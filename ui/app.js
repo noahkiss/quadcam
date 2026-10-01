@@ -35,7 +35,6 @@ const DEFAULTS = {
 };
 
 const settings = structuredClone(DEFAULTS);
-let store = null;
 
 const state = {
   tools: null,
