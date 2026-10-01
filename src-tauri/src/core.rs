@@ -37,6 +37,8 @@ pub trait Hooks: Send + Sync {
     }
     /// The library index changed. The GUI re-reads it.
     fn library_changed(&self) {}
+    /// The session's clips were analysed. The GUI starts making their previews.
+    fn analysed(&self) {}
 }
 
 pub struct NoHooks;
@@ -381,6 +383,8 @@ impl Core {
             );
         })?;
         self.commit(Some(s.clone()))?;
+        drop(_b);
+        self.hooks.analysed();
         Ok(s)
     }
 
@@ -645,9 +649,30 @@ impl Core {
         Ok(out)
     }
 
+    /// Makes the previews of every analysed clip in the session, so Play starts at once. It
+    /// stops when the session changes or another step (an export) starts.
+    pub fn make_previews(&self) -> usize {
+        let Some(s) = self.session() else { return 0 };
+        let mut made = 0;
+        for c in s.clips.iter().filter(|c| c.probe.is_some()) {
+            let same = self
+                .session()
+                .is_some_and(|now| now.staging == s.staging && now.clips.len() == s.clips.len());
+            if !same || self.busy.load(Ordering::SeqCst) {
+                break;
+            }
+            if self.preview(c.id).is_ok() {
+                made += 1;
+            }
+        }
+        made
+    }
+
     /// A small H.264 preview the webview can play, made once per clip content. It is named
     /// by the source's fingerprint, so a new PICT0001 never reuses an old flight's preview.
+    /// One preview is made at a time; a second call for the same clip waits and reuses it.
     pub fn preview(&self, id: usize) -> Result<PathBuf> {
+        static MAKING: Mutex<()> = Mutex::new(());
         let s = self.current()?;
         let c = s
             .clips
@@ -663,6 +688,7 @@ impl Core {
             src.file_stem().unwrap_or_default().to_string_lossy(),
             crate::pipeline::fingerprint(src)?
         ));
+        let _one = MAKING.lock().unwrap_or_else(|e| e.into_inner());
         if !dst.is_file() {
             media::proxy(&tools, src, &dst)?;
         }

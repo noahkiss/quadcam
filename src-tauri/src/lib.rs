@@ -78,6 +78,14 @@ impl Hooks for GuiHooks {
     fn library_changed(&self) {
         let _ = self.app.emit("library-changed", ());
     }
+    fn analysed(&self) {
+        let app = self.app.clone();
+        std::thread::spawn(move || {
+            if let Some(st) = app.try_state::<AppState>() {
+                st.core.make_previews();
+            }
+        });
+    }
 }
 
 struct AppState {
@@ -326,6 +334,9 @@ pub fn run() {
                 Core::real_photos(),
             ));
             core.forget_unrestorable();
+            // A restored session's previews may be gone from the cache; make them again.
+            let warm = core.clone();
+            std::thread::spawn(move || warm.make_previews());
             if let Err(e) = control::serve(core.clone(), &control::socket_path()) {
                 eprintln!("quadcam: control socket not started: {e:#}");
             }

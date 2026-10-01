@@ -91,7 +91,7 @@ quadcam opens on the library: every clip you imported, newest first, grouped by 
 
 1. Insert the card. It shows in the sidebar under **Import from**, with the number of clips that are not in the library yet. Nothing loads until you select it.
 2. Select the card (or **Import…**, or **Folder…**). The Import sheet opens and copies the clips at once. The sheet header shows how many files are left and the progress of the current one.
-3. **Review**: set the aircraft, the place and the date for every clip at once, or per clip. Optional: under **Radio logs**, select your radio's `LOGS` folder, or the radio itself in USB storage mode. Type a short name and a note for each clip. Select **Skip** for clips you do not want, such as bench tests. Select a clip to play it, see its moments and set cuts.
+3. **Review**: set the aircraft, the place and the date for every clip at once, or per clip. Optional: under **Radio logs**, select your radio's `LOGS` folder, or the radio itself in USB storage mode. Type a short name and a note for each clip. Select **Skip** for clips you do not want, such as bench tests. Select a clip to play it, see its moments and set cuts. After the check, quadcam makes a small preview of each clip in the background, so Play starts at once. Library clips in MP4 play from the file itself.
 4. **Export** converts and verifies each clip.
 5. **Finish**: add the files to Photos, eject the card, or format it (see below). **Done** shows the new clips in the library under **Last import**.
 
