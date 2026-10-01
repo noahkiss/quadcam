@@ -1326,14 +1326,25 @@ async function importFrom(mount) {
   const s = state.session;
   const vol = state.volumes.find((v) => v.mount === mount);
   if (s && vol && s.card?.volume_uuid === vol.info.volume_uuid) return openImport();
-  if (s && sessionLeft() && s.results.length === 0 && s.clips.length) {
-    const ok = await ask("Replace the unfinished import?", `${s.clips.length} clips are loaded and not exported. Their names, dates and cuts are lost.`, { ok: "Replace", danger: true });
-    if (!ok) return;
-  }
+  if (!(await replaceOk())) return;
   loadSource(mount);
 }
 
-async function loadSource(path) {
+// Asks before an unexported import is replaced. True to go ahead.
+async function replaceOk() {
+  const s = state.session;
+  if (!(s && sessionLeft() && s.results.length === 0 && s.clips.length)) return true;
+  return !!(await ask("Replace the unfinished import?", `${s.clips.length} clips are loaded and not exported. Their names, dates and cuts are lost.`, { ok: "Replace", danger: true }));
+}
+
+// A folder or AVI files dropped on the window: the folder loads like a card.
+async function importDropped(paths) {
+  if (!paths.length || state.busy || !state.tools) return;
+  if (!(await replaceOk())) return;
+  loadSource(paths.length === 1 ? paths[0] : `${paths.length} files`, paths);
+}
+
+async function loadSource(path, dropped = null) {
   if (state.busy) return;
   state.restored = false;
   state.busy = true;
@@ -1343,7 +1354,7 @@ async function loadSource(path) {
   $("#clips").replaceChildren(el("li", { class: "muted", style: "padding:1rem", text: `Copying from ${tilde(path)}…` }));
   renderLoad();
   try {
-    const s = await invoke("load_source", { path });
+    const s = dropped ? await invoke("load_dropped", { paths: dropped }) : await invoke("load_source", { path });
     if (!s.clips.length) {
       toast("No clips found there.", true);
       $("#import-sheet").close();
@@ -2349,6 +2360,13 @@ $("#format-label").addEventListener("change", (e) => e.target.value && save("for
 $("#fin-album").addEventListener("change", (e) => save("photosAlbum", e.target.value.trim()));
 // Closing the sheet keeps the session; Escape closes it unless a step is running.
 $("#import-sheet").addEventListener("cancel", (e) => { if (state.busy) e.preventDefault(); });
+
+// Drag and drop: a folder or clip files dropped anywhere on the window start an import.
+T.webview.getCurrentWebview().onDragDropEvent(({ payload: p }) => {
+  const blocked = state.busy || !state.tools || document.querySelector("dialog[open]:not(#import-sheet)");
+  $("#drop").hidden = !(p.type === "enter" || p.type === "over") || !!blocked;
+  if (p.type === "drop" && !blocked) importDropped(p.paths || []);
+});
 
 T.event.listen("volumes-changed", refreshVolumes);
 T.event.listen("library-changed", () => loadLibrary());

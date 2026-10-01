@@ -373,6 +373,36 @@ impl Core {
         Ok(s)
     }
 
+    /// Copies the clips among `files` (dropped on the window) to staging; a new session.
+    pub fn stage_files(&self, files: &[PathBuf]) -> Result<Session> {
+        let _b = self.claim()?;
+        let hooks = self.hooks.clone();
+        let s = Session::stage_files(
+            files,
+            &self.cache.join("staging"),
+            &mut |index, total, done, size| {
+                hooks.event("progress", json!({"phase": "stage", "index": index, "total": total, "done": done, "size": size}));
+            },
+        )?;
+        self.commit(Some(s.clone()))?;
+        Ok(s)
+    }
+
+    /// What the GUI does with things dropped on its window: one folder loads like a card;
+    /// files load the DVR clips among them.
+    pub fn load_dropped(&self, paths: &[PathBuf]) -> Result<Session> {
+        media::find_tools()?;
+        match paths {
+            [one] if one.is_dir() => return self.load(Some(one)),
+            _ if paths.iter().any(|p| p.is_dir()) => {
+                bail!("Drop one folder, or clip files, not both.")
+            }
+            _ => self.stage_files(paths)?,
+        };
+        self.analyse()?;
+        self.plan_dates(LogChoice::Keep, None)
+    }
+
     pub fn analyse(&self) -> Result<Session> {
         let _b = self.claim()?;
         let tools = media::find_tools()?;

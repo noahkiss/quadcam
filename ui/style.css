@@ -547,6 +547,11 @@ progress::-webkit-progress-value { background: var(--primary); border-radius: 99
 .menu button.danger { border: 0; color: var(--error); font-weight: 400; }
 .menu button.danger:hover { color: var(--on-accent); background: var(--error); }
 
+.drop { position: fixed; inset: 8px; z-index: 70; display: grid; place-items: center; border: 2px dashed var(--primary); border-radius: 16px; background: color-mix(in srgb, var(--bg) 82%, transparent); pointer-events: none; }
+.drop > div { display: flex; flex-direction: column; align-items: center; gap: 6px; color: var(--fg); }
+.drop i[data-icon] { width: 40px; height: 40px; color: var(--primary); }
+.drop b { font-size: 1.2rem; }
+.drop span { color: var(--muted); }
 #toast {
   position: fixed; top: 60px; right: 1rem; max-width: 380px; z-index: 60;
   padding: .65rem 1rem; border-radius: 10px; background: var(--surface); border: 1px solid var(--surface2);

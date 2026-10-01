@@ -90,7 +90,7 @@ The frontend is plain HTML, CSS, and JavaScript in `ui/`, with no build step and
 quadcam opens on the library: every clip you imported, newest first, grouped by flying day.
 
 1. Insert the card. It shows in the sidebar under **Import from**, with the number of clips that are not in the library yet. Nothing loads until you select it.
-2. Select the card (or **Import…**, or **Folder…**). The Import sheet opens and copies the clips at once. The sheet header shows how many files are left and the progress of the current one.
+2. Select the card (or **Import…**, or **Folder…**, or drag a folder or AVI files onto the window). The Import sheet opens and copies the clips at once. The sheet header shows how many files are left and the progress of the current one.
 3. **Review**: set the aircraft, the place and the date for every clip at once, or per clip. Optional: under **Radio logs**, select your radio's `LOGS` folder, or the radio itself in USB storage mode. Type a short name and a note for each clip. Select **Skip** for clips you do not want, such as bench tests. Select a clip to play it, see its moments and set cuts. After the check, quadcam makes a small preview of each clip in the background, so Play starts at once. Library clips in MP4 play from the file itself.
 4. **Export** converts and verifies each clip.
 5. **Finish**: add the files to Photos, eject the card, or format it (see below). **Done** shows the new clips in the library under **Last import**.
@@ -385,6 +385,8 @@ The tests need ffmpeg. They make their own synthetic clips with `ffmpeg -f lavfi
 - The format tests attach small FAT32 disk images with `hdiutil`. They erase only an image that they created, and they check that the target is a disk image first.
 - No test can reach your Photos library or your Trash: under `cargo`, "Move to Trash" moves files into a temporary folder.
 - `cargo test --test import size_and_speed -- --ignored --nocapture` measures MP4 against MOV size and speed.
+
+To try the app without it taking focus, start a debug build with `QUADCAM_NO_FOCUS=1`. The window opens unfocused, behind other windows. In a debug build, `QUADCAM_DEV_EVAL=<file>` runs the script written to that file in the window, then deletes the file. A script reports back with `window.__TAURI__.event.emit("dev-log", text)`, which the app prints to stderr.
 
 `test-clips/README.md` describes an optional local corpus of real clips and logs.
 

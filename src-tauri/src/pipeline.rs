@@ -131,8 +131,16 @@ pub fn stage(
     staging: &Path,
     on_progress: &mut dyn FnMut(usize, usize, u64, u64),
 ) -> Result<Vec<Clip>> {
+    stage_found(scan::find_clips(card), staging, on_progress)
+}
+
+/// `stage` for clips already found: a card's, or files a person dropped.
+pub fn stage_found(
+    found: Vec<FoundClip>,
+    staging: &Path,
+    on_progress: &mut dyn FnMut(usize, usize, u64, u64),
+) -> Result<Vec<Clip>> {
     std::fs::create_dir_all(staging).with_context(|| format!("creating {}", staging.display()))?;
-    let found = scan::find_clips(card);
     let total = found.len();
     let mut seen = HashSet::new();
     let mut clips = Vec::with_capacity(total);

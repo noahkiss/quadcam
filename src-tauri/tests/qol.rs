@@ -114,3 +114,31 @@ fn trashed_clips_can_be_put_back() {
     // A second put-back finds nothing in the Trash and changes nothing.
     assert!(c.library_untrash(&r.moved).is_err());
 }
+
+#[test]
+fn dropped_files_load_only_their_clips() {
+    let dir = tempfile::tempdir().unwrap();
+    let c = core(dir.path());
+    let src = clips_folder();
+    make_clip(&src.path().join("PICT0003.AVI"), 1, true);
+    std::fs::write(src.path().join("notes.txt"), b"x").unwrap();
+    let s = c
+        .load_dropped(&[
+            src.path().join("PICT0003.AVI"),
+            src.path().join("notes.txt"),
+            src.path().join("PICT0001.AVI"),
+        ])
+        .unwrap();
+    let names: Vec<&str> = s.clips.iter().map(|x| x.name.as_str()).collect();
+    assert_eq!(names, ["PICT0001.AVI", "PICT0003.AVI"]);
+    assert!(s.analysed && s.card.is_none());
+    // A folder loads like a card; no clips at all is an error.
+    assert_eq!(
+        c.load_dropped(&[src.path().to_path_buf()])
+            .unwrap()
+            .clips
+            .len(),
+        3
+    );
+    assert!(c.load_dropped(&[src.path().join("notes.txt")]).is_err());
+}

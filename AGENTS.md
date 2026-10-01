@@ -172,6 +172,11 @@ claude mcp add quadcam -- "$(brew --prefix)/bin/quadcam-cli" mcp
 - Record corpus values in `test-clips/README.md` when the test clips change.
 - **Never fill the real Trash while testing.** `trash::real_trash` returns a temporary-folder
   stand-in for any process started by cargo; tests pass `DirTrash`.
+- **Never move the person's mouse or keyboard, or take focus, while testing.** Start the app
+  with `QUADCAM_NO_FOCUS=1` (unfocused, behind other windows, never activated) and drive it
+  with `QUADCAM_DEV_EVAL=<file>` (debug builds: runs the file's script in the window; replies
+  come back as `dev-log` events on stderr). Screenshot with `screencapture -l <windowid>`.
+  Pass `HOME=<temp>` so the store, cache and session stay out of the real ones.
 - **Never import into a real Photos library while testing.** In-process tests pass
   `photos::Recorder`. Tests that spawn the CLI set `QUADCAM_PHOTOS=dry-run`. As a fail-safe,
   `Core::real_photos` returns the recorder for any process started by cargo (it carries

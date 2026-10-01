@@ -304,6 +304,31 @@ impl Session {
             .unwrap_or_else(|| chrono::Local::now().format("%Y%m%d-%H%M%S").to_string());
         let staging = staging_root.join(key);
         let clips = pipeline::stage(source, &staging, on_progress)?;
+        Ok(Session::staged(source, vol, staging, clips))
+    }
+
+    /// Copies the clips among `files` (files dropped on the window) into staging. The
+    /// session's source is the folder of the first clip; it is never a card.
+    pub fn stage_files(
+        files: &[PathBuf],
+        staging_root: &Path,
+        on_progress: &mut dyn FnMut(usize, usize, u64, u64),
+    ) -> Result<Session> {
+        let found = crate::scan::clips_in(files);
+        let Some(source) = found
+            .first()
+            .and_then(|f| f.path.parent())
+            .map(Path::to_path_buf)
+        else {
+            bail!("None of these files is a DVR clip (AVI).");
+        };
+        let staging = staging_root.join(chrono::Local::now().format("%Y%m%d-%H%M%S").to_string());
+        let clips = pipeline::stage_found(found, &staging, on_progress)?;
+        Ok(Session::staged(&source, None, staging, clips))
+    }
+
+    /// A new session for clips just staged: every clip planned for today, unnamed.
+    fn staged(source: &Path, vol: Option<Volume>, staging: PathBuf, clips: Vec<Clip>) -> Session {
         let today = chrono::Local::now().date_naive();
         let plans = clips
             .iter()
@@ -334,13 +359,15 @@ impl Session {
             .filter(|c| c.stage_error.is_some())
             .map(|c| c.rel.as_str())
             .collect();
-        if !missing.is_empty() {
+        if !missing.is_empty() && vol.is_some() {
             warnings.push(format!(
                 "Card pulled or unreadable. Not copied: {}. What staged is kept; the format step stays locked.",
                 missing.join(", ")
             ));
+        } else if !missing.is_empty() {
+            warnings.push(format!("Unreadable. Not copied: {}.", missing.join(", ")));
         }
-        Ok(Session {
+        Session {
             version: SESSION_VERSION,
             source: source.to_path_buf(),
             card: vol.as_ref().map(|v| CardIdentity::from_info(&v.info)),
@@ -357,7 +384,7 @@ impl Session {
             date_warnings: Vec::new(),
             in_photos: Vec::new(),
             output_dir: None,
-        })
+        }
     }
 
     /// Probes, recovers half-written clips and makes thumbnails. Empty clips get skipped.
