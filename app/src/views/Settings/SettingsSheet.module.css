@@ -1,0 +1,241 @@
+.sheet {
+  width: min(960px, calc(100vw - 64px));
+  height: min(680px, calc(100vh - 64px));
+}
+.body {
+  display: flex;
+  height: 100%;
+  min-height: 0;
+}
+.nav {
+  width: 200px;
+  flex: none;
+  padding: var(--s-3);
+  border-right: 1px solid var(--border);
+  background: var(--mantle);
+}
+.nav ul {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.nav button {
+  display: flex;
+  align-items: center;
+  gap: var(--s-2);
+  width: 100%;
+  height: 32px;
+  padding: 0 var(--s-2);
+  border: 0;
+  border-radius: var(--r-1);
+  background: transparent;
+  font-size: var(--t-md);
+  text-align: left;
+}
+.nav button:hover {
+  background: color-mix(in srgb, var(--surface) 60%, transparent);
+}
+.nav button[aria-current="page"] {
+  background: var(--selected);
+  font-weight: 600;
+}
+.pane {
+  flex: 1;
+  min-width: 0;
+  overflow-y: auto;
+  padding: var(--s-4) var(--s-6) var(--s-6);
+  background: var(--bg);
+}
+.pane section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-3);
+}
+.pane h3 {
+  margin: var(--s-2) 0 0;
+  font-size: var(--t-md);
+}
+.row {
+  display: flex;
+  align-items: flex-end;
+  gap: var(--s-3);
+  flex-wrap: wrap;
+}
+.grow {
+  flex: 1;
+  min-width: 200px;
+}
+.alignEnd {
+  margin-bottom: 2px;
+}
+.radioCards {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: var(--s-3);
+}
+.radioCard {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--s-2);
+  padding: var(--s-3);
+  border-radius: var(--r-2);
+  border: 1px solid var(--border-strong);
+  background: var(--raised);
+}
+.radioCard:has(input:checked) {
+  border-color: var(--primary);
+  background: color-mix(in srgb, var(--primary) 10%, var(--raised));
+}
+.radioCard input {
+  accent-color: var(--primary-fill);
+  margin-top: 3px;
+}
+.radioCard > span {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.sub {
+  font-size: var(--t-sm);
+  color: var(--muted);
+}
+.label {
+  font-size: var(--t-sm);
+  font-weight: 500;
+  color: var(--muted);
+}
+.layoutRow {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--s-4);
+}
+.checks {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-3);
+}
+.example pre {
+  margin: var(--s-1) 0 0;
+  padding: var(--s-3);
+  border-radius: var(--r-2);
+  background: var(--crust);
+  font-size: var(--t-sm);
+  white-space: pre;
+  overflow-x: auto;
+}
+.info {
+  display: flex;
+  align-items: center;
+  gap: var(--s-3);
+  padding: var(--s-3);
+  border-radius: var(--r-2);
+  background: var(--mantle);
+  font-size: var(--t-md);
+}
+.info p {
+  flex: 1;
+  margin: 0;
+}
+.aircraft {
+  display: grid !important;
+  grid-template-columns: 240px 1fr;
+  gap: var(--s-6);
+}
+.pickList {
+  margin: var(--s-2) 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.pickList button {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  width: 100%;
+  padding: var(--s-2);
+  border: 0;
+  border-radius: var(--r-2);
+  background: transparent;
+  text-align: left;
+  font-size: var(--t-md);
+}
+.pickList button b {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s-2);
+}
+.pickList button[aria-current="true"] {
+  background: var(--selected);
+}
+.form {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--s-3);
+  align-content: start;
+}
+.wide {
+  grid-column: 1 / -1;
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-1);
+}
+.wide.row {
+  flex-direction: row;
+  align-items: center;
+}
+.pushRight {
+  margin-left: auto;
+}
+.results {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  border: 1px solid var(--border);
+  border-radius: var(--r-2);
+}
+.results li + li {
+  border-top: 1px solid var(--border);
+}
+.results li {
+  padding: var(--s-2);
+}
+.results button {
+  width: 100%;
+  border: 0;
+  padding: 0;
+  background: transparent;
+  text-align: left;
+  display: flex;
+  flex-direction: column;
+  font-size: var(--t-md);
+}
+.places {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-2);
+}
+.placeRow {
+  display: grid;
+  grid-template-columns: 2fr 1fr 1fr auto auto;
+  gap: var(--s-2);
+  align-items: center;
+  padding: 2px;
+  border-radius: var(--r-2);
+}
+.target {
+  outline: 2px solid var(--primary);
+}
+.tools {
+  margin: 0;
+  padding: var(--s-3);
+  border-radius: var(--r-2);
+  background: var(--crust);
+  font-size: var(--t-sm);
+  white-space: pre-wrap;
+}

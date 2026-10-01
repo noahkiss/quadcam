@@ -15,7 +15,7 @@ pub trait PhotosLibrary: Send + Sync {
     fn add_videos(&self, files: &[PathBuf], album: Option<&str>) -> Result<()>;
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, specta::Type)]
 pub struct ShareReport {
     pub added: Vec<PathBuf>,
     pub failed: Vec<(PathBuf, String)>,

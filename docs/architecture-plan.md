@@ -1,6 +1,6 @@
 # QuadCam architecture plan
 
-Status: proposal for the owner to approve. No code has changed.
+Status: approved 2026-10-01; decisions in section 7.
 Baseline: `main` at release 0.4.1.
 
 Decided before this plan:
@@ -450,3 +450,49 @@ U0 ─ U1 ─ U2 ─────────── U3(R5) ─ U4 ─ U5 ─ U6 �
 7. **Legacy lifetime.** Keep `ui/` for exactly one release after U8, then delete?
 8. **Off-grid spacing in the canvas.** Boards use 6 px and 10 px gaps. Snap them to 4/8/12, or
    keep 4-px half steps?
+
+## 7. Decisions (2026-10-01)
+
+The owner approved the plan and answered the questions:
+
+1. **Identity hash:** replace `DefaultHasher` with a specified, stable hash. Ship a migration for
+   existing libraries; it must work on a real library that already has an index, and a test
+   runs it on a library built by the old code.
+2. **Library cut verify:** accepted. R2 adds `verify_qt` to library cut export. This bug fix is
+   the one allowed behaviour change.
+3. **Node tooling:** pnpm, with Node pinned through fnm.
+4. **Map tab:** hidden until the map works.
+5. **Format for digital cards:** yes, with the same guards, decided per system when each lands.
+   The `Source` trait declares whether a source offers formatting.
+6. **Workspace split:** no. R9 is skipped.
+7. **Legacy lifetime:** `ui/` stays for one release after U8, then goes.
+8. **Spacing:** snap to the 8-pt grid.
+
+### Calls made during the Rust track
+
+The plan did not cover these; each took the conservative choice.
+
+- **Identity (Q1).** New ids use XXH64 over the same sampled bytes: `x…` for a source
+  fingerprint, `hx…` for a head id (`identity.rs` states the bytes). The 0.4 ids stay
+  computable through an explicit SipHash-1-3 (`identity::legacy`). The migration writes no
+  media file: a 0.4 source id moves only when the kept original proves it, because the card
+  file is gone otherwise; every other clip keeps its 0.4 id, which still matches cards.
+  Moved clips keep the 0.4 id in `aliases`, and every lookup accepts it.
+- **Cut writer location.** The pure writer is `src/cuts.rs`, not `core/cuts.rs`, because
+  `pipeline::export_cuts` uses it and the pipeline must not depend on `core`. `core/cuts.rs`
+  holds `Core`'s cut methods.
+- **Cut numbering.** Session cuts keep `i + 1` and library cuts keep `max + 1`.
+- **Atomic library edit.** `quadcam_library_edit` calls a new `library_update` method
+  instead of a wider `library_edit`, because the legacy UI calls `library_edit` with its
+  current shape.
+- **Command names.** The typed Tauri commands carry the method names and take one `params`
+  struct. Two names were already legacy commands (`eject`, `format_plan`). A call without
+  `params` goes to a small legacy handler in `lib.rs` that answers it as before. It goes with
+  the legacy UI (U9).
+- **bindings.ts.** It lives at `app/src/bindings.ts`. specta exports `f64` as
+  `number | null`, because the lossless-float option adds runtime transforms that fail
+  `tsc --strict`. `serde_json::Value` fields are typed `unknown`; `Result` fields use
+  serde's `{Ok}`/`{Err}` shape.
+- **Sources (R7).** The library does not yet write `app.quadcam.video_system` from a clip's
+  `SourceKind`, because that would change file metadata. `disk::format_card` still erases as
+  FAT32; the per-source file system waits for F1.

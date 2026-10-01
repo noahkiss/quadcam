@@ -4,13 +4,10 @@
 
 use crate::disk::{self, CardIdentity, Volume};
 use crate::logs::{Badge, Tunables};
-use crate::media::{Encoder, Format, Tools};
+use crate::media::Tools;
 use crate::metadata::{self as md, ClipMeta, FlightStats, Location};
 use crate::moments::{Moment, Span};
-use crate::naming::NamePlanner;
-use crate::pipeline::{
-    self, Clip, ClipJob, ClipResult, ClipStatus, DateSource, ImportSettings, Outcome,
-};
+use crate::pipeline::{self, Clip, ClipJob, ClipResult, ClipStatus, DateSource, Outcome};
 use anyhow::{bail, Context, Result};
 use chrono::{NaiveDate, NaiveTime};
 use serde::{Deserialize, Serialize};
@@ -18,10 +15,12 @@ use std::path::{Path, PathBuf};
 
 pub const SESSION_VERSION: u32 = 1;
 
+pub use crate::pipeline::import::run_import;
+pub use crate::settings::Defaults;
 pub use crate::trim::{MAX_CUTS, MIN_CUT_S};
 
 /// Which fields of a plan an agent wrote and the user has not edited since.
-#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, specta::Type)]
 pub struct Suggested {
     pub date: bool,
     pub name: bool,
@@ -41,7 +40,7 @@ impl Suggested {
 
 /// What will happen to one clip on import. The GUI shows it and edits it; an agent may
 /// suggest values for it.
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, specta::Type)]
 pub struct ClipPlan {
     pub id: usize,
     pub skip: bool,
@@ -81,7 +80,7 @@ pub struct ClipPlan {
     pub flight: Option<FlightStats>,
 }
 
-#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, specta::Type)]
 #[serde(rename_all = "lowercase")]
 pub enum Editor {
     User,
@@ -89,7 +88,7 @@ pub enum Editor {
 }
 
 /// A change to one clip's plan. Missing fields stay as they are.
-#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, specta::Type)]
 pub struct PlanPatch {
     pub id: usize,
     #[serde(default)]
@@ -133,7 +132,7 @@ pub struct PlanPatch {
     pub removed_cuts: Option<crate::trim::RemovedCuts>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, specta::Type)]
 pub struct Session {
     pub version: u32,
     /// Card mount point or folder the clips came from.
@@ -169,152 +168,7 @@ pub fn parse_time(s: &str) -> Result<Option<NaiveTime>> {
         .with_context(|| format!("time {s:?} is not HH:MM (24-hour)"))
 }
 
-/// Settings every surface starts from. The GUI keeps them in sync with its settings store.
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
-pub struct Defaults {
-    pub output_dir: Option<PathBuf>,
-    pub format: Format,
-    pub encoder: Encoder,
-    pub keep_originals: bool,
-    pub add_time: bool,
-    pub default_name: String,
-    pub photos_album: String,
-    pub log_dir: Option<PathBuf>,
-    pub tunables: Tunables,
-    /// FAT32 volume name for the format step.
-    #[serde(default = "default_label")]
-    pub format_label: String,
-    #[serde(default)]
-    pub places: Vec<md::Place>,
-    #[serde(default)]
-    pub profiles: Vec<md::Profile>,
-    #[serde(default)]
-    pub default_profile: Option<String>,
-    /// How imports are filed in the library folder (`output_dir`).
-    #[serde(default)]
-    pub layout: crate::library::Layout,
-    /// Add the place name to day folders.
-    #[serde(default)]
-    pub place_folders: bool,
-    /// Place search provider: `apple` or `nominatim`.
-    #[serde(default = "default_geocoder")]
-    pub geocoder: String,
-    /// How the date starts file names.
-    #[serde(default)]
-    pub name_date_format: crate::naming::DateFormat,
-    /// Google Places API key from the settings file. Never serialized.
-    #[serde(default, skip_serializing)]
-    pub google_places_key: Option<String>,
-}
-
-fn default_geocoder() -> String {
-    "apple".into()
-}
-
-fn default_label() -> String {
-    crate::disk::DEFAULT_LABEL.into()
-}
-
-impl Default for Defaults {
-    fn default() -> Self {
-        Self {
-            output_dir: pipeline::default_output_dir(),
-            format: Format::Mp4,
-            encoder: Encoder::Videotoolbox,
-            keep_originals: false,
-            add_time: false,
-            default_name: crate::naming::DEFAULT_NAME.into(),
-            photos_album: crate::photos::DEFAULT_ALBUM.into(),
-            log_dir: None,
-            tunables: Tunables::default(),
-            format_label: default_label(),
-            places: Vec::new(),
-            profiles: Vec::new(),
-            default_profile: None,
-            layout: crate::library::Layout::default(),
-            place_folders: false,
-            geocoder: default_geocoder(),
-            name_date_format: Default::default(),
-            google_places_key: None,
-        }
-    }
-}
-
-impl Defaults {
-    /// Defaults with the app's saved settings on top (the Tauri store file the GUI writes,
-    /// `settings.json` in the app's support folder), so a headless CLI or MCP run exports
-    /// where the person told the app to. Missing or unreadable keys keep the default.
-    pub fn with_app_settings(path: &Path) -> Defaults {
-        Defaults::from_values(&crate::settings::read(path).unwrap_or_default())
-    }
-
-    /// Defaults with the settings file's values on top.
-    pub fn from_values(v: &crate::settings::Values) -> Defaults {
-        let mut d = Defaults::default();
-        fn get<T: serde::de::DeserializeOwned>(v: &crate::settings::Values, k: &str) -> Option<T> {
-            v.get(k)
-                .filter(|x| !x.is_null())
-                .and_then(|x| serde_json::from_value(x.clone()).ok())
-        }
-        if let Some(p) = get(v, "outputDir") {
-            d.output_dir = Some(p);
-        }
-        if let Some(f) = get(v, "format") {
-            d.format = f;
-        }
-        if let Some(e) = get(v, "encoder") {
-            d.encoder = e;
-        }
-        if let Some(b) = get(v, "keepOriginals") {
-            d.keep_originals = b;
-        }
-        if let Some(b) = get(v, "addTime") {
-            d.add_time = b;
-        }
-        if let Some(n) = get::<String>(v, "defaultName").filter(|n| !n.trim().is_empty()) {
-            d.default_name = n;
-        }
-        if let Some(a) = get(v, "photosAlbum") {
-            d.photos_album = a;
-        }
-        if let Some(l) = get::<String>(v, "formatLabel").filter(|l| !l.trim().is_empty()) {
-            d.format_label = l;
-        }
-        if let Some(p) = get(v, "logDir") {
-            d.log_dir = Some(p);
-        }
-        if let Some(t) = get(v, "tunables") {
-            d.tunables = t;
-        }
-        if let Some(p) = get(v, "places") {
-            d.places = p;
-        }
-        if let Some(p) = get(v, "profiles") {
-            d.profiles = p;
-        }
-        if let Some(p) = get::<String>(v, "defaultProfile").filter(|p| !p.trim().is_empty()) {
-            d.default_profile = Some(p);
-        }
-        if let Some(l) = get(v, "libraryLayout") {
-            d.layout = l;
-        }
-        if let Some(b) = get(v, "placeFolders") {
-            d.place_folders = b;
-        }
-        d.google_places_key = get::<String>(v, "googlePlacesKey").filter(|k| !k.trim().is_empty());
-        if let Some(f) = get(v, "nameDateFormat") {
-            d.name_date_format = f;
-        }
-        if let Some(g) = get::<String>(v, "geocoder")
-            .filter(|g| crate::settings::GEOCODERS.contains(&g.as_str()))
-        {
-            d.geocoder = g;
-        }
-        d
-    }
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, specta::Type)]
 pub struct Summary {
     pub results: Vec<ClipResult>,
     pub imported: usize,
@@ -323,6 +177,7 @@ pub struct Summary {
     pub total_bytes: u64,
     pub output_dir: Option<PathBuf>,
     /// Ok when the format step may unlock, else the reason it stays locked.
+    #[specta(type = crate::api::SerdeResult<(), String>)]
     pub format_ready: Result<(), String>,
 }
 
@@ -353,7 +208,12 @@ impl Session {
         staging_root: &Path,
         on_progress: &mut dyn FnMut(usize, usize, u64, u64),
     ) -> Result<Session> {
-        let found = crate::scan::clips_in(files);
+        // The first source that finds clips among the files.
+        let (system, found) = crate::sources::all()
+            .into_iter()
+            .map(|s| (s, s.pick(files)))
+            .find(|(_, f)| !f.is_empty())
+            .unwrap_or((crate::sources::get(Default::default()), Vec::new()));
         let Some(source) = found
             .first()
             .and_then(|f| f.path.parent())
@@ -362,7 +222,7 @@ impl Session {
             bail!("None of these files is a DVR clip (AVI).");
         };
         let staging = staging_root.join(chrono::Local::now().format("%Y%m%d-%H%M%S").to_string());
-        let clips = pipeline::stage_found(found, &staging, on_progress)?;
+        let clips = pipeline::stage_found(found, system.kind(), &staging, on_progress)?;
         Ok(Session::staged(&source, None, staging, clips))
     }
 
@@ -703,241 +563,9 @@ impl Session {
     }
 }
 
-/// Gives each clip without a name one that is unique within its day: the aircraft and the
-/// time when a radio log dated the clip, else `<default name>-1`, `-2`, and so on. The count
-/// skips names that a file in the day folder or another clip in this run already has.
-fn name_unnamed(jobs: &mut [ClipJob], settings: &ImportSettings, verified: &dyn Fn(usize) -> bool) {
-    let base = match settings.default_name.trim() {
-        "" => crate::naming::DEFAULT_NAME,
-        n => n,
-    };
-    let mut used: std::collections::HashSet<(String, String)> = jobs
-        .iter()
-        .filter(|j| !j.name.trim().is_empty())
-        .map(|j| (j.date.clone(), crate::naming::slug(&j.name, base)))
-        .collect();
-    for j in jobs.iter_mut() {
-        if j.skip || verified(j.id) || !j.name.trim().is_empty() {
-            continue;
-        }
-        let Ok(date) = NaiveDate::parse_from_str(&j.date, "%Y-%m-%d") else {
-            continue;
-        };
-        let place = settings
-            .place_folders
-            .then(|| j.meta.location.as_ref().and_then(|l| l.name.as_deref()))
-            .flatten();
-        let dir = crate::library::day_dir(&settings.output_dir, settings.layout, date, place);
-        let ext = settings.format.ext();
-        let file_date = settings.name_date_format.format(date);
-        let free = |name: &str, used: &std::collections::HashSet<(String, String)>| {
-            !used.contains(&(j.date.clone(), crate::naming::slug(name, base)))
-                && !dir
-                    .join(format!(
-                        "{}.{ext}",
-                        crate::naming::stem(&file_date, None, name, base)
-                    ))
-                    .exists()
-        };
-        let label = [
-            j.meta.profile.as_deref().unwrap_or(""),
-            j.meta.aircraft.as_str(),
-        ]
-        .into_iter()
-        .map(str::trim)
-        .find(|l| !l.is_empty());
-        let by_log = match (j.source, label, j.time.as_deref().and_then(|t| t.get(..5))) {
-            (DateSource::Log, Some(l), Some(t)) => {
-                Some(format!("{l} {t}")).filter(|n| free(n, &used))
-            }
-            _ => None,
-        };
-        let name = by_log.unwrap_or_else(|| {
-            (1..)
-                .map(|n| format!("{base}-{n}"))
-                .find(|n| free(n, &used))
-                .unwrap_or_default()
-        });
-        used.insert((j.date.clone(), crate::naming::slug(&name, base)));
-        j.name = name;
-    }
-}
-
-/// Converts and verifies every non-skipped clip. A clip that already
-/// verified earlier keeps that result, so a re-run never writes a second copy.
-pub fn run_import(
-    tools: &Tools,
-    session: &Session,
-    settings: &ImportSettings,
-    on_progress: &mut dyn FnMut(usize, f64, f64),
-    on_result: &mut dyn FnMut(&ClipResult),
-) -> Result<Vec<ClipResult>> {
-    let mut jobs = session.jobs();
-    for job in &mut jobs {
-        let (Some(p), Some(c)) = (
-            session.plans.iter().find(|p| p.id == job.id),
-            session.clips.iter().find(|c| c.id == job.id),
-        ) else {
-            continue;
-        };
-        job.meta = md::resolve(
-            &p.meta,
-            p.log_model.as_deref(),
-            &settings.profiles,
-            settings.default_profile.as_deref(),
-            &settings.places,
-            &p.moments,
-            c.duration,
-            p.flight.as_ref(),
-        );
-        job.extra = crate::library::import_items(
-            &c.key,
-            &c.name,
-            &settings.import_id,
-            job.meta.location.as_ref().and_then(|l| l.name.as_deref()),
-            job.meta.profile.as_deref(),
-            &p.moments
-                .iter()
-                .filter(|m| m.end > 0.0 && m.start < c.duration)
-                .cloned()
-                .collect::<Vec<_>>(),
-            c.signal.as_ref().map(|s| &s.keep[..]).unwrap_or(&[]),
-            p.flight.as_ref(),
-        );
-        // Where the time of day came from; without it the clip shows no time (noon).
-        if job.time.is_some() {
-            job.extra.push((
-                crate::library::KEY_TIME.to_string(),
-                if job.source == DateSource::Log {
-                    "log"
-                } else {
-                    "manual"
-                }
-                .to_string(),
-            ));
-        }
-    }
-    let done = |id: usize| {
-        session
-            .results
-            .iter()
-            .rev()
-            .find(|r| r.id == id && r.outcome == Outcome::Verified)
-            .cloned()
-    };
-    name_unnamed(&mut jobs, settings, &|id| done(id).is_some());
-    let todo: Vec<&Clip> = jobs
-        .iter()
-        .filter(|j| !j.skip && done(j.id).is_none())
-        .filter_map(|j| session.clips.iter().find(|c| c.id == j.id))
-        .collect();
-    pipeline::preflight(settings, &todo)?;
-    let mut planner = NamePlanner::new();
-    let mut out = Vec::new();
-    for job in &jobs {
-        let Some(clip) = session.clips.iter().find(|c| c.id == job.id) else {
-            continue;
-        };
-        let r = if job.skip {
-            ClipResult {
-                id: clip.id,
-                outcome: Outcome::Skipped,
-                output: None,
-                original: None,
-                size: 0,
-                error: None,
-                encoder: None,
-                meta: None,
-                cuts: Vec::new(),
-                qt: Vec::new(),
-            }
-        } else if let Some(prev) = done(clip.id) {
-            prev
-        } else {
-            let dur = clip.duration;
-            pipeline::import_clip(tools, clip, job, settings, &mut planner, &mut |secs| {
-                on_progress(clip.id, secs, dur)
-            })
-        };
-        let mut r = r;
-        if r.outcome == Outcome::Verified {
-            let cuts = session
-                .plans
-                .iter()
-                .find(|p| p.id == clip.id)
-                .map(|p| p.cuts.clone())
-                .unwrap_or_default();
-            r.cuts = pipeline::export_cuts(tools, clip, &r, &cuts, settings, &mut planner);
-        }
-        on_result(&r);
-        out.push(r);
-    }
-    Ok(out)
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    #[test]
-    fn unnamed_clips_get_distinct_names_per_day() {
-        let out = tempfile::tempdir().unwrap();
-        let day = out.path().join("2026-09-30");
-        std::fs::create_dir_all(&day).unwrap();
-        std::fs::write(day.join("2026-09-30_flight-1.mp4"), b"").unwrap();
-        let settings = ImportSettings {
-            output_dir: out.path().to_path_buf(),
-            format: Format::Mp4,
-            encoder: Encoder::Videotoolbox,
-            keep_originals: false,
-            add_time: false,
-            default_name: "flight".into(),
-            places: Vec::new(),
-            profiles: Vec::new(),
-            default_profile: None,
-            layout: crate::library::Layout::Day,
-            place_folders: false,
-            import_id: String::new(),
-            name_date_format: Default::default(),
-        };
-        let job = |id: usize, date: &str, name: &str| ClipJob {
-            id,
-            skip: false,
-            date: date.into(),
-            time: None,
-            source: DateSource::Import,
-            name: name.into(),
-            note: String::new(),
-            meta: md::Resolved::default(),
-            extra: Vec::new(),
-        };
-        let mut logged = job(4, "2026-09-30", "");
-        logged.source = DateSource::Log;
-        logged.time = Some("14:03:20".into());
-        logged.meta.profile = Some("Whoop".into());
-        let mut jobs = vec![
-            job(0, "2026-09-30", ""),
-            job(1, "2026-09-30", "flight-3"),
-            job(2, "2026-09-30", ""),
-            job(3, "2026-10-01", ""),
-            logged,
-            job(5, "2026-09-30", ""),
-        ];
-        name_unnamed(&mut jobs, &settings, &|id| id == 5);
-        let names: Vec<&str> = jobs.iter().map(|j| j.name.as_str()).collect();
-        // flight-1 is on disk and flight-3 is taken in this run; a verified clip keeps its name.
-        assert_eq!(
-            names,
-            [
-                "flight-2",
-                "flight-3",
-                "flight-4",
-                "flight-1",
-                "Whoop 14:03",
-                ""
-            ]
-        );
-    }
 
     fn session() -> Session {
         let d = NaiveDate::from_ymd_opt(2026, 9, 30).unwrap();
@@ -957,6 +585,7 @@ mod tests {
             detail: String::new(),
             signal: None,
             key: String::new(),
+            kind: Default::default(),
         };
         let plan = |id| ClipPlan {
             id,
@@ -1125,28 +754,6 @@ mod tests {
         };
         assert!(s.patch(&[one(vec![cut(0.0, 2.0)])], Editor::User).is_err());
         s.patch(&[one(vec![])], Editor::User).unwrap();
-    }
-
-    #[test]
-    fn app_settings_override_defaults() {
-        let d = tempfile::tempdir().unwrap();
-        let f = d.path().join("settings.json");
-        assert_eq!(
-            Defaults::with_app_settings(&f),
-            Defaults::default(),
-            "no file: defaults"
-        );
-        std::fs::write(&f, r#"{"outputDir":"/tmp/out","format":"mov","formatLabel":"FPVCARD","defaultName":"","logDir":null,"tunables":"junk"}"#).unwrap();
-        let x = Defaults::with_app_settings(&f);
-        assert_eq!(x.output_dir, Some(PathBuf::from("/tmp/out")));
-        assert_eq!(x.format, Format::Mov);
-        assert_eq!(x.format_label, "FPVCARD");
-        assert_eq!(x.default_name, "flight", "empty keeps the default");
-        assert_eq!(
-            x.tunables,
-            Tunables::default(),
-            "bad values keep the default"
-        );
     }
 
     #[test]

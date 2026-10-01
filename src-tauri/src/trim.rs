@@ -70,7 +70,7 @@ pub fn same_span(a: &Span, b: &Span) -> bool {
 }
 
 /// A cut that was written as its own file.
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, specta::Type)]
 pub struct ExportedCut {
     pub span: Span,
     pub path: PathBuf,
@@ -87,7 +87,7 @@ pub fn removed_exported(exported: &[ExportedCut], new: &[Span]) -> Vec<ExportedC
 
 /// What happens to the file of an exported cut that is removed from the list. With no
 /// decision, the change is not applied and the caller is asked.
-#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, specta::Type)]
 #[serde(rename_all = "lowercase")]
 pub enum RemovedCuts {
     /// The file stays; it becomes a clip of its own in the library.
@@ -97,7 +97,7 @@ pub enum RemovedCuts {
 }
 
 /// The answer to a cut change.
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, specta::Type)]
 #[serde(tag = "status", rename_all = "snake_case")]
 pub enum CutChange {
     /// The new list is saved. `kept` and `trashed` list the files of removed cuts.

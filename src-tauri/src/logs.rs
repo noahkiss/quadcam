@@ -7,7 +7,7 @@ use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
-#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, specta::Type)]
 pub struct Tunables {
     /// A gap over this many seconds between rows starts a new armed segment.
     pub segment_gap_s: f64,
@@ -30,7 +30,7 @@ impl Default for Tunables {
     }
 }
 
-#[derive(Debug, Clone, Copy, Serialize, PartialEq)]
+#[derive(Debug, Clone, Copy, Serialize, PartialEq, specta::Type)]
 pub struct Segment {
     pub start: NaiveDateTime,
     pub end: NaiveDateTime,
@@ -70,7 +70,7 @@ pub fn csv_files(dir: &Path) -> Vec<PathBuf> {
 
 /// Stick positions from one log row, as EdgeTX writes them: -1024..1024. Throttle is -1024
 /// at the bottom.
-#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Default)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Default, specta::Type)]
 pub struct Sticks {
     pub ail: f64,
     pub ele: f64,
@@ -247,7 +247,7 @@ pub fn segments(rows: &[NaiveDateTime], tun: &Tunables) -> Vec<Segment> {
     out
 }
 
-#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, specta::Type)]
 #[serde(rename_all = "lowercase")]
 pub enum Badge {
     Matched,
@@ -255,7 +255,7 @@ pub enum Badge {
     Unmatched,
 }
 
-#[derive(Debug, Clone, Serialize, PartialEq)]
+#[derive(Debug, Clone, Serialize, PartialEq, specta::Type)]
 pub struct ClipMatch {
     pub badge: Badge,
     /// Start of the first claimed segment.

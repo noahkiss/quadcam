@@ -20,12 +20,14 @@ use anyhow::{bail, Context, Result};
 use chrono::{Datelike, NaiveDate};
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
-use std::io::Read;
 use std::path::{Path, PathBuf};
 
 pub const INDEX_DIR: &str = ".quadcam";
 pub const INDEX_FILE: &str = "index.json";
 pub const INDEX_VERSION: u32 = 1;
+/// The id scheme the index's ids follow: 2 is `identity` (XXH64). An index without one
+/// holds QuadCam 0.4 ids; `Core` moves it to 2 when it loads it.
+pub const ID_SCHEME: u32 = 2;
 /// Folder for kept DVR originals, inside each day folder.
 pub const ORIGINALS: &str = "originals";
 
@@ -52,7 +54,7 @@ const QT: &str = "com.apple.quicktime.";
 // ---------- layout ----------
 
 /// Where a clip goes inside the library folder.
-#[derive(Debug, Clone, Copy, Default, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, Default, Serialize, Deserialize, PartialEq, Eq, specta::Type)]
 #[serde(rename_all = "snake_case")]
 pub enum Layout {
     /// `YYYY/YYYY-MM-DD/`
@@ -112,7 +114,7 @@ pub fn example_path(
 
 // ---------- index ----------
 
-#[derive(Debug, Clone, Copy, Default, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, Default, Serialize, Deserialize, PartialEq, Eq, specta::Type)]
 #[serde(rename_all = "lowercase")]
 pub enum Flag {
     #[default]
@@ -139,7 +141,7 @@ impl Flag {
 }
 
 /// A cut written as its own file next to its clip.
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, specta::Type)]
 pub struct LibCut {
     /// Relative to the library folder.
     pub path: PathBuf,
@@ -149,7 +151,7 @@ pub struct LibCut {
 }
 
 /// One clip in the library.
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, specta::Type)]
 pub struct LibClip {
     pub id: String,
     /// Relative to the library folder.
@@ -205,6 +207,9 @@ pub struct LibClip {
     /// Set for a cut file kept on its own after its cut was removed: (source id, range).
     #[serde(default)]
     pub cut_of: Option<(String, Span)>,
+    /// Earlier ids of this clip (QuadCam 0.4's). Lookups by them still find it.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub aliases: Vec<String>,
 }
 
 impl LibClip {
@@ -247,13 +252,16 @@ impl LibClip {
     }
 }
 
-#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, specta::Type)]
 pub struct Index {
     pub version: u32,
     /// The newest import's id; its clips are "Last import".
     #[serde(default)]
     pub last_import: Option<String>,
     pub clips: Vec<LibClip>,
+    /// See `ID_SCHEME`; missing in an index QuadCam 0.4 wrote.
+    #[serde(default)]
+    pub id_scheme: u32,
 }
 
 pub fn index_path(root: &Path) -> PathBuf {
@@ -283,12 +291,22 @@ impl Index {
         Ok(())
     }
 
+    /// The clip with this id, or with this earlier id.
     pub fn get(&self, id: &str) -> Option<&LibClip> {
-        self.clips.iter().find(|c| c.id == id)
+        self.clips.iter().find(|c| c.id == id).or_else(|| {
+            self.clips
+                .iter()
+                .find(|c| c.aliases.iter().any(|a| a == id))
+        })
     }
 
     pub fn get_mut(&mut self, id: &str) -> Option<&mut LibClip> {
-        self.clips.iter_mut().find(|c| c.id == id)
+        let at = self.clips.iter().position(|c| c.id == id).or_else(|| {
+            self.clips
+                .iter()
+                .position(|c| c.aliases.iter().any(|a| a == id))
+        })?;
+        self.clips.get_mut(at)
     }
 
     /// The one library order, which every view and the arrow keys use: newest day first,
@@ -319,7 +337,7 @@ impl Index {
 // ---------- reading files ----------
 
 /// Moments as written into a file: kind, start, end, score.
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, specta::Type)]
 struct MomentLite {
     k: MomentKind,
     s: f64,
@@ -387,18 +405,7 @@ fn parse_date(s: &str) -> Option<NaiveDate> {
 /// A hash of the first megabyte before `moov`: the identity of a file quadcam did not
 /// write. Metadata rewrites change only `moov`, so the identity holds.
 pub fn head_id(path: &Path) -> Result<String> {
-    use std::hash::{Hash, Hasher};
-    let limit = qtmeta::moov_offset(path)
-        .ok()
-        .filter(|&o| o > 0)
-        .unwrap_or(u64::MAX)
-        .min(1 << 20);
-    let mut f = std::fs::File::open(path)?;
-    let mut buf = Vec::with_capacity(limit as usize);
-    (&mut f).take(limit).read_to_end(&mut buf)?;
-    let mut h = std::hash::DefaultHasher::new();
-    buf.hash(&mut h);
-    Ok(format!("h{:016x}", h.finish()))
+    crate::identity::head_id(path)
 }
 
 /// What one media file in the library is.
@@ -506,14 +513,6 @@ pub fn read_file(root: &Path, rel: &Path) -> Result<Found> {
             .map(|s| s.trim().to_string())
             .filter(|s| !s.is_empty())
     });
-    let id = match &source {
-        Some(s) if detached => match cut_range {
-            Some(r) => format!("{s}@{:.1}-{:.1}", r.start, r.end),
-            None => head_id(&path)?,
-        },
-        Some(s) => s.clone(),
-        None => head_id(&path)?,
-    };
     let original = path.parent().and_then(|dir| {
         let o = dir.join(ORIGINALS);
         ["avi", "AVI"]
@@ -522,6 +521,27 @@ pub fn read_file(root: &Path, rel: &Path) -> Result<Found> {
             .find(|p| p.is_file())
             .and_then(|p| p.strip_prefix(root).ok().map(Path::to_path_buf))
     });
+    let head = || -> Result<(String, Vec<String>)> {
+        let (id, old) = crate::identity::head_ids(&path)?;
+        Ok((id, vec![old]))
+    };
+    let (id, aliases) = match &source {
+        Some(s) if detached => match cut_range {
+            Some(r) => (format!("{s}@{:.1}-{:.1}", r.start, r.end), Vec::new()),
+            None => head()?,
+        },
+        // A 0.4 source id is kept, unless the kept original proves it: then the clip gets
+        // the original's current fingerprint, and the 0.4 id stays as an alias.
+        Some(s) if crate::identity::is_legacy(s) => original
+            .as_ref()
+            .map(|o| root.join(o))
+            .and_then(|o| crate::identity::fingerprints(&o).ok())
+            .filter(|(_, old)| old == s)
+            .map(|(now, _)| (now, vec![s.clone()]))
+            .unwrap_or_else(|| (s.clone(), Vec::new())),
+        Some(s) => (s.clone(), Vec::new()),
+        None => head()?,
+    };
     Ok(Found::Clip(Box::new(LibClip {
         id,
         path: rel.to_path_buf(),
@@ -566,6 +586,7 @@ pub fn read_file(root: &Path, rel: &Path) -> Result<Found> {
         } else {
             None
         },
+        aliases,
     })))
 }
 
@@ -668,6 +689,7 @@ pub fn rebuild(root: &Path, old: Option<&Index>) -> (Index, Vec<String>) {
         version: INDEX_VERSION,
         last_import,
         clips,
+        id_scheme: ID_SCHEME,
     };
     ix.sort();
     (ix, problems)
@@ -775,7 +797,7 @@ pub fn id_file(id: &str) -> String {
 // ---------- queries ----------
 
 /// The smart groups and other ways to narrow the library.
-#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, specta::Type)]
 #[serde(default)]
 pub struct Filter {
     /// Words that must all appear in the name, note, place, aircraft, keywords or DVR name.
@@ -829,7 +851,11 @@ pub fn matches(ix: &Index, c: &LibClip, f: &Filter) -> bool {
 
 /// Clip ids by source fingerprint, for "N new" on a card.
 pub fn known_sources(ix: &Index) -> HashSet<String> {
-    let mut s: HashSet<String> = ix.clips.iter().map(|c| c.id.clone()).collect();
+    let mut s: HashSet<String> = ix
+        .clips
+        .iter()
+        .flat_map(|c| std::iter::once(c.id.clone()).chain(c.aliases.iter().cloned()))
+        .collect();
     s.extend(
         ix.clips
             .iter()
@@ -839,7 +865,7 @@ pub fn known_sources(ix: &Index) -> HashSet<String> {
 }
 
 /// Totals for the footer.
-#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, specta::Type)]
 pub struct Totals {
     pub clips: usize,
     pub bytes: u64,
@@ -896,6 +922,16 @@ mod tests {
 
     fn d(s: &str) -> NaiveDate {
         NaiveDate::parse_from_str(s, "%Y-%m-%d").unwrap()
+    }
+
+    /// An adopted file's id is persisted in the index, so the same bytes must always give
+    /// the same id.
+    #[test]
+    fn head_id_test_vector() {
+        let d = tempfile::tempdir().unwrap();
+        let big = d.path().join("big.mp4");
+        std::fs::write(&big, crate::pipeline::tests::pattern(2 << 20)).unwrap();
+        assert_eq!(head_id(&big).unwrap(), "hxd516db1b487859c5");
     }
 
     #[test]
@@ -994,6 +1030,7 @@ mod tests {
         let mut ix = Index {
             version: INDEX_VERSION,
             last_import: None,
+            id_scheme: ID_SCHEME,
             clips: vec![
                 c("2026-09-27", Some("16:00"), "late"),
                 c("2026-09-28", Some("09:00"), "next"),
@@ -1034,10 +1071,12 @@ mod tests {
             dvr: Some("PICT0001.AVI".into()),
             import: Some("20260927-150000".into()),
             cut_of: None,
+            aliases: vec![],
         };
         let mut ix = Index {
             version: INDEX_VERSION,
             last_import: Some("20260927-150000".into()),
+            id_scheme: ID_SCHEME,
             clips: vec![
                 clip("a", "backyard loops", "2026-09-27"),
                 LibClip {

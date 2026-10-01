@@ -1,0 +1,46 @@
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s-1);
+  height: 22px;
+  padding: 0 var(--s-2);
+  border-radius: var(--r-1);
+  font-size: var(--t-sm);
+  white-space: nowrap;
+}
+.plain {
+  background: var(--surface);
+  color: var(--fg);
+}
+.overlay {
+  background: var(--chip-dark);
+  color: var(--chip-dark-fg);
+}
+.accent {
+  background: color-mix(in srgb, var(--ctp-pink) 18%, transparent);
+  color: var(--fg);
+}
+.agent {
+  display: inline-flex;
+  align-items: center;
+  height: 18px;
+  padding: 0 6px;
+  border-radius: 4px;
+  border: 1px dashed var(--accent);
+  color: var(--fg);
+  font-size: var(--t-xs);
+  font-weight: 500;
+}
+.kbd {
+  display: inline-flex;
+  align-items: center;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 4px;
+  border-radius: 4px;
+  border: 1px solid var(--border-strong);
+  background: var(--raised);
+  color: var(--fg);
+  font-family: var(--mono);
+  font-size: var(--t-xs);
+}

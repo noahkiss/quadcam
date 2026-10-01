@@ -1,0 +1,120 @@
+.side {
+  width: 232px;
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  background: var(--mantle);
+  border-right: 1px solid var(--border);
+  min-height: 0;
+}
+.groups {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: var(--s-4) var(--s-3);
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-4);
+}
+.group h2 {
+  margin: 0 0 var(--s-1);
+  padding: 0 var(--s-2);
+  font-size: var(--t-sm);
+  font-weight: 500;
+  color: var(--muted);
+}
+.group ul {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.item {
+  display: flex;
+  align-items: center;
+  gap: var(--s-2);
+  width: 100%;
+  height: 30px;
+  padding: 0 var(--s-2);
+  border: 0;
+  border-radius: var(--r-1);
+  background: transparent;
+  font-size: var(--t-md);
+  text-align: left;
+}
+.item:not(:disabled):hover {
+  background: color-mix(in srgb, var(--surface) 60%, transparent);
+}
+.item[aria-current="true"] {
+  background: var(--selected);
+  font-weight: 600;
+}
+.item:disabled,
+.muted {
+  color: var(--muted);
+}
+.label {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.count {
+  font-family: var(--mono);
+  font-size: var(--t-sm);
+  color: var(--muted);
+}
+.badge {
+  font-size: var(--t-sm);
+  font-weight: 600;
+  color: var(--primary-text);
+}
+.foot {
+  padding: var(--s-3) var(--s-4);
+  border-top: 1px solid var(--border);
+  font-size: var(--t-sm);
+  color: var(--muted);
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-1);
+}
+.foot hr {
+  width: 100%;
+  border: 0;
+  border-top: 1px solid var(--border);
+  margin: var(--s-1) 0;
+}
+.line {
+  display: flex;
+  align-items: center;
+  gap: var(--s-2);
+}
+.num {
+  margin-left: auto;
+  font-family: var(--mono);
+}
+.ok {
+  margin-left: auto;
+  color: var(--success-text);
+}
+.task {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-1);
+  color: var(--fg);
+}
+.bar {
+  display: block;
+  height: 3px;
+  border-radius: 2px;
+  background: var(--surface);
+  overflow: hidden;
+}
+.bar span {
+  display: block;
+  height: 100%;
+  background: var(--primary);
+}

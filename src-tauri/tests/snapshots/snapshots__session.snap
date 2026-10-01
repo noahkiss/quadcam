@@ -1,0 +1,359 @@
+---
+source: tests/snapshots.rs
+expression: session
+---
+{
+  "analysed": true,
+  "card": null,
+  "card_volume": null,
+  "clips": [
+    {
+      "card_path": "$TMP/card/DCIM/PICT0001.AVI",
+      "detail": "90 frames",
+      "duration": 3.0,
+      "id": 0,
+      "key": "$HASH",
+      "kind": "analog",
+      "name": "PICT0001.AVI",
+      "probe": {
+        "audio_streams": 1,
+        "duration": 3.0,
+        "errors": "",
+        "fps": 30.0,
+        "height": 480,
+        "tags": {
+          "software": "$LAVF"
+        },
+        "video_packets": 90,
+        "video_streams": 1,
+        "width": 720
+      },
+      "recovered": null,
+      "rel": "DCIM/PICT0001.AVI",
+      "signal": {
+        "dead_air": [],
+        "keep": [],
+        "samples": 6,
+        "step": 0.5
+      },
+      "size": 0,
+      "stage_error": null,
+      "staged": "$TMP/cache/staging/$STAMP/PICT0001.AVI",
+      "status": "ok",
+      "thumb": "$TMP/cache/thumbs/PICT0001-$HASH.jpg"
+    },
+    {
+      "card_path": "$TMP/card/DCIM/PICT0002.AVI",
+      "detail": "60 frames",
+      "duration": 2.0,
+      "id": 1,
+      "key": "$HASH",
+      "kind": "analog",
+      "name": "PICT0002.AVI",
+      "probe": {
+        "audio_streams": 0,
+        "duration": 2.0,
+        "errors": "",
+        "fps": 30.0,
+        "height": 480,
+        "tags": {
+          "software": "$LAVF"
+        },
+        "video_packets": 60,
+        "video_streams": 1,
+        "width": 720
+      },
+      "recovered": null,
+      "rel": "DCIM/PICT0002.AVI",
+      "signal": {
+        "dead_air": [],
+        "keep": [],
+        "samples": 4,
+        "step": 0.5
+      },
+      "size": 0,
+      "stage_error": null,
+      "staged": "$TMP/cache/staging/$STAMP/PICT0002.AVI",
+      "status": "ok",
+      "thumb": "$TMP/cache/thumbs/PICT0002-$HASH.jpg"
+    },
+    {
+      "card_path": "$TMP/card/DCIM/PICT0003.AVI",
+      "detail": "zero bytes",
+      "duration": 0.0,
+      "id": 2,
+      "key": "",
+      "kind": "analog",
+      "name": "PICT0003.AVI",
+      "probe": null,
+      "recovered": null,
+      "rel": "DCIM/PICT0003.AVI",
+      "signal": null,
+      "size": 0,
+      "stage_error": null,
+      "staged": "$TMP/cache/staging/$STAMP/PICT0003.AVI",
+      "status": "empty",
+      "thumb": null
+    }
+  ],
+  "date_warnings": [],
+  "in_photos": [],
+  "log_day": null,
+  "log_days": [],
+  "log_dir": null,
+  "output_dir": "$TMP/library",
+  "plans": [
+    {
+      "badge": "unmatched",
+      "cuts": [
+        {
+          "end": 2.0,
+          "start": 0.5
+        }
+      ],
+      "date": "$TODAY",
+      "flight": null,
+      "id": 0,
+      "log_interval_s": null,
+      "log_model": null,
+      "log_offset_s": 0.0,
+      "meta": {
+        "author": null,
+        "keywords": [],
+        "location": {
+          "lat": 40.6892,
+          "lon": -74.0445,
+          "name": "Home field"
+        },
+        "profile": null
+      },
+      "moments": [],
+      "name": "loops",
+      "note": "",
+      "reason": null,
+      "segments": 0,
+      "skip": false,
+      "source": "edited",
+      "suggested": {
+        "cuts": true,
+        "date": true,
+        "meta": true,
+        "name": true,
+        "note": false,
+        "skip": false
+      },
+      "time": "18:30:00"
+    },
+    {
+      "badge": "unmatched",
+      "cuts": [],
+      "date": "$TODAY",
+      "flight": null,
+      "id": 1,
+      "log_interval_s": null,
+      "log_model": null,
+      "log_offset_s": 0.0,
+      "meta": {
+        "author": null,
+        "keywords": [
+          "practice"
+        ],
+        "location": null,
+        "profile": null
+      },
+      "moments": [],
+      "name": "",
+      "note": "windy",
+      "reason": null,
+      "segments": 0,
+      "skip": false,
+      "source": "import",
+      "suggested": {
+        "cuts": false,
+        "date": false,
+        "meta": true,
+        "name": false,
+        "note": true,
+        "skip": false
+      },
+      "time": null
+    },
+    {
+      "badge": "unmatched",
+      "cuts": [],
+      "date": "$TODAY",
+      "flight": null,
+      "id": 2,
+      "log_interval_s": null,
+      "log_model": null,
+      "log_offset_s": 0.0,
+      "meta": {
+        "author": null,
+        "keywords": [],
+        "location": null,
+        "profile": null
+      },
+      "moments": [],
+      "name": "",
+      "note": "",
+      "reason": null,
+      "segments": 0,
+      "skip": true,
+      "source": "import",
+      "suggested": {
+        "cuts": false,
+        "date": false,
+        "meta": false,
+        "name": false,
+        "note": false,
+        "skip": false
+      },
+      "time": null
+    }
+  ],
+  "results": [
+    {
+      "cuts": [
+        {
+          "end": 2.0,
+          "error": null,
+          "outcome": "verified",
+          "output": "$TMP/library/$YEAR/$TODAY/$TODAY_loops_cut1.mp4",
+          "size": 0,
+          "start": 0.5
+        }
+      ],
+      "encoder": "videotoolbox",
+      "error": null,
+      "id": 0,
+      "meta": {
+        "comment": "",
+        "creation_time": "$TIME",
+        "date": "$TODAY",
+        "description": "DVR PICT0001.AVI; date source: edited",
+        "title": "loops"
+      },
+      "original": "$TMP/library/$YEAR/$TODAY/originals/$TODAY_loops.avi",
+      "outcome": "verified",
+      "output": "$TMP/library/$YEAR/$TODAY/$TODAY_loops.mp4",
+      "qt": [
+        [
+          "com.apple.quicktime.location.ISO6709",
+          "+40.6892-074.0445/"
+        ],
+        [
+          "com.apple.quicktime.creationdate",
+          "$TIME"
+        ],
+        [
+          "com.apple.quicktime.software",
+          "QuadCam $VERSION"
+        ],
+        [
+          "com.apple.quicktime.title",
+          "loops"
+        ],
+        [
+          "com.apple.quicktime.description",
+          "DVR PICT0001.AVI; date source: edited"
+        ],
+        [
+          "com.apple.quicktime.keywords",
+          "FPV"
+        ],
+        [
+          "app.quadcam.source",
+          "$HASH"
+        ],
+        [
+          "app.quadcam.dvr",
+          "PICT0001.AVI"
+        ],
+        [
+          "app.quadcam.import",
+          "$IMPORT"
+        ],
+        [
+          "app.quadcam.place",
+          "Home field"
+        ],
+        [
+          "app.quadcam.time",
+          "manual"
+        ]
+      ],
+      "size": 0
+    },
+    {
+      "cuts": [],
+      "encoder": "videotoolbox",
+      "error": null,
+      "id": 1,
+      "meta": {
+        "comment": "windy",
+        "creation_time": "$TIME",
+        "date": "$TODAY",
+        "description": "DVR PICT0002.AVI; date source: import",
+        "title": "flight-1"
+      },
+      "original": "$TMP/library/$YEAR/$TODAY/originals/$TODAY_flight-1.avi",
+      "outcome": "verified",
+      "output": "$TMP/library/$YEAR/$TODAY/$TODAY_flight-1.mp4",
+      "qt": [
+        [
+          "com.apple.quicktime.creationdate",
+          "$TIME"
+        ],
+        [
+          "com.apple.quicktime.software",
+          "QuadCam $VERSION"
+        ],
+        [
+          "com.apple.quicktime.title",
+          "flight-1"
+        ],
+        [
+          "com.apple.quicktime.description",
+          "DVR PICT0002.AVI; date source: import"
+        ],
+        [
+          "com.apple.quicktime.comment",
+          "windy"
+        ],
+        [
+          "com.apple.quicktime.keywords",
+          "FPV,practice"
+        ],
+        [
+          "app.quadcam.source",
+          "$HASH"
+        ],
+        [
+          "app.quadcam.dvr",
+          "PICT0002.AVI"
+        ],
+        [
+          "app.quadcam.import",
+          "$IMPORT"
+        ]
+      ],
+      "size": 0
+    },
+    {
+      "cuts": [],
+      "encoder": null,
+      "error": null,
+      "id": 2,
+      "meta": null,
+      "original": null,
+      "outcome": "skipped",
+      "output": null,
+      "qt": [],
+      "size": 0
+    }
+  ],
+  "source": "$TMP/card",
+  "staging": "$TMP/cache/staging/$STAMP",
+  "version": 1,
+  "warnings": []
+}

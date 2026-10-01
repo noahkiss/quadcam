@@ -1,0 +1,174 @@
+{
+ "clips": [
+  {
+   "aircraft": "Five-inch",
+   "author": null,
+   "cut_of": null,
+   "cuts": [],
+   "date": "2026-09-28",
+   "duration": 3,
+   "dvr": "PICT0003.AVI",
+   "file": "/Users/pilot/Movies/quadcam/2026/2026-09-28/2026-09-28_river-dive.mp4",
+   "flag": "none",
+   "id": "x1108525f0a2b87e8",
+   "import": "20261001-170045",
+   "in_photos": false,
+   "keep": [],
+   "keywords": [
+    "FPV"
+   ],
+   "last_import": true,
+   "location": {
+    "lat": 40.1,
+    "lon": -75.1,
+    "name": "Riverside park"
+   },
+   "moments": [],
+   "name": "river-dive",
+   "no_picture": false,
+   "note": "",
+   "original": null,
+   "path": "2026/2026-09-28/2026-09-28_river-dive.mp4",
+   "pending_cuts": [],
+   "place": "Riverside park",
+   "poster": null,
+   "rating": 0,
+   "size": 98450,
+   "stats": null,
+   "strip": null,
+   "time": "17:05",
+   "title": "river-dive"
+  },
+  {
+   "aircraft": "Whoop",
+   "author": null,
+   "cut_of": null,
+   "cuts": [],
+   "date": "2026-09-27",
+   "duration": 5,
+   "dvr": "PICT0001.AVI",
+   "file": "/Users/pilot/Movies/quadcam/2026/2026-09-27/2026-09-27_backyard-loops.mp4",
+   "flag": "none",
+   "id": "x07fee4b870d01a6f",
+   "import": "20261001-170045",
+   "in_photos": false,
+   "keep": [],
+   "keywords": [
+    "FPV",
+    "backyard"
+   ],
+   "last_import": true,
+   "location": {
+    "lat": 40,
+    "lon": -75,
+    "name": "Home field"
+   },
+   "moments": [],
+   "name": "backyard-loops",
+   "no_picture": false,
+   "note": "",
+   "original": null,
+   "path": "2026/2026-09-27/2026-09-27_backyard-loops.mp4",
+   "pending_cuts": [],
+   "place": "Home field",
+   "poster": null,
+   "rating": 0,
+   "size": 229640,
+   "stats": null,
+   "strip": null,
+   "time": "10:15",
+   "title": "backyard-loops"
+  },
+  {
+   "aircraft": "Whoop",
+   "author": null,
+   "cut_of": null,
+   "cuts": [
+    {
+     "end": 25,
+     "path": "2026/2026-09-27/2026-09-27_gap-run_cut1.mp4",
+     "size": 691044,
+     "start": 10
+    }
+   ],
+   "date": "2026-09-27",
+   "duration": 120,
+   "dvr": "PICT0002.AVI",
+   "file": "/Users/pilot/Movies/quadcam/2026/2026-09-27/2026-09-27_gap-run.mp4",
+   "flag": "none",
+   "id": "xd0d144c9ce319e86",
+   "import": "20261001-170045",
+   "in_photos": false,
+   "keep": [],
+   "keywords": [
+    "FPV",
+    "backyard"
+   ],
+   "last_import": true,
+   "location": {
+    "lat": 40,
+    "lon": -75,
+    "name": "Home field"
+   },
+   "moments": [],
+   "name": "gap-run",
+   "no_picture": false,
+   "note": "Two packs",
+   "original": null,
+   "path": "2026/2026-09-27/2026-09-27_gap-run.mp4",
+   "pending_cuts": [],
+   "place": "Home field",
+   "poster": null,
+   "rating": 0,
+   "size": 5502389,
+   "stats": null,
+   "strip": null,
+   "time": "10:40",
+   "title": "gap-run"
+  }
+ ],
+ "exists": true,
+ "groups": {
+  "aircraft": [
+   [
+    "Whoop",
+    2
+   ],
+   [
+    "Five-inch",
+    1
+   ]
+  ],
+  "days": [
+   [
+    "2026-09-28",
+    1
+   ],
+   [
+    "2026-09-27",
+    2
+   ]
+  ],
+  "places": [
+   [
+    "Home field",
+    2
+   ],
+   [
+    "Riverside park",
+    1
+   ]
+  ]
+ },
+ "last_import": "20261001-170045",
+ "layout": "year_day",
+ "place_folders": false,
+ "root": "/Users/pilot/Movies/quadcam",
+ "totals": {
+  "bytes": 6521523,
+  "clips": 3,
+  "flying": 128,
+  "seconds": 128
+ },
+ "unindexed": 0
+}

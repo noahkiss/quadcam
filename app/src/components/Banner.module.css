@@ -1,0 +1,26 @@
+.banner {
+  display: flex;
+  align-items: center;
+  gap: var(--s-3);
+  padding: var(--s-2) var(--s-4);
+  border-radius: var(--r-2);
+  border: 1px solid var(--border);
+  background: var(--raised);
+  font-size: var(--t-md);
+}
+.text {
+  flex: 1;
+  min-width: 0;
+}
+.warning {
+  border-color: color-mix(in srgb, var(--ctp-yellow) 45%, transparent);
+}
+.error {
+  border-color: color-mix(in srgb, var(--ctp-red) 55%, transparent);
+  background: color-mix(in srgb, var(--ctp-red) 10%, var(--bg));
+}
+.banner code {
+  font-family: var(--mono);
+  -webkit-user-select: text;
+  user-select: text;
+}

@@ -10,7 +10,7 @@ pub const MAX_FORMAT_BYTES: u64 = 64_000_000_000;
 /// Cards over this size ship as exFAT; analog DVRs want FAT32.
 pub const FAT32_CARD_BYTES: u64 = 32 * 1_000_000_000 + 2_000_000_000;
 
-#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, specta::Type)]
 pub struct DiskInfo {
     pub device_identifier: String,
     pub parent_whole_disk: String,
@@ -127,7 +127,7 @@ pub fn whole_disk_of(id: &str) -> String {
 }
 
 /// A mounted volume the app may care about.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, specta::Type)]
 pub struct Volume {
     pub mount: PathBuf,
     pub info: DiskInfo,
@@ -146,15 +146,20 @@ pub fn looks_like_radio(mount: &Path) -> bool {
     mount.join("LOGS").is_dir() && (mount.join("MODELS").is_dir() || mount.join("RADIO").is_dir())
 }
 
-pub fn card_warnings(info: &DiskInfo) -> Vec<String> {
+/// What a card's source would rather it were: its file system and size.
+pub fn card_warnings(info: &DiskInfo, policy: &crate::sources::CardPolicy) -> Vec<String> {
     let mut w = Vec::new();
-    if !info.is_fat32() {
+    let fs_ok = info
+        .filesystem
+        .as_deref()
+        .is_some_and(|f| f.to_uppercase().contains(policy.filesystem));
+    if !fs_ok {
         w.push(format!(
             "Card is {}, not FAT32. Most analog DVRs need a FAT32 card of 32 GB or less. Import works; you can format it to FAT32 at the end.",
             info.filesystem.as_deref().unwrap_or("an unknown format")
         ));
     }
-    if info.total_size > FAT32_CARD_BYTES {
+    if info.total_size > policy.warn_above_bytes {
         w.push("Card is larger than 32 GB. Most analog DVRs take cards up to 32 GB.".into());
     }
     w
@@ -165,12 +170,13 @@ pub fn probe_volume(mount: &Path) -> Option<Volume> {
     let info = info(&mount.to_string_lossy()).ok()?;
     let removable = is_removable(&info);
     let is_radio = removable && looks_like_radio(mount);
-    let is_card = removable && !is_radio && crate::scan::has_clips(mount);
-    let warnings = if is_card {
-        card_warnings(&info)
-    } else {
-        Vec::new()
-    };
+    let source = (removable && !is_radio)
+        .then(|| crate::sources::detect(mount))
+        .flatten();
+    let is_card = source.is_some();
+    let warnings = source
+        .map(|s| card_warnings(&info, &s.card_policy()))
+        .unwrap_or_default();
     Some(Volume {
         mount: mount.to_path_buf(),
         info,
@@ -196,7 +202,7 @@ pub fn list_volumes() -> Vec<Volume> {
 }
 
 /// The card the clips were read from, recorded at stage time.
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, specta::Type)]
 pub struct CardIdentity {
     pub device_identifier: String,
     pub whole_disk: String,
@@ -346,6 +352,10 @@ pub fn eject(target: &str) -> Result<()> {
 mod tests {
     use super::*;
 
+    fn analog_policy() -> crate::sources::CardPolicy {
+        crate::sources::Source::card_policy(&crate::sources::analog::Analog)
+    }
+
     fn card() -> (CardIdentity, DiskInfo, DiskInfo) {
         let vol = DiskInfo {
             device_identifier: "disk9s1".into(),
@@ -457,10 +467,10 @@ mod tests {
     fn fat32_detection() {
         let (_, v, _) = card();
         assert!(v.is_fat32());
-        assert!(card_warnings(&v).is_empty());
+        assert!(card_warnings(&v, &analog_policy()).is_empty());
         let mut x = v.clone();
         x.filesystem = Some("ExFAT".into());
         x.total_size = 64_000_000_000;
-        assert_eq!(card_warnings(&x).len(), 2);
+        assert_eq!(card_warnings(&x, &analog_policy()).len(), 2);
     }
 }

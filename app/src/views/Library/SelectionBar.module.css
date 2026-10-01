@@ -1,0 +1,36 @@
+.bar {
+  position: absolute;
+  left: 50%;
+  bottom: 52px;
+  z-index: 10;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: var(--s-2);
+  padding: var(--s-1) var(--s-2) var(--s-1) var(--s-4);
+  border-radius: var(--r-3);
+  border: 1px solid var(--border-strong);
+  background: var(--mantle);
+  box-shadow: var(--shadow);
+  font-size: var(--t-md);
+  white-space: nowrap;
+}
+.sep {
+  width: 1px;
+  height: 20px;
+  background: var(--border-strong);
+}
+.rate {
+  display: inline-flex;
+}
+.rate button {
+  display: inline-flex;
+  padding: 4px;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--muted);
+}
+.rate button:hover {
+  color: var(--star);
+}

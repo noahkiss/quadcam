@@ -1,0 +1,62 @@
+.scroll {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  padding: 0 var(--s-6) var(--s-6);
+}
+.table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--t-md);
+}
+.table th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  background: var(--bg);
+  text-align: left;
+  font-weight: 500;
+  color: var(--muted);
+  padding: var(--s-2);
+  border-bottom: 1px solid var(--border);
+}
+.table td {
+  padding: 0 var(--s-2);
+  height: 44px;
+  border-bottom: 1px solid var(--border);
+  white-space: nowrap;
+}
+.table tbody tr {
+  outline: none;
+}
+.table tbody tr[aria-selected="true"] {
+  background: color-mix(in srgb, var(--primary) 16%, transparent);
+}
+.table tbody tr:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: -2px;
+}
+.rejected td {
+  opacity: 0.55;
+}
+.sort {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s-1);
+  border: 0;
+  padding: 0;
+  background: transparent;
+  color: inherit;
+  font-weight: 500;
+}
+.lthumb {
+  width: 56px;
+  height: 32px;
+  border-radius: 4px;
+  background-color: var(--crust);
+}
+.name {
+  max-width: 280px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}

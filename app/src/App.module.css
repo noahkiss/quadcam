@@ -1,0 +1,19 @@
+.app {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+}
+.banner {
+  padding: var(--s-2) var(--s-4) 0;
+}
+.body {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+}
+.main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}

@@ -4,7 +4,13 @@
   "version": "0.4.1",
   "identifier": "app.quadcam",
   "build": {
-    "frontendDist": "../ui"
+    "frontendDist": "../app/dist",
+    "devUrl": "http://localhost:4719",
+    "beforeDevCommand": {
+      "script": "pnpm --dir app dev",
+      "wait": false
+    },
+    "beforeBuildCommand": "pnpm --dir app build"
   },
   "app": {
     "withGlobalTauri": true,
@@ -21,6 +27,7 @@
     ],
     "security": {
       "csp": "default-src 'self'; img-src 'self' asset: http://asset.localhost data:; media-src 'self' asset: http://asset.localhost; style-src 'self' 'unsafe-inline'; font-src 'self'; script-src 'self'; connect-src ipc: http://ipc.localhost",
+      "devCsp": "default-src 'self'; img-src 'self' asset: http://asset.localhost data:; media-src 'self' asset: http://asset.localhost; style-src 'self' 'unsafe-inline'; font-src 'self'; script-src 'self'; connect-src ipc: http://ipc.localhost http://localhost:4719 ws://localhost:4719",
       "assetProtocol": {
         "enable": true,
         "scope": [

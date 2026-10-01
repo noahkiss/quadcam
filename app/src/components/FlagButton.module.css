@@ -1,0 +1,18 @@
+.pick {
+  color: var(--success-text);
+  border-color: color-mix(in srgb, var(--ctp-green) 45%, transparent);
+}
+.reject {
+  color: var(--error-text);
+  border-color: color-mix(in srgb, var(--ctp-red) 45%, transparent);
+}
+.markPick,
+.markReject {
+  display: inline-flex;
+}
+.markPick {
+  color: var(--success-text);
+}
+.markReject {
+  color: var(--error-text);
+}

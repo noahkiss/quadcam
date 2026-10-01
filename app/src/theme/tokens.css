@@ -1,0 +1,114 @@
+/* The app's design tokens: semantic colors over the Catppuccin palette (palette.css),
+   Mocha in dark mode and Latte in light; an 8-pt spacing rhythm; radii; type. Components
+   use these names only, never a hex value. */
+@import "./palette.css";
+
+:root {
+  --bg: var(--ctp-base);
+  --mantle: var(--ctp-mantle);
+  --crust: var(--ctp-crust);
+  --surface: var(--ctp-surface0);
+  --surface-2: var(--ctp-surface1);
+  --surface-3: var(--ctp-surface2);
+  --overlay: var(--ctp-overlay0);
+  /* Cards and fields sit a step above the page. */
+  --raised: color-mix(in srgb, var(--ctp-base) 55%, var(--ctp-surface0));
+  --field: var(--ctp-crust);
+  --border: var(--ctp-surface0);
+  /* The current item in a list: muted text on it stays AA. */
+  --selected: var(--ctp-surface0);
+  --border-strong: var(--ctp-surface1);
+  --fg: var(--ctp-text);
+  --muted: var(--ctp-subtext0);
+  --primary: var(--ctp-blue);
+  --primary-fill: var(--ctp-blue);
+  --on-primary: var(--ctp-crust);
+  --danger-fill: var(--ctp-red);
+  --on-danger: var(--ctp-crust);
+  --success: var(--ctp-green);
+  --warning: var(--ctp-yellow);
+  --error: var(--ctp-red);
+  --accent: var(--ctp-mauve);
+  /* Text in a status color: AA on --bg, --mantle and --raised in both flavors. */
+  --success-text: var(--ctp-green);
+  --warning-text: var(--ctp-yellow);
+  --error-text: var(--ctp-red);
+  --primary-text: var(--ctp-blue);
+  --flying: var(--ctp-teal);
+  --star: var(--ctp-yellow);
+  --focus: var(--ctp-blue);
+  --scrim: color-mix(in srgb, var(--ctp-crust) 62%, transparent);
+  --chip-dark: color-mix(in srgb, var(--ctp-crust) 80%, transparent);
+  --chip-dark-fg: var(--ctp-text);
+  --shadow-sm: 0 1px 2px rgb(0 0 0 / 0.25);
+  --shadow: 0 24px 60px rgb(0 0 0 / 0.45);
+
+  /* Moment kinds and icon tints. */
+  --c-blue: var(--ctp-blue);
+  --c-pink: var(--ctp-pink);
+  --c-green: var(--ctp-green);
+  --c-yellow: var(--ctp-yellow);
+  --c-red: var(--ctp-red);
+  --c-mauve: var(--ctp-mauve);
+  --c-sky: var(--ctp-sky);
+  --c-peach: var(--ctp-peach);
+  --c-teal: var(--ctp-teal);
+
+  /* 8-pt rhythm, with a 4 px half step. */
+  --s-1: 4px;
+  --s-2: 8px;
+  --s-3: 12px;
+  --s-4: 16px;
+  --s-6: 24px;
+  --s-8: 32px;
+
+  --r-1: 6px;
+  --r-2: 8px;
+  --r-3: 10px;
+
+  --t-xs: 11px;
+  --t-sm: 12px;
+  --t-md: 13px;
+  --t-lg: 15px;
+  --t-xl: 18px;
+
+  --control-h: 32px;
+  --control-h-sm: 28px;
+
+  --font: "Space Grotesk", "Avenir Next", system-ui, sans-serif;
+  --mono: "JetBrains Mono", ui-monospace, monospace;
+
+  --ease: cubic-bezier(0.2, 0, 0, 1);
+  --dur: 140ms;
+}
+
+@media (prefers-color-scheme: light) {
+  :root {
+    --raised: white;
+    --field: white;
+    --border: var(--ctp-crust);
+    --selected: color-mix(in srgb, var(--ctp-surface0) 55%, var(--ctp-base));
+    --border-strong: var(--ctp-surface1);
+    --muted: var(--ctp-subtext1);
+    --primary-fill: color-mix(in oklab, var(--ctp-blue) 88%, black);
+    --on-primary: white;
+    --danger-fill: color-mix(in oklab, var(--ctp-red) 92%, black);
+    --on-danger: white;
+    --success-text: color-mix(in oklab, var(--ctp-green) 62%, black);
+    --warning-text: color-mix(in oklab, var(--ctp-yellow) 55%, black);
+    --error-text: color-mix(in oklab, var(--ctp-red) 88%, black);
+    --primary-text: color-mix(in oklab, var(--ctp-blue) 88%, black);
+    --star: color-mix(in oklab, var(--ctp-yellow) 80%, black);
+    --scrim: color-mix(in srgb, var(--ctp-text) 35%, transparent);
+    --chip-dark: color-mix(in srgb, var(--ctp-crust) 70%, transparent);
+    --chip-dark-fg: var(--ctp-text);
+    --shadow-sm: 0 1px 2px rgb(76 79 105 / 0.25);
+    --shadow: 0 24px 60px rgb(76 79 105 / 0.3);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --dur: 0ms;
+  }
+}

@@ -8,7 +8,7 @@ use chrono::{DateTime, Local, Utc};
 use serde::{Deserialize, Serialize};
 
 /// A saved place, kept in the settings file.
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, specta::Type)]
 pub struct Place {
     pub name: String,
     pub lat: f64,
@@ -19,7 +19,7 @@ pub struct Place {
 /// from a radio log picks the profile whose `edgetx_models` holds the log's model name.
 /// A later digital video source (an MP4 with `.srt` or `.osd` sidecars) can hang off a
 /// profile through `video_system`; only analog DVR files are read today.
-#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, specta::Type)]
 #[serde(default)]
 pub struct Profile {
     pub name: String,
@@ -39,7 +39,7 @@ pub struct Profile {
 }
 
 /// A location in decimal degrees.
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, specta::Type)]
 pub struct Location {
     pub lat: f64,
     pub lon: f64,
@@ -69,7 +69,7 @@ impl Location {
 }
 
 /// What the person (or an agent) set on one clip. Missing values come from the profile.
-#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, specta::Type)]
 #[serde(default)]
 pub struct ClipMeta {
     /// Profile name. None: the log's model, then the session default.
@@ -82,7 +82,7 @@ pub struct ClipMeta {
 }
 
 /// Flight numbers from the radio log rows a clip claimed.
-#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, specta::Type)]
 pub struct FlightStats {
     pub armed_s: f64,
     pub packs: usize,
@@ -119,7 +119,7 @@ impl FlightStats {
 }
 
 /// The metadata one export writes, after profile and defaults are applied.
-#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, specta::Type)]
 pub struct Resolved {
     pub profile: Option<String>,
     pub location: Option<Location>,

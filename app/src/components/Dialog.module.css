@@ -1,0 +1,75 @@
+.dialog {
+  padding: 0;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--r-3);
+  background: var(--mantle);
+  color: var(--fg);
+  box-shadow: var(--shadow);
+}
+.dialog::backdrop {
+  background: var(--scrim);
+}
+.dialog[open] {
+  animation: rise var(--dur) var(--ease);
+}
+/* Movement only: the dialog is readable even when the window does not run animations. */
+@keyframes rise {
+  from {
+    transform: translateY(8px) scale(0.99);
+  }
+}
+.small {
+  width: min(440px, calc(100vw - var(--s-8)));
+}
+.sheet {
+  width: min(1280px, calc(100vw - var(--s-8) * 2));
+  height: calc(100vh - var(--s-8) * 2);
+  max-height: none;
+  max-width: none;
+}
+.form {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  margin: 0;
+}
+.head {
+  display: flex;
+  align-items: center;
+  gap: var(--s-4);
+  padding: var(--s-4) var(--s-6) var(--s-2);
+}
+.sheet .head {
+  padding: var(--s-4) var(--s-6);
+  border-bottom: 1px solid var(--border);
+}
+.title {
+  margin: 0;
+  display: flex;
+  align-items: center;
+  gap: var(--s-2);
+  font-size: var(--t-lg);
+  font-weight: 700;
+}
+.sheet .title {
+  font-size: var(--t-xl);
+}
+.body {
+  padding: 0 var(--s-6) var(--s-4);
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+}
+.sheet .body {
+  padding: 0;
+}
+.actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--s-2);
+  margin: 0;
+  padding: var(--s-3) var(--s-6) var(--s-4);
+}
+.sheet .actions {
+  border-top: 1px solid var(--border);
+}

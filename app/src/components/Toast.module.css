@@ -1,0 +1,30 @@
+.toast {
+  position: fixed;
+  left: 50%;
+  bottom: var(--s-6);
+  z-index: 100;
+  max-width: min(640px, calc(100vw - var(--s-8)));
+  padding: var(--s-2) var(--s-4);
+  border-radius: var(--r-2);
+  background: var(--fg);
+  color: var(--bg);
+  font-size: var(--t-md);
+  font-weight: 500;
+  box-shadow: var(--shadow);
+  opacity: 0;
+  transform: translate(-50%, 8px);
+  pointer-events: none;
+  transition: opacity var(--dur) var(--ease), transform var(--dur) var(--ease);
+}
+.toast:empty,
+.toast > :empty {
+  padding: 0;
+}
+.show {
+  opacity: 1;
+  transform: translate(-50%, 0);
+}
+.error {
+  background: var(--danger-fill);
+  color: var(--on-danger);
+}

@@ -1,0 +1,21 @@
+.stars {
+  display: inline-flex;
+  align-items: center;
+  gap: 1px;
+}
+.star {
+  display: inline-flex;
+  padding: 1px;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+}
+.on {
+  color: var(--star);
+}
+.on :global(svg *) {
+  fill: currentColor;
+}
+.off {
+  color: var(--overlay);
+}

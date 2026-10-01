@@ -16,8 +16,9 @@ README. Personal preferences go in the app's settings file on the machine
 
 | Path | Holds |
 |---|---|
-| `ui/` | Frontend: plain HTML, CSS and JS, no build step. `app.js` (library, import sheet, settings), `trim.js` (the one trim editor, used by clip detail and the import review). Icons and fonts are inlined or bundled so the app works offline |
-| `src-tauri/src/` | Rust core. `core.rs` (`Core`) owns the session and the library index and is the one surface every front end drives; `core_library.rs` holds its library methods and `core_settings.rs` its settings, places and profiles methods. `lib.rs` holds the Tauri commands (`core_call` runs any `Core::dispatch` method), `control.rs` the app's socket, `mcp.rs` the MCP server, `bin/quadcam-cli.rs` the CLI. The logic modules (`scan`, `disk`, `media`, `logs`, `moments`, `metadata`, `qtmeta`, `naming`, `pipeline`, `session`, `photos`, `library`, `trim`, `trash`, `settings`, `geocode`) run without Tauri |
+| `app/` | New frontend: React + TypeScript + Vite (pnpm, Node pinned in `.node-version`). Builds to `app/dist`, which ships in the app beside a copy of `ui/` in `app/dist/legacy/`. Not yet the default; `docs/architecture-plan.md` section 4.2 has the steps |
+| `ui/` | Legacy frontend, still the default: plain HTML, CSS and JS, no build step. `app.js` (library, import sheet, settings), `trim.js` (the one trim editor, used by clip detail and the import review). Icons and fonts are inlined or bundled so the app works offline |
+| `src-tauri/src/` | Rust core. `core/` (`Core`) owns the session and the library index and is the one surface every front end drives: `mod.rs` (state, locking, `Hooks`), `import.rs` (stage, analyse, dates, import, verify, format), `library.rs` (the index, list, rate, edit, rename, redate), `cuts.rs` (session and library cut lists), `files.rs` (Photos, previews, strips, Trash) and `setup.rs` (settings, places, profiles). `api/` is the one method table: each row names a method, its params and result types and the `Core` call, and `api!` makes `Core::dispatch` (socket, MCP) and one typed Tauri command per method from it; `api/events.rs` holds the typed events. `lib.rs` holds the GUI's own Tauri commands, the legacy UI's commands (`core_call` runs any `dispatch` method), and `specta_builder`, which tauri-specta exports to `app/src/bindings.ts`; `control.rs` the app's socket, `mcp/` the MCP server (`server.rs` the protocol and handlers, `params.rs` each tool's argument type, `tools.rs` the tool list with schemas derived from those types, `render.rs` the text answers), `bin/quadcam-cli.rs` the CLI (clap flags build the `api` params, and it calls the table's `api::call` functions). The logic modules (`scan`, `disk`, `media`, `logs`, `moments`, `metadata`, `qtmeta`, `naming`, `pipeline` (with `pipeline/import.rs`, the import run), `session`, `photos`, `library`, `trim`, `cuts` (the one cut writer), `sources` (the `Source` trait per video system; `sources/analog.rs` is the DVR: clip layout, half-written check and repair, encode plan, dead air, card policy), `trash`, `settings` (with `Defaults`, the effective settings), `paths` (every path under `$HOME`), `geocode`) run without Tauri |
 | `src-tauri/Info.plist` | Photos usage strings, merged into the bundle's Info.plist |
 | `src-tauri/tests/` | Integration tests on synthetic clips and FAT32 disk images |
 | `test-clips/` | Local test corpus. Git tracks only its README |
@@ -27,10 +28,19 @@ README. Personal preferences go in the app's settings file on the machine
 ## Requirements
 
 - Rust via rustup (stable), plus `cargo install tauri-cli --version "^2" --locked`.
+- specta `=2.0.0-rc.25`, tauri-specta `=2.0.0-rc.25` and specta-typescript `=0.0.12` are release
+  candidates: they stay pinned exactly, and an upgrade regenerates and reviews `app/src/bindings.ts`.
 - ffmpeg and ffprobe from Homebrew (`brew install ffmpeg`). The app looks in
   `/opt/homebrew/bin` and `/usr/local/bin`, then `PATH`. exiftool is optional; tests use it
   when present.
-- No Node. There is no dev server, so there is no port.
+- Node 24 through fnm (`.node-version`) and pnpm (`packageManager` in `app/package.json`), for
+  `app/`; `cargo tauri dev` and `cargo tauri build` run it.
+- **Which UI the window loads:** `QUADCAM_UI=next|legacy`, else the `ui` setting (`next` or
+  `legacy`; no control in the Settings window, `quadcam-cli settings set ui=next`), else
+  legacy. Both ship in every build: `app/dist`, and `ui/` copied to `app/dist/legacy/` by
+  `app/vite.config.ts`. The dev server serves the same two paths. The default flips to `next`
+  (plan step U8) after the owner's check. The Vite dev server is pinned to port 4719 with `strictPort`;
+  `cargo tauri dev` starts it.
 
 ## Build, test, run
 
@@ -39,11 +49,43 @@ Run these in `src-tauri/`:
 ```bash
 cargo test -- --test-threads=1  # unit + integration tests (needs ffmpeg; attaches small disk images)
 cargo test --test import size_and_speed -- --ignored --nocapture   # MP4 vs MOV size/speed
+INSTA_UPDATE=always cargo test --test snapshots   # accept a deliberate shape change, then review the diff
+QUADCAM_UPDATE_BINDINGS=1 cargo test --test bindings   # write app/src/bindings.ts after an api change
 cargo tauri dev                 # run from source (Photos is dry-run; QUADCAM_PHOTOS=real to test it)
-cargo tauri build               # -> target/release/bundle/macos/QuadCam.app
+QUADCAM_UI=next cargo tauri dev   # the same with the new UI in app/
+cargo tauri build               # -> target/release/bundle/macos/QuadCam.app (runs pnpm --dir app build)
 cargo build --release --bin quadcam-cli   # -> target/release/quadcam-cli
 open target/release/bundle/macos/QuadCam.app
 ```
+
+In `app/` (`pnpm install` first):
+
+```bash
+pnpm typecheck && pnpm lint && pnpm test   # tsc, eslint, Vitest
+pnpm e2e                                   # Playwright, headless, both UIs on the mocked core
+pnpm build                                 # -> app/dist
+scripts/make-fixtures.sh                   # re-record the mock core's data (needs the CLI and the corpus)
+```
+
+- **Core calls in `app/`** go through `app/src/ipc/api.ts`, on the generated
+  `app/src/bindings.ts` (never edit it). `ipc/types.ts` narrows the generated types for the UI
+  (specta types every f64 as `number | null`; fields serde may omit are optional there), and
+  `ipc/normalize.ts` makes each answer fit: a range or point without a time is dropped, a
+  length reads as 0. The new UI uses only the typed commands, never the `@deprecated` legacy
+  ones. The mock core answers both, and the parity specs compare calls by core method
+  (`app.method(...)` in `app/e2e/fixtures.ts`), whichever command the UI used.
+- **Theme** (`app/src/theme/`): `palette.css` is generated from `@catppuccin/palette`
+  (`node scripts/gen-palette.mjs`; a test fails when it is stale). `tokens.css` maps it to
+  semantic names (Mocha for dark, Latte for light) plus the 8-pt spacing, radii and type
+  scale. Components use CSS Modules and tokens only, never a hex value. `e2e/theme.spec.ts`
+  runs axe, contrast included, on the component gallery (`/?gallery` in dev) in both themes.
+- **Dev in a browser:** `pnpm dev`, then `http://localhost:4719/?mock=<scenario>` runs the
+  new UI on the mock core (scenarios in `app/src/ipc/mock/core.ts`).
+- **Parity specs** (`app/e2e/parity/`) run every spec on both UIs (Playwright projects `legacy`
+  and `next`) against `app/src/ipc/mock/`, a fake core behind a fake Tauri runtime. Specs find
+  controls by role and label, never by class, so one spec fits both UIs. An area runs on
+  `next` once it is listed in `PORTED` (`app/e2e/fixtures.ts`). The mock's data is the real
+  core's JSON, recorded by `app/scripts/make-fixtures.sh`; regenerate it when a shape changes.
 
 ## Release
 
@@ -63,7 +105,8 @@ GitHub (`noahkiss/quadcam`, public) is the only remote. Users install the cask
   quarantine attribute in `postflight_steps`. Hardened runtime stays off: without the Photos
   entitlement it blocks PhotoKit, and it has no use without notarization.
 - **Secret:** `HOMEBREW_TAP_TOKEN` (the tap PAT) lets the release dispatch the tap.
-- `.github/workflows/ci.yml` runs fmt, clippy, tests and a release build on every push and PR.
+- `.github/workflows/ci.yml` runs fmt, clippy, tests and a release build on every push and PR,
+  and a `ui` job for `app/` (typecheck, lint, Vitest, Playwright, build).
 
 ## Behaviour notes
 
@@ -77,14 +120,24 @@ GitHub (`noahkiss/quadcam`, public) is the only remote. Users install the cask
   existing export folder is adopted.
 - **Identity:** a library clip's id is its DVR source's content fingerprint
   (`app.quadcam.source`), never a file name. A file QuadCam did not write is known by a hash of
-  its first MB before `moov` (`library::head_id`), which metadata rewrites never touch.
+  its first MB before `moov` (`identity::head_id`), which metadata rewrites never touch. Both
+  are specified hashes (XXH64 over defined bytes; `identity.rs` states them), with test
+  vectors. Ids from 0.4 and earlier (`DefaultHasher`) stay recognizable through
+  `identity::legacy`, an explicit SipHash-1-3. An index without `id_scheme: 2` is moved when it
+  loads: a clip whose kept original proves its 0.4 id, and every adopted file, get the current
+  id, and the 0.4 id stays in `aliases`, which every lookup accepts. Other clips keep their 0.4
+  id. No media file is written. `tests/fixtures/legacy-library` is a library 0.4.1 built.
 - **Cuts:** `trim.rs` is the one cut model for the session and the library. Dropping a cut that
   was already exported needs a decision (`RemovedCuts::Keep`: the file stays as its own clip,
   marked `app.quadcam.detached`; `Trash`: it goes to the Trash). Without one, `Core` answers
   `CutChange::Confirm` (GUI) or refuses the patch (CLI `--removed`, MCP `removed_cuts`).
+  `cuts::write_cut` writes every cut file, session and library alike: it verifies frames and
+  reads the QuickTime items back before the rename.
 - **Previews:** after `Core::analyse`, the GUI's `Hooks::analysed` runs `Core::make_previews` on a
-  thread. `Core::preview` makes one proxy at a time (a static lock), so a Play click on a clip
-  being made waits for it and reuses the file. Library MP4s play directly.
+  thread. Session and library previews both go through `Core::proxy_once`, which makes one
+  proxy at a time (a static lock), so a Play click on a clip being made waits for it and reuses
+  the file. Library MP4s play directly. Session and library Photos adds both go through
+  `Core::share_files`, which also marks the library's clips as in Photos.
 - **Native feel (UI):** page text is not selectable and the cursor is the arrow; WebKit needs
   `-webkit-user-select`. Text a person may copy (paths, details values) gets the
   `selectable` class. The web view's context menu shows only over text fields and selected
@@ -93,7 +146,7 @@ GitHub (`noahkiss/quadcam`, public) is the only remote. Users install the cask
   inserting a card never starts an import on its own.
 
 - **Output folder:** defaults to `~/Movies/quadcam`, resolved from `$HOME` at runtime
-  (`pipeline::default_output_dir`). The app creates that default, with its parents, on the
+  (`paths::default_output_dir`). The app creates that default, with its parents, on the
   first import. It never creates a folder the user picked. Picking a folder saves it as the
   setting.
 - **Settings:** one file, `settings.json` in the support folder (camelCase keys `outputDir`,
@@ -196,8 +249,12 @@ claude mcp add quadcam -- "$(brew --prefix)/bin/quadcam-cli" mcp
   details, aircraft, date, time), `quadcam_library_files` (cuts, Trash, Photos, rebuild);
   setup `quadcam_places` (list, search, save, delete), `quadcam_profiles` (list, save,
   delete, set_default), `quadcam_settings` (read, write). Keep the surface this small:
-  add an action or a field to a tool before adding a tool. The tool list is one big `json!`
-  (`#![recursion_limit]` in `lib.rs`).
+  add an action or a field to a tool before adding a tool. Each tool's arguments are a type in
+  `mcp/params.rs`; `mcp/tools.rs` derives the input schema from it (schemars) and keeps the
+  descriptions as written. The handler deserializes the arguments into that type once. A
+  schema change shows in the `snapshots` tests: `mcp_tools` and the frozen
+  `tests/fixtures/mcp_tools_before.json`. `quadcam_library_edit` is one `library_update`
+  call, which checks every id and value before any file changes.
 - Agent suggestions show in the GUI with a dashed accent outline and an "agent" badge until
   the person edits the field. Read back with `quadcam_read_clips` before export.
 - `quadcam_format_card` needs `device`, `volume_uuid` and `confirm=true` (read them with
@@ -212,6 +269,9 @@ claude mcp add quadcam -- "$(brew --prefix)/bin/quadcam-cli" mcp
   created, and they assert `BusProtocol == "Disk Image"` first. Keep it that way.
 - Every format guard runs again inside `disk::format_card`, immediately before
   `diskutil eraseDisk`. Do not move a guard out of that path.
+- A source's `CardPolicy` says whether "Format card" is offered for its cards. `Core::format_plan`
+  refuses a source that does not offer it, before every other guard; the guards themselves stay
+  in `disk::format_card`.
 - "Format card" is never saved as a setting.
 - Outputs are written under a hidden `.part` name and renamed only after verify passes.
   Never overwrite an existing file.
@@ -232,4 +292,6 @@ claude mcp add quadcam -- "$(brew --prefix)/bin/quadcam-cli" mcp
   set `HOME` to a temp folder (the CLI and MCP derive every path from it) or pass
   `Core::with_settings` a temp file.
 - The control socket and MCP server expose the same `Core::dispatch` methods. Add a feature
-  to `Core` first, then wire it into the GUI, the CLI and the MCP tools.
+  to `Core` first, then add its row to the `api!` table (that makes the dispatch method and the
+  typed GUI command), then wire it into the CLI and the MCP tools. Debug builds of the app
+  rewrite `app/src/bindings.ts`; the `bindings` test fails when the committed file is stale.
