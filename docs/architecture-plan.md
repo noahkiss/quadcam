@@ -467,3 +467,32 @@ The owner approved the plan and answered the questions:
 6. **Workspace split:** no. R9 is skipped.
 7. **Legacy lifetime:** `ui/` stays for one release after U8, then goes.
 8. **Spacing:** snap to the 8-pt grid.
+
+### Calls made during the Rust track
+
+The plan did not cover these; each took the conservative choice.
+
+- **Identity (Q1).** New ids use XXH64 over the same sampled bytes: `x…` for a source
+  fingerprint, `hx…` for a head id (`identity.rs` states the bytes). The 0.4 ids stay
+  computable through an explicit SipHash-1-3 (`identity::legacy`). The migration writes no
+  media file: a 0.4 source id moves only when the kept original proves it, because the card
+  file is gone otherwise; every other clip keeps its 0.4 id, which still matches cards.
+  Moved clips keep the 0.4 id in `aliases`, and every lookup accepts it.
+- **Cut writer location.** The pure writer is `src/cuts.rs`, not `core/cuts.rs`, because
+  `pipeline::export_cuts` uses it and the pipeline must not depend on `core`. `core/cuts.rs`
+  holds `Core`'s cut methods.
+- **Cut numbering.** Session cuts keep `i + 1` and library cuts keep `max + 1`.
+- **Atomic library edit.** `quadcam_library_edit` calls a new `library_update` method
+  instead of a wider `library_edit`, because the legacy UI calls `library_edit` with its
+  current shape.
+- **Command names.** The typed Tauri commands carry the method names and take one `params`
+  struct. Two names were already legacy commands (`eject`, `format_plan`). A call without
+  `params` goes to a small legacy handler in `lib.rs` that answers it as before. It goes with
+  the legacy UI (U9).
+- **bindings.ts.** It lives at `app/src/bindings.ts`. specta exports `f64` as
+  `number | null`, because the lossless-float option adds runtime transforms that fail
+  `tsc --strict`. `serde_json::Value` fields are typed `unknown`; `Result` fields use
+  serde's `{Ok}`/`{Err}` shape.
+- **Sources (R7).** The library does not yet write `app.quadcam.video_system` from a clip's
+  `SourceKind`, because that would change file metadata. `disk::format_card` still erases as
+  FAT32; the per-source file system waits for F1.
