@@ -210,3 +210,34 @@ fn writes_while_the_app_runs_are_kept() {
     assert_eq!(s["values"]["placeFolders"], true);
     assert_eq!(s["effective"]["format"], "mov");
 }
+
+#[test]
+fn the_google_key_is_written_but_never_read_back() {
+    let dir = tempfile::tempdir().unwrap();
+    let f = dir.path().join("settings.json");
+    let c = core(dir.path(), Arc::new(NoHooks), &f);
+    let v = c
+        .settings_set(
+            &serde_json::from_value(
+                json!({"google_places_key": "test-key-123", "geocoder": "google"}),
+            )
+            .unwrap(),
+        )
+        .unwrap();
+    assert_eq!(v.values["googlePlacesKey"], "(set)");
+    assert_eq!(read(&f)["googlePlacesKey"], "test-key-123");
+    assert_eq!(
+        c.defaults().google_places_key.as_deref(),
+        Some("test-key-123")
+    );
+    let shown = serde_json::to_string(&c.status()).unwrap()
+        + &serde_json::to_string(&c.settings().unwrap()).unwrap();
+    assert!(!shown.contains("test-key-123"), "{shown}");
+    let r = Server::new(quadcam_lib::mcp::LocalBackend(c.clone()))
+        .call_tool("quadcam_settings", json!({"action": "read"}));
+    assert!(!r.to_string().contains("test-key-123"));
+    assert!(r["content"][0]["text"]
+        .as_str()
+        .unwrap()
+        .contains("google_places_key set"));
+}

@@ -201,8 +201,10 @@ Every writer changes only the settings it was asked to change and keeps the rest
 
 - **Apple Maps** (default): MapKit's search, free and without an account.
 - **OpenStreetMap (Nominatim)**: the public Nominatim server, also free. quadcam searches only when you ask, at most once a second, as its usage policy requires.
+- **US Census**: the US Census Bureau geocoder, free and without a key, for US street addresses only. It finds rural addresses the others can miss. When Apple Maps or OpenStreetMap finds nothing, quadcam asks it too.
+- **Google Places**: Google Places API (New) text search. Off unless you pick it. It needs an API key from a Google Cloud project with the Places API (New) and billing turned on (light use stays in the free tier). Type the key in **Google Places API key**, or set `QUADCAM_GOOGLE_PLACES_KEY` in the environment, which wins. quadcam never shows the key again, and passes it to Google in a request header.
 
-The search sends what you type to Apple or to OpenStreetMap. Nothing else leaves your Mac.
+The search sends what you type to the provider you picked (and to the US Census Bureau when the fallback runs). Nothing else leaves your Mac.
 
 A profile looks like this in the file:
 

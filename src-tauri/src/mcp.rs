@@ -640,13 +640,14 @@ impl<B: Backend> Server<B> {
                 };
                 let e = &view["effective"];
                 let line = format!(
-                    "{}Settings file {}.\noutput_dir {} | layout {} | place_folders {} | format {} | encoder {} | keep_originals {} | add_time {} | default_name {:?} | photos_album {:?} | format_label {} | log_dir {} | geocoder {} | name_date_format {} | default_profile {} | tunables {}",
+                    "{}Settings file {}.\noutput_dir {} | layout {} | place_folders {} | format {} | encoder {} | keep_originals {} | add_time {} | default_name {:?} | photos_album {:?} | format_label {} | log_dir {} | geocoder {} | name_date_format {} | default_profile {} | tunables {} | google_places_key {}",
                     if action == "write" { "Saved. " } else { "" },
                     view["path"].as_str().unwrap_or("?"),
                     e["output_dir"].as_str().unwrap_or("none"), e["layout"].as_str().unwrap_or("?"), e["place_folders"],
                     e["format"].as_str().unwrap_or("?"), e["encoder"].as_str().unwrap_or("?"), e["keep_originals"], e["add_time"],
                     e["default_name"].as_str().unwrap_or(""), e["photos_album"].as_str().unwrap_or(""), e["format_label"].as_str().unwrap_or(""),
                     e["log_dir"].as_str().unwrap_or("none"), e["geocoder"].as_str().unwrap_or("?"), e["name_date_format"].as_str().unwrap_or("?"), e["default_profile"].as_str().unwrap_or("none"), e["tunables"],
+                    if view["values"]["googlePlacesKey"].is_null() { "not set" } else { "set" },
                 );
                 let settings: serde_json::Map<String, Value> = [
                     "output_dir",
@@ -1235,11 +1236,11 @@ pub fn tools() -> Value {
         },
         {
             "name": "quadcam_places",
-            "description": "Saved places (name, latitude, longitude) that clips and aircraft profiles use as their location. `list` them, `search` for an address or a named place (a landmark, park or field) to get its coordinates, `save` one (creates it, or updates the place with that name; `new_name` renames it and profiles follow), or `delete` one (profiles that used it lose their default place; clips keep the location written into them).\n\nBest for: adding the field the person flies at before tagging clips with `place`.\nQuery tips: search with a full address or a well-known name; pick the right result from the list (name, address, lat, lon), then save it with the person's name for it. The search uses the geocoder setting (apple: Apple Maps, the default; nominatim: OpenStreetMap). Search only on request, never per keystroke.\nReturns: the places, or the search results.\nFollow up with quadcam_suggest or quadcam_library_edit with `place` to tag clips.",
+            "description": "Saved places (name, latitude, longitude) that clips and aircraft profiles use as their location. `list` them, `search` for an address or a named place (a landmark, park or field) to get its coordinates, `save` one (creates it, or updates the place with that name; `new_name` renames it and profiles follow), or `delete` one (profiles that used it lose their default place; clips keep the location written into them).\n\nBest for: adding the field the person flies at before tagging clips with `place`.\nQuery tips: search with a full address or a well-known name; pick the right result from the list (name, address, lat, lon), then save it with the person's name for it. The search uses the geocoder setting (apple: Apple Maps, the default; nominatim: OpenStreetMap; census: US Census, US street addresses only; google: Google Places, needs an API key). When apple or nominatim finds nothing, the US Census geocoder is tried. Search only on request, never per keystroke.\nReturns: the places, or the search results.\nFollow up with quadcam_suggest or quadcam_library_edit with `place` to tag clips.",
             "inputSchema": {"type": "object", "required": ["action"], "properties": {
                 "action": {"type": "string", "enum": ["list", "search", "save", "delete"]},
                 "query": {"type": "string", "maxLength": 200, "description": "For search: an address or a place name."},
-                "provider": {"type": "string", "enum": ["apple", "nominatim"], "description": "For search: overrides the geocoder setting."},
+                "provider": {"type": "string", "enum": ["apple", "nominatim", "census", "google"], "description": "For search: overrides the geocoder setting. census: US street addresses; google needs an API key."},
                 "limit": {"type": "integer", "minimum": 1, "maximum": 10, "default": 5},
                 "name": {"type": "string", "maxLength": 80, "description": "For save and delete: the place's name (any case)."},
                 "lat": {"type": "number", "minimum": -90, "maximum": 90, "description": "For save: required for a new place."},
@@ -1270,7 +1271,7 @@ pub fn tools() -> Value {
         },
         {
             "name": "quadcam_settings",
-            "description": "Read or write the app's settings, the same file the app's Settings window uses: library folder (`output_dir`) and its `layout` (year_day, day, flat) and `place_folders`, export `format` (mp4, mov), `encoder` (videotoolbox, x264), `keep_originals`, `add_time` (HHMM in names of clips with a time), `default_name`, `photos_album` (empty: library only), card `format_label`, radio `log_dir`, log matching `tunables`, place search `geocoder` (apple, nominatim), file-name `name_date_format` (YYYY-MM-DD, YY.MM.DD) and `default_profile`. A write changes only the given settings; null resets one to its default.\n\nBest for: pointing the library somewhere else, or changing export defaults the person asked for.\nNot for: places and profiles (quadcam_places, quadcam_profiles).\nReturns: the settings file's path and every effective setting.",
+            "description": "Read or write the app's settings, the same file the app's Settings window uses: library folder (`output_dir`) and its `layout` (year_day, day, flat) and `place_folders`, export `format` (mp4, mov), `encoder` (videotoolbox, x264), `keep_originals`, `add_time` (HHMM in names of clips with a time), `default_name`, `photos_album` (empty: library only), card `format_label`, radio `log_dir`, log matching `tunables`, place search `geocoder` (apple, nominatim, census, google) and its `google_places_key` (write-only), file-name `name_date_format` (YYYY-MM-DD, YY.MM.DD) and `default_profile`. A write changes only the given settings; null resets one to its default.\n\nBest for: pointing the library somewhere else, or changing export defaults the person asked for.\nNot for: places and profiles (quadcam_places, quadcam_profiles).\nReturns: the settings file's path and every effective setting.",
             "inputSchema": {"type": "object", "required": ["action"], "properties": {
                 "action": {"type": "string", "enum": ["read", "write"]},
                 "values": {"type": "object", "description": "For write: {setting: value}.", "properties": {
@@ -1286,7 +1287,8 @@ pub fn tools() -> Value {
                     "format_label": {"type": ["string", "null"], "maxLength": 11},
                     "log_dir": {"type": ["string", "null"]},
                     "tunables": {"type": ["object", "null"], "properties": {"segment_gap_s": {"type": "number"}, "session_gap_min": {"type": "number"}, "tolerance_s": {"type": "number"}, "max_log_age_days": {"type": "integer"}}, "required": ["segment_gap_s", "session_gap_min", "tolerance_s", "max_log_age_days"], "additionalProperties": false},
-                    "geocoder": {"type": ["string", "null"], "enum": ["apple", "nominatim", null]},
+                    "geocoder": {"type": ["string", "null"], "enum": ["apple", "nominatim", "census", "google", null]},
+                    "google_places_key": {"type": ["string", "null"], "description": "Google Places API (New) key, for geocoder google. Never read back."},
                     "name_date_format": {"type": ["string", "null"], "enum": ["YYYY-MM-DD", "YY.MM.DD", null], "description": "How the date starts new file names; rename existing clips with quadcam_library_files apply_name_format."},
                     "default_profile": {"type": ["string", "null"]}
                 }, "additionalProperties": false}

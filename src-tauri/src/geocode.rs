@@ -6,6 +6,12 @@
 //! - `nominatim`: OpenStreetMap's public Nominatim server, also free and keyless. Its usage
 //!   policy asks for a real User-Agent, at most one request a second, and no search per
 //!   keystroke; quadcam searches only when asked and waits between requests.
+//! - `census`: the US Census Bureau geocoder. Free and keyless, US street addresses only,
+//!   and it finds rural addresses the others miss. When a keyless provider finds nothing,
+//!   quadcam asks it too.
+//! - `google`: Google Places API (New) text search. Off unless chosen; needs an API key
+//!   (`QUADCAM_GOOGLE_PLACES_KEY`, else the `googlePlacesKey` setting) on a Google Cloud
+//!   project with billing enabled.
 
 use anyhow::{bail, Context, Result};
 use serde::{Deserialize, Serialize};
@@ -25,8 +31,23 @@ pub struct GeoResult {
 pub const MAX_RESULTS: usize = 10;
 const TIMEOUT: Duration = Duration::from_secs(20);
 
-/// Searches with `provider` (`apple` or `nominatim`).
-pub fn search(provider: &str, query: &str, limit: usize) -> Result<Vec<GeoResult>> {
+/// The Google Places key: the environment first, then the setting.
+pub fn google_key(setting: Option<&str>) -> Option<String> {
+    std::env::var("QUADCAM_GOOGLE_PLACES_KEY")
+        .ok()
+        .or_else(|| setting.map(str::to_string))
+        .map(|k| k.trim().to_string())
+        .filter(|k| !k.is_empty())
+}
+
+/// Searches with `provider` (`apple`, `nominatim`, `census` or `google`). When `apple` or
+/// `nominatim` finds nothing, the Census geocoder gets a try (US street addresses).
+pub fn search(
+    provider: &str,
+    query: &str,
+    limit: usize,
+    google_key: Option<&str>,
+) -> Result<Vec<GeoResult>> {
     let query = query.trim();
     if query.is_empty() {
         bail!("Type an address or a place name to search for.");
@@ -38,11 +59,22 @@ pub fn search(provider: &str, query: &str, limit: usize) -> Result<Vec<GeoResult
     let mut out = match provider {
         "apple" => apple(query)?,
         "nominatim" => nominatim(query, limit)?,
+        "census" => census(query)?,
+        "google" => google(
+            query,
+            limit,
+            google_key.context(
+                "Google place search needs an API key: set QUADCAM_GOOGLE_PLACES_KEY or the google_places_key setting, or use another provider",
+            )?,
+        )?,
         p => bail!(
             "unknown place search provider {p:?}; use one of {}",
             crate::settings::GEOCODERS.join(", ")
         ),
     };
+    if out.is_empty() && matches!(provider, "apple" | "nominatim") {
+        out = census(query).unwrap_or_default();
+    }
     out.retain(|r| {
         r.lat.is_finite() && r.lon.is_finite() && r.lat.abs() <= 90.0 && r.lon.abs() <= 180.0
     });
@@ -177,6 +209,19 @@ fn nominatim_throttle() {
     let _ = std::fs::write(&stamp, b"");
 }
 
+/// A short name for an address: its first part, with the street when the first part is
+/// only a house number (`200, East Main Street, ...` is `200 East Main Street`).
+fn address_name(address: &str) -> String {
+    let mut parts = address.split(',').map(str::trim);
+    let first = parts.next().unwrap_or("").to_string();
+    if !first.is_empty() && !first.chars().any(|c| c.is_alphabetic()) {
+        if let Some(street) = parts.next() {
+            return format!("{first} {street}");
+        }
+    }
+    first
+}
+
 fn nominatim(query: &str, limit: usize) -> Result<Vec<GeoResult>> {
     #[derive(Deserialize)]
     struct Hit {
@@ -210,14 +255,10 @@ fn nominatim(query: &str, limit: usize) -> Result<Vec<GeoResult>> {
         .into_iter()
         .filter_map(|h| {
             Some(GeoResult {
-                name: h.name.filter(|n| !n.trim().is_empty()).unwrap_or_else(|| {
-                    h.display_name
-                        .split(',')
-                        .next()
-                        .unwrap_or("")
-                        .trim()
-                        .to_string()
-                }),
+                name: h
+                    .name
+                    .filter(|n| n.chars().any(|c| c.is_alphabetic()))
+                    .unwrap_or_else(|| address_name(&h.display_name)),
                 address: h.display_name,
                 lat: h.lat.parse().ok()?,
                 lon: h.lon.parse().ok()?,
@@ -227,13 +268,167 @@ fn nominatim(query: &str, limit: usize) -> Result<Vec<GeoResult>> {
         .collect())
 }
 
+/// The US Census Bureau's one-line address geocoder.
+fn census(query: &str) -> Result<Vec<GeoResult>> {
+    #[derive(Deserialize)]
+    struct Coords {
+        x: f64,
+        y: f64,
+    }
+    #[derive(Deserialize)]
+    struct Match {
+        #[serde(rename = "matchedAddress")]
+        matched: String,
+        coordinates: Coords,
+    }
+    #[derive(Deserialize)]
+    struct Res {
+        #[serde(rename = "addressMatches", default)]
+        matches: Vec<Match>,
+    }
+    #[derive(Deserialize)]
+    struct Answer {
+        result: Res,
+    }
+    let out = std::process::Command::new("/usr/bin/curl")
+        .args(["--silent", "--show-error", "--fail", "--get"])
+        .args(["--max-time", &TIMEOUT.as_secs().to_string()])
+        .args(["--user-agent", &user_agent()])
+        .args(["--data-urlencode", &format!("address={query}")])
+        .args(["--data", "benchmark=Public_AR_Current"])
+        .args(["--data", "format=json"])
+        .arg("https://geocoding.geo.census.gov/geocoder/locations/onelineaddress")
+        .output()
+        .context("running curl")?;
+    if !out.status.success() {
+        bail!(
+            "Census address search failed: {}",
+            String::from_utf8_lossy(&out.stderr).trim()
+        );
+    }
+    let a: Answer = serde_json::from_slice(&out.stdout)
+        .context("the Census geocoder sent an answer quadcam cannot read")?;
+    Ok(a.result
+        .matches
+        .into_iter()
+        .map(|m| GeoResult {
+            name: m.matched.split(',').next().unwrap_or("").trim().to_string(),
+            address: m.matched,
+            lat: m.coordinates.y,
+            lon: m.coordinates.x,
+            provider: "census".into(),
+        })
+        .collect())
+}
+
+/// Google Places API (New) text search. The key goes to curl on stdin, never on its
+/// command line.
+fn google(query: &str, limit: usize, key: &str) -> Result<Vec<GeoResult>> {
+    use std::io::Write;
+    #[derive(Deserialize)]
+    struct Text {
+        text: String,
+    }
+    #[derive(Deserialize)]
+    struct LatLng {
+        latitude: f64,
+        longitude: f64,
+    }
+    #[derive(Deserialize)]
+    struct Place {
+        #[serde(rename = "displayName")]
+        name: Option<Text>,
+        #[serde(rename = "formattedAddress", default)]
+        address: String,
+        location: Option<LatLng>,
+    }
+    #[derive(Deserialize)]
+    struct Answer {
+        #[serde(default)]
+        places: Vec<Place>,
+    }
+    if key.contains(['\r', '\n']) {
+        bail!("the Google Places key has a line break in it");
+    }
+    let body = serde_json::json!({"textQuery": query, "maxResultCount": limit}).to_string();
+    let mut child = std::process::Command::new("/usr/bin/curl")
+        .args([
+            "--silent",
+            "--show-error",
+            "--max-time",
+            &TIMEOUT.as_secs().to_string(),
+        ])
+        .args(["--user-agent", &user_agent()])
+        .args(["--header", "Content-Type: application/json"])
+        .args([
+            "--header",
+            "X-Goog-FieldMask: places.displayName,places.formattedAddress,places.location",
+        ])
+        .args(["--header", "@-"])
+        .args(["--data", &body])
+        .arg("https://places.googleapis.com/v1/places:searchText")
+        .stdin(std::process::Stdio::piped())
+        .stdout(std::process::Stdio::piped())
+        .stderr(std::process::Stdio::piped())
+        .spawn()
+        .context("running curl")?;
+    child
+        .stdin
+        .take()
+        .context("curl stdin")?
+        .write_all(format!("X-Goog-Api-Key: {key}\n").as_bytes())?;
+    let out = child.wait_with_output()?;
+    if !out.status.success() {
+        bail!(
+            "Google place search failed: {}",
+            String::from_utf8_lossy(&out.stderr).trim()
+        );
+    }
+    let v: serde_json::Value =
+        serde_json::from_slice(&out.stdout).context("Google sent an answer quadcam cannot read")?;
+    if let Some(e) = v.get("error") {
+        bail!(
+            "Google place search refused: {} (check the key, and that the Places API (New) and billing are on for its project)",
+            e.get("message").and_then(|m| m.as_str()).unwrap_or("error")
+        );
+    }
+    let a: Answer = serde_json::from_value(v).context("reading Google's answer")?;
+    Ok(a.places
+        .into_iter()
+        .filter_map(|p| {
+            let l = p.location?;
+            Some(GeoResult {
+                name: p.name.map(|n| n.text).unwrap_or_else(|| p.address.clone()),
+                address: p.address,
+                lat: l.latitude,
+                lon: l.longitude,
+                provider: "google".into(),
+            })
+        })
+        .collect())
+}
+
 #[cfg(test)]
 mod tests {
     #[test]
     fn empty_and_unknown_are_refused() {
-        assert!(super::search("apple", "  ", 5).is_err());
-        let e = super::search("bing", "x", 5).unwrap_err();
-        assert!(format!("{e:#}").contains("apple, nominatim"));
+        assert!(super::search("apple", "  ", 5, None).is_err());
+        let e = super::search("bing", "x", 5, None).unwrap_err();
+        assert!(format!("{e:#}").contains("apple, nominatim, census, google"));
+        let e = super::search("google", "x", 5, None).unwrap_err();
+        assert!(
+            format!("{e:#}").contains("QUADCAM_GOOGLE_PLACES_KEY"),
+            "{e:#}"
+        );
+    }
+
+    #[test]
+    fn address_names() {
+        assert_eq!(
+            super::address_name("200, East Main Street, Bozeman"),
+            "200 East Main Street"
+        );
+        assert_eq!(super::address_name("Tour Eiffel, 5, Avenue"), "Tour Eiffel");
     }
 
     #[test]

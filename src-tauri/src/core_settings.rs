@@ -16,7 +16,7 @@ use std::path::{Path, PathBuf};
 #[derive(Debug, Clone, Serialize)]
 pub struct SettingsView {
     pub path: PathBuf,
-    /// The file's values, by file key.
+    /// The file's values, by file key. Secrets read `"(set)"`.
     pub values: Values,
     /// What every surface uses: the values on top of the defaults.
     pub effective: Defaults,
@@ -88,7 +88,7 @@ impl Core {
         Ok(SettingsView {
             effective: Defaults::from_values(&values),
             path,
-            values,
+            values: settings::redacted(values),
         })
     }
 
@@ -131,10 +131,10 @@ impl Core {
         provider: Option<&str>,
         limit: Option<usize>,
     ) -> Result<Vec<GeoResult>> {
-        let provider = provider
-            .map(str::to_string)
-            .unwrap_or_else(|| self.defaults().geocoder);
-        geocode::search(&provider, query, limit.unwrap_or(5))
+        let d = self.defaults();
+        let provider = provider.map(str::to_string).unwrap_or(d.geocoder);
+        let key = geocode::google_key(d.google_places_key.as_deref());
+        geocode::search(&provider, query, limit.unwrap_or(5), key.as_deref())
     }
 
     /// Saves a place: creates it, or updates the one with this name (any case). `new_name`

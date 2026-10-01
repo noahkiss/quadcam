@@ -103,8 +103,13 @@ GitHub (`noahkiss/quadcam`, public) is the only remote. Users install the cask
 - **Place search:** `geocode.rs`. `apple` (default): MapKit `MKLocalSearch` through
   objc2-map-kit. Its answer arrives on the main queue, so on the main thread (CLI, MCP) it
   spins the run loop; in the app it waits on a worker thread. `nominatim`: `/usr/bin/curl`
-  with a quadcam User-Agent and at most one request a second across processes. No provider
-  needs a key. Search only on an explicit request, never per keystroke.
+  with a quadcam User-Agent and at most one request a second across processes. `census`:
+  US Census one-line address geocoder (keyless, US street addresses), also the automatic
+  fallback when `apple` or `nominatim` finds nothing. `google`: Places API (New) text search,
+  off unless chosen; the key comes from `QUADCAM_GOOGLE_PLACES_KEY`, else the
+  `googlePlacesKey` setting, and goes to curl on stdin (never argv). Settings reads redact it
+  (`settings::SECRET_KEYS`); `Defaults` never serializes it. Never put a key in code or
+  tests. Search only on an explicit request, never per keystroke.
 - **File-name date:** `naming::DateFormat` (`nameDateFormat`: `YYYY-MM-DD` default, or
   `YY.MM.DD`) starts new file names, renames and redates. `naming::split_date` reads either
   format; a clip's date comes from its creation date first, then the name.

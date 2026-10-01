@@ -202,6 +202,9 @@ pub struct Defaults {
     /// How the date starts file names.
     #[serde(default)]
     pub name_date_format: crate::naming::DateFormat,
+    /// Google Places API key from the settings file. Never serialized.
+    #[serde(default, skip_serializing)]
+    pub google_places_key: Option<String>,
 }
 
 fn default_geocoder() -> String {
@@ -232,6 +235,7 @@ impl Default for Defaults {
             place_folders: false,
             geocoder: default_geocoder(),
             name_date_format: Default::default(),
+            google_places_key: None,
         }
     }
 }
@@ -297,6 +301,7 @@ impl Defaults {
         if let Some(b) = get(v, "placeFolders") {
             d.place_folders = b;
         }
+        d.google_places_key = get::<String>(v, "googlePlacesKey").filter(|k| !k.trim().is_empty());
         if let Some(f) = get(v, "nameDateFormat") {
             d.name_date_format = f;
         }

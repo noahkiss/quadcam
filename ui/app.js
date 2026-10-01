@@ -162,6 +162,8 @@ async function loadSettings() {
   try {
     const { values } = await call("settings");
     for (const k of Object.keys(DEFAULTS)) settings[k] = values[k] ?? structuredClone(DEFAULTS[k]);
+    // The core never sends the key itself, only whether one is saved.
+    state.googleKeySet = !!values.googlePlacesKey;
   } catch (e) {
     console.warn("settings unavailable", e);
   }
@@ -1783,6 +1785,8 @@ function syncSettingsUI() {
   $("#set-session-gap").value = settings.tunables.session_gap_min;
   $("#set-tolerance").value = settings.tunables.tolerance_s;
   $("#set-geocoder").value = settings.geocoder || "apple";
+  $("#set-google-key").value = "";
+  $("#set-google-key").placeholder = state.googleKeySet ? "Saved" : "Not set";
   $("#set-name-date").value = settings.nameDateFormat || "YYYY-MM-DD";
   $("#place-results").hidden = true;
   $("#place-query").value = "";
@@ -1970,6 +1974,7 @@ $("#settings").addEventListener("close", async () => {
     keepOriginals: $("#keep-originals").checked,
     geocoder: $("#set-geocoder").value,
     nameDateFormat: $("#set-name-date").value,
+    ...($("#set-google-key").value.trim() ? { googlePlacesKey: $("#set-google-key").value.trim() } : {}),
     places,
     profiles,
     defaultProfile,

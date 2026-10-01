@@ -58,7 +58,7 @@ fn typed<T: serde::de::DeserializeOwned>(v: &Value, what: &str) -> Result<()> {
         .with_context(|| what.to_string())
 }
 
-pub const GEOCODERS: &[&str] = &["apple", "nominatim"];
+pub const GEOCODERS: &[&str] = &["apple", "nominatim", "census", "google"];
 
 pub const KEYS: &[Key] = &[
     Key {
@@ -150,8 +150,14 @@ pub const KEYS: &[Key] = &[
     Key {
         file: "geocoder",
         name: Some("geocoder"),
-        about: "apple or nominatim",
+        about: "apple, nominatim, census or google",
         check: |v| one_of(v, GEOCODERS),
+    },
+    Key {
+        file: "googlePlacesKey",
+        name: Some("google_places_key"),
+        about: "a Google Places API key",
+        check: string,
     },
     Key {
         file: "places",
@@ -271,6 +277,19 @@ pub fn update<T>(path: &Path, edit: impl FnOnce(&mut Values) -> Result<T>) -> Re
     }
     drop(lock);
     Ok((out, values))
+}
+
+/// Settings that hold secrets: reads show only whether they are set.
+pub const SECRET_KEYS: &[&str] = &["googlePlacesKey"];
+
+/// The values with secrets replaced by `"(set)"`.
+pub fn redacted(mut values: Values) -> Values {
+    for k in SECRET_KEYS {
+        if let Some(v) = values.get_mut(*k) {
+            *v = Value::String("(set)".into());
+        }
+    }
+    values
 }
 
 /// Sets keys (CLI, MCP or file names). Null removes a key, so its default applies. Every
