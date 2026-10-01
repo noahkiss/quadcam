@@ -24,6 +24,7 @@ pub mod session;
 pub mod settings;
 pub mod trash;
 pub mod trim;
+pub mod watch;
 
 use crate::core::{
     Core, FormatPlan, FormatRequest, Hooks, ImportOptions, ImportOutcome, LogChoice,
@@ -299,38 +300,6 @@ fn watch_volumes(app: AppHandle) {
     });
 }
 
-/// Re-reads the settings file when another process (the CLI) writes it, and tells the
-/// webview, so the app never works from, or writes back, an old copy.
-fn watch_settings(app: AppHandle, core: Arc<Core>, file: PathBuf) {
-    use notify::{RecursiveMode, Watcher};
-    std::thread::spawn(move || {
-        let Some(dir) = file.parent().map(PathBuf::from) else {
-            return;
-        };
-        let (tx, rx) = std::sync::mpsc::channel();
-        let Ok(mut w) = notify::recommended_watcher(tx) else {
-            return;
-        };
-        if std::fs::create_dir_all(&dir).is_err()
-            || w.watch(&dir, RecursiveMode::NonRecursive).is_err()
-        {
-            return;
-        }
-        let ours = |ev: &notify::Result<notify::Event>| {
-            ev.as_ref()
-                .is_ok_and(|e| e.paths.iter().any(|p| p.file_name() == file.file_name()))
-        };
-        while let Ok(ev) = rx.recv() {
-            if ours(&ev) {
-                std::thread::sleep(Duration::from_millis(150));
-                while rx.try_recv().is_ok() {}
-                core.reload_settings();
-                let _ = app.emit("settings-changed", ());
-            }
-        }
-    });
-}
-
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -359,7 +328,17 @@ pub fn run() {
                 .with_settings(settings_file.clone()),
             );
             core.forget_unrestorable();
-            watch_settings(handle.clone(), core.clone(), settings_file);
+            // The CLI and a headless MCP server write these files directly.
+            let (a, b) = (handle.clone(), handle.clone());
+            watch::spawn(
+                core.clone(),
+                move || {
+                    let _ = a.emit("settings-changed", ());
+                },
+                move || {
+                    let _ = b.emit("library-changed", ());
+                },
+            );
             if let Err(e) = control::serve(core.clone(), &control::socket_path()) {
                 eprintln!("quadcam: control socket not started: {e:#}");
             }
