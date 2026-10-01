@@ -73,6 +73,10 @@ GitHub (`noahkiss/quadcam`, public) is the only remote. Users install the cask
 - **Settings:** the GUI saves them in the Tauri store file `settings.json` (keys
   `outputDir`, `format`, `formatLabel`, `photosAlbum`, and others) and pushes them to the core.
   The headless CLI and MCP server read the same file (`Defaults::with_app_settings`).
+- **Session restore:** the GUI's core uses the same session file as the CLI. At launch,
+  `Core::forget_unrestorable` drops it unless it was analysed and every staged clip still
+  exists. "Start over" (`Core::clear`, method `clear`, `quadcam-cli clear`) deletes the file;
+  the GUI also clears it after it erases a card.
 - **Add to Photos:** per clip and "Add all" on the summary. `photos::PhotoKit` uses
   PhotoKit through `objc2-photos`: add-only access for the library, read-write when an
   album is set (default album `Drone`, created if missing; an empty setting means library
@@ -96,6 +100,7 @@ quadcam-cli --json dates --logs /path/to/LOGS --day 2026-10-04 --set 2=2026-10-0
 quadcam-cli --json import --name 0=backyard-loops --skip 3 --format mp4 --add-to-photos
 quadcam-cli --json import --plan plan.json     # {"clips":[{"id":0,"name":"..","date":"..","note":"..","skip":false}],"format":"mov","output_dir":".."}
 quadcam-cli --json verify                      # re-check the session's outputs
+quadcam-cli --json clear                       # forget the session, delete the session file
 quadcam-cli --json photos out.mp4 --album Drone
 quadcam-cli --json eject
 quadcam-cli --json format --plan               # runs every guard, prints device + volume UUID
@@ -118,8 +123,9 @@ claude mcp add quadcam -- "$(brew --prefix)/bin/quadcam-cli" mcp
 - When the app is running, the server drives the app's session through the control socket
   (`~/Library/Application Support/app.quadcam/control.sock`: JSON-RPC 2.0, one object per
   line, folder 0700, socket 0600). The person sees every change live. When the app is not
-  running, it falls back to a headless core on the shared session file. A call that started
-  against the app is never retried headless.
+  running, it falls back to a headless core on the shared session file. Each call opens a
+  fresh connection (with a ping), so an app restart never leaves a dead pipe. A call that
+  started against the app is never retried headless.
 - Tools: `quadcam_status`, `quadcam_load_clips`, `quadcam_read_clips` (thumbnails as image
   content), `quadcam_match_logs`, `quadcam_suggest`, `quadcam_export`, `quadcam_verify`,
   `quadcam_add_to_photos`, `quadcam_eject`, `quadcam_format_card`.

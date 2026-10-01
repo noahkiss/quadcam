@@ -575,6 +575,16 @@ impl Session {
             .collect()
     }
 
+    /// True when every staged clip is still in the staging folder and at least one exists.
+    pub fn staged_files_exist(&self) -> bool {
+        let staged: Vec<&Path> = self
+            .clips
+            .iter()
+            .filter_map(|c| c.staged.as_deref())
+            .collect();
+        !staged.is_empty() && staged.iter().all(|p| p.is_file())
+    }
+
     pub fn save(&self, path: &Path) -> Result<()> {
         if let Some(dir) = path.parent() {
             std::fs::create_dir_all(dir)?;

@@ -185,6 +185,12 @@ fn full_flow_on_a_folder() {
     ]);
     assert_eq!(code, 3, "{v}");
     assert_eq!(v["error"]["code"], "refused");
+
+    // Start over: `clear` deletes the session; `show` then has nothing to show.
+    let gone = env.ok(&["clear"]);
+    assert_eq!(gone["cleared"], true);
+    let (code, _) = env.run(&["show"]);
+    assert_eq!(code, 4);
 }
 
 #[test]

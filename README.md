@@ -94,6 +94,10 @@ The frontend is plain HTML, CSS, and JavaScript in `ui/`, with no build step and
 6. On the summary, select **Add all to Photos** if you want the files in Photos.
 7. Eject the card, or format it (see below).
 
+The app saves the session as you work. If you quit and open quadcam again, it shows the same clips, names, dates and cuts, as long as the copies in its cache still exist. Select **Start over** in the top bar to clear the session. Files you already imported stay where they are. After the app formats a card, the next launch starts empty.
+
+A restored session does not stop a new card. If every clip in it is imported, a new card loads at once. If not, select the card's **Import** button when you are ready to replace the session.
+
 ## Moments and cuts
 
 Select a clip to see its timeline under the preview. The timeline shows:
@@ -179,7 +183,7 @@ Settings (the gear icon) hold the places and profiles above, and the default nam
 
 ## Command line
 
-`quadcam-cli` works on the same core as the app. Each run continues one session, which is saved to `~/Library/Caches/app.quadcam/session.json`.
+`quadcam-cli` works on the same core as the app. Each run continues one session, which is saved to `~/Library/Caches/app.quadcam/session.json`. The app uses the same file.
 
 ```bash
 quadcam-cli cards                         # detected cards and radio log sources
@@ -198,6 +202,7 @@ quadcam-cli import --cut 0=20-26          # add a cut, then import
 quadcam-cli profiles                      # saved places and aircraft profiles
 quadcam-cli meta all --place "Home field" --keywords park,windy
 quadcam-cli meta 2 --location 40.6892,-74.0445 --profile Whoop
+quadcam-cli clear                         # forget the session (start over)
 quadcam-cli verify                        # check the outputs again
 quadcam-cli photos --album Drone          # add verified outputs to Photos
 quadcam-cli eject
@@ -243,7 +248,7 @@ claude mcp add quadcam -- "$(brew --prefix)/bin/quadcam-cli" mcp
 
 If you built from source, give the path to `quadcam.app/Contents/MacOS/quadcam-cli` instead.
 
-If the app is running, the server works on the app's session. You see every change in the app as it happens. If the app is not running, the server works on the session file, like the command-line tool.
+If the app is running, the server works on the app's session. You see every change in the app as it happens. If the app is not running, the server works on the session file, like the command-line tool. The server checks for the app on every call, so you can quit and open the app again without restarting the server.
 
 | Tool | What it does |
 |---|---|

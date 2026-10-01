@@ -328,6 +328,60 @@ fn falls_back_to_headless_without_an_app() {
     assert_eq!(b.mode(), "headless");
 }
 
+/// The GUI's core keeps its session in the session file: a relaunch restores it while its
+/// staged clips exist, forgets it when they are gone, and Start over (`clear`) deletes it.
+#[test]
+fn session_survives_a_relaunch() {
+    let dir = tempfile::tempdir().unwrap();
+    let file = dir.path().join("cache/session.json");
+    let open = || {
+        let c = Core::new(
+            dir.path().join("cache"),
+            Some(file.clone()),
+            Arc::new(MockGui::default()),
+            Arc::new(Recorder::default()),
+        );
+        c.forget_unrestorable();
+        c
+    };
+    let src = clips_folder();
+    let first = open();
+    assert!(first.session().is_none(), "nothing saved yet");
+    first.load(Some(src.path())).unwrap();
+    first
+        .patch(
+            &[PlanPatch {
+                id: 0,
+                name: Some("Backyard".into()),
+                ..Default::default()
+            }],
+            Editor::User,
+        )
+        .unwrap();
+    drop(first);
+
+    // Relaunch: the session and the person's edits come back.
+    let second = open();
+    let s = second.session().expect("restored");
+    assert_eq!(s.clips.len(), 2);
+    assert_eq!(s.plans[0].name, "Backyard");
+
+    // Start over: the session and its file are gone, and the next launch starts empty.
+    second.dispatch("clear", Value::Null).unwrap();
+    assert!(second.session().is_none());
+    assert!(!file.exists());
+    assert!(open().session().is_none());
+    second.clear().unwrap();
+
+    // Staged clips removed from the cache: the next launch starts empty, not broken.
+    let third = open();
+    third.load(Some(src.path())).unwrap();
+    let staging = third.session().unwrap().staging;
+    std::fs::remove_dir_all(&staging).unwrap();
+    assert!(file.is_file());
+    assert!(open().session().is_none());
+}
+
 /// The app quits and relaunches while the MCP server keeps running: the server falls back to
 /// headless while the app is gone, then reaches the new app, never a dead connection.
 #[test]

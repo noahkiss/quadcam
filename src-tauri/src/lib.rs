@@ -224,6 +224,12 @@ fn answer_format_request(state: State<'_, AppState>, id: u64, approve: bool) {
     }
 }
 
+/// "Start over": forgets the session and deletes the session file.
+#[tauri::command]
+fn clear_session(state: State<'_, AppState>) -> Result<(), String> {
+    state.core.clear().map_err(err)
+}
+
 #[tauri::command]
 async fn eject(state: State<'_, AppState>, path: Option<String>) -> Result<(), String> {
     let core = state.core.clone();
@@ -278,8 +284,16 @@ pub fn run() {
                 next: AtomicU64::new(1),
             });
             let cache = app.path().app_cache_dir()?;
-            // The GUI keeps its session in memory; it starts empty each launch.
-            let core = Arc::new(Core::new(cache, None, hooks.clone(), Core::real_photos()));
+            // The GUI shares the CLI's session file, so a relaunch shows the last session
+            // again while its staged clips are still in the cache.
+            let session_file = cache.join("session.json");
+            let core = Arc::new(Core::new(
+                cache,
+                Some(session_file),
+                hooks.clone(),
+                Core::real_photos(),
+            ));
+            core.forget_unrestorable();
             if let Err(e) = control::serve(core.clone(), &control::socket_path()) {
                 eprintln!("quadcam: control socket not started: {e:#}");
             }
@@ -302,6 +316,7 @@ pub fn run() {
             format_card,
             answer_format_request,
             eject,
+            clear_session,
             preview
         ])
         .run(tauri::generate_context!())

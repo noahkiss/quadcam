@@ -262,6 +262,35 @@ impl Core {
         self.session.lock().unwrap().clone()
     }
 
+    /// Drops a session restored from the session file when the GUI cannot show it: its
+    /// staged clips are gone (the cache was cleared), or it was never analysed (the app quit
+    /// while loading). The GUI then starts empty. The file stays until the next commit.
+    pub fn forget_unrestorable(&self) {
+        let mut guard = self.session.lock().unwrap();
+        if guard
+            .as_ref()
+            .is_some_and(|s| !s.analysed || !s.staged_files_exist())
+        {
+            *guard = None;
+        }
+    }
+
+    /// Forgets the session and deletes the session file. Staged copies stay in the cache.
+    pub fn clear(&self) -> Result<()> {
+        let _b = self.claim()?;
+        if let Some(f) = &self.session_file {
+            match std::fs::remove_file(f) {
+                Err(e) if e.kind() != std::io::ErrorKind::NotFound => {
+                    return Err(e).with_context(|| format!("removing {}", f.display()))
+                }
+                _ => {}
+            }
+        }
+        *self.session.lock().unwrap() = None;
+        self.hooks.changed();
+        Ok(())
+    }
+
     pub fn defaults(&self) -> Defaults {
         self.defaults.lock().unwrap().clone()
     }
@@ -692,6 +721,10 @@ impl Core {
             "status" => v(&self.status()),
             "volumes" => v(&self.volumes()),
             "session" => v(&self.session()),
+            "clear" => {
+                self.clear()?;
+                json!({"cleared": true})
+            }
             "stage" => v(&self.stage(p::<Source>(params)?.source.as_deref())?),
             "analyse" => v(&self.analyse()?),
             "load" => v(&self.load(p::<Source>(params)?.source.as_deref())?),

@@ -42,6 +42,7 @@ const state = {
   agentFormat: null, // id of an agent's pending format request
   previewId: null, // clip shown in the preview pane
   trim: { id: null, in: null, out: null }, // in/out being edited (not saved until "Add cut")
+  restored: false, // the session came back from the last run, not from a card this run
 };
 
 // ---------- helpers ----------
@@ -108,6 +109,11 @@ function show(view) {
   $("#stage-state").hidden = view !== "stage";
   $("#workspace").hidden = view !== "workspace";
   $("#summary").hidden = view !== "summary";
+  syncStartOver();
+}
+
+function syncStartOver() {
+  $("[data-action=start-over]").hidden = !state.session || state.view === "stage";
 }
 
 function setBusy(b) {
@@ -200,7 +206,15 @@ async function refreshVolumes() {
   }
   // A card that shows up while the app is idle starts staging at once.
   const card = state.volumes.find((v) => v.is_card);
-  if (card && state.view === "empty" && !state.busy && state.tools) loadSource(card.mount);
+  if (!card || state.busy || !state.tools) return;
+  if (state.view === "empty") return loadSource(card.mount);
+  // A restored session gives way to a different card once its clips are all imported.
+  // Otherwise the card waits for its Import button, so no unfinished edits are lost.
+  const s = state.session;
+  if (!state.restored || !s || s.card?.volume_uuid === card.info.volume_uuid) return;
+  const done = s.plans.every((p) => p.skip || s.results.some((r) => r.id === p.id && r.outcome !== "failed"));
+  if (done) loadSource(card.mount);
+  else toast(`Card ${card.info.volume_name || ""} found. Click its Import button to load it in place of the restored clips.`);
 }
 
 // ---------- session ----------
@@ -226,13 +240,17 @@ function setSession(s, { quiet = false } = {}) {
   const oldResults = state.session?.results?.length || 0;
   state.session = s;
   if (!s) {
+    state.restored = false;
     show("empty");
     return;
   }
+  syncStartOver();
   if (hadCard && !s.card && s.warnings.some((w) => w.includes("erased"))) {
     toast("Card erased and ejected. It is ready for the goggles.");
     state.session = null;
     show("empty");
+    // The erased card's session is done: do not bring it back on the next launch.
+    invoke("clear_session").catch(() => {});
     refreshVolumes();
     return;
   }
@@ -258,6 +276,7 @@ function setSession(s, { quiet = false } = {}) {
 
 async function loadSource(path) {
   if (state.busy) return;
+  state.restored = false;
   setBusy(true);
   show("stage");
   $("#stage-title").textContent = "Copying clips off the card…";
@@ -1108,6 +1127,24 @@ const actions = {
     }
   },
   back: () => { show("workspace"); renderClips(); },
+  "start-over": async () => {
+    if (state.busy || !state.session) return;
+    const left = state.session.plans.filter((p) => !p.skip && !state.session.results.some((r) => r.id === p.id)).length;
+    const msg = left
+      ? `Start over? ${left} clip${left > 1 ? "s are" : " is"} not imported yet; their names, dates and cuts are lost. Imported files stay.`
+      : "Start over? This clears the loaded clips. Imported files stay.";
+    if (!confirm(msg)) return;
+    try {
+      await invoke("clear_session");
+      state.session = null;
+      state.restored = false;
+      state.selected = null;
+      show("empty");
+      refreshVolumes();
+    } catch (e) {
+      toast(String(e), true);
+    }
+  },
 };
 
 document.addEventListener("click", (e) => {
@@ -1170,7 +1207,12 @@ async function init() {
   $("#tools-status").textContent = [env.tools ? `ffmpeg: ${env.tools.ffmpeg}` : env.error, env.socket ? `agent socket: ${env.socket}` : ""].filter(Boolean).join("\n");
   show("empty");
   const s = await invoke("get_session");
-  if (s) setSession(s);
+  if (s) {
+    // The last session, restored from the session file (its staged clips still exist).
+    state.restored = true;
+    setSession(s);
+    toast(`Restored your last session: ${s.clips.length} clip${s.clips.length === 1 ? "" : "s"}. Start over clears it.`);
+  }
   await refreshVolumes();
 }
 

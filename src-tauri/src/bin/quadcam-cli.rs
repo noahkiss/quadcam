@@ -63,6 +63,8 @@ enum Cmd {
     },
     /// Show the current session: clips, plans, results.
     Show,
+    /// Forget the current session and delete the session file (staged copies stay).
+    Clear,
     /// Show each clip's moments (radio-log sticks and dead air), keep ranges and cuts.
     Moments {
         /// Clip ids. Default: every clip.
@@ -589,6 +591,10 @@ fn run(cli: Cli) -> Result<Value> {
                 let report = photos::share(photos.as_ref(), &files, album.as_deref())?;
                 json!({"dry_run": dry_run, "report": report})
             }
+        }
+        Cmd::Clear => {
+            core.clear()?;
+            json!({"cleared": true})
         }
         Cmd::Eject { target } => {
             core.eject(target.as_deref())?;
