@@ -43,6 +43,37 @@ pub struct Clip {
     /// Dead air found in the clip's frames, and the ranges worth keeping.
     #[serde(default)]
     pub signal: Option<SignalScan>,
+    /// Content fingerprint (see `fingerprint`). Names the clip's cached thumbnail and
+    /// preview, since DVRs reuse file names: the Echo restarts at PICT0001 after a format.
+    #[serde(default)]
+    pub key: String,
+}
+
+/// Bytes read from each end of a file for its fingerprint.
+const FINGERPRINT_BYTES: u64 = 1 << 20;
+
+/// A short content fingerprint: size plus the first and last MB. Two different flights
+/// with the same file name (DVR numbering restarts after a format, or a Finder copy) get
+/// different fingerprints. The hash is only a cache key; it need not be stable across
+/// quadcam versions.
+pub fn fingerprint(path: &Path) -> Result<String> {
+    use std::hash::{Hash, Hasher};
+    use std::io::{Seek, SeekFrom};
+    let mut f = std::fs::File::open(path)?;
+    let len = f.metadata()?.len();
+    let mut h = std::hash::DefaultHasher::new();
+    len.hash(&mut h);
+    let mut buf = vec![0u8; FINGERPRINT_BYTES.min(len) as usize];
+    f.read_exact(&mut buf)?;
+    buf.hash(&mut h);
+    if len > FINGERPRINT_BYTES {
+        let tail = FINGERPRINT_BYTES.min(len - FINGERPRINT_BYTES);
+        f.seek(SeekFrom::Start(len - tail))?;
+        let mut buf = vec![0u8; tail as usize];
+        f.read_exact(&mut buf)?;
+        buf.hash(&mut h);
+    }
+    Ok(format!("{:016x}", h.finish()))
 }
 
 impl Clip {
@@ -92,7 +123,7 @@ fn copy_with_progress(src: &Path, dst: &Path, on_bytes: &mut dyn FnMut(u64)) -> 
 
 /// Copies every clip on the card into `staging` before anything else. A failed copy
 /// (card pulled) stops that file only, keeps what staged, and records the error.
-/// A file already staged at the same size is not copied again.
+/// A file already staged with the same content (size and fingerprint) is not copied again.
 pub fn stage(
     card: &Path,
     staging: &Path,
@@ -120,8 +151,13 @@ pub fn stage(
             thumb: None,
             detail: String::new(),
             signal: None,
+            key: String::new(),
         };
-        let already = dst.metadata().is_ok_and(|m| m.len() == f.size);
+        // Reuse a staged copy only when it is the same content, not just the same name.
+        let already = dst.metadata().is_ok_and(|m| m.len() == f.size)
+            && fingerprint(&dst)
+                .ok()
+                .is_some_and(|a| fingerprint(&f.path).ok() == Some(a));
         let res = if already {
             Ok(())
         } else {
@@ -196,9 +232,11 @@ pub fn analyse(tools: &Tools, clip: &mut Clip, cache: &Path) -> Result<()> {
             }
         }
     }
+    clip.key = fingerprint(&staged).unwrap_or_default();
     let thumb = cache.join(format!(
-        "{}.jpg",
-        staged.file_stem().unwrap_or_default().to_string_lossy()
+        "{}-{}.jpg",
+        staged.file_stem().unwrap_or_default().to_string_lossy(),
+        clip.key
     ));
     if media::thumbnail(tools, clip.source().unwrap(), &thumb).is_ok() {
         clip.thumb = Some(thumb);

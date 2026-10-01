@@ -547,3 +547,56 @@ fn size_and_speed() {
         );
     }
 }
+
+/// DVRs reuse file names (the Echo restarts at PICT0001 after a format). Two different
+/// flights named PICT0001.AVI must never share a staged copy, thumbnail or preview.
+#[test]
+fn same_file_name_different_flights() {
+    use quadcam_lib::core::{Core, NoHooks};
+    use quadcam_lib::photos::Recorder;
+    use std::sync::Arc;
+    let a = tempfile::tempdir().unwrap();
+    let b = tempfile::tempdir().unwrap();
+    make_clip(&a.path().join("PICT0001.AVI"), 2, true);
+    make_clip(&b.path().join("PICT0001.AVI"), 3, true);
+    let work = tempfile::tempdir().unwrap();
+    let core = Core::new(
+        work.path().to_path_buf(),
+        None,
+        Arc::new(NoHooks),
+        Arc::new(Recorder::default()),
+    );
+    let sa = core.load(Some(a.path())).unwrap();
+    let pa = core.preview(0).unwrap();
+    let sb = core.load(Some(b.path())).unwrap();
+    let pb = core.preview(0).unwrap();
+    let (ta, tb) = (
+        sa.clips[0].thumb.clone().unwrap(),
+        sb.clips[0].thumb.clone().unwrap(),
+    );
+    assert_ne!(ta, tb, "thumbnails are keyed on content, not the file name");
+    assert!(ta.is_file() && tb.is_file());
+    assert_ne!(pa, pb, "previews are keyed on content");
+    assert!(
+        (pipeline_duration(&pb) - 3.0).abs() < 0.2,
+        "the preview is the new flight"
+    );
+
+    // Same name, same size, different bytes: staging copies it again.
+    let staging = work.path().join("same");
+    let c = tempfile::tempdir().unwrap();
+    let mut bytes = std::fs::read(a.path().join("PICT0001.AVI")).unwrap();
+    pipeline::stage(a.path(), &staging, &mut |_, _, _, _| {}).unwrap();
+    let n = bytes.len();
+    bytes[n - 10] ^= 0xff;
+    std::fs::write(c.path().join("PICT0001.AVI"), &bytes).unwrap();
+    let clips = pipeline::stage(c.path(), &staging, &mut |_, _, _, _| {}).unwrap();
+    assert_eq!(
+        std::fs::read(clips[0].staged.as_ref().unwrap()).unwrap(),
+        bytes
+    );
+}
+
+fn pipeline_duration(p: &Path) -> f64 {
+    quadcam_lib::media::probe(&tools(), p).unwrap().duration
+}

@@ -499,6 +499,30 @@ impl Core {
         Ok(out)
     }
 
+    /// A small H.264 preview the webview can play, made once per clip content. It is named
+    /// by the source's fingerprint, so a new PICT0001 never reuses an old flight's preview.
+    pub fn preview(&self, id: usize) -> Result<PathBuf> {
+        let s = self.current()?;
+        let c = s
+            .clips
+            .iter()
+            .find(|c| c.id == id)
+            .context("No such clip.")?;
+        let src = c.source().context("Clip is not readable.")?;
+        let tools = media::find_tools()?;
+        let dir = self.cache.join("proxies");
+        std::fs::create_dir_all(&dir)?;
+        let dst = dir.join(format!(
+            "{}-{}.mp4",
+            src.file_stem().unwrap_or_default().to_string_lossy(),
+            crate::pipeline::fingerprint(src)?
+        ));
+        if !dst.is_file() {
+            media::proxy(&tools, src, &dst)?;
+        }
+        Ok(dst)
+    }
+
     /// Ejects `target` (a mount point or `/dev/diskN`), or the session's card.
     pub fn eject(&self, target: Option<&str>) -> Result<()> {
         let target = match target {

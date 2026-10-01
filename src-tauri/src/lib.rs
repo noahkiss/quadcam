@@ -230,30 +230,9 @@ async fn eject(state: State<'_, AppState>, path: Option<String>) -> Result<(), S
 
 /// Makes (or reuses) a small H.264 preview of a clip.
 #[tauri::command]
-async fn preview(app: AppHandle, state: State<'_, AppState>, id: usize) -> Result<PathBuf, String> {
-    let src = {
-        let s = state.core.session().ok_or("No clips loaded.")?;
-        let c = s.clips.iter().find(|c| c.id == id).ok_or("No such clip.")?;
-        c.source().ok_or("Clip is not readable.")?.to_path_buf()
-    };
-    let dir = app
-        .path()
-        .app_cache_dir()
-        .map_err(|e| e.to_string())?
-        .join("proxies");
-    blocking(move || {
-        let tools = media::find_tools()?;
-        std::fs::create_dir_all(&dir)?;
-        let dst = dir.join(format!(
-            "{}.mp4",
-            src.file_stem().unwrap_or_default().to_string_lossy()
-        ));
-        if !dst.is_file() {
-            media::proxy(&tools, &src, &dst)?;
-        }
-        Ok(dst)
-    })
-    .await
+async fn preview(state: State<'_, AppState>, id: usize) -> Result<PathBuf, String> {
+    let core = state.core.clone();
+    blocking(move || core.preview(id)).await
 }
 
 /// Emits `volumes-changed` whenever something mounts or unmounts under /Volumes.

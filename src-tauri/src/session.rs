@@ -645,6 +645,7 @@ mod tests {
             thumb: None,
             detail: String::new(),
             signal: None,
+            key: String::new(),
         };
         let plan = |id| ClipPlan {
             id,
