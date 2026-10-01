@@ -618,7 +618,7 @@ impl Core {
         let s = self.current()?;
         let outs = s.verified_outputs(ids.as_deref());
         let files: Vec<PathBuf> = outs.iter().map(|(_, p)| p.clone()).collect();
-        let report = photos::share(self.photos.as_ref(), &files, album.as_deref())?;
+        let report = self.share_files(&files, album.as_deref())?;
         let added: Vec<usize> = outs
             .iter()
             .filter(|(_, p)| report.added.contains(p))
@@ -633,7 +633,6 @@ impl Core {
             }
             self.commit(Some(latest))?;
         }
-        self.library_mark_photos(&report.added);
         Ok(report)
     }
 
@@ -696,9 +695,7 @@ impl Core {
 
     /// A small H.264 preview the webview can play, made once per clip content. It is named
     /// by the source's fingerprint, so a new PICT0001 never reuses an old flight's preview.
-    /// One preview is made at a time; a second call for the same clip waits and reuses it.
     pub fn preview(&self, id: usize) -> Result<PathBuf> {
-        static MAKING: Mutex<()> = Mutex::new(());
         let s = self.current()?;
         let c = s
             .clips
@@ -707,18 +704,43 @@ impl Core {
             .context("No such clip.")?;
         let src = c.source().context("Clip is not readable.")?;
         let tools = media::find_tools()?;
-        let dir = self.cache.join("proxies");
-        std::fs::create_dir_all(&dir)?;
-        let dst = dir.join(format!(
+        let dst = self.cache.join("proxies").join(format!(
             "{}-{}.mp4",
             src.file_stem().unwrap_or_default().to_string_lossy(),
             crate::pipeline::fingerprint(src)?
         ));
+        self.proxy_once(&tools, src, &dst)
+    }
+
+    /// Makes `dst`, a preview of `src`, unless it exists. One preview is made at a time; a
+    /// second call for the same file waits for the first and reuses its file.
+    pub(crate) fn proxy_once(
+        &self,
+        tools: &media::Tools,
+        src: &Path,
+        dst: &Path,
+    ) -> Result<PathBuf> {
+        static MAKING: Mutex<()> = Mutex::new(());
+        if let Some(dir) = dst.parent() {
+            std::fs::create_dir_all(dir)?;
+        }
         let _one = MAKING.lock().unwrap_or_else(|e| e.into_inner());
         if !dst.is_file() {
-            media::proxy(&tools, src, &dst)?;
+            media::proxy(tools, src, dst)?;
         }
-        Ok(dst)
+        Ok(dst.to_path_buf())
+    }
+
+    /// Adds files to Photos (into `album`, or the library only) and marks the library's
+    /// clips among them as in Photos.
+    pub(crate) fn share_files(
+        &self,
+        files: &[PathBuf],
+        album: Option<&str>,
+    ) -> Result<ShareReport> {
+        let report = photos::share(self.photos.as_ref(), files, album)?;
+        self.library_mark_photos(&report.added);
+        Ok(report)
     }
 
     /// Ejects `target` (a mount point or `/dev/diskN`), or the session's card.

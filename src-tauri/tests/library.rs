@@ -762,3 +762,38 @@ fn a_library_cut_carries_the_clips_details_and_is_read_back() {
     quadcam_lib::media::verify_qt(&tools(), &cut, &items).unwrap();
     assert!(by_name(&l, "backyard loops").clip.pending_cuts.is_empty());
 }
+
+/// Several Play clicks on a MOV library clip at once: one preview is made, and every
+/// caller gets the same playable file.
+#[test]
+fn concurrent_previews_make_one_file() {
+    let l = lab(Layout::YearDay, false, false);
+    l.core.set_defaults(Defaults {
+        format: Format::Mov,
+        ..l.core.defaults()
+    });
+    import(&l);
+    let id = by_name(&l, "backyard loops").clip.id;
+    let paths: Vec<PathBuf> = std::thread::scope(|s| {
+        let calls: Vec<_> = (0..4)
+            .map(|_| s.spawn(|| l.core.library_preview(&id).unwrap()))
+            .collect();
+        calls.into_iter().map(|c| c.join().unwrap()).collect()
+    });
+    assert!(paths.windows(2).all(|w| w[0] == w[1]), "{paths:?}");
+    let p = quadcam_lib::media::probe(&tools(), &paths[0]).unwrap();
+    assert!(p.video_packets > 0);
+    let dir = paths[0].parent().unwrap();
+    let names: Vec<String> = std::fs::read_dir(dir)
+        .unwrap()
+        .map(|e| e.unwrap().file_name().to_string_lossy().to_string())
+        .collect();
+    assert_eq!(names.len(), 1, "no half-made previews left: {names:?}");
+    let made = paths[0].metadata().unwrap().modified().unwrap();
+    assert_eq!(l.core.library_preview(&id).unwrap(), paths[0]);
+    assert_eq!(
+        paths[0].metadata().unwrap().modified().unwrap(),
+        made,
+        "reused, not made again"
+    );
+}

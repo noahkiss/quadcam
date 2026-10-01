@@ -86,8 +86,10 @@ GitHub (`noahkiss/quadcam`, public) is the only remote. Users install the cask
   `cuts::write_cut` writes every cut file, session and library alike: it verifies frames and
   reads the QuickTime items back before the rename.
 - **Previews:** after `Core::analyse`, the GUI's `Hooks::analysed` runs `Core::make_previews` on a
-  thread. `Core::preview` makes one proxy at a time (a static lock), so a Play click on a clip
-  being made waits for it and reuses the file. Library MP4s play directly.
+  thread. Session and library previews both go through `Core::proxy_once`, which makes one
+  proxy at a time (a static lock), so a Play click on a clip being made waits for it and reuses
+  the file. Library MP4s play directly. Session and library Photos adds both go through
+  `Core::share_files`, which also marks the library's clips as in Photos.
 - **Native feel (UI):** page text is not selectable and the cursor is the arrow; WebKit needs
   `-webkit-user-select`. Text a person may copy (paths, details values) gets the
   `selectable` class. The web view's context menu shows only over text fields and selected

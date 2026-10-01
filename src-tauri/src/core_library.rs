@@ -5,7 +5,7 @@ use super::Core;
 use crate::library::{self as lib, Filter, Flag, Index, LibClip, LibCut};
 use crate::media;
 use crate::moments::Span;
-use crate::photos::{self, ShareReport};
+use crate::photos::ShareReport;
 use crate::pipeline::Outcome;
 use crate::trim::{self, CutChange, ExportedCut, RemovedCuts};
 use anyhow::{anyhow, bail, Context, Result};
@@ -1064,9 +1064,7 @@ impl Core {
             files.extend(c.cuts.iter().map(|x| root.join(&x.path)));
         }
         let album = album.or(Some(self.defaults().photos_album));
-        let report = photos::share(self.photos.as_ref(), &files, album.as_deref())?;
-        self.library_mark_photos(&report.added);
-        Ok(report)
+        self.share_files(&files, album.as_deref())
     }
 
     /// Marks added files as in Photos, in the files and the index.
@@ -1104,11 +1102,7 @@ impl Core {
             .cache
             .join("proxies")
             .join(format!("lib-{}.mp4", lib::id_file(id)));
-        if !dst.is_file() {
-            std::fs::create_dir_all(dst.parent().unwrap())?;
-            media::proxy(&tools, &file, &dst)?;
-        }
-        Ok(dst)
+        self.proxy_once(&tools, &file, &dst)
     }
 
     /// Makes the hover-scrub strips that are missing (for `ids`, or every clip). When a
