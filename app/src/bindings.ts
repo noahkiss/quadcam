@@ -275,6 +275,8 @@ export type Clip = {
 	 *  preview, since DVRs reuse file names: the Echo restarts at PICT0001 after a format.
 	 */
 	key?: string,
+	/**  The video system the clip came from. */
+	kind?: SourceKind,
 };
 
 /**  One library clip, by id. */
@@ -1076,6 +1078,11 @@ export type SignalScan = {
 
 /**  Where a moment's evidence came from. */
 export type Source = "radio_log" | "video";
+
+/**  Which video system a clip came from. */
+export type SourceKind = 
+/**  An analog DVR: MJPEG in AVI. */
+"analog";
 
 /**  `stage` and `load`: a card mount point or a folder. None takes the first detected card. */
 export type SourceParams = {

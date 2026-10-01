@@ -208,7 +208,12 @@ impl Session {
         staging_root: &Path,
         on_progress: &mut dyn FnMut(usize, usize, u64, u64),
     ) -> Result<Session> {
-        let found = crate::scan::clips_in(files);
+        // The first source that finds clips among the files.
+        let (system, found) = crate::sources::all()
+            .into_iter()
+            .map(|s| (s, s.pick(files)))
+            .find(|(_, f)| !f.is_empty())
+            .unwrap_or((crate::sources::get(Default::default()), Vec::new()));
         let Some(source) = found
             .first()
             .and_then(|f| f.path.parent())
@@ -217,7 +222,7 @@ impl Session {
             bail!("None of these files is a DVR clip (AVI).");
         };
         let staging = staging_root.join(chrono::Local::now().format("%Y%m%d-%H%M%S").to_string());
-        let clips = pipeline::stage_found(found, &staging, on_progress)?;
+        let clips = pipeline::stage_found(found, system.kind(), &staging, on_progress)?;
         Ok(Session::staged(&source, None, staging, clips))
     }
 
@@ -580,6 +585,7 @@ mod tests {
             detail: String::new(),
             signal: None,
             key: String::new(),
+            kind: Default::default(),
         };
         let plan = |id| ClipPlan {
             id,

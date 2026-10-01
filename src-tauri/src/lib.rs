@@ -24,6 +24,7 @@ pub mod scan;
 pub mod session;
 pub mod settings;
 mod share;
+pub mod sources;
 pub mod trash;
 pub mod trim;
 pub mod watch;

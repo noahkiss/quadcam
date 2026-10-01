@@ -7,9 +7,10 @@ use crate::library::{self, Layout};
 use crate::logs::{self, Badge, Tunables};
 use crate::media::{self, Encoder, Format, Meta, Probe, Tools};
 use crate::metadata::{self as md, FlightStats, Resolved};
-use crate::moments::{self, Moment, MomentSource, RadioLog, SignalScan, Span};
+use crate::moments::{Moment, MomentSource, RadioLog, SignalScan, Span};
 use crate::naming::{self, NamePlanner};
-use crate::scan::{self, FoundClip};
+use crate::scan::FoundClip;
+use crate::sources::SourceKind;
 use anyhow::{bail, Context, Result};
 use chrono::{DateTime, Local, NaiveDate, NaiveDateTime, NaiveTime, TimeZone, Utc};
 use serde::{Deserialize, Serialize};
@@ -51,6 +52,9 @@ pub struct Clip {
     /// preview, since DVRs reuse file names: the Echo restarts at PICT0001 after a format.
     #[serde(default)]
     pub key: String,
+    /// The video system the clip came from.
+    #[serde(default)]
+    pub kind: SourceKind,
 }
 
 /// Bytes read from each end of a file for its fingerprint.
@@ -133,12 +137,14 @@ pub fn stage(
     staging: &Path,
     on_progress: &mut dyn FnMut(usize, usize, u64, u64),
 ) -> Result<Vec<Clip>> {
-    stage_found(scan::find_clips(card), staging, on_progress)
+    let source = crate::sources::for_root(card);
+    stage_found(source.list(card), source.kind(), staging, on_progress)
 }
 
 /// `stage` for clips already found: a card's, or files a person dropped.
 pub fn stage_found(
     found: Vec<FoundClip>,
+    kind: SourceKind,
     staging: &Path,
     on_progress: &mut dyn FnMut(usize, usize, u64, u64),
 ) -> Result<Vec<Clip>> {
@@ -164,6 +170,7 @@ pub fn stage_found(
             detail: String::new(),
             signal: None,
             key: String::new(),
+            kind,
         };
         // Reuse a staged copy only when it is the same content, not just the same name.
         let already = dst.metadata().is_ok_and(|m| m.len() == f.size)
@@ -209,25 +216,24 @@ pub fn analyse(tools: &Tools, clip: &mut Clip, cache: &Path) -> Result<()> {
         clip.detail = "zero bytes".into();
         return Ok(());
     }
-    let avi = scan::check_avi(&staged)?;
+    let source = crate::sources::get(clip.kind);
+    let whole = source.inspect(&staged)?.complete;
     let probe = media::probe(tools, &staged).ok();
     let readable = probe.as_ref().is_some_and(|p| p.video_packets > 0);
     let probe_errors = probe.as_ref().is_some_and(|p| !p.errors.is_empty());
 
-    if avi.complete() && readable && !probe_errors {
+    if whole && readable && !probe_errors {
         let p = probe.unwrap();
         clip.status = ClipStatus::Ok;
         clip.duration = p.duration;
         clip.detail = format!("{} frames", p.video_packets);
         clip.probe = Some(p);
     } else {
-        // Half-written: RIFF size wrong, no idx1, or ffprobe complained. Try recovery.
-        let rec = staged.with_file_name(format!(
-            "{}.recovered.avi",
-            staged.file_stem().unwrap_or_default().to_string_lossy()
-        ));
-        let recovered =
-            media::recover(tools, &staged, &rec).and_then(|_| media::probe(tools, &rec));
+        // Half-written (for analog: RIFF size wrong, no idx1), or ffprobe complained.
+        let rec = source.repair_path(&staged);
+        let recovered = source
+            .repair(tools, &staged, &rec)
+            .and_then(|_| media::probe(tools, &rec));
         match recovered {
             Ok(p) if p.video_packets > 0 => {
                 clip.status = ClipStatus::Incomplete;
@@ -255,7 +261,7 @@ pub fn analyse(tools: &Tools, clip: &mut Clip, cache: &Path) -> Result<()> {
     }
     // Dead air is a suggestion only; a clip that cannot be sampled imports as usual.
     let fps = clip.probe.as_ref().and_then(|p| p.fps);
-    clip.signal = moments::scan_signal(tools, clip.source().unwrap(), fps, clip.duration).ok();
+    clip.signal = source.signal(tools, clip.source().unwrap(), fps, clip.duration);
     Ok(())
 }
 
@@ -667,11 +673,14 @@ pub fn import_clip(
     // Write under a hidden temporary name; rename only after verify passes.
     let tmp = crate::cuts::part_path(&out);
 
+    let source = crate::sources::get(clip.kind);
+    let plan = source.encode_plan(src_probe, settings.format);
     let enc = match media::convert(
         tools,
         src,
         &tmp,
         settings.format,
+        plan,
         settings.encoder,
         &meta,
         on_progress,
@@ -715,8 +724,8 @@ pub fn import_clip(
         let copy = std::fs::create_dir_all(&dir)
             .map_err(anyhow::Error::from)
             .and_then(|_| {
-                let dst = planner.claim(&dir, &orig_stem, "avi");
                 let staged = clip.staged.as_deref().unwrap_or(src);
+                let dst = planner.claim(&dir, &orig_stem, &source.original_ext(staged));
                 std::fs::copy(staged, &dst)?;
                 if dst.metadata()?.len() != staged.metadata()?.len() {
                     bail!("original copy came out the wrong size");
