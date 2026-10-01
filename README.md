@@ -121,6 +121,7 @@ In the library:
 
 - **Select** a clip; Command-click and Shift-click select more. Double-click, Space or T opens the clip.
 - **Rate**: keys 1 to 5 (0 clears). **Flag**: P picks, X rejects, U clears. The stars on a card also work.
+- **Undo** (Command-Z) and **Redo** (Shift-Command-Z) work for ratings, flags, renames, notes, keywords, places and Move to Trash. Undo after Move to Trash puts the files back from the Trash.
 - **Search** matches the name, note, place, aircraft, keywords and file name.
 - **Thumbnails** show the clip as you move the pointer across them.
 - **Right-click** a clip: Rename (Return), Edit details (Command-I), Trim and cuts, Add to Photos, Show in Finder (Command-R), Find dead air again, Move to Trash (Command-Delete). Move to Trash takes the clip's cuts and kept original with it.

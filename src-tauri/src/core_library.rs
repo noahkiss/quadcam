@@ -73,6 +73,16 @@ pub struct CardStatus {
 pub struct TrashReport {
     pub trashed: Vec<PathBuf>,
     pub failed: Vec<(PathBuf, String)>,
+    /// Where each file went, so `library_untrash` can put it back.
+    pub moved: Vec<Moved>,
+}
+
+/// A library file in the Trash: the clip it belongs to, where it was, where it is now.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Moved {
+    pub id: String,
+    pub from: PathBuf,
+    pub to: PathBuf,
 }
 
 /// The index in memory, and the index file's mtime when it was read.
@@ -724,6 +734,7 @@ impl Core {
         let mut report = TrashReport {
             trashed: Vec::new(),
             failed: Vec::new(),
+            moved: Vec::new(),
         };
         let mut gone = Vec::new();
         for id in ids {
@@ -734,7 +745,16 @@ impl Core {
                     continue;
                 }
                 match self.trash.trash(&f) {
-                    Ok(()) => report.trashed.push(f),
+                    Ok(to) => {
+                        if let Some(to) = to {
+                            report.moved.push(Moved {
+                                id: id.clone(),
+                                from: f.clone(),
+                                to,
+                            });
+                        }
+                        report.trashed.push(f)
+                    }
                     Err(e) => {
                         ok = false;
                         report.failed.push((f, format!("{e:#}")));
@@ -756,6 +776,54 @@ impl Core {
                 .collect::<Vec<_>>(),
         );
         Ok(report)
+    }
+
+    /// Puts trashed library files back where they were and the clips back in the index:
+    /// the undo of `library_trash`. Refuses before moving anything when a file is no longer
+    /// in the Trash, its old place is taken, or it was not in the library.
+    pub fn library_untrash(&self, moved: &[Moved]) -> Result<Vec<String>> {
+        let root = self.library_root()?;
+        for m in moved {
+            if !m.from.starts_with(&root) {
+                bail!("{} is not in the library.", m.from.display());
+            }
+            if m.from.exists() {
+                bail!("{} exists already; not putting it back.", m.from.display());
+            }
+            if !m.to.is_file() {
+                bail!("{} is no longer in the Trash.", m.to.display());
+            }
+        }
+        for m in moved {
+            if let Some(dir) = m.from.parent() {
+                std::fs::create_dir_all(dir)?;
+            }
+            crate::trash::move_file(&m.to, &m.from)?;
+        }
+        let mut ids: Vec<String> = Vec::new();
+        for m in moved {
+            if !ids.contains(&m.id) {
+                ids.push(m.id.clone());
+            }
+        }
+        self.with_index(|root, ix| {
+            for id in &ids {
+                // The clip comes first in `LibClip::files`, then its cuts, then its original.
+                let rels: Vec<PathBuf> = moved
+                    .iter()
+                    .filter(|m| &m.id == id)
+                    .map(|m| rel_to(root, &m.from))
+                    .collect();
+                let Some((clip, rest)) = rels.split_first() else {
+                    continue;
+                };
+                let mut c = lib::reread(root, clip, rest)?;
+                c.id = id.clone();
+                ix.upsert(c);
+            }
+            Ok(((), true))
+        })?;
+        Ok(ids)
     }
 
     /// Adds library clips and their cuts to Photos.

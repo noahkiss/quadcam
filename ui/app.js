@@ -634,11 +634,25 @@ const selectedIds = () => [...state.selected].filter((id) => libClip(id));
 
 async function rate(ids, rating, flag) {
   if (!ids.length) return;
+  const before = ids.map((id) => libClip(id)).filter(Boolean).map((c) => ({ id: c.id, rating: c.rating || 0, flag: c.flag || "none" }));
+  const apply = () => call("library_rate", { ids, rating: rating ?? null, flag: flag ?? null });
   try {
-    await call("library_rate", { ids, rating: rating ?? null, flag: flag ?? null });
+    await apply();
+    History.push({ label: flag ? "Flag" : "Rating", redo: apply, undo: () => restoreRatings(before) });
   } catch (e) {
     toast(String(e), true);
   }
+}
+
+// Puts ratings and flags back, one core call per distinct pair.
+async function restoreRatings(before) {
+  const groups = new Map();
+  for (const b of before) {
+    const k = `${b.rating}|${b.flag}`;
+    if (!groups.has(k)) groups.set(k, { rating: b.rating, flag: b.flag, ids: [] });
+    groups.get(k).ids.push(b.id);
+  }
+  for (const g of groups.values()) await call("library_rate", { ids: g.ids, rating: g.rating, flag: g.flag });
 }
 
 async function trashClips(ids) {
@@ -651,6 +665,14 @@ async function trashClips(ids) {
     if (r.failed.length) toast(`${r.failed.length} file${r.failed.length === 1 ? "" : "s"} did not move: ${r.failed[0][1]}`, true);
     else toast(`${r.trashed.length} file${r.trashed.length === 1 ? "" : "s"} moved to the Trash.`);
     if (state.detailId && ids.includes(state.detailId)) closeDetail();
+    if (r.moved.length) {
+      let moved = r.moved;
+      History.push({
+        label: "Move to Trash",
+        undo: () => call("library_untrash", { moved }),
+        redo: async () => { moved = (await call("library_trash", { ids })).moved; },
+      });
+    }
   } catch (e) {
     toast(String(e), true);
   }
@@ -661,8 +683,17 @@ async function renameClip(id) {
   if (!c) return;
   const name = await ask("Rename", null, { input: c.title || c.name, ok: "Rename" });
   if (name == null || !name.trim()) return;
+  await setClipName(id, name);
+}
+
+async function setClipName(id, name) {
+  const c = libClip(id);
+  name = name.trim();
+  if (!c || !name || name === (c.title || c.name)) return;
+  const old = c.title || c.name;
   try {
-    await call("library_rename", { id, name: name.trim() });
+    await call("library_rename", { id, name });
+    History.push({ label: "Rename", undo: () => call("library_rename", { id, name: old }), redo: () => call("library_rename", { id, name }) });
   } catch (e) {
     toast(String(e), true);
   }
@@ -852,8 +883,20 @@ function renderLibDetails(c) {
 }
 
 async function libEdit(id, patch) {
+  const c = libClip(id);
+  const before = {};
+  if (c) {
+    if ("note" in patch) before.note = c.note || "";
+    if ("keywords" in patch) before.keywords = c.keywords || [];
+    if ("author" in patch) before.author = c.author || "";
+    if ("place" in patch || "location" in patch) {
+      if (c.location) before.location = { ...c.location, name: c.place || c.location.name || null };
+      else before.place = "";
+    }
+  }
   try {
     await call("library_edit", { id, ...patch });
+    if (c) History.push({ label: "Edit", undo: () => call("library_edit", { id, ...before }), redo: () => call("library_edit", { id, ...patch }) });
   } catch (e) {
     toast(String(e), true);
   }
@@ -911,6 +954,10 @@ document.addEventListener("keydown", (e) => {
   const typing = e.target.closest("input, select, textarea, [contenteditable]");
   if (typing || document.querySelector("dialog[open]:not(#import-sheet)")) return;
   const sheetOpen = $("#import-sheet").open;
+  if (!sheetOpen && e.metaKey && e.key.toLowerCase() === "z") {
+    undoRedo(e.shiftKey ? "redo" : "undo");
+    return e.preventDefault();
+  }
   if (e.key === "Escape") {
     if (!$("#menu").hidden) return closeMenu();
     if (!sheetOpen && state.screen === "detail") return closeDetail();
@@ -949,6 +996,16 @@ document.addEventListener("keydown", (e) => {
   if (e.metaKey && e.key === "r") { T.opener.revealItemInDir(libClip(ids[0]).file); return e.preventDefault(); }
   if (libKeys(e, ids)) e.preventDefault();
 });
+
+async function undoRedo(which) {
+  const label = which === "undo" ? History.undoLabel() : History.redoLabel();
+  try {
+    const step = await History[which]();
+    if (step) toast(`${which === "undo" ? "Undo" : "Redo"} ${label.toLowerCase()}`);
+  } catch (e) {
+    toast(String(e), true);
+  }
+}
 
 function libKeys(e, ids) {
   if (e.metaKey && e.key === "Backspace") { trashClips(ids); return true; }

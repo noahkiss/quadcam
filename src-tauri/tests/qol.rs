@@ -67,3 +67,46 @@ fn one_patch_call_edits_every_clip() {
         .unwrap();
     assert!(s.plans.iter().all(|p| p.date == day && p.note == "windy"));
 }
+
+#[test]
+fn trashed_clips_can_be_put_back() {
+    let dir = tempfile::tempdir().unwrap();
+    let c = core(dir.path()).with_trash(Arc::new(quadcam_lib::trash::DirTrash(
+        dir.path().join("trash"),
+    )));
+    let src = clips_folder();
+    c.load(Some(src.path())).unwrap();
+    c.patch(
+        &[PlanPatch {
+            id: 0,
+            name: Some("loops".into()),
+            cuts: Some(vec![quadcam_lib::moments::Span {
+                start: 0.0,
+                end: 1.0,
+            }]),
+            ..Default::default()
+        }],
+        Editor::User,
+    )
+    .unwrap();
+    c.import(&Default::default()).unwrap();
+    let lib = c.library(&Default::default()).unwrap();
+    assert_eq!(lib.clips.len(), 2);
+    let loops = lib.clips.iter().find(|x| x.name == "loops").unwrap();
+    let id = loops.clip.id.clone();
+    c.library_rate(std::slice::from_ref(&id), Some(4), None).unwrap();
+
+    let r = c.library_trash(std::slice::from_ref(&id)).unwrap();
+    assert_eq!(r.moved.len(), 2, "the clip and its cut: {r:?}");
+    assert!(!loops.file.exists());
+    assert_eq!(c.library(&Default::default()).unwrap().clips.len(), 1);
+
+    assert_eq!(c.library_untrash(&r.moved).unwrap(), std::slice::from_ref(&id));
+    assert!(loops.file.is_file());
+    let lib = c.library(&Default::default()).unwrap();
+    let back = lib.clips.iter().find(|x| x.clip.id == id).unwrap();
+    assert_eq!(back.clip.rating, 4, "details live in the file");
+    assert_eq!(back.clip.cuts.len(), 1);
+    // A second put-back finds nothing in the Trash and changes nothing.
+    assert!(c.library_untrash(&r.moved).is_err());
+}

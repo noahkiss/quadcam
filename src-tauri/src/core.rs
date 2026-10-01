@@ -17,7 +17,9 @@ use std::sync::{Arc, Mutex};
 
 #[path = "core_library.rs"]
 mod core_library;
-pub use core_library::{CardStatus, LibEdit, LibItem, LibraryView, RebuildReport, TrashReport};
+pub use core_library::{
+    CardStatus, LibEdit, LibItem, LibraryView, Moved, RebuildReport, TrashReport,
+};
 
 /// What the host does when the core changes state. The GUI emits events and asks for the
 /// format click; a headless host does nothing.
@@ -916,6 +918,13 @@ impl Core {
             }
             "library_export_cuts" => v(&self.library_export_cuts(&p::<One>(params)?.id)?),
             "library_trash" => v(&self.library_trash(&p::<Ids>(params)?.ids)?),
+            "library_untrash" => {
+                #[derive(Deserialize, Default)]
+                struct Untrash {
+                    moved: Vec<Moved>,
+                }
+                v(&self.library_untrash(&p::<Untrash>(params)?.moved)?)
+            }
             "library_photos" => {
                 let x: Ids = p(params)?;
                 v(&self.library_photos(&x.ids, x.album)?)
