@@ -1,0 +1,418 @@
+//! The library: where imports land, the index and its rebuild from the files, ratings in
+//! the files, adopting an older export folder, and cuts removed after they were exported.
+
+mod common;
+
+use chrono::NaiveDate;
+use common::{make_clip, tools};
+use quadcam_lib::core::{Core, ImportOptions, LibEdit, LogChoice, NoHooks};
+use quadcam_lib::library::{self, Filter, Flag, Layout};
+use quadcam_lib::media::Format;
+use quadcam_lib::metadata::Place;
+use quadcam_lib::moments::Span;
+use quadcam_lib::photos::Recorder;
+use quadcam_lib::session::{Defaults, Editor, PlanPatch};
+use quadcam_lib::trash::DirTrash;
+use quadcam_lib::trim::{CutChange, RemovedCuts};
+use std::path::{Path, PathBuf};
+use std::sync::Arc;
+
+struct Lab {
+    _dir: tempfile::TempDir,
+    root: PathBuf,
+    trash: PathBuf,
+    src: PathBuf,
+    core: Core,
+}
+
+fn lab(layout: Layout, place_folders: bool, keep_originals: bool) -> Lab {
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path().join("library");
+    std::fs::create_dir(&root).unwrap();
+    let src = dir.path().join("card");
+    std::fs::create_dir_all(src.join("DCIM")).unwrap();
+    make_clip(&src.join("DCIM/PICT0001.AVI"), 3, true);
+    make_clip(&src.join("DCIM/PICT0002.AVI"), 2, false);
+    let trash = dir.path().join("trash");
+    let core = Core::new(
+        dir.path().join("cache"),
+        Some(dir.path().join("session.json")),
+        Arc::new(NoHooks),
+        Arc::new(Recorder::default()),
+    )
+    .with_trash(Arc::new(DirTrash(trash.clone())));
+    core.set_defaults(Defaults {
+        output_dir: Some(root.clone()),
+        format: Format::Mp4,
+        layout,
+        place_folders,
+        keep_originals,
+        places: vec![Place {
+            name: "Home field".into(),
+            lat: 40.6892,
+            lon: -74.0445,
+        }],
+        ..Defaults::default()
+    });
+    Lab {
+        _dir: dir,
+        root,
+        trash,
+        src,
+        core,
+    }
+}
+
+fn day() -> NaiveDate {
+    NaiveDate::from_ymd_opt(2026, 9, 27).unwrap()
+}
+
+/// Loads the card folder, names and dates the clips, puts clip 0 at a place with one cut,
+/// and imports.
+fn import(l: &Lab) {
+    l.core.stage(Some(&l.src)).unwrap();
+    l.core.analyse().unwrap();
+    l.core.plan_dates(LogChoice::None, None).unwrap();
+    l.core
+        .patch(
+            &[
+                PlanPatch {
+                    id: 0,
+                    name: Some("backyard loops".into()),
+                    note: Some("two flips".into()),
+                    date: Some(day()),
+                    place: Some("Home field".into()),
+                    cuts: Some(vec![Span {
+                        start: 0.5,
+                        end: 1.5,
+                    }]),
+                    ..Default::default()
+                },
+                PlanPatch {
+                    id: 1,
+                    name: Some("gap run".into()),
+                    date: Some(day()),
+                    ..Default::default()
+                },
+            ],
+            Editor::User,
+        )
+        .unwrap();
+    let out = l.core.import(&ImportOptions::default()).unwrap();
+    assert_eq!(out.summary.imported, 2, "{:?}", out.summary.results);
+}
+
+fn all(l: &Lab) -> Vec<quadcam_lib::core::LibItem> {
+    l.core.library(&Filter::default()).unwrap().clips
+}
+
+fn by_name(l: &Lab, name: &str) -> quadcam_lib::core::LibItem {
+    all(l)
+        .into_iter()
+        .find(|c| c.name == name)
+        .unwrap_or_else(|| panic!("no clip {name}"))
+}
+
+#[test]
+fn imports_land_in_year_and_day_folders_with_place_and_originals() {
+    let l = lab(Layout::YearDay, true, true);
+    import(&l);
+    let at_place = l.root.join("2026/2026-09-27 Home field");
+    assert!(at_place.join("2026-09-27_backyard_loops.mp4").is_file());
+    assert!(at_place
+        .join("2026-09-27_backyard_loops_cut1.mp4")
+        .is_file());
+    assert!(at_place
+        .join("originals/2026-09-27_backyard_loops.avi")
+        .is_file());
+    // No place: the plain day folder.
+    assert!(l
+        .root
+        .join("2026/2026-09-27/2026-09-27_gap_run.mp4")
+        .is_file());
+
+    // The index knows both, as the last import, with the cut and the original.
+    let v = l.core.library(&Filter::default()).unwrap();
+    assert_eq!(v.clips.len(), 2);
+    assert!(v.clips.iter().all(|c| c.last_import));
+    assert_eq!(v.unindexed, 0);
+    let a = by_name(&l, "backyard loops");
+    assert_eq!(a.clip.date, day());
+    assert_eq!(a.clip.note, "two flips");
+    assert_eq!(a.clip.place.as_deref(), Some("Home field"));
+    assert_eq!(a.clip.cuts.len(), 1);
+    assert!(a.clip.original.is_some());
+    assert_eq!(a.clip.dvr.as_deref(), Some("PICT0001.AVI"));
+    assert!((a.clip.duration - 3.0).abs() < 0.2, "{}", a.clip.duration);
+    // Identity is the DVR content, not the file name.
+    let s = l.core.session().unwrap();
+    assert_eq!(a.clip.id, s.clips[0].key);
+}
+
+#[test]
+fn flat_and_day_layouts() {
+    let l = lab(Layout::Flat, true, false);
+    import(&l);
+    assert!(l.root.join("2026-09-27_backyard_loops.mp4").is_file());
+    let l = lab(Layout::Day, false, false);
+    import(&l);
+    assert!(l
+        .root
+        .join("2026-09-27/2026-09-27_backyard_loops.mp4")
+        .is_file());
+}
+
+#[test]
+fn ratings_and_details_survive_a_rebuild_from_the_files() {
+    let l = lab(Layout::YearDay, false, false);
+    import(&l);
+    let a = by_name(&l, "backyard loops");
+    let b = by_name(&l, "gap run");
+    l.core
+        .library_rate(std::slice::from_ref(&a.clip.id), Some(4), Some(Flag::Pick))
+        .unwrap();
+    l.core
+        .library_rate(std::slice::from_ref(&b.clip.id), None, Some(Flag::Reject))
+        .unwrap();
+    l.core
+        .library_edit(
+            &a.clip.id,
+            &LibEdit {
+                keywords: Some(vec!["windy".into(), "park".into()]),
+                ..Default::default()
+            },
+        )
+        .unwrap();
+    // A rating changes the file's metadata, never its picture or its identity.
+    let items = quadcam_lib::qtmeta::read(&a.file).unwrap();
+    assert_eq!(
+        quadcam_lib::qtmeta::get(&items, library::KEY_RATING),
+        Some("4")
+    );
+    quadcam_lib::media::verify_qt(
+        &tools(),
+        &a.file,
+        &[("app.quadcam.flag".into(), "pick".into())],
+    )
+    .unwrap();
+
+    // Throw the index away and rebuild it from the files alone.
+    std::fs::remove_dir_all(l.root.join(".quadcam")).unwrap();
+    let r = l.core.library_rebuild().unwrap();
+    assert_eq!((r.clips, r.cuts), (2, 1), "{:?}", r.problems);
+    assert!(r.problems.is_empty(), "{:?}", r.problems);
+    let a2 = by_name(&l, "backyard loops");
+    assert_eq!(a2.clip.id, a.clip.id);
+    assert_eq!(a2.clip.rating, 4);
+    assert_eq!(a2.clip.flag, Flag::Pick);
+    assert_eq!(a2.clip.keywords, ["windy", "park"]);
+    assert_eq!(a2.clip.cuts.len(), 1);
+    assert!((a2.clip.cuts[0].start - 0.5).abs() < 0.001);
+    assert!(a2.last_import, "the last import is in the files too");
+    assert_eq!(by_name(&l, "gap run").clip.flag, Flag::Reject);
+
+    // Groups and search.
+    let rejected = l
+        .core
+        .library(&Filter {
+            group: Some("rejected".into()),
+            ..Default::default()
+        })
+        .unwrap();
+    assert_eq!(rejected.clips.len(), 1);
+    let found = l
+        .core
+        .library(&Filter {
+            query: Some("windy".into()),
+            ..Default::default()
+        })
+        .unwrap();
+    assert_eq!(found.clips.len(), 1);
+
+    // Move the rejected clip to the Trash.
+    let t = l
+        .core
+        .library_trash(std::slice::from_ref(&b.clip.id))
+        .unwrap();
+    assert_eq!(t.trashed.len(), 1);
+    assert!(!b.file.exists());
+    assert!(l.trash.join("2026-09-27_gap_run.mp4").is_file());
+    assert_eq!(all(&l).len(), 1);
+}
+
+/// An MP4 with no quadcam metadata at all, as an older export or another tool writes it.
+fn plain_mp4(path: &Path, secs: u32) {
+    let st = std::process::Command::new(tools().ffmpeg)
+        .args(["-v", "error", "-y", "-f", "lavfi", "-i"])
+        .arg("testsrc=size=320x240:rate=30")
+        .args([
+            "-t",
+            &secs.to_string(),
+            "-c:v",
+            "libx264",
+            "-pix_fmt",
+            "yuv420p",
+        ])
+        .arg(path)
+        .status()
+        .unwrap();
+    assert!(st.success());
+}
+
+#[test]
+fn an_existing_export_folder_is_adopted_without_moving_anything() {
+    let l = lab(Layout::YearDay, false, false);
+    let a = l.root.join("2026-08-02_old-flight.mp4");
+    let c = l.root.join("2026-08-02_old-flight_cut1.mp4");
+    plain_mp4(&a, 2);
+    plain_mp4(&c, 1);
+    let before: Vec<_> = [&a, &c].iter().map(|p| std::fs::read(p).unwrap()).collect();
+
+    let v = l.core.library(&Filter::default()).unwrap();
+    assert_eq!(v.clips.len(), 0);
+    assert_eq!(v.unindexed, 2, "the app offers to scan them");
+    assert!(library::needs_scan(&l.root));
+
+    let r = l.core.library_rebuild().unwrap();
+    assert_eq!((r.clips, r.cuts), (1, 1), "{:?}", r.problems);
+    let v = l.core.library(&Filter::default()).unwrap();
+    assert_eq!(v.unindexed, 0);
+    let clip = &v.clips[0];
+    assert_eq!(clip.name, "old flight");
+    assert_eq!(clip.clip.date, NaiveDate::from_ymd_opt(2026, 8, 2).unwrap());
+    assert!(clip.clip.id.starts_with('h'));
+    // Nothing moved, nothing written.
+    assert!(a.is_file() && c.is_file());
+    let after: Vec<_> = [&a, &c].iter().map(|p| std::fs::read(p).unwrap()).collect();
+    assert_eq!(before, after);
+
+    // Rating an adopted clip writes into it, and its identity holds.
+    l.core
+        .library_rate(std::slice::from_ref(&clip.clip.id), Some(3), None)
+        .unwrap();
+    std::fs::remove_dir_all(l.root.join(".quadcam")).unwrap();
+    l.core.library_rebuild().unwrap();
+    let v = l.core.library(&Filter::default()).unwrap();
+    assert_eq!(v.clips[0].clip.id, clip.clip.id);
+    assert_eq!(v.clips[0].clip.rating, 3);
+}
+
+#[test]
+fn removing_an_exported_cut_asks_then_keeps_or_trashes_the_file() {
+    let l = lab(Layout::YearDay, false, false);
+    import(&l);
+    let a = by_name(&l, "backyard loops");
+    let id = a.clip.id.clone();
+    let cut1 = l.root.join(&a.clip.cuts[0].path);
+
+    // Add two ranges and write them.
+    let two = vec![
+        Span {
+            start: 0.5,
+            end: 1.5,
+        },
+        Span {
+            start: 1.0,
+            end: 2.0,
+        },
+        Span {
+            start: 2.0,
+            end: 2.9,
+        },
+    ];
+    let ch = l.core.library_set_cuts(&id, &two, None).unwrap();
+    assert!(matches!(ch, CutChange::Applied { .. }), "{ch:?}");
+    assert_eq!(by_name(&l, "backyard loops").clip.pending_cuts.len(), 2);
+    let made = l.core.library_export_cuts(&id).unwrap();
+    assert_eq!(made.len(), 2);
+    let a = by_name(&l, "backyard loops");
+    assert_eq!(a.clip.cuts.len(), 3);
+    assert!(a.clip.pending_cuts.is_empty());
+    let cut3 = l.root.join(&a.clip.cuts[2].path);
+    assert!(cut3.to_string_lossy().ends_with("_cut3.mp4"), "{cut3:?}");
+
+    // Dropping cut 1 without a decision changes nothing and names the file.
+    let only23 = two[1..].to_vec();
+    let ch = l.core.library_set_cuts(&id, &only23, None).unwrap();
+    assert_eq!(
+        ch,
+        CutChange::Confirm {
+            files: vec![cut1.clone()]
+        }
+    );
+    assert_eq!(by_name(&l, "backyard loops").clip.cuts.len(), 3);
+    assert!(cut1.is_file());
+
+    // Keep: the file stays and becomes a clip of its own, also after a rebuild.
+    let ch = l
+        .core
+        .library_set_cuts(&id, &only23, Some(RemovedCuts::Keep))
+        .unwrap();
+    assert!(
+        matches!(&ch, CutChange::Applied { kept, .. } if kept == &vec![cut1.clone()]),
+        "{ch:?}"
+    );
+    assert!(cut1.is_file());
+    assert_eq!(by_name(&l, "backyard loops").clip.cuts.len(), 2);
+    assert_eq!(all(&l).len(), 3);
+    l.core.library_rebuild().unwrap();
+    assert_eq!(all(&l).len(), 3);
+    assert_eq!(by_name(&l, "backyard loops").clip.cuts.len(), 2);
+
+    // Trash: the file goes to the Trash.
+    let ch = l
+        .core
+        .library_set_cuts(&id, &two[1..2], Some(RemovedCuts::Trash))
+        .unwrap();
+    assert!(matches!(ch, CutChange::Applied { .. }), "{ch:?}");
+    assert!(!cut3.exists());
+    assert!(std::fs::read_dir(&l.trash).unwrap().count() == 1);
+    assert_eq!(by_name(&l, "backyard loops").clip.cuts.len(), 1);
+}
+
+#[test]
+fn the_session_asks_too_before_dropping_an_exported_cut() {
+    let l = lab(Layout::YearDay, false, false);
+    import(&l);
+    let ch = l.core.set_session_cuts(0, &[], None).unwrap();
+    let CutChange::Confirm { files } = ch else {
+        panic!("expected a question, got {ch:?}");
+    };
+    assert_eq!(files.len(), 1);
+    assert!(files[0].is_file());
+    // An agent's patch without a decision is refused with the reason.
+    let e = l
+        .core
+        .patch(
+            &[PlanPatch {
+                id: 0,
+                cuts: Some(vec![]),
+                ..Default::default()
+            }],
+            Editor::Agent,
+        )
+        .unwrap_err();
+    assert!(format!("{e:#}").contains("removed_cuts"), "{e:#}");
+    let ch = l
+        .core
+        .set_session_cuts(0, &[], Some(RemovedCuts::Trash))
+        .unwrap();
+    assert!(matches!(ch, CutChange::Applied { .. }));
+    assert!(!files[0].exists());
+    assert_eq!(by_name(&l, "backyard loops").clip.cuts.len(), 0);
+}
+
+#[test]
+fn rename_moves_the_clip_its_cuts_and_its_original() {
+    let l = lab(Layout::YearDay, false, true);
+    import(&l);
+    let a = by_name(&l, "backyard loops");
+    let c = l.core.library_rename(&a.clip.id, "fence flips").unwrap();
+    assert_eq!(c.id, a.clip.id);
+    let dir = l.root.join("2026/2026-09-27");
+    assert!(dir.join("2026-09-27_fence_flips.mp4").is_file());
+    assert!(dir.join("2026-09-27_fence_flips_cut1.mp4").is_file());
+    assert!(dir.join("originals/2026-09-27_fence_flips.avi").is_file());
+    assert!(!a.file.exists());
+    assert_eq!(by_name(&l, "fence flips").clip.cuts.len(), 1);
+}

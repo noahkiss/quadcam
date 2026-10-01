@@ -116,7 +116,8 @@ fn full_flow_on_a_folder() {
     let sum = &out["summary"];
     assert_eq!(sum["imported"], 2, "{out}");
     assert_eq!(sum["skipped"], 1);
-    let default_out = env.home.path().join("Movies/quadcam");
+    // The default layout files each clip under year and day.
+    let default_out = env.home.path().join("Movies/quadcam/2026/2026-09-28");
     assert!(default_out.join("2026-09-28_wake_up.mp4").is_file());
     assert!(default_out.join("2026-09-28_flight.mp4").is_file());
     assert!(
@@ -213,7 +214,10 @@ fn import_from_a_plan_file() {
     .unwrap();
     let r = env.ok(&["import", "--plan", s(&plan)]);
     assert_eq!(r["summary"]["imported"], 1);
-    assert!(out.path().join("2026-09-01_park.mov").is_file());
+    assert!(out
+        .path()
+        .join("2026/2026-09-01/2026-09-01_park.mov")
+        .is_file());
 }
 
 #[test]
@@ -255,8 +259,17 @@ fn moments_and_cuts() {
         let name = format!("_flight_cut{}.mp4", i + 1);
         assert!(c["output"].as_str().unwrap().ends_with(&name), "{c}");
     }
-    let c = env.ok(&["cut", "0", "--clear"]);
+    // Dropping exported cuts needs a decision about their files.
+    let (code, v) = env.run(&["cut", "0", "--clear"]);
+    assert_eq!(code, 1, "{v}");
+    assert!(v["error"]["message"]
+        .as_str()
+        .unwrap()
+        .contains("removed_cuts"));
+    let c = env.ok(&["cut", "0", "--clear", "--removed", "keep"]);
     assert_eq!(c["cuts"], serde_json::json!([]));
+    let kept = cuts[0]["output"].as_str().unwrap();
+    assert!(Path::new(kept).is_file(), "kept files stay");
 }
 
 #[test]
@@ -448,6 +461,6 @@ fn mcp_over_stdio() {
         .collect();
     assert_eq!(lines.len(), 3);
     assert_eq!(lines[0]["result"]["protocolVersion"], "2025-11-25");
-    assert_eq!(lines[1]["result"]["tools"].as_array().unwrap().len(), 10);
+    assert_eq!(lines[1]["result"]["tools"].as_array().unwrap().len(), 11);
     assert_eq!(lines[2]["result"]["structuredContent"]["mode"], "headless");
 }

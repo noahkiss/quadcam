@@ -97,6 +97,9 @@ fn settings(out: &Path, format: Format) -> ImportSettings {
         places: Vec::new(),
         profiles: Vec::new(),
         default_profile: None,
+        layout: quadcam_lib::library::Layout::Flat,
+        place_folders: false,
+        import_id: String::new(),
     }
 }
 
@@ -135,6 +138,7 @@ fn cut_clip(format: Format) {
             keywords: vec!["FPV".into()],
             ..Default::default()
         },
+        extra: Vec::new(),
     };
     let mut planner = NamePlanner::new();
     let mut r = pipeline::import_clip(&t, clip, &job, &st, &mut planner, &mut |_| {});

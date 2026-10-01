@@ -58,6 +58,7 @@ fn job(id: usize, name: &str) -> ClipJob {
         name: name.into(),
         note: String::new(),
         meta: Default::default(),
+        extra: Vec::new(),
     }
 }
 
@@ -72,6 +73,9 @@ fn settings(out: &Path, format: Format) -> ImportSettings {
         places: Vec::new(),
         profiles: Vec::new(),
         default_profile: None,
+        layout: quadcam_lib::library::Layout::Flat,
+        place_folders: false,
+        import_id: String::new(),
     }
 }
 

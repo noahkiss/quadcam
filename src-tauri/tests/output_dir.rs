@@ -23,6 +23,9 @@ fn default_output_dir_follows_home_and_is_created() {
         places: Vec::new(),
         profiles: Vec::new(),
         default_profile: None,
+        layout: quadcam_lib::library::Layout::Flat,
+        place_folders: false,
+        import_id: String::new(),
     };
     pipeline::preflight(&settings, &[]).unwrap();
     assert!(

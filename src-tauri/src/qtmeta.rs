@@ -130,16 +130,9 @@ fn rebuild_moov(body: &[u8], items: &[Item], location: Option<&str>) -> Result<V
     Ok(out)
 }
 
-/// Writes `items` as Apple `mdta` metadata and `location` (ISO 6709) as `©xyz` into the
-/// MP4 or MOV at `path`, replacing what an earlier call wrote.
-pub fn write(path: &Path, items: &[Item], location: Option<&str>) -> Result<()> {
-    let mut f = std::fs::File::options()
-        .read(true)
-        .write(true)
-        .open(path)
-        .with_context(|| format!("opening {}", path.display()))?;
+/// Finds the top-level `moov`: (offset, size, header length).
+fn find_moov(f: &mut std::fs::File, path: &Path) -> Result<(u64, u64, u64)> {
     let len = f.metadata()?.len();
-    // Find the top-level moov.
     let mut at = 0u64;
     let mut moov: Option<(u64, u64, u64)> = None;
     while at + 8 <= len {
@@ -163,7 +156,25 @@ pub fn write(path: &Path, items: &[Item], location: Option<&str>) -> Result<()> 
         }
         at += size;
     }
-    let (start, size, hdr) = moov.context("no moov box")?;
+    moov.context("no moov box")
+}
+
+/// Where the top-level `moov` starts.
+pub fn moov_offset(path: &Path) -> Result<u64> {
+    let mut f = std::fs::File::open(path)?;
+    Ok(find_moov(&mut f, path)?.0)
+}
+
+/// Writes `items` as Apple `mdta` metadata and `location` (ISO 6709) as `©xyz` into the
+/// MP4 or MOV at `path`, replacing what an earlier call wrote.
+pub fn write(path: &Path, items: &[Item], location: Option<&str>) -> Result<()> {
+    let mut f = std::fs::File::options()
+        .read(true)
+        .write(true)
+        .open(path)
+        .with_context(|| format!("opening {}", path.display()))?;
+    let len = f.metadata()?.len();
+    let (start, size, hdr) = find_moov(&mut f, path)?;
     if start + size != len {
         bail!("the moov box is not at the end of the file; cannot add metadata in place");
     }
@@ -176,6 +187,135 @@ pub fn write(path: &Path, items: &[Item], location: Option<&str>) -> Result<()> 
     f.set_len(start + new.len() as u64)?;
     f.sync_all()?;
     Ok(())
+}
+
+/// The `mdta` items in a `moov/meta` body, in key order. Items that are not UTF-8 text are
+/// left out.
+fn parse_meta(meta: &[u8]) -> Result<Vec<Item>> {
+    let mut keys: Vec<String> = Vec::new();
+    let mut values: Vec<(usize, String)> = Vec::new();
+    for (kind, b) in children(meta)? {
+        match &kind {
+            b"keys" if b.len() >= 16 => {
+                let mut at = 16;
+                while at + 8 <= b.len() {
+                    let size = u32::from_be_bytes(b[at..at + 4].try_into().unwrap()) as usize;
+                    if size < 8 || at + size > b.len() {
+                        break;
+                    }
+                    keys.push(String::from_utf8_lossy(&b[at + 8..at + size]).to_string());
+                    at += size;
+                }
+            }
+            b"ilst" => {
+                for (idx, entry) in children(&b[8..])? {
+                    let index = u32::from_be_bytes(idx) as usize;
+                    for (k, data) in children(&entry[8..])? {
+                        if &k == b"data" && data.len() >= 16 {
+                            let kind = u32::from_be_bytes(data[8..12].try_into().unwrap());
+                            if kind == 1 {
+                                values.push((
+                                    index,
+                                    String::from_utf8_lossy(&data[16..]).to_string(),
+                                ));
+                            }
+                        }
+                    }
+                }
+            }
+            _ => {}
+        }
+    }
+    Ok(values
+        .into_iter()
+        .filter_map(|(i, v)| keys.get(i.checked_sub(1)?).map(|k| (k.clone(), v)))
+        .collect())
+}
+
+/// Reads the Apple `mdta` items quadcam (or anything else) wrote into `moov/meta`.
+pub fn read(path: &Path) -> Result<Vec<Item>> {
+    Ok(read_info(path)?.0)
+}
+
+/// The `mdta` items and the movie duration in seconds (from `mvhd`).
+pub fn read_info(path: &Path) -> Result<(Vec<Item>, Option<f64>)> {
+    let mut f = std::fs::File::open(path).with_context(|| format!("opening {}", path.display()))?;
+    let (start, size, hdr) = find_moov(&mut f, path)?;
+    if size > 64 << 20 {
+        bail!("moov box too large in {}", path.display());
+    }
+    let mut body = vec![0u8; (size - hdr) as usize];
+    f.seek(SeekFrom::Start(start + hdr))?;
+    f.read_exact(&mut body)?;
+    let mut items = Vec::new();
+    let mut duration = None;
+    for (kind, b) in children(&body)? {
+        match &kind {
+            b"meta" => {
+                // Apple's meta has no version field; ISO's (ffmpeg's) has four bytes of it.
+                let inner = &b[8..];
+                let skip = if inner.len() >= 8 && &inner[4..8] == b"hdlr" {
+                    0
+                } else {
+                    4
+                };
+                items = parse_meta(&inner[skip.min(inner.len())..])?;
+            }
+            b"mvhd" => duration = mvhd_duration(&b[8..]),
+            _ => {}
+        }
+    }
+    Ok((items, duration))
+}
+
+fn mvhd_duration(b: &[u8]) -> Option<f64> {
+    let be32 = |at: usize| Some(u32::from_be_bytes(b.get(at..at + 4)?.try_into().ok()?) as u64);
+    let (scale, dur) = if *b.first()? == 1 {
+        (
+            be32(20)?,
+            u64::from_be_bytes(b.get(24..32)?.try_into().ok()?),
+        )
+    } else {
+        (be32(12)?, be32(16)?)
+    };
+    (scale > 0).then(|| dur as f64 / scale as f64)
+}
+
+/// Reads the items, lets `edit` change them, and writes them back. The location item, if
+/// any, is also written as `©xyz`. The file's modification time is kept.
+pub fn update(path: &Path, edit: impl FnOnce(&mut Vec<Item>)) -> Result<()> {
+    let mtime = path.metadata().and_then(|m| m.modified()).ok();
+    let mut items = read(path)?;
+    edit(&mut items);
+    items.retain(|(_, v)| !v.trim().is_empty());
+    let loc = items
+        .iter()
+        .find(|(k, _)| k == "com.apple.quicktime.location.ISO6709")
+        .map(|(_, v)| v.clone());
+    write(path, &items, loc.as_deref())?;
+    if let Some(t) = mtime {
+        let _ = std::fs::File::options()
+            .write(true)
+            .open(path)
+            .and_then(|f| f.set_modified(t));
+    }
+    Ok(())
+}
+
+/// Sets one item, replacing an earlier value; an empty value removes it.
+pub fn set(items: &mut Vec<Item>, key: &str, value: &str) {
+    items.retain(|(k, _)| k != key);
+    if !value.trim().is_empty() {
+        items.push((key.to_string(), value.to_string()));
+    }
+}
+
+/// The value of one item.
+pub fn get<'a>(items: &'a [Item], key: &str) -> Option<&'a str> {
+    items
+        .iter()
+        .find(|(k, _)| k == key)
+        .map(|(_, v)| v.as_str())
 }
 
 #[cfg(test)]

@@ -5,6 +5,7 @@
 pub mod control;
 pub mod core;
 pub mod disk;
+pub mod library;
 pub mod logs;
 pub mod mcp;
 pub mod media;
@@ -16,6 +17,8 @@ pub mod pipeline;
 pub mod qtmeta;
 pub mod scan;
 pub mod session;
+pub mod trash;
+pub mod trim;
 
 use crate::core::{
     Core, FormatPlan, FormatRequest, Hooks, ImportOptions, ImportOutcome, LogChoice,

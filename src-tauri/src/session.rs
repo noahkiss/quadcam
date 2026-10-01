@@ -18,10 +18,7 @@ use std::path::{Path, PathBuf};
 
 pub const SESSION_VERSION: u32 = 1;
 
-/// A cut shorter than this is refused.
-pub const MIN_CUT_S: f64 = 0.5;
-/// Most cuts one clip may have.
-pub const MAX_CUTS: usize = 20;
+pub use crate::trim::{MAX_CUTS, MIN_CUT_S};
 
 /// Which fields of a plan an agent wrote and the user has not edited since.
 #[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq)]
@@ -127,6 +124,10 @@ pub struct PlanPatch {
     /// Empty falls back to the profile's author.
     #[serde(default)]
     pub author: Option<String>,
+    /// What happens to the files of exported cuts that `cuts` drops. Required when it
+    /// drops one.
+    #[serde(default)]
+    pub removed_cuts: Option<crate::trim::RemovedCuts>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -174,6 +175,12 @@ pub struct Defaults {
     pub profiles: Vec<md::Profile>,
     #[serde(default)]
     pub default_profile: Option<String>,
+    /// How imports are filed in the library folder (`output_dir`).
+    #[serde(default)]
+    pub layout: crate::library::Layout,
+    /// Add the place name to day folders.
+    #[serde(default)]
+    pub place_folders: bool,
 }
 
 fn default_label() -> String {
@@ -196,6 +203,8 @@ impl Default for Defaults {
             places: Vec::new(),
             profiles: Vec::new(),
             default_profile: None,
+            layout: crate::library::Layout::default(),
+            place_folders: false,
         }
     }
 }
@@ -255,6 +264,12 @@ impl Defaults {
         }
         if let Some(p) = get::<String>(&v, "defaultProfile").filter(|p| !p.trim().is_empty()) {
             d.default_profile = Some(p);
+        }
+        if let Some(l) = get(&v, "libraryLayout") {
+            d.layout = l;
+        }
+        if let Some(b) = get(&v, "placeFolders") {
+            d.place_folders = b;
         }
         d
     }
@@ -426,7 +441,7 @@ impl Session {
             let cuts = patch
                 .cuts
                 .as_deref()
-                .map(|c| check_cuts(patch.id, c, duration))
+                .map(|c| crate::trim::check_cuts(&format!("clip {}", patch.id), c, duration))
                 .transpose()?;
             if cuts.as_ref().is_some_and(|c| !c.is_empty()) && unusable {
                 bail!(
@@ -525,6 +540,7 @@ impl Session {
                 name: p.name.clone(),
                 note: p.note.clone(),
                 meta: md::Resolved::default(),
+                extra: Vec::new(),
             })
             .collect()
     }
@@ -612,39 +628,6 @@ impl Session {
 
 /// Converts and verifies every non-skipped clip. A clip that already
 /// verified earlier keeps that result, so a re-run never writes a second copy.
-/// Cut ranges rounded to milliseconds, clamped to the clip, sorted. Refuses empty, inverted,
-/// too short or too many ranges.
-fn check_cuts(id: usize, cuts: &[Span], duration: f64) -> Result<Vec<Span>> {
-    if cuts.len() > MAX_CUTS {
-        bail!("clip {id}: at most {MAX_CUTS} cuts");
-    }
-    let r = |x: f64| (x * 1000.0).round() / 1000.0;
-    let mut out = Vec::with_capacity(cuts.len());
-    for c in cuts {
-        if !c.start.is_finite() || !c.end.is_finite() {
-            bail!("clip {id}: cut times must be numbers");
-        }
-        let span = Span {
-            start: r(c.start.max(0.0)),
-            end: r(if duration > 0.0 {
-                c.end.min(duration)
-            } else {
-                c.end
-            }),
-        };
-        if span.secs() < MIN_CUT_S {
-            bail!(
-                "clip {id}: cut {:.2}-{:.2} s is shorter than {MIN_CUT_S} s or outside the {duration:.1} s clip",
-                c.start,
-                c.end
-            );
-        }
-        out.push(span);
-    }
-    out.sort_by(|a, b| a.start.total_cmp(&b.start));
-    Ok(out)
-}
-
 pub fn run_import(
     tools: &Tools,
     session: &Session,
@@ -668,6 +651,20 @@ pub fn run_import(
             &settings.places,
             &p.moments,
             c.duration,
+            p.flight.as_ref(),
+        );
+        job.extra = crate::library::import_items(
+            &c.key,
+            &c.name,
+            &settings.import_id,
+            job.meta.location.as_ref().and_then(|l| l.name.as_deref()),
+            job.meta.profile.as_deref(),
+            &p.moments
+                .iter()
+                .filter(|m| m.end > 0.0 && m.start < c.duration)
+                .cloned()
+                .collect::<Vec<_>>(),
+            c.signal.as_ref().map(|s| &s.keep[..]).unwrap_or(&[]),
             p.flight.as_ref(),
         );
     }

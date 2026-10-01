@@ -15,6 +15,10 @@ use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 
+#[path = "core_library.rs"]
+mod core_library;
+pub use core_library::{CardStatus, LibEdit, LibItem, LibraryView, RebuildReport, TrashReport};
+
 /// What the host does when the core changes state. The GUI emits events and asks for the
 /// format click; a headless host does nothing.
 pub trait Hooks: Send + Sync {
@@ -31,6 +35,8 @@ pub trait Hooks: Send + Sync {
     fn has_gui(&self) -> bool {
         false
     }
+    /// The library index changed. The GUI re-reads it.
+    fn library_changed(&self) {}
 }
 
 pub struct NoHooks;
@@ -134,6 +140,9 @@ pub struct Core {
     photos: Arc<dyn PhotosLibrary>,
     cache: PathBuf,
     session_file: Option<PathBuf>,
+    /// The library index, loaded on first use: (library folder, index).
+    library: Mutex<Option<core_library::Loaded>>,
+    trash: Arc<dyn crate::trash::Trash>,
 }
 
 struct Busy<'a>(&'a AtomicBool);
@@ -192,7 +201,15 @@ impl Core {
             photos,
             cache,
             session_file,
+            library: Mutex::new(None),
+            trash: crate::trash::real_trash(),
         }
+    }
+
+    /// Replaces the Trash (tests pass a folder).
+    pub fn with_trash(mut self, trash: Arc<dyn crate::trash::Trash>) -> Core {
+        self.trash = trash;
+        self
     }
 
     /// A core for the CLI or a headless MCP server: shared cache, session file, PhotoKit.
@@ -394,6 +411,31 @@ impl Core {
     }
 
     pub fn patch(&self, patches: &[PlanPatch], editor: Editor) -> Result<Session> {
+        for p in patches {
+            if let Some(crate::trim::CutChange::Confirm { files }) = self.patch_cuts_check(p)? {
+                bail!(
+                    "clip {}: these cuts were exported already: {}. Say what happens to the files with removed_cuts \"keep\" (they stay as clips of their own) or \"trash\".",
+                    p.id,
+                    files
+                        .iter()
+                        .map(|f| f.display().to_string())
+                        .collect::<Vec<_>>()
+                        .join(", ")
+                );
+            }
+        }
+        self.patch_inner(patches, editor)?;
+        self.current()
+    }
+
+    /// Applies patches whose exported-cut decisions are settled. Returns the kept and the
+    /// trashed cut files.
+    fn patch_inner(
+        &self,
+        patches: &[PlanPatch],
+        editor: Editor,
+    ) -> Result<(Vec<PathBuf>, Vec<PathBuf>)> {
+        let before = self.current()?;
         // A saved place name becomes its location here, where the places are known.
         let places = self.defaults().places;
         let mut patches = patches.to_vec();
@@ -426,10 +468,45 @@ impl Core {
             .ok_or_else(|| anyhow!("No clips loaded. Load a card or folder first."))?;
         let mut next = s.clone();
         next.patch(patches, editor)?;
+        // Exported cuts the new lists drop: keep or trash their files, forget their results.
+        let mut removed = Vec::new();
+        for p in patches {
+            let Some(cuts) = &p.cuts else { continue };
+            let gone =
+                crate::trim::removed_exported(&core_library::session_exported(&before, p.id), cuts);
+            if gone.is_empty() {
+                continue;
+            }
+            if let Some(r) = next
+                .results
+                .iter_mut()
+                .rev()
+                .find(|r| r.id == p.id && r.outcome == crate::pipeline::Outcome::Verified)
+            {
+                r.cuts.retain(|c| {
+                    !gone
+                        .iter()
+                        .any(|g| c.output.as_deref() == Some(g.path.as_path()))
+                });
+            }
+            removed.push((gone, p.removed_cuts));
+        }
         *s = next.clone();
         drop(guard);
         self.commit(Some(next.clone()))?;
-        Ok(next)
+        let mut kept = Vec::new();
+        let mut trashed = Vec::new();
+        for (gone, decision) in removed {
+            let (k, t) = self.drop_exported(&gone, decision)?;
+            kept.extend(k);
+            trashed.extend(t);
+        }
+        if !kept.is_empty() || !trashed.is_empty() {
+            if let Some(root) = next.output_dir.clone() {
+                let _ = self.library_add_results(&root, &next, "");
+            }
+        }
+        Ok((kept, trashed))
     }
 
     pub fn import_settings(&self, o: &ImportOptions) -> Result<ImportSettings> {
@@ -448,6 +525,9 @@ impl Core {
             places: d.places,
             profiles: d.profiles,
             default_profile: d.default_profile,
+            layout: d.layout,
+            place_folders: d.place_folders,
+            import_id: chrono::Local::now().format("%Y%m%d-%H%M%S").to_string(),
         })
     }
 
@@ -482,6 +562,12 @@ impl Core {
             latest.results = results;
             latest.output_dir = Some(settings.output_dir.clone());
             self.commit(Some(latest.clone()))?;
+            // The library learns the new files; a failure here never fails the import.
+            if let Err(e) =
+                self.library_add_results(&settings.output_dir, &latest, &settings.import_id)
+            {
+                eprintln!("quadcam: library index not updated: {e:#}");
+            }
             latest
         };
         let photos = o.add_to_photos.then(|| {
@@ -517,6 +603,7 @@ impl Core {
             }
             self.commit(Some(latest))?;
         }
+        self.library_mark_photos(&report.added);
         Ok(report)
     }
 
@@ -716,6 +803,40 @@ impl Core {
         struct Label {
             label: Option<String>,
         }
+        #[derive(Deserialize, Default)]
+        struct Ids {
+            #[serde(default)]
+            ids: Vec<String>,
+            #[serde(default)]
+            rating: Option<u8>,
+            #[serde(default)]
+            flag: Option<crate::library::Flag>,
+            #[serde(default)]
+            album: Option<String>,
+        }
+        #[derive(Deserialize, Default)]
+        struct One {
+            id: String,
+            #[serde(default)]
+            name: Option<String>,
+            #[serde(default)]
+            cuts: Vec<crate::moments::Span>,
+            #[serde(default)]
+            removed_cuts: Option<crate::trim::RemovedCuts>,
+            #[serde(flatten)]
+            edit: LibEdit,
+        }
+        #[derive(Deserialize, Default)]
+        struct SessionCuts {
+            id: usize,
+            cuts: Vec<crate::moments::Span>,
+            #[serde(default)]
+            removed_cuts: Option<crate::trim::RemovedCuts>,
+        }
+        #[derive(Deserialize, Default)]
+        struct Mount {
+            mount: PathBuf,
+        }
         let v = |x: &dyn erased::Ser| x.to_value();
         Ok(match method {
             "status" => v(&self.status()),
@@ -748,6 +869,37 @@ impl Core {
             }
             "format_plan" => v(&self.format_plan(p::<Label>(params)?.label.as_deref())?),
             "format" => v(&self.format(&p::<FormatRequest>(params)?, false)?),
+            "library" => v(&self.library(&p::<crate::library::Filter>(params)?)?),
+            "library_rebuild" => v(&self.library_rebuild()?),
+            "library_rate" => {
+                let x: Ids = p(params)?;
+                v(&self.library_rate(&x.ids, x.rating, x.flag)?)
+            }
+            "library_edit" => {
+                let x: One = p(params)?;
+                v(&self.library_edit(&x.id, &x.edit)?)
+            }
+            "library_rename" => {
+                let x: One = p(params)?;
+                let name = x.name.context("name is required")?;
+                v(&self.library_rename(&x.id, &name)?)
+            }
+            "library_cuts" => {
+                let x: One = p(params)?;
+                v(&self.library_set_cuts(&x.id, &x.cuts, x.removed_cuts)?)
+            }
+            "library_export_cuts" => v(&self.library_export_cuts(&p::<One>(params)?.id)?),
+            "library_trash" => v(&self.library_trash(&p::<Ids>(params)?.ids)?),
+            "library_photos" => {
+                let x: Ids = p(params)?;
+                v(&self.library_photos(&x.ids, x.album)?)
+            }
+            "library_rescan" => v(&self.library_rescan(&p::<One>(params)?.id)?),
+            "card_status" => v(&self.card_status(&p::<Mount>(params)?.mount)?),
+            "session_cuts" => {
+                let x: SessionCuts = p(params)?;
+                v(&self.set_session_cuts(x.id, &x.cuts, x.removed_cuts)?)
+            }
             _ => bail!("unknown method {method:?}"),
         })
     }

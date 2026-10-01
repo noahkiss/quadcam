@@ -219,6 +219,76 @@ impl<B: Backend> Server<B> {
                     json!({"mode": mode, "status": status, "cards": cards, "radios": radios}),
                 ))
             }
+            "quadcam_library" => {
+                let mut filter = json!({});
+                for k in ["query", "group", "day", "place", "aircraft"] {
+                    if let Some(v) = s(k) {
+                        filter[k] = json!(v);
+                    }
+                }
+                if let Some(r) = a.get("min_rating").filter(|v| !v.is_null()) {
+                    filter["min_rating"] = r.clone();
+                }
+                let limit = a.get("limit").and_then(Value::as_u64).unwrap_or(50) as usize;
+                let lib = self.backend.call("library", filter)?;
+                let all = lib["clips"].as_array().cloned().unwrap_or_default();
+                let clips: Vec<Value> = all
+                    .iter()
+                    .take(limit)
+                    .map(|c| {
+                        json!({
+                            "id": c["id"], "name": c["name"], "file": c["file"], "date": c["date"],
+                            "time": c["time"], "duration_s": c["duration"], "rating": c["rating"],
+                            "flag": c["flag"], "place": c["place"], "aircraft": c["aircraft"],
+                            "note": c["note"], "keywords": c["keywords"],
+                            "moments": c["moments"].as_array().map(|m| m.iter().map(|x| json!({"kind": x["kind"], "start": x["start"], "score": x["score"]})).collect::<Vec<_>>()),
+                            "keep": c["keep"], "cuts": c["cuts"], "unsaved_cuts": c["pending_cuts"],
+                            "in_photos": c["in_photos"], "last_import": c["last_import"], "dvr": c["dvr"],
+                        })
+                    })
+                    .collect();
+                let lines: Vec<String> = clips
+                    .iter()
+                    .map(|c| {
+                        format!(
+                            "{} {} {:?} {:.0}s {}★{}{}",
+                            c["id"].as_str().unwrap_or("?"),
+                            c["date"].as_str().unwrap_or("?"),
+                            c["name"].as_str().unwrap_or(""),
+                            c["duration_s"].as_f64().unwrap_or(0.0),
+                            c["rating"],
+                            match c["flag"].as_str() {
+                                Some("pick") => " pick",
+                                Some("reject") => " rejected",
+                                _ => "",
+                            },
+                            c["moments"]
+                                .as_array()
+                                .filter(|m| !m.is_empty())
+                                .map(|m| format!(" {} moments", m.len()))
+                                .unwrap_or_default()
+                        )
+                    })
+                    .collect();
+                Ok((
+                    vec![text(format!(
+                        "Library {}: {} of {} clips{}.\n{}",
+                        lib["root"].as_str().unwrap_or("?"),
+                        clips.len(),
+                        all.len(),
+                        if lib["unindexed"].as_u64().unwrap_or(0) > 0 {
+                            format!(
+                                "; {} files in the folder are not indexed yet (the person can scan them in Settings > Library)",
+                                lib["unindexed"]
+                            )
+                        } else {
+                            String::new()
+                        },
+                        lines.join("\n")
+                    ))],
+                    json!({"root": lib["root"], "total": all.len(), "has_more": all.len() > clips.len(), "last_import": lib["last_import"], "totals": lib["totals"], "clips": clips}),
+                ))
+            }
             "quadcam_load_clips" => {
                 let session = self.backend.call("load", json!({"source": s("source")}))?;
                 let view = clip_views(&session, None);
@@ -626,6 +696,12 @@ pub fn tools() -> Value {
             "annotations": {"title": "quadcam status", "readOnlyHint": true, "openWorldHint": false}
         },
         {
+            "name": "quadcam_library",
+            "description": "List and search the clips already imported into the library folder, newest first: name, date, duration, star rating (0-5), pick or reject flag, place, aircraft, note, keywords, radio-log moments, keep ranges, exported and unsaved cuts, whether it is in Photos, and the file path. Read-only. The loaded card session is NOT here; use quadcam_read_clips for that.\n\nBest for: finding earlier flights (\"last week's flips at the field\"), picking the best clips, or checking what the last import added.\nReturns: one line per clip plus structured records with stable `id`s (the DVR content fingerprint), up to `limit` (default 50) with has_more.\nQuery tips: `query` matches all words against name, note, place, aircraft, keywords and file name; `group` narrows to last_import, moments, picks, rejected or not_in_photos; `day` is YYYY-MM-DD.",
+            "inputSchema": {"type": "object", "properties": {"query": {"type": "string", "maxLength": 200}, "group": {"type": "string", "enum": ["all", "last_import", "moments", "picks", "rejected", "not_in_photos"]}, "day": {"type": "string", "pattern": "^\\d{4}-\\d{2}-\\d{2}$"}, "place": {"type": "string", "description": "Saved place name."}, "aircraft": {"type": "string", "description": "Aircraft profile name."}, "min_rating": {"type": "integer", "minimum": 0, "maximum": 5}, "limit": {"type": "integer", "minimum": 1, "maximum": 500}}, "additionalProperties": false},
+            "annotations": {"title": "Library", "readOnlyHint": true, "destructiveHint": false, "idempotentHint": true, "openWorldHint": false}
+        },
+        {
             "name": "quadcam_load_clips",
             "description": "Copy every DVR clip off a card or folder to local staging, probe them (recovering half-written files), make thumbnails, and date them from radio logs when a log folder is set. Starts a new session and replaces the old one.\n\nBest for: starting an import. Do not call it to re-read a loaded session; use quadcam_read_clips.\nReturns: a line per clip (id, name, duration, status, date, name).\nFollow up with quadcam_read_clips(thumbnails=true) to see the clips.",
             "inputSchema": {"type": "object", "properties": {"source": {"type": "string", "description": "Card mount point (e.g. /Volumes/NO NAME) or a folder of AVI files. Omit to use the first detected card."}}, "additionalProperties": false},
@@ -646,7 +722,7 @@ pub fn tools() -> Value {
         {
             "name": "quadcam_suggest",
             "description": "Suggest a short name, date, note, skip or cut ranges for clips. The values are marked agent-suggested, and in the app they appear as editable suggestions the person can accept or change. Names become the filename slug (YYYY-MM-DD_<name>.mp4, lowercased); an empty name uses the default name (\"flight\"), auto-numbered. `cuts` replaces the clip's cut list; each range exports as an extra file <name>_cutN next to the clip (an empty list removes them). `log_offset_s` says where the first armed log row falls in the clip and moves the log moments. Metadata: `profile` (an aircraft profile name from quadcam_status; empty string to fall back to the log's model, then the default), `place` (a saved place name; empty string removes the location) or `location` {lat, lon}, `keywords` (replaces the clip's own; FPV, the profile's and the moment kinds are added at export), `author`. To apply one value to every clip, send one suggestion per clip id.\n\nBest for: proposing names from what the thumbnails show, dates from a clock burned into the video, and cuts from moments or the keep ranges.\nReturns: every clip's current plan.\nFollow up with quadcam_read_clips to read the final values before quadcam_export; the person may have changed them.",
-            "inputSchema": {"type": "object", "required": ["suggestions"], "properties": {"suggestions": {"type": "array", "minItems": 1, "items": {"type": "object", "required": ["id"], "properties": {"id": {"type": "integer", "minimum": 0}, "name": {"type": "string", "maxLength": 80}, "date": {"type": "string", "pattern": "^\\d{4}-\\d{2}-\\d{2}$"}, "note": {"type": "string"}, "skip": {"type": "boolean"}, "cuts": {"type": "array", "maxItems": 20, "items": {"type": "object", "required": ["start", "end"], "properties": {"start": {"type": "number", "minimum": 0, "description": "Seconds into the clip."}, "end": {"type": "number", "minimum": 0}}, "additionalProperties": false}, "description": "Ranges to export as extra files, each at least 0.5 s."}, "log_offset_s": {"type": "number", "description": "Seconds into the clip where the radio log's first armed row falls (the DVR usually starts before arming)."}, "profile": {"type": "string", "maxLength": 80}, "place": {"type": "string", "maxLength": 80, "description": "Saved place name; empty string removes the location."}, "location": {"type": "object", "required": ["lat", "lon"], "properties": {"lat": {"type": "number", "minimum": -90, "maximum": 90}, "lon": {"type": "number", "minimum": -180, "maximum": 180}}, "additionalProperties": false}, "keywords": {"type": "array", "maxItems": 30, "items": {"type": "string", "maxLength": 60}}, "author": {"type": "string", "maxLength": 120}, "reason": {"type": "string", "description": "One short line on why, shown to the person."}}, "additionalProperties": false}}}, "additionalProperties": false},
+            "inputSchema": {"type": "object", "required": ["suggestions"], "properties": {"suggestions": {"type": "array", "minItems": 1, "items": {"type": "object", "required": ["id"], "properties": {"id": {"type": "integer", "minimum": 0}, "name": {"type": "string", "maxLength": 80}, "date": {"type": "string", "pattern": "^\\d{4}-\\d{2}-\\d{2}$"}, "note": {"type": "string"}, "skip": {"type": "boolean"}, "cuts": {"type": "array", "maxItems": 20, "items": {"type": "object", "required": ["start", "end"], "properties": {"start": {"type": "number", "minimum": 0, "description": "Seconds into the clip."}, "end": {"type": "number", "minimum": 0}}, "additionalProperties": false}, "description": "Ranges to export as extra files, each at least 0.5 s."}, "log_offset_s": {"type": "number", "description": "Seconds into the clip where the radio log's first armed row falls (the DVR usually starts before arming)."}, "profile": {"type": "string", "maxLength": 80}, "place": {"type": "string", "maxLength": 80, "description": "Saved place name; empty string removes the location."}, "location": {"type": "object", "required": ["lat", "lon"], "properties": {"lat": {"type": "number", "minimum": -90, "maximum": 90}, "lon": {"type": "number", "minimum": -180, "maximum": 180}}, "additionalProperties": false}, "keywords": {"type": "array", "maxItems": 30, "items": {"type": "string", "maxLength": 60}}, "author": {"type": "string", "maxLength": 120}, "reason": {"type": "string", "description": "One short line on why, shown to the person."}, "removed_cuts": {"type": "string", "enum": ["keep", "trash"], "description": "Required when `cuts` drops a cut that was already exported: keep its file (it becomes a clip of its own) or move it to the Trash. Ask the person which."}}, "additionalProperties": false}}}, "additionalProperties": false},
             "annotations": {"title": "Suggest names and dates", "readOnlyHint": false, "destructiveHint": false, "idempotentHint": true, "openWorldHint": false}
         },
         {

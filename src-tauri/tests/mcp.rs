@@ -82,7 +82,7 @@ fn protocol_and_tool_list() {
         .handle(&json!({"jsonrpc": "2.0", "id": 2, "method": "tools/list"}))
         .unwrap();
     let tools = list["result"]["tools"].as_array().unwrap();
-    assert_eq!(tools.len(), 10);
+    assert_eq!(tools.len(), 11);
     for t in tools {
         assert!(t["name"].as_str().unwrap().starts_with("quadcam_"));
         assert_eq!(t["inputSchema"]["type"], "object");
@@ -199,7 +199,9 @@ fn headless_agent_flow() {
         (Some(1), Some(1)),
         "{exp}"
     );
-    let out = dir.path().join("out/2026-09-28_backyard_loops.mp4");
+    let out = dir
+        .path()
+        .join("out/2026/2026-09-28/2026-09-28_backyard_loops.mp4");
     assert!(out.is_file());
     let tags = format_tags(&out);
     assert_eq!(
@@ -207,7 +209,9 @@ fn headless_agent_flow() {
         "+51.5000-000.1000/"
     );
     assert_eq!(tags["com.apple.quicktime.keywords"], "FPV,park");
-    let cut = dir.path().join("out/2026-09-28_backyard_loops_cut1.mp4");
+    let cut = dir
+        .path()
+        .join("out/2026/2026-09-28/2026-09-28_backyard_loops_cut1.mp4");
     assert!(cut.is_file());
     assert!(exp["content"][0]["text"]
         .as_str()
@@ -222,6 +226,19 @@ fn headless_agent_flow() {
 
     let v = call(&mut s, "quadcam_verify", json!({}));
     assert_eq!(v["structuredContent"]["reports"][0]["ok"], true);
+
+    // The import is in the library, as the last import, with its cut.
+    let lib = call(&mut s, "quadcam_library", json!({"group": "last_import"}));
+    let clips = lib["structuredContent"]["clips"].as_array().unwrap();
+    assert_eq!(clips.len(), 1, "{lib}");
+    assert_eq!(clips[0]["name"], "Backyard Loops");
+    assert_eq!(clips[0]["cuts"].as_array().unwrap().len(), 1);
+    let none = call(
+        &mut s,
+        "quadcam_library",
+        json!({"query": "nothing-like-this"}),
+    );
+    assert_eq!(none["structuredContent"]["clips"], json!([]));
 
     // Format on a folder session refuses, even with every argument.
     let f = s.call_tool(
@@ -303,7 +320,7 @@ fn app_mode_shares_the_gui_session() {
     assert_eq!(exp["structuredContent"]["summary"]["imported"], 2);
     assert!(
         dir.path()
-            .join("out/2026-09-27_dive_over_the_pond.mp4")
+            .join("out/2026/2026-09-27/2026-09-27_dive_over_the_pond.mp4")
             .is_file(),
         "app defaults (output folder) apply"
     );

@@ -108,6 +108,10 @@ enum Cmd {
         /// Seconds into the clip where the radio log's first armed row falls.
         #[arg(long, allow_hyphen_values = true)]
         log_offset: Option<f64>,
+        /// For cuts already exported that the new list drops: keep their files (as clips of
+        /// their own) or move them to the Trash.
+        #[arg(long, value_parser = ["keep", "trash"])]
+        removed: Option<String>,
     },
     /// Convert and verify every non-skipped clip.
     Import {
@@ -185,8 +189,101 @@ enum Cmd {
         #[arg(long)]
         plan: bool,
     },
+    /// The library: list and search clips, rate and flag them, rebuild the index.
+    #[command(subcommand)]
+    Library(LibCmd),
     /// Run the MCP server on stdio.
     Mcp,
+}
+
+#[derive(Subcommand)]
+enum LibCmd {
+    /// List clips, newest first.
+    List {
+        /// Words that must all appear in the name, note, place, aircraft, keywords or file.
+        #[arg(long, short)]
+        query: Option<String>,
+        /// all, last_import, moments, picks, rejected, not_in_photos.
+        #[arg(long, value_parser = ["all", "last_import", "moments", "picks", "rejected", "not_in_photos"])]
+        group: Option<String>,
+        /// One flying day (YYYY-MM-DD).
+        #[arg(long)]
+        day: Option<NaiveDate>,
+        #[arg(long)]
+        place: Option<String>,
+        #[arg(long)]
+        aircraft: Option<String>,
+        /// At least this many stars.
+        #[arg(long)]
+        min_rating: Option<u8>,
+    },
+    /// Set stars (0 to 5, 0 clears) and pick or reject flags. Written into the files too.
+    Rate {
+        #[arg(required = true)]
+        ids: Vec<String>,
+        #[arg(long)]
+        stars: Option<u8>,
+        #[arg(long, conflicts_with_all = ["reject", "unflag"])]
+        pick: bool,
+        #[arg(long, conflicts_with = "unflag")]
+        reject: bool,
+        #[arg(long)]
+        unflag: bool,
+    },
+    /// Make the index again from the files (also adopts an existing export folder).
+    Rebuild,
+    /// Rename a clip's file, its cuts and its original.
+    Rename { id: String, name: String },
+    /// Change a clip's note, keywords, author or place.
+    Edit {
+        id: String,
+        #[arg(long)]
+        note: Option<String>,
+        /// Comma-separated; replaces the list.
+        #[arg(long)]
+        keywords: Option<String>,
+        #[arg(long)]
+        author: Option<String>,
+        /// A saved place name ("" removes the location).
+        #[arg(long)]
+        place: Option<String>,
+    },
+    /// Set a clip's cut ranges, and write the new ones with --export.
+    Cut {
+        id: String,
+        /// Ranges in seconds or m:ss. Replaces the list.
+        ranges: Vec<String>,
+        #[arg(long, conflicts_with = "ranges")]
+        clear: bool,
+        /// For exported cuts the new list drops: keep their files or move them to the Trash.
+        #[arg(long, value_parser = ["keep", "trash"])]
+        removed: Option<String>,
+        /// Write the cuts that are not files yet.
+        #[arg(long)]
+        export: bool,
+    },
+    /// Move clips, with their cuts and originals, to the Trash.
+    Trash {
+        #[arg(required = true)]
+        ids: Vec<String>,
+    },
+    /// Add clips and their cuts to Photos.
+    Photos {
+        #[arg(required = true)]
+        ids: Vec<String>,
+        #[arg(long)]
+        album: Option<String>,
+    },
+}
+
+fn removed(s: Option<String>) -> Option<quadcam_lib::trim::RemovedCuts> {
+    s.map(|s| {
+        if s == "trash" {
+            quadcam_lib::trim::RemovedCuts::Trash
+        } else {
+            quadcam_lib::trim::RemovedCuts::Keep
+        }
+    })
 }
 
 /// Exit codes: 0 ok, 1 failed, 2 usage, 3 refused by a safety guard, 4 nothing to work on.
@@ -391,6 +488,7 @@ fn run(cli: Cli) -> Result<Value> {
             keep,
             clear,
             log_offset,
+            removed: removed_files,
         } => {
             let s = core
                 .session()
@@ -425,6 +523,7 @@ fn run(cli: Cli) -> Result<Value> {
                     id,
                     cuts,
                     log_offset_s: log_offset,
+                    removed_cuts: removed(removed_files),
                     ..Default::default()
                 }],
                 Editor::User,
@@ -633,7 +732,104 @@ fn run(cli: Cli) -> Result<Value> {
             })?;
             serde_json::to_value(plan)?
         }
+        Cmd::Library(cmd) => library(&core, cmd)?,
         Cmd::Mcp => unreachable!(),
+    })
+}
+
+fn library(core: &Core, cmd: LibCmd) -> Result<Value> {
+    use quadcam_lib::library::{Filter, Flag};
+    Ok(match cmd {
+        LibCmd::List {
+            query,
+            group,
+            day,
+            place,
+            aircraft,
+            min_rating,
+        } => {
+            let v = core.library(&Filter {
+                query,
+                group,
+                day,
+                place,
+                aircraft,
+                min_rating,
+            })?;
+            serde_json::to_value(v)?
+        }
+        LibCmd::Rate {
+            ids,
+            stars,
+            pick,
+            reject,
+            unflag,
+        } => {
+            let flag = if pick {
+                Some(Flag::Pick)
+            } else if reject {
+                Some(Flag::Reject)
+            } else if unflag {
+                Some(Flag::None)
+            } else {
+                None
+            };
+            if stars.is_none() && flag.is_none() {
+                bail!("give --stars, --pick, --reject or --unflag");
+            }
+            serde_json::to_value(core.library_rate(&ids, stars, flag)?)?
+        }
+        LibCmd::Rebuild => serde_json::to_value(core.library_rebuild()?)?,
+        LibCmd::Rename { id, name } => serde_json::to_value(core.library_rename(&id, &name)?)?,
+        LibCmd::Edit {
+            id,
+            note,
+            keywords,
+            author,
+            place,
+        } => serde_json::to_value(core.library_edit(
+            &id,
+            &quadcam_lib::core::LibEdit {
+                note,
+                keywords: keywords.map(|k| k.split(',').map(|x| x.trim().to_string()).collect()),
+                author,
+                place,
+                location: None,
+            },
+        )?)?,
+        LibCmd::Cut {
+            id,
+            ranges,
+            clear,
+            removed: r,
+            export,
+        } => {
+            let mut out = json!({});
+            if clear || !ranges.is_empty() {
+                let cuts = ranges.iter().map(|r| span(r)).collect::<Result<Vec<_>>>()?;
+                let change = core.library_set_cuts(&id, &cuts, removed(r))?;
+                if let quadcam_lib::trim::CutChange::Confirm { files } = &change {
+                    bail!(
+                        "these cuts were exported already: {}. Add --removed keep or --removed trash.",
+                        files
+                            .iter()
+                            .map(|f| f.display().to_string())
+                            .collect::<Vec<_>>()
+                            .join(", ")
+                    );
+                }
+                out["change"] = serde_json::to_value(change)?;
+            }
+            if export {
+                out["exported"] = serde_json::to_value(core.library_export_cuts(&id)?)?;
+            }
+            if out.as_object().is_some_and(|o| o.is_empty()) {
+                bail!("give ranges, --clear or --export");
+            }
+            out
+        }
+        LibCmd::Trash { ids } => serde_json::to_value(core.library_trash(&ids)?)?,
+        LibCmd::Photos { ids, album } => serde_json::to_value(core.library_photos(&ids, album)?)?,
     })
 }
 

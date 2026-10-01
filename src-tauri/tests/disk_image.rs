@@ -92,6 +92,9 @@ fn format_after_verified_import() {
         places: Vec::new(),
         profiles: Vec::new(),
         default_profile: None,
+        layout: quadcam_lib::library::Layout::Flat,
+        place_folders: false,
+        import_id: String::new(),
     };
     let mut planner = NamePlanner::new();
     let mut results = Vec::new();
@@ -105,6 +108,7 @@ fn format_after_verified_import() {
             name: String::new(),
             note: String::new(),
             meta: Default::default(),
+            extra: Vec::new(),
         };
         let r = pipeline::import_clip(&t, c, &job, &settings, &mut planner, &mut |_| {});
         assert_eq!(r.outcome, Outcome::Verified, "{:?}", r.error);

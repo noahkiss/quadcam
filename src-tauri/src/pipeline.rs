@@ -1,6 +1,7 @@
 //! The import pipeline without any UI: stage, analyse, date, convert, verify.
 //! `session` and `core` build on these.
 
+use crate::library::{self, Layout};
 use crate::logs::{self, Badge, Tunables};
 use crate::media::{self, Encoder, Format, Meta, Probe, Tools};
 use crate::metadata::{self as md, FlightStats, Resolved};
@@ -456,6 +457,9 @@ pub struct ClipJob {
     /// Location, gear and keywords to write, after the profile is applied.
     #[serde(default)]
     pub meta: Resolved,
+    /// The library's own QuickTime items (see `library::import_items`).
+    #[serde(default)]
+    pub extra: Vec<(String, String)>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -473,6 +477,15 @@ pub struct ImportSettings {
     pub profiles: Vec<md::Profile>,
     #[serde(default)]
     pub default_profile: Option<String>,
+    /// How clips are filed under `output_dir` (the library folder).
+    #[serde(default)]
+    pub layout: Layout,
+    /// Add the clip's place name to its day folder.
+    #[serde(default)]
+    pub place_folders: bool,
+    /// This import's id (`YYYYMMDD-HHMMSS`), written into every file.
+    #[serde(default)]
+    pub import_id: String,
 }
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
@@ -635,7 +648,15 @@ pub fn import_clip(
         &job.name,
         &settings.default_name,
     );
-    let out = planner.claim(&settings.output_dir, &stem, settings.format.ext());
+    let place = settings
+        .place_folders
+        .then(|| job.meta.location.as_ref().and_then(|l| l.name.as_deref()))
+        .flatten();
+    let dir = library::day_dir(&settings.output_dir, settings.layout, date, place);
+    if let Err(e) = std::fs::create_dir_all(&dir) {
+        return fail(r, format!("creating {}: {e}", dir.display()));
+    }
+    let out = planner.claim(&dir, &stem, settings.format.ext());
     // Write under a hidden temporary name; rename only after verify passes.
     let tmp = out.with_file_name(format!(
         ".{}.part",
@@ -659,7 +680,8 @@ pub fn import_clip(
     };
     r.encoder = Some(enc);
     r.meta = Some(meta.clone());
-    let qt = md::qt_items(&job.meta, &meta);
+    let mut qt = md::qt_items(&job.meta, &meta);
+    qt.extend(job.extra.iter().cloned());
     let written = write_qt(&tmp, &qt)
         .and_then(|_| media::verify(tools, src_probe, &tmp, &meta))
         .and_then(|_| media::verify_qt(tools, &tmp, &qt));
@@ -684,7 +706,7 @@ pub fn import_clip(
     r.output = Some(out.clone());
 
     if settings.keep_originals {
-        let dir = settings.output_dir.join("originals");
+        let dir = dir.join(library::ORIGINALS);
         let orig_stem = out.file_stem().unwrap().to_string_lossy().to_string();
         let copy = std::fs::create_dir_all(&dir)
             .map_err(anyhow::Error::from)
@@ -818,7 +840,7 @@ pub fn export_cuts(
                 ..meta.clone()
             };
             // The clip's QuickTime items, with this cut's start time and description.
-            let qt: Vec<(String, String)> = main
+            let mut qt: Vec<(String, String)> = main
                 .qt
                 .iter()
                 .map(|(k, v)| {
@@ -832,6 +854,11 @@ pub fn export_cuts(
                     (k.clone(), v)
                 })
                 .collect();
+            crate::qtmeta::set(
+                &mut qt,
+                library::KEY_CUT,
+                &format!("{:.3}-{:.3}", span.start, span.end),
+            );
             let res = media::cut(tools, src, &tmp, *span, format, settings.encoder, &cut_meta)
                 .and_then(|_| write_qt(&tmp, &qt))
                 .and_then(|_| media::verify_cut(tools, probe, &tmp, *span))
