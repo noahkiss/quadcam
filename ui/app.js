@@ -563,8 +563,11 @@ function dayBlock(d, cs, first) {
 
 const flyingOf = (c) => (c.keep?.length ? c.keep.reduce((a, k) => a + k.end - k.start, 0) : c.duration);
 
+// The day's numbers beyond the head's clip count and flying time. Nothing when it would
+// only repeat the head: one clip, or no radio-log numbers and no moments.
 function daySummary(cs) {
   const withStats = cs.filter((c) => c.stats);
+  if (cs.length < 2 || (!withStats.length && !cs.some((c) => (c.moments || []).length))) return null;
   const air = withStats.length ? withStats.reduce((a, c) => a + (c.stats.armed_s || 0), 0) : cs.reduce((a, c) => a + flyingOf(c), 0);
   const packs = withStats.reduce((a, c) => a + (c.stats.packs || 0), 0);
   const volts = withStats.map((c) => c.stats.min_rx_bat_v).filter((v) => v != null);
