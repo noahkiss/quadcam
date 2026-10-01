@@ -427,6 +427,7 @@ function setScreen(screen) {
 }
 
 function renderAll() {
+  if (state.renaming) return;
   renderSidebar();
   const empty = !clipsAll().length && !(state.lib?.unindexed > 0);
   if (state.screen === "detail" && state.detailId && libClip(state.detailId)) {
@@ -548,9 +549,9 @@ function card(c) {
   scrubbable(thumb, c);
   const art = el("article", {
     class: `card${c.flag === "reject" ? " rejected" : ""}`, tabindex: "0", "aria-selected": String(sel), "data-id": c.id, "aria-label": c.name,
-    onclick: (e) => select(c.id, e), ondblclick: () => openDetail(c.id), oncontextmenu: (e) => openMenu(e, c.id),
+    onclick: (e) => select(c.id, e), ondblclick: () => { clearTimeout(renameTimer); openDetail(c.id); }, oncontextmenu: (e) => openMenu(e, c.id),
   }, thumb, el("div", { class: "card-body" },
-    el("div", { class: "card-line" }, el("span", { class: "name", text: c.name, title: c.name }),
+    el("div", { class: "card-line" }, el("span", { class: "name", text: c.name, title: c.name, "data-name": true, onclick: (e) => nameClick(e, c.id) }),
       el("span", { class: "right" }, c.rating ? stars(c) : el("span", { class: "stars muted", text: "·····", title: "Not rated" }), flagMark(c), el("span", { class: "time", text: c.time || "" }))),
     minibar(c.duration, deadOf(c)),
     el("div", { class: "mchips" }, momentChips(c.moments))));
@@ -585,10 +586,10 @@ function scrubbable(thumb, c) {
 function listTable(list) {
   const rows = list.map((c) => el("tr", {
     "aria-selected": String(state.selected.has(c.id)), "data-id": c.id, tabindex: "0", class: c.flag === "reject" ? "rejected" : "",
-    onclick: (e) => select(c.id, e), ondblclick: () => openDetail(c.id), oncontextmenu: (e) => openMenu(e, c.id),
+    onclick: (e) => select(c.id, e), ondblclick: () => { clearTimeout(renameTimer); openDetail(c.id); }, oncontextmenu: (e) => openMenu(e, c.id),
   },
   el("td", {}, el("div", { class: "lthumb", style: stripStyle(c) })),
-  el("td", {}, el("b", { text: c.name })),
+  el("td", {}, el("b", { text: c.name, "data-name": true, onclick: (e) => nameClick(e, c.id) })),
   el("td", { class: "mono", text: `${c.date} ${c.time || ""}` }),
   el("td", { class: "mono", text: fmtDur(c.duration) }),
   el("td", {}, stars(c)),
@@ -678,12 +679,43 @@ async function trashClips(ids) {
   }
 }
 
-async function renameClip(id) {
+// Renames a clip in place: its name on the card, list row or detail bar becomes a text
+// field. Return or leaving the field saves; Escape cancels.
+function startRename(id) {
+  clearTimeout(renameTimer);
   const c = libClip(id);
-  if (!c) return;
-  const name = await ask("Rename", null, { input: c.title || c.name, ok: "Rename" });
-  if (name == null || !name.trim()) return;
-  await setClipName(id, name);
+  const scope = state.screen === "detail" ? $("#detail-bar") : $(`#lib-content [data-id="${CSS.escape(id)}"]`);
+  const target = scope?.querySelector("[data-name]");
+  if (!c || !target || state.renaming) return;
+  state.renaming = id;
+  const input = el("input", { type: "text", class: "name-edit", value: c.title || c.name, "aria-label": "Clip name", spellcheck: "false" });
+  let over = false;
+  const finish = async (keep) => {
+    if (over) return;
+    over = true;
+    state.renaming = null;
+    if (keep) await setClipName(id, input.value);
+    renderAll();
+    if (state.screen === "library") $(`#lib-content [data-id="${CSS.escape(id)}"]`)?.focus();
+  };
+  input.addEventListener("keydown", (e) => {
+    if (e.key === "Enter") { e.preventDefault(); finish(true); }
+    if (e.key === "Escape") { e.preventDefault(); e.stopPropagation(); finish(false); }
+  });
+  input.addEventListener("blur", () => finish(true));
+  for (const ev of ["click", "dblclick", "mousedown"]) input.addEventListener(ev, (e) => e.stopPropagation());
+  target.replaceChildren(input);
+  input.focus();
+  input.select();
+}
+
+// A click on the name of the one selected clip renames it, unless a double-click follows.
+let renameTimer = null;
+function nameClick(e, id) {
+  if (state.selected.size !== 1 || !state.selected.has(id) || e.metaKey || e.shiftKey) return;
+  e.stopPropagation();
+  clearTimeout(renameTimer);
+  renameTimer = setTimeout(() => startRename(id), 450);
 }
 
 async function setClipName(id, name) {
@@ -729,7 +761,7 @@ function openMenu(e, id) {
   const sep = () => el("li", { role: "separator" });
   const menu = $("#menu");
   menu.replaceChildren(
-    many ? null : item("pen", "Rename", "⏎", () => renameClip(id)),
+    many ? null : item("pen", "Rename", "⏎", () => startRename(id)),
     many ? null : item("tag", "Edit details", "⌘I", () => openDetail(id, null, "details")),
     many ? null : item("scissors", "Trim and cuts", "T", () => openDetail(id)),
     sep(),
@@ -797,7 +829,7 @@ function renderDetail() {
     el("div", { class: "crumbs" },
       el("button", { type: "button", class: "ghost small", onclick: closeDetail }, icon("arrow-left"), "Library"),
       el("span", { class: "sep", text: "/" }), el("span", { class: "muted", text: fmtDay(c.date) }), el("span", { class: "sep", text: "/" }),
-      el("b", { text: c.name }),
+      el("b", { class: "name", text: c.name, title: "Rename", "data-name": true, onclick: () => startRename(c.id) }),
       c.aircraft ? el("span", { class: "chip" }, icon("quad", "c-pink"), c.aircraft) : null,
       c.place ? el("span", { class: "chip" }, icon("map-point", "c-green"), c.place) : null),
     el("div", { class: "right" },
@@ -968,6 +1000,7 @@ document.addEventListener("keydown", (e) => {
   }
   if (state.screen === "detail") {
     if (dTrim && dTrim.handleKey(e)) return e.preventDefault();
+    if (e.key === "Enter" && !e.target.closest("button")) { startRename(state.detailId); return e.preventDefault(); }
     if (libKeys(e, [state.detailId])) e.preventDefault();
     return;
   }
@@ -990,7 +1023,7 @@ document.addEventListener("keydown", (e) => {
     return e.preventDefault();
   }
   if (!ids.length) return;
-  if (e.key === "Enter") { renameClip(ids[0]); return e.preventDefault(); }
+  if (e.key === "Enter") { startRename(ids[0]); return e.preventDefault(); }
   if (e.key === " " || e.key === "t") { openDetail(ids[0]); return e.preventDefault(); }
   if (e.metaKey && e.key === "i") { openDetail(ids[0], null, "details"); return e.preventDefault(); }
   if (e.metaKey && e.key === "r") { T.opener.revealItemInDir(libClip(ids[0]).file); return e.preventDefault(); }

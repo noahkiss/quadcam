@@ -176,6 +176,8 @@ label.inline { display: inline-flex; gap: .35rem; align-items: center; font-size
 .crumbs { display: flex; align-items: center; gap: .45rem; min-width: 0; font-size: .9rem; }
 .crumbs .sep { color: var(--overlay); }
 .crumbs b { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.crumbs .name { cursor: text; }
+input.name-edit { font: inherit; font-weight: 600; height: 26px; padding: 0 6px; width: 100%; min-width: 12em; }
 
 #banner { padding: .55rem 1.1rem; background: color-mix(in srgb, var(--warning) 16%, var(--bg)); border-bottom: 1px solid color-mix(in srgb, var(--warning) 40%, transparent); font-size: .88rem; }
 #banner.error { background: color-mix(in srgb, var(--error) 16%, var(--bg)); border-color: color-mix(in srgb, var(--error) 40%, transparent); }
