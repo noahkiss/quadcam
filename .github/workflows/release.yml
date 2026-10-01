@@ -97,7 +97,7 @@ jobs:
           workspaces: src-tauri
           key: release
 
-      - run: cargo test --locked
+      - run: cargo test --locked -- --test-threads=1
 
       - name: Install the Tauri CLI
         run: command -v cargo-tauri >/dev/null || cargo install tauri-cli --version '^2' --locked
