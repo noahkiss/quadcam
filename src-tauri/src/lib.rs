@@ -2,15 +2,13 @@
 //! Photos, and optionally format the card. The Tauri commands here are thin wrappers over
 //! `core::Core`, which the control socket, the CLI and the MCP server share.
 
-// The MCP tool list is one large `json!`.
-#![recursion_limit = "256"]
-
 pub mod api;
 pub mod control;
 pub mod core;
 pub mod cuts;
 pub mod disk;
 pub mod geocode;
+pub mod identity;
 pub mod library;
 pub mod logs;
 pub mod mcp;
@@ -27,6 +25,7 @@ pub mod scan;
 pub mod session;
 pub mod settings;
 mod share;
+pub mod sources;
 pub mod trash;
 pub mod trim;
 pub mod watch;
@@ -432,6 +431,7 @@ pub fn specta_builder() -> tauri_specta::Builder<tauri::Wry> {
             c::library_rebuild,
             c::library_rate,
             c::library_edit,
+            c::library_update,
             c::library_rename,
             c::library_cuts,
             c::library_export_cuts,

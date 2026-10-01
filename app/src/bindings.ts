@@ -60,15 +60,17 @@ export const commands = {
 	/**  Erases the card. With the GUI running, the person must click Erase too. */
 	format: (params: FormatRequest) => typedError<FormatPlan, string>(__TAURI_INVOKE("format", { params })),
 	/**  The library, narrowed by a filter. */
-	library: (params: Filter) => typedError<LibraryView, string>(__TAURI_INVOKE("library", { params })),
+	library: (params: Filter) => typedError<LibraryView_Serialize, string>(__TAURI_INVOKE("library", { params })),
 	/**  Makes the index again from the files. */
 	libraryRebuild: () => typedError<RebuildReport, string>(__TAURI_INVOKE("library_rebuild")),
 	/**  Sets stars and flags. */
-	libraryRate: (params: RateParams) => typedError<LibClip[], string>(__TAURI_INVOKE("library_rate", { params })),
+	libraryRate: (params: RateParams) => typedError<LibClip_Serialize[], string>(__TAURI_INVOKE("library_rate", { params })),
 	/**  Changes one clip's details, date or time. */
-	libraryEdit: (params: LibraryEditParams) => typedError<LibClip, string>(__TAURI_INVOKE("library_edit", { params })),
+	libraryEdit: (params: LibraryEditParams) => typedError<LibClip_Serialize, string>(__TAURI_INVOKE("library_edit", { params })),
+	/**  Changes stars, flag, name and details of clips in one call; checks everything first. */
+	libraryUpdate: (params: LibraryUpdateParams) => typedError<LibClip_Serialize[], string>(__TAURI_INVOKE("library_update", { params })),
 	/**  Renames a clip, its cuts and its original. */
-	libraryRename: (params: RenameParams) => typedError<LibClip, string>(__TAURI_INVOKE("library_rename", { params })),
+	libraryRename: (params: RenameParams) => typedError<LibClip_Serialize, string>(__TAURI_INVOKE("library_rename", { params })),
 	/**  Sets a clip's cut list. */
 	libraryCuts: (params: LibraryCutsParams) => typedError<CutChange, string>(__TAURI_INVOKE("library_cuts", { params })),
 	/**  Writes a clip's unsaved cuts as files. */
@@ -82,7 +84,7 @@ export const commands = {
 	/**  Renames clips to the file-name date format (every clip when `ids` is empty). */
 	libraryApplyNameFormat: (params: IdsParams) => typedError<RenameReport, string>(__TAURI_INVOKE("library_apply_name_format", { params })),
 	/**  Finds dead air again in a clip. */
-	libraryRescan: (params: ClipIdParams) => typedError<LibClip, string>(__TAURI_INVOKE("library_rescan", { params })),
+	libraryRescan: (params: ClipIdParams) => typedError<LibClip_Serialize, string>(__TAURI_INVOKE("library_rescan", { params })),
 	/**  A file the web view can play. */
 	libraryPreview: (params: ClipIdParams) => typedError<string, string>(__TAURI_INVOKE("library_preview", { params })),
 	/**  Makes missing hover-scrub strips (for every clip when `ids` is empty). */
@@ -273,6 +275,8 @@ export type Clip = {
 	 *  preview, since DVRs reuse file names: the Echo restarts at PICT0001 after a format.
 	 */
 	key?: string,
+	/**  The video system the clip came from. */
+	kind?: SourceKind,
 };
 
 /**  One library clip, by id. */
@@ -593,7 +597,10 @@ export type Layout =
 "flat";
 
 /**  One clip in the library. */
-export type LibClip = {
+export type LibClip = LibClip_Serialize | LibClip_Deserialize;
+
+/**  One clip in the library. */
+export type LibClip_Deserialize = {
 	id: string,
 	/**  Relative to the library folder. */
 	path: string,
@@ -630,6 +637,50 @@ export type LibClip = {
 	import?: string | null,
 	/**  Set for a cut file kept on its own after its cut was removed: (source id, range). */
 	cut_of?: [string, Span] | null,
+	/**  Earlier ids of this clip (QuadCam 0.4's). Lookups by them still find it. */
+	aliases?: string[],
+};
+
+/**  One clip in the library. */
+export type LibClip_Serialize = {
+	id: string,
+	/**  Relative to the library folder. */
+	path: string,
+	/**  The short name; empty when the clip was imported without one. */
+	title: string,
+	note: string,
+	date: string,
+	/**  `HH:MM`, when the clip has a time of day (from its radio log or set by hand). */
+	time: string | null,
+	duration: number | null,
+	size: number,
+	rating: number,
+	flag: Flag,
+	place: string | null,
+	location: Location | null,
+	/**  Profile name, else the aircraft written in the file. */
+	aircraft: string | null,
+	keywords: string[],
+	author: string | null,
+	/**  Radio-log moments, in clip seconds. */
+	moments: Moment[],
+	/**  Ranges with a picture; empty when the clip has no dead air (or was never scanned). */
+	keep: Span[],
+	stats: FlightStats | null,
+	cuts: LibCut[],
+	/**  Cut ranges set in the library but not written yet. Only the index holds these. */
+	pending_cuts: Span[],
+	in_photos: boolean,
+	/**  The kept DVR original, relative to the library folder. */
+	original: string | null,
+	/**  The DVR file name it came from. */
+	dvr: string | null,
+	/**  The import it came in with (`YYYYMMDD-HHMMSS`). */
+	import: string | null,
+	/**  Set for a cut file kept on its own after its cut was removed: (source id, range). */
+	cut_of: [string, Span] | null,
+	/**  Earlier ids of this clip (QuadCam 0.4's). Lookups by them still find it. */
+	aliases?: string[],
 };
 
 /**  A cut written as its own file next to its clip. */
@@ -661,7 +712,10 @@ export type LibEdit = {
 };
 
 /**  A clip as the front ends see it: the index entry plus absolute paths. */
-export type LibItem = {
+export type LibItem = LibItem_Serialize | LibItem_Deserialize;
+
+/**  A clip as the front ends see it: the index entry plus absolute paths. */
+export type LibItem_Deserialize = {
 	name: string,
 	file: string,
 	/**  The hover-scrub strip, once made. */
@@ -671,7 +725,32 @@ export type LibItem = {
 	/**  Neither a strip nor a poster could be made. */
 	no_picture: boolean,
 	last_import: boolean,
-} & LibClip;
+} & LibClip_Deserialize;
+
+/**  A clip as the front ends see it: the index entry plus absolute paths. */
+export type LibItem_Serialize = {
+	name: string,
+	file: string,
+	/**  The hover-scrub strip, once made. */
+	strip: string | null,
+	/**  One frame, when no strip could be made. */
+	poster: string | null,
+	/**  Neither a strip nor a poster could be made. */
+	no_picture: boolean,
+	last_import: boolean,
+} & LibClip_Serialize;
+
+/**
+ *  Every change one call may make to library clips: stars and flag, a new name (one clip
+ *  only), and the details in `LibEdit`. Missing fields stay as they are.
+ */
+export type LibUpdate = {
+	/**  Stars, 0 to 5; 0 clears. */
+	rating?: number | null,
+	flag?: Flag | null,
+	/**  A new short name; needs exactly one clip. */
+	name?: string | null,
+} & LibEdit;
 
 /**  The library index changed. Read it again with `library`. */
 export type LibraryChanged = null;
@@ -701,7 +780,17 @@ export type LibraryTask = {
 	total: number,
 };
 
-export type LibraryView = {
+/**
+ *  `library_update`: stars, flag, name and details for these clips, checked before any
+ *  file changes.
+ */
+export type LibraryUpdateParams = {
+	ids?: string[],
+} & LibUpdate;
+
+export type LibraryView = LibraryView_Serialize | LibraryView_Deserialize;
+
+export type LibraryView_Deserialize = {
 	root: string,
 	exists: boolean,
 	/**  Media files in the folder that the index does not list (an older export to adopt). */
@@ -711,7 +800,20 @@ export type LibraryView = {
 	groups: { [key in string]: ([string, number])[] },
 	layout: Layout,
 	place_folders: boolean,
-	clips: LibItem[],
+	clips: LibItem_Deserialize[],
+};
+
+export type LibraryView_Serialize = {
+	root: string,
+	exists: boolean,
+	/**  Media files in the folder that the index does not list (an older export to adopt). */
+	unindexed: number,
+	last_import: string | null,
+	totals: Totals,
+	groups: { [key in string]: ([string, number])[] },
+	layout: Layout,
+	place_folders: boolean,
+	clips: LibItem_Serialize[],
 };
 
 /**  A location in decimal degrees. */
@@ -1054,6 +1156,11 @@ export type SignalScan = {
 
 /**  Where a moment's evidence came from. */
 export type Source = "radio_log" | "video";
+
+/**  Which video system a clip came from. */
+export type SourceKind = 
+/**  An analog DVR: MJPEG in AVI. */
+"analog";
 
 /**  `stage` and `load`: a card mount point or a folder. None takes the first detected card. */
 export type SourceParams = {

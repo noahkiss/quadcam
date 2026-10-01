@@ -3,10 +3,11 @@
 //! every change live; otherwise it runs a headless core on the shared session file.
 //! Only MCP messages go to stdout; logs go to stderr.
 
+pub mod params;
 mod render;
 mod server;
 mod tools;
 
 pub use render::clip_views;
 pub use server::{serve_stdio, AutoBackend, Backend, LocalBackend, Server};
-pub use tools::tools;
+pub use tools::{input_schema, tools};

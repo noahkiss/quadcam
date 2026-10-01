@@ -797,3 +797,68 @@ fn concurrent_previews_make_one_file() {
         "reused, not made again"
     );
 }
+
+/// One update checks every id and value before it writes anything.
+#[test]
+fn library_update_checks_everything_first() {
+    use quadcam_lib::core::LibUpdate;
+    let l = lab(Layout::YearDay, false, false);
+    import(&l);
+    let a = by_name(&l, "backyard loops").clip.id;
+    let b = by_name(&l, "gap run").clip.id;
+    let rated = |r: u8| LibUpdate {
+        rating: Some(r),
+        ..Default::default()
+    };
+    // An unknown id, a name for two clips, an unknown place: nothing is written.
+    let bad = [
+        (vec![a.clone(), "nope".to_string()], rated(3)),
+        (
+            vec![a.clone(), b.clone()],
+            LibUpdate {
+                name: Some("x".into()),
+                ..rated(3)
+            },
+        ),
+        (
+            vec![a.clone()],
+            LibUpdate {
+                edit: LibEdit {
+                    place: Some("Nowhere".into()),
+                    ..Default::default()
+                },
+                ..rated(3)
+            },
+        ),
+    ];
+    for (ids, u) in &bad {
+        assert!(l.core.library_update(ids, u).is_err());
+        assert_eq!(by_name(&l, "backyard loops").clip.rating, 0, "{u:?}");
+    }
+    let out = l
+        .core
+        .library_update(
+            &[a.clone(), b.clone()],
+            &LibUpdate {
+                flag: Some(Flag::Pick),
+                edit: LibEdit {
+                    note: Some("good light".into()),
+                    ..Default::default()
+                },
+                ..rated(4)
+            },
+        )
+        .unwrap();
+    assert_eq!(out.len(), 2);
+    for c in [by_name(&l, "backyard loops"), by_name(&l, "gap run")] {
+        assert_eq!(c.clip.rating, 4);
+        assert_eq!(c.clip.flag, Flag::Pick);
+        assert_eq!(c.clip.note, "good light");
+    }
+    assert!(l
+        .core
+        .library_update(&[a], &LibUpdate::default())
+        .unwrap_err()
+        .to_string()
+        .starts_with("Nothing to change"));
+}

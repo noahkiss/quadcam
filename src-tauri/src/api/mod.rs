@@ -3,7 +3,8 @@
 //!
 //! - `Core::dispatch` and `Core::METHODS`, for the control socket and the headless MCP server;
 //! - one typed Tauri command per method in `commands`, for the GUI, which tauri-specta
-//!   exports to `app/src/bindings.ts` with every param and result type.
+//!   exports to `app/src/bindings.ts` with every param and result type;
+//! - one typed function per method in `call`, which the CLI and both of the above use.
 //!
 //! A method with params takes one struct. `dispatch` reads JSON null as its default.
 
@@ -61,6 +62,20 @@ macro_rules! api {
         $(#[doc = $doc:literal])*
         $name:ident($($p:ident: $pty:ty)?) -> $ret:ty = |$c:ident| $body:expr;
     )*) => {
+        /// One typed function per method: the params type in, the result type out. The CLI,
+        /// `dispatch` and the Tauri commands all call these.
+        pub mod call {
+            #[allow(unused_imports)]
+            use super::*;
+
+            $(
+                $(#[doc = $doc])*
+                pub fn $name($c: &Core $(, $p: $pty)?) -> Result<$ret> {
+                    $body
+                }
+            )*
+        }
+
         impl Core {
             /// Every method `dispatch` answers, in table order.
             pub const METHODS: &'static [&'static str] = &[$(stringify!($name)),*];
@@ -70,10 +85,8 @@ macro_rules! api {
             pub fn dispatch(&self, method: &str, raw: Value) -> Result<Value> {
                 match method {
                     $(stringify!($name) => {
-                        let $c = self;
                         $(let $p: $pty = from_json(raw)?;)?
-                        let out: Result<$ret> = $body;
-                        let out = out?;
+                        let out = call::$name(self $(, $p)?)?;
                         Ok(serde_json::to_value(&out).unwrap_or(Value::Null))
                     })*
                     _ => anyhow::bail!("unknown method {method:?}"),
@@ -96,14 +109,10 @@ macro_rules! api {
                     $($p: $pty)?
                 ) -> std::result::Result<$ret, String> {
                     let core = core.inner().clone();
-                    tauri::async_runtime::spawn_blocking(move || {
-                        let $c: &Core = &core;
-                        let out: Result<$ret> = $body;
-                        out
-                    })
-                    .await
-                    .map_err(|e| e.to_string())?
-                    .map_err(|e| format!("{e:#}"))
+                    tauri::async_runtime::spawn_blocking(move || call::$name(&core $(, $p)?))
+                        .await
+                        .map_err(|e| e.to_string())?
+                        .map_err(|e| format!("{e:#}"))
                 }
             )*
         }
@@ -152,6 +161,9 @@ api! {
         |c| c.library_rate(&params.ids, params.rating, params.flag);
     /// Changes one clip's details, date or time.
     library_edit(params: LibraryEditParams) -> LibClip = |c| c.library_edit(&params.id, &params.edit);
+    /// Changes stars, flag, name and details of clips in one call; checks everything first.
+    library_update(params: LibraryUpdateParams) -> Vec<LibClip> =
+        |c| c.library_update(&params.ids, &params.update);
     /// Renames a clip, its cuts and its original.
     library_rename(params: RenameParams) -> LibClip = |c| {
         let name = params.name.context("name is required")?;

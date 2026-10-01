@@ -60,6 +60,51 @@ pub struct LibEdit {
     pub profile: Option<String>,
 }
 
+impl LibEdit {
+    /// True when the edit changes nothing.
+    pub fn is_empty(&self) -> bool {
+        let LibEdit {
+            note,
+            keywords,
+            author,
+            place,
+            location,
+            date,
+            time,
+            profile,
+        } = self;
+        note.is_none()
+            && keywords.is_none()
+            && author.is_none()
+            && place.is_none()
+            && location.is_none()
+            && date.is_none()
+            && time.is_none()
+            && profile.is_none()
+    }
+}
+
+/// Every change one call may make to library clips: stars and flag, a new name (one clip
+/// only), and the details in `LibEdit`. Missing fields stay as they are.
+#[derive(Debug, Clone, Default, Serialize, Deserialize, specta::Type)]
+#[serde(default)]
+pub struct LibUpdate {
+    /// Stars, 0 to 5; 0 clears.
+    pub rating: Option<u8>,
+    pub flag: Option<Flag>,
+    /// A new short name; needs exactly one clip.
+    pub name: Option<String>,
+    #[serde(flatten)]
+    pub edit: LibEdit,
+}
+
+/// An edit whose names, location and time were checked.
+pub(super) struct PreparedEdit {
+    location: Option<Option<crate::metadata::Location>>,
+    profile: Option<Option<crate::metadata::Profile>>,
+    time: Option<Option<chrono::NaiveTime>>,
+}
+
 #[derive(Debug, Clone, Serialize, specta::Type)]
 pub struct RebuildReport {
     pub clips: usize,
@@ -116,10 +161,17 @@ impl Core {
             .as_ref()
             .is_none_or(|l| l.root != root || l.mtime != on_disk)
         {
-            let index = lib::Index::load(&root)?.unwrap_or(Index {
+            let mut index = lib::Index::load(&root)?.unwrap_or(Index {
                 version: lib::INDEX_VERSION,
+                id_scheme: lib::ID_SCHEME,
                 ..Default::default()
             });
+            if index.id_scheme < lib::ID_SCHEME {
+                self.migrate_ids(&root, &mut index);
+                if root.is_dir() {
+                    index.save(&root)?;
+                }
+            }
             *guard = Some(Loaded {
                 root: root.clone(),
                 index,
@@ -140,6 +192,41 @@ impl Core {
             self.hooks.library_changed();
         }
         Ok(out)
+    }
+
+    /// Moves an index from QuadCam 0.4's ids to the current scheme (see `identity`). Each
+    /// clip gets the id its file now reads as: an adopted file its new head id, a clip with
+    /// a kept original that proves its 0.4 id the original's new fingerprint. The 0.4 id
+    /// stays as an alias, and the clip's cached pictures follow it. Everything else in the
+    /// entry stays, unsaved cuts included. No media file is written.
+    fn migrate_ids(&self, root: &Path, ix: &mut Index) {
+        for c in &mut ix.clips {
+            if !crate::identity::is_legacy(&c.id) {
+                continue;
+            }
+            let Ok(lib::Found::Clip(now)) = lib::read_file(root, &c.path) else {
+                continue;
+            };
+            if now.id == c.id {
+                continue;
+            }
+            for (old, new) in [
+                (self.strip_path(&c.id), self.strip_path(&now.id)),
+                (self.poster_path(&c.id), self.poster_path(&now.id)),
+                (self.no_picture_path(&c.id), self.no_picture_path(&now.id)),
+            ] {
+                if old.is_file() && !new.exists() {
+                    let _ = std::fs::rename(&old, &new);
+                }
+            }
+            let mut aliases = now.aliases.clone();
+            if !aliases.contains(&c.id) {
+                aliases.push(c.id.clone());
+            }
+            c.id = now.id.clone();
+            c.aliases = aliases;
+        }
+        ix.id_scheme = lib::ID_SCHEME;
     }
 
     /// The library, narrowed by `filter`.
@@ -338,6 +425,13 @@ impl Core {
     /// in its file and its cuts. A new day moves the clip, its cuts and its original to
     /// that day's folder (and renames them when the file name starts with the date).
     pub fn library_edit(&self, id: &str, e: &LibEdit) -> Result<LibClip> {
+        let prepared = self.prepare_edit(e)?;
+        self.apply_edit(id, e, &prepared)
+    }
+
+    /// Checks an edit before any file changes: the place and profile names, the location and
+    /// the time.
+    fn prepare_edit(&self, e: &LibEdit) -> Result<PreparedEdit> {
         let d = self.defaults();
         let places = d.places.clone();
         let location = match (&e.location, e.place.as_deref().map(str::trim)) {
@@ -393,6 +487,21 @@ impl Core {
             .as_deref()
             .map(crate::session::parse_time)
             .transpose()?;
+        Ok(PreparedEdit {
+            location,
+            profile,
+            time,
+        })
+    }
+
+    /// Writes a checked edit into one clip, its cuts and the index.
+    fn apply_edit(&self, id: &str, e: &LibEdit, prepared: &PreparedEdit) -> Result<LibClip> {
+        let d = self.defaults();
+        let PreparedEdit {
+            location,
+            profile,
+            time,
+        } = prepared;
         let (root, c) = self.clip(id)?;
         let file = root.join(&c.path);
         let items = crate::qtmeta::read(&file)?;
@@ -457,11 +566,45 @@ impl Core {
             lib::write_keys(&root.join(f), &set)?;
         }
         if e.date.is_some() || time.is_some() {
-            self.redate(&root, &c, &items, e.date, time)?;
+            self.redate(&root, &c, &items, e.date, *time)?;
         } else {
             self.reread_clips(&[id.to_string()])?;
         }
         Ok(self.clip(id)?.1)
+    }
+
+    /// Changes stars, flag, name and details of library clips in one call. Every value and
+    /// clip id is checked before any file changes; then the stars and flag, the name, and the
+    /// details are written, in that order.
+    pub fn library_update(&self, ids: &[String], u: &LibUpdate) -> Result<Vec<LibClip>> {
+        if ids.is_empty() {
+            bail!("ids is required: library clip ids from quadcam_library.");
+        }
+        if u.rating.is_none() && u.flag.is_none() && u.name.is_none() && u.edit.is_empty() {
+            bail!("Nothing to change: give rating, flag, name, note, keywords, author, place, location, profile, date or time.");
+        }
+        if u.name.is_some() && ids.len() != 1 {
+            bail!("name renames one clip; give exactly one id.");
+        }
+        if u.rating.is_some_and(|r| r > 5) {
+            bail!("A rating is 0 to 5 stars.");
+        }
+        for id in ids {
+            self.clip(id)?;
+        }
+        let prepared = self.prepare_edit(&u.edit)?;
+        if u.rating.is_some() || u.flag.is_some() {
+            self.library_rate(ids, u.rating, u.flag)?;
+        }
+        if let Some(name) = &u.name {
+            self.library_rename(&ids[0], name)?;
+        }
+        if !u.edit.is_empty() {
+            for id in ids {
+                self.apply_edit(id, &u.edit, &prepared)?;
+            }
+        }
+        ids.iter().map(|id| Ok(self.clip(id)?.1)).collect()
     }
 
     /// Gives a clip a new date and time: the QuickTime creation date, the movie header time

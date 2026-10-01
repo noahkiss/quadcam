@@ -362,6 +362,17 @@ impl Core {
     pub fn format_plan(&self, label: Option<&str>) -> Result<FormatPlan> {
         let s = self.current()?;
         s.format_ready()?;
+        // A source that does not offer formatting refuses here, before every other guard.
+        if let Some(c) = s
+            .clips
+            .iter()
+            .find(|c| !crate::sources::get(c.kind).card_policy().format_offered)
+        {
+            bail!(
+                "Refused: QuadCam does not format {:?} cards.",
+                crate::sources::get(c.kind).kind()
+            );
+        }
         let card = s
             .card
             .clone()
@@ -442,7 +453,7 @@ impl Core {
 
     /// Clips on a card, and how many of them are not in the library yet (by content).
     pub fn card_status(&self, mount: &Path) -> Result<CardStatus> {
-        let found = crate::scan::find_clips(mount);
+        let found = crate::sources::for_root(mount).list(mount);
         let known = self
             .with_index(|_, ix| Ok((lib::known_sources(ix), false)))
             .unwrap_or_default();
@@ -453,8 +464,13 @@ impl Core {
         let new = found
             .iter()
             .filter(|f| {
-                crate::pipeline::fingerprint(&f.path)
-                    .map(|k| !known.contains(&k) && !staged.contains(&k))
+                // A clip is known by its current fingerprint or by its 0.4 one.
+                crate::identity::fingerprints(&f.path)
+                    .map(|(now, old)| {
+                        ![now, old]
+                            .iter()
+                            .any(|k| known.contains(k) || staged.contains(k))
+                    })
                     .unwrap_or(true)
             })
             .count();

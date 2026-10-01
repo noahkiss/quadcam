@@ -1,0 +1,136 @@
+{
+  "version": 1,
+  "last_import": "20261001-164749",
+  "clips": [
+    {
+      "id": "6a01a1ea654bb507",
+      "path": "2026/2026-10-01/2026-10-01_hover.mp4",
+      "title": "hover",
+      "note": "",
+      "date": "2026-10-01",
+      "time": null,
+      "duration": 1.0,
+      "size": 16940,
+      "rating": 0,
+      "flag": "none",
+      "place": null,
+      "location": null,
+      "aircraft": null,
+      "keywords": [
+        "FPV"
+      ],
+      "author": null,
+      "moments": [],
+      "keep": [],
+      "stats": null,
+      "cuts": [],
+      "pending_cuts": [
+        {
+          "start": 0.1,
+          "end": 0.8
+        }
+      ],
+      "in_photos": false,
+      "original": null,
+      "dvr": "PICT0001.AVI",
+      "import": "20261001-164749",
+      "cut_of": null
+    },
+    {
+      "id": "7dbb173d0eff05c9",
+      "path": "2026/2026-10-01/2026-10-01_loops.mp4",
+      "title": "loops",
+      "note": "",
+      "date": "2026-10-01",
+      "time": null,
+      "duration": 1.5,
+      "size": 29693,
+      "rating": 4,
+      "flag": "pick",
+      "place": null,
+      "location": null,
+      "aircraft": null,
+      "keywords": [
+        "FPV"
+      ],
+      "author": null,
+      "moments": [],
+      "keep": [],
+      "stats": null,
+      "cuts": [],
+      "pending_cuts": [
+        {
+          "start": 0.5,
+          "end": 1.4
+        }
+      ],
+      "in_photos": false,
+      "original": "2026/2026-10-01/originals/2026-10-01_loops.avi",
+      "dvr": "PICT0001.AVI",
+      "import": "20261001-164748",
+      "cut_of": null
+    },
+    {
+      "id": "7dbb173d0eff05c9@0.2-0.9",
+      "path": "2026/2026-10-01/2026-10-01_loops_cut1.mp4",
+      "title": "loops",
+      "note": "",
+      "date": "2026-10-01",
+      "time": null,
+      "duration": 0.7,
+      "size": 16038,
+      "rating": 0,
+      "flag": "none",
+      "place": null,
+      "location": null,
+      "aircraft": null,
+      "keywords": [
+        "FPV"
+      ],
+      "author": null,
+      "moments": [],
+      "keep": [],
+      "stats": null,
+      "cuts": [],
+      "pending_cuts": [],
+      "in_photos": false,
+      "original": null,
+      "dvr": "PICT0001.AVI",
+      "import": "20261001-164748",
+      "cut_of": [
+        "7dbb173d0eff05c9",
+        {
+          "start": 0.2,
+          "end": 0.9
+        }
+      ]
+    },
+    {
+      "id": "hc21bcb91f8739719",
+      "path": "2025/2025-05-01/2025-05-01_old-export.mp4",
+      "title": "",
+      "note": "",
+      "date": "2025-05-01",
+      "time": null,
+      "duration": 1.0,
+      "size": 6994,
+      "rating": 2,
+      "flag": "none",
+      "place": null,
+      "location": null,
+      "aircraft": null,
+      "keywords": [],
+      "author": null,
+      "moments": [],
+      "keep": [],
+      "stats": null,
+      "cuts": [],
+      "pending_cuts": [],
+      "in_photos": false,
+      "original": null,
+      "dvr": null,
+      "import": null,
+      "cut_of": null
+    }
+  ]
+}

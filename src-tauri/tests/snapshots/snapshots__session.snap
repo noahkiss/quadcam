@@ -13,6 +13,7 @@ expression: session
       "duration": 3.0,
       "id": 0,
       "key": "$HASH",
+      "kind": "analog",
       "name": "PICT0001.AVI",
       "probe": {
         "audio_streams": 1,
@@ -47,6 +48,7 @@ expression: session
       "duration": 2.0,
       "id": 1,
       "key": "$HASH",
+      "kind": "analog",
       "name": "PICT0002.AVI",
       "probe": {
         "audio_streams": 0,
@@ -81,6 +83,7 @@ expression: session
       "duration": 0.0,
       "id": 2,
       "key": "",
+      "kind": "analog",
       "name": "PICT0003.AVI",
       "probe": null,
       "recovered": null,

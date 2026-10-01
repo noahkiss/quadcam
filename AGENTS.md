@@ -18,7 +18,7 @@ README. Personal preferences go in the app's settings file on the machine
 |---|---|
 | `app/` | New frontend: React + TypeScript + Vite (pnpm, Node pinned in `.node-version`). Built side by side with `ui/` and not yet the default; `docs/architecture-plan.md` section 4.2 has the steps |
 | `ui/` | Frontend: plain HTML, CSS and JS, no build step. `app.js` (library, import sheet, settings), `trim.js` (the one trim editor, used by clip detail and the import review). Icons and fonts are inlined or bundled so the app works offline |
-| `src-tauri/src/` | Rust core. `core/` (`Core`) owns the session and the library index and is the one surface every front end drives: `mod.rs` (state, locking, `Hooks`), `import.rs` (stage, analyse, dates, import, verify, format), `library.rs` (the index, list, rate, edit, rename, redate), `cuts.rs` (session and library cut lists), `files.rs` (Photos, previews, strips, Trash) and `setup.rs` (settings, places, profiles). `api/` is the one method table: each row names a method, its params and result types and the `Core` call, and `api!` makes `Core::dispatch` (socket, MCP) and one typed Tauri command per method from it; `api/events.rs` holds the typed events. `lib.rs` holds the GUI's own Tauri commands, the legacy UI's commands (`core_call` runs any `dispatch` method), and `specta_builder`, which tauri-specta exports to `app/src/bindings.ts`; `control.rs` the app's socket, `mcp/` the MCP server (`server.rs` the protocol and handlers, `tools.rs` the tool list, `render.rs` the text answers), `bin/quadcam-cli.rs` the CLI. The logic modules (`scan`, `disk`, `media`, `logs`, `moments`, `metadata`, `qtmeta`, `naming`, `pipeline` (with `pipeline/import.rs`, the import run), `session`, `photos`, `library`, `trim`, `cuts` (the one cut writer), `trash`, `settings` (with `Defaults`, the effective settings), `paths` (every path under `$HOME`), `geocode`) run without Tauri |
+| `src-tauri/src/` | Rust core. `core/` (`Core`) owns the session and the library index and is the one surface every front end drives: `mod.rs` (state, locking, `Hooks`), `import.rs` (stage, analyse, dates, import, verify, format), `library.rs` (the index, list, rate, edit, rename, redate), `cuts.rs` (session and library cut lists), `files.rs` (Photos, previews, strips, Trash) and `setup.rs` (settings, places, profiles). `api/` is the one method table: each row names a method, its params and result types and the `Core` call, and `api!` makes `Core::dispatch` (socket, MCP) and one typed Tauri command per method from it; `api/events.rs` holds the typed events. `lib.rs` holds the GUI's own Tauri commands, the legacy UI's commands (`core_call` runs any `dispatch` method), and `specta_builder`, which tauri-specta exports to `app/src/bindings.ts`; `control.rs` the app's socket, `mcp/` the MCP server (`server.rs` the protocol and handlers, `params.rs` each tool's argument type, `tools.rs` the tool list with schemas derived from those types, `render.rs` the text answers), `bin/quadcam-cli.rs` the CLI (clap flags build the `api` params, and it calls the table's `api::call` functions). The logic modules (`scan`, `disk`, `media`, `logs`, `moments`, `metadata`, `qtmeta`, `naming`, `pipeline` (with `pipeline/import.rs`, the import run), `session`, `photos`, `library`, `trim`, `cuts` (the one cut writer), `sources` (the `Source` trait per video system; `sources/analog.rs` is the DVR: clip layout, half-written check and repair, encode plan, dead air, card policy), `trash`, `settings` (with `Defaults`, the effective settings), `paths` (every path under `$HOME`), `geocode`) run without Tauri |
 | `src-tauri/Info.plist` | Photos usage strings, merged into the bundle's Info.plist |
 | `src-tauri/tests/` | Integration tests on synthetic clips and FAT32 disk images |
 | `test-clips/` | Local test corpus. Git tracks only its README |
@@ -115,7 +115,13 @@ GitHub (`noahkiss/quadcam`, public) is the only remote. Users install the cask
   existing export folder is adopted.
 - **Identity:** a library clip's id is its DVR source's content fingerprint
   (`app.quadcam.source`), never a file name. A file QuadCam did not write is known by a hash of
-  its first MB before `moov` (`library::head_id`), which metadata rewrites never touch.
+  its first MB before `moov` (`identity::head_id`), which metadata rewrites never touch. Both
+  are specified hashes (XXH64 over defined bytes; `identity.rs` states them), with test
+  vectors. Ids from 0.4 and earlier (`DefaultHasher`) stay recognizable through
+  `identity::legacy`, an explicit SipHash-1-3. An index without `id_scheme: 2` is moved when it
+  loads: a clip whose kept original proves its 0.4 id, and every adopted file, get the current
+  id, and the 0.4 id stays in `aliases`, which every lookup accepts. Other clips keep their 0.4
+  id. No media file is written. `tests/fixtures/legacy-library` is a library 0.4.1 built.
 - **Cuts:** `trim.rs` is the one cut model for the session and the library. Dropping a cut that
   was already exported needs a decision (`RemovedCuts::Keep`: the file stays as its own clip,
   marked `app.quadcam.detached`; `Trash`: it goes to the Trash). Without one, `Core` answers
@@ -238,8 +244,12 @@ claude mcp add quadcam -- "$(brew --prefix)/bin/quadcam-cli" mcp
   details, aircraft, date, time), `quadcam_library_files` (cuts, Trash, Photos, rebuild);
   setup `quadcam_places` (list, search, save, delete), `quadcam_profiles` (list, save,
   delete, set_default), `quadcam_settings` (read, write). Keep the surface this small:
-  add an action or a field to a tool before adding a tool. The tool list is one big `json!` in
-  `mcp/tools.rs` (`#![recursion_limit]` in `lib.rs`).
+  add an action or a field to a tool before adding a tool. Each tool's arguments are a type in
+  `mcp/params.rs`; `mcp/tools.rs` derives the input schema from it (schemars) and keeps the
+  descriptions as written. The handler deserializes the arguments into that type once. A
+  schema change shows in the `snapshots` tests: `mcp_tools` and the frozen
+  `tests/fixtures/mcp_tools_before.json`. `quadcam_library_edit` is one `library_update`
+  call, which checks every id and value before any file changes.
 - Agent suggestions show in the GUI with a dashed accent outline and an "agent" badge until
   the person edits the field. Read back with `quadcam_read_clips` before export.
 - `quadcam_format_card` needs `device`, `volume_uuid` and `confirm=true` (read them with
@@ -254,6 +264,9 @@ claude mcp add quadcam -- "$(brew --prefix)/bin/quadcam-cli" mcp
   created, and they assert `BusProtocol == "Disk Image"` first. Keep it that way.
 - Every format guard runs again inside `disk::format_card`, immediately before
   `diskutil eraseDisk`. Do not move a guard out of that path.
+- A source's `CardPolicy` says whether "Format card" is offered for its cards. `Core::format_plan`
+  refuses a source that does not offer it, before every other guard; the guards themselves stay
+  in `disk::format_card`.
 - "Format card" is never saved as a setting.
 - Outputs are written under a hidden `.part` name and renamed only after verify passes.
   Never overwrite an existing file.

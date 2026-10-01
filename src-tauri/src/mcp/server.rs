@@ -1,6 +1,7 @@
 //! The MCP server: JSON-RPC over stdio, the backend that reaches the running app or a local
 //! core, and one handler per tool.
 
+use super::params::*;
 use super::render::{clip_views, lib_line, lib_view, names, photos_line, places_text, table, text};
 use super::tools::{tools, INSTRUCTIONS};
 use crate::control::{self, Client};
@@ -112,6 +113,14 @@ pub fn serve_stdio(session_file: Option<PathBuf>) -> Result<()> {
     Ok(())
 }
 
+/// A tool's arguments as its type; no arguments are the defaults.
+fn args<T: serde::de::DeserializeOwned + Default>(a: &Value) -> Result<T> {
+    if a.is_null() {
+        return Ok(T::default());
+    }
+    serde_json::from_value(a.clone()).context("bad arguments")
+}
+
 pub struct Server<B: Backend> {
     pub backend: B,
 }
@@ -170,10 +179,9 @@ impl<B: Backend> Server<B> {
     }
 
     fn run_tool(&mut self, name: &str, a: &Value) -> Result<(Vec<Value>, Value)> {
-        let s = |k: &str| a.get(k).and_then(Value::as_str).map(str::to_string);
-        let ids = a.get("ids").cloned().filter(|v| !v.is_null());
         match name {
             "quadcam_status" => {
+                let _: StatusArgs = args(a)?;
                 let mode = self.backend.mode();
                 let status = self.backend.call("status", Value::Null)?;
                 let volumes = self.backend.call("volumes", Value::Null)?;
@@ -216,16 +224,12 @@ impl<B: Backend> Server<B> {
                 ))
             }
             "quadcam_library" => {
-                let mut filter = json!({});
-                for k in ["query", "group", "day", "place", "aircraft"] {
-                    if let Some(v) = s(k) {
-                        filter[k] = json!(v);
-                    }
-                }
-                if let Some(r) = a.get("min_rating").filter(|v| !v.is_null()) {
-                    filter["min_rating"] = r.clone();
-                }
-                let limit = a.get("limit").and_then(Value::as_u64).unwrap_or(50) as usize;
+                let x: LibraryArgs = args(a)?;
+                let filter = json!({
+                    "query": x.query, "group": x.group, "day": x.day, "place": x.place,
+                    "aircraft": x.aircraft, "min_rating": x.min_rating,
+                });
+                let limit = x.limit.unwrap_or(50) as usize;
                 let lib = self.backend.call("library", filter)?;
                 let all = lib["clips"].as_array().cloned().unwrap_or_default();
                 let clips: Vec<Value> = all.iter().take(limit).map(lib_view).collect();
@@ -250,63 +254,45 @@ impl<B: Backend> Server<B> {
                 ))
             }
             "quadcam_library_edit" => {
-                let ids: Vec<String> = a
-                    .get("ids")
-                    .cloned()
-                    .map(serde_json::from_value)
-                    .transpose()
-                    .context("ids is a list of library clip ids")?
-                    .unwrap_or_default();
+                let x: LibraryEditArgs = args(a)?;
+                let ids = x.ids.unwrap_or_default();
                 if ids.is_empty() {
                     return Err(anyhow!(
                         "ids is required: library clip ids from quadcam_library."
                     ));
                 }
+                let edit = json!({
+                    "note": x.note, "author": x.author, "place": x.place, "date": x.date,
+                    "time": x.time, "profile": x.profile, "keywords": x.keywords,
+                    "location": x.location.map(|l| json!({"lat": l.lat, "lon": l.lon})),
+                });
                 let mut changed: Vec<String> = Vec::new();
-                let rating = a.get("rating").filter(|v| !v.is_null()).cloned();
-                let flag = s("flag");
-                if rating.is_some() || flag.is_some() {
-                    if rating.is_some() {
-                        changed.push("rating".into());
-                    }
-                    if flag.is_some() {
-                        changed.push("flag".into());
-                    }
-                    self.backend.call(
-                        "library_rate",
-                        json!({"ids": ids, "rating": rating, "flag": flag}),
-                    )?;
+                if x.rating.is_some() {
+                    changed.push("rating".into());
                 }
-                if let Some(name) = s("name") {
-                    if ids.len() != 1 {
-                        return Err(anyhow!("name renames one clip; give exactly one id."));
-                    }
-                    self.backend
-                        .call("library_rename", json!({"id": ids[0], "name": name}))?;
+                if x.flag.is_some() {
+                    changed.push("flag".into());
+                }
+                if x.name.is_some() {
                     changed.push("name".into());
                 }
-                let mut edit = json!({});
-                for k in ["note", "author", "place", "date", "time", "profile"] {
-                    if let Some(v) = s(k) {
-                        edit[k] = json!(v);
-                    }
-                }
-                for k in ["keywords", "location"] {
-                    if let Some(v) = a.get(k).filter(|v| !v.is_null()) {
-                        edit[k] = v.clone();
-                    }
-                }
-                if edit.as_object().is_some_and(|o| !o.is_empty()) {
-                    for id in &ids {
-                        let mut x = edit.clone();
-                        x["id"] = json!(id);
-                        self.backend.call("library_edit", x)?;
-                    }
-                    changed.extend(edit.as_object().into_iter().flat_map(|o| o.keys().cloned()));
-                }
-                if changed.is_empty() {
-                    return Err(anyhow!("Nothing to change: give rating, flag, name, note, keywords, author, place, location, profile, date or time."));
-                }
+                // Keys in name order, as a JSON object lists them.
+                let mut keys: Vec<&String> = edit
+                    .as_object()
+                    .into_iter()
+                    .flatten()
+                    .filter(|(_, v)| !v.is_null())
+                    .map(|(k, _)| k)
+                    .collect();
+                keys.sort();
+                changed.extend(keys.into_iter().cloned());
+                let mut update = edit.clone();
+                update["ids"] = json!(ids);
+                update["rating"] = json!(x.rating);
+                update["flag"] = json!(x.flag);
+                update["name"] = json!(x.name);
+                // One call: every value and id is checked before any file changes.
+                self.backend.call("library_update", update)?;
                 let lib = self.backend.call("library", json!({}))?;
                 let clips: Vec<Value> = lib["clips"]
                     .as_array()
@@ -327,15 +313,10 @@ impl<B: Backend> Server<B> {
                 ))
             }
             "quadcam_library_files" => {
-                let action = s("action")
+                let x: LibraryFilesArgs = args(a)?;
+                let action = x.action
                     .context("action is required: cuts, export_cuts, trash, photos, rebuild or apply_name_format")?;
-                let ids: Vec<String> = a
-                    .get("ids")
-                    .cloned()
-                    .map(serde_json::from_value)
-                    .transpose()
-                    .context("ids is a list of library clip ids")?
-                    .unwrap_or_default();
+                let ids: Vec<String> = x.ids.unwrap_or_default();
                 let one = || -> Result<String> {
                     match ids.as_slice() {
                         [id] => Ok(id.clone()),
@@ -345,13 +326,16 @@ impl<B: Backend> Server<B> {
                 match action.as_str() {
                     "cuts" => {
                         let id = one()?;
-                        let cuts = a
-                            .get("cuts")
-                            .cloned()
-                            .context("cuts is required (an empty list removes every cut)")?;
+                        let cuts: Vec<Value> = x
+                            .cuts
+                            .clone()
+                            .context("cuts is required (an empty list removes every cut)")?
+                            .iter()
+                            .map(|c| json!({"start": c.start, "end": c.end}))
+                            .collect();
                         let change = self.backend.call(
                             "library_cuts",
-                            json!({"id": id, "cuts": cuts, "removed_cuts": s("removed_cuts")}),
+                            json!({"id": id, "cuts": cuts, "removed_cuts": x.removed_cuts}),
                         )?;
                         if change["status"] == "confirm" {
                             let files = &change["files"];
@@ -361,7 +345,7 @@ impl<B: Backend> Server<B> {
                             ));
                         }
                         let mut line = "Cut list saved. New ranges are not files yet; call action export_cuts to write them.".to_string();
-                        if a.get("export").and_then(Value::as_bool) == Some(true) {
+                        if x.export == Some(true) {
                             let made = self
                                 .backend
                                 .call("library_export_cuts", json!({"id": id}))?;
@@ -405,7 +389,7 @@ impl<B: Backend> Server<B> {
                         }
                         let r = self
                             .backend
-                            .call("library_photos", json!({"ids": ids, "album": s("album")}))?;
+                            .call("library_photos", json!({"ids": ids, "album": x.album}))?;
                         Ok((vec![text(photos_line(&json!({"Ok": r.clone()})))], r))
                     }
                     "apply_name_format" => {
@@ -448,18 +432,21 @@ impl<B: Backend> Server<B> {
                 }
             }
             "quadcam_places" => {
-                let action = s("action").unwrap_or_else(|| "list".into());
+                let x: PlacesArgs = args(a)?;
+                let action = x.action.clone().unwrap_or_else(|| "list".into());
                 match action.as_str() {
                     "list" => {
                         let places = self.backend.call("places", Value::Null)?;
                         Ok((vec![text(places_text(&places))], json!({"places": places})))
                     }
                     "search" => {
-                        let query =
-                            s("query").context("query is required: an address or a place name")?;
+                        let query = x
+                            .query
+                            .clone()
+                            .context("query is required: an address or a place name")?;
                         let hits = self.backend.call(
                             "place_search",
-                            json!({"query": query, "provider": s("provider"), "limit": a.get("limit")}),
+                            json!({"query": query, "provider": x.provider, "limit": x.limit}),
                         )?;
                         let arr = hits.as_array().cloned().unwrap_or_default();
                         let line = if arr.is_empty() {
@@ -483,10 +470,10 @@ impl<B: Backend> Server<B> {
                         Ok((vec![text(line)], json!({"results": hits})))
                     }
                     "save" => {
-                        let name = s("name").context("name is required")?;
+                        let name = x.name.clone().context("name is required")?;
                         let p = self.backend.call(
                             "place_save",
-                            json!({"name": name, "lat": a.get("lat"), "lon": a.get("lon"), "new_name": s("new_name")}),
+                            json!({"name": name, "lat": x.lat, "lon": x.lon, "new_name": x.new_name}),
                         )?;
                         Ok((
                             vec![text(format!(
@@ -499,7 +486,7 @@ impl<B: Backend> Server<B> {
                         ))
                     }
                     "delete" => {
-                        let name = s("name").context("name is required")?;
+                        let name = x.name.clone().context("name is required")?;
                         let r = self.backend.call("place_delete", json!({"name": name}))?;
                         let cleared = r["profiles_cleared"]
                             .as_array()
@@ -531,21 +518,22 @@ impl<B: Backend> Server<B> {
                 }
             }
             "quadcam_profiles" => {
-                let action = s("action").unwrap_or_else(|| "list".into());
+                let x: ProfilesArgs = args(a)?;
+                let action = x.action.clone().unwrap_or_else(|| "list".into());
                 let out = match action.as_str() {
                     "list" => None,
                     "save" => {
-                        let name = s("name").context("name is required")?;
-                        let fields = a
-                            .get("fields")
-                            .cloned()
+                        let name = x.name.clone().context("name is required")?;
+                        let fields = x
+                            .fields
+                            .clone()
                             .filter(|v| !v.is_null())
                             .unwrap_or(json!({}));
                         let p = self.backend.call(
                             "profile_save",
-                            json!({"name": name, "fields": fields, "new_name": s("new_name")}),
+                            json!({"name": name, "fields": fields, "new_name": x.new_name}),
                         )?;
-                        if a.get("default").and_then(Value::as_bool) == Some(true) {
+                        if x.default == Some(true) {
                             self.backend
                                 .call("profile_default", json!({"name": p["name"]}))?;
                         }
@@ -555,7 +543,7 @@ impl<B: Backend> Server<B> {
                         ))
                     }
                     "delete" => {
-                        let name = s("name").context("name is required")?;
+                        let name = x.name.clone().context("name is required")?;
                         let p = self.backend.call("profile_delete", json!({"name": name}))?;
                         Some(format!(
                             "Deleted profile {}.",
@@ -563,7 +551,7 @@ impl<B: Backend> Server<B> {
                         ))
                     }
                     "set_default" => {
-                        let name = s("name").unwrap_or_default();
+                        let name = x.name.clone().unwrap_or_default();
                         self.backend
                             .call("profile_default", json!({"name": name}))?;
                         Some(if name.is_empty() {
@@ -618,14 +606,15 @@ impl<B: Backend> Server<B> {
                 Ok((vec![text(line)], r))
             }
             "quadcam_settings" => {
-                let action = s("action").unwrap_or_else(|| "read".into());
+                let x: SettingsArgs = args(a)?;
+                let action = x.action.clone().unwrap_or_else(|| "read".into());
                 let view = match action.as_str() {
                     "read" => self.backend.call("settings", Value::Null)?,
                     "write" => {
-                        let values = a
-                            .get("values")
+                        let values = x
+                            .values
+                            .clone()
                             .filter(|v| v.as_object().is_some_and(|o| !o.is_empty()))
-                            .cloned()
                             .context(
                                 "values is required: {setting: value}; null resets a setting",
                             )?;
@@ -671,7 +660,8 @@ impl<B: Backend> Server<B> {
                 ))
             }
             "quadcam_load_clips" => {
-                let session = self.backend.call("load", json!({"source": s("source")}))?;
+                let x: LoadClipsArgs = args(a)?;
+                let session = self.backend.call("load", json!({"source": x.source}))?;
                 let view = clip_views(&session, None);
                 Ok((
                     vec![text(format!(
@@ -684,23 +674,16 @@ impl<B: Backend> Server<B> {
                 ))
             }
             "quadcam_read_clips" => {
+                let x: ReadClipsArgs = args(a)?;
                 let session = self.backend.call("session", Value::Null)?;
                 if session.is_null() {
                     return Err(anyhow!("No clips loaded. Call quadcam_load_clips first."));
                 }
-                let want: Option<Vec<u64>> = ids
-                    .as_ref()
-                    .and_then(|v| serde_json::from_value(v.clone()).ok());
+                let want: Option<Vec<u64>> = x.ids;
                 let view = clip_views(&session, want.as_deref());
                 let mut content = vec![text(table(&view))];
-                if a.get("thumbnails")
-                    .and_then(Value::as_bool)
-                    .unwrap_or(false)
-                {
-                    let max = a
-                        .get("max_thumbnails")
-                        .and_then(Value::as_u64)
-                        .unwrap_or(12) as usize;
+                if x.thumbnails.unwrap_or(false) {
+                    let max = x.max_thumbnails.unwrap_or(12) as usize;
                     for c in view.iter().take(max) {
                         let Some(path) = c["thumbnail"].as_str() else {
                             continue;
@@ -723,16 +706,17 @@ impl<B: Backend> Server<B> {
                 Ok((content, json!({"clips": view, "session": extra})))
             }
             "quadcam_match_logs" => {
-                let logs = if a.get("no_logs").and_then(Value::as_bool).unwrap_or(false) {
+                let x: MatchLogsArgs = args(a)?;
+                let logs = if x.no_logs.unwrap_or(false) {
                     json!({"kind": "none"})
-                } else if let Some(d) = s("log_dir") {
+                } else if let Some(d) = &x.log_dir {
                     json!({"kind": "dir", "path": d})
                 } else {
                     json!({"kind": "keep"})
                 };
                 let session = self
                     .backend
-                    .call("dates", json!({"logs": logs, "day": s("day")}))?;
+                    .call("dates", json!({"logs": logs, "day": x.day}))?;
                 let view = clip_views(&session, None);
                 let warn = session["date_warnings"]
                     .as_array()
@@ -753,10 +737,8 @@ impl<B: Backend> Server<B> {
                 ))
             }
             "quadcam_suggest" => {
-                let patches = a
-                    .get("suggestions")
-                    .cloned()
-                    .context("suggestions is required")?;
+                let x: SuggestArgs = args(a)?;
+                let patches = x.suggestions.context("suggestions is required")?;
                 let session = self
                     .backend
                     .call("suggest", json!({"patches": patches, "editor": "agent"}))?;
@@ -771,14 +753,23 @@ impl<B: Backend> Server<B> {
                 ))
             }
             "quadcam_export" => {
+                let x: ExportArgs = args(a)?;
                 let mut opts = json!({});
-                for k in ["output_dir", "format", "album"] {
-                    if let Some(v) = s(k) {
+                for (k, v) in [
+                    ("output_dir", x.output_dir),
+                    ("format", x.format),
+                    ("album", x.album),
+                ] {
+                    if let Some(v) = v {
                         opts[k] = json!(v);
                     }
                 }
-                for k in ["keep_originals", "add_time", "add_to_photos"] {
-                    if let Some(v) = a.get(k).and_then(Value::as_bool) {
+                for (k, v) in [
+                    ("keep_originals", x.keep_originals),
+                    ("add_time", x.add_time),
+                    ("add_to_photos", x.add_to_photos),
+                ] {
+                    if let Some(v) = v {
                         opts[k] = json!(v);
                     }
                 }
@@ -827,7 +818,8 @@ impl<B: Backend> Server<B> {
                 Ok((vec![text(line)], out))
             }
             "quadcam_verify" => {
-                let reports = self.backend.call("verify", json!({"ids": ids}))?;
+                let x: VerifyArgs = args(a)?;
+                let reports = self.backend.call("verify", json!({"ids": x.ids}))?;
                 let arr = reports.as_array().cloned().unwrap_or_default();
                 let bad: Vec<String> = arr
                     .iter()
@@ -842,20 +834,23 @@ impl<B: Backend> Server<B> {
                 Ok((vec![text(line)], json!({"reports": reports})))
             }
             "quadcam_add_to_photos" => {
+                let x: AddToPhotosArgs = args(a)?;
                 let r = self
                     .backend
-                    .call("photos", json!({"ids": ids, "album": s("album")}))?;
+                    .call("photos", json!({"ids": x.ids, "album": x.album}))?;
                 Ok((vec![text(photos_line(&json!({"Ok": r.clone()})))], r))
             }
             "quadcam_eject" => {
-                self.backend.call("eject", json!({"target": s("target")}))?;
+                let x: EjectArgs = args(a)?;
+                self.backend.call("eject", json!({"target": x.target}))?;
                 Ok((vec![text("Ejected.")], json!({"ejected": true})))
             }
             "quadcam_format_card" => {
-                if a.get("dry_run").and_then(Value::as_bool).unwrap_or(false) {
+                let x: FormatCardArgs = args(a)?;
+                if x.dry_run.unwrap_or(false) {
                     let plan = self
                         .backend
-                        .call("format_plan", json!({"label": s("label")}))?;
+                        .call("format_plan", json!({"label": x.label}))?;
                     return Ok((
                         vec![text(format!(
                             "Would erase {} (volume {}, UUID {}, {} bytes, {} clips). To go ahead, call again with device, volume_uuid and confirm=true.",
@@ -864,10 +859,10 @@ impl<B: Backend> Server<B> {
                         plan,
                     ));
                 }
-                if a.get("confirm").and_then(Value::as_bool) != Some(true) {
+                if x.confirm != Some(true) {
                     return Err(anyhow!("Refused: format needs confirm=true, device and volume_uuid. Call with dry_run=true to read them."));
                 }
-                let req = json!({"device": s("device").unwrap_or_default(), "volume_uuid": s("volume_uuid").unwrap_or_default(), "label": s("label"), "confirm": true});
+                let req = json!({"device": x.device.unwrap_or_default(), "volume_uuid": x.volume_uuid.unwrap_or_default(), "label": x.label, "confirm": true});
                 let plan = self.backend.call("format", req)?;
                 Ok((
                     vec![text(format!(

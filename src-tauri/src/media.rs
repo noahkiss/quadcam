@@ -1,5 +1,6 @@
 //! ffmpeg and ffprobe: probe, recover, convert, verify, thumbnails and preview proxies.
 
+use crate::sources::EncodePlan;
 use anyhow::{anyhow, bail, Context, Result};
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
@@ -193,13 +194,14 @@ pub fn convert_args(
     src: &Path,
     dst: &Path,
     format: Format,
+    plan: EncodePlan,
     encoder: Encoder,
     meta: &Meta,
 ) -> Vec<String> {
     let s = |p: &Path| p.to_string_lossy().to_string();
     let mut a: Vec<String> = Vec::new();
-    match format {
-        Format::Mp4 => {
+    match plan {
+        EncodePlan::Transcode => {
             a.extend(["-i".into(), s(src), "-map".into(), "0".into()]);
             match encoder {
                 Encoder::Videotoolbox => {
@@ -213,16 +215,16 @@ pub fn convert_args(
             // No `+faststart`: `qtmeta` adds metadata by rewriting the `moov` box in place,
             // which needs it at the end of the file. Local playback and Photos do not care.
             a.extend(meta.args());
-            a.extend(["-f".into(), "mp4".into(), s(dst)]);
+            a.extend(["-f".into(), format.ext().into(), s(dst)]);
         }
-        Format::Mov => {
+        EncodePlan::Remux => {
             a.extend(["-fflags".into(), "+genpts".into(), "-i".into(), s(src)]);
             a.extend(["-map", "0", "-c", "copy"].map(String::from));
             // No `use_metadata_tags`: its keys land where Apple's frameworks cannot read
             // them, and they confuse ffprobe next to ours. `qtmeta` writes the QuickTime
             // keys (description included) after ffmpeg.
             a.extend(meta.args());
-            a.extend(["-f".into(), "mov".into(), s(dst)]);
+            a.extend(["-f".into(), format.ext().into(), s(dst)]);
         }
     }
     a
@@ -271,27 +273,29 @@ pub fn run_ffmpeg(tools: &Tools, args: &[String], on_progress: &mut dyn FnMut(f6
 
 /// Converts, falling back from VideoToolbox to x264 if the hardware encoder fails.
 /// Returns the encoder that produced the file.
+#[allow(clippy::too_many_arguments)]
 pub fn convert(
     tools: &Tools,
     src: &Path,
     dst: &Path,
     format: Format,
+    plan: EncodePlan,
     encoder: Encoder,
     meta: &Meta,
     on_progress: &mut dyn FnMut(f64),
 ) -> Result<Encoder> {
     let r = run_ffmpeg(
         tools,
-        &convert_args(src, dst, format, encoder, meta),
+        &convert_args(src, dst, format, plan, encoder, meta),
         on_progress,
     );
     match r {
         Ok(()) => Ok(encoder),
-        Err(e) if format == Format::Mp4 && encoder == Encoder::Videotoolbox => {
+        Err(e) if plan == EncodePlan::Transcode && encoder == Encoder::Videotoolbox => {
             let _ = std::fs::remove_file(dst);
             run_ffmpeg(
                 tools,
-                &convert_args(src, dst, format, Encoder::X264, meta),
+                &convert_args(src, dst, format, plan, Encoder::X264, meta),
                 on_progress,
             )
             .map_err(|e2| anyhow!("{e}; x264 fallback also failed: {e2}"))?;
@@ -726,4 +730,41 @@ pub fn parse_iso6709(s: &str) -> Option<(f64, f64)> {
     let s = s.trim().trim_end_matches('/');
     let split = s[1..].find(['+', '-'])? + 1;
     Some((s[..split].parse().ok()?, s[split..].parse().ok()?))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn args(format: Format, plan: EncodePlan) -> String {
+        let meta = Meta {
+            title: String::new(),
+            comment: String::new(),
+            creation_time: DateTime::<Utc>::default(),
+            date: String::new(),
+            description: String::new(),
+        };
+        convert_args(
+            Path::new("in"),
+            Path::new("out"),
+            format,
+            plan,
+            Encoder::Videotoolbox,
+            &meta,
+        )
+        .join(" ")
+    }
+
+    /// The analog plans give the arguments they always had; the other two pairs follow.
+    #[test]
+    fn the_encode_plan_picks_the_codec_and_the_format_picks_the_container() {
+        let mp4 = args(Format::Mp4, EncodePlan::Transcode);
+        assert!(mp4.starts_with("-i in -map 0 -c:v h264_videotoolbox -q:v 65 -c:a aac"));
+        assert!(mp4.ends_with("-f mp4 out"));
+        let mov = args(Format::Mov, EncodePlan::Remux);
+        assert!(mov.starts_with("-fflags +genpts -i in -map 0 -c copy"));
+        assert!(mov.ends_with("-f mov out"));
+        assert!(args(Format::Mp4, EncodePlan::Remux).ends_with("-f mp4 out"));
+        assert!(args(Format::Mov, EncodePlan::Transcode).contains("h264_videotoolbox"));
+    }
 }
