@@ -1,0 +1,17 @@
+.ring {
+  transform: rotate(-90deg);
+  flex: none;
+}
+.bg,
+.fg {
+  fill: none;
+  stroke-width: 3;
+}
+.bg {
+  stroke: var(--surface-2);
+}
+.fg {
+  stroke: var(--primary);
+  stroke-linecap: round;
+  transition: stroke-dashoffset var(--dur) var(--ease);
+}

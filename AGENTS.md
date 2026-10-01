@@ -58,6 +58,13 @@ pnpm build                                 # -> app/dist
 scripts/make-fixtures.sh                   # re-record the mock core's data (needs the CLI and the corpus)
 ```
 
+- **Theme** (`app/src/theme/`): `palette.css` is generated from `@catppuccin/palette`
+  (`node scripts/gen-palette.mjs`; a test fails when it is stale). `tokens.css` maps it to
+  semantic names (Mocha for dark, Latte for light) plus the 8-pt spacing, radii and type
+  scale. Components use CSS Modules and tokens only, never a hex value. `e2e/theme.spec.ts`
+  runs axe, contrast included, on the component gallery (`/?gallery` in dev) in both themes.
+- **Dev in a browser:** `pnpm dev`, then `http://localhost:4719/?mock=<scenario>` runs the
+  new UI on the mock core (scenarios in `app/src/ipc/mock/core.ts`).
 - **Parity specs** (`app/e2e/parity/`) run every spec on both UIs (Playwright projects `legacy`
   and `next`) against `app/src/ipc/mock/`, a fake core behind a fake Tauri runtime. Specs find
   controls by role and label, never by class, so one spec fits both UIs. An area runs on

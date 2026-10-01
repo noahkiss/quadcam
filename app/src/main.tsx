@@ -4,9 +4,22 @@ import "./theme/fonts.css";
 import "./theme/tokens.css";
 import "./theme/base.css";
 import { App } from "./App";
+import { limitContextMenu } from "./native";
 
-createRoot(document.getElementById("root")!).render(
-  <StrictMode>
-    <App />
-  </StrictMode>,
-);
+async function start() {
+  const query = new URLSearchParams(location.search);
+  // In a plain browser (no Tauri), dev builds run on the mock core: ?mock=<scenario>.
+  if (import.meta.env.DEV && !window.__TAURI_INTERNALS__) {
+    const { installMock } = await import("./ipc/mock/install");
+    installMock({ scenario: (query.get("mock") || "library") as never });
+  }
+  let root = <App />;
+  if (import.meta.env.DEV && query.has("gallery")) {
+    const { Gallery } = await import("./views/Gallery/Gallery");
+    root = <Gallery />;
+  }
+  limitContextMenu();
+  createRoot(document.getElementById("root")!).render(<StrictMode>{root}</StrictMode>);
+}
+
+start();

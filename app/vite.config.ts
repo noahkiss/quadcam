@@ -41,6 +41,10 @@ export default defineConfig({
   plugins: [react(), legacyUi()],
   clearScreen: false,
   server: { port: PORT, strictPort: true, host: "localhost" },
+  // Pre-bundled up front, so a first page load never reloads mid-test to add one.
+  optimizeDeps: {
+    include: ["react", "react-dom", "react-dom/client", "react/jsx-runtime", "react/jsx-dev-runtime", "zustand", "@tanstack/react-virtual", "@tauri-apps/api/core", "@tauri-apps/api/event", "@tauri-apps/api/webview", "@tauri-apps/plugin-dialog", "@tauri-apps/plugin-opener"],
+  },
   preview: { port: PORT, strictPort: true, host: "localhost" },
   build: { outDir: "dist", target: "safari16", emptyOutDir: true },
   test: {

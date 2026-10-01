@@ -11,7 +11,7 @@ export interface AppFixture {
   ui: Ui;
   page: Page;
   /** Opens the app on the mock core. */
-  open: (scenario?: Scenario, opts?: Omit<MockOptions, "scenario">) => Promise<void>;
+  open: (scenario?: Scenario, opts?: Omit<MockOptions, "scenario"> & { query?: string }) => Promise<void>;
   /** Commands the page sent, filtered by name. */
   calls: (cmd?: string, method?: string) => Promise<{ cmd: string; args: Record<string, unknown> }[]>;
   /** Runs `fn` against the mock core inside the page. */
@@ -25,10 +25,10 @@ export const test = base.extend<{ app: AppFixture; area: string }>({
     const app: AppFixture = {
       ui,
       page,
-      open: async (scenario = "library", opts = {}) => {
+      open: async (scenario = "library", { query = "", ...opts } = {}) => {
         await page.addInitScript((o) => (window.__QC_MOCK__ = o), { scenario, ...opts });
         await page.addInitScript({ path: MOCK_BUNDLE });
-        await page.goto(ui === "legacy" ? "/legacy/" : "/");
+        await page.goto((ui === "legacy" ? "/legacy/" : "/") + query);
       },
       calls: (cmd, method) =>
         page.evaluate(([c, m]) => window.__qc!.calls.filter((x) => (!c || x.cmd === c) && (!m || x.args.method === m)), [cmd, method] as const),
