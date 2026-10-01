@@ -1,0 +1,151 @@
+name: Release
+
+# A pushed `v*` tag builds quadcam.app on an Apple Silicon runner, tests it,
+# zips it, attaches the zip to the tag's GitHub Release, then bumps the
+# Homebrew cask (`noahkiss/tap/quadcam`) through the tap's own `bump.yml`. The
+# tap downloads the zip, rewrites the cask, proves it with a real
+# `brew install --cask`, and commits. Nothing is transcribed by hand.
+#
+# To cut a release:
+#
+#   1. Set the same version in src-tauri/Cargo.toml and src-tauri/tauri.conf.json.
+#   2. Commit, then `git tag vX.Y.Z && git push origin main vX.Y.Z`.
+#
+# To re-run the pipeline for a tag that already exists:
+#
+#   gh workflow run release.yml -R noahkiss/quadcam -f tag=vX.Y.Z
+#
+# A re-run never replaces a zip that is already attached: the cask's sha256
+# pins what was published, and a rebuilt zip is not byte-identical.
+#
+# Signing: the app has an ad-hoc signature only (no Developer ID, no
+# notarization). Homebrew quarantines every download, so the cask removes the
+# quarantine attribute in a postflight block.
+#
+# The tap hop needs a PAT in HOMEBREW_TAP_TOKEN with `workflow` scope on the
+# tap. This repo's GITHUB_TOKEN cannot dispatch another repository.
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Existing tag to build and release, e.g. v0.2.0'
+        required: true
+
+permissions:
+  contents: write
+
+jobs:
+  resolve:
+    runs-on: ubuntu-latest
+    outputs:
+      tag: ${{ steps.tag.outputs.tag }}
+      version: ${{ steps.tag.outputs.version }}
+      tap_inputs: ${{ steps.tag.outputs.tap_inputs }}
+    steps:
+      - name: Resolve the tag
+        id: tag
+        env:
+          INPUT_TAG: ${{ inputs.tag }}
+        run: |
+          set -euo pipefail
+          if [ "$GITHUB_EVENT_NAME" = 'workflow_dispatch' ]; then
+            tag="$INPUT_TAG"
+          else
+            tag="${GITHUB_REF#refs/tags/}"
+          fi
+          [[ "$tag" =~ ^v[0-9]+\.[0-9]+\.[0-9]+([-.][0-9A-Za-z.]+)?$ ]] \
+            || { echo "::error::not a release tag: ${tag}"; exit 1; }
+          echo "tag=${tag}" >> "$GITHUB_OUTPUT"
+          echo "version=${tag#v}" >> "$GITHUB_OUTPUT"
+          echo "tap_inputs=$(jq -cn --arg tag "$tag" '{formula: "quadcam", tag: $tag}')" >> "$GITHUB_OUTPUT"
+
+  package:
+    needs: resolve
+    runs-on: macos-26
+    defaults:
+      run:
+        working-directory: src-tauri
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ needs.resolve.outputs.tag }}
+
+      # The tag must be a release of the version the manifests state, or the
+      # app reports one version and the cask installs another.
+      - name: Check the manifest versions
+        env:
+          VERSION: ${{ needs.resolve.outputs.version }}
+        run: |
+          set -euo pipefail
+          cargo_v="$(sed -n 's/^version = "\(.*\)"$/\1/p' Cargo.toml | head -1)"
+          tauri_v="$(jq -r .version tauri.conf.json)"
+          [ "$cargo_v" = "$VERSION" ] && [ "$tauri_v" = "$VERSION" ] \
+            || { echo "::error::Cargo.toml says ${cargo_v}, tauri.conf.json says ${tauri_v}, tag says ${VERSION}"; exit 1; }
+
+      - name: Install Rust and ffmpeg
+        run: |
+          rustup toolchain install stable --profile minimal
+          rustup default stable
+          brew install ffmpeg
+
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+        with:
+          workspaces: src-tauri
+          key: release
+
+      - run: cargo test --locked
+
+      - name: Install the Tauri CLI
+        run: command -v cargo-tauri >/dev/null || cargo install tauri-cli --version '^2' --locked
+
+      - run: cargo tauri build --bundles app
+
+      - name: Check and zip the bundle
+        env:
+          VERSION: ${{ needs.resolve.outputs.version }}
+        run: |
+          set -euo pipefail
+          app=target/release/bundle/macos/quadcam.app
+          codesign --verify --deep --strict "$app"
+          "$app/Contents/MacOS/quadcam-cli" --version
+          plist_v="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$app/Contents/Info.plist")"
+          [ "$plist_v" = "$VERSION" ] || { echo "::error::bundle says ${plist_v}"; exit 1; }
+          # ditto keeps the signature and the bundle's symlinks intact.
+          ditto -c -k --sequesterRsrc --keepParent "$app" "$GITHUB_WORKSPACE/quadcam-${VERSION}-arm64.zip"
+          shasum -a 256 "$GITHUB_WORKSPACE/quadcam-${VERSION}-arm64.zip"
+
+      - name: Attach to the release
+        working-directory: ${{ github.workspace }}
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+          TAG: ${{ needs.resolve.outputs.tag }}
+          VERSION: ${{ needs.resolve.outputs.version }}
+        run: |
+          set -euo pipefail
+          asset="quadcam-${VERSION}-arm64.zip"
+          gh release view "$TAG" >/dev/null 2>&1 \
+            || gh release create "$TAG" --title "$TAG" --generate-notes --verify-tag
+          # Never clobber. The cask pins the sha of whatever was attached first.
+          if gh release view "$TAG" --json assets --jq '.assets[].name' | grep -qx "$asset"; then
+            echo "::notice::${asset} is already attached to ${TAG}; keeping the published one"
+            exit 0
+          fi
+          gh release upload "$TAG" "$asset"
+
+  # Fire the tap's bump and fail unless it lands. The tap installs the cask on
+  # a macOS runner before it commits.
+  bump-tap:
+    needs: [resolve, package]
+    uses: noahkiss/workflows/.github/workflows/dispatch-and-wait.yml@main
+    with:
+      repo: noahkiss/homebrew-tap
+      workflow: bump.yml
+      inputs_json: ${{ needs.resolve.outputs.tap_inputs }}
+      timeout_minutes: 45
+    secrets:
+      token: ${{ secrets.HOMEBREW_TAP_TOKEN }}

@@ -1,0 +1,6 @@
+/src-tauri/target/
+/src-tauri/gen/
+# Test media stays local; git tracks only the corpus README.
+/test-clips/*
+!/test-clips/README.md
+.DS_Store

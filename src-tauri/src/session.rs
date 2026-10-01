@@ -1,0 +1,675 @@
+//! One import session: the clips staged from a card or folder, the per-clip plan (date,
+//! name, note, skip) and the import results. The GUI, the CLI and the MCP server all work on
+//! this one type, and it saves to JSON so separate CLI runs can continue a session.
+
+use crate::disk::{self, CardIdentity, Volume};
+use crate::logs::{Badge, Tunables};
+use crate::media::{Encoder, Format, Tools};
+use crate::naming::NamePlanner;
+use crate::pipeline::{
+    self, Clip, ClipJob, ClipResult, ClipStatus, DateSource, ImportSettings, Outcome,
+};
+use anyhow::{bail, Context, Result};
+use chrono::{NaiveDate, NaiveTime};
+use serde::{Deserialize, Serialize};
+use std::path::{Path, PathBuf};
+
+pub const SESSION_VERSION: u32 = 1;
+
+/// Which fields of a plan an agent wrote and the user has not edited since.
+#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq)]
+pub struct Suggested {
+    pub date: bool,
+    pub name: bool,
+    pub note: bool,
+    pub skip: bool,
+}
+
+impl Suggested {
+    pub fn any(&self) -> bool {
+        self.date || self.name || self.note || self.skip
+    }
+}
+
+/// What will happen to one clip on import. The GUI shows it and edits it; an agent may
+/// suggest values for it.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct ClipPlan {
+    pub id: usize,
+    pub skip: bool,
+    pub date: NaiveDate,
+    /// Only for a radio-log date.
+    pub time: Option<NaiveTime>,
+    pub source: DateSource,
+    pub badge: Badge,
+    pub segments: usize,
+    pub name: String,
+    pub note: String,
+    #[serde(default)]
+    pub suggested: Suggested,
+    /// Why the agent suggested what it did, shown next to the suggestion.
+    #[serde(default)]
+    pub reason: Option<String>,
+}
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "lowercase")]
+pub enum Editor {
+    User,
+    Agent,
+}
+
+/// A change to one clip's plan. Missing fields stay as they are.
+#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq)]
+pub struct PlanPatch {
+    pub id: usize,
+    #[serde(default)]
+    pub date: Option<NaiveDate>,
+    #[serde(default)]
+    pub name: Option<String>,
+    #[serde(default)]
+    pub note: Option<String>,
+    #[serde(default)]
+    pub skip: Option<bool>,
+    #[serde(default)]
+    pub reason: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Session {
+    pub version: u32,
+    /// Card mount point or folder the clips came from.
+    pub source: PathBuf,
+    /// The card the clips were read from; None for a plain folder (no format step).
+    pub card: Option<CardIdentity>,
+    pub card_volume: Option<Volume>,
+    pub staging: PathBuf,
+    pub clips: Vec<Clip>,
+    pub plans: Vec<ClipPlan>,
+    pub results: Vec<ClipResult>,
+    pub analysed: bool,
+    pub log_dir: Option<PathBuf>,
+    pub log_day: Option<NaiveDate>,
+    pub log_days: Vec<NaiveDate>,
+    pub warnings: Vec<String>,
+    pub date_warnings: Vec<String>,
+    /// Clip ids whose outputs were added to Photos.
+    pub in_photos: Vec<usize>,
+    /// Output folder of the last import.
+    pub output_dir: Option<PathBuf>,
+}
+
+/// Settings every surface starts from. The GUI keeps them in sync with its settings store.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct Defaults {
+    pub output_dir: Option<PathBuf>,
+    pub format: Format,
+    pub encoder: Encoder,
+    pub keep_originals: bool,
+    pub add_time: bool,
+    pub default_name: String,
+    pub photos_album: String,
+    pub log_dir: Option<PathBuf>,
+    pub tunables: Tunables,
+    /// FAT32 volume name for the format step.
+    #[serde(default = "default_label")]
+    pub format_label: String,
+}
+
+fn default_label() -> String {
+    crate::disk::DEFAULT_LABEL.into()
+}
+
+impl Default for Defaults {
+    fn default() -> Self {
+        Self {
+            output_dir: pipeline::default_output_dir(),
+            format: Format::Mp4,
+            encoder: Encoder::Videotoolbox,
+            keep_originals: false,
+            add_time: false,
+            default_name: crate::naming::DEFAULT_NAME.into(),
+            photos_album: crate::photos::DEFAULT_ALBUM.into(),
+            log_dir: None,
+            tunables: Tunables::default(),
+            format_label: default_label(),
+        }
+    }
+}
+
+impl Defaults {
+    /// Defaults with the app's saved settings on top (the Tauri store file the GUI writes,
+    /// `settings.json` in the app's support folder), so a headless CLI or MCP run exports
+    /// where the person told the app to. Missing or unreadable keys keep the default.
+    pub fn with_app_settings(path: &Path) -> Defaults {
+        let mut d = Defaults::default();
+        let Ok(bytes) = std::fs::read(path) else {
+            return d;
+        };
+        let Ok(v) = serde_json::from_slice::<serde_json::Value>(&bytes) else {
+            return d;
+        };
+        fn get<T: serde::de::DeserializeOwned>(v: &serde_json::Value, k: &str) -> Option<T> {
+            v.get(k)
+                .filter(|x| !x.is_null())
+                .and_then(|x| serde_json::from_value(x.clone()).ok())
+        }
+        if let Some(p) = get(&v, "outputDir") {
+            d.output_dir = Some(p);
+        }
+        if let Some(f) = get(&v, "format") {
+            d.format = f;
+        }
+        if let Some(e) = get(&v, "encoder") {
+            d.encoder = e;
+        }
+        if let Some(b) = get(&v, "keepOriginals") {
+            d.keep_originals = b;
+        }
+        if let Some(b) = get(&v, "addTime") {
+            d.add_time = b;
+        }
+        if let Some(n) = get::<String>(&v, "defaultName").filter(|n| !n.trim().is_empty()) {
+            d.default_name = n;
+        }
+        if let Some(a) = get(&v, "photosAlbum") {
+            d.photos_album = a;
+        }
+        if let Some(l) = get::<String>(&v, "formatLabel").filter(|l| !l.trim().is_empty()) {
+            d.format_label = l;
+        }
+        if let Some(p) = get(&v, "logDir") {
+            d.log_dir = Some(p);
+        }
+        if let Some(t) = get(&v, "tunables") {
+            d.tunables = t;
+        }
+        d
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Summary {
+    pub results: Vec<ClipResult>,
+    pub imported: usize,
+    pub skipped: usize,
+    pub failed: usize,
+    pub total_bytes: u64,
+    pub output_dir: Option<PathBuf>,
+    /// Ok when the format step may unlock, else the reason it stays locked.
+    pub format_ready: Result<(), String>,
+}
+
+impl Session {
+    /// Copies every clip off `source` into `staging_root/<key>`.
+    pub fn stage(
+        source: &Path,
+        staging_root: &Path,
+        on_progress: &mut dyn FnMut(usize, usize, u64, u64),
+    ) -> Result<Session> {
+        if !source.is_dir() {
+            bail!("{} is not a folder or mounted volume.", source.display());
+        }
+        let vol = disk::probe_volume(source).filter(|v| v.is_card);
+        let key = vol
+            .as_ref()
+            .and_then(|v| v.info.volume_uuid.clone())
+            .unwrap_or_else(|| chrono::Local::now().format("%Y%m%d-%H%M%S").to_string());
+        let staging = staging_root.join(key);
+        let clips = pipeline::stage(source, &staging, on_progress)?;
+        let today = chrono::Local::now().date_naive();
+        let plans = clips
+            .iter()
+            .map(|c| ClipPlan {
+                id: c.id,
+                skip: c.stage_error.is_some(),
+                date: today,
+                time: None,
+                source: DateSource::Import,
+                badge: Badge::Unmatched,
+                segments: 0,
+                name: String::new(),
+                note: String::new(),
+                suggested: Suggested::default(),
+                reason: None,
+            })
+            .collect();
+        let mut warnings = vol.as_ref().map(|v| v.warnings.clone()).unwrap_or_default();
+        let missing: Vec<&str> = clips
+            .iter()
+            .filter(|c| c.stage_error.is_some())
+            .map(|c| c.rel.as_str())
+            .collect();
+        if !missing.is_empty() {
+            warnings.push(format!(
+                "Card pulled or unreadable. Not copied: {}. What staged is kept; the format step stays locked.",
+                missing.join(", ")
+            ));
+        }
+        Ok(Session {
+            version: SESSION_VERSION,
+            source: source.to_path_buf(),
+            card: vol.as_ref().map(|v| CardIdentity::from_info(&v.info)),
+            card_volume: vol,
+            staging,
+            clips,
+            plans,
+            results: Vec::new(),
+            analysed: false,
+            log_dir: None,
+            log_day: None,
+            log_days: Vec::new(),
+            warnings,
+            date_warnings: Vec::new(),
+            in_photos: Vec::new(),
+            output_dir: None,
+        })
+    }
+
+    /// Probes, recovers half-written clips and makes thumbnails. Empty clips get skipped.
+    pub fn analyse(
+        &mut self,
+        tools: &Tools,
+        thumbs: &Path,
+        on_progress: &mut dyn FnMut(usize, usize),
+    ) -> Result<()> {
+        std::fs::create_dir_all(thumbs)?;
+        let total = self.clips.len();
+        for (i, c) in self.clips.iter_mut().enumerate() {
+            on_progress(i, total);
+            if let Err(e) = pipeline::analyse(tools, c, thumbs) {
+                c.detail = format!("analysis failed: {e:#}");
+            }
+            if c.status == ClipStatus::Empty {
+                self.plans[i].skip = true;
+            }
+        }
+        self.analysed = true;
+        Ok(())
+    }
+
+    /// Suggests dates from radio logs; plans the user or an agent edited keep their date.
+    pub fn plan_dates(
+        &mut self,
+        log_dir: Option<&Path>,
+        day: Option<NaiveDate>,
+        tun: &Tunables,
+        today: NaiveDate,
+    ) {
+        let durations: Vec<f64> = self.clips.iter().map(|c| c.duration).collect();
+        let plan = pipeline::plan_dates(&durations, log_dir, day, today, tun);
+        for (p, s) in self.plans.iter_mut().zip(plan.suggestions) {
+            if p.source == DateSource::Edited {
+                continue;
+            }
+            p.date = s.date;
+            p.time = s.time;
+            p.source = s.source;
+            p.badge = s.badge;
+            p.segments = s.segments;
+        }
+        self.log_dir = log_dir.map(Path::to_path_buf);
+        self.log_day = plan.day_used;
+        self.log_days = plan.log_days;
+        self.date_warnings = plan.warnings;
+    }
+
+    pub fn plan_mut(&mut self, id: usize) -> Result<&mut ClipPlan> {
+        self.plans
+            .iter_mut()
+            .find(|p| p.id == id)
+            .with_context(|| format!("no clip with id {id}"))
+    }
+
+    /// Applies edits. An agent's edits are marked suggested; a user's edits clear the mark
+    /// on the fields they touch. A new date always becomes an edited date (local noon).
+    pub fn patch(&mut self, patches: &[PlanPatch], editor: Editor) -> Result<()> {
+        for patch in patches {
+            let unusable = {
+                let c = self
+                    .clips
+                    .iter()
+                    .find(|c| c.id == patch.id)
+                    .with_context(|| format!("no clip with id {}", patch.id))?;
+                c.status == ClipStatus::Empty || c.stage_error.is_some()
+            };
+            let agent = editor == Editor::Agent;
+            let p = self.plan_mut(patch.id)?;
+            if let Some(d) = patch.date {
+                p.date = d;
+                p.time = None;
+                p.source = DateSource::Edited;
+                p.badge = Badge::Unmatched;
+                p.suggested.date = agent;
+            }
+            if let Some(n) = &patch.name {
+                p.name = n.trim().to_string();
+                p.suggested.name = agent;
+            }
+            if let Some(n) = &patch.note {
+                p.note = n.trim().to_string();
+                p.suggested.note = agent;
+            }
+            if let Some(s) = patch.skip {
+                if !s && unusable {
+                    bail!(
+                        "clip {} is empty or was not copied; it cannot be imported",
+                        patch.id
+                    );
+                }
+                p.skip = s;
+                p.suggested.skip = agent;
+            }
+            if agent {
+                if let Some(r) = &patch.reason {
+                    p.reason = Some(r.trim().to_string()).filter(|r| !r.is_empty());
+                }
+            } else if !p.suggested.any() {
+                p.reason = None;
+            }
+        }
+        Ok(())
+    }
+
+    pub fn jobs(&self) -> Vec<ClipJob> {
+        self.plans
+            .iter()
+            .map(|p| ClipJob {
+                id: p.id,
+                skip: p.skip,
+                date: p.date.format("%Y-%m-%d").to_string(),
+                time: match p.source {
+                    DateSource::Log => p.time.map(|t| t.format("%H:%M:%S").to_string()),
+                    _ => None,
+                },
+                source: p.source,
+                name: p.name.clone(),
+                note: p.note.clone(),
+            })
+            .collect()
+    }
+
+    pub fn format_ready(&self) -> Result<()> {
+        if self.card.is_none() {
+            bail!("Clips came from a folder, not a card.");
+        }
+        pipeline::can_format(&self.clips, &self.results)
+    }
+
+    pub fn summary(&self) -> Summary {
+        let count = |o| self.results.iter().filter(|r| r.outcome == o).count();
+        Summary {
+            imported: count(Outcome::Verified),
+            skipped: count(Outcome::Skipped),
+            failed: count(Outcome::Failed),
+            total_bytes: self.results.iter().map(|r| r.size).sum(),
+            output_dir: self.output_dir.clone(),
+            results: self.results.clone(),
+            format_ready: self.format_ready().map_err(|e| format!("{e:#}")),
+        }
+    }
+
+    /// Outputs that verified in this session, for the given clips (all when `ids` is None).
+    pub fn verified_outputs(&self, ids: Option<&[usize]>) -> Vec<(usize, PathBuf)> {
+        self.results
+            .iter()
+            .filter(|r| r.outcome == Outcome::Verified)
+            .filter(|r| ids.is_none_or(|ids| ids.contains(&r.id)))
+            .filter_map(|r| r.output.clone().map(|o| (r.id, o)))
+            .collect()
+    }
+
+    pub fn save(&self, path: &Path) -> Result<()> {
+        if let Some(dir) = path.parent() {
+            std::fs::create_dir_all(dir)?;
+        }
+        let tmp = path.with_extension("json.tmp");
+        std::fs::write(&tmp, serde_json::to_vec_pretty(self)?)?;
+        std::fs::rename(&tmp, path)?;
+        Ok(())
+    }
+
+    pub fn load(path: &Path) -> Result<Session> {
+        let s: Session = serde_json::from_slice(
+            &std::fs::read(path).with_context(|| format!("reading {}", path.display()))?,
+        )
+        .with_context(|| format!("parsing {}", path.display()))?;
+        if s.version != SESSION_VERSION {
+            bail!(
+                "{} is a session file from another quadcam version",
+                path.display()
+            );
+        }
+        Ok(s)
+    }
+}
+
+/// Converts and verifies every non-skipped clip. A clip that already
+/// verified earlier keeps that result, so a re-run never writes a second copy.
+pub fn run_import(
+    tools: &Tools,
+    session: &Session,
+    settings: &ImportSettings,
+    on_progress: &mut dyn FnMut(usize, f64, f64),
+    on_result: &mut dyn FnMut(&ClipResult),
+) -> Result<Vec<ClipResult>> {
+    let jobs = session.jobs();
+    let done = |id: usize| {
+        session
+            .results
+            .iter()
+            .rev()
+            .find(|r| r.id == id && r.outcome == Outcome::Verified)
+            .cloned()
+    };
+    let todo: Vec<&Clip> = jobs
+        .iter()
+        .filter(|j| !j.skip && done(j.id).is_none())
+        .filter_map(|j| session.clips.iter().find(|c| c.id == j.id))
+        .collect();
+    pipeline::preflight(settings, &todo)?;
+    let mut planner = NamePlanner::new();
+    let mut out = Vec::new();
+    for job in &jobs {
+        let Some(clip) = session.clips.iter().find(|c| c.id == job.id) else {
+            continue;
+        };
+        let r = if job.skip {
+            ClipResult {
+                id: clip.id,
+                outcome: Outcome::Skipped,
+                output: None,
+                original: None,
+                size: 0,
+                error: None,
+                encoder: None,
+                meta: None,
+            }
+        } else if let Some(prev) = done(clip.id) {
+            prev
+        } else {
+            let dur = clip.duration;
+            pipeline::import_clip(tools, clip, job, settings, &mut planner, &mut |secs| {
+                on_progress(clip.id, secs, dur)
+            })
+        };
+        on_result(&r);
+        out.push(r);
+    }
+    Ok(out)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn session() -> Session {
+        let d = NaiveDate::from_ymd_opt(2026, 9, 30).unwrap();
+        let clip = |id: usize, status| Clip {
+            id,
+            name: format!("PICT000{id}.AVI"),
+            rel: format!("DCIM/PICT000{id}.AVI"),
+            card_path: PathBuf::new(),
+            size: 1,
+            staged: None,
+            stage_error: None,
+            status,
+            duration: 5.0,
+            recovered: None,
+            probe: None,
+            thumb: None,
+            detail: String::new(),
+        };
+        let plan = |id| ClipPlan {
+            id,
+            skip: false,
+            date: d,
+            time: None,
+            source: DateSource::Import,
+            badge: Badge::Unmatched,
+            segments: 0,
+            name: String::new(),
+            note: String::new(),
+            suggested: Suggested::default(),
+            reason: None,
+        };
+        Session {
+            version: SESSION_VERSION,
+            source: PathBuf::from("/tmp/x"),
+            card: None,
+            card_volume: None,
+            staging: PathBuf::new(),
+            clips: vec![clip(0, ClipStatus::Ok), clip(1, ClipStatus::Empty)],
+            plans: vec![plan(0), plan(1)],
+            results: Vec::new(),
+            analysed: true,
+            log_dir: None,
+            log_day: None,
+            log_days: Vec::new(),
+            warnings: Vec::new(),
+            date_warnings: Vec::new(),
+            in_photos: Vec::new(),
+            output_dir: None,
+        }
+    }
+
+    #[test]
+    fn agent_suggestions_are_marked_and_user_edits_clear_them() {
+        let mut s = session();
+        let d = NaiveDate::from_ymd_opt(2026, 9, 28).unwrap();
+        s.patch(
+            &[PlanPatch {
+                id: 0,
+                name: Some(" Backyard Loops ".into()),
+                date: Some(d),
+                reason: Some("OSD clock".into()),
+                ..Default::default()
+            }],
+            Editor::Agent,
+        )
+        .unwrap();
+        let p = &s.plans[0];
+        assert_eq!(p.name, "Backyard Loops");
+        assert_eq!(p.source, DateSource::Edited);
+        assert!(p.suggested.name && p.suggested.date && !p.suggested.note);
+        assert_eq!(p.reason.as_deref(), Some("OSD clock"));
+
+        s.patch(
+            &[PlanPatch {
+                id: 0,
+                name: Some("loops".into()),
+                ..Default::default()
+            }],
+            Editor::User,
+        )
+        .unwrap();
+        assert!(!s.plans[0].suggested.name && s.plans[0].suggested.date);
+        s.patch(
+            &[PlanPatch {
+                id: 0,
+                date: Some(d),
+                ..Default::default()
+            }],
+            Editor::User,
+        )
+        .unwrap();
+        assert!(!s.plans[0].suggested.any());
+        assert_eq!(s.plans[0].reason, None);
+
+        // An empty clip cannot be un-skipped; an unknown id is an error.
+        assert!(s
+            .patch(
+                &[PlanPatch {
+                    id: 1,
+                    skip: Some(false),
+                    ..Default::default()
+                }],
+                Editor::Agent
+            )
+            .is_err());
+        assert!(s
+            .patch(
+                &[PlanPatch {
+                    id: 9,
+                    skip: Some(true),
+                    ..Default::default()
+                }],
+                Editor::Agent
+            )
+            .is_err());
+    }
+
+    #[test]
+    fn app_settings_override_defaults() {
+        let d = tempfile::tempdir().unwrap();
+        let f = d.path().join("settings.json");
+        assert_eq!(
+            Defaults::with_app_settings(&f),
+            Defaults::default(),
+            "no file: defaults"
+        );
+        std::fs::write(&f, r#"{"outputDir":"/tmp/out","format":"mov","formatLabel":"FPVCARD","defaultName":"","logDir":null,"tunables":"junk"}"#).unwrap();
+        let x = Defaults::with_app_settings(&f);
+        assert_eq!(x.output_dir, Some(PathBuf::from("/tmp/out")));
+        assert_eq!(x.format, Format::Mov);
+        assert_eq!(x.format_label, "FPVCARD");
+        assert_eq!(x.default_name, "flight", "empty keeps the default");
+        assert_eq!(
+            x.tunables,
+            Tunables::default(),
+            "bad values keep the default"
+        );
+    }
+
+    #[test]
+    fn edited_dates_survive_log_planning_and_save_load_round_trips() {
+        let mut s = session();
+        let d = NaiveDate::from_ymd_opt(2026, 9, 1).unwrap();
+        s.patch(
+            &[PlanPatch {
+                id: 0,
+                date: Some(d),
+                ..Default::default()
+            }],
+            Editor::User,
+        )
+        .unwrap();
+        s.plan_dates(
+            None,
+            None,
+            &Tunables::default(),
+            NaiveDate::from_ymd_opt(2026, 9, 30).unwrap(),
+        );
+        assert_eq!(s.plans[0].date, d);
+        assert_eq!(s.plans[1].date.to_string(), "2026-09-30");
+        let jobs = s.jobs();
+        assert_eq!(jobs[0].date, "2026-09-01");
+
+        let dir = tempfile::tempdir().unwrap();
+        let f = dir.path().join("session.json");
+        s.save(&f).unwrap();
+        let back = Session::load(&f).unwrap();
+        assert_eq!(back.plans, s.plans);
+        assert!(s.format_ready().is_err(), "a folder session never formats");
+    }
+}

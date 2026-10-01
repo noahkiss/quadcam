@@ -1,0 +1,163 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>quadcam</title>
+  <link rel="stylesheet" href="style.css">
+  <script src="icons.js"></script>
+  <script src="app.js" defer></script>
+</head>
+<body>
+  <header data-section="topbar">
+    <div class="brand">
+      <span class="logo" aria-hidden="true"><span></span><span></span><span></span><span></span></span>
+      <h1>quadcam</h1>
+    </div>
+    <nav data-component="sources" aria-label="Sources">
+      <ul id="volumes"></ul>
+      <button type="button" class="ghost" data-action="open-folder"><i data-icon="folder-open"></i>Open folder…</button>
+      <button type="button" class="icon" data-action="refresh-volumes" title="Rescan volumes"><i data-icon="refresh"></i></button>
+    </nav>
+    <button type="button" class="icon" data-action="settings" title="Settings"><i data-icon="settings"></i></button>
+  </header>
+
+  <div id="banner" data-component="banner" hidden></div>
+
+  <main>
+    <section data-section="empty" id="empty-state">
+      <i data-icon="sd-card" class="big"></i>
+      <h2>Insert the DVR card</h2>
+      <p>quadcam watches for a removable card with DVR clips on it. It copies every clip to this Mac first, so you can pull the card early.</p>
+      <p class="muted">No card? <button type="button" class="link" data-action="open-folder">Open a folder of clips</button> instead. The format step needs a card.</p>
+    </section>
+
+    <section data-section="stage" id="stage-state" hidden>
+      <h2 id="stage-title">Copying clips off the card…</h2>
+      <progress id="stage-bar" max="1" value="0"></progress>
+      <p id="stage-detail" class="muted mono"></p>
+    </section>
+
+    <section data-section="workspace" id="workspace" hidden>
+      <div class="list-pane">
+        <div data-component="date-bar" class="toolbar">
+          <label class="field">
+            <span><i data-icon="radio"></i>Radio logs</span>
+            <span class="picker">
+              <input id="log-dir" type="text" readonly placeholder="None: dates use today">
+              <button type="button" class="ghost small" data-action="pick-logs">Choose…</button>
+              <button type="button" class="icon small" data-action="clear-logs" title="Stop using logs"><i data-icon="close-square"></i></button>
+            </span>
+          </label>
+          <label class="field">
+            <span><i data-icon="calendar"></i>Log day</span>
+            <select id="log-day" disabled></select>
+          </label>
+          <button type="button" class="ghost small" data-action="apply-date">Apply first date to all</button>
+        </div>
+        <ul id="date-warnings" class="warnings"></ul>
+        <ol id="clips" data-component="clip-list"></ol>
+      </div>
+
+      <aside data-component="preview" class="preview-pane">
+        <div class="player" id="player">
+          <img id="preview-img" alt="">
+          <video id="preview-video" controls playsinline hidden></video>
+          <button type="button" class="play" data-action="play" hidden><i data-icon="play"></i><span>Play</span></button>
+        </div>
+        <dl id="preview-meta" class="meta"></dl>
+        <p class="muted small-print">The date is reliable. A log time is approximate: the DVR starts recording before you arm.</p>
+      </aside>
+
+      <section data-component="export-panel" class="export">
+        <div class="export-row">
+          <label class="field grow">
+            <span><i data-icon="folder-open"></i>Output folder</span>
+            <span class="picker">
+              <input id="out-dir" type="text" readonly placeholder="Choose where the files go">
+              <button type="button" class="ghost small" data-action="pick-output">Choose…</button>
+            </span>
+          </label>
+          <label class="field">
+            <span>Format</span>
+            <select id="format">
+              <option value="mp4">MP4, H.264 (small, plays anywhere)</option>
+              <option value="mov">MOV, lossless remux (large, Mac only)</option>
+            </select>
+          </label>
+          <label class="check"><input type="checkbox" id="keep-originals"> Keep original AVI</label>
+          <label class="check" id="add-time-wrap" title="Only for dates that came from a radio log"><input type="checkbox" id="add-time"> Add time to filename</label>
+          <button type="button" class="primary" data-action="import"><i data-icon="import"></i>Import</button>
+        </div>
+        <progress id="import-bar" max="1" value="0" hidden></progress>
+        <p id="export-note" class="muted mono"></p>
+      </section>
+    </section>
+
+    <section data-section="summary" id="summary" hidden>
+      <div class="summary-card">
+        <h2>Import finished</h2>
+        <ul class="counts" id="counts"></ul>
+        <p><button type="button" class="link" data-action="reveal-output" id="out-link"></button></p>
+        <div data-component="share-photos" class="share-row">
+          <button type="button" class="primary" data-action="photos-all"><i data-icon="gallery-add"></i>Add all to Photos</button>
+          <span id="photos-status" class="muted"></span>
+        </div>
+        <ul id="failures" class="warnings"></ul>
+
+        <div data-component="format-card" class="format" id="format-box">
+          <h3><i data-icon="sd-card"></i>Card</h3>
+          <p id="format-status" class="muted"></p>
+          <div class="format-row">
+            <label class="check"><input type="checkbox" id="format-opt"> Format card after import</label>
+            <label class="field inline"><span>Volume name</span><input id="format-label" type="text" value="DVR" maxlength="11" spellcheck="false"></label>
+            <button type="button" class="danger" data-action="format" disabled><i data-icon="trash-bin-trash"></i>Format card…</button>
+            <button type="button" class="ghost" data-action="eject"><i data-icon="upload-minimalistic"></i>Eject</button>
+          </div>
+          <p class="muted small-print">Formatting in the goggles is equally fine if the menu offers it.</p>
+        </div>
+        <p><button type="button" class="ghost" data-action="back"><i data-icon="restart"></i>Back to clips</button></p>
+      </div>
+    </section>
+  </main>
+
+  <dialog id="confirm-format" data-component="confirm-format">
+    <form method="dialog">
+      <h2><i data-icon="danger-triangle"></i>Erase the card?</h2>
+      <p id="confirm-agent" class="agent-hint" hidden><span class="badge agent">agent</span> An agent asked to erase this card. Only your click on Erase lets it go ahead.</p>
+      <p id="confirm-text"></p>
+      <p class="muted">Every clip verified in the output folder. The card is ejected right after the erase.</p>
+      <menu>
+        <button type="submit" value="cancel" class="ghost" autofocus>Cancel</button>
+        <button type="button" class="danger" data-action="confirm-erase">Erase</button>
+      </menu>
+    </form>
+  </dialog>
+
+  <dialog id="settings" data-component="settings">
+    <form method="dialog">
+      <h2><i data-icon="settings"></i>Settings</h2>
+      <label class="field"><span>Default short name</span><input id="set-default-name" type="text" placeholder="flight"></label>
+      <label class="field"><span>Photos album (empty: library only)</span><input id="set-album" type="text" placeholder="Drone"></label>
+      <label class="field"><span>MP4 encoder</span>
+        <select id="set-encoder">
+          <option value="videotoolbox">VideoToolbox (hardware, falls back to x264)</option>
+          <option value="x264">x264 (software)</option>
+        </select>
+      </label>
+      <fieldset>
+        <legend>Log matching</legend>
+        <label class="field inline"><span>Segment gap (s)</span><input id="set-seg-gap" type="number" min="1" step="1"></label>
+        <label class="field inline"><span>Session gap (min)</span><input id="set-session-gap" type="number" min="1" step="1"></label>
+        <label class="field inline"><span>Tolerance (s)</span><input id="set-tolerance" type="number" min="0" step="1"></label>
+      </fieldset>
+      <p id="tools-status" class="muted mono"></p>
+      <menu>
+        <button type="submit" class="primary" value="save">Done</button>
+      </menu>
+    </form>
+  </dialog>
+
+  <div id="toast" role="status" aria-live="polite"></div>
+</body>
+</html>

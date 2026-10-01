@@ -1,0 +1,464 @@
+//! ffmpeg and ffprobe: probe, recover, convert, verify, thumbnails and preview proxies.
+
+use anyhow::{anyhow, bail, Context, Result};
+use chrono::{DateTime, Utc};
+use serde::{Deserialize, Serialize};
+use std::collections::BTreeMap;
+use std::io::{BufRead, BufReader};
+use std::path::{Path, PathBuf};
+use std::process::{Command, Stdio};
+
+/// Homebrew first. A GUI app does not inherit the shell PATH, so look there explicitly.
+const TOOL_DIRS: &[&str] = &["/opt/homebrew/bin", "/usr/local/bin"];
+
+pub const INSTALL_HINT: &str = "brew install ffmpeg";
+
+#[derive(Debug, Clone, Serialize)]
+pub struct Tools {
+    pub ffmpeg: PathBuf,
+    pub ffprobe: PathBuf,
+}
+
+fn find_tool(name: &str) -> Option<PathBuf> {
+    let from_path = std::env::var_os("PATH")
+        .map(|p| std::env::split_paths(&p).collect::<Vec<_>>())
+        .unwrap_or_default();
+    TOOL_DIRS
+        .iter()
+        .map(PathBuf::from)
+        .chain(from_path)
+        .map(|d| d.join(name))
+        .find(|p| p.is_file())
+}
+
+pub fn find_tools() -> Result<Tools> {
+    match (find_tool("ffmpeg"), find_tool("ffprobe")) {
+        (Some(ffmpeg), Some(ffprobe)) => Ok(Tools { ffmpeg, ffprobe }),
+        _ => bail!("ffmpeg and ffprobe not found. Install them with: {INSTALL_HINT}"),
+    }
+}
+
+#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq)]
+pub struct Probe {
+    pub duration: f64,
+    pub video_packets: u64,
+    pub video_streams: usize,
+    pub audio_streams: usize,
+    pub fps: Option<f64>,
+    pub width: Option<u64>,
+    pub height: Option<u64>,
+    pub tags: BTreeMap<String, String>,
+    /// Anything ffprobe printed at `-v error`.
+    pub errors: String,
+}
+
+fn parse_rate(r: &str) -> Option<f64> {
+    let (n, d) = r.split_once('/')?;
+    let (n, d): (f64, f64) = (n.parse().ok()?, d.parse().ok()?);
+    (d > 0.0 && n > 0.0).then_some(n / d)
+}
+
+/// Counts packets and reads streams, duration and format tags.
+pub fn probe(tools: &Tools, path: &Path) -> Result<Probe> {
+    let out = Command::new(&tools.ffprobe)
+        .args(["-v", "error", "-count_packets", "-show_entries"])
+        .arg("stream=codec_type,nb_read_packets,r_frame_rate,width,height:format=duration:format_tags")
+        .args(["-of", "json"])
+        .arg(path)
+        .output()
+        .context("running ffprobe")?;
+    let errors = String::from_utf8_lossy(&out.stderr).trim().to_string();
+    if !out.status.success() {
+        bail!("ffprobe could not read {}: {errors}", path.display());
+    }
+    let v: serde_json::Value =
+        serde_json::from_slice(&out.stdout).context("parsing ffprobe json")?;
+    let mut p = Probe {
+        errors,
+        ..Default::default()
+    };
+    for s in v["streams"].as_array().into_iter().flatten() {
+        match s["codec_type"].as_str() {
+            Some("video") => {
+                p.video_streams += 1;
+                if p.video_streams == 1 {
+                    p.video_packets = s["nb_read_packets"]
+                        .as_str()
+                        .and_then(|x| x.parse().ok())
+                        .unwrap_or(0);
+                    p.fps = s["r_frame_rate"].as_str().and_then(parse_rate);
+                    p.width = s["width"].as_u64();
+                    p.height = s["height"].as_u64();
+                }
+            }
+            Some("audio") => p.audio_streams += 1,
+            _ => {}
+        }
+    }
+    p.duration = v["format"]["duration"]
+        .as_str()
+        .and_then(|x| x.parse().ok())
+        .unwrap_or(0.0);
+    if p.duration <= 0.0 {
+        if let Some(fps) = p.fps {
+            p.duration = p.video_packets as f64 / fps;
+        }
+    }
+    if let Some(tags) = v["format"]["tags"].as_object() {
+        for (k, val) in tags {
+            if let Some(s) = val.as_str() {
+                p.tags.insert(k.to_lowercase(), s.to_string());
+            }
+        }
+    }
+    Ok(p)
+}
+
+/// Rewrites a half-written AVI into a complete one: `-fflags +genpts`, stream copy.
+pub fn recover(tools: &Tools, src: &Path, dst: &Path) -> Result<()> {
+    let out = Command::new(&tools.ffmpeg)
+        .args(["-v", "error", "-y", "-fflags", "+genpts", "-i"])
+        .arg(src)
+        .args(["-map", "0", "-c", "copy", "-f", "avi"])
+        .arg(dst)
+        .output()
+        .context("running ffmpeg")?;
+    if !out.status.success() || !dst.is_file() {
+        let _ = std::fs::remove_file(dst);
+        bail!(
+            "recovery failed: {}",
+            String::from_utf8_lossy(&out.stderr).trim()
+        );
+    }
+    Ok(())
+}
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "lowercase")]
+pub enum Format {
+    Mp4,
+    Mov,
+}
+
+impl Format {
+    pub fn ext(self) -> &'static str {
+        match self {
+            Format::Mp4 => "mp4",
+            Format::Mov => "mov",
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "lowercase")]
+pub enum Encoder {
+    /// `h264_videotoolbox -q:v 65`, falling back to x264 on failure.
+    Videotoolbox,
+    /// `libx264 -preset veryfast -crf 20` (software fallback).
+    X264,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct Meta {
+    pub title: String,
+    pub comment: String,
+    pub creation_time: DateTime<Utc>,
+    pub date: String,
+    pub description: String,
+}
+
+impl Meta {
+    fn args(&self) -> Vec<String> {
+        let mut a = Vec::new();
+        let mut put = |k: &str, v: &str| {
+            if !v.is_empty() {
+                a.push("-metadata".to_string());
+                a.push(format!("{k}={v}"));
+            }
+        };
+        put("title", &self.title);
+        put("comment", &self.comment);
+        put(
+            "creation_time",
+            &self.creation_time.format("%Y-%m-%dT%H:%M:%SZ").to_string(),
+        );
+        put("date", &self.date);
+        put("description", &self.description);
+        a
+    }
+}
+
+/// The ffmpeg argument list for one conversion (after the global flags).
+pub fn convert_args(
+    src: &Path,
+    dst: &Path,
+    format: Format,
+    encoder: Encoder,
+    meta: &Meta,
+) -> Vec<String> {
+    let s = |p: &Path| p.to_string_lossy().to_string();
+    let mut a: Vec<String> = Vec::new();
+    match format {
+        Format::Mp4 => {
+            a.extend(["-i".into(), s(src), "-map".into(), "0".into()]);
+            match encoder {
+                Encoder::Videotoolbox => {
+                    a.extend(["-c:v", "h264_videotoolbox", "-q:v", "65"].map(String::from))
+                }
+                Encoder::X264 => a.extend(
+                    ["-c:v", "libx264", "-preset", "veryfast", "-crf", "20"].map(String::from),
+                ),
+            }
+            a.extend(
+                [
+                    "-c:a",
+                    "aac",
+                    "-b:a",
+                    "128k",
+                    "-fps_mode",
+                    "passthrough",
+                    "-movflags",
+                    "+faststart",
+                ]
+                .map(String::from),
+            );
+            a.extend(meta.args());
+            a.extend(["-f".into(), "mp4".into(), s(dst)]);
+        }
+        Format::Mov => {
+            a.extend(["-fflags".into(), "+genpts".into(), "-i".into(), s(src)]);
+            a.extend(["-map", "0", "-c", "copy"].map(String::from));
+            // The mov muxer drops `description` unless tags go out as QuickTime keys.
+            a.extend(["-movflags", "use_metadata_tags"].map(String::from));
+            a.extend(meta.args());
+            a.extend(["-f".into(), "mov".into(), s(dst)]);
+        }
+    }
+    a
+}
+
+/// Runs ffmpeg with `-progress`, calling `on_progress` with seconds of output written.
+pub fn run_ffmpeg(tools: &Tools, args: &[String], on_progress: &mut dyn FnMut(f64)) -> Result<()> {
+    let mut child = Command::new(&tools.ffmpeg)
+        .args([
+            "-v",
+            "error",
+            "-nostdin",
+            "-y",
+            "-progress",
+            "pipe:1",
+            "-nostats",
+        ])
+        .args(args)
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .context("starting ffmpeg")?;
+    let stderr = child.stderr.take().expect("piped stderr");
+    let err_thread = std::thread::spawn(move || {
+        let mut s = String::new();
+        let _ = std::io::Read::read_to_string(&mut BufReader::new(stderr), &mut s);
+        s
+    });
+    if let Some(stdout) = child.stdout.take() {
+        for line in BufReader::new(stdout).lines().map_while(Result::ok) {
+            if let Some(us) = line
+                .strip_prefix("out_time_us=")
+                .and_then(|x| x.parse::<i64>().ok())
+            {
+                on_progress(us.max(0) as f64 / 1e6);
+            }
+        }
+    }
+    let status = child.wait()?;
+    let err = err_thread.join().unwrap_or_default();
+    if !status.success() {
+        bail!("ffmpeg failed: {}", err.trim());
+    }
+    Ok(())
+}
+
+/// Converts, falling back from VideoToolbox to x264 if the hardware encoder fails.
+/// Returns the encoder that produced the file.
+pub fn convert(
+    tools: &Tools,
+    src: &Path,
+    dst: &Path,
+    format: Format,
+    encoder: Encoder,
+    meta: &Meta,
+    on_progress: &mut dyn FnMut(f64),
+) -> Result<Encoder> {
+    let r = run_ffmpeg(
+        tools,
+        &convert_args(src, dst, format, encoder, meta),
+        on_progress,
+    );
+    match r {
+        Ok(()) => Ok(encoder),
+        Err(e) if format == Format::Mp4 && encoder == Encoder::Videotoolbox => {
+            let _ = std::fs::remove_file(dst);
+            run_ffmpeg(
+                tools,
+                &convert_args(src, dst, format, Encoder::X264, meta),
+                on_progress,
+            )
+            .map_err(|e2| anyhow!("{e}; x264 fallback also failed: {e2}"))?;
+            Ok(Encoder::X264)
+        }
+        Err(e) => Err(e),
+    }
+}
+
+/// Duration tolerance between source and output.
+pub const DURATION_TOLERANCE: f64 = 0.1;
+
+/// Output checks. `src` is the probe of the file that was converted
+/// (the recovered copy for a half-written clip).
+pub fn verify(tools: &Tools, src: &Probe, out: &Path, meta: &Meta) -> Result<Probe> {
+    let p = probe(tools, out).context("output does not open")?;
+    if p.video_streams != 1 {
+        bail!("output has {} video streams, expected 1", p.video_streams);
+    }
+    let want_audio = usize::from(src.audio_streams > 0);
+    if p.audio_streams != want_audio {
+        bail!(
+            "output has {} audio streams, expected {want_audio}",
+            p.audio_streams
+        );
+    }
+    if p.video_packets != src.video_packets {
+        bail!(
+            "frame count {} does not match source {}",
+            p.video_packets,
+            src.video_packets
+        );
+    }
+    if (p.duration - src.duration).abs() > DURATION_TOLERANCE {
+        bail!(
+            "duration {:.3}s differs from source {:.3}s",
+            p.duration,
+            src.duration
+        );
+    }
+    let tag = |k: &str| p.tags.get(k).map(String::as_str).unwrap_or("");
+    for (k, want) in [
+        ("title", &meta.title),
+        ("comment", &meta.comment),
+        ("date", &meta.date),
+        ("description", &meta.description),
+    ] {
+        if tag(k) != want.as_str() {
+            bail!("metadata {k} reads back as {:?}, expected {want:?}", tag(k));
+        }
+    }
+    let ct = tag("creation_time");
+    // The mov muxer with use_metadata_tags reports the mvhd time and the key, joined by ';'.
+    let ok = ct.split(';').any(|c| {
+        DateTime::parse_from_rfc3339(c.trim()).is_ok_and(|t| {
+            (t.with_timezone(&Utc) - meta.creation_time)
+                .num_seconds()
+                .abs()
+                <= 1
+        })
+    });
+    if !ok {
+        bail!(
+            "creation_time reads back as {ct:?}, expected {}",
+            meta.creation_time.to_rfc3339()
+        );
+    }
+    Ok(p)
+}
+
+/// Sets the file's modified time so Finder sorts by flight date.
+pub fn set_mtime(path: &Path, t: DateTime<Utc>) -> Result<()> {
+    let f = std::fs::File::options().write(true).open(path)?;
+    f.set_modified(t.into())?;
+    Ok(())
+}
+
+/// `ffmpeg -ss 1 -i in.avi -frames:v 1 -vf scale=240:-1 thumb.jpg`; retries at 0 s for short clips.
+pub fn thumbnail(tools: &Tools, src: &Path, dst: &Path) -> Result<()> {
+    for ss in ["1", "0"] {
+        let out = Command::new(&tools.ffmpeg)
+            .args(["-v", "error", "-y", "-ss", ss, "-i"])
+            .arg(src)
+            .args(["-frames:v", "1", "-vf", "scale=240:-1"])
+            .arg(dst)
+            .output()?;
+        if out.status.success() && dst.metadata().is_ok_and(|m| m.len() > 0) {
+            return Ok(());
+        }
+    }
+    bail!("could not make a thumbnail")
+}
+
+/// A small H.264 proxy the webview can play, since it cannot play MJPEG AVI.
+pub fn proxy(tools: &Tools, src: &Path, dst: &Path) -> Result<()> {
+    let tmp = dst.with_extension("part.mp4");
+    let out = Command::new(&tools.ffmpeg)
+        .args(["-v", "error", "-y", "-i"])
+        .arg(src)
+        .args([
+            "-map",
+            "0:v:0",
+            "-map",
+            "0:a:0?",
+            "-vf",
+            "scale=480:-2",
+            "-c:v",
+            "h264_videotoolbox",
+            "-q:v",
+            "50",
+        ])
+        .args([
+            "-c:a",
+            "aac",
+            "-b:a",
+            "96k",
+            "-movflags",
+            "+faststart",
+            "-f",
+            "mp4",
+        ])
+        .arg(&tmp)
+        .output()?;
+    if !out.status.success() {
+        let out = Command::new(&tools.ffmpeg)
+            .args(["-v", "error", "-y", "-i"])
+            .arg(src)
+            .args([
+                "-map",
+                "0:v:0",
+                "-map",
+                "0:a:0?",
+                "-vf",
+                "scale=480:-2",
+                "-c:v",
+                "libx264",
+                "-preset",
+                "ultrafast",
+            ])
+            .args([
+                "-c:a",
+                "aac",
+                "-b:a",
+                "96k",
+                "-movflags",
+                "+faststart",
+                "-f",
+                "mp4",
+            ])
+            .arg(&tmp)
+            .output()?;
+        if !out.status.success() {
+            bail!(
+                "proxy failed: {}",
+                String::from_utf8_lossy(&out.stderr).trim()
+            );
+        }
+    }
+    std::fs::rename(&tmp, dst)?;
+    Ok(())
+}

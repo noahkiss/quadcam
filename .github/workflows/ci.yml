@@ -1,0 +1,46 @@
+name: CI
+
+# Format, clippy, tests and a release build of the app on every push to main
+# and every pull request. The app is macOS-only, so this runs on an Apple
+# Silicon runner. The repository is public, so macOS minutes are free.
+#
+# The tests need ffmpeg, which comes from Homebrew. The format tests attach
+# small FAT32 disk images with hdiutil and erase only those images. No test
+# reaches a Photos library: processes started by cargo use the dry-run
+# recorder unless QUADCAM_PHOTOS=real.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    runs-on: macos-26
+    defaults:
+      run:
+        working-directory: src-tauri
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Install Rust and ffmpeg
+        run: |
+          rustup toolchain install stable --profile minimal -c clippy,rustfmt
+          rustup default stable
+          brew install ffmpeg
+
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+        with:
+          workspaces: src-tauri
+
+      - run: cargo fmt --check
+      - run: cargo clippy --all-targets --locked -- -D warnings
+      - run: cargo test --locked
+      - run: cargo build --release --locked --bins

@@ -1,0 +1,340 @@
+//! quadcam-cli end to end: every command with --json, exit codes, and the format guards.
+//! Each test runs the binary with HOME set to a temp folder, so the cache, session file and
+//! default output folder stay inside it. The only disk ever erased is a test disk image.
+
+mod common;
+
+use common::*;
+use serde_json::Value;
+use std::path::Path;
+use std::process::Command;
+
+struct Env {
+    home: tempfile::TempDir,
+}
+
+impl Env {
+    fn new() -> Env {
+        Env {
+            home: tempfile::tempdir().unwrap(),
+        }
+    }
+
+    /// Runs `quadcam-cli --json <args>`; returns (exit code, parsed JSON).
+    fn run(&self, args: &[&str]) -> (i32, Value) {
+        let out = Command::new(env!("CARGO_BIN_EXE_quadcam-cli"))
+            .env("HOME", self.home.path())
+            // Never reach the real Photos library from a test.
+            .env("QUADCAM_PHOTOS", "dry-run")
+            .arg("--json")
+            .args(args)
+            .output()
+            .unwrap();
+        let text = String::from_utf8_lossy(&out.stdout);
+        let v: Value = serde_json::from_str(text.trim()).unwrap_or_else(|e| {
+            panic!(
+                "not JSON ({e}): {text} / {}",
+                String::from_utf8_lossy(&out.stderr)
+            )
+        });
+        (out.status.code().unwrap_or(-1), v)
+    }
+
+    fn ok(&self, args: &[&str]) -> Value {
+        let (code, v) = self.run(args);
+        assert_eq!(code, 0, "{args:?} -> {v}");
+        assert_eq!(v["ok"], true);
+        v["result"].clone()
+    }
+}
+
+fn folder_with_clips() -> tempfile::TempDir {
+    let d = tempfile::tempdir().unwrap();
+    std::fs::create_dir(d.path().join("DCIM")).unwrap();
+    make_clip(&d.path().join("DCIM/PICT0001.AVI"), 2, true);
+    make_clip(&d.path().join("DCIM/PICT0002.AVI"), 1, false);
+    std::fs::write(d.path().join("DCIM/PICT0003.AVI"), b"").unwrap();
+    d
+}
+
+fn s(p: &Path) -> &str {
+    p.to_str().unwrap()
+}
+
+#[test]
+fn full_flow_on_a_folder() {
+    let env = Env::new();
+    let src = folder_with_clips();
+
+    assert!(env.ok(&["cards"]).is_array());
+    let scan = env.ok(&["scan", s(src.path())]);
+    assert_eq!(scan["clips"].as_array().unwrap().len(), 3);
+
+    let staged = env.ok(&["stage", s(src.path())]);
+    assert_eq!(staged["clips"].as_array().unwrap().len(), 3);
+    assert_eq!(staged["analysed"], false);
+    let analysed = env.ok(&["analyze"]);
+    assert_eq!(analysed["clips"][0]["status"], "ok");
+    assert_eq!(analysed["clips"][2]["status"], "empty");
+    assert_eq!(
+        analysed["plans"][2]["skip"], true,
+        "empty clips are skipped"
+    );
+
+    let dates = env.ok(&[
+        "dates",
+        "--no-logs",
+        "--set",
+        "0=2026-09-28",
+        "--set",
+        "1=2026-09-28",
+    ]);
+    assert_eq!(dates["plans"][0]["date"], "2026-09-28");
+    assert_eq!(dates["plans"][0]["source"], "edited");
+
+    // Bad input is a clean error, not a crash.
+    let (code, v) = env.run(&["dates", "--set", "0=yesterday"]);
+    assert_eq!(code, 1);
+    assert!(v["error"]["message"]
+        .as_str()
+        .unwrap()
+        .contains("YYYY-MM-DD"));
+
+    // Import to the default folder (~/Movies/quadcam under the temp HOME).
+    let out = env.ok(&[
+        "import",
+        "--name",
+        "0=Wake Up",
+        "--note",
+        "0=two packs",
+        "--format",
+        "mp4",
+        "--add-to-photos",
+        "--album",
+        "",
+    ]);
+    let sum = &out["summary"];
+    assert_eq!(sum["imported"], 2, "{out}");
+    assert_eq!(sum["skipped"], 1);
+    let default_out = env.home.path().join("Movies/quadcam");
+    assert!(default_out.join("2026-09-28_wake_up.mp4").is_file());
+    assert!(default_out.join("2026-09-28_flight.mp4").is_file());
+    assert!(
+        sum["format_ready"]["Err"]
+            .as_str()
+            .unwrap()
+            .contains("folder"),
+        "a folder never formats"
+    );
+    // QUADCAM_PHOTOS=dry-run: the recorder reports both files added, and nothing is.
+    assert_eq!(
+        out["photos"]["Ok"]["added"].as_array().unwrap().len(),
+        2,
+        "{out}"
+    );
+
+    // A second import converts nothing again.
+    let again = env.ok(&["import", "--output", s(env.home.path())]);
+    assert_eq!(again["summary"]["imported"], 2);
+    assert_eq!(std::fs::read_dir(&default_out).unwrap().count(), 2);
+
+    let v = env.ok(&["verify"]);
+    assert_eq!(v.as_array().unwrap().len(), 2);
+    assert!(v.as_array().unwrap().iter().all(|r| r["ok"] == true));
+
+    let one = default_out.join("2026-09-28_wake_up.mp4");
+    let r = env.ok(&[
+        "verify",
+        s(&one),
+        "--source",
+        s(&src.path().join("DCIM/PICT0001.AVI")),
+    ]);
+    assert_eq!(r["frames"], 2 * FPS);
+    let (code, _) = env.run(&[
+        "verify",
+        s(&one),
+        "--source",
+        s(&src.path().join("DCIM/PICT0002.AVI")),
+    ]);
+    assert_eq!(code, 1, "a mismatched source fails verify");
+
+    let p = env.ok(&[
+        "photos",
+        "--dry-run",
+        s(&one),
+        s(&src.path().join("DCIM/PICT0001.AVI")),
+    ]);
+    assert_eq!(p["report"]["added"].as_array().unwrap().len(), 1);
+    assert_eq!(
+        p["report"]["failed"].as_array().unwrap().len(),
+        1,
+        "an AVI is not offered to Photos"
+    );
+
+    let show = env.ok(&["show"]);
+    assert_eq!(show["plans"][0]["name"], "Wake Up");
+
+    // Format on a folder session: refused, exit 3.
+    let (code, v) = env.run(&[
+        "format",
+        "--device",
+        "/dev/disk99",
+        "--volume-uuid",
+        "X",
+        "--yes",
+    ]);
+    assert_eq!(code, 3, "{v}");
+    assert_eq!(v["error"]["code"], "refused");
+}
+
+#[test]
+fn import_from_a_plan_file() {
+    let env = Env::new();
+    let src = folder_with_clips();
+    env.ok(&["stage", s(src.path())]);
+    env.ok(&["analyze"]);
+    let out = tempfile::tempdir().unwrap();
+    let plan = env.home.path().join("plan.json");
+    std::fs::write(
+        &plan,
+        serde_json::json!({
+            "clips": [{"id": 0, "name": "Park", "date": "2026-09-01"}, {"id": 1, "skip": true}],
+            "format": "mov",
+            "output_dir": out.path(),
+        })
+        .to_string(),
+    )
+    .unwrap();
+    let r = env.ok(&["import", "--plan", s(&plan)]);
+    assert_eq!(r["summary"]["imported"], 1);
+    assert!(out.path().join("2026-09-01_park.mov").is_file());
+}
+
+#[test]
+fn errors_and_exit_codes() {
+    let env = Env::new();
+    let (code, v) = env.run(&["show"]);
+    assert_eq!((code, v["error"]["code"].as_str()), (4, Some("no_session")));
+    let (code, v) = env.run(&["import", "--format", "avi"]);
+    assert_eq!((code, v["error"]["code"].as_str()), (2, Some("usage")));
+    let (code, v) = env.run(&["format", "--yes"]);
+    assert_eq!(code, 3, "{v}");
+    assert!(v["error"]["message"].as_str().unwrap().contains("--device"));
+}
+
+/// Test-only check before any erase: the target is a disk image this test attached.
+fn assert_is_test_image(img: &Image) {
+    let whole = quadcam_lib::disk::info(&img.disk).unwrap();
+    assert_eq!(
+        whole.bus_protocol.as_deref(),
+        Some("Disk Image"),
+        "refusing to format a non-image disk"
+    );
+}
+
+#[test]
+fn format_a_disk_image_only_with_every_flag() {
+    let env = Env::new();
+    let card = Image::create("64m", "QCCLI", false);
+    std::fs::create_dir(card.mount.join("DCIM")).unwrap();
+    make_clip(&card.mount.join("DCIM/PICT0001.AVI"), 1, true);
+
+    let staged = env.ok(&["stage", s(&card.mount)]);
+    assert_eq!(staged["card"]["whole_disk"], card.disk.as_str());
+    env.ok(&["analyze"]);
+
+    // Before import: locked.
+    let (code, _) = env.run(&["format", "--plan"]);
+    assert_eq!(code, 1);
+
+    let out = tempfile::tempdir().unwrap();
+    env.ok(&["import", "--output", s(out.path())]);
+    let plan = env.ok(&["format", "--plan"]);
+    let device = plan["device"].as_str().unwrap().to_string();
+    let uuid = plan["volume_uuid"].as_str().unwrap().to_string();
+    assert_eq!(device, format!("/dev/{}", card.disk));
+
+    for args in [
+        vec!["format", "--device", &device, "--volume-uuid", &uuid],
+        vec!["format", "--device", &device, "--yes"],
+        vec!["format", "--volume-uuid", &uuid, "--yes"],
+        vec![
+            "format",
+            "--device",
+            &device,
+            "--volume-uuid",
+            "00000000-0000-0000-0000-000000000000",
+            "--yes",
+        ],
+        vec![
+            "format",
+            "--device",
+            "/dev/disk0",
+            "--volume-uuid",
+            &uuid,
+            "--yes",
+        ],
+        vec![
+            "format",
+            "--device",
+            &format!("{device}s1"),
+            "--volume-uuid",
+            &uuid,
+            "--yes",
+        ],
+    ] {
+        let (code, v) = env.run(&args);
+        assert_eq!(code, 3, "{args:?} -> {v}");
+        assert!(card.is_attached(), "refused formats leave the card alone");
+        assert!(card.mount.join("DCIM/PICT0001.AVI").is_file());
+    }
+
+    assert_is_test_image(&card);
+    let done = env.ok(&[
+        "format",
+        "--device",
+        &device,
+        "--volume-uuid",
+        &uuid,
+        "--yes",
+        "--label",
+        "fpvcard",
+    ]);
+    assert_eq!(done["label"], "FPVCARD");
+    assert!(!card.is_attached(), "ejected after the erase");
+}
+
+/// `quadcam-cli mcp` over real stdio: only JSON-RPC on stdout, one reply per request.
+#[test]
+fn mcp_over_stdio() {
+    use std::io::Write;
+    let env = Env::new();
+    let mut child = Command::new(env!("CARGO_BIN_EXE_quadcam-cli"))
+        .env("HOME", env.home.path())
+        .env("QUADCAM_PHOTOS", "dry-run")
+        .arg("mcp")
+        .stdin(std::process::Stdio::piped())
+        .stdout(std::process::Stdio::piped())
+        .spawn()
+        .unwrap();
+    {
+        let mut stdin = child.stdin.take().unwrap();
+        for m in [
+            serde_json::json!({"jsonrpc": "2.0", "id": 1, "method": "initialize", "params": {"protocolVersion": "2025-11-25", "capabilities": {}, "clientInfo": {"name": "t", "version": "0"}}}),
+            serde_json::json!({"jsonrpc": "2.0", "method": "notifications/initialized"}),
+            serde_json::json!({"jsonrpc": "2.0", "id": 2, "method": "tools/list"}),
+            serde_json::json!({"jsonrpc": "2.0", "id": 3, "method": "tools/call", "params": {"name": "quadcam_status", "arguments": {}}}),
+        ] {
+            writeln!(stdin, "{m}").unwrap();
+        }
+    }
+    let out = child.wait_with_output().unwrap();
+    let lines: Vec<Value> = String::from_utf8_lossy(&out.stdout)
+        .lines()
+        .map(|l| serde_json::from_str(l).expect("stdout is JSON-RPC only"))
+        .collect();
+    assert_eq!(lines.len(), 3);
+    assert_eq!(lines[0]["result"]["protocolVersion"], "2025-11-25");
+    assert_eq!(lines[1]["result"]["tools"].as_array().unwrap().len(), 10);
+    assert_eq!(lines[2]["result"]["structuredContent"]["mode"], "headless");
+}
