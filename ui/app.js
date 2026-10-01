@@ -2528,7 +2528,7 @@ async function init() {
   const env = await invoke("env_check");
   state.tools = env.tools;
   if (!env.tools) {
-    banner(`<b>ffmpeg not found.</b> Import is blocked. Install it with <code>${env.install_hint}</code>, then restart quadcam.`, "error");
+    banner(`<b>ffmpeg not found.</b> Import is blocked. Install it with <code>${env.install_hint}</code>, then restart QuadCam.`, "error");
     for (const b of $$("[data-action=import]")) b.disabled = true;
   }
   $("#tools-status").textContent = [env.tools ? `ffmpeg: ${env.tools.ffmpeg}` : env.error, env.socket ? `Agent socket: ${env.socket}` : ""].filter(Boolean).join("\n");

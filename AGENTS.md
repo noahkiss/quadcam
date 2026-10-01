@@ -1,4 +1,4 @@
-# quadcam
+# QuadCam
 
 A macOS desktop app (Tauri 2) that imports analog FPV DVR clips (MJPEG AVI) into a library.
 It stages the clips off the card, dates them (EdgeTX radio logs or the import date), names them
@@ -40,9 +40,9 @@ Run these in `src-tauri/`:
 cargo test -- --test-threads=1  # unit + integration tests (needs ffmpeg; attaches small disk images)
 cargo test --test import size_and_speed -- --ignored --nocapture   # MP4 vs MOV size/speed
 cargo tauri dev                 # run from source (Photos is dry-run; QUADCAM_PHOTOS=real to test it)
-cargo tauri build               # -> target/release/bundle/macos/quadcam.app
+cargo tauri build               # -> target/release/bundle/macos/QuadCam.app
 cargo build --release --bin quadcam-cli   # -> target/release/quadcam-cli
-open target/release/bundle/macos/quadcam.app
+open target/release/bundle/macos/QuadCam.app
 ```
 
 ## Release
@@ -52,7 +52,7 @@ GitHub (`noahkiss/quadcam`, public) is the only remote. Users install the cask
 
 1. Set the new version in `src-tauri/Cargo.toml` and `src-tauri/tauri.conf.json`. They must match.
 2. Commit, then push a tag: `git tag vX.Y.Z && git push origin main vX.Y.Z`.
-3. `.github/workflows/release.yml` tests, builds `quadcam.app` on a `macos-26` (arm64) runner,
+3. `.github/workflows/release.yml` tests, builds `QuadCam.app` on a `macos-26` (arm64) runner,
    zips it as `quadcam-X.Y.Z-arm64.zip`, and attaches it to the GitHub Release. It then fires
    the tap's `bump.yml`, which rewrites `Casks/quadcam.rb`, installs it on macOS, and commits.
 4. Watch it: `gh run watch -R noahkiss/quadcam --exit-status`. Re-run for an existing tag with
@@ -76,7 +76,7 @@ GitHub (`noahkiss/quadcam`, public) is the only remote. Users install the cask
   ranges live in it alone. A rebuild never moves or writes a file, which is also how an
   existing export folder is adopted.
 - **Identity:** a library clip's id is its DVR source's content fingerprint
-  (`app.quadcam.source`), never a file name. A file quadcam did not write is known by a hash of
+  (`app.quadcam.source`), never a file name. A file QuadCam did not write is known by a hash of
   its first MB before `moov` (`library::head_id`), which metadata rewrites never touch.
 - **Cuts:** `trim.rs` is the one cut model for the session and the library. Dropping a cut that
   was already exported needs a decision (`RemovedCuts::Keep`: the file stays as its own clip,
@@ -176,7 +176,7 @@ disk), `--volume-uuid` and `--yes` all match the staged card.
 ### MCP server
 
 `quadcam-cli mcp` is an MCP server on stdio, a thin layer over the same core. `cargo tauri
-build` also puts the CLI inside the bundle (`quadcam.app/Contents/MacOS/quadcam-cli`), and the
+build` also puts the CLI inside the bundle (`QuadCam.app/Contents/MacOS/quadcam-cli`), and the
 cask links it into Homebrew's `bin`. Register it:
 
 ```bash

@@ -3,8 +3,8 @@
 <plist version="1.0">
 <dict>
   <key>NSPhotoLibraryAddUsageDescription</key>
-  <string>quadcam adds your imported flight videos to Photos when you click Add to Photos.</string>
+  <string>QuadCam adds your imported flight videos to Photos when you click Add to Photos.</string>
   <key>NSPhotoLibraryUsageDescription</key>
-  <string>quadcam finds or creates the album your flight videos go into when you click Add to Photos.</string>
+  <string>QuadCam finds or creates the album your flight videos go into when you click Add to Photos.</string>
 </dict>
 </plist>

@@ -211,7 +211,7 @@ pub fn install<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<()> {
             &PredefinedMenuItem::bring_all_to_front(app, None)?,
         ],
     )?;
-    let help_item = b.item("help", "quadcam Help", None)?;
+    let help_item = b.item("help", "QuadCam Help", None)?;
     let help = b.submenu("Help", &[&help_item])?;
 
     let menu = Menu::with_items(

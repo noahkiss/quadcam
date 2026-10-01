@@ -193,7 +193,7 @@ fn import_all(format: Format) {
     assert!(tags["com.apple.quicktime.software"]
         .as_str()
         .unwrap()
-        .starts_with("quadcam "));
+        .starts_with("QuadCam "));
     assert!(tags["creation_time"]
         .as_str()
         .unwrap()

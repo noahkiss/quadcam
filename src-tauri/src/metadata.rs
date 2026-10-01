@@ -245,7 +245,7 @@ pub fn qt_items(r: &Resolved, base: &crate::media::Meta) -> Vec<(String, String)
         (q("creationdate"), creation_date(base.creation_time)),
         (
             q("software"),
-            format!("quadcam {}", env!("CARGO_PKG_VERSION")),
+            format!("QuadCam {}", env!("CARGO_PKG_VERSION")),
         ),
         (q("title"), base.title.clone()),
         (q("description"), base.description.clone()),

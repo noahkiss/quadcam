@@ -1,4 +1,4 @@
-//! MCP server on stdio (`quadcam-cli mcp`). A thin layer over the core: when the quadcam app
+//! MCP server on stdio (`quadcam-cli mcp`). A thin layer over the core: when the QuadCam app
 //! is running it drives the app's session through the control socket, so the person sees
 //! every change live; otherwise it runs a headless core on the shared session file.
 //! Only MCP messages go to stdout; logs go to stderr.
@@ -1119,7 +1119,7 @@ fn table(view: &[Value]) -> String {
         .join("\n")
 }
 
-const INSTRUCTIONS: &str = "quadcam imports analog FPV DVR clips (AVI/MJPEG) into a library folder. \
+const INSTRUCTIONS: &str = "QuadCam imports analog FPV DVR clips (AVI/MJPEG) into a library folder. \
 Import flow: quadcam_status -> quadcam_load_clips (or quadcam_read_clips for a loaded session) -> \
 quadcam_read_clips(thumbnails=true) -> quadcam_suggest names, dates, times, places, cuts -> the person may \
 edit them in the app -> quadcam_read_clips for the final values -> quadcam_export -> quadcam_add_to_photos \
@@ -1135,9 +1135,9 @@ pub fn tools() -> Value {
     let mut flow = json!([
         {
             "name": "quadcam_status",
-            "description": "Show whether the quadcam app is running (mode \"app\": the person sees every change live) or not (\"headless\"), the detected DVR cards and radio log sources, the export defaults (including the saved places and aircraft profiles under status.defaults), and a summary of the loaded session.\n\nBest for: the first call, and checking what is inserted.\nReturns: one line of text plus {mode, status, cards, radios}.\nFollow up with quadcam_load_clips to load a card, or quadcam_read_clips when a session is already loaded.",
+            "description": "Show whether the QuadCam app is running (mode \"app\": the person sees every change live) or not (\"headless\"), the detected DVR cards and radio log sources, the export defaults (including the saved places and aircraft profiles under status.defaults), and a summary of the loaded session.\n\nBest for: the first call, and checking what is inserted.\nReturns: one line of text plus {mode, status, cards, radios}.\nFollow up with quadcam_load_clips to load a card, or quadcam_read_clips when a session is already loaded.",
             "inputSchema": {"type": "object", "properties": {}, "additionalProperties": false},
-            "annotations": {"title": "quadcam status", "readOnlyHint": true, "openWorldHint": false}
+            "annotations": {"title": "QuadCam status", "readOnlyHint": true, "openWorldHint": false}
         },
         {
             "name": "quadcam_library",

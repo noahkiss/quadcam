@@ -91,7 +91,7 @@ impl Client {
     /// Connects and pings. Err means no app is serving this socket.
     pub fn connect(path: &Path) -> Result<Client> {
         let s = UnixStream::connect(path)
-            .with_context(|| format!("no quadcam app at {}", path.display()))?;
+            .with_context(|| format!("no QuadCam app at {}", path.display()))?;
         let mut c = Client {
             reader: BufReader::new(s.try_clone()?),
             writer: s,
@@ -113,7 +113,7 @@ impl Client {
         )?;
         let mut line = String::new();
         if self.reader.read_line(&mut line)? == 0 {
-            bail!("the quadcam app closed the connection");
+            bail!("the QuadCam app closed the connection");
         }
         let v: Value = serde_json::from_str(&line)?;
         if let Some(e) = v.get("error") {

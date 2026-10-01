@@ -116,7 +116,7 @@ mod photokit {
         match status {
             PHAuthorizationStatus::Authorized | PHAuthorizationStatus::Limited => Ok(()),
             PHAuthorizationStatus::Denied => {
-                bail!("quadcam is not allowed to add to Photos. {SETTINGS_HINT}")
+                bail!("QuadCam is not allowed to add to Photos. {SETTINGS_HINT}")
             }
             PHAuthorizationStatus::Restricted => {
                 bail!("Photos access is restricted on this Mac (parental controls or a profile).")

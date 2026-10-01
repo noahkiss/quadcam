@@ -1,6 +1,6 @@
 name: Release
 
-# A pushed `v*` tag builds quadcam.app on an Apple Silicon runner, tests it,
+# A pushed `v*` tag builds QuadCam.app on an Apple Silicon runner, tests it,
 # zips it, attaches the zip to the tag's GitHub Release, then bumps the
 # Homebrew cask (`noahkiss/tap/quadcam`) through the tap's own `bump.yml`. The
 # tap downloads the zip, rewrites the cask, proves it with a real
@@ -109,7 +109,7 @@ jobs:
           VERSION: ${{ needs.resolve.outputs.version }}
         run: |
           set -euo pipefail
-          app=target/release/bundle/macos/quadcam.app
+          app=target/release/bundle/macos/QuadCam.app
           codesign --verify --deep --strict "$app"
           "$app/Contents/MacOS/quadcam-cli" --version
           plist_v="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$app/Contents/Info.plist")"
