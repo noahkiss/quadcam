@@ -60,6 +60,51 @@ pub struct LibEdit {
     pub profile: Option<String>,
 }
 
+impl LibEdit {
+    /// True when the edit changes nothing.
+    pub fn is_empty(&self) -> bool {
+        let LibEdit {
+            note,
+            keywords,
+            author,
+            place,
+            location,
+            date,
+            time,
+            profile,
+        } = self;
+        note.is_none()
+            && keywords.is_none()
+            && author.is_none()
+            && place.is_none()
+            && location.is_none()
+            && date.is_none()
+            && time.is_none()
+            && profile.is_none()
+    }
+}
+
+/// Every change one call may make to library clips: stars and flag, a new name (one clip
+/// only), and the details in `LibEdit`. Missing fields stay as they are.
+#[derive(Debug, Clone, Default, Serialize, Deserialize, specta::Type)]
+#[serde(default)]
+pub struct LibUpdate {
+    /// Stars, 0 to 5; 0 clears.
+    pub rating: Option<u8>,
+    pub flag: Option<Flag>,
+    /// A new short name; needs exactly one clip.
+    pub name: Option<String>,
+    #[serde(flatten)]
+    pub edit: LibEdit,
+}
+
+/// An edit whose names, location and time were checked.
+pub(super) struct PreparedEdit {
+    location: Option<Option<crate::metadata::Location>>,
+    profile: Option<Option<crate::metadata::Profile>>,
+    time: Option<Option<chrono::NaiveTime>>,
+}
+
 #[derive(Debug, Clone, Serialize, specta::Type)]
 pub struct RebuildReport {
     pub clips: usize,
@@ -338,6 +383,13 @@ impl Core {
     /// in its file and its cuts. A new day moves the clip, its cuts and its original to
     /// that day's folder (and renames them when the file name starts with the date).
     pub fn library_edit(&self, id: &str, e: &LibEdit) -> Result<LibClip> {
+        let prepared = self.prepare_edit(e)?;
+        self.apply_edit(id, e, &prepared)
+    }
+
+    /// Checks an edit before any file changes: the place and profile names, the location and
+    /// the time.
+    fn prepare_edit(&self, e: &LibEdit) -> Result<PreparedEdit> {
         let d = self.defaults();
         let places = d.places.clone();
         let location = match (&e.location, e.place.as_deref().map(str::trim)) {
@@ -393,6 +445,21 @@ impl Core {
             .as_deref()
             .map(crate::session::parse_time)
             .transpose()?;
+        Ok(PreparedEdit {
+            location,
+            profile,
+            time,
+        })
+    }
+
+    /// Writes a checked edit into one clip, its cuts and the index.
+    fn apply_edit(&self, id: &str, e: &LibEdit, prepared: &PreparedEdit) -> Result<LibClip> {
+        let d = self.defaults();
+        let PreparedEdit {
+            location,
+            profile,
+            time,
+        } = prepared;
         let (root, c) = self.clip(id)?;
         let file = root.join(&c.path);
         let items = crate::qtmeta::read(&file)?;
@@ -457,11 +524,45 @@ impl Core {
             lib::write_keys(&root.join(f), &set)?;
         }
         if e.date.is_some() || time.is_some() {
-            self.redate(&root, &c, &items, e.date, time)?;
+            self.redate(&root, &c, &items, e.date, *time)?;
         } else {
             self.reread_clips(&[id.to_string()])?;
         }
         Ok(self.clip(id)?.1)
+    }
+
+    /// Changes stars, flag, name and details of library clips in one call. Every value and
+    /// clip id is checked before any file changes; then the stars and flag, the name, and the
+    /// details are written, in that order.
+    pub fn library_update(&self, ids: &[String], u: &LibUpdate) -> Result<Vec<LibClip>> {
+        if ids.is_empty() {
+            bail!("ids is required: library clip ids from quadcam_library.");
+        }
+        if u.rating.is_none() && u.flag.is_none() && u.name.is_none() && u.edit.is_empty() {
+            bail!("Nothing to change: give rating, flag, name, note, keywords, author, place, location, profile, date or time.");
+        }
+        if u.name.is_some() && ids.len() != 1 {
+            bail!("name renames one clip; give exactly one id.");
+        }
+        if u.rating.is_some_and(|r| r > 5) {
+            bail!("A rating is 0 to 5 stars.");
+        }
+        for id in ids {
+            self.clip(id)?;
+        }
+        let prepared = self.prepare_edit(&u.edit)?;
+        if u.rating.is_some() || u.flag.is_some() {
+            self.library_rate(ids, u.rating, u.flag)?;
+        }
+        if let Some(name) = &u.name {
+            self.library_rename(&ids[0], name)?;
+        }
+        if !u.edit.is_empty() {
+            for id in ids {
+                self.apply_edit(id, &u.edit, &prepared)?;
+            }
+        }
+        ids.iter().map(|id| Ok(self.clip(id)?.1)).collect()
     }
 
     /// Gives a clip a new date and time: the QuickTime creation date, the movie header time

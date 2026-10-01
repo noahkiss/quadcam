@@ -454,7 +454,7 @@ To try the app without it taking focus, start a debug build with `QUADCAM_NO_FOC
 | `src-tauri/src/trash.rs` | Moving files to the Trash |
 | `src-tauri/src/lib.rs` | The app's Tauri commands |
 | `src-tauri/src/control.rs` | The control socket |
-| `src-tauri/src/mcp/` | The MCP server: protocol and handlers, the tool list, the text answers |
+| `src-tauri/src/mcp/` | The MCP server: protocol and handlers, each tool's argument type, the tool list with schemas derived from those types, the text answers |
 | `src-tauri/src/bin/quadcam-cli.rs` | The command-line tool |
 | `src-tauri/src/{scan,disk,media,logs,naming,session,photos}.rs`, `pipeline/` | Scanning, disks, ffmpeg, radio logs, file names, the session, Photos, the import steps |
 | `src-tauri/src/moments.rs` | Moments from radio-log sticks and dead air from video frames. Every threshold is in `moments::tune` |

@@ -67,6 +67,8 @@ export const commands = {
 	libraryRate: (params: RateParams) => typedError<LibClip[], string>(__TAURI_INVOKE("library_rate", { params })),
 	/**  Changes one clip's details, date or time. */
 	libraryEdit: (params: LibraryEditParams) => typedError<LibClip, string>(__TAURI_INVOKE("library_edit", { params })),
+	/**  Changes stars, flag, name and details of clips in one call; checks everything first. */
+	libraryUpdate: (params: LibraryUpdateParams) => typedError<LibClip[], string>(__TAURI_INVOKE("library_update", { params })),
 	/**  Renames a clip, its cuts and its original. */
 	libraryRename: (params: RenameParams) => typedError<LibClip, string>(__TAURI_INVOKE("library_rename", { params })),
 	/**  Sets a clip's cut list. */
@@ -673,6 +675,18 @@ export type LibItem = {
 	last_import: boolean,
 } & LibClip;
 
+/**
+ *  Every change one call may make to library clips: stars and flag, a new name (one clip
+ *  only), and the details in `LibEdit`. Missing fields stay as they are.
+ */
+export type LibUpdate = {
+	/**  Stars, 0 to 5; 0 clears. */
+	rating?: number | null,
+	flag?: Flag | null,
+	/**  A new short name; needs exactly one clip. */
+	name?: string | null,
+} & LibEdit;
+
 /**  The library index changed. Read it again with `library`. */
 export type LibraryChanged = null;
 
@@ -700,6 +714,14 @@ export type LibraryTask = {
 	done: number,
 	total: number,
 };
+
+/**
+ *  `library_update`: stars, flag, name and details for these clips, checked before any
+ *  file changes.
+ */
+export type LibraryUpdateParams = {
+	ids?: string[],
+} & LibUpdate;
 
 export type LibraryView = {
 	root: string,

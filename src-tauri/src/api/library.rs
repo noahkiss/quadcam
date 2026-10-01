@@ -1,6 +1,6 @@
 //! Params of the library methods.
 
-use crate::core::{LibEdit, Moved};
+use crate::core::{LibEdit, LibUpdate, Moved};
 use crate::library::Flag;
 use crate::moments::Span;
 use crate::trim::RemovedCuts;
@@ -31,6 +31,16 @@ pub struct LibraryEditParams {
     pub id: String,
     #[serde(flatten)]
     pub edit: LibEdit,
+}
+
+/// `library_update`: stars, flag, name and details for these clips, checked before any
+/// file changes.
+#[derive(Debug, Clone, Default, Serialize, Deserialize, Type)]
+pub struct LibraryUpdateParams {
+    #[serde(default)]
+    pub ids: Vec<String>,
+    #[serde(flatten)]
+    pub update: LibUpdate,
 }
 
 /// `library_rename`: a clip's new short name.

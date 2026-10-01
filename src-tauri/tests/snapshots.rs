@@ -292,3 +292,26 @@ fn session_and_library_json() {
     });
     assert!(Path::new(&root).is_dir());
 }
+
+/// The tool list as it was before the schemas were derived from types. The derived list
+/// must equal it; a deliberate change updates both on review.
+#[test]
+fn mcp_tool_list_matches_the_hand_written_one() {
+    let before: Value =
+        serde_json::from_str(include_str!("fixtures/mcp_tools_before.json")).unwrap();
+    let now = quadcam_lib::mcp::tools();
+    let (b, n) = (before.as_array().unwrap(), now.as_array().unwrap());
+    assert_eq!(b.len(), n.len());
+    let mut bad = Vec::new();
+    for (b, n) in b.iter().zip(n) {
+        for k in ["name", "description", "annotations", "inputSchema"] {
+            if b[k] != n[k] {
+                bad.push(format!(
+                    "{} {k}:\nbefore {}\nnow    {}",
+                    b["name"], b[k], n[k]
+                ));
+            }
+        }
+    }
+    assert!(bad.is_empty(), "{}", bad.join("\n"));
+}

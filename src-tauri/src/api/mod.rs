@@ -152,6 +152,9 @@ api! {
         |c| c.library_rate(&params.ids, params.rating, params.flag);
     /// Changes one clip's details, date or time.
     library_edit(params: LibraryEditParams) -> LibClip = |c| c.library_edit(&params.id, &params.edit);
+    /// Changes stars, flag, name and details of clips in one call; checks everything first.
+    library_update(params: LibraryUpdateParams) -> Vec<LibClip> =
+        |c| c.library_update(&params.ids, &params.update);
     /// Renames a clip, its cuts and its original.
     library_rename(params: RenameParams) -> LibClip = |c| {
         let name = params.name.context("name is required")?;

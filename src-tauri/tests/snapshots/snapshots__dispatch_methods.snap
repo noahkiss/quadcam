@@ -22,6 +22,7 @@ expression: "Core::METHODS"
   "library_rebuild",
   "library_rate",
   "library_edit",
+  "library_update",
   "library_rename",
   "library_cuts",
   "library_export_cuts",
