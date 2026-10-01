@@ -1845,7 +1845,7 @@ function renderExportList() {
     const prog = state.progress.get(c.id);
     const stateIcon = r ? (r.outcome === "verified" ? icon("check-circle", "c-green") : icon("close-circle", "c-red")) : prog != null ? icon("refresh-moments", "c-blue") : icon("clock", "muted");
     return el("li", { class: "clip-files" }, el("b", { text: p.name || settings.defaultName || "flight" }),
-      el("ul", {}, el("li", {}, stateIcon, el("span", { class: "name", text: r?.output ? base(r.output) : c.name }),
+      el("ul", {}, el("li", {}, stateIcon, el("span", { class: "name selectable", text: r?.output ? base(r.output) : c.name }),
         prog != null && !r ? el("progress", { max: 1, value: prog, style: "width:120px" }) : el("span", { class: "muted", text: r?.size ? fmtBytes(r.size) : r?.error || "" }))));
   }));
 }
@@ -1934,7 +1934,7 @@ async function renderFinish() {
     const files = [{ name: r.output ? base(r.output) : c.name, ok: r.outcome === "verified", size: r.size, error: r.error }];
     for (const k of r.cuts || []) files.push({ name: k.output ? base(k.output) : `cut ${Trim.fmtT(k.start)}–${Trim.fmtT(k.end)}`, ok: k.outcome === "verified", size: k.size, error: k.error });
     return el("li", { class: "clip-files" }, el("b", { text: p.name || settings.defaultName || "flight" }), el("ul", {}, files.map((f) => el("li", {},
-      icon(f.ok ? "check-circle" : "close-circle", f.ok ? "c-green" : "c-red"), el("span", { class: "name", text: f.name }),
+      icon(f.ok ? "check-circle" : "close-circle", f.ok ? "c-green" : "c-red"), el("span", { class: "name selectable", text: f.name }),
       f.ok ? el("span", { class: "muted", text: fmtBytes(f.size) }) : [el("span", { class: "error", text: f.error || "failed" }), el("button", { type: "button", class: "small", onclick: () => runExport() }, "Retry")]))));
   }));
   const days = [...new Set(s.plans.filter((p) => !p.skip).map((p) => p.date))];
@@ -2370,6 +2370,15 @@ $("#format-label").addEventListener("change", (e) => e.target.value && save("for
 $("#fin-album").addEventListener("change", (e) => save("photosAlbum", e.target.value.trim()));
 // Closing the sheet keeps the session; Escape closes it unless a step is running.
 $("#import-sheet").addEventListener("cancel", (e) => { if (state.busy) e.preventDefault(); });
+
+// The web view's own context menu (Reload, Inspect Element) shows only where it is useful:
+// over a text field, or over selected text a person may copy. The app's menus prevent it first.
+document.addEventListener("contextmenu", (e) => {
+  if (e.defaultPrevented) return;
+  const field = e.target.closest?.("textarea, [contenteditable]:not([contenteditable=false]), input:not([type=checkbox], [type=radio], [type=range], [type=button])");
+  const copying = e.target.closest?.(".selectable, .meta dd, #banner code, .example pre, #tools-status") && String(getSelection()).trim();
+  if (!field && !copying) e.preventDefault();
+});
 
 // Drag and drop: a folder or clip files dropped anywhere on the window start an import.
 T.webview.getCurrentWebview().onDragDropEvent(({ payload: p }) => {

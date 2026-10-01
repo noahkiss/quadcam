@@ -85,6 +85,10 @@ GitHub (`noahkiss/quadcam`, public) is the only remote. Users install the cask
 - **Previews:** after `Core::analyse`, the GUI's `Hooks::analysed` runs `Core::make_previews` on a
   thread. `Core::preview` makes one proxy at a time (a static lock), so a Play click on a clip
   being made waits for it and reuses the file. Library MP4s play directly.
+- **Native feel (UI):** page text is not selectable and the cursor is the arrow; WebKit needs
+  `-webkit-user-select`. Text a person may copy (paths, details values) gets the
+  `selectable` class. The web view's context menu shows only over text fields and selected
+  `selectable` text; the app's own menus call `preventDefault` first.
 - **Cards** show in the sidebar with an "N new" count (content fingerprints not in the index);
   inserting a card never starts an import on its own.
 
