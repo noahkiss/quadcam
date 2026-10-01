@@ -355,7 +355,7 @@ const Trim = (() => {
           if (v && v.src) v.currentTime = Math.max(0, v.currentTime - 5);
           return true;
         case "k":
-          if (v) v.pause();
+          if (v) { v.pause(); v.playbackRate = 1; }
           return true;
         case "l":
           if (v && v.src) { if (v.paused) v.play(); else v.playbackRate = Math.min(4, v.playbackRate * 2); }
