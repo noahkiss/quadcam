@@ -543,12 +543,11 @@ function dayBlock(d, cs, first) {
   const ac = [...new Set(cs.map((c) => c.aircraft).filter(Boolean))];
   const flying = cs.reduce((a, c) => a + flyingOf(c), 0);
   const sub = [...places, ...ac, `${cs.length} clip${cs.length === 1 ? "" : "s"}`, `${fmtLong(flying)} flying`].join(" · ");
-  const notIn = cs.filter((c) => !c.in_photos);
   const head = el("div", { class: "day-head" },
     el("h2", { text: fmtDay(d, true) }),
     el("span", { class: "sub", text: sub }),
     cs.some((c) => c.last_import) ? el("span", { class: "chip pill-last" }, icon("sparkle"), "Last import") : null,
-    el("span", { class: "act" }, notIn.length ? el("button", { type: "button", class: "ghost small", onclick: () => addLibToPhotos(notIn.map((c) => c.id)) }, icon("photos", "c-yellow"), `Add ${notIn.length} to Photos`) : null));
+    el("span", { class: "act" }, el("button", { type: "button", class: "ghost small", onclick: (e) => shareClips(cs.map((c) => c.id), e.currentTarget) }, icon("share"), "Share")));
   const showSummary = first || state.filter.day === d;
   return el("section", { class: "day" }, head, showSummary ? daySummary(cs) : null, el("div", { class: "grid" }, cs.map(card)));
 }
@@ -579,7 +578,7 @@ function card(c) {
   const thumb = el("div", { class: "thumb", style: stripStyle(c) },
     c.flag === "reject" ? el("span", { class: "chip tl-chip c-red" }, icon("close"), "Rejected")
       : c.cuts.length ? el("span", { class: "chip tl-chip" }, icon("scissors", "c-sky"), `${c.cuts.length} cut${c.cuts.length === 1 ? "" : "s"}`) : null,
-    c.in_photos ? el("span", { class: "chip tr-chip photos-ok", title: "In Photos" }, icon("photos")) : el("span", { class: "chip tr-chip c-yellow", text: "Not in Photos" }),
+    c.in_photos ? el("span", { class: "chip tr-chip photos-ok", title: "In Photos", "aria-label": "In Photos" }, icon("photos")) : null,
     el("span", { class: "dur", text: fmtDur(c.duration) }));
   scrubbable(thumb, c);
   const art = el("article", {
@@ -822,6 +821,23 @@ async function addLibToPhotos(ids) {
   }
 }
 
+// The macOS Share menu for clips and their cuts, shown next to `anchor` (an element), else
+// next to the clip's card or the detail bar's Share button.
+async function shareClips(ids, anchor) {
+  const root = state.lib?.root || "";
+  const files = ids.map(libClip).filter(Boolean).flatMap((c) => [c.file, ...c.cuts.map((k) => `${root}/${k.path}`)]);
+  if (!files.length) return;
+  anchor = anchor || (state.screen === "detail" ? $("#detail-bar [data-share]") : menuAnchor(ids[0]));
+  const r = anchor?.getBoundingClientRect() || { left: innerWidth / 2, top: 60, width: 1, height: 1 };
+  try {
+    await invoke("share", { paths: files, x: r.left, y: r.top, w: r.width, h: r.height });
+  } catch (e) {
+    toast(String(e), true);
+  }
+}
+
+const menuAnchor = (id) => $(`#lib-content [data-id="${CSS.escape(id)}"]`);
+
 async function rescan(id) {
   try {
     await call("library_rescan", { id });
@@ -845,6 +861,7 @@ function openMenu(e, id) {
     many ? null : item("tag", "Edit details", "⌘I", () => openDetail(id, null, "details")),
     many ? null : item("scissors", "Trim and cuts", "T", () => openDetail(id)),
     sep(),
+    item("share", "Share…", "", () => shareClips(ids, menuAnchor(id))),
     item("photos", many ? `Add ${ids.length} to Photos` : "Add to Photos", "", () => addLibToPhotos(ids)),
     many ? null : item("finder", "Show in Finder", "⌘R", () => T.opener.revealItemInDir(c.file)),
     many ? null : item("refresh-moments", "Find dead air again", "", () => rescan(id)),
@@ -916,7 +933,8 @@ function renderDetail() {
       stars(c),
       el("button", { type: "button", class: `icon small ${c.flag === "pick" ? "flag-pick" : ""}`, "aria-label": "Pick", title: "Pick (P)", "aria-pressed": String(c.flag === "pick"), onclick: () => rate([c.id], null, c.flag === "pick" ? "none" : "pick") }, icon("flag")),
       el("button", { type: "button", class: `icon small ${c.flag === "reject" ? "flag-reject" : ""}`, "aria-label": "Reject", title: "Reject (X)", "aria-pressed": String(c.flag === "reject"), onclick: () => rate([c.id], null, c.flag === "reject" ? "none" : "reject") }, icon("close")),
-      c.in_photos ? el("span", { class: "chip" }, icon("photos", "c-green"), "In Photos") : el("button", { type: "button", class: "ghost small", onclick: () => addLibToPhotos([c.id]) }, icon("photos", "c-yellow"), "Add to Photos"),
+      c.in_photos ? el("span", { class: "chip photos-in", title: "In Photos" }, icon("photos"), "In Photos") : null,
+      el("button", { type: "button", class: "ghost small", "data-share": true, onclick: (e) => shareClips([c.id], e.currentTarget) }, icon("share"), "Share"),
       el("button", { type: "button", class: "icon small", "aria-label": "Show in Finder", title: "Show in Finder", onclick: () => T.opener.revealItemInDir(c.file) }, icon("finder")),
       el("button", { type: "button", class: "icon small", "aria-label": "More actions", onclick: (e) => openMenu(e, c.id) }, icon("dots"))));
   // The poster is one frame of the strip.

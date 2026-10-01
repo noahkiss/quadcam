@@ -246,7 +246,8 @@ main { flex: 1; min-width: 0; display: flex; flex-direction: column; position: r
 .thumb .tr-chip { position: absolute; right: 8px; top: 8px; }
 .thumb .dur { position: absolute; right: 8px; bottom: 8px; font: 11px var(--mono); padding: 2px 6px; border-radius: 5px; background: var(--chip-dark); color: var(--chip-dark-fg); }
 .thumb .chip { background: var(--chip-dark); color: var(--chip-dark-fg); height: 20px; font-size: .7rem; }
-.thumb .photos-ok { width: 22px; height: 22px; padding: 0; justify-content: center; border-radius: 6px; color: var(--success); }
+.thumb .photos-ok { width: 22px; height: 22px; padding: 0; justify-content: center; border-radius: 6px; color: var(--chip-dark-fg); opacity: .85; }
+.chip.photos-in { background: transparent; color: var(--muted); }
 .thumb .scrub { position: absolute; top: 0; bottom: 0; width: 2px; background: #fff; pointer-events: none; }
 .thumb .scrub-t { position: absolute; top: 8px; transform: translateX(-50%); font: 11px var(--mono); padding: 2px 6px; border-radius: 5px; background: #fff; color: #11111b; pointer-events: none; }
 .card-body { display: flex; flex-direction: column; gap: 5px; padding: 0 2px; }

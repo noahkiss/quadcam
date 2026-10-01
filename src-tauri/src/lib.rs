@@ -18,6 +18,7 @@ pub mod pipeline;
 pub mod qtmeta;
 pub mod scan;
 pub mod session;
+mod share;
 pub mod trash;
 pub mod trim;
 
@@ -366,7 +367,8 @@ pub fn run() {
             preview,
             core_call,
             library_scope,
-            menu::menu_state
+            menu::menu_state,
+            share::share
         ])
         .run(tauri::generate_context!())
         .expect("error while running quadcam");
