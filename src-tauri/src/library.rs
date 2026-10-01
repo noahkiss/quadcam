@@ -289,12 +289,13 @@ impl Index {
         self.clips.iter_mut().find(|c| c.id == id)
     }
 
-    /// Newest first: date, then time, then name.
+    /// The one library order, which every view and the arrow keys use: newest day first,
+    /// and within a day in flying order (time, then file name).
     pub fn sort(&mut self) {
         self.clips.sort_by(|a, b| {
             b.date
                 .cmp(&a.date)
-                .then_with(|| b.time.cmp(&a.time))
+                .then_with(|| a.time.cmp(&b.time))
                 .then_with(|| a.path.cmp(&b.path))
         });
     }
@@ -967,6 +968,32 @@ mod tests {
         assert_eq!(back[0].kind, MomentKind::Flip);
         assert_eq!(back[0].start, 61.0);
         assert_eq!(back[0].score, 0.92);
+    }
+
+    #[test]
+    fn one_order_newest_day_first_then_flying_order() {
+        let c = |day: &str, time: Option<&str>, name: &str| {
+            let mut x: LibClip = serde_json::from_value(serde_json::json!({
+                "id": name, "path": format!("{day}_{name}.mp4"), "title": name, "note": "",
+                "date": day, "duration": 1.0, "size": 1
+            }))
+            .unwrap();
+            x.time = time.map(str::to_string);
+            x
+        };
+        let mut ix = Index {
+            version: INDEX_VERSION,
+            last_import: None,
+            clips: vec![
+                c("2026-09-27", Some("16:00"), "late"),
+                c("2026-09-28", Some("09:00"), "next"),
+                c("2026-09-27", Some("08:00"), "early"),
+                c("2026-09-27", Some("08:00"), "also_early"),
+            ],
+        };
+        ix.sort();
+        let names: Vec<&str> = ix.clips.iter().map(|c| c.title.as_str()).collect();
+        assert_eq!(names, ["next", "also_early", "early", "late"]);
     }
 
     #[test]

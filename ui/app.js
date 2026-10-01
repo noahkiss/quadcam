@@ -460,8 +460,8 @@ function renderLibrary() {
     }
     const days = [];
     let first = true;
+    // The core's order (newest day first, flying order within a day) is the one order.
     for (const [d, cs] of byDay) {
-      cs.sort((a, b) => (a.time || "").localeCompare(b.time || "") || a.path.localeCompare(b.path));
       days.push(dayBlock(d, cs, first));
       first = false;
     }
