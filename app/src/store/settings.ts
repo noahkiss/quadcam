@@ -62,6 +62,10 @@ export function sameValue(a: unknown, b: unknown): boolean {
   return JSON.stringify(norm(a)) === JSON.stringify(norm(b ?? null)) || (a == null && b == null);
 }
 
+const NO_RECENTS = {};
+const NO_TUNABLES = { segment_gap_s: 5, session_gap_min: 20, tolerance_s: 30, max_log_age_days: 60 };
+const NONE: never[] = [];
+
 // Reads with the core's defaults behind them.
 const eff = <T>(s: State, file: keyof SettingsValues, key: string, fallback: T): T => (s.values[file] ?? s.effective[key] ?? fallback) as T;
 
@@ -77,14 +81,25 @@ export const sel = {
   logDir: (s: State) => eff<string | null>(s, "logDir", "log_dir", null),
   layout: (s: State) => eff<"year_day" | "day" | "flat">(s, "libraryLayout", "layout", "year_day"),
   placeFolders: (s: State) => eff<boolean>(s, "placeFolders", "place_folders", false),
-  places: (s: State) => eff<Place[]>(s, "places", "places", []),
-  profiles: (s: State) => eff<Profile[]>(s, "profiles", "profiles", []),
+  places: (s: State) => eff<Place[]>(s, "places", "places", NONE),
+  profiles: (s: State) => eff<Profile[]>(s, "profiles", "profiles", NONE),
   defaultProfile: (s: State) => eff<string>(s, "defaultProfile", "default_profile", "") || "",
   geocoder: (s: State) => eff<string>(s, "geocoder", "geocoder", "apple"),
   nameDateFormat: (s: State) => eff<string>(s, "nameDateFormat", "name_date_format", "YYYY-MM-DD"),
-  tunables: (s: State) => eff<NonNullable<SettingsValues["tunables"]>>(s, "tunables", "tunables", { segment_gap_s: 5, session_gap_min: 20, tolerance_s: 30, max_log_age_days: 60 }),
-  recents: (s: State) => s.values.recents || {},
+  tunables: (s: State) => eff<NonNullable<SettingsValues["tunables"]>>(s, "tunables", "tunables", NO_TUNABLES),
+  recents: (s: State) => s.values.recents || NO_RECENTS,
   libView: (s: State) => (s.values.libView === "list" ? "list" : "grid") as "grid" | "list",
   thumbSize: (s: State) => Math.min(5, Math.max(1, s.values.thumbSize || 3)),
-  sort: (s: State): Sort => validSort(s.values.libSort),
+  sort: (s: State): Sort => sortOf(s.values.libSort),
 };
+
+// Selectors must return the same object for the same input, or React re-renders forever.
+let sortIn: unknown = {};
+let sortOut: Sort = validSort(undefined);
+function sortOf(v: SettingsValues["libSort"]): Sort {
+  if (v !== sortIn) {
+    sortIn = v;
+    sortOut = validSort(v);
+  }
+  return sortOut;
+}

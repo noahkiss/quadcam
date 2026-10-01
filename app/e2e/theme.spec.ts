@@ -16,6 +16,20 @@ for (const scheme of ["dark", "light"] as const) {
       if (process.env.QC_SHOTS) await page.screenshot({ path: `${process.env.QC_SHOTS}/gallery-${scheme}.png`, fullPage: true });
     });
 
+    for (const [scenario, ready] of [["library", "gap-run"], ["empty", ""]] as const) {
+      test(`the ${scenario} screen passes axe`, async ({ app, page }) => {
+        test.skip(app.ui !== "next", "contrast is checked on the new UI");
+        await app.open(scenario);
+        if (ready) {
+          await page.getByRole("article", { name: ready }).click();
+          await page.getByRole("article", { name: "backyard-loops" }).click({ modifiers: ["Meta"] });
+        } else await expect(page.getByRole("heading", { name: "Import your first flights" })).toBeVisible();
+        await page.mouse.move(1, 400);
+        const r = await new AxeBuilder({ page }).withTags(["wcag2a", "wcag2aa", "wcag21aa"]).analyze();
+        expect(r.violations.map((v) => `${v.id}: ${v.nodes.map((n) => n.target.join(" ") + " " + n.failureSummary).join(", ")}`)).toEqual([]);
+      });
+    }
+
     test("open dialog and menu pass axe", async ({ app, page }) => {
       test.skip(app.ui !== "next", "the gallery is part of the new UI");
       await app.open("library", { query: "?gallery" });

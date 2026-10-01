@@ -95,5 +95,5 @@ test("an aircraft profile is added and made the default", async ({ app, page }) 
 
 test("a settings change from elsewhere shows at once", async ({ app, page }) => {
   await app.core("c => c.settingsSet({ libView: 'list' })");
-  await expect(page.getByRole("table")).toBeVisible();
+  await expect(page.locator("table")).toBeVisible();
 });

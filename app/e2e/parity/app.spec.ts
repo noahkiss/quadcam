@@ -1,4 +1,4 @@
-import { area, expect, test } from "../fixtures";
+import { area, expect, selectedClips, test } from "../fixtures";
 
 area("app");
 
@@ -37,5 +37,5 @@ test("a large library scrolls and keeps keyboard selection", async ({ app, page 
   await expect(page.getByRole("article", { name: "gap-run" })).toBeVisible();
   await page.getByRole("article", { name: "gap-run" }).click();
   for (let i = 0; i < 12; i++) await page.keyboard.press("ArrowDown");
-  await expect(page.locator('article[aria-selected="true"]')).toBeInViewport();
+  await expect(selectedClips(page)).toBeInViewport();
 });

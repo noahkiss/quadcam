@@ -5,7 +5,7 @@ import { MOCK_BUNDLE } from "./global-setup";
 export type Ui = "legacy" | "next";
 
 /** Screens built in the new UI so far. A spec for any other area runs on legacy only. */
-export const PORTED = new Set<string>([]);
+export const PORTED = new Set<string>(["library", "app"]);
 
 export interface AppFixture {
   ui: Ui;
@@ -50,3 +50,14 @@ export { expect };
 /** An open dialog by its heading. */
 export const dialog = (page: Page, heading: string | RegExp) =>
   page.getByRole("dialog").filter({ has: page.getByRole("heading", { name: heading }) });
+
+/** The clip card or row that carries the selection: the article itself (legacy), or the
+ * grid cell around it (new UI). */
+export const clipCell = (page: Page, name: string) =>
+  page.locator(`[aria-selected][aria-label="${name}"], [aria-selected]:has(> article[aria-label="${name}"])`).first();
+
+/** Every selected clip card or list row. */
+export const selectedClips = (page: Page) => page.locator('article[aria-selected="true"], [role="gridcell"][aria-selected="true"]');
+
+/** The list view's table. */
+export const clipTable = (page: Page) => page.locator("table");

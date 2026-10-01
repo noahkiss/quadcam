@@ -1,4 +1,4 @@
-import { area, dialog, expect, test } from "../fixtures";
+import { area, clipCell, clipTable, dialog, expect, selectedClips, test } from "../fixtures";
 
 area("library");
 
@@ -18,23 +18,23 @@ test("groups clips by flying day, newest first", async ({ page }) => {
 
 test("click selects; Command-click and Shift-click extend; Escape clears", async ({ page }) => {
   await card(page, "backyard-loops").click();
-  await expect(card(page, "backyard-loops")).toHaveAttribute("aria-selected", "true");
+  await expect(clipCell(page, "backyard-loops")).toHaveAttribute("aria-selected", "true");
   await card(page, "river-dive").click({ modifiers: ["Meta"] });
   const bar = page.getByRole("toolbar", { name: "Selected clips" });
   await expect(bar).toContainText("2 selected");
   await card(page, "gap-run").click({ modifiers: ["Shift"] });
-  await expect(page.locator('article[aria-selected="true"]')).toHaveCount(3);
+  await expect(selectedClips(page)).toHaveCount(3);
   await page.keyboard.press("Escape");
-  await expect(page.locator('article[aria-selected="true"]')).toHaveCount(0);
+  await expect(selectedClips(page)).toHaveCount(0);
   await expect(bar).toBeHidden();
 });
 
 test("arrow keys move the selection", async ({ page }) => {
   await card(page, "river-dive").click();
   await page.keyboard.press("ArrowRight");
-  await expect(card(page, "backyard-loops")).toHaveAttribute("aria-selected", "true");
+  await expect(clipCell(page, "backyard-loops")).toHaveAttribute("aria-selected", "true");
   await page.keyboard.press("ArrowRight");
-  await expect(card(page, "gap-run")).toHaveAttribute("aria-selected", "true");
+  await expect(clipCell(page, "gap-run")).toHaveAttribute("aria-selected", "true");
 });
 
 test("number keys rate, P X U flag, and Command-Z undoes", async ({ app, page }) => {
@@ -130,8 +130,8 @@ test("sort and view settings save per machine", async ({ app, page }) => {
   await expect(page.getByRole("article")).toHaveCount(3);
   await expect(page.getByRole("article").first()).toHaveAccessibleName("backyard-loops");
   await page.getByRole("button", { name: "List", exact: true }).click();
-  await expect(page.getByRole("table")).toBeVisible();
-  await expect(page.getByRole("row")).toHaveCount(4);
+  await expect(clipTable(page)).toBeVisible();
+  await expect(clipTable(page).locator("tbody tr[data-id]")).toHaveCount(3);
   const sets = (await app.calls("core_call", "settings_set")).map((c) => (c.args.params as { values: object }).values);
   expect(sets).toContainEqual({ libSort: { key: "name", dir: "asc" } });
   expect(sets).toContainEqual({ libView: "list" });
@@ -168,7 +168,7 @@ test("menu bar items run the same actions", async ({ app, page }) => {
   await app.page.evaluate(() => window.__qc!.emit("menu", "rate-4"));
   await expect(card(page, "backyard-loops").getByRole("img", { name: "4 of 5 stars" })).toBeVisible();
   await app.page.evaluate(() => window.__qc!.emit("menu", "view-list"));
-  await expect(page.getByRole("table")).toBeVisible();
+  await expect(clipTable(page)).toBeVisible();
   const state = (await app.core<{ enabled: Record<string, boolean>; checked: Record<string, boolean> }>("c => c.menuState"));
   expect(state.enabled.pick).toBe(true);
   expect(state.checked["view-list"]).toBe(true);
