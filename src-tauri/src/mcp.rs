@@ -21,12 +21,12 @@ pub trait Backend {
     fn mode(&mut self) -> &'static str;
 }
 
-/// Uses the app when its socket answers, else a headless core. Re-checks on every call, so
-/// an app started mid-session takes over, and one that quits falls back.
+/// Uses the app when its socket answers, else a headless core. Every call opens a fresh
+/// connection, so an app started mid-session takes over, one that quits falls back, and one
+/// that quit and relaunched is reached on its new socket instead of a dead connection.
 pub struct AutoBackend {
     socket: PathBuf,
     session_file: Option<PathBuf>,
-    client: Option<Client>,
     local: Option<Arc<Core>>,
 }
 
@@ -35,16 +35,13 @@ impl AutoBackend {
         Self {
             socket,
             session_file,
-            client: None,
             local: None,
         }
     }
 
-    fn connect(&mut self) -> bool {
-        if self.client.is_none() {
-            self.client = Client::connect(&self.socket).ok();
-        }
-        self.client.is_some()
+    /// A new connection to the app, or None when no app answers the ping.
+    fn connect(&self) -> Option<Client> {
+        Client::connect(&self.socket).ok()
     }
 
     fn local(&mut self) -> Arc<Core> {
@@ -61,20 +58,17 @@ impl AutoBackend {
 
 impl Backend for AutoBackend {
     fn call(&mut self, method: &str, params: Value) -> Result<Value> {
-        if self.connect() {
-            let r = self.client.as_mut().unwrap().call(method, params);
-            if r.is_err() {
-                // Reconnect next time. Never retry a call headless that started in app mode:
-                // a format the person did not click must not run elsewhere.
-                self.client = None;
-            }
-            return r;
+        // The ping in `connect` proves the app is alive right now. Never retry a call
+        // headless that started in app mode: a format the person did not click must not run
+        // elsewhere.
+        if let Some(mut client) = self.connect() {
+            return client.call(method, params);
         }
         self.local().dispatch(method, params)
     }
 
     fn mode(&mut self) -> &'static str {
-        if self.connect() {
+        if self.connect().is_some() {
             "app"
         } else {
             "headless"

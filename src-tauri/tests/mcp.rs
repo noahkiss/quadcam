@@ -328,6 +328,46 @@ fn falls_back_to_headless_without_an_app() {
     assert_eq!(b.mode(), "headless");
 }
 
+/// The app quits and relaunches while the MCP server keeps running: the server falls back to
+/// headless while the app is gone, then reaches the new app, never a dead connection.
+#[test]
+fn survives_an_app_restart() {
+    use std::io::{BufRead, BufReader, Write};
+    use std::os::unix::net::UnixListener;
+    let dir = tempfile::tempdir().unwrap();
+    let sock = dir.path().join("support/control.sock");
+    std::fs::create_dir_all(sock.parent().unwrap()).unwrap();
+
+    // The first app answers one connection, then quits: its socket file stays behind.
+    let first = core(dir.path(), Arc::new(MockGui::default()), Arc::default());
+    let listener = UnixListener::bind(&sock).unwrap();
+    let app1 = std::thread::spawn(move || {
+        let (stream, _) = listener.accept().unwrap();
+        let mut out = stream.try_clone().unwrap();
+        let mut line = String::new();
+        BufReader::new(stream).read_line(&mut line).unwrap();
+        writeln!(out, "{}", control::respond(&first, &line)).unwrap();
+    });
+    let mut b = AutoBackend::new(sock.clone(), Some(dir.path().join("headless.json")));
+    assert_eq!(b.mode(), "app");
+    app1.join().unwrap();
+
+    // App gone: the call runs headless instead of failing with a broken pipe.
+    let st = b.call("status", Value::Null).unwrap();
+    assert_eq!(st["gui"], false);
+
+    // App relaunched on the same path: the next call reaches it.
+    let gui = Arc::new(MockGui::default());
+    let second = core(dir.path(), gui, Arc::default());
+    control::serve(second.clone(), &sock).unwrap();
+    let st = b.call("status", Value::Null).unwrap();
+    assert_eq!(st["gui"], true);
+    assert_eq!(b.mode(), "app");
+    let mut s = Server::new(b);
+    let st = call(&mut s, "quadcam_status", json!({}));
+    assert_eq!(st["structuredContent"]["mode"], "app");
+}
+
 /// Test-only check before any erase: the target is a disk image this test attached.
 fn assert_is_test_image(img: &Image) {
     let whole = quadcam_lib::disk::info(&img.disk).unwrap();
