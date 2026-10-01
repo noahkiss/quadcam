@@ -82,7 +82,7 @@ fn protocol_and_tool_list() {
         .handle(&json!({"jsonrpc": "2.0", "id": 2, "method": "tools/list"}))
         .unwrap();
     let tools = list["result"]["tools"].as_array().unwrap();
-    assert_eq!(tools.len(), 11);
+    assert_eq!(tools.len(), 16);
     for t in tools {
         assert!(t["name"].as_str().unwrap().starts_with("quadcam_"));
         assert_eq!(t["inputSchema"]["type"], "object");
@@ -513,4 +513,148 @@ fn format_through_mcp_needs_the_gui_click() {
         .unwrap()
         .starts_with("Erased"));
     assert!(!card.is_attached());
+}
+
+/// The library and setup tools, headless: a time at suggest, then rating, renaming, a new
+/// day, a profile, cuts, Photos and the Trash through MCP alone.
+#[test]
+fn library_and_setup_tools() {
+    let dir = tempfile::tempdir().unwrap();
+    let rec = Arc::new(Recorder::default());
+    let settings = dir.path().join("settings.json");
+    let trash = dir.path().join("trash");
+    let c = Core::new(
+        dir.path().join("cache"),
+        None,
+        Arc::new(NoHooks),
+        rec.clone(),
+    )
+    .with_settings(settings.clone())
+    .with_trash(Arc::new(quadcam_lib::trash::DirTrash(trash.clone())));
+    let mut s = Server::new(LocalBackend(Arc::new(c)));
+    let lib = dir.path().join("lib");
+    std::fs::create_dir(&lib).unwrap();
+
+    call(
+        &mut s,
+        "quadcam_settings",
+        json!({"action": "write", "values": {"output_dir": lib, "layout": "day"}}),
+    );
+    let bad = s.call_tool(
+        "quadcam_settings",
+        json!({"action": "write", "values": {"layout": "monthly"}}),
+    );
+    assert_eq!(bad["isError"], true);
+    assert!(bad["content"][0]["text"]
+        .as_str()
+        .unwrap()
+        .contains("year_day, day or flat"));
+    let r = call(&mut s, "quadcam_settings", json!({"action": "read"}));
+    assert_eq!(r["structuredContent"]["settings"]["layout"], "day");
+    call(
+        &mut s,
+        "quadcam_places",
+        json!({"action": "save", "name": "Golden Gate Park", "lat": 37.7694, "lon": -122.4862}),
+    );
+    call(
+        &mut s,
+        "quadcam_profiles",
+        json!({"action": "save", "name": "Whoop", "fields": {"aircraft": "65 mm whoop", "camera_make": "Maker", "keywords": ["tinywhoop"]}, "default": true}),
+    );
+    call(
+        &mut s,
+        "quadcam_profiles",
+        json!({"action": "save", "name": "Five", "fields": {"aircraft": "5-inch", "camera_make": "Other"}}),
+    );
+    let p = call(&mut s, "quadcam_profiles", json!({"action": "list"}));
+    assert_eq!(p["structuredContent"]["default_profile"], "Whoop");
+    let pl = call(&mut s, "quadcam_places", json!({"action": "list"}));
+    assert!(pl["content"][0]["text"]
+        .as_str()
+        .unwrap()
+        .contains("Golden Gate Park"));
+
+    let src = clips_folder();
+    call(&mut s, "quadcam_load_clips", json!({"source": src.path()}));
+    call(
+        &mut s,
+        "quadcam_suggest",
+        json!({"suggestions": [
+        {"id": 0, "name": "loops", "date": "2026-09-27", "time": "16:20", "place": "Golden Gate Park", "cuts": [{"start": 0.5, "end": 1.5}]},
+        {"id": 1, "name": "gap", "date": "2026-09-27"}]}),
+    );
+    let read = call(&mut s, "quadcam_read_clips", json!({"ids": [0]}));
+    assert_eq!(read["structuredContent"]["clips"][0]["time"], "16:20:00");
+    call(&mut s, "quadcam_export", json!({}));
+    let l = call(&mut s, "quadcam_library", json!({}));
+    let clips = l["structuredContent"]["clips"].as_array().unwrap().clone();
+    assert_eq!(clips.len(), 2);
+    let loops = clips.iter().find(|c| c["name"] == "loops").unwrap();
+    let gap = clips.iter().find(|c| c["name"] == "gap").unwrap();
+    assert_eq!(loops["time"], "16:20");
+    assert_eq!(loops["aircraft"], "Whoop");
+    let id = loops["id"].as_str().unwrap();
+
+    let e = call(
+        &mut s,
+        "quadcam_library_edit",
+        json!({"ids": [id], "rating": 4, "flag": "pick", "name": "fence loops", "date": "2026-09-29", "profile": "Five", "note": "best pack"}),
+    );
+    let c = &e["structuredContent"]["clips"][0];
+    assert_eq!(c["rating"], 4);
+    assert_eq!(c["flag"], "pick");
+    assert_eq!(c["date"], "2026-09-29");
+    assert_eq!(c["time"], "16:20");
+    assert_eq!(c["aircraft"], "Five");
+    assert_eq!(c["note"], "best pack");
+    let file = c["file"].as_str().unwrap();
+    assert!(
+        file.ends_with("lib/2026-09-29/2026-09-29_fence_loops.mp4"),
+        "{file}"
+    );
+    let two = s.call_tool(
+        "quadcam_library_edit",
+        json!({"ids": [id, gap["id"]], "name": "x"}),
+    );
+    assert_eq!(two["isError"], true, "a name needs one id");
+
+    let ask = s.call_tool(
+        "quadcam_library_files",
+        json!({"action": "cuts", "ids": [id], "cuts": []}),
+    );
+    assert_eq!(ask["isError"], true);
+    assert!(ask["content"][0]["text"]
+        .as_str()
+        .unwrap()
+        .contains("removed_cuts"));
+    call(
+        &mut s,
+        "quadcam_library_files",
+        json!({"action": "cuts", "ids": [id], "cuts": [], "removed_cuts": "trash"}),
+    );
+    let ph = call(
+        &mut s,
+        "quadcam_library_files",
+        json!({"action": "photos", "ids": [id]}),
+    );
+    assert_eq!(
+        ph["structuredContent"]["added"].as_array().unwrap().len(),
+        1
+    );
+    call(
+        &mut s,
+        "quadcam_library_files",
+        json!({"action": "trash", "ids": [gap["id"]]}),
+    );
+    let l = call(&mut s, "quadcam_library", json!({}));
+    assert_eq!(l["structuredContent"]["total"], 1);
+    call(
+        &mut s,
+        "quadcam_library_files",
+        json!({"action": "rebuild"}),
+    );
+    assert!(
+        std::fs::read_dir(&trash).unwrap().count() >= 2,
+        "the cut and the clip"
+    );
 }

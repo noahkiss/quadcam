@@ -17,7 +17,7 @@ README. Personal preferences go in the app's settings file on the machine
 | Path | Holds |
 |---|---|
 | `ui/` | Frontend: plain HTML, CSS and JS, no build step. `app.js` (library, import sheet, settings), `trim.js` (the one trim editor, used by clip detail and the import review). Icons and fonts are inlined or bundled so the app works offline |
-| `src-tauri/src/` | Rust core. `core.rs` (`Core`) owns the session and the library index and is the one surface every front end drives; `core_library.rs` holds its library methods. `lib.rs` holds the Tauri commands (`core_call` runs any `Core::dispatch` method), `control.rs` the app's socket, `mcp.rs` the MCP server, `bin/quadcam-cli.rs` the CLI. The logic modules (`scan`, `disk`, `media`, `logs`, `moments`, `metadata`, `qtmeta`, `naming`, `pipeline`, `session`, `photos`, `library`, `trim`, `trash`) run without Tauri |
+| `src-tauri/src/` | Rust core. `core.rs` (`Core`) owns the session and the library index and is the one surface every front end drives; `core_library.rs` holds its library methods and `core_settings.rs` its settings, places and profiles methods. `lib.rs` holds the Tauri commands (`core_call` runs any `Core::dispatch` method), `control.rs` the app's socket, `mcp.rs` the MCP server, `bin/quadcam-cli.rs` the CLI. The logic modules (`scan`, `disk`, `media`, `logs`, `moments`, `metadata`, `qtmeta`, `naming`, `pipeline`, `session`, `photos`, `library`, `trim`, `trash`, `settings`, `geocode`) run without Tauri |
 | `src-tauri/Info.plist` | Photos usage strings, merged into the bundle's Info.plist |
 | `src-tauri/tests/` | Integration tests on synthetic clips and FAT32 disk images |
 | `test-clips/` | Local test corpus. Git tracks only its README |
@@ -89,9 +89,38 @@ GitHub (`noahkiss/quadcam`, public) is the only remote. Users install the cask
   (`pipeline::default_output_dir`). The app creates that default, with its parents, on the
   first import. It never creates a folder the user picked. Picking a folder saves it as the
   setting.
-- **Settings:** the GUI saves them in the Tauri store file `settings.json` (keys
-  `outputDir`, `format`, `formatLabel`, `photosAlbum`, and others) and pushes them to the core.
-  The headless CLI and MCP server read the same file (`Defaults::with_app_settings`).
+- **Settings:** one file, `settings.json` in the support folder (camelCase keys `outputDir`,
+  `format`, `formatLabel`, `photosAlbum`, `places`, `profiles`, `defaultProfile`, `geocoder`,
+  and others). `settings.rs` is its only reader and writer: a write reads the file fresh,
+  changes only the given keys, keeps unknown keys, and renames a temp file into place under
+  an flock on `settings.json.lock`. No surface keeps a full copy and writes it back. The GUI
+  (no Tauri store plugin) reads and writes through `Core` (`settings`, `settings_set`,
+  `place_*`, `profile_*`); its Settings window saves only keys changed while it was open. The
+  app watches the file and re-reads it (event `settings-changed`) when the CLI writes it;
+  an agent's MCP writes go through the control socket when the app runs. `KEYS` names every
+  setting (file key, CLI/MCP name, check). Add a new setting there with a default in
+  `Defaults`; never drop a key a 0.3.0 file has (`settings::tests::settings_from_0_3_0_carry_over`).
+- **Place search:** `geocode.rs`. `apple` (default): MapKit `MKLocalSearch` through
+  objc2-map-kit. Its answer arrives on the main queue, so on the main thread (CLI, MCP) it
+  spins the run loop; in the app it waits on a worker thread. `nominatim`: `/usr/bin/curl`
+  with a quadcam User-Agent and at most one request a second across processes. `census`:
+  US Census one-line address geocoder (keyless, US street addresses), also the automatic
+  fallback when `apple` or `nominatim` finds nothing. `google`: Places API (New) text search,
+  off unless chosen; the key comes from `QUADCAM_GOOGLE_PLACES_KEY`, else the
+  `googlePlacesKey` setting, and goes to curl on stdin (never argv). Settings reads redact it
+  (`settings::SECRET_KEYS`); `Defaults` never serializes it. Never put a key in code or
+  tests. Search only on an explicit request, never per keystroke.
+- **File-name date:** `naming::DateFormat` (`nameDateFormat`: `YYYY-MM-DD` default, or
+  `YY.MM.DD`) starts new file names, renames and redates. `naming::split_date` reads either
+  format; a clip's date comes from its creation date first, then the name.
+  `library_apply_name_format` renames existing clips (with cuts and originals) in place.
+  Folder names keep `YYYY-MM-DD`.
+- **Time of day:** a clip's plan time comes from its radio log or by hand (`PlanPatch.time`,
+  `HH:MM`, empty for none). Without one the creation date is local noon. A library date or
+  time edit (`library_edit`) rewrites the QuickTime creation date, the `mvhd` time and the
+  mtimes of the clip, its cuts and its original; a new day moves them all (`relocate`, which
+  rename uses too). A library profile edit rewrites make, model, aircraft, video system,
+  profile name and the profile's keywords.
 - **Session restore:** the GUI's core uses the same session file as the CLI. At launch,
   `Core::forget_unrestorable` drops it unless it was analysed and every staged clip still
   exists. "Start over" (`Core::clear`, method `clear`, `quadcam-cli clear`) deletes the file;
@@ -117,10 +146,17 @@ quadcam-cli --json stage /Volumes/CARD         # copy to staging; new session
 quadcam-cli --json analyze                     # probe, recover, thumbnails
 quadcam-cli --json dates --logs /path/to/LOGS --day 2026-10-04 --set 2=2026-10-03
 quadcam-cli --json import --name 0=backyard-loops --skip 3 --format mp4 --add-to-photos
-quadcam-cli --json import --plan plan.json     # {"clips":[{"id":0,"name":"..","date":"..","note":"..","skip":false}],"format":"mov","output_dir":".."}
+quadcam-cli --json import --plan plan.json     # {"clips":[{"id":0,"name":"..","date":"..","time":"HH:MM","note":"..","skip":false}],"format":"mov","output_dir":".."}
+quadcam-cli --json import --time 0=18:30       # manual time of day (default noon)
 quadcam-cli --json verify                      # re-check the session's outputs
 quadcam-cli --json clear                       # forget the session, delete the session file
 quadcam-cli --json library list --group picks  # also rate, rebuild, rename, edit, cut, trash, photos
+quadcam-cli --json library edit <id> --date 2026-09-28 --time 18:30 --profile Whoop
+quadcam-cli --json places search "Golden Gate Park" [--provider nominatim]
+quadcam-cli --json places save NAME --location LAT,LON | --search QUERY [--pick N]
+quadcam-cli --json profiles save NAME --aircraft .. --camera-make .. --models A,B --default
+quadcam-cli --json settings set layout=day place_folders=true   # `settings` shows them
+quadcam-cli --json library apply-name-format   # after settings set name_date_format=YY.MM.DD
 quadcam-cli --json photos out.mp4 --album Drone
 quadcam-cli --json eject
 quadcam-cli --json format --plan               # runs every guard, prints device + volume UUID
@@ -146,9 +182,15 @@ claude mcp add quadcam -- "$(brew --prefix)/bin/quadcam-cli" mcp
   running, it falls back to a headless core on the shared session file. Each call opens a
   fresh connection (with a ping), so an app restart never leaves a dead pipe. A call that
   started against the app is never retried headless.
-- Tools: `quadcam_status`, `quadcam_library` (read-only library search), `quadcam_load_clips`, `quadcam_read_clips` (thumbnails as image
-  content), `quadcam_match_logs`, `quadcam_suggest`, `quadcam_export`, `quadcam_verify`,
-  `quadcam_add_to_photos`, `quadcam_eject`, `quadcam_format_card`.
+- Tools: the import flow `quadcam_status`, `quadcam_load_clips`, `quadcam_read_clips`
+  (thumbnails as image content), `quadcam_match_logs`, `quadcam_suggest`, `quadcam_export`,
+  `quadcam_verify`, `quadcam_add_to_photos`, `quadcam_eject`, `quadcam_format_card`; the
+  library `quadcam_library` (read-only search), `quadcam_library_edit` (rating, flag, name,
+  details, aircraft, date, time), `quadcam_library_files` (cuts, Trash, Photos, rebuild);
+  setup `quadcam_places` (list, search, save, delete), `quadcam_profiles` (list, save,
+  delete, set_default), `quadcam_settings` (read, write). Keep the surface this small:
+  add an action or a field to a tool before adding a tool. The tool list is one big `json!`
+  (`#![recursion_limit]` in `lib.rs`).
 - Agent suggestions show in the GUI with a dashed accent outline and an "agent" badge until
   the person edits the field. Read back with `quadcam_read_clips` before export.
 - `quadcam_format_card` needs `device`, `volume_uuid` and `confirm=true` (read them with
@@ -174,5 +216,8 @@ claude mcp add quadcam -- "$(brew --prefix)/bin/quadcam-cli" mcp
   `Core::real_photos` returns the recorder for any process started by cargo (it carries
   `CARGO_MANIFEST_DIR`) unless `QUADCAM_PHOTOS=real`. Never construct `photos::PhotoKit` in
   a test. Try the real path by hand in the built app only.
+- **Never touch the real settings file or library while testing.** Tests and manual runs
+  set `HOME` to a temp folder (the CLI and MCP derive every path from it) or pass
+  `Core::with_settings` a temp file.
 - The control socket and MCP server expose the same `Core::dispatch` methods. Add a feature
   to `Core` first, then wire it into the GUI, the CLI and the MCP tools.

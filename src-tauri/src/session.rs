@@ -46,7 +46,7 @@ pub struct ClipPlan {
     pub id: usize,
     pub skip: bool,
     pub date: NaiveDate,
-    /// Only for a radio-log date.
+    /// The time of day: from the radio log, or set by hand. None means local noon.
     pub time: Option<NaiveTime>,
     pub source: DateSource,
     pub badge: Badge,
@@ -94,6 +94,9 @@ pub struct PlanPatch {
     pub id: usize,
     #[serde(default)]
     pub date: Option<NaiveDate>,
+    /// Time of day, `HH:MM` (or `HH:MM:SS`); empty removes it (local noon).
+    #[serde(default)]
+    pub time: Option<String>,
     #[serde(default)]
     pub name: Option<String>,
     #[serde(default)]
@@ -154,6 +157,18 @@ pub struct Session {
     pub output_dir: Option<PathBuf>,
 }
 
+/// A time of day from `HH:MM` or `HH:MM:SS`; empty is None (local noon).
+pub fn parse_time(s: &str) -> Result<Option<NaiveTime>> {
+    let s = s.trim();
+    if s.is_empty() {
+        return Ok(None);
+    }
+    NaiveTime::parse_from_str(s, "%H:%M")
+        .or_else(|_| NaiveTime::parse_from_str(s, "%H:%M:%S"))
+        .map(Some)
+        .with_context(|| format!("time {s:?} is not HH:MM (24-hour)"))
+}
+
 /// Settings every surface starts from. The GUI keeps them in sync with its settings store.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct Defaults {
@@ -181,6 +196,19 @@ pub struct Defaults {
     /// Add the place name to day folders.
     #[serde(default)]
     pub place_folders: bool,
+    /// Place search provider: `apple` or `nominatim`.
+    #[serde(default = "default_geocoder")]
+    pub geocoder: String,
+    /// How the date starts file names.
+    #[serde(default)]
+    pub name_date_format: crate::naming::DateFormat,
+    /// Google Places API key from the settings file. Never serialized.
+    #[serde(default, skip_serializing)]
+    pub google_places_key: Option<String>,
+}
+
+fn default_geocoder() -> String {
+    "apple".into()
 }
 
 fn default_label() -> String {
@@ -205,6 +233,9 @@ impl Default for Defaults {
             default_profile: None,
             layout: crate::library::Layout::default(),
             place_folders: false,
+            geocoder: default_geocoder(),
+            name_date_format: Default::default(),
+            google_places_key: None,
         }
     }
 }
@@ -214,62 +245,70 @@ impl Defaults {
     /// `settings.json` in the app's support folder), so a headless CLI or MCP run exports
     /// where the person told the app to. Missing or unreadable keys keep the default.
     pub fn with_app_settings(path: &Path) -> Defaults {
+        Defaults::from_values(&crate::settings::read(path).unwrap_or_default())
+    }
+
+    /// Defaults with the settings file's values on top.
+    pub fn from_values(v: &crate::settings::Values) -> Defaults {
         let mut d = Defaults::default();
-        let Ok(bytes) = std::fs::read(path) else {
-            return d;
-        };
-        let Ok(v) = serde_json::from_slice::<serde_json::Value>(&bytes) else {
-            return d;
-        };
-        fn get<T: serde::de::DeserializeOwned>(v: &serde_json::Value, k: &str) -> Option<T> {
+        fn get<T: serde::de::DeserializeOwned>(v: &crate::settings::Values, k: &str) -> Option<T> {
             v.get(k)
                 .filter(|x| !x.is_null())
                 .and_then(|x| serde_json::from_value(x.clone()).ok())
         }
-        if let Some(p) = get(&v, "outputDir") {
+        if let Some(p) = get(v, "outputDir") {
             d.output_dir = Some(p);
         }
-        if let Some(f) = get(&v, "format") {
+        if let Some(f) = get(v, "format") {
             d.format = f;
         }
-        if let Some(e) = get(&v, "encoder") {
+        if let Some(e) = get(v, "encoder") {
             d.encoder = e;
         }
-        if let Some(b) = get(&v, "keepOriginals") {
+        if let Some(b) = get(v, "keepOriginals") {
             d.keep_originals = b;
         }
-        if let Some(b) = get(&v, "addTime") {
+        if let Some(b) = get(v, "addTime") {
             d.add_time = b;
         }
-        if let Some(n) = get::<String>(&v, "defaultName").filter(|n| !n.trim().is_empty()) {
+        if let Some(n) = get::<String>(v, "defaultName").filter(|n| !n.trim().is_empty()) {
             d.default_name = n;
         }
-        if let Some(a) = get(&v, "photosAlbum") {
+        if let Some(a) = get(v, "photosAlbum") {
             d.photos_album = a;
         }
-        if let Some(l) = get::<String>(&v, "formatLabel").filter(|l| !l.trim().is_empty()) {
+        if let Some(l) = get::<String>(v, "formatLabel").filter(|l| !l.trim().is_empty()) {
             d.format_label = l;
         }
-        if let Some(p) = get(&v, "logDir") {
+        if let Some(p) = get(v, "logDir") {
             d.log_dir = Some(p);
         }
-        if let Some(t) = get(&v, "tunables") {
+        if let Some(t) = get(v, "tunables") {
             d.tunables = t;
         }
-        if let Some(p) = get(&v, "places") {
+        if let Some(p) = get(v, "places") {
             d.places = p;
         }
-        if let Some(p) = get(&v, "profiles") {
+        if let Some(p) = get(v, "profiles") {
             d.profiles = p;
         }
-        if let Some(p) = get::<String>(&v, "defaultProfile").filter(|p| !p.trim().is_empty()) {
+        if let Some(p) = get::<String>(v, "defaultProfile").filter(|p| !p.trim().is_empty()) {
             d.default_profile = Some(p);
         }
-        if let Some(l) = get(&v, "libraryLayout") {
+        if let Some(l) = get(v, "libraryLayout") {
             d.layout = l;
         }
-        if let Some(b) = get(&v, "placeFolders") {
+        if let Some(b) = get(v, "placeFolders") {
             d.place_folders = b;
+        }
+        d.google_places_key = get::<String>(v, "googlePlacesKey").filter(|k| !k.trim().is_empty());
+        if let Some(f) = get(v, "nameDateFormat") {
+            d.name_date_format = f;
+        }
+        if let Some(g) = get::<String>(v, "geocoder")
+            .filter(|g| crate::settings::GEOCODERS.contains(&g.as_str()))
+        {
+            d.geocoder = g;
         }
         d
     }
@@ -424,7 +463,8 @@ impl Session {
     }
 
     /// Applies edits. An agent's edits are marked suggested; a user's edits clear the mark
-    /// on the fields they touch. A new date always becomes an edited date (local noon).
+    /// on the fields they touch. A new date always becomes an edited date, at local noon
+    /// unless the patch also sets a time. A time alone keeps the date and makes it edited.
     pub fn patch(&mut self, patches: &[PlanPatch], editor: Editor) -> Result<()> {
         for patch in patches {
             let (unusable, duration) = {
@@ -454,6 +494,11 @@ impl Session {
                     bail!("log offset {o} s is outside clip {}", patch.id);
                 }
             }
+            let time = patch
+                .time
+                .as_deref()
+                .map(|t| parse_time(t).with_context(|| format!("clip {}", patch.id)))
+                .transpose()?;
             let agent = editor == Editor::Agent;
             let p = self.plan_mut(patch.id)?;
             if let Some(d) = patch.date {
@@ -461,6 +506,11 @@ impl Session {
                 p.time = None;
                 p.source = DateSource::Edited;
                 p.badge = Badge::Unmatched;
+                p.suggested.date = agent;
+            }
+            if let Some(t) = time {
+                p.time = t;
+                p.source = DateSource::Edited;
                 p.suggested.date = agent;
             }
             if let Some(n) = &patch.name {
@@ -533,8 +583,8 @@ impl Session {
                 skip: p.skip,
                 date: p.date.format("%Y-%m-%d").to_string(),
                 time: match p.source {
-                    DateSource::Log => p.time.map(|t| t.format("%H:%M:%S").to_string()),
-                    _ => None,
+                    DateSource::Import => None,
+                    _ => p.time.map(|t| t.format("%H:%M:%S").to_string()),
                 },
                 source: p.source,
                 name: p.name.clone(),
@@ -667,6 +717,18 @@ pub fn run_import(
             c.signal.as_ref().map(|s| &s.keep[..]).unwrap_or(&[]),
             p.flight.as_ref(),
         );
+        // Where the time of day came from; without it the clip shows no time (noon).
+        if job.time.is_some() {
+            job.extra.push((
+                crate::library::KEY_TIME.to_string(),
+                if job.source == DateSource::Log {
+                    "log"
+                } else {
+                    "manual"
+                }
+                .to_string(),
+            ));
+        }
     }
     let done = |id: usize| {
         session

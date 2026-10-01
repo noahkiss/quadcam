@@ -1,7 +1,61 @@
-//! Output filenames: `YYYY-MM-DD_<name>.<ext>`.
+//! Output filenames: `YYYY-MM-DD_<name>.<ext>`, or `YY.MM.DD_<name>.<ext>` with the
+//! short date format.
 
+use chrono::NaiveDate;
+use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
 use std::path::{Path, PathBuf};
+
+/// How the date starts a file name.
+#[derive(Debug, Clone, Copy, Default, Serialize, Deserialize, PartialEq, Eq)]
+pub enum DateFormat {
+    /// `2026-09-25`
+    #[default]
+    #[serde(rename = "YYYY-MM-DD")]
+    Long,
+    /// `26.09.25`
+    #[serde(rename = "YY.MM.DD")]
+    Short,
+}
+
+impl DateFormat {
+    pub const NAMES: &[&str] = &["YYYY-MM-DD", "YY.MM.DD"];
+
+    pub fn format(self, d: NaiveDate) -> String {
+        match self {
+            DateFormat::Long => d.format("%Y-%m-%d").to_string(),
+            DateFormat::Short => d.format("%y.%m.%d").to_string(),
+        }
+    }
+}
+
+/// The date a file name starts with, in either format, and the rest of the name. The date
+/// must be followed by `_`, `.` or nothing.
+pub fn split_date(stem: &str) -> Option<(NaiveDate, &str)> {
+    let try_one = |len: usize, fmt: &str| {
+        let head = stem.get(..len)?;
+        let rest = &stem[len..];
+        if !(rest.is_empty() || rest.starts_with('_') || rest.starts_with('.')) {
+            return None;
+        }
+        NaiveDate::parse_from_str(head, fmt).ok().map(|d| (d, rest))
+    };
+    try_one(10, "%Y-%m-%d").or_else(|| {
+        let head = stem.get(..8)?;
+        // `%y` alone would also take one digit; insist on the exact shape.
+        if head.as_bytes().iter().enumerate().all(|(i, b)| {
+            if i == 2 || i == 5 {
+                *b == b'.'
+            } else {
+                b.is_ascii_digit()
+            }
+        }) {
+            try_one(8, "%y.%m.%d")
+        } else {
+            None
+        }
+    })
+}
 
 /// Default short name when the name field is empty.
 pub const DEFAULT_NAME: &str = "flight";
@@ -105,6 +159,29 @@ mod tests {
         assert_eq!(slug("", "My Default"), "my_default");
         assert_eq!(slug(&"x".repeat(100), "flight").len(), 80);
         assert_eq!(slug("Ünïcode", "flight"), "_n_code");
+    }
+
+    #[test]
+    fn date_formats_round_trip() {
+        let d = NaiveDate::from_ymd_opt(2026, 9, 25).unwrap();
+        assert_eq!(DateFormat::Short.format(d), "26.09.25");
+        assert_eq!(DateFormat::Long.format(d), "2026-09-25");
+        assert_eq!(
+            split_date("26.09.25_home-first-flight"),
+            Some((d, "_home-first-flight"))
+        );
+        assert_eq!(
+            split_date("2026-09-25_loops_cut1"),
+            Some((d, "_loops_cut1"))
+        );
+        assert_eq!(split_date("2026-09-25"), Some((d, "")));
+        assert_eq!(split_date("26.9.25_x"), None);
+        assert_eq!(split_date("2026-09-25x"), None);
+        assert_eq!(split_date("PICT0001"), None);
+        assert_eq!(
+            serde_json::to_value(DateFormat::Short).unwrap(),
+            serde_json::json!("YY.MM.DD")
+        );
     }
 
     #[test]

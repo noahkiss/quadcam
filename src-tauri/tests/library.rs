@@ -416,3 +416,281 @@ fn rename_moves_the_clip_its_cuts_and_its_original() {
     assert!(!a.file.exists());
     assert_eq!(by_name(&l, "fence flips").clip.cuts.len(), 1);
 }
+
+fn qt(path: &Path, key: &str) -> Option<String> {
+    let items = quadcam_lib::qtmeta::read(path).unwrap();
+    quadcam_lib::qtmeta::get(&items, key).map(str::to_string)
+}
+
+fn local_mtime(path: &Path) -> chrono::NaiveDateTime {
+    chrono::DateTime::<chrono::Local>::from(path.metadata().unwrap().modified().unwrap())
+        .naive_local()
+}
+
+#[test]
+fn a_manual_time_at_import_and_a_date_edit_that_moves_the_files() {
+    use chrono::{NaiveTime, Timelike};
+    let l = lab(Layout::YearDay, true, true);
+    l.core.stage(Some(&l.src)).unwrap();
+    l.core.analyse().unwrap();
+    l.core.plan_dates(LogChoice::None, None).unwrap();
+    let bad = l.core.patch(
+        &[PlanPatch {
+            id: 0,
+            time: Some("25:00".into()),
+            ..Default::default()
+        }],
+        Editor::User,
+    );
+    assert!(format!("{:#}", bad.unwrap_err()).contains("HH:MM"));
+    l.core
+        .patch(
+            &[PlanPatch {
+                id: 0,
+                name: Some("backyard loops".into()),
+                date: Some(day()),
+                time: Some("07:45".into()),
+                place: Some("Home field".into()),
+                cuts: Some(vec![Span {
+                    start: 1.0,
+                    end: 2.0,
+                }]),
+                ..Default::default()
+            }],
+            Editor::User,
+        )
+        .unwrap();
+    l.core.import(&ImportOptions::default()).unwrap();
+    let a = by_name(&l, "backyard loops");
+    assert_eq!(
+        a.clip.time.as_deref(),
+        Some("07:45"),
+        "the manual time is in the file"
+    );
+    assert_eq!(
+        local_mtime(&a.file).time(),
+        NaiveTime::from_hms_opt(7, 45, 0).unwrap()
+    );
+    let old_dir = l.root.join("2026/2026-09-27 Home field");
+    assert!(a.file.starts_with(&old_dir));
+
+    // A new day: the clip, its cut and its original move and take the new date's name.
+    let new_day = NaiveDate::from_ymd_opt(2026, 9, 30).unwrap();
+    let c = l
+        .core
+        .library_edit(
+            &a.clip.id,
+            &LibEdit {
+                date: Some(new_day),
+                ..Default::default()
+            },
+        )
+        .unwrap();
+    assert_eq!(c.id, a.clip.id, "identity is the content, not the file");
+    assert_eq!(c.date, new_day);
+    assert_eq!(
+        c.time.as_deref(),
+        Some("07:45"),
+        "a new date keeps the time"
+    );
+    let dir = l.root.join("2026/2026-09-30 Home field");
+    let clip = dir.join("2026-09-30_backyard_loops.mp4");
+    let cut = dir.join("2026-09-30_backyard_loops_cut1.mp4");
+    assert_eq!(l.root.join(&c.path), clip);
+    assert!(cut.is_file());
+    assert!(dir
+        .join("originals/2026-09-30_backyard_loops.avi")
+        .is_file());
+    assert!(!old_dir.join("originals").exists(), "emptied folders go");
+    assert!(qt(&clip, "com.apple.quicktime.creationdate")
+        .unwrap()
+        .starts_with("2026-09-30T07:45:00"),);
+    assert!(qt(&cut, "com.apple.quicktime.creationdate")
+        .unwrap()
+        .starts_with("2026-09-30T07:45:01"));
+    assert_eq!(local_mtime(&clip).date(), new_day);
+    // The movie header (what ffprobe calls creation_time) moved too.
+    let probe = quadcam_lib::media::probe(&tools(), &clip).unwrap();
+    let ct = chrono::DateTime::parse_from_rfc3339(&probe.tags["creation_time"]).unwrap();
+    assert_eq!(
+        ct.with_timezone(&chrono::Local).naive_local(),
+        new_day.and_hms_opt(7, 45, 0).unwrap()
+    );
+
+    // Only the time: the file stays where it is. Empty is local noon.
+    let c = l
+        .core
+        .library_edit(
+            &a.clip.id,
+            &LibEdit {
+                time: Some("".into()),
+                ..Default::default()
+            },
+        )
+        .unwrap();
+    assert_eq!(l.root.join(&c.path), clip);
+    assert_eq!(local_mtime(&clip).hour(), 12);
+
+    // The index made again from the files agrees.
+    l.core.library_rebuild().unwrap();
+    let r = by_name(&l, "backyard loops");
+    assert_eq!(
+        (r.clip.date, r.clip.time.as_deref()),
+        (new_day, None),
+        "an empty time is noon, and noon is not shown"
+    );
+    assert_eq!(r.clip.cuts.len(), 1);
+    assert!(r.clip.original.is_some());
+}
+
+#[test]
+fn a_new_aircraft_profile_after_export_rewrites_the_gear() {
+    use quadcam_lib::metadata::Profile;
+    let l = lab(Layout::Day, false, false);
+    let mut d = l.core.defaults();
+    d.profiles = vec![
+        Profile {
+            name: "Whoop".into(),
+            aircraft: "65 mm whoop".into(),
+            camera_make: "Maker".into(),
+            camera_model: "Goggles".into(),
+            video_system: "Analog".into(),
+            keywords: vec!["tinywhoop".into()],
+            author: "Pilot".into(),
+            ..Default::default()
+        },
+        Profile {
+            name: "Five".into(),
+            aircraft: "5-inch".into(),
+            camera_make: "Other".into(),
+            camera_model: "Box".into(),
+            video_system: "HDZero".into(),
+            keywords: vec!["freestyle".into()],
+            ..Default::default()
+        },
+    ];
+    d.default_profile = Some("Whoop".into());
+    l.core.set_defaults(d);
+    import(&l);
+    let a = by_name(&l, "backyard loops");
+    assert_eq!(a.clip.aircraft.as_deref(), Some("Whoop"));
+    assert_eq!(
+        a.clip.time, None,
+        "no log, no time set: no 12:00 placeholder"
+    );
+    assert!(a.clip.keywords.iter().any(|k| k == "tinywhoop"));
+
+    let e = l
+        .core
+        .library_edit(
+            &a.clip.id,
+            &LibEdit {
+                profile: Some("Ghost".into()),
+                ..Default::default()
+            },
+        )
+        .unwrap_err();
+    assert!(format!("{e:#}").contains("profiles: Whoop, Five"), "{e:#}");
+
+    let c = l
+        .core
+        .library_edit(
+            &a.clip.id,
+            &LibEdit {
+                profile: Some("five".into()),
+                ..Default::default()
+            },
+        )
+        .unwrap();
+    assert_eq!(c.aircraft.as_deref(), Some("Five"));
+    assert!(c.keywords.iter().any(|k| k == "freestyle"));
+    assert!(!c.keywords.iter().any(|k| k == "tinywhoop"));
+    assert_eq!(c.keywords[0], "FPV");
+    assert_eq!(c.author, None, "the old profile's author went with it");
+    for f in
+        std::iter::once(l.root.join(&c.path)).chain(c.cuts.iter().map(|x| l.root.join(&x.path)))
+    {
+        assert_eq!(qt(&f, "com.apple.quicktime.make").as_deref(), Some("Other"));
+        assert_eq!(qt(&f, "com.apple.quicktime.model").as_deref(), Some("Box"));
+        assert_eq!(qt(&f, "app.quadcam.aircraft").as_deref(), Some("5-inch"));
+        assert_eq!(
+            qt(&f, "app.quadcam.video_system").as_deref(),
+            Some("HDZero")
+        );
+    }
+    // An empty profile removes the gear.
+    let c = l
+        .core
+        .library_edit(
+            &a.clip.id,
+            &LibEdit {
+                profile: Some(String::new()),
+                ..Default::default()
+            },
+        )
+        .unwrap();
+    assert_eq!(c.aircraft, None);
+    assert_eq!(qt(&l.root.join(&c.path), "com.apple.quicktime.make"), None);
+}
+
+#[test]
+fn a_clip_without_a_picture_is_marked_once_not_retried() {
+    let l = lab(Layout::Day, false, false);
+    import(&l);
+    assert_eq!(l.core.library_strips(None).unwrap(), 2);
+    assert!(all(&l).iter().all(|c| c.strip.is_some()));
+    // A clip whose file no longer decodes (the index still lists it).
+    let a = by_name(&l, "gap run");
+    l.core.library_strips(None).unwrap();
+    let strip = a.strip.clone().unwrap();
+    std::fs::remove_file(&strip).unwrap();
+    std::fs::write(&a.file, b"not a video").unwrap();
+    assert_eq!(l.core.library_strips(None).unwrap(), 0);
+    let a = by_name(&l, "gap run");
+    assert!(a.no_picture && a.strip.is_none() && a.poster.is_none());
+    // Nothing is tried again until asked for by id.
+    assert_eq!(l.core.library_strips(None).unwrap(), 0);
+    assert!(by_name(&l, "gap run").no_picture);
+}
+
+#[test]
+fn the_short_date_format_and_renaming_existing_clips_to_it() {
+    use quadcam_lib::naming::DateFormat;
+    let l = lab(Layout::YearDay, false, true);
+    import(&l); // long format
+    let mut d = l.core.defaults();
+    d.name_date_format = DateFormat::Short;
+    l.core.set_defaults(d);
+    let r = l.core.library_apply_name_format(None).unwrap();
+    assert_eq!(r.renamed.len(), 2, "{r:?}");
+    let dir = l.root.join("2026/2026-09-27");
+    assert!(dir.join("26.09.27_backyard_loops.mp4").is_file());
+    assert!(dir.join("26.09.27_backyard_loops_cut1.mp4").is_file());
+    assert!(dir.join("originals/26.09.27_backyard_loops.avi").is_file());
+    assert!(!dir.join("2026-09-27_backyard_loops.mp4").exists());
+    let a = by_name(&l, "backyard loops");
+    assert_eq!(a.clip.cuts.len(), 1);
+    assert!(a.clip.original.is_some());
+    // Run again: nothing to do.
+    let again = l.core.library_apply_name_format(None).unwrap();
+    assert_eq!((again.renamed.len(), again.unchanged), (0, 2));
+    // The index made from the files reads both formats.
+    l.core.library_rebuild().unwrap();
+    let a = by_name(&l, "backyard loops");
+    assert_eq!(a.clip.date, day());
+    assert_eq!(a.clip.cuts.len(), 1);
+    // A new import and a rename use the short format too.
+    let c = l.core.library_rename(&a.clip.id, "fence flips").unwrap();
+    assert_eq!(
+        c.path,
+        PathBuf::from("2026/2026-09-27/26.09.27_fence_flips.mp4")
+    );
+    // A name without a date is left alone.
+    let m = by_name(&l, "gap run");
+    let plain = l.root.join("2026/2026-09-27/gap.mp4");
+    std::fs::rename(&m.file, &plain).unwrap();
+    l.core.library_rebuild().unwrap();
+    let r = l.core.library_apply_name_format(None).unwrap();
+    assert_eq!(r.skipped.len(), 1, "{r:?}");
+    assert!(plain.is_file());
+}

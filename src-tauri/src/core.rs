@@ -17,7 +17,12 @@ use std::sync::{Arc, Mutex};
 
 #[path = "core_library.rs"]
 mod core_library;
-pub use core_library::{CardStatus, LibEdit, LibItem, LibraryView, RebuildReport, TrashReport};
+#[path = "core_settings.rs"]
+mod core_settings;
+pub use core_library::{
+    CardStatus, LibEdit, LibItem, LibraryView, RebuildReport, RenameReport, TrashReport,
+};
+pub use core_settings::{PlaceRemoved, SettingsView};
 
 /// What the host does when the core changes state. The GUI emits events and asks for the
 /// format click; a headless host does nothing.
@@ -37,6 +42,8 @@ pub trait Hooks: Send + Sync {
     }
     /// The library index changed. The GUI re-reads it.
     fn library_changed(&self) {}
+    /// The settings file changed (profiles, places, preferences). The GUI re-reads it.
+    fn settings_changed(&self) {}
 }
 
 pub struct NoHooks;
@@ -143,6 +150,8 @@ pub struct Core {
     /// The library index, loaded on first use: (library folder, index).
     library: Mutex<Option<core_library::Loaded>>,
     trash: Arc<dyn crate::trash::Trash>,
+    /// The app's settings file; the defaults are read from it.
+    settings_file: Option<PathBuf>,
 }
 
 struct Busy<'a>(&'a AtomicBool);
@@ -169,6 +178,11 @@ pub fn cache_dir() -> PathBuf {
 /// `~/Library/Application Support/app.quadcam`, where the control socket lives.
 pub fn support_dir() -> PathBuf {
     home().join("Library/Application Support/app.quadcam")
+}
+
+/// The settings file the app, the CLI and the MCP server share.
+pub fn default_settings_file() -> PathBuf {
+    support_dir().join("settings.json")
 }
 
 /// The session file shared by CLI runs and a headless MCP server.
@@ -203,7 +217,15 @@ impl Core {
             session_file,
             library: Mutex::new(None),
             trash: crate::trash::real_trash(),
+            settings_file: None,
         }
+    }
+
+    /// Reads and writes settings in `file`, and takes the defaults from it.
+    pub fn with_settings(mut self, file: PathBuf) -> Core {
+        self.settings_file = Some(file);
+        self.reload_settings();
+        self
     }
 
     /// Replaces the Trash (tests pass a folder).
@@ -215,16 +237,13 @@ impl Core {
     /// A core for the CLI or a headless MCP server: shared cache, session file, PhotoKit.
     /// Export defaults come from the app's saved settings when there are any.
     pub fn headless(session_file: Option<PathBuf>, photos: Arc<dyn PhotosLibrary>) -> Core {
-        let core = Core::new(
+        Core::new(
             cache_dir(),
             Some(session_file.unwrap_or_else(default_session_file)),
             Arc::new(NoHooks),
             photos,
-        );
-        core.set_defaults(Defaults::with_app_settings(
-            &support_dir().join("settings.json"),
-        ));
-        core
+        )
+        .with_settings(default_settings_file())
     }
 
     /// The Photos library to use. `QUADCAM_PHOTOS=real` forces PhotoKit and
@@ -528,6 +547,7 @@ impl Core {
             layout: d.layout,
             place_folders: d.place_folders,
             import_id: chrono::Local::now().format("%Y%m%d-%H%M%S").to_string(),
+            name_date_format: d.name_date_format,
         })
     }
 
@@ -837,6 +857,30 @@ impl Core {
         struct Mount {
             mount: PathBuf,
         }
+        #[derive(Deserialize, Default)]
+        struct SetSettings {
+            values: crate::settings::Values,
+        }
+        #[derive(Deserialize, Default)]
+        struct Search {
+            query: String,
+            #[serde(default)]
+            provider: Option<String>,
+            #[serde(default)]
+            limit: Option<usize>,
+        }
+        #[derive(Deserialize, Default)]
+        struct Named {
+            name: String,
+            #[serde(default)]
+            new_name: Option<String>,
+            #[serde(default)]
+            lat: Option<f64>,
+            #[serde(default)]
+            lon: Option<f64>,
+            #[serde(default)]
+            fields: crate::settings::Values,
+        }
         let v = |x: &dyn erased::Ser| x.to_value();
         Ok(match method {
             "status" => v(&self.status()),
@@ -894,6 +938,10 @@ impl Core {
                 let x: Ids = p(params)?;
                 v(&self.library_photos(&x.ids, x.album)?)
             }
+            "library_apply_name_format" => {
+                let x: Ids = p(params)?;
+                v(&self.library_apply_name_format((!x.ids.is_empty()).then_some(x.ids))?)
+            }
             "library_rescan" => v(&self.library_rescan(&p::<One>(params)?.id)?),
             "library_preview" => v(&self.library_preview(&p::<One>(params)?.id)?),
             "library_strips" => {
@@ -901,6 +949,28 @@ impl Core {
                 v(&self.library_strips((!x.ids.is_empty()).then_some(x.ids))?)
             }
             "card_status" => v(&self.card_status(&p::<Mount>(params)?.mount)?),
+            "settings" => v(&self.settings()?),
+            "settings_set" => v(&self.settings_set(&p::<SetSettings>(params)?.values)?),
+            "places" => v(&self.places()?),
+            "place_search" => {
+                let x: Search = p(params)?;
+                v(&self.place_search(&x.query, x.provider.as_deref(), x.limit)?)
+            }
+            "place_save" => {
+                let x: Named = p(params)?;
+                v(&self.place_save(&x.name, x.lat, x.lon, x.new_name.as_deref())?)
+            }
+            "place_delete" => v(&self.place_delete(&p::<Named>(params)?.name)?),
+            "profiles" => {
+                let (profiles, default) = self.profiles()?;
+                json!({"profiles": profiles, "default_profile": default})
+            }
+            "profile_save" => {
+                let x: Named = p(params)?;
+                v(&self.profile_save(&x.name, &x.fields, x.new_name.as_deref())?)
+            }
+            "profile_delete" => v(&self.profile_delete(&p::<Named>(params)?.name)?),
+            "profile_default" => v(&self.profile_default(&p::<Named>(params)?.name)?),
             "session_cuts" => {
                 let x: SessionCuts = p(params)?;
                 v(&self.set_session_cuts(x.id, &x.cuts, x.removed_cuts)?)

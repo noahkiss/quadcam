@@ -46,7 +46,7 @@ enum Cmd {
     },
     /// Probe staged clips, recover half-written ones, make thumbnails.
     Analyze,
-    /// Date clips from radio logs, and override dates per clip.
+    /// Date clips from radio logs, and override dates and times per clip.
     Dates {
         /// EdgeTX LOGS folder or the radio's root.
         #[arg(long, conflicts_with = "no_logs")]
@@ -60,6 +60,9 @@ enum Cmd {
         /// Override one clip's date: ID=YYYY-MM-DD. Repeatable.
         #[arg(long = "set", value_name = "ID=DATE")]
         set: Vec<String>,
+        /// Set one clip's time of day: ID=HH:MM ("ID=" for noon). Repeatable.
+        #[arg(long = "time", value_name = "ID=HH:MM")]
+        times: Vec<String>,
     },
     /// Show the current session: clips, plans, results.
     Show,
@@ -70,8 +73,21 @@ enum Cmd {
         /// Clip ids. Default: every clip.
         ids: Vec<usize>,
     },
-    /// Saved places, aircraft profiles and the default profile (from the app's settings).
-    Profiles,
+    /// Aircraft profiles: list (default), save, delete, set the default.
+    Profiles {
+        #[command(subcommand)]
+        cmd: Option<ProfCmd>,
+    },
+    /// Saved places: list (default), search by address or name, save, delete.
+    Places {
+        #[command(subcommand)]
+        cmd: Option<PlaceCmd>,
+    },
+    /// The app's settings: show (default) or set.
+    Settings {
+        #[command(subcommand)]
+        cmd: Option<SetCmd>,
+    },
     /// Set metadata on clips: profile, location, keywords, author.
     Meta {
         /// Clip ids, or `all`.
@@ -115,7 +131,7 @@ enum Cmd {
     },
     /// Convert and verify every non-skipped clip.
     Import {
-        /// JSON plan: {"clips":[{"id":0,"name":"..","date":"YYYY-MM-DD","note":"..","skip":false}]}
+        /// JSON plan: {"clips":[{"id":0,"name":"..","date":"YYYY-MM-DD","time":"HH:MM","note":"..","skip":false}]}
         #[arg(long, value_name = "FILE")]
         plan: Option<PathBuf>,
         /// Short name for one clip: ID=NAME. Repeatable.
@@ -127,6 +143,9 @@ enum Cmd {
         /// Date for one clip: ID=YYYY-MM-DD. Repeatable.
         #[arg(long = "date", value_name = "ID=DATE")]
         dates: Vec<String>,
+        /// Time of day for one clip: ID=HH:MM ("ID=" for noon). Repeatable.
+        #[arg(long = "time", value_name = "ID=HH:MM")]
+        times: Vec<String>,
         /// Skip a clip. Repeatable.
         #[arg(long = "skip", value_name = "ID")]
         skip: Vec<usize>,
@@ -189,7 +208,7 @@ enum Cmd {
         #[arg(long)]
         plan: bool,
     },
-    /// The library: list and search clips, rate and flag them, rebuild the index.
+    /// The library: list, rate, rename, edit (details, aircraft, date, time), cut, trash, Photos.
     #[command(subcommand)]
     Library(LibCmd),
     /// Run the MCP server on stdio.
@@ -234,7 +253,7 @@ enum LibCmd {
     Rebuild,
     /// Rename a clip's file, its cuts and its original.
     Rename { id: String, name: String },
-    /// Change a clip's note, keywords, author or place.
+    /// Change a clip's note, keywords, author, place, aircraft profile, date or time.
     Edit {
         id: String,
         #[arg(long)]
@@ -245,8 +264,21 @@ enum LibCmd {
         #[arg(long)]
         author: Option<String>,
         /// A saved place name ("" removes the location).
-        #[arg(long)]
+        #[arg(long, conflicts_with = "location")]
         place: Option<String>,
+        /// LAT,LON in decimal degrees.
+        #[arg(long, allow_hyphen_values = true)]
+        location: Option<String>,
+        /// Aircraft profile name ("" removes the profile's details). Rewrites make, model,
+        /// aircraft and the profile's keywords.
+        #[arg(long)]
+        profile: Option<String>,
+        /// New flying day (YYYY-MM-DD). Moves the clip, its cuts and its original.
+        #[arg(long)]
+        date: Option<NaiveDate>,
+        /// Time of day (HH:MM, "" for noon). Without it a new date keeps the clip's time.
+        #[arg(long)]
+        time: Option<String>,
     },
     /// Set a clip's cut ranges, and write the new ones with --export.
     Cut {
@@ -262,6 +294,9 @@ enum LibCmd {
         #[arg(long)]
         export: bool,
     },
+    /// Rename clips to the name date format setting (YYYY-MM-DD or YY.MM.DD), with their
+    /// cuts and originals. Default: every clip. Folders stay as they are.
+    ApplyNameFormat { ids: Vec<String> },
     /// Move clips, with their cuts and originals, to the Trash.
     Trash {
         #[arg(required = true)]
@@ -273,6 +308,98 @@ enum LibCmd {
         ids: Vec<String>,
         #[arg(long)]
         album: Option<String>,
+    },
+}
+
+#[derive(Subcommand)]
+#[allow(clippy::large_enum_variant)]
+enum ProfCmd {
+    /// List profiles and the default.
+    List,
+    /// Create a profile, or change the given fields of an existing one.
+    Save {
+        name: String,
+        #[arg(long)]
+        aircraft: Option<String>,
+        #[arg(long)]
+        camera_make: Option<String>,
+        #[arg(long)]
+        camera_model: Option<String>,
+        /// Analog, DJI O4, Walksnail, HDZero, ...
+        #[arg(long)]
+        video_system: Option<String>,
+        /// Comma-separated; replaces the list.
+        #[arg(long)]
+        keywords: Option<String>,
+        #[arg(long)]
+        author: Option<String>,
+        /// A saved place name ("" for none).
+        #[arg(long)]
+        place: Option<String>,
+        /// EdgeTX model names, comma-separated; replaces the list.
+        #[arg(long)]
+        models: Option<String>,
+        /// New name for the profile.
+        #[arg(long)]
+        rename: Option<String>,
+        /// Also make it the default profile.
+        #[arg(long)]
+        default: bool,
+    },
+    /// Delete a profile.
+    Delete { name: String },
+    /// Set the default profile ("" for none).
+    Default { name: String },
+}
+
+#[derive(Subcommand)]
+enum PlaceCmd {
+    /// List saved places.
+    List,
+    /// Find an address or a named place: name, address, latitude and longitude.
+    Search {
+        query: String,
+        /// apple or nominatim. Default: the geocoder setting (apple).
+        #[arg(long)]
+        provider: Option<String>,
+        /// At most this many results (1 to 10).
+        #[arg(long, default_value_t = 5)]
+        limit: usize,
+    },
+    /// Create a place, or change an existing one.
+    Save {
+        name: String,
+        /// LAT,LON in decimal degrees.
+        #[arg(long, allow_hyphen_values = true, conflicts_with = "search")]
+        location: Option<String>,
+        /// Take the location from a place search.
+        #[arg(long)]
+        search: Option<String>,
+        /// Which search result to take (1 is the first).
+        #[arg(long, default_value_t = 1, requires = "search")]
+        pick: usize,
+        /// apple or nominatim, for --search.
+        #[arg(long, requires = "search")]
+        provider: Option<String>,
+        /// New name for the place.
+        #[arg(long)]
+        rename: Option<String>,
+    },
+    /// Delete a saved place. Profiles that use it lose their default place.
+    Delete { name: String },
+}
+
+#[derive(Subcommand)]
+enum SetCmd {
+    /// Show the settings file, its values and the effective settings.
+    Show,
+    /// Set settings: KEY=VALUE, where VALUE is JSON or plain text ("null" resets a key).
+    /// Keys: output_dir, format, encoder, keep_originals, add_time, default_name,
+    /// photos_album, format_label, log_dir, layout, place_folders, tunables, geocoder,
+    /// name_date_format, default_profile.
+    Set {
+        #[arg(required = true, value_name = "KEY=VALUE")]
+        values: Vec<String>,
     },
 }
 
@@ -328,6 +455,22 @@ fn secs(s: &str) -> Result<f64> {
     v.with_context(|| format!("{s:?} is not seconds or m:ss"))
 }
 
+/// `LAT,LON` in decimal degrees.
+fn latlon(s: &str) -> Result<(f64, f64)> {
+    let (a, b) = s.split_once(',').context("a location is LAT,LON")?;
+    Ok((
+        a.trim().parse().context("latitude")?,
+        b.trim().parse().context("longitude")?,
+    ))
+}
+
+fn csv(s: &str) -> Vec<String> {
+    s.split(',')
+        .map(|x| x.trim().to_string())
+        .filter(|x| !x.is_empty())
+        .collect()
+}
+
 /// A range `START-END`.
 fn span(s: &str) -> Result<Span> {
     let (a, b) = s
@@ -366,6 +509,7 @@ fn run(cli: Cli) -> Result<Value> {
             no_logs,
             day,
             set,
+            times,
         } => {
             let choice = match (logs, no_logs) {
                 (Some(d), _) => LogChoice::Dir(d),
@@ -385,6 +529,14 @@ fn run(cli: Cli) -> Result<Value> {
                     })
                 })
                 .collect::<Result<Vec<_>>>()?;
+            let mut patches = patches;
+            for (id, t) in times.iter().map(|x| pair(x)).collect::<Result<Vec<_>>>()? {
+                patches.push(PlanPatch {
+                    id,
+                    time: Some(t),
+                    ..Default::default()
+                });
+            }
             if !patches.is_empty() {
                 s = core.patch(&patches, Editor::User)?;
             }
@@ -394,10 +546,23 @@ fn run(cli: Cli) -> Result<Value> {
             core.session()
                 .ok_or_else(|| anyhow!("No clips loaded. Run `stage` first."))?,
         )?,
-        Cmd::Profiles => {
-            let d = core.defaults();
-            json!({"places": d.places, "profiles": d.profiles, "default_profile": d.default_profile})
-        }
+        Cmd::Profiles { cmd } => profiles(&core, cmd.unwrap_or(ProfCmd::List))?,
+        Cmd::Places { cmd } => places(&core, cmd.unwrap_or(PlaceCmd::List))?,
+        Cmd::Settings { cmd } => match cmd.unwrap_or(SetCmd::Show) {
+            SetCmd::Show => serde_json::to_value(core.settings()?)?,
+            SetCmd::Set { values } => {
+                let mut changes = serde_json::Map::new();
+                for kv in &values {
+                    let (k, v) = kv
+                        .split_once('=')
+                        .with_context(|| format!("{kv:?} is not KEY=VALUE"))?;
+                    let v = serde_json::from_str::<Value>(v.trim())
+                        .unwrap_or_else(|_| Value::String(v.to_string()));
+                    changes.insert(k.trim().to_string(), v);
+                }
+                serde_json::to_value(core.settings_set(&changes)?)?
+            }
+        },
         Cmd::Meta {
             ids,
             profile,
@@ -536,6 +701,7 @@ fn run(cli: Cli) -> Result<Value> {
             names,
             notes,
             dates,
+            times,
             skip,
             unskip,
             cuts,
@@ -575,6 +741,13 @@ fn run(cli: Cli) -> Result<Value> {
                 patches.push(PlanPatch {
                     id,
                     date: Some(date(&d)?),
+                    ..Default::default()
+                });
+            }
+            for (id, t) in times.iter().map(|x| pair(x)).collect::<Result<Vec<_>>>()? {
+                patches.push(PlanPatch {
+                    id,
+                    time: Some(t),
                     ..Default::default()
                 });
             }
@@ -787,16 +960,38 @@ fn library(core: &Core, cmd: LibCmd) -> Result<Value> {
             keywords,
             author,
             place,
-        } => serde_json::to_value(core.library_edit(
-            &id,
-            &quadcam_lib::core::LibEdit {
+            location,
+            profile,
+            date,
+            time,
+        } => {
+            let location = location
+                .map(|l| {
+                    latlon(&l).map(|(lat, lon)| quadcam_lib::metadata::Location {
+                        lat,
+                        lon,
+                        name: None,
+                    })
+                })
+                .transpose()?;
+            let e = quadcam_lib::core::LibEdit {
                 note,
-                keywords: keywords.map(|k| k.split(',').map(|x| x.trim().to_string()).collect()),
+                keywords: keywords.map(|k| csv(&k)),
                 author,
                 place,
-                location: None,
-            },
-        )?)?,
+                location,
+                date,
+                time,
+                profile,
+            };
+            if serde_json::to_value(&e)?
+                .as_object()
+                .is_some_and(|o| o.values().all(Value::is_null))
+            {
+                bail!("give at least one of --note, --keywords, --author, --place, --location, --profile, --date, --time");
+            }
+            serde_json::to_value(core.library_edit(&id, &e)?)?
+        }
         LibCmd::Cut {
             id,
             ranges,
@@ -828,8 +1023,98 @@ fn library(core: &Core, cmd: LibCmd) -> Result<Value> {
             }
             out
         }
+        LibCmd::ApplyNameFormat { ids } => {
+            serde_json::to_value(core.library_apply_name_format((!ids.is_empty()).then_some(ids))?)?
+        }
         LibCmd::Trash { ids } => serde_json::to_value(core.library_trash(&ids)?)?,
         LibCmd::Photos { ids, album } => serde_json::to_value(core.library_photos(&ids, album)?)?,
+    })
+}
+
+fn profiles(core: &Core, cmd: ProfCmd) -> Result<Value> {
+    Ok(match cmd {
+        ProfCmd::List => {
+            let (profiles, default) = core.profiles()?;
+            json!({"profiles": profiles, "default_profile": default, "places": core.places()?})
+        }
+        ProfCmd::Save {
+            name,
+            aircraft,
+            camera_make,
+            camera_model,
+            video_system,
+            keywords,
+            author,
+            place,
+            models,
+            rename,
+            default,
+        } => {
+            let mut fields = serde_json::Map::new();
+            let mut put = |k: &str, v: Option<Value>| {
+                if let Some(v) = v {
+                    fields.insert(k.to_string(), v);
+                }
+            };
+            put("aircraft", aircraft.map(Value::from));
+            put("camera_make", camera_make.map(Value::from));
+            put("camera_model", camera_model.map(Value::from));
+            put("video_system", video_system.map(Value::from));
+            put("keywords", keywords.map(|k| json!(csv(&k))));
+            put("author", author.map(Value::from));
+            put("place", place.map(Value::from));
+            put("edgetx_models", models.map(|m| json!(csv(&m))));
+            let p = core.profile_save(&name, &fields, rename.as_deref())?;
+            if default {
+                core.profile_default(&p.name)?;
+            }
+            let (_, d) = core.profiles()?;
+            json!({"profile": p, "default_profile": d})
+        }
+        ProfCmd::Delete { name } => {
+            json!({"deleted": core.profile_delete(&name)?, "default_profile": core.profiles()?.1})
+        }
+        ProfCmd::Default { name } => json!({"default_profile": core.profile_default(&name)?}),
+    })
+}
+
+fn places(core: &Core, cmd: PlaceCmd) -> Result<Value> {
+    Ok(match cmd {
+        PlaceCmd::List => serde_json::to_value(core.places()?)?,
+        PlaceCmd::Search {
+            query,
+            provider,
+            limit,
+        } => serde_json::to_value(core.place_search(&query, provider.as_deref(), Some(limit))?)?,
+        PlaceCmd::Save {
+            name,
+            location,
+            search,
+            pick,
+            provider,
+            rename,
+        } => {
+            let (lat, lon, from) = match (location, search) {
+                (Some(l), _) => {
+                    let (a, b) = latlon(&l)?;
+                    (Some(a), Some(b), None)
+                }
+                (None, Some(q)) => {
+                    let hits = core.place_search(&q, provider.as_deref(), Some(pick.max(5)))?;
+                    let hit = hits.get(pick.max(1) - 1).cloned().with_context(|| {
+                        format!(
+                            "the search for {q:?} found {} places; nothing to pick at {pick}",
+                            hits.len()
+                        )
+                    })?;
+                    (Some(hit.lat), Some(hit.lon), Some(hit))
+                }
+                (None, None) => (None, None, None),
+            };
+            let p = core.place_save(&name, lat, lon, rename.as_deref())?;
+            json!({"place": p, "from_search": from})
+        }
+        PlaceCmd::Delete { name } => serde_json::to_value(core.place_delete(&name)?)?,
     })
 }
 

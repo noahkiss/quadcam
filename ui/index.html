@@ -278,6 +278,15 @@
                 <pre class="mono" id="layout-example"></pre>
               </div>
             </div>
+            <div class="row">
+              <label class="field"><span>Date in file names</span>
+                <select id="set-name-date">
+                  <option value="YYYY-MM-DD">2026-09-25_name.mp4</option>
+                  <option value="YY.MM.DD">26.09.25_name.mp4</option>
+                </select>
+              </label>
+              <button type="button" class="ghost small" data-action="apply-name-format">Rename library files to this format</button>
+            </div>
             <div class="info-row">
               <i data-icon="info" class="c-sky"></i>
               <p>The files hold every detail. The index in <span class="mono">.quadcam/</span> is a cache.</p>
@@ -300,8 +309,22 @@
 
           <section data-pane="places" hidden>
             <h3>Places</h3>
+            <div id="place-search" class="row">
+              <input id="place-query" type="search" placeholder="Address or place name" aria-label="Search for a place" spellcheck="false">
+              <button type="button" class="ghost small" id="place-go"><i data-icon="search"></i>Search</button>
+            </div>
+            <ul id="place-results" class="place-results" hidden></ul>
             <div id="places-editor" class="rows"></div>
             <button type="button" class="ghost small" data-action="add-place"><i data-icon="add"></i>Add place</button>
+            <label class="field"><span>Search with</span>
+              <select id="set-geocoder">
+                <option value="apple">Apple Maps</option>
+                <option value="nominatim">OpenStreetMap (Nominatim)</option>
+                <option value="census">US Census (US street addresses)</option>
+                <option value="google">Google Places (API key)</option>
+              </select>
+            </label>
+            <label class="field"><span>Google Places API key</span><input id="set-google-key" type="password" autocomplete="off" spellcheck="false"></label>
           </section>
 
           <section data-pane="import" hidden>

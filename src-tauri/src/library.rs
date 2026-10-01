@@ -43,6 +43,10 @@ pub const KEY_RATING: &str = "app.quadcam.rating";
 pub const KEY_FLAG: &str = "app.quadcam.flag";
 pub const KEY_PHOTOS: &str = "app.quadcam.photos";
 pub const KEY_AIRCRAFT: &str = "app.quadcam.aircraft";
+pub const KEY_VIDEO_SYSTEM: &str = "app.quadcam.video_system";
+/// Where the clip's time of day came from: `log`, `manual`, or `none` (removed by hand).
+/// Without a time the creation date's time is the noon placeholder and is not shown.
+pub const KEY_TIME: &str = "app.quadcam.time";
 const QT: &str = "com.apple.quicktime.";
 
 // ---------- layout ----------
@@ -154,7 +158,7 @@ pub struct LibClip {
     pub title: String,
     pub note: String,
     pub date: NaiveDate,
-    /// `HH:MM`, when the creation date carries a time.
+    /// `HH:MM`, when the clip has a time of day (from its radio log or set by hand).
     #[serde(default)]
     pub time: Option<String>,
     pub duration: f64,
@@ -215,9 +219,8 @@ impl LibClip {
             .unwrap_or_default()
             .to_string_lossy()
             .to_string();
-        let rest = stem
-            .get(11..)
-            .filter(|_| stem.get(..10).and_then(parse_date).is_some())
+        let rest = crate::naming::split_date(&stem)
+            .map(|(_, r)| r.trim_start_matches(['_', '.']))
             .unwrap_or(&stem);
         rest.replace(['-', '_'], " ").trim().to_string()
     }
@@ -288,12 +291,13 @@ impl Index {
         self.clips.iter_mut().find(|c| c.id == id)
     }
 
-    /// Newest first: date, then time, then name.
+    /// The one library order, which every view and the arrow keys use: newest day first,
+    /// and within a day in flying order (time, then file name).
     pub fn sort(&mut self) {
         self.clips.sort_by(|a, b| {
             b.date
                 .cmp(&a.date)
-                .then_with(|| b.time.cmp(&a.time))
+                .then_with(|| a.time.cmp(&b.time))
                 .then_with(|| a.path.cmp(&b.path))
         });
     }
@@ -375,6 +379,7 @@ fn parse_spans(s: &str) -> Vec<Span> {
         .collect()
 }
 
+/// A `YYYY-MM-DD...` date (the creation date, or a long-format file name).
 fn parse_date(s: &str) -> Option<NaiveDate> {
     NaiveDate::parse_from_str(s.get(..10)?, "%Y-%m-%d").ok()
 }
@@ -474,12 +479,19 @@ pub fn read_file(root: &Path, rel: &Path) -> Result<Found> {
             .map(|t| chrono::DateTime::<chrono::Local>::from(t).date_naive())
     };
     let date = parse_date(&created)
-        .or_else(|| parse_date(&stem))
+        .or_else(|| crate::naming::split_date(&stem).map(|(d, _)| d))
         .or_else(mtime_date)
         .unwrap_or_default();
+    // A time counts when quadcam recorded where it came from, or (files from before that
+    // key) when the description says the date came from a radio log.
+    let has_time = match get(KEY_TIME).as_deref() {
+        Some("log" | "manual") => true,
+        Some(_) => false,
+        None => desc.contains("date source: radio log"),
+    };
     let time = created
         .get(11..16)
-        .filter(|t| t.len() == 5 && t.as_bytes()[2] == b':')
+        .filter(|t| has_time && t.len() == 5 && t.as_bytes()[2] == b':')
         .map(str::to_string);
     let location = get(&format!("{QT}location.ISO6709"))
         .and_then(|v| media::parse_iso6709(&v))
@@ -966,6 +978,32 @@ mod tests {
         assert_eq!(back[0].kind, MomentKind::Flip);
         assert_eq!(back[0].start, 61.0);
         assert_eq!(back[0].score, 0.92);
+    }
+
+    #[test]
+    fn one_order_newest_day_first_then_flying_order() {
+        let c = |day: &str, time: Option<&str>, name: &str| {
+            let mut x: LibClip = serde_json::from_value(serde_json::json!({
+                "id": name, "path": format!("{day}_{name}.mp4"), "title": name, "note": "",
+                "date": day, "duration": 1.0, "size": 1
+            }))
+            .unwrap();
+            x.time = time.map(str::to_string);
+            x
+        };
+        let mut ix = Index {
+            version: INDEX_VERSION,
+            last_import: None,
+            clips: vec![
+                c("2026-09-27", Some("16:00"), "late"),
+                c("2026-09-28", Some("09:00"), "next"),
+                c("2026-09-27", Some("08:00"), "early"),
+                c("2026-09-27", Some("08:00"), "also_early"),
+            ],
+        };
+        ix.sort();
+        let names: Vec<&str> = ix.clips.iter().map(|c| c.title.as_str()).collect();
+        assert_eq!(names, ["next", "also_early", "early", "late"]);
     }
 
     #[test]

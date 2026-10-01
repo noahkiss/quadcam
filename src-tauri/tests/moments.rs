@@ -100,6 +100,7 @@ fn settings(out: &Path, format: Format) -> ImportSettings {
         layout: quadcam_lib::library::Layout::Flat,
         place_folders: false,
         import_id: String::new(),
+        name_date_format: Default::default(),
     }
 }
 

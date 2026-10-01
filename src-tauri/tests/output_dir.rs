@@ -26,6 +26,7 @@ fn default_output_dir_follows_home_and_is_created() {
         layout: quadcam_lib::library::Layout::Flat,
         place_folders: false,
         import_id: String::new(),
+        name_date_format: Default::default(),
     };
     pipeline::preflight(&settings, &[]).unwrap();
     assert!(

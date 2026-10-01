@@ -95,6 +95,7 @@ fn format_after_verified_import() {
         layout: quadcam_lib::library::Layout::Flat,
         place_folders: false,
         import_id: String::new(),
+        name_date_format: Default::default(),
     };
     let mut planner = NamePlanner::new();
     let mut results = Vec::new();
