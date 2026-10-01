@@ -157,10 +157,21 @@ fn headless_agent_flow() {
     call(
         &mut s,
         "quadcam_suggest",
-        json!({"suggestions": [{"id": 0, "name": "Backyard Loops", "date": "2026-09-28", "reason": "trees in frame"}, {"id": 1, "skip": true}]}),
+        json!({"suggestions": [{"id": 0, "name": "Backyard Loops", "date": "2026-09-28", "reason": "trees in frame", "cuts": [{"start": 0.5, "end": 1.5}]}, {"id": 1, "skip": true}]}),
     );
     let read = call(&mut s, "quadcam_read_clips", json!({"ids": [0]}));
     let c = &read["structuredContent"]["clips"][0];
+    assert_eq!(c["cuts"], json!([{"start": 0.5, "end": 1.5}]));
+    assert_eq!(c["agent_suggested"]["cuts"], true);
+    assert_eq!(
+        c["moments"],
+        json!([]),
+        "a clean clip with no log has no moments"
+    );
+    assert!(read["content"][0]["text"]
+        .as_str()
+        .unwrap()
+        .contains("1 cuts"));
     assert_eq!(c["short_name"], "Backyard Loops");
     assert_eq!(c["agent_suggested"]["name"], true);
     assert_eq!(c["reason"], "trees in frame");
@@ -188,11 +199,17 @@ fn headless_agent_flow() {
     );
     let out = dir.path().join("out/2026-09-28_backyard_loops.mp4");
     assert!(out.is_file());
+    let cut = dir.path().join("out/2026-09-28_backyard_loops_cut1.mp4");
+    assert!(cut.is_file());
+    assert!(exp["content"][0]["text"]
+        .as_str()
+        .unwrap()
+        .contains("_cut1.mp4"));
     let calls = rec.calls.lock().unwrap().clone();
     assert_eq!(
         calls,
-        vec![(vec![out.clone()], Some("Drone".to_string()))],
-        "recorder only; nothing real"
+        vec![(vec![out.clone(), cut.clone()], Some("Drone".to_string()))],
+        "recorder only; nothing real; cuts go to Photos with their clip"
     );
 
     let v = call(&mut s, "quadcam_verify", json!({}));

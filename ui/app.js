@@ -35,6 +35,7 @@ const state = {
   lastSummary: null,
   agentFormat: null, // id of an agent's pending format request
   previewId: null, // clip shown in the preview pane
+  trim: { id: null, in: null, out: null }, // in/out being edited (not saved until "Add cut")
 };
 
 // ---------- helpers ----------
@@ -50,6 +51,13 @@ function fmtDur(s) {
   if (!s || s <= 0) return "–";
   s = Math.round(s);
   return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
+}
+
+// Seconds as m:ss.s.
+function fmtT(s) {
+  s = Math.max(0, s || 0);
+  const m = Math.floor(s / 60);
+  return `${m}:${(s - m * 60).toFixed(1).padStart(4, "0")}`;
 }
 
 function el(tag, attrs = {}, ...kids) {
@@ -228,6 +236,7 @@ function setSession(s, { quiet = false } = {}) {
   renderClips();
   restoreFocus(f);
   if (!quiet || state.previewId !== state.selected) renderPreview();
+  else renderEditor();
   // Results that arrive from an agent's import open the summary too.
   if (s.results.length && s.results.length !== oldResults && !state.busy) {
     state.lastSummary = null;
@@ -375,7 +384,9 @@ function renderClips() {
     const res = el("div", { class: "result" });
     if (outcome === "verified") {
       res.classList.add("ok");
-      res.textContent = `Verified → ${r.output.split("/").pop()}`;
+      const cutsOk = (r.cuts || []).filter((x) => x.outcome === "verified").length;
+      const cutsBad = (r.cuts || []).filter((x) => x.outcome === "failed").length;
+      res.textContent = `Verified → ${r.output.split("/").pop()}${cutsOk ? ` + ${cutsOk} cut${cutsOk > 1 ? "s" : ""}` : ""}${cutsBad ? ` (${cutsBad} cut failed)` : ""}`;
       res.append(
         inPhotos(c.id)
           ? el("span", { class: "src", text: " · in Photos" })
@@ -395,7 +406,7 @@ function renderClips() {
       el("div", {},
         el("div", { class: "clip-head" },
           el("strong", { text: c.name }),
-          el("span", { class: "facts", text: `${fmtDur(c.duration)} · ${fmtBytes(c.size)}${c.rel !== c.name ? " · " + c.rel : ""}` }),
+          el("span", { class: "facts", text: `${fmtDur(c.duration)} · ${fmtBytes(c.size)}${c.rel !== c.name ? " · " + c.rel : ""}${countLine(c, p)}` }),
           statusBadge(c)),
         el("div", { class: "clip-fields" },
           el("div", { class: "date-cell" }, date, sourceLine(p)),
@@ -437,7 +448,154 @@ function renderPreview() {
     ["Status", c.stage_error || c.detail],
   ];
   $("#preview-meta").replaceChildren(...rows.flatMap(([k, v]) => [el("dt", { text: k }), el("dd", { text: String(v) })]));
+  renderEditor();
 }
+
+// ---------- moments and cuts ----------
+
+function countLine(c, p) {
+  const n = clipMoments(c, p).length;
+  const k = p.cuts?.length || 0;
+  return `${n ? ` · ${n} moment${n > 1 ? "s" : ""}` : ""}${k ? ` · ${k} cut${k > 1 ? "s" : ""}` : ""}`;
+}
+
+// Log moments inside the clip plus dead air, by start time.
+function clipMoments(c, p) {
+  const log = (p?.moments || []).filter((m) => m.end > 0 && m.start < c.duration);
+  return [...log, ...(c.signal?.dead_air || [])].sort((a, b) => a.start - b.start);
+}
+
+const KIND = { roll: "roll", flip: "flip", punch: "punch-out", dive: "dive", crash: "crash?", dead_air: "dead air" };
+
+function playhead() {
+  const v = $("#preview-video");
+  return v.src && !v.hidden ? v.currentTime : null;
+}
+
+function seek(t) {
+  const v = $("#preview-video");
+  if (v.src && !v.hidden) v.currentTime = Math.max(0, t);
+}
+
+function trimFor(id) {
+  if (state.trim.id !== id) state.trim = { id, in: null, out: null };
+  return state.trim;
+}
+
+function renderEditor() {
+  const c = clips().find((x) => x.id === state.selected);
+  const box = $("#editor");
+  const p = c && plan(c.id);
+  box.hidden = !c || !c.probe || !(c.duration > 0);
+  if (box.hidden) return;
+  const dur = c.duration;
+  const pct = (t) => `${(Math.min(Math.max(t, 0), dur) / dur) * 100}%`;
+  const width = (a, b) => `${((Math.min(b, dur) - Math.max(a, 0)) / dur) * 100}%`;
+  const tr = trimFor(c.id);
+  const moments = clipMoments(c, p);
+  const tl = $("#timeline");
+  const parts = [];
+  for (const d of c.signal?.dead_air || []) parts.push(el("div", { class: "dead", style: `left:${pct(d.start)};width:${width(d.start, d.end)}`, title: `Dead air ${fmtT(d.start)}–${fmtT(d.end)}: ${d.detail}` }));
+  for (const k of c.signal?.keep || []) parts.push(el("div", { class: "keep", style: `left:${pct(k.start)};width:${width(k.start, k.end)}`, title: `Suggested keep ${fmtT(k.start)}–${fmtT(k.end)}` }));
+  for (const k of p.cuts || []) parts.push(el("div", { class: "cut", style: `left:${pct(k.start)};width:${width(k.start, k.end)}` }));
+  if (tr.in != null && tr.out != null && tr.out > tr.in) parts.push(el("div", { class: "sel", style: `left:${pct(tr.in)};width:${width(tr.in, tr.out)}` }));
+  for (const m of moments.filter((m) => m.kind !== "dead_air")) {
+    parts.push(el("button", {
+      type: "button", class: `mark${m.score < 0.5 ? " low" : ""}`, style: `left:${pct(m.start)};width:${width(m.start, m.end)}`,
+      title: `${KIND[m.kind]} at ${fmtT(m.start)} (${Math.round(m.score * 100)}%): ${m.detail}`, "aria-label": `${KIND[m.kind]} at ${fmtT(m.start)}`,
+      onclick: (e) => { e.stopPropagation(); pickMoment(c, m); },
+    }));
+  }
+  const head = el("div", { class: "head", hidden: playhead() == null });
+  parts.push(head);
+  tl.replaceChildren(...parts);
+  tl.onclick = (e) => {
+    const r = tl.getBoundingClientRect();
+    seek(((e.clientX - r.left) / r.width) * dur);
+  };
+  $("#moment-list").replaceChildren(...moments.map((m) => el("li", {},
+    el("button", { type: "button", class: m.kind === "dead_air" ? "dead" : "", title: m.detail, onclick: () => pickMoment(c, m) },
+      `${KIND[m.kind]} ${fmtT(m.start)}`))));
+  $("#cut-in").value = tr.in ?? "";
+  $("#cut-out").value = tr.out ?? "";
+  $("#cut-in").max = $("#cut-out").max = dur;
+  $("#use-keep").hidden = !(c.signal?.keep?.length);
+  const hasLog = p.source === "log" || (p.moments || []).length > 0;
+  $("#offset-wrap").hidden = $("#arm-here").hidden = !hasLog;
+  $("#log-offset").value = p.log_offset_s ?? 0;
+  const r = result(c.id);
+  $("#cut-list").replaceChildren(...(p.cuts || []).map((k, i) => {
+    const done = (r?.cuts || []).find((x) => Math.abs(x.start - k.start) < 0.001 && Math.abs(x.end - k.end) < 0.001);
+    return el("li", {},
+      el("span", { text: `Cut ${i + 1}  ${fmtT(k.start)}–${fmtT(k.end)}  (${(k.end - k.start).toFixed(1)} s)` }),
+      p.suggested?.cuts ? agentTag(p) : null,
+      done ? el("span", { class: done.outcome === "verified" ? "ok" : "error", text: done.outcome === "verified" ? done.output.split("/").pop() : done.error }) : null,
+      el("button", { type: "button", class: "icon small", title: "Remove this cut", onclick: () => setCuts(c.id, p.cuts.filter((_, j) => j !== i)) }, icon("close-square")));
+  }));
+  const notes = [];
+  if (p.log_interval_s > 0.3) notes.push(`Radio log rows are ${p.log_interval_s.toFixed(1)} s apart, so moment times are rough. Set the EdgeTX log interval to 0.1 s for better detection.`);
+  if (hasLog) notes.push("Log moments assume the clip starts at arm. Play to where you armed and click Arm is here to line them up.");
+  $("#moment-note").textContent = notes.join(" ");
+}
+
+function pickMoment(c, m) {
+  const pad = m.kind === "dead_air" ? 0 : 1;
+  const tr = trimFor(c.id);
+  tr.in = +Math.max(0, m.start - pad).toFixed(1);
+  tr.out = +Math.min(c.duration, m.end + pad).toFixed(1);
+  seek(tr.in);
+  renderEditor();
+}
+
+async function setCuts(id, cuts) {
+  await edit({ id, cuts: cuts.map((k) => ({ start: +k.start, end: +k.end })) });
+  renderEditor();
+}
+
+function addCut() {
+  const c = clips().find((x) => x.id === state.selected);
+  if (!c) return;
+  const tr = trimFor(c.id);
+  const a = parseFloat($("#cut-in").value);
+  const b = parseFloat($("#cut-out").value);
+  if (!Number.isFinite(a) || !Number.isFinite(b) || b - a < 0.5) {
+    toast("Set an in and an out point at least 0.5 s apart.", true);
+    return;
+  }
+  tr.in = tr.out = null;
+  setCuts(c.id, [...(plan(c.id).cuts || []), { start: a, end: b }]);
+}
+
+function setPoint(which) {
+  const c = clips().find((x) => x.id === state.selected);
+  const t = playhead();
+  if (!c) return;
+  if (t == null) {
+    toast("Play the clip first, or type the seconds.", true);
+    return;
+  }
+  trimFor(c.id)[which] = +t.toFixed(1);
+  renderEditor();
+}
+
+$("#preview-video").addEventListener("timeupdate", () => {
+  const c = clips().find((x) => x.id === state.selected);
+  const head = $("#timeline .head");
+  if (!c || !head) return;
+  head.hidden = false;
+  head.style.left = `${(Math.min($("#preview-video").currentTime, c.duration) / c.duration) * 100}%`;
+});
+for (const [id, k] of [["#cut-in", "in"], ["#cut-out", "out"]]) {
+  $(id).addEventListener("change", (e) => {
+    const v = parseFloat(e.target.value);
+    trimFor(state.selected)[k] = Number.isFinite(v) ? v : null;
+    renderEditor();
+  });
+}
+$("#log-offset").addEventListener("change", (e) => {
+  const v = parseFloat(e.target.value);
+  if (Number.isFinite(v)) edit({ id: state.selected, log_offset_s: v });
+});
 
 async function playPreview() {
   const c = clips().find((x) => x.id === state.selected);
@@ -726,6 +884,18 @@ const actions = {
   },
   import: runImport,
   play: playPreview,
+  "set-in": () => setPoint("in"),
+  "set-out": () => setPoint("out"),
+  "add-cut": addCut,
+  "use-keep": () => {
+    const c = clips().find((x) => x.id === state.selected);
+    if (c?.signal?.keep?.length) setCuts(c.id, c.signal.keep);
+  },
+  "arm-here": () => {
+    const t = playhead();
+    if (t == null) return toast("Play the clip to where you armed first.", true);
+    edit({ id: state.selected, log_offset_s: +t.toFixed(1) });
+  },
   "photos-all": () => addToPhotos((state.session?.results || []).filter((r) => r.outcome === "verified").map((r) => r.id)),
   "reveal-output": () => state.session?.output_dir && T.opener.openPath(state.session.output_dir),
   format: askFormat,

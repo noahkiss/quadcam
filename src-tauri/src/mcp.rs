@@ -362,6 +362,19 @@ impl<B: Backend> Server<B> {
                             r["error"].as_str().unwrap_or("")
                         ));
                     }
+                    for c in r["cuts"].as_array().into_iter().flatten() {
+                        line.push_str(&format!(
+                            "\nClip {} cut {}-{} s: {}",
+                            r["id"],
+                            c["start"],
+                            c["end"],
+                            if c["outcome"] == "verified" {
+                                c["output"].as_str().unwrap_or("?").to_string()
+                            } else {
+                                format!("failed: {}", c["error"].as_str().unwrap_or(""))
+                            }
+                        ));
+                    }
                 }
                 if let Some(p) = out.get("photos").filter(|p| !p.is_null()) {
                     line.push_str(&format!("\nPhotos: {}", photos_line(p)));
@@ -488,6 +501,25 @@ pub fn clip_views(session: &Value, ids: Option<&[u64]>) -> Vec<Value> {
                 .find(|r| &r["id"] == id)
                 .cloned()
                 .unwrap_or(Value::Null);
+            let duration = c["duration"].as_f64().unwrap_or(0.0);
+            // Log moments the offset moved outside the clip are left out.
+            let mut moments: Vec<Value> = p["moments"]
+                .as_array()
+                .into_iter()
+                .flatten()
+                .chain(c["signal"]["dead_air"].as_array().into_iter().flatten())
+                .filter(|m| {
+                    m["end"].as_f64().unwrap_or(0.0) > 0.0
+                        && m["start"].as_f64().unwrap_or(0.0) < duration
+                })
+                .cloned()
+                .collect();
+            moments.sort_by(|a, b| {
+                a["start"]
+                    .as_f64()
+                    .unwrap_or(0.0)
+                    .total_cmp(&b["start"].as_f64().unwrap_or(0.0))
+            });
             json!({
                 "id": id,
                 "name": c["name"],
@@ -512,6 +544,12 @@ pub fn clip_views(session: &Value, ids: Option<&[u64]>) -> Vec<Value> {
                 "output": r["output"],
                 "error": r["error"],
                 "in_photos": in_photos.contains(id),
+                "moments": moments,
+                "keep": c["signal"]["keep"],
+                "log_interval_s": p["log_interval_s"],
+                "log_offset_s": p["log_offset_s"],
+                "cuts": p["cuts"],
+                "cut_results": r["cuts"],
             })
         })
         .collect()
@@ -527,8 +565,18 @@ fn table(view: &[Value]) -> String {
             if let Some(o) = c["outcome"].as_str() {
                 marks.push(o.to_string());
             }
+            let n = |k: &str| c[k].as_array().map(Vec::len).unwrap_or(0);
+            if n("moments") > 0 {
+                marks.push(format!("{} moments", n("moments")));
+            }
+            if n("keep") > 0 {
+                marks.push(format!("{} keep ranges", n("keep")));
+            }
+            if n("cuts") > 0 {
+                marks.push(format!("{} cuts", n("cuts")));
+            }
             let sug = &c["agent_suggested"];
-            if ["date", "name", "note", "skip"]
+            if ["date", "name", "note", "skip", "cuts"]
                 .iter()
                 .any(|k| sug[k] == true)
             {
@@ -560,7 +608,9 @@ const INSTRUCTIONS: &str = "quadcam imports analog FPV DVR clips (AVI/MJPEG). Ty
 quadcam_load_clips (or read an already loaded session with quadcam_read_clips) -> look at thumbnails \
 with quadcam_read_clips(thumbnails=true) -> quadcam_suggest names/dates -> the person may edit them in \
 the app -> quadcam_read_clips to read the final values -> quadcam_export -> quadcam_add_to_photos -> \
-quadcam_eject. quadcam_format_card erases the card: only on request, after every clip verified.";
+quadcam_eject. quadcam_format_card erases the card: only on request, after every clip verified. \
+Moments (rolls, flips, punch-outs, dives from radio-log sticks; dead air from the video) and \
+suggested keep ranges are in quadcam_read_clips; propose trims as cuts with quadcam_suggest.";
 
 /// Tool descriptors: few tools, one per step of the import flow.
 pub fn tools() -> Value {
@@ -580,7 +630,7 @@ pub fn tools() -> Value {
         },
         {
             "name": "quadcam_read_clips",
-            "description": "Read the loaded clips: duration, frames, status (ok / incomplete / empty), the planned date with its source and radio-log match (matched / likely / unmatched), short name, note, skip, which values an agent suggested, and import results. Optionally returns each clip's thumbnail as an image.\n\nBest for: looking at the footage before suggesting names, and reading back the values the person settled on before export.\nReturns: a line per clip plus structured records; with thumbnails=true, one JPEG per clip (up to max_thumbnails).\nFollow up with quadcam_suggest to propose names or dates, or quadcam_export when the values are final.",
+            "description": "Read the loaded clips: duration, frames, status (ok / incomplete / empty), the planned date with its source and radio-log match (matched / likely / unmatched), short name, note, skip, which values an agent suggested, and import results. Also each clip's moments, in clip seconds: rolls, flips, punch-outs, dives and possible crashes from the radio log's sticks (scored 0..1; a 0.5 s log interval scores lower and its times are rough), and dead air from the video (blue no-signal screen, static, test pattern, black, 3 s or longer). `keep` holds the suggested ranges without dead air, and `cuts` the ranges that will export as extra files. Optionally returns each clip's thumbnail as an image.\n\nBest for: looking at the footage before suggesting names or cuts, and reading back the values the person settled on before export.\nReturns: a line per clip plus structured records; with thumbnails=true, one JPEG per clip (up to max_thumbnails).\nFollow up with quadcam_suggest to propose names or dates, or quadcam_export when the values are final.",
             "inputSchema": {"type": "object", "properties": {"ids": ids, "thumbnails": {"type": "boolean", "default": false, "description": "Attach the first-frame thumbnail of each clip as an image."}, "max_thumbnails": {"type": "integer", "minimum": 1, "maximum": 50, "default": 12}}, "additionalProperties": false},
             "annotations": {"title": "Read clips", "readOnlyHint": true, "openWorldHint": false}
         },
@@ -592,13 +642,13 @@ pub fn tools() -> Value {
         },
         {
             "name": "quadcam_suggest",
-            "description": "Suggest a short name, date, note or skip for clips. The values are marked agent-suggested, and in the app they appear as editable suggestions the person can accept or change. Names become the filename slug (YYYY-MM-DD_<name>.mp4, lowercased); an empty name uses the default name (\"flight\"), auto-numbered.\n\nBest for: proposing names from what the thumbnails show, or dates from a clock burned into the video.\nReturns: every clip's current plan.\nFollow up with quadcam_read_clips to read the final values before quadcam_export; the person may have changed them.",
-            "inputSchema": {"type": "object", "required": ["suggestions"], "properties": {"suggestions": {"type": "array", "minItems": 1, "items": {"type": "object", "required": ["id"], "properties": {"id": {"type": "integer", "minimum": 0}, "name": {"type": "string", "maxLength": 80}, "date": {"type": "string", "pattern": "^\\d{4}-\\d{2}-\\d{2}$"}, "note": {"type": "string"}, "skip": {"type": "boolean"}, "reason": {"type": "string", "description": "One short line on why, shown to the person."}}, "additionalProperties": false}}}, "additionalProperties": false},
+            "description": "Suggest a short name, date, note, skip or cut ranges for clips. The values are marked agent-suggested, and in the app they appear as editable suggestions the person can accept or change. Names become the filename slug (YYYY-MM-DD_<name>.mp4, lowercased); an empty name uses the default name (\"flight\"), auto-numbered. `cuts` replaces the clip's cut list; each range exports as an extra file <name>_cutN next to the clip (an empty list removes them). `log_offset_s` says where the first armed log row falls in the clip and moves the log moments.\n\nBest for: proposing names from what the thumbnails show, dates from a clock burned into the video, and cuts from moments or the keep ranges.\nReturns: every clip's current plan.\nFollow up with quadcam_read_clips to read the final values before quadcam_export; the person may have changed them.",
+            "inputSchema": {"type": "object", "required": ["suggestions"], "properties": {"suggestions": {"type": "array", "minItems": 1, "items": {"type": "object", "required": ["id"], "properties": {"id": {"type": "integer", "minimum": 0}, "name": {"type": "string", "maxLength": 80}, "date": {"type": "string", "pattern": "^\\d{4}-\\d{2}-\\d{2}$"}, "note": {"type": "string"}, "skip": {"type": "boolean"}, "cuts": {"type": "array", "maxItems": 20, "items": {"type": "object", "required": ["start", "end"], "properties": {"start": {"type": "number", "minimum": 0, "description": "Seconds into the clip."}, "end": {"type": "number", "minimum": 0}}, "additionalProperties": false}, "description": "Ranges to export as extra files, each at least 0.5 s."}, "log_offset_s": {"type": "number", "description": "Seconds into the clip where the radio log's first armed row falls (the DVR usually starts before arming)."}, "reason": {"type": "string", "description": "One short line on why, shown to the person."}}, "additionalProperties": false}}}, "additionalProperties": false},
             "annotations": {"title": "Suggest names and dates", "readOnlyHint": false, "destructiveHint": false, "idempotentHint": true, "openWorldHint": false}
         },
         {
             "name": "quadcam_export",
-            "description": "Convert every non-skipped clip (MP4 H.264 by default, or a lossless MOV remux), write metadata, and verify each output (frame count, duration, streams, metadata) before it counts. Never overwrites: duplicate names get -2, -3. Clips that already verified are not converted again. Options left out use the app's settings (in app mode) or the defaults (output ~/Movies/quadcam).\n\nBest for: after the names and dates are final.\nReturns: imported / skipped / failed counts, each clip's output path, and whether the card format step is unlocked.\nFollow up with quadcam_add_to_photos, then quadcam_eject.",
+            "description": "Convert every non-skipped clip (MP4 H.264 by default, or a lossless MOV remux), write metadata, and verify each output (frame count, duration, streams, metadata) before it counts. Never overwrites: duplicate names get -2, -3. Each cut range also exports as <name>_cutN (re-encoded from the source, frame-exact) and is verified. Clips and cuts that already verified are not written again, so call it again after adding cuts. Options left out use the app's settings (in app mode) or the defaults (output ~/Movies/quadcam).\n\nBest for: after the names and dates are final.\nReturns: imported / skipped / failed counts, each clip's output path, and whether the card format step is unlocked.\nFollow up with quadcam_add_to_photos, then quadcam_eject.",
             "inputSchema": {"type": "object", "properties": {"output_dir": {"type": "string"}, "format": {"type": "string", "enum": ["mp4", "mov"]}, "keep_originals": {"type": "boolean", "description": "Also copy each source AVI into <output>/originals/."}, "add_time": {"type": "boolean", "description": "Add HHMM to names of clips dated from a radio log."}, "add_to_photos": {"type": "boolean", "description": "Add the verified outputs to Photos afterwards."}, "album": {"type": "string", "description": "Photos album; empty string for the library only."}}, "additionalProperties": false},
             "annotations": {"title": "Export clips", "readOnlyHint": false, "destructiveHint": false, "idempotentHint": true, "openWorldHint": false}
         },

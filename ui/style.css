@@ -282,6 +282,25 @@ fieldset input { width: 6em; }
 
 /* Agent suggestions: dashed accent outline until the person edits the field. */
 input.suggested { border-style: dashed; border-color: var(--accent); background: color-mix(in srgb, var(--accent) 8%, var(--mantle)); }
+/* Trim editor */
+.editor { display: flex; flex-direction: column; gap: .5rem; }
+.timeline { position: relative; height: 34px; background: var(--surface); border-radius: 6px; cursor: pointer; overflow: hidden; }
+.timeline .dead { position: absolute; top: 0; bottom: 0; background: repeating-linear-gradient(45deg, color-mix(in srgb, var(--error) 35%, transparent) 0 4px, transparent 4px 8px); }
+.timeline .keep { position: absolute; bottom: 0; height: 4px; background: var(--success); }
+.timeline .cut { position: absolute; top: 0; height: 6px; background: var(--primary); }
+.timeline .sel { position: absolute; top: 0; bottom: 0; background: color-mix(in srgb, var(--primary) 18%, transparent); border-inline: 1px solid var(--primary); }
+.timeline .mark { position: absolute; top: 8px; bottom: 6px; min-width: 3px; padding: 0; border-radius: 2px; background: var(--accent); border: none; }
+.timeline .mark.low { opacity: .5; }
+.timeline .head { position: absolute; top: 0; bottom: 0; width: 2px; background: var(--fg); pointer-events: none; }
+.moment-list, .cut-list { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: .3rem; }
+.moment-list button { font-size: .75rem; padding: .1rem .5rem; border-radius: 99px; background: var(--surface); }
+.moment-list button.dead { color: var(--error); }
+.cut-list { flex-direction: column; font-size: .82rem; font-family: var(--mono); }
+.cut-list li { display: flex; gap: .5rem; align-items: center; }
+.cut-list .ok { color: var(--success); }
+.cut-list .error { color: var(--error); }
+.trim-row { display: flex; flex-wrap: wrap; gap: .4rem; align-items: end; }
+.trim-row input[type=number] { width: 5.5rem; }
 .badge.agent { background: color-mix(in srgb, var(--accent) 22%, transparent); color: var(--accent); }
 .agent-hint { font-size: .75rem; color: var(--muted); margin-top: .3rem; display: flex; gap: .4rem; align-items: center; }
 .clip.has-suggestion { border-color: color-mix(in srgb, var(--accent) 35%, transparent); }

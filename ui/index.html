@@ -65,6 +65,24 @@
           <video id="preview-video" controls playsinline hidden></video>
           <button type="button" class="play" data-action="play" hidden><i data-icon="play"></i><span>Play</span></button>
         </div>
+        <section data-component="trim-editor" id="editor" class="editor" hidden>
+          <div id="timeline" class="timeline" role="group" aria-label="Clip timeline: click to seek"></div>
+          <ul id="moment-list" class="moment-list"></ul>
+          <div class="trim-row">
+            <label class="field inline"><span>In (s)</span><input id="cut-in" type="number" min="0" step="0.1"></label>
+            <button type="button" class="ghost small" data-action="set-in" title="Use the playhead">Set in</button>
+            <label class="field inline"><span>Out (s)</span><input id="cut-out" type="number" min="0" step="0.1"></label>
+            <button type="button" class="ghost small" data-action="set-out" title="Use the playhead">Set out</button>
+            <button type="button" class="small" data-action="add-cut">Add cut</button>
+          </div>
+          <div class="trim-row">
+            <button type="button" class="ghost small" data-action="use-keep" id="use-keep" title="Cut the clip down to the parts without dead air">Use keep ranges</button>
+            <label class="field inline" id="offset-wrap" title="Where the radio log starts (arm) in this clip. Moves the log moments."><span>Log offset (s)</span><input id="log-offset" type="number" step="0.5"></label>
+            <button type="button" class="ghost small" data-action="arm-here" id="arm-here" title="Play to where you armed, then click">Arm is here</button>
+          </div>
+          <ol id="cut-list" class="cut-list"></ol>
+          <p id="moment-note" class="muted small-print"></p>
+        </section>
         <dl id="preview-meta" class="meta"></dl>
         <p class="muted small-print">The date is reliable. A log time is approximate: the DVR starts recording before you arm.</p>
       </aside>

@@ -17,9 +17,10 @@ Analog DVRs record MJPEG video in AVI files (`PICT0001.AVI` and similar). They h
    - **Edited:** any date you type.
 5. **Name.** You give each clip a short name and an optional note. The file name is `YYYY-MM-DD_<name>.mp4`. An empty name becomes `flight`, `flight-2`, and so on.
 6. **Convert.** The default is MP4 (H.264 with the VideoToolbox hardware encoder). The files play everywhere and are much smaller: 14 times smaller on the synthetic test clips. Real, noisy footage compresses less. A lossless MOV remux keeps the original MJPEG frames.
-7. **Verify.** quadcam compares every output with its source: frame count, duration, streams, and metadata. Only verified files count as imported.
-8. **Share.** You can add the files to the Photos app, into an album.
-9. **Format (optional).** When every clip verified, you can erase the card as FAT32 and eject it. See [Format safety](#format-safety).
+7. **Trim (optional).** quadcam marks moments on each clip's timeline: rolls, flips, punch-outs and dives from the radio log's sticks, and dead air from the video itself. You can export any range as an extra file. See [Moments and cuts](#moments-and-cuts).
+8. **Verify.** quadcam compares every output with its source: frame count, duration, streams, and metadata. Only verified files count as imported.
+9. **Share.** You can add the files to the Photos app, into an album.
+10. **Format (optional).** When every clip verified, you can erase the card as FAT32 and eject it. See [Format safety](#format-safety).
 
 ### Supported gear
 
@@ -93,6 +94,36 @@ The frontend is plain HTML, CSS, and JavaScript in `ui/`, with no build step and
 6. On the summary, select **Add all to Photos** if you want the files in Photos.
 7. Eject the card, or format it (see below).
 
+## Moments and cuts
+
+Select a clip to see its timeline under the preview. The timeline shows:
+
+- **Dead air** (striped): the receiver's blue no-signal screen, static, a colour-bar test pattern, or black. Each stretch is at least 3 seconds. A shorter breakup inside a flight stays in.
+- **Keep ranges** (green line): the clip without its dead air. Select **Use keep ranges** to turn them into cuts.
+- **Moments** (markers): found in the radio log's stick channels.
+- **Cuts** (blue line): the ranges that export as extra files.
+
+| Moment | What quadcam looks for |
+|---|---|
+| Roll | Aileron at 80 % or more of full stick, held 0.3 to 1.5 s |
+| Flip | Elevator at 80 % or more of full stick, held 0.3 to 1.5 s |
+| Punch-out | Throttle from 35 % or less to 85 % or more within 0.6 s |
+| Dive | Throttle at 15 % or less for 1 s or more mid-flight, then a punch-out |
+| Crash? | Big stick inputs in the last 1.5 s before the log stops (disarm). Low confidence |
+
+Each moment has a score from 0 to 1. When the receiver sends attitude telemetry and it shows the quad upside down during a roll or flip, the score goes up. Select a moment to put the in and out points around it. Play the clip, then use **Set in** and **Set out** to adjust them, or type the seconds. Select **Add cut**. A clip can have up to 20 cuts.
+
+On import, each cut becomes its own file next to the clip: `YYYY-MM-DD_<name>_cut1.mp4`, `_cut2`, and so on. quadcam cuts from the original DVR file, not from the converted one. MJPEG has a keyframe on every frame, so each cut starts and ends on the exact frame. MP4 cuts are re-encoded like the full clip; MOV cuts copy the original frames. quadcam verifies every cut (streams, frame count, duration). Cuts that verified are not written again, so you can add cuts later and import again. **Add to Photos** adds a clip's cuts with it.
+
+Two tips for radio-log moments:
+
+- **Log every 0.1 s.** EdgeTX logs every 0.5 s or 1 s unless you change it. In the model's Special Functions, set the **SD Logs** function's interval to 0.1 s. At 0.5 s, quadcam still finds moments, but their times are only good to half a second, short moves can be missed, and the scores are lower.
+- **Line up the log.** The log starts when you arm, but the DVR usually starts recording earlier. quadcam assumes the clip starts at arm. Play the clip to the moment you arm, then select **Arm is here**. The moments move to match.
+
+Dead-air detection needs no radio log. quadcam samples two frames per second at 64 × 48 pixels and decodes only those frames, so a 10-minute clip takes about half a second.
+
+## Settings
+
 Settings (the gear icon) hold the default name, the Photos album, the encoder, and the tolerances for log matching. The default output folder is `~/Movies/quadcam`. The app creates it on the first import.
 
 ## Command line
@@ -108,6 +139,11 @@ quadcam-cli dates --logs /path/to/LOGS    # date clips from radio logs
 quadcam-cli dates --set 2=2026-10-03      # set one clip's date
 quadcam-cli import --name 0=backyard-loops --skip 3 --format mp4
 quadcam-cli import --plan plan.json       # names, dates, notes and options from a file
+quadcam-cli moments                       # moments, dead air, keep ranges and cuts per clip
+quadcam-cli cut 0 12.5-18 1:02-1:10       # set clip 0's cuts (seconds or m:ss)
+quadcam-cli cut 0 --keep                  # cut clip 0 down to its keep ranges
+quadcam-cli cut 0 --log-offset 4.5        # the radio log starts 4.5 s into clip 0
+quadcam-cli import --cut 0=20-26          # add a cut, then import
 quadcam-cli verify                        # check the outputs again
 quadcam-cli photos --album Drone          # add verified outputs to Photos
 quadcam-cli eject
@@ -159,10 +195,10 @@ If the app is running, the server works on the app's session. You see every chan
 |---|---|
 | `quadcam_status` | Shows the mode (app or headless), the cards, the radios, and the session |
 | `quadcam_load_clips` | Stages, checks, and dates a card or a folder |
-| `quadcam_read_clips` | Reads the clips and their plans; returns thumbnails as images |
+| `quadcam_read_clips` | Reads the clips, their plans, moments, keep ranges and cuts; returns thumbnails as images |
 | `quadcam_match_logs` | Dates the clips from EdgeTX logs |
-| `quadcam_suggest` | Suggests names, dates, notes, or skips |
-| `quadcam_export` | Converts and verifies; can also add to Photos |
+| `quadcam_suggest` | Suggests names, dates, notes, skips, cuts, or the log offset |
+| `quadcam_export` | Converts and verifies clips and cuts; can also add to Photos |
 | `quadcam_verify` | Checks the outputs again |
 | `quadcam_add_to_photos` | Adds verified outputs to Photos |
 | `quadcam_eject` | Ejects the card |
@@ -241,6 +277,7 @@ The tests need ffmpeg. They make their own synthetic clips with `ffmpeg -f lavfi
 | `src-tauri/src/mcp.rs` | The MCP server |
 | `src-tauri/src/bin/quadcam-cli.rs` | The command-line tool |
 | `src-tauri/src/{scan,disk,media,logs,naming,pipeline,session,photos}.rs` | Scanning, disks, ffmpeg, radio logs, file names, the import steps, the session, Photos |
+| `src-tauri/src/moments.rs` | Moments from radio-log sticks and dead air from video frames. Every threshold is in `moments::tune` |
 | `src-tauri/tests/` | Integration tests |
 
 ## License

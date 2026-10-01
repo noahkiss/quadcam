@@ -7,6 +7,7 @@ use chrono::NaiveDate;
 use clap::{Parser, Subcommand};
 use quadcam_lib::core::{Core, FormatRequest, ImportOptions, LogChoice};
 use quadcam_lib::media::{self, Encoder, Format};
+use quadcam_lib::moments::Span;
 use quadcam_lib::photos::{self, PhotosLibrary, Recorder};
 use quadcam_lib::session::{Editor, PlanPatch};
 use quadcam_lib::{disk, scan};
@@ -62,6 +63,26 @@ enum Cmd {
     },
     /// Show the current session: clips, plans, results.
     Show,
+    /// Show each clip's moments (radio-log sticks and dead air), keep ranges and cuts.
+    Moments {
+        /// Clip ids. Default: every clip.
+        ids: Vec<usize>,
+    },
+    /// Set the cut ranges of one clip. Each exports as an extra <name>_cutN file on import.
+    Cut {
+        id: usize,
+        /// Ranges in clip seconds or m:ss, for example 12.5-18 or 1:02-1:10. Replaces the list.
+        ranges: Vec<String>,
+        /// Use the suggested keep ranges (the clip without its dead air).
+        #[arg(long, conflicts_with_all = ["ranges", "clear"])]
+        keep: bool,
+        /// Remove every cut.
+        #[arg(long, conflicts_with = "ranges")]
+        clear: bool,
+        /// Seconds into the clip where the radio log's first armed row falls.
+        #[arg(long, allow_hyphen_values = true)]
+        log_offset: Option<f64>,
+    },
     /// Convert and verify every non-skipped clip.
     Import {
         /// JSON plan: {"clips":[{"id":0,"name":"..","date":"YYYY-MM-DD","note":"..","skip":false}]}
@@ -82,6 +103,9 @@ enum Cmd {
         /// Import a clip that was skipped. Repeatable.
         #[arg(long = "unskip", value_name = "ID")]
         unskip: Vec<usize>,
+        /// Add a cut range to a clip: ID=START-END (seconds or m:ss). Repeatable.
+        #[arg(long = "cut", value_name = "ID=START-END")]
+        cuts: Vec<String>,
         #[arg(long, value_parser = ["mp4", "mov"])]
         format: Option<String>,
         #[arg(long, value_parser = ["videotoolbox", "x264"])]
@@ -167,6 +191,31 @@ fn date(s: &str) -> Result<NaiveDate> {
         .with_context(|| format!("{s:?} is not YYYY-MM-DD"))
 }
 
+/// Seconds from `12.5` or `1:02.5`.
+fn secs(s: &str) -> Result<f64> {
+    let s = s.trim();
+    let v = match s.split_once(':') {
+        Some((m, x)) => m
+            .parse::<f64>()
+            .ok()
+            .zip(x.parse::<f64>().ok())
+            .map(|(m, x)| m * 60.0 + x),
+        None => s.parse().ok(),
+    };
+    v.with_context(|| format!("{s:?} is not seconds or m:ss"))
+}
+
+/// A range `START-END`.
+fn span(s: &str) -> Result<Span> {
+    let (a, b) = s
+        .split_once('-')
+        .with_context(|| format!("{s:?} is not START-END"))?;
+    Ok(Span {
+        start: secs(a)?,
+        end: secs(b)?,
+    })
+}
+
 #[derive(Deserialize)]
 struct PlanFile {
     #[serde(default)]
@@ -222,6 +271,82 @@ fn run(cli: Cli) -> Result<Value> {
             core.session()
                 .ok_or_else(|| anyhow!("No clips loaded. Run `stage` first."))?,
         )?,
+        Cmd::Moments { ids } => {
+            let s = core
+                .session()
+                .ok_or_else(|| anyhow!("No clips loaded. Run `stage` first."))?;
+            let want: Vec<u64> = ids.iter().map(|&i| i as u64).collect();
+            let view = quadcam_lib::mcp::clip_views(
+                &serde_json::to_value(&s)?,
+                (!want.is_empty()).then_some(&want[..]),
+            );
+            let keys = [
+                "id",
+                "name",
+                "duration_s",
+                "log_match",
+                "log_interval_s",
+                "log_offset_s",
+                "moments",
+                "keep",
+                "cuts",
+                "cut_results",
+            ];
+            json!(view
+                .iter()
+                .map(|c| keys
+                    .iter()
+                    .map(|k| (k.to_string(), c[*k].clone()))
+                    .collect())
+                .collect::<Vec<serde_json::Map<String, Value>>>())
+        }
+        Cmd::Cut {
+            id,
+            ranges,
+            keep,
+            clear,
+            log_offset,
+        } => {
+            let s = core
+                .session()
+                .ok_or_else(|| anyhow!("No clips loaded. Run `stage` first."))?;
+            let cuts = if keep {
+                let c = s
+                    .clips
+                    .iter()
+                    .find(|c| c.id == id)
+                    .with_context(|| format!("no clip with id {id}"))?;
+                let k = c
+                    .signal
+                    .as_ref()
+                    .map(|x| x.keep.clone())
+                    .unwrap_or_default();
+                if k.is_empty() {
+                    bail!("clip {id} has no suggested keep ranges (no dead air found)");
+                }
+                Some(k)
+            } else if clear {
+                Some(Vec::new())
+            } else if ranges.is_empty() {
+                None
+            } else {
+                Some(ranges.iter().map(|r| span(r)).collect::<Result<Vec<_>>>()?)
+            };
+            if cuts.is_none() && log_offset.is_none() {
+                bail!("give ranges, --keep, --clear or --log-offset");
+            }
+            let s = core.patch(
+                &[PlanPatch {
+                    id,
+                    cuts,
+                    log_offset_s: log_offset,
+                    ..Default::default()
+                }],
+                Editor::User,
+            )?;
+            let p = s.plans.iter().find(|p| p.id == id).context("no plan")?;
+            json!({"id": id, "cuts": p.cuts, "log_offset_s": p.log_offset_s, "moments": p.moments})
+        }
         Cmd::Import {
             plan,
             names,
@@ -229,6 +354,7 @@ fn run(cli: Cli) -> Result<Value> {
             dates,
             skip,
             unskip,
+            cuts,
             format,
             encoder,
             output,
@@ -276,6 +402,29 @@ fn run(cli: Cli) -> Result<Value> {
             patches.extend(unskip.iter().map(|&id| PlanPatch {
                 id,
                 skip: Some(false),
+                ..Default::default()
+            }));
+            // --cut adds to the clip's current cuts.
+            let mut added: Vec<(usize, Vec<Span>)> = Vec::new();
+            for (id, r) in cuts.iter().map(|x| pair(x)).collect::<Result<Vec<_>>>()? {
+                let sp = span(&r)?;
+                match added.iter_mut().find(|(i, _)| *i == id) {
+                    Some((_, v)) => v.push(sp),
+                    None => {
+                        let mut v = core
+                            .session()
+                            .and_then(|s| {
+                                s.plans.iter().find(|p| p.id == id).map(|p| p.cuts.clone())
+                            })
+                            .unwrap_or_default();
+                        v.push(sp);
+                        added.push((id, v));
+                    }
+                }
+            }
+            patches.extend(added.into_iter().map(|(id, c)| PlanPatch {
+                id,
+                cuts: Some(c),
                 ..Default::default()
             }));
             if !patches.is_empty() {

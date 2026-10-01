@@ -211,6 +211,49 @@ fn import_from_a_plan_file() {
 }
 
 #[test]
+fn moments_and_cuts() {
+    let env = Env::new();
+    let src = folder_with_clips();
+    env.ok(&["stage", s(src.path())]);
+    env.ok(&["analyze"]);
+    let m = env.ok(&["moments", "0"]);
+    assert_eq!(m.as_array().unwrap().len(), 1);
+    assert_eq!(m[0]["moments"], serde_json::json!([]));
+    // No dead air in the clip, so there are no keep ranges to use.
+    let (code, v) = env.run(&["cut", "0", "--keep"]);
+    assert_eq!(code, 1, "{v}");
+    let c = env.ok(&["cut", "0", "0.25-1", "0:01.2-0:02"]);
+    assert_eq!(
+        c["cuts"],
+        serde_json::json!([{"start": 0.25, "end": 1.0}, {"start": 1.2, "end": 2.0}])
+    );
+    let (code, _) = env.run(&["cut", "0", "1.9-2.3"]);
+    assert_eq!(code, 1, "too short once clamped to the clip");
+    let out = tempfile::tempdir().unwrap();
+    let r = env.ok(&[
+        "import",
+        "--skip",
+        "1",
+        "--cut",
+        "0=0-0.75",
+        "--output",
+        s(out.path()),
+    ]);
+    let cuts = r["summary"]["results"][0]["cuts"]
+        .as_array()
+        .unwrap()
+        .clone();
+    assert_eq!(cuts.len(), 3, "--cut adds to the cuts already set");
+    for (i, c) in cuts.iter().enumerate() {
+        assert_eq!(c["outcome"], "verified", "{c}");
+        let name = format!("_flight_cut{}.mp4", i + 1);
+        assert!(c["output"].as_str().unwrap().ends_with(&name), "{c}");
+    }
+    let c = env.ok(&["cut", "0", "--clear"]);
+    assert_eq!(c["cuts"], serde_json::json!([]));
+}
+
+#[test]
 fn errors_and_exit_codes() {
     let env = Env::new();
     let (code, v) = env.run(&["show"]);
