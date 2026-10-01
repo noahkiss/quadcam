@@ -5,6 +5,7 @@
 use anyhow::{anyhow, bail, Context, Result};
 use chrono::NaiveDate;
 use clap::{Parser, Subcommand};
+use quadcam_lib::api::{self, call};
 use quadcam_lib::core::{Core, FormatRequest, ImportOptions, LogChoice};
 use quadcam_lib::media::{self, Encoder, Format};
 use quadcam_lib::moments::Span;
@@ -482,7 +483,8 @@ fn span(s: &str) -> Result<Span> {
     })
 }
 
-#[derive(Deserialize, specta::Type)]
+/// `import --plan FILE`: patches in the `api` shape, plus the import options.
+#[derive(Deserialize)]
 struct PlanFile {
     #[serde(default)]
     clips: Vec<PlanPatch>,
@@ -497,13 +499,15 @@ fn run(cli: Cli) -> Result<Value> {
     };
     let core = Core::headless(cli.session.clone(), photos.clone());
     Ok(match cli.cmd {
-        Cmd::Cards => serde_json::to_value(core.volumes())?,
+        Cmd::Cards => serde_json::to_value(call::volumes(&core)?)?,
         Cmd::Scan { path } => {
             let vol = disk::probe_volume(&path);
             json!({"path": path, "volume": vol, "clips": scan::find_clips(&path)})
         }
-        Cmd::Stage { path } => serde_json::to_value(core.stage(path.as_deref())?)?,
-        Cmd::Analyze => serde_json::to_value(core.analyse()?)?,
+        Cmd::Stage { path } => {
+            serde_json::to_value(call::stage(&core, api::SourceParams { source: path })?)?
+        }
+        Cmd::Analyze => serde_json::to_value(call::analyse(&core)?)?,
         Cmd::Dates {
             logs,
             no_logs,
@@ -516,7 +520,7 @@ fn run(cli: Cli) -> Result<Value> {
                 (None, true) => LogChoice::None,
                 _ => LogChoice::Keep,
             };
-            let mut s = core.plan_dates(choice, day)?;
+            let mut s = call::dates(&core, api::DatesParams { logs: choice, day })?;
             let patches = set
                 .iter()
                 .map(|x| {
@@ -538,18 +542,17 @@ fn run(cli: Cli) -> Result<Value> {
                 });
             }
             if !patches.is_empty() {
-                s = core.patch(&patches, Editor::User)?;
+                s = user_patch(&core, patches)?;
             }
             json!({"log_dir": s.log_dir, "log_day": s.log_day, "log_days": s.log_days, "warnings": s.date_warnings, "plans": s.plans})
         }
         Cmd::Show => serde_json::to_value(
-            core.session()
-                .ok_or_else(|| anyhow!("No clips loaded. Run `stage` first."))?,
+            call::session(&core)?.ok_or_else(|| anyhow!("No clips loaded. Run `stage` first."))?,
         )?,
         Cmd::Profiles { cmd } => profiles(&core, cmd.unwrap_or(ProfCmd::List))?,
         Cmd::Places { cmd } => places(&core, cmd.unwrap_or(PlaceCmd::List))?,
         Cmd::Settings { cmd } => match cmd.unwrap_or(SetCmd::Show) {
-            SetCmd::Show => serde_json::to_value(core.settings()?)?,
+            SetCmd::Show => serde_json::to_value(call::settings(&core)?)?,
             SetCmd::Set { values } => {
                 let mut changes = serde_json::Map::new();
                 for kv in &values {
@@ -560,7 +563,10 @@ fn run(cli: Cli) -> Result<Value> {
                         .unwrap_or_else(|_| Value::String(v.to_string()));
                     changes.insert(k.trim().to_string(), v);
                 }
-                serde_json::to_value(core.settings_set(&changes)?)?
+                serde_json::to_value(call::settings_set(
+                    &core,
+                    api::SetSettingsParams { values: changes },
+                )?)?
             }
         },
         Cmd::Meta {
@@ -610,7 +616,7 @@ fn run(cli: Cli) -> Result<Value> {
                     ..Default::default()
                 })
                 .collect();
-            let s = core.patch(&patches, Editor::User)?;
+            let s = user_patch(&core, patches)?;
             json!(s
                 .plans
                 .iter()
@@ -683,15 +689,15 @@ fn run(cli: Cli) -> Result<Value> {
             if cuts.is_none() && log_offset.is_none() {
                 bail!("give ranges, --keep, --clear or --log-offset");
             }
-            let s = core.patch(
-                &[PlanPatch {
+            let s = user_patch(
+                &core,
+                vec![PlanPatch {
                     id,
                     cuts,
                     log_offset_s: log_offset,
                     removed_cuts: removed(removed_files),
                     ..Default::default()
                 }],
-                Editor::User,
             )?;
             let p = s.plans.iter().find(|p| p.id == id).context("no plan")?;
             json!({"id": id, "cuts": p.cuts, "log_offset_s": p.log_offset_s, "moments": p.moments})
@@ -785,7 +791,7 @@ fn run(cli: Cli) -> Result<Value> {
                 ..Default::default()
             }));
             if !patches.is_empty() {
-                core.patch(&patches, Editor::User)?;
+                user_patch(&core, patches)?;
             }
             if let Some(f) = format {
                 opts.format = Some(if f == "mov" { Format::Mov } else { Format::Mp4 });
@@ -802,7 +808,7 @@ fn run(cli: Cli) -> Result<Value> {
             opts.add_time = Some(add_time || opts.add_time.unwrap_or(false));
             opts.add_to_photos |= add_to_photos;
             opts.album = album.or(opts.album);
-            serde_json::to_value(core.import(&opts)?)?
+            serde_json::to_value(call::import(&core, opts)?)?
         }
         Cmd::Verify {
             output: Some(out),
@@ -839,7 +845,7 @@ fn run(cli: Cli) -> Result<Value> {
             }
         }
         Cmd::Verify { output: None, .. } => {
-            let reports = core.verify(None)?;
+            let reports = call::verify(&core, api::VerifyParams { ids: None })?;
             let bad: Vec<_> = reports.iter().filter(|r| !r.ok).collect();
             if !bad.is_empty() {
                 bail!(
@@ -858,23 +864,19 @@ fn run(cli: Cli) -> Result<Value> {
         } => {
             let album = album.or(Some(photos::DEFAULT_ALBUM.to_string()));
             if files.is_empty() {
-                serde_json::to_value(core.add_to_photos(None, album)?)?
+                serde_json::to_value(call::photos(&core, api::PhotosParams { ids: None, album })?)?
             } else {
                 let report = photos::share(photos.as_ref(), &files, album.as_deref())?;
                 json!({"dry_run": dry_run, "report": report})
             }
         }
-        Cmd::Clear => {
-            core.clear()?;
-            json!({"cleared": true})
-        }
+        Cmd::Clear => serde_json::to_value(call::clear(&core)?)?,
         Cmd::Eject { target } => {
-            core.eject(target.as_deref())?;
-            json!({"ejected": true})
+            serde_json::to_value(call::eject(&core, api::EjectParams { target })?)?
         }
         Cmd::Format {
             plan: true, label, ..
-        } => serde_json::to_value(core.format_plan(label.as_deref())?)?,
+        } => serde_json::to_value(call::format_plan(&core, api::LabelParams { label })?)?,
         Cmd::Format {
             device,
             volume_uuid,
@@ -895,7 +897,7 @@ fn run(cli: Cli) -> Result<Value> {
                 confirm: true,
             };
             // Any reason not to erase is a refusal, so scripts can tell it from a crash.
-            let plan = core.format(&req, false).map_err(|e| {
+            let plan = call::format(&core, req).map_err(|e| {
                 let m = format!("{e:#}");
                 if m.starts_with("Refused") {
                     anyhow!(m)
@@ -910,6 +912,17 @@ fn run(cli: Cli) -> Result<Value> {
     })
 }
 
+/// A person's plan changes, through `suggest` with the user as the editor.
+fn user_patch(core: &Core, patches: Vec<PlanPatch>) -> Result<quadcam_lib::session::Session> {
+    call::suggest(
+        core,
+        api::SuggestParams {
+            patches,
+            editor: Some(Editor::User),
+        },
+    )
+}
+
 fn library(core: &Core, cmd: LibCmd) -> Result<Value> {
     use quadcam_lib::library::{Filter, Flag};
     Ok(match cmd {
@@ -921,14 +934,17 @@ fn library(core: &Core, cmd: LibCmd) -> Result<Value> {
             aircraft,
             min_rating,
         } => {
-            let v = core.library(&Filter {
-                query,
-                group,
-                day,
-                place,
-                aircraft,
-                min_rating,
-            })?;
+            let v = call::library(
+                core,
+                Filter {
+                    query,
+                    group,
+                    day,
+                    place,
+                    aircraft,
+                    min_rating,
+                },
+            )?;
             serde_json::to_value(v)?
         }
         LibCmd::Rate {
@@ -950,10 +966,23 @@ fn library(core: &Core, cmd: LibCmd) -> Result<Value> {
             if stars.is_none() && flag.is_none() {
                 bail!("give --stars, --pick, --reject or --unflag");
             }
-            serde_json::to_value(core.library_rate(&ids, stars, flag)?)?
+            serde_json::to_value(call::library_rate(
+                core,
+                api::RateParams {
+                    ids,
+                    rating: stars,
+                    flag,
+                },
+            )?)?
         }
-        LibCmd::Rebuild => serde_json::to_value(core.library_rebuild()?)?,
-        LibCmd::Rename { id, name } => serde_json::to_value(core.library_rename(&id, &name)?)?,
+        LibCmd::Rebuild => serde_json::to_value(call::library_rebuild(core)?)?,
+        LibCmd::Rename { id, name } => serde_json::to_value(call::library_rename(
+            core,
+            api::RenameParams {
+                id,
+                name: Some(name),
+            },
+        )?)?,
         LibCmd::Edit {
             id,
             note,
@@ -990,7 +1019,10 @@ fn library(core: &Core, cmd: LibCmd) -> Result<Value> {
             {
                 bail!("give at least one of --note, --keywords, --author, --place, --location, --profile, --date, --time");
             }
-            serde_json::to_value(core.library_edit(&id, &e)?)?
+            serde_json::to_value(call::library_edit(
+                core,
+                api::LibraryEditParams { id, edit: e },
+            )?)?
         }
         LibCmd::Cut {
             id,
@@ -1002,7 +1034,14 @@ fn library(core: &Core, cmd: LibCmd) -> Result<Value> {
             let mut out = json!({});
             if clear || !ranges.is_empty() {
                 let cuts = ranges.iter().map(|r| span(r)).collect::<Result<Vec<_>>>()?;
-                let change = core.library_set_cuts(&id, &cuts, removed(r))?;
+                let change = call::library_cuts(
+                    core,
+                    api::LibraryCutsParams {
+                        id: id.clone(),
+                        cuts,
+                        removed_cuts: removed(r),
+                    },
+                )?;
                 if let quadcam_lib::trim::CutChange::Confirm { files } = &change {
                     bail!(
                         "these cuts were exported already: {}. Add --removed keep or --removed trash.",
@@ -1016,26 +1055,35 @@ fn library(core: &Core, cmd: LibCmd) -> Result<Value> {
                 out["change"] = serde_json::to_value(change)?;
             }
             if export {
-                out["exported"] = serde_json::to_value(core.library_export_cuts(&id)?)?;
+                out["exported"] = serde_json::to_value(call::library_export_cuts(
+                    core,
+                    api::ClipIdParams { id },
+                )?)?;
             }
             if out.as_object().is_some_and(|o| o.is_empty()) {
                 bail!("give ranges, --clear or --export");
             }
             out
         }
-        LibCmd::ApplyNameFormat { ids } => {
-            serde_json::to_value(core.library_apply_name_format((!ids.is_empty()).then_some(ids))?)?
+        LibCmd::ApplyNameFormat { ids } => serde_json::to_value(call::library_apply_name_format(
+            core,
+            api::IdsParams { ids },
+        )?)?,
+        LibCmd::Trash { ids } => {
+            serde_json::to_value(call::library_trash(core, api::IdsParams { ids })?)?
         }
-        LibCmd::Trash { ids } => serde_json::to_value(core.library_trash(&ids)?)?,
-        LibCmd::Photos { ids, album } => serde_json::to_value(core.library_photos(&ids, album)?)?,
+        LibCmd::Photos { ids, album } => serde_json::to_value(call::library_photos(
+            core,
+            api::LibraryPhotosParams { ids, album },
+        )?)?,
     })
 }
 
 fn profiles(core: &Core, cmd: ProfCmd) -> Result<Value> {
     Ok(match cmd {
         ProfCmd::List => {
-            let (profiles, default) = core.profiles()?;
-            json!({"profiles": profiles, "default_profile": default, "places": core.places()?})
+            let p = call::profiles(core)?;
+            json!({"profiles": p.profiles, "default_profile": p.default_profile, "places": call::places(core)?})
         }
         ProfCmd::Save {
             name,
@@ -1064,28 +1112,48 @@ fn profiles(core: &Core, cmd: ProfCmd) -> Result<Value> {
             put("author", author.map(Value::from));
             put("place", place.map(Value::from));
             put("edgetx_models", models.map(|m| json!(csv(&m))));
-            let p = core.profile_save(&name, &fields, rename.as_deref())?;
+            let p = call::profile_save(
+                core,
+                api::ProfileSaveParams {
+                    name,
+                    new_name: rename,
+                    fields,
+                },
+            )?;
             if default {
-                core.profile_default(&p.name)?;
+                call::profile_default(
+                    core,
+                    api::NameParams {
+                        name: p.name.clone(),
+                    },
+                )?;
             }
-            let (_, d) = core.profiles()?;
-            json!({"profile": p, "default_profile": d})
+            json!({"profile": p, "default_profile": call::profiles(core)?.default_profile})
         }
         ProfCmd::Delete { name } => {
-            json!({"deleted": core.profile_delete(&name)?, "default_profile": core.profiles()?.1})
+            json!({"deleted": call::profile_delete(core, api::NameParams { name })?, "default_profile": call::profiles(core)?.default_profile})
         }
-        ProfCmd::Default { name } => json!({"default_profile": core.profile_default(&name)?}),
+        ProfCmd::Default { name } => {
+            json!({"default_profile": call::profile_default(core, api::NameParams { name })?})
+        }
     })
 }
 
 fn places(core: &Core, cmd: PlaceCmd) -> Result<Value> {
     Ok(match cmd {
-        PlaceCmd::List => serde_json::to_value(core.places()?)?,
+        PlaceCmd::List => serde_json::to_value(call::places(core)?)?,
         PlaceCmd::Search {
             query,
             provider,
             limit,
-        } => serde_json::to_value(core.place_search(&query, provider.as_deref(), Some(limit))?)?,
+        } => serde_json::to_value(call::place_search(
+            core,
+            api::SearchParams {
+                query,
+                provider,
+                limit: Some(limit),
+            },
+        )?)?,
         PlaceCmd::Save {
             name,
             location,
@@ -1100,7 +1168,14 @@ fn places(core: &Core, cmd: PlaceCmd) -> Result<Value> {
                     (Some(a), Some(b), None)
                 }
                 (None, Some(q)) => {
-                    let hits = core.place_search(&q, provider.as_deref(), Some(pick.max(5)))?;
+                    let hits = call::place_search(
+                        core,
+                        api::SearchParams {
+                            query: q.clone(),
+                            provider,
+                            limit: Some(pick.max(5)),
+                        },
+                    )?;
                     let hit = hits.get(pick.max(1) - 1).cloned().with_context(|| {
                         format!(
                             "the search for {q:?} found {} places; nothing to pick at {pick}",
@@ -1111,10 +1186,20 @@ fn places(core: &Core, cmd: PlaceCmd) -> Result<Value> {
                 }
                 (None, None) => (None, None, None),
             };
-            let p = core.place_save(&name, lat, lon, rename.as_deref())?;
+            let p = call::place_save(
+                core,
+                api::PlaceSaveParams {
+                    name,
+                    new_name: rename,
+                    lat,
+                    lon,
+                },
+            )?;
             json!({"place": p, "from_search": from})
         }
-        PlaceCmd::Delete { name } => serde_json::to_value(core.place_delete(&name)?)?,
+        PlaceCmd::Delete { name } => {
+            serde_json::to_value(call::place_delete(core, api::NameParams { name })?)?
+        }
     })
 }
 
