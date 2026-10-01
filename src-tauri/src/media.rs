@@ -585,14 +585,19 @@ pub fn proxy(tools: &Tools, src: &Path, dst: &Path) -> Result<()> {
 }
 
 /// Samples about `sample_fps` frames per second of `src`'s first video stream, each scaled to
-/// `w` x `h` planar YUV 4:4:4, for dead-air detection. Returns the frames and the seconds
-/// between them.
+/// `w` x `h` planar YUV 4:4:4, for dead-air detection. Returns each frame with its time in
+/// seconds, sorted, at most one per `1/sample_fps` bucket.
+///
+/// Times come from each frame's own timestamp (ffmpeg's `showinfo`), never from its position:
+/// DVR files drop frames (one test clip lacks over 60 of every 1200 sample points), and
+/// counting frames would drift by seconds over a long clip.
 ///
 /// Speed: a DVR clip is MJPEG, every frame a keyframe, and decoding is most of the cost. The
-/// `noise` bitstream filter with `drop` discards all but every Nth packet before the decoder,
-/// so only the sampled frames are decoded: about 0.5 s for a 10-minute clip, against about
-/// 5 s for decode-everything plus the `fps` filter. If this ffmpeg refuses the bitstream
-/// filter, it falls back to the `fps` filter.
+/// `noise` bitstream filter with `drop` discards every packet except the first two of each
+/// bucket (by timestamp) before the decoder, so only those frames are decoded: about 3 s for
+/// a 10-minute 1.4 GB clip, against about 5 s or more for decode-everything plus the `fps`
+/// filter. Two per bucket, so one dropped or broken frame does not leave a hole. If this
+/// ffmpeg refuses the bitstream filter, it falls back to the `fps` filter.
 pub fn sample_frames(
     tools: &Tools,
     src: &Path,
@@ -600,11 +605,12 @@ pub fn sample_frames(
     sample_fps: f64,
     w: usize,
     h: usize,
-) -> Result<(Vec<Vec<u8>>, f64)> {
-    let scale = format!("scale={w}:{h}:flags=neighbor");
-    let run = |pre: &[String], vf: &str| -> Result<Vec<u8>> {
+) -> Result<Vec<(f64, Vec<u8>)>> {
+    let step = 1.0 / sample_fps;
+    let vf = |pre: &str| format!("{pre}showinfo,scale={w}:{h}:flags=neighbor");
+    let run = |pre: &[String], vf: &str| -> Result<Vec<(f64, Vec<u8>)>> {
         let out = Command::new(&tools.ffmpeg)
-            .args(["-v", "error", "-nostdin"])
+            .args(["-hide_banner", "-nostats", "-loglevel", "info", "-nostdin"])
             .args(pre)
             .arg("-i")
             .arg(src)
@@ -620,29 +626,43 @@ pub fn sample_frames(
             .args(["-pix_fmt", "yuv444p", "-f", "rawvideo", "-"])
             .output()
             .context("running ffmpeg")?;
+        let log = String::from_utf8_lossy(&out.stderr);
         if !out.status.success() {
+            bail!("frame sampling failed: {}", log.trim());
+        }
+        let times: Vec<f64> = log
+            .lines()
+            .filter(|l| l.contains("Parsed_showinfo"))
+            .filter_map(|l| l.split("pts_time:").nth(1))
+            .filter_map(|x| x.split_whitespace().next()?.parse().ok())
+            .collect();
+        let frames: Vec<&[u8]> = out.stdout.chunks_exact(w * h * 3).collect();
+        if times.len() != frames.len() {
             bail!(
-                "frame sampling failed: {}",
-                String::from_utf8_lossy(&out.stderr).trim()
+                "frame sampling: {} frames but {} timestamps",
+                frames.len(),
+                times.len()
             );
         }
-        Ok(out.stdout)
+        let mut pairs: Vec<(f64, Vec<u8>)> = Vec::new();
+        for (t, f) in times.into_iter().zip(frames) {
+            let bucket = |x: f64| (x / step + 1e-6).floor() as i64;
+            if pairs.last().is_some_and(|(p, _)| bucket(*p) >= bucket(t)) {
+                continue;
+            }
+            pairs.push((t, f.to_vec()));
+        }
+        Ok(pairs)
     };
-    let frame = w * h * 3;
-    let split =
-        |raw: Vec<u8>| -> Vec<Vec<u8>> { raw.chunks_exact(frame).map(<[u8]>::to_vec).collect() };
     if let Some(fps) = fps.filter(|f| *f > 0.0) {
-        let every = (fps / sample_fps).round().max(1.0) as u64;
-        let bsf = format!("noise=drop=mod(n\\,{every})");
-        if let Ok(raw) = run(&["-bsf:v".into(), bsf], &scale) {
-            let frames = split(raw);
+        let bsf = format!("noise=drop=gte(mod(pts*tb\\,{step})\\,{:.6})", 2.5 / fps);
+        if let Ok(frames) = run(&["-bsf:v".into(), bsf], &vf("")) {
             if !frames.is_empty() {
-                return Ok((frames, every as f64 / fps));
+                return Ok(frames);
             }
         }
     }
-    let raw = run(&[], &format!("fps={sample_fps},{scale}"))?;
-    Ok((split(raw), 1.0 / sample_fps))
+    run(&[], &vf(&format!("fps={sample_fps},")))
 }
 
 /// exiftool, when installed. Optional: verify uses it as a second reader.

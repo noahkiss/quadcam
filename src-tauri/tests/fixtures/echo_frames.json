@@ -1,0 +1,295 @@
+{
+ "about": "Per-frame features (64x48 samples, see moments::frame_stats) measured on real analog DVR footage from Fat Shark Echo goggles, with the class a person saw in the frame. Numbers only; the footage is not in the repo.",
+ "frames": [
+  {
+   "expect": "static",
+   "mean_y": 129.53,
+   "sd_y": 108.28,
+   "sat": 0.0,
+   "blue": 0.0,
+   "h_detail": 106.46,
+   "v_detail": 115.74,
+   "change": 116.08
+  },
+  {
+   "expect": "live",
+   "mean_y": 167.52,
+   "sd_y": 62.47,
+   "sat": 34.23,
+   "blue": 0.2139,
+   "h_detail": 21.38,
+   "v_detail": 26.97,
+   "change": 31.34
+  },
+  {
+   "expect": "blue",
+   "mean_y": 64.9,
+   "sd_y": 0.76,
+   "sat": 66.77,
+   "blue": 1.0,
+   "h_detail": 0.09,
+   "v_detail": 0.14,
+   "change": 0.07
+  },
+  {
+   "expect": "static",
+   "mean_y": 130.28,
+   "sd_y": 78.38,
+   "sat": 0.0,
+   "blue": 0.0,
+   "h_detail": 80.48,
+   "v_detail": 87.1,
+   "change": 93.55
+  },
+  {
+   "expect": "blue",
+   "mean_y": 64.91,
+   "sd_y": 0.72,
+   "sat": 66.77,
+   "blue": 1.0,
+   "h_detail": 0.07,
+   "v_detail": 0.14,
+   "change": 0.07
+  },
+  {
+   "expect": "blue",
+   "mean_y": 64.92,
+   "sd_y": 0.68,
+   "sat": 66.77,
+   "blue": 1.0,
+   "h_detail": 0.06,
+   "v_detail": 0.13,
+   "change": 0.06
+  },
+  {
+   "expect": "live",
+   "mean_y": 152.15,
+   "sd_y": 69.06,
+   "sat": 53.8,
+   "blue": 0.1914,
+   "h_detail": 34.49,
+   "v_detail": 42.09,
+   "change": 55.43
+  },
+  {
+   "expect": "static",
+   "mean_y": 127.49,
+   "sd_y": 77.81,
+   "sat": 0.0,
+   "blue": 0.0,
+   "h_detail": 79.91,
+   "v_detail": 87.27,
+   "change": 87.45
+  },
+  {
+   "expect": "live",
+   "mean_y": 99.17,
+   "sd_y": 60.54,
+   "sat": 14.89,
+   "blue": 0.1038,
+   "h_detail": 29.62,
+   "v_detail": 30.23,
+   "change": 41.69
+  },
+  {
+   "expect": "mono",
+   "mean_y": 123.05,
+   "sd_y": 96.12,
+   "sat": 0.0,
+   "blue": 0.0,
+   "h_detail": 43.92,
+   "v_detail": 70.43,
+   "change": 93.05
+  },
+  {
+   "expect": "static",
+   "mean_y": 129.01,
+   "sd_y": 108.4,
+   "sat": 0.0,
+   "blue": 0.0,
+   "h_detail": 102.92,
+   "v_detail": 117.87,
+   "change": 119.05
+  },
+  {
+   "expect": "live",
+   "mean_y": 140.26,
+   "sd_y": 60.47,
+   "sat": 36.8,
+   "blue": 0.2344,
+   "h_detail": 35.93,
+   "v_detail": 41.98,
+   "change": 48.05
+  },
+  {
+   "expect": "live",
+   "mean_y": 158.14,
+   "sd_y": 55.44,
+   "sat": 33.98,
+   "blue": 0.3652,
+   "h_detail": 25.38,
+   "v_detail": 29.36,
+   "change": 24.41
+  },
+  {
+   "expect": "live",
+   "mean_y": 149.94,
+   "sd_y": 47.68,
+   "sat": 20.33,
+   "blue": 0.0023,
+   "h_detail": 19.92,
+   "v_detail": 22.22,
+   "change": 41.94
+  },
+  {
+   "expect": "blue",
+   "mean_y": 65.04,
+   "sd_y": 0.57,
+   "sat": 66.94,
+   "blue": 1.0,
+   "h_detail": 0.08,
+   "v_detail": 0.07,
+   "change": 0.07
+  },
+  {
+   "expect": "blue",
+   "mean_y": 64.89,
+   "sd_y": 0.8,
+   "sat": 66.83,
+   "blue": 1.0,
+   "h_detail": 0.09,
+   "v_detail": 0.15,
+   "change": 82.98
+  },
+  {
+   "expect": "blue",
+   "mean_y": 64.9,
+   "sd_y": 0.81,
+   "sat": 66.83,
+   "blue": 1.0,
+   "h_detail": 0.08,
+   "v_detail": 0.15,
+   "change": 84.02
+  },
+  {
+   "expect": "static",
+   "mean_y": 127.71,
+   "sd_y": 107.46,
+   "sat": 0.0,
+   "blue": 0.0,
+   "h_detail": 106.07,
+   "v_detail": 117.94,
+   "change": 118.69
+  },
+  {
+   "expect": "live",
+   "mean_y": 70.08,
+   "sd_y": 64.61,
+   "sat": 5.61,
+   "blue": 0.0036,
+   "h_detail": 18.14,
+   "v_detail": 21.01,
+   "change": 25.81
+  },
+  {
+   "expect": "live",
+   "mean_y": 76.25,
+   "sd_y": 60.27,
+   "sat": 7.86,
+   "blue": 0.0049,
+   "h_detail": 19.75,
+   "v_detail": 23.32,
+   "change": 27.24
+  },
+  {
+   "expect": "live",
+   "mean_y": 102.67,
+   "sd_y": 34.93,
+   "sat": 23.03,
+   "blue": 0.0029,
+   "h_detail": 15.46,
+   "v_detail": 15.77,
+   "change": 12.79
+  },
+  {
+   "expect": "static",
+   "mean_y": 110.8,
+   "sd_y": 67.44,
+   "sat": 0.0,
+   "blue": 0.0,
+   "h_detail": 74.9,
+   "v_detail": 76.51,
+   "change": 75.14
+  },
+  {
+   "expect": "live",
+   "mean_y": 106.22,
+   "sd_y": 27.27,
+   "sat": 19.45,
+   "blue": 0.0062,
+   "h_detail": 15.12,
+   "v_detail": 15.55,
+   "change": 11.16
+  },
+  {
+   "expect": "live",
+   "mean_y": 77.99,
+   "sd_y": 41.77,
+   "sat": 16.78,
+   "blue": 0.0023,
+   "h_detail": 17.19,
+   "v_detail": 17.83,
+   "change": 21.61
+  },
+  {
+   "expect": "static",
+   "mean_y": 110.85,
+   "sd_y": 67.3,
+   "sat": 0.0,
+   "blue": 0.0,
+   "h_detail": 73.8,
+   "v_detail": 77.86,
+   "change": 78.12
+  },
+  {
+   "expect": "static",
+   "mean_y": 108.52,
+   "sd_y": 107.18,
+   "sat": 0.0,
+   "blue": 0.0,
+   "h_detail": 92.22,
+   "v_detail": 107.15,
+   "change": 114.99
+  },
+  {
+   "expect": "live",
+   "mean_y": 168.31,
+   "sd_y": 65.72,
+   "sat": 26.45,
+   "blue": 0.1989,
+   "h_detail": 32.13,
+   "v_detail": 38.02,
+   "change": 54.64
+  },
+  {
+   "expect": "live",
+   "mean_y": 160.02,
+   "sd_y": 61.38,
+   "sat": 47.72,
+   "blue": 0.3206,
+   "h_detail": 32.3,
+   "v_detail": 38.36,
+   "change": 44.95
+  },
+  {
+   "expect": "static",
+   "mean_y": 125.26,
+   "sd_y": 82.92,
+   "sat": 0.0,
+   "blue": 0.0,
+   "h_detail": 84.8,
+   "v_detail": 92.7,
+   "change": 92.58
+  }
+ ]
+}

@@ -98,7 +98,7 @@ The frontend is plain HTML, CSS, and JavaScript in `ui/`, with no build step and
 
 Select a clip to see its timeline under the preview. The timeline shows:
 
-- **Dead air** (striped): the receiver's blue no-signal screen, static, a colour-bar test pattern, or black. Each stretch is at least 3 seconds. A shorter breakup inside a flight stays in.
+- **Dead air** (striped): the receiver's blue no-signal screen, static, a colour-bar test pattern, black, or a colourless breakup (the torn grey picture an analog receiver shows when it loses the colour signal). Each stretch is at least 3 seconds. A shorter breakup inside a flight stays in. A black-and-white camera would read as colourless breakup; set `MONO_MAX_SAT` in `moments::tune` to 0 for one.
 - **Keep ranges** (green line): the clip without its dead air. Select **Use keep ranges** to turn them into cuts.
 - **Moments** (markers): found in the radio log's stick channels.
 - **Cuts** (blue line): the ranges that export as extra files.
@@ -120,7 +120,7 @@ Two tips for radio-log moments:
 - **Log every 0.1 s.** EdgeTX logs every 0.5 s or 1 s unless you change it. In the model's Special Functions, set the **SD Logs** function's interval to 0.1 s. At 0.5 s, quadcam still finds moments, but their times are only good to half a second, short moves can be missed, and the scores are lower.
 - **Line up the log.** The log starts when you arm, but the DVR usually starts recording earlier. quadcam assumes the clip starts at arm. Play the clip to the moment you arm, then select **Arm is here**. The moments move to match.
 
-Dead-air detection needs no radio log. quadcam samples two frames per second at 64 × 48 pixels and decodes only those frames, so a 10-minute clip takes about half a second.
+Dead-air detection needs no radio log. quadcam samples two frames per second at 64 × 48 pixels and decodes only those frames, so a 10-minute, 1.4 GB clip takes about 4 seconds. It times each sample by the frame's own timestamp, because DVRs drop frames. The thresholds were checked on real Fat Shark Echo footage: keep ranges start and end within about a second of the picture coming and going.
 
 ## Metadata
 

@@ -83,6 +83,11 @@ pub mod tune {
     pub const BARS_MIN_SD: f64 = 40.0;
     pub const BARS_MAX_VERTICAL_RATIO: f64 = 0.12;
     pub const BARS_MIN_SAT: f64 = 25.0;
+    /// Colourless breakup: the receiver lost the colour burst, so the DVR records pure grey
+    /// (mean chroma distance below this) torn pictures between no-signal screens. Every
+    /// real flight frame in the test footage had colour. A black-and-white camera would trip
+    /// this; raise it to 0 to turn the class off.
+    pub const MONO_MAX_SAT: f64 = 2.0;
     /// Dead air shorter than this is a breakup inside a flight and stays in.
     pub const DEAD_MIN_S: f64 = 3.0;
     /// Live samples spanning less than this inside dead air do not split it.
@@ -492,6 +497,7 @@ pub enum Signal {
     Blank,
     Static,
     Bars,
+    Mono,
 }
 
 impl Signal {
@@ -506,6 +512,7 @@ impl Signal {
             Signal::Blank => "blank screen",
             Signal::Static => "static",
             Signal::Bars => "test pattern",
+            Signal::Mono => "colourless breakup",
         }
     }
 }
@@ -580,6 +587,8 @@ pub fn classify(s: &FrameStats) -> Signal {
         && s.sat >= BARS_MIN_SAT
     {
         Signal::Bars
+    } else if s.sat < MONO_MAX_SAT {
+        Signal::Mono
     } else {
         Signal::Live
     }
@@ -606,10 +615,10 @@ pub fn classify_frames(frames: &[Vec<u8>], w: usize, h: usize) -> Vec<Signal> {
     stats.iter().map(classify).collect()
 }
 
-/// Dead air from per-sample classes, `step` seconds apart, in a clip of `duration` seconds.
+/// Dead air from classified samples `(time, class)`, sorted by time, in a clip of
+/// `duration` seconds. Sample times come from the frames' own timestamps.
 pub struct VideoSignal {
-    pub classes: Vec<Signal>,
-    pub step: f64,
+    pub samples: Vec<(f64, Signal)>,
     pub duration: f64,
 }
 
@@ -618,33 +627,40 @@ impl MomentSource for VideoSignal {
         Source::Video
     }
     fn moments(&self) -> Vec<Moment> {
-        dead_air(&self.classes, self.step, self.duration)
+        dead_air(&self.samples, self.duration)
     }
 }
 
-/// Runs of dead samples, bridged over live gaps under `DEAD_BRIDGE_S`, kept when at least
-/// `DEAD_MIN_S` long. Sample `i` stands for `[i*step, (i+1)*step)`.
-pub fn dead_air(classes: &[Signal], step: f64, duration: f64) -> Vec<Moment> {
+/// Runs of dead samples, bridged over live stretches shorter than `DEAD_BRIDGE_S`, kept when
+/// at least `DEAD_MIN_S` long. A sample stands for the time from its own timestamp to the
+/// next sample's (the last one to `duration`).
+pub fn dead_air(samples: &[(f64, Signal)], duration: f64) -> Vec<Moment> {
+    let until = |i: usize| {
+        samples
+            .get(i + 1)
+            .map(|s| s.0)
+            .unwrap_or(duration.max(samples[i].0))
+    };
     let mut runs: Vec<(usize, usize)> = Vec::new();
-    for (i, c) in classes.iter().enumerate() {
+    for (i, (t, c)) in samples.iter().enumerate() {
         if !c.dead() {
             continue;
         }
         match runs.last_mut() {
-            Some((_, end)) if (i - *end - 1) as f64 * step < tune::DEAD_BRIDGE_S => *end = i,
+            Some((_, end)) if *t - until(*end) < tune::DEAD_BRIDGE_S => *end = i,
             _ => runs.push((i, i)),
         }
     }
     runs.into_iter()
         .filter_map(|(a, b)| {
-            let start = a as f64 * step;
-            let end = ((b + 1) as f64 * step).min(duration.max(start));
+            let start = samples[a].0;
+            let end = until(b).min(duration.max(start));
             if end - start < tune::DEAD_MIN_S {
                 return None;
             }
-            let dead: Vec<Signal> = classes[a..=b]
+            let dead: Vec<Signal> = samples[a..=b]
                 .iter()
-                .copied()
+                .map(|s| s.1)
                 .filter(|c| c.dead())
                 .collect();
             let mut kinds: Vec<(Signal, usize)> = Vec::new();
@@ -717,7 +733,7 @@ pub fn scan_signal(
     fps: Option<f64>,
     duration: f64,
 ) -> Result<SignalScan> {
-    let (frames, step) = media::sample_frames(
+    let frames = media::sample_frames(
         tools,
         src,
         fps,
@@ -725,14 +741,15 @@ pub fn scan_signal(
         tune::SAMPLE_W,
         tune::SAMPLE_H,
     )?;
+    let images: Vec<Vec<u8>> = frames.iter().map(|(_, f)| f.clone()).collect();
+    let classes = classify_frames(&images, tune::SAMPLE_W, tune::SAMPLE_H);
     let src = VideoSignal {
-        classes: classify_frames(&frames, tune::SAMPLE_W, tune::SAMPLE_H),
-        step,
+        samples: frames.iter().map(|(t, _)| *t).zip(classes).collect(),
         duration,
     };
     let dead_air = src.moments();
     Ok(SignalScan {
-        step,
+        step: 1.0 / tune::SAMPLE_FPS,
         samples: frames.len(),
         keep: keep_ranges(&dead_air, duration),
         dead_air,
@@ -1023,7 +1040,13 @@ mod tests {
             *x = Static;
         }
         c[44] = Live;
-        let dead = dead_air(&c, step, 30.0);
+        let timed = |c: &[Signal]| -> Vec<(f64, Signal)> {
+            c.iter()
+                .enumerate()
+                .map(|(i, x)| (i as f64 * step, *x))
+                .collect()
+        };
+        let dead = dead_air(&timed(&c), 30.0);
         assert_eq!(dead.len(), 2, "{dead:?}");
         assert_eq!((dead[0].start, dead[0].end), (0.0, 5.0));
         assert_eq!(dead[0].detail, "blue no-signal screen");
@@ -1047,8 +1070,8 @@ mod tests {
             ]
         );
         // No dead air: nothing to suggest.
-        assert!(keep_ranges(&dead_air(&[Live; 20], step, 10.0), 10.0).is_empty());
+        assert!(keep_ranges(&dead_air(&timed(&[Live; 20]), 10.0), 10.0).is_empty());
         // All dead air: nothing to keep.
-        assert!(keep_ranges(&dead_air(&[Bars; 20], step, 10.0), 10.0).is_empty());
+        assert!(keep_ranges(&dead_air(&timed(&[Bars; 20]), 10.0), 10.0).is_empty());
     }
 }

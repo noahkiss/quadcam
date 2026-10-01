@@ -372,3 +372,102 @@ fn profile_place_and_flight_stats_through_the_core() {
     );
     assert!(core.verify(None).unwrap()[0].ok);
 }
+
+/// Prints the dead air and keep ranges of real clips, for checking the thresholds against
+/// footage that cannot live in the repo:
+/// `QUADCAM_REAL_CLIPS="a.AVI:b.AVI" cargo test --test moments real_clips -- --ignored --nocapture`
+#[test]
+#[ignore]
+fn real_clips() {
+    let t = tools();
+    let list = std::env::var("QUADCAM_REAL_CLIPS").expect("set QUADCAM_REAL_CLIPS");
+    for f in list.split(':').filter(|f| !f.is_empty()) {
+        let p = media::probe(&t, Path::new(f)).unwrap();
+        let started = std::time::Instant::now();
+        let scan = moments::scan_signal(&t, Path::new(f), p.fps, p.duration).unwrap();
+        println!(
+            "{f}: {:.1} s, {} samples in {:.1} s",
+            p.duration,
+            scan.samples,
+            started.elapsed().as_secs_f64()
+        );
+        for m in &scan.dead_air {
+            println!(
+                "  dead {:7.1} - {:7.1}  {:.2}  {}",
+                m.start, m.end, m.score, m.detail
+            );
+        }
+        for k in &scan.keep {
+            println!("  keep {:7.1} - {:7.1}", k.start, k.end);
+        }
+    }
+}
+
+/// Regression on real footage: feature vectors measured on Echo DVR clips (numbers only,
+/// in tests/fixtures/echo_frames.json), with the class a person saw in each frame.
+#[test]
+fn classifies_real_echo_frames() {
+    use quadcam_lib::moments::{classify, FrameStats, Signal};
+    let doc: serde_json::Value =
+        serde_json::from_str(include_str!("fixtures/echo_frames.json")).unwrap();
+    let mut wrong = Vec::new();
+    for f in doc["frames"].as_array().unwrap() {
+        let n = |k: &str| f[k].as_f64().unwrap();
+        let s = FrameStats {
+            mean_y: n("mean_y"),
+            sd_y: n("sd_y"),
+            sat: n("sat"),
+            blue: n("blue"),
+            h_detail: n("h_detail"),
+            v_detail: n("v_detail"),
+            change: Some(n("change")),
+        };
+        let want = match f["expect"].as_str().unwrap() {
+            "live" => Signal::Live,
+            "blue" => Signal::Blue,
+            "static" => Signal::Static,
+            "mono" => Signal::Mono,
+            other => panic!("unknown class {other}"),
+        };
+        if classify(&s) != want {
+            wrong.push(format!("{f} -> {:?}", classify(&s)));
+        }
+    }
+    assert!(wrong.is_empty(), "{wrong:#?}");
+}
+
+/// DVRs drop frames, so a frame's position is not its time. A clip with 3 s of frames
+/// missing must still put the end of its blue screen at 5 s.
+#[test]
+fn dead_air_times_survive_dropped_frames() {
+    let d = tempfile::tempdir().unwrap();
+    let clip = d.path().join("PICT0001.AVI");
+    let st = Command::new(tools().ffmpeg)
+        .args(["-v", "error", "-y", "-f", "lavfi", "-t", "5", "-i"])
+        .arg(format!("color=c=0x0000FF:s=720x480:r={FPS}"))
+        .args(["-f", "lavfi", "-t", "10", "-i"])
+        .arg(format!("testsrc=s=720x480:r={FPS}"))
+        .args([
+            "-filter_complex",
+            "[0:v][1:v]concat=n=2:v=1:a=0,select='not(between(t\\,1\\,4))',format=yuvj420p",
+            "-fps_mode",
+            "passthrough",
+            "-c:v",
+            "mjpeg",
+            "-q:v",
+            "5",
+            "-f",
+            "avi",
+        ])
+        .arg(&clip)
+        .status()
+        .unwrap();
+    assert!(st.success());
+    let t = tools();
+    let p = media::probe(&t, &clip).unwrap();
+    let scan = moments::scan_signal(&t, &clip, p.fps, p.duration).unwrap();
+    assert_eq!(scan.dead_air.len(), 1, "{scan:?}");
+    assert!((scan.dead_air[0].end - 5.0).abs() <= 0.1, "{scan:?}");
+    assert_eq!(scan.keep.len(), 1);
+    assert!((scan.keep[0].start - 5.0).abs() <= 0.1);
+}
