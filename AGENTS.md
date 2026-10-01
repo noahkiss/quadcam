@@ -55,7 +55,14 @@ In `app/` (`pnpm install` first):
 pnpm typecheck && pnpm lint && pnpm test   # tsc, eslint, Vitest
 pnpm e2e                                   # Playwright, headless, both UIs on the mocked core
 pnpm build                                 # -> app/dist
+scripts/make-fixtures.sh                   # re-record the mock core's data (needs the CLI and the corpus)
 ```
+
+- **Parity specs** (`app/e2e/parity/`) run every spec on both UIs (Playwright projects `legacy`
+  and `next`) against `app/src/ipc/mock/`, a fake core behind a fake Tauri runtime. Specs find
+  controls by role and label, never by class, so one spec fits both UIs. An area runs on
+  `next` once it is listed in `PORTED` (`app/e2e/fixtures.ts`). The mock's data is the real
+  core's JSON, recorded by `app/scripts/make-fixtures.sh`; regenerate it when a shape changes.
 
 ## Release
 

@@ -1,0 +1,108 @@
+{
+ "effective": {
+  "add_time": false,
+  "default_name": "flight",
+  "default_profile": "Whoop",
+  "encoder": "videotoolbox",
+  "format": "mp4",
+  "format_label": "DVR",
+  "geocoder": "apple",
+  "keep_originals": false,
+  "layout": "year_day",
+  "log_dir": null,
+  "name_date_format": "YYYY-MM-DD",
+  "output_dir": "/Users/pilot/Movies/quadcam",
+  "photos_album": "Drone",
+  "place_folders": false,
+  "places": [
+   {
+    "lat": 40,
+    "lon": -75,
+    "name": "Home field"
+   },
+   {
+    "lat": 40.1,
+    "lon": -75.1,
+    "name": "Riverside park"
+   }
+  ],
+  "profiles": [
+   {
+    "aircraft": "Tiny whoop",
+    "author": "",
+    "camera_make": "Generic",
+    "camera_model": "",
+    "edgetx_models": [
+     "WHOOP"
+    ],
+    "keywords": [],
+    "name": "Whoop",
+    "place": null,
+    "video_system": "Analog"
+   },
+   {
+    "aircraft": "5 inch freestyle",
+    "author": "",
+    "camera_make": "Generic",
+    "camera_model": "",
+    "edgetx_models": [
+     "FIVE"
+    ],
+    "keywords": [],
+    "name": "Five-inch",
+    "place": null,
+    "video_system": "Analog"
+   }
+  ],
+  "tunables": {
+   "max_log_age_days": 60,
+   "segment_gap_s": 5,
+   "session_gap_min": 20,
+   "tolerance_s": 30
+  }
+ },
+ "path": "/Users/pilot/Library/Application Support/app.quadcam/settings.json",
+ "values": {
+  "defaultProfile": "Whoop",
+  "places": [
+   {
+    "lat": 40,
+    "lon": -75,
+    "name": "Home field"
+   },
+   {
+    "lat": 40.1,
+    "lon": -75.1,
+    "name": "Riverside park"
+   }
+  ],
+  "profiles": [
+   {
+    "aircraft": "Tiny whoop",
+    "author": "",
+    "camera_make": "Generic",
+    "camera_model": "",
+    "edgetx_models": [
+     "WHOOP"
+    ],
+    "keywords": [],
+    "name": "Whoop",
+    "place": null,
+    "video_system": "Analog"
+   },
+   {
+    "aircraft": "5 inch freestyle",
+    "author": "",
+    "camera_make": "Generic",
+    "camera_model": "",
+    "edgetx_models": [
+     "FIVE"
+    ],
+    "keywords": [],
+    "name": "Five-inch",
+    "place": null,
+    "video_system": "Analog"
+   }
+  ]
+ }
+}

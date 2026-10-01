@@ -1,0 +1,629 @@
+{
+ "analysed": true,
+ "card": null,
+ "card_volume": null,
+ "clips": [
+  {
+   "card_path": "/Users/pilot/quadcam/test-clips/synthetic/PICT0001.AVI",
+   "detail": "150 frames",
+   "duration": 5,
+   "id": 0,
+   "key": "e86ab59aced6fd18",
+   "name": "PICT0001.AVI",
+   "probe": {
+    "audio_streams": 1,
+    "duration": 5,
+    "errors": "",
+    "fps": 30,
+    "height": 480,
+    "tags": {
+     "software": "Lavf63.1.102"
+    },
+    "video_packets": 150,
+    "video_streams": 1,
+    "width": 720
+   },
+   "recovered": null,
+   "rel": "PICT0001.AVI",
+   "signal": {
+    "dead_air": [],
+    "keep": [],
+    "samples": 10,
+    "step": 0.5
+   },
+   "size": 3074396,
+   "stage_error": null,
+   "staged": "/Users/pilot/Library/Caches/app.quadcam/staging/20261001-154622/PICT0001.AVI",
+   "status": "ok",
+   "thumb": "/Users/pilot/Library/Caches/app.quadcam/thumbs/PICT0001-e86ab59aced6fd18.jpg"
+  },
+  {
+   "card_path": "/Users/pilot/quadcam/test-clips/synthetic/PICT0002.AVI",
+   "detail": "3600 frames",
+   "duration": 120,
+   "id": 1,
+   "key": "dce3e50d5303bc2b",
+   "name": "PICT0002.AVI",
+   "probe": {
+    "audio_streams": 1,
+    "duration": 120,
+    "errors": "",
+    "fps": 30,
+    "height": 480,
+    "tags": {
+     "software": "Lavf63.1.102"
+    },
+    "video_packets": 3600,
+    "video_streams": 1,
+    "width": 720
+   },
+   "recovered": null,
+   "rel": "PICT0002.AVI",
+   "signal": {
+    "dead_air": [],
+    "keep": [],
+    "samples": 240,
+    "step": 0.5
+   },
+   "size": 78131276,
+   "stage_error": null,
+   "staged": "/Users/pilot/Library/Caches/app.quadcam/staging/20261001-154622/PICT0002.AVI",
+   "status": "ok",
+   "thumb": "/Users/pilot/Library/Caches/app.quadcam/thumbs/PICT0002-dce3e50d5303bc2b.jpg"
+  },
+  {
+   "card_path": "/Users/pilot/quadcam/test-clips/synthetic/PICT0003.AVI",
+   "detail": "90 frames",
+   "duration": 3,
+   "id": 2,
+   "key": "54fa6f4c459f1d3b",
+   "name": "PICT0003.AVI",
+   "probe": {
+    "audio_streams": 0,
+    "duration": 3,
+    "errors": "",
+    "fps": 30,
+    "height": 480,
+    "tags": {
+     "software": "Lavf63.1.102"
+    },
+    "video_packets": 90,
+    "video_streams": 1,
+    "width": 720
+   },
+   "recovered": null,
+   "rel": "PICT0003.AVI",
+   "signal": {
+    "dead_air": [],
+    "keep": [],
+    "samples": 6,
+    "step": 0.5
+   },
+   "size": 1651322,
+   "stage_error": null,
+   "staged": "/Users/pilot/Library/Caches/app.quadcam/staging/20261001-154622/PICT0003.AVI",
+   "status": "ok",
+   "thumb": "/Users/pilot/Library/Caches/app.quadcam/thumbs/PICT0003-54fa6f4c459f1d3b.jpg"
+  },
+  {
+   "card_path": "/Users/pilot/quadcam/test-clips/synthetic/PICT0004.AVI",
+   "detail": "incomplete, recovered 0:02",
+   "duration": 2,
+   "id": 3,
+   "key": "122de6615711f2cf",
+   "name": "PICT0004.AVI",
+   "probe": {
+    "audio_streams": 1,
+    "duration": 2,
+    "errors": "",
+    "fps": 30,
+    "height": 480,
+    "tags": {
+     "software": "Lavf63.1.102"
+    },
+    "video_packets": 60,
+    "video_streams": 1,
+    "width": 720
+   },
+   "recovered": "/Users/pilot/Library/Caches/app.quadcam/staging/20261001-154622/PICT0004.recovered.avi",
+   "rel": "PICT0004.AVI",
+   "signal": {
+    "dead_air": [],
+    "keep": [],
+    "samples": 4,
+    "step": 0.5
+   },
+   "size": 1231251,
+   "stage_error": null,
+   "staged": "/Users/pilot/Library/Caches/app.quadcam/staging/20261001-154622/PICT0004.AVI",
+   "status": "incomplete",
+   "thumb": "/Users/pilot/Library/Caches/app.quadcam/thumbs/PICT0004-122de6615711f2cf.jpg"
+  },
+  {
+   "card_path": "/Users/pilot/quadcam/test-clips/synthetic/PICT0005.AVI",
+   "detail": "zero bytes",
+   "duration": 0,
+   "id": 4,
+   "key": "",
+   "name": "PICT0005.AVI",
+   "probe": null,
+   "recovered": null,
+   "rel": "PICT0005.AVI",
+   "signal": null,
+   "size": 0,
+   "stage_error": null,
+   "staged": "/Users/pilot/Library/Caches/app.quadcam/staging/20261001-154622/PICT0005.AVI",
+   "status": "empty",
+   "thumb": null
+  }
+ ],
+ "date_warnings": [],
+ "in_photos": [],
+ "log_day": null,
+ "log_days": [],
+ "log_dir": null,
+ "output_dir": "/Users/pilot/Movies/quadcam",
+ "plans": [
+  {
+   "badge": "unmatched",
+   "cuts": [],
+   "date": "2026-09-27",
+   "flight": null,
+   "id": 0,
+   "log_interval_s": null,
+   "log_model": null,
+   "log_offset_s": 0,
+   "meta": {
+    "author": null,
+    "keywords": [
+     "backyard"
+    ],
+    "location": {
+     "lat": 40,
+     "lon": -75,
+     "name": "Home field"
+    },
+    "profile": null
+   },
+   "moments": [],
+   "name": "backyard-loops",
+   "note": "",
+   "reason": null,
+   "segments": 0,
+   "skip": false,
+   "source": "edited",
+   "suggested": {
+    "cuts": false,
+    "date": false,
+    "meta": false,
+    "name": false,
+    "note": false,
+    "skip": false
+   },
+   "time": "10:15:00"
+  },
+  {
+   "badge": "unmatched",
+   "cuts": [
+    {
+     "end": 25,
+     "start": 10
+    }
+   ],
+   "date": "2026-09-27",
+   "flight": null,
+   "id": 1,
+   "log_interval_s": null,
+   "log_model": null,
+   "log_offset_s": 0,
+   "meta": {
+    "author": null,
+    "keywords": [
+     "backyard"
+    ],
+    "location": {
+     "lat": 40,
+     "lon": -75,
+     "name": "Home field"
+    },
+    "profile": null
+   },
+   "moments": [],
+   "name": "gap-run",
+   "note": "Two packs",
+   "reason": null,
+   "segments": 0,
+   "skip": false,
+   "source": "edited",
+   "suggested": {
+    "cuts": false,
+    "date": false,
+    "meta": false,
+    "name": false,
+    "note": false,
+    "skip": false
+   },
+   "time": "10:40:00"
+  },
+  {
+   "badge": "unmatched",
+   "cuts": [],
+   "date": "2026-09-28",
+   "flight": null,
+   "id": 2,
+   "log_interval_s": null,
+   "log_model": null,
+   "log_offset_s": 0,
+   "meta": {
+    "author": null,
+    "keywords": [],
+    "location": {
+     "lat": 40.1,
+     "lon": -75.1,
+     "name": "Riverside park"
+    },
+    "profile": "Five-inch"
+   },
+   "moments": [],
+   "name": "river-dive",
+   "note": "",
+   "reason": null,
+   "segments": 0,
+   "skip": false,
+   "source": "edited",
+   "suggested": {
+    "cuts": false,
+    "date": false,
+    "meta": false,
+    "name": false,
+    "note": false,
+    "skip": false
+   },
+   "time": "17:05:00"
+  },
+  {
+   "badge": "unmatched",
+   "cuts": [],
+   "date": "2026-09-28",
+   "flight": null,
+   "id": 3,
+   "log_interval_s": null,
+   "log_model": null,
+   "log_offset_s": 0,
+   "meta": {
+    "author": null,
+    "keywords": [],
+    "location": null,
+    "profile": null
+   },
+   "moments": [],
+   "name": "",
+   "note": "",
+   "reason": null,
+   "segments": 0,
+   "skip": true,
+   "source": "edited",
+   "suggested": {
+    "cuts": false,
+    "date": false,
+    "meta": false,
+    "name": false,
+    "note": false,
+    "skip": false
+   },
+   "time": null
+  },
+  {
+   "badge": "unmatched",
+   "cuts": [],
+   "date": "2026-10-01",
+   "flight": null,
+   "id": 4,
+   "log_interval_s": null,
+   "log_model": null,
+   "log_offset_s": 0,
+   "meta": {
+    "author": null,
+    "keywords": [],
+    "location": null,
+    "profile": null
+   },
+   "moments": [],
+   "name": "",
+   "note": "",
+   "reason": null,
+   "segments": 0,
+   "skip": true,
+   "source": "import",
+   "suggested": {
+    "cuts": false,
+    "date": false,
+    "meta": false,
+    "name": false,
+    "note": false,
+    "skip": false
+   },
+   "time": null
+  }
+ ],
+ "results": [
+  {
+   "cuts": [],
+   "encoder": "videotoolbox",
+   "error": null,
+   "id": 0,
+   "meta": {
+    "comment": "",
+    "creation_time": "2026-09-27T14:15:00Z",
+    "date": "2026-09-27",
+    "description": "DVR PICT0001.AVI; date source: edited",
+    "title": "backyard-loops"
+   },
+   "original": null,
+   "outcome": "verified",
+   "output": "/Users/pilot/Movies/quadcam/2026/2026-09-27/2026-09-27_backyard-loops.mp4",
+   "qt": [
+    [
+     "com.apple.quicktime.location.ISO6709",
+     "+40.0000-075.0000/"
+    ],
+    [
+     "com.apple.quicktime.creationdate",
+     "2026-09-27T10:15:00-0400"
+    ],
+    [
+     "com.apple.quicktime.software",
+     "QuadCam 0.4.1"
+    ],
+    [
+     "com.apple.quicktime.title",
+     "backyard-loops"
+    ],
+    [
+     "com.apple.quicktime.description",
+     "DVR PICT0001.AVI; date source: edited"
+    ],
+    [
+     "com.apple.quicktime.make",
+     "Generic"
+    ],
+    [
+     "com.apple.quicktime.keywords",
+     "FPV,backyard"
+    ],
+    [
+     "app.quadcam.aircraft",
+     "Tiny whoop"
+    ],
+    [
+     "app.quadcam.video_system",
+     "Analog"
+    ],
+    [
+     "app.quadcam.source",
+     "e86ab59aced6fd18"
+    ],
+    [
+     "app.quadcam.dvr",
+     "PICT0001.AVI"
+    ],
+    [
+     "app.quadcam.import",
+     "20261001-154623"
+    ],
+    [
+     "app.quadcam.place",
+     "Home field"
+    ],
+    [
+     "app.quadcam.profile",
+     "Whoop"
+    ],
+    [
+     "app.quadcam.time",
+     "manual"
+    ]
+   ],
+   "size": 229639
+  },
+  {
+   "cuts": [
+    {
+     "end": 25,
+     "error": null,
+     "outcome": "verified",
+     "output": "/Users/pilot/Movies/quadcam/2026/2026-09-27/2026-09-27_gap-run_cut1.mp4",
+     "size": 691043,
+     "start": 10
+    }
+   ],
+   "encoder": "videotoolbox",
+   "error": null,
+   "id": 1,
+   "meta": {
+    "comment": "Two packs",
+    "creation_time": "2026-09-27T14:40:00Z",
+    "date": "2026-09-27",
+    "description": "DVR PICT0002.AVI; date source: edited",
+    "title": "gap-run"
+   },
+   "original": null,
+   "outcome": "verified",
+   "output": "/Users/pilot/Movies/quadcam/2026/2026-09-27/2026-09-27_gap-run.mp4",
+   "qt": [
+    [
+     "com.apple.quicktime.location.ISO6709",
+     "+40.0000-075.0000/"
+    ],
+    [
+     "com.apple.quicktime.creationdate",
+     "2026-09-27T10:40:00-0400"
+    ],
+    [
+     "com.apple.quicktime.software",
+     "QuadCam 0.4.1"
+    ],
+    [
+     "com.apple.quicktime.title",
+     "gap-run"
+    ],
+    [
+     "com.apple.quicktime.description",
+     "DVR PICT0002.AVI; date source: edited"
+    ],
+    [
+     "com.apple.quicktime.comment",
+     "Two packs"
+    ],
+    [
+     "com.apple.quicktime.make",
+     "Generic"
+    ],
+    [
+     "com.apple.quicktime.keywords",
+     "FPV,backyard"
+    ],
+    [
+     "app.quadcam.aircraft",
+     "Tiny whoop"
+    ],
+    [
+     "app.quadcam.video_system",
+     "Analog"
+    ],
+    [
+     "app.quadcam.source",
+     "dce3e50d5303bc2b"
+    ],
+    [
+     "app.quadcam.dvr",
+     "PICT0002.AVI"
+    ],
+    [
+     "app.quadcam.import",
+     "20261001-154623"
+    ],
+    [
+     "app.quadcam.place",
+     "Home field"
+    ],
+    [
+     "app.quadcam.profile",
+     "Whoop"
+    ],
+    [
+     "app.quadcam.time",
+     "manual"
+    ]
+   ],
+   "size": 5502388
+  },
+  {
+   "cuts": [],
+   "encoder": "videotoolbox",
+   "error": null,
+   "id": 2,
+   "meta": {
+    "comment": "",
+    "creation_time": "2026-09-28T21:05:00Z",
+    "date": "2026-09-28",
+    "description": "DVR PICT0003.AVI; date source: edited",
+    "title": "river-dive"
+   },
+   "original": null,
+   "outcome": "verified",
+   "output": "/Users/pilot/Movies/quadcam/2026/2026-09-28/2026-09-28_river-dive.mp4",
+   "qt": [
+    [
+     "com.apple.quicktime.location.ISO6709",
+     "+40.1000-075.1000/"
+    ],
+    [
+     "com.apple.quicktime.creationdate",
+     "2026-09-28T17:05:00-0400"
+    ],
+    [
+     "com.apple.quicktime.software",
+     "QuadCam 0.4.1"
+    ],
+    [
+     "com.apple.quicktime.title",
+     "river-dive"
+    ],
+    [
+     "com.apple.quicktime.description",
+     "DVR PICT0003.AVI; date source: edited"
+    ],
+    [
+     "com.apple.quicktime.make",
+     "Generic"
+    ],
+    [
+     "com.apple.quicktime.keywords",
+     "FPV"
+    ],
+    [
+     "app.quadcam.aircraft",
+     "5 inch freestyle"
+    ],
+    [
+     "app.quadcam.video_system",
+     "Analog"
+    ],
+    [
+     "app.quadcam.source",
+     "54fa6f4c459f1d3b"
+    ],
+    [
+     "app.quadcam.dvr",
+     "PICT0003.AVI"
+    ],
+    [
+     "app.quadcam.import",
+     "20261001-154623"
+    ],
+    [
+     "app.quadcam.place",
+     "Riverside park"
+    ],
+    [
+     "app.quadcam.profile",
+     "Five-inch"
+    ],
+    [
+     "app.quadcam.time",
+     "manual"
+    ]
+   ],
+   "size": 98449
+  },
+  {
+   "cuts": [],
+   "encoder": null,
+   "error": null,
+   "id": 3,
+   "meta": null,
+   "original": null,
+   "outcome": "skipped",
+   "output": null,
+   "qt": [],
+   "size": 0
+  },
+  {
+   "cuts": [],
+   "encoder": null,
+   "error": null,
+   "id": 4,
+   "meta": null,
+   "original": null,
+   "outcome": "skipped",
+   "output": null,
+   "qt": [],
+   "size": 0
+  }
+ ],
+ "source": "/Users/pilot/quadcam/test-clips/synthetic",
+ "staging": "/Users/pilot/Library/Caches/app.quadcam/staging/20261001-154622",
+ "version": 1,
+ "warnings": []
+}

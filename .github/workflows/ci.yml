@@ -73,4 +73,6 @@ jobs:
       - run: pnpm typecheck
       - run: pnpm lint
       - run: pnpm test
+      - run: pnpm exec playwright install webkit
+      - run: pnpm e2e
       - run: pnpm build
