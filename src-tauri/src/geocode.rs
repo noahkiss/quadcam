@@ -71,7 +71,16 @@ fn apple(query: &str) -> Result<Vec<GeoResult>> {
                         let pm = item.placemark();
                         let c = pm.coordinate();
                         let name = item.name().map(|n| n.to_string()).unwrap_or_default();
-                        let address = pm.title().map(|t| t.to_string()).unwrap_or_default();
+                        // MapKit's title puts each address line on a text line.
+                        let address = pm
+                            .title()
+                            .map(|t| t.to_string())
+                            .unwrap_or_default()
+                            .lines()
+                            .map(str::trim)
+                            .filter(|l| !l.is_empty())
+                            .collect::<Vec<_>>()
+                            .join(", ");
                         GeoResult {
                             name: if name.is_empty() {
                                 address.clone()
