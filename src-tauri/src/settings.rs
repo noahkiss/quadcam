@@ -7,8 +7,11 @@
 //! holds a lock. Nobody keeps a full copy in memory and writes it back, so a CLI write while
 //! the app runs is never lost.
 
+use crate::logs::Tunables;
+use crate::media::{Encoder, Format};
 use crate::metadata::{Place, Profile};
 use anyhow::{bail, Context, Result};
+use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
 use std::io::Write;
 use std::path::{Path, PathBuf};
@@ -320,10 +323,152 @@ pub fn list<T: serde::de::DeserializeOwned>(values: &Values, key: &str) -> Vec<T
         .unwrap_or_default()
 }
 
+/// Settings every surface starts from. The GUI keeps them in sync with its settings store.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct Defaults {
+    pub output_dir: Option<PathBuf>,
+    pub format: Format,
+    pub encoder: Encoder,
+    pub keep_originals: bool,
+    pub add_time: bool,
+    pub default_name: String,
+    pub photos_album: String,
+    pub log_dir: Option<PathBuf>,
+    pub tunables: Tunables,
+    /// FAT32 volume name for the format step.
+    #[serde(default = "default_label")]
+    pub format_label: String,
+    #[serde(default)]
+    pub places: Vec<Place>,
+    #[serde(default)]
+    pub profiles: Vec<Profile>,
+    #[serde(default)]
+    pub default_profile: Option<String>,
+    /// How imports are filed in the library folder (`output_dir`).
+    #[serde(default)]
+    pub layout: crate::library::Layout,
+    /// Add the place name to day folders.
+    #[serde(default)]
+    pub place_folders: bool,
+    /// Place search provider: `apple` or `nominatim`.
+    #[serde(default = "default_geocoder")]
+    pub geocoder: String,
+    /// How the date starts file names.
+    #[serde(default)]
+    pub name_date_format: crate::naming::DateFormat,
+    /// Google Places API key from the settings file. Never serialized.
+    #[serde(default, skip_serializing)]
+    pub google_places_key: Option<String>,
+}
+
+fn default_geocoder() -> String {
+    "apple".into()
+}
+
+fn default_label() -> String {
+    crate::disk::DEFAULT_LABEL.into()
+}
+
+impl Default for Defaults {
+    fn default() -> Self {
+        Self {
+            output_dir: crate::paths::default_output_dir(),
+            format: Format::Mp4,
+            encoder: Encoder::Videotoolbox,
+            keep_originals: false,
+            add_time: false,
+            default_name: crate::naming::DEFAULT_NAME.into(),
+            photos_album: crate::photos::DEFAULT_ALBUM.into(),
+            log_dir: None,
+            tunables: Tunables::default(),
+            format_label: default_label(),
+            places: Vec::new(),
+            profiles: Vec::new(),
+            default_profile: None,
+            layout: crate::library::Layout::default(),
+            place_folders: false,
+            geocoder: default_geocoder(),
+            name_date_format: Default::default(),
+            google_places_key: None,
+        }
+    }
+}
+
+impl Defaults {
+    /// Defaults with the app's saved settings on top (the Tauri store file the GUI writes,
+    /// `settings.json` in the app's support folder), so a headless CLI or MCP run exports
+    /// where the person told the app to. Missing or unreadable keys keep the default.
+    pub fn with_app_settings(path: &Path) -> Defaults {
+        Defaults::from_values(&read(path).unwrap_or_default())
+    }
+
+    /// Defaults with the settings file's values on top.
+    pub fn from_values(v: &Values) -> Defaults {
+        let mut d = Defaults::default();
+        fn get<T: serde::de::DeserializeOwned>(v: &Values, k: &str) -> Option<T> {
+            v.get(k)
+                .filter(|x| !x.is_null())
+                .and_then(|x| serde_json::from_value(x.clone()).ok())
+        }
+        if let Some(p) = get(v, "outputDir") {
+            d.output_dir = Some(p);
+        }
+        if let Some(f) = get(v, "format") {
+            d.format = f;
+        }
+        if let Some(e) = get(v, "encoder") {
+            d.encoder = e;
+        }
+        if let Some(b) = get(v, "keepOriginals") {
+            d.keep_originals = b;
+        }
+        if let Some(b) = get(v, "addTime") {
+            d.add_time = b;
+        }
+        if let Some(n) = get::<String>(v, "defaultName").filter(|n| !n.trim().is_empty()) {
+            d.default_name = n;
+        }
+        if let Some(a) = get(v, "photosAlbum") {
+            d.photos_album = a;
+        }
+        if let Some(l) = get::<String>(v, "formatLabel").filter(|l| !l.trim().is_empty()) {
+            d.format_label = l;
+        }
+        if let Some(p) = get(v, "logDir") {
+            d.log_dir = Some(p);
+        }
+        if let Some(t) = get(v, "tunables") {
+            d.tunables = t;
+        }
+        if let Some(p) = get(v, "places") {
+            d.places = p;
+        }
+        if let Some(p) = get(v, "profiles") {
+            d.profiles = p;
+        }
+        if let Some(p) = get::<String>(v, "defaultProfile").filter(|p| !p.trim().is_empty()) {
+            d.default_profile = Some(p);
+        }
+        if let Some(l) = get(v, "libraryLayout") {
+            d.layout = l;
+        }
+        if let Some(b) = get(v, "placeFolders") {
+            d.place_folders = b;
+        }
+        d.google_places_key = get::<String>(v, "googlePlacesKey").filter(|k| !k.trim().is_empty());
+        if let Some(f) = get(v, "nameDateFormat") {
+            d.name_date_format = f;
+        }
+        if let Some(g) = get::<String>(v, "geocoder").filter(|g| GEOCODERS.contains(&g.as_str())) {
+            d.geocoder = g;
+        }
+        d
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::session::Defaults;
 
     /// A settings file as quadcam 0.3.0 wrote it.
     const V030: &str = r#"{"profiles":[{"name":"Whoop A","aircraft":"65 mm whoop","camera_make":"Maker","camera_model":"Goggle","video_system":"Analog","keywords":["fpv"],"author":"","place":null,"edgetx_models":["WHOOP A"]}],"defaultProfile":"Whoop A","places":[],"outputDir":"/tmp/x","encoder":"videotoolbox","photosAlbum":"Drone","defaultName":"flight","tunables":{"max_log_age_days":60,"segment_gap_s":5,"session_gap_min":20,"tolerance_s":30},"formatLabel":"ECHO"}"#;
@@ -433,5 +578,27 @@ mod tests {
         }
         let v = read(&f).unwrap();
         assert_eq!(v.len(), 8);
+    }
+
+    #[test]
+    fn app_settings_override_defaults() {
+        let d = tempfile::tempdir().unwrap();
+        let f = d.path().join("settings.json");
+        assert_eq!(
+            Defaults::with_app_settings(&f),
+            Defaults::default(),
+            "no file: defaults"
+        );
+        std::fs::write(&f, r#"{"outputDir":"/tmp/out","format":"mov","formatLabel":"FPVCARD","defaultName":"","logDir":null,"tunables":"junk"}"#).unwrap();
+        let x = Defaults::with_app_settings(&f);
+        assert_eq!(x.output_dir, Some(PathBuf::from("/tmp/out")));
+        assert_eq!(x.format, Format::Mov);
+        assert_eq!(x.format_label, "FPVCARD");
+        assert_eq!(x.default_name, "flight", "empty keeps the default");
+        assert_eq!(
+            x.tunables,
+            Tunables::default(),
+            "bad values keep the default"
+        );
     }
 }

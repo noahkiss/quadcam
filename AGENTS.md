@@ -17,7 +17,7 @@ README. Personal preferences go in the app's settings file on the machine
 | Path | Holds |
 |---|---|
 | `ui/` | Frontend: plain HTML, CSS and JS, no build step. `app.js` (library, import sheet, settings), `trim.js` (the one trim editor, used by clip detail and the import review). Icons and fonts are inlined or bundled so the app works offline |
-| `src-tauri/src/` | Rust core. `core.rs` (`Core`) owns the session and the library index and is the one surface every front end drives; `core_library.rs` holds its library methods and `core_settings.rs` its settings, places and profiles methods. `lib.rs` holds the Tauri commands (`core_call` runs any `Core::dispatch` method), `control.rs` the app's socket, `mcp.rs` the MCP server, `bin/quadcam-cli.rs` the CLI. The logic modules (`scan`, `disk`, `media`, `logs`, `moments`, `metadata`, `qtmeta`, `naming`, `pipeline`, `session`, `photos`, `library`, `trim`, `trash`, `settings`, `geocode`) run without Tauri |
+| `src-tauri/src/` | Rust core. `core.rs` (`Core`) owns the session and the library index and is the one surface every front end drives; `core_library.rs` holds its library methods and `core_settings.rs` its settings, places and profiles methods. `lib.rs` holds the Tauri commands (`core_call` runs any `Core::dispatch` method), `control.rs` the app's socket, `mcp.rs` the MCP server, `bin/quadcam-cli.rs` the CLI. The logic modules (`scan`, `disk`, `media`, `logs`, `moments`, `metadata`, `qtmeta`, `naming`, `pipeline`, `session`, `photos`, `library`, `trim`, `trash`, `settings` (with `Defaults`, the effective settings), `paths` (every path under `$HOME`), `geocode`) run without Tauri |
 | `src-tauri/Info.plist` | Photos usage strings, merged into the bundle's Info.plist |
 | `src-tauri/tests/` | Integration tests on synthetic clips and FAT32 disk images |
 | `test-clips/` | Local test corpus. Git tracks only its README |
@@ -94,7 +94,7 @@ GitHub (`noahkiss/quadcam`, public) is the only remote. Users install the cask
   inserting a card never starts an import on its own.
 
 - **Output folder:** defaults to `~/Movies/quadcam`, resolved from `$HOME` at runtime
-  (`pipeline::default_output_dir`). The app creates that default, with its parents, on the
+  (`paths::default_output_dir`). The app creates that default, with its parents, on the
   first import. It never creates a folder the user picked. Picking a folder saves it as the
   setting.
 - **Settings:** one file, `settings.json` in the support folder (camelCase keys `outputDir`,

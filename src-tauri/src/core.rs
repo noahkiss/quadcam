@@ -6,7 +6,8 @@ use crate::disk::{self, Volume};
 use crate::media::{self, Encoder, Format};
 use crate::photos::{self, PhotosLibrary, ShareReport};
 use crate::pipeline::{ClipResult, ImportSettings};
-use crate::session::{self, Defaults, Editor, PlanPatch, Session, Summary};
+use crate::session::{self, Editor, PlanPatch, Session, Summary};
+use crate::settings::Defaults;
 use anyhow::{anyhow, bail, Context, Result};
 use chrono::NaiveDate;
 use serde::{Deserialize, Serialize};
@@ -19,6 +20,7 @@ use std::sync::{Arc, Mutex};
 mod core_library;
 #[path = "core_settings.rs"]
 mod core_settings;
+pub use crate::paths::{cache_dir, default_session_file, default_settings_file, support_dir};
 pub use core_library::{
     CardStatus, LibEdit, LibItem, LibraryView, Moved, RebuildReport, RenameReport, TrashReport,
 };
@@ -170,32 +172,6 @@ pub fn photos_enabled(setting: Option<&str>, under_cargo: bool) -> bool {
         Some(_) => false,
         None => !under_cargo,
     }
-}
-
-/// `~/Library/Caches/app.quadcam`, the same folder the GUI uses.
-pub fn cache_dir() -> PathBuf {
-    home().join("Library/Caches/app.quadcam")
-}
-
-/// `~/Library/Application Support/app.quadcam`, where the control socket lives.
-pub fn support_dir() -> PathBuf {
-    home().join("Library/Application Support/app.quadcam")
-}
-
-/// The settings file the app, the CLI and the MCP server share.
-pub fn default_settings_file() -> PathBuf {
-    support_dir().join("settings.json")
-}
-
-/// The session file shared by CLI runs and a headless MCP server.
-pub fn default_session_file() -> PathBuf {
-    cache_dir().join("session.json")
-}
-
-fn home() -> PathBuf {
-    std::env::var_os("HOME")
-        .map(PathBuf::from)
-        .unwrap_or_else(|| PathBuf::from("/"))
 }
 
 impl Core {

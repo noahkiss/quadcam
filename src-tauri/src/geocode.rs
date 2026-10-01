@@ -196,7 +196,7 @@ fn user_agent() -> String {
 /// Waits until a second has passed since the last Nominatim request from any quadcam
 /// process (a stamp file in the cache folder records it).
 fn nominatim_throttle() {
-    let stamp = crate::core::cache_dir().join("nominatim.last");
+    let stamp = crate::paths::cache_dir().join("nominatim.last");
     let gap = Duration::from_millis(1100);
     if let Ok(t) = stamp.metadata().and_then(|m| m.modified()) {
         if let Ok(since) = t.elapsed() {

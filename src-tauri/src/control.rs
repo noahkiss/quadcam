@@ -3,7 +3,8 @@
 //! MCP server or the CLI) drives the same session the person sees. The folder is 0700 and
 //! the socket 0600, so only the owner can connect.
 
-use crate::core::{support_dir, Core};
+use crate::core::Core;
+use crate::paths::support_dir;
 use anyhow::{bail, Context, Result};
 use serde_json::{json, Value};
 use std::io::{BufRead, BufReader, Write};

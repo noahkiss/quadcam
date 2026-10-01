@@ -538,14 +538,7 @@ pub struct CutResult {
     pub error: Option<String>,
 }
 
-/// Where the output folder setting points until the user picks one, relative to `$HOME`.
-pub const DEFAULT_OUTPUT_REL: &str = "Movies/quadcam";
-
-/// `~/Movies/quadcam`, resolved from `$HOME` at runtime.
-pub fn default_output_dir() -> Option<PathBuf> {
-    let home = std::env::var_os("HOME").filter(|h| !h.is_empty())?;
-    Some(PathBuf::from(home).join(DEFAULT_OUTPUT_REL))
-}
+pub use crate::paths::{default_output_dir, DEFAULT_OUTPUT_REL};
 
 /// Free bytes on the volume holding `dir` (`df -Pk`).
 pub fn free_bytes(dir: &Path) -> Result<u64> {

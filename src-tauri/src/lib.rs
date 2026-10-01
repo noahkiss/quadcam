@@ -17,6 +17,7 @@ mod menu;
 pub mod metadata;
 pub mod moments;
 pub mod naming;
+pub mod paths;
 pub mod photos;
 pub mod pipeline;
 pub mod qtmeta;
