@@ -8,6 +8,7 @@ pub mod disk;
 pub mod logs;
 pub mod mcp;
 pub mod media;
+pub mod moments;
 pub mod naming;
 pub mod photos;
 pub mod pipeline;

@@ -5,6 +5,7 @@
 use crate::disk::{self, CardIdentity, Volume};
 use crate::logs::{Badge, Tunables};
 use crate::media::{Encoder, Format, Tools};
+use crate::moments::{Moment, Span};
 use crate::naming::NamePlanner;
 use crate::pipeline::{
     self, Clip, ClipJob, ClipResult, ClipStatus, DateSource, ImportSettings, Outcome,
@@ -16,6 +17,11 @@ use std::path::{Path, PathBuf};
 
 pub const SESSION_VERSION: u32 = 1;
 
+/// A cut shorter than this is refused.
+pub const MIN_CUT_S: f64 = 0.5;
+/// Most cuts one clip may have.
+pub const MAX_CUTS: usize = 20;
+
 /// Which fields of a plan an agent wrote and the user has not edited since.
 #[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq)]
 pub struct Suggested {
@@ -23,11 +29,13 @@ pub struct Suggested {
     pub name: bool,
     pub note: bool,
     pub skip: bool,
+    #[serde(default)]
+    pub cuts: bool,
 }
 
 impl Suggested {
     pub fn any(&self) -> bool {
-        self.date || self.name || self.note || self.skip
+        self.date || self.name || self.note || self.skip || self.cuts
     }
 }
 
@@ -50,6 +58,19 @@ pub struct ClipPlan {
     /// Why the agent suggested what it did, shown next to the suggestion.
     #[serde(default)]
     pub reason: Option<String>,
+    /// Moments from the radio log, in clip seconds (log time plus `log_offset_s`).
+    #[serde(default)]
+    pub moments: Vec<Moment>,
+    /// Median seconds between the log rows the clip claimed. 0.5 s logs give rough moments.
+    #[serde(default)]
+    pub log_interval_s: Option<f64>,
+    /// Seconds into the clip where the first armed log row falls. 0 assumes the clip starts
+    /// at arm; the DVR usually starts earlier, so the person can set it.
+    #[serde(default)]
+    pub log_offset_s: f64,
+    /// Ranges to export as extra files (`<name>_cutN`), in clip seconds.
+    #[serde(default)]
+    pub cuts: Vec<Span>,
 }
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
@@ -73,6 +94,12 @@ pub struct PlanPatch {
     pub skip: Option<bool>,
     #[serde(default)]
     pub reason: Option<String>,
+    /// Replaces the clip's cut list. An empty list removes every cut.
+    #[serde(default)]
+    pub cuts: Option<Vec<Span>>,
+    /// Where the first armed log row falls in the clip, in seconds. Moves the log moments.
+    #[serde(default)]
+    pub log_offset_s: Option<f64>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -232,6 +259,10 @@ impl Session {
                 note: String::new(),
                 suggested: Suggested::default(),
                 reason: None,
+                moments: Vec::new(),
+                log_interval_s: None,
+                log_offset_s: 0.0,
+                cuts: Vec::new(),
             })
             .collect();
         let mut warnings = vol.as_ref().map(|v| v.warnings.clone()).unwrap_or_default();
@@ -299,6 +330,12 @@ impl Session {
         let durations: Vec<f64> = self.clips.iter().map(|c| c.duration).collect();
         let plan = pipeline::plan_dates(&durations, log_dir, day, today, tun);
         for (p, s) in self.plans.iter_mut().zip(plan.suggestions) {
+            p.moments = s
+                .moments
+                .iter()
+                .map(|m| m.shifted(p.log_offset_s))
+                .collect();
+            p.log_interval_s = s.log_interval_s;
             if p.source == DateSource::Edited {
                 continue;
             }
@@ -325,14 +362,33 @@ impl Session {
     /// on the fields they touch. A new date always becomes an edited date (local noon).
     pub fn patch(&mut self, patches: &[PlanPatch], editor: Editor) -> Result<()> {
         for patch in patches {
-            let unusable = {
+            let (unusable, duration) = {
                 let c = self
                     .clips
                     .iter()
                     .find(|c| c.id == patch.id)
                     .with_context(|| format!("no clip with id {}", patch.id))?;
-                c.status == ClipStatus::Empty || c.stage_error.is_some()
+                (
+                    c.status == ClipStatus::Empty || c.stage_error.is_some(),
+                    c.duration,
+                )
             };
+            let cuts = patch
+                .cuts
+                .as_deref()
+                .map(|c| check_cuts(patch.id, c, duration))
+                .transpose()?;
+            if cuts.as_ref().is_some_and(|c| !c.is_empty()) && unusable {
+                bail!(
+                    "clip {} is empty or was not copied; it cannot be cut",
+                    patch.id
+                );
+            }
+            if let Some(o) = patch.log_offset_s {
+                if !o.is_finite() || o.abs() > duration.max(1.0) {
+                    bail!("log offset {o} s is outside clip {}", patch.id);
+                }
+            }
             let agent = editor == Editor::Agent;
             let p = self.plan_mut(patch.id)?;
             if let Some(d) = patch.date {
@@ -359,6 +415,15 @@ impl Session {
                 }
                 p.skip = s;
                 p.suggested.skip = agent;
+            }
+            if let Some(c) = cuts {
+                p.cuts = c;
+                p.suggested.cuts = agent;
+            }
+            if let Some(o) = patch.log_offset_s {
+                let by = o - p.log_offset_s;
+                p.moments = p.moments.iter().map(|m| m.shifted(by)).collect();
+                p.log_offset_s = o;
             }
             if agent {
                 if let Some(r) = &patch.reason {
@@ -402,20 +467,36 @@ impl Session {
             imported: count(Outcome::Verified),
             skipped: count(Outcome::Skipped),
             failed: count(Outcome::Failed),
-            total_bytes: self.results.iter().map(|r| r.size).sum(),
+            total_bytes: self
+                .results
+                .iter()
+                .map(|r| r.size + r.cuts.iter().map(|c| c.size).sum::<u64>())
+                .sum(),
             output_dir: self.output_dir.clone(),
             results: self.results.clone(),
             format_ready: self.format_ready().map_err(|e| format!("{e:#}")),
         }
     }
 
-    /// Outputs that verified in this session, for the given clips (all when `ids` is None).
+    /// Outputs that verified in this session, cuts included, for the given clips (all when
+    /// `ids` is None).
     pub fn verified_outputs(&self, ids: Option<&[usize]>) -> Vec<(usize, PathBuf)> {
         self.results
             .iter()
             .filter(|r| r.outcome == Outcome::Verified)
             .filter(|r| ids.is_none_or(|ids| ids.contains(&r.id)))
-            .filter_map(|r| r.output.clone().map(|o| (r.id, o)))
+            .flat_map(|r| {
+                r.output
+                    .iter()
+                    .cloned()
+                    .chain(
+                        r.cuts
+                            .iter()
+                            .filter(|c| c.outcome == Outcome::Verified)
+                            .filter_map(|c| c.output.clone()),
+                    )
+                    .map(move |o| (r.id, o))
+            })
             .collect()
     }
 
@@ -446,6 +527,39 @@ impl Session {
 
 /// Converts and verifies every non-skipped clip. A clip that already
 /// verified earlier keeps that result, so a re-run never writes a second copy.
+/// Cut ranges rounded to milliseconds, clamped to the clip, sorted. Refuses empty, inverted,
+/// too short or too many ranges.
+fn check_cuts(id: usize, cuts: &[Span], duration: f64) -> Result<Vec<Span>> {
+    if cuts.len() > MAX_CUTS {
+        bail!("clip {id}: at most {MAX_CUTS} cuts");
+    }
+    let r = |x: f64| (x * 1000.0).round() / 1000.0;
+    let mut out = Vec::with_capacity(cuts.len());
+    for c in cuts {
+        if !c.start.is_finite() || !c.end.is_finite() {
+            bail!("clip {id}: cut times must be numbers");
+        }
+        let span = Span {
+            start: r(c.start.max(0.0)),
+            end: r(if duration > 0.0 {
+                c.end.min(duration)
+            } else {
+                c.end
+            }),
+        };
+        if span.secs() < MIN_CUT_S {
+            bail!(
+                "clip {id}: cut {:.2}-{:.2} s is shorter than {MIN_CUT_S} s or outside the {duration:.1} s clip",
+                c.start,
+                c.end
+            );
+        }
+        out.push(span);
+    }
+    out.sort_by(|a, b| a.start.total_cmp(&b.start));
+    Ok(out)
+}
+
 pub fn run_import(
     tools: &Tools,
     session: &Session,
@@ -484,6 +598,7 @@ pub fn run_import(
                 error: None,
                 encoder: None,
                 meta: None,
+                cuts: Vec::new(),
             }
         } else if let Some(prev) = done(clip.id) {
             prev
@@ -493,6 +608,16 @@ pub fn run_import(
                 on_progress(clip.id, secs, dur)
             })
         };
+        let mut r = r;
+        if r.outcome == Outcome::Verified {
+            let cuts = session
+                .plans
+                .iter()
+                .find(|p| p.id == clip.id)
+                .map(|p| p.cuts.clone())
+                .unwrap_or_default();
+            r.cuts = pipeline::export_cuts(tools, clip, &r, &cuts, settings, &mut planner);
+        }
         on_result(&r);
         out.push(r);
     }
@@ -519,6 +644,7 @@ mod tests {
             probe: None,
             thumb: None,
             detail: String::new(),
+            signal: None,
         };
         let plan = |id| ClipPlan {
             id,
@@ -532,6 +658,10 @@ mod tests {
             note: String::new(),
             suggested: Suggested::default(),
             reason: None,
+            moments: Vec::new(),
+            log_interval_s: None,
+            log_offset_s: 0.0,
+            cuts: Vec::new(),
         };
         Session {
             version: SESSION_VERSION,
@@ -617,6 +747,69 @@ mod tests {
                 Editor::Agent
             )
             .is_err());
+    }
+
+    #[test]
+    fn cuts_and_log_offset() {
+        let mut s = session();
+        s.plans[0].moments = vec![Moment {
+            kind: crate::moments::MomentKind::Roll,
+            start: 1.0,
+            end: 1.5,
+            score: 0.8,
+            source: crate::moments::Source::RadioLog,
+            detail: String::new(),
+        }];
+        let cut = |a, b| Span { start: a, end: b };
+        s.patch(
+            &[PlanPatch {
+                id: 0,
+                cuts: Some(vec![cut(3.0, 9.0), cut(0.5, 1.5004)]),
+                log_offset_s: Some(2.0),
+                ..Default::default()
+            }],
+            Editor::Agent,
+        )
+        .unwrap();
+        let p = &s.plans[0];
+        // Sorted, clamped to the 5 s clip, rounded to ms.
+        assert_eq!(p.cuts, vec![cut(0.5, 1.5), cut(3.0, 5.0)]);
+        assert!(p.suggested.cuts);
+        assert_eq!(p.moments[0].start, 3.0, "the offset moves the moments");
+        s.patch(
+            &[PlanPatch {
+                id: 0,
+                log_offset_s: Some(0.5),
+                ..Default::default()
+            }],
+            Editor::User,
+        )
+        .unwrap();
+        assert_eq!(s.plans[0].moments[0].start, 1.5);
+        for bad in [
+            vec![cut(2.0, 2.2)],
+            vec![cut(6.0, 9.0)],
+            vec![cut(f64::NAN, 1.0)],
+        ] {
+            assert!(s
+                .patch(
+                    &[PlanPatch {
+                        id: 0,
+                        cuts: Some(bad),
+                        ..Default::default()
+                    }],
+                    Editor::User
+                )
+                .is_err());
+        }
+        // The empty clip cannot be cut, but its (empty) cut list can be cleared.
+        let one = |cuts| PlanPatch {
+            id: 1,
+            cuts: Some(cuts),
+            ..Default::default()
+        };
+        assert!(s.patch(&[one(vec![cut(0.0, 2.0)])], Editor::User).is_err());
+        s.patch(&[one(vec![])], Editor::User).unwrap();
     }
 
     #[test]

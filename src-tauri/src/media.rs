@@ -310,6 +310,129 @@ pub fn convert(
     }
 }
 
+/// The ffmpeg argument list for one cut of `span` from `src` (after the global flags).
+///
+/// Cuts come from the DVR's MJPEG source, not from the H.264 output. MJPEG is all-intra:
+/// every frame is a keyframe, so a seek lands on the exact frame.
+/// - MP4 re-encodes the range with the same encoder as the export. Input `-ss` with
+///   re-encoding is frame-accurate, and the cut plays everywhere the export does. Stream-copying
+///   the H.264 export instead would snap the start to its GOP keyframes (seconds apart).
+/// - MOV stream-copies the MJPEG range, which is lossless and still frame-exact for the
+///   same reason.
+pub fn cut_args(
+    src: &Path,
+    dst: &Path,
+    span: crate::moments::Span,
+    format: Format,
+    encoder: Encoder,
+    meta: &Meta,
+) -> Vec<String> {
+    let s = |p: &Path| p.to_string_lossy().to_string();
+    let mut a: Vec<String> = Vec::new();
+    if format == Format::Mov {
+        a.extend(["-fflags".into(), "+genpts".into()]);
+    }
+    a.extend([
+        "-ss".into(),
+        format!("{:.3}", span.start),
+        "-i".into(),
+        s(src),
+        "-t".into(),
+        format!("{:.3}", span.secs()),
+        "-map".into(),
+        "0".into(),
+    ]);
+    match format {
+        Format::Mp4 => {
+            match encoder {
+                Encoder::Videotoolbox => {
+                    a.extend(["-c:v", "h264_videotoolbox", "-q:v", "65"].map(String::from))
+                }
+                Encoder::X264 => a.extend(
+                    ["-c:v", "libx264", "-preset", "veryfast", "-crf", "20"].map(String::from),
+                ),
+            }
+            a.extend(["-c:a", "aac", "-b:a", "128k", "-movflags", "+faststart"].map(String::from));
+            a.extend(meta.args());
+            a.extend(["-f".into(), "mp4".into(), s(dst)]);
+        }
+        Format::Mov => {
+            a.extend(["-c", "copy", "-movflags", "use_metadata_tags"].map(String::from));
+            a.extend(meta.args());
+            a.extend(["-f".into(), "mov".into(), s(dst)]);
+        }
+    }
+    a
+}
+
+/// Writes one cut, falling back from VideoToolbox to x264 like `convert`.
+pub fn cut(
+    tools: &Tools,
+    src: &Path,
+    dst: &Path,
+    span: crate::moments::Span,
+    format: Format,
+    encoder: Encoder,
+    meta: &Meta,
+) -> Result<Encoder> {
+    match run_ffmpeg(
+        tools,
+        &cut_args(src, dst, span, format, encoder, meta),
+        &mut |_| {},
+    ) {
+        Ok(()) => Ok(encoder),
+        Err(e) if format == Format::Mp4 && encoder == Encoder::Videotoolbox => {
+            let _ = std::fs::remove_file(dst);
+            run_ffmpeg(
+                tools,
+                &cut_args(src, dst, span, format, Encoder::X264, meta),
+                &mut |_| {},
+            )
+            .map_err(|e2| anyhow!("{e}; x264 fallback also failed: {e2}"))?;
+            Ok(Encoder::X264)
+        }
+        Err(e) => Err(e),
+    }
+}
+
+/// Checks a cut: it opens, has one video stream, audio when the source had it, and its frame
+/// count and duration match the range within a frame (plus the usual duration tolerance).
+pub fn verify_cut(
+    tools: &Tools,
+    src: &Probe,
+    out: &Path,
+    span: crate::moments::Span,
+) -> Result<Probe> {
+    let p = probe(tools, out).context("cut does not open")?;
+    if p.video_streams != 1 {
+        bail!("cut has {} video streams, expected 1", p.video_streams);
+    }
+    let want_audio = usize::from(src.audio_streams > 0);
+    if p.audio_streams != want_audio {
+        bail!(
+            "cut has {} audio streams, expected {want_audio}",
+            p.audio_streams
+        );
+    }
+    let fps = src.fps.unwrap_or(30.0);
+    let want = span.secs() * fps;
+    if (p.video_packets as f64 - want).abs() > 1.5 {
+        bail!(
+            "cut has {} frames, expected about {:.0}",
+            p.video_packets,
+            want
+        );
+    }
+    if (p.duration - span.secs()).abs() > DURATION_TOLERANCE + 1.0 / fps {
+        bail!(
+            "cut is {:.3}s long, expected {:.3}s",
+            p.duration,
+            span.secs()
+        );
+    }
+    Ok(p)
+}
+
 /// Duration tolerance between source and output.
 pub const DURATION_TOLERANCE: f64 = 0.1;
 
@@ -461,4 +584,65 @@ pub fn proxy(tools: &Tools, src: &Path, dst: &Path) -> Result<()> {
     }
     std::fs::rename(&tmp, dst)?;
     Ok(())
+}
+
+/// Samples about `sample_fps` frames per second of `src`'s first video stream, each scaled to
+/// `w` x `h` planar YUV 4:4:4, for dead-air detection. Returns the frames and the seconds
+/// between them.
+///
+/// Speed: a DVR clip is MJPEG, every frame a keyframe, and decoding is most of the cost. The
+/// `noise` bitstream filter with `drop` discards all but every Nth packet before the decoder,
+/// so only the sampled frames are decoded: about 0.5 s for a 10-minute clip, against about
+/// 5 s for decode-everything plus the `fps` filter. If this ffmpeg refuses the bitstream
+/// filter, it falls back to the `fps` filter.
+pub fn sample_frames(
+    tools: &Tools,
+    src: &Path,
+    fps: Option<f64>,
+    sample_fps: f64,
+    w: usize,
+    h: usize,
+) -> Result<(Vec<Vec<u8>>, f64)> {
+    let scale = format!("scale={w}:{h}:flags=neighbor");
+    let run = |pre: &[String], vf: &str| -> Result<Vec<u8>> {
+        let out = Command::new(&tools.ffmpeg)
+            .args(["-v", "error", "-nostdin"])
+            .args(pre)
+            .arg("-i")
+            .arg(src)
+            .args([
+                "-map",
+                "0:v:0",
+                "-an",
+                "-fps_mode",
+                "passthrough",
+                "-vf",
+                vf,
+            ])
+            .args(["-pix_fmt", "yuv444p", "-f", "rawvideo", "-"])
+            .output()
+            .context("running ffmpeg")?;
+        if !out.status.success() {
+            bail!(
+                "frame sampling failed: {}",
+                String::from_utf8_lossy(&out.stderr).trim()
+            );
+        }
+        Ok(out.stdout)
+    };
+    let frame = w * h * 3;
+    let split =
+        |raw: Vec<u8>| -> Vec<Vec<u8>> { raw.chunks_exact(frame).map(<[u8]>::to_vec).collect() };
+    if let Some(fps) = fps.filter(|f| *f > 0.0) {
+        let every = (fps / sample_fps).round().max(1.0) as u64;
+        let bsf = format!("noise=drop=mod(n\\,{every})");
+        if let Ok(raw) = run(&["-bsf:v".into(), bsf], &scale) {
+            let frames = split(raw);
+            if !frames.is_empty() {
+                return Ok((frames, every as f64 / fps));
+            }
+        }
+    }
+    let raw = run(&[], &format!("fps={sample_fps},{scale}"))?;
+    Ok((split(raw), 1.0 / sample_fps))
 }

@@ -330,6 +330,7 @@ fn unreadable_file_blocks_format() {
             error: None,
             encoder: None,
             meta: None,
+            cuts: Vec::new(),
         })
         .collect();
     assert!(pipeline::can_format(&clips, &results).is_err());
@@ -352,6 +353,7 @@ fn format_gate_needs_every_clip_verified_or_skipped() {
                 error: None,
                 encoder: None,
                 meta: None,
+                cuts: Vec::new(),
             })
             .collect()
     };

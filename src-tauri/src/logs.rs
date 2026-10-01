@@ -68,36 +68,117 @@ pub fn csv_files(dir: &Path) -> Vec<PathBuf> {
     v
 }
 
-/// Row timestamps from one EdgeTX CSV. Date and Time are the first two columns.
-pub fn read_csv(path: &Path) -> Result<Vec<NaiveDateTime>> {
-    let text =
-        std::fs::read_to_string(path).with_context(|| format!("reading {}", path.display()))?;
+/// Stick positions from one log row, as EdgeTX writes them: -1024..1024. Throttle is -1024
+/// at the bottom.
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Default)]
+pub struct Sticks {
+    pub ail: f64,
+    pub ele: f64,
+    pub thr: f64,
+    pub rud: f64,
+}
+
+/// One EdgeTX log row: its time, the sticks when the model logs them, and the flight
+/// controller's attitude telemetry (radians) when the receiver sends it.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct LogRow {
+    pub time: NaiveDateTime,
+    pub sticks: Option<Sticks>,
+    pub roll: Option<f64>,
+    pub pitch: Option<f64>,
+}
+
+/// Splits one CSV line. EdgeTX quotes text columns such as the flight mode.
+fn split_csv(line: &str) -> Vec<&str> {
     let mut out = Vec::new();
-    for line in text.lines().skip(1) {
-        let mut cols = line.split(',');
-        let (Some(d), Some(t)) = (cols.next(), cols.next()) else {
-            continue;
-        };
-        let s = format!("{} {}", d.trim(), t.trim());
-        if let Ok(dt) = NaiveDateTime::parse_from_str(&s, "%Y-%m-%d %H:%M:%S%.f") {
-            out.push(dt);
+    let mut start = 0;
+    let mut quoted = false;
+    for (i, c) in line.char_indices() {
+        match c {
+            '"' => quoted = !quoted,
+            ',' if !quoted => {
+                out.push(line[start..i].trim().trim_matches('"'));
+                start = i + 1;
+            }
+            _ => {}
         }
     }
-    Ok(out)
+    out.push(line[start..].trim().trim_matches('"'));
+    out
+}
+
+/// Every row of one EdgeTX CSV text. Date and Time are the first two columns. The stick
+/// columns (`Ail`, `Ele`, `Thr`, `Rud`) and attitude (`Roll(rad)`, `Ptch(rad)`) are found by
+/// header name, so any column order and any extra columns work.
+pub fn parse_rows(text: &str) -> Vec<LogRow> {
+    let mut lines = text.lines();
+    let header: Vec<String> = lines
+        .next()
+        .map(|h| split_csv(h).into_iter().map(str::to_string).collect())
+        .unwrap_or_default();
+    let col = |name: &str| header.iter().position(|h| h == name);
+    let (ail, ele, thr, rud) = (col("Ail"), col("Ele"), col("Thr"), col("Rud"));
+    let (roll, pitch) = (col("Roll(rad)"), col("Ptch(rad)"));
+    let mut out = Vec::new();
+    for line in lines {
+        let cols = split_csv(line);
+        let (Some(d), Some(t)) = (cols.first(), cols.get(1)) else {
+            continue;
+        };
+        let Ok(time) = NaiveDateTime::parse_from_str(&format!("{d} {t}"), "%Y-%m-%d %H:%M:%S%.f")
+        else {
+            continue;
+        };
+        let num = |i: Option<usize>| {
+            i.and_then(|i| cols.get(i))
+                .and_then(|v| v.parse::<f64>().ok())
+        };
+        let sticks = match (num(ail), num(ele), num(thr), num(rud)) {
+            (Some(ail), Some(ele), Some(thr), Some(rud)) => Some(Sticks { ail, ele, thr, rud }),
+            _ => None,
+        };
+        out.push(LogRow {
+            time,
+            sticks,
+            roll: num(roll),
+            pitch: num(pitch),
+        });
+    }
+    out
+}
+
+/// Every row of one EdgeTX CSV file.
+pub fn read_rows(path: &Path) -> Result<Vec<LogRow>> {
+    let text =
+        std::fs::read_to_string(path).with_context(|| format!("reading {}", path.display()))?;
+    Ok(parse_rows(&text))
+}
+
+/// Row timestamps from one EdgeTX CSV. Date and Time are the first two columns.
+pub fn read_csv(path: &Path) -> Result<Vec<NaiveDateTime>> {
+    Ok(read_rows(path)?.into_iter().map(|r| r.time).collect())
+}
+
+/// All rows under `dir`, grouped by day, sorted by time.
+pub fn read_log_rows(dir: &Path) -> BTreeMap<NaiveDate, Vec<LogRow>> {
+    let mut days: BTreeMap<NaiveDate, Vec<LogRow>> = BTreeMap::new();
+    for f in csv_files(dir) {
+        for r in read_rows(&f).unwrap_or_default() {
+            days.entry(r.time.date()).or_default().push(r);
+        }
+    }
+    for v in days.values_mut() {
+        v.sort_by_key(|r| r.time);
+    }
+    days
 }
 
 /// All row times under `dir`, grouped by day, sorted.
 pub fn read_log_dir(dir: &Path) -> BTreeMap<NaiveDate, Vec<NaiveDateTime>> {
-    let mut days: BTreeMap<NaiveDate, Vec<NaiveDateTime>> = BTreeMap::new();
-    for f in csv_files(dir) {
-        for t in read_csv(&f).unwrap_or_default() {
-            days.entry(t.date()).or_default().push(t);
-        }
-    }
-    for v in days.values_mut() {
-        v.sort();
-    }
-    days
+    read_log_rows(dir)
+        .into_iter()
+        .map(|(d, rows)| (d, rows.into_iter().map(|r| r.time).collect()))
+        .collect()
 }
 
 /// Splits rows at gaps over `segment_gap_s`, then numbers sessions at gaps over `session_gap_min`.
@@ -141,6 +222,9 @@ pub struct ClipMatch {
     pub segments: usize,
     /// First start to last end of the claimed segments, in seconds.
     pub span_s: f64,
+    /// Index of the first claimed segment in the list given to `match_clips`.
+    #[serde(skip)]
+    pub first: usize,
 }
 
 impl ClipMatch {
@@ -150,6 +234,7 @@ impl ClipMatch {
             start: None,
             segments: 0,
             span_s: 0.0,
+            first: 0,
         }
     }
 }
@@ -187,6 +272,7 @@ pub fn match_clips(durations: &[f64], segs: &[Segment], tun: &Tunables) -> Vec<C
             start: Some(first.start),
             segments: k - j + 1,
             span_s: span,
+            first: j,
         });
         j = k + 1;
     }
@@ -269,6 +355,25 @@ mod tests {
             today,
             &tun
         ));
+    }
+
+    #[test]
+    fn parses_sticks_attitude_and_quoted_columns() {
+        let text = "Date,Time,RQly(%),FM,Ptch(rad),Roll(rad),Rud,Ele,Thr,Ail,TxBat(V)\n\
+            2026-09-30,10:00:00.000,100,\"AIR*\",-0.02,2.71,-21,0,-1024,1000,7.8\n\
+            2026-09-30,10:00:00.100,100,\"A,B\",0.00,0.00,1,2,3,4,7.8\n\
+            junk\n";
+        let rows = parse_rows(text);
+        assert_eq!(rows.len(), 2);
+        let s = rows[0].sticks.unwrap();
+        assert_eq!((s.ail, s.ele, s.thr, s.rud), (1000.0, 0.0, -1024.0, -21.0));
+        assert_eq!(rows[0].roll, Some(2.71));
+        // A comma inside a quoted column does not shift the columns after it.
+        assert_eq!(rows[1].sticks.unwrap().ail, 4.0);
+        // A log without stick columns still gives times.
+        let rows = parse_rows("Date,Time,1RSS(dB)\n2026-09-30,10:00:00.000,-50\n");
+        assert_eq!(rows.len(), 1);
+        assert!(rows[0].sticks.is_none());
     }
 
     #[test]

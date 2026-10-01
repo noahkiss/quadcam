@@ -3,6 +3,7 @@
 
 use crate::logs::{self, Badge, Tunables};
 use crate::media::{self, Encoder, Format, Meta, Probe, Tools};
+use crate::moments::{self, Moment, MomentSource, RadioLog, SignalScan, Span};
 use crate::naming::{self, NamePlanner};
 use crate::scan::{self, FoundClip};
 use anyhow::{bail, Context, Result};
@@ -39,6 +40,9 @@ pub struct Clip {
     pub thumb: Option<PathBuf>,
     /// One line on what analysis found.
     pub detail: String,
+    /// Dead air found in the clip's frames, and the ranges worth keeping.
+    #[serde(default)]
+    pub signal: Option<SignalScan>,
 }
 
 impl Clip {
@@ -115,6 +119,7 @@ pub fn stage(
             probe: None,
             thumb: None,
             detail: String::new(),
+            signal: None,
         };
         let already = dst.metadata().is_ok_and(|m| m.len() == f.size);
         let res = if already {
@@ -198,6 +203,9 @@ pub fn analyse(tools: &Tools, clip: &mut Clip, cache: &Path) -> Result<()> {
     if media::thumbnail(tools, clip.source().unwrap(), &thumb).is_ok() {
         clip.thumb = Some(thumb);
     }
+    // Dead air is a suggestion only; a clip that cannot be sampled imports as usual.
+    let fps = clip.probe.as_ref().and_then(|p| p.fps);
+    clip.signal = moments::scan_signal(tools, clip.source().unwrap(), fps, clip.duration).ok();
     Ok(())
 }
 
@@ -227,6 +235,13 @@ pub struct DateSuggestion {
     pub source: DateSource,
     pub badge: Badge,
     pub segments: usize,
+    /// Moments from the stick channels of the claimed log rows, timed from the first armed
+    /// row (clip time when the clip starts at arm).
+    #[serde(default)]
+    pub moments: Vec<Moment>,
+    /// Median seconds between the claimed log rows.
+    #[serde(default)]
+    pub log_interval_s: Option<f64>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -253,6 +268,8 @@ pub fn plan_dates(
         source: DateSource::Import,
         badge: Badge::Unmatched,
         segments: 0,
+        moments: Vec::new(),
+        log_interval_s: None,
     };
     let mut plan = DatePlan {
         suggestions: durations.iter().map(fallback).collect(),
@@ -261,7 +278,7 @@ pub fn plan_dates(
         day_used: None,
     };
     let Some(dir) = log_dir else { return plan };
-    let days = logs::read_log_dir(dir);
+    let days = logs::read_log_rows(dir);
     plan.log_days = days.keys().rev().copied().collect();
     if days.is_empty() {
         plan.warnings
@@ -293,19 +310,27 @@ pub fn plan_dates(
         return plan;
     };
     plan.day_used = Some(day);
-    let segs = logs::segments(rows, tun);
+    let times: Vec<NaiveDateTime> = rows.iter().map(|r| r.time).collect();
+    let segs = logs::segments(&times, tun);
     for (s, m) in plan
         .suggestions
         .iter_mut()
         .zip(logs::match_clips(durations, &segs, tun))
     {
         if let (Some(start), Badge::Matched | Badge::Likely) = (m.start, m.badge) {
+            let windows: Vec<(NaiveDateTime, NaiveDateTime)> = segs[m.first..m.first + m.segments]
+                .iter()
+                .map(|g| (g.start, g.end))
+                .collect();
+            let log = RadioLog::from_rows(rows, &windows, start, 0.0);
             *s = DateSuggestion {
                 date: start.date(),
                 time: Some(start.time()),
                 source: DateSource::Log,
                 badge: m.badge,
                 segments: m.segments,
+                moments: log.moments(),
+                log_interval_s: log.interval(),
             };
         }
     }
@@ -374,6 +399,20 @@ pub struct ClipResult {
     /// The metadata written, so a later verify checks exactly what went into the file.
     #[serde(default)]
     pub meta: Option<Meta>,
+    /// One extra output per cut range of the clip.
+    #[serde(default)]
+    pub cuts: Vec<CutResult>,
+}
+
+/// One cut range written as its own file next to the clip's output.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct CutResult {
+    pub start: f64,
+    pub end: f64,
+    pub outcome: Outcome,
+    pub output: Option<PathBuf>,
+    pub size: u64,
+    pub error: Option<String>,
 }
 
 /// Where the output folder setting points until the user picks one, relative to `$HOME`.
@@ -468,6 +507,7 @@ pub fn import_clip(
         error: None,
         encoder: None,
         meta: None,
+        cuts: Vec::new(),
     };
     let fail = |mut r: ClipResult, e: String| {
         r.error = Some(e);
@@ -593,4 +633,98 @@ pub fn can_format(clips: &[Clip], results: &[ClipResult]) -> Result<()> {
         }
     }
     Ok(())
+}
+
+/// Writes each cut range of a verified clip as `<output stem>_cutN.<ext>` next to its output,
+/// and verifies it. A cut that already verified with the same range keeps its file and is not
+/// written again. Never overwrites: a taken name gets `-2`, `-3`.
+pub fn export_cuts(
+    tools: &Tools,
+    clip: &Clip,
+    main: &ClipResult,
+    cuts: &[Span],
+    settings: &ImportSettings,
+    planner: &mut NamePlanner,
+) -> Vec<CutResult> {
+    let (Some(out), Some(meta)) = (main.output.as_deref(), main.meta.as_ref()) else {
+        return Vec::new();
+    };
+    let dir = out.parent().unwrap_or(&settings.output_dir);
+    let stem = out
+        .file_stem()
+        .unwrap_or_default()
+        .to_string_lossy()
+        .to_string();
+    let ext = out
+        .extension()
+        .unwrap_or_default()
+        .to_string_lossy()
+        .to_string();
+    let format = if ext.eq_ignore_ascii_case("mov") {
+        Format::Mov
+    } else {
+        Format::Mp4
+    };
+    let same = |a: f64, b: f64| (a - b).abs() < 0.001;
+    cuts.iter()
+        .enumerate()
+        .map(|(i, span)| {
+            if let Some(prev) = main.cuts.iter().find(|c| {
+                c.outcome == Outcome::Verified
+                    && same(c.start, span.start)
+                    && same(c.end, span.end)
+                    && c.output.as_deref().is_some_and(Path::is_file)
+            }) {
+                return prev.clone();
+            }
+            let mut r = CutResult {
+                start: span.start,
+                end: span.end,
+                outcome: Outcome::Failed,
+                output: None,
+                size: 0,
+                error: None,
+            };
+            let (Some(src), Some(probe)) = (clip.source(), clip.probe.as_ref()) else {
+                r.error = Some("clip was not staged or could not be read".into());
+                return r;
+            };
+            let dst = planner.claim(dir, &format!("{stem}_cut{}", i + 1), &ext);
+            let tmp = dst.with_file_name(format!(
+                ".{}.part",
+                dst.file_name().unwrap().to_string_lossy()
+            ));
+            let cut_meta = Meta {
+                creation_time: meta.creation_time
+                    + chrono::Duration::milliseconds((span.start * 1000.0) as i64),
+                description: format!(
+                    "{}; cut {:.1}-{:.1} s",
+                    meta.description, span.start, span.end
+                ),
+                ..meta.clone()
+            };
+            let res = media::cut(tools, src, &tmp, *span, format, settings.encoder, &cut_meta)
+                .and_then(|_| media::verify_cut(tools, probe, &tmp, *span))
+                .and_then(|_| {
+                    if dst.exists() {
+                        bail!("{} appeared during export; not overwriting", dst.display());
+                    }
+                    std::fs::rename(&tmp, &dst).context("renaming cut")?;
+                    Ok(())
+                });
+            match res {
+                Ok(()) => {
+                    let _ = media::set_mtime(&dst, cut_meta.creation_time);
+                    r.size = dst.metadata().map(|m| m.len()).unwrap_or(0);
+                    r.output = Some(dst);
+                    r.outcome = Outcome::Verified;
+                }
+                Err(e) => {
+                    let _ = std::fs::remove_file(&tmp);
+                    r.error = Some(format!("{e:#}"));
+                }
+            }
+            r
+        })
+        .collect()
 }
