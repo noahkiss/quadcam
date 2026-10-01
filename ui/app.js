@@ -830,8 +830,20 @@ function renderLibDetails(c) {
   author.addEventListener("change", () => { remember("authors", author.value); libEdit(c.id, { author: author.value }); });
   const note = el("input", { type: "text", value: c.note || "", list: "recent-notes", spellcheck: "false" });
   note.addEventListener("change", () => { remember("notes", note.value); libEdit(c.id, { note: note.value }); });
+  const known = settings.profiles.filter((p) => p.name);
+  const isProfile = known.some((p) => p.name.toLowerCase() === (c.aircraft || "").toLowerCase());
+  const aircraft = el("select", { "aria-label": "Aircraft" },
+    el("option", { value: "", text: "None", selected: !c.aircraft }),
+    ...known.map((p) => el("option", { value: p.name, text: p.name, selected: p.name.toLowerCase() === (c.aircraft || "").toLowerCase() })),
+    c.aircraft && !isProfile ? el("option", { value: "*", text: c.aircraft, selected: true, disabled: true }) : null);
+  aircraft.addEventListener("change", () => libEdit(c.id, { profile: aircraft.value }));
+  const date = el("input", { type: "date", value: c.date, "aria-label": "Date" });
+  date.addEventListener("change", () => date.value && libEdit(c.id, { date: date.value }));
+  const time = el("input", { type: "time", value: c.time || "", "aria-label": "Time of day" });
+  time.addEventListener("change", () => libEdit(c.id, { time: time.value }));
   box.replaceChildren(
-    el("label", { class: "field" }, el("span", { text: "Aircraft" }), el("input", { type: "text", value: c.aircraft || "", disabled: true })),
+    el("div", { class: "field" }, el("span", { text: "Date and time" }), el("div", { class: "row" }, date, time)),
+    el("label", { class: "field" }, el("span", { text: "Aircraft" }), aircraft),
     el("label", { class: "field" }, el("span", { text: "Place" }), placeSel, c.location ? el("span", { class: "hint mono", text: `${c.location.lat.toFixed(4)}, ${c.location.lon.toFixed(4)}` }) : null),
     el("div", { class: "field" }, el("span", { text: "Keywords" }), kwBox),
     el("label", { class: "field" }, el("span", { text: "Author" }), author),

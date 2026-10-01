@@ -461,6 +461,139 @@ fn mcp_over_stdio() {
         .collect();
     assert_eq!(lines.len(), 3);
     assert_eq!(lines[0]["result"]["protocolVersion"], "2025-11-25");
-    assert_eq!(lines[1]["result"]["tools"].as_array().unwrap().len(), 11);
+    assert_eq!(lines[1]["result"]["tools"].as_array().unwrap().len(), 16);
     assert_eq!(lines[2]["result"]["structuredContent"]["mode"], "headless");
+}
+
+#[test]
+fn places_profiles_settings_and_times_from_the_cli() {
+    let env = Env::new();
+    let settings = env
+        .home
+        .path()
+        .join("Library/Application Support/app.quadcam/settings.json");
+    std::fs::create_dir_all(settings.parent().unwrap()).unwrap();
+    std::fs::write(&settings, r#"{"formatLabel":"ECHO","libView":"list"}"#).unwrap();
+
+    let p = env.ok(&[
+        "places",
+        "save",
+        "Statue of Liberty",
+        "--location",
+        "40.6892,-74.0445",
+    ]);
+    assert_eq!(p["place"]["name"], "Statue of Liberty");
+    let (code, v) = env.run(&["places", "save", "Nowhere"]);
+    assert_eq!(code, 1, "{v}");
+    assert!(v["error"]["message"]
+        .as_str()
+        .unwrap()
+        .contains("lat and lon"));
+    env.ok(&[
+        "profiles",
+        "save",
+        "Whoop",
+        "--aircraft",
+        "65 mm whoop",
+        "--camera-make",
+        "Maker",
+        "--keywords",
+        "tinywhoop, fpv",
+        "--place",
+        "statue of liberty",
+        "--models",
+        "WHOOP A",
+        "--default",
+    ]);
+    let pr = env.ok(&["profiles"]);
+    assert_eq!(pr["default_profile"], "Whoop");
+    assert_eq!(pr["profiles"][0]["place"], "Statue of Liberty");
+    env.ok(&[
+        "places",
+        "save",
+        "Statue of Liberty",
+        "--rename",
+        "Liberty Island",
+    ]);
+    assert_eq!(
+        env.ok(&["profiles", "list"])["profiles"][0]["place"],
+        "Liberty Island"
+    );
+
+    let out = tempfile::tempdir().unwrap();
+    let st = env.ok(&[
+        "settings",
+        "set",
+        &format!("output_dir={}", s(out.path())),
+        "place_folders=true",
+        "format=mp4",
+    ]);
+    assert_eq!(st["effective"]["place_folders"], true);
+    let (code, v) = env.run(&["settings", "set", "format=avi"]);
+    assert_eq!(code, 1, "{v}");
+    let (code, v) = env.run(&["settings", "set", "colour=red"]);
+    assert_eq!(code, 1, "{v}");
+    assert!(v["error"]["message"]
+        .as_str()
+        .unwrap()
+        .contains("unknown setting"));
+    let file: Value = serde_json::from_slice(&std::fs::read(&settings).unwrap()).unwrap();
+    assert_eq!(
+        file["formatLabel"], "ECHO",
+        "keys the CLI did not set survive"
+    );
+    assert_eq!(file["libView"], "list");
+    assert_eq!(file["places"][0]["name"], "Liberty Island");
+
+    // A manual time at import, then a new date from the library.
+    let src = folder_with_clips();
+    env.ok(&["stage", s(src.path())]);
+    env.ok(&["analyze"]);
+    env.ok(&[
+        "dates",
+        "--no-logs",
+        "--set",
+        "0=2026-09-27",
+        "--set",
+        "1=2026-09-27",
+    ]);
+    let (code, v) = env.run(&["import", "--time", "0=7:5pm"]);
+    assert_eq!(code, 1, "{v}");
+    let r = env.ok(&[
+        "import", "--name", "0=loops", "--time", "0=18:30", "--skip", "1",
+    ]);
+    assert_eq!(r["summary"]["imported"], 1, "{r}");
+    let lib = env.ok(&["library", "list"]);
+    let c = &lib["clips"][0];
+    assert_eq!(c["time"], "18:30");
+    assert!(
+        c["file"]
+            .as_str()
+            .unwrap()
+            .contains("2026-09-27 Liberty Island"),
+        "{c}"
+    );
+    let id = c["id"].as_str().unwrap().to_string();
+    let e = env.ok(&[
+        "library",
+        "edit",
+        &id,
+        "--date",
+        "2026-09-28",
+        "--time",
+        "09:15",
+    ]);
+    assert_eq!(e["date"], "2026-09-28");
+    assert_eq!(e["time"], "09:15");
+    assert!(out
+        .path()
+        .join("2026/2026-09-28 Liberty Island/2026-09-28_loops.mp4")
+        .is_file());
+    let (code, _) = env.run(&["library", "edit", &id]);
+    assert_eq!(code, 1, "an edit with nothing to change is refused");
+
+    let gone = env.ok(&["places", "delete", "liberty island"]);
+    assert_eq!(gone["profiles_cleared"][0], "Whoop");
+    env.ok(&["profiles", "delete", "Whoop"]);
+    assert_eq!(env.ok(&["profiles"])["default_profile"], Value::Null);
 }
