@@ -209,9 +209,16 @@ async function saveMany(values) {
 const clipsAll = () => state.lib?.clips || [];
 const libClip = (id) => clipsAll().find((c) => c.id === id);
 
-async function loadLibrary() {
+// Reads the library from the core. With `onlyIfChanged`, it re-renders only when the
+// clips differ from what is on screen.
+let libSig = "";
+async function loadLibrary(onlyIfChanged = false) {
   try {
-    state.lib = await call("library", {});
+    const lib = await call("library", {});
+    const sig = JSON.stringify([lib.root, lib.unindexed, lib.last_import, lib.clips]);
+    if (onlyIfChanged && sig === libSig) return;
+    libSig = sig;
+    state.lib = lib;
   } catch (e) {
     state.lib = { clips: [], unindexed: 0, totals: { clips: 0, bytes: 0, seconds: 0, flying: 0 }, groups: {}, root: settings.outputDir, exists: false };
     console.warn(e);
@@ -330,6 +337,24 @@ function flagMark(c) {
   if (c.flag === "pick") return el("span", { class: "flag-pick", title: "Pick" }, icon("flag"));
   if (c.flag === "reject") return el("span", { class: "flag-reject", title: "Rejected" }, icon("close"));
   return null;
+}
+
+// Library thumbnails load their strip only when they come near the screen.
+const stripObserver = new IntersectionObserver((entries) => {
+  for (const en of entries) {
+    if (!en.isIntersecting) continue;
+    const n = en.target;
+    n.style.backgroundImage = `url("${n.dataset.strip}")`;
+    stripObserver.unobserve(n);
+  }
+}, { root: $("#lib-content"), rootMargin: "600px 0px" });
+
+function lazyStrip(node, c) {
+  if (!c.strip) return node;
+  node.style.backgroundPosition = `${(2 / 9) * 100}% 0`;
+  node.dataset.strip = src(c.strip);
+  stripObserver.observe(node);
+  return node;
 }
 
 function stripStyle(c, tile = 2) {
@@ -493,9 +518,11 @@ function renderFirstRun() {
   $("#first-run-status").replaceChildren(el("span", { class: "dot-on" }), el("span", { text: "Watching for cards" }), el("span", { class: "muted", text: "·" }), ...logs);
 }
 
+const thumbPx = () => `${[80, 104, 136, 170, 210][(settings.thumbSize || 3) - 1]}px`;
+
 function renderLibrary() {
   const content = $("#lib-content");
-  content.style.setProperty("--thumb", `${[80, 104, 136, 170, 210][(settings.thumbSize || 3) - 1]}px`);
+  content.style.setProperty("--thumb", thumbPx());
   renderBanners();
   const list = visible();
   const scroll = content.scrollTop;
@@ -587,11 +614,12 @@ function daySummary(cs) {
 
 function card(c) {
   const sel = state.selected.has(c.id);
-  const thumb = el("div", { class: "thumb", style: stripStyle(c) },
+  const thumb = el("div", { class: "thumb" },
     c.flag === "reject" ? el("span", { class: "chip tl-chip c-red" }, icon("close"), "Rejected")
       : c.cuts.length ? el("span", { class: "chip tl-chip" }, icon("scissors", "c-sky"), `${c.cuts.length} cut${c.cuts.length === 1 ? "" : "s"}`) : null,
     c.in_photos ? el("span", { class: "chip tr-chip photos-ok", title: "In Photos", "aria-label": "In Photos" }, icon("photos")) : null,
     el("span", { class: "dur", text: fmtDur(c.duration) }));
+  lazyStrip(thumb, c);
   scrubbable(thumb, c);
   const art = el("article", {
     class: `card${c.flag === "reject" ? " rejected" : ""}`, tabindex: "0", "aria-selected": String(sel), "data-id": c.id, "aria-label": c.name,
@@ -634,7 +662,7 @@ function listTable(list) {
     "aria-selected": String(state.selected.has(c.id)), "data-id": c.id, tabindex: "0", class: c.flag === "reject" ? "rejected" : "",
     onclick: (e) => select(c.id, e), ondblclick: () => { clearTimeout(renameTimer); openDetail(c.id); }, oncontextmenu: (e) => openMenu(e, c.id),
   },
-  el("td", {}, el("div", { class: "lthumb", style: stripStyle(c) })),
+  el("td", {}, lazyStrip(el("div", { class: "lthumb" }), c)),
   el("td", {}, el("b", { text: c.name, "data-name": true, onclick: (e) => nameClick(e, c.id) })),
   el("td", { class: "mono", text: `${c.date} ${c.time || ""}` }),
   el("td", { class: "mono", text: fmtDur(c.duration) }),
@@ -727,7 +755,7 @@ function setThumbSize(n) {
   settings.thumbSize = n;
   $("#thumb-size").value = n;
   save("thumbSize", n);
-  renderLibrary();
+  $("#lib-content").style.setProperty("--thumb", thumbPx());
   syncMenu();
 }
 
@@ -2305,8 +2333,14 @@ for (const tabs of ["#r-tabs", "#d-tabs"]) {
 
 $("#sort").addEventListener("change", (e) => { if (e.target.value !== librarySort().key) setSort(e.target.value); });
 $("#search").addEventListener("input", (e) => { state.query = e.target.value; if (state.screen === "library") renderLibrary(); });
-$("#thumb-size").addEventListener("input", (e) => { settings.thumbSize = +e.target.value; renderLibrary(); });
-$("#thumb-size").addEventListener("change", (e) => save("thumbSize", +e.target.value));
+// The slider resizes through one CSS variable; the setting saves when it settles.
+let thumbSave = null;
+$("#thumb-size").addEventListener("input", (e) => {
+  settings.thumbSize = +e.target.value;
+  $("#lib-content").style.setProperty("--thumb", thumbPx());
+  clearTimeout(thumbSave);
+  thumbSave = setTimeout(() => { save("thumbSize", settings.thumbSize); syncMenu(); }, 300);
+});
 $("#format-opt").addEventListener("change", syncFormatButton);
 $("#format-label").addEventListener("input", (e) => {
   e.target.value = e.target.value.toUpperCase().replace(/[^A-Z0-9_-]/g, "").slice(0, 11);
@@ -2323,7 +2357,7 @@ T.event.listen("library-task", ({ payload: t }) => {
   if (t.done >= t.total) setTimeout(() => { state.tasks.delete(t.task); renderSidebar(); }, 800);
   renderSidebar();
 });
-window.addEventListener("focus", () => loadLibrary());
+window.addEventListener("focus", () => loadLibrary(true));
 
 async function init() {
   hydrateIcons();
