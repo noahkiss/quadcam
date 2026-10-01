@@ -1120,6 +1120,12 @@ async function playDetail() {
 // ---------- keys ----------
 
 document.addEventListener("keydown", (e) => {
+  // Command-Return exports from the review, even from a name field.
+  if (e.metaKey && e.key === "Enter" && $("#import-sheet").open && state.step === "review" && !document.querySelector("dialog[open]:not(#import-sheet)")) {
+    e.preventDefault();
+    if (!$("#imp-export-btn").disabled) runExport();
+    return;
+  }
   const typing = e.target.closest("input, select, textarea, [contenteditable]");
   if (typing || document.querySelector("dialog[open]:not(#import-sheet)")) return;
   const sheetOpen = $("#import-sheet").open;
@@ -1133,7 +1139,12 @@ document.addEventListener("keydown", (e) => {
     if (!sheetOpen && state.screen === "library" && state.selected.size) return clearSelection();
   }
   if (sheetOpen) {
-    if (state.step === "review" && rTrim && rTrim.handleKey(e)) e.preventDefault();
+    if (state.step !== "review") return;
+    const plain = !e.metaKey && !e.ctrlKey && !e.altKey;
+    if (plain && (e.key === "ArrowUp" || e.key === "ArrowDown")) { stepReview(e.key === "ArrowUp" ? -1 : 1); return e.preventDefault(); }
+    if (plain && e.key.toLowerCase() === "s") { toggleSkip(state.selectedClip); return e.preventDefault(); }
+    if (plain && e.key === " " && !e.target.closest("button") && !($("#r-video").src && !$("#r-video").hidden)) { playReview(); return e.preventDefault(); }
+    if (rTrim && rTrim.handleKey(e)) e.preventDefault();
     return;
   }
   if (state.screen === "detail") {
@@ -1210,7 +1221,11 @@ const inPhotos = (id) => (state.session?.in_photos || []).includes(id);
 
 function openImport(step) {
   const dlg = $("#import-sheet");
-  if (!dlg.open) dlg.showModal();
+  if (!dlg.open) {
+    dlg.showModal();
+    // Keys go to the clip list, not to the first button in the sheet.
+    $("#clips").focus();
+  }
   if (step) setStep(step);
   else setStep(state.session ? (state.session.results.length && !sessionLeft() ? "finish" : "review") : "load");
 }
@@ -1486,6 +1501,24 @@ function renderClips() {
     );
     ol.append(li);
   }
+}
+
+// Up and Down in the review move between clips.
+function stepReview(delta) {
+  const ids = clips().map((c) => c.id);
+  const next = ids[ids.indexOf(state.selectedClip) + delta];
+  if (next == null) return;
+  state.selectedClip = next;
+  for (const x of $("#clips").children) x.setAttribute("aria-selected", String(x.dataset.clip === String(next)));
+  $(`#clips [data-clip="${next}"]`)?.scrollIntoView({ block: "nearest" });
+  renderReviewDetail();
+}
+
+function toggleSkip(id) {
+  const c = clips().find((x) => x.id === id);
+  const p = plan(id);
+  if (!c || !p || c.status === "empty" || c.stage_error) return;
+  edit({ id, skip: !p.skip });
 }
 
 function sessionTrimModel(c, p) {
