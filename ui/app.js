@@ -892,7 +892,7 @@ function openMenu(e, id) {
   const ids = selectedIds();
   const many = ids.length > 1;
   const c = libClip(id);
-  const item = (ic, label, key, fn, cls) => el("li", {}, el("button", { type: "button", role: "menuitem", class: cls, onclick: () => { closeMenu(); fn(); } }, icon(ic), el("span", { text: label }), el("span", { class: "key", text: key })));
+  const item = (ic, label, key, fn, cls) => el("li", {}, el("button", { type: "button", role: "menuitem", class: cls, onclick: () => { closeMenu(true); fn(); } }, icon(ic), el("span", { text: label }), el("span", { class: "key", text: key })));
   const sep = () => el("li", { role: "separator" });
   const menu = $("#menu");
   menu.replaceChildren(
@@ -908,15 +908,39 @@ function openMenu(e, id) {
     item("trash-bin-trash", many ? `Move ${ids.length} to Trash` : "Move to Trash", "⌘⌫", () => trashClips(ids), "danger"),
   );
   menu.hidden = false;
+  state.menuFor = id;
   const r = menu.getBoundingClientRect();
   menu.style.left = `${Math.min(e.clientX, innerWidth - r.width - 8)}px`;
   menu.style.top = `${Math.min(e.clientY, innerHeight - r.height - 8)}px`;
   menu.querySelector("button")?.focus();
 }
 
-function closeMenu() {
-  $("#menu").hidden = true;
+// Closes the context menu. With `refocus`, focus goes back to the clip it was opened on.
+function closeMenu(refocus = false) {
+  const menu = $("#menu");
+  if (menu.hidden) return;
+  menu.hidden = true;
+  if (refocus && state.menuFor) {
+    const scope = state.screen === "detail" ? $("#detail-bar") : $("#lib-content");
+    (scope.querySelector(`[data-id="${CSS.escape(state.menuFor)}"]`) || scope.querySelector("button"))?.focus();
+  }
 }
+
+// Arrow keys, Home and End move through the menu; Escape and Tab close it.
+$("#menu").addEventListener("keydown", (e) => {
+  const items = $$("#menu button:not(:disabled)");
+  const i = items.indexOf(document.activeElement);
+  const go = { ArrowDown: i + 1, ArrowUp: i - 1, Home: 0, End: items.length - 1 }[e.key];
+  if (go != null) {
+    items[(go + items.length) % items.length]?.focus();
+  } else if (e.key === "Escape" || e.key === "Tab") {
+    closeMenu(true);
+  } else {
+    return;
+  }
+  e.preventDefault();
+  e.stopPropagation();
+});
 
 document.addEventListener("click", (e) => {
   if (!e.target.closest("#menu")) closeMenu();
@@ -1172,6 +1196,11 @@ document.addEventListener("keydown", (e) => {
     return e.preventDefault();
   }
   if (!ids.length) return;
+  if (e.key === "ContextMenu" || (e.shiftKey && e.key === "F10")) {
+    const r = $(`#lib-content [data-id="${CSS.escape(state.cursor ?? ids[0])}"]`)?.getBoundingClientRect();
+    if (r) openMenu({ preventDefault() {}, clientX: r.left + 24, clientY: r.top + 24 }, state.cursor ?? ids[0]);
+    return e.preventDefault();
+  }
   if (e.key === "Enter") { startRename(ids[0]); return e.preventDefault(); }
   if (e.key === " " || e.key === "t") { openDetail(ids[0]); return e.preventDefault(); }
   if (e.metaKey && e.key === "i") { openDetail(ids[0], null, "details"); return e.preventDefault(); }
