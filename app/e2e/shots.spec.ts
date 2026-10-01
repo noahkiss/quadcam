@@ -42,6 +42,13 @@ for (const scheme of ["dark", "light"] as const) {
       await page.screenshot({ path: shot(app.ui, "detail-flight") });
     });
 
+    test("import review", async ({ app, page }) => {
+      await app.open("review");
+      await page.getByRole("navigation", { name: "Library" }).getByRole("button", { name: /Unfinished import/ }).click();
+      await page.waitForTimeout(400);
+      await page.screenshot({ path: shot(app.ui, "import-review") });
+    });
+
     test("first run", async ({ app, page }) => {
       await app.open("empty");
       await expect(page.getByRole("heading", { name: "Import your first flights" })).toBeVisible();

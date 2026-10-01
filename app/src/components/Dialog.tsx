@@ -51,7 +51,7 @@ export function Dialog({ open, title, onClose, children, actions, kind = "dialog
     <dialog
       ref={ref}
       aria-labelledby={titleId}
-      className={[styles.dialog, styles[kind], className].filter(Boolean).join(" ")}
+      className={[styles.dialog, kind === "sheet" ? styles.sheet : styles.small, className].filter(Boolean).join(" ")}
       onKeyDown={(e) => {
         if (blockReturn && e.key === "Enter") e.preventDefault();
       }}

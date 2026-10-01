@@ -43,6 +43,19 @@ for (const scheme of ["dark", "light"] as const) {
       expect(r.violations.map((v) => `${v.id}: ${v.nodes.map((n) => n.target.join(" ") + " " + n.failureSummary).join(", ")}`)).toEqual([]);
     });
 
+    test("the import sheet passes axe", async ({ app, page }) => {
+      test.skip(app.ui !== "next", "contrast is checked on the new UI");
+      await app.open("review");
+      await page.getByRole("navigation", { name: "Library" }).getByRole("button", { name: /Unfinished import/ }).click();
+      await page.waitForFunction(() => document.getAnimations().every((a) => a.playState === "finished"));
+      let r = await new AxeBuilder({ page }).withTags(["wcag2a", "wcag2aa", "wcag21aa"]).analyze();
+      expect(r.violations.map((v) => `${v.id}: ${v.nodes.map((n) => n.target.join(" ") + " " + n.failureSummary).join(", ")}`)).toEqual([]);
+      await page.keyboard.press("Meta+Enter");
+      await expect(page.getByRole("heading", { name: /^Added/ })).toBeVisible();
+      r = await new AxeBuilder({ page }).withTags(["wcag2a", "wcag2aa", "wcag21aa"]).analyze();
+      expect(r.violations.map((v) => `${v.id}: ${v.nodes.map((n) => n.target.join(" ") + " " + n.failureSummary).join(", ")}`)).toEqual([]);
+    });
+
     test("open dialog and menu pass axe", async ({ app, page }) => {
       test.skip(app.ui !== "next", "the gallery is part of the new UI");
       await app.open("library", { query: "?gallery" });

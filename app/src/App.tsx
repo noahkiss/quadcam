@@ -12,6 +12,7 @@ import { Toolbar } from "./views/Shell/Toolbar";
 import { LibraryView } from "./views/Library/LibraryView";
 import { FirstRun } from "./views/FirstRun/FirstRun";
 import { ClipDetail } from "./views/ClipDetail/ClipDetail";
+import { ImportSheet } from "./views/ImportSheet/ImportSheet";
 import styles from "./App.module.css";
 
 /** Suggestions for the place, keyword, author and note fields. */
@@ -72,6 +73,7 @@ export function App() {
           {screen === "detail" ? <ClipDetail /> : screen === "first-run" ? <FirstRun /> : <LibraryView onMenu={onMenu} />}
         </main>
       </div>
+      <ImportSheet />
       <Overlays />
       <Suggestions />
     </div>

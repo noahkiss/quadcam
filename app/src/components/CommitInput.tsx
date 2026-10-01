@@ -10,7 +10,7 @@ interface Props extends Omit<InputHTMLAttributes<HTMLInputElement>, "value" | "o
 
 /** A field that shows the core's value until the person types, and commits once. A value
  * that changes while the field has focus does not overwrite the typing. */
-export const CommitInput = forwardRef<HTMLInputElement, Props>(function CommitInput({ value, onCommit, onKeyDown, ...rest }, ref) {
+export const CommitInput = forwardRef<HTMLInputElement, Props>(function CommitInput({ value, onCommit, onKeyDown, onFocus, onBlur, ...rest }, ref) {
   const [draft, setDraft] = useState<string | null>(null);
   const commit = () => {
     if (draft != null && draft !== value) onCommit(draft);
@@ -21,7 +21,10 @@ export const CommitInput = forwardRef<HTMLInputElement, Props>(function CommitIn
       ref={ref}
       {...rest}
       value={draft ?? value}
-      onFocus={() => setDraft(value)}
+      onFocus={(e) => {
+        setDraft(value);
+        onFocus?.(e);
+      }}
       onChange={(e) => {
         setDraft(e.target.value);
         // Date, time and select-like inputs commit at once.
@@ -29,7 +32,10 @@ export const CommitInput = forwardRef<HTMLInputElement, Props>(function CommitIn
           if (e.target.value !== value) onCommit(e.target.value);
         }
       }}
-      onBlur={commit}
+      onBlur={(e) => {
+        commit();
+        onBlur?.(e);
+      }}
       onKeyDown={(e) => {
         if (e.key === "Enter") commit();
         onKeyDown?.(e);

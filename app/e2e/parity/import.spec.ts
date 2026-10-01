@@ -4,7 +4,9 @@ import { area, dialog, expect, test, type AppFixture } from "../fixtures";
 area("import");
 
 const sheet = (page: Page) => dialog(page, "Import");
-const row = (page: Page, name: string) => sheet(page).getByRole("listitem").filter({ has: page.getByRole("textbox", { name: `Short name for ${name}` }) });
+// A clip row: a list item (legacy) or a grid row (new UI).
+const rows = (page: Page) => sheet(page).locator('li, [role="row"]');
+const row = (page: Page, name: string) => rows(page).filter({ has: page.getByRole("textbox", { name: `Short name for ${name}` }) });
 const patches = async (app: AppFixture) => (await app.calls()).filter((c) => c.cmd === "edit_plan" || c.cmd === "edit_plans").flatMap((c) => (c.args.patches as object[]) || [c.args.patch]);
 
 async function openFolder(app: AppFixture) {
@@ -18,7 +20,7 @@ test("Import… without a card picks a folder and loads its clips", async ({ app
   await app.open();
   await openFolder(app);
   expect((await app.calls("load_source"))[0].args).toEqual({ path: "/Users/pilot/clips" });
-  await expect(sheet(page).getByRole("listitem").filter({ has: page.getByRole("checkbox") })).toHaveCount(5);
+  await expect(rows(page).filter({ has: page.getByRole("checkbox") })).toHaveCount(5);
   await expect(sheet(page).getByText("5 clips · 2:10 flying · 0:00 dead air")).toBeVisible();
 });
 

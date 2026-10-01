@@ -10,6 +10,7 @@
 }
 .plain {
   background: var(--surface);
+  color: var(--fg);
 }
 .overlay {
   background: var(--chip-dark);
