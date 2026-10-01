@@ -27,6 +27,7 @@ const DEFAULTS = {
   places: [],
   profiles: [],
   defaultProfile: "",
+  geocoder: "apple",
   recents: { keywords: [], authors: [], notes: [] },
   // How the library looks; per machine.
   libView: "grid",
@@ -155,45 +156,36 @@ function ask(title, text, { input = null, ok = "OK", danger = false } = {}) {
 
 // ---------- settings ----------
 
+// The core owns the settings file (shared with the CLI and the MCP server). It writes only
+// the keys it is given, so a write here never undoes one made elsewhere.
 async function loadSettings() {
   try {
-    store = await T.store.load("settings.json", { defaults: {}, autoSave: true });
-    for (const k of Object.keys(DEFAULTS)) {
-      const v = await store.get(k);
-      if (v !== undefined && v !== null) settings[k] = v;
-    }
+    const { values } = await call("settings");
+    for (const k of Object.keys(DEFAULTS)) settings[k] = values[k] ?? structuredClone(DEFAULTS[k]);
   } catch (e) {
-    console.warn("settings store unavailable", e);
+    console.warn("settings unavailable", e);
   }
-}
-
-// Tells the core, so an agent's import uses the same folder and format as the person would.
-async function pushDefaults() {
-  await invoke("set_defaults", {
-    defaults: {
-      output_dir: settings.outputDir,
-      format: settings.format,
-      encoder: settings.encoder,
-      keep_originals: settings.keepOriginals,
-      add_time: settings.addTime,
-      default_name: settings.defaultName || "flight",
-      photos_album: settings.photosAlbum || "",
-      format_label: settings.formatLabel || "DVR",
-      log_dir: settings.logDir,
-      tunables: settings.tunables,
-      places: settings.places,
-      profiles: settings.profiles,
-      default_profile: settings.defaultProfile || null,
-      layout: settings.libraryLayout,
-      place_folders: settings.placeFolders,
-    },
-  });
 }
 
 async function save(k, v) {
   settings[k] = v;
-  if (store) await store.set(k, v);
-  await pushDefaults();
+  try {
+    await call("settings_set", { values: { [k]: v } });
+  } catch (e) {
+    toast(`Settings not saved: ${e}`, true);
+  }
+}
+
+// Writes the keys whose value differs from `before`, in one call.
+async function saveChanged(values, before) {
+  const changed = Object.fromEntries(Object.entries(values).filter(([k, v]) => JSON.stringify(v) !== JSON.stringify(before[k])));
+  if (!Object.keys(changed).length) return;
+  Object.assign(settings, changed);
+  try {
+    await call("settings_set", { values: changed });
+  } catch (e) {
+    toast(`Settings not saved: ${e}`, true);
+  }
 }
 
 // ---------- library ----------
@@ -1228,7 +1220,9 @@ function renderClips() {
       "data-field": "name", class: p.suggested.name ? "suggested" : false, title: p.suggested.name ? `Agent suggestion${p.reason ? ": " + p.reason : ""}` : false,
       onchange: (e) => edit({ id: c.id, name: e.target.value }),
     });
-    const date = el("input", { type: "date", value: p.date, "aria-label": `Date for ${c.name}`, "data-field": "date", class: p.suggested.date ? "suggested" : false, onchange: (e) => e.target.value && edit({ id: c.id, date: e.target.value }) });
+    const hhmm = p.time ? p.time.slice(0, 5) : "";
+    const date = el("input", { type: "date", value: p.date, "aria-label": `Date for ${c.name}`, "data-field": "date", class: p.suggested.date ? "suggested" : false, onchange: (e) => e.target.value && edit({ id: c.id, date: e.target.value, time: hhmm }) });
+    const time = el("input", { type: "time", value: hhmm, "aria-label": `Time for ${c.name}`, title: "Time of day (empty: noon)", "data-field": "time", class: p.suggested.date ? "suggested" : false, onchange: (e) => edit({ id: c.id, time: e.target.value }) });
     const note = el("input", { type: "text", value: p.note, placeholder: "Note", "aria-label": `Note for ${c.name}`, list: "recent-notes", "data-field": "note", class: p.suggested.note ? "suggested" : false, onchange: (e) => { remember("notes", e.target.value); edit({ id: c.id, note: e.target.value }); } });
     const skip = el("input", { type: "checkbox", checked: p.skip, disabled: unusable, "data-field": "skip", onchange: (e) => edit({ id: c.id, skip: e.target.checked }) });
     const res = el("div", { class: "result" });
@@ -1245,7 +1239,7 @@ function renderClips() {
       thumb,
       el("div", { class: "rmain" },
         el("div", { class: "rname" }, name, sugg ? agentTag(p) : null),
-        el("div", { class: "rmeta" }, date, srcChip(p), el("span", { class: "mono", text: c.name }),
+        el("div", { class: "rmeta" }, date, time, srcChip(p), el("span", { class: "mono", text: c.name }),
           c.status !== "ok" || c.stage_error ? el("span", { class: "chip c-yellow", text: c.stage_error ? "missing" : c.detail }) : null),
         note,
         sugg && p.reason ? el("div", { class: "agent-hint", text: p.reason }) : null,
@@ -1436,7 +1430,12 @@ async function savePlace() {
   const name = $("#new-place-name").value.trim();
   if (!l || !name) return toast("Type a name for the place first.", true);
   if (findPlace(name)) return toast(`A place named ${name} exists already.`, true);
-  await save("places", [...settings.places, { name, lat: l.lat, lon: l.lon }]);
+  try {
+    await call("place_save", { name, lat: l.lat, lon: l.lon });
+  } catch (e) {
+    return toast(String(e), true);
+  }
+  await loadSettings();
   $("#new-place-name").value = "";
   fillDatalists();
   await edit({ id: p.id, place: name });
@@ -1736,6 +1735,7 @@ let draftProfiles = [];
 let draftProfile = 0;
 
 function openSettings(sec = "library") {
+  state.settingsBefore = structuredClone(settings);
   draftProfiles = structuredClone(settings.profiles);
   draftProfile = 0;
   syncSettingsUI();
@@ -1766,6 +1766,9 @@ function syncSettingsUI() {
   $("#set-seg-gap").value = settings.tunables.segment_gap_s;
   $("#set-session-gap").value = settings.tunables.session_gap_min;
   $("#set-tolerance").value = settings.tunables.tolerance_s;
+  $("#set-geocoder").value = settings.geocoder || "apple";
+  $("#place-results").hidden = true;
+  $("#place-query").value = "";
   renderLayoutExample();
 }
 
@@ -1796,12 +1799,70 @@ $("#set-nav").addEventListener("click", (e) => {
   if (b) showSection(b.dataset.sec);
 });
 
+// The row a picked search result fills; null adds a new row.
+let placeTarget = null;
+
 function renderPlacesEditor(places) {
+  placeTarget = null;
   $("#places-editor").replaceChildren(...places.map((p, i) => el("div", { class: "row", "data-place": i },
     el("input", { type: "text", value: p.name, placeholder: "Name", "data-k": "name", "aria-label": "Place name" }),
     el("input", { type: "number", step: "any", value: p.lat, placeholder: "Latitude", "data-k": "lat", "aria-label": "Latitude" }),
     el("input", { type: "number", step: "any", value: p.lon, placeholder: "Longitude", "data-k": "lon", "aria-label": "Longitude" }),
+    el("button", { type: "button", class: "icon small", "aria-label": "Search for this place", title: "Search", onclick: () => searchFor(i) }, icon("search")),
     el("button", { type: "button", class: "icon small", "aria-label": "Delete this place", title: "Delete", onclick: () => renderPlacesEditor(readPlaces().filter((_, j) => j !== i)) }, icon("trash-bin-trash")))));
+}
+
+function searchFor(i) {
+  placeTarget = i;
+  for (const r of $$("[data-place]")) r.classList.toggle("target", +r.dataset.place === i);
+  const name = $(`[data-place="${i}"] [data-k=name]`).value.trim();
+  const q = $("#place-query");
+  if (name && !q.value.trim()) q.value = name;
+  q.focus();
+}
+
+// Searches only on Enter or the button, never per keystroke.
+$("#place-query").addEventListener("keydown", (e) => {
+  if (e.key !== "Enter") return;
+  e.preventDefault();
+  searchPlaces();
+});
+$("#place-go").addEventListener("click", () => searchPlaces());
+
+async function searchPlaces() {
+  const query = $("#place-query").value.trim();
+  const list = $("#place-results");
+  if (!query) return;
+  list.hidden = false;
+  list.replaceChildren(el("li", { class: "muted", text: "Searching…" }));
+  let hits;
+  try {
+    hits = await call("place_search", { query, provider: $("#set-geocoder").value, limit: 6 });
+  } catch (err) {
+    list.replaceChildren(el("li", { class: "muted", text: String(err) }));
+    return;
+  }
+  if (!hits.length) return list.replaceChildren(el("li", { class: "muted", text: "No places found." }));
+  list.replaceChildren(...hits.map((h) => el("li", {}, el("button", { type: "button", class: "ghost", onclick: () => pickPlace(h) },
+    el("b", { text: h.name }),
+    el("span", { class: "sub", text: `${h.address} · ${h.lat.toFixed(5)}, ${h.lon.toFixed(5)}` })))));
+}
+
+function pickPlace(h) {
+  const rows = readPlaces();
+  const lat = +h.lat.toFixed(6);
+  const lon = +h.lon.toFixed(6);
+  if (placeTarget != null && rows[placeTarget]) {
+    const r = rows[placeTarget];
+    rows[placeTarget] = { name: r.name || h.name, lat, lon };
+  } else {
+    const blank = rows.findIndex((r) => !r.name && !Number.isFinite(r.lat));
+    if (blank >= 0) rows.splice(blank, 1);
+    rows.push({ name: h.name, lat, lon });
+  }
+  renderPlacesEditor(rows);
+  $("#place-results").hidden = true;
+  $("#place-query").value = "";
 }
 
 function readPlaces() {
@@ -1862,28 +1923,47 @@ function addProfile() {
   renderProfiles();
 }
 
+// Saves only what the person changed while the dialog was open, so a change the CLI or an
+// agent made meanwhile stays.
 $("#settings").addEventListener("close", async () => {
   readProfileForm();
+  const before = state.settingsBefore || settings;
   const num = (id, d) => (Number.isFinite(+$(id).value) && $(id).value !== "" ? +$(id).value : d);
-  await save("defaultName", $("#set-default-name").value.trim() || "flight");
-  await save("encoder", $("#set-encoder").value);
-  await save("format", $("#format").value);
-  await save("addTime", $("#add-time").checked);
-  await save("photosAlbum", $("#set-album").value.trim());
-  await save("libraryLayout", $$("input[name=layout]").find((r) => r.checked)?.value || "year_day");
-  await save("placeFolders", $("#set-place-folders").checked);
-  await save("keepOriginals", $("#keep-originals").checked);
   const places = readPlaces().filter((p) => p.name && Number.isFinite(p.lat) && Number.isFinite(p.lon) && Math.abs(p.lat) <= 90 && Math.abs(p.lon) <= 180);
   if (places.length < readPlaces().filter((p) => p.name || Number.isFinite(p.lat)).length) toast("Places without a name or a valid latitude and longitude were not saved.", true);
-  await save("places", places);
   const profiles = draftProfiles.filter((p) => p.name);
-  await save("profiles", profiles);
-  if (state.draftDefault !== undefined) await save("defaultProfile", state.draftDefault || "");
-  else if (!profiles.some((p) => p.name === settings.defaultProfile)) await save("defaultProfile", profiles[0]?.name || "");
+  let defaultProfile = before.defaultProfile;
+  if (state.draftDefault !== undefined) defaultProfile = state.draftDefault || "";
+  else if (!profiles.some((p) => p.name === before.defaultProfile)) defaultProfile = profiles[0]?.name || "";
   state.draftDefault = undefined;
+  await saveChanged({
+    defaultName: $("#set-default-name").value.trim() || "flight",
+    encoder: $("#set-encoder").value,
+    format: $("#format").value,
+    addTime: $("#add-time").checked,
+    photosAlbum: $("#set-album").value.trim(),
+    libraryLayout: $$("input[name=layout]").find((r) => r.checked)?.value || "year_day",
+    placeFolders: $("#set-place-folders").checked,
+    keepOriginals: $("#keep-originals").checked,
+    geocoder: $("#set-geocoder").value,
+    places,
+    profiles,
+    defaultProfile,
+    tunables: { ...before.tunables, segment_gap_s: num("#set-seg-gap", 5), session_gap_min: num("#set-session-gap", 20), tolerance_s: num("#set-tolerance", 30) },
+  }, before);
+  state.settingsBefore = null;
+  await loadSettings();
   fillDatalists();
-  await save("tunables", { ...settings.tunables, segment_gap_s: num("#set-seg-gap", 5), session_gap_min: num("#set-session-gap", 20), tolerance_s: num("#set-tolerance", 30) });
   if (state.session) setSession(await invoke("plan_dates", { logDir: settings.logDir, day: state.session.log_day }));
+  await loadLibrary();
+});
+
+// Another surface (the CLI, an agent) changed the settings file.
+T.event.listen("settings-changed", async () => {
+  if ($("#settings").open) return;
+  await loadSettings();
+  fillDatalists();
+  if (state.session) renderReview();
   await loadLibrary();
 });
 
@@ -2020,7 +2100,6 @@ async function init() {
   state.home = (settings.outputDir.match(/^\/Users\/[^/]+/) || [""])[0];
   $("#thumb-size").value = settings.thumbSize || 3;
   fillDatalists();
-  await pushDefaults();
   invoke("library_scope").catch(() => {});
   const env = await invoke("env_check");
   state.tools = env.tools;

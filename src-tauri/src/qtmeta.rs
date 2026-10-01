@@ -232,6 +232,44 @@ fn parse_meta(meta: &[u8]) -> Result<Vec<Item>> {
         .collect())
 }
 
+/// Sets the movie's creation and modification time in `moov/mvhd`, in place (the field
+/// sizes never change). ffprobe reports this as `creation_time`.
+pub fn set_movie_time(path: &Path, t: chrono::DateTime<chrono::Utc>) -> Result<()> {
+    const MAC_EPOCH_OFFSET: i64 = 2_082_844_800; // 1904-01-01 to 1970-01-01, in seconds
+    let secs = u64::try_from(t.timestamp() + MAC_EPOCH_OFFSET).context("time before 1904")?;
+    let mut f = std::fs::File::options()
+        .read(true)
+        .write(true)
+        .open(path)
+        .with_context(|| format!("opening {}", path.display()))?;
+    let (start, size, hdr) = find_moov(&mut f, path)?;
+    if size > 64 << 20 {
+        bail!("moov box too large in {}", path.display());
+    }
+    let mut body = vec![0u8; (size - hdr) as usize];
+    f.seek(SeekFrom::Start(start + hdr))?;
+    f.read_exact(&mut body)?;
+    let mut at = 0usize;
+    for (kind, b) in children(&body)? {
+        if &kind == b"mvhd" && b.len() >= 28 {
+            let field = start + hdr + at as u64 + 12; // after the box header and version/flags
+            f.seek(SeekFrom::Start(field))?;
+            if b[8] == 1 {
+                f.write_all(&secs.to_be_bytes())?;
+                f.write_all(&secs.to_be_bytes())?;
+            } else {
+                let s = u32::try_from(secs).context("time past 2040 needs a version 1 mvhd")?;
+                f.write_all(&s.to_be_bytes())?;
+                f.write_all(&s.to_be_bytes())?;
+            }
+            f.sync_all()?;
+            return Ok(());
+        }
+        at += b.len();
+    }
+    bail!("no mvhd box in {}", path.display())
+}
+
 /// Reads the Apple `mdta` items quadcam (or anything else) wrote into `moov/meta`.
 pub fn read(path: &Path) -> Result<Vec<Item>> {
     Ok(read_info(path)?.0)

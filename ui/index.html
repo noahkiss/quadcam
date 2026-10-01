@@ -300,8 +300,19 @@
 
           <section data-pane="places" hidden>
             <h3>Places</h3>
+            <div id="place-search" class="row">
+              <input id="place-query" type="search" placeholder="Address or place name" aria-label="Search for a place" spellcheck="false">
+              <button type="button" class="ghost small" id="place-go"><i data-icon="search"></i>Search</button>
+            </div>
+            <ul id="place-results" class="place-results" hidden></ul>
             <div id="places-editor" class="rows"></div>
             <button type="button" class="ghost small" data-action="add-place"><i data-icon="add"></i>Add place</button>
+            <label class="field"><span>Search with</span>
+              <select id="set-geocoder">
+                <option value="apple">Apple Maps</option>
+                <option value="nominatim">OpenStreetMap (Nominatim)</option>
+              </select>
+            </label>
           </section>
 
           <section data-pane="import" hidden>

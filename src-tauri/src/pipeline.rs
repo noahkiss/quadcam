@@ -424,7 +424,7 @@ pub fn plan_dates(
     plan
 }
 
-/// creation_time for a clip: the log start time when the date came from a log,
+/// creation_time for a clip: its time of day (the log start time, or one set by hand),
 /// otherwise local noon of the date so a UTC conversion cannot roll the day.
 pub fn creation_time(
     date: NaiveDate,
@@ -432,8 +432,8 @@ pub fn creation_time(
     source: DateSource,
 ) -> DateTime<Utc> {
     let t = match (source, time) {
-        (DateSource::Log, Some(t)) => t,
-        _ => NaiveTime::from_hms_opt(12, 0, 0).unwrap(),
+        (DateSource::Import, _) | (_, None) => NaiveTime::from_hms_opt(12, 0, 0).unwrap(),
+        (_, Some(t)) => t,
     };
     let local = NaiveDateTime::new(date, t);
     Local
@@ -449,7 +449,7 @@ pub struct ClipJob {
     pub skip: bool,
     /// `YYYY-MM-DD`.
     pub date: String,
-    /// `HH:MM:SS`, only when the date came from a radio log.
+    /// `HH:MM:SS`, from the radio log or set by hand.
     pub time: Option<String>,
     pub source: DateSource,
     pub name: String,
@@ -633,7 +633,8 @@ pub fn import_clip(
         return fail(r, format!("date {:?} is not YYYY-MM-DD", job.date));
     };
     let time = match (job.source, job.time.as_deref()) {
-        (DateSource::Log, Some(t)) => NaiveTime::parse_from_str(t, "%H:%M:%S%.f").ok(),
+        (DateSource::Import, _) => None,
+        (_, Some(t)) => NaiveTime::parse_from_str(t, "%H:%M:%S%.f").ok(),
         _ => None,
     };
     let meta = meta_for(clip, job, date, time);

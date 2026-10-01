@@ -50,6 +50,13 @@ pub struct LibEdit {
     /// A saved place's name; empty removes the location.
     pub place: Option<String>,
     pub location: Option<crate::metadata::Location>,
+    /// A new flying day. The clip, its cuts and its original move to that day's folder.
+    pub date: Option<chrono::NaiveDate>,
+    /// Time of day, `HH:MM`; empty means local noon. Without it a new date keeps the
+    /// clip's time.
+    pub time: Option<String>,
+    /// An aircraft profile name; empty removes the profile's details.
+    pub profile: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -330,9 +337,12 @@ impl Core {
         })
     }
 
-    /// Changes a clip's note, keywords, author or location, in its file and its cuts.
+    /// Changes a clip's note, keywords, author, location, aircraft profile, date or time,
+    /// in its file and its cuts. A new day moves the clip, its cuts and its original to
+    /// that day's folder (and renames them when the file name starts with the date).
     pub fn library_edit(&self, id: &str, e: &LibEdit) -> Result<LibClip> {
-        let places = self.defaults().places;
+        let d = self.defaults();
+        let places = d.places.clone();
         let location = match (&e.location, e.place.as_deref().map(str::trim)) {
             (Some(l), _) => {
                 l.check()?;
@@ -343,7 +353,16 @@ impl Core {
                 let p = places
                     .iter()
                     .find(|p| p.name.eq_ignore_ascii_case(name))
-                    .with_context(|| format!("no saved place {name:?}"))?;
+                    .with_context(|| {
+                        format!(
+                            "no saved place {name:?}; saved places: {}",
+                            places
+                                .iter()
+                                .map(|p| p.name.as_str())
+                                .collect::<Vec<_>>()
+                                .join(", ")
+                        )
+                    })?;
                 Some(Some(crate::metadata::Location {
                     lat: p.lat,
                     lon: p.lon,
@@ -352,15 +371,40 @@ impl Core {
             }
             (None, None) => None,
         };
+        let profile = match e.profile.as_deref().map(str::trim) {
+            None => None,
+            Some("") => Some(None),
+            Some(name) => Some(Some(
+                d.profiles
+                    .iter()
+                    .find(|p| p.name.eq_ignore_ascii_case(name))
+                    .cloned()
+                    .with_context(|| {
+                        format!(
+                            "no aircraft profile {name:?}; profiles: {}",
+                            d.profiles
+                                .iter()
+                                .map(|p| p.name.as_str())
+                                .collect::<Vec<_>>()
+                                .join(", ")
+                        )
+                    })?,
+            )),
+        };
+        let time = e
+            .time
+            .as_deref()
+            .map(crate::session::parse_time)
+            .transpose()?;
         let (root, c) = self.clip(id)?;
+        let file = root.join(&c.path);
+        let items = crate::qtmeta::read(&file)?;
         let mut set: Vec<(&str, String)> = Vec::new();
         if let Some(n) = &e.note {
             set.push(("com.apple.quicktime.comment", n.trim().to_string()));
         }
-        if let Some(k) = &e.keywords {
-            let words = crate::metadata::clean_keywords(k.iter().map(String::as_str));
-            set.push(("com.apple.quicktime.keywords", words.join(",")));
-        }
+        let mut keywords = e.keywords.clone().unwrap_or_else(|| c.keywords.clone());
+        let mut keywords_changed = e.keywords.is_some();
         if let Some(a) = &e.author {
             set.push(("com.apple.quicktime.author", a.trim().to_string()));
         }
@@ -374,88 +418,195 @@ impl Core {
                 l.as_ref().and_then(|l| l.name.clone()).unwrap_or_default(),
             ));
         }
+        if let Some(p) = &profile {
+            // The profile's own keywords and author come out; the new one's go in.
+            let old = crate::qtmeta::get(&items, lib::KEY_PROFILE)
+                .and_then(|n| d.profiles.iter().find(|x| x.name.eq_ignore_ascii_case(n)));
+            if let Some(old) = old {
+                keywords.retain(|k| {
+                    k.eq_ignore_ascii_case("FPV")
+                        || !old.keywords.iter().any(|o| o.eq_ignore_ascii_case(k))
+                });
+                let author = crate::qtmeta::get(&items, "com.apple.quicktime.author");
+                if e.author.is_none()
+                    && !old.author.is_empty()
+                    && author == Some(old.author.as_str())
+                {
+                    set.push((
+                        "com.apple.quicktime.author",
+                        p.as_ref().map(|p| p.author.clone()).unwrap_or_default(),
+                    ));
+                }
+            }
+            let mut words = vec!["FPV".to_string()];
+            words.extend(p.iter().flat_map(|p| p.keywords.clone()));
+            words.append(&mut keywords);
+            keywords = words;
+            keywords_changed = true;
+            let get = |f: fn(&crate::metadata::Profile) -> &String| {
+                p.as_ref().map(|p| f(p).clone()).unwrap_or_default()
+            };
+            set.push(("com.apple.quicktime.make", get(|p| &p.camera_make)));
+            set.push(("com.apple.quicktime.model", get(|p| &p.camera_model)));
+            set.push((lib::KEY_AIRCRAFT, get(|p| &p.aircraft)));
+            set.push((lib::KEY_VIDEO_SYSTEM, get(|p| &p.video_system)));
+            set.push((lib::KEY_PROFILE, get(|p| &p.name)));
+        }
+        if keywords_changed {
+            let words = crate::metadata::clean_keywords(keywords.iter().map(String::as_str));
+            set.push(("com.apple.quicktime.keywords", words.join(",")));
+        }
         for f in std::iter::once(c.path.clone()).chain(c.cuts.iter().map(|x| x.path.clone())) {
             lib::write_keys(&root.join(f), &set)?;
         }
-        self.reread_clips(&[id.to_string()])?;
+        if e.date.is_some() || time.is_some() {
+            self.redate(&root, &c, &items, e.date, time)?;
+        } else {
+            self.reread_clips(&[id.to_string()])?;
+        }
         Ok(self.clip(id)?.1)
     }
 
-    /// Renames a clip's file, its cuts and its original to a new short name.
-    pub fn library_rename(&self, id: &str, name: &str) -> Result<LibClip> {
-        let default_name = self.defaults().default_name;
-        let (root, c) = self.clip(id)?;
-        let old = root.join(&c.path);
-        let dir = old.parent().context("clip has no folder")?.to_path_buf();
-        let ext = old
-            .extension()
-            .unwrap_or_default()
-            .to_string_lossy()
-            .to_string();
-        let old_stem = old
-            .file_stem()
-            .unwrap_or_default()
-            .to_string_lossy()
-            .to_string();
-        let date = c.date.format("%Y-%m-%d").to_string();
-        let stem = crate::naming::stem(&date, None, name, &default_name);
-        if stem == old_stem {
+    /// Gives a clip a new date and time: the QuickTime creation date, the movie header time
+    /// and the mtime of the clip, its cuts and its original. A new day moves them all.
+    fn redate(
+        &self,
+        root: &Path,
+        c: &LibClip,
+        items: &[crate::qtmeta::Item],
+        date: Option<chrono::NaiveDate>,
+        time: Option<Option<chrono::NaiveTime>>,
+    ) -> Result<()> {
+        let old_created = crate::qtmeta::get(items, "com.apple.quicktime.creationdate")
+            .and_then(|v| chrono::DateTime::parse_from_str(v, "%Y-%m-%dT%H:%M:%S%z").ok());
+        let old_time = old_created
+            .map(|t| t.with_timezone(&chrono::Local).time())
+            .or_else(|| {
+                c.time
+                    .as_deref()
+                    .and_then(|t| chrono::NaiveTime::parse_from_str(t, "%H:%M").ok())
+            });
+        let new_date = date.unwrap_or(c.date);
+        let new_time = match time {
+            Some(t) => t,
+            None => old_time,
+        };
+        let created =
+            crate::pipeline::creation_time(new_date, new_time, crate::pipeline::DateSource::Edited);
+        let stamp = |path: &Path, t: chrono::DateTime<chrono::Utc>| -> Result<()> {
             lib::write_keys(
-                &old,
-                &[("com.apple.quicktime.title", name.trim().to_string())],
+                path,
+                &[(
+                    "com.apple.quicktime.creationdate",
+                    crate::metadata::creation_date(t),
+                )],
             )?;
-            self.reread_clips(&[id.to_string()])?;
-            return Ok(self.clip(id)?.1);
+            crate::qtmeta::set_movie_time(path, t)?;
+            media::set_mtime(path, t)
+        };
+        stamp(&root.join(&c.path), created)?;
+        for cut in &c.cuts {
+            let t = created + chrono::Duration::milliseconds((cut.start * 1000.0) as i64);
+            stamp(&root.join(&cut.path), t)?;
         }
-        let mut planner = crate::naming::NamePlanner::new();
-        let new = planner.claim(&dir, &stem, &ext);
-        let new_stem = new
+        if let Some(o) = &c.original {
+            let _ = media::set_mtime(&root.join(o), created);
+        }
+        if new_date == c.date {
+            return self.reread_clips(std::slice::from_ref(&c.id));
+        }
+        let d = self.defaults();
+        let place = d.place_folders.then_some(c.place.as_deref()).flatten();
+        let dir = lib::day_dir(root, d.layout, new_date, place);
+        let old_stem = c
+            .path
             .file_stem()
             .unwrap_or_default()
             .to_string_lossy()
             .to_string();
+        let old_day = c.date.format("%Y-%m-%d").to_string();
+        let stem = match old_stem.strip_prefix(&old_day) {
+            Some(rest) => format!("{}{rest}", new_date.format("%Y-%m-%d")),
+            None => old_stem,
+        };
+        self.relocate(root, c, &dir, &stem).map(|_| ())
+    }
+
+    /// Moves a clip, its cuts and its original to `dir` under the stem `stem` (or the next
+    /// free `stem-2`, ...), updates the index and removes folders the move left empty.
+    fn relocate(&self, root: &Path, c: &LibClip, dir: &Path, stem: &str) -> Result<PathBuf> {
+        let old = root.join(&c.path);
+        let old_dir = old.parent().context("clip has no folder")?.to_path_buf();
+        let ext = |p: &Path| {
+            p.extension()
+                .unwrap_or_default()
+                .to_string_lossy()
+                .to_string()
+        };
+        let stem_of = |p: &Path| {
+            p.file_stem()
+                .unwrap_or_default()
+                .to_string_lossy()
+                .to_string()
+        };
+        let old_stem = stem_of(&old);
+        let new = if dir == old_dir && stem == old_stem {
+            old.clone()
+        } else {
+            crate::naming::NamePlanner::new().claim(dir, stem, &ext(&old))
+        };
+        let new_stem = stem_of(&new);
         // Work out every move first; refuse if any target is taken.
         let mut moves = vec![(old.clone(), new.clone())];
         for cut in &c.cuts {
             let p = root.join(&cut.path);
-            let cs = p
-                .file_stem()
-                .unwrap_or_default()
-                .to_string_lossy()
-                .to_string();
+            let cs = stem_of(&p);
             let suffix = cs.strip_prefix(&old_stem).unwrap_or("_cut");
-            let ce = p
-                .extension()
-                .unwrap_or_default()
-                .to_string_lossy()
-                .to_string();
             moves.push((
                 p.clone(),
-                p.with_file_name(format!("{new_stem}{suffix}.{ce}")),
+                dir.join(format!("{new_stem}{suffix}.{}", ext(&p))),
             ));
         }
         if let Some(o) = &c.original {
             let p = root.join(o);
-            let oe = p
-                .extension()
-                .unwrap_or_default()
-                .to_string_lossy()
-                .to_string();
-            moves.push((p.clone(), p.with_file_name(format!("{new_stem}.{oe}"))));
+            moves.push((
+                p.clone(),
+                dir.join(lib::ORIGINALS)
+                    .join(format!("{new_stem}.{}", ext(&p))),
+            ));
         }
-        if let Some((_, to)) = moves.iter().skip(1).find(|(_, to)| to.exists()) {
-            bail!("{} exists already; not renaming.", to.display());
+        if let Some((_, to)) = moves
+            .iter()
+            .skip(1)
+            .find(|(from, to)| from != to && to.exists())
+        {
+            bail!("{} exists already; not moving.", to.display());
         }
+        std::fs::create_dir_all(dir).with_context(|| format!("creating {}", dir.display()))?;
         for (from, to) in &moves {
+            if from == to {
+                continue;
+            }
+            if let Some(p) = to.parent() {
+                std::fs::create_dir_all(p)?;
+            }
             std::fs::rename(from, to)
-                .with_context(|| format!("renaming {} to {}", from.display(), to.display()))?;
+                .with_context(|| format!("moving {} to {}", from.display(), to.display()))?;
         }
-        lib::write_keys(
-            &new,
-            &[("com.apple.quicktime.title", name.trim().to_string())],
-        )?;
+        if old_dir != dir {
+            // Remove what the move emptied: originals/, the day folder, the year folder.
+            for d in [old_dir.join(lib::ORIGINALS), old_dir.clone()]
+                .into_iter()
+                .chain(old_dir.parent().map(Path::to_path_buf))
+            {
+                if d.starts_with(root) && d != root {
+                    let _ = std::fs::remove_dir(&d);
+                }
+            }
+        }
+        let id = c.id.clone();
         self.with_index(|root, ix| {
-            let Some(e) = ix.get_mut(id) else {
+            let Some(e) = ix.get_mut(&id) else {
                 return Ok(((), false));
             };
             let cut_rels: Vec<PathBuf> = moves[1..1 + e.cuts.len()]
@@ -468,6 +619,23 @@ impl Core {
             *e = fresh;
             Ok(((), true))
         })?;
+        Ok(new)
+    }
+
+    /// Renames a clip's file, its cuts and its original to a new short name.
+    pub fn library_rename(&self, id: &str, name: &str) -> Result<LibClip> {
+        let default_name = self.defaults().default_name;
+        let (root, c) = self.clip(id)?;
+        let old = root.join(&c.path);
+        let dir = old.parent().context("clip has no folder")?.to_path_buf();
+        let date = c.date.format("%Y-%m-%d").to_string();
+        let stem = crate::naming::stem(&date, None, name, &default_name);
+        let new = self.relocate(&root, &c, &dir, &stem)?;
+        lib::write_keys(
+            &new,
+            &[("com.apple.quicktime.title", name.trim().to_string())],
+        )?;
+        self.reread_clips(&[id.to_string()])?;
         Ok(self.clip(id)?.1)
     }
 

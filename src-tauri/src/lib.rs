@@ -2,9 +2,13 @@
 //! Photos, and optionally format the card. The Tauri commands here are thin wrappers over
 //! `core::Core`, which the control socket, the CLI and the MCP server share.
 
+// The MCP tool list is one large `json!`.
+#![recursion_limit = "256"]
+
 pub mod control;
 pub mod core;
 pub mod disk;
+pub mod geocode;
 pub mod library;
 pub mod logs;
 pub mod mcp;
@@ -17,6 +21,7 @@ pub mod pipeline;
 pub mod qtmeta;
 pub mod scan;
 pub mod session;
+pub mod settings;
 pub mod trash;
 pub mod trim;
 
@@ -28,7 +33,7 @@ use chrono::NaiveDate;
 use disk::Volume;
 use serde::Serialize;
 use serde_json::Value;
-use session::{Defaults, Editor, PlanPatch, Session};
+use session::{Editor, PlanPatch, Session};
 use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -77,6 +82,9 @@ impl Hooks for GuiHooks {
     }
     fn library_changed(&self) {
         let _ = self.app.emit("library-changed", ());
+    }
+    fn settings_changed(&self) {
+        let _ = self.app.emit("settings-changed", ());
     }
 }
 
@@ -131,11 +139,6 @@ fn env_check(state: State<'_, AppState>) -> EnvCheck {
 #[tauri::command]
 fn default_output_dir() -> Option<PathBuf> {
     pipeline::default_output_dir()
-}
-
-#[tauri::command]
-fn set_defaults(state: State<'_, AppState>, defaults: Defaults) {
-    state.core.set_defaults(defaults);
 }
 
 #[tauri::command]
@@ -296,10 +299,41 @@ fn watch_volumes(app: AppHandle) {
     });
 }
 
+/// Re-reads the settings file when another process (the CLI) writes it, and tells the
+/// webview, so the app never works from, or writes back, an old copy.
+fn watch_settings(app: AppHandle, core: Arc<Core>, file: PathBuf) {
+    use notify::{RecursiveMode, Watcher};
+    std::thread::spawn(move || {
+        let Some(dir) = file.parent().map(PathBuf::from) else {
+            return;
+        };
+        let (tx, rx) = std::sync::mpsc::channel();
+        let Ok(mut w) = notify::recommended_watcher(tx) else {
+            return;
+        };
+        if std::fs::create_dir_all(&dir).is_err()
+            || w.watch(&dir, RecursiveMode::NonRecursive).is_err()
+        {
+            return;
+        }
+        let ours = |ev: &notify::Result<notify::Event>| {
+            ev.as_ref()
+                .is_ok_and(|e| e.paths.iter().any(|p| p.file_name() == file.file_name()))
+        };
+        while let Ok(ev) = rx.recv() {
+            if ours(&ev) {
+                std::thread::sleep(Duration::from_millis(150));
+                while rx.try_recv().is_ok() {}
+                core.reload_settings();
+                let _ = app.emit("settings-changed", ());
+            }
+        }
+    });
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
-        .plugin(tauri_plugin_store::Builder::new().build())
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_opener::init())
         .setup(|app| {
@@ -313,13 +347,19 @@ pub fn run() {
             // The GUI shares the CLI's session file, so a relaunch shows the last session
             // again while its staged clips are still in the cache.
             let session_file = cache.join("session.json");
-            let core = Arc::new(Core::new(
-                cache,
-                Some(session_file),
-                hooks.clone(),
-                Core::real_photos(),
-            ));
+            // The same settings file the CLI and the MCP server use.
+            let settings_file = app.path().app_data_dir()?.join("settings.json");
+            let core = Arc::new(
+                Core::new(
+                    cache,
+                    Some(session_file),
+                    hooks.clone(),
+                    Core::real_photos(),
+                )
+                .with_settings(settings_file.clone()),
+            );
             core.forget_unrestorable();
+            watch_settings(handle.clone(), core.clone(), settings_file);
             if let Err(e) = control::serve(core.clone(), &control::socket_path()) {
                 eprintln!("quadcam: control socket not started: {e:#}");
             }
@@ -330,7 +370,6 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             env_check,
             default_output_dir,
-            set_defaults,
             list_volumes,
             get_session,
             load_source,

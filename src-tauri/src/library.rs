@@ -43,6 +43,7 @@ pub const KEY_RATING: &str = "app.quadcam.rating";
 pub const KEY_FLAG: &str = "app.quadcam.flag";
 pub const KEY_PHOTOS: &str = "app.quadcam.photos";
 pub const KEY_AIRCRAFT: &str = "app.quadcam.aircraft";
+pub const KEY_VIDEO_SYSTEM: &str = "app.quadcam.video_system";
 const QT: &str = "com.apple.quicktime.";
 
 // ---------- layout ----------

@@ -82,7 +82,7 @@ fn protocol_and_tool_list() {
         .handle(&json!({"jsonrpc": "2.0", "id": 2, "method": "tools/list"}))
         .unwrap();
     let tools = list["result"]["tools"].as_array().unwrap();
-    assert_eq!(tools.len(), 11);
+    assert_eq!(tools.len(), 16);
     for t in tools {
         assert!(t["name"].as_str().unwrap().starts_with("quadcam_"));
         assert_eq!(t["inputSchema"]["type"], "object");

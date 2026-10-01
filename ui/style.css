@@ -123,7 +123,7 @@ button.icon.small { width: 28px; padding: 0; }
 button.link { background: none; border: 0; padding: 0; height: auto; color: var(--primary); }
 button.link:hover { text-decoration: underline; text-underline-offset: 3px; }
 
-input[type=text], input[type=search], input[type=date], input[type=number], select {
+input[type=text], input[type=search], input[type=date], input[type=time], input[type=number], select {
   font: inherit; font-size: .9rem; color: var(--fg);
   background: var(--mantle); border: 1px solid var(--surface2); border-radius: 8px;
   padding: 0 .6rem; height: 32px; min-width: 0;
@@ -418,7 +418,7 @@ dialog::backdrop { background: var(--scrim); }
 .rrow .rname { display: flex; gap: 6px; align-items: center; }
 .rrow .rname input { flex: 1; font-weight: 600; }
 .rrow .rmeta { display: flex; gap: 8px; align-items: center; font-size: .75rem; color: var(--muted); flex-wrap: wrap; }
-.rrow .rmeta input[type=date] { height: 24px; font: 11px var(--mono); padding: 0 4px; }
+.rrow .rmeta input[type=date], .rrow .rmeta input[type=time] { height: 24px; font: 11px var(--mono); padding: 0 4px; }
 .rrow .rside { display: flex; flex-direction: column; gap: 5px; }
 .rrow .rside .top { display: flex; gap: 8px; align-items: center; font: 11px var(--mono); color: var(--muted); }
 .rrow .result { font-size: .72rem; font-family: var(--mono); }
@@ -510,6 +510,10 @@ progress::-webkit-progress-value { background: var(--primary); border-radius: 99
 .segbtns button[aria-pressed=true] { background: var(--primary); color: var(--on-accent); }
 .rows { display: flex; flex-direction: column; gap: .4rem; }
 .rows .row input { flex: 1; min-width: 6em; }
+#place-search input { flex: 1; min-width: 12em; }
+.place-results { list-style: none; margin: .4rem 0; padding: 0; display: flex; flex-direction: column; gap: .25rem; }
+.place-results button { display: flex; flex-direction: column; align-items: flex-start; width: 100%; text-align: left; gap: .1rem; }
+.rows .row.target input { outline: 1px dashed currentColor; }
 #tools-status { white-space: pre-line; user-select: text; }
 
 /* Context menu */
