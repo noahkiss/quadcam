@@ -898,6 +898,19 @@ mod tests {
         NaiveDate::parse_from_str(s, "%Y-%m-%d").unwrap()
     }
 
+    /// An adopted file's id is persisted in the index, so the same bytes must always give
+    /// the same id.
+    #[test]
+    fn head_id_test_vector() {
+        let d = tempfile::tempdir().unwrap();
+        let small = d.path().join("small.mp4");
+        std::fs::write(&small, crate::pipeline::tests::pattern(1000)).unwrap();
+        let big = d.path().join("big.mp4");
+        std::fs::write(&big, crate::pipeline::tests::pattern(2 << 20)).unwrap();
+        assert_eq!(head_id(&small).unwrap(), "h59ffcab2ee5d62ae");
+        assert_eq!(head_id(&big).unwrap(), "hec51a6f45c0fb3e4");
+    }
+
     #[test]
     fn layout_paths() {
         let root = Path::new("/lib");

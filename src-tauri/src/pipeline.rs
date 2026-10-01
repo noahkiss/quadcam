@@ -898,3 +898,28 @@ pub fn export_cuts(
         })
         .collect()
 }
+
+#[cfg(test)]
+pub(crate) mod tests {
+    use super::*;
+
+    /// Fixed bytes for the identity test vectors.
+    pub(crate) fn pattern(len: usize) -> Vec<u8> {
+        (0..len)
+            .map(|i| (i.wrapping_mul(31) ^ (i >> 7)) as u8)
+            .collect()
+    }
+
+    /// A clip's fingerprint is persisted (`app.quadcam.source`) and compared on every card
+    /// insert, so the same bytes must always give the same id.
+    #[test]
+    fn fingerprint_test_vector() {
+        let d = tempfile::tempdir().unwrap();
+        let small = d.path().join("small.avi");
+        std::fs::write(&small, pattern(1000)).unwrap();
+        let big = d.path().join("big.avi");
+        std::fs::write(&big, pattern(3 * (1 << 20) + 123)).unwrap();
+        assert_eq!(fingerprint(&small).unwrap(), "544ed76b6260909f");
+        assert_eq!(fingerprint(&big).unwrap(), "7d3742677467c662");
+    }
+}

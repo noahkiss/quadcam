@@ -1,0 +1,116 @@
+---
+source: tests/snapshots.rs
+expression: library
+---
+{
+  "clips": [
+    {
+      "aircraft": null,
+      "author": null,
+      "cut_of": null,
+      "cuts": [],
+      "date": "$TODAY",
+      "duration": 2.0,
+      "dvr": "PICT0002.AVI",
+      "file": "$TMP/library/$YEAR/$TODAY/$TODAY_flight-1.mp4",
+      "flag": "none",
+      "id": "$HASH",
+      "import": "$IMPORT",
+      "in_photos": false,
+      "keep": [],
+      "keywords": [
+        "FPV",
+        "practice"
+      ],
+      "last_import": true,
+      "location": null,
+      "moments": [],
+      "name": "flight-1",
+      "no_picture": false,
+      "note": "windy",
+      "original": "$YEAR/$TODAY/originals/$TODAY_flight-1.avi",
+      "path": "$YEAR/$TODAY/$TODAY_flight-1.mp4",
+      "pending_cuts": [],
+      "place": null,
+      "poster": null,
+      "rating": 4,
+      "size": 0,
+      "stats": null,
+      "strip": null,
+      "time": null,
+      "title": "flight-1"
+    },
+    {
+      "aircraft": null,
+      "author": null,
+      "cut_of": null,
+      "cuts": [
+        {
+          "end": 2.0,
+          "path": "$YEAR/$TODAY/$TODAY_loops_cut1.mp4",
+          "size": 0,
+          "start": 0.5
+        }
+      ],
+      "date": "$TODAY",
+      "duration": 3.0,
+      "dvr": "PICT0001.AVI",
+      "file": "$TMP/library/$YEAR/$TODAY/$TODAY_loops.mp4",
+      "flag": "none",
+      "id": "$HASH",
+      "import": "$IMPORT",
+      "in_photos": false,
+      "keep": [],
+      "keywords": [
+        "FPV"
+      ],
+      "last_import": true,
+      "location": {
+        "lat": 40.6892,
+        "lon": -74.0445,
+        "name": "Home field"
+      },
+      "moments": [],
+      "name": "loops",
+      "no_picture": false,
+      "note": "",
+      "original": "$YEAR/$TODAY/originals/$TODAY_loops.avi",
+      "path": "$YEAR/$TODAY/$TODAY_loops.mp4",
+      "pending_cuts": [],
+      "place": "Home field",
+      "poster": null,
+      "rating": 0,
+      "size": 0,
+      "stats": null,
+      "strip": null,
+      "time": "18:30",
+      "title": "loops"
+    }
+  ],
+  "exists": true,
+  "groups": {
+    "days": [
+      [
+        "$TODAY",
+        2
+      ]
+    ],
+    "places": [
+      [
+        "Home field",
+        1
+      ]
+    ]
+  },
+  "last_import": "$IMPORT",
+  "layout": "year_day",
+  "place_folders": false,
+  "root": "$TMP/library",
+  "totals": {
+    "bytes": 0,
+    "clips": 2,
+    "flying": 5.0,
+    "seconds": 5.0
+  },
+  "unindexed": 0
+}

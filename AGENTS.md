@@ -39,6 +39,7 @@ Run these in `src-tauri/`:
 ```bash
 cargo test -- --test-threads=1  # unit + integration tests (needs ffmpeg; attaches small disk images)
 cargo test --test import size_and_speed -- --ignored --nocapture   # MP4 vs MOV size/speed
+INSTA_UPDATE=always cargo test --test snapshots   # accept a deliberate shape change, then review the diff
 cargo tauri dev                 # run from source (Photos is dry-run; QUADCAM_PHOTOS=real to test it)
 cargo tauri build               # -> target/release/bundle/macos/QuadCam.app
 cargo build --release --bin quadcam-cli   # -> target/release/quadcam-cli
