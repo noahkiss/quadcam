@@ -15,6 +15,8 @@
   --raised: color-mix(in srgb, var(--ctp-base) 55%, var(--ctp-surface0));
   --field: var(--ctp-crust);
   --border: var(--ctp-surface0);
+  /* The current item in a list: muted text on it stays AA. */
+  --selected: var(--ctp-surface0);
   --border-strong: var(--ctp-surface1);
   --fg: var(--ctp-text);
   --muted: var(--ctp-subtext0);
@@ -85,6 +87,7 @@
     --raised: white;
     --field: white;
     --border: var(--ctp-crust);
+    --selected: color-mix(in srgb, var(--ctp-surface0) 55%, var(--ctp-base));
     --border-strong: var(--ctp-surface1);
     --muted: var(--ctp-subtext1);
     --primary-fill: color-mix(in oklab, var(--ctp-blue) 88%, black);

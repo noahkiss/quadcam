@@ -56,6 +56,19 @@ for (const scheme of ["dark", "light"] as const) {
       expect(r.violations.map((v) => `${v.id}: ${v.nodes.map((n) => n.target.join(" ") + " " + n.failureSummary).join(", ")}`)).toEqual([]);
     });
 
+    test("every settings pane passes axe", async ({ app, page }) => {
+      test.skip(app.ui !== "next", "contrast is checked on the new UI");
+      await app.open();
+      await page.getByRole("button", { name: "Settings" }).click();
+      await page.waitForFunction(() => document.getAnimations().every((a) => a.playState === "finished"));
+      for (const pane of ["Library", "Aircraft", "Places", "Import", "Photos", "Advanced"]) {
+        await page.getByRole("navigation", { name: "Settings sections" }).getByRole("button", { name: pane }).click();
+        const r = await new AxeBuilder({ page }).withTags(["wcag2a", "wcag2aa", "wcag21aa"]).analyze();
+        expect(r.violations.map((v) => `${pane} ${v.id}: ${v.nodes.map((n) => n.target.join(" ") + " " + n.failureSummary).join(", ")}`)).toEqual([]);
+        if (process.env.QC_SHOTS) await page.screenshot({ path: `${process.env.QC_SHOTS}/next-settings-${pane.toLowerCase()}-${scheme}.png` });
+      }
+    });
+
     test("open dialog and menu pass axe", async ({ app, page }) => {
       test.skip(app.ui !== "next", "the gallery is part of the new UI");
       await app.open("library", { query: "?gallery" });

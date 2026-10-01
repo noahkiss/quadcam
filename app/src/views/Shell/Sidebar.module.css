@@ -48,7 +48,7 @@
   background: color-mix(in srgb, var(--surface) 60%, transparent);
 }
 .item[aria-current="true"] {
-  background: var(--surface);
+  background: var(--selected);
   font-weight: 600;
 }
 .item:disabled,

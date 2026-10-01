@@ -13,6 +13,7 @@ import { LibraryView } from "./views/Library/LibraryView";
 import { FirstRun } from "./views/FirstRun/FirstRun";
 import { ClipDetail } from "./views/ClipDetail/ClipDetail";
 import { ImportSheet } from "./views/ImportSheet/ImportSheet";
+import { SettingsSheet } from "./views/Settings/SettingsSheet";
 import styles from "./App.module.css";
 
 /** Suggestions for the place, keyword, author and note fields. */
@@ -74,6 +75,7 @@ export function App() {
         </main>
       </div>
       <ImportSheet />
+      <SettingsSheet />
       <Overlays />
       <Suggestions />
     </div>
