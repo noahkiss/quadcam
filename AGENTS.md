@@ -83,6 +83,8 @@ GitHub (`noahkiss/quadcam`, public) is the only remote. Users install the cask
   was already exported needs a decision (`RemovedCuts::Keep`: the file stays as its own clip,
   marked `app.quadcam.detached`; `Trash`: it goes to the Trash). Without one, `Core` answers
   `CutChange::Confirm` (GUI) or refuses the patch (CLI `--removed`, MCP `removed_cuts`).
+  `cuts::write_cut` writes every cut file, session and library alike: it verifies frames and
+  reads the QuickTime items back before the rename.
 - **Previews:** after `Core::analyse`, the GUI's `Hooks::analysed` runs `Core::make_previews` on a
   thread. `Core::preview` makes one proxy at a time (a static lock), so a Play click on a clip
   being made waits for it and reuses the file. Library MP4s play directly.

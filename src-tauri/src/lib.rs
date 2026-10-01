@@ -7,6 +7,7 @@
 
 pub mod control;
 pub mod core;
+pub mod cuts;
 pub mod disk;
 pub mod geocode;
 pub mod library;

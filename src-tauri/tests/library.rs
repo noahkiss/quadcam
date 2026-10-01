@@ -694,3 +694,71 @@ fn the_short_date_format_and_renaming_existing_clips_to_it() {
     assert_eq!(r.skipped.len(), 1, "{r:?}");
     assert!(plain.is_file());
 }
+
+/// A library cut carries its clip's details, its own range and start time, and none of
+/// the clip's rating, flag or Photos state; ffprobe reads every item back (the same check a
+/// session cut gets before it counts).
+#[test]
+fn a_library_cut_carries_the_clips_details_and_is_read_back() {
+    let l = lab(Layout::YearDay, false, true);
+    import(&l);
+    let a = by_name(&l, "backyard loops");
+    let id = a.clip.id.clone();
+    l.core
+        .library_rate(std::slice::from_ref(&id), Some(5), Some(Flag::Pick))
+        .unwrap();
+    let ranges = vec![
+        Span {
+            start: 0.5,
+            end: 1.5,
+        },
+        Span {
+            start: 1.5,
+            end: 2.5,
+        },
+    ];
+    l.core.library_set_cuts(&id, &ranges, None).unwrap();
+    let made = l.core.library_export_cuts(&id).unwrap();
+    assert_eq!(made.len(), 1);
+    let cut = l.root.join(&made[0].path);
+    assert!(
+        cut.file_name()
+            .unwrap()
+            .to_string_lossy()
+            .ends_with("_cut2.mp4"),
+        "numbered after the existing cut: {}",
+        cut.display()
+    );
+    let clip = l.root.join(&a.clip.path);
+    assert_eq!(qt(&cut, library::KEY_CUT).as_deref(), Some("1.500-2.500"));
+    assert_eq!(
+        qt(&cut, library::KEY_SOURCE),
+        qt(&clip, library::KEY_SOURCE)
+    );
+    assert_eq!(qt(&cut, library::KEY_PLACE).as_deref(), Some("Home field"));
+    assert_eq!(
+        qt(&cut, "com.apple.quicktime.title"),
+        qt(&clip, "com.apple.quicktime.title")
+    );
+    assert_eq!(qt(&cut, library::KEY_RATING), None);
+    assert_eq!(qt(&cut, library::KEY_FLAG), None);
+    assert!(qt(&cut, "com.apple.quicktime.description")
+        .unwrap()
+        .ends_with("; cut 1.5-2.5 s"));
+    let start = |p: &Path| {
+        chrono::DateTime::parse_from_str(
+            &qt(p, "com.apple.quicktime.creationdate").unwrap(),
+            "%Y-%m-%dT%H:%M:%S%z",
+        )
+        .unwrap()
+    };
+    // The creation date has whole seconds.
+    let offset = (start(&cut) - start(&clip)).num_milliseconds();
+    assert!(
+        (1000..=2000).contains(&offset),
+        "the cut starts 1.5 s into the clip: {offset} ms"
+    );
+    let items: Vec<(String, String)> = quadcam_lib::qtmeta::read(&cut).unwrap();
+    quadcam_lib::media::verify_qt(&tools(), &cut, &items).unwrap();
+    assert!(by_name(&l, "backyard loops").clip.pending_cuts.is_empty());
+}

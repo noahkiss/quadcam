@@ -663,10 +663,7 @@ pub fn import_clip(
     }
     let out = planner.claim(&dir, &stem, settings.format.ext());
     // Write under a hidden temporary name; rename only after verify passes.
-    let tmp = out.with_file_name(format!(
-        ".{}.part",
-        out.file_name().unwrap().to_string_lossy()
-    ));
+    let tmp = crate::cuts::part_path(&out);
 
     let enc = match media::convert(
         tools,
@@ -687,7 +684,7 @@ pub fn import_clip(
     r.meta = Some(meta.clone());
     let mut qt = md::qt_items(&job.meta, &meta);
     qt.extend(job.extra.iter().cloned());
-    let written = write_qt(&tmp, &qt)
+    let written = crate::cuts::write_qt(&tmp, &qt)
         .and_then(|_| media::verify(tools, src_probe, &tmp, &meta))
         .and_then(|_| media::verify_qt(tools, &tmp, &qt));
     if let Err(e) = written {
@@ -767,15 +764,6 @@ pub fn can_format(clips: &[Clip], results: &[ClipResult]) -> Result<()> {
     Ok(())
 }
 
-/// Writes the QuickTime items into `file`, the location also as `©xyz`.
-fn write_qt(file: &Path, qt: &[(String, String)]) -> Result<()> {
-    let loc = qt
-        .iter()
-        .find(|(k, _)| k == "com.apple.quicktime.location.ISO6709")
-        .map(|(_, v)| v.as_str());
-    crate::qtmeta::write(file, qt, loc).context("writing QuickTime metadata")
-}
-
 /// Writes each cut range of a verified clip as `<output stem>_cutN.<ext>` next to its output,
 /// and verifies it. A cut that already verified with the same range keeps its file and is not
 /// written again. Never overwrites: a taken name gets `-2`, `-3`.
@@ -801,11 +789,7 @@ pub fn export_cuts(
         .unwrap_or_default()
         .to_string_lossy()
         .to_string();
-    let format = if ext.eq_ignore_ascii_case("mov") {
-        Format::Mov
-    } else {
-        Format::Mp4
-    };
+    let format = crate::cuts::format_for_ext(&ext);
     let same = |a: f64, b: f64| (a - b).abs() < 0.001;
     cuts.iter()
         .enumerate()
@@ -831,10 +815,6 @@ pub fn export_cuts(
                 return r;
             };
             let dst = planner.claim(dir, &format!("{stem}_cut{}", i + 1), &ext);
-            let tmp = dst.with_file_name(format!(
-                ".{}.part",
-                dst.file_name().unwrap().to_string_lossy()
-            ));
             let cut_meta = Meta {
                 creation_time: meta.creation_time
                     + chrono::Duration::milliseconds((span.start * 1000.0) as i64),
@@ -864,28 +844,22 @@ pub fn export_cuts(
                 library::KEY_CUT,
                 &format!("{:.3}-{:.3}", span.start, span.end),
             );
-            let res = media::cut(tools, src, &tmp, *span, format, settings.encoder, &cut_meta)
-                .and_then(|_| write_qt(&tmp, &qt))
-                .and_then(|_| media::verify_cut(tools, probe, &tmp, *span))
-                .and_then(|_| media::verify_qt(tools, &tmp, &qt).map(|_| ()))
-                .and_then(|_| {
-                    if dst.exists() {
-                        bail!("{} appeared during export; not overwriting", dst.display());
-                    }
-                    std::fs::rename(&tmp, &dst).context("renaming cut")?;
-                    Ok(())
-                });
-            match res {
-                Ok(()) => {
-                    let _ = media::set_mtime(&dst, cut_meta.creation_time);
-                    r.size = dst.metadata().map(|m| m.len()).unwrap_or(0);
+            let cut = crate::cuts::Cut {
+                src,
+                probe,
+                span: *span,
+                format,
+                encoder: settings.encoder,
+                meta: &cut_meta,
+                qt: &qt,
+            };
+            match crate::cuts::write_cut(tools, &cut, &dst) {
+                Ok(size) => {
+                    r.size = size;
                     r.output = Some(dst);
                     r.outcome = Outcome::Verified;
                 }
-                Err(e) => {
-                    let _ = std::fs::remove_file(&tmp);
-                    r.error = Some(format!("{e:#}"));
-                }
+                Err(e) => r.error = Some(format!("{e:#}")),
             }
             r
         })

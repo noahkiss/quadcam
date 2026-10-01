@@ -151,11 +151,11 @@ The same trim editor appears in the library (open a clip) and in the Import shee
 
 Each moment has a score from 0 to 1. When the receiver sends attitude telemetry and it shows the quad upside down during a roll or flip, the score goes up. Select a moment to put the in and out points around it. Play the clip, then use **Set in** and **Set out** (I and O) to adjust them, drag the blue handles, or type the time. Select **Add cut** (C). Space plays, J, K and L go back, stop and forward, and the arrow keys step one frame. A clip can have up to 20 cuts.
 
-In the library, a new cut is written when you select **Save cuts**. QuadCam cuts from the kept original when there is one, else from the clip itself.
+In the library, a new cut is written when you select **Save cuts**. QuadCam cuts from the kept original when there is one, else from the clip itself, and verifies the cut the same way as on import.
 
 **Removing a cut that is already a file** asks first: **Keep the file** leaves it where it is as a clip of its own, **Move to Trash** moves it to the Trash. The command line needs `--removed keep` or `--removed trash`, and an agent needs `removed_cuts`.
 
-On import, each cut becomes its own file next to the clip: `YYYY-MM-DD_<name>_cut1.mp4`, `_cut2`, and so on. QuadCam cuts from the original DVR file, not from the converted one. MJPEG has a keyframe on every frame, so each cut starts and ends on the exact frame. MP4 cuts are re-encoded like the full clip; MOV cuts copy the original frames. QuadCam verifies every cut (streams, frame count, duration). Cuts that verified are not written again, so you can add cuts later and import again. **Add to Photos** adds a clip's cuts with it.
+On import, each cut becomes its own file next to the clip: `YYYY-MM-DD_<name>_cut1.mp4`, `_cut2`, and so on. QuadCam cuts from the original DVR file, not from the converted one. MJPEG has a keyframe on every frame, so each cut starts and ends on the exact frame. MP4 cuts are re-encoded like the full clip; MOV cuts copy the original frames. QuadCam verifies every cut (streams, frame count, duration, and the metadata it wrote). Cuts that verified are not written again, so you can add cuts later and import again. **Add to Photos** adds a clip's cuts with it.
 
 Two tips for radio-log moments:
 
@@ -448,6 +448,7 @@ To try the app without it taking focus, start a debug build with `QUADCAM_NO_FOC
 | `src-tauri/src/geocode.rs` | Place search: Apple MapKit and OpenStreetMap Nominatim |
 | `src-tauri/src/library.rs` | The library: layout, the index, and its rebuild from the files |
 | `src-tauri/src/trim.rs` | Cut ranges and the rule for exported cuts, shared by the session and the library |
+| `src-tauri/src/cuts.rs` | The one cut writer for the session and the library: cut, write metadata, verify, rename |
 | `src-tauri/src/trash.rs` | Moving files to the Trash |
 | `src-tauri/src/lib.rs` | The app's Tauri commands |
 | `src-tauri/src/control.rs` | The control socket |

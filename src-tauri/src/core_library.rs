@@ -3,7 +3,7 @@
 
 use super::Core;
 use crate::library::{self as lib, Filter, Flag, Index, LibClip, LibCut};
-use crate::media::{self, Format};
+use crate::media;
 use crate::moments::Span;
 use crate::photos::{self, ShareReport};
 use crate::pipeline::Outcome;
@@ -746,17 +746,7 @@ impl Core {
         decision: Option<RemovedCuts>,
     ) -> Result<CutChange> {
         let (root, c) = self.clip(id)?;
-        let exported: Vec<ExportedCut> = c
-            .cuts
-            .iter()
-            .map(|x| ExportedCut {
-                span: Span {
-                    start: x.start,
-                    end: x.end,
-                },
-                path: root.join(&x.path),
-            })
-            .collect();
+        let exported = crate::cuts::library_exported(&root, &c);
         let (checked, removed, ask) =
             trim::plan_change(&c.display_name(), &exported, cuts, c.duration, decision)?;
         if let Some(ask) = ask {
@@ -857,11 +847,7 @@ impl Core {
             .unwrap_or_default()
             .to_string_lossy()
             .to_string();
-        let format = if ext.eq_ignore_ascii_case("mov") {
-            Format::Mov
-        } else {
-            Format::Mp4
-        };
+        let format = crate::cuts::format_for_ext(&ext);
         let created = crate::qtmeta::get(&items, "com.apple.quicktime.creationdate")
             .and_then(|v| chrono::DateTime::parse_from_str(v, "%Y-%m-%dT%H:%M:%S%z").ok())
             .map(|t| t.with_timezone(&chrono::Utc))
@@ -893,10 +879,6 @@ impl Core {
                 json!({"task": "cuts", "done": i, "total": total}),
             );
             let dst = planner.claim(&dir, &format!("{stem}_cut{n}"), &ext);
-            let tmp = dst.with_file_name(format!(
-                ".{}.part",
-                dst.file_name().unwrap().to_string_lossy()
-            ));
             let start_time = created + chrono::Duration::milliseconds((span.start * 1000.0) as i64);
             let meta = media::Meta {
                 title: c.title.clone(),
@@ -934,31 +916,23 @@ impl Core {
             ] {
                 crate::qtmeta::set(&mut qt, k, "");
             }
-            let loc =
-                crate::qtmeta::get(&qt, "com.apple.quicktime.location.ISO6709").map(str::to_string);
-            let res = media::cut(&tools, &src, &tmp, *span, format, encoder, &meta)
-                .and_then(|_| crate::qtmeta::write(&tmp, &qt, loc.as_deref()))
-                .and_then(|_| media::verify_cut(&tools, &probe, &tmp, *span).map(|_| ()))
-                .and_then(|_| {
-                    if dst.exists() {
-                        bail!("{} appeared during export; not overwriting", dst.display());
-                    }
-                    std::fs::rename(&tmp, &dst).context("renaming cut")
-                });
-            match res {
-                Ok(()) => {
-                    let _ = media::set_mtime(&dst, start_time);
-                    made.push(LibCut {
-                        path: rel_to(&root, &dst),
-                        start: span.start,
-                        end: span.end,
-                        size: dst.metadata().map(|m| m.len()).unwrap_or(0),
-                    });
-                }
-                Err(e) => {
-                    let _ = std::fs::remove_file(&tmp);
-                    errors.push(format!("cut {:.1}-{:.1} s: {e:#}", span.start, span.end));
-                }
+            let cut = crate::cuts::Cut {
+                src: &src,
+                probe: &probe,
+                span: *span,
+                format,
+                encoder,
+                meta: &meta,
+                qt: &qt,
+            };
+            match crate::cuts::write_cut(&tools, &cut, &dst) {
+                Ok(size) => made.push(LibCut {
+                    path: rel_to(&root, &dst),
+                    start: span.start,
+                    end: span.end,
+                    size,
+                }),
+                Err(e) => errors.push(format!("cut {:.1}-{:.1} s: {e:#}", span.start, span.end)),
             }
         }
         self.hooks.event(
@@ -1299,7 +1273,7 @@ impl Core {
             .find(|c| c.id == patch.id)
             .map(|c| c.duration)
             .ok_or_else(|| anyhow!("no clip with id {}", patch.id))?;
-        let exported = session_exported(&s, patch.id);
+        let exported = crate::cuts::session_exported(&s, patch.id);
         let (_, _, ask) = trim::plan_change(
             &format!("clip {}", patch.id),
             &exported,
@@ -1309,29 +1283,4 @@ impl Core {
         )?;
         Ok(ask)
     }
-}
-
-/// A session clip's cuts that verified and still exist as files.
-pub(crate) fn session_exported(s: &crate::session::Session, id: usize) -> Vec<ExportedCut> {
-    s.results
-        .iter()
-        .rev()
-        .find(|r| r.id == id && r.outcome == Outcome::Verified)
-        .map(|r| {
-            r.cuts
-                .iter()
-                .filter(|c| c.outcome == Outcome::Verified)
-                .filter_map(|c| {
-                    let p = c.output.clone()?;
-                    p.is_file().then_some(ExportedCut {
-                        span: Span {
-                            start: c.start,
-                            end: c.end,
-                        },
-                        path: p,
-                    })
-                })
-                .collect()
-        })
-        .unwrap_or_default()
 }

@@ -502,7 +502,7 @@ impl Core {
         for p in patches {
             let Some(cuts) = &p.cuts else { continue };
             let gone =
-                crate::trim::removed_exported(&core_library::session_exported(&before, p.id), cuts);
+                crate::trim::removed_exported(&crate::cuts::session_exported(&before, p.id), cuts);
             if gone.is_empty() {
                 continue;
             }
