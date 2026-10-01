@@ -41,7 +41,7 @@ test("number keys rate, P X U flag, and Command-Z undoes", async ({ app, page })
   await card(page, "backyard-loops").click();
   await page.keyboard.press("5");
   await expect(card(page, "backyard-loops").getByRole("img", { name: "5 of 5 stars" })).toBeVisible();
-  expect((await app.calls("core_call", "library_rate")).at(-1)!.args.params).toMatchObject({ rating: 5 });
+  expect((await app.method("library_rate")).at(-1)!).toMatchObject({ rating: 5 });
   await page.keyboard.press("p");
   await expect(card(page, "backyard-loops").getByTitle("Pick")).toBeVisible();
   await page.keyboard.press("x");
@@ -62,7 +62,7 @@ test("the stars on a card rate it; the same star again clears it", async ({ app,
   await card(page, "gap-run").getByRole("button", { name: "2 stars" }).click();
   await expect(card(page, "gap-run").getByRole("img", { name: "2 of 5 stars" })).toBeVisible();
   await card(page, "gap-run").getByRole("button", { name: "2 stars" }).click();
-  expect((await app.calls("core_call", "library_rate")).at(-1)!.args.params).toMatchObject({ rating: 0 });
+  expect((await app.method("library_rate")).at(-1)!).toMatchObject({ rating: 0 });
 });
 
 test("Return renames the selected clip; Escape cancels", async ({ app, page }) => {
@@ -73,13 +73,13 @@ test("Return renames the selected clip; Escape cancels", async ({ app, page }) =
   await field.fill("garden loops");
   await page.keyboard.press("Enter");
   await expect(card(page, "garden loops")).toBeVisible();
-  expect((await app.calls("core_call", "library_rename"))[0].args.params).toEqual({ id: "e86ab59aced6fd18", name: "garden loops" });
+  expect((await app.method("library_rename"))[0]).toEqual({ id: "e86ab59aced6fd18", name: "garden loops" });
   await card(page, "garden loops").click();
   await page.keyboard.press("Enter");
   await page.getByRole("textbox", { name: "Clip name" }).fill("nope");
   await page.keyboard.press("Escape");
   await expect(card(page, "garden loops")).toBeVisible();
-  expect(await app.calls("core_call", "library_rename")).toHaveLength(1);
+  expect(await app.method("library_rename")).toHaveLength(1);
   await page.keyboard.press("Meta+z");
   await expect(card(page, "backyard-loops")).toBeVisible();
 });
@@ -94,7 +94,7 @@ test("Command-Delete moves to the Trash after asking; undo puts it back", async 
   await expect(page.getByRole("status")).toContainText("moved to the Trash");
   await page.keyboard.press("Meta+z");
   await expect(card(page, "river-dive")).toBeVisible();
-  expect(await app.calls("core_call", "library_untrash")).toHaveLength(1);
+  expect(await app.method("library_untrash")).toHaveLength(1);
 });
 
 test("search matches name, note, place and aircraft", async ({ page }) => {
@@ -132,7 +132,7 @@ test("sort and view settings save per machine", async ({ app, page }) => {
   await page.getByRole("button", { name: "List", exact: true }).click();
   await expect(clipTable(page)).toBeVisible();
   await expect(clipTable(page).locator("tbody tr[data-id]")).toHaveCount(3);
-  const sets = (await app.calls("core_call", "settings_set")).map((c) => (c.args.params as { values: object }).values);
+  const sets = (await app.method("settings_set")).map((p) => (p as { values: object }).values);
   expect(sets).toContainEqual({ libSort: { key: "name", dir: "asc" } });
   expect(sets).toContainEqual({ libView: "list" });
 });
@@ -156,9 +156,9 @@ test("the selection bar rates, flags and trashes several clips", async ({ app, p
   await card(page, "river-dive").click({ modifiers: ["Meta"] });
   const bar = page.getByRole("toolbar", { name: "Selected clips" });
   await bar.getByRole("button", { name: "3 stars" }).click();
-  expect((await app.calls("core_call", "library_rate")).at(-1)!.args.params).toMatchObject({ rating: 3 });
+  expect((await app.method("library_rate")).at(-1)!).toMatchObject({ rating: 3 });
   await bar.getByRole("button", { name: "Pick" }).click();
-  expect((await app.calls("core_call", "library_rate")).at(-1)!.args.params).toMatchObject({ flag: "pick" });
+  expect((await app.method("library_rate")).at(-1)!).toMatchObject({ flag: "pick" });
   await bar.getByRole("button", { name: "Trash" }).click();
   await expect(dialog(page, "Move 2 clips to the Trash?")).toBeVisible();
 });

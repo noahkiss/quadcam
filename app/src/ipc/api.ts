@@ -1,85 +1,69 @@
-// Typed calls into the core. Until tauri-specta generates bindings.ts (plan step R5) this
-// mirrors the Tauri commands and the `core_call` methods by hand; views and stores use
-// only this module, so the swap stays here.
-import { convertFileSrc, invoke } from "@tauri-apps/api/core";
+// Typed calls into the core, on the commands tauri-specta generates (../bindings.ts). Each
+// call resolves its data or rejects with the core's error text. Answers the UI reads are made
+// to fit ipc/types.ts (see normalize.ts); the rest come back as generated, since the next
+// library-changed or session-changed event refetches the view. Views and stores use only this module.
+import { convertFileSrc } from "@tauri-apps/api/core";
 import { open as openDialog } from "@tauri-apps/plugin-dialog";
 import { openPath, revealItemInDir } from "@tauri-apps/plugin-opener";
-import type {
-  CardStatus,
-  CutChange,
-  EnvCheck,
-  FormatPlan,
-  GeoResult,
-  ImportOptions,
-  ImportOutcome,
-  LibClip,
-  LibCut,
-  LibEdit,
-  LibraryFilter,
-  LibraryView,
-  Moved,
-  PlanPatch,
-  RebuildReport,
-  RemovedCuts,
-  RenameReport,
-  Session,
-  SettingsValues,
-  SettingsView,
-  ShareReport,
-  Span,
-  TrashReport,
-  Volume,
-} from "./types";
+import { commands } from "../bindings";
+import * as N from "./normalize";
+import type { ImportOptions, LibEdit, LibraryFilter, Moved, PlanPatch, RemovedCuts, SettingsValues, Span } from "./types";
 
-const call = <T>(method: string, params: object | null = {}) => invoke<T>("core_call", { method, params });
+type Result<T> = Promise<{ status: "ok"; data: T } | { status: "error"; error: string }>;
+
+async function ok<T>(r: Result<T>): Promise<T> {
+  const x = await r;
+  if (x.status === "error") throw x.error;
+  return x.data;
+}
 
 export const api = {
-  envCheck: () => invoke<EnvCheck>("env_check"),
-  defaultOutputDir: () => invoke<string | null>("default_output_dir"),
-  listVolumes: () => invoke<Volume[]>("list_volumes"),
-  libraryScope: () => invoke<null>("library_scope"),
-  menuState: (enabled: Record<string, boolean>, checked: Record<string, boolean>, albumItem: string | null) => invoke<null>("menu_state", { enabled, checked, albumItem }),
-  share: (paths: string[], r: { x: number; y: number; w: number; h: number }) => invoke<null>("share", { paths, ...r }),
+  envCheck: () => commands.envCheck(),
+  defaultOutputDir: () => commands.defaultOutputDir(),
+  listVolumes: () => ok(commands.volumes()),
+  libraryScope: () => ok(commands.libraryScope()),
+  menuState: (enabled: Record<string, boolean>, checked: Record<string, boolean>, albumItem: string | null) => commands.menuState(enabled, checked, albumItem),
+  share: (paths: string[], r: { x: number; y: number; w: number; h: number }) => ok(commands.share(paths, r.x, r.y, r.w, r.h)),
 
   // Session
-  getSession: () => invoke<Session | null>("get_session"),
-  loadSource: (path: string) => invoke<Session>("load_source", { path }),
-  loadDropped: (paths: string[]) => invoke<Session>("load_dropped", { paths }),
-  planDates: (logDir: string | null, day: string | null) => invoke<Session>("plan_dates", { logDir, day }),
-  editPlan: (patch: PlanPatch) => invoke<Session>("edit_plan", { patch }),
-  editPlans: (patches: PlanPatch[]) => invoke<Session>("edit_plans", { patches }),
-  importClips: (options: ImportOptions) => invoke<ImportOutcome>("import_clips", { options }),
-  addToPhotos: (ids: number[], album: string | null) => invoke<ShareReport>("add_to_photos", { ids, album }),
-  formatPlan: (label: string | null) => invoke<FormatPlan>("format_plan", { label }),
-  formatCard: (label: string) => invoke<FormatPlan>("format_card", { label }),
-  answerFormatRequest: (id: number, approve: boolean) => invoke<null>("answer_format_request", { id, approve }),
-  clearSession: () => invoke<null>("clear_session"),
-  eject: (path: string | null = null) => invoke<null>("eject", { path }),
-  preview: (id: number) => invoke<string>("preview", { id }),
-  sessionCuts: (id: number, cuts: Span[], removed: RemovedCuts | null) => call<CutChange>("session_cuts", { id, cuts, removed_cuts: removed }),
+  getSession: async () => N.session(await ok(commands.session())),
+  loadSource: async (path: string) => N.session(await ok(commands.load({ source: path })))!,
+  loadDropped: async (paths: string[]) => N.session(await ok(commands.loadDropped(paths)))!,
+  planDates: async (logDir: string | null, day: string | null) => N.session(await ok(commands.dates({ logs: logDir ? { kind: "dir", path: logDir } : { kind: "none" }, day })))!,
+  editPlan: async (patch: PlanPatch) => N.session(await ok(commands.suggest({ patches: [patch], editor: "user" })))!,
+  editPlans: async (patches: PlanPatch[]) => N.session(await ok(commands.suggest({ patches, editor: "user" })))!,
+  importClips: (options: ImportOptions) => ok(commands.import(options)),
+  addToPhotos: (ids: number[], album: string | null) => ok(commands.photos({ ids, album })),
+  formatPlan: (label: string | null) => ok(commands.formatPlan({ label })),
+  formatCard: (label: string) => ok(commands.formatCard(label)),
+  answerFormatRequest: (id: number, approve: boolean) => commands.answerFormatRequest(id, approve),
+  clearSession: () => ok(commands.clear()),
+  eject: (path: string | null = null) => ok(commands.eject({ target: path })),
+  preview: (id: number) => ok(commands.preview(id)),
+  sessionCuts: async (id: number, cuts: Span[], removed: RemovedCuts | null) => N.cutChange(await ok(commands.sessionCuts({ id, cuts, removed_cuts: removed }))),
 
   // Library
-  library: (filter: LibraryFilter = {}) => call<LibraryView>("library", filter),
-  rate: (ids: string[], rating: number | null, flag: LibClip["flag"] | null) => call<LibClip[]>("library_rate", { ids, rating, flag }),
-  edit: (id: string, edit: LibEdit) => call<LibClip>("library_edit", { id, ...edit }),
-  rename: (id: string, name: string) => call<LibClip>("library_rename", { id, name }),
-  libraryCuts: (id: string, cuts: Span[], removed: RemovedCuts | null) => call<CutChange>("library_cuts", { id, cuts, removed_cuts: removed }),
-  exportCuts: (id: string) => call<LibCut[]>("library_export_cuts", { id }),
-  trash: (ids: string[]) => call<TrashReport>("library_trash", { ids }),
-  untrash: (moved: Moved[]) => call<string[]>("library_untrash", { moved }),
-  libraryPhotos: (ids: string[], album: string) => call<ShareReport>("library_photos", { ids, album }),
-  applyNameFormat: () => call<RenameReport>("library_apply_name_format", {}),
-  rebuild: () => call<RebuildReport>("library_rebuild"),
-  rescan: (id: string) => call<LibClip>("library_rescan", { id }),
-  libraryPreview: (id: string) => call<string>("library_preview", { id }),
-  strips: () => call<number>("library_strips", {}),
-  cardStatus: (mount: string) => call<CardStatus>("card_status", { mount }),
+  library: async (filter: LibraryFilter = {}) => N.libraryView(await ok(commands.library(filter))),
+  rate: (ids: string[], rating: number | null, flag: "none" | "pick" | "reject" | null) => ok(commands.libraryRate({ ids, rating, flag })),
+  edit: (id: string, edit: LibEdit) => ok(commands.libraryEdit({ id, ...edit })),
+  rename: (id: string, name: string) => ok(commands.libraryRename({ id, name })),
+  libraryCuts: async (id: string, cuts: Span[], removed: RemovedCuts | null) => N.cutChange(await ok(commands.libraryCuts({ id, cuts, removed_cuts: removed }))),
+  exportCuts: (id: string) => ok(commands.libraryExportCuts({ id })),
+  trash: (ids: string[]) => ok(commands.libraryTrash({ ids })),
+  untrash: (moved: Moved[]) => ok(commands.libraryUntrash({ moved })),
+  libraryPhotos: (ids: string[], album: string) => ok(commands.libraryPhotos({ ids, album })),
+  applyNameFormat: () => ok(commands.libraryApplyNameFormat({})),
+  rebuild: () => ok(commands.libraryRebuild()),
+  rescan: (id: string) => ok(commands.libraryRescan({ id })),
+  libraryPreview: (id: string) => ok(commands.libraryPreview({ id })),
+  strips: () => ok(commands.libraryStrips({})),
+  cardStatus: (mount: string) => ok(commands.cardStatus({ mount })),
 
   // Setup
-  settings: () => call<SettingsView>("settings"),
-  settingsSet: (values: SettingsValues) => call<SettingsView>("settings_set", { values }),
-  placeSearch: (query: string, provider: string, limit = 6) => call<GeoResult[]>("place_search", { query, provider, limit }),
-  placeSave: (name: string, lat: number, lon: number) => call<unknown>("place_save", { name, lat, lon }),
+  settings: async () => N.settingsView(await ok(commands.settings())),
+  settingsSet: async (values: SettingsValues) => N.settingsView(await ok(commands.settingsSet({ values }))),
+  placeSearch: async (query: string, provider: string, limit = 6) => N.geo(await ok(commands.placeSearch({ query, provider, limit }))),
+  placeSave: (name: string, lat: number, lon: number) => ok(commands.placeSave({ name, lat, lon })),
 };
 
 /** A URL the web view can load for a file the core made (thumbnails, previews). */

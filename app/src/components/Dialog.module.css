@@ -12,9 +12,9 @@
 .dialog[open] {
   animation: rise var(--dur) var(--ease);
 }
+/* Movement only: the dialog is readable even when the window does not run animations. */
 @keyframes rise {
   from {
-    opacity: 0;
     transform: translateY(8px) scale(0.99);
   }
 }

@@ -1,6 +1,7 @@
-// The core's events, typed. Each returns its unlisten function.
-import { listen } from "@tauri-apps/api/event";
+// The core's events, from the generated bindings. Each returns its unlisten function.
 import { getCurrentWebview } from "@tauri-apps/api/webview";
+import { events } from "../bindings";
+import * as N from "./normalize";
 import type { AgentFormatRequest, ClipResult, ImportProgress, LibraryTask, StageProgress } from "./types";
 
 export interface CoreEvents {
@@ -18,8 +19,25 @@ export interface CoreEvents {
   menu: string;
 }
 
+type Listen = (cb: (payload: never) => void) => Promise<() => void>;
+const wrap = <T,>(e: { listen: (cb: (ev: { payload: T }) => void) => Promise<() => void> }, map: (p: T) => unknown = (p) => p): Listen => (cb) => e.listen((ev) => (cb as (p: unknown) => void)(map(ev.payload)));
+
+const SOURCES: Record<keyof CoreEvents, Listen> = {
+  "library-changed": wrap(events.libraryChanged),
+  "session-changed": wrap(events.sessionChanged),
+  "settings-changed": wrap(events.settingsChanged),
+  "volumes-changed": wrap(events.volumesChanged),
+  "library-task": wrap(events.libraryTask),
+  progress: wrap(events.progress),
+  "import-progress": wrap(events.importProgress, N.importProgress),
+  "import-result": wrap(events.importResult, N.result),
+  "agent-format-request": wrap(events.agentFormatRequest),
+  "agent-format-closed": wrap(events.agentFormatClosed),
+  menu: wrap(events.menu),
+};
+
 export function on<K extends keyof CoreEvents>(name: K, handler: (payload: CoreEvents[K]) => void): Promise<() => void> {
-  return listen<CoreEvents[K]>(name, (e) => handler(e.payload));
+  return SOURCES[name](handler as (p: never) => void);
 }
 
 export type DragDrop = { type: "enter" | "over"; paths?: string[] } | { type: "drop"; paths: string[] } | { type: "leave" };

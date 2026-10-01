@@ -62,6 +62,13 @@ pnpm build                                 # -> app/dist
 scripts/make-fixtures.sh                   # re-record the mock core's data (needs the CLI and the corpus)
 ```
 
+- **Core calls in `app/`** go through `app/src/ipc/api.ts`, on the generated
+  `app/src/bindings.ts` (never edit it). `ipc/types.ts` narrows the generated types for the UI
+  (specta types every f64 as `number | null`; fields serde may omit are optional there), and
+  `ipc/normalize.ts` makes each answer fit: a range or point without a time is dropped, a
+  length reads as 0. The new UI uses only the typed commands, never the `@deprecated` legacy
+  ones. The mock core answers both, and the parity specs compare calls by core method
+  (`app.method(...)` in `app/e2e/fixtures.ts`), whichever command the UI used.
 - **Theme** (`app/src/theme/`): `palette.css` is generated from `@catppuccin/palette`
   (`node scripts/gen-palette.mjs`; a test fails when it is stale). `tokens.css` maps it to
   semantic names (Mocha for dark, Latte for light) plus the 8-pt spacing, radii and type

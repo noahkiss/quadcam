@@ -98,7 +98,7 @@ describe("settings slice", () => {
   it("writes only changed keys", async () => {
     const before = structuredClone(S().values);
     await S().saveChanged({ ...before, places: structuredClone(before.places)!.map((p) => ({ name: p.name, lat: p.lat, lon: p.lon })), format: "mov" }, before);
-    const writes = mock.calls.filter((c) => c.args.method === "settings_set").map((c) => (c.args.params as { values: object }).values);
+    const writes = mock.calls.filter((c) => c.cmd === "settings_set").map((c) => (c.args.params as { values: object }).values);
     expect(writes).toEqual([{ format: "mov" }]);
   });
 });

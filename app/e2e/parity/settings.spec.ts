@@ -4,7 +4,7 @@ import { area, dialog, expect, test, type AppFixture } from "../fixtures";
 area("settings");
 
 const settingsDialog = (page: Page) => dialog(page, "Settings");
-const writes = async (app: AppFixture) => (await app.calls("core_call", "settings_set")).map((c) => (c.args.params as { values: Record<string, unknown> }).values);
+const writes = async (app: AppFixture) => (await app.method("settings_set")).map((p) => (p as { values: Record<string, unknown> }).values);
 
 /** The written keys whose value differs from the recorded settings. */
 async function changed(app: AppFixture) {
@@ -71,7 +71,7 @@ test("place search fills a new place; Done saves the list", async ({ app, page }
   await dlg.getByRole("searchbox", { name: "Search for a place" }).press("Enter");
   await dlg.getByRole("button", { name: /^Mill pond 1 Mill pond Road/ }).click();
   await expect(dlg.getByRole("textbox", { name: "Place name" }).last()).toHaveValue("Mill pond");
-  expect((await app.calls("core_call", "place_search")).map((c) => c.args.params)).toEqual([{ query: "Mill pond", provider: "apple", limit: 6 }]);
+  expect((await app.method("place_search"))).toEqual([{ query: "Mill pond", provider: "apple", limit: 6 }]);
   await dlg.getByRole("button", { name: "Done" }).click();
   await expect.poll(async () => changed(app)).toEqual({
     places: [{ name: "Home field", lat: 40, lon: -75 }, { name: "Riverside park", lat: 40.1, lon: -75.1 }, { name: "Mill pond", lat: 40.2, lon: -75.2 }],

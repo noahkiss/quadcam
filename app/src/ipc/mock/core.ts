@@ -19,6 +19,14 @@ import type {
   Volume,
 } from "../types";
 import * as seed from "./seed";
+import { location as normLocation, spans as normSpans } from "../normalize";
+
+/** `Core::dispatch` methods, each also a typed Tauri command of the same name. */
+const DISPATCH = new Set([
+  "library", "library_rate", "library_edit", "library_rename", "library_cuts", "library_export_cuts", "library_trash", "library_untrash",
+  "library_photos", "library_apply_name_format", "library_rebuild", "library_rescan", "library_preview", "library_strips", "card_status",
+  "settings", "settings_set", "place_search", "place_save", "session_cuts", "profiles",
+]);
 
 export type Scenario = "library" | "empty" | "card" | "review" | "finished-card" | "no-tools" | "many";
 
@@ -87,6 +95,36 @@ export class MockCore {
   // ---------- the Tauri commands ----------
 
   handle(cmd: string, args: Record<string, unknown>): unknown {
+    // The typed commands (R5) take one `params` struct and share the dispatch names.
+    const p = (args.params ?? {}) as Record<string, unknown>;
+    switch (cmd) {
+      case "volumes":
+        return structuredClone(this.volumes);
+      case "session":
+        return structuredClone(this.session);
+      case "load":
+        return this.load(String(p.source));
+      case "dates": {
+        const logs = p.logs as { kind: string; path?: string } | undefined;
+        return this.planDates(logs?.kind === "dir" ? logs.path! : null, (p.day as string | null) ?? null);
+      }
+      case "suggest":
+        return this.patch(p.patches as PlanPatch[]);
+      case "import":
+        return this.importClips(p as { output_dir: string; format: string });
+      case "photos":
+        return this.addToPhotos((p.ids as number[] | null) ?? null, (p.album as string | null) ?? null);
+      case "clear":
+        this.session = null;
+        return { cleared: true };
+      case "eject":
+        this.volumes = this.volumes.filter((v) => !v.is_card);
+        this.emit("volumes-changed");
+        return { ejected: true };
+      case "format_plan":
+        return this.formatPlan(((args.params ? p.label : args.label) as string | null) ?? null);
+    }
+    if (DISPATCH.has(cmd)) return this.dispatch(cmd, p);
     switch (cmd) {
       case "env_check":
         return this.tools
@@ -112,8 +150,6 @@ export class MockCore {
         return this.importClips(args.options as { output_dir: string; format: string });
       case "add_to_photos":
         return this.addToPhotos(args.ids as number[] | null, (args.album as string | null) ?? null);
-      case "format_plan":
-        return this.formatPlan(args.label as string | null);
       case "format_card":
         return this.formatCard(String(args.label));
       case "answer_format_request":
@@ -244,7 +280,7 @@ export class MockCore {
       c.location = pl ? { lat: pl.lat, lon: pl.lon, name: pl.name } : null;
     }
     if (e.location) {
-      c.location = e.location;
+      c.location = normLocation(e.location);
       c.place = e.location.name || null;
     }
     if (e.profile != null) c.aircraft = e.profile || null;
@@ -451,7 +487,7 @@ export class MockCore {
         p.suggested.skip = false;
       }
       if (x.cuts != null) {
-        p.cuts = x.cuts;
+        p.cuts = normSpans(x.cuts);
         p.suggested.cuts = false;
       }
       if (x.log_offset_s != null) p.log_offset_s = x.log_offset_s;
@@ -460,7 +496,7 @@ export class MockCore {
         const pl = (this.settings.values.places || []).find((q) => q.name.toLowerCase() === x.place!.toLowerCase());
         p.meta.location = pl ? { lat: pl.lat, lon: pl.lon, name: pl.name } : null;
       }
-      if (x.location) p.meta.location = x.location;
+      if (x.location) p.meta.location = normLocation(x.location);
       if (x.keywords != null) p.meta.keywords = x.keywords;
       if (x.author != null) p.meta.author = x.author || null;
       if (x.profile != null || x.place != null || x.location || x.keywords != null || x.author != null) p.suggested.meta = false;

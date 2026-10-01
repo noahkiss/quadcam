@@ -7,7 +7,9 @@ const sheet = (page: Page) => dialog(page, "Import");
 // A clip row: a list item (legacy) or a grid row (new UI).
 const rows = (page: Page) => sheet(page).locator('li, [role="row"]');
 const row = (page: Page, name: string) => rows(page).filter({ has: page.getByRole("textbox", { name: `Short name for ${name}` }) });
-const patches = async (app: AppFixture) => (await app.calls()).filter((c) => c.cmd === "edit_plan" || c.cmd === "edit_plans").flatMap((c) => (c.args.patches as object[]) || [c.args.patch]);
+const suggests = async (app: AppFixture) => (await app.method("suggest")).map((p) => p.patches as { id: number }[]);
+const patches = async (app: AppFixture) => (await suggests(app)).flat();
+const batches = async (app: AppFixture) => (await suggests(app)).filter((ps) => ps.length > 1);
 
 async function openFolder(app: AppFixture) {
   await app.core("c => c.dialogAnswers.push('/Users/pilot/clips')");
@@ -19,7 +21,7 @@ async function openFolder(app: AppFixture) {
 test("Import… without a card picks a folder and loads its clips", async ({ app, page }) => {
   await app.open();
   await openFolder(app);
-  expect((await app.calls("load_source"))[0].args).toEqual({ path: "/Users/pilot/clips" });
+  expect((await app.method("load"))[0]).toEqual({ source: "/Users/pilot/clips" });
   await expect(rows(page).filter({ has: page.getByRole("checkbox") })).toHaveCount(5);
   await expect(sheet(page).getByText("5 clips · 2:10 flying · 0:00 dead air")).toBeVisible();
 });
@@ -30,7 +32,7 @@ test("a card in the sidebar shows its new clips and loads on click", async ({ ap
   await expect(side.getByRole("button", { name: /DVR\s*4 new/ })).toBeVisible();
   await side.getByRole("button", { name: /DVR/ }).click();
   await expect(sheet(page)).toBeVisible();
-  expect((await app.calls("load_source"))[0].args).toEqual({ path: "/Volumes/DVR" });
+  expect((await app.method("load"))[0]).toEqual({ source: "/Volumes/DVR" });
 });
 
 test("review edits: name, note, date, time and skip go to the core", async ({ app, page }) => {
@@ -67,10 +69,10 @@ test("the session bar sets aircraft, place and date for every clip", async ({ ap
   await app.open();
   await openFolder(app);
   await sheet(page).getByLabel("Aircraft").first().selectOption("Five-inch");
-  await expect.poll(async () => (await app.calls("edit_plans")).length).toBe(1);
-  expect((await app.calls("edit_plans"))[0].args.patches).toEqual([0, 1, 2, 3].map((id) => ({ id, profile: "Five-inch" })));
+  await expect.poll(async () => (await batches(app)).length).toBe(1);
+  expect((await batches(app))[0]).toEqual([0, 1, 2, 3].map((id) => ({ id, profile: "Five-inch" })));
   await sheet(page).getByLabel("Place").first().selectOption("Home field");
-  await expect.poll(async () => (await app.calls("edit_plans")).length).toBe(2);
+  await expect.poll(async () => (await batches(app)).length).toBe(2);
 });
 
 test("Apply to all clips copies the clip's metadata", async ({ app, page }) => {
@@ -78,7 +80,7 @@ test("Apply to all clips copies the clip's metadata", async ({ app, page }) => {
   await openFolder(app);
   await sheet(page).getByRole("button", { name: "Apply to all clips" }).click();
   await expect(page.getByRole("status")).toContainText("Applied to every clip.");
-  const all = (await app.calls("edit_plans")).at(-1)!.args.patches as { id: number }[];
+  const all = (await batches(app)).at(-1)!;
   expect(all.map((p) => p.id)).toEqual([1, 2, 3, 4]);
 });
 
@@ -103,7 +105,7 @@ test("Command-Return adds to the library, then Finish shows the files", async ({
   await page.keyboard.press("Meta+Enter");
   await expect(sheet(page).getByRole("heading", { name: /^Added 4 clips and 1 cut to the library$/ })).toBeVisible();
   expect(await patches(app)).toContainEqual({ id: 0, name: "loops" });
-  expect((await app.calls("import_clips"))[0].args.options).toMatchObject({ format: "mp4", encoder: "videotoolbox", keep_originals: false });
+  expect((await app.method("import"))[0]).toMatchObject({ format: "mp4", encoder: "videotoolbox", keep_originals: false });
   await expect(sheet(page).getByText("2026-09-27_loops.mp4")).toBeVisible();
   await sheet(page).getByRole("button", { name: /Add 5 files/ }).click();
   await expect(sheet(page).getByText("5 added to the Drone album.")).toBeVisible();
@@ -128,7 +130,7 @@ test("Start over asks, then clears the session", async ({ app, page }) => {
   const ask = dialog(page, "Start over?");
   await ask.getByRole("button", { name: "Start over" }).click();
   await expect(sheet(page)).toBeHidden();
-  expect(await app.calls("clear_session")).toHaveLength(1);
+  expect(await app.method("clear")).toHaveLength(1);
 });
 
 test("Format card: unlock, then a dialog names the disk; Return does not erase", async ({ app, page }) => {
@@ -175,7 +177,7 @@ test("the review panel's trim editor sets session cuts; tabs show flight and fil
   await sheet(page).getByRole("textbox", { name: "Out point" }).fill("1:00.0");
   await sheet(page).getByRole("textbox", { name: "Out point" }).press("Tab");
   await sheet(page).getByRole("button", { name: "Add cut" }).click();
-  await expect.poll(async () => (await app.calls("core_call", "session_cuts")).map((c) => c.args.params)).toContainEqual({
+  await expect.poll(async () => (await app.method("session_cuts"))).toContainEqual({
     id: 1, cuts: [{ start: 10, end: 25 }, { start: 50, end: 60 }], removed_cuts: null,
   });
   await sheet(page).getByRole("tab", { name: "File" }).click();
