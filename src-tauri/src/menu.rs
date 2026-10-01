@@ -16,6 +16,9 @@ const HELP_URL: &str = "https://github.com/noahkiss/quadcam#readme";
 pub struct MenuItems<R: Runtime> {
     plain: Mutex<HashMap<String, MenuItem<R>>>,
     checks: Mutex<HashMap<String, CheckMenuItem<R>>>,
+    /// The Clip menu and whether its album item is in it.
+    clip: Submenu<R>,
+    album_shown: Mutex<bool>,
 }
 
 struct Build<'a, R: Runtime> {
@@ -141,7 +144,8 @@ pub fn install<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<()> {
     let details = b.item("edit-details", "Edit Details", Some("CmdOrCtrl+I"))?;
     let reveal = b.item("reveal-clip", "Show in Finder", Some("CmdOrCtrl+R"))?;
     let share = b.item("share", "Share…", None)?;
-    let photos = b.item("add-photos", "Add to Photos", None)?;
+    // Labelled with the album's name by the webview (`menu_state`); hidden without an album.
+    let photos = b.item("add-photos", "Add to Album", None)?;
     let trash = b.item("trash", "Move to Trash", Some("CmdOrCtrl+Backspace"))?;
     let clip = b.submenu(
         "Clip",
@@ -223,6 +227,8 @@ pub fn install<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<()> {
     app.manage(MenuItems {
         plain: Mutex::new(b.plain),
         checks: Mutex::new(b.checks),
+        clip,
+        album_shown: Mutex::new(true),
     });
     app.on_menu_event(|app, event| {
         let id = event.id().0.as_str();
@@ -236,14 +242,36 @@ pub fn install<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<()> {
     Ok(())
 }
 
-/// The webview's view of which items apply now: `enabled` and `checked`, by item id.
+/// The webview's view of which items apply now: `enabled` and `checked`, by item id, and
+/// the album item's label (`None` hides it).
 #[tauri::command]
 pub fn menu_state(
     items: State<'_, MenuItems<tauri::Wry>>,
     enabled: HashMap<String, bool>,
     checked: HashMap<String, bool>,
+    album_item: Option<String>,
 ) {
     let plain = items.plain.lock().unwrap();
+    if let (Some(photos), Some(share)) = (plain.get("add-photos"), plain.get("share")) {
+        let mut shown = items.album_shown.lock().unwrap();
+        match &album_item {
+            Some(label) => {
+                let _ = photos.set_text(label);
+                if !*shown {
+                    let at = items
+                        .clip
+                        .items()
+                        .ok()
+                        .and_then(|all| all.iter().position(|i| i.id() == share.id()));
+                    if let Some(at) = at {
+                        *shown = items.clip.insert(photos, at + 1).is_ok();
+                    }
+                }
+            }
+            None if *shown => *shown = items.clip.remove(photos).is_err(),
+            None => {}
+        }
+    }
     let checks = items.checks.lock().unwrap();
     for (id, on) in enabled {
         if let Some(i) = plain.get(&id) {

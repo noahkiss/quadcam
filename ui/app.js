@@ -723,7 +723,7 @@ function clearSelection() {
   syncMenu();
 }
 
-// The bar for two or more selected clips: rate, flag, share, add to Photos, trash.
+// The bar for two or more selected clips: rate, flag, share, add to the album, trash.
 function renderSelBar() {
   const bar = $("#sel-bar");
   const ids = selectedIds();
@@ -739,7 +739,7 @@ function renderSelBar() {
     el("button", { type: "button", class: "icon small", "aria-label": "Reject", title: "Reject", onclick: () => rate(selectedIds(), null, "reject") }, icon("close")),
     el("span", { class: "sep", "aria-hidden": "true" }),
     el("button", { type: "button", class: "ghost small", onclick: (e) => shareClips(selectedIds(), e.currentTarget) }, icon("share"), "Share"),
-    el("button", { type: "button", class: "ghost small", onclick: () => addLibToPhotos(selectedIds()) }, icon("photos"), "Add to Photos"),
+    albumAction() ? el("button", { type: "button", class: "ghost small", onclick: () => addLibToPhotos(selectedIds()) }, icon("photos"), albumAction()) : "",
     el("button", { type: "button", class: "ghost small danger-text", onclick: () => trashClips(selectedIds()) }, icon("trash-bin-trash"), "Trash"),
     el("button", { type: "button", class: "icon small", "aria-label": "Deselect", title: "Deselect", onclick: clearSelection }, icon("close-circle")));
 }
@@ -880,6 +880,14 @@ async function setClipName(id, name) {
   }
 }
 
+// The album action's label, e.g. "Add to Drone Album"; null without an album (Share covers
+// plain Add to Photos). `n` counts the clips when there are several.
+function albumAction(n = 1) {
+  const a = (settings.photosAlbum || "").trim();
+  if (!a) return null;
+  return `Add ${n > 1 ? `${n} ` : ""}to ${a}${/album$/i.test(a) ? "" : " Album"}`;
+}
+
 async function addLibToPhotos(ids) {
   try {
     const r = await call("library_photos", { ids, album: settings.photosAlbum ?? "" });
@@ -926,18 +934,19 @@ function openMenu(e, id) {
   const item = (ic, label, key, fn, cls) => el("li", {}, el("button", { type: "button", role: "menuitem", class: cls, onclick: () => { closeMenu(true); fn(); } }, icon(ic), el("span", { text: label }), el("span", { class: "key", text: key })));
   const sep = () => el("li", { role: "separator" });
   const menu = $("#menu");
-  menu.replaceChildren(
+  // Leaves out the items that do not apply.
+  menu.replaceChildren(...[
     many ? null : item("pen", "Rename", "⏎", () => startRename(id)),
     many ? null : item("tag", "Edit details", "⌘I", () => openDetail(id, null, "details")),
     many ? null : item("scissors", "Trim and cuts", "T", () => openDetail(id)),
-    sep(),
+    many ? null : sep(),
     item("share", "Share…", "", () => shareClips(ids, menuAnchor(id))),
-    item("photos", many ? `Add ${ids.length} to Photos` : "Add to Photos", "", () => addLibToPhotos(ids)),
+    albumAction() && item("photos", albumAction(ids.length), "", () => addLibToPhotos(ids)),
     many ? null : item("finder", "Show in Finder", "⌘R", () => T.opener.revealItemInDir(c.file)),
     many ? null : item("refresh-moments", "Find dead air again", "", () => rescan(id)),
     sep(),
     item("trash-bin-trash", many ? `Move ${ids.length} to Trash` : "Move to Trash", "⌘⌫", () => trashClips(ids), "danger"),
-  );
+  ].filter(Boolean));
   menu.hidden = false;
   state.menuFor = id;
   const r = menu.getBoundingClientRect();

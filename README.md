@@ -124,11 +124,11 @@ In the library:
 - **Undo** (Command-Z) and **Redo** (Shift-Command-Z) work for ratings, flags, renames, notes, keywords, places and Move to Trash. Undo after Move to Trash puts the files back from the Trash.
 - **Search** matches the name, note, place, aircraft, keywords and file name.
 - **Thumbnails** show the clip as you move the pointer across them.
-- **Right-click** a clip: Rename (Return), Edit details (Command-I), Trim and cuts, Add to Photos, Show in Finder (Command-R), Find dead air again, Move to Trash (Command-Delete). Move to Trash takes the clip's cuts and kept original with it.
+- **Right-click** a clip: Rename (Return), Edit details (Command-I), Trim and cuts, Share, Add to *album* (shown when Settings names a Photos album; for example **Add to Drone Album**), Show in Finder (Command-R), Find dead air again, Move to Trash (Command-Delete). Move to Trash takes the clip's cuts and kept original with it.
 - **Rejected** shows a **Move to Trash** button for every rejected clip.
 - The day summary shows the flights, armed time, packs, lowest battery voltage and the best moments of the day.
 
-Dragging clips out to Finder and the Share menu are not built yet; use **Show in Finder**.
+**Share** opens the macOS Share menu, which includes Photos. Dragging clips out to Finder is not built yet; use **Show in Finder**.
 
 ## Moments and cuts
 

@@ -53,7 +53,7 @@ const MenuBar = (() => {
       settings: free, import: free && !!state.tools, "open-folder": free && !!state.tools, "reveal-library": true,
       undo: !!typingIn() || (free && History.canUndo()), redo: !!typingIn() || (free && History.canRedo()),
       "select-all": !!typingIn() || lib,
-      pick: clipOn, reject: clipOn, unflag: clipOn, share: clipOn, "add-photos": clipOn, trash: clipOn,
+      pick: clipOn, reject: clipOn, unflag: clipOn, share: clipOn, "add-photos": clipOn && !!albumAction(), trash: clipOn,
       rename: clipOn && n === 1, "edit-details": clipOn && n === 1, "reveal-clip": clipOn && n === 1,
       "view-grid": lib, "view-list": lib, "thumb-bigger": lib && settings.libView !== "list" && (settings.thumbSize || 3) < 5,
       "thumb-smaller": lib && settings.libView !== "list" && (settings.thumbSize || 3) > 1,
@@ -67,10 +67,11 @@ const MenuBar = (() => {
       enabled[`sort-${k}`] = lib;
       checked[`sort-${k}`] = sortKey === k;
     }
-    const key = JSON.stringify([enabled, checked]);
+    const albumItem = albumAction();
+    const key = JSON.stringify([enabled, checked, albumItem]);
     if (key === last) return;
     last = key;
-    invoke("menu_state", { enabled, checked }).catch(() => {});
+    invoke("menu_state", { enabled, checked, albumItem }).catch(() => {});
   }
 
   // Dialogs and focus change what applies without a render.
