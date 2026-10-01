@@ -270,11 +270,16 @@ impl<B: Backend> Server<B> {
                 let rating = a.get("rating").filter(|v| !v.is_null()).cloned();
                 let flag = s("flag");
                 if rating.is_some() || flag.is_some() {
+                    if rating.is_some() {
+                        changed.push("rating".into());
+                    }
+                    if flag.is_some() {
+                        changed.push("flag".into());
+                    }
                     self.backend.call(
                         "library_rate",
                         json!({"ids": ids, "rating": rating, "flag": flag}),
                     )?;
-                    changed.push("rating".into());
                 }
                 if let Some(name) = s("name") {
                     if ids.len() != 1 {

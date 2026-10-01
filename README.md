@@ -91,7 +91,7 @@ quadcam opens on the library: every clip you imported, newest first, grouped by 
 
 1. Insert the card. It shows in the sidebar under **Import from**, with the number of clips that are not in the library yet. Nothing loads until you select it.
 2. Select the card (or **Import…**, or **Folder…**). The Import sheet opens and copies the clips at once. The sheet header shows how many files are left and the progress of the current one.
-3. **Review**: set the aircraft, the place and the date for every clip at once, or per clip. Optional: under **Radio logs**, select your radio's `LOGS` folder, or the radio itself in USB storage mode. Type a short name and a note for each clip. Select **Skip** for clips you do not want, such as bench tests. Select a clip to play it, see its moments and set cuts.
+3. **Review**: set the aircraft, the place and the date for every clip at once, or per clip. Optional: under **Radio logs**, select your radio's `LOGS` folder, or the radio itself in USB storage mode. Type a short name and a note for each clip, and a time of day when you know it (empty means noon, unless a radio log dated the clip). Select **Skip** for clips you do not want, such as bench tests. Select a clip to play it, see its moments and set cuts.
 4. **Export** converts and verifies each clip.
 5. **Finish**: add the files to Photos, eject the card, or format it (see below). **Done** shows the new clips in the library under **Last import**.
 
@@ -125,6 +125,7 @@ In the library:
 - **Thumbnails** show the clip as you move the pointer across them.
 - **Right-click** a clip: Rename (Return), Edit details (Command-I), Trim and cuts, Add to Photos, Show in Finder (Command-R), Find dead air again, Move to Trash (Command-Delete). Move to Trash takes the clip's cuts and kept original with it.
 - **Rejected** shows a **Move to Trash** button for every rejected clip.
+- **Details** in an open clip changes its date, time of day, aircraft, place, keywords, author and note. A new date moves the clip, its cuts and its kept original to that day's folder and renames them when the file name starts with the date. A new aircraft rewrites the camera make and model, the aircraft, the video system and the profile's keywords in the file and its cuts.
 - The day summary shows the flights, armed time, packs, lowest battery voltage and the best moments of the day.
 
 Dragging clips out to Finder and the Share menu are not built yet; use **Show in Finder**.
@@ -173,7 +174,7 @@ Every file quadcam writes carries QuickTime metadata that Apple Photos and exift
 | What | QuickTime key | Where the value comes from |
 |---|---|---|
 | Location | `com.apple.quicktime.location.ISO6709`, and `©xyz` | The clip, else the profile's default place |
-| Creation date | `com.apple.quicktime.creationdate` | The clip's date and time, with your time zone's UTC offset, so Photos shows the local time |
+| Creation date | `com.apple.quicktime.creationdate` | The clip's date and time of day (from the radio log, or set by hand; noon otherwise), with your time zone's UTC offset, so Photos shows the local time |
 | Camera make and model | `com.apple.quicktime.make`, `.model` | The profile (your goggles or DVR) |
 | Software | `com.apple.quicktime.software` | `quadcam <version>` |
 | Title, description, comment | `com.apple.quicktime.title`, `.description`, `.comment` | The short name, the DVR file and date source, the note |
@@ -190,7 +191,18 @@ What was checked: AVFoundation, the framework Photos uses to read video, returns
 
 ### Places and profiles
 
-Settings (the gear icon) has editors for places and aircraft profiles. They are saved in the app's settings file, `~/Library/Application Support/app.quadcam/settings.json`, which the command-line tool and the MCP server read too. quadcam ships with none. A profile looks like this in the file:
+Settings (the gear icon) has editors for places and aircraft profiles. They are saved in the app's settings file, `~/Library/Application Support/app.quadcam/settings.json`, which the command-line tool and the MCP server read and write too. quadcam ships with none.
+
+Every writer changes only the settings it was asked to change and keeps the rest, including keys a newer or older quadcam wrote. A change from the command line or an agent shows in the running app at once, and the app never writes an older copy over it. Settings from quadcam 0.3.0 carry over as they are.
+
+**Find a place.** In Settings > Places, type an address or the name of a place (a park, a landmark) and press Return or **Search**. Pick a result to fill in the name and the coordinates. The search button on a row fills that row. Typing coordinates by hand still works. **Search with** picks the provider:
+
+- **Apple Maps** (default): MapKit's search, free and without an account.
+- **OpenStreetMap (Nominatim)**: the public Nominatim server, also free. quadcam searches only when you ask, at most once a second, as its usage policy requires.
+
+The search sends what you type to Apple or to OpenStreetMap. Nothing else leaves your Mac.
+
+A profile looks like this in the file:
 
 ```json
 {
@@ -219,7 +231,7 @@ Settings (the gear icon) has editors for places and aircraft profiles. They are 
 Settings (the gear icon) has these sections:
 
 - **Library**: the library folder (default `~/Movies/quadcam`, created on the first import), the layout, place folders, keep originals, and **Rebuild from files**. **Archive** is not built yet.
-- **Aircraft** and **Places**: the profiles and places above.
+- **Aircraft** and **Places**: the profiles and places above, and the place search provider.
 - **Import**: the format, the MP4 encoder, the default short name, the time in file names, and the tolerances for log matching.
 - **Photos**: the album.
 - **Advanced**: where ffmpeg and the agent socket are.
@@ -242,7 +254,7 @@ quadcam-cli cut 0 12.5-18 1:02-1:10       # set clip 0's cuts (seconds or m:ss)
 quadcam-cli cut 0 --keep                  # cut clip 0 down to its keep ranges
 quadcam-cli cut 0 --log-offset 4.5        # the radio log starts 4.5 s into clip 0
 quadcam-cli import --cut 0=20-26          # add a cut, then import
-quadcam-cli profiles                      # saved places and aircraft profiles
+quadcam-cli import --time 0=18:30         # clip 0 was flown at 18:30 (the default is noon)
 quadcam-cli meta all --place "Home field" --keywords park,windy
 quadcam-cli meta 2 --location 40.6892,-74.0445 --profile Whoop
 quadcam-cli cut 0 --clear --removed trash # drop exported cuts and move their files to the Trash
@@ -264,6 +276,8 @@ quadcam-cli library rate <id> --stars 4 --pick    # also --reject, --unflag; --s
 quadcam-cli library rebuild                       # make the index again from the files
 quadcam-cli library rename <id> "fence flips"
 quadcam-cli library edit <id> --note "windy" --keywords park,windy --place "Home field"
+quadcam-cli library edit <id> --date 2026-09-28 --time 18:30   # moves the files to that day
+quadcam-cli library edit <id> --profile Whoop     # rewrites make, model, aircraft and keywords
 quadcam-cli library cut <id> 12-18 1:02-1:10 --export   # set the cuts and write the new ones
 quadcam-cli library trash <id>                    # clip, cuts and original to the Trash
 quadcam-cli library photos <id> --album Drone
@@ -271,12 +285,35 @@ quadcam-cli library photos <id> --album Drone
 
 Clip ids come from `library list`.
 
+Places, aircraft profiles and settings live in the settings file the app uses:
+
+```bash
+quadcam-cli places                                # saved places
+quadcam-cli places search "Golden Gate Park"      # name, address, latitude, longitude
+quadcam-cli places search "Golden Gate Park" --provider nominatim
+quadcam-cli places save "Home field" --search "Golden Gate Park" --pick 1
+quadcam-cli places save "Home field" --location 37.7694,-122.4862
+quadcam-cli places save "Home field" --rename "Park"   # profiles that use it follow
+quadcam-cli places delete "Park"
+quadcam-cli profiles                              # profiles and the default
+quadcam-cli profiles save Whoop --aircraft "65 mm whoop" --camera-make "Fat Shark" \
+  --camera-model Echo --keywords tinywhoop --place "Home field" --models AIR65 --default
+quadcam-cli profiles save Whoop --author "Your Name"    # changes only that field
+quadcam-cli profiles default Whoop
+quadcam-cli profiles delete Whoop
+quadcam-cli settings                              # the file, its values, the effective settings
+quadcam-cli settings set layout=day place_folders=true photos_album=Drone
+quadcam-cli settings set output_dir=null          # back to the default
+```
+
+`settings set` takes `output_dir`, `format`, `encoder`, `keep_originals`, `add_time`, `default_name`, `photos_album`, `format_label`, `log_dir`, `layout`, `place_folders`, `tunables`, `geocoder` and `default_profile`. A value is JSON or plain text.
+
 A plan file looks like this:
 
 ```json
 {
   "clips": [
-    { "id": 0, "name": "backyard loops", "date": "2026-10-04", "note": "two packs" },
+    { "id": 0, "name": "backyard loops", "date": "2026-10-04", "time": "18:30", "note": "two packs" },
     { "id": 3, "skip": true }
   ],
   "format": "mp4",
@@ -297,7 +334,7 @@ Add `--json` to any command to get one JSON object on stdout:
 | 3 | A safety check refused the command |
 | 4 | No session, or no card |
 
-When settings from the app exist, the command-line tool uses them as its defaults.
+The command-line tool uses the app's settings as its defaults.
 
 ## MCP server
 
@@ -315,10 +352,15 @@ If the app is running, the server works on the app's session. You see every chan
 |---|---|
 | `quadcam_status` | Shows the mode (app or headless), the cards, the radios, and the session |
 | `quadcam_library` | Lists and searches the clips already in the library (read-only) |
+| `quadcam_library_edit` | Changes library clips: rating, flag, name, note, keywords, author, place, aircraft, date, time |
+| `quadcam_library_files` | Library files: sets and writes cuts, moves clips to the Trash, adds them to Photos, rebuilds the index |
+| `quadcam_places` | Lists, searches (address or place name), saves and deletes saved places |
+| `quadcam_profiles` | Lists, saves and deletes aircraft profiles; sets the default |
+| `quadcam_settings` | Reads and writes the app's settings |
 | `quadcam_load_clips` | Stages, checks, and dates a card or a folder |
 | `quadcam_read_clips` | Reads the clips, their plans, moments, keep ranges and cuts; returns thumbnails as images |
 | `quadcam_match_logs` | Dates the clips from EdgeTX logs |
-| `quadcam_suggest` | Suggests names, dates, notes, skips, cuts, the log offset, or metadata (profile, place or location, keywords, author) |
+| `quadcam_suggest` | Suggests names, dates, times, notes, skips, cuts, the log offset, or metadata (profile, place or location, keywords, author) |
 | `quadcam_export` | Converts and verifies clips and cuts; can also add to Photos |
 | `quadcam_verify` | Checks the outputs again |
 | `quadcam_add_to_photos` | Adds verified outputs to Photos |
@@ -393,7 +435,9 @@ The tests need ffmpeg. They make their own synthetic clips with `ffmpeg -f lavfi
 |---|---|
 | `ui/` | The app's frontend: HTML, CSS, JavaScript, bundled fonts and icons |
 | `ui/trim.js` | The trim editor that the library and the Import sheet share |
-| `src-tauri/src/core.rs`, `core_library.rs` | The core that every frontend drives; its library half |
+| `src-tauri/src/core.rs`, `core_library.rs`, `core_settings.rs` | The core that every frontend drives; its library half; its settings, places and profiles |
+| `src-tauri/src/settings.rs` | The settings file: the one reader and writer, the setting names and their checks |
+| `src-tauri/src/geocode.rs` | Place search: Apple MapKit and OpenStreetMap Nominatim |
 | `src-tauri/src/library.rs` | The library: layout, the index, and its rebuild from the files |
 | `src-tauri/src/trim.rs` | Cut ranges and the rule for exported cuts, shared by the session and the library |
 | `src-tauri/src/trash.rs` | Moving files to the Trash |

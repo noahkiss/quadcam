@@ -15,7 +15,8 @@ use std::path::{Path, PathBuf};
 
 pub type Values = Map<String, Value>;
 
-/// One setting: its key in the file, its name on the CLI and in MCP, and what it holds.
+/// One setting: its key in the file, its name on the CLI and in MCP, and the values it
+/// takes (as words, for error messages).
 pub struct Key {
     pub file: &'static str,
     /// snake_case name for the CLI and MCP; None for keys only the GUI sets.
@@ -63,7 +64,7 @@ pub const KEYS: &[Key] = &[
     Key {
         file: "outputDir",
         name: Some("output_dir"),
-        about: "library folder (absolute path)",
+        about: "an absolute folder path or null",
         check: path_or_null,
     },
     Key {
@@ -81,31 +82,31 @@ pub const KEYS: &[Key] = &[
     Key {
         file: "keepOriginals",
         name: Some("keep_originals"),
-        about: "keep each DVR original in originals/",
+        about: "true or false",
         check: boolean,
     },
     Key {
         file: "addTime",
         name: Some("add_time"),
-        about: "add HHMM to names of clips with a time",
+        about: "true or false",
         check: boolean,
     },
     Key {
         file: "defaultName",
         name: Some("default_name"),
-        about: "name for clips without one",
+        about: "text",
         check: string,
     },
     Key {
         file: "photosAlbum",
         name: Some("photos_album"),
-        about: "Photos album; empty for the library only",
+        about: "text (empty: the library only)",
         check: string,
     },
     Key {
         file: "formatLabel",
         name: Some("format_label"),
-        about: "FAT32 volume name for the card format",
+        about: "a FAT32 volume name",
         check: |v| {
             crate::disk::fat_label(v.as_str().context("a string")?)?;
             Ok(())
@@ -114,7 +115,7 @@ pub const KEYS: &[Key] = &[
     Key {
         file: "logDir",
         name: Some("log_dir"),
-        about: "EdgeTX LOGS folder (absolute path)",
+        about: "an absolute folder path or null",
         check: path_or_null,
     },
     Key {
@@ -126,13 +127,13 @@ pub const KEYS: &[Key] = &[
     Key {
         file: "placeFolders",
         name: Some("place_folders"),
-        about: "add the place name to day folders",
+        about: "true or false",
         check: boolean,
     },
     Key {
         file: "tunables",
         name: Some("tunables"),
-        about: "log matching: segment_gap_s, session_gap_min, tolerance_s, max_log_age_days",
+        about: "an object with segment_gap_s, session_gap_min, tolerance_s and max_log_age_days",
         check: |v| {
             typed::<crate::logs::Tunables>(
                 v,
@@ -143,43 +144,43 @@ pub const KEYS: &[Key] = &[
     Key {
         file: "geocoder",
         name: Some("geocoder"),
-        about: "place search provider: apple or nominatim",
+        about: "apple or nominatim",
         check: |v| one_of(v, GEOCODERS),
     },
     Key {
         file: "places",
         name: None,
-        about: "saved places",
+        about: "a list of {name, lat, lon}",
         check: |v| typed::<Vec<Place>>(v, "a list of {name, lat, lon}"),
     },
     Key {
         file: "profiles",
         name: None,
-        about: "aircraft profiles",
+        about: "a list of profiles",
         check: |v| typed::<Vec<Profile>>(v, "a list of profiles"),
     },
     Key {
         file: "defaultProfile",
         name: Some("default_profile"),
-        about: "aircraft profile for clips without a log match",
+        about: "text (a profile name)",
         check: string,
     },
     Key {
         file: "recents",
         name: None,
-        about: "recent entries in the GUI",
+        about: "any value",
         check: any,
     },
     Key {
         file: "libView",
         name: None,
-        about: "library view in the GUI",
+        about: "any value",
         check: any,
     },
     Key {
         file: "thumbSize",
         name: None,
-        about: "thumbnail size in the GUI",
+        about: "any value",
         check: any,
     },
 ];
@@ -204,7 +205,15 @@ pub fn key(name: &str) -> Result<&'static Key> {
 pub fn check(name: &str, v: &Value) -> Result<&'static Key> {
     let k = key(name)?;
     if !v.is_null() {
-        (k.check)(v).with_context(|| format!("{name} must be {}", k.about))?;
+        if let Err(e) = (k.check)(v) {
+            // The detail helps only where the rule is not already in `about`.
+            match k.file {
+                "formatLabel" | "tunables" | "places" | "profiles" => {
+                    bail!("{name} must be {}: {e:#}", k.about)
+                }
+                _ => bail!("{name} must be {}", k.about),
+            }
+        }
     }
     Ok(k)
 }

@@ -46,7 +46,7 @@ enum Cmd {
     },
     /// Probe staged clips, recover half-written ones, make thumbnails.
     Analyze,
-    /// Date clips from radio logs, and override dates per clip.
+    /// Date clips from radio logs, and override dates and times per clip.
     Dates {
         /// EdgeTX LOGS folder or the radio's root.
         #[arg(long, conflicts_with = "no_logs")]
@@ -208,7 +208,7 @@ enum Cmd {
         #[arg(long)]
         plan: bool,
     },
-    /// The library: list and search clips, rate and flag them, rebuild the index.
+    /// The library: list, rate, rename, edit (details, aircraft, date, time), cut, trash, Photos.
     #[command(subcommand)]
     Library(LibCmd),
     /// Run the MCP server on stdio.
