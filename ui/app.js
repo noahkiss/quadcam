@@ -1748,6 +1748,7 @@ let draftProfile = 0;
 function openSettings(sec = "library") {
   state.settingsBefore = structuredClone(settings);
   draftProfiles = structuredClone(settings.profiles);
+  state.draftDefault = draftProfiles.find((p) => p.name === settings.defaultProfile) ?? null;
   draftProfile = 0;
   syncSettingsUI();
   renderPlacesEditor(settings.places);
@@ -1901,7 +1902,8 @@ function renderProfiles() {
     type: "button", "aria-pressed": String((p.video_system || "Analog") === v), onclick: () => { readProfileForm(); p.video_system = v; renderProfiles(); },
   }, v)));
   const placeSel = el("select", { "data-pk": "place" }, el("option", { value: "", text: "None" }), ...settings.places.map((x) => el("option", { value: x.name, text: x.name, selected: x.name === p.place })));
-  const def = el("input", { type: "checkbox", id: "profile-default", checked: !!p.name && p.name === (state.draftDefault ?? settings.defaultProfile) });
+  // state.draftDefault holds the profile object, so a name typed or changed after the tick counts.
+  const def = el("input", { type: "checkbox", id: "profile-default", checked: state.draftDefault === p });
   form.replaceChildren(
     fld("Name", "name"), fld("Aircraft", "aircraft"),
     el("div", { class: "field wide" }, el("span", { text: "Video system" }), seg),
@@ -1912,7 +1914,7 @@ function renderProfiles() {
     fld("Keywords", "keywords", true, { placeholder: "Comma-separated" }),
     el("div", { class: "row wide" }, el("label", { class: "check" }, def, el("span", {}, el("b", { text: "Default aircraft" }), el("span", { class: "muted", text: "For clips without a matching radio log." }))),
       el("button", { type: "button", class: "ghost small", style: "margin-left:auto", onclick: () => { draftProfiles.splice(draftProfile, 1); draftProfile = 0; renderProfiles(); } }, icon("trash-bin-trash", "c-red"), "Delete")));
-  def.addEventListener("change", () => { readProfileForm(); state.draftDefault = def.checked ? p.name : ""; });
+  def.addEventListener("change", () => { readProfileForm(); state.draftDefault = def.checked ? p : null; state.draftDefaultCleared = !def.checked; });
 }
 
 function readProfileForm() {
@@ -1943,10 +1945,14 @@ $("#settings").addEventListener("close", async () => {
   const places = readPlaces().filter((p) => p.name && Number.isFinite(p.lat) && Number.isFinite(p.lon) && Math.abs(p.lat) <= 90 && Math.abs(p.lon) <= 180);
   if (places.length < readPlaces().filter((p) => p.name || Number.isFinite(p.lat)).length) toast("Places without a name or a valid latitude and longitude were not saved.", true);
   const profiles = draftProfiles.filter((p) => p.name);
-  let defaultProfile = before.defaultProfile;
-  if (state.draftDefault !== undefined) defaultProfile = state.draftDefault || "";
-  else if (!profiles.some((p) => p.name === before.defaultProfile)) defaultProfile = profiles[0]?.name || "";
+  // The default's name is read now, after any typing; a deleted default falls to the first profile.
+  const chosen = state.draftDefault;
+  let defaultProfile;
+  if (profiles.includes(chosen)) defaultProfile = chosen.name;
+  else if (chosen === null && state.draftDefaultCleared) defaultProfile = "";
+  else defaultProfile = profiles[0]?.name || "";
   state.draftDefault = undefined;
+  state.draftDefaultCleared = false;
   await saveChanged({
     defaultName: $("#set-default-name").value.trim() || "flight",
     encoder: $("#set-encoder").value,
