@@ -73,7 +73,7 @@ test("Return renames the selected clip; Escape cancels", async ({ app, page }) =
   await field.fill("garden loops");
   await page.keyboard.press("Enter");
   await expect(card(page, "garden loops")).toBeVisible();
-  expect((await app.method("library_rename"))[0]).toEqual({ id: "e86ab59aced6fd18", name: "garden loops" });
+  expect((await app.method("library_rename"))[0]).toEqual({ id: "x07fee4b870d01a6f", name: "garden loops" });
   await card(page, "garden loops").click();
   await page.keyboard.press("Enter");
   await page.getByRole("textbox", { name: "Clip name" }).fill("nope");
@@ -175,6 +175,6 @@ test("menu bar items run the same actions", async ({ app, page }) => {
 });
 
 test("a core change from elsewhere shows at once", async ({ app, page }) => {
-  await app.core("c => c.rate(['dce3e50d5303bc2b'], 1, null)");
+  await app.core("c => c.rate(['xd0d144c9ce319e86'], 1, null)");
   await expect(card(page, "gap-run").getByRole("img", { name: "1 of 5 stars" })).toBeVisible();
 });

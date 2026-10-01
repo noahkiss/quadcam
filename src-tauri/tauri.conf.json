@@ -4,13 +4,13 @@
   "version": "0.4.1",
   "identifier": "app.quadcam",
   "build": {
-    "frontendDist": "../ui",
+    "frontendDist": "../app/dist",
     "devUrl": "http://localhost:4719",
     "beforeDevCommand": {
-      "script": "pnpm dev",
-      "cwd": "app",
+      "script": "pnpm --dir app dev",
       "wait": false
-    }
+    },
+    "beforeBuildCommand": "pnpm --dir app build"
   },
   "app": {
     "withGlobalTauri": true,

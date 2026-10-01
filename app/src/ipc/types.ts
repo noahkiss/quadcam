@@ -52,7 +52,7 @@ export type Suggested = Required<G.Suggested>;
 export type LibCut = Num<G.LibCut, "start" | "end">;
 
 /** `LibItem`: the index entry flattened, plus absolute paths. */
-export type LibClip = Omit<Required<G.LibItem>, "duration" | "time" | "location" | "moments" | "keep" | "stats" | "cuts" | "pending_cuts" | "cut_of"> & {
+export type LibClip = Omit<Required<G.LibItem_Serialize>, "duration" | "time" | "location" | "moments" | "keep" | "stats" | "cuts" | "pending_cuts" | "cut_of"> & {
   duration: number;
   time: string | null;
   location: Location | null;
@@ -66,7 +66,7 @@ export type LibClip = Omit<Required<G.LibItem>, "duration" | "time" | "location"
 
 export type Totals = Num<G.Totals, "seconds" | "flying">;
 
-export type LibraryView = Omit<G.LibraryView, "totals" | "groups" | "clips"> & {
+export type LibraryView = Omit<G.LibraryView_Serialize, "totals" | "groups" | "clips"> & {
   totals: Totals;
   groups: Partial<Record<"days" | "aircraft" | "places", [string, number][]>>;
   clips: LibClip[];

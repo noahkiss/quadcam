@@ -10,8 +10,8 @@
    "dvr": "PICT0003.AVI",
    "file": "/Users/pilot/Movies/quadcam/2026/2026-09-28/2026-09-28_river-dive.mp4",
    "flag": "none",
-   "id": "54fa6f4c459f1d3b",
-   "import": "20261001-154623",
+   "id": "x1108525f0a2b87e8",
+   "import": "20261001-170045",
    "in_photos": false,
    "keep": [],
    "keywords": [
@@ -33,7 +33,7 @@
    "place": "Riverside park",
    "poster": null,
    "rating": 0,
-   "size": 98449,
+   "size": 98450,
    "stats": null,
    "strip": null,
    "time": "17:05",
@@ -49,8 +49,8 @@
    "dvr": "PICT0001.AVI",
    "file": "/Users/pilot/Movies/quadcam/2026/2026-09-27/2026-09-27_backyard-loops.mp4",
    "flag": "none",
-   "id": "e86ab59aced6fd18",
-   "import": "20261001-154623",
+   "id": "x07fee4b870d01a6f",
+   "import": "20261001-170045",
    "in_photos": false,
    "keep": [],
    "keywords": [
@@ -73,7 +73,7 @@
    "place": "Home field",
    "poster": null,
    "rating": 0,
-   "size": 229639,
+   "size": 229640,
    "stats": null,
    "strip": null,
    "time": "10:15",
@@ -87,7 +87,7 @@
     {
      "end": 25,
      "path": "2026/2026-09-27/2026-09-27_gap-run_cut1.mp4",
-     "size": 691043,
+     "size": 691044,
      "start": 10
     }
    ],
@@ -96,8 +96,8 @@
    "dvr": "PICT0002.AVI",
    "file": "/Users/pilot/Movies/quadcam/2026/2026-09-27/2026-09-27_gap-run.mp4",
    "flag": "none",
-   "id": "dce3e50d5303bc2b",
-   "import": "20261001-154623",
+   "id": "xd0d144c9ce319e86",
+   "import": "20261001-170045",
    "in_photos": false,
    "keep": [],
    "keywords": [
@@ -120,7 +120,7 @@
    "place": "Home field",
    "poster": null,
    "rating": 0,
-   "size": 5502388,
+   "size": 5502389,
    "stats": null,
    "strip": null,
    "time": "10:40",
@@ -160,12 +160,12 @@
    ]
   ]
  },
- "last_import": "20261001-154623",
+ "last_import": "20261001-170045",
  "layout": "year_day",
  "place_folders": false,
  "root": "/Users/pilot/Movies/quadcam",
  "totals": {
-  "bytes": 6521519,
+  "bytes": 6521523,
   "clips": 3,
   "flying": 128,
   "seconds": 128

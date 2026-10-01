@@ -1,7 +1,7 @@
 /// <reference types="vitest/config" />
 import { defineConfig, type Plugin } from "vite";
 import react from "@vitejs/plugin-react";
-import { createReadStream, existsSync, statSync } from "node:fs";
+import { cpSync, createReadStream, existsSync, statSync } from "node:fs";
 import { extname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -19,11 +19,18 @@ const TYPES: Record<string, string> = {
 };
 
 // Serves the legacy ui/ folder at /legacy/ in dev, so QUADCAM_UI=legacy and the parity
-// specs reach both UIs on the one pinned port.
+// specs reach both UIs on the one pinned port, and copies it to dist/legacy/ in a build, so
+// the app ships both until the legacy UI goes (plan step U9).
 function legacyUi(): Plugin {
+  let outDir = "dist";
   return {
     name: "quadcam-legacy-ui",
-    apply: "serve",
+    configResolved(c) {
+      outDir = c.build.outDir;
+    },
+    closeBundle() {
+      cpSync(LEGACY_DIR, join(fileURLToPath(new URL(".", import.meta.url)), outDir, "legacy"), { recursive: true });
+    },
     configureServer(server) {
       server.middlewares.use("/legacy", (req, res, next) => {
         const path = decodeURIComponent((req.url || "/").split("?")[0]);

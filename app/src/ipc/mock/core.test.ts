@@ -9,21 +9,21 @@ const make = (scenario?: Scenario) => {
 describe("MockCore", () => {
   it("rates and flags, and says the library changed", () => {
     const { core, events } = make();
-    const [c] = core.rate(["dce3e50d5303bc2b"], 5, "reject");
+    const [c] = core.rate(["xd0d144c9ce319e86"], 5, "reject");
     expect(c).toMatchObject({ rating: 5, flag: "reject" });
     expect(events).toContain("library-changed");
-    expect(() => core.rate(["dce3e50d5303bc2b"], 6, null)).toThrow();
+    expect(() => core.rate(["xd0d144c9ce319e86"], 6, null)).toThrow();
   });
 
   it("asks before dropping an exported cut", () => {
     const { core } = make();
-    expect(core.libraryCuts("dce3e50d5303bc2b", [], null)).toMatchObject({ status: "confirm" });
-    expect(core.libraryCuts("dce3e50d5303bc2b", [], "trash")).toMatchObject({ status: "applied", trashed: [expect.stringContaining("_cut1.mp4")] });
+    expect(core.libraryCuts("xd0d144c9ce319e86", [], null)).toMatchObject({ status: "confirm" });
+    expect(core.libraryCuts("xd0d144c9ce319e86", [], "trash")).toMatchObject({ status: "applied", trashed: [expect.stringContaining("_cut1.mp4")] });
   });
 
   it("puts trashed clips back", () => {
     const { core } = make();
-    const r = core.trashClips(["e86ab59aced6fd18"]);
+    const r = core.trashClips(["x07fee4b870d01a6f"]);
     expect(core.libraryView().clips).toHaveLength(2);
     core.untrash(r.moved);
     expect(core.libraryView().clips).toHaveLength(3);

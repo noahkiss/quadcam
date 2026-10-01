@@ -57,7 +57,7 @@ export const tunables = (t: G.Tunables): Tunables => ({ ...t, segment_gap_s: n(t
 
 export const geo = (xs: G.GeoResult[]): GeoResult[] => xs.filter((g) => has(g.lat) && has(g.lon)).map((g) => ({ ...g, lat: g.lat!, lon: g.lon! }));
 
-export function libClip(c: G.LibItem): LibClip {
+export function libClip(c: G.LibItem_Serialize): LibClip {
   return {
     ...c,
     duration: n(c.duration),
@@ -78,11 +78,12 @@ export function libClip(c: G.LibItem): LibClip {
     original: c.original ?? null,
     dvr: c.dvr ?? null,
     import: c.import ?? null,
+    aliases: c.aliases ?? [],
     cut_of: c.cut_of && has(c.cut_of[1].start) && has(c.cut_of[1].end) ? [c.cut_of[0], { start: c.cut_of[1].start!, end: c.cut_of[1].end! }] : null,
   };
 }
 
-export function libraryView(v: G.LibraryView): LibraryView {
+export function libraryView(v: G.LibraryView_Serialize): LibraryView {
   return {
     ...v,
     totals: { ...v.totals, seconds: n(v.totals.seconds), flying: n(v.totals.flying) },
@@ -94,7 +95,7 @@ export function libraryView(v: G.LibraryView): LibraryView {
 const signal = (s: G.SignalScan | null | undefined): SignalScan | null => (s ? { ...s, step: n(s.step), dead_air: moments(s.dead_air), keep: spans(s.keep) } : null);
 
 export function clip(c: G.Clip): Clip {
-  return { ...c, duration: n(c.duration), probe: c.probe ? { ...c.probe, duration: n(c.probe.duration) } : null, signal: signal(c.signal), key: c.key ?? "" };
+  return { ...c, kind: c.kind ?? "analog", duration: n(c.duration), probe: c.probe ? { ...c.probe, duration: n(c.probe.duration) } : null, signal: signal(c.signal), key: c.key ?? "" };
 }
 
 const meta = (m: G.ClipMeta | undefined): ClipMeta => ({ profile: m?.profile ?? null, location: location(m?.location), keywords: m?.keywords ?? [], author: m?.author ?? null });

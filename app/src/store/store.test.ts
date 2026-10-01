@@ -23,7 +23,7 @@ describe("library slice", () => {
   it("loads the library and picks the screen", async () => {
     expect(S().lib?.clips).toHaveLength(3);
     expect(screenOf(S())).toBe("library");
-    S().openDetail("dce3e50d5303bc2b");
+    S().openDetail("xd0d144c9ce319e86");
     expect(screenOf(S())).toBe("detail");
     S().closeDetail();
     store.setState({ lib: { ...S().lib!, clips: [] } });
@@ -43,8 +43,8 @@ describe("library slice", () => {
   });
 
   it("drops vanished clips from the selection on reload", async () => {
-    S().select("e86ab59aced6fd18");
-    mock.core.trashClips(["e86ab59aced6fd18"]);
+    S().select("x07fee4b870d01a6f");
+    mock.core.trashClips(["x07fee4b870d01a6f"]);
     await S().loadLibrary();
     expect(selectedIds(S())).toEqual([]);
   });
@@ -52,20 +52,20 @@ describe("library slice", () => {
 
 describe("history", () => {
   it("undoes and redoes a rating through the core", async () => {
-    await actions.rate(["e86ab59aced6fd18"], 5);
-    expect(mock.core.clip("e86ab59aced6fd18").rating).toBe(5);
+    await actions.rate(["x07fee4b870d01a6f"], 5);
+    expect(mock.core.clip("x07fee4b870d01a6f").rating).toBe(5);
     expect(S().done.map((s) => s.label)).toEqual(["Rating"]);
     await actions.undoRedo("undo");
-    expect(mock.core.clip("e86ab59aced6fd18").rating).toBe(2);
+    expect(mock.core.clip("x07fee4b870d01a6f").rating).toBe(2);
     expect(S().undone).toHaveLength(1);
     await actions.undoRedo("redo");
-    expect(mock.core.clip("e86ab59aced6fd18").rating).toBe(5);
+    expect(mock.core.clip("x07fee4b870d01a6f").rating).toBe(5);
   });
 
   it("clears redo on a new edit and keeps at most 100 steps", async () => {
-    await actions.rate(["e86ab59aced6fd18"], 1);
+    await actions.rate(["x07fee4b870d01a6f"], 1);
     await S().undo();
-    await actions.rate(["e86ab59aced6fd18"], 3);
+    await actions.rate(["x07fee4b870d01a6f"], 3);
     expect(S().undone).toHaveLength(0);
     for (let i = 0; i < HISTORY_LIMIT + 5; i++) S().pushStep({ label: "x", undo: async () => {}, redo: async () => {} });
     expect(S().done).toHaveLength(HISTORY_LIMIT);
@@ -79,7 +79,7 @@ describe("history", () => {
   });
 
   it("undoes Move to Trash", async () => {
-    const asked = actions.trashClips(["dce3e50d5303bc2b"]);
+    const asked = actions.trashClips(["xd0d144c9ce319e86"]);
     await tick();
     S().askReq!.resolve(true);
     await asked;
@@ -106,7 +106,7 @@ describe("settings slice", () => {
 describe("menu state", () => {
   it("turns clip items on with a selection and checks the view", () => {
     expect(menuState(S(), false).enabled.pick).toBe(false);
-    S().select("e86ab59aced6fd18");
+    S().select("x07fee4b870d01a6f");
     const m = menuState(S(), false);
     expect(m.enabled.pick).toBe(true);
     expect(m.enabled.rename).toBe(true);

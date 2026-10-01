@@ -180,6 +180,13 @@ pub const KEYS: &[Key] = &[
         about: "text (a profile name)",
         check: string,
     },
+    // Which UI the app window loads; not in the Settings window. QUADCAM_UI overrides it.
+    Key {
+        file: "ui",
+        name: Some("ui"),
+        about: "next or legacy",
+        check: |v| one_of(v, &["next", "legacy"]),
+    },
     Key {
         file: "recents",
         name: None,

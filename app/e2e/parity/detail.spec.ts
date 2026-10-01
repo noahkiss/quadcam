@@ -37,17 +37,17 @@ test("the Flight tab shows the radio-log numbers", async ({ page }) => {
 test("Details edits go to the core and undo", async ({ app, page }) => {
   await page.getByLabel("Note").fill("windy");
   await page.getByLabel("Note").press("Tab");
-  await expect.poll(async () => (await app.method("library_edit"))).toContainEqual({ id: "dce3e50d5303bc2b", note: "windy" });
+  await expect.poll(async () => (await app.method("library_edit"))).toContainEqual({ id: "xd0d144c9ce319e86", note: "windy" });
   await page.getByRole("combobox", { name: "Place" }).selectOption("Riverside park");
-  await expect.poll(async () => (await app.method("library_edit"))).toContainEqual({ id: "dce3e50d5303bc2b", place: "Riverside park" });
+  await expect.poll(async () => (await app.method("library_edit"))).toContainEqual({ id: "xd0d144c9ce319e86", place: "Riverside park" });
   await page.getByRole("combobox", { name: "Aircraft" }).selectOption("Five-inch");
-  await expect.poll(async () => (await app.method("library_edit"))).toContainEqual({ id: "dce3e50d5303bc2b", profile: "Five-inch" });
+  await expect.poll(async () => (await app.method("library_edit"))).toContainEqual({ id: "xd0d144c9ce319e86", profile: "Five-inch" });
   await page.getByLabel("Add keyword").fill("gaps");
   await page.getByLabel("Add keyword").press("Enter");
-  await expect.poll(async () => (await app.method("library_edit"))).toContainEqual({ id: "dce3e50d5303bc2b", keywords: ["FPV", "backyard", "gaps"] });
+  await expect.poll(async () => (await app.method("library_edit"))).toContainEqual({ id: "xd0d144c9ce319e86", keywords: ["FPV", "backyard", "gaps"] });
   await page.getByRole("button", { name: "Library" }).focus();
   await page.keyboard.press("Meta+z");
-  await expect.poll(async () => (await app.method("library_edit")).at(-1)).toEqual({ id: "dce3e50d5303bc2b", keywords: ["FPV", "backyard"] });
+  await expect.poll(async () => (await app.method("library_edit")).at(-1)).toEqual({ id: "xd0d144c9ce319e86", keywords: ["FPV", "backyard"] });
 });
 
 test("keys rate and flag the open clip", async ({ page }) => {
@@ -62,7 +62,7 @@ test("Return renames the open clip", async ({ app, page }) => {
   await page.getByRole("textbox", { name: "Clip name" }).fill("gap run two");
   await page.keyboard.press("Enter");
   await expect(page.getByText("gap run two").first()).toBeVisible();
-  expect((await app.method("library_rename"))).toEqual([{ id: "dce3e50d5303bc2b", name: "gap run two" }]);
+  expect((await app.method("library_rename"))).toEqual([{ id: "xd0d144c9ce319e86", name: "gap run two" }]);
 });
 
 test("typed in and out points add a cut, then Save writes it", async ({ app, page }) => {
@@ -72,7 +72,7 @@ test("typed in and out points add a cut, then Save writes it", async ({ app, pag
   await page.getByRole("textbox", { name: "Out point" }).press("Tab");
   await page.getByRole("button", { name: "Add cut" }).click();
   await expect.poll(async () => (await app.method("library_cuts"))).toContainEqual({
-    id: "dce3e50d5303bc2b", cuts: [{ start: 10, end: 25 }, { start: 30, end: 40 }], removed_cuts: null,
+    id: "xd0d144c9ce319e86", cuts: [{ start: 10, end: 25 }, { start: 30, end: 40 }], removed_cuts: null,
   });
   await page.getByRole("button", { name: "Save 1 cut" }).click();
   await expect(page.getByRole("status")).toContainText("1 cut saved.");
@@ -89,14 +89,14 @@ test("removing a saved cut asks what happens to its file", async ({ app, page })
   const dlg = dialog(page, "Remove the cut?");
   await expect(dlg).toBeVisible();
   await dlg.getByRole("button", { name: "Move to Trash" }).click();
-  await expect.poll(async () => (await app.method("library_cuts"))).toContainEqual({ id: "dce3e50d5303bc2b", cuts: [], removed_cuts: "trash" });
+  await expect.poll(async () => (await app.method("library_cuts"))).toContainEqual({ id: "xd0d144c9ce319e86", cuts: [], removed_cuts: "trash" });
   await expect(page.getByRole("status")).toContainText("Cut file moved to the Trash.");
 });
 
 test("Use keep ranges turns them into cuts", async ({ app, page }) => {
   await page.getByRole("button", { name: "Use keep ranges (2)" }).click();
   await expect.poll(async () => (await app.method("library_cuts"))).toContainEqual({
-    id: "dce3e50d5303bc2b", cuts: [{ start: 10, end: 25 }, { start: 0, end: 50 }, { start: 60, end: 120 }], removed_cuts: null,
+    id: "xd0d144c9ce319e86", cuts: [{ start: 10, end: 25 }, { start: 0, end: 50 }, { start: 60, end: 120 }], removed_cuts: null,
   });
 });
 

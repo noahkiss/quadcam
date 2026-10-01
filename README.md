@@ -60,9 +60,9 @@ xattr -dr com.apple.quarantine /Applications/QuadCam.app
 
 ## Build from source
 
-You need Rust (through [rustup](https://rustup.rs)), the Tauri 2 CLI, and ffmpeg. `cargo tauri dev`
-also needs Node.js 24 (through [fnm](https://github.com/Schniz/fnm), which reads `.node-version`)
-and pnpm, for the new UI's dev server:
+You need Rust (through [rustup](https://rustup.rs)), the Tauri 2 CLI, ffmpeg, and, for the
+frontend, Node.js 24 (through [fnm](https://github.com/Schniz/fnm), which reads `.node-version`)
+and pnpm:
 
 ```bash
 cargo install tauri-cli --version "^2" --locked
@@ -87,12 +87,16 @@ cargo tauri dev     # run the app from source (starts the dev server on port 471
 cargo test          # unit and integration tests (see Tests)
 ```
 
-Two frontends live side by side while the new one is built:
+Two frontends ship while the new one is checked:
 
-- `ui/` is the current frontend: plain HTML, CSS, and JavaScript with no build step. Builds ship it.
-- `app/` is the new frontend: React, TypeScript and Vite. `cargo tauri dev` shows it with
-  `QUADCAM_UI=next`, and `ui/` otherwise. In `app/`: `pnpm test` (unit tests), `pnpm e2e`
-  (Playwright on both frontends with a mocked core), `pnpm typecheck`, `pnpm lint`, `pnpm build`.
+- `ui/`, plain HTML, CSS and JavaScript, is the default.
+- `app/` is the new one: React, TypeScript and Vite. `cargo tauri build` builds it first
+  (`pnpm --dir app build`) and copies `ui/` beside it. To use it, run
+  `quadcam-cli settings set ui=next` and restart the app (`ui=legacy` goes back), or start the
+  app with `QUADCAM_UI=next`, which overrides the setting.
+
+In `app/`: `pnpm test` (unit tests), `pnpm e2e` (Playwright on both frontends with a mocked
+core), `pnpm typecheck`, `pnpm lint`, `pnpm build`.
 
 ## Use the app
 
@@ -450,9 +454,10 @@ To try the app without it taking focus, start a debug build with `QUADCAM_NO_FOC
 
 | Path | Holds |
 |---|---|
-| `ui/` | The app's frontend: HTML, CSS, JavaScript, bundled fonts and icons |
-| `app/` | The new frontend (React, TypeScript, Vite), not yet the default |
+| `ui/` | The default frontend: HTML, CSS, JavaScript, bundled fonts and icons |
 | `ui/trim.js` | The trim editor that the library and the Import sheet share |
+| `app/` | The new frontend (React, TypeScript, Vite), chosen with the `ui` setting |
+| `app/src/bindings.ts` | The core's commands and types for the new frontend, generated from `src-tauri/src/api/` |
 | `src-tauri/src/api/` | The one table of core methods, with their params and results, and the app's events; it makes the socket's methods and the typed GUI commands |
 | `src-tauri/src/sources/` | Footage sources: how each video system's clips are found, checked, repaired and converted, and what its card may be formatted to. Analog DVRs today |
 | `src-tauri/src/core/` | The core that every frontend drives: import, library, cuts, files (Photos, previews, Trash), and setup (settings, places, profiles) |

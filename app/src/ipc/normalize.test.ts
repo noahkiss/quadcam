@@ -13,7 +13,7 @@ describe("normalize", () => {
   });
 
   it("fills a library clip's omitted fields", () => {
-    const c = libClip({ id: "a", path: "x.mp4", title: "", note: "", date: "2026-09-27", duration: null, size: 1, name: "x", file: "/x.mp4", strip: null, poster: null, no_picture: false, last_import: false } as G.LibItem);
+    const c = libClip({ id: "a", path: "x.mp4", title: "", note: "", date: "2026-09-27", duration: null, size: 1, name: "x", file: "/x.mp4", strip: null, poster: null, no_picture: false, last_import: false } as G.LibItem_Serialize);
     expect(c).toMatchObject({ duration: 0, rating: 0, flag: "none", keywords: [], moments: [], keep: [], cuts: [], pending_cuts: [], in_photos: false, location: null, cut_of: null });
   });
 

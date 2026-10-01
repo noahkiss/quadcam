@@ -8,7 +8,8 @@
    "detail": "150 frames",
    "duration": 5,
    "id": 0,
-   "key": "e86ab59aced6fd18",
+   "key": "x07fee4b870d01a6f",
+   "kind": "analog",
    "name": "PICT0001.AVI",
    "probe": {
     "audio_streams": 1,
@@ -33,16 +34,17 @@
    },
    "size": 3074396,
    "stage_error": null,
-   "staged": "/Users/pilot/Library/Caches/app.quadcam/staging/20261001-154622/PICT0001.AVI",
+   "staged": "/Users/pilot/Library/Caches/app.quadcam/staging/20261001-170044/PICT0001.AVI",
    "status": "ok",
-   "thumb": "/Users/pilot/Library/Caches/app.quadcam/thumbs/PICT0001-e86ab59aced6fd18.jpg"
+   "thumb": "/Users/pilot/Library/Caches/app.quadcam/thumbs/PICT0001-x07fee4b870d01a6f.jpg"
   },
   {
    "card_path": "/Users/pilot/quadcam/test-clips/synthetic/PICT0002.AVI",
    "detail": "3600 frames",
    "duration": 120,
    "id": 1,
-   "key": "dce3e50d5303bc2b",
+   "key": "xd0d144c9ce319e86",
+   "kind": "analog",
    "name": "PICT0002.AVI",
    "probe": {
     "audio_streams": 1,
@@ -67,16 +69,17 @@
    },
    "size": 78131276,
    "stage_error": null,
-   "staged": "/Users/pilot/Library/Caches/app.quadcam/staging/20261001-154622/PICT0002.AVI",
+   "staged": "/Users/pilot/Library/Caches/app.quadcam/staging/20261001-170044/PICT0002.AVI",
    "status": "ok",
-   "thumb": "/Users/pilot/Library/Caches/app.quadcam/thumbs/PICT0002-dce3e50d5303bc2b.jpg"
+   "thumb": "/Users/pilot/Library/Caches/app.quadcam/thumbs/PICT0002-xd0d144c9ce319e86.jpg"
   },
   {
    "card_path": "/Users/pilot/quadcam/test-clips/synthetic/PICT0003.AVI",
    "detail": "90 frames",
    "duration": 3,
    "id": 2,
-   "key": "54fa6f4c459f1d3b",
+   "key": "x1108525f0a2b87e8",
+   "kind": "analog",
    "name": "PICT0003.AVI",
    "probe": {
     "audio_streams": 0,
@@ -101,16 +104,17 @@
    },
    "size": 1651322,
    "stage_error": null,
-   "staged": "/Users/pilot/Library/Caches/app.quadcam/staging/20261001-154622/PICT0003.AVI",
+   "staged": "/Users/pilot/Library/Caches/app.quadcam/staging/20261001-170044/PICT0003.AVI",
    "status": "ok",
-   "thumb": "/Users/pilot/Library/Caches/app.quadcam/thumbs/PICT0003-54fa6f4c459f1d3b.jpg"
+   "thumb": "/Users/pilot/Library/Caches/app.quadcam/thumbs/PICT0003-x1108525f0a2b87e8.jpg"
   },
   {
    "card_path": "/Users/pilot/quadcam/test-clips/synthetic/PICT0004.AVI",
    "detail": "incomplete, recovered 0:02",
    "duration": 2,
    "id": 3,
-   "key": "122de6615711f2cf",
+   "key": "xe9d02942ab9d5f86",
+   "kind": "analog",
    "name": "PICT0004.AVI",
    "probe": {
     "audio_streams": 1,
@@ -125,7 +129,7 @@
     "video_streams": 1,
     "width": 720
    },
-   "recovered": "/Users/pilot/Library/Caches/app.quadcam/staging/20261001-154622/PICT0004.recovered.avi",
+   "recovered": "/Users/pilot/Library/Caches/app.quadcam/staging/20261001-170044/PICT0004.recovered.avi",
    "rel": "PICT0004.AVI",
    "signal": {
     "dead_air": [],
@@ -135,9 +139,9 @@
    },
    "size": 1231251,
    "stage_error": null,
-   "staged": "/Users/pilot/Library/Caches/app.quadcam/staging/20261001-154622/PICT0004.AVI",
+   "staged": "/Users/pilot/Library/Caches/app.quadcam/staging/20261001-170044/PICT0004.AVI",
    "status": "incomplete",
-   "thumb": "/Users/pilot/Library/Caches/app.quadcam/thumbs/PICT0004-122de6615711f2cf.jpg"
+   "thumb": "/Users/pilot/Library/Caches/app.quadcam/thumbs/PICT0004-xe9d02942ab9d5f86.jpg"
   },
   {
    "card_path": "/Users/pilot/quadcam/test-clips/synthetic/PICT0005.AVI",
@@ -145,6 +149,7 @@
    "duration": 0,
    "id": 4,
    "key": "",
+   "kind": "analog",
    "name": "PICT0005.AVI",
    "probe": null,
    "recovered": null,
@@ -152,7 +157,7 @@
    "signal": null,
    "size": 0,
    "stage_error": null,
-   "staged": "/Users/pilot/Library/Caches/app.quadcam/staging/20261001-154622/PICT0005.AVI",
+   "staged": "/Users/pilot/Library/Caches/app.quadcam/staging/20261001-170044/PICT0005.AVI",
    "status": "empty",
    "thumb": null
   }
@@ -348,7 +353,7 @@
  ],
  "results": [],
  "source": "/Users/pilot/quadcam/test-clips/synthetic",
- "staging": "/Users/pilot/Library/Caches/app.quadcam/staging/20261001-154622",
+ "staging": "/Users/pilot/Library/Caches/app.quadcam/staging/20261001-170044",
  "version": 1,
  "warnings": []
 }

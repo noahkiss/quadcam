@@ -561,7 +561,7 @@ export class MockCore {
         id: c.key || `k${p.id}`, path: output.slice(opts.output_dir.length + 1), title: p.name, note: p.note, date: p.date, time: p.time ? p.time.slice(0, 5) : null,
         duration: c.duration, size: r.size, rating: 0, flag: "none", place: loc?.name || null, location: loc || null, aircraft: p.meta.profile || (this.settings.values.defaultProfile as string) || null,
         keywords: ["FPV", ...p.meta.keywords], author: p.meta.author, moments: p.moments, keep: c.signal?.keep || [], stats: p.flight, cuts: cuts.map((k) => ({ path: k.output.slice(opts.output_dir.length + 1), start: k.start, end: k.end, size: k.size })),
-        pending_cuts: [], in_photos: false, original: null, dvr: c.name, import: "20261001-120000", cut_of: null, name: p.name || defaultName, file: output, strip: null, poster: null, no_picture: false, last_import: true,
+        pending_cuts: [], in_photos: false, original: null, aliases: [], dvr: c.name, import: "20261001-120000", cut_of: null, name: p.name || defaultName, file: output, strip: null, poster: null, no_picture: false, last_import: true,
       });
     }
     this.lib.last_import = "20261001-120000";

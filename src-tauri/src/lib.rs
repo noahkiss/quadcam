@@ -351,24 +351,30 @@ fn no_focus() -> bool {
     std::env::var_os("QUADCAM_NO_FOCUS").is_some()
 }
 
-/// The page the window loads. Dev runs (`cargo tauri dev`) pick the UI with
-/// `QUADCAM_UI=legacy|next`: the dev server (`app/`, port 4719) serves the new UI at its root
-/// and the legacy `ui/` under `legacy/`. Builds ship only the default, `frontendDist`.
-fn ui_entry() -> &'static str {
-    if !tauri::is_dev() {
-        return "index.html";
-    }
-    match std::env::var("QUADCAM_UI").as_deref() {
-        Ok("next") => "index.html",
+/// The page the window loads: the legacy `ui/` (`legacy/index.html`) or the React UI in
+/// `app/` (`index.html`). `QUADCAM_UI=legacy|next` picks one, else the `ui` setting, else
+/// the legacy UI. Builds ship both (`app/dist`, with `ui/` copied to `app/dist/legacy`); the
+/// dev server serves the same paths.
+fn ui_entry(settings_file: &std::path::Path) -> &'static str {
+    let from_settings = || {
+        settings::read(settings_file).ok().and_then(|v| {
+            v.get("ui")
+                .and_then(serde_json::Value::as_str)
+                .map(str::to_owned)
+        })
+    };
+    let choice = std::env::var("QUADCAM_UI").ok().or_else(from_settings);
+    match choice.as_deref() {
+        Some("next") => "index.html",
         _ => "legacy/index.html",
     }
 }
 
 /// Makes the main window from its config. With `QUADCAM_NO_FOCUS` it opens unfocused, below
 /// other windows, and keeps rendering there so `screencapture -l` sees it.
-fn main_window(app: &AppHandle) -> tauri::Result<()> {
+fn main_window(app: &AppHandle, settings_file: &std::path::Path) -> tauri::Result<()> {
     let mut config = app.config().app.windows[0].clone();
-    config.url = tauri::WebviewUrl::App(ui_entry().into());
+    config.url = tauri::WebviewUrl::App(ui_entry(settings_file).into());
     let mut builder = tauri::WebviewWindowBuilder::from_config(app, &config)?;
     if no_focus() {
         app.set_activation_policy(tauri::ActivationPolicy::Accessory)?;
@@ -609,7 +615,7 @@ pub fn run() {
             specta.mount_events(app);
             app.manage(core.clone());
             app.manage(AppState { core, hooks });
-            main_window(&handle)?;
+            main_window(&handle, &settings_file)?;
             menu::install(&handle)?;
             watch_volumes(handle);
             Ok(())
