@@ -627,3 +627,23 @@ fn a_new_aircraft_profile_after_export_rewrites_the_gear() {
     assert_eq!(c.aircraft, None);
     assert_eq!(qt(&l.root.join(&c.path), "com.apple.quicktime.make"), None);
 }
+
+#[test]
+fn a_clip_without_a_picture_is_marked_once_not_retried() {
+    let l = lab(Layout::Day, false, false);
+    import(&l);
+    assert_eq!(l.core.library_strips(None).unwrap(), 2);
+    assert!(all(&l).iter().all(|c| c.strip.is_some()));
+    // A clip whose file no longer decodes (the index still lists it).
+    let a = by_name(&l, "gap run");
+    l.core.library_strips(None).unwrap();
+    let strip = a.strip.clone().unwrap();
+    std::fs::remove_file(&strip).unwrap();
+    std::fs::write(&a.file, b"not a video").unwrap();
+    assert_eq!(l.core.library_strips(None).unwrap(), 0);
+    let a = by_name(&l, "gap run");
+    assert!(a.no_picture && a.strip.is_none() && a.poster.is_none());
+    // Nothing is tried again until asked for by id.
+    assert_eq!(l.core.library_strips(None).unwrap(), 0);
+    assert!(by_name(&l, "gap run").no_picture);
+}

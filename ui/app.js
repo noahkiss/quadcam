@@ -201,12 +201,14 @@ async function loadLibrary() {
   }
   for (const id of [...state.selected]) if (!libClip(id)) state.selected.delete(id);
   renderAll();
+  // Clips that came in while the app ran (an agent, the CLI) need thumbnails too.
+  makeStrips();
 }
 
 let stripsRunning = false;
 async function makeStrips() {
   if (stripsRunning || !state.tools) return;
-  if (!clipsAll().some((c) => !c.strip)) return;
+  if (!clipsAll().some((c) => !c.strip && !c.poster && !c.no_picture)) return;
   stripsRunning = true;
   try {
     await call("library_strips", {});
@@ -285,6 +287,7 @@ function flagMark(c) {
 }
 
 function stripStyle(c, tile = 2) {
+  if (!c.strip && c.poster) return `background-image:url("${src(c.poster)}");background-size:cover;background-position:center`;
   if (!c.strip) return "";
   return `background-image:url("${src(c.strip)}");background-position:${(tile / 9) * 100}% 0`;
 }
@@ -531,7 +534,7 @@ function daySummary(cs) {
 
 function card(c) {
   const sel = state.selected.has(c.id);
-  const thumb = el("div", { class: "thumb", style: stripStyle(c) },
+  const thumb = el("div", { class: `thumb${c.no_picture ? " no-picture" : ""}`, style: stripStyle(c) },
     c.flag === "reject" ? el("span", { class: "chip tl-chip c-red" }, icon("close"), "Rejected")
       : c.cuts.length ? el("span", { class: "chip tl-chip" }, icon("scissors", "c-sky"), `${c.cuts.length} cut${c.cuts.length === 1 ? "" : "s"}`) : null,
     c.in_photos ? el("span", { class: "chip tr-chip photos-ok", title: "In Photos" }, icon("photos")) : el("span", { class: "chip tr-chip c-yellow", text: "Not in Photos" }),
@@ -769,7 +772,7 @@ function renderDetail() {
       el("button", { type: "button", class: "icon small", "aria-label": "More actions", onclick: (e) => openMenu(e, c.id) }, icon("dots"))));
   // The poster is one frame of the strip.
   $("#d-img").hidden = true;
-  $("#d-player").style.cssText = $("#d-video").hidden && c.strip ? `${stripStyle(c)};background-size:1000% 100%` : "";
+  $("#d-player").style.cssText = !$("#d-video").hidden ? "" : c.strip ? `${stripStyle(c)};background-size:1000% 100%` : stripStyle(c);
   if (!dTrim) {
     dTrim = new Trim.Editor($("#d-trim"), {
       toast,

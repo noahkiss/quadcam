@@ -23,6 +23,10 @@ pub struct LibItem {
     pub file: PathBuf,
     /// The hover-scrub strip, once made.
     pub strip: Option<PathBuf>,
+    /// One frame, when no strip could be made.
+    pub poster: Option<PathBuf>,
+    /// Neither a strip nor a poster could be made.
+    pub no_picture: bool,
     pub last_import: bool,
 }
 
@@ -107,6 +111,28 @@ impl Core {
             .join(format!("{}.jpg", lib::id_file(id)))
     }
 
+    /// The single-frame fallback when the strip failed.
+    fn poster_path(&self, id: &str) -> PathBuf {
+        self.cache
+            .join("library")
+            .join(format!("{}.poster.jpg", lib::id_file(id)))
+    }
+
+    /// Marks a clip whose strip and poster both failed, so it is not tried again on every
+    /// reload. Removed with the cache, or by `library_strips` for these ids.
+    fn no_picture_path(&self, id: &str) -> PathBuf {
+        self.cache
+            .join("library")
+            .join(format!("{}.none", lib::id_file(id)))
+    }
+
+    /// Whether a clip still needs a strip attempt.
+    fn needs_picture(&self, id: &str) -> bool {
+        !self.strip_path(id).is_file()
+            && !self.poster_path(id).is_file()
+            && !self.no_picture_path(id).is_file()
+    }
+
     /// Runs `f` on the loaded index (loading it first, and again when another process
     /// changed the file), then saves it when `f` says it changed. A missing index starts
     /// empty.
@@ -175,10 +201,13 @@ impl Core {
                 .filter(|c| lib::matches(ix, c, filter))
                 .map(|c| {
                     let strip = self.strip_path(&c.id);
+                    let poster = self.poster_path(&c.id);
                     LibItem {
                         name: c.display_name(),
                         file: root.join(&c.path),
                         strip: strip.is_file().then_some(strip),
+                        poster: poster.is_file().then_some(poster),
+                        no_picture: self.no_picture_path(&c.id).is_file(),
                         last_import: c.import.is_some() && c.import == ix.last_import,
                         clip: c.clone(),
                     }
@@ -982,15 +1011,22 @@ impl Core {
         Ok(dst)
     }
 
-    /// Makes the hover-scrub strips that are missing (for `ids`, or every clip).
+    /// Makes the hover-scrub strips that are missing (for `ids`, or every clip). When a
+    /// strip fails, one frame becomes the clip's poster; when that fails too, the clip is
+    /// marked so later calls skip it (naming `ids` tries those again).
     pub fn library_strips(&self, ids: Option<Vec<String>>) -> Result<usize> {
         let tools = media::find_tools()?;
+        if let Some(ids) = &ids {
+            for id in ids {
+                let _ = std::fs::remove_file(self.no_picture_path(id));
+            }
+        }
         let todo: Vec<(PathBuf, LibClip)> = self.with_index(|root, ix| {
             Ok((
                 ix.clips
                     .iter()
                     .filter(|c| ids.as_ref().is_none_or(|ids| ids.contains(&c.id)))
-                    .filter(|c| !self.strip_path(&c.id).is_file())
+                    .filter(|c| self.needs_picture(&c.id))
                     .map(|c| (root.to_path_buf(), c.clone()))
                     .collect(),
                 false,
@@ -1003,15 +1039,22 @@ impl Core {
                 "library-task",
                 json!({"task": "thumbnails", "done": i, "total": total}),
             );
-            if lib::make_strip(
-                &tools,
-                &root.join(&c.path),
-                c.duration,
-                &self.strip_path(&c.id),
-            )
-            .is_ok()
-            {
+            let file = root.join(&c.path);
+            let strip = lib::make_strip(&tools, &file, c.duration, &self.strip_path(&c.id));
+            if strip.is_ok() {
                 made += 1;
+                continue;
+            }
+            let poster = self.poster_path(&c.id);
+            if media::thumbnail(&tools, &file, &poster).is_ok() {
+                made += 1;
+            } else {
+                let _ = std::fs::write(self.no_picture_path(&c.id), b"");
+                eprintln!(
+                    "quadcam: no picture for {}: {:#}",
+                    file.display(),
+                    strip.unwrap_err()
+                );
             }
         }
         if total > 0 {
