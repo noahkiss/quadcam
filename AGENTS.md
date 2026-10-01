@@ -105,6 +105,11 @@ GitHub (`noahkiss/quadcam`, public) is the only remote. Users install the cask
   spins the run loop; in the app it waits on a worker thread. `nominatim`: `/usr/bin/curl`
   with a quadcam User-Agent and at most one request a second across processes. No provider
   needs a key. Search only on an explicit request, never per keystroke.
+- **File-name date:** `naming::DateFormat` (`nameDateFormat`: `YYYY-MM-DD` default, or
+  `YY.MM.DD`) starts new file names, renames and redates. `naming::split_date` reads either
+  format; a clip's date comes from its creation date first, then the name.
+  `library_apply_name_format` renames existing clips (with cuts and originals) in place.
+  Folder names keep `YYYY-MM-DD`.
 - **Time of day:** a clip's plan time comes from its radio log or by hand (`PlanPatch.time`,
   `HH:MM`, empty for none). Without one the creation date is local noon. A library date or
   time edit (`library_edit`) rewrites the QuickTime creation date, the `mvhd` time and the
@@ -146,6 +151,7 @@ quadcam-cli --json places search "Golden Gate Park" [--provider nominatim]
 quadcam-cli --json places save NAME --location LAT,LON | --search QUERY [--pick N]
 quadcam-cli --json profiles save NAME --aircraft .. --camera-make .. --models A,B --default
 quadcam-cli --json settings set layout=day place_folders=true   # `settings` shows them
+quadcam-cli --json library apply-name-format   # after settings set name_date_format=YY.MM.DD
 quadcam-cli --json photos out.mp4 --album Drone
 quadcam-cli --json eject
 quadcam-cli --json format --plan               # runs every guard, prints device + volume UUID

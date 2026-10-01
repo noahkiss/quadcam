@@ -652,3 +652,45 @@ fn a_clip_without_a_picture_is_marked_once_not_retried() {
     assert_eq!(l.core.library_strips(None).unwrap(), 0);
     assert!(by_name(&l, "gap run").no_picture);
 }
+
+#[test]
+fn the_short_date_format_and_renaming_existing_clips_to_it() {
+    use quadcam_lib::naming::DateFormat;
+    let l = lab(Layout::YearDay, false, true);
+    import(&l); // long format
+    let mut d = l.core.defaults();
+    d.name_date_format = DateFormat::Short;
+    l.core.set_defaults(d);
+    let r = l.core.library_apply_name_format(None).unwrap();
+    assert_eq!(r.renamed.len(), 2, "{r:?}");
+    let dir = l.root.join("2026/2026-09-27");
+    assert!(dir.join("26.09.27_backyard_loops.mp4").is_file());
+    assert!(dir.join("26.09.27_backyard_loops_cut1.mp4").is_file());
+    assert!(dir.join("originals/26.09.27_backyard_loops.avi").is_file());
+    assert!(!dir.join("2026-09-27_backyard_loops.mp4").exists());
+    let a = by_name(&l, "backyard loops");
+    assert_eq!(a.clip.cuts.len(), 1);
+    assert!(a.clip.original.is_some());
+    // Run again: nothing to do.
+    let again = l.core.library_apply_name_format(None).unwrap();
+    assert_eq!((again.renamed.len(), again.unchanged), (0, 2));
+    // The index made from the files reads both formats.
+    l.core.library_rebuild().unwrap();
+    let a = by_name(&l, "backyard loops");
+    assert_eq!(a.clip.date, day());
+    assert_eq!(a.clip.cuts.len(), 1);
+    // A new import and a rename use the short format too.
+    let c = l.core.library_rename(&a.clip.id, "fence flips").unwrap();
+    assert_eq!(
+        c.path,
+        PathBuf::from("2026/2026-09-27/26.09.27_fence_flips.mp4")
+    );
+    // A name without a date is left alone.
+    let m = by_name(&l, "gap run");
+    let plain = l.root.join("2026/2026-09-27/gap.mp4");
+    std::fs::rename(&m.file, &plain).unwrap();
+    l.core.library_rebuild().unwrap();
+    let r = l.core.library_apply_name_format(None).unwrap();
+    assert_eq!(r.skipped.len(), 1, "{r:?}");
+    assert!(plain.is_file());
+}

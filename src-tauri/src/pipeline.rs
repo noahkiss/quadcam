@@ -486,6 +486,9 @@ pub struct ImportSettings {
     /// This import's id (`YYYYMMDD-HHMMSS`), written into every file.
     #[serde(default)]
     pub import_id: String,
+    /// How the date starts file names.
+    #[serde(default)]
+    pub name_date_format: naming::DateFormat,
 }
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
@@ -644,7 +647,7 @@ pub fn import_clip(
         None
     };
     let stem = naming::stem(
-        &meta.date,
+        &settings.name_date_format.format(date),
         hhmm.as_deref(),
         &job.name,
         &settings.default_name,

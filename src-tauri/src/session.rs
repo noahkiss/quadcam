@@ -199,6 +199,9 @@ pub struct Defaults {
     /// Place search provider: `apple` or `nominatim`.
     #[serde(default = "default_geocoder")]
     pub geocoder: String,
+    /// How the date starts file names.
+    #[serde(default)]
+    pub name_date_format: crate::naming::DateFormat,
 }
 
 fn default_geocoder() -> String {
@@ -228,6 +231,7 @@ impl Default for Defaults {
             layout: crate::library::Layout::default(),
             place_folders: false,
             geocoder: default_geocoder(),
+            name_date_format: Default::default(),
         }
     }
 }
@@ -292,6 +296,9 @@ impl Defaults {
         }
         if let Some(b) = get(v, "placeFolders") {
             d.place_folders = b;
+        }
+        if let Some(f) = get(v, "nameDateFormat") {
+            d.name_date_format = f;
         }
         if let Some(g) = get::<String>(v, "geocoder")
             .filter(|g| crate::settings::GEOCODERS.contains(&g.as_str()))

@@ -219,9 +219,8 @@ impl LibClip {
             .unwrap_or_default()
             .to_string_lossy()
             .to_string();
-        let rest = stem
-            .get(11..)
-            .filter(|_| stem.get(..10).and_then(parse_date).is_some())
+        let rest = crate::naming::split_date(&stem)
+            .map(|(_, r)| r.trim_start_matches(['_', '.']))
             .unwrap_or(&stem);
         rest.replace(['-', '_'], " ").trim().to_string()
     }
@@ -380,6 +379,7 @@ fn parse_spans(s: &str) -> Vec<Span> {
         .collect()
 }
 
+/// A `YYYY-MM-DD...` date (the creation date, or a long-format file name).
 fn parse_date(s: &str) -> Option<NaiveDate> {
     NaiveDate::parse_from_str(s.get(..10)?, "%Y-%m-%d").ok()
 }
@@ -479,7 +479,7 @@ pub fn read_file(root: &Path, rel: &Path) -> Result<Found> {
             .map(|t| chrono::DateTime::<chrono::Local>::from(t).date_naive())
     };
     let date = parse_date(&created)
-        .or_else(|| parse_date(&stem))
+        .or_else(|| crate::naming::split_date(&stem).map(|(d, _)| d))
         .or_else(mtime_date)
         .unwrap_or_default();
     // A time counts when quadcam recorded where it came from, or (files from before that

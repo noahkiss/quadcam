@@ -107,6 +107,7 @@ The library folder is the output folder setting (default `~/Movies/quadcam`). Se
 | Day only | `2026-09-27/2026-09-27_<name>.mp4` |
 | Flat | `2026-09-27_<name>.mp4` |
 
+- **Date in file names**: `2026-09-25_<name>.mp4` (default) or `26.09.25_<name>.mp4`. **Rename library files to this format** renames the clips already in the library, with their cuts and originals; folders stay as they are. quadcam reads both formats, and takes a clip's date from its metadata first.
 - **Add the place to day folders** names the day folder after the clip's saved place: `2026-09-27 Home field/`.
 - **Keep originals** copies the DVR file into `originals/` in the day folder, named like the clip.
 - Cuts go next to their clip as `_cut1`, `_cut2`.
@@ -280,6 +281,7 @@ quadcam-cli library edit <id> --note "windy" --keywords park,windy --place "Home
 quadcam-cli library edit <id> --date 2026-09-28 --time 18:30   # moves the files to that day
 quadcam-cli library edit <id> --profile Whoop     # rewrites make, model, aircraft and keywords
 quadcam-cli library cut <id> 12-18 1:02-1:10 --export   # set the cuts and write the new ones
+quadcam-cli library apply-name-format             # rename clips to the name_date_format setting
 quadcam-cli library trash <id>                    # clip, cuts and original to the Trash
 quadcam-cli library photos <id> --album Drone
 ```
@@ -307,7 +309,7 @@ quadcam-cli settings set layout=day place_folders=true photos_album=Drone
 quadcam-cli settings set output_dir=null          # back to the default
 ```
 
-`settings set` takes `output_dir`, `format`, `encoder`, `keep_originals`, `add_time`, `default_name`, `photos_album`, `format_label`, `log_dir`, `layout`, `place_folders`, `tunables`, `geocoder` and `default_profile`. A value is JSON or plain text.
+`settings set` takes `output_dir`, `format`, `encoder`, `keep_originals`, `add_time`, `default_name`, `photos_album`, `format_label`, `log_dir`, `layout`, `place_folders`, `tunables`, `geocoder`, `name_date_format` (`YYYY-MM-DD` or `YY.MM.DD`) and `default_profile`. A value is JSON or plain text.
 
 A plan file looks like this:
 
@@ -354,7 +356,7 @@ If the app is running, the server works on the app's session. You see every chan
 | `quadcam_status` | Shows the mode (app or headless), the cards, the radios, and the session |
 | `quadcam_library` | Lists and searches the clips already in the library (read-only) |
 | `quadcam_library_edit` | Changes library clips: rating, flag, name, note, keywords, author, place, aircraft, date, time |
-| `quadcam_library_files` | Library files: sets and writes cuts, moves clips to the Trash, adds them to Photos, rebuilds the index |
+| `quadcam_library_files` | Library files: sets and writes cuts, moves clips to the Trash, adds them to Photos, rebuilds the index, renames clips to the file-name date format |
 | `quadcam_places` | Lists, searches (address or place name), saves and deletes saved places |
 | `quadcam_profiles` | Lists, saves and deletes aircraft profiles; sets the default |
 | `quadcam_settings` | Reads and writes the app's settings |

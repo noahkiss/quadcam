@@ -142,6 +142,12 @@ pub const KEYS: &[Key] = &[
         },
     },
     Key {
+        file: "nameDateFormat",
+        name: Some("name_date_format"),
+        about: "YYYY-MM-DD or YY.MM.DD",
+        check: |v| one_of(v, crate::naming::DateFormat::NAMES),
+    },
+    Key {
         file: "geocoder",
         name: Some("geocoder"),
         about: "apple or nominatim",

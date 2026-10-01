@@ -28,6 +28,7 @@ const DEFAULTS = {
   profiles: [],
   defaultProfile: "",
   geocoder: "apple",
+  nameDateFormat: "YYYY-MM-DD",
   recents: { keywords: [], authors: [], notes: [] },
   // How the library looks; per machine.
   libView: "grid",
@@ -1782,6 +1783,7 @@ function syncSettingsUI() {
   $("#set-session-gap").value = settings.tunables.session_gap_min;
   $("#set-tolerance").value = settings.tunables.tolerance_s;
   $("#set-geocoder").value = settings.geocoder || "apple";
+  $("#set-name-date").value = settings.nameDateFormat || "YYYY-MM-DD";
   $("#place-results").hidden = true;
   $("#place-query").value = "";
   renderLayoutExample();
@@ -1798,7 +1800,8 @@ function renderLayoutExample() {
   const dayDir = placeOn ? `${day} ${place}` : day;
   $("#place-example").textContent = `${day} ${place}`;
   const root = `${base(settings.outputDir) || "quadcam"}/`;
-  const files = [`${day}_backyard_loops.mp4`, `${day}_backyard_loops_cut1.mp4`, ...(keep ? [`originals/${day}_backyard_loops.avi`] : []), "…"];
+  const fd = $("#set-name-date").value === "YY.MM.DD" ? day.slice(2).replaceAll("-", ".") : day;
+  const files = [`${fd}_backyard_loops.mp4`, `${fd}_backyard_loops_cut1.mp4`, ...(keep ? [`originals/${fd}_backyard_loops.avi`] : []), "…"];
   const tree = (indent, list) => list.map((f, i) => `${indent}${i === list.length - 1 ? "└─" : "├─"} ${f}`).join("\n");
   let text;
   if (layout === "flat") text = `${root}\n${tree("", files)}`;
@@ -1807,7 +1810,7 @@ function renderLayoutExample() {
   $("#layout-example").textContent = text;
 }
 
-for (const id of ["#set-place-folders", "#keep-originals"]) $(id).addEventListener("change", renderLayoutExample);
+for (const id of ["#set-place-folders", "#keep-originals", "#set-name-date"]) $(id).addEventListener("change", renderLayoutExample);
 for (const r of $$("input[name=layout]")) r.addEventListener("change", renderLayoutExample);
 $("#set-nav").addEventListener("click", (e) => {
   const b = e.target.closest("button[data-sec]");
@@ -1966,6 +1969,7 @@ $("#settings").addEventListener("close", async () => {
     placeFolders: $("#set-place-folders").checked,
     keepOriginals: $("#keep-originals").checked,
     geocoder: $("#set-geocoder").value,
+    nameDateFormat: $("#set-name-date").value,
     places,
     profiles,
     defaultProfile,
@@ -2026,6 +2030,20 @@ const actions = {
     await loadLibrary();
   },
   "reveal-library": () => settings.outputDir && T.opener.openPath(settings.outputDir),
+  "apply-name-format": async () => {
+    const fmt = $("#set-name-date").value;
+    const n = clipsAll().length;
+    const ok = await ask(`Rename ${n} clip${n === 1 ? "" : "s"} to ${fmt === "YY.MM.DD" ? "26.09.25_name" : "2026-09-25_name"}?`, "Cuts and kept originals are renamed too. Folders stay as they are.", { ok: "Rename" });
+    if (!ok) return;
+    try {
+      await save("nameDateFormat", fmt);
+      const r = await call("library_apply_name_format", {});
+      toast(`${r.renamed.length} clip${r.renamed.length === 1 ? "" : "s"} renamed.${r.failed.length ? ` ${r.failed.length} failed: ${r.failed[0][1]}` : ""}`, r.failed.length > 0);
+      await loadLibrary();
+    } catch (e) {
+      toast(String(e), true);
+    }
+  },
   rebuild: async () => {
     try {
       const r = await call("library_rebuild");

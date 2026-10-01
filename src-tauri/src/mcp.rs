@@ -332,7 +332,7 @@ impl<B: Backend> Server<B> {
             }
             "quadcam_library_files" => {
                 let action = s("action")
-                    .context("action is required: cuts, export_cuts, trash, photos or rebuild")?;
+                    .context("action is required: cuts, export_cuts, trash, photos, rebuild or apply_name_format")?;
                 let ids: Vec<String> = a
                     .get("ids")
                     .cloned()
@@ -412,6 +412,25 @@ impl<B: Backend> Server<B> {
                             .call("library_photos", json!({"ids": ids, "album": s("album")}))?;
                         Ok((vec![text(photos_line(&json!({"Ok": r.clone()})))], r))
                     }
+                    "apply_name_format" => {
+                        let r = self.backend.call(
+                            "library_apply_name_format",
+                            json!({"ids": ids}),
+                        )?;
+                        Ok((
+                            vec![text(format!(
+                                "Renamed {} clips with their cuts and originals; {} already matched; {} do not start with a date{}.",
+                                r["renamed"].as_array().map(Vec::len).unwrap_or(0),
+                                r["unchanged"],
+                                r["skipped"].as_array().map(Vec::len).unwrap_or(0),
+                                match r["failed"].as_array().map(Vec::len).unwrap_or(0) {
+                                    0 => String::new(),
+                                    n => format!("; {n} failed"),
+                                }
+                            ))],
+                            r,
+                        ))
+                    }
                     "rebuild" => {
                         let r = self.backend.call("library_rebuild", Value::Null)?;
                         Ok((
@@ -428,7 +447,7 @@ impl<B: Backend> Server<B> {
                         ))
                     }
                     other => Err(anyhow!(
-                        "unknown action {other:?}; use cuts, export_cuts, trash, photos or rebuild"
+                        "unknown action {other:?}; use cuts, export_cuts, trash, photos, rebuild or apply_name_format"
                     )),
                 }
             }
@@ -621,13 +640,13 @@ impl<B: Backend> Server<B> {
                 };
                 let e = &view["effective"];
                 let line = format!(
-                    "{}Settings file {}.\noutput_dir {} | layout {} | place_folders {} | format {} | encoder {} | keep_originals {} | add_time {} | default_name {:?} | photos_album {:?} | format_label {} | log_dir {} | geocoder {} | default_profile {} | tunables {}",
+                    "{}Settings file {}.\noutput_dir {} | layout {} | place_folders {} | format {} | encoder {} | keep_originals {} | add_time {} | default_name {:?} | photos_album {:?} | format_label {} | log_dir {} | geocoder {} | name_date_format {} | default_profile {} | tunables {}",
                     if action == "write" { "Saved. " } else { "" },
                     view["path"].as_str().unwrap_or("?"),
                     e["output_dir"].as_str().unwrap_or("none"), e["layout"].as_str().unwrap_or("?"), e["place_folders"],
                     e["format"].as_str().unwrap_or("?"), e["encoder"].as_str().unwrap_or("?"), e["keep_originals"], e["add_time"],
                     e["default_name"].as_str().unwrap_or(""), e["photos_album"].as_str().unwrap_or(""), e["format_label"].as_str().unwrap_or(""),
-                    e["log_dir"].as_str().unwrap_or("none"), e["geocoder"].as_str().unwrap_or("?"), e["default_profile"].as_str().unwrap_or("none"), e["tunables"],
+                    e["log_dir"].as_str().unwrap_or("none"), e["geocoder"].as_str().unwrap_or("?"), e["name_date_format"].as_str().unwrap_or("?"), e["default_profile"].as_str().unwrap_or("none"), e["tunables"],
                 );
                 let settings: serde_json::Map<String, Value> = [
                     "output_dir",
@@ -642,6 +661,7 @@ impl<B: Backend> Server<B> {
                     "format_label",
                     "log_dir",
                     "geocoder",
+                    "name_date_format",
                     "default_profile",
                     "tunables",
                 ]
@@ -1202,10 +1222,10 @@ pub fn tools() -> Value {
         },
         {
             "name": "quadcam_library_files",
-            "description": "Work on library clip files: set a clip's cut ranges (`cuts`), write unsaved cuts as files (`export_cuts`), move clips with their cuts and originals to the Trash (`trash`), add clips and their cuts to Photos (`photos`), or rebuild the index from the files (`rebuild`, after files were changed outside quadcam).\n\nBest for: trimming a library clip into keeper cuts, clearing out rejects (only when the person asked), sharing to Photos.\nNot for: names, ratings, dates or other details (use quadcam_library_edit).\nQuery tips: `cuts` replaces the clip's cut list in clip seconds (an empty list removes every cut). Dropping a cut that is already a file needs `removed_cuts` (\"keep\": the file stays as a clip of its own; \"trash\"); ask the person which. Set `export` true to write the new cuts in the same call.\nReturns: what changed, with file paths.",
+            "description": "Work on library clip files: set a clip's cut ranges (`cuts`), write unsaved cuts as files (`export_cuts`), move clips with their cuts and originals to the Trash (`trash`), add clips and their cuts to Photos (`photos`), rebuild the index from the files (`rebuild`, after files were changed outside quadcam), or rename clips so their file names start with the date in the name_date_format setting (`apply_name_format`; ids, or none for every clip).\n\nBest for: trimming a library clip into keeper cuts, clearing out rejects (only when the person asked), sharing to Photos.\nNot for: names, ratings, dates or other details (use quadcam_library_edit).\nQuery tips: `cuts` replaces the clip's cut list in clip seconds (an empty list removes every cut). Dropping a cut that is already a file needs `removed_cuts` (\"keep\": the file stays as a clip of its own; \"trash\"); ask the person which. Set `export` true to write the new cuts in the same call.\nReturns: what changed, with file paths.",
             "inputSchema": {"type": "object", "required": ["action"], "properties": {
-                "action": {"type": "string", "enum": ["cuts", "export_cuts", "trash", "photos", "rebuild"]},
-                "ids": {"type": "array", "maxItems": 500, "items": {"type": "string"}, "description": "Library clip ids from quadcam_library. cuts and export_cuts take exactly one; rebuild takes none."},
+                "action": {"type": "string", "enum": ["cuts", "export_cuts", "trash", "photos", "rebuild", "apply_name_format"]},
+                "ids": {"type": "array", "maxItems": 500, "items": {"type": "string"}, "description": "Library clip ids from quadcam_library. cuts and export_cuts take exactly one; rebuild takes none; apply_name_format takes some or none (every clip)."},
                 "cuts": {"type": "array", "maxItems": 20, "items": {"type": "object", "required": ["start", "end"], "properties": {"start": {"type": "number", "minimum": 0}, "end": {"type": "number", "minimum": 0}}, "additionalProperties": false}, "description": "For cuts: ranges in clip seconds, each at least 0.5 s."},
                 "removed_cuts": {"type": "string", "enum": ["keep", "trash"]},
                 "export": {"type": "boolean", "description": "For cuts: also write the new cuts as files."},
@@ -1250,7 +1270,7 @@ pub fn tools() -> Value {
         },
         {
             "name": "quadcam_settings",
-            "description": "Read or write the app's settings, the same file the app's Settings window uses: library folder (`output_dir`) and its `layout` (year_day, day, flat) and `place_folders`, export `format` (mp4, mov), `encoder` (videotoolbox, x264), `keep_originals`, `add_time` (HHMM in names of clips with a time), `default_name`, `photos_album` (empty: library only), card `format_label`, radio `log_dir`, log matching `tunables`, place search `geocoder` (apple, nominatim) and `default_profile`. A write changes only the given settings; null resets one to its default.\n\nBest for: pointing the library somewhere else, or changing export defaults the person asked for.\nNot for: places and profiles (quadcam_places, quadcam_profiles).\nReturns: the settings file's path and every effective setting.",
+            "description": "Read or write the app's settings, the same file the app's Settings window uses: library folder (`output_dir`) and its `layout` (year_day, day, flat) and `place_folders`, export `format` (mp4, mov), `encoder` (videotoolbox, x264), `keep_originals`, `add_time` (HHMM in names of clips with a time), `default_name`, `photos_album` (empty: library only), card `format_label`, radio `log_dir`, log matching `tunables`, place search `geocoder` (apple, nominatim), file-name `name_date_format` (YYYY-MM-DD, YY.MM.DD) and `default_profile`. A write changes only the given settings; null resets one to its default.\n\nBest for: pointing the library somewhere else, or changing export defaults the person asked for.\nNot for: places and profiles (quadcam_places, quadcam_profiles).\nReturns: the settings file's path and every effective setting.",
             "inputSchema": {"type": "object", "required": ["action"], "properties": {
                 "action": {"type": "string", "enum": ["read", "write"]},
                 "values": {"type": "object", "description": "For write: {setting: value}.", "properties": {
@@ -1267,6 +1287,7 @@ pub fn tools() -> Value {
                     "log_dir": {"type": ["string", "null"]},
                     "tunables": {"type": ["object", "null"], "properties": {"segment_gap_s": {"type": "number"}, "session_gap_min": {"type": "number"}, "tolerance_s": {"type": "number"}, "max_log_age_days": {"type": "integer"}}, "required": ["segment_gap_s", "session_gap_min", "tolerance_s", "max_log_age_days"], "additionalProperties": false},
                     "geocoder": {"type": ["string", "null"], "enum": ["apple", "nominatim", null]},
+                    "name_date_format": {"type": ["string", "null"], "enum": ["YYYY-MM-DD", "YY.MM.DD", null], "description": "How the date starts new file names; rename existing clips with quadcam_library_files apply_name_format."},
                     "default_profile": {"type": ["string", "null"]}
                 }, "additionalProperties": false}
             }, "additionalProperties": false},

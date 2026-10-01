@@ -80,6 +80,16 @@ pub struct CardStatus {
     pub size: u64,
 }
 
+/// What `library_apply_name_format` did, by path relative to the library folder.
+#[derive(Debug, Clone, Default, Serialize)]
+pub struct RenameReport {
+    pub renamed: Vec<(PathBuf, PathBuf)>,
+    pub unchanged: usize,
+    /// Names that do not start with a date.
+    pub skipped: Vec<PathBuf>,
+    pub failed: Vec<(PathBuf, String)>,
+}
+
 #[derive(Debug, Clone, Serialize)]
 pub struct TrashReport {
     pub trashed: Vec<PathBuf>,
@@ -560,9 +570,8 @@ impl Core {
             .unwrap_or_default()
             .to_string_lossy()
             .to_string();
-        let old_day = c.date.format("%Y-%m-%d").to_string();
-        let stem = match old_stem.strip_prefix(&old_day) {
-            Some(rest) => format!("{}{rest}", new_date.format("%Y-%m-%d")),
+        let stem = match crate::naming::split_date(&old_stem) {
+            Some((_, rest)) => format!("{}{rest}", d.name_date_format.format(new_date)),
             None => old_stem,
         };
         self.relocate(root, c, &dir, &stem).map(|_| ())
@@ -660,11 +669,12 @@ impl Core {
 
     /// Renames a clip's file, its cuts and its original to a new short name.
     pub fn library_rename(&self, id: &str, name: &str) -> Result<LibClip> {
-        let default_name = self.defaults().default_name;
+        let d = self.defaults();
+        let default_name = d.default_name;
         let (root, c) = self.clip(id)?;
         let old = root.join(&c.path);
         let dir = old.parent().context("clip has no folder")?.to_path_buf();
-        let date = c.date.format("%Y-%m-%d").to_string();
+        let date = d.name_date_format.format(c.date);
         let stem = crate::naming::stem(&date, None, name, &default_name);
         let new = self.relocate(&root, &c, &dir, &stem)?;
         lib::write_keys(
@@ -673,6 +683,47 @@ impl Core {
         )?;
         self.reread_clips(&[id.to_string()])?;
         Ok(self.clip(id)?.1)
+    }
+
+    /// Renames clips (all when `ids` is None) so their file names start with the date in
+    /// the name date format setting, with their cuts and originals. Clips whose names do
+    /// not start with a date are left alone. Folders stay as they are.
+    pub fn library_apply_name_format(&self, ids: Option<Vec<String>>) -> Result<RenameReport> {
+        let format = self.defaults().name_date_format;
+        let clips: Vec<(PathBuf, LibClip)> = self.with_index(|root, ix| {
+            Ok((
+                ix.clips
+                    .iter()
+                    .filter(|c| ids.as_ref().is_none_or(|ids| ids.contains(&c.id)))
+                    .map(|c| (root.to_path_buf(), c.clone()))
+                    .collect(),
+                false,
+            ))
+        })?;
+        let mut report = RenameReport::default();
+        for (root, c) in clips {
+            let file = root.join(&c.path);
+            let stem = file
+                .file_stem()
+                .unwrap_or_default()
+                .to_string_lossy()
+                .to_string();
+            let Some((_, rest)) = crate::naming::split_date(&stem) else {
+                report.skipped.push(c.path.clone());
+                continue;
+            };
+            let want = format!("{}{rest}", format.format(c.date));
+            if want == stem {
+                report.unchanged += 1;
+                continue;
+            }
+            let dir = file.parent().context("clip has no folder")?.to_path_buf();
+            match self.relocate(&root, &c, &dir, &want) {
+                Ok(new) => report.renamed.push((c.path.clone(), rel_to(&root, &new))),
+                Err(e) => report.failed.push((c.path.clone(), format!("{e:#}"))),
+            }
+        }
+        Ok(report)
     }
 
     /// Sets a library clip's cut list. Exported cuts that the list drops need `decision`;

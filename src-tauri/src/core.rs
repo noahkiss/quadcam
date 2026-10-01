@@ -19,7 +19,9 @@ use std::sync::{Arc, Mutex};
 mod core_library;
 #[path = "core_settings.rs"]
 mod core_settings;
-pub use core_library::{CardStatus, LibEdit, LibItem, LibraryView, RebuildReport, TrashReport};
+pub use core_library::{
+    CardStatus, LibEdit, LibItem, LibraryView, RebuildReport, RenameReport, TrashReport,
+};
 pub use core_settings::{PlaceRemoved, SettingsView};
 
 /// What the host does when the core changes state. The GUI emits events and asks for the
@@ -545,6 +547,7 @@ impl Core {
             layout: d.layout,
             place_folders: d.place_folders,
             import_id: chrono::Local::now().format("%Y%m%d-%H%M%S").to_string(),
+            name_date_format: d.name_date_format,
         })
     }
 
@@ -934,6 +937,10 @@ impl Core {
             "library_photos" => {
                 let x: Ids = p(params)?;
                 v(&self.library_photos(&x.ids, x.album)?)
+            }
+            "library_apply_name_format" => {
+                let x: Ids = p(params)?;
+                v(&self.library_apply_name_format((!x.ids.is_empty()).then_some(x.ids))?)
             }
             "library_rescan" => v(&self.library_rescan(&p::<One>(params)?.id)?),
             "library_preview" => v(&self.library_preview(&p::<One>(params)?.id)?),

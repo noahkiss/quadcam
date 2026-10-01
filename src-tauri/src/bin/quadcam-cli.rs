@@ -294,6 +294,9 @@ enum LibCmd {
         #[arg(long)]
         export: bool,
     },
+    /// Rename clips to the name date format setting (YYYY-MM-DD or YY.MM.DD), with their
+    /// cuts and originals. Default: every clip. Folders stay as they are.
+    ApplyNameFormat { ids: Vec<String> },
     /// Move clips, with their cuts and originals, to the Trash.
     Trash {
         #[arg(required = true)]
@@ -393,7 +396,7 @@ enum SetCmd {
     /// Set settings: KEY=VALUE, where VALUE is JSON or plain text ("null" resets a key).
     /// Keys: output_dir, format, encoder, keep_originals, add_time, default_name,
     /// photos_album, format_label, log_dir, layout, place_folders, tunables, geocoder,
-    /// default_profile.
+    /// name_date_format, default_profile.
     Set {
         #[arg(required = true, value_name = "KEY=VALUE")]
         values: Vec<String>,
@@ -1019,6 +1022,9 @@ fn library(core: &Core, cmd: LibCmd) -> Result<Value> {
                 bail!("give ranges, --clear or --export");
             }
             out
+        }
+        LibCmd::ApplyNameFormat { ids } => {
+            serde_json::to_value(core.library_apply_name_format((!ids.is_empty()).then_some(ids))?)?
         }
         LibCmd::Trash { ids } => serde_json::to_value(core.library_trash(&ids)?)?,
         LibCmd::Photos { ids, album } => serde_json::to_value(core.library_photos(&ids, album)?)?,
