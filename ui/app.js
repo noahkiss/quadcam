@@ -455,7 +455,7 @@ function setScreen(screen) {
   $("#first-run").hidden = screen !== "first-run";
   $("#detail").hidden = screen !== "detail";
   $("#top-mid").hidden = screen === "detail";
-  $$("#top-right .size, #top-right .seg").forEach((x) => (x.hidden = screen !== "library"));
+  $$("#top-right .size, #top-right .seg, #sort").forEach((x) => (x.hidden = screen !== "library"));
 }
 
 function renderAll() {
@@ -513,6 +513,7 @@ function renderLibrary() {
   }
   content.scrollTop = scroll;
   renderFooter(list);
+  $("#sort").value = librarySort().key;
   $$("[data-action=view-grid]")[0].setAttribute("aria-pressed", String(settings.libView !== "list"));
   $$("[data-action=view-list]")[0].setAttribute("aria-pressed", String(settings.libView === "list"));
 }
@@ -2167,6 +2168,7 @@ for (const tabs of ["#r-tabs", "#d-tabs"]) {
   });
 }
 
+$("#sort").addEventListener("change", (e) => { if (e.target.value !== librarySort().key) setSort(e.target.value); });
 $("#search").addEventListener("input", (e) => { state.query = e.target.value; if (state.screen === "library") renderLibrary(); });
 $("#thumb-size").addEventListener("input", (e) => { settings.thumbSize = +e.target.value; renderLibrary(); });
 $("#thumb-size").addEventListener("change", (e) => save("thumbSize", +e.target.value));

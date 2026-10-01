@@ -29,6 +29,12 @@
         <input id="thumb-size" type="range" min="1" max="5" value="3" aria-label="Thumbnail size">
         <i data-icon="grid"></i>
       </label>
+      <select id="sort" class="sort-select" aria-label="Sort by" title="Sort by">
+        <option value="date">Date</option>
+        <option value="rating">Rating</option>
+        <option value="duration">Duration</option>
+        <option value="name">Name</option>
+      </select>
       <div class="seg" role="group" aria-label="View">
         <button type="button" data-action="view-grid" aria-label="Grid" aria-pressed="true"><i data-icon="grid"></i></button>
         <button type="button" data-action="view-list" aria-label="List" aria-pressed="false"><i data-icon="list"></i></button>

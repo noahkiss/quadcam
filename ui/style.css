@@ -170,6 +170,7 @@ label.inline { display: inline-flex; gap: .35rem; align-items: center; font-size
 .top-right { display: flex; align-items: center; gap: .5rem; margin-left: auto; }
 .size { display: flex; align-items: center; gap: 6px; color: var(--overlay); }
 .size input { width: 80px; }
+.sort-select { height: 32px; width: auto; }
 .seg { display: flex; border: 1px solid var(--surface2); border-radius: 8px; overflow: hidden; }
 .seg button { border: 0; border-radius: 0; height: 30px; width: 34px; padding: 0; background: transparent; color: var(--muted); }
 .seg button[aria-pressed=true] { background: var(--surface); color: var(--fg); }
@@ -282,7 +283,8 @@ main { flex: 1; min-width: 0; display: flex; flex-direction: column; position: r
 .list-table .lthumb { width: 64px; height: 36px; border-radius: 5px; background: var(--crust) 0 0 / 1000% 100% no-repeat; }
 .lib-footer { height: 30px; flex: none; display: flex; align-items: center; gap: 14px; padding: 0 16px; border-top: 1px solid var(--surface); background: var(--mantle); font-size: .75rem; color: var(--muted); }
 .lib-footer .minibar { width: 80px; }
-.lib-footer .push { margin-left: auto; }
+.lib-footer > span { white-space: nowrap; }
+.lib-footer .push { margin-left: auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; display: block; }
 .empty-note { color: var(--muted); padding: 3rem 0; text-align: center; }
 
 /* First run */
