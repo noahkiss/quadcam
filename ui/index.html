@@ -252,7 +252,10 @@
     <form method="dialog">
       <div class="sheet-head">
         <h2><i data-icon="settings"></i>Settings</h2>
-        <button type="submit" class="primary small" value="save">Done</button>
+        <span class="row actions">
+          <button type="submit" class="primary small" value="save">Done</button>
+          <button type="submit" class="ghost small" value="cancel">Cancel</button>
+        </span>
       </div>
       <div class="settings-body">
         <nav aria-label="Settings sections"><ul id="set-nav">
@@ -292,8 +295,6 @@
               <p>The files hold every detail. The index in <span class="mono">.quadcam/</span> is a cache.</p>
               <button type="button" class="ghost small" data-action="rebuild">Rebuild from files</button>
             </div>
-            <h3>Archive <span class="chip">later</span></h3>
-            <div class="row"><input type="text" class="grow" placeholder="Not set" disabled aria-label="Archive folder"><button type="button" class="small" disabled>Choose…</button></div>
           </section>
 
           <section data-pane="aircraft" hidden>

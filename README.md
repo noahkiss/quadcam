@@ -217,9 +217,9 @@ Settings (the gear icon) has editors for places and aircraft profiles. They are 
 
 ## Settings
 
-Settings (the gear icon) has these sections:
+Settings (the gear icon, or Command-comma) has these sections. **Done** saves every change at once; **Cancel** or Escape leaves the settings as they were.
 
-- **Library**: the library folder (default `~/Movies/quadcam`, created on the first import), the layout, place folders, keep originals, and **Rebuild from files**. **Archive** is not built yet.
+- **Library**: the library folder (default `~/Movies/quadcam`, created on the first import), the layout, place folders, keep originals, and **Rebuild from files**.
 - **Aircraft** and **Places**: the profiles and places above.
 - **Import**: the format, the MP4 encoder, the default short name, the time in file names, and the tolerances for log matching.
 - **Photos**: the album.

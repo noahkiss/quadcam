@@ -192,8 +192,15 @@ async function pushDefaults() {
 }
 
 async function save(k, v) {
-  settings[k] = v;
-  if (store) await store.set(k, v);
+  await saveMany({ [k]: v });
+}
+
+// Saves several settings, then tells the core once.
+async function saveMany(values) {
+  for (const [k, v] of Object.entries(values)) {
+    settings[k] = v;
+    if (store) await store.set(k, v);
+  }
   await pushDefaults();
 }
 
@@ -1964,6 +1971,10 @@ let draftProfiles = [];
 let draftProfile = 0;
 
 function openSettings(sec = "library") {
+  if ($("#settings").open) return showSection(sec);
+  $("#settings").returnValue = "";
+  state.draftOutputDir = undefined;
+  state.draftDefault = undefined;
   draftProfiles = structuredClone(settings.profiles);
   draftProfile = 0;
   syncSettingsUI();
@@ -2090,27 +2101,37 @@ function addProfile() {
   renderProfiles();
 }
 
+// Done saves every change at once; Cancel and Escape leave the settings as they were.
 $("#settings").addEventListener("close", async () => {
+  const draftOut = state.draftOutputDir;
+  const draftDefault = state.draftDefault;
+  state.draftOutputDir = undefined;
+  state.draftDefault = undefined;
+  if ($("#settings").returnValue !== "save") return;
   readProfileForm();
   const num = (id, d) => (Number.isFinite(+$(id).value) && $(id).value !== "" ? +$(id).value : d);
-  await save("defaultName", $("#set-default-name").value.trim() || "flight");
-  await save("encoder", $("#set-encoder").value);
-  await save("format", $("#format").value);
-  await save("addTime", $("#add-time").checked);
-  await save("photosAlbum", $("#set-album").value.trim());
-  await save("libraryLayout", $$("input[name=layout]").find((r) => r.checked)?.value || "year_day");
-  await save("placeFolders", $("#set-place-folders").checked);
-  await save("keepOriginals", $("#keep-originals").checked);
   const places = readPlaces().filter((p) => p.name && Number.isFinite(p.lat) && Number.isFinite(p.lon) && Math.abs(p.lat) <= 90 && Math.abs(p.lon) <= 180);
   if (places.length < readPlaces().filter((p) => p.name || Number.isFinite(p.lat)).length) toast("Places without a name or a valid latitude and longitude were not saved.", true);
-  await save("places", places);
   const profiles = draftProfiles.filter((p) => p.name);
-  await save("profiles", profiles);
-  if (state.draftDefault !== undefined) await save("defaultProfile", state.draftDefault || "");
-  else if (!profiles.some((p) => p.name === settings.defaultProfile)) await save("defaultProfile", profiles[0]?.name || "");
-  state.draftDefault = undefined;
+  const next = {
+    defaultName: $("#set-default-name").value.trim() || "flight",
+    encoder: $("#set-encoder").value,
+    format: $("#format").value,
+    addTime: $("#add-time").checked,
+    photosAlbum: $("#set-album").value.trim(),
+    libraryLayout: $$("input[name=layout]").find((r) => r.checked)?.value || "year_day",
+    placeFolders: $("#set-place-folders").checked,
+    keepOriginals: $("#keep-originals").checked,
+    places,
+    profiles,
+    tunables: { ...settings.tunables, segment_gap_s: num("#set-seg-gap", 5), session_gap_min: num("#set-session-gap", 20), tolerance_s: num("#set-tolerance", 30) },
+  };
+  if (draftDefault !== undefined) next.defaultProfile = draftDefault || "";
+  else if (!profiles.some((p) => p.name === settings.defaultProfile)) next.defaultProfile = profiles[0]?.name || "";
+  if (draftOut) next.outputDir = draftOut;
+  await saveMany(next);
   fillDatalists();
-  await save("tunables", { ...settings.tunables, segment_gap_s: num("#set-seg-gap", 5), session_gap_min: num("#set-session-gap", 20), tolerance_s: num("#set-tolerance", 30) });
+  if (draftOut) await invoke("library_scope").catch(() => {});
   if (state.session) setSession(await invoke("plan_dates", { logDir: settings.logDir, day: state.session.log_day }));
   await loadLibrary();
 });
@@ -2146,12 +2167,10 @@ const actions = {
   },
   "clear-logs": () => useLogs(null),
   "pick-output": async () => {
-    const p = await pickFolder("Library folder", settings.outputDir);
+    const p = await pickFolder("Library folder", state.draftOutputDir || settings.outputDir);
     if (!p) return;
-    await save("outputDir", p);
+    state.draftOutputDir = p;
     $("#out-dir").value = tilde(p);
-    invoke("library_scope").catch(() => {});
-    await loadLibrary();
   },
   "reveal-library": () => settings.outputDir && T.opener.openPath(settings.outputDir),
   rebuild: async () => {
