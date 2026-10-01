@@ -1,6 +1,8 @@
 //! The import pipeline without any UI: stage, analyse, date, convert, verify.
 //! `session` and `core` build on these.
 
+pub mod import;
+
 use crate::library::{self, Layout};
 use crate::logs::{self, Badge, Tunables};
 use crate::media::{self, Encoder, Format, Meta, Probe, Tools};

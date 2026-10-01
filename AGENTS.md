@@ -17,7 +17,7 @@ README. Personal preferences go in the app's settings file on the machine
 | Path | Holds |
 |---|---|
 | `ui/` | Frontend: plain HTML, CSS and JS, no build step. `app.js` (library, import sheet, settings), `trim.js` (the one trim editor, used by clip detail and the import review). Icons and fonts are inlined or bundled so the app works offline |
-| `src-tauri/src/` | Rust core. `core.rs` (`Core`) owns the session and the library index and is the one surface every front end drives; `core_library.rs` holds its library methods and `core_settings.rs` its settings, places and profiles methods. `lib.rs` holds the Tauri commands (`core_call` runs any `Core::dispatch` method), `control.rs` the app's socket, `mcp.rs` the MCP server, `bin/quadcam-cli.rs` the CLI. The logic modules (`scan`, `disk`, `media`, `logs`, `moments`, `metadata`, `qtmeta`, `naming`, `pipeline`, `session`, `photos`, `library`, `trim`, `trash`, `settings` (with `Defaults`, the effective settings), `paths` (every path under `$HOME`), `geocode`) run without Tauri |
+| `src-tauri/src/` | Rust core. `core/` (`Core`) owns the session and the library index and is the one surface every front end drives: `mod.rs` (state, locking, `Hooks`, `dispatch`), `import.rs` (stage, analyse, dates, import, verify, format), `library.rs` (the index, list, rate, edit, rename, redate), `cuts.rs` (session and library cut lists), `files.rs` (Photos, previews, strips, Trash) and `setup.rs` (settings, places, profiles). `lib.rs` holds the Tauri commands (`core_call` runs any `Core::dispatch` method), `control.rs` the app's socket, `mcp/` the MCP server (`server.rs` the protocol and handlers, `tools.rs` the tool list, `render.rs` the text answers), `bin/quadcam-cli.rs` the CLI. The logic modules (`scan`, `disk`, `media`, `logs`, `moments`, `metadata`, `qtmeta`, `naming`, `pipeline` (with `pipeline/import.rs`, the import run), `session`, `photos`, `library`, `trim`, `cuts` (the one cut writer), `trash`, `settings` (with `Defaults`, the effective settings), `paths` (every path under `$HOME`), `geocode`) run without Tauri |
 | `src-tauri/Info.plist` | Photos usage strings, merged into the bundle's Info.plist |
 | `src-tauri/tests/` | Integration tests on synthetic clips and FAT32 disk images |
 | `test-clips/` | Local test corpus. Git tracks only its README |
@@ -201,8 +201,8 @@ claude mcp add quadcam -- "$(brew --prefix)/bin/quadcam-cli" mcp
   details, aircraft, date, time), `quadcam_library_files` (cuts, Trash, Photos, rebuild);
   setup `quadcam_places` (list, search, save, delete), `quadcam_profiles` (list, save,
   delete, set_default), `quadcam_settings` (read, write). Keep the surface this small:
-  add an action or a field to a tool before adding a tool. The tool list is one big `json!`
-  (`#![recursion_limit]` in `lib.rs`).
+  add an action or a field to a tool before adding a tool. The tool list is one big `json!` in
+  `mcp/tools.rs` (`#![recursion_limit]` in `lib.rs`).
 - Agent suggestions show in the GUI with a dashed accent outline and an "agent" badge until
   the person edits the field. Read back with `quadcam_read_clips` before export.
 - `quadcam_format_card` needs `device`, `volume_uuid` and `confirm=true` (read them with

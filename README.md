@@ -443,7 +443,8 @@ To try the app without it taking focus, start a debug build with `QUADCAM_NO_FOC
 |---|---|
 | `ui/` | The app's frontend: HTML, CSS, JavaScript, bundled fonts and icons |
 | `ui/trim.js` | The trim editor that the library and the Import sheet share |
-| `src-tauri/src/core.rs`, `core_library.rs`, `core_settings.rs` | The core that every frontend drives; its library half; its settings, places and profiles |
+| `src-tauri/src/core/` | The core that every frontend drives: import, library, cuts, files (Photos, previews, Trash), and setup (settings, places, profiles) |
+| `src-tauri/src/paths.rs` | Where QuadCam keeps its files under your home folder |
 | `src-tauri/src/settings.rs` | The settings file: the one reader and writer, the setting names and their checks |
 | `src-tauri/src/geocode.rs` | Place search: Apple MapKit and OpenStreetMap Nominatim |
 | `src-tauri/src/library.rs` | The library: layout, the index, and its rebuild from the files |
@@ -452,9 +453,9 @@ To try the app without it taking focus, start a debug build with `QUADCAM_NO_FOC
 | `src-tauri/src/trash.rs` | Moving files to the Trash |
 | `src-tauri/src/lib.rs` | The app's Tauri commands |
 | `src-tauri/src/control.rs` | The control socket |
-| `src-tauri/src/mcp.rs` | The MCP server |
+| `src-tauri/src/mcp/` | The MCP server: protocol and handlers, the tool list, the text answers |
 | `src-tauri/src/bin/quadcam-cli.rs` | The command-line tool |
-| `src-tauri/src/{scan,disk,media,logs,naming,pipeline,session,photos}.rs` | Scanning, disks, ffmpeg, radio logs, file names, the import steps, the session, Photos |
+| `src-tauri/src/{scan,disk,media,logs,naming,session,photos}.rs`, `pipeline/` | Scanning, disks, ffmpeg, radio logs, file names, the session, Photos, the import steps |
 | `src-tauri/src/moments.rs` | Moments from radio-log sticks and dead air from video frames. Every threshold is in `moments::tune` |
 | `src-tauri/src/metadata.rs`, `qtmeta.rs` | Places, profiles and per-clip metadata; writing QuickTime metadata into the files |
 | `src-tauri/tests/` | Integration tests |
