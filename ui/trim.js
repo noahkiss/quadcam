@@ -232,12 +232,12 @@ const Trim = (() => {
 
       const deadSecs = (model.deadAir || []).reduce((a, d) => a + (Math.min(d.end, dur) - Math.max(d.start, 0)), 0);
       const keepSecs = (model.keep || []).reduce((a, k) => a + (k.end - k.start), 0);
-      this.legend.replaceChildren(
+      this.legend.replaceChildren(...[
         el("span", {}, el("i", { class: "sw fly" }), "Flying"),
         deadSecs ? el("span", {}, el("i", { class: "sw dead" }), `Dead air ${fmtT(deadSecs, false)}`) : null,
         keepSecs ? el("span", {}, el("i", { class: "sw keep" }), `Keep ${fmtT(keepSecs, false)}`) : null,
         el("span", {}, el("i", { class: "sw cut" }), "Cuts"),
-      );
+      ].filter(Boolean));
 
       if (document.activeElement !== this.inInput) this.inInput.value = this.sel.in != null ? fmtT(this.sel.in) : "";
       if (document.activeElement !== this.outInput) this.outInput.value = this.sel.out != null ? fmtT(this.sel.out) : "";

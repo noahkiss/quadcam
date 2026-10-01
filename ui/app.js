@@ -31,6 +31,7 @@ const DEFAULTS = {
   // How the library looks; per machine.
   libView: "grid",
   thumbSize: 3,
+  libSort: { key: "date", dir: "desc" },
 };
 
 const settings = structuredClone(DEFAULTS);
@@ -248,7 +249,38 @@ function matches(c, f = state.filter) {
   return true;
 }
 
-const visible = () => clipsAll().filter((c) => matches(c));
+const visible = () => sortClips(clipsAll().filter((c) => matches(c)));
+
+// ---------- sort ----------
+
+const SORT_FIRST_DIR = { date: "desc", rating: "desc", duration: "desc", name: "asc" };
+const librarySort = () => (SORT_FIRST_DIR[settings.libSort?.key] ? settings.libSort : { key: "date", dir: "desc" });
+
+// The one order for the grid, the list and keyboard navigation. By date: days newest
+// first (or oldest first), and the clips of a day in the order they were flown.
+function sortClips(list) {
+  const { key, dir } = librarySort();
+  const sign = dir === "asc" ? 1 : -1;
+  const flown = (a, b) => (a.time || "").localeCompare(b.time || "") || a.path.localeCompare(b.path);
+  const byDate = (a, b) => sign * a.date.localeCompare(b.date) || flown(a, b);
+  const cmp = {
+    date: byDate,
+    rating: (a, b) => sign * ((a.rating || 0) - (b.rating || 0)) || byDate(a, b),
+    duration: (a, b) => sign * (a.duration - b.duration) || byDate(a, b),
+    name: (a, b) => sign * a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: "base" }) || byDate(a, b),
+  }[key];
+  return [...list].sort(cmp);
+}
+
+// A new key sorts in its natural direction; the same key again reverses it.
+function setSort(key) {
+  const cur = librarySort();
+  save("libSort", cur.key === key ? { key, dir: cur.dir === "asc" ? "desc" : "asc" } : { key, dir: SORT_FIRST_DIR[key] });
+  renderLibrary();
+  syncMenu();
+}
+
+const syncMenu = () => typeof MenuBar !== "undefined" && MenuBar.sync();
 
 function deadOf(c) {
   if (!c.keep?.length) return [];
@@ -438,6 +470,7 @@ function renderAll() {
     if (empty) renderFirstRun();
     else renderLibrary();
   }
+  syncMenu();
 }
 
 function renderFirstRun() {
@@ -462,6 +495,8 @@ function renderLibrary() {
     content.replaceChildren(el("p", { class: "empty-note", text: state.query ? "No clips match." : "No clips here." }));
   } else if (settings.libView === "list") {
     content.replaceChildren(listTable(list));
+  } else if (librarySort().key !== "date") {
+    content.replaceChildren(el("section", { class: "day" }, el("div", { class: "grid" }, list.map(card))));
   } else {
     const byDay = new Map();
     for (const c of list) {
@@ -471,7 +506,6 @@ function renderLibrary() {
     const days = [];
     let first = true;
     for (const [d, cs] of byDay) {
-      cs.sort((a, b) => (a.time || "").localeCompare(b.time || "") || a.path.localeCompare(b.path));
       days.push(dayBlock(d, cs, first));
       first = false;
     }
@@ -598,8 +632,16 @@ function listTable(list) {
   el("td", { text: c.place || "" }),
   el("td", { text: c.cuts.length ? String(c.cuts.length) : "" }),
   el("td", {}, c.in_photos ? icon("photos", "c-green") : null)));
+  const { key, dir } = librarySort();
+  const SORTS = { Name: "name", Date: "date", Length: "duration", Rating: "rating" };
+  const th = (h) => {
+    const k = SORTS[h];
+    if (!k) return el("th", { text: h });
+    return el("th", { "aria-sort": k === key ? (dir === "asc" ? "ascending" : "descending") : false },
+      el("button", { type: "button", class: "sort", onclick: () => setSort(k) }, h, k === key ? icon(dir === "asc" ? "arrow-up" : "arrow-down", "tiny") : null));
+  };
   return el("table", { class: "list-table" },
-    el("thead", {}, el("tr", {}, ["", "Name", "Date", "Length", "Rating", "Flag", "Moments", "Place", "Cuts", "Photos"].map((h) => el("th", { text: h })))),
+    el("thead", {}, el("tr", {}, ["", "Name", "Date", "Length", "Rating", "Flag", "Moments", "Place", "Cuts", "Photos"].map(th))),
     el("tbody", {}, rows));
 }
 
@@ -629,6 +671,43 @@ function select(id, e) {
   }
   state.anchor = id;
   for (const node of $$("[data-id]", $("#lib-content"))) node.setAttribute("aria-selected", String(state.selected.has(node.dataset.id)));
+  syncMenu();
+}
+
+function selectAll() {
+  state.selected = new Set(visible().map((c) => c.id));
+  renderLibrary();
+  syncMenu();
+}
+
+function setThumbSize(n) {
+  n = Math.min(5, Math.max(1, n));
+  settings.thumbSize = n;
+  $("#thumb-size").value = n;
+  save("thumbSize", n);
+  renderLibrary();
+  syncMenu();
+}
+
+// Previous or next clip in the library's order. In the detail view it opens that clip in
+// the same tab and keeps playing if the clip was playing; in the library it moves the selection.
+function stepClip(delta) {
+  const list = visible().map((c) => c.id);
+  if (!list.length) return;
+  if (state.screen === "detail") {
+    const i = list.indexOf(state.detailId);
+    const next = list[i + delta];
+    if (i < 0 || next == null) return;
+    const v = $("#d-video");
+    const playing = !v.hidden && !!v.src && !v.paused;
+    openDetail(next);
+    if (playing) playDetail();
+    return;
+  }
+  const i = list.indexOf(state.anchor);
+  const next = list[Math.min(list.length - 1, Math.max(0, i < 0 ? 0 : i + delta))];
+  select(next);
+  $(`#lib-content [data-id="${CSS.escape(next)}"]`)?.scrollIntoView({ block: "nearest" });
 }
 
 const selectedIds = () => [...state.selected].filter((id) => libClip(id));
@@ -1000,6 +1079,7 @@ document.addEventListener("keydown", (e) => {
   }
   if (state.screen === "detail") {
     if (dTrim && dTrim.handleKey(e)) return e.preventDefault();
+    if (e.key === " " && !e.target.closest("button")) { playDetail(); return e.preventDefault(); }
     if (e.key === "Enter" && !e.target.closest("button")) { startRename(state.detailId); return e.preventDefault(); }
     if (libKeys(e, [state.detailId])) e.preventDefault();
     return;
@@ -1007,8 +1087,7 @@ document.addEventListener("keydown", (e) => {
   if (state.screen !== "library") return;
   const ids = selectedIds();
   if ((e.metaKey && e.key === "a")) {
-    state.selected = new Set(visible().map((c) => c.id));
-    renderLibrary();
+    selectAll();
     return e.preventDefault();
   }
   if (["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown"].includes(e.key)) {

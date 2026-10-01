@@ -94,14 +94,18 @@ fn trashed_clips_can_be_put_back() {
     assert_eq!(lib.clips.len(), 2);
     let loops = lib.clips.iter().find(|x| x.name == "loops").unwrap();
     let id = loops.clip.id.clone();
-    c.library_rate(std::slice::from_ref(&id), Some(4), None).unwrap();
+    c.library_rate(std::slice::from_ref(&id), Some(4), None)
+        .unwrap();
 
     let r = c.library_trash(std::slice::from_ref(&id)).unwrap();
     assert_eq!(r.moved.len(), 2, "the clip and its cut: {r:?}");
     assert!(!loops.file.exists());
     assert_eq!(c.library(&Default::default()).unwrap().clips.len(), 1);
 
-    assert_eq!(c.library_untrash(&r.moved).unwrap(), std::slice::from_ref(&id));
+    assert_eq!(
+        c.library_untrash(&r.moved).unwrap(),
+        std::slice::from_ref(&id)
+    );
     assert!(loops.file.is_file());
     let lib = c.library(&Default::default()).unwrap();
     let back = lib.clips.iter().find(|x| x.clip.id == id).unwrap();

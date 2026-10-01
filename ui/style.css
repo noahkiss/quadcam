@@ -273,6 +273,9 @@ main { flex: 1; min-width: 0; display: flex; flex-direction: column; position: r
 .k-crash i, .mchip.k-crash i { color: var(--error); }
 .list-table { width: 100%; border-collapse: collapse; font-size: .85rem; }
 .list-table th { text-align: left; font-size: .72rem; font-weight: 600; color: var(--muted); padding: 6px 8px; border-bottom: 1px solid var(--surface); position: sticky; top: -18px; background: var(--bg); }
+.list-table th .sort { height: auto; padding: 0; border: 0; background: none; font: inherit; color: inherit; gap: .25rem; }
+.list-table th .sort:hover { color: var(--fg); }
+.list-table th[aria-sort] { color: var(--fg); }
 .list-table td { padding: 6px 8px; border-bottom: 1px solid color-mix(in srgb, var(--surface) 60%, transparent); white-space: nowrap; }
 .list-table tr[aria-selected=true] td { background: var(--surface); }
 .list-table tr.rejected td { opacity: .5; }

@@ -9,6 +9,7 @@ pub mod library;
 pub mod logs;
 pub mod mcp;
 pub mod media;
+mod menu;
 pub mod metadata;
 pub mod moments;
 pub mod naming;
@@ -341,6 +342,7 @@ pub fn run() {
                 eprintln!("quadcam: control socket not started: {e:#}");
             }
             app.manage(AppState { core, hooks });
+            menu::install(&handle)?;
             watch_volumes(handle);
             Ok(())
         })
@@ -363,7 +365,8 @@ pub fn run() {
             clear_session,
             preview,
             core_call,
-            library_scope
+            library_scope,
+            menu::menu_state
         ])
         .run(tauri::generate_context!())
         .expect("error while running quadcam");
