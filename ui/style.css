@@ -139,7 +139,7 @@ button.icon.small { width: 28px; padding: 0; }
 button.link { background: none; border: 0; padding: 0; height: auto; color: var(--primary); }
 button.link:hover { filter: brightness(1.15); }
 
-input[type=text], input[type=search], input[type=date], input[type=time], input[type=number], select {
+input[type=text], input[type=search], input[type=password], input[type=date], input[type=time], input[type=number], select {
   font: inherit; font-size: .9rem; color: var(--fg);
   background: var(--mantle); border: 1px solid var(--surface2); border-radius: 8px;
   padding: 0 .6rem; height: 32px; min-width: 0;
