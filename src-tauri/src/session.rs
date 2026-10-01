@@ -626,6 +626,65 @@ impl Session {
     }
 }
 
+/// Gives each clip without a name one that is unique within its day: the aircraft and the
+/// time when a radio log dated the clip, else `<default name>-1`, `-2`, and so on. The count
+/// skips names that a file in the day folder or another clip in this run already has.
+fn name_unnamed(jobs: &mut [ClipJob], settings: &ImportSettings, verified: &dyn Fn(usize) -> bool) {
+    let base = match settings.default_name.trim() {
+        "" => crate::naming::DEFAULT_NAME,
+        n => n,
+    };
+    let mut used: std::collections::HashSet<(String, String)> = jobs
+        .iter()
+        .filter(|j| !j.name.trim().is_empty())
+        .map(|j| (j.date.clone(), crate::naming::slug(&j.name, base)))
+        .collect();
+    for j in jobs.iter_mut() {
+        if j.skip || verified(j.id) || !j.name.trim().is_empty() {
+            continue;
+        }
+        let Ok(date) = NaiveDate::parse_from_str(&j.date, "%Y-%m-%d") else {
+            continue;
+        };
+        let place = settings
+            .place_folders
+            .then(|| j.meta.location.as_ref().and_then(|l| l.name.as_deref()))
+            .flatten();
+        let dir = crate::library::day_dir(&settings.output_dir, settings.layout, date, place);
+        let ext = settings.format.ext();
+        let free = |name: &str, used: &std::collections::HashSet<(String, String)>| {
+            !used.contains(&(j.date.clone(), crate::naming::slug(name, base)))
+                && !dir
+                    .join(format!(
+                        "{}.{ext}",
+                        crate::naming::stem(&j.date, None, name, base)
+                    ))
+                    .exists()
+        };
+        let label = [
+            j.meta.profile.as_deref().unwrap_or(""),
+            j.meta.aircraft.as_str(),
+        ]
+        .into_iter()
+        .map(str::trim)
+        .find(|l| !l.is_empty());
+        let by_log = match (j.source, label, j.time.as_deref().and_then(|t| t.get(..5))) {
+            (DateSource::Log, Some(l), Some(t)) => {
+                Some(format!("{l} {t}")).filter(|n| free(n, &used))
+            }
+            _ => None,
+        };
+        let name = by_log.unwrap_or_else(|| {
+            (1..)
+                .map(|n| format!("{base}-{n}"))
+                .find(|n| free(n, &used))
+                .unwrap_or_default()
+        });
+        used.insert((j.date.clone(), crate::naming::slug(&name, base)));
+        j.name = name;
+    }
+}
+
 /// Converts and verifies every non-skipped clip. A clip that already
 /// verified earlier keeps that result, so a re-run never writes a second copy.
 pub fn run_import(
@@ -676,6 +735,7 @@ pub fn run_import(
             .find(|r| r.id == id && r.outcome == Outcome::Verified)
             .cloned()
     };
+    name_unnamed(&mut jobs, settings, &|id| done(id).is_some());
     let todo: Vec<&Clip> = jobs
         .iter()
         .filter(|j| !j.skip && done(j.id).is_none())
@@ -728,6 +788,65 @@ pub fn run_import(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn unnamed_clips_get_distinct_names_per_day() {
+        let out = tempfile::tempdir().unwrap();
+        let day = out.path().join("2026-09-30");
+        std::fs::create_dir_all(&day).unwrap();
+        std::fs::write(day.join("2026-09-30_flight-1.mp4"), b"").unwrap();
+        let settings = ImportSettings {
+            output_dir: out.path().to_path_buf(),
+            format: Format::Mp4,
+            encoder: Encoder::Videotoolbox,
+            keep_originals: false,
+            add_time: false,
+            default_name: "flight".into(),
+            places: Vec::new(),
+            profiles: Vec::new(),
+            default_profile: None,
+            layout: crate::library::Layout::Day,
+            place_folders: false,
+            import_id: String::new(),
+        };
+        let job = |id: usize, date: &str, name: &str| ClipJob {
+            id,
+            skip: false,
+            date: date.into(),
+            time: None,
+            source: DateSource::Import,
+            name: name.into(),
+            note: String::new(),
+            meta: md::Resolved::default(),
+            extra: Vec::new(),
+        };
+        let mut logged = job(4, "2026-09-30", "");
+        logged.source = DateSource::Log;
+        logged.time = Some("14:03:20".into());
+        logged.meta.profile = Some("Whoop".into());
+        let mut jobs = vec![
+            job(0, "2026-09-30", ""),
+            job(1, "2026-09-30", "flight-3"),
+            job(2, "2026-09-30", ""),
+            job(3, "2026-10-01", ""),
+            logged,
+            job(5, "2026-09-30", ""),
+        ];
+        name_unnamed(&mut jobs, &settings, &|id| id == 5);
+        let names: Vec<&str> = jobs.iter().map(|j| j.name.as_str()).collect();
+        // flight-1 is on disk and flight-3 is taken in this run; a verified clip keeps its name.
+        assert_eq!(
+            names,
+            [
+                "flight-2",
+                "flight-3",
+                "flight-4",
+                "flight-1",
+                "Whoop 14:03",
+                ""
+            ]
+        );
+    }
 
     fn session() -> Session {
         let d = NaiveDate::from_ymd_opt(2026, 9, 30).unwrap();

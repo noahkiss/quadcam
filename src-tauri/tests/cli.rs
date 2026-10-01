@@ -119,7 +119,7 @@ fn full_flow_on_a_folder() {
     // The default layout files each clip under year and day.
     let default_out = env.home.path().join("Movies/quadcam/2026/2026-09-28");
     assert!(default_out.join("2026-09-28_wake_up.mp4").is_file());
-    assert!(default_out.join("2026-09-28_flight.mp4").is_file());
+    assert!(default_out.join("2026-09-28_flight-1.mp4").is_file());
     assert!(
         sum["format_ready"]["Err"]
             .as_str()
@@ -256,7 +256,7 @@ fn moments_and_cuts() {
     assert_eq!(cuts.len(), 3, "--cut adds to the cuts already set");
     for (i, c) in cuts.iter().enumerate() {
         assert_eq!(c["outcome"], "verified", "{c}");
-        let name = format!("_flight_cut{}.mp4", i + 1);
+        let name = format!("_flight-1_cut{}.mp4", i + 1);
         assert!(c["output"].as_str().unwrap().ends_with(&name), "{c}");
     }
     // Dropping exported cuts needs a decision about their files.

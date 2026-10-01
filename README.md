@@ -15,7 +15,7 @@ Analog DVRs record MJPEG video in AVI files (`PICT0001.AVI` and similar). They h
    - **Radio log:** if you point quadcam at EdgeTX logs, it matches armed flight segments to clips.
    - **Import date:** today, when no log matches.
    - **Edited:** any date you type.
-5. **Name.** You give each clip a short name and an optional note. The file name is `YYYY-MM-DD_<name>.mp4`. An empty name becomes `flight`, `flight-2`, and so on.
+5. **Name.** You give each clip a short name and an optional note. The file name is `YYYY-MM-DD_<name>.mp4`. A clip without a name gets one that is unique in its day: the aircraft and the time (`Whoop 14:03`) when a radio log dated it, else `flight-1`, `flight-2`, and so on.
 6. **Convert.** The default is MP4 (H.264 with the VideoToolbox hardware encoder). The files play everywhere and are much smaller: 14 times smaller on the synthetic test clips. Real, noisy footage compresses less. A lossless MOV remux keeps the original MJPEG frames.
 7. **Trim (optional).** quadcam marks moments on each clip's timeline: rolls, flips, punch-outs and dives from the radio log's sticks, and dead air from the video itself. You can export any range as an extra file. See [Moments and cuts](#moments-and-cuts).
 8. **Verify.** quadcam compares every output with its source: frame count, duration, streams, and metadata. Only verified files count as imported.
