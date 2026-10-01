@@ -115,13 +115,15 @@ export function syncMenu() {
 export function useMenu() {
   useEffect(() => {
     let off: (() => void) | undefined;
-    on("menu", (id) => MENU_ACTIONS[id]?.()).then((f) => (off = f));
+    let gone = false;
+    on("menu", (id) => MENU_ACTIONS[id]?.()).then((f) => (gone ? f() : (off = f)));
     const unsub = store.subscribe(() => queueMicrotask(syncMenu));
     const onFocus = () => queueMicrotask(syncMenu);
     document.addEventListener("focusin", onFocus);
     document.addEventListener("focusout", onFocus);
     syncMenu();
     return () => {
+      gone = true;
       off?.();
       unsub();
       document.removeEventListener("focusin", onFocus);

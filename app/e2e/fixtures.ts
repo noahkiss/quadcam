@@ -5,7 +5,7 @@ import { MOCK_BUNDLE } from "./global-setup";
 export type Ui = "legacy" | "next";
 
 /** Screens built in the new UI so far. A spec for any other area runs on legacy only. */
-export const PORTED = new Set<string>(["library", "app"]);
+export const PORTED = new Set<string>(["library", "app", "detail"]);
 
 export interface AppFixture {
   ui: Ui;

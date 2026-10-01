@@ -30,6 +30,18 @@ for (const scheme of ["dark", "light"] as const) {
       await page.screenshot({ path: shot(app.ui, "menu") });
     });
 
+    test("detail", async ({ app, page }) => {
+      await app.open();
+      await page.getByRole("article", { name: "gap-run" }).dblclick();
+      await page.getByRole("button", { name: "Roll", exact: true }).click();
+      await page.mouse.move(10, 10);
+      await page.waitForTimeout(300);
+      await page.screenshot({ path: shot(app.ui, "detail") });
+      await page.getByRole("tab", { name: "Flight" }).click();
+      await page.waitForTimeout(200);
+      await page.screenshot({ path: shot(app.ui, "detail-flight") });
+    });
+
     test("first run", async ({ app, page }) => {
       await app.open("empty");
       await expect(page.getByRole("heading", { name: "Import your first flights" })).toBeVisible();

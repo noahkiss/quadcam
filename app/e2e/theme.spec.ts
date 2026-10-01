@@ -30,6 +30,19 @@ for (const scheme of ["dark", "light"] as const) {
       });
     }
 
+    test("the open clip passes axe", async ({ app, page }) => {
+      test.skip(app.ui !== "next", "contrast is checked on the new UI");
+      await app.open();
+      await page.getByRole("article", { name: "gap-run" }).dblclick();
+      await page.getByRole("button", { name: "Roll", exact: true }).click();
+      await page.mouse.move(1, 400);
+      let r = await new AxeBuilder({ page }).withTags(["wcag2a", "wcag2aa", "wcag21aa"]).analyze();
+      expect(r.violations.map((v) => `${v.id}: ${v.nodes.map((n) => n.target.join(" ") + " " + n.failureSummary).join(", ")}`)).toEqual([]);
+      await page.getByRole("tab", { name: "Flight" }).click();
+      r = await new AxeBuilder({ page }).withTags(["wcag2a", "wcag2aa", "wcag21aa"]).analyze();
+      expect(r.violations.map((v) => `${v.id}: ${v.nodes.map((n) => n.target.join(" ") + " " + n.failureSummary).join(", ")}`)).toEqual([]);
+    });
+
     test("open dialog and menu pass axe", async ({ app, page }) => {
       test.skip(app.ui !== "next", "the gallery is part of the new UI");
       await app.open("library", { query: "?gallery" });

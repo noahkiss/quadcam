@@ -14,6 +14,9 @@ export default tseslint.config(
       ...reactHooks.configs.recommended.rules,
       // No React Compiler here; TanStack Virtual's API is fine without memoization.
       "react-hooks/incompatible-library": "off",
+      // Compiler-only checks: a video element held in a ref is changed on purpose.
+      "react-hooks/immutability": "off",
+      "react-hooks/preserve-manual-memoization": "off",
       "@typescript-eslint/no-unused-vars": ["error", { argsIgnorePattern: "^_", varsIgnorePattern: "^_" }],
     },
   },

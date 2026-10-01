@@ -1,6 +1,7 @@
 import { useEffect } from "react";
 import { useStore } from "./store";
 import { screenOf } from "./store/library";
+import { sel } from "./store/settings";
 import { Banner } from "./components/Banner";
 import { start } from "./events";
 import { useKeys } from "./keys";
@@ -12,6 +13,27 @@ import { LibraryView } from "./views/Library/LibraryView";
 import { FirstRun } from "./views/FirstRun/FirstRun";
 import { ClipDetail } from "./views/ClipDetail/ClipDetail";
 import styles from "./App.module.css";
+
+/** Suggestions for the place, keyword, author and note fields. */
+function Suggestions() {
+  const places = useStore(sel.places);
+  const recents: { keywords?: string[]; authors?: string[]; notes?: string[] } = useStore(sel.recents);
+  const list = (id: string, values: string[] = []) => (
+    <datalist id={id}>
+      {values.map((v) => (
+        <option key={v} value={v} />
+      ))}
+    </datalist>
+  );
+  return (
+    <>
+      {list("places-list", places.map((p) => p.name))}
+      {list("recent-keywords", recents.keywords)}
+      {list("recent-authors", recents.authors)}
+      {list("recent-notes", recents.notes)}
+    </>
+  );
+}
 
 export function App() {
   const screen = useStore(screenOf);
@@ -51,6 +73,7 @@ export function App() {
         </main>
       </div>
       <Overlays />
+      <Suggestions />
     </div>
   );
 }
