@@ -705,6 +705,18 @@ pub fn run_import(
             c.signal.as_ref().map(|s| &s.keep[..]).unwrap_or(&[]),
             p.flight.as_ref(),
         );
+        // Where the time of day came from; without it the clip shows no time (noon).
+        if job.time.is_some() {
+            job.extra.push((
+                crate::library::KEY_TIME.to_string(),
+                if job.source == DateSource::Log {
+                    "log"
+                } else {
+                    "manual"
+                }
+                .to_string(),
+            ));
+        }
     }
     let done = |id: usize| {
         session

@@ -522,14 +522,21 @@ impl Core {
         };
         let created =
             crate::pipeline::creation_time(new_date, new_time, crate::pipeline::DateSource::Edited);
+        // A time set here is manual; an empty one removes the time; a date alone keeps it.
+        let source = match time {
+            Some(Some(_)) => Some("manual".to_string()),
+            Some(None) => Some("none".to_string()),
+            None => None,
+        };
         let stamp = |path: &Path, t: chrono::DateTime<chrono::Utc>| -> Result<()> {
-            lib::write_keys(
-                path,
-                &[(
-                    "com.apple.quicktime.creationdate",
-                    crate::metadata::creation_date(t),
-                )],
-            )?;
+            let mut set = vec![(
+                "com.apple.quicktime.creationdate",
+                crate::metadata::creation_date(t),
+            )];
+            if let Some(s) = &source {
+                set.push((lib::KEY_TIME, s.clone()));
+            }
+            lib::write_keys(path, &set)?;
             crate::qtmeta::set_movie_time(path, t)?;
             media::set_mtime(path, t)
         };

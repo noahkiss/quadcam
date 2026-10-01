@@ -536,7 +536,8 @@ fn a_manual_time_at_import_and_a_date_edit_that_moves_the_files() {
     let r = by_name(&l, "backyard loops");
     assert_eq!(
         (r.clip.date, r.clip.time.as_deref()),
-        (new_day, Some("12:00"))
+        (new_day, None),
+        "an empty time is noon, and noon is not shown"
     );
     assert_eq!(r.clip.cuts.len(), 1);
     assert!(r.clip.original.is_some());
@@ -573,6 +574,10 @@ fn a_new_aircraft_profile_after_export_rewrites_the_gear() {
     import(&l);
     let a = by_name(&l, "backyard loops");
     assert_eq!(a.clip.aircraft.as_deref(), Some("Whoop"));
+    assert_eq!(
+        a.clip.time, None,
+        "no log, no time set: no 12:00 placeholder"
+    );
     assert!(a.clip.keywords.iter().any(|k| k == "tinywhoop"));
 
     let e = l

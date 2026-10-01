@@ -44,6 +44,9 @@ pub const KEY_FLAG: &str = "app.quadcam.flag";
 pub const KEY_PHOTOS: &str = "app.quadcam.photos";
 pub const KEY_AIRCRAFT: &str = "app.quadcam.aircraft";
 pub const KEY_VIDEO_SYSTEM: &str = "app.quadcam.video_system";
+/// Where the clip's time of day came from: `log`, `manual`, or `none` (removed by hand).
+/// Without a time the creation date's time is the noon placeholder and is not shown.
+pub const KEY_TIME: &str = "app.quadcam.time";
 const QT: &str = "com.apple.quicktime.";
 
 // ---------- layout ----------
@@ -155,7 +158,7 @@ pub struct LibClip {
     pub title: String,
     pub note: String,
     pub date: NaiveDate,
-    /// `HH:MM`, when the creation date carries a time.
+    /// `HH:MM`, when the clip has a time of day (from its radio log or set by hand).
     #[serde(default)]
     pub time: Option<String>,
     pub duration: f64,
@@ -479,9 +482,16 @@ pub fn read_file(root: &Path, rel: &Path) -> Result<Found> {
         .or_else(|| parse_date(&stem))
         .or_else(mtime_date)
         .unwrap_or_default();
+    // A time counts when quadcam recorded where it came from, or (files from before that
+    // key) when the description says the date came from a radio log.
+    let has_time = match get(KEY_TIME).as_deref() {
+        Some("log" | "manual") => true,
+        Some(_) => false,
+        None => desc.contains("date source: radio log"),
+    };
     let time = created
         .get(11..16)
-        .filter(|t| t.len() == 5 && t.as_bytes()[2] == b':')
+        .filter(|t| has_time && t.len() == 5 && t.as_bytes()[2] == b':')
         .map(str::to_string);
     let location = get(&format!("{QT}location.ISO6709"))
         .and_then(|v| media::parse_iso6709(&v))

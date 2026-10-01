@@ -184,6 +184,7 @@ Every file quadcam writes carries QuickTime metadata that Apple Photos and exift
 | Flight numbers | `app.quadcam.flight`, `app.quadcam.stats` | The matched radio log: armed time, packs, lowest receiver voltage, link quality and RSSI, highest throttle |
 | Library | `app.quadcam.source`, `.dvr`, `.import`, `.place`, `.profile`, `.moments`, `.keep`, `.cut` | The DVR content fingerprint and file name, the import, the place and aircraft names, the radio-log moments, the keep ranges, a cut's range |
 | Rating, flag, Photos | `app.quadcam.rating`, `.flag`, `.photos` | Set in the library |
+| Time source | `app.quadcam.time` | `log` or `manual` when the clip has a time of day. Without one, quadcam shows no time (the creation date holds noon) |
 
 quadcam reads every key back before a file counts as verified: with ffprobe, and the location also with exiftool when it is installed. ffmpeg cannot write these keys where Apple's frameworks find them, so quadcam adds them to the file itself after ffmpeg finishes. One side effect: MP4 files no longer have the index at the front (`+faststart`). That matters only for streaming from a web server; local players and Photos do not care.
 
