@@ -8,6 +8,7 @@ pub mod core;
 pub mod cuts;
 pub mod disk;
 pub mod geocode;
+pub mod identity;
 pub mod library;
 pub mod logs;
 pub mod mcp;

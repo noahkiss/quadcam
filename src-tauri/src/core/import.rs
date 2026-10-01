@@ -464,8 +464,13 @@ impl Core {
         let new = found
             .iter()
             .filter(|f| {
-                crate::pipeline::fingerprint(&f.path)
-                    .map(|k| !known.contains(&k) && !staged.contains(&k))
+                // A clip is known by its current fingerprint or by its 0.4 one.
+                crate::identity::fingerprints(&f.path)
+                    .map(|(now, old)| {
+                        ![now, old]
+                            .iter()
+                            .any(|k| known.contains(k) || staged.contains(k))
+                    })
                     .unwrap_or(true)
             })
             .count();

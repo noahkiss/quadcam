@@ -161,10 +161,17 @@ impl Core {
             .as_ref()
             .is_none_or(|l| l.root != root || l.mtime != on_disk)
         {
-            let index = lib::Index::load(&root)?.unwrap_or(Index {
+            let mut index = lib::Index::load(&root)?.unwrap_or(Index {
                 version: lib::INDEX_VERSION,
+                id_scheme: lib::ID_SCHEME,
                 ..Default::default()
             });
+            if index.id_scheme < lib::ID_SCHEME {
+                self.migrate_ids(&root, &mut index);
+                if root.is_dir() {
+                    index.save(&root)?;
+                }
+            }
             *guard = Some(Loaded {
                 root: root.clone(),
                 index,
@@ -185,6 +192,41 @@ impl Core {
             self.hooks.library_changed();
         }
         Ok(out)
+    }
+
+    /// Moves an index from QuadCam 0.4's ids to the current scheme (see `identity`). Each
+    /// clip gets the id its file now reads as: an adopted file its new head id, a clip with
+    /// a kept original that proves its 0.4 id the original's new fingerprint. The 0.4 id
+    /// stays as an alias, and the clip's cached pictures follow it. Everything else in the
+    /// entry stays, unsaved cuts included. No media file is written.
+    fn migrate_ids(&self, root: &Path, ix: &mut Index) {
+        for c in &mut ix.clips {
+            if !crate::identity::is_legacy(&c.id) {
+                continue;
+            }
+            let Ok(lib::Found::Clip(now)) = lib::read_file(root, &c.path) else {
+                continue;
+            };
+            if now.id == c.id {
+                continue;
+            }
+            for (old, new) in [
+                (self.strip_path(&c.id), self.strip_path(&now.id)),
+                (self.poster_path(&c.id), self.poster_path(&now.id)),
+                (self.no_picture_path(&c.id), self.no_picture_path(&now.id)),
+            ] {
+                if old.is_file() && !new.exists() {
+                    let _ = std::fs::rename(&old, &new);
+                }
+            }
+            let mut aliases = now.aliases.clone();
+            if !aliases.contains(&c.id) {
+                aliases.push(c.id.clone());
+            }
+            c.id = now.id.clone();
+            c.aliases = aliases;
+        }
+        ix.id_scheme = lib::ID_SCHEME;
     }
 
     /// The library, narrowed by `filter`.

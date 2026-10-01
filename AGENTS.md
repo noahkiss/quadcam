@@ -81,7 +81,13 @@ GitHub (`noahkiss/quadcam`, public) is the only remote. Users install the cask
   existing export folder is adopted.
 - **Identity:** a library clip's id is its DVR source's content fingerprint
   (`app.quadcam.source`), never a file name. A file QuadCam did not write is known by a hash of
-  its first MB before `moov` (`library::head_id`), which metadata rewrites never touch.
+  its first MB before `moov` (`identity::head_id`), which metadata rewrites never touch. Both
+  are specified hashes (XXH64 over defined bytes; `identity.rs` states them), with test
+  vectors. Ids from 0.4 and earlier (`DefaultHasher`) stay recognizable through
+  `identity::legacy`, an explicit SipHash-1-3. An index without `id_scheme: 2` is moved when it
+  loads: a clip whose kept original proves its 0.4 id, and every adopted file, get the current
+  id, and the 0.4 id stays in `aliases`, which every lookup accepts. Other clips keep their 0.4
+  id. No media file is written. `tests/fixtures/legacy-library` is a library 0.4.1 built.
 - **Cuts:** `trim.rs` is the one cut model for the session and the library. Dropping a cut that
   was already exported needs a decision (`RemovedCuts::Keep`: the file stays as its own clip,
   marked `app.quadcam.detached`; `Trash`: it goes to the Trash). Without one, `Core` answers

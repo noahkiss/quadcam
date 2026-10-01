@@ -57,31 +57,12 @@ pub struct Clip {
     pub kind: SourceKind,
 }
 
-/// Bytes read from each end of a file for its fingerprint.
-const FINGERPRINT_BYTES: u64 = 1 << 20;
-
-/// A short content fingerprint: size plus the first and last MB. Two different flights
-/// with the same file name (DVR numbering restarts after a format, or a Finder copy) get
-/// different fingerprints. The hash is only a cache key; it need not be stable across
-/// quadcam versions.
+/// A clip's content fingerprint: size plus the first and last MB (see `identity`). Two
+/// different flights with the same file name (DVR numbering restarts after a format, or a
+/// Finder copy) get different fingerprints. It is written into the library as the clip's
+/// identity (`app.quadcam.source`), so it is a specified hash.
 pub fn fingerprint(path: &Path) -> Result<String> {
-    use std::hash::{Hash, Hasher};
-    use std::io::{Seek, SeekFrom};
-    let mut f = std::fs::File::open(path)?;
-    let len = f.metadata()?.len();
-    let mut h = std::hash::DefaultHasher::new();
-    len.hash(&mut h);
-    let mut buf = vec![0u8; FINGERPRINT_BYTES.min(len) as usize];
-    f.read_exact(&mut buf)?;
-    buf.hash(&mut h);
-    if len > FINGERPRINT_BYTES {
-        let tail = FINGERPRINT_BYTES.min(len - FINGERPRINT_BYTES);
-        f.seek(SeekFrom::Start(len - tail))?;
-        let mut buf = vec![0u8; tail as usize];
-        f.read_exact(&mut buf)?;
-        buf.hash(&mut h);
-    }
-    Ok(format!("{:016x}", h.finish()))
+    crate::identity::fingerprint(path)
 }
 
 impl Clip {
@@ -897,7 +878,7 @@ pub(crate) mod tests {
         std::fs::write(&small, pattern(1000)).unwrap();
         let big = d.path().join("big.avi");
         std::fs::write(&big, pattern(3 * (1 << 20) + 123)).unwrap();
-        assert_eq!(fingerprint(&small).unwrap(), "544ed76b6260909f");
-        assert_eq!(fingerprint(&big).unwrap(), "7d3742677467c662");
+        assert_eq!(fingerprint(&small).unwrap(), "x1c63a88ed3c3c2d9");
+        assert_eq!(fingerprint(&big).unwrap(), "x472bd6ccd6749ca4");
     }
 }
