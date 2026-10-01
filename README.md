@@ -1,6 +1,6 @@
 # quadcam
 
-quadcam turns the SD card from analog FPV goggles into dated, named, playable video files. It copies the clips off the card, gives each clip a date and a name, and converts it to MP4. It verifies every file, and then it can clear the card for the next flight.
+quadcam turns the SD card from analog FPV goggles into dated, named, playable video files, and keeps them in a library. It copies the clips off the card, gives each clip a date and a name, and converts it to MP4. It verifies every file, files it by flying day, and then it can clear the card for the next flight.
 
 quadcam is a macOS desktop app. A command-line tool and an MCP server come with it, so scripts and coding agents can do everything the app does.
 
@@ -21,6 +21,7 @@ Analog DVRs record MJPEG video in AVI files (`PICT0001.AVI` and similar). They h
 8. **Verify.** quadcam compares every output with its source: frame count, duration, streams, and metadata. Only verified files count as imported.
 9. **Share.** You can add the files to the Photos app, into an album.
 10. **Format (optional).** When every clip verified, you can erase the card as FAT32 and eject it. See [Format safety](#format-safety).
+11. **Library.** The files land in the library folder, a folder per year and per flying day. You can rate, flag, search, rename and trim them there later. See [The library](#the-library).
 
 ### Supported gear
 
@@ -86,21 +87,51 @@ The frontend is plain HTML, CSS, and JavaScript in `ui/`, with no build step and
 
 ## Use the app
 
-1. Open quadcam and insert the card. The app copies the clips at once.
-2. Optional: under **Radio logs**, select your radio's `LOGS` folder, or the radio itself in USB storage mode.
-3. Check each date, and type a short name and a note.
-4. Select **Skip** for clips you do not want, such as bench tests.
-5. Select the output folder and the format, then select **Import**.
-6. On the summary, select **Add all to Photos** if you want the files in Photos.
-7. Eject the card, or format it (see below).
+quadcam opens on the library: every clip you imported, newest first, grouped by flying day.
 
-The app saves the session as you work. If you quit and open quadcam again, it shows the same clips, names, dates and cuts, as long as the copies in its cache still exist. Select **Start over** in the top bar to clear the session. Files you already imported stay where they are. After the app formats a card, the next launch starts empty.
+1. Insert the card. It shows in the sidebar under **Import from**, with the number of clips that are not in the library yet. Nothing loads until you select it.
+2. Select the card (or **Import…**, or **Folder…**). The Import sheet opens and copies the clips at once. The sheet header shows how many files are left and the progress of the current one.
+3. **Review**: set the aircraft, the place and the date for every clip at once, or per clip. Optional: under **Radio logs**, select your radio's `LOGS` folder, or the radio itself in USB storage mode. Type a short name and a note for each clip. Select **Skip** for clips you do not want, such as bench tests. Select a clip to play it, see its moments and set cuts.
+4. **Export** converts and verifies each clip.
+5. **Finish**: add the files to Photos, eject the card, or format it (see below). **Done** shows the new clips in the library under **Last import**.
 
-A restored session does not stop a new card. If every clip in it is imported, a new card loads at once. If not, select the card's **Import** button when you are ready to replace the session.
+You can close the sheet at any time; the import stays in the sidebar as **Unfinished import**. The app saves it as you work. If you quit and open quadcam again, it comes back with the same clips, names, dates and cuts, as long as the copies in its cache still exist. **Start over** in the sheet clears it. Files you already exported stay where they are. After the app formats a card, the next launch starts empty.
+
+## The library
+
+The library folder is the output folder setting (default `~/Movies/quadcam`). Settings > Library sets how files are filed in it:
+
+| Layout | Where a clip goes |
+|---|---|
+| Year / Day (default) | `2026/2026-09-27/2026-09-27_<name>.mp4` |
+| Day only | `2026-09-27/2026-09-27_<name>.mp4` |
+| Flat | `2026-09-27_<name>.mp4` |
+
+- **Add the place to day folders** names the day folder after the clip's saved place: `2026-09-27 Home field/`.
+- **Keep originals** copies the DVR file into `originals/` in the day folder, named like the clip.
+- Cuts go next to their clip as `_cut1`, `_cut2`.
+
+The files are the library. Every detail quadcam shows is written into the file's QuickTime metadata (see [Metadata](#metadata)): the date, name, note, place, aircraft, moments, keep ranges, flight numbers, star rating, pick or reject flag, and whether it is in Photos. The index in `<library>/.quadcam/index.json` is a cache that makes the app start fast. **Rebuild from files** in Settings > Library makes it again from the files alone. Only cut ranges you set but did not save yet live in the index alone.
+
+A clip is known by the content of its DVR file, not by its name, because DVRs start again at `PICT0001` after every format. That is also how the card's "N new" count works.
+
+**Existing exports.** If the library folder already holds videos that are not in the index (from an older quadcam, or another tool), the library shows a **Scan folder** banner. Scanning reads them where they are. It moves nothing and writes nothing. Rating or editing a clip later writes into that clip's file.
+
+In the library:
+
+- **Select** a clip; Command-click and Shift-click select more. Double-click, Space or T opens the clip.
+- **Rate**: keys 1 to 5 (0 clears). **Flag**: P picks, X rejects, U clears. The stars on a card also work.
+- **Search** matches the name, note, place, aircraft, keywords and file name.
+- **Thumbnails** show the clip as you move the pointer across them.
+- **Right-click** a clip: Rename (Return), Edit details (Command-I), Trim and cuts, Add to Photos, Show in Finder (Command-R), Find dead air again, Move to Trash (Command-Delete). Move to Trash takes the clip's cuts and kept original with it.
+- **Rejected** shows a **Move to Trash** button for every rejected clip.
+- The day summary shows the flights, armed time, packs, lowest battery voltage and the best moments of the day.
+
+Dragging clips out to Finder and the Share menu are not built yet; use **Show in Finder**.
 
 ## Moments and cuts
 
-Select a clip to see its timeline under the preview. The timeline shows:
+The same trim editor appears in the library (open a clip) and in the Import sheet (select a clip). The timeline shows:
 
 - **Dead air** (striped): the receiver's blue no-signal screen, static, a colour-bar test pattern, black, or a colourless breakup (the torn grey picture an analog receiver shows when it loses the colour signal). Each stretch is at least 3 seconds. A shorter breakup inside a flight stays in. A black-and-white camera would read as colourless breakup; set `MONO_MAX_SAT` in `moments::tune` to 0 for one.
 - **Keep ranges** (green line): the clip without its dead air. Select **Use keep ranges** to turn them into cuts.
@@ -115,7 +146,11 @@ Select a clip to see its timeline under the preview. The timeline shows:
 | Dive | Throttle at 15 % or less for 1 s or more mid-flight, then a punch-out |
 | Crash? | Big stick inputs in the last 1.5 s before the log stops (disarm). Low confidence |
 
-Each moment has a score from 0 to 1. When the receiver sends attitude telemetry and it shows the quad upside down during a roll or flip, the score goes up. Select a moment to put the in and out points around it. Play the clip, then use **Set in** and **Set out** to adjust them, or type the seconds. Select **Add cut**. A clip can have up to 20 cuts.
+Each moment has a score from 0 to 1. When the receiver sends attitude telemetry and it shows the quad upside down during a roll or flip, the score goes up. Select a moment to put the in and out points around it. Play the clip, then use **Set in** and **Set out** (I and O) to adjust them, drag the blue handles, or type the time. Select **Add cut** (C). Space plays, J, K and L go back, stop and forward, and the arrow keys step one frame. A clip can have up to 20 cuts.
+
+In the library, a new cut is written when you select **Save cuts**. quadcam cuts from the kept original when there is one, else from the clip itself.
+
+**Removing a cut that is already a file** asks first: **Keep the file** leaves it where it is as a clip of its own, **Move to Trash** moves it to the Trash. The command line needs `--removed keep` or `--removed trash`, and an agent needs `removed_cuts`.
 
 On import, each cut becomes its own file next to the clip: `YYYY-MM-DD_<name>_cut1.mp4`, `_cut2`, and so on. quadcam cuts from the original DVR file, not from the converted one. MJPEG has a keyframe on every frame, so each cut starts and ends on the exact frame. MP4 cuts are re-encoded like the full clip; MOV cuts copy the original frames. quadcam verifies every cut (streams, frame count, duration). Cuts that verified are not written again, so you can add cuts later and import again. **Add to Photos** adds a clip's cuts with it.
 
@@ -145,11 +180,13 @@ Every file quadcam writes carries QuickTime metadata that Apple Photos and exift
 | Author | `com.apple.quicktime.author` | The clip, else the profile |
 | Keywords | `com.apple.quicktime.keywords` | `FPV`, the profile's, the clip's, and the moment kinds found (roll, flip, punch-out, dive) |
 | Aircraft, video system | `app.quadcam.aircraft`, `app.quadcam.video_system` | The profile |
-| Flight numbers | `app.quadcam.flight` | The matched radio log: armed time, packs, lowest receiver voltage, link quality and RSSI, highest throttle |
+| Flight numbers | `app.quadcam.flight`, `app.quadcam.stats` | The matched radio log: armed time, packs, lowest receiver voltage, link quality and RSSI, highest throttle |
+| Library | `app.quadcam.source`, `.dvr`, `.import`, `.place`, `.profile`, `.moments`, `.keep`, `.cut` | The DVR content fingerprint and file name, the import, the place and aircraft names, the radio-log moments, the keep ranges, a cut's range |
+| Rating, flag, Photos | `app.quadcam.rating`, `.flag`, `.photos` | Set in the library |
 
 quadcam reads every key back before a file counts as verified: with ffprobe, and the location also with exiftool when it is installed. ffmpeg cannot write these keys where Apple's frameworks find them, so quadcam adds them to the file itself after ffmpeg finishes. One side effect: MP4 files no longer have the index at the front (`+faststart`). That matters only for streaming from a web server; local players and Photos do not care.
 
-What was checked: AVFoundation, the framework Photos uses to read video, returns the location, creation date, make, model, software, title, description, author and keywords from these files. Whether Photos shows each one in its Info panel was not checked; keywords in particular may not appear. quadcam writes no rating: Photos keeps ratings in its library, not in the file.
+What was checked: AVFoundation, the framework Photos uses to read video, returns the location, creation date, make, model, software, title, description, author and keywords from these files. Whether Photos shows each one in its Info panel was not checked; keywords in particular may not appear. Photos does not read quadcam's star rating: Photos keeps ratings in its own library, not in the file.
 
 ### Places and profiles
 
@@ -179,7 +216,13 @@ Settings (the gear icon) has editors for places and aircraft profiles. They are 
 
 ## Settings
 
-Settings (the gear icon) hold the places and profiles above, and the default name, the Photos album, the encoder, and the tolerances for log matching. The default output folder is `~/Movies/quadcam`. The app creates it on the first import.
+Settings (the gear icon) has these sections:
+
+- **Library**: the library folder (default `~/Movies/quadcam`, created on the first import), the layout, place folders, keep originals, and **Rebuild from files**. **Archive** is not built yet.
+- **Aircraft** and **Places**: the profiles and places above.
+- **Import**: the format, the MP4 encoder, the default short name, the time in file names, and the tolerances for log matching.
+- **Photos**: the album.
+- **Advanced**: where ffmpeg and the agent socket are.
 
 ## Command line
 
@@ -202,6 +245,7 @@ quadcam-cli import --cut 0=20-26          # add a cut, then import
 quadcam-cli profiles                      # saved places and aircraft profiles
 quadcam-cli meta all --place "Home field" --keywords park,windy
 quadcam-cli meta 2 --location 40.6892,-74.0445 --profile Whoop
+quadcam-cli cut 0 --clear --removed trash # drop exported cuts and move their files to the Trash
 quadcam-cli clear                         # forget the session (start over)
 quadcam-cli verify                        # check the outputs again
 quadcam-cli photos --album Drone          # add verified outputs to Photos
@@ -209,6 +253,23 @@ quadcam-cli eject
 quadcam-cli format --plan                 # show what would be erased
 quadcam-cli format --device /dev/diskN --volume-uuid <uuid> --yes
 ```
+
+The library commands work on the library folder:
+
+```bash
+quadcam-cli library list                          # every clip, newest first
+quadcam-cli library list --query flips --group picks
+quadcam-cli library list --day 2026-09-27         # groups: last_import, moments, picks, rejected, not_in_photos
+quadcam-cli library rate <id> --stars 4 --pick    # also --reject, --unflag; --stars 0 clears
+quadcam-cli library rebuild                       # make the index again from the files
+quadcam-cli library rename <id> "fence flips"
+quadcam-cli library edit <id> --note "windy" --keywords park,windy --place "Home field"
+quadcam-cli library cut <id> 12-18 1:02-1:10 --export   # set the cuts and write the new ones
+quadcam-cli library trash <id>                    # clip, cuts and original to the Trash
+quadcam-cli library photos <id> --album Drone
+```
+
+Clip ids come from `library list`.
 
 A plan file looks like this:
 
@@ -253,6 +314,7 @@ If the app is running, the server works on the app's session. You see every chan
 | Tool | What it does |
 |---|---|
 | `quadcam_status` | Shows the mode (app or headless), the cards, the radios, and the session |
+| `quadcam_library` | Lists and searches the clips already in the library (read-only) |
 | `quadcam_load_clips` | Stages, checks, and dates a card or a folder |
 | `quadcam_read_clips` | Reads the clips, their plans, moments, keep ranges and cuts; returns thumbnails as images |
 | `quadcam_match_logs` | Dates the clips from EdgeTX logs |
@@ -320,7 +382,7 @@ cargo test
 The tests need ffmpeg. They make their own synthetic clips with `ffmpeg -f lavfi -i testsrc`. GitHub Actions runs the same tests, clippy, and a build on every push and pull request.
 
 - The format tests attach small FAT32 disk images with `hdiutil`. They erase only an image that they created, and they check that the target is a disk image first.
-- No test can reach your Photos library.
+- No test can reach your Photos library or your Trash: under `cargo`, "Move to Trash" moves files into a temporary folder.
 - `cargo test --test import size_and_speed -- --ignored --nocapture` measures MP4 against MOV size and speed.
 
 `test-clips/README.md` describes an optional local corpus of real clips and logs.
@@ -330,7 +392,11 @@ The tests need ffmpeg. They make their own synthetic clips with `ffmpeg -f lavfi
 | Path | Holds |
 |---|---|
 | `ui/` | The app's frontend: HTML, CSS, JavaScript, bundled fonts and icons |
-| `src-tauri/src/core.rs` | The core that every frontend drives |
+| `ui/trim.js` | The trim editor that the library and the Import sheet share |
+| `src-tauri/src/core.rs`, `core_library.rs` | The core that every frontend drives; its library half |
+| `src-tauri/src/library.rs` | The library: layout, the index, and its rebuild from the files |
+| `src-tauri/src/trim.rs` | Cut ranges and the rule for exported cuts, shared by the session and the library |
+| `src-tauri/src/trash.rs` | Moving files to the Trash |
 | `src-tauri/src/lib.rs` | The app's Tauri commands |
 | `src-tauri/src/control.rs` | The control socket |
 | `src-tauri/src/mcp.rs` | The MCP server |

@@ -1,9 +1,10 @@
 # quadcam
 
-A macOS desktop app (Tauri 2) that imports analog FPV DVR clips (MJPEG AVI). It stages the
-clips off the card, dates them (EdgeTX radio logs or the import date), names them
-`YYYY-MM-DD_<name>.mp4`, converts them with ffmpeg, and verifies them with ffprobe. It can then
-add them to Photos and format the card to FAT32. `README.md` is the public user guide; keep it
+A macOS desktop app (Tauri 2) that imports analog FPV DVR clips (MJPEG AVI) into a library.
+It stages the clips off the card, dates them (EdgeTX radio logs or the import date), names them
+`YYYY-MM-DD_<name>.mp4`, converts them with ffmpeg, verifies them with ffprobe, and files them
+by flying day. It can then add them to Photos and format the card to FAT32. The library is the
+home screen; import is a sheet over it. `README.md` is the public user guide; keep it
 in step with every change a user can see.
 
 **Publishable repo:** no personal information in anything committed. That means no names,
@@ -15,8 +16,8 @@ README. Personal preferences go in the app's settings file on the machine
 
 | Path | Holds |
 |---|---|
-| `ui/` | Frontend: plain HTML, CSS and JS, no build step. Icons and fonts are inlined or bundled so the app works offline |
-| `src-tauri/src/` | Rust core. `core.rs` (`Core`) owns the session and is the one surface every front end drives. `lib.rs` holds the Tauri commands, `control.rs` the app's socket, `mcp.rs` the MCP server, `bin/quadcam-cli.rs` the CLI. The logic modules (`scan`, `disk`, `media`, `logs`, `moments`, `metadata`, `qtmeta`, `naming`, `pipeline`, `session`, `photos`) run without Tauri |
+| `ui/` | Frontend: plain HTML, CSS and JS, no build step. `app.js` (library, import sheet, settings), `trim.js` (the one trim editor, used by clip detail and the import review). Icons and fonts are inlined or bundled so the app works offline |
+| `src-tauri/src/` | Rust core. `core.rs` (`Core`) owns the session and the library index and is the one surface every front end drives; `core_library.rs` holds its library methods. `lib.rs` holds the Tauri commands (`core_call` runs any `Core::dispatch` method), `control.rs` the app's socket, `mcp.rs` the MCP server, `bin/quadcam-cli.rs` the CLI. The logic modules (`scan`, `disk`, `media`, `logs`, `moments`, `metadata`, `qtmeta`, `naming`, `pipeline`, `session`, `photos`, `library`, `trim`, `trash`) run without Tauri |
 | `src-tauri/Info.plist` | Photos usage strings, merged into the bundle's Info.plist |
 | `src-tauri/tests/` | Integration tests on synthetic clips and FAT32 disk images |
 | `test-clips/` | Local test corpus. Git tracks only its README |
@@ -36,7 +37,7 @@ README. Personal preferences go in the app's settings file on the machine
 Run these in `src-tauri/`:
 
 ```bash
-cargo test                      # unit + integration tests (needs ffmpeg; attaches small disk images)
+cargo test -- --test-threads=1  # unit + integration tests (needs ffmpeg; attaches small disk images)
 cargo test --test import size_and_speed -- --ignored --nocapture   # MP4 vs MOV size/speed
 cargo tauri dev                 # run from source (Photos is dry-run; QUADCAM_PHOTOS=real to test it)
 cargo tauri build               # -> target/release/bundle/macos/quadcam.app
@@ -65,6 +66,24 @@ GitHub (`noahkiss/quadcam`, public) is the only remote. Users install the cask
 - `.github/workflows/ci.yml` runs fmt, clippy, tests and a release build on every push and PR.
 
 ## Behaviour notes
+
+- **Library model:** the output folder is the library. `library::Layout` files clips as
+  `YYYY/YYYY-MM-DD/` (default), `YYYY-MM-DD/` or flat, optionally with the place name on the
+  day folder; originals go in `originals/` inside the day folder. The files are the source of
+  truth: every detail (rating, flag, moments, keep ranges, flight stats, place, source
+  fingerprint, Photos state) is an `app.quadcam.*` QuickTime item in the file.
+  `<library>/.quadcam/index.json` is a rebuildable cache (`library::rebuild`); only unsaved cut
+  ranges live in it alone. A rebuild never moves or writes a file, which is also how an
+  existing export folder is adopted.
+- **Identity:** a library clip's id is its DVR source's content fingerprint
+  (`app.quadcam.source`), never a file name. A file quadcam did not write is known by a hash of
+  its first MB before `moov` (`library::head_id`), which metadata rewrites never touch.
+- **Cuts:** `trim.rs` is the one cut model for the session and the library. Dropping a cut that
+  was already exported needs a decision (`RemovedCuts::Keep`: the file stays as its own clip,
+  marked `app.quadcam.detached`; `Trash`: it goes to the Trash). Without one, `Core` answers
+  `CutChange::Confirm` (GUI) or refuses the patch (CLI `--removed`, MCP `removed_cuts`).
+- **Cards** show in the sidebar with an "N new" count (content fingerprints not in the index);
+  inserting a card never starts an import on its own.
 
 - **Output folder:** defaults to `~/Movies/quadcam`, resolved from `$HOME` at runtime
   (`pipeline::default_output_dir`). The app creates that default, with its parents, on the
@@ -101,6 +120,7 @@ quadcam-cli --json import --name 0=backyard-loops --skip 3 --format mp4 --add-to
 quadcam-cli --json import --plan plan.json     # {"clips":[{"id":0,"name":"..","date":"..","note":"..","skip":false}],"format":"mov","output_dir":".."}
 quadcam-cli --json verify                      # re-check the session's outputs
 quadcam-cli --json clear                       # forget the session, delete the session file
+quadcam-cli --json library list --group picks  # also rate, rebuild, rename, edit, cut, trash, photos
 quadcam-cli --json photos out.mp4 --album Drone
 quadcam-cli --json eject
 quadcam-cli --json format --plan               # runs every guard, prints device + volume UUID
@@ -126,7 +146,7 @@ claude mcp add quadcam -- "$(brew --prefix)/bin/quadcam-cli" mcp
   running, it falls back to a headless core on the shared session file. Each call opens a
   fresh connection (with a ping), so an app restart never leaves a dead pipe. A call that
   started against the app is never retried headless.
-- Tools: `quadcam_status`, `quadcam_load_clips`, `quadcam_read_clips` (thumbnails as image
+- Tools: `quadcam_status`, `quadcam_library` (read-only library search), `quadcam_load_clips`, `quadcam_read_clips` (thumbnails as image
   content), `quadcam_match_logs`, `quadcam_suggest`, `quadcam_export`, `quadcam_verify`,
   `quadcam_add_to_photos`, `quadcam_eject`, `quadcam_format_card`.
 - Agent suggestions show in the GUI with a dashed accent outline and an "agent" badge until
@@ -147,6 +167,8 @@ claude mcp add quadcam -- "$(brew --prefix)/bin/quadcam-cli" mcp
 - Outputs are written under a hidden `.part` name and renamed only after verify passes.
   Never overwrite an existing file.
 - Record corpus values in `test-clips/README.md` when the test clips change.
+- **Never fill the real Trash while testing.** `trash::real_trash` returns a temporary-folder
+  stand-in for any process started by cargo; tests pass `DirTrash`.
 - **Never import into a real Photos library while testing.** In-process tests pass
   `photos::Recorder`. Tests that spawn the CLI set `QUADCAM_PHOTOS=dry-run`. As a fail-safe,
   `Core::real_photos` returns the recorder for any process started by cargo (it carries
