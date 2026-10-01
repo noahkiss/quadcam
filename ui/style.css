@@ -239,7 +239,15 @@ main { flex: 1; min-width: 0; display: flex; flex-direction: column; position: r
 .best .mini { width: 48px; height: 28px; border-radius: 5px; background: var(--crust) center / cover no-repeat; }
 .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(calc(var(--thumb) * 1.6), 1fr)); gap: 22px 16px; }
 .card { display: flex; flex-direction: column; gap: 8px; border-radius: 10px; cursor: default; outline: none; }
-.card[aria-selected=true] { outline: 2px solid var(--primary); outline-offset: 3px; }
+.card[aria-selected=true] { outline: 3px solid var(--primary); outline-offset: 3px; background: color-mix(in srgb, var(--primary) 10%, transparent); }
+.card[aria-selected=true] .thumb { box-shadow: 0 0 0 2px var(--bg); }
+.list-table tr[aria-selected=true] td:first-child { box-shadow: inset 3px 0 0 var(--primary); }
+#library { position: relative; }
+.sel-bar { position: absolute; left: 50%; bottom: 44px; transform: translateX(-50%); z-index: 20; display: flex; align-items: center; gap: 8px; padding: 6px 8px 6px 14px; border-radius: 12px; background: var(--surface); border: 1px solid var(--surface2); box-shadow: var(--shadow); font-size: .85rem; white-space: nowrap; }
+.sel-bar .sep { width: 1px; height: 20px; background: var(--surface2); }
+.sel-bar .stars i[data-icon] { width: 16px; height: 16px; }
+.sel-bar .stars button:hover { color: var(--warning); }
+.sel-bar .danger-text { color: var(--error); }
 .card.rejected { opacity: .5; }
 .thumb { height: var(--thumb); border-radius: 10px; position: relative; overflow: hidden; background: var(--crust) 0 0 / 1000% 100% no-repeat; }
 .thumb .tl-chip { position: absolute; left: 8px; top: 8px; }

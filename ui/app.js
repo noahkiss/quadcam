@@ -451,6 +451,7 @@ function sideFoot() {
 
 function setScreen(screen) {
   state.screen = screen;
+  if (screen !== "library") $("#sel-bar").hidden = true;
   $("#library").hidden = screen !== "library";
   $("#first-run").hidden = screen !== "first-run";
   $("#detail").hidden = screen !== "detail";
@@ -513,6 +514,7 @@ function renderLibrary() {
   }
   content.scrollTop = scroll;
   renderFooter(list);
+  renderSelBar();
   $("#sort").value = librarySort().key;
   $$("[data-action=view-grid]")[0].setAttribute("aria-pressed", String(settings.libView !== "list"));
   $$("[data-action=view-list]")[0].setAttribute("aria-pressed", String(settings.libView === "list"));
@@ -669,9 +671,39 @@ function select(id, e) {
   } else {
     state.selected = new Set([id]);
   }
-  state.anchor = id;
+  // Shift extends from the anchor; the cursor is the end that moves.
+  if (!e?.shiftKey || !state.anchor) state.anchor = id;
+  state.cursor = id;
   for (const node of $$("[data-id]", $("#lib-content"))) node.setAttribute("aria-selected", String(state.selected.has(node.dataset.id)));
+  renderSelBar();
   syncMenu();
+}
+
+function clearSelection() {
+  state.selected.clear();
+  renderLibrary();
+  syncMenu();
+}
+
+// The bar for two or more selected clips: rate, flag, share, add to Photos, trash.
+function renderSelBar() {
+  const bar = $("#sel-bar");
+  const ids = selectedIds();
+  bar.hidden = ids.length < 2 || state.screen !== "library";
+  if (bar.hidden) return;
+  const rateBox = el("span", { class: "stars", role: "group", "aria-label": "Rate" });
+  for (let i = 1; i <= 5; i++) rateBox.append(el("button", { type: "button", "aria-label": `${i} stars`, title: `${i} stars`, onclick: () => rate(selectedIds(), i) }, icon("star")));
+  bar.replaceChildren(
+    el("b", { text: `${ids.length} selected` }),
+    el("span", { class: "sep", "aria-hidden": "true" }),
+    rateBox,
+    el("button", { type: "button", class: "icon small", "aria-label": "Pick", title: "Pick", onclick: () => rate(selectedIds(), null, "pick") }, icon("flag")),
+    el("button", { type: "button", class: "icon small", "aria-label": "Reject", title: "Reject", onclick: () => rate(selectedIds(), null, "reject") }, icon("close")),
+    el("span", { class: "sep", "aria-hidden": "true" }),
+    el("button", { type: "button", class: "ghost small", onclick: (e) => shareClips(selectedIds(), e.currentTarget) }, icon("share"), "Share"),
+    el("button", { type: "button", class: "ghost small", onclick: () => addLibToPhotos(selectedIds()) }, icon("photos"), "Add to Photos"),
+    el("button", { type: "button", class: "ghost small danger-text", onclick: () => trashClips(selectedIds()) }, icon("trash-bin-trash"), "Trash"),
+    el("button", { type: "button", class: "icon small", "aria-label": "Deselect", title: "Deselect", onclick: clearSelection }, icon("close-circle")));
 }
 
 function selectAll() {
@@ -704,7 +736,7 @@ function stepClip(delta) {
     if (playing) playDetail();
     return;
   }
-  const i = list.indexOf(state.anchor);
+  const i = list.indexOf(state.cursor ?? state.anchor);
   const next = list[Math.min(list.length - 1, Math.max(0, i < 0 ? 0 : i + delta))];
   select(next);
   $(`#lib-content [data-id="${CSS.escape(next)}"]`)?.scrollIntoView({ block: "nearest" });
@@ -1091,6 +1123,7 @@ document.addEventListener("keydown", (e) => {
   if (e.key === "Escape") {
     if (!$("#menu").hidden) return closeMenu();
     if (!sheetOpen && state.screen === "detail") return closeDetail();
+    if (!sheetOpen && state.screen === "library" && state.selected.size) return clearSelection();
   }
   if (sheetOpen) {
     if (state.step === "review" && rTrim && rTrim.handleKey(e)) e.preventDefault();
@@ -1112,7 +1145,7 @@ document.addEventListener("keydown", (e) => {
   if (["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown"].includes(e.key)) {
     const list = visible().map((c) => c.id);
     if (!list.length) return;
-    const i = Math.max(0, list.indexOf(state.anchor));
+    const i = Math.max(0, list.indexOf(state.cursor ?? state.anchor));
     const cols = settings.libView === "list" ? 1 : Math.max(1, Math.round($("#lib-content .grid")?.clientWidth / ($("#lib-content .card")?.clientWidth + 16)) || 1);
     const step = { ArrowLeft: -1, ArrowRight: 1, ArrowUp: -cols, ArrowDown: cols }[e.key];
     const next = list[Math.min(list.length - 1, Math.max(0, i + step))];
