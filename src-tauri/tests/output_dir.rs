@@ -20,6 +20,9 @@ fn default_output_dir_follows_home_and_is_created() {
         keep_originals: false,
         add_time: false,
         default_name: "flight".into(),
+        places: Vec::new(),
+        profiles: Vec::new(),
+        default_profile: None,
     };
     pipeline::preflight(&settings, &[]).unwrap();
     assert!(

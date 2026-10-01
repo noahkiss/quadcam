@@ -80,12 +80,40 @@ pub struct Sticks {
 
 /// One EdgeTX log row: its time, the sticks when the model logs them, and the flight
 /// controller's attitude telemetry (radians) when the receiver sends it.
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct LogRow {
     pub time: NaiveDateTime,
     pub sticks: Option<Sticks>,
     pub roll: Option<f64>,
     pub pitch: Option<f64>,
+    /// Receiver battery (`RxBt(V)`), link quality (`RQly(%)`) and signal (`1RSS(dB)`).
+    pub rx_bat: Option<f64>,
+    pub lq: Option<f64>,
+    pub rssi: Option<f64>,
+    /// The EdgeTX model name, from the log file's name.
+    pub model: Option<std::sync::Arc<str>>,
+}
+
+/// The model name in an EdgeTX log file name: `<model>-YYYY-MM-DD[-HHMMSS].csv`.
+pub fn model_from_file_name(name: &str) -> Option<String> {
+    let stem = name
+        .strip_suffix(".csv")
+        .or_else(|| name.strip_suffix(".CSV"))?;
+    let digits = |s: &str| !s.is_empty() && s.chars().all(|c| c.is_ascii_digit());
+    let mut parts: Vec<&str> = stem.split('-').collect();
+    if parts.len() > 4 && parts.last().is_some_and(|p| digits(p) && p.len() == 6) {
+        parts.pop();
+    }
+    if parts.len() < 4 {
+        return None;
+    }
+    let n = parts.len();
+    let (y, m, d) = (parts[n - 3], parts[n - 2], parts[n - 1]);
+    if !(digits(y) && y.len() == 4 && digits(m) && m.len() == 2 && digits(d) && d.len() == 2) {
+        return None;
+    }
+    let model = parts[..n - 3].join("-");
+    (!model.trim().is_empty()).then_some(model)
 }
 
 /// Splits one CSV line. EdgeTX quotes text columns such as the flight mode.
@@ -119,6 +147,7 @@ pub fn parse_rows(text: &str) -> Vec<LogRow> {
     let col = |name: &str| header.iter().position(|h| h == name);
     let (ail, ele, thr, rud) = (col("Ail"), col("Ele"), col("Thr"), col("Rud"));
     let (roll, pitch) = (col("Roll(rad)"), col("Ptch(rad)"));
+    let (rx_bat, lq, rssi) = (col("RxBt(V)"), col("RQly(%)"), col("1RSS(dB)"));
     let mut out = Vec::new();
     for line in lines {
         let cols = split_csv(line);
@@ -142,16 +171,28 @@ pub fn parse_rows(text: &str) -> Vec<LogRow> {
             sticks,
             roll: num(roll),
             pitch: num(pitch),
+            rx_bat: num(rx_bat),
+            lq: num(lq),
+            rssi: num(rssi),
+            model: None,
         });
     }
     out
 }
 
-/// Every row of one EdgeTX CSV file.
+/// Every row of one EdgeTX CSV file, tagged with the model name from the file name.
 pub fn read_rows(path: &Path) -> Result<Vec<LogRow>> {
     let text =
         std::fs::read_to_string(path).with_context(|| format!("reading {}", path.display()))?;
-    Ok(parse_rows(&text))
+    let model: Option<std::sync::Arc<str>> = path
+        .file_name()
+        .and_then(|n| model_from_file_name(&n.to_string_lossy()))
+        .map(Into::into);
+    let mut rows = parse_rows(&text);
+    for r in &mut rows {
+        r.model = model.clone();
+    }
+    Ok(rows)
 }
 
 /// Row timestamps from one EdgeTX CSV. Date and Time are the first two columns.
@@ -374,6 +415,24 @@ mod tests {
         let rows = parse_rows("Date,Time,1RSS(dB)\n2026-09-30,10:00:00.000,-50\n");
         assert_eq!(rows.len(), 1);
         assert!(rows[0].sticks.is_none());
+    }
+
+    #[test]
+    fn model_names_from_log_files() {
+        assert_eq!(
+            model_from_file_name("Model01-2026-09-30-100000.csv").as_deref(),
+            Some("Model01")
+        );
+        assert_eq!(
+            model_from_file_name("AIR65 II-2000-01-01.csv").as_deref(),
+            Some("AIR65 II")
+        );
+        assert_eq!(
+            model_from_file_name("My-Quad-2026-09-30-100000.csv").as_deref(),
+            Some("My-Quad")
+        );
+        assert_eq!(model_from_file_name("notes.csv"), None);
+        assert_eq!(model_from_file_name("2026-09-30.csv"), None);
     }
 
     #[test]

@@ -904,6 +904,10 @@ mod tests {
                 }),
                 roll: None,
                 pitch: None,
+                rx_bat: None,
+                lq: None,
+                rssi: None,
+                model: None,
             })
             .collect();
         let end = rows[99].time;

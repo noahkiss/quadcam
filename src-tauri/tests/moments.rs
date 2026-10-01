@@ -94,6 +94,9 @@ fn settings(out: &Path, format: Format) -> ImportSettings {
         keep_originals: false,
         add_time: false,
         default_name: "flight".into(),
+        places: Vec::new(),
+        profiles: Vec::new(),
+        default_profile: None,
     }
 }
 
@@ -122,6 +125,16 @@ fn cut_clip(format: Format) {
         source: DateSource::Import,
         name: "loops".into(),
         note: String::new(),
+        meta: quadcam_lib::metadata::Resolved {
+            location: Some(quadcam_lib::metadata::Location {
+                lat: 40.68919,
+                lon: -74.04449,
+                name: None,
+            }),
+            make: "Maker".into(),
+            keywords: vec!["FPV".into()],
+            ..Default::default()
+        },
     };
     let mut planner = NamePlanner::new();
     let mut r = pipeline::import_clip(&t, clip, &job, &st, &mut planner, &mut |_| {});
@@ -145,10 +158,29 @@ fn cut_clip(format: Format) {
     assert_eq!(p.audio_streams, 1);
     let tags = format_tags(&file);
     assert_eq!(tags["title"], "loops");
-    assert!(tags["description"]
+    assert!(tags["com.apple.quicktime.description"]
         .as_str()
         .unwrap()
         .contains("cut 1.0-3.5 s"));
+    // QuickTime metadata carries over to the cut, with the cut's own start time.
+    assert_eq!(
+        tags["com.apple.quicktime.location.ISO6709"],
+        "+40.6892-074.0445/"
+    );
+    assert_eq!(tags["com.apple.quicktime.make"], "Maker");
+    let main = format_tags(r.output.as_ref().unwrap());
+    let when = |v: &serde_json::Value| {
+        chrono::DateTime::parse_from_str(v.as_str().unwrap(), "%Y-%m-%dT%H:%M:%S%z").unwrap()
+    };
+    assert_eq!(
+        (when(&tags["com.apple.quicktime.creationdate"])
+            - when(&main["com.apple.quicktime.creationdate"]))
+        .num_seconds(),
+        1
+    );
+    if let Some(x) = exif(&file) {
+        assert_eq!(x["Title"], "loops");
+    }
 
     // A second run keeps the verified cut and writes only the new one.
     let mtime = file.metadata().unwrap().modified().unwrap();
@@ -227,4 +259,116 @@ fn log_moments_through_date_planning() {
         .unwrap_or_else(|| panic!("{:?}", s.moments));
     assert!((roll.start - 20.0).abs() < 0.01, "{roll:?}");
     assert!((roll.end - 20.6).abs() < 0.01, "{roll:?}");
+}
+
+/// A profile picked by the log's EdgeTX model fills the gear, author and keywords; a saved
+/// place gives the location; flight numbers come from the log. All of it reads back.
+#[test]
+fn profile_place_and_flight_stats_through_the_core() {
+    use quadcam_lib::core::{Core, LogChoice, NoHooks};
+    use quadcam_lib::metadata::{Place, Profile};
+    use quadcam_lib::photos::Recorder;
+    use quadcam_lib::session::{Editor, PlanPatch};
+    use std::sync::Arc;
+
+    let logs = tempfile::tempdir().unwrap();
+    std::fs::create_dir(logs.path().join("LOGS")).unwrap();
+    let mut csv = String::from("Date,Time,1RSS(dB),RQly(%),RxBt(V),Rud,Ele,Thr,Ail\n");
+    for i in 0..60 {
+        // Rows every 0.1 s for 6 s; full aileron at 2.0-2.6 s.
+        let ail = if (20..26).contains(&i) { 1024 } else { 0 };
+        csv.push_str(&format!(
+            "2026-09-28,10:00:{:04.1},{},{},{:.2},0,0,{},{ail}\n",
+            i as f64 / 10.0,
+            -60 - i % 7,
+            100 - i % 5,
+            4.2 - i as f64 * 0.01,
+            if i > 40 { 1024 } else { 0 }
+        ));
+    }
+    std::fs::write(logs.path().join("LOGS/Whoop-2026-09-28-100000.csv"), csv).unwrap();
+    let src = tempfile::tempdir().unwrap();
+    make_clip(&src.path().join("PICT0001.AVI"), 7, true);
+
+    let work = tempfile::tempdir().unwrap();
+    let core = Core::new(
+        work.path().join("cache"),
+        None,
+        Arc::new(NoHooks),
+        Arc::new(Recorder::default()),
+    );
+    let mut d = core.defaults();
+    d.output_dir = Some(work.path().join("out"));
+    std::fs::create_dir_all(work.path().join("out")).unwrap();
+    d.places = vec![Place {
+        name: "Field".into(),
+        lat: 40.68919,
+        lon: -74.04449,
+    }];
+    d.profiles = vec![
+        Profile {
+            name: "Whoop".into(),
+            camera_make: "Maker".into(),
+            camera_model: "Goggles".into(),
+            aircraft: "65 mm whoop".into(),
+            keywords: vec!["tinywhoop".into()],
+            author: "Pilot".into(),
+            edgetx_models: vec!["Whoop".into()],
+            ..Default::default()
+        },
+        Profile {
+            name: "Other".into(),
+            camera_make: "Wrong".into(),
+            ..Default::default()
+        },
+    ];
+    d.default_profile = Some("Other".into());
+    core.set_defaults(d);
+    core.load(Some(src.path())).unwrap();
+    let s = core
+        .plan_dates(
+            LogChoice::Dir(logs.path().to_path_buf()),
+            NaiveDate::from_ymd_opt(2026, 9, 28),
+        )
+        .unwrap();
+    let p = &s.plans[0];
+    assert_eq!(p.log_model.as_deref(), Some("Whoop"));
+    let f = p.flight.as_ref().unwrap();
+    assert_eq!(
+        (f.packs, f.min_rssi_db, f.min_lq),
+        (1, Some(-66.0), Some(96.0))
+    );
+
+    // An unknown place is refused with the saved names; a known one sets the location.
+    let place = |n: &str| PlanPatch {
+        id: 0,
+        place: Some(n.into()),
+        keywords: Some(vec!["park".into()]),
+        ..Default::default()
+    };
+    let e = core.patch(&[place("Nowhere")], Editor::User).unwrap_err();
+    assert!(format!("{e:#}").contains("Field"));
+    core.patch(&[place("field")], Editor::User).unwrap();
+
+    let out = core.import(&Default::default()).unwrap();
+    let r = &out.summary.results[0];
+    assert_eq!(r.outcome, Outcome::Verified, "{:?}", r.error);
+    let tags = format_tags(r.output.as_ref().unwrap());
+    let q = |k: &str| tags[format!("com.apple.quicktime.{k}")].clone();
+    assert_eq!(
+        q("make"),
+        "Maker",
+        "the log's model picks the profile, not the default"
+    );
+    assert_eq!(q("model"), "Goggles");
+    assert_eq!(q("author"), "Pilot");
+    assert_eq!(q("location.ISO6709"), "+40.6892-074.0445/");
+    assert_eq!(q("keywords"), "FPV,tinywhoop,park,roll");
+    assert_eq!(tags["app.quadcam.aircraft"], "65 mm whoop");
+    let flight = tags["app.quadcam.flight"].as_str().unwrap();
+    assert!(
+        flight.contains("min RxBt 3.61 V") && flight.contains("max throttle 100%"),
+        "{flight}"
+    );
+    assert!(core.verify(None).unwrap()[0].ok);
 }

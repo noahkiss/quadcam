@@ -89,6 +89,9 @@ fn format_after_verified_import() {
         keep_originals: false,
         add_time: false,
         default_name: "flight".into(),
+        places: Vec::new(),
+        profiles: Vec::new(),
+        default_profile: None,
     };
     let mut planner = NamePlanner::new();
     let mut results = Vec::new();
@@ -101,6 +104,7 @@ fn format_after_verified_import() {
             source: DateSource::Import,
             name: String::new(),
             note: String::new(),
+            meta: Default::default(),
         };
         let r = pipeline::import_clip(&t, c, &job, &settings, &mut planner, &mut |_| {});
         assert_eq!(r.outcome, Outcome::Verified, "{:?}", r.error);

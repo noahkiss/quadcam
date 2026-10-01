@@ -3,6 +3,7 @@
 
 use crate::logs::{self, Badge, Tunables};
 use crate::media::{self, Encoder, Format, Meta, Probe, Tools};
+use crate::metadata::{self as md, FlightStats, Resolved};
 use crate::moments::{self, Moment, MomentSource, RadioLog, SignalScan, Span};
 use crate::naming::{self, NamePlanner};
 use crate::scan::{self, FoundClip};
@@ -280,6 +281,46 @@ pub struct DateSuggestion {
     /// Median seconds between the claimed log rows.
     #[serde(default)]
     pub log_interval_s: Option<f64>,
+    /// The EdgeTX model name of the claimed log.
+    #[serde(default)]
+    pub log_model: Option<String>,
+    #[serde(default)]
+    pub flight: Option<FlightStats>,
+}
+
+/// Flight numbers from the log rows inside `windows`.
+pub fn flight_stats(
+    rows: &[logs::LogRow],
+    windows: &[(NaiveDateTime, NaiveDateTime)],
+) -> FlightStats {
+    let inside: Vec<&logs::LogRow> = rows
+        .iter()
+        .filter(|r| windows.iter().any(|(a, b)| r.time >= *a && r.time <= *b))
+        .collect();
+    let min = |f: &dyn Fn(&logs::LogRow) -> Option<f64>| {
+        inside
+            .iter()
+            .filter_map(|r| f(r))
+            .fold(None, |m: Option<f64>, v| Some(m.map_or(v, |m| m.min(v))))
+    };
+    FlightStats {
+        armed_s: windows
+            .iter()
+            .map(|(a, b)| (*b - *a).num_milliseconds() as f64 / 1000.0)
+            .sum(),
+        packs: windows.len(),
+        // 0 V and 0 % mean no telemetry yet, not a reading.
+        min_rx_bat_v: min(&|r| r.rx_bat.filter(|v| *v > 0.0)),
+        min_lq: min(&|r| r.lq.filter(|v| *v > 0.0)),
+        min_rssi_db: min(&|r| r.rssi.filter(|v| *v < 0.0)),
+        max_throttle: inside
+            .iter()
+            .filter_map(|r| {
+                r.sticks
+                    .map(|s| ((s.thr + 1024.0) / 2048.0).clamp(0.0, 1.0))
+            })
+            .fold(None, |m: Option<f64>, v| Some(m.map_or(v, |m| m.max(v)))),
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -308,6 +349,8 @@ pub fn plan_dates(
         segments: 0,
         moments: Vec::new(),
         log_interval_s: None,
+        log_model: None,
+        flight: None,
     };
     let mut plan = DatePlan {
         suggestions: durations.iter().map(fallback).collect(),
@@ -369,6 +412,11 @@ pub fn plan_dates(
                 segments: m.segments,
                 moments: log.moments(),
                 log_interval_s: log.interval(),
+                log_model: rows
+                    .iter()
+                    .find(|r| r.time >= start)
+                    .and_then(|r| r.model.as_deref().map(str::to_string)),
+                flight: Some(flight_stats(rows, &windows)),
             };
         }
     }
@@ -405,6 +453,9 @@ pub struct ClipJob {
     pub source: DateSource,
     pub name: String,
     pub note: String,
+    /// Location, gear and keywords to write, after the profile is applied.
+    #[serde(default)]
+    pub meta: Resolved,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -415,6 +466,13 @@ pub struct ImportSettings {
     pub keep_originals: bool,
     pub add_time: bool,
     pub default_name: String,
+    /// Saved places, aircraft profiles and the session's default profile, for metadata.
+    #[serde(default)]
+    pub places: Vec<md::Place>,
+    #[serde(default)]
+    pub profiles: Vec<md::Profile>,
+    #[serde(default)]
+    pub default_profile: Option<String>,
 }
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
@@ -440,6 +498,9 @@ pub struct ClipResult {
     /// One extra output per cut range of the clip.
     #[serde(default)]
     pub cuts: Vec<CutResult>,
+    /// The QuickTime items written (see `qtmeta`), so a later verify checks them too.
+    #[serde(default)]
+    pub qt: Vec<(String, String)>,
 }
 
 /// One cut range written as its own file next to the clip's output.
@@ -546,6 +607,7 @@ pub fn import_clip(
         encoder: None,
         meta: None,
         cuts: Vec::new(),
+        qt: Vec::new(),
     };
     let fail = |mut r: ClipResult, e: String| {
         r.error = Some(e);
@@ -597,10 +659,15 @@ pub fn import_clip(
     };
     r.encoder = Some(enc);
     r.meta = Some(meta.clone());
-    if let Err(e) = media::verify(tools, src_probe, &tmp, &meta) {
+    let qt = md::qt_items(&job.meta, &meta);
+    let written = write_qt(&tmp, &qt)
+        .and_then(|_| media::verify(tools, src_probe, &tmp, &meta))
+        .and_then(|_| media::verify_qt(tools, &tmp, &qt));
+    if let Err(e) = written {
         let _ = std::fs::remove_file(&tmp);
         return fail(r, format!("verify failed: {e:#}"));
     }
+    r.qt = qt;
     if out.exists() {
         let _ = std::fs::remove_file(&tmp);
         return fail(
@@ -673,6 +740,15 @@ pub fn can_format(clips: &[Clip], results: &[ClipResult]) -> Result<()> {
     Ok(())
 }
 
+/// Writes the QuickTime items into `file`, the location also as `©xyz`.
+fn write_qt(file: &Path, qt: &[(String, String)]) -> Result<()> {
+    let loc = qt
+        .iter()
+        .find(|(k, _)| k == "com.apple.quicktime.location.ISO6709")
+        .map(|(_, v)| v.as_str());
+    crate::qtmeta::write(file, qt, loc).context("writing QuickTime metadata")
+}
+
 /// Writes each cut range of a verified clip as `<output stem>_cutN.<ext>` next to its output,
 /// and verifies it. A cut that already verified with the same range keeps its file and is not
 /// written again. Never overwrites: a taken name gets `-2`, `-3`.
@@ -741,8 +817,25 @@ pub fn export_cuts(
                 ),
                 ..meta.clone()
             };
+            // The clip's QuickTime items, with this cut's start time and description.
+            let qt: Vec<(String, String)> = main
+                .qt
+                .iter()
+                .map(|(k, v)| {
+                    let v = match k.as_str() {
+                        "com.apple.quicktime.creationdate" => {
+                            md::creation_date(cut_meta.creation_time)
+                        }
+                        "com.apple.quicktime.description" => cut_meta.description.clone(),
+                        _ => v.clone(),
+                    };
+                    (k.clone(), v)
+                })
+                .collect();
             let res = media::cut(tools, src, &tmp, *span, format, settings.encoder, &cut_meta)
+                .and_then(|_| write_qt(&tmp, &qt))
                 .and_then(|_| media::verify_cut(tools, probe, &tmp, *span))
+                .and_then(|_| media::verify_qt(tools, &tmp, &qt).map(|_| ()))
                 .and_then(|_| {
                     if dst.exists() {
                         bail!("{} appeared during export; not overwriting", dst.display());

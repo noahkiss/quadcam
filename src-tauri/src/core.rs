@@ -365,6 +365,32 @@ impl Core {
     }
 
     pub fn patch(&self, patches: &[PlanPatch], editor: Editor) -> Result<Session> {
+        // A saved place name becomes its location here, where the places are known.
+        let places = self.defaults().places;
+        let mut patches = patches.to_vec();
+        for p in &mut patches {
+            if let Some(name) = p.place.as_deref().map(str::trim).filter(|n| !n.is_empty()) {
+                let pl = places
+                    .iter()
+                    .find(|x| x.name.eq_ignore_ascii_case(name))
+                    .with_context(|| {
+                        format!(
+                            "no saved place {name:?}; saved places: {}",
+                            places
+                                .iter()
+                                .map(|x| x.name.as_str())
+                                .collect::<Vec<_>>()
+                                .join(", ")
+                        )
+                    })?;
+                p.location = Some(crate::metadata::Location {
+                    lat: pl.lat,
+                    lon: pl.lon,
+                    name: Some(pl.name.clone()),
+                });
+            }
+        }
+        let patches = &patches[..];
         let mut guard = self.session.lock().unwrap();
         let s = guard
             .as_mut()
@@ -390,6 +416,9 @@ impl Core {
             keep_originals: o.keep_originals.unwrap_or(d.keep_originals),
             add_time: o.add_time.unwrap_or(d.add_time),
             default_name: d.default_name,
+            places: d.places,
+            profiles: d.profiles,
+            default_profile: d.default_profile,
         })
     }
 
@@ -488,7 +517,8 @@ impl Core {
                 .probe
                 .as_ref()
                 .context("source was never probed")
-                .and_then(|p| media::verify(&tools, p, output, meta));
+                .and_then(|p| media::verify(&tools, p, output, meta))
+                .and_then(|_| media::verify_qt(&tools, output, &r.qt));
             out.push(VerifyReport {
                 id: r.id,
                 output: output.clone(),

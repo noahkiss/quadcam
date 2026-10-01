@@ -57,6 +57,7 @@ fn job(id: usize, name: &str) -> ClipJob {
         source: DateSource::Import,
         name: name.into(),
         note: String::new(),
+        meta: Default::default(),
     }
 }
 
@@ -68,6 +69,9 @@ fn settings(out: &Path, format: Format) -> ImportSettings {
         keep_originals: false,
         add_time: false,
         default_name: "flight".into(),
+        places: Vec::new(),
+        profiles: Vec::new(),
+        default_profile: None,
     }
 }
 
@@ -173,7 +177,18 @@ fn import_all(format: Format) {
     assert_eq!(tags["title"], "Wake Up");
     assert_eq!(tags["comment"], "two packs, windy");
     assert_eq!(tags["date"], "2026-09-30");
-    assert_eq!(tags["description"], "DVR PICT0001.AVI; date source: import");
+    // A MOV carries the description only as a QuickTime key (see qtmeta).
+    let desc = if tags["description"].is_null() {
+        &tags["com.apple.quicktime.description"]
+    } else {
+        &tags["description"]
+    };
+    assert_eq!(desc, "DVR PICT0001.AVI; date source: import");
+    assert_eq!(tags["com.apple.quicktime.title"], "Wake Up");
+    assert!(tags["com.apple.quicktime.software"]
+        .as_str()
+        .unwrap()
+        .starts_with("quadcam "));
     assert!(tags["creation_time"]
         .as_str()
         .unwrap()
@@ -331,6 +346,7 @@ fn unreadable_file_blocks_format() {
             encoder: None,
             meta: None,
             cuts: Vec::new(),
+            qt: Vec::new(),
         })
         .collect();
     assert!(pipeline::can_format(&clips, &results).is_err());
@@ -354,6 +370,7 @@ fn format_gate_needs_every_clip_verified_or_skipped() {
                 encoder: None,
                 meta: None,
                 cuts: Vec::new(),
+                qt: Vec::new(),
             })
             .collect()
     };

@@ -5,6 +5,7 @@
 use crate::disk::{self, CardIdentity, Volume};
 use crate::logs::{Badge, Tunables};
 use crate::media::{Encoder, Format, Tools};
+use crate::metadata::{self as md, ClipMeta, FlightStats, Location};
 use crate::moments::{Moment, Span};
 use crate::naming::NamePlanner;
 use crate::pipeline::{
@@ -31,11 +32,13 @@ pub struct Suggested {
     pub skip: bool,
     #[serde(default)]
     pub cuts: bool,
+    #[serde(default)]
+    pub meta: bool,
 }
 
 impl Suggested {
     pub fn any(&self) -> bool {
-        self.date || self.name || self.note || self.skip || self.cuts
+        self.date || self.name || self.note || self.skip || self.cuts || self.meta
     }
 }
 
@@ -71,6 +74,14 @@ pub struct ClipPlan {
     /// Ranges to export as extra files (`<name>_cutN`), in clip seconds.
     #[serde(default)]
     pub cuts: Vec<Span>,
+    /// Location, profile, keywords and author for this clip.
+    #[serde(default)]
+    pub meta: ClipMeta,
+    /// The EdgeTX model of the matched log; it picks the profile when the clip has none.
+    #[serde(default)]
+    pub log_model: Option<String>,
+    #[serde(default)]
+    pub flight: Option<FlightStats>,
 }
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
@@ -100,6 +111,22 @@ pub struct PlanPatch {
     /// Where the first armed log row falls in the clip, in seconds. Moves the log moments.
     #[serde(default)]
     pub log_offset_s: Option<f64>,
+    /// Aircraft profile name; empty to fall back to the log's model or the default.
+    #[serde(default)]
+    pub profile: Option<String>,
+    /// Location in decimal degrees.
+    #[serde(default)]
+    pub location: Option<Location>,
+    /// A saved place's name (`Core::patch` turns it into `location`); empty removes the
+    /// clip's location.
+    #[serde(default)]
+    pub place: Option<String>,
+    /// Replaces the clip's own keywords.
+    #[serde(default)]
+    pub keywords: Option<Vec<String>>,
+    /// Empty falls back to the profile's author.
+    #[serde(default)]
+    pub author: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -141,6 +168,12 @@ pub struct Defaults {
     /// FAT32 volume name for the format step.
     #[serde(default = "default_label")]
     pub format_label: String,
+    #[serde(default)]
+    pub places: Vec<md::Place>,
+    #[serde(default)]
+    pub profiles: Vec<md::Profile>,
+    #[serde(default)]
+    pub default_profile: Option<String>,
 }
 
 fn default_label() -> String {
@@ -160,6 +193,9 @@ impl Default for Defaults {
             log_dir: None,
             tunables: Tunables::default(),
             format_label: default_label(),
+            places: Vec::new(),
+            profiles: Vec::new(),
+            default_profile: None,
         }
     }
 }
@@ -210,6 +246,15 @@ impl Defaults {
         }
         if let Some(t) = get(&v, "tunables") {
             d.tunables = t;
+        }
+        if let Some(p) = get(&v, "places") {
+            d.places = p;
+        }
+        if let Some(p) = get(&v, "profiles") {
+            d.profiles = p;
+        }
+        if let Some(p) = get::<String>(&v, "defaultProfile").filter(|p| !p.trim().is_empty()) {
+            d.default_profile = Some(p);
         }
         d
     }
@@ -263,6 +308,9 @@ impl Session {
                 log_interval_s: None,
                 log_offset_s: 0.0,
                 cuts: Vec::new(),
+                meta: ClipMeta::default(),
+                log_model: None,
+                flight: None,
             })
             .collect();
         let mut warnings = vol.as_ref().map(|v| v.warnings.clone()).unwrap_or_default();
@@ -336,6 +384,8 @@ impl Session {
                 .map(|m| m.shifted(p.log_offset_s))
                 .collect();
             p.log_interval_s = s.log_interval_s;
+            p.log_model = s.log_model.clone();
+            p.flight = s.flight.clone();
             if p.source == DateSource::Edited {
                 continue;
             }
@@ -420,6 +470,30 @@ impl Session {
                 p.cuts = c;
                 p.suggested.cuts = agent;
             }
+            let mut meta_changed = false;
+            if let Some(n) = &patch.profile {
+                p.meta.profile = Some(n.trim().to_string()).filter(|n| !n.is_empty());
+                meta_changed = true;
+            }
+            if let Some(l) = &patch.location {
+                l.check()?;
+                p.meta.location = Some(l.clone());
+                meta_changed = true;
+            } else if patch.place.as_deref().is_some_and(|x| x.trim().is_empty()) {
+                p.meta.location = None;
+                meta_changed = true;
+            }
+            if let Some(k) = &patch.keywords {
+                p.meta.keywords = md::clean_keywords(k.iter().map(String::as_str));
+                meta_changed = true;
+            }
+            if let Some(a) = &patch.author {
+                p.meta.author = Some(a.trim().to_string()).filter(|a| !a.is_empty());
+                meta_changed = true;
+            }
+            if meta_changed {
+                p.suggested.meta = agent;
+            }
             if let Some(o) = patch.log_offset_s {
                 let by = o - p.log_offset_s;
                 p.moments = p.moments.iter().map(|m| m.shifted(by)).collect();
@@ -450,6 +524,7 @@ impl Session {
                 source: p.source,
                 name: p.name.clone(),
                 note: p.note.clone(),
+                meta: md::Resolved::default(),
             })
             .collect()
     }
@@ -567,7 +642,25 @@ pub fn run_import(
     on_progress: &mut dyn FnMut(usize, f64, f64),
     on_result: &mut dyn FnMut(&ClipResult),
 ) -> Result<Vec<ClipResult>> {
-    let jobs = session.jobs();
+    let mut jobs = session.jobs();
+    for job in &mut jobs {
+        let (Some(p), Some(c)) = (
+            session.plans.iter().find(|p| p.id == job.id),
+            session.clips.iter().find(|c| c.id == job.id),
+        ) else {
+            continue;
+        };
+        job.meta = md::resolve(
+            &p.meta,
+            p.log_model.as_deref(),
+            &settings.profiles,
+            settings.default_profile.as_deref(),
+            &settings.places,
+            &p.moments,
+            c.duration,
+            p.flight.as_ref(),
+        );
+    }
     let done = |id: usize| {
         session
             .results
@@ -599,6 +692,7 @@ pub fn run_import(
                 encoder: None,
                 meta: None,
                 cuts: Vec::new(),
+                qt: Vec::new(),
             }
         } else if let Some(prev) = done(clip.id) {
             prev
@@ -663,6 +757,9 @@ mod tests {
             log_interval_s: None,
             log_offset_s: 0.0,
             cuts: Vec::new(),
+            meta: ClipMeta::default(),
+            log_model: None,
+            flight: None,
         };
         Session {
             version: SESSION_VERSION,

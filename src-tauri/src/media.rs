@@ -209,27 +209,18 @@ pub fn convert_args(
                     ["-c:v", "libx264", "-preset", "veryfast", "-crf", "20"].map(String::from),
                 ),
             }
-            a.extend(
-                [
-                    "-c:a",
-                    "aac",
-                    "-b:a",
-                    "128k",
-                    "-fps_mode",
-                    "passthrough",
-                    "-movflags",
-                    "+faststart",
-                ]
-                .map(String::from),
-            );
+            a.extend(["-c:a", "aac", "-b:a", "128k", "-fps_mode", "passthrough"].map(String::from));
+            // No `+faststart`: `qtmeta` adds metadata by rewriting the `moov` box in place,
+            // which needs it at the end of the file. Local playback and Photos do not care.
             a.extend(meta.args());
             a.extend(["-f".into(), "mp4".into(), s(dst)]);
         }
         Format::Mov => {
             a.extend(["-fflags".into(), "+genpts".into(), "-i".into(), s(src)]);
             a.extend(["-map", "0", "-c", "copy"].map(String::from));
-            // The mov muxer drops `description` unless tags go out as QuickTime keys.
-            a.extend(["-movflags", "use_metadata_tags"].map(String::from));
+            // No `use_metadata_tags`: its keys land where Apple's frameworks cannot read
+            // them, and they confuse ffprobe next to ours. `qtmeta` writes the QuickTime
+            // keys (description included) after ffmpeg.
             a.extend(meta.args());
             a.extend(["-f".into(), "mov".into(), s(dst)]);
         }
@@ -352,12 +343,12 @@ pub fn cut_args(
                     ["-c:v", "libx264", "-preset", "veryfast", "-crf", "20"].map(String::from),
                 ),
             }
-            a.extend(["-c:a", "aac", "-b:a", "128k", "-movflags", "+faststart"].map(String::from));
+            a.extend(["-c:a", "aac", "-b:a", "128k"].map(String::from));
             a.extend(meta.args());
             a.extend(["-f".into(), "mp4".into(), s(dst)]);
         }
         Format::Mov => {
-            a.extend(["-c", "copy", "-movflags", "use_metadata_tags"].map(String::from));
+            a.extend(["-c", "copy"].map(String::from));
             a.extend(meta.args());
             a.extend(["-f".into(), "mov".into(), s(dst)]);
         }
@@ -464,7 +455,14 @@ pub fn verify(tools: &Tools, src: &Probe, out: &Path, meta: &Meta) -> Result<Pro
             src.duration
         );
     }
-    let tag = |k: &str| p.tags.get(k).map(String::as_str).unwrap_or("");
+    // A MOV keeps some tags only as QuickTime keys (written by `qtmeta`).
+    let tag = |k: &str| {
+        p.tags
+            .get(k)
+            .or_else(|| p.tags.get(&format!("com.apple.quicktime.{k}")))
+            .map(String::as_str)
+            .unwrap_or("")
+    };
     for (k, want) in [
         ("title", &meta.title),
         ("comment", &meta.comment),
@@ -476,7 +474,7 @@ pub fn verify(tools: &Tools, src: &Probe, out: &Path, meta: &Meta) -> Result<Pro
         }
     }
     let ct = tag("creation_time");
-    // The mov muxer with use_metadata_tags reports the mvhd time and the key, joined by ';'.
+    // Some muxer setups report the mvhd time and a key, joined by ';'.
     let ok = ct.split(';').any(|c| {
         DateTime::parse_from_rfc3339(c.trim()).is_ok_and(|t| {
             (t.with_timezone(&Utc) - meta.creation_time)
@@ -645,4 +643,67 @@ pub fn sample_frames(
     }
     let raw = run(&[], &format!("fps={sample_fps},{scale}"))?;
     Ok((split(raw), 1.0 / sample_fps))
+}
+
+/// exiftool, when installed. Optional: verify uses it as a second reader.
+pub fn find_exiftool() -> Option<PathBuf> {
+    find_tool("exiftool")
+}
+
+/// Checks that every QuickTime item and the location read back: through ffprobe always, and
+/// through exiftool's `Keys` and `UserData` groups when exiftool is installed.
+pub fn verify_qt(tools: &Tools, out: &Path, items: &[(String, String)]) -> Result<()> {
+    let p = probe(tools, out).context("output does not open")?;
+    for (k, want) in items {
+        let got = p
+            .tags
+            .get(&k.to_lowercase())
+            .map(String::as_str)
+            .unwrap_or("");
+        if got != want && !got.split(';').any(|x| x == want) {
+            bail!("metadata {k} reads back as {got:?}, expected {want:?}");
+        }
+    }
+    let loc = items
+        .iter()
+        .find(|(k, _)| k == "com.apple.quicktime.location.ISO6709")
+        .map(|(_, v)| v.as_str());
+    let (Some(loc), Some(exif)) = (loc, find_exiftool()) else {
+        return Ok(());
+    };
+    let out = Command::new(exif)
+        .args([
+            "-j",
+            "-n",
+            "-Keys:GPSCoordinates",
+            "-UserData:GPSCoordinates",
+            "-G1",
+        ])
+        .arg(out)
+        .output()
+        .context("running exiftool")?;
+    let v: serde_json::Value = serde_json::from_slice(&out.stdout).unwrap_or_default();
+    let want = parse_iso6709(loc).context("bad ISO 6709 value")?;
+    for g in ["Keys:GPSCoordinates", "UserData:GPSCoordinates"] {
+        let got = v[0][g]
+            .as_str()
+            .map(str::to_string)
+            .or_else(|| v[0][g].as_f64().map(|x| x.to_string()));
+        let ok = got.as_deref().and_then(|s| {
+            let mut it = s.split_whitespace().filter_map(|x| x.parse::<f64>().ok());
+            Some((it.next()?, it.next()?))
+        });
+        match ok {
+            Some((la, lo)) if (la - want.0).abs() < 1e-3 && (lo - want.1).abs() < 1e-3 => {}
+            _ => bail!("exiftool reads {g} as {got:?}, expected {loc}"),
+        }
+    }
+    Ok(())
+}
+
+/// `+40.6892-074.0445/` to (lat, lon).
+pub fn parse_iso6709(s: &str) -> Option<(f64, f64)> {
+    let s = s.trim().trim_end_matches('/');
+    let split = s[1..].find(['+', '-'])? + 1;
+    Some((s[..split].parse().ok()?, s[split..].parse().ok()?))
 }
