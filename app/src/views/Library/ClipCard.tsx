@@ -85,7 +85,7 @@ export const ClipCard = memo(function ClipCard({ clip: c, selected, onMenu }: Pr
           <FlagMark flag={c.flag} />
         </div>
         <div className={styles.line}>
-          <span className={styles.time}>{c.time || ""}</span>
+          {c.time && <span className={styles.time}>{c.time}</span>}
           <MomentChips moments={c.moments} />
           <span className={styles.stars}>
             <Stars rating={c.rating || 0} onRate={(r) => rate([c.id], r)} size={12} />
