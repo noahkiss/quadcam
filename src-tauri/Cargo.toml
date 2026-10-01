@@ -35,7 +35,8 @@ tempfile = "3"
 [target.'cfg(target_os = "macos")'.dependencies]
 block2 = "0.6"
 objc2 = "0.6"
-objc2-foundation = { version = "0.3", features = ["NSURL", "NSString", "NSArray", "NSError", "NSFileManager", "NSThread", "NSRunLoop", "NSDate", "block2"] }
+objc2-foundation = { version = "0.3", features = ["NSURL", "NSString", "NSArray", "NSError", "NSFileManager", "NSGeometry", "NSThread", "NSRunLoop", "NSDate", "block2"] }
 objc2-map-kit = { version = "0.3", default-features = false, features = ["std", "block2", "objc2-core-location", "MKAnnotation", "MKLocalSearch", "MKLocalSearchRequest", "MKLocalSearchResponse", "MKMapItem", "MKPlacemark"] }
 objc2-core-location = { version = "0.3", default-features = false, features = ["std", "CLLocation", "CLPlacemark"] }
 objc2-photos = "0.3"
+objc2-app-kit = { version = "0.3", default-features = false, features = ["std", "NSSharingService", "NSResponder", "NSView"] }

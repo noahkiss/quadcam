@@ -85,6 +85,27 @@ fn walk(root: &Path, dir: &Path, depth: usize, out: &mut Vec<FoundClip>) {
     }
 }
 
+/// The video files among `paths` (files a person dropped on the window), in PICT-number
+/// order. `rel` is the file name.
+pub fn clips_in(paths: &[PathBuf]) -> Vec<FoundClip> {
+    let mut out: Vec<FoundClip> = paths
+        .iter()
+        .filter(|p| p.is_file())
+        .filter_map(|p| {
+            let name = p.file_name()?.to_string_lossy().to_string();
+            (is_video(&name) && !name.starts_with('.')).then(|| FoundClip {
+                path: p.clone(),
+                rel: name.clone(),
+                size: p.metadata().map(|m| m.len()).unwrap_or(0),
+                name,
+            })
+        })
+        .collect();
+    out.sort_by_key(|c| clip_order_key(&c.rel));
+    out.dedup_by(|a, b| a.path == b.path);
+    out
+}
+
 pub fn is_video(name: &str) -> bool {
     let lower = name.to_lowercase();
     VIDEO_EXTS

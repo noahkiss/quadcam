@@ -33,6 +33,7 @@ const DEFAULTS = {
   // How the library looks; per machine.
   libView: "grid",
   thumbSize: 3,
+  libSort: { key: "date", dir: "desc" },
 };
 
 const settings = structuredClone(DEFAULTS);
@@ -195,9 +196,16 @@ async function saveChanged(values, before) {
 const clipsAll = () => state.lib?.clips || [];
 const libClip = (id) => clipsAll().find((c) => c.id === id);
 
-async function loadLibrary() {
+// Reads the library from the core. With `onlyIfChanged`, it re-renders only when the
+// clips differ from what is on screen.
+let libSig = "";
+async function loadLibrary(onlyIfChanged = false) {
   try {
-    state.lib = await call("library", {});
+    const lib = await call("library", {});
+    const sig = JSON.stringify([lib.root, lib.unindexed, lib.last_import, lib.clips]);
+    if (onlyIfChanged && sig === libSig) return;
+    libSig = sig;
+    state.lib = lib;
   } catch (e) {
     state.lib = { clips: [], unindexed: 0, totals: { clips: 0, bytes: 0, seconds: 0, flying: 0 }, groups: {}, root: settings.outputDir, exists: false };
     console.warn(e);
@@ -244,7 +252,38 @@ function matches(c, f = state.filter) {
   return true;
 }
 
-const visible = () => clipsAll().filter((c) => matches(c));
+const visible = () => sortClips(clipsAll().filter((c) => matches(c)));
+
+// ---------- sort ----------
+
+const SORT_FIRST_DIR = { date: "desc", rating: "desc", duration: "desc", name: "asc" };
+const librarySort = () => (SORT_FIRST_DIR[settings.libSort?.key] ? settings.libSort : { key: "date", dir: "desc" });
+
+// The one order for the grid, the list and keyboard navigation. By date: days newest
+// first (or oldest first), and the clips of a day in the order they were flown.
+function sortClips(list) {
+  const { key, dir } = librarySort();
+  const sign = dir === "asc" ? 1 : -1;
+  const flown = (a, b) => (a.time || "").localeCompare(b.time || "") || a.path.localeCompare(b.path);
+  const byDate = (a, b) => sign * a.date.localeCompare(b.date) || flown(a, b);
+  const cmp = {
+    date: byDate,
+    rating: (a, b) => sign * ((a.rating || 0) - (b.rating || 0)) || byDate(a, b),
+    duration: (a, b) => sign * (a.duration - b.duration) || byDate(a, b),
+    name: (a, b) => sign * a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: "base" }) || byDate(a, b),
+  }[key];
+  return [...list].sort(cmp);
+}
+
+// A new key sorts in its natural direction; the same key again reverses it.
+function setSort(key) {
+  const cur = librarySort();
+  save("libSort", cur.key === key ? { key, dir: cur.dir === "asc" ? "desc" : "asc" } : { key, dir: SORT_FIRST_DIR[key] });
+  renderLibrary();
+  syncMenu();
+}
+
+const syncMenu = () => typeof MenuBar !== "undefined" && MenuBar.sync();
 
 function deadOf(c) {
   if (!c.keep?.length) return [];
@@ -287,6 +326,26 @@ function flagMark(c) {
   if (c.flag === "pick") return el("span", { class: "flag-pick", title: "Pick" }, icon("flag"));
   if (c.flag === "reject") return el("span", { class: "flag-reject", title: "Rejected" }, icon("close"));
   return null;
+}
+
+// Library thumbnails load their strip only when they come near the screen.
+const stripObserver = new IntersectionObserver((entries) => {
+  for (const en of entries) {
+    if (!en.isIntersecting) continue;
+    const n = en.target;
+    n.style.backgroundImage = `url("${n.dataset.strip}")`;
+    stripObserver.unobserve(n);
+  }
+}, { root: $("#lib-content"), rootMargin: "600px 0px" });
+
+// A clip without a strip shows its one-frame poster instead.
+function lazyStrip(node, c) {
+  if (!c.strip && !c.poster) return node;
+  if (c.strip) node.style.backgroundPosition = `${(2 / 9) * 100}% 0`;
+  else Object.assign(node.style, { backgroundSize: "cover", backgroundPosition: "center" });
+  node.dataset.strip = src(c.strip || c.poster);
+  stripObserver.observe(node);
+  return node;
 }
 
 function stripStyle(c, tile = 2) {
@@ -384,7 +443,7 @@ function renderSidebar() {
   nav.replaceChildren(...groups);
 }
 
-const TASK_LABEL = { thumbnails: "Making thumbnails", cuts: "Saving cuts", moments: "Finding dead air", rebuild: "Reading the library", stage: "Copying clips", analyse: "Checking clips", export: "Exporting" };
+const TASK_LABEL = { thumbnails: "Making thumbnails", cuts: "Saving cuts", moments: "Finding dead air", rebuild: "Reading the library", stage: "Copying clips", analyse: "Checking clips", export: "Adding to library" };
 
 function sideFoot() {
   const box = el("div", { class: "side-foot" });
@@ -416,14 +475,16 @@ function sideFoot() {
 
 function setScreen(screen) {
   state.screen = screen;
+  if (screen !== "library") $("#sel-bar").hidden = true;
   $("#library").hidden = screen !== "library";
   $("#first-run").hidden = screen !== "first-run";
   $("#detail").hidden = screen !== "detail";
   $("#top-mid").hidden = screen === "detail";
-  $$("#top-right .size, #top-right .seg").forEach((x) => (x.hidden = screen !== "library"));
+  $$("#top-right .size, #top-right .seg, #sort").forEach((x) => (x.hidden = screen !== "library"));
 }
 
 function renderAll() {
+  if (state.renaming) return;
   renderSidebar();
   const empty = !clipsAll().length && !(state.lib?.unindexed > 0);
   if (state.screen === "detail" && state.detailId && libClip(state.detailId)) {
@@ -434,6 +495,7 @@ function renderAll() {
     if (empty) renderFirstRun();
     else renderLibrary();
   }
+  syncMenu();
 }
 
 function renderFirstRun() {
@@ -448,9 +510,11 @@ function renderFirstRun() {
   $("#first-run-status").replaceChildren(el("span", { class: "dot-on" }), el("span", { text: "Watching for cards" }), el("span", { class: "muted", text: "·" }), ...logs);
 }
 
+const thumbPx = () => `${[80, 104, 136, 170, 210][(settings.thumbSize || 3) - 1]}px`;
+
 function renderLibrary() {
   const content = $("#lib-content");
-  content.style.setProperty("--thumb", `${[80, 104, 136, 170, 210][(settings.thumbSize || 3) - 1]}px`);
+  content.style.setProperty("--thumb", thumbPx());
   renderBanners();
   const list = visible();
   const scroll = content.scrollTop;
@@ -458,6 +522,8 @@ function renderLibrary() {
     content.replaceChildren(el("p", { class: "empty-note", text: state.query ? "No clips match." : "No clips here." }));
   } else if (settings.libView === "list") {
     content.replaceChildren(listTable(list));
+  } else if (librarySort().key !== "date") {
+    content.replaceChildren(el("section", { class: "day" }, el("div", { class: "grid" }, list.map(card))));
   } else {
     const byDay = new Map();
     for (const c of list) {
@@ -466,7 +532,7 @@ function renderLibrary() {
     }
     const days = [];
     let first = true;
-    // The core's order (newest day first, flying order within a day) is the one order.
+    // `list` is already in the one order (sortClips); days keep it.
     for (const [d, cs] of byDay) {
       days.push(dayBlock(d, cs, first));
       first = false;
@@ -475,6 +541,8 @@ function renderLibrary() {
   }
   content.scrollTop = scroll;
   renderFooter(list);
+  renderSelBar();
+  $("#sort").value = librarySort().key;
   $$("[data-action=view-grid]")[0].setAttribute("aria-pressed", String(settings.libView !== "list"));
   $$("[data-action=view-list]")[0].setAttribute("aria-pressed", String(settings.libView === "list"));
 }
@@ -504,20 +572,22 @@ function dayBlock(d, cs, first) {
   const ac = [...new Set(cs.map((c) => c.aircraft).filter(Boolean))];
   const flying = cs.reduce((a, c) => a + flyingOf(c), 0);
   const sub = [...places, ...ac, `${cs.length} clip${cs.length === 1 ? "" : "s"}`, `${fmtLong(flying)} flying`].join(" · ");
-  const notIn = cs.filter((c) => !c.in_photos);
   const head = el("div", { class: "day-head" },
     el("h2", { text: fmtDay(d, true) }),
     el("span", { class: "sub", text: sub }),
     cs.some((c) => c.last_import) ? el("span", { class: "chip pill-last" }, icon("sparkle"), "Last import") : null,
-    el("span", { class: "act" }, notIn.length ? el("button", { type: "button", class: "ghost small", onclick: () => addLibToPhotos(notIn.map((c) => c.id)) }, icon("photos", "c-yellow"), `Add ${notIn.length} to Photos`) : null));
+    el("span", { class: "act" }, el("button", { type: "button", class: "ghost small", onclick: (e) => shareClips(cs.map((c) => c.id), e.currentTarget) }, icon("share"), "Share")));
   const showSummary = first || state.filter.day === d;
   return el("section", { class: "day" }, head, showSummary ? daySummary(cs) : null, el("div", { class: "grid" }, cs.map(card)));
 }
 
 const flyingOf = (c) => (c.keep?.length ? c.keep.reduce((a, k) => a + k.end - k.start, 0) : c.duration);
 
+// The day's numbers beyond the head's clip count and flying time. Nothing when it would
+// only repeat the head: one clip, or no radio-log numbers and no moments.
 function daySummary(cs) {
   const withStats = cs.filter((c) => c.stats);
+  if (cs.length < 2 || (!withStats.length && !cs.some((c) => (c.moments || []).length))) return null;
   const air = withStats.length ? withStats.reduce((a, c) => a + (c.stats.armed_s || 0), 0) : cs.reduce((a, c) => a + flyingOf(c), 0);
   const packs = withStats.reduce((a, c) => a + (c.stats.packs || 0), 0);
   const volts = withStats.map((c) => c.stats.min_rx_bat_v).filter((v) => v != null);
@@ -537,17 +607,18 @@ function daySummary(cs) {
 
 function card(c) {
   const sel = state.selected.has(c.id);
-  const thumb = el("div", { class: `thumb${c.no_picture ? " no-picture" : ""}`, style: stripStyle(c) },
+  const thumb = el("div", { class: `thumb${c.no_picture ? " no-picture" : ""}` },
     c.flag === "reject" ? el("span", { class: "chip tl-chip c-red" }, icon("close"), "Rejected")
       : c.cuts.length ? el("span", { class: "chip tl-chip" }, icon("scissors", "c-sky"), `${c.cuts.length} cut${c.cuts.length === 1 ? "" : "s"}`) : null,
-    c.in_photos ? el("span", { class: "chip tr-chip photos-ok", title: "In Photos" }, icon("photos")) : el("span", { class: "chip tr-chip c-yellow", text: "Not in Photos" }),
+    c.in_photos ? el("span", { class: "chip tr-chip photos-ok", title: "In Photos", "aria-label": "In Photos" }, icon("photos")) : null,
     el("span", { class: "dur", text: fmtDur(c.duration) }));
+  lazyStrip(thumb, c);
   scrubbable(thumb, c);
   const art = el("article", {
     class: `card${c.flag === "reject" ? " rejected" : ""}`, tabindex: "0", "aria-selected": String(sel), "data-id": c.id, "aria-label": c.name,
-    onclick: (e) => select(c.id, e), ondblclick: () => openDetail(c.id), oncontextmenu: (e) => openMenu(e, c.id),
+    onclick: (e) => select(c.id, e), ondblclick: () => { clearTimeout(renameTimer); openDetail(c.id); }, oncontextmenu: (e) => openMenu(e, c.id),
   }, thumb, el("div", { class: "card-body" },
-    el("div", { class: "card-line" }, el("span", { class: "name", text: c.name, title: c.name }),
+    el("div", { class: "card-line" }, el("span", { class: "name", text: c.name, title: c.name, "data-name": true, onclick: (e) => nameClick(e, c.id) }),
       el("span", { class: "right" }, c.rating ? stars(c) : el("span", { class: "stars muted", text: "·····", title: "Not rated" }), flagMark(c), el("span", { class: "time", text: c.time || "" }))),
     minibar(c.duration, deadOf(c)),
     el("div", { class: "mchips" }, momentChips(c.moments))));
@@ -582,10 +653,10 @@ function scrubbable(thumb, c) {
 function listTable(list) {
   const rows = list.map((c) => el("tr", {
     "aria-selected": String(state.selected.has(c.id)), "data-id": c.id, tabindex: "0", class: c.flag === "reject" ? "rejected" : "",
-    onclick: (e) => select(c.id, e), ondblclick: () => openDetail(c.id), oncontextmenu: (e) => openMenu(e, c.id),
+    onclick: (e) => select(c.id, e), ondblclick: () => { clearTimeout(renameTimer); openDetail(c.id); }, oncontextmenu: (e) => openMenu(e, c.id),
   },
-  el("td", {}, el("div", { class: "lthumb", style: stripStyle(c) })),
-  el("td", {}, el("b", { text: c.name })),
+  el("td", {}, lazyStrip(el("div", { class: "lthumb" }), c)),
+  el("td", {}, el("b", { text: c.name, "data-name": true, onclick: (e) => nameClick(e, c.id) })),
   el("td", { class: "mono", text: `${c.date} ${c.time || ""}` }),
   el("td", { class: "mono", text: fmtDur(c.duration) }),
   el("td", {}, stars(c)),
@@ -594,8 +665,16 @@ function listTable(list) {
   el("td", { text: c.place || "" }),
   el("td", { text: c.cuts.length ? String(c.cuts.length) : "" }),
   el("td", {}, c.in_photos ? icon("photos", "c-green") : null)));
+  const { key, dir } = librarySort();
+  const SORTS = { Name: "name", Date: "date", Length: "duration", Rating: "rating" };
+  const th = (h) => {
+    const k = SORTS[h];
+    if (!k) return el("th", { text: h });
+    return el("th", { "aria-sort": k === key ? (dir === "asc" ? "ascending" : "descending") : false },
+      el("button", { type: "button", class: "sort", onclick: () => setSort(k) }, h, k === key ? icon(dir === "asc" ? "arrow-up" : "arrow-down", "tiny") : null));
+  };
   return el("table", { class: "list-table" },
-    el("thead", {}, el("tr", {}, ["", "Name", "Date", "Length", "Rating", "Flag", "Moments", "Place", "Cuts", "Photos"].map((h) => el("th", { text: h })))),
+    el("thead", {}, el("tr", {}, ["", "Name", "Date", "Length", "Rating", "Flag", "Moments", "Place", "Cuts", "Photos"].map(th))),
     el("tbody", {}, rows));
 }
 
@@ -623,19 +702,100 @@ function select(id, e) {
   } else {
     state.selected = new Set([id]);
   }
-  state.anchor = id;
+  // Shift extends from the anchor; the cursor is the end that moves.
+  if (!e?.shiftKey || !state.anchor) state.anchor = id;
+  state.cursor = id;
   for (const node of $$("[data-id]", $("#lib-content"))) node.setAttribute("aria-selected", String(state.selected.has(node.dataset.id)));
+  renderSelBar();
+  syncMenu();
+}
+
+function clearSelection() {
+  state.selected.clear();
+  renderLibrary();
+  syncMenu();
+}
+
+// The bar for two or more selected clips: rate, flag, share, add to the album, trash.
+function renderSelBar() {
+  const bar = $("#sel-bar");
+  const ids = selectedIds();
+  bar.hidden = ids.length < 2 || state.screen !== "library";
+  if (bar.hidden) return;
+  const rateBox = el("span", { class: "stars", role: "group", "aria-label": "Rate" });
+  for (let i = 1; i <= 5; i++) rateBox.append(el("button", { type: "button", "aria-label": `${i} stars`, title: `${i} stars`, onclick: () => rate(selectedIds(), i) }, icon("star")));
+  bar.replaceChildren(
+    el("b", { text: `${ids.length} selected` }),
+    el("span", { class: "sep", "aria-hidden": "true" }),
+    rateBox,
+    el("button", { type: "button", class: "icon small", "aria-label": "Pick", title: "Pick", onclick: () => rate(selectedIds(), null, "pick") }, icon("flag")),
+    el("button", { type: "button", class: "icon small", "aria-label": "Reject", title: "Reject", onclick: () => rate(selectedIds(), null, "reject") }, icon("close")),
+    el("span", { class: "sep", "aria-hidden": "true" }),
+    el("button", { type: "button", class: "ghost small", onclick: (e) => shareClips(selectedIds(), e.currentTarget) }, icon("share"), "Share"),
+    albumAction() ? el("button", { type: "button", class: "ghost small", onclick: () => addLibToPhotos(selectedIds()) }, icon("photos"), albumAction()) : "",
+    el("button", { type: "button", class: "ghost small danger-text", onclick: () => trashClips(selectedIds()) }, icon("trash-bin-trash"), "Trash"),
+    el("button", { type: "button", class: "icon small", "aria-label": "Deselect", title: "Deselect", onclick: clearSelection }, icon("close-circle")));
+}
+
+function selectAll() {
+  state.selected = new Set(visible().map((c) => c.id));
+  renderLibrary();
+  syncMenu();
+}
+
+function setThumbSize(n) {
+  n = Math.min(5, Math.max(1, n));
+  settings.thumbSize = n;
+  $("#thumb-size").value = n;
+  save("thumbSize", n);
+  $("#lib-content").style.setProperty("--thumb", thumbPx());
+  syncMenu();
+}
+
+// Previous or next clip in the library's order. In the detail view it opens that clip in
+// the same tab and keeps playing if the clip was playing; in the library it moves the selection.
+function stepClip(delta) {
+  const list = visible().map((c) => c.id);
+  if (!list.length) return;
+  if (state.screen === "detail") {
+    const i = list.indexOf(state.detailId);
+    const next = list[i + delta];
+    if (i < 0 || next == null) return;
+    const v = $("#d-video");
+    const playing = !v.hidden && !!v.src && !v.paused;
+    openDetail(next);
+    if (playing) playDetail();
+    return;
+  }
+  const i = list.indexOf(state.cursor ?? state.anchor);
+  const next = list[Math.min(list.length - 1, Math.max(0, i < 0 ? 0 : i + delta))];
+  select(next);
+  $(`#lib-content [data-id="${CSS.escape(next)}"]`)?.scrollIntoView({ block: "nearest" });
 }
 
 const selectedIds = () => [...state.selected].filter((id) => libClip(id));
 
 async function rate(ids, rating, flag) {
   if (!ids.length) return;
+  const before = ids.map((id) => libClip(id)).filter(Boolean).map((c) => ({ id: c.id, rating: c.rating || 0, flag: c.flag || "none" }));
+  const apply = () => call("library_rate", { ids, rating: rating ?? null, flag: flag ?? null });
   try {
-    await call("library_rate", { ids, rating: rating ?? null, flag: flag ?? null });
+    await apply();
+    History.push({ label: flag ? "Flag" : "Rating", redo: apply, undo: () => restoreRatings(before) });
   } catch (e) {
     toast(String(e), true);
   }
+}
+
+// Puts ratings and flags back, one core call per distinct pair.
+async function restoreRatings(before) {
+  const groups = new Map();
+  for (const b of before) {
+    const k = `${b.rating}|${b.flag}`;
+    if (!groups.has(k)) groups.set(k, { rating: b.rating, flag: b.flag, ids: [] });
+    groups.get(k).ids.push(b.id);
+  }
+  for (const g of groups.values()) await call("library_rate", { ids: g.ids, rating: g.rating, flag: g.flag });
 }
 
 async function trashClips(ids) {
@@ -648,21 +808,77 @@ async function trashClips(ids) {
     if (r.failed.length) toast(`${r.failed.length} file${r.failed.length === 1 ? "" : "s"} did not move: ${r.failed[0][1]}`, true);
     else toast(`${r.trashed.length} file${r.trashed.length === 1 ? "" : "s"} moved to the Trash.`);
     if (state.detailId && ids.includes(state.detailId)) closeDetail();
+    if (r.moved.length) {
+      let moved = r.moved;
+      History.push({
+        label: "Move to Trash",
+        undo: () => call("library_untrash", { moved }),
+        redo: async () => { moved = (await call("library_trash", { ids })).moved; },
+      });
+    }
   } catch (e) {
     toast(String(e), true);
   }
 }
 
-async function renameClip(id) {
+// Renames a clip in place: its name on the card, list row or detail bar becomes a text
+// field. Return or leaving the field saves; Escape cancels.
+function startRename(id) {
+  clearTimeout(renameTimer);
   const c = libClip(id);
-  if (!c) return;
-  const name = await ask("Rename", null, { input: c.title || c.name, ok: "Rename" });
-  if (name == null || !name.trim()) return;
+  const scope = state.screen === "detail" ? $("#detail-bar") : $(`#lib-content [data-id="${CSS.escape(id)}"]`);
+  const target = scope?.querySelector("[data-name]");
+  if (!c || !target || state.renaming) return;
+  state.renaming = id;
+  const input = el("input", { type: "text", class: "name-edit", value: c.title || c.name, "aria-label": "Clip name", spellcheck: "false" });
+  let over = false;
+  const finish = async (keep) => {
+    if (over) return;
+    over = true;
+    state.renaming = null;
+    if (keep) await setClipName(id, input.value);
+    renderAll();
+    if (state.screen === "library") $(`#lib-content [data-id="${CSS.escape(id)}"]`)?.focus();
+  };
+  input.addEventListener("keydown", (e) => {
+    if (e.key === "Enter") { e.preventDefault(); finish(true); }
+    if (e.key === "Escape") { e.preventDefault(); e.stopPropagation(); finish(false); }
+  });
+  input.addEventListener("blur", () => finish(true));
+  for (const ev of ["click", "dblclick", "mousedown"]) input.addEventListener(ev, (e) => e.stopPropagation());
+  target.replaceChildren(input);
+  input.focus();
+  input.select();
+}
+
+// A click on the name of the one selected clip renames it, unless a double-click follows.
+let renameTimer = null;
+function nameClick(e, id) {
+  if (state.selected.size !== 1 || !state.selected.has(id) || e.metaKey || e.shiftKey) return;
+  e.stopPropagation();
+  clearTimeout(renameTimer);
+  renameTimer = setTimeout(() => startRename(id), 450);
+}
+
+async function setClipName(id, name) {
+  const c = libClip(id);
+  name = name.trim();
+  if (!c || !name || name === (c.title || c.name)) return;
+  const old = c.title || c.name;
   try {
-    await call("library_rename", { id, name: name.trim() });
+    await call("library_rename", { id, name });
+    History.push({ label: "Rename", undo: () => call("library_rename", { id, name: old }), redo: () => call("library_rename", { id, name }) });
   } catch (e) {
     toast(String(e), true);
   }
+}
+
+// The album action's label, e.g. "Add to Drone Album"; null without an album (Share covers
+// plain Add to Photos). `n` counts the clips when there are several.
+function albumAction(n = 1) {
+  const a = (settings.photosAlbum || "").trim();
+  if (!a) return null;
+  return `Add ${n > 1 ? `${n} ` : ""}to ${a}${/album$/i.test(a) ? "" : " Album"}`;
 }
 
 async function addLibToPhotos(ids) {
@@ -675,6 +891,23 @@ async function addLibToPhotos(ids) {
     toast(String(e), true);
   }
 }
+
+// The macOS Share menu for clips and their cuts, shown next to `anchor` (an element), else
+// next to the clip's card or the detail bar's Share button.
+async function shareClips(ids, anchor) {
+  const root = state.lib?.root || "";
+  const files = ids.map(libClip).filter(Boolean).flatMap((c) => [c.file, ...c.cuts.map((k) => `${root}/${k.path}`)]);
+  if (!files.length) return;
+  anchor = anchor || (state.screen === "detail" ? $("#detail-bar [data-share]") : menuAnchor(ids[0]));
+  const r = anchor?.getBoundingClientRect() || { left: innerWidth / 2, top: 60, width: 1, height: 1 };
+  try {
+    await invoke("share", { paths: files, x: r.left, y: r.top, w: r.width, h: r.height });
+  } catch (e) {
+    toast(String(e), true);
+  }
+}
+
+const menuAnchor = (id) => $(`#lib-content [data-id="${CSS.escape(id)}"]`);
 
 async function rescan(id) {
   try {
@@ -691,30 +924,56 @@ function openMenu(e, id) {
   const ids = selectedIds();
   const many = ids.length > 1;
   const c = libClip(id);
-  const item = (ic, label, key, fn, cls) => el("li", {}, el("button", { type: "button", role: "menuitem", class: cls, onclick: () => { closeMenu(); fn(); } }, icon(ic), el("span", { text: label }), el("span", { class: "key", text: key })));
+  const item = (ic, label, key, fn, cls) => el("li", {}, el("button", { type: "button", role: "menuitem", class: cls, onclick: () => { closeMenu(true); fn(); } }, icon(ic), el("span", { text: label }), el("span", { class: "key", text: key })));
   const sep = () => el("li", { role: "separator" });
   const menu = $("#menu");
-  menu.replaceChildren(
-    many ? null : item("pen", "Rename", "⏎", () => renameClip(id)),
+  // Leaves out the items that do not apply.
+  menu.replaceChildren(...[
+    many ? null : item("pen", "Rename", "⏎", () => startRename(id)),
     many ? null : item("tag", "Edit details", "⌘I", () => openDetail(id, null, "details")),
     many ? null : item("scissors", "Trim and cuts", "T", () => openDetail(id)),
-    sep(),
-    item("photos", many ? `Add ${ids.length} to Photos` : "Add to Photos", "", () => addLibToPhotos(ids)),
+    many ? null : sep(),
+    item("share", "Share…", "", () => shareClips(ids, menuAnchor(id))),
+    albumAction() && item("photos", albumAction(ids.length), "", () => addLibToPhotos(ids)),
     many ? null : item("finder", "Show in Finder", "⌘R", () => T.opener.revealItemInDir(c.file)),
     many ? null : item("refresh-moments", "Find dead air again", "", () => rescan(id)),
     sep(),
     item("trash-bin-trash", many ? `Move ${ids.length} to Trash` : "Move to Trash", "⌘⌫", () => trashClips(ids), "danger"),
-  );
+  ].filter(Boolean));
   menu.hidden = false;
+  state.menuFor = id;
   const r = menu.getBoundingClientRect();
   menu.style.left = `${Math.min(e.clientX, innerWidth - r.width - 8)}px`;
   menu.style.top = `${Math.min(e.clientY, innerHeight - r.height - 8)}px`;
   menu.querySelector("button")?.focus();
 }
 
-function closeMenu() {
-  $("#menu").hidden = true;
+// Closes the context menu. With `refocus`, focus goes back to the clip it was opened on.
+function closeMenu(refocus = false) {
+  const menu = $("#menu");
+  if (menu.hidden) return;
+  menu.hidden = true;
+  if (refocus && state.menuFor) {
+    const scope = state.screen === "detail" ? $("#detail-bar") : $("#lib-content");
+    (scope.querySelector(`[data-id="${CSS.escape(state.menuFor)}"]`) || scope.querySelector("button"))?.focus();
+  }
 }
+
+// Arrow keys, Home and End move through the menu; Escape and Tab close it.
+$("#menu").addEventListener("keydown", (e) => {
+  const items = $$("#menu button:not(:disabled)");
+  const i = items.indexOf(document.activeElement);
+  const go = { ArrowDown: i + 1, ArrowUp: i - 1, Home: 0, End: items.length - 1 }[e.key];
+  if (go != null) {
+    items[(go + items.length) % items.length]?.focus();
+  } else if (e.key === "Escape" || e.key === "Tab") {
+    closeMenu(true);
+  } else {
+    return;
+  }
+  e.preventDefault();
+  e.stopPropagation();
+});
 
 document.addEventListener("click", (e) => {
   if (!e.target.closest("#menu")) closeMenu();
@@ -763,14 +1022,15 @@ function renderDetail() {
     el("div", { class: "crumbs" },
       el("button", { type: "button", class: "ghost small", onclick: closeDetail }, icon("arrow-left"), "Library"),
       el("span", { class: "sep", text: "/" }), el("span", { class: "muted", text: fmtDay(c.date) }), el("span", { class: "sep", text: "/" }),
-      el("b", { text: c.name }),
+      el("b", { class: "name", text: c.name, title: "Rename", "data-name": true, onclick: () => startRename(c.id) }),
       c.aircraft ? el("span", { class: "chip" }, icon("quad", "c-pink"), c.aircraft) : null,
       c.place ? el("span", { class: "chip" }, icon("map-point", "c-green"), c.place) : null),
     el("div", { class: "right" },
       stars(c),
       el("button", { type: "button", class: `icon small ${c.flag === "pick" ? "flag-pick" : ""}`, "aria-label": "Pick", title: "Pick (P)", "aria-pressed": String(c.flag === "pick"), onclick: () => rate([c.id], null, c.flag === "pick" ? "none" : "pick") }, icon("flag")),
       el("button", { type: "button", class: `icon small ${c.flag === "reject" ? "flag-reject" : ""}`, "aria-label": "Reject", title: "Reject (X)", "aria-pressed": String(c.flag === "reject"), onclick: () => rate([c.id], null, c.flag === "reject" ? "none" : "reject") }, icon("close")),
-      c.in_photos ? el("span", { class: "chip" }, icon("photos", "c-green"), "In Photos") : el("button", { type: "button", class: "ghost small", onclick: () => addLibToPhotos([c.id]) }, icon("photos", "c-yellow"), "Add to Photos"),
+      c.in_photos ? el("span", { class: "chip photos-in", title: "In Photos" }, icon("photos"), "In Photos") : null,
+      el("button", { type: "button", class: "ghost small", "data-share": true, onclick: (e) => shareClips([c.id], e.currentTarget) }, icon("share"), "Share"),
       el("button", { type: "button", class: "icon small", "aria-label": "Show in Finder", title: "Show in Finder", onclick: () => T.opener.revealItemInDir(c.file) }, icon("finder")),
       el("button", { type: "button", class: "icon small", "aria-label": "More actions", onclick: (e) => openMenu(e, c.id) }, icon("dots"))));
   // The poster is one frame of the strip.
@@ -861,8 +1121,20 @@ function renderLibDetails(c) {
 }
 
 async function libEdit(id, patch) {
+  const c = libClip(id);
+  const before = {};
+  if (c) {
+    if ("note" in patch) before.note = c.note || "";
+    if ("keywords" in patch) before.keywords = c.keywords || [];
+    if ("author" in patch) before.author = c.author || "";
+    if ("place" in patch || "location" in patch) {
+      if (c.location) before.location = { ...c.location, name: c.place || c.location.name || null };
+      else before.place = "";
+    }
+  }
   try {
     await call("library_edit", { id, ...patch });
+    if (c) History.push({ label: "Edit", undo: () => call("library_edit", { id, ...before }), redo: () => call("library_edit", { id, ...patch }) });
   } catch (e) {
     toast(String(e), true);
   }
@@ -917,33 +1189,50 @@ async function playDetail() {
 // ---------- keys ----------
 
 document.addEventListener("keydown", (e) => {
+  // Command-Return adds to the library from the review, even from a name field.
+  if (e.metaKey && e.key === "Enter" && $("#import-sheet").open && state.step === "review" && !document.querySelector("dialog[open]:not(#import-sheet)")) {
+    e.preventDefault();
+    if (!$("#imp-export-btn").disabled) runExport();
+    return;
+  }
   const typing = e.target.closest("input, select, textarea, [contenteditable]");
   if (typing || document.querySelector("dialog[open]:not(#import-sheet)")) return;
   const sheetOpen = $("#import-sheet").open;
+  if (!sheetOpen && e.metaKey && e.key.toLowerCase() === "z") {
+    undoRedo(e.shiftKey ? "redo" : "undo");
+    return e.preventDefault();
+  }
   if (e.key === "Escape") {
     if (!$("#menu").hidden) return closeMenu();
     if (!sheetOpen && state.screen === "detail") return closeDetail();
+    if (!sheetOpen && state.screen === "library" && state.selected.size) return clearSelection();
   }
   if (sheetOpen) {
-    if (state.step === "review" && rTrim && rTrim.handleKey(e)) e.preventDefault();
+    if (state.step !== "review") return;
+    const plain = !e.metaKey && !e.ctrlKey && !e.altKey;
+    if (plain && (e.key === "ArrowUp" || e.key === "ArrowDown")) { stepReview(e.key === "ArrowUp" ? -1 : 1); return e.preventDefault(); }
+    if (plain && e.key.toLowerCase() === "s") { toggleSkip(state.selectedClip); return e.preventDefault(); }
+    if (plain && e.key === " " && !e.target.closest("button") && !($("#r-video").src && !$("#r-video").hidden)) { playReview(); return e.preventDefault(); }
+    if (rTrim && rTrim.handleKey(e)) e.preventDefault();
     return;
   }
   if (state.screen === "detail") {
     if (dTrim && dTrim.handleKey(e)) return e.preventDefault();
+    if (e.key === " " && !e.target.closest("button")) { playDetail(); return e.preventDefault(); }
+    if (e.key === "Enter" && !e.target.closest("button")) { startRename(state.detailId); return e.preventDefault(); }
     if (libKeys(e, [state.detailId])) e.preventDefault();
     return;
   }
   if (state.screen !== "library") return;
   const ids = selectedIds();
   if ((e.metaKey && e.key === "a")) {
-    state.selected = new Set(visible().map((c) => c.id));
-    renderLibrary();
+    selectAll();
     return e.preventDefault();
   }
   if (["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown"].includes(e.key)) {
     const list = visible().map((c) => c.id);
     if (!list.length) return;
-    const i = Math.max(0, list.indexOf(state.anchor));
+    const i = Math.max(0, list.indexOf(state.cursor ?? state.anchor));
     const cols = settings.libView === "list" ? 1 : Math.max(1, Math.round($("#lib-content .grid")?.clientWidth / ($("#lib-content .card")?.clientWidth + 16)) || 1);
     const step = { ArrowLeft: -1, ArrowRight: 1, ArrowUp: -cols, ArrowDown: cols }[e.key];
     const next = list[Math.min(list.length - 1, Math.max(0, i + step))];
@@ -952,12 +1241,27 @@ document.addEventListener("keydown", (e) => {
     return e.preventDefault();
   }
   if (!ids.length) return;
-  if (e.key === "Enter") { renameClip(ids[0]); return e.preventDefault(); }
+  if (e.key === "ContextMenu" || (e.shiftKey && e.key === "F10")) {
+    const r = $(`#lib-content [data-id="${CSS.escape(state.cursor ?? ids[0])}"]`)?.getBoundingClientRect();
+    if (r) openMenu({ preventDefault() {}, clientX: r.left + 24, clientY: r.top + 24 }, state.cursor ?? ids[0]);
+    return e.preventDefault();
+  }
+  if (e.key === "Enter") { startRename(ids[0]); return e.preventDefault(); }
   if (e.key === " " || e.key === "t") { openDetail(ids[0]); return e.preventDefault(); }
   if (e.metaKey && e.key === "i") { openDetail(ids[0], null, "details"); return e.preventDefault(); }
   if (e.metaKey && e.key === "r") { T.opener.revealItemInDir(libClip(ids[0]).file); return e.preventDefault(); }
   if (libKeys(e, ids)) e.preventDefault();
 });
+
+async function undoRedo(which) {
+  const label = which === "undo" ? History.undoLabel() : History.redoLabel();
+  try {
+    const step = await History[which]();
+    if (step) toast(`${which === "undo" ? "Undo" : "Redo"} ${label.toLowerCase()}`);
+  } catch (e) {
+    toast(String(e), true);
+  }
+}
 
 function libKeys(e, ids) {
   if (e.metaKey && e.key === "Backspace") { trashClips(ids); return true; }
@@ -991,7 +1295,11 @@ const inPhotos = (id) => (state.session?.in_photos || []).includes(id);
 
 function openImport(step) {
   const dlg = $("#import-sheet");
-  if (!dlg.open) dlg.showModal();
+  if (!dlg.open) {
+    dlg.showModal();
+    // Keys go to the clip list, not to the first button in the sheet.
+    $("#clips").focus();
+  }
   if (step) setStep(step);
   else setStep(state.session ? (state.session.results.length && !sessionLeft() ? "finish" : "review") : "load");
 }
@@ -1032,14 +1340,25 @@ async function importFrom(mount) {
   const s = state.session;
   const vol = state.volumes.find((v) => v.mount === mount);
   if (s && vol && s.card?.volume_uuid === vol.info.volume_uuid) return openImport();
-  if (s && sessionLeft() && s.results.length === 0 && s.clips.length) {
-    const ok = await ask("Replace the unfinished import?", `${s.clips.length} clips are loaded and not exported. Their names, dates and cuts are lost.`, { ok: "Replace", danger: true });
-    if (!ok) return;
-  }
+  if (!(await replaceOk())) return;
   loadSource(mount);
 }
 
-async function loadSource(path) {
+// Asks before an unexported import is replaced. True to go ahead.
+async function replaceOk() {
+  const s = state.session;
+  if (!(s && sessionLeft() && s.results.length === 0 && s.clips.length)) return true;
+  return !!(await ask("Replace the unfinished import?", `${s.clips.length} clips are loaded and not in the library. Their names, dates and cuts are lost.`, { ok: "Replace", danger: true }));
+}
+
+// A folder or AVI files dropped on the window: the folder loads like a card.
+async function importDropped(paths) {
+  if (!paths.length || state.busy || !state.tools) return;
+  if (!(await replaceOk())) return;
+  loadSource(paths.length === 1 ? paths[0] : `${paths.length} files`, paths);
+}
+
+async function loadSource(path, dropped = null) {
   if (state.busy) return;
   state.restored = false;
   state.busy = true;
@@ -1049,7 +1368,7 @@ async function loadSource(path) {
   $("#clips").replaceChildren(el("li", { class: "muted", style: "padding:1rem", text: `Copying from ${tilde(path)}…` }));
   renderLoad();
   try {
-    const s = await invoke("load_source", { path });
+    const s = dropped ? await invoke("load_dropped", { paths: dropped }) : await invoke("load_source", { path });
     if (!s.clips.length) {
       toast("No clips found there.", true);
       $("#import-sheet").close();
@@ -1177,7 +1496,8 @@ function renderSessionBar() {
   $("#imp-sum").textContent = `${s.clips.length} clips · ${fmtDur(dur - dead)} flying · ${fmtDur(dead)} dead air`;
   const todo = s.plans.filter((p) => !p.skip).length;
   const btn = $("#imp-export-btn");
-  btn.replaceChildren(`Export ${todo} clip${todo === 1 ? "" : "s"}`, icon("arrow-right"));
+  btn.replaceChildren("Add to Library", icon("arrow-right"));
+  btn.title = `Add ${todo} clip${todo === 1 ? "" : "s"} to the library (⌘↩)`;
   btn.disabled = !state.tools || state.busy;
 }
 
@@ -1269,6 +1589,24 @@ function renderClips() {
     );
     ol.append(li);
   }
+}
+
+// Up and Down in the review move between clips.
+function stepReview(delta) {
+  const ids = clips().map((c) => c.id);
+  const next = ids[ids.indexOf(state.selectedClip) + delta];
+  if (next == null) return;
+  state.selectedClip = next;
+  for (const x of $("#clips").children) x.setAttribute("aria-selected", String(x.dataset.clip === String(next)));
+  $(`#clips [data-clip="${next}"]`)?.scrollIntoView({ block: "nearest" });
+  renderReviewDetail();
+}
+
+function toggleSkip(id) {
+  const c = clips().find((x) => x.id === id);
+  const p = plan(id);
+  if (!c || !p || c.status === "empty" || c.stage_error) return;
+  edit({ id, skip: !p.skip });
 }
 
 function sessionTrimModel(c, p) {
@@ -1463,16 +1801,23 @@ async function metaToAll() {
   if (!p) return;
   const m = p.meta || {};
   const patch = { profile: m.profile || "", keywords: m.keywords || [], author: m.author || "", ...(m.location ? { location: m.location } : { place: "" }) };
-  for (const other of clips()) if (other.id !== p.id) await edit({ id: other.id, ...patch });
-  toast("Applied to every clip.");
+  if (await editAll(clips().filter((c) => c.id !== p.id).map((c) => ({ id: c.id, ...patch })))) toast("Applied to every clip.");
+}
+
+// One core call for many clips: one save and one re-render.
+async function editAll(patches) {
+  if (!patches.length) return true;
+  try {
+    setSession(await invoke("edit_plans", { patches }));
+    return true;
+  } catch (e) {
+    toast(String(e), true);
+    return false;
+  }
 }
 
 async function forAll(patchFn) {
-  for (const c of clips()) {
-    const p = plan(c.id);
-    if (p.skip) continue;
-    await edit({ id: c.id, ...patchFn(p) });
-  }
+  await editAll(clips().filter((c) => !plan(c.id).skip).map((c) => ({ id: c.id, ...patchFn(plan(c.id)) })));
 }
 
 $("#imp-aircraft").addEventListener("change", (e) => e.target.value !== "*" && forAll(() => ({ profile: e.target.value })));
@@ -1512,7 +1857,7 @@ function renderExportList() {
     const prog = state.progress.get(c.id);
     const stateIcon = r ? (r.outcome === "verified" ? icon("check-circle", "c-green") : icon("close-circle", "c-red")) : prog != null ? icon("refresh-moments", "c-blue") : icon("clock", "muted");
     return el("li", { class: "clip-files" }, el("b", { text: p.name || settings.defaultName || "flight" }),
-      el("ul", {}, el("li", {}, stateIcon, el("span", { class: "name", text: r?.output ? base(r.output) : c.name }),
+      el("ul", {}, el("li", {}, stateIcon, el("span", { class: "name selectable", text: r?.output ? base(r.output) : c.name }),
         prog != null && !r ? el("progress", { max: 1, value: prog, style: "width:120px" }) : el("span", { class: "muted", text: r?.size ? fmtBytes(r.size) : r?.error || "" }))));
   }));
 }
@@ -1528,7 +1873,7 @@ async function runExport() {
   }
   state.busy = true;
   setStep("export");
-  $("#exp-title").textContent = `Exporting ${todo} clip${todo === 1 ? "" : "s"}`;
+  $("#exp-title").textContent = `Adding ${todo} clip${todo === 1 ? "" : "s"} to the library`;
   $("#exp-where").textContent = `To ${tilde(settings.outputDir)} · ${settings.format.toUpperCase()}`;
   $("#import-bar").value = 0;
   renderExportList();
@@ -1574,12 +1919,12 @@ async function runExport() {
 function formatReady() {
   const s = state.session;
   if (!s?.card) return { ok: false, why: "Clips came from a folder, not a card." };
-  if (!s.results.length) return { ok: false, why: "Export first." };
+  if (!s.results.length) return { ok: false, why: "Add the clips to the library first." };
   for (const c of s.clips) {
     if (c.stage_error) return { ok: false, why: `${c.name} did not copy off the card.` };
     const res = result(c.id);
-    if (!res) return { ok: false, why: `${c.name} has not been exported.` };
-    if (res.outcome === "failed") return { ok: false, why: `${c.name} failed to export.` };
+    if (!res) return { ok: false, why: `${c.name} is not in the library.` };
+    if (res.outcome === "failed") return { ok: false, why: `${c.name} was not added to the library.` };
   }
   return { ok: true };
 }
@@ -1590,7 +1935,7 @@ async function renderFinish() {
   const ok = s.results.filter((r) => r.outcome === "verified");
   const cutsOk = ok.reduce((a, r) => a + (r.cuts || []).filter((k) => k.outcome === "verified").length, 0);
   const failed = s.results.filter((r) => r.outcome === "failed").length + s.results.reduce((a, r) => a + (r.cuts || []).filter((k) => k.outcome === "failed").length, 0);
-  $("#fin-title").textContent = `Exported ${ok.length} clip${ok.length === 1 ? "" : "s"}${cutsOk ? ` and ${cutsOk} cut${cutsOk === 1 ? "" : "s"}` : ""}`;
+  $("#fin-title").textContent = `Added ${ok.length} clip${ok.length === 1 ? "" : "s"}${cutsOk ? ` and ${cutsOk} cut${cutsOk === 1 ? "" : "s"}` : ""} to the library`;
   $("#fin-fail").textContent = failed ? `${failed} did not verify` : "";
   const dirs = [...new Set(ok.map((r) => r.output.split("/").slice(0, -1).join("/")))];
   $("#fin-where").textContent = dirs.length === 1 ? `Saved to ${tilde(dirs[0])}/ · each file checked against its source` : `Saved under ${tilde(s.output_dir)} · each file checked against its source`;
@@ -1601,7 +1946,7 @@ async function renderFinish() {
     const files = [{ name: r.output ? base(r.output) : c.name, ok: r.outcome === "verified", size: r.size, error: r.error }];
     for (const k of r.cuts || []) files.push({ name: k.output ? base(k.output) : `cut ${Trim.fmtT(k.start)}–${Trim.fmtT(k.end)}`, ok: k.outcome === "verified", size: k.size, error: k.error });
     return el("li", { class: "clip-files" }, el("b", { text: p.name || settings.defaultName || "flight" }), el("ul", {}, files.map((f) => el("li", {},
-      icon(f.ok ? "check-circle" : "close-circle", f.ok ? "c-green" : "c-red"), el("span", { class: "name", text: f.name }),
+      icon(f.ok ? "check-circle" : "close-circle", f.ok ? "c-green" : "c-red"), el("span", { class: "name selectable", text: f.name }),
       f.ok ? el("span", { class: "muted", text: fmtBytes(f.size) }) : [el("span", { class: "error", text: f.error || "failed" }), el("button", { type: "button", class: "small", onclick: () => runExport() }, "Retry")]))));
   }));
   const days = [...new Set(s.plans.filter((p) => !p.skip).map((p) => p.date))];
@@ -1752,6 +2097,10 @@ let draftProfiles = [];
 let draftProfile = 0;
 
 function openSettings(sec = "library") {
+  if ($("#settings").open) return showSection(sec);
+  $("#settings").returnValue = "";
+  state.draftOutputDir = undefined;
+  state.draftDefaultCleared = false;
   state.settingsBefore = structuredClone(settings);
   draftProfiles = structuredClone(settings.profiles);
   state.draftDefault = draftProfiles.find((p) => p.name === settings.defaultProfile) ?? null;
@@ -1946,9 +2295,20 @@ function addProfile() {
   renderProfiles();
 }
 
-// Saves only what the person changed while the dialog was open, so a change the CLI or an
-// agent made meanwhile stays.
+// Done saves only what the person changed while the dialog was open, so a change the CLI or
+// an agent made meanwhile stays. Cancel and Escape leave the settings as they were.
 $("#settings").addEventListener("close", async () => {
+  const draftOut = state.draftOutputDir;
+  const draftDefault = state.draftDefault;
+  state.draftOutputDir = undefined;
+  state.draftDefault = undefined;
+  if ($("#settings").returnValue !== "save") {
+    // Pick up what another surface changed while the dialog was open.
+    state.settingsBefore = null;
+    state.draftDefaultCleared = false;
+    await loadSettings();
+    return;
+  }
   readProfileForm();
   const before = state.settingsBefore || settings;
   const num = (id, d) => (Number.isFinite(+$(id).value) && $(id).value !== "" ? +$(id).value : d);
@@ -1956,12 +2316,10 @@ $("#settings").addEventListener("close", async () => {
   if (places.length < readPlaces().filter((p) => p.name || Number.isFinite(p.lat)).length) toast("Places without a name or a valid latitude and longitude were not saved.", true);
   const profiles = draftProfiles.filter((p) => p.name);
   // The default's name is read now, after any typing; a deleted default falls to the first profile.
-  const chosen = state.draftDefault;
   let defaultProfile;
-  if (profiles.includes(chosen)) defaultProfile = chosen.name;
-  else if (chosen === null && state.draftDefaultCleared) defaultProfile = "";
+  if (profiles.includes(draftDefault)) defaultProfile = draftDefault.name;
+  else if (draftDefault === null && state.draftDefaultCleared) defaultProfile = "";
   else defaultProfile = profiles[0]?.name || "";
-  state.draftDefault = undefined;
   state.draftDefaultCleared = false;
   await saveChanged({
     defaultName: $("#set-default-name").value.trim() || "flight",
@@ -1975,6 +2333,7 @@ $("#settings").addEventListener("close", async () => {
     geocoder: $("#set-geocoder").value,
     nameDateFormat: $("#set-name-date").value,
     ...($("#set-google-key").value.trim() ? { googlePlacesKey: $("#set-google-key").value.trim() } : {}),
+    ...(draftOut ? { outputDir: draftOut } : {}),
     places,
     profiles,
     defaultProfile,
@@ -1983,6 +2342,7 @@ $("#settings").addEventListener("close", async () => {
   state.settingsBefore = null;
   await loadSettings();
   fillDatalists();
+  if (draftOut) await invoke("library_scope").catch(() => {});
   if (state.session) setSession(await invoke("plan_dates", { logDir: settings.logDir, day: state.session.log_day }));
   await loadLibrary();
 });
@@ -2027,12 +2387,10 @@ const actions = {
   },
   "clear-logs": () => useLogs(null),
   "pick-output": async () => {
-    const p = await pickFolder("Library folder", settings.outputDir);
+    const p = await pickFolder("Library folder", state.draftOutputDir || settings.outputDir);
     if (!p) return;
-    await save("outputDir", p);
+    state.draftOutputDir = p;
     $("#out-dir").value = tilde(p);
-    invoke("library_scope").catch(() => {});
-    await loadLibrary();
   },
   "reveal-library": () => settings.outputDir && T.opener.openPath(settings.outputDir),
   "apply-name-format": async () => {
@@ -2086,7 +2444,7 @@ const actions = {
   "start-over": async () => {
     if (state.busy || !state.session) return;
     const left = sessionLeft();
-    const ok = await ask("Start over?", left ? `${left} clip${left > 1 ? "s are" : " is"} not exported yet; their names, dates and cuts are lost. Exported files stay.` : "This clears the loaded clips. Exported files stay.", { ok: "Start over", danger: true });
+    const ok = await ask("Start over?", left ? `${left} clip${left > 1 ? "s are" : " is"} not in the library yet; their names, dates and cuts are lost. Clips already in the library stay.` : "This clears the loaded clips. Clips already in the library stay.", { ok: "Start over", danger: true });
     if (!ok) return;
     try {
       await invoke("clear_session");
@@ -2114,9 +2472,16 @@ for (const tabs of ["#r-tabs", "#d-tabs"]) {
   });
 }
 
+$("#sort").addEventListener("change", (e) => { if (e.target.value !== librarySort().key) setSort(e.target.value); });
 $("#search").addEventListener("input", (e) => { state.query = e.target.value; if (state.screen === "library") renderLibrary(); });
-$("#thumb-size").addEventListener("input", (e) => { settings.thumbSize = +e.target.value; renderLibrary(); });
-$("#thumb-size").addEventListener("change", (e) => save("thumbSize", +e.target.value));
+// The slider resizes through one CSS variable; the setting saves when it settles.
+let thumbSave = null;
+$("#thumb-size").addEventListener("input", (e) => {
+  settings.thumbSize = +e.target.value;
+  $("#lib-content").style.setProperty("--thumb", thumbPx());
+  clearTimeout(thumbSave);
+  thumbSave = setTimeout(() => { save("thumbSize", settings.thumbSize); syncMenu(); }, 300);
+});
 $("#format-opt").addEventListener("change", syncFormatButton);
 $("#format-label").addEventListener("input", (e) => {
   e.target.value = e.target.value.toUpperCase().replace(/[^A-Z0-9_-]/g, "").slice(0, 11);
@@ -2126,6 +2491,22 @@ $("#fin-album").addEventListener("change", (e) => save("photosAlbum", e.target.v
 // Closing the sheet keeps the session; Escape closes it unless a step is running.
 $("#import-sheet").addEventListener("cancel", (e) => { if (state.busy) e.preventDefault(); });
 
+// The web view's own context menu (Reload, Inspect Element) shows only where it is useful:
+// over a text field, or over selected text a person may copy. The app's menus prevent it first.
+document.addEventListener("contextmenu", (e) => {
+  if (e.defaultPrevented) return;
+  const field = e.target.closest?.("textarea, [contenteditable]:not([contenteditable=false]), input:not([type=checkbox], [type=radio], [type=range], [type=button])");
+  const copying = e.target.closest?.(".selectable, .meta dd, #banner code, .example pre, #tools-status") && String(getSelection()).trim();
+  if (!field && !copying) e.preventDefault();
+});
+
+// Drag and drop: a folder or clip files dropped anywhere on the window start an import.
+T.webview.getCurrentWebview().onDragDropEvent(({ payload: p }) => {
+  const blocked = state.busy || !state.tools || document.querySelector("dialog[open]:not(#import-sheet)");
+  $("#drop").hidden = !(p.type === "enter" || p.type === "over") || !!blocked;
+  if (p.type === "drop" && !blocked) importDropped(p.paths || []);
+});
+
 T.event.listen("volumes-changed", refreshVolumes);
 T.event.listen("library-changed", () => loadLibrary());
 T.event.listen("library-task", ({ payload: t }) => {
@@ -2133,7 +2514,7 @@ T.event.listen("library-task", ({ payload: t }) => {
   if (t.done >= t.total) setTimeout(() => { state.tasks.delete(t.task); renderSidebar(); }, 800);
   renderSidebar();
 });
-window.addEventListener("focus", () => loadLibrary());
+window.addEventListener("focus", () => loadLibrary(true));
 
 async function init() {
   hydrateIcons();

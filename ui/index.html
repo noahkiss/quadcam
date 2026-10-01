@@ -7,7 +7,9 @@
   <link rel="stylesheet" href="style.css">
   <script src="icons.js"></script>
   <script src="trim.js"></script>
+  <script src="history.js"></script>
   <script src="app.js" defer></script>
+  <script src="menubar.js" defer></script>
 </head>
 <body>
   <header class="topbar" data-section="topbar">
@@ -27,6 +29,12 @@
         <input id="thumb-size" type="range" min="1" max="5" value="3" aria-label="Thumbnail size">
         <i data-icon="grid"></i>
       </label>
+      <select id="sort" class="sort-select" aria-label="Sort by" title="Sort by">
+        <option value="date">Date</option>
+        <option value="rating">Rating</option>
+        <option value="duration">Duration</option>
+        <option value="name">Name</option>
+      </select>
       <div class="seg" role="group" aria-label="View">
         <button type="button" data-action="view-grid" aria-label="Grid" aria-pressed="true"><i data-icon="grid"></i></button>
         <button type="button" data-action="view-list" aria-label="List" aria-pressed="false"><i data-icon="list"></i></button>
@@ -45,6 +53,7 @@
       <section id="library" data-section="library">
         <div id="lib-banners"></div>
         <div id="lib-content" class="lib-content"></div>
+        <div id="sel-bar" class="sel-bar" role="toolbar" aria-label="Selected clips" hidden></div>
         <footer class="lib-footer" id="lib-footer"></footer>
       </section>
 
@@ -74,7 +83,7 @@
             </div>
             <div class="setup-card">
               <h3><i data-icon="folder-open" class="c-blue"></i>Library folder</h3>
-              <p class="mono" id="setup-folder"></p>
+              <p class="mono selectable" id="setup-folder"></p>
               <p class="muted" id="setup-layout"></p>
               <button type="button" class="small" data-action="settings-library">Change…</button>
             </div>
@@ -112,7 +121,7 @@
     </main>
   </div>
 
-  <!-- Import: a sheet over the library. Steps Load, Review, Export, Finish. -->
+  <!-- Import: a sheet over the library. Steps Load, Review, Add to Library, Finish. -->
   <dialog id="import-sheet" class="sheet" data-component="import-sheet">
     <div class="sheet-head">
       <h2>Import</h2>
@@ -122,7 +131,7 @@
         <li class="line" aria-hidden="true"></li>
         <li data-step="review"><span class="dot">2</span>Review</li>
         <li class="line" aria-hidden="true"></li>
-        <li data-step="export"><span class="dot">3</span>Export</li>
+        <li data-step="export"><span class="dot">3</span>Add to Library</li>
         <li class="line" aria-hidden="true"></li>
         <li data-step="finish"><span class="dot">4</span>Finish</li>
       </ol>
@@ -147,12 +156,12 @@
         </div>
         <div class="session-sum">
           <div class="mono" id="imp-sum"></div>
-          <button type="button" class="primary" data-action="run-export" id="imp-export-btn">Export<i data-icon="arrow-right"></i></button>
+          <button type="button" class="primary" data-action="run-export" id="imp-export-btn" title="Add to Library (⌘↩)">Add to Library<i data-icon="arrow-right"></i></button>
         </div>
       </div>
       <ul id="date-warnings" class="warnings"></ul>
       <div class="review">
-        <ol id="clips" class="review-list" aria-label="Clips"></ol>
+        <ol id="clips" class="review-list" aria-label="Clips" tabindex="-1"></ol>
         <aside class="review-detail" id="review-detail">
           <div class="player" id="r-player">
             <img id="r-img" alt="">
@@ -186,9 +195,9 @@
     <!-- Export -->
     <div class="sheet-body" id="imp-export" hidden>
       <div class="export-head">
-        <h3 id="exp-title">Exporting</h3>
+        <h3 id="exp-title">Adding to library</h3>
         <progress id="import-bar" max="1" value="0"></progress>
-        <p class="muted" id="exp-where"></p>
+        <p class="muted selectable" id="exp-where"></p>
       </div>
       <ol id="exp-files" class="file-list"></ol>
     </div>
@@ -197,7 +206,7 @@
     <div class="sheet-body finish" id="imp-finish" hidden>
       <div class="finish-left">
         <div class="finish-title"><h3 id="fin-title"></h3><span class="error" id="fin-fail"></span></div>
-        <p class="muted" id="fin-where"></p>
+        <p class="muted selectable" id="fin-where"></p>
         <ol id="fin-files" class="file-list"></ol>
       </div>
       <div class="finish-right">
@@ -243,7 +252,10 @@
     <form method="dialog">
       <div class="sheet-head">
         <h2><i data-icon="settings"></i>Settings</h2>
-        <button type="submit" class="primary small" value="save">Done</button>
+        <span class="row actions">
+          <button type="submit" class="primary small" value="save">Done</button>
+          <button type="submit" class="ghost small" value="cancel">Cancel</button>
+        </span>
       </div>
       <div class="settings-body">
         <nav aria-label="Settings sections"><ul id="set-nav">
@@ -292,8 +304,6 @@
               <p>The files hold every detail. The index in <span class="mono">.quadcam/</span> is a cache.</p>
               <button type="button" class="ghost small" data-action="rebuild">Rebuild from files</button>
             </div>
-            <h3>Archive <span class="chip">later</span></h3>
-            <div class="row"><input type="text" class="grow" placeholder="Not set" disabled aria-label="Archive folder"><button type="button" class="small" disabled>Choose…</button></div>
           </section>
 
           <section data-pane="aircraft" hidden>
@@ -409,6 +419,7 @@
   <datalist id="recent-keywords"></datalist>
   <datalist id="recent-authors"></datalist>
   <datalist id="recent-notes"></datalist>
+  <div id="drop" class="drop" hidden><div><i data-icon="import"></i><b>Import</b><span>A folder, or AVI clips</span></div></div>
   <div id="toast" role="status" aria-live="polite"></div>
 </body>
 </html>

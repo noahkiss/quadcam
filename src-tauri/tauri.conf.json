@@ -10,6 +10,8 @@
     "withGlobalTauri": true,
     "windows": [
       {
+        "label": "main",
+        "create": false,
         "title": "quadcam",
         "width": 1280,
         "height": 820,

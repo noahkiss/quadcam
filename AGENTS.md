@@ -82,6 +82,13 @@ GitHub (`noahkiss/quadcam`, public) is the only remote. Users install the cask
   was already exported needs a decision (`RemovedCuts::Keep`: the file stays as its own clip,
   marked `app.quadcam.detached`; `Trash`: it goes to the Trash). Without one, `Core` answers
   `CutChange::Confirm` (GUI) or refuses the patch (CLI `--removed`, MCP `removed_cuts`).
+- **Previews:** after `Core::analyse`, the GUI's `Hooks::analysed` runs `Core::make_previews` on a
+  thread. `Core::preview` makes one proxy at a time (a static lock), so a Play click on a clip
+  being made waits for it and reuses the file. Library MP4s play directly.
+- **Native feel (UI):** page text is not selectable and the cursor is the arrow; WebKit needs
+  `-webkit-user-select`. Text a person may copy (paths, details values) gets the
+  `selectable` class. The web view's context menu shows only over text fields and selected
+  `selectable` text; the app's own menus call `preventDefault` first.
 - **Cards** show in the sidebar with an "N new" count (content fingerprints not in the index);
   inserting a card never starts an import on its own.
 
@@ -211,6 +218,11 @@ claude mcp add quadcam -- "$(brew --prefix)/bin/quadcam-cli" mcp
 - Record corpus values in `test-clips/README.md` when the test clips change.
 - **Never fill the real Trash while testing.** `trash::real_trash` returns a temporary-folder
   stand-in for any process started by cargo; tests pass `DirTrash`.
+- **Never move the person's mouse or keyboard, or take focus, while testing.** Start the app
+  with `QUADCAM_NO_FOCUS=1` (unfocused, behind other windows, never activated) and drive it
+  with `QUADCAM_DEV_EVAL=<file>` (debug builds: runs the file's script in the window; replies
+  come back as `dev-log` events on stderr). Screenshot with `screencapture -l <windowid>`.
+  Pass `HOME=<temp>` so the settings, cache and session stay out of the real ones.
 - **Never import into a real Photos library while testing.** In-process tests pass
   `photos::Recorder`. Tests that spawn the CLI set `QUADCAM_PHOTOS=dry-run`. As a fail-safe,
   `Core::real_photos` returns the recorder for any process started by cargo (it carries

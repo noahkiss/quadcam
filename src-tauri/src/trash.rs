@@ -7,14 +7,15 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 pub trait Trash: Send + Sync {
-    fn trash(&self, path: &Path) -> Result<()>;
+    /// Moves `path` to the Trash. Returns where it went, when the Trash says.
+    fn trash(&self, path: &Path) -> Result<Option<PathBuf>>;
 }
 
 /// Moves files into a folder. For tests, and for `QUADCAM_TRASH=<folder>`.
 pub struct DirTrash(pub PathBuf);
 
 impl Trash for DirTrash {
-    fn trash(&self, path: &Path) -> Result<()> {
+    fn trash(&self, path: &Path) -> Result<Option<PathBuf>> {
         std::fs::create_dir_all(&self.0)?;
         let name = path.file_name().context("no file name")?;
         let mut dst = self.0.join(name);
@@ -23,9 +24,8 @@ impl Trash for DirTrash {
             dst = self.0.join(format!("{n}-{}", name.to_string_lossy()));
             n += 1;
         }
-        std::fs::rename(path, &dst)
-            .or_else(|_| std::fs::copy(path, &dst).and_then(|_| std::fs::remove_file(path)))
-            .with_context(|| format!("moving {} to {}", path.display(), dst.display()))
+        move_file(path, &dst)?;
+        Ok(Some(dst))
     }
 }
 
@@ -34,14 +34,25 @@ pub struct MacTrash;
 
 #[cfg(target_os = "macos")]
 impl Trash for MacTrash {
-    fn trash(&self, path: &Path) -> Result<()> {
+    fn trash(&self, path: &Path) -> Result<Option<PathBuf>> {
         use objc2_foundation::{NSFileManager, NSString, NSURL};
         let url = NSURL::fileURLWithPath(&NSString::from_str(&path.to_string_lossy()));
         let fm = NSFileManager::defaultManager();
-        fm.trashItemAtURL_resultingItemURL_error(&url, None)
+        let mut went = None;
+        fm.trashItemAtURL_resultingItemURL_error(&url, Some(&mut went))
             .map_err(|e| anyhow::anyhow!("{}", e.localizedDescription()))
-            .with_context(|| format!("moving {} to the Trash", path.display()))
+            .with_context(|| format!("moving {} to the Trash", path.display()))?;
+        Ok(went
+            .and_then(|u| u.path())
+            .map(|p| PathBuf::from(p.to_string())))
     }
+}
+
+/// Renames `from` to `to`, or copies and deletes it across volumes.
+pub fn move_file(from: &Path, to: &Path) -> Result<()> {
+    std::fs::rename(from, to)
+        .or_else(|_| std::fs::copy(from, to).and_then(|_| std::fs::remove_file(from)))
+        .with_context(|| format!("moving {} to {}", from.display(), to.display()))
 }
 
 /// The Trash to use. `QUADCAM_TRASH=<folder>` moves files into that folder instead. A

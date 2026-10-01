@@ -13,6 +13,7 @@ pub mod library;
 pub mod logs;
 pub mod mcp;
 pub mod media;
+mod menu;
 pub mod metadata;
 pub mod moments;
 pub mod naming;
@@ -22,6 +23,7 @@ pub mod qtmeta;
 pub mod scan;
 pub mod session;
 pub mod settings;
+mod share;
 pub mod trash;
 pub mod trim;
 pub mod watch;
@@ -86,6 +88,14 @@ impl Hooks for GuiHooks {
     }
     fn settings_changed(&self) {
         let _ = self.app.emit("settings-changed", ());
+    }
+    fn analysed(&self) {
+        let app = self.app.clone();
+        std::thread::spawn(move || {
+            if let Some(st) = app.try_state::<AppState>() {
+                st.core.make_previews();
+            }
+        });
     }
 }
 
@@ -161,6 +171,13 @@ async fn load_source(state: State<'_, AppState>, path: String) -> Result<Session
     blocking(move || core.load(Some(&PathBuf::from(path)))).await
 }
 
+/// A folder or clip files dropped on the window.
+#[tauri::command]
+async fn load_dropped(state: State<'_, AppState>, paths: Vec<PathBuf>) -> Result<Session, String> {
+    let core = state.core.clone();
+    blocking(move || core.load_dropped(&paths)).await
+}
+
 #[tauri::command]
 async fn plan_dates(
     state: State<'_, AppState>,
@@ -179,6 +196,12 @@ async fn plan_dates(
 #[tauri::command]
 fn edit_plan(state: State<'_, AppState>, patch: PlanPatch) -> Result<Session, String> {
     state.core.patch(&[patch], Editor::User).map_err(err)
+}
+
+/// Several edits at once ("Apply to all", the session bar): one core call, one save.
+#[tauri::command]
+fn edit_plans(state: State<'_, AppState>, patches: Vec<PlanPatch>) -> Result<Session, String> {
+    state.core.patch(&patches, Editor::User).map_err(err)
 }
 
 #[tauri::command]
@@ -300,9 +323,58 @@ fn watch_volumes(app: AppHandle) {
     });
 }
 
+/// Set for test runs: the app starts behind other windows and never takes focus.
+fn no_focus() -> bool {
+    std::env::var_os("QUADCAM_NO_FOCUS").is_some()
+}
+
+/// Makes the main window from its config. With `QUADCAM_NO_FOCUS` it opens unfocused, below
+/// other windows, and keeps rendering there so `screencapture -l` sees it.
+fn main_window(app: &AppHandle) -> tauri::Result<()> {
+    let config = app.config().app.windows[0].clone();
+    let mut builder = tauri::WebviewWindowBuilder::from_config(app, &config)?;
+    if no_focus() {
+        app.set_activation_policy(tauri::ActivationPolicy::Accessory)?;
+        builder = builder
+            .focused(false)
+            .always_on_bottom(true)
+            .background_throttling(tauri::utils::config::BackgroundThrottlingPolicy::Disabled);
+    }
+    let window = builder.build()?;
+    dev_eval(app, window);
+    Ok(())
+}
+
+/// Debug builds only: `QUADCAM_DEV_EVAL=<file>` runs the script written to that file in the
+/// window, then deletes the file. Scripts report back with `emit("dev-log", text)`, which
+/// prints to stderr. Tests drive the UI this way without mouse or keyboard events.
+#[cfg(debug_assertions)]
+fn dev_eval(app: &AppHandle, window: tauri::WebviewWindow) {
+    use tauri::Listener;
+    let Some(file) = std::env::var_os("QUADCAM_DEV_EVAL").map(PathBuf::from) else {
+        return;
+    };
+    app.listen_any("dev-log", |e| eprintln!("dev-log: {}", e.payload()));
+    std::thread::spawn(move || loop {
+        std::thread::sleep(Duration::from_millis(300));
+        if let Ok(js) = std::fs::read_to_string(&file) {
+            let _ = std::fs::remove_file(&file);
+            if let Err(e) = window.eval(&js) {
+                eprintln!("dev-eval: {e}");
+            }
+        }
+    });
+}
+
+#[cfg(not(debug_assertions))]
+fn dev_eval(_: &AppHandle, _: tauri::WebviewWindow) {}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
+        // Launching never takes focus from the app in front; a person's launch from the Dock
+        // or Finder still brings the app forward.
+        .activate_ignoring_other_apps(false)
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_opener::init())
         .setup(|app| {
@@ -339,10 +411,15 @@ pub fn run() {
                     let _ = b.emit("library-changed", ());
                 },
             );
+            // A restored session's previews may be gone from the cache; make them again.
+            let warm = core.clone();
+            std::thread::spawn(move || warm.make_previews());
             if let Err(e) = control::serve(core.clone(), &control::socket_path()) {
                 eprintln!("quadcam: control socket not started: {e:#}");
             }
             app.manage(AppState { core, hooks });
+            main_window(&handle)?;
+            menu::install(&handle)?;
             watch_volumes(handle);
             Ok(())
         })
@@ -352,8 +429,10 @@ pub fn run() {
             list_volumes,
             get_session,
             load_source,
+            load_dropped,
             plan_dates,
             edit_plan,
+            edit_plans,
             import_clips,
             add_to_photos,
             format_plan,
@@ -363,7 +442,9 @@ pub fn run() {
             clear_session,
             preview,
             core_call,
-            library_scope
+            library_scope,
+            menu::menu_state,
+            share::share
         ])
         .run(tauri::generate_context!())
         .expect("error while running quadcam");

@@ -20,7 +20,7 @@ mod core_library;
 #[path = "core_settings.rs"]
 mod core_settings;
 pub use core_library::{
-    CardStatus, LibEdit, LibItem, LibraryView, RebuildReport, RenameReport, TrashReport,
+    CardStatus, LibEdit, LibItem, LibraryView, Moved, RebuildReport, RenameReport, TrashReport,
 };
 pub use core_settings::{PlaceRemoved, SettingsView};
 
@@ -44,6 +44,8 @@ pub trait Hooks: Send + Sync {
     fn library_changed(&self) {}
     /// The settings file changed (profiles, places, preferences). The GUI re-reads it.
     fn settings_changed(&self) {}
+    /// The session's clips were analysed. The GUI starts making their previews.
+    fn analysed(&self) {}
 }
 
 pub struct NoHooks;
@@ -388,6 +390,36 @@ impl Core {
         Ok(s)
     }
 
+    /// Copies the clips among `files` (dropped on the window) to staging; a new session.
+    pub fn stage_files(&self, files: &[PathBuf]) -> Result<Session> {
+        let _b = self.claim()?;
+        let hooks = self.hooks.clone();
+        let s = Session::stage_files(
+            files,
+            &self.cache.join("staging"),
+            &mut |index, total, done, size| {
+                hooks.event("progress", json!({"phase": "stage", "index": index, "total": total, "done": done, "size": size}));
+            },
+        )?;
+        self.commit(Some(s.clone()))?;
+        Ok(s)
+    }
+
+    /// What the GUI does with things dropped on its window: one folder loads like a card;
+    /// files load the DVR clips among them.
+    pub fn load_dropped(&self, paths: &[PathBuf]) -> Result<Session> {
+        media::find_tools()?;
+        match paths {
+            [one] if one.is_dir() => return self.load(Some(one)),
+            _ if paths.iter().any(|p| p.is_dir()) => {
+                bail!("Drop one folder, or clip files, not both.")
+            }
+            _ => self.stage_files(paths)?,
+        };
+        self.analyse()?;
+        self.plan_dates(LogChoice::Keep, None)
+    }
+
     pub fn analyse(&self) -> Result<Session> {
         let _b = self.claim()?;
         let tools = media::find_tools()?;
@@ -400,6 +432,8 @@ impl Core {
             );
         })?;
         self.commit(Some(s.clone()))?;
+        drop(_b);
+        self.hooks.analysed();
         Ok(s)
     }
 
@@ -665,9 +699,30 @@ impl Core {
         Ok(out)
     }
 
+    /// Makes the previews of every analysed clip in the session, so Play starts at once. It
+    /// stops when the session changes or another step (an export) starts.
+    pub fn make_previews(&self) -> usize {
+        let Some(s) = self.session() else { return 0 };
+        let mut made = 0;
+        for c in s.clips.iter().filter(|c| c.probe.is_some()) {
+            let same = self
+                .session()
+                .is_some_and(|now| now.staging == s.staging && now.clips.len() == s.clips.len());
+            if !same || self.busy.load(Ordering::SeqCst) {
+                break;
+            }
+            if self.preview(c.id).is_ok() {
+                made += 1;
+            }
+        }
+        made
+    }
+
     /// A small H.264 preview the webview can play, made once per clip content. It is named
     /// by the source's fingerprint, so a new PICT0001 never reuses an old flight's preview.
+    /// One preview is made at a time; a second call for the same clip waits and reuses it.
     pub fn preview(&self, id: usize) -> Result<PathBuf> {
+        static MAKING: Mutex<()> = Mutex::new(());
         let s = self.current()?;
         let c = s
             .clips
@@ -683,6 +738,7 @@ impl Core {
             src.file_stem().unwrap_or_default().to_string_lossy(),
             crate::pipeline::fingerprint(src)?
         ));
+        let _one = MAKING.lock().unwrap_or_else(|e| e.into_inner());
         if !dst.is_file() {
             media::proxy(&tools, src, &dst)?;
         }
@@ -934,6 +990,13 @@ impl Core {
             }
             "library_export_cuts" => v(&self.library_export_cuts(&p::<One>(params)?.id)?),
             "library_trash" => v(&self.library_trash(&p::<Ids>(params)?.ids)?),
+            "library_untrash" => {
+                #[derive(Deserialize, Default)]
+                struct Untrash {
+                    moved: Vec<Moved>,
+                }
+                v(&self.library_untrash(&p::<Untrash>(params)?.moved)?)
+            }
             "library_photos" => {
                 let x: Ids = p(params)?;
                 v(&self.library_photos(&x.ids, x.album)?)

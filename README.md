@@ -15,7 +15,7 @@ Analog DVRs record MJPEG video in AVI files (`PICT0001.AVI` and similar). They h
    - **Radio log:** if you point quadcam at EdgeTX logs, it matches armed flight segments to clips.
    - **Import date:** today, when no log matches.
    - **Edited:** any date you type.
-5. **Name.** You give each clip a short name and an optional note. The file name is `YYYY-MM-DD_<name>.mp4`. An empty name becomes `flight`, `flight-2`, and so on.
+5. **Name.** You give each clip a short name and an optional note. The file name is `YYYY-MM-DD_<name>.mp4`. A clip without a name gets one that is unique in its day: the aircraft and the time (`Whoop 14:03`) when a radio log dated it, else `flight-1`, `flight-2`, and so on.
 6. **Convert.** The default is MP4 (H.264 with the VideoToolbox hardware encoder). The files play everywhere and are much smaller: 14 times smaller on the synthetic test clips. Real, noisy footage compresses less. A lossless MOV remux keeps the original MJPEG frames.
 7. **Trim (optional).** quadcam marks moments on each clip's timeline: rolls, flips, punch-outs and dives from the radio log's sticks, and dead air from the video itself. You can export any range as an extra file. See [Moments and cuts](#moments-and-cuts).
 8. **Verify.** quadcam compares every output with its source: frame count, duration, streams, and metadata. Only verified files count as imported.
@@ -90,12 +90,12 @@ The frontend is plain HTML, CSS, and JavaScript in `ui/`, with no build step and
 quadcam opens on the library: every clip you imported, newest first, grouped by flying day.
 
 1. Insert the card. It shows in the sidebar under **Import from**, with the number of clips that are not in the library yet. Nothing loads until you select it.
-2. Select the card (or **Import…**, or **Folder…**). The Import sheet opens and copies the clips at once. The sheet header shows how many files are left and the progress of the current one.
-3. **Review**: set the aircraft, the place and the date for every clip at once, or per clip. Optional: under **Radio logs**, select your radio's `LOGS` folder, or the radio itself in USB storage mode. Type a short name and a note for each clip, and a time of day when you know it (empty means noon, unless a radio log dated the clip). Select **Skip** for clips you do not want, such as bench tests. Select a clip to play it, see its moments and set cuts.
-4. **Export** converts and verifies each clip.
+2. Select the card (or **Import…**, or **Folder…**, or drag a folder or AVI files onto the window). The Import sheet opens and copies the clips at once. The sheet header shows how many files are left and the progress of the current one.
+3. **Review**: set the aircraft, the place and the date for every clip at once, or per clip. Optional: under **Radio logs**, select your radio's `LOGS` folder, or the radio itself in USB storage mode. Type a short name and a note for each clip, and a time of day when you know it (empty means noon, unless a radio log dated the clip). Select **Skip** for clips you do not want, such as bench tests. Select a clip to play it, see its moments and set cuts. After the check, quadcam makes a small preview of each clip in the background, so Play starts at once. Library clips in MP4 play from the file itself.
+4. **Add to Library** (⌘↩) converts and verifies each clip.
 5. **Finish**: add the files to Photos, eject the card, or format it (see below). **Done** shows the new clips in the library under **Last import**.
 
-You can close the sheet at any time; the import stays in the sidebar as **Unfinished import**. The app saves it as you work. If you quit and open quadcam again, it comes back with the same clips, names, dates and cuts, as long as the copies in its cache still exist. **Start over** in the sheet clears it. Files you already exported stay where they are. After the app formats a card, the next launch starts empty.
+You can close the sheet at any time; the import stays in the sidebar as **Unfinished import**. The app saves it as you work. If you quit and open quadcam again, it comes back with the same clips, names, dates and cuts, as long as the copies in its cache still exist. **Start over** in the sheet clears it. Clips already in the library stay where they are. After the app formats a card, the next launch starts empty.
 
 ## The library
 
@@ -122,14 +122,15 @@ In the library:
 
 - **Select** a clip; Command-click and Shift-click select more. Double-click, Space or T opens the clip.
 - **Rate**: keys 1 to 5 (0 clears). **Flag**: P picks, X rejects, U clears. The stars on a card also work.
+- **Undo** (Command-Z) and **Redo** (Shift-Command-Z) work for ratings, flags, renames, notes, keywords, places and Move to Trash. Undo after Move to Trash puts the files back from the Trash.
 - **Search** matches the name, note, place, aircraft, keywords and file name.
 - **Thumbnails** show the clip as you move the pointer across them.
-- **Right-click** a clip: Rename (Return), Edit details (Command-I), Trim and cuts, Add to Photos, Show in Finder (Command-R), Find dead air again, Move to Trash (Command-Delete). Move to Trash takes the clip's cuts and kept original with it.
+- **Right-click** a clip: Rename (Return), Edit details (Command-I), Trim and cuts, Share, Add to *album* (shown when Settings names a Photos album; for example **Add to Drone Album**), Show in Finder (Command-R), Find dead air again, Move to Trash (Command-Delete). Move to Trash takes the clip's cuts and kept original with it.
 - **Rejected** shows a **Move to Trash** button for every rejected clip.
 - **Details** in an open clip changes its date, time of day, aircraft, place, keywords, author and note. A new date moves the clip, its cuts and its kept original to that day's folder and renames them when the file name starts with the date. A new aircraft rewrites the camera make and model, the aircraft, the video system and the profile's keywords in the file and its cuts.
 - The day summary shows the flights, armed time, packs, lowest battery voltage and the best moments of the day.
 
-Dragging clips out to Finder and the Share menu are not built yet; use **Show in Finder**.
+**Share** opens the macOS Share menu, which includes Photos. Dragging clips out to Finder is not built yet; use **Show in Finder**.
 
 ## Moments and cuts
 
@@ -232,9 +233,9 @@ A profile looks like this in the file:
 
 ## Settings
 
-Settings (the gear icon) has these sections:
+Settings (the gear icon, or Command-comma) has these sections. **Done** saves every change at once; **Cancel** or Escape leaves the settings as they were.
 
-- **Library**: the library folder (default `~/Movies/quadcam`, created on the first import), the layout, place folders, keep originals, and **Rebuild from files**. **Archive** is not built yet.
+- **Library**: the library folder (default `~/Movies/quadcam`, created on the first import), the layout, place folders, keep originals, and **Rebuild from files**.
 - **Aircraft** and **Places**: the profiles and places above, and the place search provider.
 - **Import**: the format, the MP4 encoder, the default short name, the time in file names, and the tolerances for log matching.
 - **Photos**: the album.
@@ -431,6 +432,8 @@ The tests need ffmpeg. They make their own synthetic clips with `ffmpeg -f lavfi
 - The format tests attach small FAT32 disk images with `hdiutil`. They erase only an image that they created, and they check that the target is a disk image first.
 - No test can reach your Photos library or your Trash: under `cargo`, "Move to Trash" moves files into a temporary folder.
 - `cargo test --test import size_and_speed -- --ignored --nocapture` measures MP4 against MOV size and speed.
+
+To try the app without it taking focus, start a debug build with `QUADCAM_NO_FOCUS=1`. The window opens unfocused, behind other windows. In a debug build, `QUADCAM_DEV_EVAL=<file>` runs the script written to that file in the window, then deletes the file. A script reports back with `window.__TAURI__.event.emit("dev-log", text)`, which the app prints to stderr.
 
 `test-clips/README.md` describes an optional local corpus of real clips and logs.
 
