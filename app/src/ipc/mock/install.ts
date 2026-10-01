@@ -21,7 +21,6 @@ declare global {
     __qc?: MockHandle;
     __QC_MOCK__?: MockOptions;
     __TAURI_INTERNALS__?: unknown;
-    __TAURI_EVENT_PLUGIN_INTERNALS__?: unknown;
     __TAURI__?: unknown;
   }
 }
@@ -89,7 +88,7 @@ export function installMock(opts: MockOptions = {}): MockHandle {
     metadata: { currentWindow: { label: "main" }, currentWebview: { windowLabel: "main", label: "main" } },
   };
   window.__TAURI_EVENT_PLUGIN_INTERNALS__ = {
-    unregisterListener: (event: string, id: number) => listeners.get(event)?.delete(id),
+    unregisterListener: (event: string, id: number) => void listeners.get(event)?.delete(id),
   };
 
   // The `withGlobalTauri` surface the legacy UI uses.
