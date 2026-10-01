@@ -1447,16 +1447,23 @@ async function metaToAll() {
   if (!p) return;
   const m = p.meta || {};
   const patch = { profile: m.profile || "", keywords: m.keywords || [], author: m.author || "", ...(m.location ? { location: m.location } : { place: "" }) };
-  for (const other of clips()) if (other.id !== p.id) await edit({ id: other.id, ...patch });
-  toast("Applied to every clip.");
+  if (await editAll(clips().filter((c) => c.id !== p.id).map((c) => ({ id: c.id, ...patch })))) toast("Applied to every clip.");
+}
+
+// One core call for many clips: one save and one re-render.
+async function editAll(patches) {
+  if (!patches.length) return true;
+  try {
+    setSession(await invoke("edit_plans", { patches }));
+    return true;
+  } catch (e) {
+    toast(String(e), true);
+    return false;
+  }
 }
 
 async function forAll(patchFn) {
-  for (const c of clips()) {
-    const p = plan(c.id);
-    if (p.skip) continue;
-    await edit({ id: c.id, ...patchFn(p) });
-  }
+  await editAll(clips().filter((c) => !plan(c.id).skip).map((c) => ({ id: c.id, ...patchFn(plan(c.id)) })));
 }
 
 $("#imp-aircraft").addEventListener("change", (e) => e.target.value !== "*" && forAll(() => ({ profile: e.target.value })));

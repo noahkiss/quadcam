@@ -177,6 +177,12 @@ fn edit_plan(state: State<'_, AppState>, patch: PlanPatch) -> Result<Session, St
     state.core.patch(&[patch], Editor::User).map_err(err)
 }
 
+/// Several edits at once ("Apply to all", the session bar): one core call, one save.
+#[tauri::command]
+fn edit_plans(state: State<'_, AppState>, patches: Vec<PlanPatch>) -> Result<Session, String> {
+    state.core.patch(&patches, Editor::User).map_err(err)
+}
+
 #[tauri::command]
 async fn import_clips(
     state: State<'_, AppState>,
@@ -336,6 +342,7 @@ pub fn run() {
             load_source,
             plan_dates,
             edit_plan,
+            edit_plans,
             import_clips,
             add_to_photos,
             format_plan,
