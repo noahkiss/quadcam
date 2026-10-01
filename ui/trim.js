@@ -342,6 +342,8 @@ const Trim = (() => {
     // Keys for the editor. Returns true when it handled the key.
     handleKey(e) {
       if (!this.model || this.root.hidden) return false;
+      // Command, Control and Option shortcuts belong to the app (Command-I is Edit details).
+      if (e.metaKey || e.ctrlKey || e.altKey) return false;
       const v = this.video;
       const k = e.key.length === 1 ? e.key.toLowerCase() : e.key;
       switch (k) {
