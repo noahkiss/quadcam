@@ -895,6 +895,11 @@ impl Core {
                 v(&self.library_photos(&x.ids, x.album)?)
             }
             "library_rescan" => v(&self.library_rescan(&p::<One>(params)?.id)?),
+            "library_preview" => v(&self.library_preview(&p::<One>(params)?.id)?),
+            "library_strips" => {
+                let x: Ids = p(params)?;
+                v(&self.library_strips((!x.ids.is_empty()).then_some(x.ids))?)
+            }
             "card_status" => v(&self.card_status(&p::<Mount>(params)?.mount)?),
             "session_cuts" => {
                 let x: SessionCuts = p(params)?;

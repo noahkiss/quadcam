@@ -75,6 +75,9 @@ impl Hooks for GuiHooks {
     fn has_gui(&self) -> bool {
         true
     }
+    fn library_changed(&self) {
+        let _ = self.app.emit("library-changed", ());
+    }
 }
 
 struct AppState {
@@ -246,6 +249,26 @@ async fn preview(state: State<'_, AppState>, id: usize) -> Result<PathBuf, Strin
     blocking(move || core.preview(id)).await
 }
 
+/// Any `Core::dispatch` method, off the main thread. The library calls go through here.
+#[tauri::command]
+async fn core_call(
+    state: State<'_, AppState>,
+    method: String,
+    params: Value,
+) -> Result<Value, String> {
+    let core = state.core.clone();
+    blocking(move || core.dispatch(&method, params)).await
+}
+
+/// Lets the webview load files from the library folder (thumbnails and MP4 playback).
+#[tauri::command]
+fn library_scope(app: AppHandle, state: State<'_, AppState>) -> Result<(), String> {
+    let root = state.core.library_root().map_err(err)?;
+    app.asset_protocol_scope()
+        .allow_directory(&root, true)
+        .map_err(|e| e.to_string())
+}
+
 /// Emits `volumes-changed` whenever something mounts or unmounts under /Volumes.
 fn watch_volumes(app: AppHandle) {
     use notify::{RecursiveMode, Watcher};
@@ -320,7 +343,9 @@ pub fn run() {
             answer_format_request,
             eject,
             clear_session,
-            preview
+            preview,
+            core_call,
+            library_scope
         ])
         .run(tauri::generate_context!())
         .expect("error while running quadcam");
