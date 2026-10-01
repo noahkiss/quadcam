@@ -157,12 +157,14 @@ fn headless_agent_flow() {
     call(
         &mut s,
         "quadcam_suggest",
-        json!({"suggestions": [{"id": 0, "name": "Backyard Loops", "date": "2026-09-28", "reason": "trees in frame", "cuts": [{"start": 0.5, "end": 1.5}]}, {"id": 1, "skip": true}]}),
+        json!({"suggestions": [{"id": 0, "name": "Backyard Loops", "date": "2026-09-28", "reason": "trees in frame", "cuts": [{"start": 0.5, "end": 1.5}], "location": {"lat": 51.5, "lon": -0.1}, "keywords": ["park"]}, {"id": 1, "skip": true}]}),
     );
     let read = call(&mut s, "quadcam_read_clips", json!({"ids": [0]}));
     let c = &read["structuredContent"]["clips"][0];
     assert_eq!(c["cuts"], json!([{"start": 0.5, "end": 1.5}]));
     assert_eq!(c["agent_suggested"]["cuts"], true);
+    assert_eq!(c["agent_suggested"]["meta"], true);
+    assert_eq!(c["metadata"]["keywords"], json!(["park"]));
     assert_eq!(
         c["moments"],
         json!([]),
@@ -199,6 +201,12 @@ fn headless_agent_flow() {
     );
     let out = dir.path().join("out/2026-09-28_backyard_loops.mp4");
     assert!(out.is_file());
+    let tags = format_tags(&out);
+    assert_eq!(
+        tags["com.apple.quicktime.location.ISO6709"],
+        "+51.5000-000.1000/"
+    );
+    assert_eq!(tags["com.apple.quicktime.keywords"], "FPV,park");
     let cut = dir.path().join("out/2026-09-28_backyard_loops_cut1.mp4");
     assert!(cut.is_file());
     assert!(exp["content"][0]["text"]

@@ -68,6 +68,30 @@ enum Cmd {
         /// Clip ids. Default: every clip.
         ids: Vec<usize>,
     },
+    /// Saved places, aircraft profiles and the default profile (from the app's settings).
+    Profiles,
+    /// Set metadata on clips: profile, location, keywords, author.
+    Meta {
+        /// Clip ids, or `all`.
+        #[arg(required = true)]
+        ids: Vec<String>,
+        /// Aircraft profile name ("" to fall back to the log's model, then the default).
+        #[arg(long)]
+        profile: Option<String>,
+        /// A saved place name.
+        #[arg(long, conflicts_with_all = ["location", "clear_location"])]
+        place: Option<String>,
+        /// LAT,LON in decimal degrees.
+        #[arg(long, allow_hyphen_values = true, conflicts_with = "clear_location")]
+        location: Option<String>,
+        #[arg(long)]
+        clear_location: bool,
+        /// Comma-separated keywords; replaces the clip's own.
+        #[arg(long)]
+        keywords: Option<String>,
+        #[arg(long)]
+        author: Option<String>,
+    },
     /// Set the cut ranges of one clip. Each exports as an extra <name>_cutN file on import.
     Cut {
         id: usize,
@@ -271,6 +295,65 @@ fn run(cli: Cli) -> Result<Value> {
             core.session()
                 .ok_or_else(|| anyhow!("No clips loaded. Run `stage` first."))?,
         )?,
+        Cmd::Profiles => {
+            let d = core.defaults();
+            json!({"places": d.places, "profiles": d.profiles, "default_profile": d.default_profile})
+        }
+        Cmd::Meta {
+            ids,
+            profile,
+            place,
+            location,
+            clear_location,
+            keywords,
+            author,
+        } => {
+            let s = core
+                .session()
+                .ok_or_else(|| anyhow!("No clips loaded. Run `stage` first."))?;
+            let ids: Vec<usize> = if ids.iter().any(|i| i == "all") {
+                s.clips.iter().map(|c| c.id).collect()
+            } else {
+                ids.iter()
+                    .map(|i| i.parse().with_context(|| format!("{i:?} is not a clip id")))
+                    .collect::<Result<_>>()?
+            };
+            let location = location
+                .map(|l| -> Result<quadcam_lib::metadata::Location> {
+                    let (a, b) = l.split_once(',').context("--location is LAT,LON")?;
+                    Ok(quadcam_lib::metadata::Location {
+                        lat: a.trim().parse().context("latitude")?,
+                        lon: b.trim().parse().context("longitude")?,
+                        name: None,
+                    })
+                })
+                .transpose()?;
+            let patches: Vec<PlanPatch> = ids
+                .iter()
+                .map(|&id| PlanPatch {
+                    id,
+                    profile: profile.clone(),
+                    place: if clear_location {
+                        Some(String::new())
+                    } else {
+                        place.clone()
+                    },
+                    location: location.clone(),
+                    keywords: keywords
+                        .as_ref()
+                        .map(|k| k.split(',').map(|x| x.trim().to_string()).collect()),
+                    author: author.clone(),
+                    ..Default::default()
+                })
+                .collect();
+            let s = core.patch(&patches, Editor::User)?;
+            json!(s
+                .plans
+                .iter()
+                .filter(|p| ids.contains(&p.id))
+                .map(|p| json!({"id": p.id, "metadata": p.meta, "log_model": p.log_model}))
+                .collect::<Vec<_>>())
+        }
         Cmd::Moments { ids } => {
             let s = core
                 .session()

@@ -254,6 +254,70 @@ fn moments_and_cuts() {
 }
 
 #[test]
+fn metadata_from_settings_profiles_and_places() {
+    let env = Env::new();
+    let support = env
+        .home
+        .path()
+        .join("Library/Application Support/app.quadcam");
+    std::fs::create_dir_all(&support).unwrap();
+    std::fs::write(
+        support.join("settings.json"),
+        serde_json::json!({
+            "places": [{"name": "Field", "lat": 40.68919, "lon": -74.04449}],
+            "profiles": [{"name": "Whoop", "camera_make": "Maker", "author": "Pilot", "keywords": ["tinywhoop"]}],
+            "defaultProfile": "Whoop",
+        })
+        .to_string(),
+    )
+    .unwrap();
+    let src = folder_with_clips();
+    env.ok(&["stage", s(src.path())]);
+    env.ok(&["analyze"]);
+    let p = env.ok(&["profiles"]);
+    assert_eq!(p["default_profile"], "Whoop");
+    assert_eq!(p["places"][0]["name"], "Field");
+    let (code, v) = env.run(&["meta", "all", "--place", "Nope"]);
+    assert_eq!(code, 1, "{v}");
+    let m = env.ok(&[
+        "meta",
+        "all",
+        "--place",
+        "Field",
+        "--keywords",
+        "park, , park",
+    ]);
+    assert_eq!(m.as_array().unwrap().len(), 3);
+    assert_eq!(m[0]["metadata"]["location"]["name"], "Field");
+    assert_eq!(m[0]["metadata"]["keywords"], serde_json::json!(["park"]));
+    env.ok(&[
+        "meta",
+        "1",
+        "--location",
+        "-33.8568,151.2153",
+        "--author",
+        "Guest",
+    ]);
+    let out = tempfile::tempdir().unwrap();
+    let r = env.ok(&["import", "--output", s(out.path())]);
+    let res = &r["summary"]["results"];
+    let tags = format_tags(Path::new(res[0]["output"].as_str().unwrap()));
+    assert_eq!(
+        tags["com.apple.quicktime.location.ISO6709"],
+        "+40.6892-074.0445/"
+    );
+    assert_eq!(tags["com.apple.quicktime.make"], "Maker");
+    assert_eq!(tags["com.apple.quicktime.author"], "Pilot");
+    assert_eq!(tags["com.apple.quicktime.keywords"], "FPV,tinywhoop,park");
+    let tags = format_tags(Path::new(res[1]["output"].as_str().unwrap()));
+    assert_eq!(
+        tags["com.apple.quicktime.location.ISO6709"],
+        "-33.8568+151.2153/"
+    );
+    assert_eq!(tags["com.apple.quicktime.author"], "Guest");
+}
+
+#[test]
 fn errors_and_exit_codes() {
     let env = Env::new();
     let (code, v) = env.run(&["show"]);

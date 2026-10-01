@@ -550,6 +550,9 @@ pub fn clip_views(session: &Value, ids: Option<&[u64]>) -> Vec<Value> {
                 "log_offset_s": p["log_offset_s"],
                 "cuts": p["cuts"],
                 "cut_results": r["cuts"],
+                "metadata": p["meta"],
+                "log_model": p["log_model"],
+                "flight": p["flight"],
             })
         })
         .collect()
@@ -576,7 +579,13 @@ fn table(view: &[Value]) -> String {
                 marks.push(format!("{} cuts", n("cuts")));
             }
             let sug = &c["agent_suggested"];
-            if ["date", "name", "note", "skip", "cuts"]
+            if let Some(l) = c["metadata"]["location"].as_object() {
+                marks.push(match l.get("name").and_then(Value::as_str) {
+                    Some(n) => format!("at {n}"),
+                    None => "located".into(),
+                });
+            }
+            if ["date", "name", "note", "skip", "cuts", "meta"]
                 .iter()
                 .any(|k| sug[k] == true)
             {
@@ -618,7 +627,7 @@ pub fn tools() -> Value {
     json!([
         {
             "name": "quadcam_status",
-            "description": "Show whether the quadcam app is running (mode \"app\": the person sees every change live) or not (\"headless\"), the detected DVR cards and radio log sources, the export defaults, and a summary of the loaded session.\n\nBest for: the first call, and checking what is inserted.\nReturns: one line of text plus {mode, status, cards, radios}.\nFollow up with quadcam_load_clips to load a card, or quadcam_read_clips when a session is already loaded.",
+            "description": "Show whether the quadcam app is running (mode \"app\": the person sees every change live) or not (\"headless\"), the detected DVR cards and radio log sources, the export defaults (including the saved places and aircraft profiles under status.defaults), and a summary of the loaded session.\n\nBest for: the first call, and checking what is inserted.\nReturns: one line of text plus {mode, status, cards, radios}.\nFollow up with quadcam_load_clips to load a card, or quadcam_read_clips when a session is already loaded.",
             "inputSchema": {"type": "object", "properties": {}, "additionalProperties": false},
             "annotations": {"title": "quadcam status", "readOnlyHint": true, "openWorldHint": false}
         },
@@ -630,7 +639,7 @@ pub fn tools() -> Value {
         },
         {
             "name": "quadcam_read_clips",
-            "description": "Read the loaded clips: duration, frames, status (ok / incomplete / empty), the planned date with its source and radio-log match (matched / likely / unmatched), short name, note, skip, which values an agent suggested, and import results. Also each clip's moments, in clip seconds: rolls, flips, punch-outs, dives and possible crashes from the radio log's sticks (scored 0..1; a 0.5 s log interval scores lower and its times are rough), and dead air from the video (blue no-signal screen, static, test pattern, black, 3 s or longer). `keep` holds the suggested ranges without dead air, and `cuts` the ranges that will export as extra files. Optionally returns each clip's thumbnail as an image.\n\nBest for: looking at the footage before suggesting names or cuts, and reading back the values the person settled on before export.\nReturns: a line per clip plus structured records; with thumbnails=true, one JPEG per clip (up to max_thumbnails).\nFollow up with quadcam_suggest to propose names or dates, or quadcam_export when the values are final.",
+            "description": "Read the loaded clips: duration, frames, status (ok / incomplete / empty), the planned date with its source and radio-log match (matched / likely / unmatched), short name, note, skip, which values an agent suggested, and import results. Also each clip's moments, in clip seconds: rolls, flips, punch-outs, dives and possible crashes from the radio log's sticks (scored 0..1; a 0.5 s log interval scores lower and its times are rough), and dead air from the video (blue no-signal screen, static, test pattern, black, 3 s or longer). `keep` holds the suggested ranges without dead air, and `cuts` the ranges that will export as extra files. `metadata` holds the clip's own profile, location, keywords and author; `log_model` is the EdgeTX model of its log (it picks the profile when the clip has none) and `flight` the log's numbers (armed time, packs, min RxBt, LQ, RSSI, max throttle). Optionally returns each clip's thumbnail as an image.\n\nBest for: looking at the footage before suggesting names or cuts, and reading back the values the person settled on before export.\nReturns: a line per clip plus structured records; with thumbnails=true, one JPEG per clip (up to max_thumbnails).\nFollow up with quadcam_suggest to propose names or dates, or quadcam_export when the values are final.",
             "inputSchema": {"type": "object", "properties": {"ids": ids, "thumbnails": {"type": "boolean", "default": false, "description": "Attach the first-frame thumbnail of each clip as an image."}, "max_thumbnails": {"type": "integer", "minimum": 1, "maximum": 50, "default": 12}}, "additionalProperties": false},
             "annotations": {"title": "Read clips", "readOnlyHint": true, "openWorldHint": false}
         },
@@ -642,8 +651,8 @@ pub fn tools() -> Value {
         },
         {
             "name": "quadcam_suggest",
-            "description": "Suggest a short name, date, note, skip or cut ranges for clips. The values are marked agent-suggested, and in the app they appear as editable suggestions the person can accept or change. Names become the filename slug (YYYY-MM-DD_<name>.mp4, lowercased); an empty name uses the default name (\"flight\"), auto-numbered. `cuts` replaces the clip's cut list; each range exports as an extra file <name>_cutN next to the clip (an empty list removes them). `log_offset_s` says where the first armed log row falls in the clip and moves the log moments.\n\nBest for: proposing names from what the thumbnails show, dates from a clock burned into the video, and cuts from moments or the keep ranges.\nReturns: every clip's current plan.\nFollow up with quadcam_read_clips to read the final values before quadcam_export; the person may have changed them.",
-            "inputSchema": {"type": "object", "required": ["suggestions"], "properties": {"suggestions": {"type": "array", "minItems": 1, "items": {"type": "object", "required": ["id"], "properties": {"id": {"type": "integer", "minimum": 0}, "name": {"type": "string", "maxLength": 80}, "date": {"type": "string", "pattern": "^\\d{4}-\\d{2}-\\d{2}$"}, "note": {"type": "string"}, "skip": {"type": "boolean"}, "cuts": {"type": "array", "maxItems": 20, "items": {"type": "object", "required": ["start", "end"], "properties": {"start": {"type": "number", "minimum": 0, "description": "Seconds into the clip."}, "end": {"type": "number", "minimum": 0}}, "additionalProperties": false}, "description": "Ranges to export as extra files, each at least 0.5 s."}, "log_offset_s": {"type": "number", "description": "Seconds into the clip where the radio log's first armed row falls (the DVR usually starts before arming)."}, "reason": {"type": "string", "description": "One short line on why, shown to the person."}}, "additionalProperties": false}}}, "additionalProperties": false},
+            "description": "Suggest a short name, date, note, skip or cut ranges for clips. The values are marked agent-suggested, and in the app they appear as editable suggestions the person can accept or change. Names become the filename slug (YYYY-MM-DD_<name>.mp4, lowercased); an empty name uses the default name (\"flight\"), auto-numbered. `cuts` replaces the clip's cut list; each range exports as an extra file <name>_cutN next to the clip (an empty list removes them). `log_offset_s` says where the first armed log row falls in the clip and moves the log moments. Metadata: `profile` (an aircraft profile name from quadcam_status; empty string to fall back to the log's model, then the default), `place` (a saved place name; empty string removes the location) or `location` {lat, lon}, `keywords` (replaces the clip's own; FPV, the profile's and the moment kinds are added at export), `author`. To apply one value to every clip, send one suggestion per clip id.\n\nBest for: proposing names from what the thumbnails show, dates from a clock burned into the video, and cuts from moments or the keep ranges.\nReturns: every clip's current plan.\nFollow up with quadcam_read_clips to read the final values before quadcam_export; the person may have changed them.",
+            "inputSchema": {"type": "object", "required": ["suggestions"], "properties": {"suggestions": {"type": "array", "minItems": 1, "items": {"type": "object", "required": ["id"], "properties": {"id": {"type": "integer", "minimum": 0}, "name": {"type": "string", "maxLength": 80}, "date": {"type": "string", "pattern": "^\\d{4}-\\d{2}-\\d{2}$"}, "note": {"type": "string"}, "skip": {"type": "boolean"}, "cuts": {"type": "array", "maxItems": 20, "items": {"type": "object", "required": ["start", "end"], "properties": {"start": {"type": "number", "minimum": 0, "description": "Seconds into the clip."}, "end": {"type": "number", "minimum": 0}}, "additionalProperties": false}, "description": "Ranges to export as extra files, each at least 0.5 s."}, "log_offset_s": {"type": "number", "description": "Seconds into the clip where the radio log's first armed row falls (the DVR usually starts before arming)."}, "profile": {"type": "string", "maxLength": 80}, "place": {"type": "string", "maxLength": 80, "description": "Saved place name; empty string removes the location."}, "location": {"type": "object", "required": ["lat", "lon"], "properties": {"lat": {"type": "number", "minimum": -90, "maximum": 90}, "lon": {"type": "number", "minimum": -180, "maximum": 180}}, "additionalProperties": false}, "keywords": {"type": "array", "maxItems": 30, "items": {"type": "string", "maxLength": 60}}, "author": {"type": "string", "maxLength": 120}, "reason": {"type": "string", "description": "One short line on why, shown to the person."}}, "additionalProperties": false}}}, "additionalProperties": false},
             "annotations": {"title": "Suggest names and dates", "readOnlyHint": false, "destructiveHint": false, "idempotentHint": true, "openWorldHint": false}
         },
         {
