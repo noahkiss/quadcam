@@ -6,6 +6,7 @@ use tauri::{AppHandle, Manager};
 /// Shows the Share menu for `paths`, next to the rectangle `x`, `y`, `w`, `h` (CSS pixels,
 /// from the top left of the window's content).
 #[tauri::command]
+#[specta::specta]
 pub fn share(
     app: AppHandle,
     paths: Vec<String>,

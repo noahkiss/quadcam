@@ -28,9 +28,13 @@ chrono = { version = "0.4", features = ["serde"] }
 anyhow = "1"
 clap = { version = "4", features = ["derive"] }
 base64 = "0.22"
+specta = { version = "=2.0.0-rc.25", features = ["derive", "chrono", "serde_json"] }
+tauri-specta = { version = "=2.0.0-rc.25", features = ["derive", "typescript"] }
+specta-typescript = "=0.0.12"
 
 [dev-dependencies]
 tempfile = "3"
+insta = { version = "1", features = ["json", "redactions"] }
 
 [target.'cfg(target_os = "macos")'.dependencies]
 block2 = "0.6"

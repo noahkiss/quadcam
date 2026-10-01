@@ -482,7 +482,7 @@ fn span(s: &str) -> Result<Span> {
     })
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, specta::Type)]
 struct PlanFile {
     #[serde(default)]
     clips: Vec<PlanPatch>,

@@ -52,7 +52,7 @@ const QT: &str = "com.apple.quicktime.";
 // ---------- layout ----------
 
 /// Where a clip goes inside the library folder.
-#[derive(Debug, Clone, Copy, Default, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, Default, Serialize, Deserialize, PartialEq, Eq, specta::Type)]
 #[serde(rename_all = "snake_case")]
 pub enum Layout {
     /// `YYYY/YYYY-MM-DD/`
@@ -112,7 +112,7 @@ pub fn example_path(
 
 // ---------- index ----------
 
-#[derive(Debug, Clone, Copy, Default, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, Default, Serialize, Deserialize, PartialEq, Eq, specta::Type)]
 #[serde(rename_all = "lowercase")]
 pub enum Flag {
     #[default]
@@ -139,7 +139,7 @@ impl Flag {
 }
 
 /// A cut written as its own file next to its clip.
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, specta::Type)]
 pub struct LibCut {
     /// Relative to the library folder.
     pub path: PathBuf,
@@ -149,7 +149,7 @@ pub struct LibCut {
 }
 
 /// One clip in the library.
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, specta::Type)]
 pub struct LibClip {
     pub id: String,
     /// Relative to the library folder.
@@ -247,7 +247,7 @@ impl LibClip {
     }
 }
 
-#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, specta::Type)]
 pub struct Index {
     pub version: u32,
     /// The newest import's id; its clips are "Last import".
@@ -319,7 +319,7 @@ impl Index {
 // ---------- reading files ----------
 
 /// Moments as written into a file: kind, start, end, score.
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, specta::Type)]
 struct MomentLite {
     k: MomentKind,
     s: f64,
@@ -775,7 +775,7 @@ pub fn id_file(id: &str) -> String {
 // ---------- queries ----------
 
 /// The smart groups and other ways to narrow the library.
-#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, specta::Type)]
 #[serde(default)]
 pub struct Filter {
     /// Words that must all appear in the name, note, place, aircraft, keywords or DVR name.
@@ -839,7 +839,7 @@ pub fn known_sources(ix: &Index) -> HashSet<String> {
 }
 
 /// Totals for the footer.
-#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, specta::Type)]
 pub struct Totals {
     pub clips: usize,
     pub bytes: u64,
@@ -896,6 +896,19 @@ mod tests {
 
     fn d(s: &str) -> NaiveDate {
         NaiveDate::parse_from_str(s, "%Y-%m-%d").unwrap()
+    }
+
+    /// An adopted file's id is persisted in the index, so the same bytes must always give
+    /// the same id.
+    #[test]
+    fn head_id_test_vector() {
+        let d = tempfile::tempdir().unwrap();
+        let small = d.path().join("small.mp4");
+        std::fs::write(&small, crate::pipeline::tests::pattern(1000)).unwrap();
+        let big = d.path().join("big.mp4");
+        std::fs::write(&big, crate::pipeline::tests::pattern(2 << 20)).unwrap();
+        assert_eq!(head_id(&small).unwrap(), "h59ffcab2ee5d62ae");
+        assert_eq!(head_id(&big).unwrap(), "hec51a6f45c0fb3e4");
     }
 
     #[test]

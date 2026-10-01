@@ -11,7 +11,7 @@ const VIDEO_EXTS: &[&str] = &["avi"];
 /// Deepest folder level searched. Cards hold `DCIM/<n>/` at most; this only stops runaway walks.
 const MAX_DEPTH: usize = 6;
 
-#[derive(Debug, Clone, Serialize, PartialEq)]
+#[derive(Debug, Clone, Serialize, PartialEq, specta::Type)]
 pub struct FoundClip {
     pub path: PathBuf,
     /// Path relative to the volume root, for display.
@@ -130,7 +130,7 @@ fn clip_order_key(rel: &str) -> (String, u64, String) {
 }
 
 /// What the RIFF structure says about a file (half-written detection).
-#[derive(Debug, Clone, Serialize, PartialEq)]
+#[derive(Debug, Clone, Serialize, PartialEq, specta::Type)]
 pub struct AviCheck {
     /// RIFF size field + 8 equals the file size.
     pub riff_size_ok: bool,

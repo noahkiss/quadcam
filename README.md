@@ -160,11 +160,11 @@ The same trim editor appears in the library (open a clip) and in the Import shee
 
 Each moment has a score from 0 to 1. When the receiver sends attitude telemetry and it shows the quad upside down during a roll or flip, the score goes up. Select a moment to put the in and out points around it. Play the clip, then use **Set in** and **Set out** (I and O) to adjust them, drag the blue handles, or type the time. Select **Add cut** (C). Space plays, J, K and L go back, stop and forward, and the arrow keys step one frame. A clip can have up to 20 cuts.
 
-In the library, a new cut is written when you select **Save cuts**. QuadCam cuts from the kept original when there is one, else from the clip itself.
+In the library, a new cut is written when you select **Save cuts**. QuadCam cuts from the kept original when there is one, else from the clip itself, and verifies the cut the same way as on import.
 
 **Removing a cut that is already a file** asks first: **Keep the file** leaves it where it is as a clip of its own, **Move to Trash** moves it to the Trash. The command line needs `--removed keep` or `--removed trash`, and an agent needs `removed_cuts`.
 
-On import, each cut becomes its own file next to the clip: `YYYY-MM-DD_<name>_cut1.mp4`, `_cut2`, and so on. QuadCam cuts from the original DVR file, not from the converted one. MJPEG has a keyframe on every frame, so each cut starts and ends on the exact frame. MP4 cuts are re-encoded like the full clip; MOV cuts copy the original frames. QuadCam verifies every cut (streams, frame count, duration). Cuts that verified are not written again, so you can add cuts later and import again. **Add to Photos** adds a clip's cuts with it.
+On import, each cut becomes its own file next to the clip: `YYYY-MM-DD_<name>_cut1.mp4`, `_cut2`, and so on. QuadCam cuts from the original DVR file, not from the converted one. MJPEG has a keyframe on every frame, so each cut starts and ends on the exact frame. MP4 cuts are re-encoded like the full clip; MOV cuts copy the original frames. QuadCam verifies every cut (streams, frame count, duration, and the metadata it wrote). Cuts that verified are not written again, so you can add cuts later and import again. **Add to Photos** adds a clip's cuts with it.
 
 Two tips for radio-log moments:
 
@@ -453,17 +453,20 @@ To try the app without it taking focus, start a debug build with `QUADCAM_NO_FOC
 | `ui/` | The app's frontend: HTML, CSS, JavaScript, bundled fonts and icons |
 | `app/` | The new frontend (React, TypeScript, Vite), not yet the default |
 | `ui/trim.js` | The trim editor that the library and the Import sheet share |
-| `src-tauri/src/core.rs`, `core_library.rs`, `core_settings.rs` | The core that every frontend drives; its library half; its settings, places and profiles |
+| `src-tauri/src/api/` | The one table of core methods, with their params and results, and the app's events; it makes the socket's methods and the typed GUI commands |
+| `src-tauri/src/core/` | The core that every frontend drives: import, library, cuts, files (Photos, previews, Trash), and setup (settings, places, profiles) |
+| `src-tauri/src/paths.rs` | Where QuadCam keeps its files under your home folder |
 | `src-tauri/src/settings.rs` | The settings file: the one reader and writer, the setting names and their checks |
 | `src-tauri/src/geocode.rs` | Place search: Apple MapKit and OpenStreetMap Nominatim |
 | `src-tauri/src/library.rs` | The library: layout, the index, and its rebuild from the files |
 | `src-tauri/src/trim.rs` | Cut ranges and the rule for exported cuts, shared by the session and the library |
+| `src-tauri/src/cuts.rs` | The one cut writer for the session and the library: cut, write metadata, verify, rename |
 | `src-tauri/src/trash.rs` | Moving files to the Trash |
 | `src-tauri/src/lib.rs` | The app's Tauri commands |
 | `src-tauri/src/control.rs` | The control socket |
-| `src-tauri/src/mcp.rs` | The MCP server |
+| `src-tauri/src/mcp/` | The MCP server: protocol and handlers, the tool list, the text answers |
 | `src-tauri/src/bin/quadcam-cli.rs` | The command-line tool |
-| `src-tauri/src/{scan,disk,media,logs,naming,pipeline,session,photos}.rs` | Scanning, disks, ffmpeg, radio logs, file names, the import steps, the session, Photos |
+| `src-tauri/src/{scan,disk,media,logs,naming,session,photos}.rs`, `pipeline/` | Scanning, disks, ffmpeg, radio logs, file names, the session, Photos, the import steps |
 | `src-tauri/src/moments.rs` | Moments from radio-log sticks and dead air from video frames. Every threshold is in `moments::tune` |
 | `src-tauri/src/metadata.rs`, `qtmeta.rs` | Places, profiles and per-clip metadata; writing QuickTime metadata into the files |
 | `src-tauri/tests/` | Integration tests |

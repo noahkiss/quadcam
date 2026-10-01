@@ -13,16 +13,17 @@ use serde_json::{json, Value};
 use std::path::{Path, PathBuf};
 
 /// The settings file: where it is, what it holds, and the defaults that come out of it.
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, specta::Type)]
 pub struct SettingsView {
     pub path: PathBuf,
     /// The file's values, by file key. Secrets read `"(set)"`.
+    #[specta(type = std::collections::BTreeMap<String, specta_typescript::Unknown>)]
     pub values: Values,
     /// What every surface uses: the values on top of the defaults.
     pub effective: Defaults,
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, specta::Type)]
 pub struct PlaceRemoved {
     pub name: String,
     /// Profiles that used it as their default place; they now have none.

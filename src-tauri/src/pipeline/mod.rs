@@ -1,6 +1,8 @@
 //! The import pipeline without any UI: stage, analyse, date, convert, verify.
 //! `session` and `core` build on these.
 
+pub mod import;
+
 use crate::library::{self, Layout};
 use crate::logs::{self, Badge, Tunables};
 use crate::media::{self, Encoder, Format, Meta, Probe, Tools};
@@ -15,7 +17,7 @@ use std::collections::HashSet;
 use std::io::{Read, Write};
 use std::path::{Path, PathBuf};
 
-#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, specta::Type)]
 #[serde(rename_all = "lowercase")]
 pub enum ClipStatus {
     Ok,
@@ -23,7 +25,7 @@ pub enum ClipStatus {
     Empty,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, specta::Type)]
 pub struct Clip {
     pub id: usize,
     pub name: String,
@@ -257,7 +259,7 @@ pub fn analyse(tools: &Tools, clip: &mut Clip, cache: &Path) -> Result<()> {
     Ok(())
 }
 
-#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, specta::Type)]
 #[serde(rename_all = "lowercase")]
 pub enum DateSource {
     Log,
@@ -275,7 +277,7 @@ impl DateSource {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, specta::Type)]
 pub struct DateSuggestion {
     pub date: NaiveDate,
     /// Only from a radio log: the start of the first claimed armed segment.
@@ -332,7 +334,7 @@ pub fn flight_stats(
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, specta::Type)]
 pub struct DatePlan {
     pub suggestions: Vec<DateSuggestion>,
     pub warnings: Vec<String>,
@@ -451,7 +453,7 @@ pub fn creation_time(
         .with_timezone(&Utc)
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, specta::Type)]
 pub struct ClipJob {
     pub id: usize,
     pub skip: bool,
@@ -470,7 +472,7 @@ pub struct ClipJob {
     pub extra: Vec<(String, String)>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, specta::Type)]
 pub struct ImportSettings {
     pub output_dir: PathBuf,
     pub format: Format,
@@ -499,7 +501,7 @@ pub struct ImportSettings {
     pub name_date_format: naming::DateFormat,
 }
 
-#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, specta::Type)]
 #[serde(rename_all = "lowercase")]
 pub enum Outcome {
     Verified,
@@ -507,7 +509,7 @@ pub enum Outcome {
     Skipped,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, specta::Type)]
 pub struct ClipResult {
     pub id: usize,
     pub outcome: Outcome,
@@ -528,7 +530,7 @@ pub struct ClipResult {
 }
 
 /// One cut range written as its own file next to the clip's output.
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, specta::Type)]
 pub struct CutResult {
     pub start: f64,
     pub end: f64,
@@ -538,14 +540,7 @@ pub struct CutResult {
     pub error: Option<String>,
 }
 
-/// Where the output folder setting points until the user picks one, relative to `$HOME`.
-pub const DEFAULT_OUTPUT_REL: &str = "Movies/quadcam";
-
-/// `~/Movies/quadcam`, resolved from `$HOME` at runtime.
-pub fn default_output_dir() -> Option<PathBuf> {
-    let home = std::env::var_os("HOME").filter(|h| !h.is_empty())?;
-    Some(PathBuf::from(home).join(DEFAULT_OUTPUT_REL))
-}
+pub use crate::paths::{default_output_dir, DEFAULT_OUTPUT_REL};
 
 /// Free bytes on the volume holding `dir` (`df -Pk`).
 pub fn free_bytes(dir: &Path) -> Result<u64> {
@@ -670,10 +665,7 @@ pub fn import_clip(
     }
     let out = planner.claim(&dir, &stem, settings.format.ext());
     // Write under a hidden temporary name; rename only after verify passes.
-    let tmp = out.with_file_name(format!(
-        ".{}.part",
-        out.file_name().unwrap().to_string_lossy()
-    ));
+    let tmp = crate::cuts::part_path(&out);
 
     let enc = match media::convert(
         tools,
@@ -694,7 +686,7 @@ pub fn import_clip(
     r.meta = Some(meta.clone());
     let mut qt = md::qt_items(&job.meta, &meta);
     qt.extend(job.extra.iter().cloned());
-    let written = write_qt(&tmp, &qt)
+    let written = crate::cuts::write_qt(&tmp, &qt)
         .and_then(|_| media::verify(tools, src_probe, &tmp, &meta))
         .and_then(|_| media::verify_qt(tools, &tmp, &qt));
     if let Err(e) = written {
@@ -774,15 +766,6 @@ pub fn can_format(clips: &[Clip], results: &[ClipResult]) -> Result<()> {
     Ok(())
 }
 
-/// Writes the QuickTime items into `file`, the location also as `©xyz`.
-fn write_qt(file: &Path, qt: &[(String, String)]) -> Result<()> {
-    let loc = qt
-        .iter()
-        .find(|(k, _)| k == "com.apple.quicktime.location.ISO6709")
-        .map(|(_, v)| v.as_str());
-    crate::qtmeta::write(file, qt, loc).context("writing QuickTime metadata")
-}
-
 /// Writes each cut range of a verified clip as `<output stem>_cutN.<ext>` next to its output,
 /// and verifies it. A cut that already verified with the same range keeps its file and is not
 /// written again. Never overwrites: a taken name gets `-2`, `-3`.
@@ -808,11 +791,7 @@ pub fn export_cuts(
         .unwrap_or_default()
         .to_string_lossy()
         .to_string();
-    let format = if ext.eq_ignore_ascii_case("mov") {
-        Format::Mov
-    } else {
-        Format::Mp4
-    };
+    let format = crate::cuts::format_for_ext(&ext);
     let same = |a: f64, b: f64| (a - b).abs() < 0.001;
     cuts.iter()
         .enumerate()
@@ -838,10 +817,6 @@ pub fn export_cuts(
                 return r;
             };
             let dst = planner.claim(dir, &format!("{stem}_cut{}", i + 1), &ext);
-            let tmp = dst.with_file_name(format!(
-                ".{}.part",
-                dst.file_name().unwrap().to_string_lossy()
-            ));
             let cut_meta = Meta {
                 creation_time: meta.creation_time
                     + chrono::Duration::milliseconds((span.start * 1000.0) as i64),
@@ -871,30 +846,49 @@ pub fn export_cuts(
                 library::KEY_CUT,
                 &format!("{:.3}-{:.3}", span.start, span.end),
             );
-            let res = media::cut(tools, src, &tmp, *span, format, settings.encoder, &cut_meta)
-                .and_then(|_| write_qt(&tmp, &qt))
-                .and_then(|_| media::verify_cut(tools, probe, &tmp, *span))
-                .and_then(|_| media::verify_qt(tools, &tmp, &qt).map(|_| ()))
-                .and_then(|_| {
-                    if dst.exists() {
-                        bail!("{} appeared during export; not overwriting", dst.display());
-                    }
-                    std::fs::rename(&tmp, &dst).context("renaming cut")?;
-                    Ok(())
-                });
-            match res {
-                Ok(()) => {
-                    let _ = media::set_mtime(&dst, cut_meta.creation_time);
-                    r.size = dst.metadata().map(|m| m.len()).unwrap_or(0);
+            let cut = crate::cuts::Cut {
+                src,
+                probe,
+                span: *span,
+                format,
+                encoder: settings.encoder,
+                meta: &cut_meta,
+                qt: &qt,
+            };
+            match crate::cuts::write_cut(tools, &cut, &dst) {
+                Ok(size) => {
+                    r.size = size;
                     r.output = Some(dst);
                     r.outcome = Outcome::Verified;
                 }
-                Err(e) => {
-                    let _ = std::fs::remove_file(&tmp);
-                    r.error = Some(format!("{e:#}"));
-                }
+                Err(e) => r.error = Some(format!("{e:#}")),
             }
             r
         })
         .collect()
+}
+
+#[cfg(test)]
+pub(crate) mod tests {
+    use super::*;
+
+    /// Fixed bytes for the identity test vectors.
+    pub(crate) fn pattern(len: usize) -> Vec<u8> {
+        (0..len)
+            .map(|i| (i.wrapping_mul(31) ^ (i >> 7)) as u8)
+            .collect()
+    }
+
+    /// A clip's fingerprint is persisted (`app.quadcam.source`) and compared on every card
+    /// insert, so the same bytes must always give the same id.
+    #[test]
+    fn fingerprint_test_vector() {
+        let d = tempfile::tempdir().unwrap();
+        let small = d.path().join("small.avi");
+        std::fs::write(&small, pattern(1000)).unwrap();
+        let big = d.path().join("big.avi");
+        std::fs::write(&big, pattern(3 * (1 << 20) + 123)).unwrap();
+        assert_eq!(fingerprint(&small).unwrap(), "544ed76b6260909f");
+        assert_eq!(fingerprint(&big).unwrap(), "7d3742677467c662");
+    }
 }

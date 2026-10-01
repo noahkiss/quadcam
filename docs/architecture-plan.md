@@ -1,6 +1,6 @@
 # QuadCam architecture plan
 
-Status: proposal for the owner to approve. No code has changed.
+Status: approved 2026-10-01; decisions in section 7.
 Baseline: `main` at release 0.4.1.
 
 Decided before this plan:
@@ -450,3 +450,20 @@ U0 ─ U1 ─ U2 ─────────── U3(R5) ─ U4 ─ U5 ─ U6 �
 7. **Legacy lifetime.** Keep `ui/` for exactly one release after U8, then delete?
 8. **Off-grid spacing in the canvas.** Boards use 6 px and 10 px gaps. Snap them to 4/8/12, or
    keep 4-px half steps?
+
+## 7. Decisions (2026-10-01)
+
+The owner approved the plan and answered the questions:
+
+1. **Identity hash:** replace `DefaultHasher` with a specified, stable hash. Ship a migration for
+   existing libraries; it must work on a real library that already has an index, and a test
+   runs it on a library built by the old code.
+2. **Library cut verify:** accepted. R2 adds `verify_qt` to library cut export. This bug fix is
+   the one allowed behaviour change.
+3. **Node tooling:** pnpm, with Node pinned through fnm.
+4. **Map tab:** hidden until the map works.
+5. **Format for digital cards:** yes, with the same guards, decided per system when each lands.
+   The `Source` trait declares whether a source offers formatting.
+6. **Workspace split:** no. R9 is skipped.
+7. **Legacy lifetime:** `ui/` stays for one release after U8, then goes.
+8. **Spacing:** snap to the 8-pt grid.

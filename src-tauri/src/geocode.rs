@@ -18,7 +18,7 @@ use serde::{Deserialize, Serialize};
 use std::time::Duration;
 
 /// One search hit.
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, specta::Type)]
 pub struct GeoResult {
     pub name: String,
     pub address: String,
@@ -196,7 +196,7 @@ fn user_agent() -> String {
 /// Waits until a second has passed since the last Nominatim request from any quadcam
 /// process (a stamp file in the cache folder records it).
 fn nominatim_throttle() {
-    let stamp = crate::core::cache_dir().join("nominatim.last");
+    let stamp = crate::paths::cache_dir().join("nominatim.last");
     let gap = Duration::from_millis(1100);
     if let Ok(t) = stamp.metadata().and_then(|m| m.modified()) {
         if let Ok(since) = t.elapsed() {
@@ -223,7 +223,7 @@ fn address_name(address: &str) -> String {
 }
 
 fn nominatim(query: &str, limit: usize) -> Result<Vec<GeoResult>> {
-    #[derive(Deserialize)]
+    #[derive(Deserialize, specta::Type)]
     struct Hit {
         name: Option<String>,
         display_name: String,
@@ -270,23 +270,23 @@ fn nominatim(query: &str, limit: usize) -> Result<Vec<GeoResult>> {
 
 /// The US Census Bureau's one-line address geocoder.
 fn census(query: &str) -> Result<Vec<GeoResult>> {
-    #[derive(Deserialize)]
+    #[derive(Deserialize, specta::Type)]
     struct Coords {
         x: f64,
         y: f64,
     }
-    #[derive(Deserialize)]
+    #[derive(Deserialize, specta::Type)]
     struct Match {
         #[serde(rename = "matchedAddress")]
         matched: String,
         coordinates: Coords,
     }
-    #[derive(Deserialize)]
+    #[derive(Deserialize, specta::Type)]
     struct Res {
         #[serde(rename = "addressMatches", default)]
         matches: Vec<Match>,
     }
-    #[derive(Deserialize)]
+    #[derive(Deserialize, specta::Type)]
     struct Answer {
         result: Res,
     }
@@ -325,16 +325,16 @@ fn census(query: &str) -> Result<Vec<GeoResult>> {
 /// command line.
 fn google(query: &str, limit: usize, key: &str) -> Result<Vec<GeoResult>> {
     use std::io::Write;
-    #[derive(Deserialize)]
+    #[derive(Deserialize, specta::Type)]
     struct Text {
         text: String,
     }
-    #[derive(Deserialize)]
+    #[derive(Deserialize, specta::Type)]
     struct LatLng {
         latitude: f64,
         longitude: f64,
     }
-    #[derive(Deserialize)]
+    #[derive(Deserialize, specta::Type)]
     struct Place {
         #[serde(rename = "displayName")]
         name: Option<Text>,
@@ -342,7 +342,7 @@ fn google(query: &str, limit: usize, key: &str) -> Result<Vec<GeoResult>> {
         address: String,
         location: Option<LatLng>,
     }
-    #[derive(Deserialize)]
+    #[derive(Deserialize, specta::Type)]
     struct Answer {
         #[serde(default)]
         places: Vec<Place>,
