@@ -121,7 +121,7 @@
     </main>
   </div>
 
-  <!-- Import: a sheet over the library. Steps Load, Review, Export, Finish. -->
+  <!-- Import: a sheet over the library. Steps Load, Review, Add to Library, Finish. -->
   <dialog id="import-sheet" class="sheet" data-component="import-sheet">
     <div class="sheet-head">
       <h2>Import</h2>
@@ -131,7 +131,7 @@
         <li class="line" aria-hidden="true"></li>
         <li data-step="review"><span class="dot">2</span>Review</li>
         <li class="line" aria-hidden="true"></li>
-        <li data-step="export"><span class="dot">3</span>Export</li>
+        <li data-step="export"><span class="dot">3</span>Add to Library</li>
         <li class="line" aria-hidden="true"></li>
         <li data-step="finish"><span class="dot">4</span>Finish</li>
       </ol>
@@ -156,7 +156,7 @@
         </div>
         <div class="session-sum">
           <div class="mono" id="imp-sum"></div>
-          <button type="button" class="primary" data-action="run-export" id="imp-export-btn" title="Export (⌘↩)">Export<i data-icon="arrow-right"></i></button>
+          <button type="button" class="primary" data-action="run-export" id="imp-export-btn" title="Add to Library (⌘↩)">Add to Library<i data-icon="arrow-right"></i></button>
         </div>
       </div>
       <ul id="date-warnings" class="warnings"></ul>
@@ -195,7 +195,7 @@
     <!-- Export -->
     <div class="sheet-body" id="imp-export" hidden>
       <div class="export-head">
-        <h3 id="exp-title">Exporting</h3>
+        <h3 id="exp-title">Adding to library</h3>
         <progress id="import-bar" max="1" value="0"></progress>
         <p class="muted" id="exp-where"></p>
       </div>

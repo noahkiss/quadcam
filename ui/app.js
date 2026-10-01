@@ -451,7 +451,7 @@ function renderSidebar() {
   nav.replaceChildren(...groups);
 }
 
-const TASK_LABEL = { thumbnails: "Making thumbnails", cuts: "Saving cuts", moments: "Finding dead air", rebuild: "Reading the library", stage: "Copying clips", analyse: "Checking clips", export: "Exporting" };
+const TASK_LABEL = { thumbnails: "Making thumbnails", cuts: "Saving cuts", moments: "Finding dead air", rebuild: "Reading the library", stage: "Copying clips", analyse: "Checking clips", export: "Adding to library" };
 
 function sideFoot() {
   const box = el("div", { class: "side-foot" });
@@ -1175,7 +1175,7 @@ async function playDetail() {
 // ---------- keys ----------
 
 document.addEventListener("keydown", (e) => {
-  // Command-Return exports from the review, even from a name field.
+  // Command-Return adds to the library from the review, even from a name field.
   if (e.metaKey && e.key === "Enter" && $("#import-sheet").open && state.step === "review" && !document.querySelector("dialog[open]:not(#import-sheet)")) {
     e.preventDefault();
     if (!$("#imp-export-btn").disabled) runExport();
@@ -1334,7 +1334,7 @@ async function importFrom(mount) {
 async function replaceOk() {
   const s = state.session;
   if (!(s && sessionLeft() && s.results.length === 0 && s.clips.length)) return true;
-  return !!(await ask("Replace the unfinished import?", `${s.clips.length} clips are loaded and not exported. Their names, dates and cuts are lost.`, { ok: "Replace", danger: true }));
+  return !!(await ask("Replace the unfinished import?", `${s.clips.length} clips are loaded and not in the library. Their names, dates and cuts are lost.`, { ok: "Replace", danger: true }));
 }
 
 // A folder or AVI files dropped on the window: the folder loads like a card.
@@ -1482,7 +1482,8 @@ function renderSessionBar() {
   $("#imp-sum").textContent = `${s.clips.length} clips · ${fmtDur(dur - dead)} flying · ${fmtDur(dead)} dead air`;
   const todo = s.plans.filter((p) => !p.skip).length;
   const btn = $("#imp-export-btn");
-  btn.replaceChildren(`Export ${todo} clip${todo === 1 ? "" : "s"}`, icon("arrow-right"));
+  btn.replaceChildren("Add to Library", icon("arrow-right"));
+  btn.title = `Add ${todo} clip${todo === 1 ? "" : "s"} to the library (⌘↩)`;
   btn.disabled = !state.tools || state.busy;
 }
 
@@ -1851,7 +1852,7 @@ async function runExport() {
   }
   state.busy = true;
   setStep("export");
-  $("#exp-title").textContent = `Exporting ${todo} clip${todo === 1 ? "" : "s"}`;
+  $("#exp-title").textContent = `Adding ${todo} clip${todo === 1 ? "" : "s"} to the library`;
   $("#exp-where").textContent = `To ${tilde(settings.outputDir)} · ${settings.format.toUpperCase()}`;
   $("#import-bar").value = 0;
   renderExportList();
@@ -1897,12 +1898,12 @@ async function runExport() {
 function formatReady() {
   const s = state.session;
   if (!s?.card) return { ok: false, why: "Clips came from a folder, not a card." };
-  if (!s.results.length) return { ok: false, why: "Export first." };
+  if (!s.results.length) return { ok: false, why: "Add the clips to the library first." };
   for (const c of s.clips) {
     if (c.stage_error) return { ok: false, why: `${c.name} did not copy off the card.` };
     const res = result(c.id);
-    if (!res) return { ok: false, why: `${c.name} has not been exported.` };
-    if (res.outcome === "failed") return { ok: false, why: `${c.name} failed to export.` };
+    if (!res) return { ok: false, why: `${c.name} is not in the library.` };
+    if (res.outcome === "failed") return { ok: false, why: `${c.name} was not added to the library.` };
   }
   return { ok: true };
 }
@@ -1913,7 +1914,7 @@ async function renderFinish() {
   const ok = s.results.filter((r) => r.outcome === "verified");
   const cutsOk = ok.reduce((a, r) => a + (r.cuts || []).filter((k) => k.outcome === "verified").length, 0);
   const failed = s.results.filter((r) => r.outcome === "failed").length + s.results.reduce((a, r) => a + (r.cuts || []).filter((k) => k.outcome === "failed").length, 0);
-  $("#fin-title").textContent = `Exported ${ok.length} clip${ok.length === 1 ? "" : "s"}${cutsOk ? ` and ${cutsOk} cut${cutsOk === 1 ? "" : "s"}` : ""}`;
+  $("#fin-title").textContent = `Added ${ok.length} clip${ok.length === 1 ? "" : "s"}${cutsOk ? ` and ${cutsOk} cut${cutsOk === 1 ? "" : "s"}` : ""} to the library`;
   $("#fin-fail").textContent = failed ? `${failed} did not verify` : "";
   const dirs = [...new Set(ok.map((r) => r.output.split("/").slice(0, -1).join("/")))];
   $("#fin-where").textContent = dirs.length === 1 ? `Saved to ${tilde(dirs[0])}/ · each file checked against its source` : `Saved under ${tilde(s.output_dir)} · each file checked against its source`;
@@ -2314,7 +2315,7 @@ const actions = {
   "start-over": async () => {
     if (state.busy || !state.session) return;
     const left = sessionLeft();
-    const ok = await ask("Start over?", left ? `${left} clip${left > 1 ? "s are" : " is"} not exported yet; their names, dates and cuts are lost. Exported files stay.` : "This clears the loaded clips. Exported files stay.", { ok: "Start over", danger: true });
+    const ok = await ask("Start over?", left ? `${left} clip${left > 1 ? "s are" : " is"} not in the library yet; their names, dates and cuts are lost. Clips already in the library stay.` : "This clears the loaded clips. Clips already in the library stay.", { ok: "Start over", danger: true });
     if (!ok) return;
     try {
       await invoke("clear_session");
