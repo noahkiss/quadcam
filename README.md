@@ -60,11 +60,15 @@ xattr -dr com.apple.quarantine /Applications/QuadCam.app
 
 ## Build from source
 
-You need Rust (through [rustup](https://rustup.rs)), the Tauri 2 CLI, and ffmpeg:
+You need Rust (through [rustup](https://rustup.rs)), the Tauri 2 CLI, and ffmpeg. `cargo tauri dev`
+also needs Node.js 24 (through [fnm](https://github.com/Schniz/fnm), which reads `.node-version`)
+and pnpm, for the new UI's dev server:
 
 ```bash
 cargo install tauri-cli --version "^2" --locked
-brew install ffmpeg
+brew install ffmpeg fnm pnpm
+fnm install
+(cd app && pnpm install)
 ```
 
 Build the app in `src-tauri/`:
@@ -79,11 +83,16 @@ The result is `src-tauri/target/release/bundle/macos/QuadCam.app`. The bundle al
 Other commands:
 
 ```bash
-cargo tauri dev     # run the app from source
+cargo tauri dev     # run the app from source (starts the dev server on port 4719)
 cargo test          # unit and integration tests (see Tests)
 ```
 
-The frontend is plain HTML, CSS, and JavaScript in `ui/`, with no build step and no Node.js.
+Two frontends live side by side while the new one is built:
+
+- `ui/` is the current frontend: plain HTML, CSS, and JavaScript with no build step. Builds ship it.
+- `app/` is the new frontend: React, TypeScript and Vite. `cargo tauri dev` shows it with
+  `QUADCAM_UI=next`, and `ui/` otherwise. In `app/`: `pnpm test` (unit tests), `pnpm e2e`
+  (Playwright on both frontends with a mocked core), `pnpm typecheck`, `pnpm lint`, `pnpm build`.
 
 ## Use the app
 
@@ -442,6 +451,7 @@ To try the app without it taking focus, start a debug build with `QUADCAM_NO_FOC
 | Path | Holds |
 |---|---|
 | `ui/` | The app's frontend: HTML, CSS, JavaScript, bundled fonts and icons |
+| `app/` | The new frontend (React, TypeScript, Vite), not yet the default |
 | `ui/trim.js` | The trim editor that the library and the Import sheet share |
 | `src-tauri/src/core.rs`, `core_library.rs`, `core_settings.rs` | The core that every frontend drives; its library half; its settings, places and profiles |
 | `src-tauri/src/settings.rs` | The settings file: the one reader and writer, the setting names and their checks |

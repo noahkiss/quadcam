@@ -16,6 +16,7 @@ README. Personal preferences go in the app's settings file on the machine
 
 | Path | Holds |
 |---|---|
+| `app/` | New frontend: React + TypeScript + Vite (pnpm, Node pinned in `.node-version`). Built side by side with `ui/` and not yet the default; `docs/architecture-plan.md` section 4.2 has the steps |
 | `ui/` | Frontend: plain HTML, CSS and JS, no build step. `app.js` (library, import sheet, settings), `trim.js` (the one trim editor, used by clip detail and the import review). Icons and fonts are inlined or bundled so the app works offline |
 | `src-tauri/src/` | Rust core. `core.rs` (`Core`) owns the session and the library index and is the one surface every front end drives; `core_library.rs` holds its library methods and `core_settings.rs` its settings, places and profiles methods. `lib.rs` holds the Tauri commands (`core_call` runs any `Core::dispatch` method), `control.rs` the app's socket, `mcp.rs` the MCP server, `bin/quadcam-cli.rs` the CLI. The logic modules (`scan`, `disk`, `media`, `logs`, `moments`, `metadata`, `qtmeta`, `naming`, `pipeline`, `session`, `photos`, `library`, `trim`, `trash`, `settings`, `geocode`) run without Tauri |
 | `src-tauri/Info.plist` | Photos usage strings, merged into the bundle's Info.plist |
@@ -30,7 +31,9 @@ README. Personal preferences go in the app's settings file on the machine
 - ffmpeg and ffprobe from Homebrew (`brew install ffmpeg`). The app looks in
   `/opt/homebrew/bin` and `/usr/local/bin`, then `PATH`. exiftool is optional; tests use it
   when present.
-- No Node. There is no dev server, so there is no port.
+- Node 24 through fnm (`.node-version`) and pnpm (`packageManager` in `app/package.json`), for
+  `app/` only. The Vite dev server is pinned to port 4719 with `strictPort`;
+  `cargo tauri dev` starts it.
 
 ## Build, test, run
 
@@ -40,9 +43,18 @@ Run these in `src-tauri/`:
 cargo test -- --test-threads=1  # unit + integration tests (needs ffmpeg; attaches small disk images)
 cargo test --test import size_and_speed -- --ignored --nocapture   # MP4 vs MOV size/speed
 cargo tauri dev                 # run from source (Photos is dry-run; QUADCAM_PHOTOS=real to test it)
+QUADCAM_UI=next cargo tauri dev # the same with the new UI in app/ (dev runs only; builds ship ui/)
 cargo tauri build               # -> target/release/bundle/macos/QuadCam.app
 cargo build --release --bin quadcam-cli   # -> target/release/quadcam-cli
 open target/release/bundle/macos/QuadCam.app
+```
+
+In `app/` (`pnpm install` first):
+
+```bash
+pnpm typecheck && pnpm lint && pnpm test   # tsc, eslint, Vitest
+pnpm e2e                                   # Playwright, headless, both UIs on the mocked core
+pnpm build                                 # -> app/dist
 ```
 
 ## Release
@@ -63,7 +75,8 @@ GitHub (`noahkiss/quadcam`, public) is the only remote. Users install the cask
   quarantine attribute in `postflight_steps`. Hardened runtime stays off: without the Photos
   entitlement it blocks PhotoKit, and it has no use without notarization.
 - **Secret:** `HOMEBREW_TAP_TOKEN` (the tap PAT) lets the release dispatch the tap.
-- `.github/workflows/ci.yml` runs fmt, clippy, tests and a release build on every push and PR.
+- `.github/workflows/ci.yml` runs fmt, clippy, tests and a release build on every push and PR,
+  and a `ui` job for `app/` (typecheck, lint, Vitest, Playwright, build).
 
 ## Behaviour notes
 

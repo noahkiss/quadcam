@@ -328,10 +328,24 @@ fn no_focus() -> bool {
     std::env::var_os("QUADCAM_NO_FOCUS").is_some()
 }
 
+/// The page the window loads. Dev runs (`cargo tauri dev`) pick the UI with
+/// `QUADCAM_UI=legacy|next`: the dev server (`app/`, port 4719) serves the new UI at its root
+/// and the legacy `ui/` under `legacy/`. Builds ship only the default, `frontendDist`.
+fn ui_entry() -> &'static str {
+    if !tauri::is_dev() {
+        return "index.html";
+    }
+    match std::env::var("QUADCAM_UI").as_deref() {
+        Ok("next") => "index.html",
+        _ => "legacy/index.html",
+    }
+}
+
 /// Makes the main window from its config. With `QUADCAM_NO_FOCUS` it opens unfocused, below
 /// other windows, and keeps rendering there so `screencapture -l` sees it.
 fn main_window(app: &AppHandle) -> tauri::Result<()> {
-    let config = app.config().app.windows[0].clone();
+    let mut config = app.config().app.windows[0].clone();
+    config.url = tauri::WebviewUrl::App(ui_entry().into());
     let mut builder = tauri::WebviewWindowBuilder::from_config(app, &config)?;
     if no_focus() {
         app.set_activation_policy(tauri::ActivationPolicy::Accessory)?;
