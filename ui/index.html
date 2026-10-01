@@ -83,6 +83,25 @@
           <ol id="cut-list" class="cut-list"></ol>
           <p id="moment-note" class="muted small-print"></p>
         </section>
+        <section data-component="clip-metadata" id="clip-meta" class="clip-meta" hidden>
+          <h3>Metadata</h3>
+          <label class="field"><span>Aircraft profile</span><select id="meta-profile"></select></label>
+          <label class="field"><span>Location</span><input id="meta-place" type="text" list="places-list" placeholder="Saved place, or lat, lon" spellcheck="false"></label>
+          <div class="trim-row" id="save-place-row" hidden>
+            <input id="new-place-name" type="text" placeholder="Name this place" spellcheck="false">
+            <button type="button" class="ghost small" data-action="save-place">Save as place</button>
+          </div>
+          <label class="field"><span>Keywords (comma-separated)</span><input id="meta-keywords" type="text" list="recent-keywords" spellcheck="false"></label>
+          <label class="field"><span>Author</span><input id="meta-author" type="text" list="recent-authors" spellcheck="false"></label>
+          <p id="meta-effective" class="muted small-print"></p>
+          <div class="trim-row">
+            <button type="button" class="ghost small" data-action="meta-all" title="Copy this clip's profile, location, keywords and author to every clip">Apply to all clips</button>
+          </div>
+        </section>
+        <datalist id="places-list"></datalist>
+        <datalist id="recent-keywords"></datalist>
+        <datalist id="recent-authors"></datalist>
+        <datalist id="recent-notes"></datalist>
         <dl id="preview-meta" class="meta"></dl>
         <p class="muted small-print">The date is reliable. A log time is approximate: the DVR starts recording before you arm.</p>
       </aside>
@@ -168,6 +187,18 @@
         <label class="field inline"><span>Segment gap (s)</span><input id="set-seg-gap" type="number" min="1" step="1"></label>
         <label class="field inline"><span>Session gap (min)</span><input id="set-session-gap" type="number" min="1" step="1"></label>
         <label class="field inline"><span>Tolerance (s)</span><input id="set-tolerance" type="number" min="0" step="1"></label>
+      </fieldset>
+      <fieldset>
+        <legend>Places</legend>
+        <div id="places-editor" class="rows"></div>
+        <button type="button" class="ghost small" data-action="add-place">Add place</button>
+      </fieldset>
+      <fieldset>
+        <legend>Aircraft profiles</legend>
+        <p class="muted small-print">A clip dated from a radio log uses the profile that lists the log's EdgeTX model name. Other clips use the default.</p>
+        <label class="field inline"><span>Default profile</span><select id="set-default-profile"></select></label>
+        <div id="profiles-editor" class="rows"></div>
+        <button type="button" class="ghost small" data-action="add-profile">Add profile</button>
       </fieldset>
       <p id="tools-status" class="muted mono"></p>
       <menu>

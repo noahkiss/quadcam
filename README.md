@@ -122,9 +122,60 @@ Two tips for radio-log moments:
 
 Dead-air detection needs no radio log. quadcam samples two frames per second at 64 × 48 pixels and decodes only those frames, so a 10-minute clip takes about half a second.
 
+## Metadata
+
+Every file quadcam writes carries QuickTime metadata that Apple Photos and exiftool read. Select a clip and use the **Metadata** section under its preview:
+
+- **Aircraft profile**: the gear the clip was flown with. **Automatic** picks the profile whose EdgeTX model names include the model of the clip's radio log, then the default profile.
+- **Location**: type a saved place (the list filters as you type), or latitude and longitude such as `40.6892, -74.0445`. Select **Save as place** to keep a typed location for next time.
+- **Keywords** and **Author**: recent values are offered as you type. Notes in the clip list work the same way.
+- **Apply to all clips** copies the clip's profile, location, keywords and author to every clip.
+
+| What | QuickTime key | Where the value comes from |
+|---|---|---|
+| Location | `com.apple.quicktime.location.ISO6709`, and `©xyz` | The clip, else the profile's default place |
+| Creation date | `com.apple.quicktime.creationdate` | The clip's date and time, with your time zone's UTC offset, so Photos shows the local time |
+| Camera make and model | `com.apple.quicktime.make`, `.model` | The profile (your goggles or DVR) |
+| Software | `com.apple.quicktime.software` | `quadcam <version>` |
+| Title, description, comment | `com.apple.quicktime.title`, `.description`, `.comment` | The short name, the DVR file and date source, the note |
+| Author | `com.apple.quicktime.author` | The clip, else the profile |
+| Keywords | `com.apple.quicktime.keywords` | `FPV`, the profile's, the clip's, and the moment kinds found (roll, flip, punch-out, dive) |
+| Aircraft, video system | `app.quadcam.aircraft`, `app.quadcam.video_system` | The profile |
+| Flight numbers | `app.quadcam.flight` | The matched radio log: armed time, packs, lowest receiver voltage, link quality and RSSI, highest throttle |
+
+quadcam reads every key back before a file counts as verified: with ffprobe, and the location also with exiftool when it is installed. ffmpeg cannot write these keys where Apple's frameworks find them, so quadcam adds them to the file itself after ffmpeg finishes. One side effect: MP4 files no longer have the index at the front (`+faststart`). That matters only for streaming from a web server; local players and Photos do not care.
+
+What was checked: AVFoundation, the framework Photos uses to read video, returns the location, creation date, make, model, software, title, description, author and keywords from these files. Whether Photos shows each one in its Info panel was not checked; keywords in particular may not appear. quadcam writes no rating: Photos keeps ratings in its library, not in the file.
+
+### Places and profiles
+
+Settings (the gear icon) has editors for places and aircraft profiles. They are saved in the app's settings file, `~/Library/Application Support/app.quadcam/settings.json`, which the command-line tool and the MCP server read too. quadcam ships with none. A profile looks like this in the file:
+
+```json
+{
+  "profiles": [
+    {
+      "name": "Whoop",
+      "aircraft": "65 mm whoop",
+      "camera_make": "Fat Shark",
+      "camera_model": "Echo",
+      "video_system": "Analog",
+      "keywords": ["tinywhoop"],
+      "author": "Your Name",
+      "place": "Home field",
+      "edgetx_models": ["AIR65"]
+    }
+  ],
+  "places": [{ "name": "Home field", "lat": 40.6892, "lon": -74.0445 }],
+  "defaultProfile": "Whoop"
+}
+```
+
+`edgetx_models` holds the model names as they start the radio's log files: `AIR65-2026-10-04-101500.csv` is model `AIR65`.
+
 ## Settings
 
-Settings (the gear icon) hold the default name, the Photos album, the encoder, and the tolerances for log matching. The default output folder is `~/Movies/quadcam`. The app creates it on the first import.
+Settings (the gear icon) hold the places and profiles above, and the default name, the Photos album, the encoder, and the tolerances for log matching. The default output folder is `~/Movies/quadcam`. The app creates it on the first import.
 
 ## Command line
 
@@ -144,6 +195,9 @@ quadcam-cli cut 0 12.5-18 1:02-1:10       # set clip 0's cuts (seconds or m:ss)
 quadcam-cli cut 0 --keep                  # cut clip 0 down to its keep ranges
 quadcam-cli cut 0 --log-offset 4.5        # the radio log starts 4.5 s into clip 0
 quadcam-cli import --cut 0=20-26          # add a cut, then import
+quadcam-cli profiles                      # saved places and aircraft profiles
+quadcam-cli meta all --place "Home field" --keywords park,windy
+quadcam-cli meta 2 --location 40.6892,-74.0445 --profile Whoop
 quadcam-cli verify                        # check the outputs again
 quadcam-cli photos --album Drone          # add verified outputs to Photos
 quadcam-cli eject
@@ -197,7 +251,7 @@ If the app is running, the server works on the app's session. You see every chan
 | `quadcam_load_clips` | Stages, checks, and dates a card or a folder |
 | `quadcam_read_clips` | Reads the clips, their plans, moments, keep ranges and cuts; returns thumbnails as images |
 | `quadcam_match_logs` | Dates the clips from EdgeTX logs |
-| `quadcam_suggest` | Suggests names, dates, notes, skips, cuts, or the log offset |
+| `quadcam_suggest` | Suggests names, dates, notes, skips, cuts, the log offset, or metadata (profile, place or location, keywords, author) |
 | `quadcam_export` | Converts and verifies clips and cuts; can also add to Photos |
 | `quadcam_verify` | Checks the outputs again |
 | `quadcam_add_to_photos` | Adds verified outputs to Photos |
@@ -278,6 +332,7 @@ The tests need ffmpeg. They make their own synthetic clips with `ffmpeg -f lavfi
 | `src-tauri/src/bin/quadcam-cli.rs` | The command-line tool |
 | `src-tauri/src/{scan,disk,media,logs,naming,pipeline,session,photos}.rs` | Scanning, disks, ffmpeg, radio logs, file names, the import steps, the session, Photos |
 | `src-tauri/src/moments.rs` | Moments from radio-log sticks and dead air from video frames. Every threshold is in `moments::tune` |
+| `src-tauri/src/metadata.rs`, `qtmeta.rs` | Places, profiles and per-clip metadata; writing QuickTime metadata into the files |
 | `src-tauri/tests/` | Integration tests |
 
 ## License

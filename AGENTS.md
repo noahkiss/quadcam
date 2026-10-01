@@ -16,7 +16,7 @@ README. Personal preferences go in the app's settings file on the machine
 | Path | Holds |
 |---|---|
 | `ui/` | Frontend: plain HTML, CSS and JS, no build step. Icons and fonts are inlined or bundled so the app works offline |
-| `src-tauri/src/` | Rust core. `core.rs` (`Core`) owns the session and is the one surface every front end drives. `lib.rs` holds the Tauri commands, `control.rs` the app's socket, `mcp.rs` the MCP server, `bin/quadcam-cli.rs` the CLI. The logic modules (`scan`, `disk`, `media`, `logs`, `moments`, `naming`, `pipeline`, `session`, `photos`) run without Tauri |
+| `src-tauri/src/` | Rust core. `core.rs` (`Core`) owns the session and is the one surface every front end drives. `lib.rs` holds the Tauri commands, `control.rs` the app's socket, `mcp.rs` the MCP server, `bin/quadcam-cli.rs` the CLI. The logic modules (`scan`, `disk`, `media`, `logs`, `moments`, `metadata`, `qtmeta`, `naming`, `pipeline`, `session`, `photos`) run without Tauri |
 | `src-tauri/Info.plist` | Photos usage strings, merged into the bundle's Info.plist |
 | `src-tauri/tests/` | Integration tests on synthetic clips and FAT32 disk images |
 | `test-clips/` | Local test corpus. Git tracks only its README |

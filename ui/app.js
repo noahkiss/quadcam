@@ -18,6 +18,12 @@ const DEFAULTS = {
   formatLabel: "DVR",
   logDir: null,
   tunables: { segment_gap_s: 5, session_gap_min: 20, tolerance_s: 30, max_log_age_days: 60 },
+  // Saved places [{name, lat, lon}] and aircraft profiles; see Profile in metadata.rs.
+  places: [],
+  profiles: [],
+  defaultProfile: "",
+  // Recently used values, offered as suggestions.
+  recents: { keywords: [], authors: [], notes: [] },
 };
 
 // "Format card" is deliberately not a setting: it is never remembered as on.
@@ -143,6 +149,9 @@ async function pushDefaults() {
       format_label: settings.formatLabel || "DVR",
       log_dir: settings.logDir,
       tunables: settings.tunables,
+      places: settings.places,
+      profiles: settings.profiles,
+      default_profile: settings.defaultProfile || null,
     },
   });
 }
@@ -236,7 +245,7 @@ function setSession(s, { quiet = false } = {}) {
   renderClips();
   restoreFocus(f);
   if (!quiet || state.previewId !== state.selected) renderPreview();
-  else renderEditor();
+  else { renderEditor(); renderMeta(); }
   // Results that arrive from an agent's import open the summary too.
   if (s.results.length && s.results.length !== oldResults && !state.busy) {
     state.lastSummary = null;
@@ -373,9 +382,9 @@ function renderClips() {
       onchange: (e) => edit({ id: c.id, name: e.target.value }),
     });
     const note = el("input", {
-      type: "text", value: p.note, placeholder: "Note (metadata only)", "aria-label": `Note for ${c.name}`,
+      type: "text", value: p.note, placeholder: "Note (metadata only)", "aria-label": `Note for ${c.name}`, list: "recent-notes",
       "data-field": "note", class: p.suggested.note ? "suggested" : false,
-      onchange: (e) => edit({ id: c.id, note: e.target.value }),
+      onchange: (e) => { remember("notes", e.target.value); edit({ id: c.id, note: e.target.value }); },
     });
     const skip = el("input", {
       type: "checkbox", checked: p.skip, disabled: unusable, "data-field": "skip",
@@ -449,6 +458,7 @@ function renderPreview() {
   ];
   $("#preview-meta").replaceChildren(...rows.flatMap(([k, v]) => [el("dt", { text: k }), el("dd", { text: String(v) })]));
   renderEditor();
+  renderMeta();
 }
 
 // ---------- moments and cuts ----------
@@ -536,6 +546,185 @@ function renderEditor() {
   if (p.log_interval_s > 0.3) notes.push(`Radio log rows are ${p.log_interval_s.toFixed(1)} s apart, so moment times are rough. Set the EdgeTX log interval to 0.1 s for better detection.`);
   if (hasLog) notes.push("Log moments assume the clip starts at arm. Play to where you armed and click Arm is here to line them up.");
   $("#moment-note").textContent = notes.join(" ");
+}
+
+// ---------- clip metadata ----------
+
+function remember(kind, value) {
+  value = (value || "").trim();
+  if (!value) return;
+  const list = [value, ...(settings.recents[kind] || []).filter((v) => v !== value)].slice(0, 12);
+  save("recents", { ...settings.recents, [kind]: list });
+  fillDatalists();
+}
+
+function fillDatalists() {
+  const fill = (id, vals) => $(id).replaceChildren(...vals.map((v) => el("option", { value: v })));
+  fill("#places-list", settings.places.map((p) => p.name));
+  fill("#recent-keywords", settings.recents.keywords || []);
+  fill("#recent-authors", settings.recents.authors || []);
+  fill("#recent-notes", settings.recents.notes || []);
+}
+
+const findProfile = (name) => settings.profiles.find((x) => x.name.toLowerCase() === (name || "").trim().toLowerCase());
+
+// The same choice the core makes at export: the clip's own, the log's model, the default.
+function effectiveProfile(p) {
+  if (p.meta?.profile) return { prof: findProfile(p.meta.profile), why: "chosen" };
+  const m = (p.log_model || "").toLowerCase();
+  const byLog = m && settings.profiles.find((x) => (x.edgetx_models || []).some((n) => n.trim().toLowerCase() === m));
+  if (byLog) return { prof: byLog, why: `radio log model ${p.log_model}` };
+  const d = findProfile(settings.defaultProfile);
+  return { prof: d, why: d ? "default" : "" };
+}
+
+function locationText(l) {
+  if (!l) return "";
+  return l.name || `${l.lat.toFixed(5)}, ${l.lon.toFixed(5)}`;
+}
+
+function renderMeta() {
+  const c = clips().find((x) => x.id === state.selected);
+  const box = $("#clip-meta");
+  box.hidden = !c;
+  if (!c) return;
+  const p = plan(c.id);
+  const m = p.meta || {};
+  const { prof, why } = effectiveProfile(p);
+  const sel = $("#meta-profile");
+  sel.replaceChildren(
+    el("option", { value: "", text: prof && why !== "chosen" ? `Automatic: ${prof.name} (${why})` : "Automatic (radio log model, then default)" }),
+    ...settings.profiles.map((x) => el("option", { value: x.name, text: x.name, selected: m.profile && x.name.toLowerCase() === m.profile.toLowerCase() })),
+  );
+  const active = document.activeElement;
+  if (active !== $("#meta-place")) $("#meta-place").value = locationText(m.location);
+  if (active !== $("#meta-keywords")) $("#meta-keywords").value = (m.keywords || []).join(", ");
+  if (active !== $("#meta-author")) $("#meta-author").value = m.author || "";
+  $("#meta-author").placeholder = prof?.author || "";
+  $("#save-place-row").hidden = !(m.location && !m.location.name);
+  const loc = m.location || (prof?.place ? settings.places.find((x) => x.name === prof.place) : null);
+  const words = ["FPV", ...(prof?.keywords || []), ...(m.keywords || [])];
+  const parts = [
+    prof ? `Profile ${prof.name}` : "No profile",
+    [prof?.camera_make, prof?.camera_model].filter(Boolean).join(" "),
+    loc ? `at ${locationText(loc)}` : "no location",
+    `keywords ${[...new Set(words.map((w) => w.trim()).filter(Boolean))].join(", ")} + moment kinds`,
+  ].filter(Boolean);
+  if (p.flight) parts.push(`log: ${flightLine(p.flight)}`);
+  $("#meta-effective").textContent = `Export writes: ${parts.join(" · ")}.`;
+}
+
+function flightLine(f) {
+  const s = Math.round(f.armed_s);
+  const bits = [`armed ${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")} over ${f.packs} pack${f.packs === 1 ? "" : "s"}`];
+  if (f.min_rx_bat_v != null) bits.push(`min RxBt ${f.min_rx_bat_v.toFixed(2)} V`);
+  if (f.min_lq != null) bits.push(`min LQ ${Math.round(f.min_lq)}%`);
+  if (f.max_throttle != null) bits.push(`max throttle ${Math.round(f.max_throttle * 100)}%`);
+  return bits.join(", ");
+}
+
+// "Field" (a saved place), "40.6892, -74.0445", or empty (no location).
+function placePatch(text) {
+  const t = text.trim();
+  if (!t) return { place: "" };
+  if (findPlace(t)) return { place: findPlace(t).name };
+  const m = t.match(/^\s*(-?\d+(?:\.\d+)?)\s*[, ]\s*(-?\d+(?:\.\d+)?)\s*$/);
+  if (m) return { location: { lat: +m[1], lon: +m[2] } };
+  return null;
+}
+const findPlace = (name) => settings.places.find((x) => x.name.toLowerCase() === name.trim().toLowerCase());
+
+$("#meta-profile").addEventListener("change", (e) => edit({ id: state.selected, profile: e.target.value }));
+$("#meta-place").addEventListener("change", (e) => {
+  const patch = placePatch(e.target.value);
+  if (!patch) return toast("Type a saved place, or latitude and longitude like 40.6892, -74.0445.", true);
+  edit({ id: state.selected, ...patch });
+});
+$("#meta-keywords").addEventListener("change", (e) => {
+  remember("keywords", e.target.value);
+  edit({ id: state.selected, keywords: e.target.value.split(",").map((x) => x.trim()).filter(Boolean) });
+});
+$("#meta-author").addEventListener("change", (e) => {
+  remember("authors", e.target.value);
+  edit({ id: state.selected, author: e.target.value });
+});
+
+async function savePlace() {
+  const c = clips().find((x) => x.id === state.selected);
+  const l = c && plan(c.id).meta?.location;
+  const name = $("#new-place-name").value.trim();
+  if (!l || !name) return toast("Type a name for the place first.", true);
+  if (findPlace(name)) return toast(`A place named ${name} exists already.`, true);
+  await save("places", [...settings.places, { name, lat: l.lat, lon: l.lon }]);
+  $("#new-place-name").value = "";
+  fillDatalists();
+  await edit({ id: c.id, place: name });
+}
+
+async function metaToAll() {
+  const c = clips().find((x) => x.id === state.selected);
+  if (!c) return;
+  const m = plan(c.id).meta || {};
+  const patch = {
+    profile: m.profile || "",
+    keywords: m.keywords || [],
+    author: m.author || "",
+    ...(m.location ? { location: m.location } : { place: "" }),
+  };
+  for (const other of clips()) if (other.id !== c.id) await edit({ id: other.id, ...patch });
+  toast("Metadata applied to every clip.");
+}
+
+// ---------- settings: places and profiles ----------
+
+function renderPlacesEditor(places) {
+  $("#places-editor").replaceChildren(...places.map((p, i) => el("div", { class: "row", "data-place": i },
+    el("input", { type: "text", value: p.name, placeholder: "Name", "data-k": "name", "aria-label": "Place name" }),
+    el("input", { type: "number", step: "any", value: p.lat, placeholder: "Latitude", "data-k": "lat", "aria-label": "Latitude" }),
+    el("input", { type: "number", step: "any", value: p.lon, placeholder: "Longitude", "data-k": "lon", "aria-label": "Longitude" }),
+    el("button", { type: "button", class: "icon small", title: "Delete this place", onclick: () => renderPlacesEditor(readPlaces().filter((_, j) => j !== i)) }, icon("close-square")))));
+}
+
+function readPlaces() {
+  return [...document.querySelectorAll("[data-place]")].map((r) => ({
+    name: r.querySelector("[data-k=name]").value.trim(),
+    lat: parseFloat(r.querySelector("[data-k=lat]").value),
+    lon: parseFloat(r.querySelector("[data-k=lon]").value),
+  }));
+}
+
+const PROFILE_FIELDS = [
+  ["name", "Name"], ["aircraft", "Aircraft"], ["camera_make", "Camera make (goggles or DVR)"], ["camera_model", "Camera model"],
+  ["video_system", "Video system"], ["keywords", "Keywords (comma-separated)"], ["author", "Author"], ["place", "Default place"],
+  ["edgetx_models", "EdgeTX model names (comma-separated)"],
+];
+const LIST_FIELDS = ["keywords", "edgetx_models"];
+
+function renderProfilesEditor(profiles) {
+  $("#profiles-editor").replaceChildren(...profiles.map((p, i) => el("details", { "data-profile": i, open: !p.name },
+    el("summary", { text: p.name || "New profile" }),
+    ...PROFILE_FIELDS.map(([k, label]) => {
+      const v = LIST_FIELDS.includes(k) ? (p[k] || []).join(", ") : p[k] || "";
+      const input = k === "video_system"
+        ? el("select", { "data-k": k }, ...["", "Analog", "DJI", "Walksnail", "HDZero"].map((x) => el("option", { value: x, text: x || "–", selected: x === v })))
+        : el("input", { type: "text", value: v, "data-k": k, list: k === "place" ? "places-list" : false, spellcheck: "false" });
+      return el("label", { class: "field" }, el("span", { text: label }), input);
+    }),
+    el("button", { type: "button", class: "ghost small", onclick: () => renderProfilesEditor(readProfiles().filter((_, j) => j !== i)) }, icon("trash-bin-trash"), "Delete profile"))));
+  const sel = $("#set-default-profile");
+  sel.replaceChildren(el("option", { value: "", text: "None" }), ...profiles.filter((p) => p.name).map((p) => el("option", { value: p.name, text: p.name, selected: p.name === settings.defaultProfile })));
+}
+
+function readProfiles() {
+  return [...document.querySelectorAll("[data-profile]")].map((d) => {
+    const p = {};
+    for (const [k] of PROFILE_FIELDS) {
+      const v = d.querySelector(`[data-k=${k}]`).value.trim();
+      p[k] = LIST_FIELDS.includes(k) ? v.split(",").map((x) => x.trim()).filter(Boolean) : v;
+    }
+    p.place = p.place || null;
+    return p;
+  });
 }
 
 function pickMoment(c, m) {
@@ -862,7 +1051,16 @@ const actions = {
     if (p) loadSource(p);
   },
   "refresh-volumes": refreshVolumes,
-  settings: () => { syncSettingsUI(); $("#settings").showModal(); },
+  settings: () => {
+    syncSettingsUI();
+    renderPlacesEditor(settings.places);
+    renderProfilesEditor(settings.profiles);
+    $("#settings").showModal();
+  },
+  "add-place": () => renderPlacesEditor([...readPlaces(), { name: "", lat: "", lon: "" }]),
+  "add-profile": () => renderProfilesEditor([...readProfiles(), { name: "" }]),
+  "save-place": savePlace,
+  "meta-all": metaToAll,
   "pick-logs": async () => {
     const p = await pickFolder("Radio log folder (LOGS or the radio's root)", settings.logDir);
     if (p) useLogs(p);
@@ -938,6 +1136,12 @@ $("#settings").addEventListener("close", async () => {
   await save("defaultName", $("#set-default-name").value.trim() || "flight");
   await save("encoder", $("#set-encoder").value);
   await save("photosAlbum", $("#set-album").value.trim());
+  const places = readPlaces().filter((p) => p.name && Number.isFinite(p.lat) && Number.isFinite(p.lon) && Math.abs(p.lat) <= 90 && Math.abs(p.lon) <= 180);
+  if (places.length < readPlaces().length) toast("Places without a name or a valid latitude and longitude were not saved.", true);
+  await save("places", places);
+  await save("profiles", readProfiles().filter((p) => p.name));
+  await save("defaultProfile", $("#set-default-profile").value);
+  fillDatalists();
   await save("tunables", {
     ...settings.tunables,
     segment_gap_s: num("#set-seg-gap", 5),
@@ -955,6 +1159,7 @@ async function init() {
   // Until the user picks a folder, output goes to ~/Movies/quadcam (created on first import).
   if (!settings.outputDir) settings.outputDir = await invoke("default_output_dir");
   syncSettingsUI();
+  fillDatalists();
   await pushDefaults();
   const env = await invoke("env_check");
   state.tools = env.tools;

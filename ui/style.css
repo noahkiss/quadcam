@@ -301,6 +301,15 @@ input.suggested { border-style: dashed; border-color: var(--accent); background:
 .cut-list .error { color: var(--error); }
 .trim-row { display: flex; flex-wrap: wrap; gap: .4rem; align-items: end; }
 .trim-row input[type=number] { width: 5.5rem; }
+/* Clip metadata and the settings editors */
+.clip-meta { display: flex; flex-direction: column; gap: .5rem; }
+.rows { display: flex; flex-direction: column; gap: .4rem; }
+.rows .row { display: flex; flex-wrap: wrap; gap: .4rem; align-items: center; }
+.rows .row input { width: auto; flex: 1; min-width: 6em; }
+.rows details { border: 1px solid var(--surface2); border-radius: 8px; padding: .4rem .6rem; }
+.rows details summary { cursor: pointer; }
+.rows details .field input, .rows details .field select { width: 100%; }
+dialog#settings { max-height: calc(100vh - 2rem); overflow-y: auto; }
 .badge.agent { background: color-mix(in srgb, var(--accent) 22%, transparent); color: var(--accent); }
 .agent-hint { font-size: .75rem; color: var(--muted); margin-top: .3rem; display: flex; gap: .4rem; align-items: center; }
 .clip.has-suggestion { border-color: color-mix(in srgb, var(--accent) 35%, transparent); }
