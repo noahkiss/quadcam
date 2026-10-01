@@ -5,6 +5,7 @@
 // The MCP tool list is one large `json!`.
 #![recursion_limit = "256"]
 
+pub mod api;
 pub mod control;
 pub mod core;
 pub mod cuts;
@@ -37,7 +38,6 @@ use anyhow::{anyhow, Result};
 use chrono::NaiveDate;
 use disk::Volume;
 use serde::Serialize;
-use serde_json::Value;
 use session::{Editor, PlanPatch, Session};
 use std::collections::HashMap;
 use std::path::PathBuf;
@@ -45,6 +45,7 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{mpsc, Arc, Mutex};
 use std::time::Duration;
 use tauri::{AppHandle, Emitter, Manager, State};
+use tauri_specta::Event as _;
 
 /// How long an agent's format request waits for the click in the GUI.
 const FORMAT_CONFIRM_TIMEOUT: Duration = Duration::from_secs(180);
@@ -58,9 +59,10 @@ struct GuiHooks {
 
 impl Hooks for GuiHooks {
     fn changed(&self) {
-        let _ = self.app.emit("session-changed", ());
+        let _ = self.app.emit(api::SessionChanged::NAME, ());
     }
-    fn event(&self, name: &str, payload: Value) {
+    fn event(&self, event: api::Event) {
+        let (name, payload) = event.name_and_payload();
         let _ = self.app.emit(name, payload);
     }
     fn confirm_format(&self, plan: &FormatPlan) -> Result<()> {
@@ -68,12 +70,15 @@ impl Hooks for GuiHooks {
         let (tx, rx) = mpsc::channel();
         self.pending.lock().unwrap().insert(id, tx);
         let _ = self.app.emit(
-            "agent-format-request",
-            serde_json::json!({"id": id, "plan": plan}),
+            api::AgentFormatRequest::NAME,
+            api::AgentFormatRequest {
+                id,
+                plan: plan.clone(),
+            },
         );
         let answer = rx.recv_timeout(FORMAT_CONFIRM_TIMEOUT);
         self.pending.lock().unwrap().remove(&id);
-        let _ = self.app.emit("agent-format-closed", id);
+        let _ = self.app.emit(api::AgentFormatClosed::NAME, id);
         match answer {
             Ok(true) => Ok(()),
             Ok(false) => Err(anyhow!("Refused: the user cancelled the erase in quadcam.")),
@@ -86,10 +91,10 @@ impl Hooks for GuiHooks {
         true
     }
     fn library_changed(&self) {
-        let _ = self.app.emit("library-changed", ());
+        let _ = self.app.emit(api::LibraryChanged::NAME, ());
     }
     fn settings_changed(&self) {
-        let _ = self.app.emit("settings-changed", ());
+        let _ = self.app.emit(api::SettingsChanged::NAME, ());
     }
     fn analysed(&self) {
         let app = self.app.clone();
@@ -120,7 +125,7 @@ async fn blocking<T: Send + 'static>(
         .map_err(err)
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, specta::Type)]
 struct EnvCheck {
     tools: Option<media::Tools>,
     error: Option<String>,
@@ -129,6 +134,7 @@ struct EnvCheck {
 }
 
 #[tauri::command]
+#[specta::specta]
 fn env_check(state: State<'_, AppState>) -> EnvCheck {
     let _ = &state.core;
     let socket = Some(control::socket_path().to_string_lossy().to_string());
@@ -150,24 +156,32 @@ fn env_check(state: State<'_, AppState>) -> EnvCheck {
 
 /// The output folder used until the user picks one: ~/Movies/quadcam.
 #[tauri::command]
+#[specta::specta]
 fn default_output_dir() -> Option<PathBuf> {
     pipeline::default_output_dir()
 }
 
+/// @deprecated Legacy UI; use `volumes`.
 #[tauri::command]
+#[specta::specta]
 async fn list_volumes() -> Vec<Volume> {
     tauri::async_runtime::spawn_blocking(disk::list_volumes)
         .await
         .unwrap_or_default()
 }
 
+/// @deprecated Legacy UI; use `session`.
 #[tauri::command]
+#[specta::specta]
 fn get_session(state: State<'_, AppState>) -> Option<Session> {
     state.core.session()
 }
 
 /// Stages every clip from `path` (a card or any folder), analyses them and plans dates.
+///
+/// @deprecated Legacy UI; use `load`.
 #[tauri::command]
+#[specta::specta]
 async fn load_source(state: State<'_, AppState>, path: String) -> Result<Session, String> {
     let core = state.core.clone();
     blocking(move || core.load(Some(&PathBuf::from(path)))).await
@@ -175,12 +189,15 @@ async fn load_source(state: State<'_, AppState>, path: String) -> Result<Session
 
 /// A folder or clip files dropped on the window.
 #[tauri::command]
+#[specta::specta]
 async fn load_dropped(state: State<'_, AppState>, paths: Vec<PathBuf>) -> Result<Session, String> {
     let core = state.core.clone();
     blocking(move || core.load_dropped(&paths)).await
 }
 
+/// @deprecated Legacy UI; use `dates`.
 #[tauri::command]
+#[specta::specta]
 async fn plan_dates(
     state: State<'_, AppState>,
     log_dir: Option<String>,
@@ -195,18 +212,26 @@ async fn plan_dates(
 }
 
 /// A person's edit in the GUI. It clears the agent-suggested mark on the fields it touches.
+///
+/// @deprecated Legacy UI; use `suggest` with `editor: "user"`.
 #[tauri::command]
+#[specta::specta]
 fn edit_plan(state: State<'_, AppState>, patch: PlanPatch) -> Result<Session, String> {
     state.core.patch(&[patch], Editor::User).map_err(err)
 }
 
 /// Several edits at once ("Apply to all", the session bar): one core call, one save.
+///
+/// @deprecated Legacy UI; use `suggest` with `editor: "user"`.
 #[tauri::command]
+#[specta::specta]
 fn edit_plans(state: State<'_, AppState>, patches: Vec<PlanPatch>) -> Result<Session, String> {
     state.core.patch(&patches, Editor::User).map_err(err)
 }
 
+/// @deprecated Legacy UI; use `import`.
 #[tauri::command]
+#[specta::specta]
 async fn import_clips(
     state: State<'_, AppState>,
     options: ImportOptions,
@@ -215,7 +240,9 @@ async fn import_clips(
     blocking(move || core.import(&options)).await
 }
 
+/// @deprecated Legacy UI; use `photos`.
 #[tauri::command]
+#[specta::specta]
 async fn add_to_photos(
     state: State<'_, AppState>,
     ids: Option<Vec<usize>>,
@@ -225,17 +252,9 @@ async fn add_to_photos(
     blocking(move || core.add_to_photos(ids, album)).await
 }
 
-#[tauri::command]
-async fn format_plan(
-    state: State<'_, AppState>,
-    label: Option<String>,
-) -> Result<FormatPlan, String> {
-    let core = state.core.clone();
-    blocking(move || core.format_plan(label.as_deref())).await
-}
-
 /// The GUI's own Erase button: the click in its confirm dialog is the confirmation.
 #[tauri::command]
+#[specta::specta]
 async fn format_card(state: State<'_, AppState>, label: String) -> Result<FormatPlan, String> {
     let core = state.core.clone();
     blocking(move || {
@@ -253,6 +272,7 @@ async fn format_card(state: State<'_, AppState>, label: String) -> Result<Format
 
 /// The person's answer to an agent's format request.
 #[tauri::command]
+#[specta::specta]
 fn answer_format_request(state: State<'_, AppState>, id: u64, approve: bool) {
     if let Some(tx) = state.hooks.pending.lock().unwrap().remove(&id) {
         let _ = tx.send(approve);
@@ -260,37 +280,39 @@ fn answer_format_request(state: State<'_, AppState>, id: u64, approve: bool) {
 }
 
 /// "Start over": forgets the session and deletes the session file.
+///
+/// @deprecated Legacy UI; use `clear`.
 #[tauri::command]
+#[specta::specta]
 fn clear_session(state: State<'_, AppState>) -> Result<(), String> {
     state.core.clear().map_err(err)
 }
 
-#[tauri::command]
-async fn eject(state: State<'_, AppState>, path: Option<String>) -> Result<(), String> {
-    let core = state.core.clone();
-    blocking(move || core.eject(path.as_deref())).await
-}
-
 /// Makes (or reuses) a small H.264 preview of a clip.
 #[tauri::command]
+#[specta::specta]
 async fn preview(state: State<'_, AppState>, id: usize) -> Result<PathBuf, String> {
     let core = state.core.clone();
     blocking(move || core.preview(id)).await
 }
 
 /// Any `Core::dispatch` method, off the main thread. The library calls go through here.
+///
+/// @deprecated Legacy UI; use the typed command of the same name.
 #[tauri::command]
+#[specta::specta]
 async fn core_call(
     state: State<'_, AppState>,
     method: String,
-    params: Value,
-) -> Result<Value, String> {
+    params: api::Json,
+) -> Result<api::Json, String> {
     let core = state.core.clone();
-    blocking(move || core.dispatch(&method, params)).await
+    blocking(move || core.dispatch(&method, params.0).map(api::Json)).await
 }
 
 /// Lets the webview load files from the library folder (thumbnails and MP4 playback).
 #[tauri::command]
+#[specta::specta]
 fn library_scope(app: AppHandle, state: State<'_, AppState>) -> Result<(), String> {
     let root = state.core.library_root().map_err(err)?;
     app.asset_protocol_scope()
@@ -319,7 +341,7 @@ fn watch_volumes(app: AppHandle) {
                 // Let the mount settle before the UI asks diskutil about it.
                 std::thread::sleep(Duration::from_millis(800));
                 while rx.try_recv().is_ok() {}
-                let _ = app.emit("volumes-changed", ());
+                let _ = app.emit(api::VolumesChanged::NAME, ());
             }
         }
     });
@@ -371,15 +393,166 @@ fn dev_eval(app: &AppHandle, window: tauri::WebviewWindow) {
 #[cfg(not(debug_assertions))]
 fn dev_eval(_: &AppHandle, _: tauri::WebviewWindow) {}
 
+/// Every GUI command with its types, and the events, for tauri-specta: the `api` table's
+/// commands, the GUI's own commands, and the legacy UI's commands (marked deprecated).
+pub fn specta_builder() -> tauri_specta::Builder<tauri::Wry> {
+    use api::commands as c;
+    tauri_specta::Builder::<tauri::Wry>::new()
+        .commands(tauri_specta::collect_commands![
+            c::status,
+            c::volumes,
+            c::session,
+            c::clear,
+            c::stage,
+            c::analyse,
+            c::load,
+            c::dates,
+            c::suggest,
+            c::import,
+            c::photos,
+            c::verify,
+            c::eject,
+            c::format_plan,
+            c::format,
+            c::library,
+            c::library_rebuild,
+            c::library_rate,
+            c::library_edit,
+            c::library_rename,
+            c::library_cuts,
+            c::library_export_cuts,
+            c::library_trash,
+            c::library_untrash,
+            c::library_photos,
+            c::library_apply_name_format,
+            c::library_rescan,
+            c::library_preview,
+            c::library_strips,
+            c::card_status,
+            c::settings,
+            c::settings_set,
+            c::places,
+            c::place_search,
+            c::place_save,
+            c::place_delete,
+            c::profiles,
+            c::profile_save,
+            c::profile_delete,
+            c::profile_default,
+            c::session_cuts,
+            env_check,
+            default_output_dir,
+            load_dropped,
+            preview,
+            format_card,
+            answer_format_request,
+            library_scope,
+            menu::menu_state,
+            share::share,
+            list_volumes,
+            get_session,
+            load_source,
+            plan_dates,
+            edit_plan,
+            edit_plans,
+            import_clips,
+            add_to_photos,
+            clear_session,
+            core_call,
+        ])
+        .events(tauri_specta::collect_events![
+            api::Progress,
+            api::ImportProgress,
+            api::ImportResult,
+            api::LibraryTask,
+            api::SessionChanged,
+            api::LibraryChanged,
+            api::SettingsChanged,
+            api::VolumesChanged,
+            api::AgentFormatRequest,
+            api::AgentFormatClosed,
+            api::Menu,
+        ])
+        // Sizes and counts fit a JS number.
+        .dangerously_cast_bigints_to_number()
+}
+
+/// The TypeScript the bindings are written with.
+pub fn bindings_language() -> specta_typescript::Typescript {
+    specta_typescript::Typescript::default().header(
+        "// Generated by tauri-specta from src-tauri/src/api (quadcam_lib::specta_builder).\n// Do not edit. Regenerate: QUADCAM_UPDATE_BINDINGS=1 cargo test --test bindings\n",
+    )
+}
+
+/// The legacy UI's `eject` and `format_plan` take their own arguments, while the typed
+/// commands of the same names take `params`. A call without `params` comes from the legacy
+/// UI and is answered here, the way the legacy commands answered it. Goes with the legacy UI.
+mod legacy {
+    use crate::core::Core;
+    use serde_json::Value;
+    use std::sync::Arc;
+    use tauri::ipc::{Invoke, InvokeBody, InvokeError};
+    use tauri::Manager;
+
+    pub fn wants(invoke: &Invoke) -> bool {
+        matches!(invoke.message.command(), "eject" | "format_plan")
+            && match invoke.message.payload() {
+                InvokeBody::Json(v) => v.get("params").is_none(),
+                _ => false,
+            }
+    }
+
+    pub fn handle(invoke: Invoke) {
+        let core = invoke
+            .message
+            .webview()
+            .state::<Arc<Core>>()
+            .inner()
+            .clone();
+        let command = invoke.message.command().to_string();
+        let args = match invoke.message.payload() {
+            InvokeBody::Json(v) => v.clone(),
+            _ => Value::Null,
+        };
+        invoke.resolver.respond_async(async move {
+            tauri::async_runtime::spawn_blocking(move || {
+                let text = |k: &str| args.get(k).and_then(Value::as_str).map(str::to_string);
+                match command.as_str() {
+                    "eject" => core.eject(text("path").as_deref()).map(|_| Value::Null),
+                    _ => core
+                        .format_plan(text("label").as_deref())
+                        .map(|p| serde_json::to_value(p).unwrap_or(Value::Null)),
+                }
+                .map_err(|e| format!("{e:#}"))
+            })
+            .await
+            .map_err(|e| InvokeError::from(e.to_string()))?
+            .map_err(InvokeError::from)
+        });
+    }
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    let specta = specta_builder();
+    // Debug builds keep the new UI's bindings current, once it exists.
+    #[cfg(debug_assertions)]
+    {
+        let app_dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../app/src");
+        if app_dir.is_dir() {
+            if let Err(e) = specta.export(bindings_language(), app_dir.join("bindings.ts")) {
+                eprintln!("quadcam: bindings.ts not written: {e}");
+            }
+        }
+    }
+    let typed = specta.invoke_handler();
     tauri::Builder::default()
         // Launching never takes focus from the app in front; a person's launch from the Dock
         // or Finder still brings the app forward.
         .activate_ignoring_other_apps(false)
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_opener::init())
-        .setup(|app| {
+        .setup(move |app| {
             let handle = app.handle().clone();
             let hooks = Arc::new(GuiHooks {
                 app: handle.clone(),
@@ -407,10 +580,10 @@ pub fn run() {
             watch::spawn(
                 core.clone(),
                 move || {
-                    let _ = a.emit("settings-changed", ());
+                    let _ = a.emit(api::SettingsChanged::NAME, ());
                 },
                 move || {
-                    let _ = b.emit("library-changed", ());
+                    let _ = b.emit(api::LibraryChanged::NAME, ());
                 },
             );
             // A restored session's previews may be gone from the cache; make them again.
@@ -419,35 +592,21 @@ pub fn run() {
             if let Err(e) = control::serve(core.clone(), &control::socket_path()) {
                 eprintln!("quadcam: control socket not started: {e:#}");
             }
+            specta.mount_events(app);
+            app.manage(core.clone());
             app.manage(AppState { core, hooks });
             main_window(&handle)?;
             menu::install(&handle)?;
             watch_volumes(handle);
             Ok(())
         })
-        .invoke_handler(tauri::generate_handler![
-            env_check,
-            default_output_dir,
-            list_volumes,
-            get_session,
-            load_source,
-            load_dropped,
-            plan_dates,
-            edit_plan,
-            edit_plans,
-            import_clips,
-            add_to_photos,
-            format_plan,
-            format_card,
-            answer_format_request,
-            eject,
-            clear_session,
-            preview,
-            core_call,
-            library_scope,
-            menu::menu_state,
-            share::share
-        ])
+        .invoke_handler(move |invoke| {
+            if legacy::wants(&invoke) {
+                legacy::handle(invoke);
+                return true;
+            }
+            typed(invoke)
+        })
         .run(tauri::generate_context!())
         .expect("error while running quadcam");
 }

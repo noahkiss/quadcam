@@ -324,7 +324,7 @@ pub fn list<T: serde::de::DeserializeOwned>(values: &Values, key: &str) -> Vec<T
 }
 
 /// Settings every surface starts from. The GUI keeps them in sync with its settings store.
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, specta::Type)]
 pub struct Defaults {
     pub output_dir: Option<PathBuf>,
     pub format: Format,

@@ -20,7 +20,7 @@ pub use crate::settings::Defaults;
 pub use crate::trim::{MAX_CUTS, MIN_CUT_S};
 
 /// Which fields of a plan an agent wrote and the user has not edited since.
-#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, specta::Type)]
 pub struct Suggested {
     pub date: bool,
     pub name: bool,
@@ -40,7 +40,7 @@ impl Suggested {
 
 /// What will happen to one clip on import. The GUI shows it and edits it; an agent may
 /// suggest values for it.
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, specta::Type)]
 pub struct ClipPlan {
     pub id: usize,
     pub skip: bool,
@@ -80,7 +80,7 @@ pub struct ClipPlan {
     pub flight: Option<FlightStats>,
 }
 
-#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, specta::Type)]
 #[serde(rename_all = "lowercase")]
 pub enum Editor {
     User,
@@ -88,7 +88,7 @@ pub enum Editor {
 }
 
 /// A change to one clip's plan. Missing fields stay as they are.
-#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, specta::Type)]
 pub struct PlanPatch {
     pub id: usize,
     #[serde(default)]
@@ -132,7 +132,7 @@ pub struct PlanPatch {
     pub removed_cuts: Option<crate::trim::RemovedCuts>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, specta::Type)]
 pub struct Session {
     pub version: u32,
     /// Card mount point or folder the clips came from.
@@ -168,7 +168,7 @@ pub fn parse_time(s: &str) -> Result<Option<NaiveTime>> {
         .with_context(|| format!("time {s:?} is not HH:MM (24-hour)"))
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, specta::Type)]
 pub struct Summary {
     pub results: Vec<ClipResult>,
     pub imported: usize,
@@ -177,6 +177,7 @@ pub struct Summary {
     pub total_bytes: u64,
     pub output_dir: Option<PathBuf>,
     /// Ok when the format step may unlock, else the reason it stays locked.
+    #[specta(type = crate::api::SerdeResult<(), String>)]
     pub format_ready: Result<(), String>,
 }
 

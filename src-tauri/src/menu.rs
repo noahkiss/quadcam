@@ -237,7 +237,7 @@ pub fn install<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<()> {
             let _ = app.opener().open_url(HELP_URL, None::<&str>);
             return;
         }
-        let _ = app.emit("menu", id);
+        let _ = app.emit(<crate::api::Menu as tauri_specta::Event>::NAME, id);
     });
     Ok(())
 }
@@ -245,6 +245,7 @@ pub fn install<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<()> {
 /// The webview's view of which items apply now: `enabled` and `checked`, by item id, and
 /// the album item's label (`None` hides it).
 #[tauri::command]
+#[specta::specta]
 pub fn menu_state(
     items: State<'_, MenuItems<tauri::Wry>>,
     enabled: HashMap<String, bool>,

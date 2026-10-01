@@ -3,6 +3,7 @@
 
 use super::Core;
 use super::{FormatPlan, FormatRequest, ImportOptions, ImportOutcome, LogChoice, VerifyReport};
+use crate::api::{Event, ImportProgress, ImportResult, Phase, Progress};
 use crate::disk;
 use crate::library as lib;
 use crate::media;
@@ -11,11 +12,9 @@ use crate::session::{self, Editor, PlanPatch, Session};
 use anyhow::{anyhow, bail, Context, Result};
 use chrono::NaiveDate;
 use serde::Serialize;
-use serde_json::json;
-use serde_json::Value;
 use std::path::{Path, PathBuf};
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, specta::Type)]
 pub struct CardStatus {
     pub mount: PathBuf,
     pub clips: usize,
@@ -43,7 +42,13 @@ impl Core {
             &source,
             &self.cache.join("staging"),
             &mut |index, total, done, size| {
-                hooks.event("progress", json!({"phase": "stage", "index": index, "total": total, "done": done, "size": size}));
+                hooks.event(Event::Progress(Progress {
+                    phase: Phase::Stage,
+                    index,
+                    total,
+                    done,
+                    size,
+                }));
             },
         )?;
         self.commit(Some(s.clone()))?;
@@ -58,7 +63,13 @@ impl Core {
             files,
             &self.cache.join("staging"),
             &mut |index, total, done, size| {
-                hooks.event("progress", json!({"phase": "stage", "index": index, "total": total, "done": done, "size": size}));
+                hooks.event(Event::Progress(Progress {
+                    phase: Phase::Stage,
+                    index,
+                    total,
+                    done,
+                    size,
+                }));
             },
         )?;
         self.commit(Some(s.clone()))?;
@@ -86,10 +97,13 @@ impl Core {
         let mut s = self.current()?;
         let hooks = self.hooks.clone();
         s.analyse(&tools, &self.cache.join("thumbs"), &mut |index, total| {
-            hooks.event(
-                "progress",
-                json!({"phase": "analyse", "index": index, "total": total, "done": 0, "size": 0}),
-            );
+            hooks.event(Event::Progress(Progress {
+                phase: Phase::Analyse,
+                index,
+                total,
+                done: 0,
+                size: 0,
+            }));
         })?;
         self.commit(Some(s.clone()))?;
         drop(_b);
@@ -259,16 +273,14 @@ impl Core {
                 &s,
                 &settings,
                 &mut |id, seconds, duration| {
-                    hooks.event(
-                        "import-progress",
-                        json!({"id": id, "seconds": seconds, "duration": duration}),
-                    )
+                    hooks.event(Event::ImportProgress(ImportProgress {
+                        id,
+                        seconds,
+                        duration,
+                    }))
                 },
                 &mut |r: &ClipResult| {
-                    hooks2.event(
-                        "import-result",
-                        serde_json::to_value(r).unwrap_or(Value::Null),
-                    )
+                    hooks2.event(Event::ImportResult(Box::new(ImportResult(r.clone()))))
                 },
             )?;
             // Plans may have changed while converting; keep them, replace results only.

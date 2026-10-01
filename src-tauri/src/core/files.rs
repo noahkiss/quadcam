@@ -3,17 +3,17 @@
 
 use super::library::rel_to;
 use super::Core;
+use crate::api::{Event, LibraryTask, Task};
 use crate::library::{self as lib, LibClip};
 use crate::media;
 use crate::photos::{self, ShareReport};
 use anyhow::{bail, Context, Result};
 use serde::{Deserialize, Serialize};
-use serde_json::json;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::Ordering;
 use std::sync::Mutex;
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, specta::Type)]
 pub struct TrashReport {
     pub trashed: Vec<PathBuf>,
     pub failed: Vec<(PathBuf, String)>,
@@ -22,7 +22,7 @@ pub struct TrashReport {
 }
 
 /// A library file in the Trash: the clip it belongs to, where it was, where it is now.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, specta::Type)]
 pub struct Moved {
     pub id: String,
     pub from: PathBuf,
@@ -325,10 +325,11 @@ impl Core {
         let total = todo.len();
         let mut made = 0;
         for (i, (root, c)) in todo.iter().enumerate() {
-            self.hooks.event(
-                "library-task",
-                json!({"task": "thumbnails", "done": i, "total": total}),
-            );
+            self.hooks.event(Event::LibraryTask(LibraryTask {
+                task: Task::Thumbnails,
+                done: i,
+                total,
+            }));
             let file = root.join(&c.path);
             let strip = lib::make_strip(&tools, &file, c.duration, &self.strip_path(&c.id));
             if strip.is_ok() {
@@ -348,10 +349,11 @@ impl Core {
             }
         }
         if total > 0 {
-            self.hooks.event(
-                "library-task",
-                json!({"task": "thumbnails", "done": total, "total": total}),
-            );
+            self.hooks.event(Event::LibraryTask(LibraryTask {
+                task: Task::Thumbnails,
+                done: total,
+                total,
+            }));
             self.hooks.library_changed();
         }
         Ok(made)

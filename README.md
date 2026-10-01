@@ -443,6 +443,7 @@ To try the app without it taking focus, start a debug build with `QUADCAM_NO_FOC
 |---|---|
 | `ui/` | The app's frontend: HTML, CSS, JavaScript, bundled fonts and icons |
 | `ui/trim.js` | The trim editor that the library and the Import sheet share |
+| `src-tauri/src/api/` | The one table of core methods, with their params and results, and the app's events; it makes the socket's methods and the typed GUI commands |
 | `src-tauri/src/core/` | The core that every frontend drives: import, library, cuts, files (Photos, previews, Trash), and setup (settings, places, profiles) |
 | `src-tauri/src/paths.rs` | Where QuadCam keeps its files under your home folder |
 | `src-tauri/src/settings.rs` | The settings file: the one reader and writer, the setting names and their checks |

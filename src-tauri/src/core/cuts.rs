@@ -3,12 +3,12 @@
 
 use super::library::rel_to;
 use super::Core;
+use crate::api::{Event, LibraryTask, Task};
 use crate::library::{self as lib, LibCut};
 use crate::media;
 use crate::moments::Span;
 use crate::trim::{self, CutChange, ExportedCut, RemovedCuts};
 use anyhow::{anyhow, bail, Context, Result};
-use serde_json::json;
 use std::path::PathBuf;
 
 impl Core {
@@ -150,10 +150,11 @@ impl Core {
         let total = c.pending_cuts.len();
         for (i, span) in c.pending_cuts.iter().enumerate() {
             let n = next_n + i as u32;
-            self.hooks.event(
-                "library-task",
-                json!({"task": "cuts", "done": i, "total": total}),
-            );
+            self.hooks.event(Event::LibraryTask(LibraryTask {
+                task: Task::Cuts,
+                done: i,
+                total,
+            }));
             let dst = planner.claim(&dir, &format!("{stem}_cut{n}"), &ext);
             let start_time = created + chrono::Duration::milliseconds((span.start * 1000.0) as i64);
             let meta = media::Meta {
@@ -211,10 +212,11 @@ impl Core {
                 Err(e) => errors.push(format!("cut {:.1}-{:.1} s: {e:#}", span.start, span.end)),
             }
         }
-        self.hooks.event(
-            "library-task",
-            json!({"task": "cuts", "done": total, "total": total}),
-        );
+        self.hooks.event(Event::LibraryTask(LibraryTask {
+            task: Task::Cuts,
+            done: total,
+            total,
+        }));
         self.with_index(|_, ix| {
             let e = ix.get_mut(id).context("clip left the library")?;
             for m in &made {

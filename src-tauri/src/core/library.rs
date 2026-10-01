@@ -2,17 +2,17 @@
 //! moving the clips in the library folder.
 
 use super::Core;
+use crate::api::{Event, LibraryTask, Task};
 use crate::library::{self as lib, Filter, Flag, Index, LibClip};
 use crate::media;
 use crate::pipeline::Outcome;
 use anyhow::{bail, Context, Result};
 use serde::{Deserialize, Serialize};
-use serde_json::json;
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 
 /// A clip as the front ends see it: the index entry plus absolute paths.
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, specta::Type)]
 pub struct LibItem {
     #[serde(flatten)]
     pub clip: LibClip,
@@ -27,7 +27,7 @@ pub struct LibItem {
     pub last_import: bool,
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, specta::Type)]
 pub struct LibraryView {
     pub root: PathBuf,
     pub exists: bool,
@@ -42,7 +42,7 @@ pub struct LibraryView {
 }
 
 /// Details to change on a library clip. Missing fields stay as they are.
-#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize, specta::Type)]
 #[serde(default)]
 pub struct LibEdit {
     pub note: Option<String>,
@@ -60,7 +60,7 @@ pub struct LibEdit {
     pub profile: Option<String>,
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, specta::Type)]
 pub struct RebuildReport {
     pub clips: usize,
     pub cuts: usize,
@@ -68,7 +68,7 @@ pub struct RebuildReport {
 }
 
 /// What `library_apply_name_format` did, by path relative to the library folder.
-#[derive(Debug, Clone, Default, Serialize)]
+#[derive(Debug, Clone, Default, Serialize, specta::Type)]
 pub struct RenameReport {
     pub renamed: Vec<(PathBuf, PathBuf)>,
     pub unchanged: usize,
@@ -203,10 +203,11 @@ impl Core {
         if !root.is_dir() {
             bail!("Library folder {} does not exist.", root.display());
         }
-        self.hooks.event(
-            "library-task",
-            json!({"task": "rebuild", "done": 0, "total": 1}),
-        );
+        self.hooks.event(Event::LibraryTask(LibraryTask {
+            task: Task::Rebuild,
+            done: 0,
+            total: 1,
+        }));
         let report = self.with_index(|root, ix| {
             let (fresh, problems) = lib::rebuild(root, Some(ix));
             let report = RebuildReport {
@@ -217,10 +218,11 @@ impl Core {
             *ix = fresh;
             Ok((report, true))
         });
-        self.hooks.event(
-            "library-task",
-            json!({"task": "rebuild", "done": 1, "total": 1}),
-        );
+        self.hooks.event(Event::LibraryTask(LibraryTask {
+            task: Task::Rebuild,
+            done: 1,
+            total: 1,
+        }));
         report
     }
 
@@ -698,10 +700,11 @@ impl Core {
             .map(|o| root.join(o))
             .filter(|o| o.is_file())
             .unwrap_or_else(|| root.join(&c.path));
-        self.hooks.event(
-            "library-task",
-            json!({"task": "moments", "done": 0, "total": 1}),
-        );
+        self.hooks.event(Event::LibraryTask(LibraryTask {
+            task: Task::Moments,
+            done: 0,
+            total: 1,
+        }));
         let probe = media::probe(&tools, &src)?;
         let scan = crate::moments::scan_signal(&tools, &src, probe.fps, probe.duration)?;
         lib::write_keys(
@@ -709,10 +712,11 @@ impl Core {
             &[(lib::KEY_KEEP, lib::spans_value(&scan.keep))],
         )?;
         self.reread_clips(&[id.to_string()])?;
-        self.hooks.event(
-            "library-task",
-            json!({"task": "moments", "done": 1, "total": 1}),
-        );
+        self.hooks.event(Event::LibraryTask(LibraryTask {
+            task: Task::Moments,
+            done: 1,
+            total: 1,
+        }));
         Ok(self.clip(id)?.1)
     }
 }

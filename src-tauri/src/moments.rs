@@ -96,7 +96,7 @@ pub mod tune {
     pub const KEEP_MIN_S: f64 = 2.0;
 }
 
-#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, specta::Type)]
 #[serde(rename_all = "snake_case")]
 pub enum MomentKind {
     /// Full aileron, held.
@@ -127,14 +127,14 @@ impl MomentKind {
 }
 
 /// Where a moment's evidence came from.
-#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, specta::Type)]
 #[serde(rename_all = "snake_case")]
 pub enum Source {
     RadioLog,
     Video,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, specta::Type)]
 pub struct Moment {
     pub kind: MomentKind,
     /// Seconds from the start of the clip.
@@ -159,7 +159,7 @@ impl Moment {
 }
 
 /// A time range in a clip, in seconds: a suggested keep range or a cut.
-#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, specta::Type)]
 pub struct Span {
     pub start: f64,
     pub end: f64,
@@ -488,7 +488,7 @@ pub struct FrameStats {
 }
 
 /// What a sampled frame shows.
-#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Hash, specta::Type)]
 #[serde(rename_all = "snake_case")]
 pub enum Signal {
     Live,
@@ -716,7 +716,7 @@ pub fn keep_ranges(dead: &[Moment], duration: f64) -> Vec<Span> {
 }
 
 /// The result of scanning a clip's frames.
-#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, specta::Type)]
 pub struct SignalScan {
     /// Seconds between sampled frames.
     pub step: f64,

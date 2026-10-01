@@ -17,7 +17,7 @@ use std::collections::HashSet;
 use std::io::{Read, Write};
 use std::path::{Path, PathBuf};
 
-#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, specta::Type)]
 #[serde(rename_all = "lowercase")]
 pub enum ClipStatus {
     Ok,
@@ -25,7 +25,7 @@ pub enum ClipStatus {
     Empty,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, specta::Type)]
 pub struct Clip {
     pub id: usize,
     pub name: String,
@@ -259,7 +259,7 @@ pub fn analyse(tools: &Tools, clip: &mut Clip, cache: &Path) -> Result<()> {
     Ok(())
 }
 
-#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, specta::Type)]
 #[serde(rename_all = "lowercase")]
 pub enum DateSource {
     Log,
@@ -277,7 +277,7 @@ impl DateSource {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, specta::Type)]
 pub struct DateSuggestion {
     pub date: NaiveDate,
     /// Only from a radio log: the start of the first claimed armed segment.
@@ -334,7 +334,7 @@ pub fn flight_stats(
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, specta::Type)]
 pub struct DatePlan {
     pub suggestions: Vec<DateSuggestion>,
     pub warnings: Vec<String>,
@@ -453,7 +453,7 @@ pub fn creation_time(
         .with_timezone(&Utc)
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, specta::Type)]
 pub struct ClipJob {
     pub id: usize,
     pub skip: bool,
@@ -472,7 +472,7 @@ pub struct ClipJob {
     pub extra: Vec<(String, String)>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, specta::Type)]
 pub struct ImportSettings {
     pub output_dir: PathBuf,
     pub format: Format,
@@ -501,7 +501,7 @@ pub struct ImportSettings {
     pub name_date_format: naming::DateFormat,
 }
 
-#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, specta::Type)]
 #[serde(rename_all = "lowercase")]
 pub enum Outcome {
     Verified,
@@ -509,7 +509,7 @@ pub enum Outcome {
     Skipped,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, specta::Type)]
 pub struct ClipResult {
     pub id: usize,
     pub outcome: Outcome,
@@ -530,7 +530,7 @@ pub struct ClipResult {
 }
 
 /// One cut range written as its own file next to the clip's output.
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, specta::Type)]
 pub struct CutResult {
     pub start: f64,
     pub end: f64,

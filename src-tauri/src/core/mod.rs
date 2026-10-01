@@ -5,12 +5,10 @@
 use crate::disk::{self, Volume};
 use crate::media::{self, Encoder, Format};
 use crate::photos::{self, PhotosLibrary, ShareReport};
-use crate::session::{Editor, PlanPatch, Session, Summary};
+use crate::session::{Session, Summary};
 use crate::settings::Defaults;
 use anyhow::{anyhow, bail, Context, Result};
-use chrono::NaiveDate;
 use serde::{Deserialize, Serialize};
-use serde_json::{json, Value};
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
@@ -31,8 +29,8 @@ pub use setup::{PlaceRemoved, SettingsView};
 pub trait Hooks: Send + Sync {
     /// The session changed (new clips, plans, results). The GUI re-reads it.
     fn changed(&self) {}
-    /// A progress event (`progress`, `import-progress`, `import-result`).
-    fn event(&self, _name: &str, _payload: Value) {}
+    /// A progress event (`progress`, `import-progress`, `import-result`, `library-task`).
+    fn event(&self, _event: crate::api::Event) {}
     /// Called before a format that did not start from the GUI's own button. The GUI shows
     /// its confirm dialog and returns Ok only after the user clicks Erase.
     fn confirm_format(&self, _plan: &FormatPlan) -> Result<()> {
@@ -53,7 +51,7 @@ pub trait Hooks: Send + Sync {
 pub struct NoHooks;
 impl Hooks for NoHooks {}
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, specta::Type)]
 pub struct FormatPlan {
     /// Whole disk, for example `disk4`.
     pub disk: String,
@@ -68,7 +66,7 @@ pub struct FormatPlan {
 
 /// An explicit format request from the CLI or an agent. Every field must match the card
 /// the clips were read from.
-#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize, specta::Type)]
 pub struct FormatRequest {
     /// Whole-disk device node, for example `/dev/disk4`.
     pub device: String,
@@ -81,7 +79,7 @@ pub struct FormatRequest {
 }
 
 /// Per-run overrides for an import. Anything missing comes from `Defaults`.
-#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize, specta::Type)]
 pub struct ImportOptions {
     #[serde(default)]
     pub output_dir: Option<PathBuf>,
@@ -99,13 +97,14 @@ pub struct ImportOptions {
     pub album: Option<String>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, specta::Type)]
 pub struct ImportOutcome {
     pub summary: Summary,
+    #[specta(type = Option<crate::api::SerdeResult<ShareReport, String>>)]
     pub photos: Option<Result<ShareReport, String>>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, specta::Type)]
 pub struct VerifyReport {
     pub id: usize,
     pub output: PathBuf,
@@ -113,15 +112,16 @@ pub struct VerifyReport {
     pub error: Option<String>,
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, specta::Type)]
 pub struct Status {
     pub gui: bool,
+    #[specta(type = crate::api::SerdeResult<media::Tools, String>)]
     pub tools: Result<media::Tools, String>,
     pub defaults: Defaults,
     pub session: Option<SessionBrief>,
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, specta::Type)]
 pub struct SessionBrief {
     pub source: PathBuf,
     pub card: Option<String>,
@@ -129,11 +129,12 @@ pub struct SessionBrief {
     pub analysed: bool,
     pub imported: usize,
     pub failed: usize,
+    #[specta(type = crate::api::SerdeResult<(), String>)]
     pub format_ready: Result<(), String>,
 }
 
 /// Where the log folder for date planning comes from.
-#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, specta::Type)]
 #[serde(rename_all = "lowercase", tag = "kind", content = "path")]
 pub enum LogChoice {
     /// Keep the session's current folder (or the default).
@@ -340,263 +341,6 @@ impl Core {
 
     pub fn volumes(&self) -> Vec<Volume> {
         disk::list_volumes()
-    }
-
-    /// Every method `dispatch` answers, in its order.
-    pub const METHODS: &'static [&'static str] = &[
-        "status",
-        "volumes",
-        "session",
-        "clear",
-        "stage",
-        "analyse",
-        "load",
-        "dates",
-        "suggest",
-        "import",
-        "photos",
-        "verify",
-        "eject",
-        "format_plan",
-        "format",
-        "library",
-        "library_rebuild",
-        "library_rate",
-        "library_edit",
-        "library_rename",
-        "library_cuts",
-        "library_export_cuts",
-        "library_trash",
-        "library_untrash",
-        "library_photos",
-        "library_apply_name_format",
-        "library_rescan",
-        "library_preview",
-        "library_strips",
-        "card_status",
-        "settings",
-        "settings_set",
-        "places",
-        "place_search",
-        "place_save",
-        "place_delete",
-        "profiles",
-        "profile_save",
-        "profile_delete",
-        "profile_default",
-        "session_cuts",
-    ];
-
-    /// The JSON-RPC surface shared by the control socket and the headless MCP server.
-    pub fn dispatch(&self, method: &str, params: Value) -> Result<Value> {
-        fn p<T: for<'de> Deserialize<'de> + Default>(v: Value) -> Result<T> {
-            if v.is_null() {
-                return Ok(T::default());
-            }
-            serde_json::from_value(v).context("bad params")
-        }
-        #[derive(Deserialize, Default)]
-        struct Source {
-            source: Option<PathBuf>,
-        }
-        #[derive(Deserialize, Default)]
-        struct Dates {
-            #[serde(default)]
-            logs: LogChoice,
-            day: Option<NaiveDate>,
-        }
-        #[derive(Deserialize, Default)]
-        struct Suggest {
-            patches: Vec<PlanPatch>,
-            #[serde(default)]
-            editor: Option<Editor>,
-        }
-        #[derive(Deserialize, Default)]
-        struct Photos {
-            ids: Option<Vec<usize>>,
-            album: Option<String>,
-        }
-        #[derive(Deserialize, Default)]
-        struct Eject {
-            target: Option<String>,
-        }
-        #[derive(Deserialize, Default)]
-        struct Label {
-            label: Option<String>,
-        }
-        #[derive(Deserialize, Default)]
-        struct Ids {
-            #[serde(default)]
-            ids: Vec<String>,
-            #[serde(default)]
-            rating: Option<u8>,
-            #[serde(default)]
-            flag: Option<crate::library::Flag>,
-            #[serde(default)]
-            album: Option<String>,
-        }
-        #[derive(Deserialize, Default)]
-        struct One {
-            id: String,
-            #[serde(default)]
-            name: Option<String>,
-            #[serde(default)]
-            cuts: Vec<crate::moments::Span>,
-            #[serde(default)]
-            removed_cuts: Option<crate::trim::RemovedCuts>,
-            #[serde(flatten)]
-            edit: LibEdit,
-        }
-        #[derive(Deserialize, Default)]
-        struct SessionCuts {
-            id: usize,
-            cuts: Vec<crate::moments::Span>,
-            #[serde(default)]
-            removed_cuts: Option<crate::trim::RemovedCuts>,
-        }
-        #[derive(Deserialize, Default)]
-        struct Mount {
-            mount: PathBuf,
-        }
-        #[derive(Deserialize, Default)]
-        struct SetSettings {
-            values: crate::settings::Values,
-        }
-        #[derive(Deserialize, Default)]
-        struct Search {
-            query: String,
-            #[serde(default)]
-            provider: Option<String>,
-            #[serde(default)]
-            limit: Option<usize>,
-        }
-        #[derive(Deserialize, Default)]
-        struct Named {
-            name: String,
-            #[serde(default)]
-            new_name: Option<String>,
-            #[serde(default)]
-            lat: Option<f64>,
-            #[serde(default)]
-            lon: Option<f64>,
-            #[serde(default)]
-            fields: crate::settings::Values,
-        }
-        let v = |x: &dyn erased::Ser| x.to_value();
-        Ok(match method {
-            "status" => v(&self.status()),
-            "volumes" => v(&self.volumes()),
-            "session" => v(&self.session()),
-            "clear" => {
-                self.clear()?;
-                json!({"cleared": true})
-            }
-            "stage" => v(&self.stage(p::<Source>(params)?.source.as_deref())?),
-            "analyse" => v(&self.analyse()?),
-            "load" => v(&self.load(p::<Source>(params)?.source.as_deref())?),
-            "dates" => {
-                let d: Dates = p(params)?;
-                v(&self.plan_dates(d.logs, d.day)?)
-            }
-            "suggest" => {
-                let s: Suggest = p(params)?;
-                v(&self.patch(&s.patches, s.editor.unwrap_or(Editor::Agent))?)
-            }
-            "import" => v(&self.import(&p::<ImportOptions>(params)?)?),
-            "photos" => {
-                let x: Photos = p(params)?;
-                v(&self.add_to_photos(x.ids, x.album)?)
-            }
-            "verify" => v(&self.verify(p::<Photos>(params)?.ids)?),
-            "eject" => {
-                self.eject(p::<Eject>(params)?.target.as_deref())?;
-                json!({"ejected": true})
-            }
-            "format_plan" => v(&self.format_plan(p::<Label>(params)?.label.as_deref())?),
-            "format" => v(&self.format(&p::<FormatRequest>(params)?, false)?),
-            "library" => v(&self.library(&p::<crate::library::Filter>(params)?)?),
-            "library_rebuild" => v(&self.library_rebuild()?),
-            "library_rate" => {
-                let x: Ids = p(params)?;
-                v(&self.library_rate(&x.ids, x.rating, x.flag)?)
-            }
-            "library_edit" => {
-                let x: One = p(params)?;
-                v(&self.library_edit(&x.id, &x.edit)?)
-            }
-            "library_rename" => {
-                let x: One = p(params)?;
-                let name = x.name.context("name is required")?;
-                v(&self.library_rename(&x.id, &name)?)
-            }
-            "library_cuts" => {
-                let x: One = p(params)?;
-                v(&self.library_set_cuts(&x.id, &x.cuts, x.removed_cuts)?)
-            }
-            "library_export_cuts" => v(&self.library_export_cuts(&p::<One>(params)?.id)?),
-            "library_trash" => v(&self.library_trash(&p::<Ids>(params)?.ids)?),
-            "library_untrash" => {
-                #[derive(Deserialize, Default)]
-                struct Untrash {
-                    moved: Vec<Moved>,
-                }
-                v(&self.library_untrash(&p::<Untrash>(params)?.moved)?)
-            }
-            "library_photos" => {
-                let x: Ids = p(params)?;
-                v(&self.library_photos(&x.ids, x.album)?)
-            }
-            "library_apply_name_format" => {
-                let x: Ids = p(params)?;
-                v(&self.library_apply_name_format((!x.ids.is_empty()).then_some(x.ids))?)
-            }
-            "library_rescan" => v(&self.library_rescan(&p::<One>(params)?.id)?),
-            "library_preview" => v(&self.library_preview(&p::<One>(params)?.id)?),
-            "library_strips" => {
-                let x: Ids = p(params)?;
-                v(&self.library_strips((!x.ids.is_empty()).then_some(x.ids))?)
-            }
-            "card_status" => v(&self.card_status(&p::<Mount>(params)?.mount)?),
-            "settings" => v(&self.settings()?),
-            "settings_set" => v(&self.settings_set(&p::<SetSettings>(params)?.values)?),
-            "places" => v(&self.places()?),
-            "place_search" => {
-                let x: Search = p(params)?;
-                v(&self.place_search(&x.query, x.provider.as_deref(), x.limit)?)
-            }
-            "place_save" => {
-                let x: Named = p(params)?;
-                v(&self.place_save(&x.name, x.lat, x.lon, x.new_name.as_deref())?)
-            }
-            "place_delete" => v(&self.place_delete(&p::<Named>(params)?.name)?),
-            "profiles" => {
-                let (profiles, default) = self.profiles()?;
-                json!({"profiles": profiles, "default_profile": default})
-            }
-            "profile_save" => {
-                let x: Named = p(params)?;
-                v(&self.profile_save(&x.name, &x.fields, x.new_name.as_deref())?)
-            }
-            "profile_delete" => v(&self.profile_delete(&p::<Named>(params)?.name)?),
-            "profile_default" => v(&self.profile_default(&p::<Named>(params)?.name)?),
-            "session_cuts" => {
-                let x: SessionCuts = p(params)?;
-                v(&self.set_session_cuts(x.id, &x.cuts, x.removed_cuts)?)
-            }
-            _ => bail!("unknown method {method:?}"),
-        })
-    }
-}
-
-/// Small helper so `dispatch` can serialize any result the same way.
-mod erased {
-    pub trait Ser {
-        fn to_value(&self) -> serde_json::Value;
-    }
-    impl<T: serde::Serialize> Ser for T {
-        fn to_value(&self) -> serde_json::Value {
-            serde_json::to_value(self).unwrap_or(serde_json::Value::Null)
-        }
     }
 }
 

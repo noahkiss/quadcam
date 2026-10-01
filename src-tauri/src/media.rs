@@ -13,7 +13,7 @@ const TOOL_DIRS: &[&str] = &["/opt/homebrew/bin", "/usr/local/bin"];
 
 pub const INSTALL_HINT: &str = "brew install ffmpeg";
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, specta::Type)]
 pub struct Tools {
     pub ffmpeg: PathBuf,
     pub ffprobe: PathBuf,
@@ -38,7 +38,7 @@ pub fn find_tools() -> Result<Tools> {
     }
 }
 
-#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, specta::Type)]
 pub struct Probe {
     pub duration: f64,
     pub video_packets: u64,
@@ -133,7 +133,7 @@ pub fn recover(tools: &Tools, src: &Path, dst: &Path) -> Result<()> {
     Ok(())
 }
 
-#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, specta::Type)]
 #[serde(rename_all = "lowercase")]
 pub enum Format {
     Mp4,
@@ -149,7 +149,7 @@ impl Format {
     }
 }
 
-#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, specta::Type)]
 #[serde(rename_all = "lowercase")]
 pub enum Encoder {
     /// `h264_videotoolbox -q:v 65`, falling back to x264 on failure.
@@ -158,7 +158,7 @@ pub enum Encoder {
     X264,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, specta::Type)]
 pub struct Meta {
     pub title: String,
     pub comment: String,

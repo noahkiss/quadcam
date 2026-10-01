@@ -10,7 +10,7 @@ pub const MAX_FORMAT_BYTES: u64 = 64_000_000_000;
 /// Cards over this size ship as exFAT; analog DVRs want FAT32.
 pub const FAT32_CARD_BYTES: u64 = 32 * 1_000_000_000 + 2_000_000_000;
 
-#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, specta::Type)]
 pub struct DiskInfo {
     pub device_identifier: String,
     pub parent_whole_disk: String,
@@ -127,7 +127,7 @@ pub fn whole_disk_of(id: &str) -> String {
 }
 
 /// A mounted volume the app may care about.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, specta::Type)]
 pub struct Volume {
     pub mount: PathBuf,
     pub info: DiskInfo,
@@ -196,7 +196,7 @@ pub fn list_volumes() -> Vec<Volume> {
 }
 
 /// The card the clips were read from, recorded at stage time.
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, specta::Type)]
 pub struct CardIdentity {
     pub device_identifier: String,
     pub whole_disk: String,

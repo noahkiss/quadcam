@@ -17,7 +17,7 @@ README. Personal preferences go in the app's settings file on the machine
 | Path | Holds |
 |---|---|
 | `ui/` | Frontend: plain HTML, CSS and JS, no build step. `app.js` (library, import sheet, settings), `trim.js` (the one trim editor, used by clip detail and the import review). Icons and fonts are inlined or bundled so the app works offline |
-| `src-tauri/src/` | Rust core. `core/` (`Core`) owns the session and the library index and is the one surface every front end drives: `mod.rs` (state, locking, `Hooks`, `dispatch`), `import.rs` (stage, analyse, dates, import, verify, format), `library.rs` (the index, list, rate, edit, rename, redate), `cuts.rs` (session and library cut lists), `files.rs` (Photos, previews, strips, Trash) and `setup.rs` (settings, places, profiles). `lib.rs` holds the Tauri commands (`core_call` runs any `Core::dispatch` method), `control.rs` the app's socket, `mcp/` the MCP server (`server.rs` the protocol and handlers, `tools.rs` the tool list, `render.rs` the text answers), `bin/quadcam-cli.rs` the CLI. The logic modules (`scan`, `disk`, `media`, `logs`, `moments`, `metadata`, `qtmeta`, `naming`, `pipeline` (with `pipeline/import.rs`, the import run), `session`, `photos`, `library`, `trim`, `cuts` (the one cut writer), `trash`, `settings` (with `Defaults`, the effective settings), `paths` (every path under `$HOME`), `geocode`) run without Tauri |
+| `src-tauri/src/` | Rust core. `core/` (`Core`) owns the session and the library index and is the one surface every front end drives: `mod.rs` (state, locking, `Hooks`), `import.rs` (stage, analyse, dates, import, verify, format), `library.rs` (the index, list, rate, edit, rename, redate), `cuts.rs` (session and library cut lists), `files.rs` (Photos, previews, strips, Trash) and `setup.rs` (settings, places, profiles). `api/` is the one method table: each row names a method, its params and result types and the `Core` call, and `api!` makes `Core::dispatch` (socket, MCP) and one typed Tauri command per method from it; `api/events.rs` holds the typed events. `lib.rs` holds the GUI's own Tauri commands, the legacy UI's commands (`core_call` runs any `dispatch` method), and `specta_builder`, which tauri-specta exports to `app/src/bindings.ts`; `control.rs` the app's socket, `mcp/` the MCP server (`server.rs` the protocol and handlers, `tools.rs` the tool list, `render.rs` the text answers), `bin/quadcam-cli.rs` the CLI. The logic modules (`scan`, `disk`, `media`, `logs`, `moments`, `metadata`, `qtmeta`, `naming`, `pipeline` (with `pipeline/import.rs`, the import run), `session`, `photos`, `library`, `trim`, `cuts` (the one cut writer), `trash`, `settings` (with `Defaults`, the effective settings), `paths` (every path under `$HOME`), `geocode`) run without Tauri |
 | `src-tauri/Info.plist` | Photos usage strings, merged into the bundle's Info.plist |
 | `src-tauri/tests/` | Integration tests on synthetic clips and FAT32 disk images |
 | `test-clips/` | Local test corpus. Git tracks only its README |
@@ -27,6 +27,8 @@ README. Personal preferences go in the app's settings file on the machine
 ## Requirements
 
 - Rust via rustup (stable), plus `cargo install tauri-cli --version "^2" --locked`.
+- specta `=2.0.0-rc.25`, tauri-specta `=2.0.0-rc.25` and specta-typescript `=0.0.12` are release
+  candidates: they stay pinned exactly, and an upgrade regenerates and reviews `app/src/bindings.ts`.
 - ffmpeg and ffprobe from Homebrew (`brew install ffmpeg`). The app looks in
   `/opt/homebrew/bin` and `/usr/local/bin`, then `PATH`. exiftool is optional; tests use it
   when present.
@@ -40,6 +42,7 @@ Run these in `src-tauri/`:
 cargo test -- --test-threads=1  # unit + integration tests (needs ffmpeg; attaches small disk images)
 cargo test --test import size_and_speed -- --ignored --nocapture   # MP4 vs MOV size/speed
 INSTA_UPDATE=always cargo test --test snapshots   # accept a deliberate shape change, then review the diff
+QUADCAM_UPDATE_BINDINGS=1 cargo test --test bindings   # write app/src/bindings.ts after an api change
 cargo tauri dev                 # run from source (Photos is dry-run; QUADCAM_PHOTOS=real to test it)
 cargo tauri build               # -> target/release/bundle/macos/QuadCam.app
 cargo build --release --bin quadcam-cli   # -> target/release/quadcam-cli
@@ -237,4 +240,6 @@ claude mcp add quadcam -- "$(brew --prefix)/bin/quadcam-cli" mcp
   set `HOME` to a temp folder (the CLI and MCP derive every path from it) or pass
   `Core::with_settings` a temp file.
 - The control socket and MCP server expose the same `Core::dispatch` methods. Add a feature
-  to `Core` first, then wire it into the GUI, the CLI and the MCP tools.
+  to `Core` first, then add its row to the `api!` table (that makes the dispatch method and the
+  typed GUI command), then wire it into the CLI and the MCP tools. Debug builds of the app
+  rewrite `app/src/bindings.ts`; the `bindings` test fails when the committed file is stale.
