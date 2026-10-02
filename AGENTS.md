@@ -4,12 +4,12 @@ A macOS desktop app (Tauri 2) that imports analog FPV DVR clips (MJPEG AVI) into
 It stages the clips off the card, dates them (EdgeTX radio logs or the import date), names them
 `YYYY-MM-DD_<name>.mp4`, converts them with ffmpeg, verifies them with ffprobe, and files them
 by flying day. It can then add them to Photos and format the card to FAT32. The library is the
-home screen; import is a sheet over it. `README.md` is the public user guide; keep it
-in step with every change a user can see.
+home screen; import is a sheet over it. `README.md` is the public overview and `docs/` the
+public user guide, one topic per file; keep them in step with every change a user can see.
 
 **Publishable repo:** no personal information in anything committed. That means no names,
 hostnames, user paths, or personal gear setups. Name specific devices only as examples in the
-README. Personal preferences go in the app's settings file on the machine
+README and `docs/`. Personal preferences go in the app's settings file on the machine
 (`~/Library/Application Support/app.quadcam/settings.json`), never in code defaults.
 
 ## Layout
@@ -23,6 +23,7 @@ README. Personal preferences go in the app's settings file on the machine
 | `test-clips/` | Local test corpus. Git tracks only its README |
 | `scripts/make-corpus.sh` | Builds `test-clips/synthetic/` |
 | `assets/icon.svg` | Icon source. Regenerate with `cargo tauri icon` |
+| `docs/` | The user guide (linked from `README.md`), `docs/images/` (screenshots from `app/e2e/shots.spec.ts`), and `architecture-plan.md` |
 
 ## Requirements
 
@@ -88,9 +89,11 @@ GitHub (`noahkiss/quadcam`, public) is the only remote. Users install the cask
 
 1. Set the new version in `src-tauri/Cargo.toml` and `src-tauri/tauri.conf.json`. They must match.
 2. Commit, then push a tag: `git tag vX.Y.Z && git push origin main vX.Y.Z`.
-3. `.github/workflows/release.yml` tests, builds `QuadCam.app` on a `macos-26` (arm64) runner,
-   zips it as `quadcam-X.Y.Z-arm64.zip`, and attaches it to the GitHub Release. It then fires
-   the tap's `bump.yml`, which rewrites `Casks/quadcam.rb`, installs it on macOS, and commits.
+3. `.github/workflows/release.yml` builds `QuadCam.app` on a `macos-26` (arm64) runner with the
+   prebuilt Tauri CLI from `app/`. It does not run the tests: before it attaches the zip
+   (`quadcam-X.Y.Z-arm64.zip`) to the GitHub Release, it waits up to 40 minutes for a green
+   `ci.yml` run on the tagged commit, and fails without one. It then fires the tap's
+   `bump.yml`, which rewrites `Casks/quadcam.rb`, installs it on macOS, and commits.
 4. Watch it: `gh run watch -R noahkiss/quadcam --exit-status`. Re-run for an existing tag with
    `gh workflow run release.yml -R noahkiss/quadcam -f tag=vX.Y.Z`.
 
@@ -179,7 +182,7 @@ GitHub (`noahkiss/quadcam`, public) is the only remote. Users install the cask
   `Core::forget_unrestorable` drops it unless it was analysed and every staged clip still
   exists. "Start over" (`Core::clear`, method `clear`, `quadcam-cli clear`) deletes the file;
   the GUI also clears it after it erases a card.
-- **Add to Photos:** per clip and "Add all" on the summary. `photos::PhotoKit` uses
+- **Add to Photos:** one "Add N files" button on the import's Finish step, and per clip in the library. `photos::PhotoKit` uses
   PhotoKit through `objc2-photos`: add-only access for the library, read-write when an
   album is set (default album `Drone`, created if missing; an empty setting means library
   only). Denied access returns a message that points to System Settings > Privacy &
