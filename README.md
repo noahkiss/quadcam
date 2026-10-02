@@ -1,3 +1,5 @@
+![QuadCam: a film-ribbon quad flying over a field at dusk](docs/images/banner.jpg)
+
 # QuadCam
 
 QuadCam is a macOS app that imports the recordings from your FPV goggles into a video library. It copies the clips off the card, dates and names them, converts them to MP4, verifies every file, and files it by flying day.
