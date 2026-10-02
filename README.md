@@ -60,22 +60,21 @@ xattr -dr com.apple.quarantine /Applications/QuadCam.app
 
 ## Build from source
 
-You need Rust (through [rustup](https://rustup.rs)), the Tauri 2 CLI, ffmpeg, and, for the
+You need Rust (through [rustup](https://rustup.rs)), ffmpeg, and, for the
 frontend, Node.js 24 (through [fnm](https://github.com/Schniz/fnm), which reads `.node-version`)
 and pnpm:
 
 ```bash
-cargo install tauri-cli --version "^2" --locked
 brew install ffmpeg fnm pnpm
 fnm install
-(cd app && pnpm install)
+(cd app && pnpm install)   # also installs the Tauri CLI
 ```
 
 Build the app in `src-tauri/`:
 
 ```bash
 cd src-tauri
-cargo tauri build
+../app/node_modules/.bin/tauri build   # or `cargo tauri build` with a global tauri-cli
 ```
 
 The result is `src-tauri/target/release/bundle/macos/QuadCam.app`. The bundle also holds the command-line tool, `QuadCam.app/Contents/MacOS/quadcam-cli`.

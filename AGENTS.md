@@ -26,7 +26,9 @@ README. Personal preferences go in the app's settings file on the machine
 
 ## Requirements
 
-- Rust via rustup (stable), plus `cargo install tauri-cli --version "^2" --locked`.
+- Rust via rustup (stable). The Tauri CLI is a dev dependency of `app/` (`@tauri-apps/cli`): run it as
+  `app/node_modules/.bin/tauri` after `pnpm install`, or install it globally with
+  `cargo install tauri-cli --version "^2" --locked` to type `cargo tauri`. Releases use the prebuilt one.
 - specta `=2.0.0-rc.25`, tauri-specta `=2.0.0-rc.25` and specta-typescript `=0.0.12` are release
   candidates: they stay pinned exactly, and an upgrade regenerates and reviews `app/src/bindings.ts`.
 - ffmpeg and ffprobe from Homebrew (`brew install ffmpeg`). The app looks in
