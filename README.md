@@ -24,6 +24,12 @@ Today, QuadCam reads **analog goggle and DVR recordings**: MJPEG video in AVI fi
 
 Support for **DJI, HDZero and Walksnail** recordings is planned. QuadCam does not read them yet.
 
+**Sample recordings wanted.** If you fly HDZero or Walksnail (or DJI), a few short clips straight
+off your goggle card help build and test that support. Send the files exactly as the card holds
+them, folder layout and sidecar files (`.srt`, `.osd`) included, and say which goggles and
+firmware recorded them. Open an issue with a download link. Shared files are used only for
+development and tests, and only clips you mark as freely shareable go into the repo.
+
 QuadCam was built with a Fat Shark Echo and a RadioMaster Pocket on EdgeTX in mind. The automated tests use synthetic clips and logs in the same formats, not real cards.
 
 ## Install

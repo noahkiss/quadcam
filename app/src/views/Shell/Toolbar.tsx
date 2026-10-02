@@ -24,12 +24,7 @@ export function Toolbar() {
   return (
     <header className={styles.bar}>
       <div className={styles.brand}>
-        <span className={styles.logo} aria-hidden="true">
-          <span />
-          <span />
-          <span />
-          <span />
-        </span>
+        <img className={styles.logo} src="/emblem.png" alt="" aria-hidden="true" draggable={false} />
         <h1>QuadCam</h1>
       </div>
       <div className={styles.mid}>
