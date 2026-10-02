@@ -1,7 +1,7 @@
 import { defineConfig, devices } from "@playwright/test";
 
 // Headless WebKit (the engine of the app's WKWebView) against the Vite dev server, with
-// the mock core injected. Each spec runs on both UIs: `legacy` (ui/) and `next` (app/).
+// the mock core injected.
 export default defineConfig({
   testDir: "e2e",
   globalSetup: "./e2e/global-setup.ts",
@@ -16,10 +16,7 @@ export default defineConfig({
     headless: true,
     trace: "retain-on-failure",
   },
-  projects: [
-    { name: "legacy", use: { browserName: "webkit" }, metadata: { ui: "legacy" } },
-    { name: "next", use: { browserName: "webkit" }, metadata: { ui: "next" } },
-  ],
+  projects: [{ name: "webkit", use: { browserName: "webkit" } }],
   webServer: {
     command: "pnpm dev",
     url: "http://localhost:4719/",

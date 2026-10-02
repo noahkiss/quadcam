@@ -1,7 +1,5 @@
 import type { Page } from "@playwright/test";
-import { area, dialog, expect, test, type AppFixture } from "../fixtures";
-
-area("settings");
+import { dialog, expect, test, type AppFixture } from "../fixtures";
 
 const settingsDialog = (page: Page) => dialog(page, "Settings");
 const writes = async (app: AppFixture) => (await app.method("settings_set")).map((p) => (p as { values: Record<string, unknown> }).values);
@@ -31,8 +29,6 @@ test("the gear opens Settings; Done saves only what changed", async ({ app, page
   await dlg.getByLabel("Album (empty: library only)").fill("FPV");
   await dlg.getByRole("button", { name: "Done" }).click();
   await expect(dlg).toBeHidden();
-  // Legacy also rewrites unchanged places (its compare is key-order sensitive); only
-  // values that differ count.
   await expect.poll(async () => changed(app)).toEqual({ format: "mov", photosAlbum: "FPV" });
 });
 

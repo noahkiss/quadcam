@@ -1,7 +1,4 @@
-import { area, dialog, expect, test } from "../fixtures";
-
-area("detail");
-
+import { dialog, expect, test } from "../fixtures";
 
 test.beforeEach(async ({ app, page }) => {
   await app.open();

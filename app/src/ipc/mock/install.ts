@@ -1,7 +1,6 @@
 // Puts a fake Tauri runtime in the page, backed by MockCore: `__TAURI_INTERNALS__` for
-// @tauri-apps/api (the new UI) and the `__TAURI__` global (`withGlobalTauri`, the legacy
-// UI). Both UIs reach the same core, so one parity spec runs on either. `window.__qc` is the
-// handle tests use: the call log, the core's state, and events to push.
+// @tauri-apps/api. `window.__qc` is the handle tests use: the call log, the core's state,
+// and events to push.
 import { MockCore, type MockOptions } from "./core";
 
 type Callback = (payload: unknown) => void;
@@ -21,7 +20,6 @@ declare global {
     __qc?: MockHandle;
     __QC_MOCK__?: MockOptions;
     __TAURI_INTERNALS__?: unknown;
-    __TAURI__?: unknown;
   }
 }
 
@@ -91,36 +89,12 @@ export function installMock(opts: MockOptions = {}): MockHandle {
     unregisterListener: (event: string, id: number) => void listeners.get(event)?.delete(id),
   };
 
-  // The `withGlobalTauri` surface the legacy UI uses.
-  const listen = async (event: string, handler: Callback) => {
-    const id = (await invoke("plugin:event|listen", { event, target: { kind: "Any" }, handler: transformCallback(handler) })) as number;
-    return () => {
-      listeners.get(event)?.delete(id);
-    };
-  };
-  window.__TAURI__ = {
-    core: { invoke, convertFileSrc, transformCallback },
-    event: { listen, emit: (event: string, payload?: unknown) => invoke("plugin:event|emit", { event, payload }) },
-    dialog: { open: (options: unknown = {}) => invoke("plugin:dialog|open", { options }) },
-    opener: {
-      revealItemInDir: (path: string) => invoke("plugin:opener|reveal_item_in_dir", { paths: [path] }),
-      openPath: (path: string) => invoke("plugin:opener|open_path", { path }),
-    },
-    webview: {
-      getCurrentWebview: () => ({
-        onDragDropEvent: (handler: Callback) => listen("qc://drag-drop", handler),
-      }),
-    },
-  };
-
   const handle: MockHandle = {
     core,
     calls: core.calls,
     emit,
     drop: (paths) => {
-      emit("qc://drag-drop", { type: "enter", paths, position: { x: 400, y: 300 } });
       emit("tauri://drag-enter", { paths, position: { x: 400, y: 300 } });
-      emit("qc://drag-drop", { type: "drop", paths, position: { x: 400, y: 300 } });
       emit("tauri://drag-drop", { paths, position: { x: 400, y: 300 } });
     },
   };

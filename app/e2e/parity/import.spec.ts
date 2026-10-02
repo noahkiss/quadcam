@@ -1,11 +1,8 @@
 import type { Page } from "@playwright/test";
-import { area, dialog, expect, test, type AppFixture } from "../fixtures";
-
-area("import");
+import { dialog, expect, test, type AppFixture } from "../fixtures";
 
 const sheet = (page: Page) => dialog(page, "Import");
-// A clip row: a list item (legacy) or a grid row (new UI).
-const rows = (page: Page) => sheet(page).locator('li, [role="row"]');
+const rows = (page: Page) => sheet(page).locator('[role="row"]');
 const row = (page: Page, name: string) => rows(page).filter({ has: page.getByRole("textbox", { name: `Short name for ${name}` }) });
 const suggests = async (app: AppFixture) => (await app.method("suggest")).map((p) => p.patches as { id: number }[]);
 const patches = async (app: AppFixture) => (await suggests(app)).flat();

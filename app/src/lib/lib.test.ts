@@ -4,7 +4,7 @@ import { fmtBytes, fmtDur, fmtLong, fmtT, parseT } from "./format";
 import { albumAction, byDay, daySub, deadOf, flyingOf, matches, nextSort, sortClips, validSort, visibleClips } from "./library";
 
 describe("format", () => {
-  it("formats like the legacy UI", () => {
+  it("formats sizes and dates", () => {
     expect(fmtBytes(0)).toBe("0 B");
     expect(fmtBytes(6_521_519)).toBe("7 MB");
     expect(fmtBytes(31_914_983_424)).toBe("31.9 GB");

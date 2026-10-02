@@ -1,5 +1,5 @@
 // Import actions: loading a card or folder, review edits, export, Photos, eject and the
-// format step. Ported from the legacy app.js; the core owns the session throughout.
+// format step. The core owns the session throughout.
 import { api, errText, pickFolder } from "../ipc/api";
 import { on } from "../ipc/events";
 import type { FormatPlan, PlanPatch, Session } from "../ipc/types";

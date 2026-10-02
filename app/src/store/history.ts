@@ -1,6 +1,6 @@
-// Undo and redo for library edits: the same model as the legacy history.js. Each step holds
-// its own undo and redo calls to the core; actions/library.ts builds them. A new edit clears
-// redo, at most 100 steps are kept, and a step that fails is dropped.
+// Undo and redo for library edits. Each step holds its own undo and redo calls to the
+// core; actions/library.ts builds them. A new edit clears redo, at most 100 steps are
+// kept, and a step that fails is dropped.
 import type { StateCreator } from "zustand";
 import type { State } from ".";
 

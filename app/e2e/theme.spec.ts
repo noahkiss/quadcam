@@ -8,7 +8,6 @@ for (const scheme of ["dark", "light"] as const) {
     test.use({ colorScheme: scheme });
 
     test("the component gallery passes axe", async ({ app, page }) => {
-      test.skip(app.ui !== "next", "the gallery is part of the new UI");
       await app.open("library", { query: "?gallery" });
       await expect(page.getByRole("heading", { name: "Components" })).toBeVisible();
       const r = await new AxeBuilder({ page }).withTags(["wcag2a", "wcag2aa", "wcag21aa"]).analyze();
@@ -18,8 +17,7 @@ for (const scheme of ["dark", "light"] as const) {
 
     for (const [scenario, ready] of [["library", "gap-run"], ["empty", ""]] as const) {
       test(`the ${scenario} screen passes axe`, async ({ app, page }) => {
-        test.skip(app.ui !== "next", "contrast is checked on the new UI");
-        await app.open(scenario);
+          await app.open(scenario);
         if (ready) {
           await page.getByRole("article", { name: ready }).click();
           await page.getByRole("article", { name: "backyard-loops" }).click({ modifiers: ["Meta"] });
@@ -31,7 +29,6 @@ for (const scheme of ["dark", "light"] as const) {
     }
 
     test("the open clip passes axe", async ({ app, page }) => {
-      test.skip(app.ui !== "next", "contrast is checked on the new UI");
       await app.open();
       await page.getByRole("article", { name: "gap-run" }).dblclick();
       await page.getByRole("button", { name: "Roll", exact: true }).click();
@@ -44,7 +41,6 @@ for (const scheme of ["dark", "light"] as const) {
     });
 
     test("the import sheet passes axe", async ({ app, page }) => {
-      test.skip(app.ui !== "next", "contrast is checked on the new UI");
       await app.open("review");
       await page.getByRole("navigation", { name: "Library" }).getByRole("button", { name: /Unfinished import/ }).click();
       await page.waitForFunction(() => document.getAnimations().every((a) => a.playState === "finished"));
@@ -57,7 +53,6 @@ for (const scheme of ["dark", "light"] as const) {
     });
 
     test("every settings pane passes axe", async ({ app, page }) => {
-      test.skip(app.ui !== "next", "contrast is checked on the new UI");
       await app.open();
       await page.getByRole("button", { name: "Settings" }).click();
       await page.waitForFunction(() => document.getAnimations().every((a) => a.playState === "finished"));
@@ -65,12 +60,11 @@ for (const scheme of ["dark", "light"] as const) {
         await page.getByRole("navigation", { name: "Settings sections" }).getByRole("button", { name: pane }).click();
         const r = await new AxeBuilder({ page }).withTags(["wcag2a", "wcag2aa", "wcag21aa"]).analyze();
         expect(r.violations.map((v) => `${pane} ${v.id}: ${v.nodes.map((n) => n.target.join(" ") + " " + n.failureSummary).join(", ")}`)).toEqual([]);
-        if (process.env.QC_SHOTS) await page.screenshot({ path: `${process.env.QC_SHOTS}/next-settings-${pane.toLowerCase()}-${scheme}.png` });
+        if (process.env.QC_SHOTS) await page.screenshot({ path: `${process.env.QC_SHOTS}/settings-${pane.toLowerCase()}-${scheme}.png` });
       }
     });
 
     test("open dialog and menu pass axe", async ({ app, page }) => {
-      test.skip(app.ui !== "next", "the gallery is part of the new UI");
       await app.open("library", { query: "?gallery" });
       await page.getByRole("button", { name: "Open menu" }).click();
       await expect(page.getByRole("menu", { name: "Clip actions" })).toBeVisible();
