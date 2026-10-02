@@ -136,67 +136,6 @@ export const commands = {
 	 *  from the top left of the window's content).
 	 */
 	share: (paths: string[], x: number | null, y: number | null, w: number | null, h: number | null) => typedError<null, string>(__TAURI_INVOKE("share", { paths, x, y, w, h })),
-	/**  @deprecated Legacy UI; use `volumes`. */
-	listVolumes: () => __TAURI_INVOKE<Volume[]>("list_volumes"),
-	/**  @deprecated Legacy UI; use `session`. */
-	getSession: () => __TAURI_INVOKE<{
-	version: number,
-	/**  Card mount point or folder the clips came from. */
-	source: string,
-	/**  The card the clips were read from; None for a plain folder (no format step). */
-	card: CardIdentity | null,
-	card_volume: Volume | null,
-	staging: string,
-	clips: Clip[],
-	plans: ClipPlan[],
-	results: ClipResult[],
-	analysed: boolean,
-	log_dir: string | null,
-	log_day: string | null,
-	log_days: string[],
-	warnings: string[],
-	date_warnings: string[],
-	/**  Clip ids whose outputs were added to Photos. */
-	in_photos: number[],
-	/**  Output folder of the last import. */
-	output_dir: string | null,
-} | null>("get_session"),
-	/**
-	 *  Stages every clip from `path` (a card or any folder), analyses them and plans dates.
-	 * 
-	 *  @deprecated Legacy UI; use `load`.
-	 */
-	loadSource: (path: string) => typedError<Session, string>(__TAURI_INVOKE("load_source", { path })),
-	/**  @deprecated Legacy UI; use `dates`. */
-	planDates: (logDir: string | null, day: string | null) => typedError<Session, string>(__TAURI_INVOKE("plan_dates", { logDir, day })),
-	/**
-	 *  A person's edit in the GUI. It clears the agent-suggested mark on the fields it touches.
-	 * 
-	 *  @deprecated Legacy UI; use `suggest` with `editor: "user"`.
-	 */
-	editPlan: (patch: PlanPatch) => typedError<Session, string>(__TAURI_INVOKE("edit_plan", { patch })),
-	/**
-	 *  Several edits at once ("Apply to all", the session bar): one core call, one save.
-	 * 
-	 *  @deprecated Legacy UI; use `suggest` with `editor: "user"`.
-	 */
-	editPlans: (patches: PlanPatch[]) => typedError<Session, string>(__TAURI_INVOKE("edit_plans", { patches })),
-	/**  @deprecated Legacy UI; use `import`. */
-	importClips: (options: ImportOptions) => typedError<ImportOutcome, string>(__TAURI_INVOKE("import_clips", { options })),
-	/**  @deprecated Legacy UI; use `photos`. */
-	addToPhotos: (ids: number[] | null, album: string | null) => typedError<ShareReport, string>(__TAURI_INVOKE("add_to_photos", { ids, album })),
-	/**
-	 *  "Start over": forgets the session and deletes the session file.
-	 * 
-	 *  @deprecated Legacy UI; use `clear`.
-	 */
-	clearSession: () => typedError<null, string>(__TAURI_INVOKE("clear_session")),
-	/**
-	 *  Any `Core::dispatch` method, off the main thread. The library calls go through here.
-	 * 
-	 *  @deprecated Legacy UI; use the typed command of the same name.
-	 */
-	coreCall: (method: string, params: Json) => typedError<Json, string>(__TAURI_INVOKE("core_call", { method, params })),
 };
 
 /** Events */
@@ -575,12 +514,6 @@ export type ImportProgress = {
 
 /**  One clip finished converting (verified, failed or skipped). */
 export type ImportResult = ClipResult;
-
-/**
- *  Any JSON value, typed `unknown` in TypeScript (specta cannot export a `serde_json::Value`
- *  field yet).
- */
-export type Json = unknown;
 
 /**  `format_plan`: the FAT32 volume name; None uses the setting. */
 export type LabelParams = {
