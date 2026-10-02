@@ -36,4 +36,13 @@ describe("MockCore", () => {
     expect(out.summary.imported).toBe(4);
     expect(core.libraryView().clips.some((c) => c.name === "loops")).toBe(true);
   });
+
+  it("replaces a clip that is already in the library, as the core does", () => {
+    const { core } = make("review");
+    const before = core.libraryView().clips.map((c) => c.id);
+    core.importClips({ output_dir: "/Users/pilot/Movies/quadcam", format: "mp4" });
+    const ids = core.libraryView().clips.map((c) => c.id);
+    expect(before).toContain("x07fee4b870d01a6f");
+    expect(new Set(ids).size).toBe(ids.length);
+  });
 });

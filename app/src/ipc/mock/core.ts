@@ -508,6 +508,14 @@ export class MockCore {
     this.sessionChanged();
   }
 
+  /** Puts a clip in the library, replacing the one with its id, as `Library::upsert` does.
+   * Unsaved cuts survive. */
+  upsert(clip: LibClip) {
+    const at = this.lib.clips.findIndex((x) => x.id === clip.id);
+    if (at < 0) this.lib.clips.push(clip);
+    else this.lib.clips[at] = { ...clip, pending_cuts: clip.pending_cuts.length ? clip.pending_cuts : this.lib.clips[at].pending_cuts };
+  }
+
   importClips(opts: { output_dir: string; format: string }) {
     const s = this.need();
     const defaultName = (this.settings.values.defaultName as string) || "flight";
@@ -532,7 +540,7 @@ export class MockCore {
       this.emit("import-result", r);
       imported++;
       const loc = p.meta.location;
-      this.lib.clips.push({
+      this.upsert({
         id: c.key || `k${p.id}`, path: output.slice(opts.output_dir.length + 1), title: p.name, note: p.note, date: p.date, time: p.time ? p.time.slice(0, 5) : null,
         duration: c.duration, size: r.size, rating: 0, flag: "none", place: loc?.name || null, location: loc || null, aircraft: p.meta.profile || (this.settings.values.defaultProfile as string) || null,
         keywords: ["FPV", ...p.meta.keywords], author: p.meta.author, moments: p.moments, keep: c.signal?.keep || [], stats: p.flight, cuts: cuts.map((k) => ({ path: k.output.slice(opts.output_dir.length + 1), start: k.start, end: k.end, size: k.size })),
