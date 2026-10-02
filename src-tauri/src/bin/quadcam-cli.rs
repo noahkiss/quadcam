@@ -360,7 +360,7 @@ enum PlaceCmd {
     /// Find an address or a named place: name, address, latitude and longitude.
     Search {
         query: String,
-        /// apple or nominatim. Default: the geocoder setting (apple).
+        /// apple, nominatim, census or google. Default: the geocoder setting (apple).
         #[arg(long)]
         provider: Option<String>,
         /// At most this many results (1 to 10).
@@ -379,7 +379,7 @@ enum PlaceCmd {
         /// Which search result to take (1 is the first).
         #[arg(long, default_value_t = 1, requires = "search")]
         pick: usize,
-        /// apple or nominatim, for --search.
+        /// apple, nominatim, census or google, for --search.
         #[arg(long, requires = "search")]
         provider: Option<String>,
         /// New name for the place.

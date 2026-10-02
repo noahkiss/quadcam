@@ -227,7 +227,7 @@ Arguments:
 
 Options:
       --json                 Print one JSON object: {"ok":true,"result":...} or {"ok":false,"error":{...}}
-      --provider <PROVIDER>  apple or nominatim. Default: the geocoder setting (apple)
+      --provider <PROVIDER>  apple, nominatim, census or google. Default: the geocoder setting (apple)
       --limit <LIMIT>        At most this many results (1 to 10) [default: 5]
       --session <FILE>       Session file (default: ~/Library/Caches/app.quadcam/session.json)
   -h, --help                 Print help
@@ -245,7 +245,7 @@ Options:
       --search <SEARCH>      Take the location from a place search
       --session <FILE>       Session file (default: ~/Library/Caches/app.quadcam/session.json)
       --pick <PICK>          Which search result to take (1 is the first) [default: 1]
-      --provider <PROVIDER>  apple or nominatim, for --search
+      --provider <PROVIDER>  apple, nominatim, census or google, for --search
       --rename <RENAME>      New name for the place
   -h, --help                 Print help
 ===== quadcam-cli places delete --help
