@@ -1,4 +1,4 @@
-![QuadCam: a film-ribbon quad flying over a field at dusk](docs/images/banner.jpg)
+![QuadCam: a film-ribbon quad flying over a field at dusk, seen from a chase camera above](docs/images/banner.jpg)
 
 # QuadCam
 
