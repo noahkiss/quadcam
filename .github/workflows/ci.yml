@@ -47,8 +47,8 @@ jobs:
       - run: cargo test --locked -- --nocapture --test-threads=1
       - run: cargo build --release --locked --bins
 
-  # The new React UI in app/: typecheck, lint, unit tests, build, and the Playwright
-  # parity specs against both UIs on the mocked IPC. Node comes from .node-version, pnpm
+  # The React UI in app/: typecheck, lint, unit tests, build, and the Playwright specs
+  # on the mocked IPC. Node comes from .node-version, pnpm
   # from packageManager in app/package.json.
   ui:
     runs-on: macos-26

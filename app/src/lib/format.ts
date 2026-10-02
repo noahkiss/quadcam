@@ -1,4 +1,4 @@
-// Number and date formats, as the legacy UI shows them.
+// Number and date formats, as the app shows them.
 
 export function fmtBytes(n: number): string {
   if (!n) return "0 B";

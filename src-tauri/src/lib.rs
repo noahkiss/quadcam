@@ -30,14 +30,10 @@ pub mod trash;
 pub mod trim;
 pub mod watch;
 
-use crate::core::{
-    Core, FormatPlan, FormatRequest, Hooks, ImportOptions, ImportOutcome, LogChoice,
-};
+use crate::core::{Core, FormatPlan, FormatRequest, Hooks};
 use anyhow::{anyhow, Result};
-use chrono::NaiveDate;
-use disk::Volume;
 use serde::Serialize;
-use session::{Editor, PlanPatch, Session};
+use session::Session;
 use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -160,95 +156,12 @@ fn default_output_dir() -> Option<PathBuf> {
     pipeline::default_output_dir()
 }
 
-/// @deprecated Legacy UI; use `volumes`.
-#[tauri::command]
-#[specta::specta]
-async fn list_volumes() -> Vec<Volume> {
-    tauri::async_runtime::spawn_blocking(disk::list_volumes)
-        .await
-        .unwrap_or_default()
-}
-
-/// @deprecated Legacy UI; use `session`.
-#[tauri::command]
-#[specta::specta]
-fn get_session(state: State<'_, AppState>) -> Option<Session> {
-    state.core.session()
-}
-
-/// Stages every clip from `path` (a card or any folder), analyses them and plans dates.
-///
-/// @deprecated Legacy UI; use `load`.
-#[tauri::command]
-#[specta::specta]
-async fn load_source(state: State<'_, AppState>, path: String) -> Result<Session, String> {
-    let core = state.core.clone();
-    blocking(move || core.load(Some(&PathBuf::from(path)))).await
-}
-
 /// A folder or clip files dropped on the window.
 #[tauri::command]
 #[specta::specta]
 async fn load_dropped(state: State<'_, AppState>, paths: Vec<PathBuf>) -> Result<Session, String> {
     let core = state.core.clone();
     blocking(move || core.load_dropped(&paths)).await
-}
-
-/// @deprecated Legacy UI; use `dates`.
-#[tauri::command]
-#[specta::specta]
-async fn plan_dates(
-    state: State<'_, AppState>,
-    log_dir: Option<String>,
-    day: Option<NaiveDate>,
-) -> Result<Session, String> {
-    let core = state.core.clone();
-    let logs = match log_dir {
-        Some(d) if !d.is_empty() => LogChoice::Dir(PathBuf::from(d)),
-        _ => LogChoice::None,
-    };
-    blocking(move || core.plan_dates(logs, day)).await
-}
-
-/// A person's edit in the GUI. It clears the agent-suggested mark on the fields it touches.
-///
-/// @deprecated Legacy UI; use `suggest` with `editor: "user"`.
-#[tauri::command]
-#[specta::specta]
-fn edit_plan(state: State<'_, AppState>, patch: PlanPatch) -> Result<Session, String> {
-    state.core.patch(&[patch], Editor::User).map_err(err)
-}
-
-/// Several edits at once ("Apply to all", the session bar): one core call, one save.
-///
-/// @deprecated Legacy UI; use `suggest` with `editor: "user"`.
-#[tauri::command]
-#[specta::specta]
-fn edit_plans(state: State<'_, AppState>, patches: Vec<PlanPatch>) -> Result<Session, String> {
-    state.core.patch(&patches, Editor::User).map_err(err)
-}
-
-/// @deprecated Legacy UI; use `import`.
-#[tauri::command]
-#[specta::specta]
-async fn import_clips(
-    state: State<'_, AppState>,
-    options: ImportOptions,
-) -> Result<ImportOutcome, String> {
-    let core = state.core.clone();
-    blocking(move || core.import(&options)).await
-}
-
-/// @deprecated Legacy UI; use `photos`.
-#[tauri::command]
-#[specta::specta]
-async fn add_to_photos(
-    state: State<'_, AppState>,
-    ids: Option<Vec<usize>>,
-    album: Option<String>,
-) -> Result<photos::ShareReport, String> {
-    let core = state.core.clone();
-    blocking(move || core.add_to_photos(ids, album)).await
 }
 
 /// The GUI's own Erase button: the click in its confirm dialog is the confirmation.
@@ -278,35 +191,12 @@ fn answer_format_request(state: State<'_, AppState>, id: u64, approve: bool) {
     }
 }
 
-/// "Start over": forgets the session and deletes the session file.
-///
-/// @deprecated Legacy UI; use `clear`.
-#[tauri::command]
-#[specta::specta]
-fn clear_session(state: State<'_, AppState>) -> Result<(), String> {
-    state.core.clear().map_err(err)
-}
-
 /// Makes (or reuses) a small H.264 preview of a clip.
 #[tauri::command]
 #[specta::specta]
 async fn preview(state: State<'_, AppState>, id: usize) -> Result<PathBuf, String> {
     let core = state.core.clone();
     blocking(move || core.preview(id)).await
-}
-
-/// Any `Core::dispatch` method, off the main thread. The library calls go through here.
-///
-/// @deprecated Legacy UI; use the typed command of the same name.
-#[tauri::command]
-#[specta::specta]
-async fn core_call(
-    state: State<'_, AppState>,
-    method: String,
-    params: api::Json,
-) -> Result<api::Json, String> {
-    let core = state.core.clone();
-    blocking(move || core.dispatch(&method, params.0).map(api::Json)).await
 }
 
 /// Lets the webview load files from the library folder (thumbnails and MP4 playback).
@@ -351,31 +241,10 @@ fn no_focus() -> bool {
     std::env::var_os("QUADCAM_NO_FOCUS").is_some()
 }
 
-/// The page the window loads: the legacy `ui/` (`legacy/index.html`) or the React UI in
-/// `app/` (`index.html`). `QUADCAM_UI=legacy|next` picks one, else the `ui` setting, else
-/// the legacy UI. Builds ship both (`app/dist`, with `ui/` copied to `app/dist/legacy`); the
-/// dev server serves the same paths.
-fn ui_entry(settings_file: &std::path::Path) -> &'static str {
-    let from_settings = || {
-        settings::read(settings_file).ok().and_then(|v| {
-            v.get("ui")
-                .and_then(serde_json::Value::as_str)
-                .map(str::to_owned)
-        })
-    };
-    let choice = std::env::var("QUADCAM_UI").ok().or_else(from_settings);
-    match choice.as_deref() {
-        Some("next") => "index.html",
-        _ => "legacy/index.html",
-    }
-}
-
 /// Makes the main window from its config. With `QUADCAM_NO_FOCUS` it opens unfocused, below
 /// other windows, and keeps rendering there so `screencapture -l` sees it.
-fn main_window(app: &AppHandle, settings_file: &std::path::Path) -> tauri::Result<()> {
-    let mut config = app.config().app.windows[0].clone();
-    config.url = tauri::WebviewUrl::App(ui_entry(settings_file).into());
-    let mut builder = tauri::WebviewWindowBuilder::from_config(app, &config)?;
+fn main_window(app: &AppHandle) -> tauri::Result<()> {
+    let mut builder = tauri::WebviewWindowBuilder::from_config(app, &app.config().app.windows[0])?;
     if no_focus() {
         app.set_activation_policy(tauri::ActivationPolicy::Accessory)?;
         builder = builder
@@ -413,7 +282,7 @@ fn dev_eval(app: &AppHandle, window: tauri::WebviewWindow) {
 fn dev_eval(_: &AppHandle, _: tauri::WebviewWindow) {}
 
 /// Every GUI command with its types, and the events, for tauri-specta: the `api` table's
-/// commands, the GUI's own commands, and the legacy UI's commands (marked deprecated).
+/// commands and the GUI's own commands.
 pub fn specta_builder() -> tauri_specta::Builder<tauri::Wry> {
     use api::commands as c;
     tauri_specta::Builder::<tauri::Wry>::new()
@@ -469,16 +338,6 @@ pub fn specta_builder() -> tauri_specta::Builder<tauri::Wry> {
             library_scope,
             menu::menu_state,
             share::share,
-            list_volumes,
-            get_session,
-            load_source,
-            plan_dates,
-            edit_plan,
-            edit_plans,
-            import_clips,
-            add_to_photos,
-            clear_session,
-            core_call,
         ])
         .events(tauri_specta::collect_events![
             api::Progress,
@@ -502,54 +361,6 @@ pub fn bindings_language() -> specta_typescript::Typescript {
     specta_typescript::Typescript::default().header(
         "// Generated by tauri-specta from src-tauri/src/api (quadcam_lib::specta_builder).\n// Do not edit. Regenerate: QUADCAM_UPDATE_BINDINGS=1 cargo test --test bindings\n",
     )
-}
-
-/// The legacy UI's `eject` and `format_plan` take their own arguments, while the typed
-/// commands of the same names take `params`. A call without `params` comes from the legacy
-/// UI and is answered here, the way the legacy commands answered it. Goes with the legacy UI.
-mod legacy {
-    use crate::core::Core;
-    use serde_json::Value;
-    use std::sync::Arc;
-    use tauri::ipc::{Invoke, InvokeBody, InvokeError};
-    use tauri::Manager;
-
-    pub fn wants(invoke: &Invoke) -> bool {
-        matches!(invoke.message.command(), "eject" | "format_plan")
-            && match invoke.message.payload() {
-                InvokeBody::Json(v) => v.get("params").is_none(),
-                _ => false,
-            }
-    }
-
-    pub fn handle(invoke: Invoke) {
-        let core = invoke
-            .message
-            .webview()
-            .state::<Arc<Core>>()
-            .inner()
-            .clone();
-        let command = invoke.message.command().to_string();
-        let args = match invoke.message.payload() {
-            InvokeBody::Json(v) => v.clone(),
-            _ => Value::Null,
-        };
-        invoke.resolver.respond_async(async move {
-            tauri::async_runtime::spawn_blocking(move || {
-                let text = |k: &str| args.get(k).and_then(Value::as_str).map(str::to_string);
-                match command.as_str() {
-                    "eject" => core.eject(text("path").as_deref()).map(|_| Value::Null),
-                    _ => core
-                        .format_plan(text("label").as_deref())
-                        .map(|p| serde_json::to_value(p).unwrap_or(Value::Null)),
-                }
-                .map_err(|e| format!("{e:#}"))
-            })
-            .await
-            .map_err(|e| InvokeError::from(e.to_string()))?
-            .map_err(InvokeError::from)
-        });
-    }
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -592,7 +403,7 @@ pub fn run() {
                     hooks.clone(),
                     Core::real_photos(),
                 )
-                .with_settings(settings_file.clone()),
+                .with_settings(settings_file),
             );
             core.forget_unrestorable();
             // The CLI and a headless MCP server write these files directly.
@@ -615,18 +426,12 @@ pub fn run() {
             specta.mount_events(app);
             app.manage(core.clone());
             app.manage(AppState { core, hooks });
-            main_window(&handle, &settings_file)?;
+            main_window(&handle)?;
             menu::install(&handle)?;
             watch_volumes(handle);
             Ok(())
         })
-        .invoke_handler(move |invoke| {
-            if legacy::wants(&invoke) {
-                legacy::handle(invoke);
-                return true;
-            }
-            typed(invoke)
-        })
+        .invoke_handler(typed)
         .run(tauri::generate_context!())
         .expect("error while running quadcam");
 }

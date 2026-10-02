@@ -118,7 +118,7 @@ mod tests {
     use super::*;
     use serde_json::json;
 
-    /// The payloads keep the shapes the legacy UI reads.
+    /// The payloads keep the shapes the UI reads.
     #[test]
     fn event_payloads() {
         let (n, p) = Event::Progress(Progress {

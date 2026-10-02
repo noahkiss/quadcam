@@ -30,7 +30,7 @@ describe("library slice", () => {
     expect(screenOf(S())).toBe("first-run");
   });
 
-  it("selects with Command and Shift like the legacy UI", () => {
+  it("selects with Command and Shift", () => {
     const ids = visible(S()).map((c) => c.id);
     S().select(ids[0]);
     S().select(ids[2], { meta: true });

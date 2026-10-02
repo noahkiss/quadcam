@@ -1,5 +1,5 @@
 // Library rules shared by the grid, the list, keys and the menu: filtering, the one sort
-// order, day groups, flying time. Ported from the legacy app.js.
+// order, day groups, flying time.
 import type { LibClip, LibraryView, Span } from "../ipc/types";
 
 export type Group = "all" | "last_import" | "moments" | "picks" | "rejected" | "not_in_photos";

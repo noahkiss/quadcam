@@ -1,6 +1,4 @@
-import { area, clipCell, clipTable, dialog, expect, selectedClips, test } from "../fixtures";
-
-area("library");
+import { clipCell, clipTable, dialog, expect, selectedClips, test } from "../fixtures";
 
 const card = (page: import("@playwright/test").Page, name: string) => page.getByRole("article", { name });
 

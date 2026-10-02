@@ -1,7 +1,7 @@
-// A fake core for tests and design work: answers the Tauri commands and `core_call`
-// methods the UIs use, keeps state in memory, and emits the events the real core emits
-// (`library-changed`, `session-changed`, `settings-changed`, progress). Shapes follow the
-// recorded fixtures; behaviour follows `Core` closely enough for the parity specs.
+// A fake core for tests and design work: answers the Tauri commands the UI uses, keeps
+// state in memory, and emits the events the real core emits (`library-changed`,
+// `session-changed`, `settings-changed`, progress). Shapes follow the recorded fixtures;
+// behaviour follows `Core` closely enough for the parity specs.
 import type {
   ClipPlan,
   ClipResult,
@@ -122,7 +122,7 @@ export class MockCore {
         this.emit("volumes-changed");
         return { ejected: true };
       case "format_plan":
-        return this.formatPlan(((args.params ? p.label : args.label) as string | null) ?? null);
+        return this.formatPlan((p.label as string | null) ?? null);
     }
     if (DISPATCH.has(cmd)) return this.dispatch(cmd, p);
     switch (cmd) {
@@ -132,35 +132,12 @@ export class MockCore {
           : { tools: null, error: "ffmpeg and ffprobe not found.", install_hint: "brew install ffmpeg", socket: null };
       case "default_output_dir":
         return seed.LIBRARY_ROOT;
-      case "list_volumes":
-        return structuredClone(this.volumes);
-      case "get_session":
-        return structuredClone(this.session);
-      case "load_source":
-        return this.load(String(args.path));
       case "load_dropped":
         return this.load((args.paths as string[])[0] ?? "dropped");
-      case "plan_dates":
-        return this.planDates(args.logDir as string | null, args.day as string | null);
-      case "edit_plan":
-        return this.patch([args.patch as PlanPatch]);
-      case "edit_plans":
-        return this.patch(args.patches as PlanPatch[]);
-      case "import_clips":
-        return this.importClips(args.options as { output_dir: string; format: string });
-      case "add_to_photos":
-        return this.addToPhotos(args.ids as number[] | null, (args.album as string | null) ?? null);
       case "format_card":
         return this.formatCard(String(args.label));
       case "answer_format_request":
         this.formatAnswers.push({ id: Number(args.id), approve: !!args.approve });
-        return null;
-      case "clear_session":
-        this.session = null;
-        return null;
-      case "eject":
-        this.volumes = this.volumes.filter((v) => !v.is_card);
-        this.emit("volumes-changed");
         return null;
       case "preview":
         return seed.PREVIEW;
@@ -170,8 +147,6 @@ export class MockCore {
       case "menu_state":
         this.menuState = args;
         return null;
-      case "core_call":
-        return this.dispatch(String(args.method), (args.params || {}) as Record<string, unknown>);
       case "plugin:dialog|open":
         return this.dialogAnswers.length ? this.dialogAnswers.shift() : null;
       case "plugin:opener|reveal_item_in_dir":
@@ -533,6 +508,14 @@ export class MockCore {
     this.sessionChanged();
   }
 
+  /** Puts a clip in the library, replacing the one with its id, as `Library::upsert` does.
+   * Unsaved cuts survive. */
+  upsert(clip: LibClip) {
+    const at = this.lib.clips.findIndex((x) => x.id === clip.id);
+    if (at < 0) this.lib.clips.push(clip);
+    else this.lib.clips[at] = { ...clip, pending_cuts: clip.pending_cuts.length ? clip.pending_cuts : this.lib.clips[at].pending_cuts };
+  }
+
   importClips(opts: { output_dir: string; format: string }) {
     const s = this.need();
     const defaultName = (this.settings.values.defaultName as string) || "flight";
@@ -557,7 +540,7 @@ export class MockCore {
       this.emit("import-result", r);
       imported++;
       const loc = p.meta.location;
-      this.lib.clips.push({
+      this.upsert({
         id: c.key || `k${p.id}`, path: output.slice(opts.output_dir.length + 1), title: p.name, note: p.note, date: p.date, time: p.time ? p.time.slice(0, 5) : null,
         duration: c.duration, size: r.size, rating: 0, flag: "none", place: loc?.name || null, location: loc || null, aircraft: p.meta.profile || (this.settings.values.defaultProfile as string) || null,
         keywords: ["FPV", ...p.meta.keywords], author: p.meta.author, moments: p.moments, keep: c.signal?.keep || [], stats: p.flight, cuts: cuts.map((k) => ({ path: k.output.slice(opts.output_dir.length + 1), start: k.start, end: k.end, size: k.size })),

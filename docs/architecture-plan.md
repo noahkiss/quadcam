@@ -361,6 +361,8 @@ Recommendation: **build the new UI side by side, then cut over once.**
 | U8 Flip default | `next` becomes default; legacy stays one release behind the switch | Full suites; manual smoke by the owner | S | Last |
 | U9 Remove legacy | Delete `ui/`, the switch and `withGlobalTauri` | Suites | S | One release after U8 |
 
+U8 and U9 shipped together in 0.5.0: the new UI is the only UI (decision 7, changed).
+
 Rollback for U8 is flipping the default back. Before U8, the new UI is unreachable in release.
 
 ### 4.3 Then the feature track
@@ -465,7 +467,12 @@ The owner approved the plan and answered the questions:
 5. **Format for digital cards:** yes, with the same guards, decided per system when each lands.
    The `Source` trait declares whether a source offers formatting.
 6. **Workspace split:** no. R9 is skipped.
-7. **Legacy lifetime:** `ui/` stays for one release after U8, then goes.
+7. **Legacy lifetime:** `ui/` stays for one release after U8, then goes. *Changed
+   2026-10-01:* the owner dropped the extra release. 0.5.0 ships the new UI as the only UI,
+   so U8 and U9 land together: `ui/`, the `ui` setting, `QUADCAM_UI`, `withGlobalTauri`, the
+   deprecated legacy commands, `core_call` and the legacy `eject`/`format_plan` handler are
+   gone. A settings file with `ui` still loads; reads drop the key and the next write
+   removes it.
 8. **Spacing:** snap to the 8-pt grid.
 
 ### Calls made during the Rust track
@@ -487,8 +494,8 @@ The plan did not cover these; each took the conservative choice.
   current shape.
 - **Command names.** The typed Tauri commands carry the method names and take one `params`
   struct. Two names were already legacy commands (`eject`, `format_plan`). A call without
-  `params` goes to a small legacy handler in `lib.rs` that answers it as before. It goes with
-  the legacy UI (U9).
+  `params` went to a small legacy handler in `lib.rs` that answered it as before. It went
+  with the legacy UI in 0.5.0 (U9).
 - **bindings.ts.** It lives at `app/src/bindings.ts`. specta exports `f64` as
   `number | null`, because the lossless-float option adds runtime transforms that fail
   `tsc --strict`. `serde_json::Value` fields are typed `unknown`; `Result` fields use

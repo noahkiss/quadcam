@@ -1,5 +1,5 @@
 // The trim editor's model and its pure rules, shared by the open clip and the import
-// review. Ported from the legacy trim.js.
+// review.
 import type { Moment, Span } from "../../ipc/types";
 
 export interface TrimCut extends Span {

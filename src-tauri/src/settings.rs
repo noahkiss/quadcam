@@ -180,13 +180,6 @@ pub const KEYS: &[Key] = &[
         about: "text (a profile name)",
         check: string,
     },
-    // Which UI the app window loads; not in the Settings window. QUADCAM_UI overrides it.
-    Key {
-        file: "ui",
-        name: Some("ui"),
-        about: "next or legacy",
-        check: |v| one_of(v, &["next", "legacy"]),
-    },
     Key {
         file: "recents",
         name: None,
@@ -240,6 +233,10 @@ pub fn check(name: &str, v: &Value) -> Result<&'static Key> {
     Ok(k)
 }
 
+/// Keys an older version wrote that mean nothing now (`ui` picked the legacy UI before
+/// 0.5.0). Reads drop them, so the next write removes them from the file.
+const RETIRED: &[&str] = &["ui"];
+
 /// The file's values. A missing file is empty. A file that does not parse is an error, so a
 /// write never replaces settings it could not read.
 pub fn read(path: &Path) -> Result<Values> {
@@ -248,7 +245,10 @@ pub fn read(path: &Path) -> Result<Values> {
         Ok(b) => match serde_json::from_slice::<Value>(&b)
             .with_context(|| format!("{} is not valid JSON; fix or remove it", path.display()))?
         {
-            Value::Object(m) => Ok(m),
+            Value::Object(mut m) => {
+                m.retain(|k, _| !RETIRED.contains(&k.as_str()));
+                Ok(m)
+            }
             _ => bail!("{} is not a JSON object; fix or remove it", path.display()),
         },
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(Values::new()),
@@ -516,6 +516,31 @@ mod tests {
         for (k, v) in old.as_object().unwrap() {
             check(k, v).unwrap_or_else(|e| panic!("{k}: {e:#}"));
         }
+    }
+
+    #[test]
+    fn the_retired_ui_key_loads_and_goes() {
+        let d = tempfile::tempdir().unwrap();
+        let f = d.path().join("settings.json");
+        std::fs::write(&f, r#"{"ui":"next","format":"mov","someFutureKey":1}"#).unwrap();
+
+        // It loads, and the key is gone from every read.
+        let values = read(&f).unwrap();
+        assert!(!values.contains_key("ui"));
+        assert_eq!(Defaults::from_values(&values).format, Format::Mov);
+        assert!(check("ui", &Value::String("next".into())).is_err());
+
+        // The next write drops it from the file and keeps the rest.
+        set(
+            &f,
+            &serde_json::from_value(serde_json::json!({"place_folders": true})).unwrap(),
+        )
+        .unwrap();
+        let on_disk: Value = serde_json::from_slice(&std::fs::read(&f).unwrap()).unwrap();
+        assert_eq!(
+            on_disk,
+            serde_json::json!({"format":"mov","someFutureKey":1,"placeFolders":true})
+        );
     }
 
     #[test]

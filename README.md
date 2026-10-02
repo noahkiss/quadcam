@@ -87,16 +87,10 @@ cargo tauri dev     # run the app from source (starts the dev server on port 471
 cargo test          # unit and integration tests (see Tests)
 ```
 
-Two frontends ship while the new one is checked:
+The frontend in `app/` uses React, TypeScript and Vite. `cargo tauri build` builds it first
+(`pnpm --dir app build`).
 
-- `ui/`, plain HTML, CSS and JavaScript, is the default.
-- `app/` is the new one: React, TypeScript and Vite. `cargo tauri build` builds it first
-  (`pnpm --dir app build`) and copies `ui/` beside it. To use it, run
-  `quadcam-cli settings set ui=next` and restart the app (`ui=legacy` goes back), or start the
-  app with `QUADCAM_UI=next`, which overrides the setting.
-
-In `app/`: `pnpm test` (unit tests), `pnpm e2e` (Playwright on both frontends with a mocked
-core), `pnpm typecheck`, `pnpm lint`, `pnpm build`.
+In `app/`: `pnpm test` (unit tests), `pnpm e2e` (Playwright with a mocked core), `pnpm typecheck`, `pnpm lint`, `pnpm build`.
 
 ## Use the app
 
@@ -454,13 +448,12 @@ To try the app without it taking focus, start a debug build with `QUADCAM_NO_FOC
 
 | Path | Holds |
 |---|---|
-| `ui/` | The default frontend: HTML, CSS, JavaScript, bundled fonts and icons |
-| `ui/trim.js` | The trim editor that the library and the Import sheet share |
-| `app/` | The new frontend (React, TypeScript, Vite), chosen with the `ui` setting |
-| `app/src/bindings.ts` | The core's commands and types for the new frontend, generated from `src-tauri/src/api/` |
+| `app/` | The frontend: React, TypeScript, Vite, with bundled fonts and icons |
+| `app/src/components/trim/` | The trim editor that the open clip and the Import sheet share |
+| `app/src/bindings.ts` | The core's commands and types for the frontend, generated from `src-tauri/src/api/` |
 | `src-tauri/src/api/` | The one table of core methods, with their params and results, and the app's events; it makes the socket's methods and the typed GUI commands |
 | `src-tauri/src/sources/` | Footage sources: how each video system's clips are found, checked, repaired and converted, and what its card may be formatted to. Analog DVRs today |
-| `src-tauri/src/core/` | The core that every frontend drives: import, library, cuts, files (Photos, previews, Trash), and setup (settings, places, profiles) |
+| `src-tauri/src/core/` | The core that the app, the CLI and the MCP server drive: import, library, cuts, files (Photos, previews, Trash), and setup (settings, places, profiles) |
 | `src-tauri/src/paths.rs` | Where QuadCam keeps its files under your home folder |
 | `src-tauri/src/settings.rs` | The settings file: the one reader and writer, the setting names and their checks |
 | `src-tauri/src/geocode.rs` | Place search: Apple MapKit and OpenStreetMap Nominatim |

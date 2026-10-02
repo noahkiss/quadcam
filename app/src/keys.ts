@@ -1,4 +1,4 @@
-// The app's keys, ported from the legacy keydown handler. A text field, a select, or a
+// The app's keys. A text field, a select, or a
 // dialog other than the import sheet keeps its own keys.
 import { useEffect } from "react";
 import * as lib from "./actions/library";

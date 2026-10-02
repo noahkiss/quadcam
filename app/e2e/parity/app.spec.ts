@@ -1,6 +1,4 @@
-import { area, expect, selectedClips, test } from "../fixtures";
-
-area("app");
+import { expect, selectedClips, test } from "../fixtures";
 
 test("an empty library shows the first-run screen", async ({ app, page }) => {
   await app.open("empty");
