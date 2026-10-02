@@ -37,3 +37,21 @@ test("a large library scrolls and keeps keyboard selection", async ({ app, page 
   for (let i = 0; i < 12; i++) await page.keyboard.press("ArrowDown");
   await expect(selectedClips(page)).toBeInViewport();
 });
+
+for (const view of ["grid", "list"] as const) {
+  test(`the ${view} view scrolls with the mouse wheel inside the window`, async ({ app, page }) => {
+    await page.setViewportSize({ width: 1100, height: 600 });
+    await app.open("many");
+    await expect(page.getByRole("article").first()).toBeVisible();
+    if (view === "list") await page.getByRole("radio", { name: /list/i }).or(page.getByRole("button", { name: /list/i })).first().click();
+    const box = page.locator(view === "grid" ? '[role="grid"][aria-label="Clips"]' : "table").first();
+    const scroller = view === "grid" ? box : box.locator("xpath=..");
+    const fits = await scroller.evaluate((e) => e.getBoundingClientRect().bottom <= window.innerHeight + 1);
+    expect(fits).toBe(true);
+    const before = await scroller.evaluate((e) => [e.scrollTop, e.scrollHeight - e.clientHeight]);
+    expect(before[1]).toBeGreaterThan(0);
+    await scroller.hover();
+    await page.mouse.wheel(0, 800);
+    await expect.poll(() => scroller.evaluate((e) => e.scrollTop)).toBeGreaterThan(0);
+  });
+}
