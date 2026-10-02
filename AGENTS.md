@@ -16,9 +16,8 @@ README. Personal preferences go in the app's settings file on the machine
 
 | Path | Holds |
 |---|---|
-| `app/` | New frontend: React + TypeScript + Vite (pnpm, Node pinned in `.node-version`). Builds to `app/dist`, which ships in the app beside a copy of `ui/` in `app/dist/legacy/`. Not yet the default; `docs/architecture-plan.md` section 4.2 has the steps |
-| `ui/` | Legacy frontend, still the default: plain HTML, CSS and JS, no build step. `app.js` (library, import sheet, settings), `trim.js` (the one trim editor, used by clip detail and the import review). Icons and fonts are inlined or bundled so the app works offline |
-| `src-tauri/src/` | Rust core. `core/` (`Core`) owns the session and the library index and is the one surface every front end drives: `mod.rs` (state, locking, `Hooks`), `import.rs` (stage, analyse, dates, import, verify, format), `library.rs` (the index, list, rate, edit, rename, redate), `cuts.rs` (session and library cut lists), `files.rs` (Photos, previews, strips, Trash) and `setup.rs` (settings, places, profiles). `api/` is the one method table: each row names a method, its params and result types and the `Core` call, and `api!` makes `Core::dispatch` (socket, MCP) and one typed Tauri command per method from it; `api/events.rs` holds the typed events. `lib.rs` holds the GUI's own Tauri commands, the legacy UI's commands (`core_call` runs any `dispatch` method), and `specta_builder`, which tauri-specta exports to `app/src/bindings.ts`; `control.rs` the app's socket, `mcp/` the MCP server (`server.rs` the protocol and handlers, `params.rs` each tool's argument type, `tools.rs` the tool list with schemas derived from those types, `render.rs` the text answers), `bin/quadcam-cli.rs` the CLI (clap flags build the `api` params, and it calls the table's `api::call` functions). The logic modules (`scan`, `disk`, `media`, `logs`, `moments`, `metadata`, `qtmeta`, `naming`, `pipeline` (with `pipeline/import.rs`, the import run), `session`, `photos`, `library`, `trim`, `cuts` (the one cut writer), `sources` (the `Source` trait per video system; `sources/analog.rs` is the DVR: clip layout, half-written check and repair, encode plan, dead air, card policy), `trash`, `settings` (with `Defaults`, the effective settings), `paths` (every path under `$HOME`), `geocode`) run without Tauri |
+| `app/` | The frontend: React + TypeScript + Vite (pnpm, Node pinned in `.node-version`). Builds to `app/dist`, which the app ships. `views/` (library, clip detail, import sheet, settings), `components/` (with `trim/`, the one trim editor, used by clip detail and the import review), `store/`, `actions/`, `ipc/`. Icons and fonts are inlined or bundled so the app works offline |
+| `src-tauri/src/` | Rust core. `core/` (`Core`) owns the session and the library index and is the one surface every front end drives: `mod.rs` (state, locking, `Hooks`), `import.rs` (stage, analyse, dates, import, verify, format), `library.rs` (the index, list, rate, edit, rename, redate), `cuts.rs` (session and library cut lists), `files.rs` (Photos, previews, strips, Trash) and `setup.rs` (settings, places, profiles). `api/` is the one method table: each row names a method, its params and result types and the `Core` call, and `api!` makes `Core::dispatch` (socket, MCP) and one typed Tauri command per method from it; `api/events.rs` holds the typed events. `lib.rs` holds the GUI's own Tauri commands and `specta_builder`, which tauri-specta exports to `app/src/bindings.ts`; `control.rs` the app's socket, `mcp/` the MCP server (`server.rs` the protocol and handlers, `params.rs` each tool's argument type, `tools.rs` the tool list with schemas derived from those types, `render.rs` the text answers), `bin/quadcam-cli.rs` the CLI (clap flags build the `api` params, and it calls the table's `api::call` functions). The logic modules (`scan`, `disk`, `media`, `logs`, `moments`, `metadata`, `qtmeta`, `naming`, `pipeline` (with `pipeline/import.rs`, the import run), `session`, `photos`, `library`, `trim`, `cuts` (the one cut writer), `sources` (the `Source` trait per video system; `sources/analog.rs` is the DVR: clip layout, half-written check and repair, encode plan, dead air, card policy), `trash`, `settings` (with `Defaults`, the effective settings), `paths` (every path under `$HOME`), `geocode`) run without Tauri |
 | `src-tauri/Info.plist` | Photos usage strings, merged into the bundle's Info.plist |
 | `src-tauri/tests/` | Integration tests on synthetic clips and FAT32 disk images |
 | `test-clips/` | Local test corpus. Git tracks only its README |
@@ -35,12 +34,8 @@ README. Personal preferences go in the app's settings file on the machine
   when present.
 - Node 24 through fnm (`.node-version`) and pnpm (`packageManager` in `app/package.json`), for
   `app/`; `cargo tauri dev` and `cargo tauri build` run it.
-- **Which UI the window loads:** `QUADCAM_UI=next|legacy`, else the `ui` setting (`next` or
-  `legacy`; no control in the Settings window, `quadcam-cli settings set ui=next`), else
-  legacy. Both ship in every build: `app/dist`, and `ui/` copied to `app/dist/legacy/` by
-  `app/vite.config.ts`. The dev server serves the same two paths. The default flips to `next`
-  (plan step U8) after the owner's check. The Vite dev server is pinned to port 4719 with `strictPort`;
-  `cargo tauri dev` starts it.
+- The window loads `app/` (built to `app/dist`). The Vite dev server is pinned to port 4719
+  with `strictPort`; `cargo tauri dev` starts it.
 
 ## Build, test, run
 
@@ -52,7 +47,6 @@ cargo test --test import size_and_speed -- --ignored --nocapture   # MP4 vs MOV 
 INSTA_UPDATE=always cargo test --test snapshots   # accept a deliberate shape change, then review the diff
 QUADCAM_UPDATE_BINDINGS=1 cargo test --test bindings   # write app/src/bindings.ts after an api change
 cargo tauri dev                 # run from source (Photos is dry-run; QUADCAM_PHOTOS=real to test it)
-QUADCAM_UI=next cargo tauri dev   # the same with the new UI in app/
 cargo tauri build               # -> target/release/bundle/macos/QuadCam.app (runs pnpm --dir app build)
 cargo build --release --bin quadcam-cli   # -> target/release/quadcam-cli
 open target/release/bundle/macos/QuadCam.app
@@ -62,7 +56,7 @@ In `app/` (`pnpm install` first):
 
 ```bash
 pnpm typecheck && pnpm lint && pnpm test   # tsc, eslint, Vitest
-pnpm e2e                                   # Playwright, headless, both UIs on the mocked core
+pnpm e2e                                   # Playwright, headless, on the mocked core
 pnpm build                                 # -> app/dist
 scripts/make-fixtures.sh                   # re-record the mock core's data (needs the CLI and the corpus)
 ```
@@ -71,21 +65,19 @@ scripts/make-fixtures.sh                   # re-record the mock core's data (nee
   `app/src/bindings.ts` (never edit it). `ipc/types.ts` narrows the generated types for the UI
   (specta types every f64 as `number | null`; fields serde may omit are optional there), and
   `ipc/normalize.ts` makes each answer fit: a range or point without a time is dropped, a
-  length reads as 0. The new UI uses only the typed commands, never the `@deprecated` legacy
-  ones. The mock core answers both, and the parity specs compare calls by core method
-  (`app.method(...)` in `app/e2e/fixtures.ts`), whichever command the UI used.
+  length reads as 0. The UI calls one typed command per core method; the specs read those
+  calls by method (`app.method(...)` in `app/e2e/fixtures.ts`).
 - **Theme** (`app/src/theme/`): `palette.css` is generated from `@catppuccin/palette`
   (`node scripts/gen-palette.mjs`; a test fails when it is stale). `tokens.css` maps it to
   semantic names (Mocha for dark, Latte for light) plus the 8-pt spacing, radii and type
   scale. Components use CSS Modules and tokens only, never a hex value. `e2e/theme.spec.ts`
   runs axe, contrast included, on the component gallery (`/?gallery` in dev) in both themes.
 - **Dev in a browser:** `pnpm dev`, then `http://localhost:4719/?mock=<scenario>` runs the
-  new UI on the mock core (scenarios in `app/src/ipc/mock/core.ts`).
-- **Parity specs** (`app/e2e/parity/`) run every spec on both UIs (Playwright projects `legacy`
-  and `next`) against `app/src/ipc/mock/`, a fake core behind a fake Tauri runtime. Specs find
-  controls by role and label, never by class, so one spec fits both UIs. An area runs on
-  `next` once it is listed in `PORTED` (`app/e2e/fixtures.ts`). The mock's data is the real
-  core's JSON, recorded by `app/scripts/make-fixtures.sh`; regenerate it when a shape changes.
+  UI on the mock core (scenarios in `app/src/ipc/mock/core.ts`).
+- **Parity specs** (`app/e2e/parity/`) hold the behaviour the legacy UI had, and run in
+  headless WebKit against `app/src/ipc/mock/`, a fake core behind a fake Tauri runtime. Specs
+  find controls by role and label, never by class. The mock's data is the real core's JSON,
+  recorded by `app/scripts/make-fixtures.sh`; regenerate it when a shape changes.
 
 ## Release
 
