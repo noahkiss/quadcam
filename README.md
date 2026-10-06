@@ -53,15 +53,9 @@ The cask installs:
 
 To update, run `brew upgrade --cask quadcam`. To remove the app, run `brew uninstall --cask quadcam`. Uninstall keeps your settings and your videos.
 
-### The app is not notarized
+### Signing
 
-QuadCam has an ad-hoc signature only. It has no Apple Developer ID, and Apple did not notarize it. macOS blocks such an app when the download is quarantined, so the cask removes the quarantine attribute after it installs the app.
-
-If you download the zip from the [releases page](https://github.com/noahkiss/quadcam/releases) yourself, remove the attribute before the first start:
-
-```bash
-xattr -dr com.apple.quarantine /Applications/QuadCam.app
-```
+NKMK Digital Co. signs QuadCam with its Apple Developer ID, and Apple notarizes every release after 0.5.3. macOS opens the app without a warning, whether it came from Homebrew or from the zip on the [releases page](https://github.com/noahkiss/quadcam/releases). Releases up to 0.5.3 have an ad-hoc signature only: update to a newer one.
 
 ## Quick start
 
