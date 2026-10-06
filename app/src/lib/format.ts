@@ -1,4 +1,8 @@
 // Number and date formats, as the app shows them.
+import type { SourceKind } from "../ipc/types";
+
+/** The video system of a card or an import, as a short label. */
+export const SOURCE_LABEL: Record<SourceKind, string> = { analog: "Analog", dji: "DJI" };
 
 export function fmtBytes(n: number): string {
   if (!n) return "0 B";

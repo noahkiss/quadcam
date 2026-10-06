@@ -28,7 +28,7 @@ const DISPATCH = new Set([
   "settings", "settings_set", "place_search", "place_save", "session_cuts", "profiles",
 ]);
 
-export type Scenario = "library" | "empty" | "card" | "review" | "finished-card" | "no-tools" | "many";
+export type Scenario = "library" | "empty" | "card" | "review" | "finished-card" | "dji" | "no-tools" | "many";
 
 export interface MockOptions {
   scenario?: Scenario;
@@ -75,10 +75,12 @@ export class MockCore {
     this.volumes = sc === "card" || sc === "finished-card" ? [seed.cardVolume()] : [];
     this.session = null;
     if (sc === "review") this.session = seed.reviewSession();
-    if (sc === "finished-card") {
+    if (sc === "dji") this.volumes = [seed.djiVolume()];
+    if (sc === "finished-card" || sc === "dji") {
       this.session = seed.finishedSession();
-      this.session.source = "/Volumes/DVR";
-      const v = seed.cardVolume();
+      const v = sc === "dji" ? seed.djiVolume() : seed.cardVolume();
+      this.session.source = v.mount;
+      if (v.source === "dji") asDji(this.session);
       this.session.card_volume = v;
       this.session.card = {
         device_identifier: v.info.device_identifier,
@@ -414,6 +416,7 @@ export class MockCore {
       if (v) {
         s.card_volume = v;
         s.card = { device_identifier: v.info.device_identifier, whole_disk: v.info.parent_whole_disk, volume_uuid: v.info.volume_uuid, volume_name: v.info.volume_name, total_size: v.info.total_size, media_name: v.info.media_name };
+        if (v.source === "dji") asDji(s);
       }
     }
     this.session = s;
@@ -552,7 +555,7 @@ export class MockCore {
     s.output_dir = opts.output_dir;
     this.libraryChanged();
     this.sessionChanged();
-    const summary = { results, imported, skipped: results.length - imported, failed: 0, total_bytes: results.reduce((a, r) => a + r.size, 0), output_dir: opts.output_dir, format_ready: s.card ? { Ok: null } : { Err: "Clips came from a folder, not a card." } };
+    const summary = { results, imported, skipped: results.length - imported, failed: 0, total_bytes: results.reduce((a, r) => a + r.size, 0), output_dir: opts.output_dir, format_ready: s.kind === "dji" ? { Err: "QuadCam does not format DJI cards; format them in the device." } : s.card ? { Ok: null } : { Err: "Clips came from a folder, not a card." } };
     return { summary, photos: null };
   }
 
@@ -566,6 +569,7 @@ export class MockCore {
 
   formatPlan(label: string | null) {
     const s = this.need();
+    if (s.kind === "dji") throw "Refused: QuadCam does not format DJI cards; format them in the device.";
     if (!s.card) throw "Clips came from a folder, not a card.";
     return { disk: "disk9", device: "/dev/disk9", volume_uuid: s.card.volume_uuid || "", volume_name: s.card.volume_name || "", size: s.card.total_size, media_name: s.card.media_name || "", clip_count: s.clips.length, label: label || "DVR" };
   }
@@ -581,6 +585,18 @@ export class MockCore {
     this.emit("volumes-changed");
     return plan;
   }
+}
+
+/** Makes a recorded analog session read as a DJI one: the source kind, and dates from the
+ * clip clock where the import date stood. */
+function asDji(s: Session) {
+  s.kind = "dji";
+  for (const c of s.clips) c.kind = "dji";
+  for (const p of s.plans)
+    if (p.source === "import") {
+      p.source = "clip";
+      p.time = p.time || "18:30:00";
+    }
 }
 
 /** Forty more clips over ten days, for scrolling and virtualization. */

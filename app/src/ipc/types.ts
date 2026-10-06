@@ -26,6 +26,7 @@ export type {
   RemovedCuts,
   RenameReport,
   ShareReport,
+  SourceKind,
   Tools,
   TrashReport,
   Volume,
@@ -95,7 +96,8 @@ export type ClipPlan = Omit<Required<G.ClipPlan>, "suggested" | "moments" | "log
 export type CutResult = Num<G.CutResult, "start" | "end">;
 export type ClipResult = Omit<Required<G.ClipResult>, "cuts"> & { cuts: CutResult[] };
 
-export type Session = Omit<G.Session, "clips" | "plans" | "results"> & {
+export type Session = Omit<G.Session, "kind" | "clips" | "plans" | "results"> & {
+  kind: G.SourceKind;
   clips: Clip[];
   plans: ClipPlan[];
   results: ClipResult[];

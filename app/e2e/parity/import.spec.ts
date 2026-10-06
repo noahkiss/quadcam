@@ -26,7 +26,7 @@ test("Import… without a card picks a folder and loads its clips", async ({ app
 test("a card in the sidebar shows its new clips and loads on click", async ({ app, page }) => {
   await app.open("card");
   const side = page.getByRole("navigation", { name: "Library" });
-  await expect(side.getByRole("button", { name: /DVR\s*4 new/ })).toBeVisible();
+  await expect(side.getByRole("button", { name: /DVR\s*Analog\s*4 new/ })).toBeVisible();
   await side.getByRole("button", { name: /DVR/ }).click();
   await expect(sheet(page)).toBeVisible();
   expect((await app.method("load"))[0]).toEqual({ source: "/Volumes/DVR" });
@@ -128,6 +128,19 @@ test("Start over asks, then clears the session", async ({ app, page }) => {
   await ask.getByRole("button", { name: "Start over" }).click();
   await expect(sheet(page)).toBeHidden();
   expect(await app.method("clear")).toHaveLength(1);
+});
+
+test("a DJI card names its source, dates by the clip clock and offers no Format card", async ({ app, page }) => {
+  await app.open("dji");
+  const side = page.getByRole("navigation", { name: "Library" });
+  await expect(side.getByRole("button", { name: /O4\s*DJI/ })).toBeVisible();
+  await page.getByRole("button", { name: "Import…" }).first().click();
+  await expect(sheet(page).getByText("DJI card · 5 clips", { exact: false })).toBeVisible();
+  await expect(sheet(page).getByRole("region", { name: "Format card" })).toHaveCount(0);
+  await expect(sheet(page).getByRole("button", { name: /Format card/ })).toHaveCount(0);
+  await sheet(page).getByRole("button", { name: "Back to review" }).click();
+  await expect(sheet(page).getByText(/^clip clock \d\d:\d\d$/).first()).toBeVisible();
+  expect(await app.calls("format_plan")).toHaveLength(0);
 });
 
 test("Format card: unlock, then a dialog names the disk; Return does not erase", async ({ app, page }) => {

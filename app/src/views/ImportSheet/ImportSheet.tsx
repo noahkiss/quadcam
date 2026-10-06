@@ -5,7 +5,7 @@ import { Chip } from "../../components/Chip";
 import { Dialog } from "../../components/Dialog";
 import { ProgressRing } from "../../components/ProgressRing";
 import { Stepper } from "../../components/Stepper";
-import { base, fmtBytes } from "../../lib/format";
+import { base, fmtBytes, SOURCE_LABEL } from "../../lib/format";
 import { doneImport, runExport, setStep, startOver, stepReview, toggleSkip } from "../../actions/session";
 import { screenKeys } from "../../keys";
 import { Review, reviewTrim } from "./Review";
@@ -59,7 +59,7 @@ export function ImportSheet() {
               {source}
               <span className={styles.muted}>
                 {" "}
-                · {hasCard ? "DVR card" : "folder"} · {session.clips.length} clips
+                · {SOURCE_LABEL[session.kind]} {hasCard ? "card" : "folder"} · {session.clips.length} clips
               </span>
             </Chip>
           )}

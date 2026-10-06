@@ -127,7 +127,7 @@ export function result(r: G.ClipResult): ClipResult {
 
 export function session(s: G.Session | null): Session | null {
   if (!s) return null;
-  return { ...s, clips: s.clips.map(clip), plans: s.plans.map(plan), results: s.results.map(result) };
+  return { ...s, kind: s.kind ?? "analog", clips: s.clips.map(clip), plans: s.plans.map(plan), results: s.results.map(result) };
 }
 
 export function cutChange(c: G.CutChange): CutChange {
