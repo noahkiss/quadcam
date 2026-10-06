@@ -95,7 +95,7 @@ export function libraryView(v: G.LibraryView_Serialize): LibraryView {
 const signal = (s: G.SignalScan | null | undefined): SignalScan | null => (s ? { ...s, step: n(s.step), dead_air: moments(s.dead_air), keep: spans(s.keep) } : null);
 
 export function clip(c: G.Clip): Clip {
-  return { ...c, kind: c.kind ?? "analog", duration: n(c.duration), probe: c.probe ? { ...c.probe, duration: n(c.probe.duration) } : null, signal: signal(c.signal), key: c.key ?? "" };
+  return { ...c, kind: c.kind ?? "analog", duration: n(c.duration), probe: c.probe ? { ...c.probe, duration: n(c.probe.duration) } : null, signal: signal(c.signal), key: c.key ?? "", clock: c.clock ?? null, sidecars: c.sidecars ?? [] };
 }
 
 const meta = (m: G.ClipMeta | undefined): ClipMeta => ({ profile: m?.profile ?? null, location: location(m?.location), keywords: m?.keywords ?? [], author: m?.author ?? null });

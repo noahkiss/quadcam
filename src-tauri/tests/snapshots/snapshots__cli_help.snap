@@ -3,12 +3,12 @@ source: tests/snapshots.rs
 expression: text
 ---
 ===== quadcam-cli  --help
-Import analog FPV DVR clips: stage, date, name, convert, verify, share, format
+Import FPV clips (analog DVR, DJI): stage, date, name, convert, verify, share, format
 
 Usage: quadcam-cli [OPTIONS] <COMMAND>
 
 Commands:
-  cards     List removable volumes: DVR cards and radio log sources
+  cards     List removable volumes: cards (with their source, analog or DJI) and radio log sources
   scan      List the clips on a volume or folder without copying anything
   stage     Copy every clip off a card or folder into staging and start a new session
   analyze   Probe staged clips, recover half-written ones, make thumbnails
@@ -36,7 +36,7 @@ Options:
   -h, --help            Print help
   -V, --version         Print version
 ===== quadcam-cli cards --help
-List removable volumes: DVR cards and radio log sources
+List removable volumes: cards (with their source, analog or DJI) and radio log sources
 
 Usage: quadcam-cli cards [OPTIONS]
 

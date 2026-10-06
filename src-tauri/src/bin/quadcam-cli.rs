@@ -11,7 +11,7 @@ use quadcam_lib::media::{self, Encoder, Format};
 use quadcam_lib::moments::Span;
 use quadcam_lib::photos::{self, PhotosLibrary, Recorder};
 use quadcam_lib::session::{Editor, PlanPatch};
-use quadcam_lib::{disk, scan};
+use quadcam_lib::{disk, sources};
 use serde::Deserialize;
 use serde_json::{json, Value};
 use std::path::PathBuf;
@@ -21,7 +21,7 @@ use std::sync::Arc;
 #[command(
     name = "quadcam-cli",
     version,
-    about = "Import analog FPV DVR clips: stage, date, name, convert, verify, share, format"
+    about = "Import FPV clips (analog DVR, DJI): stage, date, name, convert, verify, share, format"
 )]
 struct Cli {
     /// Print one JSON object: {"ok":true,"result":...} or {"ok":false,"error":{...}}.
@@ -36,7 +36,7 @@ struct Cli {
 
 #[derive(Subcommand)]
 enum Cmd {
-    /// List removable volumes: DVR cards and radio log sources.
+    /// List removable volumes: cards (with their source, analog or DJI) and radio log sources.
     Cards,
     /// List the clips on a volume or folder without copying anything.
     Scan { path: PathBuf },
@@ -502,7 +502,9 @@ fn run(cli: Cli) -> Result<Value> {
         Cmd::Cards => serde_json::to_value(call::volumes(&core)?)?,
         Cmd::Scan { path } => {
             let vol = disk::probe_volume(&path);
-            json!({"path": path, "volume": vol, "clips": scan::find_clips(&path)})
+            let source = sources::detect(&path).map(|s| s.kind());
+            let clips = sources::for_root(&path).list(&path);
+            json!({"path": path, "source": source, "volume": vol, "clips": clips})
         }
         Cmd::Stage { path } => {
             serde_json::to_value(call::stage(&core, api::SourceParams { source: path })?)?

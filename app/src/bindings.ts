@@ -17,6 +17,8 @@ export const commands = {
 	version: number,
 	/**  Card mount point or folder the clips came from. */
 	source: string,
+	/**  The video system of the clips. */
+	kind?: SourceKind,
 	/**  The card the clips were read from; None for a plain folder (no format step). */
 	card: CardIdentity | null,
 	card_volume: Volume | null,
@@ -216,6 +218,13 @@ export type Clip = {
 	key?: string,
 	/**  The video system the clip came from. */
 	kind?: SourceKind,
+	/**  The time the clip itself recorded (DJI: the unit's clock), read at analysis. */
+	clock?: string | null,
+	/**
+	 *  Staged copies of files that belong to the clip (a DJI `.SRT`). They are kept next
+	 *  to the original.
+	 */
+	sidecars?: string[],
 };
 
 /**  One library clip, by id. */
@@ -315,7 +324,9 @@ export type DateFormat =
 /**  `26.09.25` */
 "YY.MM.DD";
 
-export type DateSource = "log" | "import" | "edited";
+export type DateSource = "log" | "import" | "edited" | 
+/**  The clip's own clock (DJI). */
+"clip";
 
 /**  `dates`: where the radio logs come from, and the log day to match. */
 export type DatesParams = {
@@ -901,9 +912,9 @@ export type Probe = {
 
 /**
  *  One aircraft setup, kept in the settings file. Every field is optional. A clip dated
- *  from a radio log picks the profile whose `edgetx_models` holds the log's model name.
- *  A later digital video source (an MP4 with `.srt` or `.osd` sidecars) can hang off a
- *  profile through `video_system`; only analog DVR files are read today.
+ *  from a radio log picks the profile whose `edgetx_models` holds the log's model name;
+ *  without one, the first profile whose `video_system` names the clip's source (`DJI`,
+ *  `analog`).
  */
 export type Profile = {
 	name?: string,
@@ -912,7 +923,10 @@ export type Profile = {
 	/**  The recorder: goggles or DVR maker and model. Written as the camera make and model. */
 	camera_make?: string,
 	camera_model?: string,
-	/**  A label: analog, DJI, Walksnail, HDZero. */
+	/**
+	 *  A label: analog, DJI, Walksnail, HDZero. A clip of that source picks the profile
+	 *  when nothing more specific does.
+	 */
 	video_system?: string,
 	keywords?: string[],
 	author?: string,
@@ -1003,6 +1017,8 @@ export type Session = {
 	version: number,
 	/**  Card mount point or folder the clips came from. */
 	source: string,
+	/**  The video system of the clips. */
+	kind?: SourceKind,
 	/**  The card the clips were read from; None for a plain folder (no format step). */
 	card: CardIdentity | null,
 	card_volume: Volume | null,
@@ -1024,6 +1040,8 @@ export type Session = {
 
 export type SessionBrief = {
 	source: string,
+	/**  The video system of the clips. */
+	kind: SourceKind,
 	card: string | null,
 	clips: number,
 	analysed: boolean,
@@ -1093,7 +1111,9 @@ export type Source = "radio_log" | "video";
 /**  Which video system a clip came from. */
 export type SourceKind = 
 /**  An analog DVR: MJPEG in AVI. */
-"analog";
+"analog" | 
+/**  A DJI air unit or goggles: H.264 or H.265 in MP4, named by the unit's clock. */
+"dji";
 
 /**  `stage` and `load`: a card mount point or a folder. None takes the first detected card. */
 export type SourceParams = {
@@ -1181,6 +1201,11 @@ export type Tunables = {
 	tolerance_s: number | null,
 	/**  A log day further than this from the import date means the radio clock reset. */
 	max_log_age_days: number,
+	/**
+	 *  A clip with its own clock (DJI) takes a matching log's time only when the log starts
+	 *  within this many seconds of the clip clock.
+	 */
+	clock_skew_s?: number | null,
 };
 
 /**  `library_untrash`: the files `library_trash` moved. */
@@ -1204,8 +1229,10 @@ export type VerifyReport = {
 export type Volume = {
 	mount: string,
 	info: DiskInfo,
-	/**  Removable and holds DVR clips. */
+	/**  Removable and holds clips of a source QuadCam reads. */
 	is_card: boolean,
+	/**  The video system of the clips on a card. */
+	source?: SourceKind | null,
 	/**  Holds `LOGS/` next to `MODELS/` or `RADIO/`: an EdgeTX radio in USB Storage mode. */
 	is_radio: boolean,
 	warnings: string[],

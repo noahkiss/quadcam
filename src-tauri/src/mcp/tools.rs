@@ -5,11 +5,11 @@ use super::params::*;
 use schemars::JsonSchema;
 use serde_json::{json, Value};
 
-pub(super) const INSTRUCTIONS: &str = "QuadCam imports analog FPV DVR clips (AVI/MJPEG) into a library folder. \
+pub(super) const INSTRUCTIONS: &str = "QuadCam imports FPV clips (analog DVR AVI/MJPEG, DJI MP4) into a library folder. \
 Import flow: quadcam_status -> quadcam_load_clips (or quadcam_read_clips for a loaded session) -> \
 quadcam_read_clips(thumbnails=true) -> quadcam_suggest names, dates, times, places, cuts -> the person may \
 edit them in the app -> quadcam_read_clips for the final values -> quadcam_export -> quadcam_add_to_photos \
--> quadcam_eject. quadcam_format_card erases the card: only on request, after every clip verified. \
+-> quadcam_eject. quadcam_format_card erases the card: only on request, after every clip verified; never a DJI card. \
 Library: quadcam_library finds imported clips; quadcam_library_edit changes ratings, names, notes, \
 places, aircraft, dates and times; quadcam_library_files handles cuts, Trash and Photos. Setup: \
 quadcam_places (search an address or landmark, save it), quadcam_profiles (aircraft gear), \
@@ -100,7 +100,7 @@ pub fn tools() -> Value {
     json!([
         tool::<StatusArgs>(
             "quadcam_status",
-            "Show whether the QuadCam app is running (mode \"app\": the person sees every change live) or not (\"headless\"), the detected DVR cards and radio log sources, the export defaults (including the saved places and aircraft profiles under status.defaults), and a summary of the loaded session.\n\nBest for: the first call, and checking what is inserted.\nReturns: one line of text plus {mode, status, cards, radios}.\nFollow up with quadcam_load_clips to load a card, or quadcam_read_clips when a session is already loaded.",
+            "Show whether the QuadCam app is running (mode \"app\": the person sees every change live) or not (\"headless\"), the detected cards (each with its source, analog or DJI) and radio log sources, the export defaults (including the saved places and aircraft profiles under status.defaults), and a summary of the loaded session.\n\nBest for: the first call, and checking what is inserted.\nReturns: one line of text plus {mode, status, cards, radios}.\nFollow up with quadcam_load_clips to load a card, or quadcam_read_clips when a session is already loaded.",
             json!({"openWorldHint": false, "readOnlyHint": true, "title": "QuadCam status"}),
         ),
         tool::<LibraryArgs>(
@@ -110,7 +110,7 @@ pub fn tools() -> Value {
         ),
         tool::<LoadClipsArgs>(
             "quadcam_load_clips",
-            "Copy every DVR clip off a card or folder to local staging, probe them (recovering half-written files), make thumbnails, and date them from radio logs when a log folder is set. Starts a new session and replaces the old one.\n\nBest for: starting an import. Do not call it to re-read a loaded session; use quadcam_read_clips.\nReturns: a line per clip (id, name, duration, status, date, name).\nFollow up with quadcam_read_clips(thumbnails=true) to see the clips.",
+            "Copy every clip (analog DVR or DJI) off a card or folder to local staging, probe them (recovering half-written files), make thumbnails, and date them from radio logs when a log folder is set. Starts a new session and replaces the old one.\n\nBest for: starting an import. Do not call it to re-read a loaded session; use quadcam_read_clips.\nReturns: a line per clip (id, name, duration, status, date, name).\nFollow up with quadcam_read_clips(thumbnails=true) to see the clips.",
             json!({"destructiveHint": false, "idempotentHint": false, "openWorldHint": false, "readOnlyHint": false, "title": "Load clips"}),
         ),
         tool::<ReadClipsArgs>(
@@ -150,7 +150,7 @@ pub fn tools() -> Value {
         ),
         tool::<FormatCardArgs>(
             "quadcam_format_card",
-            "ERASE the session's card as FAT32 and eject it. Only when the person asked for it. It refuses unless every non-skipped clip verified, the card is removable, not internal, not the boot disk, 64 GB or smaller, and still the same card (device and volume UUID). It also needs device, volume_uuid and confirm=true, and when the app is running the person must click Erase in the app.\n\nBest for: clearing the card after a verified export. Call with dry_run=true first to read the device and volume UUID.\nReturns: the disk that was erased, or the reason it refused.",
+            "ERASE the session's card as FAT32 and eject it. Only when the person asked for it. It refuses a DJI card (goggles format their own), and refuses unless every non-skipped clip verified, the card is removable, not internal, not the boot disk, 64 GB or smaller, and still the same card (device and volume UUID). It also needs device, volume_uuid and confirm=true, and when the app is running the person must click Erase in the app.\n\nBest for: clearing the card after a verified export. Call with dry_run=true first to read the device and volume UUID.\nReturns: the disk that was erased, or the reason it refused.",
             json!({"destructiveHint": true, "idempotentHint": false, "openWorldHint": false, "readOnlyHint": false, "title": "Format card"}),
         ),
         tool::<LibraryEditArgs>(
