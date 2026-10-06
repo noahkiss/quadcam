@@ -110,7 +110,17 @@ export function cardVolume(): Volume {
       bus_protocol: "USB",
     },
     is_card: true,
+    source: "analog",
     is_radio: false,
     warnings: [],
   };
+}
+
+/** A DJI air unit over USB: exFAT, clips under `DCIM/DJI_001/`. */
+export function djiVolume(): Volume {
+  const v = cardVolume();
+  v.mount = "/Volumes/O4";
+  v.source = "dji";
+  v.info = { ...v.info, device_identifier: "disk8s1", parent_whole_disk: "disk8", volume_uuid: "00000000-0000-4000-8000-000000000002", volume_name: "O4", mount_point: "/Volumes/O4", filesystem: "ExFAT", media_name: "DJI Air Unit" };
+  return v;
 }

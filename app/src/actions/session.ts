@@ -295,6 +295,7 @@ export async function startOver() {
 /** Why the card may not be erased yet, or null when every clip is safe. */
 export function formatBlocker(s: Session | null): string | null {
   if (!s?.card) return "Clips came from a folder, not a card.";
+  if (s.kind === "dji") return "QuadCam does not format DJI cards; format them in the device.";
   if (!s.results.length) return "Add the clips to the library first.";
   for (const c of s.clips) {
     if (c.stage_error) return `${c.name} did not copy off the card.`;

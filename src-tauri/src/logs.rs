@@ -17,6 +17,14 @@ pub struct Tunables {
     pub tolerance_s: f64,
     /// A log day further than this from the import date means the radio clock reset.
     pub max_log_age_days: i64,
+    /// A clip with its own clock (DJI) takes a matching log's time only when the log starts
+    /// within this many seconds of the clip clock.
+    #[serde(default = "default_clock_skew_s")]
+    pub clock_skew_s: f64,
+}
+
+fn default_clock_skew_s() -> f64 {
+    300.0
 }
 
 impl Default for Tunables {
@@ -26,6 +34,7 @@ impl Default for Tunables {
             session_gap_min: 20.0,
             tolerance_s: 30.0,
             max_log_age_days: 60,
+            clock_skew_s: default_clock_skew_s(),
         }
     }
 }

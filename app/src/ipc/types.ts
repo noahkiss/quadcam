@@ -26,6 +26,7 @@ export type {
   RemovedCuts,
   RenameReport,
   ShareReport,
+  SourceKind,
   Tools,
   TrashReport,
   Volume,
@@ -45,7 +46,7 @@ export type FlightStats = Num<G.FlightStats, "armed_s">;
 export type Location = Num<G.Location, "lat" | "lon">;
 export type Place = Num<G.Place, "lat" | "lon">;
 export type Profile = Required<G.Profile>;
-export type Tunables = Num<G.Tunables, "segment_gap_s" | "session_gap_min" | "tolerance_s">;
+export type Tunables = Num<G.Tunables, "segment_gap_s" | "session_gap_min" | "tolerance_s" | "clock_skew_s">;
 export type GeoResult = Num<G.GeoResult, "lat" | "lon">;
 export type Suggested = Required<G.Suggested>;
 
@@ -95,7 +96,8 @@ export type ClipPlan = Omit<Required<G.ClipPlan>, "suggested" | "moments" | "log
 export type CutResult = Num<G.CutResult, "start" | "end">;
 export type ClipResult = Omit<Required<G.ClipResult>, "cuts"> & { cuts: CutResult[] };
 
-export type Session = Omit<G.Session, "clips" | "plans" | "results"> & {
+export type Session = Omit<G.Session, "kind" | "clips" | "plans" | "results"> & {
+  kind: G.SourceKind;
   clips: Clip[];
   plans: ClipPlan[];
   results: ClipResult[];

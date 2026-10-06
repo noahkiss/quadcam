@@ -37,6 +37,52 @@ pub fn make_clip(path: &Path, secs: u64, audio: bool) {
     assert!(st.success(), "ffmpeg failed making {}", path.display());
 }
 
+/// A DJI-like MP4: H.264 at 30000/1001 fps, a cover picture (MJPEG, attached picture), the
+/// format tags `comment` (EIS and FOV, as DJI writes them) and `creation_time`, and `moov`
+/// last. DJI's own data streams (`djmd`, `dbgi`) are not reproduced: ffmpeg's MP4 muxer
+/// cannot write them. Small (640x360) so the tests stay fast.
+pub fn make_dji_clip(path: &Path, secs: u64, creation_time: &str) {
+    let cover = path.with_extension("cover.jpg");
+    let st = Command::new(tools().ffmpeg)
+        .args([
+            "-v",
+            "error",
+            "-y",
+            "-f",
+            "lavfi",
+            "-i",
+            "testsrc=size=320x180",
+        ])
+        .args(["-frames:v", "1"])
+        .arg(&cover)
+        .status()
+        .unwrap();
+    assert!(st.success(), "ffmpeg failed making the cover");
+    let st = Command::new(tools().ffmpeg)
+        .args(["-v", "error", "-y", "-f", "lavfi", "-i"])
+        .arg("testsrc=size=640x360:rate=30000/1001")
+        .arg("-i")
+        .arg(&cover)
+        .args(["-map", "0:v", "-map", "1:v", "-t", &secs.to_string()])
+        .args([
+            "-c:v:0",
+            "libx264",
+            "-preset",
+            "ultrafast",
+            "-pix_fmt",
+            "yuv420p",
+        ])
+        .args(["-c:v:1", "copy", "-disposition:v:1", "attached_pic"])
+        .args(["-metadata", "comment=EIS:RS;FOV:Linear;"])
+        .args(["-metadata", &format!("creation_time={creation_time}")])
+        .args(["-f", "mp4"])
+        .arg(path)
+        .status()
+        .unwrap();
+    std::fs::remove_file(&cover).unwrap();
+    assert!(st.success(), "ffmpeg failed making {}", path.display());
+}
+
 /// A hand-truncated copy, standing in for a power-off mid-record.
 pub fn truncate_copy(src: &Path, dst: &Path, fraction: f64) {
     let data = std::fs::read(src).unwrap();

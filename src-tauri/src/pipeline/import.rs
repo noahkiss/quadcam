@@ -89,6 +89,7 @@ pub fn run_import(
         job.meta = md::resolve(
             &p.meta,
             p.log_model.as_deref(),
+            c.kind,
             &settings.profiles,
             settings.default_profile.as_deref(),
             &settings.places,
@@ -114,10 +115,10 @@ pub fn run_import(
         if job.time.is_some() {
             job.extra.push((
                 crate::library::KEY_TIME.to_string(),
-                if job.source == DateSource::Log {
-                    "log"
-                } else {
-                    "manual"
+                match job.source {
+                    DateSource::Log => "log",
+                    DateSource::Clip => "clip",
+                    _ => "manual",
                 }
                 .to_string(),
             ));

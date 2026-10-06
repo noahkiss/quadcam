@@ -23,6 +23,7 @@ export interface Draft {
   segGap: string;
   sessionGap: string;
   tolerance: string;
+  clockSkew: string;
   photosAlbum: string;
   geocoder: string;
   googleKey: string;
@@ -52,6 +53,7 @@ export function draftFrom(s: State): Draft {
     segGap: String(t.segment_gap_s),
     sessionGap: String(t.session_gap_min),
     tolerance: String(t.tolerance_s),
+    clockSkew: String(t.clock_skew_s ?? 300),
     photosAlbum: sel.photosAlbum(s),
     geocoder: sel.geocoder(s),
     googleKey: "",
@@ -93,7 +95,7 @@ export function valuesOf(d: Draft, before: Tunables): SettingsValues {
     places: validPlaces(d.places).places,
     profiles,
     defaultProfile,
-    tunables: { ...before, segment_gap_s: num(d.segGap, 5), session_gap_min: num(d.sessionGap, 20), tolerance_s: num(d.tolerance, 30) },
+    tunables: { ...before, segment_gap_s: num(d.segGap, 5), session_gap_min: num(d.sessionGap, 20), tolerance_s: num(d.tolerance, 30), clock_skew_s: num(d.clockSkew, 300) },
   };
 }
 

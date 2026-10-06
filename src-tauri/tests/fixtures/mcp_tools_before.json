@@ -5,7 +5,7 @@
       "readOnlyHint": true,
       "title": "QuadCam status"
     },
-    "description": "Show whether the QuadCam app is running (mode \"app\": the person sees every change live) or not (\"headless\"), the detected DVR cards and radio log sources, the export defaults (including the saved places and aircraft profiles under status.defaults), and a summary of the loaded session.\n\nBest for: the first call, and checking what is inserted.\nReturns: one line of text plus {mode, status, cards, radios}.\nFollow up with quadcam_load_clips to load a card, or quadcam_read_clips when a session is already loaded.",
+    "description": "Show whether the QuadCam app is running (mode \"app\": the person sees every change live) or not (\"headless\"), the detected cards (each with its source, analog or DJI) and radio log sources, the export defaults (including the saved places and aircraft profiles under status.defaults), and a summary of the loaded session.\n\nBest for: the first call, and checking what is inserted.\nReturns: one line of text plus {mode, status, cards, radios}.\nFollow up with quadcam_load_clips to load a card, or quadcam_read_clips when a session is already loaded.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {},
@@ -75,7 +75,7 @@
       "readOnlyHint": false,
       "title": "Load clips"
     },
-    "description": "Copy every DVR clip off a card or folder to local staging, probe them (recovering half-written files), make thumbnails, and date them from radio logs when a log folder is set. Starts a new session and replaces the old one.\n\nBest for: starting an import. Do not call it to re-read a loaded session; use quadcam_read_clips.\nReturns: a line per clip (id, name, duration, status, date, name).\nFollow up with quadcam_read_clips(thumbnails=true) to see the clips.",
+    "description": "Copy every clip (analog DVR or DJI) off a card or folder to local staging, probe them (recovering half-written files), make thumbnails, and date them from radio logs when a log folder is set. Starts a new session and replaces the old one.\n\nBest for: starting an import. Do not call it to re-read a loaded session; use quadcam_read_clips.\nReturns: a line per clip (id, name, duration, status, date, name).\nFollow up with quadcam_read_clips(thumbnails=true) to see the clips.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -413,7 +413,7 @@
       "readOnlyHint": false,
       "title": "Format card"
     },
-    "description": "ERASE the session's card as FAT32 and eject it. Only when the person asked for it. It refuses unless every non-skipped clip verified, the card is removable, not internal, not the boot disk, 64 GB or smaller, and still the same card (device and volume UUID). It also needs device, volume_uuid and confirm=true, and when the app is running the person must click Erase in the app.\n\nBest for: clearing the card after a verified export. Call with dry_run=true first to read the device and volume UUID.\nReturns: the disk that was erased, or the reason it refused.",
+    "description": "ERASE the session's card as FAT32 and eject it. Only when the person asked for it. It refuses a DJI card (goggles format their own), and refuses unless every non-skipped clip verified, the card is removable, not internal, not the boot disk, 64 GB or smaller, and still the same card (device and volume UUID). It also needs device, volume_uuid and confirm=true, and when the app is running the person must click Erase in the app.\n\nBest for: clearing the card after a verified export. Call with dry_run=true first to read the device and volume UUID.\nReturns: the disk that was erased, or the reason it refused.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -930,6 +930,9 @@
             "tunables": {
               "additionalProperties": false,
               "properties": {
+                "clock_skew_s": {
+                  "type": "number"
+                },
                 "max_log_age_days": {
                   "type": "integer"
                 },

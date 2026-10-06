@@ -53,7 +53,7 @@ export const profile = (p: G.Profile): Profile => ({
   edgetx_models: p.edgetx_models ?? [],
 });
 
-export const tunables = (t: G.Tunables): Tunables => ({ ...t, segment_gap_s: n(t.segment_gap_s, 5), session_gap_min: n(t.session_gap_min, 20), tolerance_s: n(t.tolerance_s, 30) });
+export const tunables = (t: G.Tunables): Tunables => ({ ...t, segment_gap_s: n(t.segment_gap_s, 5), session_gap_min: n(t.session_gap_min, 20), tolerance_s: n(t.tolerance_s, 30), clock_skew_s: n(t.clock_skew_s, 300) });
 
 export const geo = (xs: G.GeoResult[]): GeoResult[] => xs.filter((g) => has(g.lat) && has(g.lon)).map((g) => ({ ...g, lat: g.lat!, lon: g.lon! }));
 
@@ -95,7 +95,7 @@ export function libraryView(v: G.LibraryView_Serialize): LibraryView {
 const signal = (s: G.SignalScan | null | undefined): SignalScan | null => (s ? { ...s, step: n(s.step), dead_air: moments(s.dead_air), keep: spans(s.keep) } : null);
 
 export function clip(c: G.Clip): Clip {
-  return { ...c, kind: c.kind ?? "analog", duration: n(c.duration), probe: c.probe ? { ...c.probe, duration: n(c.probe.duration) } : null, signal: signal(c.signal), key: c.key ?? "" };
+  return { ...c, kind: c.kind ?? "analog", duration: n(c.duration), probe: c.probe ? { ...c.probe, duration: n(c.probe.duration) } : null, signal: signal(c.signal), key: c.key ?? "", clock: c.clock ?? null, sidecars: c.sidecars ?? [] };
 }
 
 const meta = (m: G.ClipMeta | undefined): ClipMeta => ({ profile: m?.profile ?? null, location: location(m?.location), keywords: m?.keywords ?? [], author: m?.author ?? null });
@@ -127,7 +127,7 @@ export function result(r: G.ClipResult): ClipResult {
 
 export function session(s: G.Session | null): Session | null {
   if (!s) return null;
-  return { ...s, clips: s.clips.map(clip), plans: s.plans.map(plan), results: s.results.map(result) };
+  return { ...s, kind: s.kind ?? "analog", clips: s.clips.map(clip), plans: s.plans.map(plan), results: s.results.map(result) };
 }
 
 export function cutChange(c: G.CutChange): CutChange {

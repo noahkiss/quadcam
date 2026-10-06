@@ -59,11 +59,12 @@ fn parse_rate(r: &str) -> Option<f64> {
     (d > 0.0 && n > 0.0).then_some(n / d)
 }
 
-/// Counts packets and reads streams, duration and format tags.
+/// Counts packets and reads streams, duration and format tags. An attached picture (a DJI
+/// file's cover image) is not a video stream.
 pub fn probe(tools: &Tools, path: &Path) -> Result<Probe> {
     let out = Command::new(&tools.ffprobe)
         .args(["-v", "error", "-count_packets", "-show_entries"])
-        .arg("stream=codec_type,nb_read_packets,r_frame_rate,width,height:format=duration:format_tags")
+        .arg("stream=codec_type,nb_read_packets,r_frame_rate,width,height:stream_disposition=attached_pic:format=duration:format_tags")
         .args(["-of", "json"])
         .arg(path)
         .output()
@@ -79,6 +80,9 @@ pub fn probe(tools: &Tools, path: &Path) -> Result<Probe> {
         ..Default::default()
     };
     for s in v["streams"].as_array().into_iter().flatten() {
+        if s["disposition"]["attached_pic"].as_i64() == Some(1) {
+            continue;
+        }
         match s["codec_type"].as_str() {
             Some("video") => {
                 p.video_streams += 1;
@@ -159,6 +163,27 @@ pub enum Encoder {
     X264,
 }
 
+/// How an import made its file: the encoder that ran, or a copy of the source's frames.
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, specta::Type)]
+#[serde(rename_all = "lowercase")]
+pub enum Encoded {
+    Videotoolbox,
+    X264,
+    /// The source file byte for byte (`EncodePlan::Copy`).
+    Copy,
+    /// ffmpeg copied the frames into a new container (`EncodePlan::Remux`).
+    Remux,
+}
+
+impl From<Encoder> for Encoded {
+    fn from(e: Encoder) -> Encoded {
+        match e {
+            Encoder::Videotoolbox => Encoded::Videotoolbox,
+            Encoder::X264 => Encoded::X264,
+        }
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, specta::Type)]
 pub struct Meta {
     pub title: String,
@@ -219,15 +244,41 @@ pub fn convert_args(
         }
         EncodePlan::Remux => {
             a.extend(["-fflags".into(), "+genpts".into(), "-i".into(), s(src)]);
-            a.extend(["-map", "0", "-c", "copy"].map(String::from));
+            // `-copy_unknown` carries streams ffmpeg has no codec for (DJI's `djmd` and
+            // `dbgi`, without their tags); an analog AVI has none.
+            a.extend(["-map", "0", "-c", "copy", "-copy_unknown"].map(String::from));
             // No `use_metadata_tags`: its keys land where Apple's frameworks cannot read
             // them, and they confuse ffprobe next to ours. `qtmeta` writes the QuickTime
             // keys (description included) after ffmpeg.
             a.extend(meta.args());
             a.extend(["-f".into(), format.ext().into(), s(dst)]);
         }
+        // No ffmpeg run; see `copy`.
+        EncodePlan::Copy => {}
     }
     a
+}
+
+/// `EncodePlan::Copy`: the source byte for byte, then the movie time set in `mvhd`. The
+/// QuickTime keys (title, comment, description, creation date) follow through
+/// `cuts::write_qt`, which rewrites `moov` in place, so it must be the last box.
+pub fn copy(src: &Path, dst: &Path, meta: &Meta) -> Result<()> {
+    let run = || -> Result<()> {
+        if crate::qtmeta::moov_offset(src)? + 8 > src.metadata()?.len() {
+            bail!("no moov box in {}", src.display());
+        }
+        std::fs::copy(src, dst).with_context(|| format!("copying {}", src.display()))?;
+        if dst.metadata()?.len() != src.metadata()?.len() {
+            bail!("copy came out the wrong size");
+        }
+        crate::qtmeta::set_movie_time(dst, meta.creation_time)?;
+        Ok(())
+    };
+    let r = run();
+    if r.is_err() {
+        let _ = std::fs::remove_file(dst);
+    }
+    r
 }
 
 /// Runs ffmpeg with `-progress`, calling `on_progress` with seconds of output written.
@@ -272,7 +323,7 @@ pub fn run_ffmpeg(tools: &Tools, args: &[String], on_progress: &mut dyn FnMut(f6
 }
 
 /// Converts, falling back from VideoToolbox to x264 if the hardware encoder fails.
-/// Returns the encoder that produced the file.
+/// Returns how the file was made: the encoder that ran, or copy or remux.
 #[allow(clippy::too_many_arguments)]
 pub fn convert(
     tools: &Tools,
@@ -283,14 +334,22 @@ pub fn convert(
     encoder: Encoder,
     meta: &Meta,
     on_progress: &mut dyn FnMut(f64),
-) -> Result<Encoder> {
+) -> Result<Encoded> {
+    if plan == EncodePlan::Copy {
+        copy(src, dst, meta)?;
+        return Ok(Encoded::Copy);
+    }
+    let made = match plan {
+        EncodePlan::Remux => Encoded::Remux,
+        _ => encoder.into(),
+    };
     let r = run_ffmpeg(
         tools,
         &convert_args(src, dst, format, plan, encoder, meta),
         on_progress,
     );
     match r {
-        Ok(()) => Ok(encoder),
+        Ok(()) => Ok(made),
         Err(e) if plan == EncodePlan::Transcode && encoder == Encoder::Videotoolbox => {
             let _ = std::fs::remove_file(dst);
             run_ffmpeg(
@@ -299,7 +358,7 @@ pub fn convert(
                 on_progress,
             )
             .map_err(|e2| anyhow!("{e}; x264 fallback also failed: {e2}"))?;
-            Ok(Encoder::X264)
+            Ok(Encoded::X264)
         }
         Err(e) => Err(e),
     }
@@ -334,8 +393,11 @@ pub fn cut_args(
         s(src),
         "-t".into(),
         format!("{:.3}", span.secs()),
+        // Video and audio only: no cover picture, no data streams (DJI's).
         "-map".into(),
-        "0".into(),
+        "0:V".into(),
+        "-map".into(),
+        "0:a?".into(),
     ]);
     match format {
         Format::Mp4 => {
@@ -459,25 +521,46 @@ pub fn verify(tools: &Tools, src: &Probe, out: &Path, meta: &Meta) -> Result<Pro
             src.duration
         );
     }
-    // A MOV keeps some tags only as QuickTime keys (written by `qtmeta`).
+    // The QuickTime keys (written by `qtmeta`) first: a MOV keeps some tags only there, and
+    // a copied file keeps its own plain tags (a DJI file's `comment` holds EIS and FOV).
+    let qt = |k: &str| p.tags.get(&format!("com.apple.quicktime.{k}"));
     let tag = |k: &str| {
-        p.tags
-            .get(k)
-            .or_else(|| p.tags.get(&format!("com.apple.quicktime.{k}")))
+        qt(k)
+            .or_else(|| p.tags.get(k))
             .map(String::as_str)
             .unwrap_or("")
     };
     for (k, want) in [
         ("title", &meta.title),
         ("comment", &meta.comment),
-        ("date", &meta.date),
         ("description", &meta.description),
     ] {
+        // An empty value is never written, so a source's own plain tag may stand.
+        if want.is_empty() && qt(k).is_none() {
+            continue;
+        }
         if tag(k) != want.as_str() {
             bail!("metadata {k} reads back as {:?}, expected {want:?}", tag(k));
         }
     }
-    let ct = tag("creation_time");
+    // ffmpeg writes `date`; a copied file has only the QuickTime creation date, whose
+    // local day it is.
+    let date = p
+        .tags
+        .get("date")
+        .map(String::as_str)
+        .unwrap_or_else(|| qt("creationdate").and_then(|c| c.get(..10)).unwrap_or(""));
+    if date != meta.date {
+        bail!(
+            "metadata date reads back as {date:?}, expected {:?}",
+            meta.date
+        );
+    }
+    let ct = p
+        .tags
+        .get("creation_time")
+        .map(String::as_str)
+        .unwrap_or("");
     // Some muxer setups report the mvhd time and a key, joined by ';'.
     let ok = ct.split(';').any(|c| {
         DateTime::parse_from_rfc3339(c.trim()).is_ok_and(|t| {
@@ -509,7 +592,8 @@ pub fn thumbnail(tools: &Tools, src: &Path, dst: &Path) -> Result<()> {
         let out = Command::new(&tools.ffmpeg)
             .args(["-v", "error", "-y", "-ss", ss, "-i"])
             .arg(src)
-            .args(["-frames:v", "1", "-vf", "scale=240:-1"])
+            // `V`: the first video stream that is not a cover picture.
+            .args(["-map", "0:V:0", "-frames:v", "1", "-vf", "scale=240:-1"])
             .arg(dst)
             .output()?;
         if out.status.success() && dst.metadata().is_ok_and(|m| m.len() > 0) {
@@ -527,7 +611,7 @@ pub fn proxy(tools: &Tools, src: &Path, dst: &Path) -> Result<()> {
         .arg(src)
         .args([
             "-map",
-            "0:v:0",
+            "0:V:0",
             "-map",
             "0:a:0?",
             "-vf",
@@ -555,7 +639,7 @@ pub fn proxy(tools: &Tools, src: &Path, dst: &Path) -> Result<()> {
             .arg(src)
             .args([
                 "-map",
-                "0:v:0",
+                "0:V:0",
                 "-map",
                 "0:a:0?",
                 "-vf",

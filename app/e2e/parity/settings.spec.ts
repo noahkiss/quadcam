@@ -32,6 +32,20 @@ test("the gear opens Settings; Done saves only what changed", async ({ app, page
   await expect.poll(async () => changed(app)).toEqual({ format: "mov", photosAlbum: "FPV" });
 });
 
+test("the clip clock skew saves inside tunables", async ({ app, page }) => {
+  await page.getByRole("button", { name: "Settings" }).click();
+  const dlg = settingsDialog(page);
+  await dlg.getByRole("button", { name: "Import" }).click();
+  await expect(dlg.getByLabel("Clip clock skew (s)")).toHaveValue("300");
+  await dlg.getByLabel("Clip clock skew (s)").fill("900");
+  await dlg.getByRole("button", { name: "Done" }).click();
+  await expect(dlg).toBeHidden();
+  await expect.poll(async () => Object.keys(await changed(app))).toEqual(["tunables"]);
+  const t = (await changed(app)).tunables as Record<string, number>;
+  expect(t.clock_skew_s).toBe(900);
+  expect(t.tolerance_s).toBe(30);
+});
+
 test("Cancel and Escape save nothing", async ({ app, page }) => {
   await page.getByRole("button", { name: "Settings" }).click();
   const dlg = settingsDialog(page);

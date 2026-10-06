@@ -1,9 +1,11 @@
 # QuadCam
 
-A macOS desktop app (Tauri 2) that imports analog FPV DVR clips (MJPEG AVI) into a library.
-It stages the clips off the card, dates them (EdgeTX radio logs or the import date), names them
-`YYYY-MM-DD_<name>.mp4`, converts them with ffmpeg, verifies them with ffprobe, and files them
-by flying day. It can then add them to Photos and format the card to FAT32. The library is the
+A macOS desktop app (Tauri 2) that imports FPV clips into a library from two sources: analog
+DVRs (MJPEG AVI) and DJI units (MP4 named by the unit's clock). It stages the clips off the card,
+dates them (EdgeTX radio logs, the DJI clip clock, or the import date), names them
+`YYYY-MM-DD_<name>.mp4`, converts analog clips with ffmpeg (a full DJI clip is copied, never
+re-encoded), verifies them with ffprobe, and files them by flying day. It can then add them to
+Photos and format an analog card to FAT32. The library is the
 home screen; import is a sheet over it. `README.md` is the public overview and `docs/` the
 public user guide, one topic per file; keep them in step with every change a user can see.
 
@@ -17,7 +19,7 @@ README and `docs/`. Personal preferences go in the app's settings file on the ma
 | Path | Holds |
 |---|---|
 | `app/` | The frontend: React + TypeScript + Vite (pnpm, Node pinned in `.node-version`). Builds to `app/dist`, which the app ships. `views/` (library, clip detail, import sheet, settings), `components/` (with `trim/`, the one trim editor, used by clip detail and the import review), `store/`, `actions/`, `ipc/`. Icons and fonts are inlined or bundled so the app works offline |
-| `src-tauri/src/` | Rust core. `core/` (`Core`) owns the session and the library index and is the one surface every front end drives: `mod.rs` (state, locking, `Hooks`), `import.rs` (stage, analyse, dates, import, verify, format), `library.rs` (the index, list, rate, edit, rename, redate), `cuts.rs` (session and library cut lists), `files.rs` (Photos, previews, strips, Trash) and `setup.rs` (settings, places, profiles). `api/` is the one method table: each row names a method, its params and result types and the `Core` call, and `api!` makes `Core::dispatch` (socket, MCP) and one typed Tauri command per method from it; `api/events.rs` holds the typed events. `lib.rs` holds the GUI's own Tauri commands and `specta_builder`, which tauri-specta exports to `app/src/bindings.ts`; `control.rs` the app's socket, `mcp/` the MCP server (`server.rs` the protocol and handlers, `params.rs` each tool's argument type, `tools.rs` the tool list with schemas derived from those types, `render.rs` the text answers), `bin/quadcam-cli.rs` the CLI (clap flags build the `api` params, and it calls the table's `api::call` functions). The logic modules (`scan`, `disk`, `media`, `logs`, `moments`, `metadata`, `qtmeta`, `naming`, `pipeline` (with `pipeline/import.rs`, the import run), `session`, `photos`, `library`, `trim`, `cuts` (the one cut writer), `sources` (the `Source` trait per video system; `sources/analog.rs` is the DVR: clip layout, half-written check and repair, encode plan, dead air, card policy), `trash`, `settings` (with `Defaults`, the effective settings), `paths` (every path under `$HOME`), `geocode`) run without Tauri |
+| `src-tauri/src/` | Rust core. `core/` (`Core`) owns the session and the library index and is the one surface every front end drives: `mod.rs` (state, locking, `Hooks`), `import.rs` (stage, analyse, dates, import, verify, format), `library.rs` (the index, list, rate, edit, rename, redate), `cuts.rs` (session and library cut lists), `files.rs` (Photos, previews, strips, Trash) and `setup.rs` (settings, places, profiles). `api/` is the one method table: each row names a method, its params and result types and the `Core` call, and `api!` makes `Core::dispatch` (socket, MCP) and one typed Tauri command per method from it; `api/events.rs` holds the typed events. `lib.rs` holds the GUI's own Tauri commands and `specta_builder`, which tauri-specta exports to `app/src/bindings.ts`; `control.rs` the app's socket, `mcp/` the MCP server (`server.rs` the protocol and handlers, `params.rs` each tool's argument type, `tools.rs` the tool list with schemas derived from those types, `render.rs` the text answers), `bin/quadcam-cli.rs` the CLI (clap flags build the `api` params, and it calls the table's `api::call` functions). The logic modules (`scan`, `disk`, `media`, `logs`, `moments`, `metadata`, `qtmeta`, `naming`, `pipeline` (with `pipeline/import.rs`, the import run), `session`, `photos`, `library`, `trim`, `cuts` (the one cut writer), `sources` (the `Source` trait per video system, tried in `sources::all()` order; `sources/dji.rs` is DJI O4: `DCIM/DJI_*/` names, the clock in the name, `.SRT` sidecars, byte-copy MP4 export, a read-only card; `sources/analog.rs` is the DVR: clip layout, half-written check and repair, encode plan, dead air, card policy), `trash`, `settings` (with `Defaults`, the effective settings), `paths` (every path under `$HOME`), `geocode`) run without Tauri |
 | `src-tauri/Info.plist` | Photos usage strings, merged into the bundle's Info.plist |
 | `src-tauri/tests/` | Integration tests on synthetic clips and FAT32 disk images |
 | `test-clips/` | Local test corpus. Git tracks only its README |
@@ -115,7 +117,7 @@ GitHub (`noahkiss/quadcam`, public) is the only remote. Users install the cask
   `<library>/.quadcam/index.json` is a rebuildable cache (`library::rebuild`); only unsaved cut
   ranges live in it alone. A rebuild never moves or writes a file, which is also how an
   existing export folder is adopted.
-- **Identity:** a library clip's id is its DVR source's content fingerprint
+- **Identity:** a library clip's id is its source file's content fingerprint
   (`app.quadcam.source`), never a file name. A file QuadCam did not write is known by a hash of
   its first MB before `moov` (`identity::head_id`), which metadata rewrites never touch. Both
   are specified hashes (XXH64 over defined bytes; `identity.rs` states them), with test
@@ -139,8 +141,8 @@ GitHub (`noahkiss/quadcam`, public) is the only remote. Users install the cask
   `-webkit-user-select`. Text a person may copy (paths, details values) gets the
   `selectable` class. The web view's context menu shows only over text fields and selected
   `selectable` text; the app's own menus call `preventDefault` first.
-- **Cards** show in the sidebar with an "N new" count (content fingerprints not in the index);
-  inserting a card never starts an import on its own.
+- **Cards** show in the sidebar with their source (Analog, DJI) and an "N new" count (content
+  fingerprints not in the index); inserting a card never starts an import on its own.
 
 - **Output folder:** defaults to `~/Movies/quadcam`, resolved from `$HOME` at runtime
   (`paths::default_output_dir`). The app creates that default, with its parents, on the
@@ -170,12 +172,13 @@ GitHub (`noahkiss/quadcam`, public) is the only remote. Users install the cask
 - **File-name date:** `naming::DateFormat` (`nameDateFormat`: `YYYY-MM-DD` default, or
   `YY.MM.DD`) starts new file names, renames and redates. `naming::split_date` reads either
   format; a clip's date comes from its creation date first, then the name.
-  `library_apply_name_format` renames existing clips (with cuts and originals) in place.
+  `library_apply_name_format` renames existing clips (with cuts, originals and the originals' sidecars) in place.
   Folder names keep `YYYY-MM-DD`.
-- **Time of day:** a clip's plan time comes from its radio log or by hand (`PlanPatch.time`,
+- **Time of day:** a clip's plan time comes from its radio log, its clip clock (DJI), or by hand (`PlanPatch.time`,
   `HH:MM`, empty for none). Without one the creation date is local noon. A library date or
   time edit (`library_edit`) rewrites the QuickTime creation date, the `mvhd` time and the
-  mtimes of the clip, its cuts and its original; a new day moves them all (`relocate`, which
+  mtimes of the clip, its cuts, its original and the original's sidecars (a DJI `.srt`,
+  found on disk by stem, `LibClip::sidecars`); a new day moves them all (`relocate`, which
   rename uses too). A library profile edit rewrites make, model, aircraft, video system,
   profile name and the profile's keywords.
 - **Session restore:** the GUI's core uses the same session file as the CLI. At launch,

@@ -2,7 +2,9 @@
 //! core, and one handler per tool.
 
 use super::params::*;
-use super::render::{clip_views, lib_line, lib_view, names, photos_line, places_text, table, text};
+use super::render::{
+    clip_views, lib_line, lib_view, names, photos_line, places_text, source_label, table, text,
+};
 use super::tools::{tools, INSTRUCTIONS};
 use crate::control::{self, Client};
 use crate::core::Core;
@@ -211,8 +213,9 @@ impl<B: Backend> Server<B> {
                         "none; call quadcam_load_clips".to_string()
                     } else {
                         format!(
-                            "{} clips from {}, {} imported",
+                            "{} {} clips from {}, {} imported",
                             sess["clips"],
+                            source_label(&sess["kind"]),
                             sess["source"].as_str().unwrap_or("?"),
                             sess["imported"]
                         )
@@ -665,8 +668,9 @@ impl<B: Backend> Server<B> {
                 let view = clip_views(&session, None);
                 Ok((
                     vec![text(format!(
-                        "Loaded {} clips from {}.\n{}",
+                        "Loaded {} {} clips from {}.\n{}",
                         view.len(),
+                        source_label(&session["kind"]),
                         session["source"].as_str().unwrap_or("?"),
                         table(&view)
                     ))],

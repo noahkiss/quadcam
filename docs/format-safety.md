@@ -14,6 +14,8 @@ The **Format card** button unlocks only when all of these are true:
 
 The video system of the card must also allow a format. Analog DVR cards allow it.
 
+QuadCam never formats a DJI volume: not an air unit over USB, and not a goggles card. The Finish step shows no **Format card** panel for DJI clips, and the command line and the MCP server refuse with exit code 3. Format a DJI card in the goggles.
+
 ## The guards
 
 Immediately before it erases, QuadCam reads the disk information again and checks every guard:

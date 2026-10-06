@@ -4,7 +4,7 @@ import { screenOf } from "../../store/library";
 import { unfinished } from "../../store/session";
 import { TASK_LABEL } from "../../store/tasks";
 import { Icon, type IconName, type IconTint } from "../../components/Icon";
-import { fmtBytes, fmtDay, base } from "../../lib/format";
+import { fmtBytes, fmtDay, base, SOURCE_LABEL } from "../../lib/format";
 import { sameFilter, type Filter } from "../../lib/library";
 import { importFrom, openFolderAction, openImport, setLogDir } from "../../actions/session";
 import styles from "./Sidebar.module.css";
@@ -13,6 +13,8 @@ interface ItemProps {
   icon: IconName;
   tint?: IconTint;
   label: string;
+  /** Short text after the label, such as a card's video system. */
+  detail?: string | null;
   count?: number | null;
   badge?: string | null;
   current?: boolean;
@@ -20,12 +22,13 @@ interface ItemProps {
   onClick?: () => void;
 }
 
-function Item({ icon, tint, label, count, badge, current, muted, onClick }: ItemProps) {
+function Item({ icon, tint, label, detail, count, badge, current, muted, onClick }: ItemProps) {
   return (
     <li>
       <button type="button" className={[styles.item, muted && styles.muted].filter(Boolean).join(" ")} aria-current={current ? "true" : undefined} onClick={onClick} disabled={!onClick}>
         <Icon name={icon} tint={tint} />
         <span className={styles.label}>{label}</span>
+        {detail && <span className={styles.detail}>{detail}</span>}
         {badge ? <span className={styles.badge}>{badge}</span> : count != null ? <span className={styles.count}>{count}</span> : null}
       </button>
     </li>
@@ -66,7 +69,7 @@ export function Sidebar() {
         <Group title="Import from">
           {cards.map((v) => {
             const st = s.cards[v.mount];
-            return <Item key={v.mount} icon="sd-card" tint="green" label={v.info.volume_name || base(v.mount)} badge={st?.new ? `${st.new} new` : null} count={st && !st.new ? 0 : null} onClick={() => importFrom(v.mount)} />;
+            return <Item key={v.mount} icon="sd-card" tint="green" label={v.info.volume_name || base(v.mount)} detail={v.source ? SOURCE_LABEL[v.source] : null} badge={st?.new ? `${st.new} new` : null} count={st && !st.new ? 0 : null} onClick={() => importFrom(v.mount)} />;
           })}
           {!cards.length && <Item icon="sd-card" label="No card inserted" muted />}
           {unfinished(s.session) && <Item icon="history" label="Unfinished import" count={s.session!.clips.length} onClick={() => openImport()} />}

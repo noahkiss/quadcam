@@ -270,6 +270,47 @@ pub fn set_movie_time(path: &Path, t: chrono::DateTime<chrono::Utc>) -> Result<(
     bail!("no mvhd box in {}", path.display())
 }
 
+/// True when the file has a top-level `moov` that ends inside the file: a recording that
+/// was closed properly. A recorder that lost power leaves `mdat` and no `moov`.
+pub fn has_whole_moov(path: &Path) -> bool {
+    let Ok(mut f) = std::fs::File::open(path) else {
+        return false;
+    };
+    let Ok(len) = f.metadata().map(|m| m.len()) else {
+        return false;
+    };
+    find_moov(&mut f, path).is_ok_and(|(start, size, _)| start + size <= len)
+}
+
+/// The movie's creation time from `moov/mvhd`, which ffprobe reports as `creation_time`.
+/// None when it is zero (not set).
+pub fn movie_time(path: &Path) -> Result<Option<chrono::DateTime<chrono::Utc>>> {
+    const MAC_EPOCH_OFFSET: i64 = 2_082_844_800;
+    let mut f = std::fs::File::open(path).with_context(|| format!("opening {}", path.display()))?;
+    let (start, size, hdr) = find_moov(&mut f, path)?;
+    if size > 64 << 20 {
+        bail!("moov box too large in {}", path.display());
+    }
+    let mut body = vec![0u8; (size - hdr) as usize];
+    f.seek(SeekFrom::Start(start + hdr))?;
+    f.read_exact(&mut body)?;
+    for (kind, b) in children(&body)? {
+        if &kind == b"mvhd" && b.len() >= 28 {
+            let secs = if b[8] == 1 {
+                u64::from_be_bytes(b[12..20].try_into().unwrap())
+            } else {
+                u32::from_be_bytes(b[12..16].try_into().unwrap()) as u64
+            };
+            if secs == 0 {
+                return Ok(None);
+            }
+            let unix = i64::try_from(secs).context("mvhd time out of range")? - MAC_EPOCH_OFFSET;
+            return Ok(chrono::DateTime::from_timestamp(unix, 0));
+        }
+    }
+    bail!("no mvhd box in {}", path.display())
+}
+
 /// Reads the Apple `mdta` items quadcam (or anything else) wrote into `moov/meta`.
 pub fn read(path: &Path) -> Result<Vec<Item>> {
     Ok(read_info(path)?.0)

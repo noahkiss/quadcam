@@ -27,16 +27,16 @@ The server has 16 tools.
 
 | Tool | What it does |
 |---|---|
-| `quadcam_status` | Shows the mode (app or headless), the cards, the radios, and the session |
+| `quadcam_status` | Shows the mode (app or headless), the cards with their source (analog or DJI), the radios, and the session with its source |
 | `quadcam_load_clips` | Stages, checks, and dates a card or a folder |
-| `quadcam_read_clips` | Reads the clips, their plans, moments, keep ranges and cuts. Returns thumbnails as images |
+| `quadcam_read_clips` | Reads the clips, their source, plans, moments, keep ranges and cuts. Returns thumbnails as images. The date source reads `radio log`, `clip clock`, `import` or `edited` |
 | `quadcam_match_logs` | Dates the clips from EdgeTX logs |
 | `quadcam_suggest` | Suggests names, dates, times, notes, skips, cuts, the log offset, or metadata (profile, place or location, keywords, author) |
 | `quadcam_export` | Converts and verifies clips and cuts. Can also add them to Photos |
 | `quadcam_verify` | Checks the outputs again |
 | `quadcam_add_to_photos` | Adds verified outputs to Photos |
 | `quadcam_eject` | Ejects the card |
-| `quadcam_format_card` | Erases the card. See [Format safety](format-safety.md) |
+| `quadcam_format_card` | Erases an analog card. Refuses a DJI card. See [Format safety](format-safety.md) |
 
 **Library:**
 

@@ -9,6 +9,7 @@ expression: session
   "clips": [
     {
       "card_path": "$TMP/card/DCIM/PICT0001.AVI",
+      "clock": null,
       "detail": "90 frames",
       "duration": 3.0,
       "id": 0,
@@ -30,6 +31,7 @@ expression: session
       },
       "recovered": null,
       "rel": "DCIM/PICT0001.AVI",
+      "sidecars": [],
       "signal": {
         "dead_air": [],
         "keep": [],
@@ -44,6 +46,7 @@ expression: session
     },
     {
       "card_path": "$TMP/card/DCIM/PICT0002.AVI",
+      "clock": null,
       "detail": "60 frames",
       "duration": 2.0,
       "id": 1,
@@ -65,6 +68,7 @@ expression: session
       },
       "recovered": null,
       "rel": "DCIM/PICT0002.AVI",
+      "sidecars": [],
       "signal": {
         "dead_air": [],
         "keep": [],
@@ -79,6 +83,7 @@ expression: session
     },
     {
       "card_path": "$TMP/card/DCIM/PICT0003.AVI",
+      "clock": null,
       "detail": "zero bytes",
       "duration": 0.0,
       "id": 2,
@@ -88,6 +93,7 @@ expression: session
       "probe": null,
       "recovered": null,
       "rel": "DCIM/PICT0003.AVI",
+      "sidecars": [],
       "signal": null,
       "size": 0,
       "stage_error": null,
@@ -98,6 +104,7 @@ expression: session
   ],
   "date_warnings": [],
   "in_photos": [],
+  "kind": "analog",
   "log_day": null,
   "log_days": [],
   "log_dir": null,

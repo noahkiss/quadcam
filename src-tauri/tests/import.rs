@@ -5,7 +5,7 @@ mod common;
 use chrono::{NaiveDate, TimeZone, Utc};
 use common::*;
 use quadcam_lib::logs::{Badge, Tunables};
-use quadcam_lib::media::{Encoder, Format};
+use quadcam_lib::media::{Encoded, Encoder, Format};
 use quadcam_lib::naming::NamePlanner;
 use quadcam_lib::pipeline::{self, Clip, ClipJob, ClipStatus, DateSource, ImportSettings, Outcome};
 use std::path::Path;
@@ -257,7 +257,7 @@ fn import_mp4_x264() {
         &mut |_| {},
     );
     assert_eq!(r.outcome, Outcome::Verified, "{:?}", r.error);
-    assert_eq!(r.encoder, Some(Encoder::X264));
+    assert_eq!(r.encoder, Some(Encoded::X264));
 }
 
 /// Check 5: duplicate names get -2, -3, in a batch and against files already there.
@@ -438,7 +438,7 @@ fn radio_log_dates() {
     let tun = Tunables::default();
     // Clip durations: two-pack flight, bench-only clip, one pack with long pre-arm, spare.
     let plan = pipeline::plan_dates(
-        &[500.0, 12.0, 360.0, 30.0],
+        &[500.0, 12.0, 360.0, 30.0].map(pipeline::DateInput::duration),
         Some(logs.path()),
         None,
         today,
@@ -467,7 +467,7 @@ fn radio_log_dates() {
 
     // An RTC-reset day is refused with a warning.
     let plan = pipeline::plan_dates(
-        &[500.0],
+        &[pipeline::DateInput::duration(500.0)],
         Some(logs.path()),
         NaiveDate::from_ymd_opt(2000, 1, 1),
         today,
@@ -477,7 +477,13 @@ fn radio_log_dates() {
     assert!(plan.warnings[0].contains("clock may have reset"));
 
     // No logs at all: import date, no warning about dates.
-    let plan = pipeline::plan_dates(&[500.0], None, None, today, &tun);
+    let plan = pipeline::plan_dates(
+        &[pipeline::DateInput::duration(500.0)],
+        None,
+        None,
+        today,
+        &tun,
+    );
     assert_eq!(plan.suggestions[0].date, today);
 
     // creation_time from a log is the segment start, converted from local time to UTC.

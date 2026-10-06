@@ -5,7 +5,7 @@ import { sel } from "../../store/settings";
 import { Button } from "../../components/Button";
 import { Checkbox, Input } from "../../components/Field";
 import { Icon } from "../../components/Icon";
-import { base, fmtBytes, fmtDay, fmtT, tilde } from "../../lib/format";
+import { base, fmtBytes, fmtDay, fmtT, tilde, SOURCE_LABEL } from "../../lib/format";
 import { addToPhotos, askFormat, checkFormat, eject, formatBlocker, runExport } from "../../actions/session";
 import styles from "./Finish.module.css";
 
@@ -88,7 +88,7 @@ export function Finish() {
             <div className={styles.grow}>
               <b>{s.card.volume_name || s.card_volume?.info.volume_name || "Card"}</b>
               <p className={styles.muted}>
-                {fmtBytes(s.card_volume?.info.total_size || 0)} DVR card{s.clips.every((c) => c.staged && !c.stage_error) ? " · every clip is on this Mac" : ""}
+                {fmtBytes(s.card_volume?.info.total_size || 0)} {SOURCE_LABEL[s.kind]} card{s.clips.every((c) => c.staged && !c.stage_error) ? " · every clip is on this Mac" : ""}
               </p>
             </div>
             <Button size="sm" variant="ghost" icon="eject" onClick={eject}>
@@ -96,7 +96,7 @@ export function Finish() {
             </Button>
           </section>
         )}
-        {s.card && <FormatPanel />}
+        {s.card && s.kind !== "dji" && <FormatPanel />}
       </div>
     </div>
   );

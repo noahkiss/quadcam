@@ -15,7 +15,7 @@ Settings > Library sets how QuadCam files the clips:
 | Flat | `2026-09-27_<name>.mp4` |
 
 - **Add the place to day folders** names the day folder after the clip's saved place: `2026-09-27 Home field/`.
-- **Keep originals** copies the DVR file into `originals/` in the day folder, named like the clip.
+- **Keep originals** copies the source file (the DVR's AVI or the DJI MP4) into `originals/` in the day folder, named like the clip. A DJI clip's `.SRT` file goes next to its original, with the same name. It moves with the original on a rename, a new date or a move to the Trash.
 - Cuts go next to their clip as `_cut1`, `_cut2`. See [Moments and cuts](moments-and-cuts.md).
 
 ## File names
@@ -33,13 +33,18 @@ QuadCam reads both formats. It takes a clip's date from the file's metadata firs
 
 ## Dates and times
 
-Analog DVRs have no clock, so their files carry no useful date. On import, each clip gets a date from the best source available:
+Analog DVRs have no clock, so their files carry no useful date. DJI units have one: the file name holds the unit's local time when the clip started. On import, each clip gets a date from the best source available:
 
 - **Radio log:** if you point QuadCam at EdgeTX logs, it matches armed flight segments to clips.
-- **Import date:** today, when no log matches.
+- **Clip clock:** a DJI clip's own clock.
+- **Import date:** today, when nothing else dates the clip.
 - **Edited:** any date you type.
 
-A clip's time of day comes from its radio log, or you type it. Without one, the creation date holds noon, and QuadCam shows no time.
+A radio log dates a DJI clip only when the log starts within 5 minutes of the clip clock. The log then also gives the clip its moments, flight numbers and EdgeTX model. A log further away leaves the clip clock in place, and the Review step shows a warning with the gap. **Clip clock skew (s)** under **Log matching** in Settings > Import sets the window, in seconds (default 300). In the settings file it is `clock_skew_s` in `tunables`.
+
+A clip clock before 2015 or after tomorrow means the unit's clock reset. QuadCam ignores it, shows a warning, and dates the clip as it dates an analog clip.
+
+A clip's time of day comes from its radio log or its clip clock, or you type it. Without one, the creation date holds noon, and QuadCam shows no time.
 
 ## The files are the library
 
@@ -49,9 +54,9 @@ The index in `<library>/.quadcam/index.json` is a cache that makes the app start
 
 ### Clip identity
 
-QuadCam knows a clip by the content of its DVR file, not by its name. DVRs start again at `PICT0001` after every format, so a name proves nothing. The card's "N new" count in the sidebar uses the same identity.
+QuadCam knows a clip by the content of its source file, not by its name. DVRs start again at `PICT0001` after every format, so a name proves nothing. The card's "N new" count in the sidebar uses the same identity.
 
-- A clip that QuadCam imported has the fingerprint of its DVR source: XXH64 over defined bytes of the AVI file.
+- A clip that QuadCam imported has the fingerprint of its source file: XXH64 over defined bytes of the AVI or MP4 file.
 - A file that QuadCam did not write gets an XXH64 hash of its first MB before `moov`. Metadata edits never touch those bytes.
 
 `src-tauri/src/identity.rs` states both hashes, and tests pin them with test vectors. The index records the scheme as `id_scheme: 2`.

@@ -63,14 +63,33 @@ pub(super) fn places_text(places: &Value) -> String {
         .join("\n")
 }
 
+/// A source kind as people say it: `analog`, `DJI`.
+pub(super) fn source_label(kind: &Value) -> String {
+    serde_json::from_value::<crate::sources::SourceKind>(kind.clone())
+        .map(|k| k.label().to_string())
+        .unwrap_or_else(|_| kind.as_str().unwrap_or("?").to_string())
+}
+
+/// A date source as people say it: `radio log`, `clip clock`.
+pub(super) fn date_source_label(source: &Value) -> String {
+    serde_json::from_value::<crate::pipeline::DateSource>(source.clone())
+        .map(|s| s.label().to_string())
+        .unwrap_or_else(|_| source.as_str().unwrap_or("?").to_string())
+}
+
 pub(super) fn names(v: &[&Value]) -> String {
     if v.is_empty() {
         return "none".into();
     }
     v.iter()
         .map(|x| {
+            let source = if x["source"].is_null() {
+                String::new()
+            } else {
+                format!(", {}", source_label(&x["source"]))
+            };
             format!(
-                "{} ({})",
+                "{} ({}{source})",
                 x["info"]["volume_name"].as_str().unwrap_or("?"),
                 x["mount"].as_str().unwrap_or("?")
             )
@@ -148,6 +167,7 @@ pub fn clip_views(session: &Value, ids: Option<&[u64]>) -> Vec<Value> {
             json!({
                 "id": id,
                 "name": c["name"],
+                "source": c["kind"],
                 "path": c["rel"],
                 "duration_s": (c["duration"].as_f64().unwrap_or(0.0) * 10.0).round() / 10.0,
                 "size": c["size"],
@@ -217,13 +237,14 @@ pub(super) fn table(view: &[Value]) -> String {
                 marks.push("agent-suggested".into());
             }
             format!(
-                "#{} {} {}s {} date={} ({}, {}) name={:?} note={:?}{}",
+                "#{} {} ({}) {}s {} date={} ({}, {}) name={:?} note={:?}{}",
                 c["id"],
                 c["name"].as_str().unwrap_or(""),
+                source_label(&c["source"]),
                 c["duration_s"],
                 c["status"].as_str().unwrap_or(""),
                 c["date"].as_str().unwrap_or("?"),
-                c["date_source"].as_str().unwrap_or("?"),
+                date_source_label(&c["date_source"]),
                 c["log_match"].as_str().unwrap_or("?"),
                 c["short_name"].as_str().unwrap_or(""),
                 c["note"].as_str().unwrap_or(""),

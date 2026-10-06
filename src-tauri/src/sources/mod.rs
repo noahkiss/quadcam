@@ -2,9 +2,10 @@
 //! card or folder is laid out, how to tell a whole clip from a half-written one, how to
 //! repair it, how its video goes into the output container, whether its frames show dead
 //! air, and what its card may be formatted to. The pipeline asks the clip's source and never
-//! assumes one. Today there is one: `analog` (DVR MJPEG in AVI).
+//! assumes one. Two today: `dji` (DJI O4 MP4s) and `analog` (DVR MJPEG in AVI).
 
 pub mod analog;
+pub mod dji;
 
 use crate::media::{Format, Probe, Tools};
 use crate::moments::SignalScan;
@@ -23,6 +24,28 @@ pub enum SourceKind {
     /// An analog DVR: MJPEG in AVI.
     #[default]
     Analog,
+    /// A DJI air unit or goggles: H.264 or H.265 in MP4, named by the unit's clock.
+    Dji,
+}
+
+impl SourceKind {
+    /// The name people know the video system by: `analog`, `DJI`. A profile's
+    /// `video_system` matches it, ignoring case.
+    pub fn label(self) -> &'static str {
+        match self {
+            SourceKind::Analog => "analog",
+            SourceKind::Dji => "DJI",
+        }
+    }
+
+    /// How a file's description names where it came from: `DVR PICT0001.AVI`,
+    /// `DJI DJI_..._D.MP4`.
+    pub fn file_label(self) -> &'static str {
+        match self {
+            SourceKind::Analog => "DVR",
+            SourceKind::Dji => "DJI",
+        }
+    }
 }
 
 /// What a source's own structure check says about a staged clip.
@@ -37,8 +60,12 @@ pub struct Inspect {
 pub enum EncodePlan {
     /// Re-encode the video as H.264 (analog MJPEG into MP4).
     Transcode,
-    /// Copy the streams as they are (analog MJPEG into MOV).
+    /// Copy the streams as they are into a new container (analog MJPEG into MOV, DJI MP4
+    /// into MOV).
     Remux,
+    /// Copy the file byte for byte, no ffmpeg (DJI MP4 into MP4). Every stream stays,
+    /// the ones ffmpeg's MP4 muxer refuses included.
+    Copy,
 }
 
 /// What a source's card may be formatted to. Formatting runs every guard in
@@ -49,8 +76,12 @@ pub struct CardPolicy {
     pub format_offered: bool,
     /// The file system the card should have, and gets when formatted.
     pub filesystem: &'static str,
-    /// Cards larger than this get a warning when they are inserted.
+    /// Cards larger than this get a warning when they are inserted. `u64::MAX`: never.
     pub warn_above_bytes: u64,
+    /// Said after "Card is X, not <filesystem>." when the file system differs.
+    pub filesystem_advice: &'static str,
+    /// The warning for a card over `warn_above_bytes`.
+    pub size_warning: &'static str,
 }
 
 pub trait Source: Send + Sync {
@@ -61,7 +92,7 @@ pub trait Source: Send + Sync {
     fn list(&self, root: &Path) -> Vec<FoundClip>;
     /// The clips among files a person dropped.
     fn pick(&self, files: &[PathBuf]) -> Vec<FoundClip>;
-    /// Files that belong to a clip (telemetry, OSD). None for analog.
+    /// Files next to a clip that belong to it (telemetry, OSD). None for analog.
     fn sidecars(&self, clip: &Path) -> Vec<PathBuf>;
     /// Whether a staged clip is whole.
     fn inspect(&self, staged: &Path) -> Result<Inspect>;
@@ -88,15 +119,17 @@ pub trait Source: Send + Sync {
     fn card_policy(&self) -> CardPolicy;
 }
 
-/// Every source, in detection order.
-pub fn all() -> [&'static dyn Source; 1] {
-    [&analog::Analog]
+/// Every source, in detection order: strict checks (a name pattern) before loose ones
+/// (analog takes any `.avi`).
+pub fn all() -> [&'static dyn Source; 2] {
+    [&dji::Dji, &analog::Analog]
 }
 
 /// The source of a kind.
 pub fn get(kind: SourceKind) -> &'static dyn Source {
     match kind {
         SourceKind::Analog => &analog::Analog,
+        SourceKind::Dji => &dji::Dji,
     }
 }
 

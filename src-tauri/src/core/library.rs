@@ -659,6 +659,9 @@ impl Core {
         if let Some(o) = &c.original {
             let _ = media::set_mtime(&root.join(o), created);
         }
+        for side in c.sidecars(root) {
+            let _ = media::set_mtime(&side, created);
+        }
         if new_date == c.date {
             return self.reread_clips(std::slice::from_ref(&c.id));
         }
@@ -678,8 +681,8 @@ impl Core {
         self.relocate(root, c, &dir, &stem).map(|_| ())
     }
 
-    /// Moves a clip, its cuts and its original to `dir` under the stem `stem` (or the next
-    /// free `stem-2`, ...), updates the index and removes folders the move left empty.
+    /// Moves a clip, its cuts, its original and the original's sidecars to `dir` under the
+    /// stem `stem` (or the next free `stem-2`, ...), updates the index and removes folders the move left empty.
     pub(super) fn relocate(
         &self,
         root: &Path,
@@ -726,6 +729,13 @@ impl Core {
                 dir.join(lib::ORIGINALS)
                     .join(format!("{new_stem}.{}", ext(&p))),
             ));
+            // Sidecars (a DJI `.srt`) follow the original's new stem.
+            for side in c.sidecars(root) {
+                let to = dir
+                    .join(lib::ORIGINALS)
+                    .join(format!("{new_stem}.{}", ext(&side)));
+                moves.push((side, to));
+            }
         }
         if let Some((_, to)) = moves
             .iter()

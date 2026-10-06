@@ -13,7 +13,7 @@ import { toast } from "../../components/toastStore";
 import { MomentList, TrimEditor } from "../../components/trim/TrimEditor";
 import type { TrimModel } from "../../components/trim/model";
 import { useTrim } from "../../components/trim/useTrim";
-import { base, fmtBytes, fmtDur, tilde } from "../../lib/format";
+import { base, fmtBytes, fmtDur, tilde, SOURCE_LABEL } from "../../lib/format";
 import { edit, forAll, metaToAll, pickLogs, runExport, savePlace, setLogDay, setLogDir } from "../../actions/session";
 import { remember, setSessionCuts } from "../../actions/cuts";
 import { MiniBar, MomentChips } from "../Library/ClipCard";
@@ -67,6 +67,7 @@ function SessionBar({ s }: { s: Session }) {
   const mixedPlace = allPlace.size > 1 || allPlace.has("*coords");
   const dates = [...new Set(plans.map((p) => p.date))];
   const fromLog = plans.filter((p) => p.source === "log").length;
+  const fromClip = plans.filter((p) => p.source === "clip").length;
   const logModels = [...new Set(plans.map((p) => p.log_model).filter(Boolean))];
   const live = s.clips.filter((c) => !planOf(s, c.id)?.skip);
   const dur = live.reduce((a, c) => a + c.duration, 0);
@@ -100,7 +101,7 @@ function SessionBar({ s }: { s: Session }) {
           </Select>
         )}
       </Field>
-      <Field label="Date" hint={dates.length > 1 ? `${dates.length} dates` : fromLog ? `${fromLog} of ${plans.length} from the radio log` : "Import date"}>
+      <Field label="Date" hint={dates.length > 1 ? `${dates.length} dates` : fromLog ? `${fromLog} of ${plans.length} from the radio log` : fromClip ? `${fromClip} of ${plans.length} from the clip clock` : "Import date"}>
         {(id, hint) => <CommitInput id={id} type="date" aria-describedby={hint} value={dates.length === 1 ? dates[0] : ""} onCommit={(v) => v && forAll(() => ({ date: v }))} />}
       </Field>
       <div className={styles.logs}>
@@ -242,6 +243,12 @@ function SourceChip({ plan: p, hasLogs }: { plan: ClipPlan; hasLogs: boolean }) 
       <Chip icon="radio" tint="green">
         {p.time ? `radio log ${p.time.slice(0, 5)}` : "radio log"}
         {p.segments > 1 ? ` · ${p.segments} packs` : ""}
+      </Chip>
+    );
+  if (p.source === "clip")
+    return (
+      <Chip icon="clock" tint="sky">
+        {p.time ? `clip clock ${p.time.slice(0, 5)}` : "clip clock"}
       </Chip>
     );
   if (p.source === "edited")
@@ -400,13 +407,17 @@ function Meta({ clip: c, plan: p }: { clip: Clip; plan: ClipPlan }) {
   const [placeName, setPlaceName] = useState("");
   const m = p.meta || { profile: null, location: null, keywords: [], author: null };
   const find = (n: string | null | undefined) => profiles.find((x) => x.name.toLowerCase() === (n || "").trim().toLowerCase());
-  // The same choice the core makes at export: the clip's own, the log's model, the default.
+  // The same choice the core makes at export: the clip's own, the log's model, the first
+  // profile whose video system names the clip's source, the default.
   let prof = m.profile ? find(m.profile) : undefined;
   let why = m.profile ? "chosen" : "";
   if (!prof) {
     const lm = (p.log_model || "").toLowerCase();
     const byLog = lm ? profiles.find((x) => (x.edgetx_models || []).some((n) => n.trim().toLowerCase() === lm)) : undefined;
+    const sys = SOURCE_LABEL[c.kind].toLowerCase();
+    const byKind = profiles.find((x) => (x.video_system || "").trim().toLowerCase() === sys);
     if (byLog) [prof, why] = [byLog, `radio log model ${p.log_model}`];
+    else if (byKind) [prof, why] = [byKind, `video system ${byKind.video_system}`];
     else if (find(defaultProfile)) [prof, why] = [find(defaultProfile), "default"];
   }
   const loc = m.location || (prof?.place ? places.find((x) => x.name === prof!.place) : null);
