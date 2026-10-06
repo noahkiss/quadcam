@@ -614,7 +614,8 @@ pub struct ClipResult {
     pub original: Option<PathBuf>,
     pub size: u64,
     pub error: Option<String>,
-    pub encoder: Option<Encoder>,
+    /// How the file was made: the encoder that ran, or `copy` or `remux`.
+    pub encoder: Option<crate::media::Encoded>,
     /// The metadata written, so a later verify checks exactly what went into the file.
     #[serde(default)]
     pub meta: Option<Meta>,

@@ -286,7 +286,8 @@ export type ClipResult = {
 	original: string | null,
 	size: number,
 	error: string | null,
-	encoder: Encoder | null,
+	/**  How the file was made: the encoder that ran, or `copy` or `remux`. */
+	encoder: Encoded | null,
 	/**  The metadata written, so a later verify checks exactly what went into the file. */
 	meta?: Meta | null,
 	/**  One extra output per cut range of the clip. */
@@ -418,6 +419,13 @@ export type EjectParams = {
 export type Ejected = {
 	ejected: boolean,
 };
+
+/**  How an import made its file: the encoder that ran, or a copy of the source's frames. */
+export type Encoded = "videotoolbox" | "x264" | 
+/**  The source file byte for byte (`EncodePlan::Copy`). */
+"copy" | 
+/**  ffmpeg copied the frames into a new container (`EncodePlan::Remux`). */
+"remux";
 
 export type Encoder = 
 /**  `h264_videotoolbox -q:v 65`, falling back to x264 on failure. */

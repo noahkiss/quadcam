@@ -163,6 +163,27 @@ pub enum Encoder {
     X264,
 }
 
+/// How an import made its file: the encoder that ran, or a copy of the source's frames.
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, specta::Type)]
+#[serde(rename_all = "lowercase")]
+pub enum Encoded {
+    Videotoolbox,
+    X264,
+    /// The source file byte for byte (`EncodePlan::Copy`).
+    Copy,
+    /// ffmpeg copied the frames into a new container (`EncodePlan::Remux`).
+    Remux,
+}
+
+impl From<Encoder> for Encoded {
+    fn from(e: Encoder) -> Encoded {
+        match e {
+            Encoder::Videotoolbox => Encoded::Videotoolbox,
+            Encoder::X264 => Encoded::X264,
+        }
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, specta::Type)]
 pub struct Meta {
     pub title: String,
@@ -302,7 +323,7 @@ pub fn run_ffmpeg(tools: &Tools, args: &[String], on_progress: &mut dyn FnMut(f6
 }
 
 /// Converts, falling back from VideoToolbox to x264 if the hardware encoder fails.
-/// Returns the encoder that produced the file.
+/// Returns how the file was made: the encoder that ran, or copy or remux.
 #[allow(clippy::too_many_arguments)]
 pub fn convert(
     tools: &Tools,
@@ -313,18 +334,22 @@ pub fn convert(
     encoder: Encoder,
     meta: &Meta,
     on_progress: &mut dyn FnMut(f64),
-) -> Result<Encoder> {
+) -> Result<Encoded> {
     if plan == EncodePlan::Copy {
         copy(src, dst, meta)?;
-        return Ok(encoder);
+        return Ok(Encoded::Copy);
     }
+    let made = match plan {
+        EncodePlan::Remux => Encoded::Remux,
+        _ => encoder.into(),
+    };
     let r = run_ffmpeg(
         tools,
         &convert_args(src, dst, format, plan, encoder, meta),
         on_progress,
     );
     match r {
-        Ok(()) => Ok(encoder),
+        Ok(()) => Ok(made),
         Err(e) if plan == EncodePlan::Transcode && encoder == Encoder::Videotoolbox => {
             let _ = std::fs::remove_file(dst);
             run_ffmpeg(
@@ -333,7 +358,7 @@ pub fn convert(
                 on_progress,
             )
             .map_err(|e2| anyhow!("{e}; x264 fallback also failed: {e2}"))?;
-            Ok(Encoder::X264)
+            Ok(Encoded::X264)
         }
         Err(e) => Err(e),
     }

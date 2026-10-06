@@ -119,6 +119,11 @@ fn dji_clip_imports_by_copy_with_its_clock() {
         .unwrap();
     let r = &out.summary.results[0];
     assert_eq!(r.outcome, Outcome::Verified, "{:?}", r.error);
+    assert_eq!(
+        r.encoder,
+        Some(quadcam_lib::media::Encoded::Copy),
+        "a byte copy, no encoder"
+    );
     let file = r.output.clone().unwrap();
     assert_eq!(file.extension().unwrap(), "mp4");
     // A byte copy plus the new metadata: the media data is the source's.
@@ -190,6 +195,7 @@ fn dji_clip_remuxes_into_mov() {
         .unwrap();
     let r = &out.summary.results[0];
     assert_eq!(r.outcome, Outcome::Verified, "{:?}", r.error);
+    assert_eq!(r.encoder, Some(quadcam_lib::media::Encoded::Remux));
     let file = r.output.clone().unwrap();
     assert_eq!(file.extension().unwrap(), "mov");
     let p = quadcam_lib::media::probe(&tools(), &file).unwrap();

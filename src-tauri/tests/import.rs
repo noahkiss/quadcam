@@ -5,7 +5,7 @@ mod common;
 use chrono::{NaiveDate, TimeZone, Utc};
 use common::*;
 use quadcam_lib::logs::{Badge, Tunables};
-use quadcam_lib::media::{Encoder, Format};
+use quadcam_lib::media::{Encoded, Encoder, Format};
 use quadcam_lib::naming::NamePlanner;
 use quadcam_lib::pipeline::{self, Clip, ClipJob, ClipStatus, DateSource, ImportSettings, Outcome};
 use std::path::Path;
@@ -257,7 +257,7 @@ fn import_mp4_x264() {
         &mut |_| {},
     );
     assert_eq!(r.outcome, Outcome::Verified, "{:?}", r.error);
-    assert_eq!(r.encoder, Some(Encoder::X264));
+    assert_eq!(r.encoder, Some(Encoded::X264));
 }
 
 /// Check 5: duplicate names get -2, -3, in a batch and against files already there.
