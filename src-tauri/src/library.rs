@@ -492,7 +492,7 @@ pub fn read_file(root: &Path, rel: &Path) -> Result<Found> {
     // A time counts when quadcam recorded where it came from, or (files from before that
     // key) when the description says the date came from a radio log.
     let has_time = match get(KEY_TIME).as_deref() {
-        Some("log" | "manual") => true,
+        Some("log" | "clip" | "manual") => true,
         Some(_) => false,
         None => desc.contains("date source: radio log"),
     };
@@ -515,7 +515,7 @@ pub fn read_file(root: &Path, rel: &Path) -> Result<Found> {
     });
     let original = path.parent().and_then(|dir| {
         let o = dir.join(ORIGINALS);
-        ["avi", "AVI"]
+        ["avi", "AVI", "mp4", "MP4"]
             .iter()
             .map(|e| o.join(format!("{stem}.{e}")))
             .find(|p| p.is_file())

@@ -136,11 +136,11 @@ pub const KEYS: &[Key] = &[
     Key {
         file: "tunables",
         name: Some("tunables"),
-        about: "an object with segment_gap_s, session_gap_min, tolerance_s and max_log_age_days",
+        about: "an object with segment_gap_s, session_gap_min, tolerance_s, max_log_age_days and clock_skew_s",
         check: |v| {
             typed::<crate::logs::Tunables>(
                 v,
-                "an object with segment_gap_s, session_gap_min, tolerance_s and max_log_age_days",
+                "an object with segment_gap_s, session_gap_min, tolerance_s, max_log_age_days and clock_skew_s",
             )
         },
     },

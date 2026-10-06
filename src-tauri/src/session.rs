@@ -8,6 +8,7 @@ use crate::media::Tools;
 use crate::metadata::{self as md, ClipMeta, FlightStats, Location};
 use crate::moments::{Moment, Span};
 use crate::pipeline::{self, Clip, ClipJob, ClipResult, ClipStatus, DateSource, Outcome};
+use crate::sources::SourceKind;
 use anyhow::{bail, Context, Result};
 use chrono::{NaiveDate, NaiveTime};
 use serde::{Deserialize, Serialize};
@@ -137,6 +138,9 @@ pub struct Session {
     pub version: u32,
     /// Card mount point or folder the clips came from.
     pub source: PathBuf,
+    /// The video system of the clips.
+    #[serde(default)]
+    pub kind: SourceKind,
     /// The card the clips were read from; None for a plain folder (no format step).
     pub card: Option<CardIdentity>,
     pub card_volume: Option<Volume>,
@@ -197,8 +201,10 @@ impl Session {
             .and_then(|v| v.info.volume_uuid.clone())
             .unwrap_or_else(|| chrono::Local::now().format("%Y%m%d-%H%M%S").to_string());
         let staging = staging_root.join(key);
-        let clips = pipeline::stage(source, &staging, on_progress)?;
-        Ok(Session::staged(source, vol, staging, clips))
+        let system = crate::sources::for_root(source);
+        let clips =
+            pipeline::stage_found(system.list(source), system.kind(), &staging, on_progress)?;
+        Ok(Session::staged(source, system.kind(), vol, staging, clips))
     }
 
     /// Copies the clips among `files` (files dropped on the window) into staging. The
@@ -219,15 +225,27 @@ impl Session {
             .and_then(|f| f.path.parent())
             .map(Path::to_path_buf)
         else {
-            bail!("None of these files is a DVR clip (AVI).");
+            bail!("None of these files is a clip QuadCam reads (a DVR AVI or a DJI MP4).");
         };
         let staging = staging_root.join(chrono::Local::now().format("%Y%m%d-%H%M%S").to_string());
         let clips = pipeline::stage_found(found, system.kind(), &staging, on_progress)?;
-        Ok(Session::staged(&source, None, staging, clips))
+        Ok(Session::staged(
+            &source,
+            system.kind(),
+            None,
+            staging,
+            clips,
+        ))
     }
 
     /// A new session for clips just staged: every clip planned for today, unnamed.
-    fn staged(source: &Path, vol: Option<Volume>, staging: PathBuf, clips: Vec<Clip>) -> Session {
+    fn staged(
+        source: &Path,
+        kind: SourceKind,
+        vol: Option<Volume>,
+        staging: PathBuf,
+        clips: Vec<Clip>,
+    ) -> Session {
         let today = chrono::Local::now().date_naive();
         let plans = clips
             .iter()
@@ -269,6 +287,7 @@ impl Session {
         Session {
             version: SESSION_VERSION,
             source: source.to_path_buf(),
+            kind,
             card: vol.as_ref().map(|v| CardIdentity::from_info(&v.info)),
             card_volume: vol,
             staging,
@@ -316,8 +335,9 @@ impl Session {
         tun: &Tunables,
         today: NaiveDate,
     ) {
-        let durations: Vec<f64> = self.clips.iter().map(|c| c.duration).collect();
-        let plan = pipeline::plan_dates(&durations, log_dir, day, today, tun);
+        let inputs: Vec<pipeline::DateInput> =
+            self.clips.iter().map(pipeline::DateInput::of).collect();
+        let plan = pipeline::plan_dates(&inputs, log_dir, day, today, tun);
         for (p, s) in self.plans.iter_mut().zip(plan.suggestions) {
             p.moments = s
                 .moments
@@ -586,6 +606,8 @@ mod tests {
             signal: None,
             key: String::new(),
             kind: Default::default(),
+            clock: None,
+            sidecars: Vec::new(),
         };
         let plan = |id| ClipPlan {
             id,
@@ -610,6 +632,7 @@ mod tests {
         Session {
             version: SESSION_VERSION,
             source: PathBuf::from("/tmp/x"),
+            kind: SourceKind::Analog,
             card: None,
             card_volume: None,
             staging: PathBuf::new(),

@@ -317,7 +317,7 @@ pub struct ProfilesArgs {
     pub default: Option<bool>,
 }
 
-// The log matching tunables, all required.
+// The log matching tunables, all required but the clip clock skew (default 300 s).
 #[derive(Debug, Clone, Deserialize, JsonSchema)]
 #[schemars(deny_unknown_fields)]
 pub struct TunablesValue {
@@ -325,6 +325,7 @@ pub struct TunablesValue {
     pub session_gap_min: f64,
     pub tolerance_s: f64,
     pub max_log_age_days: i64,
+    pub clock_skew_s: Option<f64>,
 }
 
 // The settings a write may set; null resets one.

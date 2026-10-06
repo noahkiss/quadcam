@@ -248,7 +248,7 @@ fn log_moments_through_date_planning() {
     std::fs::write(logs.path().join("LOGS/Model01-2026-09-28-100000.csv"), csv).unwrap();
     let today = NaiveDate::from_ymd_opt(2026, 9, 30).unwrap();
     let plan = pipeline::plan_dates(
-        &[75.0],
+        &[pipeline::DateInput::duration(75.0)],
         Some(logs.path()),
         None,
         today,

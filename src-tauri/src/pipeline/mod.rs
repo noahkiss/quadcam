@@ -12,7 +12,7 @@ use crate::naming::{self, NamePlanner};
 use crate::scan::FoundClip;
 use crate::sources::SourceKind;
 use anyhow::{bail, Context, Result};
-use chrono::{DateTime, Local, NaiveDate, NaiveDateTime, NaiveTime, TimeZone, Utc};
+use chrono::{DateTime, Datelike, Local, NaiveDate, NaiveDateTime, NaiveTime, TimeZone, Utc};
 use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
 use std::io::{Read, Write};
@@ -55,6 +55,13 @@ pub struct Clip {
     /// The video system the clip came from.
     #[serde(default)]
     pub kind: SourceKind,
+    /// The time the clip itself recorded (DJI: the unit's clock), read at analysis.
+    #[serde(default)]
+    pub clock: Option<DateTime<Utc>>,
+    /// Staged copies of files that belong to the clip (a DJI `.SRT`). They are kept next
+    /// to the original.
+    #[serde(default)]
+    pub sidecars: Vec<PathBuf>,
 }
 
 /// A clip's content fingerprint: size plus the first and last MB (see `identity`). Two
@@ -130,6 +137,7 @@ pub fn stage_found(
     on_progress: &mut dyn FnMut(usize, usize, u64, u64),
 ) -> Result<Vec<Clip>> {
     std::fs::create_dir_all(staging).with_context(|| format!("creating {}", staging.display()))?;
+    let source = crate::sources::get(kind);
     let total = found.len();
     let mut seen = HashSet::new();
     let mut clips = Vec::with_capacity(total);
@@ -152,6 +160,8 @@ pub fn stage_found(
             signal: None,
             key: String::new(),
             kind,
+            clock: None,
+            sidecars: Vec::new(),
         };
         // Reuse a staged copy only when it is the same content, not just the same name.
         let already = dst.metadata().is_ok_and(|m| m.len() == f.size)
@@ -170,6 +180,18 @@ pub fn stage_found(
                 clip.stage_error = Some("copy came out the wrong size".into());
             }
             Err(e) => clip.stage_error = Some(format!("copy failed: {e:#}")),
+        }
+        // Sidecars follow the clip's staged name; one that fails to copy is left out.
+        if let Some(staged) = clip.staged.clone() {
+            for side in source.sidecars(&f.path) {
+                let ext = side.extension().unwrap_or_default().to_string_lossy();
+                let dst = staged.with_extension(ext.as_ref());
+                if dst.metadata().ok().map(|m| m.len()) == side.metadata().ok().map(|m| m.len())
+                    || std::fs::copy(&side, &dst).is_ok()
+                {
+                    clip.sidecars.push(dst);
+                }
+            }
         }
         on_progress(i, total, f.size, f.size);
         clips.push(clip);
@@ -198,6 +220,7 @@ pub fn analyse(tools: &Tools, clip: &mut Clip, cache: &Path) -> Result<()> {
         return Ok(());
     }
     let source = crate::sources::get(clip.kind);
+    clip.clock = source.intrinsic_time(&staged);
     let whole = source.inspect(&staged)?.complete;
     let probe = media::probe(tools, &staged).ok();
     let readable = probe.as_ref().is_some_and(|p| p.video_packets > 0);
@@ -252,6 +275,8 @@ pub enum DateSource {
     Log,
     Import,
     Edited,
+    /// The clip's own clock (DJI).
+    Clip,
 }
 
 impl DateSource {
@@ -260,6 +285,7 @@ impl DateSource {
             DateSource::Log => "radio log",
             DateSource::Import => "import",
             DateSource::Edited => "edited",
+            DateSource::Clip => "clip clock",
         }
     }
 }
@@ -267,7 +293,7 @@ impl DateSource {
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, specta::Type)]
 pub struct DateSuggestion {
     pub date: NaiveDate,
-    /// Only from a radio log: the start of the first claimed armed segment.
+    /// From a radio log (the start of the first claimed armed segment) or the clip clock.
     pub time: Option<NaiveTime>,
     pub source: DateSource,
     pub badge: Badge,
@@ -330,19 +356,70 @@ pub struct DatePlan {
     pub day_used: Option<NaiveDate>,
 }
 
-/// Suggests a date per clip. Without logs, or with an implausible log day (radio clock
-/// reset), every clip gets the import date.
+/// What dating needs from one clip.
+#[derive(Debug, Clone, Default, PartialEq)]
+pub struct DateInput {
+    pub name: String,
+    pub duration: f64,
+    /// The clip's own clock (`Clip::clock`).
+    pub clock: Option<DateTime<Utc>>,
+}
+
+impl DateInput {
+    /// A clip without a clock (analog).
+    pub fn duration(duration: f64) -> DateInput {
+        DateInput {
+            duration,
+            ..Default::default()
+        }
+    }
+
+    pub fn of(c: &Clip) -> DateInput {
+        DateInput {
+            name: c.name.clone(),
+            duration: c.duration,
+            clock: c.clock,
+        }
+    }
+}
+
+/// The earliest year a clip clock is believed. A clock before it, or after tomorrow, was
+/// reset (no time set since the battery ran down).
+pub const CLIP_CLOCK_MIN_YEAR: i32 = 2015;
+
+/// Suggests a date per clip. A clip with a believable clock of its own takes it ("clip
+/// clock"); every other clip gets the import date. Radio logs then refine both: a log match
+/// dates an analog clip, and dates a clocked clip only when the log starts within
+/// `clock_skew_s` of its clock. An implausible log day (radio clock reset) is ignored.
 pub fn plan_dates(
-    durations: &[f64],
+    clips: &[DateInput],
     log_dir: Option<&Path>,
     day: Option<NaiveDate>,
     import_day: NaiveDate,
     tun: &Tunables,
 ) -> DatePlan {
-    let fallback = |_| DateSuggestion {
-        date: import_day,
-        time: None,
-        source: DateSource::Import,
+    let mut warnings = Vec::new();
+    let tomorrow = import_day.succ_opt().unwrap_or(import_day);
+    // Clip clocks in local time, the time EdgeTX logs are in.
+    let clocks: Vec<Option<NaiveDateTime>> = clips
+        .iter()
+        .map(|c| {
+            let t = c.clock?.with_timezone(&Local).naive_local();
+            if t.year() < CLIP_CLOCK_MIN_YEAR || t.date() > tomorrow {
+                warnings.push(format!(
+                    "{}: the clip clock reads {} (the clock may have reset). Ignoring it.",
+                    c.name,
+                    t.format("%Y-%m-%d %H:%M")
+                ));
+                return None;
+            }
+            Some(t)
+        })
+        .collect();
+    let unmatched = |date, time, source| DateSuggestion {
+        date,
+        time,
+        source,
         badge: Badge::Unmatched,
         segments: 0,
         moments: Vec::new(),
@@ -351,8 +428,14 @@ pub fn plan_dates(
         flight: None,
     };
     let mut plan = DatePlan {
-        suggestions: durations.iter().map(fallback).collect(),
-        warnings: Vec::new(),
+        suggestions: clocks
+            .iter()
+            .map(|c| match c {
+                Some(t) => unmatched(t.date(), Some(t.time()), DateSource::Clip),
+                None => unmatched(import_day, None, DateSource::Import),
+            })
+            .collect(),
+        warnings,
         log_days: Vec::new(),
         day_used: None,
     };
@@ -364,13 +447,23 @@ pub fn plan_dates(
             .push(format!("No EdgeTX logs found in {}.", dir.display()));
         return plan;
     }
-    // Default: the newest plausible day on or before the import date.
-    let day = day.or_else(|| {
-        days.keys()
-            .rev()
-            .find(|d| **d <= import_day && logs::day_is_plausible(**d, import_day, tun))
-            .copied()
-    });
+    // Default: the newest clip-clock day with logs, else the newest plausible day on or
+    // before the import date.
+    let day = day
+        .or_else(|| {
+            clocks
+                .iter()
+                .flatten()
+                .map(NaiveDateTime::date)
+                .filter(|d| days.contains_key(d))
+                .max()
+        })
+        .or_else(|| {
+            days.keys()
+                .rev()
+                .find(|d| **d <= import_day && logs::day_is_plausible(**d, import_day, tun))
+                .copied()
+        });
     let Some(day) = day else {
         plan.warnings.push(
             "Radio log dates look wrong (the radio clock may have reset). Using the import date."
@@ -391,12 +484,29 @@ pub fn plan_dates(
     plan.day_used = Some(day);
     let times: Vec<NaiveDateTime> = rows.iter().map(|r| r.time).collect();
     let segs = logs::segments(&times, tun);
-    for (s, m) in plan
+    let durations: Vec<f64> = clips.iter().map(|c| c.duration).collect();
+    for (i, (s, m)) in plan
         .suggestions
         .iter_mut()
-        .zip(logs::match_clips(durations, &segs, tun))
+        .zip(logs::match_clips(&durations, &segs, tun))
+        .enumerate()
     {
         if let (Some(start), Badge::Matched | Badge::Likely) = (m.start, m.badge) {
+            if let Some(clock) = clocks[i] {
+                // A log of another day says nothing about this clip.
+                if clock.date() != day {
+                    continue;
+                }
+                let skew = (start - clock).num_milliseconds().abs() as f64 / 1000.0;
+                if skew > tun.clock_skew_s {
+                    plan.warnings.push(format!(
+                        "{}: the matching radio log starts {skew:.0} s from the clip clock (more than {} s). Keeping the clip clock.",
+                        clips[i].name,
+                        tun.clock_skew_s
+                    ));
+                    continue;
+                }
+            }
             let windows: Vec<(NaiveDateTime, NaiveDateTime)> = segs[m.first..m.first + m.segments]
                 .iter()
                 .map(|g| (g.start, g.end))
@@ -421,8 +531,8 @@ pub fn plan_dates(
     plan
 }
 
-/// creation_time for a clip: its time of day (the log start time, or one set by hand),
-/// otherwise local noon of the date so a UTC conversion cannot roll the day.
+/// creation_time for a clip: its time of day (the log start time, the clip clock, or one
+/// set by hand), otherwise local noon of the date so a UTC conversion cannot roll the day.
 pub fn creation_time(
     date: NaiveDate,
     time: Option<NaiveTime>,
@@ -589,7 +699,12 @@ pub fn meta_for(clip: &Clip, job: &ClipJob, date: NaiveDate, time: Option<NaiveT
         comment: job.note.trim().to_string(),
         creation_time: creation_time(date, time, job.source),
         date: date.format("%Y-%m-%d").to_string(),
-        description: format!("DVR {}; date source: {}", clip.name, job.source.label()),
+        description: format!(
+            "{} {}; date source: {}",
+            clip.kind.file_label(),
+            clip.name,
+            job.source.label()
+        ),
     }
 }
 
@@ -712,6 +827,15 @@ pub fn import_clip(
                     bail!("original copy came out the wrong size");
                 }
                 let _ = media::set_mtime(&dst, meta.creation_time);
+                // Sidecars sit next to the original, under its stem.
+                for side in &clip.sidecars {
+                    let ext = side.extension().unwrap_or_default().to_string_lossy();
+                    let to = dst.with_extension(ext.to_lowercase());
+                    if !to.exists() {
+                        std::fs::copy(side, &to)
+                            .with_context(|| format!("keeping {}", side.display()))?;
+                    }
+                }
                 Ok(dst)
             });
         match copy {
@@ -867,6 +991,158 @@ pub(crate) mod tests {
         (0..len)
             .map(|i| (i.wrapping_mul(31) ^ (i >> 7)) as u8)
             .collect()
+    }
+
+    /// A local wall-clock time on 2026-09-28 as the UTC instant a clip clock holds.
+    fn local(hms: &str) -> DateTime<Utc> {
+        let t = NaiveDateTime::parse_from_str(&format!("2026-09-28 {hms}"), "%Y-%m-%d %H:%M:%S")
+            .unwrap();
+        Local
+            .from_local_datetime(&t)
+            .earliest()
+            .unwrap()
+            .with_timezone(&Utc)
+    }
+
+    fn clocked(name: &str, duration: f64, clock: Option<DateTime<Utc>>) -> DateInput {
+        DateInput {
+            name: name.into(),
+            duration,
+            clock,
+        }
+    }
+
+    /// One pack, 10:00:00 to 10:03:00 on 2026-09-28, a row a second.
+    fn one_pack_log() -> tempfile::TempDir {
+        let d = tempfile::tempdir().unwrap();
+        std::fs::create_dir(d.path().join("LOGS")).unwrap();
+        let mut csv = String::from("Date,Time,1RSS(dB),RQly(%)\n");
+        for s in 0..=180 {
+            csv.push_str(&format!(
+                "2026-09-28,10:{:02}:{:02}.000,-50,100\n",
+                s / 60,
+                s % 60
+            ));
+        }
+        std::fs::write(d.path().join("LOGS/Quad-2026-09-28-100000.csv"), csv).unwrap();
+        d
+    }
+
+    #[test]
+    fn clip_clock_dates_and_reset_clocks_are_ignored() {
+        let today = NaiveDate::from_ymd_opt(2026, 9, 30).unwrap();
+        let tun = Tunables::default();
+        let reset = Local
+            .with_ymd_and_hms(2000, 1, 1, 0, 1, 0)
+            .unwrap()
+            .with_timezone(&Utc);
+        let ahead = Local
+            .with_ymd_and_hms(2026, 10, 2, 9, 0, 0)
+            .unwrap()
+            .with_timezone(&Utc);
+        let tomorrow = Local
+            .with_ymd_and_hms(2026, 10, 1, 9, 0, 0)
+            .unwrap()
+            .with_timezone(&Utc);
+        let plan = plan_dates(
+            &[
+                clocked("A.MP4", 60.0, Some(local("18:36:36"))),
+                clocked("B.MP4", 60.0, Some(reset)),
+                clocked("C.MP4", 60.0, Some(ahead)),
+                clocked("D.MP4", 60.0, Some(tomorrow)),
+                DateInput::duration(60.0),
+            ],
+            None,
+            None,
+            today,
+            &tun,
+        );
+        let s = &plan.suggestions;
+        assert_eq!(s[0].source, DateSource::Clip);
+        assert_eq!(s[0].date.to_string(), "2026-09-28");
+        assert_eq!(s[0].time.unwrap().to_string(), "18:36:36");
+        assert_eq!(DateSource::Clip.label(), "clip clock");
+        for i in [1, 2] {
+            assert_eq!(s[i].source, DateSource::Import, "reset clock {i}");
+            assert_eq!(s[i].date, today);
+        }
+        assert_eq!(s[3].source, DateSource::Clip, "tomorrow is still believed");
+        assert_eq!(s[4].source, DateSource::Import);
+        assert_eq!(plan.warnings.len(), 2);
+        assert!(plan.warnings[0].starts_with("B.MP4: the clip clock reads 2000-01-01"));
+        assert!(plan.warnings[1].contains("C.MP4"));
+        // The clip clock is the creation time, not local noon.
+        assert_eq!(
+            creation_time(s[0].date, s[0].time, s[0].source),
+            local("18:36:36")
+        );
+    }
+
+    #[test]
+    fn a_log_dates_a_clocked_clip_only_within_the_skew() {
+        let logs = one_pack_log();
+        let today = NaiveDate::from_ymd_opt(2026, 9, 30).unwrap();
+        let tun = Tunables::default();
+        assert_eq!(tun.clock_skew_s, 300.0);
+        let run = |clock: Option<DateTime<Utc>>| {
+            plan_dates(
+                &[clocked("DJI_1.MP4", 200.0, clock)],
+                Some(logs.path()),
+                None,
+                today,
+                &tun,
+            )
+        };
+        // 61 s apart: the log wins, with its time and model.
+        let p = run(Some(local("09:58:59")));
+        assert_eq!(p.day_used, NaiveDate::from_ymd_opt(2026, 9, 28));
+        assert_eq!(p.suggestions[0].source, DateSource::Log);
+        assert_eq!(p.suggestions[0].time.unwrap().to_string(), "10:00:00");
+        assert_eq!(p.suggestions[0].log_model.as_deref(), Some("Quad"));
+        assert!(p.warnings.is_empty());
+        // 30 minutes apart: the clip clock stays, and a warning names the skew.
+        let p = run(Some(local("10:30:00")));
+        assert_eq!(p.suggestions[0].source, DateSource::Clip);
+        assert_eq!(p.suggestions[0].time.unwrap().to_string(), "10:30:00");
+        assert_eq!(
+            p.warnings,
+            ["DJI_1.MP4: the matching radio log starts 1800 s from the clip clock (more than 300 s). Keeping the clip clock."]
+        );
+        // A wider skew lets it through.
+        let wide = Tunables {
+            clock_skew_s: 3600.0,
+            ..Tunables::default()
+        };
+        let p = plan_dates(
+            &[clocked("DJI_1.MP4", 200.0, Some(local("10:30:00")))],
+            Some(logs.path()),
+            None,
+            today,
+            &wide,
+        );
+        assert_eq!(p.suggestions[0].source, DateSource::Log);
+        // A clip of another day keeps its clock without a warning.
+        let other = Local
+            .with_ymd_and_hms(2026, 9, 27, 10, 0, 0)
+            .unwrap()
+            .with_timezone(&Utc);
+        let p = plan_dates(
+            &[clocked("DJI_1.MP4", 200.0, Some(other))],
+            Some(logs.path()),
+            NaiveDate::from_ymd_opt(2026, 9, 28),
+            today,
+            &tun,
+        );
+        assert_eq!(p.suggestions[0].source, DateSource::Clip);
+        assert!(p.warnings.is_empty());
+        // A reset clock: the log dates it, as for analog.
+        let reset = Local
+            .with_ymd_and_hms(2000, 1, 1, 0, 0, 0)
+            .unwrap()
+            .with_timezone(&Utc);
+        let p = run(Some(reset));
+        assert_eq!(p.suggestions[0].source, DateSource::Log);
+        assert_eq!(p.warnings.len(), 1);
     }
 
     /// A clip's fingerprint is persisted (`app.quadcam.source`) and compared on every card

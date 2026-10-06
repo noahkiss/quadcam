@@ -124,6 +124,8 @@ pub struct Status {
 #[derive(Debug, Clone, Serialize, specta::Type)]
 pub struct SessionBrief {
     pub source: PathBuf,
+    /// The video system of the clips.
+    pub kind: crate::sources::SourceKind,
     pub card: Option<String>,
     pub clips: usize,
     pub analysed: bool,
@@ -323,6 +325,7 @@ impl Core {
             let sum = s.summary();
             SessionBrief {
                 source: s.source.clone(),
+                kind: s.kind,
                 card: s.card.as_ref().map(|c| c.whole_disk.clone()),
                 clips: s.clips.len(),
                 analysed: s.analysed,

@@ -361,18 +361,17 @@ impl Core {
     /// Everything the confirm dialog names. Runs every guard; an Err means format stays locked.
     pub fn format_plan(&self, label: Option<&str>) -> Result<FormatPlan> {
         let s = self.current()?;
-        s.format_ready()?;
         // A source that does not offer formatting refuses here, before every other guard.
-        if let Some(c) = s
-            .clips
-            .iter()
-            .find(|c| !crate::sources::get(c.kind).card_policy().format_offered)
+        if let Some(kind) = std::iter::once(s.kind)
+            .chain(s.clips.iter().map(|c| c.kind))
+            .find(|k| !crate::sources::get(*k).card_policy().format_offered)
         {
             bail!(
-                "Refused: QuadCam does not format {:?} cards.",
-                crate::sources::get(c.kind).kind()
+                "Refused: QuadCam does not format {} cards; format them in the device.",
+                kind.label()
             );
         }
+        s.format_ready()?;
         let card = s
             .card
             .clone()

@@ -3,6 +3,7 @@
 //! code. At export this becomes Apple QuickTime metadata (see `qtmeta`).
 
 use crate::moments::{Moment, MomentKind};
+use crate::sources::SourceKind;
 use anyhow::{bail, Result};
 use chrono::{DateTime, Local, Utc};
 use serde::{Deserialize, Serialize};
@@ -16,9 +17,9 @@ pub struct Place {
 }
 
 /// One aircraft setup, kept in the settings file. Every field is optional. A clip dated
-/// from a radio log picks the profile whose `edgetx_models` holds the log's model name.
-/// A later digital video source (an MP4 with `.srt` or `.osd` sidecars) can hang off a
-/// profile through `video_system`; only analog DVR files are read today.
+/// from a radio log picks the profile whose `edgetx_models` holds the log's model name;
+/// without one, the first profile whose `video_system` names the clip's source (`DJI`,
+/// `analog`).
 #[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, specta::Type)]
 #[serde(default)]
 pub struct Profile {
@@ -28,7 +29,8 @@ pub struct Profile {
     /// The recorder: goggles or DVR maker and model. Written as the camera make and model.
     pub camera_make: String,
     pub camera_model: String,
-    /// A label: analog, DJI, Walksnail, HDZero.
+    /// A label: analog, DJI, Walksnail, HDZero. A clip of that source picks the profile
+    /// when nothing more specific does.
     pub video_system: String,
     pub keywords: Vec<String>,
     pub author: String,
@@ -133,10 +135,11 @@ pub struct Resolved {
 }
 
 /// The profile for a clip: its own choice, else the one mapped to the log's EdgeTX model,
-/// else the session default.
+/// else the first whose `video_system` is the clip's source, else the session default.
 pub fn pick_profile<'a>(
     meta: &ClipMeta,
     log_model: Option<&str>,
+    kind: SourceKind,
     profiles: &'a [Profile],
     default: Option<&str>,
 ) -> Option<&'a Profile> {
@@ -156,6 +159,12 @@ pub fn pick_profile<'a>(
         }) {
             return Some(p);
         }
+    }
+    if let Some(p) = profiles
+        .iter()
+        .find(|p| p.video_system.trim().eq_ignore_ascii_case(kind.label()))
+    {
+        return Some(p);
     }
     default.and_then(by_name)
 }
@@ -178,6 +187,7 @@ pub fn clean_keywords<'a>(words: impl IntoIterator<Item = &'a str>) -> Vec<Strin
 pub fn resolve(
     meta: &ClipMeta,
     log_model: Option<&str>,
+    kind: SourceKind,
     profiles: &[Profile],
     default_profile: Option<&str>,
     places: &[Place],
@@ -185,7 +195,7 @@ pub fn resolve(
     duration: f64,
     flight: Option<&FlightStats>,
 ) -> Resolved {
-    let p = pick_profile(meta, log_model, profiles, default_profile);
+    let p = pick_profile(meta, log_model, kind, profiles, default_profile);
     let place = || {
         let name = p?.place.as_deref()?;
         let pl = places
@@ -297,28 +307,79 @@ mod tests {
     fn profile_choice_order() {
         let ps = profiles();
         let m = ClipMeta::default();
+        let a = SourceKind::Analog;
         assert_eq!(
-            pick_profile(&m, Some("air65 ii"), &ps, Some("Five"))
+            pick_profile(&m, Some("air65 ii"), a, &ps, Some("Five"))
                 .unwrap()
                 .name,
             "Whoop"
         );
         assert_eq!(
-            pick_profile(&m, Some("Other"), &ps, Some("Five"))
+            pick_profile(&m, Some("Other"), a, &ps, Some("Five"))
                 .unwrap()
                 .name,
             "Five"
         );
-        assert!(pick_profile(&m, None, &ps, None).is_none());
+        assert!(pick_profile(&m, None, a, &ps, None).is_none());
         let own = ClipMeta {
             profile: Some("five".into()),
             ..Default::default()
         };
         assert_eq!(
-            pick_profile(&own, Some("AIR65 II"), &ps, None)
+            pick_profile(&own, Some("AIR65 II"), a, &ps, None)
                 .unwrap()
                 .name,
             "Five"
+        );
+    }
+
+    #[test]
+    fn profile_by_video_system() {
+        let mut ps = profiles();
+        ps.push(Profile {
+            name: "Digital".into(),
+            video_system: " dji ".into(),
+            edgetx_models: vec!["DIGI".into()],
+            ..Default::default()
+        });
+        ps.push(Profile {
+            name: "Tiny".into(),
+            video_system: "Analog".into(),
+            ..Default::default()
+        });
+        let m = ClipMeta::default();
+        let pick = |own: Option<&str>, log: Option<&str>, kind, default: Option<&str>| {
+            let meta = ClipMeta {
+                profile: own.map(str::to_string),
+                ..m.clone()
+            };
+            pick_profile(&meta, log, kind, &ps, default).map(|p| p.name.clone())
+        };
+        let (dji, analog) = (SourceKind::Dji, SourceKind::Analog);
+        // The source kind beats the default...
+        assert_eq!(
+            pick(None, None, dji, Some("Five")).as_deref(),
+            Some("Digital")
+        );
+        assert_eq!(
+            pick(None, None, analog, Some("Five")).as_deref(),
+            Some("Tiny")
+        );
+        // ...but the log's model and the clip's own choice beat the source kind.
+        assert_eq!(
+            pick(None, Some("AIR65 II"), dji, None).as_deref(),
+            Some("Whoop")
+        );
+        assert_eq!(
+            pick(Some("Five"), Some("DIGI"), dji, None).as_deref(),
+            Some("Five")
+        );
+        // No profile for the source: the default.
+        ps.retain(|p| p.name != "Tiny");
+        let meta = ClipMeta::default();
+        assert_eq!(
+            pick_profile(&meta, None, analog, &ps, Some("Five")).map(|p| p.name.as_str()),
+            Some("Five")
         );
     }
 
@@ -357,6 +418,7 @@ mod tests {
         let r = resolve(
             &meta,
             Some("AIR65 II"),
+            SourceKind::Analog,
             &profiles(),
             None,
             &places,
