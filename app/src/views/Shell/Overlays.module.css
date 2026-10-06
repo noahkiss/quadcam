@@ -41,3 +41,7 @@
 .drop span {
   color: var(--muted);
 }
+
+.askText {
+  white-space: pre-line;
+}

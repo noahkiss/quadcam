@@ -74,6 +74,7 @@ quadcam-cli library edit <id> --date 2026-09-28 --time 18:30   # moves the files
 quadcam-cli library edit <id> --profile Whoop     # rewrites make, model, aircraft and keywords
 quadcam-cli library cut <id> 12-18 1:02-1:10 --export   # set the cuts and write the new ones
 quadcam-cli library apply-name-format             # rename clips to the name_date_format setting
+quadcam-cli library match-logs --logs /path/to/LOGS   # report which clips match a radio log; --apply writes flight numbers and moments
 quadcam-cli library trash <id>                    # clip, cuts and original to the Trash
 quadcam-cli library photos <id> --album Drone
 ```

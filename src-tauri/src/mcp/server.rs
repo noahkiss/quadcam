@@ -318,7 +318,7 @@ impl<B: Backend> Server<B> {
             "quadcam_library_files" => {
                 let x: LibraryFilesArgs = args(a)?;
                 let action = x.action
-                    .context("action is required: cuts, export_cuts, trash, photos, rebuild or apply_name_format")?;
+                    .context("action is required: cuts, export_cuts, trash, photos, rebuild, apply_name_format or match_logs")?;
                 let ids: Vec<String> = x.ids.unwrap_or_default();
                 let one = || -> Result<String> {
                     match ids.as_slice() {
@@ -394,6 +394,30 @@ impl<B: Backend> Server<B> {
                             .backend
                             .call("library_photos", json!({"ids": ids, "album": x.album}))?;
                         Ok((vec![text(photos_line(&json!({"Ok": r.clone()})))], r))
+                    }
+                    "match_logs" => {
+                        let r = self.backend.call(
+                            "library_match_logs",
+                            json!({"ids": ids, "logs": x.log_dir, "day": x.day, "apply": x.apply.unwrap_or(false)}),
+                        )?;
+                        let mut lines: Vec<String> = r["warnings"]
+                            .as_array()
+                            .into_iter()
+                            .flatten()
+                            .filter_map(Value::as_str)
+                            .map(|w| format!("Warning: {w}"))
+                            .collect();
+                        for c in r["clips"].as_array().into_iter().flatten() {
+                            lines.push(format!(
+                                "{} {}: {}{}{}",
+                                c["id"].as_str().unwrap_or(""),
+                                c["path"].as_str().unwrap_or(""),
+                                c["badge"].as_str().unwrap_or(""),
+                                c["reason"].as_str().map(|w| format!(" ({w})")).unwrap_or_default(),
+                                if c["applied"] == true { "; written" } else { "" }
+                            ));
+                        }
+                        Ok((vec![text(lines.join("\n"))], r))
                     }
                     "apply_name_format" => {
                         let r = self.backend.call(

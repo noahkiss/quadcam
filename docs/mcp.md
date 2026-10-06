@@ -44,7 +44,7 @@ The server has 16 tools.
 |---|---|
 | `quadcam_library` | Lists and searches the clips already in the library (read-only) |
 | `quadcam_library_edit` | Changes library clips: rating, flag, name, note, keywords, author, place, aircraft, date, time |
-| `quadcam_library_files` | Sets and writes cuts, moves clips to the Trash, adds them to Photos, rebuilds the index, renames clips to the file-name date format |
+| `quadcam_library_files` | Sets and writes cuts, moves clips to the Trash, adds them to Photos, rebuilds the index, renames clips to the file-name date format, matches radio logs to library clips |
 
 **Setup:**
 

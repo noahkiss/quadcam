@@ -35,14 +35,16 @@ QuadCam reads both formats. It takes a clip's date from the file's metadata firs
 
 Analog DVRs have no clock, so their files carry no useful date. DJI units have one: the file name holds the unit's local time when the clip started. On import, each clip gets a date from the best source available:
 
-- **Radio log:** if you point QuadCam at EdgeTX logs, it matches armed flight segments to clips.
+- **Radio log:** if you point QuadCam at EdgeTX logs, it matches armed flight segments ("packs") to clips. See [Radio logs](metadata.md#radio-logs) for how.
 - **Clip clock:** a DJI clip's own clock.
 - **Import date:** today, when nothing else dates the clip.
 - **Edited:** any date you type.
 
-A radio log dates a DJI clip only when the log starts within 5 minutes of the clip clock. The log then also gives the clip its moments, flight numbers and EdgeTX model. A log further away leaves the clip clock in place, and the Review step shows a warning with the gap. **Clip clock skew (s)** under **Log matching** in Settings > Import sets the window, in seconds (default 300). In the settings file it is `clock_skew_s` in `tunables`.
+A radio log dates a DJI clip only when the log starts within 5 minutes of the clip clock. A log further away leaves the clip clock in place, marks the match "likely", and the Review step shows a warning with the gap. Either way, a matched log gives the clip its moments, flight numbers and EdgeTX model. **Clip clock skew (s)** under **Log matching** in Settings > Import sets the window, in seconds (default 300). In the settings file it is `clock_skew_s` in `tunables`.
 
 A clip clock before 2015 or after tomorrow means the unit's clock reset. QuadCam ignores it, shows a warning, and dates the clip as it dates an analog clip.
+
+A log written while the radio's clock was reset (dated `2000-01-01`) still matches by pack lengths. It gives flight numbers and moments, but no date: the clip keeps its own.
 
 A clip's time of day comes from its radio log or its clip clock, or you type it. Without one, the creation date holds noon, and QuadCam shows no time.
 

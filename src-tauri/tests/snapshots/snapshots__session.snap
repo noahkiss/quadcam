@@ -124,6 +124,7 @@ expression: session
       "log_interval_s": null,
       "log_model": null,
       "log_offset_s": 0.0,
+      "match_reason": null,
       "meta": {
         "author": null,
         "keywords": [],
@@ -160,6 +161,7 @@ expression: session
       "log_interval_s": null,
       "log_model": null,
       "log_offset_s": 0.0,
+      "match_reason": null,
       "meta": {
         "author": null,
         "keywords": [
@@ -194,6 +196,7 @@ expression: session
       "log_interval_s": null,
       "log_model": null,
       "log_offset_s": 0.0,
+      "match_reason": null,
       "meta": {
         "author": null,
         "keywords": [],

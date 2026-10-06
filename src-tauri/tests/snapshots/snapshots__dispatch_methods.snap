@@ -30,6 +30,7 @@ expression: "Core::METHODS"
   "library_untrash",
   "library_photos",
   "library_apply_name_format",
+  "library_match_logs",
   "library_rescan",
   "library_preview",
   "library_strips",

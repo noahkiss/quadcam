@@ -10,6 +10,7 @@ pub mod disk;
 pub mod geocode;
 pub mod identity;
 pub mod library;
+pub mod logmatch;
 pub mod logs;
 pub mod mcp;
 pub mod media;
@@ -314,6 +315,7 @@ pub fn specta_builder() -> tauri_specta::Builder<tauri::Wry> {
             c::library_untrash,
             c::library_photos,
             c::library_apply_name_format,
+            c::library_match_logs,
             c::library_rescan,
             c::library_preview,
             c::library_strips,

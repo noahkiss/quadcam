@@ -54,6 +54,7 @@ export const api = {
   libraryPhotos: (ids: string[], album: string) => ok(commands.libraryPhotos({ ids, album })),
   applyNameFormat: () => ok(commands.libraryApplyNameFormat({})),
   rebuild: () => ok(commands.libraryRebuild()),
+  matchLogs: (apply: boolean, ids: string[] = []) => ok(commands.libraryMatchLogs({ ids, logs: null, day: null, apply })),
   rescan: (id: string) => ok(commands.libraryRescan({ id })),
   libraryPreview: (id: string) => ok(commands.libraryPreview({ id })),
   strips: () => ok(commands.libraryStrips({})),

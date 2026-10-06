@@ -85,6 +85,11 @@ export const commands = {
 	libraryPhotos: (params: LibraryPhotosParams) => typedError<ShareReport, string>(__TAURI_INVOKE("library_photos", { params })),
 	/**  Renames clips to the file-name date format (every clip when `ids` is empty). */
 	libraryApplyNameFormat: (params: IdsParams) => typedError<RenameReport, string>(__TAURI_INVOKE("library_apply_name_format", { params })),
+	/**
+	 *  Matches radio logs to library clips by shape; writes flight numbers and moments only
+	 *  with `apply`.
+	 */
+	libraryMatchLogs: (params: LibMatchParams) => typedError<LibMatchReport, string>(__TAURI_INVOKE("library_match_logs", { params })),
 	/**  Finds dead air again in a clip. */
 	libraryRescan: (params: ClipIdParams) => typedError<LibClip_Serialize, string>(__TAURI_INVOKE("library_rescan", { params })),
 	/**  A file the web view can play. */
@@ -277,6 +282,8 @@ export type ClipPlan = {
 	/**  The EdgeTX model of the matched log; it picks the profile when the clip has none. */
 	log_model?: string | null,
 	flight?: FlightStats | null,
+	/**  Why the radio log matched, or how sure the match is. */
+	match_reason?: string | null,
 };
 
 export type ClipResult = {
@@ -691,6 +698,49 @@ export type LibItem_Serialize = {
 	no_picture: boolean,
 	last_import: boolean,
 } & LibClip_Serialize;
+
+/**  One clip's result. */
+export type LibMatch = {
+	id: string,
+	path: string,
+	duration: number | null,
+	badge: Badge,
+	/**  The log day matched against. */
+	log_day: string | null,
+	/**  The log's start date and time, when the radio clock is believable. */
+	log_date: string | null,
+	log_time: string | null,
+	log_model: string | null,
+	packs: number,
+	reason: string | null,
+	flight: FlightStats | null,
+	moments: number,
+	/**  The flight numbers and moments were written into the file. */
+	applied: boolean,
+};
+
+/**  `library_match_logs`: which clips, which logs, and whether to write the result. */
+export type LibMatchParams = {
+	/**  Library clip ids; empty means every clip (cuts excluded). */
+	ids?: string[],
+	/**  The log folder; the `logDir` setting when missing. */
+	logs?: string | null,
+	/**
+	 *  One log day for every clip. Without it, each clip is matched to the logs of its own
+	 *  day, and clips with none to the newest reset-clock day (`2000-01-01`).
+	 */
+	day?: string | null,
+	/**
+	 *  Write the flight numbers and moments into the matched clips' files. Without it,
+	 *  nothing changes. Writes "matched" clips, and "likely" ones only when named in `ids`.
+	 */
+	apply?: boolean,
+};
+
+export type LibMatchReport = {
+	clips: LibMatch[],
+	warnings: string[],
+};
 
 /**
  *  Every change one call may make to library clips: stars and flag, a new name (one clip

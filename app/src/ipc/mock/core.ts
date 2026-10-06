@@ -24,7 +24,7 @@ import { location as normLocation, spans as normSpans } from "../normalize";
 /** `Core::dispatch` methods, each also a typed Tauri command of the same name. */
 const DISPATCH = new Set([
   "library", "library_rate", "library_edit", "library_rename", "library_cuts", "library_export_cuts", "library_trash", "library_untrash",
-  "library_photos", "library_apply_name_format", "library_rebuild", "library_rescan", "library_preview", "library_strips", "card_status",
+  "library_photos", "library_apply_name_format", "library_match_logs", "library_rebuild", "library_rescan", "library_preview", "library_strips", "card_status",
   "settings", "settings_set", "place_search", "place_save", "session_cuts", "profiles",
 ]);
 
@@ -185,6 +185,11 @@ export class MockCore {
         return this.libraryPhotos(p.ids as string[], (p.album as string) ?? "");
       case "library_apply_name_format":
         return { renamed: [], unchanged: this.lib.clips.length, skipped: [], failed: [] };
+      case "library_match_logs":
+        return {
+          clips: this.lib.clips.map((c) => ({ id: c.id, path: c.path, duration: c.duration, badge: "unmatched", log_day: null, log_date: null, log_time: null, log_model: null, packs: 0, reason: null, flight: null, moments: 0, applied: false })),
+          warnings: [],
+        };
       case "library_rebuild":
         this.emit("library-task", { task: "rebuild", done: 0, total: 1 });
         this.emit("library-task", { task: "rebuild", done: 1, total: 1 });

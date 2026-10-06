@@ -112,6 +112,7 @@ export function plan(p: G.ClipPlan): ClipPlan {
     cuts: spans(p.cuts),
     meta: meta(p.meta),
     log_model: p.log_model ?? null,
+    match_reason: p.match_reason ?? null,
     flight: flight(p.flight),
   };
 }

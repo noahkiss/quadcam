@@ -49,7 +49,7 @@ function AskDialog() {
         </>
       }
     >
-      {req?.text && <p>{req.text}</p>}
+      {req?.text && <p className={styles.askText}>{req.text}</p>}
       {req?.input != null && <input ref={input} className={styles.askInput} type="text" defaultValue={req.input} aria-label={req.title} spellCheck={false} />}
     </Dialog>
   );

@@ -298,6 +298,21 @@ enum LibCmd {
     /// Rename clips to the name date format setting (YYYY-MM-DD or YY.MM.DD), with their
     /// cuts and originals. Default: every clip. Folders stay as they are.
     ApplyNameFormat { ids: Vec<String> },
+    /// Match radio logs to library clips by shape. Reports only; --apply writes the flight
+    /// numbers and moments of "matched" clips (and "likely" ones named by id).
+    MatchLogs {
+        /// Clip ids. Default: every clip.
+        ids: Vec<String>,
+        /// The log folder (default: the logDir setting).
+        #[arg(long)]
+        logs: Option<PathBuf>,
+        /// One log day for every clip (YYYY-MM-DD). Default: each clip's own day, else a
+        /// reset-clock day.
+        #[arg(long)]
+        day: Option<NaiveDate>,
+        #[arg(long)]
+        apply: bool,
+    },
     /// Move clips, with their cuts and originals, to the Trash.
     Trash {
         #[arg(required = true)]
@@ -1070,6 +1085,20 @@ fn library(core: &Core, cmd: LibCmd) -> Result<Value> {
         LibCmd::ApplyNameFormat { ids } => serde_json::to_value(call::library_apply_name_format(
             core,
             api::IdsParams { ids },
+        )?)?,
+        LibCmd::MatchLogs {
+            ids,
+            logs,
+            day,
+            apply,
+        } => serde_json::to_value(call::library_match_logs(
+            core,
+            quadcam_lib::core::LibMatchParams {
+                ids,
+                logs,
+                day,
+                apply,
+            },
         )?)?,
         LibCmd::Trash { ids } => {
             serde_json::to_value(call::library_trash(core, api::IdsParams { ids })?)?

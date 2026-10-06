@@ -19,8 +19,9 @@ pub use session::*;
 pub use setup::*;
 
 use crate::core::{
-    CardStatus, Core, FormatPlan, FormatRequest, ImportOptions, ImportOutcome, LibraryView,
-    PlaceRemoved, RebuildReport, RenameReport, SettingsView, Status, TrashReport, VerifyReport,
+    CardStatus, Core, FormatPlan, FormatRequest, ImportOptions, ImportOutcome, LibMatchParams,
+    LibMatchReport, LibraryView, PlaceRemoved, RebuildReport, RenameReport, SettingsView, Status,
+    TrashReport, VerifyReport,
 };
 use crate::disk::Volume;
 use crate::geocode::GeoResult;
@@ -184,6 +185,9 @@ api! {
     /// Renames clips to the file-name date format (every clip when `ids` is empty).
     library_apply_name_format(params: IdsParams) -> RenameReport =
         |c| c.library_apply_name_format((!params.ids.is_empty()).then_some(params.ids));
+    /// Matches radio logs to library clips by shape; writes flight numbers and moments only
+    /// with `apply`.
+    library_match_logs(params: LibMatchParams) -> LibMatchReport = |c| c.library_match_logs(&params);
     /// Finds dead air again in a clip.
     library_rescan(params: ClipIdParams) -> LibClip = |c| c.library_rescan(&params.id);
     /// A file the web view can play.
