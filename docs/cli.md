@@ -11,8 +11,8 @@ Each run continues one import session. QuadCam saves the session to `~/Library/C
 ## Import
 
 ```bash
-quadcam-cli cards                         # detected cards and radio log sources
-quadcam-cli scan /Volumes/NO\ NAME        # list clips, copy nothing
+quadcam-cli cards                         # detected cards (with their source) and radio log sources
+quadcam-cli scan /Volumes/NO\ NAME        # the source and its clips; copies nothing
 quadcam-cli stage /Volumes/NO\ NAME       # copy clips to staging, start a session
 quadcam-cli analyze                       # probe, recover, make thumbnails
 quadcam-cli show                          # the session: clips, plans, results
@@ -39,7 +39,9 @@ quadcam-cli format --device /dev/diskN --volume-uuid <uuid> --yes
 
 `clear` deletes the session file. The staged copies stay.
 
-`format` refuses with exit code 3 unless every guard passes. `--device` (the card's whole disk), `--volume-uuid` and `--yes` must all match the staged card. See [Format safety](format-safety.md).
+`cards` and `scan` name each source: `analog` or `dji`.
+
+`format` refuses with exit code 3 unless every guard passes. It always refuses a DJI session. `--device` (the card's whole disk), `--volume-uuid` and `--yes` must all match the staged card. See [Format safety](format-safety.md).
 
 ### Plan files
 

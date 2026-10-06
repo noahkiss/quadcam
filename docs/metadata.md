@@ -6,7 +6,7 @@ Every file QuadCam writes carries QuickTime metadata that Apple Photos and exift
 
 In the Import sheet, select a clip. The panel on the right shows its preview, its timeline and three tabs: **Details**, **Flight** and **File**. Use **Details**:
 
-- **Aircraft**: the profile of the gear the clip was flown with. **Automatic** picks the profile whose EdgeTX model names include the model of the clip's radio log. If none matches, it picks the default profile.
+- **Aircraft**: the profile of the gear the clip was flown with. **Automatic** picks the profile whose EdgeTX model names include the model of the clip's radio log. If none matches, it picks the first profile whose **Video system** names the clip's source (`Analog` or `DJI`). If none matches either, it picks the default profile.
 - **Place**: type a saved place (the list filters as you type), or a latitude and longitude such as `40.6892, -74.0445`. To keep a typed location for next time, name it and select **Save as place**.
 - **Keywords** and **Author**: QuadCam offers recent values as you type. Notes in the clip list work the same way.
 - **Apply to all clips** copies the clip's aircraft, place, keywords and author to every clip.
@@ -20,21 +20,23 @@ In the library, open a clip and use its **Details** tab. See [The library](libra
 | What | QuickTime key | Where the value comes from |
 |---|---|---|
 | Location | `com.apple.quicktime.location.ISO6709`, and `©xyz` | The clip, else the profile's default place |
-| Creation date | `com.apple.quicktime.creationdate` | The clip's date and time of day (from the radio log, or set by hand; noon otherwise), with your time zone's UTC offset, so Photos shows the local time |
+| Creation date | `com.apple.quicktime.creationdate` | The clip's date and time of day (from the radio log, the clip clock, or set by hand; noon otherwise), with your time zone's UTC offset, so Photos shows the local time |
 | Camera make and model | `com.apple.quicktime.make`, `.model` | The profile (your goggles or DVR) |
 | Software | `com.apple.quicktime.software` | `QuadCam <version>` |
-| Title, description, comment | `com.apple.quicktime.title`, `.description`, `.comment` | The short name, the DVR file and date source, the note |
+| Title, description, comment | `com.apple.quicktime.title`, `.description`, `.comment` | The short name, the source file and date source (`DVR PICT0001.AVI; date source: radio log`, `DJI DJI_20261004183012_0001_D.MP4; date source: clip clock`), the note |
 | Author | `com.apple.quicktime.author` | The clip, else the profile |
 | Keywords | `com.apple.quicktime.keywords` | `FPV`, the profile's, the clip's, and the moment kinds found (roll, flip, punch-out, dive) |
 | Aircraft, video system | `app.quadcam.aircraft`, `app.quadcam.video_system` | The profile |
 | Flight numbers | `app.quadcam.flight`, `app.quadcam.stats` | The matched radio log: armed time, packs, lowest receiver voltage, link quality and RSSI, highest throttle |
-| Library | `app.quadcam.source`, `.dvr`, `.import`, `.place`, `.profile`, `.moments`, `.keep`, `.cut` | The DVR content fingerprint and file name, the import, the place and aircraft names, the radio-log moments, the keep ranges, a cut's range |
+| Library | `app.quadcam.source`, `.dvr`, `.import`, `.place`, `.profile`, `.moments`, `.keep`, `.cut` | The source file's content fingerprint and file name, the import, the place and aircraft names, the radio-log moments, the keep ranges, a cut's range |
 | Rating, flag, Photos | `app.quadcam.rating`, `.flag`, `.photos` | Set in the library |
-| Time source | `app.quadcam.time` | `log` or `manual` when the clip has a time of day. Without one, QuadCam shows no time (the creation date holds noon) |
+| Time source | `app.quadcam.time` | `log`, `clip` (the DJI clip clock) or `manual` when the clip has a time of day. Without one, QuadCam shows no time (the creation date holds noon) |
 
 QuadCam reads every key back before a file counts as verified. It reads them with ffprobe, and the location also with exiftool when exiftool is installed.
 
-ffmpeg cannot write these keys where Apple's frameworks find them. QuadCam adds them to the file itself after ffmpeg finishes. One side effect: MP4 files no longer have the index at the front (`+faststart`). That matters only for streaming from a web server. Local players and Photos do not care.
+ffmpeg cannot write these keys where Apple's frameworks find them. QuadCam adds them to the file itself after ffmpeg finishes.
+
+A DJI clip as MP4 is a byte copy of the original with these keys added. It keeps every stream: the video, the DJI data streams that Gyroflow reads, and the cover picture. As MOV, ffmpeg copies the streams into a new container. The data streams stay, but the cover picture does not. QuadCam never re-encodes a full DJI clip. One side effect: MP4 files no longer have the index at the front (`+faststart`). That matters only for streaming from a web server. Local players and Photos do not care.
 
 ### What Photos reads
 

@@ -32,6 +32,8 @@ Dead air is any stretch of 3 seconds or more that shows one of these:
 
 A shorter breakup inside a flight stays in.
 
+QuadCam does not look for dead air in DJI clips. Blue screen and static are analog signals.
+
 A black-and-white camera reads as colourless breakup. For one, set `MONO_MAX_SAT` in `moments::tune` to 0.
 
 Dead-air detection needs no radio log. QuadCam samples two frames per second at 64 × 48 pixels, and decodes only those frames. A 10-minute, 1.4 GB clip takes about 4 seconds. QuadCam times each sample by the frame's own timestamp, because DVRs drop frames.
@@ -81,6 +83,7 @@ On import, each cut becomes its own file next to the clip: `YYYY-MM-DD_<name>_cu
 
 - QuadCam cuts from the original DVR file, not from the converted one. MJPEG has a keyframe on every frame, so each cut starts and ends on the exact frame.
 - MP4 cuts are re-encoded like the full clip. MOV cuts copy the original frames.
+- A DJI clip's MP4 cut is re-encoded too. Its MOV cut copies the H.264 or H.265 frames, so it starts at the keyframe before the cut. Cuts keep only the video and audio, not the DJI data streams.
 - QuadCam verifies every cut: streams, frame count, duration, and the metadata it wrote.
 - QuadCam does not write a verified cut again. You can add cuts later and import again.
 - **Add to Photos** adds a clip's cuts with it.
