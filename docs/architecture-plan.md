@@ -586,6 +586,8 @@ restarting at 00:00 on each power-on) could not match at all.
   newest reset-clock day; `Want::day` keeps clips of different days out of one power-on.
   It reports by default; `apply` writes moments, stats and the flight line into matched
   clips (likely ones only when named) and never redates.
-- **Open.** A DVR that splits one recording at 10 minutes cuts a pack between two clips;
-  the matcher cannot split a pack, so the second clip often reads `likely`.
+- **Split recordings.** A DVR that splits one recording at 10 minutes used to cut a pack
+  between two clips. Since 0.6.3, `join` makes the files one clip before matching (an
+  `ffconcat` source), so the pack stays whole. Library clips imported as separate files are
+  not rejoined.
 

@@ -71,6 +71,29 @@ QuadCam 0.4 and earlier used other ids. When QuadCam loads an older index, it mo
 
 QuadCam writes no media file during this step.
 
+### Joined recordings
+
+An analog DVR splits a long recording into files of a fixed length. A Fat Shark Echo writes about 600 seconds per file: `PICT0001.AVI`, `PICT0002.AVI`, and so on. The next file starts where the last one ended.
+
+On import, QuadCam joins such files into one clip. It joins two files only when all of these are true:
+
+- Both are analog files in the same folder, with the same name and the next number (`PICT0001.AVI`, then `PICT0002.AVI`).
+- The first file is whole and is 600 seconds long, give or take 1 second. The next file may be any length, and may be cut off at its end.
+- Both have the same picture size, frame rate and streams.
+- The file times, when the DVR keeps a clock, do not contradict it.
+
+When QuadCam is not sure, for example when the first file is 596 seconds long, it keeps the files separate.
+
+- The Review step shows a joined clip as one row with its files. **Keep files separate** imports them as clips of their own. **Join N files** joins them again. You cannot change it after the clip is in the library.
+- **Join split recordings** in Settings > Import turns joining on or off. It is on by default. The command line takes `stage --no-join` for one import, and `import --separate ID` or `import --join ID` for one clip. An agent passes `join` to `quadcam_load_clips`, or `joined` to `quadcam_suggest`.
+- QuadCam converts every file into one output file and verifies it against all of them together: frame count and duration.
+- The radio log is matched to the whole recording, so a pack that runs across a file boundary stays one pack. Moments and dead air use the joined timeline.
+- The clip keeps the identity of every file. The output names the later files in `app.quadcam.parts`, and the card's "N new" count counts every file as imported.
+- **Keep originals** keeps every file: the first as `<name>.avi`, the next as `<name>.part2.avi`, and so on. They move and rename with the clip.
+- **Delete clips after import** deletes the files of a joined clip only when the joined output verifies again.
+
+Clips imported as separate files before QuadCam 0.6.3 stay separate. QuadCam does not join clips already in the library.
+
 ### Existing exports
 
 If the library folder already holds videos that are not in the index, the library shows a **Scan folder** banner. These can come from an older QuadCam or from another tool. A scan reads the files where they are. It moves nothing and writes nothing. If you rate or edit such a clip later, QuadCam writes into that clip's file.

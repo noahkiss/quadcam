@@ -27,8 +27,8 @@ In the library, open a clip and use its **Details** tab. See [The library](libra
 | Author | `com.apple.quicktime.author` | The clip, else the profile |
 | Keywords | `com.apple.quicktime.keywords` | `FPV`, the profile's, the clip's, and the moment kinds found (roll, flip, punch-out, dive) |
 | Aircraft, video system | `app.quadcam.aircraft`, `app.quadcam.video_system` | The profile |
-| Flight numbers | `app.quadcam.flight`, `app.quadcam.stats` | The matched radio log: armed time, packs, lowest receiver voltage, link quality and RSSI, highest throttle |
-| Library | `app.quadcam.source`, `.dvr`, `.import`, `.place`, `.profile`, `.moments`, `.keep`, `.cut` | The source file's content fingerprint and file name, the import, the place and aircraft names, the radio-log moments, the keep ranges, a cut's range |
+| Flight numbers | `app.quadcam.flight`, `app.quadcam.stats` | The matched radio log: armed time, packs and each pack's time in the clip, lowest receiver voltage, link quality and RSSI, highest throttle |
+| Library | `app.quadcam.source`, `.dvr`, `.parts`, `.import`, `.place`, `.profile`, `.moments`, `.keep`, `.cut` | The source file's content fingerprint and file name, the later files of a [joined recording](library.md#joined-recordings), the import, the place and aircraft names, the radio-log moments, the keep ranges, a cut's range |
 | Rating, flag, Photos | `app.quadcam.rating`, `.flag`, `.photos` | Set in the library |
 | Time source | `app.quadcam.time` | `log`, `clip` (the DJI clip clock) or `manual` when the clip has a time of day. Without one, QuadCam shows no time (the creation date holds noon) |
 

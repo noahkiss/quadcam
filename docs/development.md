@@ -58,6 +58,7 @@ QUADCAM_UPDATE_BINDINGS=1 cargo test --test bindings   # write app/src/bindings.
 - No test can reach your Photos library or your Trash. Under `cargo`, "Move to Trash" moves files into a temporary folder.
 - `test-clips/README.md` describes an optional local corpus of real clips and logs. `scripts/make-corpus.sh` builds its synthetic part, a DJI-like card (`synthetic/dji-card/`) included.
 - `tests/dji.rs` stages, dates, imports (MP4 copy and MOV remux) and verifies a synthetic DJI-like MP4 with a cover picture and an `.SRT` file.
+- `tests/join.rs` splits one synthetic 630 s recording with ffmpeg into a 600 s and a 30 s file, as an Echo does, and checks the joined import: one output with every frame, every file's identity in the library and the card count, kept originals, joining per run and per clip, and "Delete clips after import" on the joined output. No real Echo files are in the tests.
 - `tests/delete_clips.rs` checks "Delete clips after import" on temp folders: only verified clip files go, every other file stays, the setting off deletes nothing, a run can turn it off, and nothing in the core, CLI or MCP turns it on.
 
 ### Frontend

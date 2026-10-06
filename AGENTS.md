@@ -19,7 +19,7 @@ README and `docs/`. Personal preferences go in the app's settings file on the ma
 | Path | Holds |
 |---|---|
 | `app/` | The frontend: React + TypeScript + Vite (pnpm, Node pinned in `.node-version`). Builds to `app/dist`, which the app ships. `views/` (library, clip detail, import sheet, settings), `components/` (with `trim/`, the one trim editor, used by clip detail and the import review), `store/`, `actions/`, `ipc/`. Icons and fonts are inlined or bundled so the app works offline |
-| `src-tauri/src/` | Rust core. `core/` (`Core`) owns the session and the library index and is the one surface every front end drives: `mod.rs` (state, locking, `Hooks`), `import.rs` (stage, analyse, dates, import, verify, delete clips after import, format), `library.rs` (the index, list, rate, edit, rename, redate), `cuts.rs` (session and library cut lists), `files.rs` (Photos, previews, strips, Trash), `rematch.rs` (radio logs matched again to library clips) and `setup.rs` (settings, places, profiles). `api/` is the one method table: each row names a method, its params and result types and the `Core` call, and `api!` makes `Core::dispatch` (socket, MCP) and one typed Tauri command per method from it; `api/events.rs` holds the typed events. `lib.rs` holds the GUI's own Tauri commands and `specta_builder`, which tauri-specta exports to `app/src/bindings.ts`; `control.rs` the app's socket, `mcp/` the MCP server (`server.rs` the protocol and handlers, `params.rs` each tool's argument type, `tools.rs` the tool list with schemas derived from those types, `render.rs` the text answers), `bin/quadcam-cli.rs` the CLI (clap flags build the `api` params, and it calls the table's `api::call` functions). The logic modules (`scan`, `disk`, `media`, `logs`, `logmatch` (shape-first log matching: pack lengths, order and gaps, clocks as tie-breaks, EdgeTX models as a filter), `moments`, `metadata`, `qtmeta`, `naming`, `pipeline` (with `pipeline/import.rs`, the import run), `session`, `photos`, `library`, `trim`, `cuts` (the one cut writer), `sources` (the `Source` trait per video system, tried in `sources::all()` order; `sources/dji.rs` is DJI O4: `DCIM/DJI_*/` names, the clock in the name, `.SRT` sidecars, byte-copy MP4 export, a card never formatted; `sources/analog.rs` is the DVR: clip layout, half-written check and repair, encode plan, dead air, card policy), `trash`, `settings` (with `Defaults`, the effective settings), `paths` (every path under `$HOME`), `geocode`) run without Tauri |
+| `src-tauri/src/` | Rust core. `core/` (`Core`) owns the session and the library index and is the one surface every front end drives: `mod.rs` (state, locking, `Hooks`), `import.rs` (stage, analyse, dates, import, verify, delete clips after import, format), `library.rs` (the index, list, rate, edit, rename, redate), `cuts.rs` (session and library cut lists), `files.rs` (Photos, previews, strips, Trash), `rematch.rs` (radio logs matched again to library clips) and `setup.rs` (settings, places, profiles). `api/` is the one method table: each row names a method, its params and result types and the `Core` call, and `api!` makes `Core::dispatch` (socket, MCP) and one typed Tauri command per method from it; `api/events.rs` holds the typed events. `lib.rs` holds the GUI's own Tauri commands and `specta_builder`, which tauri-specta exports to `app/src/bindings.ts`; `control.rs` the app's socket, `mcp/` the MCP server (`server.rs` the protocol and handlers, `params.rs` each tool's argument type, `tools.rs` the tool list with schemas derived from those types, `render.rs` the text answers), `bin/quadcam-cli.rs` the CLI (clap flags build the `api` params, and it calls the table's `api::call` functions). The logic modules (`scan`, `disk`, `media`, `logs`, `logmatch` (shape-first log matching: pack lengths, order and gaps, clocks as tie-breaks, EdgeTX models as a filter), `moments`, `join` (recordings an analog DVR split into files: detection, the `ffconcat` source, the swap of joined and own values), `metadata`, `qtmeta`, `naming`, `pipeline` (with `pipeline/import.rs`, the import run), `session`, `photos`, `library`, `trim`, `cuts` (the one cut writer), `sources` (the `Source` trait per video system, tried in `sources::all()` order; `sources/dji.rs` is DJI O4: `DCIM/DJI_*/` names, the clock in the name, `.SRT` sidecars, byte-copy MP4 export, a card never formatted; `sources/analog.rs` is the DVR: clip layout, half-written check and repair, encode plan, dead air, card policy), `trash`, `settings` (with `Defaults`, the effective settings), `paths` (every path under `$HOME`), `geocode`) run without Tauri |
 | `src-tauri/Info.plist` | Photos usage strings, merged into the bundle's Info.plist |
 | `src-tauri/Entitlements.plist` | Hardened-runtime entitlements (Photos library) for every signature |
 | `src-tauri/tests/` | Integration tests on synthetic clips and FAT32 disk images |
@@ -139,6 +139,20 @@ GitHub (`noahkiss/quadcam`, public) is the only remote. Users install the cask
   `CutChange::Confirm` (GUI) or refuses the patch (CLI `--removed`, MCP `removed_cuts`).
   `cuts::write_cut` writes every cut file, session and library alike: it verifies frames and
   reads the QuickTime items back before the rename.
+- **Split by flight:** `FlightStats.pack_spans` holds each radio-log pack's armed range in
+  clip seconds (moved by the log offset). `trim::flight_cuts` makes one cut per pack, 2 s
+  each side at most half the gap, clamped to the clip, and refuses when there is nothing to
+  split; the cuts are added to the clip's list (`PlanPatch.split_by_flight`, `session_split`,
+  `library_split`), so no exported cut is dropped.
+- **Joined recordings:** at analysis `join::groups` finds analog files the DVR split (next
+  number, same folder and format, the first 600 +/- 1 s, file times that agree); unsure
+  stays apart. Each file stays a `Clip`; the first carries `Join` (its `source()` is an
+  `ffconcat` list in staging, read by ffmpeg as one input) and the later ones `part_of`.
+  Parts are left out of jobs and dating; `can_format` and `delete_clip_file` judge a part by
+  its first file's result and the joined probe. The output names the later files in
+  `app.quadcam.parts` (`LibClip.parts`, counted by `known_sources`); kept originals add
+  `<stem>.part2.avi`. Setting `join_split_recordings` (on), per run `SourceParams.join`, per
+  clip `PlanPatch.joined`.
 - **Previews:** after `Core::analyse`, the GUI's `Hooks::analysed` runs `Core::make_previews` on a
   thread. Session and library previews both go through `Core::proxy_once`, which makes one
   proxy at a time (a static lock), so a Play click on a clip being made waits for it and reuses
@@ -225,6 +239,9 @@ quadcam-cli --json import --name 0=backyard-loops --skip 3 --format mp4 --add-to
 quadcam-cli --json import --plan plan.json     # {"clips":[{"id":0,"name":"..","date":"..","time":"HH:MM","note":"..","skip":false}],"format":"mov","output_dir":".."}
 quadcam-cli --json import --time 0=18:30       # manual time of day (default noon)
 quadcam-cli --json import --keep-clips         # this run keeps the clips (delete_clips_after_import)
+quadcam-cli --json stage /Volumes/CARD --no-join   # split DVR recordings stay separate this run
+quadcam-cli --json import --separate 0         # clip 0's files (a split recording) import one by one
+quadcam-cli --json cut 0 --by-flight           # one cut per radio-log pack
 quadcam-cli --json verify                      # re-check the session's outputs
 quadcam-cli --json clear                       # forget the session, delete the session file
 quadcam-cli --json library list --group picks  # also rate, rebuild, rename, edit, cut, trash, photos
