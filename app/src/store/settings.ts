@@ -75,6 +75,7 @@ export const sel = {
   encoder: (s: State) => eff<"videotoolbox" | "x264">(s, "encoder", "encoder", "videotoolbox"),
   keepOriginals: (s: State) => eff<boolean>(s, "keepOriginals", "keep_originals", false),
   addTime: (s: State) => eff<boolean>(s, "addTime", "add_time", false),
+  deleteClips: (s: State) => eff<boolean>(s, "deleteClipsAfterImport", "delete_clips_after_import", false),
   defaultName: (s: State) => eff<string>(s, "defaultName", "default_name", "flight") || "flight",
   photosAlbum: (s: State) => eff<string>(s, "photosAlbum", "photos_album", "Drone"),
   formatLabel: (s: State) => eff<string>(s, "formatLabel", "format_label", "DVR") || "DVR",

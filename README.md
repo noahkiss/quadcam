@@ -16,6 +16,7 @@ QuadCam is a macOS app that imports the recordings from your FPV goggles into a 
 - **A library you can trust.** Rate, flag, search, rename and edit your clips. Every detail is written into the file itself, and the index rebuilds from the files.
 - **Metadata that Photos reads.** Date, time, place, aircraft and keywords go into QuickTime tags. Add clips to Photos, into an album.
 - **Safe card format.** When every clip verified, QuadCam can erase an analog card as FAT32 and eject it, behind strict guards. It never formats a DJI card or air unit.
+- **Room for the next flight.** With **Delete clips after import** on, QuadCam deletes each clip that verified from the card, DJI air units included, and leaves every other file. It is off by default. See [Settings](docs/settings.md#delete-clips-after-import).
 - **Scripts and agents.** A command-line tool and an MCP server do everything the app does.
 
 ## Supported gear
@@ -64,7 +65,7 @@ NKMK Digital Co. signs QuadCam with its Apple Developer ID, and Apple notarizes 
 3. **Review.** Set the aircraft, the place and the date for all clips at once, or per clip. Type a short name for each clip. Select **Skip** for clips you do not want, such as bench tests.
 4. **Add radio logs (optional).** Under **Radio logs**, select **Choose…** and pick your radio's `LOGS` folder. QuadCam then dates the clips and finds their moments.
 5. **Trim (optional).** Select a clip to play it, see its moments and set cuts.
-6. **Add to Library** (Command-Return). QuadCam converts and verifies each clip.
+6. **Add to Library** (Command-Return). QuadCam converts and verifies each clip. When **Delete clips after import** is on in Settings, a checkbox above the button shows it; clear it to keep the clips on the card for this import.
 7. **Finish.** Add the files to Photos, eject the card, or format it (analog cards only). **Done · show in Library** shows the new clips under **Last import**.
 
 ![The Import sheet on the Review step: a list of clips with names, dates and times, and the selected clip's preview and trim editor](docs/images/import-review-dark.png)

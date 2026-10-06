@@ -2,8 +2,9 @@
 //! `DCIM/DJI_*/`, named `DJI_<YYYYMMDDHHMMSS>_<NNNN>_<x>.MP4` by the unit's clock in local
 //! time (older goggles write `DJIG####.MP4`). Next to the video track sit DJI's own data
 //! streams (`djmd`, `dbgi`) and a cover picture; `moov` is the last box. `MISC/` holds DJI's
-//! housekeeping and is ignored. QuadCam only reads these volumes: it stages copies and never
-//! writes to or formats them.
+//! housekeeping and is ignored. QuadCam never formats these volumes and never writes a file to
+//! them. The one change it makes is "Delete clips after import" (off by default): it deletes
+//! the `.MP4` clips that verified in the library, and leaves `MISC/`, sidecars and folders.
 
 use super::{CardPolicy, EncodePlan, Inspect, Source, SourceKind};
 use crate::media::{Format, Probe, Tools};
@@ -235,9 +236,10 @@ impl Source for Dji {
     fn card_policy(&self) -> CardPolicy {
         CardPolicy {
             format_offered: false,
+            delete_clips_offered: true,
             filesystem: "exFAT",
             warn_above_bytes: u64::MAX,
-            filesystem_advice: "Import works; QuadCam only reads DJI cards.",
+            filesystem_advice: "Import works; QuadCam does not format DJI cards.",
             size_warning: "",
         }
     }
@@ -357,6 +359,7 @@ mod tests {
         assert_eq!(Dji.original_ext(Path::new("/x/DJI_1.MP4")), "mp4");
         let p = Dji.card_policy();
         assert!(!p.format_offered);
+        assert!(p.delete_clips_offered);
         assert_eq!(p.filesystem, "exFAT");
         assert_eq!(p.warn_above_bytes, u64::MAX);
         let d = tempfile::tempdir().unwrap();

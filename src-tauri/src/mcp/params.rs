@@ -133,6 +133,8 @@ pub struct ExportArgs {
     pub add_time: Option<bool>,
     /// Add the verified outputs to Photos afterwards.
     pub add_to_photos: Option<bool>,
+    /// true: keep every clip on the card or folder this run, even when the delete_clips_after_import setting is on. There is no way to turn deletion on here.
+    pub keep_clips: Option<bool>,
     /// Photos album; empty string for the library only.
     pub album: Option<String>,
 }
@@ -354,6 +356,9 @@ pub struct SettingsValues {
     pub keep_originals: Option<bool>,
     #[schemars(extend("x-nullable" = true))]
     pub add_time: Option<bool>,
+    /// After each export, delete the clip files that verified from the card or folder they came from. Other files stay.
+    #[schemars(extend("x-nullable" = true))]
+    pub delete_clips_after_import: Option<bool>,
     #[schemars(extend("x-nullable" = true))]
     pub default_name: Option<String>,
     #[schemars(extend("x-nullable" = true))]

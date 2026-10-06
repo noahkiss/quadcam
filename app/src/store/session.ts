@@ -2,7 +2,7 @@
 // (step, selected clip, progress) lives here too.
 import type { StateCreator } from "zustand";
 import type { State } from ".";
-import type { ClipPlan, ClipResult, FormatPlan, Session, StageProgress } from "../ipc/types";
+import type { ClipDeletion, ClipPlan, ClipResult, FormatPlan, Session, StageProgress } from "../ipc/types";
 
 export type Step = "load" | "review" | "export" | "finish";
 
@@ -29,6 +29,10 @@ export interface SessionSlice {
   formatUnlocked: boolean;
   /** The volume name typed for the format step. */
   formatLabelDraft: string;
+  /** This import keeps the clips on the card although "Delete clips after import" is on. */
+  keepClips: boolean;
+  /** What the last export deleted from the card, or null when it deleted nothing. */
+  clipDeletion: ClipDeletion[] | null;
   setSession: (s: Session | null) => void;
   setStep: (step: Step) => void;
   setImportOpen: (open: boolean) => void;
@@ -54,16 +58,22 @@ export const createSessionSlice: StateCreator<State, [], [], SessionSlice> = (se
   formatError: null,
   formatUnlocked: false,
   formatLabelDraft: "",
+  keepClips: false,
+  clipDeletion: null,
   setSession: (session) => {
     const cur = get().selectedClip;
     const keep = session && cur != null && session.clips.some((c) => c.id === cur);
-    set({ session, selectedClip: keep ? cur : (session?.clips[0]?.id ?? null) });
+    // A different set of clips is a new import: its delete choice starts from the setting.
+    const fresh = sessionKey(session) !== sessionKey(get().session);
+    set({ session, selectedClip: keep ? cur : (session?.clips[0]?.id ?? null), ...(fresh ? { keepClips: false, clipDeletion: null } : {}) });
   },
   setStep: (step) => set({ step }),
   setImportOpen: (importOpen) => set({ importOpen }),
   selectClip: (selectedClip) => set({ selectedClip }),
   setRTab: (rTab) => set({ rTab }),
 });
+
+const sessionKey = (s: Session | null) => (s ? `${s.source}\n${s.clips.map((c) => c.card_path).join("\n")}` : "");
 
 export const planOf = (s: Session | null, id: number): ClipPlan | undefined => s?.plans.find((p) => p.id === id);
 

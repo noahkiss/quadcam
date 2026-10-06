@@ -267,7 +267,7 @@ Usage: quadcam-cli settings [OPTIONS] [COMMAND]
 
 Commands:
   show  Show the settings file, its values and the effective settings
-  set   Set settings: KEY=VALUE, where VALUE is JSON or plain text ("null" resets a key). Keys: output_dir, format, encoder, keep_originals, add_time, default_name, photos_album, format_label, log_dir, layout, place_folders, tunables, geocoder, name_date_format, default_profile
+  set   Set settings: KEY=VALUE, where VALUE is JSON or plain text ("null" resets a key). Keys: output_dir, format, encoder, keep_originals, add_time, delete_clips_after_import, default_name, photos_album, format_label, log_dir, layout, place_folders, tunables, geocoder, name_date_format, default_profile
   help  Print this message or the help of the given subcommand(s)
 
 Options:
@@ -284,7 +284,7 @@ Options:
       --session <FILE>  Session file (default: ~/Library/Caches/app.quadcam/session.json)
   -h, --help            Print help
 ===== quadcam-cli settings set --help
-Set settings: KEY=VALUE, where VALUE is JSON or plain text ("null" resets a key). Keys: output_dir, format, encoder, keep_originals, add_time, default_name, photos_album, format_label, log_dir, layout, place_folders, tunables, geocoder, name_date_format, default_profile
+Set settings: KEY=VALUE, where VALUE is JSON or plain text ("null" resets a key). Keys: output_dir, format, encoder, keep_originals, add_time, delete_clips_after_import, default_name, photos_album, format_label, log_dir, layout, place_folders, tunables, geocoder, name_date_format, default_profile
 
 Usage: quadcam-cli settings set [OPTIONS] <KEY=VALUE>...
 
@@ -353,6 +353,7 @@ Options:
       --add-time            Add HHMM to names of clips dated from a radio log
       --add-to-photos       
       --album <ALBUM>       Photos album (default "Drone"; "" for library only)
+      --keep-clips          Keep every clip on the card this run, even when delete_clips_after_import is on
   -h, --help                Print help
 ===== quadcam-cli verify --help
 Re-verify outputs: the session's (default) or one file against its source

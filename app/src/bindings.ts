@@ -232,6 +232,15 @@ export type Clip = {
 	sidecars?: string[],
 };
 
+export type ClipDeletion = {
+	id: number,
+	/**  The clip's file on the card or folder. */
+	path: string,
+	state: DeletionState,
+	/**  Why the file stays. None when it was deleted. */
+	reason: string | null,
+};
+
 /**  One library clip, by id. */
 export type ClipIdParams = {
 	id: string,
@@ -352,6 +361,12 @@ export type Defaults_Deserialize = {
 	encoder: Encoder,
 	keep_originals: boolean,
 	add_time: boolean,
+	/**
+	 *  After an import, delete the clip files that verified from the card or folder they
+	 *  came from. Every other file stays. Off by default; an import may turn it off for
+	 *  one run, never on.
+	 */
+	delete_clips_after_import?: boolean,
 	default_name: string,
 	photos_album: string,
 	log_dir: string | null,
@@ -380,6 +395,12 @@ export type Defaults_Serialize = {
 	encoder: Encoder,
 	keep_originals: boolean,
 	add_time: boolean,
+	/**
+	 *  After an import, delete the clip files that verified from the card or folder they
+	 *  came from. Every other file stays. Off by default; an import may turn it off for
+	 *  one run, never on.
+	 */
+	delete_clips_after_import: boolean,
 	default_name: string,
 	photos_album: string,
 	log_dir: string | null,
@@ -398,6 +419,13 @@ export type Defaults_Serialize = {
 	/**  How the date starts file names. */
 	name_date_format: DateFormat,
 };
+
+/**  What happened to one clip's file on the card or folder after an import. */
+export type DeletionState = 
+/**  The file was deleted. */
+"deleted" | 
+/**  The file stays; `reason` says why. */
+"kept";
 
 export type DiskInfo = {
 	device_identifier: string,
@@ -524,11 +552,22 @@ export type ImportOptions = {
 	add_time?: boolean | null,
 	add_to_photos?: boolean,
 	album?: string | null,
+	/**
+	 *  Keep every clip file on the card or folder this run, even when the
+	 *  `delete_clips_after_import` setting is on. Nothing here turns deletion on: the
+	 *  setting is the only consent.
+	 */
+	keep_clips?: boolean,
 };
 
 export type ImportOutcome = {
 	summary: Summary,
 	photos: SerdeResult<ShareReport, string> | null,
+	/**
+	 *  What "Delete clips after import" did with each clip. None when it did not run: the
+	 *  setting is off, or this run kept the clips.
+	 */
+	clip_deletion?: ClipDeletion[] | null,
 };
 
 /**  Converting one clip: `seconds` of `duration` done. */

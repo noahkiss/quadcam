@@ -97,6 +97,11 @@ pub struct ImportOptions {
     pub add_to_photos: bool,
     #[serde(default)]
     pub album: Option<String>,
+    /// Keep every clip file on the card or folder this run, even when the
+    /// `delete_clips_after_import` setting is on. Nothing here turns deletion on: the
+    /// setting is the only consent.
+    #[serde(default)]
+    pub keep_clips: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, specta::Type)]
@@ -104,6 +109,30 @@ pub struct ImportOutcome {
     pub summary: Summary,
     #[specta(type = Option<crate::api::SerdeResult<ShareReport, String>>)]
     pub photos: Option<Result<ShareReport, String>>,
+    /// What "Delete clips after import" did with each clip. None when it did not run: the
+    /// setting is off, or this run kept the clips.
+    #[serde(default)]
+    pub clip_deletion: Option<Vec<ClipDeletion>>,
+}
+
+/// What happened to one clip's file on the card or folder after an import.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, specta::Type)]
+#[serde(rename_all = "lowercase")]
+pub enum DeletionState {
+    /// The file was deleted.
+    Deleted,
+    /// The file stays; `reason` says why.
+    Kept,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, specta::Type)]
+pub struct ClipDeletion {
+    pub id: usize,
+    /// The clip's file on the card or folder.
+    pub path: PathBuf,
+    pub state: DeletionState,
+    /// Why the file stays. None when it was deleted.
+    pub reason: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, specta::Type)]

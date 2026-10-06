@@ -173,6 +173,9 @@ enum Cmd {
         /// Photos album (default "Drone"; "" for library only).
         #[arg(long)]
         album: Option<String>,
+        /// Keep every clip on the card this run, even when delete_clips_after_import is on.
+        #[arg(long)]
+        keep_clips: bool,
     },
     /// Re-verify outputs: the session's (default) or one file against its source.
     Verify {
@@ -410,8 +413,8 @@ enum SetCmd {
     /// Show the settings file, its values and the effective settings.
     Show,
     /// Set settings: KEY=VALUE, where VALUE is JSON or plain text ("null" resets a key).
-    /// Keys: output_dir, format, encoder, keep_originals, add_time, default_name,
-    /// photos_album, format_label, log_dir, layout, place_folders, tunables, geocoder,
+    /// Keys: output_dir, format, encoder, keep_originals, add_time,
+    /// delete_clips_after_import, default_name, photos_album, format_label, log_dir, layout, place_folders, tunables, geocoder,
     /// name_date_format, default_profile.
     Set {
         #[arg(required = true, value_name = "KEY=VALUE")]
@@ -735,6 +738,7 @@ fn run(cli: Cli) -> Result<Value> {
             add_time,
             add_to_photos,
             album,
+            keep_clips,
         } => {
             let mut patches = Vec::new();
             let mut opts = ImportOptions::default();
@@ -825,6 +829,7 @@ fn run(cli: Cli) -> Result<Value> {
             opts.add_time = Some(add_time || opts.add_time.unwrap_or(false));
             opts.add_to_photos |= add_to_photos;
             opts.album = album.or(opts.album);
+            opts.keep_clips |= keep_clips;
             serde_json::to_value(call::import(&core, opts)?)?
         }
         Cmd::Verify {

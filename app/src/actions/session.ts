@@ -216,9 +216,9 @@ export async function runExport() {
     });
   });
   try {
-    await api.importClips({ output_dir: out, format: sel.format(st), encoder: sel.encoder(st), keep_originals: sel.keepOriginals(st), add_time: sel.addTime(st) });
+    const outcome = await api.importClips({ output_dir: out, format: sel.format(st), encoder: sel.encoder(st), keep_originals: sel.keepOriginals(st), add_time: sel.addTime(st), keep_clips: st.keepClips });
     S().setSession(await api.getSession());
-    store.setState({ busy: false });
+    store.setState({ busy: false, clipDeletion: outcome.clip_deletion ?? null });
     setStep("finish");
     await S().loadLibrary();
     api.strips().catch(() => {});

@@ -95,6 +95,12 @@ pub const KEYS: &[Key] = &[
         check: boolean,
     },
     Key {
+        file: "deleteClipsAfterImport",
+        name: Some("delete_clips_after_import"),
+        about: "true or false",
+        check: boolean,
+    },
+    Key {
         file: "defaultName",
         name: Some("default_name"),
         about: "text",
@@ -338,6 +344,11 @@ pub struct Defaults {
     pub encoder: Encoder,
     pub keep_originals: bool,
     pub add_time: bool,
+    /// After an import, delete the clip files that verified from the card or folder they
+    /// came from. Every other file stays. Off by default; an import may turn it off for
+    /// one run, never on.
+    #[serde(default)]
+    pub delete_clips_after_import: bool,
     pub default_name: String,
     pub photos_album: String,
     pub log_dir: Option<PathBuf>,
@@ -384,6 +395,7 @@ impl Default for Defaults {
             encoder: Encoder::Videotoolbox,
             keep_originals: false,
             add_time: false,
+            delete_clips_after_import: false,
             default_name: crate::naming::DEFAULT_NAME.into(),
             photos_album: crate::photos::DEFAULT_ALBUM.into(),
             log_dir: None,
@@ -431,6 +443,9 @@ impl Defaults {
         }
         if let Some(b) = get(v, "addTime") {
             d.add_time = b;
+        }
+        if let Some(b) = get(v, "deleteClipsAfterImport") {
+            d.delete_clips_after_import = b;
         }
         if let Some(n) = get::<String>(v, "defaultName").filter(|n| !n.trim().is_empty()) {
             d.default_name = n;
@@ -498,6 +513,7 @@ mod tests {
         assert_eq!(x.tunables.max_log_age_days, 60);
         // New settings get their defaults.
         assert_eq!(x.geocoder, "apple");
+        assert!(!x.delete_clips_after_import);
 
         // A write of one key keeps every other key, byte for byte in value.
         let after = set(
