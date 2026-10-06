@@ -15,7 +15,7 @@ Settings > Library sets how QuadCam files the clips:
 | Flat | `2026-09-27_<name>.mp4` |
 
 - **Add the place to day folders** names the day folder after the clip's saved place: `2026-09-27 Home field/`.
-- **Keep originals** copies the source file (the DVR's AVI or the DJI MP4) into `originals/` in the day folder, named like the clip. A DJI clip's `.SRT` file goes next to its original, with the same name.
+- **Keep originals** copies the source file (the DVR's AVI or the DJI MP4) into `originals/` in the day folder, named like the clip. A DJI clip's `.SRT` file goes next to its original, with the same name. It moves with the original on a rename, a new date or a move to the Trash.
 - Cuts go next to their clip as `_cut1`, `_cut2`. See [Moments and cuts](moments-and-cuts.md).
 
 ## File names

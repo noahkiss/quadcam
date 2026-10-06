@@ -199,3 +199,81 @@ fn dji_clip_remuxes_into_mov() {
         format!("DJI {NAME}; date source: clip clock")
     );
 }
+
+/// The kept `.srt` follows its original through a rename, a redate to a new day, and the
+/// Trash.
+#[test]
+fn kept_srt_moves_with_its_clip() {
+    let card = tempfile::tempdir().unwrap();
+    dji_card(card.path());
+    let work = tempfile::tempdir().unwrap();
+    let trash = work.path().join("trash");
+    std::fs::create_dir_all(&trash).unwrap();
+    let core = core(work.path()).with_trash(Arc::new(quadcam_lib::trash::DirTrash(trash.clone())));
+    let mut d = core.defaults();
+    d.layout = quadcam_lib::library::Layout::YearDay;
+    core.set_defaults(d);
+    let out_dir = work.path().join("out");
+
+    core.stage(Some(card.path())).unwrap();
+    core.analyse().unwrap();
+    core.plan_dates(LogChoice::None, None).unwrap();
+    let out = core
+        .import(&ImportOptions {
+            format: Some(Format::Mp4),
+            keep_originals: Some(true),
+            ..Default::default()
+        })
+        .unwrap();
+    let r = &out.summary.results[0];
+    assert_eq!(r.outcome, Outcome::Verified, "{:?}", r.error);
+    assert!(r.original.as_ref().unwrap().with_extension("srt").is_file());
+
+    let id = core.library(&Default::default()).unwrap().clips[0]
+        .clip
+        .id
+        .clone();
+    let srt_of = |c: &quadcam_lib::library::LibClip| {
+        out_dir
+            .join(c.original.as_ref().unwrap())
+            .with_extension("srt")
+    };
+
+    // Rename: the original and its subtitle file take the new stem.
+    let before = core.library_rename(&id, "x").unwrap();
+    let c = core.library_rename(&id, "fence flips").unwrap();
+    let orig = out_dir.join(c.original.as_ref().unwrap());
+    assert!(
+        orig.ends_with("2026/2026-01-05/originals/2026-01-05_fence_flips.mp4"),
+        "{}",
+        orig.display()
+    );
+    assert!(srt_of(&c).is_file(), "the .srt moved with the rename");
+    assert!(!srt_of(&before).exists(), "no .srt left under the old stem");
+    assert_eq!(c.sidecars(&out_dir), [srt_of(&c)]);
+
+    // Redate to a new day: the subtitle file moves to that day's originals/.
+    let day = NaiveDate::from_ymd_opt(2026, 1, 7).unwrap();
+    let c2 = core
+        .library_edit(
+            &id,
+            &quadcam_lib::core::LibEdit {
+                date: Some(day),
+                ..Default::default()
+            },
+        )
+        .unwrap();
+    assert!(srt_of(&c2).ends_with("2026/2026-01-07/originals/2026-01-07_fence_flips.srt"));
+    assert!(srt_of(&c2).is_file());
+    assert!(
+        !out_dir.join("2026/2026-01-05").exists(),
+        "the old day folder is gone"
+    );
+
+    // Trash: the subtitle file goes too, and comes back with the clip.
+    let srt = srt_of(&c2);
+    let rep = core.library_trash(std::slice::from_ref(&id)).unwrap();
+    assert!(rep.failed.is_empty(), "{:?}", rep.failed);
+    assert!(rep.trashed.contains(&srt), "{:?}", rep.trashed);
+    assert!(!srt.exists());
+}

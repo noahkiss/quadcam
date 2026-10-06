@@ -230,11 +230,33 @@ impl LibClip {
         rest.replace(['-', '_'], " ").trim().to_string()
     }
 
-    /// Every file of this clip: the clip, its cuts and its original.
+    /// Every file of this clip: the clip, its cuts, its original and the original's sidecars.
     pub fn files(&self, root: &Path) -> Vec<PathBuf> {
         let mut v = vec![root.join(&self.path)];
         v.extend(self.cuts.iter().map(|c| root.join(&c.path)));
         v.extend(self.original.iter().map(|o| root.join(o)));
+        v.extend(self.sidecars(root));
+        v
+    }
+
+    /// Files kept next to the original under its stem (a DJI `.srt`), found on disk, so the
+    /// index never has to list them. Empty without a kept original.
+    pub fn sidecars(&self, root: &Path) -> Vec<PathBuf> {
+        let Some(orig) = self.original.as_ref().map(|o| root.join(o)) else {
+            return Vec::new();
+        };
+        let (Some(dir), Some(stem)) = (orig.parent(), orig.file_stem()) else {
+            return Vec::new();
+        };
+        let Ok(rd) = std::fs::read_dir(dir) else {
+            return Vec::new();
+        };
+        let mut v: Vec<PathBuf> = rd
+            .flatten()
+            .map(|e| e.path())
+            .filter(|p| p != &orig && p.is_file() && p.file_stem() == Some(stem))
+            .collect();
+        v.sort();
         v
     }
 

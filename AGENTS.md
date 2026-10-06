@@ -172,12 +172,13 @@ GitHub (`noahkiss/quadcam`, public) is the only remote. Users install the cask
 - **File-name date:** `naming::DateFormat` (`nameDateFormat`: `YYYY-MM-DD` default, or
   `YY.MM.DD`) starts new file names, renames and redates. `naming::split_date` reads either
   format; a clip's date comes from its creation date first, then the name.
-  `library_apply_name_format` renames existing clips (with cuts and originals) in place.
+  `library_apply_name_format` renames existing clips (with cuts, originals and the originals' sidecars) in place.
   Folder names keep `YYYY-MM-DD`.
 - **Time of day:** a clip's plan time comes from its radio log, its clip clock (DJI), or by hand (`PlanPatch.time`,
   `HH:MM`, empty for none). Without one the creation date is local noon. A library date or
   time edit (`library_edit`) rewrites the QuickTime creation date, the `mvhd` time and the
-  mtimes of the clip, its cuts and its original; a new day moves them all (`relocate`, which
+  mtimes of the clip, its cuts, its original and the original's sidecars (a DJI `.srt`,
+  found on disk by stem, `LibClip::sidecars`); a new day moves them all (`relocate`, which
   rename uses too). A library profile edit rewrites make, model, aircraft, video system,
   profile name and the profile's keywords.
 - **Session restore:** the GUI's core uses the same session file as the CLI. At launch,
