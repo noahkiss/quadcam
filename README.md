@@ -23,7 +23,7 @@ QuadCam is a macOS app that imports the recordings from your FPV goggles into a 
 QuadCam reads two sources, on a card or in a folder:
 
 - **Analog goggle and DVR recordings:** MJPEG video in AVI files (`PICT0001.AVI` and similar), at the root or in folders such as `DCIM/`.
-- **DJI recordings:** MP4 files named by the unit's clock (`DJI_20261004183012_0001_D.MP4`) under `DCIM/DJI_*/`, for example from an O4 air unit over USB or a goggles card. Older `DJIG0001.MP4` names count too. With **Keep originals** on, QuadCam keeps the `.SRT` file next to the original.
+- **DJI recordings:** MP4 files named by the unit's clock (`DJI_20261004183012_0001_D.MP4`) under `DCIM/DJI_*/`, for example from an O4 air unit over USB or a goggles card. Older `DJIG0001.MP4` names count too. With **Keep originals** on, QuadCam keeps the `.SRT` file next to the original. QuadCam expects the unit to record on arm and stop on disarm, so each file holds one flight and rarely needs a cut.
 
 The app watches for removable volumes that hold either kind and shows the source next to each card. For dates and moments, it reads EdgeTX "SD Logs" CSV files.
 
