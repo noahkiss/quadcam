@@ -319,7 +319,7 @@ impl<B: Backend> Server<B> {
             "quadcam_library_files" => {
                 let x: LibraryFilesArgs = args(a)?;
                 let action = x.action
-                    .context("action is required: cuts, export_cuts, trash, photos, rebuild, apply_name_format or match_logs")?;
+                    .context("action is required: cuts, split_by_flight, export_cuts, trash, photos, rebuild, apply_name_format or match_logs")?;
                 let ids: Vec<String> = x.ids.unwrap_or_default();
                 let one = || -> Result<String> {
                     match ids.as_slice() {
@@ -355,6 +355,22 @@ impl<B: Backend> Server<B> {
                                 .call("library_export_cuts", json!({"id": id}))?;
                             line = format!(
                                 "Cut list saved; {} cut files written.",
+                                made.as_array().map(Vec::len).unwrap_or(0)
+                            );
+                        }
+                        Ok((vec![text(line)], change))
+                    }
+                    "split_by_flight" => {
+                        let id = one()?;
+                        let change = self.backend.call("library_split", json!({"id": id}))?;
+                        let n = change["cuts"].as_array().map(Vec::len).unwrap_or(0);
+                        let mut line = format!("Cut list saved: {n} cuts, one per radio-log pack added. New ranges are not files yet; call action export_cuts to write them.");
+                        if x.export == Some(true) {
+                            let made = self
+                                .backend
+                                .call("library_export_cuts", json!({"id": id}))?;
+                            line = format!(
+                                "Cut list saved: {n} cuts; {} cut files written.",
                                 made.as_array().map(Vec::len).unwrap_or(0)
                             );
                         }
@@ -455,7 +471,7 @@ impl<B: Backend> Server<B> {
                         ))
                     }
                     other => Err(anyhow!(
-                        "unknown action {other:?}; use cuts, export_cuts, trash, photos, rebuild or apply_name_format"
+                        "unknown action {other:?}; use cuts, split_by_flight, export_cuts, trash, photos, rebuild, apply_name_format or match_logs"
                     )),
                 }
             }
@@ -653,11 +669,11 @@ impl<B: Backend> Server<B> {
                 };
                 let e = &view["effective"];
                 let line = format!(
-                    "{}Settings file {}.\noutput_dir {} | layout {} | place_folders {} | format {} | encoder {} | keep_originals {} | add_time {} | delete_clips_after_import {} | default_name {:?} | photos_album {:?} | format_label {} | log_dir {} | geocoder {} | name_date_format {} | default_profile {} | tunables {} | google_places_key {}",
+                    "{}Settings file {}.\noutput_dir {} | layout {} | place_folders {} | format {} | encoder {} | keep_originals {} | add_time {} | delete_clips_after_import {} | join_split_recordings {} | default_name {:?} | photos_album {:?} | format_label {} | log_dir {} | geocoder {} | name_date_format {} | default_profile {} | tunables {} | google_places_key {}",
                     if action == "write" { "Saved. " } else { "" },
                     view["path"].as_str().unwrap_or("?"),
                     e["output_dir"].as_str().unwrap_or("none"), e["layout"].as_str().unwrap_or("?"), e["place_folders"],
-                    e["format"].as_str().unwrap_or("?"), e["encoder"].as_str().unwrap_or("?"), e["keep_originals"], e["add_time"], e["delete_clips_after_import"],
+                    e["format"].as_str().unwrap_or("?"), e["encoder"].as_str().unwrap_or("?"), e["keep_originals"], e["add_time"], e["delete_clips_after_import"], e["join_split_recordings"],
                     e["default_name"].as_str().unwrap_or(""), e["photos_album"].as_str().unwrap_or(""), e["format_label"].as_str().unwrap_or(""),
                     e["log_dir"].as_str().unwrap_or("none"), e["geocoder"].as_str().unwrap_or("?"), e["name_date_format"].as_str().unwrap_or("?"), e["default_profile"].as_str().unwrap_or("none"), e["tunables"],
                     if view["values"]["googlePlacesKey"].is_null() { "not set" } else { "set" },
@@ -671,6 +687,7 @@ impl<B: Backend> Server<B> {
                     "keep_originals",
                     "add_time",
                     "delete_clips_after_import",
+                    "join_split_recordings",
                     "default_name",
                     "photos_album",
                     "format_label",
@@ -690,7 +707,9 @@ impl<B: Backend> Server<B> {
             }
             "quadcam_load_clips" => {
                 let x: LoadClipsArgs = args(a)?;
-                let session = self.backend.call("load", json!({"source": x.source}))?;
+                let session = self
+                    .backend
+                    .call("load", json!({"source": x.source, "join": x.join}))?;
                 let view = clip_views(&session, None);
                 Ok((
                     vec![text(format!(

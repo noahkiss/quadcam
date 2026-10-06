@@ -75,10 +75,14 @@
       "readOnlyHint": false,
       "title": "Load clips"
     },
-    "description": "Copy every clip (analog DVR or DJI) off a card or folder to local staging, probe them (recovering half-written files), make thumbnails, and date them from radio logs when a log folder is set. Starts a new session and replaces the old one.\n\nBest for: starting an import. Do not call it to re-read a loaded session; use quadcam_read_clips.\nReturns: a line per clip (id, name, duration, status, date, name).\nFollow up with quadcam_read_clips(thumbnails=true) to see the clips.",
+    "description": "Copy every clip (analog DVR or DJI) off a card or folder to local staging, probe them (recovering half-written files), make thumbnails, and date them from radio logs when a log folder is set. Starts a new session and replaces the old one. A recording an analog DVR split into files of about 600 s (PICT0001.AVI, PICT0002.AVI, ...) loads as one clip made of those files (`files`, `joined`), unless `join` is false or the join_split_recordings setting is off; the later files show `part_of` and import with the first.\n\nBest for: starting an import. Do not call it to re-read a loaded session; use quadcam_read_clips.\nReturns: a line per clip (id, name, duration, status, date, name).\nFollow up with quadcam_read_clips(thumbnails=true) to see the clips.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
+        "join": {
+          "description": "false keeps recordings the DVR split into files (PICT0001.AVI, PICT0002.AVI, ...) as separate clips this run. Omit to follow the join_split_recordings setting (on by default).",
+          "type": "boolean"
+        },
         "source": {
           "description": "Card mount point (e.g. /Volumes/NO NAME) or a folder of AVI files. Omit to use the first detected card.",
           "type": "string"
@@ -160,7 +164,7 @@
       "readOnlyHint": false,
       "title": "Suggest names and dates"
     },
-    "description": "Suggest a short name, date, time of day, note, skip or cut ranges for clips. The values are marked agent-suggested, and in the app they appear as editable suggestions the person can accept or change. Names become the filename slug (YYYY-MM-DD_<name>.mp4, lowercased); an empty name uses the default name (\"flight\"), auto-numbered. `cuts` replaces the clip's cut list; each range exports as an extra file <name>_cutN next to the clip (an empty list removes them). `log_offset_s` says where the first armed log row falls in the clip and moves the log moments. Metadata: `profile` (an aircraft profile name from quadcam_status; empty string to fall back to the log's model, then the default), `place` (a saved place name; empty string removes the location) or `location` {lat, lon}, `keywords` (replaces the clip's own; FPV, the profile's and the moment kinds are added at export), `author`. To apply one value to every clip, send one suggestion per clip id.\n\nBest for: proposing names from what the thumbnails show, dates and times from a clock burned into the video, and cuts from moments or the keep ranges.\nReturns: every clip's current plan.\nFollow up with quadcam_read_clips to read the final values before quadcam_export; the person may have changed them.",
+    "description": "Suggest a short name, date, time of day, note, skip or cut ranges for clips. The values are marked agent-suggested, and in the app they appear as editable suggestions the person can accept or change. Names become the filename slug (YYYY-MM-DD_<name>.mp4, lowercased); an empty name uses the default name (\"flight\"), auto-numbered. `cuts` replaces the clip's cut list; each range exports as an extra file <name>_cutN next to the clip (an empty list removes them). `split_by_flight` true adds one cut per radio-log pack (each pack's armed range plus up to 2 s each side). `joined` on the first file of a split recording (a clip with `files`) imports its files as one clip (true) or as clips of their own (false); the clips are matched to the radio logs again. `log_offset_s` says where the first armed log row falls in the clip and moves the log moments. Metadata: `profile` (an aircraft profile name from quadcam_status; empty string to fall back to the log's model, then the default), `place` (a saved place name; empty string removes the location) or `location` {lat, lon}, `keywords` (replaces the clip's own; FPV, the profile's and the moment kinds are added at export), `author`. To apply one value to every clip, send one suggestion per clip id.\n\nBest for: proposing names from what the thumbnails show, dates and times from a clock burned into the video, and cuts from moments or the keep ranges.\nReturns: every clip's current plan.\nFollow up with quadcam_read_clips to read the final values before quadcam_export; the person may have changed them.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -203,6 +207,10 @@
               "id": {
                 "minimum": 0,
                 "type": "integer"
+              },
+              "joined": {
+                "description": "For the first file of a recording the DVR split into files (it has `files`): true imports them as one clip, false as clips of their own.",
+                "type": "boolean"
               },
               "keywords": {
                 "items": {
@@ -265,6 +273,10 @@
                 "type": "string"
               },
               "skip": {
+                "type": "boolean"
+              },
+              "split_by_flight": {
+                "description": "true adds one cut per radio-log pack (armed range plus up to 2 s each side), after cuts. Fails when the clip has no packs, or one pack that covers nearly all of it.",
                 "type": "boolean"
               },
               "time": {
@@ -560,13 +572,14 @@
       "readOnlyHint": false,
       "title": "Library files"
     },
-    "description": "Work on library clip files: set a clip's cut ranges (`cuts`), write unsaved cuts as files (`export_cuts`), move clips with their cuts and originals to the Trash (`trash`), add clips and their cuts to Photos (`photos`), rebuild the index from the files (`rebuild`, after files were changed outside quadcam), rename clips so their file names start with the date in the name_date_format setting (`apply_name_format`; ids, or none for every clip), or match radio logs to clips already imported (`match_logs`; ids, or none for every clip: reports matched / likely / unmatched with a reason, and writes flight numbers and moments only with `apply` true; dates never change).\n\nBest for: trimming a library clip into keeper cuts, clearing out rejects (only when the person asked), sharing to Photos.\nNot for: names, ratings, dates or other details (use quadcam_library_edit).\nQuery tips: `cuts` replaces the clip's cut list in clip seconds (an empty list removes every cut). Dropping a cut that is already a file needs `removed_cuts` (\"keep\": the file stays as a clip of its own; \"trash\"); ask the person which. Set `export` true to write the new cuts in the same call.\nReturns: what changed, with file paths.",
+    "description": "Work on library clip files: set a clip's cut ranges (`cuts`), add one cut per radio-log pack (`split_by_flight`: each pack's armed range plus up to 2 s each side; fails when the clip has no packs, or one pack that covers nearly all of it; clips imported before 0.6.3 need `match_logs` with `apply` first), write unsaved cuts as files (`export_cuts`), move clips with their cuts and originals to the Trash (`trash`), add clips and their cuts to Photos (`photos`), rebuild the index from the files (`rebuild`, after files were changed outside quadcam), rename clips so their file names start with the date in the name_date_format setting (`apply_name_format`; ids, or none for every clip), or match radio logs to clips already imported (`match_logs`; ids, or none for every clip: reports matched / likely / unmatched with a reason, and writes flight numbers and moments only with `apply` true; dates never change).\n\nBest for: trimming a library clip into keeper cuts, clearing out rejects (only when the person asked), sharing to Photos.\nNot for: names, ratings, dates or other details (use quadcam_library_edit).\nQuery tips: `cuts` replaces the clip's cut list in clip seconds (an empty list removes every cut). Dropping a cut that is already a file needs `removed_cuts` (\"keep\": the file stays as a clip of its own; \"trash\"); ask the person which. Set `export` true with `cuts` or `split_by_flight` to write the new cuts in the same call.\nReturns: what changed, with file paths.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
         "action": {
           "enum": [
             "cuts",
+            "split_by_flight",
             "export_cuts",
             "trash",
             "photos",
@@ -613,11 +626,11 @@
           "type": "string"
         },
         "export": {
-          "description": "For cuts: also write the new cuts as files.",
+          "description": "For cuts and split_by_flight: also write the new cuts as files.",
           "type": "boolean"
         },
         "ids": {
-          "description": "Library clip ids from quadcam_library. cuts and export_cuts take exactly one; rebuild takes none; apply_name_format takes some or none (every clip).",
+          "description": "Library clip ids from quadcam_library. cuts, split_by_flight and export_cuts take exactly one; rebuild takes none; apply_name_format takes some or none (every clip).",
           "items": {
             "type": "string"
           },
@@ -808,7 +821,7 @@
       "readOnlyHint": false,
       "title": "Settings"
     },
-    "description": "Read or write the app's settings, the same file the app's Settings window uses: library folder (`output_dir`) and its `layout` (year_day, day, flat) and `place_folders`, export `format` (mp4, mov), `encoder` (videotoolbox, x264), `keep_originals`, `add_time` (HHMM in names of clips with a time), `delete_clips_after_import` (after each export, delete the clip files that verified from the card or folder; other files stay; off by default), `default_name`, `photos_album` (empty: library only), card `format_label`, radio `log_dir`, log matching `tunables`, place search `geocoder` (apple, nominatim, census, google) and its `google_places_key` (write-only), file-name `name_date_format` (YYYY-MM-DD, YY.MM.DD) and `default_profile`. A write changes only the given settings; null resets one to its default.\n\nBest for: pointing the library somewhere else, or changing export defaults the person asked for.\nNot for: places and profiles (quadcam_places, quadcam_profiles).\nReturns: the settings file's path and every effective setting.",
+    "description": "Read or write the app's settings, the same file the app's Settings window uses: library folder (`output_dir`) and its `layout` (year_day, day, flat) and `place_folders`, export `format` (mp4, mov), `encoder` (videotoolbox, x264), `keep_originals`, `add_time` (HHMM in names of clips with a time), `delete_clips_after_import` (after each export, delete the clip files that verified from the card or folder; other files stay; off by default), `join_split_recordings` (import a recording the DVR split into files as one clip; on by default), `default_name`, `photos_album` (empty: library only), card `format_label`, radio `log_dir`, log matching `tunables`, place search `geocoder` (apple, nominatim, census, google) and its `google_places_key` (write-only), file-name `name_date_format` (YYYY-MM-DD, YY.MM.DD) and `default_profile`. A write changes only the given settings; null resets one to its default.\n\nBest for: pointing the library somewhere else, or changing export defaults the person asked for.\nNot for: places and profiles (quadcam_places, quadcam_profiles).\nReturns: the settings file's path and every effective setting.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -894,6 +907,13 @@
               "description": "Google Places API (New) key, for geocoder google. Never read back.",
               "type": [
                 "string",
+                "null"
+              ]
+            },
+            "join_split_recordings": {
+              "description": "Import a recording the DVR split into files (about 600 s each) as one clip. On by default.",
+              "type": [
+                "boolean",
                 "null"
               ]
             },

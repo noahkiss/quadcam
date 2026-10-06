@@ -167,8 +167,8 @@ function Details({ clip: c }: { clip: LibClip }) {
         <dd>{fmtBytes(c.size)}</dd>
         {c.dvr && (
           <>
-            <dt>DVR file</dt>
-            <dd className="selectable">{c.dvr}</dd>
+            <dt>{c.parts.length ? "DVR files" : "DVR file"}</dt>
+            <dd className="selectable">{[c.dvr, ...c.parts.map((x) => x.dvr)].join(", ")}</dd>
           </>
         )}
         {c.original && (

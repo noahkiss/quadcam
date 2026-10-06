@@ -134,6 +134,14 @@ pub struct PlanPatch {
     /// drops one.
     #[serde(default)]
     pub removed_cuts: Option<crate::trim::RemovedCuts>,
+    /// True adds one cut per radio-log pack (see `trim::flight_cuts`) to the cut list,
+    /// after `cuts` when both are given.
+    #[serde(default)]
+    pub split_by_flight: Option<bool>,
+    /// For the first file of a recording the DVR split into files: true imports the files
+    /// as one clip, false keeps them as clips of their own.
+    #[serde(default)]
+    pub joined: Option<bool>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, specta::Type)]
@@ -161,6 +169,10 @@ pub struct Session {
     pub in_photos: Vec<usize>,
     /// Output folder of the last import.
     pub output_dir: Option<PathBuf>,
+    /// Whether this run joins recordings the DVR split into files. None follows the
+    /// `join_split_recordings` setting.
+    #[serde(default)]
+    pub join: Option<bool>,
 }
 
 /// A time of day from `HH:MM` or `HH:MM:SS`; empty is None (local noon).
@@ -306,17 +318,25 @@ impl Session {
             date_warnings: Vec::new(),
             in_photos: Vec::new(),
             output_dir: None,
+            join: None,
         }
     }
 
     /// Probes, recovers half-written clips and makes thumbnails. Empty clips get skipped.
+    /// Then finds recordings the DVR split into files (`join::groups`) and, with `join`,
+    /// imports each as one clip.
     pub fn analyse(
         &mut self,
         tools: &Tools,
         thumbs: &Path,
+        join: bool,
         on_progress: &mut dyn FnMut(usize, usize),
     ) -> Result<()> {
         std::fs::create_dir_all(thumbs)?;
+        for c in &mut self.clips {
+            c.join = None;
+            c.part_of = None;
+        }
         let total = self.clips.len();
         for (i, c) in self.clips.iter_mut().enumerate() {
             on_progress(i, total);
@@ -328,6 +348,68 @@ impl Session {
             }
         }
         self.analysed = true;
+        self.find_joins(join);
+        Ok(())
+    }
+
+    /// Marks the recordings the DVR split into files, joined when `on`. A recording whose
+    /// list cannot be written stays as separate files, with a warning.
+    pub fn find_joins(&mut self, on: bool) {
+        for group in crate::join::groups(&self.clips) {
+            match crate::join::make(&self.clips, &group) {
+                Ok(j) => {
+                    let id = self.clips[group[0]].id;
+                    self.clips[group[0]].join = Some(j);
+                    if on {
+                        let _ = self.set_joined(id, true);
+                    }
+                }
+                Err(e) => self.warnings.push(format!(
+                    "{} and the files after it look like one recording, but stay apart: {e:#}",
+                    self.clips[group[0]].name
+                )),
+            }
+        }
+    }
+
+    /// Imports a split recording as one clip (`on`) or as clips of their own. `id` is its
+    /// first file. Refused once any of its files imported. When the files part, the first
+    /// one's cuts are clamped to its own length.
+    pub fn set_joined(&mut self, id: usize, on: bool) -> Result<()> {
+        let at = self
+            .clips
+            .iter()
+            .position(|c| c.id == id)
+            .with_context(|| format!("no clip with id {id}"))?;
+        let parts = match &self.clips[at].join {
+            Some(j) => j.parts.clone(),
+            None => bail!("clip {id} is not the first file of a recording the DVR split"),
+        };
+        if self.clips[at].join.as_ref().is_some_and(|j| j.on == on) {
+            return Ok(());
+        }
+        let ids: Vec<usize> = std::iter::once(id).chain(parts.iter().copied()).collect();
+        if self
+            .results
+            .iter()
+            .any(|r| ids.contains(&r.id) && r.outcome == Outcome::Verified)
+        {
+            bail!("clip {id} was imported already; its files cannot be joined or parted now");
+        }
+        crate::join::set(&mut self.clips[at], on);
+        for c in self.clips.iter_mut().filter(|c| parts.contains(&c.id)) {
+            c.part_of = on.then_some(id);
+        }
+        let duration = self.clips[at].duration;
+        let p = self.plan_mut(id)?;
+        if !on {
+            p.cuts
+                .retain(|c| c.start + crate::trim::MIN_CUT_S <= duration);
+            for c in &mut p.cuts {
+                c.end = c.end.min(duration);
+            }
+            p.moments.retain(|m| m.start < duration);
+        }
         Ok(())
     }
 
@@ -340,14 +422,23 @@ impl Session {
         today: NaiveDate,
         profiles: &[crate::metadata::Profile],
     ) {
+        // A part of a joined recording is dated with its first file.
+        let parts: Vec<bool> = self.clips.iter().map(|c| c.part_of.is_some()).collect();
         let inputs: Vec<pipeline::DateInput> = self
             .clips
             .iter()
             .zip(&self.plans)
+            .filter(|(c, _)| c.part_of.is_none())
             .map(|(c, p)| pipeline::DateInput::of(c, self.kind, p.meta.profile.as_deref()))
             .collect();
         let plan = pipeline::plan_dates_with(&inputs, log_dir, day, today, tun, profiles);
-        for (p, s) in self.plans.iter_mut().zip(plan.suggestions) {
+        let plans = self
+            .plans
+            .iter_mut()
+            .zip(parts)
+            .filter(|(_, part)| !part)
+            .map(|(p, _)| p);
+        for (p, s) in plans.zip(plan.suggestions) {
             p.moments = s
                 .moments
                 .iter()
@@ -355,7 +446,7 @@ impl Session {
                 .collect();
             p.log_interval_s = s.log_interval_s;
             p.log_model = s.log_model.clone();
-            p.flight = s.flight.clone();
+            p.flight = s.flight.as_ref().map(|f| f.shifted(p.log_offset_s));
             p.match_reason = s.match_reason.clone();
             if p.source == DateSource::Edited {
                 continue;
@@ -384,6 +475,20 @@ impl Session {
     /// unless the patch also sets a time. A time alone keeps the date and makes it edited.
     pub fn patch(&mut self, patches: &[PlanPatch], editor: Editor) -> Result<()> {
         for patch in patches {
+            if let Some(head) = self
+                .clips
+                .iter()
+                .find(|c| c.id == patch.id)
+                .and_then(|c| c.part_of)
+            {
+                bail!(
+                    "clip {} is part of clip {head}, one recording; set joined false on clip {head} to change it on its own",
+                    patch.id
+                );
+            }
+            if let Some(on) = patch.joined {
+                self.set_joined(patch.id, on)?;
+            }
             let (unusable, duration) = {
                 let c = self
                     .clips
@@ -395,11 +500,27 @@ impl Session {
                     c.duration,
                 )
             };
-            let cuts = patch
+            let what = format!("clip {}", patch.id);
+            let mut cuts = patch
                 .cuts
                 .as_deref()
-                .map(|c| crate::trim::check_cuts(&format!("clip {}", patch.id), c, duration))
+                .map(|c| crate::trim::check_cuts(&what, c, duration))
                 .transpose()?;
+            if patch.split_by_flight == Some(true) {
+                let p = self.plan_mut(patch.id)?;
+                let packs = p
+                    .flight
+                    .as_ref()
+                    .map(|f| f.pack_spans.clone())
+                    .unwrap_or_default();
+                let base = cuts.clone().unwrap_or_else(|| p.cuts.clone());
+                let add = crate::trim::flight_cuts(&what, &packs, duration)?;
+                cuts = Some(crate::trim::check_cuts(
+                    &what,
+                    &crate::trim::with_cuts(&base, &add),
+                    duration,
+                )?);
+            }
             if cuts.as_ref().is_some_and(|c| !c.is_empty()) && unusable {
                 bail!(
                     "clip {} is empty or was not copied; it cannot be cut",
@@ -479,6 +600,7 @@ impl Session {
             if let Some(o) = patch.log_offset_s {
                 let by = o - p.log_offset_s;
                 p.moments = p.moments.iter().map(|m| m.shifted(by)).collect();
+                p.flight = p.flight.as_ref().map(|f| f.shifted(by));
                 p.log_offset_s = o;
             }
             if agent {
@@ -492,9 +614,16 @@ impl Session {
         Ok(())
     }
 
+    /// One job per clip to import; a part of a joined recording imports with its first file.
     pub fn jobs(&self) -> Vec<ClipJob> {
         self.plans
             .iter()
+            .filter(|p| {
+                !self
+                    .clips
+                    .iter()
+                    .any(|c| c.id == p.id && c.part_of.is_some())
+            })
             .map(|p| ClipJob {
                 id: p.id,
                 skip: p.skip,
@@ -508,6 +637,7 @@ impl Session {
                 note: p.note.clone(),
                 meta: md::Resolved::default(),
                 extra: Vec::new(),
+                parts: Vec::new(),
             })
             .collect()
     }
@@ -618,6 +748,9 @@ mod tests {
             kind: Default::default(),
             clock: None,
             sidecars: Vec::new(),
+            mtime: None,
+            join: None,
+            part_of: None,
         };
         let plan = |id| ClipPlan {
             id,
@@ -658,6 +791,7 @@ mod tests {
             date_warnings: Vec::new(),
             in_photos: Vec::new(),
             output_dir: None,
+            join: None,
         }
     }
 
@@ -788,6 +922,265 @@ mod tests {
         };
         assert!(s.patch(&[one(vec![cut(0.0, 2.0)])], Editor::User).is_err());
         s.patch(&[one(vec![])], Editor::User).unwrap();
+    }
+
+    #[test]
+    fn split_by_flight_adds_a_cut_per_pack_on_the_clip_timeline() {
+        let mut s = session();
+        s.clips[0].duration = 300.0;
+        let span = |a, b| Span { start: a, end: b };
+        s.plans[0].flight = Some(FlightStats {
+            packs: 2,
+            pack_spans: vec![span(0.0, 100.0), span(150.0, 290.0)],
+            ..Default::default()
+        });
+        s.plans[0].cuts = vec![span(10.0, 20.0)];
+        let split = |s: &mut Session| {
+            s.patch(
+                &[PlanPatch {
+                    id: 0,
+                    split_by_flight: Some(true),
+                    ..Default::default()
+                }],
+                Editor::Agent,
+            )
+        };
+        // The log starts 5 s into the clip: the packs move with it, and the cuts follow.
+        s.patch(
+            &[PlanPatch {
+                id: 0,
+                log_offset_s: Some(5.0),
+                ..Default::default()
+            }],
+            Editor::User,
+        )
+        .unwrap();
+        assert_eq!(
+            s.plans[0].flight.as_ref().unwrap().pack_spans,
+            vec![span(5.0, 105.0), span(155.0, 295.0)]
+        );
+        split(&mut s).unwrap();
+        // The hand-made cut stays; the second pack's lead-out stops at the clip's end.
+        assert_eq!(
+            s.plans[0].cuts,
+            vec![span(3.0, 107.0), span(10.0, 20.0), span(153.0, 297.0)]
+        );
+        assert!(s.plans[0].suggested.cuts);
+        // Again: the same ranges are not added twice.
+        split(&mut s).unwrap();
+        assert_eq!(s.plans[0].cuts.len(), 3);
+        // A clip without packs has nothing to split, and nothing changes.
+        s.plans[0].flight = None;
+        assert!(split(&mut s)
+            .unwrap_err()
+            .to_string()
+            .contains("nothing to split"));
+        assert_eq!(s.plans[0].cuts.len(), 3);
+    }
+
+    /// A session of two DVR files of one recording (600 s, then 450 s) and a third, short
+    /// recording, staged in `dir`.
+    fn split_session(dir: &Path) -> Session {
+        let mut s = session();
+        let mut c = s.clips[0].clone();
+        let mut clips = Vec::new();
+        for (id, secs) in [(0, 600.0), (1, 450.0), (2, 90.0)] {
+            c.id = id;
+            c.name = format!("PICT000{}.AVI", id + 1);
+            c.rel = format!("DCIM/{}", c.name);
+            c.status = ClipStatus::Ok;
+            c.duration = secs;
+            c.key = format!("k{id}");
+            c.probe = Some(crate::media::Probe {
+                duration: secs,
+                video_packets: (secs * 30.0) as u64,
+                video_streams: 1,
+                audio_streams: 1,
+                fps: Some(30.0),
+                width: Some(720),
+                height: Some(480),
+                ..Default::default()
+            });
+            let f = dir.join(&c.name);
+            std::fs::write(&f, b"avi").unwrap();
+            c.staged = Some(f);
+            clips.push(c.clone());
+        }
+        s.plans = clips
+            .iter()
+            .map(|c| ClipPlan {
+                id: c.id,
+                ..s.plans[0].clone()
+            })
+            .collect();
+        s.clips = clips;
+        s
+    }
+
+    /// One 2026-09-28 log: two packs that straddle the DVR's file boundary at 600 s, then a
+    /// 90 s pack for the third file.
+    fn split_log(dir: &Path) {
+        std::fs::create_dir(dir.join("LOGS")).unwrap();
+        let mut csv = String::from("Date,Time,1RSS(dB),RQly(%)\n");
+        for (a, b) in [(0, 500), (530, 1040), (1400, 1488)] {
+            for t in a..=b {
+                let t = 10 * 3600 + t;
+                csv.push_str(&format!(
+                    "2026-09-28,{:02}:{:02}:{:02}.000,-50,100\n",
+                    t / 3600,
+                    t / 60 % 60,
+                    t % 60
+                ));
+            }
+        }
+        std::fs::write(dir.join("LOGS/Quad-2026-09-28.csv"), csv).unwrap();
+    }
+
+    #[test]
+    fn a_joined_recording_is_one_clip_for_matching_and_import() {
+        let d = tempfile::tempdir().unwrap();
+        let mut s = split_session(d.path());
+        split_log(d.path());
+        s.find_joins(true);
+        assert_eq!(s.clips[1].part_of, Some(0));
+        assert_eq!(s.clips[0].duration, 1050.0);
+        assert_eq!(
+            s.clips[0].probe.as_ref().unwrap().video_packets,
+            31500,
+            "frames add up"
+        );
+        assert!(s.clips[0]
+            .source()
+            .unwrap()
+            .to_string_lossy()
+            .ends_with(".ffconcat"));
+        assert!(s.clips[2].join.is_none() && s.clips[2].part_of.is_none());
+        let today = NaiveDate::from_ymd_opt(2026, 9, 30).unwrap();
+        let plan = |s: &mut Session| {
+            s.plan_dates(
+                Some(&d.path().join("LOGS")),
+                NaiveDate::from_ymd_opt(2026, 9, 28),
+                &Tunables::default(),
+                today,
+                &[],
+            )
+        };
+        plan(&mut s);
+        // The joined clip claims both packs, across the file boundary; the part is not
+        // matched on its own.
+        let p0 = &s.plans[0];
+        assert_eq!(p0.badge, Badge::Matched, "{:?}", p0.match_reason);
+        assert_eq!(p0.segments, 2);
+        let f = p0.flight.as_ref().unwrap();
+        assert_eq!(
+            f.pack_spans,
+            vec![
+                Span {
+                    start: 0.0,
+                    end: 500.0
+                },
+                Span {
+                    start: 530.0,
+                    end: 1040.0
+                }
+            ]
+        );
+        assert_eq!(s.plans[1].badge, Badge::Unmatched);
+        assert_eq!(s.plans[2].segments, 1);
+        // Split by flight on the joined timeline: the second cut runs past 600 s.
+        s.patch(
+            &[PlanPatch {
+                id: 0,
+                split_by_flight: Some(true),
+                ..Default::default()
+            }],
+            Editor::User,
+        )
+        .unwrap();
+        assert_eq!(s.plans[0].cuts.last().unwrap().end, 1042.0);
+        // One job for the recording: the part imports with it.
+        let ids: Vec<usize> = s.jobs().iter().map(|j| j.id).collect();
+        assert_eq!(ids, [0, 2]);
+        // A part cannot be edited on its own.
+        let err = s
+            .patch(
+                &[PlanPatch {
+                    id: 1,
+                    name: Some("x".into()),
+                    ..Default::default()
+                }],
+                Editor::User,
+            )
+            .unwrap_err();
+        assert!(err.to_string().contains("part of clip 0"), "{err}");
+
+        // Kept apart: three clips again, the cuts past 600 s go, and the first file matches
+        // the first pack alone.
+        s.patch(
+            &[PlanPatch {
+                id: 0,
+                joined: Some(false),
+                ..Default::default()
+            }],
+            Editor::User,
+        )
+        .unwrap();
+        assert_eq!(s.clips[0].duration, 600.0);
+        assert_eq!(s.clips[1].part_of, None);
+        assert!(s.plans[0].cuts.iter().all(|c| c.end <= 600.0));
+        assert_eq!(s.clips[0].source(), s.clips[0].staged.as_deref());
+        plan(&mut s);
+        assert_eq!(s.jobs().len(), 3);
+        assert_eq!(s.plans[0].segments, 1);
+        // Joined again by hand.
+        s.patch(
+            &[PlanPatch {
+                id: 0,
+                joined: Some(true),
+                ..Default::default()
+            }],
+            Editor::User,
+        )
+        .unwrap();
+        assert_eq!(s.clips[0].duration, 1050.0);
+        // Not a recording's first file.
+        assert!(s
+            .patch(
+                &[PlanPatch {
+                    id: 2,
+                    joined: Some(true),
+                    ..Default::default()
+                }],
+                Editor::User
+            )
+            .is_err());
+    }
+
+    #[test]
+    fn found_but_off_keeps_the_files_apart() {
+        let d = tempfile::tempdir().unwrap();
+        let mut s = split_session(d.path());
+        s.find_joins(false);
+        let j = s.clips[0].join.as_ref().unwrap();
+        assert!(!j.on);
+        assert_eq!(j.parts, vec![1]);
+        assert_eq!(s.clips[0].duration, 600.0);
+        assert_eq!(s.clips[1].part_of, None);
+        assert_eq!(s.jobs().len(), 3);
+        // Once a file imported, the join cannot change.
+        s.results.push(crate::pipeline::ClipResult {
+            id: 1,
+            outcome: Outcome::Verified,
+            output: None,
+            original: None,
+            size: 0,
+            error: None,
+            encoder: None,
+            meta: None,
+            cuts: Vec::new(),
+            qt: Vec::new(),
+        });
+        assert!(s.set_joined(0, true).is_err());
     }
 
     #[test]

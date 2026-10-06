@@ -140,6 +140,7 @@ fn cut_clip(format: Format) {
             ..Default::default()
         },
         extra: Vec::new(),
+        parts: Vec::new(),
     };
     let mut planner = NamePlanner::new();
     let mut r = pipeline::import_clip(&t, clip, &job, &st, &mut planner, &mut |_| {});

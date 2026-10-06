@@ -44,6 +44,10 @@ fn string(v: &Value) -> Result<()> {
     v.as_str().map(|_| ()).context("a string")
 }
 
+fn yes() -> bool {
+    true
+}
+
 fn boolean(v: &Value) -> Result<()> {
     v.as_bool().map(|_| ()).context("true or false")
 }
@@ -97,6 +101,12 @@ pub const KEYS: &[Key] = &[
     Key {
         file: "deleteClipsAfterImport",
         name: Some("delete_clips_after_import"),
+        about: "true or false",
+        check: boolean,
+    },
+    Key {
+        file: "joinSplitRecordings",
+        name: Some("join_split_recordings"),
         about: "true or false",
         check: boolean,
     },
@@ -349,6 +359,10 @@ pub struct Defaults {
     /// one run, never on.
     #[serde(default)]
     pub delete_clips_after_import: bool,
+    /// Import a recording the DVR split into several files as one clip (see `join`). On by
+    /// default; a run or a clip may keep the files separate.
+    #[serde(default = "yes")]
+    pub join_split_recordings: bool,
     pub default_name: String,
     pub photos_album: String,
     pub log_dir: Option<PathBuf>,
@@ -396,6 +410,7 @@ impl Default for Defaults {
             keep_originals: false,
             add_time: false,
             delete_clips_after_import: false,
+            join_split_recordings: true,
             default_name: crate::naming::DEFAULT_NAME.into(),
             photos_album: crate::photos::DEFAULT_ALBUM.into(),
             log_dir: None,
@@ -446,6 +461,9 @@ impl Defaults {
         }
         if let Some(b) = get(v, "deleteClipsAfterImport") {
             d.delete_clips_after_import = b;
+        }
+        if let Some(b) = get(v, "joinSplitRecordings") {
+            d.join_split_recordings = b;
         }
         if let Some(n) = get::<String>(v, "defaultName").filter(|n| !n.trim().is_empty()) {
             d.default_name = n;
@@ -514,6 +532,7 @@ mod tests {
         // New settings get their defaults.
         assert_eq!(x.geocoder, "apple");
         assert!(!x.delete_clips_after_import);
+        assert!(x.join_split_recordings);
 
         // A write of one key keeps every other key, byte for byte in value.
         let after = set(

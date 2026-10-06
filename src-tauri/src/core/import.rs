@@ -32,6 +32,11 @@ impl Core {
     /// Copies the clips off `source` (a card mount or folder). With no source, the first
     /// detected card.
     pub fn stage(&self, source: Option<&Path>) -> Result<Session> {
+        self.stage_with(source, None)
+    }
+
+    /// `stage`, with this run's choice to join split recordings (None: the setting).
+    pub fn stage_with(&self, source: Option<&Path>, join: Option<bool>) -> Result<Session> {
         let _b = self.claim()?;
         let source = match source {
             Some(p) => p.to_path_buf(),
@@ -55,6 +60,7 @@ impl Core {
                 }));
             },
         )?;
+        let s = Session { join, ..s };
         self.commit(Some(s.clone()))?;
         Ok(s)
     }
@@ -100,15 +106,21 @@ impl Core {
         let tools = media::find_tools()?;
         let mut s = self.current()?;
         let hooks = self.hooks.clone();
-        s.analyse(&tools, &self.cache.join("thumbs"), &mut |index, total| {
-            hooks.event(Event::Progress(Progress {
-                phase: Phase::Analyse,
-                index,
-                total,
-                done: 0,
-                size: 0,
-            }));
-        })?;
+        let join = s.join.unwrap_or(self.defaults().join_split_recordings);
+        s.analyse(
+            &tools,
+            &self.cache.join("thumbs"),
+            join,
+            &mut |index, total| {
+                hooks.event(Event::Progress(Progress {
+                    phase: Phase::Analyse,
+                    index,
+                    total,
+                    done: 0,
+                    size: 0,
+                }));
+            },
+        )?;
         self.commit(Some(s.clone()))?;
         drop(_b);
         self.hooks.analysed();
@@ -117,8 +129,13 @@ impl Core {
 
     /// Stage, analyse and plan dates in one go, the way the GUI does on card insert.
     pub fn load(&self, source: Option<&Path>) -> Result<Session> {
+        self.load_with(source, None)
+    }
+
+    /// `load`, with this run's choice to join split recordings (None: the setting).
+    pub fn load_with(&self, source: Option<&Path>, join: Option<bool>) -> Result<Session> {
         media::find_tools()?;
-        self.stage(source)?;
+        self.stage_with(source, join)?;
         self.analyse()?;
         self.plan_dates(LogChoice::Keep, None)
     }
@@ -200,6 +217,18 @@ impl Core {
             .ok_or_else(|| anyhow!("No clips loaded. Load a card or folder first."))?;
         let mut next = s.clone();
         next.patch(patches, editor)?;
+        // A recording joined or parted is matched to the radio logs again, as before.
+        if patches.iter().any(|p| p.joined.is_some()) {
+            let d = self.defaults();
+            let (dir, day) = (next.log_dir.clone(), next.log_day);
+            next.plan_dates(
+                dir.as_deref(),
+                day,
+                &d.tunables,
+                chrono::Local::now().date_naive(),
+                &d.profiles,
+            );
+        }
         // Exported cuts the new lists drop: keep or trash their files, forget their results.
         let mut removed = Vec::new();
         for p in patches {
@@ -548,12 +577,14 @@ fn delete_clip_file(tools: &media::Tools, s: &Session, clip: &Clip) -> Result<()
     if let Some(e) = &clip.stage_error {
         return Err(format!("it did not copy off the card ({e})"));
     }
-    // The clip's latest result must be a verified export.
+    // The clip's latest result must be a verified export. A part of a joined recording
+    // counts only when the joined output verified.
+    let id = clip.part_of.unwrap_or(clip.id);
     let r = s
         .results
         .iter()
         .rev()
-        .find(|r| r.id == clip.id)
+        .find(|r| r.id == id)
         .ok_or("it was not imported")?;
     match r.outcome {
         Outcome::Verified => {}
@@ -564,7 +595,12 @@ fn delete_clip_file(tools: &media::Tools, s: &Session, clip: &Clip) -> Result<()
     let (Some(output), Some(meta)) = (&r.output, &r.meta) else {
         return Err("its output was not recorded".into());
     };
-    let probe = clip.probe.as_ref().ok_or("the clip was never probed")?;
+    let head = s
+        .clips
+        .iter()
+        .find(|c| c.id == id)
+        .ok_or("its recording is not in the session")?;
+    let probe = head.probe.as_ref().ok_or("the clip was never probed")?;
     media::verify(tools, probe, output, meta)
         .and_then(|_| media::verify_qt(tools, output, &r.qt))
         .map_err(|e| format!("its output did not verify again: {e:#}"))?;

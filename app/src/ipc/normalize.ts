@@ -37,7 +37,7 @@ export const moments = (xs: G.Moment[] | null | undefined): Moment[] =>
 
 export const location = (l: G.Location | null | undefined): Location | null => (l && has(l.lat) && has(l.lon) ? { ...l, lat: l.lat, lon: l.lon } : null);
 
-export const flight = (f: G.FlightStats | null | undefined): FlightStats | null => (f ? { ...f, armed_s: n(f.armed_s) } : null);
+export const flight = (f: G.FlightStats | null | undefined): FlightStats | null => (f ? { ...f, armed_s: n(f.armed_s), pack_spans: spans(f.pack_spans) } : null);
 
 export const places = (xs: G.Place[] | null | undefined): Place[] => (xs || []).filter((p) => has(p.lat) && has(p.lon)).map((p) => ({ name: p.name, lat: p.lat!, lon: p.lon! }));
 
@@ -79,6 +79,7 @@ export function libClip(c: G.LibItem_Serialize): LibClip {
     dvr: c.dvr ?? null,
     import: c.import ?? null,
     aliases: c.aliases ?? [],
+    parts: c.parts ?? [],
     cut_of: c.cut_of && has(c.cut_of[1].start) && has(c.cut_of[1].end) ? [c.cut_of[0], { start: c.cut_of[1].start!, end: c.cut_of[1].end! }] : null,
   };
 }
@@ -95,7 +96,7 @@ export function libraryView(v: G.LibraryView_Serialize): LibraryView {
 const signal = (s: G.SignalScan | null | undefined): SignalScan | null => (s ? { ...s, step: n(s.step), dead_air: moments(s.dead_air), keep: spans(s.keep) } : null);
 
 export function clip(c: G.Clip): Clip {
-  return { ...c, kind: c.kind ?? "analog", duration: n(c.duration), probe: c.probe ? { ...c.probe, duration: n(c.probe.duration) } : null, signal: signal(c.signal), key: c.key ?? "", clock: c.clock ?? null, sidecars: c.sidecars ?? [] };
+  return { ...c, kind: c.kind ?? "analog", duration: n(c.duration), probe: c.probe ? { ...c.probe, duration: n(c.probe.duration) } : null, signal: signal(c.signal), key: c.key ?? "", clock: c.clock ?? null, sidecars: c.sidecars ?? [], mtime: c.mtime ?? null, join: c.join ?? null, part_of: c.part_of ?? null };
 }
 
 const meta = (m: G.ClipMeta | undefined): ClipMeta => ({ profile: m?.profile ?? null, location: location(m?.location), keywords: m?.keywords ?? [], author: m?.author ?? null });

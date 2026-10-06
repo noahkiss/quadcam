@@ -2,7 +2,7 @@
 // (step, selected clip, progress) lives here too.
 import type { StateCreator } from "zustand";
 import type { State } from ".";
-import type { ClipDeletion, ClipPlan, ClipResult, FormatPlan, Session, StageProgress } from "../ipc/types";
+import type { Clip, ClipDeletion, ClipPlan, ClipResult, FormatPlan, Session, StageProgress } from "../ipc/types";
 
 export type Step = "load" | "review" | "export" | "finish";
 
@@ -77,13 +77,20 @@ const sessionKey = (s: Session | null) => (s ? `${s.source}\n${s.clips.map((c) =
 
 export const planOf = (s: Session | null, id: number): ClipPlan | undefined => s?.plans.find((p) => p.id === id);
 
+/** The clips that import on their own: every clip but the later files of a joined recording. */
+export const clipsOf = (s: Session | null): Clip[] => (s?.clips || []).filter((c) => c.part_of == null);
+
+/** The DVR files a clip is made of: its own, then a joined recording's later files. */
+export const filesOf = (s: Session, c: Clip): Clip[] => [c, ...(c.join?.on ? c.join.parts.map((id) => s.clips.find((x) => x.id === id)).filter((x): x is Clip => !!x) : [])];
+
 /** The newest result for a clip. */
 export const resultOf = (s: Session | null, id: number): ClipResult | undefined => [...(s?.results || [])].reverse().find((r) => r.id === id);
 
 /** Clips not skipped and not yet verified. */
 export function sessionLeft(s: Session | null): number {
   if (!s) return 0;
-  return s.plans.filter((p) => !p.skip && !s.results.some((r) => r.id === p.id && r.outcome === "verified")).length;
+  const parts = new Set(s.clips.filter((c) => c.part_of != null).map((c) => c.id));
+  return s.plans.filter((p) => !p.skip && !parts.has(p.id) && !s.results.some((r) => r.id === p.id && r.outcome === "verified")).length;
 }
 
 /** The session still has work: clips left, or nothing exported yet. */

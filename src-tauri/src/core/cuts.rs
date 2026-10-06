@@ -57,6 +57,46 @@ impl Core {
         })
     }
 
+    /// "Split by flight" for a library clip: one cut per radio-log pack, added to its cut
+    /// list. The new ranges wait for `library_export_cuts`, as hand-made cuts do.
+    pub fn library_split_by_flight(&self, id: &str) -> Result<CutChange> {
+        let (root, c) = self.clip(id)?;
+        let packs = c
+            .stats
+            .as_ref()
+            .map(|f| f.pack_spans.clone())
+            .unwrap_or_default();
+        let add = trim::flight_cuts(&c.display_name(), &packs, c.duration)?;
+        let mut have: Vec<Span> = crate::cuts::library_exported(&root, &c)
+            .iter()
+            .map(|e| e.span)
+            .collect();
+        have = trim::with_cuts(&have, &c.pending_cuts);
+        self.library_set_cuts(id, &trim::with_cuts(&have, &add), None)
+    }
+
+    /// "Split by flight" for a session clip: one cut per radio-log pack, added to its cut
+    /// list.
+    pub fn session_split_by_flight(&self, id: usize) -> Result<CutChange> {
+        let patch = crate::session::PlanPatch {
+            id,
+            split_by_flight: Some(true),
+            ..Default::default()
+        };
+        self.patch_inner(&[patch], crate::session::Editor::User)?;
+        let s = self.current()?;
+        let p = s
+            .plans
+            .iter()
+            .find(|p| p.id == id)
+            .context("no such clip")?;
+        Ok(CutChange::Applied {
+            cuts: p.cuts.clone(),
+            kept: Vec::new(),
+            trashed: Vec::new(),
+        })
+    }
+
     /// Keeps (as clips of their own) or trashes the files of removed exported cuts.
     pub(crate) fn drop_exported(
         &self,

@@ -862,3 +862,64 @@ fn library_update_checks_everything_first() {
         .to_string()
         .starts_with("Nothing to change"));
 }
+
+/// "Split by flight" on a library clip: one cut per pack in the file's flight numbers, added
+/// to the cuts it has, written as `_cutN` files like any other cut. A clip without packs has
+/// nothing to split.
+#[test]
+fn split_by_flight_in_the_library() {
+    let l = lab(Layout::YearDay, false, false);
+    import(&l);
+    let a = by_name(&l, "backyard loops");
+    let id = a.clip.id.clone();
+    let stats = quadcam_lib::metadata::FlightStats {
+        armed_s: 1.6,
+        packs: 2,
+        pack_spans: vec![
+            Span {
+                start: 0.2,
+                end: 1.0,
+            },
+            Span {
+                start: 1.8,
+                end: 2.6,
+            },
+        ],
+        ..Default::default()
+    };
+    library::write_keys(
+        &l.root.join(&a.clip.path),
+        &[(library::KEY_STATS, serde_json::to_string(&stats).unwrap())],
+    )
+    .unwrap();
+    l.core.library_rebuild().unwrap();
+    let change = l.core.library_split_by_flight(&id).unwrap();
+    let span = |a, b| Span { start: a, end: b };
+    // The 0.8 s gap gives 0.4 s each side; the exported 0.5-1.5 cut stays.
+    let CutChange::Applied { cuts, .. } = change else {
+        panic!("no question expected: {change:?}");
+    };
+    assert_eq!(cuts, vec![span(0.0, 1.4), span(0.5, 1.5), span(1.4, 3.0)]);
+    let made = l.core.library_export_cuts(&id).unwrap();
+    let names: Vec<String> = made
+        .iter()
+        .map(|m| m.path.file_name().unwrap().to_string_lossy().to_string())
+        .collect();
+    assert_eq!(
+        names,
+        [
+            "2026-09-27_backyard_loops_cut2.mp4",
+            "2026-09-27_backyard_loops_cut3.mp4"
+        ]
+    );
+    // A second split adds nothing new.
+    let CutChange::Applied { cuts, .. } = l.core.library_split_by_flight(&id).unwrap() else {
+        panic!()
+    };
+    assert_eq!(cuts.len(), 3);
+    assert!(by_name(&l, "backyard loops").clip.pending_cuts.is_empty());
+    // The other clip has no radio-log packs.
+    let b = by_name(&l, "gap run");
+    let err = l.core.library_split_by_flight(&b.clip.id).unwrap_err();
+    assert!(err.to_string().contains("nothing to split"), "{err:#}");
+}

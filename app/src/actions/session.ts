@@ -6,7 +6,7 @@ import type { FormatPlan, PlanPatch, Session } from "../ipc/types";
 import { toast } from "../components/toastStore";
 import { fmtBytes, tilde } from "../lib/format";
 import { ask, store } from "../store";
-import { planOf, resultOf, sessionLeft, unfinished, type Step } from "../store/session";
+import { clipsOf, planOf, resultOf, sessionLeft, unfinished, type Step } from "../store/session";
 import { sel } from "../store/settings";
 
 const S = () => store.getState();
@@ -130,7 +130,7 @@ export async function editAll(patches: PlanPatch[]) {
 export function forAll(fn: (id: number) => Omit<PlanPatch, "id">) {
   const s = S().session;
   if (!s) return;
-  return editAll(s.clips.filter((c) => !planOf(s, c.id)?.skip).map((c) => ({ id: c.id, ...fn(c.id) })));
+  return editAll(clipsOf(s).filter((c) => !planOf(s, c.id)?.skip).map((c) => ({ id: c.id, ...fn(c.id) })));
 }
 
 export function toggleSkip(id: number | null) {
@@ -143,7 +143,7 @@ export function toggleSkip(id: number | null) {
 
 export function stepReview(delta: number) {
   const s = S();
-  const ids = s.session?.clips.map((c) => c.id) || [];
+  const ids = clipsOf(s.session).map((c) => c.id);
   const next = ids[ids.indexOf(s.selectedClip ?? -1) + delta];
   if (next == null) return;
   s.selectClip(next);
@@ -157,7 +157,7 @@ export async function metaToAll(id: number) {
   if (!s || !p) return;
   const m = p.meta;
   const patch = { profile: m.profile || "", keywords: m.keywords || [], author: m.author || "", ...(m.location ? { location: m.location } : { place: "" }) };
-  if (await editAll(s.clips.filter((c) => c.id !== id).map((c) => ({ id: c.id, ...patch })))) toast("Applied to every clip.");
+  if (await editAll(clipsOf(s).filter((c) => c.id !== id).map((c) => ({ id: c.id, ...patch })))) toast("Applied to every clip.");
 }
 
 export async function savePlace(id: number, name: string) {
@@ -299,7 +299,8 @@ export function formatBlocker(s: Session | null): string | null {
   if (!s.results.length) return "Add the clips to the library first.";
   for (const c of s.clips) {
     if (c.stage_error) return `${c.name} did not copy off the card.`;
-    const r = resultOf(s, c.id);
+    // A later file of a joined recording is in the library with its first file.
+    const r = resultOf(s, c.part_of ?? c.id);
     if (!r) return `${c.name} is not in the library.`;
     if (r.outcome === "failed") return `${c.name} was not added to the library.`;
   }

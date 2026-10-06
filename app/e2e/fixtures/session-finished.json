@@ -5,12 +5,16 @@
  "clips": [
   {
    "card_path": "/Users/pilot/quadcam/test-clips/synthetic/PICT0001.AVI",
+   "clock": null,
    "detail": "150 frames",
    "duration": 5,
    "id": 0,
+   "join": null,
    "key": "x07fee4b870d01a6f",
    "kind": "analog",
+   "mtime": "2026-10-06T14:35:56.995623940Z",
    "name": "PICT0001.AVI",
+   "part_of": null,
    "probe": {
     "audio_streams": 1,
     "duration": 5,
@@ -26,6 +30,7 @@
    },
    "recovered": null,
    "rel": "PICT0001.AVI",
+   "sidecars": [],
    "signal": {
     "dead_air": [],
     "keep": [],
@@ -34,18 +39,22 @@
    },
    "size": 3074396,
    "stage_error": null,
-   "staged": "/Users/pilot/Library/Caches/app.quadcam/staging/20261001-170044/PICT0001.AVI",
+   "staged": "/Users/pilot/Library/Caches/app.quadcam/staging/20261006-173855/PICT0001.AVI",
    "status": "ok",
    "thumb": "/Users/pilot/Library/Caches/app.quadcam/thumbs/PICT0001-x07fee4b870d01a6f.jpg"
   },
   {
    "card_path": "/Users/pilot/quadcam/test-clips/synthetic/PICT0002.AVI",
+   "clock": null,
    "detail": "3600 frames",
    "duration": 120,
    "id": 1,
+   "join": null,
    "key": "xd0d144c9ce319e86",
    "kind": "analog",
+   "mtime": "2026-10-06T14:35:59.017618324Z",
    "name": "PICT0002.AVI",
+   "part_of": null,
    "probe": {
     "audio_streams": 1,
     "duration": 120,
@@ -61,6 +70,7 @@
    },
    "recovered": null,
    "rel": "PICT0002.AVI",
+   "sidecars": [],
    "signal": {
     "dead_air": [],
     "keep": [],
@@ -69,18 +79,22 @@
    },
    "size": 78131276,
    "stage_error": null,
-   "staged": "/Users/pilot/Library/Caches/app.quadcam/staging/20261001-170044/PICT0002.AVI",
+   "staged": "/Users/pilot/Library/Caches/app.quadcam/staging/20261006-173855/PICT0002.AVI",
    "status": "ok",
    "thumb": "/Users/pilot/Library/Caches/app.quadcam/thumbs/PICT0002-xd0d144c9ce319e86.jpg"
   },
   {
    "card_path": "/Users/pilot/quadcam/test-clips/synthetic/PICT0003.AVI",
+   "clock": null,
    "detail": "90 frames",
    "duration": 3,
    "id": 2,
+   "join": null,
    "key": "x1108525f0a2b87e8",
    "kind": "analog",
+   "mtime": "2026-10-06T14:35:59.109949819Z",
    "name": "PICT0003.AVI",
+   "part_of": null,
    "probe": {
     "audio_streams": 0,
     "duration": 3,
@@ -96,6 +110,7 @@
    },
    "recovered": null,
    "rel": "PICT0003.AVI",
+   "sidecars": [],
    "signal": {
     "dead_air": [],
     "keep": [],
@@ -104,18 +119,22 @@
    },
    "size": 1651322,
    "stage_error": null,
-   "staged": "/Users/pilot/Library/Caches/app.quadcam/staging/20261001-170044/PICT0003.AVI",
+   "staged": "/Users/pilot/Library/Caches/app.quadcam/staging/20261006-173855/PICT0003.AVI",
    "status": "ok",
    "thumb": "/Users/pilot/Library/Caches/app.quadcam/thumbs/PICT0003-x1108525f0a2b87e8.jpg"
   },
   {
    "card_path": "/Users/pilot/quadcam/test-clips/synthetic/PICT0004.AVI",
+   "clock": null,
    "detail": "incomplete, recovered 0:02",
    "duration": 2,
    "id": 3,
+   "join": null,
    "key": "xe9d02942ab9d5f86",
    "kind": "analog",
+   "mtime": "2026-10-06T14:35:59.226487756Z",
    "name": "PICT0004.AVI",
+   "part_of": null,
    "probe": {
     "audio_streams": 1,
     "duration": 2,
@@ -129,8 +148,9 @@
     "video_streams": 1,
     "width": 720
    },
-   "recovered": "/Users/pilot/Library/Caches/app.quadcam/staging/20261001-170044/PICT0004.recovered.avi",
+   "recovered": "/Users/pilot/Library/Caches/app.quadcam/staging/20261006-173855/PICT0004.recovered.avi",
    "rel": "PICT0004.AVI",
+   "sidecars": [],
    "signal": {
     "dead_air": [],
     "keep": [],
@@ -139,31 +159,38 @@
    },
    "size": 1231251,
    "stage_error": null,
-   "staged": "/Users/pilot/Library/Caches/app.quadcam/staging/20261001-170044/PICT0004.AVI",
+   "staged": "/Users/pilot/Library/Caches/app.quadcam/staging/20261006-173855/PICT0004.AVI",
    "status": "incomplete",
    "thumb": "/Users/pilot/Library/Caches/app.quadcam/thumbs/PICT0004-xe9d02942ab9d5f86.jpg"
   },
   {
    "card_path": "/Users/pilot/quadcam/test-clips/synthetic/PICT0005.AVI",
+   "clock": null,
    "detail": "zero bytes",
    "duration": 0,
    "id": 4,
+   "join": null,
    "key": "",
    "kind": "analog",
+   "mtime": "2026-10-06T14:35:59.232302603Z",
    "name": "PICT0005.AVI",
+   "part_of": null,
    "probe": null,
    "recovered": null,
    "rel": "PICT0005.AVI",
+   "sidecars": [],
    "signal": null,
    "size": 0,
    "stage_error": null,
-   "staged": "/Users/pilot/Library/Caches/app.quadcam/staging/20261001-170044/PICT0005.AVI",
+   "staged": "/Users/pilot/Library/Caches/app.quadcam/staging/20261006-173855/PICT0005.AVI",
    "status": "empty",
    "thumb": null
   }
  ],
  "date_warnings": [],
  "in_photos": [],
+ "join": null,
+ "kind": "analog",
  "log_day": null,
  "log_days": [],
  "log_dir": null,
@@ -178,6 +205,7 @@
    "log_interval_s": null,
    "log_model": null,
    "log_offset_s": 0,
+   "match_reason": null,
    "meta": {
     "author": null,
     "keywords": [
@@ -221,6 +249,7 @@
    "log_interval_s": null,
    "log_model": null,
    "log_offset_s": 0,
+   "match_reason": null,
    "meta": {
     "author": null,
     "keywords": [
@@ -259,6 +288,7 @@
    "log_interval_s": null,
    "log_model": null,
    "log_offset_s": 0,
+   "match_reason": null,
    "meta": {
     "author": null,
     "keywords": [],
@@ -295,6 +325,7 @@
    "log_interval_s": null,
    "log_model": null,
    "log_offset_s": 0,
+   "match_reason": null,
    "meta": {
     "author": null,
     "keywords": [],
@@ -321,12 +352,13 @@
   {
    "badge": "unmatched",
    "cuts": [],
-   "date": "2026-10-01",
+   "date": "2026-10-06",
    "flight": null,
    "id": 4,
    "log_interval_s": null,
    "log_model": null,
    "log_offset_s": 0,
+   "match_reason": null,
    "meta": {
     "author": null,
     "keywords": [],
@@ -378,7 +410,7 @@
     ],
     [
      "com.apple.quicktime.software",
-     "QuadCam 0.4.1"
+     "QuadCam 0.6.2"
     ],
     [
      "com.apple.quicktime.title",
@@ -414,7 +446,7 @@
     ],
     [
      "app.quadcam.import",
-     "20261001-170045"
+     "20261006-173856"
     ],
     [
      "app.quadcam.place",
@@ -466,7 +498,7 @@
     ],
     [
      "com.apple.quicktime.software",
-     "QuadCam 0.4.1"
+     "QuadCam 0.6.2"
     ],
     [
      "com.apple.quicktime.title",
@@ -506,7 +538,7 @@
     ],
     [
      "app.quadcam.import",
-     "20261001-170045"
+     "20261006-173856"
     ],
     [
      "app.quadcam.place",
@@ -549,7 +581,7 @@
     ],
     [
      "com.apple.quicktime.software",
-     "QuadCam 0.4.1"
+     "QuadCam 0.6.2"
     ],
     [
      "com.apple.quicktime.title",
@@ -585,7 +617,7 @@
     ],
     [
      "app.quadcam.import",
-     "20261001-170045"
+     "20261006-173856"
     ],
     [
      "app.quadcam.place",
@@ -628,7 +660,7 @@
   }
  ],
  "source": "/Users/pilot/quadcam/test-clips/synthetic",
- "staging": "/Users/pilot/Library/Caches/app.quadcam/staging/20261001-170044",
+ "staging": "/Users/pilot/Library/Caches/app.quadcam/staging/20261006-173855",
  "version": 1,
  "warnings": []
 }

@@ -729,11 +729,20 @@ impl Core {
                 dir.join(lib::ORIGINALS)
                     .join(format!("{new_stem}.{}", ext(&p))),
             ));
-            // Sidecars (a DJI `.srt`) follow the original's new stem.
+            // Sidecars (a DJI `.srt`, a joined recording's `.part2.avi`) follow the
+            // original's new stem and keep what follows it.
+            let orig_stem = stem_of(&p);
             for side in c.sidecars(root) {
-                let to = dir
-                    .join(lib::ORIGINALS)
-                    .join(format!("{new_stem}.{}", ext(&side)));
+                let name = side
+                    .file_name()
+                    .unwrap_or_default()
+                    .to_string_lossy()
+                    .to_string();
+                let rest = name
+                    .strip_prefix(&orig_stem)
+                    .map(str::to_string)
+                    .unwrap_or_else(|| format!(".{}", ext(&side)));
+                let to = dir.join(lib::ORIGINALS).join(format!("{new_stem}{rest}"));
                 moves.push((side, to));
             }
         }

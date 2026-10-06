@@ -12,7 +12,8 @@ QuadCam is a macOS app that imports the recordings from your FPV goggles into a 
 - **Named files.** Each file is `YYYY-MM-DD_<name>.mp4`, in a folder per year and per flying day.
 - **Small MP4s.** Hardware H.264 makes files that play everywhere and are much smaller than the DVR's MJPEG. A lossless MOV option keeps the original frames. DJI clips are already H.264 or H.265: QuadCam copies them as they are.
 - **Verified imports.** QuadCam compares every output with its source: frame count, duration, streams and metadata. It recovers half-written clips, for example after a power-off during recording, and marks empty ones.
-- **Moments and dead air.** QuadCam finds rolls, flips, punch-outs and dives in the radio log, and the no-signal stretches in the video. You export any range as a cut.
+- **Moments and dead air.** QuadCam finds rolls, flips, punch-outs and dives in the radio log, and the no-signal stretches in the video. You export any range as a cut. **Split by flight** makes one cut per radio-log pack.
+- **Long recordings stay whole.** An analog DVR splits a long recording into files of about 10 minutes. QuadCam imports those files as one clip. See [Joined recordings](docs/library.md#joined-recordings).
 - **A library you can trust.** Rate, flag, search, rename and edit your clips. Every detail is written into the file itself, and the index rebuilds from the files.
 - **Metadata that Photos reads.** Date, time, place, aircraft and keywords go into QuickTime tags. Add clips to Photos, into an album.
 - **Safe card format.** When every clip verified, QuadCam can erase an analog card as FAT32 and eject it, behind strict guards. It never formats a DJI card or air unit.
@@ -62,9 +63,9 @@ NKMK Digital Co. signs QuadCam with its Apple Developer ID, and Apple notarizes 
 
 1. **Load the clips.** Insert the card. It shows in the sidebar under **Import from**, with the number of new clips. Select it. You can also select **Folder…**, or drag a folder or clip files onto the window.
 2. **Wait for the copy.** The Import sheet opens and copies every clip to a local folder first. The sheet header shows how many files are left and the progress of the current one. You can pull the card when the copy is done.
-3. **Review.** Set the aircraft, the place and the date for all clips at once, or per clip. Type a short name for each clip. Select **Skip** for clips you do not want, such as bench tests.
+3. **Review.** Set the aircraft, the place and the date for all clips at once, or per clip. Type a short name for each clip. Select **Skip** for clips you do not want, such as bench tests. A recording that the DVR split into several files shows as one clip with its files; **Keep files separate** imports them one by one.
 4. **Add radio logs (optional).** Under **Radio logs**, select **Choose…** and pick your radio's `LOGS` folder. QuadCam then dates the clips and finds their moments.
-5. **Trim (optional).** Select a clip to play it, see its moments and set cuts.
+5. **Trim (optional).** Select a clip to play it, see its moments and set cuts. **Split by flight** adds one cut per radio-log pack.
 6. **Add to Library** (Command-Return). QuadCam converts and verifies each clip. When **Delete clips after import** is on in Settings, a checkbox above the button shows it; clear it to keep the clips on the card for this import.
 7. **Finish.** Add the files to Photos, eject the card, or format it (analog cards only). **Done · show in Library** shows the new clips under **Last import**.
 

@@ -100,6 +100,11 @@ export function TrimEditor({ trim, strip }: { trim: Trim; strip?: string }) {
             {`Use keep ranges (${model.keep.length})`}
           </Button>
         )}
+        {trim.opts.split && (model.packs ?? 0) > 0 && (
+          <Button size="sm" variant="ghost" icon="scissors" title="Adds one cut per radio-log pack" onClick={() => trim.opts.split?.()}>
+            {`Split by flight (${model.packs})`}
+          </Button>
+        )}
         {trim.opts.save && unsaved > 0 && (
           <Button size="sm" variant="primary" onClick={() => trim.opts.save?.()}>
             {unsaved === 1 ? "Save 1 cut" : `Save ${unsaved} cuts`}

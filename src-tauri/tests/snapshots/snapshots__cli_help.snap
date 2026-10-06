@@ -66,6 +66,7 @@ Arguments:
 
 Options:
       --json            Print one JSON object: {"ok":true,"result":...} or {"ok":false,"error":{...}}
+      --no-join         Keep recordings the DVR split into files as separate clips this run (the join_split_recordings setting is on by default)
       --session <FILE>  Session file (default: ~/Library/Caches/app.quadcam/session.json)
   -h, --help            Print help
 ===== quadcam-cli analyze --help
@@ -327,6 +328,7 @@ Options:
       --keep                     Use the suggested keep ranges (the clip without its dead air)
       --clear                    Remove every cut
       --session <FILE>           Session file (default: ~/Library/Caches/app.quadcam/session.json)
+      --by-flight                Add one cut per radio-log pack (the armed range plus up to 2 s each side)
       --log-offset <LOG_OFFSET>  Seconds into the clip where the radio log's first armed row falls
       --removed <REMOVED>        For cuts already exported that the new list drops: keep their files (as clips of their own) or move them to the Trash [possible values: keep, trash]
   -h, --help                     Print help
@@ -345,6 +347,8 @@ Options:
       --time <ID=HH:MM>     Time of day for one clip: ID=HH:MM ("ID=" for noon). Repeatable
       --skip <ID>           Skip a clip. Repeatable
       --unskip <ID>         Import a clip that was skipped. Repeatable
+      --separate <ID>       Import the files of a split recording (ID: its first file) as clips of their own. Repeatable
+      --join <ID>           Import the files of a split recording (ID: its first file) as one clip. Repeatable
       --cut <ID=START-END>  Add a cut range to a clip: ID=START-END (seconds or m:ss). Repeatable
       --format <FORMAT>     [possible values: mp4, mov]
       --encoder <ENCODER>   [possible values: videotoolbox, x264]
@@ -515,8 +519,9 @@ Arguments:
 Options:
       --clear              
       --json               Print one JSON object: {"ok":true,"result":...} or {"ok":false,"error":{...}}
-      --removed <REMOVED>  For exported cuts the new list drops: keep their files or move them to the Trash [possible values: keep, trash]
+      --by-flight          Add one cut per radio-log pack (the armed range plus up to 2 s each side)
       --session <FILE>     Session file (default: ~/Library/Caches/app.quadcam/session.json)
+      --removed <REMOVED>  For exported cuts the new list drops: keep their files or move them to the Trash [possible values: keep, trash]
       --export             Write the cuts that are not files yet
   -h, --help               Print help
 ===== quadcam-cli library apply-name-format --help

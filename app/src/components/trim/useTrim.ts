@@ -10,6 +10,8 @@ export interface TrimOptions {
   setOffset?: (s: number) => void;
   /** Writes the unsaved cuts (the library only). */
   save?: () => Promise<void>;
+  /** Adds one cut per radio-log pack. */
+  split?: () => Promise<void>;
 }
 
 export interface Trim {

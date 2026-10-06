@@ -1,5 +1,6 @@
 import { useEffect } from "react";
 import { useStore } from "../../store";
+import { clipsOf } from "../../store/session";
 import { Button } from "../../components/Button";
 import { Chip } from "../../components/Chip";
 import { Dialog } from "../../components/Dialog";
@@ -59,7 +60,7 @@ export function ImportSheet() {
               {source}
               <span className={styles.muted}>
                 {" "}
-                · {SOURCE_LABEL[session.kind]} {hasCard ? "card" : "folder"} · {session.clips.length} clips
+                · {SOURCE_LABEL[session.kind]} {hasCard ? "card" : "folder"} · {clipsOf(session).length} clips
               </span>
             </Chip>
           )}

@@ -9,6 +9,7 @@ pub mod cuts;
 pub mod disk;
 pub mod geocode;
 pub mod identity;
+pub mod join;
 pub mod library;
 pub mod logmatch;
 pub mod logs;
@@ -331,6 +332,8 @@ pub fn specta_builder() -> tauri_specta::Builder<tauri::Wry> {
             c::profile_delete,
             c::profile_default,
             c::session_cuts,
+            c::session_split,
+            c::library_split,
             env_check,
             default_output_dir,
             load_dropped,

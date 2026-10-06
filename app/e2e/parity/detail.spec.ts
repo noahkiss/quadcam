@@ -109,3 +109,11 @@ test("the menu bar's next and previous clip step through the library", async ({ 
   await app.page.evaluate(() => window.__qc!.emit("menu", "next-clip"));
   await expect(page.getByText("gap-run", { exact: true }).filter({ visible: true })).toHaveCount(1);
 });
+
+test("Split by flight adds one cut per radio-log pack, unsaved until Save", async ({ app, page }) => {
+  await page.getByRole("button", { name: "Split by flight (2)" }).click();
+  await expect.poll(async () => await app.method("library_split")).toContainEqual({ id: "xd0d144c9ce319e86" });
+  await expect(page.getByRole("status")).toContainText("2 cuts added, one per flight.");
+  await expect(page.getByText("Not saved yet")).toHaveCount(2);
+  await expect(page.getByRole("button", { name: "Save 2 cuts" })).toBeVisible();
+});

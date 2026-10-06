@@ -13,6 +13,10 @@ use std::path::PathBuf;
 #[derive(Debug, Clone, Default, Serialize, Deserialize, Type)]
 pub struct SourceParams {
     pub source: Option<PathBuf>,
+    /// Join recordings the DVR split into files, this run. None follows the
+    /// `join_split_recordings` setting.
+    #[serde(default)]
+    pub join: Option<bool>,
 }
 
 /// `dates`: where the radio logs come from, and the log day to match.
@@ -63,6 +67,12 @@ pub struct SessionCutsParams {
     pub cuts: Vec<Span>,
     #[serde(default)]
     pub removed_cuts: Option<RemovedCuts>,
+}
+
+/// One session clip.
+#[derive(Debug, Clone, Default, Serialize, Deserialize, Type)]
+pub struct SessionClipParams {
+    pub id: usize,
 }
 
 /// `clear`'s answer.

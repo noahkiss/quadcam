@@ -2,7 +2,7 @@
 //! an aircraft profile. Profiles and saved places live in the app's settings file, never in
 //! code. At export this becomes Apple QuickTime metadata (see `qtmeta`).
 
-use crate::moments::{Moment, MomentKind};
+use crate::moments::{Moment, MomentKind, Span};
 use crate::sources::SourceKind;
 use anyhow::{bail, Result};
 use chrono::{DateTime, Local, Utc};
@@ -92,9 +92,29 @@ pub struct FlightStats {
     pub min_lq: Option<f64>,
     pub min_rssi_db: Option<f64>,
     pub max_throttle: Option<f64>,
+    /// Each pack's armed range, in clip seconds (log time plus the log offset), in order.
+    /// Empty in files from before QuadCam 0.6.3; a library re-match writes it.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub pack_spans: Vec<Span>,
 }
 
 impl FlightStats {
+    /// The same numbers with the pack ranges moved by `by` seconds (a new log offset).
+    pub fn shifted(&self, by: f64) -> FlightStats {
+        let r = |x: f64| (x * 1000.0).round() / 1000.0;
+        FlightStats {
+            pack_spans: self
+                .pack_spans
+                .iter()
+                .map(|s| Span {
+                    start: r(s.start + by),
+                    end: r(s.end + by),
+                })
+                .collect(),
+            ..self.clone()
+        }
+    }
+
     pub fn line(&self) -> String {
         let s = self.armed_s.round() as u64;
         let mut parts = vec![format!(
@@ -414,6 +434,7 @@ mod tests {
             min_lq: Some(71.0),
             min_rssi_db: None,
             max_throttle: Some(1.0),
+            pack_spans: Vec::new(),
         };
         let r = resolve(
             &meta,

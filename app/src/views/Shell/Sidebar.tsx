@@ -1,7 +1,7 @@
 import type { ReactNode } from "react";
 import { useStore, type State } from "../../store";
 import { screenOf } from "../../store/library";
-import { unfinished } from "../../store/session";
+import { clipsOf, unfinished } from "../../store/session";
 import { TASK_LABEL } from "../../store/tasks";
 import { Icon, type IconName, type IconTint } from "../../components/Icon";
 import { fmtBytes, fmtDay, base, SOURCE_LABEL } from "../../lib/format";
@@ -72,7 +72,7 @@ export function Sidebar() {
             return <Item key={v.mount} icon="sd-card" tint="green" label={v.info.volume_name || base(v.mount)} detail={v.source ? SOURCE_LABEL[v.source] : null} badge={st?.new ? `${st.new} new` : null} count={st && !st.new ? 0 : null} onClick={() => importFrom(v.mount)} />;
           })}
           {!cards.length && <Item icon="sd-card" label="No card inserted" muted />}
-          {unfinished(s.session) && <Item icon="history" label="Unfinished import" count={s.session!.clips.length} onClick={() => openImport()} />}
+          {unfinished(s.session) && <Item icon="history" label="Unfinished import" count={clipsOf(s.session).length} onClick={() => openImport()} />}
           <Item icon="folder-open" label="Folder…" onClick={openFolderAction} />
           {s.volumes
             .filter((v) => v.is_radio)

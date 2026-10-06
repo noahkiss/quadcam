@@ -33,6 +33,19 @@ export async function saveLibraryCuts(id: string) {
   }
 }
 
+/** "Split by flight": one cut per radio-log pack, added to the clip's cut list. */
+export async function splitByFlight(call: () => Promise<CutChange>, before: number) {
+  try {
+    const r = await call();
+    if (r.status === "applied") {
+      const added = r.cuts.length - before;
+      toast(added > 0 ? `${added} cut${added === 1 ? "" : "s"} added, one per flight.` : "Every flight already has a cut.");
+    }
+  } catch (e) {
+    toast(errText(e), true);
+  }
+}
+
 export async function setSessionCuts(id: number, cuts: Span[]) {
   try {
     await applyCuts((k, removed) => api.sessionCuts(id, k, removed), cuts);

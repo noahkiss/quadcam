@@ -125,7 +125,7 @@ fn normalize(v: &mut Value, tmp: &[String], today: &str) {
                     "import" | "last_import" | "import_id" if x.is_string() => {
                         *x = json!("$IMPORT")
                     }
-                    "creation_time" if x.is_string() => *x = json!("$TIME"),
+                    "creation_time" | "mtime" if x.is_string() => *x = json!("$TIME"),
                     // ffmpeg's version, in the probe's tags.
                     "software" if x.is_string() => *x = json!("$LAVF"),
                     _ => normalize(x, tmp, today),

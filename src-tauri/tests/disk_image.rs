@@ -110,6 +110,7 @@ fn format_after_verified_import() {
             note: String::new(),
             meta: Default::default(),
             extra: Vec::new(),
+            parts: Vec::new(),
         };
         let r = pipeline::import_clip(&t, c, &job, &settings, &mut planner, &mut |_| {});
         assert_eq!(r.outcome, Outcome::Verified, "{:?}", r.error);

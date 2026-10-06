@@ -1,6 +1,6 @@
 import { memo, useEffect, useMemo, useRef, useState } from "react";
 import { store, useStore } from "../../store";
-import { planOf, resultOf } from "../../store/session";
+import { clipsOf, filesOf, planOf, resultOf } from "../../store/session";
 import { sel } from "../../store/settings";
 import { api, errText, fileSrc } from "../../ipc/api";
 import type { Clip, ClipPlan, Session } from "../../ipc/types";
@@ -15,7 +15,7 @@ import type { TrimModel } from "../../components/trim/model";
 import { useTrim } from "../../components/trim/useTrim";
 import { base, fmtBytes, fmtDur, tilde, SOURCE_LABEL } from "../../lib/format";
 import { edit, forAll, metaToAll, pickLogs, runExport, savePlace, setLogDay, setLogDir } from "../../actions/session";
-import { remember, setSessionCuts } from "../../actions/cuts";
+import { remember, setSessionCuts, splitByFlight } from "../../actions/cuts";
 import { MiniBar, MomentChips } from "../Library/ClipCard";
 import { Flight } from "../ClipDetail/Inspector";
 import styles from "./Review.module.css";
@@ -71,7 +71,7 @@ function SessionBar({ s }: { s: Session }) {
   const fromLog = plans.filter((p) => p.source === "log").length;
   const fromClip = plans.filter((p) => p.source === "clip").length;
   const logModels = [...new Set(plans.map((p) => p.log_model).filter(Boolean))];
-  const live = s.clips.filter((c) => !planOf(s, c.id)?.skip);
+  const live = clipsOf(s).filter((c) => !planOf(s, c.id)?.skip);
   const dur = live.reduce((a, c) => a + c.duration, 0);
   const dead = live.reduce((a, c) => a + (c.signal?.dead_air || []).reduce((x, d) => x + d.end - d.start, 0), 0);
   const todo = plans.length;
@@ -127,7 +127,7 @@ function SessionBar({ s }: { s: Session }) {
       </div>
       <div className={styles.sum}>
         <span className="mono">
-          {s.clips.length} clips · {fmtDur(dur - dead)} flying · {fmtDur(dead)} dead air
+          {clipsOf(s).length} clips · {fmtDur(dur - dead)} flying · {fmtDur(dead)} dead air
         </span>
         {deleteClips && <Checkbox label="Delete clips after import" checked={!keepClips} disabled={busy} onChange={(e) => store.setState({ keepClips: !e.target.checked })} />}
         <Button variant="primary" iconEnd="arrow-right" title={`Add ${todo} clip${todo === 1 ? "" : "s"} to the library (⌘↩)`} disabled={!tools || busy} onClick={runExport}>
@@ -143,7 +143,7 @@ function ClipRows({ s }: { s: Session }) {
   const progress = useStore((x) => x.progress);
   return (
     <div role="grid" aria-label="Clips" className={styles.rows} tabIndex={-1}>
-      {s.clips.map((c) => (
+      {clipsOf(s).map((c) => (
         <ClipRow key={c.id} clip={c} plan={planOf(s, c.id)!} session={s} selected={selected === c.id} progress={progress[c.id] || 0} />
       ))}
     </div>
@@ -190,7 +190,7 @@ const ClipRow = memo(function ClipRow({ clip: c, plan: p, session: s, selected, 
           <CommitInput type="date" aria-label={`Date for ${c.name}`} className={p.suggested.date ? styles.suggested : undefined} value={p.date} onCommit={(v) => v && edit({ id: c.id, date: v, time: hhmm })} />
           <CommitInput type="time" aria-label={`Time for ${c.name}`} title="Time of day (empty: noon)" className={p.suggested.date ? styles.suggested : undefined} value={hhmm} onCommit={(v) => edit({ id: c.id, time: v })} />
           <SourceChip plan={p} hasLogs={!!s.log_dir} />
-          <span className="mono">{c.name}</span>
+          <JoinControl s={s} clip={c} imported={outcome === "verified"} />
           {(c.status !== "ok" || c.stage_error) && (
             <Chip tint="yellow" icon="danger-triangle">
               {c.stage_error ? "missing" : c.detail}
@@ -239,6 +239,26 @@ const ClipRow = memo(function ClipRow({ clip: c, plan: p, session: s, selected, 
     </div>
   );
 });
+
+/** A recording the DVR split into files: the files it is made of, and the control that joins
+ * them into one clip or keeps them separate. Other clips: the file name. */
+function JoinControl({ s, clip: c, imported }: { s: Session; clip: Clip; imported: boolean }) {
+  if (!c.join) return <span className="mono">{c.name}</span>;
+  const n = c.join.parts.length + 1;
+  const last = s.clips.find((x) => x.id === c.join!.parts[n - 2]);
+  return (
+    <>
+      <span className="mono" title={filesOf(s, c).map((x) => x.name).join(", ") || c.name}>
+        {c.join.on ? `${c.name}–${last?.name ?? ""} · ${n} files` : c.name}
+      </span>
+      {!imported && (
+        <Button size="sm" variant="ghost" onClick={() => edit({ id: c.id, joined: !c.join!.on })}>
+          {c.join.on ? "Keep files separate" : `Join ${n} files`}
+        </Button>
+      )}
+    </>
+  );
+}
 
 function SourceChip({ plan: p, hasLogs }: { plan: ClipPlan; hasLogs: boolean }) {
   const why = p.match_reason ?? undefined;
@@ -292,6 +312,7 @@ function sessionTrimModel(s: Session, c: Clip, p: ClipPlan): TrimModel {
     hasLog: p.source === "log" || moments.length > 0,
     logOffset: p.log_offset_s,
     logInterval: p.log_interval_s,
+    packs: p.flight?.pack_spans.length ?? 0,
   };
 }
 
@@ -311,6 +332,7 @@ function Panel({ s, clip: c, plan: p }: { s: Session; clip: Clip; plan: ClipPlan
   const trim = useTrim(model, video, {
     setCuts: (cuts) => setSessionCuts(c.id, cuts),
     setOffset: (v) => edit({ id: c.id, log_offset_s: v }),
+    split: () => splitByFlight(() => api.sessionSplit(c.id), p.cuts.length),
   });
   const play = async () => {
     if (playing === "loading") return;
@@ -381,7 +403,7 @@ function Panel({ s, clip: c, plan: p }: { s: Session; clip: Clip; plan: ClipPlan
           <dl className={styles.file}>
             {(
               [
-                ["Clip", c.rel],
+                ["Clip", filesOf(s, c).map((x) => x.rel).join(", ")],
                 ["Duration", fmtDur(c.duration)],
                 ["Frames", pr?.video_packets ?? "–"],
                 ["Size", fmtBytes(c.size)],

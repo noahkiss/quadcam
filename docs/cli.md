@@ -23,10 +23,13 @@ quadcam-cli import --plan plan.json       # names, dates, notes and options from
 quadcam-cli moments                       # moments, dead air, keep ranges and cuts per clip
 quadcam-cli cut 0 12.5-18 1:02-1:10       # set clip 0's cuts (seconds or m:ss)
 quadcam-cli cut 0 --keep                  # cut clip 0 down to its keep ranges
+quadcam-cli cut 0 --by-flight             # add one cut per radio-log pack
 quadcam-cli cut 0 --log-offset 4.5        # the radio log starts 4.5 s into clip 0
 quadcam-cli import --cut 0=20-26          # add a cut, then import
 quadcam-cli import --time 0=18:30         # clip 0 was flown at 18:30 (the default is noon)
 quadcam-cli import --keep-clips           # keep the clips on the card this run
+quadcam-cli stage /Volumes/DVR --no-join  # keep split DVR recordings as separate clips this run
+quadcam-cli import --separate 0           # import clip 0's files (a split recording) one by one
 quadcam-cli meta all --place "Home field" --keywords park,windy
 quadcam-cli meta 2 --location 40.6892,-74.0445 --profile Whoop
 quadcam-cli cut 0 --clear --removed trash # drop exported cuts and move their files to the Trash
@@ -76,6 +79,7 @@ quadcam-cli library edit <id> --note "windy" --keywords park,windy --place "Home
 quadcam-cli library edit <id> --date 2026-09-28 --time 18:30   # moves the files to that day
 quadcam-cli library edit <id> --profile Whoop     # rewrites make, model, aircraft and keywords
 quadcam-cli library cut <id> 12-18 1:02-1:10 --export   # set the cuts and write the new ones
+quadcam-cli library cut <id> --by-flight --export        # add one cut per radio-log pack and write them
 quadcam-cli library apply-name-format             # rename clips to the name_date_format setting
 quadcam-cli library match-logs --logs /path/to/LOGS   # report which clips match a radio log; --apply writes flight numbers and moments
 quadcam-cli library trash <id>                    # clip, cuts and original to the Trash
@@ -113,6 +117,7 @@ quadcam-cli settings set output_dir=null          # back to the default
 
 - `output_dir`, `format`, `encoder`, `keep_originals`, `add_time`, `default_name`
 - `delete_clips_after_import` (`true` or `false`; see [Settings](settings.md#delete-clips-after-import))
+- `join_split_recordings` (`true` or `false`; see [Joined recordings](library.md#joined-recordings))
 - `photos_album`, `format_label`, `log_dir`, `layout`, `place_folders`, `tunables`
 - `geocoder` (`apple`, `nominatim`, `census` or `google`), `google_places_key`
 - `name_date_format` (`YYYY-MM-DD` or `YY.MM.DD`), `default_profile`
