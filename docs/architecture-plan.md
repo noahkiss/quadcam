@@ -503,3 +503,47 @@ The plan did not cover these; each took the conservative choice.
 - **Sources (R7).** The library does not yet write `app.quadcam.video_system` from a clip's
   `SourceKind`, because that would change file metadata. `disk::format_card` still erases as
   FAT32; the per-source file system waits for F1.
+
+## 8. F1: DJI O4 as a second source (2026-10-06)
+
+Decided from a real O4 Lite recording (`DJI_YYYYMMDDHHMMSS_NNNN_D.MP4`, 4K 29.97 fps H.264
+`avc1`, plus two data streams `djmd` "DJI meta" and `dbgi` "DJI dbgi", and a 1280x720 MJPEG
+attached picture; format tags `encoder: DJI O4`, `comment: EIS:RS;FOV:Linear;`; atoms
+`ftyp free free mdat moov`, so `moov` is last).
+
+- **Detection.** A volume (an air unit over USB, exFAT, or a goggles card) is DJI when it
+  holds `DCIM/DJI_*/` with `DJI_<14 digits>_<4 digits>_*.MP4` names (case-insensitive;
+  `DJIG####.MP4` from older goggles counts too). `MISC/` (`FC8770.db`, `THM/`, `IDX/`) is
+  DJI housekeeping and is ignored. `sources::all()` tries DJI before analog: its check is
+  strict (a name pattern) and analog's is loose (any `.avi`). A DJI volume is read-only to
+  QuadCam: it stages copies and never writes to, ejects for formatting, or formats it.
+- **Dating.** The file name holds the air unit's clock in local time; the container's
+  `creation_time` is the same instant in UTC. `intrinsic_time` parses the name first and
+  falls back to `creation_time`. The date plan gets a new `DateSource::Clip` ("clip clock")
+  that wins over the import date. Radio logs refine it: when a log segment on the clip's day
+  matches the clip (duration match as today) and starts within `clock_skew_s` (new tunable,
+  default 300 s) of the clip clock, the suggestion becomes `Log` with the log's time, model,
+  moments and flight numbers, so the profile can follow the EdgeTX model. A match outside
+  that window keeps the clip clock and adds a warning naming the skew. A clip clock before
+  2015 or after tomorrow is a reset clock: it is ignored with a warning, and logs or the import
+  day apply as for analog.
+- **Encode plan.** `EncodePlan::Copy`, new: no ffmpeg. For MP4 output the clip is copied
+  byte for byte (ffmpeg's MP4 muxer refuses the `djmd`/`dbgi` streams: "Could not find tag
+  for codec none"), then `qtmeta` writes the QuickTime keys and `mvhd` time in place, which
+  keeps every stream, Gyroflow's DJI metadata included. For MOV output ffmpeg remuxes with
+  `-map 0 -c copy -copy_unknown`, which carries the data streams but not their tags
+  (best effort; "Keep originals" is the safe archive). Nothing is ever transcoded. `verify`
+  reads the QuickTime keys first so the DJI `comment` tag (EIS and FOV) can stay. `probe`
+  skips attached pictures when it counts video streams. Cuts map only video and audio.
+- **Card policy.** `format_offered: false`, file system exFAT, no size warning. Goggles
+  format their own cards; `Core::format_plan` refuses before any other guard.
+- **Profile.** `pick_profile` order: the clip's own choice, the log's EdgeTX model, the first
+  profile whose `video_system` matches the source kind (`DJI`, `Analog`), the default. Code
+  defaults stay generic; the DJI profile lives in the person's settings file.
+- **Sidecars.** A same-stem `.SRT` (goggles subtitle track) is listed when present and kept
+  next to the original. OSD burn-in from it stays a later feature.
+- **Dead air.** None for DJI: blue screen and static are analog signals, and sampling 4K
+  frames is slow.
+- **Surfaces.** The session, volume list, CLI `cards`/`scan`, MCP `quadcam_status` and the
+  import sheet name the source kind. `description` reads `DJI <file>; date source: clip
+  clock`.
