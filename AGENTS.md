@@ -92,7 +92,7 @@ GitHub (`noahkiss/quadcam`, public) is the only remote. Users install the cask
 
 1. Set the new version in `src-tauri/Cargo.toml` and `src-tauri/tauri.conf.json`. They must match.
 2. Commit, then push a tag: `git tag vX.Y.Z && git push origin main vX.Y.Z`.
-3. `.github/workflows/release.yml` (through the shared `tauri-macos-release.yml`) builds, signs
+3. `.github/workflows/release.yml` (through the shared composite actions) builds, signs
    and notarizes `QuadCam.app` on a `macos-26` (arm64) runner with the
    prebuilt Tauri CLI from `app/`. It does not run the tests: before it attaches the zip
    (`quadcam-X.Y.Z-arm64.zip`) to the GitHub Release, it waits up to 40 minutes for a green
@@ -101,13 +101,14 @@ GitHub (`noahkiss/quadcam`, public) is the only remote. Users install the cask
 4. Watch it: `gh run watch -R noahkiss/quadcam --exit-status`. Re-run for an existing tag with
    `gh workflow run release.yml -R noahkiss/quadcam --ref vX.Y.Z -f tag=vX.Y.Z`.
 
-- **Signing:** `release.yml` is a thin caller of `tauri-macos-release.yml` in `noahkiss/workflows`.
-  It signs with `Developer ID Application: NKMK Digital Co. (2Z88BYP37C)` (hardened runtime,
+- **Signing:** `release.yml`'s own job names the `release` environment and runs the composite
+  actions `tauri-macos-build`, `macos-sign-notarize` and `release-attach` from `noahkiss/workflows`.
+  A reusable workflow from another repo cannot read this repo's environment secrets. It signs with `Developer ID Application: NKMK Digital Co. (2Z88BYP37C)` (hardened runtime,
   timestamp, `src-tauri/Entitlements.plist`), notarizes and staples. Local builds stay ad-hoc
   (`signingIdentity "-"`) with the same hardened runtime and entitlements. The one entitlement is
   `com.apple.security.personal-information.photos-library`, which PhotoKit needs under hardened
   runtime; add one only for a new protected resource. The secrets live in the `release`
-  environment (`v*` tags only), so a re-run dispatches on the tag:
+  environment (`v*` tags only), so a re-run dispatches on the tag, with that tag's `release.yml`:
   `gh workflow run release.yml -R noahkiss/quadcam --ref vX.Y.Z -f tag=vX.Y.Z`.
 - **Secret:** `HOMEBREW_TAP_TOKEN` (the tap PAT) lets the release dispatch the tap.
 - `.github/workflows/ci.yml` runs fmt, clippy, tests and a release build on every push and PR,

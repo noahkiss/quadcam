@@ -130,7 +130,7 @@ Users install the Homebrew cask `noahkiss/tap/quadcam`. A release is a pushed ta
    git tag vX.Y.Z && git push origin main vX.Y.Z
    ```
 
-3. `.github/workflows/release.yml` calls the shared workflow `tauri-macos-release.yml` in [`noahkiss/workflows`](https://github.com/noahkiss/workflows):
+3. `.github/workflows/release.yml` runs the shared composite actions `tauri-macos-build`, `macos-sign-notarize` and `release-attach` from [`noahkiss/workflows`](https://github.com/noahkiss/workflows). They run in this repo's own job, because that job names the `release` environment; a reusable workflow from another repo cannot read this repo's environment secrets.
    - It checks that both manifests state the tag's version.
    - It builds `QuadCam.app` on an Apple Silicon runner (`macos-26`) with the prebuilt Tauri CLI from `app/`.
    - It signs, notarizes and staples the app (see [Signing](#signing)).
@@ -145,7 +145,7 @@ To run the pipeline again for an existing tag:
 gh workflow run release.yml -R noahkiss/quadcam --ref vX.Y.Z -f tag=vX.Y.Z
 ```
 
-Run it on the tag (`--ref`): the `release` environment that holds the signing secrets admits only `v*` tags.
+Run it on the tag (`--ref`): the `release` environment that holds the signing secrets admits only `v*` tags. The run uses `release.yml` as it stands at that tag.
 
 A re-run never replaces a zip that is already attached. The cask's sha256 pins what was published, and a rebuilt zip is not byte-identical.
 

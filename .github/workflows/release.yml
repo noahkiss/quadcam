@@ -1,11 +1,16 @@
 name: Release
 
-# A pushed `v*` tag runs the shared Tauri macOS release
-# (noahkiss/workflows, tauri-macos-release.yml). It builds QuadCam.app on an
-# Apple Silicon runner, signs it with the Developer ID of NKMK Digital Co.,
-# notarizes and staples it, waits for a green ci.yml run on the tagged commit,
-# attaches quadcam-X.Y.Z-arm64.zip to the tag's GitHub Release, then bumps the
-# Homebrew cask (`noahkiss/tap/quadcam`) through the tap's own `bump.yml`.
+# A pushed `v*` tag builds QuadCam.app on an Apple Silicon runner, signs it
+# with the Developer ID of NKMK Digital Co., notarizes and staples it, waits for
+# a green ci.yml run on the tagged commit, attaches quadcam-X.Y.Z-arm64.zip to
+# the tag's GitHub Release, then bumps the Homebrew cask
+# (`noahkiss/tap/quadcam`) through the tap's own `bump.yml`.
+#
+# The steps are the shared composite actions in noahkiss/workflows
+# (tauri-macos-build, macos-sign-notarize, release-attach). They run in this
+# repository's own job because that job names the `release` environment: a
+# reusable workflow from another repository cannot read this repository's
+# environment secrets.
 #
 # To cut a release:
 #
@@ -13,7 +18,8 @@ name: Release
 #   2. Commit, then `git tag vX.Y.Z && git push origin main vX.Y.Z`.
 #
 # To re-run the pipeline for a tag that already exists, dispatch it on the tag
-# (the `release` environment admits only `v*` tags):
+# (the `release` environment admits only `v*` tags). The run uses the
+# release.yml at that tag:
 #
 #   gh workflow run release.yml -R noahkiss/quadcam --ref vX.Y.Z -f tag=vX.Y.Z
 #
@@ -23,8 +29,8 @@ name: Release
 # Secrets: the signing certificate and the App Store Connect API key live in
 # the `release` environment (MAC_CERT_P12, MAC_CERT_PASSWORD, ASC_KEY_P8,
 # ASC_KEY_ID, ASC_ISSUER_ID), which only `v*` tags can use. The tap hop needs
-# HOMEBREW_TAP_TOKEN, a PAT with `workflow` scope on the tap: this repo's
-# GITHUB_TOKEN cannot dispatch another repository.
+# the repository secret HOMEBREW_TAP_TOKEN, a PAT with `actions: write` on the
+# tap: this repo's GITHUB_TOKEN cannot dispatch another repository.
 
 on:
   push:
@@ -36,28 +42,65 @@ on:
         description: 'Existing tag to build and release, e.g. v0.2.0'
         required: true
 
-permissions:
-  contents: write
-  actions: read # read the CI run on the tagged commit
+permissions: {}
 
 jobs:
   release:
-    uses: noahkiss/workflows/.github/workflows/tauri-macos-release.yml@main
+    name: Build, sign and attach
+    runs-on: macos-26
+    environment: release
+    timeout-minutes: 90
     permissions:
       contents: write
-      actions: read
+      actions: read # read the CI run on the tagged commit
+    concurrency:
+      group: release-${{ inputs.tag || github.ref }}
+      cancel-in-progress: false
+    outputs:
+      tag: ${{ steps.build.outputs.tag }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ inputs.tag || github.ref }}
+
+      - id: build
+        uses: noahkiss/workflows/actions/tauri-macos-build@main
+        with:
+          tag: ${{ inputs.tag }}
+          app-name: QuadCam
+          asset-prefix: quadcam
+          brew-packages: ffmpeg
+
+      - uses: noahkiss/workflows/actions/macos-sign-notarize@main
+        with:
+          path: ${{ steps.build.outputs.app }}
+          identity: 'Developer ID Application: NKMK Digital Co. (2Z88BYP37C)'
+          team-id: 2Z88BYP37C
+          entitlements: src-tauri/Entitlements.plist
+          certificate-p12: ${{ secrets.MAC_CERT_P12 }}
+          certificate-password: ${{ secrets.MAC_CERT_PASSWORD }}
+          notary-key-p8: ${{ secrets.ASC_KEY_P8 }}
+          notary-key-id: ${{ secrets.ASC_KEY_ID }}
+          notary-issuer-id: ${{ secrets.ASC_ISSUER_ID }}
+
+      - uses: noahkiss/workflows/actions/release-attach@main
+        with:
+          path: ${{ steps.build.outputs.app }}
+          tag: ${{ steps.build.outputs.tag }}
+          asset: ${{ steps.build.outputs.asset }}
+          smoke-command: '"$APP/Contents/MacOS/quadcam-cli" --version'
+          require-ci-workflow: ci.yml
+
+  # Fire the tap's bump and fail unless it lands. tauri-macos-build checked the
+  # tag against a strict vX.Y.Z pattern, so it is safe inside the JSON string.
+  bump-tap:
+    needs: release
+    permissions: {}
+    uses: noahkiss/workflows/.github/workflows/dispatch-and-wait.yml@main
     with:
-      tag: ${{ inputs.tag }}
-      app-name: QuadCam
-      asset-prefix: quadcam
-      brew-packages: ffmpeg
-      smoke-command: '"$APP/Contents/MacOS/quadcam-cli" --version'
-      entitlements: src-tauri/Entitlements.plist
-      signing-identity: 'Developer ID Application: NKMK Digital Co. (2Z88BYP37C)'
-      team-id: 2Z88BYP37C
-      environment: release
-      require-ci-workflow: ci.yml
-      tap-repo: noahkiss/homebrew-tap
-      tap-formula: quadcam
+      repo: noahkiss/homebrew-tap
+      workflow: bump.yml
+      inputs_json: '{"formula":"quadcam","tag":"${{ needs.release.outputs.tag }}"}'
+      timeout_minutes: 45
     secrets:
-      tap_token: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+      token: ${{ secrets.HOMEBREW_TAP_TOKEN }}
