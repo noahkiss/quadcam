@@ -131,8 +131,11 @@ pub fn whole_disk_of(id: &str) -> String {
 pub struct Volume {
     pub mount: PathBuf,
     pub info: DiskInfo,
-    /// Removable and holds DVR clips.
+    /// Removable and holds clips of a source QuadCam reads.
     pub is_card: bool,
+    /// The video system of the clips on a card.
+    #[serde(default)]
+    pub source: Option<crate::sources::SourceKind>,
     /// Holds `LOGS/` next to `MODELS/` or `RADIO/`: an EdgeTX radio in USB Storage mode.
     pub is_radio: bool,
     pub warnings: Vec<String>,
@@ -152,15 +155,17 @@ pub fn card_warnings(info: &DiskInfo, policy: &crate::sources::CardPolicy) -> Ve
     let fs_ok = info
         .filesystem
         .as_deref()
-        .is_some_and(|f| f.to_uppercase().contains(policy.filesystem));
+        .is_some_and(|f| f.to_uppercase().contains(&policy.filesystem.to_uppercase()));
     if !fs_ok {
         w.push(format!(
-            "Card is {}, not FAT32. Most analog DVRs need a FAT32 card of 32 GB or less. Import works; you can format it to FAT32 at the end.",
-            info.filesystem.as_deref().unwrap_or("an unknown format")
+            "Card is {}, not {}. {}",
+            info.filesystem.as_deref().unwrap_or("an unknown format"),
+            policy.filesystem,
+            policy.filesystem_advice
         ));
     }
-    if info.total_size > policy.warn_above_bytes {
-        w.push("Card is larger than 32 GB. Most analog DVRs take cards up to 32 GB.".into());
+    if info.total_size > policy.warn_above_bytes && !policy.size_warning.is_empty() {
+        w.push(policy.size_warning.into());
     }
     w
 }
@@ -181,6 +186,7 @@ pub fn probe_volume(mount: &Path) -> Option<Volume> {
         mount: mount.to_path_buf(),
         info,
         is_card,
+        source: source.map(|s| s.kind()),
         is_radio,
         warnings,
     })
@@ -471,6 +477,28 @@ mod tests {
         let mut x = v.clone();
         x.filesystem = Some("ExFAT".into());
         x.total_size = 64_000_000_000;
-        assert_eq!(card_warnings(&x, &analog_policy()).len(), 2);
+        assert_eq!(
+            card_warnings(&x, &analog_policy()),
+            [
+                "Card is ExFAT, not FAT32. Most analog DVRs need a FAT32 card of 32 GB or less. Import works; you can format it to FAT32 at the end.",
+                "Card is larger than 32 GB. Most analog DVRs take cards up to 32 GB.",
+            ]
+        );
+    }
+
+    #[test]
+    fn dji_card_warnings_follow_its_policy() {
+        let dji = crate::sources::Source::card_policy(&crate::sources::dji::Dji);
+        let (_, v, _) = card();
+        let mut x = v.clone();
+        x.filesystem = Some("ExFAT".into());
+        x.total_size = 512_000_000_000;
+        assert!(card_warnings(&x, &dji).is_empty(), "exFAT of any size");
+        let w = card_warnings(&v, &dji);
+        assert_eq!(
+            w,
+            ["Card is MS-DOS FAT32, not exFAT. Import works; QuadCam only reads DJI cards."]
+        );
+        assert!(!w[0].contains("analog"));
     }
 }
