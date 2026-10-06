@@ -79,6 +79,9 @@ pub struct ClipPlan {
     pub log_model: Option<String>,
     #[serde(default)]
     pub flight: Option<FlightStats>,
+    /// Why the radio log matched, or how sure the match is.
+    #[serde(default)]
+    pub match_reason: Option<String>,
 }
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, specta::Type)]
@@ -267,6 +270,7 @@ impl Session {
                 cuts: Vec::new(),
                 meta: ClipMeta::default(),
                 log_model: None,
+                match_reason: None,
                 flight: None,
             })
             .collect();
@@ -334,10 +338,15 @@ impl Session {
         day: Option<NaiveDate>,
         tun: &Tunables,
         today: NaiveDate,
+        profiles: &[crate::metadata::Profile],
     ) {
-        let inputs: Vec<pipeline::DateInput> =
-            self.clips.iter().map(pipeline::DateInput::of).collect();
-        let plan = pipeline::plan_dates(&inputs, log_dir, day, today, tun);
+        let inputs: Vec<pipeline::DateInput> = self
+            .clips
+            .iter()
+            .zip(&self.plans)
+            .map(|(c, p)| pipeline::DateInput::of(c, self.kind, p.meta.profile.as_deref()))
+            .collect();
+        let plan = pipeline::plan_dates_with(&inputs, log_dir, day, today, tun, profiles);
         for (p, s) in self.plans.iter_mut().zip(plan.suggestions) {
             p.moments = s
                 .moments
@@ -347,6 +356,7 @@ impl Session {
             p.log_interval_s = s.log_interval_s;
             p.log_model = s.log_model.clone();
             p.flight = s.flight.clone();
+            p.match_reason = s.match_reason.clone();
             if p.source == DateSource::Edited {
                 continue;
             }
@@ -627,6 +637,7 @@ mod tests {
             cuts: Vec::new(),
             meta: ClipMeta::default(),
             log_model: None,
+            match_reason: None,
             flight: None,
         };
         Session {
@@ -797,6 +808,7 @@ mod tests {
             None,
             &Tunables::default(),
             NaiveDate::from_ymd_opt(2026, 9, 30).unwrap(),
+            &[],
         );
         assert_eq!(s.plans[0].date, d);
         assert_eq!(s.plans[1].date.to_string(), "2026-09-30");

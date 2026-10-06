@@ -238,23 +238,35 @@ const ClipRow = memo(function ClipRow({ clip: c, plan: p, session: s, selected, 
 });
 
 function SourceChip({ plan: p, hasLogs }: { plan: ClipPlan; hasLogs: boolean }) {
+  const why = p.match_reason ?? undefined;
+  const likely = p.badge === "likely" ? " · likely" : "";
+  // A log matched, but the clip keeps its own date (a wrong radio clock or a far clip clock).
+  const logged = p.badge !== "unmatched" && p.source !== "log" ? ` · radio log${likely}` : "";
   if (p.source === "log")
     return (
-      <Chip icon="radio" tint="green">
+      <Chip icon="radio" tint={p.badge === "likely" ? "yellow" : "green"} title={why}>
         {p.time ? `radio log ${p.time.slice(0, 5)}` : "radio log"}
         {p.segments > 1 ? ` · ${p.segments} packs` : ""}
+        {likely}
       </Chip>
     );
   if (p.source === "clip")
     return (
-      <Chip icon="clock" tint="sky">
+      <Chip icon="clock" tint="sky" title={why}>
         {p.time ? `clip clock ${p.time.slice(0, 5)}` : "clip clock"}
+        {logged}
       </Chip>
     );
   if (p.source === "edited")
     return (
       <Chip icon="pen" tint="mauve">
         edited
+      </Chip>
+    );
+  if (logged)
+    return (
+      <Chip icon="radio" tint="yellow" title={why}>
+        import date{logged}
       </Chip>
     );
   return <Chip icon="calendar">{hasLogs ? "no log match" : "import date"}</Chip>;

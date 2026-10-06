@@ -420,6 +420,7 @@ Commands:
   edit               Change a clip's note, keywords, author, place, aircraft profile, date or time
   cut                Set a clip's cut ranges, and write the new ones with --export
   apply-name-format  Rename clips to the name date format setting (YYYY-MM-DD or YY.MM.DD), with their cuts and originals. Default: every clip. Folders stay as they are
+  match-logs         Match radio logs to library clips by shape. Reports only; --apply writes the flight numbers and moments of "matched" clips (and "likely" ones named by id)
   trash              Move clips, with their cuts and originals, to the Trash
   photos             Add clips and their cuts to Photos
   help               Print this message or the help of the given subcommand(s)

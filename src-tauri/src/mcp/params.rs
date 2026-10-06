@@ -236,7 +236,7 @@ pub struct LibraryEditArgs {
 #[derive(Debug, Clone, Default, Deserialize, JsonSchema)]
 #[schemars(deny_unknown_fields)]
 pub struct LibraryFilesArgs {
-    #[schemars(required, extend("enum" = ["cuts", "export_cuts", "trash", "photos", "rebuild", "apply_name_format"]))]
+    #[schemars(required, extend("enum" = ["cuts", "export_cuts", "trash", "photos", "rebuild", "apply_name_format", "match_logs"]))]
     pub action: Option<String>,
     /// Library clip ids from quadcam_library. cuts and export_cuts take exactly one; rebuild takes none; apply_name_format takes some or none (every clip).
     #[schemars(length(max = 500))]
@@ -250,6 +250,13 @@ pub struct LibraryFilesArgs {
     pub export: Option<bool>,
     /// For photos: album name; empty string for the library only. Omit for the default.
     pub album: Option<String>,
+    /// For match_logs: EdgeTX LOGS folder; omit for the log folder setting.
+    pub log_dir: Option<String>,
+    /// For match_logs: one log day for every clip; omit to match each clip to its own day's logs, else a reset-clock (2000-01-01) log.
+    #[schemars(pattern(r"^\d{4}-\d{2}-\d{2}$"))]
+    pub day: Option<String>,
+    /// For match_logs: write flight numbers and moments into "matched" clips (and "likely" ones named in ids). Omit to only report.
+    pub apply: Option<bool>,
 }
 
 // ----- setup -----

@@ -547,3 +547,44 @@ attached picture; format tags `encoder: DJI O4`, `comment: EIS:RS;FOV:Linear;`; 
 - **Surfaces.** The session, volume list, CLI `cards`/`scan`, MCP `quadcam_status` and the
   import sheet name the source kind. `description` reads `DJI <file>; date source: clip
   clock`.
+
+## 9. Shape-first radio-log matching (2026-10-06)
+
+Found on a real DJI clip: `match_clips` walked clips and packs in order from the day's first
+pack, so a DJI clip at 18:36 claimed a 16:28 bench blip, failed the clock check (7704 s off)
+and kept the clip clock. Logs from a radio with a dead clock battery (`2000-01-01`, time
+restarting at 00:00 on each power-on) could not match at all.
+
+- **Shape first, every source.** `logmatch` builds segments per log file in file order. A
+  gap over `segment_gap_s` ends a pack; a gap over `session_gap_min`, a time that goes back,
+  or a new file starts a session. Packs under 1 s (power-on blips) are dropped. A candidate is
+  a clip claiming consecutive packs of one file and session whose span fits its duration
+  plus `tolerance_s`. Clips are ordered (by clip clock when all have one, else as given)
+  and a DP picks one candidate or none per clip, claims of one file in pack order, no pack
+  shared. Cost: `|duration - span|`; plus, with a believable radio clock, the clip clock's
+  skew / 100 (capped at the tolerance); plus, for two clocked clips in one power-on (or any
+  with a believable clock), the gap mismatch / 10 (capped). An unmatched clip costs its
+  duration plus the tolerance, so any fitting claim beats none.
+- **Confidence.** `matched` when unarmed time is at most twice the tolerance, the clip
+  clock (if compared) is within `clock_skew_s`, and the best solution without this clip's
+  claim costs more than tolerance / 3 extra. Otherwise `likely`. Every match carries a short
+  reason (`DateSuggestion::match_reason`, `ClipPlan::match_reason`).
+- **Clocks.** The clip clock no longer gates a match. With a believable radio clock, the log
+  dates the clip (a clocked clip only within `clock_skew_s`, else it keeps its clock with
+  the old warning). A reset-clock day (`day_is_plausible` false) still matches; clips keep
+  their own date and the plan warns once. With no plausible day, the newest pre-2020 day is
+  the default.
+- **Models.** `clip_models`: the clip's own profile's `edgetx_models`, else those of every
+  profile whose `video_system` is the clip's source. A log whose model a profile lists is a
+  candidate only for clips whose set holds it; a model no profile lists matches any clip
+  and the reason says so. `plan_dates_with` takes the profiles; `plan_dates` passes none.
+- **Library re-match.** `Core::library_match_logs` (`library_match_logs`, CLI
+  `library match-logs`, MCP `quadcam_library_files` action `match_logs`, Settings > Library
+  > Match radio logs) runs the same matcher on library clips: DJI by file name with the
+  clock from it, profile from the clip. Each clip is matched to its own day's logs, else the
+  newest reset-clock day; `Want::day` keeps clips of different days out of one power-on.
+  It reports by default; `apply` writes moments, stats and the flight line into matched
+  clips (likely ones only when named) and never redates.
+- **Open.** A DVR that splits one recording at 10 minutes cuts a pack between two clips;
+  the matcher cannot split a pack, so the second clip often reads `likely`.
+

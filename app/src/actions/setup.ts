@@ -19,6 +19,30 @@ export async function rebuildLibrary() {
   }
 }
 
+/** Matches radio logs to library clips, shows what matched, and writes it on OK. */
+export async function matchLibraryLogs() {
+  try {
+    const r = await api.matchLogs(false);
+    const count = (b: string) => r.clips.filter((c) => c.badge === b).length;
+    const matched = count("matched");
+    const lines = r.clips
+      .filter((c) => c.badge !== "unmatched")
+      .map((c) => `${c.path.split("/").pop()}: ${c.badge}${c.reason ? ` (${c.reason})` : ""}`);
+    const text = [...r.warnings, ...lines, `${n(count("unmatched"), "clip")} without a match.`].join("\n");
+    if (matched === 0) {
+      await ask(`No clip matched a radio log.`, text, { ok: "OK" });
+      return;
+    }
+    const ok = await ask(`${n(matched, "clip")} matched, ${count("likely")} likely`, `${text}\n\nWrite the flight numbers and moments into the matched clips? Dates and names stay as they are.`, { ok: "Write" });
+    if (!ok) return;
+    const w = await api.matchLogs(true);
+    toast(`${n(w.clips.filter((c) => c.applied).length, "clip")} updated from radio logs.`);
+    await S().loadLibrary();
+  } catch (e) {
+    toast(errText(e), true);
+  }
+}
+
 export function revealLibrary() {
   const out = sel.outputDir(S());
   if (out) openFolder(out).catch((e) => toast(errText(e), true));

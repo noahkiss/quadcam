@@ -98,10 +98,43 @@ The search sends what you type to the provider you picked, and to the US Census 
 }
 ```
 
-`edgetx_models` holds the model names as they start the radio's log files. `AIR65-2026-10-04-101500.csv` is model `AIR65`.
+`edgetx_models` holds the model names as they start the radio's log files. `AIR65-2026-10-04-101500.csv` is model `AIR65`. In Settings > Aircraft, this is **Radio model names**.
+
+The model names tie a radio model to an aircraft and its video system. A log of a listed model matches only the clips that profile fits: clips set to that profile, or clips from its **Video system** (`Analog` or `DJI`). So with `AIR65` on an analog profile and `METEOR75` on a DJI profile, a DJI clip never takes the `AIR65` log. A log whose model no profile lists matches any clip, by shape alone, and its match says so.
 
 ## Radio logs
 
 QuadCam reads EdgeTX "SD Logs" CSV files, with Date and Time in the first two columns. In the Import sheet, under **Radio logs**, select **Choose…** and pick your radio's `LOGS` folder. You can also pick the radio itself in USB storage mode.
 
 A matched log gives the clip its date, time of day, flight numbers and moments. See [Moments and cuts](moments-and-cuts.md).
+
+### How a log matches
+
+QuadCam matches by shape first, then checks clocks:
+
+- **Pack lengths.** A clip claims the packs (armed segments) whose span fits inside its length, plus 30 s of slack. A gap of more than 5 s ends a pack.
+- **Order.** Clips claim packs in recording order, and two clips never share a pack. Gaps between DJI clip clocks must agree with gaps between their packs.
+- **Clock.** The clip clock (DJI) breaks ties: the pack nearest it wins. It never rules a match out.
+- **Model.** The log's EdgeTX model must fit the clip's profile (see above).
+
+Each match gets a badge and a reason, shown on the Review step's date chip:
+
+| Badge | Meaning |
+|---|---|
+| matched | The packs fill the clip, with at most 60 s of unarmed time, and no other fit is nearly as good |
+| likely | A fit, but with much unarmed time, another pack that fits as well, or a clip clock more than 5 minutes off |
+| unmatched | No pack fits |
+
+The reason reads like `1 pack from 18:36:34 (113 s armed over 113 s) in a 113 s clip; clip clock 2 s off; log METEOR75 → profile Meteor75`.
+
+### A radio clock that reset
+
+When the radio's clock battery is flat, EdgeTX dates every log `2000-01-01`, and the time starts again at midnight on each power-on. QuadCam keeps such a log's rows in file order and treats each power-on as its own session. Clips still match by pack lengths and order. The clips keep their own date, and the Review step warns that the radio clock was wrong. When no log has a believable date, QuadCam picks the reset-clock day by itself.
+
+### Match clips already in the library
+
+Settings > Library > **Match radio logs** matches the log folder to every library clip. It shows what matched first. **Write** puts the flight numbers and moments of the matched clips into their files. It never changes a date, a time or a name.
+
+Each clip is matched to the logs of its own day. Clips of a day without a log are matched to a reset-clock log, if there is one. Clips of different days never share one power-on of the radio.
+
+The CLI and MCP server do the same: `quadcam-cli library match-logs [ids] [--logs DIR] [--day DAY] [--apply]`, and `quadcam_library_files` with action `match_logs`. Without `--apply`, nothing changes. With it, "likely" clips are written only when you name them by id.

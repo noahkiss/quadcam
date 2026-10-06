@@ -4,6 +4,7 @@
 pub mod import;
 
 use crate::library::{self, Layout};
+use crate::logmatch;
 use crate::logs::{self, Badge, Tunables};
 use crate::media::{self, Encoder, Format, Meta, Probe, Tools};
 use crate::metadata::{self as md, FlightStats, Resolved};
@@ -310,6 +311,9 @@ pub struct DateSuggestion {
     pub log_model: Option<String>,
     #[serde(default)]
     pub flight: Option<FlightStats>,
+    /// Why the log matched (or how sure), in a few words.
+    #[serde(default)]
+    pub match_reason: Option<String>,
 }
 
 /// Flight numbers from the log rows inside `windows`.
@@ -363,6 +367,11 @@ pub struct DateInput {
     pub duration: f64,
     /// The clip's own clock (`Clip::clock`).
     pub clock: Option<DateTime<Utc>>,
+    /// The source, and the clip's own profile: they pick which logs' EdgeTX models fit.
+    pub kind: SourceKind,
+    pub profile: Option<String>,
+    /// The flying day, when known apart from the log (a library clip's date).
+    pub day: Option<NaiveDate>,
 }
 
 impl DateInput {
@@ -374,11 +383,14 @@ impl DateInput {
         }
     }
 
-    pub fn of(c: &Clip) -> DateInput {
+    pub fn of(c: &Clip, kind: SourceKind, profile: Option<&str>) -> DateInput {
         DateInput {
             name: c.name.clone(),
             duration: c.duration,
             clock: c.clock,
+            kind,
+            profile: profile.map(str::to_string),
+            day: None,
         }
     }
 }
@@ -387,16 +399,30 @@ impl DateInput {
 /// reset (no time set since the battery ran down).
 pub const CLIP_CLOCK_MIN_YEAR: i32 = 2015;
 
-/// Suggests a date per clip. A clip with a believable clock of its own takes it ("clip
-/// clock"); every other clip gets the import date. Radio logs then refine both: a log match
-/// dates an analog clip, and dates a clocked clip only when the log starts within
-/// `clock_skew_s` of its clock. An implausible log day (radio clock reset) is ignored.
+/// Suggests a date per clip, without profiles (any log model fits any clip).
 pub fn plan_dates(
     clips: &[DateInput],
     log_dir: Option<&Path>,
     day: Option<NaiveDate>,
     import_day: NaiveDate,
     tun: &Tunables,
+) -> DatePlan {
+    plan_dates_with(clips, log_dir, day, import_day, tun, &[])
+}
+
+/// Suggests a date per clip. A clip with a believable clock of its own takes it ("clip
+/// clock"); every other clip gets the import date. Radio logs then match by shape
+/// (`logmatch`): pack lengths, order and gaps, with the profiles' EdgeTX models as a
+/// filter. A match gives the clip its flight numbers and moments, and its date and time
+/// when the radio clock is believable (for a clocked clip, only within `clock_skew_s` of
+/// its clock). A log of a reset radio clock still matches; the clip keeps its own date.
+pub fn plan_dates_with(
+    clips: &[DateInput],
+    log_dir: Option<&Path>,
+    day: Option<NaiveDate>,
+    import_day: NaiveDate,
+    tun: &Tunables,
+    profiles: &[md::Profile],
 ) -> DatePlan {
     let mut warnings = Vec::new();
     let tomorrow = import_day.succ_opt().unwrap_or(import_day);
@@ -426,6 +452,7 @@ pub fn plan_dates(
         log_interval_s: None,
         log_model: None,
         flight: None,
+        match_reason: None,
     };
     let mut plan = DatePlan {
         suggestions: clocks
@@ -440,30 +467,35 @@ pub fn plan_dates(
         day_used: None,
     };
     let Some(dir) = log_dir else { return plan };
-    let days = logs::read_log_rows(dir);
-    plan.log_days = days.keys().rev().copied().collect();
+    let files = logmatch::read_files(dir);
+    let days: std::collections::BTreeSet<NaiveDate> = files
+        .iter()
+        .flat_map(|f| f.rows.iter().map(|r| r.time.date()))
+        .collect();
+    plan.log_days = days.iter().rev().copied().collect();
     if days.is_empty() {
         plan.warnings
             .push(format!("No EdgeTX logs found in {}.", dir.display()));
         return plan;
     }
     // Default: the newest clip-clock day with logs, else the newest plausible day on or
-    // before the import date.
+    // before the import date, else the newest day of a reset radio clock.
     let day = day
         .or_else(|| {
             clocks
                 .iter()
                 .flatten()
                 .map(NaiveDateTime::date)
-                .filter(|d| days.contains_key(d))
+                .filter(|d| days.contains(d))
                 .max()
         })
         .or_else(|| {
-            days.keys()
+            days.iter()
                 .rev()
                 .find(|d| **d <= import_day && logs::day_is_plausible(**d, import_day, tun))
                 .copied()
-        });
+        })
+        .or_else(|| days.iter().rev().find(|d| d.year() < 2020).copied());
     let Some(day) = day else {
         plan.warnings.push(
             "Radio log dates look wrong (the radio clock may have reset). Using the import date."
@@ -471,62 +503,73 @@ pub fn plan_dates(
         );
         return plan;
     };
-    if !logs::day_is_plausible(day, import_day, tun) {
-        plan.warnings.push(format!(
-            "Log day {day} is far from today (the radio clock may have reset). Using the import date."
-        ));
-        return plan;
-    }
-    let Some(rows) = days.get(&day) else {
+    let files = logmatch::files_of_day(&files, day);
+    if files.is_empty() {
         plan.warnings.push(format!("No log rows for {day}."));
         return plan;
-    };
+    }
     plan.day_used = Some(day);
-    let times: Vec<NaiveDateTime> = rows.iter().map(|r| r.time).collect();
-    let segs = logs::segments(&times, tun);
-    let durations: Vec<f64> = clips.iter().map(|c| c.duration).collect();
-    for (i, (s, m)) in plan
-        .suggestions
-        .iter_mut()
-        .zip(logs::match_clips(&durations, &segs, tun))
-        .enumerate()
-    {
-        if let (Some(start), Badge::Matched | Badge::Likely) = (m.start, m.badge) {
-            if let Some(clock) = clocks[i] {
-                // A log of another day says nothing about this clip.
-                if clock.date() != day {
-                    continue;
-                }
-                let skew = (start - clock).num_milliseconds().abs() as f64 / 1000.0;
-                if skew > tun.clock_skew_s {
+    let clock_ok = logs::day_is_plausible(day, import_day, tun);
+    if !clock_ok {
+        plan.warnings.push(format!(
+            "Log day {day} is wrong or far from today (the radio clock may have reset). Matching by pack lengths; clips keep their own date."
+        ));
+    }
+    let segs = logmatch::segments(&files, tun);
+    // Clips in recording order: by clock when every clip has one, else as given.
+    let mut order: Vec<usize> = (0..clips.len()).collect();
+    if clocks.iter().all(Option::is_some) {
+        order.sort_by_key(|i| clocks[*i]);
+    }
+    // With a believable radio clock, a clip clock of another day says nothing about it.
+    let takes_part = |i: usize| !(clock_ok && clocks[i].is_some_and(|c| c.date() != day));
+    let order: Vec<usize> = order.into_iter().filter(|i| takes_part(*i)).collect();
+    let wants: Vec<logmatch::Want> = order
+        .iter()
+        .map(|&i| logmatch::Want {
+            duration: clips[i].duration,
+            clock: clocks[i],
+            models: logmatch::clip_models(clips[i].profile.as_deref(), clips[i].kind, profiles),
+            day: clips[i].day,
+        })
+        .collect();
+    let found = logmatch::match_all(&wants, &segs, &files, profiles, clock_ok, tun);
+    for (&i, f) in order.iter().zip(found) {
+        let Some(f) = f else { continue };
+        let claimed = &segs[f.first..f.first + f.segments];
+        let file = &files[claimed[0].file];
+        let rows = &file.rows[claimed[0].a..claimed[claimed.len() - 1].b];
+        let windows: Vec<(NaiveDateTime, NaiveDateTime)> =
+            claimed.iter().map(|g| (g.start, g.end)).collect();
+        let log = RadioLog::from_rows(rows, &windows, f.start, 0.0);
+        let s = &mut plan.suggestions[i];
+        // The log dates the clip only when its clock is believable, and, for a clip with
+        // its own clock, close to it.
+        let dates = clock_ok
+            && match f.skew_s {
+                Some(k) if k.abs() > tun.clock_skew_s => {
                     plan.warnings.push(format!(
-                        "{}: the matching radio log starts {skew:.0} s from the clip clock (more than {} s). Keeping the clip clock.",
+                        "{}: the matching radio log starts {:.0} s from the clip clock (more than {} s). Keeping the clip clock.",
                         clips[i].name,
+                        k.abs(),
                         tun.clock_skew_s
                     ));
-                    continue;
+                    false
                 }
-            }
-            let windows: Vec<(NaiveDateTime, NaiveDateTime)> = segs[m.first..m.first + m.segments]
-                .iter()
-                .map(|g| (g.start, g.end))
-                .collect();
-            let log = RadioLog::from_rows(rows, &windows, start, 0.0);
-            *s = DateSuggestion {
-                date: start.date(),
-                time: Some(start.time()),
-                source: DateSource::Log,
-                badge: m.badge,
-                segments: m.segments,
-                moments: log.moments(),
-                log_interval_s: log.interval(),
-                log_model: rows
-                    .iter()
-                    .find(|r| r.time >= start)
-                    .and_then(|r| r.model.as_deref().map(str::to_string)),
-                flight: Some(flight_stats(rows, &windows)),
+                _ => true,
             };
+        if dates {
+            s.date = f.start.date();
+            s.time = Some(f.start.time());
+            s.source = DateSource::Log;
         }
+        s.badge = f.badge;
+        s.segments = f.segments;
+        s.moments = log.moments();
+        s.log_interval_s = log.interval();
+        s.log_model = f.model.clone();
+        s.flight = Some(flight_stats(rows, &windows));
+        s.match_reason = Some(f.reason);
     }
     plan
 }
@@ -1010,6 +1053,7 @@ pub(crate) mod tests {
             name: name.into(),
             duration,
             clock,
+            ..Default::default()
         }
     }
 
@@ -1157,5 +1201,223 @@ pub(crate) mod tests {
         std::fs::write(&big, pattern(3 * (1 << 20) + 123)).unwrap();
         assert_eq!(fingerprint(&small).unwrap(), "x1c63a88ed3c3c2d9");
         assert_eq!(fingerprint(&big).unwrap(), "x472bd6ccd6749ca4");
+    }
+
+    /// An EdgeTX CSV: rows every 0.5 s over each `(day, from, to)` span, in the order given
+    /// (a reset radio clock writes times that go back).
+    fn edgetx_csv(spans: &[(&str, &str, &str)]) -> String {
+        let mut csv = String::from("Date,Time,1RSS(dB),RQly(%),RxBt(V)\n");
+        for (day, a, b) in spans {
+            let p = |s: &str| {
+                NaiveDateTime::parse_from_str(&format!("{day} {s}"), "%Y-%m-%d %H:%M:%S%.f")
+                    .unwrap()
+            };
+            let (mut t, b) = (p(a), p(b));
+            while t <= b {
+                csv.push_str(&format!(
+                    "{},{},-60,99,4.1\n",
+                    t.format("%Y-%m-%d"),
+                    t.format("%H:%M:%S%.3f")
+                ));
+                t += chrono::Duration::milliseconds(500);
+            }
+        }
+        csv
+    }
+
+    fn profile(name: &str, system: &str, models: &[&str]) -> md::Profile {
+        md::Profile {
+            name: name.into(),
+            video_system: system.into(),
+            edgetx_models: models.iter().map(|m| m.to_string()).collect(),
+            ..Default::default()
+        }
+    }
+
+    /// Three sessions on one day, the last never disarmed (the log ends armed). A DJI clip
+    /// recorded during the last one matches it, not the day's first pack.
+    #[test]
+    fn a_dji_clip_matches_the_pack_at_its_clock_not_the_first_of_the_day() {
+        let d = tempfile::tempdir().unwrap();
+        std::fs::create_dir(d.path().join("LOGS")).unwrap();
+        std::fs::write(
+            d.path().join("LOGS/METEOR75-2026-09-28.csv"),
+            edgetx_csv(&[
+                ("2026-09-28", "16:28:12.0", "16:28:13.0"),
+                ("2026-09-28", "16:33:12.0", "16:33:19.5"),
+                ("2026-09-28", "18:32:18.5", "18:34:47.5"),
+                ("2026-09-28", "18:36:34.5", "18:38:28.0"),
+            ]),
+        )
+        .unwrap();
+        let today = NaiveDate::from_ymd_opt(2026, 10, 6).unwrap();
+        let profiles = [
+            profile("Whoop", "Analog", &["AIR65 II"]),
+            profile("Meteor", "DJI", &["METEOR75"]),
+        ];
+        let clip = DateInput {
+            name: "DJI_20260928183636_0001_D.MP4".into(),
+            duration: 112.8,
+            clock: Some(local("18:36:36")),
+            kind: SourceKind::Dji,
+            profile: None,
+            day: None,
+        };
+        let p = plan_dates_with(
+            &[clip],
+            Some(d.path()),
+            None,
+            today,
+            &Tunables::default(),
+            &profiles,
+        );
+        assert!(p.warnings.is_empty(), "{:?}", p.warnings);
+        let s = &p.suggestions[0];
+        assert_eq!(s.badge, Badge::Matched);
+        assert_eq!(s.source, DateSource::Log);
+        assert_eq!(s.time.unwrap().to_string(), "18:36:34.500");
+        assert_eq!(s.segments, 1);
+        let f = s.flight.as_ref().unwrap();
+        assert_eq!((f.packs, f.armed_s), (1, 113.5));
+        assert!(s
+            .match_reason
+            .as_deref()
+            .unwrap()
+            .contains("log METEOR75 → profile Meteor"));
+    }
+
+    /// The radio clock battery was dead: every power-on starts again at 2000-01-01 00:00.
+    /// Clips still match by pack length and order, and keep their own date.
+    #[test]
+    fn a_log_with_a_reset_clock_matches_by_shape() {
+        let d = tempfile::tempdir().unwrap();
+        std::fs::create_dir(d.path().join("LOGS")).unwrap();
+        std::fs::write(
+            d.path().join("LOGS/AIR65 II-2000-01-01.csv"),
+            edgetx_csv(&[
+                // First power-on: one 3-minute pack.
+                ("2000-01-01", "00:00:40", "00:03:40"),
+                // Second power-on: the clock starts over. Packs of 100 s and 160 s.
+                ("2000-01-01", "00:00:30", "00:02:10"),
+                ("2000-01-01", "00:03:00", "00:05:40"),
+            ]),
+        )
+        .unwrap();
+        let today = NaiveDate::from_ymd_opt(2026, 9, 30).unwrap();
+        let profiles = [profile("Whoop", "Analog", &["AIR65 II"])];
+        let analog = |duration| DateInput {
+            duration,
+            ..Default::default()
+        };
+        let p = plan_dates_with(
+            &[analog(200.0), analog(115.0), analog(175.0)],
+            Some(d.path()),
+            None,
+            today,
+            &Tunables::default(),
+            &profiles,
+        );
+        assert_eq!(p.day_used, NaiveDate::from_ymd_opt(2000, 1, 1));
+        assert!(p.warnings[0].contains("clock may have reset"));
+        let b: Vec<Badge> = p.suggestions.iter().map(|s| s.badge).collect();
+        assert_eq!(b, [Badge::Matched; 3]);
+        for s in &p.suggestions {
+            assert_eq!(s.source, DateSource::Import, "the clip keeps its own date");
+            assert_eq!(s.date, today);
+            assert!(s.flight.is_some());
+            assert!(s
+                .match_reason
+                .as_deref()
+                .unwrap()
+                .contains("radio clock wrong"));
+        }
+        // The second clip took the 100 s pack of the second power-on, not rows of the first.
+        assert_eq!(p.suggestions[1].flight.as_ref().unwrap().armed_s, 100.0);
+    }
+
+    /// Two packs of the same length and one clip without a clock: either fits, so the match
+    /// stays "likely" and says so.
+    #[test]
+    fn an_ambiguous_match_stays_likely() {
+        let d = tempfile::tempdir().unwrap();
+        std::fs::create_dir(d.path().join("LOGS")).unwrap();
+        std::fs::write(
+            d.path().join("LOGS/Quad-2026-09-28.csv"),
+            edgetx_csv(&[
+                ("2026-09-28", "10:00:00", "10:02:00"),
+                ("2026-09-28", "11:00:00", "11:02:00"),
+            ]),
+        )
+        .unwrap();
+        let today = NaiveDate::from_ymd_opt(2026, 9, 30).unwrap();
+        let p = plan_dates(
+            &[DateInput::duration(130.0)],
+            Some(d.path()),
+            None,
+            today,
+            &Tunables::default(),
+        );
+        let s = &p.suggestions[0];
+        assert_eq!(s.badge, Badge::Likely);
+        let why = s.match_reason.as_deref().unwrap();
+        assert!(why.contains("fits as well"), "{why}");
+        assert!(why.contains("log Quad is in no profile"), "{why}");
+    }
+
+    /// A log whose model a profile lists matches only clips that profile fits; a model in
+    /// no profile matches by shape alone.
+    #[test]
+    fn edgetx_models_pick_the_log_for_the_source() {
+        let d = tempfile::tempdir().unwrap();
+        std::fs::create_dir(d.path().join("LOGS")).unwrap();
+        // The analog quad flew a 120 s pack at 10:00:00, the DJI quad one at 10:00:05.
+        std::fs::write(
+            d.path().join("LOGS/AIR65 II-2026-09-28.csv"),
+            edgetx_csv(&[("2026-09-28", "10:00:00", "10:02:00")]),
+        )
+        .unwrap();
+        std::fs::write(
+            d.path().join("LOGS/METEOR75-2026-09-28.csv"),
+            edgetx_csv(&[("2026-09-28", "10:00:05", "10:02:05")]),
+        )
+        .unwrap();
+        let today = NaiveDate::from_ymd_opt(2026, 9, 30).unwrap();
+        let profiles = [
+            profile("Whoop", "Analog", &["AIR65 II"]),
+            profile("Meteor", "DJI", &["METEOR75"]),
+        ];
+        let run = |kind, clock| {
+            plan_dates_with(
+                &[DateInput {
+                    duration: 125.0,
+                    clock,
+                    kind,
+                    ..Default::default()
+                }],
+                Some(d.path()),
+                NaiveDate::from_ymd_opt(2026, 9, 28),
+                today,
+                &Tunables::default(),
+                &profiles,
+            )
+            .suggestions
+            .remove(0)
+        };
+        let analog = run(SourceKind::Analog, None);
+        assert_eq!(analog.log_model.as_deref(), Some("AIR65 II"));
+        assert_eq!(analog.time.unwrap().to_string(), "10:00:00");
+        assert!(analog.match_reason.unwrap().contains("profile Whoop"));
+        let dji = run(SourceKind::Dji, Some(local("10:00:00")));
+        assert_eq!(dji.log_model.as_deref(), Some("METEOR75"));
+        assert_eq!(dji.time.unwrap().to_string(), "10:00:05");
+        // With no profiles, both logs are candidates; the analog clip's two choices tie.
+        let p = plan_dates(
+            &[DateInput::duration(125.0)],
+            Some(d.path()),
+            NaiveDate::from_ymd_opt(2026, 9, 28),
+            today,
+            &Tunables::default(),
+        );
+        assert_eq!(p.suggestions[0].badge, Badge::Likely);
     }
 }

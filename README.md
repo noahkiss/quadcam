@@ -8,7 +8,7 @@ QuadCam is a macOS app that imports the recordings from your FPV goggles into a 
 
 ## Features
 
-- **Dated clips.** Analog DVRs have no clock. QuadCam dates each clip from your EdgeTX radio logs, or uses the import date. DJI clips carry their own clock, and a matching radio log refines it.
+- **Dated clips.** Analog DVRs have no clock. QuadCam dates each clip from your EdgeTX radio logs, matched by pack lengths, or uses the import date. DJI clips carry their own clock, and a matching radio log refines it.
 - **Named files.** Each file is `YYYY-MM-DD_<name>.mp4`, in a folder per year and per flying day.
 - **Small MP4s.** Hardware H.264 makes files that play everywhere and are much smaller than the DVR's MJPEG. A lossless MOV option keeps the original frames. DJI clips are already H.264 or H.265: QuadCam copies them as they are.
 - **Verified imports.** QuadCam compares every output with its source: frame count, duration, streams and metadata. It recovers half-written clips, for example after a power-off during recording, and marks empty ones.

@@ -11,7 +11,7 @@ import { Icon, type IconName } from "../../components/Icon";
 import { SegmentedControl } from "../../components/SegmentedControl";
 import { toast } from "../../components/toastStore";
 import { tilde } from "../../lib/format";
-import { applyNameFormat, rebuildLibrary, revealLibrary } from "../../actions/setup";
+import { applyNameFormat, matchLibraryLogs, rebuildLibrary, revealLibrary } from "../../actions/setup";
 import { draftFrom, emptyProfile, layoutExample, validPlaces, valuesOf, VIDEO_SYSTEMS, type Draft } from "./draft";
 import styles from "./SettingsSheet.module.css";
 
@@ -180,6 +180,9 @@ function LibraryPane({ d, set }: { d: Draft; set: SetFn }) {
         <Button size="sm" variant="ghost" onClick={rebuildLibrary}>
           Rebuild from files
         </Button>
+        <Button size="sm" variant="ghost" onClick={matchLibraryLogs}>
+          Match radio logs
+        </Button>
       </div>
     </section>
   );
@@ -235,7 +238,13 @@ function AircraftPane({ d, setD, at, setAt }: { d: Draft; setD: (f: (d: Draft) =
           <TextField label="Camera make" value={p.camera_make} onChange={(e) => edit({ camera_make: e.target.value })} />
           <TextField label="Camera model" value={p.camera_model} onChange={(e) => edit({ camera_model: e.target.value })} />
           <div className={styles.wide}>
-            <ListField label="Radio model names" placeholder="AIR65, …" value={p.edgetx_models} onChange={(v) => edit({ edgetx_models: list(v) })} />
+            <ListField
+              label="Radio model names"
+              placeholder="AIR65, …"
+              hint="The model name on your radio, as it starts the log file names. Comma-separated. Only this aircraft's clips match those logs."
+              value={p.edgetx_models}
+              onChange={(v) => edit({ edgetx_models: list(v) })}
+            />
           </div>
           <SelectField label="Default place" value={p.place || ""} onChange={(e) => edit({ place: e.target.value || null })}>
             <option value="">None</option>
@@ -280,11 +289,11 @@ function AircraftPane({ d, setD, at, setAt }: { d: Draft; setD: (f: (d: Draft) =
 }
 
 /** A comma-separated list field that keeps the typing (commas, spaces) until it loses focus. */
-function ListField({ label, placeholder, value, onChange }: { label: string; placeholder: string; value: string[]; onChange: (v: string) => void }) {
+function ListField({ label, placeholder, hint, value, onChange }: { label: string; placeholder: string; hint?: string; value: string[]; onChange: (v: string) => void }) {
   const [text, setText] = useState<string | null>(null);
   return (
-    <Field label={label}>
-      {(id) => <Input id={id} placeholder={placeholder} value={text ?? value.join(", ")} onFocus={() => setText(value.join(", "))} onChange={(e) => setText(e.target.value)} onBlur={() => {
+    <Field label={label} hint={hint}>
+      {(id, hintId) => <Input id={id} aria-describedby={hintId} placeholder={placeholder} value={text ?? value.join(", ")} onFocus={() => setText(value.join(", "))} onChange={(e) => setText(e.target.value)} onBlur={() => {
         if (text != null) onChange(text);
         setText(null);
       }} />}

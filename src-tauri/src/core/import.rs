@@ -132,6 +132,7 @@ impl Core {
             day,
             &defaults.tunables,
             chrono::Local::now().date_naive(),
+            &defaults.profiles,
         );
         self.commit(Some(s.clone()))?;
         Ok(s)
