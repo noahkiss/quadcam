@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { store, useStore } from "../../store";
-import { planOf, resultOf } from "../../store/session";
+import { clipsOf, planOf, resultOf } from "../../store/session";
 import { sel } from "../../store/settings";
 import { Button } from "../../components/Button";
 import { Checkbox, Input } from "../../components/Field";
@@ -18,7 +18,10 @@ export function Finish() {
   if (!s) return null;
   const deleted = (deletion || []).filter((x) => x.state === "deleted").length;
   const onCard = (id: number) => {
-    const d = deletion?.find((x) => x.id === id);
+    // A joined recording's files go or stay together; one kept file names the reason.
+    const ids = [id, ...(s.clips.find((c) => c.id === id)?.join?.parts || [])];
+    const ds = (deletion || []).filter((x) => ids.includes(x.id));
+    const d = ds.find((x) => x.state === "kept") || ds[0];
     if (!d) return null;
     const [from, at] = s.card ? ["from the card", "on the card"] : ["from the folder", "in the folder"];
     return <span className={styles.muted}>{d.state === "deleted" ? `Deleted ${from}` : `Kept ${at}: ${d.reason || ""}`}</span>;
@@ -48,7 +51,7 @@ export function Finish() {
           {dirs.length === 1 ? `Saved to ${tilde(dirs[0], home)}/ · each file checked against its source` : `Saved under ${tilde(s.output_dir, home)} · each file checked against its source`}
         </p>
         <ol className={styles.files}>
-          {s.clips.map((c) => {
+          {clipsOf(s).map((c) => {
             const p = planOf(s, c.id)!;
             const r = resultOf(s, c.id);
             if (!r || r.outcome === "skipped")

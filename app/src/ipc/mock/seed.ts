@@ -33,7 +33,7 @@ export function richLibrary(): LibraryView {
     { kind: "flip", start: 45, end: 46, score: 0.8, source: "radio_log", detail: "full elevator 1.0 s" },
     { kind: "punch", start: 70, end: 71.2, score: 0.4, source: "radio_log", detail: "throttle 10 % to 95 % in 0.3 s" },
   ];
-  gap.stats = { armed_s: 110, packs: 2, min_rx_bat_v: 3.42, min_lq: 71, min_rssi_db: -96, max_throttle: 0.98 };
+  gap.stats = { armed_s: 110, packs: 2, min_rx_bat_v: 3.42, min_lq: 71, min_rssi_db: -96, max_throttle: 0.98, pack_spans: [{ start: 1, end: 50 }, { start: 60, end: 118 }] };
   const river = by("river-dive");
   river.flag = "reject";
   by("backyard-loops").rating = 2;
@@ -81,6 +81,24 @@ export function reviewSession(source = "/Volumes/DVR"): Session {
   s.source = source;
   return s;
 }
+
+/** The review session with PICT0001 and PICT0002 as one recording the DVR split, joined, and
+ * a radio log that matched it with two packs. */
+export function joinedSession(): Session {
+  const s = reviewSession();
+  const [a, b] = s.clips;
+  a.join = { parts: [b.id], list: `${dirOf(a.staged!)}/PICT0001.joined.ffconcat`, on: true, bytes: a.size + b.size, swap: { duration: a.duration, probe: a.probe, signal: a.signal, detail: a.detail } };
+  a.duration = a.duration + b.duration;
+  a.detail = "2 files, one recording, 2:05";
+  b.part_of = a.id;
+  const p = s.plans[0];
+  p.badge = "matched";
+  p.segments = 2;
+  p.flight = { armed_s: 100, packs: 2, min_rx_bat_v: 3.6, min_lq: 90, min_rssi_db: -80, max_throttle: 0.9, pack_spans: [{ start: 2, end: 60 }, { start: 70, end: 112 }] };
+  return s;
+}
+
+const dirOf = (p: string) => p.split("/").slice(0, -1).join("/");
 
 export function finishedSession(): Session {
   return clone(finishedFixture) as unknown as Session;

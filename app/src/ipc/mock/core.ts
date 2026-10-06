@@ -25,10 +25,10 @@ import { location as normLocation, spans as normSpans } from "../normalize";
 const DISPATCH = new Set([
   "library", "library_rate", "library_edit", "library_rename", "library_cuts", "library_export_cuts", "library_trash", "library_untrash",
   "library_photos", "library_apply_name_format", "library_match_logs", "library_rebuild", "library_rescan", "library_preview", "library_strips", "card_status",
-  "settings", "settings_set", "place_search", "place_save", "session_cuts", "profiles",
+  "settings", "settings_set", "place_search", "place_save", "session_cuts", "profiles", "session_split", "library_split",
 ]);
 
-export type Scenario = "library" | "empty" | "card" | "review" | "finished-card" | "dji" | "no-tools" | "many";
+export type Scenario = "library" | "empty" | "card" | "review" | "joined" | "finished-card" | "dji" | "no-tools" | "many";
 
 export interface MockOptions {
   scenario?: Scenario;
@@ -75,6 +75,7 @@ export class MockCore {
     this.volumes = sc === "card" || sc === "finished-card" ? [seed.cardVolume()] : [];
     this.session = null;
     if (sc === "review") this.session = seed.reviewSession();
+    if (sc === "joined") this.session = seed.joinedSession();
     if (sc === "dji") this.volumes = [seed.djiVolume()];
     if (sc === "finished-card" || sc === "dji") {
       this.session = seed.finishedSession();
@@ -213,6 +214,16 @@ export class MockCore {
         return this.placeSave(String(p.name), Number(p.lat), Number(p.lon));
       case "session_cuts":
         return this.sessionCuts(Number(p.id), p.cuts as Span[], p.removed_cuts as string | null);
+      case "session_split": {
+        const id = Number(p.id);
+        const add = flightCuts(this.plan(id).flight?.pack_spans || [], this.need().clips.find((c) => c.id === id)!.duration);
+        return this.sessionCuts(id, withSpans(this.plan(id).cuts, add), null);
+      }
+      case "library_split": {
+        const c = this.clip(String(p.id));
+        const add = flightCuts(c.stats?.pack_spans || [], c.duration);
+        return this.libraryCuts(c.id, withSpans([...c.cuts, ...c.pending_cuts], add), null);
+      }
       case "profiles":
         return { profiles: this.settings.values.profiles || [], default_profile: this.settings.values.defaultProfile || null };
       default:
@@ -447,6 +458,9 @@ export class MockCore {
   patch(patches: PlanPatch[]): Session {
     const s = this.need();
     for (const x of patches) {
+      const head = s.clips.find((c) => c.id === x.id)?.part_of;
+      if (head != null) throw `clip ${x.id} is part of clip ${head}, one recording; set joined false on clip ${head} to change it on its own`;
+      if (x.joined != null) this.setJoined(x.id, x.joined);
       const p = this.plan(x.id);
       if (x.date != null) {
         p.date = x.date;
@@ -487,6 +501,20 @@ export class MockCore {
     }
     this.sessionChanged();
     return structuredClone(s);
+  }
+
+  /** Joins a split recording into one clip, or keeps its files apart, as `Session::set_joined`. */
+  setJoined(id: number, on: boolean) {
+    const s = this.need();
+    const c = s.clips.find((x) => x.id === id);
+    if (!c?.join) throw `clip ${id} is not the first file of a recording the DVR split`;
+    if (c.join.on === on) return;
+    const own = c.duration;
+    c.duration = c.join.swap.duration ?? own;
+    c.join.swap.duration = own;
+    c.join.on = on;
+    for (const x of s.clips) if (c.join.parts.includes(x.id)) x.part_of = on ? id : null;
+    if (!on) this.plan(id).cuts = this.plan(id).cuts.filter((k) => k.start + 0.5 <= c.duration).map((k) => ({ ...k, end: Math.min(k.end, c.duration) }));
   }
 
   sessionCuts(id: number, cuts: Span[], decision: string | null): CutChange {
@@ -531,6 +559,7 @@ export class MockCore {
     let imported = 0;
     for (const p of s.plans) {
       const c = s.clips.find((x) => x.id === p.id)!;
+      if (c.part_of != null) continue;
       if (p.skip || c.status === "empty") {
         const r: ClipResult = { id: p.id, outcome: "skipped", output: null, original: null, size: 0, error: null, encoder: null, meta: null, cuts: [], qt: [] };
         results.push(r);
@@ -552,7 +581,7 @@ export class MockCore {
         id: c.key || `k${p.id}`, path: output.slice(opts.output_dir.length + 1), title: p.name, note: p.note, date: p.date, time: p.time ? p.time.slice(0, 5) : null,
         duration: c.duration, size: r.size, rating: 0, flag: "none", place: loc?.name || null, location: loc || null, aircraft: p.meta.profile || (this.settings.values.defaultProfile as string) || null,
         keywords: ["FPV", ...p.meta.keywords], author: p.meta.author, moments: p.moments, keep: c.signal?.keep || [], stats: p.flight, cuts: cuts.map((k) => ({ path: k.output.slice(opts.output_dir.length + 1), start: k.start, end: k.end, size: k.size })),
-        pending_cuts: [], in_photos: false, original: null, aliases: [], dvr: c.name, import: "20261001-120000", cut_of: null, name: p.name || defaultName, file: output, strip: null, poster: null, no_picture: false, last_import: true,
+        pending_cuts: [], in_photos: false, original: null, aliases: [], parts: (c.join?.on ? c.join.parts : []).map((id) => { const x = s.clips.find((y) => y.id === id)!; return { source: x.key, dvr: x.name }; }), dvr: c.name, import: "20261001-120000", cut_of: null, name: p.name || defaultName, file: output, strip: null, poster: null, no_picture: false, last_import: true,
       });
     }
     this.lib.last_import = "20261001-120000";
@@ -565,7 +594,7 @@ export class MockCore {
     const clip_deletion =
       this.settings.values.deleteClipsAfterImport && !opts.keep_clips
         ? s.clips.map((c) => {
-            const r = results.find((x) => x.id === c.id);
+            const r = results.find((x) => x.id === (c.part_of ?? c.id));
             const ok = r?.outcome === "verified";
             return { id: c.id, path: c.card_path, state: ok ? ("deleted" as const) : ("kept" as const), reason: ok ? null : "it was skipped" };
           })
@@ -626,3 +655,23 @@ function manyClips(lib: LibraryView): LibraryView {
   }
   return lib;
 }
+
+/** One cut per radio-log pack, as `trim::flight_cuts`: 2 s each side (at most half the gap),
+ * clamped to the clip. */
+function flightCuts(packs: Span[], duration: number): Span[] {
+  if (!packs.length) throw "nothing to split; the clip has no radio-log packs (match the logs first)";
+  const r = (x: number) => Math.round(x * 10) / 10;
+  const ps = [...packs].sort((a, b) => a.start - b.start);
+  const out = ps
+    .map((p, i) => {
+      const before = i ? Math.max(0, (p.start - ps[i - 1].end) / 2) : 2;
+      const after = i < ps.length - 1 ? Math.max(0, (ps[i + 1].start - p.end) / 2) : 2;
+      return { start: r(Math.max(0, p.start - Math.min(2, before))), end: r(Math.min(duration, p.end + Math.min(2, after))) };
+    })
+    .filter((k) => k.end - k.start >= 0.5);
+  if (!out.length) throw "nothing to split; no radio-log pack falls inside the clip";
+  if (out.length === 1 && duration - (out[0].end - out[0].start) < Math.max(10, duration * 0.1)) throw "nothing to split; its one pack covers nearly the whole clip";
+  return out;
+}
+
+const withSpans = (cuts: Span[], add: Span[]): Span[] => [...cuts.map(({ start, end }) => ({ start, end })), ...add.filter((a) => !cuts.some((c) => sameSpan(c, a)))].sort((a, b) => a.start - b.start);

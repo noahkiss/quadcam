@@ -42,7 +42,7 @@ type Num<T, K extends keyof T> = Omit<T, K> & { [P in K]-?: number };
 
 export type Span = Num<G.Span, "start" | "end">;
 export type Moment = Num<G.Moment, "start" | "end" | "score">;
-export type FlightStats = Num<G.FlightStats, "armed_s">;
+export type FlightStats = Omit<Num<G.FlightStats, "armed_s">, "pack_spans"> & { pack_spans: Span[] };
 export type Location = Num<G.Location, "lat" | "lon">;
 export type Place = Num<G.Place, "lat" | "lon">;
 export type Profile = Required<G.Profile>;
@@ -116,6 +116,7 @@ export interface SettingsValues {
   keepOriginals?: boolean;
   addTime?: boolean;
   deleteClipsAfterImport?: boolean;
+  joinSplitRecordings?: boolean;
   defaultName?: string;
   photosAlbum?: string;
   formatLabel?: string;

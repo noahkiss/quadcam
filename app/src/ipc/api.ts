@@ -41,6 +41,7 @@ export const api = {
   eject: (path: string | null = null) => ok(commands.eject({ target: path })),
   preview: (id: number) => ok(commands.preview(id)),
   sessionCuts: async (id: number, cuts: Span[], removed: RemovedCuts | null) => N.cutChange(await ok(commands.sessionCuts({ id, cuts, removed_cuts: removed }))),
+  sessionSplit: async (id: number) => N.cutChange(await ok(commands.sessionSplit({ id }))),
 
   // Library
   library: async (filter: LibraryFilter = {}) => N.libraryView(await ok(commands.library(filter))),
@@ -49,6 +50,7 @@ export const api = {
   rename: (id: string, name: string) => ok(commands.libraryRename({ id, name })),
   libraryCuts: async (id: string, cuts: Span[], removed: RemovedCuts | null) => N.cutChange(await ok(commands.libraryCuts({ id, cuts, removed_cuts: removed }))),
   exportCuts: (id: string) => ok(commands.libraryExportCuts({ id })),
+  librarySplit: async (id: string) => N.cutChange(await ok(commands.librarySplit({ id }))),
   trash: (ids: string[]) => ok(commands.libraryTrash({ ids })),
   untrash: (moved: Moved[]) => ok(commands.libraryUntrash({ moved })),
   libraryPhotos: (ids: string[], album: string) => ok(commands.libraryPhotos({ ids, album })),

@@ -1,5 +1,5 @@
 import { useStore } from "../../store";
-import { planOf, resultOf } from "../../store/session";
+import { clipsOf, planOf, resultOf } from "../../store/session";
 import { sel } from "../../store/settings";
 import { Icon } from "../../components/Icon";
 import { base, fmtBytes, tilde } from "../../lib/format";
@@ -29,7 +29,7 @@ export function Export() {
         </p>
       </div>
       <ol className={styles.files}>
-        {s.clips
+        {clipsOf(s)
           .filter((c) => !planOf(s, c.id)?.skip)
           .map((c) => {
             const p = planOf(s, c.id)!;

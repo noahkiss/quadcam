@@ -3,10 +3,12 @@
   "add_time": false,
   "default_name": "flight",
   "default_profile": "Whoop",
+  "delete_clips_after_import": false,
   "encoder": "videotoolbox",
   "format": "mp4",
   "format_label": "DVR",
   "geocoder": "apple",
+  "join_split_recordings": true,
   "keep_originals": false,
   "layout": "year_day",
   "log_dir": null,
@@ -55,6 +57,7 @@
    }
   ],
   "tunables": {
+   "clock_skew_s": 300,
    "max_log_age_days": 60,
    "segment_gap_s": 5,
    "session_gap_min": 20,

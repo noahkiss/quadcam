@@ -221,3 +221,29 @@ test("Delete clips after import: Finish says what was deleted and what was kept"
   await expect(sheet(page).getByText(/^Deleted 4 clips from .* · kept 1$/)).toBeVisible();
   await expect(sheet(page).getByText("Deleted from the folder")).toHaveCount(4);
 });
+
+test("a recording the DVR split shows as one clip of its files; Keep files separate parts it", async ({ app, page }) => {
+  await app.open("joined");
+  await page.getByRole("navigation", { name: "Library" }).getByRole("button", { name: /Unfinished import/ }).click();
+  await expect(sheet(page)).toBeVisible();
+  // Four rows: PICT0002.AVI imports with PICT0001.AVI.
+  await expect(rows(page).filter({ has: page.getByRole("checkbox") })).toHaveCount(4);
+  await expect(row(page, "PICT0001.AVI").getByText("PICT0001.AVI–PICT0002.AVI · 2 files")).toBeVisible();
+  await expect(row(page, "PICT0002.AVI")).toHaveCount(0);
+  await row(page, "PICT0001.AVI").getByRole("button", { name: "Keep files separate" }).click();
+  await expect.poll(() => patches(app)).toContainEqual({ id: 0, joined: false });
+  await expect(rows(page).filter({ has: page.getByRole("checkbox") })).toHaveCount(5);
+  await row(page, "PICT0001.AVI").getByRole("button", { name: "Join 2 files" }).click();
+  await expect.poll(() => patches(app)).toContainEqual({ id: 0, joined: true });
+  await expect(row(page, "PICT0002.AVI")).toHaveCount(0);
+});
+
+test("Split by flight adds one cut per radio-log pack to the session clip", async ({ app, page }) => {
+  await app.open("joined");
+  await page.getByRole("navigation", { name: "Library" }).getByRole("button", { name: /Unfinished import/ }).click();
+  await row(page, "PICT0001.AVI").getByText("2:05").click();
+  await sheet(page).getByRole("button", { name: "Split by flight (2)" }).click();
+  await expect.poll(async () => await app.method("session_split")).toContainEqual({ id: 0 });
+  await expect(page.getByRole("status")).toContainText("2 cuts added, one per flight.");
+  await expect(sheet(page).getByRole("list", { name: "Cuts" }).getByRole("listitem")).toHaveCount(2);
+});
