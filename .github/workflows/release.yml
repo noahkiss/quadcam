@@ -1,29 +1,30 @@
 name: Release
 
-# A pushed `v*` tag waits for CI to pass on the tagged commit, builds
-# QuadCam.app on an Apple Silicon runner, checks it, zips it, attaches the zip to the tag's GitHub Release, then bumps the
-# Homebrew cask (`noahkiss/tap/quadcam`) through the tap's own `bump.yml`. The
-# tap downloads the zip, rewrites the cask, proves it with a real
-# `brew install --cask`, and commits. Nothing is transcribed by hand.
+# A pushed `v*` tag runs the shared Tauri macOS release
+# (noahkiss/workflows, tauri-macos-release.yml). It builds QuadCam.app on an
+# Apple Silicon runner, signs it with the Developer ID of NKMK Digital Co.,
+# notarizes and staples it, waits for a green ci.yml run on the tagged commit,
+# attaches quadcam-X.Y.Z-arm64.zip to the tag's GitHub Release, then bumps the
+# Homebrew cask (`noahkiss/tap/quadcam`) through the tap's own `bump.yml`.
 #
 # To cut a release:
 #
 #   1. Set the same version in src-tauri/Cargo.toml and src-tauri/tauri.conf.json.
 #   2. Commit, then `git tag vX.Y.Z && git push origin main vX.Y.Z`.
 #
-# To re-run the pipeline for a tag that already exists:
+# To re-run the pipeline for a tag that already exists, dispatch it on the tag
+# (the `release` environment admits only `v*` tags):
 #
-#   gh workflow run release.yml -R noahkiss/quadcam -f tag=vX.Y.Z
+#   gh workflow run release.yml -R noahkiss/quadcam --ref vX.Y.Z -f tag=vX.Y.Z
 #
 # A re-run never replaces a zip that is already attached: the cask's sha256
 # pins what was published, and a rebuilt zip is not byte-identical.
 #
-# Signing: the app has an ad-hoc signature only (no Developer ID, no
-# notarization). Homebrew quarantines every download, so the cask removes the
-# quarantine attribute in a postflight block.
-#
-# The tap hop needs a PAT in HOMEBREW_TAP_TOKEN with `workflow` scope on the
-# tap. This repo's GITHUB_TOKEN cannot dispatch another repository.
+# Secrets: the signing certificate and the App Store Connect API key live in
+# the `release` environment (MAC_CERT_P12, MAC_CERT_PASSWORD, ASC_KEY_P8,
+# ASC_KEY_ID, ASC_ISSUER_ID), which only `v*` tags can use. The tap hop needs
+# HOMEBREW_TAP_TOKEN, a PAT with `workflow` scope on the tap: this repo's
+# GITHUB_TOKEN cannot dispatch another repository.
 
 on:
   push:
@@ -40,149 +41,23 @@ permissions:
   actions: read # read the CI run on the tagged commit
 
 jobs:
-  resolve:
-    runs-on: ubuntu-latest
-    outputs:
-      tag: ${{ steps.tag.outputs.tag }}
-      version: ${{ steps.tag.outputs.version }}
-      tap_inputs: ${{ steps.tag.outputs.tap_inputs }}
-    steps:
-      - name: Resolve the tag
-        id: tag
-        env:
-          INPUT_TAG: ${{ inputs.tag }}
-        run: |
-          set -euo pipefail
-          if [ "$GITHUB_EVENT_NAME" = 'workflow_dispatch' ]; then
-            tag="$INPUT_TAG"
-          else
-            tag="${GITHUB_REF#refs/tags/}"
-          fi
-          [[ "$tag" =~ ^v[0-9]+\.[0-9]+\.[0-9]+([-.][0-9A-Za-z.]+)?$ ]] \
-            || { echo "::error::not a release tag: ${tag}"; exit 1; }
-          echo "tag=${tag}" >> "$GITHUB_OUTPUT"
-          echo "version=${tag#v}" >> "$GITHUB_OUTPUT"
-          echo "tap_inputs=$(jq -cn --arg tag "$tag" '{formula: "quadcam", tag: $tag}')" >> "$GITHUB_OUTPUT"
-
-  package:
-    needs: resolve
-    runs-on: macos-26
-    defaults:
-      run:
-        working-directory: src-tauri
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          ref: ${{ needs.resolve.outputs.tag }}
-
-      # The tag must be a release of the version the manifests state, or the
-      # app reports one version and the cask installs another.
-      - name: Check the manifest versions
-        env:
-          VERSION: ${{ needs.resolve.outputs.version }}
-        run: |
-          set -euo pipefail
-          cargo_v="$(sed -n 's/^version = "\(.*\)"$/\1/p' Cargo.toml | head -1)"
-          tauri_v="$(jq -r .version tauri.conf.json)"
-          [ "$cargo_v" = "$VERSION" ] && [ "$tauri_v" = "$VERSION" ] \
-            || { echo "::error::Cargo.toml says ${cargo_v}, tauri.conf.json says ${tauri_v}, tag says ${VERSION}"; exit 1; }
-
-      - name: Install Rust and ffmpeg
-        run: |
-          rustup toolchain install stable --profile minimal
-          rustup default stable
-          brew install ffmpeg
-
-      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
-        with:
-          workspaces: src-tauri
-          key: release
-
-      # The UI builds with Node and pnpm: cargo tauri build runs `pnpm --dir app build`.
-      - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
-        with:
-          package_json_file: app/package.json
-
-      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
-        with:
-          node-version-file: .node-version
-          cache: pnpm
-          cache-dependency-path: app/pnpm-lock.yaml
-
-      - run: pnpm install --frozen-lockfile
-        working-directory: app
-
-      # The Tauri CLI comes prebuilt from app/'s dev dependencies; compiling it
-      # with cargo install took about 7 minutes per release.
-      - run: ../app/node_modules/.bin/tauri build --bundles app
-
-      - name: Check and zip the bundle
-        env:
-          VERSION: ${{ needs.resolve.outputs.version }}
-        run: |
-          set -euo pipefail
-          app=target/release/bundle/macos/QuadCam.app
-          codesign --verify --deep --strict "$app"
-          "$app/Contents/MacOS/quadcam-cli" --version
-          plist_v="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$app/Contents/Info.plist")"
-          [ "$plist_v" = "$VERSION" ] || { echo "::error::bundle says ${plist_v}"; exit 1; }
-          # ditto keeps the signature and the bundle's symlinks intact.
-          ditto -c -k --sequesterRsrc --keepParent "$app" "$GITHUB_WORKSPACE/quadcam-${VERSION}-arm64.zip"
-          shasum -a 256 "$GITHUB_WORKSPACE/quadcam-${VERSION}-arm64.zip"
-
-      # CI already runs the full test suite on every push to main, so the release
-      # waits for that run on the tagged commit instead of repeating it. The
-      # check sits after the build, so the two overlap, and before anything is
-      # attached. No green
-      # CI run on this commit, no release.
-      - name: Require a green CI run on the tagged commit
-        working-directory: ${{ github.workspace }}
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          GH_REPO: ${{ github.repository }}
-        run: |
-          set -euo pipefail
-          sha="$(git rev-parse HEAD)"
-          # CI takes about 10 minutes; allow 40 (80 polls of 30 s).
-          for _ in $(seq 1 80); do
-            run="$(gh run list --workflow ci.yml --commit "$sha" --limit 1 --json status,conclusion,url --jq '.[0] // empty')"
-            if [ -n "$run" ] && [ "$(jq -r .status <<<"$run")" = completed ]; then
-              conclusion="$(jq -r .conclusion <<<"$run")"
-              [ "$conclusion" = success ] || { echo "::error::CI on ${sha} ended ${conclusion}: $(jq -r .url <<<"$run")"; exit 1; }
-              echo "CI passed: $(jq -r .url <<<"$run")"; exit 0
-            fi
-            sleep 30
-          done
-          echo "::error::no finished CI run on ${sha} after 40 minutes"; exit 1
-
-      - name: Attach to the release
-        working-directory: ${{ github.workspace }}
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          GH_REPO: ${{ github.repository }}
-          TAG: ${{ needs.resolve.outputs.tag }}
-          VERSION: ${{ needs.resolve.outputs.version }}
-        run: |
-          set -euo pipefail
-          asset="quadcam-${VERSION}-arm64.zip"
-          gh release view "$TAG" >/dev/null 2>&1 \
-            || gh release create "$TAG" --title "$TAG" --generate-notes --verify-tag
-          # Never clobber. The cask pins the sha of whatever was attached first.
-          if gh release view "$TAG" --json assets --jq '.assets[].name' | grep -qx "$asset"; then
-            echo "::notice::${asset} is already attached to ${TAG}; keeping the published one"
-            exit 0
-          fi
-          gh release upload "$TAG" "$asset"
-
-  # Fire the tap's bump and fail unless it lands. The tap installs the cask on
-  # a macOS runner before it commits.
-  bump-tap:
-    needs: [resolve, package]
-    uses: noahkiss/workflows/.github/workflows/dispatch-and-wait.yml@main
+  release:
+    uses: noahkiss/workflows/.github/workflows/tauri-macos-release.yml@main
+    permissions:
+      contents: write
+      actions: read
     with:
-      repo: noahkiss/homebrew-tap
-      workflow: bump.yml
-      inputs_json: ${{ needs.resolve.outputs.tap_inputs }}
-      timeout_minutes: 45
+      tag: ${{ inputs.tag }}
+      app-name: QuadCam
+      asset-prefix: quadcam
+      brew-packages: ffmpeg
+      smoke-command: '"$APP/Contents/MacOS/quadcam-cli" --version'
+      entitlements: src-tauri/Entitlements.plist
+      signing-identity: 'Developer ID Application: NKMK Digital Co. (2Z88BYP37C)'
+      team-id: 2Z88BYP37C
+      environment: release
+      require-ci-workflow: ci.yml
+      tap-repo: noahkiss/homebrew-tap
+      tap-formula: quadcam
     secrets:
-      token: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+      tap_token: ${{ secrets.HOMEBREW_TAP_TOKEN }}

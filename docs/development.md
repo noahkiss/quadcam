@@ -130,9 +130,10 @@ Users install the Homebrew cask `noahkiss/tap/quadcam`. A release is a pushed ta
    git tag vX.Y.Z && git push origin main vX.Y.Z
    ```
 
-3. `.github/workflows/release.yml` runs:
+3. `.github/workflows/release.yml` calls the shared workflow `tauri-macos-release.yml` in [`noahkiss/workflows`](https://github.com/noahkiss/workflows):
    - It checks that both manifests state the tag's version.
    - It builds `QuadCam.app` on an Apple Silicon runner (`macos-26`) with the prebuilt Tauri CLI from `app/`.
+   - It signs, notarizes and staples the app (see [Signing](#signing)).
    - It waits for a green CI run on the tagged commit. It does not run the tests again. If CI fails, or does not finish within 40 minutes, there is no release.
    - It zips the app as `quadcam-X.Y.Z-arm64.zip` and attaches the zip to the GitHub Release.
    - It starts the tap's `bump.yml`. That workflow rewrites `Casks/quadcam.rb`, installs the cask on macOS, and commits.
@@ -141,13 +142,18 @@ Users install the Homebrew cask `noahkiss/tap/quadcam`. A release is a pushed ta
 To run the pipeline again for an existing tag:
 
 ```bash
-gh workflow run release.yml -R noahkiss/quadcam -f tag=vX.Y.Z
+gh workflow run release.yml -R noahkiss/quadcam --ref vX.Y.Z -f tag=vX.Y.Z
 ```
+
+Run it on the tag (`--ref`): the `release` environment that holds the signing secrets admits only `v*` tags.
 
 A re-run never replaces a zip that is already attached. The cask's sha256 pins what was published, and a rebuilt zip is not byte-identical.
 
 ### Signing
 
-The app has an ad-hoc signature only (`signingIdentity "-"`). There is no Developer ID and no notarization. The cask removes the quarantine attribute after it installs the app.
+The release signs the app with `Developer ID Application: NKMK Digital Co. (2Z88BYP37C)`, with hardened runtime and a secure timestamp. Apple's notary service checks it, and the ticket is stapled to the app before it is zipped. The shared action `macos-sign-notarize` does this, then verifies the result with `codesign --verify --deep --strict`, the team ID, `spctl --assess`, `xcrun stapler validate` and an online notarization check.
 
-Hardened runtime stays off (`hardenedRuntime false`). Without the Photos entitlement, hardened runtime blocks PhotoKit, and it has no use without notarization.
+- The certificate and the App Store Connect API key are secrets of the `release` environment (`MAC_CERT_P12`, `MAC_CERT_PASSWORD`, `ASC_KEY_P8`, `ASC_KEY_ID`, `ASC_ISSUER_ID`). Only `v*` tags can use it.
+- `src-tauri/Entitlements.plist` holds one entitlement: `com.apple.security.personal-information.photos-library`. Hardened runtime blocks PhotoKit without it. QuadCam needs nothing else: ffmpeg, ffprobe, curl and diskutil run as separate processes, the app is not sandboxed, and it sends no Apple Events.
+- Local builds keep the ad-hoc signature (`signingIdentity "-"`), with the same hardened runtime and entitlements (`tauri.conf.json`).
+

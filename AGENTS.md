@@ -21,6 +21,7 @@ README and `docs/`. Personal preferences go in the app's settings file on the ma
 | `app/` | The frontend: React + TypeScript + Vite (pnpm, Node pinned in `.node-version`). Builds to `app/dist`, which the app ships. `views/` (library, clip detail, import sheet, settings), `components/` (with `trim/`, the one trim editor, used by clip detail and the import review), `store/`, `actions/`, `ipc/`. Icons and fonts are inlined or bundled so the app works offline |
 | `src-tauri/src/` | Rust core. `core/` (`Core`) owns the session and the library index and is the one surface every front end drives: `mod.rs` (state, locking, `Hooks`), `import.rs` (stage, analyse, dates, import, verify, format), `library.rs` (the index, list, rate, edit, rename, redate), `cuts.rs` (session and library cut lists), `files.rs` (Photos, previews, strips, Trash) and `setup.rs` (settings, places, profiles). `api/` is the one method table: each row names a method, its params and result types and the `Core` call, and `api!` makes `Core::dispatch` (socket, MCP) and one typed Tauri command per method from it; `api/events.rs` holds the typed events. `lib.rs` holds the GUI's own Tauri commands and `specta_builder`, which tauri-specta exports to `app/src/bindings.ts`; `control.rs` the app's socket, `mcp/` the MCP server (`server.rs` the protocol and handlers, `params.rs` each tool's argument type, `tools.rs` the tool list with schemas derived from those types, `render.rs` the text answers), `bin/quadcam-cli.rs` the CLI (clap flags build the `api` params, and it calls the table's `api::call` functions). The logic modules (`scan`, `disk`, `media`, `logs`, `moments`, `metadata`, `qtmeta`, `naming`, `pipeline` (with `pipeline/import.rs`, the import run), `session`, `photos`, `library`, `trim`, `cuts` (the one cut writer), `sources` (the `Source` trait per video system, tried in `sources::all()` order; `sources/dji.rs` is DJI O4: `DCIM/DJI_*/` names, the clock in the name, `.SRT` sidecars, byte-copy MP4 export, a read-only card; `sources/analog.rs` is the DVR: clip layout, half-written check and repair, encode plan, dead air, card policy), `trash`, `settings` (with `Defaults`, the effective settings), `paths` (every path under `$HOME`), `geocode`) run without Tauri |
 | `src-tauri/Info.plist` | Photos usage strings, merged into the bundle's Info.plist |
+| `src-tauri/Entitlements.plist` | Hardened-runtime entitlements (Photos library) for every signature |
 | `src-tauri/tests/` | Integration tests on synthetic clips and FAT32 disk images |
 | `test-clips/` | Local test corpus. Git tracks only its README |
 | `scripts/make-corpus.sh` | Builds `test-clips/synthetic/` |
@@ -91,18 +92,23 @@ GitHub (`noahkiss/quadcam`, public) is the only remote. Users install the cask
 
 1. Set the new version in `src-tauri/Cargo.toml` and `src-tauri/tauri.conf.json`. They must match.
 2. Commit, then push a tag: `git tag vX.Y.Z && git push origin main vX.Y.Z`.
-3. `.github/workflows/release.yml` builds `QuadCam.app` on a `macos-26` (arm64) runner with the
+3. `.github/workflows/release.yml` (through the shared `tauri-macos-release.yml`) builds, signs
+   and notarizes `QuadCam.app` on a `macos-26` (arm64) runner with the
    prebuilt Tauri CLI from `app/`. It does not run the tests: before it attaches the zip
    (`quadcam-X.Y.Z-arm64.zip`) to the GitHub Release, it waits up to 40 minutes for a green
    `ci.yml` run on the tagged commit, and fails without one. It then fires the tap's
    `bump.yml`, which rewrites `Casks/quadcam.rb`, installs it on macOS, and commits.
 4. Watch it: `gh run watch -R noahkiss/quadcam --exit-status`. Re-run for an existing tag with
-   `gh workflow run release.yml -R noahkiss/quadcam -f tag=vX.Y.Z`.
+   `gh workflow run release.yml -R noahkiss/quadcam --ref vX.Y.Z -f tag=vX.Y.Z`.
 
-- **Signing:** ad-hoc only (`signingIdentity "-"`, `hardenedRuntime false` in
-  `tauri.conf.json`). There is no Developer ID and no notarization. The cask removes the
-  quarantine attribute in `postflight_steps`. Hardened runtime stays off: without the Photos
-  entitlement it blocks PhotoKit, and it has no use without notarization.
+- **Signing:** `release.yml` is a thin caller of `tauri-macos-release.yml` in `noahkiss/workflows`.
+  It signs with `Developer ID Application: NKMK Digital Co. (2Z88BYP37C)` (hardened runtime,
+  timestamp, `src-tauri/Entitlements.plist`), notarizes and staples. Local builds stay ad-hoc
+  (`signingIdentity "-"`) with the same hardened runtime and entitlements. The one entitlement is
+  `com.apple.security.personal-information.photos-library`, which PhotoKit needs under hardened
+  runtime; add one only for a new protected resource. The secrets live in the `release`
+  environment (`v*` tags only), so a re-run dispatches on the tag:
+  `gh workflow run release.yml -R noahkiss/quadcam --ref vX.Y.Z -f tag=vX.Y.Z`.
 - **Secret:** `HOMEBREW_TAP_TOKEN` (the tap PAT) lets the release dispatch the tap.
 - `.github/workflows/ci.yml` runs fmt, clippy, tests and a release build on every push and PR,
   and a `ui` job for `app/` (typecheck, lint, Vitest, Playwright, build).
