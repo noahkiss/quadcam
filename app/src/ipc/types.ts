@@ -46,7 +46,7 @@ export type FlightStats = Num<G.FlightStats, "armed_s">;
 export type Location = Num<G.Location, "lat" | "lon">;
 export type Place = Num<G.Place, "lat" | "lon">;
 export type Profile = Required<G.Profile>;
-export type Tunables = Num<G.Tunables, "segment_gap_s" | "session_gap_min" | "tolerance_s">;
+export type Tunables = Num<G.Tunables, "segment_gap_s" | "session_gap_min" | "tolerance_s" | "clock_skew_s">;
 export type GeoResult = Num<G.GeoResult, "lat" | "lon">;
 export type Suggested = Required<G.Suggested>;
 

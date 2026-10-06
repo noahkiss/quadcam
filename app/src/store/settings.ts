@@ -63,7 +63,7 @@ export function sameValue(a: unknown, b: unknown): boolean {
 }
 
 const NO_RECENTS = {};
-const NO_TUNABLES = { segment_gap_s: 5, session_gap_min: 20, tolerance_s: 30, max_log_age_days: 60 };
+const NO_TUNABLES = { segment_gap_s: 5, session_gap_min: 20, tolerance_s: 30, max_log_age_days: 60, clock_skew_s: 300 };
 const NONE: never[] = [];
 
 // Reads with the core's defaults behind them.

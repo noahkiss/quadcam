@@ -40,7 +40,7 @@ Analog DVRs have no clock, so their files carry no useful date. DJI units have o
 - **Import date:** today, when nothing else dates the clip.
 - **Edited:** any date you type.
 
-A radio log dates a DJI clip only when the log starts within 5 minutes of the clip clock. The log then also gives the clip its moments, flight numbers and EdgeTX model. A log further away leaves the clip clock in place, and the Review step shows a warning with the gap. The `clock_skew_s` value in the `tunables` setting sets the window, in seconds (default 300).
+A radio log dates a DJI clip only when the log starts within 5 minutes of the clip clock. The log then also gives the clip its moments, flight numbers and EdgeTX model. A log further away leaves the clip clock in place, and the Review step shows a warning with the gap. **Clip clock skew (s)** under **Log matching** in Settings > Import sets the window, in seconds (default 300). In the settings file it is `clock_skew_s` in `tunables`.
 
 A clip clock before 2015 or after tomorrow means the unit's clock reset. QuadCam ignores it, shows a warning, and dates the clip as it dates an analog clip.
 

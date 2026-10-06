@@ -9,7 +9,7 @@ Open Settings with the gear icon or Command-comma. **Done** saves every change a
 | **Library** | The library folder (default `~/Movies/quadcam`, made on the first import), the layout, the date in file names, place folders, keep originals, and **Rebuild from files**. See [The library](library.md). |
 | **Aircraft** | The aircraft profiles and the default profile. See [Metadata](metadata.md#places-and-profiles). |
 | **Places** | The saved places and the place search provider. See [Metadata](metadata.md#place-search-providers). |
-| **Import** | The format (MP4 or MOV), the MP4 encoder, the default short name, the time in file names, and the tolerances for log matching. |
+| **Import** | The format (MP4 or MOV), the MP4 encoder, the default short name, the time in file names, and the tolerances for log matching, the DJI clip clock skew included. |
 | **Photos** | The album. An empty album means the library only. See [Photos](photos.md). |
 | **Advanced** | Where ffmpeg and the agent socket are. |
 

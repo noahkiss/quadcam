@@ -420,6 +420,7 @@ function ImportPane({ d, set }: { d: Draft; set: SetFn }) {
         <TextField label="Segment gap (s)" type="number" min={1} step={1} value={d.segGap} onChange={(e) => set("segGap", e.target.value)} />
         <TextField label="Session gap (min)" type="number" min={1} step={1} value={d.sessionGap} onChange={(e) => set("sessionGap", e.target.value)} />
         <TextField label="Tolerance (s)" type="number" min={0} step={1} value={d.tolerance} onChange={(e) => set("tolerance", e.target.value)} />
+        <TextField label="Clip clock skew (s)" type="number" min={0} step={1} value={d.clockSkew} onChange={(e) => set("clockSkew", e.target.value)} />
       </div>
     </section>
   );
