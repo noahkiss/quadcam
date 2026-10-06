@@ -62,7 +62,11 @@ impl Core {
     pub fn make_previews(&self) -> usize {
         let Some(s) = self.session() else { return 0 };
         let mut made = 0;
-        for c in s.clips.iter().filter(|c| c.probe.is_some()) {
+        for c in s
+            .clips
+            .iter()
+            .filter(|c| c.probe.is_some() && c.part_of.is_none())
+        {
             let same = self
                 .session()
                 .is_some_and(|now| now.staging == s.staging && now.clips.len() == s.clips.len());

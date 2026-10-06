@@ -186,9 +186,24 @@ pub fn clip_views(session: &Value, ids: Option<&[u64]>) -> Vec<Value> {
                     .unwrap_or(0.0)
                     .total_cmp(&b["start"].as_f64().unwrap_or(0.0))
             });
+            // A recording the DVR split: its files, by name, and whether they import as one.
+            let all = session["clips"].as_array().cloned().unwrap_or_default();
+            let files: Vec<Value> = std::iter::once(c["name"].clone())
+                .chain(
+                    c["join"]["parts"]
+                        .as_array()
+                        .into_iter()
+                        .flatten()
+                        .filter_map(|pid| all.iter().find(|x| &x["id"] == pid))
+                        .map(|x| x["name"].clone()),
+                )
+                .collect();
             json!({
                 "id": id,
                 "name": c["name"],
+                "joined": if c["join"].is_null() { Value::Null } else { c["join"]["on"].clone() },
+                "files": if c["join"].is_null() { Value::Null } else { json!(files) },
+                "part_of": c["part_of"],
                 "source": c["kind"],
                 "path": c["rel"],
                 "duration_s": (c["duration"].as_f64().unwrap_or(0.0) * 10.0).round() / 10.0,
@@ -230,6 +245,20 @@ pub(super) fn table(view: &[Value]) -> String {
     view.iter()
         .map(|c| {
             let mut marks = Vec::new();
+            if let Some(h) = c["part_of"].as_u64() {
+                marks.push(format!("part of #{h}, imports with it"));
+            }
+            if let Some(files) = c["files"].as_array() {
+                marks.push(format!(
+                    "{} files of one recording, {}",
+                    files.len(),
+                    if c["joined"] == true {
+                        "joined (joined=false keeps them apart)"
+                    } else {
+                        "kept apart (joined=true joins them)"
+                    }
+                ));
+            }
             if c["skip"] == true {
                 marks.push("skip".to_string());
             }

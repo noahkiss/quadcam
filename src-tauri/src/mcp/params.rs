@@ -51,6 +51,8 @@ pub struct StatusArgs {}
 pub struct LoadClipsArgs {
     /// Card mount point (e.g. /Volumes/NO NAME) or a folder of AVI files. Omit to use the first detected card.
     pub source: Option<String>,
+    /// false keeps recordings the DVR split into files (PICT0001.AVI, PICT0002.AVI, ...) as separate clips this run. Omit to follow the join_split_recordings setting (on by default).
+    pub join: Option<bool>,
 }
 
 #[derive(Debug, Clone, Default, Deserialize, JsonSchema)]
@@ -108,6 +110,10 @@ pub struct Suggestion {
     pub author: Option<String>,
     /// One short line on why, shown to the person.
     pub reason: Option<String>,
+    /// For the first file of a recording the DVR split into files (it has `files`): true imports them as one clip, false as clips of their own.
+    pub joined: Option<bool>,
+    /// true adds one cut per radio-log pack (armed range plus up to 2 s each side), after cuts. Fails when the clip has no packs, or one pack that covers nearly all of it.
+    pub split_by_flight: Option<bool>,
     /// Required when `cuts` drops a cut that was already exported: keep its file (it becomes a clip of its own) or move it to the Trash. Ask the person which.
     #[schemars(extend("enum" = ["keep", "trash"]))]
     pub removed_cuts: Option<String>,
@@ -238,9 +244,9 @@ pub struct LibraryEditArgs {
 #[derive(Debug, Clone, Default, Deserialize, JsonSchema)]
 #[schemars(deny_unknown_fields)]
 pub struct LibraryFilesArgs {
-    #[schemars(required, extend("enum" = ["cuts", "export_cuts", "trash", "photos", "rebuild", "apply_name_format", "match_logs"]))]
+    #[schemars(required, extend("enum" = ["cuts", "split_by_flight", "export_cuts", "trash", "photos", "rebuild", "apply_name_format", "match_logs"]))]
     pub action: Option<String>,
-    /// Library clip ids from quadcam_library. cuts and export_cuts take exactly one; rebuild takes none; apply_name_format takes some or none (every clip).
+    /// Library clip ids from quadcam_library. cuts, split_by_flight and export_cuts take exactly one; rebuild takes none; apply_name_format takes some or none (every clip).
     #[schemars(length(max = 500))]
     pub ids: Option<Vec<String>>,
     /// For cuts: ranges in clip seconds, each at least 0.5 s.
@@ -248,7 +254,7 @@ pub struct LibraryFilesArgs {
     pub cuts: Option<Vec<LibraryCut>>,
     #[schemars(extend("enum" = ["keep", "trash"]))]
     pub removed_cuts: Option<String>,
-    /// For cuts: also write the new cuts as files.
+    /// For cuts and split_by_flight: also write the new cuts as files.
     pub export: Option<bool>,
     /// For photos: album name; empty string for the library only. Omit for the default.
     pub album: Option<String>,
@@ -359,6 +365,9 @@ pub struct SettingsValues {
     /// After each export, delete the clip files that verified from the card or folder they came from. Other files stay.
     #[schemars(extend("x-nullable" = true))]
     pub delete_clips_after_import: Option<bool>,
+    /// Import a recording the DVR split into files (about 600 s each) as one clip. On by default.
+    #[schemars(extend("x-nullable" = true))]
+    pub join_split_recordings: Option<bool>,
     #[schemars(extend("x-nullable" = true))]
     pub default_name: Option<String>,
     #[schemars(extend("x-nullable" = true))]

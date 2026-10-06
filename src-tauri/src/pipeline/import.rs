@@ -111,6 +111,30 @@ pub fn run_import(
             c.signal.as_ref().map(|s| &s.keep[..]).unwrap_or(&[]),
             p.flight.as_ref(),
         );
+        // A joined recording: its later files, kept as originals and named in the file.
+        if c.join.as_ref().is_some_and(|j| j.on) {
+            let parts: Vec<&Clip> = c
+                .join
+                .iter()
+                .flat_map(|j| &j.parts)
+                .filter_map(|id| session.clips.iter().find(|x| x.id == *id))
+                .collect();
+            job.parts = parts
+                .iter()
+                .filter_map(|x| Some((x.name.clone(), x.staged.clone()?)))
+                .collect();
+            let list: Vec<crate::library::LibPart> = parts
+                .iter()
+                .map(|x| crate::library::LibPart {
+                    source: x.key.clone(),
+                    dvr: x.name.clone(),
+                })
+                .collect();
+            job.extra.push((
+                crate::library::KEY_PARTS.to_string(),
+                serde_json::to_string(&list).unwrap_or_default(),
+            ));
+        }
         // Where the time of day came from; without it the clip shows no time (noon).
         if job.time.is_some() {
             job.extra.push((
@@ -218,6 +242,7 @@ mod tests {
             note: String::new(),
             meta: md::Resolved::default(),
             extra: Vec::new(),
+            parts: Vec::new(),
         };
         let mut logged = job(4, "2026-09-30", "");
         logged.source = DateSource::Log;

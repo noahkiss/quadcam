@@ -45,5 +45,7 @@ expression: "Core::METHODS"
   "profile_save",
   "profile_delete",
   "profile_default",
-  "session_cuts"
+  "session_cuts",
+  "session_split",
+  "library_split"
 ]

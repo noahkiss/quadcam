@@ -49,6 +49,9 @@ pub const KEY_VIDEO_SYSTEM: &str = "app.quadcam.video_system";
 /// Where the clip's time of day came from: `log`, `manual`, or `none` (removed by hand).
 /// Without a time the creation date's time is the noon placeholder and is not shown.
 pub const KEY_TIME: &str = "app.quadcam.time";
+/// The later files of a recording the DVR split, joined into this clip: a JSON list of
+/// `{"source": fingerprint, "dvr": file name}`. The first file is `KEY_SOURCE`/`KEY_DVR`.
+pub const KEY_PARTS: &str = "app.quadcam.parts";
 const QT: &str = "com.apple.quicktime.";
 
 // ---------- layout ----------
@@ -140,6 +143,15 @@ impl Flag {
     }
 }
 
+/// A later file of a split recording that was joined into a clip.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, specta::Type)]
+pub struct LibPart {
+    /// The file's content fingerprint, like a clip id.
+    pub source: String,
+    /// Its DVR file name.
+    pub dvr: String,
+}
+
 /// A cut written as its own file next to its clip.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, specta::Type)]
 pub struct LibCut {
@@ -210,6 +222,10 @@ pub struct LibClip {
     /// Earlier ids of this clip (QuadCam 0.4's). Lookups by them still find it.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub aliases: Vec<String>,
+    /// The later DVR files of a split recording joined into this clip. Their fingerprints
+    /// count as imported.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub parts: Vec<LibPart>,
 }
 
 impl LibClip {
@@ -251,13 +267,27 @@ impl LibClip {
         let Ok(rd) = std::fs::read_dir(dir) else {
             return Vec::new();
         };
+        let stem = stem.to_string_lossy().to_string();
         let mut v: Vec<PathBuf> = rd
             .flatten()
             .map(|e| e.path())
-            .filter(|p| p != &orig && p.is_file() && p.file_stem() == Some(stem))
+            .filter(|p| p != &orig && p.is_file())
+            .filter(|p| {
+                let name = p.file_name().unwrap_or_default().to_string_lossy();
+                name.strip_prefix(&stem).is_some_and(sidecar_suffix)
+            })
             .collect();
         v.sort();
         v
+    }
+
+    /// The DVR files the clip came from, first file first.
+    pub fn dvr_files(&self) -> Vec<String> {
+        self.dvr
+            .iter()
+            .cloned()
+            .chain(self.parts.iter().map(|p| p.dvr.clone()))
+            .collect()
     }
 
     pub fn bytes(&self) -> u64 {
@@ -442,6 +472,23 @@ pub enum Found {
     },
 }
 
+/// What follows the original's stem in a file kept with it: `.srt` (a DJI sidecar), or
+/// `.part2.avi` (a later file of a joined recording).
+pub fn sidecar_suffix(rest: &str) -> bool {
+    let Some(rest) = rest.strip_prefix('.') else {
+        return false;
+    };
+    match rest.split_once('.') {
+        None => !rest.is_empty(),
+        Some((part, ext)) => {
+            part.strip_prefix("part")
+                .is_some_and(|n| !n.is_empty() && n.chars().all(|c| c.is_ascii_digit()))
+                && !ext.is_empty()
+                && !ext.contains('.')
+        }
+    }
+}
+
 fn is_media(p: &Path) -> bool {
     let name = p.file_name().unwrap_or_default().to_string_lossy();
     if name.starts_with('.') {
@@ -609,6 +656,9 @@ pub fn read_file(root: &Path, rel: &Path) -> Result<Found> {
             None
         },
         aliases,
+        parts: get(KEY_PARTS)
+            .and_then(|v| serde_json::from_str(&v).ok())
+            .unwrap_or_default(),
     })))
 }
 
@@ -876,7 +926,11 @@ pub fn known_sources(ix: &Index) -> HashSet<String> {
     let mut s: HashSet<String> = ix
         .clips
         .iter()
-        .flat_map(|c| std::iter::once(c.id.clone()).chain(c.aliases.iter().cloned()))
+        .flat_map(|c| {
+            std::iter::once(c.id.clone())
+                .chain(c.aliases.iter().cloned())
+                .chain(c.parts.iter().map(|p| p.source.clone()))
+        })
         .collect();
     s.extend(
         ix.clips
@@ -948,6 +1002,26 @@ mod tests {
 
     /// An adopted file's id is persisted in the index, so the same bytes must always give
     /// the same id.
+    #[test]
+    fn files_kept_with_an_original() {
+        for ok in [".srt", ".SRT", ".part2.avi", ".part12.AVI"] {
+            assert!(sidecar_suffix(ok), "{ok}");
+        }
+        for no in [
+            "",
+            ".",
+            "x.srt",
+            "_cut1.mp4",
+            ".part.avi",
+            ".partx.avi",
+            ".part2.",
+            ".a.b.c",
+            ".part2.avi.bak",
+        ] {
+            assert!(!sidecar_suffix(no), "{no}");
+        }
+    }
+
     #[test]
     fn head_id_test_vector() {
         let d = tempfile::tempdir().unwrap();
@@ -1094,6 +1168,7 @@ mod tests {
             import: Some("20260927-150000".into()),
             cut_of: None,
             aliases: vec![],
+            parts: vec![],
         };
         let mut ix = Index {
             version: INDEX_VERSION,

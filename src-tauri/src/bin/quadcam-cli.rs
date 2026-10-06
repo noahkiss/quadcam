@@ -44,6 +44,10 @@ enum Cmd {
     Stage {
         /// Card mount point or folder. Default: the first detected card.
         path: Option<PathBuf>,
+        /// Keep recordings the DVR split into files as separate clips this run (the
+        /// join_split_recordings setting is on by default).
+        #[arg(long)]
+        no_join: bool,
     },
     /// Probe staged clips, recover half-written ones, make thumbnails.
     Analyze,
@@ -122,6 +126,9 @@ enum Cmd {
         /// Remove every cut.
         #[arg(long, conflicts_with = "ranges")]
         clear: bool,
+        /// Add one cut per radio-log pack (the armed range plus up to 2 s each side).
+        #[arg(long, conflicts_with = "keep")]
+        by_flight: bool,
         /// Seconds into the clip where the radio log's first armed row falls.
         #[arg(long, allow_hyphen_values = true)]
         log_offset: Option<f64>,
@@ -153,6 +160,13 @@ enum Cmd {
         /// Import a clip that was skipped. Repeatable.
         #[arg(long = "unskip", value_name = "ID")]
         unskip: Vec<usize>,
+        /// Import the files of a split recording (ID: its first file) as clips of their own.
+        /// Repeatable.
+        #[arg(long = "separate", value_name = "ID")]
+        separate: Vec<usize>,
+        /// Import the files of a split recording (ID: its first file) as one clip. Repeatable.
+        #[arg(long = "join", value_name = "ID")]
+        join: Vec<usize>,
         /// Add a cut range to a clip: ID=START-END (seconds or m:ss). Repeatable.
         #[arg(long = "cut", value_name = "ID=START-END")]
         cuts: Vec<String>,
@@ -291,6 +305,9 @@ enum LibCmd {
         ranges: Vec<String>,
         #[arg(long, conflicts_with = "ranges")]
         clear: bool,
+        /// Add one cut per radio-log pack (the armed range plus up to 2 s each side).
+        #[arg(long, conflicts_with_all = ["ranges", "clear"])]
+        by_flight: bool,
         /// For exported cuts the new list drops: keep their files or move them to the Trash.
         #[arg(long, value_parser = ["keep", "trash"])]
         removed: Option<String>,
@@ -524,9 +541,13 @@ fn run(cli: Cli) -> Result<Value> {
             let clips = sources::for_root(&path).list(&path);
             json!({"path": path, "source": source, "volume": vol, "clips": clips})
         }
-        Cmd::Stage { path } => {
-            serde_json::to_value(call::stage(&core, api::SourceParams { source: path })?)?
-        }
+        Cmd::Stage { path, no_join } => serde_json::to_value(call::stage(
+            &core,
+            api::SourceParams {
+                source: path,
+                join: no_join.then_some(false),
+            },
+        )?)?,
         Cmd::Analyze => serde_json::to_value(call::analyse(&core)?)?,
         Cmd::Dates {
             logs,
@@ -678,6 +699,7 @@ fn run(cli: Cli) -> Result<Value> {
             ranges,
             keep,
             clear,
+            by_flight,
             log_offset,
             removed: removed_files,
         } => {
@@ -706,8 +728,8 @@ fn run(cli: Cli) -> Result<Value> {
             } else {
                 Some(ranges.iter().map(|r| span(r)).collect::<Result<Vec<_>>>()?)
             };
-            if cuts.is_none() && log_offset.is_none() {
-                bail!("give ranges, --keep, --clear or --log-offset");
+            if cuts.is_none() && log_offset.is_none() && !by_flight {
+                bail!("give ranges, --keep, --clear, --by-flight or --log-offset");
             }
             let s = user_patch(
                 &core,
@@ -715,6 +737,7 @@ fn run(cli: Cli) -> Result<Value> {
                     id,
                     cuts,
                     log_offset_s: log_offset,
+                    split_by_flight: by_flight.then_some(true),
                     removed_cuts: removed(removed_files),
                     ..Default::default()
                 }],
@@ -730,6 +753,8 @@ fn run(cli: Cli) -> Result<Value> {
             times,
             skip,
             unskip,
+            separate,
+            join,
             cuts,
             format,
             encoder,
@@ -788,6 +813,18 @@ fn run(cli: Cli) -> Result<Value> {
                 skip: Some(false),
                 ..Default::default()
             }));
+            // Joins first: they change which clips there are and how long they are.
+            let joins: Vec<PlanPatch> = separate
+                .iter()
+                .map(|&id| (id, false))
+                .chain(join.iter().map(|&id| (id, true)))
+                .map(|(id, on)| PlanPatch {
+                    id,
+                    joined: Some(on),
+                    ..Default::default()
+                })
+                .collect();
+            patches.splice(0..0, joins);
             // --cut adds to the clip's current cuts.
             let mut added: Vec<(usize, Vec<Span>)> = Vec::new();
             for (id, r) in cuts.iter().map(|x| pair(x)).collect::<Result<Vec<_>>>()? {
@@ -1050,10 +1087,15 @@ fn library(core: &Core, cmd: LibCmd) -> Result<Value> {
             id,
             ranges,
             clear,
+            by_flight,
             removed: r,
             export,
         } => {
             let mut out = json!({});
+            if by_flight {
+                let change = call::library_split(core, api::ClipIdParams { id: id.clone() })?;
+                out["change"] = serde_json::to_value(change)?;
+            }
             if clear || !ranges.is_empty() {
                 let cuts = ranges.iter().map(|r| span(r)).collect::<Result<Vec<_>>>()?;
                 let change = call::library_cuts(
@@ -1083,7 +1125,7 @@ fn library(core: &Core, cmd: LibCmd) -> Result<Value> {
                 )?)?;
             }
             if out.as_object().is_some_and(|o| o.is_empty()) {
-                bail!("give ranges, --clear or --export");
+                bail!("give ranges, --clear, --by-flight or --export");
             }
             out
         }

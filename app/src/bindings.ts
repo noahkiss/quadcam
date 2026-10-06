@@ -18,13 +18,13 @@ export const commands = {
 	/**  Card mount point or folder the clips came from. */
 	source: string,
 	/**  The video system of the clips. */
-	kind?: SourceKind,
+	kind: SourceKind,
 	/**  The card the clips were read from; None for a plain folder (no format step). */
 	card: CardIdentity | null,
 	card_volume: Volume | null,
 	staging: string,
 	clips: Clip[],
-	plans: ClipPlan[],
+	plans: ClipPlan_Serialize[],
 	results: ClipResult[],
 	analysed: boolean,
 	log_dir: string | null,
@@ -36,19 +36,24 @@ export const commands = {
 	in_photos: number[],
 	/**  Output folder of the last import. */
 	output_dir: string | null,
+	/**
+	 *  Whether this run joins recordings the DVR split into files. None follows the
+	 *  `join_split_recordings` setting.
+	 */
+	join: boolean | null,
 } | null, string>(__TAURI_INVOKE("session")),
 	/**  Forgets the session and deletes the session file. */
 	clear: () => typedError<Cleared, string>(__TAURI_INVOKE("clear")),
 	/**  Copies the clips off a card or folder; a new session. */
-	stage: (params: SourceParams) => typedError<Session, string>(__TAURI_INVOKE("stage", { params })),
+	stage: (params: SourceParams) => typedError<Session_Serialize, string>(__TAURI_INVOKE("stage", { params })),
 	/**  Probes, recovers and thumbnails the staged clips. */
-	analyse: () => typedError<Session, string>(__TAURI_INVOKE("analyse")),
+	analyse: () => typedError<Session_Serialize, string>(__TAURI_INVOKE("analyse")),
 	/**  Stage, analyse and date in one go. */
-	load: (params: SourceParams) => typedError<Session, string>(__TAURI_INVOKE("load", { params })),
+	load: (params: SourceParams) => typedError<Session_Serialize, string>(__TAURI_INVOKE("load", { params })),
 	/**  Dates the clips from radio logs. */
-	dates: (params: DatesParams) => typedError<Session, string>(__TAURI_INVOKE("dates", { params })),
+	dates: (params: DatesParams) => typedError<Session_Serialize, string>(__TAURI_INVOKE("dates", { params })),
 	/**  Changes clip plans (an agent's suggestions unless `editor` is `user`). */
-	suggest: (params: SuggestParams) => typedError<Session, string>(__TAURI_INVOKE("suggest", { params })),
+	suggest: (params: SuggestParams) => typedError<Session_Serialize, string>(__TAURI_INVOKE("suggest", { params })),
 	/**  Converts and verifies the clips, and optionally adds them to Photos. */
 	import: (params: ImportOptions) => typedError<ImportOutcome, string>(__TAURI_INVOKE("import", { params })),
 	/**  Adds verified outputs to Photos. */
@@ -89,7 +94,7 @@ export const commands = {
 	 *  Matches radio logs to library clips by shape; writes flight numbers and moments only
 	 *  with `apply`.
 	 */
-	libraryMatchLogs: (params: LibMatchParams) => typedError<LibMatchReport, string>(__TAURI_INVOKE("library_match_logs", { params })),
+	libraryMatchLogs: (params: LibMatchParams) => typedError<LibMatchReport_Serialize, string>(__TAURI_INVOKE("library_match_logs", { params })),
 	/**  Finds dead air again in a clip. */
 	libraryRescan: (params: ClipIdParams) => typedError<LibClip_Serialize, string>(__TAURI_INVOKE("library_rescan", { params })),
 	/**  A file the web view can play. */
@@ -120,11 +125,15 @@ export const commands = {
 	profileDefault: (params: NameParams) => typedError<string | null, string>(__TAURI_INVOKE("profile_default", { params })),
 	/**  Sets a session clip's cut list. */
 	sessionCuts: (params: SessionCutsParams) => typedError<CutChange, string>(__TAURI_INVOKE("session_cuts", { params })),
+	/**  Adds one cut per radio-log pack to a session clip's cut list. */
+	sessionSplit: (params: SessionClipParams) => typedError<CutChange, string>(__TAURI_INVOKE("session_split", { params })),
+	/**  Adds one cut per radio-log pack to a library clip's cut list (unsaved until exported). */
+	librarySplit: (params: ClipIdParams) => typedError<CutChange, string>(__TAURI_INVOKE("library_split", { params })),
 	envCheck: () => __TAURI_INVOKE<EnvCheck>("env_check"),
 	/**  The output folder used until the user picks one: ~/Movies/quadcam. */
 	defaultOutputDir: () => __TAURI_INVOKE<string | null>("default_output_dir"),
 	/**  A folder or clip files dropped on the window. */
-	loadDropped: (paths: string[]) => typedError<Session, string>(__TAURI_INVOKE("load_dropped", { paths })),
+	loadDropped: (paths: string[]) => typedError<Session_Serialize, string>(__TAURI_INVOKE("load_dropped", { paths })),
 	/**  Makes (or reuses) a small H.264 preview of a clip. */
 	preview: (id: number) => typedError<string, string>(__TAURI_INVOKE("preview", { id })),
 	/**  The GUI's own Erase button: the click in its confirm dialog is the confirmation. */
@@ -230,6 +239,15 @@ export type Clip = {
 	 *  to the original.
 	 */
 	sidecars?: string[],
+	/**  The card file's modified time, when it has one. */
+	mtime?: string | null,
+	/**  Set on the first file of a recording the DVR split into several files (see `join`). */
+	join?: Join | null,
+	/**
+	 *  Set on a later file of a joined recording: the id of the clip it is part of. It
+	 *  imports as part of that clip, not on its own.
+	 */
+	part_of?: number | null,
 };
 
 export type ClipDeletion = {
@@ -261,7 +279,13 @@ export type ClipMeta = {
  *  What will happen to one clip on import. The GUI shows it and edits it; an agent may
  *  suggest values for it.
  */
-export type ClipPlan = {
+export type ClipPlan = ClipPlan_Serialize | ClipPlan_Deserialize;
+
+/**
+ *  What will happen to one clip on import. The GUI shows it and edits it; an agent may
+ *  suggest values for it.
+ */
+export type ClipPlan_Deserialize = {
 	id: number,
 	skip: boolean,
 	date: string,
@@ -290,9 +314,47 @@ export type ClipPlan = {
 	meta?: ClipMeta,
 	/**  The EdgeTX model of the matched log; it picks the profile when the clip has none. */
 	log_model?: string | null,
-	flight?: FlightStats | null,
+	flight?: FlightStats_Deserialize | null,
 	/**  Why the radio log matched, or how sure the match is. */
 	match_reason?: string | null,
+};
+
+/**
+ *  What will happen to one clip on import. The GUI shows it and edits it; an agent may
+ *  suggest values for it.
+ */
+export type ClipPlan_Serialize = {
+	id: number,
+	skip: boolean,
+	date: string,
+	/**  The time of day: from the radio log, or set by hand. None means local noon. */
+	time: string | null,
+	source: DateSource,
+	badge: Badge,
+	segments: number,
+	name: string,
+	note: string,
+	suggested: Suggested,
+	/**  Why the agent suggested what it did, shown next to the suggestion. */
+	reason: string | null,
+	/**  Moments from the radio log, in clip seconds (log time plus `log_offset_s`). */
+	moments: Moment[],
+	/**  Median seconds between the log rows the clip claimed. 0.5 s logs give rough moments. */
+	log_interval_s: number | null,
+	/**
+	 *  Seconds into the clip where the first armed log row falls. 0 assumes the clip starts
+	 *  at arm; the DVR usually starts earlier, so the person can set it.
+	 */
+	log_offset_s: number | null,
+	/**  Ranges to export as extra files (`<name>_cutN`), in clip seconds. */
+	cuts: Span[],
+	/**  Location, profile, keywords and author for this clip. */
+	meta: ClipMeta,
+	/**  The EdgeTX model of the matched log; it picks the profile when the clip has none. */
+	log_model: string | null,
+	flight: FlightStats_Serialize | null,
+	/**  Why the radio log matched, or how sure the match is. */
+	match_reason: string | null,
 };
 
 export type ClipResult = {
@@ -367,6 +429,11 @@ export type Defaults_Deserialize = {
 	 *  one run, never on.
 	 */
 	delete_clips_after_import?: boolean,
+	/**
+	 *  Import a recording the DVR split into several files as one clip (see `join`). On by
+	 *  default; a run or a clip may keep the files separate.
+	 */
+	join_split_recordings?: boolean,
 	default_name: string,
 	photos_album: string,
 	log_dir: string | null,
@@ -401,6 +468,11 @@ export type Defaults_Serialize = {
 	 *  one run, never on.
 	 */
 	delete_clips_after_import: boolean,
+	/**
+	 *  Import a recording the DVR split into several files as one clip (see `join`). On by
+	 *  default; a run or a clip may keep the files separate.
+	 */
+	join_split_recordings: boolean,
 	default_name: string,
 	photos_album: string,
 	log_dir: string | null,
@@ -490,13 +562,36 @@ export type Filter = {
 export type Flag = "none" | "pick" | "reject";
 
 /**  Flight numbers from the radio log rows a clip claimed. */
-export type FlightStats = {
+export type FlightStats = FlightStats_Serialize | FlightStats_Deserialize;
+
+/**  Flight numbers from the radio log rows a clip claimed. */
+export type FlightStats_Deserialize = {
 	armed_s: number | null,
 	packs: number,
 	min_rx_bat_v: number | null,
 	min_lq: number | null,
 	min_rssi_db: number | null,
 	max_throttle: number | null,
+	/**
+	 *  Each pack's armed range, in clip seconds (log time plus the log offset), in order.
+	 *  Empty in files from before QuadCam 0.6.3; a library re-match writes it.
+	 */
+	pack_spans?: Span[],
+};
+
+/**  Flight numbers from the radio log rows a clip claimed. */
+export type FlightStats_Serialize = {
+	armed_s: number | null,
+	packs: number,
+	min_rx_bat_v: number | null,
+	min_lq: number | null,
+	min_rssi_db: number | null,
+	max_throttle: number | null,
+	/**
+	 *  Each pack's armed range, in clip seconds (log time plus the log offset), in order.
+	 *  Empty in files from before QuadCam 0.6.3; a library re-match writes it.
+	 */
+	pack_spans?: Span[],
 };
 
 export type Format = "mp4" | "mov";
@@ -580,6 +675,19 @@ export type ImportProgress = {
 /**  One clip finished converting (verified, failed or skipped). */
 export type ImportResult = ClipResult;
 
+/**  A recording the DVR split into files, on its first file's clip. */
+export type Join = {
+	/**  The later files' clip ids, in recording order. */
+	parts: number[],
+	/**  The `ffconcat` list of every file, in staging. */
+	list: string,
+	/**  True while the files import as one clip. */
+	on: boolean,
+	/**  Bytes of every file's source, for the free-space check. */
+	bytes: number,
+	swap: Swap,
+};
+
 /**  `format_plan`: the FAT32 volume name; None uses the setting. */
 export type LabelParams = {
 	label: string | null,
@@ -622,7 +730,7 @@ export type LibClip_Deserialize = {
 	moments?: Moment[],
 	/**  Ranges with a picture; empty when the clip has no dead air (or was never scanned). */
 	keep?: Span[],
-	stats?: FlightStats | null,
+	stats?: FlightStats_Deserialize | null,
 	cuts?: LibCut[],
 	/**  Cut ranges set in the library but not written yet. Only the index holds these. */
 	pending_cuts?: Span[],
@@ -637,6 +745,11 @@ export type LibClip_Deserialize = {
 	cut_of?: [string, Span] | null,
 	/**  Earlier ids of this clip (QuadCam 0.4's). Lookups by them still find it. */
 	aliases?: string[],
+	/**
+	 *  The later DVR files of a split recording joined into this clip. Their fingerprints
+	 *  count as imported.
+	 */
+	parts?: LibPart[],
 };
 
 /**  One clip in the library. */
@@ -664,7 +777,7 @@ export type LibClip_Serialize = {
 	moments: Moment[],
 	/**  Ranges with a picture; empty when the clip has no dead air (or was never scanned). */
 	keep: Span[],
-	stats: FlightStats | null,
+	stats: FlightStats_Serialize | null,
 	cuts: LibCut[],
 	/**  Cut ranges set in the library but not written yet. Only the index holds these. */
 	pending_cuts: Span[],
@@ -679,6 +792,11 @@ export type LibClip_Serialize = {
 	cut_of: [string, Span] | null,
 	/**  Earlier ids of this clip (QuadCam 0.4's). Lookups by them still find it. */
 	aliases?: string[],
+	/**
+	 *  The later DVR files of a split recording joined into this clip. Their fingerprints
+	 *  count as imported.
+	 */
+	parts?: LibPart[],
 };
 
 /**  A cut written as its own file next to its clip. */
@@ -739,24 +857,7 @@ export type LibItem_Serialize = {
 } & LibClip_Serialize;
 
 /**  One clip's result. */
-export type LibMatch = {
-	id: string,
-	path: string,
-	duration: number | null,
-	badge: Badge,
-	/**  The log day matched against. */
-	log_day: string | null,
-	/**  The log's start date and time, when the radio clock is believable. */
-	log_date: string | null,
-	log_time: string | null,
-	log_model: string | null,
-	packs: number,
-	reason: string | null,
-	flight: FlightStats | null,
-	moments: number,
-	/**  The flight numbers and moments were written into the file. */
-	applied: boolean,
-};
+export type LibMatch = LibMatch_Serialize | LibMatch_Deserialize;
 
 /**  `library_match_logs`: which clips, which logs, and whether to write the result. */
 export type LibMatchParams = {
@@ -776,9 +877,64 @@ export type LibMatchParams = {
 	apply?: boolean,
 };
 
-export type LibMatchReport = {
-	clips: LibMatch[],
+export type LibMatchReport = LibMatchReport_Serialize | LibMatchReport_Deserialize;
+
+export type LibMatchReport_Deserialize = {
+	clips: LibMatch_Deserialize[],
 	warnings: string[],
+};
+
+export type LibMatchReport_Serialize = {
+	clips: LibMatch_Serialize[],
+	warnings: string[],
+};
+
+/**  One clip's result. */
+export type LibMatch_Deserialize = {
+	id: string,
+	path: string,
+	duration: number | null,
+	badge: Badge,
+	/**  The log day matched against. */
+	log_day: string | null,
+	/**  The log's start date and time, when the radio clock is believable. */
+	log_date: string | null,
+	log_time: string | null,
+	log_model: string | null,
+	packs: number,
+	reason: string | null,
+	flight: FlightStats_Deserialize | null,
+	moments: number,
+	/**  The flight numbers and moments were written into the file. */
+	applied: boolean,
+};
+
+/**  One clip's result. */
+export type LibMatch_Serialize = {
+	id: string,
+	path: string,
+	duration: number | null,
+	badge: Badge,
+	/**  The log day matched against. */
+	log_day: string | null,
+	/**  The log's start date and time, when the radio clock is believable. */
+	log_date: string | null,
+	log_time: string | null,
+	log_model: string | null,
+	packs: number,
+	reason: string | null,
+	flight: FlightStats_Serialize | null,
+	moments: number,
+	/**  The flight numbers and moments were written into the file. */
+	applied: boolean,
+};
+
+/**  A later file of a split recording that was joined into a clip. */
+export type LibPart = {
+	/**  The file's content fingerprint, like a clip id. */
+	source: string,
+	/**  Its DVR file name. */
+	dvr: string,
 };
 
 /**
@@ -992,6 +1148,16 @@ export type PlanPatch = {
 	 *  drops one.
 	 */
 	removed_cuts?: RemovedCuts | null,
+	/**
+	 *  True adds one cut per radio-log pack (see `trim::flight_cuts`) to the cut list,
+	 *  after `cuts` when both are given.
+	 */
+	split_by_flight?: boolean | null,
+	/**
+	 *  For the first file of a recording the DVR split into files: true imports the files
+	 *  as one clip, false keeps them as clips of their own.
+	 */
+	joined?: boolean | null,
 };
 
 export type Probe = {
@@ -1110,30 +1276,7 @@ export type SearchParams = {
  */
 export type SerdeResult<T, E> = ({ Ok: T }) & { Err?: never } | ({ Err: E }) & { Ok?: never };
 
-export type Session = {
-	version: number,
-	/**  Card mount point or folder the clips came from. */
-	source: string,
-	/**  The video system of the clips. */
-	kind?: SourceKind,
-	/**  The card the clips were read from; None for a plain folder (no format step). */
-	card: CardIdentity | null,
-	card_volume: Volume | null,
-	staging: string,
-	clips: Clip[],
-	plans: ClipPlan[],
-	results: ClipResult[],
-	analysed: boolean,
-	log_dir: string | null,
-	log_day: string | null,
-	log_days: string[],
-	warnings: string[],
-	date_warnings: string[],
-	/**  Clip ids whose outputs were added to Photos. */
-	in_photos: number[],
-	/**  Output folder of the last import. */
-	output_dir: string | null,
-};
+export type Session = Session_Serialize | Session_Deserialize;
 
 export type SessionBrief = {
 	source: string,
@@ -1150,11 +1293,76 @@ export type SessionBrief = {
 /**  The session changed. Read it again with `session`. */
 export type SessionChanged = null;
 
+/**  One session clip. */
+export type SessionClipParams = {
+	id: number,
+};
+
 /**  `session_cuts`: a session clip's new cut list, and what happens to exported cuts it drops. */
 export type SessionCutsParams = {
 	id: number,
 	cuts: Span[],
 	removed_cuts?: RemovedCuts | null,
+};
+
+export type Session_Deserialize = {
+	version: number,
+	/**  Card mount point or folder the clips came from. */
+	source: string,
+	/**  The video system of the clips. */
+	kind?: SourceKind,
+	/**  The card the clips were read from; None for a plain folder (no format step). */
+	card: CardIdentity | null,
+	card_volume: Volume | null,
+	staging: string,
+	clips: Clip[],
+	plans: ClipPlan_Deserialize[],
+	results: ClipResult[],
+	analysed: boolean,
+	log_dir: string | null,
+	log_day: string | null,
+	log_days: string[],
+	warnings: string[],
+	date_warnings: string[],
+	/**  Clip ids whose outputs were added to Photos. */
+	in_photos: number[],
+	/**  Output folder of the last import. */
+	output_dir: string | null,
+	/**
+	 *  Whether this run joins recordings the DVR split into files. None follows the
+	 *  `join_split_recordings` setting.
+	 */
+	join?: boolean | null,
+};
+
+export type Session_Serialize = {
+	version: number,
+	/**  Card mount point or folder the clips came from. */
+	source: string,
+	/**  The video system of the clips. */
+	kind: SourceKind,
+	/**  The card the clips were read from; None for a plain folder (no format step). */
+	card: CardIdentity | null,
+	card_volume: Volume | null,
+	staging: string,
+	clips: Clip[],
+	plans: ClipPlan_Serialize[],
+	results: ClipResult[],
+	analysed: boolean,
+	log_dir: string | null,
+	log_day: string | null,
+	log_days: string[],
+	warnings: string[],
+	date_warnings: string[],
+	/**  Clip ids whose outputs were added to Photos. */
+	in_photos: number[],
+	/**  Output folder of the last import. */
+	output_dir: string | null,
+	/**
+	 *  Whether this run joins recordings the DVR split into files. None follows the
+	 *  `join_split_recordings` setting.
+	 */
+	join: boolean | null,
 };
 
 /**  `settings_set`: settings by file key or CLI/MCP name; null resets one. */
@@ -1215,6 +1423,11 @@ export type SourceKind =
 /**  `stage` and `load`: a card mount point or a folder. None takes the first detected card. */
 export type SourceParams = {
 	source: string | null,
+	/**
+	 *  Join recordings the DVR split into files, this run. None follows the
+	 *  `join_split_recordings` setting.
+	 */
+	join?: boolean | null,
 };
 
 /**  A time range in a clip, in seconds: a suggested keep range or a cut. */
@@ -1264,6 +1477,17 @@ export type Summary = {
 	output_dir: string | null,
 	/**  Ok when the format step may unlock, else the reason it stays locked. */
 	format_ready: SerdeResult<null, string>,
+};
+
+/**
+ *  The head's values for the other state of the join: the file's own while the join is on,
+ *  the whole recording's while it is off. Turning the join on or off swaps them in.
+ */
+export type Swap = {
+	duration: number | null,
+	probe: Probe | null,
+	signal: SignalScan | null,
+	detail: string,
 };
 
 /**  The long library jobs. */

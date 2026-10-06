@@ -59,6 +59,7 @@ fn job(id: usize, name: &str) -> ClipJob {
         note: String::new(),
         meta: Default::default(),
         extra: Vec::new(),
+        parts: Vec::new(),
     }
 }
 

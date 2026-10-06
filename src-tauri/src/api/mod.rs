@@ -130,11 +130,11 @@ api! {
     /// Forgets the session and deletes the session file.
     clear() -> Cleared = |c| c.clear().map(|_| Cleared { cleared: true });
     /// Copies the clips off a card or folder; a new session.
-    stage(params: SourceParams) -> Session = |c| c.stage(params.source.as_deref());
+    stage(params: SourceParams) -> Session = |c| c.stage_with(params.source.as_deref(), params.join);
     /// Probes, recovers and thumbnails the staged clips.
     analyse() -> Session = |c| c.analyse();
     /// Stage, analyse and date in one go.
-    load(params: SourceParams) -> Session = |c| c.load(params.source.as_deref());
+    load(params: SourceParams) -> Session = |c| c.load_with(params.source.as_deref(), params.join);
     /// Dates the clips from radio logs.
     dates(params: DatesParams) -> Session = |c| c.plan_dates(params.logs, params.day);
     /// Changes clip plans (an agent's suggestions unless `editor` is `user`).
@@ -229,4 +229,8 @@ api! {
     /// Sets a session clip's cut list.
     session_cuts(params: SessionCutsParams) -> CutChange =
         |c| c.set_session_cuts(params.id, &params.cuts, params.removed_cuts);
+    /// Adds one cut per radio-log pack to a session clip's cut list.
+    session_split(params: SessionClipParams) -> CutChange = |c| c.session_split_by_flight(params.id);
+    /// Adds one cut per radio-log pack to a library clip's cut list (unsaved until exported).
+    library_split(params: ClipIdParams) -> CutChange = |c| c.library_split_by_flight(&params.id);
 }

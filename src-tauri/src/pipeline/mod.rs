@@ -63,6 +63,16 @@ pub struct Clip {
     /// to the original.
     #[serde(default)]
     pub sidecars: Vec<PathBuf>,
+    /// The card file's modified time, when it has one.
+    #[serde(default)]
+    pub mtime: Option<DateTime<Utc>>,
+    /// Set on the first file of a recording the DVR split into several files (see `join`).
+    #[serde(default)]
+    pub join: Option<crate::join::Join>,
+    /// Set on a later file of a joined recording: the id of the clip it is part of. It
+    /// imports as part of that clip, not on its own.
+    #[serde(default)]
+    pub part_of: Option<usize>,
 }
 
 /// A clip's content fingerprint: size plus the first and last MB (see `identity`). Two
@@ -74,9 +84,27 @@ pub fn fingerprint(path: &Path) -> Result<String> {
 }
 
 impl Clip {
-    /// The file that gets converted and verified against.
+    /// The file that gets converted and verified against: the `ffconcat` list of a joined
+    /// recording, the repaired copy of a half-written clip, else the staged copy.
     pub fn source(&self) -> Option<&Path> {
-        self.recovered.as_deref().or(self.staged.as_deref())
+        self.join
+            .as_ref()
+            .filter(|j| j.on)
+            .map(|j| j.list.as_path())
+            .or(self.recovered.as_deref())
+            .or(self.staged.as_deref())
+    }
+
+    /// Bytes of what gets converted (every file of a joined recording).
+    pub fn source_bytes(&self) -> u64 {
+        match self.join.as_ref().filter(|j| j.on) {
+            Some(j) => j.bytes,
+            None => self
+                .source()
+                .and_then(|p| p.metadata().ok())
+                .map(|m| m.len())
+                .unwrap_or(self.size),
+        }
     }
 }
 
@@ -163,6 +191,14 @@ pub fn stage_found(
             kind,
             clock: None,
             sidecars: Vec::new(),
+            mtime: f
+                .path
+                .metadata()
+                .and_then(|m| m.modified())
+                .ok()
+                .map(DateTime::<Utc>::from),
+            join: None,
+            part_of: None,
         };
         // Reuse a staged copy only when it is the same content, not just the same name.
         let already = dst.metadata().is_ok_and(|m| m.len() == f.size)
@@ -316,11 +352,14 @@ pub struct DateSuggestion {
     pub match_reason: Option<String>,
 }
 
-/// Flight numbers from the log rows inside `windows`.
+/// Flight numbers from the log rows inside `windows`. `zero` is the log time at clip
+/// second 0 (the first armed row): the packs' ranges are in seconds from it.
 pub fn flight_stats(
     rows: &[logs::LogRow],
     windows: &[(NaiveDateTime, NaiveDateTime)],
+    zero: NaiveDateTime,
 ) -> FlightStats {
+    let secs = |t: NaiveDateTime| ((t - zero).num_milliseconds() as f64).round() / 1000.0;
     let inside: Vec<&logs::LogRow> = rows
         .iter()
         .filter(|r| windows.iter().any(|(a, b)| r.time >= *a && r.time <= *b))
@@ -348,6 +387,13 @@ pub fn flight_stats(
                     .map(|s| ((s.thr + 1024.0) / 2048.0).clamp(0.0, 1.0))
             })
             .fold(None, |m: Option<f64>, v| Some(m.map_or(v, |m| m.max(v)))),
+        pack_spans: windows
+            .iter()
+            .map(|(a, b)| Span {
+                start: secs(*a),
+                end: secs(*b),
+            })
+            .collect(),
     }
 }
 
@@ -568,7 +614,7 @@ pub fn plan_dates_with(
         s.moments = log.moments();
         s.log_interval_s = log.interval();
         s.log_model = f.model.clone();
-        s.flight = Some(flight_stats(rows, &windows));
+        s.flight = Some(flight_stats(rows, &windows, f.start));
         s.match_reason = Some(f.reason);
     }
     plan
@@ -610,6 +656,10 @@ pub struct ClipJob {
     /// The library's own QuickTime items (see `library::import_items`).
     #[serde(default)]
     pub extra: Vec<(String, String)>,
+    /// The later files of a joined recording: (DVR file name, staged copy). Kept originals
+    /// go next to the first file's as `<stem>.part2.avi`, and so on.
+    #[serde(default)]
+    pub parts: Vec<(String, PathBuf)>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, specta::Type)]
@@ -702,15 +752,7 @@ pub fn free_bytes(dir: &Path) -> Result<u64> {
 /// Expected bytes: the source sizes (MP4 comes out far smaller, MOV the same), plus the
 /// originals when kept, plus 5%. Deliberately an over-estimate.
 pub fn expected_bytes(clips: &[&Clip], keep_originals: bool) -> u64 {
-    let src: u64 = clips
-        .iter()
-        .map(|c| {
-            c.source()
-                .and_then(|p| p.metadata().ok())
-                .map(|m| m.len())
-                .unwrap_or(c.size)
-        })
-        .sum();
+    let src: u64 = clips.iter().map(|c| c.source_bytes()).sum();
     let total = if keep_originals { src * 2 } else { src };
     total + total / 20
 }
@@ -746,7 +788,10 @@ pub fn meta_for(clip: &Clip, job: &ClipJob, date: NaiveDate, time: Option<NaiveT
         description: format!(
             "{} {}; date source: {}",
             clip.kind.file_label(),
-            clip.name,
+            std::iter::once(clip.name.as_str())
+                .chain(job.parts.iter().map(|(n, _)| n.as_str()))
+                .collect::<Vec<_>>()
+                .join(" + "),
             job.source.label()
         ),
     }
@@ -871,6 +916,27 @@ pub fn import_clip(
                     bail!("original copy came out the wrong size");
                 }
                 let _ = media::set_mtime(&dst, meta.creation_time);
+                // The later files of a joined recording sit next to it as `.part2`, `.part3`.
+                let ext = dst
+                    .extension()
+                    .unwrap_or_default()
+                    .to_string_lossy()
+                    .to_string();
+                for (n, (_, part)) in job.parts.iter().enumerate() {
+                    let to = dst.with_extension(format!("part{}.{ext}", n + 2));
+                    if to.exists() {
+                        bail!("{} exists already; not overwriting", to.display());
+                    }
+                    std::fs::copy(part, &to)
+                        .with_context(|| format!("keeping {}", part.display()))?;
+                    if to.metadata()?.len() != part.metadata()?.len() {
+                        bail!(
+                            "original copy of {} came out the wrong size",
+                            part.display()
+                        );
+                    }
+                    let _ = media::set_mtime(&to, meta.creation_time);
+                }
                 // Sidecars sit next to the original, under its stem.
                 for side in &clip.sidecars {
                     let ext = side.extension().unwrap_or_default().to_string_lossy();
@@ -910,12 +976,9 @@ pub fn can_format(clips: &[Clip], results: &[ClipResult]) -> Result<()> {
         );
     }
     for c in clips {
-        match results
-            .iter()
-            .rev()
-            .find(|r| r.id == c.id)
-            .map(|r| r.outcome)
-        {
+        // A part of a joined recording imports with its first file.
+        let id = c.part_of.unwrap_or(c.id);
+        match results.iter().rev().find(|r| r.id == id).map(|r| r.outcome) {
             Some(Outcome::Verified | Outcome::Skipped) => {}
             Some(Outcome::Failed) => bail!("{} failed to import.", c.name),
             None => bail!("{} has not been imported.", c.name),
@@ -1279,6 +1342,14 @@ pub(crate) mod tests {
         assert_eq!(s.segments, 1);
         let f = s.flight.as_ref().unwrap();
         assert_eq!((f.packs, f.armed_s), (1, 113.5));
+        // The pack's armed range, in clip seconds from the first armed row.
+        assert_eq!(
+            f.pack_spans,
+            vec![Span {
+                start: 0.0,
+                end: 113.5
+            }]
+        );
         assert!(s
             .match_reason
             .as_deref()
@@ -1333,6 +1404,15 @@ pub(crate) mod tests {
         }
         // The second clip took the 100 s pack of the second power-on, not rows of the first.
         assert_eq!(p.suggestions[1].flight.as_ref().unwrap().armed_s, 100.0);
+        // The third took the 160 s pack; its range starts at the clip's first armed row.
+        let f = p.suggestions[2].flight.as_ref().unwrap();
+        assert_eq!(
+            f.pack_spans,
+            vec![Span {
+                start: 0.0,
+                end: 160.0
+            }]
+        );
     }
 
     /// Two packs of the same length and one clip without a clock: either fits, so the match
