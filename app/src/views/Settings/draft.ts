@@ -20,6 +20,7 @@ export interface Draft {
   encoder: "videotoolbox" | "x264";
   defaultName: string;
   addTime: boolean;
+  deleteClips: boolean;
   segGap: string;
   sessionGap: string;
   tolerance: string;
@@ -50,6 +51,7 @@ export function draftFrom(s: State): Draft {
     encoder: sel.encoder(s),
     defaultName: sel.defaultName(s),
     addTime: sel.addTime(s),
+    deleteClips: sel.deleteClips(s),
     segGap: String(t.segment_gap_s),
     sessionGap: String(t.session_gap_min),
     tolerance: String(t.tolerance_s),
@@ -84,6 +86,7 @@ export function valuesOf(d: Draft, before: Tunables): SettingsValues {
     encoder: d.encoder,
     format: d.format,
     addTime: d.addTime,
+    deleteClipsAfterImport: d.deleteClips,
     photosAlbum: d.photosAlbum.trim(),
     libraryLayout: d.libraryLayout,
     placeFolders: d.placeFolders,

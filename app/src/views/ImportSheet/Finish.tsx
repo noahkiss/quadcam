@@ -14,7 +14,15 @@ export function Finish() {
   const s = useStore((x) => x.session);
   const home = useStore((x) => x.home);
   const defaultName = useStore(sel.defaultName);
+  const deletion = useStore((x) => x.clipDeletion);
   if (!s) return null;
+  const deleted = (deletion || []).filter((x) => x.state === "deleted").length;
+  const onCard = (id: number) => {
+    const d = deletion?.find((x) => x.id === id);
+    if (!d) return null;
+    const [from, at] = s.card ? ["from the card", "on the card"] : ["from the folder", "in the folder"];
+    return <span className={styles.muted}>{d.state === "deleted" ? `Deleted ${from}` : `Kept ${at}: ${d.reason || ""}`}</span>;
+  };
   const ok = s.results.filter((r) => r.outcome === "verified");
   const cutsOk = ok.reduce((a, r) => a + (r.cuts || []).filter((k) => k.outcome === "verified").length, 0);
   const failed = s.results.filter((r) => r.outcome === "failed").length + s.results.reduce((a, r) => a + (r.cuts || []).filter((k) => k.outcome === "failed").length, 0);
@@ -30,6 +38,12 @@ export function Finish() {
           </h3>
           {failed > 0 && <span className={styles.err}>{failed} did not verify</span>}
         </div>
+        {deletion && (
+          <p className={styles.muted}>
+            Deleted {deleted} clip{deleted === 1 ? "" : "s"} from {tilde(s.source, home)}
+            {deletion.length > deleted ? ` · kept ${deletion.length - deleted}` : ""}
+          </p>
+        )}
         <p className={`${styles.muted} selectable`}>
           {dirs.length === 1 ? `Saved to ${tilde(dirs[0], home)}/ · each file checked against its source` : `Saved under ${tilde(s.output_dir, home)} · each file checked against its source`}
         </p>
@@ -47,7 +61,7 @@ export function Finish() {
             for (const k of r.cuts || []) files.push({ name: k.output ? base(k.output) : `cut ${fmtT(k.start)}–${fmtT(k.end)}`, ok: k.outcome === "verified", size: k.size, error: k.error });
             return (
               <li key={c.id}>
-                <b>{p.name || defaultName}</b>
+                <b>{p.name || defaultName}</b> {onCard(c.id)}
                 <ul>
                   {files.map((f) => (
                     <li key={f.name}>

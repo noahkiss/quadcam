@@ -16,6 +16,8 @@ The video system of the card must also allow a format. Analog DVR cards allow it
 
 QuadCam never formats a DJI volume: not an air unit over USB, and not a goggles card. The Finish step shows no **Format card** panel for DJI clips, and the command line and the MCP server refuse with exit code 3. Format a DJI card in the goggles.
 
+Formatting is not the only way to free a card. **Delete clips after import** (a setting, off by default) deletes only the clip files that verified, on DJI and analog cards alike, and keeps every other file. It never formats and never changes the file system. See [Settings](settings.md#delete-clips-after-import).
+
 ## The guards
 
 Immediately before it erases, QuadCam reads the disk information again and checks every guard:

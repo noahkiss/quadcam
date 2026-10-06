@@ -1,13 +1,17 @@
 //! `Core`'s import half: stage a card or folder, analyse, date, patch the plans, convert and
-//! verify, then eject and format the card. Also the "N new" count for a card.
+//! verify, delete the imported clips from the card when the setting says so, then eject and
+//! format the card. Also the "N new" count for a card.
 
 use super::Core;
-use super::{FormatPlan, FormatRequest, ImportOptions, ImportOutcome, LogChoice, VerifyReport};
+use super::{
+    ClipDeletion, DeletionState, FormatPlan, FormatRequest, ImportOptions, ImportOutcome,
+    LogChoice, VerifyReport,
+};
 use crate::api::{Event, ImportProgress, ImportResult, Phase, Progress};
 use crate::disk;
 use crate::library as lib;
 use crate::media;
-use crate::pipeline::{ClipResult, ImportSettings};
+use crate::pipeline::{Clip, ClipResult, ImportSettings, Outcome};
 use crate::session::{self, Editor, PlanPatch, Session};
 use anyhow::{anyhow, bail, Context, Result};
 use chrono::NaiveDate;
@@ -297,13 +301,35 @@ impl Core {
             }
             latest
         };
+        // The setting is the consent; a run can only turn deletion off.
+        let clip_deletion = (self.defaults().delete_clips_after_import && !o.keep_clips)
+            .then(|| delete_imported_clips(&tools, &s));
+        if let Some(d) = &clip_deletion {
+            let deleted = d
+                .iter()
+                .filter(|x| x.state == DeletionState::Deleted)
+                .count();
+            if deleted > 0 {
+                let mut latest = self.current()?;
+                latest.warnings.push(format!(
+                    "Deleted {deleted} imported clip{} from {}.",
+                    if deleted == 1 { "" } else { "s" },
+                    latest.source.display()
+                ));
+                self.commit(Some(latest))?;
+            }
+        }
         let photos = o.add_to_photos.then(|| {
             let album = o.album.clone().or(Some(self.defaults().photos_album));
             self.add_to_photos(None, album)
                 .map_err(|e| format!("{e:#}"))
         });
         let summary = self.session().unwrap_or(s).summary();
-        Ok(ImportOutcome { summary, photos })
+        Ok(ImportOutcome {
+            summary,
+            photos,
+            clip_deletion,
+        })
     }
 
     /// Re-runs the verify checks on verified outputs (all when `ids` is None): frame count,
@@ -485,4 +511,95 @@ impl Core {
             size,
         })
     }
+}
+
+/// "Delete clips after import": deletes the card or folder file of every clip whose output
+/// verified, and reports every clip. Only the clip files go; sidecars, other files and
+/// folders stay. Each clip's guards run in `delete_clip_file`, right before its unlink.
+pub(crate) fn delete_imported_clips(tools: &media::Tools, s: &Session) -> Vec<ClipDeletion> {
+    s.clips
+        .iter()
+        .map(|c| {
+            let reason = delete_clip_file(tools, s, c).err();
+            ClipDeletion {
+                id: c.id,
+                path: c.card_path.clone(),
+                state: if reason.is_none() {
+                    DeletionState::Deleted
+                } else {
+                    DeletionState::Kept
+                },
+                reason,
+            }
+        })
+        .collect()
+}
+
+/// Deletes one clip's file from the card or folder it came from, or says why it stays.
+/// Every guard runs here, immediately before the unlink. Do not move one out of this path.
+fn delete_clip_file(tools: &media::Tools, s: &Session, clip: &Clip) -> Result<(), String> {
+    let source = crate::sources::get(clip.kind);
+    if !source.card_policy().delete_clips_offered {
+        return Err(format!(
+            "QuadCam does not delete {} clips.",
+            clip.kind.label()
+        ));
+    }
+    if let Some(e) = &clip.stage_error {
+        return Err(format!("it did not copy off the card ({e})"));
+    }
+    // The clip's latest result must be a verified export.
+    let r = s
+        .results
+        .iter()
+        .rev()
+        .find(|r| r.id == clip.id)
+        .ok_or("it was not imported")?;
+    match r.outcome {
+        Outcome::Verified => {}
+        Outcome::Skipped => return Err("it was skipped".into()),
+        Outcome::Failed => return Err("it failed to import".into()),
+    }
+    // Check the output again, the same way `verify` does.
+    let (Some(output), Some(meta)) = (&r.output, &r.meta) else {
+        return Err("its output was not recorded".into());
+    };
+    let probe = clip.probe.as_ref().ok_or("the clip was never probed")?;
+    media::verify(tools, probe, output, meta)
+        .and_then(|_| media::verify_qt(tools, output, &r.qt))
+        .map_err(|e| format!("its output did not verify again: {e:#}"))?;
+    // The path must be a plain file inside the card or folder the clips came from.
+    let path = &clip.card_path;
+    let lmeta =
+        std::fs::symlink_metadata(path).map_err(|_| "it is no longer on the card".to_string())?;
+    if !lmeta.file_type().is_file() {
+        return Err("it is not a plain file".into());
+    }
+    let root = s
+        .source
+        .canonicalize()
+        .map_err(|e| format!("the card or folder is not readable: {e}"))?;
+    let real = path
+        .canonicalize()
+        .map_err(|e| format!("the file is not readable: {e}"))?;
+    if real == root || !real.starts_with(&root) {
+        return Err(format!("it is outside {}", s.source.display()));
+    }
+    // It must still be one of the source's clip files, and the very file that was copied.
+    if !source
+        .pick(std::slice::from_ref(&real))
+        .iter()
+        .any(|f| f.path == real)
+    {
+        return Err("it is not a clip file".into());
+    }
+    if lmeta.len() != clip.size {
+        return Err("it changed since it was copied".into());
+    }
+    if clip.key.is_empty()
+        || crate::identity::fingerprint(&real).ok().as_deref() != Some(clip.key.as_str())
+    {
+        return Err("it changed since it was copied".into());
+    }
+    std::fs::remove_file(&real).map_err(|e| format!("delete failed: {e}"))
 }

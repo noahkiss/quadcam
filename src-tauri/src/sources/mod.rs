@@ -1,7 +1,7 @@
 //! Footage sources: the video systems QuadCam reads clips from. Each `Source` knows how its
 //! card or folder is laid out, how to tell a whole clip from a half-written one, how to
 //! repair it, how its video goes into the output container, whether its frames show dead
-//! air, and what its card may be formatted to. The pipeline asks the clip's source and never
+//! air, and what may happen to its card after an import (format, delete the imported clips). The pipeline asks the clip's source and never
 //! assumes one. Two today: `dji` (DJI O4 MP4s) and `analog` (DVR MJPEG in AVI).
 
 pub mod analog;
@@ -68,12 +68,17 @@ pub enum EncodePlan {
     Copy,
 }
 
-/// What a source's card may be formatted to. Formatting runs every guard in
-/// `disk::format_card` either way; this only says whether it is offered at all.
+/// What may happen to a source's card after an import: whether it may be formatted, and
+/// whether its imported clip files may be deleted. Formatting runs every guard in
+/// `disk::format_card` and deleting every guard in `Core::delete_imported_clips` either way;
+/// this only says whether each is offered at all.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct CardPolicy {
     /// The app offers "Format card" for this source.
     pub format_offered: bool,
+    /// "Delete clips after import" may delete this source's clip files (only the files
+    /// `Source::pick` takes as clips; sidecars and every other file stay).
+    pub delete_clips_offered: bool,
     /// The file system the card should have, and gets when formatted.
     pub filesystem: &'static str,
     /// Cards larger than this get a warning when they are inserted. `u64::MAX`: never.

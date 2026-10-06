@@ -122,6 +122,28 @@ pub(super) fn photos_line(p: &Value) -> String {
     }
 }
 
+/// What "Delete clips after import" did: a count, then one line per clip.
+pub(super) fn deletion_lines(d: &[Value]) -> String {
+    let deleted = d.iter().filter(|x| x["state"] == "deleted").count();
+    let mut out = format!(
+        "Delete clips after import: {deleted} deleted, {} kept.",
+        d.len() - deleted
+    );
+    for x in d {
+        let path = x["path"].as_str().unwrap_or("?");
+        if x["state"] == "deleted" {
+            out.push_str(&format!("\nClip {} deleted: {path}", x["id"]));
+        } else {
+            out.push_str(&format!(
+                "\nClip {} kept: {path} ({})",
+                x["id"],
+                x["reason"].as_str().unwrap_or("")
+            ));
+        }
+    }
+    out
+}
+
 /// Flattens session clips + plans + results into one compact record per clip.
 pub fn clip_views(session: &Value, ids: Option<&[u64]>) -> Vec<Value> {
     let plans = session["plans"].as_array().cloned().unwrap_or_default();

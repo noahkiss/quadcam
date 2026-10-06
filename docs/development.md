@@ -58,6 +58,7 @@ QUADCAM_UPDATE_BINDINGS=1 cargo test --test bindings   # write app/src/bindings.
 - No test can reach your Photos library or your Trash. Under `cargo`, "Move to Trash" moves files into a temporary folder.
 - `test-clips/README.md` describes an optional local corpus of real clips and logs. `scripts/make-corpus.sh` builds its synthetic part, a DJI-like card (`synthetic/dji-card/`) included.
 - `tests/dji.rs` stages, dates, imports (MP4 copy and MOV remux) and verifies a synthetic DJI-like MP4 with a cover picture and an `.SRT` file.
+- `tests/delete_clips.rs` checks "Delete clips after import" on temp folders: only verified clip files go, every other file stays, the setting off deletes nothing, a run can turn it off, and nothing in the core, CLI or MCP turns it on.
 
 ### Frontend
 
@@ -97,7 +98,7 @@ pnpm build                                 # -> app/dist
 | `app/e2e/` | Playwright specs on the mocked core, and its fixtures |
 | `src-tauri/src/api/` | The one table of core methods, with their params and results, and the app's events. It makes the socket's methods and the typed GUI commands |
 | `src-tauri/src/core/` | The core that the app, the CLI and the MCP server drive: import, library, cuts, files (Photos, previews, Trash), and setup (settings, places, profiles) |
-| `src-tauri/src/sources/` | Footage sources: how each video system's clips are found, checked, repaired and converted, and whether its card can be formatted. `analog.rs` (DVR AVI) and `dji.rs` (DJI MP4) |
+| `src-tauri/src/sources/` | Footage sources: how each video system's clips are found, checked, repaired and converted, whether its card can be formatted, and whether its imported clips can be deleted. `analog.rs` (DVR AVI) and `dji.rs` (DJI MP4) |
 | `src-tauri/src/identity.rs` | Clip ids: the XXH64 source fingerprint and head id, and the 0.4 legacy ids |
 | `src-tauri/src/paths.rs` | Where QuadCam keeps its files under your home folder |
 | `src-tauri/src/settings.rs` | The settings file: the one reader and writer, the setting names and their checks |

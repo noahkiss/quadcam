@@ -497,7 +497,7 @@ mod tests {
         let w = card_warnings(&v, &dji);
         assert_eq!(
             w,
-            ["Card is MS-DOS FAT32, not exFAT. Import works; QuadCam only reads DJI cards."]
+            ["Card is MS-DOS FAT32, not exFAT. Import works; QuadCam does not format DJI cards."]
         );
         assert!(!w[0].contains("analog"));
     }

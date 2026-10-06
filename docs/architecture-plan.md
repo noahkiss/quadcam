@@ -515,8 +515,9 @@ attached picture; format tags `encoder: DJI O4`, `comment: EIS:RS;FOV:Linear;`; 
   holds `DCIM/DJI_*/` with `DJI_<14 digits>_<4 digits>_*.MP4` names (case-insensitive;
   `DJIG####.MP4` from older goggles counts too). `MISC/` (`FC8770.db`, `THM/`, `IDX/`) is
   DJI housekeeping and is ignored. `sources::all()` tries DJI before analog: its check is
-  strict (a name pattern) and analog's is loose (any `.avi`). A DJI volume is read-only to
-  QuadCam: it stages copies and never writes to, ejects for formatting, or formats it.
+  strict (a name pattern) and analog's is loose (any `.avi`). QuadCam never formats a DJI
+  volume or writes a file to it. Later, "Delete clips after import" (a setting, off by
+  default) added one change: it deletes the imported `.MP4` clips that verified.
 - **Dating.** The file name holds the air unit's clock in local time; the container's
   `creation_time` is the same instant in UTC. `intrinsic_time` parses the name first and
   falls back to `creation_time`. The date plan gets a new `DateSource::Clip` ("clip clock")

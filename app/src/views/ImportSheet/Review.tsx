@@ -1,5 +1,5 @@
 import { memo, useEffect, useMemo, useRef, useState } from "react";
-import { useStore } from "../../store";
+import { store, useStore } from "../../store";
 import { planOf, resultOf } from "../../store/session";
 import { sel } from "../../store/settings";
 import { api, errText, fileSrc } from "../../ipc/api";
@@ -7,7 +7,7 @@ import type { Clip, ClipPlan, Session } from "../../ipc/types";
 import { AgentBadge, Chip } from "../../components/Chip";
 import { Button } from "../../components/Button";
 import { CommitInput } from "../../components/CommitInput";
-import { Field, Input, Select } from "../../components/Field";
+import { Checkbox, Field, Input, Select } from "../../components/Field";
 import { Icon } from "../../components/Icon";
 import { toast } from "../../components/toastStore";
 import { MomentList, TrimEditor } from "../../components/trim/TrimEditor";
@@ -61,6 +61,8 @@ function SessionBar({ s }: { s: Session }) {
   const home = useStore((x) => x.home);
   const tools = useStore((x) => !!x.env?.tools);
   const busy = useStore((x) => x.busy);
+  const deleteClips = useStore(sel.deleteClips);
+  const keepClips = useStore((x) => x.keepClips);
   const plans = s.plans.filter((p) => !p.skip);
   const allProf = new Set(plans.map((p) => p.meta?.profile || ""));
   const allPlace = new Set(plans.map((p) => p.meta?.location?.name || (p.meta?.location ? "*coords" : "")));
@@ -127,6 +129,7 @@ function SessionBar({ s }: { s: Session }) {
         <span className="mono">
           {s.clips.length} clips · {fmtDur(dur - dead)} flying · {fmtDur(dead)} dead air
         </span>
+        {deleteClips && <Checkbox label="Delete clips after import" checked={!keepClips} disabled={busy} onChange={(e) => store.setState({ keepClips: !e.target.checked })} />}
         <Button variant="primary" iconEnd="arrow-right" title={`Add ${todo} clip${todo === 1 ? "" : "s"} to the library (⌘↩)`} disabled={!tools || busy} onClick={runExport}>
           Add to Library
         </Button>

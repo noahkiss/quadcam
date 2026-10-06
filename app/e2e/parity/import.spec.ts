@@ -195,3 +195,29 @@ test("the review panel's trim editor sets session cuts; tabs show flight and fil
   await sheet(page).getByRole("tab", { name: "Flight" }).click();
   await expect(sheet(page).getByText("No radio log for this clip.")).toBeVisible();
 });
+
+test("Delete clips after import: the checkbox follows the setting and can keep the clips", async ({ app, page }) => {
+  await app.open();
+  await openFolder(app);
+  await expect(sheet(page).getByRole("checkbox", { name: "Delete clips after import" })).toHaveCount(0);
+  await app.core("c => c.settingsSet({ deleteClipsAfterImport: true })");
+  const box = sheet(page).getByRole("checkbox", { name: "Delete clips after import" });
+  await expect(box).toBeChecked();
+  await box.uncheck();
+  await page.keyboard.press("Meta+Enter");
+  await expect(sheet(page).getByRole("heading", { name: /^Added 4 clips/ })).toBeVisible();
+  expect((await app.method("import"))[0]).toMatchObject({ keep_clips: true });
+  await expect(sheet(page).getByText(/^Deleted \d+ clips? from/)).toHaveCount(0);
+});
+
+test("Delete clips after import: Finish says what was deleted and what was kept", async ({ app, page }) => {
+  await app.open();
+  await app.core("c => c.settingsSet({ deleteClipsAfterImport: true })");
+  await openFolder(app);
+  await expect(sheet(page).getByRole("checkbox", { name: "Delete clips after import" })).toBeChecked();
+  await page.keyboard.press("Meta+Enter");
+  await expect(sheet(page).getByRole("heading", { name: /^Added 4 clips/ })).toBeVisible();
+  expect((await app.method("import"))[0]).toMatchObject({ keep_clips: false });
+  await expect(sheet(page).getByText(/^Deleted 4 clips from .* · kept 1$/)).toBeVisible();
+  await expect(sheet(page).getByText("Deleted from the folder")).toHaveCount(4);
+});

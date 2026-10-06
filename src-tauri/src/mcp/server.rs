@@ -3,7 +3,8 @@
 
 use super::params::*;
 use super::render::{
-    clip_views, lib_line, lib_view, names, photos_line, places_text, source_label, table, text,
+    clip_views, deletion_lines, lib_line, lib_view, names, photos_line, places_text, source_label,
+    table, text,
 };
 use super::tools::{tools, INSTRUCTIONS};
 use crate::control::{self, Client};
@@ -652,11 +653,11 @@ impl<B: Backend> Server<B> {
                 };
                 let e = &view["effective"];
                 let line = format!(
-                    "{}Settings file {}.\noutput_dir {} | layout {} | place_folders {} | format {} | encoder {} | keep_originals {} | add_time {} | default_name {:?} | photos_album {:?} | format_label {} | log_dir {} | geocoder {} | name_date_format {} | default_profile {} | tunables {} | google_places_key {}",
+                    "{}Settings file {}.\noutput_dir {} | layout {} | place_folders {} | format {} | encoder {} | keep_originals {} | add_time {} | delete_clips_after_import {} | default_name {:?} | photos_album {:?} | format_label {} | log_dir {} | geocoder {} | name_date_format {} | default_profile {} | tunables {} | google_places_key {}",
                     if action == "write" { "Saved. " } else { "" },
                     view["path"].as_str().unwrap_or("?"),
                     e["output_dir"].as_str().unwrap_or("none"), e["layout"].as_str().unwrap_or("?"), e["place_folders"],
-                    e["format"].as_str().unwrap_or("?"), e["encoder"].as_str().unwrap_or("?"), e["keep_originals"], e["add_time"],
+                    e["format"].as_str().unwrap_or("?"), e["encoder"].as_str().unwrap_or("?"), e["keep_originals"], e["add_time"], e["delete_clips_after_import"],
                     e["default_name"].as_str().unwrap_or(""), e["photos_album"].as_str().unwrap_or(""), e["format_label"].as_str().unwrap_or(""),
                     e["log_dir"].as_str().unwrap_or("none"), e["geocoder"].as_str().unwrap_or("?"), e["name_date_format"].as_str().unwrap_or("?"), e["default_profile"].as_str().unwrap_or("none"), e["tunables"],
                     if view["values"]["googlePlacesKey"].is_null() { "not set" } else { "set" },
@@ -669,6 +670,7 @@ impl<B: Backend> Server<B> {
                     "encoder",
                     "keep_originals",
                     "add_time",
+                    "delete_clips_after_import",
                     "default_name",
                     "photos_album",
                     "format_label",
@@ -796,6 +798,7 @@ impl<B: Backend> Server<B> {
                     ("keep_originals", x.keep_originals),
                     ("add_time", x.add_time),
                     ("add_to_photos", x.add_to_photos),
+                    ("keep_clips", x.keep_clips),
                 ] {
                     if let Some(v) = v {
                         opts[k] = json!(v);
@@ -842,6 +845,9 @@ impl<B: Backend> Server<B> {
                 }
                 if let Some(p) = out.get("photos").filter(|p| !p.is_null()) {
                     line.push_str(&format!("\nPhotos: {}", photos_line(p)));
+                }
+                if let Some(d) = out["clip_deletion"].as_array() {
+                    line.push_str(&format!("\n{}", deletion_lines(d)));
                 }
                 Ok((vec![text(line)], out))
             }

@@ -9,7 +9,7 @@ Open Settings with the gear icon or Command-comma. **Done** saves every change a
 | **Library** | The library folder (default `~/Movies/quadcam`, made on the first import), the layout, the date in file names, place folders, keep originals, and **Rebuild from files**. See [The library](library.md). |
 | **Aircraft** | The aircraft profiles and the default profile. See [Metadata](metadata.md#places-and-profiles). |
 | **Places** | The saved places and the place search provider. See [Metadata](metadata.md#place-search-providers). |
-| **Import** | The format (MP4 or MOV), the MP4 encoder, the default short name, the time in file names, and the tolerances for log matching, the DJI clip clock skew included. |
+| **Import** | The format (MP4 or MOV), the MP4 encoder, the default short name, the time in file names, **Delete clips after import**, and the tolerances for log matching, the DJI clip clock skew included. |
 | **Photos** | The album. An empty album means the library only. See [Photos](photos.md). |
 | **Advanced** | Where ffmpeg and the agent socket are. |
 
@@ -17,6 +17,35 @@ Open Settings with the gear icon or Command-comma. **Done** saves every change a
 
 - **MP4, H.264** (default) uses the VideoToolbox hardware encoder. **MP4 encoder** can pick x264 (software) instead. The files play everywhere and are much smaller: 14 times smaller on the synthetic test clips. Real, noisy footage compresses less.
 - **MOV, original MJPEG frames** is a lossless remux that keeps the original frames.
+
+### Delete clips after import
+
+A DJI air unit stops recording when its storage is full. With this setting on, QuadCam deletes the imported clips from the card after each import, so the next flight has room. It works for every source: DJI and analog, a card or a folder.
+
+The setting is off by default. Turning it on is your consent: the app, the command line and an agent then all delete without asking again.
+
+After the import, QuadCam deletes a clip's file only when all of these are true:
+
+- The clip copied off the card and was not skipped.
+- Its output verified. QuadCam checks the output again just before the delete: frame count, duration, streams and metadata.
+- The file is inside the card or folder that the clips came from, and it is the same file that QuadCam copied: same size and same content fingerprint.
+
+Everything else stays:
+
+- Skipped clips, clips that failed, and clips whose output did not verify again.
+- Every file that is not a clip. On a DJI O4 air unit, QuadCam deletes `DCIM/DJI_001/*.MP4` and keeps `MISC/`, the `.SRT` files and the empty `DCIM` folders. On an analog card, it deletes only the imported `.AVI` files.
+
+QuadCam never formats a card for this and never changes its file system. Format card is a separate step, with its own rules; see [Format safety](format-safety.md).
+
+Each import can turn the delete off for that import only:
+
+| From | Keep the clips for one import |
+|---|---|
+| The app | Clear **Delete clips after import** above **Add to Library**. The checkbox shows only while the setting is on. |
+| The command line | `quadcam-cli import --keep-clips` |
+| An agent (MCP) | `quadcam_export` with `keep_clips=true` |
+
+Nothing in an import turns the delete on while the setting is off. The import result lists each clip as deleted, or kept with the reason. The Finish step shows the same.
 
 ## The settings file
 

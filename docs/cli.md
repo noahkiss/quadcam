@@ -26,6 +26,7 @@ quadcam-cli cut 0 --keep                  # cut clip 0 down to its keep ranges
 quadcam-cli cut 0 --log-offset 4.5        # the radio log starts 4.5 s into clip 0
 quadcam-cli import --cut 0=20-26          # add a cut, then import
 quadcam-cli import --time 0=18:30         # clip 0 was flown at 18:30 (the default is noon)
+quadcam-cli import --keep-clips           # keep the clips on the card this run
 quadcam-cli meta all --place "Home field" --keywords park,windy
 quadcam-cli meta 2 --location 40.6892,-74.0445 --profile Whoop
 quadcam-cli cut 0 --clear --removed trash # drop exported cuts and move their files to the Trash
@@ -38,6 +39,8 @@ quadcam-cli format --device /dev/diskN --volume-uuid <uuid> --yes
 ```
 
 `clear` deletes the session file. The staged copies stay.
+
+When the `delete_clips_after_import` setting is on, `import` deletes each clip that verified from the card or folder, and its result lists every clip under `clip_deletion` as `deleted`, or `kept` with a `reason`. `--keep-clips` keeps them for that run. No flag turns the delete on. See [Settings](settings.md#delete-clips-after-import).
 
 `cards` and `scan` name each source: `analog` or `dji`.
 
@@ -109,6 +112,7 @@ quadcam-cli settings set output_dir=null          # back to the default
 `settings set` takes these names:
 
 - `output_dir`, `format`, `encoder`, `keep_originals`, `add_time`, `default_name`
+- `delete_clips_after_import` (`true` or `false`; see [Settings](settings.md#delete-clips-after-import))
 - `photos_album`, `format_label`, `log_dir`, `layout`, `place_folders`, `tunables`
 - `geocoder` (`apple`, `nominatim`, `census` or `google`), `google_places_key`
 - `name_date_format` (`YYYY-MM-DD` or `YY.MM.DD`), `default_profile`

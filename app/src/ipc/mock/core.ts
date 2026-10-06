@@ -113,7 +113,7 @@ export class MockCore {
       case "suggest":
         return this.patch(p.patches as PlanPatch[]);
       case "import":
-        return this.importClips(p as { output_dir: string; format: string });
+        return this.importClips(p as { output_dir: string; format: string; keep_clips?: boolean });
       case "photos":
         return this.addToPhotos((p.ids as number[] | null) ?? null, (p.album as string | null) ?? null);
       case "clear":
@@ -524,7 +524,7 @@ export class MockCore {
     else this.lib.clips[at] = { ...clip, pending_cuts: clip.pending_cuts.length ? clip.pending_cuts : this.lib.clips[at].pending_cuts };
   }
 
-  importClips(opts: { output_dir: string; format: string }) {
+  importClips(opts: { output_dir: string; format: string; keep_clips?: boolean }) {
     const s = this.need();
     const defaultName = (this.settings.values.defaultName as string) || "flight";
     const results: ClipResult[] = [];
@@ -561,7 +561,16 @@ export class MockCore {
     this.libraryChanged();
     this.sessionChanged();
     const summary = { results, imported, skipped: results.length - imported, failed: 0, total_bytes: results.reduce((a, r) => a + r.size, 0), output_dir: opts.output_dir, format_ready: s.kind === "dji" ? { Err: "QuadCam does not format DJI cards; format them in the device." } : s.card ? { Ok: null } : { Err: "Clips came from a folder, not a card." } };
-    return { summary, photos: null };
+    // "Delete clips after import": only the setting turns it on; a run may turn it off.
+    const clip_deletion =
+      this.settings.values.deleteClipsAfterImport && !opts.keep_clips
+        ? s.clips.map((c) => {
+            const r = results.find((x) => x.id === c.id);
+            const ok = r?.outcome === "verified";
+            return { id: c.id, path: c.card_path, state: ok ? ("deleted" as const) : ("kept" as const), reason: ok ? null : "it was skipped" };
+          })
+        : null;
+    return { summary, photos: null, clip_deletion };
   }
 
   addToPhotos(ids: number[] | null, album: string | null) {
