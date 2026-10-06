@@ -1,9 +1,11 @@
 # QuadCam
 
-A macOS desktop app (Tauri 2) that imports analog FPV DVR clips (MJPEG AVI) into a library.
-It stages the clips off the card, dates them (EdgeTX radio logs or the import date), names them
-`YYYY-MM-DD_<name>.mp4`, converts them with ffmpeg, verifies them with ffprobe, and files them
-by flying day. It can then add them to Photos and format the card to FAT32. The library is the
+A macOS desktop app (Tauri 2) that imports FPV clips into a library from two sources: analog
+DVRs (MJPEG AVI) and DJI units (MP4 named by the unit's clock). It stages the clips off the card,
+dates them (EdgeTX radio logs, the DJI clip clock, or the import date), names them
+`YYYY-MM-DD_<name>.mp4`, converts analog clips with ffmpeg (a full DJI clip is copied, never
+re-encoded), verifies them with ffprobe, and files them by flying day. It can then add them to
+Photos and format an analog card to FAT32. The library is the
 home screen; import is a sheet over it. `README.md` is the public overview and `docs/` the
 public user guide, one topic per file; keep them in step with every change a user can see.
 
@@ -115,7 +117,7 @@ GitHub (`noahkiss/quadcam`, public) is the only remote. Users install the cask
   `<library>/.quadcam/index.json` is a rebuildable cache (`library::rebuild`); only unsaved cut
   ranges live in it alone. A rebuild never moves or writes a file, which is also how an
   existing export folder is adopted.
-- **Identity:** a library clip's id is its DVR source's content fingerprint
+- **Identity:** a library clip's id is its source file's content fingerprint
   (`app.quadcam.source`), never a file name. A file QuadCam did not write is known by a hash of
   its first MB before `moov` (`identity::head_id`), which metadata rewrites never touch. Both
   are specified hashes (XXH64 over defined bytes; `identity.rs` states them), with test
@@ -139,8 +141,8 @@ GitHub (`noahkiss/quadcam`, public) is the only remote. Users install the cask
   `-webkit-user-select`. Text a person may copy (paths, details values) gets the
   `selectable` class. The web view's context menu shows only over text fields and selected
   `selectable` text; the app's own menus call `preventDefault` first.
-- **Cards** show in the sidebar with an "N new" count (content fingerprints not in the index);
-  inserting a card never starts an import on its own.
+- **Cards** show in the sidebar with their source (Analog, DJI) and an "N new" count (content
+  fingerprints not in the index); inserting a card never starts an import on its own.
 
 - **Output folder:** defaults to `~/Movies/quadcam`, resolved from `$HOME` at runtime
   (`paths::default_output_dir`). The app creates that default, with its parents, on the
@@ -172,7 +174,7 @@ GitHub (`noahkiss/quadcam`, public) is the only remote. Users install the cask
   format; a clip's date comes from its creation date first, then the name.
   `library_apply_name_format` renames existing clips (with cuts and originals) in place.
   Folder names keep `YYYY-MM-DD`.
-- **Time of day:** a clip's plan time comes from its radio log or by hand (`PlanPatch.time`,
+- **Time of day:** a clip's plan time comes from its radio log, its clip clock (DJI), or by hand (`PlanPatch.time`,
   `HH:MM`, empty for none). Without one the creation date is local noon. A library date or
   time edit (`library_edit`) rewrites the QuickTime creation date, the `mvhd` time and the
   mtimes of the clip, its cuts and its original; a new day moves them all (`relocate`, which
