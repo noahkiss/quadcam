@@ -13,7 +13,9 @@ small-quad first (65-75 mm 1S whoops), and general enough for larger quads.
 A throwaway spike (a patched copy of the MIT web sim `notfeylo/propwash` in a Tauri shell, with
 a native HID bridge) proved the idea and taught most of what this doc specifies. The decision
 that follows from it: QuadCam builds its own sim from a design, not a copy of propwash.
-propwash stays a reference and a test bed.
+propwash stays a reference and a test bed. QuadCam has no association with it: no fork, no
+upstream contributions, and no link or branding tie. Where QuadCam ports its MIT code, it keeps
+propwash's copyright and permission notice (10.2).
 
 This doc is the contract for the build. It names the crate, the threads, the engine choice and
 how to measure it, the physics and flight-controller models, the quad profiles and how they are
@@ -834,6 +836,7 @@ QuadCam's code stays MIT (gear-design, section 12). Every borrowed idea and ever
 |---|---|
 | Never copy GPL source | The FC model, rates and blackbox reader are written from docs, logs and measured behaviour. A reviewer checks each package for copied code |
 | A GPL program only as a separate process, downloaded | Real Betaflight SITL is a non-goal. If it ever comes, it runs as a module (7.10 in gear-design), over UDP, never bundled |
+| propwash: no association | No fork, no upstream contributions, no link or branding tie. Ported MIT code keeps propwash's copyright and permission notice in a `LICENSE` file beside the ported source and in `THIRD_PARTY_NOTICES`. The UI, About and `README.md` do not have to name it |
 | Notices for what the `.app` bundles | `scripts/notices.mjs` covers the new crates and npm packages, the propwash and RotorPy notices for ported code, and the asset manifest (8.3) |
 | MPL-2.0 dependencies | File-level copyleft only; fine unmodified, as `serialport` today |
 
@@ -915,4 +918,3 @@ Each has a default the build uses until you decide.
 | 10 | Reset: which radio control resets the quad? The sim needs a free switch or button | User picks in settings; none by default (menu only) |
 | 11 | Video latency default: 0 ms, or the profile's video system (about 12-25 ms digital, about 10 ms analog)? | The profile's video system |
 | 12 | Window: full screen by default, or a window? | Full screen on QuadCam's display |
-| 13 | Offer upstream fixes (calibration, whoop airframes) back to propwash? | Optional; not part of this plan |
