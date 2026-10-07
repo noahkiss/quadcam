@@ -8,12 +8,14 @@
 //! reset (`2000-01-01`) still matches; its rows keep their file order, and a time that
 //! jumps back starts a new run.
 //!
-//! An analog clip with dead air is matched by its picture instead of its length. On a 1S
-//! whoop the battery powers the camera and the VTX, and the goggles' DVR keeps recording
-//! across battery swaps, so each picture stretch (a keep range) is one battery: its packs
-//! sit inside it, with unarmed picture around them, and a battery swap is dead air. The
-//! matcher slides the log along the clip (`Found::offset_s`) and scores each place by how
-//! the packs fit the stretches (`picture_fit`). Files a DVR split from one recording
+//! An analog clip with dead air is matched by its picture instead of its length. On a whoop
+//! where the battery powers the camera and the VTX, the goggles' DVR keeps recording across
+//! battery swaps, so each picture stretch (a keep range) is one battery: its packs sit
+//! inside it, with unarmed picture around them, and a battery swap is dead air. Short dead
+//! air while armed is signal breakup, not a swap. Voltage steps scale with the pack's cell
+//! count, estimated from the log (`cells`). The matcher slides the log along the clip
+//! (`Found::offset_s`) and scores each place by how the packs fit the stretches
+//! (`picture_fit`). Files a DVR split from one recording
 //! (`Want::follows`) are matched as one timeline, so a pack may span the file boundary.
 //!
 //! The EdgeTX model filters first: a log whose model a profile lists is a candidate only
@@ -237,22 +239,29 @@ pub mod pic {
     /// Slack at a picture stretch's edges: dead-air detection samples frames, and a log row
     /// comes every half second or so.
     pub const EDGE_S: f64 = 4.0;
-    /// A pack armed in dead air or across it: the 1S battery powers the VTX, so this cannot
-    /// happen. Plus `DARK_PER_S` per second of it.
+    /// A pack armed in dead air or across it: the battery powers the VTX, so a swap cannot
+    /// happen while armed. Plus `DARK_PER_S` per second of it.
     pub const CROSS: f64 = 40.0;
     pub const DARK_PER_S: f64 = 0.5;
+    /// Dead air of at most this inside an armed pack, with picture on both sides, is signal
+    /// breakup (range, a crash, interference): only `DARK_PER_S` per second, and the
+    /// stretches on both sides count as one battery.
+    pub const BREAKUP_S: f64 = 10.0;
     /// A picture stretch with no pack: free up to `EMPTY_FREE_S` (a battery in, never
     /// armed), then `EMPTY_PER_S` per second, at most `EMPTY_MAX`.
     pub const EMPTY_FREE_S: f64 = 30.0;
     pub const EMPTY_PER_S: f64 = 0.25;
     pub const EMPTY_MAX: f64 = 40.0;
-    /// A new battery (the pack starts `SWAP_V` above the last one's end) with no dead air
-    /// between the packs.
+    /// A new battery (the pack starts `SWAP_V` a cell above the last one's end) with no
+    /// dead air between the packs.
     pub const SWAP_IN_STRETCH: f64 = 15.0;
     pub const SWAP_V: f64 = 0.3;
-    /// Packs of one battery (within `SAME_V`) with dead air between: an unplug and replug.
+    /// Packs of one battery (within `SAME_V` a cell) with dead air between: an unplug and
+    /// replug.
     pub const REPLUG: f64 = 5.0;
     pub const SAME_V: f64 = 0.15;
+    /// A cell holds at most this (LiHV, with telemetry error). `cells` divides by it.
+    pub const CELL_MAX_V: f64 = 4.5;
     /// The cost of leaving a clip unmatched. A fit that costs more is no match.
     pub const UNMATCHED: f64 = 60.0;
     /// A fit at or below this, with no pack in dead air and no swap without dead air, is
@@ -274,11 +283,25 @@ pub struct Fit {
     pub stretches: usize,
     /// Packs armed in or across dead air.
     pub crossing: usize,
+    /// Packs armed across short dead air (`pic::BREAKUP_S`): signal breakup.
+    pub breakups: usize,
     /// Battery swaps at dead air, and without it.
     pub swaps_at_gap: usize,
     pub swaps_in_stretch: usize,
     /// Packs of one battery with dead air between.
     pub replugs: usize,
+}
+
+/// The cell count of the packs in `run`, from the highest pack-start battery reading
+/// (`RxBt`, nearly rested at arm): that voltage over `pic::CELL_MAX_V`, rounded up, 1 to 8.
+/// 1 when the log reads no battery.
+pub fn cells(run: &[Seg]) -> f64 {
+    let v = run.iter().filter_map(|s| s.v_start).fold(0.0, f64::max);
+    if v <= 0.0 {
+        1.0
+    } else {
+        (v / pic::CELL_MAX_V).ceil().clamp(1.0, 8.0)
+    }
 }
 
 /// Scores `run` (consecutive packs of one session) placed with its first pack's start at
@@ -288,12 +311,16 @@ pub fn picture_fit(run: &[Seg], offset: f64, keep: &[(f64, f64)], duration: f64)
     use pic::*;
     let base = run[0].start;
     let rel = |t: NaiveDateTime| (t - base).num_milliseconds() as f64 / 1000.0;
+    let n_cells = cells(run);
     let mut cost = 0.0;
     let mut fit = Fit {
         offset,
         stretches: keep.len(),
         ..Default::default()
     };
+    // Stretches joined by signal breakup count as one battery: `group[k]` is the first
+    // stretch of k's group.
+    let mut group: Vec<usize> = (0..keep.len()).collect();
     // Per pack, the stretch that holds it.
     let mut home: Vec<Option<usize>> = Vec::with_capacity(run.len());
     let mut touched = vec![false; keep.len()];
@@ -302,8 +329,12 @@ pub fn picture_fit(run: &[Seg], offset: f64, keep: &[(f64, f64)], duration: f64)
         let (va, vb) = (a.max(0.0), b.min(duration));
         let len = (vb - va).max(0.0);
         let mut best: Option<(usize, f64)> = None;
-        for (k, (ks, ke)) in keep.iter().enumerate() {
-            let ov = (vb.min(ke + EDGE_S) - va.max(ks - EDGE_S)).max(0.0);
+        let ov_of = |k: usize| {
+            let (ks, ke) = keep[k];
+            (vb.min(ke + EDGE_S) - va.max(ks - EDGE_S)).max(0.0)
+        };
+        for k in 0..keep.len() {
+            let ov = ov_of(k);
             if ov > EDGE_S.min(len / 2.0) {
                 touched[k] = true;
             }
@@ -313,17 +344,40 @@ pub fn picture_fit(run: &[Seg], offset: f64, keep: &[(f64, f64)], duration: f64)
         }
         let (k, ov) = best.unwrap_or((0, 0.0));
         let dark = len - ov;
-        if dark > 0.05 {
-            fit.crossing += 1;
-            cost += CROSS + dark * DARK_PER_S;
-            home.push(None);
-        } else {
+        if dark <= 0.05 {
             home.push(Some(k));
+            continue;
         }
+        // Breakup: the pack starts in stretch `first` and ends in stretch `last`, and every
+        // gap between them is short dead air.
+        let inside = |x: f64| {
+            keep.iter()
+                .position(|(ks, ke)| x >= ks - EDGE_S && x <= ke + EDGE_S)
+        };
+        if let (Some(first), Some(last)) = (inside(va), inside(vb)) {
+            let gaps: Vec<f64> = (first..last).map(|g| keep[g + 1].0 - keep[g].1).collect();
+            if last > first && gaps.iter().all(|g| *g <= BREAKUP_S) {
+                fit.breakups += 1;
+                cost += gaps.iter().sum::<f64>() * DARK_PER_S;
+                for g in first..=last {
+                    touched[g] = true;
+                    group[g] = group[first];
+                }
+                home.push(Some(first));
+                continue;
+            }
+        }
+        fit.crossing += 1;
+        cost += CROSS + dark * DARK_PER_S;
+        home.push(None);
     }
+    let home: Vec<Option<usize>> = home.into_iter().map(|h| h.map(|k| group[k])).collect();
+    fit.stretches = (0..keep.len()).filter(|&k| group[k] == k).count();
     for (k, (ks, ke)) in keep.iter().enumerate() {
-        if home.contains(&Some(k)) {
-            fit.filled += 1;
+        if home.contains(&Some(group[k])) {
+            if group[k] == k {
+                fit.filled += 1;
+            }
         } else if !touched[k] {
             cost += ((ke - ks - EMPTY_FREE_S).max(0.0) * EMPTY_PER_S).min(EMPTY_MAX);
         }
@@ -336,14 +390,14 @@ pub fn picture_fit(run: &[Seg], offset: f64, keep: &[(f64, f64)], duration: f64)
             continue;
         };
         let jump = start - end;
-        if jump >= SWAP_V {
+        if jump >= SWAP_V * n_cells {
             if x == y {
                 fit.swaps_in_stretch += 1;
                 cost += SWAP_IN_STRETCH;
             } else {
                 fit.swaps_at_gap += 1;
             }
-        } else if jump.abs() <= SAME_V && x != y {
+        } else if jump.abs() <= SAME_V * n_cells && x != y {
             fit.replugs += 1;
             cost += REPLUG;
         }
@@ -672,6 +726,13 @@ fn match_timelines(
                 };
                 if f.crossing > 0 {
                     why.push(count(f.crossing, "pack in dead air", "packs in dead air"));
+                }
+                if f.breakups > 0 {
+                    why.push(count(
+                        f.breakups,
+                        "signal breakup while armed",
+                        "signal breakups while armed",
+                    ));
                 }
                 if f.swaps_at_gap > 0 {
                     why.push(count(
@@ -1113,6 +1174,52 @@ mod tests {
             f.as_ref().is_none_or(|f| f.badge != Badge::Matched),
             "{f:?}"
         );
+    }
+
+    #[test]
+    fn voltage_steps_scale_with_the_cell_count() {
+        // 1S: 4.3 V rested. 4S: 16.8 V.
+        assert_eq!(cells(&packs(0, &[(0.0, 60.0, 4.3, 3.5)])), 1.0);
+        assert_eq!(cells(&packs(0, &[(0.0, 60.0, 16.6, 14.0)])), 4.0);
+        assert_eq!(cells(&packs(0, &[(0.0, 60.0, 8.3, 7.0)])), 2.0);
+        assert_eq!(cells(&packs(0, &[(0.0, 60.0, 24.9, 21.0)])), 6.0);
+        // A 4S pack that recovers 0.3 V at rest after an unplug and replug: one battery,
+        // not a swap (on 1S thresholds it would read as a new battery).
+        let segs = packs(
+            0,
+            &[(1000.0, 1100.0, 16.6, 14.6), (1200.0, 1300.0, 14.9, 13.9)],
+        );
+        let keep = [(0.0, 150.0), (180.0, 350.0)];
+        let (_, fit) = picture_fit(&segs, 20.0, &keep, 350.0);
+        assert_eq!((fit.swaps_at_gap, fit.replugs), (0, 1), "{fit:?}");
+        // A fresh 4S pack (2.6 V up) is a swap.
+        let segs = packs(
+            0,
+            &[(1000.0, 1100.0, 16.6, 14.0), (1200.0, 1300.0, 16.6, 14.0)],
+        );
+        let (_, fit) = picture_fit(&segs, 20.0, &keep, 350.0);
+        assert_eq!((fit.swaps_at_gap, fit.replugs), (1, 0), "{fit:?}");
+    }
+
+    #[test]
+    fn short_dead_air_while_armed_is_signal_breakup() {
+        // One 200 s pack; the picture breaks up for 6 s in the middle.
+        let segs = packs(0, &[(1000.0, 1200.0, 4.3, 3.5)]);
+        let clip = picture(260.0, &[(0.0, 120.0), (126.0, 260.0)]);
+        let (cost, fit) = picture_fit(&segs, 20.0, &clip.keep, 260.0);
+        assert_eq!((fit.breakups, fit.crossing), (1, 0), "{fit:?}");
+        assert_eq!((fit.filled, fit.stretches), (1, 1), "{fit:?}");
+        assert!(cost < pic::CROSS, "{cost}");
+        let f = run(&[clip], &segs)[0].clone().expect("a match");
+        assert_eq!(f.badge, Badge::Matched, "{}", f.reason);
+        assert!(
+            f.reason.contains("1 signal breakup while armed"),
+            "{}",
+            f.reason
+        );
+        // 30 s of dead air inside a pack is not breakup: still a crossing.
+        let (_, fit) = picture_fit(&segs, 20.0, &[(0.0, 100.0), (130.0, 260.0)], 260.0);
+        assert_eq!((fit.breakups, fit.crossing), (0, 1), "{fit:?}");
     }
 
     #[test]

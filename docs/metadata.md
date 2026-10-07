@@ -117,11 +117,12 @@ QuadCam matches by shape first, then checks clocks:
 - **Clock.** The clip clock (DJI) breaks ties: the pack nearest it wins. It never rules a match out.
 - **Model.** The log's EdgeTX model must fit the clip's profile (see above).
 
-An analog clip with dead air matches by its picture instead of its length. On a 1S whoop, the battery powers the camera and the VTX, and the DVR keeps recording across battery swaps. So each stretch of picture between dead air is one battery. QuadCam slides the log along the clip and scores each place:
+An analog clip with dead air matches by its picture instead of its length. On a whoop where the battery powers the camera and the VTX, the DVR keeps recording across battery swaps. So each stretch of picture between dead air is one battery. QuadCam slides the log along the clip and scores each place:
 
 - **Packs sit inside a picture stretch.** Unarmed picture around a pack is fine (the battery goes in, the quad sits on the ground). A pack in dead air, or across it, costs a lot. Pack edges get 4 s of slack.
+- **Short dead air while armed is signal breakup.** Dead air of 10 s or less inside a pack, with picture on both sides, is the video breaking up (range, a crash), not a battery swap. It costs little, and the picture on both sides counts as one battery.
 - **Several packs may share a stretch.** A disarm and a re-arm on one battery (after a crash, say) gives two packs in one stretch.
-- **A battery swap is dead air.** A pack that starts well above the last pack's end voltage (`RxBt`, 0.3 V or more) is on a new battery, and dead air must lie between the two packs.
+- **A battery swap is dead air.** A pack that starts well above the last pack's end voltage (`RxBt`, 0.3 V a cell or more) is on a new battery, and dead air must lie between the two packs. A pack within 0.15 V a cell of the last one's end, with dead air between, is the same battery unplugged and plugged in again. QuadCam estimates the cell count from the highest battery reading at arm: that voltage over 4.5 V, rounded up.
 - **A stretch without a pack is suspicious.** Up to 30 s costs nothing; a longer one costs more the longer it is.
 - **A recording may start late or stop early.** A pack may run past either end of the clip, when the picture runs to that end.
 - **Missed recordings are normal.** A pack with no clip costs nothing. But every pack of the session that would fall inside the clip must be part of the match.
