@@ -61,7 +61,7 @@ freely and ask before the others. See [Gear](gear.md).
 
 | Tool | Changes | What it does |
 |---|---|---|
-| `quadcam_gear` | Nothing | `status`: the gear folder, the Gear settings, and what is plugged in. `devices`: the saved devices |
+| `quadcam_gear` | Nothing | `status`: the gear folder, the Gear settings, and what is plugged in. `devices`: the saved devices. `card`: an EdgeTX card's version, models, selected model and its aircraft, radio clock, and one model in full (`model`). `card_preview`: the checks and diff of card `edits`; writes nothing |
 | `quadcam_gear_edit` | QuadCam's own data | `device_save` names a device or links it to an aircraft profile. `device_forget` removes it from the list |
 | `quadcam_gear_apply` | A device | No actions yet. Each will need a plan's `digest` and `confirm=true` |
 

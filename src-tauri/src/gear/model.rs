@@ -170,6 +170,27 @@ pub struct Connected {
     /// The saved device with this id, when QuadCam knows it.
     #[serde(default)]
     pub device: Option<Device>,
+    /// The USB device a volume sits on, when it is a radio in USB Storage mode (not a
+    /// card in a reader). Its writes are slow (about 0.3 MB/s).
+    #[serde(default)]
+    pub usb: Option<UsbInfo>,
+}
+
+/// What a USB device says about itself.
+#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, Eq, Type)]
+pub struct UsbInfo {
+    pub vid: u16,
+    pub pid: u16,
+    #[serde(default)]
+    pub vendor: Option<String>,
+    #[serde(default)]
+    pub product: Option<String>,
+    /// The USB serial number. EdgeTX radios report a generic one, so it is not an id.
+    #[serde(default)]
+    pub serial: Option<String>,
+    /// `bcdDevice` as `major.minor` (an EdgeTX radio reports its firmware's, `2.12`).
+    #[serde(default)]
+    pub version: Option<String>,
 }
 
 /// Why a backup was taken.
@@ -294,6 +315,29 @@ pub enum Edit {
     },
     /// Puts files of a backup back.
     Restore { backup: String, paths: Vec<String> },
+    /// Ops on one EdgeTX model file (`model01.yml`). `name`, when set, must match the
+    /// file's header name ("wrong card?").
+    Model {
+        file: String,
+        #[serde(default)]
+        name: Option<String>,
+        ops: Vec<super::edgetx::model::ModelOp>,
+    },
+    /// Ops on `RADIO/radio.yml`. The selected model changes only through `select_model`.
+    Radio {
+        ops: Vec<super::edgetx::card::RadioOp>,
+    },
+    /// A model's power-on checklist text (`MODELS/<model name>.txt`). Turn it on or off
+    /// with the model op `set_checklist`.
+    Checklist { model: String, text: String },
+    /// A new model file copied from another: its own name, every timer value 0, no model id.
+    ModelCopy {
+        from: String,
+        to: String,
+        name: String,
+    },
+    /// Deletes a model file; never the selected one.
+    ModelDelete { file: String },
 }
 
 /// One entry in a change's history.

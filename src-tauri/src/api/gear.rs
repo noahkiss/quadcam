@@ -5,7 +5,9 @@
 //! `Core::METHODS`. A package adds its row here, its `Core` method in `core/gear.rs`, and
 //! its typed command to `specta_builder` in `lib.rs`.
 
-pub use crate::core::{DeviceSaveParams, GearStatus};
+pub use crate::core::{
+    CardParams, CardPreview, CardPreviewParams, DeviceSaveParams, GearCard, GearStatus,
+};
 pub use crate::gear::model::Device;
 use serde::{Deserialize, Serialize};
 use specta::Type;
@@ -29,6 +31,10 @@ macro_rules! with_gear_rows {
             gear_device_save(params: DeviceSaveParams) -> Device = |c| c.gear_device_save(&params);
             /// Forgets a device. Its backups stay.
             gear_device_forget(params: IdParams) -> Device = |c| c.gear_device_forget(&params.id);
+            /// An EdgeTX card: models, the selected model and its aircraft, the radio clock, one model in full.
+            gear_card(params: CardParams) -> GearCard = |c| c.gear_card(&params);
+            /// Checks and diffs EdgeTX card edits. Writes nothing.
+            gear_card_preview(params: CardPreviewParams) -> CardPreview = |c| c.gear_card_preview(&params);
         }
     };
 }

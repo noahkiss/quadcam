@@ -314,6 +314,7 @@ mod tests {
             },
             identity: Identity::default(),
             device: None,
+            usb: None,
         }
     }
 
@@ -329,6 +330,7 @@ mod tests {
             },
             identity: Identity::default(),
             device: None,
+            usb: None,
         }
     }
 

@@ -27,8 +27,19 @@ pub const NOTHING_FOUND: &str = "Nothing found. If macOS asked to allow an acces
 #[derive(Debug, Clone, Default, Deserialize, JsonSchema)]
 #[schemars(deny_unknown_fields)]
 pub struct GearArgs {
-    #[schemars(required, extend("enum" = ["status", "devices"]))]
+    #[schemars(required, extend("enum" = ["status", "devices", "card", "card_preview"]))]
     pub action: Option<String>,
+    /// For card and card_preview: the card's mount point. Default: the one EdgeTX card mounted.
+    #[schemars(length(max = 1024))]
+    pub mount: Option<String>,
+    /// For card and card_preview: a connected radio's device id, instead of mount.
+    #[schemars(length(max = 80))]
+    pub device: Option<String>,
+    /// For card: a model file (model01.yml) to read in full: timers, mixes, logical switches, special functions, switch warnings, sensors, screens.
+    #[schemars(length(max = 40))]
+    pub model: Option<String>,
+    /// For card_preview: the edits, each {"kind": "model", "file": "model01.yml", "name": "<header name>", "ops": [{"op": "set_checklist", "enabled": true}, ...]}, {"kind": "radio", "ops": [{"op": "set_scalar", "key": "hapticMode", "value": "mode_nokeys"}]}, {"kind": "checklist", "model": "model01.yml", "text": "=Props tight"}, {"kind": "model_copy", ...} or {"kind": "model_delete", "file": ...}.
+    pub edits: Option<Vec<Value>>,
 }
 
 #[derive(Debug, Clone, Default, Deserialize, JsonSchema)]
@@ -66,7 +77,7 @@ pub fn tools() -> Vec<Value> {
     vec![
         tool::<GearArgs>(
             "quadcam_gear",
-            "Read the FPV gear QuadCam knows: `status` (the gear folder, the Gear settings, and the devices plugged in now: EdgeTX radios in USB Storage mode, goggles and DVR cards, FC and ELRS serial ports, radios in DFU mode; each with its saved name and aircraft when QuadCam knows it) or `devices` (every device saved in gear.json: id, kind, name, aircraft, board, firmware, version, last seen, last backup). Changes nothing.\n\nBest for: the first Gear call, and checking what is plugged in.\nReturns: one line per device plus the structured records.\nFollow up with quadcam_gear_edit device_save to name a device or link it to an aircraft.",
+            "Read the FPV gear QuadCam knows: `status` (the gear folder, the Gear settings, and the devices plugged in now: EdgeTX radios in USB Storage mode, goggles and DVR cards, FC and ELRS serial ports, radios in DFU mode; each with its saved name and aircraft when QuadCam knows it), `devices` (every device saved in gear.json: id, kind, name, aircraft, board, firmware, version, last seen, last backup), `card` (an EdgeTX SD card: board and version, whether QuadCam may write it, its models, the model the radio selects and that model's aircraft, the radio clock check; with `model`, that model in full) or `card_preview` (the checks and line diff of EdgeTX card edits, and how long the write would take; writes nothing). Changes nothing.\n\nBest for: the first Gear call, checking what is plugged in, and reading or planning radio model changes.\nReturns: one line per device or model plus the structured records.\nFollow up with quadcam_gear_edit device_save to name a device or link it to an aircraft.",
             json!({"openWorldHint": false, "readOnlyHint": true, "title": "Gear"}),
         ),
         tool::<GearEditArgs>(
@@ -185,8 +196,126 @@ fn gear<B: Backend>(backend: &mut B, a: &Value) -> Result<(Vec<Value>, Value)> {
             };
             Ok((vec![text(line)], json!({"devices": list})))
         }
-        other => Err(anyhow!("unknown action {other:?}; use status or devices")),
+        "card" => {
+            let v = backend.call(
+                "gear_card",
+                json!({"mount": x.mount, "device": x.device, "model": x.model}),
+            )?;
+            Ok((vec![text(card_text(&v))], v))
+        }
+        "card_preview" => {
+            let edits = x
+                .edits
+                .context("edits is required for card_preview: a list of card edits")?;
+            let v = backend.call(
+                "gear_card_preview",
+                json!({"mount": x.mount, "device": x.device, "edits": edits}),
+            )?;
+            Ok((vec![text(preview_text(&v))], v))
+        }
+        other => Err(anyhow!(
+            "unknown action {other:?}; use status, devices, card or card_preview"
+        )),
     }
+}
+
+/// The card answer in lines: identity, write state, models, clock.
+fn card_text(v: &Value) -> String {
+    let c = &v["card"];
+    let id = &c["identity"];
+    let mut out = format!(
+        "EdgeTX {} on {} at {}{}.\n",
+        id["version"].as_str().unwrap_or("?"),
+        id["board"].as_str().unwrap_or("?"),
+        c["root"].as_str().unwrap_or("?"),
+        if v["radio_usb"].as_bool() == Some(true) {
+            " (the radio over USB: writes are slow)"
+        } else {
+            ""
+        }
+    );
+    match c["read_only"]["reason"].as_str() {
+        Some(r) => out.push_str(&format!("Read only: {r}\n")),
+        None => out.push_str("QuadCam may write this card.\n"),
+    }
+    for m in c["models"].as_array().into_iter().flatten() {
+        out.push_str(&format!(
+            "{} {:?}{}{}\n",
+            m["file"].as_str().unwrap_or("?"),
+            m["name"].as_str().unwrap_or(""),
+            if m["selected"].as_bool() == Some(true) {
+                " (selected)"
+            } else {
+                ""
+            },
+            m["problem"]
+                .as_str()
+                .map(|p| format!(" | {p}"))
+                .unwrap_or_default()
+        ));
+    }
+    if let Some(a) = v["selected_aircraft"].as_str() {
+        out.push_str(&format!("The selected model is aircraft {a}.\n"));
+    }
+    if let Some(m) = c["clock"]["message"].as_str() {
+        out.push_str(m);
+        out.push('\n');
+    }
+    out.trim_end().to_string()
+}
+
+/// The preview in lines: checks, files, and the diff.
+fn preview_text(v: &Value) -> String {
+    let mut out = String::new();
+    for c in v["checks"].as_array().into_iter().flatten() {
+        out.push_str(&format!(
+            "{} {}{}\n",
+            if c["ok"].as_bool() == Some(true) {
+                "ok"
+            } else {
+                "REFUSED"
+            },
+            c["name"].as_str().unwrap_or("?"),
+            c["refusal"]["reason"]
+                .as_str()
+                .map(|r| format!(": {r}"))
+                .unwrap_or_default()
+        ));
+    }
+    for w in v["warnings"].as_array().into_iter().flatten() {
+        out.push_str(&format!("warning: {}\n", w.as_str().unwrap_or("")));
+    }
+    let files: Vec<&str> = v["files"]
+        .as_array()
+        .into_iter()
+        .flatten()
+        .filter_map(Value::as_str)
+        .collect();
+    if files.is_empty() {
+        out.push_str("Nothing to change.\n");
+    } else {
+        out.push_str(&format!(
+            "Would write {} ({} bytes, about {} s).\n",
+            files.join(", "),
+            v["bytes"],
+            v["eta_s"]
+        ));
+    }
+    for d in v["diff"].as_array().into_iter().flatten() {
+        if d["kind"] != "lines" {
+            continue;
+        }
+        out.push_str(&format!("--- {}\n", d["label"].as_str().unwrap_or("?")));
+        for l in d["lines"].as_array().into_iter().flatten() {
+            let sign = match l["op"].as_str() {
+                Some("add") => '+',
+                Some("remove") => '-',
+                _ => ' ',
+            };
+            out.push_str(&format!("{sign}{}\n", l["text"].as_str().unwrap_or("")));
+        }
+    }
+    out.trim_end().to_string()
 }
 
 fn gear_edit<B: Backend>(backend: &mut B, a: &Value) -> Result<(Vec<Value>, Value)> {

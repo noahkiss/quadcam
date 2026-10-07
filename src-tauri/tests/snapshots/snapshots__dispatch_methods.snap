@@ -57,5 +57,7 @@ expression: "Core::METHODS"
   "gear_status",
   "gear_devices",
   "gear_device_save",
-  "gear_device_forget"
+  "gear_device_forget",
+  "gear_card",
+  "gear_card_preview"
 ]

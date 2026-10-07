@@ -16,6 +16,7 @@ use std::sync::{Arc, Mutex};
 mod cuts;
 mod files;
 mod gear;
+mod gear_card;
 mod import;
 mod library;
 mod modules;
@@ -28,6 +29,7 @@ pub use gear::{
     connected_name, link_handle, DeviceSaveParams, GearStatus, Hold, HookFn, HookOutcome, HookRun,
     OnConnectHook, HOLD_GRACE,
 };
+pub use gear_card::{CardParams, CardPreview, CardPreviewParams, GearCard};
 pub use import::CardStatus;
 pub use library::{LibEdit, LibItem, LibUpdate, LibraryView, RebuildReport, RenameReport};
 pub use rematch::{LibMatch, LibMatchParams, LibMatchReport};

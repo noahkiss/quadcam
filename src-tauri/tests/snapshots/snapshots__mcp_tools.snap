@@ -1158,15 +1158,37 @@ expression: "quadcam_lib::mcp::tools()"
       "readOnlyHint": true,
       "title": "Gear"
     },
-    "description": "Read the FPV gear QuadCam knows: `status` (the gear folder, the Gear settings, and the devices plugged in now: EdgeTX radios in USB Storage mode, goggles and DVR cards, FC and ELRS serial ports, radios in DFU mode; each with its saved name and aircraft when QuadCam knows it) or `devices` (every device saved in gear.json: id, kind, name, aircraft, board, firmware, version, last seen, last backup). Changes nothing.\n\nBest for: the first Gear call, and checking what is plugged in.\nReturns: one line per device plus the structured records.\nFollow up with quadcam_gear_edit device_save to name a device or link it to an aircraft.",
+    "description": "Read the FPV gear QuadCam knows: `status` (the gear folder, the Gear settings, and the devices plugged in now: EdgeTX radios in USB Storage mode, goggles and DVR cards, FC and ELRS serial ports, radios in DFU mode; each with its saved name and aircraft when QuadCam knows it), `devices` (every device saved in gear.json: id, kind, name, aircraft, board, firmware, version, last seen, last backup), `card` (an EdgeTX SD card: board and version, whether QuadCam may write it, its models, the model the radio selects and that model's aircraft, the radio clock check; with `model`, that model in full) or `card_preview` (the checks and line diff of EdgeTX card edits, and how long the write would take; writes nothing). Changes nothing.\n\nBest for: the first Gear call, checking what is plugged in, and reading or planning radio model changes.\nReturns: one line per device or model plus the structured records.\nFollow up with quadcam_gear_edit device_save to name a device or link it to an aircraft.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
         "action": {
           "enum": [
             "status",
-            "devices"
+            "devices",
+            "card",
+            "card_preview"
           ],
+          "type": "string"
+        },
+        "device": {
+          "description": "For card and card_preview: a connected radio's device id, instead of mount.",
+          "maxLength": 80,
+          "type": "string"
+        },
+        "edits": {
+          "description": "For card_preview: the edits, each {\"kind\": \"model\", \"file\": \"model01.yml\", \"name\": \"<header name>\", \"ops\": [{\"op\": \"set_checklist\", \"enabled\": true}, ...]}, {\"kind\": \"radio\", \"ops\": [{\"op\": \"set_scalar\", \"key\": \"hapticMode\", \"value\": \"mode_nokeys\"}]}, {\"kind\": \"checklist\", \"model\": \"model01.yml\", \"text\": \"=Props tight\"}, {\"kind\": \"model_copy\", ...} or {\"kind\": \"model_delete\", \"file\": ...}.",
+          "items": true,
+          "type": "array"
+        },
+        "model": {
+          "description": "For card: a model file (model01.yml) to read in full: timers, mixes, logical switches, special functions, switch warnings, sensors, screens.",
+          "maxLength": 40,
+          "type": "string"
+        },
+        "mount": {
+          "description": "For card and card_preview: the card's mount point. Default: the one EdgeTX card mounted.",
+          "maxLength": 1024,
           "type": "string"
         }
       },
