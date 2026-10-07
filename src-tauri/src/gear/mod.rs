@@ -13,6 +13,8 @@
 //! - `detect`: the gear plugged in now.
 //! - `events`: connected, identified, unmounted-but-present and removed, from one look to
 //!   the next.
+//! - `edgetx`: the EdgeTX card engine: YAML line editor, model views and ops, card plans
+//!   and the card writer.
 //! - `cues`: spoken, sound and notification cues ("safe to unplug", "still inserted").
 //! - `osd`: Betaflight OSD layouts: decode, draw per profile, overlap and off-screen check.
 //!
@@ -23,6 +25,7 @@ pub mod bf;
 pub mod compat;
 pub mod cues;
 pub mod detect;
+pub mod edgetx;
 pub mod events;
 pub mod model;
 pub mod osd;
@@ -165,6 +168,9 @@ pub fn check_count(v: &Value, min: u64, max: u64) -> anyhow::Result<()> {
     }
 }
 
+/// Unmounts a whole disk (`disk4`).
+pub type UnmountFn = Arc<dyn Fn(&str) -> anyhow::Result<()> + Send + Sync>;
+
 /// What Gear reaches outside the process. The real one lists `/Volumes`, the system's
 /// serial ports and what is still plugged in (none under cargo, see `serial`), and plays
 /// cues (silent under cargo, see `cues`); tests pass synthetic volumes and fakes.
@@ -177,8 +183,13 @@ pub struct Env {
     /// Cards in the built-in SD reader, with their hardware identity. Asked only when a
     /// volume sits in the slot.
     pub card_reader: Arc<dyn Fn() -> Vec<detect::CardHw> + Send + Sync>,
+    /// USB devices with their disks (an EdgeTX radio in USB Storage mode). Asked only
+    /// when a volume sits on USB.
+    pub usb: Arc<dyn Fn() -> Vec<detect::UsbStorage> + Send + Sync>,
     /// The cue queue, its debounce and its reminders.
     pub cues: Arc<cues::CueService>,
+    /// Unmounts a card's whole disk (`disk4`) under a timeout (`edgetx::card::release`).
+    pub unmount: UnmountFn,
 }
 
 impl Env {
@@ -190,7 +201,9 @@ impl Env {
             dfu: Arc::new(detect::dfu_devices),
             presence: Arc::new(events::presence),
             card_reader: Arc::new(detect::card_reader),
+            usb: Arc::new(detect::usb_storage),
             cues: Arc::new(cues::CueService::system()),
+            unmount: Arc::new(|d| edgetx::card::release(d, edgetx::card::UNMOUNT_TIMEOUT)),
         }
     }
 
@@ -202,9 +215,11 @@ impl Env {
             dfu: Arc::new(Vec::new),
             presence: Arc::new(Vec::new),
             card_reader: Arc::new(Vec::new),
+            usb: Arc::new(Vec::new),
             cues: Arc::new(cues::CueService::inline(Arc::new(
                 cues::RecordedCues::default(),
             ))),
+            unmount: Arc::new(|_| Ok(())),
         }
     }
 
@@ -219,7 +234,17 @@ impl Env {
         } else {
             Vec::new()
         };
-        detect::detect(&volumes, &self.ports.list(), &(self.dfu)(), &cards)
+        let usb = if volumes.iter().any(|v| {
+            v.info
+                .bus_protocol
+                .as_deref()
+                .is_some_and(|b| b.eq_ignore_ascii_case("USB"))
+        }) {
+            (self.usb)()
+        } else {
+            Vec::new()
+        };
+        detect::detect_all(&volumes, &self.ports.list(), &(self.dfu)(), &cards, &usb)
     }
 }
 

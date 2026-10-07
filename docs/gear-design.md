@@ -195,7 +195,8 @@ existing logic modules. `core/gear.rs` holds the `Core` methods; `api/gear.rs` t
 | `gear/bf/mod.rs` + `core/fc.rs` | FC jobs: identify (MSP), read (CLI), run (the write engine, for `apply/fc.rs`), the USB heat timer. Each job opens and releases the port and plays one cue | `bf`, `cues` |
 | `gear/edgetx/yaml.rs` | Line-level YAML reader and editor for EdgeTX files (section 6.3). Never a generic YAML round-trip | none |
 | `gear/edgetx/model.rs` | Typed views of a model file: header, timers, mixes, logical switches, special functions, switch warnings, telemetry sensors and screens, module settings | `edgetx/yaml` |
-| `gear/edgetx/card.rs` | The SD card: `RADIO/radio.yml`, `MODELS/`, `SOUNDS/`, `SCRIPTS/`, `LOGS/`; identity (board, `semver`) | `edgetx/model` |
+| `gear/edgetx/card.rs` | The SD card: `RADIO/radio.yml`, `MODELS/`, `SOUNDS/`, `SCRIPTS/`, `LOGS/`; identity (board, `semver`), the selected model, the radio clock check; `Card::plan` (edits to bytes, checks, diff; writes nothing), `write` (per-file temp + rename + `F_FULLFSYNC` + read-back, stop between files, timeouts), `release` (unmount under a timeout) | `edgetx/model` |
+| `gear/edgetx/synth.rs` | The synthetic card generator: radio and model files in the 2.12 saved and 2.10 hand-edited layouts, CRLF or LF, made-up names | none |
 | `gear/compat.rs` | The table of proven versions: EdgeTX boards and versions, Betaflight versions, ELRS targets, splash layouts, sim file versions. Data, reviewed per release | none |
 | `gear/blobs.rs` | The content-addressed blob store: put, get, verify, garbage-collect (section 7.1) | `store`, `xxhash-rust` |
 | `gear/backup.rs` | Takes, lists, reads, diffs, retains and prunes snapshots; imports old backup folders | `blobs`, `bf`, `edgetx` |
@@ -337,6 +338,8 @@ in `specta_builder` (`lib.rs`).
 | `gear_fc_read` | `FcReadParams { port, commands }` → `FcJob<FcRead>` (read-only CLI commands; the FC reboots) | no (CLI read) |
 | `gear_board_notes` | `BoardNotesParams { board, version }` → `Vec<BoardNote>` | no |
 | `gear_usb_timers` | – → `Vec<UsbTimer>` | no |
+| `gear_card` | `CardParams { mount or device, model }` → `GearCard` (card view, selected model's aircraft, `radio_usb`) | no |
+| `gear_card_preview` | `CardPreviewParams { mount or device, edits }` → `CardPreview` (checks, diff, files, bytes, ETA) | no |
 | `gear_backup` | `BackupParams { device }` → `Backup` | device read, gear folder |
 | `gear_backups` | `BackupFilter` → `Vec<Backup>` | no |
 | `gear_backup_read` | `BackupReadParams { id, path }` → `BackupContent` | no |
@@ -390,6 +393,8 @@ work packages do not edit one shared file.
 ```bash
 quadcam-cli --json gear devices
 quadcam-cli --json gear fc identify|read|check|notes|usb          # WP2 (read: --cmd, --out STEM)
+quadcam-cli --json gear card [--mount M | --device ID] [--model model01.yml]
+quadcam-cli --json gear card preview --edits edits.json             # checks and diff; writes nothing
 quadcam-cli --json gear backup --device <id>|--port /dev/cu.usbmodemX|--mount /Volumes/RADIO
 quadcam-cli --json gear backups [--device <id>]
 quadcam-cli --json gear backup show <backup> [PATH]
@@ -426,7 +431,7 @@ can then allow the read tool freely and gate the other two.
 
 | Tool | Changes | Actions |
 |---|---|---|
-| `quadcam_gear` | Nothing | `status`, `devices`, `fc_identify`, `board_notes`, `usb_timers`, `storage`, `backups`, `backup_read`, `backup_diff`, `switch_map`, `osd`, `rates`, `sims`, `changes`, `apply_plan`, `voice`, `firmware_check`, `flights`, `packs` |
+| `quadcam_gear` | Nothing | `status`, `devices`, `fc_identify`, `board_notes`, `usb_timers`, `card`, `card_preview`, `storage`, `backups`, `backup_read`, `backup_diff`, `switch_map`, `osd`, `rates`, `sims`, `changes`, `apply_plan`, `voice`, `firmware_check`, `flights`, `packs` |
 | `quadcam_gear_edit` | QuadCam's own data only: never a device, a sim or a card | `device_save`, `device_forget`, `fc_read` (a CLI read; the FC reboots), `stage`, `update`, `discard`, `restore_stage`, `voice_edit`, `voice_render`, `voice_choose`, `pack_save`, `pack_delete`, `flight_set`, `backup` (a read of the device; writes only to the gear folder), `import_backups`, `prune`, `export` |
 | `quadcam_gear_apply` | A device, a sim or the radio firmware | `apply`, `sim_sync`, `flash`. Each needs the `digest` from a plan and `confirm=true` |
 
@@ -567,6 +572,66 @@ QuadCam implements these rules from the file format; it copies no EdgeTX code.
 **Version guard:** `radio.yml` carries `board` and `semver`. Only pairs in `compat.rs` are
 writable. Others are read-only, with the reason "EdgeTX X on board Y is not proven; QuadCam
 reads it but does not write it."
+
+**Built (WP3).** `gear/edgetx/` implements these rules:
+
+- `yaml.rs` reads bytes as Latin-1 (one `char` per byte), keeps each line's own ending, and
+  classifies every line as `key: value`, a block header (`key: ` or `N:`) or a ` -` item. A
+  line outside that subset, a tab, or an indent that fits no block refuses (`shape_unknown`,
+  with the file and line); a file that does not render back to its bytes refuses
+  (`round_trip`).
+- `model.rs` holds the typed view and `ModelOp`: `rename`, `set_model_id`, `set_flags`,
+  `set_checklist` (on/off: `displayChecklist` and `checklistInteractive`), `set_mixes`,
+  `set_logical_switch`, `special_functions` (remove what a change owns, add what is absent),
+  `move_special_function`, `set_timer` (never the stored `value`), `remove_timer`,
+  `swap_timers`, `set_switch_warnings`, `set_screen`. `{Label}` in a definition becomes the
+  sensor's slot.
+- Card edits are `Edit` variants: `model` (with the expected header name), `radio`
+  (`set_scalar`; `select_model` is the only way to change `currModel`), `checklist`,
+  `model_copy` (timer values 0, no model id), `model_delete` (never the selected model).
+  `Card::plan` runs the checks in order: known version, shape understood (or values in range,
+  model identity), selected model kept. It adds `.metadata_never_index` (and, when the caller
+  passes one, the `.quadcam-id` marker) when it writes anything. Ops are idempotent: the same
+  edits on the result plan no files.
+- `card::write` re-reads every file and refuses a change since the plan (`before_mismatch`),
+  hands every touched file to a backup callback (a failure is `no_backup`, nothing written),
+  then writes one file at a time: a temporary name, `F_FULLFSYNC`, a rename, a folder sync,
+  a read-back, and the removal of any `._<name>` AppleDouble file beside it. A read-back
+  mismatch writes the old bytes back at once. A stop request takes effect between files
+  (progress shows "stopping"); a file's write is never cut short. Each write runs under a
+  timeout (a base plus its size at a floor speed: 30 s + 1 s per 100 KB over the radio's
+  USB); a timeout says "a reboot may be needed" and leaves the write's thread to finish.
+- `card::release` runs `diskutil unmountDisk` under a timeout. `Core::gear_release_card`
+  calls it (through `Env.unmount`) and only then plays "safe to unplug"; a failed or stuck
+  unmount plays "failed" instead.
+- Fail-safes: a process started by cargo writes no card under `/Volumes` unless
+  `QUADCAM_CARD_WRITE=real`, and unmounts nothing unless `QUADCAM_SERIAL=real`.
+- Read-only extras for the UI: `CardView.selected_model` and `selected_name` with
+  `GearCard.selected_aircraft` (the profile whose `gear.edgetx_model` is that file or whose
+  `edgetx_models` holds its name), for "Radio is set to X, but the quad is Y"; and
+  `CardView.clock` from log names: a newest log before 2020 means the clock reset, an older
+  2000-01-01 log means it reset once, a log after today means it runs ahead.
+
+**Device notes (RadioMaster Pocket, EdgeTX 2.12.4, measured 2026-10-07):**
+
+| Mode | USB id | Strings | Notes |
+|---|---|---|---|
+| USB Storage | `0483:5720`, `bcdDevice` `0x0212` (the firmware's major.minor) | vendor `OpenTX`, product `<Radio> Mass Storage`, serial `00000000001B` | The serial is the ST USB library's default, the same on every radio: not an id. Disk: external, physical, FAT32, `MediaName` `<Radio>Radio`. `ioreg -a -r -c IOUSBHostDevice -l` ties the USB device to its BSD disk (`detect::parse_ioreg_usb`) |
+| USB Serial (VCP) | `0483:5740` | product `<Radio> Serial Port`, serial as above | With `serialPort: VCP: mode: CLI` the EdgeTX CLI answers at 115200, prompt `>`: `ls`, `play`, `reboot`, `set`, `serialpassthrough` (the ELRS passthrough), `beep`, `readsd`, `testsd`. `read` is a speed test only: the CLI cannot move file contents, so writes stay on USB Storage or a reader. Its product names no firmware, so `detect::classify_port` takes the vendor or a radio maker in the product as a radio, not an FC |
+| DFU (powered off, USB) | `0483:df11`, `bcdDevice` `0x2200` | product `STM32  BOOTLOADER` (two spaces), vendor `STMicroelectronics`, serial from the chip's unique id | A stable hardware id. Storage and serial modes do not expose it, so the person links the DFU device to the radio once (WP10). Alt 0 `@Internal Flash /0x08000000/04*016Kg,01*064Kg,07*128Kg` (1 MB F4), alt 1 option bytes `0x1FFFC000`, alt 2 OTP `0x1FFF7800`, alt 3 device feature |
+
+- Speeds over the radio's USB: write 0.30 MB/s (20 MB in about 65 s), read about 0.5 MB/s,
+  20 small files in 5.5 s. A 37 MB voice pack takes about 2 minutes; reading a 70 MB card 2-3
+  minutes. Backups over the radio must skip unchanged files by size and mtime before hashing
+  (WP4); big writes need progress, an ETA and Cancel (`WriteProgress`, `WriteOptions.stop`).
+- `diskutil verifyVolume` on the card needs no admin, takes about 30 s over the radio's USB,
+  and mounts the volume again after.
+- macOS leaves AppleDouble files (`._model00.yml`), `.fseventsd` and
+  `.metadata_never_index` on a FAT card it writes. QuadCam removes `._` files beside what it
+  writes and adds `.metadata_never_index`.
+- Pulling the radio mid-write once wedged `diskarbitrationd` until a reboot (2026-09-27).
+- Bootloader route: hold both horizontal trims inward while powering on; the bootloader
+  shows the SD card over USB even when the firmware stops at an error.
 
 **Ownership:** QuadCam does not add marker keys to EdgeTX files. Which special functions and
 logical switches a change owns is recorded in the change, so a later change can replace them.
@@ -1005,8 +1070,10 @@ full-size adapters):
 from the card reader, built-in slot only); else a QuadCam marker file on the card (a write to
 the card, so it comes with the backup or import package that first writes there); else the
 volume UUID, which a format changes. WP1 reads the hardware identity
-(`detect::parse_card_reader`) and uses it for a card in the built-in slot; other cards use
-the volume UUID.
+(`detect::parse_card_reader`) and uses it for a card in the built-in slot. WP3 reads the
+marker (`.quadcam-id`, one line: the raw value the id hashes, so writing it keeps the id) for
+a radio card; `Card::plan` adds it when the caller passes the value. Other cards use the
+volume UUID.
 
 **USB hubs and the accessory prompt.** A card reader behind a USB-C dock (a USB 3 hub)
 behaves as when it is plugged in directly (tested 2026-10-07). On Apple silicon, macOS asks

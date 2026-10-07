@@ -168,6 +168,10 @@ export const commands = {
 	 *  and cells off screen. Reads only.
 	 */
 	gearOsd: (params: OsdParams) => typedError<OsdView, string>(__TAURI_INVOKE("gear_osd", { params })),
+	/**  An EdgeTX card: models, the selected model and its aircraft, the radio clock, one model in full. */
+	gearCard: (params: CardParams) => typedError<GearCard, string>(__TAURI_INVOKE("gear_card", { params })),
+	/**  Checks and diffs EdgeTX card edits. Writes nothing. */
+	gearCardPreview: (params: CardPreviewParams) => typedError<CardPreview, string>(__TAURI_INVOKE("gear_card_preview", { params })),
 	/**
 	 *  Downloaded tools: each module's pin, a newer pin from the last check, and what is
 	 *  installed. Reads only local files.
@@ -277,6 +281,15 @@ export type BoardNotesParams = {
 	version?: string | null,
 };
 
+/**  A file a change puts on a card. */
+export type CardFile = {
+	/**  From the card's root. */
+	path: string,
+	/**  XXH64 of the new bytes: the blob that holds them. */
+	xxh64: string,
+	size: number,
+};
+
 /**  The card the clips were read from, recorded at stage time. */
 export type CardIdentity = {
 	device_identifier: string,
@@ -285,6 +298,16 @@ export type CardIdentity = {
 	volume_name: string | null,
 	total_size: number,
 	media_name: string | null,
+};
+
+/**  `gear_card`: which card, and optionally one model's full view. */
+export type CardParams = {
+	/**  The card's mount point (or any folder holding a card's files). */
+	mount?: string | null,
+	/**  A connected radio's device id, instead of `mount`. */
+	device?: string | null,
+	/**  A model file (`model01.yml`) to read in full. */
+	model?: string | null,
 };
 
 /**
@@ -296,6 +319,29 @@ export type CardPrepParams = {
 	label?: string | null,
 };
 
+/**  What a card edit would do: every check, the diff, and the time it would take. */
+export type CardPreview = {
+	identity: Identity,
+	ready: boolean,
+	checks: Check[],
+	diff: DiffItem[],
+	warnings: string[],
+	/**  Files the edits would write or delete. */
+	files: string[],
+	bytes: number,
+	/**  Seconds at the link's usual speed (a radio over USB writes about 0.3 MB/s). */
+	eta_s: number,
+	/**  The card is in the radio, over USB (slow), not in a reader. */
+	radio_usb: boolean,
+};
+
+/**  `gear_card_preview`: card edits to check and diff. Nothing is written. */
+export type CardPreviewParams = {
+	mount?: string | null,
+	device?: string | null,
+	edits: Edit[],
+};
+
 export type CardStatus = {
 	mount: string,
 	clips: number,
@@ -303,6 +349,33 @@ export type CardStatus = {
 	new: number,
 	free: number | null,
 	size: number,
+};
+
+/**  A card as Gear reads it. */
+export type CardView = {
+	root: string,
+	/**  Board and version from `radio.yml`. */
+	identity: Identity,
+	/**  None when QuadCam may write this card; else why not. */
+	read_only?: Refusal | null,
+	models: ModelSummary[],
+	/**  The model `radio.yml` selects (`model01.yml`), and its name. */
+	selected_model?: string | null,
+	selected_name?: string | null,
+	clock: ClockCheck,
+	/**  QuadCam's marker, when the card has one. */
+	marker?: string | null,
+	/**  The typed view of the model asked for. */
+	model?: ModelView | null,
+};
+
+/**  One guard in a plan: passed, or the refusal. */
+export type Check = {
+	/**  What was checked, in words ("Known version"). */
+	name: string,
+	ok: boolean,
+	/**  Set when the check fails. */
+	refusal?: Refusal | null,
 };
 
 /**  `clear`'s answer. */
@@ -481,6 +554,15 @@ export type ClipResult = {
 
 export type ClipStatus = "ok" | "incomplete" | "empty";
 
+/**  What the radio's clock looks like, from its log names. */
+export type ClockCheck = {
+	ok: boolean,
+	/**  The newest log by date in its name. */
+	newest_log?: string | null,
+	/**  Set when the clock looks wrong. */
+	message?: string | null,
+};
+
 /**  A device plugged in now, as `detect` found it. */
 export type Connected = {
 	/**
@@ -494,6 +576,11 @@ export type Connected = {
 	identity: Identity,
 	/**  The saved device with this id, when QuadCam knows it. */
 	device?: Device | null,
+	/**
+	 *  The USB device a volume sits on, when it is a radio in USB Storage mode (not a
+	 *  card in a reader). Its writes are slow (about 0.3 MB/s).
+	 */
+	usb?: UsbInfo | null,
 };
 
 /**  The `gearCues` setting. Missing fields take their defaults. */
@@ -728,6 +815,20 @@ export type DeviceSaveParams = {
 	aircraft?: string | null,
 };
 
+/**  One item in a plan's before/after view. */
+export type DiffItem = 
+/**  CLI lines for an FC, or a line diff of one text file. */
+{ kind: "lines"; label: string; lines: DiffLine[] } | 
+/**  Files put on and deleted from a card. */
+{ kind: "files"; label: string; put: string[]; delete: string[] } | 
+/**  A firmware version pair. */
+{ kind: "version"; label: string; before: string | null; after: string };
+
+export type DiffLine = {
+	op: LineOp,
+	text: string,
+};
+
 export type DiskInfo = {
 	device_identifier: string,
 	parent_whole_disk: string,
@@ -743,6 +844,42 @@ export type DiskInfo = {
 	media_name: string | null,
 	bus_protocol: string | null,
 };
+
+/**
+ *  One edit in a staged change. Each package adds the variants it owns (rate profiles,
+ *  model operations); the apply engine refuses a variant it has no writer for.
+ */
+export type Edit = 
+/**  Raw CLI lines, checked against the device's dump. */
+{ kind: "fc_lines"; lines: string[] } | 
+/**  One `set`. */
+{ kind: "fc_set"; section: Section; name: string; value: string } | 
+/**  One `aux` line. */
+{ kind: "fc_aux"; slot: number; mode: number; aux: number; start: number; end: number } | 
+/**  One `adjrange` line. */
+{ kind: "fc_adjrange"; slot: number; range_aux: number; start: number; end: number; function: number; select_aux: number } | 
+/**  Moves an OSD element and picks the profiles that show it. */
+{ kind: "osd_element"; element: string; x: number; y: number; profiles: number[] } | 
+/**  Files to put on and delete from a card. */
+{ kind: "card_files"; put: CardFile[]; delete: string[] } | 
+/**  Puts files of a backup back. */
+{ kind: "restore"; backup: string; paths: string[] } | 
+/**
+ *  Ops on one EdgeTX model file (`model01.yml`). `name`, when set, must match the
+ *  file's header name ("wrong card?").
+ */
+{ kind: "model"; file: string; name?: string | null; ops: ModelOp[] } | 
+/**  Ops on `RADIO/radio.yml`. The selected model changes only through `select_model`. */
+{ kind: "radio"; ops: RadioOp[] } | 
+/**
+ *  A model's power-on checklist text (`MODELS/<model name>.txt`). Turn it on or off
+ *  with the model op `set_checklist`.
+ */
+{ kind: "checklist"; model: string; text: string } | 
+/**  A new model file copied from another: its own name, every timer value 0, no model id. */
+{ kind: "model_copy"; from: string; to: string; name: string } | 
+/**  Deletes a model file; never the selected one. */
+{ kind: "model_delete"; file: string };
 
 export type Editor = "user" | "agent";
 
@@ -835,6 +972,12 @@ export type FfmpegSource =
 "module" | 
 /**  Homebrew (or PATH) only. */
 "homebrew";
+
+/**  A key and its raw value, in file order. */
+export type Field = {
+	key: string,
+	value: string,
+};
 
 /**  The smart groups and other ways to narrow the library. */
 export type Filter = {
@@ -940,6 +1083,17 @@ export type FormatRequest = {
 	label?: string | null,
 	/**  Must be true. */
 	confirm?: boolean,
+};
+
+/**  `gear_card`'s answer: the card, and the aircraft whose EdgeTX model the radio selects. */
+export type GearCard = {
+	card: CardView,
+	/**
+	 *  The aircraft profile that names the selected model (its model file, or its EdgeTX
+	 *  model names). Compare with the quad last connected to warn "Radio is set to X".
+	 */
+	selected_aircraft?: string | null,
+	radio_usb: boolean,
 };
 
 /**  `gear.json` changed (devices, links). Read Gear again with `gear_status`. */
@@ -1458,6 +1612,9 @@ export type LibraryView_Serialize = {
 	clips: LibItem_Serialize[],
 };
 
+/**  A line in a line diff. */
+export type LineOp = "same" | "add" | "remove";
+
 /**  How a connected device is reached. */
 export type Link = 
 /**  A mounted volume (a radio's SD card in USB Storage mode, a goggles or DVR card). */
@@ -1489,6 +1646,30 @@ export type LogChoice =
 /**  Keep the session's current folder (or the default). */
 { kind: "keep" } | { kind: "none" } | { kind: "dir"; path: string };
 
+export type LogicalSwitch = {
+	/**  0 is `L1`. */
+	index: number,
+	func: string,
+	def: string,
+	andsw: string,
+	/**  0.1 s. */
+	delay: number,
+	/**  0.1 s. */
+	duration: number,
+};
+
+/**  A logical switch an op sets. `def` may name sensors by label: `tele({RxBt}),35`. */
+export type LsDef = {
+	/**  `FUNC_AND`, `FUNC_VPOS`, `FUNC_EDGE`, `FUNC_STICKY`, ... */
+	func: string,
+	def: string,
+	andsw?: string,
+	/**  0.1 s. */
+	delay?: number,
+	/**  0.1 s. */
+	duration?: number,
+};
+
 /**  A menu item was chosen: its id. */
 export type Menu = string;
 
@@ -1498,6 +1679,100 @@ export type Meta = {
 	creation_time: string,
 	date: string,
 	description: string,
+};
+
+export type Mix = {
+	/**  0 is CH1. */
+	dest_ch: number,
+	source: string,
+	weight: string,
+	swtch: string,
+	/**  `ADD`, `MUL` or `REPL`. */
+	mltpx: string,
+	fields: Field[],
+};
+
+/**  A mix line an op wants on a channel. */
+export type MixLine = {
+	/**  `SA`, `MAX`, `I2`, ... */
+	source: string,
+	weight: number,
+	/**  `NONE` for always. */
+	swtch: string,
+	/**  `ADD`, `MUL` or `REPL`. */
+	mltpx: string,
+};
+
+/**  One edit to a model file. Ops apply in order; a later op sees the earlier ones. */
+export type ModelOp = 
+/**  The header name (15 characters at most). */
+{ op: "rename"; name: string } | 
+/**  A module's model id (index 0 is the internal module); 0 removes it. */
+{ op: "set_model_id"; module: number; id: number } | 
+/**
+ *  Top-level values the file already has (`disableTelemetryWarning`, ...). Blocks
+ *  and the header are not values.
+ */
+{ op: "set_flags"; flags: Field[] } | 
+/**  The power-on checklist on or off (`displayChecklist`, `checklistInteractive`). */
+{ op: "set_checklist"; enabled: boolean } | 
+/**  The exact mix lines of one channel (0 is CH1); empty removes the channel's mixes. */
+{ op: "set_mixes"; channel: number; lines: MixLine[] } | 
+/**  One logical switch (0 is L1); None empties it. */
+{ op: "set_logical_switch"; index: number; ls: LsDef | null } | 
+/**
+ *  Removes these special functions (where present) and appends these (where absent).
+ *  A change records what it added, so a later change can remove them.
+ */
+{ op: "special_functions"; remove: SfDef[]; add: SfDef[] } | 
+/**  Moves a special function to another switch, keeping its place. */
+{ op: "move_special_function"; from: SfDef; swtch: string } | 
+/**  Fields of one timer (0 is Timer 1), unquoted. The stored `value` is never set. */
+{ op: "set_timer"; index: number; fields: Field[] } | { op: "remove_timer"; index: number } | 
+/**  Trades two timers and every `TmrN` reference to them. */
+{ op: "swap_timers"; a: number; b: number } | 
+/**  The switch warnings, as the 2.12 list; replaces a legacy `switchWarningState:`. */
+{ op: "set_switch_warnings"; warnings: SwitchWarning[] } | 
+/**  A telemetry screen (0 is screen 1): a script screen, or None to remove it. */
+{ op: "set_screen"; index: number; script: string | null };
+
+/**  A model file on the card. */
+export type ModelSummary = {
+	/**  `model01.yml`. */
+	file: string,
+	/**  The header name; empty when the file cannot be read. */
+	name: string,
+	/**  `radio.yml` selects it. */
+	selected: boolean,
+	/**  Set when QuadCam cannot read the file (the reason). */
+	problem?: string | null,
+};
+
+/**  What a model file says, as far as Gear reads it. Every list is in file order. */
+export type ModelView = {
+	file: string,
+	name: string,
+	model_ids: ModuleId[],
+	timers: Timer[],
+	mixes: Mix[],
+	logical_switches: LogicalSwitch[],
+	special_functions: SpecialFunction[],
+	switch_warnings: SwitchWarning[],
+	/**  The file holds the legacy `switchWarningState:` line, which EdgeTX 2.12.4 misreads. */
+	legacy_switch_warning: boolean,
+	sensors: Sensor[],
+	screens: Screen[],
+	/**  `displayChecklist`. */
+	checklist: boolean,
+	/**  `checklistInteractive`. */
+	checklist_interactive: boolean,
+};
+
+/**  An ELRS (or other) model id for one module slot. */
+export type ModuleId = {
+	/**  0 is the internal module. */
+	module: number,
+	id: number,
 };
 
 /**  `module_install`: a module by name. `confirm` says the person saw its license prompt. */
@@ -1921,6 +2196,16 @@ export type QuietHours = {
 	end: string,
 };
 
+/**  An edit to `radio.yml`. */
+export type RadioOp = 
+/**
+ *  A top-level value the file already has (`hapticMode`, ...). Never the selected model:
+ *  that is `SelectModel`.
+ */
+{ op: "set_scalar"; key: string; value: string } | 
+/**  Selects a model (`model01.yml`): `currModel` and, when present, `currModelFilename`. */
+{ op: "select_model"; file: string };
+
 /**  `library_rate`: stars (0 clears) and a pick or reject flag for these clips. */
 export type RateParams = {
 	ids?: string[],
@@ -1989,11 +2274,36 @@ export type Reply = {
 	error: boolean,
 };
 
+export type Screen = {
+	/**  0 is telemetry screen 1. */
+	index: number,
+	/**  `VALUES`, `BARS`, `SCRIPT`, ... */
+	kind: string,
+	/**  The script name for a `SCRIPT` screen. */
+	script?: string | null,
+};
+
 /**  `place_search`: an address or a place name, and an optional provider and result limit. */
 export type SearchParams = {
 	query: string,
 	provider?: string | null,
 	limit?: number | null,
+};
+
+/**  Where a Betaflight `set` lives. */
+export type Section = 
+/**  Not in a profile. */
+{ kind: "master" } | 
+/**  `profile N`. */
+{ kind: "profile"; index: number } | 
+/**  `rateprofile N`. */
+{ kind: "rate_profile"; index: number } | 
+/**  `battery_profile N` (Betaflight 2026.6 and later). */
+{ kind: "battery_profile"; index: number };
+
+export type Sensor = {
+	slot: number,
+	label: string,
 };
 
 /**
@@ -2121,6 +2431,16 @@ export type SettingsView_Serialize = {
 	effective: Defaults_Serialize,
 };
 
+/**
+ *  A special function as an op names it (values unquoted). `def` may name sensors by
+ *  label.
+ */
+export type SfDef = {
+	swtch: string,
+	func: string,
+	def: string,
+};
+
 export type ShareReport = {
 	added: string[],
 	failed: ([string, string])[],
@@ -2170,6 +2490,13 @@ export type SourceParams = {
 export type Span = {
 	start: number | null,
 	end: number | null,
+};
+
+export type SpecialFunction = {
+	index: number,
+	swtch: string,
+	func: string,
+	def: string,
 };
 
 export type Status = Status_Serialize | Status_Deserialize;
@@ -2226,8 +2553,30 @@ export type Swap = {
 	detail: string,
 };
 
+export type SwitchWarning = {
+	/**  `SA`. */
+	switch: string,
+	/**  `up`, `mid` or `down`. */
+	pos: string,
+};
+
 /**  The long library jobs. */
 export type Task = "rebuild" | "cuts" | "thumbnails" | "moments";
+
+export type Timer = {
+	/**  0 is Timer 1. */
+	index: number,
+	name: string,
+	/**  The switch that runs it (`L1`, `NONE`). */
+	swtch: string,
+	mode: string,
+	/**  The stored count, in seconds. */
+	value: number,
+	/**  0 off, 1 per flight, 2 until a manual reset. */
+	persistent: string,
+	/**  Every field, raw, in file order. */
+	fields: Field[],
+};
 
 export type Tools = {
 	ffmpeg: string,
@@ -2268,6 +2617,18 @@ export type Tunables = {
 /**  `library_untrash`: the files `library_trash` moved. */
 export type UntrashParams = {
 	moved: Moved[],
+};
+
+/**  What a USB device says about itself. */
+export type UsbInfo = {
+	vid: number,
+	pid: number,
+	vendor?: string | null,
+	product?: string | null,
+	/**  The USB serial number. EdgeTX radios report a generic one, so it is not an id. */
+	serial?: string | null,
+	/**  `bcdDevice` as `major.minor` (an EdgeTX radio reports its firmware's, `2.12`). */
+	version?: string | null,
 };
 
 /**  One FC's USB heat timer. It runs while the FC is on USB with its battery in. */

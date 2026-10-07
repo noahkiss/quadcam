@@ -38,7 +38,8 @@ reads the battery voltage over MSP every 30 seconds and closes the port again.
 
 | Device | How QuadCam finds it |
 |---|---|
-| EdgeTX radio | Its SD card in USB Storage mode. QuadCam reads `board` and `semver` from `RADIO/radio.yml` |
+| EdgeTX radio | Its SD card in USB Storage mode, or its card in a reader. QuadCam reads `board` and `semver` from `RADIO/radio.yml`. A volume on the radio's own USB device (vendor `OpenTX` or `EdgeTX`, or a radio maker in the product name) is the radio itself, and shows its USB details |
+| EdgeTX radio, serial | The radio's USB serial port (`<Maker> <Radio> Serial Port`). It is a radio, not a flight controller |
 | Goggles | A DJI volume: a goggles card, or an air unit over USB (DJI clips under `DCIM/DJI_*`) |
 | DVR card | A card with analog clips, from a DVR or analog goggles |
 | Flight controller | A USB serial port with an STM32 or AT32 virtual COM port id |
@@ -50,10 +51,16 @@ Allow." macOS keeps a new USB accessory off until you allow it, and QuadCam cann
 question.
 
 A card in the built-in SD slot gets its id from a hash of the card's own serial number, so a
-format keeps it. Other cards and radios get theirs from a hash of the volume UUID. A flight
+format keeps it. A radio card with QuadCam's marker file (`.quadcam-id`) gets its id from that
+file. Other cards and radios get theirs from a hash of the volume UUID. A flight
 controller gets its id when QuadCam identifies it: a hash of the MCU's unique id, which MSP and
 the CLI's `mcu_id` both report. An FC that reports none gets a hash of its board name and USB
 serial number. The raw id never leaves the Mac.
+
+A radio in USB Storage mode reports a USB serial number, but EdgeTX radios all report the same
+generic one, so QuadCam does not use it as an id. In DFU mode the bootloader reports the chip's
+own serial number, which is a stable id; QuadCam cannot match it to the storage-mode radio by
+itself, so you link the two once.
 
 ## Flight controllers
 
@@ -103,6 +110,37 @@ running app sees a change from the command line or an agent within 2 seconds.
 
 An aircraft profile can name its gear (`gear`: `fc`, `radio`, `edgetx_model`, `rx`,
 `pack_type`). Profiles without it load and save as before.
+
+## EdgeTX cards
+
+QuadCam reads an EdgeTX SD card, in the radio over USB or in a card reader:
+
+- the board and EdgeTX version, and whether QuadCam may write this pair. EdgeTX 2.12 on the
+  RadioMaster Pocket is proven; other pairs are read only;
+- the models, and the model the radio has selected, with the aircraft profile that names it
+  (its `edgetx_model` file, or one of its EdgeTX model names). The app can then warn when
+  the radio is set to another quad than the one just connected;
+- the radio clock: a log dated 2000-01-01 means the clock was reset, so its clock battery may
+  be dead;
+- one model in full: timers, mixes, logical switches, special functions, switch warnings,
+  telemetry sensors and screens.
+
+QuadCam can also preview card edits: the checks and a line diff, and how long the write would
+take. A preview writes nothing. Edits change only the lines they must; every other line stays
+byte for byte, line endings included. They never change the radio's selected model unless
+the edit asks for it. The power-on checklist is a model setting QuadCam turns on or off.
+
+Writing the edits is part of applying a staged change, a later release.
+
+**Over the radio's USB, writes are slow** (about 0.3 MB/s, a 37 MB voice pack in about 2
+minutes). QuadCam writes one file at a time under a temporary name and renames it, so the
+card is always whole. Cancel finishes the current file, then unmounts the card, then says
+"safe to unplug". Do not pull the radio while a file is being written: once, that wedged the
+Mac's disk service until a reboot. If macOS stops answering, QuadCam says a reboot may be
+needed instead of waiting forever.
+
+If the radio's firmware stops at an error, hold both horizontal trims inward while you power
+it on. The bootloader then shows the SD card over USB.
 
 ## Unplugging cards
 
@@ -188,7 +226,18 @@ quadcam-cli --json gear fc notes [--board B] [--version V]       # known issues
 quadcam-cli --json gear fc usb                                   # USB timers
 quadcam-cli gear osd quad.dump_all.txt --text        # each OSD profile drawn, and the check
 quadcam-cli --json gear osd quad.dump_all.txt apply.cli --grid PAL
+quadcam-cli --json gear card [--mount M | --device ID] [--model model01.yml]
+quadcam-cli --json gear card preview --edits edits.json   # checks and diff; writes nothing
 ```
+
+An edits file is a list. Each edit is a model (`{"kind": "model", "file": "model01.yml",
+"name": "<its name>", "ops": [...]}`), the radio (`{"kind": "radio", "ops": [...]}`), a
+checklist (`{"kind": "checklist", "model": "model01.yml", "text": "=Props tight"}`), a model
+copy or a model delete. Model ops: `rename`, `set_model_id`, `set_flags`, `set_checklist`,
+`set_mixes`, `set_logical_switch`, `special_functions`, `move_special_function`,
+`set_timer`, `remove_timer`, `swap_timers`, `set_switch_warnings`, `set_screen`. Radio ops:
+`set_scalar` and `select_model`. A logical switch or special function may name a telemetry
+sensor by label, `tele({RxBt}),35`; QuadCam finds its slot.
 
 Agents use the `quadcam_gear`, `quadcam_gear_edit` and `quadcam_gear_apply` tools. See
 [MCP server](mcp.md#gear).
@@ -201,3 +250,7 @@ A process started by cargo never reaches real gear:
 |---|---|---|
 | `QUADCAM_SERIAL` | No serial ports, no presence checks | Real ports and `ioreg` |
 | `QUADCAM_CUES` | Cues are recorded, not played | `say`, `afplay`, `osascript` |
+| `QUADCAM_CARD_WRITE` | No card writes under `/Volumes` | Card writes allowed |
+
+Card unmounts (`diskutil unmountDisk`) follow `QUADCAM_SERIAL`. Tests use the synthetic card
+(`gear::edgetx::synth`) in a temporary folder.

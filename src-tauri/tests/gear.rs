@@ -86,7 +86,9 @@ fn env(mounted: &Mounted, present: &Present, cues: &Arc<RecordedCues>) -> Env {
         dfu: Arc::new(Vec::new),
         presence: Arc::new(move || p.lock().unwrap().clone()),
         card_reader: Arc::new(Vec::new),
+        usb: Arc::new(Vec::new),
         cues: Arc::new(CueService::inline(cues.clone())),
+        unmount: Arc::new(|_| Ok(())),
     }
 }
 

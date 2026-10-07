@@ -6,8 +6,8 @@
 //! its typed command to `specta_builder` in `lib.rs`.
 
 pub use crate::core::{
-    BoardNotesParams, DeviceSaveParams, FcJob, FcPortParams, FcReadParams, GearStatus, OsdParams,
-    ReminderParams, UsbTimer,
+    BoardNotesParams, CardParams, CardPreview, CardPreviewParams, DeviceSaveParams, FcJob,
+    FcPortParams, FcReadParams, GearCard, GearStatus, OsdParams, ReminderParams, UsbTimer,
 };
 pub use crate::gear::bf::boards::BoardNote;
 pub use crate::gear::bf::{FcInfo, FcRead};
@@ -50,6 +50,10 @@ macro_rules! with_gear_rows {
             /// An FC's OSD layout per OSD profile, drawn on its grid and checked for overlaps
             /// and cells off screen. Reads only.
             gear_osd(params: OsdParams) -> OsdView = |c| c.gear_osd(&params);
+            /// An EdgeTX card: models, the selected model and its aircraft, the radio clock, one model in full.
+            gear_card(params: CardParams) -> GearCard = |c| c.gear_card(&params);
+            /// Checks and diffs EdgeTX card edits. Writes nothing.
+            gear_card_preview(params: CardPreviewParams) -> CardPreview = |c| c.gear_card_preview(&params);
         }
     };
 }

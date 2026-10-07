@@ -9,7 +9,7 @@
 //! `detect` is a pure function of those lists, so tests feed it synthetic volumes and fake
 //! ports. The app calls it every `POLL` and sends `gear-changed` when the answer changes.
 
-use super::model::{device_id, Connected, DeviceKind, Identity, Link};
+use super::model::{device_id, Connected, DeviceKind, Identity, Link, UsbInfo};
 use super::serial::PortInfo;
 use crate::disk::Volume;
 use crate::sources::SourceKind;
@@ -78,41 +78,111 @@ pub fn classify_port(p: &PortInfo) -> Option<DeviceKind> {
     let id = SERIAL_IDS
         .iter()
         .find(|s| s.vid == p.vid && s.pid == p.pid)?;
-    let product = p.product.as_deref().unwrap_or("").to_ascii_lowercase();
-    if id.kind == DeviceKind::Fc && (product.contains("edgetx") || product.contains("opentx")) {
+    if id.kind == DeviceKind::Fc && is_radio_usb(p.manufacturer.as_deref(), p.product.as_deref()) {
         return Some(DeviceKind::Radio);
     }
     Some(id.kind)
 }
 
-/// `board` and `semver` from a card's `RADIO/radio.yml`: top-level `key: value` lines only.
-/// The EdgeTX engine owns real parsing; detection needs these two values and nothing else.
-pub fn radio_identity(mount: &Path) -> Identity {
-    let mut id = Identity {
-        firmware: Some("EdgeTX".into()),
-        ..Default::default()
-    };
-    let Ok(text) = std::fs::read_to_string(mount.join("RADIO/radio.yml")) else {
-        return id;
-    };
-    for line in text.lines() {
-        if line.starts_with([' ', '\t', '-', '#']) {
-            continue;
-        }
-        let Some((k, v)) = line.split_once(':') else {
-            continue;
-        };
-        let v = v.trim().trim_matches(['"', '\'']).trim();
-        if v.is_empty() {
-            continue;
-        }
-        match k.trim() {
-            "board" => id.board = Some(v.to_string()),
-            "semver" => id.version = Some(v.to_string()),
-            _ => {}
+/// Words in a USB vendor or product name that mean an EdgeTX radio. A 2.12 radio's serial
+/// port says only "<Brand> <Model> Serial Port"; its vendor string says OpenTX.
+pub const RADIO_USB_WORDS: &[&str] = &[
+    "edgetx",
+    "opentx",
+    "radiomaster",
+    "jumper",
+    "frsky",
+    "flysky",
+    "betafpv lite radio",
+];
+
+/// True when a USB device's vendor or product names an EdgeTX radio.
+pub fn is_radio_usb(vendor: Option<&str>, product: Option<&str>) -> bool {
+    [vendor, product].iter().flatten().any(|s| {
+        let s = s.to_ascii_lowercase();
+        RADIO_USB_WORDS.iter().any(|w| s.contains(w))
+    })
+}
+
+/// A USB device with the BSD disks below it, as `ioreg` lists them.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct UsbStorage {
+    pub info: UsbInfo,
+    /// `disk13`, `disk13s1`.
+    pub disks: Vec<String>,
+}
+
+/// USB devices in `ioreg -a -r -c IOUSBHostDevice -l` output, each with the BSD names of
+/// the disks below it.
+pub fn parse_ioreg_usb(xml: &[u8]) -> Vec<UsbStorage> {
+    fn disks(v: &plist::Value, out: &mut Vec<String>) {
+        if let Some(d) = v.as_dictionary() {
+            if let Some(n) = d.get("BSD Name").and_then(|x| x.as_string()) {
+                out.push(n.to_string());
+            }
+            if let Some(c) = d.get("IORegistryEntryChildren").and_then(|x| x.as_array()) {
+                c.iter().for_each(|x| disks(x, out));
+            }
         }
     }
-    id
+    let Ok(v) = plist::Value::from_reader(std::io::Cursor::new(xml)) else {
+        return Vec::new();
+    };
+    let list = match v {
+        plist::Value::Array(a) => a,
+        d @ plist::Value::Dictionary(_) => vec![d],
+        _ => return Vec::new(),
+    };
+    list.iter()
+        .filter_map(|dev| {
+            let d = dev.as_dictionary()?;
+            let n = |k: &str| d.get(k).and_then(|x| x.as_unsigned_integer());
+            let s = |k: &str| d.get(k).and_then(|x| x.as_string()).map(str::to_string);
+            let mut found = Vec::new();
+            disks(dev, &mut found);
+            Some(UsbStorage {
+                info: UsbInfo {
+                    vid: n("idVendor")? as u16,
+                    pid: n("idProduct")? as u16,
+                    vendor: s("USB Vendor Name"),
+                    product: s("USB Product Name"),
+                    serial: s("USB Serial Number").or_else(|| s("kUSBSerialNumberString")),
+                    version: n("bcdDevice")
+                        .map(|b| format!("{:x}.{:02x}", (b >> 8) & 0xff, b & 0xff)),
+                },
+                disks: found,
+            })
+        })
+        .collect()
+}
+
+/// USB devices now, with their disks. Reads only; none in a process started by cargo
+/// unless `QUADCAM_SERIAL=real`.
+pub fn usb_storage() -> Vec<UsbStorage> {
+    if !super::serial::serial_enabled(
+        std::env::var("QUADCAM_SERIAL").ok().as_deref(),
+        std::env::var_os("CARGO_MANIFEST_DIR").is_some(),
+    ) {
+        return Vec::new();
+    }
+    std::process::Command::new("/usr/sbin/ioreg")
+        .args(["-a", "-r", "-c", "IOUSBHostDevice", "-l"])
+        .output()
+        .ok()
+        .filter(|o| o.status.success())
+        .map(|o| parse_ioreg_usb(&o.stdout))
+        .unwrap_or_default()
+}
+
+/// `board` and `semver` from a card's `RADIO/radio.yml`, read by the EdgeTX engine.
+pub fn radio_identity(mount: &Path) -> Identity {
+    match std::fs::read(mount.join(super::edgetx::card::RADIO_FILE)) {
+        Ok(b) => super::edgetx::card::identity_from_radio_yml(&b),
+        Err(_) => Identity {
+            firmware: Some("EdgeTX".into()),
+            ..Default::default()
+        },
+    }
 }
 
 /// A card's hardware identity, as the built-in SD card reader reports it
@@ -205,9 +275,29 @@ pub fn detect(
     dfu: &[DfuInfo],
     cards: &[CardHw],
 ) -> Vec<Connected> {
+    detect_all(volumes, ports, dfu, cards, &[])
+}
+
+/// `detect`, with the USB devices the volumes sit on. A volume on an EdgeTX radio's USB
+/// device is the radio in USB Storage mode (`Connected::usb`), even when its card lacks
+/// the radio folders. A radio card's id comes from its hardware serial (built-in slot),
+/// else QuadCam's marker file, else the volume UUID.
+pub fn detect_all(
+    volumes: &[Volume],
+    ports: &[PortInfo],
+    dfu: &[DfuInfo],
+    cards: &[CardHw],
+    usb: &[UsbStorage],
+) -> Vec<Connected> {
     let mut out = Vec::new();
     for v in volumes {
-        let kind = if v.is_radio {
+        let whole = crate::disk::whole_disk_of(&v.info.parent_whole_disk);
+        let radio_usb = usb
+            .iter()
+            .find(|u| !whole.is_empty() && u.disks.iter().any(|d| d == &whole))
+            .filter(|u| is_radio_usb(u.info.vendor.as_deref(), u.info.product.as_deref()))
+            .map(|u| u.info.clone());
+        let kind = if v.is_radio || radio_usb.is_some() {
             DeviceKind::Radio
         } else if v.is_card {
             match v.source {
@@ -223,13 +313,18 @@ pub fn detect(
             Identity::default()
         };
         let uuid = v.info.volume_uuid.clone();
-        let whole = crate::disk::whole_disk_of(&v.info.parent_whole_disk);
         let hw = is_sd_slot(v.info.bus_protocol.as_deref())
             .then(|| cards.iter().find(|c| c.disk == whole))
             .flatten()
             .and_then(CardHw::id_source);
+        let marker = (kind == DeviceKind::Radio)
+            .then(|| super::edgetx::card::read_marker(&v.mount))
+            .flatten();
         out.push(Connected {
-            id: hw.or_else(|| uuid.clone()).map(|raw| device_id(kind, &raw)),
+            id: hw
+                .or(marker)
+                .or_else(|| uuid.clone())
+                .map(|raw| device_id(kind, &raw)),
             kind,
             link: Link::Volume {
                 mount: v.mount.clone(),
@@ -240,6 +335,7 @@ pub fn detect(
             },
             identity,
             device: None,
+            usb: radio_usb,
         });
     }
     for p in ports {
@@ -257,6 +353,7 @@ pub fn detect(
             },
             identity: Identity::default(),
             device: None,
+            usb: None,
         });
     }
     for d in dfu {
@@ -270,6 +367,7 @@ pub fn detect(
                 },
                 identity: Identity::default(),
                 device: None,
+                usb: None,
             });
         }
     }
