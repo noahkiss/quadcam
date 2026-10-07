@@ -70,6 +70,8 @@ Gear
   Storage               total size of backups and logs
 ```
 
+The Settings window gets a **Modules** section (7.10).
+
 - **Aircraft** in the Library groups filters clips, as today. **Aircraft** under Gear opens
   the aircraft page. Each page links to the other ("Show clips", "Show gear").
 - A device row in **Connected** opens its page. A row disappears when the device is
@@ -151,7 +153,8 @@ A new **Gear** section:
 | Voice provider | `ttsProvider` | `say` (macOS) |
 | Voice provider key | `ttsKey` | none; read from `QUADCAM_TTS_KEY` first; in `SECRET_KEYS` |
 | Check for firmware | `firmwareCheck` | `manual` (`manual` or `daily`) |
-| esptool, dfu-util | `esptoolPath`, `dfuUtilPath` | found like ffmpeg: `/opt/homebrew/bin`, `/usr/local/bin`, `PATH` |
+| Tools (esptool, ffmpeg) | `modules` | QuadCam's own modules (7.10); a path per tool overrides one |
+| Use Homebrew ffmpeg | `ffmpegSource` | `module` (`module` or `homebrew`) |
 
 Each key goes into `settings::KEYS` with a default in `Defaults`, as today.
 
@@ -187,6 +190,8 @@ existing logic modules. `core/gear.rs` holds the `Core` methods; `api/gear.rs` t
 | `gear/voice/` (`lines.rs`, `tts.rs`, `render.rs`, `packs.rs`) | Voice lines and spelling rules, TTS providers, the render cache and normalisation, pack index and install | `media` (ffmpeg), `store` |
 | `gear/splash.rs` | Image to 1-bit 128x64 with threshold and preview; patch and decode a firmware image | `image` crate (PNG decode) |
 | `gear/firmware/` (`check.rs`, `edgetx.rs`, `elrs.rs`) | Version checks; EdgeTX download, splash, DFU flash; ELRS options and flash | `splash`, `serial`, external `dfu-util`, `esptool` |
+| `modules/` (`manifest.rs`, `fetch.rs`, `install.rs`, `run.rs`) | The module manager (7.10): pinned manifests, download, checksum, install, run as a subprocess, update check, removal. Used by `media` for ffmpeg too | `paths`, `settings` |
+| `gear/dfu.rs` | USB DFU 1.1 with the STM32 DfuSe extensions, written from the USB DFU specification and ST's published DfuSe notes | `nusb` |
 | `gear/flights.rs` | Flight analysis from radio logs (section 7.6) | `logs` (extended) |
 | `gear/packs.rs` | Packs, pack types, charging sheet, pack history | `store`, `flights` |
 | `disk.rs` (changed) | `format_card` takes the file system and the label from the source's `CardPolicy`; a card-prep plan without a session | existing |
@@ -194,9 +199,9 @@ existing logic modules. `core/gear.rs` holds the `Core` methods; `api/gear.rs` t
 
 **New crates:** `serialport` (serialport-rs, MPL-2.0: USB serial with VID/PID), `image`
 (MIT/Apache: PNG decode for the splash), `similar` (Apache-2.0: line diffs for the apply
-sheet). DFU and ESP flashing call external tools as separate processes, like ffmpeg
-(section 6.4). The app bundles neither: the cask depends on the Homebrew formulas, and the
-app names the missing tool and how to install it.
+sheet), `nusb` (Apache-2.0/MIT: pure-Rust USB for DFU). ESP flashing runs `esptool` as a
+separate process. QuadCam downloads it as a module on first need (7.10); the `.app` bundles
+no GPL tool.
 
 ## 4. Data model and storage
 
@@ -339,6 +344,10 @@ pub struct ApplyPlan {
 | `gear_flights` | `FlightFilter { day, aircraft, pack, place, logs }` → `Vec<FlightReport>` | flights cache |
 | `gear_flight_set` | `FlightSetParams { flight, pack, place }` → `FlightReport` | gear.json |
 | `gear_packs` | – → `PacksView` (packs, types, charging sheet, history) | no |
+| `modules` | – → `Vec<ModuleStatus>` (installed, pinned, newest, license) | no |
+| `module_install` | `ModuleParams { name, confirm }` → `ModuleStatus` | modules folder; network |
+| `module_remove` | `NameParams` → `ModuleStatus` | modules folder |
+| `modules_check` | – → `Vec<ModuleStatus>` | network |
 | `gear_pack_save` / `gear_pack_delete` | `PackSaveParams` / `NameParams` → `Pack` | gear.json |
 
 Events (`api/events.rs`): `DeviceChanged` (connect, disconnect, backup state), `ApplyProgress`,
@@ -378,6 +387,7 @@ quadcam-cli --json gear card-prep --plan --mount /Volumes/CARD [--label NAME]
 quadcam-cli --json gear card-prep --device /dev/diskN --volume-uuid U --yes
 quadcam-cli --json gear flights [--day 2026-10-07] [--aircraft NAME] [--pack LABEL]
 quadcam-cli --json gear packs [save LABEL --type T | delete LABEL]
+quadcam-cli --json modules [check | install NAME --yes | remove NAME]
 ```
 
 ### 5.3 MCP: three new tools
@@ -390,6 +400,9 @@ can then allow the read tool freely and gate the other two.
 | `quadcam_gear` | Nothing | `status`, `devices`, `storage`, `backups`, `backup_read`, `backup_diff`, `switch_map`, `osd`, `rates`, `sims`, `changes`, `apply_plan`, `voice`, `firmware_check`, `flights`, `packs` |
 | `quadcam_gear_edit` | QuadCam's own data only: never a device, a sim or a card | `device_save`, `device_forget`, `stage`, `update`, `discard`, `restore_stage`, `voice_edit`, `voice_render`, `voice_choose`, `pack_save`, `pack_delete`, `flight_set`, `backup` (a read of the device; writes only to the gear folder), `import_backups`, `prune`, `export` |
 | `quadcam_gear_apply` | A device, a sim or the radio firmware | `apply`, `sim_sync`, `flash`. Each needs the `digest` from a plan and `confirm=true` |
+
+Modules are setup, so `quadcam_settings` gains the actions `modules`, `module_install`
+(needs `confirm=true`, after the agent shows the user the license) and `module_remove`.
 
 Card prep extends the existing `quadcam_format_card` (`prep=true`, `mount`, `label`) rather
 than a new tool: every erase stays behind one tool with one confirm pattern.
@@ -536,8 +549,10 @@ logical switches a change owns is recorded in the change, so a later change can 
 - Releases come from the EdgeTX GitHub releases (`edgetx-firmware-vX.Y.Z.zip`, one binary per
   board). The plan names the binary for the device's board.
 - Radio off, then USB: the STM32 ROM DFU device (`0483:df11`). Exactly one must be present.
-- `dfu-util -a 0 -s 0x08000000:leave -D <bin>`. The image is the full image, bootloader
-  included.
+- Write the full image (bootloader included) at `0x08000000`, then leave DFU (the same
+  operation as `dfu-util -a 0 -s 0x08000000:leave`). `gear/dfu.rs` does it natively: there is
+  no official macOS `dfu-util` binary to download, and DFU is a published USB class. It erases
+  the pages it writes, writes, reads back and compares before it leaves.
 - Size guard per board (for the B&W Pocket: 400-1000 KB), board name check in the binary.
 
 ### 6.6 Sim file formats
@@ -807,6 +822,78 @@ in the library. Guards: every existing `disk::format_card` guard, plus "no clip 
 missing from the library" (the sidebar's "N new" is 0). The file system and the label come
 from the source's `CardPolicy`. DJI cards stay refused, as today (open question 3).
 
+### 7.10 Modules
+
+Tools and firmware that QuadCam does not ship become **modules**: QuadCam downloads them from
+their upstream, on the user's request, into its own folder. A user needs nothing installed
+elsewhere, and the `.app` bundles nothing GPL. QuadCam fetches; it does not redistribute.
+
+**Manifest.** `resources/modules.toml` pins each tool module per QuadCam release:
+
+```toml
+[esptool]
+version = "5.1.0"
+url = "https://github.com/espressif/esptool/releases/download/v5.1.0/esptool-v5.1.0-macos-arm64.tar.gz"
+sha256 = "…"
+license = "GPL-2.0-or-later"
+source = "https://github.com/espressif/esptool"
+run = "esptool"            # the executable inside the archive
+```
+
+Only official release assets of the upstream project are allowed. A release of QuadCam
+also attaches `modules.json` (the same data), so a running app can learn of a newer pin
+without an app update; it applies a newer pin only after the user's **Update**.
+
+**Candidates**
+
+| Module | Kind | Source | Decision |
+|---|---|---|---|
+| esptool | Tool | Espressif's standalone macOS release binary | Module |
+| dfu-util | Tool | No official macOS binary | Not a module: `gear/dfu.rs` does DFU natively |
+| ffmpeg, ffprobe | Tool | A static macOS arm64 build from a maintained, signed source; LGPL build preferred (QuadCam's encoders are VideoToolbox; x264 needs GPL) | Module by default, Homebrew as the fallback (`ffmpegSource`); open question 12 |
+| EdgeTX firmware | Data | EdgeTX GitHub releases | Downloaded per version at flash time |
+| ExpressLRS firmware | Data | The ELRS artifactory index | Downloaded per version at flash time |
+| FC vendor Betaflight builds | Data | The vendor's or Betaflight's release pages | Version check only in 1.0 |
+
+Data modules are never run. Their hash comes from the upstream index when it publishes one;
+otherwise QuadCam records the hash at first download and shows it in the flash plan.
+
+**Install flow**
+
+1. A feature needs a module that is missing (or the user selects **Install** in Settings >
+   Modules).
+2. A sheet names the module, its version, its size, its license with a link to the full
+   text and the source, and the upstream URL. Buttons: **Cancel**, **Download**.
+3. QuadCam downloads to the cache, checks the SHA-256 (a mismatch deletes the file and
+   refuses with "The download does not match the expected checksum."), unpacks into
+   `~/Library/Application Support/app.quadcam/modules/<name>/<version>/`, and writes
+   `installed.json` (hash, date, license, source).
+4. The feature continues.
+
+**Running a downloaded binary on macOS**
+
+- QuadCam downloads with its own HTTP client, so the files carry no quarantine attribute.
+  If one is present (a user copied a module in by hand), QuadCam removes it only after the
+  checksum matches.
+- Apple Silicon runs only signed code. Prefer upstream binaries that are signed and
+  notarized. An unsigned upstream binary gets a local ad-hoc signature after the checksum
+  passes; the installed hash then records the signed file.
+- A module runs only as a child process: an absolute path inside the modules folder, arguments
+  as an argv list (never a shell), a fixed working folder in the cache, a minimal environment,
+  a timeout, and output captured for the log. QuadCam's hardened runtime does not limit a
+  child process; nothing is loaded into QuadCam itself.
+- Before each run, the file's hash is checked against `installed.json`. A changed file is
+  refused with "esptool was changed after install; reinstall it."
+
+**Updates and removal.** **Check for updates** (Settings > Modules, or with
+`firmwareCheck` = `daily`) compares installed versions with the newest pins. **Update**
+installs the new version next to the old one, then removes the old. **Remove** deletes the
+module folder. A feature that needs a removed module asks again.
+
+**Settings > Modules:** a table with name, version, size, license (a link), source (a
+link), and **Update** and **Remove** per row; **Check for updates**; the ffmpeg source
+pop-up (QuadCam module or Homebrew).
+
 ## 8. Safety model
 
 ### 8.1 One path for every write
@@ -861,6 +948,7 @@ Refusals are exit code 3 on the CLI and an error with the code and the reason ov
 | Resource | Fail-safe |
 |---|---|
 | Serial ports | `serial::real_ports()` returns none in a process started by cargo unless `QUADCAM_SERIAL=real` |
+| Modules (downloads, running tools) | `Fetch` and `Runner` traits; tests serve fixture archives from a temp folder |
 | DFU, esptool | Calls go through a `Flasher` trait; a cargo process gets the recorder unless `QUADCAM_FLASH=real` |
 | Sims | Paths derive from `HOME`; tests set a temp `HOME` |
 | TTS | A cargo process gets the fake provider (a tone per text hash) unless `QUADCAM_TTS=real` |
@@ -906,14 +994,15 @@ docs, and its rows in `api`, CLI and MCP.
 | WP6 | Switch map | `gear/switchmap.rs`, Switches segment | WP2, WP3 | 2 |
 | WP7 | OSD | `gear/osd.rs`, OSD segment (view and editor) | WP2 (parse); WP5 to stage | 1 (pure part), 3 (editor) |
 | WP8 | Rates and sims | `gear/rates.rs`, `gear/sims/`, `apply/sim.rs`, Rates segment, Sims page | WP2, WP5 (plan/confirm pattern) | 2 (read), 3 (sync) |
-| WP9 | Radio extras: voice and model editors | `gear/voice/`, `resources/voice/`, Voice segment, `build-pack` and the pack index; `ModelOp` editors for checklists, telemetry screens, logging, timers, alarms and callouts; Checklists segment | WP3, WP5 | 4 |
-| WP10 | Firmware and splash | `gear/firmware/`, `gear/splash.rs`, Firmware page, Splash segment | WP2, WP3, WP4, WP5 | 4 |
+| WP9 | Radio extras: voice and model editors | `gear/voice/`, `resources/voice/`, Voice segment, `build-pack` and the pack index; `ModelOp` editors for checklists, telemetry screens, logging, timers, alarms and callouts; Checklists segment | WP3, WP5, WP14 | 4 |
+| WP10 | Firmware and splash | `gear/firmware/`, `gear/splash.rs`, `gear/dfu.rs`, Firmware page, Splash segment | WP2, WP3, WP4, WP5, WP14 | 4 |
 | WP11 | Card prep | `disk.rs` changes, `card_prep*` rows, `quadcam_format_card` `prep` | – (existing code) | 1 |
 | WP12 | Flights and packs | `logs.rs` columns, `gear/flights.rs`, `gear/packs.rs`, Flights and Packs pages | WP1 (reads log folders; the log store once WP4 lands) | 1 |
 | WP13 | Gear shell UI | Sidebar Gear section, page frame and segments, Connected rows, plug-in bar, shared components (`DiffView`, `ChecksList`, `DeviceHeader`), mock-core scenarios | WP1 (types) | 1 |
-| WP14 | Third-party notices | `THIRD_PARTY_NOTICES` generated at build (`cargo about` or equivalent for crates, the pnpm license list for `app/`, the OFL text for the bundled fonts) and shipped in the `.app`; an About window entry; a CI check that fails on a dependency with no license or a license outside the allow list (MIT, Apache-2.0, BSD, ISC, MPL-2.0, OFL-1.1, Unicode, Zlib) | – | 1 |
+| WP14 | Modules and third-party notices | `modules/` (the module manager, 7.10), the Modules section in Settings, `media.rs` finding ffmpeg through it; `THIRD_PARTY_NOTICES` generated at build (`cargo about` or equivalent for crates, the pnpm license list for `app/`, the OFL text for the bundled fonts) and shipped in the `.app`; an About window entry; a CI check that fails on a dependency with no license or a license outside the allow list (MIT, Apache-2.0, BSD, ISC, MPL-2.0, OFL-1.1, Unicode, Zlib) | – | 1 |
 
-**Parallel groups:** 0 → 1 → 2 → 3 → 4. Inside a group, packages run at once. WP7 and WP8
+**Parallel groups:** 0 → 1 → 2 → 3 → 4. WP14 (modules) runs in group 1 because firmware
+(WP10) and the voice render (WP9, ffmpeg) need it. Inside a group, packages run at once. WP7 and WP8
 split: their read-only halves run early; their write halves wait for WP5.
 
 ### Acceptance criteria
@@ -929,11 +1018,11 @@ split: their read-only halves run early; their write halves wait for WP5.
 | WP7 | Round-trip property test; NTSC, PAL and HD golden renders; overlap and off-screen checks; an editor move stages the right CLI line |
 | WP8 | Curves match reference values for Betaflight, Actual and Quick; Actual-to-Betaflight fit within a stated error; each sim adapter reads and writes a synthetic file byte-exact; refuses while "running" (faked) |
 | WP9 | Spelling rules golden test; cache hit renders with no provider call; normalisation golden WAV; `build-pack` writes a zip and index entry; Choose voice stages one change that keeps overrides when asked. Each `ModelOp` golden on both layouts; checklist length and name rules; ownership replaces a previous change's items |
-| WP10 | Splash patch and decode on a synthetic binary with markers; refusals for missing or doubled markers and for boards and versions not in `compat.rs`; EdgeTX flash plan picks the board binary; ELRS options block written and read back; flashes go to the recorder in tests; a missing `dfu-util` or `esptool` gives the install hint |
+| WP10 | Splash patch and decode on a synthetic binary with markers; refusals for missing or doubled markers and for boards and versions not in `compat.rs`; EdgeTX flash plan picks the board binary; ELRS options block written and read back; flashes go to the recorder in tests; DFU against a fake `nusb` device: erase, write, read back, compare |
 | WP11 | Disk-image test: prep refuses with a clip not in the library, passes otherwise; DJI refused |
 | WP12 | Each measure in 7.6 matches the synthetic log's known values; pack history; old `LogRow` tests still pass |
 | WP13 | Mock scenarios render; axe passes in both themes; Gear section collapses; plug-in bar appears for a device with staged changes |
-| WP14 | The built `.app` holds the notices file with every crate, npm package and font; the CI license check passes and fails on a planted bad license |
+| WP14 | Against a fixture server: download, checksum match and mismatch, install, run, update, remove, the license prompt (mock core). ffmpeg from the module and from Homebrew both pass the import tests. The built `.app` holds the notices file with every crate, npm package and font; the CI license check passes and fails on a planted bad license |
 
 ## 11. Release plan
 
@@ -942,7 +1031,7 @@ gear before the next release starts.
 
 | Release | Packages | Owner tests on real gear |
 |---|---|---|
-| 0.7.0 Read-only gear | WP1, WP2, WP3, WP4, WP12, WP13, WP14 | Import the old backup folders; check the Storage view's sizes. Plug the radio in (USB Storage): a backup appears, a second plug-in adds none. Plug the FC in: backup appears, the FC reboots normally, the dump reads right. Browse and diff backups. Flights for a recent day match the hand analysis (hover, sag, resting, mAh, dropouts) |
+| 0.7.0 Read-only gear | WP1, WP2, WP3, WP4, WP12, WP13, WP14 | Install the ffmpeg module in Settings > Modules and import a card with it; switch back to Homebrew. Import the old backup folders; check the Storage view's sizes. Plug the radio in (USB Storage): a backup appears, a second plug-in adds none. Plug the FC in: backup appears, the FC reboots normally, the dump reads right. Browse and diff backups. Flights for a recent day match the hand analysis (hover, sag, resting, mAh, dropouts) |
 | 0.8.0 Map, OSD, rates, sims | WP6, WP7 (read), WP8 | Switch map matches the radio and the quad, position by position; live highlight while moving switches. OSD render matches the goggles for each profile. Sim sync to every installed sim; fly each and compare feel |
 | 0.9.0 Staged changes | WP5, WP7 (editor), WP11 | Stage and apply one harmless FC change (an OSD move), check the goggles, revert it. Edit a radio timer name, apply, check on the radio, restore. Prep a spare DVR card |
 | 0.10.0 Radio extras and voice | WP9 | Install a voice pack, Choose voice, hear the callouts on the radio. Override one line. Edit a checklist and a battery callout; check them on the radio |
@@ -958,10 +1047,10 @@ talks to them from the outside and copies none of their code.
 
 | Constraint | How this design meets it |
 |---|---|
-| Talk to GPL firmware and tools only through protocols, files and separate processes | Serial CLI and MSP, SD-card files, `dfu-util` and `esptool` as subprocesses |
+| Talk to GPL firmware and tools only through protocols, files and separate processes | Serial CLI and MSP, SD-card files, `esptool` and ffmpeg as subprocesses, DFU as a USB class |
 | Never copy GPL source; reimplement tables and formats from documentation and observed files | `bf/msp.rs`, `bf/dump.rs`, `edgetx/yaml.rs`, the OSD width table, the rate formulas and the ELRS options block are written from published formats, recorded transcripts and fixtures. A reviewer checks each package for copied code |
 | Download official firmware at run time; never ship a patched binary | `gear/firmware` downloads from upstream, checks the hash, patches the splash in the cache on the user's Mac |
-| Do not bundle `esptool` or `dfu-util` in the `.app` | Homebrew dependencies of the cask; the app finds them like ffmpeg and names the install command when one is missing |
+| Do not bundle `esptool` (or any GPL tool) in the `.app` | The module manager (7.10) downloads it from upstream on the user's request, after showing its license. QuadCam does not redistribute it |
 | Do not copy EdgeTX's voice-list file | `lines.csv` is QuadCam's own text (7.4) |
 | Voice packs under a separate asset license | Each pack zip and its index entry carry the license and attribution. The chosen path is a re-render on a paid ElevenLabs plan, released under CC BY 4.0. Earlier free-tier renders are never published |
 | Notices for what the `.app` bundles | WP14: a generated third-party notices file (crates, npm packages, the OFL fonts) in the `.app`, and a CI license check |
@@ -975,7 +1064,8 @@ talks to them from the outside and copies none of their code.
 | Betaflight rate formulas, OSD element widths, MSP tables | Written from published formulas, measured widths, the protocol description | Could port from Betaflight source |
 | EdgeTX YAML encodings | From the file format and fixtures | Could port EdgeTX's YAML tables |
 | Voice line text | Own text | Could ship EdgeTX's list |
-| esptool, dfu-util | Separate processes, not bundled | Could bundle them |
+| esptool, ffmpeg | Modules downloaded from upstream, run as separate processes | Could bundle them |
+| DFU | Native, from the USB DFU specification | Could port dfu-util |
 | Splash patch | Own (marker search, bit packing) | No change |
 
 ## 13. Open questions for the owner
@@ -985,7 +1075,7 @@ Each has a default the build uses until you decide.
 | # | Question | Default |
 |---|---|---|
 | 1 | Velocidrone's save format: can you share a sample save once it is installed? | Adapter ships disabled |
-| 2 | ESP flashing: call Homebrew `esptool` (proven path) or embed the `espflash` crate (no extra install, ESP8266 support uncertain)? | `esptool`, a cask dependency |
+| 2 | ESP flashing: the `esptool` module (proven tool) or embed the `espflash` crate (no download, ESP8266 support uncertain)? | `esptool`, a cask dependency |
 | 3 | Card prep for DJI goggles cards: today QuadCam never formats a DJI card (`AGENTS.md`, Rules). Keep that? | Keep refused |
 | 4 | Auto backup of an FC reboots it (the CLI `exit`). Keep auto backup on for FCs, or MSP identity only and a manual full backup? | On; skipped while another app holds the port |
 | 5 | Gear folder: the support folder (this Mac only) or inside the library folder (moves with it)? | Support folder; `gearDir` moves it |
@@ -995,3 +1085,4 @@ Each has a default the build uses until you decide.
 | 9 | ELRS version read over CRSF device info needs a hardware check. Until then, enter versions by hand? | Hand entry, read-only check |
 | 10 | Splash source: GitHub release binaries only, or also the EdgeTX cloud build? | Release binaries only |
 | 11 | Firmware and voice indexes go online. Check only on request, or daily? | On request (`firmwareCheck` = `manual`); `README.md` Privacy updated |
+| 12 | ffmpeg as a module: which static arm64 build (signed, LGPL preferred), and drop the cask's Homebrew `ffmpeg` dependency once the module works? | Module by default, Homebrew fallback; the cask keeps the dependency until 1.0 |
