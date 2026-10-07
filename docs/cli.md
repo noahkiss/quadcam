@@ -149,6 +149,11 @@ quadcam-cli --json gear fc check STEM.diff_all.txt expected.cli  # every expecte
 quadcam-cli --json gear fc notes [--board BETAFPVG473]            # known issues of boards
 quadcam-cli --json gear fc usb                                   # USB timers
 quadcam-cli --json gear osd FILE [FILE ...] [--grid NTSC|PAL|HD|WxH] [--text]
+quadcam-cli --json gear flights [--day D] [set <flight> --pack L | folders --add DIR]
+quadcam-cli gear report [--day D] --markdown                     # the session report
+quadcam-cli --json gear preflight                                # the Pack up check
+quadcam-cli --json gear packs [save L --type T --charged | type save T ... | notes TEXT]
+quadcam-cli --json gear crashes [--clip ID save --time S --broke TEXT --parts a,b]
 quadcam-cli --json gear backup [--device ID | --port P | --mount M] [show|diff|pin ...]
 quadcam-cli --json gear backups [--device ID]
 quadcam-cli --json gear storage [--prune [--dry-run]] [--export <backup|device> DIR]

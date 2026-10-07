@@ -21,6 +21,7 @@ import type {
 } from "../types";
 import * as seed from "./seed";
 import * as gear from "./gear";
+import { MockFlights } from "./flights";
 import * as backups from "./backups";
 import { location as normLocation, spans as normSpans } from "../normalize";
 
@@ -31,6 +32,8 @@ const DISPATCH = new Set([
   "settings", "settings_set", "place_search", "place_save", "session_cuts", "profiles", "session_split", "library_split",
   "modules", "module_install", "module_remove", "modules_check", "gear_osd",
   "gear_status", "gear_devices", "gear_device_save", "gear_device_forget", "gear_dismiss_reminder",
+  "gear_flights", "gear_flight_set", "gear_flight_folders", "gear_packs", "gear_pack_save", "gear_pack_delete", "gear_pack_type_save",
+  "gear_pack_type_delete", "gear_pack_notes", "gear_session_report", "gear_preflight", "gear_crashes", "gear_crash_save", "gear_crash_delete",
   "gear_backup", "gear_backups", "gear_backup_read", "gear_backup_diff", "gear_backup_pin", "gear_storage", "gear_prune",
   "gear_export", "gear_import_backups", "gear_card_check", "gear_card_checks", "gear_card_repair", "gear_stop",
 ]);
@@ -67,6 +70,8 @@ export class MockCore {
   gear: gear.MockGear = gear.quietGear();
   /** The Gear seed helpers, for specs (`core.gearSeed.radioConnected()`). */
   gearSeed = gear;
+  /** Flights, packs and crashes (`./flights.ts`). */
+  flights = new MockFlights();
   trash = new Map<string, LibClip>();
   calls: Call[] = [];
   menuState: unknown = null;
@@ -310,6 +315,42 @@ export class MockCore {
         v.source = paths.length ? paths.map(base) : [`${dev!.last_backup} dump all`];
         return v;
       }
+      case "gear_flights":
+        return this.flights.flights((p.day as string | null) ?? null);
+      case "gear_flight_set":
+        return this.gearChanged(this.flights.flightSet(String(p.flight), (p.pack as string | null) ?? null));
+      case "gear_flight_folders":
+        if (p.add) this.flights.folders.push(String(p.add));
+        if (p.remove) this.flights.folders = this.flights.folders.filter((f) => f !== p.remove);
+        return this.gearChanged([...this.flights.folders]);
+      case "gear_packs":
+        return this.flights.packsView();
+      case "gear_pack_save":
+        return this.gearChanged(this.flights.packSave(p.pack as import("../types").Pack, (p.charged as boolean | null) ?? null));
+      case "gear_pack_delete":
+        return this.gearChanged(this.flights.packDelete(String(p.name)));
+      case "gear_pack_type_save":
+        return this.gearChanged(this.flights.typeSave(p as unknown as import("../types").PackType));
+      case "gear_pack_type_delete":
+        return this.gearChanged(this.flights.typeDelete(String(p.name)));
+      case "gear_pack_notes":
+        this.flights.notes = String(p.text);
+        return this.gearChanged(this.flights.notes);
+      case "gear_session_report":
+        return this.flights.report((p.day as string | null) ?? null);
+      case "gear_preflight":
+        return this.flights.preflight();
+      case "gear_crashes":
+        return this.flights.crashList((p.clip as string | null) ?? null, (p.aircraft as string | null) ?? null);
+      case "gear_crash_save":
+        return this.gearChanged(
+          this.flights.crashSave(p as import("../types").CrashSaveParams, (id) => {
+            const c = this.lib.clips.find((x) => x.id === id);
+            return c ? { date: c.date, aircraft: c.aircraft, duration: c.duration } : null;
+          }),
+        );
+      case "gear_crash_delete":
+        return this.gearChanged(this.flights.crashDelete(String(p.id)));
       case "modules":
       case "modules_check":
         return structuredClone(this.modules);
@@ -323,6 +364,12 @@ export class MockCore {
   }
 
   // ---------- gear ----------
+
+  /** Answers `v` after telling the UI Gear data changed, as the core's writes do. */
+  private gearChanged<T>(v: T): T {
+    this.emit("gear-changed");
+    return structuredClone(v);
+  }
 
   /** `Core::gear_device_save`: a new device must be plugged in. */
   deviceSave(id: string, name: string | null, aircraft: string | null) {

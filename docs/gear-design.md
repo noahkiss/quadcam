@@ -378,9 +378,14 @@ in `specta_builder` (`lib.rs`).
 | `gear_flash` | `FlashRequest { digest, confirm }` → `ApplyReport` | **device** |
 | `card_prep_plan` | `CardPrepParams { mount, label }` → `FormatPlan` | no |
 | `card_prep` | `FormatRequest` → `FormatPlan` | **card erase** |
-| `gear_flights` | `FlightFilter { day, aircraft, pack, place, logs }` → `Vec<FlightReport>` | flights cache |
+| `gear_flights` | `FlightFilter { day, aircraft, pack, place, logs }` → `FlightsView` (flights, days, sources, range trend per place) | flights cache |
 | `gear_flight_set` | `FlightSetParams { flight, pack, place }` → `FlightReport` | gear.json |
-| `gear_packs` | – → `PacksView` (packs, types, charging sheet, history) | no |
+| `gear_packs` | `PacksParams { target_v }` → `PacksView` (packs, types, charging sheet, history) | no |
+| `gear_flight_folders` | `FlightFoldersParams { add, remove }` → `Vec<PathBuf>` | gear.json |
+| `gear_pack_type_save` / `gear_pack_type_delete` / `gear_pack_notes` | `PackType` / `NameParams` / `NotesParams` → the saved value | gear.json |
+| `gear_session_report` | `ReportParams { day }` → `SessionReport` (with `markdown`) | no |
+| `gear_preflight` | – → `Preflight` (rows: pass, warn, unknown) | no |
+| `gear_crashes` / `gear_crash_save` / `gear_crash_delete` | `CrashFilter` / `CrashSaveParams` / `IdParams` → `Crash` | gear.json |
 | `modules` | – → `Vec<ModuleStatus>` (installed, pinned, newest, license) | no |
 | `module_install` | `ModuleParams { name, confirm }` → `ModuleStatus` | modules folder; network |
 | `module_remove` | `NameParams` → `ModuleStatus` | modules folder |
@@ -426,7 +431,11 @@ quadcam-cli --json gear flash --digest D --yes
 quadcam-cli --json gear card-prep --plan --mount /Volumes/CARD [--label NAME]
 quadcam-cli --json gear card-prep --device /dev/diskN --volume-uuid U --yes
 quadcam-cli --json gear flights [--day 2026-10-07] [--aircraft NAME] [--pack LABEL]
-quadcam-cli --json gear packs [save LABEL --type T | delete LABEL]
+quadcam-cli --json gear packs [save LABEL --type T [--charged] | delete LABEL | type save T | notes TEXT]
+quadcam-cli --json gear flights set <flight> --pack LABEL | folders --add DIR
+quadcam-cli gear report [--day D] --markdown
+quadcam-cli --json gear preflight
+quadcam-cli --json gear crashes [--clip ID save --time S --broke T --parts a,b | delete ID]
 quadcam-cli --json modules [check | install NAME --yes | remove NAME]
 ```
 
@@ -437,8 +446,8 @@ can then allow the read tool freely and gate the other two.
 
 | Tool | Changes | Actions |
 |---|---|---|
-| `quadcam_gear` | Nothing | `status`, `devices`, `fc_identify`, `board_notes`, `usb_timers`, `card`, `card_preview`, `storage`, `backups`, `backup_read`, `backup_diff`, `switch_map`, `osd`, `rates`, `sims`, `changes`, `apply_plan`, `voice`, `firmware_check`, `flights`, `packs` |
-| `quadcam_gear_edit` | QuadCam's own data only: never a device, a sim or a card | `device_save`, `device_forget`, `fc_read` (a CLI read; the FC reboots), `stage`, `update`, `discard`, `restore_stage`, `voice_edit`, `voice_render`, `voice_choose`, `pack_save`, `pack_delete`, `flight_set`, `backup` (a read of the device; writes only to the gear folder), `import_backups`, `prune`, `export` |
+| `quadcam_gear` | Nothing | `status`, `devices`, `fc_identify`, `board_notes`, `usb_timers`, `card`, `card_preview`, `storage`, `backups`, `backup_read`, `backup_diff`, `switch_map`, `osd`, `rates`, `sims`, `changes`, `apply_plan`, `voice`, `firmware_check`, `flights`, `packs`, `session_report`, `preflight`, `crashes` |
+| `quadcam_gear_edit` | QuadCam's own data only: never a device, a sim or a card | `device_save`, `device_forget`, `fc_read` (a CLI read; the FC reboots), `stage`, `update`, `discard`, `restore_stage`, `voice_edit`, `voice_render`, `voice_choose`, `pack_save`, `pack_delete`, `pack_type_save`, `pack_type_delete`, `pack_notes`, `flight_set`, `flight_folders`, `crash_save`, `crash_delete`, `backup` (a read of the device; writes only to the gear folder), `import_backups`, `prune`, `export` |
 | `quadcam_gear_apply` | A device, a sim or the radio firmware | `apply`, `sim_sync`, `flash`. Each needs the `digest` from a plan and `confirm=true` |
 
 Modules are setup, so `quadcam_settings` gains the actions `modules`, `module_install`
@@ -945,6 +954,20 @@ binaries only (open question 10).
 | Per-pack history | Flights assigned to a pack (by hand; QuadCam suggests the next label in order). Per pack: cycles, mAh, sag and resting voltage over time. A pack whose resting voltage or flight time falls well below its type's median is marked |
 | Range trend per place | Per place (from the matched clip, else the profile's place), the worst `1RSS` and `RQly` per flight over time |
 
+**Built (WP12):** `logs.rs` reads the new columns into `LogRow` (`tx_power_mw`, `snr_db`,
+`current_a`, `capacity_mah`, `bat_pct`, `flight_mode`, `channels`, `tx_bat`) and
+`LogRow::armed` (`FM` not ending in `*`). `gear/flights/` splits a log into flights (armed
+runs; with no `FM` column the same as `logs::segments`), measures each one, and caches them per
+log file in `flights.json`; the 5th percentile is nearest rank. `gear/flights/synth.rs` is the
+synthetic log with its known values (`KNOWN`). `core/flights.rs` joins each flight to its
+aircraft (profile `edgetx_models`), its clip (date and time of day, 90 s slack), its place and
+the pack type's warning. Flights read `<gear>/logs/`, folders the person adds
+(`flight_folders` in `gear.json`) and a radio plugged in. Additions approved 2026-10-07: the
+session report (`gear/report.rs`, `gear_session_report`, Markdown), the Pack up check
+(`gear/preflight.rs`, `gear_preflight`; its TODO(WP4) hooks are the selected model and card
+space of a device not plugged in, and backup times) and the crash and repair log
+(`gear/crashes.rs`, `gear_crashes`, `gear_crash_save`, `gear_crash_delete`).
+
 ### 7.7 Bench queue
 
 The Bench page replaces a hand-kept list. Each staged change has a status:
@@ -968,6 +991,14 @@ Packs are user data: label, pack type, received date, retired. Pack types hold c
 (LiPo, LiHV), cells, capacity, connector, and charge settings (full, storage, rate). The
 Charging view is a table of pack types with their settings, plus free notes. Nothing in the
 repo names a real pack or a shop.
+
+**Built (WP12):** `gear/packs.rs`: `Pack` (label, type, received, retired, `charged_at`,
+note), `PackType` (chemistry, cells, capacity, connector, full and storage volts a cell,
+charge current, `warn_mah`), the pack set on each flight (`flight_sets`), and `view`: per
+pack its history, cycles, charge state and a mark when its median resting voltage is 0.05 V a
+cell under its type's or its flights are 20 % shorter; per type the charging sheet and a
+suggested `warn_mah` (a least-squares line of resting volts a cell against mAh, at
+`target_v`, default 3.7 V). `suggest_pack` names the next label in order.
 
 ### 7.9 Card prep
 

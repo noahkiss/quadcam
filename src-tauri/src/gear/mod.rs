@@ -16,6 +16,11 @@
 //! - `edgetx`: the EdgeTX card engine: YAML line editor, model views and ops, card plans
 //!   and the card writer.
 //! - `cues`: spoken, sound and notification cues ("safe to unplug", "still inserted").
+//! - `flights`: flight analysis from radio logs: hover, sag, resting voltage, mAh,
+//!   dropouts, and the flight index (`flights.json`).
+//! - `packs`: packs and pack types, pack history, the charging sheet, suggestions.
+//! - `crashes`: the crash and repair log.
+//! - `report`: the session report; `preflight`: the "Pack up" check.
 //! - `osd`: Betaflight OSD layouts: decode, draw per profile, overlap and off-screen check.
 //! - `blobs`: the content-addressed blob store under the backups.
 //! - `backup`: snapshots: take, list, read, diff, retain, prune, export, import old folders.
@@ -29,14 +34,19 @@ pub mod backup;
 pub mod bf;
 pub mod blobs;
 pub mod compat;
+pub mod crashes;
 pub mod cues;
 pub mod detect;
 pub mod edgetx;
 pub mod events;
+pub mod flights;
 pub mod health;
 pub mod model;
 pub mod osd;
+pub mod packs;
+pub mod preflight;
 pub mod radiologs;
+pub mod report;
 pub mod serial;
 pub mod store;
 

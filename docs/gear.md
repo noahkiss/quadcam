@@ -10,6 +10,8 @@ it.
 
 - **Connected** lists what is plugged in now. Each device also has its own row under it.
 - **Devices** lists the devices you saved, plugged in or not.
+- **Pack up**, **Flights**, **Packs** and **Repairs** are described under
+  [Flights and packs](#flights-and-packs).
 - A device's page shows its kind and state, what it reports about itself (board, firmware,
   version), where it is mounted, its aircraft and its latest backup. **Save…** names a device
   QuadCam does not know and links it to an aircraft; **Edit…** changes that; **Forget…**
@@ -268,6 +270,67 @@ profile, and checks each screen.
 Open a flight controller's page under **Gear > Devices** and choose **OSD**, then **Open
 dump…**. A saved FC with a backup shows its latest backup's `dump all` until you open a file.
 
+## Flights and packs
+
+QuadCam reads flights from EdgeTX radio logs (`LOGS/*.csv`). A flight is a run of armed log
+rows. A row counts as disarmed when the flight mode (`FM`) ends in `*`, as Betaflight sends it.
+A log without an `FM` column gives the same flights as log matching. "Pack" always means a
+battery.
+
+QuadCam reads logs from three places: the gear folder's `logs/`, folders you add (**Add log
+folder…** on the Flights page), and the `LOGS/` of a radio plugged in as USB Storage. It keeps a
+cache of each log's flights in `<gear>/flights.json` and reads a log again only when it changes.
+
+**Flights** shows one day's flights. For each flight:
+
+| Measure | How QuadCam finds it |
+|---|---|
+| Hover | Median throttle over windows of 2 s or more where the throttle moves less than 3 % and roll and pitch stay within 5 % of centre. Also for the first and last third of the flight |
+| Sag | Receiver battery (`RxBt`) while armed: the 5th percentile and the minimum. 0 V readings do not count |
+| Resting voltage | The median `RxBt` after disarm while the log goes on; else the first reading of the next flight of that model that day |
+| Used | `Capa` at disarm |
+| Warning | When the flight passed the pack type's mAh warning |
+| Worst link | The lowest `RQly` and `1RSS` |
+| Dropouts | Spans of 0.3 s or more while armed with `FM` blank and `RxBt` at 0. Each shows the link before and after it. "Telemetry only" means the flight went on and no failsafe mode showed |
+
+Pick the pack for each flight in its row. QuadCam suggests the next label after the last
+pack used that day, in label order. The flight's aircraft comes from the profile whose EdgeTX
+model names match the log. Its place comes from the place you set, else the clip that holds
+the flight, else the profile.
+
+**Session report** (a segment of Flights) sums up one day: flights, air time, the longest
+flight, the worst link, dropouts, pack use and crashes. By default it shows the days of the
+last import; the import's Finish step has **Show report**. **Copy as Markdown** copies it to
+share.
+
+**Packs** lists each pack with its type, its charge state, its cycles (flights on it), and
+its median resting voltage and flight time. A pack whose resting voltage sits 0.05 V a cell
+under its type's median, or whose flights are 20 % shorter, is marked. **Mark charged** records
+a charge; a flight after it makes the pack "Flown" again. Click a label for its history.
+**Charging** lists the pack types (chemistry, cells, capacity, connector, full and storage
+volts a cell, charge current, mAh warning) with a suggested warning: the mAh where the
+resting voltage reaches 3.7 V a cell, from a straight line through the type's flights. The
+notes field is free text.
+
+**Pack up** checks, before a session:
+
+| Row | Pass when |
+|---|---|
+| Packs charged | Every pack in use is marked charged after its last flight |
+| Radio model | A radio is plugged in and its selected model belongs to an aircraft |
+| Card space | Each goggles or DVR card plugged in has 2 GB and 10 % free |
+| Backups | Each saved radio and FC was backed up in the last 14 days |
+| Cards out | No card is still in the Mac |
+
+A row QuadCam cannot judge (nothing plugged in, no backups kept yet) reads as unknown.
+
+**Repairs** lists crashes by aircraft. Log a crash from a clip: open the clip, choose the
+**Flight** tab, then **Log crash…**. The time is the playhead; add what broke and the parts
+used. The clip's Flight tab lists its crashes.
+
+Packs, pack types, the pack set on each flight, added log folders and crashes are yours, in
+`gear.json`. No file is written to a clip.
+
 ## Command line and agents
 
 ```bash
@@ -284,6 +347,17 @@ quadcam-cli gear osd quad.dump_all.txt --text        # each OSD profile drawn, a
 quadcam-cli --json gear osd quad.dump_all.txt apply.cli --grid PAL
 quadcam-cli --json gear card [--mount M | --device ID] [--model model01.yml]
 quadcam-cli --json gear card preview --edits edits.json   # checks and diff; writes nothing
+quadcam-cli --json gear flights [--day 2026-10-04] [--aircraft A] [--pack P] [--logs DIR]
+quadcam-cli --json gear flights set <flight> --pack A1 [--place NAME]   # "" clears
+quadcam-cli --json gear flights folders [--add DIR | --remove DIR]
+quadcam-cli gear report [--day 2026-10-04] --markdown  # the session report
+quadcam-cli --json gear preflight                    # the Pack up check
+quadcam-cli --json gear packs [--target-v 3.7]       # packs, types, charging notes
+quadcam-cli --json gear packs save A1 --type "1S 300" [--charged] [--retired true]
+quadcam-cli --json gear packs type save "1S 300" --chemistry lihv --cells 1 --warn-mah 250
+quadcam-cli --json gear packs notes "Storage after each session"
+quadcam-cli --json gear crashes [--aircraft A] [--clip ID]
+quadcam-cli --json gear crashes --clip ID save --time 65 --broke "arm" --parts arm,prop
 quadcam-cli --json gear backup [--device ID | --port P | --mount M]   # back up a radio card or an FC
 quadcam-cli --json gear backups [--device ID]        # newest first
 quadcam-cli --json gear backup show <backup> [PATH]  # its files, or one file

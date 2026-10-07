@@ -14,15 +14,23 @@ pub use crate::core::{
     BoardNotesParams, CardParams, CardPreview, CardPreviewParams, DeviceSaveParams, FcJob,
     FcPortParams, FcReadParams, GearCard, GearStatus, OsdParams, ReminderParams, UsbTimer,
 };
+pub use crate::core::{
+    CrashSaveParams, FlightFilter, FlightFoldersParams, FlightReport, FlightSetParams, FlightsView,
+    NotesParams, PackSaveParams, PacksParams, ReportParams,
+};
 pub use crate::gear::backup::{
     BackupContent, ExportReport, ImportBackupsReport, PruneReport, StorageView,
 };
 pub use crate::gear::bf::boards::BoardNote;
 pub use crate::gear::bf::{FcInfo, FcRead};
+pub use crate::gear::crashes::{Crash, CrashFilter};
 pub use crate::gear::health::CardCheck;
 pub use crate::gear::model::Device;
 pub use crate::gear::model::DiffItem;
 pub use crate::gear::osd::OsdView;
+pub use crate::gear::packs::{Pack, PackType, PacksView};
+pub use crate::gear::preflight::Preflight;
+pub use crate::gear::report::SessionReport;
 use serde::{Deserialize, Serialize};
 use specta::Type;
 
@@ -64,6 +72,36 @@ macro_rules! with_gear_rows {
             gear_card(params: CardParams) -> GearCard = |c| c.gear_card(&params);
             /// Checks and diffs EdgeTX card edits. Writes nothing.
             gear_card_preview(params: CardPreviewParams) -> CardPreview = |c| c.gear_card_preview(&params);
+            /// Flights from the radio logs: hover, sag, resting voltage, mAh, the threshold,
+            /// the worst link and dropouts, with the pack, place and clip of each.
+            gear_flights(params: FlightFilter) -> FlightsView = |c| c.gear_flights(&params);
+            /// Sets a flight's pack or place ("" clears one).
+            gear_flight_set(params: FlightSetParams) -> FlightReport = |c| c.gear_flight_set(&params);
+            /// Adds or removes a log folder the flights read; returns the list.
+            gear_flight_folders(params: FlightFoldersParams) -> Vec<std::path::PathBuf> = |c| c.gear_flight_folders(&params);
+            /// Packs with their history, pack types with the charging sheet, the notes.
+            gear_packs(params: PacksParams) -> PacksView = |c| c.gear_packs(&params);
+            /// Saves a pack; `charged` marks it charged now (true) or clears the mark.
+            gear_pack_save(params: PackSaveParams) -> Pack = |c| c.gear_pack_save(&params);
+            /// Deletes a pack. Its flights keep their label.
+            gear_pack_delete(params: NameParams) -> Pack = |c| c.gear_pack_delete(&params.name);
+            /// Saves a pack type.
+            gear_pack_type_save(params: PackType) -> PackType = |c| c.gear_pack_type_save(&params);
+            /// Deletes a pack type no pack uses.
+            gear_pack_type_delete(params: NameParams) -> PackType = |c| c.gear_pack_type_delete(&params.name);
+            /// Saves the charging sheet's notes.
+            gear_pack_notes(params: NotesParams) -> String = |c| c.gear_pack_notes(&params);
+            /// The session report for a day, else the last import's days, with its Markdown.
+            gear_session_report(params: ReportParams) -> SessionReport = |c| c.gear_session_report(&params);
+            /// The "Pack up" check before a session: packs, radio model, card space,
+            /// backups, cards still in. Reads only.
+            gear_preflight() -> Preflight = |c| c.gear_preflight();
+            /// Crashes, narrowed by aircraft or clip.
+            gear_crashes(params: CrashFilter) -> Vec<Crash> = |c| c.gear_crashes(&params);
+            /// Saves a crash on a clip: the time in the clip, what broke, the parts used.
+            gear_crash_save(params: CrashSaveParams) -> Crash = |c| c.gear_crash_save(&params);
+            /// Deletes a crash.
+            gear_crash_delete(params: IdParams) -> Crash = |c| c.gear_crash_delete(&params.id);
             /// Backs up a radio card or an FC (the FC reboots). Writes nothing when nothing changed.
             gear_backup(params: BackupParams) -> BackupResult = |c| c.gear_backup(&params);
             /// Snapshots, newest first, without their file lists.
