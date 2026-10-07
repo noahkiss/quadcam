@@ -413,7 +413,7 @@ pub struct SettingsValues {
     /// Gear: per device kind (fc, radio, elrs_tx, elrs_rx, goggles, dvr_card), the steps that run when it is plugged in: backup, import, apply_ready. Only backup is on by default.
     #[schemars(extend("x-nullable" = true))]
     pub gear_on_connect: Option<std::collections::BTreeMap<String, Vec<String>>>,
-    /// Gear: cues. Channels speech, sound, notification; cues safe_to_unplug, still_inserted (repeats every still_inserted_every_s seconds, 0 for none), step_failed; voice (a say voice name).
+    /// Gear: cues, one per job at its end. mute; channels speech, sound, notification; cues safe_to_unplug, still_inserted, step_failed; debounce_s; the reminder reminder_grace_s, still_inserted_every_s, reminder_max; quiet_hours {start, end} (HH:MM, no speech or sound); voice (a say voice name).
     #[schemars(extend("x-nullable" = true))]
     pub gear_cues: Option<std::collections::BTreeMap<String, Value>>,
     #[schemars(extend("x-nullable" = true, "enum" = ["manual", "daily", null]))]

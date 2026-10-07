@@ -941,7 +941,7 @@
             },
             "gear_cues": {
               "additionalProperties": true,
-              "description": "Gear: cues. Channels speech, sound, notification; cues safe_to_unplug, still_inserted (repeats every still_inserted_every_s seconds, 0 for none), step_failed; voice (a say voice name).",
+              "description": "Gear: cues, one per job at its end. mute; channels speech, sound, notification; cues safe_to_unplug, still_inserted, step_failed; debounce_s; the reminder reminder_grace_s, still_inserted_every_s, reminder_max; quiet_hours {start, end} (HH:MM, no speech or sound); voice (a say voice name).",
               "type": [
                 "object",
                 "null"

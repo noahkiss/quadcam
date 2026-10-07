@@ -173,7 +173,8 @@ pub struct Env {
     /// Cards in the built-in SD reader, with their hardware identity. Asked only when a
     /// volume sits in the slot.
     pub card_reader: Arc<dyn Fn() -> Vec<detect::CardHw> + Send + Sync>,
-    pub cues: Arc<dyn cues::CueSink>,
+    /// The cue queue, its debounce and its reminders.
+    pub cues: Arc<cues::CueService>,
 }
 
 impl Env {
@@ -185,7 +186,7 @@ impl Env {
             dfu: Arc::new(detect::dfu_devices),
             presence: Arc::new(events::presence),
             card_reader: Arc::new(detect::card_reader),
-            cues: cues::system(),
+            cues: Arc::new(cues::CueService::system()),
         }
     }
 
@@ -197,7 +198,9 @@ impl Env {
             dfu: Arc::new(Vec::new),
             presence: Arc::new(Vec::new),
             card_reader: Arc::new(Vec::new),
-            cues: Arc::new(cues::RecordedCues::default()),
+            cues: Arc::new(cues::CueService::inline(Arc::new(
+                cues::RecordedCues::default(),
+            ))),
         }
     }
 

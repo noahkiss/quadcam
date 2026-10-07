@@ -52,16 +52,25 @@ pull it. A DJI air unit stays on USB after its volume unmounts.
 
 ## Cues
 
-QuadCam can speak, play a sound, and post a notification:
+QuadCam can speak, play a sound, and post a notification. It does so once, when a job ends,
+never for its own mounts and unmounts along the way:
 
 | Cue | When |
 |---|---|
-| Safe to unplug | A card unmounted and is still inserted |
-| Still inserted | The card is still in, every `still_inserted_every_s` seconds (default 60) |
-| Step failed | A step that ran on its own, such as a backup, failed |
+| Done, safe to unplug | A job on a device finished. A run over several devices says it once |
+| Still inserted | A card is still in after "done": after 60 seconds, then every 5 minutes, 3 times at most |
+| Step failed | A step of a job failed |
 
-The `gear_cues` setting turns each cue and each channel (`speech`, `sound`, `notification`) on
-or off. Speech and notifications are on by default; sound is off. `voice` picks a `say` voice.
+The `gear_cues` setting holds:
+
+- `mute`, and a toggle for each cue (`safe_to_unplug`, `still_inserted`, `step_failed`) and
+  each channel (`speech`, `sound`, `notification`). Speech and notifications are on by
+  default; sound is off.
+- `debounce_s` (30): the same cue for the same device plays once in this time.
+- `reminder_grace_s` (60), `still_inserted_every_s` (300), `reminder_max` (3).
+- `quiet_hours` (`{"start": "22:00", "end": "07:00"}`): no speech or sound in these hours.
+  Notifications follow macOS Focus.
+- `voice`: a `say` voice.
 
 ## Steps on connect
 

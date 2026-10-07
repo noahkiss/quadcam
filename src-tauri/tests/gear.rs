@@ -7,7 +7,7 @@ use quadcam_lib::control;
 use quadcam_lib::core::{Core, Hooks, NoHooks};
 use quadcam_lib::core::{HookOutcome, OnConnectHook};
 use quadcam_lib::disk::{DiskInfo, Volume};
-use quadcam_lib::gear::cues::{Played, RecordedCues, Reminders};
+use quadcam_lib::gear::cues::{CueService, RecordedCues};
 use quadcam_lib::gear::events::{DeviceEventKind, Presence, Tracker};
 use quadcam_lib::gear::model::{DeviceKind, Link};
 use quadcam_lib::gear::serial::{FakePorts, PortInfo};
@@ -86,7 +86,7 @@ fn env(mounted: &Mounted, present: &Present, cues: &Arc<RecordedCues>) -> Env {
         dfu: Arc::new(Vec::new),
         presence: Arc::new(move || p.lock().unwrap().clone()),
         card_reader: Arc::new(Vec::new),
-        cues: cues.clone(),
+        cues: Arc::new(CueService::inline(cues.clone())),
     }
 }
 
@@ -276,53 +276,93 @@ fn the_poll_reports_plug_ins_and_marks_known_devices_seen() {
 }
 
 #[test]
-fn an_unmounted_card_says_safe_to_unplug_then_reminds_until_pulled() {
+fn cues_mark_the_end_of_a_job_and_never_quadcams_own_unmounts() {
+    use std::time::{Duration, Instant};
     let dir = tempfile::tempdir().unwrap();
     let card = radio_card(&dir.path().join("RADIO"));
-    let mounted: Mounted = Arc::new(Mutex::new(vec![card]));
+    let mounted: Mounted = Arc::new(Mutex::new(vec![card.clone()]));
     let present: Present = Arc::new(Mutex::new(vec![Presence::Disk {
         disk: "disk42".into(),
     }]));
     let cues = Arc::new(RecordedCues::default());
     let c = core_with(dir.path(), Arc::new(NoHooks), &mounted, &present, &cues);
     c.settings_set(
-        &serde_json::from_value(json!({"gear_cues": {"still_inserted_every_s": 30}})).unwrap(),
+        &serde_json::from_value(json!({"gear_cues": {"reminder_grace_s": 60, "still_inserted_every_s": 300, "reminder_max": 2}}))
+            .unwrap(),
     )
     .unwrap();
     let mut t = Tracker::default();
-    let mut r = Reminders::default();
-    let t0 = std::time::Instant::now();
     let e = c.gear_poll(&mut t).unwrap();
-    c.gear_play_cues(&e, &t, &mut r, t0);
-    assert!(cues.played.lock().unwrap().is_empty());
+    assert!(!e[0].app_initiated, "the person plugged the card in");
+    let radio = e[0].device.clone();
+    assert_eq!(quadcam_lib::core::link_handle(&radio.link), "disk42");
 
-    // Unmounted (`diskutil unmountDisk`): the disk node stays.
-    mounted.lock().unwrap().clear();
-    let e = c.gear_poll(&mut t).unwrap();
-    assert_eq!(e[0].kind, DeviceEventKind::UnmountedPresent);
-    c.gear_play_cues(&e, &t, &mut r, t0);
-    assert_eq!(
-        *cues.played.lock().unwrap(),
-        [
-            Played::Speak("The Radio is safe to unplug.".into()),
-            Played::Notify("QuadCam".into(), "The Radio is safe to unplug.".into())
-        ]
-    );
-    cues.played.lock().unwrap().clear();
-    let e = c.gear_poll(&mut t).unwrap();
-    c.gear_play_cues(&e, &t, &mut r, t0 + std::time::Duration::from_secs(31));
-    assert_eq!(
-        cues.played.lock().unwrap()[0],
-        Played::Speak("The Radio is still inserted.".into())
+    // A job: QuadCam unmounts and mounts the card while it holds it. Those events are its
+    // own and play nothing.
+    {
+        let _job = c.gear_hold("disk42");
+        mounted.lock().unwrap().clear();
+        let e = c.gear_poll(&mut t).unwrap();
+        assert_eq!(e[0].kind, DeviceEventKind::UnmountedPresent);
+        assert!(e[0].app_initiated);
+        mounted.lock().unwrap().push(card.clone());
+        let e = c.gear_poll(&mut t).unwrap();
+        assert!(e[0].app_initiated);
+        mounted.lock().unwrap().clear();
+        c.gear_poll(&mut t).unwrap();
+    }
+    assert!(
+        cues.played.lock().unwrap().is_empty(),
+        "no cue during a job"
     );
 
-    // Pulled: the node goes, the reminder stops.
+    // The job's end: one cue. The same again within the debounce: none.
+    assert!(c.gear_job_done(&radio, None));
+    assert!(!c.gear_job_done(&radio, None));
+    assert_eq!(cues.spoken(), ["The Radio done, safe to unplug."]);
+
+    // The reminder: after the grace, then every interval, at most twice.
+    let now = Instant::now();
+    c.gear_play_reminders(&t, now + Duration::from_secs(30), chrono::NaiveTime::MIN);
+    assert_eq!(cues.spoken().len(), 1, "the grace");
+    c.gear_play_reminders(&t, now + Duration::from_secs(61), chrono::NaiveTime::MIN);
+    assert_eq!(cues.spoken()[1], "The Radio is still inserted.");
+    c.gear_play_reminders(&t, now + Duration::from_secs(400), chrono::NaiveTime::MIN);
+    c.gear_play_reminders(&t, now + Duration::from_secs(5000), chrono::NaiveTime::MIN);
+    assert_eq!(cues.spoken().len(), 3, "capped at two reminders");
+
+    // Dismissed, or pulled: no more.
+    assert!(c.gear_job_done(&renamed(&radio), None));
+    c.gear_dismiss_reminder(&radio);
+    c.gear_play_reminders(&t, now + Duration::from_secs(9000), chrono::NaiveTime::MIN);
+    assert_eq!(cues.spoken().len(), 4, "only the second done");
     present.lock().unwrap().clear();
-    cues.played.lock().unwrap().clear();
     let e = c.gear_poll(&mut t).unwrap();
     assert_eq!(e[0].kind, DeviceEventKind::Removed);
-    c.gear_play_cues(&e, &t, &mut r, t0 + std::time::Duration::from_secs(120));
-    assert!(cues.played.lock().unwrap().is_empty());
+    c.gear_play_reminders(&t, now + Duration::from_secs(20000), chrono::NaiveTime::MIN);
+    assert_eq!(cues.spoken().len(), 4);
+
+    // A batch: one cue for all of it; mute silences everything.
+    c.gear_batch_done(&["A".into(), "B".into()], &[]);
+    assert_eq!(cues.spoken()[4], "2 devices done, safe to unplug.");
+    c.settings_set(&serde_json::from_value(json!({"gear_cues": {"mute": true}})).unwrap())
+        .unwrap();
+    assert!(!c.gear_batch_done(&[], &[("Backup".into(), "C".into())]));
+}
+
+/// The same device under another name, so the debounce (per cue and device) lets it play.
+fn renamed(c: &quadcam_lib::gear::model::Connected) -> quadcam_lib::gear::model::Connected {
+    let mut d = c.clone();
+    d.device = Some(quadcam_lib::gear::model::Device {
+        id: "radio-x".into(),
+        kind: DeviceKind::Radio,
+        name: "Bench radio".into(),
+        aircraft: None,
+        identity: Default::default(),
+        last_seen: None,
+        last_backup: None,
+    });
+    d
 }
 
 #[test]
@@ -371,6 +411,11 @@ fn on_connect_hooks_run_only_when_their_automation_is_on() {
         "import is off by default"
     );
     assert_eq!(ran.load(Ordering::SeqCst), 1);
+    assert_eq!(
+        cues.spoken(),
+        ["The Radio done, safe to unplug."],
+        "one cue for the run"
+    );
 
     c.settings_set(
         &serde_json::from_value(
@@ -388,10 +433,7 @@ fn on_connect_hooks_run_only_when_their_automation_is_on() {
     assert!(
         matches!(&runs[1].outcome, HookOutcome::Failed { message } if message.contains("busy"))
     );
-    assert_eq!(
-        cues.played.lock().unwrap()[0],
-        Played::Speak("The Radio: the step failed.".into())
-    );
+    assert_eq!(cues.spoken()[1], "test import failed on The Radio.");
     assert!(c
         .settings_set(
             &serde_json::from_value(json!({"gear_on_connect": {"toaster": ["backup"]}})).unwrap()
