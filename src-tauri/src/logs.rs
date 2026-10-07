@@ -88,7 +88,8 @@ pub struct Sticks {
 }
 
 /// One EdgeTX log row: its time, the sticks when the model logs them, and the flight
-/// controller's attitude telemetry (radians) when the receiver sends it.
+/// controller's attitude telemetry (radians) when the receiver sends it. A column the log
+/// does not have reads as None (`channels` as empty).
 #[derive(Debug, Clone, PartialEq)]
 pub struct LogRow {
     pub time: NaiveDateTime,
@@ -101,6 +102,55 @@ pub struct LogRow {
     pub rssi: Option<f64>,
     /// The EdgeTX model name, from the log file's name.
     pub model: Option<std::sync::Arc<str>>,
+    /// Transmit power (`TPWR(mW)`) and signal to noise (`RSNR(dB)`).
+    pub tx_power_mw: Option<f64>,
+    pub snr_db: Option<f64>,
+    /// Current (`Curr(A)`), capacity used (`Capa(mAh)`) and battery left (`Bat%(%)`).
+    pub current_a: Option<f64>,
+    pub capacity_mah: Option<f64>,
+    pub bat_pct: Option<f64>,
+    /// The flight controller's flight mode (`FM`): Some("") when the column is there but
+    /// empty (no telemetry), None when the log has no `FM` column.
+    pub flight_mode: Option<std::sync::Arc<str>>,
+    /// Channel outputs in microseconds (`CH1(us)`, `CH2(us)`, ...), CH1 first. Empty when
+    /// the log has none; a channel the row lacks is NaN.
+    pub channels: Vec<f64>,
+    /// The radio's own battery (`TxBat(V)`).
+    pub tx_bat: Option<f64>,
+}
+
+impl LogRow {
+    /// A row at `time` with no values.
+    pub fn at(time: NaiveDateTime) -> LogRow {
+        LogRow {
+            time,
+            sticks: None,
+            roll: None,
+            pitch: None,
+            rx_bat: None,
+            lq: None,
+            rssi: None,
+            model: None,
+            tx_power_mw: None,
+            snr_db: None,
+            current_a: None,
+            capacity_mah: None,
+            bat_pct: None,
+            flight_mode: None,
+            channels: Vec::new(),
+            tx_bat: None,
+        }
+    }
+
+    /// False only when the flight mode says disarmed: Betaflight sends it with a trailing
+    /// `*` (`ACRO*`). A log without `FM`, or a row with it blank (no telemetry), counts as
+    /// armed, so a log recorded only while armed reads as before.
+    pub fn armed(&self) -> bool {
+        !self
+            .flight_mode
+            .as_deref()
+            .is_some_and(|m| m.ends_with('*'))
+    }
 }
 
 /// The model name in an EdgeTX log file name: `<model>-YYYY-MM-DD[-HHMMSS].csv`.
@@ -145,8 +195,9 @@ fn split_csv(line: &str) -> Vec<&str> {
 }
 
 /// Every row of one EdgeTX CSV text. Date and Time are the first two columns. The stick
-/// columns (`Ail`, `Ele`, `Thr`, `Rud`) and attitude (`Roll(rad)`, `Ptch(rad)`) are found by
-/// header name, so any column order and any extra columns work.
+/// columns (`Ail`, `Ele`, `Thr`, `Rud`), attitude (`Roll(rad)`, `Ptch(rad)`) and the other
+/// telemetry columns `LogRow` holds are found by header name, so any column order and any
+/// extra or missing columns work.
 pub fn parse_rows(text: &str) -> Vec<LogRow> {
     let mut lines = text.lines();
     let header: Vec<String> = lines
@@ -157,6 +208,25 @@ pub fn parse_rows(text: &str) -> Vec<LogRow> {
     let (ail, ele, thr, rud) = (col("Ail"), col("Ele"), col("Thr"), col("Rud"));
     let (roll, pitch) = (col("Roll(rad)"), col("Ptch(rad)"));
     let (rx_bat, lq, rssi) = (col("RxBt(V)"), col("RQly(%)"), col("1RSS(dB)"));
+    let (tpwr, rsnr, curr) = (col("TPWR(mW)"), col("RSNR(dB)"), col("Curr(A)"));
+    let (capa, bat_pct, fm, tx_bat) =
+        (col("Capa(mAh)"), col("Bat%(%)"), col("FM"), col("TxBat(V)"));
+    // `CHn(us)` columns, by channel number.
+    let mut ch: Vec<(usize, usize)> = header
+        .iter()
+        .enumerate()
+        .filter_map(|(i, h)| {
+            let n = h
+                .strip_prefix("CH")?
+                .strip_suffix("(us)")?
+                .parse::<usize>()
+                .ok()?;
+            (n >= 1).then_some((n, i))
+        })
+        .collect();
+    ch.sort();
+    let n_ch = ch.last().map_or(0, |(n, _)| *n);
+    let mut modes: Vec<std::sync::Arc<str>> = Vec::new();
     let mut out = Vec::new();
     for line in lines {
         let cols = split_csv(line);
@@ -175,15 +245,39 @@ pub fn parse_rows(text: &str) -> Vec<LogRow> {
             (Some(ail), Some(ele), Some(thr), Some(rud)) => Some(Sticks { ail, ele, thr, rud }),
             _ => None,
         };
+        let flight_mode = fm.map(|i| {
+            let m = cols.get(i).copied().unwrap_or("");
+            match modes.iter().find(|x| &***x == m) {
+                Some(x) => x.clone(),
+                None => {
+                    let x: std::sync::Arc<str> = m.into();
+                    modes.push(x.clone());
+                    x
+                }
+            }
+        });
+        let mut channels = vec![f64::NAN; n_ch];
+        for &(n, i) in &ch {
+            if let Some(v) = num(Some(i)) {
+                channels[n - 1] = v;
+            }
+        }
         out.push(LogRow {
-            time,
             sticks,
             roll: num(roll),
             pitch: num(pitch),
             rx_bat: num(rx_bat),
             lq: num(lq),
             rssi: num(rssi),
-            model: None,
+            tx_power_mw: num(tpwr),
+            snr_db: num(rsnr),
+            current_a: num(curr),
+            capacity_mah: num(capa),
+            bat_pct: num(bat_pct),
+            flight_mode,
+            channels,
+            tx_bat: num(tx_bat),
+            ..LogRow::at(time)
         });
     }
     out
@@ -424,6 +518,39 @@ mod tests {
         let rows = parse_rows("Date,Time,1RSS(dB)\n2026-09-30,10:00:00.000,-50\n");
         assert_eq!(rows.len(), 1);
         assert!(rows[0].sticks.is_none());
+    }
+
+    #[test]
+    fn parses_telemetry_and_channel_columns() {
+        let text =
+            "Date,Time,TPWR(mW),RSNR(dB),Curr(A),Capa(mAh),Bat%(%),FM,CH1(us),CH3(us),TxBat(V)\n\
+            2026-09-30,10:00:00.000,100,9,12.5,250,80,ACRO,1500,1000,7.9\n\
+            2026-09-30,10:00:00.100,,,,,,,,,\n\
+            2026-09-30,10:00:00.200,25,9,0.1,250,80,ACRO*,1500,988,7.9\n";
+        let rows = parse_rows(text);
+        assert_eq!(rows.len(), 3);
+        let r = &rows[0];
+        assert_eq!(r.tx_power_mw, Some(100.0));
+        assert_eq!(r.snr_db, Some(9.0));
+        assert_eq!(r.current_a, Some(12.5));
+        assert_eq!(r.capacity_mah, Some(250.0));
+        assert_eq!(r.bat_pct, Some(80.0));
+        assert_eq!(r.tx_bat, Some(7.9));
+        assert_eq!(r.flight_mode.as_deref(), Some("ACRO"));
+        assert_eq!(r.channels.len(), 3);
+        assert_eq!((r.channels[0], r.channels[2]), (1500.0, 1000.0));
+        assert!(r.channels[1].is_nan());
+        assert!(r.armed());
+        // A blank flight mode is there but empty, and still counts as armed.
+        assert_eq!(rows[1].flight_mode.as_deref(), Some(""));
+        assert!(rows[1].armed());
+        assert_eq!(rows[1].capacity_mah, None);
+        assert!(!rows[2].armed());
+        // No FM column: every row is armed, as before.
+        let rows = parse_rows("Date,Time,RxBt(V)\n2026-09-30,10:00:00.000,4.1\n");
+        assert_eq!(rows[0].flight_mode, None);
+        assert!(rows[0].armed());
+        assert!(rows[0].channels.is_empty());
     }
 
     #[test]

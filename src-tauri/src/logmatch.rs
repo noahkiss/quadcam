@@ -954,12 +954,7 @@ mod tests {
                 v.push(LogRow {
                     time: t,
                     sticks: None,
-                    roll: None,
-                    pitch: None,
-                    rx_bat: None,
-                    lq: None,
-                    rssi: None,
-                    model: None,
+                    ..LogRow::at(t)
                 });
                 t += Duration::milliseconds(500);
             }

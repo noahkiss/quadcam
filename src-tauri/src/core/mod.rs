@@ -17,6 +17,7 @@ mod backup;
 mod cuts;
 mod fc;
 mod files;
+mod flights;
 mod gear;
 mod gear_card;
 mod import;
@@ -35,6 +36,10 @@ pub use backup::{
 };
 pub use fc::{BoardNotesParams, FcJob, FcPortParams, FcReadParams, UsbTimer, USB_PROBE};
 pub use files::{Moved, TrashReport};
+pub use flights::{
+    CrashSaveParams, FlightFilter, FlightFoldersParams, FlightReport, FlightSetParams, FlightsView,
+    NotesParams, PackSaveParams, PacksParams, PlaceTrend, ReportParams, TrendPoint,
+};
 pub use gear::{
     connected_name, link_handle, DeviceSaveParams, GearStatus, Hold, HookFn, HookOutcome, HookRun,
     OnConnectHook, ReminderParams, HOLD_GRACE,

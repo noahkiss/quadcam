@@ -11,8 +11,10 @@ use serde_json::Value;
 mod backup;
 mod card;
 mod fc;
+mod flights;
 mod map;
 mod osd;
+mod packs;
 
 #[derive(Subcommand)]
 pub enum GearCmd {
@@ -39,6 +41,16 @@ pub enum GearCmd {
     Map(map::MapArgs),
     /// The radio in USB Joystick mode now: buttons, axes, channel values.
     Radio(map::RadioArgs),
+    /// Flights from the radio logs: measures, pack, place, clip. `set` and `folders`.
+    Flights(flights::FlightsArgs),
+    /// The session report for a day, else the last import's days.
+    Report(flights::ReportArgs),
+    /// The "Pack up" check: packs charged, radio model, card space, backups, cards still in.
+    Preflight,
+    /// Packs with their history, pack types, the charging notes.
+    Packs(packs::PacksArgs),
+    /// The crash and repair log: list, `save`, `delete`.
+    Crashes(packs::CrashesArgs),
     /// Back up a radio card or an FC (the FC reboots); `show`, `diff` and `pin` a backup.
     Backup(backup::BackupArgs),
     /// Backups, newest first.
@@ -110,6 +122,11 @@ pub fn run(core: &Core, cmd: GearCmd) -> Result<Value> {
         GearCmd::Card(a) => card::run(core, a)?,
         GearCmd::Map(a) => map::run(core, a)?,
         GearCmd::Radio(a) => map::radio(core, a)?,
+        GearCmd::Flights(a) => flights::flights(core, a)?,
+        GearCmd::Report(a) => flights::report(core, a)?,
+        GearCmd::Preflight => flights::preflight(core)?,
+        GearCmd::Packs(a) => packs::packs(core, a)?,
+        GearCmd::Crashes(a) => packs::crashes(core, a)?,
         GearCmd::Backup(a) => backup::backup(core, a)?,
         GearCmd::Backups { device } => backup::backups(core, device)?,
         GearCmd::Storage(a) => backup::storage(core, a)?,
