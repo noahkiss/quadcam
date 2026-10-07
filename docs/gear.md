@@ -185,7 +185,63 @@ QuadCam posts through `osascript`.
 
 The `gear_on_connect` setting names the steps that run when a device of each kind is plugged in:
 `backup`, `import` and `apply_ready`. Only `backup` is on by default, and only while
-`gear_auto_backup` is on. QuadCam adds the steps themselves in later releases.
+`gear_auto_backup` is on. `backup` runs two steps: **Card check** (a card QuadCam knows) and
+**Backup** (a radio card or an FC). `import` and `apply_ready` come in later releases.
+
+## Backups
+
+QuadCam keeps backups in the gear folder (`gear_dir`). A backup of a radio holds every file on
+its SD card except `LOGS/`. A backup of a flight controller holds `version`, `status`,
+`diff all` and `dump all`, read through the CLI, so the FC reboots after it.
+
+- **Each file once.** Backups share files: QuadCam stores each file once by its content, under
+  `blobs/`, and a backup is a short list of files in `snapshots/<device>/`. Sound files cost
+  their size once.
+- **Nothing new, nothing kept.** A backup whose files equal the latest one writes nothing. The
+  FC's `status` (uptime, load) does not count.
+- **Slow links.** A radio over USB reads about 0.5 MB/s. QuadCam reads only files whose size or
+  modified time changed since the latest backup, and shows its progress. **Stop** ends a
+  backup between files; no backup is saved.
+- **Radio logs** are flight data, not backup content. Each log is kept once per radio in
+  `logs/<radio>/`. A log that grew replaces the kept one; a log that changed another way is kept
+  as a second file (`<name> (2).csv`). Logs are never pruned.
+- **Retention** (Settings > Gear): backups taken before an apply or a flash and pinned backups
+  stay. Of the rest, QuadCam keeps the newest `gear_keep_recent` (10), then one a week for
+  `gear_keep_weeks` (8), then one a month (`gear_keep_monthly`). Pruning runs after each new
+  backup, then removes stored files no backup, log or staged change uses.
+
+On a device page, **Backups** lists the device's backups. Pick one to see its changes from the
+backup before it, or its files and each text file. **Pinned** keeps a backup. **Back up now**
+backs the device up.
+
+**Gear > Storage** shows the gear folder's size in total and per device. **Prune now** shows
+what would go and asks first. **Export…** writes a device's backups as plain folders, one per
+backup. **Import backups…** takes an old backup folder:
+
+- a folder with `RADIO/radio.yml` or `MODELS/` is a radio card copy; its `LOGS/` go to the
+  log store;
+- `<name>.diff_all.txt` and `<name>.dump_all.txt` in one folder are one FC backup; a text file
+  that reads as Betaflight `diff all` or `dump all` output counts too;
+- a plain `LOGS/` folder gives logs only.
+
+Each is dated from a `YYYY-MM-DD` in its folder names, else its newest file. An FC's MCU id
+names its device. A card copy goes to the one saved radio with its board; when no saved radio
+or more than one matches, the import skips it and says so (pass a device on the command line).
+A copy the same as a backup QuadCam has from that day or before is not kept twice. The import
+shows what it would do first, and never changes the folder.
+
+## Card check
+
+Pulling a card while it is mounted can leave its file system damaged. Before QuadCam backs up
+a card it knows (on connect), it runs `diskutil verifyVolume` on it: read-only, about 30
+seconds over a radio's USB. The card unmounts and mounts again while it is checked. **Stop**
+ends a check. The result shows on the device's **Backups** segment, and a failed check marks
+the device **Needs attention**. The backup still runs.
+
+After a failed check, **Repair…** asks first, backs the card up when it can read it (that
+backup is always kept), runs `diskutil repairVolume`, and checks the card again. A repair
+cannot be stopped once it starts. Neither command needs an administrator password. QuadCam logs
+each check per card in `health/<device>.jsonl` in the gear folder.
 
 ## OSD
 
@@ -210,15 +266,16 @@ profile, and checks each screen.
   lists and says so.
 
 Open a flight controller's page under **Gear > Devices** and choose **OSD**, then **Open
-dump…**. Once QuadCam keeps device backups, the page will show the FC's latest backup.
+dump…**. A saved FC with a backup shows its latest backup's `dump all` until you open a file.
 
 ## Switch map
 
 The switch map says what each radio control does, position by position. Open a flight
-controller's or a radio's page under **Gear > Devices** and choose **Switches**. Then open the
-radio's card (**Open card…**: a mounted card or a copy of its folder) or one model file
-(**Open model…**), and the FC's dump (**Open dump…**). Once QuadCam keeps device backups, the
-page will show the latest ones.
+controller's or a radio's page under **Gear > Devices** and choose **Switches**. A device with a
+backup shows the latest backups of its aircraft's radio and FC (or its own, with no aircraft);
+the radio's model is the one the aircraft profile names under EdgeTX models, else the radio's
+selected model. To read files instead, open the radio's card (**Open card…**: a mounted card or
+a copy of its folder) or one model file (**Open model…**), and the FC's dump (**Open dump…**).
 
 - **Rows:** each switch (with its type from `radio.yml`: 2-position, 3-position or toggle),
   each trim used as a switch, and each stick a logical switch reads.
@@ -271,7 +328,18 @@ quadcam-cli --json gear card [--mount M | --device ID] [--model model01.yml]
 quadcam-cli --json gear card preview --edits edits.json   # checks and diff; writes nothing
 quadcam-cli gear map --radio /Volumes/RADIO --fc quad.diff_all.txt --text   # the switch map
 quadcam-cli --json gear map --radio model01.yml --fc quad.dump_all.txt --live   # positions now
+quadcam-cli gear map --aircraft Whoop --text         # from the latest backups of its radio and FC
 quadcam-cli --json gear radio                        # the radio in USB Joystick mode now
+quadcam-cli --json gear backup [--device ID | --port P | --mount M]   # back up a radio card or an FC
+quadcam-cli --json gear backups [--device ID]        # newest first
+quadcam-cli --json gear backup show <backup> [PATH]  # its files, or one file
+quadcam-cli --json gear backup diff <a> [<b>] [--path P]   # from the backup before a, or a to b
+quadcam-cli --json gear backup pin <backup> [--off]
+quadcam-cli --json gear storage [--prune [--dry-run]] [--export <backup|device> DIR]
+quadcam-cli --json gear import-backups FOLDER [--device ID] [--dry-run]
+quadcam-cli --json gear card-check [--device ID | --mount M] [--log]
+quadcam-cli --json gear card-repair --check <check id> --yes
+quadcam-cli --json gear stop <handle>                # stop a backup or card check
 ```
 
 An edits file is a list. Each edit is a model (`{"kind": "model", "file": "model01.yml",

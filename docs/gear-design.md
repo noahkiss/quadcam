@@ -198,9 +198,10 @@ existing logic modules. `core/gear.rs` holds the `Core` methods; `api/gear.rs` t
 | `gear/edgetx/card.rs` | The SD card: `RADIO/radio.yml`, `MODELS/`, `SOUNDS/`, `SCRIPTS/`, `LOGS/`; identity (board, `semver`), the selected model, the radio clock check; `Card::plan` (edits to bytes, checks, diff; writes nothing), `write` (per-file temp + rename + `F_FULLFSYNC` + read-back, stop between files, timeouts), `release` (unmount under a timeout) | `edgetx/model` |
 | `gear/edgetx/synth.rs` | The synthetic card generator: radio and model files in the 2.12 saved and 2.10 hand-edited layouts, CRLF or LF, made-up names | none |
 | `gear/compat.rs` | The table of proven versions: EdgeTX boards and versions, Betaflight versions, ELRS targets, splash layouts, sim file versions. Data, reviewed per release | none |
-| `gear/blobs.rs` | The content-addressed blob store: put, get, verify, garbage-collect (section 7.1) | `store`, `xxhash-rust` |
-| `gear/backup.rs` | Takes, lists, reads, diffs, retains and prunes snapshots; imports old backup folders | `blobs`, `bf`, `edgetx` |
-| `gear/radiologs.rs` | Stores each radio log once, outside snapshots; feeds `flights` | `blobs`, `logs` |
+| `gear/blobs.rs` | The content-addressed blob store: put, get, verify, garbage-collect (section 7.1). Built (WP4) | `store`, `xxhash-rust` |
+| `gear/backup.rs` | Takes, lists, reads, diffs, retains and prunes snapshots; imports old backup folders. Built (WP4) | `blobs`, `bf`, `edgetx` |
+| `gear/radiologs.rs` | Stores each radio log once, outside snapshots; feeds `flights`. Built (WP4) | `store` |
+| `gear/health.rs` | The card check and repair (`diskutil verifyVolume`/`repairVolume`) and its log. Built (WP4) | `store` |
 | `gear/changes.rs` | Staged changes: create, edit, order, status; builds an `ApplyPlan` with its digest | `store`, `bf/dump`, `edgetx` |
 | `gear/apply.rs` | The one apply engine: guards, backup, write, read back, verify, record. Per-device writers below | `changes`, `backup` |
 | `gear/apply/fc.rs`, `apply/card.rs`, `apply/sim.rs` | The writers for an FC (CLI), an SD card (files), a sim (files) | the above |
@@ -234,7 +235,8 @@ no GPL tool.
 | Aircraft profiles | `settings.json` `profiles` (existing) | `Profile` gains optional gear links (below). Old files load unchanged |
 | Snapshots | `<gear>/snapshots/<device-id>/<YYYY-MM-DDTHHMMSS>-<trigger>.json` | A manifest: path → hash, size, mtime. A few KB |
 | Blobs | `<gear>/blobs/<xx>/<hash>` | Every file stored once by content (SD files, FC `diff all`/`dump all`, sim files). Plain bytes, uncompressed |
-| Radio logs | `<gear>/logs/<radio-id>/<file name>.csv` → blob | Each log stored once, not part of any snapshot (section 7.1) |
+| Radio logs | `<gear>/logs/<radio-id>/<file name>.csv` | Each log stored once as a plain file, not part of any snapshot (section 7.1) |
+| Card checks | `<gear>/health/<device-id>.jsonl` | One line per verify or repair (7.1) |
 | Staged changes | `<gear>/changes/<YYYY-MM-DD>-<device-slug>-<n>/` | `change.json`, `before/`, `after/`, `apply.cli` or file diffs, `report.json`. The same shape as a hand-kept staging folder |
 | Bench history | `<gear>/changes/` (applied ones) | The log of what was applied, verified or reverted |
 | Downloads | `~/Library/Caches/app.quadcam/firmware/<product>/<version>/` | With a SHA-256 per file |
@@ -344,6 +346,10 @@ in `specta_builder` (`lib.rs`).
 | `gear_backups` | `BackupFilter` → `Vec<Backup>` | no |
 | `gear_backup_read` | `BackupReadParams { id, path }` → `BackupContent` | no |
 | `gear_backup_diff` | `BackupDiffParams { a, b, path }` → `Vec<DiffItem>` | no |
+| `gear_backup_pin` | `BackupPinParams { id, pinned }` → `BackupSummary` | gear folder |
+| `gear_card_check` / `gear_card_checks` | `CardCheckParams { device or mount }` / `{ device }` → `CardCheck` / `Vec<CardCheck>` | health log |
+| `gear_card_repair` | `CardRepairParams { check, confirm }` → `RepairResult` | **card file system** |
+| `gear_stop` | `StopParams { handle }` → `bool` | no |
 | `gear_storage` | – → `StorageView` (totals, per device, snapshot counts) | no |
 | `gear_prune` | `PruneParams { dry_run }` → `PruneReport` | gear folder |
 | `gear_export` | `ExportParams { device or snapshot, to }` → `ExportReport` | a folder the user picked |
@@ -768,6 +774,37 @@ any diff tool on an export.
 **Browse:** a file tree per snapshot, text files shown, a diff between any two snapshots of a
 device. **Restore** stages a change (section 8), never a direct write.
 
+**Built (WP4).** `gear/blobs.rs` (blob key `<xxh64>-<size>`, so files of different sizes never
+share a name; a key with other bytes refuses; temp + fsync + rename; `store.lock` held by every
+snapshot from first blob to manifest and by collection), `gear/backup.rs` (`Snapshots`: take a
+card with the size+mtime skip, progress and stop; take FC files; read, diff, pin, `thin`,
+prune, storage, export, `import`), `gear/radiologs.rs`, `gear/health.rs` (the card check
+below), `core/backup.rs` (`backup_hooks`: "Card check" and "Backup", registered by the app;
+jobs with progress in `GearStatus.jobs` and `gear_stop`). Choices made in the build:
+
+- Radio logs are plain CSV files in `logs/<radio>/` (not blobs), so the flight index reads a
+  folder. A second copy is `<name> (2).csv`. The stored file takes the source's mtime, so an
+  unchanged log is not read again.
+- A snapshot before an apply or a flash is always written, even when its files equal the
+  latest (its blobs are shared). `Trigger::Import` is thinned like plug-in snapshots.
+- An FC's `status` never makes a snapshot new (`backup::VOLATILE`).
+- Pruning runs after a new plug-in or manual snapshot, not after an import.
+- An import item equal to a snapshot of the same day, or the newest one before it, is
+  `same`. A card copy goes to a QuadCam marker's device, else the one saved radio with its
+  board, else the `device` passed; an FC to its `mcu_id` (saved as a new device), else the same
+  board rule.
+- Goggles and DVR cards get the card check, not a backup.
+
+**Card check (WP4, on connect).** Before the on-connect backup of a card QuadCam knows,
+`diskutil verifyVolume` runs on it (read-only; tested on a FAT32 disk image 2026-10-07: no
+admin for verify or repair; a damaged FAT gives fsck exit 206 and `-69845`). The result goes to
+`<gear>/health/<device>.jsonl` and `GearStatus.card_checks`; a failure fails the "Card check"
+step (its cue plays) and the backup still runs. A verify can be stopped (QuadCam then runs
+`mountDisk`); a repair cannot. `gear_card_repair` needs the failed check's id and `confirm`,
+backs the card up first (`BeforeApply`, always kept) when it reads, repairs, and checks again.
+Every `diskutil` run goes through `health::DiskRunner`; a cargo process gets `NoDisk` unless
+`QUADCAM_SERIAL=real`.
+
 ### 7.2 Switch map
 
 One table per aircraft. Rows: each physical control (switches, trims used as switches,
@@ -811,7 +848,10 @@ FC effect (`aux` modes, `adjrange` selections such as rate or OSD profile), the 
   and radio pages, the Controls page under Gear (sticks in Mode 1-4, the `stickMode` setting;
   channels; buttons; the map marked live), and the shared stick widget
   (`components/gear/Sticks.tsx`) the built-in sim can reuse.
-- Until WP4's backups exist, `aircraft` refuses and the sources are files.
+- Sources: files, or the latest backups of saved devices (`devices`), or of the radio and FC
+  saved with an `aircraft`. From a radio backup the model is the one named, else the one whose
+  header name the profile's `edgetx_models` lists, else the selected one. Each source names its
+  backup's date.
 
 ### 7.3 OSD
 

@@ -68,5 +68,18 @@ expression: "Core::METHODS"
   "gear_card_preview",
   "gear_switch_map",
   "gear_radio",
-  "gear_radio_watch"
+  "gear_radio_watch",
+  "gear_backup",
+  "gear_backups",
+  "gear_backup_read",
+  "gear_backup_diff",
+  "gear_backup_pin",
+  "gear_storage",
+  "gear_prune",
+  "gear_export",
+  "gear_import_backups",
+  "gear_card_check",
+  "gear_card_checks",
+  "gear_card_repair",
+  "gear_stop"
 ]

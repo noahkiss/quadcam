@@ -20,19 +20,27 @@
 //! - `switchmap`: the switch map: an EdgeTX model joined with the FC's `aux` and `adjrange`
 //!   lines, per control and position; live positions from channel values.
 //! - `radio_hid`: the radio as a USB joystick (hidapi): reports, channels, the watch.
+//! - `blobs`: the content-addressed blob store under the backups.
+//! - `backup`: snapshots: take, list, read, diff, retain, prune, export, import old folders.
+//! - `radiologs`: each radio log kept once per radio, outside snapshots.
+//! - `health`: the card check (`diskutil verifyVolume`) and repair, and their log.
 //!
 //! `Env` is what Gear reaches outside the process (serial ports, volumes, presence, the cue
 //! sink); tests replace it.
 
+pub mod backup;
 pub mod bf;
+pub mod blobs;
 pub mod compat;
 pub mod cues;
 pub mod detect;
 pub mod edgetx;
 pub mod events;
+pub mod health;
 pub mod model;
 pub mod osd;
 pub mod radio_hid;
+pub mod radiologs;
 pub mod serial;
 pub mod store;
 pub mod switchmap;
@@ -195,6 +203,8 @@ pub struct Env {
     pub cues: Arc<cues::CueService>,
     /// Unmounts a card's whole disk (`disk4`) under a timeout (`edgetx::card::release`).
     pub unmount: UnmountFn,
+    /// Runs `diskutil` for the card check and repair (`health`).
+    pub disk: Arc<dyn health::DiskRunner>,
 }
 
 impl Env {
@@ -209,10 +219,12 @@ impl Env {
             usb: Arc::new(detect::usb_storage),
             cues: Arc::new(cues::CueService::system()),
             unmount: Arc::new(|d| edgetx::card::release(d, edgetx::card::UNMOUNT_TIMEOUT)),
+            disk: health::system(),
         }
     }
 
-    /// Fixed volumes and these ports; no DFU devices, nothing present, silent cues.
+    /// Fixed volumes and these ports; no DFU devices, nothing present, silent cues, a
+    /// `diskutil` whose checks pass.
     pub fn fake(volumes: Vec<Volume>, ports: Arc<dyn serial::Ports>) -> Self {
         Self {
             ports,
@@ -225,6 +237,7 @@ impl Env {
                 cues::RecordedCues::default(),
             ))),
             unmount: Arc::new(|_| Ok(())),
+            disk: Arc::new(health::FakeDisk::ok()),
         }
     }
 

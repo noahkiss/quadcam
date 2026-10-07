@@ -1,8 +1,8 @@
 //! `Core`'s switch map (design 7.2) and the radio as a USB joystick.
 //!
 //! - `gear_switch_map` reads an EdgeTX card folder (or one model file) and Betaflight dump,
-//!   diff or CLI files, and builds the map. A device's latest backup (WP4) joins here as
-//!   another source of the same files. With `live`, it marks each control's position from
+//!   diff or CLI files, or the latest backups of saved devices (an aircraft's radio and FC),
+//!   and builds the map. With `live`, it marks each control's position from
 //!   the FC's `MSP_RC` (one short MSP exchange, no cue, the port released after it), else
 //!   from the radio's joystick.
 //! - `gear_radio` is one look at the radio in USB Joystick mode.
@@ -40,10 +40,14 @@ pub struct SwitchMapParams {
     /// lines win.
     #[serde(default)]
     pub fc: Vec<PathBuf>,
-    /// An aircraft profile: its radio's and FC's latest backups. Not available until
-    /// backups exist.
+    /// An aircraft profile: the latest backups of the saved devices linked to it (its radio
+    /// and its FC). The radio's model is the one whose name the profile's EdgeTX models
+    /// list, else the radio's selected model.
     #[serde(default)]
     pub aircraft: Option<String>,
+    /// Saved device ids whose latest backups to read: an FC's dump, a radio's card.
+    #[serde(default)]
+    pub devices: Vec<String>,
     /// Mark where each control is now: the FC's channels (`MSP_RC`) when an FC is plugged
     /// in, else the radio's joystick.
     #[serde(default)]
@@ -100,62 +104,144 @@ fn file_name(p: &Path) -> String {
         .unwrap_or_else(|| p.display().to_string())
 }
 
-/// The track names in `SOUNDS/<lang>/`, lower case, without extension.
-fn sounds(root: &Path, lang: &str) -> std::collections::BTreeSet<String> {
-    std::fs::read_dir(root.join("SOUNDS").join(lang))
-        .map(|rd| {
-            rd.filter_map(|e| e.ok())
-                .filter_map(|e| {
-                    let p = e.path();
-                    (p.extension()?.to_str()?.eq_ignore_ascii_case("wav"))
-                        .then(|| p.file_stem()?.to_str().map(|s| s.to_ascii_lowercase()))
-                        .flatten()
-                })
-                .collect()
-        })
-        .unwrap_or_default()
+/// A card to read the radio side from: a folder, or a radio's backup.
+trait CardSource {
+    fn read(&self, rel: &str) -> Option<Vec<u8>>;
+    /// Every file's path from the card's root.
+    fn files(&self) -> Vec<String>;
 }
 
-/// Reads the radio side: the model, its inputs and limits, the switch types, the sounds.
-fn read_radio(path: &Path, model: Option<&str>, inputs: &mut Inputs) -> Result<()> {
-    let (root, model_path) = if path.is_dir() {
-        let card = Card::open(path)
-            .with_context(|| format!("{} is not an EdgeTX card", path.display()))?;
-        let file = match model.map(str::trim).filter(|m| !m.is_empty()) {
-            Some(m) => m.to_string(),
-            None => card.selected_model().ok_or_else(|| {
-                anyhow::anyhow!(
-                    "{} names no selected model; pass a model file name.",
-                    path.display()
-                )
-            })?,
-        };
-        (Some(path.to_path_buf()), path.join("MODELS").join(file))
-    } else {
-        // MODELS/modelNN.yml on a card copy: radio.yml is two folders up.
-        let root = path
-            .parent()
-            .and_then(Path::parent)
-            .filter(|r| r.join("RADIO/radio.yml").is_file())
-            .map(Path::to_path_buf);
-        (root, path.to_path_buf())
-    };
-    let bytes = read_file(&model_path, "an EdgeTX model file")?;
-    let name = file_name(&model_path);
-    let doc = Doc::parse(&name, &bytes).map_err(|r| anyhow::anyhow!(r.reason))?;
-    let view = em::view(&name, &doc).map_err(|r| anyhow::anyhow!(r.reason))?;
+struct Folder(PathBuf);
+
+impl CardSource for Folder {
+    fn read(&self, rel: &str) -> Option<Vec<u8>> {
+        read_file(&self.0.join(rel), "a card file").ok()
+    }
+    fn files(&self) -> Vec<String> {
+        crate::gear::backup::card_files(&self.0)
+            .map(|v| v.into_iter().map(|(p, _, _)| p).collect())
+            .unwrap_or_default()
+    }
+}
+
+struct InBackup<'a> {
+    snaps: &'a crate::gear::backup::Snapshots,
+    backup: crate::gear::model::Backup,
+}
+
+impl CardSource for InBackup<'_> {
+    fn read(&self, rel: &str) -> Option<Vec<u8>> {
+        let f = self.backup.files.iter().find(|f| f.path == rel)?;
+        self.snaps
+            .blobs()
+            .get(&crate::gear::backup::blob_of(f))
+            .ok()
+    }
+    fn files(&self) -> Vec<String> {
+        self.backup.files.iter().map(|f| f.path.clone()).collect()
+    }
+}
+
+/// Reads one model file into the inputs.
+fn read_model(name: &str, bytes: &[u8], inputs: &mut Inputs) -> Result<()> {
+    let doc = Doc::parse(name, bytes).map_err(|r| anyhow::anyhow!(r.reason))?;
+    let view = em::view(name, &doc).map_err(|r| anyhow::anyhow!(r.reason))?;
     inputs.expos = switchmap::expos(&doc);
     inputs.limits = switchmap::limits(&doc);
     inputs.model = Some(view);
+    Ok(())
+}
+
+/// Reads `radio.yml` (switch types, sound language) and the sound files, when there.
+fn read_radio_yml(card: &dyn CardSource, inputs: &mut Inputs) -> Option<Doc> {
+    let b = card.read("RADIO/radio.yml")?;
+    let rd = Doc::parse("radio.yml", &b).ok()?;
+    inputs.switches = switchmap::switch_types(&rd);
+    let dir = format!("SOUNDS/{}/", switchmap::tts_language(&rd));
+    inputs.sounds = Some(
+        card.files()
+            .iter()
+            .filter_map(|p| p.strip_prefix(&dir))
+            .filter_map(|n| {
+                let (stem, ext) = n.rsplit_once('.')?;
+                (ext.eq_ignore_ascii_case("wav") && !stem.contains('/'))
+                    .then(|| stem.to_ascii_lowercase())
+            })
+            .collect(),
+    );
+    Some(rd)
+}
+
+/// The radio side from a card: the model named, else the one whose header name is in
+/// `names`, else the selected one.
+fn read_card(
+    card: &dyn CardSource,
+    model: Option<&str>,
+    names: &[String],
+    label: &str,
+    inputs: &mut Inputs,
+) -> Result<()> {
+    let rd = read_radio_yml(card, inputs);
+    let models: Vec<String> = card
+        .files()
+        .into_iter()
+        .filter(|p| p.starts_with("MODELS/") && p.ends_with(".yml"))
+        .collect();
+    let by_name = || {
+        models.iter().find(|m| {
+            card.read(m)
+                .and_then(|b| Doc::parse(m, &b).ok())
+                .and_then(|d| em::model_name(&d).ok().flatten())
+                .is_some_and(|n| names.iter().any(|x| x.eq_ignore_ascii_case(&n)))
+        })
+    };
+    let file = match model.map(str::trim).filter(|m| !m.is_empty()) {
+        Some(m) => format!("MODELS/{m}"),
+        None => match by_name() {
+            Some(m) => m.clone(),
+            None => format!(
+                "MODELS/{}",
+                rd.as_ref()
+                    .and_then(crate::gear::edgetx::card::selected_in)
+                    .ok_or_else(|| anyhow::anyhow!(
+                        "{label} names no selected model; pass a model file name."
+                    ))?
+            ),
+        },
+    };
+    let bytes = card
+        .read(&file)
+        .ok_or_else(|| anyhow::anyhow!("{label} has no {file}."))?;
+    let name = file.trim_start_matches("MODELS/").to_string();
+    read_model(&name, &bytes, inputs)?;
+    inputs.sources.push(format!("{label} {name}"));
+    Ok(())
+}
+
+/// Reads the radio side from a card folder or one model file.
+fn read_radio(path: &Path, model: Option<&str>, inputs: &mut Inputs) -> Result<()> {
+    if path.is_dir() {
+        Card::open(path).with_context(|| format!("{} is not an EdgeTX card", path.display()))?;
+        return read_card(
+            &Folder(path.to_path_buf()),
+            model,
+            &[],
+            &file_name(path),
+            inputs,
+        );
+    }
+    let bytes = read_file(path, "an EdgeTX model file")?;
+    let name = file_name(path);
+    read_model(&name, &bytes, inputs)?;
     inputs.sources.push(name);
-    if let Some(root) = root {
-        let radio = root.join("RADIO/radio.yml");
-        if let Ok(b) = read_file(&radio, "radio.yml") {
-            if let Ok(rd) = Doc::parse("radio.yml", &b) {
-                inputs.switches = switchmap::switch_types(&rd);
-                inputs.sounds = Some(sounds(&root, &switchmap::tts_language(&rd)));
-                inputs.sources.push("radio.yml".into());
-            }
+    // MODELS/modelNN.yml on a card copy: radio.yml is two folders up.
+    if let Some(root) = path
+        .parent()
+        .and_then(Path::parent)
+        .filter(|r| r.join("RADIO/radio.yml").is_file())
+    {
+        if read_radio_yml(&Folder(root.to_path_buf()), inputs).is_some() {
+            inputs.sources.push("radio.yml".into());
         }
     }
     Ok(())
@@ -175,19 +261,64 @@ impl Core {
     /// The switch map from the files given; with `live`, the controls' positions now.
     /// Reads only.
     pub fn gear_switch_map(&self, p: &SwitchMapParams) -> Result<SwitchMap> {
-        if let Some(a) = p.aircraft.as_deref().filter(|a| !a.trim().is_empty()) {
-            bail!(
-                "No backups to read for aircraft {a:?} yet: pass the radio's card or model file and the FC's dump. Device backups come in a later version."
-            );
+        let mut devices = p.devices.clone();
+        let mut names = Vec::new();
+        if let Some(a) = p
+            .aircraft
+            .as_deref()
+            .map(str::trim)
+            .filter(|a| !a.is_empty())
+        {
+            let linked: Vec<String> = self
+                .gear_store()
+                .devices()?
+                .into_iter()
+                .filter(|d| d.aircraft.as_deref() == Some(a))
+                .map(|d| d.id)
+                .collect();
+            if linked.is_empty() {
+                bail!("No saved device is linked to aircraft {a:?} (quadcam-cli gear devices save <id> --aircraft {a:?}).");
+            }
+            devices.extend(linked);
+            if let Some(pr) = self.profiles()?.0.into_iter().find(|x| x.name == a) {
+                names = pr.edgetx_models;
+            }
         }
-        if p.radio.is_none() && p.fc.is_empty() {
-            bail!("Pass an EdgeTX card or model file, a Betaflight dump, or both.");
+        if p.radio.is_none() && p.fc.is_empty() && devices.is_empty() {
+            bail!("Pass an EdgeTX card or model file, a Betaflight dump, a device or an aircraft.");
         }
         let mut inputs = Inputs::default();
+        let mut texts = Vec::new();
+        let snaps = crate::gear::backup::Snapshots::new(self.gear_store());
+        for id in &devices {
+            let Some(b) = snaps.latest(id) else {
+                bail!("No backup of {id:?} yet: back it up, or pass its files.");
+            };
+            let date = b.taken_at.format("%Y-%m-%d %H:%M").to_string();
+            if let Some(f) = ["dump all", "diff all"]
+                .iter()
+                .find_map(|c| b.files.iter().find(|f| f.path == *c))
+            {
+                let bytes = snaps.blobs().get(&crate::gear::backup::blob_of(f))?;
+                texts.push(String::from_utf8_lossy(&bytes).into_owned());
+                inputs.sources.push(format!("{id} {} ({date})", f.path));
+            } else if b.files.iter().any(|f| f.path == "RADIO/radio.yml") && p.radio.is_none() {
+                let label = format!("{id} ({date})");
+                read_card(
+                    &InBackup {
+                        snaps: &snaps,
+                        backup: b,
+                    },
+                    p.model.as_deref(),
+                    &names,
+                    &label,
+                    &mut inputs,
+                )?;
+            }
+        }
         if let Some(r) = &p.radio {
             read_radio(r, p.model.as_deref(), &mut inputs)?;
         }
-        let mut texts = Vec::new();
         for f in &p.fc {
             let b = read_file(f, "a Betaflight dump, diff or CLI file")?;
             texts.push(String::from_utf8_lossy(&b).into_owned());

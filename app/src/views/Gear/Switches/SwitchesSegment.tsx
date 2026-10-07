@@ -1,8 +1,8 @@
 // The Switches segment (design 7.2): what each radio control does, from an EdgeTX card or
 // model file and the FC's dump, with the position each control is in now. Live comes from
 // the radio in USB Joystick mode, or from the FC's channels over MSP once a second. The FC
-// and radio device pages mount it (`views/Gear/segments.tsx`); WP4's backups replace the
-// file pickers as the default source.
+// and radio device pages mount it (`views/Gear/segments.tsx`). A device with a backup shows
+// its aircraft's latest backups (or its own) until files are picked.
 import { useEffect, useState } from "react";
 import { Banner } from "../../../components/Banner";
 import { SegmentedControl } from "../../../components/SegmentedControl";
@@ -21,7 +21,8 @@ type LiveSource = "off" | "radio" | "fc";
 const FC_POLL_MS = 1000;
 
 export function SwitchesSegment({ d }: { d?: DeviceRef }) {
-  const m = useSwitchMap();
+  const dev = d?.device;
+  const m = useSwitchMap(dev?.last_backup ? (dev.aircraft ? { aircraft: dev.aircraft } : { devices: [dev.id] }) : null);
   const [source, setSource] = useState<LiveSource>("off");
   const connected = useStore((s) => s.gear?.connected);
   const fcs = (connected ?? []).filter((c) => c.kind === "fc" && c.link.kind === "serial");
@@ -34,7 +35,7 @@ export function SwitchesSegment({ d }: { d?: DeviceRef }) {
     if (source !== "fc" || !m.map) return;
     let gone = false;
     const read = () =>
-      api.gearSwitchMap({ radio: m.src.radio, fc: m.src.fc, live: true, port }).then(
+      api.gearSwitchMap({ ...m.params, live: true, port }).then(
         (x) => {
           if (gone) return;
           setFcLive(x.live);
@@ -51,7 +52,8 @@ export function SwitchesSegment({ d }: { d?: DeviceRef }) {
       window.clearInterval(t);
       setFcLive(null);
     };
-  }, [source, m.map, m.src, port]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- m.params follows m.map
+  }, [source, m.map, port]);
 
   const live = !m.map ? null : source === "fc" ? fcLive : source === "radio" && radio?.frame ? liveOf(m.map, "radio", radio.frame.channels) : null;
 

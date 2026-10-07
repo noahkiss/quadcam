@@ -13,6 +13,7 @@ use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 
+mod backup;
 mod cuts;
 mod fc;
 mod files;
@@ -27,6 +28,11 @@ mod rematch;
 mod setup;
 mod switchmap;
 pub use crate::paths::{cache_dir, default_session_file, default_settings_file, support_dir};
+pub use backup::{
+    backup_hooks, BackupDiffParams, BackupFilter, BackupParams, BackupPinParams, BackupReadParams,
+    BackupResult, BackupSummary, CardCheckParams, CardChecksParams, CardRepairParams, ExportParams,
+    GearJob, ImportBackupsParams, PruneParams, RepairResult, StopParams,
+};
 pub use fc::{BoardNotesParams, FcJob, FcPortParams, FcReadParams, UsbTimer, USB_PROBE};
 pub use files::{Moved, TrashReport};
 pub use gear::{
@@ -228,6 +234,8 @@ pub struct Core {
     modules: crate::modules::Modules,
     /// The radio as a USB joystick, and its stream (`core/switchmap.rs`).
     radio: switchmap::RadioState,
+    /// Backups and card checks running now, by link (`core/backup.rs`).
+    gear_jobs: Mutex<std::collections::HashMap<String, backup::JobSlot>>,
 }
 
 struct Busy<'a>(&'a AtomicBool);
@@ -275,6 +283,7 @@ impl Core {
             cache,
             modules: crate::modules::Modules::default(),
             radio: switchmap::RadioState::default(),
+            gear_jobs: Mutex::default(),
         }
     }
 

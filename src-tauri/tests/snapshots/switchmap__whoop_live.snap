@@ -3,7 +3,7 @@ source: tests/switchmap.rs
 expression: "switchmap::render_text(&m)"
 ---
 Switch map: WHOOP ONE
-Read: model00.yml, radio.yml, fc.diff_all.txt
+Read: whoop model00.yml, fc.diff_all.txt
 Sticks: Roll CH1 100%, Pitch CH2 100%, Throttle CH3 100%, Yaw CH4 100%
 
 SA (2POS)

@@ -21,6 +21,7 @@ import type {
 } from "../types";
 import * as seed from "./seed";
 import * as gear from "./gear";
+import * as backups from "./backups";
 import { location as normLocation, spans as normSpans } from "../normalize";
 import { live as liveOf } from "../../lib/controls";
 
@@ -32,6 +33,8 @@ const DISPATCH = new Set([
   "modules", "module_install", "module_remove", "modules_check", "gear_osd",
   "gear_status", "gear_devices", "gear_device_save", "gear_device_forget", "gear_dismiss_reminder",
   "gear_switch_map", "gear_radio", "gear_radio_watch",
+  "gear_backup", "gear_backups", "gear_backup_read", "gear_backup_diff", "gear_backup_pin", "gear_storage", "gear_prune",
+  "gear_export", "gear_import_backups", "gear_card_check", "gear_card_checks", "gear_card_repair", "gear_stop",
 ]);
 
 export type Scenario = "library" | "empty" | "card" | "review" | "joined" | "finished-card" | "dji" | "no-tools" | "many" | "gear";
@@ -266,7 +269,8 @@ export class MockCore {
       }
       case "gear_switch_map": {
         const fc = (p.fc as string[] | undefined) ?? [];
-        if (!p.radio && !fc.length) throw "Pass an EdgeTX card or model file, a Betaflight dump, or both.";
+        const devs = (p.devices as string[] | undefined) ?? [];
+        if (!p.radio && !fc.length && !p.aircraft && !devs.length) throw "Pass an EdgeTX card or model file, a Betaflight dump, a device or an aircraft.";
         const m = seed.switchMap();
         const channels = (p.channels as number[] | undefined) ?? [];
         if (channels.length) m.live = liveOf(m, "given", channels);
@@ -285,11 +289,54 @@ export class MockCore {
         this.radio.watching = !!p.on;
         if (this.radio.watching) this.emitRadio();
         return this.radio.watching;
+      case "gear_backup":
+        return this.gearBackup(p);
+      case "gear_backups":
+        return backups.list(this.gear, (p.device as string | null) ?? null);
+      case "gear_backup_read":
+        return backups.read(this.gear, String(p.id), (p.path as string | null) ?? null);
+      case "gear_backup_diff":
+        return backups.diff(this.gear, String(p.a), (p.b as string | null) ?? null);
+      case "gear_backup_pin":
+        return backups.pin(this.gear, String(p.id), !!p.pinned);
+      case "gear_storage":
+        return backups.storage(this.gear, gear.gearStatus(this.gear, this.settings.values).gear_dir);
+      case "gear_prune": {
+        const r = backups.prune(this.gear, !!p.dry_run);
+        if (!p.dry_run) this.emit("gear-changed");
+        return r;
+      }
+      case "gear_export": {
+        const ids = p.snapshot ? [String(p.snapshot)] : backups.list(this.gear, String(p.device)).map((b) => b.id);
+        if (!ids.length) throw "That device has no backups.";
+        return { folders: ids.map((id) => `${p.to}/${id}`), files: ids.length * 3, bytes: ids.length * 4096 };
+      }
+      case "gear_import_backups": {
+        const r = backups.importFolder(this.gear, String(p.folder), !!p.dry_run);
+        if (!p.dry_run) this.emit("gear-changed");
+        return r;
+      }
+      case "gear_card_check": {
+        const c = backups.cardCheck(this.gear, String(p.device), new Date().toISOString());
+        this.emit("gear-changed");
+        return c;
+      }
+      case "gear_card_checks":
+        return this.gear.checks.filter((c) => c.device === p.device);
+      case "gear_card_repair": {
+        if (!p.confirm) throw "Refused: a repair writes the card's file system; it needs confirm=true.";
+        const r = backups.repair(this.gear, String(p.check), new Date().toISOString());
+        this.emit("gear-changed");
+        return r;
+      }
+      case "gear_stop":
+        return this.gear.jobs.some((j) => j.handle === p.handle);
       case "gear_osd": {
         const paths = (p.paths as string[] | undefined) ?? [];
-        if (!paths.length) throw "Pass a Betaflight dump or diff file, or a device.";
+        const dev = this.gear.devices.find((d) => d.id === p.device);
+        if (!paths.length && !dev?.last_backup) throw "Pass a Betaflight dump or diff file, or a device.";
         const v = seed.osd();
-        v.source = paths.map(base);
+        v.source = paths.length ? paths.map(base) : [`${dev!.last_backup} dump all`];
         return v;
       }
       case "modules":
@@ -322,6 +369,15 @@ export class MockCore {
     }
     this.emit("gear-changed");
     return structuredClone(d);
+  }
+
+  /** `Core::gear_backup`: the device plugged in that `p` names (or the only one). */
+  gearBackup(p: Record<string, unknown>) {
+    const c = this.gear.connected.find((x) => (p.device && x.id === p.device) || (p.mount && x.link.kind === "volume" && x.link.mount === p.mount) || (p.port && x.link.kind === "serial" && x.link.port === p.port)) || (this.gear.connected.length === 1 ? this.gear.connected[0] : undefined);
+    if (!c?.id) throw "No device: no radio card or FC is plugged in.";
+    const r = backups.take(this.gear, c.id, new Date().toISOString());
+    this.emit("gear-changed");
+    return r;
   }
 
   /** Sends `device-changed` the way the app's poll does: the events, and what is plugged in

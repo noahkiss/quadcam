@@ -1,0 +1,78 @@
+.page {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-4);
+}
+.title {
+  margin: 0;
+  font-size: var(--t-xl);
+  font-weight: 700;
+}
+.facts {
+  margin: 0;
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  column-gap: var(--s-4);
+  row-gap: var(--s-1);
+}
+.facts > div {
+  display: contents;
+}
+.facts dt {
+  color: var(--muted);
+}
+.facts dd {
+  margin: 0;
+}
+.muted {
+  color: var(--muted);
+}
+.bar {
+  display: flex;
+  gap: var(--s-2);
+}
+.table {
+  width: 100%;
+  border-collapse: collapse;
+}
+.table th,
+.table td {
+  padding: var(--s-1) var(--s-2);
+  border-bottom: 1px solid var(--border);
+  text-align: left;
+}
+.table thead th {
+  color: var(--muted);
+  font-weight: 600;
+}
+.table tbody th {
+  font-weight: 600;
+}
+.table .num {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+.report h3 {
+  margin: 0 0 var(--s-2);
+  font-size: var(--t-lg);
+}
+.items {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-1);
+}
+.items li {
+  display: flex;
+  gap: var(--s-2);
+  flex-wrap: wrap;
+}
+.outcome {
+  min-width: 100px;
+  font-weight: 600;
+}
+.outcome[data-outcome="skipped"] {
+  color: var(--warning-text);
+}

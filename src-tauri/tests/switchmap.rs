@@ -195,7 +195,110 @@ fn sources_and_refusals() {
             ..Default::default()
         })
         .unwrap_err();
-    assert!(e.to_string().contains("backups"));
+    assert!(e.to_string().contains("linked to aircraft"), "{e:#}");
+}
+
+fn copy_dir(from: &std::path::Path, to: &std::path::Path) {
+    std::fs::create_dir_all(to).unwrap();
+    for e in std::fs::read_dir(from).unwrap().flatten() {
+        let p = e.path();
+        if p.is_dir() {
+            copy_dir(&p, &to.join(e.file_name()));
+        } else {
+            std::fs::copy(&p, to.join(e.file_name())).unwrap();
+        }
+    }
+}
+
+#[test]
+fn an_aircraft_reads_its_radio_and_fc_backups() {
+    use quadcam_lib::core::ImportBackupsParams;
+    use quadcam_lib::gear::model::{Device, DeviceKind, Identity};
+    let dir = tempfile::tempdir().unwrap();
+    let core = plain_core(&dir);
+    let save = |id: &str, kind: DeviceKind, board: &str| {
+        core.gear_store()
+            .save_device(&Device {
+                id: id.into(),
+                kind,
+                name: String::new(),
+                aircraft: Some("Whoop".into()),
+                identity: Identity {
+                    board: Some(board.into()),
+                    ..Default::default()
+                },
+                last_seen: None,
+                last_backup: None,
+            })
+            .unwrap();
+    };
+    save("radio-00000000000000aa", DeviceKind::Radio, "pocket");
+    save("fc-00000000000000bb", DeviceKind::Fc, "S405");
+    // Old backup folders: a card copy and an FC diff, each imported to its device.
+    let old = dir.path().join("old");
+    copy_dir(
+        &fixtures().join("whoop/RADIO"),
+        &old.join("2026-10-01-radio/RADIO"),
+    );
+    copy_dir(
+        &fixtures().join("whoop/MODELS"),
+        &old.join("2026-10-01-radio/MODELS"),
+    );
+    copy_dir(
+        &fixtures().join("whoop/SOUNDS"),
+        &old.join("2026-10-01-radio/SOUNDS"),
+    );
+    std::fs::create_dir_all(old.join("2026-10-02-fc")).unwrap();
+    std::fs::copy(
+        fixtures().join("whoop/fc.diff_all.txt"),
+        old.join("2026-10-02-fc/quad.diff_all.txt"),
+    )
+    .unwrap();
+    for (sub, dev) in [
+        ("2026-10-01-radio", "radio-00000000000000aa"),
+        ("2026-10-02-fc", "fc-00000000000000bb"),
+    ] {
+        let r = core
+            .gear_import_backups(&ImportBackupsParams {
+                folder: old.join(sub),
+                device: Some(dev.into()),
+                dry_run: false,
+            })
+            .unwrap();
+        assert_eq!(r.imported, 1, "{r:?}");
+    }
+    let m = core
+        .gear_switch_map(&SwitchMapParams {
+            aircraft: Some("Whoop".into()),
+            ..Default::default()
+        })
+        .unwrap();
+    assert_eq!(m.model.as_deref(), Some("WHOOP ONE"));
+    assert_eq!(m.modes.len(), 6, "{:?} {:?}", m.sources, m.notes);
+    assert!(
+        m.sources
+            .iter()
+            .any(|s| s.starts_with("radio-00000000000000aa (2026-10-01")),
+        "{:?}",
+        m.sources
+    );
+    assert!(
+        m.sources.iter().any(|s| s.contains("diff all")),
+        "{:?}",
+        m.sources
+    );
+    // The same map as from the files, rows and conflicts alike.
+    let files = map(whoop());
+    assert_eq!(m.rows, files.rows);
+    assert_eq!(m.conflicts, files.conflicts);
+    // One device alone.
+    let m = core
+        .gear_switch_map(&SwitchMapParams {
+            devices: vec!["fc-00000000000000bb".into()],
+            ..Default::default()
+        })
+        .unwrap();
+    assert!(m.rows.is_empty() && m.modes.len() == 6);
 }
 
 #[derive(Default)]

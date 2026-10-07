@@ -19,9 +19,12 @@ pub struct MapArgs {
     /// Betaflight dump, diff or CLI files, read in order (a later file's lines win).
     #[arg(long = "fc")]
     pub fc: Vec<PathBuf>,
-    /// An aircraft profile: its radio's and FC's latest backups.
+    /// An aircraft profile: the latest backups of its saved radio and FC.
     #[arg(long)]
     pub aircraft: Option<String>,
+    /// A saved device whose latest backup to read (an FC or a radio); repeat for both.
+    #[arg(long = "device")]
+    pub devices: Vec<String>,
     /// Mark where each control is now: the FC's channels, else the radio's joystick.
     #[arg(long)]
     pub live: bool,
@@ -51,6 +54,7 @@ pub fn run(core: &Core, a: MapArgs) -> Result<Value> {
             model: a.model,
             fc: a.fc,
             aircraft: a.aircraft,
+            devices: a.devices,
             live: a.live,
             port: a.port,
             channels: a.channels,
