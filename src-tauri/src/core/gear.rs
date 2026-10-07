@@ -45,7 +45,36 @@ pub struct GearStatus {
     /// The latest card check of each card plugged in.
     #[serde(default)]
     pub card_checks: Vec<crate::gear::health::CardCheck>,
+    /// The last failed step of each device plugged in (an unmount that failed, a backup
+    /// that failed), with the reason.
+    #[serde(default)]
+    pub failures: Vec<StepFailure>,
 }
+
+/// A step that failed on a device, and why.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, specta::Type)]
+pub struct StepFailure {
+    /// The link (`link_handle`).
+    pub handle: String,
+    pub device: Option<String>,
+    /// `Unmount`, `Backup`, `Card check`, ...
+    pub step: String,
+    pub message: String,
+    pub at: chrono::DateTime<chrono::Utc>,
+}
+
+/// An on-connect step returns this error when it had nothing to do (a card QuadCam does
+/// not know yet): the step counts as off, and the run plays no cue for it.
+#[derive(Debug)]
+pub struct Skip;
+
+impl std::fmt::Display for Skip {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str("nothing to do")
+    }
+}
+
+impl std::error::Error for Skip {}
 
 /// `gear_dismiss_reminder`: a device's link, as `link_handle` names it.
 #[derive(Debug, Clone, Default, Serialize, Deserialize, specta::Type)]
@@ -113,7 +142,18 @@ impl Core {
         let settings = self.gear_settings();
         let store = Store::new(settings.gear_dir.clone());
         let connected = self.gear_connected()?;
+        let handles: Vec<String> = connected.iter().map(|c| link_handle(&c.link)).collect();
+        let mut failures: Vec<StepFailure> = self
+            .gear_failures
+            .lock()
+            .unwrap()
+            .values()
+            .filter(|f| handles.contains(&f.handle))
+            .cloned()
+            .collect();
+        failures.sort_by(|a, b| a.handle.cmp(&b.handle));
         Ok(GearStatus {
+            failures,
             gear_dir: settings.gear_dir.clone(),
             card_checks: self.gear_latest_checks(&connected),
             jobs: self.gear_jobs(),
@@ -287,8 +327,13 @@ impl Core {
     /// Runs the on-connect hooks for this device's kind, each only when the Gear settings
     /// turn its automation on for that kind. The run is one job: it holds the device, and
     /// plays one cue at its end ("done" or the first failed step), none when nothing ran.
+    /// A step that returns `Skip` counts as off. A card a step read or checked is unmounted
+    /// at the end (`diskutil unmountDisk`), and "done, safe to unplug" plays only when that
+    /// worked; a failed unmount is a failed step ("Unmount") with its reason.
     pub fn gear_on_connect(&self, c: &Connected) -> Vec<HookRun> {
         let settings = self.gear_settings();
+        let handle = link_handle(&c.link);
+        self.gear_touched.lock().unwrap().remove(&handle);
         let hooks: Vec<OnConnectHook> = self
             .gear_hooks
             .lock()
@@ -297,8 +342,8 @@ impl Core {
             .filter(|h| h.kinds.contains(&c.kind))
             .cloned()
             .collect();
-        let runs: Vec<HookRun> = {
-            let _hold = self.gear_hold(&link_handle(&c.link));
+        let mut runs: Vec<HookRun> = {
+            let _hold = self.gear_hold(&handle);
             hooks
                 .into_iter()
                 .map(|h| {
@@ -307,6 +352,7 @@ impl Core {
                     } else {
                         match (h.run)(self, c) {
                             Ok(()) => HookOutcome::Ran,
+                            Err(e) if e.downcast_ref::<Skip>().is_some() => HookOutcome::Off,
                             Err(e) => HookOutcome::Failed {
                                 message: format!("{e:#}"),
                             },
@@ -320,15 +366,86 @@ impl Core {
                 })
                 .collect()
         };
-        let failed = runs
-            .iter()
-            .find(|r| matches!(r.outcome, HookOutcome::Failed { .. }));
-        if let Some(f) = failed {
-            self.gear_job_done(c, Some(&f.name));
+        let touched = self.gear_touched.lock().unwrap().remove(&handle);
+        let failed = runs.iter().find_map(|r| match &r.outcome {
+            HookOutcome::Failed { message } => Some((r.name.clone(), message.clone())),
+            _ => None,
+        });
+        if touched {
+            if let Err(message) =
+                self.gear_finish_card(c, failed.as_ref().map(|(s, m)| (s.as_str(), m.as_str())))
+            {
+                runs.push(HookRun {
+                    name: "Unmount".into(),
+                    automation: Automation::Backup,
+                    outcome: HookOutcome::Failed { message },
+                });
+            }
+        } else if let Some((step, message)) = failed {
+            self.gear_note_failure(c, &step, &message);
+            self.gear_job_done(c, Some(&step));
         } else if runs.iter().any(|r| r.outcome == HookOutcome::Ran) {
+            self.gear_clear_failure(&handle);
             self.gear_job_done(c, None);
         }
         runs
+    }
+
+    /// Marks a card's link as read or checked by the running on-connect job.
+    pub(super) fn gear_touch(&self, c: &Connected) {
+        self.gear_touched
+            .lock()
+            .unwrap()
+            .insert(link_handle(&c.link));
+    }
+
+    /// Records a failed step on a device, for `GearStatus.failures`.
+    pub(super) fn gear_note_failure(&self, c: &Connected, step: &str, message: &str) {
+        let handle = link_handle(&c.link);
+        self.gear_failures.lock().unwrap().insert(
+            handle.clone(),
+            StepFailure {
+                handle,
+                device: c.id.clone(),
+                step: step.to_string(),
+                message: message.to_string(),
+                at: chrono::Utc::now(),
+            },
+        );
+        self.hooks.gear_changed();
+    }
+
+    pub(super) fn gear_clear_failure(&self, handle: &str) {
+        if self.gear_failures.lock().unwrap().remove(handle).is_some() {
+            self.hooks.gear_changed();
+        }
+    }
+
+    /// The end of a job on a card: mount, work, unmount. The card is unmounted
+    /// (`unmountDisk`) whatever the job did. With a failed step, its cue plays and its
+    /// reason is kept. Otherwise "done, safe to unplug" plays only after the unmount
+    /// worked; a failed unmount plays "Unmount failed" and returns its reason.
+    pub(super) fn gear_finish_card(
+        &self,
+        c: &Connected,
+        failed: Option<(&str, &str)>,
+    ) -> std::result::Result<(), String> {
+        match failed {
+            Some((step, message)) => {
+                if let Link::Volume {
+                    whole_disk: Some(disk),
+                    ..
+                } = &c.link
+                {
+                    let _hold = self.gear_hold(&link_handle(&c.link));
+                    let _ = (self.gear.unmount)(disk);
+                }
+                self.gear_note_failure(c, step, message);
+                self.gear_job_done(c, Some(step));
+                Ok(())
+            }
+            None => self.gear_release_card(c).map_err(|e| format!("{e:#}")),
+        }
     }
 
     /// The end of one job on a device: one cue, "<device> done, safe to unplug." or

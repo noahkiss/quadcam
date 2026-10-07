@@ -41,6 +41,10 @@ struct Bench {
     core: Arc<Core>,
     cues: Arc<RecordedCues>,
     disk: Arc<FakeDisk>,
+    /// Whole disks unmounted (`diskutil unmountDisk`, faked).
+    unmounts: Arc<std::sync::Mutex<Vec<String>>>,
+    /// Makes the next unmounts fail.
+    unmount_fails: Arc<AtomicBool>,
     dir: tempfile::TempDir,
 }
 
@@ -92,6 +96,16 @@ fn bench_with(card: bool, ports: Arc<dyn Ports>, disk: FakeDisk) -> Bench {
     let mut env = Env::fake(vols, ports);
     env.cues = Arc::new(CueService::inline(cues.clone()));
     env.disk = disk.clone();
+    let unmounts: Arc<std::sync::Mutex<Vec<String>>> = Arc::default();
+    let unmount_fails = Arc::new(AtomicBool::new(false));
+    let (u, f) = (unmounts.clone(), unmount_fails.clone());
+    env.unmount = Arc::new(move |d| {
+        u.lock().unwrap().push(d.to_string());
+        if f.load(Ordering::SeqCst) {
+            anyhow::bail!("Unmount of {d} failed: at least one volume could not be unmounted")
+        }
+        Ok(())
+    });
     let core = Arc::new(
         Core::new(
             dir.path().join("cache"),
@@ -107,6 +121,8 @@ fn bench_with(card: bool, ports: Arc<dyn Ports>, disk: FakeDisk) -> Bench {
         core,
         cues,
         disk,
+        unmounts,
+        unmount_fails,
         dir,
     }
 }
@@ -932,4 +948,62 @@ fn mcp_and_cli_surfaces() {
     );
     let (code, v) = cli(&["gear", "card-repair", "--check", "x"]);
     assert_eq!(code, Some(3), "refused without --yes: {v}");
+}
+
+#[test]
+fn an_auto_backup_unmounts_the_card_and_says_safe_only_after_the_unmount() {
+    use quadcam_lib::core::HookOutcome;
+    let b = bench();
+    for h in backup_hooks() {
+        b.core.gear_add_hook(h);
+    }
+    // A card QuadCam does not know: no check (the step counts as off), a backup, then
+    // unmountDisk, then "done, safe to unplug".
+    let c = b.core.gear_connected().unwrap().remove(0);
+    let runs = b.core.gear_on_connect(&c);
+    assert_eq!(runs[0].outcome, HookOutcome::Off, "{runs:?}");
+    assert_eq!(runs[1].outcome, HookOutcome::Ran);
+    assert_eq!(runs.len(), 2, "no unmount failure: {runs:?}");
+    assert_eq!(*b.unmounts.lock().unwrap(), vec!["disk42".to_string()]);
+    let spoken = b.cues.spoken();
+    assert_eq!(spoken.len(), 1);
+    assert!(spoken[0].contains("safe to unplug"), "{spoken:?}");
+    assert!(b.core.gear_status().unwrap().failures.is_empty());
+
+    // Known now: the check passes, the backup finds nothing new, and the unmount fails.
+    // The failed step's cue plays, never "safe to unplug", and the reason shows.
+    b.unmount_fails.store(true, Ordering::SeqCst);
+    let c = b.core.gear_connected().unwrap().remove(0);
+    let runs = b.core.gear_on_connect(&c);
+    assert_eq!(b.disk.calls().len(), 1, "the check ran");
+    let last = runs.last().unwrap();
+    assert_eq!(last.name, "Unmount");
+    assert!(
+        matches!(&last.outcome, HookOutcome::Failed { message } if message.contains("could not be unmounted")),
+        "{last:?}"
+    );
+    let spoken = b.cues.spoken();
+    assert_eq!(spoken.len(), 2, "{spoken:?}");
+    assert!(spoken[1].starts_with("Unmount failed"), "{spoken:?}");
+    let f = b.core.gear_status().unwrap().failures;
+    assert_eq!(f.len(), 1);
+    assert_eq!(f[0].step, "Unmount");
+    assert!(f[0].message.contains("could not be unmounted"));
+
+    // A card check on request unmounts too; once that works, the failure clears.
+    b.unmount_fails.store(false, Ordering::SeqCst);
+    let check = b.core.gear_card_check(&CardCheckParams::default()).unwrap();
+    assert_eq!(check.state, CheckState::Ok);
+    assert_eq!(b.unmounts.lock().unwrap().len(), 3);
+    assert!(b.core.gear_status().unwrap().failures.is_empty());
+    // A manual backup also ends unmounted; a failed unmount is a note on its answer.
+    b.unmount_fails.store(true, Ordering::SeqCst);
+    let r = b.core.gear_backup(&by_mount(&b)).unwrap();
+    assert!(
+        r.notes
+            .iter()
+            .any(|n| n.starts_with("The card did not unmount")),
+        "{:?}",
+        r.notes
+    );
 }

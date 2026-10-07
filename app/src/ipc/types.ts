@@ -20,6 +20,7 @@ export type {
   ImportBackupsReport,
   PruneReport,
   RepairResult,
+  StepFailure,
   StorageView,
   Connected,
   CueSettings,

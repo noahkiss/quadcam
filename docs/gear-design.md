@@ -794,6 +794,11 @@ jobs with progress in `GearStatus.jobs` and `gear_stop`). Choices made in the bu
   board, else the `device` passed; an FC to its `mcu_id` (saved as a new device), else the same
   board rule.
 - Goggles and DVR cards get the card check, not a backup.
+- Mount, work, unmount: every card job ends in `Core::gear_finish_card`, which unmounts the
+  whole disk (`Env.unmount`, `diskutil unmountDisk`) whatever the job did. "Done, safe to
+  unplug" plays only after the unmount worked; a failed unmount is the step "Unmount", its cue
+  plays and its reason goes to `GearStatus.failures`. An on-connect step that had nothing to
+  do returns `core::Skip` (counted as off), so an unknown card is not unmounted or cued.
 
 **Card check (WP4, on connect).** Before the on-connect backup of a card QuadCam knows,
 `diskutil verifyVolume` runs on it (read-only; tested on a FAT32 disk image 2026-10-07: no

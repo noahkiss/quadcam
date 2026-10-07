@@ -36,7 +36,7 @@ pub use fc::{BoardNotesParams, FcJob, FcPortParams, FcReadParams, UsbTimer, USB_
 pub use files::{Moved, TrashReport};
 pub use gear::{
     connected_name, link_handle, DeviceSaveParams, GearStatus, Hold, HookFn, HookOutcome, HookRun,
-    OnConnectHook, ReminderParams, HOLD_GRACE,
+    OnConnectHook, ReminderParams, Skip, StepFailure, HOLD_GRACE,
 };
 pub use gear_card::{CardParams, CardPreview, CardPreviewParams, GearCard};
 pub use import::CardStatus;
@@ -232,6 +232,10 @@ pub struct Core {
     modules: crate::modules::Modules,
     /// Backups and card checks running now, by link (`core/backup.rs`).
     gear_jobs: Mutex<std::collections::HashMap<String, backup::JobSlot>>,
+    /// Links an on-connect run read or checked (they are unmounted at its end).
+    gear_touched: Mutex<std::collections::HashSet<String>>,
+    /// The last failed step per link, for the device page (`GearStatus.failures`).
+    gear_failures: Mutex<std::collections::HashMap<String, gear::StepFailure>>,
 }
 
 struct Busy<'a>(&'a AtomicBool);
@@ -279,6 +283,8 @@ impl Core {
             cache,
             modules: crate::modules::Modules::default(),
             gear_jobs: Mutex::default(),
+            gear_touched: Mutex::default(),
+            gear_failures: Mutex::default(),
         }
     }
 
