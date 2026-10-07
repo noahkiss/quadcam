@@ -18,6 +18,9 @@
 //! - `cues`: spoken, sound and notification cues ("safe to unplug", "still inserted").
 //! - `flights`: flight analysis from radio logs: hover, sag, resting voltage, mAh,
 //!   dropouts, and the flight index (`flights.json`).
+//! - `packs`: packs and pack types, pack history, the charging sheet, suggestions.
+//! - `crashes`: the crash and repair log.
+//! - `report`: the session report; `preflight`: the "Pack up" check.
 //! - `osd`: Betaflight OSD layouts: decode, draw per profile, overlap and off-screen check.
 //!
 //! `Env` is what Gear reaches outside the process (serial ports, volumes, presence, the cue
@@ -25,6 +28,7 @@
 
 pub mod bf;
 pub mod compat;
+pub mod crashes;
 pub mod cues;
 pub mod detect;
 pub mod edgetx;
@@ -32,6 +36,9 @@ pub mod events;
 pub mod flights;
 pub mod model;
 pub mod osd;
+pub mod packs;
+pub mod preflight;
+pub mod report;
 pub mod serial;
 pub mod store;
 
