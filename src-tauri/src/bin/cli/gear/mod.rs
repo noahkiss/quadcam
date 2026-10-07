@@ -8,6 +8,7 @@ use quadcam_lib::api::{self, call};
 use quadcam_lib::core::Core;
 use serde_json::Value;
 
+mod backup;
 mod card;
 mod fc;
 mod osd;
@@ -31,6 +32,45 @@ pub enum GearCmd {
     Osd(osd::OsdArgs),
     /// An EdgeTX card: models, the selected model, the radio clock; `preview` checks edits.
     Card(card::CardArgs),
+    /// Back up a radio card or an FC (the FC reboots); `show`, `diff` and `pin` a backup.
+    Backup(backup::BackupArgs),
+    /// Backups, newest first.
+    Backups {
+        /// One device's.
+        #[arg(long)]
+        device: Option<String>,
+    },
+    /// The gear folder's size per device; --prune thins backups; --export writes folders.
+    Storage(backup::StorageArgs),
+    /// Import an old backup folder: radio card copies, FC diff/dump files, LOGS folders.
+    ImportBackups {
+        folder: std::path::PathBuf,
+        /// The saved device that items no id names go to.
+        #[arg(long)]
+        device: Option<String>,
+        /// Report what it would take; write nothing.
+        #[arg(long)]
+        dry_run: bool,
+    },
+    /// Check a card's file system (diskutil verifyVolume, read-only); --log lists past checks.
+    CardCheck {
+        #[arg(long)]
+        device: Option<String>,
+        #[arg(long)]
+        mount: Option<std::path::PathBuf>,
+        #[arg(long)]
+        log: bool,
+    },
+    /// Repair a card whose latest check failed: a backup first, the repair, a check after.
+    CardRepair {
+        /// The failed check's id.
+        #[arg(long)]
+        check: String,
+        #[arg(long)]
+        yes: bool,
+    },
+    /// Stop a running backup or card check (its handle from `gear status`).
+    Stop { handle: String },
 }
 
 #[derive(Subcommand)]
@@ -61,6 +101,17 @@ pub fn run(core: &Core, cmd: GearCmd) -> Result<Value> {
         GearCmd::Osd(a) => osd::run(core, a)?,
         GearCmd::Status => serde_json::to_value(call::gear_status(core)?)?,
         GearCmd::Card(a) => card::run(core, a)?,
+        GearCmd::Backup(a) => backup::backup(core, a)?,
+        GearCmd::Backups { device } => backup::backups(core, device)?,
+        GearCmd::Storage(a) => backup::storage(core, a)?,
+        GearCmd::ImportBackups {
+            folder,
+            device,
+            dry_run,
+        } => backup::import(core, folder, device, dry_run)?,
+        GearCmd::CardCheck { device, mount, log } => backup::card_check(core, device, mount, log)?,
+        GearCmd::CardRepair { check, yes } => backup::card_repair(core, check, yes)?,
+        GearCmd::Stop { handle } => backup::stop(core, handle)?,
         GearCmd::Devices { cmd } => match cmd.unwrap_or(DevicesCmd::List) {
             DevicesCmd::List => serde_json::to_value(call::gear_devices(core)?)?,
             DevicesCmd::Save { id, name, aircraft } => serde_json::to_value(

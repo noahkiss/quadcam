@@ -1,6 +1,6 @@
 //! `Core::gear_osd`: a Betaflight OSD layout drawn per profile and checked (design 7.3).
-//! It reads dump, diff or CLI files today. A device's latest backup (WP4) and a live read
-//! of a connected FC (WP2) join here as more sources of the same text.
+//! It reads dump, diff or CLI files, or a device's latest FC backup (its `dump all`), with
+//! files read after the backup on top.
 
 use super::Core;
 use crate::gear::osd::{self, OsdConfig, OsdView};
@@ -18,7 +18,8 @@ pub struct OsdParams {
     /// so a dump followed by an apply file shows the layout after the apply.
     #[serde(default)]
     pub paths: Vec<PathBuf>,
-    /// A saved device's id: reads its latest backup. Not available until backups exist.
+    /// A saved device's id: reads its latest backup's `dump all` (`diff all` without one),
+    /// before `paths`.
     #[serde(default)]
     pub device: Option<String>,
     /// `NTSC`, `PAL`, `HD` or `WxH`; empty for the files' `vcd_video_system`.
@@ -37,11 +38,29 @@ impl Core {
             if !known {
                 bail!("No device {id:?} in QuadCam's list (quadcam-cli gear devices).");
             }
-            bail!(
-                "No device backup to read for {id:?} yet: pass a dump file. Device backups come in a later version."
-            );
+            let snaps = crate::gear::backup::Snapshots::new(self.gear_store());
+            let b = snaps
+                .list(id)
+                .into_iter()
+                .rev()
+                .find(|b| {
+                    b.files
+                        .iter()
+                        .any(|f| f.path == "dump all" || f.path == "diff all")
+                })
+                .with_context(|| {
+                    format!("No FC backup of {id:?} yet: back it up, or pass a dump file.")
+                })?;
+            // The dump holds every value; a diff alone shows only what differs from default.
+            let file = ["dump all", "diff all"]
+                .iter()
+                .find_map(|c| b.files.iter().find(|f| f.path == *c))
+                .context("the backup has no dump")?;
+            let bytes = snaps.blobs().get(&crate::gear::backup::blob_of(file))?;
+            texts.push(String::from_utf8_lossy(&bytes).into_owned());
+            source.push(format!("{} {}", b.id, file.path));
         }
-        if p.paths.is_empty() {
+        if texts.is_empty() && p.paths.is_empty() {
             bail!("Pass a Betaflight dump or diff file, or a device.");
         }
         for path in &p.paths {

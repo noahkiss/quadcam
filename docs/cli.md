@@ -149,6 +149,13 @@ quadcam-cli --json gear fc check STEM.diff_all.txt expected.cli  # every expecte
 quadcam-cli --json gear fc notes [--board BETAFPVG473]            # known issues of boards
 quadcam-cli --json gear fc usb                                   # USB timers
 quadcam-cli --json gear osd FILE [FILE ...] [--grid NTSC|PAL|HD|WxH] [--text]
+quadcam-cli --json gear backup [--device ID | --port P | --mount M] [show|diff|pin ...]
+quadcam-cli --json gear backups [--device ID]
+quadcam-cli --json gear storage [--prune [--dry-run]] [--export <backup|device> DIR]
+quadcam-cli --json gear import-backups FOLDER [--device ID] [--dry-run]
+quadcam-cli --json gear card-check [--device ID | --mount M] [--log]
+quadcam-cli --json gear card-repair --check <check id> --yes
+quadcam-cli --json gear stop <handle>
 ```
 
 `gear fc read --out STEM` writes `STEM.diff_all.txt` and `STEM.dump_all.txt` and refuses to

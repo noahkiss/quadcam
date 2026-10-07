@@ -571,12 +571,19 @@ Gear: the radio, flight controllers, goggles and cards QuadCam knows and sees
 Usage: quadcam-cli gear [OPTIONS] <COMMAND>
 
 Commands:
-  status   The gear folder, the Gear settings, and the devices plugged in now
-  devices  Saved devices: list (default), save a name or aircraft, forget
-  fc       A Betaflight flight controller: identify, read, check, board notes, USB timer
-  osd      An FC's OSD layout per OSD profile, drawn on its grid and checked for overlaps and cells off screen. Reads a dump or diff file
-  card     An EdgeTX card: models, the selected model, the radio clock; `preview` checks edits
-  help     Print this message or the help of the given subcommand(s)
+  status          The gear folder, the Gear settings, and the devices plugged in now
+  devices         Saved devices: list (default), save a name or aircraft, forget
+  fc              A Betaflight flight controller: identify, read, check, board notes, USB timer
+  osd             An FC's OSD layout per OSD profile, drawn on its grid and checked for overlaps and cells off screen. Reads a dump or diff file
+  card            An EdgeTX card: models, the selected model, the radio clock; `preview` checks edits
+  backup          Back up a radio card or an FC (the FC reboots); `show`, `diff` and `pin` a backup
+  backups         Backups, newest first
+  storage         The gear folder's size per device; --prune thins backups; --export writes folders
+  import-backups  Import an old backup folder: radio card copies, FC diff/dump files, LOGS folders
+  card-check      Check a card's file system (diskutil verifyVolume, read-only); --log lists past checks
+  card-repair     Repair a card whose latest check failed: a backup first, the repair, a check after
+  stop            Stop a running backup or card check (its handle from `gear status`)
+  help            Print this message or the help of the given subcommand(s)
 
 Options:
       --json            Print one JSON object: {"ok":true,"result":...} or {"ok":false,"error":{...}}

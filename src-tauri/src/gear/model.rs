@@ -205,6 +205,27 @@ pub enum Trigger {
     BeforeApply,
     /// Taken before a firmware flash. Always kept.
     BeforeFlash,
+    /// Taken from an old backup folder (`gear import-backups`). Thinned like plug-in
+    /// backups.
+    Import,
+}
+
+impl Trigger {
+    /// The word in a snapshot's file name.
+    pub fn slug(self) -> &'static str {
+        match self {
+            Trigger::Connect => "connect",
+            Trigger::Manual => "manual",
+            Trigger::BeforeApply => "before_apply",
+            Trigger::BeforeFlash => "before_flash",
+            Trigger::Import => "import",
+        }
+    }
+
+    /// Apply and flash snapshots are never pruned.
+    pub fn always_kept(self) -> bool {
+        matches!(self, Trigger::BeforeApply | Trigger::BeforeFlash)
+    }
 }
 
 /// One file in a backup: its path inside the device, its size and its content hash.

@@ -39,6 +39,12 @@ pub struct GearStatus {
     /// The links with a "still inserted" reminder armed (`link_handle`).
     #[serde(default)]
     pub reminders: Vec<String>,
+    /// Backups and card checks running now, with their progress (`core/backup.rs`).
+    #[serde(default)]
+    pub jobs: Vec<super::GearJob>,
+    /// The latest card check of each card plugged in.
+    #[serde(default)]
+    pub card_checks: Vec<crate::gear::health::CardCheck>,
 }
 
 /// `gear_dismiss_reminder`: a device's link, as `link_handle` names it.
@@ -106,9 +112,12 @@ impl Core {
     pub fn gear_status(&self) -> Result<GearStatus> {
         let settings = self.gear_settings();
         let store = Store::new(settings.gear_dir.clone());
+        let connected = self.gear_connected()?;
         Ok(GearStatus {
             gear_dir: settings.gear_dir.clone(),
-            connected: self.gear_connected()?,
+            card_checks: self.gear_latest_checks(&connected),
+            jobs: self.gear_jobs(),
+            connected,
             devices: store.devices()?.len(),
             staged: 0,
             sims_out_of_date: 0,
