@@ -98,6 +98,7 @@ export function Finish() {
             </p>
           </div>
         </section>
+        <ReportPanel />
         <PhotosPanel />
         {s.card && (
           <section className={styles.panel}>
@@ -212,6 +213,28 @@ function FormatPanel() {
         </div>
         <p className={styles.small}>{ready ? "A dialog names the disk before anything is erased. Return does not confirm." : why || ""}</p>
       </div>
+    </section>
+  );
+}
+
+/** Opens the session report for this import on the Flights page. */
+function ReportPanel() {
+  const show = () => {
+    const st = store.getState();
+    st.setImportOpen(false);
+    st.openGear({ page: "slot", id: "flights" });
+    st.setGearSegment("report");
+  };
+  return (
+    <section className={styles.panel}>
+      <Icon name="stopwatch" tint="blue" size={24} />
+      <div className={styles.grow}>
+        <b>Session report</b>
+        <p className={styles.muted}>Flights, air time, link and packs from the radio logs.</p>
+      </div>
+      <Button size="sm" variant="ghost" onClick={show}>
+        Show report
+      </Button>
     </section>
   );
 }

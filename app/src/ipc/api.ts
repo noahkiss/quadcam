@@ -7,7 +7,7 @@ import { open as openDialog } from "@tauri-apps/plugin-dialog";
 import { openPath, openUrl, revealItemInDir } from "@tauri-apps/plugin-opener";
 import { commands } from "../bindings";
 import * as N from "./normalize";
-import type { ImportOptions, LibEdit, LibraryFilter, Moved, OsdParams, PlanPatch, RemovedCuts, SettingsValues, Span } from "./types";
+import type { CrashSaveParams, ImportOptions, LibEdit, LibraryFilter, Moved, OsdParams, Pack, PackType, PlanPatch, RemovedCuts, SettingsValues, Span } from "./types";
 
 type Result<T> = Promise<{ status: "ok"; data: T } | { status: "error"; error: string }>;
 
@@ -84,6 +84,22 @@ export const api = {
 
   // Gear
   gearOsd: (params: OsdParams) => ok(commands.gearOsd(params)),
+
+  // Flights and packs
+  gearFlights: (day: string | null = null) => ok(commands.gearFlights({ day })),
+  gearFlightSet: (flight: string, pack: string | null, place: string | null = null) => ok(commands.gearFlightSet({ flight, pack, place })),
+  gearFlightFolders: (add: string | null, remove: string | null = null) => ok(commands.gearFlightFolders({ add, remove })),
+  gearPacks: () => ok(commands.gearPacks({})),
+  gearPackSave: (pack: Pack, charged: boolean | null = null) => ok(commands.gearPackSave({ pack, charged })),
+  gearPackDelete: (label: string) => ok(commands.gearPackDelete({ name: label })),
+  gearPackTypeSave: (t: PackType) => ok(commands.gearPackTypeSave(t)),
+  gearPackTypeDelete: (name: string) => ok(commands.gearPackTypeDelete({ name })),
+  gearPackNotes: (text: string) => ok(commands.gearPackNotes({ text })),
+  gearSessionReport: (day: string | null = null) => ok(commands.gearSessionReport({ day })),
+  gearPreflight: () => ok(commands.gearPreflight()),
+  gearCrashes: (clip: string | null = null, aircraft: string | null = null) => ok(commands.gearCrashes({ clip, aircraft })),
+  gearCrashSave: (c: CrashSaveParams) => ok(commands.gearCrashSave(c)),
+  gearCrashDelete: (id: string) => ok(commands.gearCrashDelete({ id })),
 };
 
 /** A URL the web view can load for a file the core made (thumbnails, previews). */

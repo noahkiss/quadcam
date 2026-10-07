@@ -323,3 +323,67 @@ fn cli_report_markdown() {
     let v: Value = serde_json::from_str(cli(&["--json", "gear", "preflight"]).trim()).unwrap();
     assert_eq!(v["result"]["rows"][0]["state"], "pass", "{v}");
 }
+
+/// Writes the mock core's Flights seed (`app/e2e/fixtures/flights.json`) from the real core
+/// on the synthetic log, when `QUADCAM_UPDATE_FIXTURES=1`. Paths are made generic.
+#[test]
+fn record_mock_fixture() {
+    if std::env::var("QUADCAM_UPDATE_FIXTURES").as_deref() != Ok("1") {
+        return;
+    }
+    let dir = tempfile::tempdir().unwrap();
+    let c = setup(dir.path());
+    c.gear_pack_type_save(&PackType {
+        capacity_mah: Some(300.0),
+        full_v: Some(4.35),
+        storage_v: Some(3.85),
+        charge_a: Some(0.3),
+        connector: Some("BT2.0".into()),
+        chemistry: quadcam_lib::gear::packs::Chemistry::Lihv,
+        ..one_s()
+    })
+    .unwrap();
+    for l in ["A1", "A2", "A3"] {
+        c.gear_pack_save(&api::PackSaveParams {
+            pack: Pack {
+                label: l.into(),
+                pack_type: Some("1S 300".into()),
+                ..Default::default()
+            },
+            charged: None,
+        })
+        .unwrap();
+    }
+    let v = c.gear_flights(&Default::default()).unwrap();
+    let first = v.flights.last().unwrap().flight.id.clone();
+    c.gear_flight_set(&api::FlightSetParams {
+        flight: first,
+        pack: Some("A1".into()),
+        place: None,
+    })
+    .unwrap();
+    let mut out = json!({
+        "flights": c.gear_flights(&Default::default()).unwrap(),
+        "packs": c.gear_packs(&Default::default()).unwrap(),
+        "report": c.gear_session_report(&Default::default()).unwrap(),
+        "preflight": c.gear_preflight().unwrap(),
+    });
+    // The mAh steps are long and the UI does not read them.
+    fn strip(v: &mut Value) {
+        match v {
+            Value::Object(m) => {
+                m.remove("capa");
+                m.values_mut().for_each(strip);
+            }
+            Value::Array(a) => a.iter_mut().for_each(strip),
+            _ => {}
+        }
+    }
+    strip(&mut out);
+    let text = serde_json::to_string_pretty(&out).unwrap().replace(
+        &dir.path().to_string_lossy().to_string(),
+        "/Users/pilot/fpv",
+    );
+    let dest = Path::new(env!("CARGO_MANIFEST_DIR")).join("../app/e2e/fixtures/flights.json");
+    std::fs::write(dest, text + "\n").unwrap();
+}

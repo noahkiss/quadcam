@@ -395,10 +395,7 @@ pub(super) fn edit<B: Backend>(
         "pack_notes" => {
             let t = x.text.clone().context("text is required: the notes")?;
             let r = backend.call("gear_pack_notes", json!({"text": t}))?;
-            Ok((
-                vec![text("Saved the charging notes.")],
-                json!({"notes": r}),
-            ))
+            Ok((vec![text("Saved the charging notes.")], json!({"notes": r})))
         }
         "crash_save" => {
             let r = backend.call(

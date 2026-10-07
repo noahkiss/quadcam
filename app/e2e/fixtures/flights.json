@@ -1,0 +1,327 @@
+{
+  "flights": {
+    "days": [
+      "2026-10-04"
+    ],
+    "flights": [
+      {
+        "aircraft": "Whoop",
+        "clip": null,
+        "clip_name": null,
+        "crossed_at_s": null,
+        "flight": {
+          "arm_v": 4.05,
+          "day": "2026-10-04",
+          "dropouts": [
+            {
+              "after": null,
+              "before": {
+                "lq": 100.0,
+                "rssi_db": -60.0,
+                "tx_power_mw": 25.0
+              },
+              "downlink_only": false,
+              "secs": 2.0,
+              "start_s": 18.0
+            }
+          ],
+          "end": "2026-10-04T10:06:20",
+          "file": "/Users/pilot/fpv/logs/Whoop-2026-10-04-100000.csv",
+          "hover": {
+            "all": null,
+            "early": null,
+            "late": null
+          },
+          "id": "20261004T100600-whoop",
+          "mah": 100.0,
+          "max_current_a": 5.0,
+          "max_tx_power_mw": 25.0,
+          "model": "Whoop",
+          "resting_from": null,
+          "resting_v": null,
+          "sag_min_v": 3.85,
+          "sag_p5_v": 3.85,
+          "secs": 20.0,
+          "start": "2026-10-04T10:06:00",
+          "worst_lq": 100.0,
+          "worst_rssi_db": -60.0
+        },
+        "pack": null,
+        "place": "Field",
+        "suggested_pack": "A2",
+        "threshold_mah": 300.0
+      },
+      {
+        "aircraft": "Whoop",
+        "clip": null,
+        "clip_name": null,
+        "crossed_at_s": null,
+        "flight": {
+          "arm_v": 3.9,
+          "day": "2026-10-04",
+          "dropouts": [],
+          "end": "2026-10-04T10:03:30",
+          "file": "/Users/pilot/fpv/logs/Whoop-2026-10-04-100000.csv",
+          "hover": {
+            "all": null,
+            "early": null,
+            "late": null
+          },
+          "id": "20261004T100300-whoop",
+          "mah": 150.0,
+          "max_current_a": 5.0,
+          "max_tx_power_mw": 25.0,
+          "model": "Whoop",
+          "resting_from": "next_arm",
+          "resting_v": 4.05,
+          "sag_min_v": 3.9,
+          "sag_p5_v": 3.9,
+          "secs": 30.0,
+          "start": "2026-10-04T10:03:00",
+          "worst_lq": 100.0,
+          "worst_rssi_db": -60.0
+        },
+        "pack": null,
+        "place": "Field",
+        "suggested_pack": "A2",
+        "threshold_mah": 300.0
+      },
+      {
+        "aircraft": "Whoop",
+        "clip": null,
+        "clip_name": null,
+        "crossed_at_s": 50.0,
+        "flight": {
+          "arm_v": 3.8,
+          "day": "2026-10-04",
+          "dropouts": [
+            {
+              "after": {
+                "lq": 70.0,
+                "rssi_db": -93.0,
+                "tx_power_mw": 250.0
+              },
+              "before": {
+                "lq": 60.0,
+                "rssi_db": -95.0,
+                "tx_power_mw": 100.0
+              },
+              "downlink_only": true,
+              "secs": 0.5,
+              "start_s": 25.0
+            }
+          ],
+          "end": "2026-10-04T10:01:02",
+          "file": "/Users/pilot/fpv/logs/Whoop-2026-10-04-100000.csv",
+          "hover": {
+            "all": 43.0,
+            "early": 40.0,
+            "late": 46.0
+          },
+          "id": "20261004T100002-whoop",
+          "mah": 360.0,
+          "max_current_a": 12.0,
+          "max_tx_power_mw": 250.0,
+          "model": "Whoop",
+          "resting_from": "after_disarm",
+          "resting_v": 3.95,
+          "sag_min_v": 3.3,
+          "sag_p5_v": 3.5,
+          "secs": 60.0,
+          "start": "2026-10-04T10:00:02",
+          "worst_lq": 60.0,
+          "worst_rssi_db": -95.0
+        },
+        "pack": "A1",
+        "place": "Field",
+        "suggested_pack": null,
+        "threshold_mah": 300.0
+      }
+    ],
+    "places": [
+      {
+        "place": "Field",
+        "points": [
+          {
+            "flight": "20261004T100002-whoop",
+            "start": "2026-10-04T10:00:02",
+            "worst_lq": 60.0,
+            "worst_rssi_db": -95.0
+          },
+          {
+            "flight": "20261004T100300-whoop",
+            "start": "2026-10-04T10:03:00",
+            "worst_lq": 100.0,
+            "worst_rssi_db": -60.0
+          },
+          {
+            "flight": "20261004T100600-whoop",
+            "start": "2026-10-04T10:06:00",
+            "worst_lq": 100.0,
+            "worst_rssi_db": -60.0
+          }
+        ]
+      }
+    ],
+    "sources": [
+      "/Users/pilot/fpv/support/gear/logs",
+      "/Users/pilot/fpv/logs"
+    ]
+  },
+  "packs": {
+    "notes": "",
+    "packs": [
+      {
+        "cycles": 1,
+        "history": [
+          {
+            "flight": "20261004T100002-whoop",
+            "mah": 360.0,
+            "resting_v": 3.95,
+            "sag_min_v": 3.3,
+            "sag_p5_v": 3.5,
+            "secs": 60.0,
+            "start": "2026-10-04T10:00:02"
+          }
+        ],
+        "last_flown": "2026-10-04T10:01:02",
+        "median_resting_v": 3.95,
+        "median_secs": 60.0,
+        "pack": {
+          "charged_at": null,
+          "label": "A1",
+          "note": "",
+          "pack_type": "1S 300",
+          "received": null,
+          "retired": false
+        },
+        "state": "flown",
+        "weak": null
+      },
+      {
+        "cycles": 0,
+        "history": [],
+        "last_flown": null,
+        "median_resting_v": null,
+        "median_secs": null,
+        "pack": {
+          "charged_at": null,
+          "label": "A2",
+          "note": "",
+          "pack_type": "1S 300",
+          "received": null,
+          "retired": false
+        },
+        "state": "unknown",
+        "weak": null
+      },
+      {
+        "cycles": 0,
+        "history": [],
+        "last_flown": null,
+        "median_resting_v": null,
+        "median_secs": null,
+        "pack": {
+          "charged_at": null,
+          "label": "A3",
+          "note": "",
+          "pack_type": "1S 300",
+          "received": null,
+          "retired": false
+        },
+        "state": "unknown",
+        "weak": null
+      }
+    ],
+    "target_v": 3.7,
+    "types": [
+      {
+        "flights": 1,
+        "full_total_v": 4.35,
+        "median_resting_v": 3.95,
+        "median_secs": 60.0,
+        "pack_type": {
+          "capacity_mah": 300.0,
+          "cells": 1,
+          "charge_a": 0.3,
+          "chemistry": "lihv",
+          "connector": "BT2.0",
+          "full_v": 4.35,
+          "name": "1S 300",
+          "note": "",
+          "storage_v": 3.85,
+          "warn_mah": 300.0
+        },
+        "packs": 3,
+        "storage_total_v": 3.85,
+        "suggested_warn_mah": null
+      }
+    ]
+  },
+  "preflight": {
+    "rows": [
+      {
+        "detail": "0 of 3 charged. Not charged: A1, A2, A3.",
+        "id": "packs",
+        "label": "Packs charged",
+        "state": "warn"
+      },
+      {
+        "detail": "No radio saved.",
+        "id": "radio",
+        "label": "Radio model",
+        "state": "unknown"
+      },
+      {
+        "detail": "Plug in the goggles, DVR or air unit card to check its free space.",
+        "id": "cards_space",
+        "label": "Card space",
+        "state": "unknown"
+      },
+      {
+        "detail": "No radio or FC saved.",
+        "id": "backups",
+        "label": "Backups",
+        "state": "unknown"
+      },
+      {
+        "detail": "No card in the Mac.",
+        "id": "cards_in",
+        "label": "Cards out",
+        "state": "pass"
+      }
+    ]
+  },
+  "report": {
+    "air_s": 110.0,
+    "clips": 0,
+    "crashes": [],
+    "days": [
+      "2026-10-04"
+    ],
+    "downlink_only": 1,
+    "dropouts": 2,
+    "flights": 3,
+    "longest": {
+      "flight": "20261004T100002-whoop",
+      "model": "Whoop",
+      "secs": 60.0,
+      "start": "2026-10-04T10:00:02"
+    },
+    "markdown": "# Session report: 2026-10-04\n\n- Flights: 3, air time 1:50\n- Longest flight: 1:00 at 10:00 (Whoop)\n- Worst link: LQ 60 %, RSSI -95 dB at 10:00\n- Dropouts: 2 (1 telemetry only)\n\n## Packs\n\n| Pack | Flights | mAh |\n|---|---|---|\n| A1 | 1 | 360 |\n| (none) | 2 | |\n",
+    "no_pack": 2,
+    "packs": [
+      {
+        "flights": 1,
+        "mah": 360.0,
+        "pack": "A1"
+      }
+    ],
+    "worst_link": {
+      "flight": "20261004T100002-whoop",
+      "lq": 60.0,
+      "rssi_db": -95.0,
+      "start": "2026-10-04T10:00:02"
+    }
+  }
+}
