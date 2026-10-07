@@ -1,7 +1,7 @@
 //! Where QuadCam keeps its files, all under `$HOME`: the cache (staging, thumbnails,
-//! previews, the session file), the support folder (settings, control socket), and the
-//! default library folder. Every surface derives its paths here, so a test that sets `HOME`
-//! to a temp folder never touches the real ones.
+//! previews, the session file, firmware and voice downloads), the support folder (settings,
+//! control socket, the gear folder), and the default library folder. Every surface derives
+//! its paths here, so a test that sets `HOME` to a temp folder never touches the real ones.
 
 use std::path::PathBuf;
 
@@ -24,6 +24,21 @@ pub fn support_dir() -> PathBuf {
 /// The settings file the app, the CLI and the MCP server share.
 pub fn default_settings_file() -> PathBuf {
     support_dir().join("settings.json")
+}
+
+/// The gear folder until the `gearDir` setting points elsewhere: `<support>/gear`.
+pub fn default_gear_dir() -> PathBuf {
+    support_dir().join("gear")
+}
+
+/// Firmware downloads, one folder per product and version: `<cache>/firmware`.
+pub fn firmware_cache_dir() -> PathBuf {
+    cache_dir().join("firmware")
+}
+
+/// Raw voice takes, so a re-render costs nothing: `<cache>/voice`.
+pub fn voice_cache_dir() -> PathBuf {
+    cache_dir().join("voice")
 }
 
 /// The session file shared by CLI runs and a headless MCP server.

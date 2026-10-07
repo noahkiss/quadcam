@@ -461,7 +461,7 @@ fn mcp_over_stdio() {
         .collect();
     assert_eq!(lines.len(), 3);
     assert_eq!(lines[0]["result"]["protocolVersion"], "2025-11-25");
-    assert_eq!(lines[1]["result"]["tools"].as_array().unwrap().len(), 16);
+    assert_eq!(lines[1]["result"]["tools"].as_array().unwrap().len(), 19);
     assert_eq!(lines[2]["result"]["structuredContent"]["mode"], "headless");
 }
 

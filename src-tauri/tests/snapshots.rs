@@ -93,6 +93,12 @@ fn cli_help() {
         &["library", "apply-name-format"],
         &["library", "trash"],
         &["library", "photos"],
+        &["gear"],
+        &["gear", "status"],
+        &["gear", "devices"],
+        &["gear", "devices", "list"],
+        &["gear", "devices", "save"],
+        &["gear", "devices", "forget"],
         &["mcp"],
     ];
     let home = tempfile::tempdir().unwrap();

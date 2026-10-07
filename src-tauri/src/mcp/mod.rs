@@ -3,6 +3,7 @@
 //! every change live; otherwise it runs a headless core on the shared session file.
 //! Only MCP messages go to stdout; logs go to stderr.
 
+pub mod gear;
 pub mod params;
 mod render;
 mod server;

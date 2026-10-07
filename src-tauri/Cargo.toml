@@ -34,6 +34,7 @@ specta-typescript = "=0.0.12"
 schemars = "1"
 siphasher = "1"
 xxhash-rust = { version = "0.8", features = ["xxh64"] }
+serialport = { version = "4.10.1", default-features = false }
 
 [dev-dependencies]
 tempfile = "3"

@@ -15,12 +15,16 @@ use std::sync::{Arc, Mutex};
 
 mod cuts;
 mod files;
+mod gear;
 mod import;
 mod library;
 mod rematch;
 mod setup;
 pub use crate::paths::{cache_dir, default_session_file, default_settings_file, support_dir};
 pub use files::{Moved, TrashReport};
+pub use gear::{
+    connected_name, DeviceSaveParams, GearStatus, HookFn, HookOutcome, HookRun, OnConnectHook,
+};
 pub use import::CardStatus;
 pub use library::{LibEdit, LibItem, LibUpdate, LibraryView, RebuildReport, RenameReport};
 pub use rematch::{LibMatch, LibMatchParams, LibMatchReport};
@@ -48,6 +52,8 @@ pub trait Hooks: Send + Sync {
     fn settings_changed(&self) {}
     /// The session's clips were analysed. The GUI starts making their previews.
     fn analysed(&self) {}
+    /// `gear.json` changed (devices, links). The GUI re-reads Gear.
+    fn gear_changed(&self) {}
 }
 
 pub struct NoHooks;
@@ -190,6 +196,10 @@ pub struct Core {
     trash: Arc<dyn crate::trash::Trash>,
     /// The app's settings file; the defaults are read from it.
     settings_file: Option<PathBuf>,
+    /// What Gear reaches outside the process: serial ports, volumes, DFU devices.
+    gear: crate::gear::Env,
+    /// Steps that may run when a device is plugged in (`gear_add_hook`).
+    gear_hooks: Mutex<Vec<OnConnectHook>>,
 }
 
 struct Busy<'a>(&'a AtomicBool);
@@ -225,11 +235,13 @@ impl Core {
             busy: AtomicBool::new(false),
             hooks,
             photos,
-            cache,
             session_file,
             library: Mutex::new(None),
             trash: crate::trash::real_trash(),
             settings_file: None,
+            gear: crate::gear::Env::system(&cache),
+            gear_hooks: Mutex::new(Vec::new()),
+            cache,
         }
     }
 

@@ -19,7 +19,7 @@ README and `docs/`. Personal preferences go in the app's settings file on the ma
 | Path | Holds |
 |---|---|
 | `app/` | The frontend: React + TypeScript + Vite (pnpm, Node pinned in `.node-version`). Builds to `app/dist`, which the app ships. `views/` (library, clip detail, import sheet, settings), `components/` (with `trim/`, the one trim editor, used by clip detail and the import review), `store/`, `actions/`, `ipc/`. Icons and fonts are inlined or bundled so the app works offline |
-| `src-tauri/src/` | Rust core. `core/` (`Core`) owns the session and the library index and is the one surface every front end drives: `mod.rs` (state, locking, `Hooks`), `import.rs` (stage, analyse, dates, import, verify, delete clips after import, format), `library.rs` (the index, list, rate, edit, rename, redate), `cuts.rs` (session and library cut lists), `files.rs` (Photos, previews, strips, Trash), `rematch.rs` (radio logs matched again to library clips) and `setup.rs` (settings, places, profiles). `api/` is the one method table: each row names a method, its params and result types and the `Core` call, and `api!` makes `Core::dispatch` (socket, MCP) and one typed Tauri command per method from it; `api/events.rs` holds the typed events. `lib.rs` holds the GUI's own Tauri commands and `specta_builder`, which tauri-specta exports to `app/src/bindings.ts`; `control.rs` the app's socket, `mcp/` the MCP server (`server.rs` the protocol and handlers, `params.rs` each tool's argument type, `tools.rs` the tool list with schemas derived from those types, `render.rs` the text answers), `bin/quadcam-cli.rs` the CLI (clap flags build the `api` params, and it calls the table's `api::call` functions). The logic modules (`scan`, `disk`, `media`, `logs`, `logmatch` (shape-first log matching: pack lengths, order and gaps, clocks as tie-breaks, EdgeTX models as a filter; an analog clip with dead air matches by picture: packs inside keep ranges, swaps at dead air, an offset per clip, split DVR files as one timeline), `moments`, `join` (recordings an analog DVR split into files: detection, the `ffconcat` source, the swap of joined and own values), `metadata`, `qtmeta`, `naming`, `pipeline` (with `pipeline/import.rs`, the import run), `session`, `photos`, `library`, `trim`, `cuts` (the one cut writer), `sources` (the `Source` trait per video system, tried in `sources::all()` order; `sources/dji.rs` is DJI O4: `DCIM/DJI_*/` names, the clock in the name, `.SRT` sidecars, byte-copy MP4 export, a card never formatted; `sources/analog.rs` is the DVR: clip layout, half-written check and repair, encode plan, dead air, card policy), `trash`, `settings` (with `Defaults`, the effective settings), `paths` (every path under `$HOME`), `geocode`) run without Tauri |
+| `src-tauri/src/` | Rust core. `core/` (`Core`) owns the session and the library index and is the one surface every front end drives: `mod.rs` (state, locking, `Hooks`), `import.rs` (stage, analyse, dates, import, verify, delete clips after import, format), `library.rs` (the index, list, rate, edit, rename, redate), `cuts.rs` (session and library cut lists), `files.rs` (Photos, previews, strips, Trash), `rematch.rs` (radio logs matched again to library clips), `setup.rs` (settings, places, profiles) and `gear.rs` (Gear: devices, detection poll, on-connect hooks, cues). `api/` is the one method table: each row names a method, its params and result types and the `Core` call, and `api!` makes `Core::dispatch` (socket, MCP) and one typed Tauri command per method from it; `api/events.rs` holds the typed events; `api/gear.rs` holds Gear's rows, which join the table through `with_gear_rows!`. `lib.rs` holds the GUI's own Tauri commands and `specta_builder`, which tauri-specta exports to `app/src/bindings.ts`; `control.rs` the app's socket, `mcp/` the MCP server (`server.rs` the protocol and handlers, `params.rs` each tool's argument type, `tools.rs` the tool list with schemas derived from those types, `render.rs` the text answers, `gear.rs` the three Gear tools with their argument types and handlers), `bin/quadcam-cli.rs` the CLI (clap flags build the `api` params, and it calls the table's `api::call` functions; `bin/cli/gear/` holds the `gear` subcommands, one file per area). `gear/` is Gear (`docs/gear-design.md`): `model` (shared types), `store` (the gear folder and `gear.json`, its only writer), `compat` (proven versions), `serial` (USB serial ports, the per-port lock, the fail-safe), `detect` (what is plugged in), `events` (connected, identified, unmounted but present, removed), `cues` (speech, sound, notification). The logic modules (`scan`, `disk`, `media`, `logs`, `logmatch` (shape-first log matching: pack lengths, order and gaps, clocks as tie-breaks, EdgeTX models as a filter; an analog clip with dead air matches by picture: packs inside keep ranges, swaps at dead air, an offset per clip, split DVR files as one timeline), `moments`, `join` (recordings an analog DVR split into files: detection, the `ffconcat` source, the swap of joined and own values), `metadata`, `qtmeta`, `naming`, `pipeline` (with `pipeline/import.rs`, the import run), `session`, `photos`, `library`, `trim`, `cuts` (the one cut writer), `sources` (the `Source` trait per video system, tried in `sources::all()` order; `sources/dji.rs` is DJI O4: `DCIM/DJI_*/` names, the clock in the name, `.SRT` sidecars, byte-copy MP4 export, a card never formatted; `sources/analog.rs` is the DVR: clip layout, half-written check and repair, encode plan, dead air, card policy), `trash`, `settings` (with `Defaults`, the effective settings), `paths` (every path under `$HOME`), `geocode`) run without Tauri |
 | `src-tauri/Info.plist` | Photos usage strings, merged into the bundle's Info.plist |
 | `src-tauri/Entitlements.plist` | Hardened-runtime entitlements (Photos library) for every signature |
 | `src-tauri/tests/` | Integration tests on synthetic clips and FAT32 disk images |
@@ -226,7 +226,7 @@ GitHub (`noahkiss/quadcam`, public) is the only remote. Users install the cask
 `quadcam-cli` does everything the GUI does, on the same core. Every command takes `--json`
 and prints one object: `{"ok":true,"result":...}` or
 `{"ok":false,"error":{"code","exit","message"}}`. Exit codes: 0 ok, 1 failed, 2 usage,
-3 refused by a safety guard, 4 no session or no card. Runs share a session file
+3 refused by a safety guard, 4 no session, no card or no device. Runs share a session file
 (`~/Library/Caches/app.quadcam/session.json`; override with `--session FILE`).
 
 ```bash
@@ -253,6 +253,8 @@ quadcam-cli --json settings set layout=day place_folders=true   # `settings` sho
 quadcam-cli --json library apply-name-format   # after settings set name_date_format=YY.MM.DD
 quadcam-cli --json photos out.mp4 --album Drone
 quadcam-cli --json eject
+quadcam-cli --json gear status                 # gear folder, Gear settings, what is plugged in
+quadcam-cli --json gear devices save <id> --name N --aircraft PROFILE
 quadcam-cli --json format --plan               # runs every guard, prints device + volume UUID
 quadcam-cli --json format --device /dev/diskN --volume-uuid <uuid> --yes
 ```
@@ -287,7 +289,10 @@ claude mcp add quadcam -- "$(brew --prefix)/bin/quadcam-cli" mcp
   `mcp/params.rs`; `mcp/tools.rs` derives the input schema from it (schemars) and keeps the
   descriptions as written. The handler deserializes the arguments into that type once. A
   schema change shows in the `snapshots` tests: `mcp_tools` and the frozen
-  `tests/fixtures/mcp_tools_before.json`. `quadcam_library_edit` is one `library_update`
+  `tests/fixtures/mcp_tools_before.json`. Gear's tools are `quadcam_gear` (reads),
+  `quadcam_gear_edit` (QuadCam's own data) and `quadcam_gear_apply` (devices; digest and
+  `confirm=true`); a Gear feature adds an action to one of them, in `mcp/gear.rs`.
+  `quadcam_library_edit` is one `library_update`
   call, which checks every id and value before any file changes.
 - Agent suggestions show in the GUI with a dashed accent outline and an "agent" badge until
   the person edits the field. Read back with `quadcam_read_clips` before export.
@@ -326,6 +331,13 @@ claude mcp add quadcam -- "$(brew --prefix)/bin/quadcam-cli" mcp
   `Core::real_photos` returns the recorder for any process started by cargo (it carries
   `CARGO_MANIFEST_DIR`) unless `QUADCAM_PHOTOS=real`. Never construct `photos::PhotoKit` in
   a test. Try the real path by hand in the built app only.
+- **Never open a real serial port, probe a real disk, or play a cue while testing.** A process
+  started by cargo gets no serial ports (`gear::serial::system` is `NoPorts`), no presence or
+  card-reader reads, a refused `events::probe_media`, and silent cues (`RecordedCues`), unless
+  `QUADCAM_SERIAL=real` or `QUADCAM_CUES=real`. Tests build cores with `Core::with_gear_env`
+  and `gear::Env::fake` (synthetic volumes, `FakePorts`, `ScriptLink`).
+- **Release cards with `diskutil unmountDisk`, not `eject`,** in new code: only then does a card
+  still inserted stay visible (`docs/gear-design.md`, 7.11).
 - **Never touch the real settings file or library while testing.** Tests and manual runs
   set `HOME` to a temp folder (the CLI and MCP derive every path from it) or pass
   `Core::with_settings` a temp file.

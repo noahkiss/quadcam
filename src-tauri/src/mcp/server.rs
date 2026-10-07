@@ -182,6 +182,9 @@ impl<B: Backend> Server<B> {
     }
 
     fn run_tool(&mut self, name: &str, a: &Value) -> Result<(Vec<Value>, Value)> {
+        if let Some(r) = super::gear::run(&mut self.backend, name, a) {
+            return r;
+        }
         match name {
             "quadcam_status" => {
                 let _: StatusArgs = args(a)?;

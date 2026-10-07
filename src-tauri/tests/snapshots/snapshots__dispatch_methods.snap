@@ -47,5 +47,9 @@ expression: "Core::METHODS"
   "profile_default",
   "session_cuts",
   "session_split",
-  "library_split"
+  "library_split",
+  "gear_status",
+  "gear_devices",
+  "gear_device_save",
+  "gear_device_forget"
 ]

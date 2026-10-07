@@ -121,8 +121,20 @@ quadcam-cli settings set output_dir=null          # back to the default
 - `photos_album`, `format_label`, `log_dir`, `layout`, `place_folders`, `tunables`
 - `geocoder` (`apple`, `nominatim`, `census` or `google`), `google_places_key`
 - `name_date_format` (`YYYY-MM-DD` or `YY.MM.DD`), `default_profile`
+- Gear: `gear_dir`, `gear_auto_backup`, `gear_keep_recent`, `gear_keep_weeks`, `gear_keep_monthly`, `gear_usb_minutes`, `gear_on_connect`, `gear_cues`, `firmware_check`, `tts_provider`, `tts_key` (see [Settings](settings.md#gear))
 
 A value is JSON or plain text.
+
+## Gear
+
+```bash
+quadcam-cli --json gear status                       # gear folder, Gear settings, what is plugged in
+quadcam-cli --json gear devices                      # saved devices
+quadcam-cli --json gear devices save <id> --name "Bench radio" --aircraft Whoop
+quadcam-cli --json gear devices forget <id>
+```
+
+See [Gear](gear.md).
 
 ## JSON output
 
@@ -137,7 +149,7 @@ Add `--json` to any command to get one JSON object on stdout:
 | 1 | The command failed |
 | 2 | Wrong usage |
 | 3 | A safety check refused the command |
-| 4 | No session, or no card |
+| 4 | No session, no card, or no device |
 
 ## MCP server
 

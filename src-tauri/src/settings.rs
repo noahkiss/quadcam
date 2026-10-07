@@ -178,6 +178,83 @@ pub const KEYS: &[Key] = &[
         about: "a Google Places API key",
         check: string,
     },
+    // Gear (`gear::GearSettings` reads them).
+    Key {
+        file: "gearDir",
+        name: Some("gear_dir"),
+        about: "an absolute folder path or null",
+        check: path_or_null,
+    },
+    Key {
+        file: "gearAutoBackup",
+        name: Some("gear_auto_backup"),
+        about: "true or false",
+        check: boolean,
+    },
+    Key {
+        file: "gearKeepRecent",
+        name: Some("gear_keep_recent"),
+        about: "a whole number from 1 to 1000",
+        check: |v| crate::gear::check_count(v, 1, 1000),
+    },
+    Key {
+        file: "gearKeepWeeks",
+        name: Some("gear_keep_weeks"),
+        about: "a whole number from 0 to 520",
+        check: |v| crate::gear::check_count(v, 0, 520),
+    },
+    Key {
+        file: "gearKeepMonthly",
+        name: Some("gear_keep_monthly"),
+        about: "true or false",
+        check: boolean,
+    },
+    Key {
+        file: "gearUsbMinutes",
+        name: Some("gear_usb_minutes"),
+        about: "a whole number from 0 to 240 (0: no warning)",
+        check: |v| crate::gear::check_count(v, 0, 240),
+    },
+    Key {
+        file: "gearOnConnect",
+        name: Some("gear_on_connect"),
+        about: "an object of device kind (fc, radio, elrs_tx, elrs_rx, goggles, dvr_card) to a list of backup, import, apply_ready",
+        check: |v| {
+            typed::<std::collections::BTreeMap<crate::gear::model::DeviceKind, Vec<crate::gear::Automation>>>(
+                v,
+                "an object of device kind to a list of backup, import, apply_ready",
+            )
+        },
+    },
+    Key {
+        file: "gearCues",
+        name: Some("gear_cues"),
+        about: "an object with speech, sound, notification, safe_to_unplug, still_inserted, still_inserted_every_s, step_failed and voice",
+        check: |v| {
+            if !v.is_object() {
+                bail!("an object");
+            }
+            typed::<crate::gear::cues::CueSettings>(v, "cue settings")
+        },
+    },
+    Key {
+        file: "firmwareCheck",
+        name: Some("firmware_check"),
+        about: "manual or daily",
+        check: |v| one_of(v, crate::gear::FIRMWARE_CHECKS),
+    },
+    Key {
+        file: "ttsProvider",
+        name: Some("tts_provider"),
+        about: "a voice provider name",
+        check: string,
+    },
+    Key {
+        file: "ttsKey",
+        name: Some("tts_key"),
+        about: "a voice provider API key",
+        check: string,
+    },
     Key {
         file: "places",
         name: None,
@@ -306,7 +383,7 @@ pub fn update<T>(path: &Path, edit: impl FnOnce(&mut Values) -> Result<T>) -> Re
 }
 
 /// Settings that hold secrets: reads show only whether they are set.
-pub const SECRET_KEYS: &[&str] = &["googlePlacesKey"];
+pub const SECRET_KEYS: &[&str] = &["googlePlacesKey", "ttsKey"];
 
 /// The values with secrets replaced by `"(set)"`.
 pub fn redacted(mut values: Values) -> Values {

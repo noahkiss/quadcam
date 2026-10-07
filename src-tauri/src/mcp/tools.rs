@@ -14,10 +14,12 @@ keep_clips=true keeps them this run) -> quadcam_add_to_photos -> quadcam_eject. 
 Library: quadcam_library finds imported clips; quadcam_library_edit changes ratings, names, notes, \
 places, aircraft, dates and times; quadcam_library_files handles cuts, Trash and Photos. Setup: \
 quadcam_places (search an address or landmark, save it), quadcam_profiles (aircraft gear), \
-quadcam_settings (library folder and export defaults). With the app running, every change shows there live.";
+quadcam_settings (library folder and export defaults). Gear: quadcam_gear reads the devices plugged in and saved \
+and changes nothing; quadcam_gear_edit names devices and links them to aircraft profiles; quadcam_gear_apply writes \
+to devices and needs a plan's digest and confirm=true. With the app running, every change shows there live.";
 
 /// One tool: its name, its description, its arguments' type, and its annotations.
-fn tool<T: JsonSchema>(name: &str, description: &str, annotations: Value) -> Value {
+pub(super) fn tool<T: JsonSchema>(name: &str, description: &str, annotations: Value) -> Value {
     json!({
         "name": name,
         "description": description,
@@ -96,9 +98,10 @@ fn clean(v: &mut Value) {
     }
 }
 
-/// Tool descriptors: one per step of the import flow, plus the library and setup tools.
+/// Tool descriptors: one per step of the import flow, the library and setup tools, then
+/// the Gear tools (`gear.rs`).
 pub fn tools() -> Value {
-    json!([
+    let mut list = json!([
         tool::<StatusArgs>(
             "quadcam_status",
             "Show whether the QuadCam app is running (mode \"app\": the person sees every change live) or not (\"headless\"), the detected cards (each with its source, analog or DJI) and radio log sources, the export defaults (including the saved places and aircraft profiles under status.defaults), and a summary of the loaded session.\n\nBest for: the first call, and checking what is inserted.\nReturns: one line of text plus {mode, status, cards, radios}.\nFollow up with quadcam_load_clips to load a card, or quadcam_read_clips when a session is already loaded.",
@@ -176,8 +179,12 @@ pub fn tools() -> Value {
         ),
         tool::<SettingsArgs>(
             "quadcam_settings",
-            "Read or write the app's settings, the same file the app's Settings window uses: library folder (`output_dir`) and its `layout` (year_day, day, flat) and `place_folders`, export `format` (mp4, mov), `encoder` (videotoolbox, x264), `keep_originals`, `add_time` (HHMM in names of clips with a time), `delete_clips_after_import` (after each export, delete the clip files that verified from the card or folder; other files stay; off by default), `join_split_recordings` (import a recording the DVR split into files as one clip; on by default), `default_name`, `photos_album` (empty: library only), card `format_label`, radio `log_dir`, log matching `tunables`, place search `geocoder` (apple, nominatim, census, google) and its `google_places_key` (write-only), file-name `name_date_format` (YYYY-MM-DD, YY.MM.DD) and `default_profile`. A write changes only the given settings; null resets one to its default.\n\nBest for: pointing the library somewhere else, or changing export defaults the person asked for.\nNot for: places and profiles (quadcam_places, quadcam_profiles).\nReturns: the settings file's path and every effective setting.",
+            "Read or write the app's settings, the same file the app's Settings window uses: library folder (`output_dir`) and its `layout` (year_day, day, flat) and `place_folders`, export `format` (mp4, mov), `encoder` (videotoolbox, x264), `keep_originals`, `add_time` (HHMM in names of clips with a time), `delete_clips_after_import` (after each export, delete the clip files that verified from the card or folder; other files stay; off by default), `join_split_recordings` (import a recording the DVR split into files as one clip; on by default), `default_name`, `photos_album` (empty: library only), card `format_label`, radio `log_dir`, log matching `tunables`, place search `geocoder` (apple, nominatim, census, google) and its `google_places_key` (write-only), file-name `name_date_format` (YYYY-MM-DD, YY.MM.DD) and `default_profile`; Gear's `gear_dir`, `gear_auto_backup`, backup retention (`gear_keep_recent`, `gear_keep_weeks`, `gear_keep_monthly`), `gear_usb_minutes`, `gear_on_connect` (steps per device kind), `gear_cues` (spoken, sound and notification cues), `firmware_check` (manual, daily), `tts_provider` and its `tts_key` (write-only; quadcam_gear status shows the Gear settings in effect). A write changes only the given settings; null resets one to its default.\n\nBest for: pointing the library somewhere else, or changing export defaults the person asked for.\nNot for: places and profiles (quadcam_places, quadcam_profiles).\nReturns: the settings file's path and every effective setting.",
             json!({"destructiveHint": false, "idempotentHint": true, "openWorldHint": false, "readOnlyHint": false, "title": "Settings"}),
         ),
-    ])
+    ]);
+    if let Some(a) = list.as_array_mut() {
+        a.extend(super::gear::tools());
+    }
+    list
 }

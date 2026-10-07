@@ -17,6 +17,9 @@ use serde_json::{json, Value};
 use std::path::PathBuf;
 use std::sync::Arc;
 
+#[path = "cli/gear/mod.rs"]
+mod gear;
+
 #[derive(Parser)]
 #[command(
     name = "quadcam-cli",
@@ -229,6 +232,9 @@ enum Cmd {
     /// The library: list, rate, rename, edit (details, aircraft, date, time), cut, trash, Photos.
     #[command(subcommand)]
     Library(LibCmd),
+    /// Gear: the radio, flight controllers, goggles and cards QuadCam knows and sees.
+    #[command(subcommand)]
+    Gear(gear::GearCmd),
     /// Run the MCP server on stdio.
     Mcp,
 }
@@ -432,7 +438,9 @@ enum SetCmd {
     /// Set settings: KEY=VALUE, where VALUE is JSON or plain text ("null" resets a key).
     /// Keys: output_dir, format, encoder, keep_originals, add_time,
     /// delete_clips_after_import, default_name, photos_album, format_label, log_dir, layout, place_folders, tunables, geocoder,
-    /// name_date_format, default_profile.
+    /// name_date_format, default_profile; Gear: gear_dir, gear_auto_backup, gear_keep_recent,
+    /// gear_keep_weeks, gear_keep_monthly, gear_usb_minutes, gear_on_connect, gear_cues,
+    /// firmware_check, tts_provider, tts_key.
     Set {
         #[arg(required = true, value_name = "KEY=VALUE")]
         values: Vec<String>,
@@ -449,12 +457,15 @@ fn removed(s: Option<String>) -> Option<quadcam_lib::trim::RemovedCuts> {
     })
 }
 
-/// Exit codes: 0 ok, 1 failed, 2 usage, 3 refused by a safety guard, 4 nothing to work on.
+/// Exit codes: 0 ok, 1 failed, 2 usage, 3 refused by a safety guard, 4 nothing to work on
+/// (no session, no card, no device).
 fn code_for(msg: &str) -> (i32, &'static str) {
     if msg.starts_with("Refused") {
         (3, "refused")
     } else if msg.starts_with("No clips loaded") || msg.starts_with("No card detected") {
         (4, "no_session")
+    } else if msg.starts_with("No device") {
+        (4, "no_device")
     } else {
         (1, "failed")
     }
@@ -967,6 +978,7 @@ fn run(cli: Cli) -> Result<Value> {
             serde_json::to_value(plan)?
         }
         Cmd::Library(cmd) => library(&core, cmd)?,
+        Cmd::Gear(cmd) => gear::run(&core, cmd)?,
         Cmd::Mcp => unreachable!(),
     })
 }

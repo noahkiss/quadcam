@@ -27,6 +27,7 @@ Commands:
   eject     Eject a card (mount point or /dev/diskN; default: the session's card)
   format    Erase the session's card as FAT32. Runs every guard and refuses without all of --device, --volume-uuid and --yes
   library   The library: list, rate, rename, edit (details, aircraft, date, time), cut, trash, Photos
+  gear      Gear: the radio, flight controllers, goggles and cards QuadCam knows and sees
   mcp       Run the MCP server on stdio
   help      Print this message or the help of the given subcommand(s)
 
@@ -268,7 +269,7 @@ Usage: quadcam-cli settings [OPTIONS] [COMMAND]
 
 Commands:
   show  Show the settings file, its values and the effective settings
-  set   Set settings: KEY=VALUE, where VALUE is JSON or plain text ("null" resets a key). Keys: output_dir, format, encoder, keep_originals, add_time, delete_clips_after_import, default_name, photos_album, format_label, log_dir, layout, place_folders, tunables, geocoder, name_date_format, default_profile
+  set   Set settings: KEY=VALUE, where VALUE is JSON or plain text ("null" resets a key). Keys: output_dir, format, encoder, keep_originals, add_time, delete_clips_after_import, default_name, photos_album, format_label, log_dir, layout, place_folders, tunables, geocoder, name_date_format, default_profile; Gear: gear_dir, gear_auto_backup, gear_keep_recent, gear_keep_weeks, gear_keep_monthly, gear_usb_minutes, gear_on_connect, gear_cues, firmware_check, tts_provider, tts_key
   help  Print this message or the help of the given subcommand(s)
 
 Options:
@@ -285,7 +286,7 @@ Options:
       --session <FILE>  Session file (default: ~/Library/Caches/app.quadcam/session.json)
   -h, --help            Print help
 ===== quadcam-cli settings set --help
-Set settings: KEY=VALUE, where VALUE is JSON or plain text ("null" resets a key). Keys: output_dir, format, encoder, keep_originals, add_time, delete_clips_after_import, default_name, photos_album, format_label, log_dir, layout, place_folders, tunables, geocoder, name_date_format, default_profile
+Set settings: KEY=VALUE, where VALUE is JSON or plain text ("null" resets a key). Keys: output_dir, format, encoder, keep_originals, add_time, delete_clips_after_import, default_name, photos_album, format_label, log_dir, layout, place_folders, tunables, geocoder, name_date_format, default_profile; Gear: gear_dir, gear_auto_backup, gear_keep_recent, gear_keep_weeks, gear_keep_monthly, gear_usb_minutes, gear_on_connect, gear_cues, firmware_check, tts_provider, tts_key
 
 Usage: quadcam-cli settings set [OPTIONS] <KEY=VALUE>...
 
@@ -558,6 +559,79 @@ Arguments:
 
 Options:
       --album <ALBUM>   
+      --json            Print one JSON object: {"ok":true,"result":...} or {"ok":false,"error":{...}}
+      --session <FILE>  Session file (default: ~/Library/Caches/app.quadcam/session.json)
+  -h, --help            Print help
+===== quadcam-cli gear --help
+Gear: the radio, flight controllers, goggles and cards QuadCam knows and sees
+
+Usage: quadcam-cli gear [OPTIONS] <COMMAND>
+
+Commands:
+  status   The gear folder, the Gear settings, and the devices plugged in now
+  devices  Saved devices: list (default), save a name or aircraft, forget
+  help     Print this message or the help of the given subcommand(s)
+
+Options:
+      --json            Print one JSON object: {"ok":true,"result":...} or {"ok":false,"error":{...}}
+      --session <FILE>  Session file (default: ~/Library/Caches/app.quadcam/session.json)
+  -h, --help            Print help
+===== quadcam-cli gear status --help
+The gear folder, the Gear settings, and the devices plugged in now
+
+Usage: quadcam-cli gear status [OPTIONS]
+
+Options:
+      --json            Print one JSON object: {"ok":true,"result":...} or {"ok":false,"error":{...}}
+      --session <FILE>  Session file (default: ~/Library/Caches/app.quadcam/session.json)
+  -h, --help            Print help
+===== quadcam-cli gear devices --help
+Saved devices: list (default), save a name or aircraft, forget
+
+Usage: quadcam-cli gear devices [OPTIONS] [COMMAND]
+
+Commands:
+  list    List the saved devices
+  save    Name a device or link it to an aircraft profile. A new device must be plugged in
+  forget  Remove a device from the list. Its backups stay
+  help    Print this message or the help of the given subcommand(s)
+
+Options:
+      --json            Print one JSON object: {"ok":true,"result":...} or {"ok":false,"error":{...}}
+      --session <FILE>  Session file (default: ~/Library/Caches/app.quadcam/session.json)
+  -h, --help            Print help
+===== quadcam-cli gear devices list --help
+List the saved devices
+
+Usage: quadcam-cli gear devices list [OPTIONS]
+
+Options:
+      --json            Print one JSON object: {"ok":true,"result":...} or {"ok":false,"error":{...}}
+      --session <FILE>  Session file (default: ~/Library/Caches/app.quadcam/session.json)
+  -h, --help            Print help
+===== quadcam-cli gear devices save --help
+Name a device or link it to an aircraft profile. A new device must be plugged in
+
+Usage: quadcam-cli gear devices save [OPTIONS] <ID>
+
+Arguments:
+  <ID>  The device id (from `gear status` or `gear devices`)
+
+Options:
+      --json                 Print one JSON object: {"ok":true,"result":...} or {"ok":false,"error":{...}}
+      --name <NAME>          The device's name ("" for none)
+      --aircraft <AIRCRAFT>  An aircraft profile name ("" to unlink)
+      --session <FILE>       Session file (default: ~/Library/Caches/app.quadcam/session.json)
+  -h, --help                 Print help
+===== quadcam-cli gear devices forget --help
+Remove a device from the list. Its backups stay
+
+Usage: quadcam-cli gear devices forget [OPTIONS] <ID>
+
+Arguments:
+  <ID>  The device id
+
+Options:
       --json            Print one JSON object: {"ok":true,"result":...} or {"ok":false,"error":{...}}
       --session <FILE>  Session file (default: ~/Library/Caches/app.quadcam/session.json)
   -h, --help            Print help
