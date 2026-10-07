@@ -571,12 +571,17 @@ Gear: the radio, flight controllers, goggles and cards QuadCam knows and sees
 Usage: quadcam-cli gear [OPTIONS] <COMMAND>
 
 Commands:
-  status   The gear folder, the Gear settings, and the devices plugged in now
-  devices  Saved devices: list (default), save a name or aircraft, forget
-  fc       A Betaflight flight controller: identify, read, check, board notes, USB timer
-  osd      An FC's OSD layout per OSD profile, drawn on its grid and checked for overlaps and cells off screen. Reads a dump or diff file
-  card     An EdgeTX card: models, the selected model, the radio clock; `preview` checks edits
-  help     Print this message or the help of the given subcommand(s)
+  status     The gear folder, the Gear settings, and the devices plugged in now
+  devices    Saved devices: list (default), save a name or aircraft, forget
+  fc         A Betaflight flight controller: identify, read, check, board notes, USB timer
+  osd        An FC's OSD layout per OSD profile, drawn on its grid and checked for overlaps and cells off screen. Reads a dump or diff file
+  card       An EdgeTX card: models, the selected model, the radio clock; `preview` checks edits
+  flights    Flights from the radio logs: measures, pack, place, clip. `set` and `folders`
+  report     The session report for a day, else the last import's days
+  preflight  The "Pack up" check: packs charged, radio model, card space, backups, cards still in
+  packs      Packs with their history, pack types, the charging notes
+  crashes    The crash and repair log: list, `save`, `delete`
+  help       Print this message or the help of the given subcommand(s)
 
 Options:
       --json            Print one JSON object: {"ok":true,"result":...} or {"ok":false,"error":{...}}

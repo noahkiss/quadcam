@@ -65,5 +65,19 @@ expression: "Core::METHODS"
   "gear_dismiss_reminder",
   "gear_osd",
   "gear_card",
-  "gear_card_preview"
+  "gear_card_preview",
+  "gear_flights",
+  "gear_flight_set",
+  "gear_flight_folders",
+  "gear_packs",
+  "gear_pack_save",
+  "gear_pack_delete",
+  "gear_pack_type_save",
+  "gear_pack_type_delete",
+  "gear_pack_notes",
+  "gear_session_report",
+  "gear_preflight",
+  "gear_crashes",
+  "gear_crash_save",
+  "gear_crash_delete"
 ]

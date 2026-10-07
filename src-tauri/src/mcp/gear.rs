@@ -27,7 +27,7 @@ pub const NOTHING_FOUND: &str = "Nothing found. If macOS asked to allow an acces
 #[derive(Debug, Clone, Default, Deserialize, JsonSchema)]
 #[schemars(deny_unknown_fields)]
 pub struct GearArgs {
-    #[schemars(required, extend("enum" = ["status", "devices", "fc_identify", "board_notes", "usb_timers", "osd", "card", "card_preview"]))]
+    #[schemars(required, extend("enum" = ["status", "devices", "fc_identify", "board_notes", "usb_timers", "osd", "card", "card_preview", "flights", "packs", "session_report", "preflight", "crashes"]))]
     pub action: Option<String>,
     /// For fc_identify: the FC's serial port (/dev/cu.usbmodem...) from status; omit when one FC is plugged in.
     #[schemars(length(max = 200))]
@@ -57,12 +57,32 @@ pub struct GearArgs {
     pub model: Option<String>,
     /// For card_preview: the edits, each {"kind": "model", "file": "model01.yml", "name": "<header name>", "ops": [{"op": "set_checklist", "enabled": true}, ...]}, {"kind": "radio", "ops": [{"op": "set_scalar", "key": "hapticMode", "value": "mode_nokeys"}]}, {"kind": "checklist", "model": "model01.yml", "text": "=Props tight"}, {"kind": "model_copy", ...} or {"kind": "model_delete", "file": ...}.
     pub edits: Option<Vec<Value>>,
+    /// For flights and session_report: a day, YYYY-MM-DD. session_report without it: the days of the last import.
+    #[schemars(length(max = 10))]
+    pub day: Option<String>,
+    /// For flights and crashes: an aircraft profile name.
+    #[schemars(length(max = 80))]
+    pub aircraft: Option<String>,
+    /// For flights: a pack label.
+    #[schemars(length(max = 80))]
+    pub pack: Option<String>,
+    /// For flights: a place name.
+    #[schemars(length(max = 200))]
+    pub place: Option<String>,
+    /// For flights: one more folder of radio logs (absolute path), read for this call only.
+    #[schemars(length(max = 1024))]
+    pub logs: Option<String>,
+    /// For packs: the resting volts per cell the mAh warning suggestion aims for (default 3.7).
+    pub target_v: Option<f64>,
+    /// For crashes: a library clip id.
+    #[schemars(length(max = 80))]
+    pub clip: Option<String>,
 }
 
 #[derive(Debug, Clone, Default, Deserialize, JsonSchema)]
 #[schemars(deny_unknown_fields)]
 pub struct GearEditArgs {
-    #[schemars(required, extend("enum" = ["device_save", "device_forget", "fc_read"]))]
+    #[schemars(required, extend("enum" = ["device_save", "device_forget", "fc_read", "flight_set", "flight_folders", "pack_save", "pack_delete", "pack_type_save", "pack_type_delete", "pack_notes", "crash_save", "crash_delete"]))]
     pub action: Option<String>,
     /// For fc_read: the FC's serial port from quadcam_gear status; omit when one FC is plugged in.
     #[schemars(length(max = 200))]
@@ -71,14 +91,83 @@ pub struct GearEditArgs {
     #[schemars(length(max = 20))]
     pub commands: Option<Vec<String>>,
     /// For device_save and device_forget: the device id from quadcam_gear status or devices.
+    /// For crash_save (to change one) and crash_delete: the crash id.
     #[schemars(length(max = 80))]
     pub id: Option<String>,
-    /// For device_save: the person's name for the device; empty for none.
+    /// For device_save: the person's name for the device; empty for none. For pack_save and
+    /// pack_delete: the pack label. For pack_type_save and pack_type_delete: the type name.
     #[schemars(length(max = 80))]
     pub name: Option<String>,
     /// For device_save: an aircraft profile name from quadcam_profiles; empty to unlink.
+    /// For crash_save: the aircraft (default: the clip's).
     #[schemars(length(max = 80))]
     pub aircraft: Option<String>,
+    /// For flight_set: a flight id from quadcam_gear flights.
+    #[schemars(length(max = 120))]
+    pub flight: Option<String>,
+    /// For flight_set: the pack label ("" clears it).
+    #[schemars(length(max = 80))]
+    pub pack: Option<String>,
+    /// For flight_set: the place ("" clears it).
+    #[schemars(length(max = 200))]
+    pub place: Option<String>,
+    /// For flight_folders: a folder of radio logs to add (absolute path).
+    #[schemars(length(max = 1024))]
+    pub add_folder: Option<String>,
+    /// For flight_folders: a folder to remove.
+    #[schemars(length(max = 1024))]
+    pub remove_folder: Option<String>,
+    /// For pack_save: its pack type name.
+    #[schemars(length(max = 80))]
+    pub pack_type: Option<String>,
+    /// For pack_save: the day it arrived, YYYY-MM-DD.
+    #[schemars(length(max = 10))]
+    pub received: Option<String>,
+    /// For pack_save: retired from use.
+    pub retired: Option<bool>,
+    /// For pack_save: true marks it charged now, false clears the mark.
+    pub charged: Option<bool>,
+    /// For pack_save, pack_type_save and crash_save: a free note.
+    #[schemars(length(max = 2000))]
+    pub note: Option<String>,
+    /// For pack_type_save: lipo, lihv or liion.
+    #[schemars(length(max = 10))]
+    pub chemistry: Option<String>,
+    /// For pack_type_save: cells in series.
+    #[schemars(range(min = 1, max = 14))]
+    pub cells: Option<u8>,
+    /// For pack_type_save: capacity in mAh.
+    pub capacity_mah: Option<f64>,
+    /// For pack_type_save: the connector (XT30, BT2.0, ...).
+    #[schemars(length(max = 40))]
+    pub connector: Option<String>,
+    /// For pack_type_save: full charge, volts per cell.
+    pub full_v: Option<f64>,
+    /// For pack_type_save: storage charge, volts per cell.
+    pub storage_v: Option<f64>,
+    /// For pack_type_save: charge current in amps.
+    pub charge_a: Option<f64>,
+    /// For pack_type_save: the radio's mAh warning for this type (the flight threshold).
+    pub warn_mah: Option<f64>,
+    /// For pack_notes: the charging sheet's notes.
+    #[schemars(length(max = 10000))]
+    pub text: Option<String>,
+    /// For crash_save: the library clip id.
+    #[schemars(length(max = 80))]
+    pub clip: Option<String>,
+    /// For crash_save: seconds into the clip.
+    pub time_s: Option<f64>,
+    /// For crash_save: the day, YYYY-MM-DD (default: the clip's).
+    #[schemars(length(max = 10))]
+    pub day: Option<String>,
+    /// For crash_save: what broke.
+    #[schemars(length(max = 500))]
+    pub broke: Option<String>,
+    /// For crash_save: parts used for the repair.
+    #[schemars(length(max = 40))]
+    pub parts: Option<Vec<String>>,
+    /// For crash_save: repaired.
+    pub repaired: Option<bool>,
 }
 
 #[derive(Debug, Clone, Default, Deserialize, JsonSchema)]
@@ -100,12 +189,12 @@ pub fn tools() -> Vec<Value> {
     vec![
         tool::<GearArgs>(
             "quadcam_gear",
-            "Read the FPV gear QuadCam knows: `status` (the gear folder, the Gear settings, and the devices plugged in now: EdgeTX radios in USB Storage mode, goggles and DVR cards, FC and ELRS serial ports, radios in DFU mode; each with its saved name and aircraft when QuadCam knows it; and each FC's USB heat timer), `devices` (every device saved in gear.json: id, kind, name, aircraft, board, firmware, version, last seen, last backup), `fc_identify` (reads a Betaflight FC over MSP: board, firmware, version, device id, whether QuadCam may write it, known issues; no reboot), `board_notes` (known issues of FC boards and builds), `usb_timers` (per FC on USB: battery in, minutes on USB, minutes left before \"Unplug now\"), `osd` (a Betaflight OSD layout from `paths`, dump or diff files read in order: each OSD profile drawn on its grid (NTSC 30x13, PAL 30x16, HD 53x20, from vcd_video_system or `grid`), the elements on in each profile with x and y, and the check for overlaps and cells off screen), `card` (an EdgeTX SD card: board and version, whether QuadCam may write it, its models, the model the radio selects and that model's aircraft, the radio clock check; with `model`, that model in full) or `card_preview` (the checks and line diff of EdgeTX card edits, and how long the write would take; writes nothing). Changes nothing.\n\nBest for: the first Gear call, checking what is plugged in, and checking an OSD layout before or after an edit, and reading or planning radio model changes.\nReturns: one line per device plus the structured records; for osd, the drawn profiles as text plus the structured view.\nFollow up with quadcam_gear_edit device_save to name a device or link it to an aircraft.",
+            "Read the FPV gear QuadCam knows: `status` (the gear folder, the Gear settings, and the devices plugged in now: EdgeTX radios in USB Storage mode, goggles and DVR cards, FC and ELRS serial ports, radios in DFU mode; each with its saved name and aircraft when QuadCam knows it; and each FC's USB heat timer), `devices` (every device saved in gear.json: id, kind, name, aircraft, board, firmware, version, last seen, last backup), `fc_identify` (reads a Betaflight FC over MSP: board, firmware, version, device id, whether QuadCam may write it, known issues; no reboot), `board_notes` (known issues of FC boards and builds), `usb_timers` (per FC on USB: battery in, minutes on USB, minutes left before \"Unplug now\"), `osd` (a Betaflight OSD layout from `paths`, dump or diff files read in order: each OSD profile drawn on its grid (NTSC 30x13, PAL 30x16, HD 53x20, from vcd_video_system or `grid`), the elements on in each profile with x and y, and the check for overlaps and cells off screen), `card` (an EdgeTX SD card: board and version, whether QuadCam may write it, its models, the model the radio selects and that model's aircraft, the radio clock check; with `model`, that model in full), `card_preview` (the checks and line diff of EdgeTX card edits, and how long the write would take; writes nothing), `flights` (flights from the radio logs, newest first: hover throttle, sag, resting voltage, mAh, when the pack type's mAh warning was crossed, the worst link, dropouts; each with its aircraft, pack (or a suggested one), place and library clip; filter by `day`, `aircraft`, `pack`, `place`), `packs` (packs with cycles, charge state, resting voltage and a weak mark; pack types with the charging sheet and a suggested mAh warning; the charging notes), `session_report` (one flying day, by default the last import's days: flights, air time, longest flight, worst link, dropouts, pack use, crashes; as Markdown to share), `preflight` (the \"Pack up\" check: packs charged, the radio's model, card space, backups, cards still in the Mac; each pass, warn or unknown) or `crashes` (the crash and repair log, by `aircraft` or `clip`). Changes nothing.\n\nBest for: the first Gear call, checking what is plugged in, and checking an OSD layout before or after an edit, and reading or planning radio model changes.\nReturns: one line per device plus the structured records; for osd, the drawn profiles as text plus the structured view.\nFollow up with quadcam_gear_edit device_save to name a device or link it to an aircraft, flight_set to put a flight on a pack.",
             json!({"openWorldHint": false, "readOnlyHint": true, "title": "Gear"}),
         ),
         tool::<GearEditArgs>(
             "quadcam_gear_edit",
-            "Change QuadCam's own gear data, never a device's settings, a sim or a card: `device_save` names a device or links it to an aircraft profile (a device QuadCam does not know yet must be plugged in; use its id from quadcam_gear status or fc_identify), `device_forget` removes a device from QuadCam's list (its backups stay), `fc_read` reads a Betaflight FC through its CLI (read-only commands; the FC reboots when the read ends, so the person should expect it; returns the text, writes nothing).\n\nBest for: naming a radio or quad the person just plugged in, and linking it to its aircraft profile; reading an FC's settings as text.\nReturns: the saved or forgotten device, or the FC's identity and each command's answer.",
+            "Change QuadCam's own gear data, never a device's settings, a sim or a card: `device_save` names a device or links it to an aircraft profile (a device QuadCam does not know yet must be plugged in; use its id from quadcam_gear status or fc_identify), `device_forget` removes a device from QuadCam's list (its backups stay), `fc_read` reads a Betaflight FC through its CLI (read-only commands; the FC reboots when the read ends, so the person should expect it; returns the text, writes nothing), `flight_set` (a flight's pack or place), `flight_folders` (add or remove a folder of radio logs the flights read), `pack_save` / `pack_delete` (a pack by `name`, its label; `charged=true` marks it charged now), `pack_type_save` / `pack_type_delete` (a pack type by `name`: chemistry, cells, capacity, connector, charge volts per cell, charge current, mAh warning), `pack_notes` (the charging sheet's notes), `crash_save` / `crash_delete` (a crash on a library clip: the time in the clip, what broke, the parts used; no `id` logs a new one).\n\nBest for: naming a radio or quad the person just plugged in, and linking it to its aircraft profile; reading an FC's settings as text; putting flights on packs; logging a crash and its repair.\nReturns: the saved or forgotten device, the FC's identity and each command's answer, or the saved flight, pack, pack type or crash.",
             json!({"destructiveHint": false, "idempotentHint": true, "openWorldHint": false, "readOnlyHint": false, "title": "Edit gear data"}),
         ),
         tool::<GearApplyArgs>(
@@ -331,9 +420,9 @@ fn gear<B: Backend>(backend: &mut B, a: &Value) -> Result<(Vec<Value>, Value)> {
             )?;
             Ok((vec![text(preview_text(&v))], v))
         }
-        other => Err(anyhow!(
-            "unknown action {other:?}; use status, devices, fc_identify, board_notes, usb_timers, osd, card or card_preview"
-        )),
+        other => super::gear_flights::read(backend, other, &x).unwrap_or_else(|| Err(anyhow!(
+            "unknown action {other:?}; use status, devices, fc_identify, board_notes, usb_timers, osd, card, card_preview, flights, packs, session_report, preflight or crashes"
+        ))),
     }
 }
 
@@ -441,7 +530,7 @@ fn gear_edit<B: Backend>(backend: &mut B, a: &Value) -> Result<(Vec<Value>, Valu
     let action = x
         .action
         .clone()
-        .context("action is required: device_save or device_forget")?;
+        .context("action is required, for example device_save")?;
     match action.as_str() {
         "device_save" => {
             let id =
@@ -480,9 +569,9 @@ fn gear_edit<B: Backend>(backend: &mut B, a: &Value) -> Result<(Vec<Value>, Valu
             }
             Ok((vec![text(out)], j))
         }
-        other => Err(anyhow!(
-            "unknown action {other:?}; use device_save, device_forget or fc_read"
-        )),
+        other => super::gear_flights::edit(backend, other, &x).unwrap_or_else(|| Err(anyhow!(
+            "unknown action {other:?}; use device_save, device_forget, fc_read, flight_set, flight_folders, pack_save, pack_delete, pack_type_save, pack_type_delete, pack_notes, crash_save or crash_delete"
+        ))),
     }
 }
 
