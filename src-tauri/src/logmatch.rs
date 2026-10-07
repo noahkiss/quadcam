@@ -333,10 +333,10 @@ pub fn picture_fit(run: &[Seg], offset: f64, keep: &[(f64, f64)], duration: f64)
             let (ks, ke) = keep[k];
             (vb.min(ke + EDGE_S) - va.max(ks - EDGE_S)).max(0.0)
         };
-        for k in 0..keep.len() {
+        for (k, t) in touched.iter_mut().enumerate() {
             let ov = ov_of(k);
             if ov > EDGE_S.min(len / 2.0) {
-                touched[k] = true;
+                *t = true;
             }
             if best.is_none_or(|(_, o)| ov > o) {
                 best = Some((k, ov));
