@@ -16,6 +16,7 @@
 
 pub mod aero;
 pub mod battery;
+pub mod bench;
 pub mod diff;
 pub mod fc;
 pub mod filters;

@@ -46,7 +46,12 @@ mod mach {
         pub fn mach_wait_until(deadline: u64) -> i32;
         pub fn mach_timebase_info(info: *mut TimebaseInfo) -> i32;
         pub fn pthread_set_qos_class_self_np(qos: u32, relative_priority: i32) -> i32;
+        pub fn mach_thread_self() -> u32;
+        pub fn thread_policy_set(thread: u32, flavor: u32, info: *const u32, count: u32) -> i32;
     }
+    /// `THREAD_TIME_CONSTRAINT_POLICY` and its word count.
+    pub const TIME_CONSTRAINT_POLICY: u32 = 2;
+    pub const TIME_CONSTRAINT_COUNT: u32 = 4;
     /// `QOS_CLASS_USER_INTERACTIVE`.
     pub const QOS_USER_INTERACTIVE: u32 = 0x21;
 }
@@ -107,13 +112,25 @@ impl Clock for HostClock {
     }
 }
 
-/// Raise the calling thread to the highest user QoS.
-fn set_realtime_qos() {
+/// Raise the calling thread to the highest user QoS, then ask for the time-constraint
+/// (real-time) policy audio threads use: woken every `period_ns`, needing about a fifth of
+/// it. A busy machine then cannot starve the physics for tens of milliseconds.
+fn set_realtime_qos(clock: &HostClock, period_ns: u64) {
     #[cfg(target_os = "macos")]
-    // SAFETY: sets the calling thread's own QoS class.
+    // SAFETY: both calls change only the calling thread's own scheduling.
     unsafe {
         mach::pthread_set_qos_class_self_np(mach::QOS_USER_INTERACTIVE, 0);
+        let ticks = |ns: u64| (ns as u128 * clock.denom as u128 / clock.numer as u128) as u32;
+        let policy = [ticks(period_ns), ticks(period_ns / 5), ticks(period_ns), 1];
+        mach::thread_policy_set(
+            mach::mach_thread_self(),
+            mach::TIME_CONSTRAINT_POLICY,
+            policy.as_ptr(),
+            mach::TIME_CONSTRAINT_COUNT,
+        );
     }
+    #[cfg(not(target_os = "macos"))]
+    let _ = (clock, period_ns);
 }
 
 /// A dropped backlog.
@@ -270,10 +287,10 @@ fn run<C: Clock>(
     rx: Receiver<Control>,
     shared: Arc<Shared>,
 ) -> (Sim, Option<Recording>) {
-    if cfg.realtime_qos {
-        set_realtime_qos();
-    }
     let dt_ns = sim.dt * 1e9;
+    if cfg.realtime_qos {
+        set_realtime_qos(&HostClock::new(), dt_ns as u64);
+    }
     let mut anchor = clock.now_ns();
     let mut k: u64 = 0;
     let deadline = |anchor: u64, k: u64| anchor + (k as f64 * dt_ns).round() as u64;
