@@ -3,12 +3,14 @@
 // Voice, Checklists, Splash, Backups and Changes.
 import { Overview } from "./Overview";
 import { OsdSegment } from "./Osd/OsdSegment";
+import { BackupsSegment } from "./Backups/BackupsSegment";
 import type { DeviceRef, DeviceSegment } from "./slots";
 
 export const DEVICE_SEGMENTS: DeviceSegment[] = [
   { id: "overview", label: "Overview", kinds: "all", render: (d) => <Overview d={d} /> },
-  // From a dump or diff file until WP4 gives it the FC's latest backup.
-  { id: "osd", label: "OSD", kinds: ["fc"], render: () => <OsdSegment /> },
+  // The FC's latest backup, or a dump or diff file.
+  { id: "osd", label: "OSD", kinds: ["fc"], render: (d) => <OsdSegment key={d.key} device={d.device?.last_backup ? d.device.id : null} /> },
+  { id: "backups", label: "Backups", kinds: ["radio", "fc", "goggles", "dvr_card"], render: (d) => <BackupsSegment d={d} /> },
 ];
 
 /** The segments a device shows, in list order. */

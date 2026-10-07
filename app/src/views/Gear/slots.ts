@@ -4,6 +4,8 @@
 import type { ReactNode } from "react";
 import type { Connected, Device, DeviceKind } from "../../ipc/types";
 import type { DeviceState } from "../../lib/gear";
+import { backupTime, checkFailed, checkFor } from "../../lib/backups";
+import { useStore } from "../../store";
 
 /** One device as a page shows it: saved, plugged in, or both. */
 export interface DeviceRef {
@@ -43,9 +45,9 @@ export const gearSlots = {
   stagedFor: (_deviceId: string): number => 0,
   /** Opens the apply sheet for a device's staged changes (WP5). */
   review: (_deviceId: string): void => {},
-  /** The latest backup's time or id (WP4); the saved record's `last_backup` until then. */
-  lastBackup: (d: Device | null): string | null => d?.last_backup ?? null,
+  /** The latest backup's time, from the saved record's `last_backup` id. */
+  lastBackup: (d: Device | null): string | null => backupTime(d?.last_backup),
   /** What a connected device needs from the person beyond a name (a failed step, WP4 and
    *  later): a short phrase, or null. */
-  attention: (_c: Connected): string | null => null,
+  attention: (c: Connected): string | null => (checkFailed(checkFor(useStore.getState().gear, c.id)) ? "Card check failed" : null),
 };

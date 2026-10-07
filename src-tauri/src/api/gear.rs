@@ -6,12 +6,22 @@
 //! its typed command to `specta_builder` in `lib.rs`.
 
 pub use crate::core::{
+    BackupDiffParams, BackupFilter, BackupParams, BackupPinParams, BackupReadParams, BackupResult,
+    BackupSummary, CardCheckParams, CardChecksParams, CardRepairParams, ExportParams, GearJob,
+    ImportBackupsParams, PruneParams, RepairResult, StopParams,
+};
+pub use crate::core::{
     BoardNotesParams, CardParams, CardPreview, CardPreviewParams, DeviceSaveParams, FcJob,
     FcPortParams, FcReadParams, GearCard, GearStatus, OsdParams, ReminderParams, UsbTimer,
 };
+pub use crate::gear::backup::{
+    BackupContent, ExportReport, ImportBackupsReport, PruneReport, StorageView,
+};
 pub use crate::gear::bf::boards::BoardNote;
 pub use crate::gear::bf::{FcInfo, FcRead};
+pub use crate::gear::health::CardCheck;
 pub use crate::gear::model::Device;
+pub use crate::gear::model::DiffItem;
 pub use crate::gear::osd::OsdView;
 use serde::{Deserialize, Serialize};
 use specta::Type;
@@ -54,6 +64,32 @@ macro_rules! with_gear_rows {
             gear_card(params: CardParams) -> GearCard = |c| c.gear_card(&params);
             /// Checks and diffs EdgeTX card edits. Writes nothing.
             gear_card_preview(params: CardPreviewParams) -> CardPreview = |c| c.gear_card_preview(&params);
+            /// Backs up a radio card or an FC (the FC reboots). Writes nothing when nothing changed.
+            gear_backup(params: BackupParams) -> BackupResult = |c| c.gear_backup(&params);
+            /// Snapshots, newest first, without their file lists.
+            gear_backups(params: BackupFilter) -> Vec<BackupSummary> = |c| c.gear_backups(&params);
+            /// A snapshot with its files, or one file's content.
+            gear_backup_read(params: BackupReadParams) -> BackupContent = |c| c.gear_backup_read(&params);
+            /// What changed between two snapshots (from the one before `a` when `b` is empty).
+            gear_backup_diff(params: BackupDiffParams) -> Vec<DiffItem> = |c| c.gear_backup_diff(&params);
+            /// Pins a snapshot (never pruned) or unpins it.
+            gear_backup_pin(params: BackupPinParams) -> BackupSummary = |c| c.gear_backup_pin(&params);
+            /// Sizes of the gear folder, in total and per device.
+            gear_storage() -> StorageView = |c| c.gear_storage();
+            /// Thins snapshots by the retention settings and removes blobs nothing names.
+            gear_prune(params: PruneParams) -> PruneReport = |c| c.gear_prune(&params);
+            /// Writes a snapshot, or a device's snapshots, as plain folders.
+            gear_export(params: ExportParams) -> ExportReport = |c| c.gear_export(&params);
+            /// Imports an old backup folder: card copies, FC diff and dump files, LOGS folders.
+            gear_import_backups(params: ImportBackupsParams) -> ImportBackupsReport = |c| c.gear_import_backups(&params);
+            /// Checks a card's file system (diskutil verifyVolume) and logs the result.
+            gear_card_check(params: CardCheckParams) -> CardCheck = |c| c.gear_card_check(&params);
+            /// A card's checks, newest first.
+            gear_card_checks(params: CardChecksParams) -> Vec<CardCheck> = |c| Ok(c.gear_card_checks(&params));
+            /// Repairs a card whose latest check failed: a backup first, the repair, a check after.
+            gear_card_repair(params: CardRepairParams) -> RepairResult = |c| c.gear_card_repair(&params);
+            /// Stops a running backup or card check on a link. True when one was running.
+            gear_stop(params: StopParams) -> bool = |c| Ok(c.gear_stop(&params.handle));
         }
     };
 }
