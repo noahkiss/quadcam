@@ -116,7 +116,7 @@ pub fn full_length(secs: f64, bytes: Option<u64>, neighbours: &[f64]) -> Result<
     {
         return Ok(format!("{len:.0} s, the {dvr}'s split"));
     }
-    if bytes.is_some_and(|b| b <= FAT32_MAX_BYTES && b >= FAT32_MAX_BYTES - SIZE_MARGIN) {
+    if bytes.is_some_and(|b| (FAT32_MAX_BYTES - SIZE_MARGIN..=FAT32_MAX_BYTES).contains(&b)) {
         return Ok("just under 4 GiB, the FAT32 file limit".into());
     }
     let minute_off = (secs - (secs / 60.0).round() * 60.0).abs();
