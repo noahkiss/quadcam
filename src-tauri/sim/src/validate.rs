@@ -14,6 +14,7 @@
 
 use rapier3d_f64::glamx::{DQuat, DVec3};
 use serde::Serialize;
+use specta::Type;
 
 use crate::aero::{body_drag, inflow_factor};
 use crate::battery::Battery;
@@ -28,16 +29,16 @@ use crate::ring::{RcFrame, Sticks};
 use crate::world::WorldSpec;
 use crate::{Sim, SimSettings};
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Type)]
 #[serde(rename_all = "snake_case")]
-pub enum Outcome {
+pub enum CheckOutcome {
     Pass,
     Fail,
     /// The log has no window for this check.
     NotInLog,
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Type)]
 pub struct CheckResult {
     /// `hover`, `punch`, `sag`, `roll`, `pitch`, `yaw`, `coast_down`, `fall_recovery`.
     pub check: String,
@@ -52,10 +53,10 @@ pub struct CheckResult {
     pub band: f64,
     pub relative: bool,
     pub unit: String,
-    pub outcome: Outcome,
+    pub outcome: CheckOutcome,
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Type)]
 pub struct ValidationReport {
     pub profile: String,
     pub logs: Vec<String>,
@@ -65,14 +66,14 @@ pub struct ValidationReport {
 impl ValidationReport {
     /// Every check that ran passed, and at least one ran.
     pub fn passed(&self) -> bool {
-        self.checks.iter().any(|c| c.outcome == Outcome::Pass)
-            && self.checks.iter().all(|c| c.outcome != Outcome::Fail)
+        self.checks.iter().any(|c| c.outcome == CheckOutcome::Pass)
+            && self.checks.iter().all(|c| c.outcome != CheckOutcome::Fail)
     }
 
     pub fn failures(&self) -> Vec<&CheckResult> {
         self.checks
             .iter()
-            .filter(|c| c.outcome == Outcome::Fail)
+            .filter(|c| c.outcome == CheckOutcome::Fail)
             .collect()
     }
 
@@ -95,9 +96,9 @@ impl ValidationReport {
                 format!("±{} {}", c.band, c.unit)
             };
             let res = match c.outcome {
-                Outcome::Pass => "pass",
-                Outcome::Fail => "FAIL",
-                Outcome::NotInLog => "not in log",
+                CheckOutcome::Pass => "pass",
+                CheckOutcome::Fail => "FAIL",
+                CheckOutcome::NotInLog => "not in log",
             };
             s.push_str(&format!(
                 "{:<14} {:<12} {:<26} {:<15} {:>10.3} {:>10.3}  {:<8} {}\n",
@@ -137,7 +138,11 @@ fn result(
         band,
         relative,
         unit: unit.into(),
-        outcome: if ok { Outcome::Pass } else { Outcome::Fail },
+        outcome: if ok {
+            CheckOutcome::Pass
+        } else {
+            CheckOutcome::Fail
+        },
     }
 }
 
@@ -152,7 +157,7 @@ fn not_in_log(check: &str, log: &str) -> CheckResult {
         band: 0.0,
         relative: false,
         unit: String::new(),
-        outcome: Outcome::NotInLog,
+        outcome: CheckOutcome::NotInLog,
     }
 }
 
@@ -172,15 +177,16 @@ pub fn validate(profile: &SimProfile, logs: &[LogData]) -> ValidationReport {
     // A check with no window in one log but a result in another is not reported missing.
     let ran: std::collections::BTreeSet<String> = checks
         .iter()
-        .filter(|c| c.outcome != Outcome::NotInLog)
+        .filter(|c| c.outcome != CheckOutcome::NotInLog)
         .map(|c| c.check.clone())
         .collect();
     let mut seen = std::collections::BTreeSet::new();
     checks.retain(|c| {
-        c.outcome != Outcome::NotInLog || (!ran.contains(&c.check) && seen.insert(c.check.clone()))
+        c.outcome != CheckOutcome::NotInLog
+            || (!ran.contains(&c.check) && seen.insert(c.check.clone()))
     });
     for c in checks.iter_mut() {
-        if c.outcome == Outcome::NotInLog {
+        if c.outcome == CheckOutcome::NotInLog {
             c.log = "-".into();
         }
     }

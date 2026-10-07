@@ -6,9 +6,10 @@
 //
 // Inventory: the Rust crates the app links (`cargo metadata`, normal dependencies reachable
 // from the quadcam package on aarch64-apple-darwin), the npm packages the web view bundles
-// (the `dependencies` of app/package.json and theirs), and the bundled assets (fonts, icons,
-// palette). Each entry's license texts come from its own package; an entry without one names
-// its license and repository. Needs `cargo` and `pnpm install` in app/.
+// (the `dependencies` of app/package.json and theirs), the bundled assets (fonts, icons,
+// palette), and source ported from MIT projects. Each entry's license texts come from its
+// own package; an entry without one names its license and repository. Needs `cargo` and
+// `pnpm install` in app/.
 import { execFileSync } from "node:child_process";
 import { existsSync, readdirSync, readFileSync, realpathSync, statSync, writeFileSync, mkdirSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
@@ -211,6 +212,23 @@ export function assets() {
   ];
 }
 
+/** MIT source ported into QuadCam's own code, whose notice must travel with it: each has a
+ * LICENSE file beside the ported source (sim-design 10.2). */
+export function ported() {
+  const file = "src-tauri/sim/LICENSES/propwash.txt";
+  return [
+    {
+      kind: "ported",
+      name: "propwash (parts of the simulator's physics and flight controller, ported to Rust)",
+      version: "",
+      license: "MIT",
+      url: file,
+      authors: [],
+      files: [{ file: "LICENSE", text: readFileSync(join(ROOT, file), "utf8").trim() }],
+    },
+  ];
+}
+
 /** The notices text: a list, then each license text once with the entries that use it. */
 export function render(entries) {
   const lines = [
@@ -224,6 +242,7 @@ export function render(entries) {
   ];
   const groups = [
     ["Fonts, icons and palette", (e) => ["font", "icons", "palette"].includes(e.kind)],
+    ["Ported source", (e) => e.kind === "ported"],
     ["Web view (npm packages)", (e) => e.kind === "npm"],
     ["Rust crates", (e) => e.kind === "crate"],
   ];
@@ -265,7 +284,7 @@ export function render(entries) {
 
 function main(argv) {
   const out = argv.includes("--out") ? argv[argv.indexOf("--out") + 1] : null;
-  const entries = [...assets(), ...npmPackages(), ...crates()];
+  const entries = [...assets(), ...ported(), ...npmPackages(), ...crates()];
   const bad = check(entries);
   if (argv.includes("--check")) {
     if (bad.length) {

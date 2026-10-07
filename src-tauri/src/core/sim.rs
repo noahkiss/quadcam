@@ -17,6 +17,7 @@ use crate::gear::radio_hid::{self, Feed, Subscription};
 use crate::gear::sim_cal::{self, RadioResolution, SavedCalibration, SimDefaults};
 use anyhow::{bail, Result};
 use quadcam_sim::input::{AutoCal, CalPhase, Calibration, CaptureTarget, StickFunction};
+use quadcam_sim::validate::ValidationReport;
 use serde::{Deserialize, Serialize};
 use specta::Type;
 use std::sync::{Arc, Mutex};
@@ -93,6 +94,18 @@ pub struct SimDefaultsParams {
     /// Betaflight dump, diff or CLI files.
     #[serde(default)]
     pub fc: Vec<std::path::PathBuf>,
+}
+
+/// `gear_sim_validate`: a sim profile against a folder of decoded blackbox logs.
+#[derive(Debug, Clone, Default, Serialize, Deserialize, Type)]
+pub struct SimValidateParams {
+    /// A built-in sim profile: `meteor75`, `air65ii`, `five_inch` or `seven_inch`.
+    pub aircraft: String,
+    /// A folder of CSV files `blackbox_decode` wrote (one per flight).
+    pub logs: std::path::PathBuf,
+    /// The motors' pole count, for eRPM to rpm; default: the profile's.
+    #[serde(default)]
+    pub motor_poles: Option<u32>,
 }
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize, Type)]
@@ -322,6 +335,32 @@ impl Core {
                 Ok(d)
             }
         }
+    }
+
+    /// Validates a sim profile against a quad's decoded blackbox logs: each check of the
+    /// validation harness (hover, punch, sag, roll, pitch and yaw response, coast-down,
+    /// fall recovery) with its band and result. Reads only.
+    pub fn gear_sim_validate(&self, p: &SimValidateParams) -> Result<ValidationReport> {
+        let id = p.aircraft.trim();
+        let Some(profile) = quadcam_sim::preset(id) else {
+            let ids: Vec<String> = quadcam_sim::presets().into_iter().map(|p| p.id).collect();
+            bail!(
+                "No sim profile {id:?}. Built-in profiles: {}.",
+                ids.join(", ")
+            );
+        };
+        let scales = quadcam_sim::log::Scales {
+            motor_poles: p
+                .motor_poles
+                .map(f64::from)
+                .unwrap_or(profile.motor.poles.value),
+            ..Default::default()
+        };
+        let logs = quadcam_sim::log::read_folder(&p.logs, scales).map_err(anyhow::Error::msg)?;
+        if logs.is_empty() {
+            bail!("{} holds no decoded logs (*.csv).", p.logs.display());
+        }
+        Ok(quadcam_sim::validate::validate(&profile, &logs))
     }
 
     /// Whether the radio's reader thread runs (the page stream or a sim sink).

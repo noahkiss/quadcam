@@ -72,6 +72,7 @@ expression: "Core::METHODS"
   "gear_sim_calibration",
   "gear_sim_calibration_save",
   "gear_sim_defaults",
+  "gear_sim_validate",
   "gear_sim_calibrate",
   "gear_flights",
   "gear_flight_set",

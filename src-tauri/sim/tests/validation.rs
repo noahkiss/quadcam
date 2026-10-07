@@ -7,7 +7,7 @@ use std::path::Path;
 use quadcam_sim::log::{check_scrubbed, read_folder, Scales};
 use quadcam_sim::preset;
 use quadcam_sim::ring::Sticks;
-use quadcam_sim::validate::{synth_log, validate, HoverPilot, Outcome, ValidationReport};
+use quadcam_sim::validate::{synth_log, validate, CheckOutcome, HoverPilot, ValidationReport};
 
 const FIXTURES: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/tests/fixtures");
 
@@ -15,7 +15,7 @@ fn checks_run(r: &ValidationReport) -> Vec<String> {
     let mut v: Vec<String> = r
         .checks
         .iter()
-        .filter(|c| c.outcome != Outcome::NotInLog)
+        .filter(|c| c.outcome != CheckOutcome::NotInLog)
         .map(|c| c.check.clone())
         .collect();
     v.sort();

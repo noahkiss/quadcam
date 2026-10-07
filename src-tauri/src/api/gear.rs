@@ -17,7 +17,7 @@ pub use crate::core::{
 };
 pub use crate::core::{
     CalibrateParams, CalibrateView, SimCalibration, SimCalibrationParams, SimCalibrationSaveParams,
-    SimDefaultsParams,
+    SimDefaultsParams, SimValidateParams,
 };
 pub use crate::core::{
     CrashSaveParams, FlightFilter, FlightFoldersParams, FlightReport, FlightSetParams, FlightsView,
@@ -39,6 +39,7 @@ pub use crate::gear::radio_hid::RadioSnapshot;
 pub use crate::gear::report::SessionReport;
 pub use crate::gear::sim_cal::{SavedCalibration, SimDefaults};
 pub use crate::gear::switchmap::SwitchMap;
+pub use quadcam_sim::validate::{CheckOutcome, CheckResult, ValidationReport};
 use serde::{Deserialize, Serialize};
 use specta::Type;
 
@@ -97,6 +98,9 @@ macro_rules! with_gear_rows {
             /// What the sim pre-fills for an aircraft: stick channels, arm, angle, horizon,
             /// turtle and air mode switches, a reset control, each with its source. Reads only.
             gear_sim_defaults(params: SimDefaultsParams) -> SimDefaults = |c| c.gear_sim_defaults(&params);
+            /// A sim profile checked against a folder of decoded blackbox logs: each check's
+            /// band and result (sim-design 6.4). Reads only.
+            gear_sim_validate(params: SimValidateParams) -> ValidationReport = |c| c.gear_sim_validate(&params);
             /// Drives the sim's calibration session (`sim-calibration-event` events).
             gear_sim_calibrate(params: CalibrateParams) -> CalibrateView = |c| c.gear_sim_calibrate(&params);
             /// Flights from the radio logs: hover, sag, resting voltage, mAh, the threshold,

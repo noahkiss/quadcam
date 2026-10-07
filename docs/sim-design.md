@@ -499,6 +499,29 @@ documentation and from logged behaviour, never from its source (section 10).
 Source: Betaflight's documented behaviour for each mode and guard (idea only). propwash's turtle
 implementation and the spike's arming fix (a per-airframe spawn tilt limit) (reuse code).
 
+### 5.6 Built (S1)
+
+- `quadcam-sim` holds the physics and the controller beside S4's `input.rs`: `profile`
+  (the 6.1 parameter set, each value with its source; presets `meteor75`, `air65ii`,
+  `five_inch`, `seven_inch` as JSON in `sim/presets/`), `diff` (its own `diff all` reader:
+  the selected profile and rate profile, `aux`, features), `rates` (Betaflight, Actual, Quick,
+  RaceFlight, KISS and the throttle curve), `motor` (the electrical model; the first-order
+  fallback), `battery` (ideal at 3.9 V per cell; sag solved exactly), `aero` (inflow, ground
+  effect, VRS, prop wash, duct momentum drag, H-force, body drag, Dryden wind), `mixer`,
+  `fc`, `world` (Rapier: the quad's hull, materials, collider streaming, the ground-effect
+  ray), `sim` (the step), `snapshot` (the triple buffer and pose interpolation), `record`,
+  `ring` (`RcFrame`, `RadioSource`: S4's ring through the link and the calibration),
+  `runner` (the physics thread) and `bench`.
+- Rapier owns the one dynamic body; the sim applies its own forces and torques each step.
+- The runner asks for the time-constraint policy audio threads use, as well as the QoS
+  class: with the QoS class alone, a busy machine starved it for 25-50 ms. It steps on S4's
+  `now_ns`, the clock the HID thread stamps with.
+- A calibration's arm, mode and reset controls, when set, win over the quad's `aux` ranges.
+- Convergence (4.12): over a 28 m acro script, 2 kHz ends 0.32 m from 4 kHz and 1 kHz
+  0.92 m; flip peak rates agree within 0.5 %. The default stays 2 kHz (decision 2).
+- Bench (an Apple silicon laptop, load average 11-29 from other builds): step p99 10-12 µs free, 8-9 µs
+  in contact, every preset; a 10 min real-time run dropped no steps.
+
 ---
 
 ## 6. Quad profiles
@@ -601,6 +624,25 @@ CI fixtures:
 - Scrubbed: craft and pilot names, board UIDs and dates removed. A test fails on a UID-shaped
   value, as `fixtures_are_scrubbed` does for Betaflight dumps.
 - The headless bench (not CI): step cost, contact cost and a 10 min real-time run.
+
+### 6.5 Built (S2)
+
+- `validate.rs` runs every check of 6.4 on decoded logs; `log.rs` reads `blackbox_decode`
+  CSV and fixtures, and cuts and scrubs fixtures (`examples/fixture.rs`). The CI fixtures
+  are ten excerpts of the two example whoops' logs (905 KB). `quadcam-cli gear sim validate`
+  and MCP `sim_validate` run the harness on a folder of decoded logs.
+- What the replay has to match: the punch replay climbs (inflow and drag act) from the
+  logged sink speed, and its acceleration goes through Betaflight's 10 Hz accelerometer
+  low-pass, scaled by the log's own hover (kT over mass from the same flight). Replayed
+  setpoints skip RC smoothing: the logged ones are already smoothed. Hover samples are level
+  (under 10°), with no sideways force, near the profile's hover speed.
+- Corrections to 6.3 for the example logs. The blackbox quaternion is Q15 (×32767). With
+  the attitude read right, the 75 mm whoop's level hover is 18.3-19.1k rpm at command
+  0.28-0.32, not 20.9k at 0.347: that median mixed in tilted cruising. Its rotor inertia
+  fits the punch speed traces at twice the value that a 16 ms step response implies. The
+  presets hold the corrected values (`reference` in each preset).
+- The example logs hold no ground speed and no clean fall recovery, so coast-down and fall
+  recovery run only on the harness's own sim-written log in CI.
 
 ---
 
@@ -876,8 +918,8 @@ its rows in `api`, CLI and MCP.
 
 | Id | Title | Owns | Depends on | Phase |
 |---|---|---|---|---|
-| S1 | Physics crate | `src-tauri/sim/`: rigid body, motors, props, ducts, drag, ground effect, prop wash, VRS, battery, Rapier collisions, FC (rates, smoothing, PID, angle, horizon, airmode, turtle, arming), the stepping thread, snapshots, recordings; built-in presets | – | 1 |
-| S2 | Validation harness | `sim/src/validate.rs`, `sim/tests/`, fixtures and their scrubber, the headless bench | S1 | 1 |
+| S1 | Physics crate. Built (5.6) | `src-tauri/sim/`: rigid body, motors, props, ducts, drag, ground effect, prop wash, VRS, battery, Rapier collisions, FC (rates, smoothing, PID, angle, horizon, airmode, turtle, arming), the stepping thread, snapshots, recordings; built-in presets | – | 1 |
+| S2 | Validation harness. Built (6.5) | `sim/src/validate.rs`, `sim/tests/`, fixtures and their scrubber, the headless bench | S1 | 1 |
 | S3 | Profile fitting | `sim/src/fit.rs`, profile storage under `<gear>/sim/`, `gear_sim_fit` / `profile(s)` rows, Fit and profile views | S1, S2; task BB for native decoding | 2 |
 | S4 | Input and calibration. Built (7.8) | `radio_hid` unthrottled subscriber, `sim/src/input.rs` (map, ends, deadzone, Reverse, link model), calibration storage keyed by radio id, the calibration screen | WP6 | 1 |
 | S5 | Minimal renderer and in-process host | Sim window (WebView, three.js), pose stream and interpolation, FPV camera, the plain room, basic OSD, stick display, Sim page, launch, settings popover | S1, S4 | 1 |

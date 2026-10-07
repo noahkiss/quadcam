@@ -1,7 +1,7 @@
 // node --test scripts/   (needs cargo and `pnpm install` in app/)
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { allowedExpr, assets, check, chosen, crates, npmPackages, render } from "./notices.mjs";
+import { allowedExpr, assets, check, chosen, crates, npmPackages, ported, render } from "./notices.mjs";
 
 test("license expressions", () => {
   assert.ok(allowedExpr("MIT"));
@@ -19,8 +19,9 @@ test("license expressions", () => {
 });
 
 test("the app's inventory passes, and a planted bad license fails", () => {
-  const entries = [...assets(), ...npmPackages(), ...crates()];
+  const entries = [...assets(), ...ported(), ...npmPackages(), ...crates()];
   assert.ok(entries.some((e) => e.kind === "crate" && e.name === "tauri"));
+  assert.ok(entries.some((e) => e.kind === "crate" && e.name === "rapier3d-f64"), "the sim crate's dependencies are inventoried");
   assert.ok(entries.some((e) => e.kind === "npm" && e.name === "react"));
   assert.ok(entries.some((e) => e.kind === "font" && e.name === "Space Grotesk"));
   assert.ok(!entries.some((e) => e.kind === "crate" && e.name === "quadcam"), "the app itself is not a third party");
@@ -33,5 +34,6 @@ test("the app's inventory passes, and a planted bad license fails", () => {
   for (const e of entries) assert.ok(text.includes(`- ${e.name}`), `${e.name} is listed`);
   assert.ok(text.includes("SIL OPEN FONT LICENSE Version 1.1"));
   assert.ok(text.includes("Copyright 2020 The Space Grotesk Project Authors"));
+  assert.ok(text.includes("Ported source") && text.includes("Permission is hereby granted"), "the ported code's MIT notice");
   assert.ok(!/<[^>\s]+@[^>\s]+>/.test(text.split("Packages that ship no license file")[1] || ""), "no author e-mail addresses in the summary");
 });

@@ -197,6 +197,11 @@ export const commands = {
 	 *  turtle and air mode switches, a reset control, each with its source. Reads only.
 	 */
 	gearSimDefaults: (params: SimDefaultsParams) => typedError<SimDefaults, string>(__TAURI_INVOKE("gear_sim_defaults", { params })),
+	/**
+	 *  A sim profile checked against a folder of decoded blackbox logs: each check's
+	 *  band and result (sim-design 6.4). Reads only.
+	 */
+	gearSimValidate: (params: SimValidateParams) => typedError<ValidationReport, string>(__TAURI_INVOKE("gear_sim_validate", { params })),
 	/**  Drives the sim's calibration session (`sim-calibration-event` events). */
 	gearSimCalibrate: (params: CalibrateParams) => typedError<CalibrateView, string>(__TAURI_INVOKE("gear_sim_calibrate", { params })),
 	/**
@@ -820,6 +825,27 @@ export type Check = {
 
 /**  Which command a check ran. */
 export type CheckKind = "verify" | "repair";
+
+export type CheckOutcome = "pass" | "fail" | 
+/**  The log has no window for this check. */
+"not_in_log";
+
+export type CheckResult = {
+	/**  `hover`, `punch`, `sag`, `roll`, `pitch`, `yaw`, `coast_down`, `fall_recovery`. */
+	check: string,
+	/**  What is compared: `command`, `speed`, `peak_accel`, `rise_90`, ... */
+	measure: string,
+	log: string,
+	/**  Window in the log (s). */
+	window: [number | null, number | null] | null,
+	logged: number | null,
+	sim: number | null,
+	/**  Allowed difference; `relative` bands are fractions of the logged value. */
+	band: number | null,
+	relative: boolean,
+	unit: string,
+	outcome: CheckOutcome,
+};
 
 /**  One check. */
 export type CheckRow = {
@@ -3597,6 +3623,16 @@ export type SimDefaultsParams = {
 	fc?: string[],
 };
 
+/**  `gear_sim_validate`: a sim profile against a folder of decoded blackbox logs. */
+export type SimValidateParams = {
+	/**  A built-in sim profile: `meteor75`, `air65ii`, `five_inch` or `seven_inch`. */
+	aircraft: string,
+	/**  A folder of CSV files `blackbox_decode` wrote (one per flight). */
+	logs: string,
+	/**  The motors' pole count, for eRPM to rpm; default: the profile's. */
+	motor_poles?: number | null,
+};
+
 /**  Where a moment's evidence came from. */
 export type Source = "radio_log" | "video";
 
@@ -3929,6 +3965,12 @@ export type UsbTimer = {
 	remaining_s: number | null,
 	/**  "Unplug now" played for this battery session. */
 	warned: boolean,
+};
+
+export type ValidationReport = {
+	profile: string,
+	logs: string[],
+	checks: CheckResult[],
 };
 
 /**  `verify`: the clips to check again (all verified clips when None). */
