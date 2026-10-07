@@ -16,6 +16,8 @@
 //! - `edgetx`: the EdgeTX card engine: YAML line editor, model views and ops, card plans
 //!   and the card writer.
 //! - `cues`: spoken, sound and notification cues ("safe to unplug", "still inserted").
+//! - `flights`: flight analysis from radio logs: hover, sag, resting voltage, mAh,
+//!   dropouts, and the flight index (`flights.json`).
 //! - `osd`: Betaflight OSD layouts: decode, draw per profile, overlap and off-screen check.
 //!
 //! `Env` is what Gear reaches outside the process (serial ports, volumes, presence, the cue
@@ -27,6 +29,7 @@ pub mod cues;
 pub mod detect;
 pub mod edgetx;
 pub mod events;
+pub mod flights;
 pub mod model;
 pub mod osd;
 pub mod serial;
