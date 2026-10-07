@@ -10,10 +10,12 @@ import { fmtBytes, fmtDur } from "../../lib/format";
 import { editClip, rate, renameClip } from "../../actions/library";
 import { remember } from "../../actions/cuts";
 import { KIND } from "../Library/moments";
+import { ClipCrashes } from "./ClipCrashes";
 import styles from "./Inspector.module.css";
 
-/** The open clip's details and flight numbers. */
-export function Inspector({ clip: c }: { clip: LibClip }) {
+/** The open clip's details, flight numbers and crashes. `at` is the playhead, for a new
+ *  crash. */
+export function Inspector({ clip: c, at = null }: { clip: LibClip; at?: number | null }) {
   const tab = useStore((s) => s.dTab);
   const setTab = useStore((s) => s.setDTab);
   return (
@@ -44,7 +46,14 @@ export function Inspector({ clip: c }: { clip: LibClip }) {
         ))}
       </div>
       <div role="tabpanel" id={`dpanel-${tab}`} aria-labelledby={`dtab-${tab}`} className={styles.panel}>
-        {tab === "details" ? <Details clip={c} /> : <Flight stats={c.stats} moments={c.moments} />}
+        {tab === "details" ? (
+          <Details clip={c} />
+        ) : (
+          <>
+            <Flight stats={c.stats} moments={c.moments} />
+            <ClipCrashes clip={c} at={at} />
+          </>
+        )}
       </div>
     </aside>
   );

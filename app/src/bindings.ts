@@ -172,6 +172,40 @@ export const commands = {
 	gearCard: (params: CardParams) => typedError<GearCard, string>(__TAURI_INVOKE("gear_card", { params })),
 	/**  Checks and diffs EdgeTX card edits. Writes nothing. */
 	gearCardPreview: (params: CardPreviewParams) => typedError<CardPreview, string>(__TAURI_INVOKE("gear_card_preview", { params })),
+	/**
+	 *  Flights from the radio logs: hover, sag, resting voltage, mAh, the threshold,
+	 *  the worst link and dropouts, with the pack, place and clip of each.
+	 */
+	gearFlights: (params: FlightFilter) => typedError<FlightsView, string>(__TAURI_INVOKE("gear_flights", { params })),
+	/**  Sets a flight's pack or place ("" clears one). */
+	gearFlightSet: (params: FlightSetParams) => typedError<FlightReport, string>(__TAURI_INVOKE("gear_flight_set", { params })),
+	/**  Adds or removes a log folder the flights read; returns the list. */
+	gearFlightFolders: (params: FlightFoldersParams) => typedError<string[], string>(__TAURI_INVOKE("gear_flight_folders", { params })),
+	/**  Packs with their history, pack types with the charging sheet, the notes. */
+	gearPacks: (params: PacksParams) => typedError<PacksView, string>(__TAURI_INVOKE("gear_packs", { params })),
+	/**  Saves a pack; `charged` marks it charged now (true) or clears the mark. */
+	gearPackSave: (params: PackSaveParams) => typedError<Pack, string>(__TAURI_INVOKE("gear_pack_save", { params })),
+	/**  Deletes a pack. Its flights keep their label. */
+	gearPackDelete: (params: NameParams) => typedError<Pack, string>(__TAURI_INVOKE("gear_pack_delete", { params })),
+	/**  Saves a pack type. */
+	gearPackTypeSave: (params: PackType) => typedError<PackType, string>(__TAURI_INVOKE("gear_pack_type_save", { params })),
+	/**  Deletes a pack type no pack uses. */
+	gearPackTypeDelete: (params: NameParams) => typedError<PackType, string>(__TAURI_INVOKE("gear_pack_type_delete", { params })),
+	/**  Saves the charging sheet's notes. */
+	gearPackNotes: (params: NotesParams) => typedError<string, string>(__TAURI_INVOKE("gear_pack_notes", { params })),
+	/**  The session report for a day, else the last import's days, with its Markdown. */
+	gearSessionReport: (params: ReportParams) => typedError<SessionReport, string>(__TAURI_INVOKE("gear_session_report", { params })),
+	/**
+	 *  The "Pack up" check before a session: packs, radio model, card space,
+	 *  backups, cards still in. Reads only.
+	 */
+	gearPreflight: () => typedError<Preflight, string>(__TAURI_INVOKE("gear_preflight")),
+	/**  Crashes, narrowed by aircraft or clip. */
+	gearCrashes: (params: CrashFilter) => typedError<Crash[], string>(__TAURI_INVOKE("gear_crashes", { params })),
+	/**  Saves a crash on a clip: the time in the clip, what broke, the parts used. */
+	gearCrashSave: (params: CrashSaveParams) => typedError<Crash, string>(__TAURI_INVOKE("gear_crash_save", { params })),
+	/**  Deletes a crash. */
+	gearCrashDelete: (params: IdParams) => typedError<Crash, string>(__TAURI_INVOKE("gear_crash_delete", { params })),
 	/**  Backs up a radio card or an FC (the FC reboots). Writes nothing when nothing changed. */
 	gearBackup: (params: BackupParams) => typedError<BackupResult, string>(__TAURI_INVOKE("gear_backup", { params })),
 	/**  Snapshots, newest first, without their file lists. */
@@ -458,6 +492,12 @@ export type BoardNotesParams = {
 	version?: string | null,
 };
 
+/**  The mAh used reached `mah` at `s` seconds into the flight. */
+export type CapaMark = {
+	mah: number | null,
+	s: number | null,
+};
+
 /**  One check of one card, as the log keeps it. */
 export type CardCheck = {
 	/**  `<device>-<time>`: a repair names the failed check it answers. */
@@ -583,6 +623,15 @@ export type CardView = {
 	model?: ModelView | null,
 };
 
+/**  Whether a pack is ready, from its charge mark and its flights. */
+export type ChargeState = 
+/**  Marked charged after its last flight. */
+"charged" | 
+/**  Flown since it was last marked charged (or never marked). */
+"flown" | 
+/**  No flight and no charge mark. */
+"unknown";
+
 /**  One guard in a plan: passed, or the refusal. */
 export type Check = {
 	/**  What was checked, in words ("Known version"). */
@@ -595,6 +644,15 @@ export type Check = {
 /**  Which command a check ran. */
 export type CheckKind = "verify" | "repair";
 
+/**  One check. */
+export type CheckRow = {
+	/**  `packs`, `radio`, `cards_space`, `backups`, `cards_in`. */
+	id: string,
+	label: string,
+	state: RowState,
+	detail: string,
+};
+
 /**  How a check ended. */
 export type CheckState = 
 /**  The file system is fine (or the repair fixed it). */
@@ -605,6 +663,8 @@ export type CheckState =
 "stopped" | 
 /**  `diskutil` could not run the check (busy, no such volume, timed out). */
 "error";
+
+export type Chemistry = "lipo" | "lihv" | "liion";
 
 /**  `clear`'s answer. */
 export type Cleared = {
@@ -818,6 +878,46 @@ export type Connected = {
 	 *  card in a reader). Its writes are slow (about 0.3 MB/s).
 	 */
 	usb?: UsbInfo | null,
+};
+
+/**  One crash and its repair. */
+export type Crash = {
+	id: string,
+	/**  The library clip it happened in. */
+	clip?: string | null,
+	/**  Seconds into the clip. */
+	time_s?: number | null,
+	/**  The aircraft profile. */
+	aircraft?: string | null,
+	day: string,
+	/**  What broke. */
+	broke?: string,
+	/**  Parts used for the repair. */
+	parts?: string[],
+	note?: string,
+	repaired?: boolean,
+};
+
+/**  `gear_crashes`: narrow by aircraft or clip; both empty for every crash. */
+export type CrashFilter = {
+	aircraft?: string | null,
+	clip?: string | null,
+};
+
+/**
+ *  `gear_crash_save`: a crash; an empty id makes a new one. With a clip and no aircraft or
+ *  day, they come from the clip.
+ */
+export type CrashSaveParams = {
+	id?: string | null,
+	clip?: string | null,
+	time_s?: number | null,
+	aircraft?: string | null,
+	day?: string | null,
+	broke?: string | null,
+	parts?: string[] | null,
+	note?: string | null,
+	repaired?: boolean | null,
 };
 
 /**  The `gearCues` setting. Missing fields take their defaults. */
@@ -1103,6 +1203,24 @@ export type DiskInfo = {
 };
 
 /**
+ *  A span while armed where the flight mode is blank and the receiver battery reads 0: the
+ *  radio heard nothing from the quad.
+ */
+export type Dropout = {
+	/**  Seconds from the flight's start. */
+	start_s: number | null,
+	secs: number | null,
+	/**  The last row before it and the first row after it. */
+	before: LinkEdge,
+	after: LinkEdge | null,
+	/**
+	 *  The flight went on and no failsafe mode showed: only the downlink (telemetry) was
+	 *  lost, the quad still flew.
+	 */
+	downlink_only: boolean,
+};
+
+/**
  *  One edit in a staged change. Each package adds the variants it owns (rate profiles,
  *  model operations); the apply engine refuses a variant it has no writer for.
  */
@@ -1265,6 +1383,96 @@ export type Filter = {
 
 export type Flag = "none" | "pick" | "reject";
 
+/**  One flight's measures. */
+export type Flight = {
+	/**  `<YYYYMMDDTHHMMSS>-<model>`: the start and the EdgeTX model. Stable across rebuilds. */
+	id: string,
+	/**  The EdgeTX model name, from the log file's name. */
+	model: string | null,
+	/**  The log file. */
+	file: string,
+	day: string,
+	start: string,
+	end: string,
+	secs: number | null,
+	hover: Hover,
+	/**
+	 *  `RxBt` while armed: the 5th percentile (nearest rank) and the minimum. 0 V readings
+	 *  (no telemetry) do not count.
+	 */
+	sag_p5_v: number | null,
+	sag_min_v: number | null,
+	/**  The first `RxBt` reading of the flight. */
+	arm_v: number | null,
+	resting_v: number | null,
+	resting_from: RestingFrom | null,
+	/**  `Capa` at disarm. */
+	mah: number | null,
+	/**  Each time the mAh used went up: the threshold crossings come from these. */
+	capa?: CapaMark[],
+	max_current_a: number | null,
+	/**  The worst `RQly` and `1RSS` while armed (0 and positive readings are no telemetry). */
+	worst_lq: number | null,
+	worst_rssi_db: number | null,
+	max_tx_power_mw: number | null,
+	/**  Empty when the log has no `FM` column (dropouts cannot be told apart then). */
+	dropouts: Dropout[],
+};
+
+/**  `gear_flights`: narrow the flights. Every field is optional. */
+export type FlightFilter = {
+	day?: string | null,
+	/**  An aircraft profile name. */
+	aircraft?: string | null,
+	/**  A pack label. */
+	pack?: string | null,
+	place?: string | null,
+	/**  One more log folder to read, for this call only. */
+	logs?: string | null,
+};
+
+/**  `gear_flight_folders`: add or remove a log folder; neither lists them. */
+export type FlightFoldersParams = {
+	add?: string | null,
+	remove?: string | null,
+};
+
+/**  One flight, in short. */
+export type FlightLine = {
+	flight: string,
+	model: string | null,
+	start: string,
+	secs: number | null,
+};
+
+/**  A flight with what QuadCam joins to it. */
+export type FlightReport = {
+	flight: Flight,
+	/**  The aircraft profile whose EdgeTX models name the flight's model. */
+	aircraft: string | null,
+	pack: string | null,
+	/**  The place: set by hand, else the matched clip's, else the profile's. */
+	place: string | null,
+	/**  The library clip that holds the flight, by time. */
+	clip: string | null,
+	clip_name: string | null,
+	/**  The pack QuadCam suggests when none is set. */
+	suggested_pack: string | null,
+	/**
+	 *  The mAh warning of the pack's type (else the aircraft's pack type), and the second
+	 *  the flight crossed it.
+	 */
+	threshold_mah: number | null,
+	crossed_at_s: number | null,
+};
+
+/**  `gear_flight_set`: `Some("")` clears a value; leaving it out keeps it. */
+export type FlightSetParams = {
+	flight: string,
+	pack?: string | null,
+	place?: string | null,
+};
+
 /**  Flight numbers from the radio log rows a clip claimed. */
 export type FlightStats = FlightStats_Serialize | FlightStats_Deserialize;
 
@@ -1321,6 +1529,17 @@ export type FlightStats_Serialize = {
 	 *  and earlier call it `pack_spans`.
 	 */
 	flight_spans?: Span[],
+};
+
+/**  `gear_flights`' answer. */
+export type FlightsView = {
+	/**  Newest first. */
+	flights: FlightReport[],
+	/**  Every day with flights (before the filter), newest first. */
+	days: string[],
+	/**  The log folders read. */
+	sources: string[],
+	places: PlaceTrend[],
 };
 
 export type Format = "mp4" | "mov";
@@ -1459,6 +1678,16 @@ export type Grid = {
 	name: string,
 	width: number,
 	height: number,
+};
+
+/**
+ *  Median throttle in hover, in percent (0-100): over the whole flight, its first third and
+ *  its last third. None where the flight has no hover window.
+ */
+export type Hover = {
+	all: number | null,
+	early: number | null,
+	late: number | null,
 };
 
 /**  A device, a backup or a change, by id. */
@@ -1948,6 +2177,16 @@ port: string; vid: number; pid: number; product?: string | null } |
 /**  A USB DFU device (a radio in its bootloader). */
 { kind: "dfu"; vid: number; pid: number };
 
+/**  The link at one edge of a dropout. */
+export type LinkEdge = {
+	/**  `RQly(%)`. */
+	lq: number | null,
+	/**  `1RSS(dB)`. */
+	rssi_db: number | null,
+	/**  `TPWR(mW)`. */
+	tx_power_mw: number | null,
+};
+
 /**  A location in decimal degrees. */
 export type Location = {
 	lat: number | null,
@@ -2171,6 +2410,11 @@ export type NoteWhen =
 /**  Shown on the device page only. */
 "always";
 
+/**  `gear_pack_notes`: the charging sheet's notes. */
+export type NotesParams = {
+	text: string,
+};
+
 /**  A rectangle an element takes on one profile's grid, after clipping to the grid. */
 export type OsdBox = {
 	element: string,
@@ -2279,6 +2523,111 @@ export type OsdView = {
 
 export type Outcome = "verified" | "failed" | "skipped";
 
+/**  One physical battery. */
+export type Pack = {
+	/**  The label written on it ("A1"). Unique. */
+	label: string,
+	pack_type?: string | null,
+	received?: string | null,
+	retired?: boolean,
+	/**  When the person last marked it charged. */
+	charged_at?: string | null,
+	note?: string,
+};
+
+/**  One flight in a pack's history. */
+export type PackFlight = {
+	flight: string,
+	start: string,
+	secs: number | null,
+	mah: number | null,
+	sag_min_v: number | null,
+	sag_p5_v: number | null,
+	resting_v: number | null,
+};
+
+/**
+ *  `gear_pack_save`: a pack, and `charged` to mark it charged now (true) or clear the mark
+ *  (false).
+ */
+export type PackSaveParams = {
+	pack: Pack,
+	charged?: boolean | null,
+};
+
+/**  A kind of pack: chemistry, cells, capacity, connector and charge settings. */
+export type PackType = {
+	name: string,
+	chemistry?: Chemistry,
+	/**  Cells in series (1 for a 1S pack). */
+	cells?: number,
+	capacity_mah?: number | null,
+	connector?: string | null,
+	/**  Full and storage charge, volts per cell. */
+	full_v?: number | null,
+	storage_v?: number | null,
+	/**  Charge current in amps. */
+	charge_a?: number | null,
+	/**  The mAh warning the radio gives for this type (the flight threshold). */
+	warn_mah?: number | null,
+	note?: string,
+};
+
+/**  A pack type with its numbers across its packs: the charging sheet's row. */
+export type PackTypeView = {
+	pack_type: PackType,
+	packs: number,
+	flights: number,
+	/**  Full and storage charge for the whole pack (per cell times cells). */
+	full_total_v: number | null,
+	storage_total_v: number | null,
+	median_resting_v: number | null,
+	median_secs: number | null,
+	/**
+	 *  The mAh warning that lands at `target_v` per cell resting, from its flights' mAh and
+	 *  resting voltage (a straight-line fit). None with too few flights.
+	 */
+	suggested_warn_mah: number | null,
+};
+
+/**  One pack's use in the session. */
+export type PackUse = {
+	pack: string,
+	flights: number,
+	/**  The mAh used, summed over its flights. */
+	mah: number | null,
+};
+
+/**  A pack with its history. */
+export type PackView = {
+	pack: Pack,
+	/**  Flights assigned to it (one per charge). */
+	cycles: number,
+	state: ChargeState,
+	last_flown: string | null,
+	median_resting_v: number | null,
+	median_secs: number | null,
+	/**  Why it stands out from its type, when it does. */
+	weak: string | null,
+	/**  Oldest first. */
+	history: PackFlight[],
+};
+
+/**  `gear_packs`: the resting voltage per cell the threshold suggestion aims for. */
+export type PacksParams = {
+	target_v?: number | null,
+};
+
+/**  `gear_packs`' answer. */
+export type PacksView = {
+	packs: PackView[],
+	types: PackTypeView[],
+	/**  The charging sheet's free notes. */
+	notes: string,
+	/**  The resting voltage per cell `suggested_warn_mah` aims for. */
+	target_v: number | null,
+};
+
 /**  The step `Progress` reports on. */
 export type Phase = 
 /**  Copying clips off the card. */
@@ -2330,6 +2679,12 @@ export type PlaceSaveParams = {
 	lon?: number | null,
 };
 
+/**  The worst link per flight at one place, oldest first. */
+export type PlaceTrend = {
+	place: string,
+	points: TrendPoint[],
+};
+
 /**  A change to one clip's plan. Missing fields stay as they are. */
 export type PlanPatch = {
 	id: number,
@@ -2372,6 +2727,11 @@ export type PlanPatch = {
 	 *  as one clip, false keeps them as clips of their own.
 	 */
 	joined?: boolean | null,
+};
+
+/**  `gear_preflight`'s answer. */
+export type Preflight = {
+	rows: CheckRow[],
 };
 
 export type Probe = {
@@ -2626,6 +2986,23 @@ export type Reply = {
 	error: boolean,
 };
 
+/**
+ *  `gear_session_report`: a day, else the days of the last import, else the newest day
+ *  with flights.
+ */
+export type ReportParams = {
+	day?: string | null,
+};
+
+/**  Where a flight's resting voltage came from. */
+export type RestingFrom = 
+/**  The median of the readings after disarm, while telemetry still streamed. */
+"after_disarm" | 
+/**  The first reading of the next flight of the same model. */
+"next_arm";
+
+export type RowState = "pass" | "warn" | "unknown";
+
 export type Screen = {
 	/**  0 is telemetry screen 1. */
 	index: number,
@@ -2692,6 +3069,26 @@ export type SessionCutsParams = {
 	id: number,
 	cuts: Span[],
 	removed_cuts?: RemovedCuts | null,
+};
+
+/**  `gear_session_report`'s answer. */
+export type SessionReport = {
+	days: string[],
+	/**  Library clips from the import the report is for (0 for a day picked by hand). */
+	clips: number,
+	flights: number,
+	air_s: number | null,
+	longest: FlightLine | null,
+	worst_link: WorstLink | null,
+	dropouts: number,
+	/**  Of the dropouts, those where the quad flew on (telemetry only). */
+	downlink_only: number,
+	packs: PackUse[],
+	/**  Flights with no pack assigned. */
+	no_pack: number,
+	crashes: Crash[],
+	/**  The same, as Markdown. */
+	markdown: string,
 };
 
 export type Session_Deserialize = {
@@ -2996,6 +3393,14 @@ export type TrashReport = {
 	moved: Moved[],
 };
 
+/**  One flight's worst link, for the range trend. */
+export type TrendPoint = {
+	flight: string,
+	start: string,
+	worst_lq: number | null,
+	worst_rssi_db: number | null,
+};
+
 /**  Why a backup was taken. */
 export type Trigger = 
 /**  Plugged in, with "Back up on connect" on. */
@@ -3092,6 +3497,14 @@ export type Volume = {
 
 /**  Something mounted or unmounted under /Volumes. */
 export type VolumesChanged = null;
+
+/**  The worst link of the session. */
+export type WorstLink = {
+	flight: string,
+	start: string,
+	lq: number | null,
+	rssi_db: number | null,
+};
 
 /* Tauri Specta runtime */
 async function typedError<T, E>(result: Promise<T>): Promise<{ status: "ok"; data: T } | { status: "error"; error: E }> {

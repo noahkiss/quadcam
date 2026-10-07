@@ -919,12 +919,7 @@ mod tests {
                     thr: 0.0,
                     rud: 0.0,
                 }),
-                roll: None,
-                pitch: None,
-                rx_bat: None,
-                lq: None,
-                rssi: None,
-                model: None,
+                ..LogRow::at(t0)
             })
             .collect();
         let end = rows[99].time;

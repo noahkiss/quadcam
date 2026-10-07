@@ -4,6 +4,7 @@
 //! Only MCP messages go to stdout; logs go to stderr.
 
 pub mod gear;
+mod gear_flights;
 pub mod params;
 mod render;
 mod server;

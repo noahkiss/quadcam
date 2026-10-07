@@ -162,7 +162,7 @@ function Detail({ clip: c }: { clip: LibClip }) {
           </div>
           <TrimEditor trim={trim} strip={c.strip ? fileSrc(c.strip) : undefined} />
         </div>
-        <Inspector clip={c} />
+        <Inspector clip={c} at={trim.head} />
       </div>
     </section>
   );
