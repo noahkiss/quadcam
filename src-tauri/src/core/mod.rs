@@ -27,6 +27,7 @@ mod osd;
 mod prep;
 mod rematch;
 mod setup;
+mod sim;
 mod switchmap;
 pub use crate::paths::{cache_dir, default_session_file, default_settings_file, support_dir};
 pub use backup::{
@@ -50,6 +51,10 @@ pub use library::{LibEdit, LibItem, LibUpdate, LibraryView, RebuildReport, Renam
 pub use osd::OsdParams;
 pub use rematch::{LibMatch, LibMatchParams, LibMatchReport};
 pub use setup::{PlaceRemoved, SettingsView};
+pub use sim::{
+    CalibrateAction, CalibrateParams, CalibrateView, PerStick, SimCalibration,
+    SimCalibrationParams, SimCalibrationSaveParams, SimDefaultsParams,
+};
 pub use switchmap::{RadioParams, RadioWatchParams, SwitchMapParams};
 
 /// What the host does when the core changes state. The GUI emits events and asks for the
@@ -239,6 +244,8 @@ pub struct Core {
     modules: crate::modules::Modules,
     /// The radio as a USB joystick, and its stream (`core/switchmap.rs`).
     radio: switchmap::RadioState,
+    /// The sim's calibration session (`core/sim.rs`).
+    sim: sim::SimState,
     /// Backups and card checks running now, by link (`core/backup.rs`).
     gear_jobs: Mutex<std::collections::HashMap<String, backup::JobSlot>>,
     /// Links an on-connect run read or checked (they are unmounted at its end).
@@ -292,6 +299,7 @@ impl Core {
             cache,
             modules: crate::modules::Modules::default(),
             radio: switchmap::RadioState::default(),
+            sim: sim::SimState::default(),
             gear_jobs: Mutex::default(),
             gear_touched: Mutex::default(),
             gear_failures: Mutex::default(),

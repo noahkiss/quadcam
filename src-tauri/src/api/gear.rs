@@ -16,6 +16,10 @@ pub use crate::core::{
     ReminderParams, SwitchMapParams, UsbTimer,
 };
 pub use crate::core::{
+    CalibrateParams, CalibrateView, SimCalibration, SimCalibrationParams, SimCalibrationSaveParams,
+    SimDefaultsParams,
+};
+pub use crate::core::{
     CrashSaveParams, FlightFilter, FlightFoldersParams, FlightReport, FlightSetParams, FlightsView,
     NotesParams, PackSaveParams, PacksParams, ReportParams,
 };
@@ -33,6 +37,7 @@ pub use crate::gear::packs::{Pack, PackType, PacksView};
 pub use crate::gear::preflight::Preflight;
 pub use crate::gear::radio_hid::RadioSnapshot;
 pub use crate::gear::report::SessionReport;
+pub use crate::gear::sim_cal::{SavedCalibration, SimDefaults};
 pub use crate::gear::switchmap::SwitchMap;
 use serde::{Deserialize, Serialize};
 use specta::Type;
@@ -84,6 +89,16 @@ macro_rules! with_gear_rows {
             /// Starts or stops the radio stream the app's controls page draws (`radio-input`
             /// events). True while it runs.
             gear_radio_watch(params: RadioWatchParams) -> bool = |c| c.gear_radio_watch(&params);
+            /// The sim's calibration of a radio; with no radio named, the joystick plugged in,
+            /// matched to a saved radio (or a provisional key). Reads only.
+            gear_sim_calibration(params: SimCalibrationParams) -> SimCalibration = |c| c.gear_sim_calibration(&params);
+            /// Saves a radio's sim calibration, keyed by its Gear radio id.
+            gear_sim_calibration_save(params: SimCalibrationSaveParams) -> SavedCalibration = |c| c.gear_sim_calibration_save(&params);
+            /// What the sim pre-fills for an aircraft: stick channels, arm, angle, horizon,
+            /// turtle and air mode switches, a reset control, each with its source. Reads only.
+            gear_sim_defaults(params: SimDefaultsParams) -> SimDefaults = |c| c.gear_sim_defaults(&params);
+            /// Drives the sim's calibration session (`sim-calibration-event` events).
+            gear_sim_calibrate(params: CalibrateParams) -> CalibrateView = |c| c.gear_sim_calibrate(&params);
             /// Flights from the radio logs: hover, sag, resting voltage, mAh, the threshold,
             /// the worst link and dropouts, with the pack, place and clip of each.
             gear_flights(params: FlightFilter) -> FlightsView = |c| c.gear_flights(&params);

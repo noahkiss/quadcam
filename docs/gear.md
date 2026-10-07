@@ -398,6 +398,7 @@ quadcam-cli gear map --radio /Volumes/RADIO --fc quad.diff_all.txt --text   # th
 quadcam-cli --json gear map --radio model01.yml --fc quad.dump_all.txt --live   # positions now
 quadcam-cli gear map --aircraft Whoop --text         # from the latest backups of its radio and FC
 quadcam-cli --json gear radio                        # the radio in USB Joystick mode now
+quadcam-cli --json gear sim calibration             # the sim's calibration of that radio (see sim.md)
 quadcam-cli --json gear flights [--day 2026-10-04] [--aircraft A] [--pack P] [--logs DIR]
 quadcam-cli --json gear flights set <flight> --pack A1 [--place NAME]   # "" clears
 quadcam-cli --json gear flights folders [--add DIR | --remove DIR]

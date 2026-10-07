@@ -85,6 +85,23 @@ export type {
   SessionReport,
 } from "../bindings";
 
+// The sim's radio calibration, as generated.
+export type {
+  AxisCal,
+  CalibrateParams,
+  CalibrateView,
+  Calibration,
+  CalPhase,
+  CaptureTarget,
+  RadioControl,
+  RadioResolution,
+  SavedCalibration,
+  SimCalibration,
+  SimCalibrationSaveParams,
+  SimDefaults,
+  SuggestedControl,
+} from "../bindings";
+
 export type Path = string;
 /** `YYYY-MM-DD` */
 export type IsoDate = string;

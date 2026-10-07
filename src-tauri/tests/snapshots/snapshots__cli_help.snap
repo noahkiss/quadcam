@@ -578,6 +578,7 @@ Commands:
   card            An EdgeTX card: models, the selected model, the radio clock; `preview` checks edits
   map             The switch map: what each radio control does on the radio and the FC, per position. Reads an EdgeTX card or model file and a Betaflight dump; --live marks the positions now
   radio           The radio in USB Joystick mode now: buttons, axes, channel values
+  sim             The sim: a radio's calibration, the defaults an aircraft gives it
   flights         Flights from the radio logs: measures, pack, place, clip. `set` and `folders`
   report          The session report for a day, else the last import's days
   preflight       The "Pack up" check: packs charged, radio model, card space, backups, cards still in

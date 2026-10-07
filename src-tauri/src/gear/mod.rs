@@ -22,6 +22,8 @@
 //! - `crashes`: the crash and repair log.
 //! - `report`: the session report; `preflight`: the "Pack up" check.
 //! - `osd`: Betaflight OSD layouts: decode, draw per profile, overlap and off-screen check.
+//! - `sim_cal`: the sim's radio calibrations, keyed by Gear radio id, the resolve step, and
+//!   the defaults an aircraft's switch map gives the sim.
 //! - `switchmap`: the switch map: an EdgeTX model joined with the FC's `aux` and `adjrange`
 //!   lines, per control and position; live positions from channel values.
 //! - `radio_hid`: the radio as a USB joystick (hidapi): reports, channels, the watch.
@@ -52,6 +54,7 @@ pub mod radio_hid;
 pub mod radiologs;
 pub mod report;
 pub mod serial;
+pub mod sim_cal;
 pub mod store;
 pub mod switchmap;
 

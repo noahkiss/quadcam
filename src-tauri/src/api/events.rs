@@ -16,6 +16,7 @@ pub enum Event {
     ImportResult(Box<ImportResult>),
     LibraryTask(LibraryTask),
     RadioInput(RadioInput),
+    SimCalibration(SimCalibrationEvent),
 }
 
 impl Event {
@@ -30,6 +31,7 @@ impl Event {
             Event::ImportResult(x) => (ImportResult::NAME, v(&**x)),
             Event::LibraryTask(x) => (LibraryTask::NAME, v(x)),
             Event::RadioInput(x) => (RadioInput::NAME, v(x)),
+            Event::SimCalibration(x) => (SimCalibrationEvent::NAME, v(x)),
         }
     }
 }
@@ -70,6 +72,11 @@ pub struct ImportResult(pub ClipResult);
 /// (`gear_radio_watch` starts the stream).
 #[derive(Debug, Clone, Serialize, Deserialize, Type, tauri_specta::Event)]
 pub struct RadioInput(pub crate::gear::radio_hid::RadioEvent);
+
+/// The sim's calibration session: its step, coverage, draft and live output
+/// (`gear_sim_calibrate` starts it).
+#[derive(Debug, Clone, Serialize, Deserialize, Type, tauri_specta::Event)]
+pub struct SimCalibrationEvent(pub crate::core::CalibrateView);
 
 /// The long library jobs.
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, Type, PartialEq, Eq)]

@@ -186,6 +186,20 @@ export const commands = {
 	 */
 	gearRadioWatch: (params: RadioWatchParams) => typedError<boolean, string>(__TAURI_INVOKE("gear_radio_watch", { params })),
 	/**
+	 *  The sim's calibration of a radio; with no radio named, the joystick plugged in,
+	 *  matched to a saved radio (or a provisional key). Reads only.
+	 */
+	gearSimCalibration: (params: SimCalibrationParams) => typedError<SimCalibration, string>(__TAURI_INVOKE("gear_sim_calibration", { params })),
+	/**  Saves a radio's sim calibration, keyed by its Gear radio id. */
+	gearSimCalibrationSave: (params: SimCalibrationSaveParams) => typedError<SavedCalibration, string>(__TAURI_INVOKE("gear_sim_calibration_save", { params })),
+	/**
+	 *  What the sim pre-fills for an aircraft: stick channels, arm, angle, horizon,
+	 *  turtle and air mode switches, a reset control, each with its source. Reads only.
+	 */
+	gearSimDefaults: (params: SimDefaultsParams) => typedError<SimDefaults, string>(__TAURI_INVOKE("gear_sim_defaults", { params })),
+	/**  Drives the sim's calibration session (`sim-calibration-event` events). */
+	gearSimCalibrate: (params: CalibrateParams) => typedError<CalibrateView, string>(__TAURI_INVOKE("gear_sim_calibrate", { params })),
+	/**
 	 *  Flights from the radio logs: hover, sag, resting voltage, mAh, the threshold,
 	 *  the worst link and dropouts, with the pack, place and clip of each.
 	 */
@@ -304,6 +318,7 @@ export const events = {
 	radioInput: makeEvent<RadioInput>("radio-input"),
 	sessionChanged: makeEvent<SessionChanged>("session-changed"),
 	settingsChanged: makeEvent<SettingsChanged>("settings-changed"),
+	simCalibrationEvent: makeEvent<SimCalibrationEvent>("sim-calibration-event"),
 	volumesChanged: makeEvent<VolumesChanged>("volumes-changed"),
 };
 
@@ -366,6 +381,23 @@ export type AuxMode = {
 	end: number,
 	/**  The mode this one follows instead of a range (`linkedTo`). */
 	linked?: string | null,
+};
+
+/**  One stick axis' calibration. */
+export type AxisCal = {
+	/**  1 is CH1. */
+	ch: number,
+	/**  The ends auto-calibration found, raw 0..2048. */
+	auto_low: number,
+	auto_high: number,
+	/**  Ends the user set; they win over the auto ones until Recalibrate. */
+	edited_low?: number | null,
+	edited_high?: number | null,
+	/**  Raw rest value. Throttle's is unused. */
+	centre: number,
+	/**  Percent of each side cut from the middle, 0-50. Roll, pitch and yaw only. */
+	deadzone?: number,
+	reverse?: boolean,
 };
 
 /**  A snapshot of one device: a manifest of files in the blob store. */
@@ -536,11 +568,106 @@ export type BoardNotesParams = {
 	version?: string | null,
 };
 
+export type CalPhase = 
+/**  Move both sticks around their full travel. */
+"move" | 
+/**  Let go of the sticks. */
+"let_go" | 
+/**  Flip the arm switch. */
+"arm" | 
+/**  Press the control to use for reset. */
+"reset" | 
+/**  Check, tune, save. */
+"review" | 
+/**  Move the control for `AutoCal::target`, then back to Review. */
+"capture";
+
+export type CalibrateAction = 
+/**  Starts a session from `calibration` (at Review with `review`). */
+"start" | 
+/**  Next, or Done in the Move step. */
+"advance" | 
+/**  No arm switch, or no reset control. */
+"skip" | 
+/**  The full flow again: edited ends go, deadzones stay. */
+"recalibrate" | 
+/**  Sets one control (`target`) by moving it, then back to Review. */
+"capture" | 
+/**  Replaces the draft (an edit in Review, a mode or channel change). */
+"set" | 
+/**  Ends the session. */
+"stop" | 
+/**  The state now. */
+"get";
+
+/**  `gear_sim_calibrate`. */
+export type CalibrateParams = {
+	action: CalibrateAction,
+	/**  Start and Set: the calibration (saved, or `SimDefaults::calibration`). */
+	calibration?: Calibration | null,
+	/**  Start: the short check, for a radio whose model gives every stick's channel. */
+	quick?: boolean,
+	/**  Start: the arm switch is known (the quad's `aux` lines); the Arm step is skipped. */
+	arm_known?: boolean,
+	/**  Start: open at Review (a saved calibration). */
+	review?: boolean,
+	/**  Capture: the control to set. */
+	target?: CaptureTarget | null,
+};
+
+/**  The session as the screen draws it. */
+export type CalibrateView = {
+	active: boolean,
+	connected: boolean,
+	phase: CalPhase,
+	/**  What Capture sets. */
+	target?: CaptureTarget | null,
+	quick: boolean,
+	arm_known: boolean,
+	calibration: Calibration,
+	/**  Each stick's coverage, the shorter side, 0-100. */
+	coverage: PerStick,
+	/**  The calibrated output: roll, pitch, yaw −100..100, throttle 0..100. */
+	sticks?: PerStick | null,
+	/**  Raw channels in µs, CH1 first. */
+	channels: number[],
+	buttons: number,
+	message?: string | null,
+};
+
+/**  A radio's calibration for the sim. */
+export type Calibration = {
+	/**  Stick mode 1-4: which stick carries which function. Labels only; the map decides. */
+	mode: number,
+	roll: AxisCal,
+	pitch: AxisCal,
+	throttle: AxisCal,
+	yaw: AxisCal,
+	/**
+	 *  The arm switch, when the sim arms from the calibration rather than the quad's `aux`
+	 *  lines.
+	 */
+	arm?: RadioControl | null,
+	/**  The control that puts the quad back on the start pad. */
+	reset?: RadioControl | null,
+	/**
+	 *  The quad's mode switches as the sim reads them: pre-filled from its `aux` lines,
+	 *  changeable here.
+	 */
+	turtle?: RadioControl | null,
+	angle?: RadioControl | null,
+	horizon?: RadioControl | null,
+	airmode?: RadioControl | null,
+};
+
 /**  The mAh used reached `mah` at `s` seconds into the flight. */
 export type CapaMark = {
 	mah: number | null,
 	s: number | null,
 };
+
+/**  A control the user can set by moving it. */
+export type CaptureTarget = "arm" | "reset" | "turtle" | "angle" | "horizon" | "airmode";
 
 /**  One check of one card, as the log keeps it. */
 export type CardCheck = {
@@ -2706,6 +2833,14 @@ export type PacksView = {
 	target_v: number | null,
 };
 
+/**  Percent per stick. */
+export type PerStick = {
+	roll: number,
+	pitch: number,
+	throttle: number,
+	yaw: number,
+};
+
 /**  The step `Progress` reports on. */
 export type Phase = 
 /**  Copying clips off the card. */
@@ -2989,6 +3124,22 @@ export type QuietHours = {
 	end: string,
 };
 
+/**  A saved radio the user can pick. */
+export type RadioChoice = {
+	id: string,
+	name: string,
+};
+
+/**
+ *  A radio control the sim reads: a range of a channel (CH1-8, the axes), or a button
+ *  (CH9 and up reach the joystick as buttons).
+ */
+export type RadioControl = 
+/**  On while the channel is within `min_us..=max_us`. */
+{ kind: "channel"; ch: number; min_us: number; max_us: number } | 
+/**  On while button `button` (1-24) is in the `pressed` state. */
+{ kind: "button"; button: number; pressed: boolean };
+
 /**  The radio as the page sees it. */
 export type RadioEvent = {
 	connected: boolean,
@@ -3031,10 +3182,27 @@ export type RadioParams = {
 	wait_ms?: number | null,
 };
 
+/**  Which radio a joystick is. */
+export type RadioResolution = {
+	product: string,
+	/**
+	 *  The radio's key: a saved radio's id, or a provisional key. None: ask, from
+	 *  `choices`.
+	 */
+	radio?: string | null,
+	provisional?: boolean,
+	/**  The saved radios this product name could be. */
+	choices: RadioChoice[],
+	/**  How it was worked out. */
+	how: string,
+};
+
 /**  `gear_radio`: one look at the radio. */
 export type RadioSnapshot = {
 	connected: boolean,
 	product?: string | null,
+	/**  The firmware version the radio reports over USB. */
+	version?: string | null,
 	frame?: RadioFrame | null,
 	/**  Why there is no frame. */
 	message?: string | null,
@@ -3140,6 +3308,21 @@ export type RestingFrom =
 "next_arm";
 
 export type RowState = "pass" | "warn" | "unknown";
+
+/**  One radio's saved calibration and what it was made with. */
+export type SavedCalibration = {
+	/**  The Gear radio's device id, or a provisional `usb-…` key. */
+	radio: string,
+	provisional?: boolean,
+	calibration: Calibration,
+	/**  The USB product name (`Radiomaster Pocket Joystick`). */
+	product?: string | null,
+	vid: number,
+	pid: number,
+	/**  The firmware version the radio reported over USB (`2.12`). */
+	firmware?: string | null,
+	saved_at: string,
+};
 
 export type Screen = {
 	/**  0 is telemetry screen 1. */
@@ -3353,6 +3536,67 @@ export type Signing =
 /**  Not a Mach-O binary (a script); nothing to sign. */
 "not_binary";
 
+/**  A radio's calibration, and which radio it is. */
+export type SimCalibration = {
+	/**  How the joystick was matched to a radio; None when a radio was named. */
+	resolution?: RadioResolution | null,
+	/**  The saved calibration; None: the screen opens to make one. */
+	calibration?: SavedCalibration | null,
+	/**  The joystick's firmware version, when one is plugged in. */
+	firmware?: string | null,
+};
+
+/**
+ *  The sim's calibration session: its step, coverage, draft and live output
+ *  (`gear_sim_calibrate` starts it).
+ */
+export type SimCalibrationEvent = CalibrateView;
+
+/**  `gear_sim_calibration`: a radio by key, or the one in USB Joystick mode now. */
+export type SimCalibrationParams = {
+	/**  A Gear radio id or a provisional `usb-…` key; omitted: the joystick plugged in. */
+	radio?: string | null,
+};
+
+/**  `gear_sim_calibration_save`. */
+export type SimCalibrationSaveParams = {
+	/**  A Gear radio id, or a provisional `usb-…` key. */
+	radio: string,
+	calibration: Calibration,
+	product?: string | null,
+	firmware?: string | null,
+	/**  Remember this radio as the answer to "Which radio is this?" for its product name. */
+	remember?: boolean,
+	/**  A provisional key this save replaces: linking that radio to a saved one. */
+	replaces?: string | null,
+};
+
+/**  What the sim pre-fills for an aircraft. */
+export type SimDefaults = {
+	aircraft?: string | null,
+	map: StickMap,
+	arm?: SuggestedControl | null,
+	angle?: SuggestedControl | null,
+	horizon?: SuggestedControl | null,
+	/**  Betaflight's FLIP OVER AFTER CRASH. */
+	turtle?: SuggestedControl | null,
+	airmode?: SuggestedControl | null,
+	/**  A free button or trim for reset: no function in the model or on the quad. */
+	reset?: SuggestedControl | null,
+	notes: string[],
+	/**  The calibration these give, in Mode 2: where a new calibration starts. */
+	calibration: Calibration,
+};
+
+/**  `gear_sim_defaults`: an aircraft (its saved radio's and FC's latest backups), or files. */
+export type SimDefaultsParams = {
+	aircraft?: string | null,
+	/**  An EdgeTX card or one model file, as for the switch map. */
+	radio?: string | null,
+	/**  Betaflight dump, diff or CLI files. */
+	fc?: string[],
+};
+
 /**  Where a moment's evidence came from. */
 export type Source = "radio_log" | "video";
 
@@ -3424,6 +3668,19 @@ export type StickChannel = {
 	weight: number,
 };
 
+/**  The stick channels the sim starts from. */
+export type StickMap = {
+	/**  1 is CH1. */
+	roll: number,
+	pitch: number,
+	throttle: number,
+	yaw: number,
+	/**  `your radio model`, or `EdgeTX's default order (AETR)`. */
+	source: string,
+	/**  The model gave every stick's channel, so a quick check is enough. */
+	known: boolean,
+};
+
 /**  `gear_stop`: a running job's link (`GearJob.handle`). */
 export type StopParams = {
 	handle: string,
@@ -3458,6 +3715,15 @@ export type Suggested = {
 	skip: boolean,
 	cuts?: boolean,
 	meta?: boolean,
+};
+
+/**  A control the sim will use, and where the suggestion came from. */
+export type SuggestedControl = {
+	control: RadioControl,
+	/**  `SA down`, `CH5`. */
+	label: string,
+	/**  `your radio model`, `the quad's modes`. */
+	source: string,
 };
 
 export type Summary = {
