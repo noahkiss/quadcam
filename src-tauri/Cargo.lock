@@ -3137,6 +3137,7 @@ dependencies = [
  "objc2-photos",
  "objc2-user-notifications",
  "plist",
+ "quadcam-sim",
  "schemars 1.2.2",
  "serde",
  "serde_json",
@@ -3153,6 +3154,15 @@ dependencies = [
  "tempfile",
  "toml 1.1.6+spec-1.1.0",
  "xxhash-rust",
+]
+
+[[package]]
+name = "quadcam-sim"
+version = "0.7.0"
+dependencies = [
+ "serde",
+ "serde_json",
+ "specta",
 ]
 
 [[package]]
