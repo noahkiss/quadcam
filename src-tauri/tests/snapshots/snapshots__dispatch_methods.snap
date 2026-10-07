@@ -58,5 +58,6 @@ expression: "Core::METHODS"
   "gear_devices",
   "gear_device_save",
   "gear_device_forget",
+  "gear_dismiss_reminder",
   "gear_osd"
 ]

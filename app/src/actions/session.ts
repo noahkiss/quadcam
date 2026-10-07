@@ -266,7 +266,7 @@ export async function eject() {
 
 export async function doneImport() {
   S().setImportOpen(false);
-  store.setState({ filter: { group: "last_import" }, detailId: null });
+  store.setState({ filter: { group: "last_import" }, detailId: null, gearPage: null });
   await S().loadLibrary();
 }
 

@@ -30,6 +30,18 @@ pub struct GearStatus {
     pub staged: usize,
     /// Sims whose rates differ from their quad's.
     pub sims_out_of_date: usize,
+    /// The links a job holds now (`link_handle`): their devices show as working.
+    #[serde(default)]
+    pub working: Vec<String>,
+    /// The links with a "still inserted" reminder armed (`link_handle`).
+    #[serde(default)]
+    pub reminders: Vec<String>,
+}
+
+/// `gear_dismiss_reminder`: a device's link, as `link_handle` names it.
+#[derive(Debug, Clone, Default, Serialize, Deserialize, specta::Type)]
+pub struct ReminderParams {
+    pub handle: String,
 }
 
 /// `gear_device_save`: names a device or links it to an aircraft. A device QuadCam does
@@ -96,8 +108,24 @@ impl Core {
             devices: store.devices()?.len(),
             staged: 0,
             sims_out_of_date: 0,
+            working: self.gear_working(),
+            reminders: self.gear.cues.reminders.lock().unwrap().armed(),
             settings,
         })
+    }
+
+    /// The links a job holds now; a released hold in its grace time does not count.
+    pub fn gear_working(&self) -> Vec<String> {
+        let mut v: Vec<String> = self
+            .gear_holds
+            .lock()
+            .unwrap()
+            .iter()
+            .filter(|(_, until)| until.is_none())
+            .map(|(k, _)| k.clone())
+            .collect();
+        v.sort();
+        v
     }
 
     pub fn gear_devices(&self) -> Result<Vec<Device>> {
@@ -188,6 +216,7 @@ impl Core {
             .lock()
             .unwrap()
             .insert(handle.to_string(), None);
+        self.hooks.gear_changed();
         Hold {
             core: self,
             handle: handle.to_string(),
@@ -303,9 +332,13 @@ impl Core {
                 CueEvent::new(Cue::SafeToUnplug, name)
             }
         };
-        self.gear
+        let fired = self
+            .gear
             .cues
-            .fire(&s, event, now, chrono::Local::now().time())
+            .fire(&s, event, now, chrono::Local::now().time());
+        // The reminder state changed: the GUI shows it.
+        self.hooks.gear_changed();
+        fired
     }
 
     /// The end of a batch or an automation run over several devices: one cue for all of
@@ -324,12 +357,22 @@ impl Core {
 
     /// Stops the "still inserted" reminder for a device (the person dismissed it).
     pub fn gear_dismiss_reminder(&self, c: &Connected) {
-        self.gear
-            .cues
-            .reminders
-            .lock()
-            .unwrap()
-            .dismiss(&link_handle(&c.link));
+        self.gear_dismiss(&link_handle(&c.link));
+    }
+
+    /// Stops the "still inserted" reminder for a link (`link_handle`). True when one was
+    /// armed.
+    pub fn gear_dismiss(&self, handle: &str) -> bool {
+        let was = {
+            let mut r = self.gear.cues.reminders.lock().unwrap();
+            let was = r.is_armed(handle);
+            r.dismiss(handle);
+            was
+        };
+        if was {
+            self.hooks.gear_changed();
+        }
+        was
     }
 
     /// For the app's poll: plays the "still inserted" reminders that are due. A reminder
@@ -372,6 +415,7 @@ impl Drop for Hold<'_> {
             .lock()
             .unwrap()
             .insert(self.handle.clone(), Some(Instant::now() + HOLD_GRACE));
+        self.core.hooks.gear_changed();
     }
 }
 

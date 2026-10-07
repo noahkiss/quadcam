@@ -7,6 +7,19 @@
 import type * as G from "../bindings";
 
 export type {
+  Automation,
+  Connected,
+  CueSettings,
+  Device,
+  DeviceChanged,
+  DeviceEvent,
+  DeviceKind,
+  GearSettings,
+  GearStatus,
+  Identity,
+  Link,
+  QuietHours,
+  VoiceSource,
   Badge,
   CardIdentity,
   CardStatus,

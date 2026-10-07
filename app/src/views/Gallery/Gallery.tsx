@@ -14,6 +14,10 @@ import { Stars } from "../../components/Stars";
 import { Stepper } from "../../components/Stepper";
 import { toast } from "../../components/toastStore";
 import type { Flag } from "../../ipc/types";
+import { ChecksList } from "../../components/gear/ChecksList";
+import { DeviceHeader } from "../../components/gear/DeviceHeader";
+import { DiffView } from "../../components/gear/DiffView";
+import { PlugInBar } from "../../components/gear/PlugInBar";
 import styles from "./Gallery.module.css";
 
 export function Gallery() {
@@ -115,6 +119,24 @@ export function Gallery() {
         <Banner kind="error" icon="danger-triangle" tint="red">
           <b>ffmpeg not found.</b> Install it with <code>brew install ffmpeg</code>, then restart QuadCam.
         </Banner>
+      </section>
+      <section aria-label="Gear" className={styles.col}>
+        <DeviceHeader kind="fc" name="Whoop FC" state="attention" actions={<Button size="sm">Edit…</Button>} />
+        <DeviceHeader kind="dvr_card" name="DVR card" state="safe" />
+        <PlugInBar count={3} onReview={() => toast("Review")} />
+        <ChecksList
+          checks={[
+            { name: "Known version", ok: true },
+            { name: "Same board", ok: false, refusal: { code: "device_changed", reason: "The board is not the one the change was made for." } },
+          ]}
+        />
+        <DiffView
+          items={[
+            { kind: "lines", label: "CLI", lines: [{ op: "same", text: "set motor_pwm_protocol = DSHOT300" }, { op: "remove", text: "set rc_smoothing = OFF" }, { op: "add", text: "set rc_smoothing = ON" }] },
+            { kind: "files", label: "SD card", put: ["SOUNDS/en/armed.wav"], delete: ["SOUNDS/en/old.wav"] },
+            { kind: "version", label: "Firmware", before: "4.4.3", after: "4.5.1" },
+          ]}
+        />
       </section>
       <section aria-label="Overlays" className={styles.row}>
         <Button onClick={() => setDialog(true)}>Open dialog</Button>

@@ -52,11 +52,29 @@ for (const scheme of ["dark", "light"] as const) {
       expect(r.violations.map((v) => `${v.id}: ${v.nodes.map((n) => n.target.join(" ") + " " + n.failureSummary).join(", ")}`)).toEqual([]);
     });
 
+    test("the Gear pages and the status bar pass axe", async ({ app, page }) => {
+      await app.open("gear");
+      const side = page.getByRole("navigation", { name: "Library" });
+      for (const [row, ready] of [
+        [/^Connected/, "Connected"],
+        [/^DVR card/, "DVR card"],
+        [/^Field radio/, "Field radio"],
+        [/^Devices/, "Devices"],
+      ] as const) {
+        await side.getByRole("button", { name: row }).click();
+        await expect(page.getByRole("heading", { name: ready, exact: true })).toBeVisible();
+        await page.mouse.move(1, 400);
+        const r = await new AxeBuilder({ page }).withTags(["wcag2a", "wcag2aa", "wcag21aa"]).analyze();
+        expect(r.violations.map((v) => `${ready} ${v.id}: ${v.nodes.map((n) => n.target.join(" ") + " " + n.failureSummary).join(", ")}`)).toEqual([]);
+        if (process.env.QC_SHOTS) await page.screenshot({ path: `${process.env.QC_SHOTS}/gear-${ready.toLowerCase().replace(/ /g, "-")}-${scheme}.png` });
+      }
+    });
+
     test("every settings pane passes axe", async ({ app, page }) => {
       await app.open();
       await page.getByRole("button", { name: "Settings" }).click();
       await page.waitForFunction(() => document.getAnimations().every((a) => a.playState === "finished"));
-      for (const pane of ["Library", "Aircraft", "Places", "Import", "Photos", "Advanced"]) {
+      for (const pane of ["Library", "Aircraft", "Places", "Import", "Photos", "Gear", "Advanced"]) {
         await page.getByRole("navigation", { name: "Settings sections" }).getByRole("button", { name: pane }).click();
         const r = await new AxeBuilder({ page }).withTags(["wcag2a", "wcag2aa", "wcag21aa"]).analyze();
         expect(r.violations.map((v) => `${pane} ${v.id}: ${v.nodes.map((n) => n.target.join(" ") + " " + n.failureSummary).join(", ")}`)).toEqual([]);

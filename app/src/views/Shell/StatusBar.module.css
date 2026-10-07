@@ -1,0 +1,42 @@
+.bar {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: var(--s-1);
+  height: 30px;
+  padding: 0 var(--s-3);
+  border-top: 1px solid var(--border);
+  background: var(--mantle);
+  font-size: var(--t-sm);
+}
+.none {
+  color: var(--muted);
+}
+.item {
+  display: flex;
+  align-items: center;
+  gap: var(--s-1);
+  height: 24px;
+  padding: 0 var(--s-2);
+  border: 0;
+  border-radius: var(--r-1);
+  background: transparent;
+  color: var(--fg);
+  font-size: var(--t-sm);
+}
+.item:hover {
+  background: var(--selected);
+}
+.item[data-state="attention"] .word,
+.item[data-state="inserted"] .word {
+  color: var(--warning-text);
+}
+.item[data-state="safe"] .word {
+  color: var(--success-text);
+}
+.count {
+  color: var(--muted);
+}
+.dismiss {
+  margin-left: auto;
+}
