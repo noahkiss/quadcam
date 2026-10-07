@@ -62,7 +62,8 @@ pub struct FcSense {
 }
 
 /// A test or validation override: fly these rates (deg/s, Betaflight axes: roll right,
-/// pitch forward, yaw right) instead of the sticks'.
+/// pitch forward, yaw right) instead of the sticks'. The override and the frame's throttle
+/// skip RC smoothing: they replay a log's values, which its FC already smoothed.
 #[derive(Debug, Clone, Copy, Default, PartialEq)]
 pub struct Override {
     pub setpoint: Option<[f64; 3]>,
@@ -315,7 +316,12 @@ impl Fc {
         for (k, f) in self.sp_filter.iter_mut().enumerate() {
             sp[k] = f.apply(raw_sp[k]);
         }
-        let throttle_stick = self.thr_filter.apply(sticks.throttle).clamp(0.0, 1.0);
+        let mut throttle_stick = self.thr_filter.apply(sticks.throttle).clamp(0.0, 1.0);
+        // A replayed log's setpoint and throttle were smoothed by the quad's own FC.
+        if ov.setpoint.is_some() {
+            sp = raw_sp;
+            throttle_stick = sticks.throttle;
+        }
         let throttle = self.cfg.throttle.apply(throttle_stick);
 
         if ov.setpoint.is_none() && self.mode != FlightMode::Acro {

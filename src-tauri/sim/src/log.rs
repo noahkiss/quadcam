@@ -36,6 +36,9 @@ pub const FIXTURE_COLUMNS: &[&str] = &[
     "imuQuaternion[2]",
 ];
 
+/// The optional ground-speed column a fixture may carry (coast-down needs it).
+pub const SPEED_COLUMN: &str = "speed (m/s)";
+
 /// The quaternion's fixed-point scale in the log.
 const Q15: f64 = 32767.0;
 
@@ -65,6 +68,8 @@ pub struct LogData {
     pub amps: Vec<f64>,
     /// Attitude (w, x, y, z), from the FC's estimate.
     pub quat: Vec<[f64; 4]>,
+    /// Horizontal ground speed (m/s), when the log has it (a `speed (m/s)` column).
+    pub speed: Option<Vec<f64>>,
 }
 
 impl LogData {
@@ -153,6 +158,8 @@ pub fn parse(name: &str, text: &str, scales: Scales) -> Result<LogData, String> 
         .collect::<Result<_, _>>()?;
     let iv = need("vbatLatest (V)")?;
     let ic = idx("amperageLatest (A)");
+    let is = idx(SPEED_COLUMN);
+    let mut speed = Vec::new();
     let iq: Vec<Option<usize>> = (0..3)
         .map(|i| idx(&format!("imuQuaternion[{i}]")))
         .collect();
@@ -206,11 +213,17 @@ pub fn parse(name: &str, text: &str, scales: Scales) -> Result<LogData, String> 
             d.vbat.push(v);
             d.amps.push(a);
             d.quat.push(q);
+            if let Some(k) = is {
+                speed.push(g(k)?);
+            }
             Some(())
         })();
         let _ = row;
     }
     d.meta = meta;
+    if is.is_some() {
+        d.speed = Some(speed);
+    }
     if d.is_empty() {
         return Err(format!("{name}: no rows"));
     }
@@ -248,7 +261,11 @@ pub fn excerpt(text: &str, t0: f64, t1: f64, meta: &[(&str, &str)]) -> Result<St
     let mut lines = text.lines().skip_while(|l| l.starts_with('#'));
     let header = lines.next().ok_or("empty log")?;
     let cols: Vec<&str> = header.split(',').map(|c| c.trim()).collect();
-    let pick: Vec<usize> = FIXTURE_COLUMNS
+    let mut names: Vec<&str> = FIXTURE_COLUMNS.to_vec();
+    if cols.contains(&SPEED_COLUMN) {
+        names.push(SPEED_COLUMN);
+    }
+    let pick: Vec<usize> = names
         .iter()
         .map(|c| {
             cols.iter()
@@ -260,7 +277,7 @@ pub fn excerpt(text: &str, t0: f64, t1: f64, meta: &[(&str, &str)]) -> Result<St
     for (k, v) in meta {
         out.push_str(&format!("# {k}: {v}\n"));
     }
-    out.push_str(&FIXTURE_COLUMNS.join(","));
+    out.push_str(&names.join(","));
     out.push('\n');
     let mut first: Option<f64> = None;
     let mut base: Option<f64> = None;

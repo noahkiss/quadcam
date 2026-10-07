@@ -173,7 +173,7 @@
   "gains": [
    {
     "p": {
-     "value": 70.0,
+     "value": 91.0,
      "source": "estimate",
      "note": "tuned so the closed-loop rate lag and overshoot match the example logs"
     },
@@ -183,19 +183,19 @@
      "note": "tuned so the closed-loop rate lag and overshoot match the example logs"
     },
     "d": {
-     "value": 0.75,
+     "value": 1.125,
      "source": "estimate",
      "note": "tuned so the closed-loop rate lag and overshoot match the example logs"
     },
     "ff": {
-     "value": 1.74,
+     "value": 1.39,
      "source": "estimate",
      "note": "tuned so the closed-loop rate lag and overshoot match the example logs"
     }
    },
    {
     "p": {
-     "value": 70.0,
+     "value": 91.0,
      "source": "estimate",
      "note": "tuned so the closed-loop rate lag and overshoot match the example logs"
     },
@@ -205,12 +205,12 @@
      "note": "tuned so the closed-loop rate lag and overshoot match the example logs"
     },
     "d": {
-     "value": 0.75,
+     "value": 1.125,
      "source": "estimate",
      "note": "tuned so the closed-loop rate lag and overshoot match the example logs"
     },
     "ff": {
-     "value": 1.74,
+     "value": 1.39,
      "source": "estimate",
      "note": "tuned so the closed-loop rate lag and overshoot match the example logs"
     }
@@ -232,7 +232,7 @@
      "note": "tuned so the closed-loop rate lag and overshoot match the example logs"
     },
     "ff": {
-     "value": 0.3,
+     "value": 0.15,
      "source": "estimate",
      "note": "tuned so the closed-loop rate lag and overshoot match the example logs"
     }

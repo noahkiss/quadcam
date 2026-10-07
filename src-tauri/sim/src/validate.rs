@@ -166,7 +166,7 @@ pub fn validate(profile: &SimProfile, logs: &[LogData]) -> ValidationReport {
         for (axis, name) in [(0, "roll"), (1, "pitch"), (2, "yaw")] {
             checks.extend(rate_steps(&hp, log, axis, name));
         }
-        checks.push(not_in_log("coast_down", &log.name));
+        checks.extend(coast_downs(&hp, log));
         checks.extend(fall_recoveries(&hp, log));
     }
     // A check with no window in one log but a result in another is not reported missing.
@@ -442,6 +442,34 @@ pub struct OpenLoop {
 /// `accel_g` is what the FC's accelerometer would log: body-z specific force through
 /// Betaflight's default accelerometer low-pass (10 Hz, two poles).
 pub fn open_loop(p: &SimProfile, log: &LogData, i0: usize, i1: usize, sag: bool) -> OpenLoop {
+    open_loop_from(p, log, i0, i1, sag, sink_at(log, i0))
+}
+
+/// Vertical speed (m/s) at `i`: the quad's sink since the motors were last above chop,
+/// from earth-frame specific force (taken as still before the chop; zero with no chop).
+fn sink_at(log: &LogData, i: usize) -> f64 {
+    let mut j = i;
+    let lim = i.saturating_sub((1.0 / log.dt()) as usize);
+    while j > lim && log.duty[j - 1].iter().all(|d| *d < 0.15) {
+        j -= 1;
+    }
+    let mut v = 0.0;
+    for k in j + 1..=i {
+        let q = log.quat[k];
+        let a = DQuat::from_xyzw(q[1], q[2], q[3], q[0]) * DVec3::from(log.acc[k]);
+        v += (a.z - 1.0) * G * (log.t[k] - log.t[k - 1]);
+    }
+    v
+}
+
+fn open_loop_from(
+    p: &SimProfile,
+    log: &LogData,
+    i0: usize,
+    i1: usize,
+    sag: bool,
+    vz0: f64,
+) -> OpenLoop {
     let pr = p.params();
     let mut acc_lpf = [
         Pt1::new(ACC_LPF_STAGE_HZ, log.dt()),
@@ -450,7 +478,7 @@ pub fn open_loop(p: &SimProfile, log: &LogData, i0: usize, i1: usize, sag: bool)
     for f in &mut acc_lpf {
         f.reset(log.acc[i0][2]);
     }
-    let mut vz = 0.0;
+    let mut vz = vz0;
     let mut force = 0.0;
     let mut m = Motors::new(&pr);
     m.omega = log.rpm[i0].map(|r| r * RPM_TO_RADS);
@@ -631,21 +659,24 @@ fn rate_windows(log: &LogData, axis: usize, len: f64) -> Vec<(usize, usize)> {
     out
 }
 
-/// Lag (s) of the best cross-correlation of `y` behind `x`, 0..80 ms.
+/// Lag (s) of `y` behind `x`: the shift, 0..80 ms, with the best Pearson correlation
+/// between `x` and the shifted `y` over their overlap.
 fn lag(x: &[f64], y: &[f64], dt: f64) -> f64 {
-    let mx = x.iter().sum::<f64>() / x.len() as f64;
-    let my = y.iter().sum::<f64>() / y.len() as f64;
-    let x: Vec<f64> = x.iter().map(|v| v - mx).collect();
-    let y: Vec<f64> = y.iter().map(|v| v - my).collect();
     let max = ((0.08 / dt) as usize).min(x.len() / 2);
+    let pearson = |a: &[f64], b: &[f64]| {
+        let n = a.len() as f64;
+        let (ma, mb) = (a.iter().sum::<f64>() / n, b.iter().sum::<f64>() / n);
+        let (mut sab, mut saa, mut sbb) = (0.0, 0.0, 0.0);
+        for (u, v) in a.iter().zip(b) {
+            sab += (u - ma) * (v - mb);
+            saa += (u - ma).powi(2);
+            sbb += (v - mb).powi(2);
+        }
+        sab / (saa * sbb).sqrt().max(1e-12)
+    };
     let mut best = (f64::MIN, 0usize);
     for l in 0..=max {
-        let c: f64 = x[..x.len() - l]
-            .iter()
-            .zip(&y[l..])
-            .map(|(a, b)| a * b)
-            .sum::<f64>()
-            / (x.len() - l) as f64;
+        let c = pearson(&x[..x.len() - l], &y[l..]);
         if c > best.0 {
             best = (c, l);
         }
@@ -678,14 +709,26 @@ fn body_to_bf(r: [f64; 3]) -> [f64; 3] {
     [r[0].to_degrees(), r[1].to_degrees(), -r[2].to_degrees()]
 }
 
-/// Fly the logged setpoint and throttle closed loop over `i0..i1`; the sim's gyro (BF
-/// axes, deg/s) and height at each log sample.
+struct Replay {
+    /// Gyro, BF axes (deg/s).
+    gyro: Vec<[f64; 3]>,
+    z: Vec<f64>,
+    vz: Vec<f64>,
+    /// Horizontal speed (m/s).
+    speed: Vec<f64>,
+}
+
+/// Fly the logged setpoint and throttle closed loop over `i0..i1`, starting level with
+/// velocity `v0` (world); the sim's state at each log sample.
+/// `attitude`: start from the log's attitude (same body frame as the sim's) rather than level.
 fn closed_loop(
     p: &SimProfile,
     log: &LogData,
     i0: usize,
     i1: usize,
-) -> (Vec<[f64; 3]>, Vec<f64>, Vec<f64>) {
+    v0: [f64; 3],
+    attitude: bool,
+) -> Replay {
     let vbat = median(log.vbat[i0..i1].to_vec());
     let mut sim = sim_at(p, vbat);
     sim.set_body([0.0, 0.0, 500.0], DQuat::IDENTITY, [0.0; 3], [0.0; 3]);
@@ -694,18 +737,22 @@ fn closed_loop(
     for _ in 0..20 {
         sim.step(&frame(0.3, true, false));
     }
-    sim.set_body(
-        [0.0, 0.0, 500.0],
-        DQuat::IDENTITY,
-        [0.0; 3],
-        bf_to_body(log.gyro[i0]),
-    );
+    let q = if attitude {
+        let q = log.quat[i0];
+        DQuat::from_xyzw(q[1], q[2], q[3], q[0]).normalize()
+    } else {
+        DQuat::IDENTITY
+    };
+    sim.set_body([0.0, 0.0, 500.0], q, v0, bf_to_body(log.gyro[i0]));
     for m in sim.motors.omega.iter_mut().zip(log.rpm[i0]) {
         *m.0 = m.1 * RPM_TO_RADS;
     }
-    let mut gyro = Vec::new();
-    let mut z = Vec::new();
-    let mut vz = Vec::new();
+    let mut r = Replay {
+        gyro: Vec::new(),
+        z: Vec::new(),
+        vz: Vec::new(),
+        speed: Vec::new(),
+    };
     let mut t = log.t[i0];
     for i in i0..i1 {
         let k = i.saturating_sub(1).max(i0);
@@ -717,15 +764,17 @@ fn closed_loop(
             sim.step_with(&f, &ov);
             t += sim.dt;
         }
-        gyro.push(body_to_bf(sim.body_rates()));
-        z.push(sim.position()[2]);
-        vz.push(sim.velocity()[2]);
+        let v = sim.velocity();
+        r.gyro.push(body_to_bf(sim.body_rates()));
+        r.z.push(sim.position()[2]);
+        r.vz.push(v[2]);
+        r.speed.push((v[0] * v[0] + v[1] * v[1]).sqrt());
     }
-    (gyro, z, vz)
+    r
 }
 
 fn rate_steps(p: &SimProfile, log: &LogData, axis: usize, name: &str) -> Vec<CheckResult> {
-    let wins = rate_windows(log, axis, 1.5);
+    let wins = rate_windows(log, axis, 1.0);
     if wins.is_empty() {
         return vec![not_in_log(name, &log.name)];
     }
@@ -733,7 +782,7 @@ fn rate_steps(p: &SimProfile, log: &LogData, axis: usize, name: &str) -> Vec<Che
     let skip = (0.15 / dt) as usize;
     let mut out = Vec::new();
     for (i0, i1) in wins {
-        let (g, _, _) = closed_loop(p, log, i0, i1);
+        let g = closed_loop(p, log, i0, i1, [0.0; 3], false).gyro;
         let sp: Vec<f64> = (i0 + skip..i1).map(|i| log.setpoint[i][axis]).collect();
         let lg: Vec<f64> = (i0 + skip..i1).map(|i| log.gyro[i][axis]).collect();
         let sg: Vec<f64> = g[skip..].iter().map(|x| x[axis]).collect();
@@ -815,8 +864,9 @@ fn find_falls(log: &LogData) -> Vec<(usize, usize)> {
 }
 
 /// Height lost from `i0` (vertical speed taken as zero there) until climbing again,
-/// from earth-frame specific force.
-fn logged_height_lost(log: &LogData, i0: usize, end: usize) -> f64 {
+/// from earth-frame specific force; `None` when the log never climbs again before `end`
+/// (no recovery: a crash, or a second chop).
+fn logged_height_lost(log: &LogData, i0: usize, end: usize) -> Option<f64> {
     let mut v = 0.0;
     let mut z: f64 = 0.0;
     let mut low: f64 = 0.0;
@@ -828,10 +878,10 @@ fn logged_height_lost(log: &LogData, i0: usize, end: usize) -> f64 {
         z += v * dt;
         low = low.min(z);
         if i > i0 + 5 && v >= 0.0 && z < 0.0 && low < z {
-            break;
+            return Some(-low);
         }
     }
-    -low
+    None
 }
 
 fn fall_recoveries(p: &SimProfile, log: &LogData) -> Vec<CheckResult> {
@@ -843,8 +893,10 @@ fn fall_recoveries(p: &SimProfile, log: &LogData) -> Vec<CheckResult> {
     let mut out = Vec::new();
     for (i0, k) in falls {
         let end = (k + (1.0 / dt) as usize).min(log.len());
-        let logged = logged_height_lost(log, i0, end);
-        let (_, z, vz) = closed_loop(p, log, i0, end);
+        let Some(logged) = logged_height_lost(log, i0, end) else {
+            continue;
+        };
+        let Replay { z, vz, .. } = closed_loop(p, log, i0, end, [0.0; 3], false);
         let mut low = z[0];
         for i in 1..z.len() {
             low = low.min(z[i]);
@@ -865,5 +917,139 @@ fn fall_recoveries(p: &SimProfile, log: &LogData) -> Vec<CheckResult> {
             "m",
         ));
     }
+    if out.is_empty() {
+        out.push(not_in_log("fall_recovery", &log.name));
+    }
     out
+}
+
+// ----- coast-down -----
+
+/// Coasts: moving faster than 3 m/s, then 0.5 s level (tilt under 10°), not rotating and
+/// not punching. Needs a ground-speed column.
+fn find_coasts(log: &LogData) -> Vec<(usize, usize)> {
+    let Some(speed) = &log.speed else {
+        return Vec::new();
+    };
+    let n = (0.5 / log.dt()) as usize;
+    let mut out = Vec::new();
+    let mut i = 0;
+    while i + n < log.len() {
+        let calm = (i..i + n).all(|k| {
+            tilt_deg(log.quat[k]) < 10.0
+                && log.gyro[k].iter().all(|g| g.abs() < 100.0)
+                && log.mean_duty(k) < 0.6
+        });
+        if speed[i] > 3.0 && calm && speed[i + n] < speed[i] {
+            out.push((i, i + n));
+            i += n;
+        } else {
+            i += n / 10;
+        }
+    }
+    out
+}
+
+fn coast_downs(p: &SimProfile, log: &LogData) -> Vec<CheckResult> {
+    let coasts = find_coasts(log);
+    let Some(speed) = &log.speed else {
+        return vec![not_in_log("coast_down", &log.name)];
+    };
+    if coasts.is_empty() {
+        return vec![not_in_log("coast_down", &log.name)];
+    }
+    let mut out = Vec::new();
+    for (i0, i1) in coasts {
+        let span = log.t[i1] - log.t[i0];
+        let logged = (speed[i0] - speed[i1]) / span;
+        let r = closed_loop(p, log, i0, i1 + 1, [speed[i0], 0.0, 0.0], true);
+        let sim = (r.speed[0] - r.speed[r.speed.len() - 1]) / span;
+        let w = Some((log.t[i0], log.t[i1]));
+        out.push(result(
+            "coast_down",
+            "deceleration",
+            &log.name,
+            w,
+            logged,
+            sim,
+            0.15,
+            true,
+            "m/s²",
+        ));
+    }
+    out
+}
+
+// ----- synthetic logs -----
+
+/// A log written by the sim itself, in the shape a decoded blackbox log has (800 Hz,
+/// accelerometer through Betaflight's low-pass, ground speed included). `script` gives
+/// the sticks and whether Angle mode is on at each sample; it sees the sim, so it can fly
+/// a height-holding throttle. The harness run on such a log against the same profile is
+/// its own consistency test.
+pub fn synth_log(
+    p: &SimProfile,
+    seconds: f64,
+    mut script: impl FnMut(&Sim, f64) -> (Sticks, bool),
+) -> LogData {
+    let settings = SimSettings {
+        rate_hz: 4000.0,
+        prop_wash: 0.0,
+        battery_sag: true,
+        ..SimSettings::default()
+    };
+    let hp = harness_profile(p);
+    let mut sim = Sim::new(&hp, WorldSpec::empty(), settings, 1);
+    sim.battery.set_resting_cell_voltage(4.1);
+    sim.set_body([0.0, 0.0, 100.0], DQuat::IDENTITY, [0.0; 3], [0.0; 3]);
+    arm(&mut sim, true);
+    sim.set_body([0.0, 0.0, 100.0], DQuat::IDENTITY, [0.0; 3], [0.0; 3]);
+    let per_sample = 5;
+    let dt = sim.dt * per_sample as f64;
+    let mut lpf = [
+        Pt1::new(ACC_LPF_STAGE_HZ, dt),
+        Pt1::new(ACC_LPF_STAGE_HZ, dt),
+    ];
+    for f in &mut lpf {
+        f.reset(1.0);
+    }
+    let mut log = LogData {
+        name: "synthetic".into(),
+        speed: Some(Vec::new()),
+        ..LogData::default()
+    };
+    let n = (seconds / dt) as usize;
+    let mut v_prev = DVec3::from(sim.velocity());
+    let b = |on: bool| if on { 2000 } else { 1000 };
+    for k in 0..n {
+        let t = k as f64 * dt;
+        let (s, angle) = script(&sim, t);
+        let f = RcFrame::from_sticks(s, &[b(true), b(angle)]);
+        for _ in 0..per_sample {
+            sim.step(&f);
+        }
+        let q = sim.attitude();
+        let v = DVec3::from(sim.velocity());
+        let a_world = (v - v_prev) / dt + DVec3::new(0.0, 0.0, G);
+        v_prev = v;
+        let a_body = q.inverse() * a_world / G;
+        let az0 = lpf[0].apply(a_body.z);
+        let az = lpf[1].apply(az0);
+        let snap = sim.snapshot();
+        let sp = snap.setpoint;
+        log.t.push(t);
+        log.setpoint.push([sp[0], sp[1], -sp[2]]);
+        log.throttle.push(snap.throttle);
+        log.gyro.push(body_to_bf(sim.body_rates()));
+        log.acc.push([a_body.x, a_body.y, az]);
+        log.duty.push(snap.motor_u.map(|u| sim.motors.duty_for(u)));
+        log.rpm.push(snap.motor_rpm);
+        log.vbat.push(snap.vbat);
+        log.amps.push(snap.current);
+        log.quat.push([q.w, q.x, q.y, q.z]);
+        if let Some(sp) = log.speed.as_mut() {
+            sp.push((v.x * v.x + v.y * v.y).sqrt());
+        }
+    }
+    log
 }

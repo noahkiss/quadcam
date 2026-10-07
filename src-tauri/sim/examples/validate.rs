@@ -18,7 +18,7 @@ fn main() {
     let logs: Vec<_> = args[2..]
         .iter()
         .map(|f| read(Path::new(f), scales).expect("read log"))
-        .filter(|l| l.len() > 800)
+        .filter(|l| l.len() > 100)
         .collect();
     print!("{}", validate(&p, &logs).table());
 }
