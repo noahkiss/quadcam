@@ -1720,6 +1720,11 @@ export type GearStatus = {
 	jobs?: GearJob[],
 	/**  The latest card check of each card plugged in. */
 	card_checks?: CardCheck[],
+	/**
+	 *  The last failed step of each device plugged in (an unmount that failed, a backup
+	 *  that failed), with the reason.
+	 */
+	failures?: StepFailure[],
 };
 
 /**  One search hit. */
@@ -3395,6 +3400,17 @@ export type Status_Serialize = {
 	tools: SerdeResult<Tools, string>,
 	defaults: Defaults_Serialize,
 	session: SessionBrief | null,
+};
+
+/**  A step that failed on a device, and why. */
+export type StepFailure = {
+	/**  The link (`link_handle`). */
+	handle: string,
+	device: string | null,
+	/**  `Unmount`, `Backup`, `Card check`, ... */
+	step: string,
+	message: string,
+	at: string,
 };
 
 export type Stick = "roll" | "pitch" | "throttle" | "yaw";

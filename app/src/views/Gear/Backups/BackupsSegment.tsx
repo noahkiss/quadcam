@@ -11,7 +11,8 @@ import { SegmentedControl } from "../../../components/SegmentedControl";
 import { DiffView, type DiffEntry } from "../../../components/gear/DiffView";
 import { toast } from "../../../components/toastStore";
 import { fmtBytes, plural } from "../../../lib/format";
-import { checkFailed, checkFor, fmtWhen, jobFor, jobText, TRIGGER_LABEL } from "../../../lib/backups";
+import { checkFailed, checkFor, failureFor, fmtWhen, jobFor, jobText, TRIGGER_LABEL } from "../../../lib/backups";
+import { linkHandle } from "../../../lib/gear";
 import type { DeviceRef } from "../slots";
 import styles from "./Backups.module.css";
 
@@ -30,6 +31,7 @@ export function BackupsSegment({ d }: { d: DeviceRef }) {
   const [busy, setBusy] = useState(false);
   const job = jobFor(status, id);
   const check = checkFor(status, id);
+  const failure = failureFor(status, d.connected ? linkHandle(d.connected.link) : null);
   const isCard = d.connected?.link.kind === "volume";
 
   useEffect(() => {
@@ -113,6 +115,11 @@ export function BackupsSegment({ d }: { d: DeviceRef }) {
           </span>
         )}
       </div>
+      {failure && failure.step !== "Card check" && (
+        <Banner kind="warning" icon="danger-triangle">
+          {failure.step} failed: {failure.message}
+        </Banner>
+      )}
       {checkFailed(check) && (
         <Banner
           kind="warning"

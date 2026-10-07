@@ -7,6 +7,8 @@
 //! - "Back up on connect" registers two on-connect steps (`backup_hooks`, added by the
 //!   app): "Card check" (a known card: `diskutil verifyVolume`) and "Backup". A failed
 //!   check plays its own cue; the backup still reads the card.
+//! - Mount, work, unmount: every card job ends with `diskutil unmountDisk`
+//!   (`gear_finish_card`), and "done, safe to unplug" plays only after it worked.
 //! - Pruning runs after each new plug-in or manual snapshot, not after an import.
 
 use super::{link_handle, Core, HookFn, OnConnectHook};
@@ -227,6 +229,9 @@ impl Drop for JobGuard<'_> {
 pub fn backup_hooks() -> Vec<OnConnectHook> {
     let check: HookFn = Arc::new(|core: &Core, c: &Connected| core.gear_check_on_connect(c));
     let backup: HookFn = Arc::new(|core: &Core, c: &Connected| {
+        if matches!(c.link, Link::Volume { .. }) {
+            core.gear_touch(c);
+        }
         core.gear_backup_connected(c, Trigger::Connect, false)
             .map(|_| ())
     });
@@ -426,9 +431,14 @@ impl Core {
         match (&c.kind, &c.link) {
             (DeviceKind::Fc, Link::Serial { .. }) => self.backup_fc(c, trigger),
             (DeviceKind::Radio, Link::Volume { mount, .. }) => {
-                let r = self.backup_card(c, mount, trigger);
+                let mut r = self.backup_card(c, mount, trigger);
                 if cue {
-                    self.gear_job_done(c, r.as_ref().err().map(|_| "Backup"));
+                    // Mount, work, unmount: "safe to unplug" only after the unmount.
+                    let err = r.as_ref().err().map(|e| format!("{e:#}"));
+                    let unmount = self.gear_finish_card(c, err.as_deref().map(|e| ("Backup", e)));
+                    if let (Ok(res), Err(why)) = (&mut r, unmount) {
+                        res.notes.push(format!("The card did not unmount: {why}"));
+                    }
                 }
                 r
             }
@@ -684,7 +694,11 @@ impl Core {
     /// radio's USB) and logs the result for the card. `gear_stop` ends it early.
     pub fn gear_card_check(&self, p: &CardCheckParams) -> Result<CardCheck> {
         let c = self.check_target(p)?;
-        self.card_check(&c, CheckKind::Verify)
+        let check = self.card_check(&c, CheckKind::Verify)?;
+        let failed = (check.state != CheckState::Ok).then(|| check.summary.clone());
+        // The card is unmounted after the check; a failure's reason shows in the status.
+        let _ = self.gear_finish_card(&c, failed.as_deref().map(|m| ("Card check", m)));
+        Ok(check)
     }
 
     fn card_check(&self, c: &Connected, kind: CheckKind) -> Result<CardCheck> {
@@ -725,8 +739,9 @@ impl Core {
             None => false,
         };
         if !known || !matches!(c.link, Link::Volume { .. }) {
-            return Ok(());
+            return Err(super::Skip.into());
         }
+        self.gear_touch(c);
         let check = self.card_check(c, CheckKind::Verify)?;
         match check.state {
             CheckState::Ok | CheckState::Stopped => Ok(()),
@@ -786,7 +801,8 @@ impl Core {
         };
         let repair = self.card_check(&c, CheckKind::Repair)?;
         let verify = self.card_check(&c, CheckKind::Verify)?;
-        self.gear_job_done(&c, (verify.state != CheckState::Ok).then_some("Repair"));
+        let failed = (verify.state != CheckState::Ok).then(|| verify.summary.clone());
+        let _ = self.gear_finish_card(&c, failed.as_deref().map(|m| ("Repair", m)));
         Ok(RepairResult {
             backup,
             backup_error,

@@ -1,6 +1,6 @@
 // Backups as the UI shows them: why each was taken, its time, a device's running job and
 // latest card check.
-import type { BackupSummary, CardCheck, GearJob, GearStatus } from "../ipc/types";
+import type { BackupSummary, CardCheck, GearJob, GearStatus, StepFailure } from "../ipc/types";
 
 /** Why a backup was taken (`Trigger`), in words. */
 export const TRIGGER_LABEL: Record<BackupSummary["trigger"], string> = {
@@ -37,3 +37,6 @@ export function jobText(j: GearJob): string {
   if (!p.files_total) return j.step;
   return `${p.files_done} of ${p.files_total} files`;
 }
+
+/** The last step that failed on a link (an unmount, a backup), with its reason. */
+export const failureFor = (s: GearStatus | null, handle: string | null | undefined): StepFailure | null => (handle && s?.failures?.find((f) => f.handle === handle)) || null;

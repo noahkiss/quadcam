@@ -390,6 +390,14 @@ fn gear<B: Backend>(backend: &mut B, a: &Value) -> Result<(Vec<Value>, Value)> {
                     }
                 ));
             }
+            for f in s["failures"].as_array().into_iter().flatten() {
+                line.push_str(&format!(
+                    "\n{} failed on {}: {}",
+                    f["step"].as_str().unwrap_or("?"),
+                    f["device"].as_str().unwrap_or(f["handle"].as_str().unwrap_or("?")),
+                    f["message"].as_str().unwrap_or("")
+                ));
+            }
             for c in s["card_checks"].as_array().into_iter().flatten() {
                 if c["state"] != "ok" {
                     line.push_str(&format!(

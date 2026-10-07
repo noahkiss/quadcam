@@ -83,6 +83,19 @@ test("Storage: sizes per device, prune after a confirm, import a folder after a 
   expect((await app.method("gear_import_backups")).map((p) => p.dry_run)).toEqual([true, false]);
 });
 
+test("a failed unmount shows its reason and marks the radio", async ({ page, app }) => {
+  await app.open("gear");
+  await app.core(`c => {
+    c.gear.failures = [{ handle: "disk4", device: "${RADIO_ID}", step: "Unmount", message: "Unmount of disk4 failed: at least one volume could not be unmounted", at: "2026-10-07T12:00:00Z" }];
+    c.emit("gear-changed");
+  }`);
+  await expect(bar(page).getByRole("button", { name: "Radio: Needs attention" })).toBeVisible();
+  await bar(page).getByRole("button", { name: "Radio: Needs attention" }).click();
+  const radio = page.getByRole("region", { name: "Field radio" });
+  await radio.getByRole("group", { name: "Sections" }).getByRole("button", { name: "Backups" }).click();
+  await expect(radio.getByText(/^Unmount failed: .*could not be unmounted/)).toBeVisible();
+});
+
 for (const scheme of ["dark", "light"] as const) {
   test.describe(`${scheme} theme`, () => {
     test.use({ colorScheme: scheme });

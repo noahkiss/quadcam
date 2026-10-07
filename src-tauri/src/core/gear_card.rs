@@ -169,7 +169,10 @@ impl Core {
             ..
         } = &c.link
         else {
-            bail!("This device has no disk to unmount.");
+            let e = anyhow::anyhow!("This device has no disk to unmount.");
+            self.gear_note_failure(c, "Unmount", &e.to_string());
+            self.gear_job_done(c, Some("Unmount"));
+            return Err(e);
         };
         let r = {
             let _hold = self.gear_hold(&super::link_handle(&c.link));
@@ -177,10 +180,12 @@ impl Core {
         };
         match r {
             Ok(()) => {
+                self.gear_clear_failure(&super::link_handle(&c.link));
                 self.gear_job_done(c, None);
                 Ok(())
             }
             Err(e) => {
+                self.gear_note_failure(c, "Unmount", &format!("{e:#}"));
                 self.gear_job_done(c, Some("Unmount"));
                 Err(e)
             }

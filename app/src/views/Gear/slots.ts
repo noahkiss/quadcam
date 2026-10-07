@@ -4,7 +4,8 @@
 import type { ReactNode } from "react";
 import type { Connected, Device, DeviceKind } from "../../ipc/types";
 import type { DeviceState } from "../../lib/gear";
-import { backupTime, checkFailed, checkFor } from "../../lib/backups";
+import { backupTime, checkFailed, checkFor, failureFor } from "../../lib/backups";
+import { linkHandle } from "../../lib/gear";
 import { useStore } from "../../store";
 
 /** One device as a page shows it: saved, plugged in, or both. */
@@ -49,5 +50,10 @@ export const gearSlots = {
   lastBackup: (d: Device | null): string | null => backupTime(d?.last_backup),
   /** What a connected device needs from the person beyond a name (a failed step, WP4 and
    *  later): a short phrase, or null. */
-  attention: (c: Connected): string | null => (checkFailed(checkFor(useStore.getState().gear, c.id)) ? "Card check failed" : null),
+  attention: (c: Connected): string | null => {
+    const s = useStore.getState().gear;
+    const f = failureFor(s, linkHandle(c.link));
+    if (f) return `${f.step} failed`;
+    return checkFailed(checkFor(s, c.id)) ? "Card check failed" : null;
+  },
 };
