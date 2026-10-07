@@ -51,6 +51,7 @@ export const profile = (p: G.Profile): Profile => ({
   author: p.author ?? "",
   place: p.place ?? null,
   edgetx_models: p.edgetx_models ?? [],
+  gear: p.gear ?? {},
 });
 
 export const tunables = (t: G.Tunables): Tunables => ({ ...t, segment_gap_s: n(t.segment_gap_s, 5), session_gap_min: n(t.session_gap_min, 20), tolerance_s: n(t.tolerance_s, 30), clock_skew_s: n(t.clock_skew_s, 300) });

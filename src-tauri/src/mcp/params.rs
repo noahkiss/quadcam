@@ -392,6 +392,38 @@ pub struct SettingsValues {
     pub name_date_format: Option<String>,
     #[schemars(extend("x-nullable" = true))]
     pub default_profile: Option<String>,
+    /// Gear: the gear folder (absolute path); null for the default in the support folder.
+    #[schemars(extend("x-nullable" = true))]
+    pub gear_dir: Option<String>,
+    /// Gear: back up a device when it is plugged in. On by default.
+    #[schemars(extend("x-nullable" = true))]
+    pub gear_auto_backup: Option<bool>,
+    /// Gear: plug-in and manual backups kept per device before thinning (default 10).
+    #[schemars(range(min = 1, max = 1000), extend("x-nullable" = true))]
+    pub gear_keep_recent: Option<u64>,
+    /// Gear: then one backup a week for this many weeks (default 8).
+    #[schemars(range(min = 0, max = 520), extend("x-nullable" = true))]
+    pub gear_keep_weeks: Option<u64>,
+    /// Gear: then one backup a month, with no limit (default true).
+    #[schemars(extend("x-nullable" = true))]
+    pub gear_keep_monthly: Option<bool>,
+    /// Gear: minutes an FC may run on USB power before a warning; 0 for none (default 20).
+    #[schemars(range(min = 0, max = 240), extend("x-nullable" = true))]
+    pub gear_usb_minutes: Option<u64>,
+    /// Gear: per device kind (fc, radio, elrs_tx, elrs_rx, goggles, dvr_card), the steps that run when it is plugged in: backup, import, apply_ready. Only backup is on by default.
+    #[schemars(extend("x-nullable" = true))]
+    pub gear_on_connect: Option<std::collections::BTreeMap<String, Vec<String>>>,
+    /// Gear: cues. Channels speech, sound, notification; cues safe_to_unplug, still_inserted (repeats every still_inserted_every_s seconds, 0 for none), step_failed; voice (a say voice name).
+    #[schemars(extend("x-nullable" = true))]
+    pub gear_cues: Option<std::collections::BTreeMap<String, Value>>,
+    #[schemars(extend("x-nullable" = true, "enum" = ["manual", "daily", null]))]
+    pub firmware_check: Option<String>,
+    /// Gear: the voice provider (default say, macOS).
+    #[schemars(extend("x-nullable" = true))]
+    pub tts_provider: Option<String>,
+    /// Gear: the voice provider's API key. Never read back.
+    #[schemars(extend("x-nullable" = true))]
+    pub tts_key: Option<String>,
     /// Where ffmpeg comes from: QuadCam's module when installed, else Homebrew (module), or Homebrew only.
     #[schemars(extend("x-nullable" = true, "enum" = ["module", "homebrew", null]))]
     pub ffmpeg_source: Option<String>,

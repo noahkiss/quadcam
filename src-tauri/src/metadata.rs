@@ -38,6 +38,10 @@ pub struct Profile {
     pub place: Option<String>,
     /// EdgeTX model names (the start of the log file name) that mean this profile.
     pub edgetx_models: Vec<String>,
+    /// The aircraft's gear: its FC, radio, EdgeTX model file, receiver and pack type. Left
+    /// out of the file while empty, so profiles from before Gear read and write unchanged.
+    #[serde(skip_serializing_if = "crate::gear::model::ProfileGear::is_empty")]
+    pub gear: crate::gear::model::ProfileGear,
 }
 
 /// A location in decimal degrees.

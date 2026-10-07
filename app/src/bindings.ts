@@ -126,11 +126,11 @@ export const commands = {
 	/**  Deletes a saved place. */
 	placeDelete: (params: NameParams) => typedError<PlaceRemoved, string>(__TAURI_INVOKE("place_delete", { params })),
 	/**  Aircraft profiles and the default. */
-	profiles: () => typedError<ProfilesView, string>(__TAURI_INVOKE("profiles")),
+	profiles: () => typedError<ProfilesView_Serialize, string>(__TAURI_INVOKE("profiles")),
 	/**  Creates or changes an aircraft profile. */
-	profileSave: (params: ProfileSaveParams) => typedError<Profile, string>(__TAURI_INVOKE("profile_save", { params })),
+	profileSave: (params: ProfileSaveParams) => typedError<Profile_Serialize, string>(__TAURI_INVOKE("profile_save", { params })),
 	/**  Deletes an aircraft profile. */
-	profileDelete: (params: NameParams) => typedError<Profile, string>(__TAURI_INVOKE("profile_delete", { params })),
+	profileDelete: (params: NameParams) => typedError<Profile_Serialize, string>(__TAURI_INVOKE("profile_delete", { params })),
 	/**  Sets the default profile; an empty name means none. */
 	profileDefault: (params: NameParams) => typedError<string | null, string>(__TAURI_INVOKE("profile_default", { params })),
 	/**  Sets a session clip's cut list. */
@@ -139,6 +139,14 @@ export const commands = {
 	sessionSplit: (params: SessionClipParams) => typedError<CutChange, string>(__TAURI_INVOKE("session_split", { params })),
 	/**  Adds one cut per radio-log pack to a library clip's cut list (unsaved until exported). */
 	librarySplit: (params: ClipIdParams) => typedError<CutChange, string>(__TAURI_INVOKE("library_split", { params })),
+	/**  Gear: the gear folder, the Gear settings, and what is plugged in now. */
+	gearStatus: () => typedError<GearStatus, string>(__TAURI_INVOKE("gear_status")),
+	/**  The devices QuadCam knows. */
+	gearDevices: () => typedError<Device[], string>(__TAURI_INVOKE("gear_devices")),
+	/**  Names a device or links it to an aircraft profile. */
+	gearDeviceSave: (params: DeviceSaveParams) => typedError<Device, string>(__TAURI_INVOKE("gear_device_save", { params })),
+	/**  Forgets a device. Its backups stay. */
+	gearDeviceForget: (params: IdParams) => typedError<Device, string>(__TAURI_INVOKE("gear_device_forget", { params })),
 	/**
 	 *  Downloaded tools: each module's pin, a newer pin from the last check, and what is
 	 *  installed. Reads only local files.
@@ -187,6 +195,8 @@ export const commands = {
 export const events = {
 	agentFormatClosed: makeEvent<AgentFormatClosed>("agent-format-closed"),
 	agentFormatRequest: makeEvent<AgentFormatRequest>("agent-format-request"),
+	deviceChanged: makeEvent<DeviceChanged>("device-changed"),
+	gearChanged: makeEvent<GearChanged>("gear-changed"),
 	importProgress: makeEvent<ImportProgress>("import-progress"),
 	importResult: makeEvent<ImportResult>("import-result"),
 	libraryChanged: makeEvent<LibraryChanged>("library-changed"),
@@ -216,6 +226,18 @@ export type Asset = {
 	/**  Bytes. */
 	size: number,
 };
+
+/**
+ *  A step that may run on its own when a device is plugged in. Each is off unless the
+ *  device kind's `on_connect` list holds it; only `backup` is on by default.
+ */
+export type Automation = 
+/**  Back the device up. */
+"backup" | 
+/**  Import the clips on a card. */
+"import" | 
+/**  Apply the device's staged changes that are Ready. */
+"apply_ready";
 
 export type Badge = "matched" | "likely" | "unmatched";
 
@@ -423,6 +445,38 @@ export type ClipResult = {
 
 export type ClipStatus = "ok" | "incomplete" | "empty";
 
+/**  A device plugged in now, as `detect` found it. */
+export type Connected = {
+	/**
+	 *  The device id, when the device could be identified without talking to it (a
+	 *  volume). A serial device gets its id once it is identified (MSP for an FC).
+	 */
+	id: string | null,
+	kind: DeviceKind,
+	link: Link,
+	/**  What detection could read without opening a port (the radio's `board` and `semver`). */
+	identity: Identity,
+	/**  The saved device with this id, when QuadCam knows it. */
+	device?: Device | null,
+};
+
+/**  The `gearCues` setting. Missing fields take their defaults. */
+export type CueSettings = {
+	/**  Speak cues with the system voice. */
+	speech?: boolean,
+	/**  Play a system sound. */
+	sound?: boolean,
+	/**  Post a macOS notification. */
+	notification?: boolean,
+	safe_to_unplug?: boolean,
+	still_inserted?: boolean,
+	/**  Seconds between "still inserted" reminders; 0 for none. */
+	still_inserted_every_s?: number,
+	step_failed?: boolean,
+	/**  A `say` voice name; None for the system voice. */
+	voice?: string | null,
+};
+
 /**  The answer to a cut change. */
 export type CutChange = 
 /**  The new list is saved. `kept` and `trashed` list the files of removed cuts. */
@@ -488,7 +542,7 @@ export type Defaults_Deserialize = {
 	/**  FAT32 volume name for the format step. */
 	format_label?: string,
 	places?: Place[],
-	profiles?: Profile[],
+	profiles?: Profile_Deserialize[],
 	default_profile?: string | null,
 	/**  How imports are filed in the library folder (`output_dir`). */
 	layout?: Layout,
@@ -532,7 +586,7 @@ export type Defaults_Serialize = {
 	/**  FAT32 volume name for the format step. */
 	format_label: string,
 	places: Place[],
-	profiles: Profile[],
+	profiles: Profile_Serialize[],
 	default_profile: string | null,
 	/**  How imports are filed in the library folder (`output_dir`). */
 	layout: Layout,
@@ -555,6 +609,66 @@ export type DeletionState =
 "deleted" | 
 /**  The file stays; `reason` says why. */
 "kept";
+
+/**  A device QuadCam knows, kept in `gear.json`. */
+export type Device = {
+	/**  Stable: a hash of what the device says about itself (see `device_id`). */
+	id: string,
+	kind: DeviceKind,
+	/**  The person's name for it. Empty until they give one ("Unnamed FC"). */
+	name?: string,
+	/**  The aircraft profile it belongs to. */
+	aircraft?: string | null,
+	identity?: Identity,
+	last_seen?: string | null,
+	/**  The id of its newest backup. */
+	last_backup?: string | null,
+};
+
+/**
+ *  What is plugged in changed: `events` says what happened (connected, identified,
+ *  unmounted but still in, removed), `connected` is what is plugged in now, and
+ *  `unmounted` what is unmounted but still in.
+ */
+export type DeviceChanged = {
+	events: DeviceEvent[],
+	connected: Connected[],
+	unmounted: Connected[],
+};
+
+export type DeviceEvent = {
+	kind: DeviceEventKind,
+	device: Connected,
+};
+
+export type DeviceEventKind = "connected" | "identified" | "unmounted_present" | "removed";
+
+/**  What a device is. */
+export type DeviceKind = 
+/**  A flight controller (Betaflight) on USB serial. */
+"fc" | 
+/**  An EdgeTX radio: its SD card in USB Storage mode, or its USB serial port. */
+"radio" | 
+/**  An ExpressLRS transmitter module. */
+"elrs_tx" | 
+/**  An ExpressLRS receiver. */
+"elrs_rx" | 
+/**  Goggles, by their card. */
+"goggles" | 
+/**  An analog DVR, by its card. */
+"dvr_card";
+
+/**
+ *  `gear_device_save`: names a device or links it to an aircraft. A device QuadCam does
+ *  not know yet must be plugged in (its id from `gear_status`' `connected`).
+ */
+export type DeviceSaveParams = {
+	id: string,
+	/**  The person's name for it; empty for none. */
+	name?: string | null,
+	/**  An aircraft profile name; empty to unlink. */
+	aircraft?: string | null,
+};
 
 export type DiskInfo = {
 	device_identifier: string,
@@ -685,6 +799,55 @@ export type FormatRequest = {
 	confirm?: boolean,
 };
 
+/**  `gear.json` changed (devices, links). Read Gear again with `gear_status`. */
+export type GearChanged = null;
+
+/**
+ *  The Gear settings (Settings > Gear), each with its default. They live in
+ *  `settings.json` like every other setting (`settings::KEYS`); `from_values` reads them.
+ */
+export type GearSettings = {
+	/**  The gear folder: `gear.json`, backups, logs, staged changes. */
+	gear_dir: string,
+	/**  Back up a device when it is plugged in. */
+	auto_backup: boolean,
+	/**  Plug-in and manual backups kept per device before thinning. */
+	keep_recent: number,
+	/**  Then one a week for this many weeks. */
+	keep_weeks: number,
+	/**  Then one a month, with no limit. */
+	keep_monthly: boolean,
+	/**  Minutes an FC may run on USB power before the warning; 0 turns it off. */
+	usb_minutes: number,
+	/**  `manual` or `daily`. */
+	firmware_check: string,
+	/**  The voice provider: `say` (macOS) or another a later version adds. */
+	tts_provider: string,
+	/**
+	 *  What runs when a device of each kind is plugged in (`gearOnConnect`). Backup also
+	 *  needs `auto_backup`.
+	 */
+	on_connect: Partial<{ [key in DeviceKind]: Automation[] }>,
+	/**  Which cues play, and how (`gearCues`). */
+	cues: CueSettings,
+};
+
+/**  `gear_status`' answer. */
+export type GearStatus = {
+	/**  The gear folder in use. */
+	gear_dir: string,
+	/**  The Gear settings in effect. */
+	settings: GearSettings,
+	/**  What is plugged in now, each with its saved record when QuadCam knows it. */
+	connected: Connected[],
+	/**  How many devices `gear.json` holds. */
+	devices: number,
+	/**  Staged changes not yet applied (the Bench badge). */
+	staged: number,
+	/**  Sims whose rates differ from their quad's. */
+	sims_out_of_date: number,
+};
+
 /**  One search hit. */
 export type GeoResult = {
 	name: string,
@@ -692,6 +855,25 @@ export type GeoResult = {
 	lat: number | null,
 	lon: number | null,
 	provider: string,
+};
+
+/**  A device, a backup or a change, by id. */
+export type IdParams = {
+	id: string,
+};
+
+/**  What a device reports about itself. Every field is optional: a device may not say. */
+export type Identity = {
+	/**  The board or target name (`pocket`, `STM32F411`). */
+	board?: string | null,
+	/**  The firmware family (`EdgeTX`, `Betaflight`, `ExpressLRS`). */
+	firmware?: string | null,
+	/**  The firmware version (`2.12.4`, `4.5.1`). */
+	version?: string | null,
+	/**  The build id or date, when the firmware reports one. */
+	build?: string | null,
+	/**  The flash target, for firmware that names one (ExpressLRS). */
+	target?: string | null,
 };
 
 /**
@@ -1112,6 +1294,24 @@ export type LibraryView_Serialize = {
 	clips: LibItem_Serialize[],
 };
 
+/**  How a connected device is reached. */
+export type Link = 
+/**  A mounted volume (a radio's SD card in USB Storage mode, a goggles or DVR card). */
+{ kind: "volume"; mount: string; volume_uuid?: string | null; 
+/**  The disk's protocol (`USB`, `Secure Digital` for the built-in SD slot). */
+bus_protocol?: string | null; 
+/**
+ *  The whole disk (`disk4`). After `diskutil unmountDisk` its node stays while the
+ *  card is in, so its going away means the card was pulled.
+ */
+whole_disk?: string | null } | 
+/**  A USB serial port. */
+{ kind: "serial"; 
+/**  `/dev/cu.usbmodem...` */
+port: string; vid: number; pid: number; product?: string | null } | 
+/**  A USB DFU device (a radio in its bootloader). */
+{ kind: "dfu"; vid: number; pid: number };
+
 /**  A location in decimal degrees. */
 export type Location = {
 	lat: number | null,
@@ -1317,7 +1517,41 @@ export type Probe = {
  *  without one, the first profile whose `video_system` names the clip's source (`DJI`,
  *  `analog`).
  */
-export type Profile = {
+export type Profile = Profile_Serialize | Profile_Deserialize;
+
+/**
+ *  An aircraft profile's links to its gear (`Profile.gear`). Every field is optional, so
+ *  profiles from before Gear load unchanged.
+ */
+export type ProfileGear = {
+	/**  The FC's device id. */
+	fc?: string | null,
+	/**  The radio's device id. */
+	radio?: string | null,
+	/**  The EdgeTX model file, for example `model01.yml`. */
+	edgetx_model?: string | null,
+	/**  The receiver's device id. */
+	rx?: string | null,
+	pack_type?: string | null,
+};
+
+/**
+ *  `profile_save`: creates a profile or changes the given fields of the one with this name;
+ *  `new_name` renames it.
+ */
+export type ProfileSaveParams = {
+	name: string,
+	new_name?: string | null,
+	fields?: { [key in string]: unknown },
+};
+
+/**
+ *  One aircraft setup, kept in the settings file. Every field is optional. A clip dated
+ *  from a radio log picks the profile whose `edgetx_models` holds the log's model name;
+ *  without one, the first profile whose `video_system` names the clip's source (`DJI`,
+ *  `analog`).
+ */
+export type Profile_Deserialize = {
 	name?: string,
 	/**  The aircraft, for example "5-inch freestyle". */
 	aircraft?: string,
@@ -1335,21 +1569,56 @@ export type Profile = {
 	place?: string | null,
 	/**  EdgeTX model names (the start of the log file name) that mean this profile. */
 	edgetx_models?: string[],
+	/**
+	 *  The aircraft's gear: its FC, radio, EdgeTX model file, receiver and pack type. Left
+	 *  out of the file while empty, so profiles from before Gear read and write unchanged.
+	 */
+	gear?: ProfileGear,
 };
 
 /**
- *  `profile_save`: creates a profile or changes the given fields of the one with this name;
- *  `new_name` renames it.
+ *  One aircraft setup, kept in the settings file. Every field is optional. A clip dated
+ *  from a radio log picks the profile whose `edgetx_models` holds the log's model name;
+ *  without one, the first profile whose `video_system` names the clip's source (`DJI`,
+ *  `analog`).
  */
-export type ProfileSaveParams = {
+export type Profile_Serialize = {
 	name: string,
-	new_name?: string | null,
-	fields?: { [key in string]: unknown },
+	/**  The aircraft, for example "5-inch freestyle". */
+	aircraft: string,
+	/**  The recorder: goggles or DVR maker and model. Written as the camera make and model. */
+	camera_make: string,
+	camera_model: string,
+	/**
+	 *  A label: analog, DJI, Walksnail, HDZero. A clip of that source picks the profile
+	 *  when nothing more specific does.
+	 */
+	video_system: string,
+	keywords: string[],
+	author: string,
+	/**  Name of a saved place used when a clip has no location. */
+	place: string | null,
+	/**  EdgeTX model names (the start of the log file name) that mean this profile. */
+	edgetx_models: string[],
+	/**
+	 *  The aircraft's gear: its FC, radio, EdgeTX model file, receiver and pack type. Left
+	 *  out of the file while empty, so profiles from before Gear read and write unchanged.
+	 */
+	gear?: ProfileGear,
 };
 
 /**  `profiles`' answer: every profile and the default's name. */
-export type ProfilesView = {
-	profiles: Profile[],
+export type ProfilesView = ProfilesView_Serialize | ProfilesView_Deserialize;
+
+/**  `profiles`' answer: every profile and the default's name. */
+export type ProfilesView_Deserialize = {
+	profiles: Profile_Deserialize[],
+	default_profile: string | null,
+};
+
+/**  `profiles`' answer: every profile and the default's name. */
+export type ProfilesView_Serialize = {
+	profiles: Profile_Serialize[],
 	default_profile: string | null,
 };
 

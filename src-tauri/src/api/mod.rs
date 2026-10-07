@@ -7,14 +7,18 @@
 //! - one typed function per method in `call`, which the CLI and both of the above use.
 //!
 //! A method with params takes one struct. `dispatch` reads JSON null as its default.
+//! Gear's rows live in `gear.rs` and join this table through `with_gear_rows!`.
 
 pub mod events;
+#[macro_use]
+pub mod gear;
 pub mod library;
 pub mod modules;
 pub mod session;
 pub mod setup;
 
 pub use events::*;
+pub use gear::*;
 pub use library::*;
 pub use modules::*;
 pub use session::*;
@@ -123,7 +127,8 @@ macro_rules! api {
     };
 }
 
-api! {
+// The table: these rows, then Gear's (`api/gear.rs`).
+with_gear_rows! {
     /// Whether the GUI runs, the tools, the effective settings, and the session in brief.
     status() -> Status = |c| Ok(c.status());
     /// Mounted volumes: DVR cards and radio log sources.

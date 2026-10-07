@@ -67,4 +67,21 @@ The app, the command-line tool and the MCP server all read and write this file.
 - The Settings window saves only the keys that you changed while it was open.
 - Settings from QuadCam 0.3.0 carry over as they are.
 
+## Gear
+
+These settings have no section in the Settings window yet. Set them with `quadcam-cli settings set` or an agent.
+
+| Setting | Default | Does |
+|---|---|---|
+| `gear_dir` | `~/Library/Application Support/app.quadcam/gear` | The gear folder |
+| `gear_auto_backup` | on | Backs up a device when it is plugged in |
+| `gear_keep_recent` | 10 | Plug-in and manual backups kept per device |
+| `gear_keep_weeks` | 8 | Then one backup a week for this many weeks |
+| `gear_keep_monthly` | on | Then one a month |
+| `gear_usb_minutes` | 20 | Minutes before the warning for an FC on USB power (0: none) |
+| `gear_on_connect` | `backup` for every kind | Steps per device kind on plug-in: `backup`, `import`, `apply_ready` |
+| `gear_cues` | speech and notifications on | Cues and their channels. See [Gear](gear.md#cues) |
+| `firmware_check` | `manual` | `manual` or `daily` |
+| `tts_provider`, `tts_key` | `say`, none | The voice provider. Reads show the key only as `(set)` |
+
 To read and change settings from a terminal, see [Command line](cli.md#places-profiles-and-settings).

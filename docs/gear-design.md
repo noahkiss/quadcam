@@ -108,6 +108,10 @@ segment shows in full.
 5. A device QuadCam does not know asks for a name and an aircraft in a small sheet. It can
    be dismissed; the device then shows as "Unnamed FC" and still gets backed up.
 
+When **Connected** is empty, it says: "Nothing found. If macOS asked to allow an accessory,
+click Allow." On Apple silicon, macOS keeps a new USB accessory off the bus until the person
+allows it, and an app cannot see that prompt (7.11).
+
 An FC on USB gets a session timer in its row ("USB 12 min"). At the limit set in Settings
 (default 20 min) QuadCam shows a notification: small quads overheat when powered on USB.
 
@@ -155,6 +159,8 @@ A new **Gear** section:
 | Check for firmware | `firmwareCheck` | `manual` (`manual` or `daily`) |
 | Tools (esptool, ffmpeg) | `modules` | QuadCam's own modules (7.10); a path per tool overrides one |
 | Use Homebrew ffmpeg | `ffmpegSource` | `module` (`module` or `homebrew`) |
+| Steps on connect | `gearOnConnect` | per device kind: `backup` only (`import`, `apply_ready` off) (7.11) |
+| Cues | `gearCues` | speech and notifications on, sound off; each cue on; reminder every 60 s (7.11) |
 
 Each key goes into `settings::KEYS` with a default in `Defaults`, as today.
 
@@ -167,6 +173,8 @@ existing logic modules. `core/gear.rs` holds the `Core` methods; `api/gear.rs` t
 |---|---|---|
 | `gear/store.rs` | The gear folder: `gear.json` (locked read-modify-write, the `settings.rs` pattern), backups, changes, caches. The only writer of the gear folder | `paths`, `settings` |
 | `gear/model.rs` | Shared types: `Device`, `DeviceKind`, `Identity`, `Backup`, `StagedChange`, `Edit`, `ApplyPlan`, `Refusal` | serde, specta, schemars |
+| `gear/events.rs` | Device events from one look to the next: connected, identified, unmounted but present, removed; presence after unmount (7.11) | `detect` |
+| `gear/cues.rs` | Spoken, sound and notification cues; the "still inserted" reminder (7.11) | `say`, `afplay`, `osascript` |
 | `gear/detect.rs` | Finds devices: EdgeTX volumes (extends `disk::looks_like_radio`), serial ports by USB VID/PID, DFU devices, DVR and goggles cards (existing `Volume`). Polls every 2 s while the app runs | `disk`, `serial` |
 | `gear/serial.rs` | One `SerialLink` trait (open, write, read until, close, "port gone"). The real one wraps the `serialport` crate; the fake one replays a script. A lock file per port so the app and the CLI never open the same port. The fail-safe for tests | `serialport` |
 | `gear/bf/cli.rs` | Betaflight CLI session: enter, command, `diff all`, `dump all`, `get`, `save` (reboot), `exit` | `serial` |
@@ -303,6 +311,10 @@ pub struct ApplyPlan {
 
 ### 5.1 `api` rows (`api/gear.rs`)
 
+The rows join the one `api!` table through the `with_gear_rows!` macro in `api/gear.rs`, so
+Gear packages add rows without editing `api/mod.rs`. Each new row also gets its typed command
+in `specta_builder` (`lib.rs`).
+
 | Row | Params → Result | Writes |
 |---|---|---|
 | `gear_status` | – → `GearStatus` (connected devices, staged count, sims out of date) | no |
@@ -406,6 +418,9 @@ Modules are setup, so `quadcam_settings` gains the actions `modules`, `module_in
 
 Card prep extends the existing `quadcam_format_card` (`prep=true`, `mount`, `label`) rather
 than a new tool: every erase stays behind one tool with one confirm pattern.
+
+The Gear tools, their argument types and their handlers live in `mcp/gear.rs`, not in
+`params.rs` and `server.rs`, so Gear packages edit one file.
 
 **Why not fewer:** one Gear tool would mix reads with device writes, so a harness could not
 allow one without the other. **Why not more:** each tool takes an `action` and a typed
@@ -898,6 +913,95 @@ module folder. A feature that needs a removed module asks again.
 link), and **Update** and **Remove** per row; **Check for updates**; the ffmpeg source
 pop-up (QuadCam module or Homebrew).
 
+### 7.11 Device events, on-connect steps and cues
+
+**Device events** (`gear/events.rs`). Each poll compares what is plugged in with the last look
+and reports:
+
+| Event | When |
+|---|---|
+| `connected` | A device appeared |
+| `identified` | A device on the same link got its id (an FC after MSP identity) |
+| `unmounted_present` | A volume unmounted, and its device is still plugged in |
+| `removed` | A device is gone |
+
+The app sends them in `device-changed` with the connected and the unmounted devices.
+
+**Release cards with `diskutil unmountDisk`, not `eject`.** Tested on a USB reader
+(2026-10-07): after `eject` the card's disk node disappears and the reader shows no
+card-present flag, so an ejected card cannot be told from a pulled one. After `unmountDisk`
+the whole-disk node (`/dev/diskN`) stays while the card is in, and goes within seconds of the
+pull. Presence (`events::presence`, read-only) checks:
+
+| Case | Sign of presence |
+|---|---|
+| Any card, after `unmountDisk` | Its whole-disk node in `/dev` (`Link::Volume.whole_disk`) |
+| The built-in SD slot | Its whole-disk node after `unmountDisk`, as for a USB reader (tested 2026-10-07). `AppleSDXCSlot` also reports `Card Present` in the IORegistry |
+| A DJI air unit or goggles | The USB device (vendor `0x2ca3`) stays on the bus after its volume unmounts |
+
+**The built-in SD slot and full-size adapters** (tested 2026-10-07, microSD cards in
+full-size adapters):
+
+- `diskutil` lists the slot as internal and physical, with protocol `Secure Digital`
+  (`Internal` true, `RemovableMedia` true). Detection must select cards by protocol and the
+  removable flag, never by "external" (`DiskInfo::is_slot_card`, which `disk::is_removable`
+  takes).
+- `system_profiler SPCardReaderDataType` shows the card's hardware identity: product name,
+  manufacturer id, serial number, manufacturing date and capacity. USB readers hide it.
+- After `unmountDisk` the whole-disk node stays while the adapter is in. Pulling the adapter
+  removes it at once.
+- Pulling only the microSD out of its adapter is invisible: the adapter holds the card-detect
+  switch, so the node and the serial number stay. A USB reader with a microSD in a
+  full-size adapter does the same (tested 2026-10-07 on a second USB reader, which shows no
+  card serial). The one probe that tells, in the slot and in USB readers alike, is
+  `diskutil mountDisk diskN`: with the card in, a volume mounts (QuadCam unmounts it again);
+  without it, `diskutil` still says "Volume(s) mounted successfully" but no volume and no
+  mount point appear. `events::probe_media` runs it for any whole disk. QuadCam runs this
+  probe only on demand (once when it shows "still
+  inserted", or when the person asks), never in a poll loop.
+
+**Card identity**, in order: the card's hardware serial (manufacturer id and serial number,
+from the card reader, built-in slot only); else a QuadCam marker file on the card (a write to
+the card, so it comes with the backup or import package that first writes there); else the
+volume UUID, which a format changes. WP1 reads the hardware identity
+(`detect::parse_card_reader`) and uses it for a card in the built-in slot; other cards use
+the volume UUID.
+
+**USB hubs and the accessory prompt.** A card reader behind a USB-C dock (a USB 3 hub)
+behaves as when it is plugged in directly (tested 2026-10-07). On Apple silicon, macOS asks
+"Allow accessory to connect?" for a new USB device, and the device does not enumerate at all
+until the person allows it. Approvals are remembered. No app can see a pending prompt, so
+every empty "Connected" state and `quadcam_gear status` say "Nothing found. If macOS asked to
+allow an accessory, click Allow." (`mcp::gear::NOTHING_FOUND`).
+
+A disk number can be reused by the next disk; a new disk with the same number reads as still
+present until the next look shows its own volume. "Safe to remove" (`disk::safe_remove`: the
+`eject` method, after a format or card prep) runs `unmountDisk` for a card, so every such
+release leads to `unmounted_present` and the "safe to unplug" cue.
+
+**On-connect steps.** `Core::gear_add_hook` registers an `OnConnectHook`: a name, an
+`Automation` (`backup`, `import`, `apply_ready`), the device kinds, and the function. The app
+runs `Core::gear_on_connect` on its own thread for each `connected` and `identified` event.
+A hook runs only when `gearOnConnect` lists its automation for the device's kind; `backup`
+also needs `gearAutoBackup`. Defaults: `backup` for every kind, the others off. WP4 registers
+backup, a later package import, WP5 `apply_ready` (which still goes through the plan, the
+checks and the confirm in section 8; an automatic apply never skips them). A failed step plays
+the `step_failed` cue.
+
+**Cues** (`gear/cues.rs`). Short lines for a person with their hands full:
+
+| Cue | When |
+|---|---|
+| `safe_to_unplug` | A device was released: a card unmounted and still in, or (later packages) an FC port closed after a step |
+| `still_inserted` | Every `still_inserted_every_s` (default 60, 0 for none) after the unmount, until the card is pulled |
+| `step_failed` | An on-connect step or a bench step failed |
+
+Channels: speech (`/usr/bin/say`, an optional voice), a system sound (`/usr/bin/afplay`), a
+notification (`/usr/bin/osascript`, the text passed as arguments, never in the script). Each
+is a child process with an argv list. `gearCues` turns each cue and each channel on or off.
+A process started by cargo gets the silent `RecordedCues` unless `QUADCAM_CUES=real`. The
+native notification API can replace `osascript` with the Gear UI (WP13).
+
 ## 8. Safety model
 
 ### 8.1 One path for every write
@@ -951,7 +1055,9 @@ Refusals are exit code 3 on the CLI and an error with the code and the reason ov
 
 | Resource | Fail-safe |
 |---|---|
-| Serial ports | `serial::real_ports()` returns none in a process started by cargo unless `QUADCAM_SERIAL=real` |
+| Serial ports | `serial::real_ports()` returns none in a process started by cargo unless `QUADCAM_SERIAL=real`; `serial::system()` gives `NoPorts`, which refuses every open |
+| Presence (`/dev`, `ioreg`) | `events::presence()` returns none under cargo unless `QUADCAM_SERIAL=real` |
+| Cues | `cues::system()` gives the silent `RecordedCues` under cargo unless `QUADCAM_CUES=real` |
 | Modules (downloads, running tools) | `Fetch` and `Runner` traits; tests serve fixture archives from a temp folder |
 | DFU, esptool | Calls go through a `Flasher` trait; a cargo process gets the recorder unless `QUADCAM_FLASH=real` |
 | Sims | Paths derive from `HOME`; tests set a temp `HOME` |
@@ -990,7 +1096,7 @@ docs, and its rows in `api`, CLI and MCP.
 
 | Id | Title | Owns | Depends on | Group |
 |---|---|---|---|---|
-| WP1 | Gear foundation | `gear/mod.rs`, `store.rs`, `model.rs`, `compat.rs`, `serial.rs`, `detect.rs`; `api/gear.rs`, `core/gear.rs`, `mcp/gear.rs` (three tools, empty action sets), `bin/cli/gear/mod.rs`; settings keys; paths | – | 0 |
+| WP1 | Gear foundation | `gear/mod.rs`, `store.rs`, `model.rs`, `compat.rs`, `serial.rs`, `detect.rs`, `events.rs`, `cues.rs`; `api/gear.rs`, `core/gear.rs`, `mcp/gear.rs` (three tools, empty action sets), `bin/cli/gear/mod.rs`; settings keys; paths | – | 0 |
 | WP2 | Betaflight link | `gear/bf/` (`cli.rs`, `msp.rs`, `dump.rs`, `fake.rs`) | WP1 | 1 |
 | WP3 | EdgeTX card engine | `gear/edgetx/` (`yaml.rs`, `model.rs`, `card.rs`), the synthetic card generator | WP1 | 1 |
 | WP4 | Backups and the store | `gear/blobs.rs`, `backup.rs`, `radiologs.rs`; retention, import of old backup folders, auto backup on connect; Backups segment and Storage page | WP1, WP2, WP3 | 2 |
@@ -1013,7 +1119,7 @@ split: their read-only halves run early; their write halves wait for WP5.
 
 | Id | Accepted when |
 |---|---|
-| WP1 | `gear.json` passes the settings-file tests' equivalents (unknown keys kept, locked writes, CLI change seen by the app). `detect` lists a synthetic radio volume and a fake serial port. The three MCP tools exist and the schema snapshot is updated. `real_ports()` is empty under cargo |
+| WP1 | `gear.json` passes the settings-file tests' equivalents (unknown keys kept, locked writes, CLI change seen by the app). `detect` lists a synthetic radio volume and a fake serial port. The three MCP tools exist and the schema snapshot is updated. `real_ports()` is empty under cargo. Events: an unmounted card reads `unmounted_present` until its disk node goes; hooks run only when their automation is on; cues follow `gearCues`, tested on a silent sink |
 | WP2 | Against `FakeFc`: backup, a run that stops at an error and discards, a run with `save` that waits through the reboot, a `dump all` parse with section context. MSP identity read. Transcript scrubber test |
 | WP3 | Parse-render is byte-identical on every fixture (both layouts, CRLF). Each encoding in 6.3 has a test. Unknown lines refuse with file and line |
 | WP4 | A second snapshot of an unchanged card writes nothing. A changed model file adds one blob. FC backup through `FakeFc`. Retention keeps apply and pinned snapshots and thins the rest by the settings; collection removes only unreferenced blobs. A grown log replaces the stored one. Import of a synthetic folder of card copies and FC pairs dedupes. A crash between blob and manifest (simulated) leaves a consistent store |

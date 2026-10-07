@@ -40,6 +40,7 @@ const PROFILE_FIELDS: &[&str] = &[
     "author",
     "place",
     "edgetx_models",
+    "gear",
 ];
 
 fn same(a: &str, b: &str) -> bool {

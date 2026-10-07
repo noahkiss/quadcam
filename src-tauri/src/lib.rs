@@ -7,6 +7,7 @@ pub mod control;
 pub mod core;
 pub mod cuts;
 pub mod disk;
+pub mod gear;
 pub mod geocode;
 pub mod identity;
 pub mod join;
@@ -93,6 +94,9 @@ impl Hooks for GuiHooks {
     }
     fn settings_changed(&self) {
         let _ = self.app.emit(api::SettingsChanged::NAME, ());
+    }
+    fn gear_changed(&self) {
+        let _ = self.app.emit(api::GearChanged::NAME, ());
     }
     fn analysed(&self) {
         let app = self.app.clone();
@@ -251,6 +255,59 @@ fn watch_volumes(app: AppHandle) {
     });
 }
 
+/// Looks for gear every `gear::detect::POLL`: sends `device-changed` with the events
+/// (connected, identified, unmounted but still in, removed), runs the on-connect hooks on
+/// their own threads, plays the cues, and sends `gear-changed` when another process (the
+/// CLI, an MCP server) wrote `gear.json`.
+fn poll_gear(app: AppHandle, core: Arc<Core>) {
+    std::thread::spawn(move || {
+        let mut tracker = gear::events::Tracker::default();
+        let mut reminders = gear::cues::Reminders::default();
+        let mut stamp = core.gear_store().stamp();
+        loop {
+            match core.gear_poll(&mut tracker) {
+                Ok(events) => {
+                    if !events.is_empty() {
+                        let _ = app.emit(
+                            api::DeviceChanged::NAME,
+                            api::DeviceChanged {
+                                events: events.clone(),
+                                connected: tracker.connected.clone(),
+                                unmounted: tracker.unmounted.clone(),
+                            },
+                        );
+                    }
+                    for e in &events {
+                        if matches!(
+                            e.kind,
+                            gear::events::DeviceEventKind::Connected
+                                | gear::events::DeviceEventKind::Identified
+                        ) {
+                            let (core, device) = (core.clone(), e.device.clone());
+                            std::thread::spawn(move || {
+                                core.gear_on_connect(&device);
+                            });
+                        }
+                    }
+                    core.gear_play_cues(
+                        &events,
+                        &tracker,
+                        &mut reminders,
+                        std::time::Instant::now(),
+                    );
+                }
+                Err(e) => eprintln!("quadcam: gear poll: {e:#}"),
+            }
+            let now = core.gear_store().stamp();
+            if now != stamp {
+                stamp = now;
+                let _ = app.emit(api::GearChanged::NAME, ());
+            }
+            std::thread::sleep(gear::detect::POLL);
+        }
+    });
+}
+
 /// Set for test runs: the app starts behind other windows and never takes focus.
 fn no_focus() -> bool {
     std::env::var_os("QUADCAM_NO_FOCUS").is_some()
@@ -349,6 +406,10 @@ pub fn specta_builder() -> tauri_specta::Builder<tauri::Wry> {
             c::session_cuts,
             c::session_split,
             c::library_split,
+            c::gear_status,
+            c::gear_devices,
+            c::gear_device_save,
+            c::gear_device_forget,
             c::modules,
             c::module_install,
             c::module_remove,
@@ -373,6 +434,8 @@ pub fn specta_builder() -> tauri_specta::Builder<tauri::Wry> {
             api::LibraryChanged,
             api::SettingsChanged,
             api::VolumesChanged,
+            api::GearChanged,
+            api::DeviceChanged,
             api::AgentFormatRequest,
             api::AgentFormatClosed,
             api::Menu,
@@ -448,12 +511,14 @@ pub fn run() {
             if let Err(e) = control::serve(core.clone(), &control::socket_path()) {
                 eprintln!("quadcam: control socket not started: {e:#}");
             }
+            let gear_core = core.clone();
             specta.mount_events(app);
             app.manage(core.clone());
             app.manage(AppState { core, hooks });
             main_window(&handle)?;
             menu::install(&handle)?;
-            watch_volumes(handle);
+            watch_volumes(handle.clone());
+            poll_gear(handle, gear_core);
             Ok(())
         })
         .invoke_handler(typed)

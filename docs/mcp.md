@@ -21,7 +21,7 @@ The server checks for the app on every call. You can quit and open the app again
 
 ## Tools
 
-The server has 16 tools.
+The server has 19 tools.
 
 **Import:**
 
@@ -53,6 +53,17 @@ The server has 16 tools.
 | `quadcam_places` | Lists, searches (address or place name), saves and deletes saved places |
 | `quadcam_profiles` | Lists, saves and deletes aircraft profiles. Sets the default |
 | `quadcam_settings` | Reads and writes the app's settings. Lists, installs and removes [modules](modules.md): `module_install` needs `confirm=true`, after the agent showed you the module's license |
+
+### Gear
+
+The Gear tools are split by what they can change, so an agent harness can allow the first
+freely and ask before the others. See [Gear](gear.md).
+
+| Tool | Changes | What it does |
+|---|---|---|
+| `quadcam_gear` | Nothing | `status`: the gear folder, the Gear settings, and what is plugged in. `devices`: the saved devices |
+| `quadcam_gear_edit` | QuadCam's own data | `device_save` names a device or links it to an aircraft profile. `device_forget` removes it from the list |
+| `quadcam_gear_apply` | A device | No actions yet. Each will need a plan's `digest` and `confirm=true` |
 
 ## Suggestions in the app
 

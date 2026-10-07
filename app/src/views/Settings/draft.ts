@@ -124,4 +124,4 @@ export function layoutExample(d: Pick<Draft, "libraryLayout" | "placeFolders" | 
 
 export const VIDEO_SYSTEMS = ["Analog", "DJI O4", "Walksnail", "HDZero"];
 
-export const emptyProfile = (): Profile => ({ name: "", aircraft: "", camera_make: "", camera_model: "", video_system: "Analog", keywords: [], author: "", place: null, edgetx_models: [] });
+export const emptyProfile = (): Profile => ({ name: "", aircraft: "", camera_make: "", camera_model: "", video_system: "Analog", keywords: [], author: "", place: null, edgetx_models: [], gear: {} });

@@ -98,6 +98,20 @@ pub struct SettingsChanged;
 #[derive(Debug, Clone, Serialize, Deserialize, Type, tauri_specta::Event)]
 pub struct VolumesChanged;
 
+/// `gear.json` changed (devices, links). Read Gear again with `gear_status`.
+#[derive(Debug, Clone, Serialize, Deserialize, Type, tauri_specta::Event)]
+pub struct GearChanged;
+
+/// What is plugged in changed: `events` says what happened (connected, identified,
+/// unmounted but still in, removed), `connected` is what is plugged in now, and
+/// `unmounted` what is unmounted but still in.
+#[derive(Debug, Clone, Serialize, Deserialize, Type, tauri_specta::Event)]
+pub struct DeviceChanged {
+    pub events: Vec<crate::gear::events::DeviceEvent>,
+    pub connected: Vec<crate::gear::model::Connected>,
+    pub unmounted: Vec<crate::gear::model::Connected>,
+}
+
 /// An agent asked to erase the card. Answer with `answer_format_request`.
 #[derive(Debug, Clone, Serialize, Deserialize, Type, tauri_specta::Event)]
 pub struct AgentFormatRequest {
@@ -156,5 +170,7 @@ mod tests {
         assert_eq!(AgentFormatClosed::NAME, "agent-format-closed");
         assert_eq!(VolumesChanged::NAME, "volumes-changed");
         assert_eq!(Menu::NAME, "menu");
+        assert_eq!(GearChanged::NAME, "gear-changed");
+        assert_eq!(DeviceChanged::NAME, "device-changed");
     }
 }

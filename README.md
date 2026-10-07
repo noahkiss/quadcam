@@ -18,6 +18,7 @@ QuadCam is a macOS app that imports the recordings from your FPV goggles into a 
 - **Metadata that Photos reads.** Date, time, place, aircraft and keywords go into QuickTime tags. Add clips to Photos, into an album.
 - **Safe card format.** When every clip verified, QuadCam can erase an analog card as FAT32 and unmount it, behind strict guards. Card prep formats a spare card whose clips are all in the library. It never formats a DJI card or air unit.
 - **Room for the next flight.** With **Delete clips after import** on, QuadCam deletes each clip that verified from the card, DJI air units included, and leaves every other file. It is off by default. See [Settings](docs/settings.md#delete-clips-after-import).
+- **Gear, early.** QuadCam finds EdgeTX radios, goggles and DVR cards, and flight controller ports when they are plugged in, and keeps the devices you name. It can say when a card is safe to unplug. See [Gear](docs/gear.md).
 - **Scripts and agents.** A command-line tool and an MCP server do everything the app does.
 
 ## Supported gear
@@ -93,8 +94,9 @@ QuadCam follows the system's light or dark appearance. [A light-mode screenshot]
 | [Photos](docs/photos.md) | Albums, permissions, `QUADCAM_PHOTOS` |
 | [Format safety](docs/format-safety.md) | When QuadCam erases a card, and the guards it checks first |
 | [Command line](docs/cli.md) | `quadcam-cli`: import, library, places, profiles, settings, JSON output |
-| [MCP server](docs/mcp.md) | Connect a coding agent, the 16 tools, the control socket |
+| [MCP server](docs/mcp.md) | Connect a coding agent, the 19 tools, the control socket |
 | [Development](docs/development.md) | Build from source, tests, project layout, releases |
+| [Gear](docs/gear.md) | Devices QuadCam finds, saved devices, cues, `quadcam-cli gear` |
 | [Gear design](docs/gear-design.md) | The plan for gear: device backups, staged changes, OSD, rates, sims, voice packs, firmware, flight analysis |
 
 ## Privacy

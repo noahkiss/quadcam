@@ -53,5 +53,9 @@ expression: "Core::METHODS"
   "modules",
   "module_install",
   "module_remove",
-  "modules_check"
+  "modules_check",
+  "gear_status",
+  "gear_devices",
+  "gear_device_save",
+  "gear_device_forget"
 ]
