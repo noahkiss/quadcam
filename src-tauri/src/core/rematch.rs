@@ -43,6 +43,9 @@ pub struct LibMatch {
     pub log_model: Option<String>,
     pub packs: usize,
     pub reason: Option<String>,
+    /// The clip second of the first armed row, when the clip's picture placed the log.
+    /// `flight.pack_spans` are in clip seconds with it.
+    pub log_offset_s: Option<f64>,
     pub flight: Option<FlightStats>,
     pub moments: usize,
     /// The flight numbers and moments were written into the file.
@@ -59,7 +62,8 @@ pub struct LibMatchReport {
 /// and its profile.
 fn input(c: &LibClip) -> DateInput {
     let dvr = c.dvr.clone().unwrap_or_default();
-    let (kind, clock) = if dji::is_clip_name(&dvr) {
+    let analog = !dji::is_clip_name(&dvr);
+    let (kind, clock) = if !analog {
         let clock = dji::parse_name(&dvr).and_then(|(t, _)| {
             Local
                 .from_local_datetime(&t)
@@ -77,6 +81,8 @@ fn input(c: &LibClip) -> DateInput {
         kind,
         profile: c.aircraft.clone(),
         day: Some(c.date),
+        keep: if analog { c.keep.clone() } else { Vec::new() },
+        follows: false,
     }
 }
 
@@ -128,7 +134,17 @@ impl Core {
         let mut out: Vec<Option<LibMatch>> = vec![None; clips.len()];
         let mut warnings = Vec::new();
         for (day, idx) in groups {
-            let inputs: Vec<DateInput> = idx.iter().map(|&i| input(&clips[i])).collect();
+            let mut inputs: Vec<DateInput> = idx.iter().map(|&i| input(&clips[i])).collect();
+            // The next file of a recording the DVR split (imported as clips of their own).
+            for n in 1..idx.len() {
+                let (a, b) = (&clips[idx[n - 1]], &clips[idx[n]]);
+                inputs[n].follows = a.date == b.date
+                    && a.parts.is_empty()
+                    && match (&a.dvr, &b.dvr) {
+                        (Some(x), Some(y)) => crate::join::may_follow(x, a.duration, y),
+                        _ => false,
+                    };
+            }
             let plan = match day {
                 Some(_) => pipeline::plan_dates_with(
                     &inputs,
@@ -150,6 +166,8 @@ impl Core {
             }
             for (&i, s) in idx.iter().zip(plan.suggestions) {
                 let c = &clips[i];
+                let offset = s.log_offset_s.unwrap_or(0.0);
+                let moments: Vec<_> = s.moments.iter().map(|m| m.shifted(offset)).collect();
                 let dated = s.source == DateSource::Log;
                 out[i] = Some(LibMatch {
                     id: c.id.clone(),
@@ -162,7 +180,8 @@ impl Core {
                     log_model: s.log_model.clone(),
                     packs: s.segments,
                     reason: s.match_reason.clone(),
-                    flight: s.flight.clone(),
+                    log_offset_s: s.log_offset_s,
+                    flight: s.flight.as_ref().map(|f| f.shifted(offset)),
                     moments: s.moments.len(),
                     applied: false,
                 });
@@ -174,8 +193,8 @@ impl Core {
                         Badge::Unmatched => false,
                     };
                     if write {
-                        let stats = s
-                            .flight
+                        let flight = s.flight.as_ref().map(|f| f.shifted(offset));
+                        let stats = flight
                             .as_ref()
                             .and_then(|f| serde_json::to_string(f).ok())
                             .unwrap_or_default();
@@ -183,7 +202,7 @@ impl Core {
                         lib::write_keys(
                             &root.join(&c.path),
                             &[
-                                (lib::KEY_MOMENTS, lib::moments_value(&s.moments)),
+                                (lib::KEY_MOMENTS, lib::moments_value(&moments)),
                                 (lib::KEY_STATS, stats),
                                 ("app.quadcam.flight", line),
                             ],

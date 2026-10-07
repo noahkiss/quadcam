@@ -330,7 +330,8 @@ impl DateSource {
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, specta::Type)]
 pub struct DateSuggestion {
     pub date: NaiveDate,
-    /// From a radio log (the start of the first claimed armed segment) or the clip clock.
+    /// From a radio log (the clip's start: the first claimed armed segment, moved back by
+    /// `log_offset_s`) or the clip clock.
     pub time: Option<NaiveTime>,
     pub source: DateSource,
     pub badge: Badge,
@@ -350,6 +351,10 @@ pub struct DateSuggestion {
     /// Why the log matched (or how sure), in a few words.
     #[serde(default)]
     pub match_reason: Option<String>,
+    /// The clip second of the first armed row, when the clip's picture placed the log (an
+    /// analog clip with dead air). `moments` and `flight` are timed from that row.
+    #[serde(default)]
+    pub log_offset_s: Option<f64>,
 }
 
 /// Flight numbers from the log rows inside `windows`. `zero` is the log time at clip
@@ -418,6 +423,10 @@ pub struct DateInput {
     pub profile: Option<String>,
     /// The flying day, when known apart from the log (a library clip's date).
     pub day: Option<NaiveDate>,
+    /// The clip's picture stretches (keep ranges); empty when it has no dead air.
+    pub keep: Vec<Span>,
+    /// The clip is the next file of the recording the clip before it started.
+    pub follows: bool,
 }
 
 impl DateInput {
@@ -437,6 +446,12 @@ impl DateInput {
             kind,
             profile: profile.map(str::to_string),
             day: None,
+            keep: c
+                .signal
+                .as_ref()
+                .map(|s| s.keep.clone())
+                .unwrap_or_default(),
+            follows: false,
         }
     }
 }
@@ -499,6 +514,7 @@ pub fn plan_dates_with(
         log_model: None,
         flight: None,
         match_reason: None,
+        log_offset_s: None,
     };
     let mut plan = DatePlan {
         suggestions: clocks
@@ -577,6 +593,8 @@ pub fn plan_dates_with(
             clock: clocks[i],
             models: logmatch::clip_models(clips[i].profile.as_deref(), clips[i].kind, profiles),
             day: clips[i].day,
+            keep: clips[i].keep.iter().map(|k| (k.start, k.end)).collect(),
+            follows: clips[i].follows,
         })
         .collect();
     let found = logmatch::match_all(&wants, &segs, &files, profiles, clock_ok, tun);
@@ -605,8 +623,11 @@ pub fn plan_dates_with(
                 _ => true,
             };
         if dates {
-            s.date = f.start.date();
-            s.time = Some(f.start.time());
+            // The clip starts `offset_s` before the first armed row.
+            let at = f.start
+                - chrono::Duration::milliseconds((f.offset_s.unwrap_or(0.0) * 1000.0) as i64);
+            s.date = at.date();
+            s.time = Some(at.time());
             s.source = DateSource::Log;
         }
         s.badge = f.badge;
@@ -616,6 +637,7 @@ pub fn plan_dates_with(
         s.log_model = f.model.clone();
         s.flight = Some(flight_stats(rows, &windows, f.start));
         s.match_reason = Some(f.reason);
+        s.log_offset_s = f.offset_s.map(|o| (o * 1000.0).round() / 1000.0);
     }
     plan
 }
@@ -1325,6 +1347,7 @@ pub(crate) mod tests {
             kind: SourceKind::Dji,
             profile: None,
             day: None,
+            ..Default::default()
         };
         let p = plan_dates_with(
             &[clip],
@@ -1355,6 +1378,61 @@ pub(crate) mod tests {
             .as_deref()
             .unwrap()
             .contains("log METEOR75 → profile Meteor"));
+    }
+
+    /// An analog clip with dead air: the packs sit in its picture stretches, which places
+    /// the log in the clip. The clip starts before the arm, and its time says so.
+    #[test]
+    fn a_picture_places_the_log_and_the_clip_start() {
+        let d = tempfile::tempdir().unwrap();
+        std::fs::create_dir(d.path().join("LOGS")).unwrap();
+        std::fs::write(
+            d.path().join("LOGS/AIR65 II-2026-09-28.csv"),
+            edgetx_csv(&[
+                ("2026-09-28", "18:00:30", "18:02:30"),
+                ("2026-09-28", "18:04:00", "18:06:00"),
+            ]),
+        )
+        .unwrap();
+        let today = NaiveDate::from_ymd_opt(2026, 9, 30).unwrap();
+        let clip = DateInput {
+            duration: 380.0,
+            keep: vec![
+                Span {
+                    start: 20.0,
+                    end: 140.0,
+                },
+                Span {
+                    start: 180.0,
+                    end: 360.0,
+                },
+            ],
+            ..Default::default()
+        };
+        let p = plan_dates_with(
+            &[clip],
+            Some(d.path()),
+            None,
+            today,
+            &Tunables::default(),
+            &[],
+        );
+        let s = &p.suggestions[0];
+        assert_eq!(s.badge, Badge::Matched, "{:?}", s.match_reason);
+        let o = s.log_offset_s.expect("an offset");
+        assert!((16.0..=24.0).contains(&o), "offset {o}");
+        let arm = NaiveTime::from_hms_opt(18, 0, 30).unwrap();
+        assert_eq!(
+            s.time,
+            Some(arm - chrono::Duration::milliseconds((o * 1000.0) as i64))
+        );
+        // The pack ranges stay timed from the first armed row; the plan adds the offset.
+        assert_eq!(s.flight.as_ref().unwrap().pack_spans[0].start, 0.0);
+        assert!(s
+            .match_reason
+            .as_deref()
+            .unwrap()
+            .contains("packs fit 2 of 2 picture stretches"));
     }
 
     /// The radio clock battery was dead: every power-on starts again at 2000-01-01 00:00.

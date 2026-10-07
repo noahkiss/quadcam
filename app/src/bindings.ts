@@ -903,6 +903,11 @@ export type LibMatch_Deserialize = {
 	log_model: string | null,
 	packs: number,
 	reason: string | null,
+	/**
+	 *  The clip second of the first armed row, when the clip's picture placed the log.
+	 *  `flight.pack_spans` are in clip seconds with it.
+	 */
+	log_offset_s: number | null,
 	flight: FlightStats_Deserialize | null,
 	moments: number,
 	/**  The flight numbers and moments were written into the file. */
@@ -923,6 +928,11 @@ export type LibMatch_Serialize = {
 	log_model: string | null,
 	packs: number,
 	reason: string | null,
+	/**
+	 *  The clip second of the first armed row, when the clip's picture placed the log.
+	 *  `flight.pack_spans` are in clip seconds with it.
+	 */
+	log_offset_s: number | null,
 	flight: FlightStats_Serialize | null,
 	moments: number,
 	/**  The flight numbers and moments were written into the file. */
