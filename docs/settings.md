@@ -11,6 +11,7 @@ Open Settings with the gear icon or Command-comma. **Done** saves every change a
 | **Places** | The saved places and the place search provider. See [Metadata](metadata.md#place-search-providers). |
 | **Import** | The format (MP4 or MOV), the MP4 encoder, the default short name, the time in file names, **Delete clips after import**, **Join split recordings**, and the tolerances for log matching, the DJI clip clock skew included. |
 | **Photos** | The album. An empty album means the library only. See [Photos](photos.md). |
+| **Modules** | Tools QuadCam downloads on request (ffmpeg, esptool): install, update, remove, check for updates, and where ffmpeg comes from. See [Modules and notices](modules.md). |
 | **Advanced** | Where ffmpeg and the agent socket are. |
 
 ### Formats

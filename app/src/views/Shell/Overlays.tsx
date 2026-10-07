@@ -1,5 +1,5 @@
 // Dialogs and floating things that any screen can raise.
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useStore } from "../../store";
 import { libClip, selectedIds } from "../../store/library";
 import { sel } from "../../store/settings";
@@ -12,6 +12,7 @@ import { base } from "../../lib/format";
 import { albumAction } from "../../lib/library";
 import { addLibToPhotos, rescan, revealClip, shareClips, trashClips } from "../../actions/library";
 import { cancelErase, confirmErase } from "../../actions/session";
+import { api, errText } from "../../ipc/api";
 import styles from "./Overlays.module.css";
 
 export function Overlays() {
@@ -20,6 +21,7 @@ export function Overlays() {
       <AskDialog />
       <RemovedCutsDialog />
       <FormatConfirm />
+      <NoticesDialog />
       <ClipMenu />
       <DropTarget />
       <Toast />
@@ -50,7 +52,46 @@ function AskDialog() {
       }
     >
       {req?.text && <p className={styles.askText}>{req.text}</p>}
+      {req?.body}
       {req?.input != null && <input ref={input} className={styles.askInput} type="text" defaultValue={req.input} aria-label={req.title} spellCheck={false} />}
+    </Dialog>
+  );
+}
+
+/** Acknowledgements: the third-party notices the app ships. */
+function NoticesDialog() {
+  const open = useStore((s) => s.noticesOpen);
+  const [text, setText] = useState<string | null>(null);
+  useEffect(() => {
+    if (!open) return;
+    let live = true;
+    api.thirdPartyNotices().then(
+      (t) => live && setText(t),
+      (e) => live && setText(errText(e)),
+    );
+    return () => {
+      live = false;
+    };
+  }, [open]);
+  return (
+    <Dialog
+      open={open}
+      kind="sheet"
+      className={styles.notices}
+      title="Acknowledgements"
+      onClose={() => {
+        useStore.getState().setNoticesOpen(false);
+        setText(null);
+      }}
+      actions={
+        <Button type="submit" value="done" variant="primary">
+          Done
+        </Button>
+      }
+    >
+      <pre className={`${styles.noticesText} mono selectable`} tabIndex={0} aria-label="Third-party notices">
+        {text ?? "Loading…"}
+      </pre>
     </Dialog>
   );
 }

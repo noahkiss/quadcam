@@ -3,6 +3,7 @@
 // `session-changed`, `settings-changed`, progress). Shapes follow the recorded fixtures;
 // behaviour follows `Core` closely enough for the parity specs.
 import type {
+  ModuleStatus,
   ClipPlan,
   ClipResult,
   CutChange,
@@ -26,6 +27,7 @@ const DISPATCH = new Set([
   "library", "library_rate", "library_edit", "library_rename", "library_cuts", "library_export_cuts", "library_trash", "library_untrash",
   "library_photos", "library_apply_name_format", "library_match_logs", "library_rebuild", "library_rescan", "library_preview", "library_strips", "card_status",
   "settings", "settings_set", "place_search", "place_save", "session_cuts", "profiles", "session_split", "library_split",
+  "modules", "module_install", "module_remove", "modules_check",
 ]);
 
 export type Scenario = "library" | "empty" | "card" | "review" | "joined" | "finished-card" | "dji" | "no-tools" | "many";
@@ -56,6 +58,7 @@ export class MockCore {
   initialValues: SettingsView["values"];
   volumes: Volume[];
   tools = true;
+  modules: ModuleStatus[] = seed.modules();
   trash = new Map<string, LibClip>();
   calls: Call[] = [];
   menuState: unknown = null;
@@ -131,7 +134,7 @@ export class MockCore {
     switch (cmd) {
       case "env_check":
         return this.tools
-          ? { tools: { ffmpeg: "/opt/homebrew/bin/ffmpeg", ffprobe: "/opt/homebrew/bin/ffprobe" }, error: null, install_hint: "brew install ffmpeg", socket: `${seed.HOME}/Library/Application Support/app.quadcam/control.sock` }
+          ? { tools: this.ffmpegTools(), error: null, install_hint: "brew install ffmpeg", socket: `${seed.HOME}/Library/Application Support/app.quadcam/control.sock` }
           : { tools: null, error: "ffmpeg and ffprobe not found.", install_hint: "brew install ffmpeg", socket: null };
       case "default_output_dir":
         return seed.LIBRARY_ROOT;
@@ -154,7 +157,10 @@ export class MockCore {
         return this.dialogAnswers.length ? this.dialogAnswers.shift() : null;
       case "plugin:opener|reveal_item_in_dir":
       case "plugin:opener|open_path":
+      case "plugin:opener|open_url":
         return null;
+      case "third_party_notices":
+        return seed.NOTICES;
       default:
         throw `mock core: no command ${cmd}`;
     }
@@ -226,9 +232,55 @@ export class MockCore {
       }
       case "profiles":
         return { profiles: this.settings.values.profiles || [], default_profile: this.settings.values.defaultProfile || null };
+      case "modules":
+      case "modules_check":
+        return structuredClone(this.modules);
+      case "module_install":
+        return this.moduleInstall(String(p.name), !!p.confirm);
+      case "module_remove":
+        return this.moduleChange(String(p.name), () => ({ installed: null, folder: null, update: false }));
       default:
         throw `unknown method "${method}"`;
     }
+  }
+
+  // ---------- modules ----------
+
+  ffmpegTools() {
+    const ff = this.modules.find((m) => m.name === "ffmpeg");
+    const dir = ff?.folder && this.settings.values.ffmpegSource !== "homebrew" ? ff.folder : "/opt/homebrew/bin";
+    return { ffmpeg: `${dir}/ffmpeg`, ffprobe: `${dir}/ffprobe` };
+  }
+
+  moduleChange(name: string, patch: (m: ModuleStatus) => Partial<ModuleStatus>): ModuleStatus {
+    const m = this.modules.find((x) => x.name === name);
+    if (!m) throw `unknown module "${name}"`;
+    Object.assign(m, patch(m));
+    return structuredClone(m);
+  }
+
+  moduleInstall(name: string, confirm: boolean): ModuleStatus {
+    if (!confirm) throw "Refused: the install needs confirm=true.";
+    return this.moduleChange(name, (m) => {
+      const pin = m.newest ?? m.pinned;
+      return {
+        installed: {
+          name,
+          version: pin.version,
+          installed_at: "2026-10-07T12:00:00Z",
+          license: pin.license,
+          license_url: pin.license_url,
+          source: pin.source,
+          homepage: pin.homepage,
+          assets: pin.assets,
+          tools: Object.fromEntries(Object.entries(pin.tools).map(([t, path]) => [t, { path, sha256: "0".repeat(64), signing: "upstream" as const }])),
+          size: 130_000_000,
+        },
+        folder: `${seed.HOME}/Library/Application Support/app.quadcam/modules/${name}/${pin.version}`,
+        update: false,
+        problem: null,
+      };
+    });
   }
 
   // ---------- library ----------

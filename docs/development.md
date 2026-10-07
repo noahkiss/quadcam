@@ -5,7 +5,7 @@ QuadCam is a Tauri 2 app. The core is Rust in `src-tauri/`. The frontend is Reac
 ## Requirements
 
 - Rust, through [rustup](https://rustup.rs) (stable).
-- ffmpeg and ffprobe from Homebrew. The app looks in `/opt/homebrew/bin` and `/usr/local/bin`, then `PATH`.
+- ffmpeg and ffprobe from Homebrew. The app looks in its ffmpeg module first (see [Modules](modules.md)), then in `/opt/homebrew/bin` and `/usr/local/bin`, then `PATH`.
 - Node.js 24 through [fnm](https://github.com/Schniz/fnm), which reads `.node-version`.
 - pnpm, the version that `packageManager` in `app/package.json` names.
 - exiftool is optional. The tests use it when it is installed.
@@ -59,6 +59,8 @@ QUADCAM_UPDATE_BINDINGS=1 cargo test --test bindings   # write app/src/bindings.
 - `test-clips/README.md` describes an optional local corpus of real clips and logs. `scripts/make-corpus.sh` builds its synthetic part, a DJI-like card (`synthetic/dji-card/`) included.
 - `tests/dji.rs` stages, dates, imports (MP4 copy and MOV remux) and verifies a synthetic DJI-like MP4 with a cover picture and an `.SRT` file.
 - `tests/join.rs` splits one synthetic 630 s recording with ffmpeg into a 600 s and a 30 s file, as an Echo does, and checks the joined import: one output with every frame, every file's identity in the library and the card count, kept originals, joining per run and per clip, and "Delete clips after import" on the joined output. No real Echo files are in the tests.
+- `tests/modules.rs` runs the module manager against a fixture HTTP server on 127.0.0.1: the license refusal, download, checksum match and mismatch, install, run, a changed file, check and update, removal, and ffmpeg found through the module, Homebrew or a set path. `import_mp4_with_the_ffmpeg_module` imports with ffmpeg from a fixture module. No test downloads from the internet: under `cargo`, the downloader reaches only 127.0.0.1 unless `QUADCAM_FETCH=real`.
+- `scripts/notices.test.mjs` (`node --test scripts/notices.test.mjs`) checks the license allow list, and that a planted bad license fails it.
 - `tests/delete_clips.rs` checks "Delete clips after import" on temp folders: only verified clip files go, every other file stays, the setting off deletes nothing, a run can turn it off, and nothing in the core, CLI or MCP turns it on.
 
 ### Frontend

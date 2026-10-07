@@ -139,6 +139,20 @@ export const commands = {
 	sessionSplit: (params: SessionClipParams) => typedError<CutChange, string>(__TAURI_INVOKE("session_split", { params })),
 	/**  Adds one cut per radio-log pack to a library clip's cut list (unsaved until exported). */
 	librarySplit: (params: ClipIdParams) => typedError<CutChange, string>(__TAURI_INVOKE("library_split", { params })),
+	/**
+	 *  Downloaded tools: each module's pin, a newer pin from the last check, and what is
+	 *  installed. Reads only local files.
+	 */
+	modules: () => typedError<ModuleStatus[], string>(__TAURI_INVOKE("modules")),
+	/**
+	 *  Downloads, checks and installs a module (the newest known pin; also how an update
+	 *  installs). Needs `confirm` after the person saw the license.
+	 */
+	moduleInstall: (params: ModuleParams) => typedError<ModuleStatus, string>(__TAURI_INVOKE("module_install", { params })),
+	/**  Deletes a module. */
+	moduleRemove: (params: NameParams) => typedError<ModuleStatus, string>(__TAURI_INVOKE("module_remove", { params })),
+	/**  Reads the newest module pins from the latest QuadCam release. Installs nothing. */
+	modulesCheck: () => typedError<ModuleStatus[], string>(__TAURI_INVOKE("modules_check")),
 	envCheck: () => __TAURI_INVOKE<EnvCheck>("env_check"),
 	/**  The output folder used until the user picks one: ~/Movies/quadcam. */
 	defaultOutputDir: () => __TAURI_INVOKE<string | null>("default_output_dir"),
@@ -152,6 +166,11 @@ export const commands = {
 	answerFormatRequest: (id: number, approve: boolean) => __TAURI_INVOKE<void>("answer_format_request", { id, approve }),
 	/**  Lets the webview load files from the library folder (thumbnails and MP4 playback). */
 	libraryScope: () => typedError<null, string>(__TAURI_INVOKE("library_scope")),
+	/**
+	 *  The third-party notices shipped in the app (`Contents/Resources/THIRD_PARTY_NOTICES.txt`,
+	 *  made by `scripts/notices.mjs` in the build).
+	 */
+	thirdPartyNotices: () => typedError<string, string>(__TAURI_INVOKE("third_party_notices")),
 	/**
 	 *  The webview's view of which items apply now: `enabled` and `checked`, by item id, and
 	 *  the album item's label (`None` hides it).
@@ -187,6 +206,15 @@ export type AgentFormatClosed = number;
 export type AgentFormatRequest = {
 	id: number,
 	plan: FormatPlan,
+};
+
+/**  One download of a module. */
+export type Asset = {
+	url: string,
+	/**  Lowercase hex SHA-256 of the file as downloaded. */
+	sha256: string,
+	/**  Bytes. */
+	size: number,
 };
 
 export type Badge = "matched" | "likely" | "unmatched";
@@ -470,6 +498,11 @@ export type Defaults_Deserialize = {
 	geocoder?: string,
 	/**  How the date starts file names. */
 	name_date_format?: DateFormat,
+	/**
+	 *  Where ffmpeg and ffprobe come from: QuadCam's module when it is installed, else
+	 *  Homebrew (`module`, the default), or Homebrew only (`homebrew`).
+	 */
+	ffmpeg_source?: FfmpegSource,
 	/**  Google Places API key from the settings file. Never serialized. */
 	google_places_key?: string | null,
 };
@@ -509,6 +542,11 @@ export type Defaults_Serialize = {
 	geocoder: string,
 	/**  How the date starts file names. */
 	name_date_format: DateFormat,
+	/**
+	 *  Where ffmpeg and ffprobe come from: QuadCam's module when it is installed, else
+	 *  Homebrew (`module`, the default), or Homebrew only (`homebrew`).
+	 */
+	ffmpeg_source: FfmpegSource,
 };
 
 /**  What happened to one clip's file on the card or folder after an import. */
@@ -565,6 +603,13 @@ export type EnvCheck = {
 	install_hint: string,
 	socket: string | null,
 };
+
+/**  Where ffmpeg and ffprobe come from (setting `ffmpegSource`). */
+export type FfmpegSource = 
+/**  QuadCam's ffmpeg module when it is installed, else Homebrew. */
+"module" | 
+/**  Homebrew (or PATH) only. */
+"homebrew";
 
 /**  The smart groups and other ways to narrow the library. */
 export type Filter = {
@@ -693,6 +738,31 @@ export type ImportProgress = {
 
 /**  One clip finished converting (verified, failed or skipped). */
 export type ImportResult = ClipResult;
+
+/**  `installed.json` in a module's version folder. */
+export type Installed = {
+	name: string,
+	version: string,
+	/**  RFC 3339. */
+	installed_at: string,
+	license: string,
+	license_url: string,
+	source: string,
+	homepage: string,
+	/**  Each download's URL and SHA-256. */
+	assets: Asset[],
+	tools: { [key in string]: InstalledTool },
+	/**  Bytes on disk. */
+	size: number,
+};
+
+export type InstalledTool = {
+	/**  The executable, relative to the version folder. */
+	path: string,
+	/**  SHA-256 of the executable as installed (after any ad-hoc signature). */
+	sha256: string,
+	signing: Signing,
+};
 
 /**  A recording the DVR split into files, on its first file's clip. */
 export type Join = {
@@ -1066,6 +1136,28 @@ export type Meta = {
 	description: string,
 };
 
+/**  `module_install`: a module by name. `confirm` says the person saw its license prompt. */
+export type ModuleParams = {
+	name: string,
+	confirm?: boolean,
+};
+
+/**  One module: its pin, a newer pin from the last check, and what is installed. */
+export type ModuleStatus = {
+	name: string,
+	/**  The version this QuadCam release pins. */
+	pinned: Pin,
+	/**  A newer pin from the last check, if any. */
+	newest: Pin | null,
+	installed: Installed | null,
+	/**  The installed version's folder. */
+	folder: string | null,
+	/**  An install would change the version: a newer pin than the installed one. */
+	update: boolean,
+	/**  Why an installed module cannot run (a changed or missing file). */
+	problem: string | null,
+};
+
 export type Moment = {
 	kind: MomentKind,
 	/**  Seconds from the start of the clip. */
@@ -1122,6 +1214,23 @@ export type Phase =
 export type PhotosParams = {
 	ids: number[] | null,
 	album: string | null,
+};
+
+/**  One module, pinned to one version. */
+export type Pin = {
+	title: string,
+	about: string,
+	version: string,
+	/**  SPDX expression. */
+	license: string,
+	license_url: string,
+	source: string,
+	homepage: string,
+	/**  Hosts a newer pin's URLs may use. */
+	hosts: string[],
+	/**  Tool name to the path of its executable inside the unpacked assets. */
+	tools: { [key in string]: string },
+	assets: Asset[],
 };
 
 /**  A saved place, kept in the settings file. */
@@ -1438,6 +1547,15 @@ export type SignalScan = {
 	/**  Suggested ranges to keep; empty when the clip has no dead air. */
 	keep: Span[],
 };
+
+/**  How a tool's executable is signed. */
+export type Signing = 
+/**  The upstream signature verified. */
+"upstream" | 
+/**  Unsigned upstream; QuadCam signed it ad hoc after the checksum matched. */
+"ad_hoc" | 
+/**  Not a Mach-O binary (a script); nothing to sign. */
+"not_binary";
 
 /**  Where a moment's evidence came from. */
 export type Source = "radio_log" | "video";

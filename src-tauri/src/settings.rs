@@ -65,6 +65,19 @@ fn typed<T: serde::de::DeserializeOwned>(v: &Value, what: &str) -> Result<()> {
         .with_context(|| what.to_string())
 }
 
+/// `modules`: a tool name (`ffmpeg`, `ffprobe`, `esptool`) to the absolute path of an
+/// executable that QuadCam uses instead of its own module or Homebrew.
+fn tool_paths(v: &Value) -> Result<()> {
+    let m = v.as_object().context("an object")?;
+    for p in m.values() {
+        match p.as_str() {
+            Some(s) if Path::new(s).is_absolute() => {}
+            _ => bail!("an absolute file path per tool"),
+        }
+    }
+    Ok(())
+}
+
 pub const GEOCODERS: &[&str] = &["apple", "nominatim", "census", "google"];
 
 pub const KEYS: &[Key] = &[
@@ -177,6 +190,18 @@ pub const KEYS: &[Key] = &[
         name: Some("google_places_key"),
         about: "a Google Places API key",
         check: string,
+    },
+    Key {
+        file: "ffmpegSource",
+        name: Some("ffmpeg_source"),
+        about: "module or homebrew",
+        check: |v| one_of(v, &["module", "homebrew"]),
+    },
+    Key {
+        file: "modules",
+        name: Some("modules"),
+        about: "an object of tool name to an absolute file path",
+        check: tool_paths,
     },
     Key {
         file: "places",
@@ -388,6 +413,10 @@ pub struct Defaults {
     /// How the date starts file names.
     #[serde(default)]
     pub name_date_format: crate::naming::DateFormat,
+    /// Where ffmpeg and ffprobe come from: QuadCam's module when it is installed, else
+    /// Homebrew (`module`, the default), or Homebrew only (`homebrew`).
+    #[serde(default)]
+    pub ffmpeg_source: crate::media::FfmpegSource,
     /// Google Places API key from the settings file. Never serialized.
     #[serde(default, skip_serializing)]
     pub google_places_key: Option<String>,
@@ -423,6 +452,7 @@ impl Default for Defaults {
             place_folders: false,
             geocoder: default_geocoder(),
             name_date_format: Default::default(),
+            ffmpeg_source: Default::default(),
             google_places_key: None,
         }
     }
@@ -498,6 +528,9 @@ impl Defaults {
         d.google_places_key = get::<String>(v, "googlePlacesKey").filter(|k| !k.trim().is_empty());
         if let Some(f) = get(v, "nameDateFormat") {
             d.name_date_format = f;
+        }
+        if let Some(f) = get(v, "ffmpegSource") {
+            d.ffmpeg_source = f;
         }
         if let Some(g) = get::<String>(v, "geocoder").filter(|g| GEOCODERS.contains(&g.as_str())) {
             d.geocoder = g;

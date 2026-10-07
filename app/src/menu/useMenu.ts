@@ -17,6 +17,7 @@ const typingIn = () => (document.activeElement as Element | null)?.closest?.("in
 
 export const MENU_ACTIONS: Record<string, () => void> = {
   settings: () => S().openSettings("library"),
+  acknowledgements: () => S().setNoticesOpen(true),
   import: () => importAction(),
   "open-folder": () => openFolderAction(),
   "reveal-library": () => {
@@ -67,6 +68,7 @@ export function menuState(s: State, typing: boolean) {
   const album = albumOf(s);
   const enabled: Record<string, boolean> = {
     settings: free,
+    acknowledgements: free,
     import: free && !!s.env?.tools,
     "open-folder": free && !!s.env?.tools,
     "reveal-library": true,

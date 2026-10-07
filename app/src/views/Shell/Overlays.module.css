@@ -45,3 +45,16 @@
 .askText {
   white-space: pre-line;
 }
+.notices {
+  width: min(760px, calc(100vw - 64px));
+  height: min(640px, calc(100vh - 64px));
+}
+.noticesText {
+  margin: 0;
+  height: 100%;
+  overflow: auto;
+  padding: var(--s-3);
+  font-size: var(--t-sm);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}

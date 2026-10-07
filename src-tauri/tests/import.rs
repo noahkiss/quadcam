@@ -5,7 +5,7 @@ mod common;
 use chrono::{NaiveDate, TimeZone, Utc};
 use common::*;
 use quadcam_lib::logs::{Badge, Tunables};
-use quadcam_lib::media::{Encoded, Encoder, Format};
+use quadcam_lib::media::{Encoded, Encoder, Format, Tools};
 use quadcam_lib::naming::NamePlanner;
 use quadcam_lib::pipeline::{self, Clip, ClipJob, ClipStatus, DateSource, ImportSettings, Outcome};
 use std::path::Path;
@@ -39,11 +39,14 @@ fn synthetic_card() -> Card {
 }
 
 fn load(card: &Card, work: &Path) -> Vec<Clip> {
-    let t = tools();
+    load_with(&tools(), card, work)
+}
+
+fn load_with(t: &Tools, card: &Card, work: &Path) -> Vec<Clip> {
     let staging = work.join("staging");
     let mut clips = pipeline::stage(card.root(), &staging, &mut |_, _, _, _| {}).unwrap();
     for c in clips.iter_mut() {
-        pipeline::analyse(&t, c, &staging).unwrap();
+        pipeline::analyse(t, c, &staging).unwrap();
     }
     clips
 }
@@ -124,11 +127,14 @@ fn stages_and_classifies_the_card() {
 
 /// Checks 2 and 3 for one format: frame counts, durations and metadata read back.
 fn import_all(format: Format) {
+    import_all_with(&tools(), format);
+}
+
+fn import_all_with(t: &Tools, format: Format) {
     let card = synthetic_card();
     let work = tempfile::tempdir().unwrap();
     let out = tempfile::tempdir().unwrap();
-    let clips = load(&card, work.path());
-    let t = tools();
+    let clips = load_with(t, &card, work.path());
     let mut planner = NamePlanner::new();
     let st = settings(out.path(), format);
     let mut j0 = job(0, "Wake Up");
@@ -136,7 +142,7 @@ fn import_all(format: Format) {
     let jobs = [j0, job(1, "bench"), job(2, "")];
     let mut results = Vec::new();
     for j in &jobs {
-        let r = pipeline::import_clip(&t, &clips[j.id], j, &st, &mut planner, &mut |_| {});
+        let r = pipeline::import_clip(t, &clips[j.id], j, &st, &mut planner, &mut |_| {});
         assert_eq!(r.outcome, Outcome::Verified, "clip {} {:?}", j.id, r.error);
         results.push(r);
     }
@@ -164,7 +170,7 @@ fn import_all(format: Format) {
 
     for (r, c) in results.iter().zip(&clips) {
         let o = r.output.as_ref().unwrap();
-        let p = quadcam_lib::media::probe(&t, o).unwrap();
+        let p = quadcam_lib::media::probe(t, o).unwrap();
         let src = c.probe.as_ref().unwrap();
         assert_eq!(p.video_packets, src.video_packets, "{}", o.display());
         assert!(
@@ -216,7 +222,7 @@ fn import_all(format: Format) {
 
     // Check 6: the half-written clip verifies against its recovered length.
     let r = pipeline::import_clip(
-        &t,
+        t,
         &clips[2],
         &job(2, "cut short"),
         &st,
@@ -234,6 +240,28 @@ fn import_all(format: Format) {
 #[test]
 fn import_mp4() {
     import_all(Format::Mp4);
+}
+
+/// The same import with ffmpeg and ffprobe from a module installed from the fixture server
+/// (scripts that run the Homebrew tools), found the way the app finds them.
+#[test]
+fn import_mp4_with_the_ffmpeg_module() {
+    use quadcam_lib::media::{find_tools_with, FfmpegSource, ToolPrefs};
+    let server = common::server::Server::start();
+    let d = tempfile::tempdir().unwrap();
+    let mods = common::server::ffmpeg_module(&server, d.path(), &tools());
+    let t = find_tools_with(
+        &ToolPrefs {
+            source: FfmpegSource::Module,
+            paths: Default::default(),
+        },
+        &mods,
+    )
+    .unwrap();
+    assert!(t
+        .ffmpeg
+        .starts_with(d.path().join("support/modules/ffmpeg")));
+    import_all_with(&t, Format::Mp4);
 }
 
 #[test]

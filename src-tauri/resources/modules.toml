@@ -1,0 +1,54 @@
+# QuadCam's modules: tools it does not ship, downloaded from upstream on the user's request
+# (docs/gear-design.md, 7.10). Each module pins one version per QuadCam release.
+#
+# Fields:
+#   title, about       what the Settings window shows
+#   version            the pinned version
+#   license            SPDX expression of the module's license
+#   license_url        the full license text
+#   source             where the module's source code is
+#   homepage           the page the download comes from
+#   hosts              the only hosts a newer pin (modules.json on a QuadCam release) may use
+#   tools              tool name -> path of its executable inside the unpacked assets
+#   [[name.assets]]    url, sha256 and size of each download; zip or tar.gz, unpacked into
+#                      one folder
+#
+# Only official release assets of the upstream project. A pin changes only with the
+# verification recorded in docs/modules.md.
+
+[ffmpeg]
+title = "ffmpeg and ffprobe"
+about = "Converts, checks and previews clips."
+version = "9.0.2"
+license = "GPL-3.0-or-later"
+license_url = "https://www.gnu.org/licenses/gpl-3.0.html"
+source = "https://ffmpeg.org/releases/ffmpeg-9.0.2.tar.xz"
+homepage = "https://ffmpeg.martin-riedl.de"
+hosts = ["ffmpeg.martin-riedl.de"]
+tools = { ffmpeg = "ffmpeg", ffprobe = "ffprobe" }
+
+[[ffmpeg.assets]]
+url = "https://ffmpeg.martin-riedl.de/download/macos/arm64/1789931890_9.0.2/ffmpeg.zip"
+sha256 = "c8ed4c4e6978a03c485edbfe4e0a5dc2380f8a30bba5150531b31b094492d924"
+size = 28395699
+
+[[ffmpeg.assets]]
+url = "https://ffmpeg.martin-riedl.de/download/macos/arm64/1789931890_9.0.2/ffprobe.zip"
+sha256 = "fcbe839537485eaee7a7a8bc5cbc0f90d53617e80943e8a5b2e31cb851197ea6"
+size = 28317701
+
+[esptool]
+title = "esptool"
+about = "Flashes ESP32 and ESP8266 chips, such as ExpressLRS receivers."
+version = "5.4.0"
+license = "GPL-2.0-or-later"
+license_url = "https://github.com/espressif/esptool/blob/v5.4.0/LICENSE"
+source = "https://github.com/espressif/esptool/tree/v5.4.0"
+homepage = "https://github.com/espressif/esptool/releases/tag/v5.4.0"
+hosts = ["github.com"]
+tools = { esptool = "esptool-macos-arm64/esptool" }
+
+[[esptool.assets]]
+url = "https://github.com/espressif/esptool/releases/download/v5.4.0/esptool-v5.4.0-macos-arm64.tar.gz"
+sha256 = "ba332671130939e2e6db90c2784488f7e62a1459b0fe3c5ec66e9a366821de7a"
+size = 62531864

@@ -52,7 +52,7 @@ The server has 16 tools.
 |---|---|
 | `quadcam_places` | Lists, searches (address or place name), saves and deletes saved places |
 | `quadcam_profiles` | Lists, saves and deletes aircraft profiles. Sets the default |
-| `quadcam_settings` | Reads and writes the app's settings |
+| `quadcam_settings` | Reads and writes the app's settings. Lists, installs and removes [modules](modules.md): `module_install` needs `confirm=true`, after the agent showed you the module's license |
 
 ## Suggestions in the app
 

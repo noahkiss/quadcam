@@ -19,6 +19,7 @@ Commands:
   profiles  Aircraft profiles: list (default), save, delete, set the default
   places    Saved places: list (default), search by address or name, save, delete
   settings  The app's settings: show (default) or set
+  modules   Tools QuadCam downloads from their upstream (ffmpeg, esptool): list (default), check for newer pins, install, remove
   meta      Set metadata on clips: profile, location, keywords, author
   cut       Set the cut ranges of one clip. Each exports as an extra <name>_cutN file on import
   import    Convert and verify every non-skipped clip
@@ -268,7 +269,7 @@ Usage: quadcam-cli settings [OPTIONS] [COMMAND]
 
 Commands:
   show  Show the settings file, its values and the effective settings
-  set   Set settings: KEY=VALUE, where VALUE is JSON or plain text ("null" resets a key). Keys: output_dir, format, encoder, keep_originals, add_time, delete_clips_after_import, default_name, photos_album, format_label, log_dir, layout, place_folders, tunables, geocoder, name_date_format, default_profile
+  set   Set settings: KEY=VALUE, where VALUE is JSON or plain text ("null" resets a key). Keys: output_dir, format, encoder, keep_originals, add_time, delete_clips_after_import, default_name, photos_album, format_label, log_dir, layout, place_folders, tunables, geocoder, name_date_format, default_profile, ffmpeg_source, modules
   help  Print this message or the help of the given subcommand(s)
 
 Options:
@@ -285,7 +286,7 @@ Options:
       --session <FILE>  Session file (default: ~/Library/Caches/app.quadcam/session.json)
   -h, --help            Print help
 ===== quadcam-cli settings set --help
-Set settings: KEY=VALUE, where VALUE is JSON or plain text ("null" resets a key). Keys: output_dir, format, encoder, keep_originals, add_time, delete_clips_after_import, default_name, photos_album, format_label, log_dir, layout, place_folders, tunables, geocoder, name_date_format, default_profile
+Set settings: KEY=VALUE, where VALUE is JSON or plain text ("null" resets a key). Keys: output_dir, format, encoder, keep_originals, add_time, delete_clips_after_import, default_name, photos_album, format_label, log_dir, layout, place_folders, tunables, geocoder, name_date_format, default_profile, ffmpeg_source, modules
 
 Usage: quadcam-cli settings set [OPTIONS] <KEY=VALUE>...
 
