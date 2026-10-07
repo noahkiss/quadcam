@@ -398,7 +398,7 @@ Events (`api/events.rs`): `DeviceChanged` (connect, disconnect, backup state), `
 ### 5.2 CLI
 
 `quadcam-cli gear <command>`, with `--json` and the existing exit codes (3 = refused by a
-guard, 4 = no device). The subcommands live in `bin/cli/gear/*.rs`, one file per area, so
+guard, 4 = no device). The subcommands live in `bin/quadcam-cli/gear/*.rs`, one file per area, so
 work packages do not edit one shared file.
 
 ```bash
@@ -1049,7 +1049,7 @@ advice in the confirm.
 
 Built in WP11 before WP1 landed: the `Core` methods live in `core/prep.rs`, the two rows in
 `api/mod.rs`, and the CLI is `format --prep`. `core/gear.rs`, `api/gear.rs` and
-`bin/cli/gear/` exist now; card prep moves there with the app's card-prep button (WP13).
+`bin/quadcam-cli/gear/` exist now; card prep moves there with the app's card-prep button (WP13).
 
 ### 7.10 Modules
 
@@ -1332,7 +1332,7 @@ docs, and its rows in `api`, CLI and MCP.
 
 | Id | Title | Owns | Depends on | Group |
 |---|---|---|---|---|
-| WP1 | Gear foundation | `gear/mod.rs`, `store.rs`, `model.rs`, `compat.rs`, `serial.rs`, `detect.rs`, `events.rs`, `cues.rs`; `api/gear.rs`, `core/gear.rs`, `mcp/gear.rs` (three tools, empty action sets), `bin/cli/gear/mod.rs`; settings keys; paths | – | 0 |
+| WP1 | Gear foundation | `gear/mod.rs`, `store.rs`, `model.rs`, `compat.rs`, `serial.rs`, `detect.rs`, `events.rs`, `cues.rs`; `api/gear.rs`, `core/gear.rs`, `mcp/gear.rs` (three tools, empty action sets), `bin/quadcam-cli/gear/mod.rs`; settings keys; paths | – | 0 |
 | WP2 | Betaflight link | `gear/bf/` (`cli.rs`, `msp.rs`, `dump.rs`, `fake.rs`) | WP1 | 1 |
 | WP3 | EdgeTX card engine | `gear/edgetx/` (`yaml.rs`, `model.rs`, `card.rs`), the synthetic card generator | WP1 | 1 |
 | WP4 | Backups and the store | `gear/blobs.rs`, `backup.rs`, `radiologs.rs`; retention, import of old backup folders, auto backup on connect; Backups segment and Storage page | WP1, WP2, WP3 | 2 |

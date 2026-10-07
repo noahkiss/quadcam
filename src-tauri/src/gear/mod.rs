@@ -3,7 +3,7 @@
 //!
 //! Every module here runs without Tauri. `core/gear.rs` holds the `Core` methods,
 //! `api/gear.rs` their rows, `mcp/gear.rs` the three MCP tools, and the CLI's
-//! `bin/cli/gear/` the `gear` subcommands.
+//! `bin/quadcam-cli/gear/` the `gear` subcommands.
 //!
 //! - `model`: the shared types (devices, backups, staged changes, plans, refusals).
 //! - `store`: the gear folder and `gear.json`, its only writer.
