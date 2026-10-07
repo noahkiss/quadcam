@@ -38,7 +38,7 @@ A black-and-white camera reads as colourless breakup. For one, set `MONO_MAX_SAT
 
 Dead-air detection needs no radio log. QuadCam samples two frames per second at 64 × 48 pixels, and decodes only those frames. A 10-minute, 1.4 GB clip takes about 4 seconds. QuadCam times each sample by the frame's own timestamp, because DVRs drop frames.
 
-The thresholds were checked on real Fat Shark Echo footage. Keep ranges start and end within about a second of the picture coming and going.
+The thresholds were checked on real Fat Shark Echo footage only. Other receivers may show no signal differently (another blue, snow, black), and may need other thresholds. Keep ranges start and end within about a second of the picture coming and going.
 
 ## Moments
 

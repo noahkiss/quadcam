@@ -1,4 +1,6 @@
-//! DJI digital video: an O4 air unit over USB, or a goggles card. Clips are MP4s under
+//! DJI digital video: an O4 air unit over USB, or a goggles card. QuadCam assumes the unit
+//! records on arm and stops on disarm (DJI's default), so a file is usually one flight; it
+//! does not join files a unit split from one long recording (`join` is analog only). Clips are MP4s under
 //! `DCIM/DJI_*/`, named `DJI_<YYYYMMDDHHMMSS>_<NNNN>_<x>.MP4` by the unit's clock in local
 //! time (older goggles write `DJIG####.MP4`). Next to the video track sit DJI's own data
 //! streams (`djmd`, `dbgi`) and a cover picture; `moov` is the last box. `MISC/` holds DJI's

@@ -2,7 +2,8 @@
 //! card or folder is laid out, how to tell a whole clip from a half-written one, how to
 //! repair it, how its video goes into the output container, whether its frames show dead
 //! air, and what may happen to its card after an import (format, delete the imported clips). The pipeline asks the clip's source and never
-//! assumes one. Two today: `dji` (DJI O4 MP4s) and `analog` (DVR MJPEG in AVI).
+//! assumes one. Two today: `dji` (DJI MP4s: an O4 air unit over USB, a goggles card, older
+//! `DJIG####` names) and `analog` (DVR MJPEG in AVI).
 
 pub mod analog;
 pub mod dji;

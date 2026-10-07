@@ -25,8 +25,8 @@ QuadCam is a macOS app that imports the recordings from your FPV goggles into a 
 
 QuadCam reads two sources, on a card or in a folder:
 
-- **Analog goggle and DVR recordings:** MJPEG video in AVI files (`PICT0001.AVI` and similar), at the root or in folders such as `DCIM/`.
-- **DJI recordings:** MP4 files named by the unit's clock (`DJI_20261004183012_0001_D.MP4`) under `DCIM/DJI_*/`, for example from an O4 air unit over USB or a goggles card. Older `DJIG0001.MP4` names count too. With **Keep originals** on, QuadCam keeps the `.SRT` file next to the original. QuadCam expects the unit to record on arm and stop on disarm, so each file holds one flight and rarely needs a cut.
+- **Analog goggle and DVR recordings:** MJPEG video in AVI files (`PICT0001.AVI` and similar), at the root or in folders such as `DCIM/`. Known to work: the Fat Shark Echo. Other DVRs that write MJPEG AVI should work. QuadCam does not read DVRs that write `.TS`, `.MOV` or `.MP4` yet.
+- **DJI recordings:** MP4 files named by the unit's clock (`DJI_20261004183012_0001_D.MP4`) under `DCIM/DJI_*/`, for example from an O4 air unit over USB or a goggles card. Older `DJIG0001.MP4` names count too. With **Keep originals** on, QuadCam keeps the `.SRT` file next to the original. QuadCam assumes the default setting, where the unit records on arm and stops on disarm, so each file usually holds one flight. Manual recording works too, but QuadCam does not join DJI files that the unit split from one long recording.
 
 The app watches for removable volumes that hold either kind, cards in the Mac's built-in SD slot included, and shows the source next to each card. For dates and moments, it reads EdgeTX "SD Logs" CSV files.
 
@@ -52,9 +52,9 @@ The cask installs:
 
 - `QuadCam.app` in `/Applications`
 - the command-line tool `quadcam-cli` on your `PATH`
-- ffmpeg, which QuadCam needs to convert and verify clips
+- Homebrew's ffmpeg, which QuadCam needs to convert and verify clips
 
-QuadCam can also download ffmpeg itself as a module, in **Settings > Modules**. See [Modules and notices](docs/modules.md).
+QuadCam can also download ffmpeg itself as a module, in **Settings > Modules**. Once the module is installed, Homebrew's ffmpeg is optional. See [Modules and notices](docs/modules.md).
 
 To update, run `brew upgrade --cask quadcam`. To remove the app, run `brew uninstall --cask quadcam`. Uninstall keeps your settings and your videos.
 
