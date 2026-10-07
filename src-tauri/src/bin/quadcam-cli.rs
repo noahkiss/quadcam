@@ -1406,6 +1406,9 @@ fn main() {
         Ok(v) => {
             if json {
                 println!("{}", json!({"ok": true, "result": v}));
+            } else if let Value::String(text) = &v {
+                // A text answer (`gear osd --text`) prints as it is.
+                print!("{text}");
             } else {
                 println!("{}", serde_json::to_string_pretty(&v).unwrap_or_default());
             }

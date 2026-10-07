@@ -27,7 +27,7 @@ const DISPATCH = new Set([
   "library", "library_rate", "library_edit", "library_rename", "library_cuts", "library_export_cuts", "library_trash", "library_untrash",
   "library_photos", "library_apply_name_format", "library_match_logs", "library_rebuild", "library_rescan", "library_preview", "library_strips", "card_status",
   "settings", "settings_set", "place_search", "place_save", "session_cuts", "profiles", "session_split", "library_split",
-  "modules", "module_install", "module_remove", "modules_check",
+  "modules", "module_install", "module_remove", "modules_check", "gear_osd",
 ]);
 
 export type Scenario = "library" | "empty" | "card" | "review" | "joined" | "finished-card" | "dji" | "no-tools" | "many";
@@ -232,6 +232,13 @@ export class MockCore {
       }
       case "profiles":
         return { profiles: this.settings.values.profiles || [], default_profile: this.settings.values.defaultProfile || null };
+      case "gear_osd": {
+        const paths = (p.paths as string[] | undefined) ?? [];
+        if (!paths.length) throw "Pass a Betaflight dump or diff file, or a device.";
+        const v = seed.osd();
+        v.source = paths.map(base);
+        return v;
+      }
       case "modules":
       case "modules_check":
         return structuredClone(this.modules);
