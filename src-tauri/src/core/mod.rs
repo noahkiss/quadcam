@@ -19,6 +19,7 @@ mod gear;
 mod import;
 mod library;
 mod modules;
+mod osd;
 mod prep;
 mod rematch;
 mod setup;
@@ -30,6 +31,7 @@ pub use gear::{
 };
 pub use import::CardStatus;
 pub use library::{LibEdit, LibItem, LibUpdate, LibraryView, RebuildReport, RenameReport};
+pub use osd::OsdParams;
 pub use rematch::{LibMatch, LibMatchParams, LibMatchReport};
 pub use setup::{PlaceRemoved, SettingsView};
 

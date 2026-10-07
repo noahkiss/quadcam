@@ -1,0 +1,22 @@
+dump all
+# Betaflight / SYNTHETIC 4.5.0 (synthetic PAL test)
+# master
+set osd_vbat_pos = 14817
+set osd_tim_2_pos = 14839
+set osd_link_quality_pos = 6177
+set osd_crosshairs_pos = 6381
+set osd_ah_pos = 2158
+set osd_warnings_pos = 14729
+set osd_mah_drawn_pos = 2497
+set osd_current_pos = 2500
+set osd_rssi_dbm_pos = 4155
+set osd_stick_overlay_left_pos = 8321
+set osd_craft_name_pos = 8203
+set osd_flymode_pos = 14808
+set osd_altitude_pos = 33
+set osd_profile = 2
+set osd_profile_1_name = RACE
+set osd_profile_2_name = CRUISE
+set osd_profile_3_name =
+set vcd_video_system = PAL
+set craft_name = Test Quad

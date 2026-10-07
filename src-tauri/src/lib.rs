@@ -408,6 +408,7 @@ pub fn specta_builder() -> tauri_specta::Builder<tauri::Wry> {
             c::gear_devices,
             c::gear_device_save,
             c::gear_device_forget,
+            c::gear_osd,
             c::modules,
             c::module_install,
             c::module_remove,

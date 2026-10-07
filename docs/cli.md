@@ -143,6 +143,7 @@ quadcam-cli --json gear status                       # gear folder, Gear setting
 quadcam-cli --json gear devices                      # saved devices
 quadcam-cli --json gear devices save <id> --name "Bench radio" --aircraft Whoop
 quadcam-cli --json gear devices forget <id>
+quadcam-cli --json gear osd FILE [FILE ...] [--grid NTSC|PAL|HD|WxH] [--text]
 ```
 
 See [Gear](gear.md).

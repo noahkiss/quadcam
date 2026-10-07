@@ -148,6 +148,11 @@ export const commands = {
 	/**  Forgets a device. Its backups stay. */
 	gearDeviceForget: (params: IdParams) => typedError<Device, string>(__TAURI_INVOKE("gear_device_forget", { params })),
 	/**
+	 *  An FC's OSD layout per OSD profile, drawn on its grid and checked for overlaps
+	 *  and cells off screen. Reads only.
+	 */
+	gearOsd: (params: OsdParams) => typedError<OsdView, string>(__TAURI_INVOKE("gear_osd", { params })),
+	/**
 	 *  Downloaded tools: each module's pin, a newer pin from the last check, and what is
 	 *  installed. Reads only local files.
 	 */
@@ -904,6 +909,14 @@ export type GeoResult = {
 	provider: string,
 };
 
+/**  The screen the OSD draws on. */
+export type Grid = {
+	/**  `NTSC`, `PAL`, `HD`, or `WxH` for a given size. */
+	name: string,
+	width: number,
+	height: number,
+};
+
 /**  A device, a backup or a change, by id. */
 export type IdParams = {
 	id: string,
@@ -1448,6 +1461,109 @@ export type NameParams = {
 	name: string,
 };
 
+/**  A rectangle an element takes on one profile's grid, after clipping to the grid. */
+export type OsdBox = {
+	element: string,
+	label: string,
+	x: number,
+	y: number,
+	width: number,
+	height: number,
+};
+
+/**  One element in the files. */
+export type OsdElement = {
+	/**  The setting name without `osd_` and `_pos` (`vbat`, `link_quality`). */
+	name: string,
+	/**  What it shows ("Battery voltage"); the name when the table does not know it. */
+	label: string,
+	/**  The raw `_pos` value. */
+	value: number,
+	x: number,
+	y: number,
+	/**  The OSD profiles (1-3) it shows in; empty when it is off. */
+	profiles: number[],
+	variant: number,
+	/**
+	 *  Cells it takes: columns and rows from (x, y). The horizon's full sweep is
+	 *  `HORIZON_HALF` either side and `HORIZON_ROWS` down.
+	 */
+	width: number,
+	height: number,
+	/**  The sample text it draws as. */
+	sample: string,
+	/**  False when the element table does not know it: drawn 5 wide. */
+	known: boolean,
+};
+
+/**  `gear_osd`: where to read the OSD from, and the grid to draw it on. */
+export type OsdParams = {
+	/**
+	 *  `dump all`, `diff all` or CLI-line files, read in order: a later file's lines win,
+	 *  so a dump followed by an apply file shows the layout after the apply.
+	 */
+	paths?: string[],
+	/**  A saved device's id: reads its latest backup. Not available until backups exist. */
+	device?: string | null,
+	/**  `NTSC`, `PAL`, `HD` or `WxH`; empty for the files' `vcd_video_system`. */
+	grid?: string | null,
+};
+
+/**  One check failure. */
+export type OsdProblem = {
+	kind: ProblemKind,
+	element: string,
+	/**  The other element, for an overlap. */
+	other: string | null,
+	/**  How many cells. */
+	cells: number,
+	message: string,
+};
+
+/**  One OSD profile drawn on the grid. */
+export type OsdProfile = {
+	/**  1-3. */
+	index: number,
+	/**  `osd_profile_N_name`; empty when unset. */
+	name: string,
+	/**  True for the profile `osd_profile` selects. */
+	active: boolean,
+	/**  The elements on in this profile, by name. */
+	elements: string[],
+	/**  The drawn screen, one string per row, each `grid.width` characters. */
+	rows: string[],
+	/**  Where each drawn element sits, for hover names. */
+	boxes: OsdBox[],
+	problems: OsdProblem[],
+	/**  What the drawing leaves out or cannot check. */
+	notes: string[],
+};
+
+/**  The OSD of one configuration. */
+export type OsdView = {
+	/**  Where it was read from (file names; never the person's folders). */
+	source: string[],
+	/**  The Betaflight version line, when the files have one. */
+	firmware: string | null,
+	/**  `vcd_video_system` (`NTSC`, `PAL`, `HD`, `AUTO`), when set. */
+	video_system: string | null,
+	grid: Grid,
+	/**
+	 *  False when no file was a `dump`: elements a `diff` leaves out keep their firmware
+	 *  default, which this view does not know.
+	 */
+	complete: boolean,
+	/**  Every element the files list, by name. */
+	elements: OsdElement[],
+	profiles: OsdProfile[],
+	/**  Elements on in a profile that the table does not know (drawn 5 wide). */
+	unknown: string[],
+	/**  Notes for the whole view (grid choice, a diff). */
+	notes: string[],
+	/**  True when no profile has a problem. */
+	ok: boolean,
+};
+
 export type Outcome = "verified" | "failed" | "skipped";
 
 /**  The step `Progress` reports on. */
@@ -1557,6 +1673,13 @@ export type Probe = {
 	/**  Anything ffprobe printed at `-v error`. */
 	errors: string,
 };
+
+/**  What the check found. */
+export type ProblemKind = 
+/**  Two elements share cells. */
+"overlap" | 
+/**  Some of an element's cells fall outside the grid. */
+"off_screen";
 
 /**
  *  One aircraft setup, kept in the settings file. Every field is optional. A clip dated
