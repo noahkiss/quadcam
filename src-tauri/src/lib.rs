@@ -268,7 +268,8 @@ fn watch_volumes(app: AppHandle) {
 
 /// Looks for gear every `gear::detect::POLL`: sends `device-changed` with the events
 /// (connected, identified, unmounted but still in, removed), runs the on-connect hooks on
-/// their own threads for events QuadCam did not cause, plays due reminders, and sends `gear-changed` when another process (the
+/// their own threads for events QuadCam did not cause, runs the FC USB heat timer
+/// (`Core::gear_usb_tick`), plays due reminders, and sends `gear-changed` when another process (the
 /// CLI, an MCP server) wrote `gear.json`.
 fn poll_gear(app: AppHandle, core: Arc<Core>) {
     std::thread::spawn(move || {
@@ -299,6 +300,8 @@ fn poll_gear(app: AppHandle, core: Arc<Core>) {
                             });
                         }
                     }
+                    // FCs on USB with a battery in: "Unplug now" at their limit.
+                    core.gear_usb_tick(std::time::Instant::now());
                     core.gear_play_reminders(
                         &tracker,
                         std::time::Instant::now(),
@@ -419,6 +422,10 @@ pub fn specta_builder() -> tauri_specta::Builder<tauri::Wry> {
             c::gear_devices,
             c::gear_device_save,
             c::gear_device_forget,
+            c::gear_fc_identify,
+            c::gear_fc_read,
+            c::gear_board_notes,
+            c::gear_usb_timers,
             c::gear_dismiss_reminder,
             c::gear_osd,
             c::modules,

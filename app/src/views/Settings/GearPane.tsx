@@ -81,6 +81,7 @@ export function GearPane({ d, setD }: { d: Draft; setD: (f: (d: Draft) => Draft)
         <Checkbox label="Done, safe to unplug" checked={g.cues.safe_to_unplug} onChange={(e) => cue({ safe_to_unplug: e.target.checked })} />
         <Checkbox label="Still inserted" checked={g.cues.still_inserted} onChange={(e) => cue({ still_inserted: e.target.checked })} />
         <Checkbox label="Step failed" checked={g.cues.step_failed} onChange={(e) => cue({ step_failed: e.target.checked })} />
+        <Checkbox label="Unplug now" checked={g.cues.unplug_now} onChange={(e) => cue({ unplug_now: e.target.checked })} />
       </fieldset>
       <fieldset className={styles.fieldset} disabled={g.cues.mute}>
         <legend className={styles.label}>Play cues as</legend>

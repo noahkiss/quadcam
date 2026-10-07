@@ -8,6 +8,7 @@ use quadcam_lib::api::{self, call};
 use quadcam_lib::core::Core;
 use serde_json::Value;
 
+mod fc;
 mod osd;
 
 #[derive(Subcommand)]
@@ -18,6 +19,11 @@ pub enum GearCmd {
     Devices {
         #[command(subcommand)]
         cmd: Option<DevicesCmd>,
+    },
+    /// A Betaflight flight controller: identify, read, check, board notes, USB timer.
+    Fc {
+        #[command(subcommand)]
+        cmd: fc::FcCmd,
     },
     /// An FC's OSD layout per OSD profile, drawn on its grid and checked for overlaps and
     /// cells off screen. Reads a dump or diff file.
@@ -48,6 +54,7 @@ pub enum DevicesCmd {
 
 pub fn run(core: &Core, cmd: GearCmd) -> Result<Value> {
     Ok(match cmd {
+        GearCmd::Fc { cmd } => fc::run(core, cmd)?,
         GearCmd::Osd(a) => osd::run(core, a)?,
         GearCmd::Status => serde_json::to_value(call::gear_status(core)?)?,
         GearCmd::Devices { cmd } => match cmd.unwrap_or(DevicesCmd::List) {
