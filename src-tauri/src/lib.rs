@@ -317,6 +317,8 @@ pub fn specta_builder() -> tauri_specta::Builder<tauri::Wry> {
             c::eject,
             c::format_plan,
             c::format,
+            c::card_prep_plan,
+            c::card_prep,
             c::library,
             c::library_rebuild,
             c::library_rate,

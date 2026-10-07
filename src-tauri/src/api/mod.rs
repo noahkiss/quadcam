@@ -156,6 +156,13 @@ api! {
     format_plan(params: LabelParams) -> FormatPlan = |c| c.format_plan(params.label.as_deref());
     /// Erases the card. With the GUI running, the person must click Erase too.
     format(params: FormatRequest) -> FormatPlan = |c| c.format(&params, false);
+    /// Card prep: runs every guard on a card with no session (every clip on it must be in
+    /// the library) and names the disk that would be erased. Moves to `api/gear.rs` with WP1.
+    card_prep_plan(params: CardPrepParams) -> FormatPlan =
+        |c| c.card_prep_plan(&params.mount, params.label.as_deref());
+    /// Card prep: erases the card the plan named. With the GUI running, the person must click
+    /// Erase too.
+    card_prep(params: FormatRequest) -> FormatPlan = |c| c.card_prep(&params, false);
     /// The library, narrowed by a filter.
     library(params: Filter) -> LibraryView = |c| c.library(&params);
     /// Makes the index again from the files.

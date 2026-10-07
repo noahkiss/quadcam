@@ -18,6 +18,7 @@ mod files;
 mod import;
 mod library;
 mod modules;
+mod prep;
 mod rematch;
 mod setup;
 pub use crate::paths::{cache_dir, default_session_file, default_settings_file, support_dir};

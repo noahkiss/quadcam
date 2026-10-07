@@ -216,7 +216,8 @@ enum Cmd {
     /// Eject a card (mount point or /dev/diskN; default: the session's card).
     Eject { target: Option<String> },
     /// Erase the session's card as FAT32. Runs every guard and refuses without all of
-    /// --device, --volume-uuid and --yes.
+    /// --device, --volume-uuid and --yes. With --prep, erase a card with no session instead
+    /// (card prep: every clip on it must be in the library); --plan then needs --mount.
     Format {
         /// Whole-disk device of the card, for example /dev/disk4.
         #[arg(long)]
@@ -231,6 +232,12 @@ enum Cmd {
         /// Only print what would be erased; runs every guard.
         #[arg(long)]
         plan: bool,
+        /// Card prep: a card with no session, new or with every clip in the library.
+        #[arg(long)]
+        prep: bool,
+        /// Card prep: the card's mount point, for --plan.
+        #[arg(long, requires = "prep")]
+        mount: Option<PathBuf>,
     },
     /// The library: list, rate, rename, edit (details, aircraft, date, time), cut, trash, Photos.
     #[command(subcommand)]
@@ -988,6 +995,21 @@ fn run(cli: Cli) -> Result<Value> {
             serde_json::to_value(call::eject(&core, api::EjectParams { target })?)?
         }
         Cmd::Format {
+            plan: true,
+            prep: true,
+            mount,
+            label,
+            ..
+        } => {
+            let Some(mount) = mount else {
+                bail!("format --prep --plan needs --mount, the card's mount point.");
+            };
+            serde_json::to_value(call::card_prep_plan(
+                &core,
+                api::CardPrepParams { mount, label },
+            )?)?
+        }
+        Cmd::Format {
             plan: true, label, ..
         } => serde_json::to_value(call::format_plan(&core, api::LabelParams { label })?)?,
         Cmd::Format {
@@ -995,6 +1017,7 @@ fn run(cli: Cli) -> Result<Value> {
             volume_uuid,
             label,
             yes,
+            prep,
             ..
         } => {
             let (Some(device), Some(volume_uuid)) = (device, volume_uuid) else {
@@ -1010,7 +1033,8 @@ fn run(cli: Cli) -> Result<Value> {
                 confirm: true,
             };
             // Any reason not to erase is a refusal, so scripts can tell it from a crash.
-            let plan = call::format(&core, req).map_err(|e| {
+            let run = if prep { call::card_prep } else { call::format };
+            let plan = run(&core, req).map_err(|e| {
                 let m = format!("{e:#}");
                 if m.starts_with("Refused") {
                     anyhow!(m)

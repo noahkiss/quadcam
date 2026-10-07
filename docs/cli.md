@@ -39,6 +39,8 @@ quadcam-cli photos --album Drone          # add verified outputs to Photos
 quadcam-cli eject
 quadcam-cli format --plan                 # show what would be erased
 quadcam-cli format --device /dev/diskN --volume-uuid <uuid> --yes
+quadcam-cli format --prep --plan --mount /Volumes/CARD   # card prep: a card with no session
+quadcam-cli format --prep --device /dev/diskN --volume-uuid <uuid> --yes
 ```
 
 `clear` deletes the session file. The staged copies stay.
@@ -47,7 +49,7 @@ When the `delete_clips_after_import` setting is on, `import` deletes each clip t
 
 `cards` and `scan` name each source: `analog` or `dji`.
 
-`format` refuses with exit code 3 unless every guard passes. It always refuses a DJI session. `--device` (the card's whole disk), `--volume-uuid` and `--yes` must all match the staged card. See [Format safety](format-safety.md).
+`format` refuses with exit code 3 unless every guard passes. It always refuses a DJI session. `--device` (the card's whole disk), `--volume-uuid` and `--yes` must all match the staged card. With `--prep`, `format` erases a card that has no session instead: a new card, or a card whose clips are all in the library. `--plan` then needs `--mount`, and `--device` and `--volume-uuid` must match that card. See [Format safety](format-safety.md#card-prep).
 
 ### Plan files
 

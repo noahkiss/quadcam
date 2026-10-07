@@ -908,14 +908,23 @@ impl<B: Backend> Server<B> {
             }
             "quadcam_format_card" => {
                 let x: FormatCardArgs = args(a)?;
+                let prep = x.prep.unwrap_or(false);
                 if x.dry_run.unwrap_or(false) {
-                    let plan = self
-                        .backend
-                        .call("format_plan", json!({"label": x.label}))?;
+                    let plan = if prep {
+                        let mount = x.mount.clone().ok_or_else(|| {
+                            anyhow!("Card prep's dry run needs mount, the card's mount point.")
+                        })?;
+                        self.backend
+                            .call("card_prep_plan", json!({"mount": mount, "label": x.label}))?
+                    } else {
+                        self.backend
+                            .call("format_plan", json!({"label": x.label}))?
+                    };
                     return Ok((
                         vec![text(format!(
-                            "Would erase {} (volume {}, UUID {}, {} bytes, {} clips). To go ahead, call again with device, volume_uuid and confirm=true.",
-                            plan["device"].as_str().unwrap_or("?"), plan["volume_name"].as_str().unwrap_or("?"), plan["volume_uuid"].as_str().unwrap_or("?"), plan["size"], plan["clip_count"]
+                            "Would erase {} (volume {}, UUID {}, {} bytes, {} clips). To go ahead, call again with device, volume_uuid{} and confirm=true.",
+                            plan["device"].as_str().unwrap_or("?"), plan["volume_name"].as_str().unwrap_or("?"), plan["volume_uuid"].as_str().unwrap_or("?"), plan["size"], plan["clip_count"],
+                            if prep { ", prep=true" } else { "" }
                         ))],
                         plan,
                     ));
@@ -924,7 +933,9 @@ impl<B: Backend> Server<B> {
                     return Err(anyhow!("Refused: format needs confirm=true, device and volume_uuid. Call with dry_run=true to read them."));
                 }
                 let req = json!({"device": x.device.unwrap_or_default(), "volume_uuid": x.volume_uuid.unwrap_or_default(), "label": x.label, "confirm": true});
-                let plan = self.backend.call("format", req)?;
+                let plan = self
+                    .backend
+                    .call(if prep { "card_prep" } else { "format" }, req)?;
                 Ok((
                     vec![text(format!(
                         "Erased {} as FAT32 {} and ejected it.",
