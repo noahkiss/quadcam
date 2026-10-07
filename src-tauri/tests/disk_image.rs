@@ -9,7 +9,12 @@ use quadcam_lib::disk::{self, CardIdentity};
 use quadcam_lib::media::{Encoder, Format};
 use quadcam_lib::naming::NamePlanner;
 use quadcam_lib::pipeline::{self, ClipJob, DateSource, ImportSettings, Outcome};
+use quadcam_lib::sources::{self, CardPolicy, Source};
 use std::path::Path;
+
+fn analog() -> CardPolicy {
+    sources::analog::Analog.card_policy()
+}
 
 fn put_clips(root: &Path) {
     std::fs::create_dir_all(root.join("DCIM")).unwrap();
@@ -126,12 +131,14 @@ fn format_after_verified_import() {
     assert_eq!(names, ["2026-09-30_flight.mp4", "2026-09-30_flight-2.mp4"]);
 
     // A bad label is refused before anything runs.
-    assert!(disk::format_card(&id, &card.mount, "WAY-TOO-LONG-NAME").is_err());
+    assert!(
+        disk::format_card(&id, &card.mount, "WAY-TOO-LONG-NAME", &analog(), &|| Ok(())).is_err()
+    );
     assert!(card.mount.join("DCIM/PICT0001.AVI").is_file());
 
     assert_is_test_image(&card);
     assert_eq!(
-        disk::format_card(&id, &card.mount, "fpvcard").unwrap(),
+        disk::format_card(&id, &card.mount, "fpvcard", &analog(), &|| Ok(())).unwrap(),
         None,
         "erased and ejected"
     );
@@ -156,14 +163,14 @@ fn format_refusals() {
     let a = Image::create("64m", "QCA", false);
     let b = Image::create("64m", "QCB", false);
     let id_a = CardIdentity::from_info(&disk::info(&a.mount.to_string_lossy()).unwrap());
-    let e = disk::format_card(&id_a, &b.mount, "FPVCARD")
+    let e = disk::format_card(&id_a, &b.mount, "FPVCARD", &analog(), &|| Ok(()))
         .unwrap_err()
         .to_string();
     assert!(e.contains("Refused"), "{e}");
     // Same slot, same device, different volume UUID (reformatted elsewhere, then reinserted).
     let mut forged = CardIdentity::from_info(&disk::info(&b.mount.to_string_lossy()).unwrap());
     forged.volume_uuid = id_a.volume_uuid.clone();
-    let e = disk::format_card(&forged, &b.mount, "FPVCARD")
+    let e = disk::format_card(&forged, &b.mount, "FPVCARD", &analog(), &|| Ok(()))
         .unwrap_err()
         .to_string();
     assert!(e.contains("UUID"), "{e}");

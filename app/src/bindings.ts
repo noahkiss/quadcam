@@ -66,6 +66,16 @@ export const commands = {
 	formatPlan: (params: LabelParams) => typedError<FormatPlan, string>(__TAURI_INVOKE("format_plan", { params })),
 	/**  Erases the card. With the GUI running, the person must click Erase too. */
 	format: (params: FormatRequest) => typedError<FormatPlan, string>(__TAURI_INVOKE("format", { params })),
+	/**
+	 *  Card prep: runs every guard on a card with no session (every clip on it must be in
+	 *  the library) and names the disk that would be erased. Moves to `api/gear.rs` with WP1.
+	 */
+	cardPrepPlan: (params: CardPrepParams) => typedError<FormatPlan, string>(__TAURI_INVOKE("card_prep_plan", { params })),
+	/**
+	 *  Card prep: erases the card the plan named. With the GUI running, the person must click
+	 *  Erase too.
+	 */
+	cardPrep: (params: FormatRequest) => typedError<FormatPlan, string>(__TAURI_INVOKE("card_prep", { params })),
 	/**  The library, narrowed by a filter. */
 	library: (params: Filter) => typedError<LibraryView_Serialize, string>(__TAURI_INVOKE("library", { params })),
 	/**  Makes the index again from the files. */
@@ -189,6 +199,15 @@ export type CardIdentity = {
 	volume_name: string | null,
 	total_size: number,
 	media_name: string | null,
+};
+
+/**
+ *  `card_prep_plan`: the card's mount point, and the FAT32 volume name (None uses the
+ *  setting). Moves to `api/gear.rs` with WP1.
+ */
+export type CardPrepParams = {
+	mount: string,
+	label?: string | null,
 };
 
 export type CardStatus = {

@@ -25,7 +25,7 @@ Commands:
   verify    Re-verify outputs: the session's (default) or one file against its source
   photos    Add videos to Photos: given files, or the session's verified outputs
   eject     Eject a card (mount point or /dev/diskN; default: the session's card)
-  format    Erase the session's card as FAT32. Runs every guard and refuses without all of --device, --volume-uuid and --yes
+  format    Erase the session's card as FAT32. Runs every guard and refuses without all of --device, --volume-uuid and --yes. With --prep, erase a card with no session instead (card prep: every clip on it must be in the library); --plan then needs --mount
   library   The library: list, rate, rename, edit (details, aircraft, date, time), cut, trash, Photos
   mcp       Run the MCP server on stdio
   help      Print this message or the help of the given subcommand(s)
@@ -399,7 +399,7 @@ Options:
       --session <FILE>  Session file (default: ~/Library/Caches/app.quadcam/session.json)
   -h, --help            Print help
 ===== quadcam-cli format --help
-Erase the session's card as FAT32. Runs every guard and refuses without all of --device, --volume-uuid and --yes
+Erase the session's card as FAT32. Runs every guard and refuses without all of --device, --volume-uuid and --yes. With --prep, erase a card with no session instead (card prep: every clip on it must be in the library); --plan then needs --mount
 
 Usage: quadcam-cli format [OPTIONS]
 
@@ -411,6 +411,8 @@ Options:
       --label <LABEL>              FAT32 volume name (default DVR)
       --yes                        
       --plan                       Only print what would be erased; runs every guard
+      --prep                       Card prep: a card with no session, new or with every clip in the library
+      --mount <MOUNT>              Card prep: the card's mount point, for --plan
   -h, --help                       Print help
 ===== quadcam-cli library --help
 The library: list, rate, rename, edit (details, aircraft, date, time), cut, trash, Photos

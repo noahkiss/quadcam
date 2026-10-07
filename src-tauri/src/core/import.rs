@@ -485,7 +485,10 @@ impl Core {
             .card
             .clone()
             .context("Clips came from a folder, not a card.")?;
-        let eject_error = disk::format_card(&card, &s.source, &plan.label)?;
+        let policy = crate::sources::get(s.kind).card_policy();
+        let eject_error = disk::format_card(&card, &s.source, &plan.label, &policy, &|| {
+            self.current()?.format_ready()
+        })?;
         let mut latest = self.current()?;
         latest.card = None;
         match &eject_error {

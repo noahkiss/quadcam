@@ -99,6 +99,12 @@ fn clip_dirs(root: &Path) -> Vec<PathBuf> {
     out
 }
 
+/// A volume a DJI unit wrote: a DJI clip, or a `DCIM/DJI_*` folder even when it is empty
+/// (a card whose clips were deleted). The format guards refuse such a volume.
+pub fn looks_like_dji_volume(root: &Path) -> bool {
+    Dji.detect(root) || clip_dirs(root).len() > 1
+}
+
 fn found(path: &Path, root: Option<&Path>) -> Option<FoundClip> {
     let name = path.file_name()?.to_string_lossy().to_string();
     if name.starts_with('.') || !is_clip_name(&name) || !path.is_file() {

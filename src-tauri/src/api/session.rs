@@ -60,6 +60,15 @@ pub struct LabelParams {
     pub label: Option<String>,
 }
 
+/// `card_prep_plan`: the card's mount point, and the FAT32 volume name (None uses the
+/// setting). Moves to `api/gear.rs` with WP1.
+#[derive(Debug, Clone, Default, Serialize, Deserialize, Type)]
+pub struct CardPrepParams {
+    pub mount: PathBuf,
+    #[serde(default)]
+    pub label: Option<String>,
+}
+
 /// `session_cuts`: a session clip's new cut list, and what happens to exported cuts it drops.
 #[derive(Debug, Clone, Default, Serialize, Deserialize, Type)]
 pub struct SessionCutsParams {
