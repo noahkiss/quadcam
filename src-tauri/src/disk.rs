@@ -29,6 +29,22 @@ pub struct DiskInfo {
 }
 
 impl DiskInfo {
+    /// A card in the Mac's built-in SD slot. macOS reports the slot as internal
+    /// (`Internal` true, "internal, physical" in `diskutil list`), but the card in it is
+    /// removable media on the `Secure Digital` bus. An internal SSD is neither.
+    pub fn is_slot_card(&self) -> bool {
+        self.removable
+            && self
+                .bus_protocol
+                .as_deref()
+                .is_some_and(|b| b.eq_ignore_ascii_case("Secure Digital"))
+    }
+
+    /// Internal storage of the Mac: internal and not a card in the built-in SD slot.
+    pub fn is_internal_storage(&self) -> bool {
+        self.internal && !self.is_slot_card()
+    }
+
     pub fn is_fat32(&self) -> bool {
         self.filesystem
             .as_deref()
@@ -142,8 +158,10 @@ pub struct Volume {
     pub warnings: Vec<String>,
 }
 
+/// A disk a person can take out: external and removable or ejectable, or a card in the
+/// built-in SD slot.
 pub fn is_removable(info: &DiskInfo) -> bool {
-    !info.internal && (info.removable || info.ejectable)
+    !info.is_internal_storage() && (info.removable || info.ejectable)
 }
 
 pub fn looks_like_radio(mount: &Path) -> bool {
@@ -284,7 +302,7 @@ pub fn check_format_guards(
         bail!("Refused: {whole_id} is the boot disk.");
     }
     for d in [volume, whole] {
-        if d.internal {
+        if d.is_internal_storage() {
             bail!("Refused: {} is an internal disk.", d.device_identifier);
         }
         if !(d.removable || d.ejectable) {
@@ -369,7 +387,7 @@ pub fn format_card(
     // scanning it for a moment and dissent. Retry briefly before giving up.
     let mut last = None;
     for _ in 0..8 {
-        match eject(&disk) {
+        match unmount_disk(&disk) {
             Ok(()) => return Ok(None),
             Err(e) => last = Some(format!("{e:#}")),
         }
@@ -378,7 +396,42 @@ pub fn format_card(
     Ok(last)
 }
 
-/// `diskutil eject`: unplugging mid-write once wedged diskarbitrationd.
+/// Makes a disk safe to remove. A card (removable media: a reader's card, a card in the
+/// built-in slot) gets `diskutil unmountDisk`: every volume unmounts, and the disk stays
+/// listed until the card is pulled. Anything else gets `diskutil eject`. `target` is a mount
+/// point, `/dev/diskN` or `diskN`; the whole disk is unmounted either way. Unplugging
+/// mid-write once wedged diskarbitrationd, so this always runs before a pull.
+pub fn safe_remove(target: &str) -> Result<()> {
+    let vol = info(target)?;
+    let whole_id = whole_disk_of(if vol.parent_whole_disk.is_empty() {
+        &vol.device_identifier
+    } else {
+        &vol.parent_whole_disk
+    });
+    let whole = info(&whole_id).unwrap_or(vol);
+    let dev = format!("/dev/{whole_id}");
+    if whole.removable {
+        unmount_disk(&dev)
+    } else {
+        eject(&dev)
+    }
+}
+
+/// `diskutil unmountDisk`: unmounts every volume of the whole disk; the disk stays attached.
+pub fn unmount_disk(target: &str) -> Result<()> {
+    let out = Command::new("/usr/sbin/diskutil")
+        .args(["unmountDisk", target])
+        .output()?;
+    if !out.status.success() {
+        bail!(
+            "diskutil unmountDisk failed: {}",
+            String::from_utf8_lossy(&out.stderr).trim()
+        );
+    }
+    Ok(())
+}
+
+/// `diskutil eject`: for a disk that is not a card.
 pub fn eject(target: &str) -> Result<()> {
     let out = Command::new("/usr/sbin/diskutil")
         .args(["eject", target])
@@ -420,6 +473,109 @@ mod tests {
             ..vol.clone()
         };
         (CardIdentity::from_info(&vol), vol, whole)
+    }
+
+    /// A `diskutil info -plist` answer with the keys QuadCam reads. The values are made up.
+    fn plist_info(
+        id: &str,
+        internal: bool,
+        removable: bool,
+        ejectable: bool,
+        bus: &str,
+        size: u64,
+        uuid: Option<&str>,
+    ) -> DiskInfo {
+        let whole = whole_disk_of(id);
+        let uuid = uuid
+            .map(|u| format!("<key>VolumeUUID</key><string>{u}</string><key>VolumeName</key><string>CARD</string><key>MountPoint</key><string>/Volumes/CARD</string><key>FilesystemPersonality</key><string>MS-DOS FAT32</string>"))
+            .unwrap_or_default();
+        let b = |v: bool| if v { "<true/>" } else { "<false/>" };
+        let xml = format!(
+            r#"<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0"><dict>
+<key>DeviceIdentifier</key><string>{id}</string>
+<key>ParentWholeDisk</key><string>{whole}</string>
+<key>Internal</key>{}
+<key>RemovableMedia</key>{}
+<key>Removable</key>{}
+<key>Ejectable</key>{}
+<key>BusProtocol</key><string>{bus}</string>
+<key>TotalSize</key><integer>{size}</integer>
+{uuid}
+</dict></plist>"#,
+            b(internal),
+            b(removable),
+            b(removable),
+            b(ejectable)
+        );
+        let v: plist::Value = plist::from_bytes(xml.as_bytes()).unwrap();
+        parse_info(&v.into_dictionary().unwrap())
+    }
+
+    /// (expected identity, volume, whole disk) as diskutil reports them for one kind of disk.
+    fn plist_card(
+        internal: bool,
+        removable: bool,
+        ejectable: bool,
+        bus: &str,
+        size: u64,
+    ) -> (CardIdentity, DiskInfo, DiskInfo) {
+        let vol = plist_info(
+            "disk4s1",
+            internal,
+            removable,
+            ejectable,
+            bus,
+            size,
+            Some("UUID-SLOT"),
+        );
+        let whole = plist_info("disk4", internal, removable, ejectable, bus, size, None);
+        (CardIdentity::from_info(&vol), vol, whole)
+    }
+
+    #[test]
+    fn slot_card_usb_reader_card_and_internal_ssd() {
+        let boot = vec!["disk0".to_string(), "disk3".to_string()];
+
+        // The built-in SD slot: Internal true, but removable media on the Secure Digital bus.
+        let (id, v, w) = plist_card(true, true, true, "Secure Digital", 31_900_000_000);
+        assert!(v.internal && v.is_slot_card() && !v.is_internal_storage());
+        assert!(is_removable(&v) && is_removable(&w));
+        check_format_guards(&id, &v, &w, &boot).unwrap();
+        // Every other guard still holds for a slot card.
+        let (id2, v2, w2) = plist_card(true, true, true, "Secure Digital", 128_000_000_000);
+        assert!(check_format_guards(&id2, &v2, &w2, &boot)
+            .unwrap_err()
+            .to_string()
+            .contains("64 GB"));
+        assert!(
+            check_format_guards(&id, &v, &w, &["disk0".into(), "disk4".into()]).is_err(),
+            "boot disk"
+        );
+        let mut swapped = v.clone();
+        swapped.volume_uuid = Some("UUID-OTHER".into());
+        assert!(
+            check_format_guards(&id, &swapped, &w, &boot).is_err(),
+            "swapped card"
+        );
+
+        // A card in a USB reader: external, removable.
+        let (id, v, w) = plist_card(false, true, true, "USB", 31_900_000_000);
+        assert!(!v.is_slot_card() && is_removable(&v));
+        check_format_guards(&id, &v, &w, &boot).unwrap();
+
+        // The internal SSD: internal, not removable media, another bus. Refused.
+        let (id, v, w) = plist_card(true, false, false, "Apple Fabric", 31_900_000_000);
+        assert!(v.is_internal_storage() && !is_removable(&v));
+        let e = check_format_guards(&id, &v, &w, &[])
+            .unwrap_err()
+            .to_string();
+        assert!(e.contains("internal"), "{e}");
+        // Internal storage on the SD bus that is not removable media stays internal.
+        let (id, v, w) = plist_card(true, false, true, "Secure Digital", 31_900_000_000);
+        assert!(!v.is_slot_card() && v.is_internal_storage());
+        assert!(check_format_guards(&id, &v, &w, &[]).is_err());
     }
 
     #[test]

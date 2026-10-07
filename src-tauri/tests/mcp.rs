@@ -512,7 +512,7 @@ fn format_through_mcp_needs_the_gui_click() {
         .as_str()
         .unwrap()
         .starts_with("Erased"));
-    assert!(!card.is_attached());
+    assert!(card.is_attached() && !card.is_mounted());
 }
 
 /// The library and setup tools, headless: a time at suggest, then rating, renaming, a new

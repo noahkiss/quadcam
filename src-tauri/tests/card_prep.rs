@@ -45,7 +45,7 @@ fn err(r: anyhow::Result<impl std::fmt::Debug>) -> String {
 }
 
 /// Prep refuses while a clip on the card is not in the library, passes once every clip is,
-/// refuses a wrong device, UUID or a missing confirm, then erases and ejects the image.
+/// refuses a wrong device, UUID or a missing confirm, then erases and unmounts the image.
 #[test]
 fn prep_needs_every_clip_in_the_library() {
     let mut card = Image::create("64m", "QCPREP", false);
@@ -128,8 +128,11 @@ fn prep_needs_every_clip_in_the_library() {
     assert_is_test_image(&card);
     let done = core.card_prep(&req, false).unwrap();
     assert_eq!(done.label, "SPARE1");
-    assert!(!card.is_attached(), "ejected after the erase");
-    card.attach();
+    assert!(
+        card.is_attached() && !card.is_mounted(),
+        "unmounted after the erase"
+    );
+    card.remount();
     let after = disk::info(&card.mount.to_string_lossy()).unwrap();
     assert_eq!(after.volume_name.as_deref(), Some("SPARE1"));
     assert!(after.is_fat32(), "{:?}", after.filesystem);

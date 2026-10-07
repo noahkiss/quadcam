@@ -944,9 +944,8 @@ full-size adapters):
 
 - `diskutil` lists the slot as internal and physical, with protocol `Secure Digital`
   (`Internal` true, `RemovableMedia` true). Detection must select cards by protocol and the
-  removable flag, never by "external". Today `disk::is_removable` requires `!internal`, so
-  `disk::list_volumes` hides slot cards and the format guard refuses them; the fix belongs
-  to `disk.rs` (WP11).
+  removable flag, never by "external" (`DiskInfo::is_slot_card`, which `disk::is_removable`
+  takes).
 - `system_profiler SPCardReaderDataType` shows the card's hardware identity: product name,
   manufacturer id, serial number, manufacturing date and capacity. USB readers hide it.
 - After `unmountDisk` the whole-disk node stays while the adapter is in. Pulling the adapter
@@ -976,9 +975,9 @@ every empty "Connected" state and `quadcam_gear status` say "Nothing found. If m
 allow an accessory, click Allow." (`mcp::gear::NOTHING_FOUND`).
 
 A disk number can be reused by the next disk; a new disk with the same number reads as still
-present until the next look shows its own volume. The existing eject paths (`eject`, the eject
-after export) still call `diskutil eject`. Moving cards to `unmountDisk` is a later change
-(WP11 or a follow-up), with the "safe to unplug" cue after it.
+present until the next look shows its own volume. "Safe to remove" (`disk::safe_remove`: the
+`eject` method, after a format or card prep) runs `unmountDisk` for a card, so every such
+release leads to `unmounted_present` and the "safe to unplug" cue.
 
 **On-connect steps.** `Core::gear_add_hook` registers an `OnConnectHook`: a name, an
 `Automation` (`backup`, `import`, `apply_ready`), the device kinds, and the function. The app

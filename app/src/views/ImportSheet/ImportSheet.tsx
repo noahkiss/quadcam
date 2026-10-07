@@ -93,7 +93,7 @@ export function ImportSheet() {
                 Back to review
               </Button>
             )}
-            <span className={styles.footNote}>{step === "finish" && hasCard ? "The card stays mounted until you eject it." : ""}</span>
+            <span className={styles.footNote}>{step === "finish" && hasCard ? "The card stays mounted until you make it safe to remove." : ""}</span>
             {step === "finish" && (
               <Button variant="primary" onClick={doneImport}>
                 Done · show in Library

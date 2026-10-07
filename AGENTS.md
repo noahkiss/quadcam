@@ -165,6 +165,13 @@ GitHub (`noahkiss/quadcam`, public) is the only remote. Users install the cask
   `-webkit-user-select`. Text a person may copy (paths, details values) gets the
   `selectable` class. The web view's context menu shows only over text fields and selected
   `selectable` text; the app's own menus call `preventDefault` first.
+- **Removable cards:** `disk::is_removable` takes an external removable or ejectable disk, or
+  a card in the built-in SD slot (`DiskInfo::is_slot_card`: removable media on the `Secure
+  Digital` bus; macOS reports the slot as `Internal`). Internal storage (`is_internal_storage`)
+  never counts. "Safe to remove" (`disk::safe_remove`, method `eject`, after a format or card
+  prep) runs `diskutil unmountDisk` for a card, so the disk stays listed until it is pulled,
+  and `diskutil eject` for anything else. Disk images report removable media, so the disk-image
+  tests see an unmount: the image stays attached and `Image::is_mounted` is false.
 - **Cards** show in the sidebar with their source (Analog, DJI) and an "N new" count (content
   fingerprints not in the index); inserting a card never starts an import on its own.
 
@@ -256,7 +263,7 @@ quadcam-cli --json settings set layout=day place_folders=true   # `settings` sho
 quadcam-cli --json modules [check | install NAME --yes | remove NAME | manifest]
 quadcam-cli --json library apply-name-format   # after settings set name_date_format=YY.MM.DD
 quadcam-cli --json photos out.mp4 --album Drone
-quadcam-cli --json eject
+quadcam-cli --json eject                       # safe to remove: unmountDisk a card
 quadcam-cli --json gear status                 # gear folder, Gear settings, what is plugged in
 quadcam-cli --json gear devices save <id> --name N --aircraft PROFILE
 quadcam-cli --json format --plan               # runs every guard, prints device + volume UUID
@@ -352,8 +359,8 @@ claude mcp add quadcam -- "$(brew --prefix)/bin/quadcam-cli" mcp
   card-reader reads, a refused `events::probe_media`, and silent cues (`RecordedCues`), unless
   `QUADCAM_SERIAL=real` or `QUADCAM_CUES=real`. Tests build cores with `Core::with_gear_env`
   and `gear::Env::fake` (synthetic volumes, `FakePorts`, `ScriptLink`).
-- **Release cards with `diskutil unmountDisk`, not `eject`,** in new code: only then does a card
-  still inserted stay visible (`docs/gear-design.md`, 7.11).
+- **Release cards through `disk::safe_remove` (`diskutil unmountDisk`), never `eject`:** only
+  then does a card still inserted stay visible to Gear (`docs/gear-design.md`, 7.11).
 - **Never touch the real settings file or library while testing.** Tests and manual runs
   set `HOME` to a temp folder (the CLI and MCP derive every path from it) or pass
   `Core::with_settings` a temp file.

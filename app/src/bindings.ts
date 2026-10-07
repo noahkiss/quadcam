@@ -60,7 +60,7 @@ export const commands = {
 	photos: (params: PhotosParams) => typedError<ShareReport, string>(__TAURI_INVOKE("photos", { params })),
 	/**  Checks verified outputs again. */
 	verify: (params: VerifyParams) => typedError<VerifyReport[], string>(__TAURI_INVOKE("verify", { params })),
-	/**  Ejects a card. */
+	/**  Makes a card safe to remove (unmounts it; ejects a disk that is not a card). */
 	eject: (params: EjectParams) => typedError<Ejected, string>(__TAURI_INVOKE("eject", { params })),
 	/**  Runs every format guard and names the card that would be erased. */
 	formatPlan: (params: LabelParams) => typedError<FormatPlan, string>(__TAURI_INVOKE("format_plan", { params })),
@@ -688,7 +688,7 @@ export type DiskInfo = {
 
 export type Editor = "user" | "agent";
 
-/**  `eject`: a mount point or `/dev/diskN`; None ejects the session's card. */
+/**  `eject`: a mount point or `/dev/diskN`; None makes the session's card safe to remove. */
 export type EjectParams = {
 	target: string | null,
 };

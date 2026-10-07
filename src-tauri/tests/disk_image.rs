@@ -61,7 +61,7 @@ fn detection() {
     assert!(v.is_radio && !v.is_card);
 }
 
-/// Check 7: the format runs only after every clip verified, then ejects the card.
+/// Check 7: the format runs only after every clip verified, then unmounts the card.
 #[test]
 fn format_after_verified_import() {
     let mut card = Image::create("64m", "QCFMT", false);
@@ -140,16 +140,16 @@ fn format_after_verified_import() {
     assert_eq!(
         disk::format_card(&id, &card.mount, "fpvcard", &analog(), &|| Ok(())).unwrap(),
         None,
-        "erased and ejected"
+        "erased and unmounted"
     );
 
-    // Ejected at once.
+    // Safe to remove at once: unmounted, still attached (the disk stays until it is pulled).
     assert!(
-        !card.is_attached(),
-        "card should be ejected after the erase"
+        card.is_attached() && !card.is_mounted(),
+        "card should be unmounted after the erase"
     );
-    // Re-attach: an empty FAT32 volume named FPVCARD with no clips.
-    card.attach();
+    // Mount again: an empty FAT32 volume named FPVCARD with no clips.
+    card.remount();
     let after = disk::info(&card.mount.to_string_lossy()).unwrap();
     assert_eq!(after.volume_name.as_deref(), Some("FPVCARD"));
     assert!(after.is_fat32(), "{:?}", after.filesystem);
@@ -192,4 +192,19 @@ fn format_refusals() {
         .to_string();
     assert!(e.contains("64 GB"), "{e}");
     assert!(big.is_attached());
+}
+
+/// "Safe to remove" unmounts a card's whole disk and leaves the disk attached, so it stays
+/// listed until it is pulled. A disk image reports removable media, as a card does.
+#[test]
+fn safe_remove_unmounts_and_keeps_the_disk() {
+    let mut card = Image::create("64m", "QCSAFE", false);
+    put_clips(&card.mount);
+    let whole = disk::info(&card.disk).unwrap();
+    assert!(whole.removable, "{whole:?}");
+    assert!(disk::is_removable(&whole));
+    disk::safe_remove(&card.mount.to_string_lossy()).unwrap();
+    assert!(card.is_attached() && !card.is_mounted());
+    card.remount();
+    assert!(card.is_mounted() && card.mount.join("DCIM/PICT0001.AVI").is_file());
 }

@@ -216,7 +216,8 @@ enum Cmd {
         #[arg(long)]
         dry_run: bool,
     },
-    /// Eject a card (mount point or /dev/diskN; default: the session's card).
+    /// Make a card safe to remove: unmount it, or eject a disk that is not a card (mount point or
+    /// /dev/diskN; default: the session's card).
     Eject { target: Option<String> },
     /// Erase the session's card as FAT32. Runs every guard and refuses without all of
     /// --device, --volume-uuid and --yes. With --prep, erase a card with no session instead

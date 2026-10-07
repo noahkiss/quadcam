@@ -35,7 +35,7 @@ The server has 19 tools.
 | `quadcam_export` | Converts and verifies clips and cuts. Can also add them to Photos. When the `delete_clips_after_import` setting is on, deletes the clips that verified from the card; `keep_clips=true` keeps them for that run. See [Settings](settings.md#delete-clips-after-import) |
 | `quadcam_verify` | Checks the outputs again |
 | `quadcam_add_to_photos` | Adds verified outputs to Photos |
-| `quadcam_eject` | Ejects the card |
+| `quadcam_eject` | Makes the card safe to remove (unmounts it) |
 | `quadcam_format_card` | Erases an analog card after an import, or with `prep=true` a card with no session (card prep). Refuses a DJI card. See [Format safety](format-safety.md) |
 
 **Library:**

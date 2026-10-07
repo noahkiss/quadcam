@@ -48,7 +48,7 @@ pub struct VerifyParams {
     pub ids: Option<Vec<usize>>,
 }
 
-/// `eject`: a mount point or `/dev/diskN`; None ejects the session's card.
+/// `eject`: a mount point or `/dev/diskN`; None makes the session's card safe to remove.
 #[derive(Debug, Clone, Default, Serialize, Deserialize, Type)]
 pub struct EjectParams {
     pub target: Option<String>,

@@ -18,9 +18,8 @@
 //! - a USB device that is more than its storage, such as a DJI air unit, stays on the USB
 //!   bus after its volume unmounts (`Presence::Usb`, DJI's vendor id).
 //!
-//! The existing eject paths (`eject`, the eject after export) still call `diskutil eject`;
-//! moving cards to `unmountDisk` belongs to a later package. A card ejected that way reads
-//! as `removed` at once.
+//! QuadCam's own "safe to remove" (`disk::safe_remove`) unmounts a card this way. A card
+//! another app ejects reads as `removed` at once.
 //!
 //! `Tracker` keeps the previous look and the devices unmounted but present, and turns each
 //! new look into events. The app polls (`detect::POLL`), runs the on-connect hooks for
