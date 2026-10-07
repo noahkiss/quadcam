@@ -135,7 +135,7 @@ enum Cmd {
         /// Remove every cut.
         #[arg(long, conflicts_with = "ranges")]
         clear: bool,
-        /// Add one cut per radio-log pack (the armed range plus up to 2 s each side).
+        /// Add one cut per radio-log flight (the armed range plus up to 2 s each side).
         #[arg(long, conflicts_with = "keep")]
         by_flight: bool,
         /// Seconds into the clip where the radio log's first armed row falls.
@@ -219,16 +219,17 @@ enum Cmd {
     /// Make a card safe to remove: unmount it, or eject a disk that is not a card (mount point or
     /// /dev/diskN; default: the session's card).
     Eject { target: Option<String> },
-    /// Erase the session's card as FAT32. Runs every guard and refuses without all of
-    /// --device, --volume-uuid and --yes. With --prep, erase a card with no session instead
-    /// (card prep: every clip on it must be in the library); --plan then needs --mount.
+    /// Erase the session's card with its source's file system (FAT32 for analog). Runs every
+    /// guard and refuses without all of --device, --volume-uuid and --yes. With --prep, erase a
+    /// card with no session instead (card prep: every clip on it must be in the library; a DJI
+    /// goggles card becomes exFAT); --plan then needs --mount.
     Format {
         /// Whole-disk device of the card, for example /dev/disk4.
         #[arg(long)]
         device: Option<String>,
         #[arg(long)]
         volume_uuid: Option<String>,
-        /// FAT32 volume name (default DVR).
+        /// Volume name (default DVR).
         #[arg(long)]
         label: Option<String>,
         #[arg(long)]
@@ -325,7 +326,7 @@ enum LibCmd {
         ranges: Vec<String>,
         #[arg(long, conflicts_with = "ranges")]
         clear: bool,
-        /// Add one cut per radio-log pack (the armed range plus up to 2 s each side).
+        /// Add one cut per radio-log flight (the armed range plus up to 2 s each side).
         #[arg(long, conflicts_with_all = ["ranges", "clear"])]
         by_flight: bool,
         /// For exported cuts the new list drops: keep their files or move them to the Trash.

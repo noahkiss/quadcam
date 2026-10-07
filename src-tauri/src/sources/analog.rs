@@ -83,11 +83,12 @@ impl Source for Analog {
     fn card_policy(&self) -> CardPolicy {
         CardPolicy {
             format_offered: true,
+            prep_offered: true,
             delete_clips_offered: true,
             filesystem: "FAT32",
             warn_above_bytes: WARN_ABOVE_BYTES,
             filesystem_advice: "Most analog DVRs need a FAT32 card of 32 GB or less. Import works; you can format it to FAT32 at the end.",
-            size_warning: "Card is larger than 32 GB. Most analog DVRs take cards up to 32 GB.",
+            size_warning: "Card is larger than 32 GB. Most analog DVRs take cards up to 32 GB; this DVR may not read it.",
         }
     }
 }
@@ -121,6 +122,7 @@ mod tests {
             a.card_policy(),
             CardPolicy {
                 format_offered: true,
+                prep_offered: true,
                 delete_clips_offered: true,
                 filesystem: "FAT32",
                 warn_above_bytes: 34_000_000_000,

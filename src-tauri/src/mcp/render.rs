@@ -217,7 +217,7 @@ pub fn clip_views(session: &Value, ids: Option<&[u64]>) -> Vec<Value> {
                 "date_source": p["source"],
                 "log_match": p["badge"],
                 "log_match_reason": p["match_reason"],
-                "packs": p["segments"],
+                "flights": p["segments"],
                 "short_name": p["name"],
                 "note": p["note"],
                 "skip": p["skip"],

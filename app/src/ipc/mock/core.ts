@@ -200,7 +200,7 @@ export class MockCore {
         return { renamed: [], unchanged: this.lib.clips.length, skipped: [], failed: [] };
       case "library_match_logs":
         return {
-          clips: this.lib.clips.map((c) => ({ id: c.id, path: c.path, duration: c.duration, badge: "unmatched", log_day: null, log_date: null, log_time: null, log_model: null, packs: 0, reason: null, flight: null, moments: 0, applied: false })),
+          clips: this.lib.clips.map((c) => ({ id: c.id, path: c.path, duration: c.duration, badge: "unmatched", log_day: null, log_date: null, log_time: null, log_model: null, flights: 0, reason: null, flight: null, moments: 0, applied: false })),
           warnings: [],
         };
       case "library_rebuild":
@@ -228,12 +228,12 @@ export class MockCore {
         return this.sessionCuts(Number(p.id), p.cuts as Span[], p.removed_cuts as string | null);
       case "session_split": {
         const id = Number(p.id);
-        const add = flightCuts(this.plan(id).flight?.pack_spans || [], this.need().clips.find((c) => c.id === id)!.duration);
+        const add = flightCuts(this.plan(id).flight?.flight_spans || [], this.need().clips.find((c) => c.id === id)!.duration);
         return this.sessionCuts(id, withSpans(this.plan(id).cuts, add), null);
       }
       case "library_split": {
         const c = this.clip(String(p.id));
-        const add = flightCuts(c.stats?.pack_spans || [], c.duration);
+        const add = flightCuts(c.stats?.flight_spans || [], c.duration);
         return this.libraryCuts(c.id, withSpans([...c.cuts, ...c.pending_cuts], add), null);
       }
       case "profiles":
@@ -702,7 +702,7 @@ export class MockCore {
     s.output_dir = opts.output_dir;
     this.libraryChanged();
     this.sessionChanged();
-    const summary = { results, imported, skipped: results.length - imported, failed: 0, total_bytes: results.reduce((a, r) => a + r.size, 0), output_dir: opts.output_dir, format_ready: s.kind === "dji" ? { Err: "QuadCam does not format DJI cards; format them in the device." } : s.card ? { Ok: null } : { Err: "Clips came from a folder, not a card." } };
+    const summary = { results, imported, skipped: results.length - imported, failed: 0, total_bytes: results.reduce((a, r) => a + r.size, 0), output_dir: opts.output_dir, format_ready: s.kind === "dji" ? { Err: "QuadCam does not format DJI cards after an import. Card prep can erase a removable card once every clip is in the library." } : s.card ? { Ok: null } : { Err: "Clips came from a folder, not a card." } };
     // "Delete clips after import": only the setting turns it on; a run may turn it off.
     const clip_deletion =
       this.settings.values.deleteClipsAfterImport && !opts.keep_clips
@@ -725,9 +725,9 @@ export class MockCore {
 
   formatPlan(label: string | null) {
     const s = this.need();
-    if (s.kind === "dji") throw "Refused: QuadCam does not format DJI cards; format them in the device.";
+    if (s.kind === "dji") throw "Refused: QuadCam does not format DJI cards after an import. Card prep can erase a removable card once every clip is in the library.";
     if (!s.card) throw "Clips came from a folder, not a card.";
-    return { disk: "disk9", device: "/dev/disk9", volume_uuid: s.card.volume_uuid || "", volume_name: s.card.volume_name || "", size: s.card.total_size, media_name: s.card.media_name || "", clip_count: s.clips.length, label: label || "DVR" };
+    return { disk: "disk9", device: "/dev/disk9", volume_uuid: s.card.volume_uuid || "", volume_name: s.card.volume_name || "", size: s.card.total_size, media_name: s.card.media_name || "", clip_count: s.clips.length, label: label || "DVR", filesystem: "FAT32", warnings: s.card.total_size > 34e9 ? ["Card is larger than 32 GB. Most analog DVRs take cards up to 32 GB; this DVR may not read it."] : [] };
   }
 
   formatCard(label: string) {
@@ -769,12 +769,12 @@ function manyClips(lib: LibraryView): LibraryView {
   return lib;
 }
 
-/** One cut per radio-log pack, as `trim::flight_cuts`: 2 s each side (at most half the gap),
+/** One cut per radio-log flight, as `trim::flight_cuts`: 2 s each side (at most half the gap),
  * clamped to the clip. */
-function flightCuts(packs: Span[], duration: number): Span[] {
-  if (!packs.length) throw "nothing to split; the clip has no radio-log packs (match the logs first)";
+function flightCuts(flights: Span[], duration: number): Span[] {
+  if (!flights.length) throw "nothing to split; the clip has no radio-log flights (match the logs first)";
   const r = (x: number) => Math.round(x * 10) / 10;
-  const ps = [...packs].sort((a, b) => a.start - b.start);
+  const ps = [...flights].sort((a, b) => a.start - b.start);
   const out = ps
     .map((p, i) => {
       const before = i ? Math.max(0, (p.start - ps[i - 1].end) / 2) : 2;
@@ -782,8 +782,8 @@ function flightCuts(packs: Span[], duration: number): Span[] {
       return { start: r(Math.max(0, p.start - Math.min(2, before))), end: r(Math.min(duration, p.end + Math.min(2, after))) };
     })
     .filter((k) => k.end - k.start >= 0.5);
-  if (!out.length) throw "nothing to split; no radio-log pack falls inside the clip";
-  if (out.length === 1 && duration - (out[0].end - out[0].start) < Math.max(10, duration * 0.1)) throw "nothing to split; its one pack covers nearly the whole clip";
+  if (!out.length) throw "nothing to split; no radio-log flight falls inside the clip";
+  if (out.length === 1 && duration - (out[0].end - out[0].start) < Math.max(10, duration * 0.1)) throw "nothing to split; its one flight covers nearly the whole clip";
   return out;
 }
 

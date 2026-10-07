@@ -40,8 +40,8 @@ reads the battery voltage over MSP every 30 seconds and closes the port again.
 |---|---|
 | EdgeTX radio | Its SD card in USB Storage mode, or its card in a reader. QuadCam reads `board` and `semver` from `RADIO/radio.yml`. A volume on the radio's own USB device (vendor `OpenTX` or `EdgeTX`, or a radio maker in the product name) is the radio itself, and shows its USB details |
 | EdgeTX radio, serial | The radio's USB serial port (`<Maker> <Radio> Serial Port`). It is a radio, not a flight controller |
-| Goggles card | A card with DJI clips |
-| DVR card | A card with analog clips |
+| Goggles | A DJI volume: a goggles card, or an air unit over USB (DJI clips under `DCIM/DJI_*`) |
+| DVR card | A card with analog clips, from a DVR or analog goggles |
 | Flight controller | A USB serial port with an STM32 or AT32 virtual COM port id |
 | ELRS module | A USB serial port with a CP210x, CH340 or CH9102 id |
 | Radio in DFU mode | The STM32 bootloader (`0483:df11`) |

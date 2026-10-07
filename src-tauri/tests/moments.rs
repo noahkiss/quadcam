@@ -341,7 +341,7 @@ fn profile_place_and_flight_stats_through_the_core() {
     assert_eq!(p.log_model.as_deref(), Some("Whoop"));
     let f = p.flight.as_ref().unwrap();
     assert_eq!(
-        (f.packs, f.min_rssi_db, f.min_lq),
+        (f.flights, f.min_rssi_db, f.min_lq),
         (1, Some(-66.0), Some(96.0))
     );
 

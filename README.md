@@ -8,15 +8,15 @@ QuadCam is a macOS app that imports the recordings from your FPV goggles into a 
 
 ## Features
 
-- **Dated clips.** Analog DVRs have no clock. QuadCam dates each clip from your EdgeTX radio logs, matched by pack lengths or, for an analog clip with dead air, by how the packs fit its picture between battery swaps. Otherwise it uses the import date. DJI clips carry their own clock, and a matching radio log refines it.
+- **Dated clips.** Analog DVRs have no clock. QuadCam dates each clip from your EdgeTX radio logs, matched by flight lengths or, for an analog clip with dead air, by how the flights fit its picture between battery swaps. Otherwise it uses the import date. DJI clips carry their own clock, and a matching radio log refines it.
 - **Named files.** Each file is `YYYY-MM-DD_<name>.mp4`, in a folder per year and per flying day.
 - **Small MP4s.** Hardware H.264 makes files that play everywhere and are much smaller than the DVR's MJPEG. A lossless MOV option keeps the original frames. DJI clips are already H.264 or H.265: QuadCam copies them as they are.
 - **Verified imports.** QuadCam compares every output with its source: frame count, duration, streams and metadata. It recovers half-written clips, for example after a power-off during recording, and marks empty ones.
-- **Moments and dead air.** QuadCam finds rolls, flips, punch-outs and dives in the radio log, and the no-signal stretches in the video. You export any range as a cut. **Split by flight** makes one cut per radio-log pack.
-- **Long recordings stay whole.** An analog DVR splits a long recording into files of about 10 minutes. QuadCam imports those files as one clip. See [Joined recordings](docs/library.md#joined-recordings).
+- **Moments and dead air.** QuadCam finds rolls, flips, punch-outs and dives in the radio log, and the no-signal stretches in the video. You export any range as a cut. **Split by flight** makes one cut per radio-log flight.
+- **Long recordings stay whole.** An analog DVR splits a long recording into files of a fixed length (10 minutes on a Fat Shark Echo) or size. QuadCam imports those files as one clip. See [Joined recordings](docs/library.md#joined-recordings).
 - **A library you can trust.** Rate, flag, search, rename and edit your clips. Every detail is written into the file itself, and the index rebuilds from the files.
 - **Metadata that Photos reads.** Date, time, place, aircraft and keywords go into QuickTime tags. Add clips to Photos, into an album.
-- **Safe card format.** When every clip verified, QuadCam can erase an analog card as FAT32 and unmount it, behind strict guards. Card prep formats a spare card whose clips are all in the library. It never formats a DJI card or air unit.
+- **Safe card format.** When every clip verified, QuadCam can erase an analog card as FAT32 and unmount it, behind strict guards. Card prep formats a spare card whose clips are all in the library: FAT32 for an analog DVR, exFAT for a DJI goggles card. It never formats a DJI device over USB.
 - **Room for the next flight.** With **Delete clips after import** on, QuadCam deletes each clip that verified from the card, DJI air units included, and leaves every other file. It is off by default. See [Settings](docs/settings.md#delete-clips-after-import).
 - **Gear, early.** QuadCam finds EdgeTX radios, goggles and DVR cards, and flight controller ports when they are plugged in, and keeps the devices you name. Gear has its own sidebar section and a status bar that shows when a card is safe to unplug. It can draw and check a Betaflight OSD layout from a dump, read an EdgeTX radio's card (models, the selected model, the radio clock) and preview edits to it. See [Gear](docs/gear.md).
 - **Scripts and agents.** A command-line tool and an MCP server do everything the app does.
@@ -25,8 +25,8 @@ QuadCam is a macOS app that imports the recordings from your FPV goggles into a 
 
 QuadCam reads two sources, on a card or in a folder:
 
-- **Analog goggle and DVR recordings:** MJPEG video in AVI files (`PICT0001.AVI` and similar), at the root or in folders such as `DCIM/`.
-- **DJI recordings:** MP4 files named by the unit's clock (`DJI_20261004183012_0001_D.MP4`) under `DCIM/DJI_*/`, for example from an O4 air unit over USB or a goggles card. Older `DJIG0001.MP4` names count too. With **Keep originals** on, QuadCam keeps the `.SRT` file next to the original. QuadCam expects the unit to record on arm and stop on disarm, so each file holds one flight and rarely needs a cut.
+- **Analog goggle and DVR recordings:** MJPEG video in AVI files (`PICT0001.AVI` and similar), at the root or in folders such as `DCIM/`. Known to work: the Fat Shark Echo. Other DVRs that write MJPEG AVI should work. QuadCam does not read DVRs that write `.TS`, `.MOV` or `.MP4` yet.
+- **DJI recordings:** MP4 files named by the unit's clock (`DJI_20261004183012_0001_D.MP4`) under `DCIM/DJI_*/`, for example from an O4 air unit over USB or a goggles card. Older `DJIG0001.MP4` names count too. With **Keep originals** on, QuadCam keeps the `.SRT` file next to the original. QuadCam assumes the default setting, where the unit records on arm and stops on disarm, so each file usually holds one flight. Manual recording works too, but QuadCam does not join DJI files that the unit split from one long recording.
 
 The app watches for removable volumes that hold either kind, cards in the Mac's built-in SD slot included, and shows the source next to each card. For dates and moments, it reads EdgeTX "SD Logs" CSV files.
 
@@ -52,9 +52,9 @@ The cask installs:
 
 - `QuadCam.app` in `/Applications`
 - the command-line tool `quadcam-cli` on your `PATH`
-- ffmpeg, which QuadCam needs to convert and verify clips
+- Homebrew's ffmpeg, which QuadCam needs to convert and verify clips
 
-QuadCam can also download ffmpeg itself as a module, in **Settings > Modules**. See [Modules and notices](docs/modules.md).
+QuadCam can also download ffmpeg itself as a module, in **Settings > Modules**. Once the module is installed, Homebrew's ffmpeg is optional. See [Modules and notices](docs/modules.md).
 
 To update, run `brew upgrade --cask quadcam`. To remove the app, run `brew uninstall --cask quadcam`. Uninstall keeps your settings and your videos.
 
@@ -68,7 +68,7 @@ NKMK Digital Co. signs QuadCam with its Apple Developer ID, and Apple notarizes 
 2. **Wait for the copy.** The Import sheet opens and copies every clip to a local folder first. The sheet header shows how many files are left and the progress of the current one. You can pull the card when the copy is done.
 3. **Review.** Set the aircraft, the place and the date for all clips at once, or per clip. Type a short name for each clip. Select **Skip** for clips you do not want, such as bench tests. A recording that the DVR split into several files shows as one clip with its files; **Keep files separate** imports them one by one.
 4. **Add radio logs (optional).** Under **Radio logs**, select **Choose…** and pick your radio's `LOGS` folder. QuadCam then dates the clips and finds their moments.
-5. **Trim (optional).** Select a clip to play it, see its moments and set cuts. **Split by flight** adds one cut per radio-log pack.
+5. **Trim (optional).** Select a clip to play it, see its moments and set cuts. **Split by flight** adds one cut per radio-log flight.
 6. **Add to Library** (Command-Return). QuadCam converts and verifies each clip. When **Delete clips after import** is on in Settings, a checkbox above the button shows it; clear it to keep the clips on the card for this import.
 7. **Finish.** Add the files to Photos, make the card safe to remove, or format it (analog cards only). **Done · show in Library** shows the new clips under **Last import**.
 

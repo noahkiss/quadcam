@@ -65,24 +65,24 @@ pub fn frame_moment(m: &Moment, duration: f64) -> Span {
     }
 }
 
-/// Seconds added before arm and after disarm when a pack becomes a cut, at most half the
-/// gap to the next pack.
+/// Seconds added before arm and after disarm when a flight becomes a cut, at most half the
+/// gap to the next flight.
 pub const FLIGHT_PAD_S: f64 = 2.0;
-/// One pack is worth a cut only when it leaves out at least this much of the clip...
+/// One flight is worth a cut only when it leaves out at least this much of the clip...
 pub const SPLIT_MIN_LEFT_S: f64 = 10.0;
 /// ...and at least this share of it.
 pub const SPLIT_MIN_LEFT_SHARE: f64 = 0.1;
 
-/// "Split by flight": one cut per radio-log pack (`packs`, armed ranges in clip seconds),
-/// padded by `FLIGHT_PAD_S` and clamped to the clip. A pack outside the clip, or shorter
+/// "Split by flight": one cut per radio-log flight (`flights`, armed ranges in clip seconds),
+/// padded by `FLIGHT_PAD_S` and clamped to the clip. A flight outside the clip, or shorter
 /// than `MIN_CUT_S` inside it, gives no cut. Refuses when there is nothing to split: no
-/// packs in the clip, or one pack that covers nearly all of it.
-pub fn flight_cuts(what: &str, packs: &[Span], duration: f64) -> Result<Vec<Span>> {
-    if packs.is_empty() {
-        bail!("{what}: nothing to split; the clip has no radio-log packs (match the logs first)");
+/// flights in the clip, or one flight that covers nearly all of it.
+pub fn flight_cuts(what: &str, flights: &[Span], duration: f64) -> Result<Vec<Span>> {
+    if flights.is_empty() {
+        bail!("{what}: nothing to split; the clip has no radio-log flights (match the logs first)");
     }
     let r = |x: f64| (x * 10.0).round() / 10.0;
-    let mut sorted: Vec<Span> = packs.to_vec();
+    let mut sorted: Vec<Span> = flights.to_vec();
     sorted.sort_by(|a, b| a.start.total_cmp(&b.start));
     let mut out = Vec::new();
     for (i, p) in sorted.iter().enumerate() {
@@ -103,16 +103,16 @@ pub fn flight_cuts(what: &str, packs: &[Span], duration: f64) -> Result<Vec<Span
         }
     }
     if out.is_empty() {
-        bail!("{what}: nothing to split; no radio-log pack falls inside the clip");
+        bail!("{what}: nothing to split; no radio-log flight falls inside the clip");
     }
     if let [one] = &out[..] {
         let left = duration - one.secs();
         if left < SPLIT_MIN_LEFT_S.max(duration * SPLIT_MIN_LEFT_SHARE) {
-            bail!("{what}: nothing to split; its one pack covers nearly the whole clip");
+            bail!("{what}: nothing to split; its one flight covers nearly the whole clip");
         }
     }
     if out.len() > MAX_CUTS {
-        bail!("{what}: {} packs; at most {MAX_CUTS} cuts", out.len());
+        bail!("{what}: {} flights; at most {MAX_CUTS} cuts", out.len());
     }
     Ok(out)
 }
@@ -235,9 +235,9 @@ mod tests {
 
     #[test]
     fn flights_become_padded_cuts_clamped_to_the_clip() {
-        // Three packs; the first starts 1 s in, the last runs past the 300 s clip.
-        let packs = [span(1.0, 80.0), span(83.0, 150.0), span(200.0, 320.0)];
-        let c = flight_cuts("clip 0", &packs, 300.0).unwrap();
+        // Three flights; the first starts 1 s in, the last runs past the 300 s clip.
+        let flights = [span(1.0, 80.0), span(83.0, 150.0), span(200.0, 320.0)];
+        let c = flight_cuts("clip 0", &flights, 300.0).unwrap();
         assert_eq!(
             c,
             vec![
@@ -247,7 +247,7 @@ mod tests {
                 span(198.0, 300.0),
             ]
         );
-        // Unsorted packs and a pack wholly outside the clip.
+        // Unsorted flights and a flight wholly outside the clip.
         let c = flight_cuts(
             "clip 0",
             &[span(50.0, 90.0), span(10.0, 30.0), span(400.0, 500.0)],
@@ -255,26 +255,27 @@ mod tests {
         )
         .unwrap();
         assert_eq!(c, vec![span(8.0, 32.0), span(48.0, 92.0)]);
-        // A log offset that puts a pack before the clip start: only its tail stays.
+        // A log offset that puts a flight before the clip start: only its tail stays.
         let c = flight_cuts("clip 0", &[span(-20.0, 40.0), span(60.0, 100.0)], 120.0).unwrap();
         assert_eq!(c, vec![span(0.0, 42.0), span(58.0, 102.0)]);
     }
 
     #[test]
     fn nothing_to_split() {
-        let err = |packs: &[Span], d: f64| flight_cuts("clip 0", packs, d).unwrap_err().to_string();
-        assert!(err(&[], 100.0).contains("no radio-log packs"));
-        assert!(err(&[span(200.0, 300.0)], 100.0).contains("no radio-log pack falls inside"));
-        // One pack that fills the clip: nothing to split.
+        let err =
+            |flights: &[Span], d: f64| flight_cuts("clip 0", flights, d).unwrap_err().to_string();
+        assert!(err(&[], 100.0).contains("no radio-log flights"));
+        assert!(err(&[span(200.0, 300.0)], 100.0).contains("no radio-log flight falls inside"));
+        // One flight that fills the clip: nothing to split.
         assert!(err(&[span(1.0, 95.0)], 100.0).contains("covers nearly the whole clip"));
-        // 600 s clip, one 520 s pack: 76 s left out (more than 10 s and 10 %), so it cuts.
+        // 600 s clip, one 520 s flight: 76 s left out (more than 10 s and 10 %), so it cuts.
         assert_eq!(
             flight_cuts("clip 0", &[span(30.0, 550.0)], 600.0).unwrap(),
             vec![span(28.0, 552.0)]
         );
-        // 600 s clip, one 560 s pack: 36 s left out is under 10 %: nothing to split.
+        // 600 s clip, one 560 s flight: 36 s left out is under 10 %: nothing to split.
         assert!(err(&[span(20.0, 580.0)], 600.0).contains("covers nearly"));
-        // Two packs always split, even when together they cover the clip.
+        // Two flights always split, even when together they cover the clip.
         assert_eq!(
             flight_cuts("clip 0", &[span(0.0, 50.0), span(52.0, 100.0)], 100.0)
                 .unwrap()

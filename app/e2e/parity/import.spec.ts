@@ -238,7 +238,7 @@ test("a recording the DVR split shows as one clip of its files; Keep files separ
   await expect(row(page, "PICT0002.AVI")).toHaveCount(0);
 });
 
-test("Split by flight adds one cut per radio-log pack to the session clip", async ({ app, page }) => {
+test("Split by flight adds one cut per radio-log flight to the session clip", async ({ app, page }) => {
   await app.open("joined");
   await page.getByRole("navigation", { name: "Library" }).getByRole("button", { name: /Unfinished import/ }).click();
   await row(page, "PICT0001.AVI").getByText("2:05").click();

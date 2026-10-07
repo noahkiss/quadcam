@@ -358,7 +358,7 @@ pub struct DateSuggestion {
 }
 
 /// Flight numbers from the log rows inside `windows`. `zero` is the log time at clip
-/// second 0 (the first armed row): the packs' ranges are in seconds from it.
+/// second 0 (the first armed row): the flights' ranges are in seconds from it.
 pub fn flight_stats(
     rows: &[logs::LogRow],
     windows: &[(NaiveDateTime, NaiveDateTime)],
@@ -380,7 +380,7 @@ pub fn flight_stats(
             .iter()
             .map(|(a, b)| (*b - *a).num_milliseconds() as f64 / 1000.0)
             .sum(),
-        packs: windows.len(),
+        flights: windows.len(),
         // 0 V and 0 % mean no telemetry yet, not a reading.
         min_rx_bat_v: min(&|r| r.rx_bat.filter(|v| *v > 0.0)),
         min_lq: min(&|r| r.lq.filter(|v| *v > 0.0)),
@@ -392,7 +392,7 @@ pub fn flight_stats(
                     .map(|s| ((s.thr + 1024.0) / 2048.0).clamp(0.0, 1.0))
             })
             .fold(None, |m: Option<f64>, v| Some(m.map_or(v, |m| m.max(v)))),
-        pack_spans: windows
+        flight_spans: windows
             .iter()
             .map(|(a, b)| Span {
                 start: secs(*a),
@@ -473,7 +473,7 @@ pub fn plan_dates(
 
 /// Suggests a date per clip. A clip with a believable clock of its own takes it ("clip
 /// clock"); every other clip gets the import date. Radio logs then match by shape
-/// (`logmatch`): pack lengths, order and gaps, with the profiles' EdgeTX models as a
+/// (`logmatch`): flight lengths, order and gaps, with the profiles' EdgeTX models as a
 /// filter. A match gives the clip its flight numbers and moments, and its date and time
 /// when the radio clock is believable (for a clocked clip, only within `clock_skew_s` of
 /// its clock). A log of a reset radio clock still matches; the clip keeps its own date.
@@ -574,7 +574,7 @@ pub fn plan_dates_with(
     let clock_ok = logs::day_is_plausible(day, import_day, tun);
     if !clock_ok {
         plan.warnings.push(format!(
-            "Log day {day} is wrong or far from today (the radio clock may have reset). Matching by pack lengths; clips keep their own date."
+            "Log day {day} is wrong or far from today (the radio clock may have reset). Matching by flight lengths; clips keep their own date."
         ));
     }
     let segs = logmatch::segments(&files, tun);
@@ -1142,8 +1142,8 @@ pub(crate) mod tests {
         }
     }
 
-    /// One pack, 10:00:00 to 10:03:00 on 2026-09-28, a row a second.
-    fn one_pack_log() -> tempfile::TempDir {
+    /// One flight, 10:00:00 to 10:03:00 on 2026-09-28, a row a second.
+    fn one_flight_log() -> tempfile::TempDir {
         let d = tempfile::tempdir().unwrap();
         std::fs::create_dir(d.path().join("LOGS")).unwrap();
         let mut csv = String::from("Date,Time,1RSS(dB),RQly(%)\n");
@@ -1210,7 +1210,7 @@ pub(crate) mod tests {
 
     #[test]
     fn a_log_dates_a_clocked_clip_only_within_the_skew() {
-        let logs = one_pack_log();
+        let logs = one_flight_log();
         let today = NaiveDate::from_ymd_opt(2026, 9, 30).unwrap();
         let tun = Tunables::default();
         assert_eq!(tun.clock_skew_s, 300.0);
@@ -1320,9 +1320,9 @@ pub(crate) mod tests {
     }
 
     /// Three sessions on one day, the last never disarmed (the log ends armed). A DJI clip
-    /// recorded during the last one matches it, not the day's first pack.
+    /// recorded during the last one matches it, not the day's first flight.
     #[test]
-    fn a_dji_clip_matches_the_pack_at_its_clock_not_the_first_of_the_day() {
+    fn a_dji_clip_matches_the_flight_at_its_clock_not_the_first_of_the_day() {
         let d = tempfile::tempdir().unwrap();
         std::fs::create_dir(d.path().join("LOGS")).unwrap();
         std::fs::write(
@@ -1364,10 +1364,10 @@ pub(crate) mod tests {
         assert_eq!(s.time.unwrap().to_string(), "18:36:34.500");
         assert_eq!(s.segments, 1);
         let f = s.flight.as_ref().unwrap();
-        assert_eq!((f.packs, f.armed_s), (1, 113.5));
-        // The pack's armed range, in clip seconds from the first armed row.
+        assert_eq!((f.flights, f.armed_s), (1, 113.5));
+        // The flight's armed range, in clip seconds from the first armed row.
         assert_eq!(
-            f.pack_spans,
+            f.flight_spans,
             vec![Span {
                 start: 0.0,
                 end: 113.5
@@ -1380,7 +1380,7 @@ pub(crate) mod tests {
             .contains("log METEOR75 → profile Meteor"));
     }
 
-    /// An analog clip with dead air: the packs sit in its picture stretches, which places
+    /// An analog clip with dead air: the flights sit in its picture stretches, which places
     /// the log in the clip. The clip starts before the arm, and its time says so.
     #[test]
     fn a_picture_places_the_log_and_the_clip_start() {
@@ -1426,17 +1426,17 @@ pub(crate) mod tests {
             s.time,
             Some(arm - chrono::Duration::milliseconds((o * 1000.0) as i64))
         );
-        // The pack ranges stay timed from the first armed row; the plan adds the offset.
-        assert_eq!(s.flight.as_ref().unwrap().pack_spans[0].start, 0.0);
+        // The flight ranges stay timed from the first armed row; the plan adds the offset.
+        assert_eq!(s.flight.as_ref().unwrap().flight_spans[0].start, 0.0);
         assert!(s
             .match_reason
             .as_deref()
             .unwrap()
-            .contains("packs fit 2 of 2 picture stretches"));
+            .contains("flights fit 2 of 2 picture stretches"));
     }
 
     /// The radio clock battery was dead: every power-on starts again at 2000-01-01 00:00.
-    /// Clips still match by pack length and order, and keep their own date.
+    /// Clips still match by flight length and order, and keep their own date.
     #[test]
     fn a_log_with_a_reset_clock_matches_by_shape() {
         let d = tempfile::tempdir().unwrap();
@@ -1444,9 +1444,9 @@ pub(crate) mod tests {
         std::fs::write(
             d.path().join("LOGS/AIR65 II-2000-01-01.csv"),
             edgetx_csv(&[
-                // First power-on: one 3-minute pack.
+                // First power-on: one 3-minute flight.
                 ("2000-01-01", "00:00:40", "00:03:40"),
-                // Second power-on: the clock starts over. Packs of 100 s and 160 s.
+                // Second power-on: the clock starts over. Flights of 100 s and 160 s.
                 ("2000-01-01", "00:00:30", "00:02:10"),
                 ("2000-01-01", "00:03:00", "00:05:40"),
             ]),
@@ -1480,12 +1480,12 @@ pub(crate) mod tests {
                 .unwrap()
                 .contains("radio clock wrong"));
         }
-        // The second clip took the 100 s pack of the second power-on, not rows of the first.
+        // The second clip took the 100 s flight of the second power-on, not rows of the first.
         assert_eq!(p.suggestions[1].flight.as_ref().unwrap().armed_s, 100.0);
-        // The third took the 160 s pack; its range starts at the clip's first armed row.
+        // The third took the 160 s flight; its range starts at the clip's first armed row.
         let f = p.suggestions[2].flight.as_ref().unwrap();
         assert_eq!(
-            f.pack_spans,
+            f.flight_spans,
             vec![Span {
                 start: 0.0,
                 end: 160.0
@@ -1493,7 +1493,7 @@ pub(crate) mod tests {
         );
     }
 
-    /// Two packs of the same length and one clip without a clock: either fits, so the match
+    /// Two flights of the same length and one clip without a clock: either fits, so the match
     /// stays "likely" and says so.
     #[test]
     fn an_ambiguous_match_stays_likely() {
@@ -1528,7 +1528,7 @@ pub(crate) mod tests {
     fn edgetx_models_pick_the_log_for_the_source() {
         let d = tempfile::tempdir().unwrap();
         std::fs::create_dir(d.path().join("LOGS")).unwrap();
-        // The analog quad flew a 120 s pack at 10:00:00, the DJI quad one at 10:00:05.
+        // The analog quad flew a 120 s flight at 10:00:00, the DJI quad one at 10:00:05.
         std::fs::write(
             d.path().join("LOGS/AIR65 II-2026-09-28.csv"),
             edgetx_csv(&[("2026-09-28", "10:00:00", "10:02:00")]),

@@ -112,7 +112,7 @@ pub struct Suggestion {
     pub reason: Option<String>,
     /// For the first file of a recording the DVR split into files (it has `files`): true imports them as one clip, false as clips of their own.
     pub joined: Option<bool>,
-    /// true adds one cut per radio-log pack (armed range plus up to 2 s each side), after cuts. Fails when the clip has no packs, or one pack that covers nearly all of it.
+    /// true adds one cut per radio-log flight (armed range plus up to 2 s each side), after cuts. Fails when the clip has no flights, or one flight that covers nearly all of it.
     pub split_by_flight: Option<bool>,
     /// Required when `cuts` drops a cut that was already exported: keep its file (it becomes a clip of its own) or move it to the Trash. Ask the person which.
     #[schemars(extend("enum" = ["keep", "trash"]))]
@@ -178,7 +178,7 @@ pub struct FormatCardArgs {
     pub device: Option<String>,
     /// Volume UUID from the dry run.
     pub volume_uuid: Option<String>,
-    /// FAT32 volume name, default DVR.
+    /// Volume name, default DVR.
     #[schemars(length(max = 11))]
     pub label: Option<String>,
     /// Must be true to erase.

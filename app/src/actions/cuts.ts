@@ -33,7 +33,7 @@ export async function saveLibraryCuts(id: string) {
   }
 }
 
-/** "Split by flight": one cut per radio-log pack, added to the clip's cut list. */
+/** "Split by flight": one cut per radio-log flight, added to the clip's cut list. */
 export async function splitByFlight(call: () => Promise<CutChange>, before: number) {
   try {
     const r = await call();

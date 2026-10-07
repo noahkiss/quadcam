@@ -178,6 +178,30 @@ pub fn presence() -> Vec<Presence> {
     out
 }
 
+/// Whether a DJI USB device (an air unit, or goggles in storage mode) is attached, from
+/// `ioreg`; true when `ioreg` fails. The format guard reads it before it erases a DJI
+/// volume. False in a process
+/// started by cargo unless `QUADCAM_SERIAL=real`, like `presence`.
+pub fn dji_usb_attached() -> bool {
+    if !super::serial::serial_enabled(
+        std::env::var("QUADCAM_SERIAL").ok().as_deref(),
+        std::env::var_os("CARGO_MANIFEST_DIR").is_some(),
+    ) {
+        return false;
+    }
+    std::process::Command::new("/usr/sbin/ioreg")
+        .args(["-r", "-a", "-c", "IOUSBHostDevice"])
+        .output()
+        .ok()
+        .filter(|o| o.status.success())
+        // An ioreg that cannot answer counts as attached: the guard refuses.
+        .is_none_or(|o| {
+            parse_usb(&o.stdout)
+                .iter()
+                .any(|p| matches!(p, Presence::Usb { vid, .. } if *vid == DJI_VID))
+        })
+}
+
 /// On demand only, never in a poll: whether the card behind `disk` is really in. After
 /// `unmountDisk`, a microSD pulled out of a full-size adapter (in the built-in slot or a USB
 /// reader) leaves the disk node in place: the adapter holds the card-detect switch. `diskutil mountDisk` then says it mounted, but no
