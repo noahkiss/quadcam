@@ -299,6 +299,10 @@ claude mcp add quadcam -- "$(brew --prefix)/bin/quadcam-cli" mcp
 
 ## Rules
 
+- **Look at GPL code; never copy it.** QuadCam is MIT. Betaflight, EdgeTX, ExpressLRS and esptool
+  are GPL. Read their source and docs to learn a protocol or file format, then write QuadCam's own
+  code and tables. Talk to them only through protocols, files and separate processes. Never bundle
+  a GPL binary in the app; download it from upstream at run time (`docs/gear-design.md`, Licensing).
 - **Never erase a real disk while testing.** The format tests only erase a disk image they
   created, and they assert `BusProtocol == "Disk Image"` first. Keep it that way.
 - Every format guard runs again inside `disk::format_card`, immediately before
