@@ -28,7 +28,7 @@ test("the Flight tab shows the radio-log numbers", async ({ page }) => {
   await expect(page.getByRole("tab", { name: "Flight" })).toHaveAttribute("aria-selected", "true");
   await expect(page.getByText("Armed time")).toBeVisible();
   await expect(page.getByText("3.42 V")).toBeVisible();
-  await expect(page.getByText("2 packs")).toBeVisible();
+  await expect(page.getByText("2 flights")).toBeVisible();
 });
 
 test("Details edits go to the core and undo", async ({ app, page }) => {
@@ -110,7 +110,7 @@ test("the menu bar's next and previous clip step through the library", async ({ 
   await expect(page.getByText("gap-run", { exact: true }).filter({ visible: true })).toHaveCount(1);
 });
 
-test("Split by flight adds one cut per radio-log pack, unsaved until Save", async ({ app, page }) => {
+test("Split by flight adds one cut per radio-log flight, unsaved until Save", async ({ app, page }) => {
   await page.getByRole("button", { name: "Split by flight (2)" }).click();
   await expect.poll(async () => await app.method("library_split")).toContainEqual({ id: "xd0d144c9ce319e86" });
   await expect(page.getByRole("status")).toContainText("2 cuts added, one per flight.");

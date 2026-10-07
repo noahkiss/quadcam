@@ -135,7 +135,7 @@ enum Cmd {
         /// Remove every cut.
         #[arg(long, conflicts_with = "ranges")]
         clear: bool,
-        /// Add one cut per radio-log pack (the armed range plus up to 2 s each side).
+        /// Add one cut per radio-log flight (the armed range plus up to 2 s each side).
         #[arg(long, conflicts_with = "keep")]
         by_flight: bool,
         /// Seconds into the clip where the radio log's first armed row falls.
@@ -326,7 +326,7 @@ enum LibCmd {
         ranges: Vec<String>,
         #[arg(long, conflicts_with = "ranges")]
         clear: bool,
-        /// Add one cut per radio-log pack (the armed range plus up to 2 s each side).
+        /// Add one cut per radio-log flight (the armed range plus up to 2 s each side).
         #[arg(long, conflicts_with_all = ["ranges", "clear"])]
         by_flight: bool,
         /// For exported cuts the new list drops: keep their files or move them to the Trash.

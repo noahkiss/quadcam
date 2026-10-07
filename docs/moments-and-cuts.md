@@ -71,14 +71,14 @@ A clip can have up to 20 cuts.
 
 ### Split by flight
 
-When a radio log matched the clip, **Split by flight (N)** adds one cut per pack, N being the number of packs. Each cut covers the pack from arm to disarm, plus up to 2 seconds before and after. Between two close packs, each cut gets at most half the gap, so the cuts do not overlap. Each cut stops at the start and the end of the clip, and a pack outside the clip gives no cut.
+When a radio log matched the clip, **Split by flight (N)** adds one cut per flight, N being the number of flights. Each cut covers the flight from arm to disarm, plus up to 2 seconds before and after. Between two close flights, each cut gets at most half the gap, so the cuts do not overlap. Each cut stops at the start and the end of the clip, and a flight outside the clip gives no cut.
 
 - The cuts are added to the cuts the clip has. A range the clip already has is not added twice.
 - The original clip stays. On import, or with **Save N cuts** in the library, each cut becomes a file like any other cut.
-- The cut files are numbered like other cuts, in time order: `_cut1`, `_cut2`. With no other cuts, the first pack is `_cut1`.
-- There is nothing to split when the clip has no packs, or when its one pack leaves out less than 10 seconds or 10 % of the clip. QuadCam then says so and changes nothing.
-- **Arm is here** moves the packs with the moments, so set it first.
-- Library clips imported before QuadCam 0.6.3 do not have the pack times. Run **Match radio logs** in Settings > Library first.
+- The cut files are numbered like other cuts, in time order: `_cut1`, `_cut2`. With no other cuts, the first flight is `_cut1`.
+- There is nothing to split when the clip has no flights, or when its one flight leaves out less than 10 seconds or 10 % of the clip. QuadCam then says so and changes nothing.
+- **Arm is here** moves the flights with the moments, so set it first.
+- Library clips imported before QuadCam 0.6.3 do not have the flight times. Run **Match radio logs** in Settings > Library first.
 
 The command line: `quadcam-cli cut 0 --by-flight` and `quadcam-cli library cut <id> --by-flight --export`. An agent: `split_by_flight` in `quadcam_suggest`, or the `split_by_flight` action of `quadcam_library_files`.
 

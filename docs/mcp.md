@@ -31,7 +31,7 @@ The server has 19 tools.
 | `quadcam_load_clips` | Stages, checks, and dates a card or a folder. Joins recordings the DVR split into files; `join=false` keeps them apart for that load. See [Joined recordings](library.md#joined-recordings) |
 | `quadcam_read_clips` | Reads the clips, their source, plans, moments, keep ranges and cuts. Returns thumbnails as images. The date source reads `radio log`, `clip clock`, `import` or `edited` |
 | `quadcam_match_logs` | Dates the clips from EdgeTX logs |
-| `quadcam_suggest` | Suggests names, dates, times, notes, skips, cuts, the log offset, or metadata (profile, place or location, keywords, author). `split_by_flight` adds one cut per radio-log pack; `joined` joins or parts a split recording |
+| `quadcam_suggest` | Suggests names, dates, times, notes, skips, cuts, the log offset, or metadata (profile, place or location, keywords, author). `split_by_flight` adds one cut per radio-log flight; `joined` joins or parts a split recording |
 | `quadcam_export` | Converts and verifies clips and cuts. Can also add them to Photos. When the `delete_clips_after_import` setting is on, deletes the clips that verified from the card; `keep_clips=true` keeps them for that run. See [Settings](settings.md#delete-clips-after-import) |
 | `quadcam_verify` | Checks the outputs again |
 | `quadcam_add_to_photos` | Adds verified outputs to Photos |
@@ -44,7 +44,7 @@ The server has 19 tools.
 |---|---|
 | `quadcam_library` | Lists and searches the clips already in the library (read-only) |
 | `quadcam_library_edit` | Changes library clips: rating, flag, name, note, keywords, author, place, aircraft, date, time |
-| `quadcam_library_files` | Sets and writes cuts, adds one cut per radio-log pack (`split_by_flight`), moves clips to the Trash, adds them to Photos, rebuilds the index, renames clips to the file-name date format, matches radio logs to library clips |
+| `quadcam_library_files` | Sets and writes cuts, adds one cut per radio-log flight (`split_by_flight`), moves clips to the Trash, adds them to Photos, rebuilds the index, renames clips to the file-name date format, matches radio logs to library clips |
 
 **Setup:**
 

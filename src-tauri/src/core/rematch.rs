@@ -41,10 +41,10 @@ pub struct LibMatch {
     pub log_date: Option<NaiveDate>,
     pub log_time: Option<NaiveTime>,
     pub log_model: Option<String>,
-    pub packs: usize,
+    pub flights: usize,
     pub reason: Option<String>,
     /// The clip second of the first armed row, when the clip's picture placed the log.
-    /// `flight.pack_spans` are in clip seconds with it.
+    /// `flight.flight_spans` are in clip seconds with it.
     pub log_offset_s: Option<f64>,
     pub flight: Option<FlightStats>,
     pub moments: usize,
@@ -189,7 +189,7 @@ impl Core {
                     log_date: dated.then_some(s.date),
                     log_time: if dated { s.time } else { None },
                     log_model: s.log_model.clone(),
-                    packs: s.segments,
+                    flights: s.segments,
                     reason: s.match_reason.clone(),
                     log_offset_s: s.log_offset_s,
                     flight: s.flight.as_ref().map(|f| f.shifted(offset)),

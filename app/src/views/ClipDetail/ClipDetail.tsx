@@ -23,7 +23,7 @@ import styles from "./ClipDetail.module.css";
 
 function libTrimModel(c: LibClip): TrimModel {
   const cuts = [...c.cuts.map((k) => ({ start: k.start, end: k.end, state: "saved" as const, file: k.path })), ...(c.pending_cuts || []).map((k) => ({ start: k.start, end: k.end, state: "new" as const }))].sort((a, b) => a.start - b.start);
-  return { key: `lib:${c.id}`, duration: c.duration, moments: c.moments, deadAir: deadOf(c), keep: c.keep, cuts, hasLog: false, logOffset: 0, packs: c.stats?.pack_spans.length ?? 0 };
+  return { key: `lib:${c.id}`, duration: c.duration, moments: c.moments, deadAir: deadOf(c), keep: c.keep, cuts, hasLog: false, logOffset: 0, flights: c.stats?.flight_spans.length ?? 0 };
 }
 
 /** The open clip: player, moments, the trim editor and the inspector. */

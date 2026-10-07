@@ -269,7 +269,7 @@ function SourceChip({ plan: p, hasLogs }: { plan: ClipPlan; hasLogs: boolean }) 
     return (
       <Chip icon="radio" tint={p.badge === "likely" ? "yellow" : "green"} title={why}>
         {p.time ? `radio log ${p.time.slice(0, 5)}` : "radio log"}
-        {p.segments > 1 ? ` · ${p.segments} packs` : ""}
+        {p.segments > 1 ? ` · ${p.segments} flights` : ""}
         {likely}
       </Chip>
     );
@@ -312,7 +312,7 @@ function sessionTrimModel(s: Session, c: Clip, p: ClipPlan): TrimModel {
     hasLog: p.source === "log" || moments.length > 0,
     logOffset: p.log_offset_s,
     logInterval: p.log_interval_s,
-    packs: p.flight?.pack_spans.length ?? 0,
+    flights: p.flight?.flight_spans.length ?? 0,
   };
 }
 

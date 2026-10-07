@@ -367,7 +367,7 @@ impl<B: Backend> Server<B> {
                         let id = one()?;
                         let change = self.backend.call("library_split", json!({"id": id}))?;
                         let n = change["cuts"].as_array().map(Vec::len).unwrap_or(0);
-                        let mut line = format!("Cut list saved: {n} cuts, one per radio-log pack added. New ranges are not files yet; call action export_cuts to write them.");
+                        let mut line = format!("Cut list saved: {n} cuts, one per radio-log flight added. New ranges are not files yet; call action export_cuts to write them.");
                         if x.export == Some(true) {
                             let made = self
                                 .backend

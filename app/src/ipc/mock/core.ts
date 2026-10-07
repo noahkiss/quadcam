@@ -194,7 +194,7 @@ export class MockCore {
         return { renamed: [], unchanged: this.lib.clips.length, skipped: [], failed: [] };
       case "library_match_logs":
         return {
-          clips: this.lib.clips.map((c) => ({ id: c.id, path: c.path, duration: c.duration, badge: "unmatched", log_day: null, log_date: null, log_time: null, log_model: null, packs: 0, reason: null, flight: null, moments: 0, applied: false })),
+          clips: this.lib.clips.map((c) => ({ id: c.id, path: c.path, duration: c.duration, badge: "unmatched", log_day: null, log_date: null, log_time: null, log_model: null, flights: 0, reason: null, flight: null, moments: 0, applied: false })),
           warnings: [],
         };
       case "library_rebuild":
@@ -222,12 +222,12 @@ export class MockCore {
         return this.sessionCuts(Number(p.id), p.cuts as Span[], p.removed_cuts as string | null);
       case "session_split": {
         const id = Number(p.id);
-        const add = flightCuts(this.plan(id).flight?.pack_spans || [], this.need().clips.find((c) => c.id === id)!.duration);
+        const add = flightCuts(this.plan(id).flight?.flight_spans || [], this.need().clips.find((c) => c.id === id)!.duration);
         return this.sessionCuts(id, withSpans(this.plan(id).cuts, add), null);
       }
       case "library_split": {
         const c = this.clip(String(p.id));
-        const add = flightCuts(c.stats?.pack_spans || [], c.duration);
+        const add = flightCuts(c.stats?.flight_spans || [], c.duration);
         return this.libraryCuts(c.id, withSpans([...c.cuts, ...c.pending_cuts], add), null);
       }
       case "profiles":
@@ -708,12 +708,12 @@ function manyClips(lib: LibraryView): LibraryView {
   return lib;
 }
 
-/** One cut per radio-log pack, as `trim::flight_cuts`: 2 s each side (at most half the gap),
+/** One cut per radio-log flight, as `trim::flight_cuts`: 2 s each side (at most half the gap),
  * clamped to the clip. */
-function flightCuts(packs: Span[], duration: number): Span[] {
-  if (!packs.length) throw "nothing to split; the clip has no radio-log packs (match the logs first)";
+function flightCuts(flights: Span[], duration: number): Span[] {
+  if (!flights.length) throw "nothing to split; the clip has no radio-log flights (match the logs first)";
   const r = (x: number) => Math.round(x * 10) / 10;
-  const ps = [...packs].sort((a, b) => a.start - b.start);
+  const ps = [...flights].sort((a, b) => a.start - b.start);
   const out = ps
     .map((p, i) => {
       const before = i ? Math.max(0, (p.start - ps[i - 1].end) / 2) : 2;
@@ -721,8 +721,8 @@ function flightCuts(packs: Span[], duration: number): Span[] {
       return { start: r(Math.max(0, p.start - Math.min(2, before))), end: r(Math.min(duration, p.end + Math.min(2, after))) };
     })
     .filter((k) => k.end - k.start >= 0.5);
-  if (!out.length) throw "nothing to split; no radio-log pack falls inside the clip";
-  if (out.length === 1 && duration - (out[0].end - out[0].start) < Math.max(10, duration * 0.1)) throw "nothing to split; its one pack covers nearly the whole clip";
+  if (!out.length) throw "nothing to split; no radio-log flight falls inside the clip";
+  if (out.length === 1 && duration - (out[0].end - out[0].start) < Math.max(10, duration * 0.1)) throw "nothing to split; its one flight covers nearly the whole clip";
   return out;
 }
 

@@ -177,7 +177,7 @@ function DaySummary({ clips: cs }: { clips: LibClip[] }) {
   const withStats = cs.filter((c) => c.stats);
   if (cs.length < 2 || (!withStats.length && !cs.some((c) => c.moments.length))) return null;
   const air = withStats.length ? withStats.reduce((a, c) => a + (c.stats!.armed_s || 0), 0) : cs.reduce((a, c) => a + flyingOf(c), 0);
-  const packs = withStats.reduce((a, c) => a + (c.stats!.packs || 0), 0);
+  const flights = withStats.reduce((a, c) => a + (c.stats!.flights || 0), 0);
   const volts = withStats.map((c) => c.stats!.min_rx_bat_v).filter((v): v is number => v != null);
   const best = cs
     .flatMap((c) => c.moments.map((m) => ({ c, m })))
@@ -191,9 +191,9 @@ function DaySummary({ clips: cs }: { clips: LibClip[] }) {
   );
   return (
     <section className={styles.summary} aria-label="Day summary">
-      {stat(String(cs.length), cs.length === 1 ? "flight" : "flights")}
+      {stat(String(cs.length), cs.length === 1 ? "clip" : "clips")}
       {stat(fmtDur(air), withStats.length ? "armed time" : "flying")}
-      {packs > 0 && stat(String(packs), packs === 1 ? "pack" : "packs")}
+      {flights > 0 && stat(String(flights), flights === 1 ? "flight" : "flights")}
       {volts.length > 0 && stat(`${Math.min(...volts).toFixed(2)} V`, "lowest battery")}
       {best.length > 0 && (
         <div className={styles.best}>

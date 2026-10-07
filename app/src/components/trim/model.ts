@@ -21,8 +21,8 @@ export interface TrimModel {
   hasLog: boolean;
   logOffset: number;
   logInterval?: number | null;
-  /** Radio-log packs ("Split by flight" makes one cut per pack). */
-  packs?: number;
+  /** Radio-log flights ("Split by flight" makes one cut per flight). */
+  flights?: number;
 }
 
 export interface Sel {

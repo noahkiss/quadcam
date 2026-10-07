@@ -330,7 +330,7 @@ Options:
       --keep                     Use the suggested keep ranges (the clip without its dead air)
       --clear                    Remove every cut
       --session <FILE>           Session file (default: ~/Library/Caches/app.quadcam/session.json)
-      --by-flight                Add one cut per radio-log pack (the armed range plus up to 2 s each side)
+      --by-flight                Add one cut per radio-log flight (the armed range plus up to 2 s each side)
       --log-offset <LOG_OFFSET>  Seconds into the clip where the radio log's first armed row falls
       --removed <REMOVED>        For cuts already exported that the new list drops: keep their files (as clips of their own) or move them to the Trash [possible values: keep, trash]
   -h, --help                     Print help
@@ -523,7 +523,7 @@ Arguments:
 Options:
       --clear              
       --json               Print one JSON object: {"ok":true,"result":...} or {"ok":false,"error":{...}}
-      --by-flight          Add one cut per radio-log pack (the armed range plus up to 2 s each side)
+      --by-flight          Add one cut per radio-log flight (the armed range plus up to 2 s each side)
       --session <FILE>     Session file (default: ~/Library/Caches/app.quadcam/session.json)
       --removed <REMOVED>  For exported cuts the new list drops: keep their files or move them to the Trash [possible values: keep, trash]
       --export             Write the cuts that are not files yet

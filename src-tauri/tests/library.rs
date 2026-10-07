@@ -864,7 +864,7 @@ fn library_update_checks_everything_first() {
 }
 
 /// "Split by flight" on a library clip: one cut per pack in the file's flight numbers, added
-/// to the cuts it has, written as `_cutN` files like any other cut. A clip without packs has
+/// to the cuts it has, written as `_cutN` files like any other cut. A clip without flights has
 /// nothing to split.
 #[test]
 fn split_by_flight_in_the_library() {
@@ -874,8 +874,8 @@ fn split_by_flight_in_the_library() {
     let id = a.clip.id.clone();
     let stats = quadcam_lib::metadata::FlightStats {
         armed_s: 1.6,
-        packs: 2,
-        pack_spans: vec![
+        flights: 2,
+        flight_spans: vec![
             Span {
                 start: 0.2,
                 end: 1.0,
@@ -918,7 +918,7 @@ fn split_by_flight_in_the_library() {
     };
     assert_eq!(cuts.len(), 3);
     assert!(by_name(&l, "backyard loops").clip.pending_cuts.is_empty());
-    // The other clip has no radio-log packs.
+    // The other clip has no radio-log flights.
     let b = by_name(&l, "gap run");
     let err = l.core.library_split_by_flight(&b.clip.id).unwrap_err();
     assert!(err.to_string().contains("nothing to split"), "{err:#}");

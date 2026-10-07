@@ -91,24 +91,28 @@ pub struct ClipMeta {
 #[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, specta::Type)]
 pub struct FlightStats {
     pub armed_s: f64,
-    pub packs: usize,
+    /// Armed segments of the radio log ("flights"). Files, indexes and sessions from QuadCam
+    /// 0.6.4 and earlier call it `packs`.
+    #[serde(alias = "packs")]
+    pub flights: usize,
     pub min_rx_bat_v: Option<f64>,
     pub min_lq: Option<f64>,
     pub min_rssi_db: Option<f64>,
     pub max_throttle: Option<f64>,
-    /// Each pack's armed range, in clip seconds (log time plus the log offset), in order.
-    /// Empty in files from before QuadCam 0.6.3; a library re-match writes it.
-    #[serde(default, skip_serializing_if = "Vec::is_empty")]
-    pub pack_spans: Vec<Span>,
+    /// Each flight's armed range, in clip seconds (log time plus the log offset), in order.
+    /// Empty in files from before QuadCam 0.6.3; a library re-match writes it. QuadCam 0.6.4
+    /// and earlier call it `pack_spans`.
+    #[serde(default, alias = "pack_spans", skip_serializing_if = "Vec::is_empty")]
+    pub flight_spans: Vec<Span>,
 }
 
 impl FlightStats {
-    /// The same numbers with the pack ranges moved by `by` seconds (a new log offset).
+    /// The same numbers with the flight ranges moved by `by` seconds (a new log offset).
     pub fn shifted(&self, by: f64) -> FlightStats {
         let r = |x: f64| (x * 1000.0).round() / 1000.0;
         FlightStats {
-            pack_spans: self
-                .pack_spans
+            flight_spans: self
+                .flight_spans
                 .iter()
                 .map(|s| Span {
                     start: r(s.start + by),
@@ -122,11 +126,11 @@ impl FlightStats {
     pub fn line(&self) -> String {
         let s = self.armed_s.round() as u64;
         let mut parts = vec![format!(
-            "armed {}:{:02} over {} pack{}",
+            "armed {}:{:02} over {} flight{}",
             s / 60,
             s % 60,
-            self.packs,
-            if self.packs == 1 { "" } else { "s" }
+            self.flights,
+            if self.flights == 1 { "" } else { "s" }
         )];
         if let Some(v) = self.min_rx_bat_v {
             parts.push(format!("min RxBt {v:.2} V"));
@@ -433,12 +437,12 @@ mod tests {
         };
         let stats = FlightStats {
             armed_s: 252.0,
-            packs: 2,
+            flights: 2,
             min_rx_bat_v: Some(3.52),
             min_lq: Some(71.0),
             min_rssi_db: None,
             max_throttle: Some(1.0),
-            pack_spans: Vec::new(),
+            flight_spans: Vec::new(),
         };
         let r = resolve(
             &meta,
@@ -456,7 +460,7 @@ mod tests {
         assert_eq!(r.author, "Pilot");
         assert_eq!(
             r.flight.as_deref(),
-            Some("armed 4:12 over 2 packs, min RxBt 3.52 V, min LQ 71%, max throttle 100%")
+            Some("armed 4:12 over 2 flights, min RxBt 3.52 V, min LQ 71%, max throttle 100%")
         );
         let base = crate::media::Meta {
             title: "Loops".into(),
@@ -502,5 +506,17 @@ mod tests {
             .iso6709(),
             "-03.5000+120.2500/"
         );
+    }
+
+    #[test]
+    fn flight_stats_from_0_6_4_read_packs_as_flights() {
+        let old = r#"{"armed_s":110.0,"packs":2,"min_rx_bat_v":3.42,"min_lq":71.0,"min_rssi_db":-96.0,"max_throttle":0.98,"pack_spans":[{"start":1.0,"end":50.0},{"start":60.0,"end":111.0}]}"#;
+        let f: FlightStats = serde_json::from_str(old).unwrap();
+        assert_eq!(f.flights, 2);
+        assert_eq!(f.flight_spans.len(), 2);
+        let now = serde_json::to_value(&f).unwrap();
+        assert_eq!(now["flights"], 2);
+        assert_eq!(now["flight_spans"][1]["end"], 111.0);
+        assert!(now.get("packs").is_none() && now.get("pack_spans").is_none());
     }
 }
