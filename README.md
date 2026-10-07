@@ -16,7 +16,7 @@ QuadCam is a macOS app that imports the recordings from your FPV goggles into a 
 - **Long recordings stay whole.** An analog DVR splits a long recording into files of about 10 minutes. QuadCam imports those files as one clip. See [Joined recordings](docs/library.md#joined-recordings).
 - **A library you can trust.** Rate, flag, search, rename and edit your clips. Every detail is written into the file itself, and the index rebuilds from the files.
 - **Metadata that Photos reads.** Date, time, place, aircraft and keywords go into QuickTime tags. Add clips to Photos, into an album.
-- **Safe card format.** When every clip verified, QuadCam can erase an analog card as FAT32 and eject it, behind strict guards. Card prep formats a spare card whose clips are all in the library. It never formats a DJI card or air unit.
+- **Safe card format.** When every clip verified, QuadCam can erase an analog card as FAT32 and unmount it, behind strict guards. Card prep formats a spare card whose clips are all in the library. It never formats a DJI card or air unit.
 - **Room for the next flight.** With **Delete clips after import** on, QuadCam deletes each clip that verified from the card, DJI air units included, and leaves every other file. It is off by default. See [Settings](docs/settings.md#delete-clips-after-import).
 - **Scripts and agents.** A command-line tool and an MCP server do everything the app does.
 
@@ -27,7 +27,7 @@ QuadCam reads two sources, on a card or in a folder:
 - **Analog goggle and DVR recordings:** MJPEG video in AVI files (`PICT0001.AVI` and similar), at the root or in folders such as `DCIM/`.
 - **DJI recordings:** MP4 files named by the unit's clock (`DJI_20261004183012_0001_D.MP4`) under `DCIM/DJI_*/`, for example from an O4 air unit over USB or a goggles card. Older `DJIG0001.MP4` names count too. With **Keep originals** on, QuadCam keeps the `.SRT` file next to the original. QuadCam expects the unit to record on arm and stop on disarm, so each file holds one flight and rarely needs a cut.
 
-The app watches for removable volumes that hold either kind and shows the source next to each card. For dates and moments, it reads EdgeTX "SD Logs" CSV files.
+The app watches for removable volumes that hold either kind, cards in the Mac's built-in SD slot included, and shows the source next to each card. For dates and moments, it reads EdgeTX "SD Logs" CSV files.
 
 Support for **HDZero and Walksnail** recordings is planned. QuadCam does not read them yet.
 
@@ -67,7 +67,7 @@ NKMK Digital Co. signs QuadCam with its Apple Developer ID, and Apple notarizes 
 4. **Add radio logs (optional).** Under **Radio logs**, select **Choose…** and pick your radio's `LOGS` folder. QuadCam then dates the clips and finds their moments.
 5. **Trim (optional).** Select a clip to play it, see its moments and set cuts. **Split by flight** adds one cut per radio-log pack.
 6. **Add to Library** (Command-Return). QuadCam converts and verifies each clip. When **Delete clips after import** is on in Settings, a checkbox above the button shows it; clear it to keep the clips on the card for this import.
-7. **Finish.** Add the files to Photos, eject the card, or format it (analog cards only). **Done · show in Library** shows the new clips under **Last import**.
+7. **Finish.** Add the files to Photos, make the card safe to remove, or format it (analog cards only). **Done · show in Library** shows the new clips under **Last import**.
 
 ![The Import sheet on the Review step: a list of clips with names, dates and times, and the selected clip's preview and trim editor](docs/images/import-review-dark.png)
 

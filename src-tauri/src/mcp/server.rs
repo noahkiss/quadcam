@@ -896,7 +896,7 @@ impl<B: Backend> Server<B> {
             "quadcam_eject" => {
                 let x: EjectArgs = args(a)?;
                 self.backend.call("eject", json!({"target": x.target}))?;
-                Ok((vec![text("Ejected.")], json!({"ejected": true})))
+                Ok((vec![text("Safe to remove.")], json!({"ejected": true})))
             }
             "quadcam_format_card" => {
                 let x: FormatCardArgs = args(a)?;
@@ -930,7 +930,7 @@ impl<B: Backend> Server<B> {
                     .call(if prep { "card_prep" } else { "format" }, req)?;
                 Ok((
                     vec![text(format!(
-                        "Erased {} as FAT32 {} and ejected it.",
+                        "Erased {} as FAT32 {}. It is safe to remove.",
                         plan["device"].as_str().unwrap_or("?"),
                         plan["label"].as_str().unwrap_or("DVR")
                     ))],

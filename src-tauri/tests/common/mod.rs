@@ -196,6 +196,20 @@ impl Image {
     pub fn is_attached(&self) -> bool {
         self.attached_disk().is_some()
     }
+
+    /// Our image is attached and its volume is mounted. After "safe to remove"
+    /// (`diskutil unmountDisk`) the image stays attached but nothing is mounted.
+    pub fn is_mounted(&self) -> bool {
+        self.attached_disk().is_some_and(|d| {
+            quadcam_lib::disk::info(&format!("{d}s1")).is_ok_and(|i| i.mount_point.is_some())
+        })
+    }
+
+    /// Mounts our image again after an unmount: detach, then attach at the same mount point.
+    pub fn remount(&mut self) {
+        self.detach();
+        self.attach();
+    }
 }
 
 impl Drop for Image {

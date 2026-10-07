@@ -146,7 +146,7 @@ api! {
     photos(params: PhotosParams) -> ShareReport = |c| c.add_to_photos(params.ids, params.album);
     /// Checks verified outputs again.
     verify(params: VerifyParams) -> Vec<VerifyReport> = |c| c.verify(params.ids);
-    /// Ejects a card.
+    /// Makes a card safe to remove (unmounts it; ejects a disk that is not a card).
     eject(params: EjectParams) -> Ejected =
         |c| c.eject(params.target.as_deref()).map(|_| Ejected { ejected: true });
     /// Runs every format guard and names the card that would be erased.

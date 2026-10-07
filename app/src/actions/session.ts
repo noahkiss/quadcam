@@ -1,4 +1,4 @@
-// Import actions: loading a card or folder, review edits, export, Photos, eject and the
+// Import actions: loading a card or folder, review edits, export, Photos, safe to remove and the
 // format step. The core owns the session throughout.
 import { api, errText, pickFolder } from "../ipc/api";
 import { on } from "../ipc/events";
@@ -93,7 +93,7 @@ export function sessionChanged(s: Session | null) {
   const hadCard = !!st.session?.card;
   const oldResults = st.session?.results.length || 0;
   if (hadCard && s && !s.card && s.warnings.some((w) => w.includes("erased"))) {
-    toast("Card erased and ejected.");
+    toast("Card erased. Safe to remove.");
     st.setSession(null);
     api.clearSession().catch(() => {});
     st.refreshVolumes();
@@ -257,7 +257,7 @@ export async function addToPhotos(album: string) {
 export async function eject() {
   try {
     await api.eject(null);
-    toast("Card ejected.");
+    toast("Safe to remove the card.");
     S().refreshVolumes();
   } catch (e) {
     toast(errText(e), true);

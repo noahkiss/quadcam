@@ -24,7 +24,7 @@ Formatting is not the only way to free a card. **Delete clips after import** (a 
 
 Immediately before it erases, QuadCam reads the disk information again and checks every guard:
 
-- The disk is not internal, and it is removable or ejectable.
+- The disk is not internal storage, and it is removable or ejectable. A card in the Mac's built-in SD slot counts as removable: macOS calls the slot internal, but the card in it is removable media on the Secure Digital bus.
 - The disk is not the boot disk and not `disk0`.
 - The disk is 64 GB or smaller.
 - The disk is the same card that the clips came from: same device and same volume UUID.
@@ -32,7 +32,7 @@ Immediately before it erases, QuadCam reads the disk information again and check
 - The volume is not a DJI card. A `DCIM/DJI_*` folder makes it one, even when it is empty.
 - The video system of the card allows a format.
 
-Then QuadCam runs `diskutil eraseDisk FAT32 <NAME> MBRFormat /dev/diskN` on the whole card, and ejects it at once.
+Then QuadCam runs `diskutil eraseDisk FAT32 <NAME> MBRFormat /dev/diskN` on the whole card. It then unmounts the card at once, so the card is safe to remove.
 
 ## Card prep
 

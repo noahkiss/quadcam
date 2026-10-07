@@ -9,7 +9,7 @@ import { base, fmtBytes, fmtDay, fmtT, tilde, SOURCE_LABEL } from "../../lib/for
 import { addToPhotos, askFormat, checkFormat, eject, formatBlocker, runExport } from "../../actions/session";
 import styles from "./Finish.module.css";
 
-/** Finish: what was added, Photos, eject, and the format step. */
+/** Finish: what was added, Photos, safe to remove, and the format step. */
 export function Finish() {
   const s = useStore((x) => x.session);
   const home = useStore((x) => x.home);
@@ -109,7 +109,7 @@ export function Finish() {
               </p>
             </div>
             <Button size="sm" variant="ghost" icon="eject" onClick={eject}>
-              Eject
+              Safe to Remove
             </Button>
           </section>
         )}

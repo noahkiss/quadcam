@@ -622,7 +622,7 @@ export class MockCore {
     const s = this.need();
     s.card = null;
     s.card_volume = null;
-    s.warnings = [...s.warnings, "The card was erased and ejected."];
+    s.warnings = [...s.warnings, "The card was erased and is safe to remove."];
     this.volumes = this.volumes.filter((v) => !v.is_card);
     this.sessionChanged();
     this.emit("volumes-changed");

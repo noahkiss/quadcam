@@ -36,7 +36,7 @@ quadcam-cli cut 0 --clear --removed trash # drop exported cuts and move their fi
 quadcam-cli clear                         # forget the session (start over)
 quadcam-cli verify                        # check the outputs again
 quadcam-cli photos --album Drone          # add verified outputs to Photos
-quadcam-cli eject
+quadcam-cli eject                         # safe to remove: unmount the card
 quadcam-cli format --plan                 # show what would be erased
 quadcam-cli format --device /dev/diskN --volume-uuid <uuid> --yes
 quadcam-cli format --prep --plan --mount /Volumes/CARD   # card prep: a card with no session
@@ -44,6 +44,8 @@ quadcam-cli format --prep --device /dev/diskN --volume-uuid <uuid> --yes
 ```
 
 `clear` deletes the session file. The staged copies stay.
+
+`eject` makes the card safe to remove. For a card it runs `diskutil unmountDisk`: every volume unmounts, and the card stays listed until you pull it. For a disk that is not a card it runs `diskutil eject`.
 
 When the `delete_clips_after_import` setting is on, `import` deletes each clip that verified from the card or folder, and its result lists every clip under `clip_deletion` as `deleted`, or `kept` with a `reason`. `--keep-clips` keeps them for that run. No flag turns the delete on. See [Settings](settings.md#delete-clips-after-import).
 

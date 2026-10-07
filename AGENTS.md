@@ -162,6 +162,13 @@ GitHub (`noahkiss/quadcam`, public) is the only remote. Users install the cask
   `-webkit-user-select`. Text a person may copy (paths, details values) gets the
   `selectable` class. The web view's context menu shows only over text fields and selected
   `selectable` text; the app's own menus call `preventDefault` first.
+- **Removable cards:** `disk::is_removable` takes an external removable or ejectable disk, or
+  a card in the built-in SD slot (`DiskInfo::is_slot_card`: removable media on the `Secure
+  Digital` bus; macOS reports the slot as `Internal`). Internal storage (`is_internal_storage`)
+  never counts. "Safe to remove" (`disk::safe_remove`, method `eject`, after a format or card
+  prep) runs `diskutil unmountDisk` for a card, so the disk stays listed until it is pulled,
+  and `diskutil eject` for anything else. Disk images report removable media, so the disk-image
+  tests see an unmount: the image stays attached and `Image::is_mounted` is false.
 - **Cards** show in the sidebar with their source (Analog, DJI) and an "N new" count (content
   fingerprints not in the index); inserting a card never starts an import on its own.
 
@@ -252,7 +259,7 @@ quadcam-cli --json profiles save NAME --aircraft .. --camera-make .. --models A,
 quadcam-cli --json settings set layout=day place_folders=true   # `settings` shows them
 quadcam-cli --json library apply-name-format   # after settings set name_date_format=YY.MM.DD
 quadcam-cli --json photos out.mp4 --album Drone
-quadcam-cli --json eject
+quadcam-cli --json eject                       # safe to remove: unmountDisk a card
 quadcam-cli --json format --plan               # runs every guard, prints device + volume UUID
 quadcam-cli --json format --device /dev/diskN --volume-uuid <uuid> --yes
 quadcam-cli --json format --prep --plan --mount /Volumes/CARD   # card prep: no session needed
