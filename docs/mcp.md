@@ -61,7 +61,7 @@ freely and ask before the others. See [Gear](gear.md).
 
 | Tool | Changes | What it does |
 |---|---|---|
-| `quadcam_gear` | Nothing | `status`: the gear folder, the Gear settings, and what is plugged in. `devices`: the saved devices |
+| `quadcam_gear` | Nothing | `status`: the gear folder, the Gear settings, and what is plugged in. `devices`: the saved devices. `osd`: a Betaflight OSD layout from `paths` (dump or diff files), each profile drawn as text, with the overlap and off-screen check |
 | `quadcam_gear_edit` | QuadCam's own data | `device_save` names a device or links it to an aircraft profile. `device_forget` removes it from the list |
 | `quadcam_gear_apply` | A device | No actions yet. Each will need a plan's `digest` and `confirm=true` |
 

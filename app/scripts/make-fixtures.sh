@@ -49,6 +49,7 @@ q import --name 0=backyard-loops --name 1=gap-run --name 2=river-dive --note "1=
 q show | save session-finished
 q library list | save library
 q settings | save settings
+q gear osd "$repo/src-tauri/tests/fixtures/osd/pal-synthetic.dump_all.txt" | save osd
 
 # Media: session thumbnails, a 10-frame strip per library clip, and one small MP4 that
 # stands in for every preview.
