@@ -712,8 +712,8 @@ FC effect (`aux` modes, `adjrange` selections such as rate or OSD profile), the 
   `core/osd.rs` (`Core::gear_osd` on files; `device` refuses until WP4 backups or the WP2 live
   read feed it the same text), `gear osd` in the CLI, `quadcam_gear` action `osd`. The view is
   `app/src/views/Gear/Osd/OsdSegment.tsx` (`OsdScreen.tsx` draws one view). The Gear page
-  frame (WP13) mounts `<OsdSegment />` as the Aircraft page's OSD segment and passes the FC's
-  device id once a device source exists; until then it runs alone at `?osd` in dev builds.
+  frame (WP13) mounts `<OsdSegment />` as the FC page's OSD segment (`views/Gear/segments.tsx`),
+  on files for now; it passes the FC's device id once a device source exists (WP4, WP2).
 
 ### 7.4 Voice packs
 

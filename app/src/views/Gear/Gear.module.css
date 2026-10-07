@@ -108,3 +108,6 @@
   gap: var(--s-3);
   min-width: 320px;
 }
+.page > [role="group"] {
+  align-self: flex-start;
+}

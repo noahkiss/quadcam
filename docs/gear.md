@@ -132,8 +132,8 @@ profile, and checks each screen.
 - **A diff alone:** a diff leaves out every setting at its default. QuadCam shows what the diff
   lists and says so.
 
-In a development build, open the OSD screen at `http://localhost:4719/?osd`. The Aircraft page
-will show it for the aircraft's flight controller once device backups arrive.
+Open a flight controller's page under **Gear > Devices** and choose **OSD**, then **Open
+dump…**. Once QuadCam keeps device backups, the page will show the FC's latest backup.
 
 ## Command line and agents
 
