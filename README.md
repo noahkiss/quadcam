@@ -16,7 +16,7 @@ QuadCam is a macOS app that imports the recordings from your FPV goggles into a 
 - **Long recordings stay whole.** An analog DVR splits a long recording into files of a fixed length (10 minutes on a Fat Shark Echo) or size. QuadCam imports those files as one clip. See [Joined recordings](docs/library.md#joined-recordings).
 - **A library you can trust.** Rate, flag, search, rename and edit your clips. Every detail is written into the file itself, and the index rebuilds from the files.
 - **Metadata that Photos reads.** Date, time, place, aircraft and keywords go into QuickTime tags. Add clips to Photos, into an album.
-- **Safe card format.** When every clip verified, QuadCam can erase an analog card as FAT32 and unmount it, behind strict guards. Card prep formats a spare card whose clips are all in the library. It never formats a DJI card or air unit.
+- **Safe card format.** When every clip verified, QuadCam can erase an analog card as FAT32 and unmount it, behind strict guards. Card prep formats a spare card whose clips are all in the library: FAT32 for an analog DVR, exFAT for a DJI goggles card. It never formats a DJI device over USB.
 - **Room for the next flight.** With **Delete clips after import** on, QuadCam deletes each clip that verified from the card, DJI air units included, and leaves every other file. It is off by default. See [Settings](docs/settings.md#delete-clips-after-import).
 - **Gear, early.** QuadCam finds EdgeTX radios, goggles and DVR cards, and flight controller ports when they are plugged in, and keeps the devices you name. It can say when a card is safe to unplug. See [Gear](docs/gear.md).
 - **Scripts and agents.** A command-line tool and an MCP server do everything the app does.

@@ -641,7 +641,7 @@ export class MockCore {
     s.output_dir = opts.output_dir;
     this.libraryChanged();
     this.sessionChanged();
-    const summary = { results, imported, skipped: results.length - imported, failed: 0, total_bytes: results.reduce((a, r) => a + r.size, 0), output_dir: opts.output_dir, format_ready: s.kind === "dji" ? { Err: "QuadCam does not format DJI cards; format them in the device." } : s.card ? { Ok: null } : { Err: "Clips came from a folder, not a card." } };
+    const summary = { results, imported, skipped: results.length - imported, failed: 0, total_bytes: results.reduce((a, r) => a + r.size, 0), output_dir: opts.output_dir, format_ready: s.kind === "dji" ? { Err: "QuadCam does not format DJI cards after an import. Card prep can erase a removable card once every clip is in the library." } : s.card ? { Ok: null } : { Err: "Clips came from a folder, not a card." } };
     // "Delete clips after import": only the setting turns it on; a run may turn it off.
     const clip_deletion =
       this.settings.values.deleteClipsAfterImport && !opts.keep_clips
@@ -664,9 +664,9 @@ export class MockCore {
 
   formatPlan(label: string | null) {
     const s = this.need();
-    if (s.kind === "dji") throw "Refused: QuadCam does not format DJI cards; format them in the device.";
+    if (s.kind === "dji") throw "Refused: QuadCam does not format DJI cards after an import. Card prep can erase a removable card once every clip is in the library.";
     if (!s.card) throw "Clips came from a folder, not a card.";
-    return { disk: "disk9", device: "/dev/disk9", volume_uuid: s.card.volume_uuid || "", volume_name: s.card.volume_name || "", size: s.card.total_size, media_name: s.card.media_name || "", clip_count: s.clips.length, label: label || "DVR" };
+    return { disk: "disk9", device: "/dev/disk9", volume_uuid: s.card.volume_uuid || "", volume_name: s.card.volume_name || "", size: s.card.total_size, media_name: s.card.media_name || "", clip_count: s.clips.length, label: label || "DVR", filesystem: "FAT32", warnings: s.card.total_size > 34e9 ? ["Card is larger than 32 GB. Most analog DVRs take cards up to 32 GB; this DVR may not read it."] : [] };
   }
 
   formatCard(label: string) {

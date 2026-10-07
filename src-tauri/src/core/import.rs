@@ -424,11 +424,12 @@ impl Core {
             .find(|k| !crate::sources::get(*k).card_policy().format_offered)
         {
             bail!(
-                "Refused: QuadCam does not format {} cards; format them in the device.",
+                "Refused: QuadCam does not format {} cards after an import. Card prep can erase a removable card once every clip is in the library.",
                 kind.label()
             );
         }
         s.format_ready()?;
+        let policy = crate::sources::get(s.kind).card_policy();
         let card = s
             .card
             .clone()
@@ -447,6 +448,8 @@ impl Core {
                     .filter(|l| !l.trim().is_empty())
                     .unwrap_or(&self.defaults().format_label),
             )?,
+            filesystem: policy.filesystem.to_string(),
+            warnings: disk::format_advice(whole.total_size, &policy),
         })
     }
 
@@ -487,9 +490,14 @@ impl Core {
             .clone()
             .context("Clips came from a folder, not a card.")?;
         let policy = crate::sources::get(s.kind).card_policy();
-        let eject_error = disk::format_card(&card, &s.source, &plan.label, &policy, &|| {
-            self.current()?.format_ready()
-        })?;
+        let eject_error = disk::format_card(
+            &card,
+            &s.source,
+            &plan.label,
+            &policy,
+            disk::EraseBy::Import,
+            &|| self.current()?.format_ready(),
+        )?;
         let mut latest = self.current()?;
         latest.card = None;
         match &eject_error {

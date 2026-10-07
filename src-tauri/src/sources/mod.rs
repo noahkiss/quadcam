@@ -68,20 +68,23 @@ pub enum EncodePlan {
     Copy,
 }
 
-/// What may happen to a source's card after an import: whether it may be formatted, and
-/// whether its imported clip files may be deleted. Formatting runs every guard in
-/// `disk::format_card` and deleting every guard in `Core::delete_imported_clips` either way;
-/// this only says whether each is offered at all.
+/// What may happen to a source's card: whether it may be formatted after an import or by
+/// card prep, and whether its imported clip files may be deleted. Formatting runs every guard
+/// in `disk::format_card` and deleting every guard in `Core::delete_imported_clips` either
+/// way; this only says whether each is offered at all.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct CardPolicy {
-    /// The app offers "Format card" for this source.
+    /// The app offers "Format card" for this source after an import.
     pub format_offered: bool,
+    /// Card prep may erase this source's card once every clip on it is in the library.
+    pub prep_offered: bool,
     /// "Delete clips after import" may delete this source's clip files (only the files
     /// `Source::pick` takes as clips; sidecars and every other file stay).
     pub delete_clips_offered: bool,
-    /// The file system the card should have, and gets when formatted.
+    /// The file system the card should have, and gets when formatted (`disk::erase_personality`).
     pub filesystem: &'static str,
-    /// Cards larger than this get a warning when they are inserted. `u64::MAX`: never.
+    /// Cards larger than this get a warning when they are inserted, and in the format
+    /// confirm. Never a refusal. `u64::MAX`: never.
     pub warn_above_bytes: u64,
     /// Said after "Card is X, not <filesystem>." when the file system differs.
     pub filesystem_advice: &'static str,

@@ -10,7 +10,7 @@ Import flow: quadcam_status -> quadcam_load_clips (or quadcam_read_clips for a l
 quadcam_read_clips(thumbnails=true) -> quadcam_suggest names, dates, times, places, cuts -> the person may \
 edit them in the app -> quadcam_read_clips for the final values -> quadcam_export (when the \
 delete_clips_after_import setting is on, it then deletes the clip files that verified from the card; \
-keep_clips=true keeps them this run) -> quadcam_add_to_photos -> quadcam_eject. quadcam_format_card erases the card: only on request, after every clip verified; never a DJI card. \
+keep_clips=true keeps them this run) -> quadcam_add_to_photos -> quadcam_eject. quadcam_format_card erases the card: only on request, after every clip verified; never a DJI device over USB. \
 With prep=true it erases a card with no session whose clips are all in the library. \
 Library: quadcam_library finds imported clips; quadcam_library_edit changes ratings, names, notes, \
 places, aircraft, dates and times; quadcam_library_files handles cuts, Trash and Photos. Setup: \
@@ -155,7 +155,7 @@ pub fn tools() -> Value {
         ),
         tool::<FormatCardArgs>(
             "quadcam_format_card",
-            "ERASE the session's card as FAT32 and unmount it (safe to remove). Only when the person asked for it. It refuses a DJI card (goggles format their own) and a radio's SD card, and refuses unless every non-skipped clip verified, the card is removable, not internal, not the boot disk, 64 GB or smaller, and still the same card (device and volume UUID). It also needs device, volume_uuid and confirm=true, and when the app is running the person must click Erase in the app. With prep=true it erases a card with no session instead (card prep: a new card, or one whose clips are all in the library; a clip missing from the library refuses), found by `mount` in the dry run and by device and volume_uuid to erase.\n\nBest for: clearing the card after a verified export, or preparing a spare DVR card (prep=true). Call with dry_run=true first to read the device and volume UUID.\nReturns: the disk that was erased, or the reason it refused.",
+            "ERASE the session's card with its source's file system (FAT32 for analog) and unmount it (safe to remove). Only when the person asked for it. It never erases a DJI device over USB (air unit, goggles storage) or a radio's SD card; after a DJI import it refuses (use prep). It refuses unless every non-skipped clip verified, the card is removable, not internal, not the boot disk, and still the same card (device and volume UUID). A large card is not refused: the dry run's warnings say when the card's DVRs may not read it. It also needs device, volume_uuid and confirm=true, and when the app is running the person must click Erase in the app. With prep=true it erases a card with no session instead (card prep: a new card, or one whose clips are all in the library; a clip missing from the library refuses; a removable DJI goggles card becomes exFAT), found by `mount` in the dry run and by device and volume_uuid to erase.\n\nBest for: clearing the card after a verified export, or preparing a spare DVR or goggles card (prep=true). Call with dry_run=true first to read the device and volume UUID.\nReturns: the disk that was erased, or the reason it refused.",
             json!({"destructiveHint": true, "idempotentHint": false, "openWorldHint": false, "readOnlyHint": false, "title": "Format card"}),
         ),
         tool::<LibraryEditArgs>(

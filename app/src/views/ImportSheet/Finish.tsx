@@ -173,7 +173,7 @@ function FormatPanel() {
     ["Every clip that is not skipped verified", !why],
   ];
   if (!why && plan)
-    guards.push([`Same card: ${plan.disk}, volume UUID matches`, true], [`Removable, ${fmtBytes(plan.size)} (64 GB at most)`, true]);
+    guards.push([`Same card: ${plan.disk}, volume UUID matches`, true], [`Removable, ${fmtBytes(plan.size)}, erased as ${plan.filesystem || "FAT32"}`, true]);
   if (!why && err) guards.push([err, false]);
   const ready = !why && !!plan;
   return (

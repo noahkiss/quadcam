@@ -36,7 +36,7 @@ The server has 19 tools.
 | `quadcam_verify` | Checks the outputs again |
 | `quadcam_add_to_photos` | Adds verified outputs to Photos |
 | `quadcam_eject` | Makes the card safe to remove (unmounts it) |
-| `quadcam_format_card` | Erases an analog card after an import, or with `prep=true` a card with no session (card prep). Refuses a DJI card. See [Format safety](format-safety.md) |
+| `quadcam_format_card` | Erases an analog card after an import, or with `prep=true` a card with no session (card prep; a DJI goggles card becomes exFAT). Never a DJI device over USB. See [Format safety](format-safety.md) |
 
 **Library:**
 

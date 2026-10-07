@@ -835,11 +835,14 @@ repo names a real pack or a shop.
 Formats a DVR or goggles card that has no session: a new card, or a card whose clips are all
 in the library. Guards: every existing `disk::format_card` guard, plus "no clip on the card is
 missing from the library" (the sidebar's "N new" is 0). The file system and the label come
-from the source's `CardPolicy`. DJI cards stay refused, as today (open question 3).
+from the source's `CardPolicy`: FAT32 for an analog DVR card, exFAT for a removable DJI
+goggles card (decided 2026-10-07, open question 3). A DJI device over USB (an air unit,
+goggles storage) is never erased. A card's size never refuses; the policy turns it into
+advice in the confirm.
 
 Built in WP11 before WP1 landed: the `Core` methods live in `core/prep.rs`, the two rows in
-`api/mod.rs`, and the CLI is `format --prep`. They move to `core/gear.rs`, `api/gear.rs` and
-`gear card-prep` once those exist. The app has no card-prep button yet (WP13).
+`api/mod.rs`, and the CLI is `format --prep`. `core/gear.rs`, `api/gear.rs` and
+`bin/cli/gear/` exist now; card prep moves there with the app's card-prep button (WP13).
 
 ### 7.10 Modules
 
@@ -847,12 +850,13 @@ Tools and firmware that QuadCam does not ship become **modules**: QuadCam downlo
 their upstream, on the user's request, into its own folder. A user needs nothing installed
 elsewhere, and the `.app` bundles nothing GPL. QuadCam fetches; it does not redistribute.
 
-**Manifest.** `resources/modules.toml` pins each tool module per QuadCam release:
+**Manifest.** `resources/modules.toml` pins each tool module per QuadCam release. A sketch
+(the file itself holds the real pins and fields, `docs/modules.md`):
 
 ```toml
 [esptool]
-version = "5.1.0"
-url = "https://github.com/espressif/esptool/releases/download/v5.1.0/esptool-v5.1.0-macos-arm64.tar.gz"
+version = "5.4.0"
+url = "https://github.com/espressif/esptool/releases/download/v5.4.0/esptool-v5.4.0-macos-arm64.tar.gz"
 sha256 = "…"
 license = "GPL-2.0-or-later"
 source = "https://github.com/espressif/esptool"
@@ -891,7 +895,7 @@ otherwise QuadCam records the hash at first download and shows it in the flash p
 
 **Running a downloaded binary on macOS**
 
-- QuadCam downloads with its own HTTP client, so the files carry no quarantine attribute.
+- QuadCam downloads with `/usr/bin/curl` (`modules::fetch`), so the files carry no quarantine attribute.
   If one is present (a user copied a module in by hand), QuadCam removes it only after the
   checksum matches.
 - Apple Silicon runs only signed code. Prefer upstream binaries that are signed and
@@ -1202,8 +1206,8 @@ Each has a default the build uses until you decide.
 | # | Question | Default |
 |---|---|---|
 | 1 | Velocidrone's save format: can you share a sample save once it is installed? | Adapter ships disabled |
-| 2 | ESP flashing: the `esptool` module (proven tool) or embed the `espflash` crate (no download, ESP8266 support uncertain)? | `esptool`, a cask dependency |
-| 3 | Card prep for DJI goggles cards: today QuadCam never formats a DJI card (`AGENTS.md`, Rules). Keep that? | Keep refused |
+| 2 | ESP flashing: the `esptool` module (proven tool) or embed the `espflash` crate (no download, ESP8266 support uncertain)? | `esptool`, a downloaded module (decided) |
+| 3 | Card prep for DJI goggles cards? | Decided 2026-10-07: a removable goggles card may be prepped as exFAT once every clip is in the library; a DJI device over USB is never formatted (`AGENTS.md`, Rules) |
 | 4 | Auto backup of an FC reboots it (the CLI `exit`). Keep auto backup on for FCs, or MSP identity only and a manual full backup? | On; skipped while another app holds the port |
 | 5 | Gear folder: the support folder (this Mac only) or inside the library folder (moves with it)? | Support folder; `gearDir` moves it |
 | 6 | Voice packs: confirm CC BY 4.0 for the paid re-render, the attribution text, and the voices to render besides Callum | CC BY 4.0; no pack ships before the paid re-render |

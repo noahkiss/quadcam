@@ -295,7 +295,7 @@ export async function startOver() {
 /** Why the card may not be erased yet, or null when every clip is safe. */
 export function formatBlocker(s: Session | null): string | null {
   if (!s?.card) return "Clips came from a folder, not a card.";
-  if (s.kind === "dji") return "QuadCam does not format DJI cards; format them in the device.";
+  if (s.kind === "dji") return "QuadCam does not format DJI cards after an import. Card prep can erase a removable card once every clip is in the library.";
   if (!s.results.length) return "Add the clips to the library first.";
   for (const c of s.clips) {
     if (c.stage_error) return `${c.name} did not copy off the card.`;
@@ -324,7 +324,9 @@ export function confirmText(plan: FormatPlan) {
   const n = plan.clip_count;
   // Card prep can name a card with no clips on it.
   const clips = n === 0 ? "" : ` and delete ${n} clip${n === 1 ? "" : "s"}`;
-  return `Erase ${plan.disk} (${plan.volume_name || "untitled"}, ${fmtBytes(plan.size)}${media})${clips}? This cannot be undone.`;
+  const fs = plan.filesystem ? ` as ${plan.filesystem}` : "";
+  const advice = (plan.warnings ?? []).map((w) => ` ${w}`).join("");
+  return `Erase ${plan.disk} (${plan.volume_name || "untitled"}, ${fmtBytes(plan.size)}${media})${fs}${clips}? This cannot be undone.${advice}`;
 }
 
 export async function askFormat() {

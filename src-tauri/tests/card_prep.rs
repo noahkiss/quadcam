@@ -1,6 +1,7 @@
 //! Card prep (gear design 7.9): format a card with no session, new or with every clip in the
 //! library. On FAT32 disk images this test creates; the only disk ever erased is such an
-//! image, and the test checks `BusProtocol == "Disk Image"` before it lets an erase run.
+//! image, and the test checks `BusProtocol == "Disk Image"` before it lets an erase run. A
+//! DJI goggles card is erased as exFAT, on such an image too.
 
 mod common;
 
@@ -117,9 +118,14 @@ fn prep_needs_every_clip_in_the_library() {
     // The guard right before the erase: a recheck that refuses stops `format_card`.
     let id = CardIdentity::from_info(&disk::info(&card.mount.to_string_lossy()).unwrap());
     let analog = sources::analog::Analog.card_policy();
-    let e = disk::format_card(&id, &card.mount, "SPARE1", &analog, &|| {
-        anyhow::bail!("Refused: recheck")
-    })
+    let e = disk::format_card(
+        &id,
+        &card.mount,
+        "SPARE1",
+        &analog,
+        disk::EraseBy::Prep,
+        &|| anyhow::bail!("Refused: recheck"),
+    )
     .unwrap_err()
     .to_string();
     assert_eq!(e, "Refused: recheck");
@@ -128,6 +134,12 @@ fn prep_needs_every_clip_in_the_library() {
     assert_is_test_image(&card);
     let done = core.card_prep(&req, false).unwrap();
     assert_eq!(done.label, "SPARE1");
+    assert_eq!(done.filesystem, "FAT32");
+    assert!(
+        done.warnings.is_empty(),
+        "a 64 MB card: {:?}",
+        done.warnings
+    );
     assert!(
         card.is_attached() && !card.is_mounted(),
         "unmounted after the erase"
@@ -139,10 +151,9 @@ fn prep_needs_every_clip_in_the_library() {
     assert!(!quadcam_lib::scan::has_clips(&card.mount));
 }
 
-/// A card with no clips needs no library; DJI cards (with clips or emptied) and a radio's SD
-/// card are refused.
+/// A card with no clips needs no library; a radio's SD card is refused.
 #[test]
-fn prep_plans_a_blank_card_and_refuses_dji_and_radio() {
+fn prep_plans_a_blank_card_and_refuses_a_radio() {
     let work = tempfile::tempdir().unwrap();
     let core = Core::new(
         work.path().join("cache"),
@@ -157,25 +168,7 @@ fn prep_plans_a_blank_card_and_refuses_dji_and_radio() {
     assert_eq!(plan.clip_count, 0);
     assert_eq!(plan.label, "DVR");
 
-    let dji = Image::create("64m", "QCDJI", false);
-    let dir = dji.mount.join("DCIM/DJI_001");
-    std::fs::create_dir_all(&dir).unwrap();
-    let clip = dir.join("DJI_20260105120000_0001_D.MP4");
-    make_dji_clip(&clip, 1, "2026-01-05T17:00:00Z");
-    let e = err(core.card_prep_plan(&dji.mount, None));
-    assert!(e.contains("does not format DJI cards"), "{e}");
-    std::fs::remove_file(&clip).unwrap();
-    let e = err(core.card_prep_plan(&dji.mount, None));
-    assert!(e.contains("does not format DJI cards"), "emptied: {e}");
-    // The erase itself refuses too, whatever the plan said.
-    assert_is_test_image(&dji);
-    let id = CardIdentity::from_info(&disk::info(&dji.mount.to_string_lossy()).unwrap());
-    let analog = sources::analog::Analog.card_policy();
-    let e = disk::format_card(&id, &dji.mount, "DVR", &analog, &|| Ok(()))
-        .unwrap_err()
-        .to_string();
-    assert!(e.contains("DJI"), "{e}");
-    assert!(dji.is_attached() && dir.is_dir());
+    assert_eq!(plan.filesystem, "FAT32");
 
     let radio = Image::create("64m", "QCRADIO", false);
     for d in ["LOGS", "MODELS", "RADIO"] {
@@ -184,6 +177,68 @@ fn prep_plans_a_blank_card_and_refuses_dji_and_radio() {
     let e = err(core.card_prep_plan(&radio.mount, None));
     assert!(e.contains("radio"), "{e}");
     assert!(radio.is_attached());
+}
+
+/// A removable DJI goggles card: prep refuses while a clip is not in the library, then plans
+/// and erases it as exFAT (its `CardPolicy`). An emptied DJI card plans as exFAT too. The
+/// format after an import stays refused for DJI. Erased only on a disk image.
+#[test]
+fn prep_erases_a_dji_goggles_card_as_exfat() {
+    let mut card = Image::create("64m", "QCDJI", false);
+    assert_is_test_image(&card);
+    let dir = card.mount.join("DCIM/DJI_001");
+    std::fs::create_dir_all(&dir).unwrap();
+    let clip = dir.join("DJI_20260105120000_0001_D.MP4");
+    make_dji_clip(&clip, 1, "2026-01-05T17:00:00Z");
+    let work = tempfile::tempdir().unwrap();
+    let core = core(work.path());
+
+    let e = err(core.card_prep_plan(&card.mount, None));
+    assert!(e.starts_with("Refused: 1 of 1 clips"), "{e}");
+
+    // After an import, "Format card" stays refused for DJI; card prep is the way.
+    core.load(Some(&card.mount)).unwrap();
+    core.import(&ImportOptions {
+        format: Some(Format::Mp4),
+        ..Default::default()
+    })
+    .unwrap();
+    let e = err(core.format_plan(None));
+    assert!(e.contains("after an import"), "{e}");
+    core.clear().unwrap();
+
+    let plan = core.card_prep_plan(&card.mount, Some("GOGGLES")).unwrap();
+    assert_eq!(plan.clip_count, 1);
+    assert_eq!(plan.filesystem, "exFAT");
+    assert!(plan.warnings.is_empty(), "{:?}", plan.warnings);
+    let req = FormatRequest {
+        device: plan.device.clone(),
+        volume_uuid: plan.volume_uuid.clone(),
+        label: Some("GOGGLES".into()),
+        confirm: true,
+    };
+    assert_is_test_image(&card);
+    let done = core.card_prep(&req, false).unwrap();
+    assert_eq!(done.filesystem, "exFAT");
+    assert!(card.is_attached() && !card.is_mounted());
+    card.remount();
+    let after = disk::info(&card.mount.to_string_lossy()).unwrap();
+    assert_eq!(after.volume_name.as_deref(), Some("GOGGLES"));
+    assert!(
+        after
+            .filesystem
+            .as_deref()
+            .is_some_and(|f| f.to_ascii_lowercase().contains("exfat")),
+        "{:?}",
+        after.filesystem
+    );
+    assert!(!dir.exists());
+
+    // An emptied DJI card (folders, no clips) plans as a goggles card: exFAT.
+    let emptied = Image::create("64m", "QCDJI2", false);
+    std::fs::create_dir_all(emptied.mount.join("DCIM/DJI_001")).unwrap();
+    let plan = core.card_prep_plan(&emptied.mount, None).unwrap();
+    assert_eq!((plan.clip_count, plan.filesystem.as_str()), (0, "exFAT"));
 }
 
 /// The CLI (`format --prep`) and the MCP tool (`quadcam_format_card` with `prep`) reach the

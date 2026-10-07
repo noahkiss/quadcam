@@ -178,7 +178,7 @@ pub struct FormatCardArgs {
     pub device: Option<String>,
     /// Volume UUID from the dry run.
     pub volume_uuid: Option<String>,
-    /// FAT32 volume name, default DVR.
+    /// Volume name, default DVR.
     #[schemars(length(max = 11))]
     pub label: Option<String>,
     /// Must be true to erase.

@@ -14,7 +14,10 @@ The **Format card** button unlocks only when all of these are true:
 
 The video system of the card must also allow a format. Analog DVR cards allow it.
 
-QuadCam never formats a DJI volume: not an air unit over USB, and not a goggles card. The Finish step shows no **Format card** panel for DJI clips, and the command line and the MCP server refuse with exit code 3. Format a DJI card in the goggles.
+DJI has two rules:
+
+- QuadCam never formats a DJI device over USB: an O4 air unit, or goggles in storage mode. This rule has no exception.
+- After a DJI import, the Finish step shows no **Format card** panel. A removable DJI goggles card, in a card reader or the Mac's SD slot, can be erased with [card prep](#card-prep) once every clip on it is in the library. QuadCam formats it as exFAT. You can also format it in the goggles.
 
 You can also format a card that has no session. See [Card prep](#card-prep).
 
@@ -26,23 +29,22 @@ Immediately before it erases, QuadCam reads the disk information again and check
 
 - The disk is not internal storage, and it is removable or ejectable. A card in the Mac's built-in SD slot counts as removable: macOS calls the slot internal, but the card in it is removable media on the Secure Digital bus.
 - The disk is not the boot disk and not `disk0`.
-- The disk is 64 GB or smaller.
 - The disk is the same card that the clips came from: same device and same volume UUID.
 - The volume is not a radio's SD card (`LOGS/` next to `MODELS/` or `RADIO/`).
-- The volume is not a DJI card. A `DCIM/DJI_*` folder makes it one, even when it is empty.
+- The volume is not a DJI device over USB. A `DCIM/DJI_*` folder (even an empty one) makes the volume DJI. A DJI volume is refused when the disk's media name names DJI, or when a DJI USB device is attached and the card is not in the Mac's SD slot.
 - The video system of the card allows a format.
 
-Then QuadCam runs `diskutil eraseDisk FAT32 <NAME> MBRFormat /dev/diskN` on the whole card. It then unmounts the card at once, so the card is safe to remove.
+QuadCam never refuses a card for its size. When a card is larger than the card's DVRs usually read, the confirmation says so. For an analog card over 32 GB: "Most analog DVRs take cards up to 32 GB; this DVR may not read it."
+
+Then QuadCam runs `diskutil eraseDisk <FS> <NAME> MBRFormat /dev/diskN` on the whole card. `<FS>` is the file system of the card's video system: FAT32 for an analog DVR, exFAT for DJI goggles. It then unmounts the card at once, so the card is safe to remove. FAT32 is tested on real cards; exFAT is tested on disk images only.
 
 ## Card prep
 
-Card prep formats a card that has no session behind it: a new card, or a card whose clips are all in the library. Use it to make a spare DVR card ready.
+Card prep formats a card that has no session behind it: a new card, or a card whose clips are all in the library. Use it to make a spare DVR card or a goggles card ready.
 
 Card prep checks every guard above. It also checks that no clip on the card is missing from the library. QuadCam knows a clip by its content, not by its name. A clip that is only loaded in an import does not count. Import each missing clip first. QuadCam checks this again immediately before it erases. For card prep, "the same card" is the card that the plan named.
 
-A card with no clips needs no library. QuadCam formats it as FAT32 for an analog DVR.
-
-Card prep never formats a DJI card. Format a DJI card in the goggles.
+A card with no clips needs no library. QuadCam formats it as FAT32 for an analog DVR. A card with `DCIM/DJI_*` folders, even empty ones, is a DJI goggles card: QuadCam formats it as exFAT.
 
 Card prep has no button in the app yet. Use the command line (`format --prep`) or an agent (`quadcam_format_card` with `prep=true`). If the app is running, you must still select **Erase** in the app.
 
@@ -52,7 +54,7 @@ Each way in adds its own confirmation:
 
 | From | Confirmation |
 |---|---|
-| The app | A dialog names the disk, the volume, the size, and the clip count. Only a click on **Erase** starts the erase. The Return key does not. |
+| The app | A dialog names the disk, the volume, the size, the file system, the clip count, and any size advice. Only a click on **Erase** starts the erase. The Return key does not. |
 | The command line | `--device`, `--volume-uuid`, and `--yes` must all be given, and they must match the card. |
 | An agent (MCP) | The agent must give the device, the volume UUID, and `confirm=true`. If the app is running, you must also select **Erase** in the app. |
 

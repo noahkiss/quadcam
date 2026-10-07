@@ -131,14 +131,28 @@ fn format_after_verified_import() {
     assert_eq!(names, ["2026-09-30_flight.mp4", "2026-09-30_flight-2.mp4"]);
 
     // A bad label is refused before anything runs.
-    assert!(
-        disk::format_card(&id, &card.mount, "WAY-TOO-LONG-NAME", &analog(), &|| Ok(())).is_err()
-    );
+    assert!(disk::format_card(
+        &id,
+        &card.mount,
+        "WAY-TOO-LONG-NAME",
+        &analog(),
+        disk::EraseBy::Import,
+        &|| Ok(())
+    )
+    .is_err());
     assert!(card.mount.join("DCIM/PICT0001.AVI").is_file());
 
     assert_is_test_image(&card);
     assert_eq!(
-        disk::format_card(&id, &card.mount, "fpvcard", &analog(), &|| Ok(())).unwrap(),
+        disk::format_card(
+            &id,
+            &card.mount,
+            "fpvcard",
+            &analog(),
+            disk::EraseBy::Import,
+            &|| Ok(())
+        )
+        .unwrap(),
         None,
         "erased and unmounted"
     );
@@ -156,23 +170,38 @@ fn format_after_verified_import() {
     assert!(!quadcam_lib::scan::has_clips(&card.mount));
 }
 
-/// Check 7: a swapped card, the internal disk and a disk over 64 GB are all refused.
+/// Check 7: a swapped card and the internal disk are refused. A large card is not: its size
+/// only adds advice from the source's policy.
 #[test]
 fn format_refusals() {
     // Swapped card: identity from A, then B is in the slot.
     let a = Image::create("64m", "QCA", false);
     let b = Image::create("64m", "QCB", false);
     let id_a = CardIdentity::from_info(&disk::info(&a.mount.to_string_lossy()).unwrap());
-    let e = disk::format_card(&id_a, &b.mount, "FPVCARD", &analog(), &|| Ok(()))
-        .unwrap_err()
-        .to_string();
+    let e = disk::format_card(
+        &id_a,
+        &b.mount,
+        "FPVCARD",
+        &analog(),
+        disk::EraseBy::Import,
+        &|| Ok(()),
+    )
+    .unwrap_err()
+    .to_string();
     assert!(e.contains("Refused"), "{e}");
     // Same slot, same device, different volume UUID (reformatted elsewhere, then reinserted).
     let mut forged = CardIdentity::from_info(&disk::info(&b.mount.to_string_lossy()).unwrap());
     forged.volume_uuid = id_a.volume_uuid.clone();
-    let e = disk::format_card(&forged, &b.mount, "FPVCARD", &analog(), &|| Ok(()))
-        .unwrap_err()
-        .to_string();
+    let e = disk::format_card(
+        &forged,
+        &b.mount,
+        "FPVCARD",
+        &analog(),
+        disk::EraseBy::Import,
+        &|| Ok(()),
+    )
+    .unwrap_err()
+    .to_string();
     assert!(e.contains("UUID"), "{e}");
     assert!(b.is_attached() && a.is_attached());
 
@@ -184,13 +213,14 @@ fn format_refusals() {
         .to_string();
     assert!(e.contains("Refused"), "{e}");
 
-    // Over 64 GB: a sparse 70 GB FAT32 image.
+    // Over 64 GB: a sparse 70 GB FAT32 image passes every guard, with advice. Not erased.
     let big = Image::create("70g", "QCBIG", true);
     let id_big = CardIdentity::from_info(&disk::info(&big.mount.to_string_lossy()).unwrap());
-    let e = disk::verify_card_for_format(&id_big, &big.mount)
-        .unwrap_err()
-        .to_string();
-    assert!(e.contains("64 GB"), "{e}");
+    let whole = disk::verify_card_for_format(&id_big, &big.mount).unwrap();
+    assert_eq!(
+        disk::format_advice(whole.total_size, &analog()),
+        [analog().size_warning]
+    );
     assert!(big.is_attached());
 }
 

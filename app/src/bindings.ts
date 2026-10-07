@@ -252,7 +252,7 @@ export type CardIdentity = {
 };
 
 /**
- *  `card_prep_plan`: the card's mount point, and the FAT32 volume name (None uses the
+ *  `card_prep_plan`: the card's mount point, and the volume name (None uses the
  *  setting). Moves to `api/gear.rs` with WP1.
  */
 export type CardPrepParams = {
@@ -552,7 +552,7 @@ export type Defaults_Deserialize = {
 	photos_album: string,
 	log_dir: string | null,
 	tunables: Tunables,
-	/**  FAT32 volume name for the format step. */
+	/**  Volume name for the format step. */
 	format_label?: string,
 	places?: Place[],
 	profiles?: Profile_Deserialize[],
@@ -596,7 +596,7 @@ export type Defaults_Serialize = {
 	photos_album: string,
 	log_dir: string | null,
 	tunables: Tunables,
-	/**  FAT32 volume name for the format step. */
+	/**  Volume name for the format step. */
 	format_label: string,
 	places: Place[],
 	profiles: Profile_Serialize[],
@@ -799,6 +799,13 @@ export type FormatPlan = {
 	media_name: string,
 	clip_count: number,
 	label: string,
+	/**  The file system the erase writes: the source's `CardPolicy` (FAT32, exFAT). */
+	filesystem?: string,
+	/**
+	 *  Advice for the confirm, such as a card larger than the source's DVRs read. Never a
+	 *  refusal.
+	 */
+	warnings?: string[],
 };
 
 /**
@@ -974,7 +981,7 @@ export type Join = {
 	swap: Swap,
 };
 
-/**  `format_plan`: the FAT32 volume name; None uses the setting. */
+/**  `format_plan`: the volume name; None uses the setting. */
 export type LabelParams = {
 	label: string | null,
 };
