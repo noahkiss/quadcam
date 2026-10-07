@@ -13,6 +13,7 @@ use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 
+mod backup;
 mod cuts;
 mod fc;
 mod files;
@@ -27,6 +28,11 @@ mod prep;
 mod rematch;
 mod setup;
 pub use crate::paths::{cache_dir, default_session_file, default_settings_file, support_dir};
+pub use backup::{
+    backup_hooks, BackupDiffParams, BackupFilter, BackupParams, BackupPinParams, BackupReadParams,
+    BackupResult, BackupSummary, CardCheckParams, CardChecksParams, CardRepairParams, ExportParams,
+    GearJob, ImportBackupsParams, PruneParams, RepairResult, StopParams,
+};
 pub use fc::{BoardNotesParams, FcJob, FcPortParams, FcReadParams, UsbTimer, USB_PROBE};
 pub use files::{Moved, TrashReport};
 pub use flights::{
@@ -229,6 +235,8 @@ pub struct Core {
     fc_timing: Mutex<crate::gear::bf::cli::Timing>,
     /// Downloaded tools (ffmpeg, esptool).
     modules: crate::modules::Modules,
+    /// Backups and card checks running now, by link (`core/backup.rs`).
+    gear_jobs: Mutex<std::collections::HashMap<String, backup::JobSlot>>,
 }
 
 struct Busy<'a>(&'a AtomicBool);
@@ -275,6 +283,7 @@ impl Core {
             fc_timing: Mutex::default(),
             cache,
             modules: crate::modules::Modules::default(),
+            gear_jobs: Mutex::default(),
         }
     }
 

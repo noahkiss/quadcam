@@ -206,6 +206,32 @@ export const commands = {
 	gearCrashSave: (params: CrashSaveParams) => typedError<Crash, string>(__TAURI_INVOKE("gear_crash_save", { params })),
 	/**  Deletes a crash. */
 	gearCrashDelete: (params: IdParams) => typedError<Crash, string>(__TAURI_INVOKE("gear_crash_delete", { params })),
+	/**  Backs up a radio card or an FC (the FC reboots). Writes nothing when nothing changed. */
+	gearBackup: (params: BackupParams) => typedError<BackupResult, string>(__TAURI_INVOKE("gear_backup", { params })),
+	/**  Snapshots, newest first, without their file lists. */
+	gearBackups: (params: BackupFilter) => typedError<BackupSummary[], string>(__TAURI_INVOKE("gear_backups", { params })),
+	/**  A snapshot with its files, or one file's content. */
+	gearBackupRead: (params: BackupReadParams) => typedError<BackupContent, string>(__TAURI_INVOKE("gear_backup_read", { params })),
+	/**  What changed between two snapshots (from the one before `a` when `b` is empty). */
+	gearBackupDiff: (params: BackupDiffParams) => typedError<DiffItem[], string>(__TAURI_INVOKE("gear_backup_diff", { params })),
+	/**  Pins a snapshot (never pruned) or unpins it. */
+	gearBackupPin: (params: BackupPinParams) => typedError<BackupSummary, string>(__TAURI_INVOKE("gear_backup_pin", { params })),
+	/**  Sizes of the gear folder, in total and per device. */
+	gearStorage: () => typedError<StorageView, string>(__TAURI_INVOKE("gear_storage")),
+	/**  Thins snapshots by the retention settings and removes blobs nothing names. */
+	gearPrune: (params: PruneParams) => typedError<PruneReport, string>(__TAURI_INVOKE("gear_prune", { params })),
+	/**  Writes a snapshot, or a device's snapshots, as plain folders. */
+	gearExport: (params: ExportParams) => typedError<ExportReport, string>(__TAURI_INVOKE("gear_export", { params })),
+	/**  Imports an old backup folder: card copies, FC diff and dump files, LOGS folders. */
+	gearImportBackups: (params: ImportBackupsParams) => typedError<ImportBackupsReport, string>(__TAURI_INVOKE("gear_import_backups", { params })),
+	/**  Checks a card's file system (diskutil verifyVolume) and logs the result. */
+	gearCardCheck: (params: CardCheckParams) => typedError<CardCheck, string>(__TAURI_INVOKE("gear_card_check", { params })),
+	/**  A card's checks, newest first. */
+	gearCardChecks: (params: CardChecksParams) => typedError<CardCheck[], string>(__TAURI_INVOKE("gear_card_checks", { params })),
+	/**  Repairs a card whose latest check failed: a backup first, the repair, a check after. */
+	gearCardRepair: (params: CardRepairParams) => typedError<RepairResult, string>(__TAURI_INVOKE("gear_card_repair", { params })),
+	/**  Stops a running backup or card check on a link. True when one was running. */
+	gearStop: (params: StopParams) => typedError<boolean, string>(__TAURI_INVOKE("gear_stop", { params })),
 	/**
 	 *  Downloaded tools: each module's pin, a newer pin from the last check, and what is
 	 *  installed. Reads only local files.
@@ -298,6 +324,157 @@ export type Automation =
 /**  Apply the device's staged changes that are Ready. */
 "apply_ready";
 
+/**  A snapshot of one device: a manifest of files in the blob store. */
+export type Backup = {
+	id: string,
+	device: string,
+	trigger: Trigger,
+	taken_at: string,
+	identity: Identity,
+	files: BackupFile[],
+	/**  The person's pin. Apply and flash backups are always kept anyway. */
+	pinned?: boolean,
+};
+
+/**  One file of a backup, or the backup's file list. */
+export type BackupContent = {
+	backup: Backup,
+	/**  The file read; None for the list. */
+	path: string | null,
+	size: number,
+	/**  The file as text; None for a binary file. */
+	text: string | null,
+	binary: boolean,
+};
+
+/**  `gear_backup_diff`: from snapshot `a` to `b` (none: from the one before `a` to `a`). */
+export type BackupDiffParams = {
+	a: string,
+	b?: string | null,
+	/**  One file only. */
+	path?: string | null,
+};
+
+/**  One file in a backup: its path inside the device, its size and its content hash. */
+export type BackupFile = {
+	/**
+	 *  For a card: the path from the card's root (`MODELS/model01.yml`). For an FC: the
+	 *  command (`diff all`, `dump all`).
+	 */
+	path: string,
+	size: number,
+	/**  XXH64 as 16 hex digits: the blob's name. */
+	xxh64: string,
+	mtime?: string | null,
+};
+
+/**  `gear_backups`: one device's snapshots, or every device's. */
+export type BackupFilter = {
+	device?: string | null,
+};
+
+/**  One item an import found. */
+export type BackupImportItem = {
+	/**  The folder (a card copy, a `LOGS/` folder) or the first FC file. */
+	path: string,
+	kind: BackupImportKind,
+	outcome: BackupImportOutcome,
+	/**  The device it went to. */
+	device: string | null,
+	identity: Identity,
+	taken_at: string | null,
+	/**  The snapshot written, or the one it equals. */
+	backup: string | null,
+	files: number,
+	logs: LogCounts,
+	/**  Why it was skipped, or which snapshot it equals. */
+	reason: string | null,
+};
+
+/**  What an import found in one place. */
+export type BackupImportKind = 
+/**  An EdgeTX card copy. */
+"card" | 
+/**  A Betaflight `diff all` and/or `dump all`. */
+"fc" | 
+/**  A plain `LOGS/` folder. */
+"logs";
+
+/**  What happened to one found item. */
+export type BackupImportOutcome = 
+/**  A new snapshot (or, in a dry run, one would be written). */
+"imported" | 
+/**  Its files equal a snapshot the device has from that day or before: nothing written. */
+"same" | 
+/**  Logs only. */
+"logs" | 
+/**  Not taken; `reason` says why. */
+"skipped";
+
+/**
+ *  `gear_backup`: what to back up. One of them, or none when exactly one radio card or FC
+ *  is plugged in.
+ */
+export type BackupParams = {
+	/**  A connected device's id. */
+	device?: string | null,
+	/**  An FC's serial port. */
+	port?: string | null,
+	/**  A radio card's mount point. */
+	mount?: string | null,
+};
+
+/**  `gear_backup_pin`: keep a snapshot through pruning, or stop keeping it. */
+export type BackupPinParams = {
+	id: string,
+	pinned: boolean,
+};
+
+/**  Where a snapshot is in its run, for the progress row. */
+export type BackupProgress = {
+	/**  `reading`, `logs`, `saving`. */
+	stage: string,
+	files_done: number,
+	files_total: number,
+	/**  Bytes read so far from files that changed (unchanged ones are not read). */
+	bytes_done: number,
+	/**  Bytes of the files that changed. */
+	bytes_total: number,
+	/**  The file being read. */
+	path: string,
+};
+
+/**  `gear_backup_read`: a snapshot, and one of its files (none: the file list). */
+export type BackupReadParams = {
+	id: string,
+	path?: string | null,
+};
+
+/**  `gear_backup`'s answer. */
+export type BackupResult = {
+	device: string,
+	kind: DeviceKind,
+	/**  The device's name, or "Unnamed <kind>". */
+	name: string,
+	report: TakeReport,
+	/**  The prune that followed a new snapshot. */
+	pruned?: PruneReport | null,
+	/**  FC board notes after the read. */
+	notes?: string[],
+};
+
+/**  A snapshot without its file list. */
+export type BackupSummary = {
+	id: string,
+	device: string,
+	trigger: Trigger,
+	taken_at: string,
+	identity: Identity,
+	pinned: boolean,
+	files: number,
+	bytes: number,
+};
+
 export type Badge = "matched" | "likely" | "unmatched";
 
 /**  One known issue of a board, or a board and build. */
@@ -319,6 +496,36 @@ export type BoardNotesParams = {
 export type CapaMark = {
 	mah: number | null,
 	s: number | null,
+};
+
+/**  One check of one card, as the log keeps it. */
+export type CardCheck = {
+	/**  `<device>-<time>`: a repair names the failed check it answers. */
+	id: string,
+	device: string,
+	kind: CheckKind,
+	state: CheckState,
+	at: string,
+	seconds: number | null,
+	/**  `fsck_msdos`' exit code, when it got that far. */
+	fsck_code?: number | null,
+	/**  A repair changed the file system. */
+	modified?: boolean,
+	/**  One line to show: what was found. */
+	summary: string,
+	/**  The `Warning:` and `Error:` lines. */
+	findings?: string[],
+};
+
+/**  `gear_card_check`: which card. None: the one card plugged in. */
+export type CardCheckParams = {
+	device?: string | null,
+	mount?: string | null,
+};
+
+/**  `gear_card_checks`: a device's check log. */
+export type CardChecksParams = {
+	device: string,
 };
 
 /**  A file a change puts on a card. */
@@ -382,6 +589,13 @@ export type CardPreviewParams = {
 	edits: Edit[],
 };
 
+/**  `gear_card_repair`: the failed check to answer, and the confirm. */
+export type CardRepairParams = {
+	/**  The id of the card's latest check, which failed. */
+	check: string,
+	confirm?: boolean,
+};
+
 export type CardStatus = {
 	mount: string,
 	clips: number,
@@ -427,6 +641,9 @@ export type Check = {
 	refusal?: Refusal | null,
 };
 
+/**  Which command a check ran. */
+export type CheckKind = "verify" | "repair";
+
 /**  One check. */
 export type CheckRow = {
 	/**  `packs`, `radio`, `cards_space`, `backups`, `cards_in`. */
@@ -435,6 +652,17 @@ export type CheckRow = {
 	state: RowState,
 	detail: string,
 };
+
+/**  How a check ended. */
+export type CheckState = 
+/**  The file system is fine (or the repair fixed it). */
+"ok" | 
+/**  The check found damage (or the repair could not fix it). */
+"failed" | 
+/**  Stopped before it finished. */
+"stopped" | 
+/**  `diskutil` could not run the check (busy, no such volume, timed out). */
+"error";
 
 export type Chemistry = "lipo" | "lihv" | "liion";
 
@@ -621,6 +849,15 @@ export type ClockCheck = {
 	newest_log?: string | null,
 	/**  Set when the clock looks wrong. */
 	message?: string | null,
+};
+
+/**  What a collection removed. */
+export type Collected = {
+	/**  Blobs no manifest, log or staged change named. */
+	blobs: number,
+	bytes: number,
+	/**  Temporary files a crash left. */
+	temp_files: number,
 };
 
 /**  A device plugged in now, as `detect` found it. */
@@ -915,6 +1152,26 @@ export type DeviceSaveParams = {
 	aircraft?: string | null,
 };
 
+/**  One device's share of the gear folder. */
+export type DeviceStorage = {
+	device: string,
+	/**  The saved device's name; None when QuadCam no longer lists it. */
+	name: string | null,
+	kind: DeviceKind | null,
+	snapshots: number,
+	pinned: number,
+	/**  Snapshots per trigger (`connect`, `manual`, `before_apply`, `import`, ...). */
+	by_trigger: { [key in string]: number },
+	latest: string | null,
+	manifest_bytes: number,
+	logs: number,
+	log_bytes: number,
+	/**  Blobs only this device's snapshots name. */
+	own_blob_bytes: number,
+	/**  Manifests, logs and its own blobs. */
+	total_bytes: number,
+};
+
 /**  One item in a plan's before/after view. */
 export type DiffItem = 
 /**  CLI lines for an FC, or a line diff of one text file. */
@@ -1033,6 +1290,21 @@ export type EnvCheck = {
 	version: string,
 	/**  The commit it was built from (short hash; `unknown` outside a git checkout). */
 	build: string,
+};
+
+/**  `gear_export`: a snapshot, or every snapshot of a device, to a folder. */
+export type ExportParams = {
+	device?: string | null,
+	snapshot?: string | null,
+	to: string,
+};
+
+/**  What an export wrote. */
+export type ExportReport = {
+	/**  One folder per snapshot. */
+	folders: string[],
+	files: number,
+	bytes: number,
 };
 
 /**  What QuadCam knows about an FC after talking to it. */
@@ -1318,6 +1590,18 @@ export type GearCard = {
 /**  `gear.json` changed (devices, links). Read Gear again with `gear_status`. */
 export type GearChanged = null;
 
+/**  A job running on a device now: a backup or a card check. */
+export type GearJob = {
+	/**  The link (`link_handle`): what `gear_stop` takes. */
+	handle: string,
+	device: string | null,
+	/**  `Backing up` or `Checking card`. */
+	step: string,
+	progress: BackupProgress,
+	/**  A stop was asked for; it takes effect between files. */
+	stopping: boolean,
+};
+
 /**
  *  The Gear settings (Settings > Gear), each with its default. They live in
  *  `settings.json` like every other setting (`settings::KEYS`); `from_values` reads them.
@@ -1368,6 +1652,10 @@ export type GearStatus = {
 	working?: string[],
 	/**  The links with a "still inserted" reminder armed (`link_handle`). */
 	reminders?: string[],
+	/**  Backups and card checks running now, with their progress (`core/backup.rs`). */
+	jobs?: GearJob[],
+	/**  The latest card check of each card plugged in. */
+	card_checks?: CardCheck[],
 };
 
 /**  One search hit. */
@@ -1429,6 +1717,28 @@ export type Identity = {
  */
 export type IdsParams = {
 	ids?: string[],
+};
+
+/**  `gear_import_backups`: an old backup folder. */
+export type ImportBackupsParams = {
+	folder: string,
+	/**  The saved device that items no id names go to, when several could match. */
+	device?: string | null,
+	dry_run?: boolean,
+};
+
+/**  `gear_import_backups`' answer. */
+export type ImportBackupsReport = {
+	folder: string,
+	dry_run: boolean,
+	items: BackupImportItem[],
+	/**  Snapshots written (or that would be). */
+	imported: number,
+	same: number,
+	skipped: number,
+	logs: LogCounts,
+	/**  Devices the import saved because it learned their id (an FC's MCU id). */
+	new_devices: string[],
 };
 
 /**  Per-run overrides for an import. Anything missing comes from `Defaults`. */
@@ -1885,6 +2195,15 @@ export type LogChoice =
 /**  Keep the session's current folder (or the default). */
 { kind: "keep" } | { kind: "none" } | { kind: "dir"; path: string };
 
+/**  Logs taken into the log store, by outcome. */
+export type LogCounts = {
+	added: number,
+	grown: number,
+	same: number,
+	kept_both: number,
+	unchanged: number,
+};
+
 export type LogicalSwitch = {
 	/**  0 is `L1`. */
 	index: number,
@@ -2133,7 +2452,10 @@ export type OsdParams = {
 	 *  so a dump followed by an apply file shows the layout after the apply.
 	 */
 	paths?: string[],
-	/**  A saved device's id: reads its latest backup. Not available until backups exist. */
+	/**
+	 *  A saved device's id: reads its latest backup's `dump all` (`diff all` without one),
+	 *  before `paths`.
+	 */
 	device?: string | null,
 	/**  `NTSC`, `PAL`, `HD` or `WxH`; empty for the files' `vcd_video_system`. */
 	grid?: string | null,
@@ -2547,6 +2869,20 @@ export type Progress = {
 	size: number,
 };
 
+/**  `gear_prune`. */
+export type PruneParams = {
+	dry_run?: boolean,
+};
+
+/**  What a prune did, or would do. */
+export type PruneReport = {
+	dry_run: boolean,
+	/**  The snapshots dropped (or that would be). */
+	dropped: string[],
+	kept: number,
+	collected: Collected,
+};
+
 /**
  *  Speech and sound stay silent from `start` to `end` (local time, `HH:MM`; may cross
  *  midnight).
@@ -2624,6 +2960,17 @@ export type RenameReport = {
 	/**  Names that do not start with a date. */
 	skipped: string[],
 	failed: ([string, string])[],
+};
+
+/**  `gear_card_repair`'s answer. */
+export type RepairResult = {
+	/**  The snapshot taken first (always kept), when the card could be read. */
+	backup: string | null,
+	/**  Why the backup first failed; the repair ran anyway. */
+	backup_error: string | null,
+	repair: CardCheck,
+	/**  The check after the repair. */
+	verify: CardCheck,
 };
 
 /**  One command and what it answered. */
@@ -2912,6 +3259,26 @@ export type Status_Serialize = {
 	session: SessionBrief | null,
 };
 
+/**  `gear_stop`: a running job's link (`GearJob.handle`). */
+export type StopParams = {
+	handle: string,
+};
+
+/**  Sizes in the gear folder. */
+export type StorageView = {
+	gear_dir: string,
+	/**  Blobs, manifests and logs. */
+	total_bytes: number,
+	blobs: number,
+	blob_bytes: number,
+	/**  Blobs that more than one device names. */
+	shared_blob_bytes: number,
+	manifest_bytes: number,
+	log_bytes: number,
+	snapshots: number,
+	devices: DeviceStorage[],
+};
+
 /**  `suggest`: changes to clip plans. Without `editor`, an agent made them. */
 export type SuggestParams = {
 	patches: PlanPatch[],
@@ -2955,6 +3322,21 @@ export type SwitchWarning = {
 	switch: string,
 	/**  `up`, `mid` or `down`. */
 	pos: string,
+};
+
+/**  What a snapshot run did. */
+export type TakeReport = {
+	/**  The new snapshot, or the latest one when nothing changed. */
+	backup: Backup,
+	/**  False when the files equal the latest snapshot's: nothing was written. */
+	new: boolean,
+	/**  Files read and hashed. */
+	read: number,
+	/**  Files whose size and time matched the latest snapshot: not read. */
+	skipped: number,
+	bytes_read: number,
+	/**  What happened to the card's logs. */
+	logs: LogCounts,
 };
 
 /**  The long library jobs. */
@@ -3002,6 +3384,22 @@ export type TrendPoint = {
 	worst_lq: number | null,
 	worst_rssi_db: number | null,
 };
+
+/**  Why a backup was taken. */
+export type Trigger = 
+/**  Plugged in, with "Back up on connect" on. */
+"connect" | 
+/**  The person asked. */
+"manual" | 
+/**  Taken by the apply engine before a write. Always kept. */
+"before_apply" | 
+/**  Taken before a firmware flash. Always kept. */
+"before_flash" | 
+/**
+ *  Taken from an old backup folder (`gear import-backups`). Thinned like plug-in
+ *  backups.
+ */
+"import";
 
 export type Tunables = {
 	/**  A gap over this many seconds between rows starts a new armed segment. */

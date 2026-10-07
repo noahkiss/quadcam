@@ -6,7 +6,7 @@
 //!   backup's `radio.yml`;
 //! - free space on a card that is not plugged in: TODO(WP4) from the space seen at its last
 //!   backup;
-//! - backup times: `Device::last_backup`, which WP4 sets.
+//! - backup times come from `Device::last_backup` (WP4).
 
 use super::packs::{ChargeState, PackView};
 use chrono::NaiveDateTime;

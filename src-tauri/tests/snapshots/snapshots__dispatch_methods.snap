@@ -79,5 +79,18 @@ expression: "Core::METHODS"
   "gear_preflight",
   "gear_crashes",
   "gear_crash_save",
-  "gear_crash_delete"
+  "gear_crash_delete",
+  "gear_backup",
+  "gear_backups",
+  "gear_backup_read",
+  "gear_backup_diff",
+  "gear_backup_pin",
+  "gear_storage",
+  "gear_prune",
+  "gear_export",
+  "gear_import_backups",
+  "gear_card_check",
+  "gear_card_checks",
+  "gear_card_repair",
+  "gear_stop"
 ]

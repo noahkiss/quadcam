@@ -209,14 +209,15 @@ fn space(mount: &Path) -> (Option<u64>, Option<u64>) {
     (kb(3), kb(1))
 }
 
-/// The date at the start of a backup id or time (`2026-10-04T101500-connect`, an RFC 3339
-/// time). TODO(WP4): read the backup's `taken_at` instead.
+/// When a backup was taken, from its id (`<device>/<YYYY-MM-DDTHHMMSS>-<trigger>`, UTC) or an
+/// RFC 3339 time, in local time.
 fn backup_time(s: &str) -> Option<NaiveDateTime> {
     if let Ok(t) = chrono::DateTime::parse_from_rfc3339(s) {
         return Some(t.with_timezone(&chrono::Local).naive_local());
     }
-    let d = NaiveDate::parse_from_str(s.get(..10)?, "%Y-%m-%d").ok()?;
-    d.and_hms_opt(0, 0, 0)
+    let name = s.rsplit('/').next()?;
+    let t = NaiveDateTime::parse_from_str(name.get(..17)?, "%Y-%m-%dT%H%M%S").ok()?;
+    Some(t.and_utc().with_timezone(&chrono::Local).naive_local())
 }
 
 impl Core {
@@ -629,5 +630,22 @@ impl Core {
         let out = crashes::delete(&self.gear_store(), id)?;
         self.hooks.gear_changed();
         Ok(out)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn backup_time_from_an_id() {
+        let t = super::backup_time("radio-1/2026-10-04T101500-connect").unwrap();
+        let utc = t
+            .and_local_timezone(chrono::Local)
+            .unwrap()
+            .with_timezone(&chrono::Utc);
+        assert_eq!(
+            utc.format("%Y-%m-%d %H:%M:%S").to_string(),
+            "2026-10-04 10:15:00"
+        );
+        assert!(super::backup_time("radio-1/nonsense").is_none());
     }
 }

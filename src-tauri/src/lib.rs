@@ -444,6 +444,19 @@ pub fn specta_builder() -> tauri_specta::Builder<tauri::Wry> {
             c::gear_crashes,
             c::gear_crash_save,
             c::gear_crash_delete,
+            c::gear_backup,
+            c::gear_backups,
+            c::gear_backup_read,
+            c::gear_backup_diff,
+            c::gear_backup_pin,
+            c::gear_storage,
+            c::gear_prune,
+            c::gear_export,
+            c::gear_import_backups,
+            c::gear_card_check,
+            c::gear_card_checks,
+            c::gear_card_repair,
+            c::gear_stop,
             c::modules,
             c::module_install,
             c::module_remove,
@@ -544,6 +557,9 @@ pub fn run() {
             std::thread::spawn(move || warm.make_previews());
             if let Err(e) = control::serve(core.clone(), &control::socket_path()) {
                 eprintln!("quadcam: control socket not started: {e:#}");
+            }
+            for h in crate::core::backup_hooks() {
+                core.gear_add_hook(h);
             }
             let gear_core = core.clone();
             specta.mount_events(app);

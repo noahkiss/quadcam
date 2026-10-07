@@ -4,6 +4,8 @@
 // parity specs.
 import type { Connected, Device, DeviceKind, GearSettings, GearStatus } from "../types";
 import { HOME } from "./seed";
+import { latestChecks, seedBackups, type MockBackup } from "./backups";
+import type { CardCheck, GearJob } from "../types";
 
 const GEAR_DIR = `${HOME}/Library/Application Support/app.quadcam/gear`;
 const KINDS: DeviceKind[] = ["fc", "radio", "elrs_tx", "elrs_rx", "goggles", "dvr_card"];
@@ -56,8 +58,8 @@ export function gearSettings(values: Record<string, unknown>): GearSettings {
 
 export const volume = (mount: string, disk: string): Connected["link"] => ({ kind: "volume", mount, volume_uuid: null, bus_protocol: "USB", whole_disk: disk });
 
-export const RADIO: Device = { id: "radio-1f2e3d4c5b6a7980", kind: "radio", name: "Field radio", aircraft: null, identity: { board: "tx16s", firmware: "EdgeTX", version: "2.11.2" }, last_seen: "2026-10-06T18:20:00Z", last_backup: null };
-export const FC: Device = { id: "fc-0a1b2c3d4e5f6071", kind: "fc", name: "Whoop FC", aircraft: "Whoop", identity: { board: "STM32F411", firmware: "Betaflight", version: "4.5.1", target: "BETAFPVF411" }, last_seen: "2026-10-05T10:00:00Z", last_backup: null };
+export const RADIO: Device = { id: "radio-1f2e3d4c5b6a7980", kind: "radio", name: "Field radio", aircraft: null, identity: { board: "tx16s", firmware: "EdgeTX", version: "2.11.2" }, last_seen: "2026-10-06T18:20:00Z", last_backup: "radio-1f2e3d4c5b6a7980/2026-10-06T182000-manual" };
+export const FC: Device = { id: "fc-0a1b2c3d4e5f6071", kind: "fc", name: "Whoop FC", aircraft: "Whoop", identity: { board: "STM32F411", firmware: "Betaflight", version: "4.5.1", target: "BETAFPVF411" }, last_seen: "2026-10-05T10:00:00Z", last_backup: "fc-0a1b2c3d4e5f6071/2026-10-05T100000-before_apply" };
 
 export const radioConnected = (): Connected => ({ id: RADIO.id, kind: "radio", link: volume("/Volumes/RADIO", "disk4"), identity: { board: "tx16s", version: "2.11.2" } });
 export const dvrConnected = (): Connected => ({ id: "dvr-5a6b7c8d9e0f1a2b", kind: "dvr_card", link: volume("/Volumes/DVR", "disk5"), identity: {} });
@@ -68,10 +70,19 @@ export interface MockGear {
   connected: Connected[];
   working: string[];
   reminders: string[];
+  /** Snapshots (`ipc/mock/backups.ts`). */
+  backups: MockBackup[];
+  /** Card checks, newest first. */
+  checks: CardCheck[];
+  /** Devices whose next card check fails. */
+  cardFails: string[];
+  /** The device whose next backup finds a change. */
+  dirty: string | null;
+  jobs: GearJob[];
 }
 
-/** No gear plugged in; two devices saved. */
-export const quietGear = (): MockGear => ({ devices: [structuredClone(RADIO), structuredClone(FC)], connected: [], working: [], reminders: [] });
+/** No gear plugged in; two devices saved, with backups. */
+export const quietGear = (): MockGear => ({ devices: [structuredClone(RADIO), structuredClone(FC)], connected: [], working: [], reminders: [], backups: seedBackups(), checks: [], cardFails: [], dirty: null, jobs: [] });
 
 /** A saved radio, a DVR card QuadCam does not know, and goggles a job is reading. */
 export const busyGear = (): MockGear => ({ ...quietGear(), connected: [radioConnected(), dvrConnected(), gogglesConnected()], working: ["disk6"] });
@@ -87,5 +98,7 @@ export function gearStatus(g: MockGear, values: Record<string, unknown>): GearSt
     sims_out_of_date: 0,
     working: [...g.working],
     reminders: [...g.reminders],
+    jobs: structuredClone(g.jobs),
+    card_checks: latestChecks(g),
   };
 }

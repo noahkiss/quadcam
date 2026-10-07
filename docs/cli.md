@@ -154,6 +154,13 @@ quadcam-cli gear report [--day D] --markdown                     # the session r
 quadcam-cli --json gear preflight                                # the Pack up check
 quadcam-cli --json gear packs [save L --type T --charged | type save T ... | notes TEXT]
 quadcam-cli --json gear crashes [--clip ID save --time S --broke TEXT --parts a,b]
+quadcam-cli --json gear backup [--device ID | --port P | --mount M] [show|diff|pin ...]
+quadcam-cli --json gear backups [--device ID]
+quadcam-cli --json gear storage [--prune [--dry-run]] [--export <backup|device> DIR]
+quadcam-cli --json gear import-backups FOLDER [--device ID] [--dry-run]
+quadcam-cli --json gear card-check [--device ID | --mount M] [--log]
+quadcam-cli --json gear card-repair --check <check id> --yes
+quadcam-cli --json gear stop <handle>
 ```
 
 `gear fc read --out STEM` writes `STEM.diff_all.txt` and `STEM.dump_all.txt` and refuses to

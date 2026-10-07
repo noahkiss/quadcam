@@ -6,10 +6,12 @@ import { FlightsPage } from "./Flights/FlightsPage";
 import { PacksPage } from "./Flights/PacksPage";
 import { PackUpPage } from "./Flights/PackUpPage";
 import { RepairsPage } from "./Flights/RepairsPage";
+import { StoragePage } from "./Storage/StoragePage";
 
 export const GEAR_PAGES: GearPageSlot[] = [
   { id: "packup", label: "Pack up", icon: "check-circle", render: () => <PackUpPage /> },
   { id: "flights", label: "Flights", icon: "stopwatch", render: () => <FlightsPage /> },
   { id: "packs", label: "Packs", icon: "battery", render: () => <PacksPage /> },
   { id: "repairs", label: "Repairs", icon: "danger-triangle", render: () => <RepairsPage /> },
+  { id: "storage", label: "Storage", icon: "hdd", render: () => <StoragePage /> },
 ];
