@@ -77,6 +77,13 @@ pub struct FormatPlan {
     pub media_name: String,
     pub clip_count: usize,
     pub label: String,
+    /// The file system the erase writes: the source's `CardPolicy` (FAT32, exFAT).
+    #[serde(default)]
+    pub filesystem: String,
+    /// Advice for the confirm, such as a card larger than the source's DVRs read. Never a
+    /// refusal.
+    #[serde(default)]
+    pub warnings: Vec<String>,
 }
 
 /// An explicit format request from the CLI or an agent. Every field must match the card

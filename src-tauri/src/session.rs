@@ -134,7 +134,7 @@ pub struct PlanPatch {
     /// drops one.
     #[serde(default)]
     pub removed_cuts: Option<crate::trim::RemovedCuts>,
-    /// True adds one cut per radio-log pack (see `trim::flight_cuts`) to the cut list,
+    /// True adds one cut per radio-log flight (see `trim::flight_cuts`) to the cut list,
     /// after `cuts` when both are given.
     #[serde(default)]
     pub split_by_flight: Option<bool>,
@@ -512,13 +512,13 @@ impl Session {
                 .transpose()?;
             if patch.split_by_flight == Some(true) {
                 let p = self.plan_mut(patch.id)?;
-                let packs = p
+                let flights = p
                     .flight
                     .as_ref()
-                    .map(|f| f.pack_spans.clone())
+                    .map(|f| f.flight_spans.clone())
                     .unwrap_or_default();
                 let base = cuts.clone().unwrap_or_else(|| p.cuts.clone());
-                let add = crate::trim::flight_cuts(&what, &packs, duration)?;
+                let add = crate::trim::flight_cuts(&what, &flights, duration)?;
                 cuts = Some(crate::trim::check_cuts(
                     &what,
                     &crate::trim::with_cuts(&base, &add),
@@ -911,7 +911,7 @@ mod tests {
             p.log_offset_s
         );
         let f = p.flight.as_ref().unwrap();
-        assert_eq!(f.pack_spans[0].start, p.log_offset_s);
+        assert_eq!(f.flight_spans[0].start, p.log_offset_s);
     }
 
     #[test]
@@ -978,13 +978,13 @@ mod tests {
     }
 
     #[test]
-    fn split_by_flight_adds_a_cut_per_pack_on_the_clip_timeline() {
+    fn split_by_flight_adds_a_cut_per_flight_on_the_clip_timeline() {
         let mut s = session();
         s.clips[0].duration = 300.0;
         let span = |a, b| Span { start: a, end: b };
         s.plans[0].flight = Some(FlightStats {
-            packs: 2,
-            pack_spans: vec![span(0.0, 100.0), span(150.0, 290.0)],
+            flights: 2,
+            flight_spans: vec![span(0.0, 100.0), span(150.0, 290.0)],
             ..Default::default()
         });
         s.plans[0].cuts = vec![span(10.0, 20.0)];
@@ -998,7 +998,7 @@ mod tests {
                 Editor::Agent,
             )
         };
-        // The log starts 5 s into the clip: the packs move with it, and the cuts follow.
+        // The log starts 5 s into the clip: the flights move with it, and the cuts follow.
         s.patch(
             &[PlanPatch {
                 id: 0,
@@ -1009,11 +1009,11 @@ mod tests {
         )
         .unwrap();
         assert_eq!(
-            s.plans[0].flight.as_ref().unwrap().pack_spans,
+            s.plans[0].flight.as_ref().unwrap().flight_spans,
             vec![span(5.0, 105.0), span(155.0, 295.0)]
         );
         split(&mut s).unwrap();
-        // The hand-made cut stays; the second pack's lead-out stops at the clip's end.
+        // The hand-made cut stays; the second flight's lead-out stops at the clip's end.
         assert_eq!(
             s.plans[0].cuts,
             vec![span(3.0, 107.0), span(10.0, 20.0), span(153.0, 297.0)]
@@ -1022,7 +1022,7 @@ mod tests {
         // Again: the same ranges are not added twice.
         split(&mut s).unwrap();
         assert_eq!(s.plans[0].cuts.len(), 3);
-        // A clip without packs has nothing to split, and nothing changes.
+        // A clip without flights has nothing to split, and nothing changes.
         s.plans[0].flight = None;
         assert!(split(&mut s)
             .unwrap_err()
@@ -1070,8 +1070,8 @@ mod tests {
         s
     }
 
-    /// One 2026-09-28 log: two packs that straddle the DVR's file boundary at 600 s, then a
-    /// 90 s pack for the third file.
+    /// One 2026-09-28 log: two flights that straddle the DVR's file boundary at 600 s, then a
+    /// 90 s flight for the third file.
     fn split_log(dir: &Path) {
         std::fs::create_dir(dir.join("LOGS")).unwrap();
         let mut csv = String::from("Date,Time,1RSS(dB),RQly(%)\n");
@@ -1119,14 +1119,14 @@ mod tests {
             )
         };
         plan(&mut s);
-        // The joined clip claims both packs, across the file boundary; the part is not
+        // The joined clip claims both flights, across the file boundary; the part is not
         // matched on its own.
         let p0 = &s.plans[0];
         assert_eq!(p0.badge, Badge::Matched, "{:?}", p0.match_reason);
         assert_eq!(p0.segments, 2);
         let f = p0.flight.as_ref().unwrap();
         assert_eq!(
-            f.pack_spans,
+            f.flight_spans,
             vec![
                 Span {
                     start: 0.0,
@@ -1168,7 +1168,7 @@ mod tests {
         assert!(err.to_string().contains("part of clip 0"), "{err}");
 
         // Kept apart: three clips again, the cuts past 600 s go, and the first file matches
-        // the first pack alone.
+        // the first flight alone.
         s.patch(
             &[PlanPatch {
                 id: 0,

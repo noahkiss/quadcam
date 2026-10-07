@@ -57,16 +57,16 @@ impl Core {
         })
     }
 
-    /// "Split by flight" for a library clip: one cut per radio-log pack, added to its cut
+    /// "Split by flight" for a library clip: one cut per radio-log flight, added to its cut
     /// list. The new ranges wait for `library_export_cuts`, as hand-made cuts do.
     pub fn library_split_by_flight(&self, id: &str) -> Result<CutChange> {
         let (root, c) = self.clip(id)?;
-        let packs = c
+        let flights = c
             .stats
             .as_ref()
-            .map(|f| f.pack_spans.clone())
+            .map(|f| f.flight_spans.clone())
             .unwrap_or_default();
-        let add = trim::flight_cuts(&c.display_name(), &packs, c.duration)?;
+        let add = trim::flight_cuts(&c.display_name(), &flights, c.duration)?;
         let mut have: Vec<Span> = crate::cuts::library_exported(&root, &c)
             .iter()
             .map(|e| e.span)
@@ -75,7 +75,7 @@ impl Core {
         self.library_set_cuts(id, &trim::with_cuts(&have, &add), None)
     }
 
-    /// "Split by flight" for a session clip: one cut per radio-log pack, added to its cut
+    /// "Split by flight" for a session clip: one cut per radio-log flight, added to its cut
     /// list.
     pub fn session_split_by_flight(&self, id: usize) -> Result<CutChange> {
         let patch = crate::session::PlanPatch {

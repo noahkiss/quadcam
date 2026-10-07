@@ -1,10 +1,15 @@
-//! DJI digital video: an O4 air unit over USB, or a goggles card. Clips are MP4s under
+//! DJI digital video: an O4 air unit over USB, or a goggles card. QuadCam assumes the unit
+//! records on arm and stops on disarm (DJI's default), so a file is usually one flight; it
+//! does not join files a unit split from one long recording (`join` is analog only). Clips are MP4s under
 //! `DCIM/DJI_*/`, named `DJI_<YYYYMMDDHHMMSS>_<NNNN>_<x>.MP4` by the unit's clock in local
 //! time (older goggles write `DJIG####.MP4`). Next to the video track sit DJI's own data
 //! streams (`djmd`, `dbgi`) and a cover picture; `moov` is the last box. `MISC/` holds DJI's
-//! housekeeping and is ignored. QuadCam never formats these volumes and never writes a file to
-//! them. The one change it makes is "Delete clips after import" (off by default): it deletes
-//! the `.MP4` clips that verified in the library, and leaves `MISC/`, sidecars and folders.
+//! housekeeping and is ignored. QuadCam never formats a DJI device over USB (an air unit, or
+//! goggles in storage mode) and never writes a file to it. A removable goggles card, in a
+//! reader or the built-in slot, may be erased as exFAT by card prep once every clip on it is
+//! in the library (`disk::check_volume_contents`). The one other change QuadCam makes is
+//! "Delete clips after import" (off by default): it deletes the `.MP4` clips that verified in
+//! the library, and leaves `MISC/`, sidecars and folders.
 
 use super::{CardPolicy, EncodePlan, Inspect, Source, SourceKind};
 use crate::media::{Format, Probe, Tools};
@@ -238,14 +243,16 @@ impl Source for Dji {
             .unwrap_or_else(|| "mp4".into())
     }
 
-    /// Goggles format their own cards, and an air unit is not a card.
+    /// No "Format card" after an import. Card prep may erase a removable goggles card as
+    /// exFAT; `disk::check_volume_contents` refuses a DJI device over USB.
     fn card_policy(&self) -> CardPolicy {
         CardPolicy {
             format_offered: false,
+            prep_offered: true,
             delete_clips_offered: true,
             filesystem: "exFAT",
             warn_above_bytes: u64::MAX,
-            filesystem_advice: "Import works; QuadCam does not format DJI cards.",
+            filesystem_advice: "Import works. DJI goggles want exFAT: card prep can erase the card as exFAT once every clip is in the library.",
             size_warning: "",
         }
     }
@@ -365,6 +372,7 @@ mod tests {
         assert_eq!(Dji.original_ext(Path::new("/x/DJI_1.MP4")), "mp4");
         let p = Dji.card_policy();
         assert!(!p.format_offered);
+        assert!(p.prep_offered);
         assert!(p.delete_clips_offered);
         assert_eq!(p.filesystem, "exFAT");
         assert_eq!(p.warn_above_bytes, u64::MAX);

@@ -1,14 +1,14 @@
-//! Volumes and disks: `diskutil info`, card detection, and the guarded FAT32 format (after an
-//! import, and card prep).
+//! Volumes and disks: `diskutil info`, card detection, and the guarded format (after an
+//! import, and card prep) with the file system of the source's `CardPolicy`.
 
 use anyhow::{anyhow, bail, Context, Result};
 use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
-/// Largest disk the format step accepts. Analog DVRs usually take cards up to 32 GB.
-pub const MAX_FORMAT_BYTES: u64 = 64_000_000_000;
-/// Cards over this size ship as exFAT; analog DVRs want FAT32.
+/// Cards over this size ship as exFAT; analog DVRs want FAT32. A card's size is never a
+/// reason to refuse a format: the source's `CardPolicy` turns it into advice
+/// (`format_advice`).
 pub const FAT32_CARD_BYTES: u64 = 32 * 1_000_000_000 + 2_000_000_000;
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, specta::Type)]
@@ -253,7 +253,7 @@ impl CardIdentity {
 /// Volume name the format step uses when none is given.
 pub const DEFAULT_LABEL: &str = "DVR";
 
-/// FAT32 volume label: `DVR` by default, upper case, at most 11 characters.
+/// Volume label (FAT32 and exFAT alike): `DVR` by default, upper case, at most 11 characters.
 pub fn fat_label(name: &str) -> Result<String> {
     let l: String = name.trim().to_uppercase();
     let l = if l.is_empty() {
@@ -312,13 +312,19 @@ pub fn check_format_guards(
             );
         }
     }
-    if whole.total_size == 0 || whole.total_size > MAX_FORMAT_BYTES {
-        bail!(
-            "Refused: {whole_id} is {} bytes; the limit is 64 GB.",
-            whole.total_size
-        );
+    if whole.total_size == 0 {
+        bail!("Refused: {whole_id} reports no size.");
     }
     Ok(())
+}
+
+/// What the format confirm says about a card's size for a source: advice, never a refusal.
+pub fn format_advice(size: u64, policy: &crate::sources::CardPolicy) -> Vec<String> {
+    if size > policy.warn_above_bytes && !policy.size_warning.is_empty() {
+        vec![policy.size_warning.to_string()]
+    } else {
+        Vec::new()
+    }
 }
 
 /// Re-reads diskutil and checks every guard. Returns the whole-disk info on success.
@@ -329,48 +335,80 @@ pub fn verify_card_for_format(expected: &CardIdentity, mount: &Path) -> Result<D
     Ok(whole)
 }
 
-/// The `diskutil eraseDisk` personality for a `CardPolicy` file system. QuadCam formats
-/// FAT32 only; any other file system refuses.
+/// The `diskutil eraseDisk` personality for a `CardPolicy` file system: FAT32 (proven on
+/// real cards) or exFAT (tested on disk images). Any other file system refuses.
 pub fn erase_personality(filesystem: &str) -> Result<&'static str> {
     if filesystem.eq_ignore_ascii_case("FAT32") {
         Ok("FAT32")
+    } else if filesystem.eq_ignore_ascii_case("exFAT") {
+        Ok("ExFAT")
     } else {
-        bail!("Refused: QuadCam formats cards only as FAT32, not {filesystem}.")
+        bail!("Refused: QuadCam formats cards only as FAT32 or exFAT, not {filesystem}.")
     }
 }
 
-/// What the volume at `mount` holds, as far as a format cares: a radio's SD card and a DJI
-/// card are never erased, whatever the session or the plan said. A DJI card counts even
-/// when its `DCIM/DJI_*` folders are empty.
-pub fn check_volume_contents(mount: &Path) -> Result<()> {
-    if looks_like_radio(mount) {
-        bail!("Refused: this volume is a radio's SD card (LOGS with MODELS or RADIO).");
-    }
-    if crate::sources::dji::looks_like_dji_volume(mount) {
-        bail!("Refused: QuadCam does not format DJI cards; format them in the device.");
+/// Which format path asks: the format after an import, or card prep.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum EraseBy {
+    Import,
+    Prep,
+}
+
+/// Whether the source's policy offers a format on this path.
+pub fn check_policy(policy: &crate::sources::CardPolicy, by: EraseBy) -> Result<()> {
+    let offered = match by {
+        EraseBy::Import => policy.format_offered,
+        EraseBy::Prep => policy.prep_offered,
+    };
+    if !offered {
+        bail!(match by {
+            EraseBy::Import => "Refused: QuadCam does not format this source's cards after an import. Card prep can erase a removable card once every clip is in the library.",
+            EraseBy::Prep => "Refused: card prep does not format this source's cards.",
+        });
     }
     Ok(())
 }
 
-/// Erases the card's whole disk with the file system of `policy` (MBR), then ejects it at
-/// once. Every guard runs again here, immediately before the command: the source's policy,
-/// the disk guards, the volume's contents, then `recheck` (the caller's own guards, for
-/// example card prep's "every clip is in the library"). Err means nothing was erased.
-/// Ok(Some(reason)) means the card was erased but would not eject.
+/// What the volume at `mount` holds, and what it is, as far as a format cares. A radio's SD
+/// card is never erased. A DJI volume (a `DCIM/DJI_*` folder, even an empty one) is erased
+/// only when it is a removable card, never a DJI device over USB: refused when the disk's
+/// media name names DJI, or when it is not in the built-in SD slot while a DJI USB device
+/// (an air unit, goggles in storage mode) is attached (`dji_usb_attached`). `disk` is the
+/// volume's or whole disk's `diskutil info`.
+pub fn check_volume_contents(mount: &Path, disk: &DiskInfo, dji_usb_attached: bool) -> Result<()> {
+    if looks_like_radio(mount) {
+        bail!("Refused: this volume is a radio's SD card (LOGS with MODELS or RADIO).");
+    }
+    if crate::sources::dji::looks_like_dji_volume(mount) {
+        let named_dji = disk
+            .media_name
+            .as_deref()
+            .is_some_and(|m| m.to_ascii_uppercase().contains("DJI"));
+        if named_dji || (dji_usb_attached && !disk.is_slot_card()) {
+            bail!("Refused: QuadCam never formats a DJI device over USB (air unit or goggles storage). Format it in the device.");
+        }
+    }
+    Ok(())
+}
+
+/// Erases the card's whole disk with the file system of `policy` (MBR), then unmounts it at
+/// once (safe to remove). Every guard runs again here, immediately before the command: the
+/// source's policy for `by`, the disk guards, the volume's contents, then `recheck` (the
+/// caller's own guards, for example card prep's "every clip is in the library"). Err means
+/// nothing was erased. Ok(Some(reason)) means the card was erased but would not unmount.
 pub fn format_card(
     expected: &CardIdentity,
     mount: &Path,
     label: &str,
     policy: &crate::sources::CardPolicy,
+    by: EraseBy,
     recheck: &dyn Fn() -> Result<()>,
 ) -> Result<Option<String>> {
-    if !policy.format_offered {
-        bail!("Refused: QuadCam does not format this source's cards; format them in the device.");
-    }
+    check_policy(policy, by)?;
     let personality = erase_personality(policy.filesystem)?;
     let label = fat_label(label)?;
     let whole = verify_card_for_format(expected, mount)?;
-    check_volume_contents(mount)?;
+    check_volume_contents(mount, &whole, crate::gear::events::dji_usb_attached())?;
     recheck()?;
     let disk = format!("/dev/{}", whole_disk_of(&whole.device_identifier));
     let out = Command::new("/usr/sbin/diskutil")
@@ -543,12 +581,17 @@ mod tests {
         assert!(v.internal && v.is_slot_card() && !v.is_internal_storage());
         assert!(is_removable(&v) && is_removable(&w));
         check_format_guards(&id, &v, &w, &boot).unwrap();
-        // Every other guard still holds for a slot card.
+        // A card's size never refuses: a 128 GB card passes, with advice from its policy.
         let (id2, v2, w2) = plist_card(true, true, true, "Secure Digital", 128_000_000_000);
-        assert!(check_format_guards(&id2, &v2, &w2, &boot)
-            .unwrap_err()
-            .to_string()
-            .contains("64 GB"));
+        check_format_guards(&id2, &v2, &w2, &boot).unwrap();
+        assert_eq!(
+            format_advice(w2.total_size, &analog_policy()),
+            [analog_policy().size_warning]
+        );
+        assert!(format_advice(31_900_000_000, &analog_policy()).is_empty());
+        let dji = crate::sources::Source::card_policy(&crate::sources::dji::Dji);
+        assert!(format_advice(1_000_000_000_000, &dji).is_empty());
+        // Every other guard still holds for a slot card.
         assert!(
             check_format_guards(&id, &v, &w, &["disk0".into(), "disk4".into()]).is_err(),
             "boot disk"
@@ -613,11 +656,10 @@ mod tests {
         );
 
         let mut w2 = w.clone();
-        w2.total_size = 128_000_000_000;
-        assert!(
-            check_format_guards(&id, &v, &w2, &boot).is_err(),
-            "over 64 GB"
-        );
+        w2.total_size = 0;
+        assert!(check_format_guards(&id, &v, &w2, &boot).is_err(), "no size");
+        w2.total_size = 512_000_000_000;
+        check_format_guards(&id, &v, &w2, &boot).unwrap();
 
         let mut v2 = v.clone();
         v2.volume_uuid = Some("UUID-B".into());
@@ -656,32 +698,60 @@ mod tests {
     }
 
     #[test]
-    fn only_fat32_is_formatted() {
+    fn fat32_and_exfat_are_formatted() {
         assert_eq!(erase_personality("FAT32").unwrap(), "FAT32");
-        assert!(erase_personality("exFAT").is_err());
+        assert_eq!(erase_personality("exFAT").unwrap(), "ExFAT");
         assert!(erase_personality("APFS").is_err());
+        assert!(erase_personality("HFS+").is_err());
     }
 
     #[test]
-    fn radio_and_dji_volumes_refuse() {
+    fn policy_offers_per_path() {
+        let dji = crate::sources::Source::card_policy(&crate::sources::dji::Dji);
+        check_policy(&analog_policy(), EraseBy::Import).unwrap();
+        check_policy(&analog_policy(), EraseBy::Prep).unwrap();
+        assert!(check_policy(&dji, EraseBy::Import).is_err());
+        check_policy(&dji, EraseBy::Prep).unwrap();
+    }
+
+    #[test]
+    fn radio_volumes_and_dji_devices_refuse() {
+        let (_, reader_card, _) = card();
         let d = tempfile::tempdir().unwrap();
-        check_volume_contents(d.path()).unwrap();
+        check_volume_contents(d.path(), &reader_card, false).unwrap();
         std::fs::create_dir_all(d.path().join("DCIM")).unwrap();
         std::fs::write(d.path().join("DCIM/PICT0001.AVI"), b"x").unwrap();
-        check_volume_contents(d.path()).unwrap();
+        check_volume_contents(d.path(), &reader_card, true).unwrap();
 
         let radio = tempfile::tempdir().unwrap();
         for x in ["LOGS", "MODELS"] {
             std::fs::create_dir(radio.path().join(x)).unwrap();
         }
-        let e = check_volume_contents(radio.path()).unwrap_err().to_string();
+        let e = check_volume_contents(radio.path(), &reader_card, false)
+            .unwrap_err()
+            .to_string();
         assert!(e.contains("radio"), "{e}");
 
-        // An emptied DJI card still refuses.
+        // A DJI volume, even emptied: a removable card in a reader passes while no DJI
+        // device is on USB; a card in the built-in slot passes either way.
         let dji = tempfile::tempdir().unwrap();
         std::fs::create_dir_all(dji.path().join("DCIM/DJI_001")).unwrap();
-        let e = check_volume_contents(dji.path()).unwrap_err().to_string();
-        assert!(e.contains("DJI"), "{e}");
+        check_volume_contents(dji.path(), &reader_card, false).unwrap();
+        let (_, slot_card, _) = plist_card(true, true, true, "Secure Digital", 128_000_000_000);
+        check_volume_contents(dji.path(), &slot_card, true).unwrap();
+        // A DJI device over USB refuses: a DJI USB device attached, or a DJI media name.
+        let e = check_volume_contents(dji.path(), &reader_card, true)
+            .unwrap_err()
+            .to_string();
+        assert!(e.contains("DJI device over USB"), "{e}");
+        let mut air_unit = reader_card.clone();
+        air_unit.media_name = Some("DJI Air Unit".into());
+        let e = check_volume_contents(dji.path(), &air_unit, false)
+            .unwrap_err()
+            .to_string();
+        assert!(e.contains("DJI device over USB"), "{e}");
+        // The media name only matters on a DJI volume.
+        check_volume_contents(d.path(), &air_unit, true).unwrap();
     }
 
     #[test]
@@ -689,9 +759,16 @@ mod tests {
         let dji = crate::sources::Source::card_policy(&crate::sources::dji::Dji);
         let (id, _, _) = card();
         // Refused on the policy, before diskutil is ever asked about the disk.
-        let e = format_card(&id, Path::new("/nonexistent"), "DVR", &dji, &|| Ok(()))
-            .unwrap_err()
-            .to_string();
+        let e = format_card(
+            &id,
+            Path::new("/nonexistent"),
+            "DVR",
+            &dji,
+            EraseBy::Import,
+            &|| Ok(()),
+        )
+        .unwrap_err()
+        .to_string();
         assert!(e.contains("does not format"), "{e}");
     }
 
@@ -715,7 +792,7 @@ mod tests {
             card_warnings(&x, &analog_policy()),
             [
                 "Card is ExFAT, not FAT32. Most analog DVRs need a FAT32 card of 32 GB or less. Import works; you can format it to FAT32 at the end.",
-                "Card is larger than 32 GB. Most analog DVRs take cards up to 32 GB.",
+                "Card is larger than 32 GB. Most analog DVRs take cards up to 32 GB; this DVR may not read it.",
             ]
         );
     }
@@ -731,7 +808,7 @@ mod tests {
         let w = card_warnings(&v, &dji);
         assert_eq!(
             w,
-            ["Card is MS-DOS FAT32, not exFAT. Import works; QuadCam does not format DJI cards."]
+            ["Card is MS-DOS FAT32, not exFAT. Import works. DJI goggles want exFAT: card prep can erase the card as exFAT once every clip is in the library."]
         );
         assert!(!w[0].contains("analog"));
     }

@@ -1,20 +1,22 @@
 //! Shape-first radio-log matching, for every source.
 //!
-//! A clip matches the armed segments ("packs") whose shape fits it: the clip's length
-//! against the packs' armed span, and, for a run of clips, the order of the packs and the
+//! A clip matches the armed segments ("flights") whose shape fits it: the clip's length
+//! against the flights' armed span, and, for a run of clips, the order of the flights and the
 //! gaps between them. Clocks only break ties and confirm: the clip clock (DJI) against the
 //! log time when the radio clock is believable, and the gaps between clip clocks against
-//! the gaps between packs of one power-on run even when it is not. A log whose radio clock
+//! the gaps between flights of one power-on run even when it is not. A log whose radio clock
 //! reset (`2000-01-01`) still matches; its rows keep their file order, and a time that
 //! jumps back starts a new run.
 //!
-//! An analog clip with dead air is matched by its picture instead of its length. On a 1S
-//! whoop the battery powers the camera and the VTX, and the goggles' DVR keeps recording
-//! across battery swaps, so each picture stretch (a keep range) is one battery: its packs
-//! sit inside it, with unarmed picture around them, and a battery swap is dead air. The
-//! matcher slides the log along the clip (`Found::offset_s`) and scores each place by how
-//! the packs fit the stretches (`picture_fit`). Files a DVR split from one recording
-//! (`Want::follows`) are matched as one timeline, so a pack may span the file boundary.
+//! An analog clip with dead air is matched by its picture instead of its length. On a whoop
+//! where the battery powers the camera and the VTX, the goggles' DVR keeps recording across
+//! battery swaps, so each picture stretch (a keep range) is one battery: its flights sit
+//! inside it, with unarmed picture around them, and a battery swap is dead air. Short dead
+//! air while armed is signal breakup, not a swap. Voltage steps scale with the battery's cell
+//! count, estimated from the log (`cells`). The matcher slides the log along the clip
+//! (`Found::offset_s`) and scores each place by how the flights fit the stretches
+//! (`picture_fit`). Files a DVR split from one recording
+//! (`Want::follows`) are matched as one timeline, so a flight may span the file boundary.
 //!
 //! The EdgeTX model filters first: a log whose model a profile lists is a candidate only
 //! for clips that profile fits (the clip's own profile, else its video system). A model no
@@ -74,7 +76,7 @@ pub struct Seg {
     /// Numbered across all files. A new session starts at a long gap, a time that goes
     /// back (a power cycle with a reset clock) or a new file.
     pub session: usize,
-    /// The receiver battery at the first and last rows that read one (`RxBt`). A pack that
+    /// The receiver battery at the first and last rows that read one (`RxBt`). A flight that
     /// starts well above the last one's end is on a new battery.
     pub v_start: Option<f64>,
     pub v_end: Option<f64>,
@@ -86,8 +88,8 @@ impl Seg {
     }
 }
 
-/// Packs shorter than this are power-on blips, not flights.
-const MIN_PACK_S: f64 = 1.0;
+/// Flights shorter than this are power-on blips, not flights.
+const MIN_FLIGHT_S: f64 = 1.0;
 
 /// The segments of every file, in file order. A gap over `segment_gap_s` ends a segment;
 /// a gap over `session_gap_min`, a time going back, or a new file starts a new session.
@@ -130,7 +132,7 @@ pub fn segments(files: &[LogFile], tun: &Tunables) -> Vec<Seg> {
         }
         session += 1;
     }
-    out.retain(|s| s.secs() >= MIN_PACK_S);
+    out.retain(|s| s.secs() >= MIN_FLIGHT_S);
     for s in &mut out {
         // 0 V means no telemetry yet, not a reading.
         let v = || {
@@ -214,7 +216,7 @@ pub struct Found {
     /// clock is believable.
     pub skew_s: Option<f64>,
     pub model: Option<String>,
-    /// The clip second of the first claimed pack's start, when the picture placed it.
+    /// The clip second of the first claimed flight's start, when the picture placed it.
     /// Negative when the recording started after the arm.
     pub offset_s: Option<f64>,
     /// Why, in a few words.
@@ -228,73 +230,98 @@ struct Cand {
     first: usize,
     last: usize,
     cost: f64,
-    /// How the packs fit the picture, for a clip matched by it.
+    /// How the flights fit the picture, for a clip matched by it.
     fit: Option<Fit>,
 }
 
-/// How a clip's picture is scored against the packs (`picture_fit`).
+/// How a clip's picture is scored against the flights (`picture_fit`).
 pub mod pic {
     /// Slack at a picture stretch's edges: dead-air detection samples frames, and a log row
     /// comes every half second or so.
     pub const EDGE_S: f64 = 4.0;
-    /// A pack armed in dead air or across it: the 1S battery powers the VTX, so this cannot
-    /// happen. Plus `DARK_PER_S` per second of it.
+    /// A flight armed in dead air or across it: the battery powers the VTX, so a swap cannot
+    /// happen while armed. Plus `DARK_PER_S` per second of it.
     pub const CROSS: f64 = 40.0;
     pub const DARK_PER_S: f64 = 0.5;
-    /// A picture stretch with no pack: free up to `EMPTY_FREE_S` (a battery in, never
+    /// Dead air of at most this inside an armed flight, with picture on both sides, is signal
+    /// breakup (range, a crash, interference): only `DARK_PER_S` per second, and the
+    /// stretches on both sides count as one battery.
+    pub const BREAKUP_S: f64 = 10.0;
+    /// A picture stretch with no flight: free up to `EMPTY_FREE_S` (a battery in, never
     /// armed), then `EMPTY_PER_S` per second, at most `EMPTY_MAX`.
     pub const EMPTY_FREE_S: f64 = 30.0;
     pub const EMPTY_PER_S: f64 = 0.25;
     pub const EMPTY_MAX: f64 = 40.0;
-    /// A new battery (the pack starts `SWAP_V` above the last one's end) with no dead air
-    /// between the packs.
+    /// A new battery (the flight starts `SWAP_V` a cell above the last one's end) with no
+    /// dead air between the flights.
     pub const SWAP_IN_STRETCH: f64 = 15.0;
     pub const SWAP_V: f64 = 0.3;
-    /// Packs of one battery (within `SAME_V`) with dead air between: an unplug and replug.
+    /// Flights of one battery (within `SAME_V` a cell) with dead air between: an unplug and
+    /// replug.
     pub const REPLUG: f64 = 5.0;
     pub const SAME_V: f64 = 0.15;
+    /// A cell holds at most this (LiHV, with telemetry error). `cells` divides by it.
+    pub const CELL_MAX_V: f64 = 4.5;
     /// The cost of leaving a clip unmatched. A fit that costs more is no match.
     pub const UNMATCHED: f64 = 60.0;
-    /// A fit at or below this, with no pack in dead air and no swap without dead air, is
+    /// A fit at or below this, with no flight in dead air and no swap without dead air, is
     /// "matched".
     pub const MATCHED_MAX: f64 = 12.0;
     /// Another solution within this of the best one makes the match only "likely".
     pub const MARGIN: f64 = 8.0;
 }
 
-/// How a run of packs fits a clip's picture stretches at one offset.
+/// How a run of flights fits a clip's picture stretches at one offset.
 #[derive(Debug, Clone, Copy, Default, PartialEq)]
 pub struct Fit {
-    /// The clip second of the run's first pack start.
+    /// The clip second of the run's first flight start.
     pub offset: f64,
     /// Half the width of the offsets that fit as well.
     pub spread: f64,
-    /// Stretches that hold a pack, of all.
+    /// Stretches that hold a flight, of all.
     pub filled: usize,
     pub stretches: usize,
-    /// Packs armed in or across dead air.
+    /// Flights armed in or across dead air.
     pub crossing: usize,
+    /// Flights armed across short dead air (`pic::BREAKUP_S`): signal breakup.
+    pub breakups: usize,
     /// Battery swaps at dead air, and without it.
     pub swaps_at_gap: usize,
     pub swaps_in_stretch: usize,
-    /// Packs of one battery with dead air between.
+    /// Flights of one battery with dead air between.
     pub replugs: usize,
 }
 
-/// Scores `run` (consecutive packs of one session) placed with its first pack's start at
+/// The battery's cell count for the flights in `run`, from the highest flight-start reading
+/// (`RxBt`, nearly rested at arm): that voltage over `pic::CELL_MAX_V`, rounded up, 1 to 8.
+/// 1 when the log reads no battery.
+pub fn cells(run: &[Seg]) -> f64 {
+    let v = run.iter().filter_map(|s| s.v_start).fold(0.0, f64::max);
+    if v <= 0.0 {
+        1.0
+    } else {
+        (v / pic::CELL_MAX_V).ceil().clamp(1.0, 8.0)
+    }
+}
+
+/// Scores `run` (consecutive flights of one session) placed with its first flight's start at
 /// clip second `offset`, against the picture stretches `keep` of a clip `duration` long.
 /// 0 is a perfect fit; see `pic` for the costs.
 pub fn picture_fit(run: &[Seg], offset: f64, keep: &[(f64, f64)], duration: f64) -> (f64, Fit) {
     use pic::*;
     let base = run[0].start;
     let rel = |t: NaiveDateTime| (t - base).num_milliseconds() as f64 / 1000.0;
+    let n_cells = cells(run);
     let mut cost = 0.0;
     let mut fit = Fit {
         offset,
         stretches: keep.len(),
         ..Default::default()
     };
-    // Per pack, the stretch that holds it.
+    // Stretches joined by signal breakup count as one battery: `group[k]` is the first
+    // stretch of k's group.
+    let mut group: Vec<usize> = (0..keep.len()).collect();
+    // Per flight, the stretch that holds it.
     let mut home: Vec<Option<usize>> = Vec::with_capacity(run.len());
     let mut touched = vec![false; keep.len()];
     for s in run {
@@ -302,10 +329,14 @@ pub fn picture_fit(run: &[Seg], offset: f64, keep: &[(f64, f64)], duration: f64)
         let (va, vb) = (a.max(0.0), b.min(duration));
         let len = (vb - va).max(0.0);
         let mut best: Option<(usize, f64)> = None;
-        for (k, (ks, ke)) in keep.iter().enumerate() {
-            let ov = (vb.min(ke + EDGE_S) - va.max(ks - EDGE_S)).max(0.0);
+        let ov_of = |k: usize| {
+            let (ks, ke) = keep[k];
+            (vb.min(ke + EDGE_S) - va.max(ks - EDGE_S)).max(0.0)
+        };
+        for (k, t) in touched.iter_mut().enumerate() {
+            let ov = ov_of(k);
             if ov > EDGE_S.min(len / 2.0) {
-                touched[k] = true;
+                *t = true;
             }
             if best.is_none_or(|(_, o)| ov > o) {
                 best = Some((k, ov));
@@ -313,17 +344,40 @@ pub fn picture_fit(run: &[Seg], offset: f64, keep: &[(f64, f64)], duration: f64)
         }
         let (k, ov) = best.unwrap_or((0, 0.0));
         let dark = len - ov;
-        if dark > 0.05 {
-            fit.crossing += 1;
-            cost += CROSS + dark * DARK_PER_S;
-            home.push(None);
-        } else {
+        if dark <= 0.05 {
             home.push(Some(k));
+            continue;
         }
+        // Breakup: the flight starts in stretch `first` and ends in stretch `last`, and every
+        // gap between them is short dead air.
+        let inside = |x: f64| {
+            keep.iter()
+                .position(|(ks, ke)| x >= ks - EDGE_S && x <= ke + EDGE_S)
+        };
+        if let (Some(first), Some(last)) = (inside(va), inside(vb)) {
+            let gaps: Vec<f64> = (first..last).map(|g| keep[g + 1].0 - keep[g].1).collect();
+            if last > first && gaps.iter().all(|g| *g <= BREAKUP_S) {
+                fit.breakups += 1;
+                cost += gaps.iter().sum::<f64>() * DARK_PER_S;
+                for g in first..=last {
+                    touched[g] = true;
+                    group[g] = group[first];
+                }
+                home.push(Some(first));
+                continue;
+            }
+        }
+        fit.crossing += 1;
+        cost += CROSS + dark * DARK_PER_S;
+        home.push(None);
     }
+    let home: Vec<Option<usize>> = home.into_iter().map(|h| h.map(|k| group[k])).collect();
+    fit.stretches = (0..keep.len()).filter(|&k| group[k] == k).count();
     for (k, (ks, ke)) in keep.iter().enumerate() {
-        if home.contains(&Some(k)) {
-            fit.filled += 1;
+        if home.contains(&Some(group[k])) {
+            if group[k] == k {
+                fit.filled += 1;
+            }
         } else if !touched[k] {
             cost += ((ke - ks - EMPTY_FREE_S).max(0.0) * EMPTY_PER_S).min(EMPTY_MAX);
         }
@@ -336,14 +390,14 @@ pub fn picture_fit(run: &[Seg], offset: f64, keep: &[(f64, f64)], duration: f64)
             continue;
         };
         let jump = start - end;
-        if jump >= SWAP_V {
+        if jump >= SWAP_V * n_cells {
             if x == y {
                 fit.swaps_in_stretch += 1;
                 cost += SWAP_IN_STRETCH;
             } else {
                 fit.swaps_at_gap += 1;
             }
-        } else if jump.abs() <= SAME_V && x != y {
+        } else if jump.abs() <= SAME_V * n_cells && x != y {
             fit.replugs += 1;
             cost += REPLUG;
         }
@@ -351,9 +405,9 @@ pub fn picture_fit(run: &[Seg], offset: f64, keep: &[(f64, f64)], duration: f64)
     (cost, fit)
 }
 
-/// Picture candidates for clip `ci`: every run of packs of one session that some offset
-/// puts in the clip, at its best offset. A run holds every pack of the session the clip
-/// would have seen: a pack the DVR recorded cannot be left out.
+/// Picture candidates for clip `ci`: every run of flights of one session that some offset
+/// puts in the clip, at its best offset. A run holds every flight of the session the clip
+/// would have seen: a flight the DVR recorded cannot be left out.
 fn picture_cands(
     ci: usize,
     w: &Want,
@@ -382,14 +436,14 @@ fn picture_cands(
         }
         let base = group[0].start;
         let rel = |t: NaiveDateTime| (t - base).num_milliseconds() as f64 / 1000.0;
-        let packs: Vec<(f64, f64)> = group.iter().map(|s| (rel(s.start), rel(s.end))).collect();
-        // Offsets of the group's first pack where a pack edge meets a stretch or clip edge.
+        let flights: Vec<(f64, f64)> = group.iter().map(|s| (rel(s.start), rel(s.end))).collect();
+        // Offsets of the group's first flight where a flight edge meets a stretch or clip edge.
         let mut edges: Vec<f64> = vec![0.0, d];
         for (ks, ke) in &w.keep {
             edges.extend([*ks, *ke]);
         }
         let mut at: Vec<f64> = Vec::new();
-        for (a, b) in &packs {
+        for (a, b) in &flights {
             for e in &edges {
                 for x in [-EDGE_S, 0.0, EDGE_S] {
                     at.extend([e + x - a, e + x - b]);
@@ -404,9 +458,9 @@ fn picture_cands(
         let mut runs: std::collections::BTreeMap<(usize, usize), Vec<(f64, f64)>> =
             Default::default();
         for o in at {
-            let seen: Vec<usize> = (0..packs.len())
+            let seen: Vec<usize> = (0..flights.len())
                 .filter(|&i| {
-                    let (a, b) = (o + packs[i].0, o + packs[i].1);
+                    let (a, b) = (o + flights[i].0, o + flights[i].1);
                     let vis = b.min(d) - a.max(0.0);
                     vis > EDGE_S.min((b - a) / 2.0)
                 })
@@ -414,7 +468,7 @@ fn picture_cands(
             let (Some(&i), Some(&k)) = (seen.first(), seen.last()) else {
                 continue;
             };
-            let off = o + packs[i].0;
+            let off = o + flights[i].0;
             let (cost, _) = picture_fit(&group[i..=k], off, &w.keep, d);
             runs.entry((i, k)).or_default().push((off, cost));
         }
@@ -459,7 +513,7 @@ fn picture_cands(
 /// Matches clips (in recording order) to segments (file order; time order within a
 /// session). `clock_ok`: the log's clock is believable, so a clip clock may be compared to
 /// it directly. A clip that `follows` the one before it is matched with it as one
-/// timeline; each file then gets the packs it shows.
+/// timeline; each file then gets the flights it shows.
 pub fn match_all(
     clips: &[Want],
     segs: &[Seg],
@@ -635,14 +689,14 @@ fn match_timelines(
             (true, Some(clock), None) => Some((clock - s.start).num_milliseconds() as f64 / 1000.0),
             _ => None,
         };
-        let packs = if n == 1 {
-            "1 pack".to_string()
+        let flights = if n == 1 {
+            "1 flight".to_string()
         } else {
-            format!("{n} packs")
+            format!("{n} flights")
         };
         let armed: f64 = segs[c.first..=c.last].iter().map(Seg::secs).sum();
         let mut why = vec![format!(
-            "{packs} from {} ({:.0} s armed over {:.0} s) in a {:.0} s clip",
+            "{flights} from {} ({:.0} s armed over {:.0} s) in a {:.0} s clip",
             s.start.format("%H:%M:%S"),
             armed,
             span_s,
@@ -660,7 +714,7 @@ fn match_timelines(
                     Badge::Likely
                 };
                 why.push(format!(
-                    "packs fit {} of {} picture stretches",
+                    "flights fit {} of {} picture stretches",
                     f.filled, f.stretches
                 ));
                 let count = |n: usize, one: &str, many: &str| {
@@ -671,7 +725,18 @@ fn match_timelines(
                     }
                 };
                 if f.crossing > 0 {
-                    why.push(count(f.crossing, "pack in dead air", "packs in dead air"));
+                    why.push(count(
+                        f.crossing,
+                        "flight in dead air",
+                        "flights in dead air",
+                    ));
+                }
+                if f.breakups > 0 {
+                    why.push(count(
+                        f.breakups,
+                        "signal breakup while armed",
+                        "signal breakups while armed",
+                    ));
                 }
                 if f.swaps_at_gap > 0 {
                     why.push(count(
@@ -692,11 +757,11 @@ fn match_timelines(
                 }
                 if f.spread >= 1.0 {
                     why.push(format!(
-                        "first pack at {:.0} s (±{:.0} s)",
+                        "first flight at {:.0} s (±{:.0} s)",
                         f.offset, f.spread
                     ));
                 } else {
-                    why.push(format!("first pack at {:.0} s", f.offset));
+                    why.push(format!("first flight at {:.0} s", f.offset));
                 }
             }
             None => {
@@ -720,7 +785,7 @@ fn match_timelines(
         if !clock_ok {
             why.push(match c.fit {
                 Some(_) => "radio clock wrong; matched by picture".into(),
-                None => "radio clock wrong; matched by pack lengths".into(),
+                None => "radio clock wrong; matched by flight lengths".into(),
             });
         }
         // Another solution nearly as good, with this clip elsewhere: not sure.
@@ -729,7 +794,7 @@ fn match_timelines(
             badge = Badge::Likely;
             match alt.picks[ci].map(|p| cands[p]) {
                 Some(o) => why.push(format!(
-                    "the pack at {} fits as well",
+                    "the flight at {} fits as well",
                     segs[o.first].start.format("%H:%M:%S")
                 )),
                 None => why.push("it may be a clip without a log".into()),
@@ -948,7 +1013,7 @@ mod tests {
         assert_eq!(clip_models(None, SourceKind::Dji, &[]), None);
     }
 
-    // Picture matching. Packs are given in seconds from midnight of a reset-clock day.
+    // Picture matching. Flights are given in seconds from midnight of a reset-clock day.
 
     fn at(secs: f64) -> NaiveDateTime {
         NaiveDate::from_ymd_opt(2000, 1, 1)
@@ -958,8 +1023,8 @@ mod tests {
             + Duration::milliseconds((secs * 1000.0).round() as i64)
     }
 
-    /// Packs `(start, end, volts at start, volts at end)` of one session.
-    fn packs(session: usize, p: &[(f64, f64, f64, f64)]) -> Vec<Seg> {
+    /// Flights `(start, end, volts at start, volts at end)` of one session.
+    fn flights(session: usize, p: &[(f64, f64, f64, f64)]) -> Vec<Seg> {
         p.iter()
             .map(|&(a, b, v0, v1)| Seg {
                 file: 0,
@@ -990,11 +1055,11 @@ mod tests {
         match_all(clips, segs, &files, &[], false, &Tunables::default())
     }
 
-    /// Three batteries, each a picture stretch with unarmed picture around its pack, the
+    /// Three batteries, each a picture stretch with unarmed picture around its flight, the
     /// log starting 20 s into the clip.
     fn three_batteries() -> (Want, Vec<Seg>) {
         let clip = picture(600.0, &[(5.0, 160.0), (200.0, 380.0), (420.0, 600.0)]);
-        let segs = packs(
+        let segs = flights(
             0,
             &[
                 (1000.0, 1120.0, 4.3, 3.5),
@@ -1006,16 +1071,16 @@ mod tests {
     }
 
     #[test]
-    fn packs_inside_picture_stretches_match_with_their_offset() {
+    fn flights_inside_picture_stretches_match_with_their_offset() {
         let (clip, segs) = three_batteries();
         let f = run(&[clip], &segs)[0].clone().expect("a match");
         assert_eq!(f.badge, Badge::Matched, "{}", f.reason);
         assert_eq!((f.first, f.segments), (0, 3));
         let o = f.offset_s.unwrap();
-        // Pack 1 may start 5..40 s in, pack 2 at 200..250, pack 3 at 420..450: 5..30.
+        // Flight 1 may start 5..40 s in, flight 2 at 200..250, flight 3 at 420..450: 5..30.
         assert!((5.0..=30.0).contains(&o), "offset {o}");
         assert!(
-            f.reason.contains("packs fit 3 of 3 picture stretches"),
+            f.reason.contains("flights fit 3 of 3 picture stretches"),
             "{}",
             f.reason
         );
@@ -1027,10 +1092,10 @@ mod tests {
     }
 
     #[test]
-    fn a_pack_that_must_cross_dead_air_is_never_matched() {
-        // A 150 s pack cannot sit in a 100 s or a 120 s stretch.
+    fn a_flight_that_must_cross_dead_air_is_never_matched() {
+        // A 150 s flight cannot sit in a 100 s or a 120 s stretch.
         let clip = picture(300.0, &[(0.0, 100.0), (130.0, 250.0)]);
-        let segs = packs(0, &[(1000.0, 1150.0, 4.3, 3.5)]);
+        let segs = flights(0, &[(1000.0, 1150.0, 4.3, 3.5)]);
         let f = run(&[clip], &segs)[0].clone();
         assert!(
             f.as_ref().is_none_or(|f| f.badge != Badge::Matched),
@@ -1039,9 +1104,9 @@ mod tests {
     }
 
     #[test]
-    fn packs_without_a_clip_are_left_alone() {
+    fn flights_without_a_clip_are_left_alone() {
         // Five batteries; the DVR recorded only the 2nd and 3rd.
-        let segs = packs(
+        let segs = flights(
             0,
             &[
                 (1000.0, 1100.0, 4.3, 3.5),
@@ -1051,7 +1116,7 @@ mod tests {
                 (2100.0, 2200.0, 4.3, 3.5),
             ],
         );
-        // Picture from just before pack 2 to 20 s after pack 3, dead air between and after.
+        // Picture from just before flight 2 to 20 s after flight 3, dead air between and after.
         let clip = picture(420.0, &[(30.0, 150.0), (170.0, 400.0)]);
         let f = run(&[clip], &segs)[0].clone().expect("a match");
         assert_eq!(f.badge, Badge::Matched, "{}", f.reason);
@@ -1060,8 +1125,8 @@ mod tests {
 
     #[test]
     fn a_recording_may_start_late_and_stop_early() {
-        // The DVR started about 40 s into pack 1 and stopped about 50 s into pack 3.
-        let segs = packs(
+        // The DVR started about 40 s into flight 1 and stopped about 50 s into flight 3.
+        let segs = flights(
             0,
             &[
                 (1000.0, 1100.0, 4.3, 3.5),
@@ -1078,9 +1143,9 @@ mod tests {
     }
 
     #[test]
-    fn several_packs_of_one_battery_share_a_stretch() {
+    fn several_flights_of_one_battery_share_a_stretch() {
         // A crash and a re-arm on battery 1 (it starts where it stopped), then battery 2.
-        let segs = packs(
+        let segs = flights(
             0,
             &[
                 (1000.0, 1050.0, 4.3, 3.9),
@@ -1092,7 +1157,7 @@ mod tests {
         let f = run(&[clip], &segs)[0].clone().expect("a match");
         assert_eq!(f.badge, Badge::Matched, "{}", f.reason);
         assert_eq!(f.segments, 3);
-        assert!(f.reason.contains("packs fit 2 of 2"), "{}", f.reason);
+        assert!(f.reason.contains("flights fit 2 of 2"), "{}", f.reason);
         assert!(
             f.reason.contains("1 battery swap at dead air"),
             "{}",
@@ -1102,7 +1167,7 @@ mod tests {
 
     #[test]
     fn a_battery_swap_needs_dead_air() {
-        let segs = packs(0, &[(1000.0, 1050.0, 4.3, 3.5), (1080.0, 1140.0, 4.3, 3.5)]);
+        let segs = flights(0, &[(1000.0, 1050.0, 4.3, 3.5), (1080.0, 1140.0, 4.3, 3.5)]);
         let clip = picture(300.0, &[(0.0, 300.0)]);
         // The only stretch must hold both batteries: no dead air at the swap.
         let (cost, fit) = picture_fit(&segs, 20.0, &clip.keep, 300.0);
@@ -1116,8 +1181,54 @@ mod tests {
     }
 
     #[test]
-    fn a_long_stretch_without_a_pack_is_suspicious() {
-        let segs = packs(0, &[(1000.0, 1100.0, 4.3, 3.5)]);
+    fn voltage_steps_scale_with_the_cell_count() {
+        // 1S: 4.3 V rested. 4S: 16.8 V.
+        assert_eq!(cells(&flights(0, &[(0.0, 60.0, 4.3, 3.5)])), 1.0);
+        assert_eq!(cells(&flights(0, &[(0.0, 60.0, 16.6, 14.0)])), 4.0);
+        assert_eq!(cells(&flights(0, &[(0.0, 60.0, 8.3, 7.0)])), 2.0);
+        assert_eq!(cells(&flights(0, &[(0.0, 60.0, 24.9, 21.0)])), 6.0);
+        // A 4S battery that recovers 0.3 V at rest after an unplug and replug: one battery,
+        // not a swap (on 1S thresholds it would read as a new battery).
+        let segs = flights(
+            0,
+            &[(1000.0, 1100.0, 16.6, 14.6), (1200.0, 1300.0, 14.9, 13.9)],
+        );
+        let keep = [(0.0, 150.0), (180.0, 350.0)];
+        let (_, fit) = picture_fit(&segs, 20.0, &keep, 350.0);
+        assert_eq!((fit.swaps_at_gap, fit.replugs), (0, 1), "{fit:?}");
+        // A fresh 4S battery (2.6 V up) is a swap.
+        let segs = flights(
+            0,
+            &[(1000.0, 1100.0, 16.6, 14.0), (1200.0, 1300.0, 16.6, 14.0)],
+        );
+        let (_, fit) = picture_fit(&segs, 20.0, &keep, 350.0);
+        assert_eq!((fit.swaps_at_gap, fit.replugs), (1, 0), "{fit:?}");
+    }
+
+    #[test]
+    fn short_dead_air_while_armed_is_signal_breakup() {
+        // One 200 s flight; the picture breaks up for 6 s in the middle.
+        let segs = flights(0, &[(1000.0, 1200.0, 4.3, 3.5)]);
+        let clip = picture(260.0, &[(0.0, 120.0), (126.0, 260.0)]);
+        let (cost, fit) = picture_fit(&segs, 20.0, &clip.keep, 260.0);
+        assert_eq!((fit.breakups, fit.crossing), (1, 0), "{fit:?}");
+        assert_eq!((fit.filled, fit.stretches), (1, 1), "{fit:?}");
+        assert!(cost < pic::CROSS, "{cost}");
+        let f = run(&[clip], &segs)[0].clone().expect("a match");
+        assert_eq!(f.badge, Badge::Matched, "{}", f.reason);
+        assert!(
+            f.reason.contains("1 signal breakup while armed"),
+            "{}",
+            f.reason
+        );
+        // 30 s of dead air inside a flight is not breakup: still a crossing.
+        let (_, fit) = picture_fit(&segs, 20.0, &[(0.0, 100.0), (130.0, 260.0)], 260.0);
+        assert_eq!((fit.breakups, fit.crossing), (0, 1), "{fit:?}");
+    }
+
+    #[test]
+    fn a_long_stretch_without_a_flight_is_suspicious() {
+        let segs = flights(0, &[(1000.0, 1100.0, 4.3, 3.5)]);
         let clip = picture(450.0, &[(0.0, 120.0), (150.0, 450.0)]);
         let (cost, fit) = picture_fit(&segs, 10.0, &clip.keep, 450.0);
         assert_eq!((fit.filled, fit.crossing), (1, 0));
@@ -1141,14 +1252,14 @@ mod tests {
         let mut b = picture(180.0, &[(0.0, 180.0)]);
         b.day = NaiveDate::from_ymd_opt(2026, 9, 26);
         let f = run(&[a, b], &segs);
-        // Each fits a pack of the one session alone; together they may not.
+        // Each fits a flight of the one session alone; together they may not.
         assert_eq!(f.iter().flatten().count(), 1, "{f:?}");
     }
 
     #[test]
     fn a_split_recording_matches_as_one_timeline() {
-        // One recording, split at 600 s; pack 3 runs across the split.
-        let segs = packs(
+        // One recording, split at 600 s; flight 3 runs across the split.
+        let segs = flights(
             0,
             &[
                 (1000.0, 1150.0, 4.3, 3.5),
@@ -1157,7 +1268,7 @@ mod tests {
                 (1750.0, 1850.0, 4.3, 3.5),
             ],
         );
-        // Log offset 30: packs at 30-180, 280-430, 530-680, 780-880 of the recording.
+        // Log offset 30: flights at 30-180, 280-430, 530-680, 780-880 of the recording.
         let a = picture(600.0, &[(10.0, 200.0), (260.0, 450.0), (510.0, 600.0)]);
         let mut b = picture(320.0, &[(0.0, 100.0), (160.0, 300.0)]);
         b.follows = true;
@@ -1171,18 +1282,18 @@ mod tests {
         assert!(fb.reason.contains("file 2 of 2"), "{}", fb.reason);
     }
 
-    /// Pack spans and voltages from a real reset-clock log (four power-on sessions, one
+    /// Flight spans and voltages from a real reset-clock log (four power-on sessions, one
     /// 1S whoop), and the keep ranges of four real analog recordings: two files of one
     /// recording the DVR split, then two recordings of later days. Nothing in it fits
     /// cleanly, and the matcher must say so.
     #[test]
     fn real_reset_clock_log_against_four_recordings() {
-        let mut segs = packs(0, &[(262.45, 276.95, 4.1, 3.9), (313.49, 345.19, 4.0, 3.8)]);
-        segs.extend(packs(
+        let mut segs = flights(0, &[(262.45, 276.95, 4.1, 3.9), (313.49, 345.19, 4.0, 3.8)]);
+        segs.extend(flights(
             1,
             &[(81.53, 95.53, 3.9, 3.7), (173.17, 181.17, 3.8, 3.8)],
         ));
-        segs.extend(packs(
+        segs.extend(flights(
             2,
             &[
                 (41.55, 226.34, 4.3, 3.4),
@@ -1194,7 +1305,7 @@ mod tests {
                 (1188.45, 1361.45, 4.3, 3.5),
             ],
         ));
-        segs.extend(packs(
+        segs.extend(flights(
             3,
             &[
                 (66.33, 193.82, 4.3, 3.4),
@@ -1236,10 +1347,10 @@ mod tests {
         );
         farm.day = day(28);
         let f = run(&[first, second.clone(), chase, farm], &segs);
-        // The split recording fits no session: its first stretch is 84 s, and every pack
+        // The split recording fits no session: its first stretch is 84 s, and every flight
         // of the one long run is longer than that.
         assert!(f[0].is_none() && f[1].is_none(), "{f:?}");
-        // The chase fits session 3's middle packs (one battery re-armed); only "likely",
+        // The chase fits session 3's middle flights (one battery re-armed); only "likely",
         // since the farm clip could take them instead.
         let c = f[2].clone().expect("the chase");
         assert_eq!(
@@ -1248,7 +1359,7 @@ mod tests {
             "{}",
             c.reason
         );
-        assert!(c.reason.contains("packs fit 3 of 4"), "{}", c.reason);
+        assert!(c.reason.contains("flights fit 3 of 4"), "{}", c.reason);
         // The farm clip leaves a 209 s stretch empty with any session: no match.
         assert!(f[3].is_none(), "{:?}", f[3]);
         // Alone, the second file would fit session 3 by chance; joined, it does not.

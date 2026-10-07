@@ -1,5 +1,6 @@
-//! Card prep: format a DVR card that has no session behind it, a new card or one whose clips
-//! are all in the library. The format after an import (`import.rs`) needs a verified session;
+//! Card prep: format a card that has no session behind it, a new card or one whose clips
+//! are all in the library: an analog DVR card as FAT32, a removable DJI goggles card as
+//! exFAT (the source's `CardPolicy`). A DJI device over USB is never erased. The format after an import (`import.rs`) needs a verified session;
 //! prep needs instead that no clip on the card is missing from the library. Both erase through
 //! `disk::format_card`, which runs every guard again right before `diskutil eraseDisk`.
 //!
@@ -59,9 +60,14 @@ impl Core {
             self.hooks.confirm_format(&p.plan)?;
         }
         let _b = self.claim()?;
-        let eject_error = disk::format_card(&p.card, &p.mount, &p.plan.label, &p.policy, &|| {
-            self.check_all_in_library(&p.mount).map(|_| ())
-        })?;
+        let eject_error = disk::format_card(
+            &p.card,
+            &p.mount,
+            &p.plan.label,
+            &p.policy,
+            disk::EraseBy::Prep,
+            &|| self.check_all_in_library(&p.mount).map(|_| ()),
+        )?;
         // A session read from this card can no longer format it.
         if let Some(mut s) = self.session() {
             if s.card.as_ref().is_some_and(|c| {
@@ -89,17 +95,17 @@ impl Core {
                 .clone()
                 .with_context(|| format!("{} is not mounted", mount.display()))?,
         );
-        // What the card holds refuses first: a radio or DJI card, then a source that does
-        // not offer a format. A card with no clips is prepared for an analog DVR.
-        disk::check_volume_contents(&mount)?;
-        let source = sources::detect(&mount).unwrap_or(&sources::analog::Analog);
+        // What the card holds and is refuses first: a radio's card, a DJI device over USB,
+        // then a source whose policy does not offer prep. A card with DJI folders (even
+        // emptied) is prepared for DJI goggles; a card with no clips for an analog DVR.
+        disk::check_volume_contents(&mount, &info, crate::gear::events::dji_usb_attached())?;
+        let source: &dyn sources::Source = match sources::detect(&mount) {
+            Some(s) => s,
+            None if sources::dji::looks_like_dji_volume(&mount) => &sources::dji::Dji,
+            None => &sources::analog::Analog,
+        };
         let policy = source.card_policy();
-        if !policy.format_offered {
-            bail!(
-                "Refused: QuadCam does not format {} cards; format them in the device.",
-                source.kind().label()
-            );
-        }
+        disk::check_policy(&policy, disk::EraseBy::Prep)?;
         let clips = self.check_all_in_library(&mount)?;
         let card = CardIdentity::from_info(&info);
         let whole = disk::verify_card_for_format(&card, &mount)?;
@@ -111,6 +117,8 @@ impl Core {
             size: whole.total_size,
             media_name: whole.media_name.clone().unwrap_or_default(),
             clip_count: clips,
+            filesystem: policy.filesystem.to_string(),
+            warnings: disk::format_advice(whole.total_size, &policy),
             label: disk::fat_label(
                 label
                     .filter(|l| !l.trim().is_empty())

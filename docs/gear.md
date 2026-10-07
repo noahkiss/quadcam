@@ -39,8 +39,8 @@ reads the battery voltage over MSP every 30 seconds and closes the port again.
 | Device | How QuadCam finds it |
 |---|---|
 | EdgeTX radio | Its SD card in USB Storage mode. QuadCam reads `board` and `semver` from `RADIO/radio.yml` |
-| Goggles card | A card with DJI clips |
-| DVR card | A card with analog clips |
+| Goggles | A DJI volume: a goggles card, or an air unit over USB (DJI clips under `DCIM/DJI_*`) |
+| DVR card | A card with analog clips, from a DVR or analog goggles |
 | Flight controller | A USB serial port with an STM32 or AT32 virtual COM port id |
 | ELRS module | A USB serial port with a CP210x, CH340 or CH9102 id |
 | Radio in DFU mode | The STM32 bootloader (`0483:df11`) |

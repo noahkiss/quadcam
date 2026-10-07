@@ -5,7 +5,8 @@ DVRs (MJPEG AVI) and DJI units (MP4 named by the unit's clock). It stages the cl
 dates them (EdgeTX radio logs, the DJI clip clock, or the import date), names them
 `YYYY-MM-DD_<name>.mp4`, converts analog clips with ffmpeg (a full DJI clip is copied, never
 re-encoded), verifies them with ffprobe, and files them by flying day. It can then add them to
-Photos and format an analog card to FAT32. The library is the
+Photos and format a card with its source's file system (analog FAT32; card prep also a
+removable DJI goggles card as exFAT). The library is the
 home screen; import is a sheet over it. `README.md` is the public overview and `docs/` the
 public user guide, one topic per file; keep them in step with every change a user can see.
 
@@ -19,7 +20,7 @@ README and `docs/`. Personal preferences go in the app's settings file on the ma
 | Path | Holds |
 |---|---|
 | `app/` | The frontend: React + TypeScript + Vite (pnpm, Node pinned in `.node-version`). Builds to `app/dist`, which the app ships. `views/` (library, clip detail, import sheet, settings, `Gear/` with its slots for later Gear packages: `segments.tsx`, `pages.tsx`, `slots.ts`, and `Gear/Osd/` the FC page's OSD segment; `Shell/StatusBar.tsx`, the Gear status bar), `components/` (with `trim/`, the one trim editor, used by clip detail and the import review, and `gear/`: `DeviceHeader`, `PlugInBar`, `ChecksList`, `DiffView`), `store/`, `actions/`, `ipc/`. Icons and fonts are inlined or bundled so the app works offline |
-| `src-tauri/src/` | Rust core. `core/` (`Core`) owns the session and the library index and is the one surface every front end drives: `mod.rs` (state, locking, `Hooks`), `import.rs` (stage, analyse, dates, import, verify, delete clips after import, format), `library.rs` (the index, list, rate, edit, rename, redate), `cuts.rs` (session and library cut lists), `files.rs` (Photos, previews, strips, Trash), `rematch.rs` (radio logs matched again to library clips), `prep.rs` (card prep: format a card with no session) and `setup.rs` (settings, places, profiles) and `gear.rs` (Gear: devices, detection poll, on-connect hooks, cues). `api/` is the one method table: each row names a method, its params and result types and the `Core` call, and `api!` makes `Core::dispatch` (socket, MCP) and one typed Tauri command per method from it; `api/events.rs` holds the typed events; `api/gear.rs` holds Gear's rows, which join the table through `with_gear_rows!`. `lib.rs` holds the GUI's own Tauri commands and `specta_builder`, which tauri-specta exports to `app/src/bindings.ts`; `control.rs` the app's socket, `mcp/` the MCP server (`server.rs` the protocol and handlers, `params.rs` each tool's argument type, `tools.rs` the tool list with schemas derived from those types, `render.rs` the text answers, `gear.rs` the three Gear tools with their argument types and handlers), `bin/quadcam-cli.rs` the CLI (clap flags build the `api` params, and it calls the table's `api::call` functions; `bin/cli/gear/` holds the `gear` subcommands, one file per area). `gear/` is Gear (`docs/gear-design.md`): `model` (shared types), `store` (the gear folder and `gear.json`, its only writer), `compat` (proven versions), `serial` (USB serial ports, the per-port lock, the fail-safe), `detect` (what is plugged in), `events` (connected, identified, unmounted but present, removed), `cues` (speech, sound, notification), `bf/` (the Betaflight link: `cli` the CLI session and the write engine `run_lines`, `msp` v1/v2 framing and identity, `dump` the `dump all`/`diff all` parser with section context, `verify_lines` and the transcript scrubber, `fake` the `FakeFc` simulator, `boards` known issues and USB limits per board; `core/fc.rs` holds its `Core` jobs, each opening and releasing the port with one cue), `osd` (Betaflight OSD positions: decode, element table, grids, per-profile render, overlap and off-screen check; `core/osd.rs` holds `Core::gear_osd`). The logic modules (`scan`, `disk`, `media`, `logs`, `logmatch` (shape-first log matching: pack lengths, order and gaps, clocks as tie-breaks, EdgeTX models as a filter; an analog clip with dead air matches by picture: packs inside keep ranges, swaps at dead air, an offset per clip, split DVR files as one timeline), `moments`, `join` (recordings an analog DVR split into files: detection, the `ffconcat` source, the swap of joined and own values), `metadata`, `qtmeta`, `naming`, `pipeline` (with `pipeline/import.rs`, the import run), `session`, `photos`, `library`, `trim`, `cuts` (the one cut writer), `sources` (the `Source` trait per video system, tried in `sources::all()` order; `sources/dji.rs` is DJI O4: `DCIM/DJI_*/` names, the clock in the name, `.SRT` sidecars, byte-copy MP4 export, a card never formatted; `sources/analog.rs` is the DVR: clip layout, half-written check and repair, encode plan, dead air, card policy), `trash`, `settings` (with `Defaults`, the effective settings), `paths` (every path under `$HOME`), `geocode`) run without Tauri |
+| `src-tauri/src/` | Rust core. `core/` (`Core`) owns the session and the library index and is the one surface every front end drives: `mod.rs` (state, locking, `Hooks`), `import.rs` (stage, analyse, dates, import, verify, delete clips after import, format), `library.rs` (the index, list, rate, edit, rename, redate), `cuts.rs` (session and library cut lists), `files.rs` (Photos, previews, strips, Trash), `rematch.rs` (radio logs matched again to library clips), `prep.rs` (card prep: format a card with no session) and `setup.rs` (settings, places, profiles) and `gear.rs` (Gear: devices, detection poll, on-connect hooks, cues). `api/` is the one method table: each row names a method, its params and result types and the `Core` call, and `api!` makes `Core::dispatch` (socket, MCP) and one typed Tauri command per method from it; `api/events.rs` holds the typed events; `api/gear.rs` holds Gear's rows, which join the table through `with_gear_rows!`. `lib.rs` holds the GUI's own Tauri commands and `specta_builder`, which tauri-specta exports to `app/src/bindings.ts`; `control.rs` the app's socket, `mcp/` the MCP server (`server.rs` the protocol and handlers, `params.rs` each tool's argument type, `tools.rs` the tool list with schemas derived from those types, `render.rs` the text answers, `gear.rs` the three Gear tools with their argument types and handlers), `bin/quadcam-cli.rs` the CLI (clap flags build the `api` params, and it calls the table's `api::call` functions; `bin/cli/gear/` holds the `gear` subcommands, one file per area). `gear/` is Gear (`docs/gear-design.md`): `model` (shared types), `store` (the gear folder and `gear.json`, its only writer), `compat` (proven versions), `serial` (USB serial ports, the per-port lock, the fail-safe), `detect` (what is plugged in), `events` (connected, identified, unmounted but present, removed), `cues` (speech, sound, notification), `bf/` (the Betaflight link: `cli` the CLI session and the write engine `run_lines`, `msp` v1/v2 framing and identity, `dump` the `dump all`/`diff all` parser with section context, `verify_lines` and the transcript scrubber, `fake` the `FakeFc` simulator, `boards` known issues and USB limits per board; `core/fc.rs` holds its `Core` jobs, each opening and releasing the port with one cue), `osd` (Betaflight OSD positions: decode, element table, grids, per-profile render, overlap and off-screen check; `core/osd.rs` holds `Core::gear_osd`). The logic modules (`scan`, `disk`, `media`, `logs`, `logmatch` (shape-first log matching: flight lengths, order and gaps, clocks as tie-breaks, EdgeTX models as a filter; an analog clip with dead air matches by picture: flights inside keep ranges, swaps at dead air, short armed dead air as breakup, volt steps per cell, an offset per clip, split DVR files as one timeline), `moments`, `join` (recordings an analog DVR split into files: detection, the `ffconcat` source, the swap of joined and own values), `metadata`, `qtmeta`, `naming`, `pipeline` (with `pipeline/import.rs`, the import run), `session`, `photos`, `library`, `trim`, `cuts` (the one cut writer), `sources` (the `Source` trait per video system, tried in `sources::all()` order; `sources/dji.rs` is DJI (an O4 air unit over USB, a goggles card, older `DJIG####` names): `DCIM/DJI_*/` names, the clock in the name, `.SRT` sidecars, byte-copy MP4 export, no "Format card" after an import, card prep (exFAT) for a removable goggles card only; `sources/analog.rs` is the DVR: clip layout, half-written check and repair, encode plan, dead air, card policy), `trash`, `settings` (with `Defaults`, the effective settings), `paths` (every path under `$HOME`), `geocode`) run without Tauri |
 | `src-tauri/src/modules/` | The module manager (`docs/modules.md`): `manifest.rs` (the pins in `src-tauri/resources/modules.toml`, compiled in; newer pins from a release's `modules.json`), `fetch.rs` (`Fetch`, `/usr/bin/curl`; a cargo process reaches only 127.0.0.1 unless `QUADCAM_FETCH=real`), `install.rs` (checksum, unpack, quarantine, ad-hoc signature, `installed.json`), `run.rs` (hash check before a run, the child-process `Runner`). `core/modules.rs` holds the `Core` methods |
 | `scripts/notices.mjs` | Third-party notices (crates, npm packages, fonts, icons) and the license allow list; `pnpm build` writes `app/dist/THIRD_PARTY_NOTICES.txt`, which `tauri.conf.json` copies to `Contents/Resources`. `scripts/licenses/` holds SPDX standard texts |
 | `src-tauri/Info.plist` | Photos usage strings, merged into the bundle's Info.plist |
@@ -145,13 +146,18 @@ GitHub (`noahkiss/quadcam`, public) is the only remote. Users install the cask
   `CutChange::Confirm` (GUI) or refuses the patch (CLI `--removed`, MCP `removed_cuts`).
   `cuts::write_cut` writes every cut file, session and library alike: it verifies frames and
   reads the QuickTime items back before the rename.
-- **Split by flight:** `FlightStats.pack_spans` holds each radio-log pack's armed range in
-  clip seconds (moved by the log offset). `trim::flight_cuts` makes one cut per pack, 2 s
+- **Flight, not pack:** a radio-log armed segment is a "flight" in UI text, docs, API, MCP and
+  CLI names; "pack" means a battery (Gear) only. `FlightStats` reads the 0.6.4 keys `packs`
+  and `pack_spans` through serde aliases.
+- **Split by flight:** `FlightStats.flight_spans` holds each radio-log flight's armed range in
+  clip seconds (moved by the log offset). `trim::flight_cuts` makes one cut per flight, 2 s
   each side at most half the gap, clamped to the clip, and refuses when there is nothing to
   split; the cuts are added to the clip's list (`PlanPatch.split_by_flight`, `session_split`,
   `library_split`), so no exported cut is dropped.
 - **Joined recordings:** at analysis `join::groups` finds analog files the DVR split (next
-  number, same folder and format, the first 600 +/- 1 s, file times that agree); unsure
+  number, same folder and format, the first full length by `join::full_length`: a
+  `KNOWN_SPLITS` length (Echo 600 s) +/- 1 s, the same length as the file numbered next to it
+  (a whole minute, >= 60 s), or a size just under 4 GiB; file times that agree); unsure
   stays apart. Each file stays a `Clip`; the first carries `Join` (its `source()` is an
   `ffconcat` list in staging, read by ffmpeg as one input) and the later ones `part_of`.
   Parts are left out of jobs and dating; `can_format` and `delete_clip_file` judge a part by
@@ -254,7 +260,7 @@ quadcam-cli --json import --time 0=18:30       # manual time of day (default noo
 quadcam-cli --json import --keep-clips         # this run keeps the clips (delete_clips_after_import)
 quadcam-cli --json stage /Volumes/CARD --no-join   # split DVR recordings stay separate this run
 quadcam-cli --json import --separate 0         # clip 0's files (a split recording) import one by one
-quadcam-cli --json cut 0 --by-flight           # one cut per radio-log pack
+quadcam-cli --json cut 0 --by-flight           # one cut per radio-log flight
 quadcam-cli --json verify                      # re-check the session's outputs
 quadcam-cli --json clear                       # forget the session, delete the session file
 quadcam-cli --json library list --group picks  # also rate, rebuild, rename, edit, cut, trash, photos
@@ -280,7 +286,8 @@ quadcam-cli --json format --prep --device /dev/diskN --volume-uuid <uuid> --yes
 `format` refuses (exit 3) unless every GUI guard passes and `--device` (the card's whole
 disk), `--volume-uuid` and `--yes` all match the staged card. `format --prep` is card prep
 (`docs/gear-design.md` 7.9): a card with no session, refused while any clip on it (by content
-fingerprint) is not in the library. It moves to `gear card-prep` once `bin/cli/gear/` exists.
+fingerprint) is not in the library. It moves to `gear card-prep` with the app's card-prep
+button (WP13).
 
 ### MCP server
 
@@ -318,7 +325,8 @@ claude mcp add quadcam -- "$(brew --prefix)/bin/quadcam-cli" mcp
   the person edits the field. Read back with `quadcam_read_clips` before export.
 - `quadcam_format_card` needs `device`, `volume_uuid` and `confirm=true` (read them with
   `dry_run=true`). `prep=true` (with `mount` for the dry run) is card prep, the `card_prep_plan`
-  and `card_prep` methods in `core/prep.rs`. With the app running, the person must also click Erase in the app;
+  and `card_prep` methods in `core/prep.rs`. The plan names the file system and any size
+  advice (`warnings`). With the app running, the person must also click Erase in the app;
   Cancel, closing the dialog or 3 minutes without a click refuses.
 - Photos from the CLI or a headless MCP server runs PhotoKit in that process, so macOS
   attributes the permission prompt to the terminal. Prefer the app for Photos.
@@ -333,12 +341,25 @@ claude mcp add quadcam -- "$(brew --prefix)/bin/quadcam-cli" mcp
   created, and they assert `BusProtocol == "Disk Image"` first. Keep it that way.
 - Every format guard runs again inside `disk::format_card`, immediately before
   `diskutil eraseDisk`. Do not move a guard out of that path. It takes the source's
-  `CardPolicy` (refuses one that does not offer a format; FAT32 only), refuses a radio or DJI
-  volume (`disk::check_volume_contents`), and runs the caller's `recheck` last: the session's
+  `CardPolicy` and the path (`EraseBy`: refuses a policy that does not offer that path), writes
+  the policy's file system (`erase_personality`: FAT32, proven on real cards; exFAT, tested on
+  disk images only; anything else refuses), refuses a radio's card and a DJI device over USB
+  (`disk::check_volume_contents`), and runs the caller's `recheck` last: the session's
   `format_ready` after an import, "every clip in the library" for card prep.
-- A source's `CardPolicy` says whether "Format card" is offered for its cards. `Core::format_plan`
-  refuses a source that does not offer it, before every other guard; the guards themselves stay
-  in `disk::format_card`.
+- **Never refuse a card for its size.** The other disk guards stay: not internal storage, not
+  the boot disk or `disk0`, removable or ejectable (a built-in SD slot card counts), the same
+  device and volume UUID. Size is advice only: `disk::format_advice` puts the policy's
+  `size_warning` into `FormatPlan.warnings`, which the confirm shows.
+- **DJI, two rules.** (a) Never format a DJI device over USB (an O4 air unit, goggles in
+  storage mode): absolute. `check_volume_contents` refuses a DJI volume whose media name names
+  DJI, or that is not a built-in-slot card while a DJI USB device is attached
+  (`gear::events::dji_usb_attached`, fails closed). (b) A removable DJI goggles card may be
+  erased by card prep only, as exFAT, behind the every-clip-in-the-library guard. A card that
+  once held DJI clips (empty `DCIM/DJI_*` folders) is a goggles card under (b).
+- A source's `CardPolicy` says whether "Format card" (after an import, `format_offered`) and
+  card prep (`prep_offered`) are offered for its cards. `Core::format_plan` and card prep refuse
+  a source that does not offer them, before every other guard; the guards themselves stay in
+  `disk::format_card`.
 - "Format card" is never saved as a setting.
 - Outputs are written under a hidden `.part` name and renamed only after verify passes.
   Never overwrite an existing file.
@@ -370,8 +391,9 @@ claude mcp add quadcam -- "$(brew --prefix)/bin/quadcam-cli" mcp
   card-reader reads, a refused `events::probe_media`, and silent cues (`RecordedCues`), unless
   `QUADCAM_SERIAL=real` or `QUADCAM_CUES=real`. Tests build cores with `Core::with_gear_env`
   and `gear::Env::fake` (synthetic volumes, `FakePorts`, `ScriptLink`).
-- **Release cards through `disk::safe_remove` (`diskutil unmountDisk`), never `eject`:** only
-  then does a card still inserted stay visible to Gear (`docs/gear-design.md`, 7.11).
+- **Never `diskutil eject` a card; `safe_remove` (method `eject`) unmounts cards and ejects
+  only non-card disks.** Only an unmounted card still inserted stays visible to Gear
+  (`docs/gear-design.md`, 7.11).
 - **Never touch the real settings file or library while testing.** Tests and manual runs
   set `HOME` to a temp folder (the CLI and MCP derive every path from it) or pass
   `Core::with_settings` a temp file.

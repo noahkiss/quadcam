@@ -367,7 +367,7 @@ impl<B: Backend> Server<B> {
                         let id = one()?;
                         let change = self.backend.call("library_split", json!({"id": id}))?;
                         let n = change["cuts"].as_array().map(Vec::len).unwrap_or(0);
-                        let mut line = format!("Cut list saved: {n} cuts, one per radio-log pack added. New ranges are not files yet; call action export_cuts to write them.");
+                        let mut line = format!("Cut list saved: {n} cuts, one per radio-log flight added. New ranges are not files yet; call action export_cuts to write them.");
                         if x.export == Some(true) {
                             let made = self
                                 .backend
@@ -923,10 +923,17 @@ impl<B: Backend> Server<B> {
                         self.backend
                             .call("format_plan", json!({"label": x.label}))?
                     };
+                    let advice: String = plan["warnings"]
+                        .as_array()
+                        .into_iter()
+                        .flatten()
+                        .filter_map(|w| w.as_str())
+                        .map(|w| format!(" Note: {w}"))
+                        .collect();
                     return Ok((
                         vec![text(format!(
-                            "Would erase {} (volume {}, UUID {}, {} bytes, {} clips). To go ahead, call again with device, volume_uuid{} and confirm=true.",
-                            plan["device"].as_str().unwrap_or("?"), plan["volume_name"].as_str().unwrap_or("?"), plan["volume_uuid"].as_str().unwrap_or("?"), plan["size"], plan["clip_count"],
+                            "Would erase {} as {} (volume {}, UUID {}, {} bytes, {} clips). To go ahead, call again with device, volume_uuid{} and confirm=true.{advice}",
+                            plan["device"].as_str().unwrap_or("?"), plan["filesystem"].as_str().unwrap_or("FAT32"), plan["volume_name"].as_str().unwrap_or("?"), plan["volume_uuid"].as_str().unwrap_or("?"), plan["size"], plan["clip_count"],
                             if prep { ", prep=true" } else { "" }
                         ))],
                         plan,
@@ -941,8 +948,9 @@ impl<B: Backend> Server<B> {
                     .call(if prep { "card_prep" } else { "format" }, req)?;
                 Ok((
                     vec![text(format!(
-                        "Erased {} as FAT32 {}. It is safe to remove.",
+                        "Erased {} as {} {}. It is safe to remove.",
                         plan["device"].as_str().unwrap_or("?"),
+                        plan["filesystem"].as_str().unwrap_or("FAT32"),
                         plan["label"].as_str().unwrap_or("DVR")
                     ))],
                     plan,

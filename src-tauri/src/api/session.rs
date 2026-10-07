@@ -54,13 +54,13 @@ pub struct EjectParams {
     pub target: Option<String>,
 }
 
-/// `format_plan`: the FAT32 volume name; None uses the setting.
+/// `format_plan`: the volume name; None uses the setting.
 #[derive(Debug, Clone, Default, Serialize, Deserialize, Type)]
 pub struct LabelParams {
     pub label: Option<String>,
 }
 
-/// `card_prep_plan`: the card's mount point, and the FAT32 volume name (None uses the
+/// `card_prep_plan`: the card's mount point, and the volume name (None uses the
 /// setting). Moves to `api/gear.rs` with WP1.
 #[derive(Debug, Clone, Default, Serialize, Deserialize, Type)]
 pub struct CardPrepParams {

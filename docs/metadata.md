@@ -27,7 +27,7 @@ In the library, open a clip and use its **Details** tab. See [The library](libra
 | Author | `com.apple.quicktime.author` | The clip, else the profile |
 | Keywords | `com.apple.quicktime.keywords` | `FPV`, the profile's, the clip's, and the moment kinds found (roll, flip, punch-out, dive) |
 | Aircraft, video system | `app.quadcam.aircraft`, `app.quadcam.video_system` | The profile |
-| Flight numbers | `app.quadcam.flight`, `app.quadcam.stats` | The matched radio log: armed time, packs and each pack's time in the clip, lowest receiver voltage, link quality and RSSI, highest throttle |
+| Flight numbers | `app.quadcam.flight`, `app.quadcam.stats` | The matched radio log: armed time, flights and each flight's time in the clip, lowest receiver voltage, link quality and RSSI, highest throttle. QuadCam 0.6.4 and earlier wrote `packs` and `pack_spans` here; QuadCam still reads them |
 | Library | `app.quadcam.source`, `.dvr`, `.parts`, `.import`, `.place`, `.profile`, `.moments`, `.keep`, `.cut` | The source file's content fingerprint and file name, the later files of a [joined recording](library.md#joined-recordings), the import, the place and aircraft names, the radio-log moments, the keep ranges, a cut's range |
 | Rating, flag, Photos | `app.quadcam.rating`, `.flag`, `.photos` | Set in the library |
 | Time source | `app.quadcam.time` | `log`, `clip` (the DJI clip clock) or `manual` when the clip has a time of day. Without one, QuadCam shows no time (the creation date holds noon) |
@@ -112,37 +112,38 @@ A matched log gives the clip its date, time of day, flight numbers and moments. 
 
 QuadCam matches by shape first, then checks clocks:
 
-- **Pack lengths.** A clip claims the packs (armed segments) whose span fits inside its length, plus 30 s of slack. A gap of more than 5 s ends a pack.
-- **Order.** Clips claim packs in recording order, and two clips never share a pack. Gaps between DJI clip clocks must agree with gaps between their packs.
-- **Clock.** The clip clock (DJI) breaks ties: the pack nearest it wins. It never rules a match out.
+- **Flight lengths.** A clip claims the flights (armed segments) whose span fits inside its length, plus 30 s of slack. A gap of more than 5 s ends a flight.
+- **Order.** Clips claim flights in recording order, and two clips never share a flight. Gaps between DJI clip clocks must agree with gaps between their flights.
+- **Clock.** The clip clock (DJI) breaks ties: the flight nearest it wins. It never rules a match out.
 - **Model.** The log's EdgeTX model must fit the clip's profile (see above).
 
-An analog clip with dead air matches by its picture instead of its length. On a 1S whoop, the battery powers the camera and the VTX, and the DVR keeps recording across battery swaps. So each stretch of picture between dead air is one battery. QuadCam slides the log along the clip and scores each place:
+An analog clip with dead air matches by its picture instead of its length. On a whoop where the battery powers the camera and the VTX, the DVR keeps recording across battery swaps. So each stretch of picture between dead air is one battery. QuadCam slides the log along the clip and scores each place:
 
-- **Packs sit inside a picture stretch.** Unarmed picture around a pack is fine (the battery goes in, the quad sits on the ground). A pack in dead air, or across it, costs a lot. Pack edges get 4 s of slack.
-- **Several packs may share a stretch.** A disarm and a re-arm on one battery (after a crash, say) gives two packs in one stretch.
-- **A battery swap is dead air.** A pack that starts well above the last pack's end voltage (`RxBt`, 0.3 V or more) is on a new battery, and dead air must lie between the two packs.
-- **A stretch without a pack is suspicious.** Up to 30 s costs nothing; a longer one costs more the longer it is.
-- **A recording may start late or stop early.** A pack may run past either end of the clip, when the picture runs to that end.
-- **Missed recordings are normal.** A pack with no clip costs nothing. But every pack of the session that would fall inside the clip must be part of the match.
+- **Flights sit inside a picture stretch.** Unarmed picture around a flight is fine (the battery goes in, the quad sits on the ground). A flight in dead air, or across it, costs a lot. Flight edges get 4 s of slack.
+- **Short dead air while armed is signal breakup.** Dead air of 10 s or less inside a flight, with picture on both sides, is the video breaking up (range, a crash), not a battery swap. It costs little, and the picture on both sides counts as one battery.
+- **Several flights may share a stretch.** A disarm and a re-arm on one battery (after a crash, say) gives two flights in one stretch.
+- **A battery swap is dead air.** A flight that starts well above the last flight's end voltage (`RxBt`, 0.3 V a cell or more) is on a new battery, and dead air must lie between the two flights. A flight within 0.15 V a cell of the last one's end, with dead air between, is the same battery unplugged and plugged in again. QuadCam estimates the cell count from the highest battery reading at arm: that voltage over 4.5 V, rounded up.
+- **A stretch without a flight is suspicious.** Up to 30 s costs nothing; a longer one costs more the longer it is.
+- **A recording may start late or stop early.** A flight may run past either end of the clip, when the picture runs to that end.
+- **Missed recordings are normal.** A flight with no clip costs nothing. But every flight of the session that would fall inside the clip must be part of the match.
 
-The match also places the log in the clip: the clip's log offset is set to where the first pack starts, so moments, flight numbers and **Split by flight** line up with the picture. With a believable radio clock, the clip's time of day is its start, not the arm.
+The match also places the log in the clip: the clip's log offset is set to where the first flight starts, so moments, flight numbers and **Split by flight** line up with the picture. With a believable radio clock, the clip's time of day is its start, not the arm.
 
-Files an analog DVR split from one recording are matched as one timeline, so a pack may run across the split. In an import they are one clip already (see [Joined recordings](library.md#joined-recordings)). In the library, two clips match as one timeline when the second file has the next DVR number, the first is about 600 s long, and both have the same date. Each file then gets the packs it shows.
+Files an analog DVR split from one recording are matched as one timeline, so a flight may run across the split. In an import they are one clip already (see [Joined recordings](library.md#joined-recordings)). In the library, two clips match as one timeline when the second file has the next DVR number, the first is full length (the same rule as [Joined recordings](library.md#joined-recordings), without the file size), and both have the same date. Each file then gets the flights it shows.
 
 Each match gets a badge and a reason, shown on the Review step's date chip:
 
 | Badge | Meaning |
 |---|---|
-| matched | The packs fill the clip, with at most 60 s of unarmed time, and no other fit is nearly as good. By picture: no pack in dead air, no battery swap without dead air, little empty picture, and no other fit nearly as good |
-| likely | A fit, but with much unarmed time, a long picture stretch without a pack, a pack in dead air, another pack that fits as well, or a clip clock more than 5 minutes off |
-| unmatched | No pack fits. QuadCam leaves a clip unmatched rather than guess |
+| matched | The flights fill the clip, with at most 60 s of unarmed time, and no other fit is nearly as good. By picture: no flight in dead air, no battery swap without dead air, little empty picture, and no other fit nearly as good |
+| likely | A fit, but with much unarmed time, a long picture stretch without a flight, a flight in dead air, another flight that fits as well, or a clip clock more than 5 minutes off |
+| unmatched | No flight fits. QuadCam leaves a clip unmatched rather than guess |
 
-The reason reads like `1 pack from 18:36:34 (113 s armed over 113 s) in a 113 s clip; clip clock 2 s off; log METEOR75 → profile Meteor75`. A match by picture adds how the packs fit: `packs fit 3 of 4 picture stretches; 2 battery swaps at dead air; first pack at 54 s (±7 s)`. The ± is how far the log could slide and fit as well.
+The reason reads like `1 flight from 18:36:34 (113 s armed over 113 s) in a 113 s clip; clip clock 2 s off; log METEOR75 → profile Meteor75`. A match by picture adds how the flights fit: `flights fit 3 of 4 picture stretches; 2 battery swaps at dead air; first flight at 54 s (±7 s)`. The ± is how far the log could slide and fit as well.
 
 ### A radio clock that reset
 
-When the radio's clock battery is flat, EdgeTX dates every log `2000-01-01`, and the time starts again at midnight on each power-on. QuadCam keeps such a log's rows in file order and treats each power-on as its own session. Clips still match by pack lengths or picture, and order. The clips keep their own date, and the Review step warns that the radio clock was wrong. When no log has a believable date, QuadCam picks the reset-clock day by itself.
+When the radio's clock battery is flat, EdgeTX dates every log `2000-01-01`, and the time starts again at midnight on each power-on. QuadCam keeps such a log's rows in file order and treats each power-on as its own session. Clips still match by flight lengths or picture, and order. The clips keep their own date, and the Review step warns that the radio clock was wrong. When no log has a believable date, QuadCam picks the reset-clock day by itself.
 
 ### Match clips already in the library
 

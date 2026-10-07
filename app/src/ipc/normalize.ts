@@ -37,7 +37,13 @@ export const moments = (xs: G.Moment[] | null | undefined): Moment[] =>
 
 export const location = (l: G.Location | null | undefined): Location | null => (l && has(l.lat) && has(l.lon) ? { ...l, lat: l.lat, lon: l.lon } : null);
 
-export const flight = (f: G.FlightStats | null | undefined): FlightStats | null => (f ? { ...f, armed_s: n(f.armed_s), pack_spans: spans(f.pack_spans) } : null);
+/** The core always sends the serialized shape (`flights`, `flight_spans`); the `packs` alias only
+ * reads old files. */
+export const flight = (f: G.FlightStats | null | undefined): FlightStats | null => {
+  if (!f) return null;
+  const s = f as G.FlightStats_Serialize;
+  return { ...s, armed_s: n(s.armed_s), flight_spans: spans(s.flight_spans) };
+};
 
 export const places = (xs: G.Place[] | null | undefined): Place[] => (xs || []).filter((p) => has(p.lat) && has(p.lon)).map((p) => ({ name: p.name, lat: p.lat!, lon: p.lon! }));
 

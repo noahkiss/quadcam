@@ -244,9 +244,9 @@ with_gear_rows! {
     /// Sets a session clip's cut list.
     session_cuts(params: SessionCutsParams) -> CutChange =
         |c| c.set_session_cuts(params.id, &params.cuts, params.removed_cuts);
-    /// Adds one cut per radio-log pack to a session clip's cut list.
+    /// Adds one cut per radio-log flight to a session clip's cut list.
     session_split(params: SessionClipParams) -> CutChange = |c| c.session_split_by_flight(params.id);
-    /// Adds one cut per radio-log pack to a library clip's cut list (unsaved until exported).
+    /// Adds one cut per radio-log flight to a library clip's cut list (unsaved until exported).
     library_split(params: ClipIdParams) -> CutChange = |c| c.library_split_by_flight(&params.id);
     /// Downloaded tools: each module's pin, a newer pin from the last check, and what is
     /// installed. Reads only local files.

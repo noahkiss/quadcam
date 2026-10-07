@@ -372,7 +372,7 @@ mod tests {
         r.extend(rows("10:05:00", "10:08:00"));
         r.extend(rows("11:00:00", "11:02:00"));
         let s = segments(&r, &tun);
-        // Clip 1: two packs in one file, 8 min 20 s long (span 8:00) -> matched, 2 segments.
+        // Clip 1: two flights in one file, 8 min 20 s long (span 8:00) -> matched, 2 segments.
         // Clip 2: a 10 s bench clip -> unmatched, next segment stays.
         // Clip 3: 6 min for a 2 min flight -> likely.
         // Clip 4: nothing left -> unmatched.

@@ -196,7 +196,7 @@ export function Flight({ stats: f, moments }: { stats: FlightStats | null; momen
   );
   return (
     <div className={styles.stats}>
-      {box("Armed time", fmtDur(Math.round(f.armed_s || 0)), `${f.packs} pack${f.packs === 1 ? "" : "s"}`)}
+      {box("Armed time", fmtDur(Math.round(f.armed_s || 0)), `${f.flights} flight${f.flights === 1 ? "" : "s"}`)}
       {box("Lowest battery", f.min_rx_bat_v != null ? `${f.min_rx_bat_v.toFixed(2)} V` : "–", "receiver voltage")}
       {box("Link quality", f.min_lq != null ? `${Math.round(f.min_lq)} %` : "–", "lowest")}
       {box("Signal", f.min_rssi_db != null ? `${Math.round(f.min_rssi_db)} dBm` : "–", "weakest RSSI")}

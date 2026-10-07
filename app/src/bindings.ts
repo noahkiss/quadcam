@@ -135,9 +135,9 @@ export const commands = {
 	profileDefault: (params: NameParams) => typedError<string | null, string>(__TAURI_INVOKE("profile_default", { params })),
 	/**  Sets a session clip's cut list. */
 	sessionCuts: (params: SessionCutsParams) => typedError<CutChange, string>(__TAURI_INVOKE("session_cuts", { params })),
-	/**  Adds one cut per radio-log pack to a session clip's cut list. */
+	/**  Adds one cut per radio-log flight to a session clip's cut list. */
 	sessionSplit: (params: SessionClipParams) => typedError<CutChange, string>(__TAURI_INVOKE("session_split", { params })),
-	/**  Adds one cut per radio-log pack to a library clip's cut list (unsaved until exported). */
+	/**  Adds one cut per radio-log flight to a library clip's cut list (unsaved until exported). */
 	librarySplit: (params: ClipIdParams) => typedError<CutChange, string>(__TAURI_INVOKE("library_split", { params })),
 	/**  Gear: the gear folder, the Gear settings, and what is plugged in now. */
 	gearStatus: () => typedError<GearStatus, string>(__TAURI_INVOKE("gear_status")),
@@ -288,7 +288,7 @@ export type CardIdentity = {
 };
 
 /**
- *  `card_prep_plan`: the card's mount point, and the FAT32 volume name (None uses the
+ *  `card_prep_plan`: the card's mount point, and the volume name (None uses the
  *  setting). Moves to `api/gear.rs` with WP1.
  */
 export type CardPrepParams = {
@@ -595,7 +595,7 @@ export type Defaults_Deserialize = {
 	photos_album: string,
 	log_dir: string | null,
 	tunables: Tunables,
-	/**  FAT32 volume name for the format step. */
+	/**  Volume name for the format step. */
 	format_label?: string,
 	places?: Place[],
 	profiles?: Profile_Deserialize[],
@@ -639,7 +639,7 @@ export type Defaults_Serialize = {
 	photos_album: string,
 	log_dir: string | null,
 	tunables: Tunables,
-	/**  FAT32 volume name for the format step. */
+	/**  Volume name for the format step. */
 	format_label: string,
 	places: Place[],
 	profiles: Profile_Serialize[],
@@ -856,14 +856,34 @@ export type FlightStats = FlightStats_Serialize | FlightStats_Deserialize;
 /**  Flight numbers from the radio log rows a clip claimed. */
 export type FlightStats_Deserialize = {
 	armed_s: number | null,
-	packs: number,
 	min_rx_bat_v: number | null,
 	min_lq: number | null,
 	min_rssi_db: number | null,
 	max_throttle: number | null,
+} & {
 	/**
-	 *  Each pack's armed range, in clip seconds (log time plus the log offset), in order.
-	 *  Empty in files from before QuadCam 0.6.3; a library re-match writes it.
+	 *  Armed segments of the radio log ("flights"). Files, indexes and sessions from QuadCam
+	 *  0.6.4 and earlier call it `packs`.
+	 */
+	flights: number,
+} | {
+	/**
+	 *  Armed segments of the radio log ("flights"). Files, indexes and sessions from QuadCam
+	 *  0.6.4 and earlier call it `packs`.
+	 */
+	packs: number,
+} & {
+	/**
+	 *  Each flight's armed range, in clip seconds (log time plus the log offset), in order.
+	 *  Empty in files from before QuadCam 0.6.3; a library re-match writes it. QuadCam 0.6.4
+	 *  and earlier call it `pack_spans`.
+	 */
+	flight_spans?: Span[],
+} | {
+	/**
+	 *  Each flight's armed range, in clip seconds (log time plus the log offset), in order.
+	 *  Empty in files from before QuadCam 0.6.3; a library re-match writes it. QuadCam 0.6.4
+	 *  and earlier call it `pack_spans`.
 	 */
 	pack_spans?: Span[],
 };
@@ -871,16 +891,21 @@ export type FlightStats_Deserialize = {
 /**  Flight numbers from the radio log rows a clip claimed. */
 export type FlightStats_Serialize = {
 	armed_s: number | null,
-	packs: number,
+	/**
+	 *  Armed segments of the radio log ("flights"). Files, indexes and sessions from QuadCam
+	 *  0.6.4 and earlier call it `packs`.
+	 */
+	flights: number,
 	min_rx_bat_v: number | null,
 	min_lq: number | null,
 	min_rssi_db: number | null,
 	max_throttle: number | null,
 	/**
-	 *  Each pack's armed range, in clip seconds (log time plus the log offset), in order.
-	 *  Empty in files from before QuadCam 0.6.3; a library re-match writes it.
+	 *  Each flight's armed range, in clip seconds (log time plus the log offset), in order.
+	 *  Empty in files from before QuadCam 0.6.3; a library re-match writes it. QuadCam 0.6.4
+	 *  and earlier call it `pack_spans`.
 	 */
-	pack_spans?: Span[],
+	flight_spans?: Span[],
 };
 
 export type Format = "mp4" | "mov";
@@ -895,6 +920,13 @@ export type FormatPlan = {
 	media_name: string,
 	clip_count: number,
 	label: string,
+	/**  The file system the erase writes: the source's `CardPolicy` (FAT32, exFAT). */
+	filesystem?: string,
+	/**
+	 *  Advice for the confirm, such as a card larger than the source's DVRs read. Never a
+	 *  refusal.
+	 */
+	warnings?: string[],
 };
 
 /**
@@ -1091,7 +1123,7 @@ export type Join = {
 	swap: Swap,
 };
 
-/**  `format_plan`: the FAT32 volume name; None uses the setting. */
+/**  `format_plan`: the volume name; None uses the setting. */
 export type LabelParams = {
 	label: string | null,
 };
@@ -1304,11 +1336,11 @@ export type LibMatch_Deserialize = {
 	log_date: string | null,
 	log_time: string | null,
 	log_model: string | null,
-	packs: number,
+	flights: number,
 	reason: string | null,
 	/**
 	 *  The clip second of the first armed row, when the clip's picture placed the log.
-	 *  `flight.pack_spans` are in clip seconds with it.
+	 *  `flight.flight_spans` are in clip seconds with it.
 	 */
 	log_offset_s: number | null,
 	flight: FlightStats_Deserialize | null,
@@ -1329,11 +1361,11 @@ export type LibMatch_Serialize = {
 	log_date: string | null,
 	log_time: string | null,
 	log_model: string | null,
-	packs: number,
+	flights: number,
 	reason: string | null,
 	/**
 	 *  The clip second of the first armed row, when the clip's picture placed the log.
-	 *  `flight.pack_spans` are in clip seconds with it.
+	 *  `flight.flight_spans` are in clip seconds with it.
 	 */
 	log_offset_s: number | null,
 	flight: FlightStats_Serialize | null,
@@ -1729,7 +1761,7 @@ export type PlanPatch = {
 	 */
 	removed_cuts?: RemovedCuts | null,
 	/**
-	 *  True adds one cut per radio-log pack (see `trim::flight_cuts`) to the cut list,
+	 *  True adds one cut per radio-log flight (see `trim::flight_cuts`) to the cut list,
 	 *  after `cuts` when both are given.
 	 */
 	split_by_flight?: boolean | null,

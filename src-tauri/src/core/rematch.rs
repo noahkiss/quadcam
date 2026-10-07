@@ -41,10 +41,10 @@ pub struct LibMatch {
     pub log_date: Option<NaiveDate>,
     pub log_time: Option<NaiveTime>,
     pub log_model: Option<String>,
-    pub packs: usize,
+    pub flights: usize,
     pub reason: Option<String>,
     /// The clip second of the first armed row, when the clip's picture placed the log.
-    /// `flight.pack_spans` are in clip seconds with it.
+    /// `flight.flight_spans` are in clip seconds with it.
     pub log_offset_s: Option<f64>,
     pub flight: Option<FlightStats>,
     pub moments: usize,
@@ -138,10 +138,21 @@ impl Core {
             // The next file of a recording the DVR split (imported as clips of their own).
             for n in 1..idx.len() {
                 let (a, b) = (&clips[idx[n - 1]], &clips[idx[n]]);
+                // The lengths of the files numbered next to `a`: `b`, and the one before.
+                let mut neighbours = vec![b.duration];
+                if let Some(p) = n.checked_sub(2).map(|m| &clips[idx[m]]) {
+                    if let (Some(x), Some(y)) = (&p.dvr, &a.dvr) {
+                        if p.date == a.date && crate::join::is_next(x, y) {
+                            neighbours.push(p.duration);
+                        }
+                    }
+                }
                 inputs[n].follows = a.date == b.date
                     && a.parts.is_empty()
                     && match (&a.dvr, &b.dvr) {
-                        (Some(x), Some(y)) => crate::join::may_follow(x, a.duration, y),
+                        (Some(x), Some(y)) => {
+                            crate::join::may_follow(x, a.duration, y, &neighbours)
+                        }
                         _ => false,
                     };
             }
@@ -178,7 +189,7 @@ impl Core {
                     log_date: dated.then_some(s.date),
                     log_time: if dated { s.time } else { None },
                     log_model: s.log_model.clone(),
-                    packs: s.segments,
+                    flights: s.segments,
                     reason: s.match_reason.clone(),
                     log_offset_s: s.log_offset_s,
                     flight: s.flight.as_ref().map(|f| f.shifted(offset)),

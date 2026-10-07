@@ -138,7 +138,7 @@ pub const KEYS: &[Key] = &[
     Key {
         file: "formatLabel",
         name: Some("format_label"),
-        about: "a FAT32 volume name",
+        about: "a card volume name",
         check: |v| {
             crate::disk::fat_label(v.as_str().context("a string")?)?;
             Ok(())
@@ -469,7 +469,7 @@ pub struct Defaults {
     pub photos_album: String,
     pub log_dir: Option<PathBuf>,
     pub tunables: Tunables,
-    /// FAT32 volume name for the format step.
+    /// Volume name for the format step.
     #[serde(default = "default_label")]
     pub format_label: String,
     #[serde(default)]

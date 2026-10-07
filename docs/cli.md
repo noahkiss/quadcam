@@ -23,7 +23,7 @@ quadcam-cli import --plan plan.json       # names, dates, notes and options from
 quadcam-cli moments                       # moments, dead air, keep ranges and cuts per clip
 quadcam-cli cut 0 12.5-18 1:02-1:10       # set clip 0's cuts (seconds or m:ss)
 quadcam-cli cut 0 --keep                  # cut clip 0 down to its keep ranges
-quadcam-cli cut 0 --by-flight             # add one cut per radio-log pack
+quadcam-cli cut 0 --by-flight             # add one cut per radio-log flight
 quadcam-cli cut 0 --log-offset 4.5        # the radio log starts 4.5 s into clip 0
 quadcam-cli import --cut 0=20-26          # add a cut, then import
 quadcam-cli import --time 0=18:30         # clip 0 was flown at 18:30 (the default is noon)
@@ -83,7 +83,7 @@ quadcam-cli library edit <id> --note "windy" --keywords park,windy --place "Home
 quadcam-cli library edit <id> --date 2026-09-28 --time 18:30   # moves the files to that day
 quadcam-cli library edit <id> --profile Whoop     # rewrites make, model, aircraft and keywords
 quadcam-cli library cut <id> 12-18 1:02-1:10 --export   # set the cuts and write the new ones
-quadcam-cli library cut <id> --by-flight --export        # add one cut per radio-log pack and write them
+quadcam-cli library cut <id> --by-flight --export        # add one cut per radio-log flight and write them
 quadcam-cli library apply-name-format             # rename clips to the name_date_format setting
 quadcam-cli library match-logs --logs /path/to/LOGS   # report which clips match a radio log; --apply writes flight numbers and moments
 quadcam-cli library trash <id>                    # clip, cuts and original to the Trash
