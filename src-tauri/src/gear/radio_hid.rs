@@ -67,6 +67,9 @@ pub struct RadioSnapshot {
     pub connected: bool,
     #[serde(default)]
     pub product: Option<String>,
+    /// The firmware version the radio reports over USB.
+    #[serde(default)]
+    pub version: Option<String>,
     #[serde(default)]
     pub frame: Option<RadioFrame>,
     /// Why there is no frame.
@@ -122,6 +125,10 @@ pub trait HidSource: Send + Sync {
 /// One open joystick.
 pub trait HidReader: Send {
     fn product(&self) -> String;
+    /// The firmware version from the USB device (`bcdDevice`, `2.12`), when it says.
+    fn version(&self) -> Option<String> {
+        None
+    }
     /// One report, or None when none came within `timeout`. An error means the radio is
     /// gone.
     fn read(&mut self, timeout: Duration) -> Result<Option<Vec<u8>>>;
@@ -199,6 +206,9 @@ impl HidReader for FakeReader {
     fn product(&self) -> String {
         "Test Radio Joystick".into()
     }
+    fn version(&self) -> Option<String> {
+        Some("2.12".into())
+    }
     fn read(&mut self, timeout: Duration) -> Result<Option<Vec<u8>>> {
         {
             let mut s = self.st.lock().unwrap();
@@ -262,19 +272,26 @@ impl HidSource for RealHid {
             }
             None => guard.insert(hidapi::HidApi::new()?),
         };
-        if !api
+        let Some(release) = api
             .device_list()
-            .any(|d| d.vendor_id() == VID && d.product_id() == PID)
-        {
+            .find(|d| d.vendor_id() == VID && d.product_id() == PID)
+            .map(|d| d.release_number())
+        else {
             return Ok(None);
-        }
+        };
         let dev = api.open(VID, PID)?;
         let product = dev
             .get_product_string()
             .ok()
             .flatten()
             .unwrap_or_else(|| "USB radio".into());
-        Ok(Some(Box::new(RealReader { dev, product })))
+        // bcdDevice is BCD: 0x0212 is 2.12.
+        let version = Some(format!("{:x}.{:02x}", release >> 8, release & 0xff));
+        Ok(Some(Box::new(RealReader {
+            dev,
+            product,
+            version,
+        })))
     }
 }
 
@@ -282,12 +299,16 @@ impl HidSource for RealHid {
 struct RealReader {
     dev: hidapi::HidDevice,
     product: String,
+    version: Option<String>,
 }
 
 #[cfg(target_os = "macos")]
 impl HidReader for RealReader {
     fn product(&self) -> String {
         self.product.clone()
+    }
+    fn version(&self) -> Option<String> {
+        self.version.clone()
     }
     fn read(&mut self, timeout: Duration) -> Result<Option<Vec<u8>>> {
         let mut buf = [0u8; 64];
@@ -304,6 +325,7 @@ pub fn snapshot(src: &dyn HidSource, wait: Duration) -> Result<RadioSnapshot> {
         return Ok(RadioSnapshot {
             connected: false,
             product: None,
+            version: None,
             frame: None,
             message: Some(
                 "No radio in USB Joystick mode. Plug it in and choose USB Joystick on the radio."
@@ -312,6 +334,7 @@ pub fn snapshot(src: &dyn HidSource, wait: Duration) -> Result<RadioSnapshot> {
         });
     };
     let product = r.product();
+    let version = r.version();
     let start = Instant::now();
     let mut last = None;
     while start.elapsed() < wait {
@@ -331,6 +354,7 @@ pub fn snapshot(src: &dyn HidSource, wait: Duration) -> Result<RadioSnapshot> {
     Ok(RadioSnapshot {
         connected: true,
         product: Some(product),
+        version,
         frame: last,
         message,
     })

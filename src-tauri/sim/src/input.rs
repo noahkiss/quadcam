@@ -179,39 +179,39 @@ impl InputRing {
     Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize, Type,
 )]
 #[serde(rename_all = "lowercase")]
-pub enum Function {
+pub enum StickFunction {
     Roll,
     Pitch,
     Throttle,
     Yaw,
 }
 
-impl Function {
+impl StickFunction {
     /// In EdgeTX's default channel order, AETR.
-    pub const ALL: [Function; 4] = [
-        Function::Roll,
-        Function::Pitch,
-        Function::Throttle,
-        Function::Yaw,
+    pub const ALL: [StickFunction; 4] = [
+        StickFunction::Roll,
+        StickFunction::Pitch,
+        StickFunction::Throttle,
+        StickFunction::Yaw,
     ];
     /// Roll, pitch and yaw spring back to the middle; throttle stays where it is left.
     pub fn springs(self) -> bool {
-        self != Function::Throttle
+        self != StickFunction::Throttle
     }
     pub fn name(self) -> &'static str {
         match self {
-            Function::Roll => "roll",
-            Function::Pitch => "pitch",
-            Function::Throttle => "throttle",
-            Function::Yaw => "yaw",
+            StickFunction::Roll => "roll",
+            StickFunction::Pitch => "pitch",
+            StickFunction::Throttle => "throttle",
+            StickFunction::Yaw => "yaw",
         }
     }
     /// The name of each end, low then high, before Reverse.
     fn end_names(self) -> (&'static str, &'static str) {
         match self {
-            Function::Roll | Function::Yaw => ("Left end", "Right end"),
-            Function::Pitch => ("Back end", "Forward end"),
-            Function::Throttle => ("Bottom", "Top"),
+            StickFunction::Roll | StickFunction::Yaw => ("Left end", "Right end"),
+            StickFunction::Pitch => ("Back end", "Forward end"),
+            StickFunction::Throttle => ("Bottom", "Top"),
         }
     }
 }
@@ -219,7 +219,7 @@ impl Function {
 /// One end of an axis' raw travel.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Type)]
 #[serde(rename_all = "lowercase")]
-pub enum End {
+pub enum AxisEnd {
     Low,
     High,
 }
@@ -228,33 +228,33 @@ pub enum End {
 /// (CH9 and up reach the joystick as buttons).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Type)]
 #[serde(rename_all = "snake_case", tag = "kind")]
-pub enum Control {
+pub enum RadioControl {
     /// On while the channel is within `min_us..=max_us`.
     Channel { ch: u8, min_us: u16, max_us: u16 },
     /// On while button `button` (1-24) is in the `pressed` state.
     Button { button: u8, pressed: bool },
 }
 
-impl Control {
+impl RadioControl {
     pub fn active(&self, s: &InputSample) -> bool {
         match *self {
-            Control::Channel { ch, min_us, max_us } => {
+            RadioControl::Channel { ch, min_us, max_us } => {
                 s.us(ch).is_some_and(|us| (min_us..=max_us).contains(&us))
             }
-            Control::Button { button, pressed } => s.button(button) == pressed,
+            RadioControl::Button { button, pressed } => s.button(button) == pressed,
         }
     }
 
     /// A Betaflight `aux` range on channel `ch` (1 is CH1). Channels past CH8 reach the
     /// joystick only as buttons, on above 1500 µs, so the range's middle picks the state.
-    pub fn from_range(ch: u32, start: u16, end: u16) -> Option<Control> {
+    pub fn from_range(ch: u32, start: u16, end: u16) -> Option<RadioControl> {
         match ch {
-            1..=8 => Some(Control::Channel {
+            1..=8 => Some(RadioControl::Channel {
                 ch: ch as u8,
                 min_us: start,
                 max_us: end,
             }),
-            9..=32 => Some(Control::Button {
+            9..=32 => Some(RadioControl::Button {
                 button: (ch - 8) as u8,
                 pressed: (start as u32 + end as u32) / 2 > 1500,
             }),
@@ -265,8 +265,8 @@ impl Control {
     /// `CH5 1700-2100 µs`, `Button 1 pressed`.
     pub fn describe(&self) -> String {
         match *self {
-            Control::Channel { ch, min_us, max_us } => format!("CH{ch} {min_us}-{max_us} µs"),
-            Control::Button { button, pressed } => {
+            RadioControl::Channel { ch, min_us, max_us } => format!("CH{ch} {min_us}-{max_us} µs"),
+            RadioControl::Button { button, pressed } => {
                 format!(
                     "Button {button} {}",
                     if pressed { "pressed" } else { "released" }
@@ -320,10 +320,10 @@ impl AxisCal {
     }
     /// The end's name for function `f`: an end follows Reverse, so with Reverse on the low
     /// raw end is the one the stick reaches pushed right (or forward, or up).
-    pub fn end_name(&self, f: Function, end: End) -> &'static str {
+    pub fn end_name(&self, f: StickFunction, end: AxisEnd) -> &'static str {
         let (lo, hi) = f.end_names();
         match (end, self.reverse) {
-            (End::Low, false) | (End::High, true) => lo,
+            (AxisEnd::Low, false) | (AxisEnd::High, true) => lo,
             _ => hi,
         }
     }
@@ -381,10 +381,10 @@ pub struct Calibration {
     /// The arm switch, when the sim arms from the calibration rather than the quad's `aux`
     /// lines.
     #[serde(default)]
-    pub arm: Option<Control>,
+    pub arm: Option<RadioControl>,
     /// The control that puts the quad back on the start pad.
     #[serde(default)]
-    pub reset: Option<Control>,
+    pub reset: Option<RadioControl>,
 }
 
 impl Default for Calibration {
@@ -407,30 +407,30 @@ impl Calibration {
             reset: None,
         }
     }
-    pub fn axis(&self, f: Function) -> &AxisCal {
+    pub fn axis(&self, f: StickFunction) -> &AxisCal {
         match f {
-            Function::Roll => &self.roll,
-            Function::Pitch => &self.pitch,
-            Function::Throttle => &self.throttle,
-            Function::Yaw => &self.yaw,
+            StickFunction::Roll => &self.roll,
+            StickFunction::Pitch => &self.pitch,
+            StickFunction::Throttle => &self.throttle,
+            StickFunction::Yaw => &self.yaw,
         }
     }
-    pub fn axis_mut(&mut self, f: Function) -> &mut AxisCal {
+    pub fn axis_mut(&mut self, f: StickFunction) -> &mut AxisCal {
         match f {
-            Function::Roll => &mut self.roll,
-            Function::Pitch => &mut self.pitch,
-            Function::Throttle => &mut self.throttle,
-            Function::Yaw => &mut self.yaw,
+            StickFunction::Roll => &mut self.roll,
+            StickFunction::Pitch => &mut self.pitch,
+            StickFunction::Throttle => &mut self.throttle,
+            StickFunction::Yaw => &mut self.yaw,
         }
     }
     /// The channel per function, roll first.
     pub fn map(&self) -> [u8; 4] {
-        Function::ALL.map(|f| self.axis(f).ch)
+        StickFunction::ALL.map(|f| self.axis(f).ch)
     }
 
     /// Clears edited ends; deadzones, Reverse, the mode and the map stay.
     pub fn clear_edits(&mut self) {
-        for f in Function::ALL {
+        for f in StickFunction::ALL {
             let a = self.axis_mut(f);
             a.edited_low = None;
             a.edited_high = None;
@@ -495,7 +495,7 @@ pub const SWITCH_MARGIN_US: u16 = 150;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Type)]
 #[serde(rename_all = "snake_case")]
-pub enum Phase {
+pub enum CalPhase {
     /// Move both sticks around their full travel.
     Move,
     /// Let go of the sticks.
@@ -511,7 +511,7 @@ pub enum Phase {
 /// The guided auto-calibration (design 7.3): feed it every sample.
 #[derive(Debug, Clone)]
 pub struct AutoCal {
-    pub phase: Phase,
+    pub phase: CalPhase,
     /// The calibration so far: the map, Reverse, deadzones and edits are kept from the one
     /// it started from.
     pub cal: Calibration,
@@ -536,7 +536,7 @@ impl AutoCal {
     /// QuadCam knows).
     pub fn new(start: Calibration, quick: bool, arm_known: bool) -> Self {
         Self {
-            phase: Phase::Move,
+            phase: CalPhase::Move,
             cal: start,
             quick,
             arm_known,
@@ -554,7 +554,7 @@ impl AutoCal {
     /// Opens on a saved calibration at Review.
     pub fn review(saved: Calibration) -> Self {
         let mut a = Self::new(saved, false, true);
-        a.phase = Phase::Review;
+        a.phase = CalPhase::Review;
         a
     }
 
@@ -574,7 +574,7 @@ impl AutoCal {
     }
 
     /// Coverage of a function's channel, the shorter side.
-    pub fn coverage(&self, f: Function) -> f64 {
+    pub fn coverage(&self, f: StickFunction) -> f64 {
         let ch = self.cal.axis(f).ch as usize;
         if (1..=AXES).contains(&ch) {
             self.axis_coverage(ch - 1)
@@ -594,17 +594,19 @@ impl AutoCal {
     pub fn feed(&mut self, s: InputSample) {
         self.latest = Some(s);
         match self.phase {
-            Phase::Move => {
+            CalPhase::Move => {
                 self.track(&s);
                 self.find_map();
                 let start = *self.move_start.get_or_insert(s.t_ns);
                 if (self.quick || s.t_ns - start >= MOVE_MIN_NS)
-                    && Function::ALL.iter().all(|f| self.coverage(*f) >= COVERAGE)
+                    && StickFunction::ALL
+                        .iter()
+                        .all(|f| self.coverage(*f) >= COVERAGE)
                 {
                     self.end_move();
                 }
             }
-            Phase::LetGo => {
+            CalPhase::LetGo => {
                 // A stick still on its way to an end extends it.
                 self.track(&s);
                 self.window.push(s);
@@ -614,7 +616,7 @@ impl AutoCal {
                     return;
                 }
                 self.window.retain(|w| w.t_ns >= cut);
-                let springs: Vec<usize> = Function::ALL
+                let springs: Vec<usize> = StickFunction::ALL
                     .iter()
                     .filter(|f| f.springs())
                     .map(|f| self.cal.axis(*f).ch as usize - 1)
@@ -630,22 +632,22 @@ impl AutoCal {
                     self.after_let_go();
                 }
             }
-            Phase::Arm | Phase::Reset => {
+            CalPhase::Arm | CalPhase::Reset => {
                 let Some(base) = self.base else {
                     self.base = Some(s);
                     return;
                 };
                 if let Some(c) = self.changed(&base, &s) {
-                    if self.phase == Phase::Arm {
+                    if self.phase == CalPhase::Arm {
                         self.cal.arm = Some(c);
-                        self.go(Phase::Reset);
+                        self.go(CalPhase::Reset);
                     } else if Some(c) != self.cal.arm {
                         self.cal.reset = Some(c);
-                        self.go(Phase::Review);
+                        self.go(CalPhase::Review);
                     }
                 }
             }
-            Phase::Review => {}
+            CalPhase::Review => {}
         }
     }
 
@@ -659,7 +661,7 @@ impl AutoCal {
 
     /// The ends seen so far (the quick check keeps full travel: its values are exact).
     fn set_auto_ends(&mut self) {
-        for f in Function::ALL {
+        for f in StickFunction::ALL {
             let i = self.cal.axis(f).ch as usize - 1;
             let (lo, hi) = if self.quick {
                 (0, AXIS_MAX)
@@ -674,7 +676,7 @@ impl AutoCal {
 
     /// A stick function whose channel did not move takes an unmapped axis that did.
     fn find_map(&mut self) {
-        for f in Function::ALL {
+        for f in StickFunction::ALL {
             if self.coverage(f) >= COVERAGE_DONE {
                 continue;
             }
@@ -690,12 +692,12 @@ impl AutoCal {
     fn end_move(&mut self) {
         self.set_auto_ends();
         if self.quick {
-            for f in Function::ALL {
+            for f in StickFunction::ALL {
                 self.cal.axis_mut(f).centre = AXIS_MID;
             }
             self.after_let_go();
         } else {
-            self.go(Phase::LetGo);
+            self.go(CalPhase::LetGo);
         }
     }
 
@@ -718,7 +720,7 @@ impl AutoCal {
         let thr = self.cal.throttle.ch as usize - 1;
         let off = |v: u16| (v as i32 - AXIS_MID as i32).unsigned_abs() as f64 / AXIS_MID as f64;
         if off(mean(thr, &w)) < 0.05 {
-            if let Some(f) = Function::ALL
+            if let Some(f) = StickFunction::ALL
                 .into_iter()
                 .filter(|f| f.springs())
                 .find(|f| off(mean(self.cal.axis(*f).ch as usize - 1, &w)) > 0.5)
@@ -729,7 +731,7 @@ impl AutoCal {
             }
         }
         self.set_auto_ends();
-        for f in Function::ALL.into_iter().filter(|f| f.springs()) {
+        for f in StickFunction::ALL.into_iter().filter(|f| f.springs()) {
             let i = self.cal.axis(f).ch as usize - 1;
             let a = self.cal.axis_mut(f);
             a.centre = mean(i, &w).clamp(a.low(), a.high());
@@ -738,14 +740,14 @@ impl AutoCal {
 
     fn after_let_go(&mut self) {
         if self.arm_known {
-            self.go(Phase::Reset);
+            self.go(CalPhase::Reset);
         } else {
-            self.go(Phase::Arm);
+            self.go(CalPhase::Arm);
         }
     }
 
     /// A non-stick axis that moved far, or a button that toggled.
-    fn changed(&self, base: &InputSample, s: &InputSample) -> Option<Control> {
+    fn changed(&self, base: &InputSample, s: &InputSample) -> Option<RadioControl> {
         let sticks = self.stick_axes();
         let travel = (SWITCH_TRAVEL * AXIS_MAX as f64) as i32;
         let axis = (0..AXES)
@@ -755,7 +757,7 @@ impl AutoCal {
             .max_by_key(|(_, d)| *d)
             .map(|(i, _)| {
                 let us = axis_us(s.axes[i]);
-                Control::Channel {
+                RadioControl::Channel {
                     ch: (i + 1) as u8,
                     min_us: us.saturating_sub(SWITCH_MARGIN_US).max(900),
                     max_us: (us + SWITCH_MARGIN_US).min(2100),
@@ -765,7 +767,7 @@ impl AutoCal {
             let diff = base.buttons ^ s.buttons;
             (diff != 0).then(|| {
                 let b = diff.trailing_zeros() as u8 + 1;
-                Control::Button {
+                RadioControl::Button {
                     button: b,
                     pressed: s.button(b),
                 }
@@ -778,8 +780,8 @@ impl AutoCal {
     pub fn advance(&mut self) -> bool {
         self.message = None;
         match self.phase {
-            Phase::Move => {
-                let short: Vec<&str> = Function::ALL
+            CalPhase::Move => {
+                let short: Vec<&str> = StickFunction::ALL
                     .iter()
                     .filter(|f| self.coverage(**f) < COVERAGE_DONE)
                     .map(|f| f.name())
@@ -793,13 +795,13 @@ impl AutoCal {
                 }
                 self.end_move();
             }
-            Phase::LetGo => {
+            CalPhase::LetGo => {
                 self.take_centres();
                 self.after_let_go();
             }
-            Phase::Arm => self.go(Phase::Reset),
-            Phase::Reset => self.go(Phase::Review),
-            Phase::Review => {}
+            CalPhase::Arm => self.go(CalPhase::Reset),
+            CalPhase::Reset => self.go(CalPhase::Review),
+            CalPhase::Review => {}
         }
         true
     }
@@ -807,13 +809,13 @@ impl AutoCal {
     /// No arm switch: the sim arms from the quad's `aux` lines or the menu.
     pub fn skip(&mut self) {
         match self.phase {
-            Phase::Arm => {
+            CalPhase::Arm => {
                 self.cal.arm = None;
-                self.go(Phase::Reset);
+                self.go(CalPhase::Reset);
             }
-            Phase::Reset => {
+            CalPhase::Reset => {
                 self.cal.reset = None;
-                self.go(Phase::Review);
+                self.go(CalPhase::Review);
             }
             _ => {}
         }
@@ -828,10 +830,10 @@ impl AutoCal {
         self.max = [0; AXES];
         self.seen = false;
         self.move_start = None;
-        self.go(Phase::Move);
+        self.go(CalPhase::Move);
     }
 
-    fn go(&mut self, p: Phase) {
+    fn go(&mut self, p: CalPhase) {
         self.phase = p;
         self.window.clear();
         self.base = None;
@@ -1074,11 +1076,17 @@ mod tests {
         assert_eq!(a.centred(100), -1.0);
         assert!((a.centred(1450) - 0.5).abs() < 1e-9);
         assert!((a.centred(550) + 0.5).abs() < 1e-9);
-        assert_eq!(a.end_name(Function::Pitch, End::Low), "Back end");
-        assert_eq!(a.end_name(Function::Pitch, End::High), "Forward end");
+        assert_eq!(a.end_name(StickFunction::Pitch, AxisEnd::Low), "Back end");
+        assert_eq!(
+            a.end_name(StickFunction::Pitch, AxisEnd::High),
+            "Forward end"
+        );
         a.reverse = true;
-        assert_eq!(a.end_name(Function::Pitch, End::Low), "Forward end");
-        assert_eq!(a.end_name(Function::Throttle, End::High), "Bottom");
+        assert_eq!(
+            a.end_name(StickFunction::Pitch, AxisEnd::Low),
+            "Forward end"
+        );
+        assert_eq!(a.end_name(StickFunction::Throttle, AxisEnd::High), "Bottom");
         let mut t = AxisCal::full(3);
         t.auto_low = 48;
         t.auto_high = 2000;
@@ -1091,19 +1099,19 @@ mod tests {
     #[test]
     fn controls_read_channels_and_buttons() {
         let x = s(0, [0, 0, 0, 0, 2048, 0, 0, 0], 0b100);
-        let arm = Control::from_range(5, 1700, 2100).unwrap();
+        let arm = RadioControl::from_range(5, 1700, 2100).unwrap();
         assert!(arm.active(&x));
-        let turtle = Control::from_range(9, 1700, 2100).unwrap();
+        let turtle = RadioControl::from_range(9, 1700, 2100).unwrap();
         assert_eq!(
             turtle,
-            Control::Button {
+            RadioControl::Button {
                 button: 1,
                 pressed: true
             }
         );
         assert!(!turtle.active(&x));
-        assert!(Control::from_range(11, 1800, 2100).unwrap().active(&x));
-        assert!(Control::from_range(11, 900, 1200)
+        assert!(RadioControl::from_range(11, 1800, 2100).unwrap().active(&x));
+        assert!(RadioControl::from_range(11, 900, 1200)
             .unwrap()
             .active(&s(0, rest(), 0)));
         assert_eq!(arm.describe(), "CH5 1700-2100 µs");
@@ -1140,11 +1148,11 @@ mod tests {
         let mut a = AutoCal::new(Calibration::default(), false, false);
         let mut t = 0;
         sweep(&mut a, &mut t, 40, 2010, [0, 1, 2, 3]);
-        assert_eq!(a.phase, Phase::LetGo);
+        assert_eq!(a.phase, CalPhase::LetGo);
         // Let go: the springs rest a little off the middle; throttle stays low.
         let mut ax = [1030, 1018, 0, 1027, 0, 0, 0, 0];
         hold(&mut a, &mut t, ax, 0, 700);
-        assert_eq!(a.phase, Phase::Arm);
+        assert_eq!(a.phase, CalPhase::Arm);
         // The ends include the reach after Move advanced, at 80 %.
         assert_eq!(a.cal.roll.auto_low, 40);
         assert_eq!(a.cal.yaw.auto_high, 2010);
@@ -1158,20 +1166,20 @@ mod tests {
         hold(&mut a, &mut t, ax, 0, 20);
         assert_eq!(
             a.cal.arm,
-            Some(Control::Channel {
+            Some(RadioControl::Channel {
                 ch: 5,
                 min_us: 1862,
                 max_us: 2100
             })
         );
-        assert_eq!(a.phase, Phase::Reset);
+        assert_eq!(a.phase, CalPhase::Reset);
         // Reset: a momentary on CH9, button 1. The arm switch moving again is not it.
         hold(&mut a, &mut t, ax, 0, 20);
         hold(&mut a, &mut t, ax, 1, 20);
-        assert_eq!(a.phase, Phase::Review);
+        assert_eq!(a.phase, CalPhase::Review);
         assert_eq!(
             a.cal.reset,
-            Some(Control::Button {
+            Some(RadioControl::Button {
                 button: 1,
                 pressed: true
             })
@@ -1190,7 +1198,7 @@ mod tests {
         let mut a = AutoCal::new(Calibration::default(), false, true);
         let mut t = 0;
         sweep(&mut a, &mut t, 0, 2048, [1, 2, 0, 3]);
-        assert_eq!(a.phase, Phase::LetGo);
+        assert_eq!(a.phase, CalPhase::LetGo);
         hold(&mut a, &mut t, [0, 1024, 1024, 1024, 0, 0, 0, 0], 0, 700);
         assert_eq!(a.cal.throttle.ch, 1);
         let mut springs = [a.cal.roll.ch, a.cal.pitch.ch, a.cal.yaw.ch];
@@ -1201,7 +1209,7 @@ mod tests {
         let mut t = 0;
         sweep(&mut b, &mut t, 0, 2048, [0, 1, 2, 5]);
         assert_eq!(b.cal.yaw.ch, 6);
-        assert_eq!(b.phase, Phase::LetGo);
+        assert_eq!(b.phase, CalPhase::LetGo);
     }
 
     #[test]
@@ -1226,15 +1234,15 @@ mod tests {
                 a.feed(s(t, ax, 0));
             }
         }
-        assert_eq!(a.phase, Phase::Move, "pitch back is short");
-        assert!(a.coverage(Function::Pitch) < 0.5 && a.coverage(Function::Roll) >= 0.99);
+        assert_eq!(a.phase, CalPhase::Move, "pitch back is short");
+        assert!(a.coverage(StickFunction::Pitch) < 0.5 && a.coverage(StickFunction::Roll) >= 0.99);
         assert!(!a.advance(), "Done needs half of each side");
         assert!(a.message.as_deref().unwrap().contains("pitch"));
         // Pushed to 60 % back: Done accepts it, auto does not.
         a.feed(s(t + 5, [1024, 410, 0, 1024, 0, 0, 0, 0], 0));
-        assert_eq!(a.phase, Phase::Move);
+        assert_eq!(a.phase, CalPhase::Move);
         assert!(a.advance());
-        assert_eq!(a.phase, Phase::LetGo);
+        assert_eq!(a.phase, CalPhase::LetGo);
     }
 
     #[test]
@@ -1249,11 +1257,11 @@ mod tests {
         sweep(&mut a, &mut t, 0, 2048, [0, 1, 2, 3]);
         assert_eq!(
             a.phase,
-            Phase::Reset,
+            CalPhase::Reset,
             "the quick check skips Let go and Arm"
         );
         a.advance();
-        assert_eq!(a.phase, Phase::Review);
+        assert_eq!(a.phase, CalPhase::Review);
         assert_eq!(a.cal.pitch.high(), 1900);
         assert_eq!(a.cal.pitch.auto_high, 2048);
         // Survives a save and a load.
@@ -1262,7 +1270,7 @@ mod tests {
         assert_eq!(back.pitch.edited_high, Some(1900));
         // Recalibrate clears it; the deadzone and Reverse stay.
         a.recalibrate();
-        assert_eq!(a.phase, Phase::Move);
+        assert_eq!(a.phase, CalPhase::Move);
         assert_eq!(a.cal.pitch.edited_high, None);
         assert_eq!(a.cal.roll.deadzone, 5);
         assert!(a.cal.pitch.reverse);
