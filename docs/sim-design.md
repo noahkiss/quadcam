@@ -915,6 +915,6 @@ The owner accepted every default below on 2026-10-07. Question 1 stays open unti
 | 7 | Does the sim gate 1.0, or ship as a preview alongside it? | A preview; not a 1.0 gate |
 | 8 | Which worlds first after the plain room? | Living room, gym, backyard |
 | 9 | World assets: CC0 only, or CC BY with credits too? | CC0 and CC BY; never NC, ND or SA |
-| 10 | Reset: which radio control resets the quad? The sim needs a free switch or button | User picks in settings; none by default (menu only) |
+| 10 | Reset: which radio control resets the quad? The sim needs a free switch or button | Owner: always offer a radio reset. Setup asks for a reset control (a free button or trim) and suggests one; changeable in settings. Turtle mode follows the quad's own turtle switch from its aux lines |
 | 11 | Video latency default: 0 ms, or the profile's video system (about 12-25 ms digital, about 10 ms analog)? | The profile's video system |
 | 12 | Window: full screen by default, or a window? | Full screen on QuadCam's display |
