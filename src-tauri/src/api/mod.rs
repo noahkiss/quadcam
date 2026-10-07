@@ -13,12 +13,14 @@ pub mod events;
 #[macro_use]
 pub mod gear;
 pub mod library;
+pub mod modules;
 pub mod session;
 pub mod setup;
 
 pub use events::*;
 pub use gear::*;
 pub use library::*;
+pub use modules::*;
 pub use session::*;
 pub use setup::*;
 
@@ -31,6 +33,7 @@ use crate::disk::Volume;
 use crate::geocode::GeoResult;
 use crate::library::{Filter, LibClip, LibCut};
 use crate::metadata::{Place, Profile};
+use crate::modules::ModuleStatus;
 use crate::photos::ShareReport;
 use crate::session::{Editor, Session};
 use crate::trim::CutChange;
@@ -245,4 +248,15 @@ with_gear_rows! {
     session_split(params: SessionClipParams) -> CutChange = |c| c.session_split_by_flight(params.id);
     /// Adds one cut per radio-log pack to a library clip's cut list (unsaved until exported).
     library_split(params: ClipIdParams) -> CutChange = |c| c.library_split_by_flight(&params.id);
+    /// Downloaded tools: each module's pin, a newer pin from the last check, and what is
+    /// installed. Reads only local files.
+    modules() -> Vec<ModuleStatus> = |c| Ok(c.modules());
+    /// Downloads, checks and installs a module (the newest known pin; also how an update
+    /// installs). Needs `confirm` after the person saw the license.
+    module_install(params: ModuleParams) -> ModuleStatus =
+        |c| c.module_install(&params.name, params.confirm);
+    /// Deletes a module.
+    module_remove(params: NameParams) -> ModuleStatus = |c| c.module_remove(&params.name);
+    /// Reads the newest module pins from the latest QuadCam release. Installs nothing.
+    modules_check() -> Vec<ModuleStatus> = |c| c.modules_check();
 }

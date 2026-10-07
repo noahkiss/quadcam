@@ -18,6 +18,7 @@ pub mod mcp;
 pub mod media;
 mod menu;
 pub mod metadata;
+pub mod modules;
 pub mod moments;
 pub mod naming;
 pub mod paths;
@@ -215,6 +216,18 @@ fn library_scope(app: AppHandle, state: State<'_, AppState>) -> Result<(), Strin
         .map_err(|e| e.to_string())
 }
 
+/// The third-party notices shipped in the app (`Contents/Resources/THIRD_PARTY_NOTICES.txt`,
+/// made by `scripts/notices.mjs` in the build).
+#[tauri::command]
+#[specta::specta]
+fn third_party_notices(app: AppHandle) -> Result<String, String> {
+    let dir = app.path().resource_dir().map_err(|e| e.to_string())?;
+    std::fs::read_to_string(dir.join("THIRD_PARTY_NOTICES.txt")).map_err(|_| {
+        "The notices are in the built app. Run `node scripts/notices.mjs` to see them here."
+            .to_string()
+    })
+}
+
 /// Emits `volumes-changed` whenever something mounts or unmounts under /Volumes.
 fn watch_volumes(app: AppHandle) {
     use notify::{RecursiveMode, Watcher};
@@ -397,6 +410,10 @@ pub fn specta_builder() -> tauri_specta::Builder<tauri::Wry> {
             c::gear_devices,
             c::gear_device_save,
             c::gear_device_forget,
+            c::modules,
+            c::module_install,
+            c::module_remove,
+            c::modules_check,
             env_check,
             default_output_dir,
             load_dropped,
@@ -404,6 +421,7 @@ pub fn specta_builder() -> tauri_specta::Builder<tauri::Wry> {
             format_card,
             answer_format_request,
             library_scope,
+            third_party_notices,
             menu::menu_state,
             share::share,
         ])

@@ -54,6 +54,8 @@ The cask installs:
 - the command-line tool `quadcam-cli` on your `PATH`
 - ffmpeg, which QuadCam needs to convert and verify clips
 
+QuadCam can also download ffmpeg itself as a module, in **Settings > Modules**. See [Modules and notices](docs/modules.md).
+
 To update, run `brew upgrade --cask quadcam`. To remove the app, run `brew uninstall --cask quadcam`. Uninstall keeps your settings and your videos.
 
 ### Signing
@@ -88,6 +90,7 @@ QuadCam follows the system's light or dark appearance. [A light-mode screenshot]
 | [Moments and cuts](docs/moments-and-cuts.md) | Dead air, radio-log moments, the trim editor, cut files |
 | [Metadata](docs/metadata.md) | QuickTime tags, places and place search providers, aircraft profiles, radio logs |
 | [Settings](docs/settings.md) | Each Settings section and the settings file |
+| [Modules and notices](docs/modules.md) | Tools QuadCam downloads on request (ffmpeg, esptool), their pins and checks, and the third-party notices |
 | [Photos](docs/photos.md) | Albums, permissions, `QUADCAM_PHOTOS` |
 | [Format safety](docs/format-safety.md) | When QuadCam erases a card, and the guards it checks first |
 | [Command line](docs/cli.md) | `quadcam-cli`: import, library, places, profiles, settings, JSON output |
@@ -98,8 +101,11 @@ QuadCam follows the system's light or dark appearance. [A light-mode screenshot]
 
 ## Privacy
 
-QuadCam works on your Mac. It sends data out only when you search for a place: the search text goes to the provider you picked. See [Metadata](docs/metadata.md#place-search-providers).
+QuadCam works on your Mac. It sends data out only when you ask it to:
+
+- A place search sends the search text to the provider you picked. See [Metadata](docs/metadata.md#place-search-providers).
+- A module install downloads the module from its upstream, and **Check for updates** reads `modules.json` from QuadCam's latest GitHub release. See [Modules](docs/modules.md).
 
 ## License
 
-MIT. See [LICENSE](LICENSE).
+MIT. See [LICENSE](LICENSE). **QuadCam > Acknowledgements** lists the third-party software and fonts in the app and their licenses.

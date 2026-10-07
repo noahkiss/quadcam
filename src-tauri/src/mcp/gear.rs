@@ -18,6 +18,10 @@ use schemars::JsonSchema;
 use serde::Deserialize;
 use serde_json::{json, Value};
 
+/// What Gear says when nothing is plugged in. On Apple silicon, macOS keeps a new USB
+/// accessory off the bus until the person allows it, and no app can see that prompt.
+pub const NOTHING_FOUND: &str = "Nothing found. If macOS asked to allow an accessory, click Allow.";
+
 // ----- arguments -----
 
 #[derive(Debug, Clone, Default, Deserialize, JsonSchema)]
@@ -161,7 +165,7 @@ fn gear<B: Backend>(backend: &mut B, a: &Value) -> Result<(Vec<Value>, Value)> {
                 s["staged"]
             );
             line.push_str(&if connected.is_empty() {
-                "Nothing plugged in.".to_string()
+                NOTHING_FOUND.to_string()
             } else {
                 connected
                     .iter()

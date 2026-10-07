@@ -5,6 +5,7 @@
   "default_profile": "Whoop",
   "delete_clips_after_import": false,
   "encoder": "videotoolbox",
+  "ffmpeg_source": "module",
   "format": "mp4",
   "format_label": "DVR",
   "geocoder": "apple",

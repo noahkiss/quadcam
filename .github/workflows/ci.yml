@@ -49,7 +49,8 @@ jobs:
 
   # The React UI in app/: typecheck, lint, unit tests, build, and the Playwright specs
   # on the mocked IPC. Node comes from .node-version, pnpm
-  # from packageManager in app/package.json.
+  # from packageManager in app/package.json. The license check and the notices that
+  # `pnpm build` writes read `cargo metadata`, so this job needs Rust too.
   ui:
     runs-on: macos-26
     timeout-minutes: 20
@@ -69,10 +70,19 @@ jobs:
           cache: pnpm
           cache-dependency-path: app/pnpm-lock.yaml
 
+      - name: Install Rust (for cargo metadata)
+        run: |
+          rustup toolchain install stable --profile minimal
+          rustup default stable
+
       - run: pnpm install --frozen-lockfile
+      - name: License check (fails on a license outside the allow list)
+        run: node ../scripts/notices.mjs --check
+      - run: node --test ../scripts/notices.test.mjs
       - run: pnpm typecheck
       - run: pnpm lint
       - run: pnpm test
       - run: pnpm exec playwright install webkit
       - run: pnpm e2e
       - run: pnpm build
+      - run: test -s dist/THIRD_PARTY_NOTICES.txt

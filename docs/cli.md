@@ -111,7 +111,13 @@ quadcam-cli profiles delete Whoop
 quadcam-cli settings                              # the file, its values, the effective settings
 quadcam-cli settings set layout=day place_folders=true photos_album=Drone
 quadcam-cli settings set output_dir=null          # back to the default
+quadcam-cli modules                               # downloaded tools: versions, license, source
+quadcam-cli modules install ffmpeg --yes          # without --yes: refuses (exit 3), shows the license
+quadcam-cli modules check                         # newest pins from the latest release
+quadcam-cli modules remove ffmpeg
 ```
+
+See [Modules and notices](modules.md) for what a module install checks.
 
 `--provider` takes `apple`, `nominatim`, `census` or `google`. Without it, the search uses the `geocoder` setting.
 
@@ -124,6 +130,7 @@ quadcam-cli settings set output_dir=null          # back to the default
 - `geocoder` (`apple`, `nominatim`, `census` or `google`), `google_places_key`
 - `name_date_format` (`YYYY-MM-DD` or `YY.MM.DD`), `default_profile`
 - Gear: `gear_dir`, `gear_auto_backup`, `gear_keep_recent`, `gear_keep_weeks`, `gear_keep_monthly`, `gear_usb_minutes`, `gear_on_connect`, `gear_cues`, `firmware_check`, `tts_provider`, `tts_key` (see [Settings](settings.md#gear))
+- `ffmpeg_source` (`module` or `homebrew`), `modules` (`{"ffmpeg": "/path/to/ffmpeg"}`: a file per tool; see [Modules](modules.md#where-ffmpeg-comes-from))
 
 A value is JSON or plain text.
 

@@ -108,6 +108,10 @@ segment shows in full.
 5. A device QuadCam does not know asks for a name and an aircraft in a small sheet. It can
    be dismissed; the device then shows as "Unnamed FC" and still gets backed up.
 
+When **Connected** is empty, it says: "Nothing found. If macOS asked to allow an accessory,
+click Allow." On Apple silicon, macOS keeps a new USB accessory off the bus until the person
+allows it, and an app cannot see that prompt (7.11).
+
 An FC on USB gets a session timer in its row ("USB 12 min"). At the limit set in Settings
 (default 20 min) QuadCam shows a notification: small quads overheat when powered on USB.
 
@@ -964,6 +968,13 @@ volume UUID, which a format changes. WP1 reads the hardware identity
 (`detect::parse_card_reader`) and uses it for a card in the built-in slot; other cards use
 the volume UUID.
 
+**USB hubs and the accessory prompt.** A card reader behind a USB-C dock (a USB 3 hub)
+behaves as when it is plugged in directly (tested 2026-10-07). On Apple silicon, macOS asks
+"Allow accessory to connect?" for a new USB device, and the device does not enumerate at all
+until the person allows it. Approvals are remembered. No app can see a pending prompt, so
+every empty "Connected" state and `quadcam_gear status` say "Nothing found. If macOS asked to
+allow an accessory, click Allow." (`mcp::gear::NOTHING_FOUND`).
+
 A disk number can be reused by the next disk; a new disk with the same number reads as still
 present until the next look shows its own volume. The existing eject paths (`eject`, the eject
 after export) still call `diskutil eject`. Moving cards to `unmountDisk` is a later change
@@ -1185,4 +1196,4 @@ Each has a default the build uses until you decide.
 | 9 | ELRS version read over CRSF device info needs a hardware check. Until then, enter versions by hand? | Hand entry, read-only check |
 | 10 | Splash source: GitHub release binaries only, or also the EdgeTX cloud build? | Release binaries only |
 | 11 | Firmware and voice indexes go online. Check only on request, or daily? | On request (`firmwareCheck` = `manual`); `README.md` Privacy updated |
-| 12 | ffmpeg as a module: which static arm64 build (signed, LGPL preferred), and drop the cask's Homebrew `ffmpeg` dependency once the module works? | Module by default, Homebrew fallback; the cask keeps the dependency until 1.0 |
+| 12 | ffmpeg as a module: which static arm64 build (signed, LGPL preferred), and drop the cask's Homebrew `ffmpeg` dependency once the module works? | Module by default, Homebrew fallback; the cask keeps the dependency until 1.0. WP14 pins Martin Riedl's signed, notarized 9.0.2 arm64 release build (GPL; no signed LGPL arm64 build found; `docs/modules.md`) |

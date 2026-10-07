@@ -655,6 +655,9 @@ impl<B: Backend> Server<B> {
             "quadcam_settings" => {
                 let x: SettingsArgs = args(a)?;
                 let action = x.action.clone().unwrap_or_else(|| "read".into());
+                if action.starts_with("module") {
+                    return self.modules_action(&action, &x);
+                }
                 let view = match action.as_str() {
                     "read" => self.backend.call("settings", Value::Null)?,
                     "write" => {
@@ -668,17 +671,21 @@ impl<B: Backend> Server<B> {
                         self.backend
                             .call("settings_set", json!({"values": values}))?
                     }
-                    other => return Err(anyhow!("unknown action {other:?}; use read or write")),
+                    other => {
+                        return Err(anyhow!(
+                            "unknown action {other:?}; use read, write, modules, module_install or module_remove"
+                        ))
+                    }
                 };
                 let e = &view["effective"];
                 let line = format!(
-                    "{}Settings file {}.\noutput_dir {} | layout {} | place_folders {} | format {} | encoder {} | keep_originals {} | add_time {} | delete_clips_after_import {} | join_split_recordings {} | default_name {:?} | photos_album {:?} | format_label {} | log_dir {} | geocoder {} | name_date_format {} | default_profile {} | tunables {} | google_places_key {}",
+                    "{}Settings file {}.\noutput_dir {} | layout {} | place_folders {} | format {} | encoder {} | keep_originals {} | add_time {} | delete_clips_after_import {} | join_split_recordings {} | default_name {:?} | photos_album {:?} | format_label {} | log_dir {} | geocoder {} | name_date_format {} | default_profile {} | tunables {} | ffmpeg_source {} | google_places_key {}",
                     if action == "write" { "Saved. " } else { "" },
                     view["path"].as_str().unwrap_or("?"),
                     e["output_dir"].as_str().unwrap_or("none"), e["layout"].as_str().unwrap_or("?"), e["place_folders"],
                     e["format"].as_str().unwrap_or("?"), e["encoder"].as_str().unwrap_or("?"), e["keep_originals"], e["add_time"], e["delete_clips_after_import"], e["join_split_recordings"],
                     e["default_name"].as_str().unwrap_or(""), e["photos_album"].as_str().unwrap_or(""), e["format_label"].as_str().unwrap_or(""),
-                    e["log_dir"].as_str().unwrap_or("none"), e["geocoder"].as_str().unwrap_or("?"), e["name_date_format"].as_str().unwrap_or("?"), e["default_profile"].as_str().unwrap_or("none"), e["tunables"],
+                    e["log_dir"].as_str().unwrap_or("none"), e["geocoder"].as_str().unwrap_or("?"), e["name_date_format"].as_str().unwrap_or("?"), e["default_profile"].as_str().unwrap_or("none"), e["tunables"], e["ffmpeg_source"].as_str().unwrap_or("?"),
                     if view["values"]["googlePlacesKey"].is_null() { "not set" } else { "set" },
                 );
                 let settings: serde_json::Map<String, Value> = [
@@ -699,6 +706,7 @@ impl<B: Backend> Server<B> {
                     "name_date_format",
                     "default_profile",
                     "tunables",
+                    "ffmpeg_source",
                 ]
                 .iter()
                 .map(|k| (k.to_string(), e[*k].clone()))
@@ -942,5 +950,87 @@ impl<B: Backend> Server<B> {
             }
             _ => Err(anyhow!("unknown tool {name}")),
         }
+    }
+}
+
+impl<B: Backend> Server<B> {
+    /// `quadcam_settings` actions `modules`, `module_install` and `module_remove`.
+    fn modules_action(&mut self, action: &str, x: &SettingsArgs) -> Result<(Vec<Value>, Value)> {
+        let name = || {
+            x.module
+                .clone()
+                .context("module is required: the module's name (see action modules)")
+        };
+        let one = |v: Value| Value::Array(vec![v]);
+        let (lead, list) = match action {
+            "modules" => (String::new(), self.backend.call("modules", Value::Null)?),
+            "module_install" => {
+                let v = self.backend.call(
+                    "module_install",
+                    json!({"name": name()?, "confirm": x.confirm.unwrap_or(false)}),
+                )?;
+                ("Installed. ".to_string(), one(v))
+            }
+            "module_remove" => {
+                let v = self
+                    .backend
+                    .call("module_remove", json!({"name": name()?}))?;
+                ("Removed. ".to_string(), one(v))
+            }
+            other => {
+                return Err(anyhow!(
+                    "unknown action {other:?}; use read, write, modules, module_install or module_remove"
+                ))
+            }
+        };
+        let rows = list.as_array().cloned().unwrap_or_default();
+        let lines = rows
+            .iter()
+            .map(|m| {
+                let pin = if m["newest"].is_null() {
+                    &m["pinned"]
+                } else {
+                    &m["newest"]
+                };
+                let installed = match m["installed"]["version"].as_str() {
+                    Some(v) => format!("installed {v}"),
+                    None => "not installed".into(),
+                };
+                format!(
+                    "{}: {} | {}{} | license {} ({}) | {:.1} MB from {} | source {}{}",
+                    m["name"].as_str().unwrap_or("?"),
+                    pin["title"].as_str().unwrap_or("?"),
+                    installed,
+                    if m["update"] == json!(true) {
+                        format!(" | update to {}", pin["version"].as_str().unwrap_or("?"))
+                    } else if m["installed"].is_null() {
+                        format!(
+                            " | would install {}",
+                            pin["version"].as_str().unwrap_or("?")
+                        )
+                    } else {
+                        String::new()
+                    },
+                    pin["license"].as_str().unwrap_or("?"),
+                    pin["license_url"].as_str().unwrap_or("?"),
+                    pin["assets"]
+                        .as_array()
+                        .map(|a| a.iter().filter_map(|x| x["size"].as_u64()).sum::<u64>())
+                        .unwrap_or(0) as f64
+                        / 1e6,
+                    pin["homepage"].as_str().unwrap_or("?"),
+                    pin["source"].as_str().unwrap_or("?"),
+                    m["problem"]
+                        .as_str()
+                        .map(|p| format!(" | problem: {p}"))
+                        .unwrap_or_default(),
+                )
+            })
+            .collect::<Vec<_>>()
+            .join("\n");
+        Ok((
+            vec![text(format!("{lead}{lines}"))],
+            json!({"modules": rows}),
+        ))
     }
 }

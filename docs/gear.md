@@ -17,6 +17,10 @@ device to do so.
 | ELRS module | A USB serial port with a CP210x, CH340 or CH9102 id |
 | Radio in DFU mode | The STM32 bootloader (`0483:df11`) |
 
+When nothing shows, QuadCam says: "Nothing found. If macOS asked to allow an accessory, click
+Allow." macOS keeps a new USB accessory off until you allow it, and QuadCam cannot see that
+question.
+
 A card in the built-in SD slot gets its id from a hash of the card's own serial number, so a
 format keeps it. Other cards and radios get theirs from a hash of the volume UUID. A flight
 controller gets its id when QuadCam identifies it.

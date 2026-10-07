@@ -88,6 +88,7 @@ export const sel = {
   defaultProfile: (s: State) => eff<string>(s, "defaultProfile", "default_profile", "") || "",
   geocoder: (s: State) => eff<string>(s, "geocoder", "geocoder", "apple"),
   nameDateFormat: (s: State) => eff<string>(s, "nameDateFormat", "name_date_format", "YYYY-MM-DD"),
+  ffmpegSource: (s: State) => eff<"module" | "homebrew">(s, "ffmpegSource", "ffmpeg_source", "module"),
   tunables: (s: State) => eff<NonNullable<SettingsValues["tunables"]>>(s, "tunables", "tunables", NO_TUNABLES),
   recents: (s: State) => s.values.recents || NO_RECENTS,
   libView: (s: State) => (s.values.libView === "list" ? "list" : "grid") as "grid" | "list",

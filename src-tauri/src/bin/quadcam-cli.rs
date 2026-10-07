@@ -96,6 +96,12 @@ enum Cmd {
         #[command(subcommand)]
         cmd: Option<SetCmd>,
     },
+    /// Tools QuadCam downloads from their upstream (ffmpeg, esptool): list (default), check
+    /// for newer pins, install, remove.
+    Modules {
+        #[command(subcommand)]
+        cmd: Option<ModCmd>,
+    },
     /// Set metadata on clips: profile, location, keywords, author.
     Meta {
         /// Clip ids, or `all`.
@@ -439,13 +445,32 @@ enum PlaceCmd {
 }
 
 #[derive(Subcommand)]
+enum ModCmd {
+    /// List the modules: pinned version, installed version, license, size, source.
+    List,
+    /// Read the newest pins from the latest QuadCam release. Installs nothing.
+    Check,
+    /// Download, check and install a module (the newest known pin; also updates).
+    Install {
+        name: String,
+        /// Agree to the module's license (shown without --yes).
+        #[arg(long)]
+        yes: bool,
+    },
+    /// Delete a module.
+    Remove { name: String },
+    /// Print the manifest this build pins, as JSON (the release's modules.json).
+    Manifest,
+}
+
+#[derive(Subcommand)]
 enum SetCmd {
     /// Show the settings file, its values and the effective settings.
     Show,
     /// Set settings: KEY=VALUE, where VALUE is JSON or plain text ("null" resets a key).
     /// Keys: output_dir, format, encoder, keep_originals, add_time,
     /// delete_clips_after_import, default_name, photos_album, format_label, log_dir, layout, place_folders, tunables, geocoder,
-    /// name_date_format, default_profile; Gear: gear_dir, gear_auto_backup, gear_keep_recent,
+    /// name_date_format, default_profile, ffmpeg_source, modules; Gear: gear_dir, gear_auto_backup, gear_keep_recent,
     /// gear_keep_weeks, gear_keep_monthly, gear_usb_minutes, gear_on_connect, gear_cues,
     /// firmware_check, tts_provider, tts_key.
     Set {
@@ -610,6 +635,35 @@ fn run(cli: Cli) -> Result<Value> {
         )?,
         Cmd::Profiles { cmd } => profiles(&core, cmd.unwrap_or(ProfCmd::List))?,
         Cmd::Places { cmd } => places(&core, cmd.unwrap_or(PlaceCmd::List))?,
+        Cmd::Modules { cmd } => match cmd.unwrap_or(ModCmd::List) {
+            ModCmd::List => serde_json::to_value(call::modules(&core)?)?,
+            ModCmd::Check => serde_json::to_value(call::modules_check(&core)?)?,
+            ModCmd::Install { name, yes } => {
+                if !yes {
+                    let m = call::modules(&core)?
+                        .into_iter()
+                        .find(|m| m.name == name)
+                        .with_context(|| format!("unknown module {name:?}"))?;
+                    bail!(
+                        "Refused: install needs --yes. {}",
+                        quadcam_lib::modules::Modules::license_prompt(m.target())
+                    );
+                }
+                serde_json::to_value(call::module_install(
+                    &core,
+                    api::ModuleParams {
+                        name,
+                        confirm: true,
+                    },
+                )?)?
+            }
+            ModCmd::Remove { name } => {
+                serde_json::to_value(call::module_remove(&core, api::NameParams { name })?)?
+            }
+            ModCmd::Manifest => {
+                serde_json::to_value(quadcam_lib::modules::manifest::Manifest::built_in())?
+            }
+        },
         Cmd::Settings { cmd } => match cmd.unwrap_or(SetCmd::Show) {
             SetCmd::Show => serde_json::to_value(call::settings(&core)?)?,
             SetCmd::Set { values } => {

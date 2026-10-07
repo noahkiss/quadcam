@@ -106,6 +106,8 @@ export type Session = Omit<G.Session, "kind" | "clips" | "plans" | "results"> & 
 export type CutChange = { status: "applied"; cuts: Span[]; kept: Path[]; trashed: Path[] } | { status: "confirm"; files: Path[] };
 
 export type ImportOutcome = G.ImportOutcome;
+export type ModuleStatus = G.ModuleStatus;
+export type ModulePin = G.Pin;
 export type ClipDeletion = G.ClipDeletion;
 
 /** The settings file's values, by file key (camelCase). */
@@ -130,6 +132,7 @@ export interface SettingsValues {
   geocoder?: "apple" | "nominatim" | "census" | "google";
   googlePlacesKey?: string;
   nameDateFormat?: G.DateFormat;
+  ffmpegSource?: G.FfmpegSource;
   recents?: { keywords?: string[]; authors?: string[]; notes?: string[] };
   libView?: "grid" | "list";
   thumbSize?: number;

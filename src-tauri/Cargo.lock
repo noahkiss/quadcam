@@ -3124,6 +3124,7 @@ dependencies = [
  "serde",
  "serde_json",
  "serialport",
+ "sha2",
  "siphasher",
  "specta",
  "specta-typescript",
@@ -3133,6 +3134,7 @@ dependencies = [
  "tauri-plugin-opener",
  "tauri-specta",
  "tempfile",
+ "toml 1.1.6+spec-1.1.0",
  "xxhash-rust",
 ]
 

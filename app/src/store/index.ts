@@ -1,5 +1,6 @@
 // One store in slices (plan 3.1). The core stays the source of truth: slices cache its
 // library, session and settings, and its events trigger a refetch (see ../events.ts).
+import type { ReactNode } from "react";
 import { create } from "zustand";
 import { createHistorySlice, type HistorySlice } from "./history";
 import { createLibrarySlice, type LibrarySlice } from "./library";
@@ -23,7 +24,7 @@ export const useStore = create<State>()((...a) => ({
 export const store = useStore;
 
 /** Asks a question in a dialog. Resolves the text (or true without a field), or null. */
-export function ask(title: string, text?: string, opts: { input?: string; ok?: string; danger?: boolean } = {}) {
+export function ask(title: string, text?: string, opts: { input?: string; ok?: string; danger?: boolean; body?: ReactNode } = {}) {
   return new Promise<string | true | null>((resolve) => {
     useStore.setState({
       askReq: {
