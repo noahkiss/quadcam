@@ -1154,7 +1154,7 @@
       "readOnlyHint": true,
       "title": "Gear"
     },
-    "description": "Read the FPV gear QuadCam knows: `status` (the gear folder, the Gear settings, and the devices plugged in now: EdgeTX radios in USB Storage mode, goggles and DVR cards, FC and ELRS serial ports, radios in DFU mode; each with its saved name and aircraft when QuadCam knows it; and each FC's USB heat timer), `devices` (every device saved in gear.json: id, kind, name, aircraft, board, firmware, version, last seen, last backup), `fc_identify` (reads a Betaflight FC over MSP: board, firmware, version, device id, whether QuadCam may write it, known issues; no reboot), `board_notes` (known issues of FC boards and builds) or `usb_timers` (per FC on USB: battery in, minutes on USB, minutes left before \"Unplug now\"). Changes nothing.\n\nBest for: the first Gear call, and checking what is plugged in.\nReturns: one line per device plus the structured records.\nFollow up with quadcam_gear_edit device_save to name a device or link it to an aircraft.",
+    "description": "Read the FPV gear QuadCam knows: `status` (the gear folder, the Gear settings, and the devices plugged in now: EdgeTX radios in USB Storage mode, goggles and DVR cards, FC and ELRS serial ports, radios in DFU mode; each with its saved name and aircraft when QuadCam knows it; and each FC's USB heat timer), `devices` (every device saved in gear.json: id, kind, name, aircraft, board, firmware, version, last seen, last backup), `fc_identify` (reads a Betaflight FC over MSP: board, firmware, version, device id, whether QuadCam may write it, known issues; no reboot), `board_notes` (known issues of FC boards and builds), `usb_timers` (per FC on USB: battery in, minutes on USB, minutes left before \"Unplug now\") or `osd` (a Betaflight OSD layout from `paths`, dump or diff files read in order: each OSD profile drawn on its grid (NTSC 30x13, PAL 30x16, HD 53x20, from vcd_video_system or `grid`), the elements on in each profile with x and y, and the check for overlaps and cells off screen). Changes nothing.\n\nBest for: the first Gear call, checking what is plugged in, and checking an OSD layout before or after an edit.\nReturns: one line per device plus the structured records; for osd, the drawn profiles as text plus the structured view.\nFollow up with quadcam_gear_edit device_save to name a device or link it to an aircraft.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -1164,7 +1164,8 @@
             "devices",
             "fc_identify",
             "board_notes",
-            "usb_timers"
+            "usb_timers",
+            "osd"
           ],
           "type": "string"
         },
@@ -1172,6 +1173,24 @@
           "description": "For board_notes: a board name (BETAFPVG473); omit for every board.",
           "maxLength": 80,
           "type": "string"
+        },
+        "device": {
+          "description": "For osd: a saved device id instead of files (needs a backup of it).",
+          "maxLength": 80,
+          "type": "string"
+        },
+        "grid": {
+          "description": "For osd: NTSC, PAL, HD or WxH; omit for the files' video system.",
+          "maxLength": 8,
+          "type": "string"
+        },
+        "paths": {
+          "description": "For osd: Betaflight `dump all`, `diff all` or CLI-line files (absolute paths), read\nin order; a later file's lines win.",
+          "items": {
+            "type": "string"
+          },
+          "maxItems": 8,
+          "type": "array"
         },
         "port": {
           "description": "For fc_identify: the FC's serial port (/dev/cu.usbmodem...) from status; omit when one FC is plugged in.",

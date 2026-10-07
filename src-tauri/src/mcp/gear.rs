@@ -27,7 +27,7 @@ pub const NOTHING_FOUND: &str = "Nothing found. If macOS asked to allow an acces
 #[derive(Debug, Clone, Default, Deserialize, JsonSchema)]
 #[schemars(deny_unknown_fields)]
 pub struct GearArgs {
-    #[schemars(required, extend("enum" = ["status", "devices", "fc_identify", "board_notes", "usb_timers"]))]
+    #[schemars(required, extend("enum" = ["status", "devices", "fc_identify", "board_notes", "usb_timers", "osd"]))]
     pub action: Option<String>,
     /// For fc_identify: the FC's serial port (/dev/cu.usbmodem...) from status; omit when one FC is plugged in.
     #[schemars(length(max = 200))]
@@ -38,6 +38,16 @@ pub struct GearArgs {
     /// For board_notes: a firmware version (2025.12.5); omit for every version.
     #[schemars(length(max = 80))]
     pub version: Option<String>,
+    /// For osd: Betaflight `dump all`, `diff all` or CLI-line files (absolute paths), read
+    /// in order; a later file's lines win.
+    #[schemars(length(max = 8))]
+    pub paths: Option<Vec<String>>,
+    /// For osd: a saved device id instead of files (needs a backup of it).
+    #[schemars(length(max = 80))]
+    pub device: Option<String>,
+    /// For osd: NTSC, PAL, HD or WxH; omit for the files' video system.
+    #[schemars(length(max = 8))]
+    pub grid: Option<String>,
 }
 
 #[derive(Debug, Clone, Default, Deserialize, JsonSchema)]
@@ -81,7 +91,7 @@ pub fn tools() -> Vec<Value> {
     vec![
         tool::<GearArgs>(
             "quadcam_gear",
-            "Read the FPV gear QuadCam knows: `status` (the gear folder, the Gear settings, and the devices plugged in now: EdgeTX radios in USB Storage mode, goggles and DVR cards, FC and ELRS serial ports, radios in DFU mode; each with its saved name and aircraft when QuadCam knows it; and each FC's USB heat timer), `devices` (every device saved in gear.json: id, kind, name, aircraft, board, firmware, version, last seen, last backup), `fc_identify` (reads a Betaflight FC over MSP: board, firmware, version, device id, whether QuadCam may write it, known issues; no reboot), `board_notes` (known issues of FC boards and builds) or `usb_timers` (per FC on USB: battery in, minutes on USB, minutes left before \"Unplug now\"). Changes nothing.\n\nBest for: the first Gear call, and checking what is plugged in.\nReturns: one line per device plus the structured records.\nFollow up with quadcam_gear_edit device_save to name a device or link it to an aircraft.",
+            "Read the FPV gear QuadCam knows: `status` (the gear folder, the Gear settings, and the devices plugged in now: EdgeTX radios in USB Storage mode, goggles and DVR cards, FC and ELRS serial ports, radios in DFU mode; each with its saved name and aircraft when QuadCam knows it; and each FC's USB heat timer), `devices` (every device saved in gear.json: id, kind, name, aircraft, board, firmware, version, last seen, last backup), `fc_identify` (reads a Betaflight FC over MSP: board, firmware, version, device id, whether QuadCam may write it, known issues; no reboot), `board_notes` (known issues of FC boards and builds), `usb_timers` (per FC on USB: battery in, minutes on USB, minutes left before \"Unplug now\") or `osd` (a Betaflight OSD layout from `paths`, dump or diff files read in order: each OSD profile drawn on its grid (NTSC 30x13, PAL 30x16, HD 53x20, from vcd_video_system or `grid`), the elements on in each profile with x and y, and the check for overlaps and cells off screen). Changes nothing.\n\nBest for: the first Gear call, checking what is plugged in, and checking an OSD layout before or after an edit.\nReturns: one line per device plus the structured records; for osd, the drawn profiles as text plus the structured view.\nFollow up with quadcam_gear_edit device_save to name a device or link it to an aircraft.",
             json!({"openWorldHint": false, "readOnlyHint": true, "title": "Gear"}),
         ),
         tool::<GearEditArgs>(
@@ -282,8 +292,21 @@ fn gear<B: Backend>(backend: &mut B, a: &Value) -> Result<(Vec<Value>, Value)> {
             };
             Ok((vec![text(line)], json!({"devices": list})))
         }
+        "osd" => {
+            let v = backend.call(
+                "gear_osd",
+                json!({
+                    "paths": x.paths.unwrap_or_default(),
+                    "device": x.device,
+                    "grid": x.grid,
+                }),
+            )?;
+            let view: crate::gear::osd::OsdView =
+                serde_json::from_value(v.clone()).context("bad osd answer")?;
+            Ok((vec![text(crate::gear::osd::render_text(&view))], v))
+        }
         other => Err(anyhow!(
-            "unknown action {other:?}; use status, devices, fc_identify, board_notes or usb_timers"
+            "unknown action {other:?}; use status, devices, fc_identify, board_notes, usb_timers or osd"
         )),
     }
 }

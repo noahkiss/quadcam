@@ -1,0 +1,103 @@
+---
+source: tests/osd.rs
+expression: "osd::render_text(&v)"
+---
+Betaflight / STM32G47X (G473) 2026.6.0-alpha May 15 2026 / 06:14:55 (e92c10887) MSP API: 1.48
+Grid NTSC (30x13), video system NTSC
+
+OSD profile 1 FULL (in use)
+    000000000011111111112222222222
+    012345678901234567890123456789
+   +------------------------------+
+ 0 |                              |
+ 1 | R-67                         |
+ 2 | L2:99                        |
+ 3 | R  6                         |
+ 4 |                              |
+ 5 |                              |
+ 6 |          ===-+-===           |
+ 7 |         LOW BATTERY          |
+ 8 |              ^               |
+ 9 |   45M     DISARMED    T 45   |
+10 |   2.50A               ACRO   |
+11 | B4.20V                T00:00 |
+12 |                              |
+   +------------------------------+
+  ah                       x 14, y  2  Artificial horizon
+  avg_cell_voltage         x  1, y 11  Average cell voltage
+  current                  x  1, y 10  Current draw
+  disarmed                 x 11, y  9  Disarmed
+  flip_arrow               x 14, y  8  Flip arrow
+  flymode                  x 23, y 10  Flight mode
+  link_quality             x  1, y  2  Link quality
+  mah_drawn                x  1, y  9  Capacity used
+  rsnr                     x  1, y  3  Signal-to-noise ratio
+  rssi_dbm                 x  1, y  1  RSSI (dBm)
+  throttle                 x 23, y  9  Throttle
+  tim_2                    x 23, y 11  Timer 2
+  warnings                 x  9, y  7  Warnings
+  crosshairs               x 13, y  6  Crosshairs
+  note: ah: the level line is drawn; at full pitch it sweeps rows 2-11.
+  check: ok (no overlaps, nothing off screen)
+
+OSD profile 2 MEDIUM
+    000000000011111111112222222222
+    012345678901234567890123456789
+   +------------------------------+
+ 0 |                              |
+ 1 | R-67                 R:8:200 |
+ 2 | L2:99                        |
+ 3 | R  6                         |
+ 4 | RATES                        |
+ 5 |                              |
+ 6 | ||||        -+-              |
+ 7 |         LOW BATTERY          |
+ 8 | R250MW       ^               |
+ 9 |           DISARMED    T 45   |
+10 |   2.50A               ACRO   |
+11 | B4.20V                T00:00 |
+12 |                              |
+   +------------------------------+
+  current                  x  1, y 10  Current draw
+  disarmed                 x 11, y  9  Disarmed
+  flip_arrow               x 14, y  8  Flip arrow
+  flymode                  x 23, y 10  Flight mode
+  link_quality             x  1, y  2  Link quality
+  link_tx_power            x  1, y  8  Transmitter power
+  motor_diag               x  1, y  6  Motor diagnostics
+  rate_profile_name        x  1, y  4  Rate profile name
+  rsnr                     x  1, y  3  Signal-to-noise ratio
+  rssi_dbm                 x  1, y  1  RSSI (dBm)
+  throttle                 x 23, y  9  Throttle
+  tim_2                    x 23, y 11  Timer 2
+  vbat                     x  1, y 11  Battery voltage
+  vtx_channel              x 22, y  1  VTX channel
+  warnings                 x  9, y  7  Warnings
+  crosshairs               x 13, y  6  Crosshairs
+  check: ok (no overlaps, nothing off screen)
+
+OSD profile 3 CLEAN
+    000000000011111111112222222222
+    012345678901234567890123456789
+   +------------------------------+
+ 0 |                              |
+ 1 |                              |
+ 2 | L2:99                        |
+ 3 |                              |
+ 4 |                              |
+ 5 |                              |
+ 6 |                              |
+ 7 |         LOW BATTERY          |
+ 8 |              ^               |
+ 9 |           DISARMED           |
+10 |                              |
+11 | B4.20V                T00:00 |
+12 |                              |
+   +------------------------------+
+  disarmed                 x 11, y  9  Disarmed
+  flip_arrow               x 14, y  8  Flip arrow
+  link_quality             x  1, y  2  Link quality
+  tim_2                    x 23, y 11  Timer 2
+  vbat                     x  1, y 11  Battery voltage
+  warnings                 x  9, y  7  Warnings
+  check: ok (no overlaps, nothing off screen)

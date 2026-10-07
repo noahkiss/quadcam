@@ -61,5 +61,6 @@ expression: "Core::METHODS"
   "gear_fc_identify",
   "gear_fc_read",
   "gear_board_notes",
-  "gear_usb_timers"
+  "gear_usb_timers",
+  "gear_osd"
 ]

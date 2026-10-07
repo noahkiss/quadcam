@@ -1,0 +1,526 @@
+{
+ "complete": true,
+ "elements": [
+  {
+   "height": 10,
+   "known": true,
+   "label": "Artificial horizon",
+   "name": "ah",
+   "profiles": [
+    1
+   ],
+   "sample": "=========",
+   "value": 2158,
+   "variant": 0,
+   "width": 9,
+   "x": 14,
+   "y": 3
+  },
+  {
+   "height": 1,
+   "known": true,
+   "label": "Altitude",
+   "name": "altitude",
+   "profiles": [],
+   "sample": "A 0.0",
+   "value": 33,
+   "variant": 0,
+   "width": 6,
+   "x": 1,
+   "y": 1
+  },
+  {
+   "height": 1,
+   "known": true,
+   "label": "Craft name",
+   "name": "craft_name",
+   "profiles": [
+    3
+   ],
+   "sample": "TEST QUAD",
+   "value": 8203,
+   "variant": 0,
+   "width": 9,
+   "x": 11,
+   "y": 0
+  },
+  {
+   "height": 1,
+   "known": true,
+   "label": "Crosshairs",
+   "name": "crosshairs",
+   "profiles": [
+    1,
+    2
+   ],
+   "sample": "-+-",
+   "value": 6381,
+   "variant": 0,
+   "width": 3,
+   "x": 13,
+   "y": 7
+  },
+  {
+   "height": 1,
+   "known": true,
+   "label": "Current draw",
+   "name": "current",
+   "profiles": [
+    1
+   ],
+   "sample": "  2.50A",
+   "value": 2500,
+   "variant": 0,
+   "width": 7,
+   "x": 4,
+   "y": 14
+  },
+  {
+   "height": 1,
+   "known": true,
+   "label": "Flight mode",
+   "name": "flymode",
+   "profiles": [
+    1,
+    2,
+    3
+   ],
+   "sample": "ACRO",
+   "value": 14808,
+   "variant": 0,
+   "width": 4,
+   "x": 24,
+   "y": 14
+  },
+  {
+   "height": 1,
+   "known": true,
+   "label": "Link quality",
+   "name": "link_quality",
+   "profiles": [
+    1,
+    2
+   ],
+   "sample": "L2:99",
+   "value": 6177,
+   "variant": 0,
+   "width": 5,
+   "x": 1,
+   "y": 1
+  },
+  {
+   "height": 1,
+   "known": true,
+   "label": "Capacity used",
+   "name": "mah_drawn",
+   "profiles": [
+    1
+   ],
+   "sample": "  45M",
+   "value": 2497,
+   "variant": 0,
+   "width": 5,
+   "x": 1,
+   "y": 14
+  },
+  {
+   "height": 1,
+   "known": true,
+   "label": "RSSI (dBm)",
+   "name": "rssi_dbm",
+   "profiles": [
+    2
+   ],
+   "sample": "R-67",
+   "value": 4155,
+   "variant": 0,
+   "width": 5,
+   "x": 27,
+   "y": 1
+  },
+  {
+   "height": 5,
+   "known": true,
+   "label": "Left stick overlay",
+   "name": "stick_overlay_left",
+   "profiles": [
+    3
+   ],
+   "sample": "",
+   "value": 8321,
+   "variant": 0,
+   "width": 7,
+   "x": 1,
+   "y": 4
+  },
+  {
+   "height": 1,
+   "known": true,
+   "label": "Timer 2",
+   "name": "tim_2",
+   "profiles": [
+    1,
+    2,
+    3
+   ],
+   "sample": "T00:00",
+   "value": 14839,
+   "variant": 0,
+   "width": 6,
+   "x": 23,
+   "y": 15
+  },
+  {
+   "height": 1,
+   "known": true,
+   "label": "Battery voltage",
+   "name": "vbat",
+   "profiles": [
+    1,
+    2,
+    3
+   ],
+   "sample": "B4.20V",
+   "value": 14817,
+   "variant": 0,
+   "width": 6,
+   "x": 1,
+   "y": 15
+  },
+  {
+   "height": 1,
+   "known": true,
+   "label": "Warnings",
+   "name": "warnings",
+   "profiles": [
+    1,
+    2,
+    3
+   ],
+   "sample": "LOW BATTERY",
+   "value": 14729,
+   "variant": 0,
+   "width": 12,
+   "x": 9,
+   "y": 12
+  }
+ ],
+ "firmware": "Betaflight / SYNTHETIC 4.5.0 (synthetic PAL test)",
+ "grid": {
+  "height": 16,
+  "name": "PAL",
+  "width": 30
+ },
+ "notes": [],
+ "ok": false,
+ "profiles": [
+  {
+   "active": false,
+   "boxes": [
+    {
+     "element": "ah",
+     "height": 1,
+     "label": "Artificial horizon",
+     "width": 9,
+     "x": 10,
+     "y": 7
+    },
+    {
+     "element": "current",
+     "height": 1,
+     "label": "Current draw",
+     "width": 7,
+     "x": 4,
+     "y": 14
+    },
+    {
+     "element": "flymode",
+     "height": 1,
+     "label": "Flight mode",
+     "width": 4,
+     "x": 24,
+     "y": 14
+    },
+    {
+     "element": "link_quality",
+     "height": 1,
+     "label": "Link quality",
+     "width": 5,
+     "x": 1,
+     "y": 1
+    },
+    {
+     "element": "mah_drawn",
+     "height": 1,
+     "label": "Capacity used",
+     "width": 5,
+     "x": 1,
+     "y": 14
+    },
+    {
+     "element": "tim_2",
+     "height": 1,
+     "label": "Timer 2",
+     "width": 6,
+     "x": 23,
+     "y": 15
+    },
+    {
+     "element": "vbat",
+     "height": 1,
+     "label": "Battery voltage",
+     "width": 6,
+     "x": 1,
+     "y": 15
+    },
+    {
+     "element": "warnings",
+     "height": 1,
+     "label": "Warnings",
+     "width": 12,
+     "x": 9,
+     "y": 12
+    },
+    {
+     "element": "crosshairs",
+     "height": 1,
+     "label": "Crosshairs",
+     "width": 3,
+     "x": 13,
+     "y": 7
+    }
+   ],
+   "elements": [
+    "ah",
+    "current",
+    "flymode",
+    "link_quality",
+    "mah_drawn",
+    "tim_2",
+    "vbat",
+    "warnings",
+    "crosshairs"
+   ],
+   "index": 1,
+   "name": "RACE",
+   "notes": [
+    "ah: the level line is drawn; at full pitch it sweeps rows 3-12."
+   ],
+   "problems": [
+    {
+     "cells": 2,
+     "element": "mah_drawn",
+     "kind": "overlap",
+     "message": "mah_drawn overlaps current (2 cells).",
+     "other": "current"
+    }
+   ],
+   "rows": [
+    "                              ",
+    " L2:99                        ",
+    "                              ",
+    "                              ",
+    "                              ",
+    "                              ",
+    "                              ",
+    "          ===-+-===           ",
+    "                              ",
+    "                              ",
+    "                              ",
+    "                              ",
+    "         LOW BATTERY          ",
+    "                              ",
+    "   45M2.50A             ACRO  ",
+    " B4.20V                T00:00 "
+   ]
+  },
+  {
+   "active": true,
+   "boxes": [
+    {
+     "element": "flymode",
+     "height": 1,
+     "label": "Flight mode",
+     "width": 4,
+     "x": 24,
+     "y": 14
+    },
+    {
+     "element": "link_quality",
+     "height": 1,
+     "label": "Link quality",
+     "width": 5,
+     "x": 1,
+     "y": 1
+    },
+    {
+     "element": "rssi_dbm",
+     "height": 1,
+     "label": "RSSI (dBm)",
+     "width": 3,
+     "x": 27,
+     "y": 1
+    },
+    {
+     "element": "tim_2",
+     "height": 1,
+     "label": "Timer 2",
+     "width": 6,
+     "x": 23,
+     "y": 15
+    },
+    {
+     "element": "vbat",
+     "height": 1,
+     "label": "Battery voltage",
+     "width": 6,
+     "x": 1,
+     "y": 15
+    },
+    {
+     "element": "warnings",
+     "height": 1,
+     "label": "Warnings",
+     "width": 12,
+     "x": 9,
+     "y": 12
+    },
+    {
+     "element": "crosshairs",
+     "height": 1,
+     "label": "Crosshairs",
+     "width": 3,
+     "x": 13,
+     "y": 7
+    }
+   ],
+   "elements": [
+    "flymode",
+    "link_quality",
+    "rssi_dbm",
+    "tim_2",
+    "vbat",
+    "warnings",
+    "crosshairs"
+   ],
+   "index": 2,
+   "name": "CRUISE",
+   "notes": [],
+   "problems": [
+    {
+     "cells": 2,
+     "element": "rssi_dbm",
+     "kind": "off_screen",
+     "message": "rssi_dbm: 2 cells off screen.",
+     "other": null
+    }
+   ],
+   "rows": [
+    "                              ",
+    " L2:99                     R-6",
+    "                              ",
+    "                              ",
+    "                              ",
+    "                              ",
+    "                              ",
+    "             -+-              ",
+    "                              ",
+    "                              ",
+    "                              ",
+    "                              ",
+    "         LOW BATTERY          ",
+    "                              ",
+    "                        ACRO  ",
+    " B4.20V                T00:00 "
+   ]
+  },
+  {
+   "active": false,
+   "boxes": [
+    {
+     "element": "craft_name",
+     "height": 1,
+     "label": "Craft name",
+     "width": 9,
+     "x": 11,
+     "y": 0
+    },
+    {
+     "element": "flymode",
+     "height": 1,
+     "label": "Flight mode",
+     "width": 4,
+     "x": 24,
+     "y": 14
+    },
+    {
+     "element": "stick_overlay_left",
+     "height": 5,
+     "label": "Left stick overlay",
+     "width": 7,
+     "x": 1,
+     "y": 4
+    },
+    {
+     "element": "tim_2",
+     "height": 1,
+     "label": "Timer 2",
+     "width": 6,
+     "x": 23,
+     "y": 15
+    },
+    {
+     "element": "vbat",
+     "height": 1,
+     "label": "Battery voltage",
+     "width": 6,
+     "x": 1,
+     "y": 15
+    },
+    {
+     "element": "warnings",
+     "height": 1,
+     "label": "Warnings",
+     "width": 12,
+     "x": 9,
+     "y": 12
+    }
+   ],
+   "elements": [
+    "craft_name",
+    "flymode",
+    "stick_overlay_left",
+    "tim_2",
+    "vbat",
+    "warnings"
+   ],
+   "index": 3,
+   "name": "",
+   "notes": [],
+   "problems": [],
+   "rows": [
+    "           TEST QUAD          ",
+    "                              ",
+    "                              ",
+    "                              ",
+    "    +                         ",
+    "    +                         ",
+    " +++++++                      ",
+    "    +                         ",
+    "    +                         ",
+    "                              ",
+    "                              ",
+    "                              ",
+    "         LOW BATTERY          ",
+    "                              ",
+    "                        ACRO  ",
+    " B4.20V                T00:00 "
+   ]
+  }
+ ],
+ "source": [
+  "pal-synthetic.dump_all.txt"
+ ],
+ "unknown": [],
+ "video_system": "PAL"
+}

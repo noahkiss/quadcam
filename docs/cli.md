@@ -148,6 +148,7 @@ quadcam-cli --json gear fc read [--cmd "get osd_ah_pos"]... [--out STEM]   # the
 quadcam-cli --json gear fc check STEM.diff_all.txt expected.cli  # every expected line in the diff
 quadcam-cli --json gear fc notes [--board BETAFPVG473]            # known issues of boards
 quadcam-cli --json gear fc usb                                   # USB timers
+quadcam-cli --json gear osd FILE [FILE ...] [--grid NTSC|PAL|HD|WxH] [--text]
 ```
 
 `gear fc read --out STEM` writes `STEM.diff_all.txt` and `STEM.dump_all.txt` and refuses to

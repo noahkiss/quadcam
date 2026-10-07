@@ -14,6 +14,7 @@
 //! - `events`: connected, identified, unmounted-but-present and removed, from one look to
 //!   the next.
 //! - `cues`: spoken, sound and notification cues ("safe to unplug", "still inserted").
+//! - `osd`: Betaflight OSD layouts: decode, draw per profile, overlap and off-screen check.
 //!
 //! `Env` is what Gear reaches outside the process (serial ports, volumes, presence, the cue
 //! sink); tests replace it.
@@ -24,6 +25,7 @@ pub mod cues;
 pub mod detect;
 pub mod events;
 pub mod model;
+pub mod osd;
 pub mod serial;
 pub mod store;
 

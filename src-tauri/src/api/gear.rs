@@ -6,11 +6,13 @@
 //! its typed command to `specta_builder` in `lib.rs`.
 
 pub use crate::core::{
-    BoardNotesParams, DeviceSaveParams, FcJob, FcPortParams, FcReadParams, GearStatus, UsbTimer,
+    BoardNotesParams, DeviceSaveParams, FcJob, FcPortParams, FcReadParams, GearStatus, OsdParams,
+    UsbTimer,
 };
 pub use crate::gear::bf::boards::BoardNote;
 pub use crate::gear::bf::{FcInfo, FcRead};
 pub use crate::gear::model::Device;
+pub use crate::gear::osd::OsdView;
 use serde::{Deserialize, Serialize};
 use specta::Type;
 
@@ -43,6 +45,9 @@ macro_rules! with_gear_rows {
             gear_board_notes(params: BoardNotesParams) -> Vec<BoardNote> = |c| Ok(c.gear_board_notes(&params));
             /// Each FC's USB heat timer: battery in, seconds on USB, the limit, seconds left.
             gear_usb_timers() -> Vec<UsbTimer> = |c| Ok(c.gear_usb_timers());
+            /// An FC's OSD layout per OSD profile, drawn on its grid and checked for overlaps
+            /// and cells off screen. Reads only.
+            gear_osd(params: OsdParams) -> OsdView = |c| c.gear_osd(&params);
         }
     };
 }
