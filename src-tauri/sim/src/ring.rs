@@ -289,10 +289,12 @@ mod tests {
     #[test]
     fn radio_source_reads_the_input_ring_through_the_link_and_calibration() {
         let ring = Arc::new(InputRing::new(64));
-        let mut cal = Calibration::default();
         // Reset on CH6 high, angle on CH5 high: the calibration drives them.
-        cal.reset = RadioControl::from_range(6, 1700, 2100);
-        cal.angle = RadioControl::from_range(5, 1700, 2100);
+        let cal = Calibration {
+            reset: RadioControl::from_range(6, 1700, 2100),
+            angle: RadioControl::from_range(5, 1700, 2100),
+            ..Calibration::default()
+        };
         let mut src = RadioSource {
             ring: ring.clone(),
             link: LinkModel::new(LinkConfig::default()),
