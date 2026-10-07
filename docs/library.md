@@ -73,16 +73,21 @@ QuadCam writes no media file during this step.
 
 ### Joined recordings
 
-An analog DVR splits a long recording into files of a fixed length. A Fat Shark Echo writes about 600 seconds per file: `PICT0001.AVI`, `PICT0002.AVI`, and so on. The next file starts where the last one ended.
+An analog DVR splits a long recording into files of a fixed length, or of a fixed size just under 4 GiB (the largest file FAT32 holds). A Fat Shark Echo writes about 600 seconds per file: `PICT0001.AVI`, `PICT0002.AVI`, and so on. The next file starts where the last one ended.
+
+QuadCam knows one DVR's split length: the Fat Shark Echo, 600 seconds. For any other DVR it reads the split from the files themselves.
 
 On import, QuadCam joins such files into one clip. It joins two files only when all of these are true:
 
 - Both are analog files in the same folder, with the same name and the next number (`PICT0001.AVI`, then `PICT0002.AVI`).
-- The first file is whole and is 600 seconds long, give or take 1 second. The next file may be any length, and may be cut off at its end.
+- The first file is whole and full length. The next file may be any length, and may be cut off at its end. A file is full length when one of these is true:
+  - It is a known DVR's split length, give or take 1 second (600 seconds for a Fat Shark Echo).
+  - The file numbered just before or after it has the same length, give or take 1 second. The length must be at least 1 minute and a whole number of minutes, give or take 2 seconds. Two full files in a row show the DVR's split, whatever it is.
+  - Its size is just under 4 GiB (within 128 MiB).
 - Both have the same picture size, frame rate and streams.
 - The file times, when the DVR keeps a clock, do not contradict it.
 
-When QuadCam is not sure, for example when the first file is 596 seconds long, it keeps the files separate.
+When QuadCam is not sure, it keeps the files separate. Examples: the first file is 596 seconds long, or a DVR QuadCam does not know wrote one 300-second file and then a shorter one.
 
 - The Review step shows a joined clip as one row with its files. **Keep files separate** imports them as clips of their own. **Join N files** joins them again. You cannot change it after the clip is in the library.
 - **Join split recordings** in Settings > Import turns joining on or off. It is on by default. The command line takes `stage --no-join` for one import, and `import --separate ID` or `import --join ID` for one clip. An agent passes `join` to `quadcam_load_clips`, or `joined` to `quadcam_suggest`.

@@ -148,7 +148,9 @@ GitHub (`noahkiss/quadcam`, public) is the only remote. Users install the cask
   split; the cuts are added to the clip's list (`PlanPatch.split_by_flight`, `session_split`,
   `library_split`), so no exported cut is dropped.
 - **Joined recordings:** at analysis `join::groups` finds analog files the DVR split (next
-  number, same folder and format, the first 600 +/- 1 s, file times that agree); unsure
+  number, same folder and format, the first full length by `join::full_length`: a
+  `KNOWN_SPLITS` length (Echo 600 s) +/- 1 s, the same length as the file numbered next to it
+  (a whole minute, >= 60 s), or a size just under 4 GiB; file times that agree); unsure
   stays apart. Each file stays a `Clip`; the first carries `Join` (its `source()` is an
   `ffconcat` list in staging, read by ffmpeg as one input) and the later ones `part_of`.
   Parts are left out of jobs and dating; `can_format` and `delete_clip_file` judge a part by

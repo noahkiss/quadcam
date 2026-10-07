@@ -128,7 +128,7 @@ An analog clip with dead air matches by its picture instead of its length. On a 
 
 The match also places the log in the clip: the clip's log offset is set to where the first pack starts, so moments, flight numbers and **Split by flight** line up with the picture. With a believable radio clock, the clip's time of day is its start, not the arm.
 
-Files an analog DVR split from one recording are matched as one timeline, so a pack may run across the split. In an import they are one clip already (see [Joined recordings](library.md#joined-recordings)). In the library, two clips match as one timeline when the second file has the next DVR number, the first is about 600 s long, and both have the same date. Each file then gets the packs it shows.
+Files an analog DVR split from one recording are matched as one timeline, so a pack may run across the split. In an import they are one clip already (see [Joined recordings](library.md#joined-recordings)). In the library, two clips match as one timeline when the second file has the next DVR number, the first is full length (the same rule as [Joined recordings](library.md#joined-recordings), without the file size), and both have the same date. Each file then gets the packs it shows.
 
 Each match gets a badge and a reason, shown on the Review step's date chip:
 

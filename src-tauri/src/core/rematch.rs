@@ -138,10 +138,21 @@ impl Core {
             // The next file of a recording the DVR split (imported as clips of their own).
             for n in 1..idx.len() {
                 let (a, b) = (&clips[idx[n - 1]], &clips[idx[n]]);
+                // The lengths of the files numbered next to `a`: `b`, and the one before.
+                let mut neighbours = vec![b.duration];
+                if let Some(p) = n.checked_sub(2).map(|m| &clips[idx[m]]) {
+                    if let (Some(x), Some(y)) = (&p.dvr, &a.dvr) {
+                        if p.date == a.date && crate::join::is_next(x, y) {
+                            neighbours.push(p.duration);
+                        }
+                    }
+                }
                 inputs[n].follows = a.date == b.date
                     && a.parts.is_empty()
                     && match (&a.dvr, &b.dvr) {
-                        (Some(x), Some(y)) => crate::join::may_follow(x, a.duration, y),
+                        (Some(x), Some(y)) => {
+                            crate::join::may_follow(x, a.duration, y, &neighbours)
+                        }
                         _ => false,
                     };
             }

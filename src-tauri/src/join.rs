@@ -1,6 +1,11 @@
 //! Recordings an analog DVR split into several files. A DVR writes one long recording as
 //! files of a fixed length (a Fat Shark Echo: about 600 s each, `PICT0001.AVI`,
-//! `PICT0002.AVI`, ...). The next file starts where the last one ended, with no gap.
+//! `PICT0002.AVI`, ...), or of a fixed size just under FAT32's 4 GiB file limit. The next
+//! file starts where the last one ended, with no gap.
+//!
+//! A file is full length (`full_length`) when its length is a known DVR's split
+//! (`KNOWN_SPLITS`), when it and the next or previous numbered file have the same length
+//! (two full files: the DVR's split, whatever it is), or when its size sits just under 4 GiB.
 //!
 //! Detection is conservative: a file continues the one before it only when every piece of
 //! evidence agrees (`continues`). Anything less keeps the files apart.
@@ -21,13 +26,22 @@ use chrono::{DateTime, Datelike, Utc};
 use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
 
-/// The length a DVR splits a recording at. Two real Echo files were 600.004 s and 600.031 s.
-pub const SPLIT_S: f64 = 600.0;
-/// A file within this of `SPLIT_S` was split by the DVR.
+/// DVRs whose split length is known, with that length in seconds. A Fat Shark Echo: two
+/// real files were 600.004 s and 600.031 s.
+pub const KNOWN_SPLITS: &[(&str, f64)] = &[("Fat Shark Echo", 600.0)];
+/// A file within this of a split length (a known one, or the length of the file next to it)
+/// was split by the DVR.
 pub const SURE_S: f64 = 1.0;
-/// A file within this of `SPLIT_S` (but not `SURE_S`) may have been: unsure, so it stays
-/// apart.
+/// A file within this of a known split length (but not `SURE_S`) may have been: unsure, so
+/// it stays apart.
 pub const UNSURE_S: f64 = 10.0;
+/// Two files of the same length count as a split only when they are at least this long and
+/// within `WHOLE_MINUTE_S` of a whole minute: DVRs split at round lengths.
+pub const MIN_SPLIT_S: f64 = 60.0;
+pub const WHOLE_MINUTE_S: f64 = 2.0;
+/// FAT32's largest file. A file within `SIZE_MARGIN` below it was cut at the size limit.
+pub const FAT32_MAX_BYTES: u64 = 4 * 1024 * 1024 * 1024 - 1;
+pub const SIZE_MARGIN: u64 = 128 * 1024 * 1024;
 /// File times further apart than the next file's length plus this say the files were not
 /// one recording (when the DVR's clock runs at all).
 pub const TIME_SLACK_S: f64 = 300.0;
@@ -83,14 +97,54 @@ fn numbered(name: &str) -> Option<(String, u64, usize, String)> {
     ))
 }
 
+/// Whether file `b` has the next number after file `a`: the same prefix, digits and
+/// extension.
+pub fn is_next(a: &str, b: &str) -> bool {
+    match (numbered(a), numbered(b)) {
+        (Some(x), Some(y)) => x.0 == y.0 && x.2 == y.2 && x.3 == y.3 && x.1 + 1 == y.1,
+        _ => false,
+    }
+}
+
+/// Whether a file is as long as a DVR split. `secs` and `bytes` are the file's;
+/// `neighbours` are the lengths of the files numbered just before and after it. `Ok` says
+/// why; `Err` is the verdict that keeps the files apart.
+pub fn full_length(secs: f64, bytes: Option<u64>, neighbours: &[f64]) -> Result<String, Verdict> {
+    if let Some((dvr, len)) = KNOWN_SPLITS
+        .iter()
+        .find(|(_, len)| (secs - len).abs() <= SURE_S)
+    {
+        return Ok(format!("{len:.0} s, the {dvr}'s split"));
+    }
+    if bytes.is_some_and(|b| b <= FAT32_MAX_BYTES && b >= FAT32_MAX_BYTES - SIZE_MARGIN) {
+        return Ok("just under 4 GiB, the FAT32 file limit".into());
+    }
+    let minute_off = (secs - (secs / 60.0).round() * 60.0).abs();
+    if neighbours.iter().any(|n| (n - secs).abs() <= SURE_S) {
+        if secs >= MIN_SPLIT_S && minute_off <= WHOLE_MINUTE_S {
+            return Ok(format!("{secs:.0} s, the same as the file next to it"));
+        }
+        return Err(Verdict::Unsure(format!(
+            "the same length as the file next to it ({secs:.1} s), but not a round split"
+        )));
+    }
+    if let Some((dvr, len)) = KNOWN_SPLITS
+        .iter()
+        .find(|(_, len)| (secs - len).abs() <= UNSURE_S)
+    {
+        return Err(Verdict::Unsure(format!(
+            "{secs:.1} s long, near but not at the {dvr}'s {len:.0} s split"
+        )));
+    }
+    Err(Verdict::Separate(format!("{secs:.1} s long")))
+}
+
 /// Whether a file named `b` may be the next file of the recording that `a` (`a_secs`
-/// long) holds: the next number with the same prefix and extension, and `a` as long as a
-/// DVR split. File times are not checked; a caller with more evidence uses `continues`.
-pub fn may_follow(a: &str, a_secs: f64, b: &str) -> bool {
-    let (Some(x), Some(y)) = (numbered(a), numbered(b)) else {
-        return false;
-    };
-    x.0 == y.0 && x.3 == y.3 && x.1 + 1 == y.1 && (a_secs - SPLIT_S).abs() <= SURE_S
+/// long) holds: the next number, and `a` full length (`full_length`, with `neighbours`
+/// the lengths of the files numbered next to `a`). File times are not checked; a caller
+/// with more evidence uses `continues`.
+pub fn may_follow(a: &str, a_secs: f64, b: &str, neighbours: &[f64]) -> bool {
+    is_next(a, b) && full_length(a_secs, None, neighbours).is_ok()
 }
 
 /// A name ffmpeg's concat list takes without `-safe 0`: letters, digits, `.`, `_`, `-`, and
@@ -110,11 +164,17 @@ fn file_name(p: &Path) -> String {
         .to_string()
 }
 
+/// Whether clip `b` continues clip `a`, with no file before `a` to compare.
+pub fn continues(a: &Clip, b: &Clip) -> Verdict {
+    continues_after(None, a, b)
+}
+
 /// Whether clip `b` continues clip `a`: both analog, in the same folder, numbered one after
 /// the other, read whole (`b` may be cut off at its end), the same picture size, rate and
-/// streams, `a` as long as the DVR's split length, and file times (when the DVR keeps any)
-/// that do not contradict it.
-pub fn continues(a: &Clip, b: &Clip) -> Verdict {
+/// streams, `a` full length (`full_length`; `before` is the clip before `a`, whose length
+/// counts when it is numbered just before), and file times (when the DVR keeps any) that do
+/// not contradict it.
+pub fn continues_after(before: Option<&Clip>, a: &Clip, b: &Clip) -> Verdict {
     use Verdict::*;
     if a.kind != SourceKind::Analog || b.kind != SourceKind::Analog {
         return Separate("not analog".into());
@@ -157,15 +217,18 @@ pub fn continues(a: &Clip, b: &Clip) -> Verdict {
     ) {
         return Separate("different video formats".into());
     }
-    let off = (a.duration - SPLIT_S).abs();
-    if off > UNSURE_S {
-        return Separate(format!("{} is {:.1} s long", a.name, a.duration));
+    let mut neighbours = vec![b.duration];
+    if let Some(p) = before.filter(|p| {
+        p.kind == SourceKind::Analog && parent(p) == parent(a) && is_next(&p.name, &a.name)
+    }) {
+        neighbours.push(p.duration);
     }
-    if off > SURE_S {
-        return Unsure(format!(
-            "{} is {:.1} s long, near but not at the DVR's {SPLIT_S:.0} s split",
-            a.name, a.duration
-        ));
+    if let Err(v) = full_length(a.duration, Some(a.size), &neighbours) {
+        return match v {
+            Unsure(w) => Unsure(format!("{} is {w}", a.name)),
+            Separate(w) => Separate(format!("{} is {w}", a.name)),
+            Join => Join,
+        };
     }
     // File times only count when the DVR keeps a clock that runs.
     let clocked = |t: &Option<DateTime<Utc>>| t.filter(|t| t.year() >= 2015);
@@ -191,7 +254,8 @@ pub fn groups(clips: &[Clip]) -> Vec<Vec<usize>> {
     let mut out: Vec<Vec<usize>> = Vec::new();
     let mut run = vec![0usize];
     for i in 1..clips.len() {
-        if continues(&clips[i - 1], &clips[i]) == Verdict::Join {
+        let before = i.checked_sub(2).map(|j| &clips[j]);
+        if continues_after(before, &clips[i - 1], &clips[i]) == Verdict::Join {
             run.push(i);
         } else {
             if run.len() > 1 {
@@ -463,6 +527,57 @@ mod tests {
         ));
         // Unsure files are not grouped.
         assert!(groups(&[clip(0, "PICT0001.AVI", 596.0), b]).is_empty());
+    }
+
+    #[test]
+    fn other_dvrs_split_by_matching_length_or_size() {
+        // An unknown DVR that splits at 300 s: two full files of the same length, then a tail.
+        let clips = vec![
+            clip(0, "MOVI0001.AVI", 300.2),
+            clip(1, "MOVI0002.AVI", 300.0),
+            clip(2, "MOVI0003.AVI", 41.0),
+        ];
+        assert_eq!(groups(&clips), vec![vec![0, 1, 2]]);
+        // One 300 s file and a tail: nothing proves 300 s is the split. Apart.
+        assert!(groups(&[
+            clip(0, "MOVI0001.AVI", 300.0),
+            clip(1, "MOVI0002.AVI", 41.0)
+        ])
+        .is_empty());
+        // The same length, but not a round split: two recordings the person stopped. Unsure.
+        let v = continues(
+            &clip(0, "MOVI0001.AVI", 312.0),
+            &clip(1, "MOVI0002.AVI", 312.4),
+        );
+        assert!(
+            matches!(&v, Verdict::Unsure(w) if w.contains("round")),
+            "{v:?}"
+        );
+        // Short files of the same length never count.
+        assert!(matches!(
+            continues(
+                &clip(0, "MOVI0001.AVI", 30.0),
+                &clip(1, "MOVI0002.AVI", 30.0)
+            ),
+            Verdict::Unsure(_)
+        ));
+        // A DVR that splits at FAT32's 4 GiB limit: the size says so, whatever the length.
+        let mut big = clip(0, "MOVI0001.AVI", 1234.5);
+        big.size = FAT32_MAX_BYTES - 5_000_000;
+        assert_eq!(
+            continues(&big, &clip(1, "MOVI0002.AVI", 90.0)),
+            Verdict::Join
+        );
+        big.size = 3_000_000_000;
+        assert!(matches!(
+            continues(&big, &clip(1, "MOVI0002.AVI", 90.0)),
+            Verdict::Separate(_)
+        ));
+        // Library rematch uses the same rule on names and lengths.
+        assert!(may_follow("PICT0001.AVI", 600.01, "PICT0002.AVI", &[90.0]));
+        assert!(may_follow("MOVI0001.AVI", 300.0, "MOVI0002.AVI", &[300.3]));
+        assert!(!may_follow("MOVI0001.AVI", 300.0, "MOVI0002.AVI", &[41.0]));
+        assert!(!may_follow("MOVI0001.AVI", 600.0, "MOVI0003.AVI", &[90.0]));
     }
 
     #[test]
