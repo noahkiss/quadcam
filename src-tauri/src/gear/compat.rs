@@ -55,16 +55,17 @@ pub const PROVEN: &[Proven] = &[
         board: Some("pocket"),
         version: "2.12",
     },
-    // Betaflight's CLI, by the serial runner: the 4.5 line and the 2026.6 line.
+    // Betaflight's CLI, by the serial runner, keyed by board and build: a vendor build on
+    // one board says nothing about another board. Other boards are read-only.
     Proven {
         product: Product::Betaflight,
-        board: None,
-        version: "4.5",
+        board: Some("betafpvg473_v2"),
+        version: "2026.6.0",
     },
     Proven {
         product: Product::Betaflight,
-        board: None,
-        version: "2026.6",
+        board: Some("betafpvg473"),
+        version: "2025.12.5",
     },
     // The splash patch: markers checked on this release's binary.
     Proven {
@@ -178,14 +179,31 @@ mod tests {
 
     #[test]
     fn betaflight_guard() {
-        assert!(check_writable(Product::Betaflight, Some("STM32F411"), Some("4.5.1")).is_ok());
-        assert!(check_writable(Product::Betaflight, None, Some("2026.6.0-alpha")).is_ok());
-        let e = check_writable(Product::Betaflight, None, Some("4.3.2")).unwrap_err();
+        assert!(check_writable(
+            Product::Betaflight,
+            Some("BETAFPVG473_V2"),
+            Some("2026.6.0-alpha")
+        )
+        .is_ok());
+        assert!(check_writable(
+            Product::Betaflight,
+            Some("BETAFPVG473"),
+            Some("2025.12.5-alpha")
+        )
+        .is_ok());
+        let e =
+            check_writable(Product::Betaflight, Some("BETAFPVG473"), Some("4.3.2")).unwrap_err();
         assert_eq!(e.code, RefusalCode::UnknownVersion);
         assert_eq!(
             e.reason,
-            "Betaflight 4.3.2 is not proven; QuadCam reads it but does not write it."
+            "Betaflight 4.3.2 on board BETAFPVG473 is not proven; QuadCam reads it but does not write it."
         );
+        // The proven build on another board, and no board at all.
+        let e =
+            check_writable(Product::Betaflight, Some("STM32F411"), Some("2026.6.0")).unwrap_err();
+        assert_eq!(e.code, RefusalCode::UnknownBoard);
+        let e = check_writable(Product::Betaflight, None, Some("2026.6.0")).unwrap_err();
+        assert_eq!(e.code, RefusalCode::UnknownBoard);
     }
 
     #[test]

@@ -57,5 +57,9 @@ expression: "Core::METHODS"
   "gear_status",
   "gear_devices",
   "gear_device_save",
-  "gear_device_forget"
+  "gear_device_forget",
+  "gear_fc_identify",
+  "gear_fc_read",
+  "gear_board_notes",
+  "gear_usb_timers"
 ]

@@ -1158,15 +1158,33 @@ expression: "quadcam_lib::mcp::tools()"
       "readOnlyHint": true,
       "title": "Gear"
     },
-    "description": "Read the FPV gear QuadCam knows: `status` (the gear folder, the Gear settings, and the devices plugged in now: EdgeTX radios in USB Storage mode, goggles and DVR cards, FC and ELRS serial ports, radios in DFU mode; each with its saved name and aircraft when QuadCam knows it) or `devices` (every device saved in gear.json: id, kind, name, aircraft, board, firmware, version, last seen, last backup). Changes nothing.\n\nBest for: the first Gear call, and checking what is plugged in.\nReturns: one line per device plus the structured records.\nFollow up with quadcam_gear_edit device_save to name a device or link it to an aircraft.",
+    "description": "Read the FPV gear QuadCam knows: `status` (the gear folder, the Gear settings, and the devices plugged in now: EdgeTX radios in USB Storage mode, goggles and DVR cards, FC and ELRS serial ports, radios in DFU mode; each with its saved name and aircraft when QuadCam knows it; and each FC's USB heat timer), `devices` (every device saved in gear.json: id, kind, name, aircraft, board, firmware, version, last seen, last backup), `fc_identify` (reads a Betaflight FC over MSP: board, firmware, version, device id, whether QuadCam may write it, known issues; no reboot), `board_notes` (known issues of FC boards and builds) or `usb_timers` (per FC on USB: battery in, minutes on USB, minutes left before \"Unplug now\"). Changes nothing.\n\nBest for: the first Gear call, and checking what is plugged in.\nReturns: one line per device plus the structured records.\nFollow up with quadcam_gear_edit device_save to name a device or link it to an aircraft.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
         "action": {
           "enum": [
             "status",
-            "devices"
+            "devices",
+            "fc_identify",
+            "board_notes",
+            "usb_timers"
           ],
+          "type": "string"
+        },
+        "board": {
+          "description": "For board_notes: a board name (BETAFPVG473); omit for every board.",
+          "maxLength": 80,
+          "type": "string"
+        },
+        "port": {
+          "description": "For fc_identify: the FC's serial port (/dev/cu.usbmodem...) from status; omit when one FC is plugged in.",
+          "maxLength": 200,
+          "type": "string"
+        },
+        "version": {
+          "description": "For board_notes: a firmware version (2025.12.5); omit for every version.",
+          "maxLength": 80,
           "type": "string"
         }
       },
@@ -1185,14 +1203,15 @@ expression: "quadcam_lib::mcp::tools()"
       "readOnlyHint": false,
       "title": "Edit gear data"
     },
-    "description": "Change QuadCam's own gear data, never a device, a sim or a card: `device_save` names a device or links it to an aircraft profile (a device QuadCam does not know yet must be plugged in; use its id from quadcam_gear status), `device_forget` removes a device from QuadCam's list (its backups stay).\n\nBest for: naming a radio or quad the person just plugged in, and linking it to its aircraft profile.\nReturns: the saved or forgotten device.",
+    "description": "Change QuadCam's own gear data, never a device's settings, a sim or a card: `device_save` names a device or links it to an aircraft profile (a device QuadCam does not know yet must be plugged in; use its id from quadcam_gear status or fc_identify), `device_forget` removes a device from QuadCam's list (its backups stay), `fc_read` reads a Betaflight FC through its CLI (read-only commands; the FC reboots when the read ends, so the person should expect it; returns the text, writes nothing).\n\nBest for: naming a radio or quad the person just plugged in, and linking it to its aircraft profile; reading an FC's settings as text.\nReturns: the saved or forgotten device, or the FC's identity and each command's answer.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
         "action": {
           "enum": [
             "device_save",
-            "device_forget"
+            "device_forget",
+            "fc_read"
           ],
           "type": "string"
         },
@@ -1200,6 +1219,14 @@ expression: "quadcam_lib::mcp::tools()"
           "description": "For device_save: an aircraft profile name from quadcam_profiles; empty to unlink.",
           "maxLength": 80,
           "type": "string"
+        },
+        "commands": {
+          "description": "For fc_read: read-only CLI commands (version, status, get NAME, diff all, dump all, diff/dump master|profile|rates|hardware|defaults). Omit for a backup's set: version, status, diff all, dump all.",
+          "items": {
+            "type": "string"
+          },
+          "maxItems": 20,
+          "type": "array"
         },
         "id": {
           "description": "For device_save and device_forget: the device id from quadcam_gear status or devices.",
@@ -1209,6 +1236,11 @@ expression: "quadcam_lib::mcp::tools()"
         "name": {
           "description": "For device_save: the person's name for the device; empty for none.",
           "maxLength": 80,
+          "type": "string"
+        },
+        "port": {
+          "description": "For fc_read: the FC's serial port from quadcam_gear status; omit when one FC is plugged in.",
+          "maxLength": 200,
           "type": "string"
         }
       },

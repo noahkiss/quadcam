@@ -78,7 +78,7 @@ These settings have no section in the Settings window yet. Set them with `quadca
 | `gear_keep_recent` | 10 | Plug-in and manual backups kept per device |
 | `gear_keep_weeks` | 8 | Then one backup a week for this many weeks |
 | `gear_keep_monthly` | on | Then one a month |
-| `gear_usb_minutes` | 20 | Minutes before the warning for an FC on USB power (0: none) |
+| `gear_usb_minutes` | 20 | Minutes an FC may run on USB with its battery in before "Unplug now"; a board's own shorter limit wins (0: off). See [Gear](gear.md#flight-controllers) |
 | `gear_on_connect` | `backup` for every kind | Steps per device kind on plug-in: `backup`, `import`, `apply_ready` |
 | `gear_cues` | speech and notifications on | Cues, their channels, mute, debounce, the reminder and quiet hours. See [Gear](gear.md#cues) |
 | `firmware_check` | `manual` | `manual` or `daily` |

@@ -27,15 +27,30 @@ pub const NOTHING_FOUND: &str = "Nothing found. If macOS asked to allow an acces
 #[derive(Debug, Clone, Default, Deserialize, JsonSchema)]
 #[schemars(deny_unknown_fields)]
 pub struct GearArgs {
-    #[schemars(required, extend("enum" = ["status", "devices"]))]
+    #[schemars(required, extend("enum" = ["status", "devices", "fc_identify", "board_notes", "usb_timers"]))]
     pub action: Option<String>,
+    /// For fc_identify: the FC's serial port (/dev/cu.usbmodem...) from status; omit when one FC is plugged in.
+    #[schemars(length(max = 200))]
+    pub port: Option<String>,
+    /// For board_notes: a board name (BETAFPVG473); omit for every board.
+    #[schemars(length(max = 80))]
+    pub board: Option<String>,
+    /// For board_notes: a firmware version (2025.12.5); omit for every version.
+    #[schemars(length(max = 80))]
+    pub version: Option<String>,
 }
 
 #[derive(Debug, Clone, Default, Deserialize, JsonSchema)]
 #[schemars(deny_unknown_fields)]
 pub struct GearEditArgs {
-    #[schemars(required, extend("enum" = ["device_save", "device_forget"]))]
+    #[schemars(required, extend("enum" = ["device_save", "device_forget", "fc_read"]))]
     pub action: Option<String>,
+    /// For fc_read: the FC's serial port from quadcam_gear status; omit when one FC is plugged in.
+    #[schemars(length(max = 200))]
+    pub port: Option<String>,
+    /// For fc_read: read-only CLI commands (version, status, get NAME, diff all, dump all, diff/dump master|profile|rates|hardware|defaults). Omit for a backup's set: version, status, diff all, dump all.
+    #[schemars(length(max = 20))]
+    pub commands: Option<Vec<String>>,
     /// For device_save and device_forget: the device id from quadcam_gear status or devices.
     #[schemars(length(max = 80))]
     pub id: Option<String>,
@@ -66,12 +81,12 @@ pub fn tools() -> Vec<Value> {
     vec![
         tool::<GearArgs>(
             "quadcam_gear",
-            "Read the FPV gear QuadCam knows: `status` (the gear folder, the Gear settings, and the devices plugged in now: EdgeTX radios in USB Storage mode, goggles and DVR cards, FC and ELRS serial ports, radios in DFU mode; each with its saved name and aircraft when QuadCam knows it) or `devices` (every device saved in gear.json: id, kind, name, aircraft, board, firmware, version, last seen, last backup). Changes nothing.\n\nBest for: the first Gear call, and checking what is plugged in.\nReturns: one line per device plus the structured records.\nFollow up with quadcam_gear_edit device_save to name a device or link it to an aircraft.",
+            "Read the FPV gear QuadCam knows: `status` (the gear folder, the Gear settings, and the devices plugged in now: EdgeTX radios in USB Storage mode, goggles and DVR cards, FC and ELRS serial ports, radios in DFU mode; each with its saved name and aircraft when QuadCam knows it; and each FC's USB heat timer), `devices` (every device saved in gear.json: id, kind, name, aircraft, board, firmware, version, last seen, last backup), `fc_identify` (reads a Betaflight FC over MSP: board, firmware, version, device id, whether QuadCam may write it, known issues; no reboot), `board_notes` (known issues of FC boards and builds) or `usb_timers` (per FC on USB: battery in, minutes on USB, minutes left before \"Unplug now\"). Changes nothing.\n\nBest for: the first Gear call, and checking what is plugged in.\nReturns: one line per device plus the structured records.\nFollow up with quadcam_gear_edit device_save to name a device or link it to an aircraft.",
             json!({"openWorldHint": false, "readOnlyHint": true, "title": "Gear"}),
         ),
         tool::<GearEditArgs>(
             "quadcam_gear_edit",
-            "Change QuadCam's own gear data, never a device, a sim or a card: `device_save` names a device or links it to an aircraft profile (a device QuadCam does not know yet must be plugged in; use its id from quadcam_gear status), `device_forget` removes a device from QuadCam's list (its backups stay).\n\nBest for: naming a radio or quad the person just plugged in, and linking it to its aircraft profile.\nReturns: the saved or forgotten device.",
+            "Change QuadCam's own gear data, never a device's settings, a sim or a card: `device_save` names a device or links it to an aircraft profile (a device QuadCam does not know yet must be plugged in; use its id from quadcam_gear status or fc_identify), `device_forget` removes a device from QuadCam's list (its backups stay), `fc_read` reads a Betaflight FC through its CLI (read-only commands; the FC reboots when the read ends, so the person should expect it; returns the text, writes nothing).\n\nBest for: naming a radio or quad the person just plugged in, and linking it to its aircraft profile; reading an FC's settings as text.\nReturns: the saved or forgotten device, or the FC's identity and each command's answer.",
             json!({"destructiveHint": false, "idempotentHint": true, "openWorldHint": false, "readOnlyHint": false, "title": "Edit gear data"}),
         ),
         tool::<GearApplyArgs>(
@@ -138,6 +153,51 @@ fn connected_line(c: &Value) -> String {
     )
 }
 
+/// An FC's identity, write status and job notes in words.
+fn fc_info_text(i: &Value, notes: &Value) -> String {
+    let id = &i["identity"];
+    let mut s = format!(
+        "FC on {} | id {} | {} {} | board {}",
+        i["port"].as_str().unwrap_or("?"),
+        i["id"].as_str().unwrap_or("none"),
+        id["firmware"].as_str().unwrap_or("?"),
+        id["version"].as_str().unwrap_or("?"),
+        id["board"].as_str().unwrap_or("?"),
+    );
+    match i["read_only"]["reason"].as_str() {
+        Some(r) => s.push_str(&format!("\nRead only: {r}")),
+        None => s.push_str("\nWritable: this board and build are proven."),
+    }
+    for n in notes.as_array().into_iter().flatten() {
+        if let Some(t) = n.as_str() {
+            s.push_str(&format!("\nNote: {t}"));
+        }
+    }
+    s.push_str("\nThe port is released: safe to unplug.");
+    s
+}
+
+/// One FC's USB timer in words.
+fn usb_line(t: &Value) -> String {
+    let port = t["port"].as_str().unwrap_or("?");
+    if t["battery"].as_bool() != Some(true) {
+        return format!("{port}: no battery");
+    }
+    let min = |v: &Value| v.as_u64().map(|s| format!("{}:{:02}", s / 60, s % 60));
+    match min(&t["remaining_s"]) {
+        Some(left) => format!(
+            "{port}: battery in for {}, {left} left{}",
+            min(&t["elapsed_s"]).unwrap_or_default(),
+            if t["warned"].as_bool() == Some(true) {
+                " (unplug now played)"
+            } else {
+                ""
+            }
+        ),
+        None => format!("{port}: battery in, timer off"),
+    }
+}
+
 /// Runs a Gear tool; None when `name` is not one.
 pub(super) fn run<B: Backend>(
     backend: &mut B,
@@ -175,6 +235,43 @@ fn gear<B: Backend>(backend: &mut B, a: &Value) -> Result<(Vec<Value>, Value)> {
             });
             Ok((vec![text(line)], s))
         }
+        "fc_identify" => {
+            let j = backend.call("gear_fc_identify", json!({"port": x.port}))?;
+            Ok((vec![text(fc_info_text(&j["result"], &j["notes"]))], j))
+        }
+        "board_notes" => {
+            let list = backend.call(
+                "gear_board_notes",
+                json!({"board": x.board, "version": x.version}),
+            )?;
+            let arr = list.as_array().cloned().unwrap_or_default();
+            let line = if arr.is_empty() {
+                "No known issues.".to_string()
+            } else {
+                arr.iter()
+                    .map(|n| {
+                        format!(
+                            "{} {}: {}",
+                            n["board"].as_str().unwrap_or("?"),
+                            n["version"].as_str().unwrap_or("(every version)"),
+                            n["text"].as_str().unwrap_or("")
+                        )
+                    })
+                    .collect::<Vec<_>>()
+                    .join("\n")
+            };
+            Ok((vec![text(line)], json!({"notes": list})))
+        }
+        "usb_timers" => {
+            let list = backend.call("gear_usb_timers", Value::Null)?;
+            let arr = list.as_array().cloned().unwrap_or_default();
+            let line = if arr.is_empty() {
+                "No FC on USB.".to_string()
+            } else {
+                arr.iter().map(usb_line).collect::<Vec<_>>().join("\n")
+            };
+            Ok((vec![text(line)], json!({"timers": list})))
+        }
         "devices" => {
             let list = backend.call("gear_devices", Value::Null)?;
             let arr = list.as_array().cloned().unwrap_or_default();
@@ -185,7 +282,9 @@ fn gear<B: Backend>(backend: &mut B, a: &Value) -> Result<(Vec<Value>, Value)> {
             };
             Ok((vec![text(line)], json!({"devices": list})))
         }
-        other => Err(anyhow!("unknown action {other:?}; use status or devices")),
+        other => Err(anyhow!(
+            "unknown action {other:?}; use status, devices, fc_identify, board_notes or usb_timers"
+        )),
     }
 }
 
@@ -217,8 +316,24 @@ fn gear_edit<B: Backend>(backend: &mut B, a: &Value) -> Result<(Vec<Value>, Valu
                 d,
             ))
         }
+        "fc_read" => {
+            let j = backend.call(
+                "gear_fc_read",
+                json!({"port": x.port, "commands": x.commands.unwrap_or_default()}),
+            )?;
+            let r = &j["result"];
+            let mut out = fc_info_text(&r["info"], &j["notes"]);
+            for rep in r["replies"].as_array().into_iter().flatten() {
+                out.push_str(&format!(
+                    "\n\n# {}\n{}",
+                    rep["line"].as_str().unwrap_or("?"),
+                    rep["text"].as_str().unwrap_or("")
+                ));
+            }
+            Ok((vec![text(out)], j))
+        }
         other => Err(anyhow!(
-            "unknown action {other:?}; use device_save or device_forget"
+            "unknown action {other:?}; use device_save, device_forget or fc_read"
         )),
     }
 }

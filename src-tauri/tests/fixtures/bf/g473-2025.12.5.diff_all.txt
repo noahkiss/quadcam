@@ -1,0 +1,218 @@
+diff all
+# version
+# Betaflight / STM32G47X (G473) 2025.12.5-alpha Jun 25 2026 / 03:24:50 (eb2bb5a33) MSP API: 1.47
+# config rev: 1359bbe
+
+# start the command batch
+batch start
+
+# reset configuration to default settings
+defaults nosave
+
+board_name BETAFPVG473
+manufacturer_id BEFH
+mcu_id 000000000000000000000000
+signature 
+
+# name: CRAFT
+
+# feature
+feature TELEMETRY
+feature LED_STRIP
+feature OSD
+
+# serial
+serial UART2 0 115200 57600 0 115200
+serial UART4 131073 115200 57600 0 115200
+
+# beacon
+beacon RX_SET
+
+# aux
+aux 0 0 0 1700 2100 0 0
+aux 1 35 4 1700 2100 0 0
+aux 2 31 5 1700 2100 0 0
+aux 3 13 3 1700 2100 0 0
+
+# adjrange
+adjrange 0 0 2 900 2100 12 2 0 0
+adjrange 1 0 1 900 2100 29 1 0 0
+
+# master
+set gyro_lpf1_static_hz = 0
+set gyro_lpf2_static_hz = 625
+set dyn_notch_count = 1
+set dyn_notch_q = 500
+set dyn_notch_min_hz = 160
+set dyn_notch_max_hz = 500
+set gyro_lpf1_dyn_min_hz = 0
+set acc_calibration = 29,44,-12,1
+set baro_hardware = NONE
+set rc_smoothing_auto_factor = 50
+set rc_smoothing_auto_factor_throttle = 50
+set dshot_bidir = ON
+set dshot_bitbang = AUTO
+set motor_pwm_protocol = DSHOT300
+set motor_poles = 12
+set align_board_yaw = -90
+set vbat_max_cell_voltage = 440
+set vbat_warning_cell_voltage = 345
+set vbat_duration_for_warning = 15
+set vbat_duration_for_critical = 15
+set ibata_scale = 550
+set ibata_offset = -100
+set beeper_dshot_beacon_tone = 3
+set small_angle = 180
+set simplified_gyro_filter_multiplier = 125
+set osd_warn_bitmask = 421887
+set osd_link_quality_alarm = 70
+set osd_rssi_dbm_alarm = -105
+set osd_tim2 = 769
+set osd_vbat_pos = 14850
+set osd_rssi_pos = 192
+set osd_link_quality_pos = 14434
+set osd_link_tx_power_pos = 6178
+set osd_rssi_dbm_pos = 6210
+set osd_rsnr_pos = 6274
+set osd_tim_1_pos = 3595
+set osd_tim_2_pos = 15915
+set osd_remaining_time_estimate_pos = 33
+set osd_flymode_pos = 7627
+set osd_throttle_pos = 7659
+set osd_vtx_channel_pos = 33
+set osd_crosshairs_pos = 4408
+set osd_ah_pos = 4281
+set osd_current_pos = 6626
+set osd_mah_drawn_pos = 2498
+set osd_motor_diag_pos = 4290
+set osd_craft_name_pos = 533
+set osd_home_dist_pos = 98
+set osd_flight_dist_pos = 130
+set osd_warnings_pos = 14900
+set osd_avg_cell_voltage_pos = 2594
+set osd_pit_ang_pos = 97
+set osd_rol_ang_pos = 65
+set osd_disarmed_pos = 14741
+set osd_esc_tmp_pos = 129
+set osd_esc_rpm_pos = 150
+set osd_flip_arrow_pos = 14713
+set osd_core_temp_pos = 225
+set osd_rate_profile_name_pos = 5547
+set osd_stat_bitmask = 0
+set osd_profile_1_name = NAME
+set osd_profile_2_name = NAME
+set osd_profile_3_name = NAME
+set craft_name = CRAFT
+
+profile 0
+
+# profile 0
+set profile_name = NAME
+set dterm_lpf1_dyn_min_hz = 82
+set dterm_lpf1_dyn_max_hz = 165
+set dterm_lpf1_static_hz = 82
+set dterm_lpf2_static_hz = 165
+set vbat_sag_compensation = 100
+set throttle_boost = 0
+set p_pitch = 52
+set i_pitch = 89
+set d_pitch = 42
+set f_pitch = 73
+set p_roll = 40
+set i_roll = 67
+set d_roll = 26
+set f_roll = 56
+set p_yaw = 40
+set i_yaw = 67
+set f_yaw = 56
+set d_max_roll = 30
+set d_max_pitch = 48
+set auto_profile_cell_count = 1
+set feedforward_averaging = OFF
+set feedforward_smooth_factor = 60
+set feedforward_jitter_factor = 9
+set dyn_idle_min_rpm = 30
+set simplified_master_multiplier = 85
+set simplified_i_gain = 95
+set simplified_d_gain = 105
+set simplified_pi_gain = 105
+set simplified_d_max_gain = 40
+set simplified_feedforward_gain = 55
+set simplified_pitch_d_gain = 140
+set simplified_pitch_pi_gain = 125
+set simplified_dterm_filter_multiplier = 110
+set tpa_rate = 70
+set landing_disarm_threshold = 80
+
+profile 1
+
+profile 2
+
+profile 3
+
+# restore original profile selection
+profile 0
+
+rateprofile 0
+
+# rateprofile 0
+set rateprofile_name = NAME
+set thr_mid = 30
+set thr_expo = 50
+set thr_hover = 34
+set rates_type = BETAFLIGHT
+set roll_rc_rate = 127
+set pitch_rc_rate = 127
+set yaw_rc_rate = 100
+set roll_expo = 40
+set pitch_expo = 40
+set roll_srate = 72
+set pitch_srate = 72
+set yaw_srate = 75
+
+rateprofile 1
+
+# rateprofile 1
+set rateprofile_name = NAME
+set thr_mid = 30
+set thr_expo = 50
+set thr_hover = 34
+set rates_type = BETAFLIGHT
+set roll_rc_rate = 127
+set pitch_rc_rate = 127
+set yaw_rc_rate = 100
+set roll_expo = 40
+set pitch_expo = 40
+set roll_srate = 72
+set pitch_srate = 72
+set yaw_srate = 75
+
+rateprofile 2
+
+# rateprofile 2
+set rateprofile_name = NAME
+set thr_mid = 30
+set thr_expo = 50
+set thr_hover = 43
+set rates_type = BETAFLIGHT
+set roll_rc_rate = 127
+set pitch_rc_rate = 127
+set yaw_rc_rate = 100
+set roll_expo = 40
+set pitch_expo = 40
+set roll_srate = 72
+set pitch_srate = 72
+set yaw_srate = 75
+set throttle_limit_type = SCALE
+set throttle_limit_percent = 80
+
+rateprofile 3
+
+# rateprofile 3
+set rateprofile_name = NAME
+
+# restore original rateprofile selection
+rateprofile 0
+
+# save configuration
+save
