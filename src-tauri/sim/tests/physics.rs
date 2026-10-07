@@ -212,9 +212,10 @@ fn an_unpowered_body_in_still_air_never_gains_energy() {
 
 #[test]
 fn hover_is_at_the_fitted_command_and_speed() {
-    // sim-design 6.3: hover command 0.347 / 20.9k rpm (75 mm), 0.338 / 27.3k rpm (65 mm),
-    // at the logs' hover pack voltages (3.68 V and 3.89 V).
-    for (id, v_cell) in [("meteor75", 3.68), ("air65ii", 3.89)] {
+    // The presets' reference hover (level hover in the example logs): command 0.30 /
+    // 18.9k rpm (75 mm) and 0.338 / 27.3k rpm (65 mm), at the hover pack voltages (3.93 V
+    // and 3.89 V).
+    for (id, v_cell) in [("meteor75", 3.93), ("air65ii", 3.89)] {
         let pr = preset(id).unwrap();
         let settings = SimSettings {
             ideal_cell_v: v_cell,

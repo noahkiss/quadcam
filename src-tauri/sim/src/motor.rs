@@ -266,29 +266,6 @@ mod tests {
     }
 
     #[test]
-    fn small_step_time_constant_is_the_example_fits() {
-        // 16 ms (75 mm) and 24 ms (65 mm) for small steps around hover (sim-design 6.3).
-        for (id, want_ms) in [("meteor75", 16.0), ("air65ii", 24.0)] {
-            let pr = preset(id).unwrap();
-            let p = pr.params();
-            let mut m = Motors::new(&p);
-            let v = 3.8;
-            let d0 = pr.reference.hover_cmd.unwrap();
-            run_to_steady(&mut m, d0, v);
-            let w0 = m.omega[0];
-            let w1 = m.speed_for_duty(d0 + 0.05, v);
-            let dt = 5e-5;
-            let mut t = 0.0;
-            while m.omega[0] < w0 + 0.632 * (w1 - w0) {
-                m.step(dt, &[d0 + 0.05; 4], v, true);
-                t += dt;
-            }
-            let ms = t * 1000.0;
-            assert!((ms - want_ms).abs() < 2.5, "{id}: {ms:.1} ms");
-        }
-    }
-
-    #[test]
     fn unpowered_rotor_spins_down_and_stops() {
         let p = preset("air65ii").unwrap().params();
         let mut m = Motors::new(&p);

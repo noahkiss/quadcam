@@ -76,19 +76,19 @@
   },
   "model": "electrical",
   "r_winding": {
-   "value": 0.123,
+   "value": 0.1408,
    "source": "estimate",
    "note": "example fit (sim-design 6.3)"
   },
   "no_load_current": {
-   "value": 0.05,
+   "value": 0.066,
    "source": "estimate",
    "note": "example fit (sim-design 6.3)"
   },
   "rotor_inertia": {
-   "value": 4.24e-08,
+   "value": 8.48e-08,
    "source": "estimate",
-   "note": "example fit (sim-design 6.3)"
+   "note": "fitted to the example logs' punch speed traces"
   }
  },
  "prop": {
@@ -105,17 +105,17 @@
    "source": "estimate"
   },
   "kt": {
-   "value": 2.8546650949917144e-08,
+   "value": 3.5048373388576074e-08,
    "source": "estimate",
    "note": "example fit (sim-design 6.3)"
   },
   "fm": {
-   "value": 0.349,
+   "value": 0.51,
    "source": "estimate",
    "note": "follows from kt and kq"
   },
   "kq": {
-   "value": 2.214e-10,
+   "value": 2.062e-10,
    "source": "estimate",
    "note": "example fit (sim-design 6.3)"
   },
@@ -159,12 +159,12 @@
    "source": "spec"
   },
   "resistance": {
-   "value": 0.026,
+   "value": 0.029,
    "source": "estimate",
    "note": "example fit (sim-design 6.3)"
   },
   "electronics_current": {
-   "value": 3.09,
+   "value": 3.03,
    "source": "estimate",
    "note": "example fit (sim-design 6.3)"
   }
@@ -173,68 +173,68 @@
   "gains": [
    {
     "p": {
-     "value": 18.0,
+     "value": 36.0,
      "source": "estimate",
-     "note": "sim tuning to the example fit's roll lag"
+     "note": "tuned so the closed-loop rate lag and overshoot match the example logs"
     },
     "i": {
      "value": 12.0,
      "source": "estimate",
-     "note": "sim tuning to the example fit's roll lag"
+     "note": "tuned so the closed-loop rate lag and overshoot match the example logs"
     },
     "d": {
-     "value": 0.25,
+     "value": 0.5,
      "source": "estimate",
-     "note": "sim tuning to the example fit's roll lag"
+     "note": "tuned so the closed-loop rate lag and overshoot match the example logs"
     },
     "ff": {
-     "value": 1.16,
+     "value": 1.74,
      "source": "estimate",
-     "note": "sim tuning to the example fit's roll lag"
+     "note": "tuned so the closed-loop rate lag and overshoot match the example logs"
     }
    },
    {
     "p": {
-     "value": 18.0,
+     "value": 36.0,
      "source": "estimate",
-     "note": "sim tuning to the example fit's roll lag"
+     "note": "tuned so the closed-loop rate lag and overshoot match the example logs"
     },
     "i": {
      "value": 12.0,
      "source": "estimate",
-     "note": "sim tuning to the example fit's roll lag"
+     "note": "tuned so the closed-loop rate lag and overshoot match the example logs"
     },
     "d": {
-     "value": 0.25,
+     "value": 0.5,
      "source": "estimate",
-     "note": "sim tuning to the example fit's roll lag"
+     "note": "tuned so the closed-loop rate lag and overshoot match the example logs"
     },
     "ff": {
-     "value": 1.16,
+     "value": 1.74,
      "source": "estimate",
-     "note": "sim tuning to the example fit's roll lag"
+     "note": "tuned so the closed-loop rate lag and overshoot match the example logs"
     }
    },
    {
     "p": {
-     "value": 12.0,
+     "value": 48.0,
      "source": "estimate",
-     "note": "sim tuning to the example fit's roll lag"
+     "note": "tuned so the closed-loop rate lag and overshoot match the example logs"
     },
     "i": {
      "value": 50.0,
      "source": "estimate",
-     "note": "sim tuning to the example fit's roll lag"
+     "note": "tuned so the closed-loop rate lag and overshoot match the example logs"
     },
     "d": {
      "value": 0.03,
      "source": "estimate",
-     "note": "sim tuning to the example fit's roll lag"
+     "note": "tuned so the closed-loop rate lag and overshoot match the example logs"
     },
     "ff": {
      "value": 0.3,
      "source": "estimate",
-     "note": "sim tuning to the example fit's roll lag"
+     "note": "tuned so the closed-loop rate lag and overshoot match the example logs"
     }
    }
   ],
@@ -363,13 +363,13 @@
   "aspect": "16:9"
  },
  "reference": {
-  "hover_cmd": 0.347,
-  "hover_rpm": 20925.0,
-  "tw_static_4v2": 7.6,
-  "tw_static_3v6": 5.6,
-  "motor_rise_ms": 16.0,
-  "pack_resistance": 0.026,
-  "hover_current": 6.3,
+  "hover_cmd": 0.3,
+  "hover_rpm": 18900.0,
+  "tw_static_4v2": 7.1,
+  "tw_static_3v6": 5.8,
+  "motor_rise_ms": 29.0,
+  "pack_resistance": 0.029,
+  "hover_current": 5.2,
   "roll_lag_ms": 13.7
  }
 }

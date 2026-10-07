@@ -20,6 +20,7 @@ pub mod bench;
 pub mod diff;
 pub mod fc;
 pub mod filters;
+pub mod log;
 pub mod mixer;
 pub mod motor;
 pub mod profile;
@@ -30,6 +31,7 @@ pub mod rng;
 pub mod runner;
 pub mod sim;
 pub mod snapshot;
+pub mod validate;
 pub mod world;
 
 pub use profile::{preset, presets, SimProfile};

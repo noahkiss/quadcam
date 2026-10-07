@@ -86,9 +86,9 @@
    "note": "example fit (sim-design 6.3)"
   },
   "rotor_inertia": {
-   "value": 1.66e-08,
+   "value": 2.16e-08,
    "source": "estimate",
-   "note": "example fit (sim-design 6.3)"
+   "note": "fitted to the example logs' punch speed traces"
   }
  },
  "prop": {
@@ -173,68 +173,68 @@
   "gains": [
    {
     "p": {
-     "value": 18.0,
+     "value": 70.0,
      "source": "estimate",
-     "note": "sim tuning to the example fit's roll lag"
+     "note": "tuned so the closed-loop rate lag and overshoot match the example logs"
     },
     "i": {
      "value": 12.0,
      "source": "estimate",
-     "note": "sim tuning to the example fit's roll lag"
+     "note": "tuned so the closed-loop rate lag and overshoot match the example logs"
     },
     "d": {
-     "value": 0.25,
+     "value": 0.75,
      "source": "estimate",
-     "note": "sim tuning to the example fit's roll lag"
+     "note": "tuned so the closed-loop rate lag and overshoot match the example logs"
     },
     "ff": {
-     "value": 1.16,
+     "value": 1.74,
      "source": "estimate",
-     "note": "sim tuning to the example fit's roll lag"
+     "note": "tuned so the closed-loop rate lag and overshoot match the example logs"
     }
    },
    {
     "p": {
-     "value": 18.0,
+     "value": 70.0,
      "source": "estimate",
-     "note": "sim tuning to the example fit's roll lag"
+     "note": "tuned so the closed-loop rate lag and overshoot match the example logs"
     },
     "i": {
      "value": 12.0,
      "source": "estimate",
-     "note": "sim tuning to the example fit's roll lag"
+     "note": "tuned so the closed-loop rate lag and overshoot match the example logs"
     },
     "d": {
-     "value": 0.25,
+     "value": 0.75,
      "source": "estimate",
-     "note": "sim tuning to the example fit's roll lag"
+     "note": "tuned so the closed-loop rate lag and overshoot match the example logs"
     },
     "ff": {
-     "value": 1.16,
+     "value": 1.74,
      "source": "estimate",
-     "note": "sim tuning to the example fit's roll lag"
+     "note": "tuned so the closed-loop rate lag and overshoot match the example logs"
     }
    },
    {
     "p": {
-     "value": 12.0,
+     "value": 48.0,
      "source": "estimate",
-     "note": "sim tuning to the example fit's roll lag"
+     "note": "tuned so the closed-loop rate lag and overshoot match the example logs"
     },
     "i": {
      "value": 50.0,
      "source": "estimate",
-     "note": "sim tuning to the example fit's roll lag"
+     "note": "tuned so the closed-loop rate lag and overshoot match the example logs"
     },
     "d": {
      "value": 0.03,
      "source": "estimate",
-     "note": "sim tuning to the example fit's roll lag"
+     "note": "tuned so the closed-loop rate lag and overshoot match the example logs"
     },
     "ff": {
      "value": 0.3,
      "source": "estimate",
-     "note": "sim tuning to the example fit's roll lag"
+     "note": "tuned so the closed-loop rate lag and overshoot match the example logs"
     }
    }
   ],
