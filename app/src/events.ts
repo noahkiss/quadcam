@@ -15,10 +15,16 @@ export async function start(): Promise<() => void> {
       // The Settings sheet reads them fresh when it closes.
       if (S().settingsOpen) return;
       await S().loadSettings();
+      await S().loadGear();
       await S().loadLibrary();
     }),
     on("session-changed", async () => sessionChanged(await api.getSession())),
     on("volumes-changed", () => S().refreshVolumes()),
+    on("gear-changed", () => S().loadGear()),
+    on("device-changed", (p) => {
+      S().deviceChanged(p);
+      S().loadGear();
+    }),
     on("library-task", (t) => {
       S().setTask(t.task, t.done, t.total);
       if (t.done >= t.total) setTimeout(() => S().endTask(t.task), 800);
@@ -58,6 +64,7 @@ export async function start(): Promise<() => void> {
   if (s) S().setSession(s);
   await S().loadLibrary();
   await S().refreshVolumes();
+  await S().loadGear();
   makeStrips();
   return () => {
     offs.forEach((off) => off());

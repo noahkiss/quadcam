@@ -20,6 +20,7 @@ import type {
   Volume,
 } from "../types";
 import * as seed from "./seed";
+import * as gear from "./gear";
 import { location as normLocation, spans as normSpans } from "../normalize";
 
 /** `Core::dispatch` methods, each also a typed Tauri command of the same name. */
@@ -28,9 +29,10 @@ const DISPATCH = new Set([
   "library_photos", "library_apply_name_format", "library_match_logs", "library_rebuild", "library_rescan", "library_preview", "library_strips", "card_status",
   "settings", "settings_set", "place_search", "place_save", "session_cuts", "profiles", "session_split", "library_split",
   "modules", "module_install", "module_remove", "modules_check", "gear_osd",
+  "gear_status", "gear_devices", "gear_device_save", "gear_device_forget", "gear_dismiss_reminder",
 ]);
 
-export type Scenario = "library" | "empty" | "card" | "review" | "joined" | "finished-card" | "dji" | "no-tools" | "many";
+export type Scenario = "library" | "empty" | "card" | "review" | "joined" | "finished-card" | "dji" | "no-tools" | "many" | "gear";
 
 export interface MockOptions {
   scenario?: Scenario;
@@ -59,6 +61,9 @@ export class MockCore {
   volumes: Volume[];
   tools = true;
   modules: ModuleStatus[] = seed.modules();
+  gear: gear.MockGear = gear.quietGear();
+  /** The Gear seed helpers, for specs (`core.gearSeed.radioConnected()`). */
+  gearSeed = gear;
   trash = new Map<string, LibClip>();
   calls: Call[] = [];
   menuState: unknown = null;
@@ -96,6 +101,7 @@ export class MockCore {
       };
     }
     if (sc === "no-tools") this.tools = false;
+    if (sc === "gear") this.gear = gear.busyGear();
   }
 
   // ---------- the Tauri commands ----------
@@ -134,8 +140,8 @@ export class MockCore {
     switch (cmd) {
       case "env_check":
         return this.tools
-          ? { tools: this.ffmpegTools(), error: null, install_hint: "brew install ffmpeg", socket: `${seed.HOME}/Library/Application Support/app.quadcam/control.sock` }
-          : { tools: null, error: "ffmpeg and ffprobe not found.", install_hint: "brew install ffmpeg", socket: null };
+          ? { tools: this.ffmpegTools(), error: null, install_hint: "brew install ffmpeg", socket: `${seed.HOME}/Library/Application Support/app.quadcam/control.sock`, ...seed.VERSION }
+          : { tools: null, error: "ffmpeg and ffprobe not found.", install_hint: "brew install ffmpeg", socket: null, ...seed.VERSION };
       case "default_output_dir":
         return seed.LIBRARY_ROOT;
       case "load_dropped":
@@ -232,6 +238,25 @@ export class MockCore {
       }
       case "profiles":
         return { profiles: this.settings.values.profiles || [], default_profile: this.settings.values.defaultProfile || null };
+      case "gear_status":
+        return gear.gearStatus(this.gear, this.settings.values);
+      case "gear_devices":
+        return structuredClone(this.gear.devices);
+      case "gear_device_save":
+        return this.deviceSave(String(p.id), (p.name as string | null) ?? null, (p.aircraft as string | null) ?? null);
+      case "gear_device_forget": {
+        const d = this.gear.devices.find((x) => x.id === p.id);
+        if (!d) throw `No device ${p.id}.`;
+        this.gear.devices = this.gear.devices.filter((x) => x !== d);
+        this.emit("gear-changed");
+        return d;
+      }
+      case "gear_dismiss_reminder": {
+        const was = this.gear.reminders.includes(String(p.handle));
+        this.gear.reminders = this.gear.reminders.filter((h) => h !== p.handle);
+        if (was) this.emit("gear-changed");
+        return was;
+      }
       case "gear_osd": {
         const paths = (p.paths as string[] | undefined) ?? [];
         if (!paths.length) throw "Pass a Betaflight dump or diff file, or a device.";
@@ -249,6 +274,35 @@ export class MockCore {
       default:
         throw `unknown method "${method}"`;
     }
+  }
+
+  // ---------- gear ----------
+
+  /** `Core::gear_device_save`: a new device must be plugged in. */
+  deviceSave(id: string, name: string | null, aircraft: string | null) {
+    let d = this.gear.devices.find((x) => x.id === id);
+    if (!d) {
+      const c = this.gear.connected.find((x) => x.id === id);
+      if (!c) throw `No device ${id} is known or plugged in.`;
+      d = { id, kind: c.kind, name: "", aircraft: null, identity: c.identity, last_seen: "2026-10-07T12:00:00Z", last_backup: null };
+      this.gear.devices.push(d);
+    }
+    if (name != null) d.name = name.trim();
+    if (aircraft != null) {
+      if (aircraft && !(this.settings.values.profiles || []).some((p) => p.name === aircraft)) throw `No aircraft profile named ${aircraft}.`;
+      d.aircraft = aircraft || null;
+    }
+    this.emit("gear-changed");
+    return structuredClone(d);
+  }
+
+  /** Sends `device-changed` the way the app's poll does: the events, and what is plugged in
+   *  and unmounted now. */
+  plug(connected: import("../types").Connected[], unmounted: import("../types").Connected[] = []) {
+    const before = new Set(this.gear.connected.map((c) => JSON.stringify(c.link)));
+    this.gear.connected = connected;
+    const events = connected.filter((c) => !before.has(JSON.stringify(c.link))).map((device) => ({ kind: "connected", device, app_initiated: false }));
+    this.emit("device-changed", { events, connected: gear.gearStatus(this.gear, this.settings.values).connected, unmounted });
   }
 
   // ---------- modules ----------

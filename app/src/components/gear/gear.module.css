@@ -1,0 +1,122 @@
+.header {
+  display: flex;
+  align-items: center;
+  gap: var(--s-3);
+}
+.headIcon {
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  border-radius: var(--r-3);
+  background: var(--surface);
+  color: var(--fg);
+}
+.headText {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.headText h2 {
+  margin: 0;
+  font-size: var(--t-xl);
+  font-weight: 700;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.sub {
+  color: var(--muted);
+  font-size: var(--t-md);
+}
+.sub [data-state="attention"],
+.sub [data-state="inserted"] {
+  color: var(--warning-text);
+}
+.sub [data-state="safe"] {
+  color: var(--success-text);
+}
+.headActions {
+  display: flex;
+  gap: var(--s-2);
+}
+
+.plugBar {
+  display: flex;
+  align-items: center;
+  gap: var(--s-2);
+  padding: var(--s-2) var(--s-3);
+  border-radius: var(--r-2);
+  background: var(--raised);
+  border: 1px solid var(--border-strong);
+  font-size: var(--t-md);
+}
+.plugBar > span {
+  flex: 1;
+  font-weight: 600;
+}
+
+.checks {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-2);
+}
+.checks li {
+  display: flex;
+  align-items: baseline;
+  gap: var(--s-2);
+  flex-wrap: wrap;
+  font-size: var(--t-md);
+}
+.checkName {
+  font-weight: 500;
+}
+.reason {
+  flex-basis: 100%;
+  padding-left: 24px;
+  color: var(--error-text);
+}
+
+.diff {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-3);
+}
+.diff h4 {
+  margin: 0 0 var(--s-1);
+  font-size: var(--t-md);
+  font-weight: 600;
+}
+.lines {
+  margin: 0;
+  padding: var(--s-2) var(--s-3);
+  border-radius: var(--r-1);
+  background: var(--field);
+  font-size: var(--t-sm);
+  line-height: 1.5;
+  overflow-x: auto;
+}
+.add {
+  color: var(--success-text);
+}
+.remove {
+  color: var(--error-text);
+}
+.same {
+  color: var(--muted);
+}
+.files {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-size: var(--t-sm);
+}
+.version {
+  margin: 0;
+  font-size: var(--t-md);
+}

@@ -1,13 +1,22 @@
-// The OSD segment on the mock core (dev route `?osd`): open a dump, read each profile, hover
+// The OSD segment on the mock core (a saved FC's page, OSD segment): open a dump, read each profile, hover
 // names, the check, and axe in both themes. The mock answers with the view the real core drew
 // from the synthetic PAL dump (e2e/fixtures/osd.json).
 import AxeBuilder from "@axe-core/playwright";
-import { expect, test } from "./fixtures";
+import type { Page } from "@playwright/test";
+import { expect, test, type AppFixture } from "./fixtures";
+
+/** The saved FC's page, on its OSD segment. */
+async function openOsd(app: AppFixture, page: Page) {
+  await app.open();
+  await page.getByRole("navigation", { name: "Library" }).getByRole("button", { name: /^Devices/ }).click();
+  await page.getByRole("list", { name: "Devices" }).getByRole("button", { name: /Whoop FC/ }).click();
+  await page.getByRole("group", { name: "Sections" }).getByRole("button", { name: "OSD" }).click();
+}
 
 const DUMP = "/Users/pilot/bench/quad.dump_all.txt";
 
 test("opens a dump and shows each profile with its check", async ({ app, page }) => {
-  await app.open("library", { query: "?osd" });
+  await openOsd(app, page);
   await expect(page.getByText("Open a Betaflight dump or diff to see its OSD.")).toBeVisible();
   await app.core(`c => c.dialogAnswers.push([${JSON.stringify(DUMP)}])`);
   await page.getByRole("button", { name: "Open dump…" }).click();
@@ -37,7 +46,7 @@ for (const scheme of ["dark", "light"] as const) {
   test.describe(`${scheme} theme`, () => {
     test.use({ colorScheme: scheme });
     test("the OSD segment passes axe", async ({ app, page }) => {
-      await app.open("library", { query: "?osd" });
+      await openOsd(app, page);
       await app.core(`c => c.dialogAnswers.push([${JSON.stringify(DUMP)}])`);
       await page.getByRole("button", { name: "Open dump…" }).click();
       await expect(page.getByRole("img", { name: /OSD profile/ })).toBeVisible();

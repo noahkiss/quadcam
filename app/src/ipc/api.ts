@@ -69,6 +69,13 @@ export const api = {
   placeSearch: async (query: string, provider: string, limit = 6) => N.geo(await ok(commands.placeSearch({ query, provider, limit }))),
   placeSave: (name: string, lat: number, lon: number) => ok(commands.placeSave({ name, lat, lon })),
 
+  // Gear
+  gearStatus: () => ok(commands.gearStatus()),
+  gearDevices: () => ok(commands.gearDevices()),
+  gearDeviceSave: (id: string, name: string | null, aircraft: string | null) => ok(commands.gearDeviceSave({ id, name, aircraft })),
+  gearDeviceForget: (id: string) => ok(commands.gearDeviceForget({ id })),
+  gearDismissReminder: (handle: string) => ok(commands.gearDismissReminder({ handle })),
+
   // Modules
   modules: () => ok(commands.modules()),
   moduleInstall: (name: string) => ok(commands.moduleInstall({ name, confirm: true })),

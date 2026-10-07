@@ -1,6 +1,6 @@
 // The Aircraft page's OSD segment (design 2.2): a Betaflight dump or diff file drawn per
-// OSD profile. It stands alone (dev builds: `?osd`) until the Gear page frame mounts it with
-// the aircraft's FC; then `device` replaces the file (its latest backup, or a live read).
+// OSD profile. The FC's device page mounts it (`views/Gear/segments.tsx`); once a device
+// source exists (WP4 backups, the WP2 live read) `device` replaces the file.
 import { useEffect, useState } from "react";
 import { Banner } from "../../../components/Banner";
 import { Button } from "../../../components/Button";

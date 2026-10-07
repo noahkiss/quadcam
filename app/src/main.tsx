@@ -14,11 +14,6 @@ async function start() {
     installMock({ scenario: (query.get("mock") || "library") as never });
   }
   let root = <App />;
-  if (import.meta.env.DEV && query.has("osd")) {
-    // The OSD segment on its own until the Gear page frame mounts it.
-    const { OsdSegment } = await import("./views/Gear/Osd/OsdSegment");
-    root = <OsdSegment />;
-  }
   if (import.meta.env.DEV && query.has("gallery")) {
     const { Gallery } = await import("./views/Gallery/Gallery");
     root = <Gallery />;
