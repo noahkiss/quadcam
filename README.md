@@ -92,6 +92,7 @@ QuadCam follows the system's light or dark appearance. [A light-mode screenshot]
 | [Command line](docs/cli.md) | `quadcam-cli`: import, library, places, profiles, settings, JSON output |
 | [MCP server](docs/mcp.md) | Connect a coding agent, the 16 tools, the control socket |
 | [Development](docs/development.md) | Build from source, tests, project layout, releases |
+| [Gear design](docs/gear-design.md) | The plan for gear: device backups, staged changes, OSD, rates, sims, voice packs, firmware, flight analysis |
 
 ## Privacy
 
