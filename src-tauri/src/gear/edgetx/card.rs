@@ -504,7 +504,8 @@ impl Card {
     }
 }
 
-fn selected_in(d: &Doc) -> Option<String> {
+/// The model file `radio.yml` selects (`currModelFilename`, else `currModel`).
+pub fn selected_in(d: &Doc) -> Option<String> {
     if let Some(f) = d.top_value("currModelFilename") {
         let f = unquote(&f).to_string();
         if !f.is_empty() {

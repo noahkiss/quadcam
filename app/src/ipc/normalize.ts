@@ -25,6 +25,9 @@ import type {
   SignalScan,
   Span,
   Tunables,
+  RadioEvent,
+  RadioSnapshot,
+  SwitchMap,
 } from "./types";
 
 const n = (v: number | null | undefined, d = 0) => (v == null || !Number.isFinite(v) ? d : v);
@@ -150,3 +153,15 @@ export function settingsView(v: G.SettingsView_Serialize): SettingsView {
 }
 
 export const importProgress = (p: G.ImportProgress): ImportProgress => ({ id: p.id, seconds: n(p.seconds), duration: n(p.duration) });
+
+export const switchMap = (m: G.SwitchMap): SwitchMap => ({
+  ...m,
+  model: m.model ?? null,
+  live: m.live ?? null,
+  rows: m.rows.map((r) => ({ ...r, switch_type: r.switch_type ?? null, positions: r.positions.map((p) => ({ ...p, source: p.source ?? null })) })),
+  modes: m.modes.map((x) => ({ ...x, linked: x.linked ?? null })),
+});
+
+export const radioEvent = (e: G.RadioEvent): RadioEvent => ({ connected: e.connected, product: e.product ?? null, frame: e.frame ?? null });
+
+export const radioSnapshot = (s: G.RadioSnapshot): RadioSnapshot => ({ ...radioEvent(s), message: s.message ?? null });

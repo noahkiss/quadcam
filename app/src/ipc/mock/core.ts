@@ -24,6 +24,7 @@ import * as gear from "./gear";
 import { MockFlights } from "./flights";
 import * as backups from "./backups";
 import { location as normLocation, spans as normSpans } from "../normalize";
+import { live as liveOf } from "../../lib/controls";
 
 /** `Core::dispatch` methods, each also a typed Tauri command of the same name. */
 const DISPATCH = new Set([
@@ -32,6 +33,7 @@ const DISPATCH = new Set([
   "settings", "settings_set", "place_search", "place_save", "session_cuts", "profiles", "session_split", "library_split",
   "modules", "module_install", "module_remove", "modules_check", "gear_osd",
   "gear_status", "gear_devices", "gear_device_save", "gear_device_forget", "gear_dismiss_reminder",
+  "gear_switch_map", "gear_radio", "gear_radio_watch",
   "gear_flights", "gear_flight_set", "gear_flight_folders", "gear_packs", "gear_pack_save", "gear_pack_delete", "gear_pack_type_save",
   "gear_pack_type_delete", "gear_pack_notes", "gear_session_report", "gear_preflight", "gear_crashes", "gear_crash_save", "gear_crash_delete",
   "gear_backup", "gear_backups", "gear_backup_read", "gear_backup_diff", "gear_backup_pin", "gear_storage", "gear_prune",
@@ -77,6 +79,11 @@ export class MockCore {
   menuState: unknown = null;
   /** Answers for the folder picker, used in order; then null. */
   dialogAnswers: (string | string[] | null)[] = [];
+  /** The radio in USB Joystick mode: plugged in or not, its latest frame, and whether the
+   *  page streams it (`gear_radio_watch`). Specs move it with `radioFrame`. */
+  radio: { connected: boolean; frame: import("../types").RadioFrame | null; watching: boolean } = { connected: false, frame: null, watching: false };
+  /** What the FC's `MSP_RC` reports (µs, CH1 first). */
+  fcRc: number[] = [1500, 1500, 988, 1500, 988, 988, 988, 988];
   /** Answers given to agent format requests. */
   formatAnswers: { id: number; approve: boolean }[] = [];
   private emit: Emit;
@@ -265,6 +272,28 @@ export class MockCore {
         if (was) this.emit("gear-changed");
         return was;
       }
+      case "gear_switch_map": {
+        const fc = (p.fc as string[] | undefined) ?? [];
+        const devs = (p.devices as string[] | undefined) ?? [];
+        if (!p.radio && !fc.length && !p.aircraft && !devs.length) throw "Pass an EdgeTX card or model file, a Betaflight dump, a device or an aircraft.";
+        const m = seed.switchMap();
+        const channels = (p.channels as number[] | undefined) ?? [];
+        if (channels.length) m.live = liveOf(m, "given", channels);
+        else if (p.live && this.gear.connected.some((c) => c.kind === "fc" && c.link.kind === "serial")) m.live = liveOf(m, "fc", this.fcRc);
+        else if (p.live) {
+          if (!this.radio.frame) throw "Nothing to read live: no FC is plugged in, and no radio is in USB Joystick mode.";
+          m.live = liveOf(m, "radio", this.radio.frame.channels);
+        }
+        return m;
+      }
+      case "gear_radio":
+        return this.radio.connected
+          ? { connected: true, product: "Test Radio Joystick", frame: this.radio.frame, message: this.radio.frame ? null : "The radio sent no report: is USB Joystick mode on?" }
+          : { connected: false, product: null, frame: null, message: "No radio in USB Joystick mode. Plug it in and choose USB Joystick on the radio." };
+      case "gear_radio_watch":
+        this.radio.watching = !!p.on;
+        if (this.radio.watching) this.emitRadio();
+        return this.radio.watching;
       case "gear_backup":
         return this.gearBackup(p);
       case "gear_backups":
@@ -405,6 +434,26 @@ export class MockCore {
     this.gear.connected = connected;
     const events = connected.filter((c) => !before.has(JSON.stringify(c.link))).map((device) => ({ kind: "connected", device, app_initiated: false }));
     this.emit("device-changed", { events, connected: gear.gearStatus(this.gear, this.settings.values).connected, unmounted });
+  }
+
+  /** Plugs the radio in (USB Joystick mode) or pulls it. */
+  radioPlug(on: boolean) {
+    this.radio.connected = on;
+    if (!on) this.radio.frame = null;
+    this.emitRadio();
+  }
+
+  /** The radio sends a report: raw axes 0..2048 (CH1-8) and button bits. */
+  radioFrame(axes: number[], buttons = 0) {
+    this.radio.connected = true;
+    const seq = (this.radio.frame?.seq ?? 0) + 1;
+    this.radio.frame = { seq, buttons, axes, channels: axes.map((a) => 988 + Math.floor(Math.min(2048, a) / 2)) };
+    this.emitRadio();
+  }
+
+  private emitRadio() {
+    if (!this.radio.watching) return;
+    this.emit("radio-input", { connected: this.radio.connected, product: this.radio.connected ? "Test Radio Joystick" : null, frame: this.radio.frame });
   }
 
   // ---------- modules ----------

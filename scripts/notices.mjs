@@ -115,6 +115,10 @@ function licenseFiles(dir) {
     .map((f) => ({ file: f, text: readFileSync(join(dir, f), "utf8").replace(/\r\n/g, "\n").trim() }));
 }
 
+/** Crates that compile in C code with its own license: the files to ship. hidapi's C
+ *  library offers GPL-3.0, BSD or its original license; QuadCam takes the BSD one. */
+const BUNDLED_C = { hidapi: ["etc/hidapi/LICENSE-bsd.txt"] };
+
 /** Rust crates the app links, from `cargo metadata`. */
 export function crates() {
   const out = execFileSync("cargo", ["metadata", "--format-version", "1", "--locked", "--filter-platform", "aarch64-apple-darwin"], {
@@ -144,6 +148,11 @@ export function crates() {
       if (p.license_file && !files.some((f) => f.file === p.license_file)) {
         const f = join(dir, p.license_file);
         if (existsSync(f)) files.push({ file: p.license_file, text: readFileSync(f, "utf8").trim() });
+      }
+      // C code a crate compiles in, under the license QuadCam takes it under.
+      for (const rel of BUNDLED_C[p.name] || []) {
+        const f = join(dir, rel);
+        if (existsSync(f)) files.push({ file: rel, text: readFileSync(f, "utf8").trim() });
       }
       return { kind: "crate", name: p.name, version: p.version, license: p.license || "", url: p.repository || p.homepage || `https://crates.io/crates/${p.name}`, authors: p.authors || [], files };
     })

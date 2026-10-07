@@ -148,6 +148,14 @@ pub fn battery_volts(ports: &dyn Ports, port: &str, timing: Timing) -> Result<f3
     msp::parse_analog_volts(&p).ok_or_else(|| anyhow::anyhow!("short MSP_ANALOG reply"))
 }
 
+/// The channel values the FC receives (µs, CH1 first) over MSP. Opens the port, reads,
+/// drops it.
+pub fn rc_channels(ports: &dyn Ports, port: &str, timing: Timing) -> Result<Vec<u16>> {
+    let mut link = ports.open(port, BAUD)?;
+    let p = msp::call(link.as_mut(), msp::MSP_RC, timing.msp)?;
+    Ok(msp::parse_rc(&p))
+}
+
 /// A battery counts as in above this voltage (USB alone reads near 0).
 pub const BATTERY_IN_VOLTS: f32 = 1.0;
 

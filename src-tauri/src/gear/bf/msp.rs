@@ -27,6 +27,8 @@ pub const MSP_BUILD_INFO: u16 = 5;
 pub const MSP_UID: u16 = 160;
 /// Battery voltage, mAh, RSSI, current.
 pub const MSP_ANALOG: u16 = 110;
+/// The channel values the FC receives, µs, CH1 first (the switch map's live view).
+pub const MSP_RC: u16 = 105;
 
 /// Which framing a frame uses.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -368,6 +370,15 @@ pub fn parse_analog_volts(p: &[u8]) -> Option<f32> {
         return Some(u16::from_le_bytes([p[7], p[8]]) as f32 / 100.0);
     }
     p.first().map(|b| *b as f32 / 10.0)
+}
+
+/// `MSP_RC`: one u16 per channel, µs, CH1 first.
+pub fn parse_rc(p: &[u8]) -> Vec<u16> {
+    p.as_chunks::<2>()
+        .0
+        .iter()
+        .map(|c| u16::from_le_bytes(*c))
+        .collect()
 }
 
 /// Reads the identity over MSP. API, variant and version are required; the rest is read

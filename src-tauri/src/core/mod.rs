@@ -27,6 +27,7 @@ mod osd;
 mod prep;
 mod rematch;
 mod setup;
+mod switchmap;
 pub use crate::paths::{cache_dir, default_session_file, default_settings_file, support_dir};
 pub use backup::{
     backup_hooks, BackupDiffParams, BackupFilter, BackupParams, BackupPinParams, BackupReadParams,
@@ -49,6 +50,7 @@ pub use library::{LibEdit, LibItem, LibUpdate, LibraryView, RebuildReport, Renam
 pub use osd::OsdParams;
 pub use rematch::{LibMatch, LibMatchParams, LibMatchReport};
 pub use setup::{PlaceRemoved, SettingsView};
+pub use switchmap::{RadioParams, RadioWatchParams, SwitchMapParams};
 
 /// What the host does when the core changes state. The GUI emits events and asks for the
 /// format click; a headless host does nothing.
@@ -235,6 +237,8 @@ pub struct Core {
     fc_timing: Mutex<crate::gear::bf::cli::Timing>,
     /// Downloaded tools (ffmpeg, esptool).
     modules: crate::modules::Modules,
+    /// The radio as a USB joystick, and its stream (`core/switchmap.rs`).
+    radio: switchmap::RadioState,
     /// Backups and card checks running now, by link (`core/backup.rs`).
     gear_jobs: Mutex<std::collections::HashMap<String, backup::JobSlot>>,
 }
@@ -283,6 +287,7 @@ impl Core {
             fc_timing: Mutex::default(),
             cache,
             modules: crate::modules::Modules::default(),
+            radio: switchmap::RadioState::default(),
             gear_jobs: Mutex::default(),
         }
     }

@@ -92,7 +92,7 @@ pub struct FcState {
 }
 
 impl Core {
-    fn fc_timing(&self) -> cli::Timing {
+    pub(super) fn fc_timing(&self) -> cli::Timing {
         *self.fc_timing.lock().unwrap()
     }
 
@@ -103,7 +103,7 @@ impl Core {
     }
 
     /// The FC ports plugged in now (serial devices `detect` takes for FCs).
-    fn fc_ports(&self) -> Vec<Connected> {
+    pub(super) fn fc_ports(&self) -> Vec<Connected> {
         self.gear
             .detect()
             .into_iter()

@@ -270,6 +270,48 @@ profile, and checks each screen.
 Open a flight controller's page under **Gear > Devices** and choose **OSD**, then **Open
 dump…**. A saved FC with a backup shows its latest backup's `dump all` until you open a file.
 
+## Switch map
+
+The switch map says what each radio control does, position by position. Open a flight
+controller's or a radio's page under **Gear > Devices** and choose **Switches**. A device with a
+backup shows the latest backups of its aircraft's radio and FC (or its own, with no aircraft);
+the radio's model is the one the aircraft profile names under EdgeTX models, else the radio's
+selected model. To read files instead, open the radio's card (**Open card…**: a mounted card or
+a copy of its folder) or one model file (**Open model…**), and the FC's dump (**Open dump…**).
+
+- **Rows:** each switch (with its type from `radio.yml`: 2-position, 3-position or toggle),
+  each trim used as a switch, and each stick a logical switch reads.
+- **Each position:** the channel values it sends in µs (−100 % is 988, +100 % is 2012), the
+  Betaflight modes it turns on (`aux` lines; AUX1 is CH5) and adjustments it selects
+  (`adjrange`; a 3-position select picks rate, OSD or LED profile 1 to 3), and the radio's own
+  effects: logical switches that turn on, special functions (sounds, read-outs, screens) and
+  timers.
+- **How it works out a position:** QuadCam runs the model's mixes with that control there and
+  every other control at rest (other switches in their first position, sticks centred,
+  throttle low). Mix switches, `ADD`, `MUL` and `REPL` lines, inputs and limits all count. A
+  logical switch on telemetry or a timer is left out.
+- **Conflicts:** two modes on one range, a switch that does nothing, a mode no control
+  reaches, and a sound file the card does not have.
+- **Live:** choose **Radio** to follow the radio in USB Joystick mode, or **FC** to read the
+  FC's channels over USB once a second. The position each control is in is marked, with the
+  modes on.
+
+## Controls
+
+**Gear > Controls** shows the radio live while it is in USB Joystick mode: plug the radio in
+and choose **USB Joystick** on it. The page reads the radio directly (the web view cannot see
+it as a game controller).
+
+- **Sticks:** both sticks in your stick mode (**Mode 1** to **Mode 4**; Mode 2 by default,
+  saved as the `stickMode` setting). Each axis says what it does: throttle is power, yaw turns
+  the nose, pitch tilts forward and back, roll banks.
+- **Channels:** CH1 to CH8 in µs, and the 24 buttons.
+- **Switch map:** open the card or model file and the dump, and the map marks what each
+  control does as you move it.
+
+The joystick's axes are the radio's channel outputs, CH1 first, so the model's mixes say which
+stick each channel follows. Without a model, CH1 to CH4 read as AETR.
+
 ## Flights and packs
 
 QuadCam reads flights from EdgeTX radio logs (`LOGS/*.csv`). A flight is a run of armed log
@@ -347,6 +389,10 @@ quadcam-cli gear osd quad.dump_all.txt --text        # each OSD profile drawn, a
 quadcam-cli --json gear osd quad.dump_all.txt apply.cli --grid PAL
 quadcam-cli --json gear card [--mount M | --device ID] [--model model01.yml]
 quadcam-cli --json gear card preview --edits edits.json   # checks and diff; writes nothing
+quadcam-cli gear map --radio /Volumes/RADIO --fc quad.diff_all.txt --text   # the switch map
+quadcam-cli --json gear map --radio model01.yml --fc quad.dump_all.txt --live   # positions now
+quadcam-cli gear map --aircraft Whoop --text         # from the latest backups of its radio and FC
+quadcam-cli --json gear radio                        # the radio in USB Joystick mode now
 quadcam-cli --json gear flights [--day 2026-10-04] [--aircraft A] [--pack P] [--logs DIR]
 quadcam-cli --json gear flights set <flight> --pack A1 [--place NAME]   # "" clears
 quadcam-cli --json gear flights folders [--add DIR | --remove DIR]
@@ -391,6 +437,7 @@ A process started by cargo never reaches real gear:
 | `QUADCAM_SERIAL` | No serial ports, no presence checks | Real ports and `ioreg` |
 | `QUADCAM_CUES` | Cues are recorded, not played | `say`, `afplay`, `osascript` |
 | `QUADCAM_CARD_WRITE` | No card writes under `/Volumes` | Card writes allowed |
+| `QUADCAM_HID` | No radio in USB Joystick mode | hidapi |
 
 Card unmounts (`diskutil unmountDisk`) follow `QUADCAM_SERIAL`. Tests use the synthetic card
 (`gear::edgetx::synth`) in a temporary folder.

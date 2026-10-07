@@ -1,7 +1,7 @@
 //! `FakeFc`: a Betaflight FC simulator for tests and the mock core. Seeded from a
 //! `dump all` (a scrubbed fixture or a synthetic one), it answers the CLI (`#`, `set`,
 //! `get`, other config lines, `version`, `status`, `diff all`, `dump all`, `profile N`,
-//! `save`, `exit`) and the MSP identity and battery messages.
+//! `save`, `exit`) and the MSP identity, battery and channel (`MSP_RC`) messages.
 //!
 //! - `save` keeps the changes and reboots; `exit` drops them and reboots. A reboot ends
 //!   every open link (reads give `PortGone`) and the port refuses opens for
@@ -39,6 +39,8 @@ struct State {
     uid: [u8; 12],
     /// Centivolts on the battery lead; 0 with no battery.
     vbat_cv: u16,
+    /// What `MSP_RC` answers: µs per channel.
+    rc: Vec<u16>,
     reject: Vec<String>,
     lose_port_on: Option<String>,
     dump_chunks: usize,
@@ -74,6 +76,7 @@ impl FakeFc {
                 reboot_opens: 2,
                 uid: [0x11; 12],
                 vbat_cv: 0,
+                rc: vec![1500, 1500, 988, 1500, 988, 988, 988, 988],
                 reject: Vec::new(),
                 lose_port_on: None,
                 dump_chunks: 1,
@@ -122,6 +125,12 @@ impl FakeFc {
     /// The battery: volts on the lead, 0 for none.
     pub fn set_battery(&self, volts: f32) {
         self.st().vbat_cv = (volts * 100.0).round() as u16;
+    }
+
+    /// The channel values `MSP_RC` reports (µs, CH1 first): the radio's switches as the FC
+    /// sees them.
+    pub fn set_rc(&self, channels: &[u16]) {
+        self.st().rc = channels.to_vec();
     }
 
     pub fn log(&self) -> Vec<String> {
@@ -397,6 +406,7 @@ impl FakeLink {
             }
             msp::MSP_BUILD_INFO => Some(b"Jan  1 202600:00:00abcdef0".to_vec()),
             msp::MSP_UID => Some(s.uid.to_vec()),
+            msp::MSP_RC => Some(s.rc.iter().flat_map(|v| v.to_le_bytes()).collect()),
             msp::MSP_ANALOG => {
                 let mut p = vec![(s.vbat_cv / 10).min(255) as u8, 0, 0, 0, 0, 0, 0];
                 p.extend_from_slice(&s.vbat_cv.to_le_bytes());

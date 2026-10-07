@@ -188,6 +188,7 @@ export interface SettingsValues {
   libView?: "grid" | "list";
   thumbSize?: number;
   libSort?: { key: "date" | "rating" | "duration" | "name"; dir: "asc" | "desc" };
+  stickMode?: number;
   [key: string]: unknown;
 }
 
@@ -202,6 +203,26 @@ export interface SettingsView {
   values: SettingsValues;
   effective: Defaults;
 }
+
+// The switch map and the radio as a USB joystick.
+export type Stick = G.Stick;
+export type StickChannel = G.StickChannel;
+export type ChannelValue = G.ChannelValue;
+export type Adjustment = G.Adjustment;
+export type Live = G.Live;
+export type SwitchMapParams = G.SwitchMapParams;
+export type Position = Omit<G.Position, "source"> & { source: string | null };
+export type ControlRow = Omit<G.ControlRow, "switch_type" | "positions"> & { switch_type: string | null; positions: Position[] };
+export type AuxMode = Omit<G.AuxMode, "linked"> & { linked: string | null };
+export type SwitchMap = Omit<G.SwitchMap, "model" | "live" | "rows" | "modes"> & {
+  model: string | null;
+  live: Live | null;
+  rows: ControlRow[];
+  modes: AuxMode[];
+};
+export type RadioFrame = G.RadioFrame;
+export type RadioEvent = { connected: boolean; product: string | null; frame: RadioFrame | null };
+export type RadioSnapshot = RadioEvent & { message: string | null };
 
 // Events the core emits.
 export type StageProgress = G.Progress;
