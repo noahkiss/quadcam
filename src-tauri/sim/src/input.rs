@@ -1271,8 +1271,10 @@ mod tests {
 
     #[test]
     fn capture_changes_one_control_and_returns_to_review() {
-        let mut cal = Calibration::default();
-        cal.turtle = RadioControl::from_range(9, 1700, 2100);
+        let cal = Calibration {
+            turtle: RadioControl::from_range(9, 1700, 2100),
+            ..Default::default()
+        };
         let mut a = AutoCal::review(cal);
         let mut t = 0;
         a.capture(CaptureTarget::Turtle);
