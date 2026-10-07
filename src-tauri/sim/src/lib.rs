@@ -4,8 +4,9 @@
 //! the real-time stepping thread, snapshots and recordings. No Tauri, window or audio
 //! dependency: it builds and tests on its own.
 //!
-//! - Input plugs in through [`ring`]: [`ring::rc_ring`] gives the producer to the input
-//!   thread and the consumer to [`runner::spawn`].
+//! - [`input`] reads the radio: the raw sample ring, calibration and the link model (S4).
+//!   [`ring::RadioSource`] chains them into the [`RcFrame`] each step consumes; give it to
+//!   [`runner::spawn`].
 //! - The renderer and audio read [`snapshot::SnapshotReader`].
 //! - [`sim::Sim`] is the deterministic core; [`record`] replays it exactly.
 //!
@@ -20,6 +21,7 @@ pub mod bench;
 pub mod diff;
 pub mod fc;
 pub mod filters;
+pub mod input;
 pub mod log;
 pub mod mixer;
 pub mod motor;
@@ -36,7 +38,7 @@ pub mod world;
 
 pub use profile::{preset, presets, SimProfile};
 pub use rapier3d_f64;
-pub use ring::{rc_ring, RcConsumer, RcFrame, RcProducer, RcSource};
+pub use ring::{RadioSource, RcFrame, RcSource};
 pub use sim::{Sim, SimSettings};
 pub use snapshot::{Snapshot, SnapshotPair, SnapshotReader};
 pub use world::WorldSpec;

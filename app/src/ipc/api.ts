@@ -7,7 +7,7 @@ import { open as openDialog } from "@tauri-apps/plugin-dialog";
 import { openPath, openUrl, revealItemInDir } from "@tauri-apps/plugin-opener";
 import { commands } from "../bindings";
 import * as N from "./normalize";
-import type { CrashSaveParams, ImportOptions, LibEdit, LibraryFilter, Moved, OsdParams, Pack, PackType, PlanPatch, RemovedCuts, SettingsValues, Span, SwitchMapParams } from "./types";
+import type { CrashSaveParams, ImportOptions, LibEdit, LibraryFilter, Moved, OsdParams, Pack, PackType, PlanPatch, RemovedCuts, SettingsValues, Span, SwitchMapParams, SimCalibrationSaveParams, CalibrateParams } from "./types";
 
 type Result<T> = Promise<{ status: "ok"; data: T } | { status: "error"; error: string }>;
 
@@ -100,6 +100,10 @@ export const api = {
   gearSwitchMap: async (params: SwitchMapParams) => N.switchMap(await ok(commands.gearSwitchMap(params))),
   gearRadio: async () => N.radioSnapshot(await ok(commands.gearRadio({ wait_ms: null }))),
   gearRadioWatch: (on: boolean) => ok(commands.gearRadioWatch({ on })),
+  gearSimCalibration: (radio: string | null = null) => ok(commands.gearSimCalibration({ radio })),
+  gearSimCalibrationSave: (p: SimCalibrationSaveParams) => ok(commands.gearSimCalibrationSave(p)),
+  gearSimDefaults: (aircraft: string | null) => ok(commands.gearSimDefaults({ aircraft, radio: null, fc: [] })),
+  gearSimCalibrate: (p: CalibrateParams) => ok(commands.gearSimCalibrate(p)),
 
   // Flights and packs
   gearFlights: (day: string | null = null) => ok(commands.gearFlights({ day })),

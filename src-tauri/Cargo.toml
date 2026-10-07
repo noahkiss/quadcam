@@ -59,6 +59,7 @@ xxhash-rust = { version = "0.8", features = ["xxh64"] }
 serialport = { version = "4.10.1", default-features = false }
 sha2 = "0.10"
 toml = "1"
+quadcam-sim = { path = "sim" }
 
 [dev-dependencies]
 tempfile = "3"

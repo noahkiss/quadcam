@@ -67,6 +67,9 @@ pub struct RadioSnapshot {
     pub connected: bool,
     #[serde(default)]
     pub product: Option<String>,
+    /// The firmware version the radio reports over USB.
+    #[serde(default)]
+    pub version: Option<String>,
     #[serde(default)]
     pub frame: Option<RadioFrame>,
     /// Why there is no frame.
@@ -122,6 +125,10 @@ pub trait HidSource: Send + Sync {
 /// One open joystick.
 pub trait HidReader: Send {
     fn product(&self) -> String;
+    /// The firmware version from the USB device (`bcdDevice`, `2.12`), when it says.
+    fn version(&self) -> Option<String> {
+        None
+    }
     /// One report, or None when none came within `timeout`. An error means the radio is
     /// gone.
     fn read(&mut self, timeout: Duration) -> Result<Option<Vec<u8>>>;
@@ -199,6 +206,9 @@ impl HidReader for FakeReader {
     fn product(&self) -> String {
         "Test Radio Joystick".into()
     }
+    fn version(&self) -> Option<String> {
+        Some("2.12".into())
+    }
     fn read(&mut self, timeout: Duration) -> Result<Option<Vec<u8>>> {
         {
             let mut s = self.st.lock().unwrap();
@@ -262,19 +272,26 @@ impl HidSource for RealHid {
             }
             None => guard.insert(hidapi::HidApi::new()?),
         };
-        if !api
+        let Some(release) = api
             .device_list()
-            .any(|d| d.vendor_id() == VID && d.product_id() == PID)
-        {
+            .find(|d| d.vendor_id() == VID && d.product_id() == PID)
+            .map(|d| d.release_number())
+        else {
             return Ok(None);
-        }
+        };
         let dev = api.open(VID, PID)?;
         let product = dev
             .get_product_string()
             .ok()
             .flatten()
             .unwrap_or_else(|| "USB radio".into());
-        Ok(Some(Box::new(RealReader { dev, product })))
+        // bcdDevice is BCD: 0x0212 is 2.12.
+        let version = Some(format!("{:x}.{:02x}", release >> 8, release & 0xff));
+        Ok(Some(Box::new(RealReader {
+            dev,
+            product,
+            version,
+        })))
     }
 }
 
@@ -282,12 +299,16 @@ impl HidSource for RealHid {
 struct RealReader {
     dev: hidapi::HidDevice,
     product: String,
+    version: Option<String>,
 }
 
 #[cfg(target_os = "macos")]
 impl HidReader for RealReader {
     fn product(&self) -> String {
         self.product.clone()
+    }
+    fn version(&self) -> Option<String> {
+        self.version.clone()
     }
     fn read(&mut self, timeout: Duration) -> Result<Option<Vec<u8>>> {
         let mut buf = [0u8; 64];
@@ -304,6 +325,7 @@ pub fn snapshot(src: &dyn HidSource, wait: Duration) -> Result<RadioSnapshot> {
         return Ok(RadioSnapshot {
             connected: false,
             product: None,
+            version: None,
             frame: None,
             message: Some(
                 "No radio in USB Joystick mode. Plug it in and choose USB Joystick on the radio."
@@ -312,6 +334,7 @@ pub fn snapshot(src: &dyn HidSource, wait: Duration) -> Result<RadioSnapshot> {
         });
     };
     let product = r.product();
+    let version = r.version();
     let start = Instant::now();
     let mut last = None;
     while start.elapsed() < wait {
@@ -331,82 +354,304 @@ pub fn snapshot(src: &dyn HidSource, wait: Duration) -> Result<RadioSnapshot> {
     Ok(RadioSnapshot {
         connected: true,
         product: Some(product),
+        version,
         frame: last,
         message,
     })
 }
 
-/// Streams the radio until `stop`: a `connected: false` event while there is none, each
-/// changed frame (at most one per `FRAME_INTERVAL`), a heartbeat every `HEARTBEAT`, and
-/// a reopen after the radio goes.
-pub fn watch(src: &dyn HidSource, stop: &AtomicBool, mut emit: impl FnMut(RadioEvent)) {
-    let mut seq = 0u64;
-    let mut said_absent = false;
+/// What the reader sees.
+pub enum Signal<'a> {
+    /// No radio to open; the reader tries again after `RETRY`.
+    Absent,
+    /// Opened: the product name.
+    Connected(&'a str),
+    /// One report, stamped with `quadcam_sim::input::now_ns` as it arrived.
+    Report { t_ns: u64, report: &'a [u8] },
+    /// A read timed out with no report.
+    Idle,
+    /// The radio went away.
+    Gone,
+}
+
+/// Reads the radio until `stop`: every report, stamped on arrival, and a reopen after the
+/// radio goes. Every consumer (the throttled page stream, the sim's unthrottled sinks) sees
+/// the same reports through `on`.
+pub fn read_loop(src: &dyn HidSource, stop: &AtomicBool, mut on: impl FnMut(Signal)) {
     while !stop.load(Ordering::SeqCst) {
-        let reader = src.open().ok().flatten();
-        let Some(mut r) = reader else {
-            if !said_absent {
-                emit(RadioEvent {
-                    connected: false,
-                    product: None,
-                    frame: None,
-                });
-                said_absent = true;
-            }
+        let Some(mut r) = src.open().ok().flatten() else {
+            on(Signal::Absent);
             sleep_unless(stop, RETRY);
             continue;
         };
-        said_absent = false;
-        let product = Some(r.product());
-        emit(RadioEvent {
-            connected: true,
-            product: product.clone(),
-            frame: None,
-        });
-        let mut sent: Option<(Instant, Vec<u8>)> = None;
-        let mut pending: Option<Vec<u8>> = None;
+        on(Signal::Connected(&r.product()));
         while !stop.load(Ordering::SeqCst) {
             match r.read(Duration::from_millis(20)) {
-                Ok(Some(rep)) => {
-                    seq += 1;
-                    if sent.as_ref().is_none_or(|(_, last)| *last != rep) {
-                        pending = Some(rep);
-                    }
-                }
-                Ok(None) => {}
+                Ok(Some(rep)) => on(Signal::Report {
+                    t_ns: quadcam_sim::input::now_ns(),
+                    report: &rep,
+                }),
+                Ok(None) => on(Signal::Idle),
                 Err(_) => break,
-            }
-            let due = match &sent {
-                None => pending.is_some(),
-                Some((t, _)) => {
-                    (pending.is_some() && t.elapsed() >= FRAME_INTERVAL) || t.elapsed() >= HEARTBEAT
-                }
-            };
-            if due {
-                let rep = pending
-                    .take()
-                    .or_else(|| sent.as_ref().map(|(_, l)| l.clone()));
-                if let Some(rep) = rep {
-                    if let Some(f) = frame(seq, &rep) {
-                        emit(RadioEvent {
-                            connected: true,
-                            product: product.clone(),
-                            frame: Some(f),
-                        });
-                    }
-                    sent = Some((Instant::now(), rep));
-                }
             }
         }
         if !stop.load(Ordering::SeqCst) {
-            emit(RadioEvent {
-                connected: false,
-                product: None,
-                frame: None,
-            });
-            said_absent = true;
+            on(Signal::Gone);
             sleep_unless(stop, Duration::from_millis(200));
         }
+    }
+}
+
+/// A report as the sim's sample. The parsing is `parse_report`'s, as for a frame.
+pub fn sample(t_ns: u64, report: &[u8]) -> Option<quadcam_sim::input::InputSample> {
+    let (buttons, axes) = parse_report(report)?;
+    Some(quadcam_sim::input::InputSample {
+        t_ns,
+        axes,
+        buttons,
+    })
+}
+
+/// The page's stream from the reader: a `connected: false` event while there is none,
+/// each changed frame (at most one per `FRAME_INTERVAL`), a heartbeat every `HEARTBEAT`.
+#[derive(Default)]
+pub struct Throttle {
+    seq: u64,
+    said_absent: bool,
+    product: Option<String>,
+    sent: Option<(Instant, Vec<u8>)>,
+    pending: Option<Vec<u8>>,
+}
+
+impl Throttle {
+    pub fn on(&mut self, sig: &Signal, emit: &mut impl FnMut(RadioEvent)) {
+        match sig {
+            Signal::Absent | Signal::Gone => {
+                if !self.said_absent || matches!(sig, Signal::Gone) {
+                    emit(RadioEvent {
+                        connected: false,
+                        product: None,
+                        frame: None,
+                    });
+                    self.said_absent = true;
+                }
+                self.sent = None;
+                self.pending = None;
+                return;
+            }
+            Signal::Connected(p) => {
+                self.said_absent = false;
+                self.product = Some(p.to_string());
+                emit(RadioEvent {
+                    connected: true,
+                    product: self.product.clone(),
+                    frame: None,
+                });
+                return;
+            }
+            Signal::Report { report, .. } => {
+                self.seq += 1;
+                if self.sent.as_ref().is_none_or(|(_, last)| last != report) {
+                    self.pending = Some(report.to_vec());
+                }
+            }
+            Signal::Idle => {}
+        }
+        let due = match &self.sent {
+            None => self.pending.is_some(),
+            Some((t, _)) => {
+                (self.pending.is_some() && t.elapsed() >= FRAME_INTERVAL)
+                    || t.elapsed() >= HEARTBEAT
+            }
+        };
+        if due {
+            let rep = self
+                .pending
+                .take()
+                .or_else(|| self.sent.as_ref().map(|(_, l)| l.clone()));
+            if let Some(rep) = rep {
+                if let Some(f) = frame(self.seq, &rep) {
+                    emit(RadioEvent {
+                        connected: true,
+                        product: self.product.clone(),
+                        frame: Some(f),
+                    });
+                }
+                self.sent = Some((Instant::now(), rep));
+            }
+        }
+    }
+}
+
+/// Streams the radio until `stop`, throttled for the page (`Throttle`).
+pub fn watch(src: &dyn HidSource, stop: &AtomicBool, mut emit: impl FnMut(RadioEvent)) {
+    let mut th = Throttle::default();
+    read_loop(src, stop, |sig| th.on(&sig, &mut emit));
+}
+
+/// What an unthrottled sink receives.
+#[derive(Debug, Clone, PartialEq)]
+pub enum Feed {
+    Connected(String),
+    /// Every report, with its arrival time.
+    Sample(quadcam_sim::input::InputSample),
+    Gone,
+}
+
+pub type Sink = Arc<dyn Fn(&Feed) + Send + Sync>;
+pub type Emit = Arc<dyn Fn(RadioEvent) + Send + Sync>;
+
+/// One reader thread for every consumer of the radio: the page's throttled stream and any
+/// number of unthrottled, timestamped sinks (the sim's input ring, the calibration). It runs
+/// while anyone listens.
+pub struct Hub {
+    src: Mutex<Arc<dyn HidSource>>,
+    st: Mutex<HubState>,
+}
+
+#[derive(Default)]
+struct HubState {
+    thread: Option<(Arc<AtomicBool>, std::thread::JoinHandle<()>)>,
+    watch: Option<Emit>,
+    sinks: Vec<(u64, Sink)>,
+    next: u64,
+}
+
+/// Drop it to stop receiving.
+pub struct Subscription {
+    hub: Arc<Hub>,
+    id: u64,
+}
+
+impl Drop for Subscription {
+    fn drop(&mut self) {
+        self.hub
+            .st
+            .lock()
+            .unwrap()
+            .sinks
+            .retain(|(i, _)| *i != self.id);
+        self.hub.stop_if_idle();
+    }
+}
+
+impl Hub {
+    pub fn new(src: Arc<dyn HidSource>) -> Arc<Self> {
+        Arc::new(Self {
+            src: Mutex::new(src),
+            st: Mutex::new(HubState::default()),
+        })
+    }
+
+    pub fn source(&self) -> Arc<dyn HidSource> {
+        self.src.lock().unwrap().clone()
+    }
+
+    pub fn set_source(&self, src: Arc<dyn HidSource>) {
+        *self.src.lock().unwrap() = src;
+    }
+
+    /// Starts or stops the page's stream. True while it runs.
+    pub fn watch(self: &Arc<Self>, on: bool, emit: Emit) -> Result<bool> {
+        self.st.lock().unwrap().watch = on.then_some(emit);
+        if on {
+            self.ensure_running()?;
+        } else {
+            self.stop_if_idle();
+        }
+        Ok(on)
+    }
+
+    /// Every report from now on, unthrottled, until the subscription drops.
+    pub fn subscribe(self: &Arc<Self>, sink: Sink) -> Result<Subscription> {
+        let id = {
+            let mut st = self.st.lock().unwrap();
+            st.next += 1;
+            let id = st.next;
+            st.sinks.push((id, sink));
+            id
+        };
+        let sub = Subscription {
+            hub: self.clone(),
+            id,
+        };
+        self.ensure_running()?;
+        Ok(sub)
+    }
+
+    /// Every report into a sim input ring.
+    pub fn subscribe_ring(
+        self: &Arc<Self>,
+        ring: Arc<quadcam_sim::input::InputRing>,
+    ) -> Result<Subscription> {
+        self.subscribe(Arc::new(move |f| {
+            if let Feed::Sample(s) = f {
+                ring.push(*s);
+            }
+        }))
+    }
+
+    fn ensure_running(self: &Arc<Self>) -> Result<()> {
+        let mut st = self.st.lock().unwrap();
+        if st.thread.as_ref().is_some_and(|(_, h)| !h.is_finished()) {
+            return Ok(());
+        }
+        let stop = Arc::new(AtomicBool::new(false));
+        let (hub, s2) = (Arc::downgrade(self), stop.clone());
+        let src = self.source();
+        let h = std::thread::Builder::new()
+            .name("radio-hid".into())
+            .spawn(move || {
+                let mut th = Throttle::default();
+                read_loop(src.as_ref(), &s2, |sig| {
+                    let Some(hub) = hub.upgrade() else {
+                        s2.store(true, Ordering::SeqCst);
+                        return;
+                    };
+                    let st = hub.st.lock().unwrap();
+                    if let Some(w) = &st.watch {
+                        th.on(&sig, &mut |e| w(e));
+                    }
+                    let feed = match sig {
+                        Signal::Connected(p) => Feed::Connected(p.to_string()),
+                        Signal::Report { t_ns, report } => match sample(t_ns, report) {
+                            Some(s) => Feed::Sample(s),
+                            None => return,
+                        },
+                        Signal::Gone => Feed::Gone,
+                        Signal::Absent | Signal::Idle => return,
+                    };
+                    for (_, k) in &st.sinks {
+                        k(&feed);
+                    }
+                })
+            })?;
+        st.thread = Some((stop, h));
+        Ok(())
+    }
+
+    fn stop_if_idle(&self) {
+        let t = {
+            let mut st = self.st.lock().unwrap();
+            if st.watch.is_some() || !st.sinks.is_empty() {
+                return;
+            }
+            st.thread.take()
+        };
+        if let Some((stop, h)) = t {
+            stop.store(true, Ordering::SeqCst);
+            let _ = h.join();
+        }
+    }
+
+    /// Whether the reader thread runs.
+    pub fn running(&self) -> bool {
+        self.st
+            .lock()
+            .unwrap()
+            .thread
+            .as_ref()
+            .is_some_and(|(_, h)| !h.is_finished())
     }
 }
 
@@ -458,6 +703,48 @@ mod tests {
         f.push(report(0, [2048, 0, 0, 0, 0, 0, 0, 0]));
         let s = snapshot(&f, Duration::from_millis(200)).unwrap();
         assert_eq!(s.frame.unwrap().channels[0], 2012);
+    }
+
+    #[test]
+    fn every_report_reaches_the_ring_with_its_time() {
+        let f = FakeHid::plugged();
+        let hub = Hub::new(Arc::new(f.clone()));
+        let ring = Arc::new(quadcam_sim::input::InputRing::new(1024));
+        let frames = Arc::new(Mutex::new(0usize));
+        let fr = frames.clone();
+        hub.watch(
+            true,
+            Arc::new(move |e: RadioEvent| {
+                if e.frame.is_some() {
+                    *fr.lock().unwrap() += 1;
+                }
+            }),
+        )
+        .unwrap();
+        let sub = hub.subscribe_ring(ring.clone()).unwrap();
+        let before = quadcam_sim::input::now_ns();
+        for i in 0..500u16 {
+            f.push(report(i as u32, [i, 2048 - i, 0, 1024, 0, 0, 0, 0]));
+        }
+        let end = Instant::now() + Duration::from_secs(5);
+        while ring.pushed() < 500 && Instant::now() < end {
+            std::thread::sleep(Duration::from_millis(5));
+        }
+        let (got, _) = ring.since(0);
+        assert_eq!(got.len(), 500, "every report, none dropped or merged");
+        for (i, s) in got.iter().enumerate() {
+            assert_eq!(s.axes[0], i as u16);
+            assert_eq!(s.buttons, i as u32);
+            assert!(s.t_ns >= before);
+        }
+        assert!(got.windows(2).all(|w| w[0].t_ns <= w[1].t_ns));
+        let n = *frames.lock().unwrap();
+        assert!(n < 100, "the page stream stays throttled ({n})");
+        // The page stream stops; the sink keeps the reader running until it drops.
+        hub.watch(false, Arc::new(|_| {})).unwrap();
+        assert!(hub.running());
+        drop(sub);
+        assert!(!hub.running());
     }
 
     #[test]

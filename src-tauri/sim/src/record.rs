@@ -15,7 +15,7 @@ pub const RECORDING_VERSION: u32 = 1;
 pub struct RecFrame {
     pub step: u64,
     pub ch: [u16; CHANNELS],
-    pub flags: u8,
+    pub flags: u16,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]

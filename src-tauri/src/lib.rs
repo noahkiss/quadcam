@@ -433,6 +433,10 @@ pub fn specta_builder() -> tauri_specta::Builder<tauri::Wry> {
             c::gear_switch_map,
             c::gear_radio,
             c::gear_radio_watch,
+            c::gear_sim_calibration,
+            c::gear_sim_calibration_save,
+            c::gear_sim_defaults,
+            c::gear_sim_calibrate,
             c::gear_flights,
             c::gear_flight_set,
             c::gear_flight_folders,
@@ -490,6 +494,7 @@ pub fn specta_builder() -> tauri_specta::Builder<tauri::Wry> {
             api::AgentFormatClosed,
             api::Menu,
             api::RadioInput,
+            api::SimCalibrationEvent,
         ])
         // Sizes and counts fit a JS number.
         .dangerously_cast_bigints_to_number()

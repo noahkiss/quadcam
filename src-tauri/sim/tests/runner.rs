@@ -8,9 +8,10 @@ use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use common::*;
+use quadcam_sim::input::{InputRing, InputSample, LinkConfig, LinkModel, AXES, AXIS_MAX, AXIS_MID};
 use quadcam_sim::rapier3d_f64::glamx::DQuat;
 use quadcam_sim::record::Recorder;
-use quadcam_sim::ring::{rc_ring, FakeRc};
+use quadcam_sim::ring::{FakeRc, RadioSource};
 use quadcam_sim::runner::{spawn, Clock, Control, DropEvent, HostClock, RunnerConfig};
 use quadcam_sim::snapshot::snapshot_buffer;
 use quadcam_sim::{preset, Sim, SimSettings, WorldSpec};
@@ -142,7 +143,17 @@ fn drop_logic_on_a_scripted_clock() {
 
 #[test]
 fn a_recording_from_the_thread_replays_exactly() {
-    let (mut tx, rx) = rc_ring(4096);
+    let ring = std::sync::Arc::new(InputRing::new(4096));
+    let input = RadioSource {
+        ring: ring.clone(),
+        link: LinkModel::new(LinkConfig {
+            rate_hz: Some(250),
+            jitter_us: 500,
+            loss: 0.02,
+            ..LinkConfig::default()
+        }),
+        cal: Default::default(),
+    };
     let (w, _r) = snapshot_buffer();
     let clock = HostClock::new();
     let profile = preset("air65ii").unwrap();
@@ -152,22 +163,31 @@ fn a_recording_from_the_thread_replays_exactly() {
     sim.set_body([0.0, 0.0, 1.5], DQuat::IDENTITY, [0.0; 3], [0.0; 3]);
     // The replay starts from the same placed body.
     let rec = Recorder::new(&profile, &world, &settings, 9);
-    let runner = spawn(sim, rx, w, clock, RunnerConfig::default(), Some(rec), None);
-    // An input thread at 500 Hz: arm, then wiggle the sticks.
+    let runner = spawn(
+        sim,
+        input,
+        w,
+        clock,
+        RunnerConfig::default(),
+        Some(rec),
+        None,
+    );
+    // The HID side at 500 Hz: arm (CH5), Angle (CH6), throttle and wiggling sticks.
     let producer = std::thread::spawn(move || {
+        let raw = |x: f64| (AXIS_MID as f64 + x * 1024.0).clamp(0.0, AXIS_MAX as f64) as u16;
         for k in 0..300u64 {
             let t = k as f64 * 0.002;
-            let sw = Switches {
-                arm: t > 0.05,
-                angle: true,
-                turtle: false,
-            };
-            let mut f = rc(
-                sticks(0.35, (t * 7.0).sin() * 0.3, (t * 5.0).cos() * 0.2, 0.0),
-                sw,
-            );
-            f.t_ns = clock.now_ns();
-            tx.push(f);
+            let mut axes = [AXIS_MID; AXES];
+            axes[0] = raw((t * 7.0).sin() * 0.3);
+            axes[1] = raw((t * 5.0).cos() * 0.2);
+            axes[2] = (0.35 * AXIS_MAX as f64) as u16;
+            axes[4] = if t > 0.05 { AXIS_MAX } else { 0 };
+            axes[5] = AXIS_MAX;
+            ring.push(InputSample {
+                t_ns: clock.now_ns(),
+                axes,
+                buttons: 0,
+            });
             std::thread::sleep(Duration::from_millis(2));
         }
     });

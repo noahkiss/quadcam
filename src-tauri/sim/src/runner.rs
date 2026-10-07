@@ -23,15 +23,14 @@ pub trait Clock: Send + 'static {
     fn sleep_until_ns(&self, t_ns: u64);
 }
 
-/// The host's clock: `mach_absolute_time` and `mach_wait_until` on macOS.
+/// The host's clock: [`crate::input::now_ns`] (shared with the radio input) and
+/// `mach_wait_until` on macOS.
 #[derive(Debug, Clone, Copy)]
 pub struct HostClock {
     #[cfg(target_os = "macos")]
     numer: u64,
     #[cfg(target_os = "macos")]
     denom: u64,
-    #[cfg(not(target_os = "macos"))]
-    origin: std::time::Instant,
 }
 
 #[cfg(target_os = "macos")]
@@ -75,32 +74,28 @@ impl HostClock {
             }
         }
         #[cfg(not(target_os = "macos"))]
-        HostClock {
-            origin: std::time::Instant::now(),
-        }
+        HostClock {}
     }
 }
 
 impl Clock for HostClock {
+    /// The sim's one monotonic clock, the one the HID thread stamps samples with.
     fn now_ns(&self) -> u64 {
-        #[cfg(target_os = "macos")]
-        {
-            // SAFETY: no arguments, no state.
-            let t = unsafe { mach::mach_absolute_time() } as u128;
-            (t * self.numer as u128 / self.denom as u128) as u64
-        }
-        #[cfg(not(target_os = "macos"))]
-        {
-            self.origin.elapsed().as_nanos() as u64
-        }
+        crate::input::now_ns()
     }
 
     fn sleep_until_ns(&self, t_ns: u64) {
         #[cfg(target_os = "macos")]
         {
-            let ticks = (t_ns as u128 * self.denom as u128 / self.numer as u128) as u64;
-            // SAFETY: waits until an absolute tick count.
-            unsafe { mach::mach_wait_until(ticks) };
+            let wait = t_ns.saturating_sub(self.now_ns());
+            if wait == 0 {
+                return;
+            }
+            // SAFETY: reads the tick counter, then waits until an absolute tick count.
+            unsafe {
+                let ticks = (wait as u128 * self.denom as u128 / self.numer as u128) as u64;
+                mach::mach_wait_until(mach::mach_absolute_time() + ticks);
+            }
         }
         #[cfg(not(target_os = "macos"))]
         {

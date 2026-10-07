@@ -17,7 +17,6 @@ use serde_json::{json, Value};
 use std::path::PathBuf;
 use std::sync::Arc;
 
-#[path = "cli/gear/mod.rs"]
 mod gear;
 
 #[derive(Parser)]

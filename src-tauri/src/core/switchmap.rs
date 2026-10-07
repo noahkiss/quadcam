@@ -20,8 +20,7 @@ use anyhow::{bail, Context, Result};
 use serde::{Deserialize, Serialize};
 use specta::Type;
 use std::path::{Path, PathBuf};
-use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
 use std::time::Duration;
 
 /// Files larger than this are not a dump or a model file.
@@ -74,17 +73,16 @@ pub struct RadioWatchParams {
     pub on: bool,
 }
 
-/// The joystick source and the running watch.
+/// The joystick source and its one reader (`radio_hid::Hub`): the page's stream and the
+/// sim's unthrottled sinks.
 pub struct RadioState {
-    source: Mutex<Arc<dyn HidSource>>,
-    watch: Mutex<Option<(Arc<AtomicBool>, std::thread::JoinHandle<()>)>>,
+    pub(crate) hub: Arc<radio_hid::Hub>,
 }
 
 impl Default for RadioState {
     fn default() -> Self {
         Self {
-            source: Mutex::new(radio_hid::system()),
-            watch: Mutex::new(None),
+            hub: radio_hid::Hub::new(radio_hid::system()),
         }
     }
 }
@@ -250,12 +248,18 @@ fn read_radio(path: &Path, model: Option<&str>, inputs: &mut Inputs) -> Result<(
 impl Core {
     /// Replaces the joystick source (tests pass `FakeHid`).
     pub fn with_radio_hid(self, source: Arc<dyn HidSource>) -> Core {
-        *self.radio.source.lock().unwrap() = source;
+        self.radio.hub.set_source(source);
         self
     }
 
     fn radio_source(&self) -> Arc<dyn HidSource> {
-        self.radio.source.lock().unwrap().clone()
+        self.radio.hub.source()
+    }
+
+    /// Every radio report, unthrottled and stamped on arrival, until the subscription
+    /// drops (the sim's input ring, the calibration).
+    pub fn radio_subscribe(&self, sink: radio_hid::Sink) -> Result<radio_hid::Subscription> {
+        self.radio.hub.subscribe(sink)
     }
 
     /// The switch map from the files given; with `live`, the controls' positions now.
@@ -372,28 +376,10 @@ impl Core {
 
     /// Starts or stops the radio stream (`radio-input` events). True while it runs.
     pub fn gear_radio_watch(&self, p: &RadioWatchParams) -> Result<bool> {
-        let mut w = self.radio.watch.lock().unwrap();
-        if let Some((stop, h)) = w.take() {
-            if p.on && !h.is_finished() {
-                *w = Some((stop, h));
-                return Ok(true);
-            }
-            stop.store(true, Ordering::SeqCst);
-            let _ = h.join();
-        }
-        if !p.on {
-            return Ok(false);
-        }
-        let stop = Arc::new(AtomicBool::new(false));
-        let (src, hooks, s2) = (self.radio_source(), self.hooks.clone(), stop.clone());
-        let h = std::thread::Builder::new()
-            .name("radio-watch".into())
-            .spawn(move || {
-                radio_hid::watch(src.as_ref(), &s2, |e| {
-                    hooks.event(Event::RadioInput(RadioInput(e)))
-                })
-            })?;
-        *w = Some((stop, h));
-        Ok(true)
+        let hooks = self.hooks.clone();
+        self.radio.hub.watch(
+            p.on,
+            Arc::new(move |e| hooks.event(Event::RadioInput(RadioInput(e)))),
+        )
     }
 }

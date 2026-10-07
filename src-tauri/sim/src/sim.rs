@@ -217,14 +217,12 @@ impl Sim {
         let dt = self.dt;
         self.last_rc = *rc;
 
-        // Sim-only reset control.
-        if let Some(r) = self.settings.reset {
-            let on = r.active(&rc.ch);
-            if on && !self.reset_prev {
-                self.reset();
-            }
-            self.reset_prev = on;
+        // Sim-only reset control: the calibration's, or a range in the settings.
+        let on = rc.reset() || self.settings.reset.is_some_and(|r| r.active(&rc.ch));
+        if on && !self.reset_prev {
+            self.reset();
         }
+        self.reset_prev = on;
 
         let q = self.attitude();
         let qi = q.inverse();

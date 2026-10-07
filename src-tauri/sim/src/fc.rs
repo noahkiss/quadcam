@@ -14,7 +14,7 @@ use crate::filters::{Pt1, Pt3};
 use crate::mixer::Mixer;
 use crate::motor::Motors;
 use crate::profile::{Params, SimFc};
-use crate::ring::{RcFrame, Sticks};
+use crate::ring::{Mode, RcFrame, Sticks};
 
 const DEG: f64 = std::f64::consts::PI / 180.0;
 /// Below this throttle, before airmode engages, the PID output is zero (idle on the pad).
@@ -185,6 +185,21 @@ impl Fc {
         }
     }
 
+    /// Mode `mode_id` is on: from the frame when the radio's calibration drives it, else
+    /// from the quad's `aux` ranges.
+    fn mode_on(&self, rc: &RcFrame, mode_id: u32) -> bool {
+        let m = match mode_id {
+            mode::ARM => Some(Mode::Arm),
+            mode::ANGLE => Some(Mode::Angle),
+            mode::HORIZON => Some(Mode::Horizon),
+            mode::FLIP_OVER_AFTER_CRASH => Some(Mode::Turtle),
+            mode::AIRMODE => Some(Mode::Airmode),
+            _ => None,
+        };
+        m.and_then(|m| rc.mode(m))
+            .unwrap_or_else(|| self.cfg.mode_on(mode_id, &rc.ch))
+    }
+
     /// Setpoint for the sticks under the rates, body axes (rad/s): roll right is +x, pitch
     /// forward (nose down) is +y, yaw right (clockwise from above) is −z.
     fn acro_setpoint(&self, s: &Sticks) -> [f64; 3] {
@@ -197,7 +212,7 @@ impl Fc {
     }
 
     fn arming_blocks(&self, rc: &RcFrame, sticks: &Sticks, sense: &FcSense) -> Option<ArmBlock> {
-        if !self.cfg.has_mode(mode::ARM) {
+        if !self.cfg.has_mode(mode::ARM) && rc.mode(Mode::Arm).is_none() {
             return Some(ArmBlock::NoArmRange);
         }
         if !self.arm_seen_off {
@@ -213,7 +228,7 @@ impl Fc {
         if throttle_us >= self.cfg.min_check as f64 {
             return Some(ArmBlock::Throttle);
         }
-        let turtle_on = self.cfg.mode_on(mode::FLIP_OVER_AFTER_CRASH, &rc.ch);
+        let turtle_on = self.mode_on(rc, mode::FLIP_OVER_AFTER_CRASH);
         if !turtle_on && sense.tilt_deg > self.cfg.small_angle {
             return Some(ArmBlock::Angle);
         }
@@ -247,7 +262,7 @@ impl Fc {
         mixer: &Mixer,
     ) -> FcOut {
         let sticks = rc.sticks();
-        let arm_on = self.cfg.mode_on(mode::ARM, &rc.ch);
+        let arm_on = self.mode_on(rc, mode::ARM);
         if !arm_on {
             self.arm_seen_off = true;
             self.refused = false;
@@ -271,7 +286,7 @@ impl Fc {
                 match block {
                     None => {
                         self.armed = true;
-                        self.turtle = self.cfg.mode_on(mode::FLIP_OVER_AFTER_CRASH, &rc.ch);
+                        self.turtle = self.mode_on(rc, mode::FLIP_OVER_AFTER_CRASH);
                         self.reset_loops(&sticks);
                     }
                     Some(_) => self.refused = true,
@@ -285,9 +300,9 @@ impl Fc {
         }
         self.arm_prev = arm_on;
 
-        self.mode = if self.cfg.mode_on(mode::ANGLE, &rc.ch) {
+        self.mode = if self.mode_on(rc, mode::ANGLE) {
             FlightMode::Angle
-        } else if self.cfg.mode_on(mode::HORIZON, &rc.ch) {
+        } else if self.mode_on(rc, mode::HORIZON) {
             FlightMode::Horizon
         } else {
             FlightMode::Acro
@@ -350,7 +365,10 @@ impl Fc {
             }
         }
 
-        let airmode_on = self.cfg.airmode || self.cfg.mode_on(mode::AIRMODE, &rc.ch);
+        let airmode_on = match rc.mode(Mode::Airmode) {
+            Some(on) => on,
+            None => self.cfg.airmode || self.cfg.mode_on(mode::AIRMODE, &rc.ch),
+        };
         if airmode_on && throttle > self.cfg.airmode_start_throttle / 100.0 {
             self.airmode_active = true;
         }
@@ -428,7 +446,7 @@ impl Fc {
     /// spin in reverse. Roll right spins the right motors, pitch forward the front ones;
     /// crashflip_expo shapes the stick, crashflip_motor_percent drives the others.
     fn turtle_out(&mut self, rc: &RcFrame, sticks: &Sticks, p: &Params) -> FcOut {
-        let on = self.cfg.mode_on(mode::FLIP_OVER_AFTER_CRASH, &rc.ch);
+        let on = self.mode_on(rc, mode::FLIP_OVER_AFTER_CRASH);
         let e = self.cfg.crashflip_expo / 100.0;
         let shape = |x: f64| x * (1.0 - e) + x.powi(3) * e;
         let mag = sticks.roll.abs().max(sticks.pitch.abs());

@@ -3,7 +3,7 @@
 //!
 //! Every module here runs without Tauri. `core/gear.rs` holds the `Core` methods,
 //! `api/gear.rs` their rows, `mcp/gear.rs` the three MCP tools, and the CLI's
-//! `bin/cli/gear/` the `gear` subcommands.
+//! `bin/quadcam-cli/gear/` the `gear` subcommands.
 //!
 //! - `model`: the shared types (devices, backups, staged changes, plans, refusals).
 //! - `store`: the gear folder and `gear.json`, its only writer.
@@ -22,6 +22,8 @@
 //! - `crashes`: the crash and repair log.
 //! - `report`: the session report; `preflight`: the "Pack up" check.
 //! - `osd`: Betaflight OSD layouts: decode, draw per profile, overlap and off-screen check.
+//! - `sim_cal`: the sim's radio calibrations, keyed by Gear radio id, the resolve step, and
+//!   the defaults an aircraft's switch map gives the sim.
 //! - `switchmap`: the switch map: an EdgeTX model joined with the FC's `aux` and `adjrange`
 //!   lines, per control and position; live positions from channel values.
 //! - `radio_hid`: the radio as a USB joystick (hidapi): reports, channels, the watch.
@@ -52,6 +54,7 @@ pub mod radio_hid;
 pub mod radiologs;
 pub mod report;
 pub mod serial;
+pub mod sim_cal;
 pub mod store;
 pub mod switchmap;
 
