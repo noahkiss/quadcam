@@ -28,6 +28,7 @@ export function gearDefaults(): GearSettings {
       safe_to_unplug: true,
       still_inserted: true,
       step_failed: true,
+      unplug_now: true,
       debounce_s: 30,
       reminder_grace_s: 60,
       still_inserted_every_s: 300,

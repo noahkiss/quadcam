@@ -242,7 +242,7 @@ pub const KEYS: &[Key] = &[
     Key {
         file: "gearCues",
         name: Some("gear_cues"),
-        about: "an object with mute, speech, sound, notification, safe_to_unplug, still_inserted, step_failed, debounce_s, reminder_grace_s, still_inserted_every_s, reminder_max, quiet_hours and voice",
+        about: "an object with mute, speech, sound, notification, safe_to_unplug, still_inserted, step_failed, unplug_now, debounce_s, reminder_grace_s, still_inserted_every_s, reminder_max, quiet_hours and voice",
         check: |v| {
             if !v.is_object() {
                 bail!("an object");

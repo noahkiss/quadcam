@@ -117,8 +117,13 @@ When **Connected** is empty, it says: "Nothing found. If macOS asked to allow an
 click Allow." On Apple silicon, macOS keeps a new USB accessory off the bus until the person
 allows it, and an app cannot see that prompt (7.11).
 
-An FC on USB gets a session timer in its row ("USB 12 min"). At the limit set in Settings
-(default 20 min) QuadCam shows a notification: small quads overheat when powered on USB.
+An FC on USB gets a session timer in its row ("USB 12 min"), counting while its battery is in
+(MSP battery voltage above 1 V, read every 30 s with the port closed between reads). At the
+limit QuadCam plays one "Unplug <FC> now." cue (speech and notification): small quads overheat
+on USB with a battery and no airflow. The limit is `gearUsbMinutes` (default 20), or the
+board's own shorter limit in `bf/boards.rs` (10 min for the proven BetaFPV G473 boards).
+`Core::gear_usb_tick` runs from the app's poll; `gear_usb_timers` and `GearStatus.usb_timers`
+give the countdown (built in WP2).
 
 ### 2.4 The apply sheet
 
@@ -186,6 +191,8 @@ existing logic modules. `core/gear.rs` holds the `Core` methods; `api/gear.rs` t
 | `gear/bf/msp.rs` | MSP v1/v2 framing and the read-only messages in section 6.2 | `serial` |
 | `gear/bf/dump.rs` | Parses `dump all` and `diff all` into a typed config with section context (`profile N`, `rateprofile N`); renders CLI lines back | none |
 | `gear/bf/fake.rs` | `FakeFc`: a CLI and MSP simulator seeded from a synthetic dump (tests and the mock core) | `bf/dump` |
+| `gear/bf/boards.rs` | Known issues per board and build (shown after a job and on the device page) and each board's USB time limit. Data | `compat` |
+| `gear/bf/mod.rs` + `core/fc.rs` | FC jobs: identify (MSP), read (CLI), run (the write engine, for `apply/fc.rs`), the USB heat timer. Each job opens and releases the port and plays one cue | `bf`, `cues` |
 | `gear/edgetx/yaml.rs` | Line-level YAML reader and editor for EdgeTX files (section 6.3). Never a generic YAML round-trip | none |
 | `gear/edgetx/model.rs` | Typed views of a model file: header, timers, mixes, logical switches, special functions, switch warnings, telemetry sensors and screens, module settings | `edgetx/yaml` |
 | `gear/edgetx/card.rs` | The SD card: `RADIO/radio.yml`, `MODELS/`, `SOUNDS/`, `SCRIPTS/`, `LOGS/`; identity (board, `semver`), the selected model, the radio clock check; `Card::plan` (edits to bytes, checks, diff; writes nothing), `write` (per-file temp + rename + `F_FULLFSYNC` + read-back, stop between files, timeouts), `release` (unmount under a timeout) | `edgetx/model` |
@@ -327,6 +334,10 @@ in `specta_builder` (`lib.rs`).
 | `gear_devices` | – → `Vec<Device>` | no |
 | `gear_device_save` | `DeviceSaveParams` → `Device` | gear.json |
 | `gear_device_forget` | `IdParams` → `Device` (backups stay) | gear.json |
+| `gear_fc_identify` | `FcPortParams { port }` → `FcJob<FcInfo>` (identity, id, read-only reason, notes) | no (MSP read) |
+| `gear_fc_read` | `FcReadParams { port, commands }` → `FcJob<FcRead>` (read-only CLI commands; the FC reboots) | no (CLI read) |
+| `gear_board_notes` | `BoardNotesParams { board, version }` → `Vec<BoardNote>` | no |
+| `gear_usb_timers` | – → `Vec<UsbTimer>` | no |
 | `gear_card` | `CardParams { mount or device, model }` → `GearCard` (card view, selected model's aircraft, `radio_usb`) | no |
 | `gear_card_preview` | `CardPreviewParams { mount or device, edits }` → `CardPreview` (checks, diff, files, bytes, ETA) | no |
 | `gear_backup` | `BackupParams { device }` → `Backup` | device read, gear folder |
@@ -381,6 +392,7 @@ work packages do not edit one shared file.
 
 ```bash
 quadcam-cli --json gear devices
+quadcam-cli --json gear fc identify|read|check|notes|usb          # WP2 (read: --cmd, --out STEM)
 quadcam-cli --json gear card [--mount M | --device ID] [--model model01.yml]
 quadcam-cli --json gear card preview --edits edits.json             # checks and diff; writes nothing
 quadcam-cli --json gear backup --device <id>|--port /dev/cu.usbmodemX|--mount /Volumes/RADIO
@@ -419,8 +431,8 @@ can then allow the read tool freely and gate the other two.
 
 | Tool | Changes | Actions |
 |---|---|---|
-| `quadcam_gear` | Nothing | `status`, `devices`, `card`, `card_preview`, `storage`, `backups`, `backup_read`, `backup_diff`, `switch_map`, `osd`, `rates`, `sims`, `changes`, `apply_plan`, `voice`, `firmware_check`, `flights`, `packs` |
-| `quadcam_gear_edit` | QuadCam's own data only: never a device, a sim or a card | `device_save`, `device_forget`, `stage`, `update`, `discard`, `restore_stage`, `voice_edit`, `voice_render`, `voice_choose`, `pack_save`, `pack_delete`, `flight_set`, `backup` (a read of the device; writes only to the gear folder), `import_backups`, `prune`, `export` |
+| `quadcam_gear` | Nothing | `status`, `devices`, `fc_identify`, `board_notes`, `usb_timers`, `card`, `card_preview`, `storage`, `backups`, `backup_read`, `backup_diff`, `switch_map`, `osd`, `rates`, `sims`, `changes`, `apply_plan`, `voice`, `firmware_check`, `flights`, `packs` |
+| `quadcam_gear_edit` | QuadCam's own data only: never a device, a sim or a card | `device_save`, `device_forget`, `fc_read` (a CLI read; the FC reboots), `stage`, `update`, `discard`, `restore_stage`, `voice_edit`, `voice_render`, `voice_choose`, `pack_save`, `pack_delete`, `flight_set`, `backup` (a read of the device; writes only to the gear folder), `import_backups`, `prune`, `export` |
 | `quadcam_gear_apply` | A device, a sim or the radio firmware | `apply`, `sim_sync`, `flash`. Each needs the `digest` from a plan and `confirm=true` |
 
 Modules are setup, so `quadcam_settings` gains the actions `modules`, `module_install`
@@ -461,6 +473,14 @@ Proven by a hand-written serial runner over many bench sessions:
 
 **Backup:** `version`, `status`, `diff all`, `dump all`, then `exit`.
 
+**Built (WP2):** `bf/cli.rs` (`CliSession`, `run_lines`, `Timing`), `bf::read` (read-only
+commands only), `bf::run`. `run_lines` refuses `save`, `exit`, `defaults`, `bl`, `dfu`,
+`flash_erase`, `msc`, `serialpassthrough` and `batch` in a change: the engine saves and exits
+itself. Before the first write, `bf::run` reads `version` and `mcu_id` in the CLI, re-runs the
+`compat` guard on what the FC says now and checks the planned device id (`device_changed`).
+Proven pairs are keyed by board and build (`compat.rs`); every other FC is read-only with the
+reason. Dumps from 2026.6 add `battery_profile N` sections (`Section::BatteryProfile`).
+
 **Apply:** backup, enter CLI, send each line, stop at the first error. On any error: no
 `save`, `exit` (discards everything). Otherwise `save`, wait for the port, enter CLI,
 `dump all`, `exit`. Then verify (below).
@@ -490,7 +510,13 @@ MSP serves identity and the live view. It never writes in 1.0.
 - CLI and MSP do not run at once. Entering the CLI ends the MSP session; leaving it reboots.
   `gear/bf` holds one state machine per port: Idle, Msp, Cli, Rebooting.
 - The device id is a hash of `MSP_UID`. The raw UID never leaves the machine and never goes
-  into a fixture.
+  into a fixture. `MSP_UID` and the CLI's `mcu_id` are the same value (three 32-bit words as
+  hex), so an id read over MSP and one read from a dump agree. An FC with no UID gets a hash of
+  its board name and USB serial number.
+- Not yet checked on hardware: the shape of `MSP_FC_VERSION` on calendar-versioned builds
+  (2025.12 and later). The parser takes a trailing version string when there is one, else
+  `major.minor.patch`; the write guard reads the CLI's `version` line, so it never depends on it.
+- The battery probe is `MSP_ANALOG` (0.01 V at byte 7, else 0.1 V at byte 0).
 
 **What each feature needs:**
 
@@ -1073,7 +1099,11 @@ the time: every job mounts, works and releases, and a quad is released after eve
    its device's link (`Core::gear_hold`, by whole disk or port); events on a held link, and
    for `HOLD_GRACE` (6 s) after, are `app_initiated`: they run no hook and play no cue.
    Device events never cue on their own.
-2. **One cue per job, at its end** (`Core::gear_job_done`): "<device> done, safe to unplug."
+2. **One cue per job, at its end** (`Core::gear_job_done`). FC jobs (`core/fc.rs`) hold the
+   port, open it, release it before the cue, and add the board's known issues to their answer.
+   A refusal (a busy port, several FCs, an unproven board) plays no cue. The one cue outside a job
+   is "Unplug <FC> now." (`unplug_now`), once per battery session (2.3).
+   The job cue: "<device> done, safe to unplug."
    or "<step> failed on <device>.". A batch or an automation run over several devices gets
    one cue for the whole run (`Core::gear_batch_done`: "3 devices done, safe to unplug.",
    "Backup failed on 1 of 3 devices."). `gear_on_connect` is one job.
@@ -1084,7 +1114,7 @@ the time: every job mounts, works and releases, and a quad is released after eve
    card, waits `reminder_grace_s` (60 s), repeats every `still_inserted_every_s` (300 s) at
    most `reminder_max` (3) times, and stops when the card is removed or the person dismisses
    it (`Core::gear_dismiss_reminder`).
-5. **Toggles.** Each cue (`safe_to_unplug`, `still_inserted`, `step_failed`) and each channel
+5. **Toggles.** Each cue (`safe_to_unplug`, `still_inserted`, `step_failed`, `unplug_now`) and each channel
    (`speech`, `sound`, `notification`) has a toggle, and `mute` silences all. `quiet_hours`
    (`{start, end}`, `HH:MM`, may cross midnight) silences speech and sound. Notifications
    follow macOS Focus on their own: macOS holds them back. An app cannot read the Focus

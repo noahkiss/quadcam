@@ -147,6 +147,20 @@ export const commands = {
 	gearDeviceSave: (params: DeviceSaveParams) => typedError<Device, string>(__TAURI_INVOKE("gear_device_save", { params })),
 	/**  Forgets a device. Its backups stay. */
 	gearDeviceForget: (params: IdParams) => typedError<Device, string>(__TAURI_INVOKE("gear_device_forget", { params })),
+	/**
+	 *  Reads an FC's identity over MSP (board, firmware, version, its device id). No
+	 *  reboot. One cue at the end.
+	 */
+	gearFcIdentify: (params: FcPortParams) => typedError<FcJob<FcInfo>, string>(__TAURI_INVOKE("gear_fc_identify", { params })),
+	/**
+	 *  Reads an FC through its CLI: read-only commands, a backup's set by default. The FC
+	 *  reboots when it ends. Writes nothing.
+	 */
+	gearFcRead: (params: FcReadParams) => typedError<FcJob<FcRead>, string>(__TAURI_INVOKE("gear_fc_read", { params })),
+	/**  Known issues of FC boards and builds, for the device page. */
+	gearBoardNotes: (params: BoardNotesParams) => typedError<BoardNote[], string>(__TAURI_INVOKE("gear_board_notes", { params })),
+	/**  Each FC's USB heat timer: battery in, seconds on USB, the limit, seconds left. */
+	gearUsbTimers: () => typedError<UsbTimer[], string>(__TAURI_INVOKE("gear_usb_timers")),
 	/**  Stops the "still inserted" reminder for a device's link. True when one was armed. */
 	gearDismissReminder: (params: ReminderParams) => typedError<boolean, string>(__TAURI_INVOKE("gear_dismiss_reminder", { params })),
 	/**
@@ -251,6 +265,21 @@ export type Automation =
 "apply_ready";
 
 export type Badge = "matched" | "likely" | "unmatched";
+
+/**  One known issue of a board, or a board and build. */
+export type BoardNote = {
+	board: string,
+	/**  A version prefix; None for every version. */
+	version: string | null,
+	when: NoteWhen,
+	text: string,
+};
+
+/**  `gear_board_notes`: a board and version to filter by; both empty lists every note. */
+export type BoardNotesParams = {
+	board?: string | null,
+	version?: string | null,
+};
 
 /**  A file a change puts on a card. */
 export type CardFile = {
@@ -570,6 +599,8 @@ export type CueSettings = {
 	still_inserted?: boolean,
 	/**  "<step> failed on <device>." */
 	step_failed?: boolean,
+	/**  "Unplug <device> now.": an FC on USB with its battery in past its time limit. */
+	unplug_now?: boolean,
 	/**  The same cue for the same device within this many seconds is dropped. */
 	debounce_s?: number,
 	/**  Seconds after "done" before the first reminder. */
@@ -886,6 +917,55 @@ export type EnvCheck = {
 	build: string,
 };
 
+/**  What QuadCam knows about an FC after talking to it. */
+export type FcInfo = {
+	port: string,
+	/**  `fc-<xxh64>`: a hash of the MCU id. None when the FC gave nothing stable. */
+	id: string | null,
+	id_source: IdSource | null,
+	identity: Identity,
+	/**  The MSP API version (`1.47`), when MSP answered. */
+	msp_api: string | null,
+	/**  Why QuadCam reads this FC but does not write it; None when writes are proven. */
+	read_only: Refusal | null,
+	/**  Known issues of this board and build (`boards`). */
+	notes: BoardNote[],
+	/**
+	 *  Minutes it may run on USB with a battery before "Unplug now" (the board's own, or
+	 *  the setting).
+	 */
+	usb_board_minutes: number | null,
+};
+
+/**  A finished FC job's answer: what it read, and the board notes to show after it. */
+export type FcJob<T> = {
+	result: T,
+	/**  Known issues of this board and build that a USB session triggers. */
+	notes: string[],
+};
+
+/**  `gear_fc_identify`: the FC's port; omitted when exactly one FC is plugged in. */
+export type FcPortParams = {
+	port?: string | null,
+};
+
+/**  What a CLI read gave back. */
+export type FcRead = {
+	info: FcInfo,
+	/**  Each command and its answer. */
+	replies: Reply[],
+};
+
+/**
+ *  `gear_fc_read`: CLI commands that only read (`version`, `status`, `get NAME`,
+ *  `diff all`, `dump all`, ...). Empty: a backup's set (`version`, `status`, `diff all`,
+ *  `dump all`). The FC reboots when the read ends.
+ */
+export type FcReadParams = {
+	port?: string | null,
+	commands?: string[],
+};
+
 /**  Where ffmpeg and ffprobe come from (setting `ffmpegSource`). */
 export type FfmpegSource = 
 /**  QuadCam's ffmpeg module when it is installed, else Homebrew. */
@@ -1031,6 +1111,8 @@ export type GearStatus = {
 	staged: number,
 	/**  Sims whose rates differ from their quad's. */
 	sims_out_of_date: number,
+	/**  FCs on USB: battery in, time on USB, the limit (`core/fc.rs`). */
+	usb_timers?: UsbTimer[],
 	/**  The links a job holds now (`link_handle`): their devices show as working. */
 	working?: string[],
 	/**  The links with a "still inserted" reminder armed (`link_handle`). */
@@ -1058,6 +1140,13 @@ export type Grid = {
 export type IdParams = {
 	id: string,
 };
+
+/**  Where an FC's device id comes from. */
+export type IdSource = 
+/**  The MCU's unique id (MSP_UID, or `mcu_id` in a dump: the same value). */
+"mcu_uid" | 
+/**  The board name and the USB serial number, when the FC gives no UID. */
+"board_serial";
 
 /**  What a device reports about itself. Every field is optional: a device may not say. */
 export type Identity = {
@@ -1719,6 +1808,13 @@ export type NameParams = {
 	name: string,
 };
 
+/**  When a known issue matters. */
+export type NoteWhen = 
+/**  Shown after every job on the FC, and on its page. */
+"after_usb_session" | 
+/**  Shown on the device page only. */
+"always";
+
 /**  A rectangle an element takes on one profile's grid, after clipping to the grid. */
 export type OsdBox = {
 	element: string,
@@ -2138,6 +2234,14 @@ export type RenameReport = {
 	failed: ([string, string])[],
 };
 
+/**  One command and what it answered. */
+export type Reply = {
+	line: string,
+	/**  The answer without the echo and the prompt, `\n` line endings. */
+	text: string,
+	error: boolean,
+};
+
 export type Screen = {
 	/**  0 is telemetry screen 1. */
 	index: number,
@@ -2161,7 +2265,9 @@ export type Section =
 /**  `profile N`. */
 { kind: "profile"; index: number } | 
 /**  `rateprofile N`. */
-{ kind: "rate_profile"; index: number };
+{ kind: "rate_profile"; index: number } | 
+/**  `battery_profile N` (Betaflight 2026.6 and later). */
+{ kind: "battery_profile"; index: number };
 
 export type Sensor = {
 	slot: number,
@@ -2491,6 +2597,23 @@ export type UsbInfo = {
 	serial?: string | null,
 	/**  `bcdDevice` as `major.minor` (an EdgeTX radio reports its firmware's, `2.12`). */
 	version?: string | null,
+};
+
+/**  One FC's USB heat timer. It runs while the FC is on USB with its battery in. */
+export type UsbTimer = {
+	port: string,
+	id: string | null,
+	/**  A battery is in (the FC reads more than 1 V on its battery lead). */
+	battery: boolean,
+	volts: number | null,
+	/**  Seconds on USB with the battery in. */
+	elapsed_s: number,
+	/**  The limit in seconds; None when the timer is off (`gearUsbMinutes` 0). */
+	limit_s: number | null,
+	/**  Seconds left; 0 once past the limit. */
+	remaining_s: number | null,
+	/**  "Unplug now" played for this battery session. */
+	warned: boolean,
 };
 
 /**  `verify`: the clips to check again (all verified clips when None). */

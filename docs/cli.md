@@ -143,8 +143,17 @@ quadcam-cli --json gear status                       # gear folder, Gear setting
 quadcam-cli --json gear devices                      # saved devices
 quadcam-cli --json gear devices save <id> --name "Bench radio" --aircraft Whoop
 quadcam-cli --json gear devices forget <id>
+quadcam-cli --json gear fc identify [--port /dev/cu.usbmodemX]   # MSP identity, no reboot
+quadcam-cli --json gear fc read [--cmd "get osd_ah_pos"]... [--out STEM]   # the FC reboots after
+quadcam-cli --json gear fc check STEM.diff_all.txt expected.cli  # every expected line in the diff
+quadcam-cli --json gear fc notes [--board BETAFPVG473]            # known issues of boards
+quadcam-cli --json gear fc usb                                   # USB timers
 quadcam-cli --json gear osd FILE [FILE ...] [--grid NTSC|PAL|HD|WxH] [--text]
 ```
+
+`gear fc read --out STEM` writes `STEM.diff_all.txt` and `STEM.dump_all.txt` and refuses to
+overwrite. `gear fc check` is right only for values that differ from the default: a default
+value never shows in `diff all`.
 
 See [Gear](gear.md).
 

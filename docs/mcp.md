@@ -61,8 +61,8 @@ freely and ask before the others. See [Gear](gear.md).
 
 | Tool | Changes | What it does |
 |---|---|---|
-| `quadcam_gear` | Nothing | `status`: the gear folder, the Gear settings, and what is plugged in. `devices`: the saved devices. `osd`: a Betaflight OSD layout from `paths` (dump or diff files), each profile drawn as text, with the overlap and off-screen check. `card`: an EdgeTX card's version, models, selected model and its aircraft, radio clock, and one model in full (`model`). `card_preview`: the checks and diff of card `edits`; writes nothing |
-| `quadcam_gear_edit` | QuadCam's own data | `device_save` names a device or links it to an aircraft profile. `device_forget` removes it from the list |
+| `quadcam_gear` | Nothing | `status`: the gear folder, the Gear settings, what is plugged in, and FC USB timers. `devices`: the saved devices. `fc_identify`: an FC's board, version, id and write status over MSP (no reboot). `board_notes`: known issues of boards. `usb_timers`: minutes left per FC on USB with a battery. `osd`: a Betaflight OSD layout from `paths` (dump or diff files), each profile drawn as text, with the overlap and off-screen check. `card`: an EdgeTX card's version, models, selected model and its aircraft, radio clock, and one model in full (`model`). `card_preview`: the checks and diff of card `edits`; writes nothing |
+| `quadcam_gear_edit` | QuadCam's own data | `device_save` names a device or links it to an aircraft profile. `device_forget` removes it from the list. `fc_read` reads an FC through its CLI (read-only commands; the FC reboots after) |
 | `quadcam_gear_apply` | A device | No actions yet. Each will need a plan's `digest` and `confirm=true` |
 
 ## Suggestions in the app

@@ -6,9 +6,11 @@
 //! its typed command to `specta_builder` in `lib.rs`.
 
 pub use crate::core::{
-    CardParams, CardPreview, CardPreviewParams, DeviceSaveParams, GearCard, GearStatus, OsdParams,
-    ReminderParams,
+    BoardNotesParams, CardParams, CardPreview, CardPreviewParams, DeviceSaveParams, FcJob,
+    FcPortParams, FcReadParams, GearCard, GearStatus, OsdParams, ReminderParams, UsbTimer,
 };
+pub use crate::gear::bf::boards::BoardNote;
+pub use crate::gear::bf::{FcInfo, FcRead};
 pub use crate::gear::model::Device;
 pub use crate::gear::osd::OsdView;
 use serde::{Deserialize, Serialize};
@@ -33,6 +35,16 @@ macro_rules! with_gear_rows {
             gear_device_save(params: DeviceSaveParams) -> Device = |c| c.gear_device_save(&params);
             /// Forgets a device. Its backups stay.
             gear_device_forget(params: IdParams) -> Device = |c| c.gear_device_forget(&params.id);
+            /// Reads an FC's identity over MSP (board, firmware, version, its device id). No
+            /// reboot. One cue at the end.
+            gear_fc_identify(params: FcPortParams) -> FcJob<FcInfo> = |c| c.gear_fc_identify(&params);
+            /// Reads an FC through its CLI: read-only commands, a backup's set by default. The FC
+            /// reboots when it ends. Writes nothing.
+            gear_fc_read(params: FcReadParams) -> FcJob<FcRead> = |c| c.gear_fc_read(&params);
+            /// Known issues of FC boards and builds, for the device page.
+            gear_board_notes(params: BoardNotesParams) -> Vec<BoardNote> = |c| Ok(c.gear_board_notes(&params));
+            /// Each FC's USB heat timer: battery in, seconds on USB, the limit, seconds left.
+            gear_usb_timers() -> Vec<UsbTimer> = |c| Ok(c.gear_usb_timers());
             /// Stops the "still inserted" reminder for a device's link. True when one was armed.
             gear_dismiss_reminder(params: ReminderParams) -> bool = |c| Ok(c.gear_dismiss(&params.handle));
             /// An FC's OSD layout per OSD profile, drawn on its grid and checked for overlaps

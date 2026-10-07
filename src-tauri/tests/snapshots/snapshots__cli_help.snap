@@ -573,6 +573,7 @@ Usage: quadcam-cli gear [OPTIONS] <COMMAND>
 Commands:
   status   The gear folder, the Gear settings, and the devices plugged in now
   devices  Saved devices: list (default), save a name or aircraft, forget
+  fc       A Betaflight flight controller: identify, read, check, board notes, USB timer
   osd      An FC's OSD layout per OSD profile, drawn on its grid and checked for overlaps and cells off screen. Reads a dump or diff file
   card     An EdgeTX card: models, the selected model, the radio clock; `preview` checks edits
   help     Print this message or the help of the given subcommand(s)
@@ -635,6 +636,78 @@ Usage: quadcam-cli gear devices forget [OPTIONS] <ID>
 
 Arguments:
   <ID>  The device id
+
+Options:
+      --json            Print one JSON object: {"ok":true,"result":...} or {"ok":false,"error":{...}}
+      --session <FILE>  Session file (default: ~/Library/Caches/app.quadcam/session.json)
+  -h, --help            Print help
+===== quadcam-cli gear fc --help
+A Betaflight flight controller: identify, read, check, board notes, USB timer
+
+Usage: quadcam-cli gear fc [OPTIONS] <COMMAND>
+
+Commands:
+  identify  Read the FC's identity over MSP: board, firmware, version, device id. No reboot
+  read      Read through the CLI (read-only commands). The FC reboots when the read ends
+  check     Offline: every CLI line of EXPECTED must appear verbatim in the `diff all` file
+  notes     Known issues of FC boards and builds
+  usb       Each FC's USB heat timer, as the app last read it
+  help      Print this message or the help of the given subcommand(s)
+
+Options:
+      --json            Print one JSON object: {"ok":true,"result":...} or {"ok":false,"error":{...}}
+      --session <FILE>  Session file (default: ~/Library/Caches/app.quadcam/session.json)
+  -h, --help            Print help
+===== quadcam-cli gear fc identify --help
+Read the FC's identity over MSP: board, firmware, version, device id. No reboot
+
+Usage: quadcam-cli gear fc identify [OPTIONS]
+
+Options:
+      --json            Print one JSON object: {"ok":true,"result":...} or {"ok":false,"error":{...}}
+      --port <PORT>     The FC's port (/dev/cu.usbmodem...); omit when one FC is plugged in
+      --session <FILE>  Session file (default: ~/Library/Caches/app.quadcam/session.json)
+  -h, --help            Print help
+===== quadcam-cli gear fc read --help
+Read through the CLI (read-only commands). The FC reboots when the read ends
+
+Usage: quadcam-cli gear fc read [OPTIONS]
+
+Options:
+      --json            Print one JSON object: {"ok":true,"result":...} or {"ok":false,"error":{...}}
+      --port <PORT>     
+      --cmd <COMMANDS>  A read-only command (repeat it): version, status, get NAME, diff all, dump all. Default: version, status, diff all, dump all
+      --session <FILE>  Session file (default: ~/Library/Caches/app.quadcam/session.json)
+      --out <OUT>       Also write each `diff all` and `dump all` to <OUT>.diff_all.txt and <OUT>.dump_all.txt. Refuses to overwrite a file
+  -h, --help            Print help
+===== quadcam-cli gear fc check --help
+Offline: every CLI line of EXPECTED must appear verbatim in the `diff all` file
+
+Usage: quadcam-cli gear fc check [OPTIONS] <DIFF> <EXPECTED>
+
+Arguments:
+  <DIFF>      A `diff all` file
+  <EXPECTED>  A CLI file (comments and blank lines are skipped)
+
+Options:
+      --json            Print one JSON object: {"ok":true,"result":...} or {"ok":false,"error":{...}}
+      --session <FILE>  Session file (default: ~/Library/Caches/app.quadcam/session.json)
+  -h, --help            Print help
+===== quadcam-cli gear fc notes --help
+Known issues of FC boards and builds
+
+Usage: quadcam-cli gear fc notes [OPTIONS]
+
+Options:
+      --board <BOARD>      
+      --json               Print one JSON object: {"ok":true,"result":...} or {"ok":false,"error":{...}}
+      --session <FILE>     Session file (default: ~/Library/Caches/app.quadcam/session.json)
+      --version <VERSION>  
+  -h, --help               Print help
+===== quadcam-cli gear fc usb --help
+Each FC's USB heat timer, as the app last read it
+
+Usage: quadcam-cli gear fc usb [OPTIONS]
 
 Options:
       --json            Print one JSON object: {"ok":true,"result":...} or {"ok":false,"error":{...}}
