@@ -11,6 +11,8 @@ export const HOME = "/Users/pilot";
 export const CACHE = `${HOME}/Library/Caches/app.quadcam`;
 export const LIBRARY_ROOT = `${HOME}/Movies/quadcam`;
 export const PREVIEW = `${CACHE}/previews/preview.mp4`;
+/** `env_check`'s version and build. */
+export const VERSION = { version: "0.6.4", build: "0123abcde" };
 
 const clone = <T>(v: T): T => structuredClone(v);
 

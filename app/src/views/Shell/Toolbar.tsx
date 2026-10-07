@@ -28,7 +28,7 @@ export function Toolbar() {
         <h1>QuadCam</h1>
       </div>
       <div className={styles.mid}>
-        {screen !== "detail" && <SearchField label="Search the library" placeholder="Search names, notes, places" value={query} onChange={(e) => setQuery(e.target.value)} className={styles.search} />}
+        {(screen === "library" || screen === "first-run") && <SearchField label="Search the library" placeholder="Search names, notes, places" value={query} onChange={(e) => setQuery(e.target.value)} className={styles.search} />}
       </div>
       <div className={styles.right}>
         {lib && (

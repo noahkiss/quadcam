@@ -3,6 +3,33 @@
 Gear is QuadCam's second half: the FPV bench next to the clip library. This page covers what
 works today. The full plan is in [Gear design](gear-design.md).
 
+## In the app
+
+**Gear** is a section of the sidebar, under the library groups. Its triangle opens and closes
+it.
+
+- **Connected** lists what is plugged in now. Each device also has its own row under it.
+- **Devices** lists the devices you saved, plugged in or not.
+- A device's page shows its kind and state, what it reports about itself (board, firmware,
+  version), where it is mounted, its aircraft and its latest backup. **Save…** names a device
+  QuadCam does not know and links it to an aircraft; **Edit…** changes that; **Forget…**
+  removes it from `gear.json` and keeps its backups. **Show clips** opens the aircraft's clips.
+
+The bar along the bottom of the window shows one item for each kind of device plugged in:
+radio, quad, DJI and DVR card. Click one to open the device, or the Connected list when there
+are several. Each item shows a state:
+
+| State | Means |
+|---|---|
+| Working | A QuadCam job is using the device |
+| Safe to unplug | The card is unmounted and still in |
+| Still inserted | The "still inserted" reminder is due. **Dismiss** stops it |
+| Needs attention | QuadCam does not know the device yet: save it |
+| Connected | Plugged in, nothing to do |
+
+Settings for backups, steps on connect and cues are in **Settings > Gear**
+([Settings](settings.md#gear)).
+
 ## What QuadCam finds
 
 QuadCam looks for gear every 2 seconds while the app runs. It never opens a port or writes to a
@@ -70,7 +97,12 @@ The `gear_cues` setting holds:
 - `reminder_grace_s` (60), `still_inserted_every_s` (300), `reminder_max` (3).
 - `quiet_hours` (`{"start": "22:00", "end": "07:00"}`): no speech or sound in these hours.
   Notifications follow macOS Focus.
-- `voice`: a `say` voice.
+- `voice`: a `say` voice. `voice_source`: `macos` (default) or `voice_pack`. Voice packs
+  cannot play cues yet, so `voice_pack` also speaks with macOS.
+
+Inside the app bundle, a notification comes from QuadCam through macOS notifications; the
+first one asks you to allow them. Outside a bundle (`cargo tauri dev`, a CLI built on its own)
+QuadCam posts through `osascript`.
 
 ## Steps on connect
 

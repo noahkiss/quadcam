@@ -2,6 +2,7 @@
 // library, session and settings, and its events trigger a refetch (see ../events.ts).
 import type { ReactNode } from "react";
 import { create } from "zustand";
+import { createGearSlice, type GearSlice } from "./gear";
 import { createHistorySlice, type HistorySlice } from "./history";
 import { createLibrarySlice, type LibrarySlice } from "./library";
 import { createSessionSlice, type SessionSlice } from "./session";
@@ -9,7 +10,7 @@ import { createSettingsSlice, type SettingsSlice } from "./settings";
 import { createTasksSlice, type TasksSlice } from "./tasks";
 import { createUiSlice, type UiSlice } from "./ui";
 
-export type State = LibrarySlice & SessionSlice & SettingsSlice & TasksSlice & UiSlice & HistorySlice;
+export type State = LibrarySlice & SessionSlice & SettingsSlice & TasksSlice & UiSlice & HistorySlice & GearSlice;
 
 export const useStore = create<State>()((...a) => ({
   ...createLibrarySlice(...a),
@@ -18,6 +19,7 @@ export const useStore = create<State>()((...a) => ({
   ...createTasksSlice(...a),
   ...createUiSlice(...a),
   ...createHistorySlice(...a),
+  ...createGearSlice(...a),
 }));
 
 /** The store outside React. */

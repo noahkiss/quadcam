@@ -1,0 +1,51 @@
+// The places later Gear packages fill. Each is a plain value or list; a package adds its
+// entry with a one-line edit here or in `segments.tsx` / `pages.tsx`, never by changing the
+// shell's components.
+import type { ReactNode } from "react";
+import type { Connected, Device, DeviceKind } from "../../ipc/types";
+import type { DeviceState } from "../../lib/gear";
+
+/** One device as a page shows it: saved, plugged in, or both. */
+export interface DeviceRef {
+  /** `pageKey`: the device id, else `link:<handle>`. */
+  key: string;
+  kind: DeviceKind;
+  /** The saved record; null for a device QuadCam does not know yet. */
+  device: Device | null;
+  /** How it is plugged in now; null when it is not. */
+  connected: Connected | null;
+  /** Unmounted but still in. */
+  unmounted: boolean;
+  /** Null when it is not plugged in. */
+  state: DeviceState | null;
+}
+
+/** A segment of a device page (Overview, Backups, Switches, ...). */
+export interface DeviceSegment {
+  id: string;
+  label: string;
+  /** The device kinds that show it. */
+  kinds: DeviceKind[] | "all";
+  render: (d: DeviceRef) => ReactNode;
+}
+
+/** A page under Gear in the sidebar (Bench, Aircraft, Radios, Packs, Flights, Sims,
+ *  Firmware, Storage). */
+export interface GearPageSlot {
+  id: string;
+  label: string;
+  icon: import("../../components/Icon").IconName;
+  render: () => ReactNode;
+}
+
+export const gearSlots = {
+  /** Staged changes ready for a device (WP5). The plug-in bar shows when it is above 0. */
+  stagedFor: (_deviceId: string): number => 0,
+  /** Opens the apply sheet for a device's staged changes (WP5). */
+  review: (_deviceId: string): void => {},
+  /** The latest backup's time or id (WP4); the saved record's `last_backup` until then. */
+  lastBackup: (d: Device | null): string | null => d?.last_backup ?? null,
+  /** What a connected device needs from the person beyond a name (a failed step, WP4 and
+   *  later): a short phrase, or null. */
+  attention: (_c: Connected): string | null => null,
+};

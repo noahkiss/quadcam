@@ -301,7 +301,11 @@ fn cues_mark_the_end_of_a_job_and_never_quadcams_own_unmounts() {
     // own and play nothing.
     {
         let _job = c.gear_hold("disk42");
-        assert_eq!(c.gear_status().unwrap().working, ["disk42"], "the job shows as working");
+        assert_eq!(
+            c.gear_status().unwrap().working,
+            ["disk42"],
+            "the job shows as working"
+        );
         mounted.lock().unwrap().clear();
         let e = c.gear_poll(&mut t).unwrap();
         assert_eq!(e[0].kind, DeviceEventKind::UnmountedPresent);

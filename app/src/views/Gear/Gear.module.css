@@ -1,0 +1,110 @@
+.page {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: var(--s-6);
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-4);
+  max-width: 960px;
+  width: 100%;
+}
+.title {
+  margin: 0;
+  font-size: var(--t-xl);
+  font-weight: 700;
+}
+.empty {
+  margin: var(--s-6) 0;
+  color: var(--muted);
+  font-size: var(--t-lg);
+  text-align: center;
+}
+.list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+}
+.list li + li {
+  border-top: 1px solid var(--border);
+}
+.row {
+  display: flex;
+  align-items: center;
+  gap: var(--s-3);
+  width: 100%;
+  min-height: 44px;
+  padding: var(--s-2) var(--s-2);
+  border: 0;
+  border-radius: var(--r-1);
+  background: transparent;
+  font-size: var(--t-md);
+  text-align: left;
+}
+.row:hover {
+  background: color-mix(in srgb, var(--surface) 60%, transparent);
+}
+.rowName {
+  flex: 1;
+  min-width: 0;
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.rowKind,
+.rowState {
+  color: var(--muted);
+  min-width: 110px;
+}
+.row[data-state="attention"] .rowState,
+.row[data-state="inserted"] .rowState {
+  color: var(--warning-text);
+}
+.row[data-state="safe"] .rowState {
+  color: var(--success-text);
+}
+.segment {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-4);
+}
+.overview {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-4);
+}
+.facts {
+  margin: 0;
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  column-gap: var(--s-6);
+  row-gap: var(--s-2);
+  font-size: var(--t-md);
+}
+.facts > div {
+  display: contents;
+}
+.facts dt {
+  color: var(--muted);
+}
+.facts dd {
+  margin: 0;
+  display: flex;
+  align-items: center;
+  gap: var(--s-2);
+  min-height: 24px;
+}
+.sections {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s-2);
+}
+.form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-3);
+  min-width: 320px;
+}
