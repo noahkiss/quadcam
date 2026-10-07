@@ -578,7 +578,9 @@ export type CalPhase =
 /**  Press the control to use for reset. */
 "reset" | 
 /**  Check, tune, save. */
-"review";
+"review" | 
+/**  Move the control for `AutoCal::target`, then back to Review. */
+"capture";
 
 export type CalibrateAction = 
 /**  Starts a session from `calibration` (at Review with `review`). */
@@ -589,6 +591,8 @@ export type CalibrateAction =
 "skip" | 
 /**  The full flow again: edited ends go, deadzones stay. */
 "recalibrate" | 
+/**  Sets one control (`target`) by moving it, then back to Review. */
+"capture" | 
 /**  Replaces the draft (an edit in Review, a mode or channel change). */
 "set" | 
 /**  Ends the session. */
@@ -607,6 +611,8 @@ export type CalibrateParams = {
 	arm_known?: boolean,
 	/**  Start: open at Review (a saved calibration). */
 	review?: boolean,
+	/**  Capture: the control to set. */
+	target?: CaptureTarget | null,
 };
 
 /**  The session as the screen draws it. */
@@ -614,6 +620,8 @@ export type CalibrateView = {
 	active: boolean,
 	connected: boolean,
 	phase: CalPhase,
+	/**  What Capture sets. */
+	target?: CaptureTarget | null,
 	quick: boolean,
 	arm_known: boolean,
 	calibration: Calibration,
@@ -642,6 +650,14 @@ export type Calibration = {
 	arm?: RadioControl | null,
 	/**  The control that puts the quad back on the start pad. */
 	reset?: RadioControl | null,
+	/**
+	 *  The quad's mode switches as the sim reads them: pre-filled from its `aux` lines,
+	 *  changeable here.
+	 */
+	turtle?: RadioControl | null,
+	angle?: RadioControl | null,
+	horizon?: RadioControl | null,
+	airmode?: RadioControl | null,
 };
 
 /**  The mAh used reached `mah` at `s` seconds into the flight. */
@@ -649,6 +665,9 @@ export type CapaMark = {
 	mah: number | null,
 	s: number | null,
 };
+
+/**  A control the user can set by moving it. */
+export type CaptureTarget = "arm" | "reset" | "turtle" | "angle" | "horizon" | "airmode";
 
 /**  One check of one card, as the log keeps it. */
 export type CardCheck = {

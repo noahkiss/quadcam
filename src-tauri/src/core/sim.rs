@@ -16,7 +16,7 @@ use crate::gear::model::DeviceKind;
 use crate::gear::radio_hid::{self, Feed, Subscription};
 use crate::gear::sim_cal::{self, RadioResolution, SavedCalibration, SimDefaults};
 use anyhow::{bail, Result};
-use quadcam_sim::input::{AutoCal, CalPhase, Calibration, StickFunction};
+use quadcam_sim::input::{AutoCal, CalPhase, Calibration, CaptureTarget, StickFunction};
 use serde::{Deserialize, Serialize};
 use specta::Type;
 use std::sync::{Arc, Mutex};
@@ -106,6 +106,8 @@ pub enum CalibrateAction {
     Skip,
     /// The full flow again: edited ends go, deadzones stay.
     Recalibrate,
+    /// Sets one control (`target`) by moving it, then back to Review.
+    Capture,
     /// Replaces the draft (an edit in Review, a mode or channel change).
     Set,
     /// Ends the session.
@@ -131,6 +133,9 @@ pub struct CalibrateParams {
     /// Start: open at Review (a saved calibration).
     #[serde(default)]
     pub review: bool,
+    /// Capture: the control to set.
+    #[serde(default)]
+    pub target: Option<CaptureTarget>,
 }
 
 /// Percent per stick.
@@ -148,6 +153,9 @@ pub struct CalibrateView {
     pub active: bool,
     pub connected: bool,
     pub phase: CalPhase,
+    /// What Capture sets.
+    #[serde(default)]
+    pub target: Option<CaptureTarget>,
     pub quick: bool,
     pub arm_known: bool,
     pub calibration: Calibration,
@@ -172,6 +180,7 @@ fn view(l: &Live, active: bool) -> CalibrateView {
         active,
         connected: l.connected,
         phase: a.phase,
+        target: a.target,
         quick: a.quick,
         arm_known: a.arm_known,
         calibration: a.cal.clone(),
@@ -378,6 +387,12 @@ impl Core {
             }
             CalibrateAction::Skip => l.auto.skip(),
             CalibrateAction::Recalibrate => l.auto.recalibrate(),
+            CalibrateAction::Capture => {
+                let Some(t) = p.target else {
+                    bail!("Capture needs a target: arm, reset, turtle, angle, horizon or airmode.");
+                };
+                l.auto.capture(t);
+            }
             CalibrateAction::Set => {
                 let Some(c) = &p.calibration else {
                     bail!("Set needs a calibration.");

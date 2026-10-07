@@ -263,6 +263,10 @@ impl SimDefaults {
         c.mode = mode.clamp(1, 4);
         c.arm = self.arm.as_ref().map(|s| s.control);
         c.reset = self.reset.as_ref().map(|s| s.control);
+        c.turtle = self.turtle.as_ref().map(|s| s.control);
+        c.angle = self.angle.as_ref().map(|s| s.control);
+        c.horizon = self.horizon.as_ref().map(|s| s.control);
+        c.airmode = self.airmode.as_ref().map(|s| s.control);
         c
     }
 }

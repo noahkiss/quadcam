@@ -385,6 +385,28 @@ pub struct Calibration {
     /// The control that puts the quad back on the start pad.
     #[serde(default)]
     pub reset: Option<RadioControl>,
+    /// The quad's mode switches as the sim reads them: pre-filled from its `aux` lines,
+    /// changeable here.
+    #[serde(default)]
+    pub turtle: Option<RadioControl>,
+    #[serde(default)]
+    pub angle: Option<RadioControl>,
+    #[serde(default)]
+    pub horizon: Option<RadioControl>,
+    #[serde(default)]
+    pub airmode: Option<RadioControl>,
+}
+
+/// A control the user can set by moving it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Type)]
+#[serde(rename_all = "lowercase")]
+pub enum CaptureTarget {
+    Arm,
+    Reset,
+    Turtle,
+    Angle,
+    Horizon,
+    Airmode,
 }
 
 impl Default for Calibration {
@@ -405,6 +427,10 @@ impl Calibration {
             yaw: AxisCal::full(map[3]),
             arm: None,
             reset: None,
+            turtle: None,
+            angle: None,
+            horizon: None,
+            airmode: None,
         }
     }
     pub fn axis(&self, f: StickFunction) -> &AxisCal {
@@ -423,6 +449,17 @@ impl Calibration {
             StickFunction::Yaw => &mut self.yaw,
         }
     }
+    pub fn control_mut(&mut self, t: CaptureTarget) -> &mut Option<RadioControl> {
+        match t {
+            CaptureTarget::Arm => &mut self.arm,
+            CaptureTarget::Reset => &mut self.reset,
+            CaptureTarget::Turtle => &mut self.turtle,
+            CaptureTarget::Angle => &mut self.angle,
+            CaptureTarget::Horizon => &mut self.horizon,
+            CaptureTarget::Airmode => &mut self.airmode,
+        }
+    }
+
     /// The channel per function, roll first.
     pub fn map(&self) -> [u8; 4] {
         StickFunction::ALL.map(|f| self.axis(f).ch)
@@ -440,6 +477,7 @@ impl Calibration {
     /// The stick values for a sample.
     pub fn apply(&self, s: &InputSample) -> RcInput {
         let raw = |a: &AxisCal| s.axes[(a.ch.clamp(1, AXES as u8) - 1) as usize];
+        let on = |c: Option<RadioControl>| c.is_some_and(|c| c.active(s));
         RcInput {
             t_ns: s.t_ns,
             roll: self.roll.centred(raw(&self.roll)),
@@ -448,8 +486,12 @@ impl Calibration {
             throttle: self.throttle.unit(raw(&self.throttle)),
             channels: s.axes.map(axis_us),
             buttons: s.buttons,
-            arm: self.arm.is_some_and(|c| c.active(s)),
-            reset: self.reset.is_some_and(|c| c.active(s)),
+            arm: on(self.arm),
+            reset: on(self.reset),
+            turtle: on(self.turtle),
+            angle: on(self.angle),
+            horizon: on(self.horizon),
+            airmode: on(self.airmode),
         }
     }
 }
@@ -474,6 +516,11 @@ pub struct RcInput {
     pub arm: bool,
     /// The reset control is on.
     pub reset: bool,
+    /// The calibration's mode switches are on.
+    pub turtle: bool,
+    pub angle: bool,
+    pub horizon: bool,
+    pub airmode: bool,
 }
 
 // ----- auto-calibration -----
@@ -506,6 +553,8 @@ pub enum CalPhase {
     Reset,
     /// Check, tune, save.
     Review,
+    /// Move the control for `AutoCal::target`, then back to Review.
+    Capture,
 }
 
 /// The guided auto-calibration (design 7.3): feed it every sample.
@@ -529,6 +578,8 @@ pub struct AutoCal {
     latest: Option<InputSample>,
     /// Why the last step was refused.
     pub message: Option<String>,
+    /// What Capture sets.
+    pub target: Option<CaptureTarget>,
 }
 
 impl AutoCal {
@@ -548,6 +599,7 @@ impl AutoCal {
             base: None,
             latest: None,
             message: None,
+            target: None,
         }
     }
 
@@ -632,18 +684,28 @@ impl AutoCal {
                     self.after_let_go();
                 }
             }
-            CalPhase::Arm | CalPhase::Reset => {
+            CalPhase::Arm | CalPhase::Reset | CalPhase::Capture => {
                 let Some(base) = self.base else {
                     self.base = Some(s);
                     return;
                 };
                 if let Some(c) = self.changed(&base, &s) {
-                    if self.phase == CalPhase::Arm {
-                        self.cal.arm = Some(c);
-                        self.go(CalPhase::Reset);
-                    } else if Some(c) != self.cal.arm {
-                        self.cal.reset = Some(c);
-                        self.go(CalPhase::Review);
+                    match self.phase {
+                        CalPhase::Arm => {
+                            self.cal.arm = Some(c);
+                            self.go(CalPhase::Reset);
+                        }
+                        CalPhase::Reset if Some(c) != self.cal.arm => {
+                            self.cal.reset = Some(c);
+                            self.go(CalPhase::Review);
+                        }
+                        CalPhase::Capture => {
+                            if let Some(t) = self.target.take() {
+                                *self.cal.control_mut(t) = Some(c);
+                            }
+                            self.go(CalPhase::Review);
+                        }
+                        _ => {}
                     }
                 }
             }
@@ -801,6 +863,10 @@ impl AutoCal {
             }
             CalPhase::Arm => self.go(CalPhase::Reset),
             CalPhase::Reset => self.go(CalPhase::Review),
+            CalPhase::Capture => {
+                self.target = None;
+                self.go(CalPhase::Review);
+            }
             CalPhase::Review => {}
         }
         true
@@ -817,8 +883,21 @@ impl AutoCal {
                 self.cal.reset = None;
                 self.go(CalPhase::Review);
             }
+            CalPhase::Capture => {
+                if let Some(t) = self.target.take() {
+                    *self.cal.control_mut(t) = None;
+                }
+                self.go(CalPhase::Review);
+            }
             _ => {}
         }
+    }
+
+    /// Sets one control by moving it: Capture, then back to Review.
+    pub fn capture(&mut self, t: CaptureTarget) {
+        self.message = None;
+        self.target = Some(t);
+        self.go(CalPhase::Capture);
     }
 
     /// Recalibrate: the full flow again. Edited ends go; deadzones, Reverse, the mode and
@@ -1188,6 +1267,32 @@ mod tests {
         assert_eq!((out.roll, out.pitch, out.yaw), (1.0, 0.0, -1.0));
         assert_eq!(out.throttle, 1.0);
         assert!(out.arm && out.reset);
+    }
+
+    #[test]
+    fn capture_changes_one_control_and_returns_to_review() {
+        let mut cal = Calibration::default();
+        cal.turtle = RadioControl::from_range(9, 1700, 2100);
+        let mut a = AutoCal::review(cal);
+        let mut t = 0;
+        a.capture(CaptureTarget::Turtle);
+        assert_eq!(a.phase, CalPhase::Capture);
+        hold(&mut a, &mut t, rest(), 0, 20);
+        hold(&mut a, &mut t, rest(), 0b10, 20);
+        assert_eq!(a.phase, CalPhase::Review);
+        let turtle = Some(RadioControl::Button {
+            button: 2,
+            pressed: true,
+        });
+        assert_eq!(a.cal.turtle, turtle);
+        assert!(a.cal.apply(&s(t, rest(), 0b10)).turtle);
+        // Skip clears it; Next keeps it.
+        a.capture(CaptureTarget::Angle);
+        a.skip();
+        assert_eq!((a.phase, a.cal.angle), (CalPhase::Review, None));
+        a.capture(CaptureTarget::Turtle);
+        a.advance();
+        assert_eq!(a.cal.turtle, turtle);
     }
 
     #[test]
