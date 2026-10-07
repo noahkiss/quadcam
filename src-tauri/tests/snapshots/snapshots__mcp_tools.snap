@@ -821,19 +821,30 @@ expression: "quadcam_lib::mcp::tools()"
     "annotations": {
       "destructiveHint": false,
       "idempotentHint": true,
-      "openWorldHint": false,
+      "openWorldHint": true,
       "readOnlyHint": false,
       "title": "Settings"
     },
-    "description": "Read or write the app's settings, the same file the app's Settings window uses: library folder (`output_dir`) and its `layout` (year_day, day, flat) and `place_folders`, export `format` (mp4, mov), `encoder` (videotoolbox, x264), `keep_originals`, `add_time` (HHMM in names of clips with a time), `delete_clips_after_import` (after each export, delete the clip files that verified from the card or folder; other files stay; off by default), `join_split_recordings` (import a recording the DVR split into files as one clip; on by default), `default_name`, `photos_album` (empty: library only), card `format_label`, radio `log_dir`, log matching `tunables`, place search `geocoder` (apple, nominatim, census, google) and its `google_places_key` (write-only), file-name `name_date_format` (YYYY-MM-DD, YY.MM.DD) and `default_profile`. A write changes only the given settings; null resets one to its default.\n\nBest for: pointing the library somewhere else, or changing export defaults the person asked for.\nNot for: places and profiles (quadcam_places, quadcam_profiles).\nReturns: the settings file's path and every effective setting.",
+    "description": "Read or write the app's settings, the same file the app's Settings window uses: library folder (`output_dir`) and its `layout` (year_day, day, flat) and `place_folders`, export `format` (mp4, mov), `encoder` (videotoolbox, x264), `keep_originals`, `add_time` (HHMM in names of clips with a time), `delete_clips_after_import` (after each export, delete the clip files that verified from the card or folder; other files stay; off by default), `join_split_recordings` (import a recording the DVR split into files as one clip; on by default), `default_name`, `photos_album` (empty: library only), card `format_label`, radio `log_dir`, log matching `tunables`, place search `geocoder` (apple, nominatim, census, google) and its `google_places_key` (write-only), file-name `name_date_format` (YYYY-MM-DD, YY.MM.DD), `default_profile`, `ffmpeg_source` (module: QuadCam's ffmpeg module when installed, else Homebrew; homebrew: Homebrew only) and `modules` ({tool: path} overrides). A write changes only the given settings; null resets one to its default.\nModules are tools QuadCam downloads from their upstream (ffmpeg, esptool): `modules` lists them with version, license, size and source; `module_install` downloads one (the newest known pin; also updates) and needs `confirm=true`, only after you showed the person the module's license, size and source and they agreed; `module_remove` deletes one.\n\nBest for: pointing the library somewhere else, changing export defaults the person asked for, or installing a tool a feature needs.\nNot for: places and profiles (quadcam_places, quadcam_profiles).\nReturns: the settings file's path and every effective setting, or the modules.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
         "action": {
           "enum": [
             "read",
-            "write"
+            "write",
+            "modules",
+            "module_install",
+            "module_remove"
           ],
+          "type": "string"
+        },
+        "confirm": {
+          "description": "For module_install: true after the person saw the module's license and agreed.",
+          "type": "boolean"
+        },
+        "module": {
+          "description": "For module_install and module_remove: the module (ffmpeg, esptool).",
           "type": "string"
         },
         "values": {
@@ -869,6 +880,18 @@ expression: "quadcam_lib::mcp::tools()"
               "enum": [
                 "videotoolbox",
                 "x264",
+                null
+              ],
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "ffmpeg_source": {
+              "description": "Where ffmpeg comes from: QuadCam's module when installed, else Homebrew (module), or Homebrew only.",
+              "enum": [
+                "module",
+                "homebrew",
                 null
               ],
               "type": [
@@ -942,6 +965,16 @@ expression: "quadcam_lib::mcp::tools()"
             "log_dir": {
               "type": [
                 "string",
+                "null"
+              ]
+            },
+            "modules": {
+              "additionalProperties": {
+                "type": "string"
+              },
+              "description": "{tool: absolute path}: an executable that replaces a module's tool (ffmpeg, ffprobe, esptool).",
+              "type": [
+                "object",
                 "null"
               ]
             },

@@ -5,7 +5,7 @@ import libraryFixture from "../../../e2e/fixtures/library.json";
 import reviewFixture from "../../../e2e/fixtures/session-review.json";
 import finishedFixture from "../../../e2e/fixtures/session-finished.json";
 import settingsFixture from "../../../e2e/fixtures/settings.json";
-import type { LibClip, LibraryView, Session, SettingsView, Volume } from "../types";
+import type { LibClip, LibraryView, ModulePin, ModuleStatus, Session, SettingsView, Volume } from "../types";
 
 export const HOME = "/Users/pilot";
 export const CACHE = `${HOME}/Library/Caches/app.quadcam`;
@@ -142,3 +142,23 @@ export function djiVolume(): Volume {
   v.info = { ...v.info, device_identifier: "disk8s1", parent_whole_disk: "disk8", volume_uuid: "00000000-0000-4000-8000-000000000002", volume_name: "O4", mount_point: "/Volumes/O4", filesystem: "ExFAT", media_name: "DJI Air Unit" };
   return v;
 }
+
+/** The module pins, as resources/modules.toml has them (smaller numbers). */
+export function modules(): ModuleStatus[] {
+  const pin = (p: Partial<ModulePin> & Pick<ModulePin, "title" | "version" | "license">): ModulePin => ({
+    about: "",
+    license_url: "https://example.invalid/license",
+    source: "https://example.invalid/source",
+    homepage: "https://example.invalid",
+    hosts: ["example.invalid"],
+    tools: {},
+    assets: [{ url: `https://example.invalid/${p.title}.zip`, sha256: "0".repeat(64), size: 28_000_000 }],
+    ...p,
+  });
+  return [
+    { name: "esptool", pinned: pin({ title: "esptool", about: "Flashes ESP32 and ESP8266 chips, such as ExpressLRS receivers.", version: "5.4.0", license: "GPL-2.0-or-later", tools: { esptool: "esptool" } }), newest: null, installed: null, folder: null, update: false, problem: null },
+    { name: "ffmpeg", pinned: pin({ title: "ffmpeg and ffprobe", about: "Converts, checks and previews clips.", version: "9.0.2", license: "GPL-3.0-or-later", tools: { ffmpeg: "ffmpeg", ffprobe: "ffprobe" } }), newest: null, installed: null, folder: null, update: false, problem: null },
+  ];
+}
+
+export const NOTICES = "QuadCam third-party notices\n\n- react 19.3.0: MIT\n";

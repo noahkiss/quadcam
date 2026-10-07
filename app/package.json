@@ -9,7 +9,7 @@
   },
   "scripts": {
     "dev": "vite",
-    "build": "tsc --noEmit && vite build",
+    "build": "tsc --noEmit && vite build && node ../scripts/notices.mjs --out dist/THIRD_PARTY_NOTICES.txt",
     "preview": "vite preview",
     "typecheck": "tsc --noEmit",
     "lint": "eslint .",

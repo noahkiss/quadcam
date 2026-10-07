@@ -20,7 +20,43 @@ pub struct Tools {
     pub ffprobe: PathBuf,
 }
 
-fn find_tool(name: &str) -> Option<PathBuf> {
+/// Where ffmpeg and ffprobe come from (setting `ffmpegSource`).
+#[derive(Debug, Clone, Copy, Default, Serialize, Deserialize, PartialEq, Eq, specta::Type)]
+#[serde(rename_all = "lowercase")]
+pub enum FfmpegSource {
+    /// QuadCam's ffmpeg module when it is installed, else Homebrew.
+    #[default]
+    Module,
+    /// Homebrew (or PATH) only.
+    Homebrew,
+}
+
+/// What `find_tools` reads from the settings file: the source and per-tool paths
+/// (`modules`).
+#[derive(Debug, Clone, Default)]
+pub struct ToolPrefs {
+    pub source: FfmpegSource,
+    pub paths: BTreeMap<String, PathBuf>,
+}
+
+impl ToolPrefs {
+    /// From the settings file; a missing or unreadable file gives the defaults.
+    pub fn from_settings(file: &Path) -> ToolPrefs {
+        let v = crate::settings::read(file).unwrap_or_default();
+        ToolPrefs {
+            source: v
+                .get("ffmpegSource")
+                .and_then(|x| serde_json::from_value(x.clone()).ok())
+                .unwrap_or_default(),
+            paths: v
+                .get("modules")
+                .and_then(|x| serde_json::from_value(x.clone()).ok())
+                .unwrap_or_default(),
+        }
+    }
+}
+
+fn homebrew_tool(name: &str) -> Option<PathBuf> {
     let from_path = std::env::var_os("PATH")
         .map(|p| std::env::split_paths(&p).collect::<Vec<_>>())
         .unwrap_or_default();
@@ -32,10 +68,43 @@ fn find_tool(name: &str) -> Option<PathBuf> {
         .find(|p| p.is_file())
 }
 
+/// ffmpeg and ffprobe as the settings say: a path set per tool, then QuadCam's module (when
+/// the source is `module` and it is installed), then Homebrew and PATH.
 pub fn find_tools() -> Result<Tools> {
-    match (find_tool("ffmpeg"), find_tool("ffprobe")) {
+    find_tools_with(
+        &ToolPrefs::from_settings(&crate::paths::default_settings_file()),
+        &crate::modules::Modules::default(),
+    )
+}
+
+pub fn find_tools_with(prefs: &ToolPrefs, modules: &crate::modules::Modules) -> Result<Tools> {
+    let pick = |name: &str| -> Result<Option<PathBuf>> {
+        if let Some(p) = prefs.paths.get(name) {
+            if p.is_file() {
+                return Ok(Some(p.clone()));
+            }
+            bail!("{name} is set to {}, which is not a file", p.display());
+        }
+        Ok(None)
+    };
+    let (ffmpeg, ffprobe) = (pick("ffmpeg")?, pick("ffprobe")?);
+    let (ffmpeg, ffprobe) = match (ffmpeg, ffprobe, prefs.source) {
+        (Some(a), Some(b), _) => (Some(a), Some(b)),
+        (a, b, FfmpegSource::Module) => match (modules.tool("ffmpeg")?, modules.tool("ffprobe")?) {
+            (Some(ma), Some(mb)) => (a.or(Some(ma)), b.or(Some(mb))),
+            _ => (a, b),
+        },
+        (a, b, FfmpegSource::Homebrew) => (a, b),
+    };
+    match (
+        ffmpeg.or_else(|| homebrew_tool("ffmpeg")),
+        ffprobe.or_else(|| homebrew_tool("ffprobe")),
+    ) {
         (Some(ffmpeg), Some(ffprobe)) => Ok(Tools { ffmpeg, ffprobe }),
-        _ => bail!("ffmpeg and ffprobe not found. Install them with: {INSTALL_HINT}"),
+        _ => bail!(
+            "ffmpeg and ffprobe not found. Install the ffmpeg module in Settings > Modules, \
+             or run: {INSTALL_HINT}"
+        ),
     }
 }
 
@@ -755,7 +824,7 @@ pub fn sample_frames(
 
 /// exiftool, when installed. Optional: verify uses it as a second reader.
 pub fn find_exiftool() -> Option<PathBuf> {
-    find_tool("exiftool")
+    homebrew_tool("exiftool")
 }
 
 /// Checks that every QuickTime item and the location read back: through ffprobe always, and

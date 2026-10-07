@@ -388,15 +388,25 @@ pub struct SettingsValues {
     pub name_date_format: Option<String>,
     #[schemars(extend("x-nullable" = true))]
     pub default_profile: Option<String>,
+    /// Where ffmpeg comes from: QuadCam's module when installed, else Homebrew (module), or Homebrew only.
+    #[schemars(extend("x-nullable" = true, "enum" = ["module", "homebrew", null]))]
+    pub ffmpeg_source: Option<String>,
+    /// {tool: absolute path}: an executable that replaces a module's tool (ffmpeg, ffprobe, esptool).
+    #[schemars(extend("x-nullable" = true))]
+    pub modules: Option<std::collections::BTreeMap<String, String>>,
 }
 
 #[derive(Debug, Clone, Default, Deserialize, JsonSchema)]
 #[schemars(deny_unknown_fields)]
 pub struct SettingsArgs {
-    #[schemars(required, extend("enum" = ["read", "write"]))]
+    #[schemars(required, extend("enum" = ["read", "write", "modules", "module_install", "module_remove"]))]
     pub action: Option<String>,
     /// For write: {setting: value}.
     // Passed on as they are: null resets a setting, and the settings file checks each value.
     #[schemars(with = "Option<SettingsValues>")]
     pub values: Option<Value>,
+    /// For module_install and module_remove: the module (ffmpeg, esptool).
+    pub module: Option<String>,
+    /// For module_install: true after the person saw the module's license and agreed.
+    pub confirm: Option<bool>,
 }

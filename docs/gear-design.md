@@ -1085,4 +1085,4 @@ Each has a default the build uses until you decide.
 | 9 | ELRS version read over CRSF device info needs a hardware check. Until then, enter versions by hand? | Hand entry, read-only check |
 | 10 | Splash source: GitHub release binaries only, or also the EdgeTX cloud build? | Release binaries only |
 | 11 | Firmware and voice indexes go online. Check only on request, or daily? | On request (`firmwareCheck` = `manual`); `README.md` Privacy updated |
-| 12 | ffmpeg as a module: which static arm64 build (signed, LGPL preferred), and drop the cask's Homebrew `ffmpeg` dependency once the module works? | Module by default, Homebrew fallback; the cask keeps the dependency until 1.0 |
+| 12 | ffmpeg as a module: which static arm64 build (signed, LGPL preferred), and drop the cask's Homebrew `ffmpeg` dependency once the module works? | Module by default, Homebrew fallback; the cask keeps the dependency until 1.0. WP14 pins Martin Riedl's signed, notarized 9.0.2 arm64 release build (GPL; no signed LGPL arm64 build found; `docs/modules.md`) |

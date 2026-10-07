@@ -3,11 +3,15 @@
 import type { StateCreator } from "zustand";
 import type { State } from ".";
 
-export type SettingsSection = "library" | "import" | "aircraft" | "places" | "photos" | "advanced";
+import type { ReactNode } from "react";
+
+export type SettingsSection = "library" | "import" | "aircraft" | "places" | "photos" | "modules" | "advanced";
 
 export interface AskRequest {
   title: string;
   text?: string;
+  /** Content under the text (links, a table). */
+  body?: ReactNode;
   /** Show a text field with this starting value. */
   input?: string;
   ok?: string;
@@ -23,6 +27,9 @@ export interface UiSlice {
   dropping: boolean;
   /** The erase confirmation (the person's own, or an agent's). */
   formatConfirm: { text: string; agent: boolean } | null;
+  /** The third-party notices window. */
+  noticesOpen: boolean;
+  setNoticesOpen: (on: boolean) => void;
   openSettings: (section?: SettingsSection) => void;
   closeSettings: () => void;
   setMenu: (m: UiSlice["menuAt"]) => void;
@@ -37,6 +44,8 @@ export const createUiSlice: StateCreator<State, [], [], UiSlice> = (set) => ({
   menuAt: null,
   dropping: false,
   formatConfirm: null,
+  noticesOpen: false,
+  setNoticesOpen: (noticesOpen) => set({ noticesOpen }),
   openSettings: (section = "library") => set({ settingsOpen: section }),
   closeSettings: () => set({ settingsOpen: null }),
   setMenu: (menuAt) => set({ menuAt }),
@@ -45,4 +54,4 @@ export const createUiSlice: StateCreator<State, [], [], UiSlice> = (set) => ({
 });
 
 /** Any modal is open (the import sheet does not count). */
-export const dialogOpen = (s: State) => !!(s.settingsOpen || s.askReq || s.removedReq || s.formatConfirm);
+export const dialogOpen = (s: State) => !!(s.settingsOpen || s.askReq || s.removedReq || s.formatConfirm || s.noticesOpen);

@@ -50,6 +50,9 @@
     ],
     "macOS": {
       "minimumSystemVersion": "13.0",
+      "files": {
+        "Resources/THIRD_PARTY_NOTICES.txt": "../app/dist/THIRD_PARTY_NOTICES.txt"
+      },
       "signingIdentity": "-",
       "hardenedRuntime": true,
       "entitlements": "./Entitlements.plist"

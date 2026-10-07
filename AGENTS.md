@@ -20,6 +20,8 @@ README and `docs/`. Personal preferences go in the app's settings file on the ma
 |---|---|
 | `app/` | The frontend: React + TypeScript + Vite (pnpm, Node pinned in `.node-version`). Builds to `app/dist`, which the app ships. `views/` (library, clip detail, import sheet, settings), `components/` (with `trim/`, the one trim editor, used by clip detail and the import review), `store/`, `actions/`, `ipc/`. Icons and fonts are inlined or bundled so the app works offline |
 | `src-tauri/src/` | Rust core. `core/` (`Core`) owns the session and the library index and is the one surface every front end drives: `mod.rs` (state, locking, `Hooks`), `import.rs` (stage, analyse, dates, import, verify, delete clips after import, format), `library.rs` (the index, list, rate, edit, rename, redate), `cuts.rs` (session and library cut lists), `files.rs` (Photos, previews, strips, Trash), `rematch.rs` (radio logs matched again to library clips) and `setup.rs` (settings, places, profiles). `api/` is the one method table: each row names a method, its params and result types and the `Core` call, and `api!` makes `Core::dispatch` (socket, MCP) and one typed Tauri command per method from it; `api/events.rs` holds the typed events. `lib.rs` holds the GUI's own Tauri commands and `specta_builder`, which tauri-specta exports to `app/src/bindings.ts`; `control.rs` the app's socket, `mcp/` the MCP server (`server.rs` the protocol and handlers, `params.rs` each tool's argument type, `tools.rs` the tool list with schemas derived from those types, `render.rs` the text answers), `bin/quadcam-cli.rs` the CLI (clap flags build the `api` params, and it calls the table's `api::call` functions). The logic modules (`scan`, `disk`, `media`, `logs`, `logmatch` (shape-first log matching: pack lengths, order and gaps, clocks as tie-breaks, EdgeTX models as a filter; an analog clip with dead air matches by picture: packs inside keep ranges, swaps at dead air, an offset per clip, split DVR files as one timeline), `moments`, `join` (recordings an analog DVR split into files: detection, the `ffconcat` source, the swap of joined and own values), `metadata`, `qtmeta`, `naming`, `pipeline` (with `pipeline/import.rs`, the import run), `session`, `photos`, `library`, `trim`, `cuts` (the one cut writer), `sources` (the `Source` trait per video system, tried in `sources::all()` order; `sources/dji.rs` is DJI O4: `DCIM/DJI_*/` names, the clock in the name, `.SRT` sidecars, byte-copy MP4 export, a card never formatted; `sources/analog.rs` is the DVR: clip layout, half-written check and repair, encode plan, dead air, card policy), `trash`, `settings` (with `Defaults`, the effective settings), `paths` (every path under `$HOME`), `geocode`) run without Tauri |
+| `src-tauri/src/modules/` | The module manager (`docs/modules.md`): `manifest.rs` (the pins in `src-tauri/resources/modules.toml`, compiled in; newer pins from a release's `modules.json`), `fetch.rs` (`Fetch`, `/usr/bin/curl`; a cargo process reaches only 127.0.0.1 unless `QUADCAM_FETCH=real`), `install.rs` (checksum, unpack, quarantine, ad-hoc signature, `installed.json`), `run.rs` (hash check before a run, the child-process `Runner`). `core/modules.rs` holds the `Core` methods |
+| `scripts/notices.mjs` | Third-party notices (crates, npm packages, fonts, icons) and the license allow list; `pnpm build` writes `app/dist/THIRD_PARTY_NOTICES.txt`, which `tauri.conf.json` copies to `Contents/Resources`. `scripts/licenses/` holds SPDX standard texts |
 | `src-tauri/Info.plist` | Photos usage strings, merged into the bundle's Info.plist |
 | `src-tauri/Entitlements.plist` | Hardened-runtime entitlements (Photos library) for every signature |
 | `src-tauri/tests/` | Integration tests on synthetic clips and FAT32 disk images |
@@ -35,8 +37,9 @@ README and `docs/`. Personal preferences go in the app's settings file on the ma
   `cargo install tauri-cli --version "^2" --locked` to type `cargo tauri`. Releases use the prebuilt one.
 - specta `=2.0.0-rc.25`, tauri-specta `=2.0.0-rc.25` and specta-typescript `=0.0.12` are release
   candidates: they stay pinned exactly, and an upgrade regenerates and reviews `app/src/bindings.ts`.
-- ffmpeg and ffprobe from Homebrew (`brew install ffmpeg`). The app looks in
-  `/opt/homebrew/bin` and `/usr/local/bin`, then `PATH`. exiftool is optional; tests use it
+- ffmpeg and ffprobe from Homebrew (`brew install ffmpeg`), or QuadCam's ffmpeg module. The app
+  looks in a path the `modules` setting names, then the module (unless `ffmpegSource` is
+  `homebrew`), then `/opt/homebrew/bin` and `/usr/local/bin`, then `PATH` (`media::find_tools`). exiftool is optional; tests use it
   when present.
 - Node 24 through fnm (`.node-version`) and pnpm (`packageManager` in `app/package.json`), for
   `app/`; `cargo tauri dev` and `cargo tauri build` run it.
@@ -250,6 +253,7 @@ quadcam-cli --json places search "Golden Gate Park" [--provider nominatim]
 quadcam-cli --json places save NAME --location LAT,LON | --search QUERY [--pick N]
 quadcam-cli --json profiles save NAME --aircraft .. --camera-make .. --models A,B --default
 quadcam-cli --json settings set layout=day place_folders=true   # `settings` shows them
+quadcam-cli --json modules [check | install NAME --yes | remove NAME | manifest]
 quadcam-cli --json library apply-name-format   # after settings set name_date_format=YY.MM.DD
 quadcam-cli --json photos out.mp4 --album Drone
 quadcam-cli --json eject
@@ -282,7 +286,7 @@ claude mcp add quadcam -- "$(brew --prefix)/bin/quadcam-cli" mcp
   library `quadcam_library` (read-only search), `quadcam_library_edit` (rating, flag, name,
   details, aircraft, date, time), `quadcam_library_files` (cuts, Trash, Photos, rebuild);
   setup `quadcam_places` (list, search, save, delete), `quadcam_profiles` (list, save,
-  delete, set_default), `quadcam_settings` (read, write). Keep the surface this small:
+  delete, set_default), `quadcam_settings` (read, write, modules, module_install, module_remove). Keep the surface this small:
   add an action or a field to a tool before adding a tool. Each tool's arguments are a type in
   `mcp/params.rs`; `mcp/tools.rs` derives the input schema from it (schemars) and keeps the
   descriptions as written. The handler deserializes the arguments into that type once. A
@@ -314,6 +318,10 @@ claude mcp add quadcam -- "$(brew --prefix)/bin/quadcam-cli" mcp
 - Outputs are written under a hidden `.part` name and renamed only after verify passes.
   Never overwrite an existing file.
 - Record corpus values in `test-clips/README.md` when the test clips change.
+- **Never download from the internet while testing.** Module tests serve fixture archives
+  from a local server; `modules::fetch::real_fetch` reaches only 127.0.0.1 under cargo. A
+  module pin is an official upstream release asset with its SHA-256 checked against the
+  publisher's (`docs/modules.md`). A new dependency must pass `node scripts/notices.mjs --check`.
 - **Never fill the real Trash while testing.** `trash::real_trash` returns a temporary-folder
   stand-in for any process started by cargo; tests pass `DirTrash`.
 - **Never move the person's mouse or keyboard, or take focus, while testing.** Start the app

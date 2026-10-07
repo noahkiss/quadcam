@@ -17,6 +17,7 @@ mod cuts;
 mod files;
 mod import;
 mod library;
+mod modules;
 mod rematch;
 mod setup;
 pub use crate::paths::{cache_dir, default_session_file, default_settings_file, support_dir};
@@ -190,6 +191,8 @@ pub struct Core {
     trash: Arc<dyn crate::trash::Trash>,
     /// The app's settings file; the defaults are read from it.
     settings_file: Option<PathBuf>,
+    /// Downloaded tools (ffmpeg, esptool).
+    modules: crate::modules::Modules,
 }
 
 struct Busy<'a>(&'a AtomicBool);
@@ -230,6 +233,7 @@ impl Core {
             library: Mutex::new(None),
             trash: crate::trash::real_trash(),
             settings_file: None,
+            modules: crate::modules::Modules::default(),
         }
     }
 
@@ -237,6 +241,12 @@ impl Core {
     pub fn with_settings(mut self, file: PathBuf) -> Core {
         self.settings_file = Some(file);
         self.reload_settings();
+        self
+    }
+
+    /// Replaces the module manager (tests pass a temp folder, a manifest and a fetcher).
+    pub fn with_modules(mut self, modules: crate::modules::Modules) -> Core {
+        self.modules = modules;
         self
     }
 
