@@ -7,6 +7,9 @@ import { Icon, type IconName, type IconTint } from "../../components/Icon";
 import { fmtBytes, fmtDay, base, SOURCE_LABEL } from "../../lib/format";
 import { sameFilter, type Filter } from "../../lib/library";
 import { importFrom, openFolderAction, openImport, setLogDir } from "../../actions/session";
+import { deviceName, KIND_ICON, KIND_LABEL, STATE_LABEL } from "../../lib/gear";
+import { deviceRefs, pluggedIn, useNow } from "../Gear/refs";
+import { GEAR_PAGES } from "../Gear/pages";
 import styles from "./Sidebar.module.css";
 
 interface ItemProps {
@@ -35,11 +38,20 @@ function Item({ icon, tint, label, detail, count, badge, current, muted, onClick
   );
 }
 
-function Group({ title, children }: { title: string; children: ReactNode }) {
+function Group({ title, children, expanded, onToggle }: { title: string; children: ReactNode; expanded?: boolean; onToggle?: () => void }) {
   return (
     <section className={styles.group}>
-      <h2>{title}</h2>
-      <ul>{children}</ul>
+      {onToggle ? (
+        <h2>
+          <button type="button" className={styles.disclose} aria-expanded={expanded} onClick={onToggle}>
+            <Icon name={expanded ? "chev-down" : "chev-right"} size={12} />
+            {title}
+          </button>
+        </h2>
+      ) : (
+        <h2>{title}</h2>
+      )}
+      {expanded !== false && <ul>{children}</ul>}
     </section>
   );
 }
@@ -49,7 +61,7 @@ export function Sidebar() {
   const s = useStore();
   const L = s.lib;
   const clips = L?.clips || [];
-  const detail = screenOf(s) === "detail";
+  const detail = screenOf(s) !== "library" && screenOf(s) !== "first-run";
   const cur = (f: Filter) => !detail && sameFilter(s.filter, f);
   const go = (f: Filter) => () => s.setFilter(f);
   const lastN = clips.filter((c) => c.last_import).length;
@@ -103,6 +115,7 @@ export function Sidebar() {
         <Group title="Places">
           {pl.length ? pl.map(([p, k]) => <Item key={p} icon="map-point" tint="green" label={p} count={k} current={cur({ group: "all", place: p })} onClick={go({ group: "all", place: p })} />) : <Item icon="add" tint="blue" label="Add place" muted onClick={() => s.openSettings("places")} />}
         </Group>
+        <GearGroup s={s} />
         {clips.length > 0 && (
           <Group title="Smart groups">
             <Item icon="flip" tint="mauve" label="Has moments" count={n((c) => c.moments.length > 0)} current={cur({ group: "moments" })} onClick={go({ group: "moments" })} />
@@ -114,6 +127,35 @@ export function Sidebar() {
       </div>
       <SideFoot s={s} />
     </nav>
+  );
+}
+
+/** Gear: what is plugged in, the saved devices, and the pages later packages add. */
+function GearGroup({ s }: { s: State }) {
+  const now = useNow(s.unmounted.length > 0);
+  const refs = deviceRefs(s, now);
+  const plugged = pluggedIn(refs);
+  const page = s.gearPage;
+  const at = (p: NonNullable<State["gearPage"]>) => !!page && JSON.stringify(page) === JSON.stringify(p);
+  return (
+    <Group title="Gear" expanded={s.gearExpanded} onToggle={() => s.setGearExpanded(!s.gearExpanded)}>
+      <Item icon="signal" tint="teal" label="Connected" count={plugged.length} current={at({ page: "connected" })} onClick={() => s.openGear({ page: "connected" })} />
+      {plugged.map((r) => (
+        <Item
+          key={r.key}
+          icon={KIND_ICON[r.kind]}
+          tint={r.state === "attention" || r.state === "inserted" ? "yellow" : r.state === "safe" ? "green" : undefined}
+          label={r.device ? deviceName(r.device) : KIND_LABEL[r.kind]}
+          detail={r.state && r.state !== "connected" ? STATE_LABEL[r.state] : null}
+          current={at({ page: "device", key: r.key })}
+          onClick={() => s.openGear({ page: "device", key: r.key })}
+        />
+      ))}
+      <Item icon="list" label="Devices" count={s.devices.length} current={at({ page: "devices" })} onClick={() => s.openGear({ page: "devices" })} />
+      {GEAR_PAGES.map((p) => (
+        <Item key={p.id} icon={p.icon} label={p.label} current={at({ page: "slot", id: p.id })} onClick={() => s.openGear({ page: "slot", id: p.id })} />
+      ))}
+    </Group>
   );
 }
 

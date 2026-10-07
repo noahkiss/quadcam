@@ -7,7 +7,7 @@ import { open as openDialog } from "@tauri-apps/plugin-dialog";
 import { openPath, openUrl, revealItemInDir } from "@tauri-apps/plugin-opener";
 import { commands } from "../bindings";
 import * as N from "./normalize";
-import type { ImportOptions, LibEdit, LibraryFilter, Moved, PlanPatch, RemovedCuts, SettingsValues, Span } from "./types";
+import type { ImportOptions, LibEdit, LibraryFilter, Moved, OsdParams, PlanPatch, RemovedCuts, SettingsValues, Span } from "./types";
 
 type Result<T> = Promise<{ status: "ok"; data: T } | { status: "error"; error: string }>;
 
@@ -69,11 +69,21 @@ export const api = {
   placeSearch: async (query: string, provider: string, limit = 6) => N.geo(await ok(commands.placeSearch({ query, provider, limit }))),
   placeSave: (name: string, lat: number, lon: number) => ok(commands.placeSave({ name, lat, lon })),
 
+  // Gear
+  gearStatus: () => ok(commands.gearStatus()),
+  gearDevices: () => ok(commands.gearDevices()),
+  gearDeviceSave: (id: string, name: string | null, aircraft: string | null) => ok(commands.gearDeviceSave({ id, name, aircraft })),
+  gearDeviceForget: (id: string) => ok(commands.gearDeviceForget({ id })),
+  gearDismissReminder: (handle: string) => ok(commands.gearDismissReminder({ handle })),
+
   // Modules
   modules: () => ok(commands.modules()),
   moduleInstall: (name: string) => ok(commands.moduleInstall({ name, confirm: true })),
   moduleRemove: (name: string) => ok(commands.moduleRemove({ name })),
   modulesCheck: () => ok(commands.modulesCheck()),
+
+  // Gear
+  gearOsd: (params: OsdParams) => ok(commands.gearOsd(params)),
 };
 
 /** A URL the web view can load for a file the core made (thumbnails, previews). */
@@ -88,6 +98,12 @@ export const openLink = (url: string) => openUrl(url);
 export async function pickFolder(title: string, defaultPath?: string | null): Promise<string | null> {
   const r = await openDialog({ directory: true, multiple: false, title, defaultPath: defaultPath || undefined });
   return typeof r === "string" ? r : null;
+}
+
+/** The file picker, for one or more files. */
+export async function pickFiles(title: string, filters: { name: string; extensions: string[] }[] = []): Promise<string[]> {
+  const r = await openDialog({ directory: false, multiple: true, title, filters });
+  return r === null ? [] : Array.isArray(r) ? r : [r];
 }
 
 /** A core error as text. */

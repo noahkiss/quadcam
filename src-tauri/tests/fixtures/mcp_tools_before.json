@@ -1154,7 +1154,7 @@
       "readOnlyHint": true,
       "title": "Gear"
     },
-    "description": "Read the FPV gear QuadCam knows: `status` (the gear folder, the Gear settings, and the devices plugged in now: EdgeTX radios in USB Storage mode, goggles and DVR cards, FC and ELRS serial ports, radios in DFU mode; each with its saved name and aircraft when QuadCam knows it), `devices` (every device saved in gear.json: id, kind, name, aircraft, board, firmware, version, last seen, last backup), `card` (an EdgeTX SD card: board and version, whether QuadCam may write it, its models, the model the radio selects and that model's aircraft, the radio clock check; with `model`, that model in full) or `card_preview` (the checks and line diff of EdgeTX card edits, and how long the write would take; writes nothing). Changes nothing.\n\nBest for: the first Gear call, checking what is plugged in, and reading or planning radio model changes.\nReturns: one line per device or model plus the structured records.\nFollow up with quadcam_gear_edit device_save to name a device or link it to an aircraft.",
+    "description": "Read the FPV gear QuadCam knows: `status` (the gear folder, the Gear settings, and the devices plugged in now: EdgeTX radios in USB Storage mode, goggles and DVR cards, FC and ELRS serial ports, radios in DFU mode; each with its saved name and aircraft when QuadCam knows it), `devices` (every device saved in gear.json: id, kind, name, aircraft, board, firmware, version, last seen, last backup), `osd` (a Betaflight OSD layout from `paths`, dump or diff files read in order: each OSD profile drawn on its grid (NTSC 30x13, PAL 30x16, HD 53x20, from vcd_video_system or `grid`), the elements on in each profile with x and y, and the check for overlaps and cells off screen), `card` (an EdgeTX SD card: board and version, whether QuadCam may write it, its models, the model the radio selects and that model's aircraft, the radio clock check; with `model`, that model in full) or `card_preview` (the checks and line diff of EdgeTX card edits, and how long the write would take; writes nothing). Changes nothing.\n\nBest for: the first Gear call, checking what is plugged in, checking an OSD layout before or after an edit, and reading or planning radio model changes.\nReturns: one line per device or model plus the structured records; for osd, the drawn profiles as text plus the structured view.\nFollow up with quadcam_gear_edit device_save to name a device or link it to an aircraft.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -1162,13 +1162,14 @@
           "enum": [
             "status",
             "devices",
+            "osd",
             "card",
             "card_preview"
           ],
           "type": "string"
         },
         "device": {
-          "description": "For card and card_preview: a connected radio's device id, instead of mount.",
+          "description": "For osd: a saved device id instead of files (needs a backup of it). For card and\ncard_preview: a connected radio's device id, instead of mount.",
           "maxLength": 80,
           "type": "string"
         },
@@ -1176,6 +1177,11 @@
           "description": "For card_preview: the edits, each {\"kind\": \"model\", \"file\": \"model01.yml\", \"name\": \"<header name>\", \"ops\": [{\"op\": \"set_checklist\", \"enabled\": true}, ...]}, {\"kind\": \"radio\", \"ops\": [{\"op\": \"set_scalar\", \"key\": \"hapticMode\", \"value\": \"mode_nokeys\"}]}, {\"kind\": \"checklist\", \"model\": \"model01.yml\", \"text\": \"=Props tight\"}, {\"kind\": \"model_copy\", ...} or {\"kind\": \"model_delete\", \"file\": ...}.",
           "items": true,
           "type": "array"
+        },
+        "grid": {
+          "description": "For osd: NTSC, PAL, HD or WxH; omit for the files' video system.",
+          "maxLength": 8,
+          "type": "string"
         },
         "model": {
           "description": "For card: a model file (model01.yml) to read in full: timers, mixes, logical switches, special functions, switch warnings, sensors, screens.",
@@ -1186,6 +1192,14 @@
           "description": "For card and card_preview: the card's mount point. Default: the one EdgeTX card mounted.",
           "maxLength": 1024,
           "type": "string"
+        },
+        "paths": {
+          "description": "For osd: Betaflight `dump all`, `diff all` or CLI-line files (absolute paths), read\nin order; a later file's lines win.",
+          "items": {
+            "type": "string"
+          },
+          "maxItems": 8,
+          "type": "array"
         }
       },
       "required": [

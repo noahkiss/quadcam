@@ -72,6 +72,11 @@ Gear
 
 The Settings window gets a **Modules** section (7.10).
 
+A status bar along the bottom of the main window shows one item per kind of device plugged in
+(radio, quad, DJI, DVR card) with its state: working, safe to unplug, still inserted (with
+**Dismiss** for the reminder), needs attention. A click opens the device page. The Settings
+section list shows the version and the build (commit).
+
 - **Aircraft** in the Library groups filters clips, as today. **Aircraft** under Gear opens
   the aircraft page. Each page links to the other ("Show clips", "Show gear").
 - A device row in **Connected** opens its page. A row disappears when the device is
@@ -333,7 +338,7 @@ in `specta_builder` (`lib.rs`).
 | `gear_export` | `ExportParams { device or snapshot, to }` → `ExportReport` | a folder the user picked |
 | `gear_import_backups` | `ImportBackupsParams { folder, device, dry_run }` → `ImportBackupsReport` | gear folder |
 | `gear_switch_map` | `AircraftParams { aircraft, live }` → `SwitchMap` | no |
-| `gear_osd` | `OsdParams { device or backup or change, grid }` → `OsdView` | no |
+| `gear_osd` | `OsdParams { paths or device, grid }` → `OsdView` (backup and change sources join with WP4 and WP5) | no |
 | `gear_rates` | `RatesParams { device or backup or change }` → `RatesView` | no |
 | `gear_sims` | – → `Vec<SimStatus>` | no |
 | `gear_changes` | `ChangeFilter` → `Vec<StagedChange>` | no |
@@ -385,7 +390,7 @@ quadcam-cli --json gear backup diff <a> <b> [PATH]
 quadcam-cli --json gear storage [--prune [--dry-run]] [--export <device|snapshot> DIR]
 quadcam-cli --json gear import-backups FOLDER [--device <id>] [--dry-run]
 quadcam-cli --json gear map --aircraft NAME [--live]
-quadcam-cli --json gear osd --device <id> [--grid PAL|NTSC|HD] [--text]
+quadcam-cli --json gear osd <FILE ...|device> [--grid PAL|NTSC|HD|WxH] [--text]
 quadcam-cli --json gear rates --device <id>
 quadcam-cli --json gear changes [--device <id>] [--status ready]
 quadcam-cli --json gear stage --device <id> --title T --cli FILE      # raw CLI lines
@@ -768,6 +773,12 @@ FC effect (`aux` modes, `adjrange` selections such as rate or OSD profile), the 
   chips; a profile only turns it on or off. The editor shows that rule by moving the element
   in every profile.
 - A move stages `OsdElement` edits. The apply sheet shows the CLI lines.
+- **Built (WP7 read half):** `gear/osd.rs` (decode, element table, render, check),
+  `core/osd.rs` (`Core::gear_osd` on files; `device` refuses until WP4 backups or the WP2 live
+  read feed it the same text), `gear osd` in the CLI, `quadcam_gear` action `osd`. The view is
+  `app/src/views/Gear/Osd/OsdSegment.tsx` (`OsdScreen.tsx` draws one view). The Gear page
+  frame (WP13) mounts `<OsdSegment />` as the FC page's OSD segment (`views/Gear/segments.tsx`),
+  on files for now; it passes the FC's device id once a device source exists (WP4, WP2).
 
 ### 7.4 Voice packs
 
@@ -1080,11 +1091,13 @@ the time: every job mounts, works and releases, and a quad is released after eve
    state without Full Disk Access, so speech and sound use quiet hours instead.
 
 Channels: speech (`/usr/bin/say`, an optional voice), a system sound (`/usr/bin/afplay`), a
-notification (`/usr/bin/osascript`, the text passed as arguments, never in the script). Each
-is a child process with an argv list. A process started by cargo gets the silent
+notification (`UNUserNotificationCenter` when the process runs from an app bundle, else
+`/usr/bin/osascript` with the text passed as arguments, never in the script). Speech and sound
+are child processes with an argv list. A process started by cargo gets the silent
 `RecordedCues` unless `QUADCAM_CUES=real`; the gate, the reminders and the batch cue are
-tested on a fake clock. The native notification API can replace `osascript` with the Gear UI
-(WP13).
+tested on a fake clock. `gear_status` reports the links a job holds (`working`) and the armed
+reminders (`reminders`); `gear_dismiss_reminder` stops one by link. A hold, its release, a
+job's end and a dismiss send `gear-changed`.
 
 ## 8. Safety model
 

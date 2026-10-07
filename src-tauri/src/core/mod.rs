@@ -20,6 +20,7 @@ mod gear_card;
 mod import;
 mod library;
 mod modules;
+mod osd;
 mod prep;
 mod rematch;
 mod setup;
@@ -27,11 +28,12 @@ pub use crate::paths::{cache_dir, default_session_file, default_settings_file, s
 pub use files::{Moved, TrashReport};
 pub use gear::{
     connected_name, link_handle, DeviceSaveParams, GearStatus, Hold, HookFn, HookOutcome, HookRun,
-    OnConnectHook, HOLD_GRACE,
+    OnConnectHook, ReminderParams, HOLD_GRACE,
 };
 pub use gear_card::{CardParams, CardPreview, CardPreviewParams, GearCard};
 pub use import::CardStatus;
 pub use library::{LibEdit, LibItem, LibUpdate, LibraryView, RebuildReport, RenameReport};
+pub use osd::OsdParams;
 pub use rematch::{LibMatch, LibMatchParams, LibMatchReport};
 pub use setup::{PlaceRemoved, SettingsView};
 

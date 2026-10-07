@@ -3,6 +3,33 @@
 Gear is QuadCam's second half: the FPV bench next to the clip library. This page covers what
 works today. The full plan is in [Gear design](gear-design.md).
 
+## In the app
+
+**Gear** is a section of the sidebar, under the library groups. Its triangle opens and closes
+it.
+
+- **Connected** lists what is plugged in now. Each device also has its own row under it.
+- **Devices** lists the devices you saved, plugged in or not.
+- A device's page shows its kind and state, what it reports about itself (board, firmware,
+  version), where it is mounted, its aircraft and its latest backup. **Save…** names a device
+  QuadCam does not know and links it to an aircraft; **Edit…** changes that; **Forget…**
+  removes it from `gear.json` and keeps its backups. **Show clips** opens the aircraft's clips.
+
+The bar along the bottom of the window shows one item for each kind of device plugged in:
+radio, quad, DJI and DVR card. Click one to open the device, or the Connected list when there
+are several. Each item shows a state:
+
+| State | Means |
+|---|---|
+| Working | A QuadCam job is using the device |
+| Safe to unplug | The card is unmounted and still in |
+| Still inserted | The "still inserted" reminder is due. **Dismiss** stops it |
+| Needs attention | QuadCam does not know the device yet: save it |
+| Connected | Plugged in, nothing to do |
+
+Settings for backups, steps on connect and cues are in **Settings > Gear**
+([Settings](settings.md#gear)).
+
 ## What QuadCam finds
 
 QuadCam looks for gear every 2 seconds while the app runs. It never opens a port or writes to a
@@ -108,13 +135,43 @@ The `gear_cues` setting holds:
 - `reminder_grace_s` (60), `still_inserted_every_s` (300), `reminder_max` (3).
 - `quiet_hours` (`{"start": "22:00", "end": "07:00"}`): no speech or sound in these hours.
   Notifications follow macOS Focus.
-- `voice`: a `say` voice.
+- `voice`: a `say` voice. `voice_source`: `macos` (default) or `voice_pack`. Voice packs
+  cannot play cues yet, so `voice_pack` also speaks with macOS.
+
+Inside the app bundle, a notification comes from QuadCam through macOS notifications; the
+first one asks you to allow them. Outside a bundle (`cargo tauri dev`, a CLI built on its own)
+QuadCam posts through `osascript`.
 
 ## Steps on connect
 
 The `gear_on_connect` setting names the steps that run when a device of each kind is plugged in:
 `backup`, `import` and `apply_ready`. Only `backup` is on by default, and only while
 `gear_auto_backup` is on. QuadCam adds the steps themselves in later releases.
+
+## OSD
+
+QuadCam draws a Betaflight OSD layout from a `dump all` or `diff all` file, one screen per OSD
+profile, and checks each screen.
+
+- **Positions:** each element has one position, shared by every profile. A profile only turns
+  the element on or off.
+- **Grids:** the file's `vcd_video_system` picks the grid: NTSC 30 x 13, PAL 30 x 16, HD
+  53 x 20. `AUTO` or no setting draws on NTSC. You can pick another grid, or any W x H.
+- **Element sizes:** each element draws as sample text (`B4.20V`, `L2:99`, `T00:00`), with
+  letters for the font's symbols. The craft name draws as the `craft_name` value. An element
+  QuadCam does not know draws 5 wide and is listed. Widths are QuadCam's own estimates, so treat
+  a near miss as a hint.
+- **Horizon:** the level line is drawn. The check uses its full sweep: 4 columns either side
+  and 10 rows down from its position.
+- **Check:** two elements on the same cells in one profile, or cells off the grid. The
+  crosshairs may sit on the horizon, and other elements may sit on the camera frame.
+- **Several files:** QuadCam reads them in order and a later line wins. A dump followed by an
+  apply file shows the layout after the apply.
+- **A diff alone:** a diff leaves out every setting at its default. QuadCam shows what the diff
+  lists and says so.
+
+Open a flight controller's page under **Gear > Devices** and choose **OSD**, then **Open
+dump…**. Once QuadCam keeps device backups, the page will show the FC's latest backup.
 
 ## Command line and agents
 
@@ -123,6 +180,8 @@ quadcam-cli --json gear status                       # gear folder, Gear setting
 quadcam-cli --json gear devices                      # saved devices
 quadcam-cli --json gear devices save <id> --name "Bench radio" --aircraft Whoop
 quadcam-cli --json gear devices forget <id>          # its backups stay
+quadcam-cli gear osd quad.dump_all.txt --text        # each OSD profile drawn, and the check
+quadcam-cli --json gear osd quad.dump_all.txt apply.cli --grid PAL
 quadcam-cli --json gear card [--mount M | --device ID] [--model model01.yml]
 quadcam-cli --json gear card preview --edits edits.json   # checks and diff; writes nothing
 ```

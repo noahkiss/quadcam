@@ -11,6 +11,7 @@ Open Settings with the gear icon or Command-comma. **Done** saves every change a
 | **Places** | The saved places and the place search provider. See [Metadata](metadata.md#place-search-providers). |
 | **Import** | The format (MP4 or MOV), the MP4 encoder, the default short name, the time in file names, **Delete clips after import**, **Join split recordings**, and the tolerances for log matching, the DJI clip clock skew included. |
 | **Photos** | The album. An empty album means the library only. See [Photos](photos.md). |
+| **Gear** | Back up on connect, how many backups to keep, the USB power warning, the steps per device kind when it is plugged in, and the cues: which play, as speech, sound or notification, mute, the voice and quiet hours. See [Gear](gear.md). |
 | **Modules** | Tools QuadCam downloads on request (ffmpeg, esptool): install, update, remove, check for updates, and where ffmpeg comes from. See [Modules and notices](modules.md). |
 | **Advanced** | Where ffmpeg and the agent socket are. |
 
@@ -66,10 +67,11 @@ The app, the command-line tool and the MCP server all read and write this file.
 - A change from the command line or an agent shows in the running app at once. The app never writes an older copy over it.
 - The Settings window saves only the keys that you changed while it was open.
 - Settings from QuadCam 0.3.0 carry over as they are.
+- The bottom of the section list shows the QuadCam version and the build (the commit it was built from). **About QuadCam** shows them too.
 
 ## Gear
 
-These settings have no section in the Settings window yet. Set them with `quadcam-cli settings set` or an agent.
+**Settings > Gear** sets most of these. `gear_dir`, `firmware_check` and `tts_provider` are set with `quadcam-cli settings set` or an agent.
 
 | Setting | Default | Does |
 |---|---|---|

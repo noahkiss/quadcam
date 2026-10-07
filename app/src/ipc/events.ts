@@ -2,13 +2,17 @@
 import { getCurrentWebview } from "@tauri-apps/api/webview";
 import { events } from "../bindings";
 import * as N from "./normalize";
-import type { AgentFormatRequest, ClipResult, ImportProgress, LibraryTask, StageProgress } from "./types";
+import type { AgentFormatRequest, ClipResult, DeviceChanged, ImportProgress, LibraryTask, StageProgress } from "./types";
 
 export interface CoreEvents {
   "library-changed": null;
   "session-changed": null;
   "settings-changed": null;
   "volumes-changed": null;
+  /** `gear.json`, a job's hold or a reminder changed: read `gear_status` again. */
+  "gear-changed": null;
+  /** What is plugged in changed. */
+  "device-changed": DeviceChanged;
   "library-task": LibraryTask;
   progress: StageProgress;
   "import-progress": ImportProgress;
@@ -27,6 +31,8 @@ const SOURCES: Record<keyof CoreEvents, Listen> = {
   "session-changed": wrap(events.sessionChanged),
   "settings-changed": wrap(events.settingsChanged),
   "volumes-changed": wrap(events.volumesChanged),
+  "gear-changed": wrap(events.gearChanged),
+  "device-changed": wrap(events.deviceChanged),
   "library-task": wrap(events.libraryTask),
   progress: wrap(events.progress),
   "import-progress": wrap(events.importProgress, N.importProgress),

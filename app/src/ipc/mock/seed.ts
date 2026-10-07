@@ -5,12 +5,15 @@ import libraryFixture from "../../../e2e/fixtures/library.json";
 import reviewFixture from "../../../e2e/fixtures/session-review.json";
 import finishedFixture from "../../../e2e/fixtures/session-finished.json";
 import settingsFixture from "../../../e2e/fixtures/settings.json";
-import type { LibClip, LibraryView, ModulePin, ModuleStatus, Session, SettingsView, Volume } from "../types";
+import osdFixture from "../../../e2e/fixtures/osd.json";
+import type { LibClip, LibraryView, ModulePin, ModuleStatus, OsdView, Session, SettingsView, Volume } from "../types";
 
 export const HOME = "/Users/pilot";
 export const CACHE = `${HOME}/Library/Caches/app.quadcam`;
 export const LIBRARY_ROOT = `${HOME}/Movies/quadcam`;
 export const PREVIEW = `${CACHE}/previews/preview.mp4`;
+/** `env_check`'s version and build. */
+export const VERSION = { version: "0.6.4", build: "0123abcde" };
 
 const clone = <T>(v: T): T => structuredClone(v);
 
@@ -162,3 +165,9 @@ export function modules(): ModuleStatus[] {
 }
 
 export const NOTICES = "QuadCam third-party notices\n\n- react 19.3.0: MIT\n";
+
+/** An OSD view the real core drew from a synthetic PAL dump (an overlap in profile 1, an
+ * element off screen in profile 2). */
+export function osd(): OsdView {
+  return structuredClone(osdFixture) as OsdView;
+}
