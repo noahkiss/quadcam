@@ -430,6 +430,9 @@ pub fn specta_builder() -> tauri_specta::Builder<tauri::Wry> {
             c::gear_osd,
             c::gear_card,
             c::gear_card_preview,
+            c::gear_switch_map,
+            c::gear_radio,
+            c::gear_radio_watch,
             c::modules,
             c::module_install,
             c::module_remove,
@@ -459,6 +462,7 @@ pub fn specta_builder() -> tauri_specta::Builder<tauri::Wry> {
             api::AgentFormatRequest,
             api::AgentFormatClosed,
             api::Menu,
+            api::RadioInput,
         ])
         // Sizes and counts fit a JS number.
         .dangerously_cast_bigints_to_number()

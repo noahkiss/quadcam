@@ -65,5 +65,8 @@ expression: "Core::METHODS"
   "gear_dismiss_reminder",
   "gear_osd",
   "gear_card",
-  "gear_card_preview"
+  "gear_card_preview",
+  "gear_switch_map",
+  "gear_radio",
+  "gear_radio_watch"
 ]

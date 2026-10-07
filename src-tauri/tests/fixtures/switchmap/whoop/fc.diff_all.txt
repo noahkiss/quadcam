@@ -1,0 +1,13 @@
+# diff all
+
+# version
+# Betaflight / STM32F405 (S405) 4.5.0 Jan  1 2026 / 00:00:00 (abcdef0) MSP API: 1.46
+
+# master
+aux 0 0 0 1700 2100 0 0
+aux 1 1 1 900 1300 0 0
+aux 2 2 1 1300 1700 0 0
+aux 3 13 3 1700 2100 0 0
+aux 4 35 3 1700 2100 0 0
+aux 5 26 5 1700 2100 0 0
+adjrange 0 0 2 900 2100 12 2 0 0

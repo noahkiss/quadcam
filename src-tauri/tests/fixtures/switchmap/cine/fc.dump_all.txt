@@ -1,0 +1,16 @@
+# dump all
+
+# version
+# Betaflight / STM32F7X2 (S7X2) 4.5.1 Jan  1 2026 / 00:00:00 (abcdef0) MSP API: 1.46
+
+# master
+aux 0 0 0 1700 2100 0 0
+aux 1 1 1 900 1300 0 0
+aux 2 2 1 1300 1700 0 0
+aux 3 39 3 1300 1700 0 0
+aux 4 13 3 1700 2100 0 0
+aux 5 28 0 900 2100 0 0
+aux 6 0 0 900 900 0 0
+adjrange 0 0 2 900 2100 33 2 0 0
+adjrange 1 0 3 1300 1700 14 1 0 0
+adjrange 2 0 0 900 900 0 0 0 0

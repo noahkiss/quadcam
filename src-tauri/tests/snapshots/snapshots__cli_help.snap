@@ -576,6 +576,8 @@ Commands:
   fc       A Betaflight flight controller: identify, read, check, board notes, USB timer
   osd      An FC's OSD layout per OSD profile, drawn on its grid and checked for overlaps and cells off screen. Reads a dump or diff file
   card     An EdgeTX card: models, the selected model, the radio clock; `preview` checks edits
+  map      The switch map: what each radio control does on the radio and the FC, per position. Reads an EdgeTX card or model file and a Betaflight dump; --live marks the positions now
+  radio    The radio in USB Joystick mode now: buttons, axes, channel values
   help     Print this message or the help of the given subcommand(s)
 
 Options:
@@ -713,6 +715,33 @@ Options:
       --json            Print one JSON object: {"ok":true,"result":...} or {"ok":false,"error":{...}}
       --session <FILE>  Session file (default: ~/Library/Caches/app.quadcam/session.json)
   -h, --help            Print help
+===== quadcam-cli gear map --help
+The switch map: what each radio control does on the radio and the FC, per position. Reads an EdgeTX card or model file and a Betaflight dump; --live marks the positions now
+
+Usage: quadcam-cli gear map [OPTIONS]
+
+Options:
+      --json                 Print one JSON object: {"ok":true,"result":...} or {"ok":false,"error":{...}}
+      --radio <RADIO>        An EdgeTX card (mount or folder) or one model file
+      --model <MODEL>        The model file on the card (model01.yml); default: the radio's selected model
+      --session <FILE>       Session file (default: ~/Library/Caches/app.quadcam/session.json)
+      --fc <FC>              Betaflight dump, diff or CLI files, read in order (a later file's lines win)
+      --aircraft <AIRCRAFT>  An aircraft profile: its radio's and FC's latest backups
+      --live                 Mark where each control is now: the FC's channels, else the radio's joystick
+      --port <PORT>          The FC's port for --live; omit when one FC is plugged in
+      --channels <CHANNELS>  Channel values to mark instead, µs, CH1 first (1500,1500,988,...)
+      --text                 Print the map as text instead of the structured view
+  -h, --help                 Print help
+===== quadcam-cli gear radio --help
+The radio in USB Joystick mode now: buttons, axes, channel values
+
+Usage: quadcam-cli gear radio [OPTIONS]
+
+Options:
+      --json               Print one JSON object: {"ok":true,"result":...} or {"ok":false,"error":{...}}
+      --wait-ms <WAIT_MS>  Milliseconds to wait for a report (default 500)
+      --session <FILE>     Session file (default: ~/Library/Caches/app.quadcam/session.json)
+  -h, --help               Print help
 ===== quadcam-cli mcp --help
 Run the MCP server on stdio
 

@@ -105,6 +105,8 @@ fn cli_help() {
         &["gear", "fc", "check"],
         &["gear", "fc", "notes"],
         &["gear", "fc", "usb"],
+        &["gear", "map"],
+        &["gear", "radio"],
         &["mcp"],
     ];
     let home = tempfile::tempdir().unwrap();

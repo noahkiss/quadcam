@@ -10,6 +10,7 @@ use serde_json::Value;
 
 mod card;
 mod fc;
+mod map;
 mod osd;
 
 #[derive(Subcommand)]
@@ -31,6 +32,12 @@ pub enum GearCmd {
     Osd(osd::OsdArgs),
     /// An EdgeTX card: models, the selected model, the radio clock; `preview` checks edits.
     Card(card::CardArgs),
+    /// The switch map: what each radio control does on the radio and the FC, per position.
+    /// Reads an EdgeTX card or model file and a Betaflight dump; --live marks the
+    /// positions now.
+    Map(map::MapArgs),
+    /// The radio in USB Joystick mode now: buttons, axes, channel values.
+    Radio(map::RadioArgs),
 }
 
 #[derive(Subcommand)]
@@ -61,6 +68,8 @@ pub fn run(core: &Core, cmd: GearCmd) -> Result<Value> {
         GearCmd::Osd(a) => osd::run(core, a)?,
         GearCmd::Status => serde_json::to_value(call::gear_status(core)?)?,
         GearCmd::Card(a) => card::run(core, a)?,
+        GearCmd::Map(a) => map::run(core, a)?,
+        GearCmd::Radio(a) => map::radio(core, a)?,
         GearCmd::Devices { cmd } => match cmd.unwrap_or(DevicesCmd::List) {
             DevicesCmd::List => serde_json::to_value(call::gear_devices(core)?)?,
             DevicesCmd::Save { id, name, aircraft } => serde_json::to_value(

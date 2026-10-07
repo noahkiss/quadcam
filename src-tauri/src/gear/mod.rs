@@ -17,6 +17,9 @@
 //!   and the card writer.
 //! - `cues`: spoken, sound and notification cues ("safe to unplug", "still inserted").
 //! - `osd`: Betaflight OSD layouts: decode, draw per profile, overlap and off-screen check.
+//! - `switchmap`: the switch map: an EdgeTX model joined with the FC's `aux` and `adjrange`
+//!   lines, per control and position; live positions from channel values.
+//! - `radio_hid`: the radio as a USB joystick (hidapi): reports, channels, the watch.
 //!
 //! `Env` is what Gear reaches outside the process (serial ports, volumes, presence, the cue
 //! sink); tests replace it.
@@ -29,8 +32,10 @@ pub mod edgetx;
 pub mod events;
 pub mod model;
 pub mod osd;
+pub mod radio_hid;
 pub mod serial;
 pub mod store;
+pub mod switchmap;
 
 use crate::disk::Volume;
 use model::DeviceKind;

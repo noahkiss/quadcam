@@ -43,6 +43,7 @@ tempfile = "3"
 insta = { version = "1", features = ["json", "redactions"] }
 
 [target.'cfg(target_os = "macos")'.dependencies]
+hidapi = { version = "2.6", default-features = false, features = ["macos-shared-device"] }
 block2 = "0.6"
 objc2 = "0.6"
 objc2-foundation = { version = "0.3", features = ["NSURL", "NSString", "NSArray", "NSError", "NSFileManager", "NSGeometry", "NSThread", "NSRunLoop", "NSDate", "NSBundle", "block2"] }

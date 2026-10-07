@@ -173,6 +173,19 @@ export const commands = {
 	/**  Checks and diffs EdgeTX card edits. Writes nothing. */
 	gearCardPreview: (params: CardPreviewParams) => typedError<CardPreview, string>(__TAURI_INVOKE("gear_card_preview", { params })),
 	/**
+	 *  The switch map: each control's positions with their channel values, FC modes
+	 *  and radio effects, from an EdgeTX model and a Betaflight dump; with `live`,
+	 *  where each control is now. Reads only.
+	 */
+	gearSwitchMap: (params: SwitchMapParams) => typedError<SwitchMap, string>(__TAURI_INVOKE("gear_switch_map", { params })),
+	/**  One look at the radio in USB Joystick mode: its buttons, axes and channels. */
+	gearRadio: (params: RadioParams) => typedError<RadioSnapshot, string>(__TAURI_INVOKE("gear_radio", { params })),
+	/**
+	 *  Starts or stops the radio stream the app's controls page draws (`radio-input`
+	 *  events). True while it runs.
+	 */
+	gearRadioWatch: (params: RadioWatchParams) => typedError<boolean, string>(__TAURI_INVOKE("gear_radio_watch", { params })),
+	/**
 	 *  Downloaded tools: each module's pin, a newer pin from the last check, and what is
 	 *  installed. Reads only local files.
 	 */
@@ -228,12 +241,29 @@ export const events = {
 	libraryTask: makeEvent<LibraryTask>("library-task"),
 	menu: makeEvent<Menu>("menu"),
 	progress: makeEvent<Progress>("progress"),
+	radioInput: makeEvent<RadioInput>("radio-input"),
 	sessionChanged: makeEvent<SessionChanged>("session-changed"),
 	settingsChanged: makeEvent<SettingsChanged>("settings-changed"),
 	volumesChanged: makeEvent<VolumesChanged>("volumes-changed"),
 };
 
 /* Types */
+/**  A Betaflight `adjrange` line in use. */
+export type Adjustment = {
+	slot: number,
+	function_id: number,
+	/**  `Rate profile`, `OSD profile`, `Roll rate`. */
+	name: string,
+	/**  The channel whose range turns it on, and the range. */
+	range_ch: number,
+	start: number,
+	end: number,
+	/**  The channel that selects or adjusts. */
+	select_ch: number,
+	/**  A 3-position select (rate, OSD and LED profile) rather than a step adjustment. */
+	select: boolean,
+};
+
 /**  The agent's format request with this id is closed (answered or timed out). */
 export type AgentFormatClosed = number;
 
@@ -263,6 +293,20 @@ export type Automation =
 "import" | 
 /**  Apply the device's staged changes that are Ready. */
 "apply_ready";
+
+/**  A Betaflight `aux` line in use. */
+export type AuxMode = {
+	slot: number,
+	mode_id: number,
+	/**  `ARM`, `ANGLE`; `mode 99` for an id QuadCam does not know. */
+	name: string,
+	/**  1 is CH1 (AUX1 is CH5). */
+	ch: number,
+	start: number,
+	end: number,
+	/**  The mode this one follows instead of a range (`linkedTo`). */
+	linked?: string | null,
+};
 
 export type Badge = "matched" | "likely" | "unmatched";
 
@@ -367,6 +411,12 @@ export type CardView = {
 	marker?: string | null,
 	/**  The typed view of the model asked for. */
 	model?: ModelView | null,
+};
+
+export type ChannelValue = {
+	/**  1 is CH1. */
+	ch: number,
+	us: number,
 };
 
 /**  One guard in a plan: passed, or the refusal. */
@@ -581,6 +631,20 @@ export type Connected = {
 	 *  card in a reader). Its writes are slow (about 0.3 MB/s).
 	 */
 	usb?: UsbInfo | null,
+};
+
+export type ControlKind = "switch" | "trim" | "stick";
+
+/**  One physical control and what each of its positions does. */
+export type ControlRow = {
+	/**  `SA`, `TrimThrDown`, `stick:Thr`. */
+	id: string,
+	/**  `SA`, `Throttle trim down`, `Throttle stick`. */
+	label: string,
+	kind: ControlKind,
+	/**  `2POS`, `3POS` or `TOGGLE` for a switch. */
+	switch_type?: string | null,
+	positions: Position[],
 };
 
 /**  The `gearCues` setting. Missing fields take their defaults. */
@@ -1633,6 +1697,20 @@ port: string; vid: number; pid: number; product?: string | null } |
 /**  A USB DFU device (a radio in its bootloader). */
 { kind: "dfu"; vid: number; pid: number };
 
+/**  Channel values matched to the map: where each control is, and what the FC has on. */
+export type Live = {
+	/**  `fc` (`MSP_RC`) or `radio` (the USB joystick). */
+	source: string,
+	/**  µs, CH1 first. */
+	channels: number[],
+	/**  Each row's position index, by row id; None when no position matches. */
+	positions: { [key in string]: number | null },
+	/**  Modes whose range holds their channel's value. */
+	modes: string[],
+	/**  Selections the adjustments make (`Rate profile 2`). */
+	adjustments: string[],
+};
+
 /**  A location in decimal degrees. */
 export type Location = {
 	lat: number | null,
@@ -2047,6 +2125,20 @@ export type PlanPatch = {
 	joined?: boolean | null,
 };
 
+/**  One position of a control. */
+export type Position = {
+	/**  `up`, `mid`, `down`, `pressed`, `low`... */
+	name: string,
+	/**  The EdgeTX source for it (`SA0`), when it has one. */
+	source?: string | null,
+	/**  The channels the control moves, with their value here. */
+	channels: ChannelValue[],
+	/**  FC modes on and adjustments selected here (`ARM`, `Rate profile 2`). */
+	fc: string[],
+	/**  The radio's own effects here (`L1 on`, `Plays "armed"`, `Timer 1 (TOT) runs`). */
+	radio: string[],
+};
+
 export type Probe = {
 	duration: number | null,
 	video_packets: number,
@@ -2196,6 +2288,32 @@ export type QuietHours = {
 	end: string,
 };
 
+/**  The radio as the page sees it. */
+export type RadioEvent = {
+	connected: boolean,
+	/**  `Radiomaster Pocket Joystick`. */
+	product?: string | null,
+	frame?: RadioFrame | null,
+};
+
+/**  One report, read. */
+export type RadioFrame = {
+	/**  Counts reports since the watch started. */
+	seq: number,
+	/**  Bit i is button i+1. */
+	buttons: number,
+	/**  Raw axes, 0..2048, axis 0 first. */
+	axes: number[],
+	/**  The axes as channel values in µs, CH1 first. */
+	channels: number[],
+};
+
+/**
+ *  The radio in USB Joystick mode: connected or not, and its latest report
+ *  (`gear_radio_watch` starts the stream).
+ */
+export type RadioInput = RadioEvent;
+
 /**  An edit to `radio.yml`. */
 export type RadioOp = 
 /**
@@ -2205,6 +2323,26 @@ export type RadioOp =
 { op: "set_scalar"; key: string; value: string } | 
 /**  Selects a model (`model01.yml`): `currModel` and, when present, `currModelFilename`. */
 { op: "select_model"; file: string };
+
+/**  `gear_radio`: how long to wait for a report. */
+export type RadioParams = {
+	/**  Milliseconds; default 500, at most 5000. */
+	wait_ms?: number | null,
+};
+
+/**  `gear_radio`: one look at the radio. */
+export type RadioSnapshot = {
+	connected: boolean,
+	product?: string | null,
+	frame?: RadioFrame | null,
+	/**  Why there is no frame. */
+	message?: string | null,
+};
+
+/**  `gear_radio_watch`: start or stop the stream. */
+export type RadioWatchParams = {
+	on: boolean,
+};
 
 /**  `library_rate`: stars (0 clears) and a pick or reject flag for these clips. */
 export type RateParams = {
@@ -2515,6 +2653,17 @@ export type Status_Serialize = {
 	session: SessionBrief | null,
 };
 
+export type Stick = "roll" | "pitch" | "throttle" | "yaw";
+
+/**  The channel a stick drives, and the weight its mix gives it. */
+export type StickChannel = {
+	stick: Stick,
+	/**  1 is CH1. */
+	ch: number,
+	/**  Percent; negative when reversed. */
+	weight: number,
+};
+
 /**  `suggest`: changes to clip plans. Without `editor`, an agent made them. */
 export type SuggestParams = {
 	patches: PlanPatch[],
@@ -2551,6 +2700,52 @@ export type Swap = {
 	probe: Probe | null,
 	signal: SignalScan | null,
 	detail: string,
+};
+
+/**  The switch map of one aircraft. */
+export type SwitchMap = {
+	/**  The model's header name. */
+	model?: string | null,
+	/**  What was read: file names, with the backup date once backups exist. */
+	sources: string[],
+	rows: ControlRow[],
+	sticks: StickChannel[],
+	modes: AuxMode[],
+	adjustments: Adjustment[],
+	/**
+	 *  Two modes on one range, a control with no effect, a mode no control reaches, a
+	 *  sound file the card does not have.
+	 */
+	conflicts: string[],
+	notes: string[],
+	live?: Live | null,
+};
+
+/**  `gear_switch_map`: what to read, and whether to mark the live positions. */
+export type SwitchMapParams = {
+	/**  An EdgeTX card (its mount or a copy of its folder), or one model file. */
+	radio?: string | null,
+	/**  The model file on the card (`model01.yml`); default: the radio's selected model. */
+	model?: string | null,
+	/**
+	 *  Betaflight `dump all`, `diff all` or CLI-line files, read in order: a later file's
+	 *  lines win.
+	 */
+	fc?: string[],
+	/**
+	 *  An aircraft profile: its radio's and FC's latest backups. Not available until
+	 *  backups exist.
+	 */
+	aircraft?: string | null,
+	/**
+	 *  Mark where each control is now: the FC's channels (`MSP_RC`) when an FC is plugged
+	 *  in, else the radio's joystick.
+	 */
+	live?: boolean,
+	/**  The FC's port for `live`; omitted when one FC is plugged in. */
+	port?: string | null,
+	/**  Channel values to mark instead (µs, CH1 first). */
+	channels?: number[],
 };
 
 export type SwitchWarning = {
