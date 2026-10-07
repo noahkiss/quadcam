@@ -53,7 +53,7 @@ pub use rematch::{LibMatch, LibMatchParams, LibMatchReport};
 pub use setup::{PlaceRemoved, SettingsView};
 pub use sim::{
     CalibrateAction, CalibrateParams, CalibrateView, PerStick, SimCalibration,
-    SimCalibrationParams, SimCalibrationSaveParams, SimDefaultsParams,
+    SimCalibrationParams, SimCalibrationSaveParams, SimDefaultsParams, SimValidateParams,
 };
 pub use switchmap::{RadioParams, RadioWatchParams, SwitchMapParams};
 

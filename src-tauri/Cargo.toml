@@ -11,6 +11,25 @@ default-run = "quadcam"
 
 [workspace]
 members = ["sim"]
+# Plain `cargo test` and `cargo clippy` in src-tauri cover the sim crate too.
+default-members = [".", "sim"]
+
+# The sim's physics tests and bench fly minutes of 2 kHz steps: optimise the sim and its
+# physics dependencies even in dev builds, so tests stay fast without a release build.
+[profile.dev.package.quadcam-sim]
+opt-level = 3
+
+[profile.dev.package.rapier3d-f64]
+opt-level = 3
+
+[profile.dev.package.parry3d-f64]
+opt-level = 3
+
+[profile.dev.package.glamx]
+opt-level = 3
+
+[profile.dev.package.glam]
+opt-level = 3
 
 [lib]
 name = "quadcam_lib"

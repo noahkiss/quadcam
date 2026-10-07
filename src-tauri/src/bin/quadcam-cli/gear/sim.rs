@@ -1,4 +1,5 @@
-//! `quadcam-cli gear sim`: the sim's radio calibration and the defaults an aircraft gives it.
+//! `quadcam-cli gear sim`: the sim's radio calibration, the defaults an aircraft gives it,
+//! and the validation of a sim profile against a quad's logs.
 
 use anyhow::{Context, Result};
 use clap::Subcommand;
@@ -34,6 +35,22 @@ pub enum SimCmd {
         #[arg(long = "fc")]
         fc: Vec<PathBuf>,
     },
+    /// Check a sim profile against a folder of decoded blackbox logs (the CSV files
+    /// `blackbox_decode` writes): hover, punch, sag, rate response, coast-down and fall
+    /// recovery, each with its band.
+    Validate {
+        /// A built-in sim profile: meteor75, air65ii, five_inch, seven_inch.
+        aircraft: String,
+        /// The folder of decoded logs.
+        #[arg(long)]
+        logs: PathBuf,
+        /// The motors' pole count (default: the profile's).
+        #[arg(long)]
+        poles: Option<u32>,
+        /// Print the result table instead of JSON.
+        #[arg(long)]
+        text: bool,
+    },
 }
 
 pub fn run(core: &Core, cmd: SimCmd) -> Result<Value> {
@@ -62,6 +79,26 @@ pub fn run(core: &Core, cmd: SimCmd) -> Result<Value> {
             core,
             api::SimCalibrationParams { radio },
         )?)?,
+        SimCmd::Validate {
+            aircraft,
+            logs,
+            poles,
+            text,
+        } => {
+            let report = call::gear_sim_validate(
+                core,
+                api::SimValidateParams {
+                    aircraft,
+                    logs,
+                    motor_poles: poles,
+                },
+            )?;
+            if text {
+                Value::String(report.table())
+            } else {
+                serde_json::to_value(report)?
+            }
+        }
         SimCmd::Defaults {
             aircraft,
             radio,

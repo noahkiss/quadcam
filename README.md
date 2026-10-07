@@ -98,7 +98,7 @@ QuadCam follows the system's light or dark appearance. [A light-mode screenshot]
 | [Development](docs/development.md) | Build from source, tests, project layout, releases |
 | [Gear](docs/gear.md) | Devices QuadCam finds, saved devices, EdgeTX cards, backups, the card check, cues, flights, packs, crashes, `quadcam-cli gear` |
 | [Gear design](docs/gear-design.md) | The plan for gear: device backups, staged changes, OSD, rates, sims, voice packs, firmware, flight analysis |
-| [Sim](docs/sim.md) | The built-in sim so far: calibrating the radio for it |
+| [Sim](docs/sim.md) | The built-in sim so far: calibrating the radio for it, the flight model and its check against your blackbox logs |
 | [Sim design](docs/sim-design.md) | The plan for the built-in sim: physics, flight controller, quad profiles from blackbox, radio calibration, engine choice (draft) |
 
 ## Privacy

@@ -2,7 +2,7 @@
 
 QuadCam is growing a built-in FPV simulator that flies your own quads on your own radio
 (design: [sim-design.md](sim-design.md)). This page grows with each part. Built so far: the
-radio's calibration for the sim.
+radio's calibration for the sim, the flight model and its check against your logs.
 
 ## Sim radio: calibrating the radio
 
@@ -51,6 +51,49 @@ deadzone is cut from the middle and the rest is rescaled, so full travel still r
 
 **Save** writes `<gear folder>/sim/calibrations.json`, keyed by the radio's Gear id.
 
+## The flight model
+
+The sim flies a model of the quad, not a recording: a rigid body with four motors, props and
+ducts, drag, ground effect, prop wash and vortex ring state, and a Betaflight-style flight
+controller with the quad's own rates, throttle curve and modes. Physics runs at 2 kHz on its
+own thread and keeps to the wall clock: when the Mac stalls, the sim skips ahead rather than
+playing in slow motion. The battery holds 3.9 V per cell unless sag is turned on.
+
+Built-in profiles:
+
+| Profile | Quad |
+|---|---|
+| `meteor75` | 75 mm 1S whoop, 1102 21000 KV, 45 mm tri-blade props |
+| `air65ii` | 65 mm 1S whoop, 0702 25000 KV, 31 mm tri-blade props |
+| `five_inch` | 5-inch 6S freestyle |
+| `seven_inch` | 7-inch 6S long range |
+
+The two whoops are fitted to example blackbox logs; the 5-inch and 7-inch are estimates.
+
+## Checking a profile against your logs
+
+Decode the quad's blackbox logs to CSV with `blackbox_decode` (a separate program QuadCam
+does not ship), put them in a folder, and run:
+
+```bash
+quadcam-cli gear sim validate meteor75 --logs ~/Desktop/decoded --text
+```
+
+QuadCam replays the logged sticks and motor commands through the sim and compares:
+
+| Check | Passes when |
+|---|---|
+| Hover | Motor command within 0.02 and speed within 5 % of the logged level hover |
+| Punch | Peak acceleration within 15 %, speed reaching 90 % within 15 ms, peak current within 10 % |
+| Sag | Lowest pack voltage in a punch within 0.1 V |
+| Roll, pitch | Lag behind the setpoint within 3 ms, overshoot within 10 points |
+| Yaw | Lag within 5 ms |
+| Coast-down | Deceleration within 15 % (needs a ground-speed column) |
+| Fall recovery | Height lost within 20 % |
+
+A check with no matching moment in the logs reads **not in log**. `--poles` sets the motor
+pole count when it differs from the profile's.
+
 ## From the command line and MCP
 
 ```bash
@@ -58,7 +101,8 @@ quadcam-cli --json gear sim calibration                 # the joystick now: whic
 quadcam-cli --json gear sim calibration radio-0123…     # a saved radio's
 quadcam-cli gear sim calibration radio-0123… --set cal.json [--product "Radio Joystick"]
 quadcam-cli --json gear sim defaults --aircraft Whoop   # or --radio CARD|MODEL.yml --fc DUMP
+quadcam-cli --json gear sim validate air65ii --logs DIR  # a profile against decoded logs
 ```
 
-MCP: `quadcam_gear` `sim_calibration` and `sim_defaults`; `quadcam_gear_edit`
+MCP: `quadcam_gear` `sim_calibration`, `sim_defaults` and `sim_validate`; `quadcam_gear_edit`
 `sim_calibration_save`. See [mcp.md](mcp.md).
