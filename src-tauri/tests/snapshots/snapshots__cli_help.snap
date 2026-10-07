@@ -573,6 +573,7 @@ Usage: quadcam-cli gear [OPTIONS] <COMMAND>
 Commands:
   status   The gear folder, the Gear settings, and the devices plugged in now
   devices  Saved devices: list (default), save a name or aircraft, forget
+  osd      An FC's OSD layout per OSD profile, drawn on its grid and checked for overlaps and cells off screen. Reads a dump or diff file
   help     Print this message or the help of the given subcommand(s)
 
 Options:

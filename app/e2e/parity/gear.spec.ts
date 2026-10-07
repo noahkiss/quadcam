@@ -89,6 +89,11 @@ test("a device plugged in shows in the sidebar; Forget removes a saved one", asy
   const fc = page.getByRole("region", { name: "Whoop FC" });
   await expect(fc).toContainText("Not connected");
   await expect(fc).toContainText("4.5.1");
+  // An FC's page has the OSD segment; Overview links to it.
+  await fc.getByRole("navigation", { name: "Sections" }).getByRole("button", { name: "OSD" }).click();
+  await expect(fc.getByRole("group", { name: "Sections" }).getByRole("button", { name: "OSD" })).toHaveAttribute("aria-pressed", "true");
+  await expect(fc.getByRole("button", { name: /Open/ })).toBeVisible();
+  await fc.getByRole("group", { name: "Sections" }).getByRole("button", { name: "Overview" }).click();
   await fc.getByRole("button", { name: "Forget…" }).click();
   await dialog(page, "Forget Whoop FC?").getByRole("button", { name: "Forget" }).click();
   expect(await app.method("gear_device_forget")).toEqual([{ id: "fc-0a1b2c3d4e5f6071" }]);

@@ -1,0 +1,108 @@
+.osd {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-4);
+  min-width: 0;
+}
+.head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--s-3);
+}
+.meta {
+  color: var(--muted);
+  font-size: var(--t-sm);
+}
+.body {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: var(--s-6);
+}
+.figure {
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-2);
+}
+.screen {
+  --osd-line: 1.35em;
+  display: inline-block;
+  padding: var(--s-2);
+  font-family: var(--mono);
+  font-size: var(--t-md);
+  color: var(--fg);
+  background: var(--crust);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--r-2);
+}
+.cells {
+  position: relative;
+  /* The grid lines, one cell each. */
+  background-image:
+    linear-gradient(to right, color-mix(in srgb, var(--fg) 6%, transparent) 1px, transparent 1px),
+    linear-gradient(to bottom, color-mix(in srgb, var(--fg) 6%, transparent) 1px, transparent 1px);
+  background-size: 1ch var(--osd-line);
+}
+.row {
+  position: absolute;
+  left: 0;
+  height: var(--osd-line);
+  line-height: var(--osd-line);
+  white-space: pre;
+}
+.box {
+  position: absolute;
+  border-radius: 2px;
+}
+.box:hover,
+.hot {
+  outline: 1px solid var(--primary);
+  background: color-mix(in srgb, var(--primary) 18%, transparent);
+}
+.bad {
+  outline: 1px solid var(--error);
+  background: color-mix(in srgb, var(--error) 18%, transparent);
+}
+.caption {
+  color: var(--muted);
+  font-size: var(--t-sm);
+}
+.side {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-3);
+  min-width: 240px;
+  max-width: 420px;
+  flex: 1;
+}
+.problems {
+  margin: 0;
+  padding-left: var(--s-4);
+  color: var(--error-text);
+  font-size: var(--t-sm);
+}
+.list {
+  border-collapse: collapse;
+  font-size: var(--t-sm);
+}
+.list th {
+  text-align: left;
+  font-weight: 500;
+  color: var(--muted);
+  padding: var(--s-1) var(--s-2);
+  border-bottom: 1px solid var(--border);
+}
+.list td {
+  padding: 2px var(--s-2);
+  font-variant-numeric: tabular-nums;
+}
+.hotRow td {
+  background: var(--selected);
+}
+.note {
+  margin: 0;
+  color: var(--muted);
+  font-size: var(--t-sm);
+}

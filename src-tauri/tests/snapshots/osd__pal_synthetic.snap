@@ -1,0 +1,100 @@
+---
+source: tests/osd.rs
+expression: "osd::render_text(&v)"
+---
+Betaflight / SYNTHETIC 4.5.0 (synthetic PAL test)
+Grid PAL (30x16), video system PAL
+
+OSD profile 1 RACE
+    000000000011111111112222222222
+    012345678901234567890123456789
+   +------------------------------+
+ 0 |                              |
+ 1 | L2:99                        |
+ 2 |                              |
+ 3 |                              |
+ 4 |                              |
+ 5 |                              |
+ 6 |                              |
+ 7 |          ===-+-===           |
+ 8 |                              |
+ 9 |                              |
+10 |                              |
+11 |                              |
+12 |         LOW BATTERY          |
+13 |                              |
+14 |   45M2.50A             ACRO  |
+15 | B4.20V                T00:00 |
+   +------------------------------+
+  ah                       x 14, y  3  Artificial horizon
+  current                  x  4, y 14  Current draw
+  flymode                  x 24, y 14  Flight mode
+  link_quality             x  1, y  1  Link quality
+  mah_drawn                x  1, y 14  Capacity used
+  tim_2                    x 23, y 15  Timer 2
+  vbat                     x  1, y 15  Battery voltage
+  warnings                 x  9, y 12  Warnings
+  crosshairs               x 13, y  7  Crosshairs
+  note: ah: the level line is drawn; at full pitch it sweeps rows 3-12.
+  FAIL: mah_drawn overlaps current (2 cells).
+  check: FAIL
+
+OSD profile 2 CRUISE (in use)
+    000000000011111111112222222222
+    012345678901234567890123456789
+   +------------------------------+
+ 0 |                              |
+ 1 | L2:99                     R-6|
+ 2 |                              |
+ 3 |                              |
+ 4 |                              |
+ 5 |                              |
+ 6 |                              |
+ 7 |             -+-              |
+ 8 |                              |
+ 9 |                              |
+10 |                              |
+11 |                              |
+12 |         LOW BATTERY          |
+13 |                              |
+14 |                        ACRO  |
+15 | B4.20V                T00:00 |
+   +------------------------------+
+  flymode                  x 24, y 14  Flight mode
+  link_quality             x  1, y  1  Link quality
+  rssi_dbm                 x 27, y  1  RSSI (dBm)
+  tim_2                    x 23, y 15  Timer 2
+  vbat                     x  1, y 15  Battery voltage
+  warnings                 x  9, y 12  Warnings
+  crosshairs               x 13, y  7  Crosshairs
+  FAIL: rssi_dbm: 2 cells off screen.
+  check: FAIL
+
+OSD profile 3
+    000000000011111111112222222222
+    012345678901234567890123456789
+   +------------------------------+
+ 0 |           TEST QUAD          |
+ 1 |                              |
+ 2 |                              |
+ 3 |                              |
+ 4 |    +                         |
+ 5 |    +                         |
+ 6 | +++++++                      |
+ 7 |    +                         |
+ 8 |    +                         |
+ 9 |                              |
+10 |                              |
+11 |                              |
+12 |         LOW BATTERY          |
+13 |                              |
+14 |                        ACRO  |
+15 | B4.20V                T00:00 |
+   +------------------------------+
+  craft_name               x 11, y  0  Craft name
+  flymode                  x 24, y 14  Flight mode
+  stick_overlay_left       x  1, y  4  Left stick overlay
+  tim_2                    x 23, y 15  Timer 2
+  vbat                     x  1, y 15  Battery voltage
+  warnings                 x  9, y 12  Warnings
+  check: ok (no overlaps, nothing off screen)

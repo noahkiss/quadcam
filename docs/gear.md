@@ -110,6 +110,31 @@ The `gear_on_connect` setting names the steps that run when a device of each kin
 `backup`, `import` and `apply_ready`. Only `backup` is on by default, and only while
 `gear_auto_backup` is on. QuadCam adds the steps themselves in later releases.
 
+## OSD
+
+QuadCam draws a Betaflight OSD layout from a `dump all` or `diff all` file, one screen per OSD
+profile, and checks each screen.
+
+- **Positions:** each element has one position, shared by every profile. A profile only turns
+  the element on or off.
+- **Grids:** the file's `vcd_video_system` picks the grid: NTSC 30 x 13, PAL 30 x 16, HD
+  53 x 20. `AUTO` or no setting draws on NTSC. You can pick another grid, or any W x H.
+- **Element sizes:** each element draws as sample text (`B4.20V`, `L2:99`, `T00:00`), with
+  letters for the font's symbols. The craft name draws as the `craft_name` value. An element
+  QuadCam does not know draws 5 wide and is listed. Widths are QuadCam's own estimates, so treat
+  a near miss as a hint.
+- **Horizon:** the level line is drawn. The check uses its full sweep: 4 columns either side
+  and 10 rows down from its position.
+- **Check:** two elements on the same cells in one profile, or cells off the grid. The
+  crosshairs may sit on the horizon, and other elements may sit on the camera frame.
+- **Several files:** QuadCam reads them in order and a later line wins. A dump followed by an
+  apply file shows the layout after the apply.
+- **A diff alone:** a diff leaves out every setting at its default. QuadCam shows what the diff
+  lists and says so.
+
+In a development build, open the OSD screen at `http://localhost:4719/?osd`. The Aircraft page
+will show it for the aircraft's flight controller once device backups arrive.
+
 ## Command line and agents
 
 ```bash
@@ -117,6 +142,8 @@ quadcam-cli --json gear status                       # gear folder, Gear setting
 quadcam-cli --json gear devices                      # saved devices
 quadcam-cli --json gear devices save <id> --name "Bench radio" --aircraft Whoop
 quadcam-cli --json gear devices forget <id>          # its backups stay
+quadcam-cli gear osd quad.dump_all.txt --text        # each OSD profile drawn, and the check
+quadcam-cli --json gear osd quad.dump_all.txt apply.cli --grid PAL
 ```
 
 Agents use the `quadcam_gear`, `quadcam_gear_edit` and `quadcam_gear_apply` tools. See

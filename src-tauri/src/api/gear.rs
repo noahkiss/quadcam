@@ -5,8 +5,9 @@
 //! `Core::METHODS`. A package adds its row here, its `Core` method in `core/gear.rs`, and
 //! its typed command to `specta_builder` in `lib.rs`.
 
-pub use crate::core::{DeviceSaveParams, GearStatus, ReminderParams};
+pub use crate::core::{DeviceSaveParams, GearStatus, OsdParams, ReminderParams};
 pub use crate::gear::model::Device;
+pub use crate::gear::osd::OsdView;
 use serde::{Deserialize, Serialize};
 use specta::Type;
 
@@ -31,6 +32,9 @@ macro_rules! with_gear_rows {
             gear_device_forget(params: IdParams) -> Device = |c| c.gear_device_forget(&params.id);
             /// Stops the "still inserted" reminder for a device's link. True when one was armed.
             gear_dismiss_reminder(params: ReminderParams) -> bool = |c| Ok(c.gear_dismiss(&params.handle));
+            /// An FC's OSD layout per OSD profile, drawn on its grid and checked for overlaps
+            /// and cells off screen. Reads only.
+            gear_osd(params: OsdParams) -> OsdView = |c| c.gear_osd(&params);
         }
     };
 }
