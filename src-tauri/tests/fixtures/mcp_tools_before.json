@@ -429,7 +429,7 @@
       "readOnlyHint": false,
       "title": "Format card"
     },
-    "description": "ERASE the session's card as FAT32 and eject it. Only when the person asked for it. It refuses a DJI card (goggles format their own), and refuses unless every non-skipped clip verified, the card is removable, not internal, not the boot disk, 64 GB or smaller, and still the same card (device and volume UUID). It also needs device, volume_uuid and confirm=true, and when the app is running the person must click Erase in the app.\n\nBest for: clearing the card after a verified export. Call with dry_run=true first to read the device and volume UUID.\nReturns: the disk that was erased, or the reason it refused.",
+    "description": "ERASE the session's card as FAT32 and eject it. Only when the person asked for it. It refuses a DJI card (goggles format their own) and a radio's SD card, and refuses unless every non-skipped clip verified, the card is removable, not internal, not the boot disk, 64 GB or smaller, and still the same card (device and volume UUID). It also needs device, volume_uuid and confirm=true, and when the app is running the person must click Erase in the app. With prep=true it erases a card with no session instead (card prep: a new card, or one whose clips are all in the library; a clip missing from the library refuses), found by `mount` in the dry run and by device and volume_uuid to erase.\n\nBest for: clearing the card after a verified export, or preparing a spare DVR card (prep=true). Call with dry_run=true first to read the device and volume UUID.\nReturns: the disk that was erased, or the reason it refused.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -450,6 +450,14 @@
           "description": "FAT32 volume name, default DVR.",
           "maxLength": 11,
           "type": "string"
+        },
+        "mount": {
+          "description": "Card prep: the card's mount point, for the dry run.",
+          "type": "string"
+        },
+        "prep": {
+          "description": "Card prep: erase a card with no session (new, or all its clips in the library).",
+          "type": "boolean"
         },
         "volume_uuid": {
           "description": "Volume UUID from the dry run.",

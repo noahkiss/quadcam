@@ -18,6 +18,8 @@ expression: "Core::METHODS"
   "eject",
   "format_plan",
   "format",
+  "card_prep_plan",
+  "card_prep",
   "library",
   "library_rebuild",
   "library_rate",

@@ -36,7 +36,7 @@ The server has 19 tools.
 | `quadcam_verify` | Checks the outputs again |
 | `quadcam_add_to_photos` | Adds verified outputs to Photos |
 | `quadcam_eject` | Ejects the card |
-| `quadcam_format_card` | Erases an analog card. Refuses a DJI card. See [Format safety](format-safety.md) |
+| `quadcam_format_card` | Erases an analog card after an import, or with `prep=true` a card with no session (card prep). Refuses a DJI card. See [Format safety](format-safety.md) |
 
 **Library:**
 
@@ -72,6 +72,8 @@ An agent's suggestions show in the app with a dashed outline and an **agent** ba
 ## Erase a card
 
 `quadcam_format_card` needs the device, the volume UUID, and `confirm=true`. The agent reads the device and the volume UUID with `dry_run=true` first.
+
+With `prep=true`, the tool erases a card that has no session: a new card, or a card whose clips are all in the library. The dry run then needs `mount`, the card's mount point. See [Card prep](format-safety.md#card-prep).
 
 If the app is running, you must also select **Erase** in the app. Cancel, a closed dialog, or 3 minutes without a click refuses the erase.
 

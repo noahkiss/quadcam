@@ -833,6 +833,10 @@ in the library. Guards: every existing `disk::format_card` guard, plus "no clip 
 missing from the library" (the sidebar's "N new" is 0). The file system and the label come
 from the source's `CardPolicy`. DJI cards stay refused, as today (open question 3).
 
+Built in WP11 before WP1 landed: the `Core` methods live in `core/prep.rs`, the two rows in
+`api/mod.rs`, and the CLI is `format --prep`. They move to `core/gear.rs`, `api/gear.rs` and
+`gear card-prep` once those exist. The app has no card-prep button yet (WP13).
+
 ### 7.10 Modules
 
 Tools and firmware that QuadCam does not ship become **modules**: QuadCam downloads them from
