@@ -7,6 +7,7 @@
 //!
 //! - `model`: the shared types (devices, backups, staged changes, plans, refusals).
 //! - `store`: the gear folder and `gear.json`, its only writer.
+//! - `bf`: the Betaflight link: CLI, MSP, dump parsing, the FC simulator, board notes.
 //! - `compat`: the versions QuadCam has proven it can write.
 //! - `serial`: USB serial ports, with the per-port lock and the test fail-safe.
 //! - `detect`: the gear plugged in now.
@@ -18,6 +19,7 @@
 //! `Env` is what Gear reaches outside the process (serial ports, volumes, presence, the cue
 //! sink); tests replace it.
 
+pub mod bf;
 pub mod compat;
 pub mod cues;
 pub mod detect;

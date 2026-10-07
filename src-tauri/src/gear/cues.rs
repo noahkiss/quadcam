@@ -38,6 +38,8 @@ pub enum Cue {
     StillInserted,
     /// A job's step failed.
     StepFailed,
+    /// An FC ran on USB with its battery in past its limit: it may overheat.
+    UnplugNow,
 }
 
 /// One cue to play: what, for which device (or "3 devices"), and the failed step.
@@ -75,6 +77,13 @@ impl CueEvent {
                 self.step.as_deref().unwrap_or("A step"),
                 self.device
             ),
+            Cue::UnplugNow => match &self.step {
+                Some(m) => format!(
+                    "Unplug {} now. It has run on USB with a battery for {m}.",
+                    self.device
+                ),
+                None => format!("Unplug {} now.", self.device),
+            },
         }
     }
 }
@@ -86,6 +95,7 @@ impl Cue {
             Cue::SafeToUnplug => "Glass",
             Cue::StillInserted => "Ping",
             Cue::StepFailed => "Basso",
+            Cue::UnplugNow => "Sosumi",
         }
     }
 }
@@ -130,6 +140,8 @@ pub struct CueSettings {
     pub still_inserted: bool,
     /// "<step> failed on <device>."
     pub step_failed: bool,
+    /// "Unplug <device> now.": an FC on USB with its battery in past its time limit.
+    pub unplug_now: bool,
     /// The same cue for the same device within this many seconds is dropped.
     pub debounce_s: u32,
     /// Seconds after "done" before the first reminder.
@@ -166,6 +178,7 @@ impl Default for CueSettings {
             safe_to_unplug: true,
             still_inserted: true,
             step_failed: true,
+            unplug_now: true,
             debounce_s: 30,
             reminder_grace_s: 60,
             still_inserted_every_s: 300,
@@ -184,6 +197,7 @@ impl CueSettings {
                 Cue::SafeToUnplug => self.safe_to_unplug,
                 Cue::StillInserted => self.still_inserted,
                 Cue::StepFailed => self.step_failed,
+                Cue::UnplugNow => self.unplug_now,
             }
     }
 }

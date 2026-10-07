@@ -30,6 +30,9 @@ pub struct GearStatus {
     pub staged: usize,
     /// Sims whose rates differ from their quad's.
     pub sims_out_of_date: usize,
+    /// FCs on USB: battery in, time on USB, the limit (`core/fc.rs`).
+    #[serde(default)]
+    pub usb_timers: Vec<super::fc::UsbTimer>,
     /// The links a job holds now (`link_handle`): their devices show as working.
     #[serde(default)]
     pub working: Vec<String>,
@@ -91,6 +94,7 @@ impl Core {
     pub fn gear_connected(&self) -> Result<Vec<Connected>> {
         let saved = self.gear_store().devices()?;
         let mut found = self.gear.detect();
+        self.fc_fill(&mut found);
         for c in &mut found {
             c.device =
                 c.id.as_deref()
@@ -108,6 +112,7 @@ impl Core {
             devices: store.devices()?.len(),
             staged: 0,
             sims_out_of_date: 0,
+            usb_timers: self.gear_usb_timers(),
             working: self.gear_working(),
             reminders: self.gear.cues.reminders.lock().unwrap().armed(),
             settings,
@@ -223,7 +228,12 @@ impl Core {
         }
     }
 
-    fn held(&self, handle: &str, now: Instant) -> bool {
+    /// True while a job holds the link (not counting the grace after it ends).
+    pub(super) fn held_by_job(&self, handle: &str) -> bool {
+        matches!(self.gear_holds.lock().unwrap().get(handle), Some(None))
+    }
+
+    pub(super) fn held(&self, handle: &str, now: Instant) -> bool {
         let mut holds = self.gear_holds.lock().unwrap();
         holds.retain(|_, until| until.is_none_or(|t| t > now));
         holds.contains_key(handle)

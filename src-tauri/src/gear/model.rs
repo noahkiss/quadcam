@@ -238,6 +238,20 @@ pub enum Section {
     Profile(u8),
     /// `rateprofile N`.
     RateProfile(u8),
+    /// `battery_profile N` (Betaflight 2026.6 and later).
+    BatteryProfile(u8),
+}
+
+impl Section {
+    /// The CLI line that selects this section; none for `Master`.
+    pub fn select_line(self) -> Option<String> {
+        match self {
+            Section::Master => None,
+            Section::Profile(n) => Some(format!("profile {n}")),
+            Section::RateProfile(n) => Some(format!("rateprofile {n}")),
+            Section::BatteryProfile(n) => Some(format!("battery_profile {n}")),
+        }
+    }
 }
 
 /// A file a change puts on a card.

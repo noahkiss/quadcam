@@ -14,6 +14,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 
 mod cuts;
+mod fc;
 mod files;
 mod gear;
 mod import;
@@ -24,6 +25,7 @@ mod prep;
 mod rematch;
 mod setup;
 pub use crate::paths::{cache_dir, default_session_file, default_settings_file, support_dir};
+pub use fc::{BoardNotesParams, FcJob, FcPortParams, FcReadParams, UsbTimer, USB_PROBE};
 pub use files::{Moved, TrashReport};
 pub use gear::{
     connected_name, link_handle, DeviceSaveParams, GearStatus, Hold, HookFn, HookOutcome, HookRun,
@@ -214,6 +216,10 @@ pub struct Core {
     gear_hooks: Mutex<Vec<OnConnectHook>>,
     /// Links QuadCam holds for a job: None while held, else held until then.
     gear_holds: Mutex<std::collections::HashMap<String, Option<std::time::Instant>>>,
+    /// What each FC port said last, and its USB timer (`core/fc.rs`).
+    fc_state: Mutex<fc::FcState>,
+    /// CLI and MSP waits (`with_fc_timing`).
+    fc_timing: Mutex<crate::gear::bf::cli::Timing>,
     /// Downloaded tools (ffmpeg, esptool).
     modules: crate::modules::Modules,
 }
@@ -258,6 +264,8 @@ impl Core {
             gear: crate::gear::Env::system(&cache),
             gear_hooks: Mutex::new(Vec::new()),
             gear_holds: Mutex::default(),
+            fc_state: Mutex::default(),
+            fc_timing: Mutex::default(),
             cache,
             modules: crate::modules::Modules::default(),
         }
