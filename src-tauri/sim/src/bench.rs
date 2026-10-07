@@ -1,7 +1,8 @@
 //! The headless bench (sim-design 6.4, 2.2): step cost in free flight and in contact.
 //! `examples/bench.rs` adds the real-time run; `tests/bench.rs` holds the bar in CI.
-
-use std::time::Instant;
+//!
+//! Step cost is the thread's CPU time, so a busy machine preempting the thread does not
+//! count as cost (the real-time run measures that side).
 
 use rapier3d_f64::glamx::DQuat;
 
@@ -10,6 +11,30 @@ use crate::rng::Rng;
 use crate::runner::CostHistogram;
 use crate::world::WorldSpec;
 use crate::{preset, Sim, SimSettings};
+
+#[cfg(target_os = "macos")]
+extern "C" {
+    fn clock_gettime_nsec_np(clock: u32) -> u64;
+}
+
+/// This thread's CPU time (ns).
+pub fn thread_cpu_ns() -> u64 {
+    #[cfg(target_os = "macos")]
+    {
+        /// `CLOCK_THREAD_CPUTIME_ID`.
+        const THREAD_CPU: u32 = 16;
+        // SAFETY: reads a clock; no pointers.
+        unsafe { clock_gettime_nsec_np(THREAD_CPU) }
+    }
+    #[cfg(not(target_os = "macos"))]
+    {
+        static EPOCH: std::sync::OnceLock<std::time::Instant> = std::sync::OnceLock::new();
+        EPOCH
+            .get_or_init(std::time::Instant::now)
+            .elapsed()
+            .as_nanos() as u64
+    }
+}
 
 fn frame(s: Sticks, armed: bool, angle: bool) -> RcFrame {
     let b = |on: bool| if on { 2000 } else { 1000 };
@@ -50,9 +75,9 @@ pub fn free_flight(profile: &str, steps: usize) -> CostHistogram {
             };
         }
         let f = frame(s, true, false);
-        let t = Instant::now();
+        let t = thread_cpu_ns();
         sim.step(&f);
-        h.add(t.elapsed().as_nanos() as u64);
+        h.add(thread_cpu_ns().saturating_sub(t));
         // Keep it clear of the floor and ceiling.
         let z = sim.position()[2];
         if !(20.0..380.0).contains(&z) {
@@ -89,9 +114,9 @@ pub fn contact(profile: &str, steps: usize) -> (CostHistogram, f64) {
             };
         }
         let f = frame(s, true, true);
-        let t = Instant::now();
+        let t = thread_cpu_ns();
         sim.step(&f);
-        h.add(t.elapsed().as_nanos() as u64);
+        h.add(thread_cpu_ns().saturating_sub(t));
         if sim.snapshot().touching {
             touching += 1;
         }
