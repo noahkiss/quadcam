@@ -301,6 +301,7 @@ fn cues_mark_the_end_of_a_job_and_never_quadcams_own_unmounts() {
     // own and play nothing.
     {
         let _job = c.gear_hold("disk42");
+        assert_eq!(c.gear_status().unwrap().working, ["disk42"], "the job shows as working");
         mounted.lock().unwrap().clear();
         let e = c.gear_poll(&mut t).unwrap();
         assert_eq!(e[0].kind, DeviceEventKind::UnmountedPresent);
@@ -315,6 +316,7 @@ fn cues_mark_the_end_of_a_job_and_never_quadcams_own_unmounts() {
         cues.played.lock().unwrap().is_empty(),
         "no cue during a job"
     );
+    assert!(c.gear_status().unwrap().working.is_empty(), "released");
 
     // The job's end: one cue. The same again within the debounce: none.
     assert!(c.gear_job_done(&radio, None));
@@ -333,7 +335,10 @@ fn cues_mark_the_end_of_a_job_and_never_quadcams_own_unmounts() {
 
     // Dismissed, or pulled: no more.
     assert!(c.gear_job_done(&renamed(&radio), None));
+    assert_eq!(c.gear_status().unwrap().reminders, ["disk42"]);
     c.gear_dismiss_reminder(&radio);
+    assert!(c.gear_status().unwrap().reminders.is_empty());
+    assert!(!c.gear_dismiss("disk42"), "nothing left to dismiss");
     c.gear_play_reminders(&t, now + Duration::from_secs(9000), chrono::NaiveTime::MIN);
     assert_eq!(cues.spoken().len(), 4, "only the second done");
     present.lock().unwrap().clear();

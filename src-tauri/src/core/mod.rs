@@ -26,7 +26,7 @@ pub use crate::paths::{cache_dir, default_session_file, default_settings_file, s
 pub use files::{Moved, TrashReport};
 pub use gear::{
     connected_name, link_handle, DeviceSaveParams, GearStatus, Hold, HookFn, HookOutcome, HookRun,
-    OnConnectHook, HOLD_GRACE,
+    OnConnectHook, ReminderParams, HOLD_GRACE,
 };
 pub use import::CardStatus;
 pub use library::{LibEdit, LibItem, LibUpdate, LibraryView, RebuildReport, RenameReport};

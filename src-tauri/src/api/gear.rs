@@ -5,7 +5,7 @@
 //! `Core::METHODS`. A package adds its row here, its `Core` method in `core/gear.rs`, and
 //! its typed command to `specta_builder` in `lib.rs`.
 
-pub use crate::core::{DeviceSaveParams, GearStatus};
+pub use crate::core::{DeviceSaveParams, GearStatus, ReminderParams};
 pub use crate::gear::model::Device;
 use serde::{Deserialize, Serialize};
 use specta::Type;
@@ -29,6 +29,8 @@ macro_rules! with_gear_rows {
             gear_device_save(params: DeviceSaveParams) -> Device = |c| c.gear_device_save(&params);
             /// Forgets a device. Its backups stay.
             gear_device_forget(params: IdParams) -> Device = |c| c.gear_device_forget(&params.id);
+            /// Stops the "still inserted" reminder for a device's link. True when one was armed.
+            gear_dismiss_reminder(params: ReminderParams) -> bool = |c| Ok(c.gear_dismiss(&params.handle));
         }
     };
 }
