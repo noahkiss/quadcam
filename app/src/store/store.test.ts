@@ -117,3 +117,12 @@ describe("menu state", () => {
     expect(menuState(S(), false).enabled.pick).toBe(false);
   });
 });
+
+describe("format confirm text", () => {
+  it("names the clips, or none for an empty card (card prep)", async () => {
+    const { confirmText } = await import("../actions/session");
+    const plan = { disk: "disk9", device: "/dev/disk9", volume_uuid: "U", volume_name: "DVR", size: 32e9, media_name: "", clip_count: 2, label: "DVR" };
+    expect(confirmText(plan)).toMatch(/^Erase disk9 \(DVR, .*\) and delete 2 clips\? This cannot be undone\.$/);
+    expect(confirmText({ ...plan, clip_count: 0 })).toMatch(/^Erase disk9 \(DVR, [^)]*\)\? This cannot be undone\.$/);
+  });
+});

@@ -322,7 +322,9 @@ export async function checkFormat() {
 export function confirmText(plan: FormatPlan) {
   const media = plan.media_name ? `, ${plan.media_name}` : "";
   const n = plan.clip_count;
-  return `Erase ${plan.disk} (${plan.volume_name || "untitled"}, ${fmtBytes(plan.size)}${media}) and delete ${n} clip${n === 1 ? "" : "s"}? This cannot be undone.`;
+  // Card prep can name a card with no clips on it.
+  const clips = n === 0 ? "" : ` and delete ${n} clip${n === 1 ? "" : "s"}`;
+  return `Erase ${plan.disk} (${plan.volume_name || "untitled"}, ${fmtBytes(plan.size)}${media})${clips}? This cannot be undone.`;
 }
 
 export async function askFormat() {

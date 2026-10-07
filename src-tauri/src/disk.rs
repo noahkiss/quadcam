@@ -1,4 +1,5 @@
-//! Volumes and disks: `diskutil info`, card detection, and the guarded FAT32 format.
+//! Volumes and disks: `diskutil info`, card detection, and the guarded FAT32 format (after an
+//! import, and card prep).
 
 use anyhow::{anyhow, bail, Context, Result};
 use serde::{Deserialize, Serialize};
@@ -310,15 +311,52 @@ pub fn verify_card_for_format(expected: &CardIdentity, mount: &Path) -> Result<D
     Ok(whole)
 }
 
-/// Erases the card's whole disk as FAT32/MBR, then ejects it at once.
-/// Guards run again here, immediately before the command. Err means nothing was erased.
+/// The `diskutil eraseDisk` personality for a `CardPolicy` file system. QuadCam formats
+/// FAT32 only; any other file system refuses.
+pub fn erase_personality(filesystem: &str) -> Result<&'static str> {
+    if filesystem.eq_ignore_ascii_case("FAT32") {
+        Ok("FAT32")
+    } else {
+        bail!("Refused: QuadCam formats cards only as FAT32, not {filesystem}.")
+    }
+}
+
+/// What the volume at `mount` holds, as far as a format cares: a radio's SD card and a DJI
+/// card are never erased, whatever the session or the plan said. A DJI card counts even
+/// when its `DCIM/DJI_*` folders are empty.
+pub fn check_volume_contents(mount: &Path) -> Result<()> {
+    if looks_like_radio(mount) {
+        bail!("Refused: this volume is a radio's SD card (LOGS with MODELS or RADIO).");
+    }
+    if crate::sources::dji::looks_like_dji_volume(mount) {
+        bail!("Refused: QuadCam does not format DJI cards; format them in the device.");
+    }
+    Ok(())
+}
+
+/// Erases the card's whole disk with the file system of `policy` (MBR), then ejects it at
+/// once. Every guard runs again here, immediately before the command: the source's policy,
+/// the disk guards, the volume's contents, then `recheck` (the caller's own guards, for
+/// example card prep's "every clip is in the library"). Err means nothing was erased.
 /// Ok(Some(reason)) means the card was erased but would not eject.
-pub fn format_card(expected: &CardIdentity, mount: &Path, label: &str) -> Result<Option<String>> {
+pub fn format_card(
+    expected: &CardIdentity,
+    mount: &Path,
+    label: &str,
+    policy: &crate::sources::CardPolicy,
+    recheck: &dyn Fn() -> Result<()>,
+) -> Result<Option<String>> {
+    if !policy.format_offered {
+        bail!("Refused: QuadCam does not format this source's cards; format them in the device.");
+    }
+    let personality = erase_personality(policy.filesystem)?;
     let label = fat_label(label)?;
     let whole = verify_card_for_format(expected, mount)?;
+    check_volume_contents(mount)?;
+    recheck()?;
     let disk = format!("/dev/{}", whole_disk_of(&whole.device_identifier));
     let out = Command::new("/usr/sbin/diskutil")
-        .args(["eraseDisk", "FAT32", &label, "MBRFormat", &disk])
+        .args(["eraseDisk", personality, &label, "MBRFormat", &disk])
         .output()
         .context("running diskutil eraseDisk")?;
     if !out.status.success() {
@@ -459,6 +497,46 @@ mod tests {
         v0.parent_whole_disk = "disk0".into();
         w0.device_identifier = "disk0".into();
         assert!(check_format_guards(&id0, &v0, &w0, &[]).is_err(), "disk0");
+    }
+
+    #[test]
+    fn only_fat32_is_formatted() {
+        assert_eq!(erase_personality("FAT32").unwrap(), "FAT32");
+        assert!(erase_personality("exFAT").is_err());
+        assert!(erase_personality("APFS").is_err());
+    }
+
+    #[test]
+    fn radio_and_dji_volumes_refuse() {
+        let d = tempfile::tempdir().unwrap();
+        check_volume_contents(d.path()).unwrap();
+        std::fs::create_dir_all(d.path().join("DCIM")).unwrap();
+        std::fs::write(d.path().join("DCIM/PICT0001.AVI"), b"x").unwrap();
+        check_volume_contents(d.path()).unwrap();
+
+        let radio = tempfile::tempdir().unwrap();
+        for x in ["LOGS", "MODELS"] {
+            std::fs::create_dir(radio.path().join(x)).unwrap();
+        }
+        let e = check_volume_contents(radio.path()).unwrap_err().to_string();
+        assert!(e.contains("radio"), "{e}");
+
+        // An emptied DJI card still refuses.
+        let dji = tempfile::tempdir().unwrap();
+        std::fs::create_dir_all(dji.path().join("DCIM/DJI_001")).unwrap();
+        let e = check_volume_contents(dji.path()).unwrap_err().to_string();
+        assert!(e.contains("DJI"), "{e}");
+    }
+
+    #[test]
+    fn format_card_refuses_a_source_that_does_not_offer_it() {
+        let dji = crate::sources::Source::card_policy(&crate::sources::dji::Dji);
+        let (id, _, _) = card();
+        // Refused on the policy, before diskutil is ever asked about the disk.
+        let e = format_card(&id, Path::new("/nonexistent"), "DVR", &dji, &|| Ok(()))
+            .unwrap_err()
+            .to_string();
+        assert!(e.contains("does not format"), "{e}");
     }
 
     #[test]

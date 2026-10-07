@@ -183,6 +183,10 @@ pub struct FormatCardArgs {
     pub label: Option<String>,
     /// Must be true to erase.
     pub confirm: Option<bool>,
+    /// Card prep: erase a card with no session (new, or all its clips in the library).
+    pub prep: Option<bool>,
+    /// Card prep: the card's mount point, for the dry run.
+    pub mount: Option<String>,
 }
 
 // ----- the library -----

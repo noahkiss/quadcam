@@ -19,7 +19,7 @@ README and `docs/`. Personal preferences go in the app's settings file on the ma
 | Path | Holds |
 |---|---|
 | `app/` | The frontend: React + TypeScript + Vite (pnpm, Node pinned in `.node-version`). Builds to `app/dist`, which the app ships. `views/` (library, clip detail, import sheet, settings), `components/` (with `trim/`, the one trim editor, used by clip detail and the import review), `store/`, `actions/`, `ipc/`. Icons and fonts are inlined or bundled so the app works offline |
-| `src-tauri/src/` | Rust core. `core/` (`Core`) owns the session and the library index and is the one surface every front end drives: `mod.rs` (state, locking, `Hooks`), `import.rs` (stage, analyse, dates, import, verify, delete clips after import, format), `library.rs` (the index, list, rate, edit, rename, redate), `cuts.rs` (session and library cut lists), `files.rs` (Photos, previews, strips, Trash), `rematch.rs` (radio logs matched again to library clips) and `setup.rs` (settings, places, profiles). `api/` is the one method table: each row names a method, its params and result types and the `Core` call, and `api!` makes `Core::dispatch` (socket, MCP) and one typed Tauri command per method from it; `api/events.rs` holds the typed events. `lib.rs` holds the GUI's own Tauri commands and `specta_builder`, which tauri-specta exports to `app/src/bindings.ts`; `control.rs` the app's socket, `mcp/` the MCP server (`server.rs` the protocol and handlers, `params.rs` each tool's argument type, `tools.rs` the tool list with schemas derived from those types, `render.rs` the text answers), `bin/quadcam-cli.rs` the CLI (clap flags build the `api` params, and it calls the table's `api::call` functions). The logic modules (`scan`, `disk`, `media`, `logs`, `logmatch` (shape-first log matching: pack lengths, order and gaps, clocks as tie-breaks, EdgeTX models as a filter; an analog clip with dead air matches by picture: packs inside keep ranges, swaps at dead air, an offset per clip, split DVR files as one timeline), `moments`, `join` (recordings an analog DVR split into files: detection, the `ffconcat` source, the swap of joined and own values), `metadata`, `qtmeta`, `naming`, `pipeline` (with `pipeline/import.rs`, the import run), `session`, `photos`, `library`, `trim`, `cuts` (the one cut writer), `sources` (the `Source` trait per video system, tried in `sources::all()` order; `sources/dji.rs` is DJI O4: `DCIM/DJI_*/` names, the clock in the name, `.SRT` sidecars, byte-copy MP4 export, a card never formatted; `sources/analog.rs` is the DVR: clip layout, half-written check and repair, encode plan, dead air, card policy), `trash`, `settings` (with `Defaults`, the effective settings), `paths` (every path under `$HOME`), `geocode`) run without Tauri |
+| `src-tauri/src/` | Rust core. `core/` (`Core`) owns the session and the library index and is the one surface every front end drives: `mod.rs` (state, locking, `Hooks`), `import.rs` (stage, analyse, dates, import, verify, delete clips after import, format), `library.rs` (the index, list, rate, edit, rename, redate), `cuts.rs` (session and library cut lists), `files.rs` (Photos, previews, strips, Trash), `rematch.rs` (radio logs matched again to library clips), `prep.rs` (card prep: format a card with no session) and `setup.rs` (settings, places, profiles). `api/` is the one method table: each row names a method, its params and result types and the `Core` call, and `api!` makes `Core::dispatch` (socket, MCP) and one typed Tauri command per method from it; `api/events.rs` holds the typed events. `lib.rs` holds the GUI's own Tauri commands and `specta_builder`, which tauri-specta exports to `app/src/bindings.ts`; `control.rs` the app's socket, `mcp/` the MCP server (`server.rs` the protocol and handlers, `params.rs` each tool's argument type, `tools.rs` the tool list with schemas derived from those types, `render.rs` the text answers), `bin/quadcam-cli.rs` the CLI (clap flags build the `api` params, and it calls the table's `api::call` functions). The logic modules (`scan`, `disk`, `media`, `logs`, `logmatch` (shape-first log matching: pack lengths, order and gaps, clocks as tie-breaks, EdgeTX models as a filter; an analog clip with dead air matches by picture: packs inside keep ranges, swaps at dead air, an offset per clip, split DVR files as one timeline), `moments`, `join` (recordings an analog DVR split into files: detection, the `ffconcat` source, the swap of joined and own values), `metadata`, `qtmeta`, `naming`, `pipeline` (with `pipeline/import.rs`, the import run), `session`, `photos`, `library`, `trim`, `cuts` (the one cut writer), `sources` (the `Source` trait per video system, tried in `sources::all()` order; `sources/dji.rs` is DJI O4: `DCIM/DJI_*/` names, the clock in the name, `.SRT` sidecars, byte-copy MP4 export, a card never formatted; `sources/analog.rs` is the DVR: clip layout, half-written check and repair, encode plan, dead air, card policy), `trash`, `settings` (with `Defaults`, the effective settings), `paths` (every path under `$HOME`), `geocode`) run without Tauri |
 | `src-tauri/Info.plist` | Photos usage strings, merged into the bundle's Info.plist |
 | `src-tauri/Entitlements.plist` | Hardened-runtime entitlements (Photos library) for every signature |
 | `src-tauri/tests/` | Integration tests on synthetic clips and FAT32 disk images |
@@ -255,10 +255,14 @@ quadcam-cli --json photos out.mp4 --album Drone
 quadcam-cli --json eject
 quadcam-cli --json format --plan               # runs every guard, prints device + volume UUID
 quadcam-cli --json format --device /dev/diskN --volume-uuid <uuid> --yes
+quadcam-cli --json format --prep --plan --mount /Volumes/CARD   # card prep: no session needed
+quadcam-cli --json format --prep --device /dev/diskN --volume-uuid <uuid> --yes
 ```
 
 `format` refuses (exit 3) unless every GUI guard passes and `--device` (the card's whole
-disk), `--volume-uuid` and `--yes` all match the staged card.
+disk), `--volume-uuid` and `--yes` all match the staged card. `format --prep` is card prep
+(`docs/gear-design.md` 7.9): a card with no session, refused while any clip on it (by content
+fingerprint) is not in the library. It moves to `gear card-prep` once `bin/cli/gear/` exists.
 
 ### MCP server
 
@@ -292,7 +296,8 @@ claude mcp add quadcam -- "$(brew --prefix)/bin/quadcam-cli" mcp
 - Agent suggestions show in the GUI with a dashed accent outline and an "agent" badge until
   the person edits the field. Read back with `quadcam_read_clips` before export.
 - `quadcam_format_card` needs `device`, `volume_uuid` and `confirm=true` (read them with
-  `dry_run=true`). With the app running, the person must also click Erase in the app;
+  `dry_run=true`). `prep=true` (with `mount` for the dry run) is card prep, the `card_prep_plan`
+  and `card_prep` methods in `core/prep.rs`. With the app running, the person must also click Erase in the app;
   Cancel, closing the dialog or 3 minutes without a click refuses.
 - Photos from the CLI or a headless MCP server runs PhotoKit in that process, so macOS
   attributes the permission prompt to the terminal. Prefer the app for Photos.
@@ -306,7 +311,10 @@ claude mcp add quadcam -- "$(brew --prefix)/bin/quadcam-cli" mcp
 - **Never erase a real disk while testing.** The format tests only erase a disk image they
   created, and they assert `BusProtocol == "Disk Image"` first. Keep it that way.
 - Every format guard runs again inside `disk::format_card`, immediately before
-  `diskutil eraseDisk`. Do not move a guard out of that path.
+  `diskutil eraseDisk`. Do not move a guard out of that path. It takes the source's
+  `CardPolicy` (refuses one that does not offer a format; FAT32 only), refuses a radio or DJI
+  volume (`disk::check_volume_contents`), and runs the caller's `recheck` last: the session's
+  `format_ready` after an import, "every clip in the library" for card prep.
 - A source's `CardPolicy` says whether "Format card" is offered for its cards. `Core::format_plan`
   refuses a source that does not offer it, before every other guard; the guards themselves stay
   in `disk::format_card`.
