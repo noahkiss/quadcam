@@ -2,8 +2,8 @@ name: Release
 
 # A pushed `v*` tag builds QuadCam.app on an Apple Silicon runner, signs it
 # with the Developer ID of NKMK Digital Co., notarizes and staples it, waits for
-# a green ci.yml run on the tagged commit, attaches quadcam-X.Y.Z-arm64.zip to
-# the tag's GitHub Release, then bumps the Homebrew cask
+# a green ci.yml run on the tagged commit, attaches quadcam-X.Y.Z-arm64.zip and
+# modules.json (the module pins) to the tag's GitHub Release, then bumps the Homebrew cask
 # (`noahkiss/tap/quadcam`) through the tap's own `bump.yml`.
 #
 # The steps are the shared composite actions in noahkiss/workflows
@@ -90,6 +90,21 @@ jobs:
           asset: ${{ steps.build.outputs.asset }}
           smoke-command: '"$APP/Contents/MacOS/quadcam-cli" --version'
           require-ci-workflow: ci.yml
+
+      # The app reads newer module pins from the latest release's modules.json
+      # (Settings > Modules > Check for updates). The signed app's own CLI
+      # prints the manifest it pins. A re-run replaces it: nothing pins its hash.
+      - name: Attach modules.json
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          APP: ${{ steps.build.outputs.app }}
+          TAG: ${{ steps.build.outputs.tag }}
+        run: |
+          set -euo pipefail
+          "$APP/Contents/MacOS/quadcam-cli" modules manifest > "$RUNNER_TEMP/modules.json"
+          jq -e 'type == "object" and length > 0' "$RUNNER_TEMP/modules.json" >/dev/null
+          gh release upload "$TAG" "$RUNNER_TEMP/modules.json" --clobber
 
   # Fire the tap's bump and fail unless it lands. tauri-macos-build checked the
   # tag against a strict vX.Y.Z pattern, so it is safe inside the JSON string.
