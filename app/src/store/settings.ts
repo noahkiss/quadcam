@@ -7,6 +7,7 @@ import { api, errText } from "../ipc/api";
 import type { Place, Profile, SettingsValues } from "../ipc/types";
 import { toast } from "../components/toastStore";
 import { validSort, type Sort } from "../lib/library";
+import { asMode } from "../lib/controls";
 
 export interface SettingsSlice {
   values: SettingsValues;
@@ -94,6 +95,8 @@ export const sel = {
   libView: (s: State) => (s.values.libView === "list" ? "list" : "grid") as "grid" | "list",
   thumbSize: (s: State) => Math.min(5, Math.max(1, s.values.thumbSize || 3)),
   sort: (s: State): Sort => sortOf(s.values.libSort),
+  /** The radio's stick mode, 1-4 (Mode 2 by default). */
+  stickMode: (s: State) => asMode(s.values.stickMode),
 };
 
 // Selectors must return the same object for the same input, or React re-renders forever.

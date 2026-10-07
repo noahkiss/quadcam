@@ -6,7 +6,8 @@ import reviewFixture from "../../../e2e/fixtures/session-review.json";
 import finishedFixture from "../../../e2e/fixtures/session-finished.json";
 import settingsFixture from "../../../e2e/fixtures/settings.json";
 import osdFixture from "../../../e2e/fixtures/osd.json";
-import type { LibClip, LibraryView, ModulePin, ModuleStatus, OsdView, Session, SettingsView, Volume } from "../types";
+import switchMapFixture from "../../../e2e/fixtures/switchmap.json";
+import type { LibClip, LibraryView, ModulePin, ModuleStatus, OsdView, Session, SettingsView, SwitchMap, Volume } from "../types";
 
 export const HOME = "/Users/pilot";
 export const CACHE = `${HOME}/Library/Caches/app.quadcam`;
@@ -170,4 +171,9 @@ export const NOTICES = "QuadCam third-party notices\n\n- react 19.3.0: MIT\n";
  * element off screen in profile 2). */
 export function osd(): OsdView {
   return structuredClone(osdFixture) as OsdView;
+}
+
+/** The switch map the real core made from the synthetic whoop (`tests/fixtures/switchmap/whoop`). */
+export function switchMap(): SwitchMap {
+  return structuredClone(switchMapFixture) as unknown as SwitchMap;
 }

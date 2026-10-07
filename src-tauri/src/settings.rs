@@ -316,6 +316,12 @@ pub const KEYS: &[Key] = &[
         about: "any value",
         check: any,
     },
+    Key {
+        file: "stickMode",
+        name: None,
+        about: "1, 2, 3 or 4",
+        check: |v| crate::gear::check_count(v, 1, 4),
+    },
 ];
 
 /// The setting with this file key or CLI/MCP name.

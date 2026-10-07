@@ -50,6 +50,8 @@ q show | save session-finished
 q library list | save library
 q settings | save settings
 q gear osd "$repo/src-tauri/tests/fixtures/osd/pal-synthetic.dump_all.txt" | save osd
+sm="$repo/src-tauri/tests/fixtures/switchmap/whoop"
+q gear map --radio "$sm" --fc "$sm/fc.diff_all.txt" | save switchmap
 
 # Media: session thumbnails, a 10-frame strip per library clip, and one small MP4 that
 # stands in for every preview.

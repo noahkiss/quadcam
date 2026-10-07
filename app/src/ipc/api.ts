@@ -7,7 +7,7 @@ import { open as openDialog } from "@tauri-apps/plugin-dialog";
 import { openPath, openUrl, revealItemInDir } from "@tauri-apps/plugin-opener";
 import { commands } from "../bindings";
 import * as N from "./normalize";
-import type { ImportOptions, LibEdit, LibraryFilter, Moved, OsdParams, PlanPatch, RemovedCuts, SettingsValues, Span } from "./types";
+import type { ImportOptions, LibEdit, LibraryFilter, Moved, OsdParams, PlanPatch, RemovedCuts, SettingsValues, Span, SwitchMapParams } from "./types";
 
 type Result<T> = Promise<{ status: "ok"; data: T } | { status: "error"; error: string }>;
 
@@ -84,6 +84,9 @@ export const api = {
 
   // Gear
   gearOsd: (params: OsdParams) => ok(commands.gearOsd(params)),
+  gearSwitchMap: async (params: SwitchMapParams) => N.switchMap(await ok(commands.gearSwitchMap(params))),
+  gearRadio: async () => N.radioSnapshot(await ok(commands.gearRadio({ wait_ms: null }))),
+  gearRadioWatch: (on: boolean) => ok(commands.gearRadioWatch({ on })),
 };
 
 /** A URL the web view can load for a file the core made (thumbnails, previews). */

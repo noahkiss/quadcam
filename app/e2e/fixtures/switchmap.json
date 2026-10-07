@@ -1,0 +1,361 @@
+{
+ "adjustments": [
+  {
+   "end": 2100,
+   "function_id": 12,
+   "name": "Rate profile",
+   "range_ch": 7,
+   "select": true,
+   "select_ch": 7,
+   "slot": 0,
+   "start": 900
+  }
+ ],
+ "conflicts": [
+  "BLACKBOX is on AUX6 (CH10), which no control moves: never on.",
+  "BEEPER and FLIP OVER AFTER CRASH share one range: AUX4 1700-2100.",
+  "Sound \"lapclr\" is not on the card: a special function plays it."
+ ],
+ "live": null,
+ "model": "WHOOP ONE",
+ "modes": [
+  {
+   "ch": 5,
+   "end": 2100,
+   "linked": null,
+   "mode_id": 0,
+   "name": "ARM",
+   "slot": 0,
+   "start": 1700
+  },
+  {
+   "ch": 6,
+   "end": 1300,
+   "linked": null,
+   "mode_id": 1,
+   "name": "ANGLE",
+   "slot": 1,
+   "start": 900
+  },
+  {
+   "ch": 6,
+   "end": 1700,
+   "linked": null,
+   "mode_id": 2,
+   "name": "HORIZON",
+   "slot": 2,
+   "start": 1300
+  },
+  {
+   "ch": 8,
+   "end": 2100,
+   "linked": null,
+   "mode_id": 13,
+   "name": "BEEPER",
+   "slot": 3,
+   "start": 1700
+  },
+  {
+   "ch": 8,
+   "end": 2100,
+   "linked": null,
+   "mode_id": 35,
+   "name": "FLIP OVER AFTER CRASH",
+   "slot": 4,
+   "start": 1700
+  },
+  {
+   "ch": 10,
+   "end": 2100,
+   "linked": null,
+   "mode_id": 26,
+   "name": "BLACKBOX",
+   "slot": 5,
+   "start": 1700
+  }
+ ],
+ "notes": [
+  "Logical switches on telemetry, timers or sticky state are left out: the map cannot know them."
+ ],
+ "rows": [
+  {
+   "id": "SA",
+   "kind": "switch",
+   "label": "SA",
+   "positions": [
+    {
+     "channels": [
+      {
+       "ch": 5,
+       "us": 988
+      }
+     ],
+     "fc": [],
+     "name": "up",
+     "radio": [
+      "Plays \"disarm\""
+     ],
+     "source": "SA0"
+    },
+    {
+     "channels": [
+      {
+       "ch": 5,
+       "us": 2012
+      }
+     ],
+     "fc": [
+      "ARM"
+     ],
+     "name": "down",
+     "radio": [
+      "L1 on",
+      "Timer 1 (TOT) runs",
+      "Plays \"armed\""
+     ],
+     "source": "SA2"
+    }
+   ],
+   "switch_type": "2POS"
+  },
+  {
+   "id": "SB",
+   "kind": "switch",
+   "label": "SB",
+   "positions": [
+    {
+     "channels": [
+      {
+       "ch": 6,
+       "us": 988
+      }
+     ],
+     "fc": [
+      "ANGLE"
+     ],
+     "name": "up",
+     "radio": [],
+     "source": "SB0"
+    },
+    {
+     "channels": [
+      {
+       "ch": 6,
+       "us": 1500
+      }
+     ],
+     "fc": [
+      "HORIZON"
+     ],
+     "name": "mid",
+     "radio": [],
+     "source": "SB1"
+    },
+    {
+     "channels": [
+      {
+       "ch": 6,
+       "us": 2012
+      }
+     ],
+     "fc": [],
+     "name": "down",
+     "radio": [],
+     "source": "SB2"
+    }
+   ],
+   "switch_type": "3POS"
+  },
+  {
+   "id": "SC",
+   "kind": "switch",
+   "label": "SC",
+   "positions": [
+    {
+     "channels": [
+      {
+       "ch": 7,
+       "us": 988
+      }
+     ],
+     "fc": [
+      "Rate profile 1"
+     ],
+     "name": "up",
+     "radio": [],
+     "source": "SC0"
+    },
+    {
+     "channels": [
+      {
+       "ch": 7,
+       "us": 1500
+      }
+     ],
+     "fc": [
+      "Rate profile 2"
+     ],
+     "name": "mid",
+     "radio": [],
+     "source": "SC1"
+    },
+    {
+     "channels": [
+      {
+       "ch": 7,
+       "us": 2012
+      }
+     ],
+     "fc": [
+      "Rate profile 3"
+     ],
+     "name": "down",
+     "radio": [],
+     "source": "SC2"
+    }
+   ],
+   "switch_type": "3POS"
+  },
+  {
+   "id": "SD",
+   "kind": "switch",
+   "label": "SD",
+   "positions": [
+    {
+     "channels": [
+      {
+       "ch": 8,
+       "us": 988
+      }
+     ],
+     "fc": [],
+     "name": "up",
+     "radio": [],
+     "source": "SD0"
+    },
+    {
+     "channels": [
+      {
+       "ch": 8,
+       "us": 2012
+      }
+     ],
+     "fc": [
+      "BEEPER",
+      "FLIP OVER AFTER CRASH"
+     ],
+     "name": "down",
+     "radio": [],
+     "source": "SD2"
+    }
+   ],
+   "switch_type": "2POS"
+  },
+  {
+   "id": "SE",
+   "kind": "switch",
+   "label": "SE",
+   "positions": [
+    {
+     "channels": [],
+     "fc": [],
+     "name": "released",
+     "radio": [],
+     "source": "SE0"
+    },
+    {
+     "channels": [],
+     "fc": [],
+     "name": "pressed",
+     "radio": [
+      "Plays \"lapclr\""
+     ],
+     "source": "SE2"
+    }
+   ],
+   "switch_type": "TOGGLE"
+  },
+  {
+   "id": "TrimThrDown",
+   "kind": "trim",
+   "label": "Throttle trim down",
+   "positions": [
+    {
+     "channels": [],
+     "fc": [],
+     "name": "released",
+     "radio": [],
+     "source": null
+    },
+    {
+     "channels": [],
+     "fc": [],
+     "name": "pressed",
+     "radio": [
+      "Reads Timer 1"
+     ],
+     "source": "TrimThrDown"
+    }
+   ],
+   "switch_type": null
+  },
+  {
+   "id": "stick:Thr",
+   "kind": "stick",
+   "label": "Throttle stick",
+   "positions": [
+    {
+     "channels": [],
+     "fc": [],
+     "name": "low",
+     "radio": [
+      "L2 on"
+     ],
+     "source": null
+    },
+    {
+     "channels": [],
+     "fc": [],
+     "name": "centre",
+     "radio": [],
+     "source": null
+    },
+    {
+     "channels": [],
+     "fc": [],
+     "name": "high",
+     "radio": [],
+     "source": null
+    }
+   ],
+   "switch_type": null
+  }
+ ],
+ "sources": [
+  "model00.yml",
+  "radio.yml",
+  "fc.diff_all.txt"
+ ],
+ "sticks": [
+  {
+   "ch": 1,
+   "stick": "roll",
+   "weight": 100
+  },
+  {
+   "ch": 2,
+   "stick": "pitch",
+   "weight": 100
+  },
+  {
+   "ch": 3,
+   "stick": "throttle",
+   "weight": 100
+  },
+  {
+   "ch": 4,
+   "stick": "yaw",
+   "weight": 100
+  }
+ ]
+}
