@@ -3,6 +3,7 @@
 // Voice, Checklists, Splash, Backups and Changes.
 import { Overview } from "./Overview";
 import { OsdSegment } from "./Osd/OsdSegment";
+import { SwitchesSegment } from "./Switches/SwitchesSegment";
 import { BackupsSegment } from "./Backups/BackupsSegment";
 import type { DeviceRef, DeviceSegment } from "./slots";
 
@@ -10,6 +11,8 @@ export const DEVICE_SEGMENTS: DeviceSegment[] = [
   { id: "overview", label: "Overview", kinds: "all", render: (d) => <Overview d={d} /> },
   // The FC's latest backup, or a dump or diff file.
   { id: "osd", label: "OSD", kinds: ["fc"], render: (d) => <OsdSegment key={d.key} device={d.device?.last_backup ? d.device.id : null} /> },
+  // From a card or model file and a dump; the latest backups join as sources later.
+  { id: "switches", label: "Switches", kinds: ["fc", "radio"], render: (d) => <SwitchesSegment d={d} /> },
   { id: "backups", label: "Backups", kinds: ["radio", "fc", "goggles", "dvr_card"], render: (d) => <BackupsSegment d={d} /> },
 ];
 

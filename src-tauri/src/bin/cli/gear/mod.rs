@@ -12,6 +12,7 @@ mod backup;
 mod card;
 mod fc;
 mod flights;
+mod map;
 mod osd;
 mod packs;
 
@@ -34,6 +35,12 @@ pub enum GearCmd {
     Osd(osd::OsdArgs),
     /// An EdgeTX card: models, the selected model, the radio clock; `preview` checks edits.
     Card(card::CardArgs),
+    /// The switch map: what each radio control does on the radio and the FC, per position.
+    /// Reads an EdgeTX card or model file and a Betaflight dump; --live marks the
+    /// positions now.
+    Map(map::MapArgs),
+    /// The radio in USB Joystick mode now: buttons, axes, channel values.
+    Radio(map::RadioArgs),
     /// Flights from the radio logs: measures, pack, place, clip. `set` and `folders`.
     Flights(flights::FlightsArgs),
     /// The session report for a day, else the last import's days.
@@ -113,6 +120,8 @@ pub fn run(core: &Core, cmd: GearCmd) -> Result<Value> {
         GearCmd::Osd(a) => osd::run(core, a)?,
         GearCmd::Status => serde_json::to_value(call::gear_status(core)?)?,
         GearCmd::Card(a) => card::run(core, a)?,
+        GearCmd::Map(a) => map::run(core, a)?,
+        GearCmd::Radio(a) => map::radio(core, a)?,
         GearCmd::Flights(a) => flights::flights(core, a)?,
         GearCmd::Report(a) => flights::report(core, a)?,
         GearCmd::Preflight => flights::preflight(core)?,

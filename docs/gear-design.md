@@ -835,6 +835,38 @@ FC effect (`aux` modes, `adjrange` selections such as rate or OSD profile), the 
 - Conflicts are listed: two modes on one range, a switch with no effect, a sound file the card
   does not have.
 
+**Built (WP6).** `gear/switchmap.rs` builds the map; `core/switchmap.rs` reads the files.
+
+- Rows: the switches in `radio.yml` (else the ones the model uses, as 3-position), trims used as
+  switches, and sticks a logical switch reads (low, centre, high).
+- A position is worked out by running every channel's mixes in file order with that control
+  there and the rest at rest (other switches in position 0, sticks centred, throttle low):
+  inputs, mix switch conditions, `ADD`, `MUL`, `REPL`, offsets and `limitData` (min, max,
+  offset, revert). Logical switches are three-valued: telemetry, timers and sticky state are
+  unknown and light nothing; `FUNC_EDGE` follows its switch and shows as a pulse. A row lists
+  the channels, logical switches, special functions and timers that differ between its
+  positions. A mode on in every position of a row moves to the notes.
+- "Two modes on one range" means the same AUX and the same start and end; overlapping ranges
+  are normal (AIR MODE 900-2100 under ARM).
+- Live: `MSP_RC` (105) through `bf::rc_channels` (one MSP exchange, no cue, the port released),
+  or the radio's joystick, or channel values given. A row is at the position whose channel
+  values all match within 60 µs. The UI matches the joystick stream itself
+  (`app/src/lib/controls.ts`, the same rule).
+- The radio as a USB joystick: `gear/radio_hid.rs` (hidapi, shared open; VID:PID `1209:4f54`;
+  19-byte reports: 24 button bits, 8 axes 0..2048 that are CH1-8). `gear_radio` is one look;
+  `gear_radio_watch` streams `radio-input` events (at most one per 16 ms, a heartbeat every
+  500 ms, reopen after a replug). A process started by cargo reaches no HID device unless
+  `QUADCAM_HID=real`. The web view's Gamepad API never saw the radio, so the app does not use it.
+- Surfaces: rows `gear_switch_map`, `gear_radio`, `gear_radio_watch`; CLI `gear map`, `gear
+  radio`; MCP `quadcam_gear` actions `switch_map` and `radio`. The UI: the Switches segment on FC
+  and radio pages, the Controls page under Gear (sticks in Mode 1-4, the `stickMode` setting;
+  channels; buttons; the map marked live), and the shared stick widget
+  (`components/gear/Sticks.tsx`) the built-in sim can reuse.
+- Sources: files, or the latest backups of saved devices (`devices`), or of the radio and FC
+  saved with an `aircraft`. From a radio backup the model is the one named, else the one whose
+  header name the profile's `edgetx_models` lists, else the selected one. Each source names its
+  backup's date.
+
 ### 7.3 OSD
 
 - Read `set osd_<element>_pos`, `osd_profile_N_name` and `vcd_video_system` from a dump, a

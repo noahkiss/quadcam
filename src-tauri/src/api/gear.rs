@@ -12,7 +12,8 @@ pub use crate::core::{
 };
 pub use crate::core::{
     BoardNotesParams, CardParams, CardPreview, CardPreviewParams, DeviceSaveParams, FcJob,
-    FcPortParams, FcReadParams, GearCard, GearStatus, OsdParams, ReminderParams, UsbTimer,
+    FcPortParams, FcReadParams, GearCard, GearStatus, OsdParams, RadioParams, RadioWatchParams,
+    ReminderParams, SwitchMapParams, UsbTimer,
 };
 pub use crate::core::{
     CrashSaveParams, FlightFilter, FlightFoldersParams, FlightReport, FlightSetParams, FlightsView,
@@ -30,7 +31,9 @@ pub use crate::gear::model::DiffItem;
 pub use crate::gear::osd::OsdView;
 pub use crate::gear::packs::{Pack, PackType, PacksView};
 pub use crate::gear::preflight::Preflight;
+pub use crate::gear::radio_hid::RadioSnapshot;
 pub use crate::gear::report::SessionReport;
+pub use crate::gear::switchmap::SwitchMap;
 use serde::{Deserialize, Serialize};
 use specta::Type;
 
@@ -72,6 +75,15 @@ macro_rules! with_gear_rows {
             gear_card(params: CardParams) -> GearCard = |c| c.gear_card(&params);
             /// Checks and diffs EdgeTX card edits. Writes nothing.
             gear_card_preview(params: CardPreviewParams) -> CardPreview = |c| c.gear_card_preview(&params);
+            /// The switch map: each control's positions with their channel values, FC modes
+            /// and radio effects, from an EdgeTX model and a Betaflight dump; with `live`,
+            /// where each control is now. Reads only.
+            gear_switch_map(params: SwitchMapParams) -> SwitchMap = |c| c.gear_switch_map(&params);
+            /// One look at the radio in USB Joystick mode: its buttons, axes and channels.
+            gear_radio(params: RadioParams) -> RadioSnapshot = |c| c.gear_radio(&params);
+            /// Starts or stops the radio stream the app's controls page draws (`radio-input`
+            /// events). True while it runs.
+            gear_radio_watch(params: RadioWatchParams) -> bool = |c| c.gear_radio_watch(&params);
             /// Flights from the radio logs: hover, sag, resting voltage, mAh, the threshold,
             /// the worst link and dropouts, with the pack, place and clip of each.
             gear_flights(params: FlightFilter) -> FlightsView = |c| c.gear_flights(&params);

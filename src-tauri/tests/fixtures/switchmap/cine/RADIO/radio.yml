@@ -1,0 +1,20 @@
+semver: 2.12.4
+board: pocket
+currModel: 3
+ttsLanguage: "en"
+switchConfig: 
+   SA:
+      name: ""
+      type: 2POS
+   SB:
+      name: ""
+      type: 3POS
+   SC:
+      name: ""
+      type: 3POS
+   SD:
+      name: ""
+      type: 2POS
+   SE:
+      name: ""
+      type: TOGGLE

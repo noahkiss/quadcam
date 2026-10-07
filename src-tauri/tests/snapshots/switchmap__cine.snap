@@ -1,0 +1,44 @@
+---
+source: tests/switchmap.rs
+expression: "switchmap::render_text(&m)"
+---
+Switch map: CINE TWO
+Read: model03.yml, radio.yml, fc.dump_all.txt
+Sticks: Roll CH1 100%, Pitch CH2 100%, Throttle CH3 100%, Yaw CH4 100%
+
+SA (2POS)
+  up        CH5 988                FC: -                                  Radio: -
+  down      CH5 2012               FC: ARM                                Radio: L1 on; Timer 1 (ARM) runs; Plays "armed"
+
+SB (3POS)
+  up        CH6 988                FC: ANGLE                              Radio: -
+  mid       CH6 1500               FC: HORIZON                            Radio: -
+  down      CH6 2012               FC: -                                  Radio: -
+
+SC (3POS)
+  up        CH6 988; CH7 988       FC: ANGLE; OSD profile 1               Radio: -
+  mid       CH6 988; CH7 1500      FC: ANGLE; OSD profile 2               Radio: -
+  down      CH6 1500; CH7 2012     FC: HORIZON; OSD profile 3             Radio: Plays "panic"
+
+SD (2POS)
+  up        CH8 988                FC: -                                  Radio: -
+  down      CH8 2012               FC: BEEPER                             Radio: L2 on (pulse); Screen 1
+
+SE (TOGGLE)
+  released  CH8 988                FC: -                                  Radio: -
+  pressed   CH8 1500               FC: VTX PIT MODE; Roll rate adjust on CH6 Radio: -
+
+Modes
+  ARM                    AUX1 (CH5) 1700-2100
+  ANGLE                  AUX2 (CH6) 900-1300
+  HORIZON                AUX2 (CH6) 1300-1700
+  VTX PIT MODE           AUX4 (CH8) 1300-1700
+  BEEPER                 AUX4 (CH8) 1700-2100
+  AIR MODE               AUX1 (CH5) 900-2100
+
+Adjustments
+  OSD profile            on while AUX3 900-2100, selected by AUX3
+  Roll rate              on while AUX4 1300-1700, adjusted by AUX2
+
+Notes
+  - AIR MODE is on in every position of SA.

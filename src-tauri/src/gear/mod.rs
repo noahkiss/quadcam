@@ -22,6 +22,9 @@
 //! - `crashes`: the crash and repair log.
 //! - `report`: the session report; `preflight`: the "Pack up" check.
 //! - `osd`: Betaflight OSD layouts: decode, draw per profile, overlap and off-screen check.
+//! - `switchmap`: the switch map: an EdgeTX model joined with the FC's `aux` and `adjrange`
+//!   lines, per control and position; live positions from channel values.
+//! - `radio_hid`: the radio as a USB joystick (hidapi): reports, channels, the watch.
 //! - `blobs`: the content-addressed blob store under the backups.
 //! - `backup`: snapshots: take, list, read, diff, retain, prune, export, import old folders.
 //! - `radiologs`: each radio log kept once per radio, outside snapshots.
@@ -45,10 +48,12 @@ pub mod model;
 pub mod osd;
 pub mod packs;
 pub mod preflight;
+pub mod radio_hid;
 pub mod radiologs;
 pub mod report;
 pub mod serial;
 pub mod store;
+pub mod switchmap;
 
 use crate::disk::Volume;
 use model::DeviceKind;

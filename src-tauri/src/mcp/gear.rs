@@ -27,9 +27,9 @@ pub const NOTHING_FOUND: &str = "Nothing found. If macOS asked to allow an acces
 #[derive(Debug, Clone, Default, Deserialize, JsonSchema)]
 #[schemars(deny_unknown_fields)]
 pub struct GearArgs {
-    #[schemars(required, extend("enum" = ["status", "devices", "fc_identify", "board_notes", "usb_timers", "osd", "card", "card_preview", "storage", "backups", "backup_read", "backup_diff", "card_checks", "flights", "packs", "session_report", "preflight", "crashes"]))]
+    #[schemars(required, extend("enum" = ["status", "devices", "fc_identify", "board_notes", "usb_timers", "osd", "card", "card_preview", "storage", "backups", "backup_read", "backup_diff", "card_checks", "flights", "packs", "session_report", "preflight", "crashes", "switch_map", "radio"]))]
     pub action: Option<String>,
-    /// For fc_identify: the FC's serial port (/dev/cu.usbmodem...) from status; omit when one FC is plugged in.
+    /// For fc_identify and a live switch_map: the FC's serial port (/dev/cu.usbmodem...) from status; omit when one FC is plugged in.
     #[schemars(length(max = 200))]
     pub port: Option<String>,
     /// For board_notes: a board name (BETAFPVG473); omit for every board.
@@ -38,25 +38,27 @@ pub struct GearArgs {
     /// For board_notes: a firmware version (2025.12.5); omit for every version.
     #[schemars(length(max = 80))]
     pub version: Option<String>,
-    /// For osd: Betaflight `dump all`, `diff all` or CLI-line files (absolute paths), read
-    /// in order; a later file's lines win.
+    /// For osd and switch_map: Betaflight `dump all`, `diff all` or CLI-line files
+    /// (absolute paths), read in order; a later file's lines win.
     #[schemars(length(max = 8))]
     pub paths: Option<Vec<String>>,
-    /// For osd: a saved device id instead of files (needs a backup of it). For card and
+    /// For osd and switch_map: a saved device id instead of files (needs a backup of it). For card and
     /// card_preview: a connected radio's device id, instead of mount.
     #[schemars(length(max = 80))]
     pub device: Option<String>,
     /// For osd: NTSC, PAL, HD or WxH; omit for the files' video system.
     #[schemars(length(max = 8))]
     pub grid: Option<String>,
-    /// For card and card_preview: the card's mount point. Default: the one EdgeTX card mounted.
+    /// For card and card_preview: the card's mount point. Default: the one EdgeTX card mounted. For switch_map: an EdgeTX card's mount or folder, or one model file.
     #[schemars(length(max = 1024))]
     pub mount: Option<String>,
-    /// For card: a model file (model01.yml) to read in full: timers, mixes, logical switches, special functions, switch warnings, sensors, screens.
+    /// For card: a model file (model01.yml) to read in full: timers, mixes, logical switches, special functions, switch warnings, sensors, screens. For switch_map: the model on the card; default the radio's selected model.
     #[schemars(length(max = 40))]
     pub model: Option<String>,
     /// For card_preview: the edits, each {"kind": "model", "file": "model01.yml", "name": "<header name>", "ops": [{"op": "set_checklist", "enabled": true}, ...]}, {"kind": "radio", "ops": [{"op": "set_scalar", "key": "hapticMode", "value": "mode_nokeys"}]}, {"kind": "checklist", "model": "model01.yml", "text": "=Props tight"}, {"kind": "model_copy", ...} or {"kind": "model_delete", "file": ...}.
     pub edits: Option<Vec<Value>>,
+    /// For switch_map: also mark where each control is now, from the FC's channels (MSP) when an FC is plugged in, else from the radio in USB Joystick mode.
+    pub live: Option<bool>,
     /// For backup_read and backup_diff: a backup id (<device>/<name>) from backups.
     #[schemars(length(max = 120))]
     pub id: Option<String>,
@@ -69,7 +71,7 @@ pub struct GearArgs {
     /// For flights and session_report: a day, YYYY-MM-DD. session_report without it: the days of the last import.
     #[schemars(length(max = 10))]
     pub day: Option<String>,
-    /// For flights and crashes: an aircraft profile name.
+    /// For flights and crashes: an aircraft profile name. For switch_map: reads the latest backups of the radio and FC saved with that aircraft.
     #[schemars(length(max = 80))]
     pub aircraft: Option<String>,
     /// For flights: a pack label.
@@ -220,7 +222,7 @@ pub fn tools() -> Vec<Value> {
     vec![
         tool::<GearArgs>(
             "quadcam_gear",
-            "Read the FPV gear QuadCam knows: `status` (the gear folder, the Gear settings, and the devices plugged in now: EdgeTX radios in USB Storage mode, goggles and DVR cards, FC and ELRS serial ports, radios in DFU mode; each with its saved name and aircraft when QuadCam knows it; and each FC's USB heat timer), `devices` (every device saved in gear.json: id, kind, name, aircraft, board, firmware, version, last seen, last backup), `fc_identify` (reads a Betaflight FC over MSP: board, firmware, version, device id, whether QuadCam may write it, known issues; no reboot), `board_notes` (known issues of FC boards and builds), `usb_timers` (per FC on USB: battery in, minutes on USB, minutes left before \"Unplug now\"), `osd` (a Betaflight OSD layout from `paths`, dump or diff files read in order: each OSD profile drawn on its grid (NTSC 30x13, PAL 30x16, HD 53x20, from vcd_video_system or `grid`), the elements on in each profile with x and y, and the check for overlaps and cells off screen), `card` (an EdgeTX SD card: board and version, whether QuadCam may write it, its models, the model the radio selects and that model's aircraft, the radio clock check; with `model`, that model in full) `card_preview` (the checks and line diff of EdgeTX card edits, and how long the write would take; writes nothing), `storage` (the gear folder's size in total and per device: snapshots by kind, logs, blobs only that device uses), `backups` (snapshots newest first, or one `device`'s: id, why it was taken, time, files, size, pinned), `backup_read` (a backup `id`'s file list, or one file's text with `path`), `backup_diff` (what changed from `against`, or the backup before, to `id`: files put and removed, a line diff per text file), `card_checks` (a card `device`'s file-system checks, newest first), `flights` (flights from the radio logs, newest first: hover throttle, sag, resting voltage, mAh, when the pack type's mAh warning was crossed, the worst link, dropouts; each with its aircraft, pack (or a suggested one), place and library clip; filter by `day`, `aircraft`, `pack`, `place`), `packs` (packs with cycles, charge state, resting voltage and a weak mark; pack types with the charging sheet and a suggested mAh warning; the charging notes), `session_report` (one flying day, by default the last import's days: flights, air time, longest flight, worst link, dropouts, pack use, crashes; as Markdown to share), `preflight` (the \"Pack up\" check: packs charged, the radio's model, card space, backups, cards still in the Mac; each pass, warn or unknown) or `crashes` (the crash and repair log, by `aircraft` or `clip`). Changes nothing.\n\nBest for: the first Gear call, checking what is plugged in, and checking an OSD layout before or after an edit, and reading or planning radio model changes.\nReturns: one line per device plus the structured records; for osd, the drawn profiles as text plus the structured view.\nFollow up with quadcam_gear_edit device_save to name a device or link it to an aircraft, flight_set to put a flight on a pack.",
+            "Read the FPV gear QuadCam knows: `status` (the gear folder, the Gear settings, and the devices plugged in now: EdgeTX radios in USB Storage mode, goggles and DVR cards, FC and ELRS serial ports, radios in DFU mode; each with its saved name and aircraft when QuadCam knows it; and each FC's USB heat timer), `devices` (every device saved in gear.json: id, kind, name, aircraft, board, firmware, version, last seen, last backup), `fc_identify` (reads a Betaflight FC over MSP: board, firmware, version, device id, whether QuadCam may write it, known issues; no reboot), `board_notes` (known issues of FC boards and builds), `usb_timers` (per FC on USB: battery in, minutes on USB, minutes left before \"Unplug now\"), `osd` (a Betaflight OSD layout from `paths`, dump or diff files read in order: each OSD profile drawn on its grid (NTSC 30x13, PAL 30x16, HD 53x20, from vcd_video_system or `grid`), the elements on in each profile with x and y, and the check for overlaps and cells off screen), `card` (an EdgeTX SD card: board and version, whether QuadCam may write it, its models, the model the radio selects and that model's aircraft, the radio clock check; with `model`, that model in full) `card_preview` (the checks and line diff of EdgeTX card edits, and how long the write would take; writes nothing), `storage` (the gear folder's size in total and per device: snapshots by kind, logs, blobs only that device uses), `backups` (snapshots newest first, or one `device`'s: id, why it was taken, time, files, size, pinned), `backup_read` (a backup `id`'s file list, or one file's text with `path`), `backup_diff` (what changed from `against`, or the backup before, to `id`: files put and removed, a line diff per text file), `card_checks` (a card `device`'s file-system checks, newest first), `flights` (flights from the radio logs, newest first: hover throttle, sag, resting voltage, mAh, when the pack type's mAh warning was crossed, the worst link, dropouts; each with its aircraft, pack (or a suggested one), place and library clip; filter by `day`, `aircraft`, `pack`, `place`), `packs` (packs with cycles, charge state, resting voltage and a weak mark; pack types with the charging sheet and a suggested mAh warning; the charging notes), `session_report` (one flying day, by default the last import's days: flights, air time, longest flight, worst link, dropouts, pack use, crashes; as Markdown to share), `preflight` (the \"Pack up\" check: packs charged, the radio's model, card space, backups, cards still in the Mac; each pass, warn or unknown) `crashes` (the crash and repair log, by `aircraft` or `clip`), `switch_map` (what each radio control does: per switch, trim or stick position, the channel values in microseconds, the Betaflight modes and adjustments they select, and the radio's logical switches, special functions and timers; from `mount` (an EdgeTX card or model file) and `paths` (the FC's dump or diff), or the latest backups of a saved `device` or of an `aircraft`'s radio and FC; conflicts such as two modes on one range, a switch with no effect, a mode no switch reaches, a sound file the card lacks; with `live`, the position each control is in now) or `radio` (the radio in USB Joystick mode now: buttons, axes, channel values). Changes nothing.\n\nBest for: the first Gear call, checking what is plugged in, and checking an OSD layout before or after an edit, reading or planning radio model changes, and answering \"what does this switch do\".\nReturns: one line per device plus the structured records; for osd and switch_map, the drawn view as text plus the structured view.\nFollow up with quadcam_gear_edit device_save to name a device or link it to an aircraft, flight_set to put a flight on a pack.",
             json!({"openWorldHint": false, "readOnlyHint": true, "title": "Gear"}),
         ),
         tool::<GearEditArgs>(
@@ -486,6 +488,48 @@ fn gear<B: Backend>(backend: &mut B, a: &Value) -> Result<(Vec<Value>, Value)> {
             )?;
             Ok((vec![text(preview_text(&v))], v))
         }
+        "switch_map" => {
+            let v = backend.call(
+                "gear_switch_map",
+                json!({
+                    "radio": x.mount,
+                    "model": x.model,
+                    "aircraft": x.aircraft,
+                    "devices": x.device.into_iter().collect::<Vec<_>>(),
+                    "fc": x.paths.unwrap_or_default(),
+                    "live": x.live.unwrap_or(false),
+                    "port": x.port,
+                }),
+            )?;
+            let map: crate::gear::switchmap::SwitchMap =
+                serde_json::from_value(v.clone()).context("bad switch_map answer")?;
+            Ok((vec![text(crate::gear::switchmap::render_text(&map))], v))
+        }
+        "radio" => {
+            let v = backend.call("gear_radio", json!({}))?;
+            let line = match v["frame"].as_object() {
+                Some(f) => format!(
+                    "{} | channels {} | buttons on {}",
+                    v["product"].as_str().unwrap_or("radio"),
+                    f["channels"]
+                        .as_array()
+                        .into_iter()
+                        .flatten()
+                        .enumerate()
+                        .map(|(i, c)| format!("CH{} {c}", i + 1))
+                        .collect::<Vec<_>>()
+                        .join(", "),
+                    {
+                        let b = f["buttons"].as_u64().unwrap_or(0);
+                        let on: Vec<String> =
+                            (0..24).filter(|i| b >> i & 1 == 1).map(|i| (i + 1).to_string()).collect();
+                        if on.is_empty() { "none".to_string() } else { on.join(", ") }
+                    }
+                ),
+                None => v["message"].as_str().unwrap_or("No radio.").to_string(),
+            };
+            Ok((vec![text(line)], v))
+        }
         "storage" => {
             let v = backend.call("gear_storage", Value::Null)?;
             Ok((vec![text(storage_text(&v))], v))
@@ -531,7 +575,7 @@ fn gear<B: Backend>(backend: &mut B, a: &Value) -> Result<(Vec<Value>, Value)> {
             Ok((vec![text(line)], json!({"checks": list})))
         }
         other => super::gear_flights::read(backend, other, &x).unwrap_or_else(|| Err(anyhow!(
-            "unknown action {other:?}; use status, devices, fc_identify, board_notes, usb_timers, osd, card, card_preview, storage, backups, backup_read, backup_diff, card_checks, flights, packs, session_report, preflight or crashes"
+            "unknown action {other:?}; use status, devices, fc_identify, board_notes, usb_timers, osd, card, card_preview, storage, backups, backup_read, backup_diff, card_checks, switch_map, radio, flights, packs, session_report, preflight or crashes"
         ))),
     }
 }
