@@ -2,7 +2,7 @@
 import { getCurrentWebview } from "@tauri-apps/api/webview";
 import { events } from "../bindings";
 import * as N from "./normalize";
-import type { AgentFormatRequest, ClipResult, DeviceChanged, ImportProgress, LibraryTask, RadioEvent, StageProgress } from "./types";
+import type { AgentFormatRequest, CalibrateView, ClipResult, DeviceChanged, ImportProgress, LibraryTask, RadioEvent, StageProgress } from "./types";
 
 export interface CoreEvents {
   "library-changed": null;
@@ -23,6 +23,8 @@ export interface CoreEvents {
   menu: string;
   /** The radio in USB Joystick mode, while `gearRadioWatch(true)` runs. */
   "radio-input": RadioEvent;
+  /** The sim's calibration session, while `gearSimCalibrate` runs one. */
+  "sim-calibration-event": CalibrateView;
 }
 
 type Listen = (cb: (payload: never) => void) => Promise<() => void>;
@@ -43,6 +45,7 @@ const SOURCES: Record<keyof CoreEvents, Listen> = {
   "agent-format-closed": wrap(events.agentFormatClosed),
   menu: wrap(events.menu),
   "radio-input": wrap(events.radioInput, N.radioEvent),
+  "sim-calibration-event": wrap(events.simCalibrationEvent),
 };
 
 export function on<K extends keyof CoreEvents>(name: K, handler: (payload: CoreEvents[K]) => void): Promise<() => void> {

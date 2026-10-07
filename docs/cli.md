@@ -152,6 +152,8 @@ quadcam-cli --json gear osd FILE [FILE ...] [--grid NTSC|PAL|HD|WxH] [--text]
 quadcam-cli --json gear map --radio CARD|MODEL.yml [--model model01.yml] --fc FILE [--fc FILE] [--live [--port P]] [--channels 1500,...] [--text]
 quadcam-cli --json gear map --aircraft NAME | --device ID [--device ID]   # from the latest backups
 quadcam-cli --json gear radio [--wait-ms 500]                    # the radio in USB Joystick mode
+quadcam-cli --json gear sim calibration [RADIO] [--set FILE.json [--product NAME]]   # the sim's radio calibration
+quadcam-cli --json gear sim defaults [--aircraft NAME | --radio CARD --fc FILE]     # what the sim pre-fills
 quadcam-cli --json gear flights [--day D] [set <flight> --pack L | folders --add DIR]
 quadcam-cli gear report [--day D] --markdown                     # the session report
 quadcam-cli --json gear preflight                                # the Pack up check

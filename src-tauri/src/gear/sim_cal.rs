@@ -253,6 +253,8 @@ pub struct SimDefaults {
     #[serde(default)]
     pub reset: Option<SuggestedControl>,
     pub notes: Vec<String>,
+    /// The calibration these give, in Mode 2: where a new calibration starts.
+    pub calibration: Calibration,
 }
 
 impl SimDefaults {
@@ -327,7 +329,7 @@ pub fn defaults(aircraft: Option<&str>, map: Option<&SwitchMap>) -> SimDefaults 
                 .into(),
         );
     }
-    SimDefaults {
+    let mut d = SimDefaults {
         aircraft: aircraft.map(str::to_string),
         map: stick_map,
         arm,
@@ -337,7 +339,10 @@ pub fn defaults(aircraft: Option<&str>, map: Option<&SwitchMap>) -> SimDefaults 
         airmode: mode("AIR MODE"),
         reset,
         notes,
-    }
+        calibration: Calibration::default(),
+    };
+    d.calibration = d.calibration(2);
+    d
 }
 
 /// The control that turns an `aux` mode on: the row whose position lists it, else the

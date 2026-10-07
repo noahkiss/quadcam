@@ -3584,6 +3584,8 @@ export type SimDefaults = {
 	/**  A free button or trim for reset: no function in the model or on the quad. */
 	reset?: SuggestedControl | null,
 	notes: string[],
+	/**  The calibration these give, in Mode 2: where a new calibration starts. */
+	calibration: Calibration,
 };
 
 /**  `gear_sim_defaults`: an aircraft (its saved radio's and FC's latest backups), or files. */

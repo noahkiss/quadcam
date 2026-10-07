@@ -42,7 +42,7 @@ jobs:
         with:
           workspaces: src-tauri
 
-      - run: cargo fmt --check
+      - run: cargo fmt --all --check
       - run: cargo clippy --workspace --all-targets --locked -- -D warnings
       - run: cargo test --workspace --locked -- --nocapture --test-threads=1
       - run: cargo build --release --locked --bins

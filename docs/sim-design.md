@@ -694,6 +694,30 @@ check", since the channel values are already exact (open question 3).
 - No gamepad path.
 - No battery-connect step.
 
+### 7.8 Built (S4)
+
+- `quadcam-sim` (`src-tauri/sim/`, a workspace member) holds `input.rs`: `InputSample`,
+  `InputRing` (one writer, seqlock slots, `latest_at` sample and hold), `now_ns` (the one
+  clock), `Calibration` and `AxisCal` (auto ends, edited ends, centre, deadzone in whole
+  percent, Reverse), `RadioControl` (a channel range, or a button for CH9 and up), `AutoCal`
+  (Move, Let go, Arm, Reset, Review, and Capture to set one control by moving it), `RcInput`
+  and the seeded `LinkModel`.
+- Move also lasts at least 3 s and the ends keep growing through Let go: advancing at 80 %
+  alone froze the ends at 80 %. An unmapped axis that moved replaces a mapped one that did
+  not; at Let go, a throttle channel resting mid-travel swaps with a stick resting at an end.
+- `radio_hid::Hub` is the one reader thread: the page's 16 ms stream (`Throttle`) and any
+  number of unthrottled sinks (`subscribe`, `subscribe_ring`) see every report.
+- `gear/sim_cal.rs`: `<gear>/sim/calibrations.json`, `resolve` (the saved radio whose board
+  the USB product name holds; the remembered answer; else ask; else a `usb-…` provisional
+  key), and `defaults` from an aircraft's switch map, each value with its source, plus a free
+  reset control.
+- Rows `gear_sim_calibration`, `gear_sim_calibration_save`, `gear_sim_defaults`,
+  `gear_sim_calibrate` (the session; `sim-calibration-event`); CLI `gear sim calibration |
+  defaults`; MCP `sim_calibration`, `sim_defaults`, `sim_calibration_save`. The screen is Gear
+  > **Sim radio** (`app/src/views/Gear/Sim/`). User guide: `docs/sim.md`.
+- The mode switches (turtle, angle, horizon, air mode) are in the calibration as well as the
+  arm and reset controls: pre-filled from the quad's `aux` lines and changeable on the screen.
+
 ---
 
 ## 8. Worlds and scale
@@ -855,7 +879,7 @@ its rows in `api`, CLI and MCP.
 | S1 | Physics crate | `src-tauri/sim/`: rigid body, motors, props, ducts, drag, ground effect, prop wash, VRS, battery, Rapier collisions, FC (rates, smoothing, PID, angle, horizon, airmode, turtle, arming), the stepping thread, snapshots, recordings; built-in presets | – | 1 |
 | S2 | Validation harness | `sim/src/validate.rs`, `sim/tests/`, fixtures and their scrubber, the headless bench | S1 | 1 |
 | S3 | Profile fitting | `sim/src/fit.rs`, profile storage under `<gear>/sim/`, `gear_sim_fit` / `profile(s)` rows, Fit and profile views | S1, S2; task BB for native decoding | 2 |
-| S4 | Input and calibration | `radio_hid` unthrottled subscriber, `sim/src/input.rs` (map, ends, deadzone, Reverse, link model), calibration storage keyed by radio id, the calibration screen | WP6 | 1 |
+| S4 | Input and calibration. Built (7.8) | `radio_hid` unthrottled subscriber, `sim/src/input.rs` (map, ends, deadzone, Reverse, link model), calibration storage keyed by radio id, the calibration screen | WP6 | 1 |
 | S5 | Minimal renderer and in-process host | Sim window (WebView, three.js), pose stream and interpolation, FPV camera, the plain room, basic OSD, stick display, Sim page, launch, settings popover | S1, S4 | 1 |
 | S6 | Engine prototypes and report | The four prototypes (3.2), the measurement scripts, the report | S1, S5 | 2 |
 | S7 | Production renderer | The chosen engine's host (sim process, signing, control socket), cameras, lighting, OSD from WP7, 4:3, video latency, analog look | S6 decision; WP7 | 3 |

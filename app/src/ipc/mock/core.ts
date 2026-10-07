@@ -23,6 +23,7 @@ import * as seed from "./seed";
 import * as gear from "./gear";
 import { MockFlights } from "./flights";
 import * as backups from "./backups";
+import { MockSim, defaults as simDefaults } from "./sim";
 import { location as normLocation, spans as normSpans } from "../normalize";
 import { live as liveOf } from "../../lib/controls";
 
@@ -33,7 +34,7 @@ const DISPATCH = new Set([
   "settings", "settings_set", "place_search", "place_save", "session_cuts", "profiles", "session_split", "library_split",
   "modules", "module_install", "module_remove", "modules_check", "gear_osd",
   "gear_status", "gear_devices", "gear_device_save", "gear_device_forget", "gear_dismiss_reminder",
-  "gear_switch_map", "gear_radio", "gear_radio_watch",
+  "gear_switch_map", "gear_radio", "gear_radio_watch", "gear_sim_calibration", "gear_sim_calibration_save", "gear_sim_defaults", "gear_sim_calibrate",
   "gear_flights", "gear_flight_set", "gear_flight_folders", "gear_packs", "gear_pack_save", "gear_pack_delete", "gear_pack_type_save",
   "gear_pack_type_delete", "gear_pack_notes", "gear_session_report", "gear_preflight", "gear_crashes", "gear_crash_save", "gear_crash_delete",
   "gear_backup", "gear_backups", "gear_backup_read", "gear_backup_diff", "gear_backup_pin", "gear_storage", "gear_prune",
@@ -82,6 +83,8 @@ export class MockCore {
   /** The radio in USB Joystick mode: plugged in or not, its latest frame, and whether the
    *  page streams it (`gear_radio_watch`). Specs move it with `radioFrame`. */
   radio: { connected: boolean; frame: import("../types").RadioFrame | null; watching: boolean } = { connected: false, frame: null, watching: false };
+  /** The sim's calibration (`./sim.ts`). */
+  sim = new MockSim();
   /** What the FC's `MSP_RC` reports (µs, CH1 first). */
   fcRc: number[] = [1500, 1500, 988, 1500, 988, 988, 988, 988];
   /** Answers given to agent format requests. */
@@ -290,6 +293,17 @@ export class MockCore {
         return this.radio.connected
           ? { connected: true, product: "Test Radio Joystick", frame: this.radio.frame, message: this.radio.frame ? null : "The radio sent no report: is USB Joystick mode on?" }
           : { connected: false, product: null, frame: null, message: "No radio in USB Joystick mode. Plug it in and choose USB Joystick on the radio." };
+      case "gear_sim_calibration":
+        return this.sim.calibration(this.radio.connected, this.gear.devices, (p.radio as string | null) ?? null);
+      case "gear_sim_calibration_save":
+        return this.sim.save(p as never);
+      case "gear_sim_defaults":
+        return simDefaults((p.aircraft as string | null) ?? null);
+      case "gear_sim_calibrate": {
+        const v = this.sim.calibrate(p as never);
+        this.emit("sim-calibration-event", v);
+        return v;
+      }
       case "gear_radio_watch":
         this.radio.watching = !!p.on;
         if (this.radio.watching) this.emitRadio();
@@ -449,6 +463,8 @@ export class MockCore {
     const seq = (this.radio.frame?.seq ?? 0) + 1;
     this.radio.frame = { seq, buttons, axes, channels: axes.map((a) => 988 + Math.floor(Math.min(2048, a) / 2)) };
     this.emitRadio();
+    const v = this.sim.frame(axes, buttons);
+    if (v) this.emit("sim-calibration-event", v);
   }
 
   private emitRadio() {
