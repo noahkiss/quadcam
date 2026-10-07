@@ -2,7 +2,7 @@
 // it was open, so a change the CLI or an agent made meanwhile stays.
 import type { State } from "../../store";
 import { sel } from "../../store/settings";
-import type { Layout, Place, Profile, SettingsValues, Tunables } from "../../ipc/types";
+import type { Automation, CueSettings, DeviceKind, GearSettings, Layout, Place, Profile, SettingsValues, Tunables } from "../../ipc/types";
 
 export interface PlaceRow {
   name: string;
@@ -36,6 +36,80 @@ export interface Draft {
   defaultIndex: number | null;
   /** The person unticked Default aircraft. */
   defaultCleared: boolean;
+  gear: GearDraft;
+}
+
+/** Settings > Gear. Numbers stay text while they are typed. */
+export interface GearDraft {
+  autoBackup: boolean;
+  keepRecent: string;
+  keepWeeks: string;
+  keepMonthly: boolean;
+  usbMinutes: string;
+  onConnect: Record<DeviceKind, Automation[]>;
+  cues: Required<Omit<CueSettings, "quiet_hours" | "voice">> & { voice: string };
+  quiet: boolean;
+  quietStart: string;
+  quietEnd: string;
+}
+
+export const GEAR_KINDS: DeviceKind[] = ["radio", "fc", "elrs_tx", "elrs_rx", "goggles", "dvr_card"];
+export const AUTOMATIONS: Automation[] = ["backup", "import", "apply_ready"];
+
+/** `CueSettings::default()` and `GearSettings::defaults` in the core, for a core that has not
+ *  answered yet. */
+const CUE_DEFAULTS: GearDraft["cues"] = {
+  mute: false,
+  speech: true,
+  sound: false,
+  notification: true,
+  safe_to_unplug: true,
+  still_inserted: true,
+  step_failed: true,
+  unplug_now: true,
+  debounce_s: 30,
+  reminder_grace_s: 60,
+  still_inserted_every_s: 300,
+  reminder_max: 3,
+  voice: "",
+  voice_source: "macos",
+};
+
+export function gearDraft(g: GearSettings | null | undefined): GearDraft {
+  const q = g?.cues.quiet_hours;
+  const onConnect = Object.fromEntries(GEAR_KINDS.map((k) => [k, AUTOMATIONS.filter((a) => (g ? g.on_connect[k] || [] : a === "backup" ? [a] : []).includes(a))])) as GearDraft["onConnect"];
+  const cues = { ...CUE_DEFAULTS, ...Object.fromEntries(Object.entries(g?.cues || {}).filter(([, v]) => v != null)) } as GearDraft["cues"];
+  return {
+    autoBackup: g?.auto_backup ?? true,
+    keepRecent: String(g?.keep_recent ?? 10),
+    keepWeeks: String(g?.keep_weeks ?? 8),
+    keepMonthly: g?.keep_monthly ?? true,
+    usbMinutes: String(g?.usb_minutes ?? 20),
+    onConnect,
+    cues: { ...cues, voice: cues.voice || "" },
+    quiet: !!q,
+    quietStart: q?.start || "22:00",
+    quietEnd: q?.end || "07:00",
+  };
+}
+
+const whole = (v: string, d: number, min: number, max: number) => {
+  const n = Math.round(Number(v));
+  return v.trim() !== "" && Number.isFinite(n) ? Math.min(max, Math.max(min, n)) : d;
+};
+
+/** The Gear keys the draft stands for (the checks in `settings::KEYS`). */
+export function gearValues(g: GearDraft): SettingsValues {
+  const { voice, ...cues } = g.cues;
+  return {
+    gearAutoBackup: g.autoBackup,
+    gearKeepRecent: whole(g.keepRecent, 10, 1, 1000),
+    gearKeepWeeks: whole(g.keepWeeks, 8, 0, 520),
+    gearKeepMonthly: g.keepMonthly,
+    gearUsbMinutes: whole(g.usbMinutes, 20, 0, 240),
+    gearOnConnect: g.onConnect,
+    gearCues: { ...cues, voice: voice.trim() || null, quiet_hours: g.quiet ? { start: g.quietStart, end: g.quietEnd } : null },
+  };
 }
 
 export function draftFrom(s: State): Draft {
@@ -67,6 +141,7 @@ export function draftFrom(s: State): Draft {
     profiles,
     defaultIndex: di >= 0 ? di : null,
     defaultCleared: false,
+    gear: gearDraft(s.gear?.settings),
   };
 }
 
@@ -104,6 +179,7 @@ export function valuesOf(d: Draft, before: Tunables): SettingsValues {
     places: validPlaces(d.places).places,
     profiles,
     defaultProfile,
+    ...gearValues(d.gear),
     tunables: { ...before, segment_gap_s: num(d.segGap, 5), session_gap_min: num(d.sessionGap, 20), tolerance_s: num(d.tolerance, 30), clock_skew_s: num(d.clockSkew, 300) },
   };
 }

@@ -133,6 +133,10 @@ struct EnvCheck {
     error: Option<String>,
     install_hint: &'static str,
     socket: Option<String>,
+    /// The app version (`Cargo.toml`).
+    version: &'static str,
+    /// The commit it was built from (short hash; `unknown` outside a git checkout).
+    build: &'static str,
 }
 
 #[tauri::command]
@@ -146,15 +150,22 @@ fn env_check(state: State<'_, AppState>) -> EnvCheck {
             error: None,
             install_hint: media::INSTALL_HINT,
             socket,
+            version: env!("CARGO_PKG_VERSION"),
+            build: BUILD,
         },
         Err(e) => EnvCheck {
             tools: None,
             error: Some(err(e)),
             install_hint: media::INSTALL_HINT,
             socket,
+            version: env!("CARGO_PKG_VERSION"),
+            build: BUILD,
         },
     }
 }
+
+/// The commit this build came from (`build.rs`).
+pub const BUILD: &str = env!("QUADCAM_BUILD");
 
 /// The output folder used until the user picks one: ~/Movies/quadcam.
 #[tauri::command]
@@ -415,6 +426,7 @@ pub fn specta_builder() -> tauri_specta::Builder<tauri::Wry> {
             c::gear_fc_read,
             c::gear_board_notes,
             c::gear_usb_timers,
+            c::gear_dismiss_reminder,
             c::gear_osd,
             c::modules,
             c::module_install,

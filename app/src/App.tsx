@@ -9,6 +9,8 @@ import { useMenu } from "./menu/useMenu";
 import { Overlays } from "./views/Shell/Overlays";
 import { Sidebar } from "./views/Shell/Sidebar";
 import { Toolbar } from "./views/Shell/Toolbar";
+import { StatusBar } from "./views/Shell/StatusBar";
+import { GearView } from "./views/Gear/GearView";
 import { LibraryView } from "./views/Library/LibraryView";
 import { FirstRun } from "./views/FirstRun/FirstRun";
 import { ClipDetail } from "./views/ClipDetail/ClipDetail";
@@ -71,9 +73,10 @@ export function App() {
       <div className={styles.body}>
         <Sidebar />
         <main className={styles.main}>
-          {screen === "detail" ? <ClipDetail /> : screen === "first-run" ? <FirstRun /> : <LibraryView onMenu={onMenu} />}
+          {screen === "gear" ? <GearView /> : screen === "detail" ? <ClipDetail /> : screen === "first-run" ? <FirstRun /> : <LibraryView onMenu={onMenu} />}
         </main>
       </div>
+      <StatusBar />
       <ImportSheet />
       <SettingsSheet />
       <Overlays />

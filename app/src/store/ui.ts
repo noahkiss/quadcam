@@ -5,7 +5,7 @@ import type { State } from ".";
 
 import type { ReactNode } from "react";
 
-export type SettingsSection = "library" | "import" | "aircraft" | "places" | "photos" | "modules" | "advanced";
+export type SettingsSection = "library" | "import" | "aircraft" | "places" | "photos" | "gear" | "modules" | "advanced";
 
 export interface AskRequest {
   title: string;

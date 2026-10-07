@@ -161,6 +161,8 @@ export const commands = {
 	gearBoardNotes: (params: BoardNotesParams) => typedError<BoardNote[], string>(__TAURI_INVOKE("gear_board_notes", { params })),
 	/**  Each FC's USB heat timer: battery in, seconds on USB, the limit, seconds left. */
 	gearUsbTimers: () => typedError<UsbTimer[], string>(__TAURI_INVOKE("gear_usb_timers")),
+	/**  Stops the "still inserted" reminder for a device's link. True when one was armed. */
+	gearDismissReminder: (params: ReminderParams) => typedError<boolean, string>(__TAURI_INVOKE("gear_dismiss_reminder", { params })),
 	/**
 	 *  An FC's OSD layout per OSD profile, drawn on its grid and checked for overlaps
 	 *  and cells off screen. Reads only.
@@ -524,6 +526,11 @@ export type CueSettings = {
 	quiet_hours?: QuietHours | null,
 	/**  A `say` voice name; None for the system voice. */
 	voice?: string | null,
+	/**
+	 *  What speaks the lines: macOS (`say`) or a voice pack. Until voice packs can play
+	 *  cues (WP9), `voice_pack` speaks with macOS too.
+	 */
+	voice_source?: VoiceSource,
 };
 
 /**  The answer to a cut change. */
@@ -767,6 +774,10 @@ export type EnvCheck = {
 	error: string | null,
 	install_hint: string,
 	socket: string | null,
+	/**  The app version (`Cargo.toml`). */
+	version: string,
+	/**  The commit it was built from (short hash; `unknown` outside a git checkout). */
+	build: string,
 };
 
 /**  What QuadCam knows about an FC after talking to it. */
@@ -948,6 +959,10 @@ export type GearStatus = {
 	sims_out_of_date: number,
 	/**  FCs on USB: battery in, time on USB, the limit (`core/fc.rs`). */
 	usb_timers?: UsbTimer[],
+	/**  The links a job holds now (`link_handle`): their devices show as working. */
+	working?: string[],
+	/**  The links with a "still inserted" reminder armed (`link_handle`). */
+	reminders?: string[],
 };
 
 /**  One search hit. */
@@ -1904,6 +1919,11 @@ export type RefusalCode = "unknown_version" | "unknown_board" | "device_changed"
 /**  Serial and device access is off in this process (tests; see `serial::system`). */
 "disabled";
 
+/**  `gear_dismiss_reminder`: a device's link, as `link_handle` names it. */
+export type ReminderParams = {
+	handle: string,
+};
+
 /**
  *  What happens to the file of an exported cut that is removed from the list. With no
  *  decision, the change is not applied and the caller is asked.
@@ -2246,6 +2266,9 @@ export type VerifyReport = {
 	ok: boolean,
 	error: string | null,
 };
+
+/**  What speaks the cue lines. */
+export type VoiceSource = "macos" | "voice_pack";
 
 /**  A mounted volume the app may care about. */
 export type Volume = {

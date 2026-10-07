@@ -14,6 +14,28 @@
   border-right: 1px solid var(--border);
   background: var(--mantle);
 }
+.nav {
+  display: flex;
+  flex-direction: column;
+}
+.version {
+  margin: auto 0 0;
+  padding: var(--s-2);
+  font-size: var(--t-sm);
+  color: var(--muted);
+}
+.fieldset {
+  margin: 0;
+  padding: 0;
+  border: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-2);
+}
+.fieldset legend {
+  padding: 0;
+  margin-bottom: var(--s-2);
+}
 .nav ul {
   margin: 0;
   padding: 0;

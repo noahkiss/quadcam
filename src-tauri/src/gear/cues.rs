@@ -15,9 +15,11 @@
 //!    cannot read the Focus state without Full Disk Access, so speech and sound use quiet
 //!    hours instead.
 //!
-//! `SystemCues` speaks with `/usr/bin/say`, plays a system sound with `/usr/bin/afplay` and
-//! posts a notification with `/usr/bin/osascript`, each a child process with an argv list,
-//! never a shell, run to the end before the next cue. A process started by cargo gets the
+//! `SystemCues` speaks with `/usr/bin/say` and plays a system sound with `/usr/bin/afplay`,
+//! each a child process with an argv list, never a shell, run to the end before the next
+//! cue. It posts a notification through the UserNotifications framework when the process
+//! runs from an app bundle (`native_notify`), else with `/usr/bin/osascript`: outside a
+//! bundle `UNUserNotificationCenter` has no app to post for and raises. A process started by cargo gets the
 //! silent `RecordedCues` from `system()` unless `QUADCAM_CUES=real`, so tests make no sound.
 
 use chrono::NaiveTime;
@@ -152,6 +154,18 @@ pub struct CueSettings {
     pub quiet_hours: Option<QuietHours>,
     /// A `say` voice name; None for the system voice.
     pub voice: Option<String>,
+    /// What speaks the lines: macOS (`say`) or a voice pack. Until voice packs can play
+    /// cues (WP9), `voice_pack` speaks with macOS too.
+    pub voice_source: VoiceSource,
+}
+
+/// What speaks the cue lines.
+#[derive(Debug, Clone, Copy, Default, Serialize, Deserialize, PartialEq, Eq, Type)]
+#[serde(rename_all = "snake_case")]
+pub enum VoiceSource {
+    #[default]
+    Macos,
+    VoicePack,
 }
 
 impl Default for CueSettings {
@@ -171,6 +185,7 @@ impl Default for CueSettings {
             reminder_max: 3,
             quiet_hours: None,
             voice: None,
+            voice_source: VoiceSource::Macos,
         }
     }
 }
@@ -273,6 +288,13 @@ impl Reminders {
 
     pub fn is_armed(&self, key: &str) -> bool {
         self.armed.contains_key(key)
+    }
+
+    /// The keys with a reminder armed, sorted.
+    pub fn armed(&self) -> Vec<String> {
+        let mut v: Vec<String> = self.armed.keys().cloned().collect();
+        v.sort();
+        v
     }
 
     /// The reminders due now, as cues. Keys not in `present` (removed devices) end.
@@ -391,6 +413,10 @@ impl CueSink for SystemCues {
         run("/usr/bin/afplay", &[&path]);
     }
     fn notify(&self, title: &str, body: &str) {
+        #[cfg(target_os = "macos")]
+        if native_notify(title, body) {
+            return;
+        }
         // The texts are arguments of the script, never part of it.
         run(
             "/usr/bin/osascript",
@@ -406,6 +432,53 @@ impl CueSink for SystemCues {
             ],
         );
     }
+}
+
+/// Posts a notification through `UNUserNotificationCenter`, as the app. False (nothing
+/// posted) when this process is not inside an app bundle, where the framework has no app to
+/// post for. The first post asks the person to allow notifications; a refusal drops it.
+#[cfg(target_os = "macos")]
+fn native_notify(title: &str, body: &str) -> bool {
+    use block2::RcBlock;
+    use objc2::runtime::Bool;
+    use objc2_foundation::{NSBundle, NSError, NSString};
+    use objc2_user_notifications::{
+        UNAuthorizationOptions, UNMutableNotificationContent, UNNotificationRequest,
+        UNUserNotificationCenter,
+    };
+    let bundle = NSBundle::mainBundle();
+    let in_app =
+        bundle.bundleIdentifier().is_some() && bundle.bundlePath().to_string().ends_with(".app");
+    if !in_app {
+        return false;
+    }
+    let (title, body) = (title.to_string(), body.to_string());
+    let center = UNUserNotificationCenter::currentNotificationCenter();
+    let post = RcBlock::new(move |granted: Bool, _err: *mut NSError| {
+        if !granted.as_bool() {
+            return;
+        }
+        let content = UNMutableNotificationContent::new();
+        content.setTitle(&NSString::from_str(&title));
+        content.setBody(&NSString::from_str(&body));
+        let id = NSString::from_str(&format!("cue-{}", now_nanos()));
+        let req = UNNotificationRequest::requestWithIdentifier_content_trigger(&id, &content, None);
+        UNUserNotificationCenter::currentNotificationCenter()
+            .addNotificationRequest_withCompletionHandler(&req, None);
+    });
+    center.requestAuthorizationWithOptions_completionHandler(
+        UNAuthorizationOptions::Alert | UNAuthorizationOptions::Sound,
+        &post,
+    );
+    true
+}
+
+#[cfg(target_os = "macos")]
+fn now_nanos() -> u128 {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_nanos())
+        .unwrap_or(0)
 }
 
 /// Whether cues reach the speakers: `QUADCAM_CUES=real` forces them on and any other value
@@ -505,6 +578,20 @@ impl CueService {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// A `gearCues` written before `voice_source` existed reads as macOS; the new value
+    /// round-trips.
+    #[test]
+    fn voice_source_defaults_to_macos() {
+        let s: CueSettings = serde_json::from_value(serde_json::json!({"mute": true})).unwrap();
+        assert_eq!(s.voice_source, VoiceSource::Macos);
+        let v = serde_json::to_value(CueSettings {
+            voice_source: VoiceSource::VoicePack,
+            ..CueSettings::default()
+        })
+        .unwrap();
+        assert_eq!(v["voice_source"], "voice_pack");
+    }
 
     fn t(h: u32, m: u32) -> NaiveTime {
         NaiveTime::from_hms_opt(h, m, 0).unwrap()

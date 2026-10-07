@@ -70,6 +70,7 @@ pub fn install<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<()> {
     let about = AboutMetadata {
         name: Some(info.name.clone()),
         version: Some(info.version.to_string()),
+        short_version: Some(crate::BUILD.to_string()),
         ..Default::default()
     };
 

@@ -29,7 +29,7 @@ pub use fc::{BoardNotesParams, FcJob, FcPortParams, FcReadParams, UsbTimer, USB_
 pub use files::{Moved, TrashReport};
 pub use gear::{
     connected_name, link_handle, DeviceSaveParams, GearStatus, Hold, HookFn, HookOutcome, HookRun,
-    OnConnectHook, HOLD_GRACE,
+    OnConnectHook, ReminderParams, HOLD_GRACE,
 };
 pub use import::CardStatus;
 pub use library::{LibEdit, LibItem, LibUpdate, LibraryView, RebuildReport, RenameReport};

@@ -14,6 +14,7 @@ import { tilde } from "../../lib/format";
 import { applyNameFormat, matchLibraryLogs, rebuildLibrary, revealLibrary } from "../../actions/setup";
 import { draftFrom, emptyProfile, layoutExample, validPlaces, valuesOf, VIDEO_SYSTEMS, type Draft } from "./draft";
 import { ModulesPane } from "./ModulesPane";
+import { GearPane } from "./GearPane";
 import styles from "./SettingsSheet.module.css";
 
 const SECTIONS: [SettingsSection, string, IconName][] = [
@@ -22,6 +23,7 @@ const SECTIONS: [SettingsSection, string, IconName][] = [
   ["places", "Places", "map-point"],
   ["import", "Import", "import"],
   ["photos", "Photos", "photos"],
+  ["gear", "Gear", "signal"],
   ["modules", "Modules", "hdd"],
   ["advanced", "Advanced", "sliders"],
 ];
@@ -56,6 +58,7 @@ function Sheet({ first }: { first: SettingsSection }) {
     const outChanged = d.outputDir !== start.draft.outputDir;
     await st.saveChanged(valuesOf(d, sel.tunables(st)), start.before);
     await st.loadSettings();
+    await st.loadGear();
     if (outChanged) await api.libraryScope().catch(() => {});
     const sess = store.getState().session;
     if (sess) store.getState().setSession(await api.planDates(sel.logDir(store.getState()), sess.log_day));
@@ -97,6 +100,7 @@ function Sheet({ first }: { first: SettingsSection }) {
               </li>
             ))}
           </ul>
+          <Version />
         </nav>
         <div className={styles.pane}>
           {section === "library" && <LibraryPane d={d} set={set} />}
@@ -109,11 +113,25 @@ function Sheet({ first }: { first: SettingsSection }) {
               <TextField label="Album (empty: library only)" placeholder="Drone" value={d.photosAlbum} onChange={(e) => set("photosAlbum", e.target.value)} />
             </section>
           )}
+          {section === "gear" && <GearPane d={d} setD={setD} />}
           {section === "modules" && <ModulesPane d={d} set={set} />}
           {section === "advanced" && <AdvancedPane />}
         </div>
       </div>
     </Dialog>
+  );
+}
+
+/** The app version and the commit it was built from. */
+function Version() {
+  const env = useStore((s) => s.env);
+  if (!env?.version) return null;
+  return (
+    <p className={`${styles.version} selectable`} aria-label="Version">
+      QuadCam {env.version}
+      <br />
+      Build {env.build}
+    </p>
   );
 }
 
