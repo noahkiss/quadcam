@@ -427,7 +427,10 @@ fn format_a_disk_image_only_with_every_flag() {
         "fpvcard",
     ]);
     assert_eq!(done["label"], "FPVCARD");
-    assert!(!card.is_attached(), "ejected after the erase");
+    assert!(
+        card.is_attached() && !card.is_mounted(),
+        "unmounted after the erase"
+    );
 }
 
 /// `quadcam-cli mcp` over real stdio: only JSON-RPC on stdout, one reply per request.

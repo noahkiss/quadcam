@@ -147,12 +147,12 @@ pub fn tools() -> Value {
         ),
         tool::<EjectArgs>(
             "quadcam_eject",
-            "Eject the session's card (or another mount point or /dev/diskN) with diskutil, so it can be pulled safely.\n\nBest for: the last step after export.\nReturns: {ejected: true}.",
-            json!({"destructiveHint": false, "idempotentHint": true, "openWorldHint": false, "readOnlyHint": false, "title": "Eject card"}),
+            "Make the session's card (or another mount point or /dev/diskN) safe to remove: diskutil unmounts every volume of a card (the card stays listed until it is pulled) and ejects a disk that is not a card.\n\nBest for: the last step after export.\nReturns: {ejected: true}.",
+            json!({"destructiveHint": false, "idempotentHint": true, "openWorldHint": false, "readOnlyHint": false, "title": "Safe to remove"}),
         ),
         tool::<FormatCardArgs>(
             "quadcam_format_card",
-            "ERASE the session's card as FAT32 and eject it. Only when the person asked for it. It refuses a DJI card (goggles format their own) and a radio's SD card, and refuses unless every non-skipped clip verified, the card is removable, not internal, not the boot disk, 64 GB or smaller, and still the same card (device and volume UUID). It also needs device, volume_uuid and confirm=true, and when the app is running the person must click Erase in the app. With prep=true it erases a card with no session instead (card prep: a new card, or one whose clips are all in the library; a clip missing from the library refuses), found by `mount` in the dry run and by device and volume_uuid to erase.\n\nBest for: clearing the card after a verified export, or preparing a spare DVR card (prep=true). Call with dry_run=true first to read the device and volume UUID.\nReturns: the disk that was erased, or the reason it refused.",
+            "ERASE the session's card as FAT32 and unmount it (safe to remove). Only when the person asked for it. It refuses a DJI card (goggles format their own) and a radio's SD card, and refuses unless every non-skipped clip verified, the card is removable, not internal, not the boot disk, 64 GB or smaller, and still the same card (device and volume UUID). It also needs device, volume_uuid and confirm=true, and when the app is running the person must click Erase in the app. With prep=true it erases a card with no session instead (card prep: a new card, or one whose clips are all in the library; a clip missing from the library refuses), found by `mount` in the dry run and by device and volume_uuid to erase.\n\nBest for: clearing the card after a verified export, or preparing a spare DVR card (prep=true). Call with dry_run=true first to read the device and volume UUID.\nReturns: the disk that was erased, or the reason it refused.",
             json!({"destructiveHint": true, "idempotentHint": false, "openWorldHint": false, "readOnlyHint": false, "title": "Format card"}),
         ),
         tool::<LibraryEditArgs>(

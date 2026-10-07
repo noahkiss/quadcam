@@ -29,7 +29,7 @@ impl Core {
     }
 
     /// Erases the card that `req` names (its whole-disk device and volume UUID, from
-    /// `card_prep_plan`) and ejects it. Unless the GUI's own button started it, the GUI (when
+    /// `card_prep_plan`) and makes it safe to remove. Unless the GUI's own button started it, the GUI (when
     /// running) must also get a click on Erase. `disk::format_card` checks every guard once
     /// more, the library check included.
     pub fn card_prep(&self, req: &FormatRequest, from_gui_button: bool) -> Result<FormatPlan> {
@@ -76,7 +76,7 @@ impl Core {
         match eject_error {
             None => Ok(p.plan),
             Some(e) => bail!(
-                "The card was erased, but it did not eject ({e}). Eject it before you pull it."
+                "The card was erased, but it did not unmount ({e}). Eject it in Finder before you pull it."
             ),
         }
     }

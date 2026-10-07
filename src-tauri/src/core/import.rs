@@ -1,5 +1,5 @@
 //! `Core`'s import half: stage a card or folder, analyse, date, patch the plans, convert and
-//! verify, delete the imported clips from the card when the setting says so, then eject and
+//! verify, delete the imported clips from the card when the setting says so, then make the card safe to remove and
 //! format the card. Also the "N new" count for a card.
 
 use super::Core;
@@ -399,7 +399,8 @@ impl Core {
         Ok(out)
     }
 
-    /// Ejects `target` (a mount point or `/dev/diskN`), or the session's card.
+    /// Makes `target` (a mount point or `/dev/diskN`), or the session's card, safe to remove
+    /// (`disk::safe_remove`: unmount a card, eject anything else).
     pub fn eject(&self, target: Option<&str>) -> Result<()> {
         let target = match target {
             Some(t) => t.to_string(),
@@ -411,7 +412,7 @@ impl Core {
                 s.source.to_string_lossy().to_string()
             }
         };
-        disk::eject(&target)
+        disk::safe_remove(&target)
     }
 
     /// Everything the confirm dialog names. Runs every guard; an Err means format stays locked.
@@ -492,11 +493,12 @@ impl Core {
         let mut latest = self.current()?;
         latest.card = None;
         match &eject_error {
-            None => latest
-                .warnings
-                .push(format!("Card {} was erased and ejected.", plan.device)),
+            None => latest.warnings.push(format!(
+                "Card {} was erased and is safe to remove.",
+                plan.device
+            )),
             Some(e) => latest.warnings.push(format!(
-                "Card {} was erased, but did not eject: {e}",
+                "Card {} was erased, but did not unmount: {e}",
                 plan.device
             )),
         }
@@ -504,7 +506,7 @@ impl Core {
         match eject_error {
             None => Ok(plan),
             Some(e) => bail!(
-                "The card was erased, but it did not eject ({e}). Eject it before you pull it."
+                "The card was erased, but it did not unmount ({e}). Eject it in Finder before you pull it."
             ),
         }
     }

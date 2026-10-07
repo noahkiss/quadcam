@@ -161,7 +161,7 @@ function FormatConfirm() {
     >
       {c?.agent && <p className={styles.agent}>An agent asked to erase this card. It goes ahead only if you click Erase.</p>}
       <p>{c?.text}</p>
-      <p className={styles.muted}>The card is ejected right after the erase.</p>
+      <p className={styles.muted}>QuadCam unmounts the card right after the erase.</p>
     </Dialog>
   );
 }
