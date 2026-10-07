@@ -103,7 +103,8 @@ GitHub (`noahkiss/quadcam`, public) is the only remote. Users install the cask
    and notarizes `QuadCam.app` on a `macos-26` (arm64) runner with the
    prebuilt Tauri CLI from `app/`. It does not run the tests: before it attaches the zip
    (`quadcam-X.Y.Z-arm64.zip`) to the GitHub Release, it waits up to 40 minutes for a green
-   `ci.yml` run on the tagged commit, and fails without one. It then fires the tap's
+   `ci.yml` run on the tagged commit, and fails without one. It also attaches `modules.json`
+   (`quadcam-cli modules manifest`, the pins Settings > Modules checks). It then fires the tap's
    `bump.yml`, which rewrites `Casks/quadcam.rb`, installs it on macOS, and commits.
 4. Watch it: `gh run watch -R noahkiss/quadcam --exit-status`. Re-run for an existing tag with
    `gh workflow run release.yml -R noahkiss/quadcam --ref vX.Y.Z -f tag=vX.Y.Z`.
