@@ -1154,7 +1154,7 @@
       "readOnlyHint": true,
       "title": "Gear"
     },
-    "description": "Read the FPV gear QuadCam knows: `status` (the gear folder, the Gear settings, and the devices plugged in now: EdgeTX radios in USB Storage mode, goggles and DVR cards, FC and ELRS serial ports, radios in DFU mode; each with its saved name and aircraft when QuadCam knows it; and each FC's USB heat timer), `devices` (every device saved in gear.json: id, kind, name, aircraft, board, firmware, version, last seen, last backup), `fc_identify` (reads a Betaflight FC over MSP: board, firmware, version, device id, whether QuadCam may write it, known issues; no reboot), `board_notes` (known issues of FC boards and builds), `usb_timers` (per FC on USB: battery in, minutes on USB, minutes left before \"Unplug now\"), `osd` (a Betaflight OSD layout from `paths`, dump or diff files read in order: each OSD profile drawn on its grid (NTSC 30x13, PAL 30x16, HD 53x20, from vcd_video_system or `grid`), the elements on in each profile with x and y, and the check for overlaps and cells off screen), `card` (an EdgeTX SD card: board and version, whether QuadCam may write it, its models, the model the radio selects and that model's aircraft, the radio clock check; with `model`, that model in full) `card_preview` (the checks and line diff of EdgeTX card edits, and how long the write would take; writes nothing), `storage` (the gear folder's size in total and per device: snapshots by kind, logs, blobs only that device uses), `backups` (snapshots newest first, or one `device`'s: id, why it was taken, time, files, size, pinned), `backup_read` (a backup `id`'s file list, or one file's text with `path`), `backup_diff` (what changed from `against`, or the backup before, to `id`: files put and removed, a line diff per text file), `card_checks` (a card `device`'s file-system checks, newest first), `flights` (flights from the radio logs, newest first: hover throttle, sag, resting voltage, mAh, when the pack type's mAh warning was crossed, the worst link, dropouts; each with its aircraft, pack (or a suggested one), place and library clip; filter by `day`, `aircraft`, `pack`, `place`), `packs` (packs with cycles, charge state, resting voltage and a weak mark; pack types with the charging sheet and a suggested mAh warning; the charging notes), `session_report` (one flying day, by default the last import's days: flights, air time, longest flight, worst link, dropouts, pack use, crashes; as Markdown to share), `preflight` (the \"Pack up\" check: packs charged, the radio's model, card space, backups, cards still in the Mac; each pass, warn or unknown) `crashes` (the crash and repair log, by `aircraft` or `clip`), `switch_map` (what each radio control does: per switch, trim or stick position, the channel values in microseconds, the Betaflight modes and adjustments they select, and the radio's logical switches, special functions and timers; from `mount` (an EdgeTX card or model file) and `paths` (the FC's dump or diff), or the latest backups of a saved `device` or of an `aircraft`'s radio and FC; conflicts such as two modes on one range, a switch with no effect, a mode no switch reaches, a sound file the card lacks; with `live`, the position each control is in now) or `radio` (the radio in USB Joystick mode now: buttons, axes, channel values). Changes nothing.\n\nBest for: the first Gear call, checking what is plugged in, and checking an OSD layout before or after an edit, reading or planning radio model changes, and answering \"what does this switch do\".\nReturns: one line per device plus the structured records; for osd and switch_map, the drawn view as text plus the structured view.\nFollow up with quadcam_gear_edit device_save to name a device or link it to an aircraft, flight_set to put a flight on a pack.",
+    "description": "Read the FPV gear QuadCam knows: `status` (the gear folder, the Gear settings, and the devices plugged in now: EdgeTX radios in USB Storage mode, goggles and DVR cards, FC and ELRS serial ports, radios in DFU mode; each with its saved name and aircraft when QuadCam knows it; and each FC's USB heat timer), `devices` (every device saved in gear.json: id, kind, name, aircraft, board, firmware, version, last seen, last backup), `fc_identify` (reads a Betaflight FC over MSP: board, firmware, version, device id, whether QuadCam may write it, known issues; no reboot), `board_notes` (known issues of FC boards and builds), `usb_timers` (per FC on USB: battery in, minutes on USB, minutes left before \"Unplug now\"), `osd` (a Betaflight OSD layout from `paths`, dump or diff files read in order: each OSD profile drawn on its grid (NTSC 30x13, PAL 30x16, HD 53x20, from vcd_video_system or `grid`), the elements on in each profile with x and y, and the check for overlaps and cells off screen), `card` (an EdgeTX SD card: board and version, whether QuadCam may write it, its models, the model the radio selects and that model's aircraft, the radio clock check; with `model`, that model in full) `card_preview` (the checks and line diff of EdgeTX card edits, and how long the write would take; writes nothing), `storage` (the gear folder's size in total and per device: snapshots by kind, logs, blobs only that device uses), `backups` (snapshots newest first, or one `device`'s: id, why it was taken, time, files, size, pinned), `backup_read` (a backup `id`'s file list, or one file's text with `path`), `backup_diff` (what changed from `against`, or the backup before, to `id`: files put and removed, a line diff per text file), `card_checks` (a card `device`'s file-system checks, newest first), `flights` (flights from the radio logs, newest first: hover throttle, sag, resting voltage, mAh, when the pack type's mAh warning was crossed, the worst link, dropouts; each with its aircraft, pack (or a suggested one), place and library clip; filter by `day`, `aircraft`, `pack`, `place`), `packs` (packs with cycles, charge state, resting voltage and a weak mark; pack types with the charging sheet and a suggested mAh warning; the charging notes), `session_report` (one flying day, by default the last import's days: flights, air time, longest flight, worst link, dropouts, pack use, crashes; as Markdown to share), `preflight` (the \"Pack up\" check: packs charged, the radio's model, card space, backups, cards still in the Mac; each pass, warn or unknown) `crashes` (the crash and repair log, by `aircraft` or `clip`), `switch_map` (what each radio control does: per switch, trim or stick position, the channel values in microseconds, the Betaflight modes and adjustments they select, and the radio's logical switches, special functions and timers; from `mount` (an EdgeTX card or model file) and `paths` (the FC's dump or diff), or the latest backups of a saved `device` or of an `aircraft`'s radio and FC; conflicts such as two modes on one range, a switch with no effect, a mode no switch reaches, a sound file the card lacks; with `live`, the position each control is in now), `radio` (the radio in USB Joystick mode now: buttons, axes, channel values), `sim_calibration` (the sim's calibration of a `radio`, or of the one in USB Joystick mode now, matched to a saved radio: the match, or the choices when several saved radios share its model) or `sim_defaults` (what the sim pre-fills from an `aircraft`'s radio model and quad modes, or from `mount` and `paths`: stick channels, arm, angle, horizon, turtle and air mode switches, a free reset control, each with its source). Changes nothing.\n\nBest for: the first Gear call, checking what is plugged in, and checking an OSD layout before or after an edit, reading or planning radio model changes, and answering \"what does this switch do\".\nReturns: one line per device plus the structured records; for osd and switch_map, the drawn view as text plus the structured view.\nFollow up with quadcam_gear_edit device_save to name a device or link it to an aircraft, flight_set to put a flight on a pack.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -1179,7 +1179,9 @@
             "preflight",
             "crashes",
             "switch_map",
-            "radio"
+            "radio",
+            "sim_calibration",
+            "sim_defaults"
           ],
           "type": "string"
         },
@@ -1275,6 +1277,11 @@
           "maxLength": 200,
           "type": "string"
         },
+        "radio": {
+          "description": "For sim_calibration: a saved radio's id or a provisional usb-… key; omit for the radio in USB Joystick mode now.",
+          "maxLength": 80,
+          "type": "string"
+        },
         "target_v": {
           "description": "For packs: the resting volts per cell the mAh warning suggestion aims for (default 3.7).",
           "type": "number"
@@ -1300,7 +1307,7 @@
       "readOnlyHint": false,
       "title": "Edit gear data"
     },
-    "description": "Change QuadCam's own gear data, never a device's settings, a sim or a card: `device_save` names a device or links it to an aircraft profile (a device QuadCam does not know yet must be plugged in; use its id from quadcam_gear status or fc_identify), `device_forget` removes a device from QuadCam's list (its backups stay), `fc_read` reads a Betaflight FC through its CLI (read-only commands; the FC reboots when the read ends, so the person should expect it; returns the text, writes nothing), `backup` backs up a radio card (`device` or `mount`; files whose size and time did not change are not read) or an FC (`port` or `device`; the FC reboots) into QuadCam's gear folder (nothing is written when nothing changed), `backup_pin` keeps a `backup` through pruning (`pinned`), `prune` thins backups by the retention settings and removes stored files nothing uses (`dry_run` to see first), `export` writes a `backup`, or every backup of a `device`, as plain folders into `to`, `import_backups` takes an old backup `folder` (radio card copies, Betaflight diff all and dump all files, LOGS folders, dated by YYYY-MM-DD in folder names; `dry_run` to see first; it never changes the folder), `card_check` checks a card's file system (diskutil verifyVolume, read-only, about 30 s over a radio's USB; the card unmounts and mounts again), `stop` stops a running backup or card check by its `handle`, `flight_set` (a flight's pack or place), `flight_folders` (add or remove a folder of radio logs the flights read), `pack_save` / `pack_delete` (a pack by `name`, its label; `charged=true` marks it charged now), `pack_type_save` / `pack_type_delete` (a pack type by `name`: chemistry, cells, capacity, connector, charge volts per cell, charge current, mAh warning), `pack_notes` (the charging sheet's notes), `crash_save` / `crash_delete` (a crash on a library clip: the time in the clip, what broke, the parts used; no `id` logs a new one).\n\nBest for: naming a radio or quad the person just plugged in, and linking it to its aircraft profile; reading an FC's settings as text; backing gear up and importing old backups; putting flights on packs; logging a crash and its repair.\nReturns: the saved or forgotten device, the FC's identity and each command's answer, a summary of the backup, prune, export, import or check, or the saved flight, pack, pack type or crash.",
+    "description": "Change QuadCam's own gear data, never a device's settings, a sim or a card: `device_save` names a device or links it to an aircraft profile (a device QuadCam does not know yet must be plugged in; use its id from quadcam_gear status or fc_identify), `device_forget` removes a device from QuadCam's list (its backups stay), `fc_read` reads a Betaflight FC through its CLI (read-only commands; the FC reboots when the read ends, so the person should expect it; returns the text, writes nothing), `backup` backs up a radio card (`device` or `mount`; files whose size and time did not change are not read) or an FC (`port` or `device`; the FC reboots) into QuadCam's gear folder (nothing is written when nothing changed), `backup_pin` keeps a `backup` through pruning (`pinned`), `prune` thins backups by the retention settings and removes stored files nothing uses (`dry_run` to see first), `export` writes a `backup`, or every backup of a `device`, as plain folders into `to`, `import_backups` takes an old backup `folder` (radio card copies, Betaflight diff all and dump all files, LOGS folders, dated by YYYY-MM-DD in folder names; `dry_run` to see first; it never changes the folder), `card_check` checks a card's file system (diskutil verifyVolume, read-only, about 30 s over a radio's USB; the card unmounts and mounts again), `stop` stops a running backup or card check by its `handle`, `flight_set` (a flight's pack or place), `flight_folders` (add or remove a folder of radio logs the flights read), `pack_save` / `pack_delete` (a pack by `name`, its label; `charged=true` marks it charged now), `pack_type_save` / `pack_type_delete` (a pack type by `name`: chemistry, cells, capacity, connector, charge volts per cell, charge current, mAh warning), `pack_notes` (the charging sheet's notes), `crash_save` / `crash_delete` (a crash on a library clip: the time in the clip, what broke, the parts used; no `id` logs a new one), `sim_calibration_save` (the sim's calibration of a `radio`, keyed by its Gear radio id).\n\nBest for: naming a radio or quad the person just plugged in, and linking it to its aircraft profile; reading an FC's settings as text; backing gear up and importing old backups; putting flights on packs; logging a crash and its repair.\nReturns: the saved or forgotten device, the FC's identity and each command's answer, a summary of the backup, prune, export, import or check, or the saved flight, pack, pack type or crash.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -1324,7 +1331,8 @@
             "pack_type_delete",
             "pack_notes",
             "crash_save",
-            "crash_delete"
+            "crash_delete",
+            "sim_calibration_save"
           ],
           "type": "string"
         },
@@ -1347,6 +1355,9 @@
           "description": "For crash_save: what broke.",
           "maxLength": 500,
           "type": "string"
+        },
+        "calibration": {
+          "description": "For sim_calibration_save: the calibration, as quadcam_gear sim_calibration returns it (mode, roll, pitch, throttle, yaw, arm, reset)."
         },
         "capacity_mah": {
           "description": "For pack_type_save: capacity in mAh.",
@@ -1472,6 +1483,16 @@
         "port": {
           "description": "For fc_read and backup: the FC's serial port from quadcam_gear status; omit when one FC is plugged in.",
           "maxLength": 200,
+          "type": "string"
+        },
+        "product": {
+          "description": "For sim_calibration_save: the radio's USB product name; given, this radio becomes the answer for it when several saved radios share it.",
+          "maxLength": 120,
+          "type": "string"
+        },
+        "radio": {
+          "description": "For sim_calibration_save: the radio's key, a saved radio's id or the provisional usb-… key quadcam_gear sim_calibration gave.",
+          "maxLength": 80,
           "type": "string"
         },
         "received": {

@@ -15,6 +15,7 @@ mod flights;
 mod map;
 mod osd;
 mod packs;
+mod sim;
 
 #[derive(Subcommand)]
 pub enum GearCmd {
@@ -41,6 +42,11 @@ pub enum GearCmd {
     Map(map::MapArgs),
     /// The radio in USB Joystick mode now: buttons, axes, channel values.
     Radio(map::RadioArgs),
+    /// The sim: a radio's calibration, the defaults an aircraft gives it.
+    Sim {
+        #[command(subcommand)]
+        cmd: sim::SimCmd,
+    },
     /// Flights from the radio logs: measures, pack, place, clip. `set` and `folders`.
     Flights(flights::FlightsArgs),
     /// The session report for a day, else the last import's days.
@@ -122,6 +128,7 @@ pub fn run(core: &Core, cmd: GearCmd) -> Result<Value> {
         GearCmd::Card(a) => card::run(core, a)?,
         GearCmd::Map(a) => map::run(core, a)?,
         GearCmd::Radio(a) => map::radio(core, a)?,
+        GearCmd::Sim { cmd } => sim::run(core, cmd)?,
         GearCmd::Flights(a) => flights::flights(core, a)?,
         GearCmd::Report(a) => flights::report(core, a)?,
         GearCmd::Preflight => flights::preflight(core)?,
