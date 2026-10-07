@@ -257,12 +257,11 @@ fn watch_volumes(app: AppHandle) {
 
 /// Looks for gear every `gear::detect::POLL`: sends `device-changed` with the events
 /// (connected, identified, unmounted but still in, removed), runs the on-connect hooks on
-/// their own threads, plays the cues, and sends `gear-changed` when another process (the
+/// their own threads for events QuadCam did not cause, plays due reminders, and sends `gear-changed` when another process (the
 /// CLI, an MCP server) wrote `gear.json`.
 fn poll_gear(app: AppHandle, core: Arc<Core>) {
     std::thread::spawn(move || {
         let mut tracker = gear::events::Tracker::default();
-        let mut reminders = gear::cues::Reminders::default();
         let mut stamp = core.gear_store().stamp();
         loop {
             match core.gear_poll(&mut tracker) {
@@ -277,7 +276,7 @@ fn poll_gear(app: AppHandle, core: Arc<Core>) {
                             },
                         );
                     }
-                    for e in &events {
+                    for e in events.iter().filter(|e| !e.app_initiated) {
                         if matches!(
                             e.kind,
                             gear::events::DeviceEventKind::Connected
@@ -289,11 +288,10 @@ fn poll_gear(app: AppHandle, core: Arc<Core>) {
                             });
                         }
                     }
-                    core.gear_play_cues(
-                        &events,
+                    core.gear_play_reminders(
                         &tracker,
-                        &mut reminders,
                         std::time::Instant::now(),
+                        chrono::Local::now().time(),
                     );
                 }
                 Err(e) => eprintln!("quadcam: gear poll: {e:#}"),

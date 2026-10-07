@@ -462,17 +462,30 @@ export type Connected = {
 
 /**  The `gearCues` setting. Missing fields take their defaults. */
 export type CueSettings = {
+	/**  Silences every cue. */
+	mute?: boolean,
 	/**  Speak cues with the system voice. */
 	speech?: boolean,
 	/**  Play a system sound. */
 	sound?: boolean,
 	/**  Post a macOS notification. */
 	notification?: boolean,
+	/**  "<device> done, safe to unplug." */
 	safe_to_unplug?: boolean,
+	/**  The reminder after "done" while the device is still in. */
 	still_inserted?: boolean,
-	/**  Seconds between "still inserted" reminders; 0 for none. */
-	still_inserted_every_s?: number,
+	/**  "<step> failed on <device>." */
 	step_failed?: boolean,
+	/**  The same cue for the same device within this many seconds is dropped. */
+	debounce_s?: number,
+	/**  Seconds after "done" before the first reminder. */
+	reminder_grace_s?: number,
+	/**  Seconds between reminders. */
+	still_inserted_every_s?: number,
+	/**  Reminders at most, per "done"; 0 for none. */
+	reminder_max?: number,
+	/**  Speech and sound stay silent in these hours. */
+	quiet_hours?: QuietHours | null,
 	/**  A `say` voice name; None for the system voice. */
 	voice?: string | null,
 };
@@ -639,6 +652,8 @@ export type DeviceChanged = {
 export type DeviceEvent = {
 	kind: DeviceEventKind,
 	device: Connected,
+	/**  QuadCam's own mount, unmount or port open (a job holds the link): no hook, no cue. */
+	app_initiated?: boolean,
 };
 
 export type DeviceEventKind = "connected" | "identified" | "unmounted_present" | "removed";
@@ -1629,6 +1644,15 @@ export type Progress = {
 	total: number,
 	done: number,
 	size: number,
+};
+
+/**
+ *  Speech and sound stay silent from `start` to `end` (local time, `HH:MM`; may cross
+ *  midnight).
+ */
+export type QuietHours = {
+	start: string,
+	end: string,
 };
 
 /**  `library_rate`: stars (0 clears) and a pick or reject flag for these clips. */

@@ -160,7 +160,7 @@ A new **Gear** section:
 | Tools (esptool, ffmpeg) | `modules` | QuadCam's own modules (7.10); a path per tool overrides one |
 | Use Homebrew ffmpeg | `ffmpegSource` | `module` (`module` or `homebrew`) |
 | Steps on connect | `gearOnConnect` | per device kind: `backup` only (`import`, `apply_ready` off) (7.11) |
-| Cues | `gearCues` | speech and notifications on, sound off; each cue on; reminder every 60 s (7.11) |
+| Cues | `gearCues` | speech and notifications on, sound off, each cue on, not muted; debounce 30 s; reminder after 60 s, every 300 s, 3 at most; no quiet hours (7.11) |
 
 Each key goes into `settings::KEYS` with a default in `Defaults`, as today.
 
@@ -988,19 +988,36 @@ backup, a later package import, WP5 `apply_ready` (which still goes through the 
 checks and the confirm in section 8; an automatic apply never skips them). A failed step plays
 the `step_failed` cue.
 
-**Cues** (`gear/cues.rs`). Short lines for a person with their hands full:
+**Cues** (`gear/cues.rs`) are quiet by design. QuadCam mounts, unmounts and opens ports all
+the time: every job mounts, works and releases, and a quad is released after every job. Rules:
 
-| Cue | When |
-|---|---|
-| `safe_to_unplug` | A device was released: a card unmounted and still in, or (later packages) an FC port closed after a step |
-| `still_inserted` | Every `still_inserted_every_s` (default 60, 0 for none) after the unmount, until the card is pulled |
-| `step_failed` | An on-connect step or a bench step failed |
+1. **Outcomes, not transitions.** A cue marks an outcome the person cares about. A job holds
+   its device's link (`Core::gear_hold`, by whole disk or port); events on a held link, and
+   for `HOLD_GRACE` (6 s) after, are `app_initiated`: they run no hook and play no cue.
+   Device events never cue on their own.
+2. **One cue per job, at its end** (`Core::gear_job_done`): "<device> done, safe to unplug."
+   or "<step> failed on <device>.". A batch or an automation run over several devices gets
+   one cue for the whole run (`Core::gear_batch_done`: "3 devices done, safe to unplug.",
+   "Backup failed on 1 of 3 devices."). `gear_on_connect` is one job.
+3. **Debounce and queue.** The same cue for the same device within `debounce_s` (30 s) is
+   dropped. Cues play one at a time from one queue (`CueService`); `say` finishes before the
+   next cue starts.
+4. **The reminder** ("<device> is still inserted.") starts only after a job's "done" on a
+   card, waits `reminder_grace_s` (60 s), repeats every `still_inserted_every_s` (300 s) at
+   most `reminder_max` (3) times, and stops when the card is removed or the person dismisses
+   it (`Core::gear_dismiss_reminder`).
+5. **Toggles.** Each cue (`safe_to_unplug`, `still_inserted`, `step_failed`) and each channel
+   (`speech`, `sound`, `notification`) has a toggle, and `mute` silences all. `quiet_hours`
+   (`{start, end}`, `HH:MM`, may cross midnight) silences speech and sound. Notifications
+   follow macOS Focus on their own: macOS holds them back. An app cannot read the Focus
+   state without Full Disk Access, so speech and sound use quiet hours instead.
 
 Channels: speech (`/usr/bin/say`, an optional voice), a system sound (`/usr/bin/afplay`), a
 notification (`/usr/bin/osascript`, the text passed as arguments, never in the script). Each
-is a child process with an argv list. `gearCues` turns each cue and each channel on or off.
-A process started by cargo gets the silent `RecordedCues` unless `QUADCAM_CUES=real`. The
-native notification API can replace `osascript` with the Gear UI (WP13).
+is a child process with an argv list. A process started by cargo gets the silent
+`RecordedCues` unless `QUADCAM_CUES=real`; the gate, the reminders and the batch cue are
+tested on a fake clock. The native notification API can replace `osascript` with the Gear UI
+(WP13).
 
 ## 8. Safety model
 
@@ -1119,7 +1136,7 @@ split: their read-only halves run early; their write halves wait for WP5.
 
 | Id | Accepted when |
 |---|---|
-| WP1 | `gear.json` passes the settings-file tests' equivalents (unknown keys kept, locked writes, CLI change seen by the app). `detect` lists a synthetic radio volume and a fake serial port. The three MCP tools exist and the schema snapshot is updated. `real_ports()` is empty under cargo. Events: an unmounted card reads `unmounted_present` until its disk node goes; hooks run only when their automation is on; cues follow `gearCues`, tested on a silent sink |
+| WP1 | `gear.json` passes the settings-file tests' equivalents (unknown keys kept, locked writes, CLI change seen by the app). `detect` lists a synthetic radio volume and a fake serial port. The three MCP tools exist and the schema snapshot is updated. `real_ports()` is empty under cargo. Events: an unmounted card reads `unmounted_present` until its disk node goes; QuadCam's own transitions are `app_initiated`; hooks run only when their automation is on; one cue per job, debounced, queued; the reminder waits, repeats, caps and stops; mute and quiet hours; all on a silent sink and a fake clock |
 | WP2 | Against `FakeFc`: backup, a run that stops at an error and discards, a run with `save` that waits through the reboot, a `dump all` parse with section context. MSP identity read. Transcript scrubber test |
 | WP3 | Parse-render is byte-identical on every fixture (both layouts, CRLF). Each encoding in 6.3 has a test. Unknown lines refuse with file and line |
 | WP4 | A second snapshot of an unchanged card writes nothing. A changed model file adds one blob. FC backup through `FakeFc`. Retention keeps apply and pinned snapshots and thins the rest by the settings; collection removes only unreferenced blobs. A grown log replaces the stored one. Import of a synthetic folder of card copies and FC pairs dedupes. A crash between blob and manifest (simulated) leaves a consistent store |

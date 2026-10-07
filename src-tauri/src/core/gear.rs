@@ -4,15 +4,16 @@
 //! into its `gear::` module.
 
 use super::Core;
-use crate::gear::cues::{self, Cue, Reminders};
+use crate::gear::cues::{self, Cue, CueEvent};
 use crate::gear::events::{DeviceEvent, DeviceEventKind, Tracker};
-use crate::gear::model::{Connected, Device, DeviceKind};
+use crate::gear::model::{Connected, Device, DeviceKind, Link};
 use crate::gear::store::Store;
 use crate::gear::{Automation, GearSettings};
 use anyhow::{bail, Context, Result};
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 use std::sync::Arc;
+use std::time::{Duration, Instant};
 
 /// `gear_status`' answer.
 #[derive(Debug, Clone, Serialize, Deserialize, specta::Type)]
@@ -179,15 +180,38 @@ impl Core {
         Ok(d)
     }
 
+    /// Marks a device's link as QuadCam's own while the returned guard lives, and for
+    /// `HOLD_GRACE` after: events on it (QuadCam's own mounts, unmounts and port opens) are
+    /// `app_initiated`, run no hooks and play no cue. Every job holds its device.
+    pub fn gear_hold(&self, handle: &str) -> Hold<'_> {
+        self.gear_holds
+            .lock()
+            .unwrap()
+            .insert(handle.to_string(), None);
+        Hold {
+            core: self,
+            handle: handle.to_string(),
+        }
+    }
+
+    fn held(&self, handle: &str, now: Instant) -> bool {
+        let mut holds = self.gear_holds.lock().unwrap();
+        holds.retain(|_, until| until.is_none_or(|t| t > now));
+        holds.contains_key(handle)
+    }
+
     /// For the app's poll: the events since the tracker's last look (see `gear::events`).
-    /// A known device that connects or is identified is noted as seen (its last-seen time
-    /// and what detection read). New devices are not saved here. The caller runs the
-    /// on-connect hooks (`gear_on_connect`) for `connected` and `identified`.
+    /// Events on a held link are `app_initiated`. A known device that connects or is
+    /// identified is noted as seen (its last-seen time and what detection read). New
+    /// devices are not saved here. The caller runs the on-connect hooks
+    /// (`gear_on_connect`) for user `connected` and `identified` events.
     pub fn gear_poll(&self, tracker: &mut Tracker) -> Result<Vec<DeviceEvent>> {
         let found = self.gear_connected()?;
         let mut events = tracker.update(found, &(self.gear.presence)());
         let store = self.gear_store();
+        let now = Instant::now();
         for e in &mut events {
+            e.app_initiated = self.held(&link_handle(&e.device.link), now);
             if !matches!(
                 e.kind,
                 DeviceEventKind::Connected | DeviceEventKind::Identified
@@ -213,7 +237,8 @@ impl Core {
     }
 
     /// Runs the on-connect hooks for this device's kind, each only when the Gear settings
-    /// turn its automation on for that kind. A failure plays the `step_failed` cue.
+    /// turn its automation on for that kind. The run is one job: it holds the device, and
+    /// plays one cue at its end ("done" or the first failed step), none when nothing ran.
     pub fn gear_on_connect(&self, c: &Connected) -> Vec<HookRun> {
         let settings = self.gear_settings();
         let hooks: Vec<OnConnectHook> = self
@@ -224,64 +249,129 @@ impl Core {
             .filter(|h| h.kinds.contains(&c.kind))
             .cloned()
             .collect();
-        hooks
-            .into_iter()
-            .map(|h| {
-                let outcome = if !settings.runs(c.kind, h.automation) {
-                    HookOutcome::Off
-                } else {
-                    match (h.run)(self, c) {
-                        Ok(()) => HookOutcome::Ran,
-                        Err(e) => {
-                            self.gear_cue(Cue::StepFailed, &connected_name(c));
-                            HookOutcome::Failed {
+        let runs: Vec<HookRun> = {
+            let _hold = self.gear_hold(&link_handle(&c.link));
+            hooks
+                .into_iter()
+                .map(|h| {
+                    let outcome = if !settings.runs(c.kind, h.automation) {
+                        HookOutcome::Off
+                    } else {
+                        match (h.run)(self, c) {
+                            Ok(()) => HookOutcome::Ran,
+                            Err(e) => HookOutcome::Failed {
                                 message: format!("{e:#}"),
-                            }
+                            },
                         }
+                    };
+                    HookRun {
+                        name: h.name.to_string(),
+                        automation: h.automation,
+                        outcome,
                     }
-                };
-                HookRun {
-                    name: h.name.to_string(),
-                    automation: h.automation,
-                    outcome,
-                }
-            })
-            .collect()
+                })
+                .collect()
+        };
+        let failed = runs
+            .iter()
+            .find(|r| matches!(r.outcome, HookOutcome::Failed { .. }));
+        if let Some(f) = failed {
+            self.gear_job_done(c, Some(&f.name));
+        } else if runs.iter().any(|r| r.outcome == HookOutcome::Ran) {
+            self.gear_job_done(c, None);
+        }
+        runs
     }
 
-    /// Plays a cue for a device, as the Gear settings say. False when that cue is off.
-    pub fn gear_cue(&self, cue: Cue, device: &str) -> bool {
-        cues::fire(
-            self.gear.cues.as_ref(),
+    /// The end of one job on a device: one cue, "<device> done, safe to unplug." or
+    /// "<step> failed on <device>.". A done arms the "still inserted" reminder for a card.
+    pub fn gear_job_done(&self, c: &Connected, failed_step: Option<&str>) -> bool {
+        let s = self.gear_settings().cues;
+        let name = connected_name(c);
+        let now = Instant::now();
+        let event = match failed_step {
+            Some(step) => CueEvent::failed(step, name.clone()),
+            None => {
+                if matches!(c.link, Link::Volume { .. }) {
+                    self.gear.cues.reminders.lock().unwrap().arm(
+                        &link_handle(&c.link),
+                        &name,
+                        &s,
+                        now,
+                    );
+                }
+                CueEvent::new(Cue::SafeToUnplug, name)
+            }
+        };
+        self.gear
+            .cues
+            .fire(&s, event, now, chrono::Local::now().time())
+    }
+
+    /// The end of a batch or an automation run over several devices: one cue for all of
+    /// them. `done` and `failed` name devices; `failed` pairs each with its step.
+    pub fn gear_batch_done(&self, done: &[String], failed: &[(String, String)]) -> bool {
+        let Some(e) = cues::batch_cue(done, failed) else {
+            return false;
+        };
+        self.gear.cues.fire(
             &self.gear_settings().cues,
-            cue,
-            device,
+            e,
+            Instant::now(),
+            chrono::Local::now().time(),
         )
     }
 
-    /// Plays `safe_to_unplug` for each device that unmounted but is still in, and
-    /// `still_inserted` for each one whose reminder is due. For the app's poll.
-    pub fn gear_play_cues(
-        &self,
-        events: &[DeviceEvent],
-        tracker: &Tracker,
-        reminders: &mut Reminders,
-        now: std::time::Instant,
-    ) {
-        for e in events {
-            if e.kind == DeviceEventKind::UnmountedPresent {
-                self.gear_cue(Cue::SafeToUnplug, &connected_name(&e.device));
-            }
+    /// Stops the "still inserted" reminder for a device (the person dismissed it).
+    pub fn gear_dismiss_reminder(&self, c: &Connected) {
+        self.gear
+            .cues
+            .reminders
+            .lock()
+            .unwrap()
+            .dismiss(&link_handle(&c.link));
+    }
+
+    /// For the app's poll: plays the "still inserted" reminders that are due. A reminder
+    /// runs only after a job's "done" and ends when the device is removed.
+    pub fn gear_play_reminders(&self, tracker: &Tracker, now: Instant, local: chrono::NaiveTime) {
+        let s = self.gear_settings().cues;
+        let present: Vec<String> = tracker
+            .unmounted
+            .iter()
+            .chain(tracker.connected.iter())
+            .map(|c| link_handle(&c.link))
+            .collect();
+        let due = self
+            .gear
+            .cues
+            .reminders
+            .lock()
+            .unwrap()
+            .due(&present, &s, now);
+        for e in due {
+            self.gear.cues.fire(&s, e, now, local);
         }
-        let every = std::time::Duration::from_secs(u64::from(
-            self.gear_settings().cues.still_inserted_every_s,
-        ));
-        let keys: Vec<String> = tracker.unmounted.iter().map(link_key).collect();
-        for k in reminders.due(&keys, every, now) {
-            if let Some(c) = tracker.unmounted.iter().find(|c| link_key(c) == k) {
-                self.gear_cue(Cue::StillInserted, &connected_name(c));
-            }
-        }
+    }
+}
+
+/// How long a released hold still marks events as QuadCam's own: the poll may see the
+/// release a little later.
+pub const HOLD_GRACE: Duration = Duration::from_secs(6);
+
+/// A job's hold on a device's link (see `Core::gear_hold`).
+pub struct Hold<'a> {
+    core: &'a Core,
+    handle: String,
+}
+
+impl Drop for Hold<'_> {
+    fn drop(&mut self) {
+        self.core
+            .gear_holds
+            .lock()
+            .unwrap()
+            .insert(self.handle.clone(), Some(Instant::now() + HOLD_GRACE));
     }
 }
 
@@ -293,9 +383,18 @@ pub fn connected_name(c: &Connected) -> String {
     }
 }
 
-/// A connected device's link as text, the key of its reminder.
-fn link_key(c: &Connected) -> String {
-    serde_json::to_string(&c.link).unwrap_or_default()
+/// What stays the same for a device's link across a mount and an unmount: the whole disk
+/// of a volume (its mount point when unknown), a serial port's path, DFU.
+pub fn link_handle(link: &Link) -> String {
+    match link {
+        Link::Volume {
+            whole_disk: Some(d),
+            ..
+        } => d.clone(),
+        Link::Volume { mount, .. } => mount.display().to_string(),
+        Link::Serial { port, .. } => port.clone(),
+        Link::Dfu { vid, pid } => format!("dfu-{vid:04x}:{pid:04x}"),
+    }
 }
 
 /// A step that runs on its own when a device is plugged in.

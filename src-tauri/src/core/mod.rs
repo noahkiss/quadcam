@@ -25,7 +25,8 @@ mod setup;
 pub use crate::paths::{cache_dir, default_session_file, default_settings_file, support_dir};
 pub use files::{Moved, TrashReport};
 pub use gear::{
-    connected_name, DeviceSaveParams, GearStatus, HookFn, HookOutcome, HookRun, OnConnectHook,
+    connected_name, link_handle, DeviceSaveParams, GearStatus, Hold, HookFn, HookOutcome, HookRun,
+    OnConnectHook, HOLD_GRACE,
 };
 pub use import::CardStatus;
 pub use library::{LibEdit, LibItem, LibUpdate, LibraryView, RebuildReport, RenameReport};
@@ -202,6 +203,8 @@ pub struct Core {
     gear: crate::gear::Env,
     /// Steps that may run when a device is plugged in (`gear_add_hook`).
     gear_hooks: Mutex<Vec<OnConnectHook>>,
+    /// Links QuadCam holds for a job: None while held, else held until then.
+    gear_holds: Mutex<std::collections::HashMap<String, Option<std::time::Instant>>>,
     /// Downloaded tools (ffmpeg, esptool).
     modules: crate::modules::Modules,
 }
@@ -245,6 +248,7 @@ impl Core {
             settings_file: None,
             gear: crate::gear::Env::system(&cache),
             gear_hooks: Mutex::new(Vec::new()),
+            gear_holds: Mutex::default(),
             cache,
             modules: crate::modules::Modules::default(),
         }

@@ -3,8 +3,7 @@
 //! - `connected`: a device appeared;
 //! - `identified`: a device on the same link got its id (an FC after its MSP identity);
 //! - `unmounted_present`: a volume unmounted but its device is still plugged in, so the
-//!   person has not pulled it yet ("safe to remove" for a card, and the start of the
-//!   "still inserted" reminder);
+//!   person has not pulled it yet;
 //! - `removed`: a device is gone.
 //!
 //! **Cards are released with `diskutil unmountDisk`, not `eject`.** Tested on a USB reader
@@ -22,9 +21,9 @@
 //! another app ejects reads as `removed` at once.
 //!
 //! `Tracker` keeps the previous look and the devices unmounted but present, and turns each
-//! new look into events. The app polls (`detect::POLL`), runs the on-connect hooks for
-//! `connected` and `identified`, and drives the "still inserted" reminder (`cues`) from
-//! `Tracker::unmounted`.
+//! new look into events. The app polls (`detect::POLL`) and runs the on-connect hooks for
+//! `connected` and `identified` events that are not `app_initiated` (QuadCam's own mounts
+//! and port opens during a job). Events play no cue; a job's end does (`cues`).
 
 use super::model::{Connected, DeviceKind, Link};
 use serde::{Deserialize, Serialize};
@@ -43,6 +42,9 @@ pub enum DeviceEventKind {
 pub struct DeviceEvent {
     pub kind: DeviceEventKind,
     pub device: Connected,
+    /// QuadCam's own mount, unmount or port open (a job holds the link): no hook, no cue.
+    #[serde(default)]
+    pub app_initiated: bool,
 }
 
 /// Something the system shows is still plugged in, though it has no volume.
@@ -108,6 +110,7 @@ impl Tracker {
         let ev = |kind, device: &Connected| DeviceEvent {
             kind,
             device: device.clone(),
+            app_initiated: false,
         };
         for c in &now {
             match self.connected.iter().find(|b| b.link == c.link) {
