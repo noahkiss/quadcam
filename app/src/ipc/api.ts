@@ -4,7 +4,7 @@
 // library-changed or session-changed event refetches the view. Views and stores use only this module.
 import { convertFileSrc } from "@tauri-apps/api/core";
 import { open as openDialog } from "@tauri-apps/plugin-dialog";
-import { openPath, revealItemInDir } from "@tauri-apps/plugin-opener";
+import { openPath, openUrl, revealItemInDir } from "@tauri-apps/plugin-opener";
 import { commands } from "../bindings";
 import * as N from "./normalize";
 import type { ImportOptions, LibEdit, LibraryFilter, Moved, PlanPatch, RemovedCuts, SettingsValues, Span } from "./types";
@@ -22,6 +22,7 @@ export const api = {
   defaultOutputDir: () => commands.defaultOutputDir(),
   listVolumes: () => ok(commands.volumes()),
   libraryScope: () => ok(commands.libraryScope()),
+  thirdPartyNotices: () => ok(commands.thirdPartyNotices()),
   menuState: (enabled: Record<string, boolean>, checked: Record<string, boolean>, albumItem: string | null) => commands.menuState(enabled, checked, albumItem),
   share: (paths: string[], r: { x: number; y: number; w: number; h: number }) => ok(commands.share(paths, r.x, r.y, r.w, r.h)),
 
@@ -67,6 +68,12 @@ export const api = {
   settingsSet: async (values: SettingsValues) => N.settingsView(await ok(commands.settingsSet({ values }))),
   placeSearch: async (query: string, provider: string, limit = 6) => N.geo(await ok(commands.placeSearch({ query, provider, limit }))),
   placeSave: (name: string, lat: number, lon: number) => ok(commands.placeSave({ name, lat, lon })),
+
+  // Modules
+  modules: () => ok(commands.modules()),
+  moduleInstall: (name: string) => ok(commands.moduleInstall({ name, confirm: true })),
+  moduleRemove: (name: string) => ok(commands.moduleRemove({ name })),
+  modulesCheck: () => ok(commands.modulesCheck()),
 };
 
 /** A URL the web view can load for a file the core made (thumbnails, previews). */
@@ -74,6 +81,8 @@ export const fileSrc = (path: string | null | undefined) => (path ? convertFileS
 
 export const reveal = (path: string) => revealItemInDir(path);
 export const openFolder = (path: string) => openPath(path);
+/** Opens a web page in the default browser. */
+export const openLink = (url: string) => openUrl(url);
 
 /** The folder picker. */
 export async function pickFolder(title: string, defaultPath?: string | null): Promise<string | null> {

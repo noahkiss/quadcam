@@ -13,6 +13,7 @@ import { toast } from "../../components/toastStore";
 import { tilde } from "../../lib/format";
 import { applyNameFormat, matchLibraryLogs, rebuildLibrary, revealLibrary } from "../../actions/setup";
 import { draftFrom, emptyProfile, layoutExample, validPlaces, valuesOf, VIDEO_SYSTEMS, type Draft } from "./draft";
+import { ModulesPane } from "./ModulesPane";
 import styles from "./SettingsSheet.module.css";
 
 const SECTIONS: [SettingsSection, string, IconName][] = [
@@ -21,6 +22,7 @@ const SECTIONS: [SettingsSection, string, IconName][] = [
   ["places", "Places", "map-point"],
   ["import", "Import", "import"],
   ["photos", "Photos", "photos"],
+  ["modules", "Modules", "hdd"],
   ["advanced", "Advanced", "sliders"],
 ];
 
@@ -107,6 +109,7 @@ function Sheet({ first }: { first: SettingsSection }) {
               <TextField label="Album (empty: library only)" placeholder="Drone" value={d.photosAlbum} onChange={(e) => set("photosAlbum", e.target.value)} />
             </section>
           )}
+          {section === "modules" && <ModulesPane d={d} set={set} />}
           {section === "advanced" && <AdvancedPane />}
         </div>
       </div>

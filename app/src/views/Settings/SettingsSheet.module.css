@@ -239,3 +239,47 @@
   font-size: var(--t-sm);
   white-space: pre-wrap;
 }
+.modules {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--t-sm);
+}
+.modules th,
+.modules td {
+  padding: var(--s-2);
+  border-bottom: 1px solid var(--border);
+  text-align: left;
+  vertical-align: middle;
+}
+.modules thead th {
+  color: var(--muted);
+  font-weight: 500;
+}
+.modules tbody th {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-weight: 400;
+}
+.actionsCell {
+  white-space: nowrap;
+  text-align: right;
+}
+.actionsCell > * + * {
+  margin-left: var(--s-2);
+}
+.prompt {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: var(--s-1) var(--s-3);
+  margin: var(--s-3) 0 0;
+  font-size: var(--t-sm);
+}
+.prompt dt {
+  color: var(--muted);
+}
+.prompt dd {
+  margin: 0;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}

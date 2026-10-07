@@ -29,6 +29,7 @@ export interface Draft {
   photosAlbum: string;
   geocoder: string;
   googleKey: string;
+  ffmpegSource: "module" | "homebrew";
   places: PlaceRow[];
   profiles: Profile[];
   /** Index of the default profile in `profiles`, or null for none. */
@@ -61,6 +62,7 @@ export function draftFrom(s: State): Draft {
     photosAlbum: sel.photosAlbum(s),
     geocoder: sel.geocoder(s),
     googleKey: "",
+    ffmpegSource: sel.ffmpegSource(s),
     places: sel.places(s).map((p) => ({ name: p.name, lat: String(p.lat), lon: String(p.lon) })),
     profiles,
     defaultIndex: di >= 0 ? di : null,
@@ -96,6 +98,7 @@ export function valuesOf(d: Draft, before: Tunables): SettingsValues {
     keepOriginals: d.keepOriginals,
     geocoder: d.geocoder as SettingsValues["geocoder"],
     nameDateFormat: d.nameDateFormat,
+    ffmpegSource: d.ffmpegSource,
     ...(d.googleKey.trim() ? { googlePlacesKey: d.googleKey.trim() } : {}),
     ...(d.outputDir ? { outputDir: d.outputDir } : {}),
     places: validPlaces(d.places).places,

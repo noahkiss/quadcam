@@ -50,8 +50,7 @@ export async function start(): Promise<() => void> {
   window.addEventListener("focus", onFocus);
 
   await S().loadSettings();
-  const env = await api.envCheck();
-  store.setState({ env });
+  await loadEnv();
   const out = (S().values.outputDir as string | undefined) || (await api.defaultOutputDir()) || "";
   store.setState({ home: (out.match(/^\/Users\/[^/]+/) || [""])[0] });
   api.libraryScope().catch(() => {});
@@ -80,4 +79,9 @@ export async function makeStrips() {
   } finally {
     stripsRunning = false;
   }
+}
+
+/** Finds ffmpeg again (after a module install or removal). */
+export async function loadEnv() {
+  store.setState({ env: await api.envCheck() });
 }

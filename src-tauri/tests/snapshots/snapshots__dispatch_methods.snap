@@ -49,5 +49,9 @@ expression: "Core::METHODS"
   "profile_default",
   "session_cuts",
   "session_split",
-  "library_split"
+  "library_split",
+  "modules",
+  "module_install",
+  "module_remove",
+  "modules_check"
 ]

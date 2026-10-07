@@ -1,6 +1,8 @@
 //! Shared test helpers: synthetic DVR-like clips and disk images.
 #![allow(dead_code)]
 
+pub mod server;
+
 use quadcam_lib::media::{self, Tools};
 use std::path::{Path, PathBuf};
 use std::process::Command;
