@@ -59,7 +59,7 @@ Every threshold is in `moments::tune` (`src-tauri/src/moments.rs`).
 ### Better moments from the radio log
 
 - **Log every 0.1 s.** EdgeTX logs every 0.5 s or 1 s by default. In the model's Special Functions, set the **SD Logs** function's interval to 0.1 s. At 0.5 s, QuadCam still finds moments, but their times are good only to half a second. Short moves can be missed, and the scores are lower.
-- **Line up the log.** The log starts when you arm, but the DVR usually starts recording earlier. QuadCam assumes that the clip starts at arm. Play the clip to the moment you arm, then select **Arm is here**. The moments move to match.
+- **Line up the log.** The log starts when you arm, but the DVR usually starts recording earlier. When an analog clip's picture placed the log (see [How a log matches](metadata.md#how-a-log-matches)), the log offset is already set, to within a few seconds. Otherwise QuadCam assumes that the clip starts at arm. Play the clip to the moment you arm, then select **Arm is here**. The moments move to match.
 
 ## Make a cut
 

@@ -439,6 +439,10 @@ impl Session {
             .filter(|(_, part)| !part)
             .map(|(p, _)| p);
         for (p, s) in plans.zip(plan.suggestions) {
+            // A log the clip's picture placed sets the offset; otherwise a set one stays.
+            if let Some(o) = s.log_offset_s {
+                p.log_offset_s = o;
+            }
             p.moments = s
                 .moments
                 .iter()
@@ -859,6 +863,55 @@ mod tests {
                 Editor::Agent
             )
             .is_err());
+    }
+
+    #[test]
+    fn a_match_by_picture_sets_the_log_offset() {
+        let d = tempfile::tempdir().unwrap();
+        let mut csv = String::from("Date,Time,RxBt(V)\n");
+        for (a, b) in [(30.0, 150.0), (240.0, 360.0)] {
+            let mut t: f64 = a;
+            while t <= b {
+                csv.push_str(&format!(
+                    "2026-09-28,18:{:02}:{:06.3},4.1\n",
+                    (t / 60.0) as u32,
+                    t % 60.0
+                ));
+                t += 0.5;
+            }
+        }
+        std::fs::write(d.path().join("AIR65 II-2026-09-28.csv"), csv).unwrap();
+        let mut s = session();
+        s.clips[0].duration = 380.0;
+        s.clips[0].signal = Some(crate::moments::SignalScan {
+            keep: vec![
+                Span {
+                    start: 20.0,
+                    end: 140.0,
+                },
+                Span {
+                    start: 180.0,
+                    end: 360.0,
+                },
+            ],
+            ..Default::default()
+        });
+        s.plan_dates(
+            Some(d.path()),
+            None,
+            &Tunables::default(),
+            NaiveDate::from_ymd_opt(2026, 9, 30).unwrap(),
+            &[],
+        );
+        let p = &s.plans[0];
+        assert_eq!(p.badge, Badge::Matched, "{:?}", p.match_reason);
+        assert!(
+            (16.0..=24.0).contains(&p.log_offset_s),
+            "{}",
+            p.log_offset_s
+        );
+        let f = p.flight.as_ref().unwrap();
+        assert_eq!(f.pack_spans[0].start, p.log_offset_s);
     }
 
     #[test]

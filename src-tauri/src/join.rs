@@ -83,6 +83,16 @@ fn numbered(name: &str) -> Option<(String, u64, usize, String)> {
     ))
 }
 
+/// Whether a file named `b` may be the next file of the recording that `a` (`a_secs`
+/// long) holds: the next number with the same prefix and extension, and `a` as long as a
+/// DVR split. File times are not checked; a caller with more evidence uses `continues`.
+pub fn may_follow(a: &str, a_secs: f64, b: &str) -> bool {
+    let (Some(x), Some(y)) = (numbered(a), numbered(b)) else {
+        return false;
+    };
+    x.0 == y.0 && x.3 == y.3 && x.1 + 1 == y.1 && (a_secs - SPLIT_S).abs() <= SURE_S
+}
+
 /// A name ffmpeg's concat list takes without `-safe 0`: letters, digits, `.`, `_`, `-`, and
 /// no leading dot.
 fn list_safe(name: &str) -> bool {
