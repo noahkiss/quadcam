@@ -1,6 +1,6 @@
 # Sim: design
 
-Status: draft for review, 2026-10-07.
+Status: approved 2026-10-07. The owner accepted every default in section 12; the engine (question 1) is decided by the S6 measurements.
 Baseline: `main` at release 0.6.4, with WP6 (switch map, radio joystick reader) on its branch.
 Target: a built-in FPV simulator, built in work packages (section 11). No code before the owner
 reviews this doc.
@@ -900,9 +900,9 @@ Whether the sim gates 1.0 is open question 7.
 
 ---
 
-## 12. Open questions for the owner
+## 12. Decisions (were open questions)
 
-Each has a default the build uses until you decide.
+The owner accepted every default below on 2026-10-07. Question 1 stays open until the S6 measurements, then follows the bar in 3.4.
 
 | # | Question | Default |
 |---|---|---|
