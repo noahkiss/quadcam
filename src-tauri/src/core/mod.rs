@@ -29,6 +29,7 @@ mod library;
 mod modules;
 mod osd;
 mod prep;
+mod radio_cli;
 mod rates;
 mod rematch;
 mod setup;
@@ -63,6 +64,7 @@ pub use gear_card::{CardClean, CardCleanParams, CardParams, CardPreview, CardPre
 pub use import::CardStatus;
 pub use library::{LibEdit, LibItem, LibUpdate, LibraryView, RebuildReport, RenameReport};
 pub use osd::{OsdEditParams, OsdParams};
+pub use radio_cli::{RadioCliAction, RadioCliParams, RadioCliReport, RadioMatch, RadioVerify};
 pub use rates::{RatesParams, RatesPreview, RatesPreviewParams, SimsParams};
 pub use rematch::{LibMatch, LibMatchParams, LibMatchReport};
 pub use setup::{PlaceRemoved, SettingsView};

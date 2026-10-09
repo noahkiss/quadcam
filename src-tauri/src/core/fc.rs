@@ -98,6 +98,8 @@ pub struct FcState {
     /// What each port's FC said last (identity, id).
     pub seen: HashMap<String, FcInfo>,
     pub usb: HashMap<String, UsbState>,
+    /// What each radio serial port's `ver` said last.
+    pub radio: HashMap<String, crate::gear::edgetx::cli::RadioInfo>,
     /// Ports whose background reads are paused (the USB timer's battery probe and the
     /// on-connect FC backup). Kept for the run of the app, by port.
     pub paused: HashSet<String>,
@@ -253,12 +255,24 @@ impl Core {
             .collect();
         st.seen.retain(|p, _| ports.contains(p));
         st.usb.retain(|p, _| ports.contains(p));
+        st.radio.retain(|p, _| ports.contains(p));
         for c in found.iter_mut() {
             if let Some(i) = st.seen.get(&super::gear::link_handle(&c.link)) {
                 if c.kind == DeviceKind::Fc {
                     c.id = i.id.clone();
                     c.identity = i.identity.clone();
                 }
+            }
+            if let (DeviceKind::Radio, Some(i)) = (
+                c.kind,
+                st.radio.get(&super::gear::link_handle(&c.link)),
+            ) {
+                c.identity = crate::gear::model::Identity {
+                    board: i.board.clone(),
+                    firmware: Some("EdgeTX".into()),
+                    version: i.version.clone(),
+                    ..Default::default()
+                };
             }
         }
     }

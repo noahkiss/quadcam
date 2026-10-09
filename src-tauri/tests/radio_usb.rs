@@ -152,3 +152,142 @@ fn card_clean_lists_then_removes_only_apple_double_files() {
     assert!(root.join("MODELS/._notes.txt").exists(), "not AppleDouble: kept");
     assert!(root.join("MODELS/model01.yml").exists());
 }
+
+// --- The EdgeTX CLI over USB Serial -------------------------------------------------
+
+use quadcam_lib::core::{RadioCliAction, RadioCliParams};
+use quadcam_lib::gear::edgetx::cli::FakeRadioCli;
+
+const SERIAL: &str = "/dev/cu.usbmodemRADIO1";
+
+/// A core with a radio on serial (the fake) and, optionally, its card in a reader.
+fn serial_core(dir: &Path, radio: &FakeRadioCli, volumes: Vec<Volume>) -> Core {
+    let mut env = Env::fake(volumes, Arc::new(radio.ports(SERIAL)));
+    env.card_reader = Arc::new(Vec::new);
+    Core::new(
+        dir.join("cache"),
+        None,
+        Arc::new(NoHooks),
+        Arc::new(Recorder::default()),
+    )
+    .with_settings(dir.join("support/settings.json"))
+    .with_gear_env(env)
+    .with_fc_timing(quadcam_lib::gear::bf::cli::Timing::fast())
+}
+
+fn p(action: RadioCliAction) -> RadioCliParams {
+    RadioCliParams {
+        action,
+        ..Default::default()
+    }
+}
+
+#[test]
+fn a_radio_on_serial_is_a_radio_and_identifies_itself() {
+    let d = tempfile::tempdir().unwrap();
+    let radio = FakeRadioCli::new("pocket", "2.12.4");
+    let core = serial_core(d.path(), &radio, vec![]);
+    let c = core.gear_connected().unwrap();
+    assert_eq!(c.len(), 1);
+    assert_eq!(c[0].kind, DeviceKind::Radio, "a radio's serial port is not an FC");
+    let r = core.gear_radio_cli(&p(RadioCliAction::Identify)).unwrap();
+    let info = r.info.unwrap();
+    assert_eq!((info.board.as_deref(), info.version.as_deref()), (Some("pocket"), Some("2.12.4")));
+    // The next look shows what the radio runs.
+    let c = core.gear_connected().unwrap();
+    assert_eq!(c[0].identity.version.as_deref(), Some("2.12.4"));
+    assert_eq!(c[0].identity.board.as_deref(), Some("pocket"));
+}
+
+#[test]
+fn play_ls_beep_and_reboot_need_the_right_arguments() {
+    let d = tempfile::tempdir().unwrap();
+    let radio = FakeRadioCli::new("pocket", "2.12.4").with_file("/SOUNDS/en/hello.wav", 10);
+    let core = serial_core(d.path(), &radio, vec![]);
+    let r = core
+        .gear_radio_cli(&RadioCliParams {
+            path: Some("/SOUNDS/en".into()),
+            ..p(RadioCliAction::Ls)
+        })
+        .unwrap();
+    assert_eq!(r.entries[0].name, "hello.wav");
+    core.gear_radio_cli(&RadioCliParams {
+        path: Some("/SOUNDS/en/hello.wav".into()),
+        ..p(RadioCliAction::Play)
+    })
+    .unwrap();
+    assert_eq!(radio.played(), ["/SOUNDS/en/hello.wav"]);
+    assert!(core.gear_radio_cli(&p(RadioCliAction::Play)).is_err(), "play needs a path");
+    core.gear_radio_cli(&p(RadioCliAction::Beep)).unwrap();
+    let refused = core.gear_radio_cli(&p(RadioCliAction::Reboot)).unwrap_err();
+    assert!(format!("{refused:#}").contains("confirm"));
+    assert!(!radio.rebooted());
+    core.gear_radio_cli(&RadioCliParams {
+        confirm: true,
+        ..p(RadioCliAction::Reboot)
+    })
+    .unwrap();
+    assert!(radio.rebooted());
+}
+
+#[test]
+fn another_program_holding_the_port_is_a_refusal() {
+    let d = tempfile::tempdir().unwrap();
+    let radio = FakeRadioCli::new("pocket", "2.12.4");
+    let mut env = Env::fake(vec![], Arc::new(radio.ports(SERIAL)));
+    env.holders = Arc::new(|_| vec![(4242, "screen".to_string())]);
+    let core = Core::new(
+        d.path().join("cache"),
+        None,
+        Arc::new(NoHooks),
+        Arc::new(Recorder::default()),
+    )
+    .with_settings(d.path().join("support/settings.json"))
+    .with_gear_env(env);
+    let e = core.gear_radio_cli(&p(RadioCliAction::Identify)).unwrap_err();
+    assert!(format!("{e:#}").contains("open in screen"));
+    assert_eq!(radio.opens(), 0, "QuadCam never opened the port");
+}
+
+#[test]
+fn verify_compares_the_radio_with_the_latest_backup() {
+    let d = tempfile::tempdir().unwrap();
+    let root = d.path().join("card");
+    let vol = radio_card(&root, "USB", "disk43");
+    std::fs::write(root.join("MODELS/model01.yml"), "header:\n  name: A\n").unwrap();
+    std::fs::write(root.join("MODELS/model02.yml"), "header:\n  name: B\n").unwrap();
+    std::fs::write(root.join("LOGS/x.csv"), "not checked").unwrap();
+    let size = |p: &str| std::fs::metadata(root.join(p)).unwrap().len();
+    let radio = FakeRadioCli::new("pocket", "2.12.4")
+        .with_file("/RADIO/radio.yml", size("RADIO/radio.yml"))
+        .with_file("/MODELS/model01.yml", size("MODELS/model01.yml"));
+    let core = serial_core(d.path(), &radio, vec![vol]);
+    let id = core.gear_connected().unwrap().into_iter().find(|c| c.usb.is_none() && matches!(c.link, quadcam_lib::gear::model::Link::Volume { .. })).unwrap().id.unwrap();
+    core.gear_device_save(&quadcam_lib::core::DeviceSaveParams {
+        id: id.clone(),
+        name: Some("Bench radio".into()),
+        ..Default::default()
+    })
+    .unwrap();
+    core.gear_backup(&quadcam_lib::core::BackupParams {
+        device: Some(id.clone()),
+        ..Default::default()
+    })
+    .unwrap();
+
+    let r = core
+        .gear_radio_cli(&RadioCliParams {
+            device: Some(id.clone()),
+            ..p(RadioCliAction::Verify)
+        })
+        .unwrap();
+    let v = r.verify.unwrap();
+    assert_eq!(v.missing, ["MODELS/model02.yml"]);
+    assert!(v.differ.is_empty());
+    assert!(!v.ok);
+    assert_eq!(v.checked, 3, "LOGS are not checked");
+
+    // Without a device the one saved radio of the board is used once identify saved a board.
+    let r = core.gear_radio_cli(&p(RadioCliAction::Verify)).unwrap();
+    assert_eq!(r.verify.unwrap().backup.split('/').next(), Some(id.as_str()));
+}

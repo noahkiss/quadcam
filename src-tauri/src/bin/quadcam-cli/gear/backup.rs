@@ -179,6 +179,29 @@ pub fn card_clean(
     )?)?)
 }
 
+pub fn radio_cli(
+    core: &Core,
+    action: &str,
+    port: Option<String>,
+    path: Option<String>,
+    device: Option<String>,
+    yes: bool,
+) -> Result<Value> {
+    let action = serde_json::from_value(Value::String(action.to_string())).map_err(|_| {
+        anyhow::anyhow!("unknown radio action {action:?}; use identify, ls, play, beep, reboot or verify")
+    })?;
+    Ok(serde_json::to_value(call::gear_radio_cli(
+        core,
+        api::RadioCliParams {
+            port,
+            action,
+            path,
+            device,
+            confirm: yes,
+        },
+    )?)?)
+}
+
 pub fn card_repair(core: &Core, check: String, yes: bool) -> Result<Value> {
     Ok(serde_json::to_value(call::gear_card_repair(
         core,

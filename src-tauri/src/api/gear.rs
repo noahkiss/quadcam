@@ -21,7 +21,7 @@ pub use crate::core::{
     SimDefaultsParams, SimValidateParams,
 };
 pub use crate::core::{
-    CardMountParams, CardMounted, ChangeUpdateParams, CopyParams, OsdEditParams, RestoreParams,
+    CardMountParams, CardMounted, RadioCliAction, RadioCliParams, RadioCliReport, RadioMatch, RadioVerify, ChangeUpdateParams, CopyParams, OsdEditParams, RestoreParams,
     StageParams,
 };
 pub use crate::core::{
@@ -205,6 +205,8 @@ macro_rules! with_gear_rows {
             gear_export(params: ExportParams) -> ExportReport = |c| c.gear_export(&params);
             /// Imports an old backup folder: card copies, FC diff and dump files, LOGS folders.
             gear_import_backups(params: ImportBackupsParams) -> ImportBackupsReport = |c| c.gear_import_backups(&params);
+            /// A radio on its USB serial port (EdgeTX CLI): identify, ls, play, beep, reboot, or verify the card's files against a backup.
+            gear_radio_cli(params: RadioCliParams) -> RadioCliReport = |c| c.gear_radio_cli(&params);
             /// Lists the ._ files macOS left on a card; with remove and confirm, deletes them.
             gear_card_clean(params: CardCleanParams) -> CardClean = |c| c.gear_card_clean(&params);
             /// Checks a card's file system (diskutil verifyVolume) and logs the result.
