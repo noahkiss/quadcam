@@ -629,6 +629,31 @@ reads it but does not write it."
   `CardView.clock` from log names: a newest log before 2020 means the clock reset, an older
   2000-01-01 log means it reset once, a log after today means it runs ahead.
 
+**Built (WP9 model editors):** `gear/edgetx/editors.rs` adds the editors' `ModelOp`s to WP3's:
+`set_screen_values` (up to 4 lines of 3 sources; a `{Label}` source becomes `tele(N)`),
+`set_logging` (the `LOGS` special function, `def` `"<period in 0.1 s>,1"`, one at most),
+`set_sensor_logs` (a sensor's `logs` line), `set_rf_alarms` (`rfAlarms`, critical not over
+warning), `set_callout` and `remove_callout`. `set_timer` now checks each field's range. A callout is a
+`PLAY_TRACK` special function owned by its track name: `set_callout` replaces the function with
+that track, keeps its place, and edits the logical switch it made (a switch anything else
+mentions stays; a new one takes the first free). A sensor value is typed as shown (`3.5`) and
+stored at the sensor's `prec`; `FUNC_VNEG` is "below", `FUNC_VPOS` "above". `editor_view` reads all of it
+back. `Core::gear_model` (`core/model_edit.rs`) reads a radio's model from the mounted card, else the
+latest backup, with the device's staged model edits on top; `Core::gear_model_edit` joins ops and
+checklist text into the one open "Model edits" change: `editors::merge_ops` keeps the last op
+per setting (`op_key`; timer fields and sensor logs merge), an edit that leaves the model as
+the radio has it drops out, an empty change is discarded, and a refusal stages nothing.
+Staging a checklist turns the checklist on. Rows `gear_model` and `gear_model_edit`; CLI
+`gear model`, `gear model-edit`; MCP `quadcam_gear model`, `quadcam_gear_edit model_edit`; UI
+Models and Checklists segments (`views/Gear/Models/`). Acceptance: `tests/model_editors.rs` (each
+op in both file layouts, ownership, idempotence, the limits), `tests/model_edit.rs` (read from card
+and backup, merge, drop-out, apply with read-back on the synthetic card, row and MCP),
+`e2e/model-edit.spec.ts`.
+Deviations: the design's "telemetry screens" editor covers value and script screens, not bars or
+the other types (they show and cannot be edited). Checked only against the shape of real model
+files, not on a radio: the `LOGS` encoding, 4 lines by 3 sources, the timer mode names, and the
+99-line checklist cap (QuadCam's own).
+
 **Device notes (RadioMaster Pocket, EdgeTX 2.12.4, measured 2026-10-07):**
 
 | Mode | USB id | Strings | Notes |
@@ -1027,6 +1052,50 @@ The rules apply at render time, so the CSV keeps the readable text and the rules
 spoken text. A user's own lines (custom callouts) live in `gear.json`, not in the repo
 file, and never ship in a pack.
 
+**Built (WP9 voice):** `gear/voice/` (`lines.rs` the lines and spelling rules, `tts.rs` the
+providers, `render.rs` the cache and normalisation, `packs.rs` build, index and install,
+`wav.rs`), `core/voice.rs`, `resources/voice/{lines.csv,spelling.toml}`. Rows `gear_voice`,
+`gear_voice_edit`, `gear_voice_render`, `gear_voice_pack_install`, `gear_voice_choose` and one
+the design did not list, `gear_voice_preview` (copies a take into the cache, which the asset
+protocol serves; the gear folder is outside its scope). `build-pack` is CLI only
+(`Core::voice_build_pack`). The Voice segment is `views/Gear/Voice/`.
+
+- Providers: `say` (`/usr/bin/say`, the text on stdin, a WAV file out) and `openai` (an
+  OpenAI-compatible `/v1/audio/speech`, asked for a WAV; a local Kokoro-FastAPI server is the
+  model). Both sit behind `Tts`, take their outside world through `Run` and `Post`, and are
+  built by `Env.tts`, which is off under cargo (`QUADCAM_TTS=real`, `QUADCAM_FETCH=real`), so
+  tests use fakes. The key goes to curl on stdin in a config file. No ElevenLabs adapter: the
+  design asks for one, and a paid adapter waits for open question 6.
+- Settings: `tts_provider`, `tts_key`, and new `tts_base_url`, `tts_model`, `tts_voice`,
+  `voice_index` (in `settings.json`, not in `GearSettings`). `QUADCAM_TTS_KEY` beats `tts_key`.
+- Render: `Cache` keys a take by provider, voice, model, provider speed, spoken text and seed
+  (sha-256) and stores it as a WAV, not a `.pcm`, so the rate travels with it. `normalise` runs
+  ffmpeg only for a tempo or a rate other than 32 kHz; the trim, pads and fades are integer
+  math, so `tests/fixtures/voice/golden.wav` pins the bytes. The fades act on the speech, and
+  the lead and tail pads are silence added after.
+- Packs: `build` renders the lines to a folder and zips it with `/usr/bin/zip` (no zip crate),
+  then writes the entry into `voices.json`. `install` checks the zip's hash, lists its members
+  with `unzip -Z1` and refuses a path outside `pack.json` and `SOUNDS/`, unpacks, and checks the
+  manifest's id and files. The index is read from `voice_index` (a path, or an address through
+  `Fetch`) into the cache; a pack zip sits next to its index.
+- Choose voice: `Edit::CardFiles` is now applied. `card_work` reads each `CardFile` from the blob
+  store and plans it like a restore (`Card::plan_files`), so backup, write, read back and
+  rollback are WP5's. A change of card files stands alone. Overrides live in `gear.json`
+  (`voice.overrides.<radio>`, a `text` override holds its WAV as a blob; `backup::change_keys`
+  keeps those blobs from collection), as does the chosen voice and the person's custom lines.
+  Choosing with Keep my overrides off clears that radio's overrides when it stages.
+- Not built, or different from the design: the render hook for carrier sentences is a
+  documented seam in `tts.rs` only. `lines.csv` holds 45 lines, not about 745: the callouts
+  QuadCam names, the numbers 0 to 20 and six system sounds; the rest of EdgeTX's set is a data
+  task. Units and their file names are not in it. The ElevenLabs adapter and the quota report
+  are not built; the report gives characters and whether the provider may charge. A render
+  runs inside the call, with no progress events. `lang` is `en` only.
+- Acceptance: `tests/voice.rs` (the spelling golden, a cache hit with no provider call, the
+  normalisation golden WAV, the providers' requests, `build-pack`'s zip and index entry, the
+  install checks, a hostile zip) and `tests/voice_core.rs` (render and cost, confirm, install,
+  Choose voice staging one change and keeping overrides, apply with read-back),
+  `e2e/voice.spec.ts`.
+
 **Packs are release assets, not git files.** A pack is a zip per voice
 (`voice-<id>-<version>.zip`) attached to a GitHub release, plus one `voices.json` index:
 
@@ -1174,8 +1243,10 @@ binaries only (open question 10).
     backup (not `LOGS/`) and reports missing files and size differences; the card must be back
     in the radio, because storage and serial modes are exclusive. The reply formats of `ver`
     and `ls` are parsed tolerantly (key: value lines; a name with an optional size) because the
-    real replies are not recorded yet. WP9's voice preview is not on this branch, so `play` is
-    its own action; the preview can call it once both land.
+    real replies are not recorded yet. WP9's `gear_voice_preview` plays a pack's take on the Mac;
+    `radio-cli play` plays the line the radio holds, and takes a voice line's card path as it
+    is (`SOUNDS/en/SYSTEM/hello.wav`), so a line can be heard on the Mac before an apply and on
+    the radio after it.
   - **DFU link.** `Link::Dfu` carries the chip serial. `gear_dfu_link` stores it in the picked
     radio (`dfu_serial`), or in the radio seen most recently when none is picked, and says
     which. `gear_connected` shows a linked DFU device under that radio's id. The flash plan
@@ -1558,7 +1629,7 @@ dialog, Mount and Done on a radio's page. Deviations and choices:
   variant bits), x 0-63, y 0-31, profiles 1-3; an empty list turns the element off. The WP7
   editor only has to stage it.
 - **Not done:** a radio's Bench item cannot be staged from the app (no card editor yet:
-  CLI and agents stage card edits); `CardFiles` (sound packs) wait for WP9; the mount time is
+  CLI and agents stage card edits); `CardFiles` (sound packs) apply since WP9; the mount time is
   not a setting.
 
 ### 8.1 One path for every write
@@ -1661,7 +1732,7 @@ docs, and its rows in `api`, CLI and MCP.
 | WP6 | Switch map | `gear/switchmap.rs`, Switches segment | WP2, WP3 | 2 |
 | WP7 | OSD | `gear/osd.rs`, OSD segment (view and editor) | WP2 (parse); WP5 to stage | 1 (pure part), 3 (editor) |
 | WP8 | Rates and sims | `gear/rates.rs`, `gear/sims/`, `apply/sim.rs`, Rates segment, Sims page | WP2, WP5 (plan/confirm pattern) | 2 (read), 3 (sync) |
-| WP9 | Radio extras: voice and model editors | `gear/voice/`, `resources/voice/`, Voice segment, `build-pack` and the pack index; `ModelOp` editors for checklists, telemetry screens, logging, timers, alarms and callouts; Checklists segment | WP3, WP5, WP14 | 4 |
+| WP9 | Radio extras: voice and model editors. **Done except the ElevenLabs adapter, the carrier-sentence render and the full line list (see 7.4)** | `gear/voice/`, `resources/voice/`, Voice segment, `build-pack` and the pack index; `ModelOp` editors for checklists, telemetry screens, logging, timers, alarms and callouts; Checklists segment | WP3, WP5, WP14 | 4 |
 | WP10 | Firmware and splash | `gear/firmware/`, `gear/splash.rs`, `gear/dfu.rs`, Firmware page, Splash segment | WP2, WP3, WP4, WP5, WP14 | 4 |
 | WP11 | Card prep | `disk.rs` changes, `card_prep*` rows, `quadcam_format_card` `prep` | – (existing code) | 1 |
 | WP12 | Flights and packs | `logs.rs` columns, `gear/flights.rs`, `gear/packs.rs`, Flights and Packs pages | WP1 (reads log folders; the log store once WP4 lands) | 1 |

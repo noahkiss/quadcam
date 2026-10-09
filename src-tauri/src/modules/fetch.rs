@@ -19,7 +19,7 @@ pub struct Curl {
     pub loopback_only: bool,
 }
 
-fn is_loopback(url: &str) -> bool {
+pub(crate) fn is_loopback(url: &str) -> bool {
     let Some(rest) = url.strip_prefix("http://") else {
         return false;
     };

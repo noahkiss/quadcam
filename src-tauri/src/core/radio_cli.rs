@@ -177,11 +177,19 @@ impl Core {
             verify: None,
             notes: Vec::new(),
         };
+        // A voice line's card path (`SOUNDS/en/SYSTEM/hello.wav`) works as it is.
         let path = || {
             p.path
                 .as_deref()
                 .map(str::trim)
                 .filter(|s| !s.is_empty())
+                .map(|s| {
+                    if s.starts_with('/') {
+                        s.to_string()
+                    } else {
+                        format!("/{s}")
+                    }
+                })
                 .context("path is required: a card path such as /SOUNDS/en/hello.wav")
         };
         match p.action {
@@ -196,10 +204,10 @@ impl Core {
                 self.hooks.gear_changed();
                 report.info = Some(info);
             }
-            RadioCliAction::Ls => report.entries = cli.ls(path()?)?,
+            RadioCliAction::Ls => report.entries = cli.ls(&path()?)?,
             RadioCliAction::Play => {
                 let file = path()?;
-                cli.play(file)?;
+                cli.play(&file)?;
                 report.notes.push(format!("Played {file} on the radio."));
             }
             RadioCliAction::Beep => {

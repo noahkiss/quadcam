@@ -424,6 +424,18 @@ pub struct SettingsValues {
     /// Gear: the voice provider (default say, macOS).
     #[schemars(extend("x-nullable" = true))]
     pub tts_provider: Option<String>,
+    /// Gear: the address of an OpenAI-compatible voice server (for tts_provider openai), such as http://127.0.0.1:8880.
+    #[schemars(extend("x-nullable" = true))]
+    pub tts_base_url: Option<String>,
+    /// Gear: the voice server's model name.
+    #[schemars(extend("x-nullable" = true))]
+    pub tts_model: Option<String>,
+    /// Gear: the voice your own lines render with: a say voice name, or the server's voice id.
+    #[schemars(extend("x-nullable" = true))]
+    pub tts_voice: Option<String>,
+    /// Gear: the address or path of the voice pack index (voices.json).
+    #[schemars(extend("x-nullable" = true))]
+    pub voice_index: Option<String>,
     /// Gear: the voice provider's API key. Never read back.
     #[schemars(extend("x-nullable" = true))]
     pub tts_key: Option<String>,

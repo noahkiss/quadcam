@@ -1,0 +1,46 @@
+path,text,group,why
+SOUNDS/en/armed.wav,Armed,callouts,Motors can spin. Plays when the model arms.
+SOUNDS/en/disarm.wav,Disarmed,callouts,Motors are off. Plays when the model disarms.
+SOUNDS/en/lowbat.wav,Battery low,callouts,The pack voltage is under the first warning level.
+SOUNDS/en/critbat.wav,Battery critical,callouts,The pack voltage is under the last level: land now.
+SOUNDS/en/lowrssi.wav,Signal low,callouts,The link signal is under the warning level.
+SOUNDS/en/lowlq.wav,Link quality low,callouts,The link quality is under the warning level.
+SOUNDS/en/failsafe.wav,Failsafe,callouts,The receiver lost the radio and took over.
+SOUNDS/en/linkback.wav,Link back,callouts,The receiver hears the radio again.
+SOUNDS/en/turtle.wav,Turtle mode,callouts,Turtle mode is on: the quad flips over.
+SOUNDS/en/angle.wav,Angle mode,callouts,Angle mode is on.
+SOUNDS/en/horizon.wav,Horizon mode,callouts,Horizon mode is on.
+SOUNDS/en/acro.wav,Acro mode,callouts,Acro mode is on.
+SOUNDS/en/beeper.wav,Beeper on,callouts,"The quad's beeper is on, to find it."
+SOUNDS/en/gpsfix.wav,GPS fix,callouts,The GPS has a fix.
+SOUNDS/en/rth.wav,Return to home,callouts,The quad flies home by itself.
+SOUNDS/en/mahwarn.wav,Capacity warning,callouts,The used capacity reached the warning level.
+SOUNDS/en/timer1.wav,Timer one,callouts,Timer one reached its time.
+SOUNDS/en/timer2.wav,Timer two,callouts,Timer two reached its time.
+SOUNDS/en/0000.wav,zero,numbers,The number 0.
+SOUNDS/en/0001.wav,one,numbers,The number 1.
+SOUNDS/en/0002.wav,two,numbers,The number 2.
+SOUNDS/en/0003.wav,three,numbers,The number 3.
+SOUNDS/en/0004.wav,four,numbers,The number 4.
+SOUNDS/en/0005.wav,five,numbers,The number 5.
+SOUNDS/en/0006.wav,six,numbers,The number 6.
+SOUNDS/en/0007.wav,seven,numbers,The number 7.
+SOUNDS/en/0008.wav,eight,numbers,The number 8.
+SOUNDS/en/0009.wav,nine,numbers,The number 9.
+SOUNDS/en/0010.wav,ten,numbers,The number 10.
+SOUNDS/en/0011.wav,eleven,numbers,The number 11.
+SOUNDS/en/0012.wav,twelve,numbers,The number 12.
+SOUNDS/en/0013.wav,thirteen,numbers,The number 13.
+SOUNDS/en/0014.wav,fourteen,numbers,The number 14.
+SOUNDS/en/0015.wav,fifteen,numbers,The number 15.
+SOUNDS/en/0016.wav,sixteen,numbers,The number 16.
+SOUNDS/en/0017.wav,seventeen,numbers,The number 17.
+SOUNDS/en/0018.wav,eighteen,numbers,The number 18.
+SOUNDS/en/0019.wav,nineteen,numbers,The number 19.
+SOUNDS/en/0020.wav,twenty,numbers,The number 20.
+SOUNDS/en/SYSTEM/hello.wav,Hello,system,The radio powered on.
+SOUNDS/en/SYSTEM/bye.wav,Goodbye,system,The radio powers off.
+SOUNDS/en/SYSTEM/thralert.wav,Throttle warning,system,The throttle is not at idle at power-on.
+SOUNDS/en/SYSTEM/swalert.wav,Switch warning,system,A switch is not in its safe position at power-on.
+SOUNDS/en/SYSTEM/lowbatt.wav,Radio battery low,system,The radio's own battery is low.
+SOUNDS/en/SYSTEM/inactiv.wav,Radio inactive,system,The radio was not touched for a while.

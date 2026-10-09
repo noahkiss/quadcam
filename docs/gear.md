@@ -207,7 +207,7 @@ jobs only. `gear radio-cli ACTION` runs one:
 |---|---|
 | `identify` | `ver`: the board and EdgeTX version the radio runs, and the saved radios of that board |
 | `ls --path /SOUNDS/en` | lists a card folder |
-| `play --path /SOUNDS/en/hello.wav` | plays a sound file on the radio's speaker: a voice line preview |
+| `play --path /SOUNDS/en/hello.wav` | plays a sound file on the radio's speaker. A voice line's card path works as it is, so after a voice pack is applied you can hear a line on the radio itself |
 | `beep` | the radio beeps |
 | `reboot --yes` | restarts the radio |
 | `verify [--device ID]` | `ls` each folder of the saved radio's latest backup, and lists the files the radio lacks or holds at another size. Use it after a card apply, with the card back in the radio. `LOGS/` is skipped |
@@ -216,6 +216,89 @@ QuadCam sends no other command. A path is an absolute card path of plain charact
 refuses a port another program has open ("is open in screen"), as it does for a flight
 controller, and a radio whose CLI is off gets a hint to turn it on. After `identify`, the
 serial radio shows its board and version in the device list.
+
+## Radio model editors
+
+A saved radio's page has a **Models** and a **Checklists** segment. They read the model from the
+mounted card, or from the radio's latest backup when it is not plugged in, and show the
+radio's staged model edits on top. Every control stages its change at once. All edits join
+one change per radio, "Model edits". A later edit of a setting replaces the earlier one,
+and an edit that puts the model back as the radio has it drops out. Nothing reaches the card
+until the apply sheet writes it. **Review…** opens the sheet; **Undo model edits** discards
+the change.
+
+The **Model** pop-up picks the model file. The first load shows the radio's selected model.
+
+| Section | What it edits |
+|---|---|
+| Timers | Name (8 characters), mode, switch, countdown beep, persistent, beep every minute, count up. Add a timer (3 at most) or remove one. A timer's stored time is never set |
+| Telemetry screens | A value screen holds up to 4 lines of up to 3 sources: a sensor label in braces, `{RxBt}`, or `Tmr1`. A script screen names a script (6 characters). Screens run in order: a screen cannot follow a gap |
+| Logging | Whether the radio writes a log, on which switch, and how often (0.1 to 25.5 s). Which telemetry sensors the log records |
+| Alarms | The RSSI warning and critical levels. Critical cannot be over warning |
+| Callouts | A sound that plays while a switch is on, or while a sensor is below or above a value for a delay. Repeat: once, once but not at power-on, or every few seconds |
+| Checklist | The power-on checklist, in the **Checklists** segment |
+
+**A callout belongs to its sound.** The sound's name (8 characters at most, a file in
+`SOUNDS/<language>/` on the card) identifies the callout. Staging a callout with a sound that
+already has one replaces it, and the logical switch QuadCam made for it changes with it. A
+logical switch that anything else uses stays as it is. A battery callout uses the first free
+logical switch. QuadCam can edit only the callouts whose condition it writes; any other
+callout shows in the list and can be removed.
+
+A sensor's value is typed as the sensor shows it, `3.5` for 3.5 V, and stored in the
+sensor's precision. A sensor must exist in the model; if it does not, discover sensors on
+the radio first.
+
+**Checklist.** Each item is a line; a tick box starts the line with `=`. A line holds 20
+characters on the RadioMaster Pocket (the `=` counts), and a checklist holds 99 lines.
+QuadCam writes `MODELS/<model name>.txt` and turns on `displayChecklist` and
+`checklistInteractive`. Staging a checklist turns it on; the checkbox turns it on or off.
+
+**Not yet checked on a real radio:** the logging function (`LOGS`, its period in 0.1 s), the
+value screens' limit of 4 lines and 3 sources, the list of timer modes the pop-up offers
+and the 99-line checklist limit (QuadCam's own cap). Each follows the shape of the
+functions and files a real card does hold. Check each on a real card before relying on it.
+
+## Radio voice
+
+A saved radio's **Voice** segment chooses the voice its callouts and system sounds use. The
+radio plays WAV files from `SOUNDS/<language>/` on its card. QuadCam holds a list of lines, the
+sound a radio plays and the text a voice reads, and puts a voice's takes of them on the card.
+
+- **Lines.** Each line has a card path, its text and a group (callouts, numbers, system,
+  units, extras). A few words read badly, so QuadCam spells them out before a voice speaks them:
+  `GPS` is spoken `G.P.S.`, `TX` `T.X.`, `dBm` `D.B.M.`. The table shows the spoken text
+  beside the text. Your own lines live on your Mac, never in a pack.
+- **Packs.** A voice pack is a zip of WAVs for one voice. **Refresh packs** reads the pack
+  index (the `voice_index` setting: an address or a file) and **Install** unpacks a pack into the
+  gear folder after a hash check. No pack ships with QuadCam yet.
+- **Render my voice.** QuadCam can also speak every line itself, with the provider in the
+  settings, and keep the takes as a local pack: `tts_provider` is `say` (macOS, free, offline)
+  or `openai` (any server with an OpenAI-compatible `/v1/audio/speech`, such as a Kokoro
+  server on this Mac: set `tts_base_url`, `tts_model` and `tts_voice`). A key goes in
+  `QUADCAM_TTS_KEY` or the `tts_key` setting and is never shown or logged. **Check cost**
+  reports the lines, how many the cache already holds, and the characters a provider would
+  speak. A provider that is not on this Mac may charge: **Render my voice** then stops and
+  shows the characters, and **Render and pay** goes ahead.
+- **The cache.** A take is kept by provider, voice, model, speed, spoken text and seed. A
+  render with other trim or tempo settings finds the take and calls no provider.
+- **The shape of a sound.** Each WAV is 32 kHz, 16-bit, mono. QuadCam trims the silence
+  (speech is every 5 ms window within 55 dB of the loudest), adds 20 ms before and 150 ms
+  after, and fades the speech in over 5 ms and out over 30 ms. A tempo other than 1 runs
+  first, in ffmpeg.
+- **Choose voice.** Pick an installed voice and **Choose voice** stages one change that
+  puts every sound of that pack on the card. **Keep my overrides** (on by default) keeps the
+  lines you changed one by one. Sounds on the card that no pack knows are never deleted.
+  **Review…** opens the apply sheet: backup first, write, read back, compare. Over the radio's
+  USB a whole pack takes minutes.
+- **One line.** **Use another voice…** takes another installed voice's take for that line
+  on this radio. **My text…** speaks your own text with your provider for that line only.
+  **Reset** clears it. The play buttons play a take. A line you add this way that QuadCam does
+  not list becomes one of your own lines.
+
+Not built: rendering many lines at once inside carrier sentences ("The word is six.") and
+cutting them out by word timestamps. The list holds 45 lines so far: callouts, the numbers 0
+to 20 and six system sounds. The rest of EdgeTX's sound set is yet to be added.
 
 ## Unplugging cards
 
@@ -906,7 +989,8 @@ An edits file is a list. Each edit is a model (`{"kind": "model", "file": "model
 checklist (`{"kind": "checklist", "model": "model01.yml", "text": "=Props tight"}`), a model
 copy or a model delete. Model ops: `rename`, `set_model_id`, `set_flags`, `set_checklist`,
 `set_mixes`, `set_logical_switch`, `special_functions`, `move_special_function`,
-`set_timer`, `remove_timer`, `swap_timers`, `set_switch_warnings`, `set_screen`. Radio ops:
+`set_timer`, `remove_timer`, `swap_timers`, `set_switch_warnings`, `set_screen`, and the editors' ops `set_screen_values`, `set_logging`,
+`set_sensor_logs`, `set_rf_alarms`, `set_callout` and `remove_callout`. Radio ops:
 `set_scalar` and `select_model`. A logical switch or special function may name a telemetry
 sensor by label, `tele({RxBt}),35`; QuadCam finds its slot.
 

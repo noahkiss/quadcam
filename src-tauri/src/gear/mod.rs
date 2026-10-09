@@ -65,6 +65,7 @@ pub mod sims;
 pub mod splash;
 pub mod store;
 pub mod switchmap;
+pub mod voice;
 
 use crate::disk::Volume;
 use model::DeviceKind;
@@ -238,6 +239,8 @@ pub struct Env {
     pub disk: Arc<dyn health::DiskRunner>,
     /// The other processes that have a serial port open, as `(pid, name)`.
     pub holders: HoldersFn,
+    /// The voice providers (`voice::tts`): `say` and an OpenAI-compatible server.
+    pub tts: Arc<dyn voice::tts::Providers>,
 }
 
 impl Env {
@@ -256,6 +259,9 @@ impl Env {
             fail_readback: None,
             disk: health::system(),
             holders: Arc::new(serial::other_holders),
+            tts: Arc::new(voice::tts::System {
+                scratch: cache.join("voice").join("tmp"),
+            }),
         }
     }
 
@@ -277,6 +283,7 @@ impl Env {
             fail_readback: None,
             disk: Arc::new(health::FakeDisk::ok()),
             holders: Arc::new(|_| Vec::new()),
+            tts: Arc::new(voice::tts::NoProviders),
         }
     }
 

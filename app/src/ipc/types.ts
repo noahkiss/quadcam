@@ -413,3 +413,41 @@ export interface SimRates {
   files: SimRateFile[];
   in_sync: boolean | null;
 }
+
+// The radio's model editors, as generated.
+export type {
+  CalloutDef,
+  CalloutView,
+  CalloutWhen,
+  EditorView,
+  Field as ModelField,
+  LoggingDef,
+  LoggingView,
+  ModelDetail,
+  ModelEditParams,
+  ModelEntry,
+  ModelOp,
+  ModelParams,
+  ModelView,
+  RfAlarms,
+  ScreenDetail,
+  SensorLog,
+  Timer as ModelTimer,
+} from "../bindings";
+
+// Radio voice, as generated.
+export type {
+  LineOverride,
+  PackInstallParams,
+  Plan as VoicePlan,
+  ProviderView,
+  RenderReport,
+  VoiceChooseParams,
+  VoiceEditParams,
+  VoiceLine,
+  VoiceParams,
+  VoicePack,
+  VoicePreviewParams,
+  VoiceRenderParams,
+  VoiceView,
+} from "../bindings";

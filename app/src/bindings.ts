@@ -195,6 +195,44 @@ export const commands = {
 	 */
 	gearSims: (params: SimsParams) => typedError<SimStatus[], string>(__TAURI_INVOKE("gear_sims", { params })),
 	/**
+	 *  The radio's voice: QuadCam's lines with the spoken text, the installed and available
+	 *  packs, the provider, and a radio's overrides. Reads only; `refresh_index` also reads the
+	 *  pack index.
+	 */
+	gearVoice: (params: VoiceParams) => typedError<VoiceView, string>(__TAURI_INVOKE("gear_voice", { params })),
+	/**
+	 *  Overrides one line on one radio: another pack's take, or the person's own text
+	 *  rendered with their provider. Writes only QuadCam's own data.
+	 */
+	gearVoiceEdit: (params: VoiceEditParams) => typedError<VoiceLine, string>(__TAURI_INVOKE("gear_voice_edit", { params })),
+	/**
+	 *  A sound the app can play: a pack's take of a line, or the person's own render, copied
+	 *  into the cache. Returns the file's path.
+	 */
+	gearVoicePreview: (params: VoicePreviewParams) => typedError<string, string>(__TAURI_INVOKE("gear_voice_preview", { params })),
+	/**
+	 *  Renders QuadCam's lines (and the person's own) with the provider from the settings into
+	 *  a local pack. A render that costs money waits for `confirm`; `dry_run` only reports.
+	 */
+	gearVoiceRender: (params: VoiceRenderParams) => typedError<RenderReport, string>(__TAURI_INVOKE("gear_voice_render", { params })),
+	/**  Installs a voice pack from the index after a hash check. */
+	gearVoicePackInstall: (params: PackInstallParams) => typedError<VoicePack, string>(__TAURI_INVOKE("gear_voice_pack_install", { params })),
+	/**
+	 *  Stages one card change that puts a pack's sounds on a radio, keeping the person's
+	 *  per-line overrides when asked. The apply sheet writes the card.
+	 */
+	gearVoiceChoose: (params: VoiceChooseParams) => typedError<StagedChange_Serialize, string>(__TAURI_INVOKE("gear_voice_choose", { params })),
+	/**
+	 *  A radio's model for the editors: timers, value screens, logging, alarms, callouts and
+	 *  the checklist, from the mounted card or the latest backup, with staged edits on top. Reads only.
+	 */
+	gearModel: (params: ModelParams) => typedError<ModelDetail, string>(__TAURI_INVOKE("gear_model", { params })),
+	/**
+	 *  Stages model editor ops (and a checklist) for a radio as its one "Model edits" change.
+	 *  Writes only QuadCam's own data; the apply sheet writes the card.
+	 */
+	gearModelEdit: (params: ModelEditParams) => typedError<StagedChange_Serialize, string>(__TAURI_INVOKE("gear_model_edit", { params })),
+	/**
 	 *  What syncing a quad's rate profile into the sims would write: per sim file the
 	 *  values that change, every guard, warnings and a digest. Writes nothing.
 	 */
@@ -909,6 +947,38 @@ export type Calibration = {
 	horizon?: RadioControl | null,
 	airmode?: RadioControl | null,
 };
+
+/**  A spoken callout an op sets. */
+export type CalloutDef = {
+	/**
+	 *  The track name (the file stem in `SOUNDS/<lang>/`, 8 characters at most). Owns the
+	 *  callout.
+	 */
+	track: string,
+	/**  `1x` (once), `!1x` (once, not at power-on) or seconds between repeats. Default `1x`. */
+	repeat?: string | null,
+} & CalloutWhen;
+
+/**  A callout as the file holds it. */
+export type CalloutView = {
+	track: string,
+	swtch: string,
+	repeat: string,
+	/**
+	 *  The condition, when it is one this editor writes (a switch, or a sensor against a
+	 *  value); None for anything else, which the editor shows but does not rewrite.
+	 */
+	when?: CalloutWhen | null,
+};
+
+/**  When a callout plays. */
+export type CalloutWhen = 
+/**  While a switch is on. */
+{ when: "switch"; swtch: string } | 
+/**  While a source reads below a value. `source` is `{RxBt}` or any source name. */
+{ when: "below"; source: string; value: string; delay_ds?: number } | 
+/**  While a source reads above a value. */
+{ when: "above"; source: string; value: string; delay_ds?: number };
 
 /**  The mAh used reached `mah` at `s` seconds into the flight. */
 export type CapaMark = {
@@ -1891,6 +1961,14 @@ export type Edit =
 
 export type Editor = "user" | "agent";
 
+/**  What the editors show of a model. */
+export type EditorView = {
+	logging: LoggingView,
+	rf_alarms?: RfAlarms | null,
+	callouts: CalloutView[],
+	screens: ScreenDetail[],
+};
+
 /**  `eject`: a mount point or `/dev/diskN`; None makes the session's card safe to remove. */
 export type EjectParams = {
 	target: string | null,
@@ -2861,6 +2939,14 @@ export type LibraryView_Serialize = {
 /**  A line in a line diff. */
 export type LineOp = "same" | "add" | "remove";
 
+/**  How a line differs on one radio. */
+export type LineOverride = {
+	/**  `pack` (another pack's take) or `text` (a take of the person's own text). */
+	kind: string,
+	pack?: string | null,
+	text?: string | null,
+};
+
 /**  How a connected device is reached. */
 export type Link = 
 /**  A mounted volume (a radio's SD card in USB Storage mode, a goggles or DVR card). */
@@ -2930,6 +3016,22 @@ export type LogCounts = {
 	unchanged: number,
 };
 
+/**  The switch that writes the radio's log, and how often. */
+export type LoggingDef = {
+	/**  `ON`, `SA2`, `L3`, ... */
+	swtch: string,
+	/**  0.1 s. */
+	period_ds: number,
+};
+
+/**  The radio's logging, as the file holds it. */
+export type LoggingView = {
+	/**  The `LOGS` function, when there is one. */
+	logging?: LoggingDef | null,
+	/**  Every telemetry sensor, with whether the log records it. */
+	sensors: SensorLog[],
+};
+
 export type LogicalSwitch = {
 	/**  0 is `L1`. */
 	index: number,
@@ -2987,6 +3089,47 @@ export type MixLine = {
 	mltpx: string,
 };
 
+/**  A model in full, for the editors. */
+export type ModelDetail = {
+	device: string,
+	/**  `card` (mounted now) or `backup <id> (<date>)`. */
+	source: string,
+	models: ModelEntry[],
+	view: ModelView,
+	editors: EditorView,
+	/**  `MODELS/<name>.txt`, when the model has one. */
+	checklist?: string | null,
+	/**  Characters per checklist line on this radio, when measured. */
+	checklist_width?: number | null,
+	/**  Sound files on the card a callout can name (the file stems, 8 characters at most). */
+	tracks: string[],
+	/**  Staged model edits shown on top. */
+	staged: number,
+	notes: string[],
+};
+
+/**  `gear_model_edit`: edits of one model, staged for a radio. */
+export type ModelEditParams = {
+	device: string,
+	/**  The model file (`model01.yml`). */
+	model: string,
+	ops?: ModelOp[],
+	/**
+	 *  The power-on checklist text, one item per line (`=` starts a tick box). Turns the
+	 *  checklist on when the model has it off. Empty text removes the file's lines.
+	 */
+	checklist?: string | null,
+	/**  Who stages it. The app and the CLI leave it out (the person); MCP says `agent`. */
+	editor?: Editor | null,
+};
+
+/**  One model file on the card. */
+export type ModelEntry = {
+	file: string,
+	name: string,
+	selected: boolean,
+};
+
 /**  One edit to a model file. Ops apply in order; a later op sees the earlier ones. */
 export type ModelOp = 
 /**  The header name (15 characters at most). */
@@ -3018,7 +3161,38 @@ export type ModelOp =
 /**  The switch warnings, as the 2.12 list; replaces a legacy `switchWarningState:`. */
 { op: "set_switch_warnings"; warnings: SwitchWarning[] } | 
 /**  A telemetry screen (0 is screen 1): a script screen, or None to remove it. */
-{ op: "set_screen"; index: number; script: string | null };
+{ op: "set_screen"; index: number; script: string | null } | 
+/**  A telemetry screen of values (0 is screen 1): up to 4 lines of up to 3 sources each. */
+{ op: "set_screen_values"; index: number; lines: string[][] } | 
+/**
+ *  The `LOGS` special function (the switch that writes the radio's log, and how often);
+ *  None removes every `LOGS` function.
+ */
+{ op: "set_logging"; logging: LoggingDef | null } | 
+/**  Which telemetry sensors the radio's log records. */
+{ op: "set_sensor_logs"; sensors: SensorLog[] } | 
+/**  The RSSI warning and critical levels. */
+{ op: "set_rf_alarms"; warning: number; critical: number } | 
+/**  A spoken callout, owned by its track name: replaces the callout with that track. */
+{ op: "set_callout"; callout: CalloutDef } | 
+/**
+ *  Removes the callout with this track name, and its logical switch when nothing else
+ *  uses it.
+ */
+{ op: "remove_callout"; track: string };
+
+/**  `gear_model`: a radio, and the model to read. */
+export type ModelParams = {
+	/**  A saved radio's device id. */
+	device: string,
+	/**  A model file (`model01.yml`); the radio's selected model when left out. */
+	model?: string | null,
+	/**
+	 *  Show the model as it will be with the device's staged model edits applied. On by
+	 *  default for the editors.
+	 */
+	staged?: boolean,
+};
 
 /**  A model file on the card. */
 export type ModelSummary = {
@@ -3303,6 +3477,14 @@ export type PackFlight = {
 	resting_v: number | null,
 };
 
+/**  `gear_voice_pack_install`. */
+export type PackInstallParams = {
+	/**  A pack id from the index. */
+	pack: string,
+	/**  The index (a path or an address) when the setting `voice_index` names none. */
+	source?: string | null,
+};
+
 /**
  *  `gear_pack_save`: a pack, and `charged` to mark it charged now (true) or clear the mark
  *  (false).
@@ -3448,6 +3630,17 @@ export type PlaceSaveParams = {
 export type PlaceTrend = {
 	place: string,
 	points: TrendPoint[],
+};
+
+/**  What a batch would cost. */
+export type Plan = {
+	lines: number,
+	/**  Takes the cache already holds. */
+	cached: number,
+	/**  Takes the provider must make. */
+	to_render: number,
+	/**  Characters of the takes the provider must make. */
+	chars: number,
 };
 
 /**  A change to one clip's plan. Missing fields stay as they are. */
@@ -3665,6 +3858,19 @@ export type Progress = {
 	total: number,
 	done: number,
 	size: number,
+};
+
+export type ProviderView = {
+	provider: string,
+	base_url: string,
+	model: string,
+	voice: string,
+	/**  A render costs money (a server that is not on this Mac). */
+	paid: boolean,
+	key_set: boolean,
+	/**  The provider can render now; else why not. */
+	ready: boolean,
+	problem?: string | null,
 };
 
 /**  `gear_prune`. */
@@ -3984,6 +4190,38 @@ export type RenameReport = {
 	failed: ([string, string])[],
 };
 
+export type RenderReport = {
+	/**  The local pack the sounds went into. */
+	pack: string,
+	provider: string,
+	voice: string,
+	plan: Plan,
+	/**  Takes the provider made. */
+	rendered: number,
+	from_cache: number,
+	paid: boolean,
+	/**  The render costs money and was not confirmed: nothing was rendered. */
+	needs_confirm: boolean,
+	dry_run: boolean,
+	notes: string[],
+};
+
+/**  How a voice is rendered. Every field is in the pack's index entry. */
+export type RenderSettings = {
+	/**  The provider's own speaking speed. Part of the raw cache key. */
+	speed?: number | null,
+	/**  `atempo` after the take, 0.5 to 2. Not part of the cache key. */
+	tempo?: number | null,
+	/**  Speech is every window within this many dB of the peak. */
+	trim_db?: number | null,
+	lead_ms?: number,
+	tail_ms?: number,
+	fade_in_ms?: number,
+	fade_out_ms?: number,
+	/**  Fixes a take where the provider can; always part of the cache key. */
+	seed?: number,
+};
+
 /**  `gear_card_repair`'s answer. */
 export type RepairResult = {
 	/**  The snapshot taken first (always kept), when the card could be read. */
@@ -4040,6 +4278,11 @@ export type RestoreParams = {
 	editor?: Editor | null,
 };
 
+export type RfAlarms = {
+	warning: number,
+	critical: number,
+};
+
 export type RowState = "pass" | "warn" | "unknown";
 
 /**  One radio's saved calibration and what it was made with. */
@@ -4066,6 +4309,19 @@ export type Screen = {
 	script?: string | null,
 };
 
+/**  A telemetry screen, in full. */
+export type ScreenDetail = {
+	index: number,
+	kind: string,
+	script?: string | null,
+	/**
+	 *  For a `VALUES` screen: each line's sources, as the file writes them (`tele(2)`,
+	 *  `Tmr1`), and the same with sensor labels: `labels`.
+	 */
+	lines: string[][],
+	labels: string[][],
+};
+
 /**  `place_search`: an address or a place name, and an optional provider and result limit. */
 export type SearchParams = {
 	query: string,
@@ -4087,6 +4343,12 @@ export type Section =
 export type Sensor = {
 	slot: number,
 	label: string,
+};
+
+/**  Whether the radio's log records one telemetry sensor. */
+export type SensorLog = {
+	label: string,
+	logs: boolean,
 };
 
 /**
@@ -5082,8 +5344,115 @@ export type VerifyReport = {
 	error: string | null,
 };
 
+/**  `gear_voice_choose`. */
+export type VoiceChooseParams = {
+	radio: string,
+	pack: string,
+	/**  Keep the lines the person rendered or picked one by one (default true). */
+	keep_overrides?: boolean,
+	editor?: Editor | null,
+};
+
+/**
+ *  `gear_voice_edit`: override one line on one radio. `pack` takes another installed pack's
+ *  take; `text` renders the person's own text with their provider; neither removes the
+ *  override.
+ */
+export type VoiceEditParams = {
+	radio: string,
+	/**
+	 *  The sound's card path (`SOUNDS/en/armed.wav`). A path QuadCam has no line for is a
+	 *  custom line.
+	 */
+	line: string,
+	text?: string | null,
+	pack?: string | null,
+	/**  Allows a render that costs money. */
+	confirm?: boolean,
+};
+
+export type VoiceLine = {
+	path: string,
+	text: string,
+	/**  What a voice speaks, after the spelling rules. */
+	spoken: string,
+	group: string,
+	why: string,
+	/**  The person's own line (in `gear.json`, never in a pack). */
+	custom: boolean,
+	/**  Installed packs that hold this line. */
+	packs: string[],
+	override?: LineOverride | null,
+};
+
+export type VoicePack = {
+	id: string,
+	voice: string,
+	lang: string,
+	provider: string,
+	model: string,
+	lines: number,
+	license: string,
+	attribution: string,
+	version: string,
+	installed: boolean,
+	/**  Rendered here, with the person's own provider. */
+	local: boolean,
+	bytes: number,
+	/**  The pack was rendered from other lines than this version's `lines.csv`. */
+	stale: boolean,
+	/**  Where an installed pack's files are (the app plays them from here). */
+	dir?: string | null,
+};
+
+/**  `gear_voice`. */
+export type VoiceParams = {
+	/**  A saved radio: shows its overrides and the voice chosen for it. */
+	radio?: string | null,
+	/**  Read the pack index again (the only call that goes to the network). */
+	refresh_index?: boolean,
+};
+
+/**  `gear_voice_preview`: a sound to play. */
+export type VoicePreviewParams = {
+	/**  The card path of the line. */
+	line: string,
+	/**  An installed pack's take of it. */
+	pack?: string | null,
+	/**  Without a pack: the person's own render for the line on this radio. */
+	radio?: string | null,
+};
+
+/**
+ *  `gear_voice_render`: QuadCam's lines, and the person's own, rendered with the provider
+ *  from the settings into a local pack.
+ */
+export type VoiceRenderParams = {
+	/**  The provider's voice; empty for the setting `tts_voice`. */
+	voice?: string,
+	/**  Card paths to render; empty for every line. */
+	lines?: string[],
+	/**  Report what the render would do and cost; render nothing. */
+	dry_run?: boolean,
+	/**  Allows a render that costs money. */
+	confirm?: boolean,
+	/**  How it is rendered; the defaults when left out. */
+	settings?: RenderSettings | null,
+};
+
 /**  What speaks the cue lines. */
 export type VoiceSource = "macos" | "voice_pack";
+
+export type VoiceView = {
+	provider: ProviderView,
+	lines: VoiceLine[],
+	packs: VoicePack[],
+	/**  The pack chosen for the radio (staged or applied). */
+	chosen?: string | null,
+	/**  Where the index is read from, when a setting names one. */
+	index_source?: string | null,
+	notes: string[],
+};
 
 /**  A mounted volume the app may care about. */
 export type Volume = {

@@ -836,6 +836,10 @@ pub fn change_keys(store: &Store) -> HashSet<String> {
     }
     let mut out = HashSet::new();
     walk(&store.changes_dir(), &mut out);
+    // The sounds a person rendered for one line are kept in the blob store, named in gear.json.
+    if let Some(v) = store.read().ok().and_then(|v| v.get("voice").cloned()) {
+        scan(&v, &mut out);
+    }
     out
 }
 

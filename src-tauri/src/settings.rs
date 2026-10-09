@@ -263,6 +263,30 @@ pub const KEYS: &[Key] = &[
         check: string,
     },
     Key {
+        file: "ttsBaseUrl",
+        name: Some("tts_base_url"),
+        about: "the address of an OpenAI-compatible voice server, such as http://127.0.0.1:8880",
+        check: string,
+    },
+    Key {
+        file: "ttsModel",
+        name: Some("tts_model"),
+        about: "the voice server's model name",
+        check: string,
+    },
+    Key {
+        file: "ttsVoice",
+        name: Some("tts_voice"),
+        about: "the voice to render your own lines with: a say voice, or the server's voice id",
+        check: string,
+    },
+    Key {
+        file: "voiceIndex",
+        name: Some("voice_index"),
+        about: "the address or path of the voice pack index (voices.json)",
+        check: string,
+    },
+    Key {
         file: "ttsKey",
         name: Some("tts_key"),
         about: "a voice provider API key",

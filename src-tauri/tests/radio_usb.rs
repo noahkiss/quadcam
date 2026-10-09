@@ -235,7 +235,16 @@ fn play_ls_beep_and_reboot_need_the_right_arguments() {
         ..p(RadioCliAction::Play)
     })
     .unwrap();
-    assert_eq!(radio.played(), ["/SOUNDS/en/hello.wav"]);
+    // A voice line's card path has no leading slash.
+    core.gear_radio_cli(&RadioCliParams {
+        path: Some("SOUNDS/en/hello.wav".into()),
+        ..p(RadioCliAction::Play)
+    })
+    .unwrap();
+    assert_eq!(
+        radio.played(),
+        ["/SOUNDS/en/hello.wav", "/SOUNDS/en/hello.wav"]
+    );
     assert!(
         core.gear_radio_cli(&p(RadioCliAction::Play)).is_err(),
         "play needs a path"
