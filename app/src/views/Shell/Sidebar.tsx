@@ -191,6 +191,14 @@ function SideFoot({ s }: { s: State }) {
         </div>,
       );
   }
+  if (sess?.card && s.cardRelease?.released && !s.volumes.some((v) => v.is_card && v.info.volume_uuid === sess.card!.volume_uuid))
+    lines.push(
+      <div key="unmounted" className={styles.line}>
+        <Icon name="check-circle" tint="green" size={14} />
+        <span>{sess.card.volume_name || "Card"} unmounted</span>
+        <span className={styles.ok}>Safe to remove</span>
+      </div>,
+    );
   const card = s.volumes.find((v) => v.is_card);
   const st = card && s.cards[card.mount];
   return (
