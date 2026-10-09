@@ -170,6 +170,41 @@ impl WorldSpec {
         }
     }
 
+    /// The sim page's room (sim-design 8.1, phase 1): a 5 × 4 × 2.5 m living-room box with a
+    /// crate, a low table and two gates for scale. Every box is a collider, and the page
+    /// draws exactly these boxes, so what you see is what you hit. The start pad is clear.
+    pub fn reference_room() -> WorldSpec {
+        let mut w = WorldSpec::plain_room(5.0, 4.0, 2.5);
+        w.name = "plain room".into();
+        let bx = |half: [f64; 3], position: [f64; 3], yaw_deg: f64, material| WorldCollider {
+            shape: Shape::Box { half },
+            position,
+            yaw_deg,
+            material,
+        };
+        // A crate and a low table.
+        w.colliders.push(bx(
+            [0.25, 0.25, 0.25],
+            [-1.6, -1.2, 0.25],
+            20.0,
+            Material::Wall,
+        ));
+        w.colliders
+            .push(bx([0.5, 0.3, 0.2], [1.5, -1.2, 0.2], 0.0, Material::Wall));
+        // Two gates, 0.5 m wide and 0.5 m high inside: posts and a bar, at 90° to each other.
+        for (cx, cy, yaw) in [(1.2, 0.9, 0.0), (-1.0, 0.8, 90.0)] {
+            let (s, c) = (yaw_f(yaw).sin(), yaw_f(yaw).cos());
+            let at = |along: f64, z: f64| [cx - along * s, cy + along * c, z];
+            for side in [-0.28, 0.28] {
+                w.colliders
+                    .push(bx([0.03, 0.03, 0.28], at(side, 0.28), yaw, Material::Gate));
+            }
+            w.colliders
+                .push(bx([0.03, 0.31, 0.03], at(0.0, 0.59), yaw, Material::Gate));
+        }
+        w
+    }
+
     /// A flat floor of one material, `half` metres each way from the origin.
     pub fn floor(half: f64, material: Material) -> WorldSpec {
         WorldSpec {
@@ -187,6 +222,10 @@ impl WorldSpec {
             stream_radius: half * 2.0,
         }
     }
+}
+
+fn yaw_f(deg: f64) -> f64 {
+    deg.to_radians()
 }
 
 /// What touched what in the last step.
@@ -359,5 +398,55 @@ impl Physics {
             }
         }
         s
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// The reference room keeps its stated size, and its props stay inside it and off the pad.
+    #[test]
+    fn the_reference_room_is_true_scale_and_the_start_pad_is_clear() {
+        let w = WorldSpec::reference_room();
+        let boxes: Vec<(&[f64; 3], &WorldCollider)> = w
+            .colliders
+            .iter()
+            .filter_map(|c| match &c.shape {
+                Shape::Box { half } => Some((half, c)),
+                Shape::Mesh { .. } => None,
+            })
+            .collect();
+        assert_eq!(
+            boxes.len(),
+            w.colliders.len(),
+            "boxes only: the page draws them all"
+        );
+        // The ceiling's underside is 2.5 m up; the walls are 5 m and 4 m apart inside.
+        let ceiling = boxes
+            .iter()
+            .map(|(h, c)| c.position[2] - h[2])
+            .fold(0.0, f64::max);
+        assert!((ceiling - 2.5).abs() < 1e-9, "{ceiling}");
+        let gates: Vec<_> = boxes
+            .iter()
+            .filter(|(_, c)| c.material == Material::Gate)
+            .collect();
+        assert_eq!(gates.len(), 6, "two gates of two posts and a bar");
+        // Props (not the six room boxes): inside the walls, and more than 0.6 m from the pad.
+        for (h, c) in boxes.iter().skip(6) {
+            let r = h[0].max(h[1]);
+            assert!(c.position[0].abs() + r <= 2.5 && c.position[1].abs() + r <= 2.0);
+            assert!(
+                c.position[0].hypot(c.position[1]) - r > 0.6,
+                "{:?}",
+                c.position
+            );
+        }
+        // A gate's opening is 0.5 m wide (post centres 0.56 apart, posts 0.06 thick).
+        let posts: Vec<_> = gates.iter().filter(|(h, _)| h[2] > 0.2).collect();
+        let (a, b) = (posts[0].1.position, posts[1].1.position);
+        let opening = (a[0] - b[0]).hypot(a[1] - b[1]) - 0.06;
+        assert!((opening - 0.5).abs() < 1e-9, "{opening}");
     }
 }

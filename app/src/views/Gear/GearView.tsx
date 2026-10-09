@@ -29,7 +29,7 @@ export function GearView() {
     return d ? <DevicePage d={d} /> : <Missing />;
   }
   if (page.page === "slot") {
-    const slot = GEAR_PAGES.find((p) => p.id === page.id);
+    const slot = GEAR_PAGES.find((p) => p.id === page.id && (!p.preview || s.values[p.preview] === true));
     return <section className={styles.page}>{slot ? slot.render() : <Missing />}</section>;
   }
   const list = page.page === "connected" ? pluggedIn(refs) : refs.filter((r) => r.device);

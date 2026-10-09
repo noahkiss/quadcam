@@ -131,7 +131,7 @@ See [Modules and notices](modules.md) for what a module install checks.
 - `photos_album`, `format_label`, `log_dir`, `layout`, `place_folders`, `tunables`
 - `geocoder` (`apple`, `nominatim`, `census` or `google`), `google_places_key`
 - `name_date_format` (`YYYY-MM-DD` or `YY.MM.DD`), `default_profile`
-- Gear: `gear_dir`, `gear_auto_backup`, `gear_keep_recent`, `gear_keep_weeks`, `gear_keep_monthly`, `gear_usb_minutes`, `gear_on_connect`, `gear_cues`, `firmware_check`, `tts_provider`, `tts_key` (see [Settings](settings.md#gear))
+- Gear: `gear_dir`, `gear_auto_backup`, `gear_keep_recent`, `gear_keep_weeks`, `gear_keep_monthly`, `gear_usb_minutes`, `gear_on_connect`, `gear_cues`, `firmware_check`, `tts_provider`, `tts_key`, `sim_preview` (see [Settings](settings.md#gear))
 - `ffmpeg_source` (`module` or `homebrew`), `modules` (`{"ffmpeg": "/path/to/ffmpeg"}`: a file per tool; see [Modules](modules.md#where-ffmpeg-comes-from))
 
 A value is JSON or plain text.

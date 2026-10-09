@@ -1,0 +1,16 @@
+.popover {
+  position: absolute;
+  z-index: 20;
+  top: calc(100% + var(--s-2));
+  right: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-3);
+  width: 300px;
+  max-width: calc(100vw - var(--s-6));
+  padding: var(--s-4);
+  border-radius: var(--r-3);
+  border: 1px solid var(--border-strong);
+  background: var(--mantle);
+  box-shadow: var(--shadow);
+}

@@ -209,6 +209,46 @@ fn answer_format_request(state: State<'_, AppState>, id: u64, approve: bool) {
     }
 }
 
+/// The built-in sim profiles the Sim page offers.
+#[tauri::command]
+#[specta::specta]
+fn sim_presets(state: State<'_, AppState>) -> Vec<core::SimPreset> {
+    state.core.sim_presets()
+}
+
+/// Starts the sim (a GUI command only: a sim is flown by hand, so it is not an `api` row).
+#[tauri::command]
+#[specta::specta]
+async fn sim_start(
+    state: State<'_, AppState>,
+    params: core::SimStartParams,
+) -> Result<core::SimStartInfo, String> {
+    let core = state.core.clone();
+    blocking(move || core.sim_start(&params)).await
+}
+
+/// The newest steps and HUD values, once per frame. Async so it runs off the main thread.
+#[tauri::command]
+#[specta::specta]
+async fn sim_frame(state: State<'_, AppState>) -> Result<core::SimFrame, String> {
+    state.core.sim_frame().map_err(err)
+}
+
+/// Back to the start pad.
+#[tauri::command]
+#[specta::specta]
+async fn sim_reset(state: State<'_, AppState>) -> Result<(), String> {
+    state.core.sim_reset().map_err(err)
+}
+
+/// Stops the sim.
+#[tauri::command]
+#[specta::specta]
+async fn sim_stop(state: State<'_, AppState>) -> Result<Option<core::SimStopInfo>, String> {
+    let core = state.core.clone();
+    blocking(move || Ok(core.sim_stop())).await
+}
+
 /// Makes (or reuses) a small H.264 preview of a clip.
 #[tauri::command]
 #[specta::specta]
@@ -475,6 +515,11 @@ pub fn specta_builder() -> tauri_specta::Builder<tauri::Wry> {
             default_output_dir,
             load_dropped,
             preview,
+            sim_presets,
+            sim_start,
+            sim_frame,
+            sim_reset,
+            sim_stop,
             format_card,
             answer_format_request,
             library_scope,

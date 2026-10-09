@@ -395,6 +395,9 @@ pub struct SettingsValues {
     /// Gear: the gear folder (absolute path); null for the default in the support folder.
     #[schemars(extend("x-nullable" = true))]
     pub gear_dir: Option<String>,
+    /// Show the Sim page in the Gear sidebar (a preview). Off by default.
+    #[schemars(extend("x-nullable" = true))]
+    pub sim_preview: Option<bool>,
     /// Gear: back up a device when it is plugged in. On by default.
     #[schemars(extend("x-nullable" = true))]
     pub gear_auto_backup: Option<bool>,

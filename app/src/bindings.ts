@@ -292,6 +292,22 @@ export const commands = {
 	loadDropped: (paths: string[]) => typedError<Session_Serialize, string>(__TAURI_INVOKE("load_dropped", { paths })),
 	/**  Makes (or reuses) a small H.264 preview of a clip. */
 	preview: (id: number) => typedError<string, string>(__TAURI_INVOKE("preview", { id })),
+	/**  The built-in sim profiles the Sim page offers. */
+	simPresets: () => __TAURI_INVOKE<SimPreset[]>("sim_presets"),
+	/**  Starts the sim (a GUI command only: a sim is flown by hand, so it is not an `api` row). */
+	simStart: (params: SimStartParams) => typedError<SimStartInfo, string>(__TAURI_INVOKE("sim_start", { params })),
+	/**  The newest steps and HUD values, once per frame. Async so it runs off the main thread. */
+	simFrame: () => typedError<SimFrame, string>(__TAURI_INVOKE("sim_frame")),
+	/**  Back to the start pad. */
+	simReset: () => typedError<null, string>(__TAURI_INVOKE("sim_reset")),
+	/**  Stops the sim. */
+	simStop: () => typedError<{
+	steps: number,
+	dropped_steps: number,
+	/**  The physics step's cost (µs): median and 99th percentile. */
+	step_p50_us: number | null,
+	step_p99_us: number | null,
+} | null, string>(__TAURI_INVOKE("sim_stop")),
 	/**  The GUI's own Erase button: the click in its confirm dialog is the confirmation. */
 	formatCard: (label: string) => typedError<FormatPlan, string>(__TAURI_INVOKE("format_card", { label })),
 	/**  The person's answer to an agent's format request. */
@@ -3614,6 +3630,16 @@ export type Signing =
 /**  Not a Mach-O binary (a script); nothing to sign. */
 "not_binary";
 
+/**  A box of the room, in the world frame (x, y horizontal, z up). */
+export type SimBox = {
+	centre: [(number | null), (number | null), (number | null)],
+	half: [(number | null), (number | null), (number | null)],
+	/**  Rotation about the vertical axis (deg). */
+	yaw_deg: number | null,
+	/**  `wall`, `floor`, `carpet`, `grass` or `gate`: the page colours by it. */
+	material: string,
+};
+
 /**  A radio's calibration, and which radio it is. */
 export type SimCalibration = {
 	/**  How the joystick was matched to a radio; None when a radio was named. */
@@ -3649,6 +3675,15 @@ export type SimCalibrationSaveParams = {
 	replaces?: string | null,
 };
 
+export type SimCamera = {
+	uptilt_deg: number | null,
+	fov_deg: number | null,
+	/**  `4:3` or `16:9`. */
+	aspect: string,
+	/**  In the body frame (x forward, y left, z up), metres. */
+	position: [(number | null), (number | null), (number | null)],
+};
+
 /**  What the sim pre-fills for an aircraft. */
 export type SimDefaults = {
 	aircraft?: string | null,
@@ -3673,6 +3708,114 @@ export type SimDefaultsParams = {
 	radio?: string | null,
 	/**  Betaflight dump, diff or CLI files. */
 	fc?: string[],
+};
+
+/**  The page's read each frame. */
+export type SimFrame = {
+	/**  The host clock when this was read (ns). */
+	host_ns: number,
+	prev: SimPose,
+	cur: SimPose,
+	hud: SimHud,
+	/**  The radio is plugged in and reporting. */
+	radio: boolean,
+};
+
+/**  What the OSD and the stick display show. */
+export type SimHud = {
+	armed: boolean,
+	turtle: boolean,
+	airmode: boolean,
+	/**  `acro`, `angle` or `horizon`. */
+	mode: string,
+	/**  Why the quad will not arm, in words; None when it can. */
+	arm_block: string | null,
+	vbat: number | null,
+	mah: number | null,
+	low_battery: boolean,
+	sticks: SimSticks,
+	/**  The throttle the FC applied, 0..1. */
+	throttle: number | null,
+	/**  Upside down or stopped with the motors idle: turtle or reset. */
+	stuck: boolean,
+	contacts: number,
+	dropped_steps: number,
+};
+
+/**  One step's pose. */
+export type SimPose = {
+	step: number,
+	/**  Sim time (s). */
+	t: number | null,
+	/**  The host time the step stands for (ns). */
+	host_ns: number,
+	/**  The radio sample's arrival (ns); 0 before the first. */
+	input_ns: number,
+	pos: [(number | null), (number | null), (number | null)],
+	/**  Body to world (w, x, y, z). */
+	quat: [(number | null), (number | null), (number | null), (number | null)],
+};
+
+/**  One built-in profile the Sim page offers. */
+export type SimPreset = {
+	id: string,
+	label: string,
+	/**  Motor-to-motor diagonal (mm). */
+	wheelbase_mm: number | null,
+	/**  All-up mass (g). */
+	mass_g: number | null,
+};
+
+/**  What the page needs once to draw the sim. */
+export type SimStartInfo = {
+	profile: string,
+	label: string,
+	/**  The physics step (s). */
+	dt: number | null,
+	world_name: string,
+	boxes: SimBox[],
+	/**  The start pad: where a reset puts the quad. */
+	start: [(number | null), (number | null), (number | null)],
+	start_yaw_deg: number | null,
+	camera: SimCamera,
+	/**  The frame, for the model the page draws. */
+	wheelbase_m: number | null,
+	body_half: [(number | null), (number | null), (number | null)],
+	prop_radius_m: number | null,
+	/**  The calibration's stick mode, 1 to 4. */
+	stick_mode: number,
+	/**  A calibration reached the sim: the arm, turtle and reset controls work. */
+	calibrated: boolean,
+	/**  The host clock now (ns): the page aligns its own clock to it. */
+	host_ns: number,
+};
+
+/**  `sim_start`. */
+export type SimStartParams = {
+	/**  A built-in profile id; default `meteor75`. */
+	profile?: string | null,
+	/**  The radio's saved calibration (`gear_sim_calibration`); None: sticks only, in AETR. */
+	calibration?: Calibration | null,
+};
+
+/**
+ *  The pilot's sticks after calibration: roll right, pitch forward and yaw right in -1..1,
+ *  throttle in 0..1.
+ */
+export type SimSticks = {
+	roll: number | null,
+	pitch: number | null,
+	yaw: number | null,
+	throttle: number | null,
+};
+
+/**  What a stopped sim did. */
+export type SimStopInfo = {
+	steps: number,
+	dropped_steps: number,
+	/**  The physics step's cost (µs): median and 99th percentile. */
+	step_p50_us: number | null,
+	step_p99_us: number | null,
 };
 
 /**  `gear_sim_validate`: a sim profile against a folder of decoded blackbox logs. */

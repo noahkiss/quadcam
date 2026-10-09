@@ -861,6 +861,30 @@ The spike's settings panel grew by accretion. The sim's settings are few and gro
 | Analog look | A post-process: noise, chroma bleed, rolling lines, breakup with distance and obstacles later. Source: `ntsc-rs` core crates (MIT, Apache-2.0 or ISC; not its GUI crate) (reuse code) |
 | Toasts | Arming refusals, failsafe, reset. Short, at the bottom centre, away from the OSD's throttle readout |
 
+### 9.5 Built (S5)
+
+- Host: `core/sim_host.rs` runs S1's physics thread in the QuadCam process, fed by S4's input
+  ring (`radio_hid::Hub`, calibrated, link model off). `sim_start`, `sim_frame`, `sim_reset`,
+  `sim_stop`, `sim_presets` are GUI commands, not `api` rows (2.6: an agent never launches it).
+  A radio that goes away marks the link lost, so a held arm switch cannot keep the quad flying.
+- Page: Gear > **Sim** (`app/src/views/Gear/Sim/`), three.js (MIT) in the main window. Each
+  animation frame reads the two newest steps, `lib/simhost.ts` aligns the clocks and draws the
+  pose at now minus one step (clamped to the newest step), and the HUD feeds the OSD and the
+  stick display (`Sticks`, compact). The room is `WorldSpec::reference_room`: the page draws
+  exactly the physics' boxes. Settings: the `simSettings` key, a popover that saves on change.
+- Deviations: (1) the page lives in the main window, not a second `WebviewWindow` (2.4): no
+  full-screen option yet. (2) The OSD is a fixed basic one, not the quad's own layout (S7).
+  (3) No in-picture toasts: arming refusals show on the OSD warning line. (4) A rectilinear
+  picture is capped at 100° vertical, so the profile's 155° camera is cropped (fisheye: S7).
+  (5) Camera position in the frame is an estimate until S3.
+- Preview: the page is hidden unless the `simPreview` setting is on (`sim_preview` in the CLI
+  and MCP, Settings > Gear > Preview), as the release table asks.
+- Known issue for the next sim package: after a refused arm, S1's FC reports "turn the arm
+  switch off and on again" and hides the cause (for example throttle up). The OSD should keep
+  showing the cause.
+- Measuring (3.3): the page shows frame-to-frame time and a radio-to-picture proxy (the radio
+  sample's arrival to the draw). Real-window numbers need the owner's Mac; see the S5 report.
+
 ---
 
 ## 10. Licensing
@@ -922,7 +946,7 @@ its rows in `api`, CLI and MCP.
 | S2 | Validation harness. Built (6.5) | `sim/src/validate.rs`, `sim/tests/`, fixtures and their scrubber, the headless bench | S1 | 1 |
 | S3 | Profile fitting | `sim/src/fit.rs`, profile storage under `<gear>/sim/`, `gear_sim_fit` / `profile(s)` rows, Fit and profile views | S1, S2; task BB for native decoding | 2 |
 | S4 | Input and calibration. Built (7.8) | `radio_hid` unthrottled subscriber, `sim/src/input.rs` (map, ends, deadzone, Reverse, link model), calibration storage keyed by radio id, the calibration screen | WP6 | 1 |
-| S5 | Minimal renderer and in-process host | Sim window (WebView, three.js), pose stream and interpolation, FPV camera, the plain room, basic OSD, stick display, Sim page, launch, settings popover | S1, S4 | 1 |
+| S5 | Minimal renderer and in-process host. Built (9.5) | Sim window (WebView, three.js), pose stream and interpolation, FPV camera, the plain room, basic OSD, stick display, Sim page, launch, settings popover | S1, S4 | 1 |
 | S6 | Engine prototypes and report | The four prototypes (3.2), the measurement scripts, the report | S1, S5 | 2 |
 | S7 | Production renderer | The chosen engine's host (sim process, signing, control socket), cameras, lighting, OSD from WP7, 4:3, video latency, analog look | S6 decision; WP7 | 3 |
 | S8 | Worlds | The five worlds, the asset manifest and its check, world modules, the box-room builder | S7 | 3 |

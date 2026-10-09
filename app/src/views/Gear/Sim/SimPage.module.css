@@ -1,0 +1,149 @@
+.page {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-4);
+  max-width: 1280px;
+}
+.head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--s-3);
+}
+.title {
+  margin: 0;
+  margin-right: auto;
+  font-size: var(--t-xl);
+  font-weight: 700;
+}
+.aircraft {
+  display: flex;
+  align-items: center;
+  gap: var(--s-2);
+}
+.anchor {
+  position: relative;
+}
+.note {
+  margin: 0;
+  color: var(--muted);
+}
+.stats {
+  margin: 0;
+  color: var(--muted);
+  font-family: var(--mono);
+  font-variant-numeric: tabular-nums;
+  font-size: var(--t-sm);
+}
+
+/* The stage fills the page's width and a screen's worth of height. A 16:9 or 4:3 picture sits
+   inside it, letterboxed, so the overlays are laid out against the picture, never the window. */
+.stage {
+  container-type: size;
+  display: grid;
+  place-items: center;
+  width: 100%;
+  height: clamp(320px, calc(100vh - 220px), 900px);
+  border-radius: var(--r-3);
+  background: var(--crust);
+  overflow: hidden;
+}
+.picture {
+  --row: calc(100cqh / 16);
+  container-type: size;
+  position: relative;
+  aspect-ratio: var(--ar, 1.7778);
+  width: min(100cqw, calc(100cqh * var(--ar, 1.7778)));
+  background: var(--mantle);
+}
+.canvas {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+.empty {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  margin: 0;
+  padding: var(--s-4);
+  text-align: center;
+  color: var(--fg);
+}
+.empty[hidden] {
+  display: none;
+}
+
+/* On-screen text sits on the rendered scene, not on the app's surface, so it is white with an
+   outline in both themes. */
+.osd {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  font-family: var(--mono);
+  font-size: calc(var(--row) * 0.72);
+  line-height: 1;
+  color: white;
+  text-shadow:
+    0 0 calc(var(--row) * 0.12) black,
+    0 0 calc(var(--row) * 0.2) black;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.osd > span {
+  position: absolute;
+  white-space: nowrap;
+}
+.warning {
+  top: calc(var(--row) * 2);
+  left: 50%;
+  transform: translateX(-50%);
+}
+.state {
+  bottom: calc(var(--row) * 1.25);
+  left: 4%;
+}
+.voltage {
+  bottom: calc(var(--row) * 0.25);
+  left: 4%;
+}
+.mah {
+  bottom: calc(var(--row) * 0.25);
+  left: 50%;
+  transform: translateX(-50%);
+}
+.timer {
+  bottom: calc(var(--row) * 0.25);
+  right: 4%;
+}
+
+/* Inside the picture's right edge, above the OSD's bottom two rows. */
+.sticks {
+  --stick-size: calc(var(--row) * 2.6);
+  position: absolute;
+  right: 3%;
+  bottom: calc(var(--row) * 2.2);
+  padding: calc(var(--row) * 0.3);
+  border-radius: var(--r-2);
+  background: color-mix(in srgb, var(--crust) 70%, transparent);
+  color: var(--fg);
+}
+
+/* The settings popover. */
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-1);
+}
+.fieldLabel {
+  color: var(--muted);
+  font-size: var(--t-sm);
+}
+.two {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--s-3);
+}

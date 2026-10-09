@@ -8,20 +8,23 @@ interface Props {
   /** Null while there is no radio: the sticks rest in the middle, dimmed. */
   values: StickValues | null;
   mode: StickMode;
+  /** The sim's overlay: small boxes with one line of percentages under each. The size follows
+   *  `--stick-size` on a parent. */
+  compact?: boolean;
 }
 
 /** Both sticks in the given mode. */
-export function Sticks({ values, mode }: Props) {
+export function Sticks({ values, mode, compact }: Props) {
   const l = MODE_LAYOUT[mode];
   return (
-    <div className={styles.sticks} data-idle={values ? undefined : ""}>
-      <GimbalBox side="Left" g={l.left} values={values} />
-      <GimbalBox side="Right" g={l.right} values={values} />
+    <div className={[styles.sticks, compact && styles.compact].filter(Boolean).join(" ")} data-idle={values ? undefined : ""}>
+      <GimbalBox side="Left" g={l.left} values={values} compact={compact} />
+      <GimbalBox side="Right" g={l.right} values={values} compact={compact} />
     </div>
   );
 }
 
-function GimbalBox({ side, g, values }: { side: string; g: Gimbal; values: StickValues | null }) {
+function GimbalBox({ side, g, values, compact }: { side: string; g: Gimbal; values: StickValues | null; compact?: boolean }) {
   const x = values ? values[g.h] : 0;
   const y = values ? values[g.v] : 0;
   const [v, h] = [AXIS_TEXT[g.v], AXIS_TEXT[g.h]];
@@ -38,9 +41,17 @@ function GimbalBox({ side, g, values }: { side: string; g: Gimbal; values: Stick
         </div>
       </div>
       <figcaption className={styles.caption}>
-        <span className={styles.side}>{side} stick</span>
-        <Axis name={v.name} motion={v.motion} value={values ? pct(y) : null} />
-        <Axis name={h.name} motion={h.motion} value={values ? pct(x) : null} />
+        {compact ? (
+          <span className={styles.line}>
+            {v.name} {values ? pct(y) : "-"} · {h.name} {values ? pct(x) : "-"}
+          </span>
+        ) : (
+          <>
+            <span className={styles.side}>{side} stick</span>
+            <Axis name={v.name} motion={v.motion} value={values ? pct(y) : null} />
+            <Axis name={h.name} motion={h.motion} value={values ? pct(x) : null} />
+          </>
+        )}
       </figcaption>
     </figure>
   );

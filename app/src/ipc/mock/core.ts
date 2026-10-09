@@ -23,7 +23,7 @@ import * as seed from "./seed";
 import * as gear from "./gear";
 import { MockFlights } from "./flights";
 import * as backups from "./backups";
-import { MockSim, defaults as simDefaults } from "./sim";
+import { MockHost, MockSim, defaults as simDefaults } from "./sim";
 import { location as normLocation, spans as normSpans } from "../normalize";
 import { live as liveOf } from "../../lib/controls";
 
@@ -47,6 +47,8 @@ export interface MockOptions {
   scenario?: Scenario;
   /** Milliseconds each call waits before it answers. */
   latency?: number;
+  /** Settings file values to start with. */
+  settings?: Record<string, unknown>;
 }
 
 export type Emit = (event: string, payload?: unknown) => void;
@@ -85,6 +87,8 @@ export class MockCore {
   radio: { connected: boolean; frame: import("../types").RadioFrame | null; watching: boolean } = { connected: false, frame: null, watching: false };
   /** The sim's calibration (`./sim.ts`). */
   sim = new MockSim();
+  /** The sim host's canned flight (`./sim.ts`). */
+  simHost = new MockHost();
   /** What the FC's `MSP_RC` reports (µs, CH1 first). */
   fcRc: number[] = [1500, 1500, 988, 1500, 988, 988, 988, 988];
   /** Answers given to agent format requests. */
@@ -97,6 +101,7 @@ export class MockCore {
     this.lib = sc === "empty" || sc === "no-tools" ? seed.emptyLibrary() : seed.richLibrary();
     if (sc === "many") this.lib = seed.recount(manyClips(this.lib));
     this.settings = seed.settings();
+    Object.assign(this.settings.values, opts.settings);
     this.initialValues = structuredClone(this.settings.values);
     this.volumes = sc === "card" || sc === "finished-card" ? [seed.cardVolume()] : [];
     this.session = null;
@@ -186,6 +191,17 @@ export class MockCore {
         return null;
       case "third_party_notices":
         return seed.NOTICES;
+      case "sim_presets":
+        return this.simHost.presets();
+      case "sim_start":
+        return this.simHost.start(p as never);
+      case "sim_frame":
+        return this.simHost.frame(this.sim.axes, this.radio.connected);
+      case "sim_reset":
+        this.simHost.reset();
+        return null;
+      case "sim_stop":
+        return this.simHost.stop();
       default:
         throw `mock core: no command ${cmd}`;
     }

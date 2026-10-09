@@ -28,6 +28,7 @@ mod prep;
 mod rematch;
 mod setup;
 mod sim;
+mod sim_host;
 mod switchmap;
 pub use crate::paths::{cache_dir, default_session_file, default_settings_file, support_dir};
 pub use backup::{
@@ -57,6 +58,10 @@ pub use setup::{PlaceRemoved, SettingsView};
 pub use sim::{
     CalibrateAction, CalibrateParams, CalibrateView, PerStick, SimCalibration,
     SimCalibrationParams, SimCalibrationSaveParams, SimDefaultsParams, SimValidateParams,
+};
+pub use sim_host::{
+    arm_block_text, SimBox, SimCamera, SimFrame, SimHud, SimPose, SimPreset, SimStartInfo,
+    SimStartParams, SimSticks, SimStopInfo, SimUiSettings, DEFAULT_PRESET,
 };
 pub use switchmap::{RadioParams, RadioWatchParams, SwitchMapParams};
 
