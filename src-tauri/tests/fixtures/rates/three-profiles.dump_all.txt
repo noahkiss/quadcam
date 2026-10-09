@@ -1,0 +1,73 @@
+# Betaflight / STM32G47X (G473) 2025.12.5 Jun 25 2026 / 03:24:50 (eb2bb5a33) MSP API: 1.47
+# Synthetic: three rate profiles on the three rate models.
+
+set craft_name = FIXTURE
+
+rateprofile 0
+
+# rateprofile 0
+set rateprofile_name = FREE
+set thr_mid = 30
+set thr_expo = 50
+set thr_hover = 34
+set rates_type = BETAFLIGHT
+set roll_rc_rate = 127
+set pitch_rc_rate = 127
+set yaw_rc_rate = 100
+set roll_expo = 40
+set pitch_expo = 40
+set yaw_expo = 0
+set roll_srate = 72
+set pitch_srate = 72
+set yaw_srate = 75
+set throttle_limit_type = OFF
+set throttle_limit_percent = 100
+set roll_rate_limit = 1998
+set pitch_rate_limit = 1998
+set yaw_rate_limit = 1998
+
+rateprofile 1
+
+# rateprofile 1
+set rateprofile_name = RACE
+set thr_mid = 50
+set thr_expo = 0
+set rates_type = ACTUAL
+set roll_rc_rate = 7
+set pitch_rc_rate = 7
+set yaw_rc_rate = 7
+set roll_expo = 54
+set pitch_expo = 54
+set yaw_expo = 54
+set roll_srate = 67
+set pitch_srate = 67
+set yaw_srate = 67
+set throttle_limit_type = OFF
+set throttle_limit_percent = 100
+set roll_rate_limit = 1998
+set pitch_rate_limit = 1998
+set yaw_rate_limit = 1998
+
+rateprofile 2
+
+# rateprofile 2
+set rateprofile_name = CINE
+set thr_mid = 50
+set thr_expo = 0
+set rates_type = QUICK
+set roll_rc_rate = 60
+set pitch_rc_rate = 60
+set yaw_rc_rate = 40
+set roll_expo = 20
+set pitch_expo = 20
+set yaw_expo = 20
+set roll_srate = 30
+set pitch_srate = 30
+set yaw_srate = 20
+set throttle_limit_type = CLIP
+set throttle_limit_percent = 80
+set roll_rate_limit = 500
+set pitch_rate_limit = 500
+set yaw_rate_limit = 500
+
+rateprofile 0

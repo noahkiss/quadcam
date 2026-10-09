@@ -13,7 +13,7 @@ pub use crate::core::{
 pub use crate::core::{
     BoardNotesParams, CardParams, CardPreview, CardPreviewParams, DeviceSaveParams, FcJob,
     FcPortParams, FcReadParams, GearCard, GearStatus, OsdParams, PollPauseParams, RadioParams,
-    RadioWatchParams, ReminderParams, SwitchMapParams, UsbTimer,
+    RadioWatchParams, RatesParams, ReminderParams, SimsParams, SwitchMapParams, UsbTimer,
 };
 pub use crate::core::{
     CalibrateParams, CalibrateView, SimCalibration, SimCalibrationParams, SimCalibrationSaveParams,
@@ -40,8 +40,10 @@ pub use crate::gear::osd::OsdView;
 pub use crate::gear::packs::{Pack, PackType, PacksView};
 pub use crate::gear::preflight::Preflight;
 pub use crate::gear::radio_hid::RadioSnapshot;
+pub use crate::gear::rates::RatesView;
 pub use crate::gear::report::SessionReport;
 pub use crate::gear::sim_cal::{SavedCalibration, SimDefaults};
+pub use crate::gear::sims::SimStatus;
 pub use crate::gear::switchmap::SwitchMap;
 pub use quadcam_sim::validate::{CheckOutcome, CheckResult, ValidationReport};
 use serde::{Deserialize, Serialize};
@@ -84,6 +86,13 @@ macro_rules! with_gear_rows {
             /// An FC's OSD layout per OSD profile, drawn on its grid and checked for overlaps
             /// and cells off screen. Reads only.
             gear_osd(params: OsdParams) -> OsdView = |c| c.gear_osd(&params);
+            /// An FC's rate profiles from its latest backup, a backup or dump files: names, the
+            /// roll, pitch and yaw curves with maximum and centre rates, the throttle curve.
+            /// Reads only.
+            gear_rates(params: RatesParams) -> RatesView = |c| c.gear_rates(&params);
+            /// The sims on this Mac with their rate profiles; with a quad, how each differs
+            /// from the quad's rates. Reads only.
+            gear_sims(params: SimsParams) -> Vec<SimStatus> = |c| c.gear_sims(&params);
             /// An EdgeTX card: models, the selected model and its aircraft, the radio clock, one model in full.
             gear_card(params: CardParams) -> GearCard = |c| c.gear_card(&params);
             /// Checks and diffs EdgeTX card edits. Writes nothing.

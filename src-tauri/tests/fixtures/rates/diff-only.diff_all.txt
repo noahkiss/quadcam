@@ -1,0 +1,9 @@
+# Betaflight / STM32G47X (G473) 2025.12.5 (eb2bb5a33) MSP API: 1.47
+
+rateprofile 1
+
+# rateprofile 1
+set rateprofile_name = RACE
+set roll_srate = 60
+
+rateprofile 1
