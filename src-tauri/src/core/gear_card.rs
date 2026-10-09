@@ -234,8 +234,7 @@ impl Core {
         let timeout = std::time::Duration::from_secs(
             if radio_usb { 30 } else { 10 } + out.files.len() as u64,
         );
-        let removed =
-            crate::gear::edgetx::card::remove_apple_doubles(&root, &out.files, timeout);
+        let removed = crate::gear::edgetx::card::remove_apple_doubles(&root, &out.files, timeout);
         let failed = removed.as_ref().err().map(|e| format!("{e:#}"));
         out.removed = removed.as_ref().copied().unwrap_or(0) as u32;
         if let Some(c) = &c {

@@ -924,8 +924,17 @@ fn a_dfu_device_links_to_the_radio_seen_last_or_the_one_picked() {
     // to one radio, so the pick moves it.
     let spare = second_radio(&b, true);
     let r = b.core.gear_dfu_link(&DfuLinkParams::default()).unwrap();
-    assert_eq!((r.how.as_str(), r.device.id.as_str()), ("last_seen", spare.id.as_str()));
-    assert!(r.notes.iter().any(|n| n.contains("Moved the link from Pocket")), "{:?}", r.notes);
+    assert_eq!(
+        (r.how.as_str(), r.device.id.as_str()),
+        ("last_seen", spare.id.as_str())
+    );
+    assert!(
+        r.notes
+            .iter()
+            .any(|n| n.contains("Moved the link from Pocket")),
+        "{:?}",
+        r.notes
+    );
     let again = b
         .core
         .gear_dfu_link(&DfuLinkParams {
@@ -936,7 +945,11 @@ fn a_dfu_device_links_to_the_radio_seen_last_or_the_one_picked() {
     assert_eq!(again.how, "picked");
     let devices = b.core.gear_devices().unwrap();
     assert_eq!(
-        devices.iter().filter(|d| d.dfu_serial.is_some()).map(|d| d.id.as_str()).collect::<Vec<_>>(),
+        devices
+            .iter()
+            .filter(|d| d.dfu_serial.is_some())
+            .map(|d| d.id.as_str())
+            .collect::<Vec<_>>(),
         [b.radio.as_str()]
     );
 
@@ -968,7 +981,10 @@ fn the_flash_plan_refuses_a_dfu_device_linked_to_another_radio() {
         .unwrap();
     let plan = b.core.gear_flash_plan(&params(&b, None)).unwrap();
     assert!(
-        failed(&plan).contains(&("The radio in DFU mode is this radio", RefusalCode::DeviceChanged)),
+        failed(&plan).contains(&(
+            "The radio in DFU mode is this radio",
+            RefusalCode::DeviceChanged
+        )),
         "{:?}",
         failed(&plan)
     );
@@ -984,7 +1000,10 @@ fn the_flash_plan_refuses_a_dfu_device_linked_to_another_radio() {
     // A radio linked to another DFU device than the one plugged in refuses too.
     b.dfu.lock().unwrap()[0].serial = Some("0002".into());
     let plan = b.core.gear_flash_plan(&params(&b, None)).unwrap();
-    assert!(failed(&plan).contains(&("The radio in DFU mode is this radio", RefusalCode::DeviceChanged)));
+    assert!(failed(&plan).contains(&(
+        "The radio in DFU mode is this radio",
+        RefusalCode::DeviceChanged
+    )));
 }
 
 #[test]
@@ -995,7 +1014,9 @@ fn an_unlinked_dfu_device_warns_with_the_last_seen_radio_and_a_verified_flash_li
     let plan = b.core.gear_flash_plan(&p).unwrap();
     assert!(plan.ready(), "{:?}", failed(&plan));
     assert!(
-        plan.warnings.iter().any(|w| w.contains("Spare was seen most recently, not Pocket")),
+        plan.warnings
+            .iter()
+            .any(|w| w.contains("Spare was seen most recently, not Pocket")),
         "{:?}",
         plan.warnings
     );

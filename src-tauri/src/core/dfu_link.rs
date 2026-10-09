@@ -82,7 +82,9 @@ impl Core {
                     (None, Some(s)) => d.dfu_serial.as_deref() == Some(s),
                     (None, None) => false,
                 })
-                .ok_or_else(|| anyhow::anyhow!("Name the radio to unlink with device, or its DFU serial."))?;
+                .ok_or_else(|| {
+                    anyhow::anyhow!("Name the radio to unlink with device, or its DFU serial.")
+                })?;
             let mut d = target.clone();
             if d.dfu_serial.take().is_none() {
                 notes.push("This radio had no DFU link.".to_string());

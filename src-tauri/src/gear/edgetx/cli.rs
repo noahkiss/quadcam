@@ -16,7 +16,9 @@
 //! per-port lock and refuses a port another process holds (`serial::other_holders`), as
 //! the FC link does. `FakeRadioCli` stands in for a radio in tests.
 
-use crate::gear::serial::{is_gone, read_until, FakePorts, PortGone, PortInfo, Ports, SerialLink, Wait};
+use crate::gear::serial::{
+    is_gone, read_until, FakePorts, PortGone, PortInfo, Ports, SerialLink, Wait,
+};
 use anyhow::{anyhow, bail, Result};
 use serde::{Deserialize, Serialize};
 use specta::Type;
@@ -156,7 +158,11 @@ pub fn parse_ls(text: &str) -> Vec<CliEntry> {
                 parts.pop();
             }
             let name = parts.join(" ");
-            let name = name.rsplit('/').next().filter(|n| !n.is_empty()).unwrap_or(&name);
+            let name = name
+                .rsplit('/')
+                .next()
+                .filter(|n| !n.is_empty())
+                .unwrap_or(&name);
             CliEntry {
                 name: name.to_string(),
                 size,
@@ -204,7 +210,9 @@ impl RadioCli {
             extend: true,
         };
         let raw = read_until(self.link.as_mut(), wait, at_prompt)?;
-        let text = String::from_utf8_lossy(&raw).replace("\r\n", "\n").replace('\r', "\n");
+        let text = String::from_utf8_lossy(&raw)
+            .replace("\r\n", "\n")
+            .replace('\r', "\n");
         let mut lines: Vec<&str> = text.lines().collect();
         if lines.first().is_some_and(|l| l.trim() == line) {
             lines.remove(0);
@@ -258,9 +266,16 @@ impl RadioCli {
 
 fn looks_like_error(text: &str) -> bool {
     let t = text.to_ascii_lowercase();
-    ["invalid", "unknown", "not found", "error", "failed", "no such"]
-        .iter()
-        .any(|w| t.contains(w))
+    [
+        "invalid",
+        "unknown",
+        "not found",
+        "error",
+        "failed",
+        "no such",
+    ]
+    .iter()
+    .any(|w| t.contains(w))
 }
 
 /// The files `want` (card paths) that the radio's `ls` does not show, and those whose
@@ -412,7 +427,8 @@ impl FakeRadioCli {
             "ls" => {
                 let dir = arg.trim_end_matches('/');
                 let mut names: BTreeMap<String, Option<u64>> = BTreeMap::new();
-                let known = dir.is_empty() || s.files.keys().any(|p| p.starts_with(&format!("{dir}/")));
+                let known =
+                    dir.is_empty() || s.files.keys().any(|p| p.starts_with(&format!("{dir}/")));
                 for (p, size) in &s.files {
                     let Some(rest) = p.strip_prefix(&format!("{dir}/")) else {
                         continue;
@@ -506,7 +522,11 @@ mod tests {
     use super::*;
 
     fn cli(radio: &FakeRadioCli) -> Result<RadioCli> {
-        RadioCli::open(&radio.ports("/dev/cu.usbmodemFAKE2"), "/dev/cu.usbmodemFAKE2", Timing::fast())
+        RadioCli::open(
+            &radio.ports("/dev/cu.usbmodemFAKE2"),
+            "/dev/cu.usbmodemFAKE2",
+            Timing::fast(),
+        )
     }
 
     #[test]
@@ -538,12 +558,21 @@ mod tests {
         assert_eq!(
             c.ls("/SOUNDS/en").unwrap(),
             vec![
-                CliEntry { name: "SYSTEM/".into(), size: None },
-                CliEntry { name: "hello.wav".into(), size: Some(5000) },
+                CliEntry {
+                    name: "SYSTEM/".into(),
+                    size: None
+                },
+                CliEntry {
+                    name: "hello.wav".into(),
+                    size: Some(5000)
+                },
             ]
         );
         assert!(c.ls("/NOPE").is_err());
-        assert!(c.ls("../etc").is_err(), "a path is checked before it is sent");
+        assert!(
+            c.ls("../etc").is_err(),
+            "a path is checked before it is sent"
+        );
         assert_eq!(radio.log(), ["", "ls /SOUNDS/en", "ls /NOPE"]);
     }
 

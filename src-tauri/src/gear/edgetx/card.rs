@@ -1127,7 +1127,8 @@ pub fn find_apple_double(root: &Path) -> Vec<AppleDoubleFile> {
             }
             let name = e.file_name().to_string_lossy().to_string();
             if ft.is_dir() {
-                if depth < 8 && !matches!(name.as_str(), ".fseventsd" | ".Spotlight-V100" | ".Trashes")
+                if depth < 8
+                    && !matches!(name.as_str(), ".fseventsd" | ".Spotlight-V100" | ".Trashes")
                 {
                     walk(root, &e.path(), depth + 1, out);
                 }

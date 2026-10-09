@@ -263,10 +263,9 @@ impl Core {
                     c.identity = i.identity.clone();
                 }
             }
-            if let (DeviceKind::Radio, Some(i)) = (
-                c.kind,
-                st.radio.get(&super::gear::link_handle(&c.link)),
-            ) {
+            if let (DeviceKind::Radio, Some(i)) =
+                (c.kind, st.radio.get(&super::gear::link_handle(&c.link)))
+            {
                 c.identity = crate::gear::model::Identity {
                     board: i.board.clone(),
                     firmware: Some("EdgeTX".into()),

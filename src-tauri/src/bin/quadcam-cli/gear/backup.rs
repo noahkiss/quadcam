@@ -188,7 +188,9 @@ pub fn radio_cli(
     yes: bool,
 ) -> Result<Value> {
     let action = serde_json::from_value(Value::String(action.to_string())).map_err(|_| {
-        anyhow::anyhow!("unknown radio action {action:?}; use identify, ls, play, beep, reboot or verify")
+        anyhow::anyhow!(
+            "unknown radio action {action:?}; use identify, ls, play, beep, reboot or verify"
+        )
     })?;
     Ok(serde_json::to_value(call::gear_radio_cli(
         core,

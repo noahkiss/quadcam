@@ -209,13 +209,18 @@ impl Core {
             RadioCliAction::Reboot => {
                 cli.reboot()?;
                 self.fc_state.lock().unwrap().radio.remove(&port);
-                report.notes.push("The radio restarted. Its serial port is gone until it is back.".into());
+                report
+                    .notes
+                    .push("The radio restarted. Its serial port is gone until it is back.".into());
             }
             RadioCliAction::Verify => {
                 let info = cli.identify()?;
                 let device = self.verify_device(p.device.as_deref(), info.board.as_deref())?;
-                let backup = self.snapshots().latest(&device)
-                    .with_context(|| format!("The radio {device} has no backup to compare with. Back its card up first."))?;
+                let backup = self.snapshots().latest(&device).with_context(|| {
+                    format!(
+                        "The radio {device} has no backup to compare with. Back its card up first."
+                    )
+                })?;
                 let want: Vec<(String, u64)> = backup
                     .files
                     .iter()
@@ -248,7 +253,10 @@ impl Core {
             [] => bail!("No saved radio of this board. Name the radio with device."),
             many => bail!(
                 "Several saved radios share this board ({}); name one with device.",
-                many.iter().map(|m| format!("{} ({})", m.name, m.id)).collect::<Vec<_>>().join(", ")
+                many.iter()
+                    .map(|m| format!("{} ({})", m.name, m.id))
+                    .collect::<Vec<_>>()
+                    .join(", ")
             ),
         }
     }

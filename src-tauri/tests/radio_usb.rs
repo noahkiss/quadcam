@@ -40,7 +40,12 @@ fn radio_card(root: &Path, bus: &str, disk: &str) -> Volume {
 
 type Shared<T> = Arc<Mutex<T>>;
 
-fn core(dir: &Path, volumes: Shared<Vec<Volume>>, cards: Vec<CardHw>, usb: Vec<UsbStorage>) -> Core {
+fn core(
+    dir: &Path,
+    volumes: Shared<Vec<Volume>>,
+    cards: Vec<CardHw>,
+    usb: Vec<UsbStorage>,
+) -> Core {
     let mut env = Env::fake(Vec::new(), Arc::new(FakePorts::new(vec![])));
     env.volumes = Arc::new(move || volumes.lock().unwrap().clone());
     env.card_reader = Arc::new(move || cards.clone());
@@ -73,7 +78,11 @@ fn radio_usb_device(disk: &str) -> UsbStorage {
 fn a_radio_card_is_one_saved_radio_in_the_slot_and_over_usb() {
     let d = tempfile::tempdir().unwrap();
     let root = d.path().join("card");
-    let vols = Arc::new(Mutex::new(vec![radio_card(&root, "Secure Digital", "disk42")]));
+    let vols = Arc::new(Mutex::new(vec![radio_card(
+        &root,
+        "Secure Digital",
+        "disk42",
+    )]));
     let hw = CardHw {
         disk: "disk42".into(),
         manufacturer_id: Some("0x03".into()),
@@ -149,7 +158,10 @@ fn card_clean_lists_then_removes_only_apple_double_files() {
     assert_eq!(done.removed, 2);
     assert!(!root.join("._radio").exists());
     assert!(!root.join("MODELS/._model01.yml").exists());
-    assert!(root.join("MODELS/._notes.txt").exists(), "not AppleDouble: kept");
+    assert!(
+        root.join("MODELS/._notes.txt").exists(),
+        "not AppleDouble: kept"
+    );
     assert!(root.join("MODELS/model01.yml").exists());
 }
 
@@ -189,10 +201,17 @@ fn a_radio_on_serial_is_a_radio_and_identifies_itself() {
     let core = serial_core(d.path(), &radio, vec![]);
     let c = core.gear_connected().unwrap();
     assert_eq!(c.len(), 1);
-    assert_eq!(c[0].kind, DeviceKind::Radio, "a radio's serial port is not an FC");
+    assert_eq!(
+        c[0].kind,
+        DeviceKind::Radio,
+        "a radio's serial port is not an FC"
+    );
     let r = core.gear_radio_cli(&p(RadioCliAction::Identify)).unwrap();
     let info = r.info.unwrap();
-    assert_eq!((info.board.as_deref(), info.version.as_deref()), (Some("pocket"), Some("2.12.4")));
+    assert_eq!(
+        (info.board.as_deref(), info.version.as_deref()),
+        (Some("pocket"), Some("2.12.4"))
+    );
     // The next look shows what the radio runs.
     let c = core.gear_connected().unwrap();
     assert_eq!(c[0].identity.version.as_deref(), Some("2.12.4"));
@@ -217,7 +236,10 @@ fn play_ls_beep_and_reboot_need_the_right_arguments() {
     })
     .unwrap();
     assert_eq!(radio.played(), ["/SOUNDS/en/hello.wav"]);
-    assert!(core.gear_radio_cli(&p(RadioCliAction::Play)).is_err(), "play needs a path");
+    assert!(
+        core.gear_radio_cli(&p(RadioCliAction::Play)).is_err(),
+        "play needs a path"
+    );
     core.gear_radio_cli(&p(RadioCliAction::Beep)).unwrap();
     let refused = core.gear_radio_cli(&p(RadioCliAction::Reboot)).unwrap_err();
     assert!(format!("{refused:#}").contains("confirm"));
@@ -244,7 +266,9 @@ fn another_program_holding_the_port_is_a_refusal() {
     )
     .with_settings(d.path().join("support/settings.json"))
     .with_gear_env(env);
-    let e = core.gear_radio_cli(&p(RadioCliAction::Identify)).unwrap_err();
+    let e = core
+        .gear_radio_cli(&p(RadioCliAction::Identify))
+        .unwrap_err();
     assert!(format!("{e:#}").contains("open in screen"));
     assert_eq!(radio.opens(), 0, "QuadCam never opened the port");
 }
@@ -262,7 +286,16 @@ fn verify_compares_the_radio_with_the_latest_backup() {
         .with_file("/RADIO/radio.yml", size("RADIO/radio.yml"))
         .with_file("/MODELS/model01.yml", size("MODELS/model01.yml"));
     let core = serial_core(d.path(), &radio, vec![vol]);
-    let id = core.gear_connected().unwrap().into_iter().find(|c| c.usb.is_none() && matches!(c.link, quadcam_lib::gear::model::Link::Volume { .. })).unwrap().id.unwrap();
+    let id = core
+        .gear_connected()
+        .unwrap()
+        .into_iter()
+        .find(|c| {
+            c.usb.is_none() && matches!(c.link, quadcam_lib::gear::model::Link::Volume { .. })
+        })
+        .unwrap()
+        .id
+        .unwrap();
     core.gear_device_save(&quadcam_lib::core::DeviceSaveParams {
         id: id.clone(),
         name: Some("Bench radio".into()),
@@ -289,5 +322,8 @@ fn verify_compares_the_radio_with_the_latest_backup() {
 
     // Without a device the one saved radio of the board is used once identify saved a board.
     let r = core.gear_radio_cli(&p(RadioCliAction::Verify)).unwrap();
-    assert_eq!(r.verify.unwrap().backup.split('/').next(), Some(id.as_str()));
+    assert_eq!(
+        r.verify.unwrap().backup.split('/').next(),
+        Some(id.as_str())
+    );
 }

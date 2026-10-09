@@ -846,7 +846,10 @@ fn a_restore_without_a_backup_or_for_an_unknown_sim_says_so() {
         .gear_sim_restore_plan_at(&restore_params("liftoff"), h.path(), &never)
         .unwrap();
     assert!(!plan.ready());
-    assert_eq!(plan.checks[0].refusal.as_ref().unwrap().code, RefusalCode::NoBackup);
+    assert_eq!(
+        plan.checks[0].refusal.as_ref().unwrap().code,
+        RefusalCode::NoBackup
+    );
     assert!(plan.digest.is_empty());
     let e = c
         .gear_sim_restore_plan_at(&restore_params("nosuchsim"), h.path(), &never)
@@ -866,10 +869,17 @@ fn a_restore_puts_the_synced_file_back_and_can_be_undone() {
     let plan = c.gear_sim_restore_plan_at(&p, h.path(), &never).unwrap();
     assert!(plan.ready(), "{:?}", plan.checks);
     assert!(!plan.digest.is_empty());
-    assert!(plan.warnings.iter().any(|w| w.contains("Changes made in the game")));
+    assert!(plan
+        .warnings
+        .iter()
+        .any(|w| w.contains("Changes made in the game")));
     let text = serde_json::to_string(&plan.diff).unwrap();
     assert!(text.contains("Profile Race"), "{text}");
-    assert_eq!(std::fs::read(&paths.liftoff).unwrap(), after_sync, "a plan writes nothing");
+    assert_eq!(
+        std::fs::read(&paths.liftoff).unwrap(),
+        after_sync,
+        "a plan writes nothing"
+    );
 
     // No confirm, no write; a wrong digest refuses.
     let mut no = restore_request(&p, &plan);
@@ -886,7 +896,11 @@ fn a_restore_puts_the_synced_file_back_and_can_be_undone() {
         .sim_restore_at(&restore_request(&p, &plan), true, h.path(), &never)
         .unwrap();
     assert_eq!(r.status, ChangeStatus::Verified, "{}", r.message);
-    assert_eq!(std::fs::read(&paths.liftoff).unwrap(), before, "the original bytes are back");
+    assert_eq!(
+        std::fs::read(&paths.liftoff).unwrap(),
+        before,
+        "the original bytes are back"
+    );
     for name in ["Back up Liftoff", "Write Liftoff", "Read back Liftoff"] {
         assert!(r.steps.iter().any(|s| s.name == name), "{name}");
     }
@@ -929,13 +943,18 @@ fn a_restore_names_its_backup_and_refuses_one_that_is_not_the_sims() {
     assert_eq!(std::fs::read(&paths.liftoff).unwrap(), before);
     // Now the file equals that backup: nothing to restore.
     let again = c.gear_sim_restore_plan_at(&p, h.path(), &never).unwrap();
-    assert!(again.checks.iter().any(|k| k.name == "Something differs" && !k.ok));
+    assert!(again
+        .checks
+        .iter()
+        .any(|k| k.name == "Something differs" && !k.ok));
     // A backup of another device is not this sim's.
     let other = SimRestoreParams {
         sim: "uncrashed".into(),
         backup: Some(list[0].id.clone()),
     };
-    let plan = c.gear_sim_restore_plan_at(&other, h.path(), &never).unwrap();
+    let plan = c
+        .gear_sim_restore_plan_at(&other, h.path(), &never)
+        .unwrap();
     assert!(!plan.ready());
 }
 

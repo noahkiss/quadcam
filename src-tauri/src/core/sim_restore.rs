@@ -113,7 +113,10 @@ impl Core {
     ) -> Result<RestorePlanned> {
         let id = p.sim.trim().to_ascii_lowercase();
         let Some(sim) = sims::all().into_iter().find(|s| s.id() == id) else {
-            bail!("{:?} is not a sim QuadCam knows (liftoff, micro, uncrashed, zone).", p.sim);
+            bail!(
+                "{:?} is not a sim QuadCam knows (liftoff, micro, uncrashed, zone).",
+                p.sim
+            );
         };
         let who = sim.name();
         let device = backup_device(sim.id());
@@ -149,7 +152,9 @@ impl Core {
             None => {
                 let newest = list.iter().rev().find(|b| {
                     read(b).is_ok_and(|files| {
-                        files.iter().any(|(rel, bytes)| current(rel).as_deref() != Some(bytes))
+                        files
+                            .iter()
+                            .any(|(rel, bytes)| current(rel).as_deref() != Some(bytes))
                     })
                 });
                 if newest.is_none() {
@@ -177,7 +182,11 @@ impl Core {
                 Ok(files) => {
                     checks.push(pass("Backup readable"));
                     checks.push(if running(sim.process()) {
-                        fail(&format!("Sim closed ({who})"), RefusalCode::SimRunning, format!("Quit {who} first."))
+                        fail(
+                            &format!("Sim closed ({who})"),
+                            RefusalCode::SimRunning,
+                            format!("Quit {who} first."),
+                        )
                     } else {
                         pass(&format!("Sim closed ({who})"))
                     });
@@ -210,7 +219,13 @@ impl Core {
                             }),
                         ));
                         diff.push(file_diff(sim, who, &shown, &path, &before, &after));
-                        writes.push(RestoreWrite { path, shown, rel, before, after });
+                        writes.push(RestoreWrite {
+                            path,
+                            shown,
+                            rel,
+                            before,
+                            after,
+                        });
                     }
                     if writes.iter().all(|w| w.before == w.after) && checks.iter().all(|c| c.ok) {
                         checks.push(fail(
@@ -229,9 +244,17 @@ impl Core {
 
         let ready = checks.iter().all(|c| c.ok) && !writes.is_empty();
         let digest = if ready {
-            let mut text = format!("simrestore|{}", backup.as_ref().map_or("", |b| b.id.as_str()));
+            let mut text = format!(
+                "simrestore|{}",
+                backup.as_ref().map_or("", |b| b.id.as_str())
+            );
             for w in &writes {
-                text.push_str(&format!("\n{}|{}|{}", w.rel, blobs::hash(&w.before), blobs::hash(&w.after)));
+                text.push_str(&format!(
+                    "\n{}|{}|{}",
+                    w.rel,
+                    blobs::hash(&w.before),
+                    blobs::hash(&w.after)
+                ));
             }
             blobs::hash(text.as_bytes())
         } else {
@@ -390,7 +413,11 @@ impl Core {
             }
             steps.push(StepReport {
                 name: "Roll back".into(),
-                state: if rolled_back { StepState::Done } else { StepState::Failed },
+                state: if rolled_back {
+                    StepState::Done
+                } else {
+                    StepState::Failed
+                },
                 detail: Some(format!("{} file(s) put back", done.len())),
             });
         }
@@ -407,7 +434,11 @@ impl Core {
         Ok(ApplyReport {
             change: RESTORE_ID.into(),
             device: DEVICE.into(),
-            status: if ok { ChangeStatus::Verified } else { ChangeStatus::Failed },
+            status: if ok {
+                ChangeStatus::Verified
+            } else {
+                ChangeStatus::Failed
+            },
             steps,
             backup: backups.first().cloned(),
             after_backup: None,
@@ -429,7 +460,14 @@ impl Core {
 
 /// The diff of one file: the rates of each profile that differs, when both files parse as
 /// the sim's; else the file named.
-fn file_diff(sim: &dyn Sim, who: &str, shown: &str, path: &Path, before: &[u8], after: &[u8]) -> DiffItem {
+fn file_diff(
+    sim: &dyn Sim,
+    who: &str,
+    shown: &str,
+    path: &Path,
+    before: &[u8],
+    after: &[u8],
+) -> DiffItem {
     let label = format!("{who}: {shown}");
     let (Ok(now), Ok(then)) = (sim.parse_file(before, path), sim.parse_file(after, path)) else {
         return DiffItem::Files {

@@ -317,7 +317,9 @@ impl Core {
                 format!(
                     "flash|{}|{}|{}|{}|{}|{}",
                     device.id,
-                    dfu.first().and_then(|d| d.serial.clone()).unwrap_or_default(),
+                    dfu.first()
+                        .and_then(|d| d.serial.clone())
+                        .unwrap_or_default(),
                     board.clone().unwrap_or_default(),
                     installed.clone().unwrap_or_default(),
                     target,

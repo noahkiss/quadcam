@@ -592,6 +592,9 @@ Commands:
   storage         The gear folder's size per device; --prune thins backups; --export writes folders
   import-backups  Import an old backup folder: radio card copies, FC diff/dump files, LOGS folders
   card-check      Check a card's file system (diskutil verifyVolume, read-only); --log lists past checks
+  card-clean      List the ._ files macOS left on a radio card; --remove --yes deletes them
+  radio-cli       A radio on its USB serial port (EdgeTX CLI): identify, ls, play, beep, reboot, verify
+  dfu-link        Link the radio in DFU mode to a saved radio (the pick, else the radio seen last)
   card-repair     Repair a card whose latest check failed: a backup first, the repair, a check after
   changes         Staged changes waiting to be applied (--history adds the rest)
   stage           Stage FC settings: raw CLI lines (--cli FILE) or --set NAME=VALUE. Writes nothing to the FC

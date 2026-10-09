@@ -48,6 +48,7 @@ pub use backup::{
     GearJob, ImportBackupsParams, PruneParams, RepairResult, StopParams,
 };
 pub use bench::{apply_ready_hooks, CopyParams};
+pub use dfu_link::{DfuLinkParams, DfuLinked};
 pub use fc::{
     BoardNotesParams, FcJob, FcPortParams, FcReadParams, PollPauseParams, UsbTimer, USB_PROBE,
 };
@@ -62,11 +63,12 @@ pub use gear::{
     connected_name, link_handle, DeviceSaveParams, GearStatus, Hold, HookFn, HookOutcome, HookRun,
     OnConnectHook, ReminderParams, Skip, StepFailure, HOLD_GRACE,
 };
-pub use gear_card::{CardClean, CardCleanParams, CardParams, CardPreview, CardPreviewParams, GearCard};
+pub use gear_card::{
+    CardClean, CardCleanParams, CardParams, CardPreview, CardPreviewParams, GearCard,
+};
 pub use import::CardStatus;
 pub use library::{LibEdit, LibItem, LibUpdate, LibraryView, RebuildReport, RenameReport};
 pub use osd::{OsdEditParams, OsdParams};
-pub use dfu_link::{DfuLinkParams, DfuLinked};
 pub use radio_cli::{RadioCliAction, RadioCliParams, RadioCliReport, RadioMatch, RadioVerify};
 pub use rates::{RatesParams, RatesPreview, RatesPreviewParams, SimsParams};
 pub use rematch::{LibMatch, LibMatchParams, LibMatchReport};
