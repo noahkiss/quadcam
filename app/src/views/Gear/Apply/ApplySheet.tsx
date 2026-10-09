@@ -23,8 +23,9 @@ export function ApplySheet() {
   const restore = useStore((s) => s.restoreBeforeApply);
   const next = useStore((s) => s.nextApply);
   const dev = a ? devices.find((d) => d.id === a.device) : undefined;
-  const kind = a?.device === SIMS_DEVICE ? "sims" : dev?.kind === "radio" ? "card" : "FC";
-  const name = kind === "sims" ? "sims" : dev ? deviceName(dev) : kind === "card" ? "radio" : "FC";
+  const flash = !!a?.flash || a?.change?.id === "flash";
+  const kind = flash ? "firmware" : a?.device === SIMS_DEVICE ? "sims" : dev?.kind === "radio" ? "card" : "FC";
+  const name = kind === "sims" ? "sims" : dev ? deviceName(dev) : kind === "card" || kind === "firmware" ? "radio" : "FC";
   const job = a ? jobs?.find((j) => j.device === a.device) : undefined;
   const more = a?.change ? changes.filter((c) => c.device === a.device && (c.status === "ready" || c.status === "try") && c.id !== a.change?.id).length : 0;
   const done = !!a?.report;
@@ -36,12 +37,12 @@ export function ApplySheet() {
       kind="sheet"
       blockReturn
       blockEscape={working}
-      title={`Apply to ${name}`}
+      title={kind === "firmware" ? `Flash ${name}` : `Apply to ${name}`}
       onClose={() => close()}
       actions={
         done ? (
           <>
-            {a?.report?.status === "failed" && a.report.backup && kind !== "sims" && (kind === "FC" || a.report.steps.some((x) => x.name === "Roll back" && x.state === "failed")) && (
+            {a?.report?.status === "failed" && a.report.backup && kind !== "sims" && kind !== "firmware" && (kind === "FC" || a.report.steps.some((x) => x.name === "Roll back" && x.state === "failed")) && (
               <Button variant="ghost" onClick={() => restore()}>
                 Restore backup
               </Button>
@@ -75,7 +76,7 @@ export function ApplySheet() {
           {!a.change && !a.error && <p className={styles.muted}>No staged changes for this device.</p>}
           {a.change && (
             <div className={styles.head}>
-              <h3>{a.change.title || (kind === "card" ? "Radio card" : kind === "sims" ? "Sim rates" : "FC settings")}</h3>
+              <h3>{a.change.title || (kind === "card" ? "Radio card" : kind === "sims" ? "Sim rates" : kind === "firmware" ? "Radio firmware" : "FC settings")}</h3>
               {a.plan && (
                 <p className={`${styles.muted} selectable`}>
                   {[a.plan.device.board, a.plan.device.firmware, a.plan.device.version].filter(Boolean).join(" · ")}
@@ -104,7 +105,9 @@ export function ApplySheet() {
                   </ul>
                 </section>
               )}
-              {kind === "sims" ? (
+              {kind === "firmware" ? (
+                <p className={styles.muted}>QuadCam reads the firmware the radio runs now and keeps it as a backup, then erases and writes the flash, reads it back and compares it, and restarts the radio. The radio must be in DFU mode: turn it off, hold the trims toward the centre and plug in the USB cable. If the read back differs, the radio stays in DFU mode.</p>
+              ) : kind === "sims" ? (
                 <p className={styles.muted}>QuadCam backs up each file first and keeps the backup, writes it, reads it back, and puts every file back if one reads wrong. Quit the game before you apply.</p>
               ) : kind === "card" ? (
                 <p className={styles.muted}>QuadCam mounts the card if needed, backs it up first and keeps that backup, writes file by file, reads each back, and unmounts it. It puts every file back if one reads wrong.</p>

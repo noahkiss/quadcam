@@ -9,6 +9,7 @@ import { PackUpPage } from "./Flights/PackUpPage";
 import { RepairsPage } from "./Flights/RepairsPage";
 import { BenchPage } from "./Bench/BenchPage";
 import { StoragePage } from "./Storage/StoragePage";
+import { FirmwarePage } from "./Firmware/FirmwarePage";
 import { CalibrationPage } from "./Sim/CalibrationPage";
 import { SimPage } from "./Sim/SimPage";
 
@@ -25,5 +26,7 @@ export const GEAR_PAGES: GearPageSlot[] = [
   { id: "flights", label: "Flights", icon: "stopwatch", render: () => <FlightsPage /> },
   { id: "packs", label: "Packs", icon: "battery", render: () => <PacksPage /> },
   { id: "repairs", label: "Repairs", icon: "danger-triangle", render: () => <RepairsPage /> },
+  // Installed against newest firmware, and the EdgeTX flash (WP10).
+  { id: "firmware", label: "Firmware", icon: "upload-minimalistic", count: (s) => s.firmware?.devices.filter((d) => d.state === "update").length ?? 0, render: () => <FirmwarePage /> },
   { id: "storage", label: "Storage", icon: "hdd", render: () => <StoragePage /> },
 ];

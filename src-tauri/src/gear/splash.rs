@@ -328,7 +328,7 @@ pub struct SplashPreview {
     /// Why not, when it is not.
     #[serde(default)]
     pub reason: Option<String>,
-    /// The 1,024 packed bytes as hex, to compare with `splash_hash` of a binary.
+    /// A hash of the 1,024 packed bytes.
     pub hash: String,
 }
 

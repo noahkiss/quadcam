@@ -7,6 +7,7 @@ import { RatesSegment } from "./Rates/RatesSegment";
 import { SwitchesSegment } from "./Switches/SwitchesSegment";
 import { ChangesSegment } from "./Changes/ChangesSegment";
 import { BackupsSegment } from "./Backups/BackupsSegment";
+import { SplashSegment } from "./Splash/SplashSegment";
 import type { DeviceRef, DeviceSegment } from "./slots";
 
 export const DEVICE_SEGMENTS: DeviceSegment[] = [
@@ -19,6 +20,8 @@ export const DEVICE_SEGMENTS: DeviceSegment[] = [
   { id: "switches", label: "Switches", kinds: ["fc", "radio"], render: (d) => <SwitchesSegment d={d} /> },
   // Staged changes, the history, and Edit setting (WP5).
   { id: "changes", label: "Changes", kinds: ["fc", "radio"], render: (d) => <ChangesSegment d={d} /> },
+  // The start-up picture, patched into the radio's firmware (WP10).
+  { id: "splash", label: "Splash", kinds: ["radio"], render: (d) => <SplashSegment key={d.key} d={d} /> },
   { id: "backups", label: "Backups", kinds: ["radio", "fc", "goggles", "dvr_card"], render: (d) => <BackupsSegment d={d} /> },
 ];
 
