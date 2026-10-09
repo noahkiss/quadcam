@@ -25,6 +25,11 @@ test("the app's inventory passes, and a planted bad license fails", () => {
   assert.ok(entries.some((e) => e.kind === "npm" && e.name === "react"));
   assert.ok(entries.some((e) => e.kind === "font" && e.name === "Space Grotesk"));
   assert.ok(!entries.some((e) => e.kind === "crate" && e.name === "quadcam"), "the app itself is not a third party");
+  assert.ok(!entries.some((e) => e.kind === "crate" && e.name === "quadcam-sim"), "the sim crate is QuadCam's own");
+  // Added after 0.7.0: the USB, PNG and 3D-view dependencies, and the sim's ported code.
+  for (const name of ["nusb", "png", "hidapi"]) assert.ok(entries.some((e) => e.kind === "crate" && e.name === name), `${name} is inventoried`);
+  assert.ok(entries.some((e) => e.kind === "npm" && e.name === "three"), "three is inventoried");
+  assert.ok(entries.some((e) => e.kind === "ported" && e.name.startsWith("propwash")));
   assert.deepEqual(check(entries), []);
 
   const planted = [...entries, { kind: "crate", name: "planted", version: "1.0.0", license: "GPL-3.0-only", url: "", authors: [], files: [] }, { kind: "npm", name: "nolicense", version: "0.1.0", license: "", url: "", authors: [], files: [] }];

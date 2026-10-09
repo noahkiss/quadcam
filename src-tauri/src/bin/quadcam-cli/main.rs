@@ -492,8 +492,13 @@ fn removed(s: Option<String>) -> Option<quadcam_lib::trim::RemovedCuts> {
 
 /// Exit codes: 0 ok, 1 failed, 2 usage, 3 refused by a safety guard, 4 nothing to work on
 /// (no session, no card, no device).
-fn code_for(msg: &str) -> (i32, &'static str) {
-    if msg.starts_with("Refused") {
+fn code_for(e: &anyhow::Error) -> (i32, &'static str) {
+    let msg = format!("{e:#}");
+    // A refusal stays a refusal when a caller wrapped it in context.
+    if msg.starts_with("Refused")
+        || e.downcast_ref::<quadcam_lib::gear::model::Refusal>()
+            .is_some()
+    {
         (3, "refused")
     } else if msg.starts_with("No clips loaded") || msg.starts_with("No card detected") {
         (4, "no_session")
@@ -1415,7 +1420,7 @@ fn main() {
         }
         Err(e) => {
             let msg = format!("{e:#}");
-            let (exit, code) = code_for(&msg);
+            let (exit, code) = code_for(&e);
             if json {
                 println!(
                     "{}",
@@ -1426,5 +1431,33 @@ fn main() {
             }
             std::process::exit(exit);
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use anyhow::Context;
+    use quadcam_lib::gear::model::{Refusal, RefusalCode};
+
+    #[test]
+    fn a_refusal_exits_3_with_or_without_context() {
+        let r = Refusal::new(RefusalCode::UsbHeat, "Unplug the battery and let it cool.");
+        let plain = anyhow::Error::new(r.clone());
+        assert_eq!(code_for(&plain), (3, "refused"));
+        let wrapped: anyhow::Error = Err::<(), _>(r).context("applying the change").unwrap_err();
+        assert!(!format!("{wrapped:#}").starts_with("Refused"));
+        assert_eq!(code_for(&wrapped), (3, "refused"));
+        assert_eq!(
+            code_for(&anyhow!("Refused: format needs --yes.")),
+            (3, "refused")
+        );
+    }
+
+    #[test]
+    fn other_errors_keep_their_exit_codes() {
+        assert_eq!(code_for(&anyhow!("No clips loaded.")), (4, "no_session"));
+        assert_eq!(code_for(&anyhow!("No device with id x.")), (4, "no_device"));
+        assert_eq!(code_for(&anyhow!("disk full")), (1, "failed"));
     }
 }

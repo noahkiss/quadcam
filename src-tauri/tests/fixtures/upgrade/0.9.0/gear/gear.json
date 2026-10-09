@@ -1,0 +1,113 @@
+{
+  "devices": [
+    {
+      "id": "radio-0123456789abcdef",
+      "kind": "radio",
+      "name": "Pocket",
+      "aircraft": "Whoop A",
+      "identity": {
+        "board": "pocket",
+        "firmware": "EdgeTX",
+        "version": "2.12.4"
+      },
+      "last_seen": "2026-09-20T18:00:00Z",
+      "last_backup": "radio-0123456789abcdef/2026-10-02T090000-after_apply",
+      "nickname": "kept",
+      "last_space": {
+        "free": 1000000000,
+        "total": 2000000000,
+        "at": "2026-10-02T09:00:00Z"
+      }
+    },
+    {
+      "id": "fc-fedcba9876543210",
+      "kind": "fc",
+      "name": "",
+      "identity": {
+        "board": "STM32F411",
+        "firmware": "Betaflight",
+        "version": "4.5.1",
+        "build": "Jan  1 2025",
+        "target": "MATEKF411"
+      },
+      "last_seen": "2026-09-21T10:00:00Z",
+      "last_backup": "fc-fedcba9876543210/2026-10-02T091000-before_apply"
+    }
+  ],
+  "pack_types": [
+    {
+      "name": "1S 300",
+      "chemistry": "lihv",
+      "cells": 1,
+      "capacity_mah": 300.0,
+      "connector": "BT2.0",
+      "full_v": 4.35,
+      "storage_v": 3.8,
+      "charge_a": 0.3,
+      "warn_mah": 240.0,
+      "note": "",
+      "futureField": 1
+    }
+  ],
+  "packs": [
+    {
+      "label": "A1",
+      "pack_type": "1S 300",
+      "received": "2026-08-01",
+      "retired": false,
+      "charged_at": "2026-09-20T17:00:00Z",
+      "note": "first"
+    },
+    {
+      "label": "A2"
+    }
+  ],
+  "pack_notes": "Charge to storage after a week.",
+  "flight_sets": {
+    "20260920T181500-Whoop": {
+      "pack": "A1",
+      "place": "Field"
+    }
+  },
+  "flight_folders": [
+    "/tmp/quadcam-upgrade/logs"
+  ],
+  "crashes": [
+    {
+      "id": "crash-1",
+      "clip": "clip-abc",
+      "time_s": 12.5,
+      "aircraft": "Whoop A",
+      "day": "2026-09-20",
+      "broke": "prop",
+      "parts": [
+        "prop set"
+      ],
+      "note": "tree",
+      "repaired": true
+    }
+  ],
+  "futureTopLevelKey": {
+    "keep": "me"
+  },
+  "voice": {
+    "custom_lines": [
+      {
+        "path": "custom/pack_ready",
+        "text": "Pack ready"
+      }
+    ],
+    "overrides": {
+      "radio-0123456789abcdef": {
+        "custom/pack_ready": {
+          "kind": "text",
+          "text": "Pack ready"
+        }
+      }
+    },
+    "chosen": {
+      "radio-0123456789abcdef": "local-demo"
+    },
+    "futureVoiceKey": 1
+  }
+}

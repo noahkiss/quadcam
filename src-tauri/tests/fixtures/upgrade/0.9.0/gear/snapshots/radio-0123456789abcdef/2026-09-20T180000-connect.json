@@ -1,0 +1,19 @@
+{
+  "id": "radio-0123456789abcdef/2026-09-20T180000-connect",
+  "device": "radio-0123456789abcdef",
+  "trigger": "connect",
+  "taken_at": "2026-09-20T18:00:00Z",
+  "identity": {
+    "board": "pocket",
+    "firmware": "EdgeTX",
+    "version": "2.11.2"
+  },
+  "files": [
+    {
+      "path": "RADIO/radio.yml",
+      "size": 29,
+      "xxh64": "623d28a90b277031"
+    }
+  ],
+  "pinned": false
+}

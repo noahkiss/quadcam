@@ -1,0 +1,19 @@
+{
+  "id": "fc-fedcba9876543210/2026-10-02T091000-before_apply",
+  "device": "fc-fedcba9876543210",
+  "trigger": "before_apply",
+  "taken_at": "2026-10-02T09:10:00Z",
+  "identity": {
+    "board": "STM32F411",
+    "firmware": "Betaflight",
+    "version": "4.5.1"
+  },
+  "files": [
+    {
+      "path": "diff all",
+      "size": 24,
+      "xxh64": "1bb8cab44b682d1a"
+    }
+  ],
+  "pinned": true
+}

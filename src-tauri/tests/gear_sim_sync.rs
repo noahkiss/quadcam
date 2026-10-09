@@ -406,6 +406,82 @@ fn a_profile_is_found_by_the_quads_profile_name_and_all_picks_every_sim() {
 
 // ----- the apply -----
 
+/// A sim file the person cannot write refuses with a sentence that says what to check, in
+/// the plan and again at the click. Every refusal this path makes reads as a sentence, not
+/// as its code.
+#[test]
+fn a_file_that_cannot_be_written_refuses_in_words() {
+    use std::os::unix::fs::PermissionsExt;
+    let dir = tempfile::tempdir().unwrap();
+    let (h, paths) = home();
+    let c = core(dir.path());
+    let p = params(vec![target("uncrashed", "FREE")], 0);
+    std::fs::set_permissions(&paths.uncrashed, std::fs::Permissions::from_mode(0o444)).unwrap();
+    let before = std::fs::read(&paths.uncrashed).unwrap();
+
+    let plan = c.gear_sim_sync_plan_at(&p, h.path(), &never).unwrap();
+    assert!(!plan.ready());
+    let (name, code) = plan
+        .checks
+        .iter()
+        .find_map(|k| k.refusal.as_ref().map(|r| (k.name.clone(), r.code)))
+        .unwrap();
+    assert_eq!(
+        (name.as_str(), code),
+        ("Writable (Uncrashed)", RefusalCode::NotWritable)
+    );
+    let r = plan.checks.iter().find_map(|k| k.refusal.as_ref()).unwrap();
+    assert!(
+        r.reason
+            .ends_with("cannot be written: check its permissions and its folder."),
+        "{}",
+        r.reason
+    );
+
+    // The click refuses the same way, with nothing written or backed up.
+    let e = c
+        .sim_sync_at(&request(p.clone(), &plan, true), true, h.path(), &never)
+        .unwrap_err();
+    assert_eq!(refused(&e), RefusalCode::NotWritable);
+    assert!(format!("{e:#}").contains("check its permissions"), "{e:#}");
+    assert_eq!(std::fs::read(&paths.uncrashed).unwrap(), before);
+    std::fs::set_permissions(&paths.uncrashed, std::fs::Permissions::from_mode(0o644)).unwrap();
+
+    // Each refusal the sim path makes carries words: a sentence with no code in it.
+    let running = |n: &str| n == "Liftoff";
+    let mut reasons = Vec::new();
+    for (sims, run) in [
+        (
+            vec![target("liftoff", "Race")],
+            &running as &dyn Fn(&str) -> bool,
+        ),
+        (vec![target("liftoff", "Nope")], &never),
+        (vec![target("velocidrone", "x")], &never),
+        (vec![target("flightgear", "x")], &never),
+    ] {
+        let plan = c
+            .gear_sim_sync_plan_at(&params(sims, 0), h.path(), run)
+            .unwrap();
+        reasons.extend(
+            plan.checks
+                .iter()
+                .filter_map(|k| k.refusal.clone())
+                .map(|r| (r.code, r.reason)),
+        );
+    }
+    assert!(reasons.len() >= 4, "{reasons:?}");
+    for (code, reason) in reasons {
+        assert!(
+            reason.len() > 12 && reason.ends_with('.'),
+            "{code:?}: {reason:?}"
+        );
+        assert!(
+            !reason.contains(code.as_str()) && !reason.contains("Refused"),
+            "{code:?}: {reason:?}"
+        );
+    }
+}
+
 fn request(p: SimSyncParams, plan: &ApplyPlan, confirm: bool) -> SimSyncRequest {
     SimSyncRequest {
         params: p,
