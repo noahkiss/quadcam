@@ -296,9 +296,42 @@ sound a radio plays and the text a voice reads, and puts a voice's takes of them
   **Reset** clears it. The play buttons play a take. A line you add this way that QuadCam does
   not list becomes one of your own lines.
 
-Not built: rendering many lines at once inside carrier sentences ("The word is six.") and
-cutting them out by word timestamps. The list holds 45 lines so far: callouts, the numbers 0
-to 20 and six system sounds. The rest of EdgeTX's sound set is yet to be added.
+### Voice studio
+
+The **Voice studio** at the top of the Voice segment renders whole line sets with ElevenLabs,
+inside carrier sentences, and compares voices before it spends credits.
+
+- **Key.** Paste the ElevenLabs API key and **Save key**. It goes to the macOS Keychain
+  (service `app.quadcam`) and nowhere else: not `settings.json`, not a log, not an answer.
+  The studio shows only the last four characters. **Remove key** deletes it. From the command
+  line, `quadcam-cli gear voice key set` reads the key from stdin. `QUADCAM_TTS_KEY` in the
+  environment takes the place of the Keychain for one run.
+- **Account.** The studio lists the account's voices and models (with the credits a
+  character costs on each: the turbo and flash v2.5 models bill half a credit) and the
+  credits left.
+- **Line sets.** A set is a list of lines to render. Sets combine, and a line in two sets is
+  rendered once. `edgetx` (every prompt the radio plays by itself, the numbers and units, and
+  the general prompts), `quad`, `heli`, `plane` and `glider` (the radio's own prompts and
+  numbers, plus the callouts that setup plays), `extras` (more FPV callouts), `easter` (short
+  fun lines in original wording), `custom` (your own lines) and `quadcam` (the lines a pack
+  holds today). `sample` is twelve hard lines for **Sample**.
+- **Cost.** The line under the pickers shows the characters (carriers included), the batches,
+  the credits and the credits left. Batches the cache already holds cost nothing. A render
+  the credits do not cover cannot start.
+- **Sample.** Tick voices and models and press **Sample**. QuadCam renders the sample lines
+  in each pair, shows the cost, and waits for **Sample and pay**. Each play button in the grid
+  plays one line in one voice and model.
+- **Render pack.** Needs one voice, one model and at least one set. After **Render and pay**
+  the lines go into a local pack named for the voice and model; a second set adds to the
+  same pack. **Choose voice** puts it on a radio like any other pack.
+- **How a line is cut.** A bare word sounds wrong from a voice, so each line is spoken in a
+  carrier ("The word is six.") and cut out. Lines are grouped by tone (calm, alert, number,
+  fun), up to 30 sentences in a batch. ElevenLabs returns the time of every character; QuadCam
+  cuts from the start of the line's first character to the end of its last, moving each edge
+  to the quietest point within 40 ms. The cut then gets the usual trim, fades and tempo.
+  A cut that is silent, under 120 ms, or long for its text is reported. The raw audio and
+  timestamps of each batch are kept by provider, voice, model, speed, text and seed, so a new
+  trim or tempo setting re-cuts for free. `--carrier "I said {line}."` changes the carrier.
 
 ## Unplugging cards
 
