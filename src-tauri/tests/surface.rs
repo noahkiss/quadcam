@@ -346,3 +346,47 @@ fn the_cli_prints_the_schema_version_and_warns_on_a_deprecated_command() {
     assert_eq!(schema::cli_deprecations(TABLE, &argv).len(), 1);
     assert!(schema::cli_deprecations(TABLE, &["stage".to_string()]).is_empty());
 }
+
+// ----- names renamed before 1.0 keep working -----
+
+#[test]
+fn renamed_mcp_parameters_accept_their_old_names() {
+    use quadcam_lib::mcp::gear::{GearApplyArgs, GearArgs};
+    use serde_json::json;
+    let old: GearArgs =
+        serde_json::from_value(json!({"action": "flights", "logs": "/x", "profile": 2})).unwrap();
+    let new: GearArgs =
+        serde_json::from_value(json!({"action": "flights", "log_dir": "/x", "rate_profile": 2}))
+            .unwrap();
+    for g in [old, new] {
+        assert_eq!(
+            (g.log_dir.as_deref(), g.rate_profile),
+            (Some("/x"), Some(2))
+        );
+    }
+    let apply: GearApplyArgs =
+        serde_json::from_value(json!({"action": "sim_sync", "profile": 3})).unwrap();
+    assert_eq!(apply.rate_profile, Some(3));
+}
+
+#[test]
+fn renamed_cli_flags_accept_their_old_names() {
+    let home = tempfile::tempdir().unwrap();
+    for args in [
+        ["gear", "sims", "--profile", "1"],
+        ["gear", "stage", "--profile", "1"],
+        ["gear", "stage", "--rateprofile", "1"],
+    ] {
+        let out = Command::new(env!("CARGO_BIN_EXE_quadcam-cli"))
+            .env("HOME", home.path())
+            .args(args)
+            .arg("--help")
+            .output()
+            .unwrap();
+        assert!(
+            out.status.success(),
+            "{args:?}: {}",
+            String::from_utf8_lossy(&out.stderr)
+        );
+    }
+}
