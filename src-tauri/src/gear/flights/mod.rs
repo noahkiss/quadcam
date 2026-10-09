@@ -423,7 +423,7 @@ pub struct CacheEntry {
 }
 
 /// Bumped when a measure changes, so an old cache is rebuilt.
-pub const CACHE_VERSION: u32 = 1;
+pub const CACHE_VERSION: u32 = 2;
 
 fn stamp(p: &Path) -> Option<(u64, i64)> {
     let m = std::fs::metadata(p).ok()?;
@@ -505,8 +505,12 @@ pub fn index(sources: &[PathBuf], cache_file: &Path, tun: &Tunables) -> Result<V
     let mut all: Vec<Flight> = Vec::new();
     for e in cache.files {
         for fl in e.flights {
-            if !all.iter().any(|x| x.id == fl.id) {
-                all.push(fl);
+            // The same flight in two files (the log in two places, or the store's `(2)`
+            // copy of a changed log): the longer reading wins.
+            match all.iter().position(|x| x.id == fl.id) {
+                None => all.push(fl),
+                Some(i) if fl.secs > all[i].secs => all[i] = fl,
+                Some(_) => {}
             }
         }
     }
@@ -659,6 +663,25 @@ mod tests {
         assert_eq!(c.files.len(), 2);
         // A second run reads the cache, with the same answer.
         assert_eq!(index(&srcs, &cache, &tun).unwrap(), f);
+    }
+
+    #[test]
+    fn second_copy_of_a_log_is_one_flight() {
+        let d = tempfile::tempdir().unwrap();
+        let dir = d.path().join("store/radio1");
+        std::fs::create_dir_all(&dir).unwrap();
+        let p = synth::write_known(&dir).unwrap();
+        let name = p.file_name().unwrap().to_str().unwrap().to_string();
+        let copy = dir.join(name.replace(".csv", " (2).csv"));
+        std::fs::copy(&p, &copy).unwrap();
+        let f = index(
+            &[d.path().join("store")],
+            &d.path().join("f.json"),
+            &Tunables::default(),
+        )
+        .unwrap();
+        assert_eq!(f.len(), KNOWN.flights);
+        assert!(f.iter().all(|x| x.model.is_some()), "{:?}", f[0].model);
     }
 
     #[test]

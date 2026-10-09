@@ -153,11 +153,13 @@ impl LogRow {
     }
 }
 
-/// The model name in an EdgeTX log file name: `<model>-YYYY-MM-DD[-HHMMSS].csv`.
+/// The model name in an EdgeTX log file name: `<model>-YYYY-MM-DD[-HHMMSS].csv`. A trailing
+/// ` (n)` is the log store's second copy of a changed log (`radiologs`), not part of the name.
 pub fn model_from_file_name(name: &str) -> Option<String> {
     let stem = name
         .strip_suffix(".csv")
         .or_else(|| name.strip_suffix(".CSV"))?;
+    let stem = strip_copy_suffix(stem);
     let digits = |s: &str| !s.is_empty() && s.chars().all(|c| c.is_ascii_digit());
     let mut parts: Vec<&str> = stem.split('-').collect();
     if parts.len() > 4 && parts.last().is_some_and(|p| digits(p) && p.len() == 6) {
@@ -173,6 +175,14 @@ pub fn model_from_file_name(name: &str) -> Option<String> {
     }
     let model = parts[..n - 3].join("-");
     (!model.trim().is_empty()).then_some(model)
+}
+
+/// `stem (2)` -> `stem`: drops the log store's copy number.
+fn strip_copy_suffix(stem: &str) -> &str {
+    stem.strip_suffix(')')
+        .and_then(|s| s.rsplit_once(" ("))
+        .filter(|(_, n)| !n.is_empty() && n.chars().all(|c| c.is_ascii_digit()))
+        .map_or(stem, |(base, _)| base)
 }
 
 /// Splits one CSV line. EdgeTX quotes text columns such as the flight mode.
@@ -566,6 +576,15 @@ mod tests {
         assert_eq!(
             model_from_file_name("My-Quad-2026-09-30-100000.csv").as_deref(),
             Some("My-Quad")
+        );
+        assert_eq!(
+            model_from_file_name("Whoop-2026-09-30 (2).csv").as_deref(),
+            Some("Whoop"),
+            "the store's second copy"
+        );
+        assert_eq!(
+            model_from_file_name("Whoop-2026-09-30-100000 (12).csv").as_deref(),
+            Some("Whoop")
         );
         assert_eq!(model_from_file_name("notes.csv"), None);
         assert_eq!(model_from_file_name("2026-09-30.csv"), None);
