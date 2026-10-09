@@ -55,6 +55,7 @@ fn dispatch_methods() {
 fn cli_help() {
     let commands: &[&[&str]] = &[
         &[],
+        &["status"],
         &["cards"],
         &["scan"],
         &["stage"],

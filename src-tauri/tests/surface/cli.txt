@@ -1,0 +1,512 @@
+# schema_version 1
+cli.arg cut <ID>
+cli.arg cut [RANGES]...
+cli.arg eject [TARGET]
+cli.arg gear apply <CHANGE>
+cli.arg gear backup diff <A>
+cli.arg gear backup diff [B]
+cli.arg gear backup pin <ID>
+cli.arg gear backup show <ID>
+cli.arg gear backup show [PATH]
+cli.arg gear card-mount <DEVICE>
+cli.arg gear card-unmount <DEVICE>
+cli.arg gear crashes delete <ID>
+cli.arg gear devices forget <ID>
+cli.arg gear devices save <ID>
+cli.arg gear discard <CHANGE>
+cli.arg gear fc check <DIFF>
+cli.arg gear fc check <EXPECTED>
+cli.arg gear flights set <FLIGHT>
+cli.arg gear import-backups <FOLDER>
+cli.arg gear keep <CHANGE>
+cli.arg gear model <DEVICE>
+cli.arg gear model-edit <DEVICE>
+cli.arg gear osd <TARGET>...
+cli.arg gear osd-edit <DEVICE>
+cli.arg gear packs delete <LABEL>
+cli.arg gear packs notes <TEXT>
+cli.arg gear packs save <LABEL>
+cli.arg gear packs type delete <NAME>
+cli.arg gear packs type save <NAME>
+cli.arg gear radio-cli <ACTION>
+cli.arg gear rates [TARGET]...
+cli.arg gear restore <BACKUP>
+cli.arg gear revert <CHANGE>
+cli.arg gear sim calibration [RADIO]
+cli.arg gear sim validate <AIRCRAFT>
+cli.arg gear sims [TARGET]...
+cli.arg gear splash <IMAGE>
+cli.arg gear stop <HANDLE>
+cli.arg gear update <CHANGE>
+cli.arg gear voice install <PACK>
+cli.arg library apply-name-format [IDS]...
+cli.arg library cut <ID>
+cli.arg library cut [RANGES]...
+cli.arg library edit <ID>
+cli.arg library match-logs [IDS]...
+cli.arg library photos <IDS>...
+cli.arg library rate <IDS>...
+cli.arg library rename <ID>
+cli.arg library rename <NAME>
+cli.arg library trash <IDS>...
+cli.arg meta <IDS>...
+cli.arg modules install <NAME>
+cli.arg modules remove <NAME>
+cli.arg moments [IDS]...
+cli.arg photos [FILES]...
+cli.arg places delete <NAME>
+cli.arg places save <NAME>
+cli.arg places search <QUERY>
+cli.arg profiles default <NAME>
+cli.arg profiles delete <NAME>
+cli.arg profiles save <NAME>
+cli.arg scan <PATH>
+cli.arg settings set <KEY=VALUE>...
+cli.arg stage [PATH]
+cli.arg verify [OUTPUT]
+cli.command analyze
+cli.command cards
+cli.command clear
+cli.command cut
+cli.command dates
+cli.command eject
+cli.command format
+cli.command gear
+cli.command gear apply
+cli.command gear backup
+cli.command gear backup diff
+cli.command gear backup pin
+cli.command gear backup show
+cli.command gear backups
+cli.command gear card
+cli.command gear card preview
+cli.command gear card-check
+cli.command gear card-clean
+cli.command gear card-mount
+cli.command gear card-repair
+cli.command gear card-unmount
+cli.command gear changes
+cli.command gear copy
+cli.command gear crashes
+cli.command gear crashes delete
+cli.command gear crashes save
+cli.command gear devices
+cli.command gear devices forget
+cli.command gear devices list
+cli.command gear devices save
+cli.command gear dfu-link
+cli.command gear discard
+cli.command gear fc
+cli.command gear fc check
+cli.command gear fc identify
+cli.command gear fc notes
+cli.command gear fc pause
+cli.command gear fc read
+cli.command gear fc resume
+cli.command gear fc usb
+cli.command gear firmware
+cli.command gear flights
+cli.command gear flights folders
+cli.command gear flights set
+cli.command gear import-backups
+cli.command gear keep
+cli.command gear map
+cli.command gear model
+cli.command gear model-edit
+cli.command gear osd
+cli.command gear osd-edit
+cli.command gear packs
+cli.command gear packs delete
+cli.command gear packs notes
+cli.command gear packs save
+cli.command gear packs type
+cli.command gear packs type delete
+cli.command gear packs type save
+cli.command gear preflight
+cli.command gear radio
+cli.command gear radio-cli
+cli.command gear rates
+cli.command gear report
+cli.command gear restore
+cli.command gear revert
+cli.command gear sim
+cli.command gear sim calibration
+cli.command gear sim defaults
+cli.command gear sim validate
+cli.command gear sims
+cli.command gear splash
+cli.command gear stage
+cli.command gear status
+cli.command gear stop
+cli.command gear storage
+cli.command gear update
+cli.command gear voice
+cli.command gear voice build-pack
+cli.command gear voice choose
+cli.command gear voice edit
+cli.command gear voice install
+cli.command gear voice render
+cli.command import
+cli.command library
+cli.command library apply-name-format
+cli.command library cut
+cli.command library edit
+cli.command library list
+cli.command library match-logs
+cli.command library photos
+cli.command library rate
+cli.command library rebuild
+cli.command library rename
+cli.command library trash
+cli.command mcp
+cli.command meta
+cli.command modules
+cli.command modules check
+cli.command modules install
+cli.command modules list
+cli.command modules manifest
+cli.command modules remove
+cli.command moments
+cli.command photos
+cli.command places
+cli.command places delete
+cli.command places list
+cli.command places save
+cli.command places search
+cli.command profiles
+cli.command profiles default
+cli.command profiles delete
+cli.command profiles list
+cli.command profiles save
+cli.command scan
+cli.command settings
+cli.command settings set
+cli.command settings show
+cli.command show
+cli.command stage
+cli.command status
+cli.command verify
+cli.flag  --json
+cli.flag  --schema-version
+cli.flag  --session VALUE
+cli.flag cut --by-flight
+cli.flag cut --clear
+cli.flag cut --keep
+cli.flag cut --log-offset VALUE
+cli.flag cut --removed VALUE
+cli.flag dates --day VALUE
+cli.flag dates --logs VALUE
+cli.flag dates --no-logs
+cli.flag dates --set VALUE
+cli.flag dates --time VALUE
+cli.flag format --card VALUE
+cli.flag format --device VALUE
+cli.flag format --label VALUE
+cli.flag format --mount VALUE
+cli.flag format --plan
+cli.flag format --prep
+cli.flag format --volume-uuid VALUE
+cli.flag format --yes
+cli.flag gear apply --digest VALUE
+cli.flag gear apply --plan
+cli.flag gear apply --port VALUE
+cli.flag gear apply --yes
+cli.flag gear backup --device VALUE
+cli.flag gear backup --mount VALUE
+cli.flag gear backup --port VALUE
+cli.flag gear backup diff --path VALUE
+cli.flag gear backup pin --off
+cli.flag gear backups --device VALUE
+cli.flag gear card --device VALUE
+cli.flag gear card --model VALUE
+cli.flag gear card --mount VALUE
+cli.flag gear card preview --device VALUE
+cli.flag gear card preview --edits VALUE
+cli.flag gear card preview --mount VALUE
+cli.flag gear card-check --device VALUE
+cli.flag gear card-check --log
+cli.flag gear card-check --mount VALUE
+cli.flag gear card-clean --device VALUE
+cli.flag gear card-clean --mount VALUE
+cli.flag gear card-clean --remove
+cli.flag gear card-clean --yes
+cli.flag gear card-mount --minutes VALUE
+cli.flag gear card-repair --check VALUE
+cli.flag gear card-repair --yes
+cli.flag gear changes --device VALUE
+cli.flag gear changes --history
+cli.flag gear changes --status VALUE
+cli.flag gear copy --from VALUE
+cli.flag gear copy --part VALUE
+cli.flag gear copy --plan
+cli.flag gear copy --setting VALUE
+cli.flag gear copy --to VALUE
+cli.flag gear crashes --aircraft VALUE
+cli.flag gear crashes --clip VALUE
+cli.flag gear crashes delete --aircraft VALUE
+cli.flag gear crashes delete --clip VALUE
+cli.flag gear crashes save --aircraft VALUE
+cli.flag gear crashes save --broke VALUE
+cli.flag gear crashes save --clip VALUE
+cli.flag gear crashes save --day VALUE
+cli.flag gear crashes save --id VALUE
+cli.flag gear crashes save --note VALUE
+cli.flag gear crashes save --parts VALUE
+cli.flag gear crashes save --repaired VALUE
+cli.flag gear crashes save --time VALUE
+cli.flag gear devices save --aircraft VALUE
+cli.flag gear devices save --name VALUE
+cli.flag gear dfu-link --device VALUE
+cli.flag gear dfu-link --serial VALUE
+cli.flag gear dfu-link --unlink
+cli.flag gear fc identify --port VALUE
+cli.flag gear fc notes --board VALUE
+cli.flag gear fc notes --version VALUE
+cli.flag gear fc pause --port VALUE
+cli.flag gear fc read --cmd VALUE
+cli.flag gear fc read --out VALUE
+cli.flag gear fc read --port VALUE
+cli.flag gear fc resume --port VALUE
+cli.flag gear firmware --check
+cli.flag gear firmware --device VALUE
+cli.flag gear firmware --digest VALUE
+cli.flag gear firmware --invert
+cli.flag gear firmware --plan
+cli.flag gear firmware --splash VALUE
+cli.flag gear firmware --threshold VALUE
+cli.flag gear firmware --version VALUE
+cli.flag gear firmware --yes
+cli.flag gear flights --aircraft VALUE
+cli.flag gear flights --day VALUE
+cli.flag gear flights --logs VALUE
+cli.flag gear flights --pack VALUE
+cli.flag gear flights --place VALUE
+cli.flag gear flights folders --add VALUE
+cli.flag gear flights folders --remove VALUE
+cli.flag gear flights set --pack VALUE
+cli.flag gear flights set --place VALUE
+cli.flag gear import-backups --device VALUE
+cli.flag gear import-backups --dry-run
+cli.flag gear map --aircraft VALUE
+cli.flag gear map --channels VALUE
+cli.flag gear map --device VALUE
+cli.flag gear map --fc VALUE
+cli.flag gear map --live
+cli.flag gear map --model VALUE
+cli.flag gear map --port VALUE
+cli.flag gear map --radio VALUE
+cli.flag gear map --text
+cli.flag gear model --model VALUE
+cli.flag gear model --no-staged
+cli.flag gear model --text
+cli.flag gear model-edit --callout VALUE
+cli.flag gear model-edit --callout-off VALUE
+cli.flag gear model-edit --checklist VALUE
+cli.flag gear model-edit --checklist-file VALUE
+cli.flag gear model-edit --log-sensor VALUE
+cli.flag gear model-edit --logging VALUE
+cli.flag gear model-edit --model VALUE
+cli.flag gear model-edit --ops VALUE
+cli.flag gear model-edit --rf-alarm VALUE
+cli.flag gear model-edit --screen VALUE
+cli.flag gear model-edit --screen-off VALUE
+cli.flag gear model-edit --screen-script VALUE
+cli.flag gear model-edit --timer VALUE
+cli.flag gear model-edit --timer-off VALUE
+cli.flag gear osd --grid VALUE
+cli.flag gear osd --staged
+cli.flag gear osd --text
+cli.flag gear osd-edit --copy VALUE
+cli.flag gear osd-edit --move VALUE
+cli.flag gear osd-edit --profiles VALUE
+cli.flag gear packs --target-v VALUE
+cli.flag gear packs save --charged
+cli.flag gear packs save --not-charged
+cli.flag gear packs save --note VALUE
+cli.flag gear packs save --received VALUE
+cli.flag gear packs save --retired VALUE
+cli.flag gear packs save --type VALUE
+cli.flag gear packs type save --capacity VALUE
+cli.flag gear packs type save --cells VALUE
+cli.flag gear packs type save --charge-a VALUE
+cli.flag gear packs type save --chemistry VALUE
+cli.flag gear packs type save --connector VALUE
+cli.flag gear packs type save --full VALUE
+cli.flag gear packs type save --storage VALUE
+cli.flag gear packs type save --warn-mah VALUE
+cli.flag gear radio --wait-ms VALUE
+cli.flag gear radio-cli --device VALUE
+cli.flag gear radio-cli --path VALUE
+cli.flag gear radio-cli --port VALUE
+cli.flag gear radio-cli --yes
+cli.flag gear rates --backup VALUE
+cli.flag gear rates --text
+cli.flag gear report --day VALUE
+cli.flag gear report --force
+cli.flag gear report --markdown
+cli.flag gear report --out VALUE
+cli.flag gear restore --path VALUE
+cli.flag gear sim calibration --product VALUE
+cli.flag gear sim calibration --set VALUE
+cli.flag gear sim defaults --aircraft VALUE
+cli.flag gear sim defaults --fc VALUE
+cli.flag gear sim defaults --radio VALUE
+cli.flag gear sim validate --logs VALUE
+cli.flag gear sim validate --poles VALUE
+cli.flag gear sim validate --text
+cli.flag gear sims --backup VALUE
+cli.flag gear sims --digest VALUE
+cli.flag gear sims --rate-profile VALUE
+cli.flag gear sims --restore
+cli.flag gear sims --sync
+cli.flag gear sims --text
+cli.flag gear sims --to VALUE
+cli.flag gear sims --yes
+cli.flag gear splash --board VALUE
+cli.flag gear splash --invert
+cli.flag gear splash --out VALUE
+cli.flag gear splash --threshold VALUE
+cli.flag gear stage --cli VALUE
+cli.flag gear stage --device VALUE
+cli.flag gear stage --draft
+cli.flag gear stage --edits VALUE
+cli.flag gear stage --note VALUE
+cli.flag gear stage --pid-profile VALUE
+cli.flag gear stage --rate-profile VALUE
+cli.flag gear stage --set VALUE
+cli.flag gear stage --title VALUE
+cli.flag gear storage --dry-run
+cli.flag gear storage --export VALUE
+cli.flag gear storage --prune
+cli.flag gear update --note VALUE
+cli.flag gear update --order VALUE
+cli.flag gear update --status VALUE
+cli.flag gear update --title VALUE
+cli.flag gear voice --radio VALUE
+cli.flag gear voice --refresh
+cli.flag gear voice --text
+cli.flag gear voice build-pack --attribution VALUE
+cli.flag gear voice build-pack --confirm
+cli.flag gear voice build-pack --dry-run
+cli.flag gear voice build-pack --fade-out-ms VALUE
+cli.flag gear voice build-pack --id VALUE
+cli.flag gear voice build-pack --lang VALUE
+cli.flag gear voice build-pack --license VALUE
+cli.flag gear voice build-pack --out VALUE
+cli.flag gear voice build-pack --seed VALUE
+cli.flag gear voice build-pack --speed VALUE
+cli.flag gear voice build-pack --tail-ms VALUE
+cli.flag gear voice build-pack --tempo VALUE
+cli.flag gear voice build-pack --trim-db VALUE
+cli.flag gear voice build-pack --version VALUE
+cli.flag gear voice build-pack --voice VALUE
+cli.flag gear voice choose --drop-overrides
+cli.flag gear voice choose --pack VALUE
+cli.flag gear voice choose --radio VALUE
+cli.flag gear voice edit --confirm
+cli.flag gear voice edit --line VALUE
+cli.flag gear voice edit --pack VALUE
+cli.flag gear voice edit --radio VALUE
+cli.flag gear voice edit --text VALUE
+cli.flag gear voice install --source VALUE
+cli.flag gear voice render --confirm
+cli.flag gear voice render --dry-run
+cli.flag gear voice render --fade-out-ms VALUE
+cli.flag gear voice render --lines VALUE
+cli.flag gear voice render --seed VALUE
+cli.flag gear voice render --speed VALUE
+cli.flag gear voice render --tail-ms VALUE
+cli.flag gear voice render --tempo VALUE
+cli.flag gear voice render --trim-db VALUE
+cli.flag gear voice render --voice VALUE
+cli.flag import --add-time
+cli.flag import --add-to-photos
+cli.flag import --album VALUE
+cli.flag import --cut VALUE
+cli.flag import --date VALUE
+cli.flag import --encoder VALUE
+cli.flag import --format VALUE
+cli.flag import --join VALUE
+cli.flag import --keep-clips
+cli.flag import --keep-originals
+cli.flag import --name VALUE
+cli.flag import --note VALUE
+cli.flag import --output VALUE
+cli.flag import --plan VALUE
+cli.flag import --separate VALUE
+cli.flag import --skip VALUE
+cli.flag import --time VALUE
+cli.flag import --unskip VALUE
+cli.flag library cut --by-flight
+cli.flag library cut --clear
+cli.flag library cut --export
+cli.flag library cut --removed VALUE
+cli.flag library edit --author VALUE
+cli.flag library edit --date VALUE
+cli.flag library edit --keywords VALUE
+cli.flag library edit --location VALUE
+cli.flag library edit --note VALUE
+cli.flag library edit --place VALUE
+cli.flag library edit --profile VALUE
+cli.flag library edit --time VALUE
+cli.flag library list --aircraft VALUE
+cli.flag library list --day VALUE
+cli.flag library list --group VALUE
+cli.flag library list --min-rating VALUE
+cli.flag library list --place VALUE
+cli.flag library list -q,--query VALUE
+cli.flag library match-logs --apply
+cli.flag library match-logs --day VALUE
+cli.flag library match-logs --logs VALUE
+cli.flag library photos --album VALUE
+cli.flag library rate --pick
+cli.flag library rate --reject
+cli.flag library rate --stars VALUE
+cli.flag library rate --unflag
+cli.flag meta --author VALUE
+cli.flag meta --clear-location
+cli.flag meta --keywords VALUE
+cli.flag meta --location VALUE
+cli.flag meta --place VALUE
+cli.flag meta --profile VALUE
+cli.flag modules install --yes
+cli.flag photos --album VALUE
+cli.flag photos --dry-run
+cli.flag places save --location VALUE
+cli.flag places save --pick VALUE
+cli.flag places save --provider VALUE
+cli.flag places save --rename VALUE
+cli.flag places save --search VALUE
+cli.flag places search --limit VALUE
+cli.flag places search --provider VALUE
+cli.flag profiles save --aircraft VALUE
+cli.flag profiles save --author VALUE
+cli.flag profiles save --camera-make VALUE
+cli.flag profiles save --camera-model VALUE
+cli.flag profiles save --default
+cli.flag profiles save --keywords VALUE
+cli.flag profiles save --models VALUE
+cli.flag profiles save --place VALUE
+cli.flag profiles save --rename VALUE
+cli.flag profiles save --video-system VALUE
+cli.flag stage --card VALUE
+cli.flag stage --no-join
+cli.flag verify --source VALUE
+cli.value cut --removed=keep
+cli.value cut --removed=trash
+cli.value gear crashes save --repaired=false
+cli.value gear crashes save --repaired=true
+cli.value gear packs save --retired=false
+cli.value gear packs save --retired=true
+cli.value import --encoder=videotoolbox
+cli.value import --encoder=x264
+cli.value import --format=mov
+cli.value import --format=mp4
+cli.value library cut --removed=keep
+cli.value library cut --removed=trash
+cli.value library list --group=all
+cli.value library list --group=last_import
+cli.value library list --group=moments
+cli.value library list --group=not_in_photos
+cli.value library list --group=picks
+cli.value library list --group=rejected

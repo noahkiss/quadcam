@@ -187,5 +187,6 @@ pub fn tools() -> Value {
     if let Some(a) = list.as_array_mut() {
         a.extend(super::gear::tools());
     }
+    crate::schema::annotate_tools(&mut list, crate::schema::DEPRECATIONS);
     list
 }

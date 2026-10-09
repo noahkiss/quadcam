@@ -5,9 +5,10 @@ expression: text
 ===== quadcam-cli  --help
 Import FPV clips (analog DVR, DJI): stage, date, name, convert, verify, share, format
 
-Usage: quadcam-cli [OPTIONS] <COMMAND>
+Usage: quadcam-cli [OPTIONS] [COMMAND]
 
 Commands:
+  status    What `quadcam_status` shows: the schema version, the settings and tools, the cards, the radios and the session
   cards     List removable volumes: cards (with their source, analog or DJI) and radio log sources
   scan      List the clips on a volume or folder without copying anything
   stage     Copy every clip off a card or folder into staging and start a new session
@@ -35,8 +36,18 @@ Commands:
 Options:
       --json            Print one JSON object: {"ok":true,"result":...} or {"ok":false,"error":{...}}
       --session <FILE>  Session file (default: ~/Library/Caches/app.quadcam/session.json)
+      --schema-version  Print the schema version of the CLI and MCP surface, and exit
   -h, --help            Print help
   -V, --version         Print version
+===== quadcam-cli status --help
+What `quadcam_status` shows: the schema version, the settings and tools, the cards, the radios and the session
+
+Usage: quadcam-cli status [OPTIONS]
+
+Options:
+      --json            Print one JSON object: {"ok":true,"result":...} or {"ok":false,"error":{...}}
+      --session <FILE>  Session file (default: ~/Library/Caches/app.quadcam/session.json)
+  -h, --help            Print help
 ===== quadcam-cli cards --help
 List removable volumes: cards (with their source, analog or DJI) and radio log sources
 
