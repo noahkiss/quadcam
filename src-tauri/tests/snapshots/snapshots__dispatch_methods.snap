@@ -67,6 +67,8 @@ expression: "Core::METHODS"
   "gear_osd",
   "gear_rates",
   "gear_sims",
+  "gear_sim_sync_plan",
+  "gear_sim_sync",
   "gear_card",
   "gear_card_preview",
   "gear_switch_map",

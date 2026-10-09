@@ -276,6 +276,7 @@ pub fn plan(
             checks,
             diff,
             digest,
+            warnings: Vec::new(),
         },
         port: chosen.map(|c| c.port.clone()),
         render,

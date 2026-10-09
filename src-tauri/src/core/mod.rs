@@ -33,6 +33,7 @@ mod rematch;
 mod setup;
 mod sim;
 mod sim_host;
+mod sim_sync;
 mod switchmap;
 pub use crate::paths::{cache_dir, default_session_file, default_settings_file, support_dir};
 pub use apply::{ChangeUpdateParams, RestoreParams, StageParams};

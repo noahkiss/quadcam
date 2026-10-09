@@ -49,6 +49,33 @@ impl RatesParams {
 }
 
 impl Core {
+    /// The quad's rate profile `profile` (default: the one in use) from a device's latest
+    /// backup, a backup or dump files.
+    pub(super) fn quad_profile(
+        &self,
+        paths: &[PathBuf],
+        device: &Option<String>,
+        backup: &Option<String>,
+        profile: Option<u8>,
+    ) -> Result<RateProfileView> {
+        let view = self.gear_rates(&RatesParams {
+            paths: paths.to_vec(),
+            device: device.clone(),
+            backup: backup.clone(),
+        })?;
+        let want = profile.or(view.active);
+        let found = view
+            .profiles
+            .iter()
+            .find(|x| Some(x.index) == want)
+            .or_else(|| (view.profiles.len() == 1).then(|| &view.profiles[0]))
+            .cloned();
+        match found {
+            Some(f) => Ok(f),
+            None => bail!("The source does not say which rate profile to use; pass profile."),
+        }
+    }
+
     /// Every rate profile of an FC: names, curves per axis, the throttle curve. Reads only.
     pub fn gear_rates(&self, p: &RatesParams) -> Result<RatesView> {
         if !p.any() {
@@ -129,29 +156,11 @@ impl Core {
         home: &std::path::Path,
         running: &dyn Fn(&str) -> bool,
     ) -> Result<Vec<SimStatus>> {
-        let quad: Option<RateProfileView> =
-            if p.paths.is_empty() && p.device.is_none() && p.backup.is_none() {
-                None
-            } else {
-                let view = self.gear_rates(&RatesParams {
-                    paths: p.paths.clone(),
-                    device: p.device.clone(),
-                    backup: p.backup.clone(),
-                })?;
-                let want = p.profile.or(view.active);
-                let found = view
-                    .profiles
-                    .iter()
-                    .find(|x| Some(x.index) == want)
-                    .or_else(|| (view.profiles.len() == 1).then(|| &view.profiles[0]))
-                    .cloned();
-                match found {
-                    Some(f) => Some(f),
-                    None => bail!(
-                        "The source does not say which rate profile to compare; pass profile."
-                    ),
-                }
-            };
+        let quad = if p.paths.is_empty() && p.device.is_none() && p.backup.is_none() {
+            None
+        } else {
+            Some(self.quad_profile(&p.paths, &p.device, &p.backup, p.profile)?)
+        };
         Ok(sims::status(home, running, quad.as_ref()))
     }
 }

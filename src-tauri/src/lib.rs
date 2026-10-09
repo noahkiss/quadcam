@@ -244,6 +244,17 @@ async fn gear_apply_click(
     blocking(move || core.gear_apply_click(&params)).await
 }
 
+/// The apply sheet's own Apply button for a sim sync: the click is the confirmation.
+#[tauri::command]
+#[specta::specta]
+async fn gear_sim_sync_click(
+    state: State<'_, AppState>,
+    params: api::SimSyncRequest,
+) -> Result<api::ApplyReport, String> {
+    let core = state.core.clone();
+    blocking(move || core.gear_sim_sync_click(&params)).await
+}
+
 /// The person's answer to an agent's apply request.
 #[tauri::command]
 #[specta::specta]
@@ -519,6 +530,8 @@ pub fn specta_builder() -> tauri_specta::Builder<tauri::Wry> {
             c::gear_osd,
             c::gear_rates,
             c::gear_sims,
+            c::gear_sim_sync_plan,
+            c::gear_sim_sync,
             c::gear_card,
             c::gear_card_preview,
             c::gear_switch_map,
@@ -586,6 +599,7 @@ pub fn specta_builder() -> tauri_specta::Builder<tauri::Wry> {
             format_card,
             answer_format_request,
             gear_apply_click,
+            gear_sim_sync_click,
             answer_apply_request,
             library_scope,
             third_party_notices,

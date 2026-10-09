@@ -4,6 +4,7 @@
 
 pub mod card;
 pub mod fc;
+pub mod sim;
 
 use super::bf::cli::Reply;
 use super::bf::dump::VerifyFail;

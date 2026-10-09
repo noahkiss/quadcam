@@ -184,6 +184,17 @@ export const commands = {
 	 *  from the quad's rates. Reads only.
 	 */
 	gearSims: (params: SimsParams) => typedError<SimStatus[], string>(__TAURI_INVOKE("gear_sims", { params })),
+	/**
+	 *  What syncing a quad's rate profile into the sims would write: per sim file the
+	 *  values that change, every guard, warnings and a digest. Writes nothing.
+	 */
+	gearSimSyncPlan: (params: SimSyncParams) => typedError<ApplyPlan, string>(__TAURI_INVOKE("gear_sim_sync_plan", { params })),
+	/**
+	 *  Writes the planned sim files: a backup of each, an atomic write, a read back.
+	 *  Refuses while a game runs. Needs the plan's digest and confirm=true; with the
+	 *  app running the person also clicks Apply in its sheet.
+	 */
+	gearSimSync: (params: SimSyncRequest) => typedError<ApplyReport, string>(__TAURI_INVOKE("gear_sim_sync", { params })),
 	/**  An EdgeTX card: models, the selected model and its aircraft, the radio clock, one model in full. */
 	gearCard: (params: CardParams) => typedError<GearCard, string>(__TAURI_INVOKE("gear_card", { params })),
 	/**  Checks and diffs EdgeTX card edits. Writes nothing. */
@@ -367,6 +378,8 @@ export const commands = {
 	answerFormatRequest: (id: number, approve: boolean) => __TAURI_INVOKE<void>("answer_format_request", { id, approve }),
 	/**  The apply sheet's own Apply button: the click is the confirmation. */
 	gearApplyClick: (params: ApplyRequest) => typedError<ApplyReport, string>(__TAURI_INVOKE("gear_apply_click", { params })),
+	/**  The apply sheet's own Apply button for a sim sync: the click is the confirmation. */
+	gearSimSyncClick: (params: SimSyncRequest) => typedError<ApplyReport, string>(__TAURI_INVOKE("gear_sim_sync_click", { params })),
 	/**  The person's answer to an agent's apply request. */
 	answerApplyRequest: (id: number, approve: boolean) => __TAURI_INVOKE<void>("answer_apply_request", { id, approve }),
 	/**  Lets the webview load files from the library folder (thumbnails and MP4 playback). */
@@ -465,6 +478,8 @@ export type ApplyPlan = {
 	checks: Check[],
 	diff: DiffItem[],
 	digest: string,
+	/**  Things to know that do not refuse (a sim file shape not yet seen loading). */
+	warnings?: string[],
 };
 
 /**  `gear_apply_plan`: the change to plan. `port` picks the FC when several are plugged in. */
@@ -3623,7 +3638,9 @@ export type RefusalCode = "unknown_version" | "unknown_board" | "device_changed"
  */
 "read_first" | 
 /**  Settings do not fit the device they would go to (board or firmware). */
-"incompatible";
+"incompatible" | 
+/**  A file QuadCam would write cannot be written (a sim file's folder or permissions). */
+"not_writable";
 
 /**  `gear_dismiss_reminder`: a device's link, as `link_handle` names it. */
 export type ReminderParams = {
@@ -4184,6 +4201,39 @@ export type SimStopInfo = {
 	/**  The physics step's cost (µs): median and 99th percentile. */
 	step_p50_us: number | null,
 	step_p99_us: number | null,
+};
+
+/**  `gear_sim_sync_plan`: which sim profiles take which rate profile of the quad. */
+export type SimSyncParams = {
+	sims: SimTarget[],
+	/**
+	 *  The quad, as for `gear_sims`: `dump all` or `diff all` files, a saved device's latest
+	 *  backup, or a backup id.
+	 */
+	paths?: string[],
+	device?: string | null,
+	backup?: string | null,
+	/**  The quad's rate profile index; default the one in use. */
+	profile?: number | null,
+};
+
+/**  `gear_sim_sync`: the same params, the plan's digest and the confirm. */
+export type SimSyncRequest = {
+	digest: string,
+	confirm?: boolean,
+} & SimSyncParams;
+
+/**  One profile of one sim to write. */
+export type SimTarget = {
+	/**  A sim id (`liftoff`, `micro`, `uncrashed`, `zone`) or `all` for every sim found. */
+	sim: string,
+	/**
+	 *  The file, as `gear sims` shows its path or its file name. Needed only when the sim
+	 *  has several files and the profile name does not pick one.
+	 */
+	file?: string | null,
+	/**  The sim's profile to overwrite. Default: the one named like the quad's rate profile. */
+	profile?: string | null,
 };
 
 /**  `gear_sim_validate`: a sim profile against a folder of decoded blackbox logs. */
