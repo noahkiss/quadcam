@@ -106,7 +106,7 @@ QuadCam works on your Mac. It sends data out only when you ask it to:
 
 - A place search sends the search text to the provider you picked. See [Metadata](docs/metadata.md#place-search-providers).
 - A module install downloads the module from its upstream, and **Check for updates** reads `modules.json` from QuadCam's latest GitHub release. See [Modules](docs/modules.md).
-- **Gear > Firmware > Check for updates** reads the newest EdgeTX, Betaflight and ExpressLRS releases from GitHub and the ExpressLRS release index. Planning an EdgeTX flash downloads that release's firmware zip. With the setting `firmwareCheck` on `daily`, the page also checks once a day. See [Gear](docs/gear.md#firmware-and-splash).
+- **Gear > Firmware > Check for updates** reads the newest EdgeTX, Betaflight and ExpressLRS releases from GitHub and the ExpressLRS release index. Planning an EdgeTX flash downloads that release's firmware zip. With the setting `firmwareCheck` on `daily`, the page also checks once a day. **Read firmware** saves a copy of a radio's firmware over USB (DFU) without changing the radio. See [Gear](docs/gear.md#firmware-and-splash).
 
 ## License
 

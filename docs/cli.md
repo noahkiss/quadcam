@@ -170,6 +170,7 @@ quadcam-cli --json gear sims SIM --restore [--backup ID] [--digest D --yes]   # 
 quadcam-cli --json gear sims FILE|DEVICE [--profile N] --sync --to SIM[:PROFILE][@FILE] [--to ...] [--digest D --yes]   # write the quad's rates into sim profiles
 quadcam-cli --json gear firmware [--check]                    # each device's firmware against the newest release; --check reads the network
 quadcam-cli --json gear splash IMAGE.png [--threshold N] [--invert] [--board pocket] [--out preview.png]   # a PNG as the radio's 128x64 splash; --out writes the 4x preview
+quadcam-cli --json gear firmware --read [--device RADIO]       # read-only DFU trial: copy the firmware, compare the version
 quadcam-cli --json gear firmware --plan --device RADIO [--version V] [--splash IMAGE.png] [--threshold N] [--invert]   # an EdgeTX flash: checks, diff, digest
 quadcam-cli --json gear firmware --device RADIO [--version V] [--splash IMAGE.png] --digest D --yes      # flash the radio in DFU mode
 quadcam-cli --json gear map --radio CARD|MODEL.yml [--model model01.yml] --fc FILE [--fc FILE] [--live [--port P]] [--channels 1500,...] [--text]
