@@ -27,7 +27,7 @@
   font-size: var(--t-sm);
 }
 .section {
-  background: var(--surface);
+  background: var(--raised);
   border: 1px solid var(--border);
   border-radius: var(--r-3);
   padding: var(--s-4);
@@ -68,7 +68,7 @@ fieldset.row {
   align-items: center;
   gap: var(--s-2);
   font-size: var(--t-sm);
-  color: var(--muted);
+  color: var(--fg);
 }
 .field input[type="text"],
 .field input[type="number"] {
@@ -108,7 +108,7 @@ fieldset.row {
   max-width: 360px;
 }
 .count {
-  color: var(--muted);
+  color: var(--fg);
   font-size: var(--t-xs);
   min-width: 40px;
   text-align: right;

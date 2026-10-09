@@ -21,7 +21,8 @@ export interface UseModel {
 export function useModel(device: string | null): UseModel {
   const [file, setFile] = useState<string | null>(null);
   const [detail, setDetail] = useState<ModelDetail | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [editError, setEditError] = useState<string | null>(null);
   const [note, setNote] = useState<string | null>(null);
   const loadGear = useStore((s) => s.loadGear);
   const changes = useStore((s) => s.changes);
@@ -33,10 +34,10 @@ export function useModel(device: string | null): UseModel {
     try {
       const d = await api.gearModel({ device, model: file, staged: true });
       setDetail(d);
-      setError(null);
+      setLoadError(null);
     } catch (e) {
       setDetail(null);
-      setError(errText(e));
+      setLoadError(errText(e));
     }
   }, [device, file]);
 
@@ -47,12 +48,12 @@ export function useModel(device: string | null): UseModel {
       (d) => {
         if (gone) return;
         setDetail(d);
-        setError(null);
+        setLoadError(null);
       },
       (e) => {
         if (gone) return;
         setDetail(null);
-        setError(errText(e));
+        setLoadError(errText(e));
       },
     );
     return () => {
@@ -67,14 +68,14 @@ export function useModel(device: string | null): UseModel {
         if (!device || !target) return;
         try {
           await api.gearModelEdit({ device, model: target, ops, checklist });
-          setError(null);
+          setEditError(null);
           setNote(null);
         } catch (e) {
           const t = errText(e);
           if (t.startsWith("Nothing changes")) {
             setNote(t);
-            setError(null);
-          } else setError(t);
+            setEditError(null);
+          } else setEditError(t);
         }
         await loadGear();
         await read();
@@ -85,5 +86,5 @@ export function useModel(device: string | null): UseModel {
     [device, file, detail, loadGear, read],
   );
 
-  return { detail, file: file ?? detail?.view.file ?? null, pick: setFile, error, note, stage };
+  return { detail, file: file ?? detail?.view.file ?? null, pick: setFile, error: loadError ?? editError, note, stage };
 }

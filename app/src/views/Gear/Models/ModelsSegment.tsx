@@ -6,6 +6,7 @@ import type { DeviceRef } from "../slots";
 import { CalloutsEditor } from "./CalloutsEditor";
 import { LoggingEditor } from "./LoggingEditor";
 import { ModelPicker } from "./ModelPicker";
+import { StagedBar } from "./StagedBar";
 import { ScreensEditor } from "./ScreensEditor";
 import { TimersEditor } from "./TimersEditor";
 import { useModel } from "./useModel";
@@ -17,6 +18,7 @@ export function ModelsSegment({ d }: { d: DeviceRef }) {
   return (
     <div className={styles.segment}>
       {!device && <p className={styles.muted}>Save this radio from Overview to edit its models.</p>}
+      <StagedBar device={device} />
       {m.error && (
         <Banner kind="error" icon="danger-triangle">
           {m.error}

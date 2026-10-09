@@ -8,6 +8,7 @@ import { Checkbox, Input } from "../../../components/Field";
 import { checklistText, overWidth, parseChecklist, type CheckItem } from "../../../lib/models";
 import type { DeviceRef } from "../slots";
 import { ModelPicker } from "./ModelPicker";
+import { StagedBar } from "./StagedBar";
 import { useModel } from "./useModel";
 import styles from "./Models.module.css";
 
@@ -38,6 +39,7 @@ export function ChecklistSegment({ d }: { d: DeviceRef }) {
   return (
     <div className={styles.segment}>
       {!device && <p className={styles.muted}>Save this radio from Overview to edit its checklists.</p>}
+      <StagedBar device={device} />
       {m.error && (
         <Banner kind="error" icon="danger-triangle">
           {m.error}
