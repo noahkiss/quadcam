@@ -30,6 +30,8 @@ const VIEW_INTERVAL: Duration = Duration::from_millis(16);
 #[derive(Default)]
 pub struct SimState {
     session: Mutex<Option<CalSession>>,
+    /// The running sim host (`core/sim_host.rs`).
+    pub(super) host: Mutex<Option<super::sim_host::Host>>,
 }
 
 struct CalSession {
@@ -215,7 +217,7 @@ fn view(l: &Live, active: bool) -> CalibrateView {
     }
 }
 
-fn check(c: &Calibration) -> Result<()> {
+pub(super) fn check(c: &Calibration) -> Result<()> {
     if !(1..=4).contains(&c.mode) {
         bail!("Stick mode is 1 to 4.");
     }

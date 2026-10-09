@@ -38,6 +38,8 @@ export interface GearPageSlot {
   id: string;
   label: string;
   icon: import("../../components/Icon").IconName;
+  /** A boolean settings key: the page shows only while it is on. */
+  preview?: string;
   render: () => ReactNode;
 }
 

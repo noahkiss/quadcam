@@ -83,6 +83,7 @@ The app, the command-line tool and the MCP server all read and write this file.
 | `gear_usb_minutes` | 20 | Minutes an FC may run on USB with its battery in before "Unplug now"; a board's own shorter limit wins (0: off). See [Gear](gear.md#flight-controllers) |
 | `gear_on_connect` | `backup` for every kind | Steps per device kind on plug-in: `backup`, `import`, `apply_ready` |
 | `gear_cues` | speech and notifications on | Cues, their channels, mute, debounce, the reminder and quiet hours. See [Gear](gear.md#cues) |
+| `sim_preview` | off | Shows **Gear > Sim**, the flight sim preview. Set it in Settings > Gear, or with `quadcam-cli settings set sim_preview=true` |
 | `firmware_check` | `manual` | `manual` or `daily` |
 | `tts_provider`, `tts_key` | `say`, none | The voice provider. Reads show the key only as `(set)` |
 

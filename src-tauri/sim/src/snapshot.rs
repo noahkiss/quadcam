@@ -16,6 +16,9 @@ pub struct Snapshot {
     pub t: f64,
     /// Host time (ns) the step stands for; the renderer interpolates on this.
     pub host_ns: u64,
+    /// Arrival time (ns) of the radio sample this step flew on: the renderer's
+    /// input-to-present proxy reads it.
+    pub input_ns: u64,
     /// World position (m), z up.
     pub pos: [f64; 3],
     /// Attitude, body to world (w, x, y, z).
@@ -59,6 +62,7 @@ impl Default for Snapshot {
             step: 0,
             t: 0.0,
             host_ns: 0,
+            input_ns: 0,
             pos: [0.0; 3],
             quat: [1.0, 0.0, 0.0, 0.0],
             vel: [0.0; 3],

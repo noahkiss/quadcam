@@ -102,6 +102,74 @@ export type {
   SuggestedControl,
 } from "../bindings";
 
+export type { SimPreset, SimStartParams, SimStopInfo } from "../bindings";
+
+// The sim host's answers, with the numbers narrowed (specta types every f64 as number | null;
+// the core sends a finite number, and the loop skips a frame that holds anything else).
+type V3 = [number, number, number];
+export interface SimPose {
+  step: number;
+  t: number;
+  host_ns: number;
+  input_ns: number;
+  pos: V3;
+  quat: [number, number, number, number];
+}
+export interface SimHud {
+  armed: boolean;
+  turtle: boolean;
+  airmode: boolean;
+  mode: "acro" | "angle" | "horizon";
+  arm_block: string | null;
+  vbat: number;
+  mah: number;
+  low_battery: boolean;
+  sticks: { roll: number; pitch: number; yaw: number; throttle: number };
+  throttle: number;
+  stuck: boolean;
+  contacts: number;
+  dropped_steps: number;
+}
+export interface SimFrame {
+  host_ns: number;
+  prev: SimPose;
+  cur: SimPose;
+  hud: SimHud;
+  radio: boolean;
+}
+/** The `simSettings` key of the settings file: the Sim page's choices. */
+export interface SimUiSettings {
+  profile?: string | null;
+  view?: "fpv" | "chase";
+  aspect?: "16:9" | "4:3" | null;
+  stick_display?: boolean;
+  osd?: boolean;
+  uptilt_deg?: number | null;
+  fov_deg?: number | null;
+}
+export interface SimBox {
+  centre: V3;
+  half: V3;
+  yaw_deg: number;
+  material: "wall" | "floor" | "carpet" | "grass" | "gate";
+}
+export interface SimStartInfo {
+  profile: string;
+  label: string;
+  dt: number;
+  world_name: string;
+  boxes: SimBox[];
+  start: V3;
+  start_yaw_deg: number;
+  camera: { uptilt_deg: number; fov_deg: number; aspect: string; position: V3 };
+  wheelbase_m: number;
+  body_half: V3;
+  prop_radius_m: number;
+  stick_mode: number;
+  calibrated: boolean;
+  host_ns: number;
+}
+
 export type Path = string;
 /** `YYYY-MM-DD` */
 export type IsoDate = string;
@@ -207,6 +275,7 @@ export interface SettingsValues {
   thumbSize?: number;
   libSort?: { key: "date" | "rating" | "duration" | "name"; dir: "asc" | "desc" };
   stickMode?: number;
+  simSettings?: SimUiSettings;
   [key: string]: unknown;
 }
 

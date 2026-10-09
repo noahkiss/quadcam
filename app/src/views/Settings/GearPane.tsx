@@ -28,6 +28,8 @@ export function GearPane({ d, setD }: { d: Draft; setD: (f: (d: Draft) => Draft)
   };
   return (
     <section>
+      <h3>Preview</h3>
+      <Checkbox label="Show the Sim page" checked={g.simPreview} onChange={(e) => set({ simPreview: e.target.checked })} />
       <h3>Backups</h3>
       {gearDir && <p className={`${styles.sub} selectable`}>{tilde(gearDir, home)}</p>}
       <Checkbox label="Back up on connect" checked={g.autoBackup} onChange={(e) => set({ autoBackup: e.target.checked })} />

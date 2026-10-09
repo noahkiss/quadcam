@@ -9,10 +9,13 @@ import { PackUpPage } from "./Flights/PackUpPage";
 import { RepairsPage } from "./Flights/RepairsPage";
 import { StoragePage } from "./Storage/StoragePage";
 import { CalibrationPage } from "./Sim/CalibrationPage";
+import { SimPage } from "./Sim/SimPage";
 
 export const GEAR_PAGES: GearPageSlot[] = [
   // The radio in USB Joystick mode, live (WP6).
   { id: "controls", label: "Controls", icon: "radio", render: () => <ControlsPage /> },
+  // Fly the sim in the plain room (S5).
+  { id: "sim", label: "Sim", icon: "quad", preview: "simPreview", render: () => <SimPage /> },
   // The sim's radio calibration (S4).
   { id: "sim-radio", label: "Sim radio", icon: "radio", render: () => <CalibrationPage /> },
   { id: "packup", label: "Pack up", icon: "check-circle", render: () => <PackUpPage /> },
