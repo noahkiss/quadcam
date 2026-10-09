@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { useStore } from "../../store";
 import { clipsOf } from "../../store/session";
 import { Button } from "../../components/Button";
@@ -6,6 +6,9 @@ import { Chip } from "../../components/Chip";
 import { Dialog } from "../../components/Dialog";
 import { ProgressRing } from "../../components/ProgressRing";
 import { Stepper } from "../../components/Stepper";
+import { api } from "../../ipc/api";
+import type { CardCheck } from "../../ipc/types";
+import { checkLine } from "../../lib/backups";
 import { base, fmtBytes, SOURCE_LABEL } from "../../lib/format";
 import { doneImport, runExport, setStep, startOver, stepReview, toggleSkip } from "../../actions/session";
 import { screenKeys } from "../../keys";
@@ -30,6 +33,24 @@ export function ImportSheet() {
   const setOpen = useStore((s) => s.setImportOpen);
   const staging = useStore((s) => s.staging);
   const hasCard = !!session?.card;
+  const gear = useStore((s) => s.gear);
+  // The latest card check, for a card QuadCam knows. Import never runs one.
+  const mount = session?.card_volume?.mount;
+  const known = gear?.connected.find((c) => c.link.kind === "volume" && c.link.mount === mount);
+  const knownId = known?.id ?? null;
+  const [found, setFound] = useState<{ id: string; check: CardCheck | null } | null>(null);
+  useEffect(() => {
+    let live = true;
+    if (knownId)
+      api
+        .gearCardChecks(knownId)
+        .then((list) => live && setFound({ id: knownId, check: list[0] ?? null }))
+        .catch(() => {});
+    return () => {
+      live = false;
+    };
+  }, [knownId]);
+  const check = found?.id === knownId ? found.check : null;
 
   // Keys go to the clip list, not to the first button in the sheet.
   useEffect(() => {
@@ -64,6 +85,7 @@ export function ImportSheet() {
               </span>
             </Chip>
           )}
+          {check && <span className={styles.muted}>{checkLine(check)}</span>}
           <Stepper label="Import steps" steps={STEPS} current={step} />
           <span className={styles.grow} />
           {step === "load" && staging && (
