@@ -71,7 +71,7 @@ The app, the command-line tool and the MCP server all read and write this file.
 
 ## Gear
 
-**Settings > Gear** sets most of these. `gear_dir`, `firmware_check` and `tts_provider` are set with `quadcam-cli settings set` or an agent.
+**Settings > Gear** sets most of these. `gear_dir`, `firmware_check`, `tts_provider` and the other voice settings are set with `quadcam-cli settings set` or an agent.
 
 | Setting | Default | Does |
 |---|---|---|
@@ -85,6 +85,8 @@ The app, the command-line tool and the MCP server all read and write this file.
 | `gear_cues` | speech and notifications on | Cues, their channels, mute, debounce, the reminder and quiet hours. See [Gear](gear.md#cues) |
 | `sim_preview` | off | Shows **Gear > Sim**, the flight sim preview. Set it in Settings > Gear, or with `quadcam-cli settings set sim_preview=true` |
 | `firmware_check` | `manual` | `manual` or `daily` |
-| `tts_provider`, `tts_key` | `say`, none | The voice provider. Reads show the key only as `(set)` |
+| `tts_provider`, `tts_key` | `say`, none | The voice provider: `say` or `openai`. `QUADCAM_TTS_KEY` in the environment wins over the key. Reads show the key only as `(set)` |
+| `tts_base_url`, `tts_model`, `tts_voice` | none | For `openai`: the server (such as `http://127.0.0.1:8880`), its model, and the voice your own lines render with. For `say`, `tts_voice` is a `say` voice |
+| `voice_index` | none | The address or path of the voice pack index (`voices.json`) |
 
 To read and change settings from a terminal, see [Command line](cli.md#places-profiles-and-settings).

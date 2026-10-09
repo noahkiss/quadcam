@@ -131,7 +131,7 @@ See [Modules and notices](modules.md) for what a module install checks.
 - `photos_album`, `format_label`, `log_dir`, `layout`, `place_folders`, `tunables`
 - `geocoder` (`apple`, `nominatim`, `census` or `google`), `google_places_key`
 - `name_date_format` (`YYYY-MM-DD` or `YY.MM.DD`), `default_profile`
-- Gear: `gear_dir`, `gear_auto_backup`, `gear_keep_recent`, `gear_keep_weeks`, `gear_keep_monthly`, `gear_usb_minutes`, `gear_on_connect`, `gear_cues`, `firmware_check`, `tts_provider`, `tts_key`, `sim_preview` (see [Settings](settings.md#gear))
+- Gear: `gear_dir`, `gear_auto_backup`, `gear_keep_recent`, `gear_keep_weeks`, `gear_keep_monthly`, `gear_usb_minutes`, `gear_on_connect`, `gear_cues`, `firmware_check`, `tts_provider`, `tts_base_url`, `tts_model`, `tts_voice`, `voice_index`, `tts_key`, `sim_preview` (see [Settings](settings.md#gear))
 - `ffmpeg_source` (`module` or `homebrew`), `modules` (`{"ffmpeg": "/path/to/ffmpeg"}`: a file per tool; see [Modules](modules.md#where-ffmpeg-comes-from))
 
 A value is JSON or plain text.
@@ -152,6 +152,12 @@ quadcam-cli --json gear fc usb                                   # USB timers
 quadcam-cli --json gear osd FILE [FILE ...] [--grid NTSC|PAL|HD|WxH] [--text]
 quadcam-cli --json gear osd DEVICE [--staged] [--grid ...] [--text]   # --staged: with the device's staged OSD edits on top
 quadcam-cli --json gear osd-edit DEVICE [--move ELEMENT=X,Y]... [--profiles ELEMENT=1,3|none]... [--copy FROM:TO]   # stages into the one "OSD layout" change; writes nothing to the FC
+quadcam-cli --json gear voice [--radio ID] [--refresh] [--text]   # lines, packs, the provider; --refresh reads the pack index
+quadcam-cli --json gear voice render [--voice V] [--lines SOUNDS/en/armed.wav,...] [--dry-run] [--confirm] [--speed S --tempo T --trim-db D --tail-ms N --fade-out-ms N --seed N]   # render with the tts_provider into a local pack; a provider that may charge needs --confirm
+quadcam-cli --json gear voice install PACK [--source INDEX]   # a pack from the index, after a hash check
+quadcam-cli --json gear voice edit --radio ID --line PATH [--text T | --pack P | (neither: clear)] [--confirm]   # one line on one radio
+quadcam-cli --json gear voice choose --radio ID --pack P [--drop-overrides]   # stages one card change; nothing is written to the card
+quadcam-cli --json gear voice build-pack --voice V --out DIR [--id ID --version N --lang en --license L --attribution A] [--dry-run] [--confirm] [render flags]   # maintainer tool: a zip and a voices.json entry
 quadcam-cli --json gear model DEVICE [--model model01.yml] [--no-staged] [--text]   # a radio's model for the editors, from the card or the latest backup
 quadcam-cli --json gear model-edit DEVICE --model model01.yml [--timer 2:name=FLT,minuteBeep=1]... [--timer-off N]... [--screen 1:'{RxBt},Tmr1/{Capa}']... [--screen-script N:NAME]... [--screen-off N]... [--logging SA2:0.5|off] [--log-sensor RxBt=off]... [--rf-alarm 50:40] [--callout lowbat:below:'{RxBt}':3.5:2:5]... [--callout armed:switch:L1:'!1x']... [--callout-off TRACK]... [--checklist-file FILE|-] [--checklist on|off] [--ops FILE]   # stages into the one "Model edits" change; writes nothing to the card
 quadcam-cli --json gear rates FILE [FILE ...]|DEVICE [--backup ID] [--text]   # rate profiles and throttle curve

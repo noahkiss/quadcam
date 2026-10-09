@@ -205,6 +205,47 @@ value screens' limit of 4 lines and 3 sources, the list of timer modes the pop-u
 and the 99-line checklist limit (QuadCam's own cap). Each follows the shape of the
 functions and files a real card does hold. Check each on a real card before relying on it.
 
+## Radio voice
+
+A saved radio's **Voice** segment chooses the voice its callouts and system sounds use. The
+radio plays WAV files from `SOUNDS/<language>/` on its card. QuadCam holds a list of lines, the
+sound a radio plays and the text a voice reads, and puts a voice's takes of them on the card.
+
+- **Lines.** Each line has a card path, its text and a group (callouts, numbers, system,
+  units, extras). A few words read badly, so QuadCam spells them out before a voice speaks them:
+  `GPS` is spoken `G.P.S.`, `TX` `T.X.`, `dBm` `D.B.M.`. The table shows the spoken text
+  beside the text. Your own lines live on your Mac, never in a pack.
+- **Packs.** A voice pack is a zip of WAVs for one voice. **Refresh packs** reads the pack
+  index (the `voice_index` setting: an address or a file) and **Install** unpacks a pack into the
+  gear folder after a hash check. No pack ships with QuadCam yet.
+- **Render my voice.** QuadCam can also speak every line itself, with the provider in the
+  settings, and keep the takes as a local pack: `tts_provider` is `say` (macOS, free, offline)
+  or `openai` (any server with an OpenAI-compatible `/v1/audio/speech`, such as a Kokoro
+  server on this Mac: set `tts_base_url`, `tts_model` and `tts_voice`). A key goes in
+  `QUADCAM_TTS_KEY` or the `tts_key` setting and is never shown or logged. **Check cost**
+  reports the lines, how many the cache already holds, and the characters a provider would
+  speak. A provider that is not on this Mac may charge: **Render my voice** then stops and
+  shows the characters, and **Render and pay** goes ahead.
+- **The cache.** A take is kept by provider, voice, model, speed, spoken text and seed. A
+  render with other trim or tempo settings finds the take and calls no provider.
+- **The shape of a sound.** Each WAV is 32 kHz, 16-bit, mono. QuadCam trims the silence
+  (speech is every 5 ms window within 55 dB of the loudest), adds 20 ms before and 150 ms
+  after, and fades the speech in over 5 ms and out over 30 ms. A tempo other than 1 runs
+  first, in ffmpeg.
+- **Choose voice.** Pick an installed voice and **Choose voice** stages one change that
+  puts every sound of that pack on the card. **Keep my overrides** (on by default) keeps the
+  lines you changed one by one. Sounds on the card that no pack knows are never deleted.
+  **Review…** opens the apply sheet: backup first, write, read back, compare. Over the radio's
+  USB a whole pack takes minutes.
+- **One line.** **Use another voice…** takes another installed voice's take for that line
+  on this radio. **My text…** speaks your own text with your provider for that line only.
+  **Reset** clears it. The play buttons play a take. A line you add this way that QuadCam does
+  not list becomes one of your own lines.
+
+Not built: rendering many lines at once inside carrier sentences ("The word is six.") and
+cutting them out by word timestamps. The list holds 45 lines so far: callouts, the numbers 0
+to 20 and six system sounds. The rest of EdgeTX's sound set is yet to be added.
+
 ## Unplugging cards
 
 QuadCam tracks four device events: connected, identified, unmounted but still inserted, and
