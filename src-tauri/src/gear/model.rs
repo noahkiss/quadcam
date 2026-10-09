@@ -628,6 +628,65 @@ mod tests {
         assert_ne!(id, device_id(DeviceKind::Radio, "other"));
     }
 
+    /// Every code. The match has no wildcard, so a new code fails to compile until it is
+    /// listed here and so reaches the checks below.
+    fn all_codes() -> Vec<RefusalCode> {
+        use RefusalCode::*;
+        let all = vec![
+            UnknownVersion,
+            UnknownBoard,
+            DeviceChanged,
+            BeforeMismatch,
+            ShapeUnknown,
+            RoundTrip,
+            NoBackup,
+            SeveralDevices,
+            SimRunning,
+            BadImage,
+            BadSetting,
+            PortBusy,
+            Disabled,
+            NoDevice,
+            UsbHeat,
+            CardCheck,
+            ReadFirst,
+            Incompatible,
+            NotWritable,
+        ];
+        for c in &all {
+            match c {
+                UnknownVersion | UnknownBoard | DeviceChanged | BeforeMismatch | ShapeUnknown
+                | RoundTrip | NoBackup | SeveralDevices | SimRunning | BadImage | BadSetting
+                | PortBusy | Disabled | NoDevice | UsbHeat | CardCheck | ReadFirst
+                | Incompatible | NotWritable => {}
+            }
+        }
+        all
+    }
+
+    /// The app strips `Refused (code): ` from an error before it shows it
+    /// (`errText` in `app/src/ipc/api.ts`), so the frame must stay `[a-z_]+`, and a code
+    /// must not leak into the reason.
+    #[test]
+    fn a_refusal_prints_a_frame_the_app_can_strip() {
+        let mut seen = std::collections::HashSet::new();
+        for code in all_codes() {
+            let name = code.as_str();
+            assert!(seen.insert(name), "{name} is used twice");
+            assert!(
+                name.bytes().all(|b| b.is_ascii_lowercase() || b == b'_'),
+                "{name}"
+            );
+            let json = serde_json::to_value(code).unwrap();
+            assert_eq!(json, name, "the JSON code is the printed code");
+            let r = Refusal::new(code, "Do the thing first.");
+            assert_eq!(
+                r.to_string(),
+                format!("Refused ({name}): Do the thing first.")
+            );
+        }
+    }
+
     #[test]
     fn a_minimal_device_loads() {
         let d: Device = serde_json::from_value(json!({"id": "fc-1", "kind": "fc"})).unwrap();

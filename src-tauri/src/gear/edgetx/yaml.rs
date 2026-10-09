@@ -505,6 +505,23 @@ mod tests {
     }
 
     #[test]
+    fn a_file_that_would_not_render_back_refuses_with_a_sentence() {
+        // A last line that ends in a lone CR would gain a line feed on the way out.
+        for raw in [&b"a: 1\r"[..], b"a: 1\r\nb: 2\r"] {
+            let e = Doc::parse("model01.yml", raw).unwrap_err();
+            assert_eq!(e.code, RefusalCode::RoundTrip);
+            assert_eq!(
+                e.reason,
+                "QuadCam cannot rewrite model01.yml unchanged; nothing was written."
+            );
+            assert_eq!(
+                e.to_string(),
+                "Refused (round_trip): QuadCam cannot rewrite model01.yml unchanged; nothing was written."
+            );
+        }
+    }
+
+    #[test]
     fn unknown_lines_refuse_with_file_and_line() {
         let e = Doc::parse("model01.yml", b"a: 1\r\nb: \r\n\tc: 2\r\n").unwrap_err();
         assert_eq!(e.code, RefusalCode::ShapeUnknown);

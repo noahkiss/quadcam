@@ -196,5 +196,8 @@ export async function pickSavePath(title: string, defaultPath: string, filters: 
   return typeof r === "string" ? r : null;
 }
 
-/** A core error as text. */
-export const errText = (e: unknown) => (typeof e === "string" ? e : e instanceof Error ? e.message : String(e));
+/** A refusal's machine frame, `Refused (usb_heat): `. The core puts its code there for scripts. */
+const REFUSED_FRAME = /Refused \([a-z_]+\): /g;
+
+/** A core error as text for a person. A refusal reads as its reason, never with its code. */
+export const errText = (e: unknown) => (typeof e === "string" ? e : e instanceof Error ? e.message : String(e)).replace(REFUSED_FRAME, "");
