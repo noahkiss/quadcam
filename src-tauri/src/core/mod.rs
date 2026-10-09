@@ -35,6 +35,7 @@ mod setup;
 mod sim;
 mod sim_host;
 mod switchmap;
+mod voice;
 pub use crate::paths::{cache_dir, default_session_file, default_settings_file, support_dir};
 pub use apply::{ChangeUpdateParams, RestoreParams, StageParams};
 pub use apply_card::{CardMountParams, CardMounted, MOUNT_MINUTES};
@@ -74,6 +75,11 @@ pub use sim_host::{
     SimStartParams, SimSticks, SimStopInfo, SimUiSettings, DEFAULT_PRESET,
 };
 pub use switchmap::{RadioParams, RadioWatchParams, SwitchMapParams};
+pub use voice::{
+    report_text as voice_report_text, view_text as voice_view_text, BuildPackParams, LineOverride,
+    PackInstallParams, ProviderView, RenderReport, VoiceChooseParams, VoiceEditParams, VoiceLine,
+    VoicePack, VoiceParams, VoiceRenderParams, VoiceView, VOICE_CHANGE,
+};
 
 /// What the host does when the core changes state. The GUI emits events and asks for the
 /// format click; a headless host does nothing.

@@ -21,7 +21,9 @@ pub use crate::core::{
 };
 pub use crate::core::{
     CardMountParams, CardMounted, ChangeUpdateParams, CopyParams, ModelDetail, ModelEditParams,
-    ModelParams, OsdEditParams, RestoreParams, StageParams,
+    ModelParams, OsdEditParams, PackInstallParams, RenderReport, RestoreParams, StageParams,
+    VoiceChooseParams, VoiceEditParams, VoiceLine, VoicePack, VoiceParams, VoiceRenderParams,
+    VoiceView,
 };
 pub use crate::core::{
     CrashSaveParams, FlightFilter, FlightFoldersParams, FlightReport, FlightSetParams, FlightsView,
@@ -108,6 +110,21 @@ macro_rules! with_gear_rows {
             /// Stages model editor ops (and a checklist) for a radio as its one "Model edits" change.
             /// Writes only QuadCam's own data; the apply sheet writes the card.
             gear_model_edit(params: ModelEditParams) -> StagedChange = |c| c.gear_model_edit(&params);
+            /// The radio's voice: QuadCam's lines with the spoken text, the installed and available
+            /// packs, the provider, and a radio's overrides. Reads only; `refresh_index` also reads the
+            /// pack index.
+            gear_voice(params: VoiceParams) -> VoiceView = |c| c.gear_voice(&params);
+            /// Overrides one line on one radio: another pack's take, or the person's own text
+            /// rendered with their provider. Writes only QuadCam's own data.
+            gear_voice_edit(params: VoiceEditParams) -> VoiceLine = |c| c.gear_voice_edit(&params);
+            /// Renders QuadCam's lines (and the person's own) with the provider from the settings into
+            /// a local pack. A render that costs money waits for `confirm`; `dry_run` only reports.
+            gear_voice_render(params: VoiceRenderParams) -> RenderReport = |c| c.gear_voice_render(&params);
+            /// Installs a voice pack from the index after a hash check.
+            gear_voice_pack_install(params: PackInstallParams) -> VoicePack = |c| c.gear_voice_pack_install(&params);
+            /// Stages one card change that puts a pack's sounds on a radio, keeping the person's
+            /// per-line overrides when asked. The apply sheet writes the card.
+            gear_voice_choose(params: VoiceChooseParams) -> StagedChange = |c| c.gear_voice_choose(&params);
             /// Checks and diffs EdgeTX card edits. Writes nothing.
             gear_card_preview(params: CardPreviewParams) -> CardPreview = |c| c.gear_card_preview(&params);
             /// The switch map: each control's positions with their channel values, FC modes

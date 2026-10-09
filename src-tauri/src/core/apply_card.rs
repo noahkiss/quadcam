@@ -191,6 +191,43 @@ impl Core {
             .iter()
             .filter(|e| matches!(e, Edit::Restore { .. }))
             .collect();
+        let files: Vec<&Edit> = edits
+            .iter()
+            .filter(|e| matches!(e, Edit::CardFiles { .. }))
+            .collect();
+        if !files.is_empty() {
+            if files.len() != edits.len() {
+                bail!(
+                    "Refused (shape_unknown): card files (a voice) stand with no model or radio edit; stage them as their own change."
+                );
+            }
+            let blobs = self.snapshots().blobs();
+            let mut out: Vec<(String, Option<Vec<u8>>)> = Vec::new();
+            for e in files {
+                let Edit::CardFiles { put, delete } = e else {
+                    unreachable!()
+                };
+                for f in put {
+                    check_sound_path(&f.path)?;
+                    let bytes = blobs
+                        .get(&crate::gear::blobs::BlobRef {
+                            xxh64: f.xxh64.clone(),
+                            size: f.size,
+                        })
+                        .with_context(|| {
+                            format!("QuadCam lost the bytes staged for {}.", f.path)
+                        })?;
+                    out.retain(|(p, _)| p != &f.path);
+                    out.push((f.path.clone(), Some(bytes)));
+                }
+                for d in delete {
+                    check_sound_path(d)?;
+                    out.retain(|(p, _)| p != d);
+                    out.push((d.clone(), None));
+                }
+            }
+            return Ok(CardWork::Files(out));
+        }
         if restores.is_empty() {
             return Ok(CardWork::Edits(edits.to_vec()));
         }
@@ -233,6 +270,7 @@ impl Core {
                 | Edit::Checklist { .. }
                 | Edit::ModelCopy { .. }
                 | Edit::ModelDelete { .. }
+                | Edit::CardFiles { .. }
                 | Edit::Restore { .. } => {}
                 other => {
                     return Err(refusal(Refusal::new(
@@ -715,4 +753,10 @@ impl Core {
 
 fn connected_label(c: &Connected) -> String {
     super::connected_name(c)
+}
+
+/// A card-files edit puts sounds under `SOUNDS/` only.
+fn check_sound_path(path: &str) -> Result<()> {
+    crate::gear::voice::lines::check_path(path)
+        .map_err(|e| anyhow::anyhow!("Refused (shape_unknown): card files go under SOUNDS/: {e:#}"))
 }
