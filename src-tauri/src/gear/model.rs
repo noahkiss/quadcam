@@ -107,6 +107,15 @@ pub struct Device {
     /// The card's free space when the newest backup was taken.
     #[serde(default)]
     pub last_space: Option<SpaceSeen>,
+    /// Other ids this device answers to: a radio card has one id in the built-in SD slot
+    /// (its hardware serial) and another in the radio's USB Storage mode (its volume UUID).
+    /// QuadCam records the second when it sees the first, so both are one saved radio.
+    #[serde(default)]
+    pub aliases: Vec<String>,
+    /// A radio's STM32 chip serial, as its DFU bootloader reports it. The person links it
+    /// once; DFU mode is the only mode that shows it.
+    #[serde(default)]
+    pub dfu_serial: Option<String>,
 }
 
 /// A card's space at one moment, in bytes.
@@ -186,6 +195,10 @@ pub struct Connected {
     /// card in a reader). Its writes are slow (about 0.3 MB/s).
     #[serde(default)]
     pub usb: Option<UsbInfo>,
+    /// Other device ids this volume answers to (its volume UUID and marker, when `id` came
+    /// from the card's hardware serial). Matched against a saved device's `aliases`.
+    #[serde(default)]
+    pub also: Vec<String>,
 }
 
 /// What a USB device says about itself.

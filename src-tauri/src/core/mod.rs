@@ -59,7 +59,7 @@ pub use gear::{
     connected_name, link_handle, DeviceSaveParams, GearStatus, Hold, HookFn, HookOutcome, HookRun,
     OnConnectHook, ReminderParams, Skip, StepFailure, HOLD_GRACE,
 };
-pub use gear_card::{CardParams, CardPreview, CardPreviewParams, GearCard};
+pub use gear_card::{CardClean, CardCleanParams, CardParams, CardPreview, CardPreviewParams, GearCard};
 pub use import::CardStatus;
 pub use library::{LibEdit, LibItem, LibUpdate, LibraryView, RebuildReport, RenameReport};
 pub use osd::{OsdEditParams, OsdParams};

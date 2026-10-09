@@ -230,6 +230,8 @@ fn an_aircraft_reads_its_radio_and_fc_backups() {
                 last_seen: None,
                 last_backup: None,
                 last_space: None,
+                aliases: Vec::new(),
+                dfu_serial: None,
             })
             .unwrap();
     };
@@ -473,6 +475,8 @@ fn pack_up_reads_a_radio_that_is_not_plugged_in_from_its_backup() {
         last_seen: None,
         last_backup: None,
         last_space: None,
+        aliases: Vec::new(),
+        dfu_serial: None,
     };
     store.save_device(&d).unwrap();
     // No backup yet: the model stays unknown.

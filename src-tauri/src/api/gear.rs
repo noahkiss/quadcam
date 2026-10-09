@@ -11,7 +11,7 @@ pub use crate::core::{
     ImportBackupsParams, PruneParams, RepairResult, StopParams,
 };
 pub use crate::core::{
-    BoardNotesParams, CardParams, CardPreview, CardPreviewParams, DeviceSaveParams, FcJob,
+    BoardNotesParams, CardClean, CardCleanParams, CardParams, CardPreview, CardPreviewParams, DeviceSaveParams, FcJob,
     FcPortParams, FcReadParams, GearCard, GearStatus, OsdParams, PollPauseParams, RadioParams,
     RadioWatchParams, RatesParams, RatesPreview, RatesPreviewParams, ReminderParams, SimsParams,
     SwitchMapParams, UsbTimer,
@@ -205,6 +205,8 @@ macro_rules! with_gear_rows {
             gear_export(params: ExportParams) -> ExportReport = |c| c.gear_export(&params);
             /// Imports an old backup folder: card copies, FC diff and dump files, LOGS folders.
             gear_import_backups(params: ImportBackupsParams) -> ImportBackupsReport = |c| c.gear_import_backups(&params);
+            /// Lists the ._ files macOS left on a card; with remove and confirm, deletes them.
+            gear_card_clean(params: CardCleanParams) -> CardClean = |c| c.gear_card_clean(&params);
             /// Checks a card's file system (diskutil verifyVolume) and logs the result.
             gear_card_check(params: CardCheckParams) -> CardCheck = |c| c.gear_card_check(&params);
             /// A card's checks, newest first.

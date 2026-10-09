@@ -363,6 +363,8 @@ mod tests {
             last_seen: None,
             last_backup: None,
             last_space: None,
+            aliases: Vec::new(),
+            dfu_serial: None,
         }
     }
 

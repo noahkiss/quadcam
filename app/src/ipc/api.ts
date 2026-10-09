@@ -86,6 +86,7 @@ export const api = {
   gearExport: (to: string, target: { device?: string | null; snapshot?: string | null }) => ok(commands.gearExport({ to, ...target })),
   gearImportBackups: (folder: string, dryRun: boolean, device: string | null = null) => ok(commands.gearImportBackups({ folder, device, dry_run: dryRun })),
   gearCardCheck: (device: string) => ok(commands.gearCardCheck({ device })),
+  gearCardClean: (device: string, remove = false) => ok(commands.gearCardClean({ device, mount: null, remove, confirm: remove })),
   gearCardChecks: (device: string) => ok(commands.gearCardChecks({ device })),
   gearCardRepair: (check: string) => ok(commands.gearCardRepair({ check, confirm: true })),
   gearStop: (handle: string) => ok(commands.gearStop({ handle })),

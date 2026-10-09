@@ -136,10 +136,22 @@ impl Core {
         let saved = self.gear_store().devices()?;
         let mut found = self.gear.detect();
         self.fc_fill(&mut found);
+        let store = self.gear_store();
         for c in &mut found {
-            c.device =
-                c.id.as_deref()
-                    .and_then(|id| saved.iter().find(|d| d.id == id).cloned());
+            let Some(d) = saved_for(c, &saved) else {
+                continue;
+            };
+            // A card answers to several ids; the saved radio's own id wins, and the others
+            // are kept as its aliases so the next look needs no guess.
+            let mut d = d.clone();
+            let mut seen: Vec<String> = c.id.iter().chain(c.also.iter()).cloned().collect();
+            seen.retain(|id| *id != d.id && !d.aliases.contains(id));
+            if !seen.is_empty() && !d.id.is_empty() {
+                d.aliases.extend(seen);
+                let _ = store.save_device(&d);
+            }
+            c.id = Some(d.id.clone());
+            c.device = Some(d);
         }
         Ok(found)
     }
@@ -223,6 +235,8 @@ impl Core {
                     last_seen: Some(chrono::Utc::now()),
                     last_backup: None,
                     last_space: None,
+                    aliases: Vec::new(),
+                    dfu_serial: None,
                 }
             }
         };
@@ -618,4 +632,22 @@ pub struct HookRun {
     pub name: String,
     pub automation: Automation,
     pub outcome: HookOutcome,
+}
+
+/// The saved device a connected one is: its id, else an id it answers to (`Connected::also`)
+/// that is a saved id or alias, else its id as a saved alias. Only a radio has aliases.
+fn saved_for<'a>(c: &Connected, saved: &'a [Device]) -> Option<&'a Device> {
+    let id = c.id.as_deref()?;
+    if let Some(d) = saved.iter().find(|d| d.id == id) {
+        return Some(d);
+    }
+    if c.kind != DeviceKind::Radio {
+        return None;
+    }
+    saved.iter().find(|d| {
+        d.kind == DeviceKind::Radio
+            && std::iter::once(id)
+                .chain(c.also.iter().map(String::as_str))
+                .any(|x| d.id == x || d.aliases.iter().any(|a| a == x))
+    })
 }

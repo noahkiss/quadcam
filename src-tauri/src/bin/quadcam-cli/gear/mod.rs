@@ -96,6 +96,17 @@ pub enum GearCmd {
         #[arg(long)]
         log: bool,
     },
+    /// List the ._ files macOS left on a radio card; --remove --yes deletes them.
+    CardClean {
+        #[arg(long)]
+        device: Option<String>,
+        #[arg(long)]
+        mount: Option<std::path::PathBuf>,
+        #[arg(long)]
+        remove: bool,
+        #[arg(long)]
+        yes: bool,
+    },
     /// Repair a card whose latest check failed: a backup first, the repair, a check after.
     CardRepair {
         /// The failed check's id.
@@ -201,6 +212,12 @@ pub fn run(core: &Core, cmd: GearCmd) -> Result<Value> {
             dry_run,
         } => backup::import(core, folder, device, dry_run)?,
         GearCmd::CardCheck { device, mount, log } => backup::card_check(core, device, mount, log)?,
+        GearCmd::CardClean {
+            device,
+            mount,
+            remove,
+            yes,
+        } => backup::card_clean(core, device, mount, remove, yes)?,
         GearCmd::CardRepair { check, yes } => backup::card_repair(core, check, yes)?,
         GearCmd::Changes(a) => changes::changes(core, a)?,
         GearCmd::Stage(a) => changes::stage(core, a)?,

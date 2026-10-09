@@ -551,6 +551,7 @@ pub fn specta_builder() -> tauri_specta::Builder<tauri::Wry> {
             c::gear_flash,
             c::gear_card,
             c::gear_card_preview,
+            c::gear_card_clean,
             c::gear_switch_map,
             c::gear_radio,
             c::gear_radio_watch,

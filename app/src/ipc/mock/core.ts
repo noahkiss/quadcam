@@ -43,7 +43,7 @@ const DISPATCH = new Set([
   "gear_flights", "gear_flight_set", "gear_flight_folders", "gear_packs", "gear_pack_save", "gear_pack_delete", "gear_pack_type_save",
   "gear_pack_type_delete", "gear_pack_notes", "gear_session_report", "gear_session_report_save", "gear_preflight", "gear_crashes", "gear_crash_save", "gear_crash_delete",
   "gear_backup", "gear_backups", "gear_backup_read", "gear_backup_diff", "gear_backup_pin", "gear_storage", "gear_prune",
-  "gear_export", "gear_import_backups", "gear_card_check", "gear_card_checks", "gear_card_repair", "gear_stop",
+  "gear_export", "gear_import_backups", "gear_card_check", "gear_card_clean", "gear_card_checks", "gear_card_repair", "gear_stop",
   "gear_changes", "gear_change_stage", "gear_change_update", "gear_change_discard", "gear_restore_stage", "gear_apply_plan", "gear_apply",
   "gear_change_keep", "gear_change_revert", "gear_copy_plan", "gear_copy_stage", "gear_card_mount", "gear_card_unmount",
 ]);
@@ -384,6 +384,13 @@ export class MockCore {
         const c = backups.cardCheck(this.gear, String(p.device), new Date().toISOString());
         this.emit("gear-changed");
         return c;
+      }
+      case "gear_card_clean": {
+        const files = Array.from({ length: this.gear.appleDoubles }, (_, i) => ({ path: `MODELS/._model${String(i + 1).padStart(2, "0")}.yml`, bytes: 4096 }));
+        if (p.remove && !p.confirm) throw "Refused: removing files from a card needs confirm=true. Call without remove to list them first.";
+        const removed = p.remove ? files.length : 0;
+        if (p.remove) this.gear.appleDoubles = 0;
+        return { root: "/Volumes/RADIO", files, bytes: files.length * 4096, removed, radio_usb: true, notes: [] };
       }
       case "gear_card_checks":
         return this.gear.checks.filter((c) => c.device === p.device);

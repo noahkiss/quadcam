@@ -180,6 +180,8 @@ fn bench(hooks: Arc<dyn Hooks>, board: &str, version: &str, backed_up: bool) -> 
         last_seen: None,
         last_backup: backed_up.then(|| "2026-10-01T100000-manual".to_string()),
         last_space: None,
+        aliases: Vec::new(),
+        dfu_serial: None,
     };
     core.gear_store().save_device(&radio).unwrap();
     Bench {
@@ -467,6 +469,8 @@ fn only_a_radio_can_be_flashed() {
         last_seen: None,
         last_backup: None,
         last_space: None,
+        aliases: Vec::new(),
+        dfu_serial: None,
     };
     b.core.gear_store().save_device(&fc).unwrap();
     let e = b
@@ -846,6 +850,8 @@ fn the_cli_previews_a_splash_and_plans_in_a_temporary_home() {
         last_seen: None,
         last_backup: None,
         last_space: None,
+        aliases: Vec::new(),
+        dfu_serial: None,
     };
     std::fs::write(
         gear.join("gear.json"),

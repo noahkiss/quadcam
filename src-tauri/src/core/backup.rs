@@ -394,6 +394,7 @@ impl Core {
                 identity: Identity::default(),
                 device: None,
                 usb: None,
+                also: Vec::new(),
             });
         }
         let able = |c: &&Connected| {
@@ -669,6 +670,8 @@ impl Core {
                         last_seen: None,
                         last_backup: None,
                         last_space: None,
+                        aliases: Vec::new(),
+                        dfu_serial: None,
                     },
                 };
                 d.last_backup = Some(latest.id.clone());

@@ -89,10 +89,12 @@ export interface MockGear {
   unmounted: Connected[];
   /** Cards the person mounted to browse. */
   mounted: CardMounted[];
+  /** `._` files on the plugged-in radio card (`gear_card_clean` lists, then removes them). */
+  appleDoubles: number;
 }
 
 /** No gear plugged in; two devices saved, with backups. */
-export const quietGear = (): MockGear => ({ devices: [structuredClone(RADIO), structuredClone(FC)], connected: [], working: [], reminders: [], paused: [], backups: seedBackups(), checks: [], cardFails: [], dirty: null, jobs: [], failures: [], changeStore: freshChanges(), unmounted: [], mounted: [] });
+export const quietGear = (): MockGear => ({ devices: [structuredClone(RADIO), structuredClone(FC)], connected: [], working: [], reminders: [], paused: [], backups: seedBackups(), checks: [], cardFails: [], dirty: null, jobs: [], failures: [], changeStore: freshChanges(), unmounted: [], mounted: [], appleDoubles: 0 });
 
 /** A saved radio, a DVR card QuadCam does not know, and goggles a job is reading. */
 export const busyGear = (): MockGear => ({ ...quietGear(), connected: [radioConnected(), dvrConnected(), gogglesConnected()], working: ["disk6"] });

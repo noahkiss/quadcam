@@ -161,6 +161,24 @@ pub fn card_check(
     )?)?)
 }
 
+pub fn card_clean(
+    core: &Core,
+    device: Option<String>,
+    mount: Option<PathBuf>,
+    remove: bool,
+    yes: bool,
+) -> Result<Value> {
+    Ok(serde_json::to_value(call::gear_card_clean(
+        core,
+        api::CardCleanParams {
+            mount,
+            device,
+            remove,
+            confirm: yes,
+        },
+    )?)?)
+}
+
 pub fn card_repair(core: &Core, check: String, yes: bool) -> Result<Value> {
     Ok(serde_json::to_value(call::gear_card_repair(
         core,

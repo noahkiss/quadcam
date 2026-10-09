@@ -4,7 +4,7 @@
 //! comes before "safe to unplug".
 
 use super::Core;
-use crate::gear::edgetx::card::{Card, CardView, WriteOptions};
+use crate::gear::edgetx::card::{AppleDoubleFile, Card, CardView, WriteOptions};
 use crate::gear::model::{Check, Connected, DiffItem, Edit, Identity, Link};
 use anyhow::{bail, Result};
 use serde::{Deserialize, Serialize};
@@ -49,6 +49,33 @@ pub struct CardPreview {
     pub eta_s: u64,
     /// The card is in the radio, over USB (slow), not in a reader.
     pub radio_usb: bool,
+}
+
+/// `gear_card_clean`: the `._` files macOS left on a card. Without `remove` it lists them.
+#[derive(Debug, Clone, Default, Serialize, Deserialize, specta::Type)]
+pub struct CardCleanParams {
+    #[serde(default)]
+    pub mount: Option<PathBuf>,
+    #[serde(default)]
+    pub device: Option<String>,
+    /// Delete the listed files. Needs `confirm`.
+    #[serde(default)]
+    pub remove: bool,
+    #[serde(default)]
+    pub confirm: bool,
+}
+
+/// What `gear_card_clean` found and did.
+#[derive(Debug, Clone, Serialize, Deserialize, specta::Type)]
+pub struct CardClean {
+    pub root: PathBuf,
+    /// The AppleDouble files on the card when the call began.
+    pub files: Vec<AppleDoubleFile>,
+    pub bytes: u64,
+    pub removed: u32,
+    /// The card is in the radio, over USB (slow).
+    pub radio_usb: bool,
+    pub notes: Vec<String>,
 }
 
 /// `gear_card`'s answer: the card, and the aircraft whose EdgeTX model the radio selects.
@@ -166,6 +193,61 @@ impl Core {
             warnings: plan.warnings,
             radio_usb,
         })
+    }
+
+    /// Lists the AppleDouble (`._*`) files macOS left on a card, and with `remove` and
+    /// `confirm` deletes them. Only files that start with the AppleDouble magic count.
+    /// After a removal on a connected card the card unmounts, as after every card job.
+    pub fn gear_card_clean(&self, p: &CardCleanParams) -> Result<CardClean> {
+        if p.remove && !p.confirm {
+            bail!("Refused: removing files from a card needs confirm=true. Call without remove to list them first.");
+        }
+        let (root, c) = self.gear_card_target(p.mount.as_ref(), p.device.as_deref())?;
+        let radio_usb = c.as_ref().is_some_and(|c| c.usb.is_some());
+        let files = crate::gear::edgetx::card::find_apple_double(&root);
+        let bytes = files.iter().map(|f| f.bytes).sum();
+        let mut out = CardClean {
+            root: root.clone(),
+            bytes,
+            removed: 0,
+            radio_usb,
+            notes: Vec::new(),
+            files,
+        };
+        if !p.remove {
+            return Ok(out);
+        }
+        if !crate::gear::edgetx::card::writes_allowed(
+            &root,
+            std::env::var("QUADCAM_CARD_WRITE").ok().as_deref(),
+            std::env::var_os("CARGO_MANIFEST_DIR").is_some(),
+        ) {
+            bail!("Refused: this process writes no real card under /Volumes (set QUADCAM_CARD_WRITE=real).");
+        }
+        if out.files.is_empty() {
+            out.notes.push("The card holds no ._ files.".into());
+            return Ok(out);
+        }
+        let _hold = c
+            .as_ref()
+            .map(|c| self.gear_hold(&super::link_handle(&c.link)));
+        let timeout = std::time::Duration::from_secs(
+            if radio_usb { 30 } else { 10 } + out.files.len() as u64,
+        );
+        let removed =
+            crate::gear::edgetx::card::remove_apple_doubles(&root, &out.files, timeout);
+        let failed = removed.as_ref().err().map(|e| format!("{e:#}"));
+        out.removed = removed.as_ref().copied().unwrap_or(0) as u32;
+        if let Some(c) = &c {
+            if let Err(why) = self.gear_finish_card(c, failed.as_deref().map(|m| ("Clean card", m)))
+            {
+                out.notes.push(format!("The card did not unmount: {why}"));
+            }
+        }
+        match removed {
+            Ok(_) => Ok(out),
+            Err(e) => Err(e),
+        }
     }
 
     /// Unmounts a card after a job, then plays "<device> done, safe to unplug." Never the
