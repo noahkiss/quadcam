@@ -39,7 +39,7 @@ README and `docs/`. Personal preferences go in the app's settings file on the ma
   `cargo install tauri-cli --version "^2" --locked` to type `cargo tauri`. Releases use the prebuilt one.
 - specta `=2.0.0-rc.25`, tauri-specta `=2.0.0-rc.25` and specta-typescript `=0.0.12` are release
   candidates: they stay pinned exactly, and an upgrade regenerates and reviews `app/src/bindings.ts`.
-- ffmpeg and ffprobe from Homebrew (`brew install ffmpeg`), or QuadCam's ffmpeg module. The app
+- ffmpeg and ffprobe from Homebrew (`brew install ffmpeg`), or QuadCam's ffmpeg module (users get the module through the first-run banner; the cask does not install ffmpeg). `tests/external_tools.rs` lists every program the code may run. The app
   looks in a path the `modules` setting names, then the module (unless `ffmpegSource` is
   `homebrew`), then `/opt/homebrew/bin` and `/usr/local/bin`, then `PATH` (`media::find_tools`). exiftool is optional; tests use it
   when present.
@@ -187,6 +187,15 @@ GitHub (`noahkiss/quadcam`, public) is the only remote. Users install the cask
   prep) runs `diskutil unmountDisk` for a card, so the disk stays listed until it is pulled,
   and `diskutil eject` for anything else. Disk images report removable media, so the disk-image
   tests see an unmount: the image stays attached and `Image::is_mounted` is false.
+- **Mount cycle:** every operation on a card mounts it if needed, works, and unmounts it when
+  done; "safe to unplug" plays only after the unmount worked. One helper does it:
+  `core/apply_card.rs` (`locate_volume`, `unmounted_cards`, `mount_picked`, `card_for_job`) for
+  gear jobs, `core/session_card.rs` for the import session's card (`stage_device`, `import`
+  unmounts it after "Delete clips after import", `format_plan`/`format`/`eject`/card prep mount
+  it again). Do not add a second mount path. A DJI device over USB is never unmounted.
+  Lists and checks that only read (`gear_connected`, Pack up) never mount. The Mount button
+  (10 minutes, `MOUNT_MINUTES`) stays for browsing. Tests: `tests/gear_apply_card.rs` (fake
+  `diskutil`) and `tests/mount_cycle.rs` (disk images).
 - **Cards** show in the sidebar with their source (Analog, DJI) and an "N new" count (content
   fingerprints not in the index); inserting a card never starts an import on its own.
 

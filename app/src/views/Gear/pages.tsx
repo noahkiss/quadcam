@@ -12,6 +12,7 @@ import { StoragePage } from "./Storage/StoragePage";
 import { FirmwarePage } from "./Firmware/FirmwarePage";
 import { CalibrationPage } from "./Sim/CalibrationPage";
 import { SimPage } from "./Sim/SimPage";
+import { SimsPage } from "./Sims/SimsPage";
 
 export const GEAR_PAGES: GearPageSlot[] = [
   // The changes staged for each device, in the order the next session applies them (WP5).
@@ -20,6 +21,8 @@ export const GEAR_PAGES: GearPageSlot[] = [
   { id: "controls", label: "Controls", icon: "radio", render: () => <ControlsPage /> },
   // Fly the sim in the plain room (S5).
   { id: "sim", label: "Sim", icon: "quad", preview: "simPreview", render: () => <SimPage /> },
+  // The sims on this Mac against the quad's rates; the badge counts the ones that differ (WP8).
+  { id: "sims", label: "Sims", icon: "play", badge: (s) => ((s.gear?.sims_out_of_date ?? 0) > 0 ? "Out of date" : null), render: () => <SimsPage /> },
   // The sim's radio calibration (S4).
   { id: "sim-radio", label: "Sim radio", icon: "radio", render: () => <CalibrationPage /> },
   { id: "packup", label: "Pack up", icon: "check-circle", render: () => <PackUpPage /> },

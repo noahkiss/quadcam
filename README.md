@@ -30,7 +30,7 @@ QuadCam reads two sources, on a card or in a folder:
 
 The app watches for removable volumes that hold either kind, cards in the Mac's built-in SD slot included, and shows the source next to each card. For dates and moments, it reads EdgeTX "SD Logs" CSV files.
 
-Support for **HDZero and Walksnail** recordings is planned. QuadCam does not read them yet.
+**HDZero and Walksnail** recordings are out of scope for 1.0. QuadCam does not read them. Support may come later.
 
 **Sample recordings wanted.** If you fly HDZero or Walksnail, a few short clips straight
 off your goggle card help build and test that support. Send the files exactly as the card holds
@@ -52,9 +52,8 @@ The cask installs:
 
 - `QuadCam.app` in `/Applications`
 - the command-line tool `quadcam-cli` on your `PATH`
-- Homebrew's ffmpeg, which QuadCam needs to convert and verify clips
 
-QuadCam can also download ffmpeg itself as a module, in **Settings > Modules**. Once the module is installed, Homebrew's ffmpeg is optional. See [Modules and notices](docs/modules.md).
+QuadCam needs ffmpeg to convert and verify clips. The first time you open the app, a banner offers to download it as a module. It shows the license, size and source first, and downloads nothing until you select **Download**. **Settings > Modules** manages it later. A Homebrew ffmpeg that is already installed also works. See [Modules and notices](docs/modules.md).
 
 To update, run `brew upgrade --cask quadcam`. To remove the app, run `brew uninstall --cask quadcam`. Uninstall keeps your settings and your videos.
 
@@ -70,7 +69,7 @@ NKMK Digital Co. signs QuadCam with its Apple Developer ID, and Apple notarizes 
 4. **Add radio logs (optional).** Under **Radio logs**, select **Choose…** and pick your radio's `LOGS` folder. QuadCam then dates the clips and finds their moments.
 5. **Trim (optional).** Select a clip to play it, see its moments and set cuts. **Split by flight** adds one cut per radio-log flight.
 6. **Add to Library** (Command-Return). QuadCam converts and verifies each clip. When **Delete clips after import** is on in Settings, a checkbox above the button shows it; clear it to keep the clips on the card for this import.
-7. **Finish.** Add the files to Photos, make the card safe to remove, or format it (analog cards only). **Done · show in Library** shows the new clips under **Last import**.
+7. **Finish.** QuadCam unmounts the card when the import is done, so it is safe to remove. Add the files to Photos, or format the card (analog cards only; QuadCam mounts it again for that and unmounts it after). A DJI card has **Prepare card** instead. **Done · show in Library** shows the new clips under **Last import**.
 
 ![The Import sheet on the Review step: a list of clips with names, dates and times, and the selected clip's preview and trim editor](docs/images/import-review-dark.png)
 

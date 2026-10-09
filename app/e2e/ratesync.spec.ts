@@ -94,7 +94,7 @@ test("syncing a sim profile plans, backs up through the sheet and reads as match
   await profiles(page).getByRole("button", { name: "1 RACE" }).click();
   const sims = page.getByRole("region", { name: "Sims" });
   const row = (name: string) => sims.getByRole("listitem").filter({ has: page.getByText(name, { exact: true }) }).first();
-  await expect(row("Uncrashed")).toContainText("Differs from the quad");
+  await expect(row("Uncrashed")).toContainText("Out of date");
 
   await sims.getByRole("button", { name: "Sync 1 RACE into Uncrashed FREE" }).click();
   const sheet = page.getByRole("dialog", { name: "Apply to sims" });

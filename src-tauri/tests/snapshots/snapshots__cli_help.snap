@@ -67,6 +67,7 @@ Arguments:
   [PATH]  Card mount point or folder. Default: the first detected card
 
 Options:
+      --card <CARD>     A card's device id (see `gear status`), when it is unmounted but still plugged in: QuadCam mounts it for the stage
       --json            Print one JSON object: {"ok":true,"result":...} or {"ok":false,"error":{...}}
       --no-join         Keep recordings the DVR split into files as separate clips this run (the join_split_recordings setting is on by default)
       --session <FILE>  Session file (default: ~/Library/Caches/app.quadcam/session.json)
@@ -415,6 +416,7 @@ Options:
       --plan                       Only print what would be erased; runs every guard
       --prep                       Card prep: a card with no session, new or with every clip in the library
       --mount <MOUNT>              Card prep: the card's mount point, for --plan
+      --card <CARD>                Card prep: the card's device id (see `gear status`), for --plan, when the card is unmounted but still plugged in. QuadCam mounts it for the plan and unmounts it
   -h, --help                       Print help
 ===== quadcam-cli library --help
 The library: list, rate, rename, edit (details, aircraft, date, time), cut, trash, Photos

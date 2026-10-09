@@ -68,7 +68,7 @@ export function simState(s: SimRates): string {
   if (!s.found) return "No rate file";
   if (s.files.every((f) => f.error)) return "Cannot read";
   if (s.in_sync === true) return "Matches the quad";
-  if (s.in_sync === false) return "Differs from the quad";
+  if (s.in_sync === false) return "Out of date";
   return "Read";
 }
 

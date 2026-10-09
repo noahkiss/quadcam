@@ -251,6 +251,7 @@ export type ImportOutcome = G.ImportOutcome;
 export type ModuleStatus = G.ModuleStatus;
 export type ModulePin = G.Pin;
 export type ClipDeletion = G.ClipDeletion;
+export type CardRelease = G.CardRelease;
 
 /** The settings file's values, by file key (camelCase). */
 export interface SettingsValues {
@@ -324,6 +325,7 @@ export type StageProgress = G.Progress;
 export type ImportProgress = Num<G.ImportProgress, "seconds" | "duration">;
 export type LibraryTask = G.LibraryTask;
 export type AgentFormatRequest = G.AgentFormatRequest;
+export type FormatRequest = G.FormatRequest;
 export type AgentApplyRequest = G.AgentApplyRequest;
 export type { ApplyPlan, ApplyReport, CardMounted, ChangeStatus, Check, CopyPart, CopyPlan, Edit, StagedChange, StepReport } from "../bindings";
 

@@ -2,52 +2,15 @@
 // esptool). Install and Update show the license first; nothing downloads before Download.
 import { useEffect, useState } from "react";
 import { ask, useStore } from "../../store";
-import { api, errText, openLink } from "../../ipc/api";
-import type { ModulePin, ModuleStatus } from "../../ipc/types";
+import { api, errText } from "../../ipc/api";
+import type { ModuleStatus } from "../../ipc/types";
 import { Button } from "../../components/Button";
+import { Link, ModulePrompt, mb } from "../../components/ModulePrompt";
 import { SelectField } from "../../components/Field";
 import { toast } from "../../components/toastStore";
 import { loadEnv } from "../../events";
 import type { Draft } from "./draft";
 import styles from "./SettingsSheet.module.css";
-
-const mb = (bytes: number) => `${(bytes / 1e6).toFixed(1)} MB`;
-
-function Link({ href, children }: { href: string; children: string }) {
-  return (
-    <a
-      href={href}
-      onClick={(e) => {
-        e.preventDefault();
-        openLink(href).catch(() => {});
-      }}
-    >
-      {children}
-    </a>
-  );
-}
-
-/** The license prompt: name, version, size, license, source and the download's origin. */
-function Prompt({ pin }: { pin: ModulePin }) {
-  return (
-    <dl className={styles.prompt}>
-      <dt>Version</dt>
-      <dd>{pin.version}</dd>
-      <dt>Size</dt>
-      <dd>{mb(pin.assets.reduce((n, a) => n + a.size, 0))}</dd>
-      <dt>License</dt>
-      <dd>
-        <Link href={pin.license_url}>{pin.license}</Link>
-      </dd>
-      <dt>Source</dt>
-      <dd>
-        <Link href={pin.source}>{pin.source}</Link>
-      </dd>
-      <dt>Download from</dt>
-      <dd className="mono selectable">{pin.assets.map((a) => a.url).join("\n")}</dd>
-    </dl>
-  );
-}
 
 export function ModulesPane({ d, set }: { d: Draft; set: <K extends keyof Draft>(k: K, v: Draft[K]) => void }) {
   const [list, setList] = useState<ModuleStatus[] | null>(null);
@@ -63,7 +26,7 @@ export function ModulesPane({ d, set }: { d: Draft; set: <K extends keyof Draft>
 
   const install = async (m: ModuleStatus) => {
     const pin = m.newest ?? m.pinned;
-    const yes = await ask(`${m.installed ? "Update" : "Install"} ${pin.title}?`, `QuadCam downloads ${pin.title} from its upstream and checks its checksum.`, { ok: "Download", body: <Prompt pin={pin} /> });
+    const yes = await ask(`${m.installed ? "Update" : "Install"} ${pin.title}?`, `QuadCam downloads ${pin.title} from its upstream and checks its checksum.`, { ok: "Download", body: <ModulePrompt pin={pin} /> });
     if (yes !== true) return;
     setBusy(m.name);
     try {

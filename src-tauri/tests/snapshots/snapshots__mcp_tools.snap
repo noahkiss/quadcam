@@ -83,6 +83,10 @@ expression: "quadcam_lib::mcp::tools()"
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
+        "card": {
+          "description": "A card's device id from quadcam_gear, for a card that is unmounted but still plugged in: QuadCam mounts it for the load and unmounts it when the import is done. Use instead of source.",
+          "type": "string"
+        },
         "join": {
           "description": "false keeps recordings the DVR split into files (PICT0001.AVI, PICT0002.AVI, ...) as separate clips this run. Omit to follow the join_split_recordings setting (on by default).",
           "type": "boolean"
@@ -313,7 +317,7 @@ expression: "quadcam_lib::mcp::tools()"
       "readOnlyHint": false,
       "title": "Export clips"
     },
-    "description": "Convert every non-skipped clip (MP4 H.264 by default, or a lossless MOV remux), write metadata, and verify each output (frame count, duration, streams, metadata) before it counts. Never overwrites: duplicate names get -2, -3. Each cut range also exports as <name>_cutN (re-encoded from the source, frame-exact) and is verified. Clips and cuts that already verified are not written again, so call it again after adding cuts. Options left out use the app's settings (in app mode) or the defaults (output ~/Movies/quadcam). When the delete_clips_after_import setting is on, it then deletes each clip file whose output verified from the card or folder it came from; skipped and failed clips, sidecars and every other file stay. keep_clips=true keeps every clip this run; nothing here turns deletion on.\n\nBest for: after the names and dates are final.\nReturns: imported / skipped / failed counts, each clip's output path, whether the card format step is unlocked, and, when deletion ran, each clip deleted or kept with the reason.\nFollow up with quadcam_add_to_photos, then quadcam_eject.",
+    "description": "Convert every non-skipped clip (MP4 H.264 by default, or a lossless MOV remux), write metadata, and verify each output (frame count, duration, streams, metadata) before it counts. Never overwrites: duplicate names get -2, -3. Each cut range also exports as <name>_cutN (re-encoded from the source, frame-exact) and is verified. Clips and cuts that already verified are not written again, so call it again after adding cuts. Options left out use the app's settings (in app mode) or the defaults (output ~/Movies/quadcam). When the delete_clips_after_import setting is on, it then deletes each clip file whose output verified from the card or folder it came from; skipped and failed clips, sidecars and every other file stay. keep_clips=true keeps every clip this run; nothing here turns deletion on. When it ends, it unmounts a removable card (the work on it is done); quadcam_format_card mounts it again if it needs it.\n\nBest for: after the names and dates are final.\nReturns: imported / skipped / failed counts, each clip's output path, whether the card format step is unlocked, whether the card is unmounted (card.released), and, when deletion ran, each clip deleted or kept with the reason.\nFollow up with quadcam_add_to_photos, then quadcam_eject (a no-op on a card that is unmounted already).",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -437,6 +441,10 @@ expression: "quadcam_lib::mcp::tools()"
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
+        "card": {
+          "description": "Card prep: the card's device id from quadcam_gear, for the dry run, when the card is unmounted but still plugged in (QuadCam mounts it for the plan and unmounts it again). Use instead of mount.",
+          "type": "string"
+        },
         "confirm": {
           "description": "Must be true to erase.",
           "type": "boolean"

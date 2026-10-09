@@ -7,7 +7,7 @@ import { open as openDialog, save as saveDialog } from "@tauri-apps/plugin-dialo
 import { openPath, openUrl, revealItemInDir } from "@tauri-apps/plugin-opener";
 import { commands } from "../bindings";
 import * as N from "./normalize";
-import type { ChangeStatus, CopyRequest, Edit, SimFrame, SimPreset, SimStartInfo, SimStartParams, SimStopInfo, CrashSaveParams, ImportOptions, LibEdit, LibraryFilter, Moved, ModelEditParams, ModelParams, PackInstallParams, VoiceChooseParams, VoiceEditParams, VoiceParams, VoicePreviewParams, VoiceRenderParams, OsdEditParams, OsdParams, RatesParams, RatesPreview, RateProfile, FlashParams, SplashParams, SimRestoreParams, SimSyncParams, SimsParams, Pack, PackType, PlanPatch, RemovedCuts, SettingsValues, Span, SwitchMapParams, SimCalibrationSaveParams, CalibrateParams } from "./types";
+import type { FormatRequest, ChangeStatus, CopyRequest, Edit, SimFrame, SimPreset, SimStartInfo, SimStartParams, SimStopInfo, CrashSaveParams, ImportOptions, LibEdit, LibraryFilter, Moved, ModelEditParams, ModelParams, PackInstallParams, VoiceChooseParams, VoiceEditParams, VoiceParams, VoicePreviewParams, VoiceRenderParams, OsdEditParams, OsdParams, RatesParams, RatesPreview, RateProfile, FlashParams, SplashParams, SimRestoreParams, SimSyncParams, SimsParams, Pack, PackType, PlanPatch, RemovedCuts, SettingsValues, Span, SwitchMapParams, SimCalibrationSaveParams, CalibrateParams } from "./types";
 
 type Result<T> = Promise<{ status: "ok"; data: T } | { status: "error"; error: string }>;
 
@@ -29,6 +29,8 @@ export const api = {
   // Session
   getSession: async () => N.session(await ok(commands.session())),
   loadSource: async (path: string) => N.session(await ok(commands.load({ source: path })))!,
+  /** A card that is unmounted but still plugged in: the core mounts it for the stage. */
+  loadDevice: async (device: string) => N.session(await ok(commands.load({ source: null, device, join: null })))!,
   loadDropped: async (paths: string[]) => N.session(await ok(commands.loadDropped(paths)))!,
   planDates: async (logDir: string | null, day: string | null) => N.session(await ok(commands.dates({ logs: logDir ? { kind: "dir", path: logDir } : { kind: "none" }, day })))!,
   editPlan: async (patch: PlanPatch) => N.session(await ok(commands.suggest({ patches: [patch], editor: "user" })))!,
@@ -37,6 +39,8 @@ export const api = {
   addToPhotos: (ids: number[], album: string | null) => ok(commands.photos({ ids, album })),
   formatPlan: (label: string | null) => ok(commands.formatPlan({ label })),
   formatCard: (label: string) => ok(commands.formatCard(label)),
+  cardPrepPlan: (target: { mount?: string; device?: string }, label: string | null = null) => ok(commands.cardPrepPlan({ mount: target.mount ?? null, device: target.device ?? null, label })),
+  cardPrepClick: (req: FormatRequest) => ok(commands.cardPrepClick(req)),
   answerFormatRequest: (id: number, approve: boolean) => commands.answerFormatRequest(id, approve),
   clearSession: () => ok(commands.clear()),
   eject: (path: string | null = null) => ok(commands.eject({ target: path })),

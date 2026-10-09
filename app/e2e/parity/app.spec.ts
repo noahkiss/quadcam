@@ -13,6 +13,29 @@ test("without ffmpeg, a banner says so and Import is off", async ({ app, page })
   await expect(page.getByRole("button", { name: "Import…" }).first()).toBeDisabled();
 });
 
+test("the banner installs the ffmpeg module after the person agrees, and Import turns on", async ({ app, page }) => {
+  await app.open("no-tools");
+  await expect(page.getByText("ffmpeg not found.")).toBeVisible();
+  await page.getByRole("button", { name: "Install ffmpeg…" }).click();
+  // Nothing downloads before Download: the prompt names the license, the size and the origin.
+  const prompt = page.getByRole("dialog", { name: "Install ffmpeg and ffprobe?" });
+  await expect(prompt).toContainText("GPL-3.0-or-later");
+  await expect(prompt).toContainText("MB");
+  expect(await app.method("module_install")).toEqual([]);
+  await prompt.getByRole("button", { name: "Download" }).click();
+  await expect.poll(async () => (await app.method("module_install")).length).toBe(1);
+  await expect(page.getByText("ffmpeg not found.")).toBeHidden();
+  await expect(page.getByRole("button", { name: "Import…" }).first()).toBeEnabled();
+});
+
+test("declining the ffmpeg prompt downloads nothing", async ({ app, page }) => {
+  await app.open("no-tools");
+  await page.getByRole("button", { name: "Install ffmpeg…" }).click();
+  await page.getByRole("dialog", { name: "Install ffmpeg and ffprobe?" }).getByRole("button", { name: "Cancel" }).click();
+  expect(await app.method("module_install")).toEqual([]);
+  await expect(page.getByText("ffmpeg not found.")).toBeVisible();
+});
+
 test("page text is not selectable; text fields are", async ({ app, page }) => {
   await app.open();
   await expect(page.getByRole("article").first()).toBeVisible();

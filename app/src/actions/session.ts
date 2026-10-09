@@ -60,12 +60,18 @@ export async function importDropped(paths: string[]) {
   loadSource(paths.length === 1 ? paths[0] : `${paths.length} files`, paths);
 }
 
-export async function loadSource(path: string, dropped: string[] | null = null) {
+/** Imports from a card that is unmounted but still plugged in: the core mounts it. */
+export async function importFromDevice(device: string, label: string) {
+  if (!(await replaceOk())) return;
+  loadSource(label, null, device);
+}
+
+export async function loadSource(path: string, dropped: string[] | null = null, device: string | null = null) {
   if (S().busy) return;
   store.setState({ busy: true, session: null, staging: { phase: "stage", index: 0, total: 0, done: 0, size: 0 }, loadingFrom: path });
   openImport("load");
   try {
-    const s = dropped ? await api.loadDropped(dropped) : await api.loadSource(path);
+    const s = dropped ? await api.loadDropped(dropped) : device ? await api.loadDevice(device) : await api.loadSource(path);
     if (!s.clips.length) {
       toast("No clips found there.", true);
       S().setImportOpen(false);
@@ -218,7 +224,7 @@ export async function runExport() {
   try {
     const outcome = await api.importClips({ output_dir: out, format: sel.format(st), encoder: sel.encoder(st), keep_originals: sel.keepOriginals(st), add_time: sel.addTime(st), keep_clips: st.keepClips });
     S().setSession(await api.getSession());
-    store.setState({ busy: false, clipDeletion: outcome.clip_deletion ?? null });
+    store.setState({ busy: false, clipDeletion: outcome.clip_deletion ?? null, cardRelease: outcome.card ?? null });
     setStep("finish");
     await S().loadLibrary();
     api.strips().catch(() => {});
@@ -340,9 +346,40 @@ export async function askFormat() {
   S().setFormatConfirm({ text: confirmText(plan), agent: false });
 }
 
+/** Card prep from the app: the plan names the disk, the person's Erase click confirms. A
+ *  mounted card is named by its mount point, an unmounted one by its device id (the core
+ *  mounts it for the plan and the erase). */
+export async function prepCard(target: { mount?: string; device?: string }) {
+  let plan: FormatPlan;
+  try {
+    plan = await api.cardPrepPlan(target, S().formatLabelDraft || null);
+  } catch (e) {
+    return toast(errText(e), true);
+  }
+  store.setState({ agentFormat: null });
+  S().setFormatConfirm({
+    text: confirmText(plan),
+    agent: false,
+    prep: { device: plan.device, volume_uuid: plan.volume_uuid, label: plan.label, confirm: true },
+  });
+}
+
 /** The Erase click in the confirmation. */
 export async function confirmErase() {
   const st = S();
+  const prep = st.formatConfirm?.prep;
+  if (prep) {
+    st.setFormatConfirm(null);
+    try {
+      await api.cardPrepClick(prep);
+      toast("Card prepared. Safe to remove.");
+      st.refreshVolumes();
+      st.loadGear();
+    } catch (e) {
+      toast(errText(e), true);
+    }
+    return;
+  }
   if (st.agentFormat != null) {
     const id = st.agentFormat;
     store.setState({ agentFormat: null });

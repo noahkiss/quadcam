@@ -57,7 +57,7 @@ describe("sims", () => {
     expect(simState(sim({ enabled: false }))).toBe("Off");
     expect(simState(sim({ found: false }))).toBe("No rate file");
     expect(simState(sim({ in_sync: true, files: [{ path: "p", error: null, profiles: [] }] }))).toBe("Matches the quad");
-    expect(simState(sim({ in_sync: false, files: [{ path: "p", error: null, profiles: [] }] }))).toBe("Differs from the quad");
+    expect(simState(sim({ in_sync: false, files: [{ path: "p", error: null, profiles: [] }] }))).toBe("Out of date");
     expect(simState(sim({ files: [{ path: "p", error: "bad", profiles: [] }] }))).toBe("Cannot read");
   });
   it("takes the worst axis", () => {

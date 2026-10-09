@@ -4,6 +4,7 @@ import type { StateCreator } from "zustand";
 import type { State } from ".";
 
 import type { ReactNode } from "react";
+import type { FormatRequest } from "../ipc/types";
 
 export type SettingsSection = "library" | "import" | "aircraft" | "places" | "photos" | "gear" | "modules" | "advanced";
 
@@ -26,7 +27,7 @@ export interface UiSlice {
   menuAt: { id: string; x: number; y: number } | null;
   dropping: boolean;
   /** The erase confirmation (the person's own, or an agent's). */
-  formatConfirm: { text: string; agent: boolean } | null;
+  formatConfirm: { text: string; agent: boolean; /** Card prep: the request the Erase click sends. */ prep?: FormatRequest } | null;
   /** The third-party notices window. */
   noticesOpen: boolean;
   setNoticesOpen: (on: boolean) => void;

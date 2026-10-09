@@ -404,11 +404,15 @@ impl Core {
             )
         };
         if let Some(id) = p.device.as_deref().map(str::trim).filter(|s| !s.is_empty()) {
+            let unmounted = self.unmounted_cards(true);
             return connected
                 .iter()
                 .filter(able)
+                .chain(&unmounted)
                 .find(|c| c.id.as_deref() == Some(id))
                 .cloned()
+                .map(|c| self.mount_picked(c, true))
+                .transpose()?
                 .or_else(|| {
                     // An FC not identified yet: the only FC plugged in.
                     (crate::gear::backup::kind_of_id(id) == Some(DeviceKind::Fc))
@@ -419,9 +423,10 @@ impl Core {
                     format!("No device: {id:?} is not plugged in (or not a radio card or FC).")
                 });
         }
-        let list: Vec<&Connected> = connected.iter().filter(able).collect();
+        let unmounted = self.unmounted_cards(true);
+        let list: Vec<&Connected> = connected.iter().filter(able).chain(&unmounted).collect();
         match list.as_slice() {
-            [one] => Ok((*one).clone()),
+            [one] => self.mount_picked((*one).clone(), true),
             [] => bail!(
                 "No device: no radio card or FC is plugged in. If macOS asked to allow an accessory, click Allow."
             ),
@@ -685,8 +690,8 @@ impl Core {
     // ----- card check -----
 
     /// The card a check names: a device id, a mount, or the one card plugged in.
-    fn check_target(&self, p: &CardCheckParams) -> Result<Connected> {
-        let cards: Vec<Connected> = self
+    fn check_target(&self, p: &CardCheckParams) -> Result<(Connected, bool)> {
+        let mut cards: Vec<Connected> = self
             .gear_connected()?
             .into_iter()
             .filter(|c| matches!(c.link, Link::Volume { .. }))
@@ -695,16 +700,20 @@ impl Core {
             return cards
                 .into_iter()
                 .find(|c| matches!(&c.link, Link::Volume { mount, .. } if mount == m))
+                .map(|c| (c, false))
                 .with_context(|| format!("No device: no card is mounted at {}.", m.display()));
         }
+        // Mount, work, unmount: a card unmounted since its last job is mounted for the check.
+        cards.extend(self.unmounted_cards(false));
         if let Some(id) = p.device.as_deref().map(str::trim).filter(|s| !s.is_empty()) {
-            return cards
+            let c = cards
                 .into_iter()
                 .find(|c| c.id.as_deref() == Some(id))
-                .with_context(|| format!("No device: card {id:?} is not plugged in."));
+                .with_context(|| format!("No device: card {id:?} is not plugged in."))?;
+            return self.mount_picked_here(c, false);
         }
         match cards.len() {
-            1 => Ok(cards.into_iter().next().unwrap()),
+            1 => self.mount_picked_here(cards.into_iter().next().unwrap(), false),
             0 => bail!("No device: no card is plugged in."),
             n => bail!("{n} cards are plugged in; name one by device or mount."),
         }
@@ -713,8 +722,18 @@ impl Core {
     /// Checks a card's file system (`diskutil verifyVolume`, read-only, about 30 s over a
     /// radio's USB) and logs the result for the card. `gear_stop` ends it early.
     pub fn gear_card_check(&self, p: &CardCheckParams) -> Result<CardCheck> {
-        let c = self.check_target(p)?;
-        let check = self.card_check(&c, CheckKind::Verify)?;
+        let (c, here) = self.check_target(p)?;
+        let check = match self.card_check(&c, CheckKind::Verify) {
+            Ok(k) => k,
+            Err(e) => {
+                // Mount, work, unmount: a card this call mounted is released even when
+                // the check could not run.
+                if here {
+                    let _ = self.gear_finish_card(&c, Some(("Card check", &format!("{e:#}"))));
+                }
+                return Err(e);
+            }
+        };
         let failed = (check.state != CheckState::Ok).then(|| check.summary.clone());
         // The card is unmounted after the check; a failure's reason shows in the status.
         let _ = self.gear_finish_card(&c, failed.as_deref().map(|m| ("Card check", m)));
@@ -792,7 +811,8 @@ impl Core {
             bail!("Refused: a repair writes the card's file system; it needs confirm=true.");
         }
         let check_id = p.check.trim();
-        let connected = self.gear_connected()?;
+        let mut connected = self.gear_connected()?;
+        connected.extend(self.unmounted_cards(false));
         let log = HealthLog::new(self.gear_store());
         let c = connected
             .iter()
@@ -806,6 +826,7 @@ impl Core {
             .with_context(|| {
                 format!("Refused: {check_id:?} is not the latest check of a card plugged in. Check the card again.")
             })?;
+        let (c, here) = self.mount_picked_here(c, false)?;
         let latest = log.latest(c.id.as_deref().unwrap_or("")).unwrap();
         if latest.state == CheckState::Ok {
             bail!("Refused: the card's latest check passed; there is nothing to repair.");
@@ -819,8 +840,18 @@ impl Core {
             }
             _ => (None, None),
         };
-        let repair = self.card_check(&c, CheckKind::Repair)?;
-        let verify = self.card_check(&c, CheckKind::Verify)?;
+        let ran = self
+            .card_check(&c, CheckKind::Repair)
+            .and_then(|r| Ok((r, self.card_check(&c, CheckKind::Verify)?)));
+        let (repair, verify) = match ran {
+            Ok(both) => both,
+            Err(e) => {
+                if here {
+                    let _ = self.gear_finish_card(&c, Some(("Repair", &format!("{e:#}"))));
+                }
+                return Err(e);
+            }
+        };
         let failed = (verify.state != CheckState::Ok).then(|| verify.summary.clone());
         let _ = self.gear_finish_card(&c, failed.as_deref().map(|m| ("Repair", m)));
         Ok(RepairResult {

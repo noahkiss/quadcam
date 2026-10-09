@@ -15,6 +15,25 @@ The app bundles no GPL tool. Each QuadCam release pins one version of each modul
 | ffmpeg and ffprobe | 9.0.2 | Converting, checking and previewing clips | GPL-3.0-or-later | Martin Riedl's FFmpeg build server, macOS arm64 release build |
 | esptool | 5.4.0 | Flashing ESP32 and ESP8266 chips (ExpressLRS) | GPL-2.0-or-later | Espressif's GitHub release, macOS arm64 |
 
+### What QuadCam needs
+
+Every program QuadCam runs is a macOS system tool, a module, or optional. `tests/external_tools.rs` fails when the code runs a program that is not on this list.
+
+| Program | Where it comes from | Used for |
+|---|---|---|
+| ffmpeg and ffprobe | The ffmpeg module. Homebrew's copy is the fallback | Converting, checking and previewing clips |
+| esptool | The esptool module | Flashing ExpressLRS chips (planned for 1.1) |
+| exiftool | Optional. QuadCam uses Homebrew's copy when it finds one | A second reader for the location tag when it verifies a clip. Nothing needs it |
+| `diskutil`, `ioreg`, `system_profiler`, `df`, `ps` | macOS | Cards, disks, USB devices and free space |
+| `curl`, `tar`, `unzip`, `zip`, `ditto`, `codesign`, `xattr` | macOS | Downloads and unpacking, signing a module |
+| `say`, `afplay`, `osascript` | macOS | Spoken cues and voice previews |
+
+QuadCam bundles no tool. The cask installs only the app and `quadcam-cli`.
+
+### First run
+
+When QuadCam finds no ffmpeg, a banner says so and import stays off. Select **Install ffmpeg** in the banner. QuadCam shows the version, size, license, source and download address first, and downloads nothing until you select **Download**. The tool works at once, with no restart. **Cancel** downloads nothing. Settings > Modules does the same for every module, and you can remove one there at any time.
+
 ### Install, update and remove
 
 Open **Settings > Modules**.
@@ -52,7 +71,7 @@ The **Use ffmpeg from** setting (`ffmpegSource`) picks the source:
 
 The `modules` setting can name a file per tool, for example `{"ffmpeg": "/path/to/ffmpeg"}`. A file named there wins over both.
 
-Settings > Modules shows the ffmpeg that is in use. The Homebrew cask still installs Homebrew's ffmpeg.
+Settings > Modules shows the ffmpeg that is in use. The Homebrew cask does not install ffmpeg: the first run offers the module (see [First run](#first-run)). A Homebrew ffmpeg that is already installed keeps working as the fallback.
 
 ### How QuadCam runs a module
 

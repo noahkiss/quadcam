@@ -102,8 +102,8 @@ pub fn find_tools_with(prefs: &ToolPrefs, modules: &crate::modules::Modules) -> 
     ) {
         (Some(ffmpeg), Some(ffprobe)) => Ok(Tools { ffmpeg, ffprobe }),
         _ => bail!(
-            "ffmpeg and ffprobe not found. Install the ffmpeg module in Settings > Modules, \
-             or run: {INSTALL_HINT}"
+            "ffmpeg and ffprobe not found. Install the ffmpeg module (Settings > Modules, or \
+             `quadcam-cli modules install ffmpeg --yes`), or run: {INSTALL_HINT}"
         ),
     }
 }

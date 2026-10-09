@@ -34,6 +34,7 @@ mod prep;
 mod radio_cli;
 mod rates;
 mod rematch;
+mod session_card;
 mod setup;
 mod sim;
 mod sim_host;
@@ -75,6 +76,7 @@ pub use osd::{OsdEditParams, OsdParams};
 pub use radio_cli::{RadioCliAction, RadioCliParams, RadioCliReport, RadioMatch, RadioVerify};
 pub use rates::{RatesParams, RatesPreview, RatesPreviewParams, SimsParams};
 pub use rematch::{LibMatch, LibMatchParams, LibMatchReport};
+pub use session_card::CardRelease;
 pub use setup::{PlaceRemoved, SettingsView};
 pub use sim::{
     CalibrateAction, CalibrateParams, CalibrateView, PerStick, SimCalibration,
@@ -197,6 +199,10 @@ pub struct ImportOutcome {
     /// setting is off, or this run kept the clips.
     #[serde(default)]
     pub clip_deletion: Option<Vec<ClipDeletion>>,
+    /// What the end of the import did with the card: unmounted (safe to remove) or not.
+    /// None when the clips came from a folder, or the card is a DJI device over USB.
+    #[serde(default)]
+    pub card: Option<CardRelease>,
 }
 
 /// What happened to one clip's file on the card or folder after an import.
@@ -298,6 +304,8 @@ pub struct Core {
     gear_touched: Mutex<std::collections::HashSet<String>>,
     /// The last failed step per link, for the device page (`GearStatus.failures`).
     gear_failures: Mutex<std::collections::HashMap<String, gear::StepFailure>>,
+    /// The Sims badge's last answer and what it was read from (`core/rates.rs`).
+    sims_badge: Mutex<Option<(String, usize)>>,
     /// Cards unmounted but still plugged in, by device id (`core/apply_card.rs`).
     gear_released: Mutex<std::collections::HashMap<String, crate::gear::model::Connected>>,
     /// Cards the person mounted: when each unmounts.
@@ -356,6 +364,7 @@ impl Core {
             gear_jobs: Mutex::default(),
             gear_touched: Mutex::default(),
             gear_failures: Mutex::default(),
+            sims_badge: Mutex::default(),
             gear_released: Mutex::default(),
             gear_mounted_for_user: Mutex::default(),
         }

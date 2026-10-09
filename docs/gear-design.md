@@ -984,7 +984,7 @@ FC effect (`aux` modes, `adjrange` selections such as rate or OSD profile), the 
   - The shapes were first inferred from 6.6 and checked against a real install by the sync
     package (see the note under the table in 6.6): Liftoff's and The Zone's were wrong and are
     corrected. The fixtures in `tests/fixtures/sims/` are synthetic files of the real shapes.
-  - The Sims page and the sidebar "Out of date" badge: see the sync half below.
+  - The Sims page and the sidebar "Out of date" badge: built, see the sync half below.
 
 - **Built (WP8 sync half):** `gear/apply/sim.rs` (the plan: targets, checks, diff, warnings,
   digest; `write_atomic`; the test fail-safe), `core/sim_sync.rs` (`gear_sim_sync_plan`,
@@ -1024,9 +1024,15 @@ FC effect (`aux` modes, `adjrange` selections such as rate or OSD profile), the 
     6.6 describes rates only, and QuadCam has no source for those values to sync. Uncrashed's
     deadzone is one `DeadZone` float per controller file under `RC/` (shape checked against a
     real install, one of five files holds none); a later package can add it.
-  - **The Sims page and the sidebar "Out of date" badge** are not built: the Rates segment's
-    Sims list carries Sync and Restore backup (it already lists each sim, its profiles and its
-    sync state against the quad), and the badge waits for the Gear sidebar.
+  - **The Sims page and the sidebar "Out of date" badge** are built (shell gaps). The Sims
+    list is one component (`Sims/SimList.tsx`) in the Rates segment and on the page. The badge
+    comes from `GearStatus.sims_out_of_date`: the count of enabled sims whose rates differ from
+    the quad's profile in use. The quad is `GearStatus.sims_quad`, the saved FC seen last that
+    has a backup; the page's **Compare with** picks another. The count is cached on the quad's
+    backup id and the sim files' times. A process started by cargo reads no real sim file
+    unless `QUADCAM_SIMS_HOME` names a folder. A sim reads "Out of date" or "Matches the quad";
+    Velocidrone reads "Off" with the note "Not supported yet. QuadCam needs a sample
+    Velocidrone save to read its rate file, so this sim stays off." (decision 12).
   - **Rate editor:** edits are `FcSet` values in the profile's rate section (`*_rc_rate`,
     `*_srate`, `*_expo`, `*_rate_limit`, `rates_type`, `thr_mid`, `thr_expo`,
     `throttle_limit_type`, `throttle_limit_percent`, `rateprofile_name`), only the ones that
@@ -1216,10 +1222,10 @@ binaries only (open question 10).
   - **Splash layout unverified.** The markers, the 1,024 bytes and the bit order (bit 0 is the
     top row of a band) follow this section and a synthetic binary. No release binary was
     downloaded. The plan refuses an image whose markers differ.
-  - **Not built:** the Betaflight flash plan (the table above and open question 8 say version
-    check only for 1.0; the package list asks for it, so it needs a decision), and ELRS options
-    and flashing (needs `esptool`, serial passthrough and the options block). The CRSF
-    device-info ping is open as before.
+  - **Not built, deferred to 1.1 (decided 2026-10-09, both wanted):** the Betaflight flash
+    plan, and ELRS options and flashing (needs `esptool`, serial passthrough and the options
+    block). 1.0 keeps the version check for Betaflight. The CRSF device-info ping is open as
+    before.
 
 - **Built (radio over USB):** four follow-ups, branch `radio-usb`.
   - **One radio, two ids.** `Device` gained `aliases` and `dfu_serial`; `Connected` gained
@@ -1344,7 +1350,15 @@ advice in the confirm.
 
 Built in WP11 before WP1 landed: the `Core` methods live in `core/prep.rs`, the two rows in
 `api/mod.rs`, and the CLI is `format --prep`. `core/gear.rs`, `api/gear.rs` and
-`bin/quadcam-cli/gear/` exist now; card prep moves there with the app's card-prep button (WP13).
+`bin/quadcam-cli/gear/` exist now; card prep moves there later.
+
+Built (shell gaps): the app has the button. **Prepare card…** is on the device page of a DVR
+card or goggles card (mounted, or unmounted but still in) and in the Finish step of a DJI
+import, which offers no Format card. The plan comes from `card_prep_plan` (`CardPrepParams`:
+a `mount` point or a `device` id); the Erase click calls the GUI-only command
+`card_prep_click`, which is `card_prep` with `from_gui_button` true. Every guard stays in
+`disk::format_card`; the button moves none of them. The CLI takes `--card <id>` and the MCP
+tool `card`, for a card that is unmounted.
 
 ### 7.10 Modules
 
@@ -1600,6 +1614,17 @@ dialog, Mount and Done on a radio's page. Deviations and choices:
   a refusal plays no cue). The person's Mount (`gear_card_mount`) keeps a card mounted for 10
   minutes (`MOUNT_MINUTES`, a constant; `gear_mount_tick` in the app's poll unmounts it) or
   until `gear_card_unmount`. `GearStatus.mounted` lists those cards.
+- **Mount cycle for every card job (shell gaps).** Decided 2026-10-09: every operation on any
+  card or card-like volume mounts it if needed, works, and unmounts it when done. One helper:
+  `locate_volume` (`locate_card` is its radio-only form) with `unmounted_cards`,
+  `mount_picked` and `card_for_job` in `core/apply_card.rs`. Backup, card check, repair,
+  `gear_card`, `gear_card_preview` and `gear_card_clean` resolve their target through it (a
+  card unmounted since its last job is mounted; a view or preview unmounts it quietly). The
+  import session's card follows the same cycle in `core/session_card.rs`: `stage` and `load`
+  take a `device` id, `import` unmounts the card after "Delete clips after import" and reports
+  `ImportOutcome.card`, and `format_plan`, `format`, `eject` and card prep mount it first.
+  A DJI device over USB is not unmounted. Lists (`gear_connected`, Pack up, flight sources) never
+  mount a card.
 - **Restore on a card** names the files (`Edit::Restore { paths }`) and stands alone: the plan
   makes each path read as in the backup (a path the backup lacks is removed), through
   `Card::plan_files`. A whole-card restore is not offered.
@@ -1731,12 +1756,12 @@ docs, and its rows in `api`, CLI and MCP.
 | WP5 | Staged changes and apply. **Done (5a, 5b):** `changes.rs`, `apply.rs`, `apply/fc.rs`, `apply/card.rs`, `copy.rs`, the apply sheet, the Changes segment, the Bench page, the mount cycle, copy between quads, `apply_ready` | `gear/changes.rs`, `apply.rs`, `apply/fc.rs`, `apply/card.rs`; the apply sheet; Bench page | WP1, WP2, WP3, WP4 | 3 |
 | WP6 | Switch map | `gear/switchmap.rs`, Switches segment | WP2, WP3 | 2 |
 | WP7 | OSD | `gear/osd.rs`, OSD segment (view and editor) | WP2 (parse); WP5 to stage | 1 (pure part), 3 (editor) |
-| WP8 | Rates and sims | `gear/rates.rs`, `gear/sims/`, `apply/sim.rs`, Rates segment, Sims page | WP2, WP5 (plan/confirm pattern) | 2 (read), 3 (sync) |
+| WP8 | Rates and sims. **Done:** the Sims page and the sidebar "Out of date" badge | `gear/rates.rs`, `gear/sims/`, `apply/sim.rs`, Rates segment, Sims page | WP2, WP5 (plan/confirm pattern) | 2 (read), 3 (sync) |
 | WP9 | Radio extras: voice and model editors. **Done except the ElevenLabs adapter, the carrier-sentence render and the full line list (see 7.4)** | `gear/voice/`, `resources/voice/`, Voice segment, `build-pack` and the pack index; `ModelOp` editors for checklists, telemetry screens, logging, timers, alarms and callouts; Checklists segment | WP3, WP5, WP14 | 4 |
-| WP10 | Firmware and splash | `gear/firmware/`, `gear/splash.rs`, `gear/dfu.rs`, Firmware page, Splash segment | WP2, WP3, WP4, WP5, WP14 | 4 |
-| WP11 | Card prep | `disk.rs` changes, `card_prep*` rows, `quadcam_format_card` `prep` | – (existing code) | 1 |
+| WP10 | Firmware and splash. **1.0 holds the version checks, the EdgeTX flash and the splash. The Betaflight flash plan and ELRS options and flashing are deferred to 1.1 (both wanted)** | `gear/firmware/`, `gear/splash.rs`, `gear/dfu.rs`, Firmware page, Splash segment | WP2, WP3, WP4, WP5, WP14 | 4 |
+| WP11 | Card prep. **Done, with the app button** | `disk.rs` changes, `card_prep*` rows, `quadcam_format_card` `prep`, the Prepare card button | – (existing code) | 1 |
 | WP12 | Flights and packs | `logs.rs` columns, `gear/flights.rs`, `gear/packs.rs`, Flights and Packs pages | WP1 (reads log folders; the log store once WP4 lands) | 1 |
-| WP13 | Gear shell UI | Sidebar Gear section, page frame and segments, Connected rows, plug-in bar, shared components (`DiffView`, `ChecksList`, `DeviceHeader`), mock-core scenarios | WP1 (types) | 1 |
+| WP13 | Gear shell UI. **Done** | Sidebar Gear section, page frame and segments, Connected rows, plug-in bar, shared components (`DiffView`, `ChecksList`, `DeviceHeader`), mock-core scenarios | WP1 (types) | 1 |
 | WP14 | Modules and third-party notices | `modules/` (the module manager, 7.10), the Modules section in Settings, `media.rs` finding ffmpeg through it; `THIRD_PARTY_NOTICES` generated at build (`cargo about` or equivalent for crates, the pnpm license list for `app/`, the OFL text for the bundled fonts) and shipped in the `.app`; an About window entry; a CI check that fails on a dependency with no license or a license outside the allow list (MIT, Apache-2.0, BSD, ISC, MPL-2.0, OFL-1.1, Unicode, Zlib) | – | 1 |
 
 **Parallel groups:** 0 → 1 → 2 → 3 → 4. WP14 (modules) runs in group 1 because firmware
@@ -1756,7 +1781,7 @@ split: their read-only halves run early; their write halves wait for WP5.
 | WP7 | Round-trip property test; NTSC, PAL and HD golden renders; overlap and off-screen checks; an editor move stages the right CLI line |
 | WP8 | Curves match reference values for Betaflight, Actual and Quick; Actual-to-Betaflight fit within a stated error; each sim adapter reads and writes a synthetic file byte-exact; refuses while "running" (faked) |
 | WP9 | Spelling rules golden test; cache hit renders with no provider call; normalisation golden WAV; `build-pack` writes a zip and index entry; Choose voice stages one change that keeps overrides when asked. Each `ModelOp` golden on both layouts; checklist length and name rules; ownership replaces a previous change's items |
-| WP10 | Splash patch and decode on a synthetic binary with markers; refusals for missing or doubled markers and for boards and versions not in `compat.rs`; EdgeTX flash plan picks the board binary; ELRS options block written and read back; flashes go to the recorder in tests; DFU against a fake `nusb` device: erase, write, read back, compare |
+| WP10 | Splash patch and decode on a synthetic binary with markers; refusals for missing or doubled markers and for boards and versions not in `compat.rs`; EdgeTX flash plan picks the board binary; (1.1: ELRS options block written and read back, the Betaflight flash plan); flashes go to the recorder in tests; DFU against a fake `nusb` device: erase, write, read back, compare |
 | WP11 | Disk-image test: prep refuses with a clip not in the library, passes otherwise; DJI refused |
 | WP12 | Each measure in 7.6 matches the synthetic log's known values; pack history; old `LogRow` tests still pass |
 | WP13 | Mock scenarios render; axe passes in both themes; Gear section collapses; plug-in bar appears for a device with staged changes |
@@ -1812,15 +1837,15 @@ Each has a default the build uses until you decide.
 
 | # | Question | Default |
 |---|---|---|
-| 1 | Velocidrone's save format: can you share a sample save once it is installed? | Adapter ships disabled |
+| 1 | Velocidrone's save format: can you share a sample save once it is installed? | Decided 2026-10-09: the adapter ships disabled until a sample save exists; the Sims page says so |
 | 2 | ESP flashing: the `esptool` module (proven tool) or embed the `espflash` crate (no download, ESP8266 support uncertain)? | `esptool`, a downloaded module (decided) |
 | 3 | Card prep for DJI goggles cards? | Decided 2026-10-07: a removable goggles card may be prepped as exFAT once every clip is in the library; a DJI device over USB is never formatted (`AGENTS.md`, Rules) |
 | 4 | Auto backup of an FC reboots it (the CLI `exit`). Keep auto backup on for FCs, or MSP identity only and a manual full backup? | On; skipped while another app holds the port |
 | 5 | Gear folder: the support folder (this Mac only) or inside the library folder (moves with it)? | Support folder; `gearDir` moves it |
 | 6 | Voice packs: confirm CC BY 4.0 for the paid re-render, the attribution text, and the voices to render besides Callum | CC BY 4.0; no pack ships before the paid re-render |
 | 7 | Write the pack label and flight analysis into clip files as QuickTime items? | No in 1.0; shown from the flight index |
-| 8 | Betaflight firmware flashing: out of scope for 1.0 (version check only)? | Out of scope |
-| 9 | ELRS version read over CRSF device info needs a hardware check. Until then, enter versions by hand? | Hand entry, read-only check |
+| 8 | Betaflight firmware flashing: out of scope for 1.0 (version check only)? | Decided 2026-10-09: deferred to 1.1, and wanted. 1.0 checks the version only |
+| 9 | ELRS version read over CRSF device info needs a hardware check. Until then, enter versions by hand? | Decided 2026-10-09: ELRS options and flashing are deferred to 1.1, and wanted. Until the hardware check, hand entry and a read-only check |
 | 10 | Splash source: GitHub release binaries only, or also the EdgeTX cloud build? | Release binaries only |
 | 11 | Firmware and voice indexes go online. Check only on request, or daily? | On request (`firmwareCheck` = `manual`); `README.md` Privacy updated |
-| 12 | ffmpeg as a module: which static arm64 build (signed, LGPL preferred), and drop the cask's Homebrew `ffmpeg` dependency once the module works? | Module by default, Homebrew fallback; the cask keeps the dependency until 1.0. WP14 pins Martin Riedl's signed, notarized 9.0.2 arm64 release build (GPL; no signed LGPL arm64 build found; `docs/modules.md`) |
+| 12 | ffmpeg as a module: which static arm64 build (signed, LGPL preferred), and drop the cask's Homebrew `ffmpeg` dependency once the module works? | Module by default, Homebrew fallback. Decided 2026-10-09: the cask drops its `ffmpeg` dependency for 1.0, and the first run offers the module (a banner, with the license and the size first; `docs/modules.md`). WP14 pins Martin Riedl's signed, notarized 9.0.2 arm64 release build (GPL; no signed LGPL arm64 build found; `docs/modules.md`) |

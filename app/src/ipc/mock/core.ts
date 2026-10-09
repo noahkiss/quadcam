@@ -152,6 +152,7 @@ export class MockCore {
       case "session":
         return structuredClone(this.session);
       case "load":
+        if (p.source == null && p.device) return this.load(this.mountForJob(String(p.device)));
         return this.load(String(p.source));
       case "dates": {
         const logs = p.logs as { kind: string; path?: string } | undefined;
@@ -172,6 +173,10 @@ export class MockCore {
         return { ejected: true };
       case "format_plan":
         return this.formatPlan((p.label as string | null) ?? null);
+      case "card_prep_plan":
+        return this.cardPrepPlan(p as { mount?: string | null; device?: string | null; label?: string | null });
+      case "card_prep_click":
+        return this.cardPrepClick(args.req as { device: string; volume_uuid: string; label: string | null });
     }
     if (DISPATCH.has(cmd)) return this.dispatch(cmd, p);
     switch (cmd) {
@@ -298,8 +303,14 @@ export class MockCore {
       }
       case "profiles":
         return { profiles: this.settings.values.profiles || [], default_profile: this.settings.values.defaultProfile || null };
-      case "gear_status":
-        return gear.gearStatus(this.gear, this.settings.values);
+      case "gear_status": {
+        // The Sims badge: the saved FC seen last with a backup, against the sims' rates.
+        const st = gear.gearStatus(this.gear, this.settings.values);
+        const quad = this.gear.devices.filter((d) => d.kind === "fc" && d.last_backup).sort((a, b) => String(a.last_seen).localeCompare(String(b.last_seen))).pop();
+        st.sims_quad = quad?.id ?? null;
+        st.sims_out_of_date = quad ? simsync.status(this.simSync, "p0").filter((x) => x.enabled && x.in_sync === false).length : 0;
+        return st;
+      }
       case "gear_devices":
         return structuredClone(this.gear.devices);
       case "gear_device_save":
@@ -584,6 +595,36 @@ export class MockCore {
     return structuredClone(m);
   }
 
+  /** The core's mount cycle: an unmounted card that is still plugged in mounts for a job. */
+  private mountForJob(device: string): string {
+    const un = this.gear.unmounted.find((c) => c.id === device);
+    const here = this.gear.connected.find((c) => c.id === device);
+    if (!un && !here) throw `Card "${device}" is not plugged in.`;
+    if (un) this.plug([...this.gear.connected, un], this.gear.unmounted.filter((c) => c !== un));
+    const card = (un || here)!;
+    return card.link.kind === "volume" ? card.link.mount : "/Volumes/DVR";
+  }
+
+  /** `Core::card_prep_plan_for`: a card by mount point or device id; a clip not in the library refuses. */
+  private cardPrepPlan(p: { mount?: string | null; device?: string | null; label?: string | null }) {
+    const c = [...this.gear.connected, ...this.gear.unmounted].find((x) => (p.device && x.id === p.device) || (p.mount && x.link.kind === "volume" && x.link.mount === p.mount));
+    const v = this.volumes.find((x) => x.mount === p.mount);
+    if (!c && !v) throw "Refused: that card is not plugged in.";
+    const uuid = (c?.link.kind === "volume" ? c.link.volume_uuid : null) || v?.info.volume_uuid || "";
+    const dji = c?.kind === "goggles" || v?.source === "dji";
+    return { disk: "disk9", device: "/dev/disk9", volume_uuid: uuid, volume_name: v?.info.volume_name || "DVR", size: v?.info.total_size ?? 31914983424, media_name: v?.info.media_name || "SD Card Reader", clip_count: 0, label: (p.label || "DVR").toUpperCase(), filesystem: dji ? "exFAT" : "FAT32", warnings: [] as string[] };
+  }
+
+  /** The app's own prep button: the card goes, unmounted. */
+  private cardPrepClick(req: { device: string; volume_uuid: string; label: string | null }) {
+    const plan = this.cardPrepPlan({ mount: this.volumes.find((x) => x.info.volume_uuid === req.volume_uuid)?.mount ?? null, device: [...this.gear.connected, ...this.gear.unmounted].find((c) => c.link.kind === "volume" && c.link.volume_uuid === req.volume_uuid)?.id ?? null, label: req.label });
+    this.volumes = this.volumes.filter((v) => v.info.volume_uuid !== req.volume_uuid);
+    this.plug(this.gear.connected.filter((c) => !(c.link.kind === "volume" && c.link.volume_uuid === req.volume_uuid)), this.gear.unmounted);
+    this.emit("volumes-changed");
+    this.emit("gear-changed");
+    return plan;
+  }
+
   /** `Core::gear_card_unmount` (Done, or the timer). */
   private cardUnmount(device: string) {
     const card = this.gear.connected.find((c) => c.id === device);
@@ -670,6 +711,8 @@ export class MockCore {
 
   moduleInstall(name: string, confirm: boolean): ModuleStatus {
     if (!confirm) throw "Refused: the install needs confirm=true.";
+    // The module is the default ffmpeg: once it is in, the tools check passes.
+    if (name === "ffmpeg") this.tools = true;
     return this.moduleChange(name, (m) => {
       const pin = m.newest ?? m.pinned;
       return {
@@ -1060,7 +1103,20 @@ export class MockCore {
             return { id: c.id, path: c.card_path, state: ok ? ("deleted" as const) : ("kept" as const), reason: ok ? null : "it was skipped" };
           })
         : null;
-    return { summary, photos: null, clip_deletion };
+    // Mount, work, unmount: the end of an import unmounts a removable card.
+    let card: { released: boolean; message: string } | null = null;
+    const vol = s.card && this.volumes.find((v) => v.is_card && v.info.volume_uuid === s.card!.volume_uuid);
+    if (s.card && vol) {
+      this.volumes = this.volumes.filter((v) => v !== vol);
+      s.card_volume = null;
+      card = { released: true, message: `${s.card.volume_name || "The card"} is unmounted. It is safe to remove.` };
+      // The poll then lists it as unmounted but still plugged in.
+      const gone: import("../types").Connected = { id: `card-${vol.info.volume_uuid}`, kind: vol.source === "dji" ? "goggles" : "dvr_card", link: { kind: "volume", mount: vol.mount, volume_uuid: vol.info.volume_uuid, bus_protocol: vol.info.bus_protocol, whole_disk: "disk9" }, identity: {}, device: null, usb: null, also: [] };
+      this.plug(this.gear.connected, [...this.gear.unmounted, gone]);
+      this.emit("volumes-changed");
+      this.sessionChanged();
+    }
+    return { summary, photos: null, clip_deletion, card };
   }
 
   addToPhotos(ids: number[] | null, album: string | null) {
