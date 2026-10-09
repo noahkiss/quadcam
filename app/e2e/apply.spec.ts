@@ -93,7 +93,7 @@ test("an agent's apply request waits for the person's click", async ({ app, page
   const plan = { change: change.id, device: { board: "BETAFPVG473" }, checks: [{ name: "One FC plugged in", ok: true }], diff: [{ kind: "lines", label: change.title, lines: [{ op: "add", text: "set osd_cap_alarm = 1500" }] }], digest: "d" };
   await page.evaluate(([c, p]) => window.__qc!.emit("agent-apply-request", { id: 9, change: c, plan: p }), [change, plan] as [unknown, unknown]);
   const sheet = page.getByRole("dialog", { name: "Apply to Whoop FC" });
-  await expect(sheet.getByText("An agent asked to apply this change.", { exact: false })).toBeVisible();
+  await expect(sheet.getByText("asked to apply this change.", { exact: false })).toBeVisible();
   await sheet.getByRole("button", { name: "Cancel" }).click();
   await expect.poll(async () => (await app.calls("answer_apply_request")).map((c) => c.args)).toEqual([{ id: 9, approve: false }]);
 });

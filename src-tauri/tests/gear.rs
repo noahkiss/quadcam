@@ -89,6 +89,8 @@ fn env(mounted: &Mounted, present: &Present, cues: &Arc<RecordedCues>) -> Env {
         usb: Arc::new(Vec::new),
         cues: Arc::new(CueService::inline(cues.clone())),
         unmount: Arc::new(|_| Ok(())),
+        mount: Arc::new(|_| Ok(())),
+        fail_readback: None,
         disk: Arc::new(quadcam_lib::gear::health::FakeDisk::ok()),
         holders: Arc::new(|_| Vec::new()),
     }

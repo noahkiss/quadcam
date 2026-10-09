@@ -41,6 +41,7 @@ pub mod bf;
 pub mod blobs;
 pub mod changes;
 pub mod compat;
+pub mod copy;
 pub mod crashes;
 pub mod cues;
 pub mod detect;

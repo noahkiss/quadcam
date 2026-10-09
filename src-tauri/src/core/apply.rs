@@ -96,7 +96,7 @@ impl Core {
     }
 
     /// The device's latest backup with its `dump all`.
-    fn fc_base(&self, device: &str) -> Option<Base> {
+    pub(super) fn fc_base(&self, device: &str) -> Option<Base> {
         let snaps = self.snapshots();
         let backup = snaps.latest(device)?;
         let BackupContent { text, .. } = snaps.read(&backup.id, Some("dump all")).ok()?;

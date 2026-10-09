@@ -76,6 +76,9 @@ function DevicePage({ d }: { d: DeviceRef }) {
   const segment = useStore((s) => s.gearSegment);
   const setSegment = useStore((s) => s.setGearSegment);
   const dismiss = useStore((s) => s.dismissReminder);
+  const mountCard = useStore((s) => s.mountCard);
+  const unmountCard = useStore((s) => s.unmountCard);
+  const browsing = useStore((s) => s.gear?.mounted.find((m) => m.device === d.device?.id || m.device === d.connected?.id));
   const [editing, setEditing] = useState(false);
   const segs = segmentsFor(d);
   const cur = segs.find((x) => x.id === segment) || segs[0];
@@ -93,6 +96,19 @@ function DevicePage({ d }: { d: DeviceRef }) {
               <Button size="sm" variant="ghost" onClick={() => dismiss(d.connected!)}>
                 Dismiss reminder
               </Button>
+            )}
+            {d.kind === "radio" && d.unmounted && d.connected?.id && (
+              <Button size="sm" variant="ghost" onClick={() => void mountCard(d.connected!.id!)}>
+                Mount
+              </Button>
+            )}
+            {d.kind === "radio" && browsing && (
+              <>
+                <span className={styles.rowState}>Mounted until {new Date(browsing.until).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}</span>
+                <Button size="sm" variant="ghost" onClick={() => void unmountCard(browsing.device)}>
+                  Done
+                </Button>
+              </>
             )}
             {canSave && (
               <Button size="sm" variant={d.device ? "ghost" : "primary"} onClick={() => setEditing(true)}>

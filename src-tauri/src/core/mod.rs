@@ -16,6 +16,7 @@ use std::sync::{Arc, Mutex};
 mod apply;
 mod apply_card;
 mod backup;
+mod bench;
 mod cuts;
 mod fc;
 mod files;
@@ -40,6 +41,7 @@ pub use backup::{
     BackupResult, BackupSummary, CardCheckParams, CardChecksParams, CardRepairParams, ExportParams,
     GearJob, ImportBackupsParams, PruneParams, RepairResult, StopParams,
 };
+pub use bench::{apply_ready_hooks, CopyParams};
 pub use fc::{
     BoardNotesParams, FcJob, FcPortParams, FcReadParams, PollPauseParams, UsbTimer, USB_PROBE,
 };

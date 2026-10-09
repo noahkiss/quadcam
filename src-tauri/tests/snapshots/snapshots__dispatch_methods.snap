@@ -108,5 +108,11 @@ expression: "Core::METHODS"
   "gear_restore_stage",
   "gear_apply_plan",
   "gear_apply",
+  "gear_change_keep",
+  "gear_change_revert",
+  "gear_copy_plan",
+  "gear_copy_stage",
+  "gear_card_mount",
+  "gear_card_unmount",
   "gear_stop"
 ]

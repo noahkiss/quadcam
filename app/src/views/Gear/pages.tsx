@@ -7,11 +7,14 @@ import { FlightsPage } from "./Flights/FlightsPage";
 import { PacksPage } from "./Flights/PacksPage";
 import { PackUpPage } from "./Flights/PackUpPage";
 import { RepairsPage } from "./Flights/RepairsPage";
+import { BenchPage } from "./Bench/BenchPage";
 import { StoragePage } from "./Storage/StoragePage";
 import { CalibrationPage } from "./Sim/CalibrationPage";
 import { SimPage } from "./Sim/SimPage";
 
 export const GEAR_PAGES: GearPageSlot[] = [
+  // The changes staged for each device, in the order the next session applies them (WP5).
+  { id: "bench", label: "Bench", icon: "sliders", count: (s) => s.changes.length, render: () => <BenchPage /> },
   // The radio in USB Joystick mode, live (WP6).
   { id: "controls", label: "Controls", icon: "radio", render: () => <ControlsPage /> },
   // Fly the sim in the plain room (S5).

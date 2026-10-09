@@ -1,0 +1,126 @@
+.bar {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--s-2);
+}
+.groups {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-5);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.group {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-3);
+  padding: var(--s-4);
+  border: 1px solid var(--border);
+  border-radius: var(--r-2);
+}
+.head {
+  display: flex;
+  align-items: center;
+  gap: var(--s-2);
+}
+.name {
+  margin: 0;
+  flex: 1;
+  min-width: 0;
+  font-size: var(--t-lg);
+  font-weight: 700;
+}
+.state {
+  color: var(--muted);
+}
+.state[data-state="present"] {
+  color: var(--success-text);
+}
+.muted {
+  margin: 0;
+  color: var(--muted);
+}
+.prompt {
+  margin: 0;
+  display: flex;
+  align-items: center;
+  gap: var(--s-2);
+  color: var(--warning-text);
+}
+.list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-3);
+}
+.item {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-1);
+}
+.row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--s-2);
+}
+.title {
+  flex: 1;
+  min-width: 160px;
+  font-weight: 600;
+}
+.code {
+  display: block;
+  white-space: pre-wrap;
+  word-break: break-all;
+}
+.status {
+  min-width: 110px;
+}
+.history {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-2);
+}
+.hstatus {
+  color: var(--muted);
+}
+.hstatus[data-state="verified"] {
+  color: var(--success-text);
+}
+.hstatus[data-state="failed"] {
+  color: var(--warning-text);
+}
+.form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-3);
+  min-width: 360px;
+}
+.parts {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--s-1) var(--s-4);
+  border: 0;
+  margin: 0;
+  padding: 0;
+}
+.parts legend {
+  padding: 0;
+  margin-bottom: var(--s-1);
+  color: var(--muted);
+  font-weight: 600;
+}
+.error {
+  margin: 0;
+  color: var(--warning-text);
+}
+.skipped {
+  margin: 0;
+  padding-left: var(--s-4);
+  color: var(--muted);
+}

@@ -153,7 +153,7 @@ function GearGroup({ s }: { s: State }) {
       ))}
       <Item icon="list" label="Devices" count={s.devices.length} current={at({ page: "devices" })} onClick={() => s.openGear({ page: "devices" })} />
       {GEAR_PAGES.filter((p) => !p.preview || s.values[p.preview] === true).map((p) => (
-        <Item key={p.id} icon={p.icon} label={p.label} current={at({ page: "slot", id: p.id })} onClick={() => s.openGear({ page: "slot", id: p.id })} />
+        <Item key={p.id} icon={p.icon} label={p.label} count={p.count ? p.count(s) || null : undefined} current={at({ page: "slot", id: p.id })} onClick={() => s.openGear({ page: "slot", id: p.id })} />
       ))}
     </Group>
   );
