@@ -277,7 +277,7 @@ impl FakeElrs {
         let mut s = self.st.lock().unwrap();
         s.parser.push(data);
         let mut out = Vec::new();
-        while let Some(f) = s.parser.next() {
+        while let Some(f) = s.parser.take() {
             out.extend(Self::answer(&mut s, &f));
         }
         out

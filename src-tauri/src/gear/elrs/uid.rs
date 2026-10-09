@@ -46,6 +46,7 @@ pub fn md5(data: &[u8]) -> [u8; 16] {
             .map(|w| u32::from_le_bytes([w[0], w[1], w[2], w[3]]))
             .collect();
         let (mut a, mut b, mut c, mut d) = (a0, b0, c0, d0);
+        #[allow(clippy::needless_range_loop)]
         for i in 0..64 {
             let (f, g) = match i / 16 {
                 0 => ((b & c) | (!b & d), i),

@@ -250,7 +250,7 @@ impl CrsfLink {
     ) -> Result<Option<T>> {
         let end = Instant::now() + timeout;
         loop {
-            while let Some(fr) = self.parser.next() {
+            while let Some(fr) = self.parser.take() {
                 if let Some(v) = f(&fr) {
                     return Ok(Some(v));
                 }

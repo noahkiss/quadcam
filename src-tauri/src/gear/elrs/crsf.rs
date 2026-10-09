@@ -120,7 +120,7 @@ impl FrameParser {
     }
 
     /// The next whole, crc-correct frame, if the buffer holds one.
-    pub fn next(&mut self) -> Option<Frame> {
+    pub fn take(&mut self) -> Option<Frame> {
         loop {
             if self.buf.len() < 4 {
                 return None;
@@ -451,10 +451,10 @@ mod tests {
         let mut p = FrameParser::new();
         p.push(&[0x13, 0x77, 0x55]);
         p.push(&f);
-        let got = p.next().expect("a frame");
+        let got = p.take().expect("a frame");
         assert_eq!(got.kind, T_WRITE);
         assert_eq!(got.payload, vec![ADDR_TX, ADDR_RADIO, 3, 2]);
-        assert!(p.next().is_none());
+        assert!(p.take().is_none());
     }
 
     #[test]
@@ -464,9 +464,9 @@ mod tests {
         f[n - 1] ^= 0xFF;
         let mut p = FrameParser::new();
         p.push(&f);
-        assert!(p.next().is_none());
+        assert!(p.take().is_none());
         p.push(&ping());
-        assert_eq!(p.next().unwrap().kind, T_PING);
+        assert_eq!(p.take().unwrap().kind, T_PING);
     }
 
     #[test]
@@ -479,7 +479,7 @@ mod tests {
         let f = encode_ext(ADDR_RADIO, T_DEVICE_INFO, ADDR_RADIO, ADDR_TX, &body);
         let mut p = FrameParser::new();
         p.push(&f);
-        let info = parse_device_info(&p.next().unwrap()).unwrap();
+        let info = parse_device_info(&p.take().unwrap()).unwrap();
         assert_eq!(info.name, "Test TX");
         assert_eq!(info.origin, ADDR_TX);
         assert_eq!(info.serial, 0x454C5253);
@@ -491,7 +491,7 @@ mod tests {
         let f = encode_ext(ADDR_RADIO, T_DEVICE_INFO, ADDR_RADIO, ADDR_TX, b"X\0AB");
         let mut p = FrameParser::new();
         p.push(&f);
-        assert!(parse_device_info(&p.next().unwrap()).is_err());
+        assert!(parse_device_info(&p.take().unwrap()).is_err());
     }
 
     #[test]
