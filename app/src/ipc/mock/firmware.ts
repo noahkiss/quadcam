@@ -2,6 +2,7 @@
 // `gear_flash`): the check reads "the network" only when asked and remembers its answer,
 // the flash plan runs the core's guards on the mock's devices, and a flash keeps the
 // radio's old firmware as a backup. Written by hand from `core/firmware.rs`.
+import * as bf from "./bfflash";
 import type { ApplyPlan, ApplyReport, Check, Device, FirmwareStatus, FirmwareView, FlashParams, SplashParams, SplashPreview } from "../types";
 
 export interface MockFirmware {
@@ -52,7 +53,7 @@ function compat(product: "edgetx" | "splash", board: string | null, version: str
 }
 
 /** `gear_firmware`: `check` true reads the releases, false the saved answer, null follows the setting. */
-export function view(st: MockFirmware, devices: Device[], check: boolean | null, now: string): FirmwareView {
+export function view(st: MockFirmware, devices: Device[], check: boolean | null, now: string, bfPreview = false): FirmwareView {
   const due = st.mode === "daily" && !st.seen.checked_at;
   if (check ?? due) {
     st.checks += 1;
@@ -83,7 +84,7 @@ export function view(st: MockFirmware, devices: Device[], check: boolean | null,
     } else if (state === "update") note = `QuadCam checks ${product} versions. It does not flash them.`;
     rows.push({ device: d.id, kind: d.kind, name: d.name || `Unnamed ${d.kind === "radio" ? "Radio" : d.kind === "fc" ? "FC" : "ELRS"}`, product, board: idOf(d).board ?? null, installed, latest: newest, state, flashable, note });
   }
-  return { devices: rows, latest: structuredClone(latest), mode: st.mode };
+  return { devices: bf.adjust(rows, bfPreview), latest: structuredClone(latest), mode: st.mode };
 }
 
 // A 1 x 1 white PNG: the mock does not draw pictures.
@@ -116,9 +117,10 @@ const fail = (name: string, code: string, reason: string): Check => ({ name, ok:
 const refused = (code: string, reason: string) => `Refused (${code}): ${reason}`;
 
 /** `gear_flash_plan`. */
-export function plan(st: MockFirmware, devices: Device[], p: FlashParams): ApplyPlan {
+export function plan(st: MockFirmware, devices: Device[], p: FlashParams, bfPreview = false): ApplyPlan {
   const d = devices.find((x) => x.id === p.device);
   if (!d) throw `No saved device ${p.device}.`;
+  if (d.kind === "fc") return bf.plan(d, p, bfPreview, st.dfu);
   if (d.kind !== "radio") throw refused("incompatible", "QuadCam flashes the firmware of EdgeTX radios only.");
   const target = (p.version ?? idOf(d).version ?? "").replace(/^v/i, "");
   if (!target) throw "The radio reports no version; name the version to flash.";
@@ -157,12 +159,19 @@ export function plan(st: MockFirmware, devices: Device[], p: FlashParams): Apply
 }
 
 /** `gear_flash` and `gear_flash_click`. */
-export function flash(st: MockFirmware, devices: Device[], p: FlashParams, digest: string, confirm: boolean): ApplyReport {
+export function flash(st: MockFirmware, devices: Device[], p: FlashParams, digest: string, confirm: boolean, bfPreview = false): ApplyReport {
   if (!confirm) throw "Refused: a flash needs the plan's digest and confirm=true.";
-  const pl = plan(st, devices, p);
+  const pl = plan(st, devices, p, bfPreview);
   const bad = pl.checks.find((c) => !c.ok);
   if (bad?.refusal) throw refused(bad.refusal.code, bad.refusal.reason);
   if (pl.digest !== digest) throw refused("before_mismatch", "The firmware or the radio changed since the plan; plan again.");
+  const fc = devices.find((x) => x.id === p.device && x.kind === "fc");
+  if (fc) {
+    const failed = st.failNext;
+    st.failNext = false;
+    if (!failed) st.flashed.push(p.device);
+    return bf.flash(fc, p, pl, failed);
+  }
   const backup = `${p.device}/2026-10-09T120000-before_flash`;
   const base = { change: "flash", device: p.device, backup, after_backup: null, sent: [], failed_line: null, verify: [], files: [], notes: pl.warnings ?? [], at: "2026-10-09T12:00:00Z" };
   const first = { name: "Back up the current firmware", state: "done" as const, detail: `600 KB, ${backup}` };

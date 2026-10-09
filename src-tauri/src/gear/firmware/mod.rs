@@ -10,6 +10,8 @@
 //! QuadCam bundles no firmware. Images come from the upstream release at run time, on the
 //! person's action, and sit in `<cache>/firmware/<product>/<version>/` with their SHA-256.
 
+pub mod betaflight;
+pub mod betaflight_config;
 pub mod check;
 pub mod edgetx;
 

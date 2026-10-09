@@ -47,6 +47,8 @@ struct State {
     /// Lines acknowledged and not stored.
     forget: Vec<String>,
     lose_port_on: Option<String>,
+    /// `bl` was sent and the firmware was not installed since: the FC is a DFU device.
+    bootloader: bool,
     dump_chunks: usize,
     log: Vec<String>,
     opens: u32,
@@ -85,6 +87,7 @@ impl FakeFc {
                 allowed: Vec::new(),
                 forget: Vec::new(),
                 lose_port_on: None,
+                bootloader: false,
                 dump_chunks: 1,
                 log: Vec::new(),
                 opens: 0,
@@ -145,6 +148,28 @@ impl FakeFc {
     pub fn slow_dumps(self, chunks: usize) -> Self {
         self.st().dump_chunks = chunks.max(1);
         self
+    }
+    /// True from `bl` until `install`: the FC runs its ROM bootloader and has no port.
+    pub fn in_bootloader(&self) -> bool {
+        self.st().bootloader
+    }
+    /// New firmware: the FC holds `dump` (a `dump all`, with those values as defaults), leaves
+    /// the bootloader and reboots.
+    pub fn install(&self, dump: &str) {
+        let lines: Vec<String> = dump
+            .lines()
+            .map(|l| l.trim_end_matches('\r').to_string())
+            .filter(|l| l.trim() != "dump all")
+            .collect();
+        let mut s = self.st();
+        s.saved = lines.clone();
+        s.current = lines;
+        s.defaults = Config::parse(dump);
+        s.bootloader = false;
+        s.generation += 1;
+        s.mode = Mode::Msp;
+        s.section = Section::Master;
+        s.gone_opens = s.reboot_opens;
     }
     /// The battery: volts on the lead, 0 for none.
     pub fn set_battery(&self, volts: f32) {
@@ -306,6 +331,13 @@ impl FakeLink {
                 drop(s);
                 self.send(&format!("{echo}Saving\r\nRebooting"), 1);
                 self.reboot(true, None);
+                return;
+            }
+            "bl" => {
+                s.bootloader = true;
+                drop(s);
+                self.send(&format!("{echo}Restarting in bootloader mode\r\n"), 1);
+                self.reboot(false, Some(u32::MAX));
                 return;
             }
             "exit" => {

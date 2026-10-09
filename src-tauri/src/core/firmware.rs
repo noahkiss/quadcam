@@ -129,7 +129,19 @@ impl Core {
     /// What a flash would do, with every guard's result. Downloads the release when it is not
     /// in the cache; writes no device.
     pub fn gear_flash_plan(&self, p: &FlashParams) -> Result<ApplyPlan> {
+        if self.is_fc(&p.device)? {
+            return self.bf_flash_plan(p);
+        }
         Ok(self.flash_prepared(p)?.plan)
+    }
+
+    /// True when the saved device is an FC: its flash is Betaflight's (`core/bf_flash.rs`).
+    fn is_fc(&self, device: &str) -> Result<bool> {
+        Ok(self
+            .gear_store()
+            .devices()?
+            .iter()
+            .any(|d| d.id == device && d.kind == DeviceKind::Fc))
     }
 
     fn flash_prepared(&self, p: &FlashParams) -> Result<Prepared> {
@@ -358,6 +370,9 @@ impl Core {
 
     /// `gear_flash` with the confirm source given.
     pub fn flash_at(&self, req: &FlashRequest, from_gui: bool) -> Result<ApplyReport> {
+        if self.is_fc(&req.params.device)? {
+            return self.bf_flash_at(req, from_gui);
+        }
         if !req.confirm {
             bail!("Refused: a flash needs the plan's digest and confirm=true.");
         }

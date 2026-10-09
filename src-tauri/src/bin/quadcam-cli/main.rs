@@ -487,7 +487,7 @@ enum SetCmd {
     /// delete_clips_after_import, default_name, photos_album, format_label, log_dir, layout, place_folders, tunables, geocoder,
     /// name_date_format, default_profile, ffmpeg_source, modules; Gear: gear_dir, gear_auto_backup, gear_keep_recent,
     /// gear_keep_weeks, gear_keep_monthly, gear_usb_minutes, gear_on_connect, gear_cues,
-    /// firmware_check, tts_provider, tts_base_url, tts_model, tts_voice, voice_index, tts_key; sim_preview.
+    /// firmware_check, tts_provider, tts_base_url, tts_model, tts_voice, voice_index, tts_key; sim_preview, betaflight_flash_preview.
     Set {
         #[arg(required = true, value_name = "KEY=VALUE")]
         values: Vec<String>,

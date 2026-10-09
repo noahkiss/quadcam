@@ -175,6 +175,22 @@ impl CliSession {
         bail!("After save the port {port} is still there; check the FC.")
     }
 
+    /// Sends `bl`: the FC reboots into its ROM bootloader (a DFU device) and the serial port
+    /// vanishes. Nothing is saved. Fails when the port is still there after `Timing::save`.
+    pub fn bootloader(mut self) -> Result<()> {
+        self.link.write_all(b"bl\n")?;
+        let port = self.link.port().to_string();
+        let deadline = Instant::now() + self.timing.save;
+        while Instant::now() < deadline {
+            match self.link.read_some(Duration::from_millis(100)) {
+                Ok(_) => {}
+                Err(e) if is_gone(&e) => return Ok(()),
+                Err(e) => return Err(e),
+            }
+        }
+        bail!("After bl the port {port} is still there; the FC did not restart into its bootloader.")
+    }
+
     /// Sends `exit`: the FC leaves the CLI, drops unsaved changes and reboots. The link is
     /// dropped either way; a port already gone is fine.
     pub fn exit(mut self) {

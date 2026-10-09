@@ -847,7 +847,7 @@ fn gear<B: Backend>(backend: &mut B, a: &Value) -> Result<(Vec<Value>, Value)> {
             Ok((vec![text(t)], v))
         }
         "flash_plan" => {
-            let device = x.device.clone().context("device is required for flash_plan: the radio's saved device id")?;
+            let device = x.device.clone().context("device is required for flash_plan: the saved device id of the radio or FC")?;
             let v = backend.call(
                 "gear_flash_plan",
                 json!({"device": device, "version": x.version, "splash": splash_arg(x.image.as_deref(), x.threshold, x.invert)}),
@@ -1992,13 +1992,13 @@ fn gear_apply<B: Backend>(backend: &mut B, a: &Value) -> Result<(Vec<Value>, Val
             let device = x
                 .device
                 .clone()
-                .context("device is required for flash: the radio's saved device id")?;
+                .context("device is required for flash: the saved device id of the radio or FC")?;
             let digest = x
                 .digest
                 .context("digest is required for flash: the digest from quadcam_gear flash_plan")?;
             if x.confirm != Some(true) {
                 return Err(anyhow!(
-                    "Refused: flash writes the radio's firmware; it needs the plan's digest and confirm=true."
+                    "Refused: flash writes the device's firmware; it needs the plan's digest and confirm=true."
                 ));
             }
             let v = backend.call(

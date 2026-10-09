@@ -258,7 +258,7 @@ impl Core {
 
     /// Each plugged-in FC as the plan sees it. An FC not identified yet is identified
     /// over MSP (no reboot) unless another program holds its port.
-    fn fc_cands(&self) -> Vec<Cand> {
+    pub(super) fn fc_cands(&self) -> Vec<Cand> {
         let t = self.fc_timing();
         let now = Instant::now();
         let timers = self.gear_usb_timers();
@@ -352,7 +352,7 @@ impl Core {
         self.apply_inner(req, true)
     }
 
-    fn apply_inner(&self, req: &ApplyRequest, from_gui: bool) -> Result<ApplyReport> {
+    pub(super) fn apply_inner(&self, req: &ApplyRequest, from_gui: bool) -> Result<ApplyReport> {
         if !req.confirm {
             bail!("Refused: apply needs the plan's digest and confirm=true.");
         }

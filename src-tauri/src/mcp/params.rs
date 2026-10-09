@@ -402,6 +402,9 @@ pub struct SettingsValues {
     /// Show the Sim page in the Gear sidebar (a preview). Off by default.
     #[schemars(extend("x-nullable" = true))]
     pub sim_preview: Option<bool>,
+    /// Gear: offer flashing Betaflight firmware to an FC (a preview). Off by default.
+    #[schemars(extend("x-nullable" = true))]
+    pub betaflight_flash_preview: Option<bool>,
     /// Gear: back up a device when it is plugged in. On by default.
     #[schemars(extend("x-nullable" = true))]
     pub gear_auto_backup: Option<bool>,

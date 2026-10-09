@@ -315,6 +315,65 @@ pub fn run_with(
     }
 }
 
+/// Reboots the FC into its ROM bootloader (CLI `bl`), so it shows as a DFU device. The flash
+/// calls this after its backup and its plan; nothing else does. Before `bl` it reads `version`
+/// and `mcu_id` and checks that this is Betaflight, a board `board_ok` takes, and the FC the
+/// caller planned for (`expect_id`). It does not need the installed version to be proven:
+/// the flash replaces it. Nothing is saved.
+pub fn to_bootloader(
+    ports: &dyn Ports,
+    port: &str,
+    expect_id: Option<&str>,
+    board_ok: &dyn Fn(&str) -> std::result::Result<(), Refusal>,
+    timing: Timing,
+) -> Result<FcInfo> {
+    let usb_serial = ports
+        .list()
+        .into_iter()
+        .find(|p| p.port == port)
+        .and_then(|p| p.serial_number);
+    let (mut s, _) = CliSession::enter(cli::wait_for_port(ports, port, timing)?, timing)?;
+    let checked = (|| -> Result<FcInfo> {
+        let v = s.command("version")?;
+        let mut text = v.text.clone();
+        if let Some(m) = s.command("mcu_id").ok().filter(|m| !m.error) {
+            text.push('\n');
+            text.push_str(&m.text);
+        }
+        let c = dump::Config::parse(&text);
+        let uid = c.mcu_id();
+        let fc = info(port, c.identity(), uid.as_deref(), usb_serial.as_deref(), None);
+        if let Some(f) = fc.identity.firmware.as_deref().filter(|f| *f != "Betaflight") {
+            return Err(Refusal::new(
+                super::model::RefusalCode::UnknownVersion,
+                format!("{f} is not Betaflight; QuadCam flashes Betaflight only."),
+            )
+            .into());
+        }
+        board_ok(fc.identity.board.as_deref().unwrap_or_default())?;
+        if let Some(want) = expect_id {
+            if fc.id.as_deref() != Some(want) {
+                return Err(Refusal::new(
+                    super::model::RefusalCode::DeviceChanged,
+                    "This is not the FC the flash was planned for.",
+                )
+                .into());
+            }
+        }
+        Ok(fc)
+    })();
+    match checked {
+        Ok(fc) => {
+            s.bootloader()?;
+            Ok(fc)
+        }
+        Err(e) => {
+            s.exit();
+            Err(e)
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

@@ -194,7 +194,7 @@ export class MockCore {
         this.formatAnswers.push({ id: Number(args.id), approve: !!args.approve });
         return null;
       case "gear_flash_click":
-        return this.gearChanged(firmware.flash(this.firmware, this.gear.devices, p as never, String(p.digest), true));
+        return this.gearChanged(firmware.flash(this.firmware, this.gear.devices, p as never, String(p.digest), true, this.settings.values.bfFlashPreview === true));
       case "gear_sim_sync_click":
         return this.gearChanged(simsync.apply(this.simSync, p as never, String(p.digest), true));
       case "gear_sim_restore_click":
@@ -502,13 +502,13 @@ export class MockCore {
       case "gear_dfu_link":
         throw "No radio is in DFU mode. Turn the radio off, hold both trim buttons toward the centre and plug in the USB cable.";
       case "gear_firmware":
-        return firmware.view(this.firmware, this.gear.devices, (p.check as boolean | null) ?? null, "2026-10-09T12:00:00Z");
+        return firmware.view(this.firmware, this.gear.devices, (p.check as boolean | null) ?? null, "2026-10-09T12:00:00Z", this.settings.values.bfFlashPreview === true);
       case "gear_splash":
         return firmware.splash(p as never);
       case "gear_flash_plan":
-        return firmware.plan(this.firmware, this.gear.devices, p as never);
+        return firmware.plan(this.firmware, this.gear.devices, p as never, this.settings.values.bfFlashPreview === true);
       case "gear_flash":
-        return this.gearChanged(firmware.flash(this.firmware, this.gear.devices, p as never, String(p.digest), !!p.confirm));
+        return this.gearChanged(firmware.flash(this.firmware, this.gear.devices, p as never, String(p.digest), !!p.confirm, this.settings.values.bfFlashPreview === true));
       case "gear_flights":
         return this.flights.flights((p.day as string | null) ?? null);
       case "gear_flight_set":

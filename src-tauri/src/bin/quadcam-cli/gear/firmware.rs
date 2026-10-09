@@ -1,5 +1,5 @@
 //! `quadcam-cli gear firmware|splash`: the firmware check, the splash preview, and the
-//! EdgeTX flash (design 6.5, 7.5, 8). `firmware --plan` runs every guard and prints the
+//! EdgeTX flash and the Betaflight flash preview (design 6.5, 7.5, 8). `firmware --plan` runs every guard and prints the
 //! digest; `firmware --digest D --yes` flashes. Nothing here flashes without both, and
 //! a process started by cargo never reaches a real USB device.
 
@@ -22,10 +22,12 @@ pub struct FirmwareArgs {
     /// --device. Downloads the release on first use; writes no device.
     #[arg(long)]
     plan: bool,
-    /// The EdgeTX radio to flash (a saved device id).
+    /// The device to flash (a saved device id): an EdgeTX radio, or a Betaflight FC when
+    /// betaflight_flash_preview is on.
     #[arg(long)]
     device: Option<String>,
-    /// The EdgeTX version to flash. Default: the version the radio reports.
+    /// The version to flash: EdgeTX for a radio, a Betaflight release such as 2026.6.0 for
+    /// an FC. Default: the version the device reports.
     #[arg(long)]
     version: Option<String>,
     /// A PNG to make the radio's splash screen.
@@ -37,7 +39,8 @@ pub struct FirmwareArgs {
     /// Splash: swap dark and light.
     #[arg(long)]
     invert: bool,
-    /// The digest `--plan` printed. Flashes the radio, which must be in DFU mode.
+    /// The digest `--plan` printed. Flashes the device. A radio must be in DFU mode; an FC is
+    /// restarted into its bootloader by QuadCam, and its settings are put back afterwards.
     #[arg(long)]
     digest: Option<String>,
     #[arg(long)]

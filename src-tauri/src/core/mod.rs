@@ -17,6 +17,7 @@ mod apply;
 mod apply_card;
 mod backup;
 mod bench;
+mod bf_flash;
 mod cuts;
 mod dfu_link;
 mod fc;
@@ -294,6 +295,8 @@ pub struct Core {
     modules: crate::modules::Modules,
     /// The network and the USB path the firmware code uses (`core/firmware.rs`).
     firmware: crate::gear::firmware::FwEnv,
+    /// Betaflight's build service (`core/bf_flash.rs`).
+    bf_cloud: Arc<dyn crate::gear::firmware::betaflight::Cloud>,
     /// The radio as a USB joystick, and its stream (`core/switchmap.rs`).
     radio: switchmap::RadioState,
     /// The sim's calibration session (`core/sim.rs`).
@@ -359,6 +362,7 @@ impl Core {
             cache,
             modules: crate::modules::Modules::default(),
             firmware: crate::gear::firmware::FwEnv::system(),
+            bf_cloud: Arc::new(crate::gear::firmware::betaflight::CurlCloud::system()),
             radio: switchmap::RadioState::default(),
             sim: sim::SimState::default(),
             gear_jobs: Mutex::default(),

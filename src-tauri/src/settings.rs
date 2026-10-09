@@ -347,6 +347,12 @@ pub const KEYS: &[Key] = &[
         check: boolean,
     },
     Key {
+        file: "bfFlashPreview",
+        name: Some("betaflight_flash_preview"),
+        about: "true or false",
+        check: boolean,
+    },
+    Key {
         file: "simSettings",
         name: None,
         about: "the Sim page's settings object",
