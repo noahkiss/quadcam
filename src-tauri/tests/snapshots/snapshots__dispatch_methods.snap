@@ -65,6 +65,7 @@ expression: "Core::METHODS"
   "gear_poll_pause",
   "gear_dismiss_reminder",
   "gear_osd",
+  "gear_osd_edit",
   "gear_rates",
   "gear_rates_preview",
   "gear_sims",

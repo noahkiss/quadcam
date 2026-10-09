@@ -22,6 +22,7 @@ import type {
 import * as seed from "./seed";
 import * as gear from "./gear";
 import * as changes from "./changes";
+import * as osd from "./osd";
 import { MockFlights } from "./flights";
 import * as backups from "./backups";
 import * as simsync from "./simsync";
@@ -35,7 +36,7 @@ const DISPATCH = new Set([
   "library", "library_rate", "library_edit", "library_rename", "library_cuts", "library_export_cuts", "library_trash", "library_untrash",
   "library_photos", "library_apply_name_format", "library_match_logs", "library_rebuild", "library_rescan", "library_preview", "library_strips", "card_status",
   "settings", "settings_set", "place_search", "place_save", "session_cuts", "profiles", "session_split", "library_split",
-  "modules", "module_install", "module_remove", "modules_check", "gear_osd", "gear_rates", "gear_rates_preview", "gear_sims", "gear_sim_sync_plan", "gear_sim_sync",
+  "modules", "module_install", "module_remove", "modules_check", "gear_osd", "gear_osd_edit", "gear_rates", "gear_rates_preview", "gear_sims", "gear_sim_sync_plan", "gear_sim_sync",
   "gear_status", "gear_devices", "gear_device_save", "gear_device_forget", "gear_dismiss_reminder", "gear_poll_pause",
   "gear_switch_map", "gear_radio", "gear_radio_watch", "gear_sim_calibration", "gear_sim_calibration_save", "gear_sim_defaults", "gear_sim_calibrate",
   "gear_flights", "gear_flight_set", "gear_flight_folders", "gear_packs", "gear_pack_save", "gear_pack_delete", "gear_pack_type_save",
@@ -419,10 +420,12 @@ export class MockCore {
         const paths = (p.paths as string[] | undefined) ?? [];
         const dev = this.gear.devices.find((d) => d.id === p.device);
         if (!paths.length && !dev?.last_backup) throw "Pass a Betaflight dump or diff file, or a device.";
-        const v = seed.osd();
+        const v = osd.view(this.gear, paths.length ? null : (dev?.id ?? null), !!p.staged);
         v.source = paths.length ? paths.map(base) : [`${dev!.last_backup} dump all`];
         return v;
       }
+      case "gear_osd_edit":
+        return this.gearChanged(osd.edit(this.gear, p as never, (p.editor as "agent" | null) ?? "user"));
       case "gear_rates": {
         const paths = (p.paths as string[] | undefined) ?? [];
         const dev = this.gear.devices.find((d) => d.id === p.device);

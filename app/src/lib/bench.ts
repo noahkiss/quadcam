@@ -35,6 +35,7 @@ export function summary(c: StagedChange): string {
       if (e.kind === "fc_lines") return e.lines.filter((l) => l.trim()).join("; ");
       if (e.kind === "restore") return e.paths.length ? `restore ${e.paths.join(", ")}` : "restore a backup";
       if (e.kind === "radio") return e.ops.map((o) => (o.op === "set_scalar" ? `${o.key}: ${o.value}` : `select ${o.file}`)).join("; ");
+      if (e.kind === "osd_element") return `osd ${e.element} to ${e.x},${e.y} ${e.profiles.length ? `in profile ${e.profiles.join(", ")}` : "off"}`;
       return e.kind.replace(/_/g, " ");
     })
     .join("; ");

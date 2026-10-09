@@ -23,8 +23,8 @@ test("opens a dump and shows each profile with its check", async ({ app, page })
   await page.getByRole("button", { name: "Open dump…" }).click();
 
   const calls = await app.method("gear_osd");
-  expect(calls[0]).toEqual({ paths: [], device: "fc-0a1b2c3d4e5f6071", grid: null });
-  expect(calls.at(-1)).toEqual({ paths: [DUMP], device: null, grid: null });
+  expect(calls[0]).toEqual({ paths: [], device: "fc-0a1b2c3d4e5f6071", grid: null, staged: true });
+  expect(calls.at(-1)).toEqual({ paths: [DUMP], device: null, grid: null, staged: false });
   const profiles = page.getByRole("group", { name: "OSD profile" });
   // The profile in use (osd_profile = 2) opens first; problem counts are on the segments.
   await expect(profiles.getByRole("button", { name: "2 CRUISE (1)" })).toHaveAttribute("aria-pressed", "true");

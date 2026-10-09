@@ -356,7 +356,8 @@ in `specta_builder` (`lib.rs`).
 | `gear_export` | `ExportParams { device or snapshot, to }` → `ExportReport` | a folder the user picked |
 | `gear_import_backups` | `ImportBackupsParams { folder, device, dry_run }` → `ImportBackupsReport` | gear folder |
 | `gear_switch_map` | `AircraftParams { aircraft, live }` → `SwitchMap` | no |
-| `gear_osd` | `OsdParams { paths or device, grid }` → `OsdView` (backup and change sources join with WP4 and WP5) | no |
+| `gear_osd` | `OsdParams { paths or device, grid, staged }` → `OsdView` (`staged`: the device's backup with its staged OSD edits on top) | no |
+| `gear_osd_edit` | `OsdEditParams { device, moves, copy }` → `StagedChange` (joins the one "OSD layout" change) | no |
 | `gear_rates` | `RatesParams { device or backup or change }` → `RatesView` | no |
 | `gear_sims` | – → `Vec<SimStatus>` | no |
 | `gear_changes` | `ChangeFilter` → `Vec<StagedChange>` | no |
@@ -914,6 +915,25 @@ FC effect (`aux` modes, `adjrange` selections such as rate or OSD profile), the 
   `app/src/views/Gear/Osd/OsdSegment.tsx` (`OsdScreen.tsx` draws one view). The Gear page
   frame (WP13) mounts `<OsdSegment />` as the FC page's OSD segment (`views/Gear/segments.tsx`),
   on files for now; it passes the FC's device id once a device source exists (WP4, WP2).
+- **Built (WP7 editor):** on a saved FC with a backup the segment is the editor.
+  `OsdParams.staged` draws the backup with the device's staged `OsdElement` edits on top
+  (`OsdConfig::apply_edits`, the same bits the FC writer keeps). `gear_osd_edit`
+  (`Core::gear_osd_edit`) takes moves (`OsdMove`: element, optional x, y, profiles), or a
+  profile copy (`OsdCopy`), resolves them against that working layout and joins them into one
+  open change titled "OSD layout" (updated in place, made if none): the last edit of an element
+  wins, an element back at the FC's value drops out, and an empty change is discarded.
+  Staging and the apply go through the WP5 path unchanged. The CLI has `gear osd-edit` and
+  `gear osd --staged`; MCP has `quadcam_gear_edit osd_edit` and `quadcam_gear osd` with `staged`.
+  The UI (`OsdScreen`, `OsdSegment`) drags, moves with the arrow keys (Shift for five), toggles
+  per profile in a list with X and Y boxes, copies a profile, and opens WP5's Copy settings with
+  OSD ticked for a copy from another quad.
+- **Deviations:** the editor does not fork copy settings: copying a layout between quads is the
+  Copy settings `osd` part, so it carries the alarms and units too, not only positions.
+  Elements draw as sample text, not Betaflight font glyphs. Variant bits are kept, never
+  edited. Edits to an element a diff-only backup leaves out are refused (the core cannot see
+  its value). Acceptance: the exhaustive `Pos` round trip, an edit-to-FC-line round trip, the
+  NTSC, PAL and HD goldens (`tests/osd.rs`), overlap and off-screen checks, and
+  `tests/osd_edit.rs` plus `e2e/osd-edit.spec.ts` for the staged line.
 - **Built (WP8 read half):** `gear/rates.rs` re-exports `quadcam_sim::rates` (the one
   implementation of the curves), reads every `rateprofile` of a dump or diff, samples the curves
   (51 points), and fits one model onto another (`fit`, `to_betaflight`). `gear/sims/` holds one

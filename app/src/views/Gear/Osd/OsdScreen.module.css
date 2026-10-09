@@ -106,3 +106,47 @@
   color: var(--muted);
   font-size: var(--t-sm);
 }
+.edit {
+  cursor: grab;
+  overflow: hidden;
+  white-space: pre;
+  line-height: var(--osd-line);
+  touch-action: none;
+  user-select: none;
+  outline: 1px dashed color-mix(in srgb, var(--fg) 35%, transparent);
+}
+.edit:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 1px;
+}
+.moving {
+  cursor: grabbing;
+  z-index: 1;
+  background: color-mix(in srgb, var(--primary) 28%, var(--crust));
+}
+.scroll {
+  max-height: 420px;
+  overflow: auto;
+}
+.scroll:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 1px;
+}
+.tick {
+  accent-color: var(--primary);
+  margin: 0;
+}
+.num {
+  width: 5ch;
+  font: inherit;
+  font-variant-numeric: tabular-nums;
+  color: var(--fg);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--r-1);
+  padding: 1px var(--s-1);
+}
+.num:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 0;
+}
