@@ -62,6 +62,7 @@ pub mod sim_cal;
 pub mod sims;
 pub mod store;
 pub mod switchmap;
+pub mod voice;
 
 use crate::disk::Volume;
 use model::DeviceKind;
