@@ -364,6 +364,12 @@ pub fn flash(
     })
 }
 
+/// The size of the device's flash, from its memory layout.
+pub fn flash_size(usb: &mut dyn Usb, _quick: bool) -> Result<usize> {
+    let l = Layout::parse(&usb.layout()?)?;
+    Ok((l.end() - l.start()) as usize)
+}
+
 /// Reads `len` bytes of flash from `base`: a firmware backup before a flash.
 pub fn read_flash(usb: &mut dyn Usb, base: u32, len: usize, quick: bool) -> Result<Vec<u8>> {
     let mut dfu = if quick { Dfu::quick(usb) } else { Dfu::new(usb) };

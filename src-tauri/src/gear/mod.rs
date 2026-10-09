@@ -48,6 +48,7 @@ pub mod detect;
 pub mod dfu;
 pub mod edgetx;
 pub mod events;
+pub mod firmware;
 pub mod flights;
 pub mod health;
 pub mod model;
