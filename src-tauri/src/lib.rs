@@ -529,6 +529,7 @@ pub fn specta_builder() -> tauri_specta::Builder<tauri::Wry> {
             c::gear_dismiss_reminder,
             c::gear_osd,
             c::gear_rates,
+            c::gear_rates_preview,
             c::gear_sims,
             c::gear_sim_sync_plan,
             c::gear_sim_sync,

@@ -180,6 +180,11 @@ export const commands = {
 	 */
 	gearRates: (params: RatesParams) => typedError<RatesView, string>(__TAURI_INVOKE("gear_rates", { params })),
 	/**
+	 *  A rate profile as edited, with fresh curves; with `to`, fitted onto that rate model
+	 *  first, with the error per axis. Reads and writes nothing.
+	 */
+	gearRatesPreview: (params: RatesPreviewParams) => typedError<RatesPreview, string>(__TAURI_INVOKE("gear_rates_preview", { params })),
+	/**
 	 *  The sims on this Mac with their rate profiles; with a quad, how each differs
 	 *  from the quad's rates. Reads only.
 	 */
@@ -3590,6 +3595,25 @@ export type RatesParams = {
 	device?: string | null,
 	/**  A backup id (`<device>/<name>`) from `gear_backups`, instead of the latest. */
 	backup?: string | null,
+};
+
+/**  The edited profile with fresh curves, and, after a conversion, how far each axis is off. */
+export type RatesPreview = {
+	profile: RateProfileView,
+	/**  Largest gap from the source curve per axis (deg/s); 0 without a conversion. */
+	fit_error: (number | null)[],
+	/**  The same as a share of the source's maximum rate (0-1). */
+	fit_share: (number | null)[],
+};
+
+/**
+ *  `gear_rates_preview`: a rate profile as edited, to draw its curves; with `to`, the same
+ *  curve fitted onto another rate model first.
+ */
+export type RatesPreviewParams = {
+	profile: RateProfileView,
+	/**  `betaflight`, `actual`, `quick`, `raceflight` or `kiss`. */
+	to?: string | null,
 };
 
 /**  What a dump or diff says about rates. */

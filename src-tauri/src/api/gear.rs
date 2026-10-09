@@ -13,7 +13,8 @@ pub use crate::core::{
 pub use crate::core::{
     BoardNotesParams, CardParams, CardPreview, CardPreviewParams, DeviceSaveParams, FcJob,
     FcPortParams, FcReadParams, GearCard, GearStatus, OsdParams, PollPauseParams, RadioParams,
-    RadioWatchParams, RatesParams, ReminderParams, SimsParams, SwitchMapParams, UsbTimer,
+    RadioWatchParams, RatesParams, RatesPreview, RatesPreviewParams, ReminderParams, SimsParams,
+    SwitchMapParams, UsbTimer,
 };
 pub use crate::core::{
     CalibrateParams, CalibrateView, SimCalibration, SimCalibrationParams, SimCalibrationSaveParams,
@@ -94,6 +95,9 @@ macro_rules! with_gear_rows {
             /// roll, pitch and yaw curves with maximum and centre rates, the throttle curve.
             /// Reads only.
             gear_rates(params: RatesParams) -> RatesView = |c| c.gear_rates(&params);
+            /// A rate profile as edited, with fresh curves; with `to`, fitted onto that rate model
+            /// first, with the error per axis. Reads and writes nothing.
+            gear_rates_preview(params: RatesPreviewParams) -> RatesPreview = |c| c.gear_rates_preview(&params);
             /// The sims on this Mac with their rate profiles; with a quad, how each differs
             /// from the quad's rates. Reads only.
             gear_sims(params: SimsParams) -> Vec<SimStatus> = |c| c.gear_sims(&params);

@@ -61,7 +61,7 @@ pub use gear_card::{CardParams, CardPreview, CardPreviewParams, GearCard};
 pub use import::CardStatus;
 pub use library::{LibEdit, LibItem, LibUpdate, LibraryView, RebuildReport, RenameReport};
 pub use osd::OsdParams;
-pub use rates::{RatesParams, SimsParams};
+pub use rates::{RatesParams, RatesPreview, RatesPreviewParams, SimsParams};
 pub use rematch::{LibMatch, LibMatchParams, LibMatchReport};
 pub use setup::{PlaceRemoved, SettingsView};
 pub use sim::{

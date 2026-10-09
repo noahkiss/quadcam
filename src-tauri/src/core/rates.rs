@@ -42,6 +42,26 @@ pub struct SimsParams {
     pub profile: Option<u8>,
 }
 
+/// `gear_rates_preview`: a rate profile as edited, to draw its curves; with `to`, the same
+/// curve fitted onto another rate model first.
+#[derive(Debug, Clone, Default, Serialize, Deserialize, specta::Type)]
+pub struct RatesPreviewParams {
+    pub profile: RateProfileView,
+    /// `betaflight`, `actual`, `quick`, `raceflight` or `kiss`.
+    #[serde(default)]
+    pub to: Option<String>,
+}
+
+/// The edited profile with fresh curves, and, after a conversion, how far each axis is off.
+#[derive(Debug, Clone, Serialize, Deserialize, specta::Type)]
+pub struct RatesPreview {
+    pub profile: RateProfileView,
+    /// Largest gap from the source curve per axis (deg/s); 0 without a conversion.
+    pub fit_error: Vec<f64>,
+    /// The same as a share of the source's maximum rate (0-1).
+    pub fit_share: Vec<f64>,
+}
+
 impl RatesParams {
     fn any(&self) -> bool {
         !self.paths.is_empty() || self.device.is_some() || self.backup.is_some()
@@ -138,6 +158,49 @@ impl Core {
         // Later texts win: one config from all of them, in order.
         let config = Config::parse(&texts.join("\n"));
         Ok(rates::read(&config, source))
+    }
+
+    /// A profile as edited: its curves from the one implementation of the math, so the
+    /// editor draws what the FC will do. With `to`, the profile is fitted onto that model
+    /// first (the existing least-squares fit). Writes nothing.
+    pub fn gear_rates_preview(&self, p: &RatesPreviewParams) -> Result<RatesPreview> {
+        let v = &p.profile;
+        let nums = v
+            .axes
+            .iter()
+            .flat_map(|a| [a.rc_rate, a.srate, a.expo, a.rate_limit])
+            .chain([v.throttle.mid, v.throttle.expo, v.throttle.limit_percent]);
+        if v.axes.len() != 3 || nums.into_iter().any(|x| !x.is_finite()) {
+            bail!("A rate profile has roll, pitch and yaw, and every value is a number.");
+        }
+        if rates::type_of(&v.rates_type).is_none() {
+            bail!(
+                "{:?} is not a rate model (betaflight, actual, quick, raceflight, kiss).",
+                v.rates_type
+            );
+        }
+        let prof = rates::profile_of(v);
+        let (prof, fits) = match p.to.as_deref().map(str::trim).filter(|t| !t.is_empty()) {
+            None => (prof, None),
+            Some(t) => {
+                let to =
+                    rates::type_of(t).with_context(|| format!("{t:?} is not a rate model."))?;
+                let (c, f) = rates::convert(&prof, to);
+                (c, Some(f))
+            }
+        };
+        let mut view = prof.view(v.index, v.name.clone(), v.active, v.complete);
+        // The limit shown is the one given, not the clamp the math applies.
+        for (a, src) in view.axes.iter_mut().zip(&v.axes) {
+            a.rate_limit = src.rate_limit;
+        }
+        Ok(RatesPreview {
+            profile: view,
+            fit_error: fits.map_or(vec![0.0; 3], |f| f.iter().map(|x| x.max_diff).collect()),
+            fit_share: fits.map_or(vec![0.0; 3], |f| {
+                f.iter().map(|x| x.max_diff_share).collect()
+            }),
+        })
     }
 
     /// The sims on this Mac: each one's rate profiles, whether it runs, and, with a quad,

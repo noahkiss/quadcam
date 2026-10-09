@@ -369,3 +369,76 @@ fn the_rows_cli_and_mcp_actions() {
     let r = s.call_tool("quadcam_gear", json!({"action": "rates"}));
     assert_eq!(r["isError"], true);
 }
+
+#[test]
+fn a_preview_redraws_an_edited_profile_and_converts_with_the_fit() {
+    use quadcam_lib::core::RatesPreviewParams;
+    let dir = tempfile::tempdir().unwrap();
+    let c = core(dir.path());
+    let view = c
+        .gear_rates(&RatesParams {
+            paths: vec![three()],
+            ..Default::default()
+        })
+        .unwrap();
+    let free = view.profiles[0].clone();
+    // As read: the preview is the profile, curve for curve.
+    let same = c
+        .gear_rates_preview(&RatesPreviewParams {
+            profile: free.clone(),
+            to: None,
+        })
+        .unwrap();
+    assert_eq!(same.profile.axes[0].curve, free.axes[0].curve);
+    assert_eq!(same.fit_error, [0.0, 0.0, 0.0]);
+    // A higher RC rate raises the maximum, and the other axes stay.
+    let mut edited = free.clone();
+    edited.axes[0].rc_rate = 150.0;
+    let p = c
+        .gear_rates_preview(&RatesPreviewParams {
+            profile: edited,
+            to: None,
+        })
+        .unwrap();
+    assert!(p.profile.axes[0].max_deg_s > free.axes[0].max_deg_s + 10.0);
+    assert_eq!(p.profile.axes[1].curve, free.axes[1].curve);
+    // Actual to Betaflight: the existing fit, with the gap per axis, whole numbers.
+    let race = view.profiles[1].clone();
+    assert_eq!(race.rates_type, "actual");
+    let to = c
+        .gear_rates_preview(&RatesPreviewParams {
+            profile: race.clone(),
+            to: Some("betaflight".into()),
+        })
+        .unwrap();
+    assert_eq!(to.profile.rates_type, "betaflight");
+    assert!(to.fit_error[0] > 0.0 && to.fit_share[0] < 0.12);
+    assert_eq!(to.profile.axes[0].rc_rate.fract(), 0.0);
+    assert_eq!(to.profile.index, race.index);
+    let gap = to.profile.axes[0]
+        .curve
+        .iter()
+        .zip(&race.axes[0].curve)
+        .map(|(a, b)| (a - b).abs())
+        .fold(0.0, f64::max);
+    assert!(
+        (gap - to.fit_error[0]).abs() < 12.0,
+        "{gap} {}",
+        to.fit_error[0]
+    );
+    // Refusals: a model that does not exist, a value that is not a number.
+    assert!(c
+        .gear_rates_preview(&RatesPreviewParams {
+            profile: free.clone(),
+            to: Some("nope".into()),
+        })
+        .is_err());
+    let mut nan = free;
+    nan.axes[0].expo = f64::NAN;
+    assert!(c
+        .gear_rates_preview(&RatesPreviewParams {
+            profile: nan,
+            to: None,
+        })
+        .is_err());
+}
