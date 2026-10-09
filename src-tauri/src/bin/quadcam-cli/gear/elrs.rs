@@ -92,9 +92,10 @@ pub fn run(core: &Core, cmd: Option<ElrsCmd>) -> Result<Value> {
                 check: check.then_some(true),
             },
         )?)?,
-        ElrsCmd::Read { host, port } => {
-            serde_json::to_value(call::gear_elrs_read(core, api::ElrsReadParams { host, port })?)?
-        }
+        ElrsCmd::Read { host, port } => serde_json::to_value(call::gear_elrs_read(
+            core,
+            api::ElrsReadParams { host, port },
+        )?)?,
         ElrsCmd::Set {
             device,
             options,

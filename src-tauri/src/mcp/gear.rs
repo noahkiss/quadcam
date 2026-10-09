@@ -1478,15 +1478,26 @@ fn elrs_text(v: &Value) -> String {
         }
     }
     if v["devices"].as_array().is_none_or(Vec::is_empty) {
-        out.push_str("No ELRS device read yet. Use quadcam_gear_edit elrs_read with a saved radio or FC.\n");
+        out.push_str(
+            "No ELRS device read yet. Use quadcam_gear_edit elrs_read with a saved radio or FC.\n",
+        );
     }
-    for w in v["warnings"].as_array().into_iter().flatten().filter_map(Value::as_str) {
+    for w in v["warnings"]
+        .as_array()
+        .into_iter()
+        .flatten()
+        .filter_map(Value::as_str)
+    {
         out.push_str(&format!("warning: {w}\n"));
     }
     out.push_str(&format!(
         "esptool module: {}. Binding phrase: {}. Region {}.\n",
         v["esptool"].as_str().unwrap_or("not installed"),
-        if v["phrase_set"] == true { "set" } else { "not set" },
+        if v["phrase_set"] == true {
+            "set"
+        } else {
+            "not set"
+        },
         v["region"].as_str().unwrap_or("FCC"),
     ));
     out
@@ -1510,7 +1521,12 @@ fn elrs_read_text(v: &Value) -> String {
             o["value"].as_str().unwrap_or("?")
         ));
     }
-    for n in v["notes"].as_array().into_iter().flatten().filter_map(Value::as_str) {
+    for n in v["notes"]
+        .as_array()
+        .into_iter()
+        .flatten()
+        .filter_map(Value::as_str)
+    {
         out.push_str(&format!("note: {n}\n"));
     }
     out
