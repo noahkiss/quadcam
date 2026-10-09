@@ -30,8 +30,8 @@ pub struct SimsArgs {
     #[arg(long)]
     pub backup: Option<String>,
     /// The quad's rate profile to compare with (default: the one it uses).
-    #[arg(long)]
-    pub profile: Option<u8>,
+    #[arg(long = "rate-profile", alias = "profile")]
+    pub rate_profile: Option<u8>,
     /// Print the sims as text instead of the structured view.
     #[arg(long)]
     pub text: bool,
@@ -106,7 +106,7 @@ fn sync(core: &Core, a: SimsArgs) -> Result<Value> {
         paths,
         device,
         backup: a.backup,
-        profile: a.profile,
+        profile: a.rate_profile,
     };
     let Some(digest) = a.digest else {
         return Ok(serde_json::to_value(call::gear_sim_sync_plan(
@@ -160,7 +160,7 @@ pub fn sims(core: &Core, a: SimsArgs) -> Result<Value> {
             paths,
             device,
             backup: a.backup,
-            profile: a.profile,
+            profile: a.rate_profile,
         },
     )?;
     Ok(if a.text {

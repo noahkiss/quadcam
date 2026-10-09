@@ -9,6 +9,7 @@ use super::render::{
 use super::tools::{tools, INSTRUCTIONS};
 use crate::control::{self, Client};
 use crate::core::Core;
+use crate::schema::{mcp_deprecations, Deprecation, DEPRECATIONS, SCHEMA_VERSION};
 use anyhow::{anyhow, Context, Result};
 use base64::Engine;
 use serde_json::{json, Value};
@@ -126,11 +127,22 @@ fn args<T: serde::de::DeserializeOwned + Default>(a: &Value) -> Result<T> {
 
 pub struct Server<B: Backend> {
     pub backend: B,
+    /// What warns on use (`schema::DEPRECATIONS`; tests give their own).
+    deprecations: &'static [Deprecation],
 }
 
 impl<B: Backend> Server<B> {
     pub fn new(backend: B) -> Self {
-        Self { backend }
+        Self {
+            backend,
+            deprecations: DEPRECATIONS,
+        }
+    }
+
+    /// The same server with another deprecation table, to test the warnings.
+    pub fn with_deprecations(mut self, table: &'static [Deprecation]) -> Self {
+        self.deprecations = table;
+        self
     }
 
     /// Handles one message. Notifications get no reply.
@@ -152,7 +164,11 @@ impl<B: Backend> Server<B> {
                 Ok(json!({
                     "protocolVersion": version,
                     "capabilities": {"tools": {"listChanged": false}},
-                    "serverInfo": {"name": "quadcam", "version": env!("CARGO_PKG_VERSION")},
+                    "serverInfo": {
+                        "name": "quadcam",
+                        "version": env!("CARGO_PKG_VERSION"),
+                        "schemaVersion": SCHEMA_VERSION,
+                    },
                     "instructions": INSTRUCTIONS,
                 }))
             }
@@ -174,7 +190,18 @@ impl<B: Backend> Server<B> {
     /// Runs a tool. Operational failures come back as `isError` results the agent can read.
     pub fn call_tool(&mut self, name: &str, args: Value) -> Value {
         match self.run_tool(name, &args) {
-            Ok((content, structured)) => {
+            Ok((mut content, mut structured)) => {
+                // A deprecated tool, action or parameter works and says what replaces it.
+                let warnings: Vec<String> = mcp_deprecations(self.deprecations, name, &args)
+                    .iter()
+                    .map(|d| d.warning())
+                    .collect();
+                if !warnings.is_empty() {
+                    content.push(text(warnings.join("\n")));
+                    if let Some(o) = structured.as_object_mut() {
+                        o.insert("deprecations".into(), json!(warnings));
+                    }
+                }
                 json!({"content": content, "structuredContent": structured, "isError": false})
             }
             Err(e) => json!({"content": [text(format!("{e:#}"))], "isError": true}),
@@ -205,7 +232,7 @@ impl<B: Backend> Server<B> {
                     .collect();
                 let sess = &status["session"];
                 let line = format!(
-                    "Mode: {mode}{}. Cards: {}. Radios: {}. Session: {}.",
+                    "Schema {SCHEMA_VERSION}. Mode: {mode}{}. Cards: {}. Radios: {}. Session: {}.",
                     if mode == "app" {
                         " (the person sees changes live in quadcam)"
                     } else {
@@ -227,7 +254,7 @@ impl<B: Backend> Server<B> {
                 );
                 Ok((
                     vec![text(line)],
-                    json!({"mode": mode, "status": status, "cards": cards, "radios": radios}),
+                    json!({"schema_version": SCHEMA_VERSION, "mode": mode, "status": status, "cards": cards, "radios": radios}),
                 ))
             }
             "quadcam_library" => {
