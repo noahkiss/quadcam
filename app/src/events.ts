@@ -45,6 +45,9 @@ export async function start(): Promise<() => void> {
         S().setFormatConfirm(null);
       }
     }),
+    // An agent asked to apply a staged change: the person must click Apply in the sheet.
+    on("agent-apply-request", ({ id, change, plan }) => S().agentApply(id, change, plan)),
+    on("agent-apply-closed", (id) => S().agentApplyClosed(id)),
     onDragDrop((e) => {
       const s = S();
       const blocked = s.busy || !s.env?.tools || dialogOpen(s);

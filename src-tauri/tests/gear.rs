@@ -90,6 +90,7 @@ fn env(mounted: &Mounted, present: &Present, cues: &Arc<RecordedCues>) -> Env {
         cues: Arc::new(CueService::inline(cues.clone())),
         unmount: Arc::new(|_| Ok(())),
         disk: Arc::new(quadcam_lib::gear::health::FakeDisk::ok()),
+        holders: Arc::new(|_| Vec::new()),
     }
 }
 
@@ -494,7 +495,7 @@ fn the_three_mcp_tools() {
     assert_eq!(r["isError"], true, "device_save needs an id");
     let r = s.call_tool(
         "quadcam_gear_apply",
-        json!({"action": "apply", "digest": "x", "confirm": true}),
+        json!({"action": "flash", "digest": "x", "confirm": true}),
     );
     assert_eq!(r["isError"], true);
     assert!(r["content"][0]["text"]

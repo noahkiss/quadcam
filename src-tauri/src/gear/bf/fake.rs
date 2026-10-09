@@ -42,6 +42,10 @@ struct State {
     /// What `MSP_RC` answers: µs per channel.
     rc: Vec<u16>,
     reject: Vec<String>,
+    /// What `get NAME` prints after the value, by name (default `Allowed range: 0 - 65535`).
+    allowed: Vec<(String, String)>,
+    /// Lines acknowledged and not stored.
+    forget: Vec<String>,
     lose_port_on: Option<String>,
     dump_chunks: usize,
     log: Vec<String>,
@@ -78,6 +82,8 @@ impl FakeFc {
                 vbat_cv: 0,
                 rc: vec![1500, 1500, 988, 1500, 988, 988, 988, 988],
                 reject: Vec::new(),
+                allowed: Vec::new(),
+                forget: Vec::new(),
                 lose_port_on: None,
                 dump_chunks: 1,
                 log: Vec::new(),
@@ -111,6 +117,24 @@ impl FakeFc {
     pub fn reject(self, line: &str) -> Self {
         self.st().reject.push(line.trim().to_string());
         self
+    }
+    /// What `get name` prints after the value (`Allowed range: 0 - 20000`).
+    pub fn with_allowed(self, name: &str, text: &str) -> Self {
+        self.st().allowed.push((name.to_string(), text.to_string()));
+        self
+    }
+    /// A `set` line the FC acknowledges and does not keep (a verify failure).
+    pub fn forget(self, line: &str) -> Self {
+        self.st().forget.push(line.trim().to_string());
+        self
+    }
+    /// Changes a saved `set` from outside, as a configurator would.
+    pub fn poke(&self, section: Section, name: &str, value: &str) {
+        let mut s = self.st();
+        if let Some(i) = find_set(&s.saved, section, name) {
+            s.saved[i] = format!("set {name} = {value}");
+            s.current[i] = s.saved[i].clone();
+        }
     }
     /// The port goes away when this line arrives, and stays away.
     pub fn lose_port_on(self, line: &str) -> Self {
@@ -336,6 +360,11 @@ impl FakeLink {
             }
             Cmd::Set { name, value } => {
                 let sec = s.section;
+                if s.forget.contains(&line) {
+                    drop(s);
+                    self.send(&format!("{echo}{name} set to {value}\r\n\r\n# "), 1);
+                    return;
+                }
                 match find_set(&s.current, sec, &name) {
                     Some(i) => {
                         s.current[i] = format!("set {name} = {value}");
@@ -349,7 +378,14 @@ impl FakeLink {
                 let name = line.split_whitespace().nth(1).unwrap_or(&name).to_string();
                 let c = Config::parse(&s.current.join("\n"));
                 match c.get(s.section, &name) {
-                    Some(v) => format!("{name} = {v}\r\nAllowed range: 0 - 65535\r\n"),
+                    Some(v) => {
+                        let allowed = s
+                            .allowed
+                            .iter()
+                            .find(|(n, _)| *n == name)
+                            .map_or("Allowed range: 0 - 65535", |(_, t)| t.as_str());
+                        format!("{name} = {v}\r\n{allowed}\r\n")
+                    }
                     None => format!("###ERROR IN get: INVALID NAME: {name}###\r\n"),
                 }
             }

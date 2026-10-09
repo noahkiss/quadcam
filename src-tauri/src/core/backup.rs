@@ -213,7 +213,7 @@ pub(super) struct JobSlot {
 }
 
 /// Unregisters a job when it ends.
-struct JobGuard<'a> {
+pub(super) struct JobGuard<'a> {
     core: &'a Core,
     handle: String,
 }
@@ -255,7 +255,7 @@ pub fn backup_hooks() -> Vec<OnConnectHook> {
 }
 
 impl Core {
-    fn snapshots(&self) -> Snapshots {
+    pub(super) fn snapshots(&self) -> Snapshots {
         Snapshots::new(self.gear_store())
     }
 
@@ -286,7 +286,7 @@ impl Core {
     }
 
     /// Registers a job on a link; refuses a second job on the same link.
-    fn job_start(
+    pub(super) fn job_start(
         &self,
         handle: &str,
         device: Option<&str>,
@@ -324,6 +324,14 @@ impl Core {
             },
             stop,
         ))
+    }
+
+    /// Names the step a job is on, for the apply sheet's progress row.
+    pub(super) fn job_step(&self, handle: &str, step: &str) {
+        if let Some(s) = self.gear_jobs.lock().unwrap().get_mut(handle) {
+            s.job.step = step.to_string();
+        }
+        self.hooks.gear_changed();
     }
 
     /// Records a job's progress; tells the GUI at most four times a second.
@@ -505,7 +513,7 @@ impl Core {
     }
 
     /// Saves the device as seen with its newest backup, and prunes after a new snapshot.
-    fn after_backup(
+    pub(super) fn after_backup(
         &self,
         id: &str,
         kind: DeviceKind,

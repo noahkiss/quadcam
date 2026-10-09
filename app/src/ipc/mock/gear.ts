@@ -6,6 +6,7 @@ import type { Connected, Device, DeviceKind, GearSettings, GearStatus } from "..
 import { HOME } from "./seed";
 import { latestChecks, seedBackups, type MockBackup } from "./backups";
 import type { CardCheck, GearJob, StepFailure } from "../types";
+import { freshChanges, type MockChanges } from "./changes";
 
 const GEAR_DIR = `${HOME}/Library/Application Support/app.quadcam/gear`;
 const KINDS: DeviceKind[] = ["fc", "radio", "elrs_tx", "elrs_rx", "goggles", "dvr_card"];
@@ -82,10 +83,12 @@ export interface MockGear {
   dirty: string | null;
   jobs: GearJob[];
   failures: StepFailure[];
+  /** Staged changes (`ipc/mock/changes.ts`). */
+  changeStore: MockChanges;
 }
 
 /** No gear plugged in; two devices saved, with backups. */
-export const quietGear = (): MockGear => ({ devices: [structuredClone(RADIO), structuredClone(FC)], connected: [], working: [], reminders: [], paused: [], backups: seedBackups(), checks: [], cardFails: [], dirty: null, jobs: [], failures: [] });
+export const quietGear = (): MockGear => ({ devices: [structuredClone(RADIO), structuredClone(FC)], connected: [], working: [], reminders: [], paused: [], backups: seedBackups(), checks: [], cardFails: [], dirty: null, jobs: [], failures: [], changeStore: freshChanges() });
 
 /** A saved radio, a DVR card QuadCam does not know, and goggles a job is reading. */
 export const busyGear = (): MockGear => ({ ...quietGear(), connected: [radioConnected(), dvrConnected(), gogglesConnected()], working: ["disk6"] });
@@ -97,7 +100,7 @@ export function gearStatus(g: MockGear, values: Record<string, unknown>): GearSt
     settings: gearSettings(values),
     connected: g.connected.map((c) => ({ ...c, device: g.devices.find((d) => d.id === c.id) || null })),
     devices: g.devices.length,
-    staged: 0,
+    staged: g.changeStore.changes.filter((c) => c.status === "ready" || c.status === "draft").length,
     sims_out_of_date: 0,
     working: [...g.working],
     reminders: [...g.reminders],

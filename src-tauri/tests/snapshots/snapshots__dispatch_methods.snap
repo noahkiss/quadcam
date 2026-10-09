@@ -102,5 +102,12 @@ expression: "Core::METHODS"
   "gear_card_check",
   "gear_card_checks",
   "gear_card_repair",
+  "gear_changes",
+  "gear_change_stage",
+  "gear_change_update",
+  "gear_change_discard",
+  "gear_restore_stage",
+  "gear_apply_plan",
+  "gear_apply",
   "gear_stop"
 ]

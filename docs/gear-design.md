@@ -1256,6 +1256,36 @@ job's end and a dismiss send `gear-changed`.
 
 ## 8. Safety model
 
+**Built (WP5a, FC side).** `gear/changes.rs` (the change store under `<gear>/changes/<id>/`,
+`render_fc`: edits to CLI lines, the diff and the before state, and `restore_lines`),
+`gear/apply.rs` (types), `gear/apply/fc.rs` (the plan, its checks, the digest, the range
+check), `core/apply.rs` (stage, update, discard, restore, plan, apply as one FC job). Rows:
+`gear_changes`, `gear_change_stage`, `gear_change_update`, `gear_change_discard`,
+`gear_restore_stage`, `gear_apply_plan`, `gear_apply`. The sheet's own click is the Tauri command
+`gear_apply_click`; `Hooks::confirm_apply` asks the app's sheet for any other caller (events
+`agent-apply-request` and `agent-apply-closed`, the command `answer_apply_request`). Deviations:
+
+- **The plan reads no CLI.** The before state is the touched settings in the device's latest
+  `dump all` backup, so a plan needs no reboot. The apply takes a fresh `before_apply` backup
+  and recomputes the digest from it; a difference is `before_mismatch`. The digest covers the
+  device id, the dump's board, firmware, version and build, the before values and the lines.
+- **Range check at apply, not plan.** `get NAME` needs the CLI, so the check runs in the
+  apply's first CLI session before the first line (`bf::run_with`'s `precheck`). The plan checks
+  that names exist.
+- **USB heat** is a check of its own (`usb_heat`): the FC has a battery in and its USB timer
+  has run out. No device is `no_device`. These two codes are new.
+- **`gear_apply_plan` and `gear_apply` take an optional `port`** for the several-FC case.
+- **After an apply** the engine stores a `Trigger::AfterApply` backup from the read-back
+  session, so the next plan compares with the state the FC holds now.
+- **Profile selection.** A line in a profile gets its `profile N` select, and the FC's own
+  selection is put back at the end (a saved selection changes the active profile).
+- **Restore** works on FC backups: it sets back every `set`, and the list-like commands
+  (modes, adjustments, features, beepers, LEDs, VTX and mixers) that differ from the latest
+  dump.
+- **Not in 5a:** card apply, the Bench page and statuses (Try, Read first, Keep/Revert), mount
+  cycle, copying settings between quads, the `apply_ready` automation. `OsdElement` edits have
+  no FC writer yet; stage refuses them.
+
 ### 8.1 One path for every write
 
 Every write to a device, a sim or a card goes: stage → plan → checks → confirm → backup →
@@ -1352,7 +1382,7 @@ docs, and its rows in `api`, CLI and MCP.
 | WP2 | Betaflight link | `gear/bf/` (`cli.rs`, `msp.rs`, `dump.rs`, `fake.rs`) | WP1 | 1 |
 | WP3 | EdgeTX card engine | `gear/edgetx/` (`yaml.rs`, `model.rs`, `card.rs`), the synthetic card generator | WP1 | 1 |
 | WP4 | Backups and the store | `gear/blobs.rs`, `backup.rs`, `radiologs.rs`; retention, import of old backup folders, auto backup on connect; Backups segment and Storage page | WP1, WP2, WP3 | 2 |
-| WP5 | Staged changes and apply | `gear/changes.rs`, `apply.rs`, `apply/fc.rs`, `apply/card.rs`; the apply sheet; Bench page | WP1, WP2, WP3, WP4 | 3 |
+| WP5 | Staged changes and apply. **5a done:** `changes.rs`, `apply.rs`, `apply/fc.rs`, the FC apply sheet, the Changes segment. 5b: `apply/card.rs`, Bench page, mount cycle, copy between quads | `gear/changes.rs`, `apply.rs`, `apply/fc.rs`, `apply/card.rs`; the apply sheet; Bench page | WP1, WP2, WP3, WP4 | 3 |
 | WP6 | Switch map | `gear/switchmap.rs`, Switches segment | WP2, WP3 | 2 |
 | WP7 | OSD | `gear/osd.rs`, OSD segment (view and editor) | WP2 (parse); WP5 to stage | 1 (pure part), 3 (editor) |
 | WP8 | Rates and sims | `gear/rates.rs`, `gear/sims/`, `apply/sim.rs`, Rates segment, Sims page | WP2, WP5 (plan/confirm pattern) | 2 (read), 3 (sync) |

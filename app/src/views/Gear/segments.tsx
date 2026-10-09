@@ -4,6 +4,7 @@
 import { Overview } from "./Overview";
 import { OsdSegment } from "./Osd/OsdSegment";
 import { SwitchesSegment } from "./Switches/SwitchesSegment";
+import { ChangesSegment } from "./Changes/ChangesSegment";
 import { BackupsSegment } from "./Backups/BackupsSegment";
 import type { DeviceRef, DeviceSegment } from "./slots";
 
@@ -13,6 +14,8 @@ export const DEVICE_SEGMENTS: DeviceSegment[] = [
   { id: "osd", label: "OSD", kinds: ["fc"], render: (d) => <OsdSegment key={d.key} device={d.device?.last_backup ? d.device.id : null} /> },
   // From a card or model file and a dump; the latest backups join as sources later.
   { id: "switches", label: "Switches", kinds: ["fc", "radio"], render: (d) => <SwitchesSegment d={d} /> },
+  // Staged changes, the history, and Edit setting (WP5).
+  { id: "changes", label: "Changes", kinds: ["fc"], render: (d) => <ChangesSegment d={d} /> },
   { id: "backups", label: "Backups", kinds: ["radio", "fc", "goggles", "dvr_card"], render: (d) => <BackupsSegment d={d} /> },
 ];
 

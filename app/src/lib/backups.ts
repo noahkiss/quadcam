@@ -8,6 +8,7 @@ export const TRIGGER_LABEL: Record<BackupSummary["trigger"], string> = {
   manual: "Manual",
   before_apply: "Before apply",
   before_flash: "Before flash",
+  after_apply: "After apply",
   import: "Imported",
 };
 

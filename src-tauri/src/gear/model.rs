@@ -217,6 +217,9 @@ pub enum Trigger {
     BeforeApply,
     /// Taken before a firmware flash. Always kept.
     BeforeFlash,
+    /// Read back from an FC right after an apply, so the next plan compares with what the
+    /// FC holds now. Thinned like plug-in backups.
+    AfterApply,
     /// Taken from an old backup folder (`gear import-backups`). Thinned like plug-in
     /// backups.
     Import,
@@ -230,6 +233,7 @@ impl Trigger {
             Trigger::Manual => "manual",
             Trigger::BeforeApply => "before_apply",
             Trigger::BeforeFlash => "before_flash",
+            Trigger::AfterApply => "after_apply",
             Trigger::Import => "import",
         }
     }
@@ -280,6 +284,16 @@ pub enum ChangeStatus {
     Failed,
     Reverted,
     Discarded,
+}
+
+impl ChangeStatus {
+    /// Staged and not applied yet: the change still waits for the person.
+    pub fn staged(self) -> bool {
+        matches!(
+            self,
+            ChangeStatus::Draft | ChangeStatus::Ready | ChangeStatus::Try | ChangeStatus::ReadFirst
+        )
+    }
 }
 
 /// Where a Betaflight `set` lives.
@@ -434,6 +448,10 @@ pub enum RefusalCode {
     PortBusy,
     /// Serial and device access is off in this process (tests; see `serial::system`).
     Disabled,
+    /// The device the change is for is not plugged in.
+    NoDevice,
+    /// The FC has run on USB with its battery in past its limit; it must cool first.
+    UsbHeat,
 }
 
 impl RefusalCode {
@@ -453,6 +471,8 @@ impl RefusalCode {
             RefusalCode::BadSetting => "bad_setting",
             RefusalCode::PortBusy => "port_busy",
             RefusalCode::Disabled => "disabled",
+            RefusalCode::NoDevice => "no_device",
+            RefusalCode::UsbHeat => "usb_heat",
         }
     }
 }

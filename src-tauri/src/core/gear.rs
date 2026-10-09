@@ -162,7 +162,7 @@ impl Core {
             jobs: self.gear_jobs(),
             connected,
             devices: store.devices()?.len(),
-            staged: 0,
+            staged: self.gear_staged_counts().values().sum(),
             sims_out_of_date: 0,
             usb_timers: self.gear_usb_timers(),
             paused: self.gear_paused_ports(),

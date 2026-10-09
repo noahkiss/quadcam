@@ -35,6 +35,7 @@ pub mod trim;
 pub mod watch;
 
 use crate::core::{Core, FormatPlan, FormatRequest, Hooks};
+use crate::gear::model::{ApplyPlan, StagedChange};
 use anyhow::{anyhow, Result};
 use serde::Serialize;
 use session::Session;
@@ -83,6 +84,29 @@ impl Hooks for GuiHooks {
             Ok(false) => Err(anyhow!("Refused: the user cancelled the erase in quadcam.")),
             Err(_) => Err(anyhow!(
                 "Refused: nobody clicked Erase in quadcam within 3 minutes."
+            )),
+        }
+    }
+    fn confirm_apply(&self, change: &StagedChange, plan: &ApplyPlan) -> Result<()> {
+        let id = self.next.fetch_add(1, Ordering::SeqCst);
+        let (tx, rx) = mpsc::channel();
+        self.pending.lock().unwrap().insert(id, tx);
+        let _ = self.app.emit(
+            api::AgentApplyRequest::NAME,
+            api::AgentApplyRequest {
+                id,
+                change: change.clone(),
+                plan: plan.clone(),
+            },
+        );
+        let answer = rx.recv_timeout(FORMAT_CONFIRM_TIMEOUT);
+        self.pending.lock().unwrap().remove(&id);
+        let _ = self.app.emit(api::AgentApplyClosed::NAME, id);
+        match answer {
+            Ok(true) => Ok(()),
+            Ok(false) => Err(anyhow!("Refused: the user cancelled the apply in quadcam.")),
+            Err(_) => Err(anyhow!(
+                "Refused: nobody clicked Apply in quadcam within 3 minutes."
             )),
         }
     }
@@ -204,6 +228,26 @@ async fn format_card(state: State<'_, AppState>, label: String) -> Result<Format
 #[tauri::command]
 #[specta::specta]
 fn answer_format_request(state: State<'_, AppState>, id: u64, approve: bool) {
+    if let Some(tx) = state.hooks.pending.lock().unwrap().remove(&id) {
+        let _ = tx.send(approve);
+    }
+}
+
+/// The apply sheet's own Apply button: the click is the confirmation.
+#[tauri::command]
+#[specta::specta]
+async fn gear_apply_click(
+    state: State<'_, AppState>,
+    params: api::ApplyRequest,
+) -> Result<api::ApplyReport, String> {
+    let core = state.core.clone();
+    blocking(move || core.gear_apply_click(&params)).await
+}
+
+/// The person's answer to an agent's apply request.
+#[tauri::command]
+#[specta::specta]
+fn answer_apply_request(state: State<'_, AppState>, id: u64, approve: bool) {
     if let Some(tx) = state.hooks.pending.lock().unwrap().remove(&id) {
         let _ = tx.send(approve);
     }
@@ -507,6 +551,13 @@ pub fn specta_builder() -> tauri_specta::Builder<tauri::Wry> {
             c::gear_card_checks,
             c::gear_card_repair,
             c::gear_stop,
+            c::gear_changes,
+            c::gear_change_stage,
+            c::gear_change_update,
+            c::gear_change_discard,
+            c::gear_restore_stage,
+            c::gear_apply_plan,
+            c::gear_apply,
             c::modules,
             c::module_install,
             c::module_remove,
@@ -522,6 +573,8 @@ pub fn specta_builder() -> tauri_specta::Builder<tauri::Wry> {
             sim_stop,
             format_card,
             answer_format_request,
+            gear_apply_click,
+            answer_apply_request,
             library_scope,
             third_party_notices,
             menu::menu_state,
@@ -540,6 +593,8 @@ pub fn specta_builder() -> tauri_specta::Builder<tauri::Wry> {
             api::DeviceChanged,
             api::AgentFormatRequest,
             api::AgentFormatClosed,
+            api::AgentApplyRequest,
+            api::AgentApplyClosed,
             api::Menu,
             api::RadioInput,
             api::SimCalibrationEvent,

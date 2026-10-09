@@ -13,6 +13,7 @@ use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 
+mod apply;
 mod backup;
 mod cuts;
 mod fc;
@@ -31,6 +32,7 @@ mod sim;
 mod sim_host;
 mod switchmap;
 pub use crate::paths::{cache_dir, default_session_file, default_settings_file, support_dir};
+pub use apply::{ChangeUpdateParams, RestoreParams, StageParams};
 pub use backup::{
     backup_hooks, BackupDiffParams, BackupFilter, BackupParams, BackupPinParams, BackupReadParams,
     BackupResult, BackupSummary, CardCheckParams, CardChecksParams, CardRepairParams, ExportParams,
@@ -75,6 +77,15 @@ pub trait Hooks: Send + Sync {
     /// Called before a format that did not start from the GUI's own button. The GUI shows
     /// its confirm dialog and returns Ok only after the user clicks Erase.
     fn confirm_format(&self, _plan: &FormatPlan) -> Result<()> {
+        Ok(())
+    }
+    /// Called before an apply that did not start from the apply sheet's own Apply button.
+    /// The GUI shows the sheet and returns Ok only after the person clicks Apply.
+    fn confirm_apply(
+        &self,
+        _change: &crate::gear::model::StagedChange,
+        _plan: &crate::gear::model::ApplyPlan,
+    ) -> Result<()> {
         Ok(())
     }
     /// True when a person is watching (the GUI).

@@ -21,6 +21,7 @@ const fmtTime = (t: string | null | undefined) => (t ? new Date(t).toLocaleStrin
  *  its aircraft and its latest backup, and the device's other segments. */
 export function Overview({ d }: { d: DeviceRef }) {
   const home = useStore((s) => s.home);
+  useStore((s) => s.changes); // the bar follows the staged changes
   const setFilter = useStore((s) => s.setFilter);
   const setSegment = useStore((s) => s.setGearSegment);
   const identity = { ...(d.device?.identity || {}), ...Object.fromEntries(Object.entries(d.connected?.identity || {}).filter(([, v]) => v)) };

@@ -271,6 +271,30 @@ export const commands = {
 	gearCardRepair: (params: CardRepairParams) => typedError<RepairResult, string>(__TAURI_INVOKE("gear_card_repair", { params })),
 	/**  Stops a running backup or card check on a link. True when one was running. */
 	gearStop: (params: StopParams) => typedError<boolean, string>(__TAURI_INVOKE("gear_stop", { params })),
+	/**  Staged changes: those waiting by default, or the bench history with `history`. */
+	gearChanges: (params: ChangeFilter) => typedError<StagedChange[], string>(__TAURI_INVOKE("gear_changes", { params })),
+	/**
+	 *  Stages edits for a device (FC settings as raw CLI lines or `set`s). Refuses
+	 *  names the FC's latest backup does not hold and lines the engine never sends.
+	 */
+	gearChangeStage: (params: StageParams) => typedError<StagedChange, string>(__TAURI_INVOKE("gear_change_stage", { params })),
+	/**  Edits a staged change: its edits, title, note, order, or draft/ready. */
+	gearChangeUpdate: (params: ChangeUpdateParams) => typedError<StagedChange, string>(__TAURI_INVOKE("gear_change_update", { params })),
+	/**  Discards a staged change. It stays in the history. */
+	gearChangeDiscard: (params: IdParams) => typedError<StagedChange, string>(__TAURI_INVOKE("gear_change_discard", { params })),
+	/**  Stages an FC backup's settings back as a change. */
+	gearRestoreStage: (params: RestoreParams) => typedError<StagedChange, string>(__TAURI_INVOKE("gear_restore_stage", { params })),
+	/**
+	 *  Runs every guard for a staged change and builds its diff and digest. Writes
+	 *  nothing and does not reboot the FC.
+	 */
+	gearApplyPlan: (params: ApplyPlanParams) => typedError<ApplyPlan, string>(__TAURI_INVOKE("gear_apply_plan", { params })),
+	/**
+	 *  Applies a staged change to the FC: backup, write, save, read back, verify.
+	 *  Needs the plan's digest and confirm=true; with the app running the person also
+	 *  clicks Apply in its sheet.
+	 */
+	gearApply: (params: ApplyRequest) => typedError<ApplyReport, string>(__TAURI_INVOKE("gear_apply", { params })),
 	/**
 	 *  Downloaded tools: each module's pin, a newer pin from the last check, and what is
 	 *  installed. Reads only local files.
@@ -312,6 +336,10 @@ export const commands = {
 	formatCard: (label: string) => typedError<FormatPlan, string>(__TAURI_INVOKE("format_card", { label })),
 	/**  The person's answer to an agent's format request. */
 	answerFormatRequest: (id: number, approve: boolean) => __TAURI_INVOKE<void>("answer_format_request", { id, approve }),
+	/**  The apply sheet's own Apply button: the click is the confirmation. */
+	gearApplyClick: (params: ApplyRequest) => typedError<ApplyReport, string>(__TAURI_INVOKE("gear_apply_click", { params })),
+	/**  The person's answer to an agent's apply request. */
+	answerApplyRequest: (id: number, approve: boolean) => __TAURI_INVOKE<void>("answer_apply_request", { id, approve }),
 	/**  Lets the webview load files from the library folder (thumbnails and MP4 playback). */
 	libraryScope: () => typedError<null, string>(__TAURI_INVOKE("library_scope")),
 	/**
@@ -333,6 +361,8 @@ export const commands = {
 
 /** Events */
 export const events = {
+	agentApplyClosed: makeEvent<AgentApplyClosed>("agent-apply-closed"),
+	agentApplyRequest: makeEvent<AgentApplyRequest>("agent-apply-request"),
 	agentFormatClosed: makeEvent<AgentFormatClosed>("agent-format-closed"),
 	agentFormatRequest: makeEvent<AgentFormatRequest>("agent-format-request"),
 	deviceChanged: makeEvent<DeviceChanged>("device-changed"),
@@ -367,6 +397,16 @@ export type Adjustment = {
 	select: boolean,
 };
 
+/**  The agent's apply request with this id is closed (answered or timed out). */
+export type AgentApplyClosed = number;
+
+/**  An agent asked to apply a staged change. Answer with `answer_apply_request`. */
+export type AgentApplyRequest = {
+	id: number,
+	change: StagedChange,
+	plan: ApplyPlan,
+};
+
 /**  The agent's format request with this id is closed (answered or timed out). */
 export type AgentFormatClosed = number;
 
@@ -374,6 +414,57 @@ export type AgentFormatClosed = number;
 export type AgentFormatRequest = {
 	id: number,
 	plan: FormatPlan,
+};
+
+/**
+ *  What applying a change would do, with every guard's result. Writes nothing. `digest`
+ *  covers the identity, the before state and the edits; the apply needs it back.
+ */
+export type ApplyPlan = {
+	change: string,
+	device: Identity,
+	checks: Check[],
+	diff: DiffItem[],
+	digest: string,
+};
+
+/**  `gear_apply_plan`: the change to plan. `port` picks the FC when several are plugged in. */
+export type ApplyPlanParams = {
+	id: string,
+	port?: string | null,
+};
+
+/**  What an apply did. It is also written to the change's `report.json`. */
+export type ApplyReport = {
+	change: string,
+	device: string,
+	/**  `Verified`, or `Failed`. */
+	status: ChangeStatus,
+	steps: StepReport[],
+	/**  The backup taken before the write (always kept). "Restore backup" stages it back. */
+	backup: string | null,
+	/**  The state read back after the save. */
+	after_backup: string | null,
+	/**  Each line sent with the FC's answer, up to a failed one. */
+	sent: Reply[],
+	/**  The line the FC refused; nothing was saved. */
+	failed_line: Reply | null,
+	/**  Lines the FC does not hold as written after the save. */
+	verify: VerifyFail[],
+	saved: boolean,
+	/**  One sentence for the person. */
+	message: string,
+	/**  Known issues of this board and build. */
+	notes?: string[],
+	at: string,
+};
+
+/**  `gear_apply`: the plan's digest and the confirm. */
+export type ApplyRequest = {
+	id: string,
+	digest: string,
+	confirm?: boolean,
+	port?: string | null,
 };
 
 /**  One download of a module. */
@@ -820,6 +911,34 @@ export type CardView = {
 	marker?: string | null,
 	/**  The typed view of the model asked for. */
 	model?: ModelView | null,
+};
+
+/**  One entry in a change's history. */
+export type ChangeEvent = {
+	at: string,
+	status: ChangeStatus,
+	note?: string,
+};
+
+/**  `gear_changes`: which changes to list. Staged ones by default. */
+export type ChangeFilter = {
+	device?: string | null,
+	status?: ChangeStatus | null,
+	/**  Also list applied, failed, reverted and discarded changes (the bench history). */
+	history?: boolean,
+};
+
+/**  A staged change's place in the bench queue. */
+export type ChangeStatus = "draft" | "ready" | "try" | "read_first" | "applied" | "verified" | "failed" | "reverted" | "discarded";
+
+/**  `gear_change_update`. */
+export type ChangeUpdateParams = {
+	id: string,
+	title?: string | null,
+	edits?: Edit[] | null,
+	status?: ChangeStatus | null,
+	note?: string | null,
+	order?: number | null,
 };
 
 export type ChannelValue = {
@@ -3320,7 +3439,11 @@ export type RefusalCode = "unknown_version" | "unknown_board" | "device_changed"
 /**  The port is open in another QuadCam process (the app or the CLI). */
 "port_busy" | 
 /**  Serial and device access is off in this process (tests; see `serial::system`). */
-"disabled";
+"disabled" | 
+/**  The device the change is for is not plugged in. */
+"no_device" | 
+/**  The FC has run on USB with its battery in past its limit; it must cool first. */
+"usb_heat";
 
 /**  `gear_dismiss_reminder`: a device's link, as `link_handle` names it. */
 export type ReminderParams = {
@@ -3400,6 +3523,13 @@ export type RestingFrom =
 "after_disarm" | 
 /**  The first reading of the next flight of the same model. */
 "next_arm";
+
+/**  `gear_restore_stage`: put an FC backup's settings back, as a staged change. */
+export type RestoreParams = {
+	backup: string,
+	paths?: string[],
+	editor?: Editor | null,
+};
 
 export type RowState = "pass" | "warn" | "unknown";
 
@@ -3868,6 +3998,33 @@ export type SpecialFunction = {
 	def: string,
 };
 
+/**  `gear_change_stage`: queue edits for a device. */
+export type StageParams = {
+	device: string,
+	title?: string | null,
+	edits: Edit[],
+	note?: string | null,
+	/**  Who staged it. The app and the CLI leave it out (the person); MCP says `agent`. */
+	editor?: Editor | null,
+	/**  Keep it as a draft: the plug-in bar and Review skip drafts. */
+	draft?: boolean,
+};
+
+/**  A change to one device, staged and not yet applied (or applied, as history). */
+export type StagedChange = {
+	id: string,
+	device: string,
+	title: string,
+	status: ChangeStatus,
+	edits: Edit[],
+	/**  The backup the "before" state was read from. */
+	base_backup: string,
+	editor: Editor,
+	note?: string,
+	order?: number,
+	history?: ChangeEvent[],
+};
+
 export type Status = Status_Serialize | Status_Deserialize;
 
 export type Status_Deserialize = {
@@ -3894,6 +4051,18 @@ export type StepFailure = {
 	message: string,
 	at: string,
 };
+
+/**  One step of an apply: Back up, Write, Read back, Verify. */
+export type StepReport = {
+	name: string,
+	state: StepState,
+	detail?: string | null,
+};
+
+/**  How one step of an apply ended. */
+export type StepState = "done" | "failed" | 
+/**  Not reached: an earlier step failed. */
+"skipped";
 
 export type Stick = "roll" | "pitch" | "throttle" | "yaw";
 
@@ -4116,6 +4285,11 @@ export type Trigger =
 /**  Taken before a firmware flash. Always kept. */
 "before_flash" | 
 /**
+ *  Read back from an FC right after an apply, so the next plan compares with what the
+ *  FC holds now. Thinned like plug-in backups.
+ */
+"after_apply" | 
+/**
  *  Taken from an old backup folder (`gear import-backups`). Thinned like plug-in
  *  backups.
  */
@@ -4189,6 +4363,14 @@ export type ValidationReport = {
 	profile: string,
 	logs: string[],
 	checks: CheckResult[],
+};
+
+/**  A line a dump does not show as written. */
+export type VerifyFail = {
+	line: string,
+	section: Section,
+	/**  What the dump holds instead, when it holds the setting at all. */
+	found: string | null,
 };
 
 /**  `verify`: the clips to check again (all verified clips when None). */
