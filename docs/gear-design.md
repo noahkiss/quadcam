@@ -690,11 +690,22 @@ file before it writes.
 
 | Sim | File | Format | Rates |
 |---|---|---|---|
-| Liftoff | `~/Library/Application Support/LuGus Studios/Liftoff/Saves/Player/UserData.xml` | XML; each rate profile its own `<rateProfiles>` sibling | Betaflight style, values × 100, no throttle curve |
-| Liftoff: Micro Drones | Inside the game's app bundle: `Contents/Saves/Player/UserData.xml` | XML; profiles wrapped in `<FlightRatesProfile>` | As Liftoff |
-| Uncrashed | `~/Library/Application Support/Uncrashed/<id>/rates/<NAME>.sav` | Unreal GVAS. After `FloatProperty\0` and one byte, an i32 count (12) and 12 little-endian f32 | Per axis (roll, pitch, yaw): super, RC rate, expo; then rates type (0 = Betaflight), throttle mid, throttle expo. A new profile is a copy of an existing file with the floats replaced; the name is the file name. An empty profile has no floats |
-| The Zone | `~/Library/Application Support/Godot/app_userdata/The Zone/settings.cfg` | Godot config; `[rate_profile_0]`, `type "betaflight"` | Each axis `Vector3(RC rate, super rate, expo)` |
+| Liftoff | `~/Library/Application Support/LuGus Studios/Liftoff/Saves/Player/UserData.xml` | XML; each rate profile its own `<rateProfiles>` sibling: `<name>`, then `<rates xsi:type="BetaFlight">` with `<Roll>`, `<Pitch>`, `<Yaw>`, each `<Rate>` (RC rate), `<Expo>`, `<SuperExpo>` (super rate) | Betaflight style, the CLI's whole numbers (127, not 1.27), no throttle curve |
+| Liftoff: Micro Drones | Inside the game's app bundle: `Contents/Saves/Player/UserData.xml` | The same XML; one `<rateProfiles>` wraps a `<FlightRatesProfile>` per profile, each with `<name>` and `<rates>` | As Liftoff |
+| Uncrashed | `~/Library/Application Support/Uncrashed/<id>/rates/<NAME>.sav` | Unreal GVAS. After `FloatProperty\0` and one byte, an i32 count (12) and 12 little-endian f32 | Per axis (roll, pitch, yaw): super, RC rate, expo, as fractions; then rates type (0 = Betaflight), throttle mid, throttle expo. The name is the file name. An empty profile has no floats |
+| The Zone | `~/Library/Application Support/Godot/app_userdata/The Zone/settings.cfg` | Godot config; each `[rate_profile_N]` holds one dictionary, `rates={ "roll": Vector3(…), "pitch": …, "yaw": …, "type": "betaflight" }`, one entry per line | Each axis `Vector3(RC rate, super rate, expo)` as fractions |
 | Velocidrone | Unknown | – | Adapter ships disabled until a sample save exists (open question 1) |
+
+**Checked against a real install (WP8 sync, 2026-10-09).** The WP8 read half inferred Liftoff's
+and The Zone's shapes from this section's earlier text; the real files differ, and the
+adapters now follow the files. The table above is the real shape. Confirmed: Liftoff,
+Micro Drones, Uncrashed and The Zone, each read from a real player's files (reading only; the
+tests keep synthetic fixtures of the same shapes). Still inferred: the XML `xsi:type` and the
+Zone `type` of the other rate models (those profiles are listed, not read), the Uncrashed
+rates-type float for other models, and any file shape of a game version other than the one
+checked. A written file has been seen loading in the game only for Uncrashed (the reference
+script `uncrashed_rates.py` writes the same bytes); the other three sims' plans carry an
+"Unverified" warning until a write is flown.
 
 - Sims take Betaflight-style rates. An FC on Actual or Quick rates is converted by a
   least-squares fit of the Betaflight curve; the preview shows both curves and the largest
@@ -945,11 +956,56 @@ FC effect (`aux` modes, `adjrange` selections such as rate or OSD profile), the 
   - Reads do not refuse while a sim runs; `running` is reported and the write package refuses
     (`sim_running`). Under cargo the process list comes from `QUADCAM_SIMS_RUNNING`, a comma
     list of process names, never from `ps`.
-  - The Liftoff, Micro Drones and Zone shapes and the Uncrashed float units (fractions, so a
-    file's 1.27 is `rc_rate` 127) follow 6.6 and are not yet checked against a real player's
-    files; the fixtures in `tests/fixtures/sims/` are synthetic. Check each against a real file
-    by hand before the sync package writes one.
-  - The Sims page and the sidebar "Out of date" badge belong to the sync package.
+  - The shapes were first inferred from 6.6 and checked against a real install by the sync
+    package (see the note under the table in 6.6): Liftoff's and The Zone's were wrong and are
+    corrected. The fixtures in `tests/fixtures/sims/` are synthetic files of the real shapes.
+  - The Sims page and the sidebar "Out of date" badge: see the sync half below.
+
+- **Built (WP8 sync half):** `gear/apply/sim.rs` (the plan: targets, checks, diff, warnings,
+  digest; `write_atomic`; the test fail-safe), `core/sim_sync.rs` (`gear_sim_sync_plan`,
+  `gear_sim_sync`, the sheet's `gear_sim_sync_click`), `sims::write_profile` and the adapters'
+  `slots`/`encode` (a replaced span changes only its bytes), `gear_rates_preview` (an edited
+  profile redrawn by the one implementation of the math, or fitted onto another model), the
+  rate editor in the Rates segment (`RateEditor.tsx`), and **Sync** on each sim profile. Rows
+  `gear_sim_sync_plan` and `gear_sim_sync`; CLI `gear sims --sync --to SIM[:PROFILE][@FILE]`
+  with `--digest` and `--yes`; MCP `quadcam_gear sim_sync_plan` and `quadcam_gear_apply
+  sim_sync`. Deviations and decisions:
+  - **No sim device kind.** A sim is not a device with an identity, so the backups live under
+    the pseudo device `sim-<id>` (`sim-liftoff`) in the same store, `BeforeApply`, always kept,
+    one file named by its path from the home folder. `gear backups --device sim-liftoff` lists
+    them. Nothing restores them yet: copy the bytes back from `gear backups read`.
+  - **`SimSyncRequest` carries the params** (the sims and the quad) with the digest and
+    `confirm`: the apply plans again from them, as the FC apply does from the change. A sim sync
+    is not a staged change: it overwrites sim files at once through the sheet. The sheet and an
+    agent's confirm request use a stand-in change with the id `sim-sync` and the device `sims`.
+  - **Targets** are `SIM[:PROFILE][@FILE]`; the profile defaults to the one named like the
+    quad's rate profile; `all` takes every sim that has such a profile. QuadCam overwrites an
+    existing sim profile and never creates one.
+  - **`ApplyPlan` gained `warnings`** (the "warning, not a refusal" row of 8.2): the fitted
+    model and its gap, a sim without a throttle curve, the unverified shapes. New refusal code
+    `not_writable`.
+  - **Checks:** sim closed (`sim_running`, again right before the write), file understood
+    (`shape_unknown`), rewrites unchanged byte for byte and reads back as wanted (`round_trip`),
+    writable (`not_writable`), something differs (`incompatible`). A changed file after the plan
+    is `before_mismatch`. Under cargo a write outside the temporary folder is refused
+    (`disabled`), so no test reaches a real player's files.
+  - **Write:** all backups first, then each file through a temporary name beside it with the
+    file's permissions, a full sync and a rename; the read back compares the bytes and parses
+    the file. A failure puts every written file back (the report says whether that worked).
+  - **Throttle compare:** a sim profile and the quad count as the same when the throttle
+    **mid and expo** agree (what a sync writes). A sim has no hover value, so the quad's
+    `thr_hover` no longer makes a synced Uncrashed profile read as different.
+  - **Not covered:** the input settings of the sims (deadband, input expo, channel map). Design
+    6.6 describes rates only, and QuadCam has no source for those values to sync. Uncrashed's
+    deadzone is one `DeadZone` float per controller file under `RC/` (shape checked against a
+    real install, one of five files holds none); a later package can add it.
+  - **The Sims page and the sidebar "Out of date" badge** are not built: the Rates segment's
+    Sims list carries Sync, and the badge waits for the Gear sidebar.
+  - **Rate editor:** edits are `FcSet` values in the profile's rate section (`*_rc_rate`,
+    `*_srate`, `*_expo`, `*_rate_limit`, `rates_type`, `thr_mid`, `thr_expo`,
+    `throttle_limit_type`, `throttle_limit_percent`, `rateprofile_name`), only the ones that
+    changed, as one change the sheet applies. A dump file is not editable. `thr_hover` is shown,
+    not edited.
 
 ### 7.4 Voice packs
 
@@ -1082,7 +1138,7 @@ The Bench page replaces a hand-kept list. Each staged change has a status:
 
 The page groups by device and shows "Next session" per device: the first Ready or Try item.
 A Try item that is applied gets **Keep** and **Revert** buttons; Revert stages a restore of
-the backup the apply took. Applied items move to History. **Copy as Markdown** exports the
+the backup the apply took (for an FC, only the inverse of that change's lines). Applied items move to History. **Copy as Markdown** exports the
 queue. Built in WP5b (section 8): the page lists devices that have waiting changes, shows
 "Plug in the radio in USB Storage mode to apply 3 changes." for a device that is away, and
 disables Review for a Draft or a Read first change.
@@ -1377,7 +1433,12 @@ dialog, Mount and Done on a radio's page. Deviations and choices:
   change refuses at plan time (`read_first`) until the person marks it Ready. A Try change that
   verifies becomes `Applied` (the report still says verified); Keep makes it Verified; Revert
   stages a restore (`StagedChange.reverts` names the original) and the original becomes
-  Reverted when that restore verifies.
+  Reverted when that restore verifies. **An FC revert stages only the inverse of that change's
+  lines** (WP8 sync): each `set` the change sent takes its value from the `dump all` taken
+  just before its apply (`inverse_lines`, as `FcLines`), and each list-like line its old line.
+  A line the pre-apply dump does not hold is left alone and named in the note. A later applied
+  change that set the same lines is named in a warning in the revert's note: the revert undoes
+  those values too. A card revert still restores the files the apply wrote.
 - **Copy settings** (`gear/copy.rs`): parts rates, pid, osd, modes, adjustments, vtx and
   features, plus settings by name, from a device's latest backup or a named backup to an FC's
   latest backup. Checks: same firmware, same year.month release, something picked, something

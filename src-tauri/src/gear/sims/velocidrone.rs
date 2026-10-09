@@ -1,7 +1,7 @@
 //! Velocidrone. Its save format is not known: the adapter ships off until a sample save
 //! exists (design open question 1). It finds and reads nothing.
 
-use super::{Sim, SimFile};
+use super::{Sim, SimFile, Slot};
 use anyhow::{bail, Result};
 use std::path::{Path, PathBuf};
 
@@ -28,5 +28,11 @@ impl Sim for Velocidrone {
     }
     fn parse(&self, _raw: &[u8]) -> Result<SimFile> {
         bail!("the Velocidrone adapter is off")
+    }
+    fn slots(&self) -> Vec<Slot> {
+        Vec::new()
+    }
+    fn encode(&self, _cli: f64) -> Vec<u8> {
+        Vec::new()
     }
 }

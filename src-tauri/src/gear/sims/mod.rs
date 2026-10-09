@@ -7,12 +7,14 @@
 //! replaced through its span changes only those bytes. The later sync package writes through
 //! that, behind the plan and confirm of design 8; this package never writes.
 //!
-//! Sims take Betaflight-style rates. File values are stored as fractions (1.27 for the CLI's
-//! 127); `FILE_SCALE` converts. The formats are the ones design 6.6 describes, read from
-//! synthetic fixtures (`tests/fixtures/sims/`): never a real player's files in tests.
+//! Sims take Betaflight-style rates. Liftoff and Micro Drones store the CLI's whole numbers
+//! (127); Uncrashed and The Zone store fractions (1.27). Each adapter encodes its own.
+//! The formats were checked against a real install (design 6.6); the tests read synthetic
+//! fixtures (`tests/fixtures/sims/`) of the same shapes: never a real player's files.
 //!
 //! Reads work while the game runs (the game may rewrite the file later). `running` is
-//! reported so a later write refuses (`sim_running`, design 8.2).
+//! reported so a write refuses (`sim_running`, design 8.2). `write_profile` makes the new
+//! bytes of a file; `core/sim_sync.rs` plans and runs the write behind the apply pattern.
 
 pub mod liftoff;
 pub mod micro;
@@ -29,8 +31,21 @@ use specta::Type;
 use std::ops::Range;
 use std::path::{Path, PathBuf};
 
-/// A file value times this is the CLI value (a file's 1.27 is `rc_rate` 127).
+/// A fraction file value times this is the CLI value (a file's 1.27 is `rc_rate` 127).
 pub const FILE_SCALE: f64 = 100.0;
+
+/// What one value of `SimProfile::spans` holds.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Slot {
+    /// RC rate of an axis (0 roll, 1 pitch, 2 yaw).
+    Rc(usize),
+    Super(usize),
+    Expo(usize),
+    ThrMid,
+    ThrExpo,
+    /// A value QuadCam never writes (Uncrashed's rates type).
+    Keep,
+}
 
 /// A file's bytes with the spans of the values read from it.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -68,8 +83,7 @@ pub struct SimProfile {
     pub throttle: Option<ThrottleCurve>,
     /// Why `rates` is empty, or another thing to know.
     pub note: Option<String>,
-    /// The byte spans of the values read, in file order: nine rate values, then the
-    /// throttle's two when present.
+    /// The byte spans of the values read, in the order of the adapter's `slots`.
     pub spans: Vec<Range<usize>>,
 }
 
@@ -103,6 +117,73 @@ pub trait Sim: Sync {
     fn parse_file(&self, raw: &[u8], _path: &Path) -> Result<SimFile> {
         self.parse(raw)
     }
+    /// What each span of a read profile holds, in span order.
+    fn slots(&self) -> Vec<Slot>;
+    /// The bytes of a span for a value in CLI units (127 for an RC rate of 1.27).
+    fn encode(&self, cli: f64) -> Vec<u8>;
+    /// True once a QuadCam write of this format has been seen loading in the game. The plan
+    /// warns about every other adapter's write.
+    fn write_verified(&self) -> bool {
+        false
+    }
+}
+
+/// The file with profile `index` holding `rates` (Betaflight model) and, when the sim has a
+/// throttle curve, `throttle`. Only values that differ are replaced: every other byte, and
+/// every value already equal, stays as it was. Refuses a profile QuadCam did not read.
+pub fn write_profile(
+    sim: &dyn Sim,
+    file: &SimFile,
+    index: usize,
+    rates: &Rates,
+    throttle: Option<&ThrottleCurve>,
+) -> Result<Doc> {
+    let Some(p) = file.profiles.get(index) else {
+        bail!("the file has no profile {index}");
+    };
+    let Some(have) = p.rates else {
+        bail!(
+            "{} holds {}: QuadCam does not write it",
+            p.name,
+            p.note.as_deref().unwrap_or("rates it does not read")
+        );
+    };
+    if rates.rates_type != RatesType::Betaflight {
+        bail!("a sim takes the Betaflight model; convert the rates first");
+    }
+    let slots = sim.slots();
+    if slots.len() != p.spans.len() {
+        bail!("the profile's values do not match the adapter");
+    }
+    let mut edits: Vec<(Range<usize>, Vec<u8>)> = Vec::new();
+    for (slot, span) in slots.iter().zip(&p.spans) {
+        let (want, now) = match *slot {
+            Slot::Rc(a) => (rates.axes[a].rc_rate, have.axes[a].rc_rate),
+            Slot::Super(a) => (rates.axes[a].srate, have.axes[a].srate),
+            Slot::Expo(a) => (rates.axes[a].expo, have.axes[a].expo),
+            Slot::ThrMid | Slot::ThrExpo => {
+                let (Some(t), Some(n)) = (throttle, p.throttle) else {
+                    continue;
+                };
+                if *slot == Slot::ThrMid {
+                    (t.mid, n.mid)
+                } else {
+                    (t.expo, n.expo)
+                }
+            }
+            Slot::Keep => continue,
+        };
+        if want.round() != now.round() {
+            edits.push((span.clone(), sim.encode(want)));
+        }
+    }
+    // Back to front, so earlier spans keep their offsets.
+    edits.sort_by_key(|(r, _)| std::cmp::Reverse(r.start));
+    let mut doc = file.doc.clone();
+    for (span, bytes) in &edits {
+        doc = doc.replaced(span, bytes);
+    }
+    Ok(doc)
 }
 
 /// Every adapter, in the order the Rates segment lists them.
@@ -129,16 +210,31 @@ pub fn parse_f64(text: &str, what: &str) -> Result<f64> {
     }
 }
 
-/// Betaflight-model rates from nine file values (per axis rc rate, super rate, expo).
-pub fn bf_rates(v: &[f64; 9]) -> Rates {
+/// Betaflight-model rates from nine file values (per axis rc rate, super rate, expo),
+/// each times `scale` (`FILE_SCALE` for fractions, 1 for the CLI's whole numbers).
+pub fn bf_rates(v: &[f64; 9], scale: f64) -> Rates {
     let axis = |i: usize| rates::RateAxis {
-        rc_rate: (v[i] * FILE_SCALE).round(),
-        srate: (v[i + 1] * FILE_SCALE).round(),
-        expo: (v[i + 2] * FILE_SCALE).round(),
+        rc_rate: (v[i] * scale).round(),
+        srate: (v[i + 1] * scale).round(),
+        expo: (v[i + 2] * scale).round(),
     };
     Rates {
         rates_type: RatesType::Betaflight,
         axes: [axis(0), axis(3), axis(6)],
+    }
+}
+
+/// A decimal text for a CLI value as a fraction: 127 is `1.27`, 100 is `1.0`, 0 is `0`.
+pub fn fraction_text(cli: f64) -> String {
+    if cli == 0.0 {
+        return "0".into();
+    }
+    let t = format!("{:.4}", cli / FILE_SCALE);
+    let t = t.trim_end_matches('0');
+    if t.ends_with('.') {
+        format!("{t}0")
+    } else {
+        t.to_string()
     }
 }
 
@@ -221,9 +317,11 @@ pub fn diff(sim: &SimProfile, quad: &RateProfileView) -> Option<SimDiff> {
     };
     let to_target = s.max_diff(&target);
     let to_quad = s.max_diff(&q);
-    let throttle_differs = sim
-        .throttle
-        .map(|t| rates::throttle_differs(&t, &q.throttle));
+    // What a sync writes: mid and expo. A sim has no hover value, so a quad's `thr_hover`
+    // is not a difference the person can fix.
+    let throttle_differs = sim.throttle.map(|t| {
+        t.mid.round() != q.throttle.mid.round() || t.expo.round() != q.throttle.expo.round()
+    });
     let same = to_target.iter().all(|&d| d <= SAME_DEG_S) && throttle_differs != Some(true);
     Some(SimDiff {
         max_diff: to_target.to_vec(),

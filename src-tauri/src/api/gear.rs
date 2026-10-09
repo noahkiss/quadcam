@@ -13,7 +13,8 @@ pub use crate::core::{
 pub use crate::core::{
     BoardNotesParams, CardParams, CardPreview, CardPreviewParams, DeviceSaveParams, FcJob,
     FcPortParams, FcReadParams, GearCard, GearStatus, OsdParams, PollPauseParams, RadioParams,
-    RadioWatchParams, RatesParams, ReminderParams, SimsParams, SwitchMapParams, UsbTimer,
+    RadioWatchParams, RatesParams, RatesPreview, RatesPreviewParams, ReminderParams, SimsParams,
+    SwitchMapParams, UsbTimer,
 };
 pub use crate::core::{
     CalibrateParams, CalibrateView, SimCalibration, SimCalibrationParams, SimCalibrationSaveParams,
@@ -27,6 +28,7 @@ pub use crate::core::{
     CrashSaveParams, FlightFilter, FlightFoldersParams, FlightReport, FlightSetParams, FlightsView,
     NotesParams, PackSaveParams, PacksParams, ReportParams, ReportSaveParams, ReportSaved,
 };
+pub use crate::gear::apply::sim::{SimSyncParams, SimSyncRequest, SimTarget};
 pub use crate::gear::apply::{ApplyPlanParams, ApplyReport, ApplyRequest, StepReport, StepState};
 pub use crate::gear::backup::{
     BackupContent, ExportReport, ImportBackupsReport, PruneReport, StorageView,
@@ -97,9 +99,19 @@ macro_rules! with_gear_rows {
             /// roll, pitch and yaw curves with maximum and centre rates, the throttle curve.
             /// Reads only.
             gear_rates(params: RatesParams) -> RatesView = |c| c.gear_rates(&params);
+            /// A rate profile as edited, with fresh curves; with `to`, fitted onto that rate model
+            /// first, with the error per axis. Reads and writes nothing.
+            gear_rates_preview(params: RatesPreviewParams) -> RatesPreview = |c| c.gear_rates_preview(&params);
             /// The sims on this Mac with their rate profiles; with a quad, how each differs
             /// from the quad's rates. Reads only.
             gear_sims(params: SimsParams) -> Vec<SimStatus> = |c| c.gear_sims(&params);
+            /// What syncing a quad's rate profile into the sims would write: per sim file the
+            /// values that change, every guard, warnings and a digest. Writes nothing.
+            gear_sim_sync_plan(params: SimSyncParams) -> ApplyPlan = |c| c.gear_sim_sync_plan(&params);
+            /// Writes the planned sim files: a backup of each, an atomic write, a read back.
+            /// Refuses while a game runs. Needs the plan's digest and confirm=true; with the
+            /// app running the person also clicks Apply in its sheet.
+            gear_sim_sync(params: SimSyncRequest) -> ApplyReport = |c| c.gear_sim_sync(&params);
             /// An EdgeTX card: models, the selected model and its aircraft, the radio clock, one model in full.
             gear_card(params: CardParams) -> GearCard = |c| c.gear_card(&params);
             /// Checks and diffs EdgeTX card edits. Writes nothing.

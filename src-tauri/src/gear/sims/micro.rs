@@ -2,8 +2,8 @@
 //! (`Contents/Saves/Player/UserData.xml`) with the profiles wrapped in `<FlightRatesProfile>`.
 //! The game is a Steam app, so the bundle sits under Steam's `steamapps/common`.
 
-use super::liftoff::parse_xml;
-use super::{support, Sim, SimFile};
+use super::liftoff::{parse_xml, xml_number, xml_slots};
+use super::{support, Sim, SimFile, Slot};
 use anyhow::Result;
 use std::path::{Path, PathBuf};
 
@@ -45,6 +45,12 @@ impl Sim for Micro {
     }
     fn parse(&self, raw: &[u8]) -> Result<SimFile> {
         parse_xml(raw)
+    }
+    fn slots(&self) -> Vec<Slot> {
+        xml_slots()
+    }
+    fn encode(&self, cli: f64) -> Vec<u8> {
+        xml_number(cli)
     }
 }
 

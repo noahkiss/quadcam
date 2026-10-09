@@ -8,7 +8,20 @@ import type { DiffItem } from "../types";
 import { FC, type MockGear } from "./gear";
 
 /** Settings the mock FC holds, with the value its latest backup shows. */
-export const FC_SETTINGS: Record<string, string> = { osd_cap_alarm: "2200", osd_ah_pos: "4281", p_roll: "45", roll_srate: "70" };
+export const FC_SETTINGS: Record<string, string> = {
+  osd_cap_alarm: "2200",
+  osd_ah_pos: "4281",
+  p_roll: "45",
+  roll_srate: "70",
+  // The rate profile settings the Rates editor stages.
+  rateprofile_name: "FREE",
+  rates_type: "BETAFLIGHT",
+  ...Object.fromEntries(["roll", "pitch", "yaw"].flatMap((a) => [[`${a}_rc_rate`, "100"], [`${a}_expo`, "0"], [`${a}_rate_limit`, "1998"], ...(a === "roll" ? [] : [[`${a}_srate`, "70"]])])),
+  thr_mid: "50",
+  thr_expo: "0",
+  throttle_limit_type: "OFF",
+  throttle_limit_percent: "100",
+};
 
 /** The settings each part of a copy takes in the mock. */
 const PART_SETTINGS: Record<string, string[]> = { osd: ["osd_cap_alarm", "osd_ah_pos"], pid: ["p_roll"], rates: ["roll_srate"] };
@@ -29,10 +42,12 @@ export interface MockChanges {
   dumps: Record<string, Record<string, string>>;
   /** Each applied change's report (Revert reads the backup and files from it). */
   reports: Record<string, ApplyReport>;
+  /** What each applied FC change replaced: the values from just before its apply (Revert puts only these back). */
+  before: Record<string, Record<string, string>>;
   counter: number;
 }
 
-export const freshChanges = (): MockChanges => ({ changes: [], failNext: null, failCard: false, dumps: {}, reports: {}, counter: 0 });
+export const freshChanges = (): MockChanges => ({ changes: [], failNext: null, failCard: false, dumps: {}, reports: {}, before: {}, counter: 0 });
 
 const STAGED = ["draft", "ready", "try", "read_first"];
 const staged = (c: StagedChange) => STAGED.includes(c.status);
@@ -297,10 +312,15 @@ export function apply(g: MockGear, id: string, digest: string): ApplyReport {
     finish(g, c, r);
     return r;
   }
+  const prev: Record<string, string> = {};
   for (const l of lines(c.edits)) {
     const m = /^set\s+(\S+)\s*=\s*(.+)$/.exec(l);
-    if (m) FC_SETTINGS[m[1]] = m[2];
+    if (m) {
+      prev[m[1]] ??= FC_SETTINGS[m[1]];
+      FC_SETTINGS[m[1]] = m[2];
+    }
   }
+  store.before[c.id] = prev;
   g.devices = g.devices.map((d) => (d.id === c.device ? { ...d, last_backup: `${c.device}/2026-10-09T120100-after_apply` } : d));
   const r: ApplyReport = {
     ...base,
@@ -340,6 +360,18 @@ export function revert(g: MockGear, id: string, report: ApplyReport | null): Sta
   const dev = g.devices.find((d) => d.id === c.device);
   const backup = report?.backup ?? `${c.device}/2026-10-09T120000-before_apply`;
   const paths = dev?.kind === "radio" ? (report?.files?.length ? report.files : ["RADIO/radio.yml"]) : [];
+  const old = g.changeStore.before[id];
+  if (dev?.kind !== "radio" && old) {
+    // Only this change's lines, put back to the values from before its apply; a later apply
+    // that set the same lines is named in the note.
+    const mine = Object.keys(old);
+    const later = g.changeStore.changes.filter((x) => x.id !== id && x.device === c.device && x.reverts !== id && (x.status === "applied" || x.status === "verified") && Number(x.id.split("-").pop()) > Number(id.split("-").pop()));
+    const clash = later.flatMap((x) => lines(x.edits).flatMap((l) => (/^set\s+(\S+)/.exec(l) ?? []).slice(1).filter((n) => mine.includes(n)).map((n) => [x, n] as const)));
+    const rv = stage(g, c.device, [{ kind: "fc_lines", lines: mine.map((n) => `set ${n} = ${old[n]}`) }], `Revert: ${c.title}`, "user", id);
+    const stored = g.changeStore.changes.find((x) => x.id === rv.id)!;
+    stored.note = [`Reverts ${id}`, ...clash.map(([x, n]) => `Warning: a later apply, ${x.id} (${x.title}), also changed set ${n}. This revert puts those back to their values before ${id}, which undoes that change there too.`)].join(" ");
+    return structuredClone(stored);
+  }
   return restoreStage(g, backup, paths, id, `Revert: ${c.title}`);
 }
 

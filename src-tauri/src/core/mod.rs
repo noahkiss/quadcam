@@ -33,6 +33,7 @@ mod rematch;
 mod setup;
 mod sim;
 mod sim_host;
+mod sim_sync;
 mod switchmap;
 pub use crate::paths::{cache_dir, default_session_file, default_settings_file, support_dir};
 pub use apply::{ChangeUpdateParams, RestoreParams, StageParams};
@@ -60,7 +61,7 @@ pub use gear_card::{CardParams, CardPreview, CardPreviewParams, GearCard};
 pub use import::CardStatus;
 pub use library::{LibEdit, LibItem, LibUpdate, LibraryView, RebuildReport, RenameReport};
 pub use osd::{OsdEditParams, OsdParams};
-pub use rates::{RatesParams, SimsParams};
+pub use rates::{RatesParams, RatesPreview, RatesPreviewParams, SimsParams};
 pub use rematch::{LibMatch, LibMatchParams, LibMatchReport};
 pub use setup::{PlaceRemoved, SettingsView};
 pub use sim::{

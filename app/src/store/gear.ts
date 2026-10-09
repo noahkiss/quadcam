@@ -4,7 +4,7 @@
 import type { StateCreator } from "zustand";
 import type { State } from ".";
 import { api, errText } from "../ipc/api";
-import type { ApplyPlan, ApplyReport, Connected, Device, DeviceChanged, GearStatus, StagedChange } from "../ipc/types";
+import type { ApplyPlan, ApplyReport, Connected, Device, DeviceChanged, GearStatus, SimSyncParams, StagedChange } from "../ipc/types";
 import { linkHandle } from "../lib/gear";
 import { toast } from "../components/toastStore";
 
@@ -23,7 +23,26 @@ export interface ApplySheetState {
   agent: number | null;
   busy: boolean;
   error: string | null;
+  /** Set when the sheet shows a sim sync: the click writes these sim profiles. */
+  sim?: SimSyncParams | null;
 }
+
+/** The device id a sim sync's sheet, report and stand-in change carry (the core's `DEVICE`). */
+export const SIMS_DEVICE = "sims";
+
+/** The change the sheet shows for a sim sync (the core's `pseudo_change`). */
+const simChange = (plan: ApplyPlan | null): StagedChange => ({
+  id: "sim-sync",
+  device: SIMS_DEVICE,
+  title: "Sync sims",
+  status: "ready",
+  edits: [],
+  base_backup: "",
+  editor: "user",
+  note: (plan?.warnings ?? []).join(" "),
+  order: 0,
+  history: [],
+});
 
 export interface GearSlice {
   /** Staged changes waiting to be applied, every device. */
@@ -33,6 +52,8 @@ export interface GearSlice {
   applySheet: ApplySheetState | null;
   /** Opens the sheet on a device's first staged change, or a given one. */
   openApply: (device: string, change?: string) => Promise<void>;
+  /** Opens the sheet on a plan to write the quad's rates into sim profiles. */
+  openSimSync: (params: SimSyncParams) => Promise<void>;
   closeApply: () => void;
   /** Apply in the open sheet. */
   runApply: () => Promise<void>;
@@ -92,6 +113,15 @@ export const createGearSlice: StateCreator<State, [], [], GearSlice> = (set, get
       set((s) => (s.applySheet ? { applySheet: { ...s.applySheet, busy: false, error: errText(e) } } : {}));
     }
   },
+  openSimSync: async (params) => {
+    set({ applySheet: { device: SIMS_DEVICE, change: simChange(null), plan: null, report: null, agent: null, busy: true, error: null, sim: params } });
+    try {
+      const plan = await api.gearSimSyncPlan(params);
+      set((s) => (s.applySheet?.sim === params ? { applySheet: { ...s.applySheet, change: simChange(plan), plan, busy: false } } : {}));
+    } catch (e) {
+      set((s) => (s.applySheet?.sim === params ? { applySheet: { ...s.applySheet, busy: false, error: errText(e) } } : {}));
+    }
+  },
   closeApply: () => {
     const a = get().applySheet;
     if (a?.busy && a.report === null && a.agent === null && a.plan === null) return;
@@ -108,7 +138,7 @@ export const createGearSlice: StateCreator<State, [], [], GearSlice> = (set, get
       return;
     }
     try {
-      const report = await api.gearApplyClick(a.change.id, a.plan.digest);
+      const report = a.sim ? await api.gearSimSyncClick(a.sim, a.plan.digest) : await api.gearApplyClick(a.change.id, a.plan.digest);
       set((s) => (s.applySheet ? { applySheet: { ...s.applySheet, report, busy: false } } : {}));
     } catch (e) {
       set((s) => (s.applySheet ? { applySheet: { ...s.applySheet, busy: false, error: errText(e) } } : {}));

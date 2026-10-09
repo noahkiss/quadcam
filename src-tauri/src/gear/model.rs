@@ -463,6 +463,8 @@ pub enum RefusalCode {
     ReadFirst,
     /// Settings do not fit the device they would go to (board or firmware).
     Incompatible,
+    /// A file QuadCam would write cannot be written (a sim file's folder or permissions).
+    NotWritable,
 }
 
 impl RefusalCode {
@@ -487,6 +489,7 @@ impl RefusalCode {
             RefusalCode::CardCheck => "card_check",
             RefusalCode::ReadFirst => "read_first",
             RefusalCode::Incompatible => "incompatible",
+            RefusalCode::NotWritable => "not_writable",
         }
     }
 }
@@ -572,6 +575,9 @@ pub struct ApplyPlan {
     pub checks: Vec<Check>,
     pub diff: Vec<DiffItem>,
     pub digest: String,
+    /// Things to know that do not refuse (a sim file shape not yet seen loading).
+    #[serde(default)]
+    pub warnings: Vec<String>,
 }
 
 impl ApplyPlan {

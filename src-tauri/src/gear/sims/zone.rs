@@ -1,8 +1,21 @@
-//! The Zone (Godot): `settings.cfg`, a Godot config file. Each `[rate_profile_N]` section has
-//! `type="betaflight"` and one `Vector3(RC rate, super rate, expo)` per axis (`roll`,
-//! `pitch`, `yaw`) as fractions. Other keys and sections stay as they are.
+//! The Zone (Godot): `settings.cfg`, a Godot config file. Each `[rate_profile_N]` section
+//! holds one dictionary (checked against a real install):
+//!
+//! ```text
+//! rates={
+//! "pitch": Vector3(1.27, 0.72, 0.4),
+//! "roll": Vector3(1.27, 0.72, 0.4),
+//! "type": "betaflight",
+//! "yaw": Vector3(1.0, 0.75, 0)
+//! }
+//! ```
+//!
+//! Each `Vector3` is RC rate, super rate, expo as fractions. Other keys and sections stay
+//! as they are.
 
-use super::{bf_rates, parse_f64, support, Doc, Sim, SimFile, SimProfile};
+use super::{
+    bf_rates, fraction_text, parse_f64, support, Doc, Sim, SimFile, SimProfile, Slot, FILE_SCALE,
+};
 use anyhow::{bail, Result};
 use std::ops::Range;
 use std::path::{Path, PathBuf};
@@ -35,12 +48,14 @@ impl Sim for Zone {
         }
         let mut secs: Vec<Sec> = Vec::new();
         let mut cur: Option<usize> = None;
+        let mut in_dict = false;
         let mut pos = 0;
         for line in text.split_inclusive('\n') {
             let start = pos;
             pos += line.len();
             let t = line.trim();
             if let Some(h) = t.strip_prefix('[').and_then(|h| h.strip_suffix(']')) {
+                in_dict = false;
                 cur = h.starts_with("rate_profile_").then(|| {
                     secs.push(Sec {
                         name: h.into(),
@@ -52,10 +67,20 @@ impl Sim for Zone {
                 continue;
             }
             let Some(i) = cur else { continue };
-            let Some((k, v)) = t.split_once('=') else {
+            // The rates are one dictionary: `rates={`, a line per key, `}`.
+            if !in_dict {
+                in_dict = t.starts_with("rates=") && t.ends_with('{');
+                continue;
+            }
+            if t.starts_with('}') {
+                in_dict = false;
+                continue;
+            }
+            let Some((k, v)) = t.split_once(':') else {
                 continue;
             };
-            let (k, v) = (k.trim(), v.trim());
+            let k = k.trim().trim_matches('"');
+            let v = v.trim().trim_end_matches(',').trim();
             if k == "type" {
                 secs[i].kind = Some(v.trim_matches('"').to_string());
             } else if let Some(a) = ["roll", "pitch", "yaw"].iter().position(|n| *n == k) {
@@ -107,6 +132,7 @@ impl Sim for Zone {
                         spans: Vec::new(),
                     };
                 }
+                // Vector3 holds RC rate, super rate, expo.
                 let mut v = [0.0; 9];
                 let mut spans = Vec::new();
                 for (a, ax) in s.axes.iter().enumerate() {
@@ -116,7 +142,7 @@ impl Sim for Zone {
                 }
                 SimProfile {
                     name,
-                    rates: Some(bf_rates(&v)),
+                    rates: Some(bf_rates(&v, FILE_SCALE)),
                     throttle: None,
                     note: None,
                     spans,
@@ -127,6 +153,14 @@ impl Sim for Zone {
             doc: Doc::new(raw.to_vec()),
             profiles,
         })
+    }
+    fn slots(&self) -> Vec<Slot> {
+        (0..3)
+            .flat_map(|a| [Slot::Rc(a), Slot::Super(a), Slot::Expo(a)])
+            .collect()
+    }
+    fn encode(&self, cli: f64) -> Vec<u8> {
+        fraction_text(cli).into_bytes()
     }
 }
 
@@ -155,6 +189,9 @@ mod tests {
         let f = Zone.parse(FIXTURE.as_bytes()).unwrap();
         let s = f.profiles[0].spans[0].clone();
         assert_eq!(&FIXTURE.as_bytes()[s.clone()], b"1.27");
+        // Spans run roll, pitch, yaw whatever order the file lists them in.
+        let yaw = f.profiles[0].spans[6].clone();
+        assert_eq!(&FIXTURE.as_bytes()[yaw], b"1.0");
         let doc = f.doc.replaced(&s, b"1.5");
         let again = Zone.parse(doc.render()).unwrap();
         assert_eq!(again.profiles[0].rates.unwrap().axes[0].rc_rate, 150.0);
@@ -163,10 +200,10 @@ mod tests {
     #[test]
     fn a_bad_vector_is_an_error() {
         assert!(Zone
-            .parse(b"[rate_profile_0]\ntype=\"betaflight\"\nroll=Vector3(1, 2)\n")
+            .parse(b"[rate_profile_0]\nrates={\n\"roll\": Vector3(1, 2),\n}\n")
             .is_err());
         assert!(Zone
-            .parse(b"[rate_profile_0]\nroll=Vector3(a, b, c)\n")
+            .parse(b"[rate_profile_0]\nrates={\n\"roll\": Vector3(a, b, c),\n}\n")
             .is_err());
     }
 }
