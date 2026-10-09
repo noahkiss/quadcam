@@ -1,7 +1,7 @@
 // The mock core's voice (`core/voice.rs`, `gear/voice/`), written by hand: a few of QuadCam's
 // lines, one pack in a made-up index, per-line overrides, a local render and Choose voice,
 // which stages one `card_files` change as the core does.
-import type { Edit, LineOverride, RenderReport, StagedChange, VoiceLine, VoicePack, VoiceView } from "../types";
+import type { Catalog, Edit, KeyStatus, LineOverride, ModelInfo, RenderReport, SampleItem, SampleReport, SetInfo, StagedChange, StudioEstimate, StudioView, VoiceEstimate, VoiceInfo, VoiceLine, VoicePack, VoiceView } from "../types";
 import type { MockGear } from "./gear";
 import * as changes from "./changes";
 
@@ -19,8 +19,8 @@ const LINES: Seed[] = [
   { path: "SOUNDS/en/disarm.wav", text: "Disarmed", group: "callouts", why: "Motors are off." },
   { path: "SOUNDS/en/lowbat.wav", text: "Battery low", group: "callouts", why: "The pack voltage is under the first warning level." },
   { path: "SOUNDS/en/gpsfix.wav", text: "GPS fix", group: "callouts", why: "The GPS has a fix." },
-  { path: "SOUNDS/en/0000.wav", text: "zero", group: "numbers", why: "The number 0." },
-  { path: "SOUNDS/en/0001.wav", text: "one", group: "numbers", why: "The number 1." },
+  { path: "SOUNDS/en/SYSTEM/0000.wav", text: "zero", group: "numbers", why: "The number 0." },
+  { path: "SOUNDS/en/SYSTEM/0001.wav", text: "one", group: "numbers", why: "The number 1." },
   { path: "SOUNDS/en/SYSTEM/hello.wav", text: "Hello", group: "system", why: "The radio powered on." },
 ];
 
@@ -38,9 +38,13 @@ export interface MockVoice {
   custom: { path: string; text: string }[];
   /** The provider may charge (the next render waits for confirm). */
   paid: boolean;
+  /** An ElevenLabs key is stored (the mock keeps only that fact). */
+  keySet: boolean;
+  /** Credits the studio has spent in this run. */
+  spent: number;
 }
 
-export const freshVoice = (): MockVoice => ({ installed: [], index: false, overrides: {}, chosen: {}, custom: [], paid: false });
+export const freshVoice = (): MockVoice => ({ installed: [], index: false, overrides: {}, chosen: {}, custom: [], paid: false, keySet: false, spent: 0 });
 
 const AVAILABLE: VoicePack = { id: "en-demo-v1", voice: "Demo", lang: "en", provider: "demo", model: "", lines: LINES.length, license: "CC BY 4.0", attribution: "Made up for the mock core", version: "1", installed: false, local: false, bytes: 3_700_000, stale: false, dir: null };
 const LOCAL_ID = "local-say-samantha";
@@ -48,6 +52,10 @@ const LOCAL_ID = "local-say-samantha";
 function packs(v: MockVoice): VoicePack[] {
   const out: VoicePack[] = [];
   if (v.installed.includes(LOCAL_ID)) out.push({ ...AVAILABLE, id: LOCAL_ID, voice: "Samantha", provider: "say", license: "Rendered by you; yours to use.", attribution: "", version: "", installed: true, local: true, bytes: 0, dir: `/Users/pilot/gear/voices/${LOCAL_ID}` });
+  for (const id of v.installed.filter((x) => x.startsWith("local-elevenlabs-"))) {
+    const name = id.split("-")[2] ?? "voice";
+    out.push({ ...AVAILABLE, id, voice: name.charAt(0).toUpperCase() + name.slice(1), provider: "elevenlabs", model: id.split("-").slice(3).join("_"), license: "Rendered by you; yours to use.", attribution: "", version: "", installed: true, local: true, bytes: 0, dir: `/Users/pilot/gear/voices/${id}` });
+  }
   if (v.installed.includes(AVAILABLE.id)) out.push({ ...AVAILABLE, installed: true, dir: `/Users/pilot/gear/voices/${AVAILABLE.id}` });
   else if (v.index) out.push({ ...AVAILABLE });
   return out;
@@ -97,8 +105,9 @@ export function install(g: MockGear, p: { pack: string }): VoicePack {
 }
 
 /** `gear_voice_render`. */
-export function render(g: MockGear, p: { voice?: string; lines?: string[]; dry_run?: boolean; confirm?: boolean }): RenderReport {
+export function render(g: MockGear, p: { voice?: string; lines?: string[]; dry_run?: boolean; confirm?: boolean; sets?: string[]; model?: string }): RenderReport {
   const v = g.voice;
+  if (p.sets?.length) return studioRender(g, p as never);
   const n = p.lines?.length ? p.lines.length : LINES.length + v.custom.length;
   const chars = LINES.reduce((c, l) => c + spoken(l.text).length, 0);
   const have = v.installed.includes(LOCAL_ID);
@@ -160,4 +169,130 @@ export function preview(g: MockGear, p: { line: string; pack?: string | null; ra
   }
   if (p.radio && g.voice.overrides[p.radio]?.[p.line]) return `/Users/pilot/Library/Caches/app.quadcam/voice/preview/own-${stem}.wav`;
   throw `${p.line} has no override on this radio.`;
+}
+
+// ----- the voice studio (`core/voice_studio.rs`) -----
+
+const VOICES: VoiceInfo[] = ["Callum", "Daniel", "Brian", "Adam", "Matilda", "Alice", "Sarah", "Lily"].map((name, i) => ({ id: `voice-${name.toLowerCase()}`, name, category: "premade", labels: i < 4 ? "male" : "female", preview_url: null }));
+const MODELS: ModelInfo[] = [
+  { id: "eleven_v4", name: "Eleven v4", cost_per_char: 1, usd_per_1k: 0.08, promo_until: null, max_chars: 5000 },
+  { id: "eleven_v4_turbo", name: "Eleven v4 Turbo", cost_per_char: 0.5, usd_per_1k: 0.04, promo_until: null, max_chars: 5000 },
+  { id: "eleven_turbo_v2_5", name: "Turbo v2.5", cost_per_char: 0.5, usd_per_1k: 0.04, promo_until: null, max_chars: 40000 },
+];
+const SETS: SetInfo[] = [
+  { id: "edgetx", title: "Full EdgeTX English", about: "Every prompt the radio plays by itself, the numbers and units, and the general prompts a model can name.", lines: 311 },
+  { id: "quad", title: "FPV quad", about: "The radio's own prompts and numbers, and the callouts a quad's radio plays.", lines: 168 },
+  { id: "heli", title: "Helicopter", about: "The radio's own prompts and numbers, and the callouts a helicopter's radio plays.", lines: 164 },
+  { id: "plane", title: "Plane", about: "The radio's own prompts and numbers, and the callouts a plane's radio plays.", lines: 169 },
+  { id: "glider", title: "Glider", about: "The radio's own prompts and numbers, and the callouts a glider's radio plays.", lines: 164 },
+  { id: "extras", title: "FPV extras", about: "More FPV callouts: arming states, profiles, VTX, OSD, recording, finder.", lines: 68 },
+  { id: "easter", title: "Easter eggs", about: "Short fun lines in original wording. Off unless a model plays them.", lines: 12 },
+  { id: "sample", title: "Sample", about: "A dozen hard lines for comparing voices: a bare number, short words, warnings.", lines: 12 },
+  { id: "custom", title: "Your lines", about: "The lines you added.", lines: 0 },
+];
+const CREDITS = 98_500;
+const CARRIER = "The word is .".length;
+
+const keyStatus = (g: MockGear): KeyStatus => (g.voice.keySet ? { set: true, hint: "ends in 3f9a", source: "keychain", problem: null } : { set: false, hint: "", source: "", problem: null });
+
+/** `gear_voice_key`. */
+export function key(g: MockGear, p: { action?: string; key?: string | null }): KeyStatus {
+  if (p.action === "set") {
+    if (!p.key?.trim()) throw "The key is empty.";
+    g.voice.keySet = true;
+  } else if (p.action === "delete") g.voice.keySet = false;
+  return keyStatus(g);
+}
+
+/** `gear_voice_sets`. */
+export function sets(g: MockGear): StudioView {
+  return { key: keyStatus(g), sets: SETS.map((s) => (s.id === "custom" ? { ...s, lines: g.voice.custom.length } : s)), batch: { carrier: "The word is {line}.", tone_carriers: {}, max_lines: 30, snap_ms: 40 } };
+}
+
+const needKey = (g: MockGear) => {
+  if (!g.voice.keySet) throw "No ElevenLabs key is stored: run `quadcam-cli gear voice key set`, or paste it in the Voice studio.";
+};
+
+/** `gear_voice_catalog`. */
+export function catalog(g: MockGear, p: { voices?: boolean; models?: boolean; credits?: boolean }): Catalog {
+  needKey(g);
+  const all = !(p.voices || p.models || p.credits);
+  return {
+    voices: all || p.voices ? VOICES : [],
+    models: all || p.models ? MODELS : [],
+    credits: all || p.credits ? { used: 100_000 - CREDITS + g.voice.spent, limit: 100_000, remaining: CREDITS - g.voice.spent, tier: "creator", resets_at: 0 } : null,
+  };
+}
+
+function price(g: MockGear, setIds: string[], model: string): VoiceEstimate {
+  const m = MODELS.find((x) => x.id === model);
+  if (!m) throw `The account lists no model "${model}".`;
+  const lines = SETS.filter((s) => setIds.includes(s.id)).reduce((n, s) => n + s.lines, 0);
+  const chars = lines * (CARRIER + 10);
+  const credits = Math.ceil(chars * (m.cost_per_char ?? 1));
+  const remaining = CREDITS - g.voice.spent;
+  const usd = (chars * (m.usd_per_1k ?? 0)) / 1000;
+  return { batches: Math.ceil(lines / 30) + 1, cached_batches: 0, lines, chars, cost_per_char: m.cost_per_char, credits_basis: "estimated", usd_per_1k: m.usd_per_1k ?? 0, promo_until: null, credits, usd, remaining, affordable: credits <= remaining };
+}
+
+function voiceOf(want: string): VoiceInfo {
+  const v = VOICES.find((x) => x.id === want || x.name.toLowerCase() === want.toLowerCase());
+  if (!v) throw `The account has no voice "${want}".`;
+  return v;
+}
+
+/** `gear_voice_estimate`. */
+export function estimate(g: MockGear, p: { sets: string[]; voice: string; model: string }): StudioEstimate {
+  needKey(g);
+  const v = voiceOf(p.voice);
+  const e = price(g, p.sets, p.model);
+  return { voice: v.id, voice_name: v.name, model: p.model, lines: e.lines, estimate: e };
+}
+
+/** `gear_voice_sample`: three lines per voice and model. */
+export function sample(g: MockGear, p: { voices: string[]; models: string[]; dry_run?: boolean; confirm?: boolean }): SampleReport {
+  needKey(g);
+  const sum = { batches: 0, cached_batches: 0, lines: 0, chars: 0, cost_per_char: 0, credits_basis: "estimated", usd_per_1k: 0, promo_until: null, credits: 0, usd: 0, remaining: CREDITS - g.voice.spent, affordable: true };
+  const combos = p.voices.flatMap((v) => p.models.map((m) => ({ v: voiceOf(v), m })));
+  for (const c of combos) {
+    const e = price(g, ["sample"], c.m);
+    sum.batches += e.batches;
+    sum.lines += e.lines;
+    sum.chars += e.chars;
+    sum.credits += e.credits;
+    sum.usd += e.usd ?? 0;
+  }
+  sum.affordable = sum.credits <= sum.remaining;
+  const base = { estimate: sum, combos: combos.length, dry_run: !!p.dry_run, warnings: [] as string[] };
+  if (p.dry_run) return { ...base, items: [], needs_confirm: false };
+  if (!sum.affordable) throw `this render needs ${sum.credits} credits but the account has ${sum.remaining}`;
+  if (!p.confirm) return { ...base, items: [], needs_confirm: true };
+  g.voice.spent += sum.credits;
+  const items = combos.flatMap<SampleItem>((c) =>
+    [["SOUNDS/en/SYSTEM/0006.wav", "Six"], ["SOUNDS/en/armed.wav", "Armed"], ["SOUNDS/en/turtle.wav", "Turtle mode"]].map(([line, text]) => ({
+      voice: c.v.id,
+      voice_name: c.v.name,
+      model: c.m,
+      line,
+      text,
+      file: `/Users/pilot/Library/Caches/app.quadcam/voice/samples/${c.v.name.toLowerCase()}-${c.m}/${line.split("/").pop()}`,
+      ms: 520,
+    })),
+  );
+  return { ...base, items, needs_confirm: false };
+}
+
+/** `gear_voice_render` with sets: a batched render into a local pack. */
+function studioRender(g: MockGear, p: { voice?: string; sets: string[]; model?: string; dry_run?: boolean; confirm?: boolean }): RenderReport {
+  needKey(g);
+  const voice = voiceOf(p.voice ?? "");
+  const e = price(g, p.sets, p.model ?? "");
+  const id = `local-elevenlabs-${voice.name.toLowerCase()}-${(p.model ?? "").replace(/_/g, "-")}`;
+  const base = { pack: id, provider: "elevenlabs", voice: voice.name, plan: { lines: e.lines, cached: 0, to_render: e.lines, chars: e.chars }, paid: true, dry_run: !!p.dry_run, notes: [] as string[], estimate: e, warnings: [] as string[] };
+  if (p.dry_run) return { ...base, rendered: 0, from_cache: 0, needs_confirm: false };
+  if (!e.affordable) throw `this render needs ${e.credits} credits but the account has ${e.remaining}`;
+  if (!p.confirm) return { ...base, rendered: 0, from_cache: 0, needs_confirm: true };
+  g.voice.spent += e.credits;
+  if (!g.voice.installed.includes(id)) g.voice.installed.push(id);
+  return { ...base, rendered: e.batches, from_cache: 0, needs_confirm: false };
 }

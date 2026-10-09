@@ -10,6 +10,7 @@ PID = "P.I.D."
 GPS = "G.P.S."
 LQ = "L.Q."
 RF = "R.F."
+RPM = "R.P.M."
 dBm = "D.B.M."
 dB = "D.B."
 

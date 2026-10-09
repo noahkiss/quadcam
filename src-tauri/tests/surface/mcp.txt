@@ -13,6 +13,7 @@ mcp.action quadcam_gear.crashes
 mcp.action quadcam_gear.devices
 mcp.action quadcam_gear.fc_identify
 mcp.action quadcam_gear.firmware_check
+mcp.action quadcam_gear.firmware_read
 mcp.action quadcam_gear.flash_plan
 mcp.action quadcam_gear.flights
 mcp.action quadcam_gear.model
@@ -34,6 +35,9 @@ mcp.action quadcam_gear.storage
 mcp.action quadcam_gear.switch_map
 mcp.action quadcam_gear.usb_timers
 mcp.action quadcam_gear.voice
+mcp.action quadcam_gear.voice_catalog
+mcp.action quadcam_gear.voice_estimate
+mcp.action quadcam_gear.voice_sets
 mcp.action quadcam_gear_apply.apply
 mcp.action quadcam_gear_apply.card_repair
 mcp.action quadcam_gear_apply.flash
@@ -78,7 +82,9 @@ mcp.action quadcam_gear_edit.update
 mcp.action quadcam_gear_edit.voice_choose
 mcp.action quadcam_gear_edit.voice_edit
 mcp.action quadcam_gear_edit.voice_install
+mcp.action quadcam_gear_edit.voice_key_delete
 mcp.action quadcam_gear_edit.voice_render
+mcp.action quadcam_gear_edit.voice_sample
 mcp.action quadcam_library_files.apply_name_format
 mcp.action quadcam_library_files.cuts
 mcp.action quadcam_library_files.export_cuts
@@ -147,6 +153,7 @@ mcp.param quadcam_gear.port string
 mcp.param quadcam_gear.radio string
 mcp.param quadcam_gear.rate_profile integer
 mcp.param quadcam_gear.refresh boolean
+mcp.param quadcam_gear.sets array<string>
 mcp.param quadcam_gear.settings array<string>
 mcp.param quadcam_gear.sim string
 mcp.param quadcam_gear.sim_targets array<string>
@@ -155,6 +162,9 @@ mcp.param quadcam_gear.target_v number
 mcp.param quadcam_gear.threshold integer
 mcp.param quadcam_gear.to string
 mcp.param quadcam_gear.version string
+mcp.param quadcam_gear.voice string
+mcp.param quadcam_gear.voice_model string
+mcp.param quadcam_gear.what string
 mcp.param quadcam_gear_apply.action string
 mcp.param quadcam_gear_apply.change string
 mcp.param quadcam_gear_apply.confirm boolean
@@ -228,6 +238,7 @@ mcp.param quadcam_gear_edit.remove_folder string
 mcp.param quadcam_gear_edit.repaired boolean
 mcp.param quadcam_gear_edit.retired boolean
 mcp.param quadcam_gear_edit.serial string
+mcp.param quadcam_gear_edit.sets array<string>
 mcp.param quadcam_gear_edit.settings array<string>
 mcp.param quadcam_gear_edit.source string
 mcp.param quadcam_gear_edit.status string
@@ -238,6 +249,9 @@ mcp.param quadcam_gear_edit.title string
 mcp.param quadcam_gear_edit.to string
 mcp.param quadcam_gear_edit.unlink boolean
 mcp.param quadcam_gear_edit.voice string
+mcp.param quadcam_gear_edit.voice_model string
+mcp.param quadcam_gear_edit.voice_models array<string>
+mcp.param quadcam_gear_edit.voices array<string>
 mcp.param quadcam_gear_edit.warn_mah number
 mcp.param quadcam_library.aircraft string
 mcp.param quadcam_library.day string

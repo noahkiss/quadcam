@@ -248,6 +248,7 @@ fn render(b: &Bench, lines: &[&str], dry: bool, confirm: bool) -> quadcam_lib::c
             dry_run: dry,
             confirm,
             settings: None,
+            ..Default::default()
         })
         .unwrap()
 }
