@@ -973,7 +973,7 @@ FC effect (`aux` modes, `adjrange` selections such as rate or OSD profile), the 
   - **No sim device kind.** A sim is not a device with an identity, so the backups live under
     the pseudo device `sim-<id>` (`sim-liftoff`) in the same store, `BeforeApply`, always kept,
     one file named by its path from the home folder. `gear backups --device sim-liftoff` lists
-    them. Nothing restores them yet: copy the bytes back from `gear backups read`.
+    them. A sim restore reads them back (see "Built (radio over USB)" under 7.5).
   - **`SimSyncRequest` carries the params** (the sims and the quad) with the digest and
     `confirm`: the apply plans again from them, as the FC apply does from the change. A sim sync
     is not a staged change: it overwrites sim files at once through the sheet. The sheet and an
@@ -1000,7 +1000,8 @@ FC effect (`aux` modes, `adjrange` selections such as rate or OSD profile), the 
     deadzone is one `DeadZone` float per controller file under `RC/` (shape checked against a
     real install, one of five files holds none); a later package can add it.
   - **The Sims page and the sidebar "Out of date" badge** are not built: the Rates segment's
-    Sims list carries Sync, and the badge waits for the Gear sidebar.
+    Sims list carries Sync and Restore backup (it already lists each sim, its profiles and its
+    sync state against the quad), and the badge waits for the Gear sidebar.
   - **Rate editor:** edits are `FcSet` values in the profile's rate section (`*_rc_rate`,
     `*_srate`, `*_expo`, `*_rate_limit`, `rates_type`, `thr_mid`, `thr_expo`,
     `throttle_limit_type`, `throttle_limit_percent`, `rateprofile_name`), only the ones that
@@ -1138,7 +1139,7 @@ binaries only (open question 10).
     trimmed). Nothing restores it yet: flash it by hand with a DFU tool.
   - **The DFU device has no identity.** The STM32 bootloader reports a chip serial, not the
     radio. The plan flashes the one STM32 DFU device present (zero or two refuse) and warns.
-    Linking a DFU serial to a saved radio (6.5, 7.5) is not built.
+    Linking a DFU serial to a saved radio is built: see "Built (radio over USB)" below.
   - **After the flash.** The apply ends at "Leave DFU" with every byte compared. Reading
     `semver` in USB Storage mode (8.4) is left to the person; the report says so.
   - **A flash is a stand-in change.** The sheet and an agent's confirm request carry a change
@@ -1149,7 +1150,51 @@ binaries only (open question 10).
   - **Not built:** the Betaflight flash plan (the table above and open question 8 say version
     check only for 1.0; the package list asks for it, so it needs a decision), and ELRS options
     and flashing (needs `esptool`, serial passthrough and the options block). The CRSF
-    device-info ping and the DFU link are open as before.
+    device-info ping is open as before.
+
+- **Built (radio over USB):** four follow-ups, branch `radio-usb`.
+  - **One radio, two ids.** `Device` gained `aliases` and `dfu_serial`; `Connected` gained
+    `also`. `detect` lists every id a radio card answers to (hardware serial in the built-in
+    slot, marker, volume UUID); `Core::gear_connected` takes the saved radio whose id or alias
+    matches, shows it under the saved id, and records the ids it saw as aliases. The identity
+    stays the card's, not the USB serial (all radios report the same generic one). A radio
+    never seen in the slot first has one id only, so there is nothing to match, and a brand
+    new second radio of the same board is never merged by board alone.
+  - **Storage-mode rules.** Already in `card.rs` (timeouts, `stuck_message`, the unmount
+    after every job, the `._` removal beside each write). Added: the apply sheet's "keep the
+    radio plugged in" line while an over-USB write runs, and **Clean ._ files**
+    (`gear_card_clean`: `find_apple_double` lists files that start with the AppleDouble header,
+    `remove_apple_doubles` deletes them under a timeout; `confirm` is required; the card
+    unmounts after). QuadCam never prompts to unplug during a write.
+  - **EdgeTX CLI link.** `gear/edgetx/cli.rs` (`RadioCli`, `FakeRadioCli`) over `Ports::open`,
+    so it takes the port lock and refuses a port another process holds, as the FC link does.
+    The commands are a closed list: `ver`, `ls`, `play`, `beep`, `reboot`. A path is checked
+    before it is sent. `core/radio_cli.rs` holds `gear_radio_cli` (identify, ls, play, beep,
+    reboot with `confirm`, verify). **Verify** `ls`es each folder of a saved radio's latest
+    backup (not `LOGS/`) and reports missing files and size differences; the card must be back
+    in the radio, because storage and serial modes are exclusive. The reply formats of `ver`
+    and `ls` are parsed tolerantly (key: value lines; a name with an optional size) because the
+    real replies are not recorded yet. WP9's voice preview is not on this branch, so `play` is
+    its own action; the preview can call it once both land.
+  - **DFU link.** `Link::Dfu` carries the chip serial. `gear_dfu_link` stores it in the picked
+    radio (`dfu_serial`), or in the radio seen most recently when none is picked, and says
+    which. `gear_connected` shows a linked DFU device under that radio's id. The flash plan
+    has the check "The radio in DFU mode is this radio" (`device_changed`) and, for an unlinked
+    device, a warning that names the radio seen most recently; a verified flash links it. The
+    plan's digest includes the DFU serial. There is no Firmware page yet, so there is no UI for
+    the link: the CLI and MCP carry it.
+  - **Sim restore.** `core/sim_restore.rs`: `gear_sim_restore_plan`, `gear_sim_restore`, the
+    sheet's `gear_sim_restore_click`; a stand-in change `sim-restore` on the device `sims`. The
+    backup is the one named, else the newest that differs from the file now; the current file
+    is backed up first (kept), so a second restore undoes the first. Checks: backup found and
+    readable, sim closed, path inside the home folder, file present and writable, something
+    differs. Under cargo a write outside the temporary folder is refused. UI: **Restore backup**
+    in the Rates segment's Sims list (the section already lists sims, profiles and sync state;
+    no separate Sims page).
+  - **Needs a real radio:** `ver` and `ls` reply formats and the prompt on a real CLI; `play`
+    with a real sound path; `reboot` coming back; the alias match with a real card moved from
+    the slot into the radio; a DFU link with a real chip serial; `Clean ._ files` on a card
+    macOS has written to.
 
 ### 7.6 Flight analysis
 
