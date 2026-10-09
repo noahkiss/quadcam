@@ -56,19 +56,19 @@ test("lists the sims and says which match the quad", async ({ app, page }) => {
   await expect(row("Liftoff")).toContainText("Running");
   await expect(row("Liftoff")).toContainText("Freestyle maximum 907 / 907 / 800 °/s, same as the quad");
   await expect(row("Liftoff")).toContainText("Race maximum 667 / 667 / 667 °/s, differs by up to");
-  await expect(row("Liftoff: Micro Drones")).toContainText("Differs from the quad");
+  await expect(row("Liftoff: Micro Drones")).toContainText("Out of date");
   await expect(row("Uncrashed")).toContainText("Matches the quad");
   await expect(row("Uncrashed")).toContainText("empty profile");
   await expect(row("The Zone")).toContainText("Matches the quad");
   await expect(row("The Zone")).toContainText("uses the actual type");
   await expect(row("Velocidrone")).toContainText("Off");
-  await expect(row("Velocidrone")).toContainText("Off until a sample save exists");
+  await expect(row("Velocidrone")).toContainText("Not supported yet. QuadCam needs a sample Velocidrone save");
   await expect((await app.method("gear_sims")).at(-1)).toEqual({ paths: [], device: "fc-0a1b2c3d4e5f6071", profile: 0 });
 
   // Against the Actual profile the sims differ, and the fit error is shown.
   await page.getByRole("group", { name: "Rate profile" }).getByRole("button", { name: "1 RACE" }).click();
-  await expect(row("Liftoff")).toContainText("Differs from the quad");
-  await expect(row("The Zone")).toContainText("Differs from the quad");
+  await expect(row("Liftoff")).toContainText("Out of date");
+  await expect(row("The Zone")).toContainText("Out of date");
   expect((await app.method("gear_sims")).at(-1)).toEqual({ paths: [], device: "fc-0a1b2c3d4e5f6071", profile: 1 });
 });
 

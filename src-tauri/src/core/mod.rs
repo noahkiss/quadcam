@@ -304,6 +304,8 @@ pub struct Core {
     gear_touched: Mutex<std::collections::HashSet<String>>,
     /// The last failed step per link, for the device page (`GearStatus.failures`).
     gear_failures: Mutex<std::collections::HashMap<String, gear::StepFailure>>,
+    /// The Sims badge's last answer and what it was read from (`core/rates.rs`).
+    sims_badge: Mutex<Option<(String, usize)>>,
     /// Cards unmounted but still plugged in, by device id (`core/apply_card.rs`).
     gear_released: Mutex<std::collections::HashMap<String, crate::gear::model::Connected>>,
     /// Cards the person mounted: when each unmounts.
@@ -362,6 +364,7 @@ impl Core {
             gear_jobs: Mutex::default(),
             gear_touched: Mutex::default(),
             gear_failures: Mutex::default(),
+            sims_badge: Mutex::default(),
             gear_released: Mutex::default(),
             gear_mounted_for_user: Mutex::default(),
         }

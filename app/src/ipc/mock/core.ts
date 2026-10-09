@@ -303,8 +303,14 @@ export class MockCore {
       }
       case "profiles":
         return { profiles: this.settings.values.profiles || [], default_profile: this.settings.values.defaultProfile || null };
-      case "gear_status":
-        return gear.gearStatus(this.gear, this.settings.values);
+      case "gear_status": {
+        // The Sims badge: the saved FC seen last with a backup, against the sims' rates.
+        const st = gear.gearStatus(this.gear, this.settings.values);
+        const quad = this.gear.devices.filter((d) => d.kind === "fc" && d.last_backup).sort((a, b) => String(a.last_seen).localeCompare(String(b.last_seen))).pop();
+        st.sims_quad = quad?.id ?? null;
+        st.sims_out_of_date = quad ? simsync.status(this.simSync, "p0").filter((x) => x.enabled && x.in_sync === false).length : 0;
+        return st;
+      }
       case "gear_devices":
         return structuredClone(this.gear.devices);
       case "gear_device_save":

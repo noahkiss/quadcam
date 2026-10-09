@@ -18,7 +18,7 @@ impl Sim for Velocidrone {
         false
     }
     fn note(&self) -> Option<&'static str> {
-        Some("Off until a sample save exists to read its format from.")
+        Some("Not supported yet. QuadCam needs a sample Velocidrone save to read its rate file, so this sim stays off.")
     }
     fn process(&self) -> &'static str {
         "Velocidrone"

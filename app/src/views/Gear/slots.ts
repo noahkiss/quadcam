@@ -42,6 +42,8 @@ export interface GearPageSlot {
   preview?: string;
   /** A count the sidebar shows beside the label. */
   count?: (s: import("../../store").State) => number;
+  /** A word the sidebar shows beside the label instead of the count ("Out of date"). */
+  badge?: (s: import("../../store").State) => string | null;
   render: () => ReactNode;
 }
 

@@ -28,8 +28,12 @@ pub struct GearStatus {
     pub devices: usize,
     /// Staged changes not yet applied (the Bench badge).
     pub staged: usize,
-    /// Sims whose rates differ from their quad's.
+    /// Sims whose rates differ from their quad's (the Sims badge). The quad is
+    /// `sims_quad`.
     pub sims_out_of_date: usize,
+    /// The saved FC the badge compares the sims with: the one seen last that has a backup.
+    #[serde(default)]
+    pub sims_quad: Option<String>,
     /// FCs on USB: battery in, time on USB, the limit (`core/fc.rs`).
     #[serde(default)]
     pub usb_timers: Vec<super::fc::UsbTimer>,
@@ -170,6 +174,7 @@ impl Core {
             .cloned()
             .collect();
         failures.sort_by(|a, b| a.handle.cmp(&b.handle));
+        let (sims_quad, sims_out_of_date) = self.sims_badge();
         Ok(GearStatus {
             failures,
             mounted: self.gear_mounted_cards(),
@@ -179,7 +184,8 @@ impl Core {
             connected,
             devices: store.devices()?.len(),
             staged: self.gear_staged_counts().values().sum(),
-            sims_out_of_date: 0,
+            sims_out_of_date,
+            sims_quad,
             usb_timers: self.gear_usb_timers(),
             paused: self.gear_paused_ports(),
             working: self.gear_working(),

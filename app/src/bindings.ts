@@ -2425,8 +2425,13 @@ export type GearStatus = {
 	devices: number,
 	/**  Staged changes not yet applied (the Bench badge). */
 	staged: number,
-	/**  Sims whose rates differ from their quad's. */
+	/**
+	 *  Sims whose rates differ from their quad's (the Sims badge). The quad is
+	 *  `sims_quad`.
+	 */
 	sims_out_of_date: number,
+	/**  The saved FC the badge compares the sims with: the one seen last that has a backup. */
+	sims_quad?: string | null,
 	/**  FCs on USB: battery in, time on USB, the limit (`core/fc.rs`). */
 	usb_timers?: UsbTimer[],
 	/**  The FC ports whose background reads are paused (`gear_poll_pause`). */
