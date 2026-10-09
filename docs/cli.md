@@ -135,7 +135,7 @@ See [Modules and notices](modules.md) for what a module install checks.
 - `photos_album`, `format_label`, `log_dir`, `layout`, `place_folders`, `tunables`
 - `geocoder` (`apple`, `nominatim`, `census` or `google`), `google_places_key`
 - `name_date_format` (`YYYY-MM-DD` or `YY.MM.DD`), `default_profile`
-- Gear: `gear_dir`, `gear_auto_backup`, `gear_keep_recent`, `gear_keep_weeks`, `gear_keep_monthly`, `gear_usb_minutes`, `gear_on_connect`, `gear_cues`, `firmware_check`, `tts_provider`, `tts_base_url`, `tts_model`, `tts_voice`, `voice_index`, `tts_key`, `sim_preview` (see [Settings](settings.md#gear))
+- Gear: `gear_dir`, `gear_auto_backup`, `gear_erase_blackbox`, `gear_blackbox_msc`, `gear_keep_recent`, `gear_keep_weeks`, `gear_keep_monthly`, `gear_usb_minutes`, `gear_on_connect`, `gear_cues`, `firmware_check`, `tts_provider`, `tts_base_url`, `tts_model`, `tts_voice`, `voice_index`, `tts_key`, `sim_preview` (see [Settings](settings.md#gear))
 - `ffmpeg_source` (`module` or `homebrew`), `modules` (`{"ffmpeg": "/path/to/ffmpeg"}`: a file per tool; see [Modules](modules.md#where-ffmpeg-comes-from))
 
 A value is JSON or plain text.
@@ -153,6 +153,10 @@ quadcam-cli --json gear fc check STEM.diff_all.txt expected.cli  # every expecte
 quadcam-cli --json gear fc notes [--board BETAFPVG473]            # known issues of boards
 quadcam-cli --json gear fc pause|resume [--port ...]                 # pause the running app's FC reads
 quadcam-cli --json gear fc usb                                   # USB timers
+quadcam-cli --json gear blackbox pull [--port P] [--keep] [--mode auto|msp|msc] [--force]
+quadcam-cli --json gear blackbox list [--device ID]
+quadcam-cli --json gear blackbox export PULL DIR [--split]
+quadcam-cli --json gear blackbox erase [--port P] --confirm
 quadcam-cli --json gear osd FILE [FILE ...] [--grid NTSC|PAL|HD|WxH] [--text]
 quadcam-cli --json gear osd DEVICE [--staged] [--grid ...] [--text]   # --staged: with the device's staged OSD edits on top
 quadcam-cli --json gear osd-edit DEVICE [--move ELEMENT=X,Y]... [--profiles ELEMENT=1,3|none]... [--copy FROM:TO]   # stages into the one "OSD layout" change; writes nothing to the FC
@@ -213,6 +217,13 @@ quadcam-cli --json gear stop <handle>
 `gear fc read --out STEM` writes `STEM.diff_all.txt` and `STEM.dump_all.txt` and refuses to
 overwrite. `gear fc check` is right only for values that differ from the default: a default
 value never shows in `diff all`.
+
+`gear blackbox pull` reads an FC's blackbox flash, verifies and stores it, and erases the flash only when the
+`gear_erase_blackbox` setting is on and the checks pass. `--keep` skips the erase for that run; no flag turns it on.
+It refuses a pull that would outlast the USB heat timer (`--force` overrides that, never an erase that could not
+finish) and a port another program has open. `list` shows the stored pulls newest first, each log paired with a
+radio-log flight by order (a labelled guess). `erase --confirm` empties the flash when QuadCam holds a stored pull of
+exactly what it holds. See [Gear](gear.md#blackbox).
 
 See [Gear](gear.md).
 
