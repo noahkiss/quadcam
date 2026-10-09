@@ -1199,19 +1199,42 @@ binaries only (open question 10).
     version to flash, not the installed one: EdgeTX 2.12 on the Pocket, and for a splash the
     `Splash` pair (2.12.4). The plan downloads only after those pass. The default version is
     the installed one, so a splash on 2.12.3 is refused until the radio updates.
-  - **Which file is the board's.** The release zip's `.bin` files are matched by name, less a
-    `fw-`, `firmware-` or `edgetx-` prefix and the version, against the board's names
-    (`edgetx::BOARDS`). Exactly one must match. The names are a guess about EdgeTX's naming and
-    not checked against a real release; a miss refuses with `bad_image`.
-  - **Full image only.** 6.5 says the image includes the bootloader. Nothing checked that
-    against a real release, and a firmware-only file written at `0x08000000` would replace the
-    bootloader. `check_image` therefore requires a bootloader vector table at the start and the
-    firmware's at `app_offset` (`0x8000`). If real images are firmware-only, the plan refuses
-    and a later package writes them at the firmware offset.
-  - **Backups before a flash.** A radio in DFU mode shows no card, so the plan requires an
-    earlier card backup (`no_backup`), and the apply reads the radio's whole flash over DFU
-    first and keeps it (`BeforeFlash`, always kept, file `firmware.bin`, trailing erased bytes
-    trimmed). Nothing restores it yet: flash it by hand with a DFU tool.
+  - **Which file is the board's.** Verified against the official 2.12.4 zip (2026-10-09): the
+    `.bin` files are named `<board>-<7 hex of the commit>.bin` (`pocket-def35ad.bin`), next to
+    `.uf2` files for newer boards, `fw.json` (display name to `pocket-` prefix) and `LICENSE`.
+    The first version of this code guessed `fw-radiomaster-pocket-v2.12.4.bin` and would have
+    refused every real release; the match is now the name less `.bin` and the hash, against the
+    board's names (`edgetx::BOARDS`). Exactly one must match.
+  - **Full image only.** Verified: the Pocket's 2.12.4 `.bin` is 519,580 bytes (507 KB) and a
+    full image. The bootloader's vector table is at offset 0 (stack `0x10010000`, reset
+    `0x08007bd9`), the firmware's at `0x8000` (reset `0x0807ea7d`), so the image is written at
+    `0x08000000` and replaces the EdgeTX bootloader with the release's. `check_image` requires
+    both tables, the size band, and that the image names `edgetx-<board>-<version>`
+    (`edgetx-pocket-2.12.4 (def35ad3)` in the real one) so a file of another release cannot
+    pass.
+  - **A verified copy before any erase.** `dfu::read_verified` reads the whole flash twice
+    through `dfu::ReadOnly`, a transport that refuses erase, write and leave, and returns a
+    `VerifiedCopy` only when both reads are equal and the flash is not all zeros. `dfu::flash`
+    takes a `&VerifiedCopy` that covers the range, so an erase without a copy does not
+    compile. The apply saves the copy (`gear/fwcopy.rs`, plain files under
+    `<gear>/firmware/<device>/`, read back from disk) before the erase. A blank flash is a
+    valid copy to flash over (an interrupted flash must be recoverable) and is not saved.
+    The copy is not a card snapshot: a snapshot of only `firmware.bin` would become the radio's
+    `latest` backup, which `model_edit`, the switch map and the apply engine read cards from,
+    and the pruner would collect its blob. (The first version did that.)
+  - **Each block checked.** The write goes in 16 KB segments; each is read back and compared
+    before the next, then the whole image is read back. The device's `wTransferSize` is read
+    from its DFU functional descriptor (`NusbUsb`); DfuSe addresses blocks with it, so any size
+    other than 2,048 refuses before the erase. The flash size must equal the board's
+    (`BoardSpec::flash_bytes`, 1 MB for the Pocket).
+  - **Read-only trial.** `gear_firmware_read` (CLI `gear firmware --read`, MCP `quadcam_gear`
+    `firmware_read`, the Firmware page's Read firmware, event `firmware-read-progress`) reads
+    through `ReadOnly`, saves a copy and compares the version the image names with the radio's.
+    The Firmware page lists the steps: radio off, USB in, no buttons, wait, Read.
+  - **Entering DFU.** The EdgeTX manual says: radio off, USB cable in (the ROM bootloader,
+    `0483:df11`); both trims held with power on starts the EdgeTX bootloader (mass storage), a
+    different mode. The first version told the person to hold the trims, which is wrong for
+    DFU. Fixed in the plan, the page and the docs.
   - **The DFU device has no identity.** The STM32 bootloader reports a chip serial, not the
     radio. The plan flashes the one STM32 DFU device present (zero or two refuse) and warns.
     Linking a DFU serial to a saved radio is built: see "Built (radio over USB)" below.
@@ -1219,9 +1242,18 @@ binaries only (open question 10).
     `semver` in USB Storage mode (8.4) is left to the person; the report says so.
   - **A flash is a stand-in change.** The sheet and an agent's confirm request carry a change
     with the id `flash`, like the sim sync.
-  - **Splash layout unverified.** The markers, the 1,024 bytes and the bit order (bit 0 is the
-    top row of a band) follow this section and a synthetic binary. No release binary was
-    downloaded. The plan refuses an image whose markers differ.
+  - **Splash layout verified** (2.12.4, Pocket, 2026-10-09). `SPS\0` appears once in the
+    image, followed by `0x80 0x40`, 1,024 bytes and `SPE`; `SPE` also appears at five other
+    places, so only the start marker is counted. The bytes are 8-row vertical bytes (byte
+    `band * 128 + x`, top row in bit 0) and decode to the upright EdgeTX logo with a set bit as
+    a drawn pixel. The tests build a synthetic image with that layout; no GPL bytes are in the
+    repository.
+  - **Still unverified on hardware** (WP10): the `nusb` transport on a real DFU device; that
+    the Pocket enters ROM DFU the way the EdgeTX manual says; the DfuSe set-address, erase and
+    upload sequence against the real ROM bootloader (it follows ST's notes and `dfu-util`);
+    the 1 MB layout string the Pocket reports; the DFU functional descriptor's
+    `wTransferSize`; that the image the release ships boots after QuadCam writes it. The first
+    real step is the read-only trial. Any mismatch there fails safe: the read refuses.
   - **Not built, deferred to 1.1 (decided 2026-10-09, both wanted):** the Betaflight flash
     plan, and ELRS options and flashing (needs `esptool`, serial passthrough and the options
     block). 1.0 keeps the version check for Betaflight. The CRSF device-info ping is open as

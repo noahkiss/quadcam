@@ -56,7 +56,10 @@ pub use fc::{
     BoardNotesParams, FcJob, FcPortParams, FcReadParams, PollPauseParams, UsbTimer, USB_PROBE,
 };
 pub use files::{Moved, TrashReport};
-pub use firmware::{FirmwareParams, FirmwareView, FlashParams, FlashRequest, FLASH_CHANGE};
+pub use firmware::{
+    FirmwareParams, FirmwareRead, FirmwareReadParams, FirmwareView, FlashParams, FlashRequest,
+    FLASH_CHANGE,
+};
 pub use flights::{
     CrashSaveParams, FlightFilter, FlightFoldersParams, FlightReport, FlightSetParams, FlightsView,
     NotesParams, PackSaveParams, PacksParams, PlaceTrend, ReportParams, ReportSaveParams,

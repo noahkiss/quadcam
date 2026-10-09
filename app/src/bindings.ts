@@ -259,6 +259,12 @@ export const commands = {
 	 */
 	gearSplash: (params: SplashParams) => typedError<SplashPreview, string>(__TAURI_INVOKE("gear_splash", { params })),
 	/**
+	 *  The read-only DFU trial: reads the flash of the one radio in DFU mode twice, saves
+	 *  it as a firmware copy and compares the version the image names with the radio's
+	 *  known version. Cannot erase, write or restart the radio (`firmware-read-progress` events).
+	 */
+	gearFirmwareRead: (params: FirmwareReadParams) => typedError<FirmwareRead, string>(__TAURI_INVOKE("gear_firmware_read", { params })),
+	/**
 	 *  What flashing an EdgeTX radio would do: the release's board binary (downloaded
 	 *  on first use), the splash patch, every guard and a digest. Writes no device.
 	 */
@@ -498,6 +504,7 @@ export const events = {
 	agentFormatClosed: makeEvent<AgentFormatClosed>("agent-format-closed"),
 	agentFormatRequest: makeEvent<AgentFormatRequest>("agent-format-request"),
 	deviceChanged: makeEvent<DeviceChanged>("device-changed"),
+	firmwareReadProgress: makeEvent<FirmwareReadProgress>("firmware-read-progress"),
 	gearChanged: makeEvent<GearChanged>("gear-changed"),
 	importProgress: makeEvent<ImportProgress>("import-progress"),
 	importResult: makeEvent<ImportResult>("import-result"),
@@ -1514,6 +1521,13 @@ export type ControlRow = {
 	positions: Position[],
 };
 
+/**  Why a copy was taken. */
+export type CopyKind = 
+/**  The person ran "Read radio firmware". */
+"read" | 
+/**  The flash took it before it erased. */
+"before_flash";
+
 /**  `gear_copy_plan` and `gear_copy_stage`: where the settings come from and go to. */
 export type CopyParams = {
 	/**  An FC's device id (its latest backup), or a backup id (`<device>/<snapshot>`). */
@@ -2116,6 +2130,38 @@ export type FirmwareParams = {
 	check?: boolean | null,
 };
 
+/**  What the read-only trial found. */
+export type FirmwareRead = {
+	copy: FwCopy,
+	/**  The saved radio the copy belongs to, when one was named. */
+	device: string | null,
+	/**  The version QuadCam knows for that radio (from its last card or serial read). */
+	known_version: string | null,
+	/**  The flash size the DFU device reports, in bytes. */
+	flash_bytes: number,
+	/**
+	 *  True: the image names the version the radio reported. False: it names another.
+	 *  None: one of the two is unknown.
+	 */
+	matches: boolean | null,
+	/**  What to tell the person, in plain words. */
+	message: string,
+	/**  What the read did, step by step. None of them writes the radio. */
+	steps: StepReport[],
+};
+
+/**  `gear_firmware_read`: which saved radio the DFU device is, when known. */
+export type FirmwareReadParams = {
+	/**  The saved radio's device id. Without it the copy is kept under `dfu-<serial>`. */
+	device?: string | null,
+};
+
+/**  The read-only DFU trial: `done` of `total` bytes of both reads (`gear_firmware_read`). */
+export type FirmwareReadProgress = {
+	done: number,
+	total: number,
+};
+
 /**  Where a device stands against the newest release. */
 export type FirmwareState = "up_to_date" | "update" | 
 /**  The device reports no version, or the newest release is not known. */
@@ -2355,6 +2401,23 @@ export type FormatRequest = {
 	label?: string | null,
 	/**  Must be true. */
 	confirm?: boolean,
+};
+
+/**  One saved copy. */
+export type FwCopy = {
+	/**  `<device>/<stamp>-<kind>`. */
+	id: string,
+	device: string,
+	taken_at: string,
+	kind: CopyKind,
+	/**  Bytes in the saved image. */
+	size: number,
+	/**  SHA-256 of the saved image. */
+	sha256: string,
+	/**  The board the image names itself (`pocket`), when it carries the EdgeTX string. */
+	image_board: string | null,
+	/**  The EdgeTX version the image names itself. */
+	image_version: string | null,
 };
 
 /**  `gear_card`'s answer: the card, and the aircraft whose EdgeTX model the radio selects. */

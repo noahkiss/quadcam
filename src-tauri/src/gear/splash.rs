@@ -9,9 +9,14 @@
 //! says, then decodes what it wrote and compares it with the picture.
 //!
 //! This is QuadCam's own code from the layout in the design. No EdgeTX source or binary is
-//! in this repository: the tests build a synthetic binary with the markers. The layout has
-//! not been compared with a downloaded release binary yet, so `compat.rs` lists a splash
-//! pair only after a test on that release passes.
+//! in this repository: the tests build a synthetic binary with the markers.
+//!
+//! Checked against the real EdgeTX 2.12.4 Pocket image (2026-10-09, outside the test suite):
+//! `SPS\0` appears once, at a NUL-terminated string's end near the image's tail, followed by
+//! `0x80 0x40`, 1,024 bytes and `SPE`; `SPE` also appears at five other places (so only the
+//! start marker is counted); with the bit order above the bytes decode to the upright
+//! EdgeTX logo (set bit = drawn pixel). `compat.rs` lists a splash pair only after such a
+//! check.
 
 use super::model::{Refusal, RefusalCode};
 use anyhow::{anyhow, bail, Context, Result};
@@ -401,6 +406,33 @@ pub(crate) mod tests {
             m.set(x, 63, true);
         }
         m
+    }
+
+    /// The layout of the real 2.12.4 image: the start marker once after a NUL, `SPE` in other
+    /// places too, the image drawn with set bits, the logo's top row in bit 0.
+    #[test]
+    fn the_real_layout_counts_the_start_marker_only() {
+        let mut bin = vec![0x11u8; 4000];
+        // Stray end markers, as the release has five of them.
+        for at in [100, 900, 3500] {
+            bin[at..at + 3].copy_from_slice(END);
+        }
+        bin[1999] = 0;
+        let at = 2000;
+        bin[at..at + 4].copy_from_slice(START);
+        bin[at + 4] = 0x80;
+        bin[at + 5] = 0x40;
+        // Column 0 has its top pixel set (bit 0 of band 0); column 5 has row 63 (bit 7 of band 7).
+        let img = &mut bin[at + 6..at + 6 + IMAGE_BYTES];
+        img.fill(0);
+        img[0] = 1;
+        img[7 * 128 + 5] = 0x80;
+        bin[at + 6 + IMAGE_BYTES..at + 9 + IMAGE_BYTES].copy_from_slice(END);
+        let m = decode(&bin).unwrap();
+        assert!(m.get(0, 0) && m.get(5, 63));
+        assert_eq!(m.dark_count(), 2);
+        let back = patch(&bin, &m).unwrap();
+        assert_eq!(back, bin);
     }
 
     #[test]
