@@ -693,6 +693,70 @@ pub fn restore_lines(target: &Config, base: &Config) -> Vec<String> {
     out
 }
 
+/// One setting or list-like line a change touches, as the revert and its overlap check
+/// name it: `("rateprofile 1", "set roll_expo")`.
+pub type Touch = (Section, String);
+
+/// What the rendered CLI lines touch: each `set` by name, each list-like command by its key.
+pub fn touched(lines: &[String]) -> Vec<Touch> {
+    let mut section = Section::Master;
+    let mut out: Vec<Touch> = Vec::new();
+    for l in lines {
+        match dump::parse_cmd(l) {
+            Cmd::Select(s) => section = s,
+            Cmd::Set { name, .. } => out.push((section, format!("set {name}"))),
+            Cmd::Other { verb, key } => out.push((section, format!("{verb} {key}"))),
+            Cmd::Control => {}
+        }
+    }
+    out.dedup();
+    out
+}
+
+/// The lines that put back what `lines` changed: each touched `set` takes its value from
+/// `before` (the dump taken just before the apply), each list-like command its old line.
+/// The second list names what `before` cannot give back (a line that did not exist).
+pub fn inverse_lines(lines: &[String], before: &Config) -> (Vec<String>, Vec<String>) {
+    let mut section = Section::Master;
+    let mut shown = Section::Master;
+    let mut out = Vec::new();
+    let mut lost = Vec::new();
+    for l in lines {
+        let (key, old): (String, Option<String>) = match dump::parse_cmd(l) {
+            Cmd::Select(s) => {
+                section = s;
+                continue;
+            }
+            Cmd::Set { name, .. } => (
+                format!("set {name}"),
+                before
+                    .get(section, &name)
+                    .map(|v| dump::render_set(&name, v)),
+            ),
+            Cmd::Other { verb, key } => (
+                format!("{verb} {key}"),
+                before.other(section, &key).map(str::to_string),
+            ),
+            Cmd::Control => continue,
+        };
+        match old {
+            Some(line) => {
+                if section != shown {
+                    if let Some(s) = section.select_line() {
+                        out.push(s);
+                    }
+                    shown = section;
+                }
+                if !out.contains(&line) {
+                    out.push(line);
+                }
+            }
+            None => lost.push(key),
+        }
+    }
+    (out, lost)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -910,6 +974,46 @@ mod tests {
         );
         assert_eq!(r.lines, ["aux 0 0 1 1300 2100 0 0"]);
         assert!(r.diff.iter().any(|l| l.op == LineOp::Remove));
+    }
+
+    #[test]
+    fn touched_names_each_set_and_list_command_with_its_section() {
+        let lines: Vec<String> = [
+            "rateprofile 1",
+            "set roll_expo = 40",
+            "set roll_expo = 41",
+            "aux 0 0 1 900 2100 0 0",
+            "set osd_cap_alarm = 9",
+        ]
+        .map(String::from)
+        .to_vec();
+        let t = touched(&lines);
+        assert!(t.contains(&(Section::RateProfile(1), "set roll_expo".to_string())));
+        assert!(t
+            .iter()
+            .any(|(s, k)| *s == Section::RateProfile(1) && k.starts_with("aux")));
+        assert!(t.contains(&(Section::RateProfile(1), "set osd_cap_alarm".to_string())));
+    }
+
+    #[test]
+    fn inverse_lines_take_old_values_and_report_what_was_missing() {
+        let before = Config::parse(
+            "set a = 1
+rateprofile 1
+set roll_expo = 10
+",
+        );
+        let lines: Vec<String> = [
+            "set a = 5",
+            "rateprofile 1",
+            "set roll_expo = 40",
+            "set new = 1",
+        ]
+        .map(String::from)
+        .to_vec();
+        let (inv, lost) = inverse_lines(&lines, &before);
+        assert_eq!(inv, ["set a = 1", "rateprofile 1", "set roll_expo = 10"]);
+        assert_eq!(lost, ["set new"]);
     }
 
     #[test]

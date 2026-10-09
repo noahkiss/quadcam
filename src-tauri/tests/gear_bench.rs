@@ -214,8 +214,11 @@ fn revert_stages_a_restore_and_the_change_is_reverted_when_it_verifies() {
     let rv = b.core.gear_change_revert(&c.id).unwrap();
     assert_eq!(rv.reverts.as_deref(), Some(c.id.as_str()));
     assert_eq!(rv.title, format!("Revert: {}", c.title));
+    // The revert is the inverse of this change's lines, not the whole pre-apply dump.
     assert!(
-        matches!(&rv.edits[0], Edit::Restore { backup, .. } if backup.contains("before_apply"))
+        matches!(&rv.edits[0], Edit::FcLines { lines } if lines == &["set osd_cap_alarm = 2200"]),
+        "{:?}",
+        rv.edits
     );
     assert!(
         b.core.gear_change_revert(&c.id).is_err(),
@@ -231,6 +234,54 @@ fn revert_stages_a_restore_and_the_change_is_reverted_when_it_verifies() {
     );
     assert_eq!(status(&b, &rv.id), ChangeStatus::Verified);
     assert_eq!(status(&b, &c.id), ChangeStatus::Reverted);
+}
+
+#[test]
+fn revert_puts_back_only_its_own_lines_and_leaves_a_later_apply_alone() {
+    let fc = FakeFc::new(G473).with_uid(UID);
+    let b = bench(&fc);
+    let a = stage(&b, vec![set("osd_cap_alarm", "1500")]);
+    apply(&b, &a.id);
+    // A later apply sets another line; reverting the first must not touch it.
+    let later = stage(&b, vec![set("osd_alt_alarm", "250")]);
+    apply(&b, &later.id);
+    let rv = b.core.gear_change_revert(&a.id).unwrap();
+    assert!(
+        matches!(&rv.edits[0], Edit::FcLines { lines } if lines == &["set osd_cap_alarm = 2200"]),
+        "{:?}",
+        rv.edits
+    );
+    assert!(!rv.note.contains("Warning"), "{}", rv.note);
+    let r = apply(&b, &rv.id);
+    assert_eq!(r.status, ChangeStatus::Verified, "{}", r.message);
+    assert_eq!(
+        fc.saved_value(Section::Master, "osd_cap_alarm").as_deref(),
+        Some("2200")
+    );
+    assert_eq!(
+        fc.saved_value(Section::Master, "osd_alt_alarm").as_deref(),
+        Some("250"),
+        "the later apply's line stays"
+    );
+    assert_eq!(status(&b, &a.id), ChangeStatus::Reverted);
+}
+
+#[test]
+fn revert_warns_when_a_later_apply_set_the_same_line() {
+    let fc = FakeFc::new(G473).with_uid(UID);
+    let b = bench(&fc);
+    let a = stage(&b, vec![set("osd_cap_alarm", "1500")]);
+    apply(&b, &a.id);
+    let later = stage(&b, vec![set("osd_cap_alarm", "1800")]);
+    apply(&b, &later.id);
+    let rv = b.core.gear_change_revert(&a.id).unwrap();
+    assert!(rv.note.contains("Warning"), "{}", rv.note);
+    assert!(rv.note.contains(&later.id), "{}", rv.note);
+    assert!(rv.note.contains("set osd_cap_alarm"), "{}", rv.note);
+    // The inverse still reads the value from before the first apply.
+    assert!(
+        matches!(&rv.edits[0], Edit::FcLines { lines } if lines == &["set osd_cap_alarm = 2200"])
+    );
 }
 
 #[test]
