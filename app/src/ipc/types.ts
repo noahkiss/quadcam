@@ -451,3 +451,22 @@ export type {
   VoiceRenderParams,
   VoiceView,
 } from "../bindings";
+
+// The voice studio, as generated.
+export type {
+  Catalog,
+  CatalogParams,
+  Credits,
+  Estimate as VoiceEstimate,
+  EstimateParams,
+  KeyParams,
+  KeyStatus,
+  ModelInfo,
+  SampleItem,
+  SampleParams,
+  SampleReport,
+  SetInfo,
+  StudioEstimate,
+  StudioView,
+  VoiceInfo,
+} from "../bindings";
