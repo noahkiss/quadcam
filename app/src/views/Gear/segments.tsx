@@ -2,6 +2,8 @@
 // an aircraft gets Switches, OSD, Rates, Settings, Backups and Changes; a radio Models,
 // Voice, Checklists, Splash, Backups and Changes.
 import { Overview } from "./Overview";
+import { ChecklistSegment } from "./Models/ChecklistSegment";
+import { ModelsSegment } from "./Models/ModelsSegment";
 import { OsdSegment } from "./Osd/OsdSegment";
 import { RatesSegment } from "./Rates/RatesSegment";
 import { SwitchesSegment } from "./Switches/SwitchesSegment";
@@ -17,6 +19,9 @@ export const DEVICE_SEGMENTS: DeviceSegment[] = [
   { id: "rates", label: "Rates", kinds: ["fc"], render: (d) => <RatesSegment key={d.key} device={d.device?.last_backup ? d.device.id : null} /> },
   // From a card or model file and a dump; the latest backups join as sources later.
   { id: "switches", label: "Switches", kinds: ["fc", "radio"], render: (d) => <SwitchesSegment d={d} /> },
+  // A radio's models and checklists: each edit stages one "Model edits" change (WP9).
+  { id: "models", label: "Models", kinds: ["radio"], render: (d) => <ModelsSegment key={d.key} d={d} /> },
+  { id: "checklists", label: "Checklists", kinds: ["radio"], render: (d) => <ChecklistSegment key={d.key} d={d} /> },
   // Staged changes, the history, and Edit setting (WP5).
   { id: "changes", label: "Changes", kinds: ["fc", "radio"], render: (d) => <ChangesSegment d={d} /> },
   { id: "backups", label: "Backups", kinds: ["radio", "fc", "goggles", "dvr_card"], render: (d) => <BackupsSegment d={d} /> },

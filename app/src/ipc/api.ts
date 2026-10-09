@@ -7,7 +7,7 @@ import { open as openDialog, save as saveDialog } from "@tauri-apps/plugin-dialo
 import { openPath, openUrl, revealItemInDir } from "@tauri-apps/plugin-opener";
 import { commands } from "../bindings";
 import * as N from "./normalize";
-import type { ChangeStatus, CopyRequest, Edit, SimFrame, SimPreset, SimStartInfo, SimStartParams, SimStopInfo, CrashSaveParams, ImportOptions, LibEdit, LibraryFilter, Moved, OsdEditParams, OsdParams, RatesParams, SimsParams, Pack, PackType, PlanPatch, RemovedCuts, SettingsValues, Span, SwitchMapParams, SimCalibrationSaveParams, CalibrateParams } from "./types";
+import type { ChangeStatus, CopyRequest, Edit, SimFrame, SimPreset, SimStartInfo, SimStartParams, SimStopInfo, CrashSaveParams, ImportOptions, LibEdit, LibraryFilter, Moved, ModelEditParams, ModelParams, OsdEditParams, OsdParams, RatesParams, SimsParams, Pack, PackType, PlanPatch, RemovedCuts, SettingsValues, Span, SwitchMapParams, SimCalibrationSaveParams, CalibrateParams } from "./types";
 
 type Result<T> = Promise<{ status: "ok"; data: T } | { status: "error"; error: string }>;
 
@@ -112,6 +112,8 @@ export const api = {
   modulesCheck: () => ok(commands.modulesCheck()),
 
   // Gear
+  gearModel: (params: ModelParams) => ok(commands.gearModel(params)),
+  gearModelEdit: (params: ModelEditParams) => ok(commands.gearModelEdit(params)),
   gearOsd: (params: OsdParams) => ok(commands.gearOsd(params)),
   gearOsdEdit: (params: OsdEditParams) => ok(commands.gearOsdEdit(params)),
   gearRates: async (params: RatesParams) => N.rates(await ok(commands.gearRates(params))),
