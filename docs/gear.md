@@ -409,7 +409,7 @@ a plan whose checks all pass opens the apply sheet. Nothing is written until you
 An agent or the command line can move one OSD element: the edit `{"kind": "osd_element",
 "element": "vbat", "x": 20, "y": 9, "profiles": [1, 3]}` becomes
 `set osd_vbat_pos = <value>`, keeping the element's other bits. The OSD segment's editor stages
-the same edit later.
+the same edit (see "Edit the OSD" below).
 
 ## Card check
 
@@ -449,6 +449,31 @@ profile, and checks each screen.
 
 Open a flight controller's page under **Gear > Devices** and choose **OSD**, then **Open
 dump…**. A saved FC with a backup shows its latest backup's `dump all` until you open a file.
+
+### Edit the OSD
+
+On a saved FC with a backup, the OSD segment is the editor. Opening a file turns it back into a
+viewer. Nothing reaches the FC until you apply it from the apply sheet.
+
+- **Move:** drag an element on the grid, or focus it (Tab) and press the arrow keys. Shift moves
+  five cells. A drag stays on the grid; the keys and the **X** and **Y** boxes in the list reach
+  any cell the position value holds (x 0-63, y 0-31), so you can see an off-screen warning.
+- **Turn on or off:** tick the element in the list for the profile you are looking at. The list
+  shows every element, the ones on in this profile first.
+- **One position for all profiles:** moving an element moves it in every profile that shows it.
+- **Copy a layout between profiles:** pick the two profiles and press **Copy profile**. The
+  target then shows exactly the elements the source shows.
+- **Copy from another quad:** **Copy from another quad…** opens Copy settings with OSD ticked.
+  It copies every `osd_*` setting from that quad's latest backup, not only the positions.
+- **Live check:** the grid, the problem list and the profile counts show the layout with your
+  edits on top, so an overlap or an element off screen shows as you edit. A diff-only backup
+  cannot be edited for elements it leaves out.
+- **Staged as one change:** all edits go into one change named "OSD layout" on the FC's
+  Changes segment. A later edit of an element replaces its earlier one, an element put back where
+  the FC holds it drops out, and the change disappears when nothing differs. **Review…** opens
+  the apply sheet, which shows the `set osd_<element>_pos` lines. **Undo OSD edits** discards the
+  change.
+- **Element labels:** each element draws as plain sample text, not Betaflight's font.
 
 ## Rates
 
@@ -612,6 +637,9 @@ quadcam-cli --json gear fc pause|resume [--port ...]                 # pause the
 quadcam-cli --json gear fc usb                                   # USB timers
 quadcam-cli gear osd quad.dump_all.txt --text        # each OSD profile drawn, and the check
 quadcam-cli --json gear osd quad.dump_all.txt apply.cli --grid PAL
+quadcam-cli --json gear osd <fc> --staged                    # the layout with its staged OSD edits on top
+quadcam-cli --json gear osd-edit <fc> --move vbat=12,3 --profiles vbat=1,3   # stage a move and a toggle
+quadcam-cli --json gear osd-edit <fc> --copy 1:2             # profile 2 shows what profile 1 shows
 quadcam-cli gear rates quad.dump_all.txt --text      # every rate profile: names, maximum and centre rates
 quadcam-cli --json gear sims quad.dump_all.txt [--profile N]   # the sims' rates against the quad
 quadcam-cli --json gear card [--mount M | --device ID] [--model model01.yml]

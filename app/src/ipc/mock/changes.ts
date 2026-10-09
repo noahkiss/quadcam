@@ -37,10 +37,14 @@ export const freshChanges = (): MockChanges => ({ changes: [], failNext: null, f
 const STAGED = ["draft", "ready", "try", "read_first"];
 const staged = (c: StagedChange) => STAGED.includes(c.status);
 
+/** `Pos::encode` with variant 0. */
+export const encodePos = (x: number, y: number, profiles: number[]) => (x & 31) | (((x >> 5) & 1) << 10) | ((y & 31) << 5) | (profiles.reduce((m, p) => m | (1 << (p - 1)), 0) << 11);
+
 const lines = (edits: Edit[]): string[] =>
   edits.flatMap((e) => {
     if (e.kind === "fc_set") return [`set ${e.name} = ${e.value}`];
     if (e.kind === "fc_lines") return e.lines.filter((l) => l.trim());
+    if (e.kind === "osd_element") return [`set osd_${e.element}_pos = ${encodePos(e.x, e.y, e.profiles)}`];
     return [];
   });
 
@@ -49,7 +53,7 @@ const refused = (code: string, reason: string) => `Refused (${code}): ${reason}`
 const CARD_EDITS = ["model", "radio", "checklist", "model_copy", "model_delete", "restore"];
 
 function validateFc(edits: Edit[]) {
-  for (const l of lines(edits)) {
+  for (const l of lines(edits.filter((e) => e.kind !== "osd_element"))) {
     if (/^(save|exit|defaults|bl|dfu|batch)\b/.test(l)) throw refused("shape_unknown", `\`${l}\` is not sent; QuadCam saves and exits itself.`);
     const m = /^set\s+(\S+)\s*=\s*(.+)$/.exec(l);
     if (m && !(m[1] in FC_SETTINGS)) throw refused("bad_setting", `\`${m[1]}\` is not a setting on this FC.`);

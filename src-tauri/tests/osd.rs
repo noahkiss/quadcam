@@ -41,6 +41,7 @@ fn view(files: &[&str], grid: Option<&str>) -> osd::OsdView {
             paths: files.iter().map(|f| fixture(f)).collect(),
             device: None,
             grid: grid.map(str::to_string),
+            ..Default::default()
         })
         .unwrap()
 }
@@ -148,6 +149,7 @@ fn a_diff_is_incomplete_and_an_apply_file_wins() {
             paths: vec![dump, apply],
             device: None,
             grid: None,
+            ..Default::default()
         })
         .unwrap();
     let e = v.elements.iter().find(|e| e.name == "ah").unwrap();

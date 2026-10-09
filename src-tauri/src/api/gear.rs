@@ -20,7 +20,8 @@ pub use crate::core::{
     SimDefaultsParams, SimValidateParams,
 };
 pub use crate::core::{
-    CardMountParams, CardMounted, ChangeUpdateParams, CopyParams, RestoreParams, StageParams,
+    CardMountParams, CardMounted, ChangeUpdateParams, CopyParams, OsdEditParams, RestoreParams,
+    StageParams,
 };
 pub use crate::core::{
     CrashSaveParams, FlightFilter, FlightFoldersParams, FlightReport, FlightSetParams, FlightsView,
@@ -39,7 +40,7 @@ pub use crate::gear::health::CardCheck;
 pub use crate::gear::model::Device;
 pub use crate::gear::model::DiffItem;
 pub use crate::gear::model::{ApplyPlan, StagedChange};
-pub use crate::gear::osd::OsdView;
+pub use crate::gear::osd::{OsdCopy, OsdMove, OsdView};
 pub use crate::gear::packs::{Pack, PackType, PacksView};
 pub use crate::gear::preflight::Preflight;
 pub use crate::gear::radio_hid::RadioSnapshot;
@@ -89,6 +90,9 @@ macro_rules! with_gear_rows {
             /// An FC's OSD layout per OSD profile, drawn on its grid and checked for overlaps
             /// and cells off screen. Reads only.
             gear_osd(params: OsdParams) -> OsdView = |c| c.gear_osd(&params);
+            /// Stages OSD moves, toggles or a profile copy for an FC as one "OSD layout"
+            /// change. Writes only QuadCam's own data; the apply sheet writes the FC.
+            gear_osd_edit(params: OsdEditParams) -> StagedChange = |c| c.gear_osd_edit(&params);
             /// An FC's rate profiles from its latest backup, a backup or dump files: names, the
             /// roll, pitch and yaw curves with maximum and centre rates, the throttle curve.
             /// Reads only.
