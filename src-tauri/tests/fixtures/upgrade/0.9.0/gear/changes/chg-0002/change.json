@@ -1,0 +1,38 @@
+{
+  "id": "chg-0002",
+  "device": "radio-0123456789abcdef",
+  "title": "Timer name",
+  "status": "verified",
+  "edits": [
+    {
+      "kind": "model",
+      "file": "model01.yml",
+      "name": "Whoop A",
+      "ops": [
+        {
+          "op": "rename",
+          "name": "Whoop B"
+        }
+      ]
+    }
+  ],
+  "base_backup": "radio-0123456789abcdef/2026-09-20T180000-connect",
+  "editor": "user",
+  "history": [
+    {
+      "at": "2026-10-01T09:00:00Z",
+      "status": "ready",
+      "note": ""
+    },
+    {
+      "at": "2026-10-01T09:05:00Z",
+      "status": "applied",
+      "note": ""
+    },
+    {
+      "at": "2026-10-01T09:06:00Z",
+      "status": "verified",
+      "note": ""
+    }
+  ]
+}

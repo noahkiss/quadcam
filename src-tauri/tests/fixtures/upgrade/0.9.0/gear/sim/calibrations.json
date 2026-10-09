@@ -1,0 +1,59 @@
+{
+  "radios": {
+    "radio-0123456789abcdef": {
+      "radio": "radio-0123456789abcdef",
+      "provisional": false,
+      "calibration": {
+        "mode": 2,
+        "roll": {
+          "ch": 1,
+          "auto_low": 0,
+          "auto_high": 2047,
+          "edited_low": null,
+          "edited_high": null,
+          "centre": 1024,
+          "deadzone": 0,
+          "reverse": false
+        },
+        "pitch": {
+          "ch": 2,
+          "auto_low": 0,
+          "auto_high": 2047,
+          "edited_low": null,
+          "edited_high": null,
+          "centre": 1024,
+          "deadzone": 0,
+          "reverse": false
+        },
+        "throttle": {
+          "ch": 3,
+          "auto_low": 0,
+          "auto_high": 2047,
+          "edited_low": null,
+          "edited_high": null,
+          "centre": 1024,
+          "deadzone": 0,
+          "reverse": false
+        },
+        "yaw": {
+          "ch": 4,
+          "auto_low": 0,
+          "auto_high": 2047,
+          "edited_low": null,
+          "edited_high": null,
+          "centre": 1024,
+          "deadzone": 0,
+          "reverse": false
+        }
+      },
+      "product": "Radio Joystick",
+      "vid": 4617,
+      "pid": 22016,
+      "firmware": "2.12",
+      "saved_at": "2026-10-03T12:00:00Z"
+    }
+  },
+  "products": {
+    "Radio Joystick": "radio-0123456789abcdef"
+  }
+}
