@@ -29,6 +29,30 @@ impl Core {
         Ok(self.prepare(mount, label)?.plan)
     }
 
+    /// `card_prep_plan` for a mount point or a device id (`CardPrepParams`).
+    pub fn card_prep_plan_for(&self, p: &crate::api::CardPrepParams) -> Result<FormatPlan> {
+        match (
+            &p.mount,
+            p.device.as_deref().map(str::trim).filter(|d| !d.is_empty()),
+        ) {
+            (Some(m), _) => self.card_prep_plan(m, p.label.as_deref()),
+            (None, Some(d)) => self.card_prep_plan_device(d, p.label.as_deref()),
+            (None, None) => bail!("Card prep needs the card's mount point or its device id."),
+        }
+    }
+
+    /// `card_prep_plan` for a card named by device id (`gear_status`). Mount, work,
+    /// unmount: an unmounted card that is still plugged in is mounted for the plan and
+    /// released again; a card that is mounted stays as it is.
+    pub fn card_prep_plan_device(&self, device: &str, label: Option<&str>) -> Result<FormatPlan> {
+        let l = self
+            .locate_volume(device.trim(), true, false)?
+            .with_context(|| format!("Card {:?} is not plugged in.", device.trim()))?;
+        let plan = self.prepare(&l.root, label).map(|p| p.plan);
+        self.card_quiet_unmount(&l);
+        plan
+    }
+
     /// Erases the card that `req` names (its whole-disk device and volume UUID, from
     /// `card_prep_plan`) and makes it safe to remove. Unless the GUI's own button started it, the GUI (when
     /// running) must also get a click on Erase. `disk::format_card` checks every guard once
@@ -41,7 +65,54 @@ impl Core {
         if uuid.is_empty() {
             bail!("Refused: card prep needs the card's volume UUID (see the plan).");
         }
-        let mount = mount_of_volume(uuid)?;
+        // Mount, work, unmount: a card that is not mounted is mounted for the erase. A
+        // successful erase unmounts it itself; any other end releases it here.
+        let (mount, mounted_here) = self.mount_volume_for_job(uuid)?;
+        let r = self.card_prep_on(&mount, req, from_gui_button);
+        if r.is_err() && mounted_here {
+            if let Ok(info) = disk::info(uuid) {
+                let _ = (self.gear.unmount)(&disk::whole_disk_of(&info.parent_whole_disk));
+            }
+        }
+        r
+    }
+
+    /// The mount point of the volume with this UUID, mounting its disk when it is
+    /// unmounted but still plugged in. True when this call mounted it.
+    fn mount_volume_for_job(&self, uuid: &str) -> Result<(PathBuf, bool)> {
+        let info = disk::info(uuid)
+            .with_context(|| format!("Refused: no volume with UUID {uuid} is attached."))?;
+        if !info
+            .volume_uuid
+            .as_deref()
+            .is_some_and(|u| u.eq_ignore_ascii_case(uuid))
+        {
+            bail!("Refused: no volume with UUID {uuid} is attached.");
+        }
+        if let Some(m) = info.mount_point {
+            return Ok((PathBuf::from(m), false));
+        }
+        let whole = disk::whole_disk_of(&info.parent_whole_disk);
+        (self.gear.mount)(&whole).with_context(|| format!("Mounting {whole} for card prep"))?;
+        for i in 0..40 {
+            if let Some(m) = disk::info(uuid).ok().and_then(|i| i.mount_point) {
+                return Ok((PathBuf::from(m), true));
+            }
+            if i < 39 {
+                std::thread::sleep(std::time::Duration::from_millis(250));
+            }
+        }
+        bail!("Refused: the volume with UUID {uuid} did not mount. Take the card out and put it back.")
+    }
+
+    fn card_prep_on(
+        &self,
+        mount: &Path,
+        req: &FormatRequest,
+        from_gui_button: bool,
+    ) -> Result<FormatPlan> {
+        let uuid = req.volume_uuid.trim();
+        let mount = mount.to_path_buf();
         let p = self.prepare(&mount, req.label.as_deref())?;
         let device = req.device.trim();
         if device != p.plan.device {
@@ -180,20 +251,4 @@ impl Core {
         }
         Ok(found.len())
     }
-}
-
-/// The mount point of the volume with this UUID. `diskutil info` takes a volume UUID.
-fn mount_of_volume(uuid: &str) -> Result<PathBuf> {
-    let info = disk::info(uuid)
-        .with_context(|| format!("Refused: no volume with UUID {uuid} is attached."))?;
-    if !info
-        .volume_uuid
-        .as_deref()
-        .is_some_and(|u| u.eq_ignore_ascii_case(uuid))
-    {
-        bail!("Refused: no volume with UUID {uuid} is attached.");
-    }
-    info.mount_point
-        .map(PathBuf::from)
-        .with_context(|| format!("Refused: the volume with UUID {uuid} is not mounted."))
 }

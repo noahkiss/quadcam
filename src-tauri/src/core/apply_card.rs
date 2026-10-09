@@ -1,6 +1,7 @@
 //! `Core`'s card apply and the mount cycle (design 8, 7.1).
 //!
-//! - **Mount cycle.** A card stays unmounted between operations. A job that needs the card
+//! - **Mount cycle.** (Any card: a radio's, a DVR card, goggles. The import session's card follows
+//!   the same cycle in `session_card.rs`.) A card stays unmounted between operations. A job that needs the card
 //!   mounts it (`diskutil mountDisk`, `Env.mount`), works, and unmounts it again
 //!   (`gear_finish_card`: "safe to unplug" only after the unmount worked). A plan mounts and
 //!   unmounts quietly. The person's **Mount** (`gear_card_mount`) mounts a card to browse it
@@ -235,10 +236,12 @@ impl Core {
     /// unmounted one is mounted now and comes back with `mounted_here`, so the job (or
     /// `card_quiet_unmount`) releases it when done.
     pub(super) fn card_for_job(&self, c: &Connected, radio_only: bool) -> Result<Located> {
-        let id = c
-            .id
-            .clone()
-            .with_context(|| format!("{} has no id, so QuadCam cannot mount it.", connected_label(c)))?;
+        let id = c.id.clone().with_context(|| {
+            format!(
+                "{} has no id, so QuadCam cannot mount it.",
+                connected_label(c)
+            )
+        })?;
         self.locate_volume(&id, true, radio_only)?
             .with_context(|| format!("{} is not plugged in.", connected_label(c)))
     }
@@ -397,7 +400,7 @@ impl Core {
         let minutes = p.minutes.unwrap_or(MOUNT_MINUTES).clamp(1, 60);
         let device = p.device.trim();
         let l = self
-            .locate_card(device, true)?
+            .locate_volume(device, true, false)?
             .with_context(|| format!("Card {device:?} is not plugged in."))?;
         let until = Utc::now() + chrono::Duration::minutes(minutes as i64);
         self.gear_mounted_for_user.lock().unwrap().insert(
@@ -421,7 +424,7 @@ impl Core {
         let device = p.device.trim();
         self.gear_mounted_for_user.lock().unwrap().remove(device);
         let l = self
-            .locate_card(device, false)?
+            .locate_volume(device, false, false)?
             .with_context(|| format!("Card {device:?} is not mounted."))?;
         self.gear_release_card(&l.connected)
     }
@@ -454,7 +457,7 @@ impl Core {
         let mut out: Vec<CardMounted> = m
             .iter()
             .filter_map(|(device, (_, until))| {
-                let l = self.locate_card(device, false).ok()??;
+                let l = self.locate_volume(device, false, false).ok()??;
                 Some(CardMounted {
                     device: device.clone(),
                     mount: l.root,

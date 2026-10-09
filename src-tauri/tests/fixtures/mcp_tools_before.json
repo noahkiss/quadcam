@@ -79,6 +79,10 @@
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
+        "card": {
+          "description": "A card's device id from quadcam_gear, for a card that is unmounted but still plugged in: QuadCam mounts it for the load and unmounts it when the import is done. Use instead of source.",
+          "type": "string"
+        },
         "join": {
           "description": "false keeps recordings the DVR split into files (PICT0001.AVI, PICT0002.AVI, ...) as separate clips this run. Omit to follow the join_split_recordings setting (on by default).",
           "type": "boolean"
@@ -433,6 +437,10 @@
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
+        "card": {
+          "description": "Card prep: the card's device id from quadcam_gear, for the dry run, when the card is unmounted but still plugged in (QuadCam mounts it for the plan and unmounts it again). Use instead of mount.",
+          "type": "string"
+        },
         "confirm": {
           "description": "Must be true to erase.",
           "type": "boolean"

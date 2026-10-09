@@ -6,8 +6,8 @@
 //! is touched.
 
 use quadcam_lib::core::{
-    BackupParams, CardCheckParams, CardCleanParams, CardMountParams, CardParams,
-    CardPreviewParams, Core, Hooks, NoHooks, RestoreParams, StageParams,
+    BackupParams, CardCheckParams, CardCleanParams, CardMountParams, CardParams, CardPreviewParams,
+    Core, Hooks, NoHooks, RestoreParams, StageParams,
 };
 use quadcam_lib::disk::{DiskInfo, Volume};
 use quadcam_lib::gear::apply::{ApplyPlanParams, ApplyRequest};
@@ -849,11 +849,7 @@ fn a_card_read_a_preview_and_a_clean_listing_release_the_card_quietly() {
         .unwrap();
     assert_eq!(listed.removed, 0);
     assert_eq!(*b.log.lock().unwrap(), mount_then_unmount());
-    assert!(
-        spoken(&b).is_empty(),
-        "reads play no cue: {:?}",
-        spoken(&b)
-    );
+    assert!(spoken(&b).is_empty(), "reads play no cue: {:?}", spoken(&b));
     assert!(!b.mounted.load(Ordering::SeqCst));
 }
 
@@ -895,7 +891,10 @@ fn a_card_that_is_mounted_already_is_not_mounted_again_for_a_read() {
         })
         .unwrap();
     assert!(b.log.lock().unwrap().is_empty());
-    assert!(b.mounted.load(Ordering::SeqCst), "a read leaves it as it was");
+    assert!(
+        b.mounted.load(Ordering::SeqCst),
+        "a read leaves it as it was"
+    );
 }
 
 #[test]

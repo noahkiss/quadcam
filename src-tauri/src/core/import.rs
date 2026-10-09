@@ -37,14 +37,29 @@ impl Core {
 
     /// `stage`, with this run's choice to join split recordings (None: the setting).
     pub fn stage_with(&self, source: Option<&Path>, join: Option<bool>) -> Result<Session> {
+        self.stage_device(source, None, join)
+    }
+
+    /// `stage_with`, and a card named by device id when `source` is empty. Mount, work,
+    /// unmount: an unmounted card that is still plugged in is mounted for the stage; the
+    /// end of the import unmounts it again.
+    pub fn stage_device(
+        &self,
+        source: Option<&Path>,
+        device: Option<&str>,
+        join: Option<bool>,
+    ) -> Result<Session> {
         let _b = self.claim()?;
-        let source = match source {
-            Some(p) => p.to_path_buf(),
-            None => disk::list_volumes()
-                .into_iter()
-                .find(|v| v.is_card)
-                .map(|v| v.mount)
-                .ok_or_else(|| anyhow!("No card detected. Insert the card or pass a folder."))?,
+        let device = device.map(str::trim).filter(|d| !d.is_empty());
+        let source = match (source, device) {
+            (Some(p), _) => p.to_path_buf(),
+            (None, Some(d)) => self.mount_source(d)?,
+            (None, None) => match disk::list_volumes().into_iter().find(|v| v.is_card) {
+                Some(v) => v.mount,
+                None => self.mount_only_card()?.ok_or_else(|| {
+                    anyhow!("No card detected. Insert the card or pass a folder.")
+                })?,
+            },
         };
         let hooks = self.hooks.clone();
         let s = Session::stage(
@@ -134,8 +149,18 @@ impl Core {
 
     /// `load`, with this run's choice to join split recordings (None: the setting).
     pub fn load_with(&self, source: Option<&Path>, join: Option<bool>) -> Result<Session> {
+        self.load_device(source, None, join)
+    }
+
+    /// `load_with`, and a card named by device id when `source` is empty.
+    pub fn load_device(
+        &self,
+        source: Option<&Path>,
+        device: Option<&str>,
+        join: Option<bool>,
+    ) -> Result<Session> {
         media::find_tools()?;
-        self.stage_with(source, join)?;
+        self.stage_device(source, device, join)?;
         self.analyse()?;
         self.plan_dates(LogChoice::Keep, None)
     }
@@ -330,9 +355,16 @@ impl Core {
             }
             latest
         };
-        // The setting is the consent; a run can only turn deletion off.
-        let clip_deletion = (self.defaults().delete_clips_after_import && !o.keep_clips)
-            .then(|| delete_imported_clips(&tools, &s));
+        // The setting is the consent; a run can only turn deletion off. Mount, work,
+        // unmount: a card released by an earlier export is mounted again to delete from it.
+        let clip_deletion =
+            (self.defaults().delete_clips_after_import && !o.keep_clips).then(|| {
+                if let Err(e) = self.ensure_session_card() {
+                    eprintln!("quadcam: card not mounted for deleting clips: {e:#}");
+                }
+                let s = self.session().unwrap_or_else(|| s.clone());
+                delete_imported_clips(&tools, &s)
+            });
         if let Some(d) = &clip_deletion {
             let deleted = d
                 .iter()
@@ -353,11 +385,21 @@ impl Core {
             self.add_to_photos(None, album)
                 .map_err(|e| format!("{e:#}"))
         });
+        // The work on the card is done: unmount it. Format and "Safe to remove" mount it
+        // again if they need it.
+        let card = self.release_session_card();
+        if let Some(r) = card.as_ref().filter(|r| !r.released) {
+            if let Ok(mut latest) = self.current() {
+                latest.warnings.push(r.message.clone());
+                let _ = self.commit(Some(latest));
+            }
+        }
         let summary = self.session().unwrap_or(s).summary();
         Ok(ImportOutcome {
             summary,
             photos,
             clip_deletion,
+            card,
         })
     }
 
@@ -406,10 +448,12 @@ impl Core {
             Some(t) => t.to_string(),
             None => {
                 let s = self.current()?;
-                if s.card.is_none() {
+                let Some(card) = &s.card else {
                     bail!("This session came from a folder; there is no card to eject.");
-                }
-                s.source.to_string_lossy().to_string()
+                };
+                // By disk, not mount point: the end of an import may have unmounted the
+                // card already, and unmounting a disk again is harmless.
+                format!("/dev/{}", card.whole_disk)
             }
         };
         disk::safe_remove(&target)
@@ -417,6 +461,17 @@ impl Core {
 
     /// Everything the confirm dialog names. Runs every guard; an Err means format stays locked.
     pub fn format_plan(&self, label: Option<&str>) -> Result<FormatPlan> {
+        // Mount, work, unmount: a plan only reads, so a card it mounted is released again.
+        let was_mounted = self.session_card_mounted();
+        let plan = self.format_plan_with(label);
+        if !was_mounted {
+            let _ = self.release_session_card();
+        }
+        plan
+    }
+
+    /// `format_plan`, leaving a card it had to mount mounted (the erase follows).
+    fn format_plan_with(&self, label: Option<&str>) -> Result<FormatPlan> {
         let s = self.current()?;
         // A source that does not offer formatting refuses here, before every other guard.
         if let Some(kind) = std::iter::once(s.kind)
@@ -434,7 +489,10 @@ impl Core {
             .card
             .clone()
             .context("Clips came from a folder, not a card.")?;
-        let whole = disk::verify_card_for_format(&card, &s.source)?;
+        let source = self
+            .ensure_session_card()?
+            .context("Clips came from a folder, not a card.")?;
+        let whole = disk::verify_card_for_format(&card, &source)?;
         Ok(FormatPlan {
             disk: card.whole_disk.clone(),
             device: format!("/dev/{}", card.whole_disk),
@@ -460,7 +518,18 @@ impl Core {
         if !req.confirm {
             bail!("Refused: format needs an explicit confirm.");
         }
-        let plan = self.format_plan(req.label.as_deref())?;
+        // Mount, work, unmount: a card mounted for the erase is released again when the
+        // erase does not happen (a successful erase unmounts it itself).
+        let was_mounted = self.session_card_mounted();
+        let r = self.format_inner(req, from_gui_button);
+        if r.is_err() && !was_mounted {
+            let _ = self.release_session_card();
+        }
+        r
+    }
+
+    fn format_inner(&self, req: &FormatRequest, from_gui_button: bool) -> Result<FormatPlan> {
+        let plan = self.format_plan_with(req.label.as_deref())?;
         let device = req.device.trim();
         if device != plan.device {
             bail!(

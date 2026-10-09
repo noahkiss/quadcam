@@ -13,6 +13,10 @@ use std::path::PathBuf;
 #[derive(Debug, Clone, Default, Serialize, Deserialize, Type)]
 pub struct SourceParams {
     pub source: Option<PathBuf>,
+    /// A card's device id (from `gear_status`), for a card that is unmounted but still
+    /// plugged in: QuadCam mounts it for the stage. Used when `source` is empty.
+    #[serde(default)]
+    pub device: Option<String>,
     /// Join recordings the DVR split into files, this run. None follows the
     /// `join_split_recordings` setting.
     #[serde(default)]
@@ -60,11 +64,16 @@ pub struct LabelParams {
     pub label: Option<String>,
 }
 
-/// `card_prep_plan`: the card's mount point, and the volume name (None uses the
-/// setting). Moves to `api/gear.rs` with WP1.
+/// `card_prep_plan`: the card's mount point, or its device id when it is unmounted but
+/// still plugged in (QuadCam mounts it for the plan and unmounts it again), and the volume
+/// name (None uses the setting). Moves to `api/gear.rs` with WP1.
 #[derive(Debug, Clone, Default, Serialize, Deserialize, Type)]
 pub struct CardPrepParams {
-    pub mount: PathBuf,
+    #[serde(default)]
+    pub mount: Option<PathBuf>,
+    /// A card's device id (from `gear_status`), instead of `mount`.
+    #[serde(default)]
+    pub device: Option<String>,
     #[serde(default)]
     pub label: Option<String>,
 }

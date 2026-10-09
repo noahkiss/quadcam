@@ -138,11 +138,11 @@ with_gear_rows! {
     /// Forgets the session and deletes the session file.
     clear() -> Cleared = |c| c.clear().map(|_| Cleared { cleared: true });
     /// Copies the clips off a card or folder; a new session.
-    stage(params: SourceParams) -> Session = |c| c.stage_with(params.source.as_deref(), params.join);
+    stage(params: SourceParams) -> Session = |c| c.stage_device(params.source.as_deref(), params.device.as_deref(), params.join);
     /// Probes, recovers and thumbnails the staged clips.
     analyse() -> Session = |c| c.analyse();
     /// Stage, analyse and date in one go.
-    load(params: SourceParams) -> Session = |c| c.load_with(params.source.as_deref(), params.join);
+    load(params: SourceParams) -> Session = |c| c.load_device(params.source.as_deref(), params.device.as_deref(), params.join);
     /// Dates the clips from radio logs.
     dates(params: DatesParams) -> Session = |c| c.plan_dates(params.logs, params.day);
     /// Changes clip plans (an agent's suggestions unless `editor` is `user`).
@@ -164,7 +164,7 @@ with_gear_rows! {
     /// Card prep: runs every guard on a card with no session (every clip on it must be in
     /// the library) and names the disk that would be erased. Moves to `api/gear.rs` with WP1.
     card_prep_plan(params: CardPrepParams) -> FormatPlan =
-        |c| c.card_prep_plan(&params.mount, params.label.as_deref());
+        |c| c.card_prep_plan_for(&params);
     /// Card prep: erases the card the plan named. With the GUI running, the person must click
     /// Erase too.
     card_prep(params: FormatRequest) -> FormatPlan = |c| c.card_prep(&params, false);

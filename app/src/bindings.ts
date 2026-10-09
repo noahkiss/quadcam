@@ -455,6 +455,11 @@ export const commands = {
 } | null, string>(__TAURI_INVOKE("sim_stop")),
 	/**  The GUI's own Erase button: the click in its confirm dialog is the confirmation. */
 	formatCard: (label: string) => typedError<FormatPlan, string>(__TAURI_INVOKE("format_card", { label })),
+	/**
+	 *  The GUI's own card prep button: the click in its confirm dialog is the confirmation.
+	 *  `req` comes from the plan the dialog showed; `card_prep` checks it against the card again.
+	 */
+	cardPrepClick: (req: FormatRequest) => typedError<FormatPlan, string>(__TAURI_INVOKE("card_prep_click", { req })),
 	/**  The person's answer to an agent's format request. */
 	answerFormatRequest: (id: number, approve: boolean) => __TAURI_INVOKE<void>("answer_format_request", { id, approve }),
 	/**  The apply sheet's own Apply button: the click is the confirmation. */
@@ -1085,11 +1090,14 @@ export type CardParams = {
 };
 
 /**
- *  `card_prep_plan`: the card's mount point, and the volume name (None uses the
- *  setting). Moves to `api/gear.rs` with WP1.
+ *  `card_prep_plan`: the card's mount point, or its device id when it is unmounted but
+ *  still plugged in (QuadCam mounts it for the plan and unmounts it again), and the volume
+ *  name (None uses the setting). Moves to `api/gear.rs` with WP1.
  */
 export type CardPrepParams = {
-	mount: string,
+	mount?: string | null,
+	/**  A card's device id (from `gear_status`), instead of `mount`. */
+	device?: string | null,
 	label?: string | null,
 };
 
@@ -1114,6 +1122,13 @@ export type CardPreviewParams = {
 	mount?: string | null,
 	device?: string | null,
 	edits: Edit[],
+};
+
+/**  What the end of an import did with the session's card. */
+export type CardRelease = {
+	/**  The card is unmounted: safe to remove. */
+	released: boolean,
+	message: string,
 };
 
 /**  `gear_card_repair`: the failed check to answer, and the confirm. */
@@ -2541,6 +2556,11 @@ export type ImportOutcome = {
 	 *  setting is off, or this run kept the clips.
 	 */
 	clip_deletion?: ClipDeletion[] | null,
+	/**
+	 *  What the end of the import did with the card: unmounted (safe to remove) or not.
+	 *  None when the clips came from a folder, or the card is a DJI device over USB.
+	 */
+	card?: CardRelease | null,
 };
 
 /**  Converting one clip: `seconds` of `duration` done. */
@@ -4859,6 +4879,11 @@ export type SourceKind =
 /**  `stage` and `load`: a card mount point or a folder. None takes the first detected card. */
 export type SourceParams = {
 	source: string | null,
+	/**
+	 *  A card's device id (from `gear_status`), for a card that is unmounted but still
+	 *  plugged in: QuadCam mounts it for the stage. Used when `source` is empty.
+	 */
+	device?: string | null,
 	/**
 	 *  Join recordings the DVR split into files, this run. None follows the
 	 *  `join_split_recordings` setting.
