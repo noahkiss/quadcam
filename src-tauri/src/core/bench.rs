@@ -14,6 +14,8 @@
 
 use super::{Core, OnConnectHook, Skip};
 use crate::gear::apply::{ApplyPlanParams, ApplyReport, ApplyRequest};
+use crate::gear::bf::dump::Config;
+use crate::gear::changes::{inverse_lines, render_fc, touched};
 use crate::gear::copy::{self, CopyPlan, CopySelect};
 use crate::gear::model::{ChangeStatus, Connected, DeviceKind, Edit, StagedChange};
 use crate::gear::Automation;
@@ -78,25 +80,121 @@ impl Core {
             .backup
             .clone()
             .context("The apply took no backup; nothing to revert to.")?;
-        let paths = match self.change_kind(&c)? {
-            DeviceKind::Fc => vec!["dump all".to_string()],
+        let (edit, warnings) = match self.change_kind(&c)? {
+            DeviceKind::Fc => self.fc_inverse(&c, &report, &backup)?,
             _ if report.files.is_empty() => {
                 bail!("The apply wrote no card files; nothing to revert.")
             }
-            _ => report.files.clone(),
+            _ => (
+                Edit::Restore {
+                    backup,
+                    paths: report.files.clone(),
+                },
+                Vec::new(),
+            ),
         };
-        let edit = Edit::Restore { backup, paths };
+        let mut note = format!("Reverts {id}");
+        for w in &warnings {
+            note.push_str(&format!(" {w}"));
+        }
         self.stage_inner(
             &super::StageParams {
                 device: c.device.clone(),
                 title: Some(format!("Revert: {}", c.title)),
                 edits: vec![edit],
-                note: Some(format!("Reverts {id}")),
+                note: Some(note),
                 editor: None,
                 draft: false,
             },
             Some(id.to_string()),
         )
+    }
+
+    /// The inverse of an FC change: only the lines that change set, put back to the values
+    /// in the dump taken just before its apply (not the whole dump), and a warning for each
+    /// later apply that set the same lines (the revert undoes those values too).
+    fn fc_inverse(
+        &self,
+        c: &StagedChange,
+        report: &ApplyReport,
+        backup: &str,
+    ) -> Result<(Edit, Vec<String>)> {
+        let before = Config::parse(
+            &self
+                .snapshots()
+                .read(backup, Some("dump all"))
+                .with_context(|| format!("The pre-apply backup {backup} has no `dump all`."))?
+                .text
+                .context("The pre-apply dump is not text.")?,
+        );
+        // A restore inside the change has no lines of its own to invert here.
+        let edits: Vec<Edit> = c
+            .edits
+            .iter()
+            .filter(|e| !matches!(e, Edit::Restore { .. }))
+            .cloned()
+            .collect();
+        let ours = render_fc(&edits, Some(&before));
+        let (lines, lost) = inverse_lines(&ours.lines, &before);
+        if lines.is_empty() {
+            bail!(
+                "Nothing to put back: the dump taken before the apply holds no value for {}.",
+                if lost.is_empty() {
+                    "these lines".to_string()
+                } else {
+                    lost.join(", ")
+                }
+            );
+        }
+        let mut warnings = Vec::new();
+        if !lost.is_empty() {
+            warnings.push(format!(
+                "The pre-apply dump had no value for {}; those stay as they are.",
+                lost.join(", ")
+            ));
+        }
+        let mine = touched(&ours.lines);
+        let ch = self.changes();
+        for x in ch.all() {
+            if x.device != c.device
+                || x.id == c.id
+                || x.reverts.as_deref() == Some(c.id.as_str())
+                || !matches!(x.status, ChangeStatus::Applied | ChangeStatus::Verified)
+            {
+                continue;
+            }
+            let later = ch
+                .read_report(&x.id)
+                .and_then(|b| serde_json::from_slice::<ApplyReport>(&b).ok())
+                .is_some_and(|r| r.at > report.at);
+            if !later {
+                continue;
+            }
+            let theirs: Vec<_> = x
+                .edits
+                .iter()
+                .filter(|e| !matches!(e, Edit::Restore { .. }))
+                .cloned()
+                .collect();
+            let same: Vec<String> = touched(&render_fc(&theirs, None).lines)
+                .into_iter()
+                .filter(|t| mine.contains(t))
+                .map(|(s, k)| match s.select_line() {
+                    Some(sel) => format!("{k} ({sel})"),
+                    None => k,
+                })
+                .collect();
+            if !same.is_empty() {
+                warnings.push(format!(
+                    "Warning: a later apply, {} ({}), also changed {}. This revert puts those back to their values before {}, which undoes that change there too.",
+                    x.id,
+                    x.title,
+                    same.join(", "),
+                    c.id
+                ));
+            }
+        }
+        Ok((Edit::FcLines { lines }, warnings))
     }
 
     /// The dump all behind `from`: a backup id, or a device's latest backup.

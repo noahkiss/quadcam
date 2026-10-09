@@ -223,14 +223,14 @@ fn sims_are_read_from_their_files_and_compared_with_the_quad() {
     assert_eq!(micro.in_sync, Some(false));
     assert_eq!(micro.files[0].profiles[0].name, "Micro");
 
-    // Uncrashed: rates equal and the throttle curve equal (mid 30, expo 50; the quad's hover
-    // is 34, so the curves differ at the middle: the sim differs).
+    // Uncrashed: rates equal and the throttle's mid and expo equal (30 and 50). A sim has no
+    // hover value, so the quad's hover (34) is not a difference; the sim matches.
     let unc = by("uncrashed");
     let prof = &unc.files[0].profiles[0];
     assert_eq!(prof.name, "FREE");
     assert!(prof.throttle.is_some());
-    assert_eq!(prof.diff.as_ref().unwrap().throttle_differs, Some(true));
-    assert_eq!(unc.in_sync, Some(false));
+    assert_eq!(prof.diff.as_ref().unwrap().throttle_differs, Some(false));
+    assert_eq!(unc.in_sync, Some(true));
 
     // The Zone: profile 0 equals the quad; profile 1 uses another type.
     let zone = by("zone");
@@ -348,7 +348,7 @@ fn the_rows_cli_and_mcp_actions() {
     assert_eq!(code, 0);
     assert!(out.contains("Liftoff - matches the quad"), "{out}");
     assert!(
-        out.contains("Uncrashed (running) - differs from the quad"),
+        out.contains("Uncrashed (running) - matches the quad"),
         "{out}"
     );
     let (code, out) = run(&["--json", "gear", "rates", "fc-nothing"]);
@@ -368,4 +368,77 @@ fn the_rows_cli_and_mcp_actions() {
     assert_eq!(r["structuredContent"]["sims"].as_array().unwrap().len(), 5);
     let r = s.call_tool("quadcam_gear", json!({"action": "rates"}));
     assert_eq!(r["isError"], true);
+}
+
+#[test]
+fn a_preview_redraws_an_edited_profile_and_converts_with_the_fit() {
+    use quadcam_lib::core::RatesPreviewParams;
+    let dir = tempfile::tempdir().unwrap();
+    let c = core(dir.path());
+    let view = c
+        .gear_rates(&RatesParams {
+            paths: vec![three()],
+            ..Default::default()
+        })
+        .unwrap();
+    let free = view.profiles[0].clone();
+    // As read: the preview is the profile, curve for curve.
+    let same = c
+        .gear_rates_preview(&RatesPreviewParams {
+            profile: free.clone(),
+            to: None,
+        })
+        .unwrap();
+    assert_eq!(same.profile.axes[0].curve, free.axes[0].curve);
+    assert_eq!(same.fit_error, [0.0, 0.0, 0.0]);
+    // A higher RC rate raises the maximum, and the other axes stay.
+    let mut edited = free.clone();
+    edited.axes[0].rc_rate = 150.0;
+    let p = c
+        .gear_rates_preview(&RatesPreviewParams {
+            profile: edited,
+            to: None,
+        })
+        .unwrap();
+    assert!(p.profile.axes[0].max_deg_s > free.axes[0].max_deg_s + 10.0);
+    assert_eq!(p.profile.axes[1].curve, free.axes[1].curve);
+    // Actual to Betaflight: the existing fit, with the gap per axis, whole numbers.
+    let race = view.profiles[1].clone();
+    assert_eq!(race.rates_type, "actual");
+    let to = c
+        .gear_rates_preview(&RatesPreviewParams {
+            profile: race.clone(),
+            to: Some("betaflight".into()),
+        })
+        .unwrap();
+    assert_eq!(to.profile.rates_type, "betaflight");
+    assert!(to.fit_error[0] > 0.0 && to.fit_share[0] < 0.12);
+    assert_eq!(to.profile.axes[0].rc_rate.fract(), 0.0);
+    assert_eq!(to.profile.index, race.index);
+    let gap = to.profile.axes[0]
+        .curve
+        .iter()
+        .zip(&race.axes[0].curve)
+        .map(|(a, b)| (a - b).abs())
+        .fold(0.0, f64::max);
+    assert!(
+        (gap - to.fit_error[0]).abs() < 12.0,
+        "{gap} {}",
+        to.fit_error[0]
+    );
+    // Refusals: a model that does not exist, a value that is not a number.
+    assert!(c
+        .gear_rates_preview(&RatesPreviewParams {
+            profile: free.clone(),
+            to: Some("nope".into()),
+        })
+        .is_err());
+    let mut nan = free;
+    nan.axes[0].expo = f64::NAN;
+    assert!(c
+        .gear_rates_preview(&RatesPreviewParams {
+            profile: nan,
+            to: None,
+        })
+        .is_err());
 }

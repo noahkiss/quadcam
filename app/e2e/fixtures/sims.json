@@ -396,6 +396,14 @@
        "note": null,
        "supported": true,
        "throttle": null
+      },
+      {
+       "axes": [],
+       "diff": null,
+       "name": "Cine",
+       "note": "uses the Actual type (QuadCam reads Betaflight)",
+       "supported": false,
+       "throttle": null
       }
      ]
     }
@@ -1763,6 +1771,14 @@
        "note": null,
        "supported": true,
        "throttle": null
+      },
+      {
+       "axes": [],
+       "diff": null,
+       "name": "Cine",
+       "note": "uses the Actual type (QuadCam reads Betaflight)",
+       "supported": false,
+       "throttle": null
       }
      ]
     }
@@ -2443,8 +2459,8 @@
          0.0,
          0.0
         ],
-        "same": false,
-        "throttle_differs": true
+        "same": true,
+        "throttle_differs": false
        },
        "name": "FREE",
        "note": null,
@@ -2515,7 +2531,7 @@
    ],
    "found": true,
    "id": "uncrashed",
-   "in_sync": false,
+   "in_sync": true,
    "name": "Uncrashed",
    "note": null,
    "running": false
@@ -3201,6 +3217,14 @@
        "name": "Race",
        "note": null,
        "supported": true,
+       "throttle": null
+      },
+      {
+       "axes": [],
+       "diff": null,
+       "name": "Cine",
+       "note": "uses the Actual type (QuadCam reads Betaflight)",
+       "supported": false,
        "throttle": null
       }
      ]
@@ -4640,6 +4664,14 @@
        "name": "Race",
        "note": null,
        "supported": true,
+       "throttle": null
+      },
+      {
+       "axes": [],
+       "diff": null,
+       "name": "Cine",
+       "note": "uses the Actual type (QuadCam reads Betaflight)",
+       "supported": false,
        "throttle": null
       }
      ]

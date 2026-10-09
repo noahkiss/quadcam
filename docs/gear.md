@@ -451,9 +451,12 @@ the order the next session applies them.
   | Applied | A Try change that applied and verified. It waits for **Keep** or **Revert…** |
   | Verified, Failed, Reverted, Discarded | After the apply sheet, or Discard |
 
-- **Keep** makes an applied Try change Verified. **Revert…** stages a restore of the backup the
-  apply took (for a card, of the files the apply wrote) and opens it in the sheet. The change
-  becomes Reverted when that restore verifies.
+- **Keep** makes an applied Try change Verified. **Revert…** stages the undo and opens it in the
+  sheet. For an FC the undo sets back only the lines that change set, to their values from just
+  before its apply; settings a later change set stay as they are. When a later applied change
+  set the same line, the revert's note says so, because the revert undoes that value too. For a
+  card it restores the files the apply wrote. The change becomes Reverted when the undo
+  verifies.
 - **History** lists changes that are done.
 - **Copy as Markdown** puts the queue on the clipboard.
 
@@ -561,9 +564,10 @@ viewer. Nothing reaches the FC until you apply it from the apply sheet.
 ## Rates
 
 The Rates segment shows how an FC's rate profiles turn stick movement into rotation, and how
-each sim on this Mac compares. It reads only. Open a flight controller's page under **Gear >
-Devices** and choose **Rates**. A saved FC with a backup shows its latest backup; **Open
-dump…** reads a `dump all` or `diff all` file instead.
+each sim on this Mac compares. You can edit a profile and write the quad's rates into a sim;
+both go through the apply sheet. Open a flight controller's page under **Gear > Devices** and
+choose **Rates**. A saved FC with a backup shows its latest backup; **Open dump…** reads a
+`dump all` or `diff all` file instead (a file is read only).
 
 - **Profiles:** one button per rate profile, with its name (FREE, RACE, CINE). The profile the
   FC uses has an "In use" mark. The line under the buttons names the rates type: Betaflight,
@@ -585,6 +589,51 @@ dump…** reads a `dump all` or `diff all` file instead.
   grows, up to about 12 %. The fit error shows next to each profile it affects. Only Uncrashed has a throttle
   curve. Velocidrone is off until a sample save exists. A sim marked "Running" may rewrite its
   file when it quits.
+- **Edit profile:** on a saved FC, **Edit profile** opens the profile's rates type, the three
+  numbers of each axis (named for the type: RC rate, super rate and expo for Betaflight; center
+  rate, max rate and expo for Actual and Quick), the rate limits, the throttle mid, expo and
+  limit, and the name. The curves redraw as you type, with the profile as it is now dashed.
+  **Stage** queues only the values you changed as one change; **Review and apply…** opens the
+  apply sheet. Nothing is written until you click Apply there. **Convert to** fits the profile
+  onto another rate model with the same fit the sims use (whole numbers within the model's
+  range) and shows the largest gap from the old curve per axis; stage it like any edit.
+  Changing **Rates type** alone keeps the numbers and changes what they mean.
+
+### Sync the quad's rates into a sim
+
+**Sync** beside a sim profile opens the apply sheet on a plan to write the selected rate
+profile of the quad into that sim profile. It overwrites the profile you pick; QuadCam does not
+create sim profiles.
+
+- **Sims:** Liftoff, Liftoff: Micro Drones (its file lives inside the game's app bundle),
+  Uncrashed (one file per profile; the file name is the profile name) and The Zone.
+- **The plan** lists the checks, the values that change per file (old line out, new line in),
+  warnings and a digest. Checks: the game is not running, the file is understood, the file
+  rewrites unchanged byte for byte, and it is writable. **A sim that runs is never written**
+  ("Quit Liftoff first."); the Sync button is off while it runs, and the check runs again
+  right before the write.
+- **Warnings:** a quad on Actual or Quick is fitted to Betaflight first, with the largest gap;
+  a sim without a throttle curve (every sim but Uncrashed) gets rates only; and an
+  **Unverified** warning for every sim whose written file QuadCam has not yet seen the game
+  load (see below). Check the game's rates screen after the first sync of each.
+- **The write:** QuadCam backs up each file first (the gear folder, as device `sim-<id>`, always
+  kept), writes it through a temporary file and a rename with the file's own permissions, reads it
+  back and parses it. If one file fails, every file already written is put back. Only the values
+  that differ change; the rest of the file stays as it was.
+- **Throttle:** Uncrashed gets the quad's throttle mid and expo. A sim has no hover value, so
+  the quad's `thr_hover` is not counted as a difference.
+
+**What was checked against a real install.** The file shapes below were read from the files of
+real installs of each game (reading only) and the adapters read them. Only Uncrashed's write
+has also been seen loading in the game (by a script that writes the same bytes); for Liftoff,
+Micro Drones and The Zone the plan says "Unverified". Deadband, input expo and channel maps
+are not synced: they are outside what the sims' rate adapters cover.
+
+| Sim | Shape |
+|---|---|
+| Liftoff, Micro Drones | `<rateProfiles><name>…</name><rates xsi:type="BetaFlight"><Roll><Rate>127</Rate><Expo>40</Expo><SuperExpo>72</SuperExpo></Roll>…` whole numbers, as the CLI stores them. Micro Drones wraps profiles in `<FlightRatesProfile>` |
+| Uncrashed | Unreal GVAS, 12 little-endian floats after `FloatProperty`: super rate, RC rate, expo per axis, rates type (0 Betaflight), throttle mid, throttle expo, as fractions |
+| The Zone | `[rate_profile_N]` with one `rates={ "roll": Vector3(rc, super, expo), …, "type": "betaflight" }` dictionary, as fractions |
 
 ## Switch map
 
@@ -725,6 +774,8 @@ quadcam-cli --json gear osd-edit <fc> --move vbat=12,3 --profiles vbat=1,3   # s
 quadcam-cli --json gear osd-edit <fc> --copy 1:2             # profile 2 shows what profile 1 shows
 quadcam-cli gear rates quad.dump_all.txt --text      # every rate profile: names, maximum and centre rates
 quadcam-cli --json gear sims quad.dump_all.txt [--profile N]   # the sims' rates against the quad
+quadcam-cli --json gear sims quad.dump_all.txt --sync --to uncrashed:OUT --to liftoff:Freestyle   # the plan
+quadcam-cli --json gear sims quad.dump_all.txt --sync --to uncrashed:OUT --digest D --yes        # write
 quadcam-cli --json gear card [--mount M | --device ID] [--model model01.yml]
 quadcam-cli --json gear card preview --edits edits.json   # checks and diff; writes nothing
 quadcam-cli gear map --radio /Volumes/RADIO --fc quad.diff_all.txt --text   # the switch map

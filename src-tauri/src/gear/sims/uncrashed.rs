@@ -1,10 +1,10 @@
 //! Uncrashed: one Unreal GVAS file per profile, `rates/<NAME>.sav`, the name being the file
 //! name. After the property type `FloatProperty\0` and one byte comes an i32 count (12) and
 //! 12 little-endian f32: per axis (roll, pitch, yaw) super rate, RC rate and expo; then the
-//! rates type (0 = Betaflight), throttle mid and throttle expo. Values are fractions, as in
-//! Liftoff. An empty profile has no floats. The only sim with a throttle curve.
+//! rates type (0 = Betaflight), throttle mid and throttle expo. Values are fractions.
+//! Checked against a real install and a script that writes it. An empty profile has no floats. The only sim with a throttle curve.
 
-use super::{support, Doc, Sim, SimFile, SimProfile, FILE_SCALE};
+use super::{support, Doc, Sim, SimFile, SimProfile, Slot, FILE_SCALE};
 use crate::gear::rates::{RateAxis, Rates, RatesType, ThrottleCurve};
 use anyhow::{bail, Result};
 use std::path::{Path, PathBuf};
@@ -46,6 +46,22 @@ impl Sim for Uncrashed {
     }
     fn parse_file(&self, raw: &[u8], path: &Path) -> Result<SimFile> {
         named(raw, path)
+    }
+    fn slots(&self) -> Vec<Slot> {
+        // Per axis: super, RC rate, expo; then the rates type, throttle mid and expo.
+        let mut v: Vec<Slot> = (0..3)
+            .flat_map(|a| [Slot::Super(a), Slot::Rc(a), Slot::Expo(a)])
+            .collect();
+        v.extend([Slot::Keep, Slot::ThrMid, Slot::ThrExpo]);
+        v
+    }
+    fn encode(&self, cli: f64) -> Vec<u8> {
+        ((cli / FILE_SCALE) as f32).to_le_bytes().to_vec()
+    }
+    /// A script that writes these same bytes has been used with the game and the Rates screen
+    /// checked.
+    fn write_verified(&self) -> bool {
+        true
     }
 }
 

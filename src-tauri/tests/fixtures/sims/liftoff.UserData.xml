@@ -1,18 +1,66 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Synthetic fixture: the shape design 6.6 describes, not a real player's file. -->
-<UserData>
-  <playerName>Fixture Pilot</playerName>
-  <rateProfiles>
-    <profileName>Freestyle</profileName>
-    <rcRate><x>1.27</x><y>1.27</y><z>1.00</z></rcRate>
-    <superRate><x>0.72</x><y>0.72</y><z>0.75</z></superRate>
-    <expo><x>0.40</x><y>0.40</y><z>0.00</z></expo>
-  </rateProfiles>
-  <rateProfiles>
-    <profileName>Race</profileName>
-    <rcRate><x>1.00</x><y>1.00</y><z>1.00</z></rcRate>
-    <superRate><x>0.70</x><y>0.70</y><z>0.70</z></superRate>
-    <expo><x>0.00</x><y>0.00</y><z>0.00</z></expo>
-  </rateProfiles>
+<!-- Synthetic fixture: the shape of a real Liftoff file with made-up values. -->
+<UserData xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
+  <gameVersion>1.0.0</gameVersion>
   <graphicsQuality>3</graphicsQuality>
+  <rateProfiles>
+    <name>Freestyle</name>
+    <rates xsi:type="BetaFlight">
+      <Roll>
+        <Rate>127</Rate>
+        <Expo>40</Expo>
+        <SuperExpo>72</SuperExpo>
+      </Roll>
+      <Pitch>
+        <Rate>127</Rate>
+        <Expo>40</Expo>
+        <SuperExpo>72</SuperExpo>
+      </Pitch>
+      <Yaw>
+        <Rate>100</Rate>
+        <Expo>0</Expo>
+        <SuperExpo>75</SuperExpo>
+      </Yaw>
+    </rates>
+  </rateProfiles>
+  <rateProfiles>
+    <name>Race</name>
+    <rates xsi:type="BetaFlight">
+      <Roll>
+        <Rate>100</Rate>
+        <Expo>0</Expo>
+        <SuperExpo>70</SuperExpo>
+      </Roll>
+      <Pitch>
+        <Rate>100</Rate>
+        <Expo>0</Expo>
+        <SuperExpo>70</SuperExpo>
+      </Pitch>
+      <Yaw>
+        <Rate>100</Rate>
+        <Expo>0</Expo>
+        <SuperExpo>70</SuperExpo>
+      </Yaw>
+    </rates>
+  </rateProfiles>
+  <rateProfiles>
+    <name>Cine</name>
+    <rates xsi:type="Actual">
+      <Roll>
+        <Rate>7</Rate>
+        <Expo>54</Expo>
+        <SuperExpo>67</SuperExpo>
+      </Roll>
+      <Pitch>
+        <Rate>7</Rate>
+        <Expo>54</Expo>
+        <SuperExpo>67</SuperExpo>
+      </Pitch>
+      <Yaw>
+        <Rate>7</Rate>
+        <Expo>54</Expo>
+        <SuperExpo>67</SuperExpo>
+      </Yaw>
+    </rates>
+  </rateProfiles>
 </UserData>

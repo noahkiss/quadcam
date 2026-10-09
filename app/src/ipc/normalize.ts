@@ -192,7 +192,7 @@ const rateThrottle = (t: G.ThrottleView): RateThrottle => ({
   limit_percent: n(t.limit_percent, 100),
   curve: nums(t.curve),
 });
-const rateProfile = (p: G.RateProfileView): RateProfile => ({
+export const rateProfile = (p: G.RateProfileView): RateProfile => ({
   ...p,
   index: n(p.index),
   axes: p.axes.map(rateAxis),

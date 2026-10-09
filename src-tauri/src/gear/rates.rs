@@ -60,7 +60,7 @@ pub fn type_of(s: &str) -> Option<RatesType> {
 }
 
 /// One axis of a rate profile, with its sampled curve.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Type)]
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize, Type)]
 pub struct AxisView {
     /// `roll`, `pitch` or `yaw`.
     pub axis: String,
@@ -80,7 +80,7 @@ pub struct AxisView {
 }
 
 /// The throttle curve of a rate profile.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Type)]
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize, Type)]
 pub struct ThrottleView {
     pub mid: f64,
     pub expo: f64,
@@ -94,7 +94,7 @@ pub struct ThrottleView {
 }
 
 /// One rate profile.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Type)]
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize, Type)]
 pub struct RateProfileView {
     pub index: u8,
     /// `rateprofile_name`, when set (FREE, RACE, CINE).
@@ -582,8 +582,15 @@ fn nelder_mead(f: &dyn Fn(&[f64; 3]) -> f64, start: [f64; 3]) -> ([f64; 3], f64)
 /// The profile as a sim would take it: every axis fitted onto the Betaflight model. A
 /// profile already on the Betaflight model comes back unchanged with zero error.
 pub fn to_betaflight(p: &Profile) -> (Profile, [Fit; 3]) {
+    convert(p, RatesType::Betaflight)
+}
+
+/// The profile on another rate model: every axis fitted onto `to` (whole-number settings
+/// within the model's range). A profile already on `to` comes back unchanged with zero
+/// error; the limits and the throttle curve stay as they are.
+pub fn convert(p: &Profile, to: RatesType) -> (Profile, [Fit; 3]) {
     let mut out = *p;
-    out.rates.rates_type = RatesType::Betaflight;
+    out.rates.rates_type = to;
     let mut fits = [Fit {
         rc_rate: 0.0,
         srate: 0.0,
@@ -592,7 +599,7 @@ pub fn to_betaflight(p: &Profile) -> (Profile, [Fit; 3]) {
         max_diff_share: 0.0,
     }; 3];
     for (i, (fit_slot, a)) in fits.iter_mut().zip(p.rates.axes).enumerate() {
-        if p.rates.rates_type == RatesType::Betaflight {
+        if p.rates.rates_type == to {
             *fit_slot = Fit {
                 rc_rate: a.rc_rate,
                 srate: a.srate,
@@ -601,7 +608,7 @@ pub fn to_betaflight(p: &Profile) -> (Profile, [Fit; 3]) {
                 max_diff_share: 0.0,
             };
         } else {
-            *fit_slot = fit(p.rates.rates_type, &a, p.limits[i], RatesType::Betaflight);
+            *fit_slot = fit(p.rates.rates_type, &a, p.limits[i], to);
             out.rates.axes[i] = RateAxis {
                 rc_rate: fit_slot.rc_rate,
                 srate: fit_slot.srate,

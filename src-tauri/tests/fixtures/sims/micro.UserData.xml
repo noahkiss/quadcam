@@ -1,20 +1,47 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Synthetic fixture: profiles wrapped in FlightRatesProfile (design 6.6). -->
-<UserData>
-  <FlightRatesProfile>
-    <rateProfiles>
-      <profileName>Micro</profileName>
-      <rcRate><x>1.00</x><y>1.00</y><z>1.00</z></rcRate>
-      <superRate><x>0.70</x><y>0.70</y><z>0.70</z></superRate>
-      <expo><x>0.20</x><y>0.20</y><z>0.20</z></expo>
-    </rateProfiles>
-  </FlightRatesProfile>
-  <FlightRatesProfile>
-    <rateProfiles>
-      <profileName>Indoor</profileName>
-      <rcRate><x>0.80</x><y>0.80</y><z>0.80</z></rcRate>
-      <superRate><x>0.50</x><y>0.50</y><z>0.50</z></superRate>
-      <expo><x>0.30</x><y>0.30</y><z>0.30</z></expo>
-    </rateProfiles>
-  </FlightRatesProfile>
+<!-- Synthetic fixture: the shape of a real Micro Drones file with made-up values. -->
+<UserData xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
+  <gameVersion>1.0.0</gameVersion>
+  <rateProfiles>
+    <FlightRatesProfile>
+      <name>Micro</name>
+      <rates xsi:type="BetaFlight">
+        <Roll>
+          <Rate>100</Rate>
+          <Expo>20</Expo>
+          <SuperExpo>70</SuperExpo>
+        </Roll>
+        <Pitch>
+          <Rate>100</Rate>
+          <Expo>20</Expo>
+          <SuperExpo>70</SuperExpo>
+        </Pitch>
+        <Yaw>
+          <Rate>100</Rate>
+          <Expo>20</Expo>
+          <SuperExpo>70</SuperExpo>
+        </Yaw>
+      </rates>
+    </FlightRatesProfile>
+    <FlightRatesProfile>
+      <name>Indoor</name>
+      <rates xsi:type="BetaFlight">
+        <Roll>
+          <Rate>80</Rate>
+          <Expo>30</Expo>
+          <SuperExpo>50</SuperExpo>
+        </Roll>
+        <Pitch>
+          <Rate>80</Rate>
+          <Expo>30</Expo>
+          <SuperExpo>50</SuperExpo>
+        </Pitch>
+        <Yaw>
+          <Rate>80</Rate>
+          <Expo>30</Expo>
+          <SuperExpo>50</SuperExpo>
+        </Yaw>
+      </rates>
+    </FlightRatesProfile>
+  </rateProfiles>
 </UserData>
