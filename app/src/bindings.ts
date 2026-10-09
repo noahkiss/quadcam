@@ -190,6 +190,29 @@ export const commands = {
 	 */
 	gearSims: (params: SimsParams) => typedError<SimStatus[], string>(__TAURI_INVOKE("gear_sims", { params })),
 	/**
+	 *  The radio's voice: QuadCam's lines with the spoken text, the installed and available
+	 *  packs, the provider, and a radio's overrides. Reads only; `refresh_index` also reads the
+	 *  pack index.
+	 */
+	gearVoice: (params: VoiceParams) => typedError<VoiceView, string>(__TAURI_INVOKE("gear_voice", { params })),
+	/**
+	 *  Overrides one line on one radio: another pack's take, or the person's own text
+	 *  rendered with their provider. Writes only QuadCam's own data.
+	 */
+	gearVoiceEdit: (params: VoiceEditParams) => typedError<VoiceLine, string>(__TAURI_INVOKE("gear_voice_edit", { params })),
+	/**
+	 *  Renders QuadCam's lines (and the person's own) with the provider from the settings into
+	 *  a local pack. A render that costs money waits for `confirm`; `dry_run` only reports.
+	 */
+	gearVoiceRender: (params: VoiceRenderParams) => typedError<RenderReport, string>(__TAURI_INVOKE("gear_voice_render", { params })),
+	/**  Installs a voice pack from the index after a hash check. */
+	gearVoicePackInstall: (params: PackInstallParams) => typedError<VoicePack, string>(__TAURI_INVOKE("gear_voice_pack_install", { params })),
+	/**
+	 *  Stages one card change that puts a pack's sounds on a radio, keeping the person's
+	 *  per-line overrides when asked. The apply sheet writes the card.
+	 */
+	gearVoiceChoose: (params: VoiceChooseParams) => typedError<StagedChange_Serialize, string>(__TAURI_INVOKE("gear_voice_choose", { params })),
+	/**
 	 *  A radio's model for the editors: timers, value screens, logging, alarms, callouts and
 	 *  the checklist, from the mounted card or the latest backup, with staged edits on top. Reads only.
 	 */
@@ -2719,6 +2742,14 @@ export type LibraryView_Serialize = {
 /**  A line in a line diff. */
 export type LineOp = "same" | "add" | "remove";
 
+/**  How a line differs on one radio. */
+export type LineOverride = {
+	/**  `pack` (another pack's take) or `text` (a take of the person's own text). */
+	kind: string,
+	pack?: string | null,
+	text?: string | null,
+};
+
 /**  How a connected device is reached. */
 export type Link = 
 /**  A mounted volume (a radio's SD card in USB Storage mode, a goggles or DVR card). */
@@ -3244,6 +3275,14 @@ export type PackFlight = {
 	resting_v: number | null,
 };
 
+/**  `gear_voice_pack_install`. */
+export type PackInstallParams = {
+	/**  A pack id from the index. */
+	pack: string,
+	/**  The index (a path or an address) when the setting `voice_index` names none. */
+	source?: string | null,
+};
+
 /**
  *  `gear_pack_save`: a pack, and `charged` to mark it charged now (true) or clear the mark
  *  (false).
@@ -3389,6 +3428,17 @@ export type PlaceSaveParams = {
 export type PlaceTrend = {
 	place: string,
 	points: TrendPoint[],
+};
+
+/**  What a batch would cost. */
+export type Plan = {
+	lines: number,
+	/**  Takes the cache already holds. */
+	cached: number,
+	/**  Takes the provider must make. */
+	to_render: number,
+	/**  Characters of the takes the provider must make. */
+	chars: number,
 };
 
 /**  A change to one clip's plan. Missing fields stay as they are. */
@@ -3606,6 +3656,19 @@ export type Progress = {
 	total: number,
 	done: number,
 	size: number,
+};
+
+export type ProviderView = {
+	provider: string,
+	base_url: string,
+	model: string,
+	voice: string,
+	/**  A render costs money (a server that is not on this Mac). */
+	paid: boolean,
+	key_set: boolean,
+	/**  The provider can render now; else why not. */
+	ready: boolean,
+	problem?: string | null,
 };
 
 /**  `gear_prune`. */
@@ -3832,6 +3895,38 @@ export type RenameReport = {
 	/**  Names that do not start with a date. */
 	skipped: string[],
 	failed: ([string, string])[],
+};
+
+export type RenderReport = {
+	/**  The local pack the sounds went into. */
+	pack: string,
+	provider: string,
+	voice: string,
+	plan: Plan,
+	/**  Takes the provider made. */
+	rendered: number,
+	from_cache: number,
+	paid: boolean,
+	/**  The render costs money and was not confirmed: nothing was rendered. */
+	needs_confirm: boolean,
+	dry_run: boolean,
+	notes: string[],
+};
+
+/**  How a voice is rendered. Every field is in the pack's index entry. */
+export type RenderSettings = {
+	/**  The provider's own speaking speed. Part of the raw cache key. */
+	speed?: number | null,
+	/**  `atempo` after the take, 0.5 to 2. Not part of the cache key. */
+	tempo?: number | null,
+	/**  Speech is every window within this many dB of the peak. */
+	trim_db?: number | null,
+	lead_ms?: number,
+	tail_ms?: number,
+	fade_in_ms?: number,
+	fade_out_ms?: number,
+	/**  Fixes a take where the provider can; always part of the cache key. */
+	seed?: number,
 };
 
 /**  `gear_card_repair`'s answer. */
@@ -4876,8 +4971,103 @@ export type VerifyReport = {
 	error: string | null,
 };
 
+/**  `gear_voice_choose`. */
+export type VoiceChooseParams = {
+	radio: string,
+	pack: string,
+	/**  Keep the lines the person rendered or picked one by one (default true). */
+	keep_overrides?: boolean,
+	editor?: Editor | null,
+};
+
+/**
+ *  `gear_voice_edit`: override one line on one radio. `pack` takes another installed pack's
+ *  take; `text` renders the person's own text with their provider; neither removes the
+ *  override.
+ */
+export type VoiceEditParams = {
+	radio: string,
+	/**
+	 *  The sound's card path (`SOUNDS/en/armed.wav`). A path QuadCam has no line for is a
+	 *  custom line.
+	 */
+	line: string,
+	text?: string | null,
+	pack?: string | null,
+	/**  Allows a render that costs money. */
+	confirm?: boolean,
+};
+
+export type VoiceLine = {
+	path: string,
+	text: string,
+	/**  What a voice speaks, after the spelling rules. */
+	spoken: string,
+	group: string,
+	why: string,
+	/**  The person's own line (in `gear.json`, never in a pack). */
+	custom: boolean,
+	/**  Installed packs that hold this line. */
+	packs: string[],
+	override?: LineOverride | null,
+};
+
+export type VoicePack = {
+	id: string,
+	voice: string,
+	lang: string,
+	provider: string,
+	model: string,
+	lines: number,
+	license: string,
+	attribution: string,
+	version: string,
+	installed: boolean,
+	/**  Rendered here, with the person's own provider. */
+	local: boolean,
+	bytes: number,
+	/**  The pack was rendered from other lines than this version's `lines.csv`. */
+	stale: boolean,
+};
+
+/**  `gear_voice`. */
+export type VoiceParams = {
+	/**  A saved radio: shows its overrides and the voice chosen for it. */
+	radio?: string | null,
+	/**  Read the pack index again (the only call that goes to the network). */
+	refresh_index?: boolean,
+};
+
+/**
+ *  `gear_voice_render`: QuadCam's lines, and the person's own, rendered with the provider
+ *  from the settings into a local pack.
+ */
+export type VoiceRenderParams = {
+	/**  The provider's voice; empty for the setting `tts_voice`. */
+	voice?: string,
+	/**  Card paths to render; empty for every line. */
+	lines?: string[],
+	/**  Report what the render would do and cost; render nothing. */
+	dry_run?: boolean,
+	/**  Allows a render that costs money. */
+	confirm?: boolean,
+	/**  How it is rendered; the defaults when left out. */
+	settings?: RenderSettings | null,
+};
+
 /**  What speaks the cue lines. */
 export type VoiceSource = "macos" | "voice_pack";
+
+export type VoiceView = {
+	provider: ProviderView,
+	lines: VoiceLine[],
+	packs: VoicePack[],
+	/**  The pack chosen for the radio (staged or applied). */
+	chosen?: string | null,
+	/**  Where the index is read from, when a setting names one. */
+	index_source?: string | null,
+	notes: string[],
+};
 
 /**  A mounted volume the app may care about. */
 export type Volume = {
