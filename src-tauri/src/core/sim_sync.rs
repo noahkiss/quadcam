@@ -18,9 +18,7 @@ use crate::gear::apply::sim::{
     SimSyncParams, SimSyncRequest,
 };
 use crate::gear::apply::{first_refusal, ApplyReport, StepReport, StepState};
-use crate::gear::model::{
-    ApplyPlan, ChangeStatus, Identity, Refusal, RefusalCode, Trigger,
-};
+use crate::gear::model::{ApplyPlan, ChangeStatus, Identity, Refusal, RefusalCode, Trigger};
 use crate::gear::sims;
 use anyhow::{bail, Result};
 use chrono::Utc;
@@ -31,7 +29,9 @@ impl Core {
     pub fn gear_sim_sync_plan(&self, p: &SimSyncParams) -> Result<ApplyPlan> {
         let running = sims::running_processes();
         Ok(self
-            .sim_planned(p, &crate::paths::home_dir(), &|n| running.iter().any(|r| r == n))?
+            .sim_planned(p, &crate::paths::home_dir(), &|n| {
+                running.iter().any(|r| r == n)
+            })?
             .plan)
     }
 
@@ -149,7 +149,10 @@ impl Core {
                 .map_err(|e| {
                     Refusal::new(
                         RefusalCode::NoBackup,
-                        format!("The backup of {} failed: {e:#}. Nothing was written.", w.name),
+                        format!(
+                            "The backup of {} failed: {e:#}. Nothing was written.",
+                            w.name
+                        ),
                     )
                 })?;
             steps.push(StepReport {

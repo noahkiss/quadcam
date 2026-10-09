@@ -317,9 +317,11 @@ pub fn diff(sim: &SimProfile, quad: &RateProfileView) -> Option<SimDiff> {
     };
     let to_target = s.max_diff(&target);
     let to_quad = s.max_diff(&q);
-    let throttle_differs = sim
-        .throttle
-        .map(|t| rates::throttle_differs(&t, &q.throttle));
+    // What a sync writes: mid and expo. A sim has no hover value, so a quad's `thr_hover`
+    // is not a difference the person can fix.
+    let throttle_differs = sim.throttle.map(|t| {
+        t.mid.round() != q.throttle.mid.round() || t.expo.round() != q.throttle.expo.round()
+    });
     let same = to_target.iter().all(|&d| d <= SAME_DEG_S) && throttle_differs != Some(true);
     Some(SimDiff {
         max_diff: to_target.to_vec(),

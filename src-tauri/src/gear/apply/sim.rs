@@ -139,7 +139,16 @@ pub fn writes_allowed(path: &Path, under_cargo: bool) -> bool {
     }
     let tmp = std::env::temp_dir();
     let tmp = tmp.canonicalize().unwrap_or(tmp);
-    let p = path.canonicalize().unwrap_or_else(|_| path.to_path_buf());
+    // The file may not exist yet: resolve its folder.
+    let p = path.canonicalize().unwrap_or_else(|_| {
+        match (
+            path.parent().and_then(|d| d.canonicalize().ok()),
+            path.file_name(),
+        ) {
+            (Some(d), Some(n)) => d.join(n),
+            _ => path.to_path_buf(),
+        }
+    });
     p.starts_with(tmp)
 }
 
@@ -213,15 +222,11 @@ pub fn reads_as(sim: &dyn Sim, path: &Path, raw: &[u8], w: &SimWrite) -> bool {
 
 fn holds(p: &SimProfile, want: &Rates, throttle: Option<&ThrottleCurve>) -> bool {
     let Some(r) = p.rates else { return false };
-    let same_rates = r
-        .axes
-        .iter()
-        .zip(&want.axes)
-        .all(|(a, b)| {
-            a.rc_rate.round() == b.rc_rate.round()
-                && a.srate.round() == b.srate.round()
-                && a.expo.round() == b.expo.round()
-        });
+    let same_rates = r.axes.iter().zip(&want.axes).all(|(a, b)| {
+        a.rc_rate.round() == b.rc_rate.round()
+            && a.srate.round() == b.srate.round()
+            && a.expo.round() == b.expo.round()
+    });
     let same_throttle = match (p.throttle, throttle) {
         (Some(a), Some(b)) => a.mid.round() == b.mid.round() && a.expo.round() == b.expo.round(),
         _ => true,
@@ -298,15 +303,20 @@ fn find(
 
 fn can_write(path: &Path) -> bool {
     std::fs::OpenOptions::new().write(true).open(path).is_ok()
-        && path.parent().is_some_and(|d| {
-            std::fs::metadata(d).is_ok_and(|m| !m.permissions().readonly())
-        })
+        && path
+            .parent()
+            .is_some_and(|d| std::fs::metadata(d).is_ok_and(|m| !m.permissions().readonly()))
 }
 
 const AXIS_NAMES: [&str; 3] = ["Roll", "Pitch", "Yaw"];
 
 /// The diff of one profile: the values that change, old line out, new line in.
-fn diff_lines(have: &Rates, want: &Rates, ht: Option<ThrottleCurve>, wt: Option<&ThrottleCurve>) -> Vec<DiffLine> {
+fn diff_lines(
+    have: &Rates,
+    want: &Rates,
+    ht: Option<ThrottleCurve>,
+    wt: Option<&ThrottleCurve>,
+) -> Vec<DiffLine> {
     let mut out = Vec::new();
     let mut change = |what: String, a: f64, b: f64| {
         if a.round() != b.round() {
@@ -321,8 +331,16 @@ fn diff_lines(have: &Rates, want: &Rates, ht: Option<ThrottleCurve>, wt: Option<
         }
     };
     for (i, name) in AXIS_NAMES.iter().enumerate() {
-        change(format!("{name} RC rate"), have.axes[i].rc_rate, want.axes[i].rc_rate);
-        change(format!("{name} super rate"), have.axes[i].srate, want.axes[i].srate);
+        change(
+            format!("{name} RC rate"),
+            have.axes[i].rc_rate,
+            want.axes[i].rc_rate,
+        );
+        change(
+            format!("{name} super rate"),
+            have.axes[i].srate,
+            want.axes[i].srate,
+        );
         change(format!("{name} expo"), have.axes[i].expo, want.axes[i].expo);
     }
     if let (Some(h), Some(w)) = (ht, wt) {
@@ -366,11 +384,23 @@ pub fn plan(
         if id == "all" {
             for s in sims::all() {
                 if s.enabled() && !s.files(home).is_empty() {
-                    picked.push((s, SimTarget { sim: s.id().into(), ..t.clone() }));
+                    picked.push((
+                        s,
+                        SimTarget {
+                            sim: s.id().into(),
+                            ..t.clone()
+                        },
+                    ));
                 }
             }
         } else if let Some(s) = sims::all().into_iter().find(|s| s.id() == id) {
-            picked.push((s, SimTarget { sim: id, ..t.clone() }));
+            picked.push((
+                s,
+                SimTarget {
+                    sim: id,
+                    ..t.clone()
+                },
+            ));
         } else {
             checks.push(fail(
                 &format!("Sim {}", t.sim),
@@ -496,7 +526,8 @@ pub fn plan(
             ));
         }
         if sim.id() == "micro" {
-            warnings.push("Liftoff: Micro Drones keeps this file inside the game's app bundle.".into());
+            warnings
+                .push("Liftoff: Micro Drones keeps this file inside the game's app bundle.".into());
         }
         let rel = path
             .strip_prefix(home)
@@ -516,7 +547,10 @@ pub fn plan(
         });
     }
 
-    if checks.iter().all(|c| c.ok) && !writes.is_empty() && writes.iter().all(|w| w.before == w.after) {
+    if checks.iter().all(|c| c.ok)
+        && !writes.is_empty()
+        && writes.iter().all(|w| w.before == w.after)
+    {
         checks.push(fail(
             "Something differs",
             RefusalCode::Incompatible,
@@ -524,7 +558,11 @@ pub fn plan(
         ));
     }
     let ready = checks.iter().all(|c| c.ok);
-    let digest = if ready { digest(&writes) } else { String::new() };
+    let digest = if ready {
+        digest(&writes)
+    } else {
+        String::new()
+    };
     SimPlanned {
         plan: ApplyPlan {
             change: CHANGE_ID.into(),
@@ -559,7 +597,10 @@ mod tests {
         std::fs::set_permissions(&p, std::fs::Permissions::from_mode(0o755)).unwrap();
         assert!(write_atomic(&p, b"new bytes").unwrap());
         assert_eq!(std::fs::read(&p).unwrap(), b"new bytes");
-        assert_eq!(std::fs::metadata(&p).unwrap().permissions().mode() & 0o777, 0o755);
+        assert_eq!(
+            std::fs::metadata(&p).unwrap().permissions().mode() & 0o777,
+            0o755
+        );
         assert!(!d.path().join(".a.sav.quadcam-tmp").exists());
     }
 }

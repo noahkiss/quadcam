@@ -104,7 +104,9 @@ fn sync(core: &Core, a: SimsArgs) -> Result<Value> {
         profile: a.profile,
     };
     let Some(digest) = a.digest else {
-        return Ok(serde_json::to_value(call::gear_sim_sync_plan(core, params)?)?);
+        return Ok(serde_json::to_value(call::gear_sim_sync_plan(
+            core, params,
+        )?)?);
     };
     Ok(serde_json::to_value(call::gear_sim_sync(
         core,

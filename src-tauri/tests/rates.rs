@@ -223,14 +223,14 @@ fn sims_are_read_from_their_files_and_compared_with_the_quad() {
     assert_eq!(micro.in_sync, Some(false));
     assert_eq!(micro.files[0].profiles[0].name, "Micro");
 
-    // Uncrashed: rates equal and the throttle curve equal (mid 30, expo 50; the quad's hover
-    // is 34, so the curves differ at the middle: the sim differs).
+    // Uncrashed: rates equal and the throttle's mid and expo equal (30 and 50). A sim has no
+    // hover value, so the quad's hover (34) is not a difference; the sim matches.
     let unc = by("uncrashed");
     let prof = &unc.files[0].profiles[0];
     assert_eq!(prof.name, "FREE");
     assert!(prof.throttle.is_some());
-    assert_eq!(prof.diff.as_ref().unwrap().throttle_differs, Some(true));
-    assert_eq!(unc.in_sync, Some(false));
+    assert_eq!(prof.diff.as_ref().unwrap().throttle_differs, Some(false));
+    assert_eq!(unc.in_sync, Some(true));
 
     // The Zone: profile 0 equals the quad; profile 1 uses another type.
     let zone = by("zone");
@@ -348,7 +348,7 @@ fn the_rows_cli_and_mcp_actions() {
     assert_eq!(code, 0);
     assert!(out.contains("Liftoff - matches the quad"), "{out}");
     assert!(
-        out.contains("Uncrashed (running) - differs from the quad"),
+        out.contains("Uncrashed (running) - matches the quad"),
         "{out}"
     );
     let (code, out) = run(&["--json", "gear", "rates", "fc-nothing"]);
