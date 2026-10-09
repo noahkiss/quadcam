@@ -339,6 +339,7 @@ mod tests {
             identity: Identity::default(),
             device: None,
             usb: None,
+            also: Vec::new(),
         }
     }
 
@@ -355,6 +356,7 @@ mod tests {
             identity: Identity::default(),
             device: None,
             usb: None,
+            also: Vec::new(),
         }
     }
 

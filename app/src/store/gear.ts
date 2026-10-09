@@ -4,7 +4,7 @@
 import type { StateCreator } from "zustand";
 import type { State } from ".";
 import { api, errText } from "../ipc/api";
-import type { ApplyPlan, ApplyReport, Connected, Device, DeviceChanged, FirmwareView, FlashParams, GearStatus, SimSyncParams, StagedChange } from "../ipc/types";
+import type { ApplyPlan, ApplyReport, Connected, Device, DeviceChanged, FirmwareView, FlashParams, GearStatus, SimRestoreParams, SimSyncParams, StagedChange } from "../ipc/types";
 import { linkHandle } from "../lib/gear";
 import { toast } from "../components/toastStore";
 
@@ -25,6 +25,8 @@ export interface ApplySheetState {
   error: string | null;
   /** Set when the sheet shows a sim sync: the click writes these sim profiles. */
   sim?: SimSyncParams | null;
+  /** Set when the sheet shows a sim restore: the click puts this sim's backup back. */
+  restore?: SimRestoreParams | null;
   /** Set when the sheet shows a firmware flash: the click flashes this radio. */
   flash?: FlashParams | null;
 }
@@ -45,6 +47,9 @@ const simChange = (plan: ApplyPlan | null): StagedChange => ({
   order: 0,
   history: [],
 });
+
+/** The change the sheet shows for a sim restore (the core's `pseudo_restore`). */
+const restoreChange = (plan: ApplyPlan | null): StagedChange => ({ ...simChange(plan), id: "sim-restore", title: "Restore a sim backup" });
 
 /** The change the sheet shows for a firmware flash (the core's `flash_change`). */
 const flashChange = (device: string, plan: ApplyPlan | null): StagedChange => ({
@@ -70,6 +75,7 @@ export interface GearSlice {
   openApply: (device: string, change?: string) => Promise<void>;
   /** Opens the sheet on a plan to write the quad's rates into sim profiles. */
   openSimSync: (params: SimSyncParams) => Promise<void>;
+  openSimRestore: (params: SimRestoreParams) => Promise<void>;
   /** Opens the sheet on a plan to flash an EdgeTX radio, with a splash when given. */
   openFlash: (params: FlashParams) => Promise<void>;
   /** The Firmware page's rows. `check`: read the network (true), the saved answer (false), or follow the firmwareCheck setting (null). */
@@ -143,6 +149,15 @@ export const createGearSlice: StateCreator<State, [], [], GearSlice> = (set, get
       set((s) => (s.applySheet?.sim === params ? { applySheet: { ...s.applySheet, busy: false, error: errText(e) } } : {}));
     }
   },
+  openSimRestore: async (params) => {
+    set({ applySheet: { device: SIMS_DEVICE, change: restoreChange(null), plan: null, report: null, agent: null, busy: true, error: null, restore: params } });
+    try {
+      const plan = await api.gearSimRestorePlan(params);
+      set((s) => (s.applySheet?.restore === params ? { applySheet: { ...s.applySheet, change: restoreChange(plan), plan, busy: false } } : {}));
+    } catch (e) {
+      set((s) => (s.applySheet?.restore === params ? { applySheet: { ...s.applySheet, busy: false, error: errText(e) } } : {}));
+    }
+  },
   openFlash: async (params) => {
     set({ applySheet: { device: params.device, change: flashChange(params.device, null), plan: null, report: null, agent: null, busy: true, error: null, flash: params } });
     try {
@@ -176,7 +191,7 @@ export const createGearSlice: StateCreator<State, [], [], GearSlice> = (set, get
       return;
     }
     try {
-      const report = a.sim ? await api.gearSimSyncClick(a.sim, a.plan.digest) : a.flash ? await api.gearFlashClick(a.flash, a.plan.digest) : await api.gearApplyClick(a.change.id, a.plan.digest);
+      const report = a.sim ? await api.gearSimSyncClick(a.sim, a.plan.digest) : a.restore ? await api.gearSimRestoreClick(a.restore, a.plan.digest) : a.flash ? await api.gearFlashClick(a.flash, a.plan.digest) : await api.gearApplyClick(a.change.id, a.plan.digest);
       set((s) => (s.applySheet ? { applySheet: { ...s.applySheet, report, busy: false } } : {}));
     } catch (e) {
       set((s) => (s.applySheet ? { applySheet: { ...s.applySheet, busy: false, error: errText(e) } } : {}));

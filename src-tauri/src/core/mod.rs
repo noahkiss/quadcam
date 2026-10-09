@@ -18,6 +18,7 @@ mod apply_card;
 mod backup;
 mod bench;
 mod cuts;
+mod dfu_link;
 mod fc;
 mod files;
 mod firmware;
@@ -30,11 +31,13 @@ pub mod model_edit;
 mod modules;
 mod osd;
 mod prep;
+mod radio_cli;
 mod rates;
 mod rematch;
 mod setup;
 mod sim;
 mod sim_host;
+mod sim_restore;
 mod sim_sync;
 mod switchmap;
 mod voice;
@@ -47,6 +50,7 @@ pub use backup::{
     GearJob, ImportBackupsParams, PruneParams, RepairResult, StopParams,
 };
 pub use bench::{apply_ready_hooks, CopyParams};
+pub use dfu_link::{DfuLinkParams, DfuLinked};
 pub use fc::{
     BoardNotesParams, FcJob, FcPortParams, FcReadParams, PollPauseParams, UsbTimer, USB_PROBE,
 };
@@ -61,11 +65,14 @@ pub use gear::{
     connected_name, link_handle, DeviceSaveParams, GearStatus, Hold, HookFn, HookOutcome, HookRun,
     OnConnectHook, ReminderParams, Skip, StepFailure, HOLD_GRACE,
 };
-pub use gear_card::{CardParams, CardPreview, CardPreviewParams, GearCard};
+pub use gear_card::{
+    CardClean, CardCleanParams, CardParams, CardPreview, CardPreviewParams, GearCard,
+};
 pub use import::CardStatus;
 pub use library::{LibEdit, LibItem, LibUpdate, LibraryView, RebuildReport, RenameReport};
 pub use model_edit::{ModelDetail, ModelEditParams, ModelEntry, ModelParams, MODEL_CHANGE};
 pub use osd::{OsdEditParams, OsdParams};
+pub use radio_cli::{RadioCliAction, RadioCliParams, RadioCliReport, RadioMatch, RadioVerify};
 pub use rates::{RatesParams, RatesPreview, RatesPreviewParams, SimsParams};
 pub use rematch::{LibMatch, LibMatchParams, LibMatchReport};
 pub use setup::{PlaceRemoved, SettingsView};
@@ -77,6 +84,7 @@ pub use sim_host::{
     arm_block_text, SimBox, SimCamera, SimFrame, SimHud, SimPose, SimPreset, SimStartInfo,
     SimStartParams, SimSticks, SimStopInfo, SimUiSettings, DEFAULT_PRESET,
 };
+pub use sim_restore::{SimRestoreParams, SimRestoreRequest};
 pub use switchmap::{RadioParams, RadioWatchParams, SwitchMapParams};
 pub use voice::{
     report_text as voice_report_text, view_text as voice_view_text, BuildPackParams, LineOverride,

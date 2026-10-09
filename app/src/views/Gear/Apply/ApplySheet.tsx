@@ -17,6 +17,7 @@ export function ApplySheet() {
   const a = useStore((s) => s.applySheet);
   const devices = useStore((s) => s.devices);
   const jobs = useStore((s) => s.gear?.jobs);
+  const connected = useStore((s) => s.gear?.connected);
   const changes = useStore((s) => s.changes);
   const close = useStore((s) => s.closeApply);
   const run = useStore((s) => s.runApply);
@@ -28,6 +29,7 @@ export function ApplySheet() {
   const name = kind === "sims" ? "sims" : dev ? deviceName(dev) : kind === "card" || kind === "firmware" ? "radio" : "FC";
   const job = a ? jobs?.find((j) => j.device === a.device) : undefined;
   const more = a?.change ? changes.filter((c) => c.device === a.device && (c.status === "ready" || c.status === "try") && c.id !== a.change?.id).length : 0;
+  const overUsb = kind === "card" && !!connected?.find((c) => c.id === a?.device)?.usb;
   const done = !!a?.report;
   const ready = !!a?.plan && a.plan.checks.every((c) => c.ok);
   const working = !!a?.busy && !done;
@@ -121,6 +123,7 @@ export function ApplySheet() {
               <Icon name="refresh" /> {job?.step || "Applying"}…
             </p>
           )}
+          {working && overUsb && <p className={styles.muted}>Keep the radio plugged in until this sheet shows the result. Writes over USB are slow.</p>}
           {a.report && <Result r={a.report} />}
           {a.report?.status === "verified" && a.change?.status === "try" && <p className={styles.muted}>This was a Try change. Fly it, then keep it or revert it on the Bench.</p>}
         </div>

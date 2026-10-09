@@ -1,7 +1,7 @@
 // The mock core's sim sync (`Core::gear_sim_sync_plan` and `gear_sim_sync`): plans against the
 // recorded sims (a synthetic home read by the real core), refuses while a sim "runs", and
 // remembers which profiles a sync wrote so the Rates segment reads them as matching.
-import type { ApplyPlan, ApplyReport, Check, DiffItem, RateAxis, SimRates, SimSyncParams } from "../types";
+import type { ApplyPlan, ApplyReport, BackupSummary, Check, DiffItem, RateAxis, SimRates, SimRestoreParams, SimSyncParams } from "../types";
 import * as seed from "./seed";
 
 export interface MockSimSync {
@@ -13,9 +13,11 @@ export interface MockSimSync {
   failNext: boolean;
   /** Plans taken and syncs written, for specs. */
   written: string[];
+  /** Sims whose file QuadCam backed up (a sync or a restore wrote it). */
+  backedUp: Set<string>;
 }
 
-export const freshSimSync = (): MockSimSync => ({ running: null, synced: new Set(), failNext: false, written: [] });
+export const freshSimSync = (): MockSimSync => ({ running: null, synced: new Set(), failNext: false, written: [], backedUp: new Set() });
 
 const PROCESS: Record<string, string> = { liftoff: "Liftoff", micro: "Liftoff Micro Drones", uncrashed: "Uncrashed", zone: "The Zone" };
 const key = (sim: string, file: string, profile: string) => `${sim}:${file}:${profile}`;
@@ -147,6 +149,7 @@ export function apply(st: MockSimSync, p: SimSyncParams, digest: string, confirm
   for (const k of keys) {
     st.synced.add(k);
     st.written.push(k);
+    st.backedUp.add(k.split(":")[0]);
   }
   return {
     ...base,
@@ -163,4 +166,69 @@ export function apply(st: MockSimSync, p: SimSyncParams, digest: string, confirm
     }),
     message: `Verified: ${keys.map((k) => `${label(k.split(":")[0])} (${k.split(":")[2]})`).join(", ")} hold the new rates.`,
   };
+}
+
+const BACKUP_AT = "2026-10-09T12:00:00Z";
+
+/** `gear_backups` for a `sim-<id>` device: one backup once QuadCam wrote the sim's file. */
+export function backupsOf(st: MockSimSync, device: string): BackupSummary[] {
+  const id = device.replace(/^sim-/, "");
+  if (!st.backedUp.has(id)) return [];
+  return [{ id: `${device}/2026-10-09T120000-before_apply`, device, trigger: "before_apply", taken_at: BACKUP_AT, identity: {}, pinned: false, files: 1, bytes: 2048 } as BackupSummary];
+}
+
+const restoreName = (id: string) => seed.sims("none").find((s) => s.id === id)?.name ?? id;
+
+/** `gear_sim_restore_plan`: the backup, the running check, and a digest. */
+export function restorePlan(st: MockSimSync, p: SimRestoreParams): ApplyPlan {
+  const list = status(st, "none");
+  const sim = list.find((s) => s.id === p.sim);
+  const checks: Check[] = [];
+  const diff: DiffItem[] = [];
+  const warnings: string[] = [];
+  if (!sim) throw `${JSON.stringify(p.sim)} is not a sim QuadCam knows (liftoff, micro, uncrashed, zone).`;
+  if (!st.backedUp.has(sim.id)) {
+    checks.push(fail("Backup found", "no_backup", `${sim.name} has no backup: QuadCam backs a sim file up before each sync.`));
+  } else {
+    checks.push(ok("Backup found"), ok("Backup readable"));
+    checks.push(sim.running ? fail(`Sim closed (${sim.name})`, "sim_running", `Quit ${sim.name} first.`) : ok(`Sim closed (${sim.name})`));
+    checks.push(ok(`Writable (${sim.name})`));
+    const prof = sim.files[0]?.profiles.find((x) => st.synced.has(key(sim.id, sim.files[0].path, x.name)));
+    diff.push({ kind: "lines", label: `${sim.name}: ${sim.files[0]?.path ?? ""}`, lines: [{ op: "same", text: `Profile ${prof?.name ?? "?"}` }, { op: "remove", text: "Roll RC rate 127" }, { op: "add", text: "Roll RC rate 100" }] });
+    warnings.push("This puts back the file as it was on 2026-10-09 12:00 UTC. Changes made in the game or by a later sync are lost; QuadCam backs the file up first, so this can be undone.");
+  }
+  const ready = checks.every((c) => c.ok);
+  return { change: "sim-restore", device: {}, checks, diff, digest: ready ? `simrestore-${sim.id}` : "", warnings } as ApplyPlan;
+}
+
+/** `gear_sim_restore`: puts the file back; the synced profiles read as before. */
+export function restoreApply(st: MockSimSync, p: SimRestoreParams, digest: string, confirm: boolean): ApplyReport {
+  if (!confirm) throw "Refused: a restore needs the plan's digest and confirm=true.";
+  const pl = restorePlan(st, p);
+  const bad = pl.checks.find((c) => !c.ok);
+  if (bad?.refusal) throw refused(bad.refusal.code, bad.refusal.reason);
+  if (pl.digest !== digest) throw refused("before_mismatch", "The sim files or the backup changed since you read the plan; plan again.");
+  for (const k of [...st.synced]) if (k.startsWith(`${p.sim}:`)) st.synced.delete(k);
+  const n = restoreName(p.sim);
+  const backup = `sim-${p.sim}/2026-10-09T120100-before_apply`;
+  return {
+    change: "sim-restore",
+    device: "sims",
+    status: "verified",
+    saved: true,
+    backup,
+    after_backup: null,
+    sent: [],
+    failed_line: null,
+    verify: [],
+    files: ["~/Library/Application Support/sim.xml"],
+    steps: [
+      { name: `Back up ${n}`, state: "done", detail: backup },
+      { name: `Write ${n}`, state: "done", detail: "~/Library/Application Support/sim.xml" },
+      { name: `Read back ${n}`, state: "done", detail: "the file holds the backup's bytes" },
+    ],
+    message: `Verified: ${n} holds the backed-up file again.`,
+    notes: pl.warnings ?? [],
+    at: "2026-10-09T12:01:00Z",
+  } as ApplyReport;
 }

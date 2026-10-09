@@ -74,6 +74,20 @@ export function BackupsSegment({ d }: { d: DeviceRef }) {
       const c = await api.gearCardCheck(id!);
       return c.summary;
     });
+  const cleanCard = async () => {
+    const found = await api.gearCardClean(id!).catch((e) => {
+      toast(errText(e), true);
+      return null;
+    });
+    if (!found) return;
+    if (!found.files.length) return void toast("The card holds no ._ files.");
+    const ok = await ask(`Remove ${plural(found.files.length, "._ file")}?`, "macOS leaves these hidden files on a card it writes to. The radio does not use them. QuadCam removes only files that are AppleDouble data, then unmounts the card.", { ok: "Remove" });
+    if (ok !== true) return;
+    run(async () => {
+      const r = await api.gearCardClean(id!, true);
+      return `Removed ${plural(r.removed, "._ file")}.`;
+    });
+  };
   const repair = async () => {
     if (!check) return;
     const ok = await ask("Repair this card?", "QuadCam backs the card up first when it can read it, then repairs its file system. A repair cannot be stopped once it starts.", { ok: "Repair" });
@@ -104,6 +118,11 @@ export function BackupsSegment({ d }: { d: DeviceRef }) {
         {isCard && d.device && !d.unmounted && (
           <Button icon="shield" onClick={checkCard} disabled={busy || !!job}>
             Check card
+          </Button>
+        )}
+        {d.kind === "radio" && isCard && d.device && !d.unmounted && (
+          <Button icon="trash-bin-trash" onClick={cleanCard} disabled={busy || !!job}>
+            Clean ._ files
           </Button>
         )}
         {job && (

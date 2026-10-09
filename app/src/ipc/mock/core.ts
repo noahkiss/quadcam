@@ -39,13 +39,13 @@ const DISPATCH = new Set([
   "library", "library_rate", "library_edit", "library_rename", "library_cuts", "library_export_cuts", "library_trash", "library_untrash",
   "library_photos", "library_apply_name_format", "library_match_logs", "library_rebuild", "library_rescan", "library_preview", "library_strips", "card_status",
   "settings", "settings_set", "place_search", "place_save", "session_cuts", "profiles", "session_split", "library_split",
-  "modules", "module_install", "module_remove", "modules_check", "gear_osd", "gear_osd_edit", "gear_model", "gear_model_edit", "gear_voice", "gear_voice_edit", "gear_voice_preview", "gear_voice_render", "gear_voice_pack_install", "gear_voice_choose", "gear_rates", "gear_rates_preview", "gear_sims", "gear_sim_sync_plan", "gear_sim_sync", "gear_firmware", "gear_splash", "gear_flash_plan", "gear_flash",
+  "modules", "module_install", "module_remove", "modules_check", "gear_osd", "gear_osd_edit", "gear_model", "gear_model_edit", "gear_voice", "gear_voice_edit", "gear_voice_preview", "gear_voice_render", "gear_voice_pack_install", "gear_voice_choose", "gear_rates", "gear_rates_preview", "gear_sims", "gear_sim_sync_plan", "gear_sim_sync", "gear_sim_restore_plan", "gear_sim_restore", "gear_radio_cli", "gear_dfu_link", "gear_firmware", "gear_splash", "gear_flash_plan", "gear_flash",
   "gear_status", "gear_devices", "gear_device_save", "gear_device_forget", "gear_dismiss_reminder", "gear_poll_pause",
   "gear_switch_map", "gear_radio", "gear_radio_watch", "gear_sim_calibration", "gear_sim_calibration_save", "gear_sim_defaults", "gear_sim_calibrate",
   "gear_flights", "gear_flight_set", "gear_flight_folders", "gear_packs", "gear_pack_save", "gear_pack_delete", "gear_pack_type_save",
   "gear_pack_type_delete", "gear_pack_notes", "gear_session_report", "gear_session_report_save", "gear_preflight", "gear_crashes", "gear_crash_save", "gear_crash_delete",
   "gear_backup", "gear_backups", "gear_backup_read", "gear_backup_diff", "gear_backup_pin", "gear_storage", "gear_prune",
-  "gear_export", "gear_import_backups", "gear_card_check", "gear_card_checks", "gear_card_repair", "gear_stop",
+  "gear_export", "gear_import_backups", "gear_card_check", "gear_card_clean", "gear_card_checks", "gear_card_repair", "gear_stop",
   "gear_changes", "gear_change_stage", "gear_change_update", "gear_change_discard", "gear_restore_stage", "gear_apply_plan", "gear_apply",
   "gear_change_keep", "gear_change_revert", "gear_copy_plan", "gear_copy_stage", "gear_card_mount", "gear_card_unmount",
 ]);
@@ -192,6 +192,8 @@ export class MockCore {
         return this.gearChanged(firmware.flash(this.firmware, this.gear.devices, p as never, String(p.digest), true));
       case "gear_sim_sync_click":
         return this.gearChanged(simsync.apply(this.simSync, p as never, String(p.digest), true));
+      case "gear_sim_restore_click":
+        return this.gearChanged(simsync.restoreApply(this.simSync, p as never, String(p.digest), true));
       case "gear_apply_click":
         return this.applied((p as { id: string }).id, (p as { digest: string }).digest);
       case "answer_apply_request":
@@ -358,6 +360,7 @@ export class MockCore {
       case "gear_backup":
         return this.gearBackup(p);
       case "gear_backups":
+        if (String(p.device ?? "").startsWith("sim-")) return simsync.backupsOf(this.simSync, String(p.device));
         return backups.list(this.gear, (p.device as string | null) ?? null);
       case "gear_backup_read":
         return backups.read(this.gear, String(p.id), (p.path as string | null) ?? null);
@@ -386,6 +389,13 @@ export class MockCore {
         const c = backups.cardCheck(this.gear, String(p.device), new Date().toISOString());
         this.emit("gear-changed");
         return c;
+      }
+      case "gear_card_clean": {
+        const files = Array.from({ length: this.gear.appleDoubles }, (_, i) => ({ path: `MODELS/._model${String(i + 1).padStart(2, "0")}.yml`, bytes: 4096 }));
+        if (p.remove && !p.confirm) throw "Refused: removing files from a card needs confirm=true. Call without remove to list them first.";
+        const removed = p.remove ? files.length : 0;
+        if (p.remove) this.gear.appleDoubles = 0;
+        return { root: "/Volumes/RADIO", files, bytes: files.length * 4096, removed, radio_usb: true, notes: [] };
       }
       case "gear_card_checks":
         return this.gear.checks.filter((c) => c.device === p.device);
@@ -472,6 +482,14 @@ export class MockCore {
         return simsync.plan(this.simSync, p as never);
       case "gear_sim_sync":
         return this.gearChanged(simsync.apply(this.simSync, p as never, String(p.digest), !!p.confirm));
+      case "gear_sim_restore_plan":
+        return simsync.restorePlan(this.simSync, p as never);
+      case "gear_sim_restore":
+        return this.gearChanged(simsync.restoreApply(this.simSync, p as never, String(p.digest), !!p.confirm));
+      case "gear_radio_cli":
+        throw "No device: no radio on a USB serial port. Plug it in and pick USB Serial on the radio.";
+      case "gear_dfu_link":
+        throw "No radio is in DFU mode. Turn the radio off, hold both trim buttons toward the centre and plug in the USB cable.";
       case "gear_firmware":
         return firmware.view(this.firmware, this.gear.devices, (p.check as boolean | null) ?? null, "2026-10-09T12:00:00Z");
       case "gear_splash":

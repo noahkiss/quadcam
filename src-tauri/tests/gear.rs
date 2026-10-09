@@ -378,6 +378,8 @@ fn renamed(c: &quadcam_lib::gear::model::Connected) -> quadcam_lib::gear::model:
         last_seen: None,
         last_backup: None,
         last_space: None,
+        aliases: Vec::new(),
+        dfu_serial: None,
     });
     d
 }

@@ -333,6 +333,7 @@ mod tests {
                 identity: Identity::default(),
                 device: None,
                 usb: None,
+                also: Vec::new(),
             },
             root: root.to_path_buf(),
         }

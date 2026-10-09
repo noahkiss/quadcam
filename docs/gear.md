@@ -63,9 +63,26 @@ the CLI's `mcu_id` both report. An FC that reports none gets a hash of its board
 serial number. The raw id never leaves the Mac.
 
 A radio in USB Storage mode reports a USB serial number, but EdgeTX radios all report the same
-generic one, so QuadCam does not use it as an id. In DFU mode the bootloader reports the chip's
-own serial number, which is a stable id; QuadCam cannot match it to the storage-mode radio by
-itself, so you link the two once.
+generic one, so QuadCam does not use it as an id. It identifies the radio by its card.
+
+**One radio, two ids.** A radio card in the built-in SD slot gets its id from the card's
+hardware serial, which the radio's USB Storage mode does not show. There the id comes from the
+volume UUID. When QuadCam sees a saved radio's card, it also records the other ids the card
+answers to (`aliases` in `gear.json`). The same card, plugged in through the radio, is then the
+same saved radio, with its name, aircraft and backups.
+
+**DFU link.** In DFU mode the bootloader reports the chip's own serial number, which is a
+stable id, but no name. QuadCam cannot match it to the storage-mode radio by itself, so the
+serial is linked to a saved radio once and kept in that radio's record:
+
+- `gear dfu-link --device RADIO` links the radio now in DFU mode to the radio you name.
+  Without `--device` QuadCam takes the saved radio seen most recently and says so. A serial
+  belongs to one radio; linking it to another moves it. `--unlink` removes it.
+- A flash plan checks the link. A DFU device linked to another radio, or a radio linked to
+  another DFU device, refuses ("The radio in DFU mode is this radio"). An unlinked DFU device
+  passes with a warning that names the radio seen most recently; a verified flash then links
+  it to the radio you flashed.
+- Once linked, the DFU device shows in the device list under the radio's name.
 
 ## Flight controllers
 
@@ -162,8 +179,43 @@ card is always whole. Cancel finishes the current file, then unmounts the card, 
 Mac's disk service until a reboot. If macOS stops answering, QuadCam says a reboot may be
 needed instead of waiting forever.
 
+While a write runs over the radio's USB, the apply sheet says to keep the radio plugged in.
+QuadCam never asks you to unplug it before the unmount. A mount or unmount that macOS does not
+finish within its time limit (60 seconds for an unmount) ends with "macOS did not finish ...
+a reboot may be needed" and leaves the radio plugged in.
+
 If the radio's firmware stops at an error, hold both horizontal trims inward while you power
 it on. The bootloader then shows the SD card over USB.
+
+### Clean ._ files
+
+macOS writes hidden `._*` files (AppleDouble) next to files it copies to a FAT card. The radio
+does not use them. QuadCam removes the `._` file beside every file it writes, and does not
+create the others. For files that are already there, **Clean ._ files** on the radio's
+**Backups** segment lists them, asks, then deletes them and unmounts the card. It deletes only
+files that start with the AppleDouble header; a file you named `._notes` stays. On the command
+line: `gear card-clean --device ID` lists, `--remove --yes` deletes.
+
+### Radio over USB Serial
+
+With the radio's USB serial port set to **CLI** (the hardware settings, `serialPort: VCP`),
+the radio shows as a serial port (`<Radio> Serial Port`, 115200 baud, prompt `>`). It is a
+radio, not a flight controller. The CLI cannot move file contents, so QuadCam uses it for small
+jobs only. `gear radio-cli ACTION` runs one:
+
+| Action | What it does |
+|---|---|
+| `identify` | `ver`: the board and EdgeTX version the radio runs, and the saved radios of that board |
+| `ls --path /SOUNDS/en` | lists a card folder |
+| `play --path /SOUNDS/en/hello.wav` | plays a sound file on the radio's speaker. A voice line's card path works as it is, so after a voice pack is applied you can hear a line on the radio itself |
+| `beep` | the radio beeps |
+| `reboot --yes` | restarts the radio |
+| `verify [--device ID]` | `ls` each folder of the saved radio's latest backup, and lists the files the radio lacks or holds at another size. Use it after a card apply, with the card back in the radio. `LOGS/` is skipped |
+
+QuadCam sends no other command. A path is an absolute card path of plain characters. QuadCam
+refuses a port another program has open ("is open in screen"), as it does for a flight
+controller, and a radio whose CLI is off gets a hint to turn it on. After `identify`, the
+serial radio shows its board and version in the device list.
 
 ## Radio model editors
 
@@ -637,6 +689,22 @@ are not synced: they are outside what the sims' rate adapters cover.
 | Uncrashed | Unreal GVAS, 12 little-endian floats after `FloatProperty`: super rate, RC rate, expo per axis, rates type (0 Betaflight), throttle mid, throttle expo, as fractions |
 | The Zone | `[rate_profile_N]` with one `rates={ "roll": Vector3(rc, super, expo), …, "type": "betaflight" }` dictionary, as fractions |
 
+### Restore a sim's backup
+
+A sim that QuadCam backed up shows when, with **Restore backup** in the Rates segment's Sims
+list. It opens the same apply sheet on a plan to put the file back as it was before a sync.
+
+- **The backup:** the newest one that differs from the file now. A second restore therefore
+  undoes the first. `gear sims --restore SIM --backup ID` picks one from `gear backups --device
+  sim-<id>`.
+- **The plan** lists the checks (a backup found and readable, the game is not running, the
+  file is there and writable), the rates that change per profile, and a warning that changes
+  made in the game or by a later sync are lost. A digest covers the backup and the file as it is
+  now.
+- **The write:** QuadCam backs up the file as it is now (kept), writes the backup's bytes
+  through a temporary file and a rename, and reads them back byte for byte. A failure puts the
+  file back. A sim that runs is never written.
+
 ## Switch map
 
 The switch map says what each radio control does, position by position. Open a flight
@@ -794,7 +862,9 @@ Anything else is refused with the reason.
    the board and version, the firmware image, the splash markers, the card backup and exactly
    one radio in DFU mode.
 3. Put the radio in DFU mode: turn it off, hold both trims toward the centre, plug in the USB
-   cable. The radio shows no name in DFU mode, so check that it is the radio you picked.
+   cable. The radio shows no name in DFU mode, so check that it is the radio you picked. Once
+   the DFU device is linked to a saved radio (see [What QuadCam finds](#what-quadcam-finds)),
+   the plan refuses a different radio.
 4. Select **Apply**. QuadCam:
    - reads the firmware the radio runs now and keeps it as a backup (**Backups**, file
      `firmware.bin`);
@@ -859,6 +929,8 @@ quadcam-cli gear rates quad.dump_all.txt --text      # every rate profile: names
 quadcam-cli --json gear sims quad.dump_all.txt [--profile N]   # the sims' rates against the quad
 quadcam-cli --json gear sims quad.dump_all.txt --sync --to uncrashed:OUT --to liftoff:Freestyle   # the plan
 quadcam-cli --json gear sims quad.dump_all.txt --sync --to uncrashed:OUT --digest D --yes        # write
+quadcam-cli --json gear sims uncrashed --restore [--backup ID]                              # the plan to put a sim's file back
+quadcam-cli --json gear sims uncrashed --restore [--backup ID] --digest D --yes                   # restore
 quadcam-cli --json gear firmware [--check]           # installed against newest; --check reads the network
 quadcam-cli --json gear splash logo.png [--threshold 128] [--invert] [--board pocket] [--out preview.png]
 quadcam-cli --json gear firmware --plan --device <radio> [--version 2.12.4] [--splash logo.png]   # checks, diff, digest
@@ -891,6 +963,9 @@ quadcam-cli --json gear storage [--prune [--dry-run]] [--export <backup|device> 
 quadcam-cli --json gear import-backups FOLDER [--device ID] [--dry-run]
 quadcam-cli --json gear card-check [--device ID | --mount M] [--log]
 quadcam-cli --json gear card-repair --check <check id> --yes
+quadcam-cli --json gear card-clean [--device ID | --mount M] [--remove --yes]   # list or delete the ._ files macOS left
+quadcam-cli --json gear radio-cli identify|ls|play|beep|reboot|verify [--port P] [--path P] [--device ID] [--yes]   # a radio on USB Serial
+quadcam-cli --json gear dfu-link [--device ID] [--serial S] [--unlink]   # link the radio in DFU mode to a saved radio
 quadcam-cli --json gear stop <handle>                # stop a backup or card check
 quadcam-cli --json gear stage --device <id> --set osd_cap_alarm=1500   # stage; writes nothing
 quadcam-cli --json gear stage --device <id> --cli lines.cli [--title T] # raw CLI lines

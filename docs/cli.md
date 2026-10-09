@@ -162,6 +162,7 @@ quadcam-cli --json gear model DEVICE [--model model01.yml] [--no-staged] [--text
 quadcam-cli --json gear model-edit DEVICE --model model01.yml [--timer 2:name=FLT,minuteBeep=1]... [--timer-off N]... [--screen 1:'{RxBt},Tmr1/{Capa}']... [--screen-script N:NAME]... [--screen-off N]... [--logging SA2:0.5|off] [--log-sensor RxBt=off]... [--rf-alarm 50:40] [--callout lowbat:below:'{RxBt}':3.5:2:5]... [--callout armed:switch:L1:'!1x']... [--callout-off TRACK]... [--checklist-file FILE|-] [--checklist on|off] [--ops FILE]   # stages into the one "Model edits" change; writes nothing to the card
 quadcam-cli --json gear rates FILE [FILE ...]|DEVICE [--backup ID] [--text]   # rate profiles and throttle curve
 quadcam-cli --json gear sims [FILE ...|DEVICE] [--backup ID] [--profile N] [--text]   # sims' rates, against the quad
+quadcam-cli --json gear sims SIM --restore [--backup ID] [--digest D --yes]   # put a sim's file back from a backup (the plan without --digest)
 quadcam-cli --json gear sims FILE|DEVICE [--profile N] --sync --to SIM[:PROFILE][@FILE] [--to ...] [--digest D --yes]   # write the quad's rates into sim profiles
 quadcam-cli --json gear firmware [--check]                    # each device's firmware against the newest release; --check reads the network
 quadcam-cli --json gear splash IMAGE.png [--threshold N] [--invert] [--board pocket] [--out preview.png]   # a PNG as the radio's 128x64 splash; --out writes the 4x preview
@@ -185,6 +186,9 @@ quadcam-cli --json gear storage [--prune [--dry-run]] [--export <backup|device> 
 quadcam-cli --json gear import-backups FOLDER [--device ID] [--dry-run]
 quadcam-cli --json gear card-check [--device ID | --mount M] [--log]
 quadcam-cli --json gear card-repair --check <check id> --yes
+quadcam-cli --json gear card-clean [--device ID | --mount M] [--remove --yes]   # list or delete the ._ files macOS left on a card
+quadcam-cli --json gear radio-cli identify|ls|play|beep|reboot|verify [--port P] [--path P] [--device ID] [--yes]   # a radio on its USB serial port (EdgeTX CLI)
+quadcam-cli --json gear dfu-link [--device ID] [--serial S] [--unlink]   # link the radio in DFU mode to a saved radio
 quadcam-cli --json gear stage --device ID --set NAME=VALUE [--profile N | --rateprofile N] [--title T]   # stage; writes nothing
 quadcam-cli --json gear stage --device ID --cli FILE   # raw CLI lines, no save/exit/defaults
 quadcam-cli --json gear stage --device RADIO_ID --edits FILE.json   # card edits (JSON array)

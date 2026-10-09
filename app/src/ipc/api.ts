@@ -7,7 +7,7 @@ import { open as openDialog, save as saveDialog } from "@tauri-apps/plugin-dialo
 import { openPath, openUrl, revealItemInDir } from "@tauri-apps/plugin-opener";
 import { commands } from "../bindings";
 import * as N from "./normalize";
-import type { ChangeStatus, CopyRequest, Edit, SimFrame, SimPreset, SimStartInfo, SimStartParams, SimStopInfo, CrashSaveParams, ImportOptions, LibEdit, LibraryFilter, Moved, ModelEditParams, ModelParams, PackInstallParams, VoiceChooseParams, VoiceEditParams, VoiceParams, VoicePreviewParams, VoiceRenderParams, OsdEditParams, OsdParams, RatesParams, RatesPreview, RateProfile, FlashParams, SplashParams, SimSyncParams, SimsParams, Pack, PackType, PlanPatch, RemovedCuts, SettingsValues, Span, SwitchMapParams, SimCalibrationSaveParams, CalibrateParams } from "./types";
+import type { ChangeStatus, CopyRequest, Edit, SimFrame, SimPreset, SimStartInfo, SimStartParams, SimStopInfo, CrashSaveParams, ImportOptions, LibEdit, LibraryFilter, Moved, ModelEditParams, ModelParams, PackInstallParams, VoiceChooseParams, VoiceEditParams, VoiceParams, VoicePreviewParams, VoiceRenderParams, OsdEditParams, OsdParams, RatesParams, RatesPreview, RateProfile, FlashParams, SplashParams, SimRestoreParams, SimSyncParams, SimsParams, Pack, PackType, PlanPatch, RemovedCuts, SettingsValues, Span, SwitchMapParams, SimCalibrationSaveParams, CalibrateParams } from "./types";
 
 type Result<T> = Promise<{ status: "ok"; data: T } | { status: "error"; error: string }>;
 
@@ -86,6 +86,7 @@ export const api = {
   gearExport: (to: string, target: { device?: string | null; snapshot?: string | null }) => ok(commands.gearExport({ to, ...target })),
   gearImportBackups: (folder: string, dryRun: boolean, device: string | null = null) => ok(commands.gearImportBackups({ folder, device, dry_run: dryRun })),
   gearCardCheck: (device: string) => ok(commands.gearCardCheck({ device })),
+  gearCardClean: (device: string, remove = false) => ok(commands.gearCardClean({ device, mount: null, remove, confirm: remove })),
   gearCardChecks: (device: string) => ok(commands.gearCardChecks({ device })),
   gearCardRepair: (check: string) => ok(commands.gearCardRepair({ check, confirm: true })),
   gearStop: (handle: string) => ok(commands.gearStop({ handle })),
@@ -131,6 +132,9 @@ export const api = {
   gearSimSyncPlan: (p: SimSyncParams) => ok(commands.gearSimSyncPlan(p)),
   /** The apply sheet's own Apply click for a sim sync: the click is the confirm. */
   gearSimSyncClick: (p: SimSyncParams, digest: string) => ok(commands.gearSimSyncClick({ ...p, digest, confirm: true })),
+  gearSimRestorePlan: (p: SimRestoreParams) => ok(commands.gearSimRestorePlan(p)),
+  /** The apply sheet's own Apply click for a sim restore: the click is the confirm. */
+  gearSimRestoreClick: (p: SimRestoreParams, digest: string) => ok(commands.gearSimRestoreClick({ ...p, digest, confirm: true })),
   gearFirmware: (check: boolean | null = null) => ok(commands.gearFirmware({ check })),
   gearSplash: (p: SplashParams) => ok(commands.gearSplash(p)),
   gearFlashPlan: (p: FlashParams) => ok(commands.gearFlashPlan(p)),

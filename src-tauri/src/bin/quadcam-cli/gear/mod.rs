@@ -106,6 +106,44 @@ pub enum GearCmd {
         #[arg(long)]
         log: bool,
     },
+    /// List the ._ files macOS left on a radio card; --remove --yes deletes them.
+    CardClean {
+        #[arg(long)]
+        device: Option<String>,
+        #[arg(long)]
+        mount: Option<std::path::PathBuf>,
+        #[arg(long)]
+        remove: bool,
+        #[arg(long)]
+        yes: bool,
+    },
+    /// A radio on its USB serial port (EdgeTX CLI): identify, ls, play, beep, reboot, verify.
+    RadioCli {
+        /// identify, ls, play, beep, reboot or verify.
+        action: String,
+        #[arg(long)]
+        port: Option<String>,
+        /// For ls and play: a card path such as /SOUNDS/en/hello.wav.
+        #[arg(long)]
+        path: Option<String>,
+        /// For verify: the saved radio whose latest backup to compare with.
+        #[arg(long)]
+        device: Option<String>,
+        /// For reboot.
+        #[arg(long)]
+        yes: bool,
+    },
+    /// Link the radio in DFU mode to a saved radio (the pick, else the radio seen last).
+    DfuLink {
+        #[arg(long)]
+        device: Option<String>,
+        /// The DFU chip serial; default the one radio in DFU mode.
+        #[arg(long)]
+        serial: Option<String>,
+        /// Remove the link.
+        #[arg(long)]
+        unlink: bool,
+    },
     /// Repair a card whose latest check failed: a backup first, the repair, a check after.
     CardRepair {
         /// The failed check's id.
@@ -214,6 +252,31 @@ pub fn run(core: &Core, cmd: GearCmd) -> Result<Value> {
             dry_run,
         } => backup::import(core, folder, device, dry_run)?,
         GearCmd::CardCheck { device, mount, log } => backup::card_check(core, device, mount, log)?,
+        GearCmd::CardClean {
+            device,
+            mount,
+            remove,
+            yes,
+        } => backup::card_clean(core, device, mount, remove, yes)?,
+        GearCmd::RadioCli {
+            action,
+            port,
+            path,
+            device,
+            yes,
+        } => backup::radio_cli(core, &action, port, path, device, yes)?,
+        GearCmd::DfuLink {
+            device,
+            serial,
+            unlink,
+        } => serde_json::to_value(call::gear_dfu_link(
+            core,
+            api::DfuLinkParams {
+                device,
+                serial,
+                unlink,
+            },
+        )?)?,
         GearCmd::CardRepair { check, yes } => backup::card_repair(core, check, yes)?,
         GearCmd::Changes(a) => changes::changes(core, a)?,
         GearCmd::Stage(a) => changes::stage(core, a)?,

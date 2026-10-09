@@ -56,6 +56,23 @@ test("a failed card check offers a repair, which asks first", async ({ page, app
   expect((await app.method("gear_card_repair"))[0]).toMatchObject({ confirm: true });
 });
 
+test("Clean ._ files lists them, asks, and removes them", async ({ page, app }) => {
+  await app.open("gear");
+  await app.core(`c => { c.gear.appleDoubles = 3; }`);
+  const radio = await radioBackups(page);
+  await radio.getByRole("button", { name: "Clean ._ files" }).click();
+  const ask = dialog(page, "Remove 3 ._ files?");
+  await expect(ask).toContainText("AppleDouble");
+  await ask.getByRole("button", { name: "Remove" }).click();
+  await expect(page.getByText("Removed 3 ._ files.")).toBeVisible();
+  const calls = await app.method("gear_card_clean");
+  expect(calls.map((c) => c.remove)).toEqual([false, true]);
+  expect(calls[1]).toMatchObject({ confirm: true });
+  // Nothing left: the next click only says so.
+  await radio.getByRole("button", { name: "Clean ._ files" }).click();
+  await expect(page.getByText("The card holds no ._ files.")).toBeVisible();
+});
+
 test("Storage: sizes per device, prune after a confirm, import a folder after a dry run", async ({ page, app }) => {
   await app.open("gear");
   await side(page).getByRole("button", { name: /^Storage/ }).click();

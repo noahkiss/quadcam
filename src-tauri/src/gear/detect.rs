@@ -322,11 +322,21 @@ pub fn detect_all(
         let marker = (kind == DeviceKind::Radio)
             .then(|| super::edgetx::card::read_marker(&v.mount))
             .flatten();
+        // Every raw value this card answers to, best first. The first is its id; the rest
+        // are aliases, so a card seen in the built-in slot (hardware serial) is the same
+        // radio when it is seen in the radio's USB Storage mode (volume UUID).
+        let mut raws: Vec<String> = hw.into_iter().chain(marker).chain(uuid.clone()).collect();
+        raws.dedup();
+        let mut ids = raws.iter().map(|raw| device_id(kind, raw));
+        let id = ids.next();
+        let also: Vec<String> = if kind == DeviceKind::Radio {
+            ids.collect()
+        } else {
+            Vec::new()
+        };
         out.push(Connected {
-            id: hw
-                .or(marker)
-                .or_else(|| uuid.clone())
-                .map(|raw| device_id(kind, &raw)),
+            id,
+            also,
             kind,
             link: Link::Volume {
                 mount: v.mount.clone(),
@@ -356,6 +366,7 @@ pub fn detect_all(
             identity: Identity::default(),
             device: None,
             usb: None,
+            also: Vec::new(),
         });
     }
     for d in dfu {
@@ -366,10 +377,12 @@ pub fn detect_all(
                 link: Link::Dfu {
                     vid: d.vid,
                     pid: d.pid,
+                    serial: d.serial.clone(),
                 },
                 identity: Identity::default(),
                 device: None,
                 usb: None,
+                also: Vec::new(),
             });
         }
     }

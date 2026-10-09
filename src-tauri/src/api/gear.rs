@@ -11,20 +11,21 @@ pub use crate::core::{
     ImportBackupsParams, PruneParams, RepairResult, StopParams,
 };
 pub use crate::core::{
-    BoardNotesParams, CardParams, CardPreview, CardPreviewParams, DeviceSaveParams, FcJob,
-    FcPortParams, FcReadParams, GearCard, GearStatus, OsdParams, PollPauseParams, RadioParams,
-    RadioWatchParams, RatesParams, RatesPreview, RatesPreviewParams, ReminderParams, SimsParams,
-    SwitchMapParams, UsbTimer,
+    BoardNotesParams, CardClean, CardCleanParams, CardParams, CardPreview, CardPreviewParams,
+    DeviceSaveParams, FcJob, FcPortParams, FcReadParams, GearCard, GearStatus, OsdParams,
+    PollPauseParams, RadioParams, RadioWatchParams, RatesParams, RatesPreview, RatesPreviewParams,
+    ReminderParams, SimsParams, SwitchMapParams, UsbTimer,
 };
 pub use crate::core::{
     CalibrateParams, CalibrateView, SimCalibration, SimCalibrationParams, SimCalibrationSaveParams,
     SimDefaultsParams, SimValidateParams,
 };
 pub use crate::core::{
-    CardMountParams, CardMounted, ChangeUpdateParams, CopyParams, ModelDetail, ModelEditParams,
-    ModelParams, OsdEditParams, PackInstallParams, RenderReport, RestoreParams, StageParams,
-    VoiceChooseParams, VoiceEditParams, VoiceLine, VoicePack, VoiceParams, VoicePreviewParams,
-    VoiceRenderParams, VoiceView,
+    CardMountParams, CardMounted, ChangeUpdateParams, CopyParams, DfuLinkParams, DfuLinked,
+    ModelDetail, ModelEditParams, ModelParams, OsdEditParams, PackInstallParams, RadioCliAction,
+    RadioCliParams, RadioCliReport, RadioMatch, RadioVerify, RenderReport, RestoreParams,
+    SimRestoreParams, SimRestoreRequest, StageParams, VoiceChooseParams, VoiceEditParams,
+    VoiceLine, VoicePack, VoiceParams, VoicePreviewParams, VoiceRenderParams, VoiceView,
 };
 pub use crate::core::{
     CrashSaveParams, FlightFilter, FlightFoldersParams, FlightReport, FlightSetParams, FlightsView,
@@ -116,6 +117,10 @@ macro_rules! with_gear_rows {
             /// Refuses while a game runs. Needs the plan's digest and confirm=true; with the
             /// app running the person also clicks Apply in its sheet.
             gear_sim_sync(params: SimSyncRequest) -> ApplyReport = |c| c.gear_sim_sync(&params);
+            /// What putting a sim's file back from a backup would write: the checks, the rates that change, a warning and a digest. Writes nothing.
+            gear_sim_restore_plan(params: SimRestoreParams) -> ApplyPlan = |c| c.gear_sim_restore_plan(&params);
+            /// Puts a sim's rate file back from a backup. Needs the plan's digest and confirm; the current file is backed up first.
+            gear_sim_restore(params: SimRestoreRequest) -> ApplyReport = |c| c.gear_sim_restore(&params);
             /// Each saved device's firmware against the newest release (EdgeTX, Betaflight,
             /// ExpressLRS). Reads the network only when `check` is true, or unset with
             /// `firmwareCheck` set to `daily` and the last answer a day old.
@@ -231,6 +236,12 @@ macro_rules! with_gear_rows {
             gear_export(params: ExportParams) -> ExportReport = |c| c.gear_export(&params);
             /// Imports an old backup folder: card copies, FC diff and dump files, LOGS folders.
             gear_import_backups(params: ImportBackupsParams) -> ImportBackupsReport = |c| c.gear_import_backups(&params);
+            /// Links the radio in DFU mode to a saved radio (the pick, else the radio seen last), or removes the link.
+            gear_dfu_link(params: DfuLinkParams) -> DfuLinked = |c| c.gear_dfu_link(&params);
+            /// A radio on its USB serial port (EdgeTX CLI): identify, ls, play, beep, reboot, or verify the card's files against a backup.
+            gear_radio_cli(params: RadioCliParams) -> RadioCliReport = |c| c.gear_radio_cli(&params);
+            /// Lists the ._ files macOS left on a card; with remove and confirm, deletes them.
+            gear_card_clean(params: CardCleanParams) -> CardClean = |c| c.gear_card_clean(&params);
             /// Checks a card's file system (diskutil verifyVolume) and logs the result.
             gear_card_check(params: CardCheckParams) -> CardCheck = |c| c.gear_card_check(&params);
             /// A card's checks, newest first.

@@ -40,6 +40,11 @@ pub struct SimsArgs {
     /// `--digest D --yes` it backs up each file, writes it and reads it back.
     #[arg(long)]
     pub sync: bool,
+    /// Put a sim's file back from a backup: `gear sims --restore SIM [--backup ID]`. Without
+    /// `--digest` it only prints the plan; with `--digest D --yes` it backs the current file
+    /// up, writes the backup's bytes and reads them back.
+    #[arg(long)]
+    pub restore: bool,
     /// A sim profile to overwrite, `SIM[:PROFILE][@FILE]`: `liftoff:Freestyle`, `uncrashed:OUT`,
     /// or `all` (each sim's profile named like the quad's). Repeat for several.
     #[arg(long = "to")]
@@ -118,7 +123,33 @@ fn sync(core: &Core, a: SimsArgs) -> Result<Value> {
     )?)?)
 }
 
+fn restore(core: &Core, a: SimsArgs) -> Result<Value> {
+    let [sim] = a.target.as_slice() else {
+        anyhow::bail!("Name one sim to restore: liftoff, micro, uncrashed or zone.");
+    };
+    let params = api::SimRestoreParams {
+        sim: sim.clone(),
+        backup: a.backup,
+    };
+    let Some(digest) = a.digest else {
+        return Ok(serde_json::to_value(call::gear_sim_restore_plan(
+            core, params,
+        )?)?);
+    };
+    Ok(serde_json::to_value(call::gear_sim_restore(
+        core,
+        api::SimRestoreRequest {
+            params,
+            digest,
+            confirm: a.yes,
+        },
+    )?)?)
+}
+
 pub fn sims(core: &Core, a: SimsArgs) -> Result<Value> {
+    if a.restore {
+        return restore(core, a);
+    }
     if a.sync {
         return sync(core, a);
     }

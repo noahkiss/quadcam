@@ -4,14 +4,16 @@
 // another profile, another quad or a sim's profile; the sims' own rates are listed with
 // "Matches the quad" or "Differs from the quad". On a saved FC, Edit changes a profile with the
 // curves redrawing live and stages the change (the apply sheet writes it), and each sim profile
-// has a Sync button that opens the apply sheet on a plan to write the quad's rates into it.
+// has a Sync button that opens the apply sheet on a plan to write the quad's rates into it. A sim
+// QuadCam backed up shows when, with Restore backup: the same sheet, on a plan to put the file back.
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Banner } from "../../../components/Banner";
 import { Button } from "../../../components/Button";
 import { Chip } from "../../../components/Chip";
 import { SegmentedControl } from "../../../components/SegmentedControl";
 import { api, errText, pickFiles } from "../../../ipc/api";
-import type { RateProfile, RatesView, SimRates } from "../../../ipc/types";
+import type { BackupSummary, RateProfile, RatesView, SimRates } from "../../../ipc/types";
+import { fmtWhen } from "../../../lib/backups";
 import {
   AXIS_LABEL,
   LIMIT_LABEL,
@@ -288,6 +290,21 @@ export function RatesSegment({ paths: initial = [], device = null }: Props) {
 
 function SimList({ sims, error, profile, quad }: { sims: SimRates[]; error: string | null; profile: RateProfile; quad: { paths: string[]; device: string | null } }) {
   const sync = useStore((s) => s.openSimSync);
+  const restore = useStore((s) => s.openSimRestore);
+  const applyOpen = useStore((s) => !!s.applySheet);
+  // The newest backup QuadCam took of each sim's file, read again when a sheet closes.
+  const [backups, setBackups] = useState<Record<string, BackupSummary | undefined>>({});
+  const ids = sims.map((s) => s.id).join(",");
+  useEffect(() => {
+    if (applyOpen || !ids) return;
+    let gone = false;
+    Promise.all(ids.split(",").map((id) => api.gearBackups(`sim-${id}`).then((l) => [id, l[l.length - 1]] as const, () => [id, undefined] as const))).then((all) => {
+      if (!gone) setBackups(Object.fromEntries(all));
+    });
+    return () => {
+      gone = true;
+    };
+  }, [ids, applyOpen]);
   if (error) {
     return (
       <Banner kind="error" icon="danger-triangle" tint="red">
@@ -309,6 +326,14 @@ function SimList({ sims, error, profile, quad }: { sims: SimRates[]; error: stri
               <strong>{s.name}</strong>
               <Chip kind={s.in_sync === false ? "accent" : "plain"}>{simState(s)}</Chip>
               {s.running && <Chip>Running</Chip>}
+              {backups[s.id] && (
+                <>
+                  <span className={styles.meta}>Backed up {fmtWhen(backups[s.id]!.taken_at)}</span>
+                  <Button variant="ghost" disabled={s.running} aria-label={`Restore ${s.name} from its backup`} onClick={() => void restore({ sim: s.id, backup: null })}>
+                    Restore backup
+                  </Button>
+                </>
+              )}
             </div>
             {s.note && <p className={styles.meta}>{s.note}</p>}
             {s.files.map((f) => (

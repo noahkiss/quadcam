@@ -14,6 +14,7 @@
 //! code (EdgeTX is GPL-2.0; QuadCam is MIT).
 
 pub mod card;
+pub mod cli;
 pub mod editors;
 pub mod model;
 pub mod synth;

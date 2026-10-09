@@ -1093,6 +1093,84 @@ pub fn remove_apple_double(dir: &Path, name: &str) {
     }
 }
 
+/// True when the file at `p` starts with the AppleDouble magic.
+fn is_apple_double(p: &Path) -> bool {
+    std::fs::File::open(p)
+        .and_then(|mut f| {
+            let mut b = [0u8; 4];
+            std::io::Read::read_exact(&mut f, &mut b).map(|_| b)
+        })
+        .is_ok_and(|b| b == APPLE_DOUBLE_MAGIC)
+}
+
+/// An AppleDouble file found on a card.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Type)]
+pub struct AppleDoubleFile {
+    /// Path from the card's root (`MODELS/._model01.yml`).
+    pub path: String,
+    pub bytes: u64,
+}
+
+/// Every `._*` file under `root` that starts with the AppleDouble magic, by path. A file
+/// named `._x` that is not AppleDouble is not listed: it is someone's file. Links are not
+/// followed, and the folders macOS keeps (`.fseventsd`, `.Spotlight-V100`, `.Trashes`)
+/// are skipped.
+pub fn find_apple_double(root: &Path) -> Vec<AppleDoubleFile> {
+    fn walk(root: &Path, dir: &Path, depth: usize, out: &mut Vec<AppleDoubleFile>) {
+        let Ok(rd) = std::fs::read_dir(dir) else {
+            return;
+        };
+        for e in rd.flatten() {
+            let Ok(ft) = e.file_type() else { continue };
+            if ft.is_symlink() {
+                continue;
+            }
+            let name = e.file_name().to_string_lossy().to_string();
+            if ft.is_dir() {
+                if depth < 8
+                    && !matches!(name.as_str(), ".fseventsd" | ".Spotlight-V100" | ".Trashes")
+                {
+                    walk(root, &e.path(), depth + 1, out);
+                }
+            } else if name.starts_with("._") && is_apple_double(&e.path()) {
+                let rel = e.path().strip_prefix(root).map(Path::to_path_buf);
+                out.push(AppleDoubleFile {
+                    path: rel
+                        .unwrap_or_else(|_| e.path())
+                        .to_string_lossy()
+                        .replace('\\', "/"),
+                    bytes: e.metadata().map(|m| m.len()).unwrap_or(0),
+                });
+            }
+        }
+    }
+    let mut out = Vec::new();
+    walk(root, root, 0, &mut out);
+    out.sort_by(|a, b| a.path.cmp(&b.path));
+    out
+}
+
+/// Removes the AppleDouble files `find_apple_double` listed, under a timeout (a radio over
+/// USB is slow and a pulled radio can wedge macOS). Returns how many it removed. A file
+/// that is no longer AppleDouble is left alone.
+pub fn remove_apple_doubles(
+    root: &Path,
+    files: &[AppleDoubleFile],
+    timeout: Duration,
+) -> Result<usize> {
+    let (root, files) = (root.to_path_buf(), files.to_vec());
+    with_timeout(timeout, "removing the ._ files", move || {
+        let mut n = 0;
+        for f in &files {
+            let p = root.join(&f.path);
+            if is_apple_double(&p) && std::fs::remove_file(&p).is_ok() {
+                n += 1;
+            }
+        }
+        Ok(n)
+    })
+}
+
 /// Puts a plan on the card at `root`. Runs every guard again first: the plan is ready,
 /// writes are allowed here, and each file still holds the bytes the plan read. Then
 /// `backup` gets every touched file that exists (path, bytes); a failed backup writes

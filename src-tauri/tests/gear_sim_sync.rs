@@ -804,3 +804,192 @@ fn the_rows_and_the_mcp_actions_need_the_digest_and_confirm() {
         .unwrap()
         .contains("confirm=true"));
 }
+
+// ----- the restore -----
+
+use quadcam_lib::core::{SimRestoreParams, SimRestoreRequest};
+
+fn restore_params(sim: &str) -> SimRestoreParams {
+    SimRestoreParams {
+        sim: sim.into(),
+        backup: None,
+    }
+}
+
+fn restore_request(p: &SimRestoreParams, plan: &ApplyPlan) -> SimRestoreRequest {
+    SimRestoreRequest {
+        params: p.clone(),
+        digest: plan.digest.clone(),
+        confirm: true,
+    }
+}
+
+/// Syncs Liftoff's Race profile in a fresh home; returns the file's bytes before.
+fn synced(c: &Core, h: &Path, paths: &Paths) -> Vec<u8> {
+    let before = std::fs::read(&paths.liftoff).unwrap();
+    let p = params(vec![target("liftoff", "Race")], 0);
+    let plan = c.gear_sim_sync_plan_at(&p, h, &never).unwrap();
+    let r = c
+        .sim_sync_at(&request(p, &plan, true), true, h, &never)
+        .unwrap();
+    assert_eq!(r.status, ChangeStatus::Verified, "{}", r.message);
+    assert_ne!(std::fs::read(&paths.liftoff).unwrap(), before);
+    before
+}
+
+#[test]
+fn a_restore_without_a_backup_or_for_an_unknown_sim_says_so() {
+    let dir = tempfile::tempdir().unwrap();
+    let (h, _) = home();
+    let c = core(dir.path());
+    let plan = c
+        .gear_sim_restore_plan_at(&restore_params("liftoff"), h.path(), &never)
+        .unwrap();
+    assert!(!plan.ready());
+    assert_eq!(
+        plan.checks[0].refusal.as_ref().unwrap().code,
+        RefusalCode::NoBackup
+    );
+    assert!(plan.digest.is_empty());
+    let e = c
+        .gear_sim_restore_plan_at(&restore_params("nosuchsim"), h.path(), &never)
+        .unwrap_err();
+    assert!(format!("{e:#}").contains("not a sim QuadCam knows"));
+}
+
+#[test]
+fn a_restore_puts_the_synced_file_back_and_can_be_undone() {
+    let dir = tempfile::tempdir().unwrap();
+    let (h, paths) = home();
+    let c = core(dir.path());
+    let before = synced(&c, h.path(), &paths);
+    let after_sync = std::fs::read(&paths.liftoff).unwrap();
+
+    let p = restore_params("liftoff");
+    let plan = c.gear_sim_restore_plan_at(&p, h.path(), &never).unwrap();
+    assert!(plan.ready(), "{:?}", plan.checks);
+    assert!(!plan.digest.is_empty());
+    assert!(plan
+        .warnings
+        .iter()
+        .any(|w| w.contains("Changes made in the game")));
+    let text = serde_json::to_string(&plan.diff).unwrap();
+    assert!(text.contains("Profile Race"), "{text}");
+    assert_eq!(
+        std::fs::read(&paths.liftoff).unwrap(),
+        after_sync,
+        "a plan writes nothing"
+    );
+
+    // No confirm, no write; a wrong digest refuses.
+    let mut no = restore_request(&p, &plan);
+    no.confirm = false;
+    let e = c.sim_restore_at(&no, true, h.path(), &never).unwrap_err();
+    assert!(format!("{e:#}").contains("confirm=true"));
+    let mut bad = restore_request(&p, &plan);
+    bad.digest = "nope".into();
+    let e = c.sim_restore_at(&bad, true, h.path(), &never).unwrap_err();
+    assert_eq!(refused(&e), RefusalCode::BeforeMismatch);
+    assert_eq!(std::fs::read(&paths.liftoff).unwrap(), after_sync);
+
+    let r = c
+        .sim_restore_at(&restore_request(&p, &plan), true, h.path(), &never)
+        .unwrap();
+    assert_eq!(r.status, ChangeStatus::Verified, "{}", r.message);
+    assert_eq!(
+        std::fs::read(&paths.liftoff).unwrap(),
+        before,
+        "the original bytes are back"
+    );
+    for name in ["Back up Liftoff", "Write Liftoff", "Read back Liftoff"] {
+        assert!(r.steps.iter().any(|s| s.name == name), "{name}");
+    }
+
+    // The file as it was just before the restore is kept: restoring again undoes it.
+    let list = c
+        .gear_backups(&BackupFilter {
+            device: Some("sim-liftoff".into()),
+        })
+        .unwrap();
+    assert_eq!(list.len(), 2);
+    let undo = c.gear_sim_restore_plan_at(&p, h.path(), &never).unwrap();
+    assert!(undo.ready());
+    let r = c
+        .sim_restore_at(&restore_request(&p, &undo), true, h.path(), &never)
+        .unwrap();
+    assert_eq!(r.status, ChangeStatus::Verified);
+    assert_eq!(std::fs::read(&paths.liftoff).unwrap(), after_sync);
+}
+
+#[test]
+fn a_restore_names_its_backup_and_refuses_one_that_is_not_the_sims() {
+    let dir = tempfile::tempdir().unwrap();
+    let (h, paths) = home();
+    let c = core(dir.path());
+    let before = synced(&c, h.path(), &paths);
+    let list = c
+        .gear_backups(&BackupFilter {
+            device: Some("sim-liftoff".into()),
+        })
+        .unwrap();
+    let p = SimRestoreParams {
+        sim: "liftoff".into(),
+        backup: Some(list[0].id.clone()),
+    };
+    let plan = c.gear_sim_restore_plan_at(&p, h.path(), &never).unwrap();
+    assert!(plan.ready());
+    c.sim_restore_at(&restore_request(&p, &plan), true, h.path(), &never)
+        .unwrap();
+    assert_eq!(std::fs::read(&paths.liftoff).unwrap(), before);
+    // Now the file equals that backup: nothing to restore.
+    let again = c.gear_sim_restore_plan_at(&p, h.path(), &never).unwrap();
+    assert!(again
+        .checks
+        .iter()
+        .any(|k| k.name == "Something differs" && !k.ok));
+    // A backup of another device is not this sim's.
+    let other = SimRestoreParams {
+        sim: "uncrashed".into(),
+        backup: Some(list[0].id.clone()),
+    };
+    let plan = c
+        .gear_sim_restore_plan_at(&other, h.path(), &never)
+        .unwrap();
+    assert!(!plan.ready());
+}
+
+#[test]
+fn a_restore_refuses_while_the_sim_runs_or_when_the_file_changed() {
+    let dir = tempfile::tempdir().unwrap();
+    let (h, paths) = home();
+    let c = core(dir.path());
+    synced(&c, h.path(), &paths);
+    let p = restore_params("liftoff");
+    let running = |n: &str| n == sim_of("liftoff").process();
+    let plan = c.gear_sim_restore_plan_at(&p, h.path(), &running).unwrap();
+    assert!(plan
+        .checks
+        .iter()
+        .any(|k| !k.ok && k.refusal.as_ref().unwrap().code == RefusalCode::SimRunning));
+
+    let plan = c.gear_sim_restore_plan_at(&p, h.path(), &never).unwrap();
+    let e = c
+        .sim_restore_at(&restore_request(&p, &plan), true, h.path(), &running)
+        .unwrap_err();
+    assert_eq!(refused(&e), RefusalCode::SimRunning);
+
+    // The file changed after the plan.
+    let mut bytes = std::fs::read(&paths.liftoff).unwrap();
+    bytes.extend_from_slice(b"\n<!-- edited -->");
+    std::fs::write(&paths.liftoff, &bytes).unwrap();
+    let e = c
+        .sim_restore_at(&restore_request(&p, &plan), true, h.path(), &never)
+        .unwrap_err();
+    assert_eq!(refused(&e), RefusalCode::BeforeMismatch);
+    assert_eq!(std::fs::read(&paths.liftoff).unwrap(), bytes);
+
+    // The file is gone: the plan refuses.
+    std::fs::remove_file(&paths.liftoff).unwrap();
+    let plan = c.gear_sim_restore_plan_at(&p, h.path(), &never).unwrap();
+    assert!(!plan.ready());
+}
