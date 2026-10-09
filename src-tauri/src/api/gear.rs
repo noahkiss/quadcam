@@ -19,7 +19,9 @@ pub use crate::core::{
     CalibrateParams, CalibrateView, SimCalibration, SimCalibrationParams, SimCalibrationSaveParams,
     SimDefaultsParams, SimValidateParams,
 };
-pub use crate::core::{ChangeUpdateParams, RestoreParams, StageParams};
+pub use crate::core::{
+    CardMountParams, CardMounted, ChangeUpdateParams, CopyParams, RestoreParams, StageParams,
+};
 pub use crate::core::{
     CrashSaveParams, FlightFilter, FlightFoldersParams, FlightReport, FlightSetParams, FlightsView,
     NotesParams, PackSaveParams, PacksParams, ReportParams, ReportSaveParams, ReportSaved,
@@ -31,6 +33,7 @@ pub use crate::gear::backup::{
 pub use crate::gear::bf::boards::BoardNote;
 pub use crate::gear::bf::{FcInfo, FcRead};
 pub use crate::gear::changes::ChangeFilter;
+pub use crate::gear::copy::CopyPlan;
 pub use crate::gear::crashes::{Crash, CrashFilter};
 pub use crate::gear::health::CardCheck;
 pub use crate::gear::model::Device;
@@ -180,10 +183,24 @@ macro_rules! with_gear_rows {
             /// Runs every guard for a staged change and builds its diff and digest. Writes
             /// nothing and does not reboot the FC.
             gear_apply_plan(params: ApplyPlanParams) -> ApplyPlan = |c| c.gear_apply_plan(&params);
-            /// Applies a staged change to the FC: backup, write, save, read back, verify.
-            /// Needs the plan's digest and confirm=true; with the app running the person also
-            /// clicks Apply in its sheet.
+            /// Applies a staged change to an FC or a radio card: backup, write, read back,
+            /// verify; a card is mounted for it and unmounted after. Needs the plan's digest
+            /// and confirm=true; with the app running the person also clicks Apply in its sheet.
             gear_apply(params: ApplyRequest) -> ApplyReport = |c| c.gear_apply(&params);
+            /// Keeps an applied Try change.
+            gear_change_keep(params: IdParams) -> StagedChange = |c| c.gear_change_keep(&params.id);
+            /// Stages a restore of the backup an applied change took; the change becomes
+            /// Reverted when that restore verifies.
+            gear_change_revert(params: IdParams) -> StagedChange = |c| c.gear_change_revert(&params.id);
+            /// What copying settings from one FC's backup to another would stage: checks, diff.
+            gear_copy_plan(params: CopyParams) -> CopyPlan = |c| c.gear_copy_plan(&params);
+            /// Stages the copy as one change for the target FC.
+            gear_copy_stage(params: CopyParams) -> StagedChange = |c| c.gear_copy_stage(&params);
+            /// Mounts an unmounted radio card for the person to browse; it unmounts again
+            /// after the minutes given (10 by default) or on gear_card_unmount.
+            gear_card_mount(params: CardMountParams) -> CardMounted = |c| c.gear_card_mount(&params);
+            /// Unmounts a radio card (Done) and plays the safe-to-unplug cue.
+            gear_card_unmount(params: CardMountParams) -> bool = |c| c.gear_card_unmount(&params).map(|_| true);
             /// Stops a running backup or card check on a link. True when one was running.
             gear_stop(params: StopParams) -> bool = |c| Ok(c.gear_stop(&params.handle));
         }

@@ -41,6 +41,7 @@ pub mod bf;
 pub mod blobs;
 pub mod changes;
 pub mod compat;
+pub mod copy;
 pub mod crashes;
 pub mod cues;
 pub mod detect;
@@ -202,6 +203,9 @@ pub type HoldersFn = Arc<dyn Fn(&str) -> Vec<(u32, String)> + Send + Sync>;
 /// Unmounts a whole disk (`disk4`).
 pub type UnmountFn = Arc<dyn Fn(&str) -> anyhow::Result<()> + Send + Sync>;
 
+/// Mounts a whole disk (`disk4`) that an earlier job unmounted.
+pub type MountFn = Arc<dyn Fn(&str) -> anyhow::Result<()> + Send + Sync>;
+
 /// What Gear reaches outside the process. The real one lists `/Volumes`, the system's
 /// serial ports and what is still plugged in (none under cargo, see `serial`), and plays
 /// cues (silent under cargo, see `cues`); tests pass synthetic volumes and fakes.
@@ -221,6 +225,10 @@ pub struct Env {
     pub cues: Arc<cues::CueService>,
     /// Unmounts a card's whole disk (`disk4`) under a timeout (`edgetx::card::release`).
     pub unmount: UnmountFn,
+    /// Mounts a card's whole disk again (`edgetx::card::attach`) for a job or for the person.
+    pub mount: MountFn,
+    /// Tests: a card path whose read-back counts as a mismatch (`WriteOptions.fail_readback`).
+    pub fail_readback: Option<String>,
     /// Runs `diskutil` for the card check and repair (`health`).
     pub disk: Arc<dyn health::DiskRunner>,
     /// The other processes that have a serial port open, as `(pid, name)`.
@@ -239,6 +247,8 @@ impl Env {
             usb: Arc::new(detect::usb_storage),
             cues: Arc::new(cues::CueService::system()),
             unmount: Arc::new(|d| edgetx::card::release(d, edgetx::card::UNMOUNT_TIMEOUT)),
+            mount: Arc::new(|d| edgetx::card::attach(d, edgetx::card::UNMOUNT_TIMEOUT)),
+            fail_readback: None,
             disk: health::system(),
             holders: Arc::new(serial::other_holders),
         }
@@ -258,6 +268,8 @@ impl Env {
                 cues::RecordedCues::default(),
             ))),
             unmount: Arc::new(|_| Ok(())),
+            mount: Arc::new(|_| Ok(())),
+            fail_readback: None,
             disk: Arc::new(health::FakeDisk::ok()),
             holders: Arc::new(|_| Vec::new()),
         }

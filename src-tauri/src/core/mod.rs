@@ -14,7 +14,9 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 
 mod apply;
+mod apply_card;
 mod backup;
+mod bench;
 mod cuts;
 mod fc;
 mod files;
@@ -33,11 +35,13 @@ mod sim_host;
 mod switchmap;
 pub use crate::paths::{cache_dir, default_session_file, default_settings_file, support_dir};
 pub use apply::{ChangeUpdateParams, RestoreParams, StageParams};
+pub use apply_card::{CardMountParams, CardMounted, MOUNT_MINUTES};
 pub use backup::{
     backup_hooks, BackupDiffParams, BackupFilter, BackupParams, BackupPinParams, BackupReadParams,
     BackupResult, BackupSummary, CardCheckParams, CardChecksParams, CardRepairParams, ExportParams,
     GearJob, ImportBackupsParams, PruneParams, RepairResult, StopParams,
 };
+pub use bench::{apply_ready_hooks, CopyParams};
 pub use fc::{
     BoardNotesParams, FcJob, FcPortParams, FcReadParams, PollPauseParams, UsbTimer, USB_PROBE,
 };
@@ -271,6 +275,12 @@ pub struct Core {
     gear_touched: Mutex<std::collections::HashSet<String>>,
     /// The last failed step per link, for the device page (`GearStatus.failures`).
     gear_failures: Mutex<std::collections::HashMap<String, gear::StepFailure>>,
+    /// Cards unmounted but still plugged in, by device id (`core/apply_card.rs`).
+    gear_released: Mutex<std::collections::HashMap<String, crate::gear::model::Connected>>,
+    /// Cards the person mounted: when each unmounts.
+    gear_mounted_for_user: Mutex<
+        std::collections::HashMap<String, (std::time::Instant, chrono::DateTime<chrono::Utc>)>,
+    >,
 }
 
 struct Busy<'a>(&'a AtomicBool);
@@ -322,6 +332,8 @@ impl Core {
             gear_jobs: Mutex::default(),
             gear_touched: Mutex::default(),
             gear_failures: Mutex::default(),
+            gear_released: Mutex::default(),
+            gear_mounted_for_user: Mutex::default(),
         }
     }
 

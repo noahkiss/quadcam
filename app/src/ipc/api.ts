@@ -7,7 +7,7 @@ import { open as openDialog, save as saveDialog } from "@tauri-apps/plugin-dialo
 import { openPath, openUrl, revealItemInDir } from "@tauri-apps/plugin-opener";
 import { commands } from "../bindings";
 import * as N from "./normalize";
-import type { Edit, SimFrame, SimPreset, SimStartInfo, SimStartParams, SimStopInfo, CrashSaveParams, ImportOptions, LibEdit, LibraryFilter, Moved, OsdParams, Pack, PackType, PlanPatch, RemovedCuts, SettingsValues, Span, SwitchMapParams, SimCalibrationSaveParams, CalibrateParams } from "./types";
+import type { ChangeStatus, CopyRequest, Edit, SimFrame, SimPreset, SimStartInfo, SimStartParams, SimStopInfo, CrashSaveParams, ImportOptions, LibEdit, LibraryFilter, Moved, OsdParams, Pack, PackType, PlanPatch, RemovedCuts, SettingsValues, Span, SwitchMapParams, SimCalibrationSaveParams, CalibrateParams } from "./types";
 
 type Result<T> = Promise<{ status: "ok"; data: T } | { status: "error"; error: string }>;
 
@@ -92,7 +92,14 @@ export const api = {
   gearChanges: (device: string | null = null, history = false) => ok(commands.gearChanges({ device, status: null, history })),
   gearChangeStage: (device: string, edits: Edit[], title: string | null = null) => ok(commands.gearChangeStage({ device, title, edits, note: null, editor: null, draft: false })),
   gearChangeDiscard: (id: string) => ok(commands.gearChangeDiscard({ id })),
-  gearRestoreStage: (backup: string) => ok(commands.gearRestoreStage({ backup, paths: [], editor: null })),
+  gearRestoreStage: (backup: string, paths: string[] = []) => ok(commands.gearRestoreStage({ backup, paths, editor: null })),
+  gearChangeSetStatus: (id: string, status: ChangeStatus) => ok(commands.gearChangeUpdate({ id, title: null, edits: null, status, note: null, order: null })),
+  gearChangeKeep: (id: string) => ok(commands.gearChangeKeep({ id })),
+  gearChangeRevert: (id: string) => ok(commands.gearChangeRevert({ id })),
+  gearCopyPlan: (p: CopyRequest) => ok(commands.gearCopyPlan({ ...p, editor: null })),
+  gearCopyStage: (p: CopyRequest) => ok(commands.gearCopyStage({ ...p, editor: null })),
+  gearCardMount: (device: string, minutes: number | null = null) => ok(commands.gearCardMount({ device, minutes })),
+  gearCardUnmount: (device: string) => ok(commands.gearCardUnmount({ device, minutes: null })),
   gearApplyPlan: (id: string) => ok(commands.gearApplyPlan({ id, port: null })),
   /** The apply sheet's own Apply click: the click is the confirm. */
   gearApplyClick: (id: string, digest: string) => ok(commands.gearApplyClick({ id, digest, confirm: true, port: null })),

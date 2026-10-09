@@ -41,6 +41,7 @@ const DISPATCH = new Set([
   "gear_backup", "gear_backups", "gear_backup_read", "gear_backup_diff", "gear_backup_pin", "gear_storage", "gear_prune",
   "gear_export", "gear_import_backups", "gear_card_check", "gear_card_checks", "gear_card_repair", "gear_stop",
   "gear_changes", "gear_change_stage", "gear_change_update", "gear_change_discard", "gear_restore_stage", "gear_apply_plan", "gear_apply",
+  "gear_change_keep", "gear_change_revert", "gear_copy_plan", "gear_copy_stage", "gear_card_mount", "gear_card_unmount",
 ]);
 
 export type Scenario = "library" | "empty" | "card" | "review" | "joined" | "finished-card" | "dji" | "no-tools" | "many" | "gear";
@@ -177,12 +178,8 @@ export class MockCore {
       case "answer_format_request":
         this.formatAnswers.push({ id: Number(args.id), approve: !!args.approve });
         return null;
-      case "gear_apply_click": {
-        const q = p as { id: string; digest: string };
-        const r = changes.apply(this.gear, q.id, q.digest);
-        this.emit("gear-changed");
-        return r;
-      }
+      case "gear_apply_click":
+        return this.applied((p as { id: string }).id, (p as { digest: string }).digest);
       case "answer_apply_request":
         this.applyAnswers.push({ id: Number(args.id), approve: !!args.approve });
         return null;
@@ -387,18 +384,29 @@ export class MockCore {
       case "gear_changes":
         return changes.list(this.gear, (p.device as string | null) ?? null, !!p.history);
       case "gear_change_stage":
-        return this.gearChanged(changes.stage(this.gear, String(p.device), p.edits as never, (p.title as string | null) ?? null, (p.editor as "agent" | null) ?? "user"));
+        return this.gearChanged(changes.stage(this.gear, String(p.device), p.edits as never, (p.title as string | null) ?? null, (p.editor as "agent" | null) ?? "user", null, !!p.draft));
+      case "gear_change_update":
+        return this.gearChanged(changes.update(this.gear, p as never));
       case "gear_change_discard":
         return this.gearChanged(changes.discard(this.gear, String(p.id)));
       case "gear_restore_stage":
-        return this.gearChanged(changes.restoreStage(this.gear, String(p.backup)));
+        return this.gearChanged(changes.restoreStage(this.gear, String(p.backup), (p.paths as string[] | undefined) ?? []));
       case "gear_apply_plan":
         return changes.plan(this.gear, String(p.id));
-      case "gear_apply": {
-        const r = changes.apply(this.gear, String(p.id), String(p.digest));
-        this.emit("gear-changed");
-        return r;
-      }
+      case "gear_apply":
+        return this.applied(String(p.id), String(p.digest));
+      case "gear_change_keep":
+        return this.gearChanged(changes.keep(this.gear, String(p.id)));
+      case "gear_change_revert":
+        return this.gearChanged(changes.revert(this.gear, String(p.id), this.gear.changeStore.reports[String(p.id)] ?? null));
+      case "gear_copy_plan":
+        return changes.copyPlan(this.gear, p as never);
+      case "gear_copy_stage":
+        return this.gearChanged(changes.copyStage(this.gear, p as never, (p.editor as "agent" | null) ?? "user"));
+      case "gear_card_mount":
+        return this.cardMount(String(p.device), (p.minutes as number | null) ?? null);
+      case "gear_card_unmount":
+        return this.cardUnmount(String(p.device));
       case "gear_stop":
         return this.gear.jobs.some((j) => j.handle === p.handle);
       case "gear_osd": {
@@ -467,6 +475,44 @@ export class MockCore {
     return structuredClone(v);
   }
 
+  /** An apply: a radio card is unmounted when it ends (its job ends with `unmountDisk`), so
+   *  it moves from plugged in to unmounted but still in. */
+  private applied(id: string, digest: string) {
+    const r = changes.apply(this.gear, id, digest);
+    const dev = this.gear.devices.find((d) => d.id === r.device);
+    const card = dev?.kind === "radio" ? this.gear.connected.find((c) => c.id === dev.id) : undefined;
+    if (card) {
+      this.gear.mounted = this.gear.mounted.filter((m) => m.device !== dev!.id);
+      this.plug(this.gear.connected.filter((c) => c !== card), [card]);
+    }
+    this.emit("gear-changed");
+    return r;
+  }
+
+  /** `Core::gear_card_mount`: an unmounted card mounts for the person to browse. */
+  private cardMount(device: string, minutes: number | null) {
+    const un = this.gear.unmounted.find((c) => c.id === device);
+    const here = this.gear.connected.find((c) => c.id === device);
+    if (!un && !here) throw `Card "${device}" is not plugged in.`;
+    const card = (un || here)!;
+    const mins = Math.min(60, Math.max(1, minutes ?? 10));
+    const m = { device, mount: card.link.kind === "volume" ? card.link.mount : "/Volumes/CARD", until: new Date(Date.parse("2026-10-09T12:00:00Z") + mins * 60000).toISOString() };
+    this.gear.mounted = [...this.gear.mounted.filter((x) => x.device !== device), m];
+    if (un) this.plug([...this.gear.connected, un], this.gear.unmounted.filter((c) => c !== un));
+    this.emit("gear-changed");
+    return structuredClone(m);
+  }
+
+  /** `Core::gear_card_unmount` (Done, or the timer). */
+  private cardUnmount(device: string) {
+    const card = this.gear.connected.find((c) => c.id === device);
+    if (!card) throw `Card "${device}" is not mounted.`;
+    this.gear.mounted = this.gear.mounted.filter((m) => m.device !== device);
+    this.plug(this.gear.connected.filter((c) => c !== card), [...this.gear.unmounted, card]);
+    this.emit("gear-changed");
+    return true;
+  }
+
   /** `Core::gear_device_save`: a new device must be plugged in. */
   deviceSave(id: string, name: string | null, aircraft: string | null) {
     let d = this.gear.devices.find((x) => x.id === id);
@@ -499,6 +545,7 @@ export class MockCore {
   plug(connected: import("../types").Connected[], unmounted: import("../types").Connected[] = []) {
     const before = new Set(this.gear.connected.map((c) => JSON.stringify(c.link)));
     this.gear.connected = connected;
+    this.gear.unmounted = unmounted;
     const events = connected.filter((c) => !before.has(JSON.stringify(c.link))).map((device) => ({ kind: "connected", device, app_initiated: false }));
     this.emit("device-changed", { events, connected: gear.gearStatus(this.gear, this.settings.values).connected, unmounted });
   }

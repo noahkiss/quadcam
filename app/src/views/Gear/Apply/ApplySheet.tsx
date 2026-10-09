@@ -22,9 +22,10 @@ export function ApplySheet() {
   const restore = useStore((s) => s.restoreBeforeApply);
   const next = useStore((s) => s.nextApply);
   const dev = a ? devices.find((d) => d.id === a.device) : undefined;
-  const name = dev ? deviceName(dev) : "FC";
+  const kind = dev?.kind === "radio" ? "card" : "FC";
+  const name = dev ? deviceName(dev) : kind === "card" ? "radio" : "FC";
   const job = a ? jobs?.find((j) => j.device === a.device) : undefined;
-  const more = a?.change ? changes.filter((c) => c.device === a.device && c.status === "ready" && c.id !== a.change?.id).length : 0;
+  const more = a?.change ? changes.filter((c) => c.device === a.device && (c.status === "ready" || c.status === "try") && c.id !== a.change?.id).length : 0;
   const done = !!a?.report;
   const ready = !!a?.plan && a.plan.checks.every((c) => c.ok);
   const working = !!a?.busy && !done;
@@ -39,7 +40,7 @@ export function ApplySheet() {
       actions={
         done ? (
           <>
-            {a?.report?.status === "failed" && a.report.backup && (
+            {a?.report?.status === "failed" && a.report.backup && (kind === "FC" || a.report.steps.some((x) => x.name === "Roll back" && x.state === "failed")) && (
               <Button variant="ghost" onClick={() => restore()}>
                 Restore backup
               </Button>
@@ -68,12 +69,12 @@ export function ApplySheet() {
     >
       {a && (
         <div className={styles.sheet}>
-          {a.agent != null && !done && <Banner icon="info">An agent asked to apply this change. It goes ahead only if you click Apply.</Banner>}
+          {a.agent != null && !done && <Banner icon="info">An agent, or "Apply ready changes", asked to apply this change. It goes ahead only if you click Apply.</Banner>}
           {a.error && <Banner kind="error">{a.error}</Banner>}
           {!a.change && !a.error && <p className={styles.muted}>No staged changes for this device.</p>}
           {a.change && (
             <div className={styles.head}>
-              <h3>{a.change.title || "FC settings"}</h3>
+              <h3>{a.change.title || (kind === "card" ? "Radio card" : "FC settings")}</h3>
               {a.plan && (
                 <p className={`${styles.muted} selectable`}>
                   {[a.plan.device.board, a.plan.device.firmware, a.plan.device.version].filter(Boolean).join(" · ")}
@@ -92,7 +93,11 @@ export function ApplySheet() {
                 <h4>Checks</h4>
                 <ChecksList checks={a.plan.checks} />
               </section>
-              <p className={styles.muted}>QuadCam backs the FC up first and keeps that backup. The FC restarts when the backup is read, and again when the change is saved.</p>
+              {kind === "card" ? (
+                <p className={styles.muted}>QuadCam mounts the card if needed, backs it up first and keeps that backup, writes file by file, reads each back, and unmounts it. It puts every file back if one reads wrong.</p>
+              ) : (
+                <p className={styles.muted}>QuadCam backs the FC up first and keeps that backup. The FC restarts when the backup is read, and again when the change is saved.</p>
+              )}
             </>
           )}
           {working && a.plan && (
@@ -101,6 +106,7 @@ export function ApplySheet() {
             </p>
           )}
           {a.report && <Result r={a.report} />}
+          {a.report?.status === "verified" && a.change?.status === "try" && <p className={styles.muted}>This was a Try change. Fly it, then keep it or revert it on the Bench.</p>}
         </div>
       )}
     </Dialog>

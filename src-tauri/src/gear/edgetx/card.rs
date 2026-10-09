@@ -504,6 +504,72 @@ impl Card {
     }
 }
 
+impl Card {
+    /// What putting these files on the card, or taking them off (`None`), would do: the
+    /// plan of a restore. Same checks and extras as `plan`; a file that already reads as
+    /// asked changes nothing. A path must stay inside the card.
+    pub fn plan_files(&self, targets: Vec<(String, Option<Vec<u8>>)>) -> Result<CardPlan> {
+        let identity = self.identity();
+        let mut plan = CardPlan {
+            identity: identity.clone(),
+            checks: Vec::new(),
+            files: Vec::new(),
+            diff: Vec::new(),
+            warnings: Vec::new(),
+        };
+        let known = compat::check_writable(
+            Product::Edgetx,
+            identity.board.as_deref(),
+            identity.version.as_deref(),
+        );
+        let ok = known.is_ok();
+        plan.checks.push(check("Known version", known));
+        if !ok {
+            return Ok(plan);
+        }
+        let inside = targets.iter().find(|(p, _)| {
+            p.is_empty()
+                || p.starts_with('/')
+                || p.split('/')
+                    .any(|c| c == ".." || c.is_empty() || c.starts_with('.'))
+        });
+        plan.checks.push(check(
+            "Files inside the card",
+            match inside {
+                Some((p, _)) => Err(Refusal::new(
+                    RefusalCode::ShapeUnknown,
+                    format!("{p:?} is not a file path on the card; nothing was written."),
+                )),
+                None => Ok(()),
+            },
+        ));
+        if inside.is_some() {
+            return Ok(plan);
+        }
+        for (path, after) in targets {
+            let before = self.read(&path)?;
+            if before == after {
+                continue;
+            }
+            plan.files.push(FileChange {
+                path,
+                before,
+                after,
+            });
+        }
+        plan.files.sort_by(|a, b| a.path.cmp(&b.path));
+        if !plan.files.is_empty() && !self.root.join(NEVER_INDEX).exists() {
+            plan.files.push(FileChange {
+                path: NEVER_INDEX.into(),
+                before: None,
+                after: Some(Vec::new()),
+            });
+        }
+        plan.diff = diff_items(&plan.files);
+        Ok(plan)
+    }
+}
+
 /// The model file `radio.yml` selects (`currModelFilename`, else `currModel`).
 pub fn selected_in(d: &Doc) -> Option<String> {
     if let Some(f) = d.top_value("currModelFilename") {
@@ -872,6 +938,8 @@ pub struct WriteOptions {
     pub bytes_per_s: u64,
     /// Set to stop after the current file.
     pub stop: Arc<AtomicBool>,
+    /// Tests: this path's read-back counts as a mismatch, as a bad card would give.
+    pub fail_readback: Option<String>,
 }
 
 impl WriteOptions {
@@ -882,6 +950,7 @@ impl WriteOptions {
             floor_bytes_per_s: 1_000_000,
             bytes_per_s: 10_000_000,
             stop: Arc::new(AtomicBool::new(false)),
+            fail_readback: None,
         }
     }
 
@@ -892,6 +961,7 @@ impl WriteOptions {
             floor_bytes_per_s: 100_000,
             bytes_per_s: 300_000,
             stop: Arc::new(AtomicBool::new(false)),
+            fail_readback: None,
         }
     }
 
@@ -1118,7 +1188,7 @@ pub fn write(
                     opts.timeout_for(size),
                     &format!("writing {}", f.path),
                     move || write_file_atomic(&p, &b),
-                )?;
+                )? && opts.fail_readback.as_deref() != Some(f.path.as_str());
                 if !same {
                     let restore = match &f.before {
                         Some(old) => {
@@ -1216,6 +1286,35 @@ pub fn release(whole_disk: &str, timeout: Duration) -> Result<()> {
     if !out.status.success() {
         bail!(
             "diskutil unmountDisk failed: {}",
+            String::from_utf8_lossy(&out.stderr).trim()
+        );
+    }
+    Ok(())
+}
+
+/// Mounts a card's whole disk (`disk4`) again with `diskutil mountDisk`, under a timeout.
+/// With the card in, its volume appears within seconds; without it `diskutil` still says
+/// "mounted", so the caller looks for the volume. A process started by cargo never mounts
+/// a real disk unless `QUADCAM_SERIAL=real`.
+pub fn attach(whole_disk: &str, timeout: Duration) -> Result<()> {
+    if !crate::gear::serial::serial_enabled(
+        std::env::var("QUADCAM_SERIAL").ok().as_deref(),
+        std::env::var_os("CARGO_MANIFEST_DIR").is_some(),
+    ) {
+        return Err(anyhow::Error::new(Refusal::new(
+            RefusalCode::Disabled,
+            "Mounting a real disk is off in tests.",
+        )));
+    }
+    let disk = format!("/dev/{}", crate::disk::whole_disk_of(whole_disk));
+    let out = run_with_timeout(
+        std::process::Command::new("/usr/sbin/diskutil").args(["mountDisk", &disk]),
+        &format!("mounting {disk}"),
+        timeout,
+    )?;
+    if !out.status.success() {
+        bail!(
+            "diskutil mountDisk failed: {}",
             String::from_utf8_lossy(&out.stderr).trim()
         );
     }

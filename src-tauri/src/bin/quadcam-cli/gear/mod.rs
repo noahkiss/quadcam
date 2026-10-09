@@ -102,8 +102,35 @@ pub enum GearCmd {
     Stage(changes::StageArgs),
     /// Discard a staged change. It stays in the history.
     Discard { change: String },
-    /// Stage an FC backup's settings back as a change.
-    Restore { backup: String },
+    /// Stage a backup's settings back as a change. An FC backup restores its `dump all`; a
+    /// radio card backup needs the files to put back (`--path`, repeat for more).
+    Restore {
+        backup: String,
+        #[arg(long = "path")]
+        paths: Vec<String>,
+    },
+    /// Change a staged change's status (draft, ready, try, read_first), title, note or order.
+    Update(changes::UpdateArgs),
+    /// Keep an applied Try change.
+    Keep { change: String },
+    /// Stage a restore of the backup an applied change took. The change becomes Reverted
+    /// when the restore verifies.
+    Revert { change: String },
+    /// Copy settings between quads: `--plan` shows the checks and the diff; without it the
+    /// settings are staged as one change for the target FC.
+    Copy(changes::CopyArgs),
+    /// Mount an unmounted radio card to browse it; it unmounts after --minutes (10).
+    CardMount {
+        /// The card's device id.
+        device: String,
+        #[arg(long)]
+        minutes: Option<u32>,
+    },
+    /// Unmount a radio card (Done).
+    CardUnmount {
+        /// The card's device id.
+        device: String,
+    },
     /// Apply a staged change to the FC: `--plan` shows the checks, diff and digest;
     /// `--digest D --yes` backs up, writes, saves, reads back and verifies.
     Apply(changes::ApplyArgs),
@@ -160,7 +187,22 @@ pub fn run(core: &Core, cmd: GearCmd) -> Result<Value> {
         GearCmd::Changes(a) => changes::changes(core, a)?,
         GearCmd::Stage(a) => changes::stage(core, a)?,
         GearCmd::Discard { change } => changes::discard(core, change)?,
-        GearCmd::Restore { backup } => changes::restore(core, backup)?,
+        GearCmd::Restore { backup, paths } => changes::restore(core, backup, paths)?,
+        GearCmd::Update(a) => changes::update(core, a)?,
+        GearCmd::Keep { change } => changes::keep(core, change)?,
+        GearCmd::Revert { change } => changes::revert(core, change)?,
+        GearCmd::Copy(a) => changes::copy(core, a)?,
+        GearCmd::CardMount { device, minutes } => serde_json::to_value(call::gear_card_mount(
+            core,
+            api::CardMountParams { device, minutes },
+        )?)?,
+        GearCmd::CardUnmount { device } => serde_json::to_value(call::gear_card_unmount(
+            core,
+            api::CardMountParams {
+                device,
+                minutes: None,
+            },
+        )?)?,
         GearCmd::Apply(a) => changes::apply(core, a)?,
         GearCmd::Stop { handle } => backup::stop(core, handle)?,
         GearCmd::Devices { cmd } => match cmd.unwrap_or(DevicesCmd::List) {

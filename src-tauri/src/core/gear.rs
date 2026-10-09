@@ -52,6 +52,9 @@ pub struct GearStatus {
     /// that failed), with the reason.
     #[serde(default)]
     pub failures: Vec<StepFailure>,
+    /// The radio cards the person mounted to browse, and when each unmounts.
+    #[serde(default)]
+    pub mounted: Vec<super::CardMounted>,
 }
 
 /// A step that failed on a device, and why.
@@ -157,6 +160,7 @@ impl Core {
         failures.sort_by(|a, b| a.handle.cmp(&b.handle));
         Ok(GearStatus {
             failures,
+            mounted: self.gear_mounted_cards(),
             gear_dir: settings.gear_dir.clone(),
             card_checks: self.gear_latest_checks(&connected),
             jobs: self.gear_jobs(),
@@ -443,7 +447,9 @@ impl Core {
                 } = &c.link
                 {
                     let _hold = self.gear_hold(&link_handle(&c.link));
-                    let _ = (self.gear.unmount)(disk);
+                    if (self.gear.unmount)(disk).is_ok() {
+                        self.card_note_released(c);
+                    }
                 }
                 self.gear_note_failure(c, step, message);
                 self.gear_job_done(c, Some(step));

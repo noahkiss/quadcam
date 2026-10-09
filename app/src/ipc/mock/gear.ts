@@ -5,7 +5,7 @@
 import type { Connected, Device, DeviceKind, GearSettings, GearStatus } from "../types";
 import { HOME } from "./seed";
 import { latestChecks, seedBackups, type MockBackup } from "./backups";
-import type { CardCheck, GearJob, StepFailure } from "../types";
+import type { CardCheck, CardMounted, GearJob, StepFailure } from "../types";
 import { freshChanges, type MockChanges } from "./changes";
 
 const GEAR_DIR = `${HOME}/Library/Application Support/app.quadcam/gear`;
@@ -85,10 +85,14 @@ export interface MockGear {
   failures: StepFailure[];
   /** Staged changes (`ipc/mock/changes.ts`). */
   changeStore: MockChanges;
+  /** Cards unmounted but still in (the `device-changed` event's list). */
+  unmounted: Connected[];
+  /** Cards the person mounted to browse. */
+  mounted: CardMounted[];
 }
 
 /** No gear plugged in; two devices saved, with backups. */
-export const quietGear = (): MockGear => ({ devices: [structuredClone(RADIO), structuredClone(FC)], connected: [], working: [], reminders: [], paused: [], backups: seedBackups(), checks: [], cardFails: [], dirty: null, jobs: [], failures: [], changeStore: freshChanges() });
+export const quietGear = (): MockGear => ({ devices: [structuredClone(RADIO), structuredClone(FC)], connected: [], working: [], reminders: [], paused: [], backups: seedBackups(), checks: [], cardFails: [], dirty: null, jobs: [], failures: [], changeStore: freshChanges(), unmounted: [], mounted: [] });
 
 /** A saved radio, a DVR card QuadCam does not know, and goggles a job is reading. */
 export const busyGear = (): MockGear => ({ ...quietGear(), connected: [radioConnected(), dvrConnected(), gogglesConnected()], working: ["disk6"] });
@@ -100,7 +104,7 @@ export function gearStatus(g: MockGear, values: Record<string, unknown>): GearSt
     settings: gearSettings(values),
     connected: g.connected.map((c) => ({ ...c, device: g.devices.find((d) => d.id === c.id) || null })),
     devices: g.devices.length,
-    staged: g.changeStore.changes.filter((c) => c.status === "ready" || c.status === "draft").length,
+    staged: g.changeStore.changes.filter((c) => ["draft", "ready", "try", "read_first"].includes(c.status)).length,
     sims_out_of_date: 0,
     working: [...g.working],
     reminders: [...g.reminders],
@@ -108,5 +112,6 @@ export function gearStatus(g: MockGear, values: Record<string, unknown>): GearSt
     jobs: structuredClone(g.jobs),
     card_checks: latestChecks(g),
     failures: structuredClone(g.failures),
+    mounted: structuredClone(g.mounted),
   };
 }

@@ -322,4 +322,15 @@ export type ImportProgress = Num<G.ImportProgress, "seconds" | "duration">;
 export type LibraryTask = G.LibraryTask;
 export type AgentFormatRequest = G.AgentFormatRequest;
 export type AgentApplyRequest = G.AgentApplyRequest;
-export type { ApplyPlan, ApplyReport, ChangeStatus, Check, Edit, StagedChange, StepReport } from "../bindings";
+export type { ApplyPlan, ApplyReport, CardMounted, ChangeStatus, Check, CopyPart, CopyPlan, Edit, StagedChange, StepReport } from "../bindings";
+
+/** `gear_copy_plan` and `gear_copy_stage`: where settings come from and go to. */
+export interface CopyRequest {
+  /** An FC's device id (its latest backup) or a backup id. */
+  from: string;
+  /** The FC that gets the settings. */
+  to: string;
+  parts: import("../bindings").CopyPart[];
+  /** Settings by name, on top of the parts. */
+  settings: string[];
+}

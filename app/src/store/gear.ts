@@ -28,6 +28,8 @@ export interface ApplySheetState {
 export interface GearSlice {
   /** Staged changes waiting to be applied, every device. */
   changes: StagedChange[];
+  /** Every change, staged or not: the Bench's applied-and-undecided items and history. */
+  allChanges: StagedChange[];
   applySheet: ApplySheetState | null;
   /** Opens the sheet on a device's first staged change, or a given one. */
   openApply: (device: string, change?: string) => Promise<void>;
@@ -39,6 +41,15 @@ export interface GearSlice {
   /** The next staged change of the same device, or closes the sheet. */
   nextApply: () => Promise<void>;
   discardChange: (id: string) => Promise<void>;
+  /** Draft, Ready, Try or Read first. */
+  setChangeStatus: (id: string, status: StagedChange["status"]) => Promise<void>;
+  /** Keeps an applied Try change. */
+  keepChange: (id: string) => Promise<void>;
+  /** Stages a restore of the backup the change's apply took, and opens it in the sheet. */
+  revertChange: (id: string) => Promise<void>;
+  /** Mounts an unmounted card for the person to browse, or unmounts it (Done). */
+  mountCard: (device: string) => Promise<void>;
+  unmountCard: (device: string) => Promise<void>;
   agentApply: (id: number, change: StagedChange, plan: ApplyPlan) => void;
   agentApplyClosed: (id: number) => void;
   gear: GearStatus | null;
@@ -63,10 +74,11 @@ export interface GearSlice {
   setPollPaused: (port: string, paused: boolean) => Promise<void>;
 }
 
-const ready = (cs: StagedChange[], device: string) => cs.filter((c) => c.device === device && c.status === "ready");
+const ready = (cs: StagedChange[], device: string) => cs.filter((c) => c.device === device && (c.status === "ready" || c.status === "try"));
 
 export const createGearSlice: StateCreator<State, [], [], GearSlice> = (set, get) => ({
   changes: [],
+  allChanges: [],
   applySheet: null,
   openApply: async (device, change) => {
     await get().loadGear();
@@ -108,7 +120,7 @@ export const createGearSlice: StateCreator<State, [], [], GearSlice> = (set, get
     const backup = a?.report?.backup;
     if (!a || !backup) return;
     try {
-      const c = await api.gearRestoreStage(backup);
+      const c = await api.gearRestoreStage(backup, a.report?.files ?? []);
       await get().openApply(a.device, c.id);
     } catch (e) {
       set((s) => (s.applySheet ? { applySheet: { ...s.applySheet, error: errText(e) } } : {}));
@@ -129,6 +141,46 @@ export const createGearSlice: StateCreator<State, [], [], GearSlice> = (set, get
       toast(errText(e), true);
     }
   },
+  setChangeStatus: async (id, status) => {
+    try {
+      await api.gearChangeSetStatus(id, status);
+      await get().loadGear();
+    } catch (e) {
+      toast(errText(e), true);
+    }
+  },
+  keepChange: async (id) => {
+    try {
+      await api.gearChangeKeep(id);
+      await get().loadGear();
+    } catch (e) {
+      toast(errText(e), true);
+    }
+  },
+  revertChange: async (id) => {
+    try {
+      const c = await api.gearChangeRevert(id);
+      await get().openApply(c.device, c.id);
+    } catch (e) {
+      toast(errText(e), true);
+    }
+  },
+  mountCard: async (device) => {
+    try {
+      await api.gearCardMount(device);
+      await get().loadGear();
+    } catch (e) {
+      toast(errText(e), true);
+    }
+  },
+  unmountCard: async (device) => {
+    try {
+      await api.gearCardUnmount(device);
+      await get().loadGear();
+    } catch (e) {
+      toast(errText(e), true);
+    }
+  },
   agentApply: (id, change, plan) => set({ applySheet: { device: change.device, change, plan, report: null, agent: id, busy: false, error: null } }),
   agentApplyClosed: (id) => set((s) => (s.applySheet?.agent === id ? { applySheet: null } : {})),
   gear: null,
@@ -140,8 +192,8 @@ export const createGearSlice: StateCreator<State, [], [], GearSlice> = (set, get
   gearExpanded: true,
   loadGear: async () => {
     try {
-      const [gear, devices, changes] = await Promise.all([api.gearStatus(), api.gearDevices(), api.gearChanges()]);
-      set({ gear, devices, changes });
+      const [gear, devices, changes, allChanges] = await Promise.all([api.gearStatus(), api.gearDevices(), api.gearChanges(), api.gearChanges(null, true)]);
+      set({ gear, devices, changes, allChanges });
     } catch (e) {
       console.warn("gear unavailable", e);
     }

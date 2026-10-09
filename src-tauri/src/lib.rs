@@ -384,6 +384,10 @@ fn poll_gear(app: AppHandle, core: Arc<Core>) {
                             });
                         }
                     }
+                    // Cards unmounted but still in can be mounted for a job; a card the
+                    // person mounted unmounts when its time is up.
+                    core.gear_note_unmounted(&tracker.unmounted);
+                    core.gear_mount_tick(std::time::Instant::now());
                     // FCs on USB with a battery in: "Unplug now" at their limit.
                     core.gear_usb_tick(std::time::Instant::now());
                     core.gear_play_reminders(
@@ -558,6 +562,12 @@ pub fn specta_builder() -> tauri_specta::Builder<tauri::Wry> {
             c::gear_restore_stage,
             c::gear_apply_plan,
             c::gear_apply,
+            c::gear_change_keep,
+            c::gear_change_revert,
+            c::gear_copy_plan,
+            c::gear_copy_stage,
+            c::gear_card_mount,
+            c::gear_card_unmount,
             c::modules,
             c::module_install,
             c::module_remove,
@@ -670,7 +680,10 @@ pub fn run() {
             if let Err(e) = control::serve(core.clone(), &control::socket_path()) {
                 eprintln!("quadcam: control socket not started: {e:#}");
             }
-            for h in crate::core::backup_hooks() {
+            for h in crate::core::backup_hooks()
+                .into_iter()
+                .chain(crate::core::apply_ready_hooks())
+            {
                 core.gear_add_hook(h);
             }
             let gear_core = core.clone();

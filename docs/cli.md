@@ -170,10 +170,17 @@ quadcam-cli --json gear card-check [--device ID | --mount M] [--log]
 quadcam-cli --json gear card-repair --check <check id> --yes
 quadcam-cli --json gear stage --device ID --set NAME=VALUE [--profile N | --rateprofile N] [--title T]   # stage; writes nothing
 quadcam-cli --json gear stage --device ID --cli FILE   # raw CLI lines, no save/exit/defaults
+quadcam-cli --json gear stage --device RADIO_ID --edits FILE.json   # card edits (JSON array)
 quadcam-cli --json gear changes [--device ID] [--status ready] [--history]
+quadcam-cli --json gear update CHANGE --status draft|ready|try|read_first [--title T] [--note N] [--order N]
 quadcam-cli --json gear apply CHANGE --plan            # every check, the diff, the digest; no reboot
-quadcam-cli --json gear apply CHANGE --digest D --yes  # backup, write, save, read back, verify
-quadcam-cli --json gear restore BACKUP                 # stage an FC backup's settings back
+quadcam-cli --json gear apply CHANGE --digest D --yes  # FC: backup, write, save, read back, verify; card: mount, backup, write, read back, roll back on a mismatch, unmount
+quadcam-cli --json gear restore BACKUP [--path P]...   # stage a backup back (a card backup needs --path)
+quadcam-cli --json gear keep CHANGE                    # an applied Try change becomes Verified
+quadcam-cli --json gear revert CHANGE                  # stage a restore of the backup its apply took
+quadcam-cli --json gear copy --from FC|BACKUP --to FC --part rates --part osd [--setting NAME]... [--plan]   # --plan shows the checks and diff; without it, stages the copy
+quadcam-cli --json gear card-mount RADIO_ID [--minutes 10]   # mount an unmounted card to browse it
+quadcam-cli --json gear card-unmount RADIO_ID
 quadcam-cli --json gear discard CHANGE
 quadcam-cli --json gear stop <handle>
 ```
