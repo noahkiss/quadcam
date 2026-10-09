@@ -351,7 +351,7 @@ impl Tts for Eleven {
     }
 }
 
-#[cfg(test)]
+/// Canned HTTP for tests (unit and integration): no network.
 pub mod fake {
     use super::*;
     use std::sync::Mutex;
@@ -361,9 +361,17 @@ pub mod fake {
     pub struct FakeHttp {
         pub answers: Mutex<Vec<(String, u16, String)>>,
         pub seen: Mutex<Vec<HttpRequest>>,
+        /// When set, a with-timestamps request with no canned answer gets a take of its own
+        /// text, each character this many seconds long.
+        pub synth_step: Mutex<Option<f64>>,
     }
 
     impl FakeHttp {
+        /// Answers every with-timestamps request with a take of the text it carries.
+        pub fn synth(&self, step: f64) {
+            *self.synth_step.lock().unwrap() = Some(step);
+        }
+
         pub fn on(&self, path_part: &str, status: u16, body: impl Into<String>) {
             self.answers
                 .lock()
@@ -385,6 +393,16 @@ pub mod fake {
             self.seen.lock().unwrap().push(req.clone());
             let mut a = self.answers.lock().unwrap();
             let Some(i) = a.iter().position(|(p, _, _)| req.url.contains(p.as_str())) else {
+                let step = *self.synth_step.lock().unwrap();
+                if let (Some(step), true) = (step, req.url.contains("with-timestamps")) {
+                    let body: Value = serde_json::from_str(req.body.as_deref().unwrap_or("{}"))
+                        .unwrap_or_default();
+                    let text = body["text"].as_str().unwrap_or("");
+                    return Ok(HttpResponse {
+                        status: 200,
+                        body: timestamps_json(text, step),
+                    });
+                }
                 bail!("no canned answer for {}", req.url);
             };
             // The last answer for a path stays; earlier ones are used up in order.
@@ -407,21 +425,20 @@ pub mod fake {
     pub fn timestamps_json(text: &str, step: f64) -> String {
         let rate = super::super::render::OUT_RATE as f64;
         let n = text.chars().count();
-        let total = (n as f64 * step * rate) as usize;
-        let mut pcm = Vec::with_capacity(total * 2);
-        for i in 0..total {
-            let ch = text
-                .chars()
-                .nth((i as f64 / (step * rate)) as usize)
-                .unwrap_or(' ');
-            let v: i16 = if ch == ' ' || ch == '.' {
-                0
-            } else if (i / 16) % 2 == 0 {
-                4000
-            } else {
-                -4000
-            };
-            pcm.extend_from_slice(&v.to_le_bytes());
+        let per = (step * rate) as usize;
+        let mut pcm: Vec<u8> = Vec::with_capacity(n * per * 2);
+        for ch in text.chars() {
+            let silent = ch == ' ' || ch == '.';
+            for j in 0..per {
+                let v: i16 = if silent {
+                    0
+                } else if (j / 16) % 2 == 0 {
+                    4000
+                } else {
+                    -4000
+                };
+                pcm.extend_from_slice(&v.to_le_bytes());
+            }
         }
         let chars: Vec<String> = text.chars().map(String::from).collect();
         let starts: Vec<f64> = (0..n).map(|i| i as f64 * step).collect();

@@ -241,6 +241,8 @@ pub struct Env {
     pub holders: HoldersFn,
     /// The voice providers (`voice::tts`): `say` and an OpenAI-compatible server.
     pub tts: Arc<dyn voice::tts::Providers>,
+    /// Secrets (the voice provider's API key): the login Keychain.
+    pub keys: Arc<dyn voice::keychain::KeyStore>,
 }
 
 impl Env {
@@ -262,6 +264,7 @@ impl Env {
             tts: Arc::new(voice::tts::System {
                 scratch: cache.join("voice").join("tmp"),
             }),
+            keys: Arc::new(voice::keychain::Keychain),
         }
     }
 
@@ -284,6 +287,7 @@ impl Env {
             disk: Arc::new(health::FakeDisk::ok()),
             holders: Arc::new(|_| Vec::new()),
             tts: Arc::new(voice::tts::NoProviders),
+            keys: Arc::new(voice::keychain::MemKeys::default()),
         }
     }
 

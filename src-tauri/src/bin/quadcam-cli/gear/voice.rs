@@ -2,12 +2,14 @@
 //! from the settings, installing a pack, a per-line override, Choose voice (stages one card
 //! change; nothing is written to the card), and `build-pack`, the maintainer's tool.
 
-use anyhow::Result;
+use anyhow::{bail, Result};
 use clap::{Args, Subcommand};
 use quadcam_lib::api::{self, call};
 use quadcam_lib::core::{self, Core};
+use quadcam_lib::gear::voice::batch::BatchSettings;
 use quadcam_lib::gear::voice::render::RenderSettings;
 use serde_json::Value;
+use std::io::IsTerminal;
 use std::path::PathBuf;
 
 #[derive(Args)]
@@ -71,10 +73,107 @@ impl SettingsArgs {
     }
 }
 
+#[derive(Args, Default)]
+pub struct BatchArgs {
+    /// The sentence around each line; {line} stands for it ("The word is {line}.").
+    #[arg(long)]
+    pub carrier: Option<String>,
+    /// Sentences in one batch at most (default 30).
+    #[arg(long)]
+    pub max_lines: Option<u32>,
+    /// Each cut edge moves to the quietest point within this many ms (default 40).
+    #[arg(long)]
+    pub snap_ms: Option<u32>,
+}
+
+impl BatchArgs {
+    fn get(&self) -> Option<BatchSettings> {
+        if self.carrier.is_none() && self.max_lines.is_none() && self.snap_ms.is_none() {
+            return None;
+        }
+        let d = BatchSettings::default();
+        Some(BatchSettings {
+            carrier: self.carrier.clone().unwrap_or(d.carrier),
+            max_lines: self.max_lines.unwrap_or(d.max_lines),
+            snap_ms: self.snap_ms.unwrap_or(d.snap_ms),
+            ..d
+        })
+    }
+}
+
+#[derive(Subcommand)]
+pub enum KeyCmd {
+    /// Store the ElevenLabs key in the Keychain. Reads one line from stdin (hidden when
+    /// stdin is a terminal), so the key never sits in argv or shell history.
+    Set,
+    /// Remove the stored key.
+    Delete,
+    /// Say whether a key is stored. Never prints the key.
+    Status,
+}
+
 #[derive(Subcommand)]
 pub enum VoiceCmd {
+    /// The ElevenLabs API key: set, delete, status.
+    Key {
+        #[command(subcommand)]
+        cmd: KeyCmd,
+    },
+    /// The line sets that can be rendered (`--set` takes their ids), and whether a key is stored.
+    Sets,
+    /// The account's ElevenLabs voices.
+    Voices,
+    /// The account's ElevenLabs models, with the credits a character costs.
+    Models,
+    /// The account's remaining ElevenLabs credits.
+    Credits,
+    /// What rendering line sets would cost, and whether the credits cover it. Makes no paid call.
+    Estimate {
+        /// Line set ids, comma separated.
+        #[arg(long = "set", value_delimiter = ',', required = true)]
+        sets: Vec<String>,
+        /// A voice name or id from the account.
+        #[arg(long)]
+        voice: String,
+        #[arg(long)]
+        model: String,
+        /// Only these card paths of the sets, comma separated.
+        #[arg(long, value_delimiter = ',')]
+        lines: Vec<String>,
+        #[command(flatten)]
+        batch: BatchArgs,
+        #[command(flatten)]
+        settings: SettingsArgs,
+    },
+    /// Render a few lines in every voice and model, cut out of carrier sentences, and write
+    /// the WAVs to the cache for listening. Bills ElevenLabs: it needs --confirm.
+    Sample {
+        /// Voice names or ids, comma separated.
+        #[arg(long, value_delimiter = ',', required = true)]
+        voices: Vec<String>,
+        /// Model ids, comma separated.
+        #[arg(long, value_delimiter = ',', required = true)]
+        models: Vec<String>,
+        /// Line set ids, comma separated (default: sample, the hard lines).
+        #[arg(long = "set", value_delimiter = ',')]
+        sets: Vec<String>,
+        /// Only these card paths of the sets, comma separated.
+        #[arg(long, value_delimiter = ',')]
+        lines: Vec<String>,
+        /// Price it and list nothing else; render nothing.
+        #[arg(long)]
+        dry_run: bool,
+        /// Allow the paid call.
+        #[arg(long)]
+        confirm: bool,
+        #[command(flatten)]
+        batch: BatchArgs,
+        #[command(flatten)]
+        settings: SettingsArgs,
+    },
     /// Render QuadCam's lines (and your own) with the provider from the settings into a local
-    /// pack. A provider that may charge needs --confirm.
+    /// pack. A provider that may charge needs --confirm. With --set, render line sets as
+    /// carrier-sentence batches with ElevenLabs instead.
     Render {
         /// The provider's voice (default: the tts_voice setting).
         #[arg(long)]
@@ -82,6 +181,14 @@ pub enum VoiceCmd {
         /// Card paths to render, comma separated (default: every line).
         #[arg(long, value_delimiter = ',')]
         lines: Vec<String>,
+        /// Line set ids, comma separated: a batched ElevenLabs render of those sets.
+        #[arg(long = "set", value_delimiter = ',')]
+        sets: Vec<String>,
+        /// The model for --set (default: the tts_model setting).
+        #[arg(long)]
+        model: Option<String>,
+        #[command(flatten)]
+        batch: BatchArgs,
         /// Report the plan and the characters; render nothing.
         #[arg(long)]
         dry_run: bool,
@@ -156,6 +263,44 @@ pub enum VoiceCmd {
     },
 }
 
+fn catalog(core: &Core, voices: bool, models: bool, credits: bool) -> Result<Value> {
+    Ok(serde_json::to_value(call::gear_voice_catalog(
+        core,
+        api::CatalogParams {
+            voices,
+            models,
+            credits,
+        },
+    )?)?)
+}
+
+/// One line from stdin. A terminal gets a prompt and no echo.
+fn read_key() -> Result<String> {
+    let tty = std::io::stdin().is_terminal();
+    let stty = |on: bool| {
+        let _ = std::process::Command::new("/bin/stty")
+            .arg(if on { "echo" } else { "-echo" })
+            .stdin(std::process::Stdio::inherit())
+            .status();
+    };
+    if tty {
+        eprint!("ElevenLabs API key (not shown): ");
+        stty(false);
+    }
+    let mut line = String::new();
+    let r = std::io::stdin().read_line(&mut line);
+    if tty {
+        stty(true);
+        eprintln!();
+    }
+    r?;
+    let key = line.trim().to_string();
+    if key.is_empty() {
+        bail!("No key was given: pipe it in, or type it at the prompt.");
+    }
+    Ok(key)
+}
+
 pub fn run(core: &Core, a: VoiceArgs) -> Result<Value> {
     Ok(match a.cmd {
         None => {
@@ -172,9 +317,70 @@ pub fn run(core: &Core, a: VoiceArgs) -> Result<Value> {
                 serde_json::to_value(v)?
             }
         }
+        Some(VoiceCmd::Key { cmd }) => {
+            let (action, key) = match cmd {
+                KeyCmd::Set => ("set", Some(read_key()?)),
+                KeyCmd::Delete => ("delete", None),
+                KeyCmd::Status => ("status", None),
+            };
+            serde_json::to_value(call::gear_voice_key(
+                core,
+                api::KeyParams {
+                    action: action.into(),
+                    key,
+                },
+            )?)?
+        }
+        Some(VoiceCmd::Sets) => serde_json::to_value(call::gear_voice_sets(core)?)?,
+        Some(VoiceCmd::Voices) => catalog(core, true, false, false)?,
+        Some(VoiceCmd::Models) => catalog(core, false, true, false)?,
+        Some(VoiceCmd::Credits) => catalog(core, false, false, true)?,
+        Some(VoiceCmd::Estimate {
+            sets,
+            voice,
+            model,
+            lines,
+            batch,
+            settings,
+        }) => serde_json::to_value(call::gear_voice_estimate(
+            core,
+            api::EstimateParams {
+                sets,
+                voice,
+                model,
+                lines,
+                settings: settings.get(),
+                batch: batch.get(),
+            },
+        )?)?,
+        Some(VoiceCmd::Sample {
+            voices,
+            models,
+            sets,
+            lines,
+            dry_run,
+            confirm,
+            batch,
+            settings,
+        }) => serde_json::to_value(call::gear_voice_sample(
+            core,
+            api::SampleParams {
+                voices,
+                models,
+                sets,
+                lines,
+                dry_run,
+                confirm,
+                settings: settings.get(),
+                batch: batch.get(),
+            },
+        )?)?,
         Some(VoiceCmd::Render {
             voice,
             lines,
+            sets,
+            model,
+            batch,
             dry_run,
             confirm,
             settings,
@@ -186,6 +392,9 @@ pub fn run(core: &Core, a: VoiceArgs) -> Result<Value> {
                 dry_run,
                 confirm,
                 settings: settings.get(),
+                sets,
+                model: model.unwrap_or_default(),
+                batch: batch.get(),
             },
         )?)?,
         Some(VoiceCmd::Install { pack, source }) => serde_json::to_value(
