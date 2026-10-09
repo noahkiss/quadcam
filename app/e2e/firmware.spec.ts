@@ -124,6 +124,7 @@ test("the splash segment previews a PNG, refuses a colour radio, and plans a fla
   await expect(sheet.getByRole("region", { name: "Changes" })).toContainText("Splash:");
   await sheet.getByRole("button", { name: "Apply" }).click();
   await expect(sheet.getByRole("region", { name: "Result" })).toContainText("Verified");
-  const click = (await app.calls("gear_flash_click")).at(-1) as { args: { params: { splash: { threshold: number; invert: boolean } } } };
-  expect(JSON.stringify(click)).toContain('"threshold":200');
+  const click = JSON.stringify((await app.calls("gear_flash_click")).at(-1));
+  expect(click).toContain('"threshold":200');
+  expect(click).toContain('"invert":true');
 });
