@@ -2,7 +2,7 @@
 import { getCurrentWebview } from "@tauri-apps/api/webview";
 import { events } from "../bindings";
 import * as N from "./normalize";
-import type { AgentApplyRequest, AgentFormatRequest, CalibrateView, ClipResult, DeviceChanged, ImportProgress, LibraryTask, RadioEvent, StageProgress } from "./types";
+import type { AgentApplyRequest, AgentFormatRequest, CalibrateView, ClipResult, DeviceChanged, FirmwareReadProgress, ImportProgress, LibraryTask, RadioEvent, StageProgress } from "./types";
 
 export interface CoreEvents {
   "library-changed": null;
@@ -27,6 +27,8 @@ export interface CoreEvents {
   "radio-input": RadioEvent;
   /** The sim's calibration session, while `gearSimCalibrate` runs one. */
   "sim-calibration-event": CalibrateView;
+  /** The read-only DFU trial: bytes of both reads done. */
+  "firmware-read-progress": FirmwareReadProgress;
 }
 
 type Listen = (cb: (payload: never) => void) => Promise<() => void>;
@@ -50,6 +52,7 @@ const SOURCES: Record<keyof CoreEvents, Listen> = {
   menu: wrap(events.menu),
   "radio-input": wrap(events.radioInput, N.radioEvent),
   "sim-calibration-event": wrap(events.simCalibrationEvent),
+  "firmware-read-progress": wrap(events.firmwareReadProgress),
 };
 
 export function on<K extends keyof CoreEvents>(name: K, handler: (payload: CoreEvents[K]) => void): Promise<() => void> {

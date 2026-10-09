@@ -143,6 +143,8 @@ export const api = {
   /** The apply sheet's own Apply click for a sim restore: the click is the confirm. */
   gearSimRestoreClick: (p: SimRestoreParams, digest: string) => ok(commands.gearSimRestoreClick({ ...p, digest, confirm: true })),
   gearFirmware: (check: boolean | null = null) => ok(commands.gearFirmware({ check })),
+  /** The read-only DFU trial: reads the radio in DFU mode twice and saves a copy. Cannot write the radio. */
+  gearFirmwareRead: (device: string | null) => ok(commands.gearFirmwareRead({ device })),
   gearSplash: (p: SplashParams) => ok(commands.gearSplash(p)),
   gearFlashPlan: (p: FlashParams) => ok(commands.gearFlashPlan(p)),
   /** The apply sheet's own Apply click for a firmware flash: the click is the confirm. */

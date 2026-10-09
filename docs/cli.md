@@ -11,6 +11,7 @@ Each run continues one import session. QuadCam saves the session to `~/Library/C
 ## Import
 
 ```bash
+quadcam-cli status                        # the schema version, tools, settings, cards, radios and the session
 quadcam-cli cards                         # detected cards (with their source) and radio log sources
 quadcam-cli scan /Volumes/NO\ NAME        # the source and its clips; copies nothing
 quadcam-cli stage /Volumes/NO\ NAME       # copy clips to staging, start a session
@@ -156,7 +157,7 @@ quadcam-cli --json gear fc usb                                   # USB timers
 quadcam-cli --json gear blackbox pull [--port P] [--keep] [--mode auto|msp|msc] [--force]
 quadcam-cli --json gear blackbox list [--device ID]
 quadcam-cli --json gear blackbox export PULL DIR [--split]
-quadcam-cli --json gear blackbox erase [--port P] --confirm
+quadcam-cli --json gear blackbox erase [--port P] --yes
 quadcam-cli --json gear osd FILE [FILE ...] [--grid NTSC|PAL|HD|WxH] [--text]
 quadcam-cli --json gear osd DEVICE [--staged] [--grid ...] [--text]   # --staged: with the device's staged OSD edits on top
 quadcam-cli --json gear osd-edit DEVICE [--move ELEMENT=X,Y]... [--profiles ELEMENT=1,3|none]... [--copy FROM:TO]   # stages into the one "OSD layout" change; writes nothing to the FC
@@ -169,11 +170,12 @@ quadcam-cli --json gear voice build-pack --voice V --out DIR [--id ID --version 
 quadcam-cli --json gear model DEVICE [--model model01.yml] [--no-staged] [--text]   # a radio's model for the editors, from the card or the latest backup
 quadcam-cli --json gear model-edit DEVICE --model model01.yml [--timer 2:name=FLT,minuteBeep=1]... [--timer-off N]... [--screen 1:'{RxBt},Tmr1/{Capa}']... [--screen-script N:NAME]... [--screen-off N]... [--logging SA2:0.5|off] [--log-sensor RxBt=off]... [--rf-alarm 50:40] [--callout lowbat:below:'{RxBt}':3.5:2:5]... [--callout armed:switch:L1:'!1x']... [--callout-off TRACK]... [--checklist-file FILE|-] [--checklist on|off] [--ops FILE]   # stages into the one "Model edits" change; writes nothing to the card
 quadcam-cli --json gear rates FILE [FILE ...]|DEVICE [--backup ID] [--text]   # rate profiles and throttle curve
-quadcam-cli --json gear sims [FILE ...|DEVICE] [--backup ID] [--profile N] [--text]   # sims' rates, against the quad
+quadcam-cli --json gear sims [FILE ...|DEVICE] [--backup ID] [--rate-profile N] [--text]   # sims' rates, against the quad
 quadcam-cli --json gear sims SIM --restore [--backup ID] [--digest D --yes]   # put a sim's file back from a backup (the plan without --digest)
-quadcam-cli --json gear sims FILE|DEVICE [--profile N] --sync --to SIM[:PROFILE][@FILE] [--to ...] [--digest D --yes]   # write the quad's rates into sim profiles
+quadcam-cli --json gear sims FILE|DEVICE [--rate-profile N] --sync --to SIM[:PROFILE][@FILE] [--to ...] [--digest D --yes]   # write the quad's rates into sim profiles
 quadcam-cli --json gear firmware [--check]                    # each device's firmware against the newest release; --check reads the network
 quadcam-cli --json gear splash IMAGE.png [--threshold N] [--invert] [--board pocket] [--out preview.png]   # a PNG as the radio's 128x64 splash; --out writes the 4x preview
+quadcam-cli --json gear firmware --read [--device RADIO]       # read-only DFU trial: copy the firmware, compare the version
 quadcam-cli --json gear firmware --plan --device RADIO [--version V] [--splash IMAGE.png] [--threshold N] [--invert]   # an EdgeTX flash: checks, diff, digest
 quadcam-cli --json gear firmware --device RADIO [--version V] [--splash IMAGE.png] --digest D --yes      # flash the radio in DFU mode
 quadcam-cli --json gear map --radio CARD|MODEL.yml [--model model01.yml] --fc FILE [--fc FILE] [--live [--port P]] [--channels 1500,...] [--text]
@@ -197,7 +199,7 @@ quadcam-cli --json gear card-repair --check <check id> --yes
 quadcam-cli --json gear card-clean [--device ID | --mount M] [--remove --yes]   # list or delete the ._ files macOS left on a card
 quadcam-cli --json gear radio-cli identify|ls|play|beep|reboot|verify [--port P] [--path P] [--device ID] [--yes]   # a radio on its USB serial port (EdgeTX CLI)
 quadcam-cli --json gear dfu-link [--device ID] [--serial S] [--unlink]   # link the radio in DFU mode to a saved radio
-quadcam-cli --json gear stage --device ID --set NAME=VALUE [--profile N | --rateprofile N] [--title T]   # stage; writes nothing
+quadcam-cli --json gear stage --device ID --set NAME=VALUE [--pid-profile N | --rate-profile N] [--title T]   # stage; writes nothing
 quadcam-cli --json gear stage --device ID --cli FILE   # raw CLI lines, no save/exit/defaults
 quadcam-cli --json gear stage --device RADIO_ID --edits FILE.json   # card edits (JSON array)
 quadcam-cli --json gear changes [--device ID] [--status ready] [--history]
@@ -222,7 +224,7 @@ value never shows in `diff all`.
 `gear_erase_blackbox` setting is on and the checks pass. `--keep` skips the erase for that run; no flag turns it on.
 It refuses a pull that would outlast the USB heat timer (`--force` overrides that, never an erase that could not
 finish) and a port another program has open. `list` shows the stored pulls newest first, each log paired with a
-radio-log flight by order (a labelled guess). `erase --confirm` empties the flash when QuadCam holds a stored pull of
+radio-log flight by order (a labelled guess). `erase --yes` empties the flash when QuadCam holds a stored pull of
 exactly what it holds. See [Gear](gear.md#blackbox).
 
 See [Gear](gear.md).
@@ -231,7 +233,7 @@ See [Gear](gear.md).
 
 Add `--json` to any command to get one JSON object on stdout:
 
-- On success: `{"ok": true, "result": ...}`
+- On success: `{"ok": true, "result": ...}`. A run that used a deprecated command or flag adds `"warnings": [...]`.
 - On failure: `{"ok": false, "error": {"code": ..., "exit": ..., "message": ...}}`
 
 | Exit code | Meaning |
@@ -241,6 +243,36 @@ Add `--json` to any command to get one JSON object on stdout:
 | 2 | Wrong usage |
 | 3 | A safety check refused the command |
 | 4 | No session, no card, or no device |
+
+## Stability
+
+From 1.0 the command line is a contract. The schema version is 1; `quadcam-cli --schema-version` prints it, and `quadcam-cli --json status` and the MCP server report the same number.
+
+- **Additions stay allowed.** A new command, flag, positional argument, value or output field does not change the schema version.
+- **Removals and renames need a schema version bump and a deprecation period.** QuadCam marks the old command or flag deprecated first. It keeps working and prints a warning on stderr (`warnings` in `--json` output) that names the replacement. A later schema version removes it.
+- **Output fields stay.** A field that scripts read does not change its meaning or type.
+- **Exit codes stay** as the table below lists them.
+- `tests/surface/cli.txt` records every command, flag and argument. A test compares it with the built tool, so a removal or a rename fails the build.
+
+### MCP equivalents
+
+Every MCP tool has a command. The command line also has `scan`, `analyze`, `clear`, `moments`, `modules manifest`, `gear fc check` and `gear voice build-pack`. An MCP `snake_case` action is the same `kebab-case` command under `gear`. The exceptions:
+
+| MCP | Command |
+|---|---|
+| `quadcam_status` | `status` (the card list alone: `cards`; the session alone: `show`) |
+| `quadcam_load_clips` | `stage`, then `analyze` and `dates` |
+| `quadcam_suggest` | `import` flags (`--name`, `--note`, `--date`, `--cut`, ...), `meta`, `cut`, `dates` |
+| `quadcam_settings` `read`, `write` | `settings show`, `settings set` |
+| `quadcam_profiles` `set_default` | `profiles default` |
+| `quadcam_gear` `switch_map` | `gear map` |
+| `quadcam_gear` `session_report` | `gear report` |
+| `quadcam_gear` `board_notes`, `usb_timers` | `gear fc notes`, `gear fc usb` |
+| `quadcam_gear` `*_plan` | the same command without `--yes` or `--digest` (or with `--plan`) |
+| `quadcam_gear_apply` | the same command with `--digest D --yes` (MCP `confirm=true`) |
+| `quadcam_library_files` `cuts`, `split_by_flight`, `export_cuts` | `library cut` (`--by-flight`, `--export`) |
+
+Flags that mean one thing everywhere: `--yes` is MCP `confirm`, `--plan` shows the checks and digest and writes nothing, `--device` is a saved device id, `--mount` is a mount point, `--profile` is an aircraft profile. `gear voice` keeps `--confirm`: it allows a voice provider that may charge, which is a different consent.
 
 ## MCP server
 

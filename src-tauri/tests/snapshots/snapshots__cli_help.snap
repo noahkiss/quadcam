@@ -5,9 +5,10 @@ expression: text
 ===== quadcam-cli  --help
 Import FPV clips (analog DVR, DJI): stage, date, name, convert, verify, share, format
 
-Usage: quadcam-cli [OPTIONS] <COMMAND>
+Usage: quadcam-cli [OPTIONS] [COMMAND]
 
 Commands:
+  status    What `quadcam_status` shows: the schema version, the settings and tools, the cards, the radios and the session
   cards     List removable volumes: cards (with their source, analog or DJI) and radio log sources
   scan      List the clips on a volume or folder without copying anything
   stage     Copy every clip off a card or folder into staging and start a new session
@@ -35,8 +36,18 @@ Commands:
 Options:
       --json            Print one JSON object: {"ok":true,"result":...} or {"ok":false,"error":{...}}
       --session <FILE>  Session file (default: ~/Library/Caches/app.quadcam/session.json)
+      --schema-version  Print the schema version of the CLI and MCP surface, and exit
   -h, --help            Print help
   -V, --version         Print version
+===== quadcam-cli status --help
+What `quadcam_status` shows: the schema version, the settings and tools, the cards, the radios and the session
+
+Usage: quadcam-cli status [OPTIONS]
+
+Options:
+      --json            Print one JSON object: {"ok":true,"result":...} or {"ok":false,"error":{...}}
+      --session <FILE>  Session file (default: ~/Library/Caches/app.quadcam/session.json)
+  -h, --help            Print help
 ===== quadcam-cli cards --help
 List removable volumes: cards (with their source, analog or DJI) and radio log sources
 
@@ -576,6 +587,7 @@ Commands:
   status          The gear folder, the Gear settings, and the devices plugged in now
   devices         Saved devices: list (default), save a name or aircraft, forget
   fc              A Betaflight flight controller: identify, read, check, board notes, USB timer
+  blackbox        An FC's blackbox flash: `pull` (read, verify, store, maybe erase), `list`, `export`, `erase`
   osd             An FC's OSD layout per OSD profile, drawn on its grid and checked for overlaps and cells off screen. Reads a dump or diff file
   osd-edit        Stages OSD moves, toggles or a profile copy for an FC (one "OSD layout" change)
   rates           An FC's rate profiles: names, curves per axis (maximum and centre rates), the throttle curve. Reads a dump or diff file, a backup, or a saved device's latest backup

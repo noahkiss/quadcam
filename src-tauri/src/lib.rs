@@ -26,6 +26,7 @@ pub mod photos;
 pub mod pipeline;
 pub mod qtmeta;
 pub mod scan;
+pub mod schema;
 pub mod session;
 pub mod settings;
 mod share;
@@ -580,6 +581,7 @@ pub fn specta_builder() -> tauri_specta::Builder<tauri::Wry> {
             c::gear_sim_restore,
             c::gear_firmware,
             c::gear_splash,
+            c::gear_firmware_read,
             c::gear_flash_plan,
             c::gear_flash,
             c::gear_card,
@@ -684,6 +686,7 @@ pub fn specta_builder() -> tauri_specta::Builder<tauri::Wry> {
             api::Menu,
             api::RadioInput,
             api::SimCalibrationEvent,
+            api::FirmwareReadProgress,
         ])
         // Sizes and counts fit a JS number.
         .dangerously_cast_bigints_to_number()

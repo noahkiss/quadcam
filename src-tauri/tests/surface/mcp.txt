@@ -1,0 +1,351 @@
+# schema_version 1
+mcp.action quadcam_gear.apply_plan
+mcp.action quadcam_gear.backup_diff
+mcp.action quadcam_gear.backup_read
+mcp.action quadcam_gear.backups
+mcp.action quadcam_gear.blackbox
+mcp.action quadcam_gear.board_notes
+mcp.action quadcam_gear.card
+mcp.action quadcam_gear.card_checks
+mcp.action quadcam_gear.card_preview
+mcp.action quadcam_gear.changes
+mcp.action quadcam_gear.copy_plan
+mcp.action quadcam_gear.crashes
+mcp.action quadcam_gear.devices
+mcp.action quadcam_gear.fc_identify
+mcp.action quadcam_gear.firmware_check
+mcp.action quadcam_gear.firmware_read
+mcp.action quadcam_gear.flash_plan
+mcp.action quadcam_gear.flights
+mcp.action quadcam_gear.model
+mcp.action quadcam_gear.osd
+mcp.action quadcam_gear.packs
+mcp.action quadcam_gear.preflight
+mcp.action quadcam_gear.radio
+mcp.action quadcam_gear.rates
+mcp.action quadcam_gear.session_report
+mcp.action quadcam_gear.sim_calibration
+mcp.action quadcam_gear.sim_defaults
+mcp.action quadcam_gear.sim_restore_plan
+mcp.action quadcam_gear.sim_sync_plan
+mcp.action quadcam_gear.sim_validate
+mcp.action quadcam_gear.sims
+mcp.action quadcam_gear.splash
+mcp.action quadcam_gear.status
+mcp.action quadcam_gear.storage
+mcp.action quadcam_gear.switch_map
+mcp.action quadcam_gear.usb_timers
+mcp.action quadcam_gear.voice
+mcp.action quadcam_gear_apply.apply
+mcp.action quadcam_gear_apply.blackbox_erase
+mcp.action quadcam_gear_apply.blackbox_pull
+mcp.action quadcam_gear_apply.card_repair
+mcp.action quadcam_gear_apply.flash
+mcp.action quadcam_gear_apply.sim_restore
+mcp.action quadcam_gear_apply.sim_sync
+mcp.action quadcam_gear_edit.backup
+mcp.action quadcam_gear_edit.backup_pin
+mcp.action quadcam_gear_edit.blackbox_export
+mcp.action quadcam_gear_edit.card_check
+mcp.action quadcam_gear_edit.card_clean
+mcp.action quadcam_gear_edit.card_mount
+mcp.action quadcam_gear_edit.card_unmount
+mcp.action quadcam_gear_edit.copy_stage
+mcp.action quadcam_gear_edit.crash_delete
+mcp.action quadcam_gear_edit.crash_save
+mcp.action quadcam_gear_edit.device_forget
+mcp.action quadcam_gear_edit.device_save
+mcp.action quadcam_gear_edit.dfu_link
+mcp.action quadcam_gear_edit.discard
+mcp.action quadcam_gear_edit.export
+mcp.action quadcam_gear_edit.fc_read
+mcp.action quadcam_gear_edit.flight_folders
+mcp.action quadcam_gear_edit.flight_set
+mcp.action quadcam_gear_edit.import_backups
+mcp.action quadcam_gear_edit.keep
+mcp.action quadcam_gear_edit.model_edit
+mcp.action quadcam_gear_edit.osd_edit
+mcp.action quadcam_gear_edit.pack_delete
+mcp.action quadcam_gear_edit.pack_notes
+mcp.action quadcam_gear_edit.pack_save
+mcp.action quadcam_gear_edit.pack_type_delete
+mcp.action quadcam_gear_edit.pack_type_save
+mcp.action quadcam_gear_edit.poll_pause
+mcp.action quadcam_gear_edit.prune
+mcp.action quadcam_gear_edit.radio_cli
+mcp.action quadcam_gear_edit.report_save
+mcp.action quadcam_gear_edit.restore_stage
+mcp.action quadcam_gear_edit.revert_stage
+mcp.action quadcam_gear_edit.sim_calibration_save
+mcp.action quadcam_gear_edit.stage
+mcp.action quadcam_gear_edit.stop
+mcp.action quadcam_gear_edit.update
+mcp.action quadcam_gear_edit.voice_choose
+mcp.action quadcam_gear_edit.voice_edit
+mcp.action quadcam_gear_edit.voice_install
+mcp.action quadcam_gear_edit.voice_render
+mcp.action quadcam_library_files.apply_name_format
+mcp.action quadcam_library_files.cuts
+mcp.action quadcam_library_files.export_cuts
+mcp.action quadcam_library_files.match_logs
+mcp.action quadcam_library_files.photos
+mcp.action quadcam_library_files.rebuild
+mcp.action quadcam_library_files.split_by_flight
+mcp.action quadcam_library_files.trash
+mcp.action quadcam_places.delete
+mcp.action quadcam_places.list
+mcp.action quadcam_places.save
+mcp.action quadcam_places.search
+mcp.action quadcam_profiles.delete
+mcp.action quadcam_profiles.list
+mcp.action quadcam_profiles.save
+mcp.action quadcam_profiles.set_default
+mcp.action quadcam_settings.module_install
+mcp.action quadcam_settings.module_remove
+mcp.action quadcam_settings.modules
+mcp.action quadcam_settings.read
+mcp.action quadcam_settings.write
+mcp.param quadcam_add_to_photos.album string
+mcp.param quadcam_add_to_photos.ids array<integer>
+mcp.param quadcam_eject.target string
+mcp.param quadcam_export.add_time boolean
+mcp.param quadcam_export.add_to_photos boolean
+mcp.param quadcam_export.album string
+mcp.param quadcam_export.format string
+mcp.param quadcam_export.keep_clips boolean
+mcp.param quadcam_export.keep_originals boolean
+mcp.param quadcam_export.output_dir string
+mcp.param quadcam_format_card.card string
+mcp.param quadcam_format_card.confirm boolean
+mcp.param quadcam_format_card.device string
+mcp.param quadcam_format_card.dry_run boolean
+mcp.param quadcam_format_card.label string
+mcp.param quadcam_format_card.mount string
+mcp.param quadcam_format_card.prep boolean
+mcp.param quadcam_format_card.volume_uuid string
+mcp.param quadcam_gear.action string
+mcp.param quadcam_gear.against string
+mcp.param quadcam_gear.aircraft string
+mcp.param quadcam_gear.board string
+mcp.param quadcam_gear.change string
+mcp.param quadcam_gear.check boolean
+mcp.param quadcam_gear.clip string
+mcp.param quadcam_gear.day string
+mcp.param quadcam_gear.device string
+mcp.param quadcam_gear.edits array
+mcp.param quadcam_gear.from string
+mcp.param quadcam_gear.grid string
+mcp.param quadcam_gear.history boolean
+mcp.param quadcam_gear.id string
+mcp.param quadcam_gear.image string
+mcp.param quadcam_gear.invert boolean
+mcp.param quadcam_gear.live boolean
+mcp.param quadcam_gear.log_dir string
+mcp.param quadcam_gear.model string
+mcp.param quadcam_gear.mount string
+mcp.param quadcam_gear.pack string
+mcp.param quadcam_gear.parts array<string>
+mcp.param quadcam_gear.path string
+mcp.param quadcam_gear.paths array<string>
+mcp.param quadcam_gear.place string
+mcp.param quadcam_gear.port string
+mcp.param quadcam_gear.radio string
+mcp.param quadcam_gear.rate_profile integer
+mcp.param quadcam_gear.refresh boolean
+mcp.param quadcam_gear.settings array<string>
+mcp.param quadcam_gear.sim string
+mcp.param quadcam_gear.sim_targets array<string>
+mcp.param quadcam_gear.staged boolean
+mcp.param quadcam_gear.target_v number
+mcp.param quadcam_gear.threshold integer
+mcp.param quadcam_gear.to string
+mcp.param quadcam_gear.version string
+mcp.param quadcam_gear_apply.action string
+mcp.param quadcam_gear_apply.change string
+mcp.param quadcam_gear_apply.confirm boolean
+mcp.param quadcam_gear_apply.device string
+mcp.param quadcam_gear_apply.digest string
+mcp.param quadcam_gear_apply.force boolean
+mcp.param quadcam_gear_apply.id string
+mcp.param quadcam_gear_apply.image string
+mcp.param quadcam_gear_apply.invert boolean
+mcp.param quadcam_gear_apply.keep boolean
+mcp.param quadcam_gear_apply.mode string
+mcp.param quadcam_gear_apply.paths array<string>
+mcp.param quadcam_gear_apply.port string
+mcp.param quadcam_gear_apply.rate_profile integer
+mcp.param quadcam_gear_apply.sim string
+mcp.param quadcam_gear_apply.sim_targets array<string>
+mcp.param quadcam_gear_apply.threshold integer
+mcp.param quadcam_gear_apply.version string
+mcp.param quadcam_gear_edit.action string
+mcp.param quadcam_gear_edit.add_folder string
+mcp.param quadcam_gear_edit.aircraft string
+mcp.param quadcam_gear_edit.backup string
+mcp.param quadcam_gear_edit.broke string
+mcp.param quadcam_gear_edit.calibration any
+mcp.param quadcam_gear_edit.capacity_mah number
+mcp.param quadcam_gear_edit.cells integer
+mcp.param quadcam_gear_edit.change string
+mcp.param quadcam_gear_edit.charge_a number
+mcp.param quadcam_gear_edit.charged boolean
+mcp.param quadcam_gear_edit.checklist string
+mcp.param quadcam_gear_edit.chemistry string
+mcp.param quadcam_gear_edit.clip string
+mcp.param quadcam_gear_edit.command string
+mcp.param quadcam_gear_edit.commands array<string>
+mcp.param quadcam_gear_edit.confirm boolean
+mcp.param quadcam_gear_edit.connector string
+mcp.param quadcam_gear_edit.copy any
+mcp.param quadcam_gear_edit.day string
+mcp.param quadcam_gear_edit.device string
+mcp.param quadcam_gear_edit.draft boolean
+mcp.param quadcam_gear_edit.dry_run boolean
+mcp.param quadcam_gear_edit.edits array
+mcp.param quadcam_gear_edit.flight string
+mcp.param quadcam_gear_edit.folder string
+mcp.param quadcam_gear_edit.from string
+mcp.param quadcam_gear_edit.full_v number
+mcp.param quadcam_gear_edit.handle string
+mcp.param quadcam_gear_edit.id string
+mcp.param quadcam_gear_edit.keep_overrides boolean
+mcp.param quadcam_gear_edit.line string
+mcp.param quadcam_gear_edit.lines array<string>
+mcp.param quadcam_gear_edit.minutes integer
+mcp.param quadcam_gear_edit.model string
+mcp.param quadcam_gear_edit.mount string
+mcp.param quadcam_gear_edit.moves array
+mcp.param quadcam_gear_edit.name string
+mcp.param quadcam_gear_edit.note string
+mcp.param quadcam_gear_edit.ops array
+mcp.param quadcam_gear_edit.order integer
+mcp.param quadcam_gear_edit.overwrite boolean
+mcp.param quadcam_gear_edit.pack string
+mcp.param quadcam_gear_edit.pack_type string
+mcp.param quadcam_gear_edit.parts array<string>
+mcp.param quadcam_gear_edit.path string
+mcp.param quadcam_gear_edit.paths array<string>
+mcp.param quadcam_gear_edit.paused boolean
+mcp.param quadcam_gear_edit.pinned boolean
+mcp.param quadcam_gear_edit.place string
+mcp.param quadcam_gear_edit.port string
+mcp.param quadcam_gear_edit.product string
+mcp.param quadcam_gear_edit.radio string
+mcp.param quadcam_gear_edit.received string
+mcp.param quadcam_gear_edit.remove_folder string
+mcp.param quadcam_gear_edit.repaired boolean
+mcp.param quadcam_gear_edit.retired boolean
+mcp.param quadcam_gear_edit.serial string
+mcp.param quadcam_gear_edit.settings array<string>
+mcp.param quadcam_gear_edit.source string
+mcp.param quadcam_gear_edit.split boolean
+mcp.param quadcam_gear_edit.status string
+mcp.param quadcam_gear_edit.storage_v number
+mcp.param quadcam_gear_edit.text string
+mcp.param quadcam_gear_edit.time_s number
+mcp.param quadcam_gear_edit.title string
+mcp.param quadcam_gear_edit.to string
+mcp.param quadcam_gear_edit.unlink boolean
+mcp.param quadcam_gear_edit.voice string
+mcp.param quadcam_gear_edit.warn_mah number
+mcp.param quadcam_library.aircraft string
+mcp.param quadcam_library.day string
+mcp.param quadcam_library.group string
+mcp.param quadcam_library.limit integer
+mcp.param quadcam_library.min_rating integer
+mcp.param quadcam_library.place string
+mcp.param quadcam_library.query string
+mcp.param quadcam_library_edit.author string
+mcp.param quadcam_library_edit.date string
+mcp.param quadcam_library_edit.flag string
+mcp.param quadcam_library_edit.ids array<string>
+mcp.param quadcam_library_edit.keywords array<string>
+mcp.param quadcam_library_edit.location object
+mcp.param quadcam_library_edit.name string
+mcp.param quadcam_library_edit.note string
+mcp.param quadcam_library_edit.place string
+mcp.param quadcam_library_edit.profile string
+mcp.param quadcam_library_edit.rating integer
+mcp.param quadcam_library_edit.time string
+mcp.param quadcam_library_files.action string
+mcp.param quadcam_library_files.album string
+mcp.param quadcam_library_files.apply boolean
+mcp.param quadcam_library_files.cuts array<object>
+mcp.param quadcam_library_files.day string
+mcp.param quadcam_library_files.export boolean
+mcp.param quadcam_library_files.ids array<string>
+mcp.param quadcam_library_files.log_dir string
+mcp.param quadcam_library_files.removed_cuts string
+mcp.param quadcam_load_clips.card string
+mcp.param quadcam_load_clips.join boolean
+mcp.param quadcam_load_clips.source string
+mcp.param quadcam_match_logs.day string
+mcp.param quadcam_match_logs.log_dir string
+mcp.param quadcam_match_logs.no_logs boolean
+mcp.param quadcam_places.action string
+mcp.param quadcam_places.lat number
+mcp.param quadcam_places.limit integer
+mcp.param quadcam_places.lon number
+mcp.param quadcam_places.name string
+mcp.param quadcam_places.new_name string
+mcp.param quadcam_places.provider string
+mcp.param quadcam_places.query string
+mcp.param quadcam_profiles.action string
+mcp.param quadcam_profiles.default boolean
+mcp.param quadcam_profiles.fields object
+mcp.param quadcam_profiles.name string
+mcp.param quadcam_profiles.new_name string
+mcp.param quadcam_read_clips.ids array<integer>
+mcp.param quadcam_read_clips.max_thumbnails integer
+mcp.param quadcam_read_clips.thumbnails boolean
+mcp.param quadcam_settings.action string
+mcp.param quadcam_settings.confirm boolean
+mcp.param quadcam_settings.module string
+mcp.param quadcam_settings.values object
+mcp.param quadcam_suggest.suggestions array<object>
+mcp.param quadcam_verify.ids array<integer>
+mcp.required quadcam_gear.action
+mcp.required quadcam_gear_apply.action
+mcp.required quadcam_gear_edit.action
+mcp.required quadcam_library_edit.ids
+mcp.required quadcam_library_files.action
+mcp.required quadcam_places.action
+mcp.required quadcam_profiles.action
+mcp.required quadcam_settings.action
+mcp.required quadcam_suggest.suggestions
+mcp.tool quadcam_add_to_photos
+mcp.tool quadcam_eject
+mcp.tool quadcam_export
+mcp.tool quadcam_format_card
+mcp.tool quadcam_gear
+mcp.tool quadcam_gear_apply
+mcp.tool quadcam_gear_edit
+mcp.tool quadcam_library
+mcp.tool quadcam_library_edit
+mcp.tool quadcam_library_files
+mcp.tool quadcam_load_clips
+mcp.tool quadcam_match_logs
+mcp.tool quadcam_places
+mcp.tool quadcam_profiles
+mcp.tool quadcam_read_clips
+mcp.tool quadcam_settings
+mcp.tool quadcam_status
+mcp.tool quadcam_suggest
+mcp.tool quadcam_verify
+mcp.value quadcam_export.format=mov
+mcp.value quadcam_export.format=mp4
+mcp.value quadcam_library.group=all
+mcp.value quadcam_library.group=last_import
+mcp.value quadcam_library.group=moments
+mcp.value quadcam_library.group=not_in_photos
+mcp.value quadcam_library.group=picks
+mcp.value quadcam_library.group=rejected
+mcp.value quadcam_library_edit.flag=none
+mcp.value quadcam_library_edit.flag=pick
+mcp.value quadcam_library_edit.flag=reject
+mcp.value quadcam_library_files.removed_cuts=keep
+mcp.value quadcam_library_files.removed_cuts=trash
+mcp.value quadcam_places.provider=apple
+mcp.value quadcam_places.provider=census
+mcp.value quadcam_places.provider=google
+mcp.value quadcam_places.provider=nominatim

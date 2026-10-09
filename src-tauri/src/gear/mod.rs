@@ -52,6 +52,7 @@ pub mod edgetx;
 pub mod events;
 pub mod firmware;
 pub mod flights;
+pub mod fwcopy;
 pub mod health;
 pub mod model;
 pub mod osd;

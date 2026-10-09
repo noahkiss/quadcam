@@ -165,7 +165,7 @@ fails, the pull stays stored, and the record says why.
 
 `gear_erase_blackbox` is off by default, like `delete_clips_after_import`. The CLI and the MCP tools
 only respect it: `--keep` (CLI) and `keep` (MCP) skip the erase for one run, and nothing turns it on
-except the setting. **Erase flash** (`gear blackbox erase --confirm`, `blackbox_erase`) erases by hand.
+except the setting. **Erase flash** (`gear blackbox erase --yes`, `blackbox_erase`) erases by hand.
 It needs a stored pull of exactly what the flash holds (the same used size; flash only grows), and
 asks first in the app.
 
@@ -916,10 +916,11 @@ Packs, pack types, the pack set on each flight, added log folders and crashes ar
 ## Firmware and splash
 
 > **Warning.** Flashing writes a radio's firmware. A wrong or interrupted flash can leave the
-> radio unable to start until you flash it again. The STM32 bootloader is in ROM and QuadCam
-> never overwrites it, so a radio in DFU mode can always be recovered. **QuadCam's flash has
-> not been tried on a real radio yet.** Do not flash a radio you cannot recover, and keep the
-> backups QuadCam makes.
+> radio unable to start until you flash it again. The chip's own USB bootloader is in ROM, so
+> QuadCam cannot overwrite it, and a radio can be recovered over USB (see
+> [Recovery](#if-a-flash-fails-or-the-radio-will-not-start)). **QuadCam's flash has not been
+> tried on a real radio yet.** Read the firmware first (below), and keep the copies QuadCam
+> makes.
 
 ### Check
 
@@ -940,6 +941,31 @@ Packs, pack types, the pack set on each flight, added log folders and crashes ar
 - QuadCam checks Betaflight and ExpressLRS versions. It does not flash them.
 - **Flash 2.12.4…** appears for an EdgeTX radio that QuadCam has proven (see below).
 
+### Read the firmware (the first trial)
+
+**Firmware > Read firmware** reads the firmware that runs on a radio and saves a copy. It
+cannot erase, write or restart the radio: the USB path it uses refuses every command except
+status polls, aborts, the address pointer and uploads. Run it before any flash.
+
+1. Turn the radio off.
+2. Plug the radio into this Mac with the USB cable. Do not hold any buttons. (Holding both
+   trim buttons starts the EdgeTX bootloader, which is a different mode.) Wait a few seconds.
+3. Pick the radio in **Radio**, or **Other radio** to skip the version comparison.
+4. Select **Read firmware**. The progress bar covers two reads of the whole 1 MB flash.
+
+QuadCam reads the flash twice and keeps the copy only when both reads are equal. It saves the
+copy, reads the saved file back and compares it, then compares the version the image names
+(`edgetx-pocket-2.12.4 ...`) with the version it knows for the radio. The result says whether
+they match. A mismatch is not an error; check the radio's About screen.
+
+- The copy is a file pair under the gear folder, `firmware/<radio>/<time>-read.bin` and
+  `.json`. It is not a card backup and does not appear in **Backups**.
+- A flash that reads as blank, as all zeros (a protected chip) or differently on the two reads
+  is refused with the reason.
+- With no radio in DFU mode, the read says so and tells you the steps above.
+- Command line: `quadcam-cli --json gear firmware --read [--device RADIO]`. MCP:
+  `quadcam_gear` `firmware_read`.
+
 ### Flash an EdgeTX radio
 
 QuadCam flashes only a board and an EdgeTX version listed in `compat.rs`. Today that is the
@@ -950,31 +976,66 @@ Anything else is refused with the reason.
 2. Open **Firmware > Flash…**, or make a splash first (below). The sheet shows the checks:
    the board and version, the firmware image, the splash markers, the card backup and exactly
    one radio in DFU mode.
-3. Put the radio in DFU mode: turn it off, hold both trims toward the centre, plug in the USB
-   cable. The radio shows no name in DFU mode, so check that it is the radio you picked. Once
+3. Put the radio in DFU mode: turn it off and plug in the USB cable, without holding any
+   button. The radio shows no name in DFU mode, so check that it is the radio you picked. Once
    the DFU device is linked to a saved radio (see [What QuadCam finds](#what-quadcam-finds)),
    the plan refuses a different radio.
 4. Select **Apply**. QuadCam:
-   - reads the firmware the radio runs now and keeps it as a backup (**Backups**, file
-     `firmware.bin`);
-   - erases the sectors it needs, writes the image, reads it back and compares every byte;
+   - checks the chip has the flash size the board expects (1 MB for the Pocket);
+   - reads the firmware the radio runs now twice, saves it as a copy and reads the saved file
+     back. Nothing is erased until both reads are equal and the file matches. A blank flash
+     (an earlier flash that stopped) has nothing to copy and may be flashed;
+   - erases the sectors it needs and writes the image in 16 KB segments, reading each segment
+     back before it writes the next;
+   - reads the whole image back and compares every byte;
    - leaves DFU mode, and the radio restarts.
 5. Connect the radio in USB Storage mode to see its version.
 
-If the read back differs, QuadCam does not start the image. The radio stays in DFU mode:
-unplug it, enter DFU mode again and retry.
+If a segment or the final read back differs, QuadCam does not start the image. The radio
+stays in DFU mode: select Apply again, or unplug it, turn it off and plug it in again.
 
 Where the image comes from:
 
-- QuadCam downloads the release's firmware zip from EdgeTX on GitHub when you plan a flash.
-  It bundles and redistributes no firmware. The download is kept in
-  `~/Library/Caches/app.quadcam/firmware/edgetx/<version>/`.
+- QuadCam downloads the release's firmware zip (`edgetx-firmware-vX.Y.Z.zip`) from EdgeTX on
+  GitHub when you plan a flash. It bundles and redistributes no firmware. The download is kept
+  in `~/Library/Caches/app.quadcam/firmware/edgetx/<version>/`.
 - QuadCam checks the zip against the SHA-256 that the release lists. When the release lists
   none, QuadCam records the hash at the first download and shows it in the plan.
-- The board's image is the one file in the zip named for the board. None, or two, refuses.
+- The board's image is the one `.bin` in the zip named `<board>-<commit hash>.bin`
+  (`pocket-def35ad.bin` in 2.12.4). None, or two, refuses.
 - The image must be a full image: the bootloader's vector table first and the firmware's at
   `0x8000`, 400 to 1000 KB. A firmware-only file is refused, because writing it at the start
   of the flash would replace the bootloader.
+- The image must name its own board and version (`edgetx-pocket-2.12.4 (...)`). An image of
+  another release or board is refused.
+
+### If a flash fails or the radio will not start
+
+The STM32 chip has a bootloader in ROM that no flash can erase. A radio whose firmware is
+missing or broken can still be put in DFU mode, and QuadCam can flash it again.
+
+1. Turn the radio off. Unplug other radios.
+2. Plug in the USB cable, with no button held. Wait a few seconds.
+3. Open **Firmware > Flash…** and select **Apply**. A blank flash is allowed.
+4. If QuadCam cannot do it, use a DFU tool on the copy in `firmware/<radio>/`. Another
+   option is STM32CubeProgrammer with the release's `<board>-<hash>.bin` at address
+   `0x08000000`.
+5. If the radio shows the EdgeTX bootloader (it started with both trims held), you can copy a
+   firmware file to its SD card from there, as the EdgeTX manual describes.
+
+Where a failure can leave the radio, and what QuadCam does:
+
+| Point | What can go wrong | What QuadCam does |
+|---|---|---|
+| The cable or the Mac drops during the read | Nothing on the radio changes | The read fails; nothing was erased |
+| Two reads differ | A bad cable or port | No copy, no erase |
+| The saved copy does not match | A failing disk | No erase |
+| The chip is not the expected size | The wrong radio in DFU mode | Refuses before any command |
+| The device moves another block size than 2,048 bytes | Blocks land at the wrong address | Refuses before the erase |
+| Power or USB drops during the erase or the write | The radio has no valid firmware | The radio stays in DFU mode; flash again |
+| A block does not program | A corrupt image | Caught by the segment read back; the image is not started |
+| The final read back differs | A corrupt image | The image is not started |
+| The image is not the board's or the version's | A wrong file | Refused in the plan |
 
 ### Splash
 
@@ -993,8 +1054,10 @@ appears twice or is not where the layout puts it. After the patch it decodes the
 compares it with the preview. Colour radios are refused: "This radio's splash format is not
 supported yet."
 
-The marker layout comes from the design and was tested on a synthetic image. It has not been
-compared with a downloaded EdgeTX binary yet. If a real image differs, the plan refuses.
+The layout was compared with the official EdgeTX 2.12.4 Pocket image: one `SPS` marker,
+`0x80 0x40`, 1,024 bytes of 8-row vertical bytes with the top row in bit 0 (a set bit is a drawn
+pixel), then `SPE`. The bytes decode to the EdgeTX logo. The tests use a synthetic image with
+the same layout. If another release differs, the plan refuses.
 
 ## Command line and agents
 
@@ -1012,20 +1075,21 @@ quadcam-cli --json gear fc usb                                   # USB timers
 quadcam-cli --json gear blackbox pull [--port P] [--keep] [--mode auto|msp|msc] [--force]   # read, verify, store; erase if the setting allows
 quadcam-cli --json gear blackbox list [--device ID]              # stored pulls with their guessed flights
 quadcam-cli --json gear blackbox export <pull> DIR [--split]     # .bbl files
-quadcam-cli --json gear blackbox erase [--port P] --confirm      # erase the flash; needs a stored pull of it
+quadcam-cli --json gear blackbox erase [--port P] --yes      # erase the flash; needs a stored pull of it
 quadcam-cli gear osd quad.dump_all.txt --text        # each OSD profile drawn, and the check
 quadcam-cli --json gear osd quad.dump_all.txt apply.cli --grid PAL
 quadcam-cli --json gear osd <fc> --staged                    # the layout with its staged OSD edits on top
 quadcam-cli --json gear osd-edit <fc> --move vbat=12,3 --profiles vbat=1,3   # stage a move and a toggle
 quadcam-cli --json gear osd-edit <fc> --copy 1:2             # profile 2 shows what profile 1 shows
 quadcam-cli gear rates quad.dump_all.txt --text      # every rate profile: names, maximum and centre rates
-quadcam-cli --json gear sims quad.dump_all.txt [--profile N]   # the sims' rates against the quad
+quadcam-cli --json gear sims quad.dump_all.txt [--rate-profile N]   # the sims' rates against the quad
 quadcam-cli --json gear sims quad.dump_all.txt --sync --to uncrashed:OUT --to liftoff:Freestyle   # the plan
 quadcam-cli --json gear sims quad.dump_all.txt --sync --to uncrashed:OUT --digest D --yes        # write
 quadcam-cli --json gear sims uncrashed --restore [--backup ID]                              # the plan to put a sim's file back
 quadcam-cli --json gear sims uncrashed --restore [--backup ID] --digest D --yes                   # restore
 quadcam-cli --json gear firmware [--check]           # installed against newest; --check reads the network
 quadcam-cli --json gear splash logo.png [--threshold 128] [--invert] [--board pocket] [--out preview.png]
+quadcam-cli --json gear firmware --read [--device <radio>]   # read-only DFU trial: copy the firmware, compare the version
 quadcam-cli --json gear firmware --plan --device <radio> [--version 2.12.4] [--splash logo.png]   # checks, diff, digest
 quadcam-cli --json gear firmware --device <radio> [--splash logo.png] --digest D --yes   # flash (radio in DFU mode)
 quadcam-cli --json gear card [--mount M | --device ID] [--model model01.yml]

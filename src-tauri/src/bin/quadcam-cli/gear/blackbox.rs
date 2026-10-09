@@ -52,11 +52,11 @@ pub enum BlackboxCmd {
         #[arg(long)]
         split: bool,
     },
-    /// Erase the FC's flash. Needs --confirm and a stored pull of exactly what the flash holds.
+    /// Erase the FC's flash. Needs --yes and a stored pull of exactly what the flash holds.
     Erase {
         #[arg(long)]
         port: Option<String>,
-        #[arg(long)]
+        #[arg(long = "yes")]
         confirm: bool,
     },
 }

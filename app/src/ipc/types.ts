@@ -351,7 +351,7 @@ export interface CopyRequest {
 
 // Rates and the sims' rates, with the numbers narrowed (the core sends a finite number).
 export type { RatesParams, SimRestoreParams, SimsParams, SimSyncParams, SimTarget } from "../bindings";
-export type { FirmwareStatus, FirmwareView, FlashParams, SplashParams, SplashPreview } from "../bindings";
+export type { FirmwareRead, FirmwareReadProgress, FirmwareStatus, FirmwareView, FlashParams, SplashParams, SplashPreview } from "../bindings";
 /** A profile re-drawn, and after a conversion how far each axis is off. */
 export interface RatesPreview {
   profile: RateProfile;
