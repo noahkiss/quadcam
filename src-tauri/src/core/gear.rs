@@ -598,7 +598,7 @@ pub fn link_handle(link: &Link) -> String {
         } => d.clone(),
         Link::Volume { mount, .. } => mount.display().to_string(),
         Link::Serial { port, .. } => port.clone(),
-        Link::Dfu { vid, pid } => format!("dfu-{vid:04x}:{pid:04x}"),
+        Link::Dfu { vid, pid, .. } => format!("dfu-{vid:04x}:{pid:04x}"),
     }
 }
 
@@ -637,6 +637,15 @@ pub struct HookRun {
 /// The saved device a connected one is: its id, else an id it answers to (`Connected::also`)
 /// that is a saved id or alias, else its id as a saved alias. Only a radio has aliases.
 fn saved_for<'a>(c: &Connected, saved: &'a [Device]) -> Option<&'a Device> {
+    if let Link::Dfu {
+        serial: Some(serial),
+        ..
+    } = &c.link
+    {
+        return saved
+            .iter()
+            .find(|d| d.kind == DeviceKind::Radio && d.dfu_serial.as_deref() == Some(serial));
+    }
     let id = c.id.as_deref()?;
     if let Some(d) = saved.iter().find(|d| d.id == id) {
         return Some(d);

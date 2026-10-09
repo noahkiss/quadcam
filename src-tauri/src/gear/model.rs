@@ -175,7 +175,14 @@ pub enum Link {
         product: Option<String>,
     },
     /// A USB DFU device (a radio in its bootloader).
-    Dfu { vid: u16, pid: u16 },
+    Dfu {
+        vid: u16,
+        pid: u16,
+        /// The chip's unique id, which the bootloader reports. A saved radio's `dfu_serial`
+        /// links to it.
+        #[serde(default)]
+        serial: Option<String>,
+    },
 }
 
 /// A device plugged in now, as `detect` found it.

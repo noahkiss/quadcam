@@ -377,6 +377,7 @@ pub fn detect_all(
                 link: Link::Dfu {
                     vid: d.vid,
                     pid: d.pid,
+                    serial: d.serial.clone(),
                 },
                 identity: Identity::default(),
                 device: None,

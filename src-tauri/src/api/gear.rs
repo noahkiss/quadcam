@@ -21,7 +21,7 @@ pub use crate::core::{
     SimDefaultsParams, SimValidateParams,
 };
 pub use crate::core::{
-    CardMountParams, CardMounted, RadioCliAction, RadioCliParams, RadioCliReport, RadioMatch, RadioVerify, ChangeUpdateParams, CopyParams, OsdEditParams, RestoreParams,
+    CardMountParams, CardMounted, DfuLinkParams, DfuLinked, RadioCliAction, RadioCliParams, RadioCliReport, RadioMatch, RadioVerify, ChangeUpdateParams, CopyParams, OsdEditParams, RestoreParams,
     StageParams,
 };
 pub use crate::core::{
@@ -205,6 +205,8 @@ macro_rules! with_gear_rows {
             gear_export(params: ExportParams) -> ExportReport = |c| c.gear_export(&params);
             /// Imports an old backup folder: card copies, FC diff and dump files, LOGS folders.
             gear_import_backups(params: ImportBackupsParams) -> ImportBackupsReport = |c| c.gear_import_backups(&params);
+            /// Links the radio in DFU mode to a saved radio (the pick, else the radio seen last), or removes the link.
+            gear_dfu_link(params: DfuLinkParams) -> DfuLinked = |c| c.gear_dfu_link(&params);
             /// A radio on its USB serial port (EdgeTX CLI): identify, ls, play, beep, reboot, or verify the card's files against a backup.
             gear_radio_cli(params: RadioCliParams) -> RadioCliReport = |c| c.gear_radio_cli(&params);
             /// Lists the ._ files macOS left on a card; with remove and confirm, deletes them.

@@ -259,6 +259,51 @@ impl Core {
             ),
         });
 
+        if let [one] = dfu.as_slice() {
+            let saved = self.gear_store().devices().unwrap_or_default();
+            let owner = one
+                .serial
+                .as_deref()
+                .and_then(|s| saved.iter().find(|d| d.dfu_serial.as_deref() == Some(s)));
+            match (owner, device.dfu_serial.as_deref()) {
+                (Some(o), _) if o.id == device.id => {
+                    checks.push(pass("The radio in DFU mode is this radio"));
+                }
+                (Some(o), _) => checks.push(fail(
+                    "The radio in DFU mode is this radio",
+                    RefusalCode::DeviceChanged,
+                    format!(
+                        "The radio in DFU mode is linked to {}, not {}. Pick that radio, or unlink it (gear_dfu_link).",
+                        o.display_name(),
+                        device.display_name()
+                    ),
+                )),
+                (None, Some(_)) => checks.push(fail(
+                    "The radio in DFU mode is this radio",
+                    RefusalCode::DeviceChanged,
+                    format!(
+                        "{} is linked to another DFU device than the one plugged in. Unplug the other radio, or unlink {} (gear_dfu_link) and plan again.",
+                        device.display_name(),
+                        device.display_name()
+                    ),
+                )),
+                (None, None) => {
+                    let last = super::dfu_link::last_seen_radio(&saved);
+                    warnings.push(match last {
+                        Some(l) if l.id != device.id => format!(
+                            "This DFU device is not linked to a radio yet. {} was seen most recently, not {}; check you picked the radio in DFU mode. A verified flash links it to {}.",
+                            l.display_name(),
+                            device.display_name(),
+                            device.display_name()
+                        ),
+                        _ => format!(
+                            "This DFU device is not linked to a radio yet. A verified flash links it to {}.",
+                            device.display_name()
+                        ),
+                    });
+                }
+            }
+        }
         warnings.push(
             "A radio in DFU mode shows no name. QuadCam writes the one radio in DFU mode; check it is the radio you picked.".into(),
         );
@@ -270,8 +315,9 @@ impl Core {
         let digest = if ready {
             blobs::hash(
                 format!(
-                    "flash|{}|{}|{}|{}|{}",
+                    "flash|{}|{}|{}|{}|{}|{}",
                     device.id,
+                    dfu.first().and_then(|d| d.serial.clone()).unwrap_or_default(),
                     board.clone().unwrap_or_default(),
                     installed.clone().unwrap_or_default(),
                     target,
@@ -403,6 +449,13 @@ impl Core {
                             dfu::Step::Leave => None,
                         },
                     ));
+                }
+                if prep.device.dfu_serial.is_none() {
+                    if let Some(serial) = dfu_info.serial.clone().filter(|s| !s.is_empty()) {
+                        let mut d = prep.device.clone();
+                        d.dfu_serial = Some(serial);
+                        let _ = self.gear_store().save_device(&d);
+                    }
                 }
                 (
                     ChangeStatus::Verified,

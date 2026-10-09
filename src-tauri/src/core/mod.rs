@@ -18,6 +18,7 @@ mod apply_card;
 mod backup;
 mod bench;
 mod cuts;
+mod dfu_link;
 mod fc;
 mod files;
 mod firmware;
@@ -64,6 +65,7 @@ pub use gear_card::{CardClean, CardCleanParams, CardParams, CardPreview, CardPre
 pub use import::CardStatus;
 pub use library::{LibEdit, LibItem, LibUpdate, LibraryView, RebuildReport, RenameReport};
 pub use osd::{OsdEditParams, OsdParams};
+pub use dfu_link::{DfuLinkParams, DfuLinked};
 pub use radio_cli::{RadioCliAction, RadioCliParams, RadioCliReport, RadioMatch, RadioVerify};
 pub use rates::{RatesParams, RatesPreview, RatesPreviewParams, SimsParams};
 pub use rematch::{LibMatch, LibMatchParams, LibMatchReport};

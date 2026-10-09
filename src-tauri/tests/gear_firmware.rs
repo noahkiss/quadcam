@@ -881,3 +881,126 @@ fn the_cli_previews_a_splash_and_plans_in_a_temporary_home() {
     ]);
     assert_eq!(code, 3, "{text}");
 }
+
+// --- Linking a DFU device to its saved radio -----------------------------------------
+
+fn second_radio(b: &Bench, seen: bool) -> Device {
+    let d = Device {
+        id: "radio-0000000000000002".into(),
+        kind: DeviceKind::Radio,
+        name: "Spare".into(),
+        aircraft: None,
+        identity: Identity {
+            board: Some("pocket".into()),
+            ..Identity::default()
+        },
+        last_seen: seen.then(chrono::Utc::now),
+        last_backup: Some("2026-10-01T100000-manual".into()),
+        last_space: None,
+        aliases: Vec::new(),
+        dfu_serial: None,
+    };
+    b.core.gear_store().save_device(&d).unwrap();
+    d
+}
+
+#[test]
+fn a_dfu_device_links_to_the_radio_seen_last_or_the_one_picked() {
+    use quadcam_lib::core::DfuLinkParams;
+    let b = plain();
+    // One saved radio: it is the last seen.
+    let r = b.core.gear_dfu_link(&DfuLinkParams::default()).unwrap();
+    assert_eq!(r.how, "last_seen");
+    assert_eq!(r.device.id, b.radio);
+    assert_eq!(r.serial.as_deref(), Some("0001"));
+
+    // The status shows the DFU device as that radio.
+    let c = b.core.gear_connected().unwrap();
+    assert_eq!(c.len(), 1);
+    assert_eq!(c[0].id.as_deref(), Some(b.radio.as_str()));
+    assert_eq!(c[0].device.as_ref().unwrap().name, "Pocket");
+
+    // Two radios: the most recently seen is taken unless one is picked. A serial belongs
+    // to one radio, so the pick moves it.
+    let spare = second_radio(&b, true);
+    let r = b.core.gear_dfu_link(&DfuLinkParams::default()).unwrap();
+    assert_eq!((r.how.as_str(), r.device.id.as_str()), ("last_seen", spare.id.as_str()));
+    assert!(r.notes.iter().any(|n| n.contains("Moved the link from Pocket")), "{:?}", r.notes);
+    let again = b
+        .core
+        .gear_dfu_link(&DfuLinkParams {
+            device: Some(b.radio.clone()),
+            ..Default::default()
+        })
+        .unwrap();
+    assert_eq!(again.how, "picked");
+    let devices = b.core.gear_devices().unwrap();
+    assert_eq!(
+        devices.iter().filter(|d| d.dfu_serial.is_some()).map(|d| d.id.as_str()).collect::<Vec<_>>(),
+        [b.radio.as_str()]
+    );
+
+    // Unlink.
+    let u = b
+        .core
+        .gear_dfu_link(&DfuLinkParams {
+            device: Some(b.radio.clone()),
+            unlink: true,
+            ..Default::default()
+        })
+        .unwrap();
+    assert!(u.serial.is_none() && u.device.dfu_serial.is_none());
+    // No radio in DFU mode: nothing to link.
+    b.dfu.lock().unwrap().clear();
+    assert!(b.core.gear_dfu_link(&DfuLinkParams::default()).is_err());
+}
+
+#[test]
+fn the_flash_plan_refuses_a_dfu_device_linked_to_another_radio() {
+    use quadcam_lib::core::DfuLinkParams;
+    let b = plain();
+    let spare = second_radio(&b, true);
+    b.core
+        .gear_dfu_link(&DfuLinkParams {
+            device: Some(spare.id.clone()),
+            ..Default::default()
+        })
+        .unwrap();
+    let plan = b.core.gear_flash_plan(&params(&b, None)).unwrap();
+    assert!(
+        failed(&plan).contains(&("The radio in DFU mode is this radio", RefusalCode::DeviceChanged)),
+        "{:?}",
+        failed(&plan)
+    );
+    // Linked to the picked radio: passes.
+    b.core
+        .gear_dfu_link(&DfuLinkParams {
+            device: Some(b.radio.clone()),
+            ..Default::default()
+        })
+        .unwrap();
+    let plan = b.core.gear_flash_plan(&params(&b, None)).unwrap();
+    assert!(plan.ready(), "{:?}", failed(&plan));
+    // A radio linked to another DFU device than the one plugged in refuses too.
+    b.dfu.lock().unwrap()[0].serial = Some("0002".into());
+    let plan = b.core.gear_flash_plan(&params(&b, None)).unwrap();
+    assert!(failed(&plan).contains(&("The radio in DFU mode is this radio", RefusalCode::DeviceChanged)));
+}
+
+#[test]
+fn an_unlinked_dfu_device_warns_with_the_last_seen_radio_and_a_verified_flash_links_it() {
+    let b = plain();
+    let _spare = second_radio(&b, true);
+    let p = params(&b, None);
+    let plan = b.core.gear_flash_plan(&p).unwrap();
+    assert!(plan.ready(), "{:?}", failed(&plan));
+    assert!(
+        plan.warnings.iter().any(|w| w.contains("Spare was seen most recently, not Pocket")),
+        "{:?}",
+        plan.warnings
+    );
+    let report = b.core.gear_flash(&request(&p, &plan)).unwrap();
+    assert_eq!(report.status, ChangeStatus::Verified, "{}", report.message);
+    let pocket = b.core.gear_store().device(&b.radio).unwrap().unwrap();
+    assert_eq!(pocket.dfu_serial.as_deref(), Some("0001"));
+}
