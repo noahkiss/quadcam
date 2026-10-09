@@ -1222,10 +1222,62 @@ binaries only (open question 10).
   - **Splash layout unverified.** The markers, the 1,024 bytes and the bit order (bit 0 is the
     top row of a band) follow this section and a synthetic binary. No release binary was
     downloaded. The plan refuses an image whose markers differ.
-  - **Not built, deferred to 1.1 (decided 2026-10-09, both wanted):** the Betaflight flash
-    plan, and ELRS options and flashing (needs `esptool`, serial passthrough and the options
-    block). 1.0 keeps the version check for Betaflight. The CRSF device-info ping is open as
-    before.
+  - **Not built, deferred to 1.1 (decided 2026-10-09, both wanted):** ELRS options and
+    flashing (needs `esptool`, serial passthrough and the options block). The Betaflight flash
+    plan is built behind a preview setting: see "Built (Betaflight flash, preview)" below. The
+    CRSF device-info ping is open as before.
+
+- **Built (Betaflight flash, preview):** branch `bf-flash`, WP10 part 1 of the 1.1 work, off
+  by default behind the setting `bfFlashPreview` (`betaflight_flash_preview`, "Betaflight
+  flashing (preview)"). Modules: `gear/firmware/betaflight.rs` (the board table, Intel HEX,
+  the image checks, the build service behind a `Cloud` trait with `CurlCloud` and
+  `FixtureCloud`, the cache with its SHA-256 record, the heat estimate, the Firmware page's FC
+  rows), `gear/firmware/betaflight_config.rs` (the carry-over), `bf::to_bootloader` with
+  `CliSession::bootloader` (CLI `bl`), `FakeFc` `bl` and `install`, and `core/bf_flash.rs`
+  (plan and apply on `Core`). It adds no `api` row: `gear_flash_plan`, `gear_flash` and
+  `gear_flash_click` pick the path by the saved device's kind (an FC takes Betaflight's), so
+  the CLI (`gear firmware --plan|--digest --device FC`) and MCP (`flash_plan`, `flash`) work
+  as they do for a radio. Decisions:
+  - **The plan gate is the target release.** `betaflight::target_for(board)` must name a
+    build target, and `compat::check_writable(Betaflight, board, release)` must pass for the
+    release to flash, not the installed one. So an FC on an unproven version can be flashed
+    to a proven one, and a proven FC cannot be moved to an unproven release. The default
+    release is the installed one, less its suffix.
+  - **Source.** Betaflight's build service, not the GitHub release hex: a unified target needs
+    its board's defaults inside the image, and the release hex is MCU-generic. The service
+    lists no checksum, so the plan shows the SHA-256 recorded at the first download. The
+    request shapes (`POST /api/builds`, `GET /api/builds/<key>/status` and `/hex`) are from the
+    service's public API and are **not checked against the live service**; the same goes for
+    the cloud target names (`betaflight::TARGETS` uses the board name) and the chip's flash
+    size (512 KB for the G473). A reply of another shape refuses the plan.
+  - **Transport.** The flash runs inside the app's own FC job: backup, `bl`, wait for exactly
+    one new STM32 DFU device (a DFU device already attached refuses, since the FC could not be
+    told apart), open it through `Flasher`, compare the DFU layout with the board's flash size
+    (a mismatch leaves DFU without erasing, which starts the old firmware), then `dfu::flash`
+    (erase, write, read back, compare, leave). The firmware is not read out of the FC first,
+    unlike the radio flash: the FC's recovery is an official build, and the pre-flash `diff all`
+    and `dump all` are the backup that matters.
+  - **Heat.** The plan and the apply refuse when a battery is in and the USB timer's remaining
+    time is shorter than the estimate (`betaflight::flash_seconds`: 45 s plus 1 s per 8 KB).
+    The plan also warns to unplug the battery.
+  - **Carry-over.** After the flash QuadCam reads `dump all` and one `get` per old setting,
+    saves them as a backup (trigger `after_apply`, so the apply compares with the new
+    firmware), computes `changes::restore_lines(old diff, new dump)`, drops every `set` the
+    `get` answer refuses, stages the rest as one change and applies it through the FC apply
+    (`apply_inner`), which backs up, range checks, writes, saves and verifies against `dump
+    all`. The flash's confirm covers that apply; the plan says the settings come back. Missing
+    settings, refused values and the board lines left out (resource, serial, timer, dma, mixer,
+    map, ...) go into the report's notes. Nothing is renamed or guessed.
+  - **Half states.** A failure before `bl` changes nothing and returns a refusal. After it the
+    report (status `failed`, `saved` true only once the flash read back equal) names the state
+    (bootloader, new firmware, settings not put back), the backup, and the recovery path: the
+    boot button and ROM DFU.
+  - **Needs a real-FC trial:** the `bl` command and the DFU re-enumeration on a real FC, the
+    build service's request and reply shapes, the target names, the chip's DFU layout string,
+    the time the FC takes to come back after a first boot, and a real `get` on every old
+    setting. See `docs/gear.md`.
+  - Tests: `tests/gear_bf_flash.rs` (13) and unit tests in the two modules, on `FakeFc`,
+    `FakeDfu` and `FixtureCloud`; `app/e2e/bfflash.spec.ts` on the mock core.
 
 - **Built (radio over USB):** four follow-ups, branch `radio-usb`.
   - **One radio, two ids.** `Device` gained `aliases` and `dfu_serial`; `Connected` gained
@@ -1758,7 +1810,7 @@ docs, and its rows in `api`, CLI and MCP.
 | WP7 | OSD | `gear/osd.rs`, OSD segment (view and editor) | WP2 (parse); WP5 to stage | 1 (pure part), 3 (editor) |
 | WP8 | Rates and sims. **Done:** the Sims page and the sidebar "Out of date" badge | `gear/rates.rs`, `gear/sims/`, `apply/sim.rs`, Rates segment, Sims page | WP2, WP5 (plan/confirm pattern) | 2 (read), 3 (sync) |
 | WP9 | Radio extras: voice and model editors. **Done except the ElevenLabs adapter, the carrier-sentence render and the full line list (see 7.4)** | `gear/voice/`, `resources/voice/`, Voice segment, `build-pack` and the pack index; `ModelOp` editors for checklists, telemetry screens, logging, timers, alarms and callouts; Checklists segment | WP3, WP5, WP14 | 4 |
-| WP10 | Firmware and splash. **1.0 holds the version checks, the EdgeTX flash and the splash. The Betaflight flash plan and ELRS options and flashing are deferred to 1.1 (both wanted)** | `gear/firmware/`, `gear/splash.rs`, `gear/dfu.rs`, Firmware page, Splash segment | WP2, WP3, WP4, WP5, WP14 | 4 |
+| WP10 | Firmware and splash. **1.0 holds the version checks, the EdgeTX flash and the splash. ELRS options and flashing are deferred to 1.1 (wanted). The Betaflight flash plan is built behind a preview setting** | `gear/firmware/`, `gear/splash.rs`, `gear/dfu.rs`, Firmware page, Splash segment | WP2, WP3, WP4, WP5, WP14 | 4 |
 | WP11 | Card prep. **Done, with the app button** | `disk.rs` changes, `card_prep*` rows, `quadcam_format_card` `prep`, the Prepare card button | – (existing code) | 1 |
 | WP12 | Flights and packs | `logs.rs` columns, `gear/flights.rs`, `gear/packs.rs`, Flights and Packs pages | WP1 (reads log folders; the log store once WP4 lands) | 1 |
 | WP13 | Gear shell UI. **Done** | Sidebar Gear section, page frame and segments, Connected rows, plug-in bar, shared components (`DiffView`, `ChecksList`, `DeviceHeader`), mock-core scenarios | WP1 (types) | 1 |
@@ -1781,7 +1833,7 @@ split: their read-only halves run early; their write halves wait for WP5.
 | WP7 | Round-trip property test; NTSC, PAL and HD golden renders; overlap and off-screen checks; an editor move stages the right CLI line |
 | WP8 | Curves match reference values for Betaflight, Actual and Quick; Actual-to-Betaflight fit within a stated error; each sim adapter reads and writes a synthetic file byte-exact; refuses while "running" (faked) |
 | WP9 | Spelling rules golden test; cache hit renders with no provider call; normalisation golden WAV; `build-pack` writes a zip and index entry; Choose voice stages one change that keeps overrides when asked. Each `ModelOp` golden on both layouts; checklist length and name rules; ownership replaces a previous change's items |
-| WP10 | Splash patch and decode on a synthetic binary with markers; refusals for missing or doubled markers and for boards and versions not in `compat.rs`; EdgeTX flash plan picks the board binary; (1.1: ELRS options block written and read back, the Betaflight flash plan); flashes go to the recorder in tests; DFU against a fake `nusb` device: erase, write, read back, compare |
+| WP10 | Splash patch and decode on a synthetic binary with markers; refusals for missing or doubled markers and for boards and versions not in `compat.rs`; EdgeTX flash plan picks the board binary; (1.1: ELRS options block written and read back; built: the Betaflight flash plan on a fake FC and a fake DFU device); flashes go to the recorder in tests; DFU against a fake `nusb` device: erase, write, read back, compare |
 | WP11 | Disk-image test: prep refuses with a clip not in the library, passes otherwise; DJI refused |
 | WP12 | Each measure in 7.6 matches the synthetic log's known values; pack history; old `LogRow` tests still pass |
 | WP13 | Mock scenarios render; axe passes in both themes; Gear section collapses; plug-in bar appears for a device with staged changes |
@@ -1844,7 +1896,7 @@ Each has a default the build uses until you decide.
 | 5 | Gear folder: the support folder (this Mac only) or inside the library folder (moves with it)? | Support folder; `gearDir` moves it |
 | 6 | Voice packs: confirm CC BY 4.0 for the paid re-render, the attribution text, and the voices to render besides Callum | CC BY 4.0; no pack ships before the paid re-render |
 | 7 | Write the pack label and flight analysis into clip files as QuickTime items? | No in 1.0; shown from the flight index |
-| 8 | Betaflight firmware flashing: out of scope for 1.0 (version check only)? | Decided 2026-10-09: deferred to 1.1, and wanted. 1.0 checks the version only |
+| 8 | Betaflight firmware flashing: out of scope for 1.0 (version check only)? | Decided 2026-10-09: deferred to 1.1, and wanted. Built on a branch behind the `betaflight_flash_preview` setting, tested on fakes only; a real-FC trial decides when it leaves preview |
 | 9 | ELRS version read over CRSF device info needs a hardware check. Until then, enter versions by hand? | Decided 2026-10-09: ELRS options and flashing are deferred to 1.1, and wanted. Until the hardware check, hand entry and a read-only check |
 | 10 | Splash source: GitHub release binaries only, or also the EdgeTX cloud build? | Release binaries only |
 | 11 | Firmware and voice indexes go online. Check only on request, or daily? | On request (`firmwareCheck` = `manual`); `README.md` Privacy updated |

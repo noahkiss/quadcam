@@ -120,7 +120,7 @@ const refused = (code: string, reason: string) => `Refused (${code}): ${reason}`
 export function plan(st: MockFirmware, devices: Device[], p: FlashParams, bfPreview = false): ApplyPlan {
   const d = devices.find((x) => x.id === p.device);
   if (!d) throw `No saved device ${p.device}.`;
-  if (d.kind === "fc") return bf.plan(d, p, bfPreview, st.dfu);
+  if (d.kind === "fc") return bf.plan(d, p, bfPreview, 0);
   if (d.kind !== "radio") throw refused("incompatible", "QuadCam flashes the firmware of EdgeTX radios only.");
   const target = (p.version ?? idOf(d).version ?? "").replace(/^v/i, "");
   if (!target) throw "The radio reports no version; name the version to flash.";

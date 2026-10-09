@@ -1,6 +1,6 @@
 // The Betaflight flash preview on the mock core: the Settings > Gear switch, the FC row on
 // the Firmware page, the flash sheet with its checks and recovery warning, and the report
-// of a flash and of a bad read back. axe on the sheet.
+// of a flash and of a bad read back. axe on the page with the Flash button.
 import AxeBuilder from "@axe-core/playwright";
 import type { Page } from "@playwright/test";
 import { expect, test, type AppFixture } from "./fixtures";
@@ -28,12 +28,14 @@ test("the preview is off by default and the FC row offers no flash", async ({ ap
 
 test("the Settings > Gear switch turns the preview on", async ({ app, page }) => {
   await app.open();
-  await page.getByRole("button", { name: "Settings" }).first().click();
-  const sheet = page.getByRole("dialog", { name: "Settings" });
-  await sheet.getByRole("tab", { name: "Gear" }).click();
-  await sheet.getByLabel("Betaflight flashing (preview)").check();
-  await sheet.getByRole("button", { name: "Save" }).click();
-  await expect.poll(async () => (await app.method("settings_set")).some((v) => JSON.stringify(v).includes('"bfFlashPreview":true'))).toBe(true);
+  await page.getByRole("button", { name: "Settings" }).click();
+  const dlg = page.getByRole("dialog").filter({ has: page.getByRole("heading", { name: "Settings" }) });
+  await dlg.getByRole("navigation", { name: "Settings sections" }).getByRole("button", { name: "Gear" }).click();
+  await expect(dlg.getByLabel("Betaflight flashing (preview)")).not.toBeChecked();
+  await dlg.getByLabel("Betaflight flashing (preview)").check();
+  await dlg.getByRole("button", { name: "Done" }).click();
+  const sets = (await app.method("settings_set")).map((p) => (p as { values: Record<string, unknown> }).values);
+  expect(sets.some((v) => v.bfFlashPreview === true)).toBe(true);
 });
 
 test("a flash shows its checks and the way back, and puts the settings back on Apply", async ({ app, page }) => {
@@ -42,6 +44,8 @@ test("a flash shows its checks and the way back, and puts the settings back on A
   await page.getByRole("button", { name: "Check for updates" }).click();
   const fc = page.getByRole("row", { name: /Whoop FC/ });
   await expect(fc.getByRole("button", { name: "Flash 2026.6.0…" })).toBeVisible();
+  const axe = await new AxeBuilder({ page }).analyze();
+  expect(axe.violations).toEqual([]);
   await fc.getByRole("button", { name: "Flash 2026.6.0…" }).click();
   const sheet = page.getByRole("dialog", { name: "Flash Whoop FC" });
   await expect(sheet.getByRole("region", { name: "Changes" })).toContainText("2025.12.5");
@@ -49,8 +53,6 @@ test("a flash shows its checks and the way back, and puts the settings back on A
   await expect(sheet.getByRole("list", { name: "Checks" })).toContainText("Known board and version");
   await expect(sheet.getByRole("region", { name: "Warnings" })).toContainText("boot button");
   await expect(sheet.getByRole("region", { name: "Warnings" })).toContainText("preview");
-  const axe = await new AxeBuilder({ page }).analyze();
-  expect(axe.violations).toEqual([]);
   expect(await app.calls("gear_flash_click")).toEqual([]);
   await sheet.getByRole("button", { name: "Apply" }).click();
   const result = sheet.getByRole("region", { name: "Result" });

@@ -4,8 +4,10 @@
 //! here downloads, opens a port or flashes anything real.
 
 use quadcam_lib::core::{
-    BackupFilter, BackupParams, Core, FlashParams, FlashRequest, Hooks, NoHooks,
+    BackupFilter, BackupParams, Core, FirmwareParams, FlashParams, FlashRequest, Hooks, NoHooks,
 };
+use quadcam_lib::gear::firmware::check::{BETAFLIGHT_RELEASES, EDGETX_RELEASES, ELRS_INDEX};
+use quadcam_lib::gear::firmware::FixtureFetch;
 use quadcam_lib::gear::apply::ApplyReport;
 use quadcam_lib::gear::bf::cli::Timing;
 use quadcam_lib::gear::bf::fake::FakeFc;
@@ -238,13 +240,18 @@ fn bench(o: Opts) -> Bench {
         old_dump: o.old.clone(),
         opened: AtomicUsize::new(0),
     });
+    let fetch = Arc::new(FixtureFetch::new());
+    let rel = |t: &str| serde_json::json!([{"tag_name": t, "prerelease": false, "draft": false, "assets": []}]);
+    fetch.serve(EDGETX_RELEASES, serde_json::to_vec(&rel("v2.12.4")).unwrap());
+    fetch.serve(BETAFLIGHT_RELEASES, serde_json::to_vec(&rel(RELEASE)).unwrap());
+    fetch.serve(ELRS_INDEX, serde_json::json!({"tags": {"3.5.3": "x"}}).to_string().into_bytes());
     let core = Arc::new(
         Core::new(dir.path().join("cache"), None, o.hooks, Arc::new(Recorder::default()))
             .with_settings(dir.path().join("support/settings.json"))
             .with_gear_env(env)
             .with_fc_timing(Timing::fast())
             .with_firmware_env(quadcam_lib::gear::firmware::FwEnv {
-                fetch: Arc::new(quadcam_lib::gear::firmware::FixtureFetch::new()),
+                fetch: fetch.clone(),
                 flasher: flasher.clone(),
             })
             .with_bf_cloud(cloud.clone()),
@@ -676,4 +683,35 @@ fn a_failed_backup_stops_before_the_bootloader() {
     assert!(!b.fc.log().iter().any(|l| l == "bl"));
     assert!(!b.fc.in_bootloader());
     assert_eq!(b.flasher.opened.load(Ordering::SeqCst), 0);
+}
+
+#[test]
+fn the_firmware_page_offers_the_flash_only_with_the_preview_on() {
+    for (preview, flashable) in [(true, true), (false, false)] {
+        let b = bench(Opts {
+            preview,
+            ..Opts::default()
+        });
+        let view = b
+            .core
+            .gear_firmware(&FirmwareParams { check: Some(true) })
+            .unwrap();
+        let fc = view.devices.iter().find(|d| d.device == b.id).unwrap();
+        assert_eq!(fc.flashable, flashable, "{fc:?}");
+        assert_eq!(fc.latest.as_deref(), Some(RELEASE));
+        assert_eq!(fc.note.is_none(), flashable, "{:?}", fc.note);
+    }
+    // A board without a target says why, with the preview on.
+    let other = old_dump().replace("board_name BETAFPVG473_V2", "board_name BETAFPVF411");
+    let b = bench(Opts {
+        old: other,
+        ..Opts::default()
+    });
+    let view = b.core.gear_firmware(&FirmwareParams { check: Some(true) }).unwrap();
+    let fc = view.devices.iter().find(|d| d.device == b.id).unwrap();
+    assert!(!fc.flashable);
+    assert_eq!(
+        fc.note.as_deref(),
+        Some("QuadCam will not flash it: Board BETAFPVF411 cannot be flashed by QuadCam yet.")
+    );
 }

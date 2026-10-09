@@ -136,7 +136,7 @@ See [Modules and notices](modules.md) for what a module install checks.
 - `photos_album`, `format_label`, `log_dir`, `layout`, `place_folders`, `tunables`
 - `geocoder` (`apple`, `nominatim`, `census` or `google`), `google_places_key`
 - `name_date_format` (`YYYY-MM-DD` or `YY.MM.DD`), `default_profile`
-- Gear: `gear_dir`, `gear_auto_backup`, `gear_keep_recent`, `gear_keep_weeks`, `gear_keep_monthly`, `gear_usb_minutes`, `gear_on_connect`, `gear_cues`, `firmware_check`, `tts_provider`, `tts_base_url`, `tts_model`, `tts_voice`, `voice_index`, `tts_key`, `sim_preview` (see [Settings](settings.md#gear))
+- Gear: `gear_dir`, `gear_auto_backup`, `gear_keep_recent`, `gear_keep_weeks`, `gear_keep_monthly`, `gear_usb_minutes`, `gear_on_connect`, `gear_cues`, `firmware_check`, `betaflight_flash_preview`, `tts_provider`, `tts_base_url`, `tts_model`, `tts_voice`, `voice_index`, `tts_key`, `sim_preview` (see [Settings](settings.md#gear))
 - `ffmpeg_source` (`module` or `homebrew`), `modules` (`{"ffmpeg": "/path/to/ffmpeg"}`: a file per tool; see [Modules](modules.md#where-ffmpeg-comes-from))
 
 A value is JSON or plain text.
@@ -173,6 +173,8 @@ quadcam-cli --json gear firmware [--check]                    # each device's fi
 quadcam-cli --json gear splash IMAGE.png [--threshold N] [--invert] [--board pocket] [--out preview.png]   # a PNG as the radio's 128x64 splash; --out writes the 4x preview
 quadcam-cli --json gear firmware --plan --device RADIO [--version V] [--splash IMAGE.png] [--threshold N] [--invert]   # an EdgeTX flash: checks, diff, digest
 quadcam-cli --json gear firmware --device RADIO [--version V] [--splash IMAGE.png] --digest D --yes      # flash the radio in DFU mode
+quadcam-cli --json gear firmware --plan --device FC [--version 2026.6.0]    # a Betaflight flash (needs betaflight_flash_preview=true): checks, diff, digest
+quadcam-cli --json gear firmware --device FC [--version 2026.6.0] --digest D --yes   # back up, flash over DFU, put the settings back
 quadcam-cli --json gear map --radio CARD|MODEL.yml [--model model01.yml] --fc FILE [--fc FILE] [--live [--port P]] [--channels 1500,...] [--text]
 quadcam-cli --json gear map --aircraft NAME | --device ID [--device ID]   # from the latest backups
 quadcam-cli --json gear radio [--wait-ms 500]                    # the radio in USB Joystick mode

@@ -874,8 +874,12 @@ Packs, pack types, the pack set on each flight, added log folders and crashes ar
 - A row says **Up to date**, **Update available** or **Unknown** (the device reports no
   version, or no check has run). A source that fails shows a notice; the others still show.
 - The sidebar shows how many devices have an update.
-- QuadCam checks Betaflight and ExpressLRS versions. It does not flash them.
+- QuadCam checks Betaflight and ExpressLRS versions. It flashes only EdgeTX radios, and
+  Betaflight FCs when **Betaflight flashing (preview)** is on.
 - **Flash 2.12.4…** appears for an EdgeTX radio that QuadCam has proven (see below).
+- **Flash 2026.6.0…** appears for a Betaflight FC with the preview on, on a board QuadCam has a
+  target for, when it has proven that release on the board (see
+  [Flash a Betaflight FC](#flash-a-betaflight-fc-preview)).
 
 ### Flash an EdgeTX radio
 
@@ -912,6 +916,74 @@ Where the image comes from:
 - The image must be a full image: the bootloader's vector table first and the firmware's at
   `0x8000`, 400 to 1000 KB. A firmware-only file is refused, because writing it at the start
   of the flash would replace the bootloader.
+
+### Flash a Betaflight FC (preview)
+
+This is a preview. It is off until you turn on **Settings > Gear > Betaflight flashing
+(preview)** (or `quadcam-cli settings set betaflight_flash_preview=true`). It has not been
+tried on a real FC yet; it was built and tested on a simulated FC and a simulated DFU device.
+
+QuadCam flashes only a board with a build target and a release listed in `compat.rs`. Today
+that is the two BetaFPV G473 boards, each on the release it has proven. Any other board or
+release is refused with the reason. A Betaflight FC on an unproven version can still be
+flashed to a proven one.
+
+1. Plug the FC in over USB, battery out. Save it as a device (**Devices**) if it is not.
+2. Open **Firmware > Flash…**. The sheet shows the checks: the preview is on, one FC, the
+   saved device, the board and release, the firmware image, the port is free, no DFU device
+   is plugged in already, and the USB timer outlasts the flash.
+3. Select **Apply**. QuadCam:
+   - saves `diff all` and `dump all` as a backup that is always kept (**Backups**, trigger
+     `before_flash`);
+   - restarts the FC into its ROM bootloader (CLI `bl`) and waits for exactly one new DFU
+     device;
+   - checks the chip's flash is the size the board has, erases the sectors it needs, writes
+     the image, reads it back and compares every byte, then leaves DFU mode;
+   - waits for the FC and checks it is the same FC (its MCU id);
+   - reads the new firmware's `dump all` and a `get` for each old setting, and saves it as a
+     backup;
+   - stages the old settings as one change, **Settings after the Betaflight … flash**, and
+     applies it through the normal FC apply: backup, range check, write, save, and a check
+     of every line against `dump all`.
+
+What comes back, and what does not:
+
+- A setting whose value differs from the new firmware's default comes back. So do modes,
+  adjustments and features.
+- A setting the new version no longer has is **listed in the report and skipped**. QuadCam
+  does not rename or guess. The same holds for a value the new version's `get` answer does
+  not allow.
+- Board lines (resources, serial ports, timers, mixer, rc map) do not come back. The new
+  image brings its board's own. The report lists the old lines, and the backup keeps them.
+
+Where the image comes from:
+
+- QuadCam asks Betaflight's build service (`build.betaflight.com`) for the board's target at
+  the release. The unified-target defaults are inside the image. It bundles and redistributes
+  no firmware. The download is kept in `~/Library/Caches/app.quadcam/firmware/betaflight/<release>/`.
+- The service lists no checksum. QuadCam records the SHA-256 at the first download and shows
+  it in the plan. If a cached file no longer matches its record, QuadCam downloads it again.
+- The image must be Intel HEX with valid checksums and an end record, start at the start of
+  flash, fit the board's flash (64 KB up to the chip) and begin with a vector table.
+- The request shapes follow the service's public API and are not checked against the live
+  service. If it answers in another shape, the plan refuses.
+
+If something goes wrong:
+
+- **Before the restart into the bootloader** nothing has changed. A failed backup, a DFU
+  device already plugged in, a busy port or a USB timer that would run out all stop here.
+- **The FC does not show up as a DFU device.** Nothing was written. Unplug USB and the
+  battery and plug USB in again; the report names the backup.
+- **A flash step fails, or the read back differs.** The FC has half a firmware and stays in
+  its bootloader. Run the flash again, or unplug and enter the bootloader again first.
+- **The FC does not start afterwards.** Unplug USB and the battery, hold the FC's boot
+  button, plug USB in, and flash an official build from Betaflight Configurator. The ROM
+  bootloader cannot be overwritten, so an FC can always be flashed again.
+- **The firmware is flashed but the settings did not go back.** The report says so. The old
+  settings are in the `before_flash` backup, and the staged change stays in **Changes**.
+
+A flash with the battery in runs on USB power for about a minute and a half. The plan refuses
+when the USB timer would run out first.
 
 ### Splash
 
