@@ -181,3 +181,10 @@
   border-color: var(--primary-fill);
   color: var(--on-primary);
 }
+.combo td {
+  color: var(--muted);
+  font-size: var(--t-sm);
+}
+.combo td:first-of-type {
+  padding-left: var(--s-4);
+}

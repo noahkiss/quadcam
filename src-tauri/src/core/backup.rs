@@ -481,7 +481,7 @@ impl Core {
         let report =
             self.snapshots()
                 .take_files(&id, &info.identity, trigger, Utc::now(), &files, false)?;
-        self.after_backup(&id, DeviceKind::Fc, &info.identity, report, job.notes)
+        self.after_backup(&id, DeviceKind::Fc, &info.identity, report, job.notes, None)
     }
 
     fn backup_card(
@@ -508,7 +508,8 @@ impl Core {
         let report = self
             .snapshots()
             .take_card(&id, &identity, mount, trigger, &mut opts)?;
-        self.after_backup(&id, DeviceKind::Radio, &identity, report, Vec::new())
+        let space = super::flights::space_seen(mount);
+        self.after_backup(&id, DeviceKind::Radio, &identity, report, Vec::new(), space)
     }
 
     /// Saves the device as seen with its newest backup, and prunes after a new snapshot.
@@ -519,10 +520,14 @@ impl Core {
         identity: &Identity,
         report: TakeReport,
         notes: Vec<String>,
+        space: Option<crate::gear::model::SpaceSeen>,
     ) -> Result<BackupResult> {
         let store = self.gear_store();
         let mut d = store.seen(id, kind, identity)?;
         d.last_backup = Some(report.backup.id.clone());
+        if space.is_some() {
+            d.last_space = space;
+        }
         let d = store.save_device(&d)?;
         let pruned = if report.new && report.backup.trigger != Trigger::Import {
             let s = self.gear_settings();
@@ -663,6 +668,7 @@ impl Core {
                         identity: latest.identity.clone(),
                         last_seen: None,
                         last_backup: None,
+                        last_space: None,
                     },
                 };
                 d.last_backup = Some(latest.id.clone());

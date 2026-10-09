@@ -158,6 +158,7 @@ quadcam-cli --json gear sim defaults [--aircraft NAME | --radio CARD --fc FILE] 
 quadcam-cli --json gear sim validate PROFILE --logs DIR [--poles N] [--text]      # a sim profile against decoded blackbox logs
 quadcam-cli --json gear flights [--day D] [set <flight> --pack L | folders --add DIR]
 quadcam-cli gear report [--day D] --markdown                     # the session report
+quadcam-cli --json gear report [--day D] --out FILE [--force]     # write the Markdown to FILE
 quadcam-cli --json gear preflight                                # the Pack up check
 quadcam-cli --json gear packs [save L --type T --charged | type save T ... | notes TEXT]
 quadcam-cli --json gear crashes [--clip ID save --time S --broke TEXT --parts a,b]

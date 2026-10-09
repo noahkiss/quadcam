@@ -1,12 +1,10 @@
 //! The "Pack up" check before a flying session: read-only rows that pass or warn. Each row
 //! uses what QuadCam already knows; a row it cannot judge reads as unknown.
 //!
-//! Inputs come from `core/flights.rs`. Later packages fill more of them:
-//! - the radio's selected model when it is not plugged in: TODO(WP4) from the latest radio
-//!   backup's `radio.yml`;
-//! - free space on a card that is not plugged in: TODO(WP4) from the space seen at its last
-//!   backup;
-//! - backup times come from `Device::last_backup` (WP4).
+//! Inputs come from `core/flights.rs`. A radio that is not plugged in gives its selected model
+//! from the latest backup's `radio.yml`, and its card's free space from the space recorded
+//! when that backup was taken (`Device::last_space`). Both rows say "from backup" and its age.
+//! Backup times come from `Device::last_backup`.
 
 use super::packs::{ChargeState, PackView};
 use chrono::NaiveDateTime;
@@ -52,6 +50,8 @@ pub struct RadioSeen {
     /// The aircraft that model belongs to.
     pub aircraft: Option<String>,
     pub last_seen: Option<NaiveDateTime>,
+    /// When the backup the model was read from was taken. `None` for a radio plugged in.
+    pub from_backup: Option<NaiveDateTime>,
 }
 
 /// A goggles, DVR or air-unit card plugged in now.
@@ -60,6 +60,8 @@ pub struct CardSpace {
     pub name: String,
     pub free: Option<u64>,
     pub total: Option<u64>,
+    /// When the space was recorded (at a backup). `None` for a card plugged in.
+    pub from_backup: Option<NaiveDateTime>,
 }
 
 /// A saved device and its latest backup.
@@ -83,6 +85,15 @@ pub struct Input {
 
 fn gb(b: u64) -> String {
     format!("{:.1} GB", b as f64 / 1e9)
+}
+
+/// "from backup, 2 days ago".
+fn backup_age(at: NaiveDateTime, now: NaiveDateTime) -> String {
+    match (now - at).num_days().max(0) {
+        0 => "from backup, today".into(),
+        1 => "from backup, 1 day ago".into(),
+        n => format!("from backup, {n} days ago"),
+    }
 }
 
 fn row(id: &str, label: &str, state: RowState, detail: String) -> CheckRow {
@@ -164,25 +175,53 @@ pub fn check(i: &Input) -> Preflight {
         None => match i
             .radios
             .iter()
-            .filter_map(|r| r.last_seen.map(|t| (r, t)))
+            .filter_map(|r| r.from_backup.map(|t| (r, t)))
+            .filter(|(r, _)| r.selected_model.is_some())
             .max_by_key(|x| x.1)
         {
-            Some((r, t)) => row(
-                "radio",
-                "Radio model",
-                RowState::Unknown,
-                format!(
-                    "{} last seen {}. Plug it in to check the model.",
-                    r.name,
-                    t.format("%Y-%m-%d %H:%M")
+            Some((r, t)) => {
+                let m = r.selected_model.as_deref().unwrap_or_default();
+                let age = backup_age(t, i.now);
+                row(
+                    "radio",
+                    "Radio model",
+                    if r.aircraft.is_some() {
+                        RowState::Pass
+                    } else {
+                        RowState::Warn
+                    },
+                    match &r.aircraft {
+                        Some(a) => format!("{}: model {m} selected ({a}), {age}.", r.name),
+                        None => format!(
+                            "{}: model {m} selected, not linked to an aircraft, {age}.",
+                            r.name
+                        ),
+                    },
+                )
+            }
+            None => match i
+                .radios
+                .iter()
+                .filter_map(|r| r.last_seen.map(|t| (r, t)))
+                .max_by_key(|x| x.1)
+            {
+                Some((r, t)) => row(
+                    "radio",
+                    "Radio model",
+                    RowState::Unknown,
+                    format!(
+                        "{} last seen {}. Plug it in to check the model.",
+                        r.name,
+                        t.format("%Y-%m-%d %H:%M")
+                    ),
                 ),
-            ),
-            None => row(
-                "radio",
-                "Radio model",
-                RowState::Unknown,
-                "No radio saved.".into(),
-            ),
+                None => row(
+                    "radio",
+                    "Radio model",
+                    RowState::Unknown,
+                    "No radio saved.".into(),
+                ),
+            },
         },
     });
 
@@ -208,7 +247,10 @@ pub fn check(i: &Input) -> Preflight {
             .cards
             .iter()
             .map(|c| match c.free {
-                Some(f) => format!("{}: {} free", c.name, gb(f)),
+                Some(f) => match c.from_backup {
+                    Some(t) => format!("{}: {} free, {}", c.name, gb(f), backup_age(t, i.now)),
+                    None => format!("{}: {} free", c.name, gb(f)),
+                },
                 None => format!("{}: free space unknown", c.name),
             })
             .collect::<Vec<_>>()
@@ -332,11 +374,13 @@ mod tests {
                 selected_model: Some("Whoop".into()),
                 aircraft: Some("Whoop".into()),
                 last_seen: None,
+                from_backup: None,
             }],
             cards: vec![CardSpace {
                 name: "DVR".into(),
                 free: Some(1_000_000_000),
                 total: Some(32_000_000_000),
+                from_backup: None,
             }],
             backups: vec![
                 BackupSeen {
@@ -360,5 +404,61 @@ mod tests {
         assert_eq!(r("backups").state, RowState::Warn);
         assert_eq!(r("backups").detail, "Radio: 3 days ago; FC: never.");
         assert_eq!(r("cards_in").state, RowState::Warn);
+    }
+
+    #[test]
+    fn a_radio_not_plugged_in_reads_from_its_backup() {
+        let p = check(&Input {
+            radios: vec![RadioSeen {
+                name: "Radio".into(),
+                selected_model: Some("Whoop".into()),
+                aircraft: Some("Whoop".into()),
+                from_backup: Some(now() - chrono::Duration::days(2)),
+                ..Default::default()
+            }],
+            cards: vec![CardSpace {
+                name: "Radio card".into(),
+                free: Some(5_000_000_000),
+                total: Some(8_000_000_000),
+                from_backup: Some(now() - chrono::Duration::days(2)),
+            }],
+            now: now(),
+            ..Default::default()
+        });
+        let r = |id: &str| p.rows.iter().find(|r| r.id == id).unwrap().clone();
+        assert_eq!(r("radio").state, RowState::Pass);
+        assert_eq!(
+            r("radio").detail,
+            "Radio: model Whoop selected (Whoop), from backup, 2 days ago."
+        );
+        assert_eq!(r("cards_space").state, RowState::Pass);
+        assert_eq!(
+            r("cards_space").detail,
+            "Radio card: 5.0 GB free, from backup, 2 days ago."
+        );
+    }
+
+    #[test]
+    fn a_plugged_in_radio_wins_over_a_backup() {
+        let p = check(&Input {
+            radios: vec![
+                RadioSeen {
+                    name: "Old".into(),
+                    selected_model: Some("A".into()),
+                    from_backup: Some(now()),
+                    ..Default::default()
+                },
+                RadioSeen {
+                    name: "Live".into(),
+                    connected: true,
+                    selected_model: Some("B".into()),
+                    aircraft: Some("B".into()),
+                    ..Default::default()
+                },
+            ],
+            now: now(),
+            ..Default::default()
+        });
+        assert_eq!(p.rows[1].detail, "Live: model B selected (B).");
     }
 }

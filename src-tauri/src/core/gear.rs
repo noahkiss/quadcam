@@ -222,6 +222,7 @@ impl Core {
                     identity: c.identity,
                     last_seen: Some(chrono::Utc::now()),
                     last_backup: None,
+                    last_space: None,
                 }
             }
         };

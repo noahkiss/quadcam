@@ -32,6 +32,17 @@ test("a card in the sidebar shows its new clips and loads on click", async ({ ap
   expect((await app.method("load"))[0]).toEqual({ source: "/Volumes/DVR" });
 });
 
+test("the import sheet shows the latest check of a card QuadCam knows, and runs none", async ({ app, page }) => {
+  await app.open("card");
+  await app.core(`c => {
+    c.gear.checks.unshift({ id: "dvr-1-2026-10-07T09:00:00Z", device: "dvr-1", kind: "verify", state: "ok", at: "2026-10-07T09:00:00Z", seconds: 30, summary: "The file system is OK." });
+    c.plug([{ id: "dvr-1", kind: "dvr_card", link: { kind: "volume", mount: "/Volumes/DVR", volume_uuid: null, bus_protocol: "USB", whole_disk: "disk9" }, identity: {} }]);
+  }`);
+  await page.getByRole("navigation", { name: "Library" }).getByRole("button", { name: /DVR\s*Analog/ }).click();
+  await expect(sheet(page).getByText(/^Card check: passed, /)).toBeVisible();
+  expect(await app.method("gear_card_check")).toEqual([]);
+});
+
 test("review edits: name, note, date, time and skip go to the core", async ({ app, page }) => {
   await app.open();
   await openFolder(app);

@@ -75,14 +75,19 @@ export function live(map: SwitchMap, source: string, channels: number[]): Live {
   for (const r of map.rows) {
     let best: [number, number] | null = null;
     r.positions.forEach((p, i) => {
-      if (!p.channels.length) return;
-      let total = 0;
-      for (const cv of p.channels) {
-        const v = at(cv.ch);
-        if (v == null || Math.abs(v - cv.us) > LIVE_TOLERANCE_US) return;
-        total += Math.abs(v - cv.us);
+      // The position alone, or with other controls moved: a combination's channels replace the position's own.
+      const variants = [p.channels, ...p.combos.map((c) => [...p.channels.filter((cv) => !c.channels.some((x) => x.ch === cv.ch)), ...c.channels])];
+      for (const chs of variants) {
+        if (!chs.length) continue;
+        let total = 0;
+        let ok = true;
+        for (const cv of chs) {
+          const v = at(cv.ch);
+          if (v == null || Math.abs(v - cv.us) > LIVE_TOLERANCE_US) ok = false;
+          else total += Math.abs(v - cv.us);
+        }
+        if (ok && (!best || total < best[1])) best = [i, total];
       }
-      if (!best || total < best[1]) best = [i, total];
     });
     positions[r.id] = best ? best[0] : null;
   }

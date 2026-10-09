@@ -36,6 +36,16 @@ test("flights of a day with their measures; a pack is set from the row", async (
   await expect(detail.getByRole("table", { name: "Dropouts" })).toContainText("Telemetry only");
 });
 
+test("the range trend charts the worst link per place, with its values", async ({ app, page }) => {
+  await openPage(app, page, "Flights");
+  const trend = page.getByRole("region", { name: "Range by place" });
+  await expect(trend.getByRole("img", { name: /Worst link quality at Field: 3 flights, from 60 % .* to 100 % / })).toBeVisible();
+  await trend.getByText("Values for Field").click();
+  const table = trend.getByRole("table", { name: "Worst link at Field" });
+  await expect(table.getByRole("row")).toHaveCount(4);
+  await expect(table.getByRole("row", { name: /10:00/ })).toContainText("-95 dB");
+});
+
 test("the session report reads the day and copies as Markdown", async ({ app, page }) => {
   await openPage(app, page, "Flights");
   await page.getByRole("group", { name: "Sections" }).getByRole("button", { name: "Session report" }).click();
@@ -46,6 +56,19 @@ test("the session report reads the day and copies as Markdown", async ({ app, pa
   await expect(r.getByRole("table", { name: "Pack use" })).toContainText("A1");
   await page.getByRole("button", { name: "Copy as Markdown" }).click();
   await expect(page.getByRole("status")).toContainText("report");
+});
+
+test("the session report saves as a Markdown file through the save panel", async ({ app, page }) => {
+  await openPage(app, page, "Flights");
+  await page.getByRole("group", { name: "Sections" }).getByRole("button", { name: "Session report" }).click();
+  await expect(page.getByRole("region", { name: "Session report" })).toBeVisible();
+  await app.core(`c => c.dialogAnswers.push("/Users/pilot/report.md")`);
+  await page.getByRole("button", { name: "Save…" }).click();
+  await expect(page.getByRole("status")).toContainText("Saved the report");
+  expect(await app.method("gear_session_report_save")).toEqual([{ day: null, path: "/Users/pilot/report.md", overwrite: true }]);
+  // A cancelled panel writes nothing.
+  await page.getByRole("button", { name: "Save…" }).click();
+  expect(await app.method("gear_session_report_save")).toHaveLength(1);
 });
 
 test("the import's Finish step opens the session report", async ({ app, page }) => {

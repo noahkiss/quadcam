@@ -158,8 +158,9 @@ export const switchMap = (m: G.SwitchMap): SwitchMap => ({
   ...m,
   model: m.model ?? null,
   live: m.live ?? null,
-  rows: m.rows.map((r) => ({ ...r, switch_type: r.switch_type ?? null, positions: r.positions.map((p) => ({ ...p, source: p.source ?? null })) })),
+  rows: m.rows.map((r) => ({ ...r, switch_type: r.switch_type ?? null, positions: r.positions.map((p) => ({ ...p, source: p.source ?? null, combos: p.combos ?? [] })) })),
   modes: m.modes.map((x) => ({ ...x, linked: x.linked ?? null })),
+  unmapped: m.unmapped ?? [],
 });
 
 export const radioEvent = (e: G.RadioEvent): RadioEvent => ({ connected: e.connected, product: e.product ?? null, frame: e.frame ?? null });

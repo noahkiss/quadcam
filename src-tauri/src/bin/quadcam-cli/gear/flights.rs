@@ -58,6 +58,12 @@ pub struct ReportArgs {
     /// Print the Markdown only.
     #[arg(long)]
     markdown: bool,
+    /// Write the Markdown to this file instead of printing the report.
+    #[arg(long, value_name = "FILE")]
+    out: Option<PathBuf>,
+    /// With --out: replace a file that is already there.
+    #[arg(long, requires = "out")]
+    force: bool,
 }
 
 pub fn flights(core: &Core, a: FlightsArgs) -> Result<Value> {
@@ -91,6 +97,16 @@ pub fn flights(core: &Core, a: FlightsArgs) -> Result<Value> {
 }
 
 pub fn report(core: &Core, a: ReportArgs) -> Result<Value> {
+    if let Some(path) = a.out {
+        return Ok(serde_json::to_value(call::gear_session_report_save(
+            core,
+            api::ReportSaveParams {
+                day: a.day,
+                path,
+                overwrite: a.force,
+            },
+        )?)?);
+    }
     let r = call::gear_session_report(core, api::ReportParams { day: a.day })?;
     Ok(if a.markdown {
         Value::String(r.markdown)

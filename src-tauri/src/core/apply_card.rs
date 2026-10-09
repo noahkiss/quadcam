@@ -458,6 +458,7 @@ impl Core {
             &identity,
             taken,
             Vec::new(),
+            super::flights::space_seen(&l.root),
         );
 
         // Write. Each touched file must be in the backup with the bytes the plan read.
@@ -626,6 +627,7 @@ impl Core {
                     &identity,
                     rep,
                     Vec::new(),
+                    super::flights::space_seen(&l.root),
                 );
             }
         } else {

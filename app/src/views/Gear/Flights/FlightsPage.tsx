@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useStore } from "../../../store";
-import { api, errText, pickFolder } from "../../../ipc/api";
+import { api, errText, pickFolder, pickSavePath } from "../../../ipc/api";
 import type { FlightReport, SessionReport } from "../../../ipc/types";
 import { Button } from "../../../components/Button";
 import { Select, SelectField } from "../../../components/Field";
@@ -8,6 +8,7 @@ import { SegmentedControl } from "../../../components/SegmentedControl";
 import { toast } from "../../../components/toastStore";
 import { fmtDay } from "../../../lib/format";
 import { copyText, hhmm, mmss, num } from "../../../lib/flights";
+import { RangeTrend } from "./RangeTrend";
 import { useGearData } from "./useGearData";
 import g from "../Gear.module.css";
 import styles from "./Flights.module.css";
@@ -105,6 +106,7 @@ function Flights() {
         </table>
       </div>
       {sel && <FlightDetail r={sel} />}
+      <RangeTrend places={data.places} />
     </>
   );
 }
@@ -260,6 +262,23 @@ function Report() {
           }}
         >
           Copy as Markdown
+        </Button>
+        <Button
+          icon="import"
+          onClick={async () => {
+            const path = await pickSavePath("Save the session report", `session-report-${data.days[0] ?? "last-import"}.md`, [
+              { name: "Markdown", extensions: ["md"] },
+            ]);
+            if (!path) return;
+            try {
+              await api.gearSessionReportSave(day || null, path);
+              toast("Saved the report.");
+            } catch (e) {
+              toast(errText(e), true);
+            }
+          }}
+        >
+          Save…
         </Button>
       </div>
       <ReportView r={data} />

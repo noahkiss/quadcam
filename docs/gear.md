@@ -415,7 +415,8 @@ the same edit later.
 Pulling a card while it is mounted can leave its file system damaged. Before QuadCam backs up
 a card it knows (on connect), it runs `diskutil verifyVolume` on it: read-only, about 30
 seconds over a radio's USB. The card unmounts and mounts again while it is checked. **Stop**
-ends a check. The result shows on the device's **Backups** segment, and a failed check marks
+ends a check. The result shows on the device's **Backups** segment, in the import sheet's header
+for a card QuadCam knows (an import never runs a check), and a failed check marks
 the device **Needs attention**. The backup still runs.
 
 After a failed check, **Repair…** asks first, backs the card up when it can read it (that
@@ -466,8 +467,18 @@ a copy of its folder) or one model file (**Open model…**), and the FC's dump (
   timers.
 - **How it works out a position:** QuadCam runs the model's mixes with that control there and
   every other control at rest (other switches in their first position, sticks centred,
-  throttle low). Mix switches, `ADD`, `MUL` and `REPL` lines, inputs and limits all count. A
-  logical switch on telemetry or a timer is left out.
+  throttle low). Mix switches, `ADD`, `MUL` and `REPL` lines, inputs and limits all count.
+- **Combinations:** some effects need two controls at once, such as a mode on a logical switch
+  `SA down AND SB down`. For each position QuadCam also tries the other controls that feed the
+  same channel, logical switch, special function or timer, up to 4 controls in a group. A
+  position that does more with another control moved shows an extra line under it
+  (`down with SB down`) with only what that adds. A control with only such effects is not
+  reported as doing nothing, and the live match counts these lines. A group of more than 4
+  controls is not tried, and a note says so.
+- **Not mapped:** a logical switch on telemetry, a timer or sticky state cannot be worked out.
+  The **Not mapped** list shows each with its condition (`RxBt > 3.5`), the controls it reads
+  and what uses it. It lights no position. A control that only feeds one is not reported as
+  doing nothing.
 - **Conflicts:** two modes on one range, a switch that does nothing, a mode no control
   reaches, and a sound file the card does not have.
 - **Live:** choose **Radio** to follow the radio in USB Joystick mode, or **FC** to read the
@@ -483,7 +494,9 @@ it as a game controller).
 - **Sticks:** both sticks in your stick mode (**Mode 1** to **Mode 4**; Mode 2 by default,
   saved as the `stickMode` setting). Each axis says what it does: throttle is power, yaw turns
   the nose, pitch tilts forward and back, roll banks.
-- **Channels:** CH1 to CH8 in µs, and the 24 buttons.
+- **Channels:** CH1 to CH8 in µs, and the 24 buttons. In the radio's Classic joystick mode,
+  CH9 to CH32 are buttons 1 to 24 (EdgeTX manual, USB Joystick). In Advanced mode the model
+  sets which channels are buttons, so the numbering can differ.
 - **Switch map:** open the card or model file and the dump, and the map marks what each
   control does as you move it.
 
@@ -521,7 +534,10 @@ the flight, else the profile.
 **Session report** (a segment of Flights) sums up one day: flights, air time, the longest
 flight, the worst link, dropouts, pack use and crashes. By default it shows the days of the
 last import; the import's Finish step has **Show report**. **Copy as Markdown** copies it to
-share.
+share. **Save…** writes it to a Markdown file you pick.
+
+Under the flights, **Range by place** charts the worst link quality (LQ) of each flight at
+each place, oldest first. **Values** under a chart lists LQ and RSSI per flight.
 
 **Packs** lists each pack with its type, its charge state, its cycles (flights on it), and
 its median resting voltage and flight time. A pack whose resting voltage sits 0.05 V a cell
@@ -537,12 +553,13 @@ notes field is free text.
 | Row | Pass when |
 |---|---|
 | Packs charged | Every pack in use is marked charged after its last flight |
-| Radio model | A radio is plugged in and its selected model belongs to an aircraft |
-| Card space | Each goggles or DVR card plugged in has 2 GB and 10 % free |
+| Radio model | The selected model belongs to an aircraft. A radio that is plugged in is read now; one that is not is read from its latest backup, and the row says "from backup" and its age |
+| Card space | Each goggles or DVR card plugged in has 2 GB and 10 % free. A radio card that is not plugged in uses the space seen when its latest backup was taken, marked "from backup" |
 | Backups | Each saved radio and FC was backed up in the last 14 days |
 | Cards out | No card is still in the Mac |
 
-A row QuadCam cannot judge (nothing plugged in, no backups kept yet) reads as unknown.
+A row QuadCam cannot judge (nothing plugged in, no backups kept yet) reads as unknown. Each radio
+backup records the card's free space for this check.
 
 **Repairs** lists crashes by aircraft. Log a crash from a clip: open the clip, choose the
 **Flight** tab, then **Log crash…**. The time is the playhead; add what broke and the parts
@@ -577,6 +594,7 @@ quadcam-cli --json gear flights [--day 2026-10-04] [--aircraft A] [--pack P] [--
 quadcam-cli --json gear flights set <flight> --pack A1 [--place NAME]   # "" clears
 quadcam-cli --json gear flights folders [--add DIR | --remove DIR]
 quadcam-cli gear report [--day 2026-10-04] --markdown  # the session report
+quadcam-cli --json gear report [--day 2026-10-04] --out report.md [--force]   # save it as a file
 quadcam-cli --json gear preflight                    # the Pack up check
 quadcam-cli --json gear packs [--target-v 3.7]       # packs, types, charging notes
 quadcam-cli --json gear packs save A1 --type "1S 300" [--charged] [--retired true]

@@ -232,6 +232,8 @@ export const commands = {
 	gearPackNotes: (params: NotesParams) => typedError<string, string>(__TAURI_INVOKE("gear_pack_notes", { params })),
 	/**  The session report for a day, else the last import's days, with its Markdown. */
 	gearSessionReport: (params: ReportParams) => typedError<SessionReport, string>(__TAURI_INVOKE("gear_session_report", { params })),
+	/**  Writes the session report's Markdown to a file. */
+	gearSessionReportSave: (params: ReportSaveParams) => typedError<ReportSaved, string>(__TAURI_INVOKE("gear_session_report_save", { params })),
 	/**
 	 *  The "Pack up" check before a session: packs, radio model, card space,
 	 *  backups, cards still in. Reads only.
@@ -1248,6 +1250,18 @@ export type Collected = {
 	temp_files: number,
 };
 
+/**  A position with other controls moved: only what differs from the position alone. */
+export type Combo = {
+	/**  The other controls and where they sit (`SB down`). */
+	with: string[],
+	/**  The channels that change, with their value here. */
+	channels: ChannelValue[],
+	/**  FC modes and adjustments on the changed channels. */
+	fc: string[],
+	/**  Radio effects that turn on. */
+	radio: string[],
+};
+
 /**  A device plugged in now, as `detect` found it. */
 export type Connected = {
 	/**
@@ -1556,6 +1570,8 @@ export type Device = {
 	last_seen?: string | null,
 	/**  The id of its newest backup. */
 	last_backup?: string | null,
+	/**  The card's free space when the newest backup was taken. */
+	last_space?: SpaceSeen | null,
 };
 
 /**
@@ -3229,6 +3245,11 @@ export type Position = {
 	fc: string[],
 	/**  The radio's own effects here (`L1 on`, `Plays "armed"`, `Timer 1 (TOT) runs`). */
 	radio: string[],
+	/**
+	 *  What changes when other controls the same channel, logical switch or function reads
+	 *  are off their first position. Empty when nothing does.
+	 */
+	combos?: Combo[],
 };
 
 /**  `gear_preflight`'s answer. */
@@ -3586,6 +3607,21 @@ export type Reply = {
  */
 export type ReportParams = {
 	day?: string | null,
+};
+
+/**  `gear_session_report_save`: the report for a day, written as a Markdown file. */
+export type ReportSaveParams = {
+	day?: string | null,
+	/**  The file to write. Its folder must exist. */
+	path: string,
+	/**  Replace a file that is already there. The GUI's save dialog has asked already. */
+	overwrite?: boolean,
+};
+
+/**  What `gear_session_report_save` wrote. */
+export type ReportSaved = {
+	path: string,
+	bytes: number,
 };
 
 /**  Where a flight's resting voltage came from. */
@@ -4049,6 +4085,13 @@ export type SourceParams = {
 	join?: boolean | null,
 };
 
+/**  A card's space at one moment, in bytes. */
+export type SpaceSeen = {
+	free: number,
+	total?: number | null,
+	at: string,
+};
+
 /**  A time range in a clip, in seconds: a suggested keep range or a cut. */
 export type Span = {
 	start: number | null,
@@ -4263,6 +4306,8 @@ export type SwitchMap = {
 	 */
 	conflicts: string[],
 	notes: string[],
+	/**  Logical switches left out of the positions, with their condition. */
+	unmapped?: Unmapped[],
 	live?: Live | null,
 };
 
@@ -4399,6 +4444,20 @@ export type Tunables = {
 	 *  within this many seconds of the clip clock.
 	 */
 	clock_skew_s?: number | null,
+};
+
+/**  A logical switch the map cannot work out: it reads telemetry, a timer or sticky state. */
+export type Unmapped = {
+	/**  `L5`. */
+	switch: string,
+	/**  `telemetry`, `timer`, `sticky` or `depends`. */
+	kind: string,
+	/**  Its condition as text (`RxBt < 3.30`). */
+	condition: string,
+	/**  Controls it reads (`SA`). */
+	reads: string[],
+	/**  What uses it (`Plays "lowbat"`, `CH7 mix`, `L6`). */
+	used_by: string[],
 };
 
 /**  `library_untrash`: the files `library_trash` moved. */

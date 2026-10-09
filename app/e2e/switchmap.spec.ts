@@ -32,6 +32,9 @@ test("the Switches segment shows what each switch does and marks where it is", a
   await expect(sa.getByRole("row", { name: /down CH5 2012 ARM/ })).toBeVisible();
   await expect(control(page, "SC").getByRole("row", { name: /mid CH7 1500 Rate profile 2/ })).toBeVisible();
   await expect(page.getByRole("region", { name: "Conflicts" })).toContainText('Sound "lapclr" is not on the card');
+  // Combinations of controls, and the logical switches the map cannot work out.
+  await expect(sa.getByRole("row", { name: /down with SD down CH8 2012 BEEPER L2 on/ })).toBeVisible();
+  await expect(page.getByRole("region", { name: "Not mapped" })).toContainText("L4 (telemetry): RxBt > 10. Used by Reads RxBt");
 
   // Live from the radio's joystick: SA down is marked, ARM is on.
   await page.getByRole("group", { name: "Live" }).getByRole("button", { name: "Radio" }).click();

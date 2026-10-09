@@ -135,6 +135,25 @@ pub struct ReportParams {
     pub day: Option<NaiveDate>,
 }
 
+/// `gear_session_report_save`: the report for a day, written as a Markdown file.
+#[derive(Debug, Clone, Default, Serialize, Deserialize, specta::Type)]
+pub struct ReportSaveParams {
+    #[serde(default)]
+    pub day: Option<NaiveDate>,
+    /// The file to write. Its folder must exist.
+    pub path: PathBuf,
+    /// Replace a file that is already there. The GUI's save dialog has asked already.
+    #[serde(default)]
+    pub overwrite: bool,
+}
+
+/// What `gear_session_report_save` wrote.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, specta::Type)]
+pub struct ReportSaved {
+    pub path: PathBuf,
+    pub bytes: u64,
+}
+
 /// `gear_crash_save`: a crash; an empty id makes a new one. With a clip and no aircraft or
 /// day, they come from the clip.
 #[derive(Debug, Clone, Default, Serialize, Deserialize, specta::Type)]
@@ -188,7 +207,7 @@ fn clip_of<'a>(clips: &'a [LibClip], f: &Flight) -> Option<&'a LibClip> {
 }
 
 /// Bytes free and in all on a mounted volume (`df -k`).
-fn space(mount: &Path) -> (Option<u64>, Option<u64>) {
+pub(super) fn space(mount: &Path) -> (Option<u64>, Option<u64>) {
     let Ok(out) = std::process::Command::new("/bin/df")
         .arg("-k")
         .arg(mount)
@@ -207,6 +226,16 @@ fn space(mount: &Path) -> (Option<u64>, Option<u64>) {
             .map(|k| k * 1024)
     };
     (kb(3), kb(1))
+}
+
+/// The card's free space now, for the device record.
+pub(super) fn space_seen(mount: &Path) -> Option<crate::gear::model::SpaceSeen> {
+    let (free, total) = space(mount);
+    Some(crate::gear::model::SpaceSeen {
+        free: free?,
+        total,
+        at: chrono::Utc::now(),
+    })
 }
 
 /// When a backup was taken, from its id (`<device>/<YYYY-MM-DDTHHMMSS>-<trigger>`, UTC) or an
@@ -339,6 +368,9 @@ impl Core {
             }
         }
         places.sort_by(|a, b| a.place.cmp(&b.place));
+        for t in &mut places {
+            t.points.sort_by_key(|p| p.start);
+        }
 
         let mut flights: Vec<FlightReport> = reports
             .into_iter()
@@ -474,6 +506,35 @@ impl Core {
         ))
     }
 
+    /// Writes the session report's Markdown to a file, through a temp file and a rename.
+    pub fn gear_session_report_save(&self, p: &ReportSaveParams) -> Result<ReportSaved> {
+        if p.path.is_dir() {
+            bail!("{} is a folder; name a file.", p.path.display());
+        }
+        if p.path.exists() && !p.overwrite {
+            bail!("{} exists. Pass overwrite to replace it.", p.path.display());
+        }
+        let Some(dir) = p.path.parent().filter(|d| d.is_dir()) else {
+            bail!("The folder of {} does not exist.", p.path.display());
+        };
+        let r = self.gear_session_report(&ReportParams { day: p.day })?;
+        let name = p
+            .path
+            .file_name()
+            .map(|n| n.to_string_lossy().into_owned())
+            .unwrap_or_default();
+        let tmp = dir.join(format!(".{name}.quadcam-tmp"));
+        std::fs::write(&tmp, r.markdown.as_bytes())?;
+        if let Err(e) = std::fs::rename(&tmp, &p.path) {
+            let _ = std::fs::remove_file(&tmp);
+            return Err(e.into());
+        }
+        Ok(ReportSaved {
+            path: p.path.clone(),
+            bytes: r.markdown.len() as u64,
+        })
+    }
+
     /// The "Pack up" check: packs charged, the radio's model, card space, backups, and
     /// cards still in the Mac. Reads only.
     pub fn gear_preflight(&self) -> Result<Preflight> {
@@ -509,21 +570,37 @@ impl Core {
                 }),
                 aircraft: card.and_then(|g| g.selected_aircraft),
                 last_seen: None,
+                from_backup: None,
             });
         }
+        let mut cards = Vec::new();
+        let local =
+            |t: chrono::DateTime<chrono::Utc>| t.with_timezone(&chrono::Local).naive_local();
+        let is_connected = |id: &str| connected.iter().any(|c| c.id.as_deref() == Some(id));
         for d in devices.iter().filter(|d| d.kind == DeviceKind::Radio) {
+            let (model, aircraft, taken) = if is_connected(&d.id) {
+                (None, None, None)
+            } else {
+                self.radio_model_from_backup(&d.id)
+            };
             radios.push(preflight::RadioSeen {
                 name: name(Some(&d.id), d.kind),
                 connected: false,
-                selected_model: None,
-                aircraft: None,
-                last_seen: d
-                    .last_seen
-                    .map(|t| t.with_timezone(&chrono::Local).naive_local()),
+                selected_model: model,
+                aircraft,
+                last_seen: d.last_seen.map(local),
+                from_backup: taken.map(local),
             });
+            if let (false, Some(sp)) = (is_connected(&d.id), &d.last_space) {
+                cards.push(preflight::CardSpace {
+                    name: format!("{} card", name(Some(&d.id), d.kind)),
+                    free: Some(sp.free),
+                    total: sp.total,
+                    from_backup: Some(local(sp.at)),
+                });
+            }
         }
 
-        let mut cards = Vec::new();
         let mut cards_in = Vec::new();
         for c in &connected {
             let Link::Volume { mount, .. } = &c.link else {
@@ -536,6 +613,7 @@ impl Core {
                     name: n.clone(),
                     free,
                     total,
+                    from_backup: None,
                 });
             }
             cards_in.push(n);
@@ -562,6 +640,42 @@ impl Core {
             cards_in,
             now: chrono::Local::now().naive_local(),
         }))
+    }
+
+    /// The model a radio's latest backup selects: its name, its aircraft, and when the backup
+    /// was taken. All `None` when there is no backup or it holds no `radio.yml`.
+    fn radio_model_from_backup(
+        &self,
+        id: &str,
+    ) -> (
+        Option<String>,
+        Option<String>,
+        Option<chrono::DateTime<chrono::Utc>>,
+    ) {
+        use crate::gear::edgetx::{card::selected_in, model::model_name, yaml::Doc};
+        let snaps = crate::gear::backup::Snapshots::new(self.gear_store());
+        let Some(b) = snaps.latest(id) else {
+            return (None, None, None);
+        };
+        let read = |path: &str| {
+            let f = b.files.iter().find(|f| f.path == path)?;
+            snaps.blobs().get(&crate::gear::backup::blob_of(f)).ok()
+        };
+        let Some(file) = read("RADIO/radio.yml")
+            .and_then(|bytes| Doc::parse("radio.yml", &bytes).ok())
+            .and_then(|d| selected_in(&d))
+        else {
+            return (None, None, None);
+        };
+        let name = read(&format!("MODELS/{file}"))
+            .and_then(|bytes| Doc::parse(&file, &bytes).ok())
+            .and_then(|d| model_name(&d).ok().flatten())
+            .filter(|n| !n.is_empty());
+        let aircraft = self
+            .aircraft_of_model(Some(&file), name.as_deref())
+            .ok()
+            .flatten();
+        (Some(name.unwrap_or(file)), aircraft, Some(b.taken_at))
     }
 
     pub fn gear_crashes(&self, f: &CrashFilter) -> Result<Vec<Crash>> {

@@ -37,7 +37,7 @@ const DISPATCH = new Set([
   "gear_status", "gear_devices", "gear_device_save", "gear_device_forget", "gear_dismiss_reminder", "gear_poll_pause",
   "gear_switch_map", "gear_radio", "gear_radio_watch", "gear_sim_calibration", "gear_sim_calibration_save", "gear_sim_defaults", "gear_sim_calibrate",
   "gear_flights", "gear_flight_set", "gear_flight_folders", "gear_packs", "gear_pack_save", "gear_pack_delete", "gear_pack_type_save",
-  "gear_pack_type_delete", "gear_pack_notes", "gear_session_report", "gear_preflight", "gear_crashes", "gear_crash_save", "gear_crash_delete",
+  "gear_pack_type_delete", "gear_pack_notes", "gear_session_report", "gear_session_report_save", "gear_preflight", "gear_crashes", "gear_crash_save", "gear_crash_delete",
   "gear_backup", "gear_backups", "gear_backup_read", "gear_backup_diff", "gear_backup_pin", "gear_storage", "gear_prune",
   "gear_export", "gear_import_backups", "gear_card_check", "gear_card_checks", "gear_card_repair", "gear_stop",
   "gear_changes", "gear_change_stage", "gear_change_update", "gear_change_discard", "gear_restore_stage", "gear_apply_plan", "gear_apply",
@@ -191,6 +191,7 @@ export class MockCore {
       case "menu_state":
         this.menuState = args;
         return null;
+      case "plugin:dialog|save":
       case "plugin:dialog|open":
         return this.dialogAnswers.length ? this.dialogAnswers.shift() : null;
       case "plugin:opener|reveal_item_in_dir":
@@ -439,6 +440,8 @@ export class MockCore {
         return this.gearChanged(this.flights.notes);
       case "gear_session_report":
         return this.flights.report((p.day as string | null) ?? null);
+      case "gear_session_report_save":
+        return { path: String(p.path), bytes: this.flights.report((p.day as string | null) ?? null).markdown.length };
       case "gear_preflight":
         return this.flights.preflight();
       case "gear_crashes":
