@@ -89,47 +89,93 @@ pub struct GearCard {
     pub radio_usb: bool,
 }
 
+/// The card a request names, found mounted or mounted for it.
+struct CardTarget {
+    root: PathBuf,
+    /// The detected card; none for a plain folder.
+    c: Option<Connected>,
+    /// This request mounted it.
+    here: bool,
+}
+
 impl Core {
-    /// The card a request names: `mount`, a device id, or the one radio plugged in.
+    /// The card a request names: `mount`, a device id, or the one radio plugged in. A card
+    /// that is unmounted but still plugged in is mounted for the request; `here` says this
+    /// call mounted it, so the caller releases it when done (`gear_target_done`).
     fn gear_card_target(
         &self,
         mount: Option<&PathBuf>,
         device: Option<&str>,
-    ) -> Result<(PathBuf, Option<Connected>)> {
+    ) -> Result<CardTarget> {
         let connected = self.gear_connected()?;
         let is_vol = |c: &&Connected| matches!(c.link, Link::Volume { .. });
         let mount_of = |c: &Connected| match &c.link {
             Link::Volume { mount, .. } => Some(mount.clone()),
             _ => None,
         };
+        let mounted = |c: Connected| CardTarget {
+            root: mount_of(&c).unwrap(),
+            c: Some(c),
+            here: false,
+        };
         if let Some(m) = mount {
             let c = connected
                 .iter()
                 .find(|c| mount_of(c).as_ref() == Some(m))
                 .cloned();
-            return Ok((m.clone(), c));
+            return Ok(CardTarget {
+                root: m.clone(),
+                c,
+                here: false,
+            });
         }
+        let unmounted = self.unmounted_cards(true);
         if let Some(id) = device.map(str::trim).filter(|s| !s.is_empty()) {
-            let Some(c) = connected
+            if let Some(c) = connected
                 .iter()
                 .filter(is_vol)
                 .find(|c| c.id.as_deref() == Some(id))
-            else {
-                bail!("No card with id {id:?} is mounted. Plug the radio in (USB Storage) or insert its card.");
+            {
+                return Ok(mounted(c.clone()));
+            }
+            let Some(c) = unmounted.iter().find(|c| c.id.as_deref() == Some(id)) else {
+                bail!("No card with id {id:?} is plugged in. Plug the radio in (USB Storage) or insert its card.");
             };
-            return Ok((mount_of(c).unwrap(), Some(c.clone())));
+            return self.target_mounted(c);
         }
         let radios: Vec<&Connected> = connected
             .iter()
             .filter(is_vol)
             .filter(|c| c.kind == crate::gear::model::DeviceKind::Radio)
             .collect();
-        match radios.as_slice() {
-            [one] => Ok((mount_of(one).unwrap(), Some((*one).clone()))),
-            [] => bail!(
-                "No EdgeTX card is mounted. Plug the radio in and pick USB Storage, or insert its card; or name a mount."
+        match (radios.as_slice(), unmounted.as_slice()) {
+            ([one], []) => Ok(mounted((*one).clone())),
+            ([], [one]) => self.target_mounted(one),
+            ([], []) => bail!(
+                "No EdgeTX card is plugged in. Plug the radio in and pick USB Storage, or insert its card; or name a mount."
             ),
-            _ => bail!("Several EdgeTX cards are mounted; name one by mount or device."),
+            _ => bail!("Several EdgeTX cards are plugged in; name one by mount or device."),
+        }
+    }
+
+    fn target_mounted(&self, c: &Connected) -> Result<CardTarget> {
+        let l = self.card_for_job(c, true)?;
+        Ok(CardTarget {
+            root: l.root,
+            c: Some(l.connected),
+            here: l.mounted_here,
+        })
+    }
+
+    /// Mount, work, unmount: releases a card the request mounted, quietly (a read or a
+    /// preview plays no cue). A card that was mounted already stays as it is.
+    fn gear_target_done(&self, t: &CardTarget) {
+        if let (true, Some(c)) = (t.here, &t.c) {
+            self.card_quiet_unmount(&super::apply_card::Located {
+                connected: c.clone(),
+                root: t.root.clone(),
+                mounted_here: true,
+            });
         }
     }
 
@@ -157,42 +203,50 @@ impl Core {
     /// The card: identity, models, the selected model and its aircraft, the radio clock,
     /// and one model's full view when asked. Reads only.
     pub fn gear_card(&self, p: &CardParams) -> Result<GearCard> {
-        let (root, c) = self.gear_card_target(p.mount.as_ref(), p.device.as_deref())?;
-        let card = Card::open(&root)?;
-        let view = card.view(p.model.as_deref(), chrono::Local::now().date_naive())?;
-        let selected_aircraft = self.aircraft_of_model(
-            view.selected_model.as_deref(),
-            view.selected_name.as_deref(),
-        )?;
-        Ok(GearCard {
-            card: view,
-            selected_aircraft,
-            radio_usb: c.is_some_and(|c| c.usb.is_some()),
-        })
+        let t = self.gear_card_target(p.mount.as_ref(), p.device.as_deref())?;
+        let out = (|| {
+            let card = Card::open(&t.root)?;
+            let view = card.view(p.model.as_deref(), chrono::Local::now().date_naive())?;
+            let selected_aircraft = self.aircraft_of_model(
+                view.selected_model.as_deref(),
+                view.selected_name.as_deref(),
+            )?;
+            Ok(GearCard {
+                card: view,
+                selected_aircraft,
+                radio_usb: t.c.as_ref().is_some_and(|c| c.usb.is_some()),
+            })
+        })();
+        self.gear_target_done(&t);
+        out
     }
 
     /// Checks and diffs card edits. Writes nothing.
     pub fn gear_card_preview(&self, p: &CardPreviewParams) -> Result<CardPreview> {
-        let (root, c) = self.gear_card_target(p.mount.as_ref(), p.device.as_deref())?;
-        let card = Card::open(&root)?;
-        let plan = card.plan(&p.edits, None)?;
-        let radio_usb = c.as_ref().is_some_and(|c| c.usb.is_some());
-        let opts = if radio_usb {
-            WriteOptions::radio_usb()
-        } else {
-            WriteOptions::reader()
-        };
-        Ok(CardPreview {
-            identity: plan.identity.clone(),
-            ready: plan.ready(),
-            files: plan.files.iter().map(|f| f.path.clone()).collect(),
-            bytes: plan.bytes(),
-            eta_s: plan.bytes() / opts.bytes_per_s.max(1),
-            checks: plan.checks,
-            diff: plan.diff,
-            warnings: plan.warnings,
-            radio_usb,
-        })
+        let t = self.gear_card_target(p.mount.as_ref(), p.device.as_deref())?;
+        let out = (|| {
+            let card = Card::open(&t.root)?;
+            let plan = card.plan(&p.edits, None)?;
+            let radio_usb = t.c.as_ref().is_some_and(|c| c.usb.is_some());
+            let opts = if radio_usb {
+                WriteOptions::radio_usb()
+            } else {
+                WriteOptions::reader()
+            };
+            Ok(CardPreview {
+                identity: plan.identity.clone(),
+                ready: plan.ready(),
+                files: plan.files.iter().map(|f| f.path.clone()).collect(),
+                bytes: plan.bytes(),
+                eta_s: plan.bytes() / opts.bytes_per_s.max(1),
+                checks: plan.checks,
+                diff: plan.diff,
+                warnings: plan.warnings,
+                radio_usb,
+            })
+        })();
+        self.gear_target_done(&t);
+        out
     }
 
     /// Lists the AppleDouble (`._*`) files macOS left on a card, and with `remove` and
@@ -202,7 +256,24 @@ impl Core {
         if p.remove && !p.confirm {
             bail!("Refused: removing files from a card needs confirm=true. Call without remove to list them first.");
         }
-        let (root, c) = self.gear_card_target(p.mount.as_ref(), p.device.as_deref())?;
+        let t = self.gear_card_target(p.mount.as_ref(), p.device.as_deref())?;
+        let mut released = false;
+        let out = self.card_clean_on(p, &t, &mut released);
+        if !released {
+            self.gear_target_done(&t);
+        }
+        out
+    }
+
+    /// The body of `gear_card_clean`. `released` turns true once the job's own finish
+    /// unmounted the card.
+    fn card_clean_on(
+        &self,
+        p: &CardCleanParams,
+        t: &CardTarget,
+        released: &mut bool,
+    ) -> Result<CardClean> {
+        let (root, c) = (t.root.clone(), t.c.clone());
         let radio_usb = c.as_ref().is_some_and(|c| c.usb.is_some());
         let files = crate::gear::edgetx::card::find_apple_double(&root);
         let bytes = files.iter().map(|f| f.bytes).sum();
@@ -238,6 +309,7 @@ impl Core {
         let failed = removed.as_ref().err().map(|e| format!("{e:#}"));
         out.removed = removed.as_ref().copied().unwrap_or(0) as u32;
         if let Some(c) = &c {
+            *released = true;
             if let Err(why) = self.gear_finish_card(c, failed.as_deref().map(|m| ("Clean card", m)))
             {
                 out.notes.push(format!("The card did not unmount: {why}"));

@@ -442,3 +442,62 @@ fn a_preview_redraws_an_edited_profile_and_converts_with_the_fit() {
         })
         .is_err());
 }
+
+#[test]
+fn the_sims_badge_counts_sims_that_differ_from_the_quad_seen_last() {
+    use quadcam_lib::gear::backup::Snapshots;
+    use quadcam_lib::gear::bf::dump::Config;
+    use quadcam_lib::gear::model::{device_id, Device, DeviceKind, Trigger};
+    use quadcam_lib::gear::store::Store;
+
+    let dir = tempfile::tempdir().unwrap();
+    let home = sims_home();
+    let c = core(dir.path());
+
+    // No saved FC with a backup: no quad, no badge.
+    assert_eq!(c.sims_badge_at(home.path()), (None, 0));
+    assert_eq!(c.gear_status().unwrap().sims_out_of_date, 0);
+
+    // A saved FC with one backup of the three-profile dump (profile 0 is in use).
+    let dump = std::fs::read_to_string(three()).unwrap();
+    let id = device_id(DeviceKind::Fc, "bf-uid:badge");
+    let store = Store::new(dir.path().join("support/gear"));
+    let mut d: Device =
+        serde_json::from_value(json!({"id": id, "kind": "fc", "name": "Five-inch"})).unwrap();
+    store.save_device(&d).unwrap();
+    let taken = Snapshots::new(Store::new(dir.path().join("support/gear")))
+        .take_files(
+            &id,
+            &Config::parse(&dump).identity(),
+            Trigger::Manual,
+            chrono::Utc::now(),
+            &[("dump all".into(), dump.into_bytes())],
+            false,
+        )
+        .unwrap();
+    d.last_backup = Some(taken.backup.id);
+    store.save_device(&d).unwrap();
+
+    // Micro Drones differs from the quad; Liftoff, Uncrashed and the Zone match it. Velocidrone
+    // is off and never counts.
+    assert_eq!(c.sims_badge_at(home.path()), (Some(id.clone()), 1));
+    // The answer is kept until a sim file or the backup changes.
+    assert_eq!(c.sims_badge_at(home.path()), (Some(id.clone()), 1));
+    std::fs::remove_dir_all(
+        home.path()
+            .join("Library/Application Support/Steam/steamapps/common/Liftoff Micro Drones"),
+    )
+    .unwrap();
+    assert_eq!(c.sims_badge_at(home.path()), (Some(id.clone()), 0));
+
+    // `gear_status` carries the badge and the quad it compares with.
+    put(
+        home.path(),
+        "Steam/steamapps/common/Liftoff Micro Drones/Liftoff Micro Drones.app/Contents/Saves/Player/UserData.xml",
+        &std::fs::read(fixture("sims", "micro.UserData.xml")).unwrap(),
+    );
+    std::env::set_var("QUADCAM_SIMS_HOME", home.path());
+    let st = c.gear_status().unwrap();
+    std::env::remove_var("QUADCAM_SIMS_HOME");
+    assert_eq!((st.sims_quad, st.sims_out_of_date), (Some(id), 1));
+}

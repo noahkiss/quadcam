@@ -13,6 +13,8 @@ it.
 - **Bench** lists the changes staged for each device. See [The Bench](#the-bench).
 - **Pack up**, **Flights**, **Packs** and **Repairs** are described under
   [Flights and packs](#flights-and-packs).
+- **Sims** lists the sims on this Mac against one quad's rates. The item says **Out of date**
+  while a sim's rates differ from the quad's. See [Sims](#sims-page).
 - **Firmware** compares each device's firmware with the newest release and flashes an EdgeTX
   radio. See [Firmware and splash](#firmware-and-splash).
 - A device's page shows its kind and state, what it reports about itself (board, firmware,
@@ -505,15 +507,26 @@ every file back to the bytes in the backup, and the sheet says the card is as it
 is removed. Over the radio's USB a write is slow and **Stop** finishes the current file, then
 puts the written files back.
 
-**Mount, work, unmount.** QuadCam keeps a card unmounted between jobs. A plan or an apply
-mounts the card when it needs it. A plan unmounts the card again without a word. An apply ends
-with the unmount, and "safe to unplug" plays only after the unmount worked. A card that is
-already mounted stays mounted for a plan. If the unmount fails, the sheet says so and the cue is
-"failed".
+**Mount, work, unmount.** QuadCam keeps a card unmounted between jobs, for every kind of
+card: a radio's, a DVR card and a goggles card. Any job that needs a card mounts it when it is
+unmounted but still in, does its work, and unmounts it again:
 
-**Mount** (on a radio's page, when its card is unmounted but still in) mounts the card so you
-can browse it in Finder. QuadCam unmounts it again when you press **Done**, or after 10
-minutes.
+| Job | Ends with |
+|---|---|
+| Backup, card check, repair, apply, restore, voice pack, `._` clean-up | The unmount, and "safe to unplug" only after it worked |
+| A plan, a card view, a preview, a list of `._` files, a format plan, a card prep plan | A quiet unmount, with no cue |
+| Importing clips (the card is mounted for the stage) | The unmount when the import is done, after "Delete clips after import". Finish says "Unmounted. Safe to remove." |
+| Format and card prep | The erase unmounts the card. A refused erase unmounts it too |
+
+A card that is mounted already stays as it is for a plan, a view or a preview. A DJI device
+over USB (an air unit) is never unmounted this way. If an unmount fails, the sheet says so and
+the cue is "failed". Lists such as Connected and the Pack up check never mount a card: they read
+what is mounted, or the latest backup.
+
+**Mount** (on a radio's, a DVR card's or a goggles card's page, when the card is unmounted but
+still in) mounts the card so you can browse it in Finder. QuadCam unmounts it again when you
+press **Done**, or after 10 minutes. **Import clipsâ€¦** on a DVR or goggles card's page mounts it
+and starts an import. **Prepare cardâ€¦** opens [card prep](format-safety.md#card-prep).
 
 A restore of a radio backup names the files to put back (`gear restore <backup> --path
 RADIO/radio.yml`). It makes those files read as in the backup, and removes a file the backup
@@ -668,13 +681,14 @@ choose **Rates**. A saved FC with a backup shows its latest backup; **Open dumpâ
 - **A diff alone:** a diff lists only values that differ from the defaults. QuadCam fills in
   Betaflight's defaults and says so. Use a dump for exact curves.
 - **Sims:** QuadCam reads the rate files of Liftoff, Liftoff: Micro Drones, Uncrashed and The
-  Zone, and lists each profile's maximum rates. Each sim says "Matches the quad" or "Differs from
-  the quad" against the selected profile, and shows the largest gap in degrees per second. A sim
+  Zone, and lists each profile's maximum rates. Each sim says "Matches the quad" or "Out of date"
+  against the selected profile, and shows the largest gap in degrees per second. A sim
   takes Betaflight rates, so a quad on Actual or Quick is fitted to the Betaflight model first.
   The fit stays within 6 % of the maximum rate for Actual profiles with a centre of 40 to 200
   degrees per second, a maximum of 300 to 1000 and expo up to 60. Outside that range the error
   grows, up to about 12 %. The fit error shows next to each profile it affects. Only Uncrashed has a throttle
-  curve. Velocidrone is off until a sample save exists. A sim marked "Running" may rewrite its
+  curve. Velocidrone is off: QuadCam needs a sample Velocidrone save to read its rate file, so
+  the adapter ships disabled until one exists. A sim marked "Running" may rewrite its
   file when it quits.
 - **Edit profile:** on a saved FC, **Edit profile** opens the profile's rates type, the three
   numbers of each axis (named for the type: RC rate, super rate and expo for Betaflight; center
@@ -685,6 +699,18 @@ choose **Rates**. A saved FC with a backup shows its latest backup; **Open dumpâ
   onto another rate model with the same fit the sims use (whole numbers within the model's
   range) and shows the largest gap from the old curve per axis; stage it like any edit.
   Changing **Rates type** alone keeps the numbers and changes what they mean.
+
+### Sims page
+
+**Gear > Sims** lists every sim on this Mac against one quad's profile in use. The quad is the
+saved flight controller that QuadCam saw last and has a backup; **Compare with** picks another
+when there are several. Each sim shows **Matches the quad** or **Out of date**, its files and
+profiles with **Sync**, and **Restore backup** for a sim QuadCam backed up (the same sheets as
+in the Rates segment). Velocidrone shows **Off** with the reason.
+
+The sidebar item says **Out of date** while at least one enabled sim differs from that quad.
+It clears after a sync or when the quad's rates change. `gear status` carries the count as
+`sims_out_of_date` and the quad as `sims_quad`.
 
 ### Sync the quad's rates into a sim
 

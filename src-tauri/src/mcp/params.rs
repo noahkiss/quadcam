@@ -51,6 +51,8 @@ pub struct StatusArgs {}
 pub struct LoadClipsArgs {
     /// Card mount point (e.g. /Volumes/NO NAME) or a folder of AVI files. Omit to use the first detected card.
     pub source: Option<String>,
+    /// A card's device id from quadcam_gear, for a card that is unmounted but still plugged in: QuadCam mounts it for the load and unmounts it when the import is done. Use instead of source.
+    pub card: Option<String>,
     /// false keeps recordings the DVR split into files (PICT0001.AVI, PICT0002.AVI, ...) as separate clips this run. Omit to follow the join_split_recordings setting (on by default).
     pub join: Option<bool>,
 }
@@ -187,6 +189,8 @@ pub struct FormatCardArgs {
     pub prep: Option<bool>,
     /// Card prep: the card's mount point, for the dry run.
     pub mount: Option<String>,
+    /// Card prep: the card's device id from quadcam_gear, for the dry run, when the card is unmounted but still plugged in (QuadCam mounts it for the plan and unmounts it again). Use instead of mount.
+    pub card: Option<String>,
 }
 
 // ----- the library -----

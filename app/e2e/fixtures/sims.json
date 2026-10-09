@@ -1334,7 +1334,7 @@
    "id": "velocidrone",
    "in_sync": null,
    "name": "Velocidrone",
-   "note": "Off until a sample save exists to read its format from.",
+   "note": "Not supported yet. QuadCam needs a sample Velocidrone save to read its rate file, so this sim stays off.",
    "running": false
   }
  ],
@@ -2781,7 +2781,7 @@
    "id": "velocidrone",
    "in_sync": null,
    "name": "Velocidrone",
-   "note": "Off until a sample save exists to read its format from.",
+   "note": "Not supported yet. QuadCam needs a sample Velocidrone save to read its rate file, so this sim stays off.",
    "running": false
   }
  ],
@@ -4228,7 +4228,7 @@
    "id": "velocidrone",
    "in_sync": null,
    "name": "Velocidrone",
-   "note": "Off until a sample save exists to read its format from.",
+   "note": "Not supported yet. QuadCam needs a sample Velocidrone save to read its rate file, so this sim stays off.",
    "running": false
   }
  ],
@@ -5675,7 +5675,7 @@
    "id": "velocidrone",
    "in_sync": null,
    "name": "Velocidrone",
-   "note": "Off until a sample save exists to read its format from.",
+   "note": "Not supported yet. QuadCam needs a sample Velocidrone save to read its rate file, so this sim stays off.",
    "running": false
   }
  ]

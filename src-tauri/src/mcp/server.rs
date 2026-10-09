@@ -718,9 +718,10 @@ impl<B: Backend> Server<B> {
             }
             "quadcam_load_clips" => {
                 let x: LoadClipsArgs = args(a)?;
-                let session = self
-                    .backend
-                    .call("load", json!({"source": x.source, "join": x.join}))?;
+                let session = self.backend.call(
+                    "load",
+                    json!({"source": x.source, "device": x.card, "join": x.join}),
+                )?;
                 let view = clip_views(&session, None);
                 Ok((
                     vec![text(format!(
@@ -914,11 +915,15 @@ impl<B: Backend> Server<B> {
                 let prep = x.prep.unwrap_or(false);
                 if x.dry_run.unwrap_or(false) {
                     let plan = if prep {
-                        let mount = x.mount.clone().ok_or_else(|| {
-                            anyhow!("Card prep's dry run needs mount, the card's mount point.")
-                        })?;
-                        self.backend
-                            .call("card_prep_plan", json!({"mount": mount, "label": x.label}))?
+                        if x.mount.is_none() && x.card.is_none() {
+                            return Err(anyhow!(
+                                "Card prep's dry run needs mount (the card's mount point) or card (its device id)."
+                            ));
+                        }
+                        self.backend.call(
+                            "card_prep_plan",
+                            json!({"mount": x.mount, "device": x.card, "label": x.label}),
+                        )?
                     } else {
                         self.backend
                             .call("format_plan", json!({"label": x.label}))?

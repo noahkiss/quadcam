@@ -2,7 +2,7 @@
 // (step, selected clip, progress) lives here too.
 import type { StateCreator } from "zustand";
 import type { State } from ".";
-import type { Clip, ClipDeletion, ClipPlan, ClipResult, FormatPlan, Session, StageProgress } from "../ipc/types";
+import type { CardRelease, Clip, ClipDeletion, ClipPlan, ClipResult, FormatPlan, Session, StageProgress } from "../ipc/types";
 
 export type Step = "load" | "review" | "export" | "finish";
 
@@ -33,6 +33,8 @@ export interface SessionSlice {
   keepClips: boolean;
   /** What the last export deleted from the card, or null when it deleted nothing. */
   clipDeletion: ClipDeletion[] | null;
+  /** What the end of the last export did with the card: unmounted, or why not. */
+  cardRelease: CardRelease | null;
   setSession: (s: Session | null) => void;
   setStep: (step: Step) => void;
   setImportOpen: (open: boolean) => void;
@@ -60,12 +62,13 @@ export const createSessionSlice: StateCreator<State, [], [], SessionSlice> = (se
   formatLabelDraft: "",
   keepClips: false,
   clipDeletion: null,
+  cardRelease: null,
   setSession: (session) => {
     const cur = get().selectedClip;
     const keep = session && cur != null && session.clips.some((c) => c.id === cur);
     // A different set of clips is a new import: its delete choice starts from the setting.
     const fresh = sessionKey(session) !== sessionKey(get().session);
-    set({ session, selectedClip: keep ? cur : (session?.clips[0]?.id ?? null), ...(fresh ? { keepClips: false, clipDeletion: null } : {}) });
+    set({ session, selectedClip: keep ? cur : (session?.clips[0]?.id ?? null), ...(fresh ? { keepClips: false, clipDeletion: null, cardRelease: null } : {}) });
   },
   setStep: (step) => set({ step }),
   setImportOpen: (importOpen) => set({ importOpen }),

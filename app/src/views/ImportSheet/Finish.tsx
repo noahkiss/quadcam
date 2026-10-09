@@ -6,7 +6,7 @@ import { Button } from "../../components/Button";
 import { Checkbox, Input } from "../../components/Field";
 import { Icon } from "../../components/Icon";
 import { base, fmtBytes, fmtDay, fmtT, tilde, SOURCE_LABEL } from "../../lib/format";
-import { addToPhotos, askFormat, checkFormat, eject, formatBlocker, runExport } from "../../actions/session";
+import { addToPhotos, askFormat, checkFormat, eject, formatBlocker, prepCard, runExport } from "../../actions/session";
 import styles from "./Finish.module.css";
 
 /** Finish: what was added, Photos, safe to remove, and the format step. */
@@ -15,6 +15,7 @@ export function Finish() {
   const home = useStore((x) => x.home);
   const defaultName = useStore(sel.defaultName);
   const deletion = useStore((x) => x.clipDeletion);
+  const release = useStore((x) => x.cardRelease);
   if (!s) return null;
   const deleted = (deletion || []).filter((x) => x.state === "deleted").length;
   const onCard = (id: number) => {
@@ -106,8 +107,9 @@ export function Finish() {
             <div className={styles.grow}>
               <b>{s.card.volume_name || s.card_volume?.info.volume_name || "Card"}</b>
               <p className={styles.muted}>
-                {fmtBytes(s.card_volume?.info.total_size || 0)} {SOURCE_LABEL[s.kind]} card{s.clips.every((c) => c.staged && !c.stage_error) ? " · every clip is on this Mac" : ""}
+                {fmtBytes(s.card_volume?.info.total_size || s.card.total_size)} {SOURCE_LABEL[s.kind]} card{s.clips.every((c) => c.staged && !c.stage_error) ? " · every clip is on this Mac" : ""}
               </p>
+              {release && <p className={release.released ? styles.muted : styles.err}>{release.released ? "Unmounted. Safe to remove." : release.message}</p>}
             </div>
             <Button size="sm" variant="ghost" icon="eject" onClick={eject}>
               Safe to Remove
@@ -115,8 +117,35 @@ export function Finish() {
           </section>
         )}
         {s.card && s.kind !== "dji" && <FormatPanel />}
+        {s.card && s.kind === "dji" && <PrepPanel />}
       </div>
     </div>
+  );
+}
+
+/** A DJI card has no Format card step. Card prep erases a removable goggles card once every
+ *  clip on it is in the library. */
+function PrepPanel() {
+  const s = useStore((x) => x.session)!;
+  const unmounted = useStore((x) => x.unmounted);
+  const uuid = s.card?.volume_uuid;
+  const gone = unmounted.find((c) => c.link.kind === "volume" && !!uuid && c.link.volume_uuid === uuid);
+  const target = s.card_volume ? { mount: s.card_volume.mount } : gone?.id ? { device: gone.id } : null;
+  return (
+    <section className={styles.panel} aria-label="Prepare card">
+      <div className={styles.grow}>
+        <h4>
+          <Icon name="danger-triangle" tint="red" />
+          Prepare card
+        </h4>
+        <div className={styles.row}>
+          <Button size="sm" variant="danger" disabled={!target} onClick={() => target && prepCard(target)}>
+            Prepare card…
+          </Button>
+        </div>
+        <p className={styles.small}>QuadCam does not format a DJI card after an import. Card prep erases a removable card once every clip on it is in the library. A dialog names the disk first.</p>
+      </div>
+    </section>
   );
 }
 

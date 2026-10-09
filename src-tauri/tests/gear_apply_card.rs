@@ -6,7 +6,8 @@
 //! is touched.
 
 use quadcam_lib::core::{
-    BackupParams, CardMountParams, Core, Hooks, NoHooks, RestoreParams, StageParams,
+    BackupParams, CardCheckParams, CardCleanParams, CardMountParams, CardParams, CardPreviewParams,
+    Core, Hooks, NoHooks, RestoreParams, StageParams,
 };
 use quadcam_lib::disk::{DiskInfo, Volume};
 use quadcam_lib::gear::apply::{ApplyPlanParams, ApplyRequest};
@@ -750,4 +751,163 @@ fn a_change_the_engine_does_not_plan_is_refused_at_stage() {
         })
         .unwrap_err();
     assert_eq!(code(&e), RefusalCode::ShapeUnknown);
+}
+
+// ----- mount, work, unmount for every card operation -----
+
+/// The bench with its card released, as an earlier job leaves it.
+fn released(o: Opts) -> Bench {
+    let b = bench(o);
+    b.core
+        .gear_card_unmount(&CardMountParams {
+            device: b.id.clone(),
+            minutes: None,
+        })
+        .unwrap();
+    assert!(!b.mounted.load(Ordering::SeqCst));
+    b.log.lock().unwrap().clear();
+    b.cues.played.lock().unwrap().clear();
+    b
+}
+
+fn mount_then_unmount() -> Vec<String> {
+    vec![format!("mount {DISK}"), format!("unmount {DISK}")]
+}
+
+#[test]
+fn a_backup_mounts_an_unmounted_card_and_unmounts_it() {
+    let b = released(Opts::default());
+    std::fs::write(b.root.join("RADIO/radio.yml"), "contrast: 31\n").unwrap();
+    let r = b
+        .core
+        .gear_backup(&BackupParams {
+            device: Some(b.id.clone()),
+            ..Default::default()
+        })
+        .unwrap();
+    assert!(r.notes.iter().all(|n| !n.contains("did not unmount")));
+    assert_eq!(*b.log.lock().unwrap(), mount_then_unmount());
+    assert!(!b.mounted.load(Ordering::SeqCst));
+    assert_eq!(
+        spoken(&b)
+            .iter()
+            .filter(|s| s.contains("safe to unplug"))
+            .count(),
+        1
+    );
+    // With no device named, the one unmounted card is the target.
+    b.log.lock().unwrap().clear();
+    b.core.gear_backup(&BackupParams::default()).unwrap();
+    assert_eq!(*b.log.lock().unwrap(), mount_then_unmount());
+}
+
+#[test]
+fn a_card_check_mounts_an_unmounted_card_and_unmounts_it() {
+    let b = released(Opts::default());
+    let k = b
+        .core
+        .gear_card_check(&CardCheckParams {
+            device: Some(b.id.clone()),
+            mount: None,
+        })
+        .unwrap();
+    assert_eq!(k.state, CheckState::Ok);
+    assert_eq!(*b.log.lock().unwrap(), mount_then_unmount());
+    assert!(!b.mounted.load(Ordering::SeqCst));
+    // No device named: the one card plugged in.
+    b.log.lock().unwrap().clear();
+    b.core.gear_card_check(&CardCheckParams::default()).unwrap();
+    assert_eq!(*b.log.lock().unwrap(), mount_then_unmount());
+}
+
+#[test]
+fn a_card_read_a_preview_and_a_clean_listing_release_the_card_quietly() {
+    let b = released(Opts::default());
+    b.core
+        .gear_card(&CardParams {
+            device: Some(b.id.clone()),
+            ..Default::default()
+        })
+        .unwrap();
+    assert_eq!(*b.log.lock().unwrap(), mount_then_unmount());
+    b.log.lock().unwrap().clear();
+    b.core
+        .gear_card_preview(&CardPreviewParams {
+            device: Some(b.id.clone()),
+            edits: vec![contrast("22")],
+            ..Default::default()
+        })
+        .unwrap();
+    assert_eq!(*b.log.lock().unwrap(), mount_then_unmount());
+    b.log.lock().unwrap().clear();
+    let listed = b
+        .core
+        .gear_card_clean(&CardCleanParams {
+            device: Some(b.id.clone()),
+            ..Default::default()
+        })
+        .unwrap();
+    assert_eq!(listed.removed, 0);
+    assert_eq!(*b.log.lock().unwrap(), mount_then_unmount());
+    assert!(spoken(&b).is_empty(), "reads play no cue: {:?}", spoken(&b));
+    assert!(!b.mounted.load(Ordering::SeqCst));
+}
+
+#[test]
+fn a_clean_removal_mounts_removes_and_unmounts_once_with_the_cue() {
+    let b = released(Opts::default());
+    let mut junk = vec![0x00, 0x05, 0x16, 0x07, 0x00, 0x02, 0x00, 0x00];
+    junk.extend_from_slice(b"Mac OS X        ");
+    junk.resize(120, 0);
+    std::fs::write(b.root.join("RADIO/._radio.yml"), &junk).unwrap();
+    let r = b
+        .core
+        .gear_card_clean(&CardCleanParams {
+            device: Some(b.id.clone()),
+            remove: true,
+            confirm: true,
+            ..Default::default()
+        })
+        .unwrap();
+    assert_eq!(r.removed, 1, "{:?}", r.notes);
+    assert!(!b.root.join("RADIO/._radio.yml").exists());
+    assert_eq!(*b.log.lock().unwrap(), mount_then_unmount());
+    assert_eq!(
+        spoken(&b)
+            .iter()
+            .filter(|s| s.contains("safe to unplug"))
+            .count(),
+        1
+    );
+}
+
+#[test]
+fn a_card_that_is_mounted_already_is_not_mounted_again_for_a_read() {
+    let b = bench(Opts::default());
+    b.core
+        .gear_card(&CardParams {
+            device: Some(b.id.clone()),
+            ..Default::default()
+        })
+        .unwrap();
+    assert!(b.log.lock().unwrap().is_empty());
+    assert!(
+        b.mounted.load(Ordering::SeqCst),
+        "a read leaves it as it was"
+    );
+}
+
+#[test]
+fn a_card_pulled_before_the_job_is_not_mounted() {
+    let b = released(Opts::default());
+    b.present.store(false, Ordering::SeqCst);
+    let e = b
+        .core
+        .gear_backup(&BackupParams {
+            device: Some(b.id.clone()),
+            ..Default::default()
+        })
+        .unwrap_err();
+    assert!(format!("{e:#}").contains("not plugged in"), "{e:#}");
+    assert!(b.log.lock().unwrap().is_empty());
 }

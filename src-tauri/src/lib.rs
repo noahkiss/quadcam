@@ -224,6 +224,18 @@ async fn format_card(state: State<'_, AppState>, label: String) -> Result<Format
     .await
 }
 
+/// The GUI's own card prep button: the click in its confirm dialog is the confirmation.
+/// `req` comes from the plan the dialog showed; `card_prep` checks it against the card again.
+#[tauri::command]
+#[specta::specta]
+async fn card_prep_click(
+    state: State<'_, AppState>,
+    req: FormatRequest,
+) -> Result<FormatPlan, String> {
+    let core = state.core.clone();
+    blocking(move || core.card_prep(&req, true)).await
+}
+
 /// The person's answer to an agent's format request.
 #[tauri::command]
 #[specta::specta]
@@ -643,6 +655,7 @@ pub fn specta_builder() -> tauri_specta::Builder<tauri::Wry> {
             sim_reset,
             sim_stop,
             format_card,
+            card_prep_click,
             answer_format_request,
             gear_apply_click,
             gear_sim_sync_click,

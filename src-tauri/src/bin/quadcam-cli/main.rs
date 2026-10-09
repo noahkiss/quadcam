@@ -46,6 +46,10 @@ enum Cmd {
     Stage {
         /// Card mount point or folder. Default: the first detected card.
         path: Option<PathBuf>,
+        /// A card's device id (see `gear status`), when it is unmounted but still plugged in:
+        /// QuadCam mounts it for the stage.
+        #[arg(long, conflicts_with = "path")]
+        card: Option<String>,
         /// Keep recordings the DVR split into files as separate clips this run (the
         /// join_split_recordings setting is on by default).
         #[arg(long)]
@@ -242,6 +246,10 @@ enum Cmd {
         /// Card prep: the card's mount point, for --plan.
         #[arg(long, requires = "prep")]
         mount: Option<PathBuf>,
+        /// Card prep: the card's device id (see `gear status`), for --plan, when the card
+        /// is unmounted but still plugged in. QuadCam mounts it for the plan and unmounts it.
+        #[arg(long, requires = "prep", conflicts_with = "mount")]
+        card: Option<String>,
     },
     /// The library: list, rate, rename, edit (details, aircraft, date, time), cut, trash, Photos.
     #[command(subcommand)]
@@ -590,10 +598,15 @@ fn run(cli: Cli) -> Result<Value> {
             let clips = sources::for_root(&path).list(&path);
             json!({"path": path, "source": source, "volume": vol, "clips": clips})
         }
-        Cmd::Stage { path, no_join } => serde_json::to_value(call::stage(
+        Cmd::Stage {
+            path,
+            card,
+            no_join,
+        } => serde_json::to_value(call::stage(
             &core,
             api::SourceParams {
                 source: path,
+                device: card,
                 join: no_join.then_some(false),
             },
         )?)?,
@@ -1015,15 +1028,20 @@ fn run(cli: Cli) -> Result<Value> {
             plan: true,
             prep: true,
             mount,
+            card,
             label,
             ..
         } => {
-            let Some(mount) = mount else {
-                bail!("format --prep --plan needs --mount, the card's mount point.");
-            };
+            if mount.is_none() && card.is_none() {
+                bail!("format --prep --plan needs --mount (the card's mount point) or --card (its device id).");
+            }
             serde_json::to_value(call::card_prep_plan(
                 &core,
-                api::CardPrepParams { mount, label },
+                api::CardPrepParams {
+                    mount,
+                    device: card,
+                    label,
+                },
             )?)?
         }
         Cmd::Format {

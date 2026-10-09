@@ -28,7 +28,7 @@ The server has 19 tools.
 | Tool | What it does |
 |---|---|
 | `quadcam_status` | Shows the mode (app or headless), the cards with their source (analog or DJI), the radios, and the session with its source |
-| `quadcam_load_clips` | Stages, checks, and dates a card or a folder. Joins recordings the DVR split into files; `join=false` keeps them apart for that load. See [Joined recordings](library.md#joined-recordings) |
+| `quadcam_load_clips` | Stages, checks, and dates a card or a folder. `card` names a card that is unmounted but still in (its device id from `quadcam_gear`); QuadCam mounts it, and `quadcam_export` unmounts it when the import is done. Joins recordings the DVR split into files; `join=false` keeps them apart for that load. See [Joined recordings](library.md#joined-recordings) |
 | `quadcam_read_clips` | Reads the clips, their source, plans, moments, keep ranges and cuts. Returns thumbnails as images. The date source reads `radio log`, `clip clock`, `import` or `edited` |
 | `quadcam_match_logs` | Dates the clips from EdgeTX logs |
 | `quadcam_suggest` | Suggests names, dates, times, notes, skips, cuts, the log offset, or metadata (profile, place or location, keywords, author). `split_by_flight` adds one cut per radio-log flight; `joined` joins or parts a split recording |
@@ -73,7 +73,7 @@ An agent's suggestions show in the app with a dashed outline and an **agent** ba
 
 `quadcam_format_card` needs the device, the volume UUID, and `confirm=true`. The agent reads the device and the volume UUID with `dry_run=true` first.
 
-With `prep=true`, the tool erases a card that has no session: a new card, or a card whose clips are all in the library. The dry run then needs `mount`, the card's mount point. See [Card prep](format-safety.md#card-prep).
+With `prep=true`, the tool erases a card that has no session: a new card, or a card whose clips are all in the library. The dry run then needs `mount`, the card's mount point, or `card`, its device id when it is unmounted but still in. See [Card prep](format-safety.md#card-prep).
 
 If the app is running, you must also select **Erase** in the app. Cancel, a closed dialog, or 3 minutes without a click refuses the erase.
 

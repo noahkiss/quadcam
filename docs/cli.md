@@ -29,6 +29,7 @@ quadcam-cli import --cut 0=20-26          # add a cut, then import
 quadcam-cli import --time 0=18:30         # clip 0 was flown at 18:30 (the default is noon)
 quadcam-cli import --keep-clips           # keep the clips on the card this run
 quadcam-cli stage /Volumes/DVR --no-join  # keep split DVR recordings as separate clips this run
+quadcam-cli stage --card <device id>       # a card that is unmounted but still in: QuadCam mounts it
 quadcam-cli import --separate 0           # import clip 0's files (a split recording) one by one
 quadcam-cli meta all --place "Home field" --keywords park,windy
 quadcam-cli meta 2 --location 40.6892,-74.0445 --profile Whoop
@@ -40,10 +41,13 @@ quadcam-cli eject                         # safe to remove: unmount the card
 quadcam-cli format --plan                 # show what would be erased
 quadcam-cli format --device /dev/diskN --volume-uuid <uuid> --yes
 quadcam-cli format --prep --plan --mount /Volumes/CARD   # card prep: a card with no session
+quadcam-cli format --prep --plan --card <device id>      # the same, for a card that is unmounted but still in
 quadcam-cli format --prep --device /dev/diskN --volume-uuid <uuid> --yes
 ```
 
 `clear` deletes the session file. The staged copies stay.
+
+**Mount, work, unmount.** The end of `import` unmounts the session's card (a removable card; never a DJI device over USB), and the result says so under `card`. `format`, `format --plan` and `eject` mount it again when they need it. `stage --card` and `format --prep --card` take a card that an earlier job unmounted and mounted by its device id from `gear status`.
 
 `eject` makes the card safe to remove. For a card it runs `diskutil unmountDisk`: every volume unmounts, and the card stays listed until you pull it. For a disk that is not a card it runs `diskutil eject`.
 

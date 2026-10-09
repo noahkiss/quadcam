@@ -10,6 +10,7 @@ import { Icon } from "../../components/Icon";
 import { SegmentedControl } from "../../components/SegmentedControl";
 import { DeviceHeader } from "../../components/gear/DeviceHeader";
 import { toast } from "../../components/toastStore";
+import { importFromDevice, prepCard } from "../../actions/session";
 import { attentionText, deviceName, KIND_ICON, KIND_LABEL, NOTHING_FOUND, STATE_LABEL } from "../../lib/gear";
 import { deviceRefs, pluggedIn, useNow } from "./refs";
 import { segmentsFor } from "./segments";
@@ -84,6 +85,9 @@ function DevicePage({ d }: { d: DeviceRef }) {
   const cur = segs.find((x) => x.id === segment) || segs[0];
   const name = d.device ? deviceName(d.device) : KIND_LABEL[d.kind];
   const canSave = !!(d.device || d.connected?.id);
+  // Radio cards, DVR cards and goggles cards mount for the person to browse; only the last two hold clips.
+  const isClipCard = d.kind === "dvr_card" || d.kind === "goggles";
+  const isCard = d.kind === "radio" || isClipCard;
   return (
     <section className={styles.page} aria-label={name}>
       <DeviceHeader
@@ -97,12 +101,26 @@ function DevicePage({ d }: { d: DeviceRef }) {
                 Dismiss reminder
               </Button>
             )}
-            {d.kind === "radio" && d.unmounted && d.connected?.id && (
+            {isCard && d.unmounted && d.connected?.id && (
               <Button size="sm" variant="ghost" onClick={() => void mountCard(d.connected!.id!)}>
                 Mount
               </Button>
             )}
-            {d.kind === "radio" && browsing && (
+            {isClipCard && d.unmounted && d.connected?.id && (
+              <Button size="sm" variant="ghost" onClick={() => void importFromDevice(d.connected!.id!, name)}>
+                Import clips…
+              </Button>
+            )}
+            {isClipCard && d.connected && (d.unmounted ? !!d.connected.id : d.connected.link.kind === "volume") && (
+              <Button
+                size="sm"
+                variant="ghost"
+                onClick={() => void prepCard(d.unmounted ? { device: d.connected!.id! } : { mount: d.connected!.link.kind === "volume" ? d.connected!.link.mount : undefined })}
+              >
+                Prepare card…
+              </Button>
+            )}
+            {isCard && browsing && (
               <>
                 <span className={styles.rowState}>Mounted until {new Date(browsing.until).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}</span>
                 <Button size="sm" variant="ghost" onClick={() => void unmountCard(browsing.device)}>

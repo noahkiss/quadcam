@@ -227,3 +227,77 @@ impl Core {
         Ok(sims::status(home, running, quad.as_ref()))
     }
 }
+
+impl Core {
+    /// The saved FC the Sims badge compares with: the one seen last that has a backup.
+    fn sims_quad(&self) -> Option<crate::gear::model::Device> {
+        let mut fcs: Vec<_> = self
+            .gear_store()
+            .devices()
+            .ok()?
+            .into_iter()
+            .filter(|d| d.kind == crate::gear::model::DeviceKind::Fc && d.last_backup.is_some())
+            .collect();
+        fcs.sort_by(|a, b| a.last_seen.cmp(&b.last_seen).then(b.id.cmp(&a.id)));
+        fcs.pop()
+    }
+
+    /// The badge: the quad's id and how many enabled sims differ from its active rates.
+    /// Read again only when the quad's backup or a sim file changed.
+    ///
+    /// A process started by cargo reads no real sim file: it needs `QUADCAM_SIMS_HOME`.
+    pub(super) fn sims_badge(&self) -> (Option<String>, usize) {
+        let under_cargo = std::env::var_os("CARGO_MANIFEST_DIR").is_some();
+        match std::env::var_os("QUADCAM_SIMS_HOME") {
+            Some(h) => self.sims_badge_at(std::path::Path::new(&h)),
+            None if under_cargo => (self.sims_quad().map(|d| d.id), 0),
+            None => self.sims_badge_at(&crate::paths::home_dir()),
+        }
+    }
+
+    /// `sims_badge` with the home folder given (tests).
+    pub fn sims_badge_at(&self, home: &std::path::Path) -> (Option<String>, usize) {
+        let Some(quad) = self.sims_quad() else {
+            return (None, 0);
+        };
+        let stamp = |p: &std::path::Path| {
+            std::fs::metadata(p)
+                .and_then(|m| m.modified())
+                .map(|t| format!("{t:?}"))
+                .unwrap_or_default()
+        };
+        let key = format!(
+            "{}|{}|{}",
+            quad.id,
+            quad.last_backup.as_deref().unwrap_or(""),
+            sims::all()
+                .iter()
+                .flat_map(|s| s.files(home))
+                .map(|f| format!("{}@{}", f.display(), stamp(&f)))
+                .collect::<Vec<_>>()
+                .join(",")
+        );
+        if let Some((k, n)) = &*self.sims_badge.lock().unwrap() {
+            if *k == key {
+                return (Some(quad.id), *n);
+            }
+        }
+        let n = self
+            .gear_sims_at(
+                &SimsParams {
+                    device: Some(quad.id.clone()),
+                    ..Default::default()
+                },
+                home,
+                &|_| false,
+            )
+            .map(|list| {
+                list.iter()
+                    .filter(|s| s.enabled && s.in_sync == Some(false))
+                    .count()
+            })
+            .unwrap_or(0);
+        *self.sims_badge.lock().unwrap() = Some((key, n));
+        (Some(quad.id), n)
+    }
+}
