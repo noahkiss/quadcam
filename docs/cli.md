@@ -167,6 +167,13 @@ quadcam-cli --json gear storage [--prune [--dry-run]] [--export <backup|device> 
 quadcam-cli --json gear import-backups FOLDER [--device ID] [--dry-run]
 quadcam-cli --json gear card-check [--device ID | --mount M] [--log]
 quadcam-cli --json gear card-repair --check <check id> --yes
+quadcam-cli --json gear stage --device ID --set NAME=VALUE [--profile N | --rateprofile N] [--title T]   # stage; writes nothing
+quadcam-cli --json gear stage --device ID --cli FILE   # raw CLI lines, no save/exit/defaults
+quadcam-cli --json gear changes [--device ID] [--status ready] [--history]
+quadcam-cli --json gear apply CHANGE --plan            # every check, the diff, the digest; no reboot
+quadcam-cli --json gear apply CHANGE --digest D --yes  # backup, write, save, read back, verify
+quadcam-cli --json gear restore BACKUP                 # stage an FC backup's settings back
+quadcam-cli --json gear discard CHANGE
 quadcam-cli --json gear stop <handle>
 ```
 

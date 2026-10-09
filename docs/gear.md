@@ -230,7 +230,7 @@ its SD card except `LOGS/`. A backup of a flight controller holds `version`, `st
   `logs/<radio>/`. A log that grew replaces the kept one; a log that changed another way is kept
   as a second file (`<name> (2).csv`). Logs are never pruned.
 - **Retention** (Settings > Gear): backups taken before an apply or a flash and pinned backups
-  stay. Of the rest, QuadCam keeps the newest `gear_keep_recent` (10), then one a week for
+  stay. The backup read back after an apply is thinned like a plug-in backup. Of the rest, QuadCam keeps the newest `gear_keep_recent` (10), then one a week for
   `gear_keep_weeks` (8), then one a month (`gear_keep_monthly`). Pruning runs after each new
   backup, then removes stored files no backup, log or staged change uses.
 
@@ -253,6 +253,61 @@ names its device. A card copy goes to the one saved radio with its board; when n
 or more than one matches, the import skips it and says so (pass a device on the command line).
 A copy the same as a backup QuadCam has from that day or before is not kept twice. The import
 shows what it would do first, and never changes the folder.
+
+## Staged changes and apply
+
+A change to a flight controller goes through five steps: **stage** it, **review** it, **check**
+it, **confirm** it, then **apply** it. Staging writes nothing to the FC. Only the apply
+does, and only after the plan's checks pass.
+
+**Stage a setting.** On an FC's page open **Changes**, then **Edit setting…**. Give a setting
+name (`osd_cap_alarm`), its value, and, for a profile setting, the PID or rate profile. QuadCam
+refuses a name that the FC's latest backup does not hold, and any line it never sends
+(`save`, `exit`, `defaults`, `batch`, `bl`, `dfu`: QuadCam saves and exits itself). The change
+waits in the gear folder (`changes/`) until you apply or discard it. **Discard** keeps it in
+the history.
+
+**Review.** A device with staged changes shows a bar on its Overview: "1 change ready" and
+**Review…**. Nothing applies on its own. **Review…** opens the apply sheet:
+
+- **Changes** shows the lines that would be sent, with the old value removed and the new one
+  added.
+- **Checks** shows each guard with a pass mark or the reason it fails. **Apply** stays off while
+  one fails. Return does not press it.
+- **Apply** backs the FC up (QuadCam keeps this backup), sends the lines, saves, waits for the
+  FC to restart, reads `dump all` and checks that every line reads back as written. A `set`
+  equal to its default is checked too.
+
+The checks:
+
+| Check | Fails when |
+|---|---|
+| One FC plugged in | No FC is plugged in, or several are and QuadCam cannot tell which one the change is for |
+| Same FC as planned | The FC on the port is not the one the change was staged for |
+| Known board and version | QuadCam has not proven this board and Betaflight version for writing |
+| Backup to compare with | The FC has no backup yet; the plan compares with the latest one |
+| Lines understood | A line is one QuadCam never sends, or has no name or value |
+| Settings exist | A name is not in the FC's `dump all`, or is a profile setting with no profile |
+| Port free | Another program (a configurator, a terminal) has the port open |
+| USB heat | The FC has run on USB with its battery in past its limit ([USB timer](#flight-controllers)) |
+
+Two more guards run when you press **Apply**, because only then does QuadCam read the FC: the
+backup must succeed, and the FC must still hold what the plan compared with (otherwise "The FC
+changed since the plan; plan again."). Each `set` is also checked with the FC's own `get`: a
+value outside the allowed range or list is refused before any line is sent.
+
+**If it fails.** A line the FC refuses stops the apply: QuadCam sends `exit`, nothing is saved,
+and the FC is as it was. The sheet names the line. If the FC saves but a line does not read back
+as written, the sheet lists those lines and offers **Restore backup**, which stages the backup
+taken before the write as a new change and opens it in the same sheet. A restore sets back
+every setting, mode, adjustment and feature that differs; it leaves resources, serial ports
+and timers alone.
+
+After an apply QuadCam stores the FC's new state as a backup (**After apply**), so the next
+plan compares with it. A profile selection changes the FC's active profile once saved, so
+QuadCam selects the profile it needs, then selects the one the FC had.
+
+Radio, card and sim changes use the same steps and arrive with card apply.
 
 ## Card check
 
@@ -438,6 +493,13 @@ quadcam-cli --json gear import-backups FOLDER [--device ID] [--dry-run]
 quadcam-cli --json gear card-check [--device ID | --mount M] [--log]
 quadcam-cli --json gear card-repair --check <check id> --yes
 quadcam-cli --json gear stop <handle>                # stop a backup or card check
+quadcam-cli --json gear stage --device <id> --set osd_cap_alarm=1500   # stage; writes nothing
+quadcam-cli --json gear stage --device <id> --cli lines.cli [--title T] # raw CLI lines
+quadcam-cli --json gear changes [--device ID] [--history]
+quadcam-cli --json gear apply <change> --plan        # the checks, the diff and the digest
+quadcam-cli --json gear apply <change> --digest D --yes
+quadcam-cli --json gear restore <backup>             # stage an FC backup's settings back
+quadcam-cli --json gear discard <change>
 ```
 
 An edits file is a list. Each edit is a model (`{"kind": "model", "file": "model01.yml",
