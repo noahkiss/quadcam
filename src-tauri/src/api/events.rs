@@ -137,6 +137,18 @@ pub struct AgentFormatRequest {
 #[derive(Debug, Clone, Serialize, Deserialize, Type, tauri_specta::Event)]
 pub struct AgentFormatClosed(pub u64);
 
+/// An agent asked to apply a staged change. Answer with `answer_apply_request`.
+#[derive(Debug, Clone, Serialize, Deserialize, Type, tauri_specta::Event)]
+pub struct AgentApplyRequest {
+    pub id: u64,
+    pub change: crate::gear::model::StagedChange,
+    pub plan: crate::gear::model::ApplyPlan,
+}
+
+/// The agent's apply request with this id is closed (answered or timed out).
+#[derive(Debug, Clone, Serialize, Deserialize, Type, tauri_specta::Event)]
+pub struct AgentApplyClosed(pub u64);
+
 /// A menu item was chosen: its id.
 #[derive(Debug, Clone, Serialize, Deserialize, Type, tauri_specta::Event)]
 pub struct Menu(pub String);
@@ -182,6 +194,8 @@ mod tests {
         assert_eq!(SessionChanged::NAME, "session-changed");
         assert_eq!(AgentFormatRequest::NAME, "agent-format-request");
         assert_eq!(AgentFormatClosed::NAME, "agent-format-closed");
+        assert_eq!(AgentApplyRequest::NAME, "agent-apply-request");
+        assert_eq!(AgentApplyClosed::NAME, "agent-apply-closed");
         assert_eq!(VolumesChanged::NAME, "volumes-changed");
         assert_eq!(Menu::NAME, "menu");
         assert_eq!(GearChanged::NAME, "gear-changed");

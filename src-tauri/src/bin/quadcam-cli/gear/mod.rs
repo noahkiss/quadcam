@@ -10,6 +10,7 @@ use serde_json::Value;
 
 mod backup;
 mod card;
+mod changes;
 mod fc;
 mod flights;
 mod map;
@@ -94,6 +95,18 @@ pub enum GearCmd {
         #[arg(long)]
         yes: bool,
     },
+    /// Staged changes waiting to be applied (--history adds the rest).
+    Changes(changes::ChangesArgs),
+    /// Stage FC settings: raw CLI lines (--cli FILE) or --set NAME=VALUE. Writes nothing to
+    /// the FC.
+    Stage(changes::StageArgs),
+    /// Discard a staged change. It stays in the history.
+    Discard { change: String },
+    /// Stage an FC backup's settings back as a change.
+    Restore { backup: String },
+    /// Apply a staged change to the FC: `--plan` shows the checks, diff and digest;
+    /// `--digest D --yes` backs up, writes, saves, reads back and verifies.
+    Apply(changes::ApplyArgs),
     /// Stop a running backup or card check (its handle from `gear status`).
     Stop { handle: String },
 }
@@ -144,6 +157,11 @@ pub fn run(core: &Core, cmd: GearCmd) -> Result<Value> {
         } => backup::import(core, folder, device, dry_run)?,
         GearCmd::CardCheck { device, mount, log } => backup::card_check(core, device, mount, log)?,
         GearCmd::CardRepair { check, yes } => backup::card_repair(core, check, yes)?,
+        GearCmd::Changes(a) => changes::changes(core, a)?,
+        GearCmd::Stage(a) => changes::stage(core, a)?,
+        GearCmd::Discard { change } => changes::discard(core, change)?,
+        GearCmd::Restore { backup } => changes::restore(core, backup)?,
+        GearCmd::Apply(a) => changes::apply(core, a)?,
         GearCmd::Stop { handle } => backup::stop(core, handle)?,
         GearCmd::Devices { cmd } => match cmd.unwrap_or(DevicesCmd::List) {
             DevicesCmd::List => serde_json::to_value(call::gear_devices(core)?)?,

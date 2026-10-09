@@ -44,10 +44,10 @@ export interface GearPageSlot {
 }
 
 export const gearSlots = {
-  /** Staged changes ready for a device (WP5). The plug-in bar shows when it is above 0. */
-  stagedFor: (_deviceId: string): number => 0,
-  /** Opens the apply sheet for a device's staged changes (WP5). */
-  review: (_deviceId: string): void => {},
+  /** Staged changes ready for a device. The plug-in bar shows when it is above 0. */
+  stagedFor: (deviceId: string): number => useStore.getState().changes.filter((c) => c.device === deviceId && c.status === "ready").length,
+  /** Opens the apply sheet for a device's staged changes. */
+  review: (deviceId: string): void => void useStore.getState().openApply(deviceId),
   /** The latest backup's time, from the saved record's `last_backup` id. */
   lastBackup: (d: Device | null): string | null => backupTime(d?.last_backup),
   /** What a connected device needs from the person beyond a name (a failed step, WP4 and

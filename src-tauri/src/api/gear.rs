@@ -19,19 +19,23 @@ pub use crate::core::{
     CalibrateParams, CalibrateView, SimCalibration, SimCalibrationParams, SimCalibrationSaveParams,
     SimDefaultsParams, SimValidateParams,
 };
+pub use crate::core::{ChangeUpdateParams, RestoreParams, StageParams};
 pub use crate::core::{
     CrashSaveParams, FlightFilter, FlightFoldersParams, FlightReport, FlightSetParams, FlightsView,
     NotesParams, PackSaveParams, PacksParams, ReportParams,
 };
+pub use crate::gear::apply::{ApplyPlanParams, ApplyReport, ApplyRequest, StepReport, StepState};
 pub use crate::gear::backup::{
     BackupContent, ExportReport, ImportBackupsReport, PruneReport, StorageView,
 };
 pub use crate::gear::bf::boards::BoardNote;
 pub use crate::gear::bf::{FcInfo, FcRead};
+pub use crate::gear::changes::ChangeFilter;
 pub use crate::gear::crashes::{Crash, CrashFilter};
 pub use crate::gear::health::CardCheck;
 pub use crate::gear::model::Device;
 pub use crate::gear::model::DiffItem;
+pub use crate::gear::model::{ApplyPlan, StagedChange};
 pub use crate::gear::osd::OsdView;
 pub use crate::gear::packs::{Pack, PackType, PacksView};
 pub use crate::gear::preflight::Preflight;
@@ -160,6 +164,24 @@ macro_rules! with_gear_rows {
             gear_card_checks(params: CardChecksParams) -> Vec<CardCheck> = |c| Ok(c.gear_card_checks(&params));
             /// Repairs a card whose latest check failed: a backup first, the repair, a check after.
             gear_card_repair(params: CardRepairParams) -> RepairResult = |c| c.gear_card_repair(&params);
+            /// Staged changes: those waiting by default, or the bench history with `history`.
+            gear_changes(params: ChangeFilter) -> Vec<StagedChange> = |c| c.gear_changes(&params);
+            /// Stages edits for a device (FC settings as raw CLI lines or `set`s). Refuses
+            /// names the FC's latest backup does not hold and lines the engine never sends.
+            gear_change_stage(params: StageParams) -> StagedChange = |c| c.gear_change_stage(&params);
+            /// Edits a staged change: its edits, title, note, order, or draft/ready.
+            gear_change_update(params: ChangeUpdateParams) -> StagedChange = |c| c.gear_change_update(&params);
+            /// Discards a staged change. It stays in the history.
+            gear_change_discard(params: IdParams) -> StagedChange = |c| c.gear_change_discard(&params.id);
+            /// Stages an FC backup's settings back as a change.
+            gear_restore_stage(params: RestoreParams) -> StagedChange = |c| c.gear_restore_stage(&params);
+            /// Runs every guard for a staged change and builds its diff and digest. Writes
+            /// nothing and does not reboot the FC.
+            gear_apply_plan(params: ApplyPlanParams) -> ApplyPlan = |c| c.gear_apply_plan(&params);
+            /// Applies a staged change to the FC: backup, write, save, read back, verify.
+            /// Needs the plan's digest and confirm=true; with the app running the person also
+            /// clicks Apply in its sheet.
+            gear_apply(params: ApplyRequest) -> ApplyReport = |c| c.gear_apply(&params);
             /// Stops a running backup or card check on a link. True when one was running.
             gear_stop(params: StopParams) -> bool = |c| Ok(c.gear_stop(&params.handle));
         }

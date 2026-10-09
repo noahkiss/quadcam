@@ -7,7 +7,7 @@ import { open as openDialog } from "@tauri-apps/plugin-dialog";
 import { openPath, openUrl, revealItemInDir } from "@tauri-apps/plugin-opener";
 import { commands } from "../bindings";
 import * as N from "./normalize";
-import type { SimFrame, SimPreset, SimStartInfo, SimStartParams, SimStopInfo, CrashSaveParams, ImportOptions, LibEdit, LibraryFilter, Moved, OsdParams, Pack, PackType, PlanPatch, RemovedCuts, SettingsValues, Span, SwitchMapParams, SimCalibrationSaveParams, CalibrateParams } from "./types";
+import type { Edit, SimFrame, SimPreset, SimStartInfo, SimStartParams, SimStopInfo, CrashSaveParams, ImportOptions, LibEdit, LibraryFilter, Moved, OsdParams, Pack, PackType, PlanPatch, RemovedCuts, SettingsValues, Span, SwitchMapParams, SimCalibrationSaveParams, CalibrateParams } from "./types";
 
 type Result<T> = Promise<{ status: "ok"; data: T } | { status: "error"; error: string }>;
 
@@ -89,6 +89,14 @@ export const api = {
   gearCardChecks: (device: string) => ok(commands.gearCardChecks({ device })),
   gearCardRepair: (check: string) => ok(commands.gearCardRepair({ check, confirm: true })),
   gearStop: (handle: string) => ok(commands.gearStop({ handle })),
+  gearChanges: (device: string | null = null, history = false) => ok(commands.gearChanges({ device, status: null, history })),
+  gearChangeStage: (device: string, edits: Edit[], title: string | null = null) => ok(commands.gearChangeStage({ device, title, edits, note: null, editor: null, draft: false })),
+  gearChangeDiscard: (id: string) => ok(commands.gearChangeDiscard({ id })),
+  gearRestoreStage: (backup: string) => ok(commands.gearRestoreStage({ backup, paths: [], editor: null })),
+  gearApplyPlan: (id: string) => ok(commands.gearApplyPlan({ id, port: null })),
+  /** The apply sheet's own Apply click: the click is the confirm. */
+  gearApplyClick: (id: string, digest: string) => ok(commands.gearApplyClick({ id, digest, confirm: true, port: null })),
+  answerApplyRequest: (id: number, approve: boolean) => commands.answerApplyRequest(id, approve),
 
   // Modules
   modules: () => ok(commands.modules()),
