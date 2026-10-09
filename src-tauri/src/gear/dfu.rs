@@ -11,7 +11,11 @@
 //!   what every test flashes.
 //! - Nothing here flashes by itself. `Flasher` (in `firmware/mod.rs`) hands out a transport,
 //!   and a process started by cargo gets the fake unless `QUADCAM_FLASH=real`.
-//! - `flash` reads the image back before it leaves DFU. A mismatch stays in DFU, so the
+//! - `read_verified` reads the whole flash twice through `ReadOnly`, a transport that cannot
+//!   erase, write or leave, and returns a `VerifiedCopy`. `flash` takes one as an argument,
+//!   so no code path erases without a verified copy of what it replaces.
+//! - `flash` verifies every 16 KB segment as it writes it and reads the whole image back
+//!   before it leaves DFU. A mismatch stays in DFU, so the
 //!   person can try again: the bootloader is in ROM and cannot be overwritten from here.
 
 use super::detect::{DfuInfo, STM32_DFU};
@@ -52,6 +56,53 @@ pub trait Usb {
     fn control_in(&mut self, request: u8, value: u16, len: usize) -> Result<Vec<u8>>;
     /// The alt setting 0 string, `@Internal Flash /0x08000000/04*016Kg,...`.
     fn layout(&mut self) -> Result<String>;
+    /// `wTransferSize` of the DFU functional descriptor, when the transport can read it.
+    /// DfuSe addresses a block as `pointer + (block - 2) * wTransferSize`, so a device with
+    /// another size than `TRANSFER` must not be written with it.
+    fn transfer_size(&mut self) -> Option<usize> {
+        None
+    }
+}
+
+/// The bytes written, then read back and compared, before the next segment.
+pub const SEGMENT: usize = 16 * 1024;
+
+/// A transport that can only read: it passes status polls, aborts, error clears, the
+/// set-address command and uploads, and refuses everything else (erase, write blocks,
+/// leave). The read-only DFU trial runs through it.
+pub struct ReadOnly<'a> {
+    inner: &'a mut dyn Usb,
+}
+
+impl<'a> ReadOnly<'a> {
+    pub fn new(inner: &'a mut dyn Usb) -> ReadOnly<'a> {
+        ReadOnly { inner }
+    }
+}
+
+impl Usb for ReadOnly<'_> {
+    fn control_out(&mut self, request: u8, value: u16, data: &[u8]) -> Result<()> {
+        let set_address =
+            request == DFU_DNLOAD && value == 0 && data.len() == 5 && data[0] == DFUSE_SET_ADDRESS;
+        if set_address || request == DFU_CLRSTATUS || request == DFU_ABORT {
+            self.inner.control_out(request, value, data)
+        } else {
+            bail!("Refused: the read-only DFU path cannot send request {request} (value {value}).")
+        }
+    }
+    fn control_in(&mut self, request: u8, value: u16, len: usize) -> Result<Vec<u8>> {
+        if request == DFU_GETSTATUS || request == DFU_UPLOAD {
+            self.inner.control_in(request, value, len)
+        } else {
+            bail!("Refused: the read-only DFU path cannot send request {request}.")
+        }
+    }
+    fn layout(&mut self) -> Result<String> {
+        self.inner.layout()
+    }
+    fn transfer_size(&mut self) -> Option<usize> {
+        self.inner.transfer_size()
+    }
 }
 
 /// The answer to DFU_GETSTATUS.
@@ -170,18 +221,20 @@ pub struct Dfu<'a> {
 
 impl<'a> Dfu<'a> {
     pub fn new(usb: &'a mut dyn Usb) -> Dfu<'a> {
+        let transfer = usb.transfer_size().unwrap_or(TRANSFER);
         Dfu {
             usb,
-            transfer: TRANSFER,
+            transfer,
             sleep: true,
         }
     }
 
     /// For tests: no sleeping on the device's poll timeouts.
     pub fn quick(usb: &'a mut dyn Usb) -> Dfu<'a> {
+        let transfer = usb.transfer_size().unwrap_or(TRANSFER);
         Dfu {
             usb,
-            transfer: TRANSFER,
+            transfer,
             sleep: false,
         }
     }
@@ -321,23 +374,112 @@ pub enum Step {
     Leave,
 }
 
-/// Erases the pages `image` covers, writes it at `base`, reads it back and compares, then
-/// leaves DFU. A failed compare returns an error and does not leave.
+/// A copy of the device's flash read twice, with both reads equal. Only `read_verified`
+/// makes one. `flash` needs one that covers the range it will erase.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct VerifiedCopy {
+    base: u32,
+    bytes: Vec<u8>,
+}
+
+impl VerifiedCopy {
+    pub fn base(&self) -> u32 {
+        self.base
+    }
+
+    /// Every byte read, to the end of the flash.
+    pub fn bytes(&self) -> &[u8] {
+        &self.bytes
+    }
+
+    /// True when every byte reads 0xFF: there is no firmware to keep.
+    pub fn is_blank(&self) -> bool {
+        self.bytes.iter().all(|b| *b == 0xFF)
+    }
+
+    /// The bytes without the erased tail (0xFF), at least one byte.
+    pub fn trimmed(&self) -> Vec<u8> {
+        let mut v = self.bytes.clone();
+        while v.len() > 1 && v.last() == Some(&0xFF) {
+            v.pop();
+        }
+        v
+    }
+
+    fn covers(&self, addr: u32, len: usize) -> bool {
+        addr >= self.base
+            && (addr as u64 + len as u64) <= self.base as u64 + self.bytes.len() as u64
+    }
+}
+
+/// Reads all of the device's flash twice, over a transport that cannot write, and returns
+/// the copy when both reads are equal. Refuses a flash that reads as all zeros (a
+/// read-protected part), because that copy would restore nothing. A blank flash (all 0xFF,
+/// as after an interrupted flash) is a copy: `is_blank` says so, and the caller decides.
+/// `progress` gets
+/// (bytes done, bytes in both reads).
+pub fn read_verified(
+    usb: &mut dyn Usb,
+    quick: bool,
+    progress: &mut dyn FnMut(usize, usize),
+) -> Result<VerifiedCopy> {
+    let mut ro = ReadOnly::new(usb);
+    let mut dfu = if quick {
+        Dfu::quick(&mut ro)
+    } else {
+        Dfu::new(&mut ro)
+    };
+    let layout = dfu.layout()?;
+    let (base, len) = (layout.start(), (layout.end() - layout.start()) as usize);
+    dfu.to_idle()?;
+    let total = len * 2;
+    let first = dfu.read(base, len, &mut |n| progress(n, total))?;
+    let second = dfu.read(base, len, &mut |n| progress(len + n, total))?;
+    if let Some(i) = first.iter().zip(&second).position(|(a, b)| a != b) {
+        bail!(
+            "Two reads of the radio's flash differ (first difference at {:#010x}). The USB link is not reliable; try another cable or port.",
+            base as usize + i
+        );
+    }
+    if first.iter().all(|b| *b == 0) {
+        bail!("The radio's flash reads as all zeros; it may be read-protected. The copy would restore nothing.");
+    }
+    Ok(VerifiedCopy { base, bytes: first })
+}
+
+/// Erases the pages `image` covers, writes it at `base` one segment at a time (each read
+/// back and compared before the next), reads the whole image back and compares, then leaves
+/// DFU. A failed compare returns an error and does not leave.
+///
+/// `copy` is a verified copy of the flash, which must cover the range. It is the argument
+/// that makes an erase without a copy impossible to write.
 pub fn flash(
     usb: &mut dyn Usb,
     base: u32,
     image: &[u8],
+    copy: &VerifiedCopy,
     quick: bool,
     step: &mut dyn FnMut(Step),
 ) -> Result<FlashOutcome> {
     if image.is_empty() {
         bail!("There is nothing to flash.");
     }
+    if !copy.covers(base, image.len()) {
+        bail!(
+            "Refused: the verified copy of the radio's firmware does not cover the range to erase."
+        );
+    }
     let mut dfu = if quick {
         Dfu::quick(usb)
     } else {
         Dfu::new(usb)
     };
+    if dfu.transfer != TRANSFER {
+        bail!(
+            "The device moves {} bytes per transfer; QuadCam writes {TRANSFER}. Nothing was written.",
+            dfu.transfer
+        );
+    }
     let layout = dfu.layout()?;
     let end = base as u64 + image.len() as u64;
     if base < layout.start() || end > layout.end() as u64 {
@@ -358,7 +500,17 @@ pub fn flash(
         dfu.erase_sector(s.addr)?;
     }
     step(Step::Write);
-    dfu.write(base, image, &mut |_| {})?;
+    for (n, chunk) in image.chunks(SEGMENT).enumerate() {
+        let at = base + (n * SEGMENT) as u32;
+        dfu.write(at, chunk, &mut |_| {})?;
+        let back = dfu.read(at, chunk.len(), &mut |_| {})?;
+        if let Some(i) = back.iter().zip(chunk).position(|(a, b)| a != b) {
+            bail!(
+                "The device holds different bytes than were written (first difference at {:#010x}, found while writing). It stays in DFU mode; nothing was started.",
+                at as usize + i
+            );
+        }
+    }
     step(Step::ReadBack);
     let back = dfu.read(base, image.len(), &mut |_| {})?;
     if let Some(i) = back.iter().zip(image).position(|(a, b)| a != b) {
@@ -380,21 +532,6 @@ pub fn flash(
 pub fn flash_size(usb: &mut dyn Usb, _quick: bool) -> Result<usize> {
     let l = Layout::parse(&usb.layout()?)?;
     Ok((l.end() - l.start()) as usize)
-}
-
-/// Reads `len` bytes of flash from `base`: a firmware backup before a flash.
-pub fn read_flash(usb: &mut dyn Usb, base: u32, len: usize, quick: bool) -> Result<Vec<u8>> {
-    let mut dfu = if quick {
-        Dfu::quick(usb)
-    } else {
-        Dfu::new(usb)
-    };
-    let layout = dfu.layout()?;
-    if base < layout.start() || base as u64 + len as u64 > layout.end() as u64 {
-        bail!("That range is outside the device's flash.");
-    }
-    dfu.to_idle()?;
-    dfu.read(base, len, &mut |_| {})
 }
 
 // ---- the real transport ----
@@ -426,6 +563,7 @@ pub fn list() -> Vec<DfuInfo> {
 pub struct NusbUsb {
     iface: nusb::Interface,
     layout: String,
+    transfer: Option<usize>,
 }
 
 impl NusbUsb {
@@ -454,10 +592,17 @@ impl NusbUsb {
             .claim_interface(0)
             .wait()
             .map_err(|e| anyhow!("Claiming the DFU interface failed: {e}"))?;
-        let idx = iface
+        let alt0 = iface
             .descriptors()
             .find(|d| d.alternate_setting() == 0)
-            .and_then(|d| d.string_index())
+            .ok_or_else(|| anyhow!("The DFU device has no alt setting 0."))?;
+        // The DFU functional descriptor (type 0x21): wTransferSize at bytes 5 and 6.
+        let transfer = alt0
+            .descriptors()
+            .find(|d| d.descriptor_type() == 0x21 && d.len() >= 7)
+            .map(|d| u16::from_le_bytes([d[5], d[6]]) as usize);
+        let idx = alt0
+            .string_index()
             .ok_or_else(|| anyhow!("The DFU device names no memory layout."))?;
         let layout = dev
             .get_string_descriptor(
@@ -467,7 +612,11 @@ impl NusbUsb {
             )
             .wait()
             .map_err(|e| anyhow!("Reading the memory layout failed: {e}"))?;
-        Ok(NusbUsb { iface, layout })
+        Ok(NusbUsb {
+            iface,
+            layout,
+            transfer,
+        })
     }
 }
 
@@ -517,6 +666,10 @@ impl Usb for NusbUsb {
     fn layout(&mut self) -> Result<String> {
         Ok(self.layout.clone())
     }
+
+    fn transfer_size(&mut self) -> Option<usize> {
+        self.transfer
+    }
 }
 
 // ---- the fake ----
@@ -530,6 +683,9 @@ pub struct Faults {
     pub fail_erase: bool,
     /// Every upload flips the low bit of byte 0.
     pub corrupt_read: bool,
+    /// After this many uploads, every upload flips the low bit of byte 0 (a link that went
+    /// bad part way).
+    pub flip_after_reads: Option<usize>,
 }
 
 enum Pending {
@@ -553,6 +709,12 @@ pub struct FakeDfu {
     pub erased: Vec<u32>,
     pub faults: Faults,
     pub log: Vec<String>,
+    /// Data blocks programmed or dropped so far (what `drop_write_block` counts).
+    pub blocks: usize,
+    /// Uploads answered so far.
+    pub reads: usize,
+    /// Commands that changed the flash: erases and data blocks (a read-only path leaves 0).
+    pub mutations: usize,
     pending: Option<Pending>,
 }
 
@@ -576,6 +738,9 @@ impl FakeDfu {
             erased: Vec::new(),
             faults: Faults::default(),
             log: Vec::new(),
+            blocks: 0,
+            reads: 0,
+            mutations: 0,
             pending: None,
         }
     }
@@ -608,6 +773,7 @@ impl FakeDfu {
                 if self.faults.fail_erase {
                     return self.fail(4);
                 }
+                self.mutations += 1;
                 self.log.push(format!("erase {:#010x}", s.addr));
                 self.erased.push(s.addr);
                 let from = (s.addr - self.base) as usize;
@@ -622,7 +788,9 @@ impl FakeDfu {
                 }
                 self.log
                     .push(format!("write {at:#010x} {} bytes", data.len()));
-                if self.faults.drop_write_block == Some(block) {
+                self.mutations += 1;
+                self.blocks += 1;
+                if self.faults.drop_write_block == Some(self.blocks - 1) {
                     return;
                 }
                 let from = (at - self.base as u64) as usize;
@@ -631,6 +799,7 @@ impl FakeDfu {
                 }
             }
             Pending::Leave => {
+                self.mutations += 1;
                 self.log.push(format!("leave {:#010x}", self.pointer));
                 self.left = true;
             }
@@ -716,7 +885,9 @@ impl Usb for FakeDfu {
                 }
                 let to = (from + len.min(TRANSFER)).min(self.flash.len());
                 let mut b = self.flash[from..to].to_vec();
-                if self.faults.corrupt_read && !b.is_empty() {
+                self.reads += 1;
+                let flaky = self.faults.flip_after_reads.is_some_and(|n| self.reads > n);
+                if (self.faults.corrupt_read || flaky) && !b.is_empty() {
                     b[0] ^= 1;
                 }
                 self.state = state::UPLOAD_IDLE;
@@ -734,6 +905,15 @@ impl Usb for FakeDfu {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// What `read_verified` would return for the device as it stands, for a test whose device
+    /// is blank (a blank flash is refused as a copy).
+    fn copy(dev: &FakeDfu) -> VerifiedCopy {
+        VerifiedCopy {
+            base: FLASH_BASE,
+            bytes: dev.flash.clone(),
+        }
+    }
 
     fn image(n: usize) -> Vec<u8> {
         (0..n).map(|i| (i * 7 % 251) as u8).collect()
@@ -765,8 +945,9 @@ mod tests {
         let old = image(300 * 1024);
         let new = image(500 * 1024).into_iter().rev().collect::<Vec<u8>>();
         let mut dev = FakeDfu::with_firmware(&old);
+        let c = copy(&dev);
         let mut steps = Vec::new();
-        let out = flash(&mut dev, FLASH_BASE, &new, true, &mut |s| steps.push(s)).unwrap();
+        let out = flash(&mut dev, FLASH_BASE, &new, &c, true, &mut |s| steps.push(s)).unwrap();
         assert_eq!(
             steps,
             [Step::Erase, Step::Write, Step::ReadBack, Step::Leave]
@@ -786,10 +967,38 @@ mod tests {
     }
 
     #[test]
-    fn a_dropped_block_is_caught_by_the_read_back_and_the_device_stays_in_dfu() {
-        let mut dev = FakeDfu::with_firmware(&[]);
+    fn every_segment_is_read_back_before_the_next_is_written() {
+        let mut dev = FakeDfu::with_firmware(&image(1000));
+        let c = copy(&dev);
+        flash(
+            &mut dev,
+            FLASH_BASE,
+            &image(40 * 1024),
+            &c,
+            true,
+            &mut |_| {},
+        )
+        .unwrap();
+        // Writes are 2 KB blocks; a segment is 8 of them. The log has no write of segment
+        // n + 1 before a set_address back to segment n's start (the read-back).
+        let sets: Vec<&String> = dev
+            .log
+            .iter()
+            .filter(|l| l.starts_with("set_address"))
+            .collect();
+        assert!(
+            sets.len() >= 3 * 2,
+            "a write and a read per segment: {sets:?}"
+        );
+        assert!(dev.log.iter().any(|l| l == "write 0x08004000 2048 bytes"));
+    }
+
+    #[test]
+    fn a_dropped_block_is_caught_while_writing_and_the_device_stays_in_dfu() {
+        let mut dev = FakeDfu::with_firmware(&[1]);
         dev.faults.drop_write_block = Some(3);
-        let err = flash(&mut dev, FLASH_BASE, &image(20_000), true, &mut |_| {}).unwrap_err();
+        let c = copy(&dev);
+        let err = flash(&mut dev, FLASH_BASE, &image(20_000), &c, true, &mut |_| {}).unwrap_err();
         let msg = format!("{err:#}");
         assert!(msg.contains("different bytes"), "{msg}");
         assert!(
@@ -797,13 +1006,16 @@ mod tests {
             "first difference is block 3: {msg}"
         );
         assert!(!dev.left, "must not start a half-written image");
+        // The failure came before the next segment was written.
+        assert!(!dev.log.iter().any(|l| l.starts_with("write 0x08004000")));
     }
 
     #[test]
     fn a_failed_erase_stops_before_any_write() {
         let mut dev = FakeDfu::with_firmware(&image(1000));
         dev.faults.fail_erase = true;
-        let err = flash(&mut dev, FLASH_BASE, &image(5000), true, &mut |_| {}).unwrap_err();
+        let c = copy(&dev);
+        let err = flash(&mut dev, FLASH_BASE, &image(5000), &c, true, &mut |_| {}).unwrap_err();
         assert!(format!("{err:#}").contains("cannot erase"), "{err:#}");
         assert!(!dev.log.iter().any(|l| l.starts_with("write")));
         assert!(!dev.left);
@@ -811,55 +1023,156 @@ mod tests {
 
     #[test]
     fn corrupt_uploads_fail_the_compare() {
-        let mut dev = FakeDfu::with_firmware(&[]);
+        let mut dev = FakeDfu::with_firmware(&[1]);
+        let c = copy(&dev);
         dev.faults.corrupt_read = true;
-        assert!(flash(&mut dev, FLASH_BASE, &image(3000), true, &mut |_| {}).is_err());
+        assert!(flash(&mut dev, FLASH_BASE, &image(3000), &c, true, &mut |_| {}).is_err());
         assert!(!dev.left);
     }
 
     #[test]
     fn an_image_outside_the_flash_is_refused_before_any_command() {
-        let mut dev = FakeDfu::with_firmware(&[]);
+        let mut dev = FakeDfu::with_firmware(&[1]);
+        let c = copy(&dev);
         let err = flash(
             &mut dev,
             FLASH_BASE,
             &vec![0u8; 1024 * 1024 + 1],
+            &c,
             true,
             &mut |_| {},
         )
         .unwrap_err();
-        assert!(err.to_string().contains("does not fit"));
-        let err = flash(&mut dev, 0x2000_0000, &[1, 2, 3, 4], true, &mut |_| {}).unwrap_err();
-        assert!(err.to_string().contains("does not fit"));
-        assert!(flash(&mut dev, FLASH_BASE, &[], true, &mut |_| {}).is_err());
+        assert!(err.to_string().contains("does not cover"), "{err}");
+        let err = flash(&mut dev, 0x2000_0000, &[1, 2, 3, 4], &c, true, &mut |_| {}).unwrap_err();
+        assert!(err.to_string().contains("does not cover"), "{err}");
+        assert!(flash(&mut dev, FLASH_BASE, &[], &c, true, &mut |_| {}).is_err());
         assert!(dev.log.is_empty(), "nothing was sent: {:?}", dev.log);
+        assert_eq!(dev.mutations, 0);
+    }
+
+    #[test]
+    fn a_copy_that_does_not_cover_the_image_refuses_the_erase() {
+        let mut dev = FakeDfu::with_firmware(&[1]);
+        let short = VerifiedCopy {
+            base: FLASH_BASE,
+            bytes: vec![1; 1000],
+        };
+        let err = flash(
+            &mut dev,
+            FLASH_BASE,
+            &image(5000),
+            &short,
+            true,
+            &mut |_| {},
+        )
+        .unwrap_err();
+        assert!(err.to_string().contains("does not cover"), "{err}");
+        assert_eq!(dev.mutations, 0, "no erase without a covering copy");
+    }
+
+    #[test]
+    fn a_device_with_another_transfer_size_is_not_written() {
+        struct Odd(FakeDfu);
+        impl Usb for Odd {
+            fn control_out(&mut self, r: u8, v: u16, d: &[u8]) -> Result<()> {
+                self.0.control_out(r, v, d)
+            }
+            fn control_in(&mut self, r: u8, v: u16, l: usize) -> Result<Vec<u8>> {
+                self.0.control_in(r, v, l)
+            }
+            fn layout(&mut self) -> Result<String> {
+                self.0.layout()
+            }
+            fn transfer_size(&mut self) -> Option<usize> {
+                Some(1024)
+            }
+        }
+        let inner = FakeDfu::with_firmware(&[1]);
+        let c = copy(&inner);
+        let mut dev = Odd(inner);
+        let err = flash(&mut dev, FLASH_BASE, &image(5000), &c, true, &mut |_| {}).unwrap_err();
+        assert!(err.to_string().contains("1024"), "{err}");
+        assert_eq!(dev.0.mutations, 0);
     }
 
     #[test]
     fn an_odd_length_image_is_padded_for_the_device_only() {
         let img = image(2049);
-        let mut dev = FakeDfu::with_firmware(&[]);
-        flash(&mut dev, FLASH_BASE, &img, true, &mut |_| {}).unwrap();
+        let mut dev = FakeDfu::with_firmware(&[1]);
+        let c = copy(&dev);
+        flash(&mut dev, FLASH_BASE, &img, &c, true, &mut |_| {}).unwrap();
         assert_eq!(&dev.flash[..2049], &img[..]);
         assert_eq!(dev.flash[2049..2052], [0xFF, 0xFF, 0xFF]);
     }
 
     #[test]
-    fn read_flash_returns_the_firmware_for_a_backup() {
+    fn read_verified_reads_twice_through_a_path_that_cannot_write() {
         let fw = image(70_000);
         let mut dev = FakeDfu::with_firmware(&fw);
-        let got = read_flash(&mut dev, FLASH_BASE, 70_000, true).unwrap();
-        assert_eq!(got, fw);
-        assert!(read_flash(&mut dev, FLASH_BASE, 2 * 1024 * 1024, true).is_err());
-        assert!(!dev.left, "a backup does not restart the radio");
+        let mut last = (0, 0);
+        let c = read_verified(&mut dev, true, &mut |d, t| last = (d, t)).unwrap();
+        assert_eq!(c.base(), FLASH_BASE);
+        assert_eq!(&c.bytes()[..fw.len()], &fw[..]);
+        assert_eq!(c.bytes().len(), 1024 * 1024);
+        assert_eq!(c.trimmed().len(), fw.len(), "the erased tail is cut");
+        assert_eq!(
+            last,
+            (2 * 1024 * 1024, 2 * 1024 * 1024),
+            "both reads reported"
+        );
+        assert_eq!(dev.mutations, 0, "no erase, write or leave");
+        assert!(!dev.left, "a read does not restart the radio");
+        assert_eq!(dev.flash[..fw.len()], fw[..]);
+    }
+
+    #[test]
+    fn the_read_only_path_refuses_erase_write_and_leave() {
+        let mut dev = FakeDfu::with_firmware(&image(100));
+        {
+            let mut ro = ReadOnly::new(&mut dev);
+            let mut erase = vec![DFUSE_ERASE];
+            erase.extend_from_slice(&FLASH_BASE.to_le_bytes());
+            assert!(ro.control_out(DFU_DNLOAD, 0, &erase).is_err());
+            assert!(ro.control_out(DFU_DNLOAD, 2, &[0; 16]).is_err());
+            assert!(ro.control_out(DFU_DNLOAD, 0, &[]).is_err(), "leave");
+            assert!(ro.control_out(5, 0, &[]).is_err());
+            assert!(ro.control_in(1, 0, 6).is_err());
+            // What a read needs passes.
+            let mut set = vec![DFUSE_SET_ADDRESS];
+            set.extend_from_slice(&FLASH_BASE.to_le_bytes());
+            ro.control_out(DFU_DNLOAD, 0, &set).unwrap();
+            ro.control_in(DFU_GETSTATUS, 0, 6).unwrap();
+            ro.control_out(DFU_ABORT, 0, &[]).unwrap();
+        }
+        assert_eq!(dev.mutations, 0);
+    }
+
+    #[test]
+    fn a_zero_or_unstable_flash_is_not_a_copy() {
+        let mut blank = FakeDfu::with_firmware(&[]);
+        let c = read_verified(&mut blank, true, &mut |_, _| {}).unwrap();
+        assert!(c.is_blank(), "a blank flash is a copy the caller can judge");
+        let mut zero = FakeDfu::with_firmware(&[]);
+        zero.flash.fill(0);
+        let e = read_verified(&mut zero, true, &mut |_, _| {}).unwrap_err();
+        assert!(e.to_string().contains("zeros"), "{e}");
+        // Every upload flips a bit in its first byte, but the two reads agree with each other
+        // there, so a stable corruption cannot be told from data: the unstable case is the
+        // one a flaky link shows. Flip on the second pass only.
+        let mut flaky = FakeDfu::with_firmware(&image(5000));
+        flaky.faults.flip_after_reads = Some(512);
+        let e = read_verified(&mut flaky, true, &mut |_, _| {}).unwrap_err();
+        assert!(e.to_string().contains("differ"), "{e}");
     }
 
     #[test]
     fn a_device_in_error_is_cleared_first() {
-        let mut dev = FakeDfu::with_firmware(&[]);
+        let mut dev = FakeDfu::with_firmware(&[1]);
+        let c = copy(&dev);
         dev.status = 3;
         dev.state = state::ERROR;
-        flash(&mut dev, FLASH_BASE, &image(100), true, &mut |_| {}).unwrap();
+        flash(&mut dev, FLASH_BASE, &image(100), &c, true, &mut |_| {}).unwrap();
         assert!(dev.left);
     }
 

@@ -22,6 +22,12 @@ pub struct FirmwareArgs {
     /// --device. Downloads the release on first use; writes no device.
     #[arg(long)]
     plan: bool,
+    /// The read-only DFU trial: read all of the flash of the radio in DFU mode twice, save
+    /// it as a firmware copy and compare its EdgeTX version with the radio's known version.
+    /// Turn the radio off and plug in USB first. Cannot erase, write or restart the radio.
+    /// --device is optional.
+    #[arg(long)]
+    read: bool,
     /// The device to flash (a saved device id): an EdgeTX radio, or a Betaflight FC when
     /// betaflight_flash_preview is on.
     #[arg(long)]
@@ -80,6 +86,15 @@ fn splash_params(
 }
 
 pub fn firmware(core: &Core, a: FirmwareArgs) -> Result<Value> {
+    if a.read {
+        if a.plan || a.digest.is_some() || a.yes {
+            bail!("--read only reads. It takes no --plan, --digest or --yes.");
+        }
+        return Ok(serde_json::to_value(call::gear_firmware_read(
+            core,
+            api::FirmwareReadParams { device: a.device },
+        )?)?);
+    }
     if a.plan || a.digest.is_some() {
         let device = a
             .device

@@ -7,7 +7,8 @@
 //!   board not in `betaflight::TARGETS`, or a release `compat` has not proven on that board,
 //!   refuses. Nothing is written and nothing reboots.
 //! - **Apply.** Back up `diff all` and `dump all` (always kept), run `bl` so the FC shows as a
-//!   DFU device, flash it over `gear::dfu` (erase, write, read back, compare, leave), wait for
+//!   DFU device, copy its flash twice (`dfu::read_verified`) and keep the copy, flash it over
+//!   `gear::dfu` (erase, write, read back, compare, leave), wait for
 //!   the FC, read the new version's `dump all`, then stage the old `diff all` as one change
 //!   (`betaflight_config::carry`) and apply it through the FC apply engine, which backs up,
 //!   writes, saves and verifies against `dump all`.
@@ -31,6 +32,7 @@ use crate::gear::detect::{DfuInfo, STM32_DFU};
 use crate::gear::dfu::{self, Dfu, Layout, FLASH_BASE};
 use crate::gear::firmware::betaflight::{self as bfw, Obtained, Target};
 use crate::gear::firmware::betaflight_config as carryover;
+use crate::gear::fwcopy::{self, CopyKind};
 use crate::gear::model::{
     ApplyPlan, ChangeStatus, Check, Device, DeviceKind, DiffItem, Edit, Refusal, RefusalCode,
     Trigger,
@@ -240,7 +242,12 @@ impl Core {
             .filter(|v| !v.is_empty())
             .or_else(|| installed.as_deref().map(bfw::release_of))
             .filter(|v| !v.is_empty())
-            .ok_or_else(|| anyhow!("The FC reports no version; name the version to flash."))?;
+            .ok_or_else(|| {
+                refuse(
+                    RefusalCode::Incompatible,
+                    "The FC reports no version; name the version to flash.",
+                )
+            })?;
 
         let target = board.as_deref().and_then(bfw::target_for);
         let known = match target {
@@ -251,7 +258,9 @@ impl Core {
                     board.as_deref().unwrap_or("(none)")
                 ),
             )),
-            Some(_) => compat::check_writable(Product::Betaflight, board.as_deref(), Some(&release)),
+            Some(_) => {
+                compat::check_writable(Product::Betaflight, board.as_deref(), Some(&release))
+            }
         };
         checks.push(check("Known board and version", known));
         // Download only for a plan that is otherwise sound.
@@ -300,10 +309,7 @@ impl Core {
             .unwrap_or(bfw::flash_seconds(512 * 1024));
         match chosen {
             Some(c) => checks.extend(self.bf_live_checks(c, need)),
-            None => checks.push(check(
-                "USB heat",
-                Ok(()),
-            )),
+            None => checks.push(check("USB heat", Ok(()))),
         }
 
         warnings.push(
@@ -378,7 +384,10 @@ impl Core {
             self.hooks
                 .confirm_apply(&flash_change(&prep.device, &prep.plan), &prep.plan)?;
         }
-        let port = prep.port.clone().ok_or_else(|| anyhow!("No FC to flash."))?;
+        let port = prep
+            .port
+            .clone()
+            .ok_or_else(|| anyhow!("No FC to flash."))?;
         let target = prep.target.expect("a known board passed its check");
         let image = prep.image.as_ref().expect("the image passed its check");
 
@@ -442,7 +451,11 @@ impl Core {
                     let ok = applied.status == ChangeStatus::Verified;
                     steps.push(step(
                         "Re-apply settings",
-                        if ok { StepState::Done } else { StepState::Failed },
+                        if ok {
+                            StepState::Done
+                        } else {
+                            StepState::Failed
+                        },
                         Some(if ok {
                             format!("{} lines, change {id}", carry.lines.len())
                         } else {
@@ -493,7 +506,10 @@ impl Core {
     ) -> Result<(ApplyReport, String)> {
         let change = self.gear_change_stage(&super::apply::StageParams {
             device: prep.device.id.clone(),
-            title: Some(format!("Settings after the Betaflight {} flash", prep.release)),
+            title: Some(format!(
+                "Settings after the Betaflight {} flash",
+                prep.release
+            )),
             edits: vec![Edit::FcLines {
                 lines: lines.to_vec(),
             }],
@@ -506,11 +522,7 @@ impl Core {
             port: Some(port.to_string()),
         })?;
         if let Some(r) = first_refusal(&plan.checks) {
-            bail!(
-                "{} Change {} waits in Changes.",
-                r.reason,
-                change.id
-            );
+            bail!("{} Change {} waits in Changes.", r.reason, change.id);
         }
         let report = self.apply_inner(
             &ApplyRequest {
@@ -615,7 +627,10 @@ impl Core {
             Some(&id),
             &|b| {
                 bfw::target_for(b).map(|_| ()).ok_or_else(|| {
-                    Refusal::new(RefusalCode::UnknownBoard, format!("Board {b} cannot be flashed."))
+                    Refusal::new(
+                        RefusalCode::UnknownBoard,
+                        format!("Board {b} cannot be flashed."),
+                    )
                 })
             },
             t,
@@ -624,8 +639,11 @@ impl Core {
             if e.downcast_ref::<Refusal>().is_some() {
                 return Err(e);
             }
-            out.steps
-                .push(step("Restart into the bootloader", StepState::Failed, Some(format!("{e:#}"))));
+            out.steps.push(step(
+                "Restart into the bootloader",
+                StepState::Failed,
+                Some(format!("{e:#}")),
+            ));
             out.failed = Some(format!(
                 "{name} did not restart into its bootloader: {e:#} Nothing was written. Unplug USB and the battery, plug USB in again, and plan again. Your settings are in backup {backup_id}."
             ));
@@ -634,8 +652,11 @@ impl Core {
         let dfu_info = match self.bf_wait_dfu(t) {
             Ok(d) => d,
             Err(e) => {
-                out.steps
-                    .push(step("Restart into the bootloader", StepState::Failed, Some(e.reason.clone())));
+                out.steps.push(step(
+                    "Restart into the bootloader",
+                    StepState::Failed,
+                    Some(e.reason.clone()),
+                ));
                 out.failed = Some(format!(
                     "{} Nothing was written. {RECOVERY} Your settings are in backup {backup_id}.",
                     e.reason
@@ -653,7 +674,8 @@ impl Core {
         self.job_step(port, "Flashing");
         let flasher = self.firmware.flasher.as_ref();
         let quick = flasher.quick();
-        let mut usb = match flasher.open_dfu(dfu_info.vid, dfu_info.pid, dfu_info.serial.as_deref()) {
+        let mut usb = match flasher.open_dfu(dfu_info.vid, dfu_info.pid, dfu_info.serial.as_deref())
+        {
             Ok(u) => u,
             Err(e) => {
                 out.steps
@@ -687,7 +709,8 @@ impl Core {
                 } else {
                     Dfu::new(usb.as_mut()).leave(FLASH_BASE)
                 };
-                out.steps.push(step("Erase", StepState::Failed, Some(why.clone())));
+                out.steps
+                    .push(step("Erase", StepState::Failed, Some(why.clone())));
                 out.failed = Some(format!(
                     "{why}. This is not the chip the image is for. Nothing was written, and QuadCam asked the FC to start its old firmware. Your settings are in backup {backup_id}."
                 ));
@@ -702,11 +725,72 @@ impl Core {
                 return Ok(out);
             }
         }
+        // Copy the firmware the FC runs now: two reads that agree, saved and read back from
+        // disk. Only then may anything be erased. A blank flash (an interrupted flash) has
+        // nothing to copy and may be flashed.
+        self.job_step(port, "Copying the firmware");
+        let stuck = |why: String| {
+            format!(
+                "{why} Nothing was written; the FC waits in its bootloader. Unplug USB and the battery and plug USB in again to start its old firmware. Your settings are in backup {backup_id}."
+            )
+        };
+        let copy = match dfu::read_verified(usb.as_mut(), quick, &mut |_, _| {}) {
+            Ok(c) => c,
+            Err(e) => {
+                out.steps.push(step(
+                    "Copy the current firmware",
+                    StepState::Failed,
+                    Some(format!("{e:#}")),
+                ));
+                out.failed = Some(stuck(format!("Reading the FC's firmware failed: {e:#}.")));
+                return Ok(out);
+            }
+        };
+        let kept = if copy.is_blank() {
+            None
+        } else {
+            match fwcopy::save(
+                &self.gear_store(),
+                &prep.device.id,
+                CopyKind::BeforeFlash,
+                Utc::now(),
+                &copy.trimmed(),
+                None,
+            ) {
+                Ok(c) => Some(c),
+                Err(e) => {
+                    out.steps.push(step(
+                        "Copy the current firmware",
+                        StepState::Failed,
+                        Some(format!("{e:#}")),
+                    ));
+                    out.failed = Some(stuck(format!(
+                        "Saving the copy of the FC's firmware failed: {e:#}."
+                    )));
+                    return Ok(out);
+                }
+            }
+        };
+        out.steps.push(step(
+            "Copy the current firmware",
+            StepState::Done,
+            Some(match &kept {
+                Some(c) => format!(
+                    "{} KB, read twice, saved as {}",
+                    copy.trimmed().len() / 1024,
+                    c.id
+                ),
+                None => "the flash is blank; there is no firmware to keep".into(),
+            }),
+        ));
+
+        self.job_step(port, "Flashing");
         let mut seen: Vec<dfu::Step> = Vec::new();
         let outcome = dfu::flash(
             usb.as_mut(),
             FLASH_BASE,
             &image.image.bytes,
+            &copy,
             quick,
             &mut |s| seen.push(s),
         );
@@ -820,8 +904,11 @@ impl Core {
         let fresh = match bf::read(ports, port, &commands, t) {
             Ok(r) => r,
             Err(e) => {
-                out.steps
-                    .push(step("Read new settings", StepState::Failed, Some(format!("{e:#}"))));
+                out.steps.push(step(
+                    "Read new settings",
+                    StepState::Failed,
+                    Some(format!("{e:#}")),
+                ));
                 out.failed = Some(format!(
                     "The firmware is flashed and verified, but reading the new settings failed: {e:#} Re-apply your settings from backup {backup_id} (Restore) once the FC answers."
                 ));
@@ -904,7 +991,9 @@ impl Core {
                 n => {
                     return Err(Refusal::new(
                         RefusalCode::SeveralDevices,
-                        format!("{n} DFU devices appeared; QuadCam cannot tell which one is the FC."),
+                        format!(
+                            "{n} DFU devices appeared; QuadCam cannot tell which one is the FC."
+                        ),
                     ))
                 }
             }

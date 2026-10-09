@@ -3,7 +3,7 @@
 // the flash plan runs the core's guards on the mock's devices, and a flash keeps the
 // radio's old firmware as a backup. Written by hand from `core/firmware.rs`.
 import * as bf from "./bfflash";
-import type { ApplyPlan, ApplyReport, Check, Device, FirmwareStatus, FirmwareView, FlashParams, SplashParams, SplashPreview } from "../types";
+import type { ApplyPlan, ApplyReport, Check, Device, FirmwareRead, FirmwareStatus, FirmwareView, FlashParams, SplashParams, SplashPreview } from "../types";
 
 export interface MockFirmware {
   /** What the releases say now. */
@@ -16,6 +16,10 @@ export interface MockFirmware {
   dfu: number;
   /** Sources that fail the next check. */
   failing: string[];
+  /** The EdgeTX version the radio's image names (`gear_firmware_read`). */
+  readVersion: string;
+  /** Reads made, for specs. */
+  reads: number;
   /** The next flash fails its read back. */
   failNext: boolean;
   /** Network checks and flashes made, for specs. */
@@ -28,6 +32,8 @@ export const freshFirmware = (): MockFirmware => ({
   seen: {},
   mode: "manual",
   dfu: 1,
+  readVersion: "2.12.4",
+  reads: 0,
   failing: [],
   failNext: false,
   checks: 0,
@@ -116,6 +122,32 @@ const ok = (name: string): Check => ({ name, ok: true });
 const fail = (name: string, code: string, reason: string): Check => ({ name, ok: false, refusal: { code: code as never, reason } });
 const refused = (code: string, reason: string) => `Refused (${code}): ${reason}`;
 
+/** `gear_firmware_read`: the read-only trial. `st.readVersion` is the version the radio's image names. */
+export function read(st: MockFirmware, devices: Device[], device: string | null): FirmwareRead {
+  if (st.dfu === 0) throw refused("no_device", "No radio is in DFU mode. Turn the radio off, then plug in the USB cable (do not hold the trim buttons, which start the EdgeTX bootloader instead). Wait a few seconds and read again.");
+  if (st.dfu > 1) throw refused("several_devices", `${st.dfu} radios are in DFU mode; unplug all but one.`);
+  const d = device ? devices.find((x) => x.id === device) : undefined;
+  if (device && !d) throw `No saved device ${device}.`;
+  const known = d ? idOf(d).version ?? null : null;
+  const matches = known ? known.replace(/^v/i, "") === st.readVersion : null;
+  const id = `${d?.id ?? "dfu-0001"}/2026-10-09T120000-read`;
+  const message = matches === null ? `The firmware names EdgeTX ${st.readVersion}. QuadCam has no version to compare it with. The copy is saved.` : matches ? `The radio's firmware is EdgeTX ${st.readVersion}, the version QuadCam knows for it. The copy is saved.` : `The firmware names EdgeTX ${st.readVersion}, but QuadCam knows the radio as ${known}. Read the version in the radio's own About screen. The copy is saved.`;
+  st.reads += 1;
+  return {
+    copy: { id, device: d?.id ?? "dfu-0001", taken_at: "2026-10-09T12:00:00Z", kind: "read", size: 519580, sha256: "7d1c0f5e".repeat(8), image_board: "pocket", image_version: st.readVersion },
+    device: d?.id ?? null,
+    known_version: known,
+    flash_bytes: 1048576,
+    matches,
+    message,
+    steps: [
+      { name: "Open the DFU device", state: "done", detail: "1024 KB of flash" },
+      { name: "Read the flash twice", state: "done", detail: "both reads equal" },
+      { name: "Save the copy", state: "done", detail: `507 KB, ${id}` },
+    ],
+  };
+}
+
 /** `gear_flash_plan`. */
 export function plan(st: MockFirmware, devices: Device[], p: FlashParams, bfPreview = false): ApplyPlan {
   const d = devices.find((x) => x.id === p.device);
@@ -138,7 +170,7 @@ export function plan(st: MockFirmware, devices: Device[], p: FlashParams, bfPrev
   }
   if (!known && splashOk) {
     checks.push(ok("Firmware image"));
-    const put = [`fw-radiomaster-pocket-v${target}.bin (600 KB)`, "SHA-256 7d1c0f5e…"];
+    const put = [`pocket-def35ad.bin (507 KB)`, "SHA-256 7d1c0f5e…"];
     if (p.splash) {
       checks.push(ok("Splash markers"));
       put.push(`Splash: ${splash(p.splash).dark} dark pixels of 8192`);
@@ -146,7 +178,7 @@ export function plan(st: MockFirmware, devices: Device[], p: FlashParams, bfPrev
     diff.push({ kind: "files", label: "Firmware image", put, delete: [] });
   }
   checks.push(d.last_backup ? ok("Card backup") : fail("Card backup", "no_backup", "Back up this radio first: connect it in USB Storage mode and back it up. A flash can change how the radio reads its card."));
-  checks.push(st.dfu === 1 ? ok("One radio in DFU mode") : st.dfu === 0 ? fail("One radio in DFU mode", "no_device", "No radio is in DFU mode. Turn the radio off, hold both trim buttons toward the centre and plug in the USB cable.") : fail("One radio in DFU mode", "several_devices", `${st.dfu} radios are in DFU mode; unplug all but one.`));
+  checks.push(st.dfu === 1 ? ok("One radio in DFU mode") : st.dfu === 0 ? fail("One radio in DFU mode", "no_device", "No radio is in DFU mode. Turn the radio off, then plug in the USB cable (do not hold the trim buttons, which start the EdgeTX bootloader instead). Wait a few seconds.") : fail("One radio in DFU mode", "several_devices", `${st.dfu} radios are in DFU mode; unplug all but one.`));
   const ready = checks.every((c) => c.ok);
   return {
     change: "flash",
@@ -154,7 +186,7 @@ export function plan(st: MockFirmware, devices: Device[], p: FlashParams, bfPrev
     checks,
     diff,
     digest: ready ? `flash-${d.id}-${target}-${p.splash ? splash(p.splash).hash : "none"}` : "",
-    warnings: ["A radio in DFU mode shows no name. QuadCam writes the one radio in DFU mode; check it is the radio you picked.", "QuadCam reads the radio's current firmware over DFU first and keeps it as a backup. Flashing has not been tried on a real radio yet."],
+    warnings: ["A radio in DFU mode shows no name. QuadCam writes the one radio in DFU mode; check it is the radio you picked.", "QuadCam reads the radio's current firmware over DFU twice first and keeps it as a copy; it erases nothing until both reads agree and the saved file reads back. If a flash fails, the radio's ROM bootloader still answers over USB (turn it off, plug in USB) and you can flash again. Flashing has not been tried on a real radio yet."],
   };
 }
 
@@ -172,17 +204,17 @@ export function flash(st: MockFirmware, devices: Device[], p: FlashParams, diges
     if (!failed) st.flashed.push(p.device);
     return bf.flash(fc, p, pl, failed);
   }
-  const backup = `${p.device}/2026-10-09T120000-before_flash`;
+  const backup = `${p.device}/2026-10-09T120000-before-flash`;
   const base = { change: "flash", device: p.device, backup, after_backup: null, sent: [], failed_line: null, verify: [], files: [], notes: pl.warnings ?? [], at: "2026-10-09T12:00:00Z" };
-  const first = { name: "Back up the current firmware", state: "done" as const, detail: `600 KB, ${backup}` };
+  const first = { name: "Copy the current firmware", state: "done" as const, detail: `600 KB, read twice, saved as ${backup}` };
   if (st.failNext) {
     st.failNext = false;
     return {
       ...base,
       status: "failed",
       saved: false,
-      steps: [first, { name: "Erase", state: "done", detail: "8 sectors" }, { name: "Write", state: "done", detail: "600 KB" }, { name: "Read back", state: "failed", detail: "The device holds different bytes than were written (first difference at 0x08001800)." }, { name: "Leave DFU", state: "skipped" }],
-      message: `The flash failed: The device holds different bytes than were written. The radio stays in DFU mode: unplug it, enter DFU mode again and retry. The firmware it ran before is kept in the backup (${backup}).`,
+      steps: [first, { name: "Erase", state: "done", detail: "8 sectors" }, { name: "Write", state: "failed", detail: "The device holds different bytes than were written (first difference at 0x08001800, found while writing)." }, { name: "Read back", state: "skipped" }, { name: "Leave DFU", state: "skipped" }],
+      message: `The flash failed: The device holds different bytes than were written. The radio stays in DFU mode. Flash again, or unplug it, turn it off, plug it in again and retry. The radio's ROM bootloader always answers over USB. The firmware it ran before is kept (${backup}).`,
     };
   }
   st.flashed.push(p.device);

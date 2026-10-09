@@ -59,10 +59,11 @@ test("a flash shows its checks, needs the DFU radio, and writes only on Apply", 
   await page.getByRole("button", { name: "Flash 2.12.4…" }).click();
   const sheet = page.getByRole("dialog", { name: "Flash Field radio" });
   await expect(sheet.getByRole("region", { name: "Changes" })).toContainText("2.12.3");
-  await expect(sheet.getByRole("region", { name: "Changes" })).toContainText("fw-radiomaster-pocket-v2.12.4.bin");
+  await expect(sheet.getByRole("region", { name: "Changes" })).toContainText("pocket-def35ad.bin");
   const checks = sheet.getByRole("list", { name: "Checks" });
   await expect(checks).toContainText("Known board and version");
   await expect(checks).toContainText("No radio is in DFU mode.");
+  await expect(checks).toContainText("do not hold the trim buttons");
   await expect(sheet.getByRole("button", { name: "Apply" })).toBeDisabled();
   expect(await app.calls("gear_flash_click")).toEqual([]);
   await sheet.getByRole("button", { name: "Cancel" }).click();
@@ -74,7 +75,7 @@ test("a flash shows its checks, needs the DFU radio, and writes only on Apply", 
   await sheet.getByRole("button", { name: "Apply" }).click();
   const result = sheet.getByRole("region", { name: "Result" });
   await expect(result).toContainText("Verified");
-  await expect(result.getByRole("list", { name: "Steps" })).toContainText("Back up the current firmware");
+  await expect(result.getByRole("list", { name: "Steps" })).toContainText("Copy the current firmware");
   await expect(result.getByRole("list", { name: "Steps" })).toContainText("Leave DFU");
   expect((await app.calls("gear_flash_click")).length).toBe(1);
 });
@@ -89,8 +90,42 @@ test("a bad read back is reported and the radio stays in DFU", async ({ app, pag
   await sheet.getByRole("button", { name: "Apply" }).click();
   const result = sheet.getByRole("region", { name: "Result" });
   await expect(result).toContainText("The radio stays in DFU mode");
-  await expect(result.getByRole("listitem").filter({ hasText: "Read back" })).toContainText("failed");
+  await expect(result.getByRole("listitem").filter({ hasText: "Write" }).first()).toContainText("failed");
+  await expect(result).toContainText("ROM bootloader always answers over USB");
   await expect(sheet.getByRole("button", { name: "Restore backup" })).toHaveCount(0);
+});
+
+test("Read firmware lists the steps, reads with no write, and compares the version", async ({ app, page }) => {
+  await openFirmware(app, page);
+  await makePocket(app, "2.12.4");
+  const section = page.getByRole("region", { name: "Read radio firmware" });
+  await expect(section.getByRole("list", { name: "Steps" })).toContainText("Turn the radio off.");
+  await expect(section.getByRole("list", { name: "Steps" })).toContainText("Do not hold any buttons.");
+  await section.getByRole("button", { name: "Read firmware" }).click();
+  const copy = section.getByRole("region", { name: "Firmware copy" });
+  await expect(copy).toContainText("The radio's firmware is EdgeTX 2.12.4");
+  await expect(copy.getByRole("list", { name: "Read steps" })).toContainText("Read the flash twice");
+  await expect(copy).toContainText("-read");
+  expect(await app.method("gear_firmware_read")).toEqual([{ device: RADIO_ID }]);
+  // Nothing in this path flashes.
+  expect(await app.method("gear_flash")).toEqual([]);
+  expect(await app.calls("gear_flash_click")).toEqual([]);
+  const axe = await new AxeBuilder({ page }).analyze();
+  expect(axe.violations).toEqual([]);
+});
+
+test("Read firmware says when no radio is in DFU mode and when the version differs", async ({ app, page }) => {
+  await openFirmware(app, page);
+  await makePocket(app, "2.11.3");
+  await app.core(`c => { c.firmware.dfu = 0; }`);
+  const section = page.getByRole("region", { name: "Read radio firmware" });
+  await section.getByRole("button", { name: "Read firmware" }).click();
+  await expect(section).toContainText("No radio is in DFU mode.");
+  await expect(section).toContainText("do not hold the trim buttons");
+  await app.core(`c => { c.firmware.dfu = 1; }`);
+  await section.getByRole("button", { name: "Read firmware" }).click();
+  await expect(section.getByRole("region", { name: "Firmware copy" })).toContainText("names EdgeTX 2.12.4, but QuadCam knows the radio as 2.11.3");
+  await expect(section).not.toContainText("No radio is in DFU mode.");
 });
 
 async function openSplash(app: AppFixture, page: Page) {

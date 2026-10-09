@@ -272,6 +272,7 @@ cli.flag gear firmware --device VALUE
 cli.flag gear firmware --digest VALUE
 cli.flag gear firmware --invert
 cli.flag gear firmware --plan
+cli.flag gear firmware --read
 cli.flag gear firmware --splash VALUE
 cli.flag gear firmware --threshold VALUE
 cli.flag gear firmware --version VALUE

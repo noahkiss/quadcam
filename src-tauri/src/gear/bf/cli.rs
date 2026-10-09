@@ -188,7 +188,9 @@ impl CliSession {
                 Err(e) => return Err(e),
             }
         }
-        bail!("After bl the port {port} is still there; the FC did not restart into its bootloader.")
+        bail!(
+            "After bl the port {port} is still there; the FC did not restart into its bootloader."
+        )
     }
 
     /// Sends `exit`: the FC leaves the CLI, drops unsaved changes and reboots. The link is

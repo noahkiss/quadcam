@@ -6,8 +6,6 @@
 use quadcam_lib::core::{
     BackupFilter, BackupParams, Core, FirmwareParams, FlashParams, FlashRequest, Hooks, NoHooks,
 };
-use quadcam_lib::gear::firmware::check::{BETAFLIGHT_RELEASES, EDGETX_RELEASES, ELRS_INDEX};
-use quadcam_lib::gear::firmware::FixtureFetch;
 use quadcam_lib::gear::apply::ApplyReport;
 use quadcam_lib::gear::bf::cli::Timing;
 use quadcam_lib::gear::bf::fake::FakeFc;
@@ -15,6 +13,8 @@ use quadcam_lib::gear::cues::{CueService, RecordedCues};
 use quadcam_lib::gear::detect::DfuInfo;
 use quadcam_lib::gear::dfu::{FakeDfu, Usb, FLASH_BASE};
 use quadcam_lib::gear::firmware::betaflight::{to_hex, FixtureCloud};
+use quadcam_lib::gear::firmware::check::{BETAFLIGHT_RELEASES, EDGETX_RELEASES, ELRS_INDEX};
+use quadcam_lib::gear::firmware::FixtureFetch;
 use quadcam_lib::gear::firmware::Flasher;
 use quadcam_lib::gear::model::{
     device_id, ApplyPlan, ChangeStatus, DeviceKind, Refusal, RefusalCode, Section, StagedChange,
@@ -39,11 +39,10 @@ const RELEASE: &str = "2026.6.0";
 /// The firmware the FC runs before the flash: the fixture's older release, with one setting
 /// the new release does not have.
 fn old_dump() -> String {
-    NEW.replace("2026.6.0-alpha", "2025.12.5-alpha")
-        .replace(
-            "manufacturer_id BEFH",
-            "manufacturer_id BEFH\nset legacy_thing = 1",
-        )
+    NEW.replace("2026.6.0-alpha", "2025.12.5-alpha").replace(
+        "manufacturer_id BEFH",
+        "manufacturer_id BEFH\nset legacy_thing = 1",
+    )
 }
 
 /// A firmware-shaped image of `kb` KB: a vector table, then filler.
@@ -242,19 +241,35 @@ fn bench(o: Opts) -> Bench {
     });
     let fetch = Arc::new(FixtureFetch::new());
     let rel = |t: &str| serde_json::json!([{"tag_name": t, "prerelease": false, "draft": false, "assets": []}]);
-    fetch.serve(EDGETX_RELEASES, serde_json::to_vec(&rel("v2.12.4")).unwrap());
-    fetch.serve(BETAFLIGHT_RELEASES, serde_json::to_vec(&rel(RELEASE)).unwrap());
-    fetch.serve(ELRS_INDEX, serde_json::json!({"tags": {"3.5.3": "x"}}).to_string().into_bytes());
+    fetch.serve(
+        EDGETX_RELEASES,
+        serde_json::to_vec(&rel("v2.12.4")).unwrap(),
+    );
+    fetch.serve(
+        BETAFLIGHT_RELEASES,
+        serde_json::to_vec(&rel(RELEASE)).unwrap(),
+    );
+    fetch.serve(
+        ELRS_INDEX,
+        serde_json::json!({"tags": {"3.5.3": "x"}})
+            .to_string()
+            .into_bytes(),
+    );
     let core = Arc::new(
-        Core::new(dir.path().join("cache"), None, o.hooks, Arc::new(Recorder::default()))
-            .with_settings(dir.path().join("support/settings.json"))
-            .with_gear_env(env)
-            .with_fc_timing(Timing::fast())
-            .with_firmware_env(quadcam_lib::gear::firmware::FwEnv {
-                fetch: fetch.clone(),
-                flasher: flasher.clone(),
-            })
-            .with_bf_cloud(cloud.clone()),
+        Core::new(
+            dir.path().join("cache"),
+            None,
+            o.hooks,
+            Arc::new(Recorder::default()),
+        )
+        .with_settings(dir.path().join("support/settings.json"))
+        .with_gear_env(env)
+        .with_fc_timing(Timing::fast())
+        .with_firmware_env(quadcam_lib::gear::firmware::FwEnv {
+            fetch: fetch.clone(),
+            flasher: flasher.clone(),
+        })
+        .with_bf_cloud(cloud.clone()),
     );
     // The device is saved and has a backup, as after a plug-in.
     core.gear_backup(&BackupParams {
@@ -312,7 +327,10 @@ fn a_plan_names_the_change_and_runs_every_guard() {
     assert!(plan.checks.iter().all(|c| c.ok), "{:?}", plan.checks);
     assert!(!plan.digest.is_empty());
     let text = format!("{:?}", plan.diff);
-    assert!(text.contains("2025.12.5-alpha") && text.contains("2026.6.0"), "{text}");
+    assert!(
+        text.contains("2025.12.5-alpha") && text.contains("2026.6.0"),
+        "{text}"
+    );
     assert!(text.contains("SHA-256"), "{text}");
     assert!(
         plan.warnings.iter().any(|w| w.contains("boot button")),
@@ -324,11 +342,7 @@ fn a_plan_names_the_change_and_runs_every_guard() {
     assert!(!b.fc.in_bootloader());
     assert_eq!(b.fc.saves(), 0);
     assert_eq!(b.flasher.opened.load(Ordering::SeqCst), 0);
-    assert!(
-        !b.fc.log().iter().any(|l| l == "bl"),
-        "{:?}",
-        b.fc.log()
-    );
+    assert!(!b.fc.log().iter().any(|l| l == "bl"), "{:?}", b.fc.log());
     // The same plan twice gives the same digest, and the second reads the cache.
     let again = b.core.gear_flash_plan(&params(&b)).unwrap();
     assert_eq!(again.digest, plan.digest);
@@ -385,7 +399,10 @@ fn the_plan_refuses_what_it_cannot_prove() {
         board: None,
     });
     let e = b.core.gear_flash_plan(&p).unwrap_err();
-    assert_eq!(e.downcast_ref::<Refusal>().unwrap().code, RefusalCode::Incompatible);
+    assert_eq!(
+        e.downcast_ref::<Refusal>().unwrap().code,
+        RefusalCode::Incompatible
+    );
 }
 
 #[test]
@@ -394,7 +411,12 @@ fn a_bad_image_refuses_the_plan() {
     // Not a firmware: no vector table.
     let mut junk = image(300, 5);
     junk[0..4].copy_from_slice(&0u32.to_le_bytes());
-    b.cloud.serve(TARGET, RELEASE, "x.hex", to_hex(FLASH_BASE, &junk).into_bytes());
+    b.cloud.serve(
+        TARGET,
+        RELEASE,
+        "x.hex",
+        to_hex(FLASH_BASE, &junk).into_bytes(),
+    );
     let plan = b.core.gear_flash_plan(&params(&b)).unwrap();
     assert_eq!(failed_check(&plan).code, RefusalCode::BadImage);
     assert!(plan.digest.is_empty());
@@ -463,6 +485,7 @@ fn a_flash_replaces_the_firmware_and_puts_the_settings_back() {
         vec![
             "Back up",
             "Restart into the bootloader",
+            "Copy the current firmware",
             "Erase",
             "Write",
             "Read back",
@@ -472,7 +495,20 @@ fn a_flash_replaces_the_firmware_and_puts_the_settings_back() {
             "Re-apply settings"
         ]
     );
-    assert!(report.steps.iter().all(|s| s.state == quadcam_lib::gear::apply::StepState::Done));
+    assert!(report
+        .steps
+        .iter()
+        .all(|s| s.state == quadcam_lib::gear::apply::StepState::Done));
+    // The old firmware was read twice and kept before anything was erased.
+    assert!(
+        step(&report, "Copy the current firmware")
+            .detail
+            .as_deref()
+            .unwrap()
+            .contains("read twice, saved as"),
+        "{:?}",
+        report.steps
+    );
 
     // The old firmware's setting is back on the new one; the new firmware's version shows.
     assert_eq!(
@@ -480,7 +516,8 @@ fn a_flash_replaces_the_firmware_and_puts_the_settings_back() {
         Some("160")
     );
     assert_eq!(
-        b.fc.saved_value(Section::Master, "osd_cap_alarm").as_deref(),
+        b.fc.saved_value(Section::Master, "osd_cap_alarm")
+            .as_deref(),
         Some("400")
     );
     assert!(b.fc.saved_dump().contains("2026.6.0-alpha"));
@@ -534,7 +571,8 @@ fn a_value_the_new_version_refuses_is_skipped_with_its_reason() {
     assert_eq!(report.status, ChangeStatus::Verified, "{}", report.message);
     // The other setting came back; the refused one stayed at the new default.
     assert_eq!(
-        b.fc.saved_value(Section::Master, "osd_cap_alarm").as_deref(),
+        b.fc.saved_value(Section::Master, "osd_cap_alarm")
+            .as_deref(),
         Some("400")
     );
     assert_ne!(
@@ -566,7 +604,10 @@ fn a_flash_needs_the_digest_the_confirm_and_the_click() {
     let mut r = request(&b, &plan);
     r.digest = "0000000000000000".into();
     let e = b.core.gear_flash(&r).unwrap_err();
-    assert_eq!(e.downcast_ref::<Refusal>().unwrap().code, RefusalCode::BeforeMismatch);
+    assert_eq!(
+        e.downcast_ref::<Refusal>().unwrap().code,
+        RefusalCode::BeforeMismatch
+    );
     assert!(!b.fc.log().iter().any(|l| l == "bl"));
     assert!(!b.fc.in_bootloader());
 
@@ -588,7 +629,11 @@ fn a_flash_needs_the_digest_the_confirm_and_the_click() {
     // The sheet's own click is the confirm.
     let report = b.core.gear_flash_click(&request(&b, &plan)).unwrap();
     assert_eq!(report.status, ChangeStatus::Verified, "{}", report.message);
-    assert_eq!(gui.asked.load(Ordering::SeqCst), 1, "the click does not ask again");
+    assert_eq!(
+        gui.asked.load(Ordering::SeqCst),
+        1,
+        "the click does not ask again"
+    );
 }
 
 #[test]
@@ -598,7 +643,10 @@ fn a_flash_stops_when_the_plan_changed() {
     // A DFU device is plugged in after the plan.
     b.extra_dfu.store(1, Ordering::SeqCst);
     let e = b.core.gear_flash(&request(&b, &plan)).unwrap_err();
-    assert_eq!(e.downcast_ref::<Refusal>().unwrap().code, RefusalCode::SeveralDevices);
+    assert_eq!(
+        e.downcast_ref::<Refusal>().unwrap().code,
+        RefusalCode::SeveralDevices
+    );
     assert!(!b.fc.log().iter().any(|l| l == "bl"));
 }
 
@@ -609,9 +657,17 @@ fn an_fc_that_never_enters_dfu_is_reported_with_the_way_back() {
     b.hide_dfu.store(1, Ordering::SeqCst);
     let report = b.core.gear_flash(&request(&b, &plan)).unwrap();
     assert_eq!(report.status, ChangeStatus::Failed);
-    assert!(report.message.contains("did not show up as a DFU device"), "{}", report.message);
+    assert!(
+        report.message.contains("did not show up as a DFU device"),
+        "{}",
+        report.message
+    );
     assert!(report.message.contains("boot button"), "{}", report.message);
-    assert!(report.message.contains("Nothing was written"), "{}", report.message);
+    assert!(
+        report.message.contains("Nothing was written"),
+        "{}",
+        report.message
+    );
     assert_eq!(b.flasher.opened.load(Ordering::SeqCst), 0);
     assert!(!report.saved);
     // The old settings are in the backup the report names.
@@ -625,21 +681,19 @@ fn a_dropped_block_leaves_the_fc_in_its_bootloader_and_says_so() {
     let plan = b.core.gear_flash_plan(&params(&b)).unwrap();
     let report = b.core.gear_flash(&request(&b, &plan)).unwrap();
     assert_eq!(report.status, ChangeStatus::Failed);
-    assert!(report.message.contains("stays in its bootloader"), "{}", report.message);
+    assert!(
+        report.message.contains("stays in its bootloader"),
+        "{}",
+        report.message
+    );
     assert!(report.message.contains("boot button"), "{}", report.message);
     assert!(report.message.contains(report.backup.as_deref().unwrap()));
-    assert_eq!(
-        step(&report, "Write").state,
-        quadcam_lib::gear::apply::StepState::Done
-    );
-    assert_eq!(
-        step(&report, "Read back").state,
-        quadcam_lib::gear::apply::StepState::Failed
-    );
-    assert_eq!(
-        step(&report, "Leave DFU").state,
-        quadcam_lib::gear::apply::StepState::Skipped
-    );
+    // The write reads each segment back before the next: the bad one stops the flash.
+    use quadcam_lib::gear::apply::StepState;
+    assert_eq!(step(&report, "Erase").state, StepState::Done);
+    assert_eq!(step(&report, "Write").state, StepState::Failed);
+    assert_eq!(step(&report, "Read back").state, StepState::Skipped);
+    assert_eq!(step(&report, "Leave DFU").state, StepState::Skipped);
     // No settings were written to a half flashed FC.
     assert!(b.fc.in_bootloader());
     assert!(b
@@ -661,8 +715,16 @@ fn a_chip_of_the_wrong_size_is_left_alone() {
     let plan = b.core.gear_flash_plan(&params(&b)).unwrap();
     let report = b.core.gear_flash(&request(&b, &plan)).unwrap();
     assert_eq!(report.status, ChangeStatus::Failed);
-    assert!(report.message.contains("not the chip"), "{}", report.message);
-    assert!(report.message.contains("Nothing was written"), "{}", report.message);
+    assert!(
+        report.message.contains("not the chip"),
+        "{}",
+        report.message
+    );
+    assert!(
+        report.message.contains("Nothing was written"),
+        "{}",
+        report.message
+    );
     // Nothing was erased, and the old firmware was started again.
     let d = b.flasher.dfu.lock().unwrap();
     assert!(d.erased.is_empty());
@@ -678,7 +740,11 @@ fn a_failed_backup_stops_before_the_bootloader() {
     // The port drops out when the backup reads `diff all`.
     let _ = b.fc.clone().lose_port_on("diff all");
     let e = b.core.gear_flash(&request(&b, &plan)).unwrap_err();
-    assert_eq!(e.downcast_ref::<Refusal>().unwrap().code, RefusalCode::NoBackup, "{e:#}");
+    assert_eq!(
+        e.downcast_ref::<Refusal>().unwrap().code,
+        RefusalCode::NoBackup,
+        "{e:#}"
+    );
     assert!(format!("{e}").contains("Nothing was changed"), "{e}");
     assert!(!b.fc.log().iter().any(|l| l == "bl"));
     assert!(!b.fc.in_bootloader());
@@ -707,7 +773,10 @@ fn the_firmware_page_offers_the_flash_only_with_the_preview_on() {
         old: other,
         ..Opts::default()
     });
-    let view = b.core.gear_firmware(&FirmwareParams { check: Some(true) }).unwrap();
+    let view = b
+        .core
+        .gear_firmware(&FirmwareParams { check: Some(true) })
+        .unwrap();
     let fc = view.devices.iter().find(|d| d.device == b.id).unwrap();
     assert!(!fc.flashable);
     assert_eq!(

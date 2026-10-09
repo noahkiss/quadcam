@@ -342,8 +342,19 @@ pub fn to_bootloader(
         }
         let c = dump::Config::parse(&text);
         let uid = c.mcu_id();
-        let fc = info(port, c.identity(), uid.as_deref(), usb_serial.as_deref(), None);
-        if let Some(f) = fc.identity.firmware.as_deref().filter(|f| *f != "Betaflight") {
+        let fc = info(
+            port,
+            c.identity(),
+            uid.as_deref(),
+            usb_serial.as_deref(),
+            None,
+        );
+        if let Some(f) = fc
+            .identity
+            .firmware
+            .as_deref()
+            .filter(|f| *f != "Betaflight")
+        {
             return Err(Refusal::new(
                 super::model::RefusalCode::UnknownVersion,
                 format!("{f} is not Betaflight; QuadCam flashes Betaflight only."),

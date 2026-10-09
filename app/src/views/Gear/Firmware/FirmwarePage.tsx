@@ -7,6 +7,7 @@ import { Banner } from "../../../components/Banner";
 import { Button } from "../../../components/Button";
 import type { FirmwareStatus } from "../../../ipc/types";
 import { fmtWhen } from "../../../lib/backups";
+import { ReadFirmware } from "./ReadFirmware";
 import styles from "./Firmware.module.css";
 
 const STATE_LABEL: Record<FirmwareStatus["state"], string> = {
@@ -92,6 +93,7 @@ export function FirmwarePage() {
           </tbody>
         </table>
       )}
+      <ReadFirmware radios={(view?.devices ?? []).filter((d) => d.kind === "radio")} />
     </div>
   );
 }

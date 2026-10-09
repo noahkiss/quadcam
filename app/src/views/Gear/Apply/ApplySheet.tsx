@@ -110,7 +110,7 @@ export function ApplySheet() {
               {kind === "firmware" && dev?.kind === "fc" ? (
                 <p className={styles.muted}>QuadCam saves the FC's settings first and keeps that backup, restarts the FC into its bootloader, erases and writes the flash, reads it back and compares it, and restarts the FC. It then puts your settings back and checks them against the FC. Unplug the battery first. If the read back differs, the FC stays in its bootloader.</p>
               ) : kind === "firmware" ? (
-                <p className={styles.muted}>QuadCam reads the firmware the radio runs now and keeps it as a backup, then erases and writes the flash, reads it back and compares it, and restarts the radio. The radio must be in DFU mode: turn it off, hold the trims toward the centre and plug in the USB cable. If the read back differs, the radio stays in DFU mode.</p>
+                <p className={styles.muted}>QuadCam reads the firmware the radio runs now twice and keeps it as a copy, then erases and writes the flash in segments, reads each back, compares the whole image, and restarts the radio. The radio must be in DFU mode: turn it off and plug in the USB cable, holding no button. If a read back differs, the radio stays in DFU mode.</p>
               ) : kind === "sims" ? (
                 <p className={styles.muted}>QuadCam backs up each file first and keeps the backup, writes it, reads it back, and puts every file back if one reads wrong. Quit the game before you apply.</p>
               ) : kind === "card" ? (

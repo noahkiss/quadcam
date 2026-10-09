@@ -67,6 +67,7 @@ export function flash(d: Device, p: FlashParams, pl: ApplyPlan, failNext: boolea
   const steps = [
     { name: "Back up", state: "done" as const, detail: `diff all and dump all, ${backup}` },
     { name: "Restart into the bootloader", state: "done" as const, detail: "DFU device FCCHIP" },
+    { name: "Copy the current firmware", state: "done" as const, detail: `300 KB, read twice, saved as ${d.id}/2026-10-09T120000-before-flash` },
   ];
   if (failNext) {
     return {

@@ -149,16 +149,20 @@ pub fn parse_hex(text: &str) -> Result<Image, Refusal> {
             continue;
         }
         let at = n + 1;
-        let body = line
-            .strip_prefix(':')
-            .ok_or_else(|| bad_image(format!("Line {at} of the HEX file does not start with ':'.")))?;
+        let body = line.strip_prefix(':').ok_or_else(|| {
+            bad_image(format!(
+                "Line {at} of the HEX file does not start with ':'."
+            ))
+        })?;
         if ended {
             return Err(bad_image(format!(
                 "The HEX file has data after its end record (line {at})."
             )));
         }
         if body.len() < 10 || body.len() % 2 != 0 {
-            return Err(bad_image(format!("Line {at} of the HEX file is cut short.")));
+            return Err(bad_image(format!(
+                "Line {at} of the HEX file is cut short."
+            )));
         }
         let bytes: Option<Vec<u8>> = (0..body.len() / 2).map(|i| hex_byte(body, i * 2)).collect();
         let bytes =
@@ -190,7 +194,9 @@ pub fn parse_hex(text: &str) -> Result<Image, Refusal> {
         }
     }
     if !ended {
-        return Err(bad_image("The HEX file has no end record; it is cut short."));
+        return Err(bad_image(
+            "The HEX file has no end record; it is cut short.",
+        ));
     }
     chunks.retain(|(_, d)| !d.is_empty());
     chunks.sort_by_key(|(a, _)| *a);
@@ -256,10 +262,11 @@ pub fn check_image(img: &Image, target: &Target) -> Result<(), Refusal> {
     Ok(())
 }
 
-/// Seconds a flash of `len` bytes takes, with room: erase, write and read back over DFU,
-/// plus the reboot into the bootloader. An estimate for the USB heat check, not a promise.
+/// Seconds a flash of `len` bytes takes, with room: the reboot into the bootloader, two reads
+/// of the old firmware, then erase, write and read back over DFU. An estimate for the USB
+/// heat check, not a promise.
 pub fn flash_seconds(len: usize) -> u32 {
-    45 + (len / 8192) as u32
+    90 + (len / 8192) as u32
 }
 
 /// The heat check: with a battery in, the USB timer must outlast the flash.
@@ -650,7 +657,11 @@ mod tests {
         adjust_statuses(&mut on, true);
         assert!(on[0].flashable && on[0].note.is_none());
         assert!(!on[1].flashable);
-        assert!(on[1].note.as_deref().unwrap().contains("is not proven"), "{:?}", on[1].note);
+        assert!(
+            on[1].note.as_deref().unwrap().contains("is not proven"),
+            "{:?}",
+            on[1].note
+        );
         assert!(!on[2].flashable);
         assert_eq!(
             on[2].note.as_deref(),
@@ -704,7 +715,9 @@ mod tests {
     #[test]
     fn the_real_service_stays_offline_under_cargo() {
         if std::env::var("QUADCAM_FETCH").as_deref() != Ok("real") {
-            let e = CurlCloud::system().build("BETAFPVG473", "2025.12.5").unwrap_err();
+            let e = CurlCloud::system()
+                .build("BETAFPVG473", "2025.12.5")
+                .unwrap_err();
             assert!(format!("{e:#}").contains("off in tests"), "{e:#}");
         }
     }

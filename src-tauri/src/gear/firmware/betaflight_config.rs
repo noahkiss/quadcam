@@ -53,8 +53,20 @@ const FRAMING: &[&str] = &[
 
 /// The verbs `restore_lines` carries.
 const CARRIED: &[&str] = &[
-    "aux", "adjrange", "rxrange", "feature", "beeper", "beacon", "led", "color", "mode_color",
-    "vtx", "mmix", "smix", "servo", "rxfail",
+    "aux",
+    "adjrange",
+    "rxrange",
+    "feature",
+    "beeper",
+    "beacon",
+    "led",
+    "color",
+    "mode_color",
+    "vtx",
+    "mmix",
+    "smix",
+    "servo",
+    "rxfail",
 ];
 
 /// `old` is the old firmware's `diff all`, `new` the new firmware's `dump all`, `gets` the new
@@ -124,7 +136,12 @@ pub fn carry(old: &Config, new: &Config, gets: &HashMap<String, String>) -> Carr
 /// The sentence lists for the report's notes: each list capped at `cap` names.
 pub fn notes(c: &Carry, cap: usize) -> Vec<String> {
     fn list(items: &[String], cap: usize) -> String {
-        let shown = items.iter().take(cap).cloned().collect::<Vec<_>>().join(", ");
+        let shown = items
+            .iter()
+            .take(cap)
+            .cloned()
+            .collect::<Vec<_>>()
+            .join(", ");
         match items.len().saturating_sub(cap) {
             0 => shown,
             n => format!("{shown}, and {n} more"),
@@ -213,7 +230,9 @@ batch end
     #[test]
     fn carries_what_differs_and_reports_the_rest() {
         let c = carry(&Config::parse(OLD), &Config::parse(NEW), &gets());
-        assert!(c.lines.contains(&"set motor_pwm_protocol = DSHOT600".to_string()));
+        assert!(c
+            .lines
+            .contains(&"set motor_pwm_protocol = DSHOT600".to_string()));
         assert!(c.lines.contains(&"set small_angle = 180".to_string()));
         assert!(c.lines.contains(&"set p_pitch = 60".to_string()));
         // p_roll is the new default already.
@@ -225,7 +244,10 @@ batch end
         // Board lines are listed, framing is not.
         assert!(c.left_out.iter().any(|l| l.starts_with("resource MOTOR")));
         assert!(c.left_out.iter().any(|l| l.starts_with("serial 0")));
-        assert!(!c.left_out.iter().any(|l| l.contains("batch") || l.contains("defaults")));
+        assert!(!c
+            .left_out
+            .iter()
+            .any(|l| l.contains("batch") || l.contains("defaults")));
         assert!(!c.lines.iter().any(|l| l.contains("removed_setting")));
     }
 
