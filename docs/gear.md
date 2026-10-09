@@ -475,6 +475,34 @@ viewer. Nothing reaches the FC until you apply it from the apply sheet.
   change.
 - **Element labels:** each element draws as plain sample text, not Betaflight's font.
 
+## Rates
+
+The Rates segment shows how an FC's rate profiles turn stick movement into rotation, and how
+each sim on this Mac compares. It reads only. Open a flight controller's page under **Gear >
+Devices** and choose **Rates**. A saved FC with a backup shows its latest backup; **Open
+dump…** reads a `dump all` or `diff all` file instead.
+
+- **Profiles:** one button per rate profile, with its name (FREE, RACE, CINE). The profile the
+  FC uses has an "In use" mark. The line under the buttons names the rates type: Betaflight,
+  Actual, Quick, Raceflight or KISS.
+- **Curves:** roll, pitch and yaw, in degrees per second against stick position from centre to
+  full. The table lists RC rate, super rate, expo, the rate limit, the centre rate (degrees per
+  second per full stick at the centre) and the maximum rate. The throttle chart shows mid, expo,
+  hover and the throttle limit.
+- **Compare with:** draws a second, dashed curve from another profile of the quad, the profile
+  in use of another saved quad, or a sim's profile. The table gains a column with its maximum.
+- **A diff alone:** a diff lists only values that differ from the defaults. QuadCam fills in
+  Betaflight's defaults and says so. Use a dump for exact curves.
+- **Sims:** QuadCam reads the rate files of Liftoff, Liftoff: Micro Drones, Uncrashed and The
+  Zone, and lists each profile's maximum rates. Each sim says "Matches the quad" or "Differs from
+  the quad" against the selected profile, and shows the largest gap in degrees per second. A sim
+  takes Betaflight rates, so a quad on Actual or Quick is fitted to the Betaflight model first.
+  The fit stays within 6 % of the maximum rate for Actual profiles with a centre of 40 to 200
+  degrees per second, a maximum of 300 to 1000 and expo up to 60. Outside that range the error
+  grows, up to about 12 %. The fit error shows next to each profile it affects. Only Uncrashed has a throttle
+  curve. Velocidrone is off until a sample save exists. A sim marked "Running" may rewrite its
+  file when it quits.
+
 ## Switch map
 
 The switch map says what each radio control does, position by position. Open a flight
@@ -612,6 +640,8 @@ quadcam-cli --json gear osd quad.dump_all.txt apply.cli --grid PAL
 quadcam-cli --json gear osd <fc> --staged                    # the layout with its staged OSD edits on top
 quadcam-cli --json gear osd-edit <fc> --move vbat=12,3 --profiles vbat=1,3   # stage a move and a toggle
 quadcam-cli --json gear osd-edit <fc> --copy 1:2             # profile 2 shows what profile 1 shows
+quadcam-cli gear rates quad.dump_all.txt --text      # every rate profile: names, maximum and centre rates
+quadcam-cli --json gear sims quad.dump_all.txt [--profile N]   # the sims' rates against the quad
 quadcam-cli --json gear card [--mount M | --device ID] [--model model01.yml]
 quadcam-cli --json gear card preview --edits edits.json   # checks and diff; writes nothing
 quadcam-cli gear map --radio /Volumes/RADIO --fc quad.diff_all.txt --text   # the switch map

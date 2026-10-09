@@ -923,6 +923,33 @@ FC effect (`aux` modes, `adjrange` selections such as rate or OSD profile), the 
   its value). Acceptance: the exhaustive `Pos` round trip, an edit-to-FC-line round trip, the
   NTSC, PAL and HD goldens (`tests/osd.rs`), overlap and off-screen checks, and
   `tests/osd_edit.rs` plus `e2e/osd-edit.spec.ts` for the staged line.
+- **Built (WP8 read half):** `gear/rates.rs` re-exports `quadcam_sim::rates` (the one
+  implementation of the curves), reads every `rateprofile` of a dump or diff, samples the curves
+  (51 points), and fits one model onto another (`fit`, `to_betaflight`). `gear/sims/` holds one
+  adapter per game (`liftoff`, `micro`, `uncrashed`, `zone`, `velocidrone`, off) that reads the
+  rate profiles with byte spans (`Doc`): a parsed file renders back to the same bytes, and a
+  replaced span changes only its bytes (the sync package writes through it). `core/rates.rs`
+  holds `gear_rates` and `gear_sims`; the CLI has `gear rates` and `gear sims`; `quadcam_gear`
+  has the actions `rates` and `sims`. The Rates segment is `app/src/views/Gear/Rates/`.
+  Deviations and decisions:
+  - `gear_rates` takes `device`, `backup` or `paths`; `change` (a staged change) joins with WP5.
+    The FC's latest backup stands in for a live read: a fresh backup reads the FC.
+  - `gear_sims` takes the quad (`device`, `backup`, `paths`, `profile`), which the design's row
+    left out, so the comparison runs in the core for the CLI and MCP too. A sim profile is
+    "the same" when it is within 1 deg/s of the quad's rates as the Betaflight model (a quad on
+    Actual or Quick is fitted first), so a synced sim reads as matching.
+  - The fit is least squares over 101 stick points on whole-number settings. Stated bound: 6 %
+    of the maximum rate for Actual profiles with a centre of 40-200 deg/s, a maximum of 300-1000
+    deg/s and expo 0-60 (tested over that grid); a centre under 40 or expo above 60 reaches
+    about 12 %. Every view reports its actual error.
+  - Reads do not refuse while a sim runs; `running` is reported and the write package refuses
+    (`sim_running`). Under cargo the process list comes from `QUADCAM_SIMS_RUNNING`, a comma
+    list of process names, never from `ps`.
+  - The Liftoff, Micro Drones and Zone shapes and the Uncrashed float units (fractions, so a
+    file's 1.27 is `rc_rate` 127) follow 6.6 and are not yet checked against a real player's
+    files; the fixtures in `tests/fixtures/sims/` are synthetic. Check each against a real file
+    by hand before the sync package writes one.
+  - The Sims page and the sidebar "Out of date" badge belong to the sync package.
 
 ### 7.4 Voice packs
 

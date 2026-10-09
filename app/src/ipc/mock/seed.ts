@@ -6,8 +6,10 @@ import reviewFixture from "../../../e2e/fixtures/session-review.json";
 import finishedFixture from "../../../e2e/fixtures/session-finished.json";
 import settingsFixture from "../../../e2e/fixtures/settings.json";
 import osdFixture from "../../../e2e/fixtures/osd.json";
+import ratesFixture from "../../../e2e/fixtures/rates.json";
+import simsFixture from "../../../e2e/fixtures/sims.json";
 import switchMapFixture from "../../../e2e/fixtures/switchmap.json";
-import type { LibClip, LibraryView, ModulePin, ModuleStatus, OsdView, Session, SettingsView, SwitchMap, Volume } from "../types";
+import type { LibClip, LibraryView, ModulePin, ModuleStatus, OsdView, RatesView, Session, SettingsView, SimRates, SwitchMap, Volume } from "../types";
 
 export const HOME = "/Users/pilot";
 export const CACHE = `${HOME}/Library/Caches/app.quadcam`;
@@ -171,6 +173,18 @@ export const NOTICES = "QuadCam third-party notices\n\n- react 19.3.0: MIT\n";
  * element off screen in profile 2). */
 export function osd(): OsdView {
   return structuredClone(osdFixture) as OsdView;
+}
+
+/** The rate profiles the real core read from a synthetic three-profile dump (FREE on the
+ * Betaflight model, RACE on Actual, CINE on Quick). */
+export function rates(): RatesView {
+  return structuredClone(ratesFixture) as unknown as RatesView;
+}
+
+/** The sims the real core read from synthetic files under a temp home: `none`, or compared
+ * with the quad's profile `p0`, `p1` or `p2` of the dump above. Liftoff runs. */
+export function sims(key: string): SimRates[] {
+  return structuredClone((simsFixture as Record<string, unknown>)[key]) as unknown as SimRates[];
 }
 
 /** The switch map the real core made from the synthetic whoop (`tests/fixtures/switchmap/whoop`). */

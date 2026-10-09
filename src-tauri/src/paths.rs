@@ -11,6 +11,11 @@ fn home() -> PathBuf {
         .unwrap_or_else(|| PathBuf::from("/"))
 }
 
+/// The home folder (`$HOME`); sim adapters look for their files under it.
+pub fn home_dir() -> PathBuf {
+    home()
+}
+
 /// `~/Library/Caches/app.quadcam`, the same folder the GUI uses.
 pub fn cache_dir() -> PathBuf {
     home().join("Library/Caches/app.quadcam")
