@@ -1689,8 +1689,7 @@ pub fn build(inputs: &Inputs) -> SwitchMap {
             }
         }
         for o in &model.logical_switches {
-            if o.index != l.index && (o.def.split(',').take(2).any(|p| is_me(p)) || is_me(&o.andsw))
-            {
+            if o.index != l.index && (o.def.split(',').take(2).any(is_me) || is_me(&o.andsw)) {
                 used_by.push(format!("L{}", o.index + 1));
             }
         }
