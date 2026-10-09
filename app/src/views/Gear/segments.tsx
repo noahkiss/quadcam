@@ -4,6 +4,7 @@
 import { Overview } from "./Overview";
 import { ChecklistSegment } from "./Models/ChecklistSegment";
 import { ModelsSegment } from "./Models/ModelsSegment";
+import { VoiceSegment } from "./Voice/VoiceSegment";
 import { OsdSegment } from "./Osd/OsdSegment";
 import { RatesSegment } from "./Rates/RatesSegment";
 import { SwitchesSegment } from "./Switches/SwitchesSegment";
@@ -21,6 +22,8 @@ export const DEVICE_SEGMENTS: DeviceSegment[] = [
   { id: "switches", label: "Switches", kinds: ["fc", "radio"], render: (d) => <SwitchesSegment d={d} /> },
   // A radio's models and checklists: each edit stages one "Model edits" change (WP9).
   { id: "models", label: "Models", kinds: ["radio"], render: (d) => <ModelsSegment key={d.key} d={d} /> },
+  // A radio's voice: packs, Choose voice and per-line overrides (WP9).
+  { id: "voice", label: "Voice", kinds: ["radio"], render: (d) => <VoiceSegment key={d.key} d={d} /> },
   { id: "checklists", label: "Checklists", kinds: ["radio"], render: (d) => <ChecklistSegment key={d.key} d={d} /> },
   // Staged changes, the history, and Edit setting (WP5).
   { id: "changes", label: "Changes", kinds: ["fc", "radio"], render: (d) => <ChangesSegment d={d} /> },

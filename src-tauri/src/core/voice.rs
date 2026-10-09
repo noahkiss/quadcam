@@ -80,6 +80,9 @@ pub struct VoicePack {
     pub bytes: u64,
     /// The pack was rendered from other lines than this version's `lines.csv`.
     pub stale: bool,
+    /// Where an installed pack's files are (the app plays them from here).
+    #[serde(default)]
+    pub dir: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, specta::Type)]
@@ -165,6 +168,19 @@ pub struct RenderReport {
     pub needs_confirm: bool,
     pub dry_run: bool,
     pub notes: Vec<String>,
+}
+
+/// `gear_voice_preview`: a sound to play.
+#[derive(Debug, Clone, Default, Serialize, Deserialize, specta::Type)]
+pub struct VoicePreviewParams {
+    /// The card path of the line.
+    pub line: String,
+    /// An installed pack's take of it.
+    #[serde(default)]
+    pub pack: Option<String>,
+    /// Without a pack: the person's own render for the line on this radio.
+    #[serde(default)]
+    pub radio: Option<String>,
 }
 
 /// `gear_voice_pack_install`.
@@ -445,6 +461,7 @@ impl Core {
                         .map(|e| e.bytes)
                         .unwrap_or(0),
                     stale: !m.lines_csv_sha.is_empty() && m.lines_csv_sha != csv_sha,
+                    dir: Some(i.dir.clone()),
                 }
             })
             .collect();
@@ -464,6 +481,7 @@ impl Core {
                     local: false,
                     bytes: e.bytes,
                     stale: e.lines_csv_sha != csv_sha,
+                    dir: None,
                 });
             }
         }
@@ -759,6 +777,7 @@ impl Core {
             local: false,
             bytes: entry.bytes,
             stale: m.lines_csv_sha != lines::builtin_sha(),
+            dir: Some(inst.dir),
         })
     }
 
@@ -865,6 +884,57 @@ impl Core {
             .into_iter()
             .find(|l| l.path == p.line)
             .ok_or_else(|| anyhow!("The line is gone."))
+    }
+
+    /// A sound the app can play: a pack's take, or the person's own render for a line, copied
+    /// into the cache (the app plays files from there). Returns the file's path.
+    pub fn gear_voice_preview(&self, p: &VoicePreviewParams) -> Result<String> {
+        lines::check_path(&p.line)?;
+        let dir = self.cache.join("voice").join("preview");
+        std::fs::create_dir_all(&dir)?;
+        let name = |tag: &str| {
+            format!(
+                "{}-{}.wav",
+                slug(tag),
+                slug(
+                    p.line
+                        .trim_start_matches("SOUNDS/")
+                        .trim_end_matches(".wav")
+                )
+            )
+        };
+        let bytes = match (&p.pack, &p.radio) {
+            (Some(pack), _) => {
+                let inst = packs::installed(&self.voices_dir())
+                    .into_iter()
+                    .find(|i| &i.manifest.id == pack)
+                    .ok_or_else(|| anyhow!("Pack {pack:?} is not installed."))?;
+                if !inst.manifest.files.contains(&p.line) {
+                    bail!("Pack {pack:?} has no take of {}.", p.line);
+                }
+                (
+                    name(pack),
+                    std::fs::read(Path::new(&inst.dir).join(&p.line))?,
+                )
+            }
+            (None, Some(radio)) => {
+                let o = self
+                    .overrides_of(radio)?
+                    .remove(&p.line)
+                    .ok_or_else(|| anyhow!("{} has no override on this radio.", p.line))?;
+                let blob = o.blob.ok_or_else(|| {
+                    anyhow!("The override takes another pack's sound: pass the pack.")
+                })?;
+                (
+                    name(&format!("own-{radio}")),
+                    self.snapshots().blobs().get(&blob)?,
+                )
+            }
+            _ => bail!("Name a pack, or a radio whose override to play."),
+        };
+        let path = dir.join(&bytes.0);
+        std::fs::write(&path, &bytes.1)?;
+        Ok(path.display().to_string())
     }
 
     // ----- Choose voice -----

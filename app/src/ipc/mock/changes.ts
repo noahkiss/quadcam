@@ -50,7 +50,7 @@ const lines = (edits: Edit[]): string[] =>
 
 const refused = (code: string, reason: string) => `Refused (${code}): ${reason}`;
 
-const CARD_EDITS = ["model", "radio", "checklist", "model_copy", "model_delete", "restore"];
+const CARD_EDITS = ["model", "radio", "checklist", "model_copy", "model_delete", "restore", "card_files"];
 
 function validateFc(edits: Edit[]) {
   for (const l of lines(edits.filter((e) => e.kind !== "osd_element"))) {
@@ -188,7 +188,8 @@ function cardDiff(c: StagedChange): DiffItem[] {
     } else if (e.kind === "checklist") {
       out.push({ kind: "lines", label: `MODELS/${e.model}.txt`, lines: e.text.split("\n").filter(Boolean).map((text) => ({ op: "add" as const, text })) });
       put.push(`MODELS/${e.model}.txt`);
-    } else if (e.kind === "restore") put.push(...e.paths);
+    } else if (e.kind === "card_files") put.push(...e.put.map((f) => f.path));
+    else if (e.kind === "restore") put.push(...e.paths);
   }
   return [{ kind: "files", label: "Card files", put: [...put, ".metadata_never_index"], delete: [] }, ...out];
 }

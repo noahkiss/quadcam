@@ -522,6 +522,7 @@ pub fn specta_builder() -> tauri_specta::Builder<tauri::Wry> {
             c::gear_sims,
             c::gear_voice,
             c::gear_voice_edit,
+            c::gear_voice_preview,
             c::gear_voice_render,
             c::gear_voice_pack_install,
             c::gear_voice_choose,

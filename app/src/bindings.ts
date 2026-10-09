@@ -201,6 +201,11 @@ export const commands = {
 	 */
 	gearVoiceEdit: (params: VoiceEditParams) => typedError<VoiceLine, string>(__TAURI_INVOKE("gear_voice_edit", { params })),
 	/**
+	 *  A sound the app can play: a pack's take of a line, or the person's own render, copied
+	 *  into the cache. Returns the file's path.
+	 */
+	gearVoicePreview: (params: VoicePreviewParams) => typedError<string, string>(__TAURI_INVOKE("gear_voice_preview", { params })),
+	/**
 	 *  Renders QuadCam's lines (and the person's own) with the provider from the settings into
 	 *  a local pack. A render that costs money waits for `confirm`; `dry_run` only reports.
 	 */
@@ -5028,6 +5033,8 @@ export type VoicePack = {
 	bytes: number,
 	/**  The pack was rendered from other lines than this version's `lines.csv`. */
 	stale: boolean,
+	/**  Where an installed pack's files are (the app plays them from here). */
+	dir?: string | null,
 };
 
 /**  `gear_voice`. */
@@ -5036,6 +5043,16 @@ export type VoiceParams = {
 	radio?: string | null,
 	/**  Read the pack index again (the only call that goes to the network). */
 	refresh_index?: boolean,
+};
+
+/**  `gear_voice_preview`: a sound to play. */
+export type VoicePreviewParams = {
+	/**  The card path of the line. */
+	line: string,
+	/**  An installed pack's take of it. */
+	pack?: string | null,
+	/**  Without a pack: the person's own render for the line on this radio. */
+	radio?: string | null,
 };
 
 /**

@@ -726,3 +726,56 @@ fn the_rows_and_the_mcp_actions() {
         .unwrap()
         .contains("not installed"));
 }
+
+#[test]
+fn a_take_copies_into_the_cache_so_the_app_can_play_it() {
+    let b = bench(Opts::default());
+    let out = b.dir.path().join("release");
+    let idx = build(&b, &out, "en-a-v1", 150);
+    b.core
+        .gear_voice_pack_install(&PackInstallParams {
+            pack: "en-a-v1".into(),
+            source: Some(idx.display().to_string()),
+        })
+        .unwrap();
+    let p = b
+        .core
+        .gear_voice_preview(&quadcam_lib::core::VoicePreviewParams {
+            line: ARMED.into(),
+            pack: Some("en-a-v1".into()),
+            radio: None,
+        })
+        .unwrap();
+    assert!(
+        p.starts_with(b.dir.path().join("cache").to_str().unwrap()),
+        "{p}"
+    );
+    assert!(wav::read(&std::fs::read(&p).unwrap()).is_ok());
+    b.core
+        .gear_voice_edit(&VoiceEditParams {
+            radio: b.id.clone(),
+            line: ARMED.into(),
+            text: Some("Motors live".into()),
+            ..Default::default()
+        })
+        .unwrap();
+    let own = b
+        .core
+        .gear_voice_preview(&quadcam_lib::core::VoicePreviewParams {
+            line: ARMED.into(),
+            pack: None,
+            radio: Some(b.id.clone()),
+        })
+        .unwrap();
+    assert_ne!(own, p);
+    assert!(wav::read(&std::fs::read(&own).unwrap()).is_ok());
+    let e = b
+        .core
+        .gear_voice_preview(&quadcam_lib::core::VoicePreviewParams {
+            line: LOWBAT.into(),
+            pack: None,
+            radio: Some(b.id.clone()),
+        })
+        .unwrap_err();
+    assert!(format!("{e:#}").contains("no override"), "{e:#}");
+}

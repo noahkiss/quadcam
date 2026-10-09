@@ -22,8 +22,8 @@ pub use crate::core::{
 pub use crate::core::{
     CardMountParams, CardMounted, ChangeUpdateParams, CopyParams, ModelDetail, ModelEditParams,
     ModelParams, OsdEditParams, PackInstallParams, RenderReport, RestoreParams, StageParams,
-    VoiceChooseParams, VoiceEditParams, VoiceLine, VoicePack, VoiceParams, VoiceRenderParams,
-    VoiceView,
+    VoiceChooseParams, VoiceEditParams, VoiceLine, VoicePack, VoiceParams, VoicePreviewParams,
+    VoiceRenderParams, VoiceView,
 };
 pub use crate::core::{
     CrashSaveParams, FlightFilter, FlightFoldersParams, FlightReport, FlightSetParams, FlightsView,
@@ -114,6 +114,9 @@ macro_rules! with_gear_rows {
             /// packs, the provider, and a radio's overrides. Reads only; `refresh_index` also reads the
             /// pack index.
             gear_voice(params: VoiceParams) -> VoiceView = |c| c.gear_voice(&params);
+            /// A sound the app can play: a pack's take of a line, or the person's own render, copied
+            /// into the cache. Returns the file's path.
+            gear_voice_preview(params: VoicePreviewParams) -> String = |c| c.gear_voice_preview(&params);
             /// Overrides one line on one radio: another pack's take, or the person's own text
             /// rendered with their provider. Writes only QuadCam's own data.
             gear_voice_edit(params: VoiceEditParams) -> VoiceLine = |c| c.gear_voice_edit(&params);

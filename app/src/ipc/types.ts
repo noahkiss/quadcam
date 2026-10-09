@@ -427,3 +427,20 @@ export type {
   SensorLog,
   Timer as ModelTimer,
 } from "../bindings";
+
+// Radio voice, as generated.
+export type {
+  LineOverride,
+  PackInstallParams,
+  Plan as VoicePlan,
+  ProviderView,
+  RenderReport,
+  VoiceChooseParams,
+  VoiceEditParams,
+  VoiceLine,
+  VoiceParams,
+  VoicePack,
+  VoicePreviewParams,
+  VoiceRenderParams,
+  VoiceView,
+} from "../bindings";

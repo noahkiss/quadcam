@@ -72,6 +72,7 @@ expression: "Core::METHODS"
   "gear_model",
   "gear_model_edit",
   "gear_voice",
+  "gear_voice_preview",
   "gear_voice_edit",
   "gear_voice_render",
   "gear_voice_pack_install",

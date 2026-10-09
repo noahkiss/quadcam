@@ -7,7 +7,7 @@ import { open as openDialog, save as saveDialog } from "@tauri-apps/plugin-dialo
 import { openPath, openUrl, revealItemInDir } from "@tauri-apps/plugin-opener";
 import { commands } from "../bindings";
 import * as N from "./normalize";
-import type { ChangeStatus, CopyRequest, Edit, SimFrame, SimPreset, SimStartInfo, SimStartParams, SimStopInfo, CrashSaveParams, ImportOptions, LibEdit, LibraryFilter, Moved, ModelEditParams, ModelParams, OsdEditParams, OsdParams, RatesParams, SimsParams, Pack, PackType, PlanPatch, RemovedCuts, SettingsValues, Span, SwitchMapParams, SimCalibrationSaveParams, CalibrateParams } from "./types";
+import type { ChangeStatus, CopyRequest, Edit, SimFrame, SimPreset, SimStartInfo, SimStartParams, SimStopInfo, CrashSaveParams, ImportOptions, LibEdit, LibraryFilter, Moved, ModelEditParams, ModelParams, PackInstallParams, VoiceChooseParams, VoiceEditParams, VoiceParams, VoicePreviewParams, VoiceRenderParams, OsdEditParams, OsdParams, RatesParams, SimsParams, Pack, PackType, PlanPatch, RemovedCuts, SettingsValues, Span, SwitchMapParams, SimCalibrationSaveParams, CalibrateParams } from "./types";
 
 type Result<T> = Promise<{ status: "ok"; data: T } | { status: "error"; error: string }>;
 
@@ -112,6 +112,12 @@ export const api = {
   modulesCheck: () => ok(commands.modulesCheck()),
 
   // Gear
+  gearVoice: (params: VoiceParams) => ok(commands.gearVoice(params)),
+  gearVoiceEdit: (params: VoiceEditParams) => ok(commands.gearVoiceEdit(params)),
+  gearVoicePreview: (params: VoicePreviewParams) => ok(commands.gearVoicePreview(params)),
+  gearVoiceRender: (params: VoiceRenderParams) => ok(commands.gearVoiceRender(params)),
+  gearVoicePackInstall: (params: PackInstallParams) => ok(commands.gearVoicePackInstall(params)),
+  gearVoiceChoose: (params: VoiceChooseParams) => ok(commands.gearVoiceChoose(params)),
   gearModel: (params: ModelParams) => ok(commands.gearModel(params)),
   gearModelEdit: (params: ModelEditParams) => ok(commands.gearModelEdit(params)),
   gearOsd: (params: OsdParams) => ok(commands.gearOsd(params)),
