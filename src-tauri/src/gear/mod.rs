@@ -45,6 +45,7 @@ pub mod copy;
 pub mod crashes;
 pub mod cues;
 pub mod detect;
+pub mod dfu;
 pub mod edgetx;
 pub mod events;
 pub mod flights;
@@ -60,6 +61,7 @@ pub mod report;
 pub mod serial;
 pub mod sim_cal;
 pub mod sims;
+pub mod splash;
 pub mod store;
 pub mod switchmap;
 
