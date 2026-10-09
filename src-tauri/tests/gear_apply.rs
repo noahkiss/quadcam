@@ -646,3 +646,43 @@ fn update_discard_and_filters() {
         })
         .is_err());
 }
+
+#[test]
+fn mcp_apply_needs_the_digest_and_confirm() {
+    use quadcam_lib::mcp::{LocalBackend, Server};
+    use serde_json::json;
+    let fc = FakeFc::new(G473).with_uid(UID);
+    let b = bench(&fc);
+    let mut s = Server::new(LocalBackend(b.core.clone()));
+    let r = s.call_tool(
+        "quadcam_gear_edit",
+        json!({"action": "stage", "device": b.id, "lines": ["set osd_cap_alarm = 1500"], "title": "Alarm"}),
+    );
+    assert_eq!(r["isError"], false, "{r}");
+    let change = r["structuredContent"]["id"].as_str().unwrap().to_string();
+    assert_eq!(r["structuredContent"]["editor"], "agent");
+    let r = s.call_tool("quadcam_gear", json!({"action": "changes"}));
+    assert!(r["content"][0]["text"].as_str().unwrap().contains(&change));
+    let r = s.call_tool("quadcam_gear", json!({"action": "apply_plan", "change": change}));
+    assert_eq!(r["isError"], false, "{r}");
+    let digest = r["structuredContent"]["digest"].as_str().unwrap().to_string();
+    let text = r["content"][0]["text"].as_str().unwrap();
+    assert!(text.contains("+set osd_cap_alarm = 1500") && text.contains("digest="), "{text}");
+    // No digest, no confirm, wrong digest: refused, FC untouched.
+    for args in [
+        json!({"action": "apply", "change": change}),
+        json!({"action": "apply", "change": change, "digest": digest}),
+        json!({"action": "apply", "change": change, "digest": "0000000000000000", "confirm": true}),
+    ] {
+        let r = s.call_tool("quadcam_gear_apply", args);
+        assert_eq!(r["isError"], true, "{r}");
+    }
+    assert_eq!(fc.saves(), 0);
+    let r = s.call_tool(
+        "quadcam_gear_apply",
+        json!({"action": "apply", "change": change, "digest": digest, "confirm": true}),
+    );
+    assert_eq!(r["isError"], false, "{r}");
+    assert!(r["content"][0]["text"].as_str().unwrap().starts_with("Verified"));
+    assert_eq!(fc.saved_value(Section::Master, "osd_cap_alarm").as_deref(), Some("1500"));
+}
