@@ -336,7 +336,13 @@ export interface CopyRequest {
 }
 
 // Rates and the sims' rates, with the numbers narrowed (the core sends a finite number).
-export type { RatesParams, SimsParams } from "../bindings";
+export type { RatesParams, SimsParams, SimSyncParams, SimTarget } from "../bindings";
+/** A profile re-drawn, and after a conversion how far each axis is off. */
+export interface RatesPreview {
+  profile: RateProfile;
+  fit_error: number[];
+  fit_share: number[];
+}
 export interface RateAxis {
   axis: string;
   rc_rate: number;

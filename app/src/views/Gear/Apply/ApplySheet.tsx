@@ -2,6 +2,7 @@
 // its reason, then Cancel and Apply. Return does not press Apply. During the write a row
 // shows the step; after it, "Verified" or the lines that failed, with Restore backup.
 import { useStore } from "../../../store";
+import { SIMS_DEVICE } from "../../../store/gear";
 import { Banner } from "../../../components/Banner";
 import { Button } from "../../../components/Button";
 import { Dialog } from "../../../components/Dialog";
@@ -22,8 +23,8 @@ export function ApplySheet() {
   const restore = useStore((s) => s.restoreBeforeApply);
   const next = useStore((s) => s.nextApply);
   const dev = a ? devices.find((d) => d.id === a.device) : undefined;
-  const kind = dev?.kind === "radio" ? "card" : "FC";
-  const name = dev ? deviceName(dev) : kind === "card" ? "radio" : "FC";
+  const kind = a?.device === SIMS_DEVICE ? "sims" : dev?.kind === "radio" ? "card" : "FC";
+  const name = kind === "sims" ? "sims" : dev ? deviceName(dev) : kind === "card" ? "radio" : "FC";
   const job = a ? jobs?.find((j) => j.device === a.device) : undefined;
   const more = a?.change ? changes.filter((c) => c.device === a.device && (c.status === "ready" || c.status === "try") && c.id !== a.change?.id).length : 0;
   const done = !!a?.report;
@@ -40,7 +41,7 @@ export function ApplySheet() {
       actions={
         done ? (
           <>
-            {a?.report?.status === "failed" && a.report.backup && (kind === "FC" || a.report.steps.some((x) => x.name === "Roll back" && x.state === "failed")) && (
+            {a?.report?.status === "failed" && a.report.backup && kind !== "sims" && (kind === "FC" || a.report.steps.some((x) => x.name === "Roll back" && x.state === "failed")) && (
               <Button variant="ghost" onClick={() => restore()}>
                 Restore backup
               </Button>
@@ -74,7 +75,7 @@ export function ApplySheet() {
           {!a.change && !a.error && <p className={styles.muted}>No staged changes for this device.</p>}
           {a.change && (
             <div className={styles.head}>
-              <h3>{a.change.title || (kind === "card" ? "Radio card" : "FC settings")}</h3>
+              <h3>{a.change.title || (kind === "card" ? "Radio card" : kind === "sims" ? "Sim rates" : "FC settings")}</h3>
               {a.plan && (
                 <p className={`${styles.muted} selectable`}>
                   {[a.plan.device.board, a.plan.device.firmware, a.plan.device.version].filter(Boolean).join(" · ")}
@@ -93,7 +94,19 @@ export function ApplySheet() {
                 <h4>Checks</h4>
                 <ChecksList checks={a.plan.checks} />
               </section>
-              {kind === "card" ? (
+              {(a.plan.warnings ?? []).length > 0 && (
+                <section aria-label="Warnings">
+                  <h4>Warnings</h4>
+                  <ul className={styles.warnings}>
+                    {a.plan.warnings!.map((w) => (
+                      <li key={w}>{w}</li>
+                    ))}
+                  </ul>
+                </section>
+              )}
+              {kind === "sims" ? (
+                <p className={styles.muted}>QuadCam backs up each file first and keeps the backup, writes it, reads it back, and puts every file back if one reads wrong. Quit the game before you apply.</p>
+              ) : kind === "card" ? (
                 <p className={styles.muted}>QuadCam mounts the card if needed, backs it up first and keeps that backup, writes file by file, reads each back, and unmounts it. It puts every file back if one reads wrong.</p>
               ) : (
                 <p className={styles.muted}>QuadCam backs the FC up first and keeps that backup. The FC restarts when the backup is read, and again when the change is saved.</p>

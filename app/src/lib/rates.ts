@@ -1,6 +1,6 @@
 // The Rates segment's pure helpers: names, chart geometry, and the things a curve can be
 // compared with (another profile, another quad, a sim's profile).
-import type { RateAxis, RateProfile, RateThrottle, SimRates } from "../ipc/types";
+import type { Edit, RateAxis, RateProfile, RateThrottle, SimRates } from "../ipc/types";
 
 export const AXIS_LABEL: Record<string, string> = { roll: "Roll", pitch: "Pitch", yaw: "Yaw" };
 export const RATES_TYPE: Record<string, string> = { betaflight: "Betaflight", actual: "Actual", quick: "Quick", raceflight: "Raceflight", kiss: "KISS" };
@@ -74,3 +74,72 @@ export function simState(s: SimRates): string {
 
 /** The largest per-axis difference of a sim profile from the quad, in deg/s. */
 export const worstDiff = (d: { max_diff: number[] } | null): number | null => (d ? Math.max(0, ...d.max_diff) : null);
+
+// ----- editing -----
+
+/** The rate models a profile can use, in the order the editor lists them. */
+export const RATE_MODELS = ["betaflight", "actual", "quick", "raceflight", "kiss"] as const;
+
+/** What the three numbers of an axis are called under each model (the CLI's `*_rc_rate`,
+ * `*_srate`, `*_expo`). */
+export const MODEL_FIELDS: Record<string, [string, string, string]> = {
+  betaflight: ["RC rate", "Super rate", "Expo"],
+  actual: ["Center rate", "Max rate", "Expo"],
+  quick: ["Center rate", "Max rate", "Expo"],
+  raceflight: ["Rate", "Acro plus", "Expo"],
+  kiss: ["RC rate", "Rate", "Curve"],
+};
+
+/** The CLI range of rc rate, super rate and expo under each model: the same table the
+ * core's fit clamps to (`gear/rates.rs`, `bounds`). */
+export const MODEL_BOUNDS: Record<string, [[number, number], [number, number], [number, number]]> = {
+  betaflight: [[1, 255], [0, 99], [0, 100]],
+  actual: [[1, 200], [1, 200], [0, 100]],
+  quick: [[1, 255], [1, 200], [0, 100]],
+  raceflight: [[1, 255], [0, 255], [0, 100]],
+  kiss: [[1, 255], [0, 99], [0, 100]],
+};
+
+const AXES = ["roll", "pitch", "yaw"] as const;
+
+/** `set` edits (rate profile section) that make `before` read as `after`. Only the values
+ * that differ; the order is name, model, axes, throttle. An empty name is left alone (the
+ * CLI cannot clear it). */
+export function profileEdits(before: RateProfile, after: RateProfile): Edit[] {
+  const section = { kind: "rate_profile" as const, index: before.index };
+  const out: Edit[] = [];
+  const set = (name: string, a: string | number | null, b: string | number | null) => {
+    if (b !== null && String(a ?? "") !== String(b)) out.push({ kind: "fc_set", section, name, value: String(b) } as Edit);
+  };
+  const name = after.name?.trim();
+  if (name) set("rateprofile_name", before.name, name);
+  set("rates_type", before.rates_type.toUpperCase(), after.rates_type.toUpperCase());
+  AXES.forEach((ax, i) => {
+    const [a, b] = [before.axes[i], after.axes[i]];
+    if (!a || !b) return;
+    set(`${ax}_rc_rate`, a.rc_rate, b.rc_rate);
+    set(`${ax}_srate`, a.srate, b.srate);
+    set(`${ax}_expo`, a.expo, b.expo);
+    set(`${ax}_rate_limit`, a.rate_limit, b.rate_limit);
+  });
+  set("thr_mid", before.throttle.mid, after.throttle.mid);
+  set("thr_expo", before.throttle.expo, after.throttle.expo);
+  set("throttle_limit_type", before.throttle.limit.toUpperCase(), after.throttle.limit.toUpperCase());
+  set("throttle_limit_percent", before.throttle.limit_percent, after.throttle.limit_percent);
+  return out;
+}
+
+/** One sentence for the staged change's title. */
+export function editTitle(before: RateProfile, edits: Edit[]): string {
+  const label = profileLabel(before);
+  const model = edits.find((e) => e.kind === "fc_set" && e.name === "rates_type");
+  if (model && model.kind === "fc_set") return `Rate profile ${label}: ${RATES_TYPE[model.value.toLowerCase()] ?? model.value} rates`;
+  return `Rate profile ${label}: ${edits.length === 1 ? "1 value" : `${edits.length} values`}`;
+}
+
+/** The text of a value for a number field: whole numbers only (the CLI stores whole numbers). */
+export const wholeNumber = (text: string, min: number, max: number): number | null => {
+  if (text.trim() === "") return null;
+  const v = Math.round(Number(text));
+  return Number.isFinite(v) ? Math.min(max, Math.max(min, v)) : null;
+};
