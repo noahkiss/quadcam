@@ -335,6 +335,54 @@ fn the_usb_timer_warns_once_at_the_board_limit() {
 }
 
 #[test]
+fn a_paused_port_is_never_probed_and_a_busy_one_is_skipped() {
+    use quadcam_lib::core::PollPauseParams;
+    let fc = FakeFc::new(V2).with_uid(UID);
+    let b = bench(&fc);
+    let t0 = Instant::now();
+    let paused = b
+        .core
+        .gear_poll_pause(&PollPauseParams {
+            port: None,
+            paused: true,
+        })
+        .unwrap();
+    assert_eq!(paused, vec![PORT.to_string()]);
+    assert_eq!(b.core.gear_status().unwrap().paused, paused);
+    b.core.gear_usb_tick(t0);
+    b.core.gear_usb_tick(t0 + USB_PROBE * 2);
+    assert_eq!(fc.opens(), 0, "a paused port is not opened");
+    // Another process holds the port: the probe is refused, nothing breaks, and the next
+    // probe after it is released reads.
+    b.core
+        .gear_poll_pause(&PollPauseParams {
+            port: Some(PORT.into()),
+            paused: false,
+        })
+        .unwrap();
+    assert!(b.core.gear_status().unwrap().paused.is_empty());
+    // The same switch through the MCP tool.
+    let mut srv = Server::new(LocalBackend(b.core.clone()));
+    let r = srv.call_tool("quadcam_gear_edit", json!({"action": "poll_pause"}));
+    assert_eq!(r["isError"], false, "{r}");
+    assert_eq!(b.core.gear_paused_ports(), vec![PORT.to_string()]);
+    let r = srv.call_tool(
+        "quadcam_gear_edit",
+        json!({"action": "poll_pause", "paused": false}),
+    );
+    assert_eq!(r["isError"], false, "{r}");
+    assert!(b.core.gear_paused_ports().is_empty());
+    let held = lock_port(&b.locks, PORT).unwrap();
+    let t = b.core.gear_usb_tick(t0 + USB_PROBE * 3);
+    assert!(t.iter().all(|x| x.volts.is_none()));
+    assert_eq!(fc.opens(), 0, "a busy port is not probed");
+    drop(held);
+    let t = b.core.gear_usb_tick(t0 + USB_PROBE * 5);
+    assert_eq!(t.len(), 1);
+    assert!(fc.opens() > 0);
+}
+
+#[test]
 fn mcp_and_dispatch_surfaces() {
     let fc = FakeFc::new(G473).with_uid(UID);
     let b = bench(&fc);

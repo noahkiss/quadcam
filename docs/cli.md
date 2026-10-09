@@ -147,6 +147,7 @@ quadcam-cli --json gear fc identify [--port /dev/cu.usbmodemX]   # MSP identity,
 quadcam-cli --json gear fc read [--cmd "get osd_ah_pos"]... [--out STEM]   # the FC reboots after
 quadcam-cli --json gear fc check STEM.diff_all.txt expected.cli  # every expected line in the diff
 quadcam-cli --json gear fc notes [--board BETAFPVG473]            # known issues of boards
+quadcam-cli --json gear fc pause|resume [--port ...]                 # pause the running app's FC reads
 quadcam-cli --json gear fc usb                                   # USB timers
 quadcam-cli --json gear osd FILE [FILE ...] [--grid NTSC|PAL|HD|WxH] [--text]
 quadcam-cli --json gear map --radio CARD|MODEL.yml [--model model01.yml] --fc FILE [--fc FILE] [--live [--port P]] [--channels 1500,...] [--text]

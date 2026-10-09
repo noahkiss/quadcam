@@ -7,6 +7,10 @@
 //!   as the Betaflight simulator.
 //! - Every open takes a lock file per port (`<cache>/locks/`), so the app and the CLI never
 //!   open the same port; the second gets the refusal `port_busy`.
+//! - A real open also refuses when another process has the port open (`other_holders`): the
+//!   lock file only covers QuadCam's own processes, and `TIOCEXCL` only stops later opens, so
+//!   an MSP probe sent into another tool's session would land in its replies. The refusal is
+//!   `port_busy` too.
 //! - Fail-safe: a process started by cargo gets `NoPorts` from `system` and an empty list
 //!   from `real_ports`, unless `QUADCAM_SERIAL=real`. A test cannot reach a real device even
 //!   when it forgets to pass a fake.
@@ -214,6 +218,103 @@ pub fn lock_port(lock_dir: &Path, port: &str) -> Result<File> {
     }
 }
 
+/// The processes other than this one that have the port open, as `(pid, name)`. A serial
+/// device has two nodes, `/dev/cu.X` and `/dev/tty.X`; a tool may hold either, so both are
+/// checked. macOS only (`proc_listpidspath`, the call behind `lsof`: no subprocess, about a
+/// millisecond); it sees the processes of the same user, which covers a terminal, a browser
+/// or a configurator. Elsewhere, and when the call fails, it finds none.
+pub fn other_holders(port: &str) -> Vec<(u32, String)> {
+    let mut paths = vec![port.to_string()];
+    if let Some(name) = port.strip_prefix("/dev/cu.") {
+        paths.push(format!("/dev/tty.{name}"));
+    } else if let Some(name) = port.strip_prefix("/dev/tty.") {
+        paths.push(format!("/dev/cu.{name}"));
+    }
+    let mut out: Vec<(u32, String)> = Vec::new();
+    for p in paths {
+        for pid in holders_of_path(&p) {
+            if pid != std::process::id() && !out.iter().any(|(x, _)| *x == pid) {
+                out.push((pid, process_name(pid)));
+            }
+        }
+    }
+    out
+}
+
+#[cfg(target_os = "macos")]
+mod libproc {
+    use std::ffi::{c_char, c_int, c_void, CString};
+    extern "C" {
+        fn proc_listpidspath(
+            kind: u32,
+            typeinfo: u32,
+            path: *const c_char,
+            pathflags: u32,
+            buffer: *mut c_void,
+            buffersize: c_int,
+        ) -> c_int;
+        fn proc_name(pid: c_int, buffer: *mut c_void, buffersize: u32) -> c_int;
+    }
+    const PROC_ALL_PIDS: u32 = 1;
+
+    pub fn holders_of_path(path: &str) -> Vec<u32> {
+        let Ok(c) = CString::new(path) else {
+            return Vec::new();
+        };
+        // SAFETY: `c` is a NUL-terminated path; a null buffer asks for the size, and the
+        // second call writes at most `size` bytes into a buffer of that size.
+        unsafe {
+            let size = proc_listpidspath(PROC_ALL_PIDS, 0, c.as_ptr(), 0, std::ptr::null_mut(), 0);
+            if size <= 0 {
+                return Vec::new();
+            }
+            // The table can grow between the calls; leave room.
+            let mut pids = vec![0i32; size as usize / 4 + 16];
+            let got = proc_listpidspath(
+                PROC_ALL_PIDS,
+                0,
+                c.as_ptr(),
+                0,
+                pids.as_mut_ptr().cast(),
+                (pids.len() * 4) as c_int,
+            );
+            if got <= 0 {
+                return Vec::new();
+            }
+            pids.truncate(got as usize / 4);
+            pids.into_iter()
+                .filter(|p| *p > 0)
+                .map(|p| p as u32)
+                .collect()
+        }
+    }
+
+    pub fn name_of(pid: u32) -> Option<String> {
+        let mut buf = [0u8; 256];
+        // SAFETY: the buffer is 256 bytes and the call writes at most that many.
+        let n = unsafe { proc_name(pid as c_int, buf.as_mut_ptr().cast(), buf.len() as u32) };
+        (n > 0).then(|| String::from_utf8_lossy(&buf[..n as usize]).into_owned())
+    }
+}
+
+#[cfg(target_os = "macos")]
+fn holders_of_path(path: &str) -> Vec<u32> {
+    libproc::holders_of_path(path)
+}
+#[cfg(not(target_os = "macos"))]
+fn holders_of_path(_path: &str) -> Vec<u32> {
+    Vec::new()
+}
+
+#[cfg(target_os = "macos")]
+fn process_name(pid: u32) -> String {
+    libproc::name_of(pid).unwrap_or_else(|| format!("process {pid}"))
+}
+#[cfg(not(target_os = "macos"))]
+fn process_name(pid: u32) -> String {
+    format!("process {pid}")
+}
+
 /// A link that holds its port's lock.
 struct Locked {
     inner: Box<dyn SerialLink>,
@@ -282,6 +383,15 @@ impl Ports for RealPorts {
     }
     fn open(&self, port: &str, baud: u32) -> Result<Box<dyn SerialLink>> {
         open_locked(&self.lock_dir, port, || {
+            if let Some((_, name)) = other_holders(port).into_iter().next() {
+                return Err(Refusal::new(
+                    RefusalCode::PortBusy,
+                    format!(
+                        "{port} is open in {name}. Close it there; QuadCam does not share a port."
+                    ),
+                )
+                .into());
+            }
             let p = serialport::new(port, baud)
                 .timeout(Duration::from_millis(100))
                 .open()
@@ -508,6 +618,32 @@ impl Ports for FakePorts {
 
 #[cfg(test)]
 mod tests {
+    #[cfg(target_os = "macos")]
+    #[test]
+    fn other_holders_sees_another_process_only() {
+        let d = tempfile::tempdir().unwrap();
+        let path = d.path().join("port");
+        std::fs::write(&path, b"x").unwrap();
+        let name = path.to_str().unwrap();
+        let _mine = std::fs::File::open(&path).unwrap();
+        assert!(
+            super::other_holders(name).is_empty(),
+            "this process is not another"
+        );
+        let mut child = std::process::Command::new("/bin/sleep")
+            .arg("30")
+            .stdin(std::fs::File::open(&path).unwrap())
+            .spawn()
+            .unwrap();
+        let found = super::other_holders(name);
+        child.kill().unwrap();
+        child.wait().unwrap();
+        assert_eq!(found.len(), 1, "{found:?}");
+        assert_eq!(found[0].0, child.id());
+        assert_eq!(found[0].1, "sleep");
+        assert!(super::other_holders(name).is_empty(), "closed again");
+    }
+
     use super::*;
 
     fn port(p: &str) -> PortInfo {

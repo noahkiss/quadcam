@@ -128,3 +128,20 @@ test("Settings > Gear saves the changed Gear keys with Done and shows the versio
   await expect(dlg.getByLabel("Back up on connect")).not.toBeChecked();
   await expect(dlg.getByLabel("Mute all cues")).toBeChecked();
 });
+
+test("an FC's background reads can be paused and resumed from its page", async ({ page, app }) => {
+  await app.open("gear");
+  await app.core(`c => {
+    const fc = { id: c.gearSeed.FC.id, kind: "fc", link: { kind: "serial", port: "/dev/cu.usbmodem0", vid: 0x0483, pid: 0x5740, product: null }, identity: {} };
+    c.plug([fc, c.gearSeed.radioConnected()], []);
+  }`);
+  await page.getByRole("navigation", { name: "Library" }).getByRole("button", { name: /^Connected/ }).click();
+  await page.getByRole("button", { name: /Whoop FC/ }).first().click();
+  const fc = page.getByRole("region", { name: "Whoop FC" });
+  await expect(fc).toContainText("Background reads");
+  await fc.getByRole("button", { name: "Pause reads" }).click();
+  expect(await app.method("gear_poll_pause")).toEqual([{ port: "/dev/cu.usbmodem0", paused: true }]);
+  await expect(fc.getByRole("button", { name: "Resume reads" })).toBeVisible();
+  await fc.getByRole("button", { name: "Resume reads" }).click();
+  await expect(fc.getByRole("button", { name: "Pause reads" })).toBeVisible();
+});

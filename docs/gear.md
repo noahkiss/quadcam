@@ -74,7 +74,24 @@ QuadCam talks to Betaflight over USB in two ways:
 
 Every job opens the port, works, and closes it. QuadCam never keeps an FC port open between
 jobs, so another app can use it, and the FC can be unplugged as soon as the job says "done".
-When another app has the port open, QuadCam says so and waits for you.
+
+**Sharing the port with another tool.** Two programs talking MSP and the CLI on one port garble
+each other: QuadCam's MSP frames (`$M<`) land in the other tool's CLI replies. So QuadCam opens
+a port only when no other program has it open:
+
+- Before each open it asks macOS which processes have the port's device nodes open
+  (`/dev/cu.*` and its `/dev/tty.*` twin; the same data `lsof` shows, read in place). If one
+  does, QuadCam does not open the port. A job you start says "port busy" and names the
+  program. A background read (the USB timer's battery probe, the on-connect backup) skips quietly
+  and tries again later.
+- QuadCam opens the port exclusively (`TIOCEXCL` and a file lock), so a tool that starts in the
+  middle of a read gets "busy" instead of sharing it, and closes it again within a second.
+- QuadCam's own background reads are the USB timer's probe (every 30 s), the on-connect FC
+  backup and a live switch read. Each opens, reads, and closes.
+- The check sees programs of your own user account. If a tool runs as another user, or you want
+  no chance of a probe at all, pause the reads: **Pause reads** on the FC's Overview, `gear fc
+  pause` in the CLI, or `poll_pause` in `quadcam_gear_edit`. The USB timer stops counting while
+  paused, and the pause lasts until QuadCam quits. A job you start yourself still runs.
 
 Plug USB in before the battery: many FCs do not show up on USB when the battery is first.
 When several FCs are plugged in, name the port; QuadCam does not guess.
@@ -389,6 +406,7 @@ quadcam-cli --json gear fc identify [--port /dev/cu.usbmodemX]   # MSP: board, v
 quadcam-cli --json gear fc read [--cmd "diff all"]... [--out STEM]   # CLI read; the FC reboots
 quadcam-cli --json gear fc check STEM.diff_all.txt expected.cli  # offline: lines in the diff
 quadcam-cli --json gear fc notes [--board B] [--version V]       # known issues
+quadcam-cli --json gear fc pause|resume [--port ...]                 # pause the running app's FC reads
 quadcam-cli --json gear fc usb                                   # USB timers
 quadcam-cli gear osd quad.dump_all.txt --text        # each OSD profile drawn, and the check
 quadcam-cli --json gear osd quad.dump_all.txt apply.cli --grid PAL

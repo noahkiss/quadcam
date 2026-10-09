@@ -74,6 +74,7 @@ export const api = {
   gearDevices: () => ok(commands.gearDevices()),
   gearDeviceSave: (id: string, name: string | null, aircraft: string | null) => ok(commands.gearDeviceSave({ id, name, aircraft })),
   gearDeviceForget: (id: string) => ok(commands.gearDeviceForget({ id })),
+  gearPollPause: (port: string, paused: boolean) => ok(commands.gearPollPause({ port, paused })),
   gearDismissReminder: (handle: string) => ok(commands.gearDismissReminder({ handle })),
   gearBackup: (target: { device?: string | null; port?: string | null; mount?: string | null }) => ok(commands.gearBackup(target)),
   gearBackups: (device: string | null) => ok(commands.gearBackups({ device })),

@@ -14,7 +14,7 @@ use crate::gear::model::{Connected, DeviceKind, Link, Refusal, RefusalCode};
 use anyhow::{bail, Result};
 use serde::{Deserialize, Serialize};
 use specta::Type;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::time::{Duration, Instant};
 
 /// `gear_fc_identify`: the FC's port; omitted when exactly one FC is plugged in.
@@ -22,6 +22,15 @@ use std::time::{Duration, Instant};
 pub struct FcPortParams {
     #[serde(default)]
     pub port: Option<String>,
+}
+
+/// `gear_poll_pause`: stop or resume QuadCam's own reads of one FC port. Omit `port` when
+/// exactly one FC is plugged in.
+#[derive(Debug, Clone, Default, Serialize, Deserialize, Type)]
+pub struct PollPauseParams {
+    #[serde(default)]
+    pub port: Option<String>,
+    pub paused: bool,
 }
 
 /// `gear_fc_read`: CLI commands that only read (`version`, `status`, `get NAME`,
@@ -89,6 +98,9 @@ pub struct FcState {
     /// What each port's FC said last (identity, id).
     pub seen: HashMap<String, FcInfo>,
     pub usb: HashMap<String, UsbState>,
+    /// Ports whose background reads are paused (the USB timer's battery probe and the
+    /// on-connect FC backup). Kept for the run of the app, by port.
+    pub paused: HashSet<String>,
 }
 
 impl Core {
@@ -262,6 +274,47 @@ impl Core {
         boards::notes(b, v)
     }
 
+    /// True while QuadCam's own background reads of this port are paused.
+    pub fn gear_poll_paused(&self, port: &str) -> bool {
+        self.fc_state.lock().unwrap().paused.contains(port)
+    }
+
+    /// The ports whose background reads are paused, sorted.
+    pub fn gear_paused_ports(&self) -> Vec<String> {
+        let mut v: Vec<String> = self
+            .fc_state
+            .lock()
+            .unwrap()
+            .paused
+            .iter()
+            .cloned()
+            .collect();
+        v.sort();
+        v
+    }
+
+    /// Pauses or resumes QuadCam's own reads of an FC port: the USB timer's battery probe
+    /// (so its timer stops counting) and the on-connect FC backup. A job you start yourself
+    /// still runs. Returns the paused ports. The state lasts until QuadCam quits.
+    pub fn gear_poll_pause(&self, p: &PollPauseParams) -> Result<Vec<String>> {
+        let port = match p.port.as_deref().map(str::trim).filter(|s| !s.is_empty()) {
+            Some(named) => named.to_string(),
+            None => super::gear::link_handle(&self.gear_fc_pick(None)?.link),
+        };
+        {
+            let mut st = self.fc_state.lock().unwrap();
+            if p.paused {
+                st.paused.insert(port.clone());
+                // A stale battery session must not warn after the pause.
+                st.usb.remove(&port);
+            } else {
+                st.paused.remove(&port);
+            }
+        }
+        self.hooks.gear_changed();
+        Ok(self.gear_paused_ports())
+    }
+
     /// For the app's poll: reads each FC's battery every `USB_PROBE` (a short MSP
     /// exchange, the port closed between reads; skipped while a job holds the port or
     /// another app has it open) and plays one "Unplug now" when an FC has run on USB with
@@ -278,7 +331,7 @@ impl Core {
                     .and_then(|u| u.last_probe)
                     .is_none_or(|l| now.duration_since(l) >= USB_PROBE)
             };
-            if !due || self.held_by_job(&port) {
+            if !due || self.held_by_job(&port) || self.gear_poll_paused(&port) {
                 continue;
             }
             let known = self.fc_state.lock().unwrap().seen.contains_key(&port);

@@ -36,7 +36,7 @@ cargo build --release --bin quadcam-cli   # -> target/release/quadcam-cli
 
 `cargo tauri build` builds the frontend first (`pnpm --dir app build`). The bundle also holds the command-line tool, `QuadCam.app/Contents/MacOS/quadcam-cli`.
 
-The Vite dev server uses port 4719 with `strictPort`.
+The Vite dev server uses port 4719 with `strictPort`. Set `QUADCAM_DEV_PORT` to run `pnpm dev` and `pnpm e2e` on another port, for a second git worktree beside the first (Vite and Playwright read the same variable). `cargo tauri dev` always loads 4719.
 
 `cargo tauri dev` does not touch your Photos library: Photos runs as a dry run. To try the real path, set `QUADCAM_PHOTOS=real`. See [Photos](photos.md#test-without-photos).
 

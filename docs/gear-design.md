@@ -340,6 +340,7 @@ in `specta_builder` (`lib.rs`).
 | `gear_fc_read` | `FcReadParams { port, commands }` → `FcJob<FcRead>` (read-only CLI commands; the FC reboots) | no (CLI read) |
 | `gear_board_notes` | `BoardNotesParams { board, version }` → `Vec<BoardNote>` | no |
 | `gear_usb_timers` | – → `Vec<UsbTimer>` | no |
+| `gear_poll_pause` | `PollPauseParams { port, paused }` → `Vec<String>` (the paused ports; in memory until quit) | no |
 | `gear_card` | `CardParams { mount or device, model }` → `GearCard` (card view, selected model's aircraft, `radio_usb`) | no |
 | `gear_card_preview` | `CardPreviewParams { mount or device, edits }` → `CardPreview` (checks, diff, files, bytes, ETA) | no |
 | `gear_backup` | `BackupParams { device }` → `Backup` | device read, gear folder |

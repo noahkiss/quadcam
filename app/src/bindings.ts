@@ -161,6 +161,11 @@ export const commands = {
 	gearBoardNotes: (params: BoardNotesParams) => typedError<BoardNote[], string>(__TAURI_INVOKE("gear_board_notes", { params })),
 	/**  Each FC's USB heat timer: battery in, seconds on USB, the limit, seconds left. */
 	gearUsbTimers: () => typedError<UsbTimer[], string>(__TAURI_INVOKE("gear_usb_timers")),
+	/**
+	 *  Pauses or resumes QuadCam's own reads of an FC port (the USB timer's probe and the
+	 *  on-connect backup). Returns the paused ports. Lasts until QuadCam quits.
+	 */
+	gearPollPause: (params: PollPauseParams) => typedError<string[], string>(__TAURI_INVOKE("gear_poll_pause", { params })),
 	/**  Stops the "still inserted" reminder for a device's link. True when one was armed. */
 	gearDismissReminder: (params: ReminderParams) => typedError<boolean, string>(__TAURI_INVOKE("gear_dismiss_reminder", { params })),
 	/**
@@ -1865,6 +1870,8 @@ export type GearStatus = {
 	sims_out_of_date: number,
 	/**  FCs on USB: battery in, time on USB, the limit (`core/fc.rs`). */
 	usb_timers?: UsbTimer[],
+	/**  The FC ports whose background reads are paused (`gear_poll_pause`). */
+	paused?: string[],
 	/**  The links a job holds now (`link_handle`): their devices show as working. */
 	working?: string[],
 	/**  The links with a "still inserted" reminder armed (`link_handle`). */
@@ -2966,6 +2973,15 @@ export type PlanPatch = {
 	 *  as one clip, false keeps them as clips of their own.
 	 */
 	joined?: boolean | null,
+};
+
+/**
+ *  `gear_poll_pause`: stop or resume QuadCam's own reads of one FC port. Omit `port` when
+ *  exactly one FC is plugged in.
+ */
+export type PollPauseParams = {
+	port?: string | null,
+	paused: boolean,
 };
 
 /**  One position of a control. */
