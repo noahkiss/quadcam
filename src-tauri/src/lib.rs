@@ -26,6 +26,7 @@ pub mod photos;
 pub mod pipeline;
 pub mod qtmeta;
 pub mod scan;
+pub mod schema;
 pub mod session;
 pub mod settings;
 mod share;
