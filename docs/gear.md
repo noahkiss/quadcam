@@ -952,7 +952,7 @@ quadcam-cli --json gear osd <fc> --staged                    # the layout with i
 quadcam-cli --json gear osd-edit <fc> --move vbat=12,3 --profiles vbat=1,3   # stage a move and a toggle
 quadcam-cli --json gear osd-edit <fc> --copy 1:2             # profile 2 shows what profile 1 shows
 quadcam-cli gear rates quad.dump_all.txt --text      # every rate profile: names, maximum and centre rates
-quadcam-cli --json gear sims quad.dump_all.txt [--profile N]   # the sims' rates against the quad
+quadcam-cli --json gear sims quad.dump_all.txt [--rate-profile N]   # the sims' rates against the quad
 quadcam-cli --json gear sims quad.dump_all.txt --sync --to uncrashed:OUT --to liftoff:Freestyle   # the plan
 quadcam-cli --json gear sims quad.dump_all.txt --sync --to uncrashed:OUT --digest D --yes        # write
 quadcam-cli --json gear sims uncrashed --restore [--backup ID]                              # the plan to put a sim's file back

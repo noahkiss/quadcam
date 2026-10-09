@@ -196,7 +196,7 @@ pub(super) fn read<B: Backend>(
         "flights" => {
             let v = backend.call(
                 "gear_flights",
-                json!({"day": x.day, "aircraft": x.aircraft, "pack": x.pack, "place": x.place, "logs": x.logs}),
+                json!({"day": x.day, "aircraft": x.aircraft, "pack": x.pack, "place": x.place, "logs": x.log_dir}),
             )?;
             let list = v["flights"].as_array().cloned().unwrap_or_default();
             let line = if list.is_empty() {

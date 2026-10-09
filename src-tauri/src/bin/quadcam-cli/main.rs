@@ -4,7 +4,7 @@
 
 use anyhow::{anyhow, bail, Context, Result};
 use chrono::NaiveDate;
-use clap::{Parser, Subcommand};
+use clap::{CommandFactory, Parser, Subcommand};
 use quadcam_lib::api::{self, call};
 use quadcam_lib::core::{Core, FormatRequest, ImportOptions, LogChoice};
 use quadcam_lib::media::{self, Encoder, Format};
@@ -23,6 +23,7 @@ mod gear;
 #[command(
     name = "quadcam-cli",
     version,
+    arg_required_else_help = true,
     about = "Import FPV clips (analog DVR, DJI): stage, date, name, convert, verify, share, format"
 )]
 struct Cli {
@@ -32,12 +33,17 @@ struct Cli {
     /// Session file (default: ~/Library/Caches/app.quadcam/session.json).
     #[arg(long, global = true, value_name = "FILE")]
     session: Option<PathBuf>,
+    /// Print the schema version of the CLI and MCP surface, and exit.
+    #[arg(long)]
+    schema_version: bool,
     #[command(subcommand)]
-    cmd: Cmd,
+    cmd: Option<Cmd>,
 }
 
 #[derive(Subcommand)]
 enum Cmd {
+    /// What `quadcam_status` shows: the schema version, the settings and tools, the cards, the radios and the session.
+    Status,
     /// List removable volumes: cards (with their source, analog or DJI) and radio log sources.
     Cards,
     /// List the clips on a volume or folder without copying anything.
@@ -584,13 +590,31 @@ struct PlanFile {
     options: ImportOptions,
 }
 
-fn run(cli: Cli) -> Result<Value> {
-    let photos: Arc<dyn PhotosLibrary> = match &cli.cmd {
+fn run(cmd: Cmd, session: Option<PathBuf>) -> Result<Value> {
+    let photos: Arc<dyn PhotosLibrary> = match &cmd {
         Cmd::Photos { dry_run: true, .. } => Arc::new(Recorder::default()),
         _ => Core::real_photos(),
     };
-    let core = Core::headless(cli.session.clone(), photos.clone());
-    Ok(match cli.cmd {
+    let core = Core::headless(session, photos.clone());
+    Ok(match cmd {
+        Cmd::Status => {
+            let volumes = serde_json::to_value(call::volumes(&core)?)?;
+            let pick = |key: &str| -> Vec<&Value> {
+                volumes
+                    .as_array()
+                    .into_iter()
+                    .flatten()
+                    .filter(|v| v[key] == true)
+                    .collect()
+            };
+            json!({
+                "schema_version": quadcam_lib::schema::SCHEMA_VERSION,
+                "mode": "headless",
+                "status": serde_json::to_value(core.status())?,
+                "cards": pick("is_card"),
+                "radios": pick("is_radio"),
+            })
+        }
         Cmd::Cards => serde_json::to_value(call::volumes(&core)?)?,
         Cmd::Scan { path } => {
             let vol = disk::probe_volume(&path);
@@ -1395,6 +1419,15 @@ fn places(core: &Core, cmd: PlaceCmd) -> Result<Value> {
     })
 }
 
+/// The warnings for deprecated commands and flags this run uses (`quadcam_lib::schema`).
+fn deprecation_warnings() -> Vec<String> {
+    let argv: Vec<String> = std::env::args().skip(1).collect();
+    quadcam_lib::schema::cli_deprecations(quadcam_lib::schema::DEPRECATIONS, &argv)
+        .iter()
+        .map(|d| d.warning())
+        .collect()
+}
+
 fn main() {
     let cli = match Cli::try_parse() {
         Ok(c) => c,
@@ -1415,7 +1448,39 @@ fn main() {
             e.exit();
         }
     };
-    if matches!(cli.cmd, Cmd::Mcp) {
+    let json = cli.json;
+    if cli.schema_version {
+        let v = quadcam_lib::schema::SCHEMA_VERSION;
+        if json {
+            println!("{}", json!({"ok": true, "result": {"schema_version": v}}));
+        } else {
+            println!("{v}");
+        }
+        return;
+    }
+    let Some(cmd) = cli.cmd else {
+        if json {
+            let message = "a subcommand is required";
+            println!(
+                "{}",
+                json!({"ok": false, "error": {"code": "usage", "exit": 2, "message": message}})
+            );
+            std::process::exit(2);
+        }
+        Cli::command()
+            .error(
+                clap::error::ErrorKind::MissingSubcommand,
+                "a subcommand is required",
+            )
+            .exit();
+    };
+    let warnings = deprecation_warnings();
+    if !json {
+        for w in &warnings {
+            eprintln!("quadcam-cli: warning: {w}");
+        }
+    }
+    if matches!(cmd, Cmd::Mcp) {
         std::process::exit(match quadcam_lib::mcp::serve_stdio(cli.session.clone()) {
             Ok(()) => 0,
             Err(e) => {
@@ -1424,11 +1489,14 @@ fn main() {
             }
         });
     }
-    let json = cli.json;
-    match run(cli) {
+    match run(cmd, cli.session) {
         Ok(v) => {
             if json {
-                println!("{}", json!({"ok": true, "result": v}));
+                let mut out = json!({"ok": true, "result": v});
+                if !warnings.is_empty() {
+                    out["warnings"] = json!(warnings);
+                }
+                println!("{out}");
             } else if let Value::String(text) = &v {
                 // A text answer (`gear osd --text`) prints as it is.
                 print!("{text}");

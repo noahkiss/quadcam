@@ -41,11 +41,11 @@ pub struct StageArgs {
     #[arg(long = "set")]
     sets: Vec<String>,
     /// With --set: the PID profile the setting lives in.
-    #[arg(long)]
-    profile: Option<u8>,
+    #[arg(long = "pid-profile", alias = "profile")]
+    pid_profile: Option<u8>,
     /// With --set: the rate profile the setting lives in.
-    #[arg(long)]
-    rateprofile: Option<u8>,
+    #[arg(long = "rate-profile", alias = "rateprofile")]
+    rate_profile: Option<u8>,
     #[arg(long)]
     note: Option<String>,
     /// Keep it as a draft.
@@ -98,8 +98,8 @@ pub fn stage(core: &Core, a: StageArgs) -> Result<Value> {
             lines: text.lines().map(str::to_string).collect(),
         });
     }
-    let section = match (a.profile, a.rateprofile) {
-        (Some(_), Some(_)) => bail!("Use --profile or --rateprofile, not both."),
+    let section = match (a.pid_profile, a.rate_profile) {
+        (Some(_), Some(_)) => bail!("Use --pid-profile or --rate-profile, not both."),
         (Some(n), None) => Section::Profile(n),
         (None, Some(n)) => Section::RateProfile(n),
         (None, None) => Section::Master,
