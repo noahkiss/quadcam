@@ -163,6 +163,48 @@ needed instead of waiting forever.
 If the radio's firmware stops at an error, hold both horizontal trims inward while you power
 it on. The bootloader then shows the SD card over USB.
 
+## Radio model editors
+
+A saved radio's page has a **Models** and a **Checklists** segment. They read the model from the
+mounted card, or from the radio's latest backup when it is not plugged in, and show the
+radio's staged model edits on top. Every control stages its change at once. All edits join
+one change per radio, "Model edits". A later edit of a setting replaces the earlier one,
+and an edit that puts the model back as the radio has it drops out. Nothing reaches the card
+until the apply sheet writes it. **Review…** opens the sheet; **Undo model edits** discards
+the change.
+
+The **Model** pop-up picks the model file. The first load shows the radio's selected model.
+
+| Section | What it edits |
+|---|---|
+| Timers | Name (8 characters), mode, switch, countdown beep, persistent, beep every minute, count up. Add a timer (3 at most) or remove one. A timer's stored time is never set |
+| Telemetry screens | A value screen holds up to 4 lines of up to 3 sources: a sensor label in braces, `{RxBt}`, or `Tmr1`. A script screen names a script (6 characters). Screens run in order: a screen cannot follow a gap |
+| Logging | Whether the radio writes a log, on which switch, and how often (0.1 to 25.5 s). Which telemetry sensors the log records |
+| Alarms | The RSSI warning and critical levels. Critical cannot be over warning |
+| Callouts | A sound that plays while a switch is on, or while a sensor is below or above a value for a delay. Repeat: once, once but not at power-on, or every few seconds |
+| Checklist | The power-on checklist, in the **Checklists** segment |
+
+**A callout belongs to its sound.** The sound's name (8 characters at most, a file in
+`SOUNDS/<language>/` on the card) identifies the callout. Staging a callout with a sound that
+already has one replaces it, and the logical switch QuadCam made for it changes with it. A
+logical switch that anything else uses stays as it is. A battery callout uses the first free
+logical switch. QuadCam can edit only the callouts whose condition it writes; any other
+callout shows in the list and can be removed.
+
+A sensor's value is typed as the sensor shows it, `3.5` for 3.5 V, and stored in the
+sensor's precision. A sensor must exist in the model; if it does not, discover sensors on
+the radio first.
+
+**Checklist.** Each item is a line; a tick box starts the line with `=`. A line holds 20
+characters on the RadioMaster Pocket (the `=` counts), and a checklist holds 99 lines.
+QuadCam writes `MODELS/<model name>.txt` and turns on `displayChecklist` and
+`checklistInteractive`. Staging a checklist turns it on; the checkbox turns it on or off.
+
+**Not yet checked on a real radio:** the logging function (`LOGS`, its period in 0.1 s), the
+value screens' limit of 4 lines and 3 sources, the list of timer modes the pop-up offers
+and the 99-line checklist limit (QuadCam's own cap). Each follows the shape of the
+functions and files a real card does hold. Check each on a real card before relying on it.
+
 ## Unplugging cards
 
 QuadCam tracks four device events: connected, identified, unmounted but still inserted, and
@@ -693,7 +735,8 @@ An edits file is a list. Each edit is a model (`{"kind": "model", "file": "model
 checklist (`{"kind": "checklist", "model": "model01.yml", "text": "=Props tight"}`), a model
 copy or a model delete. Model ops: `rename`, `set_model_id`, `set_flags`, `set_checklist`,
 `set_mixes`, `set_logical_switch`, `special_functions`, `move_special_function`,
-`set_timer`, `remove_timer`, `swap_timers`, `set_switch_warnings`, `set_screen`. Radio ops:
+`set_timer`, `remove_timer`, `swap_timers`, `set_switch_warnings`, `set_screen`, and the editors' ops `set_screen_values`, `set_logging`,
+`set_sensor_logs`, `set_rf_alarms`, `set_callout` and `remove_callout`. Radio ops:
 `set_scalar` and `select_model`. A logical switch or special function may name a telemetry
 sensor by label, `tele({RxBt}),35`; QuadCam finds its slot.
 

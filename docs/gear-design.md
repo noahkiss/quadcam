@@ -629,6 +629,31 @@ reads it but does not write it."
   `CardView.clock` from log names: a newest log before 2020 means the clock reset, an older
   2000-01-01 log means it reset once, a log after today means it runs ahead.
 
+**Built (WP9 model editors):** `gear/edgetx/editors.rs` adds the editors' `ModelOp`s to WP3's:
+`set_screen_values` (up to 4 lines of 3 sources; a `{Label}` source becomes `tele(N)`),
+`set_logging` (the `LOGS` special function, `def` `"<period in 0.1 s>,1"`, one at most),
+`set_sensor_logs` (a sensor's `logs` line), `set_rf_alarms` (`rfAlarms`, critical not over
+warning), `set_callout` and `remove_callout`. `set_timer` now checks each field's range. A callout is a
+`PLAY_TRACK` special function owned by its track name: `set_callout` replaces the function with
+that track, keeps its place, and edits the logical switch it made (a switch anything else
+mentions stays; a new one takes the first free). A sensor value is typed as shown (`3.5`) and
+stored at the sensor's `prec`; `FUNC_VNEG` is "below", `FUNC_VPOS` "above". `editor_view` reads all of it
+back. `Core::gear_model` (`core/model_edit.rs`) reads a radio's model from the mounted card, else the
+latest backup, with the device's staged model edits on top; `Core::gear_model_edit` joins ops and
+checklist text into the one open "Model edits" change: `editors::merge_ops` keeps the last op
+per setting (`op_key`; timer fields and sensor logs merge), an edit that leaves the model as
+the radio has it drops out, an empty change is discarded, and a refusal stages nothing.
+Staging a checklist turns the checklist on. Rows `gear_model` and `gear_model_edit`; CLI
+`gear model`, `gear model-edit`; MCP `quadcam_gear model`, `quadcam_gear_edit model_edit`; UI
+Models and Checklists segments (`views/Gear/Models/`). Acceptance: `tests/model_editors.rs` (each
+op in both file layouts, ownership, idempotence, the limits), `tests/model_edit.rs` (read from card
+and backup, merge, drop-out, apply with read-back on the synthetic card, row and MCP),
+`e2e/model-edit.spec.ts`.
+Deviations: the design's "telemetry screens" editor covers value and script screens, not bars or
+the other types (they show and cannot be edited). Checked only against the shape of real model
+files, not on a radio: the `LOGS` encoding, 4 lines by 3 sources, the timer mode names, and the
+99-line checklist cap (QuadCam's own).
+
 **Device notes (RadioMaster Pocket, EdgeTX 2.12.4, measured 2026-10-07):**
 
 | Mode | USB id | Strings | Notes |

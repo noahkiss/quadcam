@@ -152,6 +152,8 @@ quadcam-cli --json gear fc usb                                   # USB timers
 quadcam-cli --json gear osd FILE [FILE ...] [--grid NTSC|PAL|HD|WxH] [--text]
 quadcam-cli --json gear osd DEVICE [--staged] [--grid ...] [--text]   # --staged: with the device's staged OSD edits on top
 quadcam-cli --json gear osd-edit DEVICE [--move ELEMENT=X,Y]... [--profiles ELEMENT=1,3|none]... [--copy FROM:TO]   # stages into the one "OSD layout" change; writes nothing to the FC
+quadcam-cli --json gear model DEVICE [--model model01.yml] [--no-staged] [--text]   # a radio's model for the editors, from the card or the latest backup
+quadcam-cli --json gear model-edit DEVICE --model model01.yml [--timer 2:name=FLT,minuteBeep=1]... [--timer-off N]... [--screen 1:'{RxBt},Tmr1/{Capa}']... [--screen-script N:NAME]... [--screen-off N]... [--logging SA2:0.5|off] [--log-sensor RxBt=off]... [--rf-alarm 50:40] [--callout lowbat:below:'{RxBt}':3.5:2:5]... [--callout armed:switch:L1:'!1x']... [--callout-off TRACK]... [--checklist-file FILE|-] [--checklist on|off] [--ops FILE]   # stages into the one "Model edits" change; writes nothing to the card
 quadcam-cli --json gear rates FILE [FILE ...]|DEVICE [--backup ID] [--text]   # rate profiles and throttle curve
 quadcam-cli --json gear sims [FILE ...|DEVICE] [--backup ID] [--profile N] [--text]   # sims' rates, against the quad
 quadcam-cli --json gear map --radio CARD|MODEL.yml [--model model01.yml] --fc FILE [--fc FILE] [--live [--port P]] [--channels 1500,...] [--text]
