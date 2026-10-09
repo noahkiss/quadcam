@@ -80,9 +80,11 @@ export type {
   PackTypeView,
   PackView,
   PacksView,
+  PlaceTrend,
   Preflight,
   RowState,
   SessionReport,
+  TrendPoint,
 } from "../bindings";
 
 // The sim's radio calibration, as generated.

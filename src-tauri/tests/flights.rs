@@ -56,6 +56,11 @@ fn flights_carry_the_known_measures_and_joins() {
     let v = c.gear_flights(&Default::default()).unwrap();
     assert_eq!(v.flights.len(), KNOWN.flights);
     assert_eq!(v.days.len(), 1);
+    // The range trend: one place, its flights oldest first.
+    assert_eq!(v.places.len(), 1);
+    let starts: Vec<_> = v.places[0].points.iter().map(|p| p.start).collect();
+    assert_eq!(starts.len(), KNOWN.flights);
+    assert!(starts.windows(2).all(|w| w[0] < w[1]), "{starts:?}");
     // Newest first: flight 1 is last.
     let f1 = v.flights.last().unwrap();
     assert_eq!(f1.aircraft.as_deref(), Some("Whoop"));

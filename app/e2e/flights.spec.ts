@@ -36,6 +36,16 @@ test("flights of a day with their measures; a pack is set from the row", async (
   await expect(detail.getByRole("table", { name: "Dropouts" })).toContainText("Telemetry only");
 });
 
+test("the range trend charts the worst link per place, with its values", async ({ app, page }) => {
+  await openPage(app, page, "Flights");
+  const trend = page.getByRole("region", { name: "Range by place" });
+  await expect(trend.getByRole("img", { name: /Worst link quality at Field: 3 flights, from 60 % .* to 100 % / })).toBeVisible();
+  await trend.getByText("Values for Field").click();
+  const table = trend.getByRole("table", { name: "Worst link at Field" });
+  await expect(table.getByRole("row")).toHaveCount(4);
+  await expect(table.getByRole("row", { name: /10:00/ })).toContainText("-95 dB");
+});
+
 test("the session report reads the day and copies as Markdown", async ({ app, page }) => {
   await openPage(app, page, "Flights");
   await page.getByRole("group", { name: "Sections" }).getByRole("button", { name: "Session report" }).click();

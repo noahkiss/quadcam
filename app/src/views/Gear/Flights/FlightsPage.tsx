@@ -8,6 +8,7 @@ import { SegmentedControl } from "../../../components/SegmentedControl";
 import { toast } from "../../../components/toastStore";
 import { fmtDay } from "../../../lib/format";
 import { copyText, hhmm, mmss, num } from "../../../lib/flights";
+import { RangeTrend } from "./RangeTrend";
 import { useGearData } from "./useGearData";
 import g from "../Gear.module.css";
 import styles from "./Flights.module.css";
@@ -105,6 +106,7 @@ function Flights() {
         </table>
       </div>
       {sel && <FlightDetail r={sel} />}
+      <RangeTrend places={data.places} />
     </>
   );
 }

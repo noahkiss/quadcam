@@ -368,6 +368,9 @@ impl Core {
             }
         }
         places.sort_by(|a, b| a.place.cmp(&b.place));
+        for t in &mut places {
+            t.points.sort_by_key(|p| p.start);
+        }
 
         let mut flights: Vec<FlightReport> = reports
             .into_iter()
