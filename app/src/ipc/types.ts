@@ -334,3 +334,72 @@ export interface CopyRequest {
   /** Settings by name, on top of the parts. */
   settings: string[];
 }
+
+// Rates and the sims' rates, with the numbers narrowed (the core sends a finite number).
+export type { RatesParams, SimsParams } from "../bindings";
+export interface RateAxis {
+  axis: string;
+  rc_rate: number;
+  srate: number;
+  expo: number;
+  rate_limit: number;
+  max_deg_s: number;
+  center_deg_s: number;
+  /** Deg/s at stick i / (curve.length - 1), from 0 to full. */
+  curve: number[];
+}
+export interface RateThrottle {
+  mid: number;
+  expo: number;
+  hover: number | null;
+  limit: string;
+  limit_percent: number;
+  /** Output 0-1 at stick i / (curve.length - 1). */
+  curve: number[];
+}
+export interface RateProfile {
+  index: number;
+  name: string | null;
+  active: boolean;
+  rates_type: string;
+  complete: boolean;
+  axes: RateAxis[];
+  throttle: RateThrottle;
+}
+export interface RatesView {
+  source: string[];
+  firmware: string | null;
+  active: number | null;
+  profiles: RateProfile[];
+  notes: string[];
+}
+export interface SimRateDiff {
+  max_diff: number[];
+  quad_max_diff: number[];
+  fit_error: number[];
+  throttle_differs: boolean | null;
+  same: boolean;
+}
+export interface SimRateProfile {
+  name: string;
+  supported: boolean;
+  note: string | null;
+  axes: RateAxis[];
+  throttle: RateThrottle | null;
+  diff: SimRateDiff | null;
+}
+export interface SimRateFile {
+  path: string;
+  error: string | null;
+  profiles: SimRateProfile[];
+}
+export interface SimRates {
+  id: string;
+  name: string;
+  enabled: boolean;
+  found: boolean;
+  running: boolean;
+  note: string | null;
+  files: SimRateFile[];
+  in_sync: boolean | null;
+}

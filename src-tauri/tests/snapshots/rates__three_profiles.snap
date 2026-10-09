@@ -1,0 +1,20 @@
+---
+source: tests/rates.rs
+expression: "rates::render_text(&v)"
+---
+Rates (Betaflight 2025.12.5) from three-profiles.dump_all.txt
+Rate profile 0 FREE (in use) - betaflight
+  roll  rc 127 super 72 expo 40  centre 152 deg/s  max 907 deg/s
+  pitch rc 127 super 72 expo 40  centre 152 deg/s  max 907 deg/s
+  yaw   rc 100 super 75 expo 0  centre 200 deg/s  max 800 deg/s
+  throttle mid 30 expo 50 hover 34 limit off 100
+Rate profile 1 RACE - actual
+  roll  rc 7 super 67 expo 54  centre 70 deg/s  max 670 deg/s
+  pitch rc 7 super 67 expo 54  centre 70 deg/s  max 670 deg/s
+  yaw   rc 7 super 67 expo 54  centre 70 deg/s  max 670 deg/s
+  throttle mid 50 expo 0 limit off 100
+Rate profile 2 CINE - quick
+  roll  rc 60 super 30 expo 20  centre 120 deg/s  max 300 deg/s
+  pitch rc 60 super 30 expo 20  centre 120 deg/s  max 300 deg/s
+  yaw   rc 40 super 20 expo 20  centre 80 deg/s  max 200 deg/s
+  throttle mid 50 expo 0 limit clip 80

@@ -55,9 +55,11 @@ pub mod packs;
 pub mod preflight;
 pub mod radio_hid;
 pub mod radiologs;
+pub mod rates;
 pub mod report;
 pub mod serial;
 pub mod sim_cal;
+pub mod sims;
 pub mod store;
 pub mod switchmap;
 

@@ -173,6 +173,17 @@ export const commands = {
 	 *  and cells off screen. Reads only.
 	 */
 	gearOsd: (params: OsdParams) => typedError<OsdView, string>(__TAURI_INVOKE("gear_osd", { params })),
+	/**
+	 *  An FC's rate profiles from its latest backup, a backup or dump files: names, the
+	 *  roll, pitch and yaw curves with maximum and centre rates, the throttle curve.
+	 *  Reads only.
+	 */
+	gearRates: (params: RatesParams) => typedError<RatesView, string>(__TAURI_INVOKE("gear_rates", { params })),
+	/**
+	 *  The sims on this Mac with their rate profiles; with a quad, how each differs
+	 *  from the quad's rates. Reads only.
+	 */
+	gearSims: (params: SimsParams) => typedError<SimStatus[], string>(__TAURI_INVOKE("gear_sims", { params })),
 	/**  An EdgeTX card: models, the selected model and its aircraft, the radio clock, one model in full. */
 	gearCard: (params: CardParams) => typedError<GearCard, string>(__TAURI_INVOKE("gear_card", { params })),
 	/**  Checks and diffs EdgeTX card edits. Writes nothing. */
@@ -547,6 +558,27 @@ export type AxisCal = {
 	/**  Percent of each side cut from the middle, 0-50. Roll, pitch and yaw only. */
 	deadzone?: number,
 	reverse?: boolean,
+};
+
+/**  One axis of a rate profile, with its sampled curve. */
+export type AxisView = {
+	/**  `roll`, `pitch` or `yaw`. */
+	axis: string,
+	/**  The three numbers as the CLI stores them (`*_rc_rate`, `*_srate`, `*_expo`). */
+	rc_rate: number | null,
+	srate: number | null,
+	expo: number | null,
+	/**  `*_rate_limit` (deg/s). */
+	rate_limit: number | null,
+	/**  Deg/s at full stick (after the limit). */
+	max_deg_s: number | null,
+	/**  Deg/s per full stick at the centre: the curve's slope at 0. */
+	center_deg_s: number | null,
+	/**
+	 *  Deg/s at stick `i / STEPS`, `i` from 0 to `STEPS`. The curve is odd: the negative
+	 *  half mirrors it.
+	 */
+	curve: (number | null)[],
 };
 
 /**  A snapshot of one device: a manifest of files in the blob store. */
@@ -3516,6 +3548,47 @@ export type RateParams = {
 	flag?: Flag | null,
 };
 
+/**  One rate profile. */
+export type RateProfileView = {
+	index: number,
+	/**  `rateprofile_name`, when set (FREE, RACE, CINE). */
+	name: string | null,
+	/**  The profile the FC uses (the last `rateprofile` line). */
+	active: boolean,
+	/**  `betaflight`, `actual`, `quick`, `raceflight` or `kiss`. */
+	rates_type: string,
+	/**  False when the source left values out (a diff): they read as Betaflight's defaults. */
+	complete: boolean,
+	/**  Roll, pitch, yaw. */
+	axes: AxisView[],
+	throttle: ThrottleView,
+};
+
+/**  `gear_rates`: where to read the rate profiles from. */
+export type RatesParams = {
+	/**  `dump all`, `diff all` or CLI-line files, read in order: a later file's lines win. */
+	paths?: string[],
+	/**
+	 *  A saved device's id: reads its latest backup's `dump all` (`diff all` without one),
+	 *  before `paths`.
+	 */
+	device?: string | null,
+	/**  A backup id (`<device>/<name>`) from `gear_backups`, instead of the latest. */
+	backup?: string | null,
+};
+
+/**  What a dump or diff says about rates. */
+export type RatesView = {
+	/**  Where it was read from (file names and backup ids). */
+	source: string[],
+	/**  The Betaflight version line, when the source has one. */
+	firmware: string | null,
+	/**  The active rate profile's index. */
+	active: number | null,
+	profiles: RateProfileView[],
+	notes: string[],
+};
+
 export type RebuildReport = {
 	clips: number,
 	cuts: number,
@@ -3947,6 +4020,31 @@ export type SimDefaultsParams = {
 	fc?: string[],
 };
 
+/**  How a sim profile compares with the quad's active rate profile. */
+export type SimDiff = {
+	/**
+	 *  Largest difference (deg/s) per axis from what a sync would write: the quad's rates
+	 *  as the Betaflight model (a quad on Actual or Quick is fitted first).
+	 */
+	max_diff: (number | null)[],
+	/**  The same against the quad's own curve. */
+	quad_max_diff: (number | null)[],
+	/**  The fit error per axis (0 when the quad is on the Betaflight model). */
+	fit_error: (number | null)[],
+	/**  True when the throttle curves differ; null when the sim has none. */
+	throttle_differs: boolean | null,
+	/**  True when every axis is within `SAME_DEG_S` and the throttle curves agree. */
+	same: boolean,
+};
+
+/**  One file of a sim. */
+export type SimFileView = {
+	/**  With `~` for the home folder. */
+	path: string,
+	error: string | null,
+	profiles: SimProfileView[],
+};
+
 /**  The page's read each frame. */
 export type SimFrame = {
 	/**  The host clock when this was read (ns). */
@@ -4003,6 +4101,20 @@ export type SimPreset = {
 	mass_g: number | null,
 };
 
+/**  One sim profile as the Rates segment shows it. */
+export type SimProfileView = {
+	name: string,
+	/**  True when QuadCam could read rates from it. */
+	supported: boolean,
+	note: string | null,
+	/**  Roll, pitch, yaw (Betaflight model); empty when unsupported. */
+	axes: AxisView[],
+	/**  Only Uncrashed has one. */
+	throttle: ThrottleView | null,
+	/**  Against the quad, when a quad was given. */
+	diff: SimDiff | null,
+};
+
 /**  What the page needs once to draw the sim. */
 export type SimStartInfo = {
 	profile: string,
@@ -4035,6 +4147,25 @@ export type SimStartParams = {
 	calibration?: Calibration | null,
 };
 
+/**  One sim and what QuadCam read from it. */
+export type SimStatus = {
+	id: string,
+	name: string,
+	/**  False for an adapter that ships off. */
+	enabled: boolean,
+	/**  True when a rate file exists. */
+	found: boolean,
+	/**  True while the game runs (a write would refuse). */
+	running: boolean,
+	note: string | null,
+	files: SimFileView[],
+	/**
+	 *  With a quad: true when some profile equals the quad's active rates. Null without a
+	 *  quad or a readable profile.
+	 */
+	in_sync: boolean | null,
+};
+
 /**
  *  The pilot's sticks after calibration: roll right, pitch forward and yaw right in -1..1,
  *  throttle in 0..1.
@@ -4063,6 +4194,15 @@ export type SimValidateParams = {
 	logs: string,
 	/**  The motors' pole count, for eRPM to rpm; default: the profile's. */
 	motor_poles?: number | null,
+};
+
+/**  `gear_sims`: the quad to compare with; none for the sims alone. */
+export type SimsParams = {
+	paths?: string[],
+	device?: string | null,
+	backup?: string | null,
+	/**  The rate profile to compare with; default the one the FC uses. */
+	profile?: number | null,
 };
 
 /**  Where a moment's evidence came from. */
@@ -4365,6 +4505,19 @@ export type TakeReport = {
 
 /**  The long library jobs. */
 export type Task = "rebuild" | "cuts" | "thumbnails" | "moments";
+
+/**  The throttle curve of a rate profile. */
+export type ThrottleView = {
+	mid: number | null,
+	expo: number | null,
+	/**  `thr_hover`, when the firmware has it. */
+	hover: number | null,
+	/**  `off`, `scale` or `clip`. */
+	limit: string,
+	limit_percent: number | null,
+	/**  Output (0-1) at stick `i / STEPS`. */
+	curve: (number | null)[],
+};
 
 export type Timer = {
 	/**  0 is Timer 1. */

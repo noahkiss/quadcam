@@ -7,7 +7,7 @@ import { open as openDialog, save as saveDialog } from "@tauri-apps/plugin-dialo
 import { openPath, openUrl, revealItemInDir } from "@tauri-apps/plugin-opener";
 import { commands } from "../bindings";
 import * as N from "./normalize";
-import type { ChangeStatus, CopyRequest, Edit, SimFrame, SimPreset, SimStartInfo, SimStartParams, SimStopInfo, CrashSaveParams, ImportOptions, LibEdit, LibraryFilter, Moved, OsdParams, Pack, PackType, PlanPatch, RemovedCuts, SettingsValues, Span, SwitchMapParams, SimCalibrationSaveParams, CalibrateParams } from "./types";
+import type { ChangeStatus, CopyRequest, Edit, SimFrame, SimPreset, SimStartInfo, SimStartParams, SimStopInfo, CrashSaveParams, ImportOptions, LibEdit, LibraryFilter, Moved, OsdParams, RatesParams, SimsParams, Pack, PackType, PlanPatch, RemovedCuts, SettingsValues, Span, SwitchMapParams, SimCalibrationSaveParams, CalibrateParams } from "./types";
 
 type Result<T> = Promise<{ status: "ok"; data: T } | { status: "error"; error: string }>;
 
@@ -113,6 +113,8 @@ export const api = {
 
   // Gear
   gearOsd: (params: OsdParams) => ok(commands.gearOsd(params)),
+  gearRates: async (params: RatesParams) => N.rates(await ok(commands.gearRates(params))),
+  gearSims: async (params: SimsParams) => N.sims(await ok(commands.gearSims(params))),
   gearSwitchMap: async (params: SwitchMapParams) => N.switchMap(await ok(commands.gearSwitchMap(params))),
   gearRadio: async () => N.radioSnapshot(await ok(commands.gearRadio({ wait_ms: null }))),
   gearRadioWatch: (on: boolean) => ok(commands.gearRadioWatch({ on })),
