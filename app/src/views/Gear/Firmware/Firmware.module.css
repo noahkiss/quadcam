@@ -43,3 +43,32 @@
   text-align: right;
   white-space: nowrap;
 }
+.read {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-3);
+  padding-top: var(--s-3);
+  border-top: 1px solid var(--border);
+}
+.subtitle {
+  margin: 0;
+  font-size: var(--t-lg);
+  font-weight: 600;
+}
+.steps {
+  margin: 0;
+  padding-left: var(--s-5);
+}
+.pick {
+  display: flex;
+  align-items: center;
+  gap: var(--s-2);
+}
+.progress {
+  width: 160px;
+}
+.result {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-2);
+}
