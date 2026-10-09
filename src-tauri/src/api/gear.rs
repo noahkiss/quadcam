@@ -28,6 +28,7 @@ pub use crate::core::{
     CrashSaveParams, FlightFilter, FlightFoldersParams, FlightReport, FlightSetParams, FlightsView,
     NotesParams, PackSaveParams, PacksParams, ReportParams, ReportSaveParams, ReportSaved,
 };
+pub use crate::core::{FirmwareParams, FirmwareView, FlashParams, FlashRequest};
 pub use crate::gear::apply::sim::{SimSyncParams, SimSyncRequest, SimTarget};
 pub use crate::gear::apply::{ApplyPlanParams, ApplyReport, ApplyRequest, StepReport, StepState};
 pub use crate::gear::backup::{
@@ -50,6 +51,7 @@ pub use crate::gear::rates::RatesView;
 pub use crate::gear::report::SessionReport;
 pub use crate::gear::sim_cal::{SavedCalibration, SimDefaults};
 pub use crate::gear::sims::SimStatus;
+pub use crate::gear::splash::{SplashParams, SplashPreview};
 pub use crate::gear::switchmap::SwitchMap;
 pub use quadcam_sim::validate::{CheckOutcome, CheckResult, ValidationReport};
 use serde::{Deserialize, Serialize};
@@ -112,6 +114,21 @@ macro_rules! with_gear_rows {
             /// Refuses while a game runs. Needs the plan's digest and confirm=true; with the
             /// app running the person also clicks Apply in its sheet.
             gear_sim_sync(params: SimSyncRequest) -> ApplyReport = |c| c.gear_sim_sync(&params);
+            /// Each saved device's firmware against the newest release (EdgeTX, Betaflight,
+            /// ExpressLRS). Reads the network only when `check` is true, or unset with
+            /// `firmwareCheck` set to `daily` and the last answer a day old.
+            gear_firmware(params: FirmwareParams) -> FirmwareView = |c| c.gear_firmware(&params);
+            /// A picture at an EdgeTX radio's splash size (128 x 64, 1 bit) with a threshold
+            /// and invert, as a 4x PNG. Reads the image file only.
+            gear_splash(params: SplashParams) -> SplashPreview = |c| c.gear_splash(&params);
+            /// What flashing an EdgeTX radio would do: the release's board binary (downloaded
+            /// on first use), the splash patch, every guard and a digest. Writes no device.
+            gear_flash_plan(params: FlashParams) -> ApplyPlan = |c| c.gear_flash_plan(&params);
+            /// Flashes the planned firmware over DFU: reads the radio's current firmware as a
+            /// kept backup, erases, writes, reads back and compares, then leaves DFU. Needs
+            /// the plan's digest and confirm=true; with the app running the person also clicks
+            /// Apply in its sheet.
+            gear_flash(params: FlashRequest) -> ApplyReport = |c| c.gear_flash(&params);
             /// An EdgeTX card: models, the selected model and its aircraft, the radio clock, one model in full.
             gear_card(params: CardParams) -> GearCard = |c| c.gear_card(&params);
             /// Checks and diffs EdgeTX card edits. Writes nothing.

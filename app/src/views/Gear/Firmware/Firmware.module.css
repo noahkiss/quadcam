@@ -1,0 +1,45 @@
+.page {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-4);
+}
+.title {
+  margin: 0;
+  font-size: var(--t-xl);
+  font-weight: 700;
+}
+.bar {
+  display: flex;
+  align-items: center;
+  gap: var(--s-3);
+}
+.muted {
+  color: var(--muted);
+}
+.table {
+  width: 100%;
+  border-collapse: collapse;
+}
+.table th,
+.table td {
+  padding: var(--s-2);
+  border-bottom: 1px solid var(--border);
+  text-align: left;
+  vertical-align: top;
+}
+.table thead th {
+  color: var(--muted);
+  font-weight: 600;
+}
+.table tbody th {
+  font-weight: 600;
+}
+.note {
+  display: block;
+  color: var(--muted);
+  font-size: var(--t-sm);
+}
+.actions {
+  text-align: right;
+  white-space: nowrap;
+}

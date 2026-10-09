@@ -4,7 +4,7 @@
 import type { StateCreator } from "zustand";
 import type { State } from ".";
 import { api, errText } from "../ipc/api";
-import type { ApplyPlan, ApplyReport, Connected, Device, DeviceChanged, GearStatus, SimSyncParams, StagedChange } from "../ipc/types";
+import type { ApplyPlan, ApplyReport, Connected, Device, DeviceChanged, FirmwareView, FlashParams, GearStatus, SimSyncParams, StagedChange } from "../ipc/types";
 import { linkHandle } from "../lib/gear";
 import { toast } from "../components/toastStore";
 
@@ -25,6 +25,8 @@ export interface ApplySheetState {
   error: string | null;
   /** Set when the sheet shows a sim sync: the click writes these sim profiles. */
   sim?: SimSyncParams | null;
+  /** Set when the sheet shows a firmware flash: the click flashes this radio. */
+  flash?: FlashParams | null;
 }
 
 /** The device id a sim sync's sheet, report and stand-in change carry (the core's `DEVICE`). */
@@ -44,6 +46,20 @@ const simChange = (plan: ApplyPlan | null): StagedChange => ({
   history: [],
 });
 
+/** The change the sheet shows for a firmware flash (the core's `flash_change`). */
+const flashChange = (device: string, plan: ApplyPlan | null): StagedChange => ({
+  id: "flash",
+  device,
+  title: "Flash firmware",
+  status: "ready",
+  edits: [],
+  base_backup: "",
+  editor: "user",
+  note: (plan?.warnings ?? []).join(" "),
+  order: 0,
+  history: [],
+});
+
 export interface GearSlice {
   /** Staged changes waiting to be applied, every device. */
   changes: StagedChange[];
@@ -54,6 +70,11 @@ export interface GearSlice {
   openApply: (device: string, change?: string) => Promise<void>;
   /** Opens the sheet on a plan to write the quad's rates into sim profiles. */
   openSimSync: (params: SimSyncParams) => Promise<void>;
+  /** Opens the sheet on a plan to flash an EdgeTX radio, with a splash when given. */
+  openFlash: (params: FlashParams) => Promise<void>;
+  /** The Firmware page's rows. `check`: read the network (true), the saved answer (false), or follow the firmwareCheck setting (null). */
+  firmware: FirmwareView | null;
+  loadFirmware: (check?: boolean | null) => Promise<void>;
   closeApply: () => void;
   /** Apply in the open sheet. */
   runApply: () => Promise<void>;
@@ -122,6 +143,23 @@ export const createGearSlice: StateCreator<State, [], [], GearSlice> = (set, get
       set((s) => (s.applySheet?.sim === params ? { applySheet: { ...s.applySheet, busy: false, error: errText(e) } } : {}));
     }
   },
+  openFlash: async (params) => {
+    set({ applySheet: { device: params.device, change: flashChange(params.device, null), plan: null, report: null, agent: null, busy: true, error: null, flash: params } });
+    try {
+      const plan = await api.gearFlashPlan(params);
+      set((s) => (s.applySheet?.flash === params ? { applySheet: { ...s.applySheet, change: flashChange(params.device, plan), plan, busy: false } } : {}));
+    } catch (e) {
+      set((s) => (s.applySheet?.flash === params ? { applySheet: { ...s.applySheet, busy: false, error: errText(e) } } : {}));
+    }
+  },
+  firmware: null,
+  loadFirmware: async (check = null) => {
+    try {
+      set({ firmware: await api.gearFirmware(check) });
+    } catch (e) {
+      toast(errText(e), true);
+    }
+  },
   closeApply: () => {
     const a = get().applySheet;
     if (a?.busy && a.report === null && a.agent === null && a.plan === null) return;
@@ -138,7 +176,7 @@ export const createGearSlice: StateCreator<State, [], [], GearSlice> = (set, get
       return;
     }
     try {
-      const report = a.sim ? await api.gearSimSyncClick(a.sim, a.plan.digest) : await api.gearApplyClick(a.change.id, a.plan.digest);
+      const report = a.sim ? await api.gearSimSyncClick(a.sim, a.plan.digest) : a.flash ? await api.gearFlashClick(a.flash, a.plan.digest) : await api.gearApplyClick(a.change.id, a.plan.digest);
       set((s) => (s.applySheet ? { applySheet: { ...s.applySheet, report, busy: false } } : {}));
     } catch (e) {
       set((s) => (s.applySheet ? { applySheet: { ...s.applySheet, busy: false, error: errText(e) } } : {}));
@@ -224,6 +262,11 @@ export const createGearSlice: StateCreator<State, [], [], GearSlice> = (set, get
     try {
       const [gear, devices, changes, allChanges] = await Promise.all([api.gearStatus(), api.gearDevices(), api.gearChanges(), api.gearChanges(null, true)]);
       set({ gear, devices, changes, allChanges });
+      // The saved answer only: it never reads the network.
+      api.gearFirmware(false).then(
+        (firmware) => set({ firmware }),
+        () => undefined,
+      );
     } catch (e) {
       console.warn("gear unavailable", e);
     }

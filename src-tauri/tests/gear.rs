@@ -497,13 +497,23 @@ fn the_three_mcp_tools() {
     assert_eq!(r["isError"], true, "device_save needs an id");
     let r = s.call_tool(
         "quadcam_gear_apply",
-        json!({"action": "flash", "digest": "x", "confirm": true}),
+        json!({"action": "reflash_everything", "digest": "x", "confirm": true}),
     );
     assert_eq!(r["isError"], true);
     assert!(r["content"][0]["text"]
         .as_str()
         .unwrap()
         .starts_with("Refused"));
+    // The firmware flash needs its digest and confirm before anything else.
+    let r = s.call_tool(
+        "quadcam_gear_apply",
+        json!({"action": "flash", "device": "radio-1", "digest": "x"}),
+    );
+    assert_eq!(r["isError"], true);
+    assert!(r["content"][0]["text"]
+        .as_str()
+        .unwrap()
+        .starts_with("Refused: flash writes"));
 }
 
 #[test]

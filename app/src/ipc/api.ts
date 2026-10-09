@@ -7,7 +7,7 @@ import { open as openDialog, save as saveDialog } from "@tauri-apps/plugin-dialo
 import { openPath, openUrl, revealItemInDir } from "@tauri-apps/plugin-opener";
 import { commands } from "../bindings";
 import * as N from "./normalize";
-import type { ChangeStatus, CopyRequest, Edit, SimFrame, SimPreset, SimStartInfo, SimStartParams, SimStopInfo, CrashSaveParams, ImportOptions, LibEdit, LibraryFilter, Moved, OsdEditParams, OsdParams, RatesParams, RatesPreview, RateProfile, SimSyncParams, SimsParams, Pack, PackType, PlanPatch, RemovedCuts, SettingsValues, Span, SwitchMapParams, SimCalibrationSaveParams, CalibrateParams } from "./types";
+import type { ChangeStatus, CopyRequest, Edit, SimFrame, SimPreset, SimStartInfo, SimStartParams, SimStopInfo, CrashSaveParams, ImportOptions, LibEdit, LibraryFilter, Moved, OsdEditParams, OsdParams, RatesParams, RatesPreview, RateProfile, FlashParams, SplashParams, SimSyncParams, SimsParams, Pack, PackType, PlanPatch, RemovedCuts, SettingsValues, Span, SwitchMapParams, SimCalibrationSaveParams, CalibrateParams } from "./types";
 
 type Result<T> = Promise<{ status: "ok"; data: T } | { status: "error"; error: string }>;
 
@@ -123,6 +123,11 @@ export const api = {
   gearSimSyncPlan: (p: SimSyncParams) => ok(commands.gearSimSyncPlan(p)),
   /** The apply sheet's own Apply click for a sim sync: the click is the confirm. */
   gearSimSyncClick: (p: SimSyncParams, digest: string) => ok(commands.gearSimSyncClick({ ...p, digest, confirm: true })),
+  gearFirmware: (check: boolean | null = null) => ok(commands.gearFirmware({ check })),
+  gearSplash: (p: SplashParams) => ok(commands.gearSplash(p)),
+  gearFlashPlan: (p: FlashParams) => ok(commands.gearFlashPlan(p)),
+  /** The apply sheet's own Apply click for a firmware flash: the click is the confirm. */
+  gearFlashClick: (p: FlashParams, digest: string) => ok(commands.gearFlashClick({ ...p, digest, confirm: true })),
   gearSims: async (params: SimsParams) => N.sims(await ok(commands.gearSims(params))),
   gearSwitchMap: async (params: SwitchMapParams) => N.switchMap(await ok(commands.gearSwitchMap(params))),
   gearRadio: async () => N.radioSnapshot(await ok(commands.gearRadio({ wait_ms: null }))),
