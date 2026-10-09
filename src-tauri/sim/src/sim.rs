@@ -380,6 +380,7 @@ impl Sim {
             step: self.step,
             t: self.time(),
             host_ns: 0,
+            input_ns: self.last_rc.t_ns,
             pos: self.position(),
             quat: [q.w, q.x, q.y, q.z],
             vel: self.velocity(),

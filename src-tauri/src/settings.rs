@@ -317,6 +317,15 @@ pub const KEYS: &[Key] = &[
         check: any,
     },
     Key {
+        file: "simSettings",
+        name: None,
+        about: "the Sim page's settings object",
+        check: |v| {
+            typed::<crate::core::SimUiSettings>(v, "Sim page settings")?;
+            serde_json::from_value::<crate::core::SimUiSettings>(v.clone())?.check()
+        },
+    },
+    Key {
         file: "stickMode",
         name: None,
         about: "1, 2, 3 or 4",
