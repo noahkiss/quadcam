@@ -442,7 +442,9 @@ impl Core {
                 } = &c.link
                 {
                     let _hold = self.gear_hold(&link_handle(&c.link));
-                    let _ = (self.gear.unmount)(disk);
+                    if (self.gear.unmount)(disk).is_ok() {
+                        self.card_note_released(c);
+                    }
                 }
                 self.gear_note_failure(c, step, message);
                 self.gear_job_done(c, Some(step));

@@ -13,6 +13,7 @@ use super::bf::dump::{self, parse_cmd, Cmd, Config};
 use super::model::{
     ChangeEvent, ChangeStatus, DiffLine, Edit, LineOp, Refusal, RefusalCode, Section, StagedChange,
 };
+use super::osd::Pos;
 use super::store::{safe, Store};
 use crate::session::Editor;
 use anyhow::{bail, Context, Result};
@@ -43,6 +44,8 @@ pub struct NewChange {
     pub editor: Editor,
     pub note: String,
     pub status: ChangeStatus,
+    /// The change a restore undoes.
+    pub reverts: Option<String>,
 }
 
 /// `Changes::update`: the fields to change.
@@ -165,6 +168,7 @@ impl Changes {
                 status: n.status,
                 note: "Staged".into(),
             }],
+            reverts: n.reverts,
         };
         self.write(&c)?;
         Ok(c)
@@ -196,8 +200,16 @@ impl Changes {
             c.order = o;
         }
         if let Some(s) = u.status {
-            if !matches!(s, ChangeStatus::Draft | ChangeStatus::Ready) {
-                bail!("Status {s:?} is set by the apply engine; set draft or ready, or discard.");
+            if !matches!(
+                s,
+                ChangeStatus::Draft
+                    | ChangeStatus::Ready
+                    | ChangeStatus::Try
+                    | ChangeStatus::ReadFirst
+            ) {
+                bail!(
+                    "Status {s:?} is set by the apply engine; set draft, ready, try or read_first, or discard."
+                );
             }
             if s != c.status {
                 c.status = s;
@@ -415,6 +427,47 @@ pub fn render_fc(edits: &[Edit], base: Option<&Config>) -> FcRender {
                             line: l,
                         }),
                     }
+                }
+            }
+            Edit::OsdElement {
+                element,
+                x,
+                y,
+                profiles,
+            } => {
+                let el = element
+                    .trim()
+                    .to_ascii_lowercase()
+                    .trim_start_matches("osd_")
+                    .trim_end_matches("_pos")
+                    .to_string();
+                let name = format!("osd_{el}_pos");
+                if *x > 63 || *y > 31 || profiles.iter().any(|p| !(1..=3).contains(p)) {
+                    out.problems.push(bad(
+                        RefusalCode::ShapeUnknown,
+                        format!(
+                            "`{name}` takes x 0-63, y 0-31 and OSD profiles 1-3; nothing was written."
+                        ),
+                    ));
+                } else {
+                    // Keep the variant bits the FC holds; move the element and pick its profiles.
+                    let held = base
+                        .and_then(|b| b.get(Section::Master, &name))
+                        .and_then(|v| v.trim().parse::<u16>().ok())
+                        .map(Pos::decode);
+                    let pos = Pos {
+                        x: *x,
+                        y: *y,
+                        profiles: profiles.iter().fold(0u8, |m, p| m | (1 << (p - 1))),
+                        variant: held.map_or(0, |h| h.variant),
+                    };
+                    push_set(
+                        &mut items,
+                        &mut out,
+                        Section::Master,
+                        &name,
+                        &pos.encode().to_string(),
+                    );
                 }
             }
             Edit::FcAux {
@@ -661,6 +714,7 @@ mod tests {
             editor: Editor::User,
             note: String::new(),
             status: ChangeStatus::Ready,
+            reverts: None,
         }
     }
 
@@ -782,7 +836,63 @@ mod tests {
             }],
             Some(&base),
         );
-        assert_eq!(osd.problems[0].code, RefusalCode::ShapeUnknown);
+        assert_eq!(osd.problems[0].code, RefusalCode::BadSetting);
+    }
+
+    #[test]
+    fn osd_element_move_is_one_set_line() {
+        // vbat at x 12, y 3 on OSD profiles 1 and 2, variant 1: 12 | 3 << 5 | 3 << 11 | 1 << 14.
+        let held = Pos {
+            x: 12,
+            y: 3,
+            profiles: 3,
+            variant: 1,
+        }
+        .encode();
+        let base = Config::parse(&DUMP.replacen(
+            "set osd_cap_alarm = 2200\n",
+            &format!("set osd_cap_alarm = 2200\nset osd_vbat_pos = {held}\n"),
+            1,
+        ));
+        let r = render_fc(
+            &[Edit::OsdElement {
+                element: "vbat".into(),
+                x: 20,
+                y: 9,
+                profiles: vec![1, 3],
+            }],
+            Some(&base),
+        );
+        assert!(r.problems.is_empty(), "{:?}", r.problems);
+        let want = Pos {
+            x: 20,
+            y: 9,
+            profiles: 0b101,
+            variant: 1,
+        }
+        .encode();
+        assert_eq!(r.lines, [format!("set osd_vbat_pos = {want}")]);
+        assert_eq!(r.before, [format!("master:osd_vbat_pos={held}")]);
+        let bad = render_fc(
+            &[Edit::OsdElement {
+                element: "osd_vbat_pos".into(),
+                x: 64,
+                y: 1,
+                profiles: vec![],
+            }],
+            Some(&base),
+        );
+        assert_eq!(bad.problems[0].code, RefusalCode::ShapeUnknown);
+        let off = render_fc(
+            &[Edit::OsdElement {
+                element: "vbat".into(),
+                x: 1,
+                y: 1,
+                profiles: vec![],
+            }],
+            Some(&base),
+        );
+        assert_eq!(off.lines.len(), 1, "an empty profile list turns it off");
     }
 
     #[test]

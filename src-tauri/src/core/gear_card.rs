@@ -180,6 +180,7 @@ impl Core {
         };
         match r {
             Ok(()) => {
+                self.card_note_released(c);
                 self.gear_clear_failure(&super::link_handle(&c.link));
                 self.gear_job_done(c, None);
                 Ok(())

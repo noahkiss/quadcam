@@ -335,7 +335,7 @@ impl Core {
     }
 
     /// Records a job's progress; tells the GUI at most four times a second.
-    fn job_progress(&self, handle: &str, p: &BackupProgress) {
+    pub(super) fn job_progress(&self, handle: &str, p: &BackupProgress) {
         let note = {
             let mut jobs = self.gear_jobs.lock().unwrap();
             let Some(s) = jobs.get_mut(handle) else {
