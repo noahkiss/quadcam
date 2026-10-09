@@ -96,7 +96,11 @@ impl SimUiSettings {
         if !["fpv", "chase"].contains(&self.view.as_str()) {
             bail!("the view is fpv or chase");
         }
-        if self.aspect.as_deref().is_some_and(|a| !["16:9", "4:3"].contains(&a)) {
+        if self
+            .aspect
+            .as_deref()
+            .is_some_and(|a| !["16:9", "4:3"].contains(&a))
+        {
             bail!("the aspect is 16:9 or 4:3");
         }
         if self.uptilt_deg.is_some_and(|u| !(0.0..=60.0).contains(&u)) {
@@ -266,7 +270,10 @@ impl Core {
         let id = p.profile.as_deref().unwrap_or(DEFAULT_PRESET);
         let profile = quadcam_sim::preset(id).with_context(|| {
             let ids: Vec<String> = quadcam_sim::presets().into_iter().map(|p| p.id).collect();
-            format!("No sim profile {id:?}. Built-in profiles: {}.", ids.join(", "))
+            format!(
+                "No sim profile {id:?}. Built-in profiles: {}.",
+                ids.join(", ")
+            )
         })?;
         let cal = p.calibration.clone();
         if let Some(c) = &cal {

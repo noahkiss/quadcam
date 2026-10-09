@@ -74,7 +74,13 @@ fn with(axes: [u16; 8], i: usize, v: u16) -> [u16; 8] {
     a
 }
 
-fn wait(c: &Core, f: &FakeHid, axes: [u16; 8], buttons: u32, ok: impl Fn(&SimFrame) -> bool) -> SimFrame {
+fn wait(
+    c: &Core,
+    f: &FakeHid,
+    axes: [u16; 8],
+    buttons: u32,
+    ok: impl Fn(&SimFrame) -> bool,
+) -> SimFrame {
     let end = Instant::now() + Duration::from_secs(8);
     loop {
         hold(f, 20, buttons, axes);
@@ -106,15 +112,31 @@ fn start_describes_the_room_and_frames_advance() {
     assert!(info.boxes.iter().any(|b| b.material == "gate"));
     assert!(info.camera.uptilt_deg > 0.0 && info.camera.fov_deg > 60.0);
 
+    // Real time: steps follow the wall clock at 2 kHz, within 10 %.
+    let t0 = Instant::now();
     hold(&f, 300, 0, REST);
     let a = c.sim_frame().unwrap();
+    let want = t0.elapsed().as_secs_f64() * 2000.0;
+    assert!(
+        (a.cur.step as f64 - want).abs() < want * 0.1,
+        "{} steps, wanted {want:.0}",
+        a.cur.step
+    );
     std::thread::sleep(Duration::from_millis(50));
     let b = c.sim_frame().unwrap();
     assert!(a.radio && b.radio);
-    assert!(b.cur.step > a.cur.step + 50, "{} {}", a.cur.step, b.cur.step);
+    assert!(
+        b.cur.step > a.cur.step + 50,
+        "{} {}",
+        a.cur.step,
+        b.cur.step
+    );
     assert_eq!(b.cur.step, b.prev.step + 1);
     assert!(b.cur.host_ns > b.prev.host_ns);
-    assert!(b.host_ns >= b.cur.host_ns, "the read is after the step it holds");
+    assert!(
+        b.host_ns >= b.cur.host_ns,
+        "the read is after the step it holds"
+    );
     // A quad at rest on the pad, disarmed, battery full, no sag.
     assert!(!b.hud.armed);
     assert!(b.cur.pos[2].abs() < 0.05);
@@ -152,7 +174,10 @@ fn an_unknown_profile_is_refused_and_a_second_start_replaces_the_first() {
         .unwrap();
     assert_eq!(two.profile, "five_inch");
     std::thread::sleep(Duration::from_millis(50));
-    assert!(c.sim_frame().unwrap().cur.step < 1000, "a fresh run, not the old one");
+    assert!(
+        c.sim_frame().unwrap().cur.step < 1000,
+        "a fresh run, not the old one"
+    );
     c.sim_stop();
 }
 
@@ -170,7 +195,11 @@ fn the_arm_switch_arms_at_low_throttle_and_the_sticks_show_calibrated() {
     // Half roll right, throttle a quarter: the HUD's sticks are the calibrated values.
     let axes = with(with(with(REST, 0, 1536), 2, 512), 4, ARM_ON);
     let fr = wait(&c, &f, axes, 0, |fr| fr.hud.sticks.roll > 0.4);
-    assert!((fr.hud.sticks.roll - 0.5).abs() < 0.05, "{}", fr.hud.sticks.roll);
+    assert!(
+        (fr.hud.sticks.roll - 0.5).abs() < 0.05,
+        "{}",
+        fr.hud.sticks.roll
+    );
     assert!((fr.hud.sticks.throttle - 0.25).abs() < 0.05);
     assert!(fr.hud.sticks.pitch.abs() < 0.05 && fr.hud.sticks.yaw.abs() < 0.05);
     // The switch off disarms.
@@ -186,13 +215,18 @@ fn a_raised_throttle_refuses_to_arm_and_the_hud_says_why() {
     let c = core(&dir, &f);
     start(&c);
     // Throttle up, switch off: the quad names the throttle.
-    let fr = wait(&c, &f, with(REST, 2, 1500), 0, |fr| fr.hud.arm_block.is_some());
+    let fr = wait(&c, &f, with(REST, 2, 1500), 0, |fr| {
+        fr.hud.arm_block.is_some()
+    });
     let why = fr.hud.arm_block.unwrap();
     assert!(why.to_lowercase().contains("throttle"), "{why}");
     // The switch on anyway: refused, and the quad asks for the switch off and on again.
     let up = with(with(REST, 2, 1500), 4, ARM_ON);
     let fr = wait(&c, &f, up, 0, |fr| {
-        fr.hud.arm_block.as_deref().is_some_and(|w| w.contains("off and on"))
+        fr.hud
+            .arm_block
+            .as_deref()
+            .is_some_and(|w| w.contains("off and on"))
     });
     assert!(!fr.hud.armed);
     assert!(fr.hud.arm_block.unwrap().contains("off and on"));
@@ -224,7 +258,9 @@ fn the_reset_control_returns_the_quad_to_the_pad() {
     let fr = wait(&c, &f, climb, 0, |fr| fr.cur.pos[2] > 0.3);
     assert!(fr.cur.pos[2] > 0.3, "{:?}", fr.cur.pos);
     // The reset button (the arm switch still on, as it would be in the air).
-    let fr = wait(&c, &f, with(REST, 4, ARM_ON), BTN_RESET, |fr| fr.cur.pos[2] < 0.1);
+    let fr = wait(&c, &f, with(REST, 4, ARM_ON), BTN_RESET, |fr| {
+        fr.cur.pos[2] < 0.1
+    });
     assert!(fr.cur.pos[2] < 0.1, "{:?}", fr.cur.pos);
     c.sim_stop();
 }
@@ -237,7 +273,9 @@ fn the_page_can_reset_without_the_radio() {
     start(&c);
     hold(&f, 200, 0, REST);
     wait(&c, &f, with(REST, 4, ARM_ON), 0, |fr| fr.hud.armed);
-    wait(&c, &f, with(with(REST, 2, 1700), 4, ARM_ON), 0, |fr| fr.cur.pos[2] > 0.3);
+    wait(&c, &f, with(with(REST, 2, 1700), 4, ARM_ON), 0, |fr| {
+        fr.cur.pos[2] > 0.3
+    });
     c.sim_reset().unwrap();
     let fr = wait(&c, &f, REST, 0, |fr| fr.cur.pos[2] < 0.1);
     assert!(fr.cur.pos[2] < 0.1);

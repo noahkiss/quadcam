@@ -183,8 +183,12 @@ impl WorldSpec {
             material,
         };
         // A crate and a low table.
-        w.colliders
-            .push(bx([0.25, 0.25, 0.25], [-1.6, -1.2, 0.25], 20.0, Material::Wall));
+        w.colliders.push(bx(
+            [0.25, 0.25, 0.25],
+            [-1.6, -1.2, 0.25],
+            20.0,
+            Material::Wall,
+        ));
         w.colliders
             .push(bx([0.5, 0.3, 0.2], [1.5, -1.2, 0.2], 0.0, Material::Wall));
         // Two gates, 0.5 m wide and 0.5 m high inside: posts and a bar, at 90° to each other.
@@ -413,9 +417,16 @@ mod tests {
                 Shape::Mesh { .. } => None,
             })
             .collect();
-        assert_eq!(boxes.len(), w.colliders.len(), "boxes only: the page draws them all");
+        assert_eq!(
+            boxes.len(),
+            w.colliders.len(),
+            "boxes only: the page draws them all"
+        );
         // The ceiling's underside is 2.5 m up; the walls are 5 m and 4 m apart inside.
-        let ceiling = boxes.iter().map(|(h, c)| c.position[2] - h[2]).fold(0.0, f64::max);
+        let ceiling = boxes
+            .iter()
+            .map(|(h, c)| c.position[2] - h[2])
+            .fold(0.0, f64::max);
         assert!((ceiling - 2.5).abs() < 1e-9, "{ceiling}");
         let gates: Vec<_> = boxes
             .iter()
@@ -426,7 +437,11 @@ mod tests {
         for (h, c) in boxes.iter().skip(6) {
             let r = h[0].max(h[1]);
             assert!(c.position[0].abs() + r <= 2.5 && c.position[1].abs() + r <= 2.0);
-            assert!(c.position[0].hypot(c.position[1]) - r > 0.6, "{:?}", c.position);
+            assert!(
+                c.position[0].hypot(c.position[1]) - r > 0.6,
+                "{:?}",
+                c.position
+            );
         }
         // A gate's opening is 0.5 m wide (post centres 0.56 apart, posts 0.06 thick).
         let posts: Vec<_> = gates.iter().filter(|(h, _)| h[2] > 0.2).collect();
