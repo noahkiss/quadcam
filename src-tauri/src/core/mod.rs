@@ -16,6 +16,7 @@ use std::sync::{Arc, Mutex};
 mod apply;
 mod apply_card;
 mod backup;
+mod blackbox;
 mod bench;
 mod cuts;
 mod dfu_link;
@@ -51,6 +52,10 @@ pub use backup::{
     GearJob, ImportBackupsParams, PruneParams, RepairResult, StopParams,
 };
 pub use bench::{apply_ready_hooks, CopyParams};
+pub use blackbox::{
+    blackbox_hooks, BlackboxEntry, BlackboxEraseParams, BlackboxErased, BlackboxExportParams,
+    BlackboxExported, BlackboxFilter, BlackboxPullParams, BlackboxPullResult, EraseState, PullMode,
+};
 pub use dfu_link::{DfuLinkParams, DfuLinked};
 pub use fc::{
     BoardNotesParams, FcJob, FcPortParams, FcReadParams, PollPauseParams, UsbTimer, USB_PROBE,

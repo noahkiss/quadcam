@@ -10,6 +10,7 @@
 //! CLI reboots the FC. So a job is either MSP only (identify, the battery probe, no
 //! reboot) or CLI (read, run; the FC reboots at the end).
 
+pub mod blackbox;
 pub mod boards;
 pub mod cli;
 pub mod dump;

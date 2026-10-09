@@ -1,7 +1,9 @@
 //! `FakeFc`: a Betaflight FC simulator for tests and the mock core. Seeded from a
 //! `dump all` (a scrubbed fixture or a synthetic one), it answers the CLI (`#`, `set`,
 //! `get`, other config lines, `version`, `status`, `diff all`, `dump all`, `profile N`,
-//! `save`, `exit`) and the MSP identity, battery and channel (`MSP_RC`) messages.
+//! `save`, `exit`) and the MSP identity, battery and channel (`MSP_RC`) messages. With a
+//! dataflash (`with_dataflash`) it answers the blackbox messages too (summary, read, erase)
+//! and, with `with_msc`, the `msc` command.
 //!
 //! - `save` keeps the changes and reboots; `exit` drops them and reboots. A reboot ends
 //!   every open link (reads give `PortGone`) and the port refuses opens for
@@ -52,6 +54,31 @@ struct State {
     opens: u32,
     saves: u32,
     exits: u32,
+    flash: Option<Flash>,
+    /// The `msc` command is known; the port stays gone until `msc_release`.
+    msc: bool,
+    msc_active: bool,
+}
+
+/// The blackbox flash of a `FakeFc`.
+struct Flash {
+    image: Vec<u8>,
+    total: u32,
+    /// Summary polls that read "not ready" after an erase starts.
+    erase_polls: u32,
+    erasing: u32,
+    erases: u32,
+    reads: u32,
+    /// The next N read replies are `!` errors.
+    fail_reads: u32,
+    /// Replies carry at most this many bytes.
+    short_reads: Option<usize>,
+    /// Replies claim to be compressed.
+    compress: bool,
+    /// The summary reports this many more bytes used than the image holds.
+    lie_used: u32,
+    /// An erase starts and the flash never becomes ready again.
+    stuck_erase: bool,
 }
 
 /// The simulator. Clones share the FC.
@@ -90,6 +117,9 @@ impl FakeFc {
                 opens: 0,
                 saves: 0,
                 exits: 0,
+                flash: None,
+                msc: false,
+                msc_active: false,
             })),
         }
     }
@@ -155,6 +185,91 @@ impl FakeFc {
     /// sees them.
     pub fn set_rc(&self, channels: &[u16]) {
         self.st().rc = channels.to_vec();
+    }
+
+    /// A blackbox flash holding `image` (the used part) on a chip of `total` bytes.
+    pub fn with_dataflash(self, image: Vec<u8>, total: u32) -> Self {
+        self.st().flash = Some(Flash {
+            image,
+            total,
+            erase_polls: 2,
+            erasing: 0,
+            erases: 0,
+            reads: 0,
+            fail_reads: 0,
+            short_reads: None,
+            compress: false,
+            lie_used: 0,
+            stuck_erase: false,
+        });
+        self
+    }
+    fn flash<T>(&self, f: impl FnOnce(&mut Flash) -> T) -> T {
+        f(self.st().flash.as_mut().expect("no dataflash: with_dataflash"))
+    }
+    /// Summary polls that read "not ready" after an erase starts (default 2).
+    pub fn with_erase_polls(self, n: u32) -> Self {
+        self.flash(|f| f.erase_polls = n);
+        self
+    }
+    /// The next `n` read replies are errors.
+    pub fn fail_reads(self, n: u32) -> Self {
+        self.flash(|f| f.fail_reads = n);
+        self
+    }
+    /// Read replies carry at most `n` bytes.
+    pub fn short_reads(self, n: usize) -> Self {
+        self.flash(|f| f.short_reads = Some(n));
+        self
+    }
+    /// Read replies claim to be compressed.
+    pub fn compress_replies(self) -> Self {
+        self.flash(|f| f.compress = true);
+        self
+    }
+    /// The summary reports `extra` more bytes used than the flash holds.
+    pub fn lie_used(self, extra: u32) -> Self {
+        self.flash(|f| f.lie_used = extra);
+        self
+    }
+    /// An erase starts and never ends.
+    pub fn stuck_erase(self) -> Self {
+        self.flash(|f| f.stuck_erase = true);
+        self
+    }
+    /// The flash bytes now.
+    pub fn dataflash(&self) -> Vec<u8> {
+        self.flash(|f| f.image.clone())
+    }
+    /// Adds bytes to the flash, as a flight would.
+    pub fn append_dataflash(&self, bytes: &[u8]) {
+        self.flash(|f| f.image.extend_from_slice(bytes));
+    }
+    /// Erase commands received.
+    pub fn dataflash_erases(&self) -> u32 {
+        self.flash(|f| f.erases)
+    }
+    /// Read requests received.
+    pub fn dataflash_reads(&self) -> u32 {
+        self.flash(|f| f.reads)
+    }
+    /// The CLI knows `msc`: the command takes the port away until `msc_release`.
+    pub fn with_msc(self) -> Self {
+        self.st().msc = true;
+        self
+    }
+    /// True while the FC is in USB disk mode.
+    pub fn msc_active(&self) -> bool {
+        self.st().msc_active
+    }
+    /// The host let go of the disk: the FC reboots and the port comes back.
+    pub fn msc_release(&self) {
+        let mut s = self.st();
+        if s.msc_active {
+            s.msc_active = false;
+            s.generation += 1;
+            s.gone_opens = s.reboot_opens;
+        }
     }
 
     pub fn log(&self) -> Vec<String> {
@@ -324,6 +439,20 @@ impl FakeLink {
                 self.send(&t, 1);
                 return;
             }
+            "help" => {
+                let msc = if s.msc { " msc\r\n" } else { "" };
+                let t = format!("{echo}Available commands:\r\n diff\r\n dump\r\n{msc} save\r\n\r\n# ");
+                drop(s);
+                self.send(&t, 1);
+                return;
+            }
+            "msc" if s.msc => {
+                s.msc_active = true;
+                drop(s);
+                self.send(&format!("{echo}Restarting in mass storage mode"), 1);
+                self.reboot(false, Some(u32::MAX));
+                return;
+            }
             "status" => {
                 let t = format!(
                     "{echo}MCU G473 Clock=170MHz, Vref=3.30V, Core temp=40degC\r\nVoltage: {} * 0.01V\r\nCPU:2%, cycle time: 125\r\n\r\n# ",
@@ -410,7 +539,7 @@ impl FakeLink {
     }
 
     fn msp_frame(&mut self, f: Frame) {
-        let s = self.fc.st();
+        let mut s = self.fc.st();
         let payload: Option<Vec<u8>> = match f.cmd {
             msp::MSP_API_VERSION => Some(vec![0, 1, 47]),
             msp::MSP_FC_VARIANT => Some(b"BTFL".to_vec()),
@@ -448,6 +577,11 @@ impl FakeLink {
                 p.extend_from_slice(&s.vbat_cv.to_le_bytes());
                 Some(p)
             }
+            super::blackbox::MSP_DATAFLASH_SUMMARY
+            | super::blackbox::MSP_DATAFLASH_READ
+            | super::blackbox::MSP_DATAFLASH_ERASE => {
+                s.flash.as_mut().and_then(|fl| flash_msp(fl, &f))
+            }
             _ => None,
         };
         drop(s);
@@ -470,6 +604,60 @@ impl FakeLink {
             .unwrap()
         });
         self.out.push_back(bytes);
+    }
+}
+
+/// The blackbox messages. None: the FC answers `!`.
+fn flash_msp(fl: &mut Flash, f: &Frame) -> Option<Vec<u8>> {
+    use super::blackbox::{MSP_DATAFLASH_ERASE, MSP_DATAFLASH_READ};
+    match f.cmd {
+        MSP_DATAFLASH_ERASE => {
+            fl.erases += 1;
+            fl.image.clear();
+            fl.erasing = if fl.stuck_erase { u32::MAX } else { fl.erase_polls };
+            Some(Vec::new())
+        }
+        MSP_DATAFLASH_READ => {
+            fl.reads += 1;
+            if fl.fail_reads > 0 {
+                fl.fail_reads -= 1;
+                return None;
+            }
+            let p = &f.payload;
+            if p.len() < 4 {
+                return None;
+            }
+            let addr = u32::from_le_bytes([p[0], p[1], p[2], p[3]]) as usize;
+            let want = if p.len() >= 6 {
+                u16::from_le_bytes([p[4], p[5]]) as usize
+            } else {
+                4096
+            };
+            let end = (addr + want.min(fl.short_reads.unwrap_or(usize::MAX))).min(fl.image.len());
+            let data = fl.image.get(addr..end).unwrap_or(&[]);
+            let mut r = (addr as u32).to_le_bytes().to_vec();
+            r.extend_from_slice(&(data.len() as u16).to_le_bytes());
+            r.push(u8::from(fl.compress));
+            r.extend_from_slice(data);
+            Some(r)
+        }
+        _ => {
+            // Summary.
+            let ready = fl.erasing == 0;
+            if fl.erasing > 0 && fl.erasing != u32::MAX {
+                fl.erasing -= 1;
+            }
+            let mut r = vec![if ready { 3 } else { 2 }];
+            r.extend_from_slice(&(fl.total / 4096).to_le_bytes());
+            r.extend_from_slice(&fl.total.to_le_bytes());
+            let used = if ready {
+                fl.image.len() as u32 + fl.lie_used
+            } else {
+                0
+            };
+            r.extend_from_slice(&used.to_le_bytes());
+            Some(r)
+        }
     }
 }
 

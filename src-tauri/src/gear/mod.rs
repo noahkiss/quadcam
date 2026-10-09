@@ -28,6 +28,7 @@
 //!   lines, per control and position; live positions from channel values.
 //! - `radio_hid`: the radio as a USB joystick (hidapi): reports, channels, the watch.
 //! - `blobs`: the content-addressed blob store under the backups.
+//! - `blackbox`: pulled blackbox flash images: records, the pairing with flights.
 //! - `backup`: snapshots: take, list, read, diff, retain, prune, export, import old folders.
 //! - `radiologs`: each radio log kept once per radio, outside snapshots.
 //! - `health`: the card check (`diskutil verifyVolume`) and repair, and their log.
@@ -38,6 +39,7 @@
 pub mod apply;
 pub mod backup;
 pub mod bf;
+pub mod blackbox;
 pub mod blobs;
 pub mod changes;
 pub mod compat;
@@ -95,6 +97,12 @@ pub struct GearSettings {
     pub firmware_check: String,
     /// The voice provider: `say` (macOS) or another a later version adds.
     pub tts_provider: String,
+    /// Erase the FC's blackbox flash after a pull verified (`gearEraseBlackbox`). Off by
+    /// default, like `delete_clips_after_import`.
+    pub erase_blackbox: bool,
+    /// Try the FC's USB disk mode before MSP for a blackbox pull (`gearBlackboxMsc`).
+    /// Unproven on real FCs; off by default.
+    pub blackbox_msc: bool,
     /// What runs when a device of each kind is plugged in (`gearOnConnect`). Backup also
     /// needs `auto_backup`.
     pub on_connect: BTreeMap<DeviceKind, Vec<Automation>>,
@@ -115,6 +123,8 @@ pub enum Automation {
     Import,
     /// Apply the device's staged changes that are Ready.
     ApplyReady,
+    /// Pull an FC's blackbox flash (and erase it, when `erase_blackbox` is on).
+    Blackbox,
 }
 
 /// Values `firmwareCheck` takes.
@@ -132,6 +142,8 @@ impl GearSettings {
             usb_minutes: 20,
             firmware_check: "manual".into(),
             tts_provider: "say".into(),
+            erase_blackbox: false,
+            blackbox_msc: false,
             on_connect: DeviceKind::ALL
                 .iter()
                 .map(|k| (*k, vec![Automation::Backup]))
@@ -183,6 +195,12 @@ impl GearSettings {
         }
         if let Some(p) = get::<String>(v, "ttsProvider").filter(|p| !p.trim().is_empty()) {
             s.tts_provider = p;
+        }
+        if let Some(b) = get(v, "gearEraseBlackbox") {
+            s.erase_blackbox = b;
+        }
+        if let Some(b) = get(v, "gearBlackboxMsc") {
+            s.blackbox_msc = b;
         }
         // A kind in the file replaces that kind's list; other kinds keep the default.
         if let Some(m) = get::<BTreeMap<DeviceKind, Vec<Automation>>>(v, "gearOnConnect") {
@@ -352,15 +370,20 @@ mod tests {
             assert!(s.runs(k, Automation::Backup));
             assert!(!s.runs(k, Automation::Import));
             assert!(!s.runs(k, Automation::ApplyReady));
+            assert!(!s.runs(k, Automation::Blackbox));
         }
+        assert!(!s.erase_blackbox && !s.blackbox_msc, "both off by default");
         let v: crate::settings::Values = serde_json::from_value(json!({
-            "gearOnConnect": {"dvr_card": ["backup", "import"], "fc": []},
+            "gearOnConnect": {"dvr_card": ["backup", "import"], "fc": ["blackbox"]},
+            "gearEraseBlackbox": true,
             "gearCues": {"speech": false}
         }))
         .unwrap();
         let s = GearSettings::from_values(&v, def);
         assert!(s.runs(DeviceKind::DvrCard, Automation::Import));
         assert!(!s.runs(DeviceKind::Fc, Automation::Backup));
+        assert!(s.runs(DeviceKind::Fc, Automation::Blackbox));
+        assert!(s.erase_blackbox);
         assert!(
             s.runs(DeviceKind::Radio, Automation::Backup),
             "other kinds keep theirs"
