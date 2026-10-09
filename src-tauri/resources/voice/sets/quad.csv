@@ -1,0 +1,20 @@
+path,text,group,tone,why
+SOUNDS/en/armed.wav,Armed,callouts,calm,Motors can spin. Plays when the model arms.
+SOUNDS/en/disarm.wav,Disarmed,callouts,calm,Motors are off. Plays when the model disarms.
+SOUNDS/en/lowbat.wav,Battery low,callouts,alert,The pack voltage is under the first warning level.
+SOUNDS/en/critbat.wav,Battery critical,callouts,alert,The pack voltage is under the last level: land now.
+SOUNDS/en/lowrssi.wav,Signal low,callouts,alert,The link signal is under the warning level.
+SOUNDS/en/critrssi.wav,Signal critical,callouts,alert,The link signal is under the last warning level.
+SOUNDS/en/lowlq.wav,Link quality low,callouts,alert,The link quality is under the warning level.
+SOUNDS/en/failsafe.wav,Failsafe,callouts,alert,The receiver lost the radio and took over.
+SOUNDS/en/linkback.wav,Link back,callouts,calm,The receiver hears the radio again.
+SOUNDS/en/turtle.wav,Turtle mode,callouts,calm,Turtle mode is on: the quad flips over.
+SOUNDS/en/angle.wav,Angle mode,callouts,calm,Angle mode is on.
+SOUNDS/en/horizon.wav,Horizon mode,callouts,calm,Horizon mode is on.
+SOUNDS/en/acro.wav,Acro mode,callouts,calm,Acro mode is on.
+SOUNDS/en/beeper.wav,Beeper on,callouts,calm,"The quad's beeper is on, to find it."
+SOUNDS/en/gpsfix.wav,GPS fix,callouts,calm,The GPS has a fix.
+SOUNDS/en/rth.wav,Return to home,callouts,alert,The quad flies home by itself.
+SOUNDS/en/mahwarn.wav,Capacity warning,callouts,alert,The used capacity reached the warning level.
+SOUNDS/en/timer1.wav,Timer one,callouts,calm,Timer one reached its time.
+SOUNDS/en/timer2.wav,Timer two,callouts,calm,Timer two reached its time.

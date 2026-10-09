@@ -8,6 +8,7 @@ pub mod keychain;
 pub mod lines;
 pub mod packs;
 pub mod render;
+pub mod sets;
 pub mod tts;
 pub mod wav;
 

@@ -35,7 +35,7 @@ pub fn builtin_sha() -> String {
 }
 
 /// Splits one CSV record into fields (quotes, doubled quotes inside).
-fn fields(line: &str) -> Result<Vec<String>> {
+pub(super) fn fields(line: &str) -> Result<Vec<String>> {
     let mut out = Vec::new();
     let mut cur = String::new();
     let mut quoted = false;
