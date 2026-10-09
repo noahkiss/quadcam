@@ -14,7 +14,10 @@
 //!   the start of flash, fit the board's flash and begin with a Cortex-M vector table. A
 //!   refusal is safe; a wrong flash is not.
 
+use super::check::{FirmwareState, FirmwareStatus};
+use crate::gear::compat::{self, Product};
 use crate::gear::dfu::FLASH_BASE;
+use crate::gear::model::DeviceKind;
 use crate::gear::model::{Refusal, RefusalCode};
 use anyhow::{anyhow, bail, Context, Result};
 use sha2::{Digest, Sha256};
@@ -81,6 +84,44 @@ pub fn release_of(version: &str) -> String {
         .next()
         .unwrap_or_default()
         .to_string()
+}
+
+/// The Firmware page's FC rows with the preview on: an FC on a board with a target, where
+/// `compat` proves the newest release, can be flashed. Any other FC keeps the row the check
+/// made, with the reason when an update waits.
+pub fn adjust_statuses(rows: &mut [FirmwareStatus], preview: bool) {
+    if !preview {
+        return;
+    }
+    for r in rows.iter_mut().filter(|r| r.kind == DeviceKind::Fc) {
+        let verdict = match (&r.latest, r.board.as_deref()) {
+            (Some(latest), Some(board)) => match target_for(board) {
+                None => Err(format!("Board {board} cannot be flashed by QuadCam yet.")),
+                Some(_) => compat::check_writable(
+                    Product::Betaflight,
+                    Some(board),
+                    Some(&release_of(latest)),
+                )
+                .map_err(|e| e.reason),
+            },
+            (Some(_), None) => Err("Board (none) cannot be flashed by QuadCam yet.".into()),
+            (None, _) => Err("The newest release is not known.".into()),
+        };
+        match verdict {
+            Ok(()) => {
+                r.flashable = true;
+                if r.state == FirmwareState::Update {
+                    r.note = None;
+                }
+            }
+            Err(why) => {
+                r.flashable = false;
+                if r.state == FirmwareState::Update {
+                    r.note = Some(format!("QuadCam will not flash it: {why}"));
+                }
+            }
+        }
+    }
 }
 
 /// A flashable image: the bytes from `base`, gaps filled with 0xFF.
@@ -577,6 +618,44 @@ mod tests {
         assert!(!valid_release("../x"));
         assert!(!valid_release(""));
         assert!(!valid_release("a.b"));
+    }
+
+    fn fc_row(board: &str, installed: &str, latest: &str) -> FirmwareStatus {
+        FirmwareStatus {
+            device: "fc-1".into(),
+            kind: DeviceKind::Fc,
+            name: "FC".into(),
+            product: "Betaflight".into(),
+            board: Some(board.into()),
+            installed: Some(installed.into()),
+            latest: Some(latest.into()),
+            state: FirmwareState::Update,
+            flashable: false,
+            note: Some("QuadCam checks Betaflight versions. It does not flash them.".into()),
+        }
+    }
+
+    #[test]
+    fn the_page_offers_a_flash_only_with_the_preview_on_and_a_proven_pair() {
+        let mut off = vec![fc_row("BETAFPVG473_V2", "2025.12.5", "2026.6.0")];
+        adjust_statuses(&mut off, false);
+        assert!(!off[0].flashable);
+        assert!(off[0].note.as_deref().unwrap().contains("does not flash"));
+
+        let mut on = vec![
+            fc_row("BETAFPVG473_V2", "2025.12.5", "2026.6.0"),
+            fc_row("BETAFPVG473_V2", "2025.12.5", "2026.7.0"),
+            fc_row("STM32F411", "4.5.1", "2026.6.0"),
+        ];
+        adjust_statuses(&mut on, true);
+        assert!(on[0].flashable && on[0].note.is_none());
+        assert!(!on[1].flashable);
+        assert!(on[1].note.as_deref().unwrap().contains("is not proven"), "{:?}", on[1].note);
+        assert!(!on[2].flashable);
+        assert_eq!(
+            on[2].note.as_deref(),
+            Some("QuadCam will not flash it: Board STM32F411 cannot be flashed by QuadCam yet.")
+        );
     }
 
     #[test]

@@ -1,3 +1,8 @@
+---
+source: tests/snapshots.rs
+assertion_line: 24
+expression: "quadcam_lib::mcp::tools()"
+---
 [
   {
     "annotations": {

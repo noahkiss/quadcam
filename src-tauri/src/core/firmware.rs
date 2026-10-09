@@ -114,8 +114,10 @@ impl Core {
             last
         };
         let devices = self.gear_store().devices()?;
+        let mut statuses = fwcheck::statuses(&devices, &latest);
+        crate::gear::firmware::betaflight::adjust_statuses(&mut statuses, self.bf_flash_on());
         Ok(FirmwareView {
-            devices: fwcheck::statuses(&devices, &latest),
+            devices: statuses,
             latest,
             mode,
         })

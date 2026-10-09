@@ -873,6 +873,13 @@ expression: "quadcam_lib::mcp::tools()"
                 "null"
               ]
             },
+            "betaflight_flash_preview": {
+              "description": "Gear: offer flashing Betaflight firmware to an FC (a preview). Off by default.",
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
             "default_name": {
               "type": [
                 "string",

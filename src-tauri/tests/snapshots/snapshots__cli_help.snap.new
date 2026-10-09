@@ -1,5 +1,6 @@
 ---
 source: tests/snapshots.rs
+assertion_line: 129
 expression: text
 ---
 ===== quadcam-cli  --help
