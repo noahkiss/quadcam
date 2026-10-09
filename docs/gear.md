@@ -99,7 +99,7 @@ a port only when no other program has it open:
 Plug USB in before the battery: many FCs do not show up on USB when the battery is first.
 When several FCs are plugged in, name the port; QuadCam does not guess.
 
-**Writes.** QuadCam writes an FC only through a staged change (a later release). It writes
+**Writes.** QuadCam writes an FC only through a staged change that you apply. It writes
 only boards and Betaflight builds it has tested; any other FC is read-only, and QuadCam says
 why ("Board X is not proven."). Today these are proven:
 
@@ -292,7 +292,7 @@ QuadCam posts through `osascript`.
 The `gear_on_connect` setting names the steps that run when a device of each kind is plugged in:
 `backup`, `import` and `apply_ready`. Only `backup` is on by default, and only while
 `gear_auto_backup` is on. `backup` runs two steps: **Card check** (a card QuadCam knows) and
-**Backup** (a radio card or an FC). `import` comes in a later release. `apply_ready` is described
+**Backup** (a radio card or an FC). `import` is accepted in the setting and does nothing yet. `apply_ready` is described
 under [Apply on connect](#apply-on-connect).
 
 A card is unmounted (`diskutil unmountDisk`) at the end of every job: the on-connect steps, a
