@@ -84,7 +84,7 @@ The app, the command-line tool and the MCP server all read and write this file.
 | `gear_on_connect` | `backup` for every kind | Steps per device kind on plug-in: `backup`, `import`, `apply_ready` (opens the apply sheet for the device's Ready changes; nothing is written until you click Apply) |
 | `gear_cues` | speech and notifications on | Cues, their channels, mute, debounce, the reminder and quiet hours. See [Gear](gear.md#cues) |
 | `sim_preview` | off | Shows **Gear > Sim**, the flight sim preview. Set it in Settings > Gear, or with `quadcam-cli settings set sim_preview=true` |
-| `firmware_check` | `manual` | `manual` or `daily` |
+| `firmware_check` | `manual` | `manual` or `daily`. `manual`: the Firmware page reads the network only when you select **Check for updates**. `daily`: it also checks when the last answer is a day old. See [Gear](gear.md#check) |
 | `tts_provider`, `tts_key` | `say`, none | The voice provider. Reads show the key only as `(set)` |
 
 To read and change settings from a terminal, see [Command line](cli.md#places-profiles-and-settings).
