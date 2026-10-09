@@ -4476,7 +4476,7 @@ export type SplashPreview = {
 	supported: boolean,
 	/**  Why not, when it is not. */
 	reason?: string | null,
-	/**  The 1,024 packed bytes as hex, to compare with `splash_hash` of a binary. */
+	/**  A hash of the 1,024 packed bytes. */
 	hash: string,
 };
 

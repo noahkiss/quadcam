@@ -1317,14 +1317,26 @@ fn firmware_text(v: &Value) -> String {
             d["installed"].as_str().unwrap_or("unknown"),
             d["latest"].as_str().unwrap_or("unknown"),
             state,
-            if d["flashable"] == true { "; QuadCam can flash it" } else { "" },
-            d["note"].as_str().map(|n| format!("; {n}")).unwrap_or_default(),
+            if d["flashable"] == true {
+                "; QuadCam can flash it"
+            } else {
+                ""
+            },
+            d["note"]
+                .as_str()
+                .map(|n| format!("; {n}"))
+                .unwrap_or_default(),
         ));
     }
     if out.is_empty() {
         out.push_str("No saved device runs firmware QuadCam checks.\n");
     }
-    for e in v["latest"]["errors"].as_array().into_iter().flatten().filter_map(Value::as_str) {
+    for e in v["latest"]["errors"]
+        .as_array()
+        .into_iter()
+        .flatten()
+        .filter_map(Value::as_str)
+    {
         out.push_str(&format!("Check failed: {e}\n"));
     }
     if let Some(t) = v["latest"]["checked_at"].as_str() {
@@ -1362,10 +1374,20 @@ fn sim_plan_text(v: &Value) -> String {
                 d["after"].as_str().unwrap_or("?")
             )),
             Some("files") => {
-                for f in d["put"].as_array().into_iter().flatten().filter_map(Value::as_str) {
+                for f in d["put"]
+                    .as_array()
+                    .into_iter()
+                    .flatten()
+                    .filter_map(Value::as_str)
+                {
                     out.push_str(&format!("+{f}\n"));
                 }
-                for f in d["delete"].as_array().into_iter().flatten().filter_map(Value::as_str) {
+                for f in d["delete"]
+                    .as_array()
+                    .into_iter()
+                    .flatten()
+                    .filter_map(Value::as_str)
+                {
                     out.push_str(&format!("-{f}\n"));
                 }
             }
@@ -1735,8 +1757,13 @@ fn gear_apply<B: Backend>(backend: &mut B, a: &Value) -> Result<(Vec<Value>, Val
             Ok((vec![text(apply_text(&v))], v))
         }
         "flash" => {
-            let device = x.device.clone().context("device is required for flash: the radio's saved device id")?;
-            let digest = x.digest.context("digest is required for flash: the digest from quadcam_gear flash_plan")?;
+            let device = x
+                .device
+                .clone()
+                .context("device is required for flash: the radio's saved device id")?;
+            let digest = x
+                .digest
+                .context("digest is required for flash: the digest from quadcam_gear flash_plan")?;
             if x.confirm != Some(true) {
                 return Err(anyhow!(
                     "Refused: flash writes the radio's firmware; it needs the plan's digest and confirm=true."

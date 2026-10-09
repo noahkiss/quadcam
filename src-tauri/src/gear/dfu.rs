@@ -266,7 +266,12 @@ impl<'a> Dfu<'a> {
     }
 
     /// Reads `len` bytes from `addr`.
-    pub fn read(&mut self, addr: u32, len: usize, progress: &mut dyn FnMut(usize)) -> Result<Vec<u8>> {
+    pub fn read(
+        &mut self,
+        addr: u32,
+        len: usize,
+        progress: &mut dyn FnMut(usize),
+    ) -> Result<Vec<u8>> {
         self.set_address(addr)?;
         self.to_idle()?;
         let mut out = Vec::with_capacity(len);
@@ -275,7 +280,10 @@ impl<'a> Dfu<'a> {
             let want = self.transfer.min(len - out.len()).max(1);
             let b = self.usb.control_in(DFU_UPLOAD, 2 + n, self.transfer)?;
             if b.is_empty() {
-                bail!("The DFU device sent no data at {:#010x}.", addr as usize + out.len());
+                bail!(
+                    "The DFU device sent no data at {:#010x}.",
+                    addr as usize + out.len()
+                );
             }
             out.extend_from_slice(&b[..b.len().min(want)]);
             n += 1;
@@ -325,7 +333,11 @@ pub fn flash(
     if image.is_empty() {
         bail!("There is nothing to flash.");
     }
-    let mut dfu = if quick { Dfu::quick(usb) } else { Dfu::new(usb) };
+    let mut dfu = if quick {
+        Dfu::quick(usb)
+    } else {
+        Dfu::new(usb)
+    };
     let layout = dfu.layout()?;
     let end = base as u64 + image.len() as u64;
     if base < layout.start() || end > layout.end() as u64 {
@@ -372,7 +384,11 @@ pub fn flash_size(usb: &mut dyn Usb, _quick: bool) -> Result<usize> {
 
 /// Reads `len` bytes of flash from `base`: a firmware backup before a flash.
 pub fn read_flash(usb: &mut dyn Usb, base: u32, len: usize, quick: bool) -> Result<Vec<u8>> {
-    let mut dfu = if quick { Dfu::quick(usb) } else { Dfu::new(usb) };
+    let mut dfu = if quick {
+        Dfu::quick(usb)
+    } else {
+        Dfu::new(usb)
+    };
     let layout = dfu.layout()?;
     if base < layout.start() || base as u64 + len as u64 > layout.end() as u64 {
         bail!("That range is outside the device's flash.");
@@ -424,7 +440,9 @@ impl NusbUsb {
                     && d.product_id() == pid
                     && serial.is_none_or(|s| d.serial_number() == Some(s))
             });
-        let info = found.next().ok_or_else(|| anyhow!("No DFU device {vid:04x}:{pid:04x} is plugged in."))?;
+        let info = found
+            .next()
+            .ok_or_else(|| anyhow!("No DFU device {vid:04x}:{pid:04x} is plugged in."))?;
         if found.next().is_some() {
             bail!("Two DFU devices {vid:04x}:{pid:04x} are plugged in; unplug one.");
         }
@@ -442,7 +460,11 @@ impl NusbUsb {
             .and_then(|d| d.string_index())
             .ok_or_else(|| anyhow!("The DFU device names no memory layout."))?;
         let layout = dev
-            .get_string_descriptor(idx, nusb::descriptors::language_id::US_ENGLISH, Duration::from_secs(2))
+            .get_string_descriptor(
+                idx,
+                nusb::descriptors::language_id::US_ENGLISH,
+                Duration::from_secs(2),
+            )
             .wait()
             .map_err(|e| anyhow!("Reading the memory layout failed: {e}"))?;
         Ok(NusbUsb { iface, layout })
@@ -559,7 +581,9 @@ impl FakeDfu {
     }
 
     fn sectors(&self) -> Vec<Sector> {
-        Layout::parse(&self.layout).map(|l| l.sectors).unwrap_or_default()
+        Layout::parse(&self.layout)
+            .map(|l| l.sectors)
+            .unwrap_or_default()
     }
 
     fn fail(&mut self, status: u8) {
@@ -574,7 +598,10 @@ impl FakeDfu {
                 self.pointer = a;
             }
             Pending::Erase(a) => {
-                let Some(s) = self.sectors().into_iter().find(|s| a >= s.addr && a < s.addr + s.size)
+                let Some(s) = self
+                    .sectors()
+                    .into_iter()
+                    .find(|s| a >= s.addr && a < s.addr + s.size)
                 else {
                     return self.fail(8);
                 };
@@ -588,10 +615,13 @@ impl FakeDfu {
             }
             Pending::Write { block, data } => {
                 let at = self.pointer as u64 + (block * TRANSFER) as u64;
-                if at < self.base as u64 || at + data.len() as u64 > self.base as u64 + self.flash.len() as u64 {
+                if at < self.base as u64
+                    || at + data.len() as u64 > self.base as u64 + self.flash.len() as u64
+                {
                     return self.fail(8);
                 }
-                self.log.push(format!("write {at:#010x} {} bytes", data.len()));
+                self.log
+                    .push(format!("write {at:#010x} {} bytes", data.len()));
                 if self.faults.drop_write_block == Some(block) {
                     return;
                 }
@@ -664,7 +694,11 @@ impl Usb for FakeDfu {
                         self.run(p);
                     }
                     if self.state == state::DNBUSY {
-                        self.state = if leave { state::MANIFEST } else { state::DNLOAD_IDLE };
+                        self.state = if leave {
+                            state::MANIFEST
+                        } else {
+                            state::DNLOAD_IDLE
+                        };
                     }
                     // This answer says busy; the next says what it became.
                     return Ok(vec![report.0, 0, 0, 0, state::DNBUSY, 0]);
@@ -733,7 +767,10 @@ mod tests {
         let mut dev = FakeDfu::with_firmware(&old);
         let mut steps = Vec::new();
         let out = flash(&mut dev, FLASH_BASE, &new, true, &mut |s| steps.push(s)).unwrap();
-        assert_eq!(steps, [Step::Erase, Step::Write, Step::ReadBack, Step::Leave]);
+        assert_eq!(
+            steps,
+            [Step::Erase, Step::Write, Step::ReadBack, Step::Leave]
+        );
         assert_eq!(&dev.flash[..new.len()], &new[..]);
         assert!(dev.left, "the device left DFU");
         assert_eq!(out.written, new.len());
@@ -743,7 +780,9 @@ mod tests {
         assert_eq!(dev.erased.len(), 8);
         assert_eq!(dev.log.last().unwrap(), "leave 0x08000000");
         // Bytes past the image stay as they were (erased).
-        assert!(dev.flash[new.len() + 12 * 1024..].iter().all(|b| *b == 0xFF));
+        assert!(dev.flash[new.len() + 12 * 1024..]
+            .iter()
+            .all(|b| *b == 0xFF));
     }
 
     #[test]
@@ -753,7 +792,10 @@ mod tests {
         let err = flash(&mut dev, FLASH_BASE, &image(20_000), true, &mut |_| {}).unwrap_err();
         let msg = format!("{err:#}");
         assert!(msg.contains("different bytes"), "{msg}");
-        assert!(msg.contains("0x08001800"), "first difference is block 3: {msg}");
+        assert!(
+            msg.contains("0x08001800"),
+            "first difference is block 3: {msg}"
+        );
         assert!(!dev.left, "must not start a half-written image");
     }
 
@@ -778,7 +820,14 @@ mod tests {
     #[test]
     fn an_image_outside_the_flash_is_refused_before_any_command() {
         let mut dev = FakeDfu::with_firmware(&[]);
-        let err = flash(&mut dev, FLASH_BASE, &vec![0u8; 1024 * 1024 + 1], true, &mut |_| {}).unwrap_err();
+        let err = flash(
+            &mut dev,
+            FLASH_BASE,
+            &vec![0u8; 1024 * 1024 + 1],
+            true,
+            &mut |_| {},
+        )
+        .unwrap_err();
         assert!(err.to_string().contains("does not fit"));
         let err = flash(&mut dev, 0x2000_0000, &[1, 2, 3, 4], true, &mut |_| {}).unwrap_err();
         assert!(err.to_string().contains("does not fit"));

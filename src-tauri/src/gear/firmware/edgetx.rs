@@ -101,13 +101,17 @@ pub fn select_binary(names: &[String], spec: &BoardSpec) -> Result<usize, Refusa
             "{} firmware files in the release match the {}: {}.",
             many.len(),
             spec.id,
-            many.iter().map(|i| names[*i].as_str()).collect::<Vec<_>>().join(", ")
+            many.iter()
+                .map(|i| names[*i].as_str())
+                .collect::<Vec<_>>()
+                .join(", ")
         ))),
     }
 }
 
 fn word(b: &[u8], at: usize) -> Option<u32> {
-    b.get(at..at + 4).map(|w| u32::from_le_bytes([w[0], w[1], w[2], w[3]]))
+    b.get(at..at + 4)
+        .map(|w| u32::from_le_bytes([w[0], w[1], w[2], w[3]]))
 }
 
 fn is_vector_table(b: &[u8], at: usize, lo: u32, hi: u32) -> bool {
@@ -166,7 +170,9 @@ fn release_dir(cache: &Path, version: &str) -> PathBuf {
 }
 
 fn valid_version(v: &str) -> bool {
-    !v.is_empty() && v.bytes().all(|b| b.is_ascii_alphanumeric() || b == b'.' || b == b'-')
+    !v.is_empty()
+        && v.bytes()
+            .all(|b| b.is_ascii_alphanumeric() || b == b'.' || b == b'-')
         && Ver::parse(v).is_some()
 }
 
@@ -210,11 +216,18 @@ pub fn obtain(fetch: &dyn Fetch, cache: &Path, version: &str) -> Result<Release>
         .find(|a| a.name == name)
         .ok_or_else(|| anyhow!("EdgeTX {version} has no {name} in its release."))?;
     if !asset.url.starts_with(DOWNLOAD_PREFIX) {
-        bail!("The release points outside the EdgeTX downloads: {}", asset.url);
+        bail!(
+            "The release points outside the EdgeTX downloads: {}",
+            asset.url
+        );
     }
     fetch.download(&asset.url, &zip)?;
     let sha = sha256_file(&zip)?;
-    let source = match asset.digest.as_deref().and_then(|d| d.strip_prefix("sha256:")) {
+    let source = match asset
+        .digest
+        .as_deref()
+        .and_then(|d| d.strip_prefix("sha256:"))
+    {
         Some(want) => {
             if !want.eq_ignore_ascii_case(&sha) {
                 let _ = std::fs::remove_file(&zip);
@@ -228,7 +241,11 @@ pub fn obtain(fetch: &dyn Fetch, cache: &Path, version: &str) -> Result<Release>
         &record,
         format!(
             "{sha} {}",
-            if source == HashSource::Release { "release" } else { "first" }
+            if source == HashSource::Release {
+                "release"
+            } else {
+                "first"
+            }
         ),
     )?;
     std::fs::write(&url_file, &asset.url)?;
@@ -250,7 +267,9 @@ pub struct Binary {
 }
 
 fn bin_files(dir: &Path, out: &mut Vec<PathBuf>) {
-    let Ok(rd) = std::fs::read_dir(dir) else { return };
+    let Ok(rd) = std::fs::read_dir(dir) else {
+        return;
+    };
     let mut entries: Vec<_> = rd.filter_map(|e| e.ok()).collect();
     entries.sort_by_key(|e| e.file_name());
     for e in entries {
@@ -270,7 +289,10 @@ fn bin_files(dir: &Path, out: &mut Vec<PathBuf>) {
 /// Unpacks the release and returns the board's binary, after the image checks.
 pub fn board_binary(rel: &Release, board: &str) -> Result<Binary> {
     let spec = spec(board).ok_or_else(|| {
-        Refusal::new(RefusalCode::UnknownBoard, format!("Board {board} is not proven."))
+        Refusal::new(
+            RefusalCode::UnknownBoard,
+            format!("Board {board} is not proven."),
+        )
     })?;
     let dir = rel.zip.parent().unwrap_or(Path::new(".")).join("unpacked");
     let _ = std::fs::remove_dir_all(&dir);
@@ -280,7 +302,12 @@ pub fn board_binary(rel: &Release, board: &str) -> Result<Binary> {
     bin_files(&dir, &mut files);
     let rels: Vec<String> = files
         .iter()
-        .map(|p| p.strip_prefix(&dir).unwrap_or(p).to_string_lossy().to_string())
+        .map(|p| {
+            p.strip_prefix(&dir)
+                .unwrap_or(p)
+                .to_string_lossy()
+                .to_string()
+        })
         .collect();
     let i = select_binary(&rels, spec)?;
     let bytes = std::fs::read(&files[i])?;
@@ -317,11 +344,20 @@ pub(crate) mod fixtures {
     }
 
     /// A release zip with a pocket binary and a binary of another radio, as `ditto` makes it.
-    pub(crate) fn release_zip(out_dir: &Path, version: &str, pocket: &[u8], extra: &[(&str, &[u8])]) -> PathBuf {
+    pub(crate) fn release_zip(
+        out_dir: &Path,
+        version: &str,
+        pocket: &[u8],
+        extra: &[(&str, &[u8])],
+    ) -> PathBuf {
         let src = out_dir.join(format!("zip-src-{version}"));
         let _ = std::fs::remove_dir_all(&src);
         std::fs::create_dir_all(&src).unwrap();
-        std::fs::write(src.join(format!("fw-radiomaster-pocket-v{version}.bin")), pocket).unwrap();
+        std::fs::write(
+            src.join(format!("fw-radiomaster-pocket-v{version}.bin")),
+            pocket,
+        )
+        .unwrap();
         std::fs::write(src.join(format!("fw-tx16s-v{version}.bin")), full_image(7)).unwrap();
         for (n, b) in extra {
             std::fs::write(src.join(n), b).unwrap();
@@ -338,7 +374,12 @@ pub(crate) mod fixtures {
     }
 
     /// Serves a release (its JSON and the zip) from fixtures.
-    pub(crate) fn serve_release(f: &super::super::FixtureFetch, version: &str, zip: &Path, digest: bool) {
+    pub(crate) fn serve_release(
+        f: &super::super::FixtureFetch,
+        version: &str,
+        zip: &Path,
+        digest: bool,
+    ) {
         let bytes = std::fs::read(zip).unwrap();
         let url = format!("{DOWNLOAD_PREFIX}v{version}/{}", asset_name(version));
         let mut asset = serde_json::json!({
@@ -386,12 +427,22 @@ mod tests {
             0
         );
         // Another radio is not a near match: pocket is not "pocket-x".
-        let e = select_binary(&names(&["fw-pocketx-v2.12.4.bin", "fw-tx16s-v2.12.4.bin"]), pocket)
-            .unwrap_err();
-        assert_eq!(e.code, RefusalCode::BadImage);
-        assert!(e.reason.contains("no firmware file for the pocket"), "{}", e.reason);
         let e = select_binary(
-            &names(&["a/fw-pocket-v2.12.4.bin", "b/fw-radiomaster-pocket-v2.12.4.bin"]),
+            &names(&["fw-pocketx-v2.12.4.bin", "fw-tx16s-v2.12.4.bin"]),
+            pocket,
+        )
+        .unwrap_err();
+        assert_eq!(e.code, RefusalCode::BadImage);
+        assert!(
+            e.reason.contains("no firmware file for the pocket"),
+            "{}",
+            e.reason
+        );
+        let e = select_binary(
+            &names(&[
+                "a/fw-pocket-v2.12.4.bin",
+                "b/fw-radiomaster-pocket-v2.12.4.bin",
+            ]),
             pocket,
         )
         .unwrap_err();
@@ -408,12 +459,18 @@ mod tests {
     fn image_checks_size_and_the_two_vector_tables() {
         let pocket = spec("pocket").unwrap();
         assert!(check_image(&full_image(0), pocket).is_ok());
-        assert!(check_image(&vec![0u8; 100 * 1024], pocket).unwrap_err().reason.contains("100 KB"));
+        assert!(check_image(&vec![0u8; 100 * 1024], pocket)
+            .unwrap_err()
+            .reason
+            .contains("100 KB"));
         assert!(check_image(&vec![0u8; 2000 * 1024], pocket).is_err());
         // No bootloader table first.
         let mut b = full_image(0);
         b[4..8].copy_from_slice(&0x0800_8201u32.to_le_bytes());
-        assert!(check_image(&b, pocket).unwrap_err().reason.contains("bootloader"));
+        assert!(check_image(&b, pocket)
+            .unwrap_err()
+            .reason
+            .contains("bootloader"));
         // A firmware-only image: its own table first, nothing after.
         let mut fw_only = full_image(0)[0x8000..].to_vec();
         fw_only.resize(600 * 1024, 0xAA);
@@ -421,7 +478,10 @@ mod tests {
         // No firmware table at the offset.
         let mut b = full_image(0);
         b[0x8000..0x8004].copy_from_slice(&0u32.to_le_bytes());
-        assert!(check_image(&b, pocket).unwrap_err().reason.contains("no firmware"));
+        assert!(check_image(&b, pocket)
+            .unwrap_err()
+            .reason
+            .contains("no firmware"));
     }
 
     #[test]
@@ -438,7 +498,10 @@ mod tests {
         let bin = board_binary(&rel, "pocket").unwrap();
         assert_eq!(bin.bytes, img);
         assert_eq!(bin.name, "fw-radiomaster-pocket-v2.12.4.bin");
-        assert_eq!(bin.sha256, sha256_file(&rel.zip.parent().unwrap().join("unpacked").join(&bin.name)).unwrap());
+        assert_eq!(
+            bin.sha256,
+            sha256_file(&rel.zip.parent().unwrap().join("unpacked").join(&bin.name)).unwrap()
+        );
         // The second call needs no network.
         let again = obtain(&f, &cache, "2.12.4").unwrap();
         assert_eq!(again.sha256, rel.sha256);
@@ -458,8 +521,13 @@ mod tests {
         let url = format!("{DOWNLOAD_PREFIX}v2.12.4/{}", asset_name("2.12.4"));
         f.serve(&url, b"tampered".to_vec());
         let e = obtain(&f, &cache, "2.12.4").unwrap_err();
-        assert_eq!(e.to_string(), "The download does not match the expected checksum.");
-        assert!(!release_dir(&cache, "2.12.4").join(asset_name("2.12.4")).exists());
+        assert_eq!(
+            e.to_string(),
+            "The download does not match the expected checksum."
+        );
+        assert!(!release_dir(&cache, "2.12.4")
+            .join(asset_name("2.12.4"))
+            .exists());
     }
 
     #[test]
@@ -489,7 +557,10 @@ mod tests {
             .unwrap(),
         );
         let e = obtain(&f, d.path(), "2.12.4").unwrap_err();
-        assert!(e.to_string().contains("outside the EdgeTX downloads"), "{e}");
+        assert!(
+            e.to_string().contains("outside the EdgeTX downloads"),
+            "{e}"
+        );
         assert!(obtain(&f, d.path(), "../x").is_err());
         assert!(obtain(&f, d.path(), "").is_err());
     }

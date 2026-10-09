@@ -140,8 +140,15 @@ pub struct Grey {
 pub fn decode_png(bytes: &[u8]) -> Result<Grey> {
     let mut dec = png::Decoder::new(std::io::Cursor::new(bytes));
     dec.set_transformations(png::Transformations::EXPAND | png::Transformations::STRIP_16);
-    let mut reader = dec.read_info().map_err(|e| anyhow!("Not a PNG image: {e}"))?;
-    let mut buf = vec![0u8; reader.output_buffer_size().ok_or_else(|| anyhow!("The image is too large."))?];
+    let mut reader = dec
+        .read_info()
+        .map_err(|e| anyhow!("Not a PNG image: {e}"))?;
+    let mut buf = vec![
+        0u8;
+        reader
+            .output_buffer_size()
+            .ok_or_else(|| anyhow!("The image is too large."))?
+    ];
     let info = reader
         .next_frame(&mut buf)
         .map_err(|e| anyhow!("Not a PNG image: {e}"))?;
@@ -155,15 +162,21 @@ pub fn decode_png(bytes: &[u8]) -> Result<Grey> {
     let px: Vec<u8> = match info.color_type {
         png::ColorType::Grayscale => data.to_vec(),
         png::ColorType::GrayscaleAlpha => data
-            .chunks_exact(2)
+            .as_chunks::<2>()
+            .0
+            .iter()
             .map(|c| over_white(c[0] as f32, c[1] as f32 / 255.0))
             .collect(),
         png::ColorType::Rgb => data
-            .chunks_exact(3)
+            .as_chunks::<3>()
+            .0
+            .iter()
             .map(|c| luma(c[0], c[1], c[2]).round() as u8)
             .collect(),
         png::ColorType::Rgba => data
-            .chunks_exact(4)
+            .as_chunks::<4>()
+            .0
+            .iter()
             .map(|c| over_white(luma(c[0], c[1], c[2]), c[3] as f32 / 255.0))
             .collect(),
         png::ColorType::Indexed => bail!("The image uses a palette the decoder did not expand."),
@@ -335,8 +348,8 @@ pub struct SplashPreview {
 /// Reads the PNG at `p.image` and previews it.
 pub fn preview(p: &SplashParams) -> Result<(Mono, SplashPreview)> {
     use base64::Engine;
-    let bytes = std::fs::read(&p.image)
-        .with_context(|| format!("Cannot read {}", p.image.display()))?;
+    let bytes =
+        std::fs::read(&p.image).with_context(|| format!("Cannot read {}", p.image.display()))?;
     let mono = to_mono(&decode_png(&bytes)?, p.threshold(), p.invert);
     let (supported, reason) = match p.board.as_deref().map(str::trim).filter(|b| !b.is_empty()) {
         Some(b) if !board_supported(b) => (false, Some(unsupported(b).reason)),

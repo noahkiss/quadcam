@@ -227,10 +227,7 @@ impl Core {
                     });
                     image = bytes;
                 }
-                Err(e) => match e.downcast::<Refusal>() {
-                    Ok(r) => checks.push(check("Firmware image", Err(r))),
-                    Err(e) => return Err(e),
-                },
+                Err(e) => checks.push(check("Firmware image", Err(e.downcast::<Refusal>()?))),
             }
         }
 

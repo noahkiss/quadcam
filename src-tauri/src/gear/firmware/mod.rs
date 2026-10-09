@@ -77,7 +77,10 @@ impl Recorder {
 
 impl Flasher for Recorder {
     fn open_dfu(&self, vid: u16, pid: u16, _serial: Option<&str>) -> Result<Box<dyn Usb>> {
-        self.opened.lock().unwrap().push(format!("{vid:04x}:{pid:04x}"));
+        self.opened
+            .lock()
+            .unwrap()
+            .push(format!("{vid:04x}:{pid:04x}"));
         Ok(Box::new(Shared(self.device.clone())))
     }
     fn quick(&self) -> bool {
@@ -142,7 +145,12 @@ impl FixtureFetch {
     }
 
     pub fn count(&self, url: &str) -> usize {
-        self.requested.lock().unwrap().iter().filter(|u| *u == url).count()
+        self.requested
+            .lock()
+            .unwrap()
+            .iter()
+            .filter(|u| *u == url)
+            .count()
     }
 }
 

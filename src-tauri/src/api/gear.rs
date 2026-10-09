@@ -29,7 +29,6 @@ pub use crate::core::{
     NotesParams, PackSaveParams, PacksParams, ReportParams, ReportSaveParams, ReportSaved,
 };
 pub use crate::core::{FirmwareParams, FirmwareView, FlashParams, FlashRequest};
-pub use crate::gear::splash::{SplashParams, SplashPreview};
 pub use crate::gear::apply::sim::{SimSyncParams, SimSyncRequest, SimTarget};
 pub use crate::gear::apply::{ApplyPlanParams, ApplyReport, ApplyRequest, StepReport, StepState};
 pub use crate::gear::backup::{
@@ -52,6 +51,7 @@ pub use crate::gear::rates::RatesView;
 pub use crate::gear::report::SessionReport;
 pub use crate::gear::sim_cal::{SavedCalibration, SimDefaults};
 pub use crate::gear::sims::SimStatus;
+pub use crate::gear::splash::{SplashParams, SplashPreview};
 pub use crate::gear::switchmap::SwitchMap;
 pub use quadcam_sim::validate::{CheckOutcome, CheckResult, ValidationReport};
 use serde::{Deserialize, Serialize};

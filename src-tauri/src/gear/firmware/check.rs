@@ -182,7 +182,10 @@ pub fn cached(cache: &Path) -> Latest {
 
 /// True when `daily` is set and the last answer is a day old or missing.
 pub fn due(setting: &str, last: &Latest, now: DateTime<Utc>) -> bool {
-    setting == "daily" && last.checked_at.is_none_or(|t| now - t >= Duration::hours(24))
+    setting == "daily"
+        && last
+            .checked_at
+            .is_none_or(|t| now - t >= Duration::hours(24))
 }
 
 /// Reads the three sources and keeps the answer. A source that fails keeps its old value
@@ -285,7 +288,10 @@ pub fn statuses(devices: &[Device], latest: &Latest) -> Vec<FirmwareStatus> {
                         Some("This version is newer than the newest release.".to_string()),
                     ),
                     (Some(_), Some(_)) => (FirmwareState::UpToDate, None),
-                    _ => (FirmwareState::Unknown, Some("QuadCam cannot compare these versions.".into())),
+                    _ => (
+                        FirmwareState::Unknown,
+                        Some("QuadCam cannot compare these versions.".into()),
+                    ),
                 },
                 (None, _) => (
                     FirmwareState::Unknown,
@@ -303,7 +309,9 @@ pub fn statuses(devices: &[Device], latest: &Latest) -> Vec<FirmwareStatus> {
                     Err(_) => {}
                 }
             } else if state == FirmwareState::Update {
-                note = Some(format!("QuadCam checks {product} versions. It does not flash them."));
+                note = Some(format!(
+                    "QuadCam checks {product} versions. It does not flash them."
+                ));
             }
             Some(FirmwareStatus {
                 device: d.id.clone(),
@@ -403,14 +411,19 @@ mod tests {
     fn the_elrs_index_gives_the_highest_non_candidate_tag() {
         let j = json!({"tags": {"3.5.3": "a", "4.0.0": "b", "4.0.1-RC1": "c", "3.6.0": "d"}, "branches": {"main": "x"}});
         assert_eq!(
-            parse_elrs_index(j.to_string().as_bytes()).unwrap().as_deref(),
+            parse_elrs_index(j.to_string().as_bytes())
+                .unwrap()
+                .as_deref(),
             Some("4.0.0")
         );
         assert!(parse_elrs_index(b"{}").is_err());
     }
 
     fn serve_all(f: &FixtureFetch) {
-        f.serve(EDGETX_RELEASES, releases_json(&[("v2.12.4", false), ("v2.11.0", false)]));
+        f.serve(
+            EDGETX_RELEASES,
+            releases_json(&[("v2.12.4", false), ("v2.11.0", false)]),
+        );
         f.serve(BETAFLIGHT_RELEASES, releases_json(&[("2026.6.0", false)]));
         f.serve(
             ELRS_INDEX,
@@ -479,7 +492,11 @@ mod tests {
         assert!(s[0].flashable, "pocket 2.12.4 is proven");
         assert_eq!(s[1].state, FirmwareState::Update);
         assert!(!s[1].flashable);
-        assert!(s[1].note.as_deref().unwrap().contains("will not flash"), "{:?}", s[1].note);
+        assert!(
+            s[1].note.as_deref().unwrap().contains("will not flash"),
+            "{:?}",
+            s[1].note
+        );
         assert_eq!(s[2].state, FirmwareState::Update);
         assert!(!s[2].flashable);
         assert!(s[2].note.as_deref().unwrap().contains("does not flash"));
