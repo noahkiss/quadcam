@@ -176,6 +176,7 @@ quadcam-cli --json gear elrs set DEVICE OPTION=VALUE [...]    # stage ELRS optio
 quadcam-cli --json gear elrs flash DEVICE [--version V] [--sha256 H] [--port P]   # an ExpressLRS flash: checks, diff, digest
 quadcam-cli --json gear elrs flash DEVICE [--version V] --digest D --yes          # flash with the esptool module
 quadcam-cli --json gear splash IMAGE.png [--threshold N] [--invert] [--board pocket] [--out preview.png]   # a PNG as the radio's 128x64 splash; --out writes the 4x preview
+quadcam-cli --json gear firmware --read [--device RADIO]       # read-only DFU trial: copy the firmware, compare the version
 quadcam-cli --json gear firmware --plan --device RADIO [--version V] [--splash IMAGE.png] [--threshold N] [--invert]   # an EdgeTX flash: checks, diff, digest
 quadcam-cli --json gear firmware --device RADIO [--version V] [--splash IMAGE.png] --digest D --yes      # flash the radio in DFU mode
 quadcam-cli --json gear map --radio CARD|MODEL.yml [--model model01.yml] --fc FILE [--fc FILE] [--live [--port P]] [--channels 1500,...] [--text]

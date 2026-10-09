@@ -17,6 +17,7 @@ pub enum Event {
     LibraryTask(LibraryTask),
     RadioInput(RadioInput),
     SimCalibration(SimCalibrationEvent),
+    FirmwareRead(FirmwareReadProgress),
 }
 
 impl Event {
@@ -32,6 +33,7 @@ impl Event {
             Event::LibraryTask(x) => (LibraryTask::NAME, v(x)),
             Event::RadioInput(x) => (RadioInput::NAME, v(x)),
             Event::SimCalibration(x) => (SimCalibrationEvent::NAME, v(x)),
+            Event::FirmwareRead(x) => (FirmwareReadProgress::NAME, v(x)),
         }
     }
 }
@@ -77,6 +79,13 @@ pub struct RadioInput(pub crate::gear::radio_hid::RadioEvent);
 /// (`gear_sim_calibrate` starts it).
 #[derive(Debug, Clone, Serialize, Deserialize, Type, tauri_specta::Event)]
 pub struct SimCalibrationEvent(pub crate::core::CalibrateView);
+
+/// The read-only DFU trial: `done` of `total` bytes of both reads (`gear_firmware_read`).
+#[derive(Debug, Clone, Serialize, Deserialize, Type, tauri_specta::Event)]
+pub struct FirmwareReadProgress {
+    pub done: u64,
+    pub total: u64,
+}
 
 /// The long library jobs.
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, Type, PartialEq, Eq)]

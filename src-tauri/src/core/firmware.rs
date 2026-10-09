@@ -7,8 +7,14 @@
 //! - **Flash.** The same path as every write: `gear_flash_plan` downloads the release (or reads
 //!   the cache), picks the board binary, patches the splash, runs every guard and returns a
 //!   plan with a digest. `gear_flash` runs the guards again, needs the digest and `confirm`,
-//!   reads the radio's current firmware over DFU and keeps it as a backup, then erases,
-//!   writes, reads back, compares and leaves DFU. A mismatch stays in DFU.
+//!   reads the radio's current firmware over DFU twice (`dfu::read_verified`), keeps it as a
+//!   firmware copy (`gear::fwcopy`) and reads the saved file back, and only then erases,
+//!   writes (each 16 KB segment read back), reads back, compares and leaves DFU. A mismatch
+//!   stays in DFU. `dfu::flash` takes the verified copy as an argument, so an erase without
+//!   one does not compile.
+//! - **Read.** `gear_firmware_read` is the read-only trial: the same verified read, saved as a
+//!   copy, with the version string in the image compared with the radio's known version. It
+//!   goes through `dfu::ReadOnly`, which refuses erase, write and leave.
 //! - **Confirm.** The sheet's own Apply calls `gear_flash_click`. Any other caller needs the
 //!   plan's digest and `confirm`, and with the app running the person also clicks Apply in the
 //!   sheet (`Hooks::confirm_apply`).
@@ -16,6 +22,7 @@
 //!   cargo gets a recorder unless `QUADCAM_FLASH=real`, and tests pass their own fake.
 
 use super::Core;
+use crate::api::{Event, FirmwareReadProgress};
 use crate::gear::apply::{check, first_refusal, pass, ApplyReport, StepReport, StepState};
 use crate::gear::blobs;
 use crate::gear::compat::{self, Product};
@@ -24,9 +31,10 @@ use crate::gear::dfu::{self, FLASH_BASE};
 use crate::gear::firmware::check::{self as fwcheck, FirmwareStatus, Latest};
 use crate::gear::firmware::edgetx::{self, HashSource};
 use crate::gear::firmware::{Flasher, FwEnv};
+use crate::gear::fwcopy::{self, CopyKind, FwCopy};
 use crate::gear::model::{
     ApplyPlan, ChangeStatus, Check, Device, DeviceKind, DiffItem, Refusal, RefusalCode,
-    StagedChange, Trigger,
+    StagedChange,
 };
 use crate::gear::splash::{self, SplashParams, SplashPreview};
 use anyhow::{anyhow, bail, Result};
@@ -76,6 +84,33 @@ pub struct FlashRequest {
     pub digest: String,
     #[serde(default)]
     pub confirm: bool,
+}
+
+/// `gear_firmware_read`: which saved radio the DFU device is, when known.
+#[derive(Debug, Clone, Default, Serialize, Deserialize, Type)]
+pub struct FirmwareReadParams {
+    /// The saved radio's device id. Without it the copy is kept under `dfu-<serial>`.
+    #[serde(default)]
+    pub device: Option<String>,
+}
+
+/// What the read-only trial found.
+#[derive(Debug, Clone, Serialize, Deserialize, Type, PartialEq)]
+pub struct FirmwareRead {
+    pub copy: FwCopy,
+    /// The saved radio the copy belongs to, when one was named.
+    pub device: Option<String>,
+    /// The version QuadCam knows for that radio (from its last card or serial read).
+    pub known_version: Option<String>,
+    /// The flash size the DFU device reports, in bytes.
+    pub flash_bytes: u64,
+    /// True: the image names the version the radio reported. False: it names another.
+    /// None: one of the two is unknown.
+    pub matches: Option<bool>,
+    /// What to tell the person, in plain words.
+    pub message: String,
+    /// What the read did, step by step. None of them writes the radio.
+    pub steps: Vec<StepReport>,
 }
 
 struct Prepared {
@@ -250,7 +285,7 @@ impl Core {
             0 => fail(
                 "One radio in DFU mode",
                 RefusalCode::NoDevice,
-                "No radio is in DFU mode. Turn the radio off, hold both trim buttons toward the centre and plug in the USB cable.",
+                "No radio is in DFU mode. Turn the radio off, then plug in the USB cable (do not hold the trim buttons, which start the EdgeTX bootloader instead). Wait a few seconds.",
             ),
             n => fail(
                 "One radio in DFU mode",
@@ -308,7 +343,7 @@ impl Core {
             "A radio in DFU mode shows no name. QuadCam writes the one radio in DFU mode; check it is the radio you picked.".into(),
         );
         warnings.push(
-            "QuadCam reads the radio's current firmware over DFU first and keeps it as a backup. Flashing has not been tried on a real radio yet.".into(),
+            "QuadCam reads the radio's current firmware over DFU twice first and keeps it as a copy; it erases nothing until both reads agree and the saved file reads back. If a flash fails, the radio's ROM bootloader still answers over USB (turn it off, plug in USB) and you can flash again. Flashing has not been tried on a real radio yet.".into(),
         );
 
         let ready = checks.iter().all(|c| c.ok);
@@ -342,6 +377,145 @@ impl Core {
             device,
             image,
             dfu: dfu.into_iter().next(),
+        })
+    }
+
+    /// The read-only trial: reads all of the flash of the one radio in DFU mode twice, saves it
+    /// as a firmware copy and compares the version the image names with the radio's known
+    /// version. Nothing here erases, writes or restarts the radio: the transport is
+    /// `dfu::ReadOnly`. Needs no digest and no confirm for that reason.
+    pub fn gear_firmware_read(&self, p: &FirmwareReadParams) -> Result<FirmwareRead> {
+        let saved = self.gear_store().devices()?;
+        let device = match &p.device {
+            Some(id) => {
+                let d = saved
+                    .iter()
+                    .find(|d| &d.id == id)
+                    .ok_or_else(|| anyhow!("No saved device {id}."))?;
+                if d.kind != DeviceKind::Radio {
+                    return Err(refuse(
+                        RefusalCode::Incompatible,
+                        "Reading firmware over DFU is for EdgeTX radios.",
+                    ));
+                }
+                Some(d.clone())
+            }
+            None => None,
+        };
+        let dfus: Vec<DfuInfo> = (self.gear.dfu)()
+            .into_iter()
+            .filter(|d| (d.vid, d.pid) == STM32_DFU)
+            .collect();
+        let info = match dfus.as_slice() {
+            [one] => one.clone(),
+            [] => {
+                return Err(refuse(
+                    RefusalCode::NoDevice,
+                    "No radio is in DFU mode. Turn the radio off, then plug in the USB cable (do not hold the trim buttons, which start the EdgeTX bootloader instead). Wait a few seconds and read again.",
+                ))
+            }
+            n => {
+                return Err(refuse(
+                    RefusalCode::SeveralDevices,
+                    format!("{} radios are in DFU mode; unplug all but one.", n.len()),
+                ))
+            }
+        };
+        let flasher: &dyn Flasher = self.firmware.flasher.as_ref();
+        let quick = flasher.quick();
+        let mut usb = flasher
+            .open_dfu(info.vid, info.pid, info.serial.as_deref())
+            .map_err(|e| {
+                refuse(
+                    RefusalCode::Disabled,
+                    format!("Cannot open the radio's DFU device: {e:#}"),
+                )
+            })?;
+        let mut steps = Vec::new();
+        let flash_bytes = dfu::flash_size(usb.as_mut(), quick)? as u64;
+        steps.push(StepReport {
+            name: "Open the DFU device".into(),
+            state: StepState::Done,
+            detail: Some(format!("{} KB of flash", flash_bytes / 1024)),
+        });
+        let hooks = self.hooks.clone();
+        let mut last = 0usize;
+        let copy = dfu::read_verified(usb.as_mut(), quick, &mut |done, total| {
+            // About 100 events for a 2 MB read.
+            if done == total || done >= last + 20 * 1024 {
+                last = done;
+                hooks.event(Event::FirmwareRead(FirmwareReadProgress {
+                    done: done as u64,
+                    total: total as u64,
+                }));
+            }
+        })
+        .map_err(|e| {
+            refuse(
+                RefusalCode::NoBackup,
+                format!(
+                    "Reading the radio's firmware failed: {e:#}. Nothing was written to the radio."
+                ),
+            )
+        })?;
+        steps.push(StepReport {
+            name: "Read the flash twice".into(),
+            state: StepState::Done,
+            detail: Some("both reads equal".into()),
+        });
+        if copy.is_blank() {
+            return Err(refuse(
+                RefusalCode::BadImage,
+                "The radio's flash reads as blank. There is no firmware to copy. Flash firmware to bring it back.",
+            ));
+        }
+        let bytes = copy.trimmed();
+        let identity = edgetx::image_identity(&bytes);
+        let key = device
+            .as_ref()
+            .map(|d| d.id.clone())
+            .unwrap_or_else(|| format!("dfu-{}", info.serial.clone().unwrap_or_default()));
+        let saved_copy = fwcopy::save(
+            &self.gear_store(),
+            &key,
+            CopyKind::Read,
+            Utc::now(),
+            &bytes,
+            identity.clone(),
+        )
+        .map_err(|e| anyhow!("Saving the copy failed: {e:#}. Nothing was written to the radio."))?;
+        steps.push(StepReport {
+            name: "Save the copy".into(),
+            state: StepState::Done,
+            detail: Some(format!("{} KB, {}", bytes.len() / 1024, saved_copy.id)),
+        });
+        let known = device.as_ref().and_then(|d| d.identity.version.clone());
+        let image = identity.as_ref().map(|(_, v)| v.clone());
+        let matches = match (&known, &image) {
+            (Some(k), Some(i)) => Some(k.trim().trim_start_matches(['v', 'V']) == i),
+            _ => None,
+        };
+        let message = match (&image, &known, matches) {
+            (Some(i), Some(_), Some(true)) => {
+                format!("The radio's firmware is EdgeTX {i}, the version QuadCam knows for it. The copy is saved.")
+            }
+            (Some(i), Some(k), _) => format!(
+                "The firmware names EdgeTX {i}, but QuadCam knows the radio as {k}. Read the version in the radio's own About screen. The copy is saved."
+            ),
+            (Some(i), None, _) => format!(
+                "The firmware names EdgeTX {i}. QuadCam has no version to compare it with. The copy is saved."
+            ),
+            (None, _, _) => "The copy is saved, but it holds no EdgeTX version string. This may not be EdgeTX firmware.".into(),
+        };
+        self.hooks.gear_changed();
+        Ok(FirmwareRead {
+            copy: saved_copy,
+            device: device.map(|d| d.id),
+            known_version: known,
+            flash_bytes,
+            matches,
+            message,
+            steps,
         })
     }
 
@@ -393,45 +567,67 @@ impl Core {
             detail,
         };
 
-        // Back up the firmware the radio runs now. A failed read stops everything.
         let name = prep.device.display_name();
-        let current = dfu::flash_size(usb.as_mut(), quick)
-            .and_then(|n| dfu::read_flash(usb.as_mut(), FLASH_BASE, n, quick));
-        let mut current = current.map_err(|e| {
-            refuse(
-                RefusalCode::NoBackup,
-                format!("Reading the radio's firmware failed: {e:#}. Nothing was written."),
-            )
-        })?;
-        while current.len() > 1 && current.last() == Some(&0xFF) {
-            current.pop();
+        let no_copy =
+            |why: String| refuse(RefusalCode::NoBackup, format!("{why} Nothing was written."));
+        // The device must be the chip the board expects, before any command that changes it.
+        let want = edgetx::spec(prep.device.identity.board.as_deref().unwrap_or_default())
+            .map(|s| s.flash_bytes)
+            .unwrap_or_default();
+        let have = dfu::flash_size(usb.as_mut(), quick)
+            .map_err(|e| no_copy(format!("Reading the DFU memory layout failed: {e:#}.")))?;
+        if want == 0 || have != want {
+            return Err(refuse(
+                RefusalCode::Incompatible,
+                format!("The DFU device has {have} bytes of flash; this radio's chip has {want}. Nothing was written."),
+            ));
         }
-        let taken = self
-            .snapshots()
-            .take_files(
-                &prep.device.id,
-                &prep.device.identity,
-                Trigger::BeforeFlash,
-                Utc::now(),
-                &[("firmware.bin".to_string(), current.clone())],
-                false,
-            )
-            .map_err(|e| {
-                refuse(
-                    RefusalCode::NoBackup,
-                    format!("The backup of {name}'s firmware failed: {e:#}. Nothing was written."),
+
+        // Copy the firmware the radio runs now: two reads that agree, saved, read back from
+        // disk. Only then may anything be erased. A blank flash (an interrupted flash)
+        // has nothing to copy and may be flashed.
+        let copy = dfu::read_verified(usb.as_mut(), quick, &mut |_, _| {})
+            .map_err(|e| no_copy(format!("Reading the radio's firmware failed: {e:#}.")))?;
+        let current = copy.trimmed();
+        let blank = copy.is_blank();
+        let identity = edgetx::image_identity(&current);
+        let kept = if blank {
+            None
+        } else {
+            Some(
+                fwcopy::save(
+                    &self.gear_store(),
+                    &prep.device.id,
+                    CopyKind::BeforeFlash,
+                    Utc::now(),
+                    &current,
+                    identity,
                 )
-            })?;
+                .map_err(|e| {
+                    no_copy(format!(
+                        "Saving the copy of {name}'s firmware failed: {e:#}."
+                    ))
+                })?,
+            )
+        };
         steps.push(step(
-            "Back up the current firmware",
+            "Copy the current firmware",
             StepState::Done,
-            Some(format!("{} KB, {}", current.len() / 1024, taken.backup.id)),
+            Some(match &kept {
+                Some(c) => format!("{} KB, read twice, saved as {}", current.len() / 1024, c.id),
+                None => "the flash is blank; there is no firmware to keep".into(),
+            }),
         ));
 
         let mut seen: Vec<dfu::Step> = Vec::new();
-        let outcome = dfu::flash(usb.as_mut(), FLASH_BASE, &prep.image, quick, &mut |s| {
-            seen.push(s)
-        });
+        let outcome = dfu::flash(
+            usb.as_mut(),
+            FLASH_BASE,
+            &prep.image,
+            &copy,
+            quick,
+            &mut |s| seen.push(s),
+        );
         let labels = [
             (dfu::Step::Erase, "Erase"),
             (dfu::Step::Write, "Write"),
@@ -484,8 +680,8 @@ impl Core {
                 (
                     ChangeStatus::Failed,
                     format!(
-                        "The flash failed: {e:#} The radio stays in DFU mode: unplug it, enter DFU mode again and retry. The firmware it ran before is kept in the backup ({}).",
-                        taken.backup.id
+                        "The flash failed: {e:#} The radio stays in DFU mode. Flash again, or unplug it, turn it off, plug it in again and retry. The radio's ROM bootloader always answers over USB. The firmware it ran before is kept ({}).",
+                        kept.as_ref().map_or("it was blank".to_string(), |c| c.id.clone())
                     ),
                 )
             }
@@ -497,7 +693,7 @@ impl Core {
             device: prep.device.id.clone(),
             status,
             steps,
-            backup: Some(taken.backup.id),
+            backup: kept.map(|c| c.id),
             after_backup: None,
             sent: Vec::new(),
             failed_line: None,
