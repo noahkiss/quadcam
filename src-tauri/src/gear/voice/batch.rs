@@ -14,6 +14,7 @@
 //! Re-cutting from the cache costs nothing; `estimate` prices only the batches the cache
 //! lacks, and `Pricing::check` refuses a render the credits do not cover.
 
+use super::rates;
 use super::render::RenderSettings;
 use super::tts::{Aligned, Alignment, Tts, TtsRequest};
 use super::wav::{self, Pcm};
@@ -133,6 +134,12 @@ fn sentence(carrier: &str, line: &str) -> (String, std::ops::Range<usize>) {
 /// Groups items by tone (the order tones first appear in), drops repeats of the same spoken
 /// text, and cuts each tone's list into batches of `max_lines`.
 pub fn plan(items: &[Item], s: &BatchSettings) -> Vec<Batch> {
+    plan_within(items, s, 0)
+}
+
+/// `plan`, with no batch longer than `max_chars` characters (0 for no limit). A batch holds
+/// at least one sentence.
+pub fn plan_within(items: &[Item], s: &BatchSettings, max_chars: usize) -> Vec<Batch> {
     let mut tones: Vec<&str> = Vec::new();
     for i in items {
         if !tones.contains(&i.tone.as_str()) {
@@ -146,17 +153,30 @@ pub fn plan(items: &[Item], s: &BatchSettings) -> Vec<Batch> {
             .iter()
             .filter(|i| i.tone == tone && seen.insert(i.spoken.clone()))
             .collect();
-        for chunk in mine.chunks(s.max_lines as usize) {
-            let (mut text, mut spans) = (String::new(), Vec::new());
-            for i in chunk {
-                let (sent, range) = sentence(s.carrier_for(tone), &i.spoken);
-                if !text.is_empty() {
-                    text.push(' ');
-                }
-                let base = text.chars().count();
-                spans.push(((*i).clone(), base + range.start..base + range.end));
-                text.push_str(&sent);
+        let (mut text, mut spans): (String, Vec<(Item, std::ops::Range<usize>)>) =
+            (String::new(), Vec::new());
+        let mut len = 0;
+        for i in mine {
+            let (sent, range) = sentence(s.carrier_for(tone), &i.spoken);
+            let sent_len = sent.chars().count();
+            let full = spans.len() >= s.max_lines as usize
+                || (max_chars > 0 && !spans.is_empty() && len + 1 + sent_len > max_chars);
+            if full {
+                out.push(Batch {
+                    tone: tone.to_string(),
+                    text: std::mem::take(&mut text),
+                    items: std::mem::take(&mut spans),
+                });
             }
+            if !text.is_empty() {
+                text.push(' ');
+            }
+            let base = text.chars().count();
+            spans.push((i.clone(), base + range.start..base + range.end));
+            text.push_str(&sent);
+            len = text.chars().count();
+        }
+        if !spans.is_empty() {
             out.push(Batch {
                 tone: tone.to_string(),
                 text,
@@ -173,6 +193,7 @@ pub fn plan(items: &[Item], s: &BatchSettings) -> Vec<Batch> {
 #[derive(Debug, Clone)]
 pub struct BatchCache {
     root: PathBuf,
+    cache_dir: PathBuf,
 }
 
 /// What the cache keeps beside the audio.
@@ -190,7 +211,13 @@ impl BatchCache {
     pub fn new(cache_dir: &Path) -> Self {
         Self {
             root: cache_dir.join("voice").join("batch"),
+            cache_dir: cache_dir.to_path_buf(),
         }
+    }
+
+    /// The cache folder this was made on.
+    pub fn cache_dir(&self) -> &Path {
+        &self.cache_dir
     }
 
     /// The key of a batch: provider, voice, model, provider speed, batch text and seed.
@@ -228,6 +255,7 @@ impl BatchCache {
         Some(Aligned {
             pcm,
             alignment: st.alignment,
+            billed_chars: None,
         })
     }
 
@@ -309,6 +337,13 @@ pub fn fetch(ctx: &Ctx<'_>, b: &Batch) -> Result<(Aligned, bool)> {
             seed: ctx.settings.seed,
         })
         .with_context(|| format!("rendering a batch of {} {} lines", b.items.len(), b.tone))?;
+    if let Some(billed) = a.billed_chars {
+        rates::Recorded::new(ctx.cache.cache_dir()).record(
+            ctx.model,
+            billed,
+            b.text.chars().count() as u64,
+        );
+    }
     ctx.cache.put(
         ctx.tts.id(),
         &key,
@@ -487,10 +522,19 @@ pub fn check(cuts: &[Cut]) -> Vec<String> {
 // ----- estimate and price -----
 
 /// What a render costs and what the account holds.
-#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize, Type)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct Pricing {
     /// Credits one character bills on the model.
     pub cost_per_char: f64,
+    /// Where that figure comes from: `estimated` (the rate table), `recorded` (the
+    /// `x-character-count` of an earlier call) or `account` (a model the table lacks).
+    pub basis: &'static str,
+    /// USD per 1,000 characters today.
+    pub usd_per_1k: f64,
+    /// The last day of the promo rate in `usd_per_1k`, while one applies.
+    pub promo_until: Option<String>,
+    /// The longest text one request takes here, or 0 for no limit: `plan_within` reads it.
+    pub batch_limit: usize,
     /// Credits left on the account; `None` when the provider cannot say.
     pub remaining: Option<u64>,
 }
@@ -506,8 +550,20 @@ pub struct Estimate {
     /// Characters of those batches, carriers included.
     pub chars: u64,
     pub cost_per_char: f64,
-    /// Credits the render bills.
+    /// `estimated`, `recorded` or `account`: where `cost_per_char` comes from.
+    #[serde(default)]
+    pub credits_basis: String,
+    /// USD per 1,000 characters today.
+    #[serde(default)]
+    pub usd_per_1k: f64,
+    /// The last day of a promo rate in `usd_per_1k`.
+    #[serde(default)]
+    pub promo_until: Option<String>,
+    /// Credits the render bills (an estimate unless `credits_basis` is `recorded`).
     pub credits: u64,
+    /// What the render costs in USD.
+    #[serde(default)]
+    pub usd: f64,
     pub remaining: Option<u64>,
     /// The credits cover the render (true when the provider cannot say).
     pub affordable: bool,
@@ -516,6 +572,9 @@ pub struct Estimate {
 pub fn estimate(ctx: &Ctx<'_>, batches: &[Batch], price: &Pricing) -> Estimate {
     let mut e = Estimate {
         cost_per_char: price.cost_per_char,
+        credits_basis: price.basis.into(),
+        usd_per_1k: price.usd_per_1k,
+        promo_until: price.promo_until.clone(),
         remaining: price.remaining,
         ..Default::default()
     };
@@ -529,6 +588,7 @@ pub fn estimate(ctx: &Ctx<'_>, batches: &[Batch], price: &Pricing) -> Estimate {
         }
     }
     e.credits = (e.chars as f64 * price.cost_per_char).ceil() as u64;
+    e.usd = e.chars as f64 * price.usd_per_1k / 1000.0;
     e.affordable = price.remaining.is_none_or(|r| e.credits <= r);
     e
 }
@@ -598,6 +658,62 @@ mod tests {
             spoken: s.into(),
             tone: tone.into(),
         }
+    }
+
+    fn price(cost_per_char: f64, remaining: Option<u64>) -> Pricing {
+        Pricing {
+            cost_per_char,
+            basis: "estimated",
+            usd_per_1k: 0.04,
+            promo_until: None,
+            batch_limit: 0,
+            remaining,
+        }
+    }
+
+    #[test]
+    fn a_batch_stays_below_the_request_limit() {
+        let v: Vec<Item> = (0..10)
+            .map(|i| item(&format!("line {i}"), "calm"))
+            .collect();
+        let s = BatchSettings::default();
+        let one = plan(&v, &s);
+        assert_eq!(one.len(), 1);
+        let limit = one[0].text.chars().count() / 3;
+        let b = plan_within(&v, &s, limit);
+        assert!(b.len() > 3);
+        assert!(b.iter().all(|b| b.text.chars().count() <= limit));
+        assert_eq!(b.iter().map(|b| b.items.len()).sum::<usize>(), 10);
+        let chars: Vec<char> = b[1].text.chars().collect();
+        for (i, r) in &b[1].items {
+            assert_eq!(chars[r.clone()].iter().collect::<String>(), i.spoken);
+        }
+        // A sentence longer than the limit still gets a batch of its own.
+        assert_eq!(plan_within(&v, &s, 3).len(), 10);
+    }
+
+    #[test]
+    fn the_estimate_gives_usd_and_credits() {
+        let dir = tempfile::tempdir().unwrap();
+        let batches = plan(&[item("Six", "number")], &BatchSettings::default());
+        let (_h, tts) = eleven_with(0.06, &batches[0]);
+        let cache = BatchCache::new(dir.path());
+        let settings = RenderSettings::default();
+        let ctx = Ctx {
+            tts: &tts,
+            cache: &cache,
+            voice: "abc",
+            model: "m",
+            settings: &settings,
+        };
+        let e = estimate(&ctx, &batches, &price(0.5, None));
+        assert_eq!(e.chars, 16);
+        assert_eq!(e.credits, 8);
+        assert!((e.usd - 16.0 * 0.04 / 1000.0).abs() < 1e-12);
+        assert_eq!(
+            (e.usd_per_1k, e.credits_basis.as_str()),
+            (0.04, "estimated")
+        );
     }
 
     #[test]
@@ -726,6 +842,7 @@ mod tests {
                 starts: vec![0.315, 0.40, 0.50, 0.785, 0.90],
                 ends: vec![0.40, 0.485, 0.785, 0.90, 1.015],
             },
+            billed_chars: None,
         }
     }
 
@@ -833,10 +950,7 @@ mod tests {
             model: "eleven_turbo_v2_5",
             settings: &settings,
         };
-        let price = Pricing {
-            cost_per_char: 0.5,
-            remaining: Some(1000),
-        };
+        let price = price(0.5, Some(1000));
 
         let before = estimate(&ctx, &batches, &price);
         assert_eq!(before.chars, batches[0].text.chars().count() as u64);
@@ -891,29 +1005,13 @@ mod tests {
             model: "m",
             settings: &settings,
         };
-        let e = estimate(
-            &ctx,
-            &batches,
-            &Pricing {
-                cost_per_char: 1.0,
-                remaining: Some(5),
-            },
-        );
+        let e = estimate(&ctx, &batches, &price(1.0, Some(5)));
         assert!(!e.affordable);
         let msg = e.check().unwrap_err().to_string();
         assert!(
             msg.contains("needs 16 credits") && msg.contains("has 5"),
             "{msg}"
         );
-        assert!(estimate(
-            &ctx,
-            &batches,
-            &Pricing {
-                cost_per_char: 1.0,
-                remaining: None
-            }
-        )
-        .check()
-        .is_ok());
+        assert!(estimate(&ctx, &batches, &price(1.0, None)).check().is_ok());
     }
 }

@@ -40,8 +40,15 @@ struct Bench {
 }
 
 const MODELS: &str = r#"[
+  {"model_id":"eleven_v4","name":"Eleven v4","can_do_text_to_speech":true},
+  {"model_id":"eleven_v4_turbo","name":"Eleven v4 Turbo","can_do_text_to_speech":true},
+  {"model_id":"eleven_v3","name":"Eleven v3","can_do_text_to_speech":true},
+  {"model_id":"eleven_v3_conversational","name":"Eleven v3 Conversational","can_do_text_to_speech":true},
+  {"model_id":"eleven_multilingual_v2","name":"Multilingual v2","can_do_text_to_speech":true},
+  {"model_id":"eleven_flash_v2_5","name":"Flash v2.5","can_do_text_to_speech":true},
   {"model_id":"eleven_turbo_v2_5","name":"Turbo v2.5","can_do_text_to_speech":true,"model_rates":{"character_cost_multiplier":0.5}},
-  {"model_id":"eleven_v4","name":"v4","can_do_text_to_speech":true,"model_rates":{"character_cost_multiplier":1.0}}]"#;
+  {"model_id":"eleven_turbo_v2","name":"Turbo v2","can_do_text_to_speech":true,"model_rates":{"character_cost_multiplier":0.5}},
+  {"model_id":"eleven_flash_v2","name":"Flash v2","can_do_text_to_speech":true,"model_rates":{"character_cost_multiplier":0.5}}]"#;
 const VOICES: &str = r#"{"voices":[
   {"voice_id":"v-callum","name":"Callum","category":"premade","labels":{"accent":"american"}},
   {"voice_id":"v-matilda","name":"Matilda","category":"premade"}]}"#;
@@ -141,7 +148,12 @@ fn the_catalogue_needs_a_key_and_lists_voices_models_and_credits() {
         .gear_voice_catalog(&CatalogParams::default())
         .unwrap();
     assert_eq!(c.voices.len(), 2);
-    assert_eq!(c.models[0].cost_per_char, 0.5);
+    // The account lists v4 and v4 turbo by these ids; the rate table prices them.
+    let by = |id: &str| c.models.iter().find(|m| m.id == id).expect(id);
+    assert_eq!(by("eleven_v4").cost_per_char, 1.0);
+    assert_eq!(by("eleven_v4_turbo").cost_per_char, 0.5);
+    assert_eq!(by("eleven_turbo_v2_5").cost_per_char, 0.5);
+    assert_eq!(by("eleven_v3").max_chars, 5000);
     assert_eq!(c.credits.unwrap().remaining, 50000);
     let only = b
         .core
@@ -182,6 +194,20 @@ fn the_estimate_prices_carriers_at_the_models_rate_and_makes_no_paid_call() {
         half.estimate.credits,
         (half.estimate.chars as f64 / 2.0).ceil() as u64
     );
+    // USD from the table: flash and turbo v2.5 are $0.04 per 1K characters, with no promo.
+    assert_eq!(half.estimate.usd_per_1k, 0.04);
+    assert!((half.estimate.usd - half.estimate.chars as f64 * 0.04 / 1000.0).abs() < 1e-9);
+    assert_eq!(half.estimate.credits_basis, "estimated");
+    assert_eq!(half.estimate.promo_until, None);
+    let text = quadcam_lib::core::voice_estimate_text(&half.estimate);
+    assert!(
+        text.contains("$0.04 per 1K") && text.contains("credits (estimated)"),
+        "{text}"
+    );
+    // v4 is $0.08, or $0.022 while its promo lasts.
+    let u = full.estimate.usd_per_1k;
+    assert!(u == 0.08 || u == 0.022, "{u}");
+    assert_eq!(full.estimate.promo_until.is_some(), u == 0.022);
     assert_eq!(b.http.posts(), 0);
     assert!(estimate(&b, &["nope"], "eleven_v4").is_err());
     assert!(estimate(&b, &["sample"], "eleven_nothing")
@@ -250,6 +276,64 @@ fn a_sample_waits_for_confirm_then_writes_one_wav_per_voice_model_and_line() {
     assert_eq!(again.estimate.credits, 0);
     assert_eq!(again.items.len(), 48);
     assert_eq!(b.http.posts(), 12);
+}
+
+#[test]
+fn a_recorded_character_count_replaces_the_estimate() {
+    let b = bench(50000, true);
+    // The header says each character billed a quarter credit on v4, not one.
+    b.http.bill(0.25);
+    let before = estimate(&b, &["sample"], "eleven_v4").unwrap();
+    assert_eq!(before.estimate.credits_basis, "estimated");
+    b.core
+        .gear_voice_sample(&sample(&["Callum"], &["eleven_v4"], false, true))
+        .unwrap();
+    // Other batches (another set) are priced at the recorded rate.
+    let after = estimate(&b, &["quad"], "eleven_v4").unwrap();
+    assert_eq!(after.estimate.credits_basis, "recorded");
+    assert!((after.estimate.cost_per_char - 0.25).abs() < 0.01);
+    assert!(after.estimate.credits < after.estimate.chars / 3);
+    let text = quadcam_lib::core::voice_estimate_text(&after.estimate);
+    assert!(text.contains("recorded rate"), "{text}");
+    // Another model keeps its estimate.
+    let other = estimate(&b, &["quad"], "eleven_v4_turbo").unwrap();
+    assert_eq!(other.estimate.credits_basis, "estimated");
+}
+
+#[test]
+fn batches_stay_below_the_models_request_limit() {
+    let b = bench(100000, true);
+    // A long carrier makes a full batch of lines run past 5,000 characters.
+    let est = |model: &str| {
+        b.core
+            .gear_voice_estimate(&EstimateParams {
+                sets: vec!["edgetx".into()],
+                voice: "callum".into(),
+                model: model.into(),
+                batch: Some(quadcam_lib::gear::voice::batch::BatchSettings {
+                    carrier: format!(
+                        "{} The word is {{line}}.",
+                        "A long run of words that carries on.".repeat(3)
+                    ),
+                    max_lines: 100,
+                    ..Default::default()
+                }),
+                ..Default::default()
+            })
+            .unwrap()
+            .estimate
+    };
+    let long = est("eleven_flash_v2_5");
+    let short = est("eleven_v3");
+    assert!(
+        short.batches > long.batches,
+        "{} {}",
+        short.batches,
+        long.batches
+    );
+    // No batch is longer than nine tenths of the model's limit.
+    assert!(short.chars / short.batches as u64 <= 4500);
+    assert!(long.chars / long.batches as u64 <= 36000);
 }
 
 #[test]

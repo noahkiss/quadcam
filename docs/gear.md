@@ -308,18 +308,26 @@ inside carrier sentences, and compares voices before it spends credits.
   The studio shows only the last four characters. **Remove key** deletes it. From the command
   line, `quadcam-cli gear voice key set` reads the key from stdin. `QUADCAM_TTS_KEY` in the
   environment takes the place of the Keychain for one run.
-- **Account.** The studio lists the account's voices and models (with the credits a
-  character costs on each: the turbo and flash v2.5 models bill half a credit) and the
-  credits left.
+- **Account.** The studio lists the account's voices and models and the credits left. Each
+  model shows its price in USD per 1,000 characters and the credits a character costs. QuadCam
+  holds one rate table (the pricing page of 2026-10-09). A promo rate, such as the one on v4
+  and v4 turbo until 2026-10-12, shows with its last day. The credit figure is an estimate:
+  one credit is one character at the $0.08 rate, so a $0.04 model costs half a credit. After
+  a paid call, QuadCam records the character count ElevenLabs reports and uses that next time.
 - **Line sets.** A set is a list of lines to render. Sets combine, and a line in two sets is
   rendered once. `edgetx` (every prompt the radio plays by itself, the numbers and units, and
   the general prompts), `quad`, `heli`, `plane` and `glider` (the radio's own prompts and
   numbers, plus the callouts that setup plays), `extras` (more FPV callouts), `easter` (short
   fun lines in original wording), `custom` (your own lines) and `quadcam` (the lines a pack
-  holds today). `sample` is twelve hard lines for **Sample**.
+  holds today). `sample` is twelve hard lines for **Sample**. The number and unit prompts
+  (`0000.wav` to `0099.wav`, `volt0.wav` and so on) and the sounds the radio plays by itself
+  go in `SOUNDS/en/SYSTEM/`, where EdgeTX looks for them; a model's own tracks go in
+  `SOUNDS/en/`.
 - **Cost.** The line under the pickers shows the characters (carriers included), the batches,
-  the credits and the credits left. Batches the cache already holds cost nothing. A render
-  the credits do not cover cannot start.
+  the price in USD and the credits (estimated), and the credits left. Batches the cache already
+  holds cost nothing. A render the credits do not cover cannot start. A batch stays under the
+  model's per-request limit (v3 5,000 characters, multilingual v2 10,000, flash and turbo
+  40,000).
 - **Sample.** Tick voices and models and press **Sample**. QuadCam renders the sample lines
   in each pair, shows the cost, and waits for **Sample and pay**. Each play button in the grid
   plays one line in one voice and model.

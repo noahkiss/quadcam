@@ -51,6 +51,8 @@ pub struct Alignment {
 pub struct Aligned {
     pub pcm: Pcm,
     pub alignment: Alignment,
+    /// Characters the provider says it billed for this take, when it says.
+    pub billed_chars: Option<u64>,
 }
 
 /// A model a provider offers.
@@ -58,8 +60,15 @@ pub struct Aligned {
 pub struct ModelInfo {
     pub id: String,
     pub name: String,
-    /// Credits one character costs on this model.
+    /// Credits one character costs on this model: estimated from the rate table, or the
+    /// account's own figure for a model the table lacks.
     pub cost_per_char: f64,
+    /// USD per 1,000 characters today (the promo rate while it lasts); 0 when unknown.
+    #[serde(default)]
+    pub usd_per_1k: f64,
+    /// The last day of a promo rate that applies today.
+    #[serde(default)]
+    pub promo_until: Option<String>,
     /// The longest text one request takes; 0 when the provider does not say.
     pub max_chars: u64,
 }

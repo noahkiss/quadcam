@@ -59,7 +59,9 @@ function KeyRow({ s }: { s: UseStudio }) {
 
 function costText(e: VoiceEstimate) {
   const left = e.remaining === null ? "" : ` of ${n(e.remaining)} left`;
-  return `${n(e.chars)} characters in ${e.batches} ${e.batches === 1 ? "batch" : "batches"} (${e.cached_batches} cached): ${n(e.credits)} credits${left}.`;
+  const rate = (e.usd_per_1k ?? 0) > 0 ? ` at $${e.usd_per_1k} per 1K${e.promo_until ? `, promo until ${e.promo_until}` : ""}` : "";
+  const basis = e.credits_basis === "recorded" ? "recorded rate" : "estimated";
+  return `${n(e.chars)} characters in ${e.batches} ${e.batches === 1 ? "batch" : "batches"} (${e.cached_batches} cached): $${(e.usd ?? 0).toFixed(2)}${rate}, ${n(e.credits)} credits (${basis})${left}.`;
 }
 
 function Grid({ items }: { items: SampleItem[] }) {
@@ -128,7 +130,7 @@ export function Studio({ onRendered }: { onRendered: () => Promise<void> }) {
             <fieldset className={styles.pick}>
               <legend>Models</legend>
               {s.catalog.models.map((m) => (
-                <Checkbox key={m.id} label={m.name} detail={`${m.id}, ${m.cost_per_char ?? "?"} ${m.cost_per_char === 1 ? "credit" : "credits"} a character`} checked={s.models.includes(m.id)} onChange={(ev) => s.setModels(toggle(s.models, m.id, ev.target.checked))} />
+                <Checkbox key={m.id} label={m.name} detail={`${m.id}, $${m.usd_per_1k ?? "?"} per 1K characters${m.promo_until ? ` (promo until ${m.promo_until})` : ""}, about ${m.cost_per_char ?? "?"} ${m.cost_per_char === 1 ? "credit" : "credits"} a character (estimated)`} checked={s.models.includes(m.id)} onChange={(ev) => s.setModels(toggle(s.models, m.id, ev.target.checked))} />
               ))}
             </fieldset>
             <fieldset className={styles.pick}>

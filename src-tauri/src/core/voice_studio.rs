@@ -10,6 +10,7 @@ use crate::gear::voice::batch::{self, BatchCache, BatchSettings, Estimate, Item,
 use crate::gear::voice::keychain::{self, ELEVENLABS};
 use crate::gear::voice::lines::{self, Line, Spelling};
 use crate::gear::voice::packs::{self, BuildOpts};
+use crate::gear::voice::rates;
 use crate::gear::voice::render::{self, Plan, RenderSettings};
 use crate::gear::voice::sets::{self, SetInfo, SetLine};
 use crate::gear::voice::tts::{Credits, ModelInfo, ProviderConfig, Tts, VoiceInfo};
@@ -257,7 +258,7 @@ impl Core {
         }
     }
 
-    fn pricing(models: &[ModelInfo], model: &str, credits: &Credits) -> Result<Pricing> {
+    fn pricing(&self, models: &[ModelInfo], model: &str, credits: &Credits) -> Result<Pricing> {
         let m = models.iter().find(|m| m.id == model).ok_or_else(|| {
             anyhow!(
                 "The account lists no model {model:?}. It lists: {}.",
@@ -268,8 +269,20 @@ impl Core {
                     .join(", ")
             )
         })?;
+        let recorded = rates::Recorded::new(&self.cache).get(model);
+        let basis = if recorded.is_some() {
+            "recorded"
+        } else if rates::rate(model).is_some() {
+            "estimated"
+        } else {
+            "account"
+        };
         Ok(Pricing {
-            cost_per_char: m.cost_per_char,
+            cost_per_char: recorded.unwrap_or(m.cost_per_char),
+            basis,
+            usd_per_1k: m.usd_per_1k,
+            promo_until: m.promo_until.clone(),
+            batch_limit: rates::batch_limit(model, m.max_chars),
             remaining: Some(credits.remaining),
         })
     }
@@ -327,9 +340,9 @@ impl Core {
         bs.check()?;
         let (voice, voice_name) = Self::resolve_voice(&tts.voices()?, &p.voice)?;
         let model = self.studio_model(&p.model)?;
-        let price = Self::pricing(&tts.models()?, &model, &tts.credits()?)?;
+        let price = self.pricing(&tts.models()?, &model, &tts.credits()?)?;
         let lines = self.studio_lines(&p.sets, &p.lines)?;
-        let batches = batch::plan(&Self::studio_items(&lines), &bs);
+        let batches = batch::plan_within(&Self::studio_items(&lines), &bs, price.batch_limit);
         let cache = BatchCache::new(&self.cache);
         let ctx = batch::Ctx {
             tts: tts.as_ref(),
@@ -381,7 +394,7 @@ impl Core {
             p.sets.clone()
         };
         let lines = self.studio_lines(&ids, &p.lines)?;
-        let batches = batch::plan(&Self::studio_items(&lines), &bs);
+        let items = Self::studio_items(&lines);
         let cache = BatchCache::new(&self.cache);
         let mut combos = Vec::new();
         let mut total = Estimate {
@@ -392,7 +405,8 @@ impl Core {
         for v in &p.voices {
             let (vid, vname) = Self::resolve_voice(&voices, v)?;
             for m in &p.models {
-                let price = Self::pricing(&models, m, &credits)?;
+                let price = self.pricing(&models, m, &credits)?;
+                let batches = batch::plan_within(&items, &bs, price.batch_limit);
                 let ctx = batch::Ctx {
                     tts: tts.as_ref(),
                     cache: &cache,
@@ -406,7 +420,13 @@ impl Core {
                 total.lines += e.lines;
                 total.chars += e.chars;
                 total.credits += e.credits;
-                combos.push((vid.clone(), vname.clone(), m.clone()));
+                total.usd += e.usd;
+                if total.credits_basis.is_empty() {
+                    total.credits_basis = e.credits_basis.clone();
+                } else if total.credits_basis != e.credits_basis {
+                    total.credits_basis = "estimated".into();
+                }
+                combos.push((vid.clone(), vname.clone(), m.clone(), batches));
             }
         }
         total.affordable = credits.remaining >= total.credits;
@@ -430,7 +450,7 @@ impl Core {
         }
         let tools = crate::media::find_tools().ok();
         let out_root = self.cache.join("voice").join("samples");
-        for (vid, vname, model) in combos {
+        for (vid, vname, model, batches) in combos {
             let ctx = batch::Ctx {
                 tts: tts.as_ref(),
                 cache: &cache,
@@ -490,9 +510,9 @@ impl Core {
         };
         let (voice, voice_name) = Self::resolve_voice(&tts.voices()?, &want)?;
         let model = self.studio_model(&p.model)?;
-        let price = Self::pricing(&tts.models()?, &model, &tts.credits()?)?;
+        let price = self.pricing(&tts.models()?, &model, &tts.credits()?)?;
         let lines = self.studio_lines(&p.sets, &p.lines)?;
-        let batches = batch::plan(&Self::studio_items(&lines), &bs);
+        let batches = batch::plan_within(&Self::studio_items(&lines), &bs, price.batch_limit);
         let cache = BatchCache::new(&self.cache);
         let bctx = batch::Ctx {
             tts: tts.as_ref(),
@@ -524,12 +544,11 @@ impl Core {
             needs_confirm: false,
             dry_run: p.dry_run,
             notes: vec![format!(
-                "{} batches ({} cached), {} characters with carriers at {} credits each: {} credits of {} left; {} distinct lines.",
+                "{} batches ({} cached), {} characters with carriers, {}; {} credits left; {} distinct lines.",
                 est.batches,
                 est.cached_batches,
                 est.chars,
-                est.cost_per_char,
-                est.credits,
+                cost_text(&est),
                 est.remaining.unwrap_or(0),
                 unique.len()
             )],
@@ -635,8 +654,16 @@ pub fn catalog_text(c: &Catalog) -> String {
         for m in &c.models {
             let _ = writeln!(
                 s,
-                "  {}  {}: {} credits a character",
-                m.id, m.name, m.cost_per_char
+                "  {}  {}: ${} per 1K characters{}, about {} credits a character (estimated), {} characters a request",
+                m.id,
+                m.name,
+                m.usd_per_1k,
+                m.promo_until
+                    .as_ref()
+                    .map(|u| format!(" (promo until {u})"))
+                    .unwrap_or_default(),
+                m.cost_per_char,
+                m.max_chars
             );
         }
     }
@@ -657,17 +684,41 @@ pub fn catalog_text(c: &Catalog) -> String {
     s
 }
 
+/// What an estimate costs: USD first, then credits, which are an estimate unless an earlier
+/// call recorded the real count.
+fn cost_text(e: &Estimate) -> String {
+    let basis = if e.credits_basis == "recorded" {
+        "recorded rate"
+    } else {
+        "estimated"
+    };
+    let rate = if e.usd_per_1k > 0.0 {
+        format!(
+            " at ${} per 1K{}",
+            e.usd_per_1k,
+            e.promo_until
+                .as_ref()
+                .map(|u| format!(", promo until {u}"))
+                .unwrap_or_default()
+        )
+    } else {
+        String::new()
+    };
+    format!("${:.2}{rate}, {} credits ({basis})", e.usd, e.credits)
+}
+
 /// The estimate as text.
 pub fn estimate_text(e: &Estimate) -> String {
     format!(
-        "{} batches ({} cached), {} lines to render, {} characters with carriers, {} credits at {} a character; {} left{}.",
+        "{} batches ({} cached), {} lines to render, {} characters with carriers, {}; {} left{}.",
         e.batches,
         e.cached_batches,
         e.lines,
         e.chars,
-        e.credits,
-        e.cost_per_char,
-        e.remaining.map(|r| r.to_string()).unwrap_or_else(|| "unknown".into()),
+        cost_text(e),
+        e.remaining
+            .map(|r| r.to_string())
+            .unwrap_or_else(|| "unknown".into()),
         if e.affordable { "" } else { " (not enough)" }
     )
 }

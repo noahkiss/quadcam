@@ -3,6 +3,7 @@
 //! canned JSON and never reach the network. The key rides in a header on curl's stdin, never
 //! in argv, and no error or log line carries it.
 
+use super::rates;
 use super::tts::{curl_quote, Aligned, Alignment, Credits, ModelInfo, Tts, TtsRequest, VoiceInfo};
 use super::wav::Pcm;
 use anyhow::{anyhow, bail, Context, Result};
@@ -28,11 +29,13 @@ pub struct HttpRequest {
     pub body: Option<String>,
 }
 
-/// An answer: the status and the body text (every call here answers JSON).
+/// An answer: the status, the body text (every call here answers JSON) and the billed count.
 #[derive(Debug, Clone)]
 pub struct HttpResponse {
     pub status: u16,
     pub body: String,
+    /// The `x-character-count` header: characters the request billed, when it came.
+    pub char_count: Option<u64>,
 }
 
 pub trait Http: Send + Sync {
@@ -55,7 +58,7 @@ impl Http for CurlHttp {
         if let Some(b) = &req.body {
             cfg.push_str(&format!("data = {}\n", curl_quote(b)));
         }
-        cfg.push_str("max-time = 300\nsilent\nshow-error\nwrite-out = \"\\n%{http_code}\"\n");
+        cfg.push_str("max-time = 300\nsilent\nshow-error\nwrite-out = \"\\n%header{x-character-count}\\n%{http_code}\"\n");
         let mut child = Command::new("/usr/bin/curl")
             .args(["-K", "-"])
             .stdin(Stdio::piped())
@@ -74,18 +77,23 @@ impl Http for CurlHttp {
             );
         }
         let text = String::from_utf8_lossy(&out.stdout).into_owned();
-        let (body, code) = text.rsplit_once('\n').unwrap_or(("", &text));
+        let (rest, code) = text.rsplit_once('\n').unwrap_or(("", &text));
+        let (body, count) = rest.rsplit_once('\n').unwrap_or((rest, ""));
         Ok(HttpResponse {
             status: code.trim().parse().unwrap_or(0),
             body: body.to_string(),
+            char_count: count.trim().parse().ok(),
         })
     }
 }
 
-/// What ElevenLabs bills one character on a model that does not say. Flash and turbo v2.5
-/// bill half a credit; everything else one.
+/// What ElevenLabs bills one character on a model that does not say. Flash and turbo
+/// and the older turbo and flash v2 bill half a credit; everything else one.
 pub fn fallback_rate(model: &str) -> f64 {
-    if model == "eleven_turbo_v2_5" || model == "eleven_flash_v2_5" {
+    if matches!(
+        model,
+        "eleven_turbo_v2_5" | "eleven_flash_v2_5" | "eleven_turbo_v2" | "eleven_flash_v2"
+    ) {
         0.5
     } else {
         1.0
@@ -117,6 +125,16 @@ impl Eleven {
     }
 
     fn call(&self, method: &'static str, path: &str, body: Option<Value>) -> Result<Value> {
+        Ok(self.call_counted(method, path, body)?.0)
+    }
+
+    /// `call`, and the characters the answer says it billed.
+    fn call_counted(
+        &self,
+        method: &'static str,
+        path: &str,
+        body: Option<Value>,
+    ) -> Result<(Value, Option<u64>)> {
         let req = HttpRequest {
             method,
             url: format!("{}{path}", self.base),
@@ -132,6 +150,7 @@ impl Eleven {
             let r = self.http.send(&req).context("ElevenLabs did not answer")?;
             if (200..300).contains(&r.status) {
                 return serde_json::from_str(&r.body)
+                    .map(|v| (v, r.char_count))
                     .map_err(|_| anyhow!("ElevenLabs answered something that is not JSON"));
             }
             let busy = r.status == 429 || r.status >= 500;
@@ -235,7 +254,7 @@ impl Tts for Eleven {
         if (req.speed - 1.0).abs() > 1e-9 {
             body["voice_settings"] = json!({"speed": req.speed.clamp(0.7, 1.2)});
         }
-        let v = self.call(
+        let (v, billed_chars) = self.call_counted(
             "POST",
             &format!(
                 "/v1/text-to-speech/{}/with-timestamps?output_format={OUTPUT_FORMAT}",
@@ -256,6 +275,7 @@ impl Tts for Eleven {
         Ok(Aligned {
             pcm: Self::pcm(&r.audio_base64)?,
             alignment,
+            billed_chars,
         })
     }
 
@@ -273,10 +293,17 @@ impl Tts for Eleven {
             })
             .filter_map(|m| {
                 let id = m.get("model_id")?.as_str()?.to_string();
-                let rate = m
+                let table = rates::rate(&id);
+                let today = rates::today();
+                let api_rate = m
                     .pointer("/model_rates/character_cost_multiplier")
                     .and_then(Value::as_f64)
                     .unwrap_or_else(|| fallback_rate(&id));
+                let rate = table.map_or(api_rate, |t| t.credits_per_char());
+                let api_max = m
+                    .get("maximum_text_length_per_request")
+                    .and_then(Value::as_u64)
+                    .unwrap_or(0);
                 Some(ModelInfo {
                     name: m
                         .get("name")
@@ -284,10 +311,11 @@ impl Tts for Eleven {
                         .unwrap_or(&id)
                         .to_string(),
                     cost_per_char: rate,
-                    max_chars: m
-                        .get("maximum_text_length_per_request")
-                        .and_then(Value::as_u64)
-                        .unwrap_or(0),
+                    usd_per_1k: table.map_or(rate * rates::BASE_USD_PER_1K, |t| t.usd_on(&today)),
+                    promo_until: table
+                        .and_then(|t| t.promo_on(&today))
+                        .map(|(_, until)| until.to_string()),
+                    max_chars: table.map_or(api_max, |t| t.max_chars),
                     id,
                 })
             })
@@ -364,12 +392,20 @@ pub mod fake {
         /// When set, a with-timestamps request with no canned answer gets a take of its own
         /// text, each character this many seconds long.
         pub synth_step: Mutex<Option<f64>>,
+        /// When set, a synthesised take reports `x-character-count` of this many billed
+        /// characters per character of text.
+        pub bill: Mutex<Option<f64>>,
     }
 
     impl FakeHttp {
         /// Answers every with-timestamps request with a take of the text it carries.
         pub fn synth(&self, step: f64) {
             *self.synth_step.lock().unwrap() = Some(step);
+        }
+
+        /// Makes every synthesised take report that many billed characters per character.
+        pub fn bill(&self, per_char: f64) {
+            *self.bill.lock().unwrap() = Some(per_char);
         }
 
         pub fn on(&self, path_part: &str, status: u16, body: impl Into<String>) {
@@ -401,6 +437,11 @@ pub mod fake {
                     return Ok(HttpResponse {
                         status: 200,
                         body: timestamps_json(text, step),
+                        char_count: self
+                            .bill
+                            .lock()
+                            .unwrap()
+                            .map(|r| (text.chars().count() as f64 * r).round() as u64),
                     });
                 }
                 bail!("no canned answer for {}", req.url);
@@ -416,7 +457,11 @@ pub mod fake {
             } else {
                 a[i].clone()
             };
-            Ok(HttpResponse { status, body })
+            Ok(HttpResponse {
+                status,
+                body,
+                char_count: None,
+            })
         }
     }
 
@@ -460,6 +505,18 @@ mod tests {
     use super::fake::*;
     use super::*;
 
+    /// The shape of the account's `/v1/models` answer, with the ids it lists.
+    const FULL_LIST: &str = r#"[
+        {"model_id":"eleven_v4","name":"Eleven v4","can_do_text_to_speech":true},
+        {"model_id":"eleven_v4_turbo","name":"Eleven v4 Turbo","can_do_text_to_speech":true},
+        {"model_id":"eleven_v3","name":"Eleven v3","can_do_text_to_speech":true},
+        {"model_id":"eleven_v3_conversational","name":"Eleven v3 Conversational","can_do_text_to_speech":true},
+        {"model_id":"eleven_multilingual_v2","name":"Multilingual v2","can_do_text_to_speech":true,"maximum_text_length_per_request":10000},
+        {"model_id":"eleven_flash_v2_5","name":"Flash v2.5","can_do_text_to_speech":true},
+        {"model_id":"eleven_turbo_v2_5","name":"Turbo v2.5","can_do_text_to_speech":true},
+        {"model_id":"eleven_turbo_v2","name":"Turbo v2","can_do_text_to_speech":true,"model_rates":{"character_cost_multiplier":0.5}},
+        {"model_id":"eleven_flash_v2","name":"Flash v2","can_do_text_to_speech":true,"model_rates":{"character_cost_multiplier":0.5}}]"#;
+
     fn client(h: &Arc<FakeHttp>) -> Eleven {
         Eleven::new(h.clone(), "sk_secret_key_1234".into()).without_backoff()
     }
@@ -483,6 +540,52 @@ mod tests {
         assert_eq!(m[1].cost_per_char, 0.5);
         let seen = h.seen.lock().unwrap();
         assert!(seen[0].headers.iter().any(|(k, _)| k == "xi-api-key"));
+    }
+
+    #[test]
+    fn the_rate_table_prices_the_models_it_knows() {
+        let h = Arc::new(FakeHttp::default());
+        h.on("/v1/models", 200, FULL_LIST);
+        let m = client(&h).models().unwrap();
+        let by = |id: &str| {
+            m.iter()
+                .find(|m| m.id == id)
+                .unwrap_or_else(|| panic!("{id}"))
+        };
+        // The ids the account lists, v4 and v4 turbo among them.
+        assert_eq!(m.len(), 9);
+        let v4 = by("eleven_v4");
+        assert_eq!(v4.cost_per_char, 1.0);
+        let turbo = by("eleven_v4_turbo");
+        assert_eq!(turbo.cost_per_char, 0.5);
+        assert_eq!(by("eleven_multilingual_v2").max_chars, 10000);
+        assert_eq!(by("eleven_flash_v2_5").usd_per_1k, 0.04);
+        assert_eq!(by("eleven_flash_v2_5").max_chars, 40000);
+        assert_eq!(by("eleven_v3").max_chars, 5000);
+        // The older models are not in the table: the account's figure and the fallback stand.
+        assert_eq!(by("eleven_turbo_v2").cost_per_char, 0.5);
+        assert_eq!(by("eleven_flash_v2").usd_per_1k, 0.04);
+        assert_eq!(by("eleven_turbo_v2").promo_until, None);
+        // A promo shows only while it lasts; the USD rate is the base or the promo's.
+        assert!(v4.usd_per_1k == 0.08 || v4.usd_per_1k == 0.022);
+        assert_eq!(v4.promo_until.is_some(), v4.usd_per_1k == 0.022);
+    }
+
+    #[test]
+    fn a_take_reports_the_characters_it_billed() {
+        let h = Arc::new(FakeHttp::default());
+        h.synth(0.05);
+        h.bill(0.5);
+        let a = client(&h)
+            .render_aligned(&TtsRequest {
+                text: "The word is six.",
+                voice: "abc",
+                model: "eleven_v4_turbo",
+                speed: 1.0,
+                seed: 0,
+            })
+            .unwrap();
+        assert_eq!(a.billed_chars, Some(8));
     }
 
     #[test]

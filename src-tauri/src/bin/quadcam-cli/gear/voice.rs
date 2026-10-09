@@ -123,7 +123,7 @@ pub enum VoiceCmd {
     Sets,
     /// The account's ElevenLabs voices.
     Voices,
-    /// The account's ElevenLabs models, with the credits a character costs.
+    /// The account's ElevenLabs models, with USD per 1K characters and the estimated credits a character.
     Models,
     /// The account's remaining ElevenLabs credits.
     Credits,

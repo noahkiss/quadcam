@@ -283,6 +283,33 @@ mod tests {
             .contains("no line set"));
     }
 
+    /// EdgeTX plays the number and unit prompts, and the sounds it plays by itself, from
+    /// `SOUNDS/en/SYSTEM/`; a model's own tracks sit in `SOUNDS/en/`.
+    #[test]
+    fn number_and_unit_prompts_sit_in_the_system_folder() {
+        let mut paths: Vec<String> = super::super::lines::builtin()
+            .unwrap()
+            .into_iter()
+            .map(|l| l.path)
+            .collect();
+        for id in ids() {
+            if id != CUSTOM {
+                paths.extend(lines_of(id).unwrap().into_iter().map(|l| l.line.path));
+            }
+        }
+        let mut numbers = 0;
+        for p in &paths {
+            let name = p.rsplit('/').next().unwrap();
+            let numbered = name.len() == 8 && name[..4].bytes().all(|b| b.is_ascii_digit());
+            if numbered || name.starts_with("volt") {
+                numbers += 1;
+                assert!(p.starts_with("SOUNDS/en/SYSTEM/"), "{p}");
+            }
+            assert!(p.starts_with("SOUNDS/en/"), "{p}");
+        }
+        assert!(numbers > 80, "{numbers}");
+    }
+
     #[test]
     fn a_path_means_one_text_in_every_file() {
         let mut seen: std::collections::BTreeMap<String, String> = Default::default();

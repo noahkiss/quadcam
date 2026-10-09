@@ -19,8 +19,8 @@ const LINES: Seed[] = [
   { path: "SOUNDS/en/disarm.wav", text: "Disarmed", group: "callouts", why: "Motors are off." },
   { path: "SOUNDS/en/lowbat.wav", text: "Battery low", group: "callouts", why: "The pack voltage is under the first warning level." },
   { path: "SOUNDS/en/gpsfix.wav", text: "GPS fix", group: "callouts", why: "The GPS has a fix." },
-  { path: "SOUNDS/en/0000.wav", text: "zero", group: "numbers", why: "The number 0." },
-  { path: "SOUNDS/en/0001.wav", text: "one", group: "numbers", why: "The number 1." },
+  { path: "SOUNDS/en/SYSTEM/0000.wav", text: "zero", group: "numbers", why: "The number 0." },
+  { path: "SOUNDS/en/SYSTEM/0001.wav", text: "one", group: "numbers", why: "The number 1." },
   { path: "SOUNDS/en/SYSTEM/hello.wav", text: "Hello", group: "system", why: "The radio powered on." },
 ];
 
@@ -175,9 +175,9 @@ export function preview(g: MockGear, p: { line: string; pack?: string | null; ra
 
 const VOICES: VoiceInfo[] = ["Callum", "Daniel", "Brian", "Adam", "Matilda", "Alice", "Sarah", "Lily"].map((name, i) => ({ id: `voice-${name.toLowerCase()}`, name, category: "premade", labels: i < 4 ? "male" : "female", preview_url: null }));
 const MODELS: ModelInfo[] = [
-  { id: "eleven_v4", name: "Eleven v4", cost_per_char: 1, max_chars: 5000 },
-  { id: "eleven_v4_turbo", name: "Eleven v4 Turbo", cost_per_char: 1, max_chars: 5000 },
-  { id: "eleven_turbo_v2_5", name: "Turbo v2.5", cost_per_char: 0.5, max_chars: 40000 },
+  { id: "eleven_v4", name: "Eleven v4", cost_per_char: 1, usd_per_1k: 0.08, promo_until: null, max_chars: 5000 },
+  { id: "eleven_v4_turbo", name: "Eleven v4 Turbo", cost_per_char: 0.5, usd_per_1k: 0.04, promo_until: null, max_chars: 5000 },
+  { id: "eleven_turbo_v2_5", name: "Turbo v2.5", cost_per_char: 0.5, usd_per_1k: 0.04, promo_until: null, max_chars: 40000 },
 ];
 const SETS: SetInfo[] = [
   { id: "edgetx", title: "Full EdgeTX English", about: "Every prompt the radio plays by itself, the numbers and units, and the general prompts a model can name.", lines: 311 },
@@ -231,7 +231,8 @@ function price(g: MockGear, setIds: string[], model: string): VoiceEstimate {
   const chars = lines * (CARRIER + 10);
   const credits = Math.ceil(chars * (m.cost_per_char ?? 1));
   const remaining = CREDITS - g.voice.spent;
-  return { batches: Math.ceil(lines / 30) + 1, cached_batches: 0, lines, chars, cost_per_char: m.cost_per_char, credits, remaining, affordable: credits <= remaining };
+  const usd = (chars * (m.usd_per_1k ?? 0)) / 1000;
+  return { batches: Math.ceil(lines / 30) + 1, cached_batches: 0, lines, chars, cost_per_char: m.cost_per_char, credits_basis: "estimated", usd_per_1k: m.usd_per_1k ?? 0, promo_until: null, credits, usd, remaining, affordable: credits <= remaining };
 }
 
 function voiceOf(want: string): VoiceInfo {
@@ -251,7 +252,7 @@ export function estimate(g: MockGear, p: { sets: string[]; voice: string; model:
 /** `gear_voice_sample`: three lines per voice and model. */
 export function sample(g: MockGear, p: { voices: string[]; models: string[]; dry_run?: boolean; confirm?: boolean }): SampleReport {
   needKey(g);
-  const sum = { batches: 0, cached_batches: 0, lines: 0, chars: 0, cost_per_char: 1, credits: 0, remaining: CREDITS - g.voice.spent, affordable: true };
+  const sum = { batches: 0, cached_batches: 0, lines: 0, chars: 0, cost_per_char: 0, credits_basis: "estimated", usd_per_1k: 0, promo_until: null, credits: 0, usd: 0, remaining: CREDITS - g.voice.spent, affordable: true };
   const combos = p.voices.flatMap((v) => p.models.map((m) => ({ v: voiceOf(v), m })));
   for (const c of combos) {
     const e = price(g, ["sample"], c.m);
@@ -259,6 +260,7 @@ export function sample(g: MockGear, p: { voices: string[]; models: string[]; dry
     sum.lines += e.lines;
     sum.chars += e.chars;
     sum.credits += e.credits;
+    sum.usd += e.usd ?? 0;
   }
   sum.affordable = sum.credits <= sum.remaining;
   const base = { estimate: sum, combos: combos.length, dry_run: !!p.dry_run, warnings: [] as string[] };

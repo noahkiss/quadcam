@@ -2082,8 +2082,16 @@ export type Estimate = {
 	/**  Characters of those batches, carriers included. */
 	chars: number,
 	cost_per_char: number | null,
-	/**  Credits the render bills. */
+	/**  `estimated`, `recorded` or `account`: where `cost_per_char` comes from. */
+	credits_basis?: string,
+	/**  USD per 1,000 characters today. */
+	usd_per_1k?: number | null,
+	/**  The last day of a promo rate in `usd_per_1k`. */
+	promo_until?: string | null,
+	/**  Credits the render bills (an estimate unless `credits_basis` is `recorded`). */
 	credits: number,
+	/**  What the render costs in USD. */
+	usd?: number | null,
 	remaining: number | null,
 	/**  The credits cover the render (true when the provider cannot say). */
 	affordable: boolean,
@@ -3262,8 +3270,15 @@ export type ModelEntry = {
 export type ModelInfo = {
 	id: string,
 	name: string,
-	/**  Credits one character costs on this model. */
+	/**
+	 *  Credits one character costs on this model: estimated from the rate table, or the
+	 *  account's own figure for a model the table lacks.
+	 */
 	cost_per_char: number | null,
+	/**  USD per 1,000 characters today (the promo rate while it lasts); 0 when unknown. */
+	usd_per_1k?: number | null,
+	/**  The last day of a promo rate that applies today. */
+	promo_until?: string | null,
 	/**  The longest text one request takes; 0 when the provider does not say. */
 	max_chars: number,
 };

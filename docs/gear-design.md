@@ -1100,8 +1100,9 @@ protocol serves; the gear folder is outside its scope). `build-pack` is CLI only
 - Not built, or different from the design: `lines.csv` holds 45 lines, not about 745: the
   callouts QuadCam names, the numbers 0 to 20 and six system sounds. The full set lives in the
   line sets below. A render runs inside the call, with no progress events. `lang` is `en` only.
-  Open: `lines.csv` puts the numbers at `SOUNDS/en/0000.wav`, where EdgeTX plays
-  `SOUNDS/en/SYSTEM/0000.wav`; the line sets use the `SYSTEM` paths.
+  The numbers sit at `SOUNDS/en/SYSTEM/0000.wav`, where EdgeTX plays them (the manual:
+  `SYSTEM` holds what the radio plays by itself; `SOUNDS/en/` holds tracks a model names);
+  a test keeps every number and unit prompt in `SYSTEM`.
 - Acceptance: `tests/voice.rs` (the spelling golden, a cache hit with no provider call, the
   normalisation golden WAV, the providers' requests, `build-pack`'s zip and index entry, the
   install checks, a hostile zip) and `tests/voice_core.rs` (render and cost, confirm, install,
@@ -1114,7 +1115,12 @@ from the Keychain through `KeyStore` (`keychain.rs`, `security-framework`, no se
 `QUADCAM_TTS=real`), `/v1/models`, `/v1/voices`, `/v1/user/subscription` and
 `/v1/text-to-speech/<voice>/with-timestamps?output_format=pcm_32000` go through `Http` (curl with
 its config on stdin; `FakeHttp` in tests). A model's billing rate is its
-`character_cost_multiplier`; turbo and flash v2.5 fall back to 0.5.
+price in `rates.rs`, the one rate table: USD per 1,000 characters, an optional promo rate with
+its last day, and the per-request character limit (v4 and v4 turbo: the v3 limit of 5,000
+until the account says otherwise). Credits a character are the base USD rate over 0.08 and
+read as an estimate; a model the table lacks keeps the account's `character_cost_multiplier`
+(turbo and flash v2 fall back to 0.5). The `x-character-count` header of a paid call is kept
+per model in `<cache>/voice/charcost.json` and wins over the estimate next time.
 
 - Batches (`batch.rs`): `plan` groups lines by tone, wraps each in the carrier (default
   `The word is {line}.`, the line ends the sentence; a line with its own end mark takes no
@@ -1127,8 +1133,10 @@ its config on stdin; `FakeHttp` in tests). A model's billing rate is its
   median pace per letter. The cuts feed `render::Ctx.cuts`, so `render_line` and `packs::render_to`
   take them like any cached take, then trim, fade and tempo.
 - Cost: `estimate` counts the characters of the batches the cache lacks, carriers included,
-  times the model's rate; `Estimate::check` refuses when the credits (`/v1/user/subscription`)
-  fall short. Every paid row (`gear_voice_sample`, `gear_voice_render` with `sets`) prices
+  times the model's rate, in credits and in USD (`Estimate.usd`, `usd_per_1k`, `promo_until`,
+  `credits_basis`: `estimated`, `recorded` or `account`); `plan_within` keeps each batch under
+  nine tenths of the model's request limit; `Estimate::check` refuses when the credits
+  (`/v1/user/subscription`) fall short. Every paid row (`gear_voice_sample`, `gear_voice_render` with `sets`) prices
   first and waits for `confirm`. MCP can delete the key and cannot set it.
 - Sets (`sets.rs`, `resources/voice/sets/*.csv`, `path,text,group,tone,why`): `edgetx`,
   `quad`, `heli`, `plane`, `glider`, `extras`, `easter`, `sample`, `quadcam` (the built-in

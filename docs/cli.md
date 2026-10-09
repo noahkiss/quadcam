@@ -159,7 +159,7 @@ quadcam-cli --json gear osd-edit DEVICE [--move ELEMENT=X,Y]... [--profiles ELEM
 quadcam-cli --json gear voice [--radio ID] [--refresh] [--text]   # lines, packs, the provider; --refresh reads the pack index
 quadcam-cli --json gear voice render [--voice V] [--lines SOUNDS/en/armed.wav,...] [--dry-run] [--confirm] [--speed S --tempo T --trim-db D --tail-ms N --fade-out-ms N --seed N]   # render with the tts_provider into a local pack; a provider that may charge needs --confirm
 quadcam-cli gear voice key set|delete|status   # the ElevenLabs key in the Keychain; `set` reads one line from stdin (hidden on a terminal); never printed
-quadcam-cli --json gear voice sets|voices|models|credits   # the line sets; the account's voices; its models with the credits a character costs; the credits left
+quadcam-cli --json gear voice sets|voices|models|credits   # the line sets; the account's voices; its models with USD per 1K characters, the estimated credits a character and the request limit; the credits left
 quadcam-cli --json gear voice estimate --set quad,easter --voice Callum --model eleven_turbo_v2_5 [--lines PATH,...] [--carrier T --max-lines N --snap-ms N]   # the characters (carriers included), batches and credits; no paid call
 quadcam-cli --json gear voice sample --voices Callum,Daniel --models eleven_v4,eleven_turbo_v2_5 [--set sample] [--lines PATH,...] [--dry-run] [--confirm]   # a few hard lines per voice and model as WAVs in the cache; bills ElevenLabs, so it needs --confirm and refuses when the credits fall short
 quadcam-cli --json gear voice render --set quad,extras --voice Callum --model eleven_turbo_v2_5 [--dry-run] [--confirm]   # the sets as carrier-sentence batches into a local pack; same confirm and credit check

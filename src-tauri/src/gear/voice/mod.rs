@@ -7,6 +7,7 @@ pub mod eleven;
 pub mod keychain;
 pub mod lines;
 pub mod packs;
+pub mod rates;
 pub mod render;
 pub mod sets;
 pub mod tts;
