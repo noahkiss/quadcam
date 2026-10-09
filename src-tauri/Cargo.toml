@@ -77,3 +77,4 @@ objc2-core-location = { version = "0.3", default-features = false, features = ["
 objc2-photos = "0.3"
 objc2-user-notifications = { version = "0.3", default-features = false, features = ["std", "block2", "UNUserNotificationCenter", "UNNotificationContent", "UNNotificationRequest", "UNNotificationTrigger"] }
 objc2-app-kit = { version = "0.3", default-features = false, features = ["std", "NSSharingService", "NSResponder", "NSView"] }
+security-framework = "3.5"

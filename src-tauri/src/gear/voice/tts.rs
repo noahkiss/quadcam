@@ -5,12 +5,15 @@
 //! with fakes and never reach a real voice or network. A key goes to curl on stdin, never in
 //! argv, and never into a log.
 //!
-//! The render hook for batched carrier sentences ("The word is six.", cut out by word
-//! timestamps) is not built. Its seam is `TtsRequest::text`: a later renderer can speak a
-//! carrier and cut the line out before the take reaches `render::normalise`.
+//! A third provider, ElevenLabs (`eleven`), also reports character timestamps with a take
+//! (`Tts::render_aligned`), which `batch` uses to cut lines out of carrier sentences
+//! ("The word is six."). Its catalogue calls (`models`, `voices`, `credits`) sit on the same
+//! trait; providers without them answer that they do not have them.
 
 use super::wav::{self, Pcm};
 use anyhow::{bail, Context, Result};
+use serde::{Deserialize, Serialize};
+use specta::Type;
 use std::io::Write;
 use std::path::PathBuf;
 use std::process::{Command, Stdio};
@@ -32,13 +35,83 @@ pub struct TtsRequest<'a> {
     pub seed: u64,
 }
 
+/// Character timestamps of one take: for each character of the spoken text, when it starts
+/// and ends in the audio, in seconds.
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+pub struct Alignment {
+    pub characters: Vec<String>,
+    #[serde(rename = "character_start_times_seconds")]
+    pub starts: Vec<f64>,
+    #[serde(rename = "character_end_times_seconds")]
+    pub ends: Vec<f64>,
+}
+
+/// A take with its timestamps.
+#[derive(Debug, Clone)]
+pub struct Aligned {
+    pub pcm: Pcm,
+    pub alignment: Alignment,
+}
+
+/// A model a provider offers.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Type)]
+pub struct ModelInfo {
+    pub id: String,
+    pub name: String,
+    /// Credits one character costs on this model.
+    pub cost_per_char: f64,
+    /// The longest text one request takes; 0 when the provider does not say.
+    pub max_chars: u64,
+}
+
+/// A voice a provider offers.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Type)]
+pub struct VoiceInfo {
+    pub id: String,
+    pub name: String,
+    /// `premade`, `cloned`, `generated`, `professional` and so on.
+    pub category: String,
+    /// What the provider says about it: accent, gender, age, use.
+    pub labels: String,
+    #[serde(default)]
+    pub preview_url: Option<String>,
+}
+
+/// What an account may still spend.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Type)]
+pub struct Credits {
+    pub used: u64,
+    pub limit: u64,
+    pub remaining: u64,
+    pub tier: String,
+    /// When the allowance resets, seconds since 1970; 0 when unknown.
+    pub resets_at: u64,
+}
+
+fn no_catalogue<T>(id: &str, what: &str) -> Result<T> {
+    bail!("the {id} voice has no {what}")
+}
+
 /// A provider.
 pub trait Tts: Send + Sync {
-    /// `say` or `openai`: the folder of its raw takes in the cache.
+    /// `say`, `openai` or `elevenlabs`: the folder of its raw takes in the cache.
     fn id(&self) -> &str;
     /// Whether a render costs money: the caller reports the character count first.
     fn paid(&self) -> bool;
     fn render(&self, req: &TtsRequest<'_>) -> Result<Pcm>;
+    /// A take with character timestamps.
+    fn render_aligned(&self, _req: &TtsRequest<'_>) -> Result<Aligned> {
+        no_catalogue(self.id(), "timestamps")
+    }
+    fn models(&self) -> Result<Vec<ModelInfo>> {
+        no_catalogue(self.id(), "list of models")
+    }
+    fn voices(&self) -> Result<Vec<VoiceInfo>> {
+        no_catalogue(self.id(), "list of voices")
+    }
+    fn credits(&self) -> Result<Credits> {
+        no_catalogue(self.id(), "credit balance")
+    }
 }
 
 /// What a provider needs from the settings.
@@ -197,7 +270,7 @@ impl Tts for OpenAi {
 }
 
 /// Escapes a value for a curl config file's double-quoted string.
-fn curl_quote(s: &str) -> String {
+pub(crate) fn curl_quote(s: &str) -> String {
     let mut o = String::from("\"");
     for c in s.chars() {
         match c {
@@ -295,7 +368,19 @@ impl Providers for System {
                     key: cfg.key.clone(),
                 }))
             }
-            other => bail!("{other:?} is not a voice provider here: use say or openai"),
+            "elevenlabs" => {
+                if under_cargo {
+                    bail!("the elevenlabs voice is off in tests (QUADCAM_TTS=real turns it on)");
+                }
+                let Some(key) = cfg.key.clone().filter(|k| !k.is_empty()) else {
+                    bail!("the elevenlabs voice needs an API key: quadcam-cli gear voice key set");
+                };
+                Ok(Box::new(super::eleven::Eleven::new(
+                    Arc::new(super::eleven::CurlHttp),
+                    key,
+                )))
+            }
+            other => bail!("{other:?} is not a voice provider here: use say, openai or elevenlabs"),
         }
     }
 }
