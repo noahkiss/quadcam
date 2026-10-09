@@ -533,6 +533,7 @@ pub fn specta_builder() -> tauri_specta::Builder<tauri::Wry> {
             c::gear_pack_type_delete,
             c::gear_pack_notes,
             c::gear_session_report,
+            c::gear_session_report_save,
             c::gear_preflight,
             c::gear_crashes,
             c::gear_crash_save,

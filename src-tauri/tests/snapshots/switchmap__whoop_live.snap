@@ -52,10 +52,10 @@ Live (fc): CH1 1500, CH2 1500, CH3 988, CH4 1500, CH5 2012, CH6 1500, CH7 2012, 
   modes: ARM, HORIZON
   adjustments: Rate profile 3
 
+Not mapped (telemetry, timers, sticky state)
+  L4 (telemetry): RxBt > 10; used by Reads RxBt
+
 Conflicts
   - BLACKBOX is on AUX6 (CH10), which no control moves: never on.
   - BEEPER and FLIP OVER AFTER CRASH share one range: AUX4 1700-2100.
   - Sound "lapclr" is not on the card: a special function plays it.
-
-Notes
-  - Logical switches on telemetry, timers or sticky state are left out: the map cannot know them.

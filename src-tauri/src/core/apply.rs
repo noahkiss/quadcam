@@ -424,6 +424,7 @@ impl Core {
             &read.info.identity,
             taken,
             Vec::new(),
+            None,
         );
 
         // Same state as planned: the fresh dump gives the same digest.
@@ -573,6 +574,7 @@ impl Core {
                     &fcinfo.identity,
                     rep,
                     Vec::new(),
+                    None,
                 );
             }
         }

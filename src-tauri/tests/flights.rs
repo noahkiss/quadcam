@@ -56,6 +56,11 @@ fn flights_carry_the_known_measures_and_joins() {
     let v = c.gear_flights(&Default::default()).unwrap();
     assert_eq!(v.flights.len(), KNOWN.flights);
     assert_eq!(v.days.len(), 1);
+    // The range trend: one place, its flights oldest first.
+    assert_eq!(v.places.len(), 1);
+    let starts: Vec<_> = v.places[0].points.iter().map(|p| p.start).collect();
+    assert_eq!(starts.len(), KNOWN.flights);
+    assert!(starts.windows(2).all(|w| w[0] < w[1]), "{starts:?}");
     // Newest first: flight 1 is last.
     let f1 = v.flights.last().unwrap();
     assert_eq!(f1.aircraft.as_deref(), Some("Whoop"));
@@ -184,6 +189,24 @@ fn session_report_preflight_and_crashes() {
     c.gear_crash_delete(&crash.id).unwrap();
     assert!(c.gear_crashes(&Default::default()).unwrap().is_empty());
 
+    // Save the report: a new file, then a refusal until overwrite, then a folder and a gap.
+    let out = dir.path().join("report.md");
+    let save = |path: &Path, overwrite: bool| {
+        c.gear_session_report_save(&api::ReportSaveParams {
+            day: Some("2026-10-04".parse().unwrap()),
+            path: path.to_path_buf(),
+            overwrite,
+        })
+    };
+    let saved = save(&out, false).unwrap();
+    let md = std::fs::read_to_string(&out).unwrap();
+    assert_eq!(saved.bytes, md.len() as u64);
+    assert!(md.starts_with("# Session report: 2026-10-04"), "{md}");
+    assert!(save(&out, false).is_err());
+    assert!(save(&out, true).is_ok());
+    assert!(save(dir.path(), true).is_err());
+    assert!(save(&dir.path().join("nope/r.md"), true).is_err());
+
     let p = c.gear_preflight().unwrap();
     let ids: Vec<&str> = p.rows.iter().map(|r| r.id.as_str()).collect();
     assert_eq!(
@@ -243,6 +266,25 @@ fn mcp_actions() {
         "{}",
         text(&r)
     );
+    let file = dir.path().join("mcp-report.md");
+    let r = call(
+        &mut s,
+        "quadcam_gear_edit",
+        json!({"action":"report_save","day":"2026-10-04","to":file}),
+    );
+    assert!(
+        text(&r).starts_with("Wrote the session report"),
+        "{}",
+        text(&r)
+    );
+    assert!(std::fs::read_to_string(&file)
+        .unwrap()
+        .starts_with("# Session report: 2026-10-04"));
+    let again = s.call_tool(
+        "quadcam_gear_edit",
+        json!({"action":"report_save","day":"2026-10-04","to":file}),
+    );
+    assert_eq!(again["isError"], true, "{again}");
     let r = call(&mut s, "quadcam_gear", json!({"action":"preflight"}));
     assert!(text(&r).contains("Packs charged"), "{}", text(&r));
     let r = call(
@@ -298,6 +340,25 @@ fn cli_report_markdown() {
     );
     let md = cli(&["gear", "report", "--day", "2026-10-04", "--markdown"]);
     assert!(md.starts_with("# Session report: 2026-10-04"), "{md}");
+    let file = home.path().join("r.md");
+    let v: Value = serde_json::from_str(
+        cli(&[
+            "--json",
+            "gear",
+            "report",
+            "--day",
+            "2026-10-04",
+            "--out",
+            file.to_str().unwrap(),
+        ])
+        .trim(),
+    )
+    .unwrap();
+    assert_eq!(v["result"]["bytes"], md.len() as u64);
+    assert_eq!(
+        std::fs::read_to_string(&file).unwrap().trim_end(),
+        md.trim_end()
+    );
     cli(&[
         "--json",
         "gear",

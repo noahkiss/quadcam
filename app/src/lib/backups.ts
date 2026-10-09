@@ -27,6 +27,12 @@ export const jobFor = (s: GearStatus | null, device: string | null | undefined):
 /** A card's latest check, when it is plugged in. */
 export const checkFor = (s: GearStatus | null, device: string | null | undefined): CardCheck | null => (device && s?.card_checks?.find((c) => c.device === device)) || null;
 
+/** A card's latest check in a line: "Card check: passed, Oct 7, 9:00 AM". */
+export function checkLine(c: CardCheck): string {
+  const what = { ok: "passed", failed: "found problems", stopped: "stopped", error: "did not run" }[c.state];
+  return `Card check: ${what}, ${fmtWhen(c.at)}`;
+}
+
 /** True when a card's latest check found a problem. */
 export const checkFailed = (c: CardCheck | null) => !!c && (c.state === "failed" || c.state === "error");
 

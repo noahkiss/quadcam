@@ -1,5 +1,6 @@
 // The switch map as a table: one group of rows per control, one row per position, with its
 // channel values, FC modes and radio effects. The position a control is in now is marked.
+import { Fragment } from "react";
 import { Button } from "../../../components/Button";
 import type { Live, SwitchMap } from "../../../ipc/types";
 import type { MapSources } from "./hooks";
@@ -51,21 +52,34 @@ export function SwitchMapView({ map, live }: { map: SwitchMap; live: Live | null
           </thead>
           {map.rows.map((r) => {
             const now = live?.positions[r.id] ?? null;
+            const span = r.positions.reduce((n, p) => n + 1 + p.combos.length, 0);
             return (
               <tbody key={r.id} className={styles.group}>
                 {r.positions.map((p, i) => (
-                  <tr key={p.name} aria-current={now === i ? "true" : undefined} className={now === i ? styles.now : undefined}>
-                    {i === 0 && (
-                      <th scope="rowgroup" rowSpan={r.positions.length} className={styles.control}>
-                        {r.label}
-                        {r.switch_type && <span className={styles.type}>{r.switch_type}</span>}
-                      </th>
-                    )}
-                    <td>{p.name}</td>
-                    <td className={styles.num}>{p.channels.map((c) => `CH${c.ch} ${c.us}`).join(", ")}</td>
-                    <td>{p.fc.join(", ")}</td>
-                    <td>{p.radio.join("; ")}</td>
-                  </tr>
+                  <Fragment key={p.name}>
+                    <tr aria-current={now === i ? "true" : undefined} className={now === i ? styles.now : undefined}>
+                      {i === 0 && (
+                        <th scope="rowgroup" rowSpan={span} className={styles.control}>
+                          {r.label}
+                          {r.switch_type && <span className={styles.type}>{r.switch_type}</span>}
+                        </th>
+                      )}
+                      <td>{p.name}</td>
+                      <td className={styles.num}>{p.channels.map((c) => `CH${c.ch} ${c.us}`).join(", ")}</td>
+                      <td>{p.fc.join(", ")}</td>
+                      <td>{p.radio.join("; ")}</td>
+                    </tr>
+                    {p.combos.map((c) => (
+                      <tr key={c.with.join("+")} className={styles.combo}>
+                        <td>
+                          {p.name} with {c.with.join(" and ")}
+                        </td>
+                        <td className={styles.num}>{c.channels.map((v) => `CH${v.ch} ${v.us}`).join(", ")}</td>
+                        <td>{c.fc.join(", ")}</td>
+                        <td>{c.radio.join("; ")}</td>
+                      </tr>
+                    ))}
+                  </Fragment>
                 ))}
               </tbody>
             );
@@ -80,6 +94,21 @@ export function SwitchMapView({ map, live }: { map: SwitchMap; live: Live | null
               <li key={m.slot} data-on={live?.modes.includes(m.name) ? "" : undefined}>
                 <span>{m.name}</span>
                 <span className={styles.num}>{m.linked ? `linked to ${m.linked}` : `AUX${m.ch - 4} (CH${m.ch}) ${m.start}-${m.end}`}</span>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
+      {map.unmapped.length > 0 && (
+        <section aria-label="Not mapped">
+          <h3 className={styles.h3}>Not mapped</h3>
+          <p className={styles.muted}>Logical switches on telemetry, timers or sticky state. The map cannot say when they are on.</p>
+          <ul className={styles.notes}>
+            {map.unmapped.map((u) => (
+              <li key={u.switch}>
+                {`${u.switch} (${u.kind}): ${u.condition}`}
+                {u.reads.length > 0 && `. Reads ${u.reads.join(", ")}`}
+                {u.used_by.length > 0 && `. Used by ${u.used_by.join(", ")}`}
               </li>
             ))}
           </ul>

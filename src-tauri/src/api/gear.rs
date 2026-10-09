@@ -22,7 +22,7 @@ pub use crate::core::{
 pub use crate::core::{ChangeUpdateParams, RestoreParams, StageParams};
 pub use crate::core::{
     CrashSaveParams, FlightFilter, FlightFoldersParams, FlightReport, FlightSetParams, FlightsView,
-    NotesParams, PackSaveParams, PacksParams, ReportParams,
+    NotesParams, PackSaveParams, PacksParams, ReportParams, ReportSaveParams, ReportSaved,
 };
 pub use crate::gear::apply::{ApplyPlanParams, ApplyReport, ApplyRequest, StepReport, StepState};
 pub use crate::gear::backup::{
@@ -131,6 +131,8 @@ macro_rules! with_gear_rows {
             gear_pack_notes(params: NotesParams) -> String = |c| c.gear_pack_notes(&params);
             /// The session report for a day, else the last import's days, with its Markdown.
             gear_session_report(params: ReportParams) -> SessionReport = |c| c.gear_session_report(&params);
+            /// Writes the session report's Markdown to a file.
+            gear_session_report_save(params: ReportSaveParams) -> ReportSaved = |c| c.gear_session_report_save(&params);
             /// The "Pack up" check before a session: packs, radio model, card space,
             /// backups, cards still in. Reads only.
             gear_preflight() -> Preflight = |c| c.gear_preflight();

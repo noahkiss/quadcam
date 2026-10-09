@@ -85,6 +85,7 @@ expression: "Core::METHODS"
   "gear_pack_type_delete",
   "gear_pack_notes",
   "gear_session_report",
+  "gear_session_report_save",
   "gear_preflight",
   "gear_crashes",
   "gear_crash_save",

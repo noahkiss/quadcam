@@ -80,9 +80,11 @@ export type {
   PackTypeView,
   PackView,
   PacksView,
+  PlaceTrend,
   Preflight,
   RowState,
   SessionReport,
+  TrendPoint,
 } from "../bindings";
 
 // The sim's radio calibration, as generated.
@@ -298,11 +300,14 @@ export type ChannelValue = G.ChannelValue;
 export type Adjustment = G.Adjustment;
 export type Live = G.Live;
 export type SwitchMapParams = G.SwitchMapParams;
-export type Position = Omit<G.Position, "source"> & { source: string | null };
+export type Combo = G.Combo;
+export type Unmapped = G.Unmapped;
+export type Position = Omit<G.Position, "source" | "combos"> & { source: string | null; combos: Combo[] };
 export type ControlRow = Omit<G.ControlRow, "switch_type" | "positions"> & { switch_type: string | null; positions: Position[] };
 export type AuxMode = Omit<G.AuxMode, "linked"> & { linked: string | null };
-export type SwitchMap = Omit<G.SwitchMap, "model" | "live" | "rows" | "modes"> & {
+export type SwitchMap = Omit<G.SwitchMap, "model" | "live" | "rows" | "modes" | "unmapped"> & {
   model: string | null;
+  unmapped: Unmapped[];
   live: Live | null;
   rows: ControlRow[];
   modes: AuxMode[];

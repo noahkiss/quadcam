@@ -46,4 +46,13 @@ describe("live matching", () => {
     // Between positions: no match.
     expect(live(map, "radio", [1500, 1500, 988, 1500, 1250]).positions.SA).toBeNull();
   });
+
+  it("matches a position that only shows with another control moved, as the core does", () => {
+    const m = structuredClone(map);
+    // SE has no channels of its own; with SD down it sends CH9.
+    const se = m.rows.find((r) => r.id === "SE")!;
+    se.positions[1].combos = [{ with: ["SD down"], channels: [{ ch: 9, us: 2012 }], fc: [], radio: [] }];
+    expect(live(m, "radio", [1500, 1500, 988, 1500, 2012, 1500, 2012, 2012, 2012]).positions.SE).toBe(1);
+    expect(live(m, "radio", [1500, 1500, 988, 1500, 2012, 1500, 2012, 2012, 988]).positions.SE).toBeNull();
+  });
 });

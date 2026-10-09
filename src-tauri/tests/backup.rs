@@ -171,6 +171,9 @@ fn a_second_snapshot_of_an_unchanged_card_writes_nothing() {
     let first = b.core.gear_backup(&by_mount(&b)).unwrap();
     assert!(first.report.new);
     assert_eq!(first.kind, DeviceKind::Radio);
+    // The card's free space is recorded with the backup.
+    let seen = b.core.gear_devices().unwrap()[0].last_space.clone();
+    assert!(seen.is_some_and(|s| s.free > 0));
     assert!(first.report.read >= 5, "{:?}", first.report);
     assert_eq!(first.report.logs.added, 2);
     assert!(
@@ -459,6 +462,7 @@ fn radio_device(id: &str) -> Device {
         },
         last_seen: None,
         last_backup: None,
+        last_space: None,
     }
 }
 

@@ -43,6 +43,7 @@ fn save_radio(c: &Core, id: &str, board: &str) {
             },
             last_seen: None,
             last_backup: None,
+            last_space: None,
         })
         .unwrap();
 }

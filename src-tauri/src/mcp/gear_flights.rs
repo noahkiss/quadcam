@@ -20,6 +20,7 @@ pub const EDITS: &[&str] = &[
     "pack_notes",
     "crash_save",
     "crash_delete",
+    "report_save",
 ];
 
 fn num(v: &Value, digits: usize) -> String {
@@ -412,6 +413,23 @@ pub(super) fn edit<B: Backend>(
             let id = x.id.clone().context("id is required: a crash id")?;
             let r = backend.call("gear_crash_delete", json!({"id": id}))?;
             Ok((vec![text(format!("Deleted. {}", crash_line(&r)))], r))
+        }
+        "report_save" => {
+            let to =
+                x.to.clone()
+                    .context("to is required for report_save: the Markdown file to write")?;
+            let r = backend.call(
+                "gear_session_report_save",
+                json!({"day": x.day, "path": to, "overwrite": x.overwrite.unwrap_or(false)}),
+            )?;
+            Ok((
+                vec![text(format!(
+                    "Wrote the session report ({} bytes) to {}.",
+                    r["bytes"],
+                    r["path"].as_str().unwrap_or(&to)
+                ))],
+                r,
+            ))
         }
         _ => Err(anyhow!("not a flights action")),
     })())

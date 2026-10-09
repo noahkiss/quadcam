@@ -844,15 +844,29 @@ FC effect (`aux` modes, `adjrange` selections such as rate or OSD profile), the 
   there and the rest at rest (other switches in position 0, sticks centred, throttle low):
   inputs, mix switch conditions, `ADD`, `MUL`, `REPL`, offsets and `limitData` (min, max,
   offset, revert). Logical switches are three-valued: telemetry, timers and sticky state are
-  unknown and light nothing; `FUNC_EDGE` follows its switch and shows as a pulse. A row lists
+  unknown and light nothing (they are listed in `unmapped`, below); `FUNC_EDGE` follows its
+  switch and shows as a pulse. A row lists
   the channels, logical switches, special functions and timers that differ between its
   positions. A mode on in every position of a row moves to the notes.
+- Combinations (0.7.2): groups of controls that feed one channel (sticks left out), one logical
+  switch, one special function or one timer, looking through logical switches. For each position
+  of a control, every other setting of the other controls in a group of at most 4 is run; a
+  result that differs from the same companions with this control at rest, and from the
+  position alone, is a `Combo` (`with`, the changed `channels`, `fc`, `radio`), the smallest
+  first and without repeats. Conflicts ("does nothing", "never reached") and live matching count
+  combos. A group over 4 controls adds a note.
+- Unmapped (0.7.2): a logical switch that is unknown in any run is listed in `SwitchMap.unmapped`
+  with `kind` (`telemetry`, `timer`, `sticky`, `depends`), its condition as text, the controls it
+  reads and what uses it. A control that feeds one is not called "does nothing".
 - "Two modes on one range" means the same AUX and the same start and end; overlapping ranges
   are normal (AIR MODE 900-2100 under ARM).
 - Live: `MSP_RC` (105) through `bf::rc_channels` (one MSP exchange, no cue, the port released),
   or the radio's joystick, or channel values given. A row is at the position whose channel
   values all match within 60 µs. The UI matches the joystick stream itself
   (`app/src/lib/controls.ts`, the same rule).
+- Pocket buttons: in Classic joystick mode EdgeTX sends CH9-CH32 as buttons 1-24 (its manual,
+  USB Joystick); Advanced mode sets this per channel. Confirmed from the manual, not from the
+  radio.
 - The radio as a USB joystick: `gear/radio_hid.rs` (hidapi, shared open; VID:PID `1209:4f54`;
   19-byte reports: 24 button bits, 8 axes 0..2048 that are CH1-8). `gear_radio` is one look;
   `gear_radio_watch` streams `radio-input` events (at most one per 16 ms, a heartbeat every
@@ -1001,9 +1015,10 @@ synthetic log with its known values (`KNOWN`). `core/flights.rs` joins each flig
 aircraft (profile `edgetx_models`), its clip (date and time of day, 90 s slack), its place and
 the pack type's warning. Flights read `<gear>/logs/`, folders the person adds
 (`flight_folders` in `gear.json`) and a radio plugged in. Additions approved 2026-10-07: the
-session report (`gear/report.rs`, `gear_session_report`, Markdown), the Pack up check
-(`gear/preflight.rs`, `gear_preflight`; its TODO(WP4) hooks are the selected model and card
-space of a device not plugged in, and backup times) and the crash and repair log
+session report (`gear/report.rs`, `gear_session_report`, Markdown; `gear_session_report_save` writes the file), the Pack up check
+(`gear/preflight.rs`, `gear_preflight`; a radio not plugged in gives its selected model from the
+latest backup's `radio.yml` and its card space from `Device.last_space`, recorded at each radio
+card backup; both rows say "from backup" and its age) and the crash and repair log
 (`gear/crashes.rs`, `gear_crashes`, `gear_crash_save`, `gear_crash_delete`).
 
 ### 7.7 Bench queue

@@ -106,29 +106,37 @@ impl Core {
         }
     }
 
+    /// The aircraft profile a model file (or its name) belongs to.
+    pub(super) fn aircraft_of_model(
+        &self,
+        file: Option<&str>,
+        name: Option<&str>,
+    ) -> Result<Option<String>> {
+        let Some(file) = file else { return Ok(None) };
+        let (profiles, _) = self.profiles()?;
+        Ok(profiles
+            .iter()
+            .find(|pr| pr.gear.edgetx_model.as_deref() == Some(file))
+            .or_else(|| {
+                name.and_then(|n| {
+                    profiles
+                        .iter()
+                        .find(|pr| pr.edgetx_models.iter().any(|m| m.eq_ignore_ascii_case(n)))
+                })
+            })
+            .map(|pr| pr.name.clone()))
+    }
+
     /// The card: identity, models, the selected model and its aircraft, the radio clock,
     /// and one model's full view when asked. Reads only.
     pub fn gear_card(&self, p: &CardParams) -> Result<GearCard> {
         let (root, c) = self.gear_card_target(p.mount.as_ref(), p.device.as_deref())?;
         let card = Card::open(&root)?;
         let view = card.view(p.model.as_deref(), chrono::Local::now().date_naive())?;
-        let selected_aircraft = match (&view.selected_model, &view.selected_name) {
-            (Some(file), name) => {
-                let (profiles, _) = self.profiles()?;
-                profiles
-                    .iter()
-                    .find(|pr| pr.gear.edgetx_model.as_deref() == Some(file.as_str()))
-                    .or_else(|| {
-                        name.as_deref().and_then(|n| {
-                            profiles.iter().find(|pr| {
-                                pr.edgetx_models.iter().any(|m| m.eq_ignore_ascii_case(n))
-                            })
-                        })
-                    })
-                    .map(|pr| pr.name.clone())
-            }
-            _ => None,
-        };
+        let selected_aircraft = self.aircraft_of_model(
+            view.selected_model.as_deref(),
+            view.selected_name.as_deref(),
+        )?;
         Ok(GearCard {
             card: view,
             selected_aircraft,

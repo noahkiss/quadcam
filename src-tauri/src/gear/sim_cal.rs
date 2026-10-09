@@ -455,6 +455,7 @@ mod tests {
             },
             last_seen: None,
             last_backup: None,
+            last_space: None,
         }
     }
 
@@ -574,6 +575,7 @@ mod tests {
             channels: vec![ChannelValue { ch, us }],
             fc: fc.iter().map(|s| s.to_string()).collect(),
             radio: vec![],
+            combos: vec![],
         }
     }
 
@@ -671,6 +673,7 @@ mod tests {
             adjustments: vec![],
             conflicts: vec![],
             notes: vec![],
+            unmapped: vec![],
             live: None,
         }
     }
