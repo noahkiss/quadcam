@@ -57,7 +57,7 @@ test("lists the sims and says which match the quad", async ({ app, page }) => {
   await expect(row("Liftoff")).toContainText("Freestyle maximum 907 / 907 / 800 °/s, same as the quad");
   await expect(row("Liftoff")).toContainText("Race maximum 667 / 667 / 667 °/s, differs by up to");
   await expect(row("Liftoff: Micro Drones")).toContainText("Differs from the quad");
-  await expect(row("Uncrashed")).toContainText("throttle differs");
+  await expect(row("Uncrashed")).toContainText("Matches the quad");
   await expect(row("Uncrashed")).toContainText("empty profile");
   await expect(row("The Zone")).toContainText("Matches the quad");
   await expect(row("The Zone")).toContainText("uses the actual type");
