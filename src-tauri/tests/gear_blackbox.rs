@@ -679,7 +679,13 @@ fn the_surfaces_exist_and_respect_the_setting() {
     let b = bench(&fc);
     let mut s = Server::new(LocalBackend(b.core.clone()));
     // MCP pull: the setting is off, so nothing is erased, and no argument turns it on.
-    let r = s.call_tool("quadcam_gear_edit", json!({"action": "blackbox_pull"}));
+    let r = s.call_tool("quadcam_gear_apply", json!({"action": "blackbox_pull"}));
+    assert_eq!(r["isError"], true, "needs confirm: {r}");
+    assert_eq!(fc.dataflash_reads(), 0);
+    let r = s.call_tool(
+        "quadcam_gear_apply",
+        json!({"action": "blackbox_pull", "confirm": true}),
+    );
     assert_eq!(r["isError"], false, "{r}");
     let text = r["content"][0]["text"].as_str().unwrap();
     assert!(text.contains("2 logs verified and stored"), "{text}");
@@ -687,7 +693,7 @@ fn the_surfaces_exist_and_respect_the_setting() {
     // The tool has no argument that turns the erase on.
     let edit = quadcam_lib::mcp::gear::tools()
         .into_iter()
-        .find(|t| t["name"] == "quadcam_gear_edit")
+        .find(|t| t["name"] == "quadcam_gear_apply")
         .unwrap();
     let props = edit["inputSchema"]["properties"].as_object().unwrap();
     assert!(
@@ -708,11 +714,11 @@ fn the_surfaces_exist_and_respect_the_setting() {
         .unwrap()
         .to_string();
     // Erase by hand needs confirm.
-    let r = s.call_tool("quadcam_gear_edit", json!({"action": "blackbox_erase"}));
+    let r = s.call_tool("quadcam_gear_apply", json!({"action": "blackbox_erase"}));
     assert_eq!(r["isError"], true);
     assert!(fc.dataflash_erases() == 0);
     let r = s.call_tool(
-        "quadcam_gear_edit",
+        "quadcam_gear_apply",
         json!({"action": "blackbox_erase", "confirm": true}),
     );
     assert_eq!(r["isError"], false, "{r}");
