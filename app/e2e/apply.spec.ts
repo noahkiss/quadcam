@@ -89,7 +89,7 @@ test("a refused line fails the apply and offers the restore", async ({ app, page
 test("an agent's apply request waits for the person's click", async ({ app, page }) => {
   await openChanges(app, page);
   await stageSetting(page, "osd_cap_alarm", "1500");
-  const change = await app.core(`c => c.gear.changeStore.changes[0]`);
+  const change = (await app.core(`c => c.gear.changeStore.changes[0]`)) as { id: string; title: string };
   const plan = { change: change.id, device: { board: "BETAFPVG473" }, checks: [{ name: "One FC plugged in", ok: true }], diff: [{ kind: "lines", label: change.title, lines: [{ op: "add", text: "set osd_cap_alarm = 1500" }] }], digest: "d" };
   await page.evaluate(([c, p]) => window.__qc!.emit("agent-apply-request", { id: 9, change: c, plan: p }), [change, plan] as [unknown, unknown]);
   const sheet = page.getByRole("dialog", { name: "Apply to Whoop FC" });
