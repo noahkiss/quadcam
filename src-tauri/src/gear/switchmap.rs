@@ -66,6 +66,38 @@ pub struct Position {
     pub fc: Vec<String>,
     /// The radio's own effects here (`L1 on`, `Plays "armed"`, `Timer 1 (TOT) runs`).
     pub radio: Vec<String>,
+    /// What changes when other controls the same channel, logical switch or function reads
+    /// are off their first position. Empty when nothing does.
+    #[serde(default)]
+    pub combos: Vec<Combo>,
+}
+
+/// A position with other controls moved: only what differs from the position alone.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Type)]
+pub struct Combo {
+    /// The other controls and where they sit (`SB down`).
+    pub with: Vec<String>,
+    /// The channels that change, with their value here.
+    pub channels: Vec<ChannelValue>,
+    /// FC modes and adjustments on the changed channels.
+    pub fc: Vec<String>,
+    /// Radio effects that turn on.
+    pub radio: Vec<String>,
+}
+
+/// A logical switch the map cannot work out: it reads telemetry, a timer or sticky state.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Type)]
+pub struct Unmapped {
+    /// `L5`.
+    pub switch: String,
+    /// `telemetry`, `timer`, `sticky` or `depends`.
+    pub kind: String,
+    /// Its condition as text (`RxBt < 3.30`).
+    pub condition: String,
+    /// Controls it reads (`SA`).
+    pub reads: Vec<String>,
+    /// What uses it (`Plays "lowbat"`, `CH7 mix`, `L6`).
+    pub used_by: Vec<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Type)]
@@ -185,6 +217,9 @@ pub struct SwitchMap {
     /// sound file the card does not have.
     pub conflicts: Vec<String>,
     pub notes: Vec<String>,
+    /// Logical switches left out of the positions, with their condition.
+    #[serde(default)]
+    pub unmapped: Vec<Unmapped>,
     #[serde(default)]
     pub live: Option<Live>,
 }
@@ -883,6 +918,288 @@ struct RowState {
     st: State,
 }
 
+// ----- combinations and unmapped switches -----
+
+/// The most controls one group tries every combination of.
+const MAX_GROUP: usize = 4;
+
+/// Control ids a condition reads (`SA2`, `!L3`, a trim), looking through logical switches.
+fn cond_controls(c: &str, ls: &[BTreeSet<String>], known: &BTreeSet<String>) -> BTreeSet<String> {
+    let c = unquote(c.trim()).trim_start_matches('!');
+    let mut out = BTreeSet::new();
+    if let Some((n, _)) = switch_pos(c) {
+        out.insert(n);
+    } else if let Some(i) = ls_index(c) {
+        if let Some(x) = ls.get(i as usize) {
+            out.extend(x.iter().cloned());
+        }
+    } else if is_trim(c) {
+        out.insert(c.to_string());
+    }
+    out.retain(|x| known.contains(x));
+    out
+}
+
+/// Control ids a source reads (a switch, a stick a row exists for, a logical switch).
+fn source_controls(
+    s: &str,
+    ls: &[BTreeSet<String>],
+    ch: &BTreeMap<u32, BTreeSet<String>>,
+    known: &BTreeSet<String>,
+) -> BTreeSet<String> {
+    let s = unquote(s.trim()).trim_start_matches('-');
+    let mut out = BTreeSet::new();
+    if let Some(k) = Stick::from_source(s) {
+        out.insert(format!("stick:{}", k.source()));
+    } else if is_switch_name(s) {
+        out.insert(s.to_string());
+    } else if let Some(i) = ls_index(s) {
+        if let Some(x) = ls.get(i as usize) {
+            out.extend(x.iter().cloned());
+        }
+    } else if let Some(n) = s
+        .strip_prefix("ch(")
+        .and_then(|r| r.strip_suffix(')'))
+        .and_then(|n| n.parse::<u32>().ok())
+    {
+        if let Some(x) = ch.get(&n) {
+            out.extend(x.iter().cloned());
+        }
+    }
+    out.retain(|x| known.contains(x));
+    out
+}
+
+/// A logical switch as text.
+fn ls_text(model: &ModelView, l: &crate::gear::edgetx::model::LogicalSwitch) -> String {
+    let a: Vec<&str> = l.def.split(',').map(str::trim).collect();
+    let get = |i: usize| a.get(i).copied().unwrap_or("");
+    let v = |i: usize| {
+        let s = get(i);
+        if let Some(n) = s
+            .strip_prefix("tele(")
+            .and_then(|r| r.strip_suffix(')'))
+            .and_then(|n| n.parse::<u32>().ok())
+        {
+            return model
+                .sensors
+                .iter()
+                .find(|x| x.slot == n)
+                .map(|x| x.label.clone())
+                .unwrap_or_else(|| s.to_string());
+        }
+        if let Some(n) = s.strip_prefix("Tmr") {
+            return format!("Timer {n}");
+        }
+        s.to_string()
+    };
+    let base = match l.func.as_str() {
+        "FUNC_VPOS" => format!("{} > {}", v(0), v(1)),
+        "FUNC_VNEG" => format!("{} < {}", v(0), v(1)),
+        "FUNC_APOS" => format!("|{}| > {}", v(0), v(1)),
+        "FUNC_ANEG" => format!("|{}| < {}", v(0), v(1)),
+        "FUNC_VEQUAL" => format!("{} = {}", v(0), v(1)),
+        "FUNC_VALMOSTEQUAL" => format!("{} is about {}", v(0), v(1)),
+        "FUNC_GREATER" => format!("{} > {}", v(0), v(1)),
+        "FUNC_LESS" => format!("{} < {}", v(0), v(1)),
+        "FUNC_EQUAL" => format!("{} = {}", v(0), v(1)),
+        "FUNC_DIFFEGREATER" => format!("change of {} >= {}", v(0), v(1)),
+        "FUNC_ADIFFEGREATER" => format!("|change of {}| >= {}", v(0), v(1)),
+        "FUNC_AND" => format!("{} AND {}", v(0), v(1)),
+        "FUNC_OR" => format!("{} OR {}", v(0), v(1)),
+        "FUNC_XOR" => format!("{} XOR {}", v(0), v(1)),
+        "FUNC_EDGE" => format!("edge of {}", v(0)),
+        "FUNC_STICKY" => format!("set by {}, reset by {}", v(0), v(1)),
+        "FUNC_TIMER" => format!("timer ({}, {})", v(0), v(1)),
+        other => format!("{other} {}", l.def),
+    };
+    if l.andsw.is_empty() || l.andsw == "NONE" {
+        base
+    } else {
+        format!("{base}, and {}", l.andsw)
+    }
+}
+
+/// Where a control sits when nothing moves it: the first position, a stick centred and
+/// the throttle low.
+fn rest_index(id: &str, kind: ControlKind) -> usize {
+    match kind {
+        ControlKind::Stick if id != format!("stick:{}", Stick::Throttle.source()) => 1,
+        _ => 0,
+    }
+}
+
+/// The FC modes and adjustments a set of channel values turns on, for the channels
+/// `driven` names.
+fn fc_effects(
+    modes: &[AuxMode],
+    adjustments: &[Adjustment],
+    chv: &dyn Fn(u32) -> u16,
+    driven: &[u32],
+) -> Vec<String> {
+    let mut fc: Vec<String> = Vec::new();
+    for m in modes {
+        if m.linked.is_none()
+            && driven.contains(&(m.ch - 1))
+            && in_range(chv(m.ch - 1), m.start, m.end)
+            && !fc.contains(&m.name)
+        {
+            fc.push(m.name.clone());
+        }
+    }
+    for a in adjustments {
+        let active = in_range(chv(a.range_ch - 1), a.start, a.end);
+        let mine = driven.contains(&(a.select_ch - 1)) || driven.contains(&(a.range_ch - 1));
+        if !active || !mine {
+            continue;
+        }
+        let t = if a.select {
+            format!("{} {}", a.name, select_position(chv(a.select_ch - 1)) + 1)
+        } else if driven.contains(&(a.select_ch - 1)) {
+            format!("{} adjust", a.name)
+        } else {
+            format!("{} adjust on CH{}", a.name, a.select_ch)
+        };
+        if !fc.contains(&t) {
+            fc.push(t);
+        }
+    }
+    fc
+}
+
+/// Moves a control from `from` (a state with only that control moved) into `st`.
+fn overlay(st: &mut State, from: &State, id: &str, kind: ControlKind) {
+    match kind {
+        ControlKind::Switch => st.switches.extend(from.switches.clone()),
+        ControlKind::Trim => st.trims.extend(from.trims.iter().cloned()),
+        ControlKind::Stick => {
+            if let Some(k) = id.strip_prefix("stick:").and_then(Stick::from_source) {
+                if let Some(v) = from.sticks.get(&k) {
+                    st.sticks.insert(k, *v);
+                }
+            }
+        }
+    }
+}
+
+/// What else happens at one position when the other controls of a group are moved: every
+/// combination of the group's other controls, the smallest first, each kept when it changes
+/// a channel, a logical switch, a timer or a function, and not already listed.
+#[allow(clippy::too_many_arguments)]
+fn combos_for(
+    ev: &Eval,
+    specs: &[RowSpec],
+    groups: &[Vec<usize>],
+    si: usize,
+    pi: usize,
+    pos_out: &Outcome,
+    modes: &[AuxMode],
+    adjustments: &[Adjustment],
+    stick_chs: &BTreeSet<u32>,
+) -> Vec<Combo> {
+    let model = ev.model;
+    let rest_pos = rest_index(&specs[si].id, specs[si].kind);
+    let mut found: Vec<Combo> = Vec::new();
+    for g in groups.iter().filter(|g| g.contains(&si)) {
+        let others: Vec<usize> = g.iter().copied().filter(|x| *x != si).collect();
+        let counts: Vec<usize> = others.iter().map(|o| specs[*o].states.len()).collect();
+        let total: usize = counts.iter().product();
+        for n in 0..total {
+            let mut rem = n;
+            let mut st = specs[si].states[pi].st.clone();
+            // The same companions with this control at rest: what the control adds is the
+            // difference.
+            let mut st0 = specs[si].states[rest_pos].st.clone();
+            let mut with = Vec::new();
+            let mut with_stick = false;
+            for (o, c) in others.iter().zip(&counts) {
+                let k = rem % c;
+                rem /= c;
+                let sp = &specs[*o];
+                if k == rest_index(&sp.id, sp.kind) {
+                    continue;
+                }
+                with_stick |= sp.kind == ControlKind::Stick;
+                overlay(&mut st, &sp.states[k].st, &sp.id, sp.kind);
+                overlay(&mut st0, &sp.states[k].st, &sp.id, sp.kind);
+                with.push(format!("{} {}", sp.label, sp.states[k].name));
+            }
+            if with.is_empty() {
+                continue;
+            }
+            let o = ev.run(&st);
+            let base = ev.run(&st0);
+            let chv0 = |c: u32| us(base.channels.get(&c).copied().unwrap_or(0.0));
+            let chv = |c: u32| us(o.channels.get(&c).copied().unwrap_or(0.0));
+            let all: BTreeSet<u32> = o
+                .channels
+                .keys()
+                .chain(base.channels.keys())
+                .copied()
+                .collect();
+            let changed: Vec<u32> = all
+                .into_iter()
+                .filter(|c| chv(*c) != chv0(*c))
+                .filter(|c| chv(*c) != us(pos_out.channels.get(c).copied().unwrap_or(0.0)))
+                .filter(|c| {
+                    !((with_stick || specs[si].kind == ControlKind::Stick) && stick_chs.contains(c))
+                })
+                .collect();
+            let mut radio = Vec::new();
+            for l in &model.logical_switches {
+                let i = l.index as usize;
+                if o.ls.get(i) == Some(&Tri::On)
+                    && base.ls.get(i) != Some(&Tri::On)
+                    && pos_out.ls.get(i) != Some(&Tri::On)
+                {
+                    let pulse = if l.func == "FUNC_EDGE" {
+                        " (pulse)"
+                    } else {
+                        ""
+                    };
+                    radio.push(format!("L{} on{pulse}", l.index + 1));
+                }
+            }
+            let st_pos = &specs[si].states[pi].st;
+            let newly = |c: &str| {
+                ev.cond(c, &st, &o.ls) == Tri::On
+                    && ev.cond(c, &st0, &base.ls) != Tri::On
+                    && ev.cond(c, st_pos, &pos_out.ls) != Tri::On
+            };
+            for t in &model.timers {
+                if newly(&t.swtch) {
+                    radio.push(format!("Timer {} runs", t.index + 1));
+                }
+            }
+            for f in &model.special_functions {
+                if newly(&f.swtch) {
+                    radio.push(sf_text(model, &f.func, &f.def));
+                }
+            }
+            let fc = fc_effects(modes, adjustments, &chv, &changed);
+            if changed.is_empty() && radio.is_empty() {
+                continue;
+            }
+            found.push(Combo {
+                with,
+                channels: changed
+                    .iter()
+                    .map(|c| ChannelValue {
+                        ch: c + 1,
+                        us: chv(*c),
+                    })
+                    .collect(),
+                fc,
+                radio,
+            });
+        }
+    }
+    found.sort_by_key(|c| c.with.len());
+    let mut seen = BTreeSet::new();
+    found.retain(|c| seen.insert(format!("{:?}|{:?}|{:?}", c.channels, c.fc, c.radio)));
+    found
+}
+
 // ----- the map -----
 
 /// Builds the switch map. With no model, the rows are empty and only the FC side shows.
@@ -1007,18 +1324,123 @@ pub fn build(inputs: &Inputs) -> SwitchMap {
         });
     }
 
+    // Which controls feed the same channel, logical switch, function or timer.
+    let known: BTreeSet<String> = specs.iter().map(|s| s.id.clone()).collect();
+    let nls = model
+        .logical_switches
+        .iter()
+        .map(|l| l.index as usize + 1)
+        .max()
+        .unwrap_or(0);
+    let mut ls_ctl: Vec<BTreeSet<String>> = vec![BTreeSet::new(); nls];
+    let mut ch_ctl: BTreeMap<u32, BTreeSet<String>> = BTreeMap::new();
+    for _ in 0..4 {
+        for l in &model.logical_switches {
+            let parts: Vec<&str> = l.def.split(',').map(str::trim).collect();
+            let mut c = BTreeSet::new();
+            match l.func.as_str() {
+                "FUNC_AND" | "FUNC_OR" | "FUNC_XOR" | "FUNC_EDGE" | "FUNC_STICKY" => {
+                    for p in parts.iter().take(2) {
+                        c.extend(cond_controls(p, &ls_ctl, &known));
+                    }
+                }
+                "FUNC_TIMER" => {}
+                "FUNC_GREATER" | "FUNC_LESS" | "FUNC_EQUAL" => {
+                    for p in parts.iter().take(2) {
+                        c.extend(source_controls(p, &ls_ctl, &ch_ctl, &known));
+                    }
+                }
+                _ => {
+                    if let Some(p) = parts.first() {
+                        c.extend(source_controls(p, &ls_ctl, &ch_ctl, &known));
+                    }
+                }
+            }
+            c.extend(cond_controls(&l.andsw, &ls_ctl, &known));
+            ls_ctl[l.index as usize] = c;
+        }
+        for m in &model.mixes {
+            let mut c = source_controls(&m.source, &ls_ctl, &ch_ctl, &known);
+            c.extend(cond_controls(&m.swtch, &ls_ctl, &known));
+            ch_ctl.entry(m.dest_ch).or_default().extend(c);
+        }
+    }
+    let mut raw: Vec<(String, BTreeSet<String>)> = Vec::new();
+    for (c, set) in &ch_ctl {
+        // A stick moves its channel by itself: it is no companion there.
+        let set: BTreeSet<String> = set
+            .iter()
+            .filter(|x| !x.starts_with("stick:"))
+            .cloned()
+            .collect();
+        raw.push((format!("CH{}", c + 1), set));
+    }
+    for (i, set) in ls_ctl.iter().enumerate() {
+        raw.push((format!("L{}", i + 1), set.clone()));
+    }
+    for f in &model.special_functions {
+        raw.push((
+            "A special function".into(),
+            cond_controls(&f.swtch, &ls_ctl, &known),
+        ));
+    }
+    for t in &model.timers {
+        raw.push((
+            format!("Timer {}", t.index + 1),
+            cond_controls(&t.swtch, &ls_ctl, &known),
+        ));
+    }
+    let mut groups: Vec<Vec<usize>> = Vec::new();
+    let mut seen_groups = BTreeSet::new();
+    for (what, set) in raw {
+        if set.len() < 2 || !seen_groups.insert(set.clone()) {
+            continue;
+        }
+        if set.len() > MAX_GROUP {
+            notes.push(format!(
+                "{what} reads {} controls: the map tries combinations of at most {MAX_GROUP}.",
+                set.len()
+            ));
+            continue;
+        }
+        groups.push(
+            set.iter()
+                .filter_map(|id| specs.iter().position(|s| &s.id == id))
+                .collect(),
+        );
+    }
+    let mut unknown_ls: BTreeSet<usize> = base
+        .ls
+        .iter()
+        .enumerate()
+        .filter(|(_, t)| **t == Tri::Unknown)
+        .map(|(i, _)| i)
+        .collect();
+
+    for sp in &specs {
+        for state in &sp.states {
+            unknown_ls.extend(
+                ev.run(&state.st)
+                    .ls
+                    .iter()
+                    .enumerate()
+                    .filter(|(_, t)| **t == Tri::Unknown)
+                    .map(|(i, _)| i),
+            );
+        }
+    }
     let sticks = stick_channels(&ev, &rest);
     let stick_chs: BTreeSet<u32> = sticks.iter().map(|s| s.ch - 1).collect();
     let mut driven_all: BTreeSet<u32> = BTreeSet::new();
     let mut rows = Vec::new();
-    for RowSpec {
-        id,
-        label,
-        kind,
-        switch_type,
-        states,
-    } in specs
-    {
+    for (si, spec) in specs.iter().enumerate() {
+        let (id, label, kind, switch_type) = (
+            spec.id.clone(),
+            spec.label.clone(),
+            spec.kind,
+            spec.switch_type.clone(),
+        );
+        let states = &spec.states;
         let outs: Vec<Outcome> = states.iter().map(|s| ev.run(&s.st)).collect();
         let all_ch: BTreeSet<u32> = outs
             .iter()
@@ -1063,34 +1485,7 @@ pub fn build(inputs: &Inputs) -> SwitchMap {
                     us: chv(*c),
                 })
                 .collect();
-            let mut fc = Vec::new();
-            for m in &modes {
-                if m.linked.is_none()
-                    && driven.contains(&(m.ch - 1))
-                    && in_range(chv(m.ch - 1), m.start, m.end)
-                    && !fc.contains(&m.name)
-                {
-                    fc.push(m.name.clone());
-                }
-            }
-            for a in &adjustments {
-                let active = in_range(chv(a.range_ch - 1), a.start, a.end);
-                let mine =
-                    driven.contains(&(a.select_ch - 1)) || driven.contains(&(a.range_ch - 1));
-                if !active || !mine {
-                    continue;
-                }
-                let t = if a.select {
-                    format!("{} {}", a.name, select_position(chv(a.select_ch - 1)) + 1)
-                } else if driven.contains(&(a.select_ch - 1)) {
-                    format!("{} adjust", a.name)
-                } else {
-                    format!("{} adjust on CH{}", a.name, a.select_ch)
-                };
-                if !fc.contains(&t) {
-                    fc.push(t);
-                }
-            }
+            let fc = fc_effects(&modes, &adjustments, &chv, &driven);
             let mut radio = Vec::new();
             for l in &model.logical_switches {
                 let i = l.index as usize;
@@ -1124,7 +1519,28 @@ pub fn build(inputs: &Inputs) -> SwitchMap {
                 channels,
                 fc,
                 radio,
+                combos: Vec::new(),
             });
+        }
+        for (pi, pos) in positions.iter_mut().enumerate() {
+            pos.combos = combos_for(
+                &ev,
+                &specs,
+                &groups,
+                si,
+                pi,
+                &outs[pi],
+                &modes,
+                &adjustments,
+                &stick_chs,
+            );
+        }
+        for c in positions
+            .iter()
+            .flat_map(|p| &p.combos)
+            .flat_map(|c| &c.channels)
+        {
+            driven_all.insert(c.ch - 1);
         }
         // A mode on at every position does not change with this control.
         let everywhere: Vec<String> = positions
@@ -1144,10 +1560,15 @@ pub fn build(inputs: &Inputs) -> SwitchMap {
                 notes.push(n);
             }
         }
+        let feeds_unmapped = unknown_ls.iter().any(|i| ls_ctl[*i].contains(&id));
         if kind == ControlKind::Switch
-            && positions
-                .iter()
-                .all(|p| p.channels.is_empty() && p.radio.is_empty() && p.fc.is_empty())
+            && !feeds_unmapped
+            && positions.iter().all(|p| {
+                p.channels.is_empty()
+                    && p.radio.is_empty()
+                    && p.fc.is_empty()
+                    && p.combos.is_empty()
+            })
         {
             conflicts.push(format!(
                 "{label} does nothing: no channel, logical switch or special function changes with it."
@@ -1185,6 +1606,7 @@ pub fn build(inputs: &Inputs) -> SwitchMap {
                 r.positions.iter().any(|p| {
                     p.channels
                         .iter()
+                        .chain(p.combos.iter().flat_map(|c| &c.channels))
                         .any(|cv| cv.ch == m.ch && in_range(cv.us, m.start, m.end))
                 })
             });
@@ -1237,17 +1659,59 @@ pub fn build(inputs: &Inputs) -> SwitchMap {
     {
         notes.push("A mix weight is a global variable: it is read as 100 %.".into());
     }
-    if model.logical_switches.iter().any(|l| {
-        l.def.contains("tele(")
-            || matches!(
-                l.func.as_str(),
-                "FUNC_TIMER" | "FUNC_STICKY" | "FUNC_DIFFEGREATER" | "FUNC_ADIFFEGREATER"
-            )
-    }) {
-        notes.push(
-            "Logical switches on telemetry, timers or sticky state are left out: the map cannot know them."
-                .into(),
-        );
+    // Logical switches the map cannot work out: listed with their condition and uses.
+    let label_of = |id: &String| {
+        specs
+            .iter()
+            .find(|s| &s.id == id)
+            .map(|s| s.label.clone())
+            .unwrap_or_else(|| id.clone())
+    };
+    let mut unmapped = Vec::new();
+    for l in &model.logical_switches {
+        let i = l.index as usize;
+        if !unknown_ls.contains(&i) {
+            continue;
+        }
+        let name = format!("L{}", l.index + 1);
+        let kind = match l.func.as_str() {
+            "FUNC_TIMER" => "timer",
+            "FUNC_STICKY" => "sticky",
+            _ if l.def.contains("tele(") || l.def.contains("Tmr") => "telemetry",
+            "FUNC_DIFFEGREATER" | "FUNC_ADIFFEGREATER" => "telemetry",
+            _ => "depends",
+        };
+        let is_me = |c: &str| unquote(c.trim()).trim_start_matches('!') == name;
+        let mut used_by = Vec::new();
+        for m in &model.mixes {
+            if is_me(&m.swtch) || unquote(m.source.trim()).trim_start_matches('-') == name {
+                used_by.push(format!("CH{} mix", m.dest_ch + 1));
+            }
+        }
+        for o in &model.logical_switches {
+            if o.index != l.index && (o.def.split(',').take(2).any(|p| is_me(p)) || is_me(&o.andsw))
+            {
+                used_by.push(format!("L{}", o.index + 1));
+            }
+        }
+        for t in &model.timers {
+            if is_me(&t.swtch) {
+                used_by.push(format!("Timer {}", t.index + 1));
+            }
+        }
+        for f in &model.special_functions {
+            if is_me(&f.swtch) {
+                used_by.push(sf_text(model, &f.func, &f.def));
+            }
+        }
+        used_by.dedup();
+        unmapped.push(Unmapped {
+            switch: name,
+            kind: kind.into(),
+            condition: ls_text(model, l),
+            reads: ls_ctl[i].iter().map(label_of).collect(),
+            used_by,
+        });
     }
 
     SwitchMap {
@@ -1259,6 +1723,7 @@ pub fn build(inputs: &Inputs) -> SwitchMap {
         adjustments,
         conflicts,
         notes,
+        unmapped,
         live: None,
     }
 }
@@ -1298,21 +1763,34 @@ pub fn live(map: &SwitchMap, source: &str, channels: &[u16]) -> Live {
     for r in &map.rows {
         let mut best: Option<(u32, u32)> = None;
         for (i, p) in r.positions.iter().enumerate() {
-            if p.channels.is_empty() {
-                continue;
-            }
-            let mut total = 0u32;
-            let mut ok = true;
-            for cv in &p.channels {
-                match at(cv.ch) {
-                    Some(v) if v.abs_diff(cv.us) <= LIVE_TOLERANCE_US => {
-                        total += v.abs_diff(cv.us) as u32
+            // The position alone, or with other controls moved (a combination's channels
+            // replace the position's own).
+            let variants = std::iter::once(p.channels.clone())
+                .filter(|v| !v.is_empty())
+                .chain(p.combos.iter().map(|c| {
+                    let mut v: Vec<ChannelValue> = p
+                        .channels
+                        .iter()
+                        .filter(|cv| !c.channels.iter().any(|x| x.ch == cv.ch))
+                        .cloned()
+                        .collect();
+                    v.extend(c.channels.iter().cloned());
+                    v
+                }));
+            for chs in variants.filter(|v| !v.is_empty()) {
+                let mut total = 0u32;
+                let mut ok = true;
+                for cv in &chs {
+                    match at(cv.ch) {
+                        Some(v) if v.abs_diff(cv.us) <= LIVE_TOLERANCE_US => {
+                            total += v.abs_diff(cv.us) as u32
+                        }
+                        _ => ok = false,
                     }
-                    _ => ok = false,
                 }
-            }
-            if ok && best.is_none_or(|(_, t)| total < t) {
-                best = Some((i as u32, total));
+                if ok && best.is_none_or(|(_, t)| total < t) {
+                    best = Some((i as u32, total));
+                }
             }
         }
         positions.insert(r.id.clone(), best.map(|(i, _)| i));
@@ -1399,6 +1877,20 @@ pub fn render_text(m: &SwitchMap) -> String {
                 join(&p.fc),
                 join(&p.radio)
             );
+            for c in &p.combos {
+                let ch: Vec<String> = c
+                    .channels
+                    .iter()
+                    .map(|c| format!("CH{} {}", c.ch, c.us))
+                    .collect();
+                s += &format!(
+                    "    with {}: {}; FC: {}; Radio: {}\n",
+                    c.with.join(" + "),
+                    join(&ch),
+                    join(&c.fc),
+                    join(&c.radio)
+                );
+            }
         }
     }
     if !m.modes.is_empty() {
@@ -1451,6 +1943,19 @@ pub fn render_text(m: &SwitchMap) -> String {
         );
         if !l.adjustments.is_empty() {
             s += &format!("  adjustments: {}\n", l.adjustments.join(", "));
+        }
+    }
+    if !m.unmapped.is_empty() {
+        s += "\nNot mapped (telemetry, timers, sticky state)\n";
+        for u in &m.unmapped {
+            s += &format!("  {} ({}): {}", u.switch, u.kind, u.condition);
+            if !u.reads.is_empty() {
+                s += &format!("; reads {}", u.reads.join(", "));
+            }
+            if !u.used_by.is_empty() {
+                s += &format!("; used by {}", u.used_by.join(", "));
+            }
+            s += "\n";
         }
     }
     if !m.conflicts.is_empty() {

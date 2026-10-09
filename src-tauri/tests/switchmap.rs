@@ -513,3 +513,75 @@ fn pack_up_reads_a_radio_that_is_not_plugged_in_from_its_backup() {
         "Pocket card: 6.0 GB free, from backup, 2 days ago."
     );
 }
+
+/// A model whose arm channel needs two switches at once (a logical switch), with a sticky
+/// switch and a telemetry switch the map cannot work out.
+fn combo_card(dir: &std::path::Path) -> SwitchMapParams {
+    let mix = |ch: u32, src: &str, sw: &str| {
+        format!(" -\n   destCh: {ch}\n   srcRaw: \"{src}\"\n   carryTrim: 0\n   mixWarn: 0\n   mltpx: ADD\n   flightModes: 000000000\n   weight: 100\n   offset: 0\n   swtch: \"{sw}\"\n   name: \"\"\n")
+    };
+    let ls = |i: u32, func: &str, def: &str| {
+        format!("   {i}:\n      func: {func}\n      def: \"{def}\"\n      andsw: \"NONE\"\n      delay: 0\n      duration: 0\n")
+    };
+    let model = format!(
+        "semver: 2.12.4\nheader: \n   name: \"COMBO\"\ntimers: \nmixData: \n{}logicalSw: \n{}{}{}customFn: \n   0:\n      swtch: \"L3\"\n      func: PLAY_TRACK\n      def: \"lowbat,1,1x\"\n   1:\n      swtch: \"L2\"\n      func: HAPTIC\n      def: \"1,1,1x\"\ntelemetrySensors: \n   0:\n      id1: \n         id: 7\n      id2: \n         instance: 0\n      label: \"RQly\"\n      subId: 0\n      type: TYPE_CUSTOM\n   1:\n      id1: \n         id: 8\n      id2: \n         instance: 0\n      label: \"RxBt\"\n      subId: 0\n      type: TYPE_CUSTOM\n",
+        mix(4, "MAX", "L1"),
+        ls(0, "FUNC_AND", "SA2,SB2"),
+        ls(1, "FUNC_STICKY", "SD2,SD0"),
+        ls(2, "FUNC_VPOS", "tele(1),35"),
+    );
+    let radio = "semver: 2.12.4\nboard: pocket\ncurrModel: 0\nswitchConfig: \n   SA:\n      name: \"\"\n      type: 2POS\n   SB:\n      name: \"\"\n      type: 2POS\n   SD:\n      name: \"\"\n      type: 2POS\n";
+    std::fs::create_dir_all(dir.join("RADIO")).unwrap();
+    std::fs::create_dir_all(dir.join("MODELS")).unwrap();
+    std::fs::write(dir.join("RADIO/radio.yml"), radio).unwrap();
+    std::fs::write(dir.join("MODELS/model00.yml"), model).unwrap();
+    let fc = dir.join("fc.diff_all.txt");
+    std::fs::write(&fc, "# diff all\n\n# version\n# Betaflight / STM32F405 (S405) 4.5.0 Jan  1 2026 / 00:00:00 (abcdef0) MSP API: 1.46\n\naux 0 0 0 1700 2100 0 0\n").unwrap();
+    SwitchMapParams {
+        radio: Some(dir.to_path_buf()),
+        fc: vec![fc],
+        ..Default::default()
+    }
+}
+
+#[test]
+fn a_mode_two_switches_make_shows_as_a_combination_and_is_not_a_conflict() {
+    let dir = tempfile::tempdir().unwrap();
+    let p = combo_card(dir.path());
+    let m = map(p.clone());
+    // Alone, SA and SB change nothing; together they send CH5 high and turn ARM on.
+    let sa = m.rows.iter().find(|r| r.id == "SA").unwrap();
+    assert!(
+        sa.positions[1].combos.iter().any(|c| c.with == ["SB down"]
+            && c.channels.iter().any(|v| v.ch == 5 && v.us == 2012)
+            && c.fc == ["ARM"]
+            && c.radio.contains(&"L1 on".to_string())),
+        "{sa:?}"
+    );
+    assert!(sa.positions[0].combos.is_empty(), "{sa:?}");
+    // SD only feeds a sticky switch: the map cannot tell, so it does not say it does nothing.
+    assert!(
+        !m.conflicts.iter().any(|c| c.contains("does nothing")
+            || c.contains("never reached")
+            || c.contains("no control moves")),
+        "{:?}",
+        m.conflicts
+    );
+    // Live: SA and SB both down is a position of SA, and of SB.
+    let live = switchmap::live(&m, "given", &[1500, 1500, 988, 1500, 2012]);
+    assert_eq!(live.positions["SA"], Some(1), "{live:?}");
+    assert_eq!(live.positions["SB"], Some(1), "{live:?}");
+    // Not mapped: the sticky and the telemetry switch, with their conditions and uses.
+    let by: std::collections::BTreeMap<_, _> =
+        m.unmapped.iter().map(|u| (u.switch.as_str(), u)).collect();
+    assert_eq!(by.len(), 2, "{:?}", m.unmapped);
+    assert_eq!(by["L2"].kind, "sticky");
+    assert_eq!(by["L2"].condition, "set by SD2, reset by SD0");
+    assert_eq!(by["L2"].used_by, ["Vibrates"]);
+    assert_eq!(by["L3"].kind, "telemetry");
+    assert_eq!(by["L3"].condition, "RxBt > 35");
+    assert_eq!(by["L3"].used_by, ["Plays \"lowbat\""]);
+    let text = switchmap::render_text(&m);
+    assert!(text.contains("with SB down: CH5 2012"), "{text}");
+    assert!(text.contains("L3 (telemetry): RxBt > 35"), "{text}");
+}

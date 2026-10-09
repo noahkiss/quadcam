@@ -175,5 +175,13 @@ export function osd(): OsdView {
 
 /** The switch map the real core made from the synthetic whoop (`tests/fixtures/switchmap/whoop`). */
 export function switchMap(): SwitchMap {
-  return structuredClone(switchMapFixture) as unknown as SwitchMap;
+  // The recording is the core's answer before combinations and unmapped switches existed;
+  // this adds one of each by hand, in the shape the core now answers.
+  const m = structuredClone(switchMapFixture) as unknown as SwitchMap;
+  for (const p of m.rows.flatMap((r) => r.positions)) p.combos = [];
+  const down = m.rows.find((r) => r.id === "SA")?.positions.find((p) => p.name === "down");
+  if (down) down.combos = [{ with: ["SD down"], channels: [{ ch: 8, us: 2012 }], fc: ["BEEPER"], radio: ["L2 on (pulse)"] }];
+  m.notes = m.notes.filter((n) => !n.startsWith("Logical switches on telemetry"));
+  m.unmapped = [{ switch: "L4", kind: "telemetry", condition: "RxBt > 10", reads: [], used_by: ["Reads RxBt"] }];
+  return m;
 }

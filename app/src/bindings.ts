@@ -1070,6 +1070,18 @@ export type Collected = {
 	temp_files: number,
 };
 
+/**  A position with other controls moved: only what differs from the position alone. */
+export type Combo = {
+	/**  The other controls and where they sit (`SB down`). */
+	with: string[],
+	/**  The channels that change, with their value here. */
+	channels: ChannelValue[],
+	/**  FC modes and adjustments on the changed channels. */
+	fc: string[],
+	/**  Radio effects that turn on. */
+	radio: string[],
+};
+
 /**  A device plugged in now, as `detect` found it. */
 export type Connected = {
 	/**
@@ -3000,6 +3012,11 @@ export type Position = {
 	fc: string[],
 	/**  The radio's own effects here (`L1 on`, `Plays "armed"`, `Timer 1 (TOT) runs`). */
 	radio: string[],
+	/**
+	 *  What changes when other controls the same channel, logical switch or function reads
+	 *  are off their first position. Empty when nothing does.
+	 */
+	combos?: Combo[],
 };
 
 /**  `gear_preflight`'s answer. */
@@ -3842,6 +3859,8 @@ export type SwitchMap = {
 	 */
 	conflicts: string[],
 	notes: string[],
+	/**  Logical switches left out of the positions, with their condition. */
+	unmapped?: Unmapped[],
 	live?: Live | null,
 };
 
@@ -3973,6 +3992,20 @@ export type Tunables = {
 	 *  within this many seconds of the clip clock.
 	 */
 	clock_skew_s?: number | null,
+};
+
+/**  A logical switch the map cannot work out: it reads telemetry, a timer or sticky state. */
+export type Unmapped = {
+	/**  `L5`. */
+	switch: string,
+	/**  `telemetry`, `timer`, `sticky` or `depends`. */
+	kind: string,
+	/**  Its condition as text (`RxBt < 3.30`). */
+	condition: string,
+	/**  Controls it reads (`SA`). */
+	reads: string[],
+	/**  What uses it (`Plays "lowbat"`, `CH7 mix`, `L6`). */
+	used_by: string[],
 };
 
 /**  `library_untrash`: the files `library_trash` moved. */
