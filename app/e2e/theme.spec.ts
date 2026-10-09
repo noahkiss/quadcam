@@ -1,7 +1,16 @@
 // The base components in both flavors: WCAG AA (axe, contrast included), and screenshots
 // for review with QC_SHOTS=<dir>.
 import AxeBuilder from "@axe-core/playwright";
+import type { Page } from "@playwright/test";
 import { expect, test } from "./fixtures";
+
+/** Axe reads a color wherever a transition is at that moment: a button fading back after
+ *  the mouse left it, a dialog rising. The hover change lands on the frame after the
+ *  mouse event, so wait for that frame, then for every animation to finish. */
+const settled = async (page: Page) => {
+  await page.evaluate(() => new Promise<void>((r) => requestAnimationFrame(() => requestAnimationFrame(() => r()))));
+  await page.waitForFunction(() => document.getAnimations().every((a) => a.playState === "finished"));
+};
 
 for (const scheme of ["dark", "light"] as const) {
   test.describe(`${scheme} theme`, () => {
@@ -23,6 +32,7 @@ for (const scheme of ["dark", "light"] as const) {
           await page.getByRole("article", { name: "backyard-loops" }).click({ modifiers: ["Meta"] });
         } else await expect(page.getByRole("heading", { name: "Import your first flights" })).toBeVisible();
         await page.mouse.move(1, 400);
+        await settled(page);
         const r = await new AxeBuilder({ page }).withTags(["wcag2a", "wcag2aa", "wcag21aa"]).analyze();
         expect(r.violations.map((v) => `${v.id}: ${v.nodes.map((n) => n.target.join(" ") + " " + n.failureSummary).join(", ")}`)).toEqual([]);
       });
@@ -33,6 +43,7 @@ for (const scheme of ["dark", "light"] as const) {
       await page.getByRole("article", { name: "gap-run" }).dblclick();
       await page.getByRole("button", { name: "Roll", exact: true }).click();
       await page.mouse.move(1, 400);
+      await settled(page);
       let r = await new AxeBuilder({ page }).withTags(["wcag2a", "wcag2aa", "wcag21aa"]).analyze();
       expect(r.violations.map((v) => `${v.id}: ${v.nodes.map((n) => n.target.join(" ") + " " + n.failureSummary).join(", ")}`)).toEqual([]);
       await page.getByRole("tab", { name: "Flight" }).click();
@@ -55,6 +66,12 @@ for (const scheme of ["dark", "light"] as const) {
     test("the Gear pages and the status bar pass axe", async ({ app, page }) => {
       await app.open("gear");
       const side = page.getByRole("navigation", { name: "Library" });
+      // The Gear status loads after the page does. Until it has, a page reads as empty
+      // and fills in under axe; the status bar shows it has arrived.
+      const bar = page.getByRole("contentinfo", { name: "Gear status" });
+      for (const state of ["Radio: Connected", "DJI: Working", "DVR card: Needs attention"]) {
+        await expect(bar.getByRole("button", { name: state })).toBeVisible();
+      }
       for (const [row, ready] of [
         [/^Connected/, "Connected"],
         [/^DVR card/, "DVR card"],
@@ -64,6 +81,7 @@ for (const scheme of ["dark", "light"] as const) {
         await side.getByRole("button", { name: row }).click();
         await expect(page.getByRole("heading", { name: ready, exact: true })).toBeVisible();
         await page.mouse.move(1, 400);
+        await settled(page);
         const r = await new AxeBuilder({ page }).withTags(["wcag2a", "wcag2aa", "wcag21aa"]).analyze();
         expect(r.violations.map((v) => `${ready} ${v.id}: ${v.nodes.map((n) => n.target.join(" ") + " " + n.failureSummary).join(", ")}`)).toEqual([]);
         if (process.env.QC_SHOTS) await page.screenshot({ path: `${process.env.QC_SHOTS}/gear-${ready.toLowerCase().replace(/ /g, "-")}-${scheme}.png` });
