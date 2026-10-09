@@ -12,7 +12,9 @@ use quadcam_lib::gear::voice::eleven::Eleven;
 use quadcam_lib::gear::voice::keychain::{KeyStore, MemKeys};
 use quadcam_lib::gear::voice::tts::{ProviderConfig, Providers, Tts};
 use quadcam_lib::gear::Env;
+use quadcam_lib::mcp::{LocalBackend, Server};
 use quadcam_lib::photos::Recorder;
+use serde_json::json;
 use std::sync::Arc;
 
 const KEY: &str = "fake-key-0123456789abcdef";
@@ -387,4 +389,68 @@ fn a_render_without_a_voice_or_model_says_what_to_name() {
         .gear_voice_render(&render("Nobody", "eleven_v4", &["quad"], true, false))
         .unwrap_err();
     assert!(e.to_string().contains("no voice"), "{e}");
+}
+
+#[test]
+fn the_mcp_tools_price_first_and_a_paid_sample_needs_confirm() {
+    let b = bench(50000, true);
+    let http = b.http.clone();
+    let mut s = Server::new(LocalBackend(Arc::new(b.core)));
+
+    let r = s.call_tool("quadcam_gear", json!({"action": "voice_sets"}));
+    assert_eq!(r["isError"], false, "{r}");
+    let t = r["content"][0]["text"].as_str().unwrap();
+    assert!(
+        t.contains("key is stored") && t.contains("edgetx") && t.contains("sample"),
+        "{t}"
+    );
+    assert!(!t.contains(KEY));
+
+    let r = s.call_tool(
+        "quadcam_gear",
+        json!({"action": "voice_catalog", "what": "credits"}),
+    );
+    assert_eq!(r["isError"], false, "{r}");
+    assert!(r["content"][0]["text"]
+        .as_str()
+        .unwrap()
+        .contains("50000 left"));
+
+    let r = s.call_tool(
+        "quadcam_gear",
+        json!({"action": "voice_estimate", "sets": ["sample"], "voice": "Callum", "voice_model": "eleven_turbo_v2_5"}),
+    );
+    assert_eq!(r["isError"], false, "{r}");
+    assert!(r["content"][0]["text"]
+        .as_str()
+        .unwrap()
+        .contains("credits"));
+    assert_eq!(http.posts(), 0);
+
+    let ask = json!({"action": "voice_sample", "voices": ["Callum"], "voice_models": ["eleven_turbo_v2_5"]});
+    let r = s.call_tool("quadcam_gear_edit", ask);
+    assert_eq!(r["isError"], false, "{r}");
+    assert!(r["content"][0]["text"]
+        .as_str()
+        .unwrap()
+        .contains("Not rendered"));
+    assert_eq!(http.posts(), 0);
+
+    let go = json!({"action": "voice_sample", "voices": ["Callum"], "voice_models": ["eleven_turbo_v2_5"], "confirm": true});
+    let r = s.call_tool("quadcam_gear_edit", go);
+    assert_eq!(r["isError"], false, "{r}");
+    assert_eq!(http.posts(), 3);
+
+    // An agent can delete the key but has no way to set one.
+    let r = s.call_tool("quadcam_gear_edit", json!({"action": "voice_key_delete"}));
+    assert_eq!(r["isError"], false, "{r}");
+    assert!(r["content"][0]["text"]
+        .as_str()
+        .unwrap()
+        .contains("No ElevenLabs key"));
+    let r = s.call_tool(
+        "quadcam_gear_edit",
+        json!({"action": "voice_key_set", "key": KEY}),
+    );
+    assert_eq!(r["isError"], true);
 }

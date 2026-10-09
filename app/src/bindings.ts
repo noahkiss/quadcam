@@ -2690,6 +2690,8 @@ export type KeyStatus = {
 	hint: string,
 	/**  `keychain`, or `environment` when QUADCAM_TTS_KEY holds it for this run. */
 	source: string,
+	/**  Why the Keychain could not be read, when it could not. */
+	problem?: string | null,
 };
 
 /**  `format_plan`: the volume name; None uses the setting. */

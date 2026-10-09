@@ -36,6 +36,9 @@ pub struct KeyStatus {
     pub hint: String,
     /// `keychain`, or `environment` when QUADCAM_TTS_KEY holds it for this run.
     pub source: String,
+    /// Why the Keychain could not be read, when it could not.
+    #[serde(default)]
+    pub problem: Option<String>,
 }
 
 /// `gear_voice_catalog`: what the account offers. With none of the three set, all of them.
@@ -159,19 +162,23 @@ impl Core {
         })
     }
 
-    fn key_status(&self) -> Result<KeyStatus> {
-        Ok(match self.eleven_key()? {
-            Some((k, source)) => KeyStatus {
+    fn key_status(&self) -> KeyStatus {
+        let none = |problem| KeyStatus {
+            set: false,
+            hint: String::new(),
+            source: String::new(),
+            problem,
+        };
+        match self.eleven_key() {
+            Ok(Some((k, source))) => KeyStatus {
                 set: true,
                 hint: keychain::hint(&k),
                 source: source.into(),
+                problem: None,
             },
-            None => KeyStatus {
-                set: false,
-                hint: String::new(),
-                source: String::new(),
-            },
-        })
+            Ok(None) => none(None),
+            Err(e) => none(Some(format!("{e:#}"))),
+        }
     }
 
     /// Stores, deletes or reports the ElevenLabs key. The key never comes back.
@@ -193,13 +200,13 @@ impl Core {
             }
             other => bail!("{other:?} is not a key action: use status, set or delete."),
         }
-        self.key_status()
+        Ok(self.key_status())
     }
 
     /// The key and the line sets. No network.
     pub fn gear_voice_sets(&self) -> Result<StudioView> {
         Ok(StudioView {
-            key: self.key_status()?,
+            key: self.key_status(),
             sets: sets::infos(self.custom_lines()?.len())?,
             batch: BatchSettings::default(),
         })
@@ -605,6 +612,8 @@ impl Core {
 pub fn key_text(k: &KeyStatus) -> String {
     if k.set {
         format!("An ElevenLabs key is stored ({}, {}).", k.hint, k.source)
+    } else if let Some(p) = &k.problem {
+        format!("No ElevenLabs key could be read: {p}")
     } else {
         "No ElevenLabs key is stored.".into()
     }

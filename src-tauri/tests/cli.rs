@@ -600,3 +600,66 @@ fn places_profiles_settings_and_times_from_the_cli() {
     env.ok(&["profiles", "delete", "Whoop"]);
     assert_eq!(env.ok(&["profiles"])["default_profile"], Value::Null);
 }
+
+#[test]
+fn voice_studio_commands_list_sets_and_keep_the_key_out_of_every_answer() {
+    let env = Env::new();
+    let sets = env.ok(&["gear", "voice", "sets"]);
+    let ids: Vec<&str> = sets["sets"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|s| s["id"].as_str().unwrap())
+        .collect();
+    for want in [
+        "edgetx", "quad", "heli", "plane", "glider", "extras", "easter", "sample",
+    ] {
+        assert!(ids.contains(&want), "{want} in {ids:?}");
+    }
+    // Under cargo the real Keychain is closed; the view says so instead of failing.
+    assert_eq!(sets["key"]["set"], false);
+    assert!(sets["key"]["problem"]
+        .as_str()
+        .unwrap()
+        .contains("off in tests"));
+
+    // `key set` reads the key from stdin, and no stream shows it.
+    let key = "fake-key-0123456789abcdef";
+    let mut child = Command::new(env!("CARGO_BIN_EXE_quadcam-cli"))
+        .env("HOME", env.home.path())
+        .args(["--json", "gear", "voice", "key", "set"])
+        .stdin(std::process::Stdio::piped())
+        .stdout(std::process::Stdio::piped())
+        .stderr(std::process::Stdio::piped())
+        .spawn()
+        .unwrap();
+    std::io::Write::write_all(
+        &mut child.stdin.take().unwrap(),
+        format!("{key}\n").as_bytes(),
+    )
+    .unwrap();
+    let out = child.wait_with_output().unwrap();
+    assert!(!out.status.success());
+    let all = format!(
+        "{}{}",
+        String::from_utf8_lossy(&out.stdout),
+        String::from_utf8_lossy(&out.stderr)
+    );
+    assert!(all.contains("off in tests"), "{all}");
+    assert!(!all.contains(key), "{all}");
+
+    // A render of sets without a reachable key says what to do.
+    let (code, v) = env.run(&[
+        "gear",
+        "voice",
+        "render",
+        "--set",
+        "quad",
+        "--voice",
+        "x",
+        "--model",
+        "m",
+        "--dry-run",
+    ]);
+    assert_ne!(code, 0, "{v}");
+}
