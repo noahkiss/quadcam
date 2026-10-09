@@ -187,6 +187,15 @@ GitHub (`noahkiss/quadcam`, public) is the only remote. Users install the cask
   prep) runs `diskutil unmountDisk` for a card, so the disk stays listed until it is pulled,
   and `diskutil eject` for anything else. Disk images report removable media, so the disk-image
   tests see an unmount: the image stays attached and `Image::is_mounted` is false.
+- **Mount cycle:** every operation on a card mounts it if needed, works, and unmounts it when
+  done; "safe to unplug" plays only after the unmount worked. One helper does it:
+  `core/apply_card.rs` (`locate_volume`, `unmounted_cards`, `mount_picked`, `card_for_job`) for
+  gear jobs, `core/session_card.rs` for the import session's card (`stage_device`, `import`
+  unmounts it after "Delete clips after import", `format_plan`/`format`/`eject`/card prep mount
+  it again). Do not add a second mount path. A DJI device over USB is never unmounted.
+  Lists and checks that only read (`gear_connected`, Pack up) never mount. The Mount button
+  (10 minutes, `MOUNT_MINUTES`) stays for browsing. Tests: `tests/gear_apply_card.rs` (fake
+  `diskutil`) and `tests/mount_cycle.rs` (disk images).
 - **Cards** show in the sidebar with their source (Analog, DJI) and an "N new" count (content
   fingerprints not in the index); inserting a card never starts an import on its own.
 
