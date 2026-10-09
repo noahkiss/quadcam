@@ -57,7 +57,7 @@ impl Core {
             .filter(|d| (d.vid, d.pid) == STM32_DFU)
             .collect();
         match now.as_slice() {
-            [] => bail!("No radio is in DFU mode. Turn the radio off, hold both trim buttons toward the centre and plug in the USB cable."),
+            [] => bail!("No radio is in DFU mode. Turn the radio off, then plug in the USB cable (do not hold the trim buttons, which start the EdgeTX bootloader instead). Wait a few seconds."),
             [one] => one.serial.clone().filter(|s| !s.is_empty()).ok_or_else(|| {
                 anyhow::anyhow!("The radio in DFU mode reports no serial number, so it cannot be linked.")
             }),

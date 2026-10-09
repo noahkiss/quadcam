@@ -46,7 +46,7 @@ test("the pickers list the account's voices and models, and the cost follows the
   const full = await cost.textContent();
   // The price shows in USD and in estimated credits.
   expect(full).toMatch(/\$\d+\.\d\d at \$0\.08 per 1K, [\d,]+ credits \(estimated\)/);
-  await expect(models.getByRole("checkbox", { name: /eleven_v4,/ })).toContainText("$0.08 per 1K characters");
+  await expect(models).toContainText("eleven_v4, $0.08 per 1K characters");
   // The half-price model costs half the credits for the same sets.
   await models.getByRole("checkbox", { name: /eleven_v4,/ }).uncheck();
   await models.getByRole("checkbox", { name: /eleven_turbo_v2_5,/ }).check();

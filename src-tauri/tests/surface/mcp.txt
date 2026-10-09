@@ -13,6 +13,7 @@ mcp.action quadcam_gear.crashes
 mcp.action quadcam_gear.devices
 mcp.action quadcam_gear.fc_identify
 mcp.action quadcam_gear.firmware_check
+mcp.action quadcam_gear.firmware_read
 mcp.action quadcam_gear.flash_plan
 mcp.action quadcam_gear.flights
 mcp.action quadcam_gear.model

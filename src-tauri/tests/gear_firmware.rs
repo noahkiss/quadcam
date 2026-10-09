@@ -3,7 +3,8 @@
 //! downloads, opens a USB device or flashes anything real.
 
 use quadcam_lib::core::{
-    BackupFilter, Core, FirmwareParams, FlashParams, FlashRequest, Hooks, NoHooks,
+    BackupFilter, Core, FirmwareParams, FirmwareReadParams, FlashParams, FlashRequest, Hooks,
+    NoHooks,
 };
 use quadcam_lib::gear::detect::DfuInfo;
 use quadcam_lib::gear::dfu::{FakeDfu, FLASH_BASE};
@@ -32,6 +33,9 @@ fn full_image(salt: u8) -> Vec<u8> {
     b[4..8].copy_from_slice(&0x0800_0101u32.to_le_bytes());
     b[0x8000..0x8004].copy_from_slice(&0x2001_FFF0u32.to_le_bytes());
     b[0x8004..0x8008].copy_from_slice(&0x0800_8201u32.to_le_bytes());
+    // The version string the real image carries.
+    let v = b"edgetx-pocket-2.12.4 (def35ad3)\0";
+    b[0x9000..0x9000 + v.len()].copy_from_slice(v);
     let at = 0x20000;
     b[at..at + 4].copy_from_slice(splash::START);
     b[at + 4] = 0x80;
@@ -46,12 +50,11 @@ fn release_zip(dir: &Path, pocket: &[u8]) -> PathBuf {
     let src = dir.join("zip-src");
     let _ = std::fs::remove_dir_all(&src);
     std::fs::create_dir_all(&src).unwrap();
-    std::fs::write(
-        src.join(format!("fw-radiomaster-pocket-v{VERSION}.bin")),
-        pocket,
-    )
-    .unwrap();
-    std::fs::write(src.join(format!("fw-tx16s-v{VERSION}.bin")), full_image(9)).unwrap();
+    // The names and extra files of the real 2.12.4 release zip.
+    std::fs::write(src.join("pocket-def35ad.bin"), pocket).unwrap();
+    std::fs::write(src.join("tx16s-def35ad.bin"), full_image(9)).unwrap();
+    std::fs::write(src.join("fw.json"), b"{}").unwrap();
+    std::fs::write(src.join("LICENSE"), b"x").unwrap();
     let zip = dir.join(asset_name(VERSION));
     let st = Command::new("/usr/bin/ditto")
         .args(["-c", "-k", "--sequesterRsrc"])
@@ -305,7 +308,7 @@ fn a_plan_with_a_splash_passes_every_check_and_names_the_image() {
         assert!(names.contains(&want), "{want} in {names:?}");
     }
     let text = serde_json::to_string(&plan.diff).unwrap();
-    assert!(text.contains("fw-radiomaster-pocket-v2.12.4.bin"), "{text}");
+    assert!(text.contains("pocket-def35ad.bin"), "{text}");
     assert!(text.contains("Splash:"), "{text}");
     // The same params give the same digest; no splash gives another.
     assert_eq!(b.core.gear_flash_plan(&p).unwrap().digest, plan.digest);
@@ -538,7 +541,7 @@ fn a_flash_backs_up_writes_reads_back_and_leaves() {
     assert_eq!(
         names,
         [
-            "Back up the current firmware",
+            "Copy the current firmware",
             "Erase",
             "Write",
             "Read back",
@@ -562,24 +565,29 @@ fn a_flash_backs_up_writes_reads_back_and_leaves() {
     assert_eq!(&flashed[at + 1024..], &b.new[at + 1024..]);
     assert_eq!(b.flasher.opened.lock().unwrap().as_slice(), ["0483:df11"]);
 
-    // The firmware it ran before is kept as a before-flash backup.
-    let backups = b
+    // The firmware it ran before is kept as a firmware copy, not as a card backup: a
+    // snapshot of only firmware.bin would become the radio's latest card backup.
+    assert!(b
         .core
         .gear_backups(&BackupFilter {
             device: Some(b.radio.clone()),
         })
-        .unwrap();
-    assert_eq!(backups.len(), 1);
-    assert_eq!(report.backup.as_deref(), Some(backups[0].id.as_str()));
-    let kept = b
-        .core
-        .gear_backup_read(&quadcam_lib::core::BackupReadParams {
-            id: backups[0].id.clone(),
-            path: Some("firmware.bin".into()),
-        })
-        .unwrap();
-    let text = serde_json::to_string(&kept).unwrap();
-    assert!(text.contains("firmware.bin"), "{text}");
+        .unwrap()
+        .is_empty());
+    let copies = quadcam_lib::gear::fwcopy::list(&b.core.gear_store(), &b.radio);
+    assert_eq!(copies.len(), 1);
+    assert_eq!(report.backup.as_deref(), Some(copies[0].id.as_str()));
+    assert_eq!(
+        copies[0].kind,
+        quadcam_lib::gear::fwcopy::CopyKind::BeforeFlash
+    );
+    assert_eq!(copies[0].image_version.as_deref(), Some("2.12.4"));
+    let kept = quadcam_lib::gear::fwcopy::read(&b.core.gear_store(), &copies[0]).unwrap();
+    assert_eq!(
+        &kept[..],
+        &b.old[..kept.len()],
+        "the old firmware, as it was"
+    );
     assert!(gui.changed.load(Ordering::SeqCst) >= 1);
     // Nothing logs the picture's path or the radio's name in the report's notes.
     assert!(!report.message.contains("splash.png"));
@@ -621,15 +629,16 @@ fn a_bad_read_back_keeps_the_radio_in_dfu_and_the_backup() {
     assert!(!r.saved);
     assert!(r.message.contains("stays in DFU mode"), "{}", r.message);
     assert!(r.message.contains("different bytes"), "{}", r.message);
+    assert!(r.message.contains("ROM bootloader"), "{}", r.message);
     let states: Vec<_> = r.steps.iter().map(|s| (s.name.as_str(), s.state)).collect();
     use quadcam_lib::gear::apply::StepState::{Done, Failed, Skipped};
     assert_eq!(
         states,
         [
-            ("Back up the current firmware", Done),
+            ("Copy the current firmware", Done),
             ("Erase", Done),
-            ("Write", Done),
-            ("Read back", Failed),
+            ("Write", Failed),
+            ("Read back", Skipped),
             ("Leave DFU", Skipped)
         ]
     );
@@ -668,6 +677,152 @@ fn a_cargo_process_never_gets_the_real_usb_path() {
         let mut usb = f.open_dfu(0x0483, 0xdf11, None).unwrap();
         assert!(quadcam_lib::gear::dfu::flash_size(usb.as_mut(), true).unwrap() > 0);
     }
+}
+
+// ----- the read-only DFU trial -----
+
+#[test]
+fn the_read_only_trial_saves_a_copy_and_compares_the_version_and_changes_nothing() {
+    let b = plain();
+    let r = b
+        .core
+        .gear_firmware_read(&FirmwareReadParams {
+            device: Some(b.radio.clone()),
+        })
+        .unwrap();
+    assert_eq!(r.matches, Some(true), "{}", r.message);
+    assert_eq!(r.known_version.as_deref(), Some("2.12.4"));
+    assert_eq!(r.copy.image_version.as_deref(), Some("2.12.4"));
+    assert_eq!(r.copy.image_board.as_deref(), Some("pocket"));
+    assert_eq!(r.flash_bytes, 1024 * 1024);
+    let kept = quadcam_lib::gear::fwcopy::read(&b.core.gear_store(), &r.copy).unwrap();
+    assert_eq!(&kept[..], &b.old[..kept.len()]);
+    assert_eq!(kept.len(), b.old.len().min(kept.len()));
+    // The radio saw status polls, set-address commands and uploads: no erase, no data block,
+    // no leave.
+    let dev = b.flasher.device.lock().unwrap();
+    assert_eq!(dev.mutations, 0, "{:?}", dev.log);
+    assert!(!dev.left);
+    assert!(!dev
+        .log
+        .iter()
+        .any(|l| l.starts_with("erase") || l.starts_with("write") || l.starts_with("leave")));
+    assert_eq!(&dev.flash[..b.old.len()], &b.old[..]);
+    // It is not a card backup.
+    drop(dev);
+    assert!(b
+        .core
+        .gear_backups(&BackupFilter::default())
+        .unwrap()
+        .is_empty());
+    assert_eq!(r.steps.len(), 3);
+}
+
+#[test]
+fn the_trial_says_when_the_image_names_another_version() {
+    let b = bench(Arc::new(NoHooks), "pocket", "2.11.3", true);
+    let r = b
+        .core
+        .gear_firmware_read(&FirmwareReadParams {
+            device: Some(b.radio.clone()),
+        })
+        .unwrap();
+    assert_eq!(r.matches, Some(false));
+    assert!(
+        r.message.contains("2.12.4") && r.message.contains("2.11.3"),
+        "{}",
+        r.message
+    );
+    // With no radio named, nothing is compared, and the copy sits under the DFU serial.
+    let r = b
+        .core
+        .gear_firmware_read(&FirmwareReadParams::default())
+        .unwrap();
+    assert_eq!(r.matches, None);
+    assert!(r.copy.id.starts_with("dfu-0001/"), "{}", r.copy.id);
+}
+
+#[test]
+fn the_trial_refuses_without_one_dfu_device_and_on_a_blank_or_flaky_read() {
+    let b = plain();
+    b.dfu.lock().unwrap().clear();
+    let e = b
+        .core
+        .gear_firmware_read(&FirmwareReadParams::default())
+        .unwrap_err();
+    let r = refusal(e);
+    assert_eq!(r.code, RefusalCode::NoDevice);
+    assert!(r.reason.contains("do not hold the trim"), "{}", r.reason);
+    assert!(b.flasher.opened.lock().unwrap().is_empty());
+    let one = DfuInfo {
+        vid: 0x0483,
+        pid: 0xdf11,
+        serial: None,
+    };
+    b.dfu.lock().unwrap().extend([one.clone(), one]);
+    let e = b
+        .core
+        .gear_firmware_read(&FirmwareReadParams::default())
+        .unwrap_err();
+    assert_eq!(refusal(e).code, RefusalCode::SeveralDevices);
+    // A blank flash has nothing to copy.
+    let blank = plain();
+    blank.flasher.device.lock().unwrap().flash.fill(0xFF);
+    let e = blank
+        .core
+        .gear_firmware_read(&FirmwareReadParams::default())
+        .unwrap_err();
+    assert!(refusal(e).reason.contains("blank"));
+    // A link that goes bad part way: the two reads differ and nothing is saved.
+    let flaky = plain();
+    flaky.flasher.device.lock().unwrap().faults.flip_after_reads = Some(600);
+    let e = flaky
+        .core
+        .gear_firmware_read(&FirmwareReadParams::default())
+        .unwrap_err();
+    assert!(refusal(e).reason.contains("differ"));
+    assert!(quadcam_lib::gear::fwcopy::list(&flaky.core.gear_store(), "dfu-0001").is_empty());
+    assert_eq!(flaky.flasher.device.lock().unwrap().mutations, 0);
+}
+
+#[test]
+fn a_flash_never_erases_when_its_copy_cannot_be_made() {
+    // The first read is clean, the second differs: no verified copy, so no erase.
+    let b = plain();
+    b.flasher.device.lock().unwrap().faults.flip_after_reads = Some(600);
+    let p = params(&b, None);
+    let plan = b.core.gear_flash_plan(&p).unwrap();
+    let e = b.core.gear_flash(&request(&p, &plan)).unwrap_err();
+    let r = refusal(e);
+    assert_eq!(r.code, RefusalCode::NoBackup);
+    assert!(r.reason.contains("Nothing was written"), "{}", r.reason);
+    assert_eq!(b.flasher.device.lock().unwrap().mutations, 0);
+    assert!(quadcam_lib::gear::fwcopy::list(&b.core.gear_store(), &b.radio).is_empty());
+}
+
+#[test]
+fn a_blank_radio_can_be_flashed_and_a_wrong_sized_chip_cannot() {
+    let b = plain();
+    b.flasher.device.lock().unwrap().flash.fill(0xFF);
+    let p = params(&b, None);
+    let plan = b.core.gear_flash_plan(&p).unwrap();
+    let r = b.core.gear_flash(&request(&p, &plan)).unwrap();
+    assert_eq!(r.status, ChangeStatus::Verified, "{}", r.message);
+    assert!(r.backup.is_none(), "there was nothing to keep");
+    assert!(r.steps[0].detail.as_deref().unwrap().contains("blank"));
+    // A 512 KB part is not the Pocket's chip.
+    let small = plain();
+    {
+        let mut d = small.flasher.device.lock().unwrap();
+        *d = FakeDfu::with_firmware(&small.old);
+        d.layout = "@Internal Flash  /0x08000000/04*016Kg,01*064Kg,03*128Kg".into();
+        d.flash.truncate(512 * 1024);
+    }
+    let p = params(&small, None);
+    let plan = small.core.gear_flash_plan(&p).unwrap();
+    let e = small.core.gear_flash(&request(&p, &plan)).unwrap_err();
+    assert_eq!(refusal(e).code, RefusalCode::Incompatible);
+    assert_eq!(small.flasher.device.lock().unwrap().mutations, 0);
 }
 
 // ----- MCP -----
@@ -760,7 +915,7 @@ fn the_mcp_actions_check_preview_plan_and_flash_with_a_digest() {
     assert_eq!(r["isError"], false, "{r}");
     let t = r["content"][0]["text"].as_str().unwrap();
     assert!(t.starts_with("Verified:"), "{t}");
-    assert!(t.contains("Back up the current firmware: done"), "{t}");
+    assert!(t.contains("Copy the current firmware: done"), "{t}");
     assert!(b.flasher.device.lock().unwrap().left);
 }
 
@@ -1024,4 +1179,23 @@ fn an_unlinked_dfu_device_warns_with_the_last_seen_radio_and_a_verified_flash_li
     assert_eq!(report.status, ChangeStatus::Verified, "{}", report.message);
     let pocket = b.core.gear_store().device(&b.radio).unwrap().unwrap();
     assert_eq!(pocket.dfu_serial.as_deref(), Some("0001"));
+}
+
+#[test]
+fn the_mcp_firmware_read_action_is_the_read_only_trial() {
+    let b = plain();
+    let mut s = quadcam_lib::mcp::Server::new(quadcam_lib::mcp::LocalBackend(b.core.clone()));
+    let r = call(
+        &mut s,
+        "quadcam_gear",
+        json!({"action": "firmware_read", "device": b.radio}),
+    );
+    assert_eq!(r["isError"], false, "{r}");
+    let t = r["content"][0]["text"].as_str().unwrap();
+    assert!(t.contains("EdgeTX 2.12.4"), "{t}");
+    assert!(t.contains("Nothing was written to the radio"), "{t}");
+    assert_eq!(r["structuredContent"]["matches"], true);
+    let dev = b.flasher.device.lock().unwrap();
+    assert_eq!(dev.mutations, 0);
+    assert!(!dev.left);
 }
