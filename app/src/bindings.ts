@@ -189,6 +189,16 @@ export const commands = {
 	 *  from the quad's rates. Reads only.
 	 */
 	gearSims: (params: SimsParams) => typedError<SimStatus[], string>(__TAURI_INVOKE("gear_sims", { params })),
+	/**
+	 *  A radio's model for the editors: timers, value screens, logging, alarms, callouts and
+	 *  the checklist, from the mounted card or the latest backup, with staged edits on top. Reads only.
+	 */
+	gearModel: (params: ModelParams) => typedError<ModelDetail, string>(__TAURI_INVOKE("gear_model", { params })),
+	/**
+	 *  Stages model editor ops (and a checklist) for a radio as its one "Model edits" change.
+	 *  Writes only QuadCam's own data; the apply sheet writes the card.
+	 */
+	gearModelEdit: (params: ModelEditParams) => typedError<StagedChange_Serialize, string>(__TAURI_INVOKE("gear_model_edit", { params })),
 	/**  An EdgeTX card: models, the selected model and its aircraft, the radio clock, one model in full. */
 	gearCard: (params: CardParams) => typedError<GearCard, string>(__TAURI_INVOKE("gear_card", { params })),
 	/**  Checks and diffs EdgeTX card edits. Writes nothing. */
@@ -845,6 +855,38 @@ export type Calibration = {
 	horizon?: RadioControl | null,
 	airmode?: RadioControl | null,
 };
+
+/**  A spoken callout an op sets. */
+export type CalloutDef = {
+	/**
+	 *  The track name (the file stem in `SOUNDS/<lang>/`, 8 characters at most). Owns the
+	 *  callout.
+	 */
+	track: string,
+	/**  `1x` (once), `!1x` (once, not at power-on) or seconds between repeats. Default `1x`. */
+	repeat?: string | null,
+} & CalloutWhen;
+
+/**  A callout as the file holds it. */
+export type CalloutView = {
+	track: string,
+	swtch: string,
+	repeat: string,
+	/**
+	 *  The condition, when it is one this editor writes (a switch, or a sensor against a
+	 *  value); None for anything else, which the editor shows but does not rewrite.
+	 */
+	when?: CalloutWhen | null,
+};
+
+/**  When a callout plays. */
+export type CalloutWhen = 
+/**  While a switch is on. */
+{ when: "switch"; swtch: string } | 
+/**  While a source reads below a value. `source` is `{RxBt}` or any source name. */
+{ when: "below"; source: string; value: string; delay_ds?: number } | 
+/**  While a source reads above a value. */
+{ when: "above"; source: string; value: string; delay_ds?: number };
 
 /**  The mAh used reached `mah` at `s` seconds into the flight. */
 export type CapaMark = {
@@ -1763,6 +1805,14 @@ export type Edit =
 { kind: "model_delete"; file: string };
 
 export type Editor = "user" | "agent";
+
+/**  What the editors show of a model. */
+export type EditorView = {
+	logging: LoggingView,
+	rf_alarms?: RfAlarms | null,
+	callouts: CalloutView[],
+	screens: ScreenDetail[],
+};
 
 /**  `eject`: a mount point or `/dev/diskN`; None makes the session's card safe to remove. */
 export type EjectParams = {
@@ -2733,6 +2783,22 @@ export type LogCounts = {
 	unchanged: number,
 };
 
+/**  The switch that writes the radio's log, and how often. */
+export type LoggingDef = {
+	/**  `ON`, `SA2`, `L3`, ... */
+	swtch: string,
+	/**  0.1 s. */
+	period_ds: number,
+};
+
+/**  The radio's logging, as the file holds it. */
+export type LoggingView = {
+	/**  The `LOGS` function, when there is one. */
+	logging?: LoggingDef | null,
+	/**  Every telemetry sensor, with whether the log records it. */
+	sensors: SensorLog[],
+};
+
 export type LogicalSwitch = {
 	/**  0 is `L1`. */
 	index: number,
@@ -2790,6 +2856,47 @@ export type MixLine = {
 	mltpx: string,
 };
 
+/**  A model in full, for the editors. */
+export type ModelDetail = {
+	device: string,
+	/**  `card` (mounted now) or `backup <id> (<date>)`. */
+	source: string,
+	models: ModelEntry[],
+	view: ModelView,
+	editors: EditorView,
+	/**  `MODELS/<name>.txt`, when the model has one. */
+	checklist?: string | null,
+	/**  Characters per checklist line on this radio, when measured. */
+	checklist_width?: number | null,
+	/**  Sound files on the card a callout can name (the file stems, 8 characters at most). */
+	tracks: string[],
+	/**  Staged model edits shown on top. */
+	staged: number,
+	notes: string[],
+};
+
+/**  `gear_model_edit`: edits of one model, staged for a radio. */
+export type ModelEditParams = {
+	device: string,
+	/**  The model file (`model01.yml`). */
+	model: string,
+	ops?: ModelOp[],
+	/**
+	 *  The power-on checklist text, one item per line (`=` starts a tick box). Turns the
+	 *  checklist on when the model has it off. Empty text removes the file's lines.
+	 */
+	checklist?: string | null,
+	/**  Who stages it. The app and the CLI leave it out (the person); MCP says `agent`. */
+	editor?: Editor | null,
+};
+
+/**  One model file on the card. */
+export type ModelEntry = {
+	file: string,
+	name: string,
+	selected: boolean,
+};
+
 /**  One edit to a model file. Ops apply in order; a later op sees the earlier ones. */
 export type ModelOp = 
 /**  The header name (15 characters at most). */
@@ -2821,7 +2928,38 @@ export type ModelOp =
 /**  The switch warnings, as the 2.12 list; replaces a legacy `switchWarningState:`. */
 { op: "set_switch_warnings"; warnings: SwitchWarning[] } | 
 /**  A telemetry screen (0 is screen 1): a script screen, or None to remove it. */
-{ op: "set_screen"; index: number; script: string | null };
+{ op: "set_screen"; index: number; script: string | null } | 
+/**  A telemetry screen of values (0 is screen 1): up to 4 lines of up to 3 sources each. */
+{ op: "set_screen_values"; index: number; lines: string[][] } | 
+/**
+ *  The `LOGS` special function (the switch that writes the radio's log, and how often);
+ *  None removes every `LOGS` function.
+ */
+{ op: "set_logging"; logging: LoggingDef | null } | 
+/**  Which telemetry sensors the radio's log records. */
+{ op: "set_sensor_logs"; sensors: SensorLog[] } | 
+/**  The RSSI warning and critical levels. */
+{ op: "set_rf_alarms"; warning: number; critical: number } | 
+/**  A spoken callout, owned by its track name: replaces the callout with that track. */
+{ op: "set_callout"; callout: CalloutDef } | 
+/**
+ *  Removes the callout with this track name, and its logical switch when nothing else
+ *  uses it.
+ */
+{ op: "remove_callout"; track: string };
+
+/**  `gear_model`: a radio, and the model to read. */
+export type ModelParams = {
+	/**  A saved radio's device id. */
+	device: string,
+	/**  A model file (`model01.yml`); the radio's selected model when left out. */
+	model?: string | null,
+	/**
+	 *  Show the model as it will be with the device's staged model edits applied. On by
+	 *  default for the editors.
+	 */
+	staged?: boolean,
+};
 
 /**  A model file on the card. */
 export type ModelSummary = {
@@ -3752,6 +3890,11 @@ export type RestoreParams = {
 	editor?: Editor | null,
 };
 
+export type RfAlarms = {
+	warning: number,
+	critical: number,
+};
+
 export type RowState = "pass" | "warn" | "unknown";
 
 /**  One radio's saved calibration and what it was made with. */
@@ -3778,6 +3921,19 @@ export type Screen = {
 	script?: string | null,
 };
 
+/**  A telemetry screen, in full. */
+export type ScreenDetail = {
+	index: number,
+	kind: string,
+	script?: string | null,
+	/**
+	 *  For a `VALUES` screen: each line's sources, as the file writes them (`tele(2)`,
+	 *  `Tmr1`), and the same with sensor labels: `labels`.
+	 */
+	lines: string[][],
+	labels: string[][],
+};
+
 /**  `place_search`: an address or a place name, and an optional provider and result limit. */
 export type SearchParams = {
 	query: string,
@@ -3799,6 +3955,12 @@ export type Section =
 export type Sensor = {
 	slot: number,
 	label: string,
+};
+
+/**  Whether the radio's log records one telemetry sensor. */
+export type SensorLog = {
+	label: string,
+	logs: boolean,
 };
 
 /**

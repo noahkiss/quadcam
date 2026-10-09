@@ -578,6 +578,8 @@ Commands:
   osd-edit        Stages OSD moves, toggles or a profile copy for an FC (one "OSD layout" change)
   rates           An FC's rate profiles: names, curves per axis (maximum and centre rates), the throttle curve. Reads a dump or diff file, a backup, or a saved device's latest backup
   sims            The sims on this Mac with their rate profiles; with a quad, how each differs from it
+  model           A radio's model for the editors: timers, value screens, logging, alarms, callouts and the checklist, from the mounted card or the latest backup, with staged edits on top
+  model-edit      Stages model edits for a radio (one "Model edits" change); nothing is written to the card
   card            An EdgeTX card: models, the selected model, the radio clock; `preview` checks edits
   map             The switch map: what each radio control does on the radio and the FC, per position. Reads an EdgeTX card or model file and a Betaflight dump; --live marks the positions now
   radio           The radio in USB Joystick mode now: buttons, axes, channel values

@@ -25,7 +25,7 @@ mod gear;
 mod gear_card;
 mod import;
 mod library;
-mod model_edit;
+pub mod model_edit;
 mod modules;
 mod osd;
 mod prep;

@@ -528,3 +528,61 @@ fn staged_model_edits_on_a_stage_call_use_the_same_engine() {
     edit(&b, vec![lowbat("3.5")], None).unwrap();
     assert_eq!(staged(&b).len(), 2, "the editor keeps its own change");
 }
+
+#[test]
+fn the_row_and_the_mcp_actions() {
+    use quadcam_lib::mcp::{LocalBackend, Server};
+    use serde_json::json;
+    let b = bench(Opts::default());
+    let v = b
+        .core
+        .dispatch(
+            "gear_model_edit",
+            json!({"device": b.id, "model": "model00.yml",
+                   "ops": [{"op": "set_rf_alarms", "warning": 50, "critical": 40}]}),
+        )
+        .unwrap();
+    assert_eq!(v["title"], "Model edits");
+    assert_eq!(v["edits"][0]["kind"], "model");
+    let mut s = Server::new(LocalBackend(b.core.clone()));
+    let r = s.call_tool(
+        "quadcam_gear_edit",
+        json!({"action": "model_edit", "device": b.id, "model": "model00.yml",
+               "ops": [{"op": "set_callout", "callout": {"track": "lowbat", "when": "below",
+                        "source": "{RxBt}", "value": "3.5", "delay_ds": 20, "repeat": "5"}}],
+               "checklist": "=Props tight"}),
+    );
+    assert_eq!(r["isError"], false, "{r}");
+    assert!(r["content"][0]["text"]
+        .as_str()
+        .unwrap()
+        .starts_with("Staged."));
+    assert_eq!(staged(&b).len(), 1);
+    let r = s.call_tool(
+        "quadcam_gear",
+        json!({"action": "model", "device": b.id, "model": "model00.yml"}),
+    );
+    assert_eq!(r["isError"], false, "{r}");
+    let text = r["content"][0]["text"].as_str().unwrap();
+    assert!(text.contains("ALPHA (model00.yml) from the card"), "{text}");
+    assert!(
+        text.contains("lowbat: {RxBt} below 3.5 for 2.0 s, repeat 5"),
+        "{text}"
+    );
+    assert!(
+        text.contains("RSSI alarms: warning 50, critical 40"),
+        "{text}"
+    );
+    assert!(text.contains("Checklist: on, 1 lines"), "{text}");
+    assert!(text.contains("Sounds for callouts: hello"), "{text}");
+    // A missing model says how to find one.
+    let r = s.call_tool(
+        "quadcam_gear_edit",
+        json!({"action": "model_edit", "device": b.id, "ops": []}),
+    );
+    assert_eq!(r["isError"], true);
+    assert!(r["content"][0]["text"]
+        .as_str()
+        .unwrap()
+        .contains("model is required"));
+}

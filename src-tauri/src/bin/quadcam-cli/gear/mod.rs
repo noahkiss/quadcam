@@ -14,6 +14,7 @@ mod changes;
 mod fc;
 mod flights;
 mod map;
+mod model;
 mod osd;
 mod packs;
 mod rates;
@@ -43,6 +44,11 @@ pub enum GearCmd {
     Rates(rates::RatesArgs),
     /// The sims on this Mac with their rate profiles; with a quad, how each differs from it.
     Sims(rates::SimsArgs),
+    /// A radio's model for the editors: timers, value screens, logging, alarms, callouts and
+    /// the checklist, from the mounted card or the latest backup, with staged edits on top.
+    Model(model::ModelArgs),
+    /// Stages model edits for a radio (one "Model edits" change); nothing is written to the card.
+    ModelEdit(model::ModelEditArgs),
     /// An EdgeTX card: models, the selected model, the radio clock; `preview` checks edits.
     Card(card::CardArgs),
     /// The switch map: what each radio control does on the radio and the FC, per position.
@@ -173,6 +179,8 @@ pub fn run(core: &Core, cmd: GearCmd) -> Result<Value> {
         GearCmd::Fc { cmd } => fc::run(core, cmd)?,
         GearCmd::Osd(a) => osd::run(core, a)?,
         GearCmd::OsdEdit(a) => osd::edit(core, a)?,
+        GearCmd::Model(a) => model::run(core, a)?,
+        GearCmd::ModelEdit(a) => model::edit(core, a)?,
         GearCmd::Rates(a) => rates::rates(core, a)?,
         GearCmd::Sims(a) => rates::sims(core, a)?,
         GearCmd::Status => serde_json::to_value(call::gear_status(core)?)?,

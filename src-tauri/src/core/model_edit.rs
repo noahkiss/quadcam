@@ -409,3 +409,143 @@ fn normalise(t: &str) -> String {
         .trim_end()
         .to_string()
 }
+
+/// The model as text, for the CLI and MCP.
+pub fn render_text(d: &ModelDetail) -> String {
+    use std::fmt::Write;
+    let v = &d.view;
+    let mut s = format!("{} ({}) from the {}\n", v.name, v.file, d.source);
+    for n in &d.notes {
+        let _ = writeln!(s, "  {n}");
+    }
+    let _ = writeln!(s, "Timers:");
+    if v.timers.is_empty() {
+        let _ = writeln!(s, "  none");
+    }
+    for t in &v.timers {
+        let get = |k: &str| {
+            t.fields
+                .iter()
+                .find(|f| f.key == k)
+                .map(|f| f.value.as_str())
+                .unwrap_or("")
+        };
+        let _ = writeln!(
+            s,
+            "  {} {:?}: mode {}, switch {}, minute beep {}, countdown beep {}, persistent {}",
+            t.index + 1,
+            t.name,
+            t.mode,
+            t.swtch,
+            get("minuteBeep"),
+            get("countdownBeep"),
+            t.persistent
+        );
+    }
+    let _ = writeln!(s, "Telemetry screens:");
+    if d.editors.screens.is_empty() {
+        let _ = writeln!(s, "  none");
+    }
+    for sc in &d.editors.screens {
+        match (sc.kind.as_str(), &sc.script) {
+            ("SCRIPT", Some(f)) => {
+                let _ = writeln!(s, "  {} script {f}", sc.index + 1);
+            }
+            _ => {
+                let lines: Vec<String> = sc
+                    .labels
+                    .iter()
+                    .filter(|l| !l.is_empty())
+                    .map(|l| l.join(", "))
+                    .collect();
+                let _ = writeln!(s, "  {} {}: {}", sc.index + 1, sc.kind, lines.join(" / "));
+            }
+        }
+    }
+    let lg = &d.editors.logging;
+    let _ = writeln!(
+        s,
+        "Logging: {}",
+        match &lg.logging {
+            Some(l) => format!("{} every {:.1} s", l.swtch, f64::from(l.period_ds) / 10.0),
+            None => "no LOGS function".into(),
+        }
+    );
+    let on: Vec<&str> = lg
+        .sensors
+        .iter()
+        .filter(|x| x.logs)
+        .map(|x| x.label.as_str())
+        .collect();
+    let off: Vec<&str> = lg
+        .sensors
+        .iter()
+        .filter(|x| !x.logs)
+        .map(|x| x.label.as_str())
+        .collect();
+    let _ = writeln!(s, "  sensors logged: {}", on.join(", "));
+    if !off.is_empty() {
+        let _ = writeln!(s, "  not logged: {}", off.join(", "));
+    }
+    match &d.editors.rf_alarms {
+        Some(r) => {
+            let _ = writeln!(
+                s,
+                "RSSI alarms: warning {}, critical {}",
+                r.warning, r.critical
+            );
+        }
+        None => {
+            let _ = writeln!(s, "RSSI alarms: none");
+        }
+    }
+    let _ = writeln!(s, "Callouts:");
+    if d.editors.callouts.is_empty() {
+        let _ = writeln!(s, "  none");
+    }
+    for c in &d.editors.callouts {
+        let when = match &c.when {
+            Some(editors::CalloutWhen::Switch { swtch }) => format!("while {swtch}"),
+            Some(editors::CalloutWhen::Below {
+                source,
+                value,
+                delay_ds,
+            }) => {
+                format!(
+                    "{source} below {value} for {:.1} s",
+                    f64::from(*delay_ds) / 10.0
+                )
+            }
+            Some(editors::CalloutWhen::Above {
+                source,
+                value,
+                delay_ds,
+            }) => {
+                format!(
+                    "{source} above {value} for {:.1} s",
+                    f64::from(*delay_ds) / 10.0
+                )
+            }
+            None => format!("on {} (not editable here)", c.swtch),
+        };
+        let _ = writeln!(s, "  {}: {when}, repeat {}", c.track, c.repeat);
+    }
+    let lines = d
+        .checklist
+        .as_deref()
+        .map(|t| t.lines().count())
+        .unwrap_or(0);
+    let _ = writeln!(
+        s,
+        "Checklist: {}, {} lines{}",
+        if v.checklist { "on" } else { "off" },
+        lines,
+        d.checklist_width
+            .map(|w| format!(" (up to {w} characters)"))
+            .unwrap_or_default()
+    );
+    if !d.tracks.is_empty() {
+        let _ = writeln!(s, "Sounds for callouts: {}", d.tracks.join(", "));
+    }
+    s
+}
