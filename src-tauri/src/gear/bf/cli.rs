@@ -250,6 +250,10 @@ pub struct RunReport {
     pub after_dump: Option<String>,
     /// Lines the after dump does not show as written.
     pub verify: Vec<VerifyFail>,
+    /// The answers to the `after` commands `run_lines_with` read in the same session as
+    /// the after dump (`version`, `status`, `diff all`).
+    #[serde(skip)]
+    pub after_replies: Vec<Reply>,
 }
 
 /// Sends `lines` in an open session. On the first error: `exit` (nothing saved). Else
@@ -260,6 +264,18 @@ pub fn run_lines(
     ports: &dyn Ports,
     lines: &[String],
     timing: Timing,
+) -> Result<RunReport> {
+    run_lines_with(session, ports, lines, timing, &[])
+}
+
+/// `run_lines`, reading the read-only commands in `after` too (in order, before the
+/// session ends), so the caller can store a whole backup of the saved state.
+pub fn run_lines_with(
+    session: CliSession,
+    ports: &dyn Ports,
+    lines: &[String],
+    timing: Timing,
+    after: &[&str],
 ) -> Result<RunReport> {
     let lines: Vec<String> = dump::cli_lines(&lines.join("\n"));
     if let Some((l, f)) = lines.iter().find_map(|l| forbidden(l).map(|f| (l, f))) {
@@ -273,6 +289,7 @@ pub fn run_lines(
         saved: false,
         after_dump: None,
         verify: Vec::new(),
+        after_replies: Vec::new(),
     };
     for l in &lines {
         let r = match session.command(l) {
@@ -293,9 +310,17 @@ pub fn run_lines(
     report.saved = true;
     let link = wait_for_port(ports, &port, timing)?;
     let (mut s, _) = CliSession::enter(link, timing)?;
+    let mut extra = Vec::new();
+    for c in after {
+        match s.command(c) {
+            Ok(r) => extra.push(r),
+            Err(_) => break,
+        }
+    }
     let d = s.command("dump all");
     s.exit();
     let d = d.map_err(|e| anyhow!("Saved, but the read back failed: {e:#}"))?;
+    report.after_replies = extra;
     report.verify = dump::verify_lines(&Config::parse(&d.text), &lines);
     report.after_dump = Some(d.text);
     Ok(report)

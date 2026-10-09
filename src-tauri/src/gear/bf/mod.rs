@@ -245,7 +245,7 @@ pub fn read(ports: &dyn Ports, port: &str, commands: &[String], timing: Timing) 
 /// Runs CLI lines with the write engine (`cli::run_lines`). Before the first write it
 /// enters the CLI, reads `version` and runs the write guard again on what the FC says
 /// now, and checks it is the FC the caller planned for (`expect_id`). The apply engine
-/// (WP5) calls this after its own plan, backup and confirm; nothing else writes an FC.
+/// calls this after its own plan, backup and confirm; nothing else writes an FC.
 pub fn run(
     ports: &dyn Ports,
     port: &str,
@@ -253,12 +253,29 @@ pub fn run(
     lines: &[String],
     timing: Timing,
 ) -> Result<(FcInfo, cli::RunReport)> {
+    run_with(ports, port, expect_id, lines, timing, &[], &mut |_| Ok(()))
+}
+
+/// `run`, with two additions for the apply engine. `precheck` runs in the open session
+/// after the identity guard and before the first line is sent: an `Err` ends the session
+/// with `exit` (nothing is written). `after` names read-only commands read next to the
+/// after dump (`cli::run_lines_with`). The port may still be rebooting from an earlier
+/// job: this waits for it.
+pub fn run_with(
+    ports: &dyn Ports,
+    port: &str,
+    expect_id: Option<&str>,
+    lines: &[String],
+    timing: Timing,
+    after: &[&str],
+    precheck: &mut dyn FnMut(&mut CliSession) -> Result<()>,
+) -> Result<(FcInfo, cli::RunReport)> {
     let usb_serial = ports
         .list()
         .into_iter()
         .find(|p| p.port == port)
         .and_then(|p| p.serial_number);
-    let (mut s, _) = CliSession::enter(ports.open(port, BAUD)?, timing)?;
+    let (mut s, _) = CliSession::enter(cli::wait_for_port(ports, port, timing)?, timing)?;
     let checked = (|| -> Result<FcInfo> {
         let v = s.command("version")?;
         // `mcu_id` prints the MCU id, the value MSP_UID gives (and the id hashes).
@@ -286,10 +303,11 @@ pub fn run(
                 .into());
             }
         }
+        precheck(&mut s)?;
         Ok(fc)
     })();
     match checked {
-        Ok(fc) => Ok((fc, cli::run_lines(s, ports, lines, timing)?)),
+        Ok(fc) => Ok((fc, cli::run_lines_with(s, ports, lines, timing, after)?)),
         Err(e) => {
             s.exit();
             Err(e)

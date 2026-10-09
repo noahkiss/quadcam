@@ -35,9 +35,11 @@
 //! `Env` is what Gear reaches outside the process (serial ports, volumes, presence, the cue
 //! sink); tests replace it.
 
+pub mod apply;
 pub mod backup;
 pub mod bf;
 pub mod blobs;
+pub mod changes;
 pub mod compat;
 pub mod crashes;
 pub mod cues;
@@ -218,6 +220,8 @@ pub struct Env {
     pub unmount: UnmountFn,
     /// Runs `diskutil` for the card check and repair (`health`).
     pub disk: Arc<dyn health::DiskRunner>,
+    /// The other processes that have a serial port open, as `(pid, name)`.
+    pub holders: Arc<dyn Fn(&str) -> Vec<(u32, String)> + Send + Sync>,
 }
 
 impl Env {
@@ -233,6 +237,7 @@ impl Env {
             cues: Arc::new(cues::CueService::system()),
             unmount: Arc::new(|d| edgetx::card::release(d, edgetx::card::UNMOUNT_TIMEOUT)),
             disk: health::system(),
+            holders: Arc::new(serial::other_holders),
         }
     }
 
@@ -251,6 +256,7 @@ impl Env {
             ))),
             unmount: Arc::new(|_| Ok(())),
             disk: Arc::new(health::FakeDisk::ok()),
+            holders: Arc::new(|_| Vec::new()),
         }
     }
 

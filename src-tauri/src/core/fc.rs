@@ -154,7 +154,7 @@ impl Core {
     }
 
     /// One FC job: hold the port, run `f`, cache the identity it read, one cue at the end.
-    fn fc_job<T>(
+    pub(super) fn fc_job<T>(
         &self,
         port: Option<&str>,
         step: &str,
