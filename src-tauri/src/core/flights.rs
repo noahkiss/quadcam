@@ -135,6 +135,25 @@ pub struct ReportParams {
     pub day: Option<NaiveDate>,
 }
 
+/// `gear_session_report_save`: the report for a day, written as a Markdown file.
+#[derive(Debug, Clone, Default, Serialize, Deserialize, specta::Type)]
+pub struct ReportSaveParams {
+    #[serde(default)]
+    pub day: Option<NaiveDate>,
+    /// The file to write. Its folder must exist.
+    pub path: PathBuf,
+    /// Replace a file that is already there. The GUI's save dialog has asked already.
+    #[serde(default)]
+    pub overwrite: bool,
+}
+
+/// What `gear_session_report_save` wrote.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, specta::Type)]
+pub struct ReportSaved {
+    pub path: PathBuf,
+    pub bytes: u64,
+}
+
 /// `gear_crash_save`: a crash; an empty id makes a new one. With a clip and no aircraft or
 /// day, they come from the clip.
 #[derive(Debug, Clone, Default, Serialize, Deserialize, specta::Type)]
@@ -482,6 +501,35 @@ impl Core {
             &crashes::list(&store, &CrashFilter::default())?,
             clips,
         ))
+    }
+
+    /// Writes the session report's Markdown to a file, through a temp file and a rename.
+    pub fn gear_session_report_save(&self, p: &ReportSaveParams) -> Result<ReportSaved> {
+        if p.path.is_dir() {
+            bail!("{} is a folder; name a file.", p.path.display());
+        }
+        if p.path.exists() && !p.overwrite {
+            bail!("{} exists. Pass overwrite to replace it.", p.path.display());
+        }
+        let Some(dir) = p.path.parent().filter(|d| d.is_dir()) else {
+            bail!("The folder of {} does not exist.", p.path.display());
+        };
+        let r = self.gear_session_report(&ReportParams { day: p.day })?;
+        let name = p
+            .path
+            .file_name()
+            .map(|n| n.to_string_lossy().into_owned())
+            .unwrap_or_default();
+        let tmp = dir.join(format!(".{name}.quadcam-tmp"));
+        std::fs::write(&tmp, r.markdown.as_bytes())?;
+        if let Err(e) = std::fs::rename(&tmp, &p.path) {
+            let _ = std::fs::remove_file(&tmp);
+            return Err(e.into());
+        }
+        Ok(ReportSaved {
+            path: p.path.clone(),
+            bytes: r.markdown.len() as u64,
+        })
     }
 
     /// The "Pack up" check: packs charged, the radio's model, card space, backups, and

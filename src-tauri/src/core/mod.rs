@@ -41,7 +41,8 @@ pub use fc::{
 pub use files::{Moved, TrashReport};
 pub use flights::{
     CrashSaveParams, FlightFilter, FlightFoldersParams, FlightReport, FlightSetParams, FlightsView,
-    NotesParams, PackSaveParams, PacksParams, PlaceTrend, ReportParams, TrendPoint,
+    NotesParams, PackSaveParams, PacksParams, PlaceTrend, ReportParams, ReportSaveParams,
+    ReportSaved, TrendPoint,
 };
 pub use gear::{
     connected_name, link_handle, DeviceSaveParams, GearStatus, Hold, HookFn, HookOutcome, HookRun,

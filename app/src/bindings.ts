@@ -232,6 +232,8 @@ export const commands = {
 	gearPackNotes: (params: NotesParams) => typedError<string, string>(__TAURI_INVOKE("gear_pack_notes", { params })),
 	/**  The session report for a day, else the last import's days, with its Markdown. */
 	gearSessionReport: (params: ReportParams) => typedError<SessionReport, string>(__TAURI_INVOKE("gear_session_report", { params })),
+	/**  Writes the session report's Markdown to a file. */
+	gearSessionReportSave: (params: ReportSaveParams) => typedError<ReportSaved, string>(__TAURI_INVOKE("gear_session_report_save", { params })),
 	/**
 	 *  The "Pack up" check before a session: packs, radio model, card space,
 	 *  backups, cards still in. Reads only.
@@ -3342,6 +3344,21 @@ export type Reply = {
  */
 export type ReportParams = {
 	day?: string | null,
+};
+
+/**  `gear_session_report_save`: the report for a day, written as a Markdown file. */
+export type ReportSaveParams = {
+	day?: string | null,
+	/**  The file to write. Its folder must exist. */
+	path: string,
+	/**  Replace a file that is already there. The GUI's save dialog has asked already. */
+	overwrite?: boolean,
+};
+
+/**  What `gear_session_report_save` wrote. */
+export type ReportSaved = {
+	path: string,
+	bytes: number,
 };
 
 /**  Where a flight's resting voltage came from. */

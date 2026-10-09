@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useStore } from "../../../store";
-import { api, errText, pickFolder } from "../../../ipc/api";
+import { api, errText, pickFolder, pickSavePath } from "../../../ipc/api";
 import type { FlightReport, SessionReport } from "../../../ipc/types";
 import { Button } from "../../../components/Button";
 import { Select, SelectField } from "../../../components/Field";
@@ -260,6 +260,23 @@ function Report() {
           }}
         >
           Copy as Markdown
+        </Button>
+        <Button
+          icon="import"
+          onClick={async () => {
+            const path = await pickSavePath("Save the session report", `session-report-${data.days[0] ?? "last-import"}.md`, [
+              { name: "Markdown", extensions: ["md"] },
+            ]);
+            if (!path) return;
+            try {
+              await api.gearSessionReportSave(day || null, path);
+              toast("Saved the report.");
+            } catch (e) {
+              toast(errText(e), true);
+            }
+          }}
+        >
+          Save…
         </Button>
       </div>
       <ReportView r={data} />

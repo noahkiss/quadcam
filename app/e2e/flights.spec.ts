@@ -48,6 +48,19 @@ test("the session report reads the day and copies as Markdown", async ({ app, pa
   await expect(page.getByRole("status")).toContainText("report");
 });
 
+test("the session report saves as a Markdown file through the save panel", async ({ app, page }) => {
+  await openPage(app, page, "Flights");
+  await page.getByRole("group", { name: "Sections" }).getByRole("button", { name: "Session report" }).click();
+  await expect(page.getByRole("region", { name: "Session report" })).toBeVisible();
+  await app.core(`c => c.dialogAnswers.push("/Users/pilot/report.md")`);
+  await page.getByRole("button", { name: "Save…" }).click();
+  await expect(page.getByRole("status")).toContainText("Saved the report");
+  expect(await app.method("gear_session_report_save")).toEqual([{ day: null, path: "/Users/pilot/report.md", overwrite: true }]);
+  // A cancelled panel writes nothing.
+  await page.getByRole("button", { name: "Save…" }).click();
+  expect(await app.method("gear_session_report_save")).toHaveLength(1);
+});
+
 test("the import's Finish step opens the session report", async ({ app, page }) => {
   await app.open("finished-card");
   await page.getByRole("button", { name: "Import…" }).first().click();

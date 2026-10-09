@@ -3,7 +3,7 @@
 // to fit ipc/types.ts (see normalize.ts); the rest come back as generated, since the next
 // library-changed or session-changed event refetches the view. Views and stores use only this module.
 import { convertFileSrc } from "@tauri-apps/api/core";
-import { open as openDialog } from "@tauri-apps/plugin-dialog";
+import { open as openDialog, save as saveDialog } from "@tauri-apps/plugin-dialog";
 import { openPath, openUrl, revealItemInDir } from "@tauri-apps/plugin-opener";
 import { commands } from "../bindings";
 import * as N from "./normalize";
@@ -117,6 +117,7 @@ export const api = {
   gearPackTypeDelete: (name: string) => ok(commands.gearPackTypeDelete({ name })),
   gearPackNotes: (text: string) => ok(commands.gearPackNotes({ text })),
   gearSessionReport: (day: string | null = null) => ok(commands.gearSessionReport({ day })),
+  gearSessionReportSave: (day: string | null, path: string) => ok(commands.gearSessionReportSave({ day, path, overwrite: true })),
   gearPreflight: () => ok(commands.gearPreflight()),
   gearCrashes: (clip: string | null = null, aircraft: string | null = null) => ok(commands.gearCrashes({ clip, aircraft })),
   gearCrashSave: (c: CrashSaveParams) => ok(commands.gearCrashSave(c)),
@@ -141,6 +142,12 @@ export async function pickFolder(title: string, defaultPath?: string | null): Pr
 export async function pickFiles(title: string, filters: { name: string; extensions: string[] }[] = []): Promise<string[]> {
   const r = await openDialog({ directory: false, multiple: true, title, filters });
   return r === null ? [] : Array.isArray(r) ? r : [r];
+}
+
+/** The save panel: the path the person picked, or null. The panel asks before it replaces a file. */
+export async function pickSavePath(title: string, defaultPath: string, filters: { name: string; extensions: string[] }[] = []): Promise<string | null> {
+  const r = await saveDialog({ title, defaultPath, filters });
+  return typeof r === "string" ? r : null;
 }
 
 /** A core error as text. */
