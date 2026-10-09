@@ -19,11 +19,13 @@ use std::time::Duration;
 /// How often the app looks for gear.
 pub const POLL: Duration = Duration::from_secs(2);
 
-/// A USB DFU device as listed (filled in by the DFU module).
+/// A USB DFU device as listed (`dfu::list`).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct DfuInfo {
     pub vid: u16,
     pub pid: u16,
+    /// The chip's unique id, a stable hardware id (the STM32 bootloader reports one).
+    pub serial: Option<String>,
 }
 
 /// The STM32 ROM bootloader in DFU mode: a radio being flashed.
@@ -374,9 +376,9 @@ pub fn detect_all(
     out
 }
 
-/// DFU devices plugged in now. Empty until the DFU module (`gear/dfu.rs`) lists them.
+/// DFU devices plugged in now (`dfu::list`: none in a process started by cargo).
 pub fn dfu_devices() -> Vec<DfuInfo> {
-    Vec::new()
+    super::dfu::list()
 }
 
 #[cfg(test)]
@@ -454,6 +456,7 @@ mod tests {
             &[DfuInfo {
                 vid: 0x0483,
                 pid: 0xdf11,
+                serial: None,
             }],
             &[],
         );

@@ -20,6 +20,7 @@ mod bench;
 mod cuts;
 mod fc;
 mod files;
+mod firmware;
 mod flights;
 mod gear;
 mod gear_card;
@@ -50,6 +51,7 @@ pub use fc::{
     BoardNotesParams, FcJob, FcPortParams, FcReadParams, PollPauseParams, UsbTimer, USB_PROBE,
 };
 pub use files::{Moved, TrashReport};
+pub use firmware::{FirmwareParams, FirmwareView, FlashParams, FlashRequest, FLASH_CHANGE};
 pub use flights::{
     CrashSaveParams, FlightFilter, FlightFoldersParams, FlightReport, FlightSetParams, FlightsView,
     NotesParams, PackSaveParams, PacksParams, PlaceTrend, ReportParams, ReportSaveParams,
@@ -276,6 +278,8 @@ pub struct Core {
     fc_timing: Mutex<crate::gear::bf::cli::Timing>,
     /// Downloaded tools (ffmpeg, esptool).
     modules: crate::modules::Modules,
+    /// The network and the USB path the firmware code uses (`core/firmware.rs`).
+    firmware: crate::gear::firmware::FwEnv,
     /// The radio as a USB joystick, and its stream (`core/switchmap.rs`).
     radio: switchmap::RadioState,
     /// The sim's calibration session (`core/sim.rs`).
@@ -338,6 +342,7 @@ impl Core {
             fc_timing: Mutex::default(),
             cache,
             modules: crate::modules::Modules::default(),
+            firmware: crate::gear::firmware::FwEnv::system(),
             radio: switchmap::RadioState::default(),
             sim: sim::SimState::default(),
             gear_jobs: Mutex::default(),

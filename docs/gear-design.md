@@ -1162,6 +1162,64 @@ supported yet."
 The EdgeTX cloud build service is an alternative source; 1.0 uses the GitHub release
 binaries only (open question 10).
 
+- **Built (WP10, parts 1 to 3):** `gear/splash.rs` (image to 1-bit 128 x 64, the preview, patch
+  and decode with markers and refusals), `gear/dfu.rs` (USB DFU 1.1 with DfuSe: layout string,
+  erase, write, read back, leave; `NusbUsb` the real transport, `FakeDfu` a device in memory
+  with faults), `gear/firmware/` (`mod.rs` the `Flasher` trait, its recorder, `FwEnv` and the
+  fixture fetcher; `check.rs` the version check; `edgetx.rs` the release download, the board
+  binary and the image checks), `core/firmware.rs` (the `Core` methods). Rows `gear_firmware`,
+  `gear_splash`, `gear_flash_plan`, `gear_flash` (and the GUI-only `gear_flash_click`); CLI
+  `gear firmware` and `gear splash`; MCP `quadcam_gear` `firmware_check`, `splash`,
+  `flash_plan` and `quadcam_gear_apply` `flash`; the Firmware page, the radio's Splash segment
+  and the flash in the apply sheet. Deviations and decisions:
+  - **`png`, not `image`.** The splash needs PNG decode only, and `png` is already in the
+    dependency tree. A JPEG source would need `image`.
+  - **DFU over a transport trait.** `Usb` is two control transfers and the layout string. The
+    real one uses `nusb` 0.2; every test flashes `FakeDfu`, which follows the DfuSe state
+    machine and models flash (a program only clears bits, an erase fills a sector). The real
+    transport has not touched a device. `Flasher` hands out a `Usb`; a process started by cargo
+    gets a recorder unless `QUADCAM_FLASH=real`, and `dfu::list` (the DFU devices in
+    `gear status`) follows `QUADCAM_SERIAL`. `FwEnv` (the fetcher and the flasher) is a `Core`
+    field with `with_firmware_env`, not part of `gear::Env`, so existing tests that build an
+    `Env` stay as they are.
+  - **Check.** EdgeTX and Betaflight from the GitHub release lists (newest stable by version,
+    not by order), ExpressLRS from the artifactory `index.json` (the highest tag without a
+    suffix). The saved answer is `<cache>/firmware/latest.json`; a failing source keeps its old
+    value and adds an error. `gear_firmware` takes `check`: true reads the network, false the
+    saved answer, unset follows `firmwareCheck` (`daily`: only when the answer is a day old).
+    The page asks with unset; the sidebar badge never reads the network.
+  - **The plan gate is the target version.** The flash checks `compat::check_writable` for the
+    version to flash, not the installed one: EdgeTX 2.12 on the Pocket, and for a splash the
+    `Splash` pair (2.12.4). The plan downloads only after those pass. The default version is
+    the installed one, so a splash on 2.12.3 is refused until the radio updates.
+  - **Which file is the board's.** The release zip's `.bin` files are matched by name, less a
+    `fw-`, `firmware-` or `edgetx-` prefix and the version, against the board's names
+    (`edgetx::BOARDS`). Exactly one must match. The names are a guess about EdgeTX's naming and
+    not checked against a real release; a miss refuses with `bad_image`.
+  - **Full image only.** 6.5 says the image includes the bootloader. Nothing checked that
+    against a real release, and a firmware-only file written at `0x08000000` would replace the
+    bootloader. `check_image` therefore requires a bootloader vector table at the start and the
+    firmware's at `app_offset` (`0x8000`). If real images are firmware-only, the plan refuses
+    and a later package writes them at the firmware offset.
+  - **Backups before a flash.** A radio in DFU mode shows no card, so the plan requires an
+    earlier card backup (`no_backup`), and the apply reads the radio's whole flash over DFU
+    first and keeps it (`BeforeFlash`, always kept, file `firmware.bin`, trailing erased bytes
+    trimmed). Nothing restores it yet: flash it by hand with a DFU tool.
+  - **The DFU device has no identity.** The STM32 bootloader reports a chip serial, not the
+    radio. The plan flashes the one STM32 DFU device present (zero or two refuse) and warns.
+    Linking a DFU serial to a saved radio (6.5, 7.5) is not built.
+  - **After the flash.** The apply ends at "Leave DFU" with every byte compared. Reading
+    `semver` in USB Storage mode (8.4) is left to the person; the report says so.
+  - **A flash is a stand-in change.** The sheet and an agent's confirm request carry a change
+    with the id `flash`, like the sim sync.
+  - **Splash layout unverified.** The markers, the 1,024 bytes and the bit order (bit 0 is the
+    top row of a band) follow this section and a synthetic binary. No release binary was
+    downloaded. The plan refuses an image whose markers differ.
+  - **Not built:** the Betaflight flash plan (the table above and open question 8 say version
+    check only for 1.0; the package list asks for it, so it needs a decision), and ELRS options
+    and flashing (needs `esptool`, serial passthrough and the options block). The CRSF
+    device-info ping and the DFU link are open as before.
+
 ### 7.6 Flight analysis
 
 `logs.rs` gains the columns QuadCam does not read yet: `TPWR(mW)`, `RSNR(dB)`, `Curr(A)`,

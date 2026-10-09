@@ -13,6 +13,8 @@ it.
 - **Bench** lists the changes staged for each device. See [The Bench](#the-bench).
 - **Pack up**, **Flights**, **Packs** and **Repairs** are described under
   [Flights and packs](#flights-and-packs).
+- **Firmware** compares each device's firmware with the newest release and flashes an EdgeTX
+  radio. See [Firmware and splash](#firmware-and-splash).
 - A device's page shows its kind and state, what it reports about itself (board, firmware,
   version), where it is mounted, its aircraft and its latest backup. **Save…** names a device
   QuadCam does not know and links it to an aircraft; **Edit…** changes that; **Forget…**
@@ -754,6 +756,87 @@ used. The clip's Flight tab lists its crashes.
 Packs, pack types, the pack set on each flight, added log folders and crashes are yours, in
 `gear.json`. No file is written to a clip.
 
+## Firmware and splash
+
+> **Warning.** Flashing writes a radio's firmware. A wrong or interrupted flash can leave the
+> radio unable to start until you flash it again. The STM32 bootloader is in ROM and QuadCam
+> never overwrites it, so a radio in DFU mode can always be recovered. **QuadCam's flash has
+> not been tried on a real radio yet.** Do not flash a radio you cannot recover, and keep the
+> backups QuadCam makes.
+
+### Check
+
+**Gear > Firmware** lists each saved device with its installed version and the newest release:
+
+| Product | Newest release comes from |
+|---|---|
+| EdgeTX | The EdgeTX releases on GitHub |
+| Betaflight | The Betaflight releases on GitHub |
+| ExpressLRS | The ExpressLRS release index |
+
+- **Check for updates** reads the network. Without it, the page shows the last answer, or
+  "Not checked yet." The setting `firmwareCheck` (**Settings > Gear**) is `manual` by default.
+  With `daily`, the page checks when the last answer is a day old.
+- A row says **Up to date**, **Update available** or **Unknown** (the device reports no
+  version, or no check has run). A source that fails shows a notice; the others still show.
+- The sidebar shows how many devices have an update.
+- QuadCam checks Betaflight and ExpressLRS versions. It does not flash them.
+- **Flash 2.12.4…** appears for an EdgeTX radio that QuadCam has proven (see below).
+
+### Flash an EdgeTX radio
+
+QuadCam flashes only a board and an EdgeTX version listed in `compat.rs`. Today that is the
+RadioMaster Pocket on EdgeTX 2.12. A splash needs a version it has checked: 2.12.4.
+Anything else is refused with the reason.
+
+1. Back up the radio's card (**Backups**). The flash plan refuses without a backup.
+2. Open **Firmware > Flash…**, or make a splash first (below). The sheet shows the checks:
+   the board and version, the firmware image, the splash markers, the card backup and exactly
+   one radio in DFU mode.
+3. Put the radio in DFU mode: turn it off, hold both trims toward the centre, plug in the USB
+   cable. The radio shows no name in DFU mode, so check that it is the radio you picked.
+4. Select **Apply**. QuadCam:
+   - reads the firmware the radio runs now and keeps it as a backup (**Backups**, file
+     `firmware.bin`);
+   - erases the sectors it needs, writes the image, reads it back and compares every byte;
+   - leaves DFU mode, and the radio restarts.
+5. Connect the radio in USB Storage mode to see its version.
+
+If the read back differs, QuadCam does not start the image. The radio stays in DFU mode:
+unplug it, enter DFU mode again and retry.
+
+Where the image comes from:
+
+- QuadCam downloads the release's firmware zip from EdgeTX on GitHub when you plan a flash.
+  It bundles and redistributes no firmware. The download is kept in
+  `~/Library/Caches/app.quadcam/firmware/edgetx/<version>/`.
+- QuadCam checks the zip against the SHA-256 that the release lists. When the release lists
+  none, QuadCam records the hash at the first download and shows it in the plan.
+- The board's image is the one file in the zip named for the board. None, or two, refuses.
+- The image must be a full image: the bootloader's vector table first and the firmware's at
+  `0x8000`, 400 to 1000 KB. A firmware-only file is refused, because writing it at the start
+  of the flash would replace the bootloader.
+
+### Splash
+
+**Radio > Splash** makes the start-up picture.
+
+1. **Choose image…** picks a PNG. QuadCam scales it to fit 128 × 64, centres it on white and
+   cuts it to two tones.
+2. **Threshold** sets how dark a pixel must be to count as dark. **Invert** swaps the tones.
+   The preview shows the radio's pixels at 4 times the size.
+3. **Make firmware…** opens the flash sheet for the radio's installed version, with the
+   picture put into the board's image.
+
+QuadCam finds the splash in the image by its markers: `SPS`, a zero byte, the width 128 and the
+height 64, then 1,024 picture bytes, then `SPE`. It refuses an image where a marker is missing,
+appears twice or is not where the layout puts it. After the patch it decodes the picture and
+compares it with the preview. Colour radios are refused: "This radio's splash format is not
+supported yet."
+
+The marker layout comes from the design and was tested on a synthetic image. It has not been
+compared with a downloaded EdgeTX binary yet. If a real image differs, the plan refuses.
+
 ## Command line and agents
 
 ```bash
@@ -776,6 +859,10 @@ quadcam-cli gear rates quad.dump_all.txt --text      # every rate profile: names
 quadcam-cli --json gear sims quad.dump_all.txt [--profile N]   # the sims' rates against the quad
 quadcam-cli --json gear sims quad.dump_all.txt --sync --to uncrashed:OUT --to liftoff:Freestyle   # the plan
 quadcam-cli --json gear sims quad.dump_all.txt --sync --to uncrashed:OUT --digest D --yes        # write
+quadcam-cli --json gear firmware [--check]           # installed against newest; --check reads the network
+quadcam-cli --json gear splash logo.png [--threshold 128] [--invert] [--board pocket] [--out preview.png]
+quadcam-cli --json gear firmware --plan --device <radio> [--version 2.12.4] [--splash logo.png]   # checks, diff, digest
+quadcam-cli --json gear firmware --device <radio> [--splash logo.png] --digest D --yes   # flash (radio in DFU mode)
 quadcam-cli --json gear card [--mount M | --device ID] [--model model01.yml]
 quadcam-cli --json gear card preview --edits edits.json   # checks and diff; writes nothing
 quadcam-cli gear map --radio /Volumes/RADIO --fc quad.diff_all.txt --text   # the switch map
@@ -845,6 +932,9 @@ A process started by cargo never reaches real gear:
 | `QUADCAM_CUES` | Cues are recorded, not played | `say`, `afplay`, `osascript` |
 | `QUADCAM_CARD_WRITE` | No card writes under `/Volumes` | Card writes allowed |
 | `QUADCAM_HID` | No radio in USB Joystick mode | hidapi |
+| `QUADCAM_FLASH` | Firmware flashes go to a fake DFU device | The real USB path |
+| `QUADCAM_FETCH` | Downloads reach only this Mac | Downloads reach the internet |
 
-Card unmounts (`diskutil unmountDisk`) follow `QUADCAM_SERIAL`. Tests use the synthetic card
+Card unmounts (`diskutil unmountDisk`) follow `QUADCAM_SERIAL`, and so does the list of DFU
+devices. The firmware tests serve releases from memory and flash a fake DFU device. Tests use the synthetic card
 (`gear::edgetx::synth`) in a temporary folder.

@@ -37,6 +37,10 @@ quadcam-cli modules remove ffmpeg
 
 An agent uses `quadcam_settings` with the actions `modules`, `module_install` (with `confirm=true`, only after it showed you the license) and `module_remove`.
 
+### Firmware images
+
+EdgeTX firmware is not a module. QuadCam downloads a release's zip from EdgeTX on GitHub when you plan a flash, checks it against the SHA-256 the release lists (or records the hash at the first download), and keeps it in `~/Library/Caches/app.quadcam/firmware/`. It is never run. QuadCam flashes over DFU with its own code, so it needs no `dfu-util`. See [Gear](gear.md#firmware-and-splash).
+
 ### Where ffmpeg comes from
 
 The **Use ffmpeg from** setting (`ffmpegSource`) picks the source:

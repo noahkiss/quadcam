@@ -28,6 +28,7 @@ import * as osd from "./osd";
 import { MockFlights } from "./flights";
 import * as backups from "./backups";
 import * as simsync from "./simsync";
+import * as firmware from "./firmware";
 import * as ratemath from "./ratemath";
 import { MockHost, MockSim, defaults as simDefaults } from "./sim";
 import { location as normLocation, spans as normSpans } from "../normalize";
@@ -38,7 +39,7 @@ const DISPATCH = new Set([
   "library", "library_rate", "library_edit", "library_rename", "library_cuts", "library_export_cuts", "library_trash", "library_untrash",
   "library_photos", "library_apply_name_format", "library_match_logs", "library_rebuild", "library_rescan", "library_preview", "library_strips", "card_status",
   "settings", "settings_set", "place_search", "place_save", "session_cuts", "profiles", "session_split", "library_split",
-  "modules", "module_install", "module_remove", "modules_check", "gear_osd", "gear_osd_edit", "gear_model", "gear_model_edit", "gear_voice", "gear_voice_edit", "gear_voice_preview", "gear_voice_render", "gear_voice_pack_install", "gear_voice_choose", "gear_rates", "gear_rates_preview", "gear_sims", "gear_sim_sync_plan", "gear_sim_sync",
+  "modules", "module_install", "module_remove", "modules_check", "gear_osd", "gear_osd_edit", "gear_model", "gear_model_edit", "gear_voice", "gear_voice_edit", "gear_voice_preview", "gear_voice_render", "gear_voice_pack_install", "gear_voice_choose", "gear_rates", "gear_rates_preview", "gear_sims", "gear_sim_sync_plan", "gear_sim_sync", "gear_firmware", "gear_splash", "gear_flash_plan", "gear_flash",
   "gear_status", "gear_devices", "gear_device_save", "gear_device_forget", "gear_dismiss_reminder", "gear_poll_pause",
   "gear_switch_map", "gear_radio", "gear_radio_watch", "gear_sim_calibration", "gear_sim_calibration_save", "gear_sim_defaults", "gear_sim_calibrate",
   "gear_flights", "gear_flight_set", "gear_flight_folders", "gear_packs", "gear_pack_save", "gear_pack_delete", "gear_pack_type_save",
@@ -95,6 +96,8 @@ export class MockCore {
   radio: { connected: boolean; frame: import("../types").RadioFrame | null; watching: boolean } = { connected: false, frame: null, watching: false };
   /** Sim sync: which sims run, what a sync wrote (`./simsync.ts`). */
   simSync = simsync.freshSimSync();
+  /** Firmware: the releases, the saved answer, the DFU device (`./firmware.ts`). */
+  firmware = firmware.freshFirmware();
   /** The sim's calibration (`./sim.ts`). */
   sim = new MockSim();
   /** The sim host's canned flight (`./sim.ts`). */
@@ -185,6 +188,8 @@ export class MockCore {
       case "answer_format_request":
         this.formatAnswers.push({ id: Number(args.id), approve: !!args.approve });
         return null;
+      case "gear_flash_click":
+        return this.gearChanged(firmware.flash(this.firmware, this.gear.devices, p as never, String(p.digest), true));
       case "gear_sim_sync_click":
         return this.gearChanged(simsync.apply(this.simSync, p as never, String(p.digest), true));
       case "gear_apply_click":
@@ -467,6 +472,14 @@ export class MockCore {
         return simsync.plan(this.simSync, p as never);
       case "gear_sim_sync":
         return this.gearChanged(simsync.apply(this.simSync, p as never, String(p.digest), !!p.confirm));
+      case "gear_firmware":
+        return firmware.view(this.firmware, this.gear.devices, (p.check as boolean | null) ?? null, "2026-10-09T12:00:00Z");
+      case "gear_splash":
+        return firmware.splash(p as never);
+      case "gear_flash_plan":
+        return firmware.plan(this.firmware, this.gear.devices, p as never);
+      case "gear_flash":
+        return this.gearChanged(firmware.flash(this.firmware, this.gear.devices, p as never, String(p.digest), !!p.confirm));
       case "gear_flights":
         return this.flights.flights((p.day as string | null) ?? null);
       case "gear_flight_set":
