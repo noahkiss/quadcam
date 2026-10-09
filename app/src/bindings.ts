@@ -283,29 +283,47 @@ export const commands = {
 	/**  Stops a running backup or card check on a link. True when one was running. */
 	gearStop: (params: StopParams) => typedError<boolean, string>(__TAURI_INVOKE("gear_stop", { params })),
 	/**  Staged changes: those waiting by default, or the bench history with `history`. */
-	gearChanges: (params: ChangeFilter) => typedError<StagedChange[], string>(__TAURI_INVOKE("gear_changes", { params })),
+	gearChanges: (params: ChangeFilter) => typedError<StagedChange_Serialize[], string>(__TAURI_INVOKE("gear_changes", { params })),
 	/**
 	 *  Stages edits for a device (FC settings as raw CLI lines or `set`s). Refuses
 	 *  names the FC's latest backup does not hold and lines the engine never sends.
 	 */
-	gearChangeStage: (params: StageParams) => typedError<StagedChange, string>(__TAURI_INVOKE("gear_change_stage", { params })),
+	gearChangeStage: (params: StageParams) => typedError<StagedChange_Serialize, string>(__TAURI_INVOKE("gear_change_stage", { params })),
 	/**  Edits a staged change: its edits, title, note, order, or draft/ready. */
-	gearChangeUpdate: (params: ChangeUpdateParams) => typedError<StagedChange, string>(__TAURI_INVOKE("gear_change_update", { params })),
+	gearChangeUpdate: (params: ChangeUpdateParams) => typedError<StagedChange_Serialize, string>(__TAURI_INVOKE("gear_change_update", { params })),
 	/**  Discards a staged change. It stays in the history. */
-	gearChangeDiscard: (params: IdParams) => typedError<StagedChange, string>(__TAURI_INVOKE("gear_change_discard", { params })),
+	gearChangeDiscard: (params: IdParams) => typedError<StagedChange_Serialize, string>(__TAURI_INVOKE("gear_change_discard", { params })),
 	/**  Stages an FC backup's settings back as a change. */
-	gearRestoreStage: (params: RestoreParams) => typedError<StagedChange, string>(__TAURI_INVOKE("gear_restore_stage", { params })),
+	gearRestoreStage: (params: RestoreParams) => typedError<StagedChange_Serialize, string>(__TAURI_INVOKE("gear_restore_stage", { params })),
 	/**
 	 *  Runs every guard for a staged change and builds its diff and digest. Writes
 	 *  nothing and does not reboot the FC.
 	 */
 	gearApplyPlan: (params: ApplyPlanParams) => typedError<ApplyPlan, string>(__TAURI_INVOKE("gear_apply_plan", { params })),
 	/**
-	 *  Applies a staged change to the FC: backup, write, save, read back, verify.
-	 *  Needs the plan's digest and confirm=true; with the app running the person also
-	 *  clicks Apply in its sheet.
+	 *  Applies a staged change to an FC or a radio card: backup, write, read back,
+	 *  verify; a card is mounted for it and unmounted after. Needs the plan's digest
+	 *  and confirm=true; with the app running the person also clicks Apply in its sheet.
 	 */
 	gearApply: (params: ApplyRequest) => typedError<ApplyReport, string>(__TAURI_INVOKE("gear_apply", { params })),
+	/**  Keeps an applied Try change. */
+	gearChangeKeep: (params: IdParams) => typedError<StagedChange_Serialize, string>(__TAURI_INVOKE("gear_change_keep", { params })),
+	/**
+	 *  Stages a restore of the backup an applied change took; the change becomes
+	 *  Reverted when that restore verifies.
+	 */
+	gearChangeRevert: (params: IdParams) => typedError<StagedChange_Serialize, string>(__TAURI_INVOKE("gear_change_revert", { params })),
+	/**  What copying settings from one FC's backup to another would stage: checks, diff. */
+	gearCopyPlan: (params: CopyParams) => typedError<CopyPlan, string>(__TAURI_INVOKE("gear_copy_plan", { params })),
+	/**  Stages the copy as one change for the target FC. */
+	gearCopyStage: (params: CopyParams) => typedError<StagedChange_Serialize, string>(__TAURI_INVOKE("gear_copy_stage", { params })),
+	/**
+	 *  Mounts an unmounted radio card for the person to browse; it unmounts again
+	 *  after the minutes given (10 by default) or on gear_card_unmount.
+	 */
+	gearCardMount: (params: CardMountParams) => typedError<CardMounted, string>(__TAURI_INVOKE("gear_card_mount", { params })),
+	/**  Unmounts a radio card (Done) and plays the safe-to-unplug cue. */
+	gearCardUnmount: (params: CardMountParams) => typedError<boolean, string>(__TAURI_INVOKE("gear_card_unmount", { params })),
 	/**
 	 *  Downloaded tools: each module's pin, a newer pin from the last check, and what is
 	 *  installed. Reads only local files.
@@ -373,7 +391,7 @@ export const commands = {
 /** Events */
 export const events = {
 	agentApplyClosed: makeEvent<AgentApplyClosed>("agent-apply-closed"),
-	agentApplyRequest: makeEvent<AgentApplyRequest>("agent-apply-request"),
+	agentApplyRequest: makeEvent<AgentApplyRequest_Deserialize>("agent-apply-request"),
 	agentFormatClosed: makeEvent<AgentFormatClosed>("agent-format-closed"),
 	agentFormatRequest: makeEvent<AgentFormatRequest>("agent-format-request"),
 	deviceChanged: makeEvent<DeviceChanged>("device-changed"),
@@ -412,9 +430,19 @@ export type Adjustment = {
 export type AgentApplyClosed = number;
 
 /**  An agent asked to apply a staged change. Answer with `answer_apply_request`. */
-export type AgentApplyRequest = {
+export type AgentApplyRequest = AgentApplyRequest_Serialize | AgentApplyRequest_Deserialize;
+
+/**  An agent asked to apply a staged change. Answer with `answer_apply_request`. */
+export type AgentApplyRequest_Deserialize = {
 	id: number,
-	change: StagedChange,
+	change: StagedChange_Deserialize,
+	plan: ApplyPlan,
+};
+
+/**  An agent asked to apply a staged change. Answer with `answer_apply_request`. */
+export type AgentApplyRequest_Serialize = {
+	id: number,
+	change: StagedChange_Serialize,
 	plan: ApplyPlan,
 };
 
@@ -463,6 +491,8 @@ export type ApplyReport = {
 	/**  Lines the FC does not hold as written after the save. */
 	verify: VerifyFail[],
 	saved: boolean,
+	/**  Card files the apply wrote, and files it deleted: what a Revert restores. */
+	files?: string[],
 	/**  One sentence for the person. */
 	message: string,
 	/**  Known issues of this board and build. */
@@ -867,6 +897,21 @@ export type CardIdentity = {
 	volume_name: string | null,
 	total_size: number,
 	media_name: string | null,
+};
+
+/**  `gear_card_mount` and `gear_card_unmount`: the card's device id. */
+export type CardMountParams = {
+	device: string,
+	/**  Minutes to keep it mounted (1-60); `MOUNT_MINUTES` when left out. */
+	minutes?: number | null,
+};
+
+/**  A card mounted for the person. */
+export type CardMounted = {
+	device: string,
+	mount: string,
+	/**  QuadCam unmounts it at this time unless the person is done sooner. */
+	until: string,
 };
 
 /**  `gear_card`: which card, and optionally one model's full view. */
@@ -1281,6 +1326,57 @@ export type ControlRow = {
 	/**  `2POS`, `3POS` or `TOGGLE` for a switch. */
 	switch_type?: string | null,
 	positions: Position[],
+};
+
+/**  `gear_copy_plan` and `gear_copy_stage`: where the settings come from and go to. */
+export type CopyParams = {
+	/**  An FC's device id (its latest backup), or a backup id (`<device>/<snapshot>`). */
+	from: string,
+	/**  The FC that gets the settings (its latest backup is the base). */
+	to: string,
+	editor?: Editor | null,
+} & CopySelect;
+
+/**  A part of the configuration to copy. */
+export type CopyPart = 
+/**  Every rate profile's settings. */
+"rates" | 
+/**  Every PID profile's settings (PIDs, filters, and the rest of a profile). */
+"pid" | 
+/**  The `osd_*` settings: element positions, units and alarms. */
+"osd" | 
+/**  The mode ranges (`aux`). */
+"modes" | 
+/**  The adjustment ranges (`adjrange`). */
+"adjustments" | 
+/**  The VTX table and the band/channel/power ranges (`vtx`, `vtxtable`). */
+"vtx" | 
+/**  Features and beeper conditions. */
+"features";
+
+/**  What a copy would do. */
+export type CopyPlan = {
+	/**  The source and target backups the plan read. */
+	from_backup: string,
+	to_backup: string,
+	checks: Check[],
+	/**  The edits that stage the copy; empty when a check failed or nothing differs. */
+	edits: Edit[],
+	/**  The before/after lines. */
+	diff: DiffLine[],
+	/**  Settings and lines already the same on the target. */
+	same: number,
+	/**  Left out, each with why. */
+	skipped: string[],
+	/**  Things to know that do not refuse. */
+	notes: string[],
+};
+
+/**  What to copy. */
+export type CopySelect = {
+	parts?: CopyPart[],
+	/**  Settings by name (in every section that holds them), on top of the parts. */
+	settings?: string[],
 };
 
 /**  One crash and its repair. */
@@ -2068,6 +2164,8 @@ export type GearStatus = {
 	 *  that failed), with the reason.
 	 */
 	failures?: StepFailure[],
+	/**  The radio cards the person mounted to browse, and when each unmounts. */
+	mounted?: CardMounted[],
 };
 
 /**  One search hit. */
@@ -3516,7 +3614,16 @@ export type RefusalCode = "unknown_version" | "unknown_board" | "device_changed"
 /**  The device the change is for is not plugged in. */
 "no_device" | 
 /**  The FC has run on USB with its battery in past its limit; it must cool first. */
-"usb_heat";
+"usb_heat" | 
+/**  The card's last check found errors; repair it before a write. */
+"card_check" | 
+/**
+ *  The change is marked "Read first": read the real value on the device, then mark it
+ *  Ready.
+ */
+"read_first" | 
+/**  Settings do not fit the device they would go to (board or firmware). */
+"incompatible";
 
 /**  `gear_dismiss_reminder`: a device's link, as `link_handle` names it. */
 export type ReminderParams = {
@@ -4151,7 +4258,10 @@ export type StageParams = {
 };
 
 /**  A change to one device, staged and not yet applied (or applied, as history). */
-export type StagedChange = {
+export type StagedChange = StagedChange_Serialize | StagedChange_Deserialize;
+
+/**  A change to one device, staged and not yet applied (or applied, as history). */
+export type StagedChange_Deserialize = {
 	id: string,
 	device: string,
 	title: string,
@@ -4163,6 +4273,31 @@ export type StagedChange = {
 	note?: string,
 	order?: number,
 	history?: ChangeEvent[],
+	/**
+	 *  The change this one undoes (a Revert stages a restore). When this change verifies,
+	 *  that one becomes Reverted.
+	 */
+	reverts?: string | null,
+};
+
+/**  A change to one device, staged and not yet applied (or applied, as history). */
+export type StagedChange_Serialize = {
+	id: string,
+	device: string,
+	title: string,
+	status: ChangeStatus,
+	edits: Edit[],
+	/**  The backup the "before" state was read from. */
+	base_backup: string,
+	editor: Editor,
+	note: string,
+	order: number,
+	history: ChangeEvent[],
+	/**
+	 *  The change this one undoes (a Revert stages a restore). When this change verifies,
+	 *  that one becomes Reverted.
+	 */
+	reverts?: string | null,
 };
 
 export type Status = Status_Serialize | Status_Deserialize;

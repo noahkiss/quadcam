@@ -18,7 +18,7 @@ export const DEVICE_SEGMENTS: DeviceSegment[] = [
   // From a card or model file and a dump; the latest backups join as sources later.
   { id: "switches", label: "Switches", kinds: ["fc", "radio"], render: (d) => <SwitchesSegment d={d} /> },
   // Staged changes, the history, and Edit setting (WP5).
-  { id: "changes", label: "Changes", kinds: ["fc"], render: (d) => <ChangesSegment d={d} /> },
+  { id: "changes", label: "Changes", kinds: ["fc", "radio"], render: (d) => <ChangesSegment d={d} /> },
   { id: "backups", label: "Backups", kinds: ["radio", "fc", "goggles", "dvr_card"], render: (d) => <BackupsSegment d={d} /> },
 ];
 

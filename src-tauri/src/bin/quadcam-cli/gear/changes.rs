@@ -33,6 +33,10 @@ pub struct StageArgs {
     /// A file of raw Betaflight CLI lines (no save, exit or defaults: QuadCam saves).
     #[arg(long)]
     cli: Option<PathBuf>,
+    /// A JSON file holding an array of edits (`{"kind": "radio", "ops": [...]}`, ...): the
+    /// way to stage a radio card change.
+    #[arg(long)]
+    edits: Option<PathBuf>,
     /// One setting, NAME=VALUE. Repeat for more.
     #[arg(long = "set")]
     sets: Vec<String>,
@@ -110,8 +114,15 @@ pub fn stage(core: &Core, a: StageArgs) -> Result<Value> {
             value: value.trim().into(),
         });
     }
+    if let Some(f) = &a.edits {
+        let text =
+            std::fs::read_to_string(f).with_context(|| format!("reading {}", f.display()))?;
+        let list: Vec<Edit> = serde_json::from_str(&text)
+            .with_context(|| format!("{} is not a JSON array of edits", f.display()))?;
+        edits.extend(list);
+    }
     if edits.is_empty() {
-        bail!("Give --cli FILE or --set NAME=VALUE.");
+        bail!("Give --cli FILE, --set NAME=VALUE or --edits FILE.json.");
     }
     Ok(serde_json::to_value(call::gear_change_stage(
         core,
@@ -133,15 +144,110 @@ pub fn discard(core: &Core, id: String) -> Result<Value> {
     )?)?)
 }
 
-pub fn restore(core: &Core, backup: String) -> Result<Value> {
+pub fn restore(core: &Core, backup: String, paths: Vec<String>) -> Result<Value> {
     Ok(serde_json::to_value(call::gear_restore_stage(
         core,
         api::RestoreParams {
             backup,
-            paths: Vec::new(),
+            paths,
             editor: None,
         },
     )?)?)
+}
+
+#[derive(Args)]
+pub struct UpdateArgs {
+    /// The change id.
+    change: String,
+    /// draft, ready, try (apply, fly, then keep or revert) or read_first (read the real
+    /// value on the device before changing anything).
+    #[arg(long)]
+    status: Option<String>,
+    #[arg(long)]
+    title: Option<String>,
+    #[arg(long)]
+    note: Option<String>,
+    /// Its place in the device's queue (0 first).
+    #[arg(long)]
+    order: Option<u32>,
+}
+
+pub fn update(core: &Core, a: UpdateArgs) -> Result<Value> {
+    let status: Option<ChangeStatus> = match a.status {
+        Some(s) => Some(
+            serde_json::from_value(json!(s.to_lowercase()))
+                .with_context(|| format!("{s:?} is not a status"))?,
+        ),
+        None => None,
+    };
+    Ok(serde_json::to_value(call::gear_change_update(
+        core,
+        api::ChangeUpdateParams {
+            id: a.change,
+            title: a.title,
+            edits: None,
+            status,
+            note: a.note,
+            order: a.order,
+        },
+    )?)?)
+}
+
+pub fn keep(core: &Core, id: String) -> Result<Value> {
+    Ok(serde_json::to_value(call::gear_change_keep(
+        core,
+        api::IdParams { id },
+    )?)?)
+}
+
+pub fn revert(core: &Core, id: String) -> Result<Value> {
+    Ok(serde_json::to_value(call::gear_change_revert(
+        core,
+        api::IdParams { id },
+    )?)?)
+}
+
+#[derive(Args)]
+pub struct CopyArgs {
+    /// The FC to copy from: its device id (latest backup) or a backup id.
+    #[arg(long)]
+    from: String,
+    /// The FC to copy to (a device id).
+    #[arg(long)]
+    to: String,
+    /// A part to copy: rates, pid, osd, modes, adjustments, vtx, features. Repeat for more.
+    #[arg(long = "part")]
+    parts: Vec<String>,
+    /// A setting to copy by name. Repeat for more.
+    #[arg(long = "setting")]
+    settings: Vec<String>,
+    /// Show the checks and the diff; stage nothing.
+    #[arg(long)]
+    plan: bool,
+}
+
+pub fn copy(core: &Core, a: CopyArgs) -> Result<Value> {
+    let mut parts = Vec::new();
+    for p in &a.parts {
+        parts.push(
+            serde_json::from_value(json!(p.to_lowercase())).with_context(|| {
+                format!("{p:?} is not a part (rates, pid, osd, modes, adjustments, vtx, features)")
+            })?,
+        );
+    }
+    let params = api::CopyParams {
+        from: a.from,
+        to: a.to,
+        select: quadcam_lib::gear::copy::CopySelect {
+            parts,
+            settings: a.settings,
+        },
+        editor: None,
+    };
+    if a.plan {
+        return Ok(serde_json::to_value(call::gear_copy_plan(core, params)?)?);
+    }
+    Ok(serde_json::to_value(call::gear_copy_stage(core, params)?)?)
 }
 
 pub fn apply(core: &Core, a: ApplyArgs) -> Result<Value> {

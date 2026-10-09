@@ -40,12 +40,14 @@ export interface GearPageSlot {
   icon: import("../../components/Icon").IconName;
   /** A boolean settings key: the page shows only while it is on. */
   preview?: string;
+  /** A count the sidebar shows beside the label. */
+  count?: (s: import("../../store").State) => number;
   render: () => ReactNode;
 }
 
 export const gearSlots = {
   /** Staged changes ready for a device. The plug-in bar shows when it is above 0. */
-  stagedFor: (deviceId: string): number => useStore.getState().changes.filter((c) => c.device === deviceId && c.status === "ready").length,
+  stagedFor: (deviceId: string): number => useStore.getState().changes.filter((c) => c.device === deviceId && (c.status === "ready" || c.status === "try")).length,
   /** Opens the apply sheet for a device's staged changes. */
   review: (deviceId: string): void => void useStore.getState().openApply(deviceId),
   /** The latest backup's time, from the saved record's `last_backup` id. */

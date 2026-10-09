@@ -77,12 +77,12 @@ pub struct RestoreParams {
     pub editor: Option<Editor>,
 }
 
-fn refusal(e: Refusal) -> anyhow::Error {
+pub(super) fn refusal(e: Refusal) -> anyhow::Error {
     e.into()
 }
 
 impl Core {
-    fn changes(&self) -> Changes {
+    pub(super) fn changes(&self) -> Changes {
         Changes::new(self.gear_store())
     }
 
@@ -96,7 +96,7 @@ impl Core {
     }
 
     /// The device's latest backup with its `dump all`.
-    fn fc_base(&self, device: &str) -> Option<Base> {
+    pub(super) fn fc_base(&self, device: &str) -> Option<Base> {
         let snaps = self.snapshots();
         let backup = snaps.latest(device)?;
         let BackupContent { text, .. } = snaps.read(&backup.id, Some("dump all")).ok()?;
@@ -132,31 +132,53 @@ impl Core {
         Ok(out)
     }
 
-    fn check_stageable(&self, device: &str, edits: &[Edit]) -> Result<Option<Base>> {
+    /// Checks a change's edits against the device: an FC's lines against its latest dump,
+    /// a radio's against what the card engine plans. Returns the backup the change is
+    /// based on (empty when the device has none).
+    fn check_stageable(&self, device: &str, edits: &[Edit]) -> Result<String> {
         let d = self
             .gear_store()
             .device(device)?
             .with_context(|| format!("Unknown device {device:?}. See `gear devices`."))?;
-        if d.kind != DeviceKind::Fc {
-            bail!(
-                "Only FC changes can be staged for now; a {} change arrives with card apply.",
-                d.kind.label()
-            );
+        match d.kind {
+            DeviceKind::Fc => {
+                let base = self.fc_base(device);
+                let resolved = self.fc_edits(edits, base.as_ref())?;
+                let cfg = base.as_ref().map(|b| Config::parse(&b.dump));
+                if let Some(p) = render_fc(&resolved, cfg.as_ref())
+                    .problems
+                    .into_iter()
+                    .next()
+                {
+                    return Err(refusal(p));
+                }
+                Ok(base.map(|b| b.backup.id).unwrap_or_default())
+            }
+            DeviceKind::Radio => {
+                self.check_card_stageable(edits)?;
+                Ok(self
+                    .snapshots()
+                    .latest(device)
+                    .map(|b| b.id)
+                    .unwrap_or_default())
+            }
+            other => bail!(
+                "Only FC and radio changes can be staged for now; a {} change arrives with its package.",
+                other.label()
+            ),
         }
-        let base = self.fc_base(device);
-        let resolved = self.fc_edits(edits, base.as_ref())?;
-        let cfg = base.as_ref().map(|b| Config::parse(&b.dump));
-        if let Some(p) = render_fc(&resolved, cfg.as_ref())
-            .problems
-            .into_iter()
-            .next()
-        {
-            return Err(refusal(p));
-        }
-        Ok(base)
     }
 
     pub fn gear_change_stage(&self, p: &StageParams) -> Result<StagedChange> {
+        self.stage_inner(p, None)
+    }
+
+    /// Stages a change; `reverts` names the change a restore undoes.
+    pub(super) fn stage_inner(
+        &self,
+        p: &StageParams,
+        reverts: Option<String>,
+    ) -> Result<StagedChange> {
         let base = self.check_stageable(&p.device, &p.edits)?;
         let title = p
             .title
@@ -167,7 +189,7 @@ impl Core {
             device: p.device.clone(),
             title,
             edits: p.edits.clone(),
-            base_backup: base.map(|b| b.backup.id).unwrap_or_default(),
+            base_backup: base,
             editor: p.editor.unwrap_or(Editor::User),
             note: p.note.clone().unwrap_or_default(),
             status: if p.draft {
@@ -175,6 +197,7 @@ impl Core {
             } else {
                 ChangeStatus::Ready
             },
+            reverts,
         })?;
         self.hooks.gear_changed();
         Ok(c)
@@ -209,15 +232,13 @@ impl Core {
     /// Stages a restore of an FC backup's settings.
     pub fn gear_restore_stage(&self, p: &RestoreParams) -> Result<StagedChange> {
         let b = self.snapshots().get(&p.backup)?;
-        if crate::gear::backup::kind_of_id(&b.device) != Some(DeviceKind::Fc) {
-            bail!(
-                "Only an FC backup can be restored for now; card restore arrives with card apply."
-            );
-        }
-        let paths = if p.paths.is_empty() {
-            vec!["dump all".to_string()]
-        } else {
-            p.paths.clone()
+        let paths = match crate::gear::backup::kind_of_id(&b.device) {
+            Some(DeviceKind::Fc) if p.paths.is_empty() => vec!["dump all".to_string()],
+            Some(DeviceKind::Fc | DeviceKind::Radio) if !p.paths.is_empty() => p.paths.clone(),
+            Some(DeviceKind::Radio) => bail!(
+                "A card restore names the files to put back (paths): restoring a whole card is not offered."
+            ),
+            _ => bail!("Only an FC or a radio card backup can be restored."),
         };
         self.gear_change_stage(&StageParams {
             device: b.device.clone(),
@@ -279,23 +300,45 @@ impl Core {
                 change.status
             );
         }
-        let d = self
-            .gear_store()
-            .device(&change.device)?
-            .with_context(|| format!("Unknown device {:?}.", change.device))?;
-        if d.kind != DeviceKind::Fc {
-            bail!("Only FC changes can be applied for now; card apply comes later.");
-        }
         let base = self.fc_base(&change.device);
         let edits = self.fc_edits(&change.edits, base.as_ref())?;
-        let planned = fcplan::plan(&change, &edits, base.as_ref(), &self.fc_cands(), port);
+        let mut planned = fcplan::plan(&change, &edits, base.as_ref(), &self.fc_cands(), port);
+        planned
+            .plan
+            .checks
+            .insert(0, crate::gear::apply::card::read_first(&change));
         Ok((change, planned))
+    }
+
+    /// The kind of device a staged change is for.
+    pub(super) fn change_kind(&self, change: &StagedChange) -> Result<DeviceKind> {
+        Ok(self
+            .gear_store()
+            .device(&change.device)?
+            .with_context(|| format!("Unknown device {:?}.", change.device))?
+            .kind)
+    }
+
+    fn staged_change(&self, id: &str) -> Result<StagedChange> {
+        let change = self.changes().get(id)?;
+        if !change.status.staged() {
+            bail!(
+                "Change {id} is {:?}; only a staged change can be applied.",
+                change.status
+            );
+        }
+        Ok(change)
     }
 
     /// Runs every guard and builds the diff and digest. Writes nothing and reboots
     /// nothing.
     pub fn gear_apply_plan(&self, p: &ApplyPlanParams) -> Result<ApplyPlan> {
-        Ok(self.plan_change(&p.id, p.port.as_deref())?.1.plan)
+        let change = self.staged_change(&p.id)?;
+        match self.change_kind(&change)? {
+            DeviceKind::Fc => Ok(self.plan_change(&p.id, p.port.as_deref())?.1.plan),
+            DeviceKind::Radio => Ok(self.plan_card(&change, false)?.0.plan),
+            other => bail!("A {} change cannot be applied yet.", other.label()),
+        }
     }
 
     /// Applies a staged change. Needs the plan's digest and `confirm`; with the app
@@ -312,6 +355,12 @@ impl Core {
     fn apply_inner(&self, req: &ApplyRequest, from_gui: bool) -> Result<ApplyReport> {
         if !req.confirm {
             bail!("Refused: apply needs the plan's digest and confirm=true.");
+        }
+        let change = self.staged_change(&req.id)?;
+        match self.change_kind(&change)? {
+            DeviceKind::Fc => {}
+            DeviceKind::Radio => return self.apply_card_change(req, from_gui),
+            other => bail!("A {} change cannot be applied yet.", other.label()),
         }
         let (change, planned) = self.plan_change(&req.id, req.port.as_deref())?;
         if let Some(r) = first_refusal(&planned.plan.checks) {
@@ -494,6 +543,7 @@ impl Core {
             failed_line: run.failed.clone(),
             verify: run.verify.clone(),
             saved: run.saved,
+            files: Vec::new(),
             message: String::new(),
             notes: Vec::new(),
             at: Utc::now(),
@@ -579,10 +629,7 @@ impl Core {
             }
         }
         report.steps = steps;
-        let ch = self.changes();
-        ch.set_status(&change.id, report.status, &report.message)?;
-        ch.write_report(&change.id, &serde_json::to_vec_pretty(&report)?)?;
-        self.hooks.gear_changed();
+        self.finish_change(change, &report)?;
         if report.status == ChangeStatus::Verified {
             Ok((fcinfo, report))
         } else {
@@ -590,6 +637,33 @@ impl Core {
             *stash.lock().unwrap() = Some(report);
             Err(anyhow!("{msg}"))
         }
+    }
+
+    /// Records an apply: the change's status (a Try change that verified waits as Applied
+    /// for Keep or Revert), its report, and, for a restore that verified, the change it
+    /// undoes.
+    pub(super) fn finish_change(&self, change: &StagedChange, report: &ApplyReport) -> Result<()> {
+        let ch = self.changes();
+        let verified = report.status == ChangeStatus::Verified;
+        let (status, note) = if verified && change.status == ChangeStatus::Try {
+            (
+                ChangeStatus::Applied,
+                format!("{} Keep it or revert it.", report.message),
+            )
+        } else {
+            (report.status, report.message.clone())
+        };
+        ch.set_status(&change.id, status, &note)?;
+        ch.write_report(&change.id, &serde_json::to_vec_pretty(report)?)?;
+        if let (true, Some(orig)) = (verified, &change.reverts) {
+            let _ = ch.set_status(
+                orig,
+                ChangeStatus::Reverted,
+                &format!("Reverted by {}", change.id),
+            );
+        }
+        self.hooks.gear_changed();
+        Ok(())
     }
 
     /// Board notes for the sheet's header.

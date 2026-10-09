@@ -2,6 +2,7 @@
 //! stage, plan, checks, confirm, backup, write, read back, verify, record. `apply/fc.rs`
 //! holds the FC's plan and checks; `core/apply.rs` runs the job (port, backup, write).
 
+pub mod card;
 pub mod fc;
 
 use super::bf::cli::Reply;
@@ -68,6 +69,9 @@ pub struct ApplyReport {
     /// Lines the FC does not hold as written after the save.
     pub verify: Vec<VerifyFail>,
     pub saved: bool,
+    /// Card files the apply wrote, and files it deleted: what a Revert restores.
+    #[serde(default)]
+    pub files: Vec<String>,
     /// One sentence for the person.
     pub message: String,
     /// Known issues of this board and build.

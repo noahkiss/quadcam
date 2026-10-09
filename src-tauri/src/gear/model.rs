@@ -427,6 +427,10 @@ pub struct StagedChange {
     pub order: u32,
     #[serde(default)]
     pub history: Vec<ChangeEvent>,
+    /// The change this one undoes (a Revert stages a restore). When this change verifies,
+    /// that one becomes Reverted.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub reverts: Option<String>,
 }
 
 /// Why a write was refused. Each is one row of the checks table (design 8.2).
@@ -452,6 +456,13 @@ pub enum RefusalCode {
     NoDevice,
     /// The FC has run on USB with its battery in past its limit; it must cool first.
     UsbHeat,
+    /// The card's last check found errors; repair it before a write.
+    CardCheck,
+    /// The change is marked "Read first": read the real value on the device, then mark it
+    /// Ready.
+    ReadFirst,
+    /// Settings do not fit the device they would go to (board or firmware).
+    Incompatible,
 }
 
 impl RefusalCode {
@@ -473,6 +484,9 @@ impl RefusalCode {
             RefusalCode::Disabled => "disabled",
             RefusalCode::NoDevice => "no_device",
             RefusalCode::UsbHeat => "usb_heat",
+            RefusalCode::CardCheck => "card_check",
+            RefusalCode::ReadFirst => "read_first",
+            RefusalCode::Incompatible => "incompatible",
         }
     }
 }

@@ -1063,7 +1063,9 @@ The Bench page replaces a hand-kept list. Each staged change has a status:
 The page groups by device and shows "Next session" per device: the first Ready or Try item.
 A Try item that is applied gets **Keep** and **Revert** buttons; Revert stages a restore of
 the backup the apply took. Applied items move to History. **Copy as Markdown** exports the
-queue.
+queue. Built in WP5b (section 8): the page lists devices that have waiting changes, shows
+"Plug in the radio in USB Storage mode to apply 3 changes." for a device that is away, and
+disables Review for a Draft or a Read first change.
 
 ### 7.8 Packs and charging
 
@@ -1309,9 +1311,71 @@ check), `core/apply.rs` (stage, update, discard, restore, plan, apply as one FC 
 - **Restore** works on FC backups: it sets back every `set`, and the list-like commands
   (modes, adjustments, features, beepers, LEDs, VTX and mixers) that differ from the latest
   dump.
-- **Not in 5a:** card apply, the Bench page and statuses (Try, Read first, Keep/Revert), mount
-  cycle, copying settings between quads, the `apply_ready` automation. `OsdElement` edits have
-  no FC writer yet; stage refuses them.
+- **Not in 5a** (built in 5b, below): card apply, the Bench page and statuses (Try, Read
+  first, Keep/Revert), the mount cycle, copying settings between quads, the `apply_ready`
+  automation, the `OsdElement` writer.
+
+**Built (WP5b, card side and Bench).** `gear/apply/card.rs` (the card plan and checks, the
+digest, `roll_back`, `verify`), `core/apply_card.rs` (locate and mount a card, plan, apply,
+the user's Mount), `core/bench.rs` (Keep, Revert, copy, the `apply_ready` step),
+`gear/copy.rs` (copy between quads, pure), `Card::plan_files` and `card::attach`
+(`diskutil mountDisk`) in the EdgeTX engine. Rows: `gear_change_keep`, `gear_change_revert`,
+`gear_copy_plan`, `gear_copy_stage`, `gear_card_mount`, `gear_card_unmount`;
+`gear_apply_plan` and `gear_apply` take a radio change too. UI: the Bench page, the copy
+dialog, Mount and Done on a radio's page. Deviations and choices:
+
+- **One path, two plans.** `gear_apply_plan` and `gear_apply` look at the change's device:
+  an FC goes the 5a way, a radio goes `plan_card`. The card digest covers the card's id, board
+  and version, and for each file the path and the hashes of the bytes before and after.
+- **Card checks** (`gear/apply/card.rs`, in order): Read first, one card plugged in, same card
+  as planned (`device_changed`), card check state (`card_check`), nothing else writing
+  (`port_busy`, a job runs on the link), then the engine's own: known version
+  (`unknown_version`, `unknown_board`), shape understood, round trip, model identity (the
+  expected name: "wrong card?"), values in range, selected model kept, and something to write.
+  New codes: `card_check`, `read_first`, `incompatible` (copy).
+- **Backup.** A full card snapshot (`BeforeApply`, always kept; WP4's size and mtime skip keeps
+  it cheap), then the writer's backup callback checks that the snapshot holds each touched
+  file's exact bytes. A failed snapshot is `no_backup`, nothing written.
+- **Write, verify, roll back.** The engine writes each file (temporary name, `F_FULLFSYNC`,
+  rename, read-back). The engine puts back only the file whose read-back failed, so on any write
+  failure, a stop, or a failed second read (`verify`), `roll_back` puts every touched file back
+  to the planned bytes and removes new ones. Steps shown: Back up, Write, Roll back (when it
+  ran), Read back, Verify. After a verified apply an `AfterApply` snapshot is taken. The card
+  `ApplyReport.files` lists the files written and deleted: a Revert restores those.
+- **Mount cycle.** `Env.mount` (`diskutil mountDisk`) joins `Env.unmount`. Cards stay unmounted
+  between jobs. `locate_card` finds a card mounted, else mounts one that `gear_released` holds
+  while the system still shows its disk (`gear_released` is fed by every release and by the app
+  poll's unmounted list). A plan that mounted a card unmounts it quietly (no cue); an apply ends
+  in `gear_finish_card` like every card job (one cue, "safe to unplug" only after the unmount;
+  a refusal plays no cue). The person's Mount (`gear_card_mount`) keeps a card mounted for 10
+  minutes (`MOUNT_MINUTES`, a constant; `gear_mount_tick` in the app's poll unmounts it) or
+  until `gear_card_unmount`. `GearStatus.mounted` lists those cards.
+- **Restore on a card** names the files (`Edit::Restore { paths }`) and stands alone: the plan
+  makes each path read as in the backup (a path the backup lacks is removed), through
+  `Card::plan_files`. A whole-card restore is not offered.
+- **Statuses.** Try, Read first and Draft are set by hand (`gear_change_update`). A Read first
+  change refuses at plan time (`read_first`) until the person marks it Ready. A Try change that
+  verifies becomes `Applied` (the report still says verified); Keep makes it Verified; Revert
+  stages a restore (`StagedChange.reverts` names the original) and the original becomes
+  Reverted when that restore verifies.
+- **Copy settings** (`gear/copy.rs`): parts rates, pid, osd, modes, adjustments, vtx and
+  features, plus settings by name, from a device's latest backup or a named backup to an FC's
+  latest backup. Checks: same firmware, same year.month release, something picked, something
+  differs (`incompatible`). Per-quad values (names, accelerometer trims, battery and current
+  calibration) are never copied; with different boards the board-bound settings are left out;
+  settings and lines the target lacks are listed. The result is `FcSet` and `FcLines` edits on
+  one staged change, so the FC plan and apply run as usual.
+- **`apply_ready`** is the on-connect step "Apply ready changes" (kinds fc and radio), off
+  unless `gearOnConnect` lists it. It plans each Ready change and, when every check passes,
+  calls `gear_apply`, which asks the sheet (`Hooks::confirm_apply`). With no window
+  (`has_gui` false) the step skips: the headless `confirm_apply` accepts, so an unattended
+  apply would skip the click.
+- **`OsdElement`** now renders to `set osd_<element>_pos = N` (`render_fc`, keeping the
+  variant bits), x 0-63, y 0-31, profiles 1-3; an empty list turns the element off. The WP7
+  editor only has to stage it.
+- **Not done:** a radio's Bench item cannot be staged from the app (no card editor yet:
+  CLI and agents stage card edits); `CardFiles` (sound packs) wait for WP9; the mount time is
+  not a setting.
 
 ### 8.1 One path for every write
 
@@ -1409,7 +1473,7 @@ docs, and its rows in `api`, CLI and MCP.
 | WP2 | Betaflight link | `gear/bf/` (`cli.rs`, `msp.rs`, `dump.rs`, `fake.rs`) | WP1 | 1 |
 | WP3 | EdgeTX card engine | `gear/edgetx/` (`yaml.rs`, `model.rs`, `card.rs`), the synthetic card generator | WP1 | 1 |
 | WP4 | Backups and the store | `gear/blobs.rs`, `backup.rs`, `radiologs.rs`; retention, import of old backup folders, auto backup on connect; Backups segment and Storage page | WP1, WP2, WP3 | 2 |
-| WP5 | Staged changes and apply. **5a done:** `changes.rs`, `apply.rs`, `apply/fc.rs`, the FC apply sheet, the Changes segment. 5b: `apply/card.rs`, Bench page, mount cycle, copy between quads | `gear/changes.rs`, `apply.rs`, `apply/fc.rs`, `apply/card.rs`; the apply sheet; Bench page | WP1, WP2, WP3, WP4 | 3 |
+| WP5 | Staged changes and apply. **Done (5a, 5b):** `changes.rs`, `apply.rs`, `apply/fc.rs`, `apply/card.rs`, `copy.rs`, the apply sheet, the Changes segment, the Bench page, the mount cycle, copy between quads, `apply_ready` | `gear/changes.rs`, `apply.rs`, `apply/fc.rs`, `apply/card.rs`; the apply sheet; Bench page | WP1, WP2, WP3, WP4 | 3 |
 | WP6 | Switch map | `gear/switchmap.rs`, Switches segment | WP2, WP3 | 2 |
 | WP7 | OSD | `gear/osd.rs`, OSD segment (view and editor) | WP2 (parse); WP5 to stage | 1 (pure part), 3 (editor) |
 | WP8 | Rates and sims | `gear/rates.rs`, `gear/sims/`, `apply/sim.rs`, Rates segment, Sims page | WP2, WP5 (plan/confirm pattern) | 2 (read), 3 (sync) |

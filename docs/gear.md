@@ -10,6 +10,7 @@ it.
 
 - **Connected** lists what is plugged in now. Each device also has its own row under it.
 - **Devices** lists the devices you saved, plugged in or not.
+- **Bench** lists the changes staged for each device. See [The Bench](#the-bench).
 - **Pack up**, **Flights**, **Packs** and **Repairs** are described under
   [Flights and packs](#flights-and-packs).
 - A device's page shows its kind and state, what it reports about itself (board, firmware,
@@ -149,7 +150,8 @@ take. A preview writes nothing. Edits change only the lines they must; every oth
 byte for byte, line endings included. They never change the radio's selected model unless
 the edit asks for it. The power-on checklist is a model setting QuadCam turns on or off.
 
-Writing the edits is part of applying a staged change, a later release.
+QuadCam writes the edits through a staged change. See
+[Radio cards](#radio-cards).
 
 **Over the radio's USB, writes are slow** (about 0.3 MB/s, a 37 MB voice pack in about 2
 minutes). QuadCam writes one file at a time under a temporary name and renames it, so the
@@ -205,10 +207,11 @@ QuadCam posts through `osascript`.
 The `gear_on_connect` setting names the steps that run when a device of each kind is plugged in:
 `backup`, `import` and `apply_ready`. Only `backup` is on by default, and only while
 `gear_auto_backup` is on. `backup` runs two steps: **Card check** (a card QuadCam knows) and
-**Backup** (a radio card or an FC). `import` and `apply_ready` come in later releases.
+**Backup** (a radio card or an FC). `import` comes in a later release. `apply_ready` is described
+under [Apply on connect](#apply-on-connect).
 
 A card is unmounted (`diskutil unmountDisk`) at the end of every job: the on-connect steps, a
-backup, a card check, a repair. "Done, safe to unplug" plays only after the unmount worked.
+backup, a card check, a repair, an apply. "Done, safe to unplug" plays only after the unmount worked.
 When it fails, "Unmount failed" plays, the device shows **Needs attention**, and its
 **Backups** segment shows the reason. The card stays in the list until you pull it.
 
@@ -307,7 +310,106 @@ After an apply QuadCam stores the FC's new state as a backup (**After apply**), 
 plan compares with it. A profile selection changes the FC's active profile once saved, so
 QuadCam selects the profile it needs, then selects the one the FC had.
 
-Radio, card and sim changes use the same steps and arrive with card apply.
+### Radio cards
+
+A radio's changes use the same five steps. Stage them from the command line or an agent
+(an edits file, see [Command line and agents](#command-line-and-agents)); a radio's **Changes**
+segment lists them and **Review…** opens the same sheet. The checks:
+
+| Check | Fails when |
+|---|---|
+| One card plugged in | No radio card is mounted or still plugged in |
+| Same card as planned | The card is not the one the change was staged for (its id) |
+| Card check | The card's last file-system check failed. Repair it first |
+| Nothing else writing | A backup or another job is running on the card |
+| Known version | QuadCam has not proven this board and EdgeTX version for writing |
+| Shape understood, Round trip, Model identity, Values in range | A file is not one QuadCam rewrites unchanged, or an edit names another model than the file holds ("wrong card?"), or a value is out of range |
+| Selected model kept | The edits would change the radio's selected model without asking |
+| Something to write | The card already holds what the edit asks for |
+| Read first | The change is marked Read first |
+
+**Apply** backs the card up first (a full snapshot, **Before apply**, which QuadCam always
+keeps), then writes one file at a time under a temporary name, reads each back and compares it,
+then reads every file again. If a file reads back different, or a write fails, QuadCam puts
+every file back to the bytes in the backup, and the sheet says the card is as it was. A new file
+is removed. Over the radio's USB a write is slow and **Stop** finishes the current file, then
+puts the written files back.
+
+**Mount, work, unmount.** QuadCam keeps a card unmounted between jobs. A plan or an apply
+mounts the card when it needs it. A plan unmounts the card again without a word. An apply ends
+with the unmount, and "safe to unplug" plays only after the unmount worked. A card that is
+already mounted stays mounted for a plan. If the unmount fails, the sheet says so and the cue is
+"failed".
+
+**Mount** (on a radio's page, when its card is unmounted but still in) mounts the card so you
+can browse it in Finder. QuadCam unmounts it again when you press **Done**, or after 10
+minutes.
+
+A restore of a radio backup names the files to put back (`gear restore <backup> --path
+RADIO/radio.yml`). It makes those files read as in the backup, and removes a file the backup
+does not hold.
+
+### The Bench
+
+**Bench** (in the sidebar, with a count) lists every device that has a waiting change, in
+the order the next session applies them.
+
+- Each device shows whether it is plugged in, unmounted but still in, or away. A device that is
+  away shows what to do: "Plug in the radio in USB Storage mode to apply 3 changes." **Next
+  session** names the first Ready or Try change.
+- Each change has a status you set from its list:
+
+  | Status | Means |
+  |---|---|
+  | Draft | Being edited. The plug-in bar and **Review** skip it |
+  | Ready | Agreed. Apply it when the device is in |
+  | Try | Apply, fly, then keep or revert |
+  | Read first | Read the real value on the device before changing anything. It does not apply until you mark it Ready |
+  | Applied | A Try change that applied and verified. It waits for **Keep** or **Revert…** |
+  | Verified, Failed, Reverted, Discarded | After the apply sheet, or Discard |
+
+- **Keep** makes an applied Try change Verified. **Revert…** stages a restore of the backup the
+  apply took (for a card, of the files the apply wrote) and opens it in the sheet. The change
+  becomes Reverted when that restore verifies.
+- **History** lists changes that are done.
+- **Copy as Markdown** puts the queue on the clipboard.
+
+### Copy settings between quads
+
+**Copy settings…** (on the Bench, and on an FC's **Changes**) copies settings from one FC's
+latest backup to another FC. Pick the quad to copy from and the one that gets the settings, then
+the parts (rates, PID profiles, OSD, modes, adjustments, VTX, features and beeper) and any
+settings by name. QuadCam shows the checks and the diff. **Stage** queues one change on the
+target. It writes nothing until you apply it.
+
+| Check | Fails when |
+|---|---|
+| Same firmware | The two quads do not run the same firmware |
+| Same release | The year and month of the versions differ (a patch difference is fine) |
+| Something picked | No part and no setting is picked |
+| Something differs | The target already holds everything picked |
+
+QuadCam leaves out, and lists, what it should not copy:
+
+- values each quad has of its own: the craft name, accelerometer trims, battery and current
+  calibration;
+- with two different boards, settings tied to the board's chips and buses (`gyro_*`, `acc_*`,
+  `baro_*`, `mag_*`, `serial*`, SPI and I2C settings);
+- a setting or line the target's backup does not hold.
+
+### Apply on connect
+
+**Settings > Gear > Steps on connect** can list `apply_ready` for a kind of device. It is off
+by default. When the device is plugged in, QuadCam plans each Ready change of that device, and
+a plan whose checks all pass opens the apply sheet. Nothing is written until you click
+**Apply**. With no window to click in, the step does nothing.
+
+### OSD element moves
+
+An agent or the command line can move one OSD element: the edit `{"kind": "osd_element",
+"element": "vbat", "x": 20, "y": 9, "profiles": [1, 3]}` becomes
+`set osd_vbat_pos = <value>`, keeping the element's other bits. The OSD segment's editor stages
+the same edit later.
 
 ## Card check
 
@@ -546,7 +648,15 @@ quadcam-cli --json gear stage --device <id> --cli lines.cli [--title T] # raw CL
 quadcam-cli --json gear changes [--device ID] [--history]
 quadcam-cli --json gear apply <change> --plan        # the checks, the diff and the digest
 quadcam-cli --json gear apply <change> --digest D --yes
-quadcam-cli --json gear restore <backup>             # stage an FC backup's settings back
+quadcam-cli --json gear restore <backup> [--path P]...   # stage a backup back (a card: name the files)
+quadcam-cli --json gear stage --device <radio id> --edits edits.json   # stage card edits
+quadcam-cli --json gear update <change> --status try|ready|read_first|draft [--title T] [--order N]
+quadcam-cli --json gear keep <change>                # an applied Try change becomes Verified
+quadcam-cli --json gear revert <change>              # stage a restore of the backup its apply took
+quadcam-cli --json gear copy --from <fc or backup> --to <fc> --part rates --part osd [--setting NAME]... --plan
+quadcam-cli --json gear copy --from <fc> --to <fc> --part rates   # stage the copy
+quadcam-cli --json gear card-mount <radio id> [--minutes 10]      # mount a card to browse it
+quadcam-cli --json gear card-unmount <radio id>
 quadcam-cli --json gear discard <change>
 ```
 

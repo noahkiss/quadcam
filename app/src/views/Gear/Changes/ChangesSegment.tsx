@@ -10,31 +10,12 @@ import { Dialog } from "../../../components/Dialog";
 import { SelectField, TextField } from "../../../components/Field";
 import { toast } from "../../../components/toastStore";
 import { fmtWhen } from "../../../lib/backups";
+import { STATUS_LABEL as STATUS, summary } from "../../../lib/bench";
+import { CopyDialog } from "../Bench/CopyDialog";
 import type { DeviceRef } from "../slots";
 import styles from "./Changes.module.css";
 
-const STATUS: Record<StagedChange["status"], string> = {
-  draft: "Draft",
-  ready: "Ready",
-  try: "Try",
-  read_first: "Read first",
-  applied: "Applied",
-  verified: "Verified",
-  failed: "Failed",
-  reverted: "Reverted",
-  discarded: "Discarded",
-};
-
-/** What a change does, in one line. */
-export function summary(c: StagedChange): string {
-  return c.edits
-    .map((e: Edit) => {
-      if (e.kind === "fc_set") return `set ${e.name} = ${e.value}`;
-      if (e.kind === "fc_lines") return e.lines.filter((l) => l.trim()).join("; ");
-      return e.kind.replace(/_/g, " ");
-    })
-    .join("; ");
-}
+export { summary };
 
 export function ChangesSegment({ d }: { d: DeviceRef }) {
   const id = d.device?.id || d.connected?.id || null;
@@ -42,18 +23,27 @@ export function ChangesSegment({ d }: { d: DeviceRef }) {
   const open = useStore((s) => s.openApply);
   const discard = useStore((s) => s.discardChange);
   const [editing, setEditing] = useState(false);
+  const [copying, setCopying] = useState(false);
   const mine = changes.filter((c) => c.device === id);
   const canStage = !!d.device;
+  const fc = d.kind === "fc";
   return (
     <div className={styles.segment}>
       <div className={styles.bar}>
-        <Button size="sm" variant="primary" disabled={!canStage} onClick={() => setEditing(true)}>
-          Edit setting…
-        </Button>
-        <Button size="sm" disabled={!mine.some((c) => c.status === "ready")} onClick={() => id && open(id)}>
+        {fc && (
+          <Button size="sm" variant="primary" disabled={!canStage} onClick={() => setEditing(true)}>
+            Edit setting…
+          </Button>
+        )}
+        {fc && (
+          <Button size="sm" disabled={!canStage || !d.device?.last_backup} onClick={() => setCopying(true)}>
+            Copy settings…
+          </Button>
+        )}
+        <Button size="sm" disabled={!mine.some((c) => c.status === "ready" || c.status === "try")} onClick={() => id && open(id)}>
           Review…
         </Button>
-        {!canStage && <span className={styles.muted}>Save this FC first.</span>}
+        {!canStage && <span className={styles.muted}>Save this device first.</span>}
       </div>
       {mine.length === 0 ? (
         <p className={styles.muted}>No staged changes.</p>
@@ -81,6 +71,7 @@ export function ChangesSegment({ d }: { d: DeviceRef }) {
       )}
       <History device={id} />
       {editing && id && <EditSetting device={id} onClose={() => setEditing(false)} />}
+      {copying && id && <CopyDialog to={id} onClose={() => setCopying(false)} />}
     </div>
   );
 }
@@ -93,7 +84,7 @@ function History({ device }: { device: string | null }) {
   const load = async () => {
     if (!device) return;
     try {
-      setRows((await api.gearChanges(device, true)).filter((c) => c.status !== "ready" && c.status !== "draft").reverse());
+      setRows((await api.gearChanges(device, true)).filter((c) => !["ready", "draft", "try", "read_first"].includes(c.status)).reverse());
     } catch (e) {
       toast(errText(e), true);
     }
