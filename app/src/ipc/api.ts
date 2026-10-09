@@ -7,7 +7,7 @@ import { open as openDialog, save as saveDialog } from "@tauri-apps/plugin-dialo
 import { openPath, openUrl, revealItemInDir } from "@tauri-apps/plugin-opener";
 import { commands } from "../bindings";
 import * as N from "./normalize";
-import type { FormatRequest, ChangeStatus, CopyRequest, Edit, SimFrame, SimPreset, SimStartInfo, SimStartParams, SimStopInfo, CrashSaveParams, ImportOptions, LibEdit, LibraryFilter, Moved, ModelEditParams, ModelParams, PackInstallParams, VoiceChooseParams, VoiceEditParams, VoiceParams, VoicePreviewParams, VoiceRenderParams, OsdEditParams, OsdParams, RatesParams, RatesPreview, RateProfile, FlashParams, SplashParams, SimRestoreParams, SimSyncParams, SimsParams, Pack, PackType, PlanPatch, RemovedCuts, SettingsValues, Span, SwitchMapParams, SimCalibrationSaveParams, CalibrateParams } from "./types";
+import type { ElrsFlashParams, FormatRequest, ChangeStatus, CopyRequest, Edit, SimFrame, SimPreset, SimStartInfo, SimStartParams, SimStopInfo, CrashSaveParams, ImportOptions, LibEdit, LibraryFilter, Moved, ModelEditParams, ModelParams, PackInstallParams, VoiceChooseParams, VoiceEditParams, VoiceParams, VoicePreviewParams, VoiceRenderParams, OsdEditParams, OsdParams, RatesParams, RatesPreview, RateProfile, FlashParams, SplashParams, SimRestoreParams, SimSyncParams, SimsParams, Pack, PackType, PlanPatch, RemovedCuts, SettingsValues, Span, SwitchMapParams, SimCalibrationSaveParams, CalibrateParams } from "./types";
 
 type Result<T> = Promise<{ status: "ok"; data: T } | { status: "error"; error: string }>;
 
@@ -144,6 +144,11 @@ export const api = {
   gearFlashPlan: (p: FlashParams) => ok(commands.gearFlashPlan(p)),
   /** The apply sheet's own Apply click for a firmware flash: the click is the confirm. */
   gearFlashClick: (p: FlashParams, digest: string) => ok(commands.gearFlashClick({ ...p, digest, confirm: true })),
+  gearElrs: (check: boolean | null = null) => ok(commands.gearElrs({ check })),
+  gearElrsRead: (host: string, port: string | null = null) => ok(commands.gearElrsRead({ host, port })),
+  gearElrsFlashPlan: (p: ElrsFlashParams) => ok(commands.gearElrsFlashPlan(p)),
+  /** The ELRS flash sheet's own Apply click: the click is the confirm. */
+  gearElrsFlashClick: (p: ElrsFlashParams, digest: string) => ok(commands.gearElrsFlashClick({ ...p, digest, confirm: true })),
   gearSims: async (params: SimsParams) => N.sims(await ok(commands.gearSims(params))),
   gearSwitchMap: async (params: SwitchMapParams) => N.switchMap(await ok(commands.gearSwitchMap(params))),
   gearRadio: async () => N.radioSnapshot(await ok(commands.gearRadio({ wait_ms: null }))),

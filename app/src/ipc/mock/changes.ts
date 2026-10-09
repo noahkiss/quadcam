@@ -82,7 +82,9 @@ export function stage(g: MockGear, device: string, edits: Edit[], title: string 
   else if (d.kind === "radio") {
     const bad = edits.find((e) => !CARD_EDITS.includes(e.kind));
     if (bad) throw refused("shape_unknown", `${bad.kind} edits are not a radio card change.`);
-  } else throw `Only FC and radio changes can be staged for now; a ${d.kind} change arrives with its package.`;
+  } else if (d.kind === "elrs_tx" || d.kind === "elrs_rx") {
+    if (edits.some((e) => e.kind !== "elrs_options")) throw "An ELRS device takes only ELRS option changes.";
+  } else throw `Only FC, radio and ELRS changes can be staged for now; a ${d.kind} change arrives with its package.`;
   const c = g.changeStore;
   c.counter += 1;
   const first = lines(edits)[0] ?? "";
@@ -215,6 +217,17 @@ export function plan(g: MockGear, id: string): ApplyPlan {
   if (!staged(c)) throw `Change ${id} is ${c.status}; only a staged change can be applied.`;
   const dev = g.devices.find((d) => d.id === c.device);
   const readFirst: Check = c.status === "read_first" ? fail("Read first", "read_first", "This change is marked Read first. Read the real value on the device, then mark it Ready.") : ok("Read first");
+  if (dev?.kind === "elrs_tx" || dev?.kind === "elrs_rx") {
+    const sets = c.edits.flatMap((e) => (e.kind === "elrs_options" ? e.options : []));
+    return {
+      change: id,
+      device: dev.identity ?? {},
+      checks: [readFirst, ok("ELRS tools (preview) are on"), ok("The device was read"), ok("The options exist and the values are in range"), ok("The radio or FC it sits behind is plugged in on serial")],
+      diff: [{ kind: "lines", label: `${dev.name || "ELRS device"} options`, lines: sets.map((s) => ({ op: "add" as const, text: `${s.option}: ${s.value}` })) }],
+      digest: `digest-${id}`,
+      warnings: ["QuadCam reads the device again first and refuses when an option moved since the read.", "Writing ExpressLRS options over a passthrough has not been checked on a real device yet."],
+    };
+  }
   if (dev?.kind === "radio") {
     const card = cardOf(g, c.device);
     const failedCheck = g.checks.find((k) => k.device === c.device);
@@ -283,6 +296,19 @@ export function apply(g: MockGear, id: string, digest: string): ApplyReport {
   const dev = g.devices.find((d) => d.id === c.device);
   const backup = `${c.device}/2026-10-09T120000-before_apply`;
   const base = { change: id, device: c.device, backup, after_backup: null, saved: false, files: [] as string[], notes: [], at: "2026-10-09T12:00:00Z", verify: [] as ApplyReport["verify"] };
+  if (dev?.kind === "elrs_tx" || dev?.kind === "elrs_rx") {
+    const r: ApplyReport = {
+      ...base,
+      status: "verified",
+      steps: [{ name: "Read the device", state: "done" }, { name: "Back up the parameters", state: "done", detail: backup }, { name: "Read back", state: "done" }, { name: "Verify", state: "done" }],
+      sent: [],
+      failed_line: null,
+      saved: true,
+      message: `Verified: ${dev.name || "the device"} reports the new options.`,
+    };
+    finish(g, c, r);
+    return r;
+  }
   if (dev?.kind === "radio") {
     const files = (p.diff.find((d) => d.kind === "files") as { put: string[] } | undefined)?.put ?? [];
     if (store.failCard) {

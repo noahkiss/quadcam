@@ -29,6 +29,7 @@ import { MockFlights } from "./flights";
 import * as backups from "./backups";
 import * as simsync from "./simsync";
 import * as firmware from "./firmware";
+import * as elrs from "./elrs";
 import * as ratemath from "./ratemath";
 import { MockHost, MockSim, defaults as simDefaults } from "./sim";
 import { location as normLocation, spans as normSpans } from "../normalize";
@@ -39,7 +40,7 @@ const DISPATCH = new Set([
   "library", "library_rate", "library_edit", "library_rename", "library_cuts", "library_export_cuts", "library_trash", "library_untrash",
   "library_photos", "library_apply_name_format", "library_match_logs", "library_rebuild", "library_rescan", "library_preview", "library_strips", "card_status",
   "settings", "settings_set", "place_search", "place_save", "session_cuts", "profiles", "session_split", "library_split",
-  "modules", "module_install", "module_remove", "modules_check", "gear_osd", "gear_osd_edit", "gear_model", "gear_model_edit", "gear_voice", "gear_voice_edit", "gear_voice_preview", "gear_voice_render", "gear_voice_pack_install", "gear_voice_choose", "gear_rates", "gear_rates_preview", "gear_sims", "gear_sim_sync_plan", "gear_sim_sync", "gear_sim_restore_plan", "gear_sim_restore", "gear_radio_cli", "gear_dfu_link", "gear_firmware", "gear_splash", "gear_flash_plan", "gear_flash",
+  "modules", "module_install", "module_remove", "modules_check", "gear_osd", "gear_osd_edit", "gear_model", "gear_model_edit", "gear_voice", "gear_voice_edit", "gear_voice_preview", "gear_voice_render", "gear_voice_pack_install", "gear_voice_choose", "gear_rates", "gear_rates_preview", "gear_sims", "gear_sim_sync_plan", "gear_sim_sync", "gear_sim_restore_plan", "gear_sim_restore", "gear_radio_cli", "gear_dfu_link", "gear_firmware", "gear_splash", "gear_flash_plan", "gear_flash", "gear_elrs", "gear_elrs_read", "gear_elrs_flash_plan", "gear_elrs_flash",
   "gear_status", "gear_devices", "gear_device_save", "gear_device_forget", "gear_dismiss_reminder", "gear_poll_pause",
   "gear_switch_map", "gear_radio", "gear_radio_watch", "gear_sim_calibration", "gear_sim_calibration_save", "gear_sim_defaults", "gear_sim_calibrate",
   "gear_flights", "gear_flight_set", "gear_flight_folders", "gear_packs", "gear_pack_save", "gear_pack_delete", "gear_pack_type_save",
@@ -98,6 +99,8 @@ export class MockCore {
   simSync = simsync.freshSimSync();
   /** Firmware: the releases, the saved answer, the DFU device (`./firmware.ts`). */
   firmware = firmware.freshFirmware();
+  /** ExpressLRS tools (`./elrs.ts`). */
+  elrs = elrs.freshElrs();
   /** The sim's calibration (`./sim.ts`). */
   sim = new MockSim();
   /** The sim host's canned flight (`./sim.ts`). */
@@ -195,6 +198,8 @@ export class MockCore {
         return null;
       case "gear_flash_click":
         return this.gearChanged(firmware.flash(this.firmware, this.gear.devices, p as never, String(p.digest), true));
+      case "gear_elrs_flash_click":
+        return this.gearChanged(elrs.flash(this.elrs, this.gear, p as never, String(p.digest), true, this.settings.values));
       case "gear_sim_sync_click":
         return this.gearChanged(simsync.apply(this.simSync, p as never, String(p.digest), true));
       case "gear_sim_restore_click":
@@ -418,8 +423,14 @@ export class MockCore {
       }
       case "gear_changes":
         return changes.list(this.gear, (p.device as string | null) ?? null, !!p.history);
-      case "gear_change_stage":
+      case "gear_change_stage": {
+        const dev = this.gear.devices.find((d) => d.id === p.device);
+        if (dev?.kind === "elrs_tx" || dev?.kind === "elrs_rx") {
+          if (this.settings.values.elrsPreview !== true) throw "Refused: ELRS tools (preview) are off. Turn them on in Settings > Gear, or set elrs_preview=true.";
+          for (const e of p.edits as { kind: string; options?: { option: string; value: string }[] }[]) elrs.resolve(this.elrs, dev.id, e.options ?? []);
+        }
         return this.gearChanged(changes.stage(this.gear, String(p.device), p.edits as never, (p.title as string | null) ?? null, (p.editor as "agent" | null) ?? "user", null, !!p.draft));
+      }
       case "gear_change_update":
         return this.gearChanged(changes.update(this.gear, p as never));
       case "gear_change_discard":
@@ -503,6 +514,14 @@ export class MockCore {
         throw "No radio is in DFU mode. Turn the radio off, hold both trim buttons toward the centre and plug in the USB cable.";
       case "gear_firmware":
         return firmware.view(this.firmware, this.gear.devices, (p.check as boolean | null) ?? null, "2026-10-09T12:00:00Z");
+      case "gear_elrs":
+        return elrs.view(this.elrs, this.gear, this.settings.values);
+      case "gear_elrs_read":
+        return this.gearChanged(elrs.read(this.elrs, this.gear, p as never, this.settings.values));
+      case "gear_elrs_flash_plan":
+        return elrs.flashPlan(this.elrs, this.gear, p as never, this.settings.values);
+      case "gear_elrs_flash":
+        return this.gearChanged(elrs.flash(this.elrs, this.gear, p as never, String(p.digest), !!p.confirm, this.settings.values));
       case "gear_splash":
         return firmware.splash(p as never);
       case "gear_flash_plan":
@@ -572,6 +591,12 @@ export class MockCore {
   private applied(id: string, digest: string) {
     const r = changes.apply(this.gear, id, digest);
     const dev = this.gear.devices.find((d) => d.id === r.device);
+    if (dev?.kind === "elrs_tx" || dev?.kind === "elrs_rx") {
+      const change = this.gear.changeStore.changes.find((c) => c.id === id);
+      for (const e of (change?.edits ?? []) as { options?: { option: string; value: string }[] }[]) {
+        for (const { option, to } of elrs.resolve(this.elrs, dev.id, e.options ?? [])) option.value = to;
+      }
+    }
     const card = dev?.kind === "radio" ? this.gear.connected.find((c) => c.id === dev.id) : undefined;
     if (card) {
       this.gear.mounted = this.gear.mounted.filter((m) => m.device !== dev!.id);

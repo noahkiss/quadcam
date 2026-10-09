@@ -44,6 +44,8 @@ export interface GearDraft {
   autoBackup: boolean;
   /** Shows Gear > Sim. */
   simPreview: boolean;
+  /** Shows the ELRS tools on the Firmware page. */
+  elrsPreview: boolean;
   keepRecent: string;
   keepWeeks: string;
   keepMonthly: boolean;
@@ -77,13 +79,14 @@ const CUE_DEFAULTS: GearDraft["cues"] = {
   voice_source: "macos",
 };
 
-export function gearDraft(g: GearSettings | null | undefined, simPreview = false): GearDraft {
+export function gearDraft(g: GearSettings | null | undefined, simPreview = false, elrsPreview = false): GearDraft {
   const q = g?.cues.quiet_hours;
   const onConnect = Object.fromEntries(GEAR_KINDS.map((k) => [k, AUTOMATIONS.filter((a) => (g ? g.on_connect[k] || [] : a === "backup" ? [a] : []).includes(a))])) as GearDraft["onConnect"];
   const cues = { ...CUE_DEFAULTS, ...Object.fromEntries(Object.entries(g?.cues || {}).filter(([, v]) => v != null)) } as GearDraft["cues"];
   return {
     autoBackup: g?.auto_backup ?? true,
     simPreview,
+    elrsPreview,
     keepRecent: String(g?.keep_recent ?? 10),
     keepWeeks: String(g?.keep_weeks ?? 8),
     keepMonthly: g?.keep_monthly ?? true,
@@ -107,6 +110,7 @@ export function gearValues(g: GearDraft): SettingsValues {
   return {
     gearAutoBackup: g.autoBackup,
     simPreview: g.simPreview,
+    elrsPreview: g.elrsPreview,
     gearKeepRecent: whole(g.keepRecent, 10, 1, 1000),
     gearKeepWeeks: whole(g.keepWeeks, 8, 0, 520),
     gearKeepMonthly: g.keepMonthly,
@@ -145,7 +149,7 @@ export function draftFrom(s: State): Draft {
     profiles,
     defaultIndex: di >= 0 ? di : null,
     defaultCleared: false,
-    gear: gearDraft(s.gear?.settings, s.values.simPreview === true),
+    gear: gearDraft(s.gear?.settings, s.values.simPreview === true, s.values.elrsPreview === true),
   };
 }
 
