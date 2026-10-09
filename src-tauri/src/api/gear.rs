@@ -20,8 +20,8 @@ pub use crate::core::{
     SimDefaultsParams, SimValidateParams,
 };
 pub use crate::core::{
-    CardMountParams, CardMounted, ChangeUpdateParams, CopyParams, OsdEditParams, RestoreParams,
-    StageParams,
+    CardMountParams, CardMounted, ChangeUpdateParams, CopyParams, ModelDetail, ModelEditParams,
+    ModelParams, OsdEditParams, RestoreParams, StageParams,
 };
 pub use crate::core::{
     CrashSaveParams, FlightFilter, FlightFoldersParams, FlightReport, FlightSetParams, FlightsView,
@@ -102,6 +102,12 @@ macro_rules! with_gear_rows {
             gear_sims(params: SimsParams) -> Vec<SimStatus> = |c| c.gear_sims(&params);
             /// An EdgeTX card: models, the selected model and its aircraft, the radio clock, one model in full.
             gear_card(params: CardParams) -> GearCard = |c| c.gear_card(&params);
+            /// A radio's model for the editors: timers, value screens, logging, alarms, callouts and
+            /// the checklist, from the mounted card or the latest backup, with staged edits on top. Reads only.
+            gear_model(params: ModelParams) -> ModelDetail = |c| c.gear_model(&params);
+            /// Stages model editor ops (and a checklist) for a radio as its one "Model edits" change.
+            /// Writes only QuadCam's own data; the apply sheet writes the card.
+            gear_model_edit(params: ModelEditParams) -> StagedChange = |c| c.gear_model_edit(&params);
             /// Checks and diffs EdgeTX card edits. Writes nothing.
             gear_card_preview(params: CardPreviewParams) -> CardPreview = |c| c.gear_card_preview(&params);
             /// The switch map: each control's positions with their channel values, FC modes

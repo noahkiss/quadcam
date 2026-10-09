@@ -17,7 +17,8 @@
 
 use super::model::{
     bad, check_text, get, ls_index, ls_name, resolve_sensors, set_ls, sf_fields, sf_items,
-    write_sfs, Field, LsDef, SfDef, MAX_LOGICAL_SWITCHES, MAX_SPECIAL_FUNCTIONS, MAX_TRACK_NAME,
+    write_sfs, Field, LsDef, ModelOp, SfDef, MAX_LOGICAL_SWITCHES, MAX_SPECIAL_FUNCTIONS,
+    MAX_TRACK_NAME,
 };
 use super::yaml::{unquote, Doc};
 use crate::gear::model::Refusal;
@@ -747,4 +748,84 @@ pub fn editor_view(doc: &Doc) -> Result<EditorView, Refusal> {
         callouts,
         screens,
     })
+}
+
+// ----- merging staged ops -----
+
+/// What a staged op is about. A later op with the same key replaces the earlier one, so a
+/// change holds the last word per setting.
+pub fn op_key(op: &ModelOp) -> String {
+    match op {
+        ModelOp::Rename { .. } => "rename".into(),
+        ModelOp::SetModelId { module, .. } => format!("model_id:{module}"),
+        ModelOp::SetFlags { flags } => format!(
+            "flags:{}",
+            flags
+                .iter()
+                .map(|f| f.key.as_str())
+                .collect::<Vec<_>>()
+                .join(",")
+        ),
+        ModelOp::SetChecklist { .. } => "checklist".into(),
+        ModelOp::SetMixes { channel, .. } => format!("mixes:{channel}"),
+        ModelOp::SetLogicalSwitch { index, .. } => format!("ls:{index}"),
+        ModelOp::SpecialFunctions { .. } | ModelOp::MoveSpecialFunction { .. } => {
+            serde_json::to_string(op).unwrap_or_default()
+        }
+        ModelOp::SetTimer { index, .. } | ModelOp::RemoveTimer { index } => {
+            format!("timer:{index}")
+        }
+        ModelOp::SwapTimers { a, b } => format!("swap:{a}:{b}"),
+        ModelOp::SetSwitchWarnings { .. } => "warnings".into(),
+        ModelOp::SetScreen { index, .. } | ModelOp::SetScreenValues { index, .. } => {
+            format!("screen:{index}")
+        }
+        ModelOp::SetLogging { .. } => "logging".into(),
+        ModelOp::SetSensorLogs { .. } => "sensor_logs".into(),
+        ModelOp::SetRfAlarms { .. } => "rf_alarms".into(),
+        ModelOp::SetCallout { callout } => format!("callout:{}", callout.track),
+        ModelOp::RemoveCallout { track } => format!("callout:{track}"),
+    }
+}
+
+/// Puts `fresh` after `kept`: an op replaces the op with its key. Two edits of one timer
+/// merge their fields (the later value of a field wins), and sensor logging merges by
+/// label.
+pub fn merge_ops(kept: &[ModelOp], fresh: &[ModelOp]) -> Vec<ModelOp> {
+    let mut out: Vec<ModelOp> = kept.to_vec();
+    for op in fresh {
+        let key = op_key(op);
+        let at = out.iter().position(|o| op_key(o) == key);
+        let merged = match (at.map(|i| &out[i]), op) {
+            (Some(ModelOp::SetTimer { fields: old, .. }), ModelOp::SetTimer { index, fields }) => {
+                let mut all = old.clone();
+                for f in fields {
+                    match all.iter_mut().find(|x| x.key == f.key) {
+                        Some(x) => x.value = f.value.clone(),
+                        None => all.push(f.clone()),
+                    }
+                }
+                ModelOp::SetTimer {
+                    index: *index,
+                    fields: all,
+                }
+            }
+            (Some(ModelOp::SetSensorLogs { sensors: old }), ModelOp::SetSensorLogs { sensors }) => {
+                let mut all = old.clone();
+                for s in sensors {
+                    match all.iter_mut().find(|x| x.label == s.label) {
+                        Some(x) => x.logs = s.logs,
+                        None => all.push(s.clone()),
+                    }
+                }
+                ModelOp::SetSensorLogs { sensors: all }
+            }
+            _ => op.clone(),
+        };
+        if let Some(i) = at {
+            out.remove(i);
+        }
+        out.push(merged);
+    }
+    out
 }

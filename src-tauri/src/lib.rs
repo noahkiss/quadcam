@@ -520,6 +520,8 @@ pub fn specta_builder() -> tauri_specta::Builder<tauri::Wry> {
             c::gear_osd_edit,
             c::gear_rates,
             c::gear_sims,
+            c::gear_model,
+            c::gear_model_edit,
             c::gear_card,
             c::gear_card_preview,
             c::gear_switch_map,

@@ -285,7 +285,7 @@ fn a_battery_callout_makes_a_switch_and_a_function_and_owns_them_by_track() {
         );
         assert_eq!(a.matches("lowbat").count(), 1);
         // Read back.
-        let v = view(layout, &[op.clone()]);
+        let v = view(layout, std::slice::from_ref(&op));
         let got = v.callouts.iter().find(|c| c.track == "lowbat").unwrap();
         assert_eq!(got.swtch, "L3");
         assert_eq!(got.repeat, "5");

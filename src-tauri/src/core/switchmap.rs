@@ -103,13 +103,13 @@ fn file_name(p: &Path) -> String {
 }
 
 /// A card to read the radio side from: a folder, or a radio's backup.
-trait CardSource {
+pub(super) trait CardSource {
     fn read(&self, rel: &str) -> Option<Vec<u8>>;
     /// Every file's path from the card's root.
     fn files(&self) -> Vec<String>;
 }
 
-struct Folder(PathBuf);
+pub(super) struct Folder(pub(super) PathBuf);
 
 impl CardSource for Folder {
     fn read(&self, rel: &str) -> Option<Vec<u8>> {
@@ -122,9 +122,9 @@ impl CardSource for Folder {
     }
 }
 
-struct InBackup<'a> {
-    snaps: &'a crate::gear::backup::Snapshots,
-    backup: crate::gear::model::Backup,
+pub(super) struct InBackup<'a> {
+    pub(super) snaps: &'a crate::gear::backup::Snapshots,
+    pub(super) backup: crate::gear::model::Backup,
 }
 
 impl CardSource for InBackup<'_> {

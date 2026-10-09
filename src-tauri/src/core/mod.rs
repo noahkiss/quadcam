@@ -25,6 +25,7 @@ mod gear;
 mod gear_card;
 mod import;
 mod library;
+mod model_edit;
 mod modules;
 mod osd;
 mod prep;
@@ -59,6 +60,7 @@ pub use gear::{
 pub use gear_card::{CardParams, CardPreview, CardPreviewParams, GearCard};
 pub use import::CardStatus;
 pub use library::{LibEdit, LibItem, LibUpdate, LibraryView, RebuildReport, RenameReport};
+pub use model_edit::{ModelDetail, ModelEditParams, ModelEntry, ModelParams, MODEL_CHANGE};
 pub use osd::{OsdEditParams, OsdParams};
 pub use rates::{RatesParams, SimsParams};
 pub use rematch::{LibMatch, LibMatchParams, LibMatchReport};
