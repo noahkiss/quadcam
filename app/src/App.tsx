@@ -3,6 +3,8 @@ import { useStore } from "./store";
 import { screenOf } from "./store/library";
 import { sel } from "./store/settings";
 import { Banner } from "./components/Banner";
+import { Button } from "./components/Button";
+import { installModule } from "./actions/modules";
 import { start } from "./events";
 import { useKeys } from "./keys";
 import { useMenu } from "./menu/useMenu";
@@ -65,8 +67,17 @@ export function App() {
       <Toolbar />
       {env && !env.tools && (
         <div className={styles.banner}>
-          <Banner kind="error" icon="danger-triangle" tint="red">
-            <b>ffmpeg not found.</b> Import is blocked. Install it with <code>{env.install_hint}</code>, then restart QuadCam.
+          <Banner
+            kind="error"
+            icon="danger-triangle"
+            tint="red"
+            action={
+              <Button size="sm" variant="primary" onClick={() => void installModule("ffmpeg")}>
+                Install ffmpeg…
+              </Button>
+            }
+          >
+            <b>ffmpeg not found.</b> Import is blocked until QuadCam has ffmpeg. You can also run <code>{env.install_hint}</code>, then restart QuadCam.
           </Banner>
         </div>
       )}

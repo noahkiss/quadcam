@@ -5,7 +5,7 @@ QuadCam is a Tauri 2 app. The core is Rust in `src-tauri/`. The frontend is Reac
 ## Requirements
 
 - Rust, through [rustup](https://rustup.rs) (stable).
-- ffmpeg and ffprobe from Homebrew. The app looks in its ffmpeg module first (see [Modules](modules.md)), then in `/opt/homebrew/bin` and `/usr/local/bin`, then `PATH`.
+- ffmpeg and ffprobe from Homebrew, for the tests and for `cargo tauri dev`. The app looks in its ffmpeg module first (see [Modules](modules.md)), then in `/opt/homebrew/bin` and `/usr/local/bin`, then `PATH`.
 - Node.js 24 through [fnm](https://github.com/Schniz/fnm), which reads `.node-version`.
 - pnpm, the version that `packageManager` in `app/package.json` names.
 - exiftool is optional. The tests use it when it is installed.

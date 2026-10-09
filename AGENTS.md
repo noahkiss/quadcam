@@ -39,7 +39,7 @@ README and `docs/`. Personal preferences go in the app's settings file on the ma
   `cargo install tauri-cli --version "^2" --locked` to type `cargo tauri`. Releases use the prebuilt one.
 - specta `=2.0.0-rc.25`, tauri-specta `=2.0.0-rc.25` and specta-typescript `=0.0.12` are release
   candidates: they stay pinned exactly, and an upgrade regenerates and reviews `app/src/bindings.ts`.
-- ffmpeg and ffprobe from Homebrew (`brew install ffmpeg`), or QuadCam's ffmpeg module. The app
+- ffmpeg and ffprobe from Homebrew (`brew install ffmpeg`), or QuadCam's ffmpeg module (users get the module through the first-run banner; the cask does not install ffmpeg). `tests/external_tools.rs` lists every program the code may run. The app
   looks in a path the `modules` setting names, then the module (unless `ffmpegSource` is
   `homebrew`), then `/opt/homebrew/bin` and `/usr/local/bin`, then `PATH` (`media::find_tools`). exiftool is optional; tests use it
   when present.

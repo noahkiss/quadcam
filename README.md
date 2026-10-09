@@ -52,9 +52,8 @@ The cask installs:
 
 - `QuadCam.app` in `/Applications`
 - the command-line tool `quadcam-cli` on your `PATH`
-- Homebrew's ffmpeg, which QuadCam needs to convert and verify clips
 
-QuadCam can also download ffmpeg itself as a module, in **Settings > Modules**. Once the module is installed, Homebrew's ffmpeg is optional. See [Modules and notices](docs/modules.md).
+QuadCam needs ffmpeg to convert and verify clips. The first time you open the app, a banner offers to download it as a module. It shows the license, size and source first, and downloads nothing until you select **Download**. **Settings > Modules** manages it later. A Homebrew ffmpeg that is already installed also works. See [Modules and notices](docs/modules.md).
 
 To update, run `brew upgrade --cask quadcam`. To remove the app, run `brew uninstall --cask quadcam`. Uninstall keeps your settings and your videos.
 

@@ -711,6 +711,8 @@ export class MockCore {
 
   moduleInstall(name: string, confirm: boolean): ModuleStatus {
     if (!confirm) throw "Refused: the install needs confirm=true.";
+    // The module is the default ffmpeg: once it is in, the tools check passes.
+    if (name === "ffmpeg") this.tools = true;
     return this.moduleChange(name, (m) => {
       const pin = m.newest ?? m.pinned;
       return {
