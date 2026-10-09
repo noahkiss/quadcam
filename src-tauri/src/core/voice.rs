@@ -540,6 +540,7 @@ impl Core {
             model,
             settings,
             tools,
+            cuts: None,
         }
     }
 
