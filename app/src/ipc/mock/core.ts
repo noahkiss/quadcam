@@ -33,7 +33,7 @@ const DISPATCH = new Set([
   "library", "library_rate", "library_edit", "library_rename", "library_cuts", "library_export_cuts", "library_trash", "library_untrash",
   "library_photos", "library_apply_name_format", "library_match_logs", "library_rebuild", "library_rescan", "library_preview", "library_strips", "card_status",
   "settings", "settings_set", "place_search", "place_save", "session_cuts", "profiles", "session_split", "library_split",
-  "modules", "module_install", "module_remove", "modules_check", "gear_osd",
+  "modules", "module_install", "module_remove", "modules_check", "gear_osd", "gear_rates", "gear_sims",
   "gear_status", "gear_devices", "gear_device_save", "gear_device_forget", "gear_dismiss_reminder", "gear_poll_pause",
   "gear_switch_map", "gear_radio", "gear_radio_watch", "gear_sim_calibration", "gear_sim_calibration_save", "gear_sim_defaults", "gear_sim_calibrate",
   "gear_flights", "gear_flight_set", "gear_flight_folders", "gear_packs", "gear_pack_save", "gear_pack_delete", "gear_pack_type_save",
@@ -408,6 +408,23 @@ export class MockCore {
         const v = seed.osd();
         v.source = paths.length ? paths.map(base) : [`${dev!.last_backup} dump all`];
         return v;
+      }
+      case "gear_rates": {
+        const paths = (p.paths as string[] | undefined) ?? [];
+        const dev = this.gear.devices.find((d) => d.id === p.device);
+        if (!paths.length && !p.backup && !dev?.last_backup) throw "Pass a device, a backup id, or a Betaflight dump or diff file.";
+        const v = seed.rates();
+        // A quad other than the seeded one flies profile 1.
+        if (dev && dev.id !== gear.FC.id) {
+          v.active = 1;
+          for (const x of v.profiles) x.active = x.index === 1;
+        }
+        v.source = paths.length ? paths.map(base) : [`${dev?.last_backup ?? p.backup} dump all`];
+        return v;
+      }
+      case "gear_sims": {
+        const quad = ((p.paths as string[] | undefined) ?? []).length > 0 || !!p.device || !!p.backup;
+        return seed.sims(quad ? `p${p.profile ?? 0}` : "none");
       }
       case "gear_flights":
         return this.flights.flights((p.day as string | null) ?? null);

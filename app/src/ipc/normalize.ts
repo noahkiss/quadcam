@@ -28,6 +28,12 @@ import type {
   RadioEvent,
   RadioSnapshot,
   SwitchMap,
+  RateAxis,
+  RateThrottle,
+  RateProfile,
+  RatesView,
+  SimRates,
+  SimRateProfile,
 } from "./types";
 
 const n = (v: number | null | undefined, d = 0) => (v == null || !Number.isFinite(v) ? d : v);
@@ -166,3 +172,38 @@ export const switchMap = (m: G.SwitchMap): SwitchMap => ({
 export const radioEvent = (e: G.RadioEvent): RadioEvent => ({ connected: e.connected, product: e.product ?? null, frame: e.frame ?? null });
 
 export const radioSnapshot = (s: G.RadioSnapshot): RadioSnapshot => ({ ...radioEvent(s), message: s.message ?? null });
+
+const nums = (xs: (number | null)[] | null | undefined): number[] => (xs || []).map((x) => n(x));
+const rateAxis = (a: G.AxisView): RateAxis => ({
+  axis: a.axis,
+  rc_rate: n(a.rc_rate),
+  srate: n(a.srate),
+  expo: n(a.expo),
+  rate_limit: n(a.rate_limit),
+  max_deg_s: n(a.max_deg_s),
+  center_deg_s: n(a.center_deg_s),
+  curve: nums(a.curve),
+});
+const rateThrottle = (t: G.ThrottleView): RateThrottle => ({
+  mid: n(t.mid),
+  expo: n(t.expo),
+  hover: has(t.hover) ? t.hover : null,
+  limit: t.limit,
+  limit_percent: n(t.limit_percent, 100),
+  curve: nums(t.curve),
+});
+const rateProfile = (p: G.RateProfileView): RateProfile => ({
+  ...p,
+  index: n(p.index),
+  axes: p.axes.map(rateAxis),
+  throttle: rateThrottle(p.throttle),
+});
+export const rates = (v: G.RatesView): RatesView => ({ ...v, active: has(v.active) ? v.active : null, profiles: v.profiles.map(rateProfile) });
+
+const simProfile = (p: G.SimProfileView): SimRateProfile => ({
+  ...p,
+  axes: p.axes.map(rateAxis),
+  throttle: p.throttle ? rateThrottle(p.throttle) : null,
+  diff: p.diff ? { ...p.diff, max_diff: nums(p.diff.max_diff), quad_max_diff: nums(p.diff.quad_max_diff), fit_error: nums(p.diff.fit_error) } : null,
+});
+export const sims = (xs: G.SimStatus[]): SimRates[] => xs.map((s) => ({ ...s, files: s.files.map((f) => ({ ...f, profiles: f.profiles.map(simProfile) })) }));
