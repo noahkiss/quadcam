@@ -32,10 +32,10 @@ pub use crate::core::{
     NotesParams, PackSaveParams, PacksParams, ReportParams, ReportSaveParams, ReportSaved,
 };
 pub use crate::core::{
-    FirmwareParams, FirmwareRead, FirmwareReadParams, FirmwareView, FlashParams, FlashRequest,
+    ElrsFlashParams, ElrsFlashRequest, ElrsParams, ElrsReadParams, ElrsReadReport, ElrsView,
 };
 pub use crate::core::{
-    ElrsFlashParams, ElrsFlashRequest, ElrsParams, ElrsReadParams, ElrsReadReport, ElrsView,
+    FirmwareParams, FirmwareRead, FirmwareReadParams, FirmwareView, FlashParams, FlashRequest,
 };
 pub use crate::gear::apply::sim::{SimSyncParams, SimSyncRequest, SimTarget};
 pub use crate::gear::apply::{ApplyPlanParams, ApplyReport, ApplyRequest, StepReport, StepState};
