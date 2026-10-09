@@ -31,7 +31,9 @@ pub use crate::core::{
     CrashSaveParams, FlightFilter, FlightFoldersParams, FlightReport, FlightSetParams, FlightsView,
     NotesParams, PackSaveParams, PacksParams, ReportParams, ReportSaveParams, ReportSaved,
 };
-pub use crate::core::{FirmwareParams, FirmwareView, FlashParams, FlashRequest};
+pub use crate::core::{
+    FirmwareParams, FirmwareRead, FirmwareReadParams, FirmwareView, FlashParams, FlashRequest,
+};
 pub use crate::gear::apply::sim::{SimSyncParams, SimSyncRequest, SimTarget};
 pub use crate::gear::apply::{ApplyPlanParams, ApplyReport, ApplyRequest, StepReport, StepState};
 pub use crate::gear::backup::{
@@ -131,6 +133,10 @@ macro_rules! with_gear_rows {
             /// What flashing an EdgeTX radio would do: the release's board binary (downloaded
             /// on first use), the splash patch, every guard and a digest. Writes no device.
             gear_flash_plan(params: FlashParams) -> ApplyPlan = |c| c.gear_flash_plan(&params);
+            /// The read-only DFU trial: reads the flash of the one radio in DFU mode twice, saves
+            /// it as a firmware copy and compares the version the image names with the radio's
+            /// known version. Cannot erase, write or restart the radio (`firmware-read-progress` events).
+            gear_firmware_read(params: FirmwareReadParams) -> FirmwareRead = |c| c.gear_firmware_read(&params);
             /// Flashes the planned firmware over DFU: reads the radio's current firmware as a
             /// kept backup, erases, writes, reads back and compares, then leaves DFU. Needs
             /// the plan's digest and confirm=true; with the app running the person also clicks

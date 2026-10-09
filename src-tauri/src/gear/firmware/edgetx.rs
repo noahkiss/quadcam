@@ -2,15 +2,19 @@
 //! the splash patch.
 //!
 //! - The release comes from the EdgeTX GitHub releases (`edgetx-firmware-vX.Y.Z.zip`, one
-//!   binary per board). The zip is downloaded on the person's action into
+//!   binary per board, named `<board>-<7 hex of the git commit>.bin`; checked against the
+//!   real 2.12.4 release). The zip is downloaded on the person's action into
 //!   `<cache>/firmware/edgetx/<version>/` and checked against the release's SHA-256 when
 //!   GitHub reports one; otherwise the hash is recorded at the first download and shown in
 //!   the plan. QuadCam bundles and redistributes nothing.
-//! - The binary for a board is the one zip entry whose name, less a `fw-` or `edgetx-`
-//!   prefix and the version, is one of the board's names. None, or two, refuses.
+//! - The binary for a board is the one zip entry whose name, less `.bin` and the commit hash,
+//!   is one of the board's names. None, or two, refuses.
 //! - The image must be a full image: the bootloader at `0x08000000` and the firmware's own
 //!   vector table `app_offset` bytes in. A firmware-only image would overwrite the
-//!   bootloader, so it refuses (a refusal is safe; a wrong flash is not).
+//!   bootloader, so it refuses (a refusal is safe; a wrong flash is not). The release's
+//!   Pocket image is a full image (the bootloader's table at 0, the firmware's at `0x8000`).
+//! - The image must also name its own board and version (`edgetx-pocket-2.12.4 (...)`), so a
+//!   binary of another release or board cannot pass as the one asked for.
 
 use super::check::{parse_release, Asset, Ver};
 use super::fetch_bytes;
@@ -39,21 +43,24 @@ pub fn asset_name(version: &str) -> String {
 pub struct BoardSpec {
     /// The `board:` value of `radio.yml`.
     pub id: &'static str,
-    /// Names the release gives its binary, less prefix and version.
+    /// Names the release gives its binary, less `.bin` and the commit hash.
     pub names: &'static [&'static str],
     /// The image size guard, in KB.
     pub min_kb: usize,
     pub max_kb: usize,
     /// Where the firmware's own vector table sits in a full image (the bootloader's size).
     pub app_offset: usize,
+    /// The size of the chip's internal flash, which DFU reports in its layout.
+    pub flash_bytes: usize,
 }
 
 pub const BOARDS: &[BoardSpec] = &[BoardSpec {
     id: "pocket",
-    names: &["pocket", "radiomaster-pocket"],
+    names: &["pocket"],
     min_kb: 400,
     max_kb: 1000,
     app_offset: 0x8000,
+    flash_bytes: 0x10_0000,
 }];
 
 pub fn spec(board: &str) -> Option<&'static BoardSpec> {
@@ -63,6 +70,11 @@ pub fn spec(board: &str) -> Option<&'static BoardSpec> {
 
 fn bad_image(reason: impl Into<String>) -> Refusal {
     Refusal::new(RefusalCode::BadImage, reason)
+}
+
+/// The short commit hash the release adds to every binary name (`def35ad`).
+fn is_commit_hash(s: &str) -> bool {
+    (7..=40).contains(&s.len()) && s.bytes().all(|b| b.is_ascii_hexdigit())
 }
 
 /// The entry of `names` that is this board's binary.
@@ -75,15 +87,10 @@ pub fn select_binary(names: &[String], spec: &BoardSpec) -> Result<usize, Refusa
             let Some(stem) = file.strip_suffix(".bin") else {
                 return false;
             };
-            let mut stem = stem.replace('_', "-");
+            let mut stem = stem.to_string();
             if let Some((head, tail)) = stem.rsplit_once('-') {
-                if Ver::parse(tail).is_some() {
+                if is_commit_hash(tail) {
                     stem = head.to_string();
-                }
-            }
-            for p in ["fw-", "firmware-", "edgetx-"] {
-                if let Some(rest) = stem.strip_prefix(p) {
-                    stem = rest.to_string();
                 }
             }
             spec.names.contains(&stem.as_str())
@@ -124,7 +131,7 @@ fn is_vector_table(b: &[u8], at: usize, lo: u32, hi: u32) -> bool {
 
 /// The checks every image passes before it is planned: size, and a full image with the
 /// bootloader first and the firmware after it.
-pub fn check_image(bin: &[u8], spec: &BoardSpec) -> Result<(), Refusal> {
+pub fn check_image(bin: &[u8], spec: &BoardSpec, version: &str) -> Result<(), Refusal> {
     let kb = bin.len() / 1024;
     if kb < spec.min_kb || kb > spec.max_kb {
         return Err(bad_image(format!(
@@ -143,7 +150,63 @@ pub fn check_image(bin: &[u8], spec: &BoardSpec) -> Result<(), Refusal> {
             "The file has no firmware after the bootloader; it is not a full image.",
         ));
     }
+    if !names_version(bin, spec.id, version) {
+        return Err(bad_image(format!(
+            "The file does not say it is EdgeTX {version} for the {}.",
+            spec.id
+        )));
+    }
     Ok(())
+}
+
+/// True when the image holds `edgetx-<board>-<version>` followed by a space, a NUL or the
+/// end (the firmware's own version string, `edgetx-pocket-2.12.4 (def35ad3)`).
+pub fn names_version(bin: &[u8], board: &str, version: &str) -> bool {
+    let needle = format!("edgetx-{board}-{version}");
+    let n = needle.as_bytes();
+    bin.windows(n.len())
+        .enumerate()
+        .filter(|(_, w)| *w == n)
+        .any(|(i, _)| matches!(bin.get(i + n.len()), None | Some(b' ') | Some(0)))
+}
+
+/// The `edgetx-<board>-<version>` string an image carries, whatever it is.
+pub fn image_version(bin: &[u8], board: &str) -> Option<String> {
+    let needle = format!("edgetx-{board}-");
+    let n = needle.as_bytes();
+    let at = bin.windows(n.len()).position(|w| w == n)? + n.len();
+    let v: String = bin[at..]
+        .iter()
+        .take(24)
+        .take_while(|b| b.is_ascii_alphanumeric() || **b == b'.' || **b == b'-')
+        .map(|b| *b as char)
+        .collect();
+    (!v.is_empty()).then_some(v)
+}
+
+/// The board and version an image names itself (`edgetx-pocket-2.12.4 (def35ad3)`), whatever
+/// they are: the first `edgetx-<board>-<version>` string where the version starts with a digit.
+pub fn image_identity(bin: &[u8]) -> Option<(String, String)> {
+    let needle = b"edgetx-";
+    let mut from = 0;
+    while let Some(p) = bin[from..].windows(needle.len()).position(|w| w == needle) {
+        let at = from + p + needle.len();
+        from = at;
+        let text: String = bin[at..]
+            .iter()
+            .take(40)
+            .take_while(|b| b.is_ascii_alphanumeric() || matches!(**b, b'.' | b'-' | b'_'))
+            .map(|b| *b as char)
+            .collect();
+        // The version starts at the last "-<digit>" so board names with dashes survive.
+        let Some(i) = text.match_indices('-').map(|(i, _)| i).find(|i| {
+            text[i + 1..].starts_with(|c: char| c.is_ascii_digit()) && text[i + 1..].contains('.')
+        }) else {
+            continue;
+        };
+        return Some((text[..i].to_string(), text[i + 1..].to_string()));
+    }
+    None
 }
 
 /// Where a release's hash came from.
@@ -311,7 +374,7 @@ pub fn board_binary(rel: &Release, board: &str) -> Result<Binary> {
         .collect();
     let i = select_binary(&rels, spec)?;
     let bytes = std::fs::read(&files[i])?;
-    check_image(&bytes, spec)?;
+    check_image(&bytes, spec, &rel.version)?;
     let sha256 = sha256_file(&files[i])?;
     Ok(Binary {
         name: rels[i].rsplit('/').next().unwrap_or(&rels[i]).to_string(),
@@ -334,6 +397,11 @@ pub(crate) mod fixtures {
         b[4..8].copy_from_slice(&0x0800_0101u32.to_le_bytes());
         b[0x8000..0x8004].copy_from_slice(&0x2001_FFF0u32.to_le_bytes());
         b[0x8004..0x8008].copy_from_slice(&0x0800_8201u32.to_le_bytes());
+        // The version string the real image carries, twice, as the real one does.
+        for at in [0x9000, 0x40000] {
+            let v = b"edgetx-pocket-2.12.4 (def35ad3)\0";
+            b[at..at + v.len()].copy_from_slice(v);
+        }
         let s = splash::tests::synthetic_binary();
         // Filler of `salt` never forms the markers; the synthetic block does.
         let at = 0x20000;
@@ -343,7 +411,9 @@ pub(crate) mod fixtures {
         b
     }
 
-    /// A release zip with a pocket binary and a binary of another radio, as `ditto` makes it.
+    /// A release zip laid out as the real 2.12.4 one is (`<board>-<hash>.bin`, `fw.json`,
+    /// `LICENSE`, `.uf2` files), with a pocket binary and a binary of another radio, as `ditto`
+    /// makes it. `version` is only the zip's name.
     pub(crate) fn release_zip(
         out_dir: &Path,
         version: &str,
@@ -353,12 +423,12 @@ pub(crate) mod fixtures {
         let src = out_dir.join(format!("zip-src-{version}"));
         let _ = std::fs::remove_dir_all(&src);
         std::fs::create_dir_all(&src).unwrap();
-        std::fs::write(
-            src.join(format!("fw-radiomaster-pocket-v{version}.bin")),
-            pocket,
-        )
-        .unwrap();
-        std::fs::write(src.join(format!("fw-tx16s-v{version}.bin")), full_image(7)).unwrap();
+        std::fs::write(src.join("pocket-def35ad.bin"), pocket).unwrap();
+        std::fs::write(src.join("tx16s-def35ad.bin"), full_image(7)).unwrap();
+        // The real zip also holds a firmware list, a licence and .uf2 files.
+        std::fs::write(src.join("fw.json"), b"{}").unwrap();
+        std::fs::write(src.join("LICENSE"), b"x").unwrap();
+        std::fs::write(src.join("t15-def35ad.uf2"), b"x").unwrap();
         for (n, b) in extra {
             std::fs::write(src.join(n), b).unwrap();
         }
@@ -413,22 +483,23 @@ mod tests {
     fn the_board_binary_is_the_one_named_for_the_board() {
         let pocket = spec("pocket").unwrap();
         let n = names(&[
-            "fw-tx16s-v2.12.4.bin",
-            "fw-radiomaster-pocket-v2.12.4.bin",
-            "readme.txt",
+            "tx16s-def35ad.bin",
+            "pocket-def35ad.bin",
+            "LICENSE",
+            "fw.json",
+            "t15-def35ad.uf2",
         ]);
         assert_eq!(select_binary(&n, pocket).unwrap(), 1);
         assert_eq!(
-            select_binary(&names(&["dir/pocket-2.12.4.bin"]), pocket).unwrap(),
+            select_binary(&names(&["dir/pocket-def35ad.bin"]), pocket).unwrap(),
             0
         );
-        assert_eq!(
-            select_binary(&names(&["radiomaster_pocket_v2.12.4.bin"]), pocket).unwrap(),
-            0
-        );
+        assert_eq!(select_binary(&names(&["pocket.bin"]), pocket).unwrap(), 0);
+        // Names from before the real release was checked match nothing.
+        assert!(select_binary(&names(&["fw-radiomaster-pocket-v2.12.4.bin"]), pocket).is_err());
         // Another radio is not a near match: pocket is not "pocket-x".
         let e = select_binary(
-            &names(&["fw-pocketx-v2.12.4.bin", "fw-tx16s-v2.12.4.bin"]),
+            &names(&["pocketx-def35ad.bin", "tx16s-def35ad.bin"]),
             pocket,
         )
         .unwrap_err();
@@ -439,10 +510,7 @@ mod tests {
             e.reason
         );
         let e = select_binary(
-            &names(&[
-                "a/fw-pocket-v2.12.4.bin",
-                "b/fw-radiomaster-pocket-v2.12.4.bin",
-            ]),
+            &names(&["a/pocket-def35ad.bin", "b/pocket-0123456.bin"]),
             pocket,
         )
         .unwrap_err();
@@ -458,30 +526,63 @@ mod tests {
     #[test]
     fn image_checks_size_and_the_two_vector_tables() {
         let pocket = spec("pocket").unwrap();
-        assert!(check_image(&full_image(0), pocket).is_ok());
-        assert!(check_image(&vec![0u8; 100 * 1024], pocket)
+        assert!(check_image(&full_image(0), pocket, "2.12.4").is_ok());
+        assert!(check_image(&vec![0u8; 100 * 1024], pocket, "2.12.4")
             .unwrap_err()
             .reason
             .contains("100 KB"));
-        assert!(check_image(&vec![0u8; 2000 * 1024], pocket).is_err());
+        assert!(check_image(&vec![0u8; 2000 * 1024], pocket, "2.12.4").is_err());
         // No bootloader table first.
         let mut b = full_image(0);
         b[4..8].copy_from_slice(&0x0800_8201u32.to_le_bytes());
-        assert!(check_image(&b, pocket)
+        assert!(check_image(&b, pocket, "2.12.4")
             .unwrap_err()
             .reason
             .contains("bootloader"));
         // A firmware-only image: its own table first, nothing after.
         let mut fw_only = full_image(0)[0x8000..].to_vec();
         fw_only.resize(600 * 1024, 0xAA);
-        assert!(check_image(&fw_only, pocket).is_err());
+        assert!(check_image(&fw_only, pocket, "2.12.4").is_err());
         // No firmware table at the offset.
         let mut b = full_image(0);
         b[0x8000..0x8004].copy_from_slice(&0u32.to_le_bytes());
-        assert!(check_image(&b, pocket)
+        assert!(check_image(&b, pocket, "2.12.4")
             .unwrap_err()
             .reason
             .contains("no firmware"));
+    }
+
+    #[test]
+    fn the_image_must_name_its_own_board_and_version() {
+        let pocket = spec("pocket").unwrap();
+        let img = full_image(0);
+        assert_eq!(image_version(&img, "pocket").as_deref(), Some("2.12.4"));
+        assert_eq!(
+            image_identity(&img),
+            Some(("pocket".to_string(), "2.12.4".to_string()))
+        );
+        assert_eq!(image_identity(&[0u8; 100]), None);
+        // Other text that starts with the prefix is skipped.
+        let mut o = b"edgetx-\0edgetx-x9e-hall-2.12.0 (abc)\0".to_vec();
+        assert_eq!(
+            image_identity(&o),
+            Some(("x9e-hall".to_string(), "2.12.0".to_string()))
+        );
+        o.clear();
+        // A release asked for as 2.12.5 that holds 2.12.4 refuses; so does 2.12.40.
+        let e = check_image(&img, pocket, "2.12.5").unwrap_err();
+        assert!(e.reason.contains("EdgeTX 2.12.5"), "{}", e.reason);
+        assert!(!names_version(&img, "pocket", "2.12.40"));
+        assert!(!names_version(&img, "pocket", "2.12"));
+        // Another board's string does not count.
+        assert!(!names_version(&img, "boxer", "2.12.4"));
+        // No string at all.
+        let mut b = img.clone();
+        for at in [0x9000, 0x40000] {
+            b[at..at + 32].fill(0);
+        }
+        assert!(check_image(&b, pocket, "2.12.4").is_err());
+        assert_eq!(image_version(&b, "pocket"), None);
     }
 
     #[test]
@@ -497,7 +598,7 @@ mod tests {
         assert_eq!(rel.sha256, sha256_file(&zip).unwrap());
         let bin = board_binary(&rel, "pocket").unwrap();
         assert_eq!(bin.bytes, img);
-        assert_eq!(bin.name, "fw-radiomaster-pocket-v2.12.4.bin");
+        assert_eq!(bin.name, "pocket-def35ad.bin");
         assert_eq!(
             bin.sha256,
             sha256_file(&rel.zip.parent().unwrap().join("unpacked").join(&bin.name)).unwrap()
