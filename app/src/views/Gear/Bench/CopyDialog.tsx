@@ -24,12 +24,12 @@ const PARTS: { id: CopyPart; label: string }[] = [
   { id: "features", label: "Features and beeper" },
 ];
 
-export function CopyDialog({ onClose, to: toInit }: { onClose: () => void; to?: string }) {
+export function CopyDialog({ onClose, to: toInit, parts: partsInit = [] }: { onClose: () => void; to?: string; parts?: CopyPart[] }) {
   const fcs = useStore((s) => s.devices).filter((d) => d.kind === "fc");
   const loadGear = useStore((s) => s.loadGear);
   const [to, setTo] = useState(toInit || fcs[0]?.id || "");
   const [from, setFrom] = useState(fcs.find((d) => d.id !== (toInit || fcs[0]?.id))?.id || "");
-  const [parts, setParts] = useState<CopyPart[]>([]);
+  const [parts, setParts] = useState<CopyPart[]>(partsInit);
   const [names, setNames] = useState("");
   const [result, setResult] = useState<{ key: string; plan?: CopyPlan; error?: string } | null>(null);
   const [staging, setStaging] = useState<string | null>(null);
