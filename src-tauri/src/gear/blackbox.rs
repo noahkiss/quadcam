@@ -11,8 +11,8 @@
 //!   the day it ran. `link` pairs a pull's logs with the radio-log flights by order, and
 //!   labels the pairing a guess.
 
-use super::blobs::BlobRef;
 use super::bf::blackbox::LogInfo;
+use super::blobs::BlobRef;
 use super::store::{safe, Store};
 use anyhow::{bail, Context, Result};
 use chrono::{DateTime, NaiveDate, Utc};
@@ -140,7 +140,7 @@ impl Pulls {
             .filter(|e| e.path().extension().is_some_and(|x| x == "json"))
             .filter_map(|e| serde_json::from_slice(&std::fs::read(e.path()).ok()?).ok())
             .collect();
-        out.sort_by(|a: &Pull, b: &Pull| a.pulled_at.cmp(&b.pulled_at));
+        out.sort_by_key(|p: &Pull| p.pulled_at);
         out
     }
 
@@ -156,7 +156,7 @@ impl Pulls {
                 self.list(&name)
             })
             .collect();
-        out.sort_by(|a, b| a.pulled_at.cmp(&b.pulled_at));
+        out.sort_by_key(|p| p.pulled_at);
         out
     }
 
@@ -323,7 +323,11 @@ mod tests {
         assert!(p.get("fc-1/../x").is_err());
         assert!(p.get("nothing").is_err());
         assert_eq!(p.all().len(), 2);
-        p.save(&pull("fc-2", Utc.with_ymd_and_hms(2026, 10, 7, 13, 0, 0).unwrap())).unwrap();
+        p.save(&pull(
+            "fc-2",
+            Utc.with_ymd_and_hms(2026, 10, 7, 13, 0, 0).unwrap(),
+        ))
+        .unwrap();
         assert_eq!(p.all().len(), 3);
         assert_eq!(keys(&Store::new(dir.path())).len(), 1, "all name one blob");
         assert_eq!(export_stem(&a), "Meteor_75_2026-10-07T120000");
@@ -331,7 +335,12 @@ mod tests {
 
     #[test]
     fn links_pair_the_newest_by_order_and_say_guess() {
-        let logs = [log(1, 200_000), log(2, 4_000), log(3, 300_000), log(4, 100_000)];
+        let logs = [
+            log(1, 200_000),
+            log(2, 4_000),
+            log(3, 300_000),
+            log(4, 100_000),
+        ];
         let flights = [cand("f1", 40.0), cand("f2", 60.0), cand("f3", 20.0)];
         let l = link(&logs, &flights);
         assert_eq!(l.short_logs, 1, "log 2 is a test arm");
@@ -346,7 +355,12 @@ mod tests {
 
     #[test]
     fn extra_logs_stay_unpaired_and_a_bad_fit_shows() {
-        let logs = [log(1, 100_000), log(2, 100_000), log(3, 100_000), log(4, 100_000)];
+        let logs = [
+            log(1, 100_000),
+            log(2, 100_000),
+            log(3, 100_000),
+            log(4, 100_000),
+        ];
         let flights = [cand("f1", 20.0), cand("f2", 20.0)];
         let l = link(&logs, &flights);
         assert_eq!((l.unpaired_logs, l.unpaired_flights), (2, 0));

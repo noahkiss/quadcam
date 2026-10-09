@@ -147,10 +147,6 @@ export const commands = {
 	gearDeviceSave: (params: DeviceSaveParams) => typedError<Device, string>(__TAURI_INVOKE("gear_device_save", { params })),
 	/**  Forgets a device. Its backups stay. */
 	gearDeviceForget: (params: IdParams) => typedError<Device, string>(__TAURI_INVOKE("gear_device_forget", { params })),
-	/**
-	 *  Reads an FC's identity over MSP (board, firmware, version, its device id). No
-	 *  reboot. One cue at the end.
-	 */
 	gearFcIdentify: (params: FcPortParams) => typedError<FcJob<FcInfo>, string>(__TAURI_INVOKE("gear_fc_identify", { params })),
 	/**
 	 *  Reads an FC through its CLI: read-only commands, a backup's set by default. The FC
@@ -350,6 +346,19 @@ export const commands = {
 	gearCrashDelete: (params: IdParams) => typedError<Crash, string>(__TAURI_INVOKE("gear_crash_delete", { params })),
 	/**  Backs up a radio card or an FC (the FC reboots). Writes nothing when nothing changed. */
 	gearBackup: (params: BackupParams) => typedError<BackupResult, string>(__TAURI_INVOKE("gear_backup", { params })),
+	/**
+	 *  Reads an FC's identity over MSP (board, firmware, version, its device id). No
+	 *  reboot. One cue at the end.
+	 *  Pulls an FC's blackbox flash (only the used bytes), verifies and stores it, and
+	 *  erases the flash when the setting or `erase` allows and the checks pass.
+	 */
+	gearBlackboxPull: (params: BlackboxPullParams) => typedError<FcJob<BlackboxPullResult>, string>(__TAURI_INVOKE("gear_blackbox_pull", { params })),
+	/**  Stored blackbox pulls, newest first, each with its guessed flights. */
+	gearBlackbox: (params: BlackboxFilter) => typedError<BlackboxEntry[], string>(__TAURI_INVOKE("gear_blackbox", { params })),
+	/**  Writes a stored pull (and with `split` each log) to a folder. */
+	gearBlackboxExport: (params: BlackboxExportParams) => typedError<BlackboxExported, string>(__TAURI_INVOKE("gear_blackbox_export", { params })),
+	/**  Erases an FC's blackbox flash. Needs `confirm` and a stored pull of exactly what the flash holds. */
+	gearBlackboxErase: (params: BlackboxEraseParams) => typedError<FcJob<BlackboxErased>, string>(__TAURI_INVOKE("gear_blackbox_erase", { params })),
 	/**  Snapshots, newest first, without their file lists. */
 	gearBackups: (params: BackupFilter) => typedError<BackupSummary[], string>(__TAURI_INVOKE("gear_backups", { params })),
 	/**  A snapshot with its files, or one file's content. */
@@ -639,7 +648,9 @@ export type Automation =
 /**  Import the clips on a card. */
 "import" | 
 /**  Apply the device's staged changes that are Ready. */
-"apply_ready";
+"apply_ready" | 
+/**  Pull an FC's blackbox flash (and erase it, when `erase_blackbox` is on). */
+"blackbox";
 
 /**  A Betaflight `aux` line in use. */
 export type AuxMode = {
@@ -845,6 +856,84 @@ export type BackupSummary = {
 };
 
 export type Badge = "matched" | "likely" | "unmatched";
+
+/**  A pull with its guessed flights. */
+export type BlackboxEntry = {
+	pull: Pull,
+	flights: Linked,
+};
+
+/**  `gear_blackbox_erase`: erase the FC's flash by hand. */
+export type BlackboxEraseParams = {
+	port?: string | null,
+	/**  Required. The erase deletes the FC's logs for good. */
+	confirm?: boolean,
+};
+
+/**  `gear_blackbox_erase`'s answer. */
+export type BlackboxErased = {
+	/**  The stored pull that holds what was erased. */
+	pull: string,
+	secs: number | null,
+};
+
+/**  `gear_blackbox_export`: a pull to a folder. */
+export type BlackboxExportParams = {
+	id: string,
+	to: string,
+	/**  Also write each log as its own file. */
+	split?: boolean,
+};
+
+/**  `gear_blackbox_export`'s answer. */
+export type BlackboxExported = {
+	files: string[],
+	bytes: number,
+};
+
+/**  `gear_blackbox`: one device's pulls, or every device's. */
+export type BlackboxFilter = {
+	device?: string | null,
+};
+
+/**  `gear_blackbox_pull`. */
+export type BlackboxPullParams = {
+	/**  The FC's port; omitted when exactly one FC is plugged in. */
+	port?: string | null,
+	/**
+	 *  Keep the flash this run: do not erase it even when the `gear_erase_blackbox` setting
+	 *  is on. Nothing here turns the erase on; `gear_blackbox_erase` is its own call.
+	 */
+	keep?: boolean,
+	mode?: PullMode | null,
+	/**
+	 *  Pull although the USB heat timer says the read would outlast it. An erase that
+	 *  could not finish still does not start.
+	 */
+	force?: boolean,
+};
+
+/**  `gear_blackbox_pull`'s answer. */
+export type BlackboxPullResult = {
+	/**  None when the flash was empty. */
+	pull: Pull | null,
+	/**  False when the stored pull already holds these bytes. */
+	new: boolean,
+	method: Method | null,
+	read_bytes: number,
+	read_secs: number | null,
+	erase: EraseState,
+	erase_note: string | null,
+	erase_secs: number | null,
+	notes: string[],
+};
+
+/**  A blob's identity: its content hash and size. */
+export type BlobRef = {
+	/**  XXH64 as 16 hex digits. */
+	xxh64: string,
+	size: number,
+};
 
 /**  One known issue of a board, or a board and build. */
 export type BoardNote = {
@@ -2018,6 +2107,15 @@ export type EnvCheck = {
 	build: string,
 };
 
+/**  What a pull did about the erase. */
+export type EraseState = 
+/**  Not asked for. */
+"off" | 
+/**  The flash was erased and reads empty. */
+"done" | 
+/**  Asked for and not done; `erase_note` says why. The pull itself is stored. */
+"skipped";
+
 /**  `gear_export`: a snapshot, or every snapshot of a device, to a folder. */
 export type ExportParams = {
 	device?: string | null,
@@ -2226,6 +2324,20 @@ export type FlightLine = {
 	secs: number | null,
 };
 
+/**  One log paired with one flight. */
+export type FlightLink = {
+	/**  The log's number in the image (1-based). */
+	log: number,
+	log_bytes: number,
+	flight: string,
+	flight_secs: number | null,
+	/**
+	 *  Bytes per second of flight: a log and its flight agree when these are alike across
+	 *  pairs. None with fewer than three pairs.
+	 */
+	fits: boolean | null,
+};
+
 /**  A flight with what QuadCam joins to it. */
 export type FlightReport = {
 	flight: Flight,
@@ -2404,6 +2516,16 @@ export type GearSettings = {
 	firmware_check: string,
 	/**  The voice provider: `say` (macOS) or another a later version adds. */
 	tts_provider: string,
+	/**
+	 *  Erase the FC's blackbox flash after a pull verified (`gearEraseBlackbox`). Off by
+	 *  default, like `delete_clips_after_import`.
+	 */
+	erase_blackbox: boolean,
+	/**
+	 *  Try the FC's USB disk mode before MSP for a blackbox pull (`gearBlackboxMsc`).
+	 *  Unproven on real FCs; off by default.
+	 */
+	blackbox_msc: boolean,
 	/**
 	 *  What runs when a device of each kind is plugged in (`gearOnConnect`). Backup also
 	 *  needs `auto_backup`.
@@ -3005,6 +3127,19 @@ export type LinkEdge = {
 	tx_power_mw: number | null,
 };
 
+/**  The pairing of a pull's logs with flights, and what it left over. */
+export type Linked = {
+	links: FlightLink[],
+	/**  Flight logs (not test arms) with no flight to pair with. */
+	unpaired_logs: number,
+	/**  Candidate flights with no log. */
+	unpaired_flights: number,
+	/**  Logs shorter than `MIN_FLIGHT_LOG_BYTES`. */
+	short_logs: number,
+	/**  Always says this is a guess and how it was made. */
+	note: string,
+};
+
 /**  Channel values matched to the map: where each control is, and what the FC has on. */
 export type Live = {
 	/**  `fc` (`MSP_RC`) or `radio` (the USB joystick). */
@@ -3039,6 +3174,26 @@ export type LogCounts = {
 	same: number,
 	kept_both: number,
 	unchanged: number,
+};
+
+/**  One log in the flash image, from its headers. */
+export type LogInfo = {
+	/**  Position in the image, 1-based. */
+	index: number,
+	offset: number,
+	size: number,
+	/**  `H Firmware revision`. */
+	firmware: string | null,
+	/**  `H Craft name`. */
+	craft: string | null,
+	/**  `H Log start datetime`, as the log prints it. */
+	start: string | null,
+	/**  The start is a real date (not the `0000-01-01` an FC without a clock prints). */
+	dated: boolean,
+	/**  `H looptime`, microseconds. */
+	looptime_us: number | null,
+	/**  Header lines. */
+	headers: number,
 };
 
 /**  The switch that writes the radio's log, and how often. */
@@ -3091,6 +3246,13 @@ export type Meta = {
 	date: string,
 	description: string,
 };
+
+/**  How the image was read. */
+export type Method = 
+/**  MSP over the serial port (about 84 KB/s). */
+"msp" | 
+/**  The FC in USB disk mode (`msc`). Not proven on a real FC. */
+"msc";
 
 export type Mix = {
 	/**  0 is CH1. */
@@ -3911,6 +4073,41 @@ export type PruneReport = {
 	kept: number,
 	collected: Collected,
 };
+
+/**  One pull. */
+export type Pull = {
+	/**  `<device>/<YYYY-MM-DDTHHMMSS>`. */
+	id: string,
+	/**  The FC's device id. */
+	device: string,
+	/**  The aircraft profile the device is linked to, when it is. */
+	aircraft?: string | null,
+	pulled_at: string,
+	/**  The local day of the pull. */
+	day: string,
+	method: Method,
+	blob: BlobRef,
+	/**  Bytes the flash reported used, and its size. */
+	used: number,
+	total: number,
+	logs: LogInfo[],
+	/**  The firmware of the first log, and the craft name of the first log that has one. */
+	firmware?: string | null,
+	craft?: string | null,
+	/**  The flash was erased after the pull verified. */
+	erased?: boolean,
+	/**  Why the flash was not erased, or what the erase did. */
+	erase_note?: string | null,
+};
+
+/**  How a pull reads the flash. */
+export type PullMode = 
+/**  USB disk mode when the `gear_blackbox_msc` setting is on and the FC has it, else MSP. */
+"auto" | 
+/**  MSP only. */
+"msp" | 
+/**  USB disk mode only (unproven on real FCs); fails when the FC lacks it. */
+"msc";
 
 /**
  *  Speech and sound stay silent from `start` to `end` (local time, `HH:MM`; may cross

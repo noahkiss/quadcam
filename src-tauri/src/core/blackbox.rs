@@ -292,7 +292,8 @@ impl Core {
             notes: Vec::new(),
         };
         if used == 0 {
-            res.notes.push("The blackbox flash is empty; nothing to pull.".into());
+            res.notes
+                .push("The blackbox flash is empty; nothing to pull.".into());
             return Ok((info, res));
         }
 
@@ -313,7 +314,8 @@ impl Core {
             .into());
         }
         if !fits(read_s, remaining) {
-            res.notes.push("Pulled although the USB timer is short (forced).".into());
+            res.notes
+                .push("Pulled although the USB timer is short (forced).".into());
         }
 
         // Read.
@@ -321,7 +323,8 @@ impl Core {
         let mut method = Method::Msp;
         let mut image: Option<Vec<u8>> = None;
         let mut back = true;
-        let use_msc = a.mode == PullMode::Msc || (a.mode == PullMode::Auto && a.settings.blackbox_msc);
+        let use_msc =
+            a.mode == PullMode::Msc || (a.mode == PullMode::Auto && a.settings.blackbox_msc);
         if use_msc {
             drop(link);
             match self.blackbox_msc_read(ports, port, t) {
@@ -388,7 +391,9 @@ impl Core {
             if blobs.get(&r)? != image {
                 bail!("The stored blackbox does not read back equal, so nothing was erased.");
             }
-            let device = store.seen(&id, DeviceKind::Fc, &info.identity)?;
+            // The device is not saved here: a pull of an FC QuadCam does not know yet stays
+            // under its id, and the person names the FC and links its aircraft in Gear.
+            let aircraft = store.device(&id)?.and_then(|d| d.aircraft);
             match pulls.latest(&id).filter(|l| l.blob == r && !l.erased) {
                 Some(same) => {
                     res.notes
@@ -396,11 +401,15 @@ impl Core {
                     same
                 }
                 None => {
-                    let now = Utc::now();
+                    // Two pulls in one second would share an id: step past a taken one.
+                    let mut now = Utc::now();
+                    while pulls.get(&format!("{id}/{}", blackbox::stamp(now))).is_ok() {
+                        now += chrono::Duration::seconds(1);
+                    }
                     let new = Pull {
                         id: format!("{id}/{}", blackbox::stamp(now)),
                         device: id.clone(),
-                        aircraft: device.aircraft.clone(),
+                        aircraft,
                         pulled_at: now,
                         day: now.with_timezone(&Local).date_naive(),
                         method,
@@ -490,7 +499,12 @@ impl Core {
         }
         bb::erase(link.as_mut(), t.msp)?;
         let limit = Duration::from_secs_f64(erase_s * 2.0).min(t.erase_max);
-        let secs = bb::wait_erased(link.as_mut(), t.msp, limit, t.poll.max(Duration::from_millis(1)))?;
+        let secs = bb::wait_erased(
+            link.as_mut(),
+            t.msp,
+            limit,
+            t.poll.max(Duration::from_millis(1)),
+        )?;
         pull.erased = true;
         pull.erase_note = None;
         Ok((EraseState::Done, None, Some(secs)))
@@ -500,7 +514,12 @@ impl Core {
     /// send it, wait for a new volume with `.bbl` files, copy them in name order, release the
     /// disk. None when the FC has no `msc`. Needs a real-FC trial: the file names and layout
     /// the FC shows are not proven.
-    fn blackbox_msc_read(&self, ports: &dyn Ports, port: &str, t: Timing) -> Result<Option<MscRead>> {
+    fn blackbox_msc_read(
+        &self,
+        ports: &dyn Ports,
+        port: &str,
+        t: Timing,
+    ) -> Result<Option<MscRead>> {
         let before: HashSet<PathBuf> = (self.gear.volumes)().into_iter().map(|v| v.mount).collect();
         let (mut s, _) = CliSession::enter(ports.open(port, BAUD)?, t)?;
         let help = s.command("help")?;
@@ -585,8 +604,7 @@ impl Core {
     pub fn gear_blackbox_export(&self, p: &BlackboxExportParams) -> Result<BlackboxExported> {
         let pull = self.pulls().get(p.id.trim())?;
         let image = Blobs::new(self.gear_store()).get(&pull.blob)?;
-        std::fs::create_dir_all(&p.to)
-            .with_context(|| format!("creating {}", p.to.display()))?;
+        std::fs::create_dir_all(&p.to).with_context(|| format!("creating {}", p.to.display()))?;
         let stem = blackbox::export_stem(&pull);
         let mut files = Vec::new();
         let mut write = |name: String, bytes: &[u8]| -> Result<()> {
@@ -595,7 +613,9 @@ impl Core {
                 .write(true)
                 .create_new(true)
                 .open(&path)
-                .with_context(|| format!("{} already exists or cannot be written", path.display()))?;
+                .with_context(|| {
+                    format!("{} already exists or cannot be written", path.display())
+                })?;
             std::io::Write::write_all(&mut f, bytes)?;
             files.push(path);
             Ok(())
@@ -689,9 +709,10 @@ fn bbl_files(dir: &std::path::Path) -> Vec<PathBuf> {
             let p = e.path();
             if p.is_dir() && depth == 0 {
                 here(&p, out, 1);
-            } else if p.extension().is_some_and(|x| {
-                x.eq_ignore_ascii_case("bbl") || x.eq_ignore_ascii_case("bfl")
-            }) && !e.file_name().to_string_lossy().starts_with('.')
+            } else if p
+                .extension()
+                .is_some_and(|x| x.eq_ignore_ascii_case("bbl") || x.eq_ignore_ascii_case("bfl"))
+                && !e.file_name().to_string_lossy().starts_with('.')
             {
                 out.push(p);
             }

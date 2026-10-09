@@ -84,10 +84,9 @@ pub fn run(core: &Core, cmd: BlackboxCmd) -> Result<Value> {
         BlackboxCmd::List { device } => {
             serde_json::to_value(call::gear_blackbox(core, api::BlackboxFilter { device })?)?
         }
-        BlackboxCmd::Export { id, dir, split } => serde_json::to_value(call::gear_blackbox_export(
-            core,
-            api::BlackboxExportParams { id, to: dir, split },
-        )?)?,
+        BlackboxCmd::Export { id, dir, split } => serde_json::to_value(
+            call::gear_blackbox_export(core, api::BlackboxExportParams { id, to: dir, split })?,
+        )?,
         BlackboxCmd::Erase { port, confirm } => serde_json::to_value(call::gear_blackbox_erase(
             core,
             api::BlackboxEraseParams { port, confirm },

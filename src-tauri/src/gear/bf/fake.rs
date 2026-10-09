@@ -205,7 +205,11 @@ impl FakeFc {
         self
     }
     fn flash<T>(&self, f: impl FnOnce(&mut Flash) -> T) -> T {
-        f(self.st().flash.as_mut().expect("no dataflash: with_dataflash"))
+        f(self
+            .st()
+            .flash
+            .as_mut()
+            .expect("no dataflash: with_dataflash"))
     }
     /// Summary polls that read "not ready" after an erase starts (default 2).
     pub fn with_erase_polls(self, n: u32) -> Self {
@@ -441,7 +445,8 @@ impl FakeLink {
             }
             "help" => {
                 let msc = if s.msc { " msc\r\n" } else { "" };
-                let t = format!("{echo}Available commands:\r\n diff\r\n dump\r\n{msc} save\r\n\r\n# ");
+                let t =
+                    format!("{echo}Available commands:\r\n diff\r\n dump\r\n{msc} save\r\n\r\n# ");
                 drop(s);
                 self.send(&t, 1);
                 return;
@@ -614,7 +619,11 @@ fn flash_msp(fl: &mut Flash, f: &Frame) -> Option<Vec<u8>> {
         MSP_DATAFLASH_ERASE => {
             fl.erases += 1;
             fl.image.clear();
-            fl.erasing = if fl.stuck_erase { u32::MAX } else { fl.erase_polls };
+            fl.erasing = if fl.stuck_erase {
+                u32::MAX
+            } else {
+                fl.erase_polls
+            };
             Some(Vec::new())
         }
         MSP_DATAFLASH_READ => {

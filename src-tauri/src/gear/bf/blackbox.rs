@@ -72,7 +72,10 @@ pub fn parse_summary(p: &[u8]) -> Result<FlashSummary> {
 }
 
 /// The flash summary.
-pub fn summary(link: &mut dyn crate::gear::serial::SerialLink, timeout: Duration) -> Result<FlashSummary> {
+pub fn summary(
+    link: &mut dyn crate::gear::serial::SerialLink,
+    timeout: Duration,
+) -> Result<FlashSummary> {
     parse_summary(&msp::call(link, MSP_DATAFLASH_SUMMARY, timeout)?)
 }
 
@@ -157,9 +160,11 @@ pub fn read_used(
             }
         }
         let Some(d) = got else {
-            return Err(last.unwrap_or_else(|| anyhow!("read failed")).context(format!(
-                "Reading the blackbox failed at byte {addr} of {used} after {RETRIES} tries."
-            )));
+            return Err(last
+                .unwrap_or_else(|| anyhow!("read failed"))
+                .context(format!(
+                    "Reading the blackbox failed at byte {addr} of {used} after {RETRIES} tries."
+                )));
         };
         // A reply longer than asked cannot be trusted.
         if d.len() > want as usize {
@@ -287,7 +292,9 @@ fn parse_one(index: u32, offset: usize, log: &[u8]) -> LogInfo {
         let Some(nl) = rest.iter().position(|b| *b == b'\n') else {
             break;
         };
-        let line = String::from_utf8_lossy(&rest[2..nl]).trim_end_matches('\r').to_string();
+        let line = String::from_utf8_lossy(&rest[2..nl])
+            .trim_end_matches('\r')
+            .to_string();
         rest = &rest[nl + 1..];
         info.headers += 1;
         let Some((k, v)) = line.split_once(':') else {
@@ -336,7 +343,10 @@ pub fn check_image(image: &[u8], used: u64) -> ImageCheck {
     }
     for l in &logs {
         if l.firmware.is_none() {
-            problems.push(format!("Log {} has no firmware line in its header.", l.index));
+            problems.push(format!(
+                "Log {} has no firmware line in its header.",
+                l.index
+            ));
         }
     }
     ImageCheck { logs, problems }
@@ -378,7 +388,10 @@ mod tests {
             p.extend_from_slice(&v.to_le_bytes());
         }
         let s = parse_summary(&p).unwrap();
-        assert_eq!((s.ready, s.supported, s.total, s.used), (true, true, 16_777_216, 1234));
+        assert_eq!(
+            (s.ready, s.supported, s.total, s.used),
+            (true, true, 16_777_216, 1234)
+        );
         assert!(parse_summary(&p[..12]).is_err());
         p[0] = 2;
         assert!(!parse_summary(&p).unwrap().ready);
@@ -400,14 +413,21 @@ mod tests {
 
     #[test]
     fn headers_give_count_firmware_craft_and_date() {
-        let img = synth_image(&[("Meteor75", 500), ("Meteor75", 900), ("Air65", 100)], "0000-01-01T00:00:00.000+00:00");
+        let img = synth_image(
+            &[("Meteor75", 500), ("Meteor75", 900), ("Air65", 100)],
+            "0000-01-01T00:00:00.000+00:00",
+        );
         let c = check_image(&img, img.len() as u64);
         assert!(c.problems.is_empty(), "{:?}", c.problems);
         assert_eq!(c.logs.len(), 3);
         assert_eq!(c.logs[0].offset, 0);
         assert_eq!(c.logs[1].craft.as_deref(), Some("Meteor75"));
         assert_eq!(c.logs[2].craft.as_deref(), Some("Air65"));
-        assert!(c.logs[0].firmware.as_deref().unwrap().starts_with("Betaflight 2025.12.5"));
+        assert!(c.logs[0]
+            .firmware
+            .as_deref()
+            .unwrap()
+            .starts_with("Betaflight 2025.12.5"));
         assert!(!c.logs[0].dated);
         assert_eq!(c.logs[0].looptime_us, Some(125));
         assert_eq!(c.logs.iter().map(|l| l.size).sum::<u64>(), img.len() as u64);
@@ -419,7 +439,11 @@ mod tests {
     fn a_bad_image_is_named() {
         let img = synth_image(&[("A", 100)], "0000-01-01T00:00:00.000+00:00");
         let short = check_image(&img[..img.len() - 1], img.len() as u64);
-        assert!(short.problems[0].starts_with("Read "), "{:?}", short.problems);
+        assert!(
+            short.problems[0].starts_with("Read "),
+            "{:?}",
+            short.problems
+        );
         let mut lead = b"junk".to_vec();
         lead.extend_from_slice(&img);
         assert!(check_image(&lead, lead.len() as u64).problems[0].contains("before the first"));
@@ -429,7 +453,7 @@ mod tests {
     }
 
     use crate::gear::bf::fake::FakeFc;
-    use crate::gear::bf::{cli::BAUD, cli::Timing};
+    use crate::gear::bf::{cli::Timing, cli::BAUD};
     use crate::gear::serial::Ports;
 
     const DUMP: &str = include_str!("../../../tests/fixtures/bf/g473-2025.12.5.dump_all.txt");
@@ -440,7 +464,10 @@ mod tests {
     }
 
     fn image() -> Vec<u8> {
-        synth_image(&[("Meteor75", 9000), ("Meteor75", 5000)], "0000-01-01T00:00:00.000+00:00")
+        synth_image(
+            &[("Meteor75", 9000), ("Meteor75", 5000)],
+            "0000-01-01T00:00:00.000+00:00",
+        )
     }
 
     #[test]
@@ -450,7 +477,10 @@ mod tests {
         let mut l = flash(&fc);
         let t = Timing::fast().msp;
         let s = summary(l.as_mut(), t).unwrap();
-        assert_eq!((s.ready, s.supported, s.used as usize), (true, true, img.len()));
+        assert_eq!(
+            (s.ready, s.supported, s.used as usize),
+            (true, true, img.len())
+        );
         let mut seen = Vec::new();
         let got = read_used(l.as_mut(), s.used, t, &mut |d| {
             seen.push(d);
@@ -458,7 +488,10 @@ mod tests {
         })
         .unwrap();
         assert_eq!(got, img);
-        assert_eq!(fc.dataflash_reads() as usize, img.len().div_ceil(CHUNK as usize));
+        assert_eq!(
+            fc.dataflash_reads() as usize,
+            img.len().div_ceil(CHUNK as usize)
+        );
         assert_eq!(*seen.last().unwrap(), img.len() as u64);
         assert!(seen.windows(2).all(|w| w[0] < w[1]));
     }
@@ -471,44 +504,94 @@ mod tests {
             .short_reads(1000)
             .fail_reads(2);
         let mut l = flash(&fc);
-        let got = read_used(l.as_mut(), img.len() as u32, Timing::fast().msp, &mut |_| true).unwrap();
-        assert_eq!(got, img, "short replies continue where they ended; two errors retry");
+        let got = read_used(
+            l.as_mut(),
+            img.len() as u32,
+            Timing::fast().msp,
+            &mut |_| true,
+        )
+        .unwrap();
+        assert_eq!(
+            got, img,
+            "short replies continue where they ended; two errors retry"
+        );
         // Three errors in a row on one chunk give up and say where.
-        let fc = FakeFc::new(DUMP).with_dataflash(img.clone(), 1 << 24).fail_reads(3);
+        let fc = FakeFc::new(DUMP)
+            .with_dataflash(img.clone(), 1 << 24)
+            .fail_reads(3);
         let mut l = flash(&fc);
-        let e = read_used(l.as_mut(), img.len() as u32, Timing::fast().msp, &mut |_| true).unwrap_err();
+        let e = read_used(
+            l.as_mut(),
+            img.len() as u32,
+            Timing::fast().msp,
+            &mut |_| true,
+        )
+        .unwrap_err();
         assert!(format!("{e:#}").contains("byte 0 of"), "{e:#}");
     }
 
     #[test]
     fn a_compressed_reply_is_an_error_and_a_stop_stops() {
         let img = image();
-        let fc = FakeFc::new(DUMP).with_dataflash(img.clone(), 1 << 24).compress_replies();
+        let fc = FakeFc::new(DUMP)
+            .with_dataflash(img.clone(), 1 << 24)
+            .compress_replies();
         let mut l = flash(&fc);
-        let e = read_used(l.as_mut(), img.len() as u32, Timing::fast().msp, &mut |_| true).unwrap_err();
+        let e = read_used(
+            l.as_mut(),
+            img.len() as u32,
+            Timing::fast().msp,
+            &mut |_| true,
+        )
+        .unwrap_err();
         assert!(format!("{e:#}").contains("compressed"), "{e:#}");
         let fc = FakeFc::new(DUMP).with_dataflash(img.clone(), 1 << 24);
         let mut l = flash(&fc);
-        let e = read_used(l.as_mut(), img.len() as u32, Timing::fast().msp, &mut |_| false).unwrap_err();
+        let e = read_used(
+            l.as_mut(),
+            img.len() as u32,
+            Timing::fast().msp,
+            &mut |_| false,
+        )
+        .unwrap_err();
         assert!(e.downcast_ref::<Stopped>().is_some());
     }
 
     #[test]
     fn erase_polls_until_ready_and_empty() {
-        let fc = FakeFc::new(DUMP).with_dataflash(image(), 1 << 24).with_erase_polls(3);
+        let fc = FakeFc::new(DUMP)
+            .with_dataflash(image(), 1 << 24)
+            .with_erase_polls(3);
         let mut l = flash(&fc);
         let t = Timing::fast().msp;
         erase(l.as_mut(), t).unwrap();
-        assert!(!summary(l.as_mut(), t).unwrap().ready, "an erase in progress is not ready");
-        wait_erased(l.as_mut(), t, Duration::from_secs(2), Duration::from_millis(1)).unwrap();
+        assert!(
+            !summary(l.as_mut(), t).unwrap().ready,
+            "an erase in progress is not ready"
+        );
+        wait_erased(
+            l.as_mut(),
+            t,
+            Duration::from_secs(2),
+            Duration::from_millis(1),
+        )
+        .unwrap();
         let s = summary(l.as_mut(), t).unwrap();
         assert_eq!((s.ready, s.used), (true, 0));
         assert_eq!(fc.dataflash_erases(), 1);
         // A flash that never finishes fails with a plain message.
-        let fc = FakeFc::new(DUMP).with_dataflash(image(), 1 << 24).stuck_erase();
+        let fc = FakeFc::new(DUMP)
+            .with_dataflash(image(), 1 << 24)
+            .stuck_erase();
         let mut l = flash(&fc);
         erase(l.as_mut(), t).unwrap();
-        let e = wait_erased(l.as_mut(), t, Duration::from_millis(30), Duration::from_millis(1)).unwrap_err();
+        let e = wait_erased(
+            l.as_mut(),
+            t,
+            Duration::from_millis(30),
+            Duration::from_millis(1),
+        )
+        .unwrap_err();
         assert!(format!("{e}").contains("did not finish"), "{e}");
     }
 
