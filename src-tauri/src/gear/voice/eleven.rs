@@ -182,8 +182,10 @@ impl Eleven {
         Ok(Pcm {
             rate: super::render::OUT_RATE,
             samples: bytes
-                .chunks_exact(2)
-                .map(|c| i16::from_le_bytes([c[0], c[1]]))
+                .as_chunks::<2>()
+                .0
+                .iter()
+                .map(|c| i16::from_le_bytes(*c))
                 .collect(),
         })
     }
