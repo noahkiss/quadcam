@@ -116,6 +116,40 @@ test("syncing a sim profile plans, backs up through the sheet and reads as match
   await expect(sims.getByRole("button", { name: "Sync 1 RACE into Uncrashed FREE" })).toBeDisabled();
 });
 
+test("a synced sim can be restored from its backup through the sheet", async ({ app, page }) => {
+  await app.open();
+  await app.core(`c => { c.simSync.running = []; }`);
+  await page.getByRole("navigation", { name: "Library" }).getByRole("button", { name: /^Devices/ }).click();
+  await page.getByRole("list", { name: "Devices" }).getByRole("button", { name: /Whoop FC/ }).click();
+  await page.getByRole("group", { name: "Sections" }).getByRole("button", { name: "Rates" }).click();
+  await profiles(page).getByRole("button", { name: "1 RACE" }).click();
+  const sims = page.getByRole("region", { name: "Sims" });
+  // No backup yet: no Restore.
+  await expect(sims.getByRole("button", { name: /^Restore Uncrashed/ })).toHaveCount(0);
+
+  await sims.getByRole("button", { name: "Sync 1 RACE into Uncrashed FREE" }).click();
+  const sync = page.getByRole("dialog", { name: "Apply to sims" });
+  await sync.getByRole("button", { name: "Apply" }).click();
+  await expect(sync.getByRole("region", { name: "Result" })).toContainText("Verified");
+  await sync.getByRole("button", { name: "Done" }).click();
+
+  await expect(sims.getByText(/^Backed up /).first()).toBeVisible();
+  await sims.getByRole("button", { name: "Restore Uncrashed from its backup" }).click();
+  const sheet = page.getByRole("dialog", { name: "Apply to sims" });
+  await expect(sheet.getByRole("heading", { name: "Restore a sim backup" })).toBeVisible();
+  await expect(sheet.getByRole("region", { name: "Checks" })).toContainText("Backup found");
+  await expect(sheet.getByRole("region", { name: "Warnings" })).toContainText("Changes made in the game");
+  expect((await app.method("gear_sim_restore_plan")).at(-1)).toMatchObject({ sim: "uncrashed" });
+  expect(await app.method("gear_sim_restore")).toEqual([]);
+
+  await sheet.getByRole("button", { name: "Apply" }).click();
+  await expect(sheet.getByRole("region", { name: "Result" })).toContainText("Verified");
+  expect((await app.method("gear_sim_restore_click")).at(-1)).toMatchObject({ sim: "uncrashed", confirm: true });
+  await sheet.getByRole("button", { name: "Done" }).click();
+  // The file is back as it was: the profile differs from the quad again, so Sync is on.
+  await expect(sims.getByRole("button", { name: "Sync 1 RACE into Uncrashed FREE" })).toBeEnabled();
+});
+
 test("a sim that runs cannot be synced, even if it starts after the plan", async ({ app, page }) => {
   await app.open();
   await app.core(`c => { c.simSync.running = []; }`);
