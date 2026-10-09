@@ -183,7 +183,7 @@ mod tests {
         .unwrap();
         assert_eq!(c.id, "radio-1/2026-10-09T120000-read");
         assert_eq!(c.size, 5000);
-        assert_eq!(list(&s, "radio-1"), [c.clone()]);
+        assert_eq!(list(&s, "radio-1"), std::slice::from_ref(&c));
         assert_eq!(read(&s, &c).unwrap(), bytes);
         // A damaged file fails its hash.
         let p = dir(&s, "radio-1").join("2026-10-09T120000-read.bin");
