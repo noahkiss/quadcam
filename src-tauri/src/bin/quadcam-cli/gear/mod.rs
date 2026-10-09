@@ -35,6 +35,8 @@ pub enum GearCmd {
     /// An FC's OSD layout per OSD profile, drawn on its grid and checked for overlaps and
     /// cells off screen. Reads a dump or diff file.
     Osd(osd::OsdArgs),
+    /// Stages OSD moves, toggles or a profile copy for an FC (one "OSD layout" change).
+    OsdEdit(osd::OsdEditArgs),
     /// An EdgeTX card: models, the selected model, the radio clock; `preview` checks edits.
     Card(card::CardArgs),
     /// The switch map: what each radio control does on the radio and the FC, per position.
@@ -164,6 +166,7 @@ pub fn run(core: &Core, cmd: GearCmd) -> Result<Value> {
     Ok(match cmd {
         GearCmd::Fc { cmd } => fc::run(core, cmd)?,
         GearCmd::Osd(a) => osd::run(core, a)?,
+        GearCmd::OsdEdit(a) => osd::edit(core, a)?,
         GearCmd::Status => serde_json::to_value(call::gear_status(core)?)?,
         GearCmd::Card(a) => card::run(core, a)?,
         GearCmd::Map(a) => map::run(core, a)?,

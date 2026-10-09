@@ -23,7 +23,8 @@
 //! This module reads text only: it opens no port and no file. `Core::gear_osd` reads the
 //! files.
 
-use anyhow::{bail, Result};
+use super::model::Edit;
+use anyhow::{bail, Context, Result};
 use serde::{Deserialize, Serialize};
 use specta::Type;
 use std::collections::{BTreeMap, BTreeSet};
@@ -374,6 +375,129 @@ impl OsdConfig {
             c.read(t);
         }
         c
+    }
+}
+
+/// One element move, toggle or both. A field left out keeps the element's value now.
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize, Type)]
+pub struct OsdMove {
+    /// The setting name without `osd_` and `_pos` (`vbat`); `osd_vbat_pos` is accepted.
+    pub element: String,
+    #[serde(default)]
+    pub x: Option<u8>,
+    #[serde(default)]
+    pub y: Option<u8>,
+    /// The OSD profiles (1-3) that show it; empty turns it off in all of them.
+    #[serde(default)]
+    pub profiles: Option<Vec<u8>>,
+}
+
+/// Copy one OSD profile's layout onto another: the target shows exactly the elements the
+/// source shows. Positions are shared by every profile, so nothing moves.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Type)]
+pub struct OsdCopy {
+    pub from: u8,
+    pub to: u8,
+}
+
+/// An element's setting name: `osd_vbat_pos`, `OSD_VBAT_POS` and `vbat` all give `vbat`.
+pub fn element_name(s: &str) -> String {
+    let l = s.trim().to_ascii_lowercase();
+    let l = l.strip_prefix("osd_").unwrap_or(&l);
+    l.strip_suffix("_pos").unwrap_or(l).to_string()
+}
+
+fn profile_mask(profiles: &[u8]) -> u8 {
+    profiles.iter().fold(0u8, |m, p| m | (1 << (p - 1)))
+}
+
+impl OsdConfig {
+    /// The `OsdElement` edit a move makes against what the config holds now.
+    pub fn resolve(&self, m: &OsdMove) -> Result<Edit> {
+        let name = element_name(&m.element);
+        let held = self.positions.get(&name).with_context(|| {
+            format!("The layout lists no osd_{name}_pos; check the name with `gear osd`.")
+        })?;
+        let now = Pos::decode(*held);
+        let profiles = m.profiles.clone().unwrap_or_else(|| now.profile_list());
+        if let Some(p) = profiles.iter().find(|p| !(1..=3).contains(*p)) {
+            bail!("OSD profile {p} does not exist: Betaflight has profiles 1-3.");
+        }
+        let (x, y) = (m.x.unwrap_or(now.x), m.y.unwrap_or(now.y));
+        if x > 63 || y > 31 {
+            bail!("osd_{name}_pos takes x 0-63 and y 0-31, not {x},{y}.");
+        }
+        Ok(Edit::OsdElement {
+            element: name,
+            x,
+            y,
+            profiles,
+        })
+    }
+
+    /// The edits that make profile `copy.to` show what `copy.from` shows. Empty when they
+    /// already match.
+    pub fn copy_profile(&self, copy: OsdCopy) -> Result<Vec<Edit>> {
+        for p in [copy.from, copy.to] {
+            if !(1..=3).contains(&p) {
+                bail!("OSD profile {p} does not exist: Betaflight has profiles 1-3.");
+            }
+        }
+        let mut out = Vec::new();
+        for (name, v) in &self.positions {
+            let pos = Pos::decode(*v);
+            if pos.in_profile(copy.from) == pos.in_profile(copy.to) {
+                continue;
+            }
+            let bit = 1u8 << (copy.to - 1);
+            let mask = if pos.in_profile(copy.from) {
+                pos.profiles | bit
+            } else {
+                pos.profiles & !bit
+            };
+            out.push(Edit::OsdElement {
+                element: name.clone(),
+                x: pos.x,
+                y: pos.y,
+                profiles: PROFILES
+                    .into_iter()
+                    .filter(|p| mask & (1 << (p - 1)) != 0)
+                    .collect(),
+            });
+        }
+        Ok(out)
+    }
+
+    /// Applies `OsdElement` edits on top, as the FC writer would: the variant bits stay,
+    /// an element the config does not list is added. Other edits are skipped, and so is an
+    /// edit the writer would refuse.
+    pub fn apply_edits(&mut self, edits: &[Edit]) {
+        for e in edits {
+            let Edit::OsdElement {
+                element,
+                x,
+                y,
+                profiles,
+            } = e
+            else {
+                continue;
+            };
+            if *x > 63 || *y > 31 || profiles.iter().any(|p| !(1..=3).contains(p)) {
+                continue;
+            }
+            let name = element_name(element);
+            let variant = self
+                .positions
+                .get(&name)
+                .map_or(0, |v| Pos::decode(*v).variant);
+            let pos = Pos {
+                x: *x,
+                y: *y,
+                profiles: profile_mask(profiles),
+                variant,
+            };
+            self.positions.insert(name, pos.encode());
+        }
     }
 }
 
@@ -1108,5 +1232,165 @@ mod tests {
             .boxes
             .iter()
             .any(|b| b.element == "craft_name" && b.width == 5));
+    }
+
+    fn held(lines: &str) -> OsdConfig {
+        OsdConfig::parse([lines])
+    }
+
+    #[test]
+    fn a_move_keeps_what_it_leaves_out() {
+        let c = held(&format!(
+            "set osd_vbat_pos = {}\n",
+            Pos {
+                x: 2,
+                y: 3,
+                profiles: 0b011,
+                variant: 2
+            }
+            .encode()
+        ));
+        let e = c
+            .resolve(&OsdMove {
+                element: "OSD_VBAT_POS".into(),
+                x: Some(9),
+                ..Default::default()
+            })
+            .unwrap();
+        assert_eq!(
+            e,
+            Edit::OsdElement {
+                element: "vbat".into(),
+                x: 9,
+                y: 3,
+                profiles: vec![1, 2]
+            }
+        );
+        let off = c
+            .resolve(&OsdMove {
+                element: "vbat".into(),
+                profiles: Some(vec![]),
+                ..Default::default()
+            })
+            .unwrap();
+        assert!(matches!(off, Edit::OsdElement { profiles, .. } if profiles.is_empty()));
+        assert!(c
+            .resolve(&OsdMove {
+                element: "nope".into(),
+                ..Default::default()
+            })
+            .is_err());
+        for bad in [
+            OsdMove {
+                element: "vbat".into(),
+                x: Some(64),
+                ..Default::default()
+            },
+            OsdMove {
+                element: "vbat".into(),
+                y: Some(32),
+                ..Default::default()
+            },
+            OsdMove {
+                element: "vbat".into(),
+                profiles: Some(vec![4]),
+                ..Default::default()
+            },
+        ] {
+            assert!(c.resolve(&bad).is_err(), "{bad:?}");
+        }
+    }
+
+    #[test]
+    fn copy_profile_changes_only_the_target_bit() {
+        let p = |x, y, profiles| {
+            Pos {
+                x,
+                y,
+                profiles,
+                variant: 1,
+            }
+            .encode()
+        };
+        let c = held(&format!(
+            "set osd_vbat_pos = {}\nset osd_rssi_pos = {}\nset osd_tim_1_pos = {}\nset osd_tim_2_pos = {}\n",
+            p(1, 1, 0b001),
+            p(2, 2, 0b011),
+            p(3, 3, 0b010),
+            p(4, 4, 0b000),
+        ));
+        let edits = c.copy_profile(OsdCopy { from: 1, to: 2 }).unwrap();
+        let got: Vec<_> = edits
+            .iter()
+            .map(|e| match e {
+                Edit::OsdElement {
+                    element, profiles, ..
+                } => (element.as_str(), profiles.clone()),
+                _ => unreachable!(),
+            })
+            .collect();
+        // vbat joins profile 2; rssi already matches; tim_1 leaves profile 2; tim_2 matches.
+        assert_eq!(got, [("tim_1", vec![]), ("vbat", vec![1, 2])]);
+        assert!(c
+            .copy_profile(OsdCopy { from: 1, to: 1 })
+            .unwrap()
+            .is_empty());
+        assert!(c.copy_profile(OsdCopy { from: 0, to: 1 }).is_err());
+    }
+
+    /// Property: whatever an edit says, the FC line the writer renders reads back as the
+    /// same x, y and profiles, and keeps the variant the FC held.
+    #[test]
+    fn an_edit_round_trips_through_the_fc_line() {
+        use crate::gear::bf::dump::Config;
+        use crate::gear::changes::render_fc;
+        for variant in 0..4u8 {
+            let base_value = Pos {
+                x: 7,
+                y: 7,
+                profiles: 1,
+                variant,
+            }
+            .encode();
+            let base = Config::parse(&format!("set osd_vbat_pos = {base_value}\n"));
+            for x in (0..64u8).step_by(3).chain([63]) {
+                for y in (0..32u8).step_by(2).chain([31]) {
+                    for mask in 0..8u8 {
+                        let profiles: Vec<u8> = PROFILES
+                            .into_iter()
+                            .filter(|p| mask & (1 << (p - 1)) != 0)
+                            .collect();
+                        let edit = Edit::OsdElement {
+                            element: "vbat".into(),
+                            x,
+                            y,
+                            profiles: profiles.clone(),
+                        };
+                        let r = render_fc(std::slice::from_ref(&edit), Some(&base));
+                        assert!(r.problems.is_empty(), "{:?}", r.problems);
+                        let [line] = r.lines.as_slice() else {
+                            panic!("{:?}", r.lines)
+                        };
+                        let v: u16 = line
+                            .strip_prefix("set osd_vbat_pos = ")
+                            .unwrap()
+                            .parse()
+                            .unwrap();
+                        let pos = Pos::decode(v);
+                        assert_eq!(
+                            (pos.x, pos.y, pos.profile_list(), pos.variant),
+                            (x, y, profiles, variant)
+                        );
+                        // The preview applies the same edit to the same value.
+                        let mut c =
+                            OsdConfig::parse([
+                                format!("set osd_vbat_pos = {base_value}\n").as_str()
+                            ]);
+                        c.apply_edits(&[edit]);
+                        assert_eq!(c.positions["vbat"], v);
+                    }
+                }
+            }
+        }
     }
 }

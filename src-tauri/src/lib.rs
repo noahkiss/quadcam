@@ -517,6 +517,7 @@ pub fn specta_builder() -> tauri_specta::Builder<tauri::Wry> {
             c::gear_poll_pause,
             c::gear_dismiss_reminder,
             c::gear_osd,
+            c::gear_osd_edit,
             c::gear_card,
             c::gear_card_preview,
             c::gear_switch_map,

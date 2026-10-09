@@ -173,6 +173,11 @@ export const commands = {
 	 *  and cells off screen. Reads only.
 	 */
 	gearOsd: (params: OsdParams) => typedError<OsdView, string>(__TAURI_INVOKE("gear_osd", { params })),
+	/**
+	 *  Stages OSD moves, toggles or a profile copy for an FC as one "OSD layout"
+	 *  change. Writes only QuadCam's own data; the apply sheet writes the FC.
+	 */
+	gearOsdEdit: (params: OsdEditParams) => typedError<StagedChange_Serialize, string>(__TAURI_INVOKE("gear_osd_edit", { params })),
 	/**  An EdgeTX card: models, the selected model and its aircraft, the radio clock, one model in full. */
 	gearCard: (params: CardParams) => typedError<GearCard, string>(__TAURI_INVOKE("gear_card", { params })),
 	/**  Checks and diffs EdgeTX card edits. Writes nothing. */
@@ -2912,6 +2917,27 @@ export type OsdBox = {
 	height: number,
 };
 
+/**
+ *  Copy one OSD profile's layout onto another: the target shows exactly the elements the
+ *  source shows. Positions are shared by every profile, so nothing moves.
+ */
+export type OsdCopy = {
+	from: number,
+	to: number,
+};
+
+/**
+ *  `gear_osd_edit`: move or toggle elements, or copy one profile's layout onto another, as
+ *  a staged change for an FC. The edits join the device's open "OSD layout" change.
+ */
+export type OsdEditParams = {
+	device: string,
+	moves?: OsdMove[],
+	copy?: OsdCopy | null,
+	/**  Who stages it. The app and the CLI leave it out (the person); MCP says `agent`. */
+	editor?: Editor | null,
+};
+
 /**  One element in the files. */
 export type OsdElement = {
 	/**  The setting name without `osd_` and `_pos` (`vbat`, `link_quality`). */
@@ -2937,6 +2963,16 @@ export type OsdElement = {
 	known: boolean,
 };
 
+/**  One element move, toggle or both. A field left out keeps the element's value now. */
+export type OsdMove = {
+	/**  The setting name without `osd_` and `_pos` (`vbat`); `osd_vbat_pos` is accepted. */
+	element: string,
+	x?: number | null,
+	y?: number | null,
+	/**  The OSD profiles (1-3) that show it; empty turns it off in all of them. */
+	profiles?: number[] | null,
+};
+
 /**  `gear_osd`: where to read the OSD from, and the grid to draw it on. */
 export type OsdParams = {
 	/**
@@ -2951,6 +2987,11 @@ export type OsdParams = {
 	device?: string | null,
 	/**  `NTSC`, `PAL`, `HD` or `WxH`; empty for the files' `vcd_video_system`. */
 	grid?: string | null,
+	/**
+	 *  With a `device`: also apply the OSD edits its staged changes hold, so the view shows
+	 *  the layout after they apply (the editor's working copy).
+	 */
+	staged?: boolean,
 };
 
 /**  One check failure. */
