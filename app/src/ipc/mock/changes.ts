@@ -101,7 +101,7 @@ export function update(g: MockGear, p: { id: string; title?: string | null; note
     if (!["draft", "ready", "try", "read_first"].includes(p.status)) throw `Status ${p.status} is set by the apply engine; set draft, ready, try or read_first, or discard.`;
     if (p.status !== c.status) {
       c.status = p.status as StagedChange["status"];
-      c.history.push({ at: "2026-10-09T12:05:00Z", status: c.status, note: "" });
+      (c.history ??= []).push({ at: "2026-10-09T12:05:00Z", status: c.status, note: "" });
     }
   }
   return structuredClone(c);
@@ -140,7 +140,7 @@ function cardDiff(c: StagedChange): DiffItem[] {
     if (e.kind === "radio") {
       const l: { op: "add" | "remove" | "same"; text: string }[] = [];
       for (const op of e.ops) {
-        if (op.kind === "set_scalar") {
+        if (op.op === "set_scalar") {
           const before = RADIO_YML[op.key];
           if (before != null && before !== op.value) l.push({ op: "remove", text: `${op.key}: ${before}` }, { op: "add", text: `${op.key}: ${op.value}` });
         }
@@ -150,7 +150,7 @@ function cardDiff(c: StagedChange): DiffItem[] {
         put.push("RADIO/radio.yml");
       }
     } else if (e.kind === "model") {
-      out.push({ kind: "lines", label: `MODELS/${e.file}`, lines: e.ops.flatMap((op) => (op.kind === "rename" ? [{ op: "remove" as const, text: `  name: "${e.name ?? "ALPHA"}"` }, { op: "add" as const, text: `  name: "${op.name}"` }] : [])) });
+      out.push({ kind: "lines", label: `MODELS/${e.file}`, lines: e.ops.flatMap((op) => (op.op === "rename" ? [{ op: "remove" as const, text: `  name: "${e.name ?? "ALPHA"}"` }, { op: "add" as const, text: `  name: "${op.name}"` }] : [])) });
       put.push(`MODELS/${e.file}`);
     } else if (e.kind === "restore") put.push(...e.paths);
   }
@@ -214,7 +214,7 @@ function finish(g: MockGear, c: StagedChange, report: ApplyReport) {
   g.changeStore.reports[c.id] = report;
   const verified = report.status === "verified";
   c.status = verified && c.status === "try" ? "applied" : report.status;
-  c.history.push({ at: "2026-10-09T12:10:00Z", status: c.status, note: report.message });
+  (c.history ??= []).push({ at: "2026-10-09T12:10:00Z", status: c.status, note: report.message });
   if (verified && c.reverts) {
     const orig = g.changeStore.changes.find((x) => x.id === c.reverts);
     if (orig) orig.status = "reverted";
@@ -253,7 +253,7 @@ export function apply(g: MockGear, id: string, digest: string): ApplyReport {
       return r;
     }
     for (const e of c.edits) {
-      if (e.kind === "radio") for (const op of e.ops) if (op.kind === "set_scalar") RADIO_YML[op.key] = op.value;
+      if (e.kind === "radio") for (const op of e.ops) if (op.op === "set_scalar") RADIO_YML[op.key] = op.value;
     }
     const r: ApplyReport = {
       ...base,
@@ -323,7 +323,7 @@ export function keep(g: MockGear, id: string): StagedChange {
   if (!c) throw `No staged change "${id}". See \`gear changes\`.`;
   if (c.status !== "applied") throw `Change ${id} is ${c.status}; only an applied Try change waits for Keep or Revert.`;
   c.status = "verified";
-  c.history.push({ at: "2026-10-09T12:20:00Z", status: "verified", note: "Kept" });
+  (c.history ??= []).push({ at: "2026-10-09T12:20:00Z", status: "verified", note: "Kept" });
   return structuredClone(c);
 }
 
@@ -335,7 +335,7 @@ export function revert(g: MockGear, id: string, report: ApplyReport | null): Sta
   if (g.changeStore.changes.some((x) => x.reverts === id && staged(x))) throw "A revert of this change is already staged.";
   const dev = g.devices.find((d) => d.id === c.device);
   const backup = report?.backup ?? `${c.device}/2026-10-09T120000-before_apply`;
-  const paths = dev?.kind === "radio" ? (report?.files.length ? report.files : ["RADIO/radio.yml"]) : [];
+  const paths = dev?.kind === "radio" ? (report?.files?.length ? report.files : ["RADIO/radio.yml"]) : [];
   return restoreStage(g, backup, paths, id, `Revert: ${c.title}`);
 }
 
@@ -355,10 +355,11 @@ export function copyPlan(g: MockGear, p: { from: string; to: string; parts: stri
   if (!src || !hasBackup(g, from)) throw `"${p.from}" has no backup to copy from.`;
   if (!hasBackup(g, to.id)) throw `"${p.to}" has no backup yet. Back it up first.`;
   const checks: Check[] = [];
-  const sv = src.identity.version ?? "";
-  const tv = to.identity.version ?? "";
+  const [si, ti] = [src.identity ?? {}, to.identity ?? {}];
+  const sv = si.version ?? "";
+  const tv = ti.version ?? "";
   const rel = (v: string) => v.split(/[.-]/).slice(0, 2).join(".");
-  checks.push(src.identity.firmware && src.identity.firmware === to.identity.firmware ? ok("Same firmware") : fail("Same firmware", "incompatible", `The quads run ${src.identity.firmware ?? "an unknown firmware"} and ${to.identity.firmware ?? "an unknown firmware"}; QuadCam copies settings between the same firmware only.`));
+  checks.push(si.firmware && si.firmware === ti.firmware ? ok("Same firmware") : fail("Same firmware", "incompatible", `The quads run ${si.firmware ?? "an unknown firmware"} and ${ti.firmware ?? "an unknown firmware"}; QuadCam copies settings between the same firmware only.`));
   checks.push(sv && rel(sv) === rel(tv) ? ok("Same release") : fail("Same release", "incompatible", `The quads run release ${rel(sv) || "unknown"} and ${rel(tv) || "unknown"}; settings change between releases, so QuadCam copies within one release.`));
   checks.push(p.parts.length || p.settings.length ? ok("Something picked") : fail("Something picked", "incompatible", "Pick a part (rates, OSD, modes, ...) or name the settings to copy."));
   const base: CopyPlan = { from_backup: `${from}/2026-10-05T100000-before_apply`, to_backup: to.last_backup || "", checks, edits: [], diff: [], same: 0, skipped: [], notes: [] };
@@ -366,7 +367,7 @@ export function copyPlan(g: MockGear, p: { from: string; to: string; parts: stri
   const a = heldBy(g, from);
   const b = heldBy(g, to.id);
   const names = [...p.parts.flatMap((x) => PART_SETTINGS[x] ?? []), ...p.settings];
-  if (src.identity.board !== to.identity.board) base.notes.push(`The boards differ (${src.identity.board ?? "unknown"} and ${to.identity.board ?? "unknown"}): settings tied to the board's chips and buses are left out.`);
+  if (si.board !== ti.board) base.notes.push(`The boards differ (${si.board ?? "unknown"} and ${ti.board ?? "unknown"}): settings tied to the board's chips and buses are left out.`);
   for (const n of [...new Set(names)]) {
     if (!(n in a)) base.skipped.push(`${n}: the source does not hold this setting`);
     else if (!(n in b)) base.skipped.push(`${n}: the target does not hold this setting`);

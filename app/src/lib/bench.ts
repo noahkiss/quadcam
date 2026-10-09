@@ -34,7 +34,7 @@ export function summary(c: StagedChange): string {
       if (e.kind === "fc_set") return `set ${e.name} = ${e.value}`;
       if (e.kind === "fc_lines") return e.lines.filter((l) => l.trim()).join("; ");
       if (e.kind === "restore") return e.paths.length ? `restore ${e.paths.join(", ")}` : "restore a backup";
-      if (e.kind === "radio") return e.ops.map((o) => (o.kind === "set_scalar" ? `${o.key}: ${o.value}` : `select ${o.file}`)).join("; ");
+      if (e.kind === "radio") return e.ops.map((o) => (o.op === "set_scalar" ? `${o.key}: ${o.value}` : `select ${o.file}`)).join("; ");
       return e.kind.replace(/_/g, " ");
     })
     .join("; ");
@@ -45,6 +45,8 @@ export interface BenchGroup {
   device: string;
   name: string;
   kind: DeviceKind;
+  /** The person named the device. */
+  named: boolean;
   /** In the Mac now, mounted or not. */
   present: boolean;
   /** Plugged in, mounted. */
@@ -66,15 +68,15 @@ export interface BenchGroup {
 const plural = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`;
 
 /** The device's noun in a prompt: "the radio", "Whoop FC". */
-function noun(kind: DeviceKind, name: string, saved: boolean): string {
-  if (saved && name) return name;
+function noun(kind: DeviceKind, name: string, named: boolean): string {
+  if (named) return name;
   return kind === "radio" ? "the radio" : `the ${KIND_LABEL[kind]}`;
 }
 
-export function plugPrompt(g: Pick<BenchGroup, "ready" | "present" | "kind" | "name">): string | null {
+export function plugPrompt(g: Pick<BenchGroup, "ready" | "present" | "kind" | "name" | "named">): string | null {
   if (g.ready === 0 || g.present) return null;
   const how = g.kind === "radio" ? " in USB Storage mode" : "";
-  return `Plug in ${noun(g.kind, g.name, !!g.name)}${how} to apply ${plural(g.ready, "change", "changes")}.`;
+  return `Plug in ${noun(g.kind, g.name, g.named)}${how} to apply ${plural(g.ready, "change", "changes")}.`;
 }
 
 /** The groups for the Bench: every device with a waiting or an applied-and-undecided
@@ -85,7 +87,7 @@ export function benchGroups(all: StagedChange[], devices: Device[], mountedIds: 
     if (!WAITING.includes(c.status) && c.status !== "applied") continue;
     byDevice.set(c.device, [...(byDevice.get(c.device) || []), c]);
   }
-  const order = (a: StagedChange, b: StagedChange) => a.order - b.order || a.id.localeCompare(b.id);
+  const order = (a: StagedChange, b: StagedChange) => (a.order ?? 0) - (b.order ?? 0) || a.id.localeCompare(b.id);
   const out: BenchGroup[] = [];
   for (const [id, list] of byDevice) {
     const d = devices.find((x) => x.id === id);
@@ -96,6 +98,7 @@ export function benchGroups(all: StagedChange[], devices: Device[], mountedIds: 
       device: id,
       name: d ? deviceName(d) : id,
       kind,
+      named: !!d?.name?.trim(),
       mounted: mountedIds.has(id),
       unmounted: unmountedIds.has(id),
       present: mountedIds.has(id) || unmountedIds.has(id),

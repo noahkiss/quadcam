@@ -31,29 +31,31 @@ export function CopyDialog({ onClose, to: toInit }: { onClose: () => void; to?: 
   const [from, setFrom] = useState(fcs.find((d) => d.id !== (toInit || fcs[0]?.id))?.id || "");
   const [parts, setParts] = useState<CopyPart[]>([]);
   const [names, setNames] = useState("");
-  const [plan, setPlan] = useState<CopyPlan | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  const [result, setResult] = useState<{ key: string; plan?: CopyPlan; error?: string } | null>(null);
+  const [staging, setStaging] = useState<string | null>(null);
   const settings = names
     .split(/[\s,]+/)
     .map((x) => x.trim())
     .filter(Boolean);
   const key = JSON.stringify([from, to, parts, settings]);
+  const asked = !!from && !!to && from !== to && (parts.length > 0 || settings.length > 0);
 
   // The plan follows the picks.
   useEffect(() => {
+    if (!asked) return;
     let live = true;
-    setPlan(null);
-    setError(null);
-    if (!from || !to || from === to || (!parts.length && !settings.length)) return;
     api
       .gearCopyPlan({ from, to, parts, settings })
-      .then((p) => live && setPlan(p))
-      .catch((e) => live && setError(errText(e)));
+      .then((plan) => live && setResult({ key, plan }))
+      .catch((e) => live && setResult({ key, error: errText(e) }));
     return () => {
       live = false;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [key]);
+  }, [key, asked]);
+  const current = asked && result?.key === key ? result : null;
+  const plan = current?.plan ?? null;
+  const error = staging ?? current?.error ?? null;
 
   const close = async (v: string) => {
     if (v !== "stage") return onClose();
@@ -62,7 +64,7 @@ export function CopyDialog({ onClose, to: toInit }: { onClose: () => void; to?: 
       await loadGear();
       onClose();
     } catch (e) {
-      setError(errText(e));
+      setStaging(errText(e));
     }
   };
   const ready = !!plan && plan.checks.every((c) => c.ok) && plan.edits.length > 0;
@@ -114,13 +116,12 @@ export function CopyDialog({ onClose, to: toInit }: { onClose: () => void; to?: 
         )}
         {plan && (
           <>
-            <section aria-label="Checks">
-              <ChecksList checks={plan.checks} />
-            </section>
+            <ChecksList checks={plan.checks} />
             {plan.diff.length > 0 && (
-              <section aria-label="Changes">
+              <>
+                <h3 className={styles.sub}>Changes</h3>
                 <DiffView items={[{ kind: "lines", label: `Changes for ${deviceName(fcs.find((d) => d.id === to)!)}`, lines: plan.diff }]} />
-              </section>
+              </>
             )}
             {plan.same > 0 && <p className={styles.muted}>{plan.same === 1 ? "1 setting is already the same." : `${plan.same} settings are already the same.`}</p>}
             {plan.notes.map((n) => (

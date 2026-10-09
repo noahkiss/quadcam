@@ -78,7 +78,7 @@ function DevicePage({ d }: { d: DeviceRef }) {
   const dismiss = useStore((s) => s.dismissReminder);
   const mountCard = useStore((s) => s.mountCard);
   const unmountCard = useStore((s) => s.unmountCard);
-  const browsing = useStore((s) => s.gear?.mounted.find((m) => m.device === d.device?.id || m.device === d.connected?.id));
+  const browsing = useStore((s) => s.gear?.mounted?.find((m) => m.device === d.device?.id || m.device === d.connected?.id));
   const [editing, setEditing] = useState(false);
   const segs = segmentsFor(d);
   const cur = segs.find((x) => x.id === segment) || segs[0];

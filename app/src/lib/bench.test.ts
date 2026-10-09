@@ -57,14 +57,14 @@ describe("benchGroups", () => {
 
 describe("plugPrompt", () => {
   it("is null with nothing ready", () => {
-    expect(plugPrompt({ ready: 0, present: false, kind: "fc", name: "Whoop FC" })).toBeNull();
+    expect(plugPrompt({ ready: 0, present: false, kind: "fc", name: "Whoop FC", named: true })).toBeNull();
   });
 });
 
 describe("summary and Markdown", () => {
   it("says what a change does in one line", () => {
     expect(summary(change("fc-1", "ready", "t"))).toBe("set osd_cap_alarm = 1500");
-    expect(summary(change("radio-1", "ready", "t", 0, { edits: [{ kind: "radio", ops: [{ kind: "set_scalar", key: "contrast", value: "25" }] }] }))).toBe("contrast: 25");
+    expect(summary(change("radio-1", "ready", "t", 0, { edits: [{ kind: "radio", ops: [{ op: "set_scalar", key: "contrast", value: "25" }] }] }))).toBe("contrast: 25");
     expect(summary(change("radio-1", "ready", "t", 0, { edits: [{ kind: "restore", backup: "b", paths: ["RADIO/radio.yml"] }] }))).toBe("restore RADIO/radio.yml");
   });
 

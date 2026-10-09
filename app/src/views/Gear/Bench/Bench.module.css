@@ -124,3 +124,9 @@
   padding-left: var(--s-4);
   color: var(--muted);
 }
+.sub {
+  margin: 0;
+  font-size: var(--t-md);
+  color: var(--muted);
+  font-weight: 600;
+}

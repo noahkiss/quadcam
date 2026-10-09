@@ -18,7 +18,7 @@ async function openBench(page: Page) {
 /** Stages a radio card change through the core, as the CLI or an agent would. */
 async function stageCard(app: AppFixture, title: string, value: string, status: "ready" | "try" | "read_first" = "ready") {
   const id = await app.core<string>(
-    `c => c.dispatch("gear_change_stage", { device: "${RADIO_ID}", title: "${title}", edits: [{ kind: "radio", ops: [{ kind: "set_scalar", key: "contrast", value: "${value}" }] }], note: null, editor: null, draft: false }).id`,
+    `c => c.dispatch("gear_change_stage", { device: "${RADIO_ID}", title: "${title}", edits: [{ kind: "radio", ops: [{ op: "set_scalar", key: "contrast", value: "${value}" }] }], note: null, editor: null, draft: false }).id`,
   );
   if (status !== "ready") await app.core(`c => c.dispatch("gear_change_update", { id: "${id}", status: "${status}", title: null, edits: null, note: null, order: null })`);
   return id;
@@ -105,9 +105,10 @@ test("a Read first change does not apply until it is marked Ready", async ({ app
   await openBench(page);
   const group = page.getByRole("region", { name: "Field radio" });
   await expect(group).toContainText("Read the real value on the device");
-  await expect(group.getByRole("button", { name: "Review…" })).toBeDisabled();
+  const item = group.getByRole("list", { name: "Staged changes for Field radio" });
+  await expect(item.getByRole("button", { name: "Review…" })).toBeDisabled();
   await group.getByLabel("Status of Check the value").selectOption("ready");
-  await expect(group.getByRole("button", { name: "Review…" }).first()).toBeEnabled();
+  await expect(item.getByRole("button", { name: "Review…" })).toBeEnabled();
   expect((await app.method("gear_change_update")).at(-1)).toMatchObject({ status: "ready" });
 });
 
@@ -142,6 +143,7 @@ async function secondFc(app: AppFixture, version: string) {
   await app.core(`c => {
     c.gear.devices.push({ id: "fc-5a5a5a5a5a5a5a5a", kind: "fc", name: "Five-inch FC", aircraft: null, identity: { board: "STM32F411", firmware: "Betaflight", version: "${version}" }, last_seen: null, last_backup: "fc-5a5a5a5a5a5a5a5a/2026-10-05T100000-connect" });
     c.gear.changeStore.dumps["fc-5a5a5a5a5a5a5a5a"] = { osd_cap_alarm: "1800", p_roll: "50" };
+    c.emit("gear-changed");
   }`);
 }
 
@@ -155,9 +157,11 @@ test("copy settings: pick the quads and the parts, read the diff, stage one chan
   await expect(d.getByRole("button", { name: "Stage" })).toBeDisabled();
   await d.getByLabel("OSD").check();
   await expect(d.getByRole("list", { name: "Checks" })).toContainText("Same release");
-  await expect(d.getByRole("region", { name: "Changes" })).toContainText("set osd_cap_alarm = 1800");
-  await expect(d.getByRole("region", { name: "Changes" })).toContainText("set osd_cap_alarm = 2200");
-  expect(await new AxeBuilder({ page }).analyze().then((r) => r.violations)).toEqual([]);
+  const diff = d.getByRole("region", { name: "Changes for Whoop FC" });
+  await expect(diff).toContainText("set osd_cap_alarm = 1800");
+  await expect(diff).toContainText("set osd_cap_alarm = 2200");
+  const v = await new AxeBuilder({ page }).analyze().then((r) => r.violations.map((x) => `${x.id}: ${x.nodes.map((n) => n.html.slice(0, 120)).join(' | ')}`));
+  expect(v).toEqual([]);
   await d.getByRole("button", { name: "Stage" }).click();
   const staged = (await app.method("gear_copy_stage")).at(-1);
   expect(staged).toMatchObject({ from: "fc-5a5a5a5a5a5a5a5a", to: "fc-0a1b2c3d4e5f6071", parts: ["osd"] });

@@ -52,7 +52,7 @@ pub enum CardWork {
 
 /// XXH64 over the card's id, its board and version, and each file's path and hashes.
 pub fn digest(device: &str, plan: &CardPlan) -> String {
-    let h = |b: &Option<Vec<u8>>| b.as_deref().map_or("-".to_string(), |b| blobs::hash(b));
+    let h = |b: &Option<Vec<u8>>| b.as_deref().map_or("-".to_string(), blobs::hash);
     let mut text = format!(
         "card|{device}|{}|{}",
         plan.identity.board.clone().unwrap_or_default(),
