@@ -232,6 +232,9 @@ pub fn backup_hooks() -> Vec<OnConnectHook> {
         if matches!(c.link, Link::Volume { .. }) {
             core.gear_touch(c);
         }
+        if c.kind == DeviceKind::Fc && core.gear_poll_paused(&link_handle(&c.link)) {
+            return Err(super::Skip.into());
+        }
         core.gear_backup_connected(c, Trigger::Connect, false)
             .map(|_| ())
     });

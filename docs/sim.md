@@ -54,7 +54,8 @@ deadzone is cut from the middle and the rest is rescaled, so full travel still r
 
 ## Sim: flying the plain room
 
-Open **Gear > Sim**, pick **Fly**. The sim starts at once on the profile chosen in the settings
+The Sim is a preview and hidden at first: turn on **Settings > Gear > Preview > Show the Sim page**
+(or `quadcam-cli settings set sim_preview=true`). Then open **Gear > Sim** and pick **Fly**. The sim starts at once on the profile chosen in the settings
 (the 75 mm whoop by default) in a 5 × 4 × 2.5 m room with a crate, a low table and two gates.
 The view is FPV, from the quad's camera. Calibrate the radio first (Sim radio): without a saved
 calibration the sim still starts, but the arm, turtle and reset switches do nothing.

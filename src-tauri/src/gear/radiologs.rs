@@ -6,7 +6,8 @@
 //! - A new log is copied in.
 //! - A log that grew (its bytes start with the stored bytes) replaces the stored one.
 //! - A log the store already holds in full, or a shorter copy of it, changes nothing.
-//! - A log that changed any other way is kept as a second file, `<stem> (2).csv`.
+//! - A log that changed any other way is kept as a second file, `<stem> (2).csv`. The flight
+//!   index reads the `(n)` as a copy of the same log: same model, same start, one flight.
 //!
 //! Every write goes to a temporary name and is renamed into place. The stored file gets
 //! the source's modified time, so the next look skips a log whose size and time match

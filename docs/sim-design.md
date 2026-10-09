@@ -876,8 +876,12 @@ The spike's settings panel grew by accretion. The sim's settings are few and gro
   full-screen option yet. (2) The OSD is a fixed basic one, not the quad's own layout (S7).
   (3) No in-picture toasts: arming refusals show on the OSD warning line. (4) A rectilinear
   picture is capped at 100° vertical, so the profile's 155° camera is cropped (fisheye: S7).
-  (5) The release table's "Sim preview behind a setting" is not wired: the page is always in
-  the sidebar. (6) Camera position in the frame is an estimate until S3.
+  (5) Camera position in the frame is an estimate until S3.
+- Preview: the page is hidden unless the `simPreview` setting is on (`sim_preview` in the CLI
+  and MCP, Settings > Gear > Preview), as the release table asks.
+- Known issue for the next sim package: after a refused arm, S1's FC reports "turn the arm
+  switch off and on again" and hides the cause (for example throttle up). The OSD should keep
+  showing the cause.
 - Measuring (3.3): the page shows frame-to-frame time and a radio-to-picture proxy (the radio
   sample's arrival to the draw). Real-window numbers need the owner's Mac; see the S5 report.
 

@@ -12,8 +12,8 @@ pub use crate::core::{
 };
 pub use crate::core::{
     BoardNotesParams, CardParams, CardPreview, CardPreviewParams, DeviceSaveParams, FcJob,
-    FcPortParams, FcReadParams, GearCard, GearStatus, OsdParams, RadioParams, RadioWatchParams,
-    ReminderParams, SwitchMapParams, UsbTimer,
+    FcPortParams, FcReadParams, GearCard, GearStatus, OsdParams, PollPauseParams, RadioParams,
+    RadioWatchParams, ReminderParams, SwitchMapParams, UsbTimer,
 };
 pub use crate::core::{
     CalibrateParams, CalibrateView, SimCalibration, SimCalibrationParams, SimCalibrationSaveParams,
@@ -72,6 +72,9 @@ macro_rules! with_gear_rows {
             gear_board_notes(params: BoardNotesParams) -> Vec<BoardNote> = |c| Ok(c.gear_board_notes(&params));
             /// Each FC's USB heat timer: battery in, seconds on USB, the limit, seconds left.
             gear_usb_timers() -> Vec<UsbTimer> = |c| Ok(c.gear_usb_timers());
+            /// Pauses or resumes QuadCam's own reads of an FC port (the USB timer's probe and the
+            /// on-connect backup). Returns the paused ports. Lasts until QuadCam quits.
+            gear_poll_pause(params: PollPauseParams) -> Vec<String> = |c| c.gear_poll_pause(&params);
             /// Stops the "still inserted" reminder for a device's link. True when one was armed.
             gear_dismiss_reminder(params: ReminderParams) -> bool = |c| Ok(c.gear_dismiss(&params.handle));
             /// An FC's OSD layout per OSD profile, drawn on its grid and checked for overlaps

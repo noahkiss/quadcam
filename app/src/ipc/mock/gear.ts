@@ -70,6 +70,8 @@ export interface MockGear {
   connected: Connected[];
   working: string[];
   reminders: string[];
+  /** FC ports whose background reads are paused. */
+  paused: string[];
   /** Snapshots (`ipc/mock/backups.ts`). */
   backups: MockBackup[];
   /** Card checks, newest first. */
@@ -83,7 +85,7 @@ export interface MockGear {
 }
 
 /** No gear plugged in; two devices saved, with backups. */
-export const quietGear = (): MockGear => ({ devices: [structuredClone(RADIO), structuredClone(FC)], connected: [], working: [], reminders: [], backups: seedBackups(), checks: [], cardFails: [], dirty: null, jobs: [], failures: [] });
+export const quietGear = (): MockGear => ({ devices: [structuredClone(RADIO), structuredClone(FC)], connected: [], working: [], reminders: [], paused: [], backups: seedBackups(), checks: [], cardFails: [], dirty: null, jobs: [], failures: [] });
 
 /** A saved radio, a DVR card QuadCam does not know, and goggles a job is reading. */
 export const busyGear = (): MockGear => ({ ...quietGear(), connected: [radioConnected(), dvrConnected(), gogglesConnected()], working: ["disk6"] });
@@ -99,6 +101,7 @@ export function gearStatus(g: MockGear, values: Record<string, unknown>): GearSt
     sims_out_of_date: 0,
     working: [...g.working],
     reminders: [...g.reminders],
+    paused: [...g.paused],
     jobs: structuredClone(g.jobs),
     card_checks: latestChecks(g),
     failures: structuredClone(g.failures),

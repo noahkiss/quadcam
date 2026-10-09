@@ -33,6 +33,9 @@ pub struct GearStatus {
     /// FCs on USB: battery in, time on USB, the limit (`core/fc.rs`).
     #[serde(default)]
     pub usb_timers: Vec<super::fc::UsbTimer>,
+    /// The FC ports whose background reads are paused (`gear_poll_pause`).
+    #[serde(default)]
+    pub paused: Vec<String>,
     /// The links a job holds now (`link_handle`): their devices show as working.
     #[serde(default)]
     pub working: Vec<String>,
@@ -162,6 +165,7 @@ impl Core {
             staged: 0,
             sims_out_of_date: 0,
             usb_timers: self.gear_usb_timers(),
+            paused: self.gear_paused_ports(),
             working: self.gear_working(),
             reminders: self.gear.cues.reminders.lock().unwrap().armed(),
             settings,

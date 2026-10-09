@@ -3,9 +3,9 @@ import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
 
 // The Tauri dev window loads this server. Pinned so another project's server never
-// answers in its place. A second checkout running its specs at the same time sets
-// QUADCAM_DEV_PORT (Playwright reads it too).
-const PORT = Number(process.env.QUADCAM_DEV_PORT) || 4719;
+// answers in its place; QUADCAM_DEV_PORT moves it (playwright.config.ts reads
+// the same variable); `cargo tauri dev` always loads 4719 (`devUrl` in tauri.conf.json).
+const PORT = Number(process.env.QUADCAM_DEV_PORT || 4719);
 
 export default defineConfig({
   plugins: [react()],

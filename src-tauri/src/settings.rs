@@ -317,6 +317,12 @@ pub const KEYS: &[Key] = &[
         check: any,
     },
     Key {
+        file: "simPreview",
+        name: Some("sim_preview"),
+        about: "true or false",
+        check: boolean,
+    },
+    Key {
         file: "simSettings",
         name: None,
         about: "the Sim page's settings object",

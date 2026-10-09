@@ -1,7 +1,7 @@
 import { useStore } from "../../store";
 import { Button } from "../../components/Button";
 import { PlugInBar } from "../../components/gear/PlugInBar";
-import { linkText } from "../../lib/gear";
+import { linkHandle, linkText } from "../../lib/gear";
 import { tilde } from "../../lib/format";
 import { gearSlots, type DeviceRef } from "./slots";
 import { segmentsFor } from "./segments";
@@ -28,6 +28,10 @@ export function Overview({ d }: { d: DeviceRef }) {
   const backup = gearSlots.lastBackup(d.device);
   const others = segmentsFor(d).filter((s) => s.id !== "overview");
   const aircraft = d.device?.aircraft;
+  const paused = useStore((s) => s.gear?.paused);
+  const setPollPaused = useStore((s) => s.setPollPaused);
+  const fcPort = d.connected?.kind === "fc" && d.connected.link.kind === "serial" ? linkHandle(d.connected.link) : null;
+  const isPaused = fcPort !== null && !!paused?.includes(fcPort);
   return (
     <div className={styles.overview}>
       {d.device && <PlugInBar count={gearSlots.stagedFor(d.device.id)} onReview={() => gearSlots.review(d.device!.id)} />}
@@ -42,6 +46,17 @@ export function Overview({ d }: { d: DeviceRef }) {
           <div>
             <dt>{d.connected.link.kind === "volume" ? "Mounted at" : "Port"}</dt>
             <dd className="selectable">{d.unmounted ? "Unmounted" : tilde(linkText(d.connected.link), home)}</dd>
+          </div>
+        )}
+        {fcPort && (
+          <div>
+            <dt>Background reads</dt>
+            <dd>
+              {isPaused ? "Paused" : "On"}
+              <Button size="sm" variant="ghost" onClick={() => setPollPaused(fcPort, !isPaused)}>
+                {isPaused ? "Resume reads" : "Pause reads"}
+              </Button>
+            </dd>
           </div>
         )}
         <div>

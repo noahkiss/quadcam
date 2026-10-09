@@ -1,6 +1,8 @@
 import { defineConfig, devices } from "@playwright/test";
 
-const PORT = Number(process.env.QUADCAM_DEV_PORT) || 4719;
+// The dev server is on QUADCAM_DEV_PORT (default 4719, as vite.config.ts), so a second
+// checkout runs beside the first on its own port.
+const PORT = Number(process.env.QUADCAM_DEV_PORT || 4719);
 
 // Headless WebKit (the engine of the app's WKWebView) against the Vite dev server, with
 // the mock core injected.

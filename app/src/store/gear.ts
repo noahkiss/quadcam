@@ -31,6 +31,8 @@ export interface GearSlice {
   closeGear: () => void;
   setGearExpanded: (on: boolean) => void;
   dismissReminder: (c: Connected) => Promise<void>;
+  /** Pauses or resumes the app's own reads of an FC port. */
+  setPollPaused: (port: string, paused: boolean) => Promise<void>;
 }
 
 export const createGearSlice: StateCreator<State, [], [], GearSlice> = (set, get) => ({
@@ -63,6 +65,14 @@ export const createGearSlice: StateCreator<State, [], [], GearSlice> = (set, get
   setGearSegment: (gearSegment) => set({ gearSegment }),
   closeGear: () => set({ gearPage: null }),
   setGearExpanded: (gearExpanded) => set({ gearExpanded }),
+  setPollPaused: async (port, paused) => {
+    try {
+      await api.gearPollPause(port, paused);
+      await get().loadGear();
+    } catch (e) {
+      toast(errText(e), true);
+    }
+  },
   dismissReminder: async (c) => {
     try {
       await api.gearDismissReminder(linkHandle(c.link));

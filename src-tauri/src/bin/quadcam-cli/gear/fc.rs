@@ -46,6 +46,18 @@ pub enum FcCmd {
     },
     /// Each FC's USB heat timer, as the app last read it.
     Usb,
+    /// Pause the running app's own reads of an FC (the USB timer's probe, the on-connect
+    /// backup) so another tool can have the port. Lasts until the app quits.
+    Pause {
+        /// The FC's port; omit when one FC is plugged in.
+        #[arg(long)]
+        port: Option<String>,
+    },
+    /// Resume the app's reads of an FC.
+    Resume {
+        #[arg(long)]
+        port: Option<String>,
+    },
 }
 
 pub fn run(core: &Core, cmd: FcCmd) -> Result<Value> {
@@ -103,6 +115,17 @@ pub fn run(core: &Core, cmd: FcCmd) -> Result<Value> {
             api::BoardNotesParams { board, version },
         )?)?,
         FcCmd::Usb => serde_json::to_value(call::gear_usb_timers(core)?)?,
+        FcCmd::Pause { port } => serde_json::to_value(call::gear_poll_pause(
+            core,
+            api::PollPauseParams { port, paused: true },
+        )?)?,
+        FcCmd::Resume { port } => serde_json::to_value(call::gear_poll_pause(
+            core,
+            api::PollPauseParams {
+                port,
+                paused: false,
+            },
+        )?)?,
     })
 }
 

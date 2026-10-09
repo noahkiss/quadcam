@@ -270,7 +270,7 @@ Usage: quadcam-cli settings [OPTIONS] [COMMAND]
 
 Commands:
   show  Show the settings file, its values and the effective settings
-  set   Set settings: KEY=VALUE, where VALUE is JSON or plain text ("null" resets a key). Keys: output_dir, format, encoder, keep_originals, add_time, delete_clips_after_import, default_name, photos_album, format_label, log_dir, layout, place_folders, tunables, geocoder, name_date_format, default_profile, ffmpeg_source, modules; Gear: gear_dir, gear_auto_backup, gear_keep_recent, gear_keep_weeks, gear_keep_monthly, gear_usb_minutes, gear_on_connect, gear_cues, firmware_check, tts_provider, tts_key
+  set   Set settings: KEY=VALUE, where VALUE is JSON or plain text ("null" resets a key). Keys: output_dir, format, encoder, keep_originals, add_time, delete_clips_after_import, default_name, photos_album, format_label, log_dir, layout, place_folders, tunables, geocoder, name_date_format, default_profile, ffmpeg_source, modules; Gear: gear_dir, gear_auto_backup, gear_keep_recent, gear_keep_weeks, gear_keep_monthly, gear_usb_minutes, gear_on_connect, gear_cues, firmware_check, tts_provider, tts_key; sim_preview
   help  Print this message or the help of the given subcommand(s)
 
 Options:
@@ -287,7 +287,7 @@ Options:
       --session <FILE>  Session file (default: ~/Library/Caches/app.quadcam/session.json)
   -h, --help            Print help
 ===== quadcam-cli settings set --help
-Set settings: KEY=VALUE, where VALUE is JSON or plain text ("null" resets a key). Keys: output_dir, format, encoder, keep_originals, add_time, delete_clips_after_import, default_name, photos_album, format_label, log_dir, layout, place_folders, tunables, geocoder, name_date_format, default_profile, ffmpeg_source, modules; Gear: gear_dir, gear_auto_backup, gear_keep_recent, gear_keep_weeks, gear_keep_monthly, gear_usb_minutes, gear_on_connect, gear_cues, firmware_check, tts_provider, tts_key
+Set settings: KEY=VALUE, where VALUE is JSON or plain text ("null" resets a key). Keys: output_dir, format, encoder, keep_originals, add_time, delete_clips_after_import, default_name, photos_album, format_label, log_dir, layout, place_folders, tunables, geocoder, name_date_format, default_profile, ffmpeg_source, modules; Gear: gear_dir, gear_auto_backup, gear_keep_recent, gear_keep_weeks, gear_keep_monthly, gear_usb_minutes, gear_on_connect, gear_cues, firmware_check, tts_provider, tts_key; sim_preview
 
 Usage: quadcam-cli settings set [OPTIONS] <KEY=VALUE>...
 
@@ -667,6 +667,8 @@ Commands:
   check     Offline: every CLI line of EXPECTED must appear verbatim in the `diff all` file
   notes     Known issues of FC boards and builds
   usb       Each FC's USB heat timer, as the app last read it
+  pause     Pause the running app's own reads of an FC (the USB timer's probe, the on-connect backup) so another tool can have the port. Lasts until the app quits
+  resume    Resume the app's reads of an FC
   help      Print this message or the help of the given subcommand(s)
 
 Options:

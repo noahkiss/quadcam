@@ -62,6 +62,7 @@ expression: "Core::METHODS"
   "gear_fc_read",
   "gear_board_notes",
   "gear_usb_timers",
+  "gear_poll_pause",
   "gear_dismiss_reminder",
   "gear_osd",
   "gear_card",

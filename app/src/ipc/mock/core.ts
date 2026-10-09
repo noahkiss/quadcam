@@ -33,7 +33,7 @@ const DISPATCH = new Set([
   "library_photos", "library_apply_name_format", "library_match_logs", "library_rebuild", "library_rescan", "library_preview", "library_strips", "card_status",
   "settings", "settings_set", "place_search", "place_save", "session_cuts", "profiles", "session_split", "library_split",
   "modules", "module_install", "module_remove", "modules_check", "gear_osd",
-  "gear_status", "gear_devices", "gear_device_save", "gear_device_forget", "gear_dismiss_reminder",
+  "gear_status", "gear_devices", "gear_device_save", "gear_device_forget", "gear_dismiss_reminder", "gear_poll_pause",
   "gear_switch_map", "gear_radio", "gear_radio_watch", "gear_sim_calibration", "gear_sim_calibration_save", "gear_sim_defaults", "gear_sim_calibrate",
   "gear_flights", "gear_flight_set", "gear_flight_folders", "gear_packs", "gear_pack_save", "gear_pack_delete", "gear_pack_type_save",
   "gear_pack_type_delete", "gear_pack_notes", "gear_session_report", "gear_preflight", "gear_crashes", "gear_crash_save", "gear_crash_delete",
@@ -47,6 +47,8 @@ export interface MockOptions {
   scenario?: Scenario;
   /** Milliseconds each call waits before it answers. */
   latency?: number;
+  /** Settings file values to start with. */
+  settings?: Record<string, unknown>;
 }
 
 export type Emit = (event: string, payload?: unknown) => void;
@@ -99,6 +101,7 @@ export class MockCore {
     this.lib = sc === "empty" || sc === "no-tools" ? seed.emptyLibrary() : seed.richLibrary();
     if (sc === "many") this.lib = seed.recount(manyClips(this.lib));
     this.settings = seed.settings();
+    Object.assign(this.settings.values, opts.settings);
     this.initialValues = structuredClone(this.settings.values);
     this.volumes = sc === "card" || sc === "finished-card" ? [seed.cardVolume()] : [];
     this.session = null;
@@ -281,6 +284,13 @@ export class MockCore {
         this.gear.devices = this.gear.devices.filter((x) => x !== d);
         this.emit("gear-changed");
         return d;
+      }
+      case "gear_poll_pause": {
+        const port = String(p.port);
+        this.gear.paused = this.gear.paused.filter((x) => x !== port);
+        if (p.paused) this.gear.paused.push(port);
+        this.emit("gear-changed");
+        return [...this.gear.paused];
       }
       case "gear_dismiss_reminder": {
         const was = this.gear.reminders.includes(String(p.handle));

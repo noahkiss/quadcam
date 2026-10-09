@@ -36,7 +36,9 @@ pub use backup::{
     BackupResult, BackupSummary, CardCheckParams, CardChecksParams, CardRepairParams, ExportParams,
     GearJob, ImportBackupsParams, PruneParams, RepairResult, StopParams,
 };
-pub use fc::{BoardNotesParams, FcJob, FcPortParams, FcReadParams, UsbTimer, USB_PROBE};
+pub use fc::{
+    BoardNotesParams, FcJob, FcPortParams, FcReadParams, PollPauseParams, UsbTimer, USB_PROBE,
+};
 pub use files::{Moved, TrashReport};
 pub use flights::{
     CrashSaveParams, FlightFilter, FlightFoldersParams, FlightReport, FlightSetParams, FlightsView,
