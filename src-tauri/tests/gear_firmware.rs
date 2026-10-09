@@ -1180,3 +1180,22 @@ fn an_unlinked_dfu_device_warns_with_the_last_seen_radio_and_a_verified_flash_li
     let pocket = b.core.gear_store().device(&b.radio).unwrap().unwrap();
     assert_eq!(pocket.dfu_serial.as_deref(), Some("0001"));
 }
+
+#[test]
+fn the_mcp_firmware_read_action_is_the_read_only_trial() {
+    let b = plain();
+    let mut s = quadcam_lib::mcp::Server::new(quadcam_lib::mcp::LocalBackend(b.core.clone()));
+    let r = call(
+        &mut s,
+        "quadcam_gear",
+        json!({"action": "firmware_read", "device": b.radio}),
+    );
+    assert_eq!(r["isError"], false, "{r}");
+    let t = r["content"][0]["text"].as_str().unwrap();
+    assert!(t.contains("EdgeTX 2.12.4"), "{t}");
+    assert!(t.contains("Nothing was written to the radio"), "{t}");
+    assert_eq!(r["structuredContent"]["matches"], true);
+    let dev = b.flasher.device.lock().unwrap();
+    assert_eq!(dev.mutations, 0);
+    assert!(!dev.left);
+}
