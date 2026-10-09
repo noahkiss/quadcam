@@ -26,6 +26,7 @@ mod gear;
 mod gear_card;
 mod import;
 mod library;
+pub mod model_edit;
 mod modules;
 mod osd;
 mod prep;
@@ -36,6 +37,7 @@ mod sim;
 mod sim_host;
 mod sim_sync;
 mod switchmap;
+mod voice;
 pub use crate::paths::{cache_dir, default_session_file, default_settings_file, support_dir};
 pub use apply::{ChangeUpdateParams, RestoreParams, StageParams};
 pub use apply_card::{CardMountParams, CardMounted, MOUNT_MINUTES};
@@ -62,6 +64,7 @@ pub use gear::{
 pub use gear_card::{CardParams, CardPreview, CardPreviewParams, GearCard};
 pub use import::CardStatus;
 pub use library::{LibEdit, LibItem, LibUpdate, LibraryView, RebuildReport, RenameReport};
+pub use model_edit::{ModelDetail, ModelEditParams, ModelEntry, ModelParams, MODEL_CHANGE};
 pub use osd::{OsdEditParams, OsdParams};
 pub use rates::{RatesParams, RatesPreview, RatesPreviewParams, SimsParams};
 pub use rematch::{LibMatch, LibMatchParams, LibMatchReport};
@@ -75,6 +78,11 @@ pub use sim_host::{
     SimStartParams, SimSticks, SimStopInfo, SimUiSettings, DEFAULT_PRESET,
 };
 pub use switchmap::{RadioParams, RadioWatchParams, SwitchMapParams};
+pub use voice::{
+    report_text as voice_report_text, view_text as voice_view_text, BuildPackParams, LineOverride,
+    PackInstallParams, ProviderView, RenderReport, VoiceChooseParams, VoiceEditParams, VoiceLine,
+    VoicePack, VoiceParams, VoicePreviewParams, VoiceRenderParams, VoiceView, VOICE_CHANGE,
+};
 
 /// What the host does when the core changes state. The GUI emits events and asks for the
 /// format click; a headless host does nothing.

@@ -19,6 +19,7 @@
 //! - Timer swap: trades every field, the stored value included, and every `TmrN`
 //!   reference outside the timers block.
 
+use super::editors;
 use super::yaml::{quote, shape_refusal, unquote, Doc, Node};
 use crate::gear::model::{Refusal, RefusalCode};
 use serde::{Deserialize, Serialize};
@@ -225,16 +226,16 @@ pub fn resolve_sensors(doc: &Doc, text: &str) -> Result<String, Refusal> {
     Ok(out)
 }
 
-fn bad(reason: impl Into<String>) -> Refusal {
+pub(super) fn bad(reason: impl Into<String>) -> Refusal {
     Refusal::new(RefusalCode::BadSetting, reason)
 }
 
-fn shape(doc: &Doc, node: &Node, why: &str) -> Refusal {
+pub(super) fn shape(doc: &Doc, node: &Node, why: &str) -> Refusal {
     shape_refusal(&doc.name, node.line + 1, why)
 }
 
 /// Checks a name for a quoted EdgeTX string: printable ASCII, no `"` or `\`.
-fn check_text(what: &str, s: &str, max: usize) -> Result<(), Refusal> {
+pub(super) fn check_text(what: &str, s: &str, max: usize) -> Result<(), Refusal> {
     if s.chars().count() > max {
         return Err(bad(format!("{what} {s:?} is over {max} characters.")));
     }
@@ -253,7 +254,11 @@ fn check_text(what: &str, s: &str, max: usize) -> Result<(), Refusal> {
 
 /// The `N:` children of a block, each with its scalar fields. Refuses a child that is not
 /// an index or holds a nested block (unless `nested_ok`).
-fn indexed(doc: &Doc, n: &Node, nested_ok: bool) -> Result<Vec<(u32, Vec<Field>)>, Refusal> {
+pub(super) fn indexed(
+    doc: &Doc,
+    n: &Node,
+    nested_ok: bool,
+) -> Result<Vec<(u32, Vec<Field>)>, Refusal> {
     let mut out = Vec::new();
     for c in &n.children {
         let idx = c
@@ -275,7 +280,7 @@ fn indexed(doc: &Doc, n: &Node, nested_ok: bool) -> Result<Vec<(u32, Vec<Field>)
     Ok(out)
 }
 
-fn get<'a>(fields: &'a [Field], key: &str) -> &'a str {
+pub(super) fn get<'a>(fields: &'a [Field], key: &str) -> &'a str {
     fields
         .iter()
         .find(|f| f.key == key)
@@ -427,7 +432,7 @@ pub fn view(file: &str, doc: &Doc) -> Result<ModelView, Refusal> {
     })
 }
 
-fn sf_items(doc: &Doc) -> Result<Vec<(u32, Vec<Field>)>, Refusal> {
+pub(super) fn sf_items(doc: &Doc) -> Result<Vec<(u32, Vec<Field>)>, Refusal> {
     match doc.top("customFn")? {
         Some(n) => indexed(doc, &n, false),
         None => Ok(Vec::new()),
@@ -542,6 +547,34 @@ pub enum ModelOp {
         index: u32,
         script: Option<String>,
     },
+    /// A telemetry screen of values (0 is screen 1): up to 4 lines of up to 3 sources each.
+    SetScreenValues {
+        index: u32,
+        lines: Vec<Vec<String>>,
+    },
+    /// The `LOGS` special function (the switch that writes the radio's log, and how often);
+    /// None removes every `LOGS` function.
+    SetLogging {
+        logging: Option<editors::LoggingDef>,
+    },
+    /// Which telemetry sensors the radio's log records.
+    SetSensorLogs {
+        sensors: Vec<editors::SensorLog>,
+    },
+    /// The RSSI warning and critical levels.
+    SetRfAlarms {
+        warning: u32,
+        critical: u32,
+    },
+    /// A spoken callout, owned by its track name: replaces the callout with that track.
+    SetCallout {
+        callout: editors::CalloutDef,
+    },
+    /// Removes the callout with this track name, and its logical switch when nothing else
+    /// uses it.
+    RemoveCallout {
+        track: String,
+    },
 }
 
 /// Applies ops in order. Refuses with the first problem; the doc is then unusable.
@@ -591,6 +624,14 @@ fn apply_one(doc: &mut Doc, op: &ModelOp) -> Result<(), Refusal> {
         ModelOp::SwapTimers { a, b } => swap_timers(doc, *a, *b),
         ModelOp::SetSwitchWarnings { warnings } => set_switch_warnings(doc, warnings),
         ModelOp::SetScreen { index, script } => set_screen(doc, *index, script.as_deref()),
+        ModelOp::SetScreenValues { index, lines } => editors::set_screen_values(doc, *index, lines),
+        ModelOp::SetLogging { logging } => editors::set_logging(doc, logging.as_ref()),
+        ModelOp::SetSensorLogs { sensors } => editors::set_sensor_logs(doc, sensors),
+        ModelOp::SetRfAlarms { warning, critical } => {
+            editors::set_rf_alarms(doc, *warning, *critical)
+        }
+        ModelOp::SetCallout { callout } => editors::set_callout(doc, callout),
+        ModelOp::RemoveCallout { track } => editors::remove_callout(doc, track),
     }
 }
 
@@ -841,7 +882,7 @@ fn check_comparison(doc: &Doc, func: &str, def: &str) -> Result<(), Refusal> {
     Ok(())
 }
 
-fn set_ls(doc: &mut Doc, index: u32, ls: Option<&LsDef>) -> Result<(), Refusal> {
+pub(super) fn set_ls(doc: &mut Doc, index: u32, ls: Option<&LsDef>) -> Result<(), Refusal> {
     if index >= MAX_LOGICAL_SWITCHES {
         return Err(bad(format!(
             "Logical switches are L1-L{MAX_LOGICAL_SWITCHES}."
@@ -986,7 +1027,7 @@ fn sf_lines(doc: &Doc, node: Option<&Node>, items: &[Vec<Field>]) -> Vec<String>
     out
 }
 
-fn sf_fields(doc: &Doc, sf: &SfDef) -> Result<Vec<Field>, Refusal> {
+pub(super) fn sf_fields(doc: &Doc, sf: &SfDef) -> Result<Vec<Field>, Refusal> {
     Ok(vec![
         Field::new("swtch", &quote(&sf.swtch)),
         Field::new("func", &sf.func),
@@ -994,7 +1035,7 @@ fn sf_fields(doc: &Doc, sf: &SfDef) -> Result<Vec<Field>, Refusal> {
     ])
 }
 
-fn same_sf(f: &[Field], want: &[Field]) -> bool {
+pub(super) fn same_sf(f: &[Field], want: &[Field]) -> bool {
     want.iter().all(|w| get(f, &w.key) == w.value)
 }
 
@@ -1021,7 +1062,11 @@ fn special_functions(doc: &mut Doc, remove: &[SfDef], add: &[SfDef]) -> Result<(
     write_sfs(doc, node, &items)
 }
 
-fn write_sfs(doc: &mut Doc, node: Option<Node>, items: &[Vec<Field>]) -> Result<(), Refusal> {
+pub(super) fn write_sfs(
+    doc: &mut Doc,
+    node: Option<Node>,
+    items: &[Vec<Field>],
+) -> Result<(), Refusal> {
     let body = sf_lines(doc, node.as_ref(), items);
     match node {
         Some(n) => {
@@ -1086,7 +1131,7 @@ fn timers_node(doc: &Doc) -> Result<Node, Refusal> {
     })
 }
 
-fn render_indexed(n: &Node, items: &BTreeMap<u32, Vec<Field>>) -> Vec<String> {
+pub(super) fn render_indexed(n: &Node, items: &BTreeMap<u32, Vec<Field>>) -> Vec<String> {
     let (ipad, fpad) = n
         .children
         .first()
@@ -1139,6 +1184,7 @@ fn set_timer(doc: &mut Doc, index: u32, fields: &[Field]) -> Result<(), Refusal>
         if f.key == "name" {
             check_text("A timer name", &f.value, 8)?;
         }
+        editors::check_timer_field(&f.key, &f.value)?;
         let v = if TIMER_QUOTED.contains(&f.key.as_str()) {
             quote(&f.value)
         } else {
@@ -1286,17 +1332,6 @@ fn set_screen(doc: &mut Doc, index: u32, script: Option<&str>) -> Result<(), Ref
     if index > 3 {
         return Err(bad("Telemetry screens are 1-4."));
     }
-    let n = doc.top("screens")?.ok_or_else(|| {
-        bad(format!(
-            "{} has no screens block; nothing was written.",
-            doc.name
-        ))
-    })?;
-    let existing = n
-        .children
-        .iter()
-        .find(|c| c.index() == Some(index))
-        .cloned();
     let new = match script {
         None => vec![],
         Some(s) => {
@@ -1315,6 +1350,23 @@ fn set_screen(doc: &mut Doc, index: u32, script: Option<&str>) -> Result<(), Ref
             ]
         }
     };
+    put_screen(doc, index, new)
+}
+
+/// Replaces telemetry screen `index` with `new` lines (empty removes it). A screen after a
+/// gap is refused.
+pub(super) fn put_screen(doc: &mut Doc, index: u32, new: Vec<String>) -> Result<(), Refusal> {
+    let n = doc.top("screens")?.ok_or_else(|| {
+        bad(format!(
+            "{} has no screens block; nothing was written.",
+            doc.name
+        ))
+    })?;
+    let existing = n
+        .children
+        .iter()
+        .find(|c| c.index() == Some(index))
+        .cloned();
     let range = match &existing {
         Some(c) => c.span(),
         None => {

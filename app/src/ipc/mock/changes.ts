@@ -65,7 +65,7 @@ const lines = (edits: Edit[]): string[] =>
 
 const refused = (code: string, reason: string) => `Refused (${code}): ${reason}`;
 
-const CARD_EDITS = ["model", "radio", "checklist", "model_copy", "model_delete", "restore"];
+const CARD_EDITS = ["model", "radio", "checklist", "model_copy", "model_delete", "restore", "card_files"];
 
 function validateFc(edits: Edit[]) {
   for (const l of lines(edits.filter((e) => e.kind !== "osd_element"))) {
@@ -152,6 +152,34 @@ function cardOf(g: MockGear, device: string) {
   return g.connected.find((c) => c.id === device && c.kind === "radio") || g.unmounted.find((c) => c.id === device && c.kind === "radio") || null;
 }
 
+/** One model op as a line of the diff. */
+const opLine = (op: import("../types").ModelOp): string => {
+  switch (op.op) {
+    case "set_timer":
+      return `timer ${op.index + 1}: ${op.fields.map((f) => `${f.key} ${f.value}`).join(", ")}`;
+    case "remove_timer":
+      return `timer ${op.index + 1} removed`;
+    case "set_screen_values":
+      return `screen ${op.index + 1}: ${op.lines.map((l) => l.join(", ")).join(" / ")}`;
+    case "set_screen":
+      return op.script ? `screen ${op.index + 1}: script ${op.script}` : `screen ${op.index + 1} removed`;
+    case "set_logging":
+      return op.logging ? `logging: ${op.logging.swtch} every ${op.logging.period_ds / 10} s` : "logging removed";
+    case "set_sensor_logs":
+      return `log sensors: ${op.sensors.map((s) => `${s.label} ${s.logs ? "on" : "off"}`).join(", ")}`;
+    case "set_rf_alarms":
+      return `rfAlarms: warning ${op.warning}, critical ${op.critical}`;
+    case "set_callout":
+      return `callout ${op.callout.track}`;
+    case "remove_callout":
+      return `callout ${op.track} removed`;
+    case "set_checklist":
+      return `displayChecklist: ${op.enabled ? 1 : 0}`;
+    default:
+      return op.op;
+  }
+};
+
 function cardDiff(c: StagedChange): DiffItem[] {
   const out: DiffItem[] = [];
   const put: string[] = [];
@@ -169,9 +197,14 @@ function cardDiff(c: StagedChange): DiffItem[] {
         put.push("RADIO/radio.yml");
       }
     } else if (e.kind === "model") {
-      out.push({ kind: "lines", label: `MODELS/${e.file}`, lines: e.ops.flatMap((op) => (op.op === "rename" ? [{ op: "remove" as const, text: `  name: "${e.name ?? "ALPHA"}"` }, { op: "add" as const, text: `  name: "${op.name}"` }] : [])) });
+      const lines = e.ops.flatMap((op) => (op.op === "rename" ? [{ op: "remove" as const, text: `  name: "${e.name ?? "ALPHA"}"` }, { op: "add" as const, text: `  name: "${op.name}"` }] : [{ op: "add" as const, text: `  ${opLine(op)}` }]));
+      out.push({ kind: "lines", label: `MODELS/${e.file}`, lines });
       put.push(`MODELS/${e.file}`);
-    } else if (e.kind === "restore") put.push(...e.paths);
+    } else if (e.kind === "checklist") {
+      out.push({ kind: "lines", label: `MODELS/${e.model}.txt`, lines: e.text.split("\n").filter(Boolean).map((text) => ({ op: "add" as const, text })) });
+      put.push(`MODELS/${e.model}.txt`);
+    } else if (e.kind === "card_files") put.push(...e.put.map((f) => f.path));
+    else if (e.kind === "restore") put.push(...e.paths);
   }
   return [{ kind: "files", label: "Card files", put: [...put, ".metadata_never_index"], delete: [] }, ...out];
 }

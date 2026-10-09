@@ -3,6 +3,8 @@
 //!
 //! - `yaml`: the line-level reader and editor. Never a generic YAML round trip.
 //! - `model`: typed views of a model file and the `ModelOp` edits.
+//! - `editors`: the model editors' ops (logging, alarms, callouts, value screens, timer
+//!   checks, checklist text) and the reads that show them.
 //! - `card`: the card: identity, models, the selected model, the radio clock; plans
 //!   (`Card::plan`, writes nothing) and the writer (`card::write`, called only by the
 //!   apply engine), and `card::release` (unmount, before "safe to unplug").
@@ -12,6 +14,7 @@
 //! code (EdgeTX is GPL-2.0; QuadCam is MIT).
 
 pub mod card;
+pub mod editors;
 pub mod model;
 pub mod synth;
 pub mod yaml;

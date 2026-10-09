@@ -1,0 +1,24 @@
+# QuadCam's spelling rules for voice lines. The text in lines.csv stays readable; these
+# rules turn it into the text a voice speaks, whole words only, longest first.
+
+# Dot acronyms a voice must spell out.
+[spell]
+DVR = "D.V.R."
+VTX = "V.T.X."
+TX = "T.X."
+PID = "P.I.D."
+GPS = "G.P.S."
+LQ = "L.Q."
+RF = "R.F."
+dBm = "D.B.M."
+dB = "D.B."
+
+# Abbreviations written out in full.
+[expand]
+mAh = "milliamp hours"
+RSSI = "R.S.S.I."
+RTH = "return to home"
+
+# Words a voice reads well as they are. A rule that names one of these is a mistake.
+[plain]
+words = ["OSD", "3D", "ELRS", "FPV"]

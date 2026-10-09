@@ -1,0 +1,122 @@
+.segment {
+  height: 100%;
+  overflow: auto;
+  padding: var(--s-6) var(--s-8);
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-4);
+  background: var(--bg);
+}
+.bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--s-3);
+}
+.source {
+  color: var(--muted);
+  font-size: var(--t-sm);
+}
+.muted {
+  margin: 0;
+  color: var(--muted);
+}
+.note {
+  margin: 0;
+  color: var(--muted);
+  font-size: var(--t-sm);
+}
+.section {
+  background: var(--raised);
+  border: 1px solid var(--border);
+  border-radius: var(--r-3);
+  padding: var(--s-4);
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-3);
+}
+.section > h3 {
+  margin: 0;
+  font-size: var(--t-lg);
+}
+.rows {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-3);
+}
+.row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--s-3);
+}
+.row > legend,
+.legend {
+  font-weight: 600;
+  min-width: 72px;
+}
+fieldset.row {
+  border: 0;
+  margin: 0;
+  padding: 0;
+}
+.field {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s-2);
+  font-size: var(--t-sm);
+  color: var(--fg);
+}
+.field input[type="text"],
+.field input[type="number"] {
+  width: 96px;
+}
+.wide input {
+  width: 220px !important;
+}
+.grow {
+  flex: 1;
+  min-width: 0;
+}
+.form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-3);
+  padding: var(--s-3);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--r-2);
+}
+.items {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-2);
+}
+.item {
+  display: flex;
+  align-items: center;
+  gap: var(--s-2);
+}
+.item input[type="text"] {
+  flex: 1;
+  min-width: 0;
+  max-width: 360px;
+}
+.count {
+  color: var(--fg);
+  font-size: var(--t-xs);
+  min-width: 40px;
+  text-align: right;
+}
+.count[data-over="true"] {
+  color: var(--error-text);
+}
+.error {
+  margin: 0;
+  color: var(--error-text);
+}
