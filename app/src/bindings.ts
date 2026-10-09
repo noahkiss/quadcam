@@ -1325,6 +1325,8 @@ export type Device = {
 	last_seen?: string | null,
 	/**  The id of its newest backup. */
 	last_backup?: string | null,
+	/**  The card's free space when the newest backup was taken. */
+	last_space?: SpaceSeen | null,
 };
 
 /**
@@ -3667,6 +3669,13 @@ export type SourceParams = {
 	 *  `join_split_recordings` setting.
 	 */
 	join?: boolean | null,
+};
+
+/**  A card's space at one moment, in bytes. */
+export type SpaceSeen = {
+	free: number,
+	total?: number | null,
+	at: string,
 };
 
 /**  A time range in a clip, in seconds: a suggested keep range or a cut. */

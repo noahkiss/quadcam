@@ -104,6 +104,18 @@ pub struct Device {
     /// The id of its newest backup.
     #[serde(default)]
     pub last_backup: Option<String>,
+    /// The card's free space when the newest backup was taken.
+    #[serde(default)]
+    pub last_space: Option<SpaceSeen>,
+}
+
+/// A card's space at one moment, in bytes.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Type)]
+pub struct SpaceSeen {
+    pub free: u64,
+    #[serde(default)]
+    pub total: Option<u64>,
+    pub at: DateTime<Utc>,
 }
 
 impl Device {

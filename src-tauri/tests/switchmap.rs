@@ -229,6 +229,7 @@ fn an_aircraft_reads_its_radio_and_fc_backups() {
                 },
                 last_seen: None,
                 last_backup: None,
+                last_space: None,
             })
             .unwrap();
     };
@@ -443,4 +444,72 @@ fn cli_mcp_and_dispatch_surfaces() {
     assert_eq!(code, 0, "{out}");
     let j: Value = serde_json::from_str(&out).unwrap();
     assert_eq!(j["result"]["connected"], false);
+}
+
+#[test]
+fn pack_up_reads_a_radio_that_is_not_plugged_in_from_its_backup() {
+    use quadcam_lib::core::ImportBackupsParams;
+    use quadcam_lib::gear::model::{Device, DeviceKind, Identity, SpaceSeen};
+    let dir = tempfile::tempdir().unwrap();
+    std::fs::create_dir_all(dir.path().join("support")).unwrap();
+    std::fs::write(
+        dir.path().join("support/settings.json"),
+        r#"{"profiles":[{"name":"Whoop","edgetx_models":["WHOOP ONE"]}]}"#,
+    )
+    .unwrap();
+    let core = plain_core(&dir);
+    let id = "radio-00000000000000aa";
+    let old = dir.path().join("old/2026-10-01-radio");
+    for sub in ["RADIO", "MODELS", "SOUNDS"] {
+        copy_dir(&fixtures().join("whoop").join(sub), &old.join(sub));
+    }
+    let store = core.gear_store();
+    let mut d = Device {
+        id: id.into(),
+        kind: DeviceKind::Radio,
+        name: "Pocket".into(),
+        aircraft: None,
+        identity: Identity::default(),
+        last_seen: None,
+        last_backup: None,
+        last_space: None,
+    };
+    store.save_device(&d).unwrap();
+    // No backup yet: the model stays unknown.
+    let row = |c: &Core, id: &str| {
+        c.gear_preflight()
+            .unwrap()
+            .rows
+            .into_iter()
+            .find(|r| r.id == id)
+            .unwrap()
+    };
+    assert_eq!(
+        row(&core, "radio").state,
+        quadcam_lib::gear::preflight::RowState::Unknown
+    );
+    core.gear_import_backups(&ImportBackupsParams {
+        folder: old,
+        device: Some(id.into()),
+        dry_run: false,
+    })
+    .unwrap();
+    let r = row(&core, "radio");
+    assert!(
+        r.detail
+            .starts_with("Pocket: model WHOOP ONE selected (Whoop), from backup, "),
+        "{r:?}"
+    );
+    d = store.device(id).unwrap().unwrap();
+    d.last_space = Some(SpaceSeen {
+        free: 6_000_000_000,
+        total: Some(8_000_000_000),
+        at: chrono::Utc::now() - chrono::Duration::days(2),
+    });
+    store.save_device(&d).unwrap();
+    let r = row(&core, "cards_space");
+    assert_eq!(
+        r.detail,
+        "Pocket card: 6.0 GB free, from backup, 2 days ago."
+    );
 }
