@@ -13,6 +13,7 @@ import { albumAction } from "../../lib/library";
 import { addLibToPhotos, rescan, revealClip, shareClips, trashClips } from "../../actions/library";
 import { cancelErase, confirmErase } from "../../actions/session";
 import { api, errText } from "../../ipc/api";
+import { ApplySheet } from "../Gear/Apply/ApplySheet";
 import styles from "./Overlays.module.css";
 
 export function Overlays() {
@@ -21,6 +22,7 @@ export function Overlays() {
       <AskDialog />
       <RemovedCutsDialog />
       <FormatConfirm />
+      <ApplySheet />
       <NoticesDialog />
       <ClipMenu />
       <DropTarget />

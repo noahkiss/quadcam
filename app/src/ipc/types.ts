@@ -316,3 +316,5 @@ export type StageProgress = G.Progress;
 export type ImportProgress = Num<G.ImportProgress, "seconds" | "duration">;
 export type LibraryTask = G.LibraryTask;
 export type AgentFormatRequest = G.AgentFormatRequest;
+export type AgentApplyRequest = G.AgentApplyRequest;
+export type { ApplyPlan, ApplyReport, ChangeStatus, Check, Edit, StagedChange, StepReport } from "../bindings";

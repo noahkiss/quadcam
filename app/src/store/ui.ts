@@ -54,4 +54,4 @@ export const createUiSlice: StateCreator<State, [], [], UiSlice> = (set) => ({
 });
 
 /** Any modal is open (the import sheet does not count). */
-export const dialogOpen = (s: State) => !!(s.settingsOpen || s.askReq || s.removedReq || s.formatConfirm || s.noticesOpen);
+export const dialogOpen = (s: State) => !!(s.settingsOpen || s.askReq || s.removedReq || s.formatConfirm || s.noticesOpen || s.applySheet);

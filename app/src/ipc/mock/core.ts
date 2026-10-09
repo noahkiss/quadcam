@@ -21,6 +21,7 @@ import type {
 } from "../types";
 import * as seed from "./seed";
 import * as gear from "./gear";
+import * as changes from "./changes";
 import { MockFlights } from "./flights";
 import * as backups from "./backups";
 import { MockHost, MockSim, defaults as simDefaults } from "./sim";
@@ -39,6 +40,7 @@ const DISPATCH = new Set([
   "gear_pack_type_delete", "gear_pack_notes", "gear_session_report", "gear_preflight", "gear_crashes", "gear_crash_save", "gear_crash_delete",
   "gear_backup", "gear_backups", "gear_backup_read", "gear_backup_diff", "gear_backup_pin", "gear_storage", "gear_prune",
   "gear_export", "gear_import_backups", "gear_card_check", "gear_card_checks", "gear_card_repair", "gear_stop",
+  "gear_changes", "gear_change_stage", "gear_change_update", "gear_change_discard", "gear_restore_stage", "gear_apply_plan", "gear_apply",
 ]);
 
 export type Scenario = "library" | "empty" | "card" | "review" | "joined" | "finished-card" | "dji" | "no-tools" | "many" | "gear";
@@ -93,6 +95,7 @@ export class MockCore {
   fcRc: number[] = [1500, 1500, 988, 1500, 988, 988, 988, 988];
   /** Answers given to agent format requests. */
   formatAnswers: { id: number; approve: boolean }[] = [];
+  applyAnswers: { id: number; approve: boolean }[] = [];
   private emit: Emit;
 
   constructor(emit: Emit, opts: MockOptions = {}) {
@@ -173,6 +176,15 @@ export class MockCore {
         return this.formatCard(String(args.label));
       case "answer_format_request":
         this.formatAnswers.push({ id: Number(args.id), approve: !!args.approve });
+        return null;
+      case "gear_apply_click": {
+        const q = p as { id: string; digest: string };
+        const r = changes.apply(this.gear, q.id, q.digest);
+        this.emit("gear-changed");
+        return r;
+      }
+      case "answer_apply_request":
+        this.applyAnswers.push({ id: Number(args.id), approve: !!args.approve });
         return null;
       case "preview":
         return seed.PREVIEW;
@@ -368,6 +380,21 @@ export class MockCore {
       case "gear_card_repair": {
         if (!p.confirm) throw "Refused: a repair writes the card's file system; it needs confirm=true.";
         const r = backups.repair(this.gear, String(p.check), new Date().toISOString());
+        this.emit("gear-changed");
+        return r;
+      }
+      case "gear_changes":
+        return changes.list(this.gear, (p.device as string | null) ?? null, !!p.history);
+      case "gear_change_stage":
+        return this.gearChanged(changes.stage(this.gear, String(p.device), p.edits as never, (p.title as string | null) ?? null, (p.editor as "agent" | null) ?? "user"));
+      case "gear_change_discard":
+        return this.gearChanged(changes.discard(this.gear, String(p.id)));
+      case "gear_restore_stage":
+        return this.gearChanged(changes.restoreStage(this.gear, String(p.backup)));
+      case "gear_apply_plan":
+        return changes.plan(this.gear, String(p.id));
+      case "gear_apply": {
+        const r = changes.apply(this.gear, String(p.id), String(p.digest));
         this.emit("gear-changed");
         return r;
       }

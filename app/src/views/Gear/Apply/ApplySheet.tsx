@@ -1,0 +1,142 @@
+// The apply sheet (design 2.4) for an FC: the change's diff, each guard with a pass mark or
+// its reason, then Cancel and Apply. Return does not press Apply. During the write a row
+// shows the step; after it, "Verified" or the lines that failed, with Restore backup.
+import { useStore } from "../../../store";
+import { Banner } from "../../../components/Banner";
+import { Button } from "../../../components/Button";
+import { Dialog } from "../../../components/Dialog";
+import { Icon } from "../../../components/Icon";
+import { ChecksList } from "../../../components/gear/ChecksList";
+import { DiffView, type DiffEntry } from "../../../components/gear/DiffView";
+import { deviceName } from "../../../lib/gear";
+import type { ApplyReport } from "../../../ipc/types";
+import styles from "./Apply.module.css";
+
+export function ApplySheet() {
+  const a = useStore((s) => s.applySheet);
+  const devices = useStore((s) => s.devices);
+  const jobs = useStore((s) => s.gear?.jobs);
+  const changes = useStore((s) => s.changes);
+  const close = useStore((s) => s.closeApply);
+  const run = useStore((s) => s.runApply);
+  const restore = useStore((s) => s.restoreBeforeApply);
+  const next = useStore((s) => s.nextApply);
+  const dev = a ? devices.find((d) => d.id === a.device) : undefined;
+  const name = dev ? deviceName(dev) : "FC";
+  const job = a ? jobs?.find((j) => j.device === a.device) : undefined;
+  const more = a?.change ? changes.filter((c) => c.device === a.device && c.status === "ready" && c.id !== a.change?.id).length : 0;
+  const done = !!a?.report;
+  const ready = !!a?.plan && a.plan.checks.every((c) => c.ok);
+  const working = !!a?.busy && !done;
+  return (
+    <Dialog
+      open={!!a}
+      kind="sheet"
+      blockReturn
+      blockEscape={working}
+      title={`Apply to ${name}`}
+      onClose={() => close()}
+      actions={
+        done ? (
+          <>
+            {a?.report?.status === "failed" && a.report.backup && (
+              <Button variant="ghost" onClick={() => restore()}>
+                Restore backup
+              </Button>
+            )}
+            {more > 0 ? (
+              <Button variant="primary" onClick={() => next()}>
+                Next change
+              </Button>
+            ) : (
+              <Button variant="primary" onClick={() => close()}>
+                Done
+              </Button>
+            )}
+          </>
+        ) : (
+          <>
+            <Button type="submit" value="cancel" variant="ghost" disabled={working}>
+              Cancel
+            </Button>
+            <Button variant="primary" disabled={!ready || working} onClick={() => run()}>
+              Apply
+            </Button>
+          </>
+        )
+      }
+    >
+      {a && (
+        <div className={styles.sheet}>
+          {a.agent != null && !done && <Banner icon="info">An agent asked to apply this change. It goes ahead only if you click Apply.</Banner>}
+          {a.error && <Banner kind="error">{a.error}</Banner>}
+          {!a.change && !a.error && <p className={styles.muted}>No staged changes for this device.</p>}
+          {a.change && (
+            <div className={styles.head}>
+              <h3>{a.change.title || "FC settings"}</h3>
+              {a.plan && (
+                <p className={`${styles.muted} selectable`}>
+                  {[a.plan.device.board, a.plan.device.firmware, a.plan.device.version].filter(Boolean).join(" · ")}
+                </p>
+              )}
+              {more > 0 && <p className={styles.muted}>{more === 1 ? "1 more change waits." : `${more} more changes wait.`}</p>}
+            </div>
+          )}
+          {a.plan && !done && (
+            <>
+              <section aria-label="Changes">
+                <h4>Changes</h4>
+                <DiffView items={a.plan.diff as DiffEntry[]} />
+              </section>
+              <section aria-label="Checks">
+                <h4>Checks</h4>
+                <ChecksList checks={a.plan.checks} />
+              </section>
+              <p className={styles.muted}>QuadCam backs the FC up first and keeps that backup. The FC restarts when the backup is read, and again when the change is saved.</p>
+            </>
+          )}
+          {working && a.plan && (
+            <p className={styles.progress} role="status">
+              <Icon name="refresh" /> {job?.step || "Applying"}…
+            </p>
+          )}
+          {a.report && <Result r={a.report} />}
+        </div>
+      )}
+    </Dialog>
+  );
+}
+
+function Result({ r }: { r: ApplyReport }) {
+  const ok = r.status === "verified";
+  return (
+    <section aria-label="Result" className={styles.result} data-state={ok ? "ok" : "failed"}>
+      <p className={styles.verdict}>
+        <Icon name={ok ? "check-circle" : "close-circle"} tint={ok ? "green" : "red"} /> {r.message}
+      </p>
+      <ol className={styles.steps} aria-label="Steps">
+        {r.steps.map((s) => (
+          <li key={s.name} data-state={s.state}>
+            <span>{s.name}</span>
+            <span className="visually-hidden">{s.state}</span>
+            {s.detail && <span className={`${styles.detail} mono selectable`}>{s.detail}</span>}
+          </li>
+        ))}
+      </ol>
+      {r.verify.length > 0 && (
+        <ul aria-label="Lines that did not read back" className={`${styles.lines} mono selectable`}>
+          {r.verify.map((f) => (
+            <li key={f.line}>
+              {f.line} <span className={styles.muted}>(found {f.found ?? "nothing"})</span>
+            </li>
+          ))}
+        </ul>
+      )}
+      {(r.notes ?? []).map((n) => (
+        <p key={n} className={styles.muted}>
+          {n}
+        </p>
+      ))}
+    </section>
+  );
+}
