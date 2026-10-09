@@ -143,6 +143,8 @@ export function crates() {
   seen.delete(m.resolve.root);
   return [...seen]
     .map((id) => pkgs.get(id))
+    // A workspace crate (source null, such as the sim) is QuadCam's own code, not a third party.
+    .filter((p) => p.source !== null)
     .map((p) => {
       const dir = dirname(p.manifest_path);
       const files = licenseFiles(dir);
