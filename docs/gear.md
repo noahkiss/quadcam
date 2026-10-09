@@ -207,10 +207,11 @@ QuadCam posts through `osascript`.
 The `gear_on_connect` setting names the steps that run when a device of each kind is plugged in:
 `backup`, `import` and `apply_ready`. Only `backup` is on by default, and only while
 `gear_auto_backup` is on. `backup` runs two steps: **Card check** (a card QuadCam knows) and
-**Backup** (a radio card or an FC). `import` and `apply_ready` come in later releases.
+**Backup** (a radio card or an FC). `import` comes in a later release. `apply_ready` is described
+under [Apply on connect](#apply-on-connect).
 
 A card is unmounted (`diskutil unmountDisk`) at the end of every job: the on-connect steps, a
-backup, a card check, a repair. "Done, safe to unplug" plays only after the unmount worked.
+backup, a card check, a repair, an apply. "Done, safe to unplug" plays only after the unmount worked.
 When it fails, "Unmount failed" plays, the device shows **Needs attention**, and its
 **Backups** segment shows the reason. The card stays in the list until you pull it.
 
