@@ -874,7 +874,7 @@ Packs, pack types, the pack set on each flight, added log folders and crashes ar
 - A row says **Up to date**, **Update available** or **Unknown** (the device reports no
   version, or no check has run). A source that fails shows a notice; the others still show.
 - The sidebar shows how many devices have an update.
-- QuadCam checks Betaflight and ExpressLRS versions. It does not flash them.
+- QuadCam checks Betaflight versions. It does not flash them. For ExpressLRS, see [ExpressLRS (preview)](#expresslrs-preview).
 - **Flash 2.12.4…** appears for an EdgeTX radio that QuadCam has proven (see below).
 
 ### Flash an EdgeTX radio
@@ -912,6 +912,72 @@ Where the image comes from:
 - The image must be a full image: the bootloader's vector table first and the firmware's at
   `0x8000`, 400 to 1000 KB. A firmware-only file is refused, because writing it at the start
   of the flash would replace the bootloader.
+
+### ExpressLRS (preview)
+
+A preview for 1.1, off by default. Select **Show the ELRS tools** under **Firmware > ExpressLRS
+(preview)**, or turn on **Settings > Gear > Show the ELRS tools**
+(`quadcam-cli settings set elrs_preview=true`). **QuadCam has not tried any of this on a real
+radio, FC or ExpressLRS device yet.** Every job refuses while the setting is off.
+
+**Read.** An ExpressLRS device sits behind a saved radio (its internal module) or a saved FC
+(its receiver). **Read the module in …** or **Read the receiver in …** hands the host's USB
+port to the device and asks it over CRSF for its name, version, target and parameters:
+
+| Host | What QuadCam does |
+|---|---|
+| Radio | The radio's USB serial port must be set to CLI (as for the radio CLI). QuadCam stops the pulses and starts `serialpassthrough rfmod 0 400000` |
+| FC | QuadCam checks that the serial receiver is CRSF, not inverted and not half duplex, finds the UART with the serial receiver and starts `serialpassthrough <uart> 420000` |
+
+The radio or FC **stays in passthrough** until you restart the radio or unplug the FC. A second
+job needs that restart first. The version comes from a text the device lists in its parameters
+(`ELRS 4.1.0 …`), else from its device info; the report says which. A device it cannot read a
+version from is saved without one.
+
+The read saves the device (a transmitter or receiver, named by its host and target) and its
+options in the gear folder. It cannot read the binding phrase, and QuadCam never stores one in a
+change.
+
+**Options.** For a device that was read, **Options** lists packet rate, telemetry ratio, max power,
+dynamic power, switch mode and model match, as far as the device offers them. **Stage changes**
+queues one change; **Apply** opens the apply sheet like any change. The apply reads the device
+again and refuses if an option moved since your read, keeps the parameters as a backup, writes each
+option over CRSF, reads them back and compares. From a terminal:
+`quadcam-cli gear elrs set <device> packet_rate=250Hz telemetry_ratio=1:16`, then
+`gear apply`. A choice matches the device's text or the text before its `(`.
+
+**Flash.** **Flash 4.1.0…** (the newest release the last check found) shows the plan:
+
+- QuadCam downloads the official release (`firmware.zip` from the ExpressLRS artifactory, on your
+  action) and unpacks it in the cache. ExpressLRS publishes no checksum, so the plan shows the
+  SHA-256 QuadCam recorded; pass `--sha256` (CLI) or `sha256` (MCP) to check against a digest you
+  trust, and a mismatch deletes the download.
+- The device's target is found in the release by the name the device reports. QuadCam flashes only
+  the unified ESP8285 receiver and ESP32 transmitter-module targets, on ExpressLRS 3 and newer, and
+  refuses any other target, a name that matches none or several, and a version the target does not
+  support.
+- QuadCam configures the image: the device name, your binding phrase as the UID, the hardware
+  layout and the WiFi delay (`elrs_wifi_interval`, 60 s by default). It reads the image back and
+  checks that no other byte changed. **The plan shows only a fingerprint of the UID, never the
+  phrase.** Set the phrase in the ELRS section (write-only) or with
+  `settings set elrs_binding_phrase=…`; reads show `(set)`. The plan refuses without a phrase.
+- The region (`elrs_region`, `FCC` or `LBT`) picks the image folder.
+- The **esptool** module must be installed ([Modules](modules.md)). Nothing downloads except the
+  release, on your action.
+- Mixed majors (4.x on one end, 3.x on the other) do not link; the plan warns, and the page warns
+  about a read pair. Flash the receiver first.
+
+**Apply** puts the device in its bootloader (a radio: the module's boot pin held while it powers
+up; an FC: the receiver restarts into its bootloader on a CRSF request, and its name must match),
+reads the chip's current flash with esptool and keeps it as a backup (`firmware.bin`), writes with
+`esptool write-flash` and reports success only when esptool prints that it verified the data.
+Afterwards restart the radio or power-cycle the quad, then read the device again. ExpressLRS 4
+wipes a receiver's Options page, so note your settings first. A flash that fails leaves the device
+in its bootloader: power-cycle it and flash again.
+
+Stock esptool does not have the `--passthrough` flag ExpressLRS's own tools add. QuadCam uses
+`--before no-reset` after it has put the device in its bootloader. Whether that works through a
+passthrough is one of the things a real-device trial has to show.
 
 ### Splash
 
@@ -958,6 +1024,11 @@ quadcam-cli --json gear sims quad.dump_all.txt --sync --to uncrashed:OUT --diges
 quadcam-cli --json gear sims uncrashed --restore [--backup ID]                              # the plan to put a sim's file back
 quadcam-cli --json gear sims uncrashed --restore [--backup ID] --digest D --yes                   # restore
 quadcam-cli --json gear firmware [--check]           # installed against newest; --check reads the network
+quadcam-cli --json gear elrs [status [--check]]      # ELRS devices read so far (a preview: elrs_preview)
+quadcam-cli --json gear elrs read HOST [--port P]    # the module behind a radio or the receiver behind an FC
+quadcam-cli --json gear elrs set DEVICE packet_rate=250Hz   # stage options; then gear apply
+quadcam-cli --json gear elrs flash DEVICE [--version V] [--sha256 H]   # the flash plan
+quadcam-cli --json gear elrs flash DEVICE --digest D --yes            # flash with the esptool module
 quadcam-cli --json gear splash logo.png [--threshold 128] [--invert] [--board pocket] [--out preview.png]
 quadcam-cli --json gear firmware --plan --device <radio> [--version 2.12.4] [--splash logo.png]   # checks, diff, digest
 quadcam-cli --json gear firmware --device <radio> [--splash logo.png] --digest D --yes   # flash (radio in DFU mode)
@@ -1037,5 +1108,5 @@ A process started by cargo never reaches real gear:
 | `QUADCAM_FETCH` | Downloads reach only this Mac | Downloads reach the internet |
 
 Card unmounts (`diskutil unmountDisk`) follow `QUADCAM_SERIAL`, and so does the list of DFU
-devices. The firmware tests serve releases from memory and flash a fake DFU device. Tests use the synthetic card
+devices. The firmware tests serve releases from memory and flash a fake DFU device. The ExpressLRS tests (`tests/gear_elrs.rs`) use a simulated radio, FC and ELRS device on fake ports and `esptool` as a recorder; ExpressLRS and esptool are never downloaded or run for real. Tests use the synthetic card
 (`gear::edgetx::synth`) in a temporary folder.

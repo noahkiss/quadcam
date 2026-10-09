@@ -692,8 +692,8 @@ logical switches a change owns is recorded in the change, so a later change can 
   the auto-WiFi delay are written into the binary's options block. QuadCam implements this
   from the published format, then reads it back and checks the UID. The phrase is user data
   (`gear.json`, in `SECRET_KEYS`-style redaction for CLI and MCP reads).
-- **Version read:** a CRSF device-info ping over the same passthrough gives name and version.
-  Unverified on hardware; until then the version is user-entered (open question 9).
+- **Version read:** a CRSF device-info ping over the same passthrough gives the name; the version
+  comes from a parameter text or the firmware id. Unverified on hardware (open question 9).
 - **Order trap:** TX and RX on different major versions cannot link. The flash plan warns
   when a flash would leave a linked pair on different majors, and suggests RX first.
 
@@ -1223,9 +1223,51 @@ binaries only (open question 10).
     top row of a band) follow this section and a synthetic binary. No release binary was
     downloaded. The plan refuses an image whose markers differ.
   - **Not built, deferred to 1.1 (decided 2026-10-09, both wanted):** the Betaflight flash
-    plan, and ELRS options and flashing (needs `esptool`, serial passthrough and the options
-    block). 1.0 keeps the version check for Betaflight. The CRSF device-info ping is open as
-    before.
+    plan. 1.0 keeps the version check for Betaflight. ExpressLRS options and flashing are built
+    as a preview behind the `elrsPreview` setting (below).
+  - **Built (ELRS preview, branch `elrs`):** `gear/elrs/` and `core/elrs.rs`. Nothing has touched
+    a real device.
+    - `crsf.rs` is the CRSF codec (CRC-8 `0xD5`, device info `0x29`, parameter entries `0x2B`
+      with chunks, read `0x2C`, write `0x2D`, the receiver's bootloader request). `link.rs`
+      hands a radio's port to its internal module (`set pulses 0`, module power, optionally the
+      boot pin, `serialpassthrough rfmod 0 <baud>`) or an FC's port to its receiver (checks
+      `serialrx_provider`, `serialrx_inverted`, `serialrx_halfduplex`, finds the UART whose
+      function mask has bit 64, `serialpassthrough <uart> <baud>`), then speaks CRSF.
+      The host stays in passthrough until the radio restarts or the FC is unplugged.
+      `fake.rs` has `FakeElrs` (a device with the usual Lua parameters) and `FakeHost` (a radio
+      or an FC CLI in front of it).
+    - **Version read** (open question 9): a text the device lists in an info or text parameter,
+      else its name, else its device-info firmware id read as one byte each of major, minor and
+      patch. The report names the source. All three are unverified.
+    - **Options.** `Edit::ElrsOptions` stages packet rate, telemetry ratio, max power, dynamic
+      power, switch mode and model match by the Lua parameter's name. The apply reads the device
+      again, refuses when a value differs from the read (`before_mismatch`), keeps the
+      parameters as a `BeforeApply` backup, writes, reads back and compares. The binding phrase
+      is not an option and cannot be staged (it is not readable over CRSF either).
+    - **Release bundle.** `index.json` gives the tag's commit; `<commit>/firmware.zip` holds
+      `FCC|LBT/<firmware>/` and `hardware/targets.json` with `hardware/{RX,TX}/<layout>.json`.
+      ExpressLRS publishes no checksum: the plan shows the recorded SHA-256, and an optional
+      expected digest is checked and deletes the download on a mismatch.
+    - **Image.** After its ESP segments an image holds the product name (128 bytes), the Lua name
+      (16), the options JSON (512: `uid`, `wifi-on-interval`, `flash-discriminator`) and the
+      hardware layout JSON (2048), then a trailer of `BE EF CA FE` and the prior target name.
+      QuadCam learned the places by comparing a stock image with the same image configured by
+      ExpressLRS's own tools, writes them itself, reads them back and checks that no other byte
+      changed. The UID is MD5 of `-DMY_BINDING_PHRASE="<phrase>"`, first 6 bytes (`uid.rs`,
+      written here: no dependency). The phrase is the write-only setting `elrsBindingPhrase`
+      (redacted like the other secrets); plans and reports show a fingerprint of the UID.
+    - **Flash.** Targets: the unified ESP8285 receiver and ESP32 transmitter-module
+      firmwares, ExpressLRS 3 and newer, nothing else (`flash.rs`). A radio's module is started
+      with the boot pin held; a receiver is asked to restart into its bootloader and must
+      name the planned target. The chip's flash is read with esptool and kept (`firmware.bin`,
+      `BeforeFlash`); a failed read stops before any write. `esptool write-flash` runs with
+      `--before no-reset`; the flash counts as verified only when esptool prints that it
+      verified the data. Stock esptool lacks ExpressLRS's fork-only `--passthrough` flag, so
+      whether a receiver behind an FC accepts this needs a real-device trial.
+    - **Needs a real device:** the CLI sequences of both hosts (`set rfmod`, `serialpassthrough`
+      baud rates 400000 and 420000), the CRSF parameter layouts (number defaults and units are
+      skipped), the version sources, the bootloader request and the receiver's reply, esptool
+      through a passthrough, and the image block places on releases other than 4.1.0.
 
 - **Built (radio over USB):** four follow-ups, branch `radio-usb`.
   - **One radio, two ids.** `Device` gained `aliases` and `dfu_serial`; `Connected` gained
@@ -1758,7 +1800,7 @@ docs, and its rows in `api`, CLI and MCP.
 | WP7 | OSD | `gear/osd.rs`, OSD segment (view and editor) | WP2 (parse); WP5 to stage | 1 (pure part), 3 (editor) |
 | WP8 | Rates and sims. **Done:** the Sims page and the sidebar "Out of date" badge | `gear/rates.rs`, `gear/sims/`, `apply/sim.rs`, Rates segment, Sims page | WP2, WP5 (plan/confirm pattern) | 2 (read), 3 (sync) |
 | WP9 | Radio extras: voice and model editors. **Done except the ElevenLabs adapter, the carrier-sentence render and the full line list (see 7.4)** | `gear/voice/`, `resources/voice/`, Voice segment, `build-pack` and the pack index; `ModelOp` editors for checklists, telemetry screens, logging, timers, alarms and callouts; Checklists segment | WP3, WP5, WP14 | 4 |
-| WP10 | Firmware and splash. **1.0 holds the version checks, the EdgeTX flash and the splash. The Betaflight flash plan and ELRS options and flashing are deferred to 1.1 (both wanted)** | `gear/firmware/`, `gear/splash.rs`, `gear/dfu.rs`, Firmware page, Splash segment | WP2, WP3, WP4, WP5, WP14 | 4 |
+| WP10 | Firmware and splash. **1.0 holds the version checks, the EdgeTX flash and the splash. The Betaflight flash plan and ELRS options and flashing are deferred to 1.1 (both wanted); ELRS is built as a preview behind `elrsPreview`, off by default** | `gear/firmware/`, `gear/splash.rs`, `gear/dfu.rs`, Firmware page, Splash segment | WP2, WP3, WP4, WP5, WP14 | 4 |
 | WP11 | Card prep. **Done, with the app button** | `disk.rs` changes, `card_prep*` rows, `quadcam_format_card` `prep`, the Prepare card button | – (existing code) | 1 |
 | WP12 | Flights and packs | `logs.rs` columns, `gear/flights.rs`, `gear/packs.rs`, Flights and Packs pages | WP1 (reads log folders; the log store once WP4 lands) | 1 |
 | WP13 | Gear shell UI. **Done** | Sidebar Gear section, page frame and segments, Connected rows, plug-in bar, shared components (`DiffView`, `ChecksList`, `DeviceHeader`), mock-core scenarios | WP1 (types) | 1 |
@@ -1845,7 +1887,7 @@ Each has a default the build uses until you decide.
 | 6 | Voice packs: confirm CC BY 4.0 for the paid re-render, the attribution text, and the voices to render besides Callum | CC BY 4.0; no pack ships before the paid re-render |
 | 7 | Write the pack label and flight analysis into clip files as QuickTime items? | No in 1.0; shown from the flight index |
 | 8 | Betaflight firmware flashing: out of scope for 1.0 (version check only)? | Decided 2026-10-09: deferred to 1.1, and wanted. 1.0 checks the version only |
-| 9 | ELRS version read over CRSF device info needs a hardware check. Until then, enter versions by hand? | Decided 2026-10-09: ELRS options and flashing are deferred to 1.1, and wanted. Until the hardware check, hand entry and a read-only check |
+| 9 | ELRS version read over CRSF device info needs a hardware check. Until then, enter versions by hand? | Decided 2026-10-09: ELRS options and flashing are deferred to 1.1, and wanted. Built as a preview behind `elrsPreview` (off); the read, the options and the flash run on fakes only and need a real-device trial. Until then a version QuadCam cannot read can be entered by hand (`gear devices save`) |
 | 10 | Splash source: GitHub release binaries only, or also the EdgeTX cloud build? | Release binaries only |
 | 11 | Firmware and voice indexes go online. Check only on request, or daily? | On request (`firmwareCheck` = `manual`); `README.md` Privacy updated |
 | 12 | ffmpeg as a module: which static arm64 build (signed, LGPL preferred), and drop the cask's Homebrew `ffmpeg` dependency once the module works? | Module by default, Homebrew fallback. Decided 2026-10-09: the cask drops its `ffmpeg` dependency for 1.0, and the first run offers the module (a banner, with the license and the size first; `docs/modules.md`). WP14 pins Martin Riedl's signed, notarized 9.0.2 arm64 release build (GPL; no signed LGPL arm64 build found; `docs/modules.md`) |

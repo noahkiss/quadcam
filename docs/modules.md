@@ -22,7 +22,7 @@ Every program QuadCam runs is a macOS system tool, a module, or optional. `tests
 | Program | Where it comes from | Used for |
 |---|---|---|
 | ffmpeg and ffprobe | The ffmpeg module. Homebrew's copy is the fallback | Converting, checking and previewing clips |
-| esptool | The esptool module | Flashing ExpressLRS chips (planned for 1.1) |
+| esptool | The esptool module | Flashing ExpressLRS chips (a preview: [ELRS tools](gear.md#expresslrs-preview)) |
 | exiftool | Optional. QuadCam uses Homebrew's copy when it finds one | A second reader for the location tag when it verifies a clip. Nothing needs it |
 | `diskutil`, `ioreg`, `system_profiler`, `df`, `ps` | macOS | Cards, disks, USB devices and free space |
 | `curl`, `tar`, `unzip`, `zip`, `ditto`, `codesign`, `xattr` | macOS | Downloads and unpacking, signing a module |
@@ -57,6 +57,8 @@ quadcam-cli modules remove ffmpeg
 An agent uses `quadcam_settings` with the actions `modules`, `module_install` (with `confirm=true`, only after it showed you the license) and `module_remove`.
 
 ### Firmware images
+
+ExpressLRS releases work the same way: QuadCam downloads `firmware.zip` from the ExpressLRS artifactory when you plan a flash, records its SHA-256 (ExpressLRS publishes none; you can pass one to check against), keeps it in `~/Library/Caches/app.quadcam/firmware/elrs/`, and configures an image from it. The image goes to the chip through the esptool module, as a separate process. See [Gear](gear.md#expresslrs-preview).
 
 EdgeTX firmware is not a module. QuadCam downloads a release's zip from EdgeTX on GitHub when you plan a flash, checks it against the SHA-256 the release lists (or records the hash at the first download), and keeps it in `~/Library/Caches/app.quadcam/firmware/`. It is never run. QuadCam flashes over DFU with its own code, so it needs no `dfu-util`. See [Gear](gear.md#firmware-and-splash).
 

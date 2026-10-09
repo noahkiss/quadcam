@@ -51,7 +51,7 @@ test("an option change is staged and applied through the apply sheet", async ({ 
   const sheet = page.getByRole("dialog", { name: /Apply to/ });
   await expect(sheet.getByRole("region", { name: "Changes" })).toContainText("packet_rate: 250Hz(-108dBm)");
   await expect(sheet).toContainText("QuadCam reads the device again first");
-  const staged = await app.calls("gear_change_stage");
+  const staged = await app.method("gear_change_stage");
   expect(staged.at(-1)).toMatchObject({ edits: [{ kind: "elrs_options", options: [{ option: "packet_rate", value: "250Hz(-108dBm)" }] }] });
   await sheet.getByRole("button", { name: "Apply" }).click();
   await expect(sheet.getByRole("region", { name: "Result" })).toContainText("reports the new options");
