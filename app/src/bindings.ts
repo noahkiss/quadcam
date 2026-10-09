@@ -270,6 +270,30 @@ export const commands = {
 	 *  Apply in its sheet.
 	 */
 	gearFlash: (params: FlashRequest) => typedError<ApplyReport, string>(__TAURI_INVOKE("gear_flash", { params })),
+	/**
+	 *  The ExpressLRS devices QuadCam has read: version, target, options, the radios and
+	 *  FCs to read through, and what a flash needs. A preview behind `elrsPreview`.
+	 */
+	gearElrs: (params: ElrsParams) => typedError<ElrsView, string>(__TAURI_INVOKE("gear_elrs", { params })),
+	/**
+	 *  Reads the ExpressLRS device behind a saved radio (its internal module) or FC (its
+	 *  receiver) over CRSF and saves its version, target and options. The host stays in
+	 *  passthrough until the radio restarts or the FC is unplugged.
+	 */
+	gearElrsRead: (params: ElrsReadParams) => typedError<ElrsReadReport, string>(__TAURI_INVOKE("gear_elrs_read", { params })),
+	/**
+	 *  What flashing an ExpressLRS device would do: the official release (downloaded on
+	 *  first use), its target, the configured image with only a fingerprint of the
+	 *  binding UID, every guard and a digest. Writes no device.
+	 */
+	gearElrsFlashPlan: (params: ElrsFlashParams) => typedError<ApplyPlan, string>(__TAURI_INVOKE("gear_elrs_flash_plan", { params })),
+	/**
+	 *  Flashes the planned ExpressLRS image with the esptool module: keeps the chip's
+	 *  current flash as a backup, writes, and reads esptool's hash check. Needs the
+	 *  plan's digest and confirm=true; with the app running the person also clicks Apply
+	 *  in its sheet.
+	 */
+	gearElrsFlash: (params: ElrsFlashRequest) => typedError<ApplyReport, string>(__TAURI_INVOKE("gear_elrs_flash", { params })),
 	/**  An EdgeTX card: models, the selected model and its aircraft, the radio clock, one model in full. */
 	gearCard: (params: CardParams) => typedError<GearCard, string>(__TAURI_INVOKE("gear_card", { params })),
 	/**  Checks and diffs EdgeTX card edits. Writes nothing. */
@@ -470,6 +494,8 @@ export const commands = {
 	gearSimRestoreClick: (params: SimRestoreRequest) => typedError<ApplyReport, string>(__TAURI_INVOKE("gear_sim_restore_click", { params })),
 	/**  The apply sheet's own Apply button for a firmware flash: the click is the confirmation. */
 	gearFlashClick: (params: FlashRequest) => typedError<ApplyReport, string>(__TAURI_INVOKE("gear_flash_click", { params })),
+	/**  The apply sheet's own Apply button for an ExpressLRS flash. */
+	gearElrsFlashClick: (params: ElrsFlashRequest) => typedError<ApplyReport, string>(__TAURI_INVOKE("gear_elrs_flash_click", { params })),
 	/**  The person's answer to an agent's apply request. */
 	answerApplyRequest: (id: number, approve: boolean) => __TAURI_INVOKE<void>("answer_apply_request", { id, approve }),
 	/**  Lets the webview load files from the library folder (thumbnails and MP4 playback). */
@@ -1972,7 +1998,12 @@ export type Edit =
 /**  A new model file copied from another: its own name, every timer value 0, no model id. */
 { kind: "model_copy"; from: string; to: string; name: string } | 
 /**  Deletes a model file; never the selected one. */
-{ kind: "model_delete"; file: string };
+{ kind: "model_delete"; file: string } | 
+/**
+ *  ExpressLRS options of a saved ELRS device, set over CRSF (design 6.4). Never the
+ *  binding phrase.
+ */
+{ kind: "elrs_options"; options: ElrsSet[] };
 
 export type Editor = "user" | "agent";
 
@@ -1992,6 +2023,134 @@ export type EjectParams = {
 /**  `eject`'s answer. */
 export type Ejected = {
 	ejected: boolean,
+};
+
+/**  A saved ELRS device with what the last read found. */
+export type ElrsDeviceView = {
+	snapshot: ElrsSnapshot,
+	name: string,
+	status: FirmwareStatus | null,
+	/**  Staged changes waiting for this device. */
+	staged: number,
+};
+
+/**  `gear_elrs_flash_plan`: which saved ELRS device, which release. */
+export type ElrsFlashParams = {
+	device: string,
+	/**  The ExpressLRS version to flash; default the newest release the last check found. */
+	version?: string | null,
+	/**
+	 *  The release zip's SHA-256, when the person has it from a trusted place. Without it
+	 *  the plan shows the digest of what it downloaded.
+	 */
+	sha256?: string | null,
+	port?: string | null,
+};
+
+export type ElrsFlashRequest = {
+	digest: string,
+	confirm?: boolean,
+} & ElrsFlashParams;
+
+/**  A radio or an FC an ExpressLRS device can be read through. */
+export type ElrsHost = {
+	device: string,
+	name: string,
+	kind: DeviceKind,
+};
+
+/**  An option as the last read found it. */
+export type ElrsOption = {
+	/**  QuadCam's name for it (`packet_rate`). */
+	key: string,
+	label: string,
+	/**  The Lua parameter it is (`Packet Rate`). */
+	param: string,
+	/**  The parameter id on the device. */
+	id: number,
+	/**  The chosen entry, or the number. */
+	value: string,
+	/**  What it can be set to; empty for a number (see `min` and `max`). */
+	choices: string[],
+	min?: number | null,
+	max?: number | null,
+};
+
+/**  Any parameter the device listed, for the person to read. */
+export type ElrsParamView = {
+	id: number,
+	parent: number,
+	name: string,
+	kind: string,
+	value: string,
+};
+
+/**  `gear_elrs`: the ELRS devices QuadCam knows, and what a job needs. */
+export type ElrsParams = {
+	/**  True: read the newest ExpressLRS release from the network now. */
+	check?: boolean | null,
+};
+
+/**  `gear_elrs_read`: the radio or FC the device sits behind. */
+export type ElrsReadParams = {
+	/**  The saved radio (its internal module) or FC (its receiver). */
+	host: string,
+	/**  The host's serial port; omit when only one is plugged in. */
+	port?: string | null,
+};
+
+export type ElrsReadReport = {
+	device: string,
+	snapshot: ElrsSnapshot,
+	notes: string[],
+};
+
+/**
+ *  One option change: the option's name and the wanted choice, as the Lua script writes it
+ *  (`150Hz`, `1:16`, `250`, `On`). A choice matches an entry's text, or the text before its
+ *  `(`.
+ */
+export type ElrsSet = {
+	option: string,
+	value: string,
+};
+
+/**
+ *  What a read of one ExpressLRS device left behind. Never holds a binding phrase: the phrase
+ *  is not readable over CRSF, and QuadCam stores only a hash of the one it flashes.
+ */
+export type ElrsSnapshot = {
+	device: string,
+	/**  `tx` or `rx`. */
+	role: string,
+	/**  The saved radio or FC the device sits behind. */
+	host: string,
+	name: string,
+	target: string | null,
+	version: string | null,
+	/**
+	 *  Where `version` came from: `parameters` (a text the device lists) or `device_info`
+	 *  (the firmware id field). Both are unverified against a real device.
+	 */
+	version_source: string | null,
+	options: ElrsOption[],
+	params: ElrsParamView[],
+	read_at: string,
+};
+
+export type ElrsView = {
+	/**  The `elrsPreview` setting. Every job refuses while it is off. */
+	preview: boolean,
+	/**  The installed `esptool` module's version, if any. */
+	esptool: string | null,
+	latest: string | null,
+	hosts: ElrsHost[],
+	devices: ElrsDeviceView[],
+	/**  Whether a binding phrase is set. Never the phrase. */
+	phrase_set: boolean,
+	region: string,
+	wifi_interval: number,
+	warnings: string[],
 };
 
 /**  How an import made its file: the encoder that ran, or a copy of the source's frames. */

@@ -31,6 +31,9 @@ pub use crate::core::{
     CrashSaveParams, FlightFilter, FlightFoldersParams, FlightReport, FlightSetParams, FlightsView,
     NotesParams, PackSaveParams, PacksParams, ReportParams, ReportSaveParams, ReportSaved,
 };
+pub use crate::core::{
+    ElrsFlashParams, ElrsFlashRequest, ElrsParams, ElrsReadParams, ElrsReadReport, ElrsView,
+};
 pub use crate::core::{FirmwareParams, FirmwareView, FlashParams, FlashRequest};
 pub use crate::gear::apply::sim::{SimSyncParams, SimSyncRequest, SimTarget};
 pub use crate::gear::apply::{ApplyPlanParams, ApplyReport, ApplyRequest, StepReport, StepState};
@@ -136,6 +139,22 @@ macro_rules! with_gear_rows {
             /// the plan's digest and confirm=true; with the app running the person also clicks
             /// Apply in its sheet.
             gear_flash(params: FlashRequest) -> ApplyReport = |c| c.gear_flash(&params);
+            /// The ExpressLRS devices QuadCam has read: version, target, options, the radios and
+            /// FCs to read through, and what a flash needs. A preview behind `elrsPreview`.
+            gear_elrs(params: ElrsParams) -> ElrsView = |c| c.gear_elrs(&params);
+            /// Reads the ExpressLRS device behind a saved radio (its internal module) or FC (its
+            /// receiver) over CRSF and saves its version, target and options. The host stays in
+            /// passthrough until the radio restarts or the FC is unplugged.
+            gear_elrs_read(params: ElrsReadParams) -> ElrsReadReport = |c| c.gear_elrs_read(&params);
+            /// What flashing an ExpressLRS device would do: the official release (downloaded on
+            /// first use), its target, the configured image with only a fingerprint of the
+            /// binding UID, every guard and a digest. Writes no device.
+            gear_elrs_flash_plan(params: ElrsFlashParams) -> ApplyPlan = |c| c.gear_elrs_flash_plan(&params);
+            /// Flashes the planned ExpressLRS image with the esptool module: keeps the chip's
+            /// current flash as a backup, writes, and reads esptool's hash check. Needs the
+            /// plan's digest and confirm=true; with the app running the person also clicks Apply
+            /// in its sheet.
+            gear_elrs_flash(params: ElrsFlashRequest) -> ApplyReport = |c| c.gear_elrs_flash(&params);
             /// An EdgeTX card: models, the selected model and its aircraft, the radio clock, one model in full.
             gear_card(params: CardParams) -> GearCard = |c| c.gear_card(&params);
             /// A radio's model for the editors: timers, value screens, logging, alarms, callouts and

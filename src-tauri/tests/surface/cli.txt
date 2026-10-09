@@ -14,6 +14,10 @@ cli.arg gear crashes delete <ID>
 cli.arg gear devices forget <ID>
 cli.arg gear devices save <ID>
 cli.arg gear discard <CHANGE>
+cli.arg gear elrs flash <DEVICE>
+cli.arg gear elrs read <HOST>
+cli.arg gear elrs set <DEVICE>
+cli.arg gear elrs set <OPTIONS>...
 cli.arg gear fc check <DIFF>
 cli.arg gear fc check <EXPECTED>
 cli.arg gear flights set <FLIGHT>
@@ -96,6 +100,11 @@ cli.command gear devices list
 cli.command gear devices save
 cli.command gear dfu-link
 cli.command gear discard
+cli.command gear elrs
+cli.command gear elrs flash
+cli.command gear elrs read
+cli.command gear elrs set
+cli.command gear elrs status
 cli.command gear fc
 cli.command gear fc check
 cli.command gear fc identify
@@ -259,6 +268,15 @@ cli.flag gear devices save --name VALUE
 cli.flag gear dfu-link --device VALUE
 cli.flag gear dfu-link --serial VALUE
 cli.flag gear dfu-link --unlink
+cli.flag gear elrs flash --digest VALUE
+cli.flag gear elrs flash --port VALUE
+cli.flag gear elrs flash --sha256 VALUE
+cli.flag gear elrs flash --version VALUE
+cli.flag gear elrs flash --yes
+cli.flag gear elrs read --port VALUE
+cli.flag gear elrs set --draft
+cli.flag gear elrs set --note VALUE
+cli.flag gear elrs status --check
 cli.flag gear fc identify --port VALUE
 cli.flag gear fc notes --board VALUE
 cli.flag gear fc notes --version VALUE

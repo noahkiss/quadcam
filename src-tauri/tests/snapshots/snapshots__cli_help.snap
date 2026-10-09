@@ -282,7 +282,7 @@ Usage: quadcam-cli settings [OPTIONS] [COMMAND]
 
 Commands:
   show  Show the settings file, its values and the effective settings
-  set   Set settings: KEY=VALUE, where VALUE is JSON or plain text ("null" resets a key). Keys: output_dir, format, encoder, keep_originals, add_time, delete_clips_after_import, default_name, photos_album, format_label, log_dir, layout, place_folders, tunables, geocoder, name_date_format, default_profile, ffmpeg_source, modules; Gear: gear_dir, gear_auto_backup, gear_keep_recent, gear_keep_weeks, gear_keep_monthly, gear_usb_minutes, gear_on_connect, gear_cues, firmware_check, tts_provider, tts_base_url, tts_model, tts_voice, voice_index, tts_key; sim_preview
+  set   Set settings: KEY=VALUE, where VALUE is JSON or plain text ("null" resets a key). Keys: output_dir, format, encoder, keep_originals, add_time, delete_clips_after_import, default_name, photos_album, format_label, log_dir, layout, place_folders, tunables, geocoder, name_date_format, default_profile, ffmpeg_source, modules; Gear: gear_dir, gear_auto_backup, gear_keep_recent, gear_keep_weeks, gear_keep_monthly, gear_usb_minutes, gear_on_connect, gear_cues, firmware_check, tts_provider, tts_base_url, tts_model, tts_voice, voice_index, tts_key; sim_preview; elrs_preview, elrs_binding_phrase, elrs_region, elrs_wifi_interval
   help  Print this message or the help of the given subcommand(s)
 
 Options:
@@ -299,7 +299,7 @@ Options:
       --session <FILE>  Session file (default: ~/Library/Caches/app.quadcam/session.json)
   -h, --help            Print help
 ===== quadcam-cli settings set --help
-Set settings: KEY=VALUE, where VALUE is JSON or plain text ("null" resets a key). Keys: output_dir, format, encoder, keep_originals, add_time, delete_clips_after_import, default_name, photos_album, format_label, log_dir, layout, place_folders, tunables, geocoder, name_date_format, default_profile, ffmpeg_source, modules; Gear: gear_dir, gear_auto_backup, gear_keep_recent, gear_keep_weeks, gear_keep_monthly, gear_usb_minutes, gear_on_connect, gear_cues, firmware_check, tts_provider, tts_base_url, tts_model, tts_voice, voice_index, tts_key; sim_preview
+Set settings: KEY=VALUE, where VALUE is JSON or plain text ("null" resets a key). Keys: output_dir, format, encoder, keep_originals, add_time, delete_clips_after_import, default_name, photos_album, format_label, log_dir, layout, place_folders, tunables, geocoder, name_date_format, default_profile, ffmpeg_source, modules; Gear: gear_dir, gear_auto_backup, gear_keep_recent, gear_keep_weeks, gear_keep_monthly, gear_usb_minutes, gear_on_connect, gear_cues, firmware_check, tts_provider, tts_base_url, tts_model, tts_voice, voice_index, tts_key; sim_preview; elrs_preview, elrs_binding_phrase, elrs_region, elrs_wifi_interval
 
 Usage: quadcam-cli settings set [OPTIONS] <KEY=VALUE>...
 
@@ -626,6 +626,7 @@ Commands:
   stop            Stop a running backup or card check (its handle from `gear status`)
   firmware        Firmware: each saved device against the newest release (--check reads the network). `--plan --device ID [--version V] [--splash IMAGE]` shows an EdgeTX flash with its checks and digest; `--digest D --yes` flashes the radio in DFU mode
   splash          A PNG as the radio's splash screen: 128 x 64, one bit; --out writes the preview
+  elrs            ExpressLRS (a preview, `settings set elrs_preview=true`): status (default), read the device behind a radio or FC, set options, plan and run a flash
   help            Print this message or the help of the given subcommand(s)
 
 Options:

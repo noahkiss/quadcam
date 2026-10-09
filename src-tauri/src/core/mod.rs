@@ -19,6 +19,7 @@ mod backup;
 mod bench;
 mod cuts;
 mod dfu_link;
+mod elrs;
 mod fc;
 mod files;
 mod firmware;
@@ -52,6 +53,10 @@ pub use backup::{
 };
 pub use bench::{apply_ready_hooks, CopyParams};
 pub use dfu_link::{DfuLinkParams, DfuLinked};
+pub use elrs::{
+    ElrsDeviceView, ElrsFlashParams, ElrsFlashRequest, ElrsHost, ElrsParams, ElrsReadParams,
+    ElrsReadReport, ElrsView, ELRS_FLASH_CHANGE,
+};
 pub use fc::{
     BoardNotesParams, FcJob, FcPortParams, FcReadParams, PollPauseParams, UsbTimer, USB_PROBE,
 };

@@ -162,8 +162,12 @@ impl Core {
                     .map(|b| b.id)
                     .unwrap_or_default())
             }
+            DeviceKind::ElrsTx | DeviceKind::ElrsRx => {
+                self.check_elrs_stageable(device, edits)?;
+                Ok(String::new())
+            }
             other => bail!(
-                "Only FC and radio changes can be staged for now; a {} change arrives with its package.",
+                "Only FC, radio and ELRS changes can be staged for now; a {} change arrives with its package.",
                 other.label()
             ),
         }
@@ -337,6 +341,7 @@ impl Core {
         match self.change_kind(&change)? {
             DeviceKind::Fc => Ok(self.plan_change(&p.id, p.port.as_deref())?.1.plan),
             DeviceKind::Radio => Ok(self.plan_card(&change, false)?.0.plan),
+            DeviceKind::ElrsTx | DeviceKind::ElrsRx => self.plan_elrs_options(&change),
             other => bail!("A {} change cannot be applied yet.", other.label()),
         }
     }
@@ -360,6 +365,9 @@ impl Core {
         match self.change_kind(&change)? {
             DeviceKind::Fc => {}
             DeviceKind::Radio => return self.apply_card_change(req, from_gui),
+            DeviceKind::ElrsTx | DeviceKind::ElrsRx => {
+                return self.apply_elrs_options(&change, &req.digest, from_gui)
+            }
             other => bail!("A {} change cannot be applied yet.", other.label()),
         }
         let (change, planned) = self.plan_change(&req.id, req.port.as_deref())?;
@@ -686,6 +694,10 @@ fn default_title(edits: &[Edit]) -> String {
             }
         }
         Some(Edit::Restore { .. }) => "Restore a backup".into(),
+        Some(Edit::ElrsOptions { options }) => match options.as_slice() {
+            [one] => format!("Set {} = {}", one.option, one.value),
+            many => format!("{} ELRS options", many.len()),
+        },
         _ => "FC change".into(),
     }
 }

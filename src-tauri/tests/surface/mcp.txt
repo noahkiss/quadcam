@@ -11,6 +11,8 @@ mcp.action quadcam_gear.changes
 mcp.action quadcam_gear.copy_plan
 mcp.action quadcam_gear.crashes
 mcp.action quadcam_gear.devices
+mcp.action quadcam_gear.elrs
+mcp.action quadcam_gear.elrs_flash_plan
 mcp.action quadcam_gear.fc_identify
 mcp.action quadcam_gear.firmware_check
 mcp.action quadcam_gear.flash_plan
@@ -36,6 +38,7 @@ mcp.action quadcam_gear.usb_timers
 mcp.action quadcam_gear.voice
 mcp.action quadcam_gear_apply.apply
 mcp.action quadcam_gear_apply.card_repair
+mcp.action quadcam_gear_apply.elrs_flash
 mcp.action quadcam_gear_apply.flash
 mcp.action quadcam_gear_apply.sim_restore
 mcp.action quadcam_gear_apply.sim_sync
@@ -52,6 +55,7 @@ mcp.action quadcam_gear_edit.device_forget
 mcp.action quadcam_gear_edit.device_save
 mcp.action quadcam_gear_edit.dfu_link
 mcp.action quadcam_gear_edit.discard
+mcp.action quadcam_gear_edit.elrs_read
 mcp.action quadcam_gear_edit.export
 mcp.action quadcam_gear_edit.fc_read
 mcp.action quadcam_gear_edit.flight_folders
@@ -148,6 +152,7 @@ mcp.param quadcam_gear.radio string
 mcp.param quadcam_gear.rate_profile integer
 mcp.param quadcam_gear.refresh boolean
 mcp.param quadcam_gear.settings array<string>
+mcp.param quadcam_gear.sha256 string
 mcp.param quadcam_gear.sim string
 mcp.param quadcam_gear.sim_targets array<string>
 mcp.param quadcam_gear.staged boolean
@@ -166,6 +171,7 @@ mcp.param quadcam_gear_apply.invert boolean
 mcp.param quadcam_gear_apply.paths array<string>
 mcp.param quadcam_gear_apply.port string
 mcp.param quadcam_gear_apply.rate_profile integer
+mcp.param quadcam_gear_apply.sha256 string
 mcp.param quadcam_gear_apply.sim string
 mcp.param quadcam_gear_apply.sim_targets array<string>
 mcp.param quadcam_gear_apply.threshold integer

@@ -346,6 +346,31 @@ pub const KEYS: &[Key] = &[
         about: "true or false",
         check: boolean,
     },
+    // ExpressLRS tools, a preview (`gear::elrs`, `core/elrs.rs`).
+    Key {
+        file: "elrsPreview",
+        name: Some("elrs_preview"),
+        about: "true or false",
+        check: boolean,
+    },
+    Key {
+        file: "elrsBindingPhrase",
+        name: Some("elrs_binding_phrase"),
+        about: "the ExpressLRS binding phrase (1 to 64 characters)",
+        check: crate::gear::elrs::check_phrase,
+    },
+    Key {
+        file: "elrsRegion",
+        name: Some("elrs_region"),
+        about: "FCC or LBT",
+        check: |v| one_of(v, &["FCC", "LBT"]),
+    },
+    Key {
+        file: "elrsWifiInterval",
+        name: Some("elrs_wifi_interval"),
+        about: "seconds without a link before the device starts its WiFi (0 for never)",
+        check: |v| crate::gear::check_count(v, 0, 3600),
+    },
     Key {
         file: "simSettings",
         name: None,
@@ -453,7 +478,7 @@ pub fn update<T>(path: &Path, edit: impl FnOnce(&mut Values) -> Result<T>) -> Re
 }
 
 /// Settings that hold secrets: reads show only whether they are set.
-pub const SECRET_KEYS: &[&str] = &["googlePlacesKey", "ttsKey"];
+pub const SECRET_KEYS: &[&str] = &["googlePlacesKey", "ttsKey", "elrsBindingPhrase"];
 
 /// The values with secrets replaced by `"(set)"`.
 pub fn redacted(mut values: Values) -> Values {
