@@ -550,3 +550,143 @@ fn a_cargo_process_never_gets_the_real_usb_path() {
         assert!(quadcam_lib::gear::dfu::flash_size(usb.as_mut(), true).unwrap() > 0);
     }
 }
+
+// ----- MCP -----
+
+fn call(s: &mut quadcam_lib::mcp::Server<quadcam_lib::mcp::LocalBackend>, tool: &str, args: serde_json::Value) -> serde_json::Value {
+    s.call_tool(tool, args)
+}
+
+#[test]
+fn the_mcp_actions_check_preview_plan_and_flash_with_a_digest() {
+    let b = plain();
+    let d = tempfile::tempdir().unwrap();
+    let sp = picture(d.path());
+    let image = sp.image.to_str().unwrap().to_string();
+    let mut s = quadcam_lib::mcp::Server::new(quadcam_lib::mcp::LocalBackend(b.core.clone()));
+
+    let r = call(&mut s, "quadcam_gear", json!({"action": "firmware_check"}));
+    assert_eq!(r["isError"], false, "{r}");
+    let t = r["content"][0]["text"].as_str().unwrap();
+    assert!(t.contains("Pocket (EdgeTX, pocket): 2.12.4 installed, 2.12.4 newest, up to date"), "{t}");
+    let r = call(&mut s, "quadcam_gear", json!({"action": "firmware_check", "check": false}));
+    assert_eq!(r["isError"], false);
+
+    let r = call(&mut s, "quadcam_gear", json!({"action": "splash", "image": image, "board": "pocket"}));
+    assert_eq!(r["isError"], false, "{r}");
+    assert!(r["content"][0]["text"].as_str().unwrap().contains("dark pixels of 8192"));
+    assert!(r["structuredContent"]["png_base64"].is_null(), "the picture is not sent as text");
+    let r = call(&mut s, "quadcam_gear", json!({"action": "splash", "image": image, "board": "tx16s"}));
+    assert!(r["content"][0]["text"].as_str().unwrap().contains("not supported yet"));
+    let r = call(&mut s, "quadcam_gear", json!({"action": "splash"}));
+    assert_eq!(r["isError"], true);
+
+    let r = call(&mut s, "quadcam_gear", json!({"action": "flash_plan", "device": b.radio, "image": image}));
+    assert_eq!(r["isError"], false, "{r}");
+    let t = r["content"][0]["text"].as_str().unwrap();
+    assert!(t.contains("ok Known board and version"), "{t}");
+    assert!(t.contains("EdgeTX firmware"), "{t}");
+    assert!(t.contains("2.12.4 -> 2.12.4"), "{t}");
+    let digest = r["structuredContent"]["digest"].as_str().unwrap().to_string();
+    assert!(t.contains(&format!("digest={digest}")), "{t}");
+
+    // Flash: refused without confirm, then with the digest it flashes the fake.
+    let r = call(
+        &mut s,
+        "quadcam_gear_apply",
+        json!({"action": "flash", "device": b.radio, "image": image, "digest": digest}),
+    );
+    assert_eq!(r["isError"], true);
+    assert!(b.flasher.opened.lock().unwrap().is_empty());
+    let r = call(
+        &mut s,
+        "quadcam_gear_apply",
+        json!({"action": "flash", "device": b.radio, "image": image, "digest": digest, "confirm": true}),
+    );
+    assert_eq!(r["isError"], false, "{r}");
+    let t = r["content"][0]["text"].as_str().unwrap();
+    assert!(t.starts_with("Verified:"), "{t}");
+    assert!(t.contains("Back up the current firmware: done"), "{t}");
+    assert!(b.flasher.device.lock().unwrap().left);
+}
+
+// ----- CLI -----
+
+#[test]
+fn the_cli_previews_a_splash_and_plans_in_a_temporary_home() {
+    let home = tempfile::tempdir().unwrap();
+    let d = tempfile::tempdir().unwrap();
+    let sp = picture(d.path());
+    let run = |args: &[&str]| {
+        let out = Command::new(env!("CARGO_BIN_EXE_quadcam-cli"))
+            .arg("--json")
+            .args(args)
+            .env("HOME", home.path())
+            .env("QUADCAM_PHOTOS", "dry-run")
+            .output()
+            .unwrap();
+        let text = String::from_utf8_lossy(&out.stdout).into_owned();
+        (
+            out.status.code().unwrap(),
+            serde_json::from_str::<serde_json::Value>(text.trim()).unwrap_or(serde_json::Value::Null),
+            text,
+        )
+    };
+    let preview = d.path().join("preview.png");
+    let (code, v, text) = run(&[
+        "gear", "splash", sp.image.to_str().unwrap(), "--board", "pocket", "--out", preview.to_str().unwrap(),
+    ]);
+    assert_eq!(code, 0, "{text}");
+    assert_eq!(v["result"]["supported"], true);
+    assert_eq!(v["result"]["png_base64"], "");
+    let g = splash::decode_png(&std::fs::read(&preview).unwrap()).unwrap();
+    assert_eq!((g.width, g.height), (512, 256));
+    let (_, v, _) = run(&["gear", "splash", sp.image.to_str().unwrap(), "--board", "tx16s"]);
+    assert_eq!(v["result"]["supported"], false);
+    let (code, _, _) = run(&["gear", "splash", "/nonexistent.png"]);
+    assert_ne!(code, 0);
+
+    // No devices: an empty table, offline checks report instead of failing.
+    let (code, v, text) = run(&["gear", "firmware"]);
+    assert_eq!(code, 0, "{text}");
+    assert_eq!(v["result"]["devices"].as_array().unwrap().len(), 0);
+    let (code, v, text) = run(&["gear", "firmware", "--check"]);
+    assert_eq!(code, 0, "{text}");
+    assert_eq!(v["result"]["latest"]["errors"].as_array().unwrap().len(), 3, "{text}");
+
+    // A flash needs a device, a digest and --yes.
+    let (code, _, _) = run(&["gear", "firmware", "--plan"]);
+    assert_ne!(code, 0);
+    let (code, _, text) = run(&["gear", "firmware", "--device", "radio-1", "--digest", "x"]);
+    assert_ne!(code, 0, "{text}");
+    assert!(text.contains("--yes"), "{text}");
+
+    // A saved radio on an unproven version: the plan refuses, exit 0, no download.
+    let gear = home.path().join("Library/Application Support/app.quadcam/gear");
+    std::fs::create_dir_all(&gear).unwrap();
+    let radio = Device {
+        id: "radio-0000000000000002".into(),
+        kind: DeviceKind::Radio,
+        name: String::new(),
+        aircraft: None,
+        identity: Identity {
+            board: Some("pocket".into()),
+            version: Some("2.11.3".into()),
+            ..Identity::default()
+        },
+        last_seen: None,
+        last_backup: None,
+        last_space: None,
+    };
+    std::fs::write(gear.join("gear.json"), json!({"devices": [radio]}).to_string()).unwrap();
+    let (code, v, text) = run(&["gear", "firmware", "--plan", "--device", "radio-0000000000000002"]);
+    assert_eq!(code, 0, "{text}");
+    let checks = v["result"]["checks"].as_array().unwrap();
+    assert_eq!(checks[0]["refusal"]["code"], "unknown_version", "{text}");
+    assert_eq!(v["result"]["digest"], "");
+    // Even with a made-up digest the flash is refused (exit 3) and opens no USB device.
+    let (code, _, text) = run(&[
+        "gear", "firmware", "--device", "radio-0000000000000002", "--digest", "x", "--yes",
+    ]);
+    assert_eq!(code, 3, "{text}");
+}

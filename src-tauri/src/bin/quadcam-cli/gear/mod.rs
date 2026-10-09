@@ -12,6 +12,7 @@ mod backup;
 mod card;
 mod changes;
 mod fc;
+mod firmware;
 mod flights;
 mod map;
 mod osd;
@@ -144,6 +145,12 @@ pub enum GearCmd {
     Apply(changes::ApplyArgs),
     /// Stop a running backup or card check (its handle from `gear status`).
     Stop { handle: String },
+    /// Firmware: each saved device against the newest release (--check reads the network).
+    /// `--plan --device ID [--version V] [--splash IMAGE]` shows an EdgeTX flash with its
+    /// checks and digest; `--digest D --yes` flashes the radio in DFU mode.
+    Firmware(firmware::FirmwareArgs),
+    /// A PNG as the radio's splash screen: 128 x 64, one bit; --out writes the preview.
+    Splash(firmware::SplashArgs),
 }
 
 #[derive(Subcommand)]
@@ -216,6 +223,8 @@ pub fn run(core: &Core, cmd: GearCmd) -> Result<Value> {
         )?)?,
         GearCmd::Apply(a) => changes::apply(core, a)?,
         GearCmd::Stop { handle } => backup::stop(core, handle)?,
+        GearCmd::Firmware(a) => firmware::firmware(core, a)?,
+        GearCmd::Splash(a) => firmware::splash(core, a)?,
         GearCmd::Devices { cmd } => match cmd.unwrap_or(DevicesCmd::List) {
             DevicesCmd::List => serde_json::to_value(call::gear_devices(core)?)?,
             DevicesCmd::Save { id, name, aircraft } => serde_json::to_value(

@@ -291,7 +291,7 @@ pub fn patch(bin: &[u8], picture: &Mono) -> Result<Vec<u8>, SplashError> {
 }
 
 /// `gear_splash`: the image to preview.
-#[derive(Debug, Clone, Serialize, Deserialize, Type)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize, Type)]
 pub struct SplashParams {
     /// A PNG file.
     pub image: std::path::PathBuf,

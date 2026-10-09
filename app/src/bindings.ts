@@ -205,6 +205,29 @@ export const commands = {
 	 *  app running the person also clicks Apply in its sheet.
 	 */
 	gearSimSync: (params: SimSyncRequest) => typedError<ApplyReport, string>(__TAURI_INVOKE("gear_sim_sync", { params })),
+	/**
+	 *  Each saved device's firmware against the newest release (EdgeTX, Betaflight,
+	 *  ExpressLRS). Reads the network only when `check` is true, or unset with
+	 *  `firmwareCheck` set to `daily` and the last answer a day old.
+	 */
+	gearFirmware: (params: FirmwareParams) => typedError<FirmwareView, string>(__TAURI_INVOKE("gear_firmware", { params })),
+	/**
+	 *  A picture at an EdgeTX radio's splash size (128 x 64, 1 bit) with a threshold
+	 *  and invert, as a 4x PNG. Reads the image file only.
+	 */
+	gearSplash: (params: SplashParams) => typedError<SplashPreview, string>(__TAURI_INVOKE("gear_splash", { params })),
+	/**
+	 *  What flashing an EdgeTX radio would do: the release's board binary (downloaded
+	 *  on first use), the splash patch, every guard and a digest. Writes no device.
+	 */
+	gearFlashPlan: (params: FlashParams) => typedError<ApplyPlan, string>(__TAURI_INVOKE("gear_flash_plan", { params })),
+	/**
+	 *  Flashes the planned firmware over DFU: reads the radio's current firmware as a
+	 *  kept backup, erases, writes, reads back and compares, then leaves DFU. Needs
+	 *  the plan's digest and confirm=true; with the app running the person also clicks
+	 *  Apply in its sheet.
+	 */
+	gearFlash: (params: FlashRequest) => typedError<ApplyReport, string>(__TAURI_INVOKE("gear_flash", { params })),
 	/**  An EdgeTX card: models, the selected model and its aircraft, the radio clock, one model in full. */
 	gearCard: (params: CardParams) => typedError<GearCard, string>(__TAURI_INVOKE("gear_card", { params })),
 	/**  Checks and diffs EdgeTX card edits. Writes nothing. */
@@ -390,6 +413,8 @@ export const commands = {
 	gearApplyClick: (params: ApplyRequest) => typedError<ApplyReport, string>(__TAURI_INVOKE("gear_apply_click", { params })),
 	/**  The apply sheet's own Apply button for a sim sync: the click is the confirmation. */
 	gearSimSyncClick: (params: SimSyncRequest) => typedError<ApplyReport, string>(__TAURI_INVOKE("gear_sim_sync_click", { params })),
+	/**  The apply sheet's own Apply button for a firmware flash: the click is the confirmation. */
+	gearFlashClick: (params: FlashRequest) => typedError<ApplyReport, string>(__TAURI_INVOKE("gear_flash_click", { params })),
 	/**  The person's answer to an agent's apply request. */
 	answerApplyRequest: (id: number, approve: boolean) => __TAURI_INVOKE<void>("answer_apply_request", { id, approve }),
 	/**  Lets the webview load files from the library folder (thumbnails and MP4 playback). */
@@ -1907,7 +1932,62 @@ export type Filter = {
 	min_rating?: number | null,
 };
 
+/**  `gear_firmware`: whether to read the network. */
+export type FirmwareParams = {
+	/**
+	 *  True: check now. False: show the last answer only. Unset: check only when
+	 *  `firmwareCheck` is `daily` and the last answer is a day old.
+	 */
+	check?: boolean | null,
+};
+
+/**  Where a device stands against the newest release. */
+export type FirmwareState = "up_to_date" | "update" | 
+/**  The device reports no version, or the newest release is not known. */
+"unknown";
+
+/**  One row of the Firmware page. */
+export type FirmwareStatus = {
+	device: string,
+	kind: DeviceKind,
+	name: string,
+	/**  `EdgeTX`, `Betaflight`, `ExpressLRS`. */
+	product: string,
+	board: string | null,
+	installed: string | null,
+	latest: string | null,
+	state: FirmwareState,
+	/**  True when QuadCam can build and flash the newest version for this device. */
+	flashable: boolean,
+	/**  What the person should know: why QuadCam does not flash it, or that the device is ahead. */
+	note: string | null,
+};
+
+/**  The Firmware page: one row per device, and what the check found. */
+export type FirmwareView = {
+	devices: FirmwareStatus[],
+	latest: Latest,
+	/**  The `firmwareCheck` setting: `manual` or `daily`. */
+	mode: string,
+};
+
 export type Flag = "none" | "pick" | "reject";
+
+/**  `gear_flash_plan`: which radio, which EdgeTX version, which splash. */
+export type FlashParams = {
+	/**  The saved radio's device id. */
+	device: string,
+	/**  The EdgeTX version to flash; default the version the radio reports. */
+	version?: string | null,
+	/**  A splash picture to put in the firmware. */
+	splash?: SplashParams | null,
+};
+
+/**  `gear_flash`: the same params, the plan's digest and the confirm. */
+export type FlashRequest = {
+	digest: string,
+	confirm?: boolean,
+} & FlashParams;
 
 /**  One flight's measures. */
 export type Flight = {
@@ -2354,6 +2434,16 @@ export type Join = {
 /**  `format_plan`: the volume name; None uses the setting. */
 export type LabelParams = {
 	label: string | null,
+};
+
+/**  The newest stable version of each product, and when it was read. */
+export type Latest = {
+	edgetx?: string | null,
+	betaflight?: string | null,
+	elrs?: string | null,
+	checked_at?: string | null,
+	/**  Sources that failed, one sentence each. */
+	errors?: string[],
 };
 
 /**  Where a clip goes inside the library folder. */
@@ -4358,6 +4448,36 @@ export type SpecialFunction = {
 	swtch: string,
 	func: string,
 	def: string,
+};
+
+/**  `gear_splash`: the image to preview. */
+export type SplashParams = {
+	/**  A PNG file. */
+	image: string,
+	/**  Grey values under this are dark (0-255). Default 128. */
+	threshold?: number | null,
+	invert?: boolean,
+	/**  The radio's board (`pocket`); a colour radio is refused. */
+	board?: string | null,
+};
+
+/**  The picture at the radio's size and depth, ready to draw. */
+export type SplashPreview = {
+	width: number,
+	height: number,
+	threshold: number,
+	invert: boolean,
+	board: string | null,
+	/**  Dark pixels of the 8,192. */
+	dark: number,
+	/**  A PNG at 4 times the size, as base64 (nearest-neighbour: each pixel a 4 x 4 square). */
+	png_base64: string,
+	/**  The board has a 128 x 64, 1-bit screen. */
+	supported: boolean,
+	/**  Why not, when it is not. */
+	reason?: string | null,
+	/**  The 1,024 packed bytes as hex, to compare with `splash_hash` of a binary. */
+	hash: string,
 };
 
 /**  `gear_change_stage`: queue edits for a device. */
