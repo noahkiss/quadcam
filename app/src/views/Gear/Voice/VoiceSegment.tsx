@@ -10,6 +10,7 @@ import { api, errText, fileSrc } from "../../../ipc/api";
 import type { RenderReport, StagedChange, VoiceLine, VoicePack, VoiceView } from "../../../ipc/types";
 import { useStore } from "../../../store";
 import type { DeviceRef } from "../slots";
+import { Studio } from "./Studio";
 import { useVoice } from "./useVoice";
 import styles from "./Voice.module.css";
 
@@ -240,6 +241,7 @@ export function VoiceSegment({ d }: { d: DeviceRef }) {
       {view && radio && (
         <>
           <Choose radio={radio} view={view} act={v.act} />
+          <Studio onRendered={v.refresh} />
           <Packs view={view} act={v.act} refresh={v.refresh} />
           <section className={styles.section} aria-label="Lines">
             <h3>Lines</h3>

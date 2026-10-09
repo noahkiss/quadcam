@@ -211,6 +211,25 @@ export const commands = {
 	 *  a local pack. A render that costs money waits for `confirm`; `dry_run` only reports.
 	 */
 	gearVoiceRender: (params: VoiceRenderParams) => typedError<RenderReport, string>(__TAURI_INVOKE("gear_voice_render", { params })),
+	/**
+	 *  The voice studio's ElevenLabs key: `status` (set or not, never the key), `set` (into the
+	 *  Keychain) or `delete`.
+	 */
+	gearVoiceKey: (params: KeyParams) => typedError<KeyStatus, string>(__TAURI_INVOKE("gear_voice_key", { params })),
+	/**  The line sets a person can render, and whether a key is stored. No network. */
+	gearVoiceSets: () => typedError<StudioView, string>(__TAURI_INVOKE("gear_voice_sets")),
+	/**  The account's ElevenLabs voices, models (with what a character costs) and credits. Free calls. */
+	gearVoiceCatalog: (params: CatalogParams) => typedError<Catalog, string>(__TAURI_INVOKE("gear_voice_catalog", { params })),
+	/**
+	 *  What rendering line sets as carrier-sentence batches would cost, and whether the
+	 *  credits cover it. Makes no paid call.
+	 */
+	gearVoiceEstimate: (params: EstimateParams) => typedError<StudioEstimate, string>(__TAURI_INVOKE("gear_voice_estimate", { params })),
+	/**
+	 *  Renders a few lines in every voice and model for A/B listening. A paid call:
+	 *  `confirm` allows it; `dry_run` only prices it.
+	 */
+	gearVoiceSample: (params: SampleParams) => typedError<SampleReport, string>(__TAURI_INVOKE("gear_voice_sample", { params })),
 	/**  Installs a voice pack from the index after a hash check. */
 	gearVoicePackInstall: (params: PackInstallParams) => typedError<VoicePack, string>(__TAURI_INVOKE("gear_voice_pack_install", { params })),
 	/**
@@ -864,6 +883,18 @@ export type BackupSummary = {
 
 export type Badge = "matched" | "likely" | "unmatched";
 
+/**  How lines are batched and cut. Part of a batch's cache key only through the batch text. */
+export type BatchSettings = {
+	/**  The sentence around a line; `{line}` stands for it, and the line ends the sentence. */
+	carrier?: string,
+	/**  A carrier for one tone (`alert`, `number`, `fun`, `calm`) instead of `carrier`. */
+	tone_carriers?: { [key in string]: string },
+	/**  Sentences in one batch at most. */
+	max_lines?: number,
+	/**  Each cut edge moves to the quietest point within this many milliseconds. */
+	snap_ms?: number,
+};
+
 /**  A pull with its guessed flights. */
 export type BlackboxEntry = {
 	pull: Pull,
@@ -1259,6 +1290,19 @@ export type CardView = {
 	marker?: string | null,
 	/**  The typed view of the model asked for. */
 	model?: ModelView | null,
+};
+
+export type Catalog = {
+	voices: VoiceInfo[],
+	models: ModelInfo[],
+	credits?: Credits | null,
+};
+
+/**  `gear_voice_catalog`: what the account offers. With none of the three set, all of them. */
+export type CatalogParams = {
+	voices?: boolean,
+	models?: boolean,
+	credits?: boolean,
 };
 
 /**  One entry in a change's history. */
@@ -1708,6 +1752,16 @@ export type CrashSaveParams = {
 	repaired?: boolean | null,
 };
 
+/**  What an account may still spend. */
+export type Credits = {
+	used: number,
+	limit: number,
+	remaining: number,
+	tier: string,
+	/**  When the allowance resets, seconds since 1970; 0 when unknown. */
+	resets_at: number,
+};
+
 /**  The `gearCues` setting. Missing fields take their defaults. */
 export type CueSettings = {
 	/**  Silences every cue. */
@@ -2129,6 +2183,44 @@ export type EraseState =
 "done" | 
 /**  Asked for and not done; `erase_note` says why. The pull itself is stored. */
 "skipped";
+
+/**  What a set of batches would cost. */
+export type Estimate = {
+	batches: number,
+	/**  Batches the cache already holds. */
+	cached_batches: number,
+	/**  Lines in the batches still to render. */
+	lines: number,
+	/**  Characters of those batches, carriers included. */
+	chars: number,
+	cost_per_char: number | null,
+	/**  `estimated`, `recorded` or `account`: where `cost_per_char` comes from. */
+	credits_basis?: string,
+	/**  USD per 1,000 characters today. */
+	usd_per_1k?: number | null,
+	/**  The last day of a promo rate in `usd_per_1k`. */
+	promo_until?: string | null,
+	/**  Credits the render bills (an estimate unless `credits_basis` is `recorded`). */
+	credits: number,
+	/**  What the render costs in USD. */
+	usd?: number | null,
+	remaining: number | null,
+	/**  The credits cover the render (true when the provider cannot say). */
+	affordable: boolean,
+};
+
+/**  `gear_voice_estimate`. */
+export type EstimateParams = {
+	/**  Line set ids (`gear_voice_sets`); they combine. */
+	sets: string[],
+	/**  A voice name or id from the account. */
+	voice: string,
+	model: string,
+	/**  Only these card paths of the sets; empty for every line. */
+	lines?: string[],
+	settings?: RenderSettings | null,
+	batch?: BatchSettings | null,
+};
 
 /**  `gear_export`: a snapshot, or every snapshot of a device, to a folder. */
 export type ExportParams = {
@@ -2801,6 +2893,25 @@ export type Join = {
 	swap: Swap,
 };
 
+/**  `gear_voice_key`. */
+export type KeyParams = {
+	/**  `status` (default), `set` or `delete`. */
+	action?: string,
+	/**  For `set`: the key. It goes to the Keychain and nowhere else. */
+	key?: string | null,
+};
+
+/**  Whether a key is stored, never the key. */
+export type KeyStatus = {
+	set: boolean,
+	/**  What tells keys apart without showing one: `ends in 3f9a`. */
+	hint: string,
+	/**  `keychain`, or `environment` when QUADCAM_TTS_KEY holds it for this run. */
+	source: string,
+	/**  Why the Keychain could not be read, when it could not. */
+	problem?: string | null,
+};
+
 /**  `format_plan`: the volume name; None uses the setting. */
 export type LabelParams = {
 	label: string | null,
@@ -3378,6 +3489,23 @@ export type ModelEntry = {
 	file: string,
 	name: string,
 	selected: boolean,
+};
+
+/**  A model a provider offers. */
+export type ModelInfo = {
+	id: string,
+	name: string,
+	/**
+	 *  Credits one character costs on this model: estimated from the rate table, or the
+	 *  account's own figure for a model the table lacks.
+	 */
+	cost_per_char: number | null,
+	/**  USD per 1,000 characters today (the promo rate while it lasts); 0 when unknown. */
+	usd_per_1k?: number | null,
+	/**  The last day of a promo rate that applies today. */
+	promo_until?: string | null,
+	/**  The longest text one request takes; 0 when the provider does not say. */
+	max_chars: number,
 };
 
 /**  One edit to a model file. Ops apply in order; a later op sees the earlier ones. */
@@ -4489,6 +4617,10 @@ export type RenderReport = {
 	needs_confirm: boolean,
 	dry_run: boolean,
 	notes: string[],
+	/**  A batched render: what it costs. Absent for a line-by-line render. */
+	estimate?: Estimate | null,
+	/**  Cuts whose length looks wrong (batched renders). */
+	warnings?: string[],
 };
 
 /**  How a voice is rendered. Every field is in the pack's index entry. */
@@ -4569,6 +4701,41 @@ export type RfAlarms = {
 };
 
 export type RowState = "pass" | "warn" | "unknown";
+
+export type SampleItem = {
+	voice: string,
+	voice_name: string,
+	model: string,
+	/**  The line's card path. */
+	line: string,
+	text: string,
+	/**  The WAV, in the cache. */
+	file: string,
+	ms: number,
+};
+
+/**  `gear_voice_sample`: short A/B renders of a few lines in every voice and model. */
+export type SampleParams = {
+	voices: string[],
+	models: string[],
+	/**  Line sets to sample; empty for `sample`. */
+	sets?: string[],
+	lines?: string[],
+	dry_run?: boolean,
+	confirm?: boolean,
+	settings?: RenderSettings | null,
+	batch?: BatchSettings | null,
+};
+
+export type SampleReport = {
+	items: SampleItem[],
+	/**  The total over every voice and model. */
+	estimate: Estimate,
+	combos: number,
+	needs_confirm: boolean,
+	dry_run: boolean,
+	warnings: string[],
+};
 
 /**  One radio's saved calibration and what it was made with. */
 export type SavedCalibration = {
@@ -4750,6 +4917,14 @@ export type Session_Serialize = {
 	 *  `join_split_recordings` setting.
 	 */
 	join: boolean | null,
+};
+
+/**  What a person sees of a set. */
+export type SetInfo = {
+	id: string,
+	title: string,
+	about: string,
+	lines: number,
 };
 
 /**  `settings_set`: settings by file key or CLI/MCP name; null resets one. */
@@ -5344,6 +5519,23 @@ export type StorageView = {
 	devices: DeviceStorage[],
 };
 
+export type StudioEstimate = {
+	voice: string,
+	voice_name: string,
+	model: string,
+	/**  Lines in the sets after combining. */
+	lines: number,
+	estimate: Estimate,
+};
+
+/**  `gear_voice_sets`: the line sets and the key, with no network call. */
+export type StudioView = {
+	key: KeyStatus,
+	sets: SetInfo[],
+	/**  The carrier and batch size used when none is given. */
+	batch: BatchSettings,
+};
+
 /**  `suggest`: changes to clip plans. Without `editor`, an agent made them. */
 export type SuggestParams = {
 	patches: PlanPatch[],
@@ -5661,6 +5853,17 @@ export type VoiceEditParams = {
 	confirm?: boolean,
 };
 
+/**  A voice a provider offers. */
+export type VoiceInfo = {
+	id: string,
+	name: string,
+	/**  `premade`, `cloned`, `generated`, `professional` and so on. */
+	category: string,
+	/**  What the provider says about it: accent, gender, age, use. */
+	labels: string,
+	preview_url?: string | null,
+};
+
 export type VoiceLine = {
 	path: string,
 	text: string,
@@ -5728,6 +5931,15 @@ export type VoiceRenderParams = {
 	confirm?: boolean,
 	/**  How it is rendered; the defaults when left out. */
 	settings?: RenderSettings | null,
+	/**
+	 *  Line sets to render as carrier-sentence batches with ElevenLabs (`quadcam-cli gear
+	 *  voice sets` lists them). Empty renders `lines` or every line one at a time.
+	 */
+	sets?: string[],
+	/**  The model for a batched render; empty for the setting `tts_model`. */
+	model?: string,
+	/**  The carrier and batch size of a batched render; the defaults when left out. */
+	batch?: BatchSettings | null,
 };
 
 /**  What speaks the cue lines. */

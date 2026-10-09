@@ -12,6 +12,7 @@ const SYSTEM: &[&str] = &[
     "/bin/ls",
     "/bin/ps",
     "/bin/sleep",
+    "/bin/stty",
     "/usr/bin/afplay",
     "/usr/bin/codesign",
     "/usr/bin/curl",

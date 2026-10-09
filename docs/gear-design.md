@@ -165,7 +165,7 @@ A new **Gear** section:
 | Keep one a month | `gearKeepMonthly` | on (no limit) |
 | USB time warning | `gearUsbMinutes` | 20 |
 | Voice provider | `ttsProvider` | `say` (macOS) |
-| Voice provider key | `ttsKey` | none; read from `QUADCAM_TTS_KEY` first; in `SECRET_KEYS` |
+| Voice provider key | `ttsKey` | none; read from `QUADCAM_TTS_KEY` first; in `SECRET_KEYS`. The ElevenLabs key is not a setting: it lives in the Keychain (service `app.quadcam`, account `elevenlabs-api-key`) |
 | Check for firmware | `firmwareCheck` | `manual` (`manual` or `daily`) |
 | Tools (esptool, ffmpeg) | `modules` | QuadCam's own modules (7.10); a path per tool overrides one |
 | Use Homebrew ffmpeg | `ffmpegSource` | `module` (`module` or `homebrew`) |
@@ -213,7 +213,7 @@ existing logic modules. `core/gear.rs` holds the `Core` methods; `api/gear.rs` t
 | `gear/osd.rs` | OSD position encode and decode, element widths, grids, render, overlap and off-screen check | `bf/dump` |
 | `gear/rates.rs` | Rate curves (Betaflight, Actual, Quick), sampling for the chart, conversion between types | none |
 | `gear/sims/mod.rs` + `liftoff.rs`, `micro.rs`, `uncrashed.rs`, `zone.rs`, `velocidrone.rs` | One `Sim` adapter per game: find, read rate profiles, write, "running" check | `rates` |
-| `gear/voice/` (`lines.rs`, `tts.rs`, `render.rs`, `packs.rs`) | Voice lines and spelling rules, TTS providers, the render cache and normalisation, pack index and install | `media` (ffmpeg), `store` |
+| `gear/voice/` (`lines.rs`, `tts.rs`, `eleven.rs`, `keychain.rs`, `batch.rs`, `sets.rs`, `render.rs`, `packs.rs`) | Voice lines and spelling rules, TTS providers (`say`, OpenAI-compatible, ElevenLabs), the Keychain key, batched carrier-sentence renders, line sets, the render cache and normalisation, pack index and install | `media` (ffmpeg), `store` |
 | `gear/splash.rs` | Image to 1-bit 128x64 with threshold and preview; patch and decode a firmware image | `image` crate (PNG decode) |
 | `gear/firmware/` (`check.rs`, `edgetx.rs`, `elrs.rs`) | Version checks; EdgeTX download, splash, DFU flash; ELRS options and flash | `splash`, `serial`, external `dfu-util`, `esptool` |
 | `modules/` (`manifest.rs`, `fetch.rs`, `install.rs`, `run.rs`) | The module manager (7.10): pinned manifests, download, checksum, install, run as a subprocess, update check, removal. Used by `media` for ffmpeg too | `paths`, `settings` |
@@ -244,7 +244,9 @@ no GPL tool.
 | Staged changes | `<gear>/changes/<YYYY-MM-DD>-<device-slug>-<n>/` | `change.json`, `before/`, `after/`, `apply.cli` or file diffs, `report.json`. The same shape as a hand-kept staging folder |
 | Bench history | `<gear>/changes/` (applied ones) | The log of what was applied, verified or reverted |
 | Downloads | `~/Library/Caches/app.quadcam/firmware/<product>/<version>/` | With a SHA-256 per file |
-| Voice renders | `~/Library/Caches/app.quadcam/voice/raw/<provider>/<key>.pcm` | Raw takes; a re-render costs nothing |
+| Voice renders | `~/Library/Caches/app.quadcam/voice/raw/<provider>/<key>.wav` | Raw takes; a re-render costs nothing |
+| Voice batches | `~/Library/Caches/app.quadcam/voice/batch/<provider>/<key>.wav` and `.json` | A carrier-sentence batch's raw audio and character timestamps; re-cutting costs nothing |
+| Voice samples | `~/Library/Caches/app.quadcam/voice/samples/<voice>-<model>/` | The A/B WAVs |
 | Installed voice packs | `<gear>/voices/<pack-id>/` | WAVs and `pack.json` |
 | Blackbox pulls | `<gear>/blackbox/<device-id>/<YYYY-MM-DDTHHMMSS>.json` | One record per pull: the blob ref of the raw flash image (in `blobs/`), aircraft, day, method, used and total size, the logs found in the headers, whether the flash was erased (7.12). A blob a record names is never collected |
 | Flight index | `<gear>/flights.json` | A rebuildable cache over the log store and folders the user adds |
@@ -381,6 +383,11 @@ in `specta_builder` (`lib.rs`).
 | `gear_voice` | `VoiceParams` → `VoiceView` (lines, packs installed and available, card state) | no |
 | `gear_voice_edit` | `VoiceEditParams { line, text, pack }` → `VoiceLine` | gear.json |
 | `gear_voice_render` | `VoiceRenderParams { voice, lines, dry_run }` → `RenderReport` | cache; network |
+| `gear_voice_key` | `KeyParams { action, key }` → `KeyStatus` (never the key) | Keychain |
+| `gear_voice_sets` | → `StudioView` (key state, line sets) | no |
+| `gear_voice_catalog` | `CatalogParams { voices, models, credits }` → `Catalog` | network (free calls) |
+| `gear_voice_estimate` | `EstimateParams { sets, voice, model }` → `StudioEstimate` | network (free calls) |
+| `gear_voice_sample` | `SampleParams { voices, models, sets, confirm }` → `SampleReport` | cache; network (paid) |
 | `gear_voice_pack_install` | `PackInstallParams { pack }` → `VoicePack` | gear folder; network |
 | `gear_voice_choose` | `VoiceChooseParams { radio, pack, keep_overrides }` → `StagedChange` | gear folder |
 | `gear_splash` | `SplashParams { image, threshold, invert, board }` → `SplashPreview` | cache |
@@ -1102,17 +1109,54 @@ protocol serves; the gear folder is outside its scope). `build-pack` is CLI only
   (`voice.overrides.<radio>`, a `text` override holds its WAV as a blob; `backup::change_keys`
   keeps those blobs from collection), as does the chosen voice and the person's custom lines.
   Choosing with Keep my overrides off clears that radio's overrides when it stages.
-- Not built, or different from the design: the render hook for carrier sentences is a
-  documented seam in `tts.rs` only. `lines.csv` holds 45 lines, not about 745: the callouts
-  QuadCam names, the numbers 0 to 20 and six system sounds; the rest of EdgeTX's set is a data
-  task. Units and their file names are not in it. The ElevenLabs adapter and the quota report
-  are not built; the report gives characters and whether the provider may charge. A render
-  runs inside the call, with no progress events. `lang` is `en` only.
+- Not built, or different from the design: `lines.csv` holds 45 lines, not about 745: the
+  callouts QuadCam names, the numbers 0 to 20 and six system sounds. The full set lives in the
+  line sets below. A render runs inside the call, with no progress events. `lang` is `en` only.
+  The numbers sit at `SOUNDS/en/SYSTEM/0000.wav`, where EdgeTX plays them (the manual:
+  `SYSTEM` holds what the radio plays by itself; `SOUNDS/en/` holds tracks a model names);
+  a test keeps every number and unit prompt in `SYSTEM`.
 - Acceptance: `tests/voice.rs` (the spelling golden, a cache hit with no provider call, the
   normalisation golden WAV, the providers' requests, `build-pack`'s zip and index entry, the
   install checks, a hostile zip) and `tests/voice_core.rs` (render and cost, confirm, install,
   Choose voice staging one change and keeping overrides, apply with read-back),
   `e2e/voice.spec.ts`.
+
+**Voice studio (built).** ElevenLabs behind the same `Tts` trait (`eleven.rs`): the key comes
+from the Keychain through `KeyStore` (`keychain.rs`, `security-framework`, no secret in argv;
+`MemKeys` in tests; the real Keychain and network stay closed under cargo unless
+`QUADCAM_TTS=real`), `/v1/models`, `/v1/voices`, `/v1/user/subscription` and
+`/v1/text-to-speech/<voice>/with-timestamps?output_format=pcm_32000` go through `Http` (curl with
+its config on stdin; `FakeHttp` in tests). A model's billing rate is its
+price in `rates.rs`, the one rate table: USD per 1,000 characters, an optional promo rate with
+its last day, and the per-request character limit (v4 and v4 turbo: the v3 limit of 5,000
+until the account says otherwise). Credits a character are the base USD rate over 0.08 and
+read as an estimate; a model the table lacks keeps the account's `character_cost_multiplier`
+(turbo and flash v2 fall back to 0.5). The `x-character-count` header of a paid call is kept
+per model in `<cache>/voice/charcost.json` and wins over the estimate next time.
+
+- Batches (`batch.rs`): `plan` groups lines by tone, wraps each in the carrier (default
+  `The word is {line}.`, the line ends the sentence; a line with its own end mark takes no
+  second full stop), joins up to 30 sentences, and drops repeats of the same spoken text.
+  `fetch` renders with timestamps or reads `BatchCache` (WAV and alignment JSON by provider,
+  voice, model, speed, batch text and seed). `cut` takes each line from its first character's
+  start to its last character's end, each edge moved to the quietest 2 ms window within 40 ms,
+  and fails when the alignment does not describe the batch text or runs past the audio.
+  `check` flags silent cuts, cuts under 120 ms or over 4.5 s, and cuts far from the batch's
+  median pace per letter. The cuts feed `render::Ctx.cuts`, so `render_line` and `packs::render_to`
+  take them like any cached take, then trim, fade and tempo.
+- Cost: `estimate` counts the characters of the batches the cache lacks, carriers included,
+  times the model's rate, in credits and in USD (`Estimate.usd`, `usd_per_1k`, `promo_until`,
+  `credits_basis`: `estimated`, `recorded` or `account`); `plan_within` keeps each batch under
+  nine tenths of the model's request limit; `Estimate::check` refuses when the credits
+  (`/v1/user/subscription`) fall short. Every paid row (`gear_voice_sample`, `gear_voice_render` with `sets`) prices
+  first and waits for `confirm`. MCP can delete the key and cannot set it.
+- Sets (`sets.rs`, `resources/voice/sets/*.csv`, `path,text,group,tone,why`): `edgetx`,
+  `quad`, `heli`, `plane`, `glider`, `extras`, `easter`, `sample`, `quadcam` (the built-in
+  `lines.csv`) and `custom` (from `gear.json`). The aircraft sets are `radio.csv` plus their own
+  callouts. The text is QuadCam's wording; file names are the names the firmware plays.
+- Acceptance: unit tests in `eleven.rs`, `keychain.rs`, `batch.rs`, `sets.rs`;
+  `tests/voice_studio.rs` (key, catalogue, estimate, sample, set render, credits refusal, MCP)
+  and `e2e/voice-studio.spec.ts`.
 
 **Packs are release assets, not git files.** A pack is a zip per voice
 (`voice-<id>-<version>.zip`) attached to a GitHub release, plus one `voices.json` index:

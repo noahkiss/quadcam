@@ -1,0 +1,13 @@
+path,text,group,tone,why
+SOUNDS/en/egglnch.wav,Launch control engaged!,extras,fun,Plays on arming with launch control on. Original line.
+SOUNDS/en/eggsend.wav,Engines hot. Send it!,extras,fun,Plays on arming. Original line.
+SOUNDS/en/eggten.wav,Ten seconds to glory!,extras,fun,Plays before a timed run. Original line.
+SOUNDS/en/egglegal.wav,This is totally legal.,extras,fun,A joke for the first flight of the day. Original line.
+SOUNDS/en/eggbeast.wav,Beast mode!,extras,fun,Plays when the quad goes to a high rate. Original line.
+SOUNDS/en/eggnice.wav,Nice flying!,extras,fun,Plays after a clean landing. Original line.
+SOUNDS/en/eggcrash.wav,That is going to leave a mark.,extras,fun,Plays after a crash. Original line.
+SOUNDS/en/eggfuel.wav,Fuel is for cars. You have volts.,extras,fun,Plays when the battery is low. Original line.
+SOUNDS/en/eggshred.wav,Time to shred!,extras,fun,Plays before a flight. Original line.
+SOUNDS/en/eggfull.wav,Full send!,extras,fun,Plays on arming. Original line.
+SOUNDS/en/eggplum.wav,Gravity wins again.,extras,fun,Plays after a crash. Original line.
+SOUNDS/en/egghous.wav,"Houston, we have a quad.",extras,fun,Plays on power-on. Original line.

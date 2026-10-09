@@ -43,6 +43,7 @@ mod sim_restore;
 mod sim_sync;
 mod switchmap;
 mod voice;
+mod voice_studio;
 pub use crate::paths::{cache_dir, default_session_file, default_settings_file, support_dir};
 pub use apply::{ChangeUpdateParams, RestoreParams, StageParams};
 pub use apply_card::{CardMountParams, CardMounted, MOUNT_MINUTES};
@@ -100,6 +101,12 @@ pub use voice::{
     report_text as voice_report_text, view_text as voice_view_text, BuildPackParams, LineOverride,
     PackInstallParams, ProviderView, RenderReport, VoiceChooseParams, VoiceEditParams, VoiceLine,
     VoicePack, VoiceParams, VoicePreviewParams, VoiceRenderParams, VoiceView, VOICE_CHANGE,
+};
+pub use voice_studio::{
+    catalog_text as voice_catalog_text, estimate_text as voice_estimate_text,
+    key_text as voice_key_text, sample_text as voice_sample_text, Catalog, CatalogParams,
+    EstimateParams, KeyParams, KeyStatus, SampleItem, SampleParams, SampleReport, StudioEstimate,
+    StudioView,
 };
 
 /// What the host does when the core changes state. The GUI emits events and asks for the
