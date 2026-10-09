@@ -36,6 +36,7 @@ mod rematch;
 mod setup;
 mod sim;
 mod sim_host;
+mod sim_restore;
 mod sim_sync;
 mod switchmap;
 pub use crate::paths::{cache_dir, default_session_file, default_settings_file, support_dir};
@@ -78,6 +79,7 @@ pub use sim_host::{
     arm_block_text, SimBox, SimCamera, SimFrame, SimHud, SimPose, SimPreset, SimStartInfo,
     SimStartParams, SimSticks, SimStopInfo, SimUiSettings, DEFAULT_PRESET,
 };
+pub use sim_restore::{SimRestoreParams, SimRestoreRequest};
 pub use switchmap::{RadioParams, RadioWatchParams, SwitchMapParams};
 
 /// What the host does when the core changes state. The GUI emits events and asks for the

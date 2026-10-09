@@ -21,7 +21,7 @@ pub use crate::core::{
     SimDefaultsParams, SimValidateParams,
 };
 pub use crate::core::{
-    CardMountParams, CardMounted, DfuLinkParams, DfuLinked, RadioCliAction, RadioCliParams, RadioCliReport, RadioMatch, RadioVerify, ChangeUpdateParams, CopyParams, OsdEditParams, RestoreParams,
+    CardMountParams, CardMounted, SimRestoreParams, SimRestoreRequest, DfuLinkParams, DfuLinked, RadioCliAction, RadioCliParams, RadioCliReport, RadioMatch, RadioVerify, ChangeUpdateParams, CopyParams, OsdEditParams, RestoreParams,
     StageParams,
 };
 pub use crate::core::{
@@ -114,6 +114,10 @@ macro_rules! with_gear_rows {
             /// Refuses while a game runs. Needs the plan's digest and confirm=true; with the
             /// app running the person also clicks Apply in its sheet.
             gear_sim_sync(params: SimSyncRequest) -> ApplyReport = |c| c.gear_sim_sync(&params);
+            /// What putting a sim's file back from a backup would write: the checks, the rates that change, a warning and a digest. Writes nothing.
+            gear_sim_restore_plan(params: SimRestoreParams) -> ApplyPlan = |c| c.gear_sim_restore_plan(&params);
+            /// Puts a sim's rate file back from a backup. Needs the plan's digest and confirm; the current file is backed up first.
+            gear_sim_restore(params: SimRestoreRequest) -> ApplyReport = |c| c.gear_sim_restore(&params);
             /// Each saved device's firmware against the newest release (EdgeTX, Betaflight,
             /// ExpressLRS). Reads the network only when `check` is true, or unset with
             /// `firmwareCheck` set to `daily` and the last answer a day old.

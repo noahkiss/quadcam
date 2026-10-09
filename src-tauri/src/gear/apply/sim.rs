@@ -127,7 +127,7 @@ pub fn pseudo_change(plan: &ApplyPlan) -> StagedChange {
     }
 }
 
-fn fail(name: &str, code: RefusalCode, reason: impl Into<String>) -> Check {
+pub(crate) fn fail(name: &str, code: RefusalCode, reason: impl Into<String>) -> Check {
     check(name, Err(Refusal::new(code, reason)))
 }
 
@@ -234,7 +234,7 @@ fn holds(p: &SimProfile, want: &Rates, throttle: Option<&ThrottleCurve>) -> bool
     same_rates && same_throttle
 }
 
-fn tilde(home: &Path, p: &Path) -> String {
+pub(crate) fn tilde(home: &Path, p: &Path) -> String {
     match p.strip_prefix(home) {
         Ok(r) => format!("~/{}", r.display()),
         Err(_) => p.display().to_string(),
@@ -301,7 +301,7 @@ fn find(
     }
 }
 
-fn can_write(path: &Path) -> bool {
+pub(crate) fn can_write(path: &Path) -> bool {
     std::fs::OpenOptions::new().write(true).open(path).is_ok()
         && path
             .parent()
@@ -311,7 +311,7 @@ fn can_write(path: &Path) -> bool {
 const AXIS_NAMES: [&str; 3] = ["Roll", "Pitch", "Yaw"];
 
 /// The diff of one profile: the values that change, old line out, new line in.
-fn diff_lines(
+pub(crate) fn diff_lines(
     have: &Rates,
     want: &Rates,
     ht: Option<ThrottleCurve>,

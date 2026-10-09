@@ -205,6 +205,10 @@ export const commands = {
 	 *  app running the person also clicks Apply in its sheet.
 	 */
 	gearSimSync: (params: SimSyncRequest) => typedError<ApplyReport, string>(__TAURI_INVOKE("gear_sim_sync", { params })),
+	/**  What putting a sim's file back from a backup would write: the checks, the rates that change, a warning and a digest. Writes nothing. */
+	gearSimRestorePlan: (params: SimRestoreParams) => typedError<ApplyPlan, string>(__TAURI_INVOKE("gear_sim_restore_plan", { params })),
+	/**  Puts a sim's rate file back from a backup. Needs the plan's digest and confirm; the current file is backed up first. */
+	gearSimRestore: (params: SimRestoreRequest) => typedError<ApplyReport, string>(__TAURI_INVOKE("gear_sim_restore", { params })),
 	/**
 	 *  Each saved device's firmware against the newest release (EdgeTX, Betaflight,
 	 *  ExpressLRS). Reads the network only when `check` is true, or unset with
@@ -232,6 +236,12 @@ export const commands = {
 	gearCard: (params: CardParams) => typedError<GearCard, string>(__TAURI_INVOKE("gear_card", { params })),
 	/**  Checks and diffs EdgeTX card edits. Writes nothing. */
 	gearCardPreview: (params: CardPreviewParams) => typedError<CardPreview, string>(__TAURI_INVOKE("gear_card_preview", { params })),
+	/**  Lists the ._ files macOS left on a card; with remove and confirm, deletes them. */
+	gearCardClean: (params: CardCleanParams) => typedError<CardClean, string>(__TAURI_INVOKE("gear_card_clean", { params })),
+	/**  A radio on its USB serial port (EdgeTX CLI): identify, ls, play, beep, reboot, or verify the card's files against a backup. */
+	gearRadioCli: (params: RadioCliParams) => typedError<RadioCliReport, string>(__TAURI_INVOKE("gear_radio_cli", { params })),
+	/**  Links the radio in DFU mode to a saved radio (the pick, else the radio seen last), or removes the link. */
+	gearDfuLink: (params: DfuLinkParams) => typedError<DfuLinked, string>(__TAURI_INVOKE("gear_dfu_link", { params })),
 	/**
 	 *  The switch map: each control's positions with their channel values, FC modes
 	 *  and radio effects, from an EdgeTX model and a Betaflight dump; with `live`,
@@ -413,6 +423,8 @@ export const commands = {
 	gearApplyClick: (params: ApplyRequest) => typedError<ApplyReport, string>(__TAURI_INVOKE("gear_apply_click", { params })),
 	/**  The apply sheet's own Apply button for a sim sync: the click is the confirmation. */
 	gearSimSyncClick: (params: SimSyncRequest) => typedError<ApplyReport, string>(__TAURI_INVOKE("gear_sim_sync_click", { params })),
+	/**  The apply sheet's own Apply button for a sim restore: the click is the confirmation. */
+	gearSimRestoreClick: (params: SimRestoreRequest) => typedError<ApplyReport, string>(__TAURI_INVOKE("gear_sim_restore_click", { params })),
 	/**  The apply sheet's own Apply button for a firmware flash: the click is the confirmation. */
 	gearFlashClick: (params: FlashRequest) => typedError<ApplyReport, string>(__TAURI_INVOKE("gear_flash_click", { params })),
 	/**  The person's answer to an agent's apply request. */
@@ -501,6 +513,13 @@ export type AgentFormatClosed = number;
 export type AgentFormatRequest = {
 	id: number,
 	plan: FormatPlan,
+};
+
+/**  An AppleDouble file found on a card. */
+export type AppleDoubleFile = {
+	/**  Path from the card's root (`MODELS/._model01.yml`). */
+	path: string,
+	bytes: number,
 };
 
 /**
@@ -930,6 +949,27 @@ export type CardChecksParams = {
 	device: string,
 };
 
+/**  What `gear_card_clean` found and did. */
+export type CardClean = {
+	root: string,
+	/**  The AppleDouble files on the card when the call began. */
+	files: AppleDoubleFile[],
+	bytes: number,
+	removed: number,
+	/**  The card is in the radio, over USB (slow). */
+	radio_usb: boolean,
+	notes: string[],
+};
+
+/**  `gear_card_clean`: the `._` files macOS left on a card. Without `remove` it lists them. */
+export type CardCleanParams = {
+	mount?: string | null,
+	device?: string | null,
+	/**  Delete the listed files. Needs `confirm`. */
+	remove?: boolean,
+	confirm?: boolean,
+};
+
 /**  A file a change puts on a card. */
 export type CardFile = {
 	/**  From the card's root. */
@@ -1141,6 +1181,12 @@ export type Chemistry = "lipo" | "lihv" | "liion";
 /**  `clear`'s answer. */
 export type Cleared = {
 	cleared: boolean,
+};
+
+/**  A name `ls` printed, with its size when it printed one. */
+export type CliEntry = {
+	name: string,
+	size?: number | null,
 };
 
 export type Clip = {
@@ -1362,6 +1408,11 @@ export type Connected = {
 	 *  card in a reader). Its writes are slow (about 0.3 MB/s).
 	 */
 	usb?: UsbInfo | null,
+	/**
+	 *  Other device ids this volume answers to (its volume UUID and marker, when `id` came
+	 *  from the card's hardware serial). Matched against a saved device's `aliases`.
+	 */
+	also?: string[],
 };
 
 export type ControlKind = "switch" | "trim" | "stick";
@@ -1654,6 +1705,17 @@ export type Device = {
 	last_backup?: string | null,
 	/**  The card's free space when the newest backup was taken. */
 	last_space?: SpaceSeen | null,
+	/**
+	 *  Other ids this device answers to: a radio card has one id in the built-in SD slot
+	 *  (its hardware serial) and another in the radio's USB Storage mode (its volume UUID).
+	 *  QuadCam records the second when it sees the first, so both are one saved radio.
+	 */
+	aliases?: string[],
+	/**
+	 *  A radio's STM32 chip serial, as its DFU bootloader reports it. The person links it
+	 *  once; DFU mode is the only mode that shows it.
+	 */
+	dfu_serial?: string | null,
 };
 
 /**
@@ -1721,6 +1783,26 @@ export type DeviceStorage = {
 	own_blob_bytes: number,
 	/**  Manifests, logs and its own blobs. */
 	total_bytes: number,
+};
+
+/**  `gear_dfu_link`: link the radio in DFU mode to a saved radio, or remove a link. */
+export type DfuLinkParams = {
+	/**  The saved radio's id. Omitted: the radio seen most recently. */
+	device?: string | null,
+	/**  The DFU chip serial. Omitted: the one radio in DFU mode now. */
+	serial?: string | null,
+	/**  Remove the link of `device` (or of the radio that holds `serial`). */
+	unlink?: boolean,
+};
+
+/**  What `gear_dfu_link` did. */
+export type DfuLinked = {
+	device: Device,
+	/**  The DFU serial now linked; none after an unlink. */
+	serial?: string | null,
+	/**  How the radio was chosen: `picked` (the person named it) or `last_seen`. */
+	how: string,
+	notes: string[],
 };
 
 /**  One item in a plan's before/after view. */
@@ -2795,7 +2877,12 @@ whole_disk?: string | null } |
 /**  `/dev/cu.usbmodem...` */
 port: string; vid: number; pid: number; product?: string | null } | 
 /**  A USB DFU device (a radio in its bootloader). */
-{ kind: "dfu"; vid: number; pid: number };
+{ kind: "dfu"; vid: number; pid: number; 
+/**
+ *  The chip's unique id, which the bootloader reports. A saved radio's `dfu_serial`
+ *  links to it.
+ */
+serial?: string | null };
 
 /**  The link at one edge of a dropout. */
 export type LinkEdge = {
@@ -3609,6 +3696,48 @@ export type RadioChoice = {
 	name: string,
 };
 
+/**  What `gear_radio_cli` does. */
+export type RadioCliAction = 
+/**  `ver`: the board and version the radio runs now. */
+"identify" | 
+/**  `ls` of the folder in `path`. */
+"ls" | 
+/**  `play` the sound file in `path` on the radio's speaker. */
+"play" | "beep" | 
+/**  Restart the radio (needs `confirm`). */
+"reboot" | 
+/**
+ *  `ls` each folder of a saved radio's latest backup and report the files the radio
+ *  lacks or holds at another size. `device` names the radio.
+ */
+"verify";
+
+/**
+ *  `gear_radio_cli`: the serial port (omit when one radio is on serial), the action and its
+ *  arguments.
+ */
+export type RadioCliParams = {
+	port?: string | null,
+	action?: RadioCliAction,
+	/**  For ls and play: a card path (`/SOUNDS/en/hello.wav`). */
+	path?: string | null,
+	/**  For verify: the saved radio whose latest backup to compare with. */
+	device?: string | null,
+	/**  For reboot: must be true. */
+	confirm?: boolean,
+};
+
+/**  What a radio CLI job found. */
+export type RadioCliReport = {
+	port: string,
+	info?: RadioInfo | null,
+	/**  Saved radios of the board `info` names. */
+	candidates?: RadioMatch[],
+	entries?: CliEntry[],
+	verify?: RadioVerify | null,
+	notes: string[],
+};
+
 /**
  *  A radio control the sim reads: a range of a channel (CH1-8, the axes), or a button
  *  (CH9 and up reach the joystick as buttons).
@@ -3639,11 +3768,27 @@ export type RadioFrame = {
 	channels: number[],
 };
 
+/**  What `ver` says about the running firmware. */
+export type RadioInfo = {
+	/**  The board (`pocket`), when `ver` names one. */
+	board?: string | null,
+	/**  The firmware version (`2.12.4`). */
+	version?: string | null,
+	/**  The reply, for the person to read. */
+	text: string,
+};
+
 /**
  *  The radio in USB Joystick mode: connected or not, and its latest report
  *  (`gear_radio_watch` starts the stream).
  */
 export type RadioInput = RadioEvent;
+
+/**  A saved radio that a serial radio may be. */
+export type RadioMatch = {
+	id: string,
+	name: string,
+};
 
 /**  An edit to `radio.yml`. */
 export type RadioOp = 
@@ -3685,6 +3830,18 @@ export type RadioSnapshot = {
 	frame?: RadioFrame | null,
 	/**  Why there is no frame. */
 	message?: string | null,
+};
+
+/**  The `ls` comparison with a backup. */
+export type RadioVerify = {
+	/**  The backup compared with. */
+	backup: string,
+	checked: number,
+	/**  Backup files the radio's `ls` does not show. */
+	missing: string[],
+	/**  Files whose size `ls` shows and differs from the backup's. */
+	differ: string[],
+	ok: boolean,
 };
 
 /**  `gear_radio_watch`: start or stop the stream. */
@@ -4286,6 +4443,23 @@ export type SimProfileView = {
 	/**  Against the quad, when a quad was given. */
 	diff: SimDiff | null,
 };
+
+/**
+ *  `gear_sim_restore_plan`: which sim, and which of its backups (default the newest that
+ *  differs from the file now).
+ */
+export type SimRestoreParams = {
+	/**  A sim id: `liftoff`, `micro`, `uncrashed`, `zone`. */
+	sim: string,
+	/**  A backup id from `gear_backups` for `sim-<id>`. */
+	backup?: string | null,
+};
+
+/**  `gear_sim_restore`: the same params, the plan's digest and the confirm. */
+export type SimRestoreRequest = {
+	digest: string,
+	confirm?: boolean,
+} & SimRestoreParams;
 
 /**  What the page needs once to draw the sim. */
 export type SimStartInfo = {
