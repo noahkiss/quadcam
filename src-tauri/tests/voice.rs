@@ -221,9 +221,12 @@ fn tempo_and_rate_run_in_ffmpeg() {
 
 // ----- providers -----
 
+/// The program, its arguments and its stdin, for each call.
+type RunCall = (String, Vec<String>, Vec<u8>);
+
 #[derive(Default)]
 struct RunLog {
-    calls: Mutex<Vec<(String, Vec<String>, Vec<u8>)>>,
+    calls: Mutex<Vec<RunCall>>,
 }
 
 struct FakeRun(Arc<RunLog>);
@@ -283,9 +286,12 @@ fn say_gets_the_text_on_stdin_and_a_wav_back() {
     );
 }
 
+/// The URL, the key and the body, for each call.
+type PostCall = (String, Option<String>, String);
+
 #[derive(Default)]
 struct PostLog {
-    calls: Mutex<Vec<(String, Option<String>, String)>>,
+    calls: Mutex<Vec<PostCall>>,
 }
 
 struct FakePost(Arc<PostLog>, Vec<u8>);
