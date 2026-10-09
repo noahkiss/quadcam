@@ -1,5 +1,7 @@
 import { defineConfig, devices } from "@playwright/test";
 
+const PORT = Number(process.env.QUADCAM_DEV_PORT) || 4719;
+
 // Headless WebKit (the engine of the app's WKWebView) against the Vite dev server, with
 // the mock core injected.
 export default defineConfig({
@@ -11,7 +13,7 @@ export default defineConfig({
   reporter: process.env.CI ? "github" : "list",
   use: {
     ...devices["Desktop Safari"],
-    baseURL: "http://localhost:4719",
+    baseURL: `http://localhost:${PORT}`,
     viewport: { width: 1280, height: 820 },
     headless: true,
     trace: "retain-on-failure",
@@ -19,7 +21,7 @@ export default defineConfig({
   projects: [{ name: "webkit", use: { browserName: "webkit" } }],
   webServer: {
     command: "pnpm dev",
-    url: "http://localhost:4719/",
+    url: `http://localhost:${PORT}/`,
     reuseExistingServer: !process.env.CI,
   },
 });

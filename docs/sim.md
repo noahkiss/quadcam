@@ -2,7 +2,8 @@
 
 QuadCam is growing a built-in FPV simulator that flies your own quads on your own radio
 (design: [sim-design.md](sim-design.md)). This page grows with each part. Built so far: the
-radio's calibration for the sim, the flight model and its check against your logs.
+radio's calibration for the sim, the flight model and its check against your logs, and the
+Sim page, where you fly a plain room.
 
 ## Sim radio: calibrating the radio
 
@@ -50,6 +51,40 @@ measured one until **Recalibrate**, which runs every step again and keeps the de
 deadzone is cut from the middle and the rest is rescaled, so full travel still reaches 100 %.
 
 **Save** writes `<gear folder>/sim/calibrations.json`, keyed by the radio's Gear id.
+
+## Sim: flying the plain room
+
+Open **Gear > Sim**, pick **Fly**. The sim starts at once on the profile chosen in the settings
+(the 75 mm whoop by default) in a 5 × 4 × 2.5 m room with a crate, a low table and two gates.
+The view is FPV, from the quad's camera. Calibrate the radio first (Sim radio): without a saved
+calibration the sim still starts, but the arm, turtle and reset switches do nothing.
+
+| Control | What it does |
+|---|---|
+| Arm switch | Arms with the throttle down. Turn it off and on again after a refusal; the OSD says why |
+| Turtle switch | On while you arm, the quad flips over after a crash (throttle down) |
+| Reset control | Puts the quad back on the start pad |
+| **Reset** | The same, from the page |
+| **Stop** | Ends the sim. Leaving the page stops it too |
+| Settings button | Opens the settings popover |
+
+The OSD shows flight mode and arm state, voltage, mAh used and the flight timer, and a warning
+line (why the quad will not arm, a low pack, upside down, no radio). The stick display shows the
+calibrated sticks in your stick mode, at the right edge above the OSD.
+
+**Settings** save as you change them (the `simSettings` key of the settings file):
+
+| Setting | What it does |
+|---|---|
+| Aircraft | The built-in profile to fly |
+| View | FPV, or a chase camera behind the quad |
+| Picture shape | 16:9 or 4:3; the picture sits letterboxed in the window |
+| Camera tilt, Field of view | The camera's up-tilt and diagonal field of view (the profile's to start). A flat picture cannot show more than 100° vertically, so a wide whoop camera is cropped |
+| Stick display, OSD | Show or hide each |
+
+A click outside the popover, or Escape, closes it. Under the picture a line shows the frame
+time and the radio-to-picture time. The sim is a preview: the room, the OSD and the camera are
+the minimal version.
 
 ## The flight model
 

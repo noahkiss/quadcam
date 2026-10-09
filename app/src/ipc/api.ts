@@ -7,7 +7,7 @@ import { open as openDialog } from "@tauri-apps/plugin-dialog";
 import { openPath, openUrl, revealItemInDir } from "@tauri-apps/plugin-opener";
 import { commands } from "../bindings";
 import * as N from "./normalize";
-import type { CrashSaveParams, ImportOptions, LibEdit, LibraryFilter, Moved, OsdParams, Pack, PackType, PlanPatch, RemovedCuts, SettingsValues, Span, SwitchMapParams, SimCalibrationSaveParams, CalibrateParams } from "./types";
+import type { SimFrame, SimPreset, SimStartInfo, SimStartParams, SimStopInfo, CrashSaveParams, ImportOptions, LibEdit, LibraryFilter, Moved, OsdParams, Pack, PackType, PlanPatch, RemovedCuts, SettingsValues, Span, SwitchMapParams, SimCalibrationSaveParams, CalibrateParams } from "./types";
 
 type Result<T> = Promise<{ status: "ok"; data: T } | { status: "error"; error: string }>;
 
@@ -104,6 +104,13 @@ export const api = {
   gearSimCalibrationSave: (p: SimCalibrationSaveParams) => ok(commands.gearSimCalibrationSave(p)),
   gearSimDefaults: (aircraft: string | null) => ok(commands.gearSimDefaults({ aircraft, radio: null, fc: [] })),
   gearSimCalibrate: (p: CalibrateParams) => ok(commands.gearSimCalibrate(p)),
+
+  // The sim host (GUI commands only; the answers are narrowed in ipc/types.ts)
+  simPresets: (): Promise<SimPreset[]> => commands.simPresets(),
+  simStart: async (p: SimStartParams) => (await ok(commands.simStart(p))) as unknown as SimStartInfo,
+  simFrame: async () => (await ok(commands.simFrame())) as unknown as SimFrame,
+  simReset: () => ok(commands.simReset()),
+  simStop: (): Promise<SimStopInfo | null> => ok(commands.simStop()),
 
   // Flights and packs
   gearFlights: (day: string | null = null) => ok(commands.gearFlights({ day })),

@@ -85,3 +85,34 @@
   font-family: var(--mono);
   font-variant-numeric: tabular-nums;
 }
+
+/* The sim's overlay: small boxes, one line of percentages. */
+.compact {
+  gap: calc(var(--stick-size, 96px) * 0.18);
+  max-width: none;
+}
+.compact .gimbal {
+  gap: 2px;
+}
+.compact .vlabel {
+  display: none;
+}
+.compact .box {
+  flex: none;
+  width: var(--stick-size, 96px);
+  background: color-mix(in srgb, var(--raised) 55%, transparent);
+  border-radius: var(--r-2);
+}
+.compact .dot {
+  width: calc(var(--stick-size, 96px) * 0.16);
+  height: calc(var(--stick-size, 96px) * 0.16);
+  margin: calc(var(--stick-size, 96px) * -0.08) 0 0 calc(var(--stick-size, 96px) * -0.08);
+}
+.compact .caption {
+  font-size: calc(var(--stick-size, 96px) * 0.12);
+}
+.line {
+  font-family: var(--mono);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}

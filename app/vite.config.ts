@@ -3,8 +3,9 @@ import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
 
 // The Tauri dev window loads this server. Pinned so another project's server never
-// answers in its place.
-const PORT = 4719;
+// answers in its place. A second checkout running its specs at the same time sets
+// QUADCAM_DEV_PORT (Playwright reads it too).
+const PORT = Number(process.env.QUADCAM_DEV_PORT) || 4719;
 
 export default defineConfig({
   plugins: [react()],
@@ -12,7 +13,7 @@ export default defineConfig({
   server: { port: PORT, strictPort: true, host: "localhost" },
   // Pre-bundled up front, so a first page load never reloads mid-test to add one.
   optimizeDeps: {
-    include: ["react", "react-dom", "react-dom/client", "react/jsx-runtime", "react/jsx-dev-runtime", "zustand", "@tanstack/react-virtual", "@tauri-apps/api/core", "@tauri-apps/api/event", "@tauri-apps/api/webview", "@tauri-apps/plugin-dialog", "@tauri-apps/plugin-opener"],
+    include: ["react", "react-dom", "react-dom/client", "react/jsx-runtime", "react/jsx-dev-runtime", "zustand", "@tanstack/react-virtual", "@tauri-apps/api/core", "@tauri-apps/api/event", "@tauri-apps/api/webview", "@tauri-apps/plugin-dialog", "@tauri-apps/plugin-opener", "three"],
   },
   preview: { port: PORT, strictPort: true, host: "localhost" },
   build: { outDir: "dist", target: "safari16", emptyOutDir: true },
