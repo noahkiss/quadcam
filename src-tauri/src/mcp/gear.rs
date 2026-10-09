@@ -1010,7 +1010,11 @@ fn change_line(c: &Value) -> String {
         .into_iter()
         .flatten()
         .map(|e| match e["kind"].as_str() {
-            Some("fc_set") => format!("set {} = {}", e["name"].as_str().unwrap_or("?"), e["value"].as_str().unwrap_or("?")),
+            Some("fc_set") => format!(
+                "set {} = {}",
+                e["name"].as_str().unwrap_or("?"),
+                e["value"].as_str().unwrap_or("?")
+            ),
             Some("fc_lines") => e["lines"]
                 .as_array()
                 .into_iter()
@@ -1039,7 +1043,9 @@ fn change_edits(x: &GearEditArgs) -> Result<Vec<Value>> {
         out.push(json!({"kind": "fc_lines", "lines": l}));
     }
     if out.is_empty() {
-        return Err(anyhow!("lines or edits is required: for example lines [\"set osd_cap_alarm = 1500\"]"));
+        return Err(anyhow!(
+            "lines or edits is required: for example lines [\"set osd_cap_alarm = 1500\"]"
+        ));
     }
     Ok(out)
 }
@@ -1052,7 +1058,10 @@ fn apply_text(v: &Value) -> String {
             "{}: {}{}\n",
             s["name"].as_str().unwrap_or("?"),
             s["state"].as_str().unwrap_or("?"),
-            s["detail"].as_str().map(|d| format!(" ({d})")).unwrap_or_default()
+            s["detail"]
+                .as_str()
+                .map(|d| format!(" ({d})"))
+                .unwrap_or_default()
         ));
     }
     if let Some(b) = v["backup"].as_str() {
@@ -1068,7 +1077,12 @@ fn apply_text(v: &Value) -> String {
     if v["status"] == "failed" && v["saved"] == true {
         out.push_str("To undo it, stage restore_stage with the backup above.\n");
     }
-    for n in v["notes"].as_array().into_iter().flatten().filter_map(Value::as_str) {
+    for n in v["notes"]
+        .as_array()
+        .into_iter()
+        .flatten()
+        .filter_map(Value::as_str)
+    {
         out.push_str(&format!("Note: {n}\n"));
     }
     out.trim_end().to_string()
@@ -1306,8 +1320,12 @@ fn gear_apply<B: Backend>(backend: &mut B, a: &Value) -> Result<(Vec<Value>, Val
             Ok((vec![text(t)], v))
         }
         "apply" => {
-            let id = x.change.context("change is required for apply: a staged change id from quadcam_gear changes")?;
-            let digest = x.digest.context("digest is required for apply: the digest from quadcam_gear apply_plan")?;
+            let id = x.change.context(
+                "change is required for apply: a staged change id from quadcam_gear changes",
+            )?;
+            let digest = x
+                .digest
+                .context("digest is required for apply: the digest from quadcam_gear apply_plan")?;
             if x.confirm != Some(true) {
                 return Err(anyhow!(
                     "Refused: apply writes the FC; it needs the plan's digest and confirm=true."

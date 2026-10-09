@@ -69,7 +69,10 @@ pub fn range_problem(set: &SetRef, reply: &str) -> Option<Refusal> {
         let l = l.trim();
         if let Some(r) = l.strip_prefix("Allowed range:") {
             let (lo, hi) = r.split_once(" - ")?;
-            let (lo, hi) = (lo.trim().parse::<i64>().ok()?, hi.trim().parse::<i64>().ok()?);
+            let (lo, hi) = (
+                lo.trim().parse::<i64>().ok()?,
+                hi.trim().parse::<i64>().ok()?,
+            );
             return match set.value.parse::<i64>() {
                 Ok(v) if (lo..=hi).contains(&v) => None,
                 _ => Some(Refusal::new(
@@ -134,7 +137,10 @@ pub fn plan(
                 format!(
                     "{} FCs are connected; pick one with a port: {}.",
                     pool.len(),
-                    pool.iter().map(|c| c.port.as_str()).collect::<Vec<_>>().join(", ")
+                    pool.iter()
+                        .map(|c| c.port.as_str())
+                        .collect::<Vec<_>>()
+                        .join(", ")
                 ),
             )),
         )
@@ -154,10 +160,12 @@ pub fn plan(
                     "This is not the FC the change was planned for.",
                 ))
             }
-            None if !pool.is_empty() && known.is_empty() && unknown.is_empty() => Err(Refusal::new(
-                RefusalCode::DeviceChanged,
-                "This is not the FC the change was planned for.",
-            )),
+            None if !pool.is_empty() && known.is_empty() && unknown.is_empty() => {
+                Err(Refusal::new(
+                    RefusalCode::DeviceChanged,
+                    "This is not the FC the change was planned for.",
+                ))
+            }
             _ => Ok(()),
         },
     ));

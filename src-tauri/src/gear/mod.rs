@@ -196,6 +196,9 @@ pub fn check_count(v: &Value, min: u64, max: u64) -> anyhow::Result<()> {
     }
 }
 
+/// The processes other than this one that have a serial port open, as `(pid, name)`.
+pub type HoldersFn = Arc<dyn Fn(&str) -> Vec<(u32, String)> + Send + Sync>;
+
 /// Unmounts a whole disk (`disk4`).
 pub type UnmountFn = Arc<dyn Fn(&str) -> anyhow::Result<()> + Send + Sync>;
 
@@ -221,7 +224,7 @@ pub struct Env {
     /// Runs `diskutil` for the card check and repair (`health`).
     pub disk: Arc<dyn health::DiskRunner>,
     /// The other processes that have a serial port open, as `(pid, name)`.
-    pub holders: Arc<dyn Fn(&str) -> Vec<(u32, String)> + Send + Sync>,
+    pub holders: HoldersFn,
 }
 
 impl Env {

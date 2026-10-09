@@ -20,7 +20,9 @@ use crate::gear::backup::BackupContent;
 use crate::gear::bf::cli::CliSession;
 use crate::gear::bf::dump::{parse_cmd, Cmd, Config};
 use crate::gear::bf::{self, boards};
-use crate::gear::changes::{render_fc, restore_lines, ChangeFilter, ChangeUpdate, Changes, NewChange};
+use crate::gear::changes::{
+    render_fc, restore_lines, ChangeFilter, ChangeUpdate, Changes, NewChange,
+};
 use crate::gear::model::{
     ApplyPlan, ChangeStatus, DeviceKind, Edit, Refusal, RefusalCode, StagedChange, Trigger,
 };
@@ -144,7 +146,11 @@ impl Core {
         let base = self.fc_base(device);
         let resolved = self.fc_edits(edits, base.as_ref())?;
         let cfg = base.as_ref().map(|b| Config::parse(&b.dump));
-        if let Some(p) = render_fc(&resolved, cfg.as_ref()).problems.into_iter().next() {
+        if let Some(p) = render_fc(&resolved, cfg.as_ref())
+            .problems
+            .into_iter()
+            .next()
+        {
             return Err(refusal(p));
         }
         Ok(base)
@@ -204,7 +210,9 @@ impl Core {
     pub fn gear_restore_stage(&self, p: &RestoreParams) -> Result<StagedChange> {
         let b = self.snapshots().get(&p.backup)?;
         if crate::gear::backup::kind_of_id(&b.device) != Some(DeviceKind::Fc) {
-            bail!("Only an FC backup can be restored for now; card restore arrives with card apply.");
+            bail!(
+                "Only an FC backup can be restored for now; card restore arrives with card apply."
+            );
         }
         let paths = if p.paths.is_empty() {
             vec!["dump all".to_string()]
@@ -213,7 +221,10 @@ impl Core {
         };
         self.gear_change_stage(&StageParams {
             device: b.device.clone(),
-            title: Some(format!("Restore backup {}", p.backup.rsplit('/').next().unwrap_or(&p.backup))),
+            title: Some(format!(
+                "Restore backup {}",
+                p.backup.rsplit('/').next().unwrap_or(&p.backup)
+            )),
             edits: vec![Edit::Restore {
                 backup: p.backup.clone(),
                 paths,
@@ -238,7 +249,11 @@ impl Core {
             if info.is_none() && holders.is_empty() && !self.held_by_job(&port) {
                 let _hold = self.gear_hold(&port);
                 if let Ok(i) = bf::identify(self.gear.ports.as_ref(), &port, t) {
-                    self.fc_state.lock().unwrap().seen.insert(port.clone(), i.clone());
+                    self.fc_state
+                        .lock()
+                        .unwrap()
+                        .seen
+                        .insert(port.clone(), i.clone());
                     info = Some(i);
                 }
             }
@@ -259,7 +274,10 @@ impl Core {
     fn plan_change(&self, id: &str, port: Option<&str>) -> Result<(StagedChange, fcplan::Planned)> {
         let change = self.changes().get(id)?;
         if !change.status.staged() {
-            bail!("Change {id} is {:?}; only a staged change can be applied.", change.status);
+            bail!(
+                "Change {id} is {:?}; only a staged change can be applied.",
+                change.status
+            );
         }
         let d = self
             .gear_store()
@@ -530,7 +548,12 @@ impl Core {
             let mut files: Vec<(String, Vec<u8>)> = run
                 .after_replies
                 .iter()
-                .map(|r| (r.line.clone(), format!("{}\n{}\n", r.line, r.text).into_bytes()))
+                .map(|r| {
+                    (
+                        r.line.clone(),
+                        format!("{}\n{}\n", r.line, r.text).into_bytes(),
+                    )
+                })
                 .collect();
             if let Some(d) = &run.after_dump {
                 files.push(("dump all".into(), format!("dump all\n{d}\n").into_bytes()));
@@ -577,10 +600,15 @@ impl Core {
 fn default_title(edits: &[Edit]) -> String {
     match edits.first() {
         Some(Edit::FcSet { name, value, .. }) => format!("Set {name} = {value}"),
-        Some(Edit::FcLines { lines }) => match lines.iter().filter(|l| !l.trim().is_empty()).count() {
-            1 => format!("Run `{}`", lines.iter().find(|l| !l.trim().is_empty()).unwrap().trim()),
-            n => format!("{n} CLI lines"),
-        },
+        Some(Edit::FcLines { lines }) => {
+            match lines.iter().filter(|l| !l.trim().is_empty()).count() {
+                1 => format!(
+                    "Run `{}`",
+                    lines.iter().find(|l| !l.trim().is_empty()).unwrap().trim()
+                ),
+                n => format!("{n} CLI lines"),
+            }
+        }
         Some(Edit::Restore { .. }) => "Restore a backup".into(),
         _ => "FC change".into(),
     }

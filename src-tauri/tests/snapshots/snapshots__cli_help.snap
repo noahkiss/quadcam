@@ -590,6 +590,11 @@ Commands:
   import-backups  Import an old backup folder: radio card copies, FC diff/dump files, LOGS folders
   card-check      Check a card's file system (diskutil verifyVolume, read-only); --log lists past checks
   card-repair     Repair a card whose latest check failed: a backup first, the repair, a check after
+  changes         Staged changes waiting to be applied (--history adds the rest)
+  stage           Stage FC settings: raw CLI lines (--cli FILE) or --set NAME=VALUE. Writes nothing to the FC
+  discard         Discard a staged change. It stays in the history
+  restore         Stage an FC backup's settings back as a change
+  apply           Apply a staged change to the FC: `--plan` shows the checks, diff and digest; `--digest D --yes` backs up, writes, saves, reads back and verifies
   stop            Stop a running backup or card check (its handle from `gear status`)
   help            Print this message or the help of the given subcommand(s)
 

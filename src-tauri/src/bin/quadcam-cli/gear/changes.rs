@@ -88,7 +88,8 @@ pub fn changes(core: &Core, a: ChangesArgs) -> Result<Value> {
 pub fn stage(core: &Core, a: StageArgs) -> Result<Value> {
     let mut edits = Vec::new();
     if let Some(f) = &a.cli {
-        let text = std::fs::read_to_string(f).with_context(|| format!("reading {}", f.display()))?;
+        let text =
+            std::fs::read_to_string(f).with_context(|| format!("reading {}", f.display()))?;
         edits.push(Edit::FcLines {
             lines: text.lines().map(str::to_string).collect(),
         });

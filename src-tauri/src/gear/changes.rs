@@ -8,11 +8,10 @@
 //! - `render_fc` turns an FC change's edits into the CLI lines the write engine sends, the
 //!   diff the apply sheet shows and the before state the plan's digest covers.
 
-use super::bf::dump::{self, parse_cmd, Cmd, Config};
 use super::bf::cli;
+use super::bf::dump::{self, parse_cmd, Cmd, Config};
 use super::model::{
-    ChangeEvent, ChangeStatus, DiffLine, Edit, LineOp, Refusal, RefusalCode, Section,
-    StagedChange,
+    ChangeEvent, ChangeStatus, DiffLine, Edit, LineOp, Refusal, RefusalCode, Section, StagedChange,
 };
 use super::store::{safe, Store};
 use crate::session::Editor;
@@ -96,9 +95,7 @@ impl Changes {
             .filter_map(|e| std::fs::read(e.path().join("change.json")).ok())
             .filter_map(|b| serde_json::from_slice(&b).ok())
             .collect();
-        out.sort_by(|a, b| {
-            (&a.device, a.order, &a.id).cmp(&(&b.device, b.order, &b.id))
-        });
+        out.sort_by(|a, b| (&a.device, a.order, &a.id).cmp(&(&b.device, b.order, &b.id)));
         out
     }
 
@@ -178,7 +175,10 @@ impl Changes {
     pub fn update(&self, id: &str, u: ChangeUpdate) -> Result<StagedChange> {
         let mut c = self.get(id)?;
         if !c.status.staged() {
-            bail!("Change {id} is {:?}; only a staged change can be edited.", c.status);
+            bail!(
+                "Change {id} is {:?}; only a staged change can be edited.",
+                c.status
+            );
         }
         if let Some(t) = u.title {
             c.title = t;
@@ -229,7 +229,10 @@ impl Changes {
     pub fn discard(&self, id: &str) -> Result<StagedChange> {
         let c = self.get(id)?;
         if !c.status.staged() {
-            bail!("Change {id} is {:?}; only a staged change can be discarded.", c.status);
+            bail!(
+                "Change {id} is {:?}; only a staged change can be discarded.",
+                c.status
+            );
         }
         self.set_status(id, ChangeStatus::Discarded, "Discarded")
     }
@@ -335,54 +338,52 @@ struct Item {
 pub fn render_fc(edits: &[Edit], base: Option<&Config>) -> FcRender {
     let mut out = FcRender::default();
     let mut items: Vec<Item> = Vec::new();
-    let push_set = |items: &mut Vec<Item>, out: &mut FcRender, section: Section, name: &str, value: &str| {
-        let name = name.trim().to_ascii_lowercase();
-        let value = value.trim().to_string();
-        if name.is_empty() || value.is_empty() {
-            out.problems.push(bad(
-                RefusalCode::ShapeUnknown,
-                format!("`set {name} = {value}` has no name or no value; nothing was written."),
-            ));
-            return;
-        }
-        if let Some(b) = base {
-            let known = b.sections_of(&name);
-            if known.is_empty() {
+    let push_set =
+        |items: &mut Vec<Item>, out: &mut FcRender, section: Section, name: &str, value: &str| {
+            let name = name.trim().to_ascii_lowercase();
+            let value = value.trim().to_string();
+            if name.is_empty() || value.is_empty() {
                 out.problems.push(bad(
-                    RefusalCode::BadSetting,
-                    format!("`{name}` is not a setting on this FC."),
+                    RefusalCode::ShapeUnknown,
+                    format!("`set {name} = {value}` has no name or no value; nothing was written."),
                 ));
                 return;
             }
-            let fam = family(section);
-            if section == Section::Master && !known.contains(&Section::Master) {
-                out.problems.push(bad(
-                    RefusalCode::BadSetting,
-                    format!("`{name}` is a profile setting; select a profile first."),
-                ));
-                return;
+            if let Some(b) = base {
+                let known = b.sections_of(&name);
+                if known.is_empty() {
+                    out.problems.push(bad(
+                        RefusalCode::BadSetting,
+                        format!("`{name}` is not a setting on this FC."),
+                    ));
+                    return;
+                }
+                let fam = family(section);
+                if section == Section::Master && !known.contains(&Section::Master) {
+                    out.problems.push(bad(
+                        RefusalCode::BadSetting,
+                        format!("`{name}` is a profile setting; select a profile first."),
+                    ));
+                    return;
+                }
+                if fam.is_some() && !known.contains(&Section::Master) && !known.contains(&section) {
+                    out.problems.push(bad(
+                        RefusalCode::BadSetting,
+                        format!("`{name}` has no {} on this FC.", section_key(section)),
+                    ));
+                    return;
+                }
             }
-            if fam.is_some()
-                && !known.contains(&Section::Master)
-                && !known.contains(&section)
-            {
-                out.problems.push(bad(
-                    RefusalCode::BadSetting,
-                    format!("`{name}` has no {} on this FC.", section_key(section)),
-                ));
-                return;
-            }
-        }
-        out.sets.push(SetRef {
-            section,
-            name: name.clone(),
-            value: value.clone(),
-        });
-        items.push(Item {
-            section,
-            line: dump::render_set(&name, &value),
-        });
-    };
+            out.sets.push(SetRef {
+                section,
+                name: name.clone(),
+                value: value.clone(),
+            });
+            items.push(Item {
+                section,
+                line: dump::render_set(&name, &value),
+            });
+        };
     for e in edits {
         match e {
             Edit::FcSet {
@@ -468,10 +469,7 @@ pub fn render_fc(edits: &[Edit], base: Option<&Config>) -> FcRender {
         if let Some(f) = family(it.section) {
             if selected[slot(f)] != Some(index(it.section)) {
                 selected[slot(f)] = Some(index(it.section));
-                seq.push((
-                    it.section,
-                    it.section.select_line().unwrap_or_default(),
-                ));
+                seq.push((it.section, it.section.select_line().unwrap_or_default()));
             }
             if !touched.contains(&f) {
                 touched.push(f);
@@ -501,7 +499,9 @@ pub fn render_fc(edits: &[Edit], base: Option<&Config>) -> FcRender {
         }
         match parse_cmd(line) {
             Cmd::Set { name, value } => {
-                let before = base.and_then(|b| b.get(*section, &name)).map(str::to_string);
+                let before = base
+                    .and_then(|b| b.get(*section, &name))
+                    .map(str::to_string);
                 out.before.push(format!(
                     "{}:{name}={}",
                     section_key(*section),
@@ -565,7 +565,12 @@ fn diff_pair(
 /// The trailing words of the base's `verb slot ...` line from word `from`, else `dflt`.
 fn tail_words(base: Option<&Config>, verb: &str, slot: u8, from: usize, dflt: &str) -> String {
     base.and_then(|b| b.other(Section::Master, &format!("{verb} {slot}")))
-        .map(|l| l.split_whitespace().skip(from).collect::<Vec<_>>().join(" "))
+        .map(|l| {
+            l.split_whitespace()
+                .skip(from)
+                .collect::<Vec<_>>()
+                .join(" ")
+        })
         .filter(|t| !t.is_empty())
         .unwrap_or_else(|| dflt.to_string())
 }
@@ -586,8 +591,20 @@ fn edit_name(e: &Edit) -> &'static str {
 /// backup stages these; resources, serial ports and timers stay as they are.
 pub fn restore_lines(target: &Config, base: &Config) -> Vec<String> {
     const VERBS: &[&str] = &[
-        "aux", "adjrange", "rxrange", "feature", "beeper", "beacon", "led", "color",
-        "mode_color", "vtx", "mmix", "smix", "servo", "rxfail",
+        "aux",
+        "adjrange",
+        "rxrange",
+        "feature",
+        "beeper",
+        "beacon",
+        "led",
+        "color",
+        "mode_color",
+        "vtx",
+        "mmix",
+        "smix",
+        "servo",
+        "rxfail",
     ];
     let mut out = Vec::new();
     let mut section = Section::Master;
@@ -652,7 +669,11 @@ mod tests {
         let (_d, c) = store();
         let a = c.stage(new("fc-1")).unwrap();
         let b = c.stage(new("fc-1")).unwrap();
-        assert!(a.id.ends_with("-fc-1-1") && b.id.ends_with("-fc-1-2"), "{}", a.id);
+        assert!(
+            a.id.ends_with("-fc-1-1") && b.id.ends_with("-fc-1-2"),
+            "{}",
+            a.id
+        );
         assert_eq!((a.order, b.order), (0, 1));
         assert_eq!(c.list(&ChangeFilter::default()).len(), 2);
         assert_eq!(c.staged_counts()["fc-1"], 2);
@@ -785,6 +806,9 @@ mod tests {
     fn restore_lines_make_the_base_read_as_the_target() {
         let base = Config::parse("set a = 1\nset b = 2\naux 0 0 0 900 2100 0 0\n");
         let target = Config::parse("set a = 1\nset b = 9\naux 0 0 1 900 2100 0 0\n");
-        assert_eq!(restore_lines(&target, &base), ["set b = 9", "aux 0 0 1 900 2100 0 0"]);
+        assert_eq!(
+            restore_lines(&target, &base),
+            ["set b = 9", "aux 0 0 1 900 2100 0 0"]
+        );
     }
 }

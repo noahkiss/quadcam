@@ -3,11 +3,11 @@
 //! `dump all` (a default-valued `set` too), and confirm is the digest plus the click.
 //! No real port opens.
 
-use quadcam_lib::gear::apply::{ApplyPlanParams, ApplyRequest};
 use quadcam_lib::core::{
-    BackupFilter, BackupParams, ChangeUpdateParams, Core, Hooks,
-    NoHooks, RestoreParams, StageParams,
+    BackupFilter, BackupParams, ChangeUpdateParams, Core, Hooks, NoHooks, RestoreParams,
+    StageParams,
 };
+use quadcam_lib::gear::apply::{ApplyPlanParams, ApplyRequest};
 use quadcam_lib::gear::bf::cli::Timing;
 use quadcam_lib::gear::bf::fake::FakeFc;
 use quadcam_lib::gear::changes::ChangeFilter;
@@ -40,7 +40,7 @@ struct Bench {
 fn core_with(
     dir: &tempfile::TempDir,
     ports: Arc<dyn Ports>,
-    holders: Option<Arc<dyn Fn(&str) -> Vec<(u32, String)> + Send + Sync>>,
+    holders: Option<quadcam_lib::gear::HoldersFn>,
     hooks: Arc<dyn Hooks>,
 ) -> (Arc<Core>, Arc<RecordedCues>) {
     let cues = Arc::new(RecordedCues::default());
@@ -78,7 +78,7 @@ fn bench(fc: &FakeFc) -> Bench {
 
 fn bench_with(
     fc: &FakeFc,
-    holders: Option<Arc<dyn Fn(&str) -> Vec<(u32, String)> + Send + Sync>>,
+    holders: Option<quadcam_lib::gear::HoldersFn>,
     hooks: Arc<dyn Hooks>,
     backup: bool,
 ) -> Bench {
@@ -190,25 +190,34 @@ fn stage_plan_apply_verifies_and_records() {
         r.steps.iter().map(|s| s.name.as_str()).collect::<Vec<_>>(),
         ["Back up", "Write", "Read back", "Verify"]
     );
-    assert_eq!(fc.saved_value(Section::Master, "osd_cap_alarm").as_deref(), Some("1500"));
+    assert_eq!(
+        fc.saved_value(Section::Master, "osd_cap_alarm").as_deref(),
+        Some("1500")
+    );
     assert_eq!(fc.saves(), 1);
     assert!(fc.exits() > exits_before, "the backup read ended with exit");
     assert_eq!(status(&b, &c.id), ChangeStatus::Verified);
     assert_eq!(b.core.gear_status().unwrap().staged, 0);
     assert!(released(&b));
-    assert_eq!(b.cues.spoken().len(), cues_before + 1, "one cue for the job");
+    assert_eq!(
+        b.cues.spoken().len(),
+        cues_before + 1,
+        "one cue for the job"
+    );
 
     // The backup before is kept; the state after is stored for the next plan.
     let list = b
         .core
         .gear_backups(&BackupFilter {
             device: Some(b.id.clone()),
-            ..Default::default()
         })
         .unwrap();
     assert!(list.iter().any(|s| s.trigger == Trigger::BeforeApply));
     assert!(list.iter().any(|s| s.trigger == Trigger::AfterApply));
-    assert_eq!(r.backup.as_deref().map(|b| b.contains("before_apply")), Some(true));
+    assert_eq!(
+        r.backup.as_deref().map(|b| b.contains("before_apply")),
+        Some(true)
+    );
 
     // A second apply of the same change is refused: it is no longer staged.
     assert!(b.core.gear_apply(&req(&c, &p)).is_err());
@@ -227,7 +236,10 @@ fn a_default_valued_set_verifies_against_dump_all() {
     let p2 = plan(&b, &second);
     let r = b.core.gear_apply(&req(&second, &p2)).unwrap();
     assert_eq!(r.status, ChangeStatus::Verified, "{}", r.message);
-    assert_eq!(fc.saved_value(Section::Master, "osd_cap_alarm").as_deref(), Some("2200"));
+    assert_eq!(
+        fc.saved_value(Section::Master, "osd_cap_alarm").as_deref(),
+        Some("2200")
+    );
     let diff = b
         .core
         .gear_backup_read(&quadcam_lib::core::BackupReadParams {
@@ -237,7 +249,10 @@ fn a_default_valued_set_verifies_against_dump_all() {
         .unwrap()
         .text
         .unwrap();
-    assert!(!diff.contains("osd_cap_alarm"), "the default is not in diff all");
+    assert!(
+        !diff.contains("osd_cap_alarm"),
+        "the default is not in diff all"
+    );
 }
 
 #[test]
@@ -255,10 +270,17 @@ fn a_profile_edit_selects_and_puts_the_selection_back() {
     let p = plan(&b, &c);
     let r = b.core.gear_apply(&req(&c, &p)).unwrap();
     assert_eq!(r.status, ChangeStatus::Verified, "{}", r.message);
-    assert_eq!(fc.saved_value(Section::Profile(2), "p_pitch").as_deref(), Some("55"));
+    assert_eq!(
+        fc.saved_value(Section::Profile(2), "p_pitch").as_deref(),
+        Some("55")
+    );
     let sent: Vec<&str> = r.sent.iter().map(|s| s.line.as_str()).collect();
     assert_eq!(sent.first().copied(), Some("profile 2"));
-    assert_eq!(sent.last().copied(), Some("profile 0"), "the original selection returns: {sent:?}");
+    assert_eq!(
+        sent.last().copied(),
+        Some("profile 0"),
+        "the original selection returns: {sent:?}"
+    );
 }
 
 #[test]
@@ -315,7 +337,12 @@ fn no_fc_plugged_in_refuses() {
     let c = stage(&b, vec![set("osd_cap_alarm", "1500")]);
     let dir2 = b._dir.path().join("support/settings.json");
     let none = tempfile::tempdir().unwrap();
-    let (core2, _) = core_with(&none, Arc::new(FakePorts::new(vec![])), None, Arc::new(NoHooks));
+    let (core2, _) = core_with(
+        &none,
+        Arc::new(FakePorts::new(vec![])),
+        None,
+        Arc::new(NoHooks),
+    );
     let core2 = Arc::try_unwrap(core2).ok().unwrap().with_settings(dir2);
     let p = core2
         .gear_apply_plan(&ApplyPlanParams {
@@ -351,9 +378,7 @@ fn no_backup_refuses() {
     let b = bench_with(&fc, None, Arc::new(NoHooks), false);
     // The device is known, but nothing has been backed up.
     let store = b.core.gear_store();
-    store
-        .save_device(&fc_device(&b.id.clone()))
-        .unwrap();
+    store.save_device(&fc_device(&b.id.clone())).unwrap();
     let c = stage(&b, vec![set("osd_cap_alarm", "1500")]);
     let p = plan(&b, &c);
     assert_eq!(failed_check(&p), RefusalCode::NoBackup);
@@ -386,7 +411,10 @@ fn bad_settings_refuse_at_stage_and_at_the_range_check() {
     assert_eq!(code(&e), RefusalCode::BadSetting);
     assert!(format!("{e}").contains("0-20000"), "{e}");
     assert_eq!(fc.saves(), 0);
-    assert_eq!(fc.saved_value(Section::Master, "osd_cap_alarm").as_deref(), Some("2200"));
+    assert_eq!(
+        fc.saved_value(Section::Master, "osd_cap_alarm").as_deref(),
+        Some("2200")
+    );
     assert_eq!(status(&b, &c.id), ChangeStatus::Ready);
     assert!(released(&b));
 }
@@ -415,7 +443,7 @@ fn a_port_another_program_holds_refuses_and_so_do_two_unknown_fcs() {
     let fc = FakeFc::new(G473).with_uid(UID);
     let held = Arc::new(AtomicBool::new(false));
     let h = held.clone();
-    let holders: Arc<dyn Fn(&str) -> Vec<(u32, String)> + Send + Sync> = Arc::new(move |_| {
+    let holders: quadcam_lib::gear::HoldersFn = Arc::new(move |_| {
         if h.load(Ordering::SeqCst) {
             vec![(4242, "Configurator".to_string())]
         } else {
@@ -429,7 +457,10 @@ fn a_port_another_program_holds_refuses_and_so_do_two_unknown_fcs() {
     held.store(true, Ordering::SeqCst);
     let p2 = plan(&b, &c);
     assert_eq!(failed_check(&p2), RefusalCode::PortBusy);
-    assert!(p2.checks.iter().any(|c| c.refusal.as_ref().is_some_and(|r| r.reason.contains("Configurator"))));
+    assert!(p2.checks.iter().any(|c| c
+        .refusal
+        .as_ref()
+        .is_some_and(|r| r.reason.contains("Configurator"))));
     let e = b.core.gear_apply(&req(&c, &p)).unwrap_err();
     assert_eq!(code(&e), RefusalCode::PortBusy);
     assert_eq!(fc.saves(), 0);
@@ -458,8 +489,7 @@ fn a_port_another_program_holds_refuses_and_so_do_two_unknown_fcs() {
         ),
     );
     let dir = tempfile::tempdir().unwrap();
-    let busy: Arc<dyn Fn(&str) -> Vec<(u32, String)> + Send + Sync> =
-        Arc::new(|_| vec![(1, "Configurator".to_string())]);
+    let busy: quadcam_lib::gear::HoldersFn = Arc::new(|_| vec![(1, "Configurator".to_string())]);
     let (core, _) = core_with(&dir, ports, Some(busy), Arc::new(NoHooks));
     core.gear_store()
         .save_device(&fc_device(&id_of(&a)))
@@ -504,11 +534,12 @@ fn a_battery_in_past_the_usb_limit_refuses() {
 
 #[test]
 fn an_error_before_save_discards_everything() {
-    let fc = FakeFc::new(G473)
-        .with_uid(UID)
-        .reject("set osd_ah_pos = 1");
+    let fc = FakeFc::new(G473).with_uid(UID).reject("set osd_ah_pos = 1");
     let b = bench(&fc);
-    let c = stage(&b, vec![set("osd_cap_alarm", "1500"), set("osd_ah_pos", "1")]);
+    let c = stage(
+        &b,
+        vec![set("osd_cap_alarm", "1500"), set("osd_ah_pos", "1")],
+    );
     let p = plan(&b, &c);
     let r = b.core.gear_apply(&req(&c, &p)).unwrap();
     assert_eq!(r.status, ChangeStatus::Failed);
@@ -522,7 +553,10 @@ fn an_error_before_save_discards_everything() {
         "the first line is discarded with the session"
     );
     assert_eq!(status(&b, &c.id), ChangeStatus::Failed);
-    assert!(r.steps.iter().any(|s| s.name == "Write" && s.detail.is_some()));
+    assert!(r
+        .steps
+        .iter()
+        .any(|s| s.name == "Write" && s.detail.is_some()));
     assert!(released(&b));
 }
 
@@ -532,14 +566,20 @@ fn a_value_the_fc_does_not_keep_fails_verify_and_a_restore_undoes_it() {
         .with_uid(UID)
         .forget("set osd_cap_alarm = 1500");
     let b = bench(&fc);
-    let c = stage(&b, vec![set("osd_cap_alarm", "1500"), set("osd_ah_pos", "4000")]);
+    let c = stage(
+        &b,
+        vec![set("osd_cap_alarm", "1500"), set("osd_ah_pos", "4000")],
+    );
     let p = plan(&b, &c);
     let r = b.core.gear_apply(&req(&c, &p)).unwrap();
     assert_eq!(r.status, ChangeStatus::Failed);
     assert!(r.saved);
     assert_eq!(r.verify.len(), 1);
     assert_eq!(r.verify[0].line, "set osd_cap_alarm = 1500");
-    assert_eq!(fc.saved_value(Section::Master, "osd_ah_pos").as_deref(), Some("4000"));
+    assert_eq!(
+        fc.saved_value(Section::Master, "osd_ah_pos").as_deref(),
+        Some("4000")
+    );
 
     // Restore backup: the backup taken before the write, staged as a change.
     let rc = b
@@ -552,8 +592,18 @@ fn a_value_the_fc_does_not_keep_fails_verify_and_a_restore_undoes_it() {
     let rp = plan(&b, &rc);
     assert!(rp.ready(), "{:?}", rp.checks);
     let rr = b.core.gear_apply(&req(&rc, &rp)).unwrap();
-    assert_eq!(rr.status, ChangeStatus::Verified, "{} {:?} {:?}", rr.message, rr.verify, rr.sent);
-    assert_eq!(fc.saved_value(Section::Master, "osd_ah_pos").as_deref(), Some("4281"));
+    assert_eq!(
+        rr.status,
+        ChangeStatus::Verified,
+        "{} {:?} {:?}",
+        rr.message,
+        rr.verify,
+        rr.sent
+    );
+    assert_eq!(
+        fc.saved_value(Section::Master, "osd_ah_pos").as_deref(),
+        Some("4281")
+    );
 }
 
 struct Gate {
@@ -567,7 +617,9 @@ impl Hooks for Gate {
         if self.answer {
             Ok(())
         } else {
-            Err(anyhow::anyhow!("Refused: the user cancelled the apply in quadcam."))
+            Err(anyhow::anyhow!(
+                "Refused: the user cancelled the apply in quadcam."
+            ))
         }
     }
 }
@@ -663,11 +715,20 @@ fn mcp_apply_needs_the_digest_and_confirm() {
     assert_eq!(r["structuredContent"]["editor"], "agent");
     let r = s.call_tool("quadcam_gear", json!({"action": "changes"}));
     assert!(r["content"][0]["text"].as_str().unwrap().contains(&change));
-    let r = s.call_tool("quadcam_gear", json!({"action": "apply_plan", "change": change}));
+    let r = s.call_tool(
+        "quadcam_gear",
+        json!({"action": "apply_plan", "change": change}),
+    );
     assert_eq!(r["isError"], false, "{r}");
-    let digest = r["structuredContent"]["digest"].as_str().unwrap().to_string();
+    let digest = r["structuredContent"]["digest"]
+        .as_str()
+        .unwrap()
+        .to_string();
     let text = r["content"][0]["text"].as_str().unwrap();
-    assert!(text.contains("+set osd_cap_alarm = 1500") && text.contains("digest="), "{text}");
+    assert!(
+        text.contains("+set osd_cap_alarm = 1500") && text.contains("digest="),
+        "{text}"
+    );
     // No digest, no confirm, wrong digest: refused, FC untouched.
     for args in [
         json!({"action": "apply", "change": change}),
@@ -683,6 +744,12 @@ fn mcp_apply_needs_the_digest_and_confirm() {
         json!({"action": "apply", "change": change, "digest": digest, "confirm": true}),
     );
     assert_eq!(r["isError"], false, "{r}");
-    assert!(r["content"][0]["text"].as_str().unwrap().starts_with("Verified"));
-    assert_eq!(fc.saved_value(Section::Master, "osd_cap_alarm").as_deref(), Some("1500"));
+    assert!(r["content"][0]["text"]
+        .as_str()
+        .unwrap()
+        .starts_with("Verified"));
+    assert_eq!(
+        fc.saved_value(Section::Master, "osd_cap_alarm").as_deref(),
+        Some("1500")
+    );
 }
