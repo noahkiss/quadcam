@@ -419,6 +419,9 @@ pub enum Edit {
     },
     /// Deletes a model file; never the selected one.
     ModelDelete { file: String },
+    /// ExpressLRS options of a saved ELRS device, set over CRSF (design 6.4). Never the
+    /// binding phrase.
+    ElrsOptions { options: Vec<super::elrs::ElrsSet> },
 }
 
 /// One entry in a change's history.

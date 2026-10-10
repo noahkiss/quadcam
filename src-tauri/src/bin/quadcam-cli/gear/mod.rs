@@ -12,6 +12,7 @@ mod backup;
 mod blackbox;
 mod card;
 mod changes;
+mod elrs;
 mod fc;
 mod firmware;
 mod flights;
@@ -205,6 +206,12 @@ pub enum GearCmd {
     Firmware(firmware::FirmwareArgs),
     /// A PNG as the radio's splash screen: 128 x 64, one bit; --out writes the preview.
     Splash(firmware::SplashArgs),
+    /// ExpressLRS (a preview, `settings set elrs_preview=true`): status (default), read the
+    /// device behind a radio or FC, set options, plan and run a flash.
+    Elrs {
+        #[command(subcommand)]
+        cmd: Option<elrs::ElrsCmd>,
+    },
 }
 
 #[derive(Subcommand)]
@@ -308,6 +315,7 @@ pub fn run(core: &Core, cmd: GearCmd) -> Result<Value> {
         GearCmd::Stop { handle } => backup::stop(core, handle)?,
         GearCmd::Firmware(a) => firmware::firmware(core, a)?,
         GearCmd::Splash(a) => firmware::splash(core, a)?,
+        GearCmd::Elrs { cmd } => elrs::run(core, cmd)?,
         GearCmd::Devices { cmd } => match cmd.unwrap_or(DevicesCmd::List) {
             DevicesCmd::List => serde_json::to_value(call::gear_devices(core)?)?,
             DevicesCmd::Save { id, name, aircraft } => serde_json::to_value(

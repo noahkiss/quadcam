@@ -290,6 +290,17 @@ async fn gear_flash_click(
     blocking(move || core.gear_flash_click(&params)).await
 }
 
+/// The apply sheet's own Apply button for an ExpressLRS flash.
+#[tauri::command]
+#[specta::specta]
+async fn gear_elrs_flash_click(
+    state: State<'_, AppState>,
+    params: api::ElrsFlashRequest,
+) -> Result<api::ApplyReport, String> {
+    let core = state.core.clone();
+    blocking(move || core.gear_elrs_flash_click(&params)).await
+}
+
 /// The person's answer to an agent's apply request.
 #[tauri::command]
 #[specta::specta]
@@ -589,6 +600,10 @@ pub fn specta_builder() -> tauri_specta::Builder<tauri::Wry> {
             c::gear_firmware_read,
             c::gear_flash_plan,
             c::gear_flash,
+            c::gear_elrs,
+            c::gear_elrs_read,
+            c::gear_elrs_flash_plan,
+            c::gear_elrs_flash,
             c::gear_card,
             c::gear_card_preview,
             c::gear_card_clean,
@@ -667,6 +682,7 @@ pub fn specta_builder() -> tauri_specta::Builder<tauri::Wry> {
             gear_sim_sync_click,
             gear_sim_restore_click,
             gear_flash_click,
+            gear_elrs_flash_click,
             answer_apply_request,
             library_scope,
             third_party_notices,

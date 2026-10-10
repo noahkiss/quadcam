@@ -25,7 +25,7 @@ export function ApplySheet() {
   const next = useStore((s) => s.nextApply);
   const dev = a ? devices.find((d) => d.id === a.device) : undefined;
   const flash = !!a?.flash || a?.change?.id === "flash";
-  const kind = flash ? "firmware" : a?.device === SIMS_DEVICE ? "sims" : dev?.kind === "radio" ? "card" : "FC";
+  const kind = flash ? "firmware" : a?.device === SIMS_DEVICE ? "sims" : dev?.kind === "radio" ? "card" : dev?.kind === "elrs_tx" || dev?.kind === "elrs_rx" ? "ELRS" : "FC";
   const name = kind === "sims" ? "sims" : dev ? deviceName(dev) : kind === "card" || kind === "firmware" ? "radio" : "FC";
   const job = a ? jobs?.find((j) => j.device === a.device) : undefined;
   const more = a?.change ? changes.filter((c) => c.device === a.device && (c.status === "ready" || c.status === "try") && c.id !== a.change?.id).length : 0;
@@ -111,6 +111,8 @@ export function ApplySheet() {
                 <p className={styles.muted}>QuadCam reads the firmware the radio runs now twice and keeps it as a copy, then erases and writes the flash in segments, reads each back, compares the whole image, and restarts the radio. The radio must be in DFU mode: turn it off and plug in the USB cable, holding no button. If a read back differs, the radio stays in DFU mode.</p>
               ) : kind === "sims" ? (
                 <p className={styles.muted}>QuadCam backs up each file first and keeps the backup, writes it, reads it back, and puts every file back if one reads wrong. Quit the game before you apply.</p>
+              ) : kind === "ELRS" ? (
+                <p className={styles.muted}>QuadCam reads the device again first and refuses if an option moved since you read it. It keeps the parameters as a backup, writes each option, reads them back and compares. The radio or FC stays in passthrough afterwards: restart the radio, or unplug the FC.</p>
               ) : kind === "card" ? (
                 <p className={styles.muted}>QuadCam mounts the card if needed, backs it up first and keeps that backup, writes file by file, reads each back, and unmounts it. It puts every file back if one reads wrong.</p>
               ) : (

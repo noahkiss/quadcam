@@ -7,6 +7,7 @@ import { Banner } from "../../../components/Banner";
 import { Button } from "../../../components/Button";
 import type { FirmwareStatus } from "../../../ipc/types";
 import { fmtWhen } from "../../../lib/backups";
+import { ElrsSection } from "./ElrsSection";
 import { ReadFirmware } from "./ReadFirmware";
 import styles from "./Firmware.module.css";
 
@@ -93,6 +94,7 @@ export function FirmwarePage() {
           </tbody>
         </table>
       )}
+      <ElrsSection />
       <ReadFirmware radios={(view?.devices ?? []).filter((d) => d.kind === "radio")} />
     </div>
   );
