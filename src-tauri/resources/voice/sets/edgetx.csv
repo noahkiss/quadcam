@@ -1,99 +1,357 @@
-path,text,group,tone,why
-SOUNDS/en/on.wav,on,callouts,calm,A prompt EdgeTX can play by name.
-SOUNDS/en/off.wav,off,callouts,calm,A prompt EdgeTX can play by name.
-SOUNDS/en/ok.wav,okay,callouts,calm,A prompt EdgeTX can play by name.
-SOUNDS/en/no.wav,no,callouts,calm,A prompt EdgeTX can play by name.
-SOUNDS/en/done.wav,done,callouts,calm,A prompt EdgeTX can play by name.
-SOUNDS/en/error.wav,error,callouts,alert,A prompt EdgeTX can play by name.
-SOUNDS/en/failed.wav,failed,callouts,alert,A prompt EdgeTX can play by name.
-SOUNDS/en/saved.wav,saved,callouts,calm,A prompt EdgeTX can play by name.
-SOUNDS/en/reset.wav,reset,callouts,calm,A prompt EdgeTX can play by name.
-SOUNDS/en/check.wav,check,callouts,calm,A prompt EdgeTX can play by name.
-SOUNDS/en/warnng.wav,warning,callouts,alert,A prompt EdgeTX can play by name.
-SOUNDS/en/danger.wav,danger,callouts,alert,A prompt EdgeTX can play by name.
-SOUNDS/en/enabl.wav,enabled,callouts,calm,A prompt EdgeTX can play by name.
-SOUNDS/en/disabl.wav,disabled,callouts,calm,A prompt EdgeTX can play by name.
-SOUNDS/en/active.wav,active,callouts,calm,A prompt EdgeTX can play by name.
-SOUNDS/en/ready.wav,ready,callouts,calm,A prompt EdgeTX can play by name.
-SOUNDS/en/start.wav,start,callouts,calm,A prompt EdgeTX can play by name.
-SOUNDS/en/confirm.wav,confirm,callouts,calm,A prompt EdgeTX can play by name.
-SOUNDS/en/cancel.wav,cancel,callouts,calm,A prompt EdgeTX can play by name.
-SOUNDS/en/next.wav,next,callouts,calm,A prompt EdgeTX can play by name.
-SOUNDS/en/left.wav,left,callouts,calm,A prompt EdgeTX can play by name.
-SOUNDS/en/right.wav,right,callouts,calm,A prompt EdgeTX can play by name.
-SOUNDS/en/high.wav,high,callouts,calm,A prompt EdgeTX can play by name.
-SOUNDS/en/low.wav,low,callouts,calm,A prompt EdgeTX can play by name.
-SOUNDS/en/medium.wav,medium,callouts,calm,A prompt EdgeTX can play by name.
-SOUNDS/en/normal.wav,normal,callouts,calm,A prompt EdgeTX can play by name.
-SOUNDS/en/manual.wav,manual,callouts,calm,A prompt EdgeTX can play by name.
-SOUNDS/en/auto.wav,auto,callouts,calm,A prompt EdgeTX can play by name.
-SOUNDS/en/full.wav,full,callouts,calm,A prompt EdgeTX can play by name.
-SOUNDS/en/good.wav,good,callouts,calm,A prompt EdgeTX can play by name.
-SOUNDS/en/bad.wav,bad,callouts,alert,A prompt EdgeTX can play by name.
-SOUNDS/en/hot.wav,hot,callouts,alert,A prompt EdgeTX can play by name.
-SOUNDS/en/cold.wav,cold,callouts,calm,A prompt EdgeTX can play by name.
-SOUNDS/en/sec10.wav,ten seconds,callouts,calm,A prompt EdgeTX can play by name.
-SOUNDS/en/sec15.wav,fifteen seconds,callouts,calm,A prompt EdgeTX can play by name.
-SOUNDS/en/sec30.wav,thirty seconds,callouts,calm,A prompt EdgeTX can play by name.
-SOUNDS/en/min1.wav,one minute,callouts,calm,A prompt EdgeTX can play by name.
-SOUNDS/en/min2.wav,two minutes,callouts,calm,A prompt EdgeTX can play by name.
-SOUNDS/en/min3.wav,three minutes,callouts,calm,A prompt EdgeTX can play by name.
-SOUNDS/en/min4.wav,four minutes,callouts,calm,A prompt EdgeTX can play by name.
-SOUNDS/en/min5.wav,five minutes,callouts,calm,A prompt EdgeTX can play by name.
-SOUNDS/en/timeup.wav,time is up,callouts,alert,A prompt EdgeTX can play by name.
-SOUNDS/en/bind.wav,bind,callouts,calm,A prompt EdgeTX can play by name.
-SOUNDS/en/calib.wav,calibrating,callouts,calm,A prompt EdgeTX can play by name.
-SOUNDS/en/calibok.wav,calibration done,callouts,calm,A prompt EdgeTX can play by name.
-SOUNDS/en/sag.wav,Voltage sag,callouts,alert,A prompt EdgeTX can play by name.
-SOUNDS/en/storage.wav,Storage voltage,callouts,calm,A prompt EdgeTX can play by name.
-SOUNDS/en/swapbatt.wav,Swap battery,callouts,alert,A prompt EdgeTX can play by name.
-SOUNDS/en/lastpack.wav,Last pack,callouts,calm,A prompt EdgeTX can play by name.
-SOUNDS/en/halfpack.wav,Half pack,callouts,calm,A prompt EdgeTX can play by name.
-SOUNDS/en/cellchk.wav,Check cells,callouts,calm,A prompt EdgeTX can play by name.
-SOUNDS/en/linkok.wav,Link good,callouts,calm,A prompt EdgeTX can play by name.
-SOUNDS/en/linkweak.wav,Link weak,callouts,alert,A prompt EdgeTX can play by name.
-SOUNDS/en/linklost.wav,Link lost,callouts,alert,A prompt EdgeTX can play by name.
-SOUNDS/en/lostmdl.wav,Lost model,callouts,alert,A prompt EdgeTX can play by name.
-SOUNDS/en/foundit.wav,Found it,callouts,calm,A prompt EdgeTX can play by name.
-SOUNDS/en/telem.wav,telemetry,callouts,calm,A prompt EdgeTX can play by name.
-SOUNDS/en/gps.wav,GPS,callouts,calm,A prompt EdgeTX can play by name.
-SOUNDS/en/home.wav,home,callouts,calm,A prompt EdgeTX can play by name.
-SOUNDS/en/landnow.wav,Land now,callouts,alert,A prompt EdgeTX can play by name.
-SOUNDS/en/ch1.wav,channel one,callouts,calm,A prompt EdgeTX can play by name.
-SOUNDS/en/ch2.wav,channel two,callouts,calm,A prompt EdgeTX can play by name.
-SOUNDS/en/ch3.wav,channel three,callouts,calm,A prompt EdgeTX can play by name.
-SOUNDS/en/ch4.wav,channel four,callouts,calm,A prompt EdgeTX can play by name.
-SOUNDS/en/ch5.wav,channel five,callouts,calm,A prompt EdgeTX can play by name.
-SOUNDS/en/ch6.wav,channel six,callouts,calm,A prompt EdgeTX can play by name.
-SOUNDS/en/ch7.wav,channel seven,callouts,calm,A prompt EdgeTX can play by name.
-SOUNDS/en/ch8.wav,channel eight,callouts,calm,A prompt EdgeTX can play by name.
-SOUNDS/en/flp1.wav,flaps one,callouts,calm,A prompt EdgeTX can play by name.
-SOUNDS/en/flp2.wav,flaps two,callouts,calm,A prompt EdgeTX can play by name.
-SOUNDS/en/flp3.wav,flaps three,callouts,calm,A prompt EdgeTX can play by name.
-SOUNDS/en/flp4.wav,flaps four,callouts,calm,A prompt EdgeTX can play by name.
-SOUNDS/en/flp5.wav,flaps five,callouts,calm,A prompt EdgeTX can play by name.
-SOUNDS/en/pack1.wav,pack one,callouts,calm,A prompt EdgeTX can play by name.
-SOUNDS/en/pack2.wav,pack two,callouts,calm,A prompt EdgeTX can play by name.
-SOUNDS/en/pack3.wav,pack three,callouts,calm,A prompt EdgeTX can play by name.
-SOUNDS/en/pack4.wav,pack four,callouts,calm,A prompt EdgeTX can play by name.
-SOUNDS/en/pack5.wav,pack five,callouts,calm,A prompt EdgeTX can play by name.
-SOUNDS/en/pack6.wav,pack six,callouts,calm,A prompt EdgeTX can play by name.
-SOUNDS/en/pack7.wav,pack seven,callouts,calm,A prompt EdgeTX can play by name.
-SOUNDS/en/pack8.wav,pack eight,callouts,calm,A prompt EdgeTX can play by name.
-SOUNDS/en/pack9.wav,pack nine,callouts,calm,A prompt EdgeTX can play by name.
-SOUNDS/en/pack10.wav,pack ten,callouts,calm,A prompt EdgeTX can play by name.
-SOUNDS/en/fm-1.wav,flight mode one,callouts,calm,A prompt EdgeTX can play by name.
-SOUNDS/en/fm-2.wav,flight mode two,callouts,calm,A prompt EdgeTX can play by name.
-SOUNDS/en/fm-3.wav,flight mode three,callouts,calm,A prompt EdgeTX can play by name.
-SOUNDS/en/fm-4.wav,flight mode four,callouts,calm,A prompt EdgeTX can play by name.
-SOUNDS/en/fm-5.wav,flight mode five,callouts,calm,A prompt EdgeTX can play by name.
-SOUNDS/en/fm-6.wav,flight mode six,callouts,calm,A prompt EdgeTX can play by name.
-SOUNDS/en/fm-7.wav,flight mode seven,callouts,calm,A prompt EdgeTX can play by name.
-SOUNDS/en/fm-8.wav,flight mode eight,callouts,calm,A prompt EdgeTX can play by name.
-SOUNDS/en/bank-0.wav,bank zero,callouts,calm,A prompt EdgeTX can play by name.
-SOUNDS/en/bank-1.wav,bank one,callouts,calm,A prompt EdgeTX can play by name.
-SOUNDS/en/bank-2.wav,bank two,callouts,calm,A prompt EdgeTX can play by name.
-SOUNDS/en/bank-3.wav,bank three,callouts,calm,A prompt EdgeTX can play by name.
-SOUNDS/en/expo1.wav,expo one,callouts,calm,A prompt EdgeTX can play by name.
-SOUNDS/en/expo2.wav,expo two,callouts,calm,A prompt EdgeTX can play by name.
-SOUNDS/en/expo3.wav,expo three,callouts,calm,A prompt EdgeTX can play by name.
+path,text,group,tone,why,kinds
+SOUNDS/en/armed.wav,Armed,callouts,calm,Motors can spin. Plays when the model arms.,glider heli plane quad
+SOUNDS/en/disarm.wav,Disarmed,callouts,calm,Motors are off. Plays when the model disarms.,glider heli plane quad
+SOUNDS/en/thrcut.wav,Throttle cut,callouts,calm,A prompt EdgeTX can play by name.,glider heli plane quad
+SOUNDS/en/thract.wav,Throttle active,callouts,calm,A prompt EdgeTX can play by name.,glider heli plane quad
+SOUNDS/en/gearup.wav,Gear up,callouts,calm,The landing gear is up.,glider plane
+SOUNDS/en/geardn.wav,Gear down,callouts,calm,The landing gear is down.,glider plane
+SOUNDS/en/flapup.wav,Flaps up,callouts,calm,The flaps are up.,glider plane
+SOUNDS/en/flapdn.wav,Flaps down,callouts,calm,The flaps are down.,glider plane
+SOUNDS/en/splrup.wav,Spoilers up,callouts,calm,The spoilers are out.,glider plane
+SOUNDS/en/splrdn.wav,Spoilers down,callouts,calm,The spoilers are in.,glider plane
+SOUNDS/en/trnon.wav,Trainer on,callouts,calm,A prompt EdgeTX can play by name.,car glider heli plane quad
+SOUNDS/en/trnoff.wav,Trainer off,callouts,calm,A prompt EdgeTX can play by name.,car glider heli plane quad
+SOUNDS/en/engoff.wav,Engine off,callouts,calm,The engine is off.,glider heli plane
+SOUNDS/en/tohigh.wav,Too high,callouts,alert,A prompt EdgeTX can play by name.,glider heli plane quad
+SOUNDS/en/tolow.wav,Too low,callouts,alert,A prompt EdgeTX can play by name.,glider heli plane quad
+SOUNDS/en/lowbat.wav,Battery low,callouts,alert,The pack voltage is under the first warning level.,quad
+SOUNDS/en/crowon.wav,Crow on,callouts,calm,Crow braking is on.,glider
+SOUNDS/en/crowof.wav,Crow off,callouts,calm,Crow braking is off.,glider
+SOUNDS/en/siglow.wav,RF signal low,callouts,alert,A prompt EdgeTX can play by name.,car glider heli plane quad
+SOUNDS/en/sigcrt.wav,RF signal critical,callouts,alert,A prompt EdgeTX can play by name.,car glider heli plane quad
+SOUNDS/en/lq.wav,LQ,callouts,calm,A prompt EdgeTX can play by name.,car glider heli plane quad
+SOUNDS/en/rfmode.wav,RF mode,callouts,calm,A prompt EdgeTX can play by name.,car glider heli plane quad
+SOUNDS/en/spdmod.wav,Speed mode,callouts,calm,The speed flight mode.,glider plane
+SOUNDS/en/thmmod.wav,Thermal mode on,callouts,calm,A prompt EdgeTX can play by name.,glider
+SOUNDS/en/nrmmod.wav,Normal mode on,callouts,calm,A prompt EdgeTX can play by name.,glider heli plane
+SOUNDS/en/lnding.wav,Landing,callouts,calm,The landing flight mode.,glider plane
+SOUNDS/en/acro.wav,Acro mode,callouts,calm,Acro mode is on.,plane quad
+SOUNDS/en/fm-1.wav,flight mode one,callouts,calm,A prompt EdgeTX can play by name.,car glider heli plane quad
+SOUNDS/en/fm-2.wav,flight mode two,callouts,calm,A prompt EdgeTX can play by name.,car glider heli plane quad
+SOUNDS/en/fm-3.wav,flight mode three,callouts,calm,A prompt EdgeTX can play by name.,car glider heli plane quad
+SOUNDS/en/fm-4.wav,flight mode four,callouts,calm,A prompt EdgeTX can play by name.,car glider heli plane quad
+SOUNDS/en/fm-5.wav,flight mode five,callouts,calm,A prompt EdgeTX can play by name.,car glider heli plane quad
+SOUNDS/en/fm-6.wav,flight mode six,callouts,calm,A prompt EdgeTX can play by name.,car glider heli plane quad
+SOUNDS/en/fm-7.wav,flight mode seven,callouts,calm,A prompt EdgeTX can play by name.,car glider heli plane quad
+SOUNDS/en/fm-8.wav,flight mode eight,callouts,calm,A prompt EdgeTX can play by name.,car glider heli plane quad
+SOUNDS/en/vrion.wav,Vario on,callouts,calm,A prompt EdgeTX can play by name.,glider plane
+SOUNDS/en/vrioff.wav,Vario off,callouts,calm,A prompt EdgeTX can play by name.,glider plane
+SOUNDS/en/fm-pwr.wav,Flight mode power,callouts,calm,A prompt EdgeTX can play by name.,glider plane
+SOUNDS/en/fm-lnd.wav,Flight mode land,callouts,calm,A prompt EdgeTX can play by name.,glider heli plane
+SOUNDS/en/fm-flt.wav,Flight mode float,callouts,calm,A prompt EdgeTX can play by name.,glider heli plane
+SOUNDS/en/fm-spd.wav,Flight mode speed,callouts,calm,A prompt EdgeTX can play by name.,glider heli plane
+SOUNDS/en/fm-fst.wav,Flight mode fast,callouts,calm,A prompt EdgeTX can play by name.,
+SOUNDS/en/fm-nrm.wav,Flight mode normal,callouts,calm,A prompt EdgeTX can play by name.,glider heli plane
+SOUNDS/en/fm-crs.wav,Flight mode cruise,callouts,calm,A prompt EdgeTX can play by name.,glider plane
+SOUNDS/en/fm-acr.wav,Flight mode acro,callouts,calm,A prompt EdgeTX can play by name.,plane quad
+SOUNDS/en/fm-rce.wav,Flight mode race,callouts,calm,A prompt EdgeTX can play by name.,quad
+SOUNDS/en/fm-lch.wav,Flight mode launch,callouts,calm,A prompt EdgeTX can play by name.,glider plane
+SOUNDS/en/fm-png.wav,Flight mode ping,callouts,calm,A prompt EdgeTX can play by name.,glider
+SOUNDS/en/fm-thm.wav,Flight mode thermal,callouts,calm,A prompt EdgeTX can play by name.,glider
+SOUNDS/en/fm-thl.wav,Flight mode thermal left,callouts,calm,A prompt EdgeTX can play by name.,glider
+SOUNDS/en/fm-thr.wav,Flight mode thermal right,callouts,calm,A prompt EdgeTX can play by name.,glider
+SOUNDS/en/fm-stb.wav,Flight mode stabilize,callouts,calm,A prompt EdgeTX can play by name.,plane quad
+SOUNDS/en/fm-hor.wav,Flight mode horizon,callouts,calm,A prompt EdgeTX can play by name.,quad
+SOUNDS/en/fm-ang.wav,Flight mode angle,callouts,calm,A prompt EdgeTX can play by name.,quad
+SOUNDS/en/fm-id1.wav,Flight mode idle up one,callouts,calm,A prompt EdgeTX can play by name.,heli
+SOUNDS/en/fm-id2.wav,Flight mode idle up two,callouts,calm,A prompt EdgeTX can play by name.,heli
+SOUNDS/en/ratlow.wav,Low rate,callouts,calm,A low rate profile.,car heli plane quad
+SOUNDS/en/ratmed.wav,Medium rate,callouts,calm,A medium rate profile.,car heli plane quad
+SOUNDS/en/rathi.wav,High rate,callouts,calm,A high rate profile.,car heli plane quad
+SOUNDS/en/takeof.wav,Take off,callouts,calm,A prompt EdgeTX can play by name.,glider plane quad
+SOUNDS/en/sport.wav,Sport,callouts,calm,A prompt EdgeTX can play by name.,plane
+SOUNDS/en/pattrn.wav,Pattern,callouts,calm,A prompt EdgeTX can play by name.,plane
+SOUNDS/en/3d.wav,3D,callouts,calm,A prompt EdgeTX can play by name.,heli plane quad
+SOUNDS/en/landin.wav,Landing,callouts,calm,A prompt EdgeTX can play by name.,glider plane quad
+SOUNDS/en/idleu1.wav,Idle up one,callouts,calm,The first idle-up flight mode.,heli
+SOUNDS/en/idleu2.wav,Idle up two,callouts,calm,The second idle-up flight mode.,heli
+SOUNDS/en/normod.wav,Normal mode,callouts,calm,A prompt EdgeTX can play by name.,glider heli plane
+SOUNDS/en/bank-0.wav,bank zero,callouts,calm,A prompt EdgeTX can play by name.,heli
+SOUNDS/en/bank-1.wav,bank one,callouts,calm,A prompt EdgeTX can play by name.,heli
+SOUNDS/en/bank-2.wav,bank two,callouts,calm,A prompt EdgeTX can play by name.,heli
+SOUNDS/en/bank-3.wav,bank three,callouts,calm,A prompt EdgeTX can play by name.,heli
+SOUNDS/en/headlo.wav,Heading lock,callouts,calm,A prompt EdgeTX can play by name.,heli quad
+SOUNDS/en/ratmod.wav,Rate mode,callouts,calm,A prompt EdgeTX can play by name.,heli plane quad
+SOUNDS/en/3d-mod.wav,3D Mode,callouts,calm,A prompt EdgeTX can play by name.,heli plane quad
+SOUNDS/en/stabmo.wav,Stabilize mode,callouts,calm,A prompt EdgeTX can play by name.,heli plane quad
+SOUNDS/en/on.wav,on,callouts,calm,A prompt EdgeTX can play by name.,
+SOUNDS/en/off.wav,off,callouts,calm,A prompt EdgeTX can play by name.,
+SOUNDS/en/buzact.wav,Buzzer active,callouts,calm,The buzzer is on.,quad
+SOUNDS/en/crfact.wav,Crash flip active,callouts,calm,Crash flip (turtle) is active.,quad
+SOUNDS/en/blkact.wav,Blackbox active,callouts,calm,Blackbox logging is on.,quad
+SOUNDS/en/preact.wav,Pre-arm active,callouts,calm,A prompt EdgeTX can play by name.,quad
+SOUNDS/en/stbmod.wav,Stable mode,callouts,calm,A prompt EdgeTX can play by name.,heli plane quad
+SOUNDS/en/brakon.wav,Brake on,callouts,calm,The brake is on.,car glider plane
+SOUNDS/en/brakof.wav,Brake off,callouts,calm,The brake is off.,car glider plane
+SOUNDS/en/btfon.wav,Butterfly on,callouts,calm,A prompt EdgeTX can play by name.,glider plane
+SOUNDS/en/btfoff.wav,Butterfly off,callouts,calm,A prompt EdgeTX can play by name.,glider plane
+SOUNDS/en/flp1.wav,flaps one,callouts,calm,A prompt EdgeTX can play by name.,glider plane
+SOUNDS/en/flp2.wav,flaps two,callouts,calm,A prompt EdgeTX can play by name.,glider plane
+SOUNDS/en/flp3.wav,flaps three,callouts,calm,A prompt EdgeTX can play by name.,glider plane
+SOUNDS/en/flp4.wav,flaps four,callouts,calm,A prompt EdgeTX can play by name.,glider plane
+SOUNDS/en/flp5.wav,flaps five,callouts,calm,A prompt EdgeTX can play by name.,glider plane
+SOUNDS/en/wngswp.wav,Wingsweep,callouts,calm,A prompt EdgeTX can play by name.,glider plane
+SOUNDS/en/whlbro.wav,Wheelbrakes on,callouts,calm,A prompt EdgeTX can play by name.,plane
+SOUNDS/en/whlbrf.wav,Wheelbrakes off,callouts,calm,A prompt EdgeTX can play by name.,plane
+SOUNDS/en/manmod.wav,Manual mode,callouts,calm,A prompt EdgeTX can play by name.,quad
+SOUNDS/en/acrmod.wav,Acro mode,callouts,calm,A prompt EdgeTX can play by name.,plane quad
+SOUNDS/en/angmod.wav,Angle mode,callouts,calm,A prompt EdgeTX can play by name.,quad
+SOUNDS/en/hznmod.wav,Horizon mode,callouts,calm,Horizon mode is on.,quad
+SOUNDS/en/lncmod.wav,Launch mode,callouts,calm,The launch flight mode.,glider plane
+SOUNDS/en/airmod.wav,Air mode,callouts,calm,A prompt EdgeTX can play by name.,quad
+SOUNDS/en/pitmod.wav,Pit mode,callouts,calm,A prompt EdgeTX can play by name.,quad
+SOUNDS/en/navcrs.wav,Navigation cruise,callouts,calm,A prompt EdgeTX can play by name.,plane quad
+SOUNDS/en/navcsh.wav,Navigation course hold,callouts,calm,A prompt EdgeTX can play by name.,plane quad
+SOUNDS/en/navalh.wav,Navigation altitude hold,callouts,calm,A prompt EdgeTX can play by name.,plane quad
+SOUNDS/en/navpos.wav,Navigation position hold,callouts,calm,A prompt EdgeTX can play by name.,plane quad
+SOUNDS/en/navrth.wav,Navigation return to home,callouts,calm,A prompt EdgeTX can play by name.,plane quad
+SOUNDS/en/navwp.wav,Navigation waypoint,callouts,calm,A prompt EdgeTX can play by name.,plane quad
+SOUNDS/en/cruise.wav,Cruise,callouts,calm,The cruise flight mode.,glider plane quad
+SOUNDS/en/crshld.wav,Course hold,callouts,calm,A prompt EdgeTX can play by name.,plane quad
+SOUNDS/en/althld.wav,Altitude hold,callouts,calm,A prompt EdgeTX can play by name.,plane quad
+SOUNDS/en/poshld.wav,Position hold,callouts,calm,A prompt EdgeTX can play by name.,plane quad
+SOUNDS/en/rth.wav,Return to home,callouts,alert,The plane flies home by itself.,plane quad
+SOUNDS/en/waypnt.wav,Waypoint,callouts,calm,A prompt EdgeTX can play by name.,plane quad
+SOUNDS/en/manual.wav,manual,callouts,calm,A prompt EdgeTX can play by name.,
+SOUNDS/en/auto.wav,auto,callouts,calm,A prompt EdgeTX can play by name.,
+SOUNDS/en/osd.wav,OSD,callouts,calm,A prompt EdgeTX can play by name.,quad
+SOUNDS/en/osdprf.wav,OSD profile,callouts,calm,A prompt EdgeTX can play by name.,quad
+SOUNDS/en/sxrahd.wav,Attitude hold mode,callouts,calm,A prompt EdgeTX can play by name.,heli plane
+SOUNDS/en/sxrman.wav,Manual mode,callouts,calm,A prompt EdgeTX can play by name.,heli plane
+SOUNDS/en/sxrsmd.wav,Stabilizer mode,callouts,calm,A prompt EdgeTX can play by name.,heli plane
+SOUNDS/en/sxrsof.wav,Stabilizer off,callouts,calm,A prompt EdgeTX can play by name.,heli plane quad
+SOUNDS/en/sxrstb.wav,Stabilizer on,callouts,calm,A prompt EdgeTX can play by name.,heli plane quad
+SOUNDS/en/sxrwr.wav,Wind rejection mode,callouts,calm,A prompt EdgeTX can play by name.,heli plane
+SOUNDS/en/turton.wav,Turtle mode on,callouts,calm,Turtle mode switched on.,quad
+SOUNDS/en/turtof.wav,Turtle mode off,callouts,calm,Turtle mode switched off.,quad
+SOUNDS/en/flip.wav,Flip,callouts,calm,A prompt EdgeTX can play by name.,quad
+SOUNDS/en/auro.wav,Autorotation,callouts,calm,A prompt EdgeTX can play by name.,heli
+SOUNDS/en/fsact.wav,Failsafe active,callouts,calm,A prompt EdgeTX can play by name.,glider plane quad
+SOUNDS/en/fsoff.wav,Failsafe off,callouts,calm,A prompt EdgeTX can play by name.,glider plane quad
+SOUNDS/en/osd1.wav,OSD profile one,callouts,calm,OSD profile 1.,quad
+SOUNDS/en/osd2.wav,OSD profile two,callouts,calm,OSD profile 2.,quad
+SOUNDS/en/osd3.wav,OSD profile three,callouts,calm,OSD profile 3.,quad
+SOUNDS/en/rates1.wav,Rate profile one,callouts,calm,Rate profile 1.,car heli quad
+SOUNDS/en/rates2.wav,Rate profile two,callouts,calm,Rate profile 2.,car heli quad
+SOUNDS/en/rates3.wav,Rate profile three,callouts,calm,Rate profile 3.,car heli quad
+SOUNDS/en/rates4.wav,Rate profile four,callouts,calm,A prompt EdgeTX can play by name.,quad
+SOUNDS/en/rates5.wav,Rate profile five,callouts,calm,A prompt EdgeTX can play by name.,quad
+SOUNDS/en/rates6.wav,Rate profile six,callouts,calm,A prompt EdgeTX can play by name.,quad
+SOUNDS/en/scmdof.wav,Stick commands disabled,callouts,calm,A prompt EdgeTX can play by name.,quad
+SOUNDS/en/scmdon.wav,Stick commands enabled,callouts,calm,A prompt EdgeTX can play by name.,quad
+SOUNDS/en/telem.wav,telemetry,callouts,calm,A prompt EdgeTX can play by name.,
+SOUNDS/en/tlogon.wav,Telemetry logging on,callouts,calm,A prompt EdgeTX can play by name.,glider heli plane quad
+SOUNDS/en/tlogof.wav,Telemetry logging off,callouts,calm,A prompt EdgeTX can play by name.,glider heli plane quad
+SOUNDS/en/vtx.wav,VTX,callouts,calm,A prompt EdgeTX can play by name.,quad
+SOUNDS/en/vtxon.wav,VTX on,callouts,calm,The video transmitter is on.,quad
+SOUNDS/en/vtxoff.wav,VTX off,callouts,calm,The video transmitter is off.,quad
+SOUNDS/en/vtx25.wav,VTX twenty five milliwatts,callouts,calm,A prompt EdgeTX can play by name.,quad
+SOUNDS/en/vtx50.wav,VTX fifty milliwatts,callouts,calm,A prompt EdgeTX can play by name.,quad
+SOUNDS/en/vtx100.wav,VTX one hundred milliwatts,callouts,calm,A prompt EdgeTX can play by name.,quad
+SOUNDS/en/vtx200.wav,VTX two hundred milliwatts,callouts,calm,A prompt EdgeTX can play by name.,quad
+SOUNDS/en/vtx300.wav,VTX three hundred milliwatts,callouts,calm,A prompt EdgeTX can play by name.,quad
+SOUNDS/en/vtx400.wav,VTX four hundred milliwatts,callouts,calm,A prompt EdgeTX can play by name.,quad
+SOUNDS/en/vtx500.wav,VTX five hundred milliwatts,callouts,calm,A prompt EdgeTX can play by name.,quad
+SOUNDS/en/vtx600.wav,VTX six hundred milliwatts,callouts,calm,A prompt EdgeTX can play by name.,quad
+SOUNDS/en/vtx700.wav,VTX seven hundred milliwatts,callouts,calm,A prompt EdgeTX can play by name.,quad
+SOUNDS/en/vtx800.wav,VTX eight hundred milliwatts,callouts,calm,A prompt EdgeTX can play by name.,quad
+SOUNDS/en/vtx900.wav,VTX nine hundred milliwatts,callouts,calm,A prompt EdgeTX can play by name.,quad
+SOUNDS/en/vtxpm.wav,VTX pit mode,callouts,calm,The video transmitter is in pit mode.,quad
+SOUNDS/en/vtxrm.wav,VTX Race Mode,callouts,calm,A prompt EdgeTX can play by name.,quad
+SOUNDS/en/vtx1w.wav,VTX one watt,callouts,calm,A prompt EdgeTX can play by name.,quad
+SOUNDS/en/vtx2w.wav,VTX two watts,callouts,calm,A prompt EdgeTX can play by name.,quad
+SOUNDS/en/vtx4w.wav,VTX four watts,callouts,calm,A prompt EdgeTX can play by name.,quad
+SOUNDS/en/clobat.wav,Critical low battery,callouts,alert,A prompt EdgeTX can play by name.,
+SOUNDS/en/start.wav,start,callouts,calm,A prompt EdgeTX can play by name.,
+SOUNDS/en/stop.wav,Stop,callouts,calm,A prompt EdgeTX can play by name.,
+SOUNDS/en/lghton.wav,Lights on,callouts,calm,A prompt EdgeTX can play by name.,car heli plane quad
+SOUNDS/en/lghtof.wav,Lights off,callouts,calm,A prompt EdgeTX can play by name.,car heli plane quad
+SOUNDS/en/buzoff.wav,Buzzer off,callouts,calm,The buzzer is off.,quad
+SOUNDS/en/dyntxp.wav,Dynamic TX power,callouts,calm,The radio adjusts its own output power.,quad
+SOUNDS/en/maxtxp.wav,Maximum TX power,callouts,alert,Radio output power at its top.,quad
+SOUNDS/en/thrhld.wav,Throttle hold,callouts,calm,A prompt EdgeTX can play by name.,heli plane
+SOUNDS/en/thridl.wav,Throttle idle,callouts,calm,A prompt EdgeTX can play by name.,heli
+SOUNDS/en/thrrel.wav,Throttle release,callouts,calm,A prompt EdgeTX can play by name.,heli
+SOUNDS/en/negpon.wav,Negative pitch allowed,callouts,calm,A prompt EdgeTX can play by name.,
+SOUNDS/en/negpof.wav,Negative pitch disallowed,callouts,calm,A prompt EdgeTX can play by name.,
+SOUNDS/en/alnch.wav,Autolaunch started,callouts,calm,A prompt EdgeTX can play by name.,glider plane
+SOUNDS/en/rscmon.wav,Rescue mode active,callouts,calm,A prompt EdgeTX can play by name.,heli plane quad
+SOUNDS/en/rscmof.wav,Rescue mode off,callouts,calm,A prompt EdgeTX can play by name.,heli plane quad
+SOUNDS/en/hdfmon.wav,Headfree mode active,callouts,calm,A prompt EdgeTX can play by name.,quad
+SOUNDS/en/hdfmof.wav,Headfree mode off,callouts,calm,A prompt EdgeTX can play by name.,quad
+SOUNDS/en/hdadj.wav,Heading adjust,callouts,calm,A prompt EdgeTX can play by name.,heli quad
+SOUNDS/en/agmxon.wav,FPV angle mix active,callouts,calm,A prompt EdgeTX can play by name.,quad
+SOUNDS/en/agmxof.wav,FPV angle mix off,callouts,calm,A prompt EdgeTX can play by name.,quad
+SOUNDS/en/airmon.wav,Air mode on,callouts,calm,Air mode is on.,quad
+SOUNDS/en/airmof.wav,Air mode off,callouts,calm,Air mode is off.,quad
+SOUNDS/en/osdon.wav,OSD on,callouts,calm,The on-screen display is on.,quad
+SOUNDS/en/osdoff.wav,OSD off,callouts,calm,The on-screen display is off.,quad
+SOUNDS/en/rthstr.wav,Return to home started,callouts,calm,A prompt EdgeTX can play by name.,plane quad
+SOUNDS/en/rthstp.wav,Return to home stopped,callouts,calm,A prompt EdgeTX can play by name.,plane quad
+SOUNDS/en/wpnstr.wav,Waypoint navigation started,callouts,calm,A prompt EdgeTX can play by name.,plane quad
+SOUNDS/en/wpnstp.wav,Waypoint navigation stopped,callouts,calm,A prompt EdgeTX can play by name.,plane quad
+SOUNDS/en/crshon.wav,Course hold active,callouts,calm,A prompt EdgeTX can play by name.,plane quad
+SOUNDS/en/crshof.wav,Course hold off,callouts,calm,A prompt EdgeTX can play by name.,plane quad
+SOUNDS/en/poshon.wav,Position hold active,callouts,calm,A prompt EdgeTX can play by name.,plane quad
+SOUNDS/en/poshof.wav,Position hold off,callouts,calm,A prompt EdgeTX can play by name.,plane quad
+SOUNDS/en/althon.wav,Altitude hold active,callouts,calm,A prompt EdgeTX can play by name.,plane quad
+SOUNDS/en/althof.wav,Altitude hold off,callouts,calm,A prompt EdgeTX can play by name.,plane quad
+SOUNDS/en/loiter.wav,Loiter,callouts,calm,A prompt EdgeTX can play by name.,plane quad
+SOUNDS/en/sftyon.wav,Safety on,callouts,calm,A prompt EdgeTX can play by name.,quad
+SOUNDS/en/sftyof.wav,Safety off,callouts,calm,A prompt EdgeTX can play by name.,quad
+SOUNDS/en/safeon.wav,SAFE on,callouts,calm,A prompt EdgeTX can play by name.,quad
+SOUNDS/en/safeof.wav,SAFE off,callouts,calm,A prompt EdgeTX can play by name.,quad
+SOUNDS/en/fepact.wav,Flight envelope protection active,callouts,calm,A prompt EdgeTX can play by name.,
+SOUNDS/en/fepoff.wav,Flight envelope protection off,callouts,calm,A prompt EdgeTX can play by name.,
+SOUNDS/en/timrs1.wav,Timer one reset,callouts,calm,A prompt EdgeTX can play by name.,car glider heli plane quad
+SOUNDS/en/timrs2.wav,Timer two reset,callouts,calm,A prompt EdgeTX can play by name.,car glider heli plane quad
+SOUNDS/en/timrs3.wav,Timer three reset,callouts,calm,A prompt EdgeTX can play by name.,car glider heli plane quad
+SOUNDS/en/expo1.wav,expo one,callouts,calm,A prompt EdgeTX can play by name.,car heli quad
+SOUNDS/en/expo2.wav,expo two,callouts,calm,A prompt EdgeTX can play by name.,car heli quad
+SOUNDS/en/expo3.wav,expo three,callouts,calm,A prompt EdgeTX can play by name.,car heli quad
+SOUNDS/en/active.wav,active,callouts,calm,A prompt EdgeTX can play by name.,
+SOUNDS/en/deact.wav,Deactivated,callouts,calm,A prompt EdgeTX can play by name.,
+SOUNDS/en/enabl.wav,enabled,callouts,calm,A prompt EdgeTX can play by name.,
+SOUNDS/en/disabl.wav,disabled,callouts,calm,A prompt EdgeTX can play by name.,
+SOUNDS/en/good.wav,good,callouts,calm,A prompt EdgeTX can play by name.,
+SOUNDS/en/bad.wav,bad,callouts,alert,A prompt EdgeTX can play by name.,
+SOUNDS/en/normal.wav,Normal,callouts,calm,The normal flight mode.,
+SOUNDS/en/warnng.wav,warning,callouts,alert,A prompt EdgeTX can play by name.,
+SOUNDS/en/danger.wav,danger,callouts,alert,A prompt EdgeTX can play by name.,
+SOUNDS/en/ready.wav,ready,callouts,calm,A prompt EdgeTX can play by name.,
+SOUNDS/en/homrst.wav,Home reset,callouts,calm,A prompt EdgeTX can play by name.,glider plane quad
+SOUNDS/en/gps.wav,GPS,callouts,calm,A prompt EdgeTX can play by name.,glider plane quad
+SOUNDS/en/gpson.wav,GPS on,callouts,calm,A prompt EdgeTX can play by name.,glider plane quad
+SOUNDS/en/gpsoff.wav,GPS off,callouts,calm,A prompt EdgeTX can play by name.,glider plane quad
+SOUNDS/en/vtxfr1.wav,VTX Frequency R1,callouts,calm,A prompt EdgeTX can play by name.,quad
+SOUNDS/en/vtxfr2.wav,VTX Frequency R2,callouts,calm,A prompt EdgeTX can play by name.,quad
+SOUNDS/en/vtxfr3.wav,VTX Frequency R3,callouts,calm,A prompt EdgeTX can play by name.,quad
+SOUNDS/en/vtxfr4.wav,VTX Frequency R4,callouts,calm,A prompt EdgeTX can play by name.,quad
+SOUNDS/en/vtxfr5.wav,VTX Frequency R5,callouts,calm,A prompt EdgeTX can play by name.,quad
+SOUNDS/en/vtxfr6.wav,VTX Frequency R6,callouts,calm,A prompt EdgeTX can play by name.,quad
+SOUNDS/en/vtxfr7.wav,VTX Frequency R7,callouts,calm,A prompt EdgeTX can play by name.,quad
+SOUNDS/en/vtxfr8.wav,VTX Frequency R8,callouts,calm,A prompt EdgeTX can play by name.,quad
+SOUNDS/en/vtxmax.wav,VTX maximum power,callouts,alert,The video transmitter runs at full power.,quad
+SOUNDS/en/blkers.wav,Blackbox erase,callouts,calm,A prompt EdgeTX can play by name.,quad
+SOUNDS/en/actnmd.wav,Acro trainer mode,callouts,calm,A prompt EdgeTX can play by name.,quad
+SOUNDS/en/cwifi.wav,Camera wifi button,callouts,calm,A prompt EdgeTX can play by name.,quad
+SOUNDS/en/cpower.wav,Camera power button,callouts,calm,A prompt EdgeTX can play by name.,quad
+SOUNDS/en/cmode.wav,Camera change mode,callouts,calm,A prompt EdgeTX can play by name.,quad
+SOUNDS/en/cstart.wav,Camera start,callouts,calm,A prompt EdgeTX can play by name.,quad
+SOUNDS/en/cstop.wav,Camera stop,callouts,calm,A prompt EdgeTX can play by name.,quad
+SOUNDS/en/recsrt.wav,Recording started,callouts,calm,Recording started.,quad
+SOUNDS/en/recstp.wav,Recording stopped,callouts,calm,Recording stopped.,quad
+SOUNDS/en/strtrc.wav,Start recording,callouts,calm,A prompt EdgeTX can play by name.,quad
+SOUNDS/en/stoprc.wav,Stop recording,callouts,calm,A prompt EdgeTX can play by name.,quad
+SOUNDS/en/revthr.wav,Reverse Thrust,callouts,calm,A prompt EdgeTX can play by name.,car plane
+SOUNDS/en/revon.wav,Reverse Thrust On,callouts,calm,A prompt EdgeTX can play by name.,car plane
+SOUNDS/en/revoff.wav,Reverse Thrust Off,callouts,calm,A prompt EdgeTX can play by name.,car plane
+SOUNDS/en/revid.wav,Reverse Thrust Idle,callouts,calm,A prompt EdgeTX can play by name.,car plane
+SOUNDS/en/revfwd.wav,Forward Thrust,callouts,calm,A prompt EdgeTX can play by name.,car plane
+SOUNDS/en/lvlmod.wav,Level mode,callouts,calm,A prompt EdgeTX can play by name.,heli
+SOUNDS/en/difloc.wav,Diffs locked,callouts,calm,A prompt EdgeTX can play by name.,car
+SOUNDS/en/difulc.wav,Diffs unlocked,callouts,alert,A prompt EdgeTX can play by name.,car
+SOUNDS/en/engsrt.wav,Engine start,callouts,calm,A prompt EdgeTX can play by name.,glider heli plane
+SOUNDS/en/engstp.wav,Engine stop,callouts,calm,A prompt EdgeTX can play by name.,glider heli plane
+SOUNDS/en/engon.wav,Engine on,callouts,calm,The engine runs.,glider heli plane
+SOUNDS/en/turnon.wav,Turn signals on,callouts,calm,A prompt EdgeTX can play by name.,car
+SOUNDS/en/turnof.wav,Turn signals off,callouts,calm,A prompt EdgeTX can play by name.,car
+SOUNDS/en/highgr.wav,High gear,callouts,calm,A prompt EdgeTX can play by name.,car
+SOUNDS/en/lowgr.wav,Low gear,callouts,alert,A prompt EdgeTX can play by name.,car
+SOUNDS/en/digmod.wav,Dig mode,callouts,calm,A prompt EdgeTX can play by name.,car
+SOUNDS/en/2wd.wav,Two wheel drive,callouts,calm,A prompt EdgeTX can play by name.,car
+SOUNDS/en/4wd.wav,Four wheel drive,callouts,calm,A prompt EdgeTX can play by name.,car
+SOUNDS/en/wchin.wav,Winch in,callouts,calm,A prompt EdgeTX can play by name.,car glider
+SOUNDS/en/wchout.wav,Winch out,callouts,calm,A prompt EdgeTX can play by name.,car glider
+SOUNDS/en/str-f.wav,Front Steer,callouts,calm,A prompt EdgeTX can play by name.,car
+SOUNDS/en/str-r.wav,Rear Steer,callouts,calm,A prompt EdgeTX can play by name.,car
+SOUNDS/en/str-4w.wav,Four Wheel Steer,callouts,calm,A prompt EdgeTX can play by name.,car
+SOUNDS/en/str-mr.wav,Mirror Steer,callouts,calm,A prompt EdgeTX can play by name.,car
+SOUNDS/en/str-cr.wav,Crab Steer,callouts,calm,A prompt EdgeTX can play by name.,car
+SOUNDS/en/motarm.wav,Motor armed,callouts,calm,A prompt EdgeTX can play by name.,car heli
+SOUNDS/en/power.wav,Power,callouts,calm,A prompt EdgeTX can play by name.,
+SOUNDS/en/speed.wav,Speed,callouts,calm,A prompt EdgeTX can play by name.,
+SOUNDS/en/therml.wav,Thermal,callouts,calm,A prompt EdgeTX can play by name.,glider plane
+SOUNDS/en/fwd.wav,Front wheel drive,callouts,calm,A prompt EdgeTX can play by name.,car
+SOUNDS/en/rwd.wav,Rear wheel drive,callouts,calm,A prompt EdgeTX can play by name.,car
+SOUNDS/en/awd.wav,All wheel drive,callouts,calm,A prompt EdgeTX can play by name.,car
+SOUNDS/en/thren.wav,Throttle enabled,callouts,calm,A prompt EdgeTX can play by name.,car
+SOUNDS/en/thrdis.wav,Throttle disabled,callouts,calm,A prompt EdgeTX can play by name.,car
+SOUNDS/en/wchen.wav,Winch enabled,callouts,calm,A prompt EdgeTX can play by name.,car glider
+SOUNDS/en/wchdis.wav,Winch disabled,callouts,calm,A prompt EdgeTX can play by name.,car glider
+SOUNDS/en/drifon.wav,Drift mode on,callouts,calm,A prompt EdgeTX can play by name.,car
+SOUNDS/en/drifof.wav,Drift mode off,callouts,calm,A prompt EdgeTX can play by name.,car
+SOUNDS/en/gyroon.wav,Gyro enabled,callouts,calm,A prompt EdgeTX can play by name.,car
+SOUNDS/en/gyroof.wav,Gyro disabled,callouts,calm,A prompt EdgeTX can play by name.,car
+SOUNDS/en/launch.wav,Launch control active,callouts,calm,A prompt EdgeTX can play by name.,car
+SOUNDS/en/wetmde.wav,Wet mode enabled,callouts,calm,A prompt EdgeTX can play by name.,car
+SOUNDS/en/maxgyr.wav,Max gyro,callouts,calm,A prompt EdgeTX can play by name.,car
+SOUNDS/en/maxast.wav,Max assistance,callouts,calm,A prompt EdgeTX can play by name.,car
+SOUNDS/en/overht.wav,Overheating,callouts,alert,A prompt EdgeTX can play by name.,car heli
+SOUNDS/en/mothot.wav,Motor overheating,callouts,alert,A prompt EdgeTX can play by name.,car heli
+SOUNDS/en/drifen.wav,Drift Mode Enabled,callouts,calm,A prompt EdgeTX can play by name.,car
+SOUNDS/en/drifdb.wav,Drift Mode Disabled,callouts,calm,A prompt EdgeTX can play by name.,car
+SOUNDS/en/screns.wav,Screenshot,callouts,calm,A prompt EdgeTX can play by name.,car quad
+SOUNDS/en/cell.wav,Cell,callouts,calm,A prompt EdgeTX can play by name.,
+SOUNDS/en/txbatl.wav,Transmitter Battery Low,callouts,alert,A prompt EdgeTX can play by name.,
+SOUNDS/en/left.wav,left,callouts,calm,A prompt EdgeTX can play by name.,
+SOUNDS/en/right.wav,right,callouts,calm,A prompt EdgeTX can play by name.,
+SOUNDS/en/shift.wav,Shift,callouts,calm,A prompt EdgeTX can play by name.,car
+SOUNDS/en/sbcton.wav,Stability Control On,callouts,calm,A prompt EdgeTX can play by name.,car
+SOUNDS/en/sbctof.wav,Stability Control Off,callouts,calm,A prompt EdgeTX can play by name.,car
+SOUNDS/en/sbcten.wav,Stability Control Enabled,callouts,calm,A prompt EdgeTX can play by name.,car
+SOUNDS/en/sbctdb.wav,Stability Control Disabled,callouts,calm,A prompt EdgeTX can play by name.,car
+SOUNDS/en/thmwrn.wav,Thermal Warning,callouts,alert,A prompt EdgeTX can play by name.,car
+SOUNDS/en/srvovl.wav,Servo Overload,callouts,alert,A prompt EdgeTX can play by name.,car heli
+SOUNDS/en/becovl.wav,Receiver power overload,callouts,alert,A prompt EdgeTX can play by name.,car heli
+SOUNDS/en/sbct.wav,Stability Control,callouts,calm,A prompt EdgeTX can play by name.,car
+SOUNDS/en/sbctst.wav,Stability Control Standard,callouts,calm,A prompt EdgeTX can play by name.,car
+SOUNDS/en/gyro.wav,Gyro,callouts,calm,A prompt EdgeTX can play by name.,car
+SOUNDS/en/low.wav,low,callouts,calm,A prompt EdgeTX can play by name.,
+SOUNDS/en/medium.wav,medium,callouts,calm,A prompt EdgeTX can play by name.,
+SOUNDS/en/high.wav,high,callouts,calm,A prompt EdgeTX can play by name.,
+SOUNDS/en/stanrd.wav,Standard,callouts,calm,A prompt EdgeTX can play by name.,car
+SOUNDS/en/bashmd.wav,Bash Mode,callouts,calm,A prompt EdgeTX can play by name.,car
+SOUNDS/en/racemd.wav,Race Mode,callouts,calm,A prompt EdgeTX can play by name.,car
+SOUNDS/en/chilmd.wav,Chill Mode,callouts,calm,A prompt EdgeTX can play by name.,car
+SOUNDS/en/trnmd.wav,Trainer Mode,callouts,calm,A prompt EdgeTX can play by name.,car
+SOUNDS/en/spdmd.wav,Speed Mode,callouts,calm,A prompt EdgeTX can play by name.,car
+SOUNDS/en/citymd.wav,City Mode,callouts,calm,A prompt EdgeTX can play by name.,car
+SOUNDS/en/crusmd.wav,Cruise Mode,callouts,calm,A prompt EdgeTX can play by name.,car
+SOUNDS/en/flapmd.wav,Flaps takeoff,callouts,calm,The flaps are in the takeoff position.,glider plane
+SOUNDS/en/flapfl.wav,Flaps landing,callouts,calm,The flaps are in the landing position.,glider plane
+SOUNDS/en/moton.wav,Motor on,callouts,calm,The motor runs.,car glider heli
+SOUNDS/en/motoff.wav,Motor off,callouts,calm,The motor is off.,car glider heli
+SOUNDS/en/motidl.wav,Motor Idle,callouts,calm,A prompt EdgeTX can play by name.,car glider heli
+SOUNDS/en/autor.wav,Autorotation,callouts,alert,The autorotation flight mode.,heli
+SOUNDS/en/reson.wav,Rescue On,callouts,calm,A prompt EdgeTX can play by name.,heli
+SOUNDS/en/htemp.wav,High Temperature,callouts,alert,A prompt EdgeTX can play by name.,car heli
+SOUNDS/en/hvibr.wav,High Vibration,callouts,alert,A prompt EdgeTX can play by name.,car heli
+SOUNDS/en/glwon.wav,Glow On,callouts,calm,A prompt EdgeTX can play by name.,heli
+SOUNDS/en/glwoff.wav,Glow Off,callouts,calm,A prompt EdgeTX can play by name.,heli
+SOUNDS/en/glwact.wav,Glow Activated,callouts,calm,A prompt EdgeTX can play by name.,heli
+SOUNDS/en/glwdea.wav,Glow Deactivated,callouts,calm,A prompt EdgeTX can play by name.,heli
+SOUNDS/en/trkmd.wav,Track Mode,callouts,calm,A prompt EdgeTX can play by name.,heli
+SOUNDS/en/dbrk.wav,Drag brake,callouts,calm,A prompt EdgeTX can play by name.,glider plane
+SOUNDS/en/dbrkon.wav,Drag brake on,callouts,calm,A prompt EdgeTX can play by name.,glider plane
+SOUNDS/en/dbrkof.wav,Drag brake off,callouts,calm,A prompt EdgeTX can play by name.,glider plane
+SOUNDS/en/dbrklw.wav,Drag brake Low,callouts,alert,A prompt EdgeTX can play by name.,glider plane
+SOUNDS/en/dbrkmd.wav,Drag brake Medium,callouts,calm,A prompt EdgeTX can play by name.,glider plane
+SOUNDS/en/dbrkhi.wav,Drag brake High,callouts,calm,A prompt EdgeTX can play by name.,glider plane
+SOUNDS/en/snapfon.wav,Snapflap On,callouts,calm,A prompt EdgeTX can play by name.,glider plane
+SOUNDS/en/snapfof.wav,Snapflap Off,callouts,calm,A prompt EdgeTX can play by name.,glider plane
+SOUNDS/en/snapflo.wav,Snapflap Low,callouts,alert,A prompt EdgeTX can play by name.,glider plane
+SOUNDS/en/snapfhi.wav,Snapflap High,callouts,calm,A prompt EdgeTX can play by name.,glider plane
+SOUNDS/en/autotun.wav,Auto tune,callouts,calm,A prompt EdgeTX can play by name.,glider heli plane
+SOUNDS/en/alvltrim.wav,Auto level trim,callouts,calm,A prompt EdgeTX can play by name.,glider heli plane
+SOUNDS/en/srvatrim.wav,Servo auto trim,callouts,calm,A prompt EdgeTX can play by name.,glider heli plane
+SOUNDS/en/open.wav,Open,callouts,calm,A prompt EdgeTX can play by name.,
+SOUNDS/en/close.wav,Close,callouts,calm,A prompt EdgeTX can play by name.,
+SOUNDS/en/locked.wav,Locked,callouts,calm,A prompt EdgeTX can play by name.,glider heli plane
+SOUNDS/en/unlckd.wav,Unlocked,callouts,alert,A prompt EdgeTX can play by name.,glider heli plane
+SOUNDS/en/canopy.wav,Canopy,callouts,calm,A prompt EdgeTX can play by name.,glider heli plane
+SOUNDS/en/bind.wav,bind,callouts,calm,A prompt EdgeTX can play by name.,
+SOUNDS/en/vgext.wav,Wings extending,callouts,calm,A prompt EdgeTX can play by name.,glider plane
+SOUNDS/en/vgextd.wav,Wings extended,callouts,calm,A prompt EdgeTX can play by name.,glider plane
+SOUNDS/en/vgfold.wav,Wings folding,callouts,calm,A prompt EdgeTX can play by name.,glider plane
+SOUNDS/en/vgfldd.wav,Wings folded,callouts,calm,A prompt EdgeTX can play by name.,glider plane

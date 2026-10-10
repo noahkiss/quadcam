@@ -1,21 +1,11 @@
 path,text,group,tone,why
-SOUNDS/en/armed.wav,Armed,callouts,calm,Motors can spin. Plays when the model arms.
-SOUNDS/en/disarm.wav,Disarmed,callouts,calm,Motors are off. Plays when the model disarms.
-SOUNDS/en/gearup.wav,Gear up,callouts,calm,The landing gear is up.
-SOUNDS/en/geardn.wav,Gear down,callouts,calm,The landing gear is down.
-SOUNDS/en/flapup.wav,Flaps up,callouts,calm,The flaps are up.
-SOUNDS/en/flapmd.wav,Flaps takeoff,callouts,calm,The flaps are in the takeoff position.
-SOUNDS/en/flapfl.wav,Flaps landing,callouts,calm,The flaps are in the landing position.
-SOUNDS/en/brakon.wav,Brake on,callouts,calm,The brake is on.
-SOUNDS/en/brakof.wav,Brake off,callouts,calm,The brake is off.
-SOUNDS/en/splrup.wav,Spoilers up,callouts,calm,The spoilers are out.
-SOUNDS/en/splrdn.wav,Spoilers down,callouts,calm,The spoilers are in.
-SOUNDS/en/engon.wav,Engine on,callouts,calm,The engine runs.
-SOUNDS/en/engoff.wav,Engine off,callouts,calm,The engine is off.
 SOUNDS/en/stall.wav,Stall,callouts,alert,The plane is about to stall.
-SOUNDS/en/lnding.wav,Landing,callouts,calm,The landing flight mode.
-SOUNDS/en/cruise.wav,Cruise,callouts,calm,The cruise flight mode.
-SOUNDS/en/lowbat.wav,Battery low,callouts,alert,The pack voltage is under the first warning level.
 SOUNDS/en/critbat.wav,Battery critical,callouts,alert,The pack voltage is under the last level: land now.
-SOUNDS/en/rth.wav,Return to home,callouts,alert,The plane flies home by itself.
 SOUNDS/en/timer1.wav,Timer one,callouts,calm,Timer one reached its time.
+SOUNDS/en/airspdl.wav,Airspeed low,callouts,alert,The airspeed is under the warning level.
+SOUNDS/en/gearuns.wav,Gear unsafe,callouts,alert,The gear is not down for landing.
+SOUNDS/en/lndlton.wav,Landing lights on,callouts,calm,The landing lights are on.
+SOUNDS/en/lndltof.wav,Landing lights off,callouts,calm,The landing lights are off.
+SOUNDS/en/rotate.wav,Rotate,callouts,calm,The speed for lift-off.
+SOUNDS/en/trmtkof.wav,Takeoff trim,callouts,calm,The trim for take-off is set.
+SOUNDS/en/fuellow.wav,Fuel low,callouts,alert,The fuel level is low.
