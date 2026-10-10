@@ -8,6 +8,8 @@ cli.arg gear backup diff [B]
 cli.arg gear backup pin <ID>
 cli.arg gear backup show <ID>
 cli.arg gear backup show [PATH]
+cli.arg gear blackbox export <DIR>
+cli.arg gear blackbox export <ID>
 cli.arg gear card-mount <DEVICE>
 cli.arg gear card-unmount <DEVICE>
 cli.arg gear crashes delete <ID>
@@ -78,6 +80,11 @@ cli.command gear backup diff
 cli.command gear backup pin
 cli.command gear backup show
 cli.command gear backups
+cli.command gear blackbox
+cli.command gear blackbox erase
+cli.command gear blackbox export
+cli.command gear blackbox list
+cli.command gear blackbox pull
 cli.command gear card
 cli.command gear card preview
 cli.command gear card-check
@@ -227,6 +234,14 @@ cli.flag gear backup --port VALUE
 cli.flag gear backup diff --path VALUE
 cli.flag gear backup pin --off
 cli.flag gear backups --device VALUE
+cli.flag gear blackbox erase --port VALUE
+cli.flag gear blackbox erase --yes
+cli.flag gear blackbox export --split
+cli.flag gear blackbox list --device VALUE
+cli.flag gear blackbox pull --force
+cli.flag gear blackbox pull --keep
+cli.flag gear blackbox pull --mode VALUE
+cli.flag gear blackbox pull --port VALUE
 cli.flag gear card --device VALUE
 cli.flag gear card --model VALUE
 cli.flag gear card --mount VALUE

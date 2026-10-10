@@ -417,7 +417,13 @@ pub struct SettingsValues {
     /// Gear: minutes an FC may run on USB power before a warning; 0 for none (default 20).
     #[schemars(range(min = 0, max = 240), extend("x-nullable" = true))]
     pub gear_usb_minutes: Option<u64>,
-    /// Gear: per device kind (fc, radio, elrs_tx, elrs_rx, goggles, dvr_card), the steps that run when it is plugged in: backup, import, apply_ready. Only backup is on by default.
+    /// Gear: erase an FC's blackbox flash after a pull verified (default false, like delete_clips_after_import).
+    #[schemars(extend("x-nullable" = true))]
+    pub gear_erase_blackbox: Option<bool>,
+    /// Gear: try the FC's USB disk mode before MSP for a blackbox pull (default false; unproven on real FCs).
+    #[schemars(extend("x-nullable" = true))]
+    pub gear_blackbox_msc: Option<bool>,
+    /// Gear: per device kind (fc, radio, elrs_tx, elrs_rx, goggles, dvr_card), the steps that run when it is plugged in: backup, import, apply_ready, blackbox. Only backup is on by default.
     #[schemars(extend("x-nullable" = true))]
     pub gear_on_connect: Option<std::collections::BTreeMap<String, Vec<String>>>,
     /// Gear: cues, one per job at its end. mute; channels speech, sound, notification; cues safe_to_unplug, still_inserted, step_failed; debounce_s; the reminder reminder_grace_s, still_inserted_every_s, reminder_max; quiet_hours {start, end} (HH:MM, no speech or sound); voice (a say voice name).

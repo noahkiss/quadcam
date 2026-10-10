@@ -952,7 +952,7 @@ its rows in `api`, CLI and MCP.
 | S8 | Worlds | The five worlds, the asset manifest and its check, world modules, the box-room builder | S7 | 3 |
 | S9 | Audio | The Rust synth, beeps, the swish option | S1 | 2 |
 | S10 | Polish | Settings clean-up across hosts, session summary, MCP and CLI completeness, `docs/sim.md` complete | S5, S7 | 3 |
-| BB | Blackbox pull and reader | Task outside the sim: pull on connect, verify, erase (a setting), QuadCam's own decoder | WP2, WP4 | 2 |
+| BB | Blackbox pull and reader | Task outside the sim: pull on connect, verify, erase (a setting), QuadCam's own decoder. The pull, verify, store and erase are built (gear-design 7.12); the decoder is not | WP2, WP4 | 2 |
 
 **Phase 1** (fly through a minimal renderer): S1, S2, S4, S5. Profiles start from the built-in
 presets with the example fits (6.3) entered by hand.

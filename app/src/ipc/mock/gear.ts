@@ -23,6 +23,8 @@ export function gearDefaults(): GearSettings {
     usb_minutes: 20,
     firmware_check: "manual",
     tts_provider: "say",
+    erase_blackbox: false,
+    blackbox_msc: false,
     on_connect: Object.fromEntries(KINDS.map((k) => [k, ["backup"]])),
     cues: {
       mute: false,
@@ -53,6 +55,8 @@ export function gearSettings(values: Record<string, unknown>): GearSettings {
   if (v.gearKeepWeeks != null) s.keep_weeks = v.gearKeepWeeks;
   if (v.gearKeepMonthly != null) s.keep_monthly = v.gearKeepMonthly;
   if (v.gearUsbMinutes != null) s.usb_minutes = v.gearUsbMinutes;
+  if (v.gearEraseBlackbox != null) s.erase_blackbox = v.gearEraseBlackbox;
+  if (v.gearBlackboxMsc != null) s.blackbox_msc = v.gearBlackboxMsc;
   if (v.gearOnConnect != null) s.on_connect = { ...s.on_connect, ...(v.gearOnConnect as object) };
   if (v.gearCues != null) s.cues = { ...s.cues, ...(v.gearCues as object) };
   return s;

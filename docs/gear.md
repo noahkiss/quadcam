@@ -137,6 +137,69 @@ At the limit it says "Unplug <FC> now." once, and the device shows the time left
 the `gear_usb_minutes` setting (20), or the board's own limit when it is shorter (10 minutes for
 the boards above). `gear_usb_minutes` 0 turns the timer off. Pulling the battery resets it.
 
+## Blackbox
+
+An FC with a flash chip logs its flights to it. When the flash is full, Betaflight stops logging, so
+the next flights leave no log. QuadCam pulls the logs off the flash and, if you allow it, erases
+the flash afterwards.
+
+**Pull.** **Pull blackbox** on the FC's **Blackbox** segment (also `gear blackbox pull`, and the
+on-connect step below) does this in one job:
+
+1. Reads the flash summary over MSP: size, bytes used, ready.
+2. Reads only the used bytes, 4 KB at a time, with the compression flag off. MSP gives about
+   84 KB/s, so a full 16 MB flash takes about 3.3 minutes. A chunk that fails is asked again
+   twice; a plug pulled mid-read fails the job.
+3. Checks the image. Its size must equal the used bytes, it must start with a log header, and
+   each log needs a firmware line. QuadCam counts the logs and reads the firmware, the craft
+   name and the log date from the headers.
+4. Stores the image in the gear folder's blob store and reads it back. A record in
+   `<gear>/blackbox/<device>/` ties it to the FC, its aircraft and the day, and names the logs.
+   A pull of the same bytes as the last one adds no second record.
+5. Erases the flash only if all of the above passed and the **Erase blackbox after download**
+   setting (`gear_erase_blackbox`) is on. It waits until the flash reads ready with 0 bytes used.
+   A flash that grew since the read is not erased.
+
+"Done, safe to unplug." plays after step 5 ends, not before. If the erase does not finish, the job
+fails, the pull stays stored, and the record says why.
+
+`gear_erase_blackbox` is off by default, like `delete_clips_after_import`. The CLI and the MCP tools
+only respect it: `--keep` (CLI) and `keep` (MCP) skip the erase for one run, and nothing turns it on
+except the setting. **Erase flash** (`gear blackbox erase --yes`, `blackbox_erase`) erases by hand.
+It needs a stored pull of exactly what the flash holds (the same used size; flash only grows), and
+asks first in the app.
+
+**USB heat.** A quad on USB with its battery in heats up. When the timer (see
+[Flight controllers](#flight-controllers)) shows less time left than the read needs, the pull is
+refused ("USB heat") and reads nothing; unplug the battery, or force the pull. A forced pull still
+never starts an erase it could not finish: the erase estimate (4 s per MiB, 20 to 120 s) plus 10 s
+must fit in the time left, else the erase is skipped and the answer says so. With no battery in,
+there is no timer.
+
+**Other programs and Pause reads.** A pull refuses a port another program has open. The on-connect
+step skips a port whose reads you paused; a pull you start yourself still runs.
+
+**Steps on connect.** `blackbox` is a step in `gear_on_connect` for FCs. It is off until you tick
+**Pull blackbox** for FC in Settings > Gear (or list `blackbox` in `gear_on_connect.fc`).
+
+**Dates and flights.** A flight controller has no clock, so its logs read `0000-01-01`. QuadCam
+dates a pull by the day it ran. If the FC is linked to an aircraft (Overview, or `gear devices
+save --aircraft`), the Blackbox segment pairs the pull's logs with that aircraft's flights from the
+radio logs **by order**, newest log with newest flight, since the previous erased pull. This is a
+guess and the segment says so. Logs under 32 KB (test arms) are skipped. Pairs whose size per
+second of flight differ from the others by more than 2 times are marked "size does not fit". QuadCam
+does not decode the flight data yet.
+
+**USB disk mode (not proven).** With `gear_blackbox_msc` on, a pull first tries the FC's USB mass
+storage mode: it enters the CLI, checks that `help` lists `msc`, sends `msc`, copies the `.bbl` files
+from the new disk in name order, unmounts it, and waits for the FC to come back. It falls back to
+MSP when the FC has no `msc`. This path is built and tested on a simulated FC only. **It needs a trial
+on a real FC**: the disk's file layout, the speed, and whether the FC returns to serial after the
+eject are unknown. The estimate for the heat check stays the MSP one.
+
+**Export.** `gear blackbox export <id> DIR [--split]` writes the image as `.bbl`, and with `--split`
+each log as its own file. It never overwrites.
+
 ## Saved devices
 
 QuadCam keeps the devices you name in `gear.json`, in the gear folder:
@@ -402,7 +465,7 @@ QuadCam posts through `osascript`.
 ## Steps on connect
 
 The `gear_on_connect` setting names the steps that run when a device of each kind is plugged in:
-`backup`, `import` and `apply_ready`. Only `backup` is on by default, and only while
+`backup`, `import`, `apply_ready` and `blackbox` (FCs only; see [Blackbox](#blackbox)). Only `backup` is on by default, and only while
 `gear_auto_backup` is on. `backup` runs two steps: **Card check** (a card QuadCam knows) and
 **Backup** (a radio card or an FC). `import` is accepted in the setting and does nothing yet. `apply_ready` is described
 under [Apply on connect](#apply-on-connect).
@@ -1067,6 +1130,10 @@ quadcam-cli --json gear fc check STEM.diff_all.txt expected.cli  # offline: line
 quadcam-cli --json gear fc notes [--board B] [--version V]       # known issues
 quadcam-cli --json gear fc pause|resume [--port ...]                 # pause the running app's FC reads
 quadcam-cli --json gear fc usb                                   # USB timers
+quadcam-cli --json gear blackbox pull [--port P] [--keep] [--mode auto|msp|msc] [--force]   # read, verify, store; erase if the setting allows
+quadcam-cli --json gear blackbox list [--device ID]              # stored pulls with their guessed flights
+quadcam-cli --json gear blackbox export <pull> DIR [--split]     # .bbl files
+quadcam-cli --json gear blackbox erase [--port P] --yes      # erase the flash; needs a stored pull of it
 quadcam-cli gear osd quad.dump_all.txt --text        # each OSD profile drawn, and the check
 quadcam-cli --json gear osd quad.dump_all.txt apply.cli --grid PAL
 quadcam-cli --json gear osd <fc> --staged                    # the layout with its staged OSD edits on top
@@ -1161,3 +1228,13 @@ A process started by cargo never reaches real gear:
 Card unmounts (`diskutil unmountDisk`) follow `QUADCAM_SERIAL`, and so does the list of DFU
 devices. The firmware tests serve releases from memory and flash a fake DFU device. Tests use the synthetic card
 (`gear::edgetx::synth`) in a temporary folder.
+
+**Blackbox: tested on a simulated FC only.** The tests drive `FakeFc` with a flash image. These need a
+trial on a real FC before you trust them:
+
+- The MSP flash messages on a real board: the summary flags, the 4 KB read, and that a reply is never
+  compressed when the flag is off.
+- How long a real erase takes, against the 4 s per MiB estimate behind the heat check.
+- USB disk mode (`gear_blackbox_msc`): the disk's file names and layout, its speed, and whether the FC
+  returns to serial after the disk is released.
+- Pairing logs with flights by order, on days with test arms and missed flights.

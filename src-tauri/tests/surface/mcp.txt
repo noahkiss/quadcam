@@ -3,6 +3,7 @@ mcp.action quadcam_gear.apply_plan
 mcp.action quadcam_gear.backup_diff
 mcp.action quadcam_gear.backup_read
 mcp.action quadcam_gear.backups
+mcp.action quadcam_gear.blackbox
 mcp.action quadcam_gear.board_notes
 mcp.action quadcam_gear.card
 mcp.action quadcam_gear.card_checks
@@ -39,12 +40,15 @@ mcp.action quadcam_gear.voice_catalog
 mcp.action quadcam_gear.voice_estimate
 mcp.action quadcam_gear.voice_sets
 mcp.action quadcam_gear_apply.apply
+mcp.action quadcam_gear_apply.blackbox_erase
+mcp.action quadcam_gear_apply.blackbox_pull
 mcp.action quadcam_gear_apply.card_repair
 mcp.action quadcam_gear_apply.flash
 mcp.action quadcam_gear_apply.sim_restore
 mcp.action quadcam_gear_apply.sim_sync
 mcp.action quadcam_gear_edit.backup
 mcp.action quadcam_gear_edit.backup_pin
+mcp.action quadcam_gear_edit.blackbox_export
 mcp.action quadcam_gear_edit.card_check
 mcp.action quadcam_gear_edit.card_clean
 mcp.action quadcam_gear_edit.card_mount
@@ -170,9 +174,12 @@ mcp.param quadcam_gear_apply.change string
 mcp.param quadcam_gear_apply.confirm boolean
 mcp.param quadcam_gear_apply.device string
 mcp.param quadcam_gear_apply.digest string
+mcp.param quadcam_gear_apply.force boolean
 mcp.param quadcam_gear_apply.id string
 mcp.param quadcam_gear_apply.image string
 mcp.param quadcam_gear_apply.invert boolean
+mcp.param quadcam_gear_apply.keep boolean
+mcp.param quadcam_gear_apply.mode string
 mcp.param quadcam_gear_apply.paths array<string>
 mcp.param quadcam_gear_apply.port string
 mcp.param quadcam_gear_apply.rate_profile integer
@@ -241,6 +248,7 @@ mcp.param quadcam_gear_edit.serial string
 mcp.param quadcam_gear_edit.sets array<string>
 mcp.param quadcam_gear_edit.settings array<string>
 mcp.param quadcam_gear_edit.source string
+mcp.param quadcam_gear_edit.split boolean
 mcp.param quadcam_gear_edit.status string
 mcp.param quadcam_gear_edit.storage_v number
 mcp.param quadcam_gear_edit.text string

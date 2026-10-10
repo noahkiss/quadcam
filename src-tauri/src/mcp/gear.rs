@@ -27,7 +27,7 @@ pub const NOTHING_FOUND: &str = "Nothing found. If macOS asked to allow an acces
 #[derive(Debug, Clone, Default, Deserialize, JsonSchema)]
 #[schemars(deny_unknown_fields)]
 pub struct GearArgs {
-    #[schemars(required, extend("enum" = ["status", "devices", "fc_identify", "board_notes", "usb_timers", "osd", "model", "voice", "voice_sets", "voice_catalog", "voice_estimate", "rates", "sims", "card", "card_preview", "storage", "backups", "backup_read", "backup_diff", "card_checks", "flights", "packs", "session_report", "preflight", "crashes", "switch_map", "radio", "sim_calibration", "sim_defaults", "sim_validate", "changes", "apply_plan", "copy_plan", "sim_sync_plan", "sim_restore_plan", "firmware_check", "firmware_read", "splash", "flash_plan"]))]
+    #[schemars(required, extend("enum" = ["status", "devices", "fc_identify", "board_notes", "usb_timers", "osd", "model", "voice", "voice_sets", "voice_catalog", "voice_estimate", "rates", "sims", "card", "card_preview", "storage", "backups", "backup_read", "backup_diff", "card_checks", "blackbox", "flights", "packs", "session_report", "preflight", "crashes", "switch_map", "radio", "sim_calibration", "sim_defaults", "sim_validate", "changes", "apply_plan", "copy_plan", "sim_sync_plan", "sim_restore_plan", "firmware_check", "firmware_read", "splash", "flash_plan"]))]
     pub action: Option<String>,
     /// For firmware_check: false reads the last saved answer without the network; default true (checks now). For flash_plan and splash see image.
     pub check: Option<bool>,
@@ -76,7 +76,7 @@ pub struct GearArgs {
     #[schemars(length(max = 8))]
     pub paths: Option<Vec<String>>,
     /// For osd, rates, sims, switch_map, model and voice: a saved device id instead of files (needs a backup of it). For card and
-    /// card_preview: a connected radio's device id, instead of mount.
+    /// card_preview: a connected radio's device id, instead of mount. For blackbox: one FC's pulls.
     #[schemars(length(max = 80))]
     pub device: Option<String>,
     /// For sims: the quad's rate profile to compare with (0-5); omit for the one in use.
@@ -148,7 +148,7 @@ pub struct GearArgs {
 #[derive(Debug, Clone, Default, Deserialize, JsonSchema)]
 #[schemars(deny_unknown_fields)]
 pub struct GearEditArgs {
-    #[schemars(required, extend("enum" = ["device_save", "device_forget", "fc_read", "backup", "backup_pin", "prune", "export", "import_backups", "card_check", "card_clean", "radio_cli", "dfu_link", "stop", "poll_pause", "flight_set", "flight_folders", "pack_save", "pack_delete", "pack_type_save", "pack_type_delete", "pack_notes", "crash_save", "crash_delete", "report_save", "sim_calibration_save", "stage", "osd_edit", "model_edit", "voice_edit", "voice_render", "voice_sample", "voice_key_delete", "voice_install", "voice_choose", "update", "discard", "restore_stage", "copy_stage", "keep", "revert_stage", "card_mount", "card_unmount"]))]
+    #[schemars(required, extend("enum" = ["device_save", "device_forget", "fc_read", "backup", "backup_pin", "blackbox_export", "prune", "export", "import_backups", "card_check", "card_clean", "radio_cli", "dfu_link", "stop", "poll_pause", "flight_set", "flight_folders", "pack_save", "pack_delete", "pack_type_save", "pack_type_delete", "pack_notes", "crash_save", "crash_delete", "report_save", "sim_calibration_save", "stage", "osd_edit", "model_edit", "voice_edit", "voice_render", "voice_sample", "voice_key_delete", "voice_install", "voice_choose", "update", "discard", "restore_stage", "copy_stage", "keep", "revert_stage", "card_mount", "card_unmount"]))]
     pub action: Option<String>,
     /// For copy_stage: the FC to copy from, a device id (its latest backup) or a backup id.
     #[schemars(length(max = 200))]
@@ -217,10 +217,13 @@ pub struct GearEditArgs {
     /// For fc_read and backup: the FC's serial port from quadcam_gear status; omit when one FC is plugged in.
     #[schemars(length(max = 200))]
     pub port: Option<String>,
+    /// For blackbox_export: also write each log as its own .bbl file.
+    pub split: Option<bool>,
     /// For fc_read: read-only CLI commands (version, status, get NAME, diff all, dump all, diff/dump master|profile|rates|hardware|defaults). Omit for a backup's set: version, status, diff all, dump all.
     #[schemars(length(max = 20))]
     pub commands: Option<Vec<String>>,
     /// For device_save and device_forget: the device id from quadcam_gear status or devices.
+    /// For blackbox_export: the pull id (<device>/<time>) from quadcam_gear blackbox.
     /// For crash_save (to change one) and crash_delete: the crash id.
     #[schemars(length(max = 80))]
     pub id: Option<String>,
@@ -258,7 +261,7 @@ pub struct GearEditArgs {
     pub paused: Option<bool>,
     /// For prune, import_backups and voice_render: report what would happen; change nothing.
     pub dry_run: Option<bool>,
-    /// For export: an existing folder (absolute path) to write the backup folders into.
+    /// For export and blackbox_export: an existing folder (absolute path) to write into.
     /// For report_save: the Markdown file (absolute path) to write; its folder must exist.
     /// For copy_stage: the FC that gets the settings (a device id).
     #[schemars(length(max = 1024))]
@@ -350,7 +353,7 @@ pub struct GearEditArgs {
 #[derive(Debug, Clone, Default, Deserialize, JsonSchema)]
 #[schemars(deny_unknown_fields)]
 pub struct GearApplyArgs {
-    #[schemars(required, extend("enum" = ["card_repair", "apply", "sim_sync", "sim_restore", "flash"]))]
+    #[schemars(required, extend("enum" = ["card_repair", "apply", "sim_sync", "sim_restore", "flash", "blackbox_pull", "blackbox_erase"]))]
     pub action: Option<String>,
     /// For flash: the radio, a saved device id; the version defaults to the one it reports.
     #[schemars(length(max = 120))]
@@ -385,9 +388,16 @@ pub struct GearApplyArgs {
     /// For apply: the staged change id from quadcam_gear changes.
     #[schemars(length(max = 120))]
     pub change: Option<String>,
-    /// For apply: the FC's serial port, when several FCs are plugged in.
+    /// For apply, blackbox_pull and blackbox_erase: the FC's serial port, when several FCs are plugged in.
     #[schemars(length(max = 200))]
     pub port: Option<String>,
+    /// For blackbox_pull: true keeps the FC's flash this run, even when the gear_erase_blackbox setting is on. Nothing here turns the erase on.
+    pub keep: Option<bool>,
+    /// For blackbox_pull: auto (default), msp, or msc (the FC's USB disk mode; unproven on real FCs).
+    #[schemars(length(max = 8))]
+    pub mode: Option<String>,
+    /// For blackbox_pull: pull although the USB heat timer is short. An erase that could not finish still does not start.
+    pub force: Option<bool>,
     /// Must be true.
     pub confirm: Option<bool>,
 }
@@ -399,17 +409,17 @@ pub fn tools() -> Vec<Value> {
     vec![
         tool::<GearArgs>(
             "quadcam_gear",
-            "Read the FPV gear QuadCam knows: `status` (the gear folder, the Gear settings, and the devices plugged in now: EdgeTX radios in USB Storage mode, goggles and DVR cards, FC and ELRS serial ports, radios in DFU mode; each with its saved name and aircraft when QuadCam knows it; and each FC's USB heat timer), `devices` (every device saved in gear.json: id, kind, name, aircraft, board, firmware, version, last seen, last backup), `fc_identify` (reads a Betaflight FC over MSP: board, firmware, version, device id, whether QuadCam may write it, known issues; no reboot), `board_notes` (known issues of FC boards and builds), `usb_timers` (per FC on USB: battery in, minutes on USB, minutes left before \"Unplug now\"), `osd` (a Betaflight OSD layout from `paths`, dump or diff files read in order: each OSD profile drawn on its grid (NTSC 30x13, PAL 30x16, HD 53x20, from vcd_video_system or `grid`), the elements on in each profile with x and y, and the check for overlaps and cells off screen; with a `device` and `staged`, the layout after its staged OSD edits), `model` (a saved radio's model for the editors, from `device` and `model` (model01.yml; default the selected one): timers, value screens, logging and which sensors the log records, RSSI alarms, callouts, the checklist, the sounds a callout can name; read from the mounted card, else the latest backup, with the device's staged model edits on top unless `staged` is false), `voice` (the radio's voice: QuadCam's lines with the text a voice speaks, the installed and available packs, the provider and its readiness, and with a `device` the radio's overrides and chosen voice; `refresh` reads the pack index again), `voice_sets` (the line sets a voice pack can be rendered from, and whether an ElevenLabs key is stored; never the key), `voice_catalog` (the ElevenLabs account's voices, models with USD per 1K characters, the estimated credits a character and the request limit, and credits; `what` picks one; free calls), `voice_estimate` (what rendering `sets` in one ElevenLabs `voice` and `voice_model` as carrier-sentence batches would cost, with the carrier text counted, and whether the credits cover it; makes no paid call), `rates` (an FC's rate profiles from `paths` (dump or diff files), a saved `device`'s latest backup, or a backup `id`: each profile's name and whether it is in use, the rates type, roll, pitch and yaw rc rate, super rate, expo, rate limit, maximum and centre rates in degrees per second, and the throttle curve), `sims` (the sims on this Mac, with the rate profiles QuadCam reads from their files and whether each runs; with `paths`, `device` or `id` for a quad, how each sim profile differs from the quad's rate profile in use, or the one in `rate_profile`), `card` (an EdgeTX SD card: board and version, whether QuadCam may write it, its models, the model the radio selects and that model's aircraft, the radio clock check; with `model`, that model in full) `card_preview` (the checks and line diff of EdgeTX card edits, and how long the write would take; writes nothing), `storage` (the gear folder's size in total and per device: snapshots by kind, logs, blobs only that device uses), `backups` (snapshots newest first, or one `device`'s: id, why it was taken, time, files, size, pinned), `backup_read` (a backup `id`'s file list, or one file's text with `path`), `backup_diff` (what changed from `against`, or the backup before, to `id`: files put and removed, a line diff per text file), `card_checks` (a card `device`'s file-system checks, newest first), `flights` (flights from the radio logs, newest first: hover throttle, sag, resting voltage, mAh, when the pack type's mAh warning was crossed, the worst link, dropouts; each with its aircraft, pack (or a suggested one), place and library clip; filter by `day`, `aircraft`, `pack`, `place`), `packs` (packs with cycles, charge state, resting voltage and a weak mark; pack types with the charging sheet and a suggested mAh warning; the charging notes), `session_report` (one flying day, by default the last import's days: flights, air time, longest flight, worst link, dropouts, pack use, crashes; as Markdown to share), `preflight` (the \"Pack up\" check: packs charged, the radio's model, card space, backups, cards still in the Mac; each pass, warn or unknown) `crashes` (the crash and repair log, by `aircraft` or `clip`), `switch_map` (what each radio control does: per switch, trim or stick position, the channel values in microseconds, the Betaflight modes and adjustments they select, and the radio's logical switches, special functions and timers; from `mount` (an EdgeTX card or model file) and `paths` (the FC's dump or diff), or the latest backups of a saved `device` or of an `aircraft`'s radio and FC; conflicts such as two modes on one range, a switch with no effect, a mode no switch reaches, a sound file the card lacks; with `live`, the position each control is in now), `radio` (the radio in USB Joystick mode now: buttons, axes, channel values), `sim_calibration` (the sim's calibration of a `radio`, or of the one in USB Joystick mode now, matched to a saved radio: the match, or the choices when several saved radios share its model) `sim_defaults` (what the sim pre-fills from an `aircraft`'s radio model and quad modes, or from `mount` and `paths`: stick channels, arm, angle, horizon, turtle and air mode switches, a free reset control, each with its source) `changes` (staged changes waiting to be applied: id, device, title, status, edits; `history` adds applied, failed and discarded ones), `apply_plan` (every check for a staged `change` on an FC or a radio card, its diff and the digest an apply needs; writes nothing, does not reboot the FC, and for an unmounted card mounts it to read and unmounts it again), `copy_plan` (what copying `parts` (rates, pid, osd, modes, adjustments, vtx, features) and named `settings` from the FC `from` (a device id or a backup id) to the FC `to` would stage: compatibility checks, the diff, what is left out and why; writes nothing) `sim_sync_plan` (what writing a quad's rate profile (`paths`, `device` or `id`, and `rate_profile`) into the `sim_targets` would do: every check (a sim that runs, a file shape QuadCam does not understand, a file it cannot rewrite unchanged), warnings (an Actual or Quick quad fitted to Betaflight with its largest gap, a sim without a throttle curve, a file shape not yet seen loading in the game), the values that change per file and the digest `quadcam_gear_apply sim_sync` needs; writes nothing) `sim_restore_plan` (what putting a `sim`'s file back from its backup (`id` from backups, device `sim-<sim>`; default the newest that differs from the file now) would do: the checks (a sim that runs, a file that is not there), the rates that change, a warning that later changes are lost, and the digest `quadcam_gear_apply sim_restore` needs; writes nothing), `sim_validate` (a sim profile, `aircraft`, checked against a folder of decoded blackbox logs, `paths`: hover, punch, sag, roll, pitch and yaw response, coast-down and fall recovery, each against its band), `firmware_check` (each saved device's firmware against the newest EdgeTX, Betaflight and ExpressLRS release: installed, newest, update or not, and whether QuadCam can flash it; it reads the network unless `check` is false), `splash` (a PNG `image` made into the radio's 128 x 64, 1-bit splash with `threshold` and `invert`: the dark pixel count and whether the `board` is supported; reads the file only) or `firmware_read` (the read-only DFU trial: reads all of the flash of the one radio in DFU mode twice (radio off, USB plugged in), saves it as a firmware copy and compares the EdgeTX version the image names with the radio's known version (`device`, optional); cannot erase, write or restart the radio), `flash_plan` (what flashing an EdgeTX radio `device` with `version` and an optional splash `image` would do: the release's board binary (downloaded on first use, checked against the release's SHA-256), every check (a board or version QuadCam has not proven, missing or doubled splash markers, a card backup, exactly one radio in DFU mode) and the digest `quadcam_gear_apply flash` needs; writes no device). Changes nothing.\n\nBest for: the first Gear call, checking what is plugged in, and checking an OSD layout before or after an edit, reading or planning radio model changes, and answering \"what does this switch do\".\nReturns: one line per device plus the structured records; for osd and switch_map, the drawn view as text plus the structured view.\nFollow up with quadcam_gear_edit device_save to name a device or link it to an aircraft, flight_set to put a flight on a pack.",
+            "Read the FPV gear QuadCam knows: `status` (the gear folder, the Gear settings, and the devices plugged in now: EdgeTX radios in USB Storage mode, goggles and DVR cards, FC and ELRS serial ports, radios in DFU mode; each with its saved name and aircraft when QuadCam knows it; and each FC's USB heat timer), `devices` (every device saved in gear.json: id, kind, name, aircraft, board, firmware, version, last seen, last backup), `fc_identify` (reads a Betaflight FC over MSP: board, firmware, version, device id, whether QuadCam may write it, known issues; no reboot), `board_notes` (known issues of FC boards and builds), `usb_timers` (per FC on USB: battery in, minutes on USB, minutes left before \"Unplug now\"), `osd` (a Betaflight OSD layout from `paths`, dump or diff files read in order: each OSD profile drawn on its grid (NTSC 30x13, PAL 30x16, HD 53x20, from vcd_video_system or `grid`), the elements on in each profile with x and y, and the check for overlaps and cells off screen; with a `device` and `staged`, the layout after its staged OSD edits), `model` (a saved radio's model for the editors, from `device` and `model` (model01.yml; default the selected one): timers, value screens, logging and which sensors the log records, RSSI alarms, callouts, the checklist, the sounds a callout can name; read from the mounted card, else the latest backup, with the device's staged model edits on top unless `staged` is false), `voice` (the radio's voice: QuadCam's lines with the text a voice speaks, the installed and available packs, the provider and its readiness, and with a `device` the radio's overrides and chosen voice; `refresh` reads the pack index again), `voice_sets` (the line sets a voice pack can be rendered from, and whether an ElevenLabs key is stored; never the key), `voice_catalog` (the ElevenLabs account's voices, models with USD per 1K characters, the estimated credits a character and the request limit, and credits; `what` picks one; free calls), `voice_estimate` (what rendering `sets` in one ElevenLabs `voice` and `voice_model` as carrier-sentence batches would cost, with the carrier text counted, and whether the credits cover it; makes no paid call), `rates` (an FC's rate profiles from `paths` (dump or diff files), a saved `device`'s latest backup, or a backup `id`: each profile's name and whether it is in use, the rates type, roll, pitch and yaw rc rate, super rate, expo, rate limit, maximum and centre rates in degrees per second, and the throttle curve), `sims` (the sims on this Mac, with the rate profiles QuadCam reads from their files and whether each runs; with `paths`, `device` or `id` for a quad, how each sim profile differs from the quad's rate profile in use, or the one in `rate_profile`), `card` (an EdgeTX SD card: board and version, whether QuadCam may write it, its models, the model the radio selects and that model's aircraft, the radio clock check; with `model`, that model in full) `card_preview` (the checks and line diff of EdgeTX card edits, and how long the write would take; writes nothing), `storage` (the gear folder's size in total and per device: snapshots by kind, logs, blobs only that device uses), `backups` (snapshots newest first, or one `device`'s: id, why it was taken, time, files, size, pinned), `blackbox` (the blackbox flash images pulled from FCs, newest first, or one `device`'s: id, day, aircraft, size, firmware, the logs found, whether the flash was erased, and each log paired with a radio-log flight by order, a guess because an FC has no clock), `backup_read` (a backup `id`'s file list, or one file's text with `path`), `backup_diff` (what changed from `against`, or the backup before, to `id`: files put and removed, a line diff per text file), `card_checks` (a card `device`'s file-system checks, newest first), `flights` (flights from the radio logs, newest first: hover throttle, sag, resting voltage, mAh, when the pack type's mAh warning was crossed, the worst link, dropouts; each with its aircraft, pack (or a suggested one), place and library clip; filter by `day`, `aircraft`, `pack`, `place`), `packs` (packs with cycles, charge state, resting voltage and a weak mark; pack types with the charging sheet and a suggested mAh warning; the charging notes), `session_report` (one flying day, by default the last import's days: flights, air time, longest flight, worst link, dropouts, pack use, crashes; as Markdown to share), `preflight` (the \"Pack up\" check: packs charged, the radio's model, card space, backups, cards still in the Mac; each pass, warn or unknown) `crashes` (the crash and repair log, by `aircraft` or `clip`), `switch_map` (what each radio control does: per switch, trim or stick position, the channel values in microseconds, the Betaflight modes and adjustments they select, and the radio's logical switches, special functions and timers; from `mount` (an EdgeTX card or model file) and `paths` (the FC's dump or diff), or the latest backups of a saved `device` or of an `aircraft`'s radio and FC; conflicts such as two modes on one range, a switch with no effect, a mode no switch reaches, a sound file the card lacks; with `live`, the position each control is in now), `radio` (the radio in USB Joystick mode now: buttons, axes, channel values), `sim_calibration` (the sim's calibration of a `radio`, or of the one in USB Joystick mode now, matched to a saved radio: the match, or the choices when several saved radios share its model) `sim_defaults` (what the sim pre-fills from an `aircraft`'s radio model and quad modes, or from `mount` and `paths`: stick channels, arm, angle, horizon, turtle and air mode switches, a free reset control, each with its source) `changes` (staged changes waiting to be applied: id, device, title, status, edits; `history` adds applied, failed and discarded ones), `apply_plan` (every check for a staged `change` on an FC or a radio card, its diff and the digest an apply needs; writes nothing, does not reboot the FC, and for an unmounted card mounts it to read and unmounts it again), `copy_plan` (what copying `parts` (rates, pid, osd, modes, adjustments, vtx, features) and named `settings` from the FC `from` (a device id or a backup id) to the FC `to` would stage: compatibility checks, the diff, what is left out and why; writes nothing) `sim_sync_plan` (what writing a quad's rate profile (`paths`, `device` or `id`, and `rate_profile`) into the `sim_targets` would do: every check (a sim that runs, a file shape QuadCam does not understand, a file it cannot rewrite unchanged), warnings (an Actual or Quick quad fitted to Betaflight with its largest gap, a sim without a throttle curve, a file shape not yet seen loading in the game), the values that change per file and the digest `quadcam_gear_apply sim_sync` needs; writes nothing) `sim_restore_plan` (what putting a `sim`'s file back from its backup (`id` from backups, device `sim-<sim>`; default the newest that differs from the file now) would do: the checks (a sim that runs, a file that is not there), the rates that change, a warning that later changes are lost, and the digest `quadcam_gear_apply sim_restore` needs; writes nothing), `sim_validate` (a sim profile, `aircraft`, checked against a folder of decoded blackbox logs, `paths`: hover, punch, sag, roll, pitch and yaw response, coast-down and fall recovery, each against its band), `firmware_check` (each saved device's firmware against the newest EdgeTX, Betaflight and ExpressLRS release: installed, newest, update or not, and whether QuadCam can flash it; it reads the network unless `check` is false), `splash` (a PNG `image` made into the radio's 128 x 64, 1-bit splash with `threshold` and `invert`: the dark pixel count and whether the `board` is supported; reads the file only) or `firmware_read` (the read-only DFU trial: reads all of the flash of the one radio in DFU mode twice (radio off, USB plugged in), saves it as a firmware copy and compares the EdgeTX version the image names with the radio's known version (`device`, optional); cannot erase, write or restart the radio), `flash_plan` (what flashing an EdgeTX radio `device` with `version` and an optional splash `image` would do: the release's board binary (downloaded on first use, checked against the release's SHA-256), every check (a board or version QuadCam has not proven, missing or doubled splash markers, a card backup, exactly one radio in DFU mode) and the digest `quadcam_gear_apply flash` needs; writes no device). Changes nothing.\n\nBest for: the first Gear call, checking what is plugged in, and checking an OSD layout before or after an edit, reading or planning radio model changes, and answering \"what does this switch do\".\nReturns: one line per device plus the structured records; for osd and switch_map, the drawn view as text plus the structured view.\nFollow up with quadcam_gear_edit device_save to name a device or link it to an aircraft, flight_set to put a flight on a pack.",
             json!({"openWorldHint": false, "readOnlyHint": true, "title": "Gear"}),
         ),
         tool::<GearEditArgs>(
             "quadcam_gear_edit",
-            "Change QuadCam's own gear data, never a device's settings, a sim or a card: `device_save` names a device or links it to an aircraft profile (a device QuadCam does not know yet must be plugged in; use its id from quadcam_gear status or fc_identify), `device_forget` removes a device from QuadCam's list (its backups stay), `fc_read` reads a Betaflight FC through its CLI (read-only commands; the FC reboots when the read ends, so the person should expect it; returns the text, writes nothing), `backup` backs up a radio card (`device` or `mount`; files whose size and time did not change are not read) or an FC (`port` or `device`; the FC reboots) into QuadCam's gear folder (nothing is written when nothing changed), `backup_pin` keeps a `backup` through pruning (`pinned`), `prune` thins backups by the retention settings and removes stored files nothing uses (`dry_run` to see first), `export` writes a `backup`, or every backup of a `device`, as plain folders into `to`, `import_backups` takes an old backup `folder` (radio card copies, Betaflight diff all and dump all files, LOGS folders, dated by YYYY-MM-DD in folder names; `dry_run` to see first; it never changes the folder), `card_check` checks a card's file system (diskutil verifyVolume, read-only, about 30 s over a radio's USB; the card unmounts and mounts again), `dfu_link` links the radio in DFU mode (the bootloader shows a chip serial the other modes do not) to a saved radio: `device` is the pick, and without it QuadCam takes the radio seen most recently and says so; `unlink`=true removes the link; a flash plan then checks that the radio in DFU mode is the one picked, `radio_cli` talks to an EdgeTX radio on its USB serial port (the radio's USB serial port set to CLI), with `command`: `identify` (the firmware board and version the radio runs now, and the saved radios of that board), `ls` (a card folder `path`), `play` (a sound file `path` on the radio's speaker, for a voice line preview), `beep`, `reboot` (restarts the radio; needs `confirm`=true) or `verify` (lists each folder of a saved radio's latest backup, `device`, and reports the files the radio lacks or holds at another size; use it after a card apply, with the card back in the radio); it writes no file and refuses a port another program has open, `card_clean` lists the `._` AppleDouble files macOS left on a radio card (`device` or `mount`); with `confirm`=true it deletes them (only files that start with the AppleDouble magic) and unmounts the card, `stop` stops a running backup or card check by its `handle`, `poll_pause` pauses (`paused` true) or resumes (false) QuadCam's own background reads of an FC's `port`: the USB timer's battery probe, which then stops counting, and the on-connect FC backup (QuadCam already skips a port another program has open; pause it when you want a tool to have the port without any chance of a probe; jobs you start still run, and the pause lasts until QuadCam quits), `flight_set` (a flight's pack or place), `flight_folders` (add or remove a folder of radio logs the flights read), `pack_save` / `pack_delete` (a pack by `name`, its label; `charged=true` marks it charged now), `pack_type_save` / `pack_type_delete` (a pack type by `name`: chemistry, cells, capacity, connector, charge volts per cell, charge current, mAh warning), `pack_notes` (the charging sheet's notes), `crash_save` / `crash_delete` (a crash on a library clip: the time in the clip, what broke, the parts used; no `id` logs a new one), `report_save` (writes the session report for a `day`, by default the last import's days, as Markdown to the file `to`; `overwrite` replaces an existing file), `sim_calibration_save` (the sim's calibration of a `radio`, keyed by its Gear radio id), `stage` (queues FC edits for a `device`: raw CLI `lines` or typed `edits`; refuses a setting the FC's latest backup does not hold; writes only QuadCam's own data), `osd_edit` (moves, toggles or a profile `copy` of the OSD layout for an FC `device`, joined into its one OSD layout change; check the result with quadcam_gear osd and `staged`), `voice_edit` (override one `line` of a radio `device` with another installed voice `pack`'s take or the person's own `text`, or neither to clear it), `voice_render` (QuadCam's lines, or the card paths in `lines`, rendered with the tts_provider into a local pack; with `sets` and `voice_model`, the line sets rendered as carrier-sentence batches with ElevenLabs instead, priced first and refused when the credits fall short; `voice` picks the voice; `dry_run` reports the plan and the characters; a provider that may charge needs `confirm` after the person agreed), `voice_sample` (renders the `sample` set, or `sets` and `lines`, in every one of `voices` x `voice_models` for A/B listening and writes WAVs to the cache; a paid ElevenLabs call: run with `dry_run` first, show the person the credits, then `confirm` after they agreed; it refuses when the credits do not cover it), `voice_key_delete` (removes the stored ElevenLabs key; the person sets one in the Voice studio or with `quadcam-cli gear voice key set`), `voice_install` (a `pack` from the index after a hash check; `source` names the index), `voice_choose` (stages one card change that puts the installed `pack`'s sounds on a radio `device`; `keep_overrides` keeps the lines the person overrode; read the result with quadcam_gear changes), `model_edit` (`ops` and a `checklist` for one `model` of a radio `device`, joined into its one \"Model edits\" change; read the result with quadcam_gear model; a callout is owned by its track name, so a second callout with that track replaces the first), `update` and `discard` (a staged `change`), `restore_stage` (stages a `backup` back as a change: an FC backup's settings, or for a radio card backup the card files named in `paths`), `copy_stage` (stages the settings quadcam_gear copy_plan showed as one change for the FC `to`), `keep` (an applied Try `change` becomes Verified), `revert_stage` (stages a restore of the backup an applied `change` took; the change becomes Reverted when that restore verifies), `card_mount` / `card_unmount` (mounts an unmounted radio card for the person to browse, for `minutes` (default 10), and unmounts it; neither writes the card). `update` also sets a change's status: draft, ready, try or read_first.\n\nBest for: naming a radio or quad the person just plugged in, and linking it to its aircraft profile; reading an FC's settings as text; backing gear up and importing old backups; putting flights on packs; logging a crash and its repair.\nReturns: the saved or forgotten device, the FC's identity and each command's answer, a summary of the backup, prune, export, import or check, or the saved flight, pack, pack type or crash.",
+            "Change QuadCam's own gear data, never a device's settings, a sim or a card: `device_save` names a device or links it to an aircraft profile (a device QuadCam does not know yet must be plugged in; use its id from quadcam_gear status or fc_identify), `device_forget` removes a device from QuadCam's list (its backups stay), `fc_read` reads a Betaflight FC through its CLI (read-only commands; the FC reboots when the read ends, so the person should expect it; returns the text, writes nothing), `backup` backs up a radio card (`device` or `mount`; files whose size and time did not change are not read) or an FC (`port` or `device`; the FC reboots) into QuadCam's gear folder (nothing is written when nothing changed), `backup_pin` keeps a `backup` through pruning (`pinned`), `blackbox_export` writes a pull `id` as .bbl into the folder `to` (`split` also writes each log), `prune` thins backups by the retention settings and removes stored files nothing uses (`dry_run` to see first), `export` writes a `backup`, or every backup of a `device`, as plain folders into `to`, `import_backups` takes an old backup `folder` (radio card copies, Betaflight diff all and dump all files, LOGS folders, dated by YYYY-MM-DD in folder names; `dry_run` to see first; it never changes the folder), `card_check` checks a card's file system (diskutil verifyVolume, read-only, about 30 s over a radio's USB; the card unmounts and mounts again), `dfu_link` links the radio in DFU mode (the bootloader shows a chip serial the other modes do not) to a saved radio: `device` is the pick, and without it QuadCam takes the radio seen most recently and says so; `unlink`=true removes the link; a flash plan then checks that the radio in DFU mode is the one picked, `radio_cli` talks to an EdgeTX radio on its USB serial port (the radio's USB serial port set to CLI), with `command`: `identify` (the firmware board and version the radio runs now, and the saved radios of that board), `ls` (a card folder `path`), `play` (a sound file `path` on the radio's speaker, for a voice line preview), `beep`, `reboot` (restarts the radio; needs `confirm`=true) or `verify` (lists each folder of a saved radio's latest backup, `device`, and reports the files the radio lacks or holds at another size; use it after a card apply, with the card back in the radio); it writes no file and refuses a port another program has open, `card_clean` lists the `._` AppleDouble files macOS left on a radio card (`device` or `mount`); with `confirm`=true it deletes them (only files that start with the AppleDouble magic) and unmounts the card, `stop` stops a running backup or card check by its `handle`, `poll_pause` pauses (`paused` true) or resumes (false) QuadCam's own background reads of an FC's `port`: the USB timer's battery probe, which then stops counting, and the on-connect FC backup (QuadCam already skips a port another program has open; pause it when you want a tool to have the port without any chance of a probe; jobs you start still run, and the pause lasts until QuadCam quits), `flight_set` (a flight's pack or place), `flight_folders` (add or remove a folder of radio logs the flights read), `pack_save` / `pack_delete` (a pack by `name`, its label; `charged=true` marks it charged now), `pack_type_save` / `pack_type_delete` (a pack type by `name`: chemistry, cells, capacity, connector, charge volts per cell, charge current, mAh warning), `pack_notes` (the charging sheet's notes), `crash_save` / `crash_delete` (a crash on a library clip: the time in the clip, what broke, the parts used; no `id` logs a new one), `report_save` (writes the session report for a `day`, by default the last import's days, as Markdown to the file `to`; `overwrite` replaces an existing file), `sim_calibration_save` (the sim's calibration of a `radio`, keyed by its Gear radio id), `stage` (queues FC edits for a `device`: raw CLI `lines` or typed `edits`; refuses a setting the FC's latest backup does not hold; writes only QuadCam's own data), `osd_edit` (moves, toggles or a profile `copy` of the OSD layout for an FC `device`, joined into its one OSD layout change; check the result with quadcam_gear osd and `staged`), `voice_edit` (override one `line` of a radio `device` with another installed voice `pack`'s take or the person's own `text`, or neither to clear it), `voice_render` (QuadCam's lines, or the card paths in `lines`, rendered with the tts_provider into a local pack; with `sets` and `voice_model`, the line sets rendered as carrier-sentence batches with ElevenLabs instead, priced first and refused when the credits fall short; `voice` picks the voice; `dry_run` reports the plan and the characters; a provider that may charge needs `confirm` after the person agreed), `voice_sample` (renders the `sample` set, or `sets` and `lines`, in every one of `voices` x `voice_models` for A/B listening and writes WAVs to the cache; a paid ElevenLabs call: run with `dry_run` first, show the person the credits, then `confirm` after they agreed; it refuses when the credits do not cover it), `voice_key_delete` (removes the stored ElevenLabs key; the person sets one in the Voice studio or with `quadcam-cli gear voice key set`), `voice_install` (a `pack` from the index after a hash check; `source` names the index), `voice_choose` (stages one card change that puts the installed `pack`'s sounds on a radio `device`; `keep_overrides` keeps the lines the person overrode; read the result with quadcam_gear changes), `model_edit` (`ops` and a `checklist` for one `model` of a radio `device`, joined into its one \"Model edits\" change; read the result with quadcam_gear model; a callout is owned by its track name, so a second callout with that track replaces the first), `update` and `discard` (a staged `change`), `restore_stage` (stages a `backup` back as a change: an FC backup's settings, or for a radio card backup the card files named in `paths`), `copy_stage` (stages the settings quadcam_gear copy_plan showed as one change for the FC `to`), `keep` (an applied Try `change` becomes Verified), `revert_stage` (stages a restore of the backup an applied `change` took; the change becomes Reverted when that restore verifies), `card_mount` / `card_unmount` (mounts an unmounted radio card for the person to browse, for `minutes` (default 10), and unmounts it; neither writes the card). `update` also sets a change's status: draft, ready, try or read_first.\n\nBest for: naming a radio or quad the person just plugged in, and linking it to its aircraft profile; reading an FC's settings as text; backing gear up and importing old backups; putting flights on packs; logging a crash and its repair.\nReturns: the saved or forgotten device, the FC's identity and each command's answer, a summary of the backup, prune, export, import or check, or the saved flight, pack, pack type or crash.",
             json!({"destructiveHint": false, "idempotentHint": true, "openWorldHint": false, "readOnlyHint": false, "title": "Edit gear data"}),
         ),
         tool::<GearApplyArgs>(
             "quadcam_gear_apply",
-            "Write to a device, a sim or the radio firmware: each action needs a digest and confirm=true. `card_repair` repairs a card whose latest check failed (diskutil repairVolume): `digest` is that check's id (quadcam_gear card_checks or status); QuadCam backs the card up first when it reads, repairs it, and checks it again. A repair cannot be stopped once it starts. `apply` writes a staged FC or radio card `change`: call quadcam_gear apply_plan first, show the person the diff, then pass its `digest` and confirm=true; for an FC QuadCam backs it up (always kept), sends the lines, saves, waits for the reboot and checks every line against `dump all`, and nothing is saved when a line fails; for a radio card it mounts the card if needed, backs it up (always kept), writes file by file, reads each back, puts every file back if one reads wrong, and unmounts it (safe to unplug only after the unmount). `flash` flashes an EdgeTX radio over DFU: call quadcam_gear flash_plan first, show the person the checks, the warnings and the image, then pass the same arguments, its `digest` and confirm=true; the radio must be in DFU mode (off, trims held, USB plugged in); QuadCam reads the firmware it runs now and keeps it as a backup, erases, writes, reads back and compares, then restarts the radio; a mismatch leaves it in DFU mode. `sim_sync` writes a quad's rate profile into sim profiles (Liftoff, Micro Drones, Uncrashed, The Zone): call quadcam_gear sim_sync_plan first, show the person the diff and the warnings, then pass the same arguments, its `digest` and confirm=true; QuadCam refuses while the game runs, backs each file up (kept), writes it atomically, reads it back and parses it, and puts every file back if one fails. `sim_restore` puts a sim's file back from a backup: call quadcam_gear sim_restore_plan first, then pass the same arguments, its `digest` and confirm=true; QuadCam backs the current file up first (so a restore can be undone), writes the backup's bytes atomically and reads them back. With the app running, the person must also click Apply in its sheet (3 minutes, else refused).\n\nBest for: repairing a radio or DVR card after a failed card check, and applying a staged FC or radio card change the person has seen, when they ask.\nReturns: the backup taken first, the repair's result and the check after it.",
+            "Write to a device, a sim or the radio firmware: each action needs a digest and confirm=true. `card_repair` repairs a card whose latest check failed (diskutil repairVolume): `digest` is that check's id (quadcam_gear card_checks or status); QuadCam backs the card up first when it reads, repairs it, and checks it again. A repair cannot be stopped once it starts. `apply` writes a staged FC or radio card `change`: call quadcam_gear apply_plan first, show the person the diff, then pass its `digest` and confirm=true; for an FC QuadCam backs it up (always kept), sends the lines, saves, waits for the reboot and checks every line against `dump all`, and nothing is saved when a line fails; for a radio card it mounts the card if needed, backs it up (always kept), writes file by file, reads each back, puts every file back if one reads wrong, and unmounts it (safe to unplug only after the unmount). `flash` flashes an EdgeTX radio over DFU: call quadcam_gear flash_plan first, show the person the checks, the warnings and the image, then pass the same arguments, its `digest` and confirm=true; the radio must be in DFU mode (off, trims held, USB plugged in); QuadCam reads the firmware it runs now and keeps it as a backup, erases, writes, reads back and compares, then restarts the radio; a mismatch leaves it in DFU mode. `sim_sync` writes a quad's rate profile into sim profiles (Liftoff, Micro Drones, Uncrashed, The Zone): call quadcam_gear sim_sync_plan first, show the person the diff and the warnings, then pass the same arguments, its `digest` and confirm=true; QuadCam refuses while the game runs, backs each file up (kept), writes it atomically, reads it back and parses it, and puts every file back if one fails. `sim_restore` puts a sim's file back from a backup: call quadcam_gear sim_restore_plan first, then pass the same arguments, its `digest` and confirm=true; QuadCam backs the current file up first (so a restore can be undone), writes the backup's bytes atomically and reads them back. With the app running, the person must also click Apply in its sheet (3 minutes, else refused). `blackbox_pull` reads an FC's blackbox flash (`port`; only the used bytes, over MSP at about 84 KB/s, so a full 16 MB flash takes over 3 minutes; `mode` msc tries the FC's USB disk mode, which is unproven), verifies it (size, log headers, stored copy read back) and stores it; only then, and only when the person's gear_erase_blackbox setting is on, it erases the flash and waits until the flash reads empty; `keep`=true keeps the flash this run and nothing here turns the erase on; it needs confirm=true only (no plan, no sheet) because the setting may erase; it refuses a pull that would outlast the USB heat timer unless `force`, and never starts an erase that could not finish; the FC is safe to unplug only after the answer says so. `blackbox_erase` erases the FC's flash by hand: confirm=true, and QuadCam must hold a stored pull of exactly what the flash holds.\n\nBest for: repairing a radio or DVR card after a failed card check, and applying a staged FC or radio card change the person has seen, when they ask.\nReturns: the backup taken first, the repair's result and the check after it; for blackbox_pull the pull, its logs and what happened to the flash.",
             json!({"destructiveHint": true, "idempotentHint": false, "openWorldHint": false, "readOnlyHint": false, "title": "Apply to gear"}),
         ),
     ]
@@ -847,6 +857,16 @@ fn gear<B: Backend>(backend: &mut B, a: &Value) -> Result<(Vec<Value>, Value)> {
             };
             Ok((vec![text(line)], json!({"backups": list})))
         }
+        "blackbox" => {
+            let list = backend.call("gear_blackbox", json!({"device": x.device}))?;
+            let arr = list.as_array().cloned().unwrap_or_default();
+            let line = if arr.is_empty() {
+                "No blackbox pulls.".to_string()
+            } else {
+                arr.iter().map(blackbox_text).collect::<Vec<_>>().join("\n\n")
+            };
+            Ok((vec![text(line)], json!({"blackbox": list})))
+        }
         "backup_read" => {
             let id = x.id.context("id is required for backup_read: a backup id from backups")?;
             let v = backend.call("gear_backup_read", json!({"id": id, "path": x.path}))?;
@@ -1008,7 +1028,7 @@ fn gear<B: Backend>(backend: &mut B, a: &Value) -> Result<(Vec<Value>, Value)> {
             Ok((vec![text(line)], json!({"checks": list})))
         }
         other => super::gear_flights::read(backend, other, &x).unwrap_or_else(|| Err(anyhow!(
-            "unknown action {other:?}; use status, devices, fc_identify, board_notes, usb_timers, osd, rates, sims, card, card_preview, storage, backups, backup_read, backup_diff, card_checks, switch_map, radio, sim_calibration, sim_defaults, sim_validate, flights, packs, session_report, preflight or crashes"
+            "unknown action {other:?}; use status, devices, fc_identify, board_notes, usb_timers, osd, rates, sims, card, card_preview, storage, backups, backup_read, backup_diff, card_checks, blackbox, switch_map, radio, sim_calibration, sim_defaults, sim_validate, flights, packs, session_report, preflight or crashes"
         ))),
     }
 }
@@ -1110,6 +1130,104 @@ fn storage_text(v: &Value) -> String {
             size(&d["total_bytes"]),
             day(&d["latest"]),
         ));
+    }
+    out
+}
+
+/// One stored pull and its guessed flights.
+fn blackbox_text(e: &Value) -> String {
+    let p = &e["pull"];
+    let f = &e["flights"];
+    let mut out = format!(
+        "{} | {} | {} | {}, {} logs | {}{}{}",
+        p["id"].as_str().unwrap_or("?"),
+        day(&p["pulled_at"]),
+        p["aircraft"].as_str().unwrap_or("no aircraft"),
+        size(&p["used"]),
+        p["logs"].as_array().map_or(0, Vec::len),
+        p["firmware"].as_str().unwrap_or("firmware unknown"),
+        match p["method"].as_str() {
+            Some("msc") => " | read through USB disk mode",
+            _ => "",
+        },
+        if p["erased"].as_bool() == Some(true) {
+            " | flash erased".to_string()
+        } else {
+            p["erase_note"]
+                .as_str()
+                .map(|n| format!(" | {n}"))
+                .unwrap_or_default()
+        }
+    );
+    let links = f["links"].as_array().cloned().unwrap_or_default();
+    for l in &links {
+        out.push_str(&format!(
+            "\n  log {} ({}) <-> flight {} ({:.0} s){}",
+            l["log"],
+            size(&l["log_bytes"]),
+            l["flight"].as_str().unwrap_or("?"),
+            l["flight_secs"].as_f64().unwrap_or(0.0),
+            match l["fits"].as_bool() {
+                Some(false) => " | size does not fit",
+                _ => "",
+            }
+        ));
+    }
+    out.push_str(&format!(
+        "\n  {} paired, {} logs and {} flights left over, {} test arms. {}",
+        links.len(),
+        f["unpaired_logs"],
+        f["unpaired_flights"],
+        f["short_logs"],
+        f["note"].as_str().unwrap_or("")
+    ));
+    out
+}
+
+fn blackbox_pull_text(j: &Value) -> String {
+    let r = &j["result"];
+    let mut out = match r["pull"].as_object() {
+        None => "The blackbox flash is empty; nothing to pull.".to_string(),
+        Some(p) => format!(
+            "{} pull {}: {} read in {:.0} s through {}; {} logs verified and stored.",
+            if r["new"].as_bool() == Some(true) {
+                "New"
+            } else {
+                "Same bytes as"
+            },
+            p["id"].as_str().unwrap_or("?"),
+            size(&r["read_bytes"]),
+            r["read_secs"].as_f64().unwrap_or(0.0),
+            if r["method"].as_str() == Some("msc") {
+                "USB disk mode"
+            } else {
+                "MSP"
+            },
+            p["logs"].as_array().map_or(0, Vec::len)
+        ),
+    };
+    match r["erase"].as_str() {
+        Some("done") => out.push_str(&format!(
+            "\nErased the flash in {:.0} s. Safe to unplug.",
+            r["erase_secs"].as_f64().unwrap_or(0.0)
+        )),
+        Some("skipped") => out.push_str(&format!(
+            "\n{}",
+            r["erase_note"]
+                .as_str()
+                .unwrap_or("The flash was not erased.")
+        )),
+        _ => out.push_str(
+            "\nThe flash was not erased (the gear_erase_blackbox setting is off, or keep was set).",
+        ),
+    }
+    for n in r["notes"]
+        .as_array()
+        .into_iter()
+        .flatten()
+        .filter_map(Value::as_str)
+    {
+        out.push_str(&format!("\nNote: {n}"));
     }
     out
 }
@@ -1703,6 +1821,23 @@ fn gear_edit<B: Backend>(backend: &mut B, a: &Value) -> Result<(Vec<Value>, Valu
             )?;
             Ok((vec![text(backup_result_text(&v))], v))
         }
+        "blackbox_export" => {
+            let id = x
+                .id
+                .context("id is required for blackbox_export: a pull id from quadcam_gear blackbox")?;
+            let to = x
+                .to
+                .context("to is required for blackbox_export: an existing folder (absolute path)")?;
+            let v = backend.call(
+                "gear_blackbox_export",
+                json!({"id": id, "to": to, "split": x.split.unwrap_or(false)}),
+            )?;
+            let files: Vec<&str> = v["files"].as_array().into_iter().flatten().filter_map(Value::as_str).collect();
+            Ok((
+                vec![text(format!("Wrote {} file(s), {}:\n{}", files.len(), size(&v["bytes"]), files.join("\n")))],
+                v,
+            ))
+        }
         "backup_pin" => {
             let id = x
                 .backup
@@ -2000,7 +2135,7 @@ fn gear_edit<B: Backend>(backend: &mut B, a: &Value) -> Result<(Vec<Value>, Valu
             Ok((vec![text(line.to_string())], json!({"paused": v})))
         }
         other => super::gear_flights::edit(backend, other, &x).unwrap_or_else(|| Err(anyhow!(
-            "unknown action {other:?}; use device_save, device_forget, fc_read, backup, backup_pin, prune, export, import_backups, card_check, card_clean, radio_cli, dfu_link, stop, poll_pause, flight_set, flight_folders, pack_save, pack_delete, pack_type_save, pack_type_delete, pack_notes, crash_save, crash_delete, report_save, sim_calibration_save, stage, update, discard, restore_stage, copy_stage, keep, revert_stage, card_mount or card_unmount"
+            "unknown action {other:?}; use device_save, device_forget, fc_read, backup, backup_pin, blackbox_export, prune, export, import_backups, card_check, card_clean, radio_cli, dfu_link, stop, poll_pause, flight_set, flight_folders, pack_save, pack_delete, pack_type_save, pack_type_delete, pack_notes, crash_save, crash_delete, report_save, sim_calibration_save, stage, update, discard, restore_stage, copy_stage, keep, revert_stage, card_mount or card_unmount"
         ))),
     }
 }
@@ -2008,6 +2143,34 @@ fn gear_edit<B: Backend>(backend: &mut B, a: &Value) -> Result<(Vec<Value>, Valu
 fn gear_apply<B: Backend>(backend: &mut B, a: &Value) -> Result<(Vec<Value>, Value)> {
     let x: GearApplyArgs = args(a)?;
     match x.action.as_deref().unwrap_or("") {
+        "blackbox_pull" => {
+            if x.confirm != Some(true) {
+                return Err(anyhow!(
+                    "Refused: blackbox_pull reads the FC and, when the gear_erase_blackbox setting is on, erases its flash; it needs confirm=true."
+                ));
+            }
+            let v = backend.call(
+                "gear_blackbox_pull",
+                json!({"port": x.port, "keep": x.keep.unwrap_or(false), "mode": x.mode, "force": x.force.unwrap_or(false)}),
+            )?;
+            Ok((vec![text(blackbox_pull_text(&v))], v))
+        }
+        "blackbox_erase" => {
+            if x.confirm != Some(true) {
+                return Err(anyhow!(
+                    "Refused: blackbox_erase deletes the FC's logs for good; it needs confirm=true."
+                ));
+            }
+            let v = backend.call("gear_blackbox_erase", json!({"port": x.port, "confirm": true}))?;
+            Ok((
+                vec![text(format!(
+                    "Erased the FC's blackbox flash in {:.0} s. Its logs are kept in pull {}. Safe to unplug.",
+                    v["result"]["secs"].as_f64().unwrap_or(0.0),
+                    v["result"]["pull"].as_str().unwrap_or("?")
+                ))],
+                v,
+            ))
+        }
         "card_repair" => {
             let check = x.digest.context(
                 "digest is required for card_repair: the id of the card's latest check, which failed",
@@ -2120,7 +2283,7 @@ fn gear_apply<B: Backend>(backend: &mut B, a: &Value) -> Result<(Vec<Value>, Val
             Ok((vec![text(apply_text(&v))], v))
         }
         other => Err(anyhow!(
-            "Refused: {other:?} is not an apply action; use card_repair, apply, sim_sync, sim_restore or flash."
+            "Refused: {other:?} is not an apply action; use card_repair, apply, sim_sync, sim_restore, flash, blackbox_pull or blackbox_erase."
         )),
     }
 }

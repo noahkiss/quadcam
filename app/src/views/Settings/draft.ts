@@ -48,6 +48,8 @@ export interface GearDraft {
   keepWeeks: string;
   keepMonthly: boolean;
   usbMinutes: string;
+  eraseBlackbox: boolean;
+  blackboxMsc: boolean;
   onConnect: Record<DeviceKind, Automation[]>;
   cues: Required<Omit<CueSettings, "quiet_hours" | "voice">> & { voice: string };
   quiet: boolean;
@@ -56,7 +58,7 @@ export interface GearDraft {
 }
 
 export const GEAR_KINDS: DeviceKind[] = ["radio", "fc", "elrs_tx", "elrs_rx", "goggles", "dvr_card"];
-export const AUTOMATIONS: Automation[] = ["backup", "import", "apply_ready"];
+export const AUTOMATIONS: Automation[] = ["backup", "import", "apply_ready", "blackbox"];
 
 /** `CueSettings::default()` and `GearSettings::defaults` in the core, for a core that has not
  *  answered yet. */
@@ -88,6 +90,8 @@ export function gearDraft(g: GearSettings | null | undefined, simPreview = false
     keepWeeks: String(g?.keep_weeks ?? 8),
     keepMonthly: g?.keep_monthly ?? true,
     usbMinutes: String(g?.usb_minutes ?? 20),
+    eraseBlackbox: g?.erase_blackbox ?? false,
+    blackboxMsc: g?.blackbox_msc ?? false,
     onConnect,
     cues: { ...cues, voice: cues.voice || "" },
     quiet: !!q,
@@ -111,6 +115,8 @@ export function gearValues(g: GearDraft): SettingsValues {
     gearKeepWeeks: whole(g.keepWeeks, 8, 0, 520),
     gearKeepMonthly: g.keepMonthly,
     gearUsbMinutes: whole(g.usbMinutes, 20, 0, 240),
+    gearEraseBlackbox: g.eraseBlackbox,
+    gearBlackboxMsc: g.blackboxMsc,
     gearOnConnect: g.onConnect,
     gearCues: { ...cues, voice: voice.trim() || null, quiet_hours: g.quiet ? { start: g.quietStart, end: g.quietEnd } : null },
   };

@@ -8,6 +8,15 @@ import type * as G from "../bindings";
 
 export type {
   Automation,
+  BlackboxEntry,
+  BlackboxErased,
+  BlackboxPullResult,
+  EraseState,
+  FcJob,
+  FlightLink,
+  Linked,
+  LogInfo,
+  Pull,
   BackupContent,
   BackupImportItem,
   BackupProgress,
