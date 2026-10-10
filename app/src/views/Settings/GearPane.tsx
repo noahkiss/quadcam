@@ -47,6 +47,9 @@ export function GearPane({ d, setD }: { d: Draft; setD: (f: (d: Draft) => Draft)
       <Checkbox label="Erase blackbox after download" checked={g.eraseBlackbox} onChange={(e) => set({ eraseBlackbox: e.target.checked })} />
       <Checkbox label="Read through USB disk mode first (not proven)" checked={g.blackboxMsc} onChange={(e) => set({ blackboxMsc: e.target.checked })} />
 
+      <h3>Firmware</h3>
+      <Checkbox label="Check for firmware updates daily" checked={g.firmwareDaily} onChange={(e) => set({ firmwareDaily: e.target.checked })} />
+
       <h3>When a device is plugged in</h3>
       <table className={styles.modules} aria-label="Steps on connect">
         <thead>

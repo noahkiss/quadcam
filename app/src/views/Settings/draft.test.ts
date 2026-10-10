@@ -21,3 +21,14 @@ describe("the blackbox settings in the Gear draft", () => {
     expect(gearValues(d).gearOnConnect).toMatchObject({ fc: ["backup", "blackbox"] });
   });
 });
+
+describe("the firmware check in the Gear draft", () => {
+  it("is manual by default and round-trips as daily", () => {
+    const d = gearDraft(gearDefaults());
+    expect(d.firmwareDaily).toBe(false);
+    expect(gearValues(d).firmwareCheck).toBe("manual");
+    const daily = gearDraft({ ...gearDefaults(), firmware_check: "daily" });
+    expect(daily.firmwareDaily).toBe(true);
+    expect(gearValues(daily).firmwareCheck).toBe("daily");
+  });
+});

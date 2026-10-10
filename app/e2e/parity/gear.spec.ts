@@ -108,6 +108,7 @@ test("Settings > Gear saves the changed Gear keys with Done and shows the versio
   await dlg.getByRole("navigation", { name: "Settings sections" }).getByRole("button", { name: "Gear" }).click();
   await dlg.getByLabel("Back up on connect").uncheck();
   await dlg.getByLabel("Keep recent backups").fill("5");
+  await dlg.getByLabel("Check for firmware updates daily").check();
   await dlg.getByLabel("Pull blackbox: FC").check();
   await dlg.getByLabel("Mute all cues").check();
   await dlg.getByLabel("Quiet hours for speech and sound").check();
@@ -118,6 +119,7 @@ test("Settings > Gear saves the changed Gear keys with Done and shows the versio
   const w = writes.at(-1)!;
   expect(w.gearAutoBackup).toBe(false);
   expect(w.gearKeepRecent).toBe(5);
+  expect(w.firmwareCheck).toBe("daily");
   expect(w.gearOnConnect).toMatchObject({ fc: ["backup", "blackbox"], radio: ["backup"] });
   expect(w.gearCues).toMatchObject({ mute: true, quiet_hours: { start: "21:30", end: "07:00" }, voice_source: "macos" });
   expect(w.gearKeepWeeks).toBeUndefined();

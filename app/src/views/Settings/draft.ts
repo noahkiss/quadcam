@@ -53,6 +53,7 @@ export interface GearDraft {
   keepMonthly: boolean;
   usbMinutes: string;
   eraseBlackbox: boolean;
+  firmwareDaily: boolean;
   blackboxMsc: boolean;
   onConnect: Record<DeviceKind, ShownAutomation[]>;
   cues: Required<Omit<CueSettings, "quiet_hours" | "voice">> & { voice: string };
@@ -100,6 +101,7 @@ export function gearDraft(g: GearSettings | null | undefined, simPreview = false
     keepMonthly: g?.keep_monthly ?? true,
     usbMinutes: String(g?.usb_minutes ?? 20),
     eraseBlackbox: g?.erase_blackbox ?? false,
+    firmwareDaily: g?.firmware_check === "daily",
     blackboxMsc: g?.blackbox_msc ?? false,
     onConnect,
     cues: { ...cues, voice: cues.voice || "" },
@@ -128,6 +130,7 @@ export function gearValues(g: GearDraft): SettingsValues {
     gearUsbMinutes: whole(g.usbMinutes, 20, 0, 240),
     gearEraseBlackbox: g.eraseBlackbox,
     gearBlackboxMsc: g.blackboxMsc,
+    firmwareCheck: g.firmwareDaily ? "daily" : "manual",
     gearOnConnect: g.onConnect,
     gearCues: { ...cues, voice: voice.trim() || null, quiet_hours: g.quiet ? { start: g.quietStart, end: g.quietEnd } : null },
   };

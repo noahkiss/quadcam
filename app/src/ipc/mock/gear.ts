@@ -57,6 +57,7 @@ export function gearSettings(values: Record<string, unknown>): GearSettings {
   if (v.gearUsbMinutes != null) s.usb_minutes = v.gearUsbMinutes;
   if (v.gearEraseBlackbox != null) s.erase_blackbox = v.gearEraseBlackbox;
   if (v.gearBlackboxMsc != null) s.blackbox_msc = v.gearBlackboxMsc;
+  if (v.firmwareCheck != null) s.firmware_check = v.firmwareCheck;
   if (v.gearOnConnect != null) s.on_connect = { ...s.on_connect, ...(v.gearOnConnect as object) };
   if (v.gearCues != null) s.cues = { ...s.cues, ...(v.gearCues as object) };
   return s;
