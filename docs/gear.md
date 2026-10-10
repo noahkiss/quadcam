@@ -3,6 +3,8 @@
 Gear is QuadCam's second half: the FPV bench next to the clip library. This page covers what
 works today. The full plan is in [Gear design](gear-design.md).
 
+First time on real hardware? Follow the ordered checklist in [Device trials](trials.md).
+
 ## In the app
 
 **Gear** is a section of the sidebar, under the library groups. Its triangle opens and closes
