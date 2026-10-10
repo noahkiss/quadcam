@@ -19,6 +19,8 @@ quadcam-cli analyze                       # probe, recover, make thumbnails
 quadcam-cli show                          # the session: clips, plans, results
 quadcam-cli dates --logs /path/to/LOGS    # date clips from radio logs
 quadcam-cli dates --set 2=2026-10-03      # set one clip's date
+quadcam-cli dates --no-logs               # ignore radio logs; every clip gets the import date
+quadcam-cli dates --logs /path/to/LOGS --day 2026-10-03   # match against one log day
 quadcam-cli import --name 0=backyard-loops --skip 3 --format mp4
 quadcam-cli import --plan plan.json       # names, dates, notes and options from a file
 quadcam-cli moments                       # moments, dead air, keep ranges and cuts per clip
@@ -28,6 +30,7 @@ quadcam-cli cut 0 --by-flight             # add one cut per radio-log flight
 quadcam-cli cut 0 --log-offset 4.5        # the radio log starts 4.5 s into clip 0
 quadcam-cli import --cut 0=20-26          # add a cut, then import
 quadcam-cli import --time 0=18:30         # clip 0 was flown at 18:30 (the default is noon)
+quadcam-cli import --keep-originals --add-to-photos --album Drone   # also --encoder, --output, --add-time, --note, --date
 quadcam-cli import --keep-clips           # keep the clips on the card this run
 quadcam-cli stage /Volumes/DVR --no-join  # keep split DVR recordings as separate clips this run
 quadcam-cli stage --card <device id>       # a card that is unmounted but still in: QuadCam mounts it
@@ -39,7 +42,7 @@ quadcam-cli clear                         # forget the session (start over)
 quadcam-cli verify                        # check the outputs again
 quadcam-cli photos --album Drone          # add verified outputs to Photos
 quadcam-cli eject                         # safe to remove: unmount the card
-quadcam-cli format --plan                 # show what would be erased
+quadcam-cli format --plan                 # show what would be erased; --label sets the volume name (default DVR)
 quadcam-cli format --device /dev/diskN --volume-uuid <uuid> --yes
 quadcam-cli format --prep --plan --mount /Volumes/CARD   # card prep: a card with no session
 quadcam-cli format --prep --plan --card <device id>      # the same, for a card that is unmounted but still in
@@ -145,13 +148,13 @@ A value is JSON or plain text.
 
 ```bash
 quadcam-cli --json gear status                       # gear folder, Gear settings, what is plugged in
-quadcam-cli --json gear devices                      # saved devices
+quadcam-cli --json gear devices                      # saved devices (`devices list` is the same)
 quadcam-cli --json gear devices save <id> --name "Bench radio" --aircraft Whoop
 quadcam-cli --json gear devices forget <id>
 quadcam-cli --json gear fc identify [--port /dev/cu.usbmodemX]   # MSP identity, no reboot
 quadcam-cli --json gear fc read [--cmd "get osd_ah_pos"]... [--out STEM]   # the FC reboots after
 quadcam-cli --json gear fc check STEM.diff_all.txt expected.cli  # every expected line in the diff
-quadcam-cli --json gear fc notes [--board BETAFPVG473]            # known issues of boards
+quadcam-cli --json gear fc notes [--board BOARD] [--version V]     # known issues of boards
 quadcam-cli --json gear fc pause|resume [--port ...]                 # pause the running app's FC reads
 quadcam-cli --json gear fc usb                                   # USB timers
 quadcam-cli --json gear blackbox pull [--port P] [--keep] [--mode auto|msp|msc] [--force]
@@ -162,7 +165,7 @@ quadcam-cli --json gear osd FILE [FILE ...] [--grid NTSC|PAL|HD|WxH] [--text]
 quadcam-cli --json gear osd DEVICE [--staged] [--grid ...] [--text]   # --staged: with the device's staged OSD edits on top
 quadcam-cli --json gear osd-edit DEVICE [--move ELEMENT=X,Y]... [--profiles ELEMENT=1,3|none]... [--copy FROM:TO]   # stages into the one "OSD layout" change; writes nothing to the FC
 quadcam-cli --json gear voice [--radio ID] [--refresh] [--text]   # lines, packs, the provider; --refresh reads the pack index
-quadcam-cli --json gear voice render [--voice V] [--lines SOUNDS/en/armed.wav,...] [--dry-run] [--confirm] [--speed S --tempo T --trim-db D --tail-ms N --fade-out-ms N --seed N]   # render with the tts_provider into a local pack; a provider that may charge needs --confirm
+quadcam-cli --json gear voice render [--voice V] [--lines SOUNDS/en/armed.wav,...] [--dry-run] [--confirm] [--speed S --tempo T --trim-db D --tail-ms N --fade-out-ms N --seed N]   # without --set: render with the tts_provider into a local pack; a provider that may charge needs --confirm
 quadcam-cli gear voice key set|delete|status   # the ElevenLabs key in the Keychain; `set` reads one line from stdin (hidden on a terminal); never printed
 quadcam-cli --json gear voice sets|voices|models|credits   # the line sets; the account's voices; its models with USD per 1K characters, the estimated credits a character and the request limit; the credits left
 quadcam-cli --json gear voice estimate --set quad,easter --voice Callum --model eleven_turbo_v2_5 [--lines PATH,...] [--carrier T --max-lines N --snap-ms N]   # the characters (carriers included), batches and credits; no paid call
@@ -196,22 +199,24 @@ quadcam-cli --json gear radio [--wait-ms 500]                    # the radio in 
 quadcam-cli --json gear sim calibration [RADIO] [--set FILE.json [--product NAME]]   # the sim's radio calibration
 quadcam-cli --json gear sim defaults [--aircraft NAME | --radio CARD --fc FILE]     # what the sim pre-fills
 quadcam-cli --json gear sim validate PROFILE --logs DIR [--poles N] [--text]      # a sim profile against decoded blackbox logs
-quadcam-cli --json gear flights [--day D] [set <flight> --pack L | folders --add DIR]
+quadcam-cli --json gear flights [--day D] [--aircraft A] [--pack L] [--place P] [--logs DIR] [set <flight> --pack L --place P | folders --add DIR | folders --remove DIR]
 quadcam-cli gear report [--day D] --markdown                     # the session report
 quadcam-cli --json gear report [--day D] --out FILE [--force]     # write the Markdown to FILE
 quadcam-cli --json gear preflight                                # the Pack up check
-quadcam-cli --json gear packs [save L --type T --charged | type save T ... | notes TEXT]
-quadcam-cli --json gear crashes [--clip ID save --time S --broke TEXT --parts a,b]
-quadcam-cli --json gear backup [--device ID | --port P | --mount M] [show|diff|pin ...]
+quadcam-cli --json gear packs [save L --type T --charged | delete L | type save T --cells N --capacity MAH ... | type delete T | notes TEXT]
+quadcam-cli --json gear crashes [--clip ID save --time S --broke TEXT --parts a,b | delete ID]
+quadcam-cli --json gear backup [--device ID | --port P | --mount M] [show ID [PATH] | diff A [B] [--path P] | pin ID [--off]]
 quadcam-cli --json gear backups [--device ID]
 quadcam-cli --json gear storage [--prune [--dry-run]] [--export <backup|device> DIR]
 quadcam-cli --json gear import-backups FOLDER [--device ID] [--dry-run]
+quadcam-cli --json gear card [--device ID | --mount M] [--model model01.yml]   # an EdgeTX card: version, models, selected model, radio clock
+quadcam-cli --json gear card preview [--device ID | --mount M] --edits FILE.json   # the checks and diff of card edits; writes nothing
 quadcam-cli --json gear card-check [--device ID | --mount M] [--log]
 quadcam-cli --json gear card-repair --check <check id> --yes
 quadcam-cli --json gear card-clean [--device ID | --mount M] [--remove --yes]   # list or delete the ._ files macOS left on a card
 quadcam-cli --json gear radio-cli identify|ls|play|beep|reboot|verify [--port P] [--path P] [--device ID] [--yes]   # a radio on its USB serial port (EdgeTX CLI)
 quadcam-cli --json gear dfu-link [--device ID] [--serial S] [--unlink]   # link the radio in DFU mode to a saved radio
-quadcam-cli --json gear stage --device ID --set NAME=VALUE [--pid-profile N | --rate-profile N] [--title T]   # stage; writes nothing
+quadcam-cli --json gear stage --device ID --set NAME=VALUE [--pid-profile N | --rate-profile N] [--title T] [--note N] [--draft]   # stage; writes nothing
 quadcam-cli --json gear stage --device ID --cli FILE   # raw CLI lines, no save/exit/defaults
 quadcam-cli --json gear stage --device RADIO_ID --edits FILE.json   # card edits (JSON array)
 quadcam-cli --json gear changes [--device ID] [--status ready] [--history]
@@ -234,7 +239,7 @@ value never shows in `diff all`.
 
 `gear blackbox pull` reads an FC's blackbox flash, verifies and stores it, and erases the flash only when the
 `gear_erase_blackbox` setting is on and the checks pass. `--keep` skips the erase for that run; no flag turns it on.
-It refuses a pull that would outlast the USB heat timer (`--force` overrides that, never an erase that could not
+`--mode auto` (the default) uses the FC's USB disk only when the `gear_blackbox_msc` setting is on and the FC has one, else MSP; `msp` and `msc` force one path. It refuses a pull that would outlast the USB heat timer (`--force` overrides that, never an erase that could not
 finish) and a port another program has open. `list` shows the stored pulls newest first, each log paired with a
 radio-log flight by order (a labelled guess). `erase --yes` empties the flash when QuadCam holds a stored pull of
 exactly what it holds. See [Gear](gear.md#blackbox).
@@ -268,7 +273,7 @@ From 1.0 the command line is a contract. The schema version is 1; `quadcam-cli -
 
 ### MCP equivalents
 
-Every MCP tool has a command. The command line also has `scan`, `analyze`, `clear`, `moments`, `modules manifest`, `gear fc check` and `gear voice build-pack`. An MCP `snake_case` action is the same `kebab-case` command under `gear`. The exceptions:
+Every MCP tool has a command. The command line also has `scan`, `analyze`, `clear`, `moments`, `modules manifest`, `gear fc check` and `gear voice build-pack`. An MCP `gear` action maps to a `gear` command of a similar name: `blackbox_pull` is `gear blackbox pull`, `voice_render` is `gear voice render`, and `card_mount` is `gear card-mount`. `gear --help` lists them. The exceptions:
 
 | MCP | Command |
 |---|---|
@@ -280,6 +285,7 @@ Every MCP tool has a command. The command line also has `scan`, `analyze`, `clea
 | `quadcam_gear` `switch_map` | `gear map` |
 | `quadcam_gear` `session_report` | `gear report` |
 | `quadcam_gear` `board_notes`, `usb_timers` | `gear fc notes`, `gear fc usb` |
+| `quadcam_gear_edit` `poll_pause` | `gear fc pause`, `gear fc resume` |
 | `quadcam_gear` `*_plan` | the same command without `--yes` or `--digest` (or with `--plan`) |
 | `quadcam_gear_apply` | the same command with `--digest D --yes` (MCP `confirm=true`) |
 | `quadcam_library_files` `cuts`, `split_by_flight`, `export_cuts` | `library cut` (`--by-flight`, `--export`) |
