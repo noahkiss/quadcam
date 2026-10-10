@@ -2306,6 +2306,7 @@ export type ElrsView = {
 	/**  Whether a binding phrase is set. Never the phrase. */
 	phrase_set: boolean,
 	region: string,
+	/**  Seconds without a link before a flashed device starts its WiFi; 0 is never. 60 when unset. */
 	wifi_interval: number,
 	warnings: string[],
 };
