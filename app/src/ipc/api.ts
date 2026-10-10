@@ -7,7 +7,7 @@ import { open as openDialog, save as saveDialog } from "@tauri-apps/plugin-dialo
 import { openPath, openUrl, revealItemInDir } from "@tauri-apps/plugin-opener";
 import { commands } from "../bindings";
 import * as N from "./normalize";
-import type { FormatRequest, ChangeStatus, CopyRequest, Edit, SimFrame, SimPreset, SimStartInfo, SimStartParams, SimStopInfo, CrashSaveParams, ImportOptions, LibEdit, LibraryFilter, Moved, ModelEditParams, ModelParams, PackInstallParams, VoiceChooseParams, VoiceEditParams, VoiceParams, VoicePreviewParams, VoiceRenderParams, OsdEditParams, OsdParams, RatesParams, RatesPreview, RateProfile, FlashParams, SplashParams, SimRestoreParams, SimSyncParams, SimsParams, Pack, PackType, PlanPatch, RemovedCuts, SettingsValues, Span, SwitchMapParams, SimCalibrationSaveParams, CalibrateParams } from "./types";
+import type { FormatRequest, ChangeStatus, CopyRequest, Edit, SimFrame, SimPreset, SimStartInfo, SimStartParams, SimStopInfo, CrashSaveParams, ImportOptions, LibEdit, LibraryFilter, Moved, ModelEditParams, ModelParams, PackInstallParams, CatalogParams, EstimateParams, KeyParams, SampleParams, VoiceChooseParams, VoiceEditParams, VoiceParams, VoicePreviewParams, VoiceRenderParams, OsdEditParams, OsdParams, RatesParams, RatesPreview, RateProfile, FlashParams, SplashParams, SimRestoreParams, SimSyncParams, SimsParams, Pack, PackType, PlanPatch, RemovedCuts, SettingsValues, Span, SwitchMapParams, SimCalibrationSaveParams, CalibrateParams } from "./types";
 
 type Result<T> = Promise<{ status: "ok"; data: T } | { status: "error"; error: string }>;
 
@@ -81,6 +81,9 @@ export const api = {
   gearPollPause: (port: string, paused: boolean) => ok(commands.gearPollPause({ port, paused })),
   gearDismissReminder: (handle: string) => ok(commands.gearDismissReminder({ handle })),
   gearBackup: (target: { device?: string | null; port?: string | null; mount?: string | null }) => ok(commands.gearBackup(target)),
+  gearBlackbox: (device: string | null) => ok(commands.gearBlackbox({ device })),
+  gearBlackboxPull: (port: string | null, keep = false) => ok(commands.gearBlackboxPull({ port, keep })),
+  gearBlackboxErase: (port: string | null) => ok(commands.gearBlackboxErase({ port, confirm: true })),
   gearBackups: (device: string | null) => ok(commands.gearBackups({ device })),
   gearBackupRead: (id: string, path: string | null) => ok(commands.gearBackupRead({ id, path })),
   gearBackupDiff: (a: string, b: string | null = null, path: string | null = null) => ok(commands.gearBackupDiff({ a, b, path })),
@@ -121,6 +124,11 @@ export const api = {
   gearVoiceEdit: (params: VoiceEditParams) => ok(commands.gearVoiceEdit(params)),
   gearVoicePreview: (params: VoicePreviewParams) => ok(commands.gearVoicePreview(params)),
   gearVoiceRender: (params: VoiceRenderParams) => ok(commands.gearVoiceRender(params)),
+  gearVoiceKey: (params: KeyParams) => ok(commands.gearVoiceKey(params)),
+  gearVoiceSets: () => ok(commands.gearVoiceSets()),
+  gearVoiceCatalog: (params: CatalogParams) => ok(commands.gearVoiceCatalog(params)),
+  gearVoiceEstimate: (params: EstimateParams) => ok(commands.gearVoiceEstimate(params)),
+  gearVoiceSample: (params: SampleParams) => ok(commands.gearVoiceSample(params)),
   gearVoicePackInstall: (params: PackInstallParams) => ok(commands.gearVoicePackInstall(params)),
   gearVoiceChoose: (params: VoiceChooseParams) => ok(commands.gearVoiceChoose(params)),
   gearModel: (params: ModelParams) => ok(commands.gearModel(params)),

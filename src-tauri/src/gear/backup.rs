@@ -556,6 +556,7 @@ impl Snapshots {
         let dropping: HashSet<String> = dropped.iter().cloned().collect();
         let mut keep = self.manifest_keys(&dropping);
         keep.extend(change_keys(&self.store));
+        keep.extend(super::blackbox::keys(&self.store));
         let collected = if dry_run {
             let mut c = Collected::default();
             for (k, size) in blobs.list()? {

@@ -1,0 +1,69 @@
+path,text,group,tone,why
+SOUNDS/en/armdis.wav,Arming disabled,extras,alert,The arm switch is on but the flight controller refuses.
+SOUNDS/en/armrdy.wav,Ready to arm,extras,calm,Link up and arm switch safe.
+SOUNDS/en/noarm.wav,Cannot arm,extras,alert,An arm attempt was blocked.
+SOUNDS/en/armsafe.wav,Arm switch safe,extras,calm,The arm switch is off.
+SOUNDS/en/thrhigh.wav,Throttle high,extras,alert,Throttle above idle while disarmed.
+SOUNDS/en/thrdown.wav,Lower throttle,extras,alert,Lower the throttle.
+SOUNDS/en/propchk.wav,Props check,extras,alert,Check the propellers before arming.
+SOUNDS/en/airmon.wav,Air mode on,extras,calm,Air mode is on.
+SOUNDS/en/airmof.wav,Air mode off,extras,calm,Air mode is off.
+SOUNDS/en/angleon.wav,Angle on,extras,calm,Angle mode switched on.
+SOUNDS/en/angleoff.wav,Angle off,extras,calm,Angle mode switched off.
+SOUNDS/en/hznmod.wav,Horizon mode,extras,calm,Horizon mode is on.
+SOUNDS/en/crfact.wav,Crash flip active,extras,calm,Crash flip (turtle) is active.
+SOUNDS/en/turton.wav,Turtle mode on,extras,calm,Turtle mode switched on.
+SOUNDS/en/turtof.wav,Turtle mode off,extras,calm,Turtle mode switched off.
+SOUNDS/en/buzact.wav,Buzzer active,extras,calm,The buzzer is on.
+SOUNDS/en/buzoff.wav,Buzzer off,extras,calm,The buzzer is off.
+SOUNDS/en/beepmute.wav,Beeper muted,extras,calm,The beeper is silenced.
+SOUNDS/en/bbfull.wav,Blackbox full,extras,alert,The blackbox storage is full.
+SOUNDS/en/bbclear.wav,Blackbox cleared,extras,calm,The blackbox storage was erased.
+SOUNDS/en/bboff.wav,Blackbox off,extras,calm,Blackbox logging is off.
+SOUNDS/en/blkact.wav,Blackbox active,extras,calm,Blackbox logging is on.
+SOUNDS/en/dvron.wav,DVR on,extras,calm,The DVR records.
+SOUNDS/en/dvroff.wav,DVR off,extras,calm,The DVR stopped.
+SOUNDS/en/recsrt.wav,Recording started,extras,calm,Recording started.
+SOUNDS/en/recstp.wav,Recording stopped,extras,calm,Recording stopped.
+SOUNDS/en/recchk.wav,Check recording,extras,alert,Check that the recorder runs.
+SOUNDS/en/stopdvr.wav,Stop recording,extras,alert,Stop the recording.
+SOUNDS/en/vtxon.wav,VTX on,extras,calm,The video transmitter is on.
+SOUNDS/en/vtxoff.wav,VTX off,extras,calm,The video transmitter is off.
+SOUNDS/en/vtxpm.wav,VTX pit mode,extras,calm,The video transmitter is in pit mode.
+SOUNDS/en/vtxlow.wav,VTX power low,extras,calm,The video transmitter runs at low power.
+SOUNDS/en/vtxhigh.wav,VTX power high,extras,calm,The video transmitter runs at high power.
+SOUNDS/en/vtxmax.wav,VTX maximum power,extras,alert,The video transmitter runs at full power.
+SOUNDS/en/vtxchg.wav,VTX changed,extras,calm,"The video transmitter changed band, channel or power."
+SOUNDS/en/osdon.wav,OSD on,extras,calm,The on-screen display is on.
+SOUNDS/en/osdoff.wav,OSD off,extras,calm,The on-screen display is off.
+SOUNDS/en/osd1.wav,OSD profile one,extras,calm,OSD profile 1.
+SOUNDS/en/osd2.wav,OSD profile two,extras,calm,OSD profile 2.
+SOUNDS/en/osd3.wav,OSD profile three,extras,calm,OSD profile 3.
+SOUNDS/en/pid1.wav,PID profile one,extras,calm,PID profile 1.
+SOUNDS/en/pid2.wav,PID profile two,extras,calm,PID profile 2.
+SOUNDS/en/pid3.wav,PID profile three,extras,calm,PID profile 3.
+SOUNDS/en/rates1.wav,Rate profile one,extras,calm,Rate profile 1.
+SOUNDS/en/rates2.wav,Rate profile two,extras,calm,Rate profile 2.
+SOUNDS/en/rates3.wav,Rate profile three,extras,calm,Rate profile 3.
+SOUNDS/en/ratlow.wav,Low rate,extras,calm,A low rate profile.
+SOUNDS/en/ratmed.wav,Medium rate,extras,calm,A medium rate profile.
+SOUNDS/en/rathi.wav,High rate,extras,calm,A high rate profile.
+SOUNDS/en/indoor.wav,Indoor,extras,calm,The indoor setup.
+SOUNDS/en/outdoor.wav,Outdoor,extras,calm,The outdoor setup.
+SOUNDS/en/longrng.wav,Long range,extras,calm,The long range setup.
+SOUNDS/en/tx25mw.wav,TX twenty five milliwatts,extras,calm,Radio output power.
+SOUNDS/en/tx100mw.wav,TX one hundred milliwatts,extras,calm,Radio output power.
+SOUNDS/en/tx250mw.wav,TX two hundred fifty milliwatts,extras,calm,Radio output power.
+SOUNDS/en/maxtxp.wav,Maximum TX power,extras,alert,Radio output power at its top.
+SOUNDS/en/dyntxp.wav,Dynamic TX power,extras,calm,The radio adjusts its own output power.
+SOUNDS/en/tmrreset.wav,Timer reset,extras,calm,A timer was reset.
+SOUNDS/en/tmrstart.wav,Timer started,extras,calm,A timer started.
+SOUNDS/en/tmrstop.wav,Timer stopped,extras,calm,A timer stopped.
+SOUNDS/en/headback.wav,Head back,extras,alert,Fly back toward the pilot.
+SOUNDS/en/turnback.wav,Turn back,extras,alert,Turn around.
+SOUNDS/en/closer.wav,Getting closer,extras,calm,Closer to the lost quad.
+SOUNDS/en/warmer.wav,Warmer,extras,calm,Closer to the lost quad.
+SOUNDS/en/colder.wav,Colder,extras,calm,Further from the lost quad.
+SOUNDS/en/finder.wav,Finder on,extras,calm,The quad finder is on.
+SOUNDS/en/finderof.wav,Finder off,extras,calm,The quad finder is off.
+SOUNDS/en/simconn.wav,Sim connected,extras,calm,The radio talks to a simulator.

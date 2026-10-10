@@ -17,27 +17,27 @@ SOUNDS/en/rth.wav,Return to home,callouts,The quad flies home by itself.
 SOUNDS/en/mahwarn.wav,Capacity warning,callouts,The used capacity reached the warning level.
 SOUNDS/en/timer1.wav,Timer one,callouts,Timer one reached its time.
 SOUNDS/en/timer2.wav,Timer two,callouts,Timer two reached its time.
-SOUNDS/en/0000.wav,zero,numbers,The number 0.
-SOUNDS/en/0001.wav,one,numbers,The number 1.
-SOUNDS/en/0002.wav,two,numbers,The number 2.
-SOUNDS/en/0003.wav,three,numbers,The number 3.
-SOUNDS/en/0004.wav,four,numbers,The number 4.
-SOUNDS/en/0005.wav,five,numbers,The number 5.
-SOUNDS/en/0006.wav,six,numbers,The number 6.
-SOUNDS/en/0007.wav,seven,numbers,The number 7.
-SOUNDS/en/0008.wav,eight,numbers,The number 8.
-SOUNDS/en/0009.wav,nine,numbers,The number 9.
-SOUNDS/en/0010.wav,ten,numbers,The number 10.
-SOUNDS/en/0011.wav,eleven,numbers,The number 11.
-SOUNDS/en/0012.wav,twelve,numbers,The number 12.
-SOUNDS/en/0013.wav,thirteen,numbers,The number 13.
-SOUNDS/en/0014.wav,fourteen,numbers,The number 14.
-SOUNDS/en/0015.wav,fifteen,numbers,The number 15.
-SOUNDS/en/0016.wav,sixteen,numbers,The number 16.
-SOUNDS/en/0017.wav,seventeen,numbers,The number 17.
-SOUNDS/en/0018.wav,eighteen,numbers,The number 18.
-SOUNDS/en/0019.wav,nineteen,numbers,The number 19.
-SOUNDS/en/0020.wav,twenty,numbers,The number 20.
+SOUNDS/en/SYSTEM/0000.wav,zero,numbers,The number 0.
+SOUNDS/en/SYSTEM/0001.wav,one,numbers,The number 1.
+SOUNDS/en/SYSTEM/0002.wav,two,numbers,The number 2.
+SOUNDS/en/SYSTEM/0003.wav,three,numbers,The number 3.
+SOUNDS/en/SYSTEM/0004.wav,four,numbers,The number 4.
+SOUNDS/en/SYSTEM/0005.wav,five,numbers,The number 5.
+SOUNDS/en/SYSTEM/0006.wav,six,numbers,The number 6.
+SOUNDS/en/SYSTEM/0007.wav,seven,numbers,The number 7.
+SOUNDS/en/SYSTEM/0008.wav,eight,numbers,The number 8.
+SOUNDS/en/SYSTEM/0009.wav,nine,numbers,The number 9.
+SOUNDS/en/SYSTEM/0010.wav,ten,numbers,The number 10.
+SOUNDS/en/SYSTEM/0011.wav,eleven,numbers,The number 11.
+SOUNDS/en/SYSTEM/0012.wav,twelve,numbers,The number 12.
+SOUNDS/en/SYSTEM/0013.wav,thirteen,numbers,The number 13.
+SOUNDS/en/SYSTEM/0014.wav,fourteen,numbers,The number 14.
+SOUNDS/en/SYSTEM/0015.wav,fifteen,numbers,The number 15.
+SOUNDS/en/SYSTEM/0016.wav,sixteen,numbers,The number 16.
+SOUNDS/en/SYSTEM/0017.wav,seventeen,numbers,The number 17.
+SOUNDS/en/SYSTEM/0018.wav,eighteen,numbers,The number 18.
+SOUNDS/en/SYSTEM/0019.wav,nineteen,numbers,The number 19.
+SOUNDS/en/SYSTEM/0020.wav,twenty,numbers,The number 20.
 SOUNDS/en/SYSTEM/hello.wav,Hello,system,The radio powered on.
 SOUNDS/en/SYSTEM/bye.wav,Goodbye,system,The radio powers off.
 SOUNDS/en/SYSTEM/thralert.wav,Throttle warning,system,The throttle is not at idle at power-on.

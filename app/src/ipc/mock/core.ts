@@ -28,6 +28,7 @@ import * as osd from "./osd";
 import { MockFlights } from "./flights";
 import * as backups from "./backups";
 import * as simsync from "./simsync";
+import * as blackbox from "./blackbox";
 import * as firmware from "./firmware";
 import * as ratemath from "./ratemath";
 import { MockHost, MockSim, defaults as simDefaults } from "./sim";
@@ -39,12 +40,12 @@ const DISPATCH = new Set([
   "library", "library_rate", "library_edit", "library_rename", "library_cuts", "library_export_cuts", "library_trash", "library_untrash",
   "library_photos", "library_apply_name_format", "library_match_logs", "library_rebuild", "library_rescan", "library_preview", "library_strips", "card_status",
   "settings", "settings_set", "place_search", "place_save", "session_cuts", "profiles", "session_split", "library_split",
-  "modules", "module_install", "module_remove", "modules_check", "gear_osd", "gear_osd_edit", "gear_model", "gear_model_edit", "gear_voice", "gear_voice_edit", "gear_voice_preview", "gear_voice_render", "gear_voice_pack_install", "gear_voice_choose", "gear_rates", "gear_rates_preview", "gear_sims", "gear_sim_sync_plan", "gear_sim_sync", "gear_sim_restore_plan", "gear_sim_restore", "gear_radio_cli", "gear_dfu_link", "gear_firmware", "gear_firmware_read", "gear_splash", "gear_flash_plan", "gear_flash",
+  "modules", "module_install", "module_remove", "modules_check", "gear_osd", "gear_osd_edit", "gear_model", "gear_model_edit", "gear_voice", "gear_voice_edit", "gear_voice_preview", "gear_voice_render", "gear_voice_key", "gear_voice_sets", "gear_voice_catalog", "gear_voice_estimate", "gear_voice_sample", "gear_voice_pack_install", "gear_voice_choose", "gear_rates", "gear_rates_preview", "gear_sims", "gear_sim_sync_plan", "gear_sim_sync", "gear_sim_restore_plan", "gear_sim_restore", "gear_radio_cli", "gear_dfu_link", "gear_firmware", "gear_firmware_read", "gear_splash", "gear_flash_plan", "gear_flash",
   "gear_status", "gear_devices", "gear_device_save", "gear_device_forget", "gear_dismiss_reminder", "gear_poll_pause",
   "gear_switch_map", "gear_radio", "gear_radio_watch", "gear_sim_calibration", "gear_sim_calibration_save", "gear_sim_defaults", "gear_sim_calibrate",
   "gear_flights", "gear_flight_set", "gear_flight_folders", "gear_packs", "gear_pack_save", "gear_pack_delete", "gear_pack_type_save",
   "gear_pack_type_delete", "gear_pack_notes", "gear_session_report", "gear_session_report_save", "gear_preflight", "gear_crashes", "gear_crash_save", "gear_crash_delete",
-  "gear_backup", "gear_backups", "gear_backup_read", "gear_backup_diff", "gear_backup_pin", "gear_storage", "gear_prune",
+  "gear_blackbox", "gear_blackbox_pull", "gear_blackbox_erase", "gear_blackbox_export", "gear_backup", "gear_backups", "gear_backup_read", "gear_backup_diff", "gear_backup_pin", "gear_storage", "gear_prune",
   "gear_export", "gear_import_backups", "gear_card_check", "gear_card_clean", "gear_card_checks", "gear_card_repair", "gear_stop",
   "gear_changes", "gear_change_stage", "gear_change_update", "gear_change_discard", "gear_restore_stage", "gear_apply_plan", "gear_apply",
   "gear_change_keep", "gear_change_revert", "gear_copy_plan", "gear_copy_stage", "gear_card_mount", "gear_card_unmount",
@@ -96,6 +97,8 @@ export class MockCore {
   radio: { connected: boolean; frame: import("../types").RadioFrame | null; watching: boolean } = { connected: false, frame: null, watching: false };
   /** Sim sync: which sims run, what a sync wrote (`./simsync.ts`). */
   simSync = simsync.freshSimSync();
+  /** Blackbox pulls and the FC's flash (`./blackbox.ts`). */
+  blackbox = blackbox.freshBlackbox();
   /** Firmware: the releases, the saved answer, the DFU device (`./firmware.ts`). */
   firmware = firmware.freshFirmware();
   /** The sim's calibration (`./sim.ts`). */
@@ -368,6 +371,20 @@ export class MockCore {
         this.radio.watching = !!p.on;
         if (this.radio.watching) this.emitRadio();
         return this.radio.watching;
+      case "gear_blackbox":
+        return blackbox.list(this.blackbox, (p.device as string | null) ?? null);
+      case "gear_blackbox_pull": {
+        const r = blackbox.pull(this.blackbox, this.gear.connected, this.settings.values, p.keep === true, new Date());
+        this.emit("gear-changed");
+        return r;
+      }
+      case "gear_blackbox_erase": {
+        const r = blackbox.erase(this.blackbox, this.gear.connected, p.confirm === true);
+        this.emit("gear-changed");
+        return r;
+      }
+      case "gear_blackbox_export":
+        throw "The browser mock cannot write files.";
       case "gear_backup":
         return this.gearBackup(p);
       case "gear_backups":
@@ -462,6 +479,16 @@ export class MockCore {
         return voice.preview(this.gear, p as never);
       case "gear_voice_render":
         return voice.render(this.gear, p as never);
+      case "gear_voice_key":
+        return voice.key(this.gear, p as never);
+      case "gear_voice_sets":
+        return voice.sets(this.gear);
+      case "gear_voice_catalog":
+        return voice.catalog(this.gear, p as never);
+      case "gear_voice_estimate":
+        return voice.estimate(this.gear, p as never);
+      case "gear_voice_sample":
+        return voice.sample(this.gear, p as never);
       case "gear_voice_pack_install":
         return voice.install(this.gear, p as never);
       case "gear_voice_choose":

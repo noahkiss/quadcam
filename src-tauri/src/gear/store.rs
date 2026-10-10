@@ -7,7 +7,7 @@
 //! a full copy and writes it back, so a CLI write while the app runs is never lost.
 //!
 //! The folder layout (design 4.1) is named here too, so every module asks the store for
-//! its paths: `snapshots/<device>/`, `blobs/<xx>/<hash>`, `logs/<radio>/`, `changes/`,
+//! its paths: `snapshots/<device>/`, `blobs/<xx>/<hash>`, `logs/<radio>/`, `blackbox/<device>/`, `changes/`,
 //! `voices/`, `flights.json`.
 
 use super::model::{Device, DeviceKind};
@@ -67,6 +67,11 @@ impl Store {
     /// `<gear>/logs/<radio>/`: each radio log, stored once.
     pub fn logs_dir(&self, radio: &str) -> PathBuf {
         self.root.join("logs").join(safe(radio))
+    }
+
+    /// `<gear>/blackbox/<device>/`: one record per blackbox pull (`blackbox`).
+    pub fn blackbox_dir(&self, device: &str) -> PathBuf {
+        self.root.join("blackbox").join(safe(device))
     }
 
     /// `<gear>/changes/`: staged changes and the bench history.

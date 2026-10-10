@@ -151,6 +151,16 @@ pub struct VoiceRenderParams {
     /// How it is rendered; the defaults when left out.
     #[serde(default)]
     pub settings: Option<RenderSettings>,
+    /// Line sets to render as carrier-sentence batches with ElevenLabs (`quadcam-cli gear
+    /// voice sets` lists them). Empty renders `lines` or every line one at a time.
+    #[serde(default)]
+    pub sets: Vec<String>,
+    /// The model for a batched render; empty for the setting `tts_model`.
+    #[serde(default)]
+    pub model: String,
+    /// The carrier and batch size of a batched render; the defaults when left out.
+    #[serde(default)]
+    pub batch: Option<crate::gear::voice::batch::BatchSettings>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, specta::Type)]
@@ -168,6 +178,12 @@ pub struct RenderReport {
     pub needs_confirm: bool,
     pub dry_run: bool,
     pub notes: Vec<String>,
+    /// A batched render: what it costs. Absent for a line-by-line render.
+    #[serde(default)]
+    pub estimate: Option<crate::gear::voice::batch::Estimate>,
+    /// Cuts whose length looks wrong (batched renders).
+    #[serde(default)]
+    pub warnings: Vec<String>,
 }
 
 /// `gear_voice_preview`: a sound to play.
@@ -240,9 +256,9 @@ struct Override {
 }
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
-struct Custom {
-    path: String,
-    text: String,
+pub(super) struct Custom {
+    pub(super) path: String,
+    pub(super) text: String,
 }
 
 fn voice_obj(v: &mut crate::gear::store::Values) -> Result<&mut serde_json::Map<String, Value>> {
@@ -267,16 +283,16 @@ impl Core {
         self.cache.join("voice").join("tmp")
     }
 
-    fn voice_cache(&self) -> Cache {
+    pub(super) fn voice_cache(&self) -> Cache {
         Cache::new(&self.cache)
     }
 
-    fn voices_dir(&self) -> PathBuf {
+    pub(super) fn voices_dir(&self) -> PathBuf {
         self.gear_store().voices_dir()
     }
 
     /// The provider setting, and why it cannot render, if it cannot.
-    fn voice_config(&self) -> (ProviderConfig, String, String) {
+    pub(super) fn voice_config(&self) -> (ProviderConfig, String, String) {
         let values = self
             .settings_file
             .as_deref()
@@ -294,10 +310,21 @@ impl Core {
             "" => "say".to_string(),
             p => p.to_string(),
         };
+        // ElevenLabs keeps its key in the Keychain; the setting `ttsKey` never holds it.
         let key = std::env::var("QUADCAM_TTS_KEY")
             .ok()
             .filter(|k| !k.is_empty())
-            .or_else(|| Some(s("ttsKey")).filter(|k| !k.is_empty()));
+            .or_else(|| {
+                if provider == "elevenlabs" {
+                    self.gear
+                        .keys
+                        .get(crate::gear::voice::keychain::ELEVENLABS)
+                        .ok()
+                        .flatten()
+                } else {
+                    Some(s("ttsKey")).filter(|k| !k.is_empty())
+                }
+            });
         (
             ProviderConfig {
                 provider,
@@ -343,7 +370,7 @@ impl Core {
         Ok(out)
     }
 
-    fn custom_lines(&self) -> Result<Vec<Custom>> {
+    pub(super) fn custom_lines(&self) -> Result<Vec<Custom>> {
         let v = self.gear_store().read()?;
         Ok(v.get("voice")
             .and_then(|x| x.get("custom_lines"))
@@ -407,7 +434,7 @@ impl Core {
         }
     }
 
-    fn provider_view(&self) -> ProviderView {
+    pub(super) fn provider_view(&self) -> ProviderView {
         let (cfg, model, voice) = self.voice_config();
         let made = self.gear.tts.make(&cfg);
         ProviderView {
@@ -524,7 +551,7 @@ impl Core {
 
     // ----- rendering -----
 
-    fn render_ctx<'a>(
+    pub(super) fn render_ctx<'a>(
         &self,
         tts: &'a dyn Tts,
         cache: &'a Cache,
@@ -540,6 +567,7 @@ impl Core {
             model,
             settings,
             tools,
+            cuts: None,
         }
     }
 
@@ -547,6 +575,9 @@ impl Core {
     /// into the local pack for that voice. A render that costs money waits for `confirm`;
     /// `dry_run` only reports.
     pub fn gear_voice_render(&self, p: &VoiceRenderParams) -> Result<RenderReport> {
+        if !p.sets.is_empty() {
+            return self.voice_studio_render(p);
+        }
         let (tts, model, setting_voice) = self.voice_provider()?;
         let voice = if p.voice.trim().is_empty() {
             setting_voice
@@ -596,6 +627,8 @@ impl Core {
             needs_confirm: false,
             dry_run: p.dry_run,
             notes: Vec::new(),
+            estimate: None,
+            warnings: Vec::new(),
         };
         if paid && plan.to_render > 0 {
             report.notes.push(format!(
@@ -1046,7 +1079,7 @@ impl Core {
     }
 }
 
-fn slug(s: &str) -> String {
+pub(super) fn slug(s: &str) -> String {
     let t: String = s
         .chars()
         .map(|c| {
@@ -1065,7 +1098,7 @@ fn slug(s: &str) -> String {
     }
 }
 
-fn copy_dir(from: &Path, to: &Path) -> Result<()> {
+pub(super) fn copy_dir(from: &Path, to: &Path) -> Result<()> {
     for e in std::fs::read_dir(from)?.flatten() {
         let (src, dst) = (e.path(), to.join(e.file_name()));
         if src.is_dir() {
@@ -1078,7 +1111,7 @@ fn copy_dir(from: &Path, to: &Path) -> Result<()> {
     Ok(())
 }
 
-fn collect_sounds(root: &Path, dir: &Path, out: &mut Vec<String>) {
+pub(super) fn collect_sounds(root: &Path, dir: &Path, out: &mut Vec<String>) {
     for e in std::fs::read_dir(dir).into_iter().flatten().flatten() {
         let p = e.path();
         if p.is_dir() {

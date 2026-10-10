@@ -165,11 +165,13 @@ A new **Gear** section:
 | Keep one a month | `gearKeepMonthly` | on (no limit) |
 | USB time warning | `gearUsbMinutes` | 20 |
 | Voice provider | `ttsProvider` | `say` (macOS) |
-| Voice provider key | `ttsKey` | none; read from `QUADCAM_TTS_KEY` first; in `SECRET_KEYS` |
+| Voice provider key | `ttsKey` | none; read from `QUADCAM_TTS_KEY` first; in `SECRET_KEYS`. The ElevenLabs key is not a setting: it lives in the Keychain (service `app.quadcam`, account `elevenlabs-api-key`) |
 | Check for firmware | `firmwareCheck` | `manual` (`manual` or `daily`) |
 | Tools (esptool, ffmpeg) | `modules` | QuadCam's own modules (7.10); a path per tool overrides one |
 | Use Homebrew ffmpeg | `ffmpegSource` | `module` (`module` or `homebrew`) |
-| Steps on connect | `gearOnConnect` | per device kind: `backup` only (`import`, `apply_ready` off) (7.11) |
+| Steps on connect | `gearOnConnect` | per device kind: `backup` only (`import`, `apply_ready`, `blackbox` off) (7.11) |
+| Erase blackbox after download | `gearEraseBlackbox` | off (7.12) |
+| Read the blackbox through USB disk mode first | `gearBlackboxMsc` | off; not proven on a real FC (7.12) |
 | Cues | `gearCues` | speech and notifications on, sound off, each cue on, not muted; debounce 30 s; reminder after 60 s, every 300 s, 3 at most; no quiet hours (7.11) |
 
 Each key goes into `settings::KEYS` with a default in `Defaults`, as today.
@@ -189,6 +191,8 @@ existing logic modules. `core/gear.rs` holds the `Core` methods; `api/gear.rs` t
 | `gear/serial.rs` | One `SerialLink` trait (open, write, read until, close, "port gone"). The real one wraps the `serialport` crate; the fake one replays a script. A lock file per port so the app and the CLI never open the same port. The fail-safe for tests | `serialport` |
 | `gear/bf/cli.rs` | Betaflight CLI session: enter, command, `diff all`, `dump all`, `get`, `save` (reboot), `exit` | `serial` |
 | `gear/bf/msp.rs` | MSP v1/v2 framing and the read-only messages in section 6.2 | `serial` |
+| `gear/bf/blackbox.rs` | The blackbox flash over MSP: summary, chunked read, erase and poll, the log header reader, the time estimates (7.12) | `bf/msp` |
+| `gear/blackbox.rs` + `core/blackbox.rs` | Pull records, the pairing of logs with flights (a labelled guess), the keep set for blob collection; the `Core` jobs: pull, list, export, erase, the USB disk path and the on-connect step (7.12) | `blobs`, `bf`, `flights` |
 | `gear/bf/dump.rs` | Parses `dump all` and `diff all` into a typed config with section context (`profile N`, `rateprofile N`); renders CLI lines back | none |
 | `gear/bf/fake.rs` | `FakeFc`: a CLI and MSP simulator seeded from a synthetic dump (tests and the mock core) | `bf/dump` |
 | `gear/bf/boards.rs` | Known issues per board and build (shown after a job and on the device page) and each board's USB time limit. Data | `compat` |
@@ -209,7 +213,7 @@ existing logic modules. `core/gear.rs` holds the `Core` methods; `api/gear.rs` t
 | `gear/osd.rs` | OSD position encode and decode, element widths, grids, render, overlap and off-screen check | `bf/dump` |
 | `gear/rates.rs` | Rate curves (Betaflight, Actual, Quick), sampling for the chart, conversion between types | none |
 | `gear/sims/mod.rs` + `liftoff.rs`, `micro.rs`, `uncrashed.rs`, `zone.rs`, `velocidrone.rs` | One `Sim` adapter per game: find, read rate profiles, write, "running" check | `rates` |
-| `gear/voice/` (`lines.rs`, `tts.rs`, `render.rs`, `packs.rs`) | Voice lines and spelling rules, TTS providers, the render cache and normalisation, pack index and install | `media` (ffmpeg), `store` |
+| `gear/voice/` (`lines.rs`, `tts.rs`, `eleven.rs`, `keychain.rs`, `batch.rs`, `sets.rs`, `render.rs`, `packs.rs`) | Voice lines and spelling rules, TTS providers (`say`, OpenAI-compatible, ElevenLabs), the Keychain key, batched carrier-sentence renders, line sets, the render cache and normalisation, pack index and install | `media` (ffmpeg), `store` |
 | `gear/splash.rs` | Image to 1-bit 128x64 with threshold and preview; patch and decode a firmware image | `image` crate (PNG decode) |
 | `gear/firmware/` (`check.rs`, `edgetx.rs`, `elrs.rs`) | Version checks; EdgeTX download, splash, DFU flash; ELRS options and flash | `splash`, `serial`, external `dfu-util`, `esptool` |
 | `modules/` (`manifest.rs`, `fetch.rs`, `install.rs`, `run.rs`) | The module manager (7.10): pinned manifests, download, checksum, install, run as a subprocess, update check, removal. Used by `media` for ffmpeg too | `paths`, `settings` |
@@ -240,8 +244,11 @@ no GPL tool.
 | Staged changes | `<gear>/changes/<YYYY-MM-DD>-<device-slug>-<n>/` | `change.json`, `before/`, `after/`, `apply.cli` or file diffs, `report.json`. The same shape as a hand-kept staging folder |
 | Bench history | `<gear>/changes/` (applied ones) | The log of what was applied, verified or reverted |
 | Downloads | `~/Library/Caches/app.quadcam/firmware/<product>/<version>/` | With a SHA-256 per file |
-| Voice renders | `~/Library/Caches/app.quadcam/voice/raw/<provider>/<key>.pcm` | Raw takes; a re-render costs nothing |
+| Voice renders | `~/Library/Caches/app.quadcam/voice/raw/<provider>/<key>.wav` | Raw takes; a re-render costs nothing |
+| Voice batches | `~/Library/Caches/app.quadcam/voice/batch/<provider>/<key>.wav` and `.json` | A carrier-sentence batch's raw audio and character timestamps; re-cutting costs nothing |
+| Voice samples | `~/Library/Caches/app.quadcam/voice/samples/<voice>-<model>/` | The A/B WAVs |
 | Installed voice packs | `<gear>/voices/<pack-id>/` | WAVs and `pack.json` |
+| Blackbox pulls | `<gear>/blackbox/<device-id>/<YYYY-MM-DDTHHMMSS>.json` | One record per pull: the blob ref of the raw flash image (in `blobs/`), aircraft, day, method, used and total size, the logs found in the headers, whether the flash was erased (7.12). A blob a record names is never collected |
 | Flight index | `<gear>/flights.json` | A rebuildable cache over the log store and folders the user adds |
 
 `<gear>` is the `gearDir` setting. Every path derives from `paths.rs`, so a test with
@@ -344,6 +351,10 @@ in `specta_builder` (`lib.rs`).
 | `gear_card` | `CardParams { mount or device, model }` → `GearCard` (card view, selected model's aircraft, `radio_usb`) | no |
 | `gear_card_preview` | `CardPreviewParams { mount or device, edits }` → `CardPreview` (checks, diff, files, bytes, ETA) | no |
 | `gear_backup` | `BackupParams { device }` → `Backup` | device read, gear folder |
+| `gear_blackbox_pull` | `BlackboxPullParams { port, keep, mode, force }` → `FcJob<BlackboxPullResult>` | device read; **device erase** only when `gearEraseBlackbox` is on and the pull verified; blobs, gear folder |
+| `gear_blackbox` | `BlackboxFilter { device }` → `Vec<BlackboxEntry>` (a pull and its guessed flights) | no |
+| `gear_blackbox_export` | `BlackboxExportParams { id, to, split }` → `BlackboxExported` | files in `to` |
+| `gear_blackbox_erase` | `BlackboxEraseParams { port, confirm }` → `FcJob<BlackboxErased>` | **device erase** |
 | `gear_backups` | `BackupFilter` → `Vec<Backup>` | no |
 | `gear_backup_read` | `BackupReadParams { id, path }` → `BackupContent` | no |
 | `gear_backup_diff` | `BackupDiffParams { a, b, path }` → `Vec<DiffItem>` | no |
@@ -372,6 +383,11 @@ in `specta_builder` (`lib.rs`).
 | `gear_voice` | `VoiceParams` → `VoiceView` (lines, packs installed and available, card state) | no |
 | `gear_voice_edit` | `VoiceEditParams { line, text, pack }` → `VoiceLine` | gear.json |
 | `gear_voice_render` | `VoiceRenderParams { voice, lines, dry_run }` → `RenderReport` | cache; network |
+| `gear_voice_key` | `KeyParams { action, key }` → `KeyStatus` (never the key) | Keychain |
+| `gear_voice_sets` | → `StudioView` (key state, line sets) | no |
+| `gear_voice_catalog` | `CatalogParams { voices, models, credits }` → `Catalog` | network (free calls) |
+| `gear_voice_estimate` | `EstimateParams { sets, voice, model }` → `StudioEstimate` | network (free calls) |
+| `gear_voice_sample` | `SampleParams { voices, models, sets, confirm }` → `SampleReport` | cache; network (paid) |
 | `gear_voice_pack_install` | `PackInstallParams { pack }` → `VoicePack` | gear folder; network |
 | `gear_voice_choose` | `VoiceChooseParams { radio, pack, keep_overrides }` → `StagedChange` | gear folder |
 | `gear_splash` | `SplashParams { image, threshold, invert, board }` → `SplashPreview` | cache |
@@ -406,6 +422,7 @@ work packages do not edit one shared file.
 ```bash
 quadcam-cli --json gear devices
 quadcam-cli --json gear fc identify|read|check|notes|usb          # WP2 (read: --cmd, --out STEM)
+quadcam-cli --json gear blackbox pull|list|export|erase           # BB (7.12; pull: --keep, --mode, --force; erase: --yes)
 quadcam-cli --json gear card [--mount M | --device ID] [--model model01.yml]
 quadcam-cli --json gear card preview --edits edits.json             # checks and diff; writes nothing
 quadcam-cli --json gear backup --device <id>|--port /dev/cu.usbmodemX|--mount /Volumes/RADIO
@@ -448,9 +465,9 @@ can then allow the read tool freely and gate the other two.
 
 | Tool | Changes | Actions |
 |---|---|---|
-| `quadcam_gear` | Nothing | `status`, `devices`, `fc_identify`, `board_notes`, `usb_timers`, `card`, `card_preview`, `storage`, `backups`, `backup_read`, `backup_diff`, `switch_map`, `osd`, `rates`, `sims`, `changes`, `apply_plan`, `voice`, `firmware_check`, `flights`, `packs`, `session_report`, `preflight`, `crashes` |
-| `quadcam_gear_edit` | QuadCam's own data only: never a device, a sim or a card | `device_save`, `device_forget`, `fc_read` (a CLI read; the FC reboots), `stage`, `update`, `discard`, `restore_stage`, `voice_edit`, `voice_render`, `voice_choose`, `pack_save`, `pack_delete`, `pack_type_save`, `pack_type_delete`, `pack_notes`, `flight_set`, `flight_folders`, `crash_save`, `crash_delete`, `backup` (a read of the device; writes only to the gear folder), `import_backups`, `prune`, `export` |
-| `quadcam_gear_apply` | A device, a sim or the radio firmware | `apply`, `sim_sync`, `flash`. Each needs the `digest` from a plan and `confirm=true` |
+| `quadcam_gear` | Nothing | `status`, `devices`, `fc_identify`, `board_notes`, `usb_timers`, `card`, `card_preview`, `storage`, `backups`, `backup_read`, `backup_diff`, `blackbox`, `switch_map`, `osd`, `rates`, `sims`, `changes`, `apply_plan`, `voice`, `firmware_check`, `flights`, `packs`, `session_report`, `preflight`, `crashes` |
+| `quadcam_gear_edit` | QuadCam's own data only: never a device, a sim or a card | `device_save`, `device_forget`, `fc_read` (a CLI read; the FC reboots), `stage`, `update`, `discard`, `restore_stage`, `voice_edit`, `voice_render`, `voice_choose`, `pack_save`, `pack_delete`, `pack_type_save`, `pack_type_delete`, `pack_notes`, `flight_set`, `flight_folders`, `crash_save`, `crash_delete`, `backup` (a read of the device; writes only to the gear folder), `blackbox_export` (files in a folder), `import_backups`, `prune`, `export` |
+| `quadcam_gear_apply` | A device, a sim or the radio firmware | `apply`, `sim_sync`, `flash`. Each needs the `digest` from a plan and `confirm=true`. `blackbox_pull` and `blackbox_erase` need `confirm=true` only: a pull may erase the FC's flash when the person's `gearEraseBlackbox` setting is on, so it sits in the tool a harness gates, though it has no plan or sheet (like `card_repair`) |
 
 Modules are setup, so `quadcam_settings` gains the actions `modules`, `module_install`
 (needs `confirm=true`, after the agent shows the user the license) and `module_remove`.
@@ -513,13 +530,14 @@ the new value against it.
 
 ### 6.2 MSP (read-only)
 
-MSP serves identity and the live view. It never writes in 1.0.
+MSP serves identity and the live view. It never writes configuration in 1.0. The one MSP message that changes the FC is the blackbox flash erase (`MSP_DATAFLASH_ERASE`, section 7.12), and it runs only after a verified pull.
 
 | Need | Messages |
 |---|---|
 | Identity without entering the CLI (no reboot) | `MSP_API_VERSION`, `MSP_FC_VARIANT`, `MSP_FC_VERSION`, `MSP_BOARD_INFO`, `MSP_BUILD_INFO`, `MSP_UID` |
 | Live switch map | `MSP_RC` (channel values), `MSP_BOXIDS` + `MSP_MODE_RANGES` + `MSP_ADJUSTMENT_RANGES`, the active-modes flags in `MSP_STATUS_EX` |
 | Live overview | `MSP_ANALOG`, `MSP_BATTERY_STATE` |
+| Blackbox flash | `MSP_DATAFLASH_SUMMARY` (70), `MSP_DATAFLASH_READ` (71, v2, compression flag off), `MSP_DATAFLASH_ERASE` (72) (7.12) |
 
 - v1 frames (`$M<`, XOR checksum) for the classic messages, v2 (`$X<`, CRC8 DVB-S2) where
   needed. Message ids come from the public MSP protocol description and are checked against
@@ -544,6 +562,7 @@ MSP serves identity and the live view. It never writes in 1.0.
 | Verify | yes (`dump all`) | – |
 | Identity, version guard | `version` as a fallback | yes |
 | Switch map, live | – | yes |
+| Blackbox pull and erase | `msc` (the optional USB disk path, unproven) | yes |
 | ELRS RX flash | `serialpassthrough` | – |
 
 ### 6.3 EdgeTX SD card and YAML
@@ -1090,17 +1109,54 @@ protocol serves; the gear folder is outside its scope). `build-pack` is CLI only
   (`voice.overrides.<radio>`, a `text` override holds its WAV as a blob; `backup::change_keys`
   keeps those blobs from collection), as does the chosen voice and the person's custom lines.
   Choosing with Keep my overrides off clears that radio's overrides when it stages.
-- Not built, or different from the design: the render hook for carrier sentences is a
-  documented seam in `tts.rs` only. `lines.csv` holds 45 lines, not about 745: the callouts
-  QuadCam names, the numbers 0 to 20 and six system sounds; the rest of EdgeTX's set is a data
-  task. Units and their file names are not in it. The ElevenLabs adapter and the quota report
-  are not built; the report gives characters and whether the provider may charge. A render
-  runs inside the call, with no progress events. `lang` is `en` only.
+- Not built, or different from the design: `lines.csv` holds 45 lines, not about 745: the
+  callouts QuadCam names, the numbers 0 to 20 and six system sounds. The full set lives in the
+  line sets below. A render runs inside the call, with no progress events. `lang` is `en` only.
+  The numbers sit at `SOUNDS/en/SYSTEM/0000.wav`, where EdgeTX plays them (the manual:
+  `SYSTEM` holds what the radio plays by itself; `SOUNDS/en/` holds tracks a model names);
+  a test keeps every number and unit prompt in `SYSTEM`.
 - Acceptance: `tests/voice.rs` (the spelling golden, a cache hit with no provider call, the
   normalisation golden WAV, the providers' requests, `build-pack`'s zip and index entry, the
   install checks, a hostile zip) and `tests/voice_core.rs` (render and cost, confirm, install,
   Choose voice staging one change and keeping overrides, apply with read-back),
   `e2e/voice.spec.ts`.
+
+**Voice studio (built).** ElevenLabs behind the same `Tts` trait (`eleven.rs`): the key comes
+from the Keychain through `KeyStore` (`keychain.rs`, `security-framework`, no secret in argv;
+`MemKeys` in tests; the real Keychain and network stay closed under cargo unless
+`QUADCAM_TTS=real`), `/v1/models`, `/v1/voices`, `/v1/user/subscription` and
+`/v1/text-to-speech/<voice>/with-timestamps?output_format=pcm_32000` go through `Http` (curl with
+its config on stdin; `FakeHttp` in tests). A model's billing rate is its
+price in `rates.rs`, the one rate table: USD per 1,000 characters, an optional promo rate with
+its last day, and the per-request character limit (v4 and v4 turbo: the v3 limit of 5,000
+until the account says otherwise). Credits a character are the base USD rate over 0.08 and
+read as an estimate; a model the table lacks keeps the account's `character_cost_multiplier`
+(turbo and flash v2 fall back to 0.5). The `x-character-count` header of a paid call is kept
+per model in `<cache>/voice/charcost.json` and wins over the estimate next time.
+
+- Batches (`batch.rs`): `plan` groups lines by tone, wraps each in the carrier (default
+  `The word is {line}.`, the line ends the sentence; a line with its own end mark takes no
+  second full stop), joins up to 30 sentences, and drops repeats of the same spoken text.
+  `fetch` renders with timestamps or reads `BatchCache` (WAV and alignment JSON by provider,
+  voice, model, speed, batch text and seed). `cut` takes each line from its first character's
+  start to its last character's end, each edge moved to the quietest 2 ms window within 40 ms,
+  and fails when the alignment does not describe the batch text or runs past the audio.
+  `check` flags silent cuts, cuts under 120 ms or over 4.5 s, and cuts far from the batch's
+  median pace per letter. The cuts feed `render::Ctx.cuts`, so `render_line` and `packs::render_to`
+  take them like any cached take, then trim, fade and tempo.
+- Cost: `estimate` counts the characters of the batches the cache lacks, carriers included,
+  times the model's rate, in credits and in USD (`Estimate.usd`, `usd_per_1k`, `promo_until`,
+  `credits_basis`: `estimated`, `recorded` or `account`); `plan_within` keeps each batch under
+  nine tenths of the model's request limit; `Estimate::check` refuses when the credits
+  (`/v1/user/subscription`) fall short. Every paid row (`gear_voice_sample`, `gear_voice_render` with `sets`) prices
+  first and waits for `confirm`. MCP can delete the key and cannot set it.
+- Sets (`sets.rs`, `resources/voice/sets/*.csv`, `path,text,group,tone,why`): `edgetx`,
+  `quad`, `heli`, `plane`, `glider`, `extras`, `easter`, `sample`, `quadcam` (the built-in
+  `lines.csv`) and `custom` (from `gear.json`). The aircraft sets are `radio.csv` plus their own
+  callouts. The text is QuadCam's wording; file names are the names the firmware plays.
+- Acceptance: unit tests in `eleven.rs`, `keychain.rs`, `batch.rs`, `sets.rs`;
+  `tests/voice_studio.rs` (key, catalogue, estimate, sample, set render, credits refusal, MCP)
+  and `e2e/voice-studio.spec.ts`.
 
 **Packs are release assets, not git files.** A pack is a zip per voice
 (`voice-<id>-<version>.zip`) attached to a GitHub release, plus one `voices.json` index:
@@ -1586,12 +1642,14 @@ present until the next look shows its own volume. "Safe to remove" (`disk::safe_
 release leads to `unmounted_present` and the "safe to unplug" cue.
 
 **On-connect steps.** `Core::gear_add_hook` registers an `OnConnectHook`: a name, an
-`Automation` (`backup`, `import`, `apply_ready`), the device kinds, and the function. The app
+`Automation` (`backup`, `import`, `apply_ready`, `blackbox`), the device kinds, and the function. The app
 runs `Core::gear_on_connect` on its own thread for each `connected` and `identified` event.
 A hook runs only when `gearOnConnect` lists its automation for the device's kind; `backup`
 also needs `gearAutoBackup`. Defaults: `backup` for every kind, the others off. WP4 registers
 backup, a later package import, WP5 `apply_ready` (which still goes through the plan, the
-checks and the confirm in section 8; an automatic apply never skips them). A failed step plays
+checks and the confirm in section 8; an automatic apply never skips them), and BB `blackbox`
+(FCs only; off until the person lists it; it skips a port whose reads are paused, and the erase
+inside it still needs `gearEraseBlackbox`). A failed step plays
 the `step_failed` cue.
 
 **Cues** (`gear/cues.rs`) are quiet by design. QuadCam mounts, unmounts and opens ports all
@@ -1630,6 +1688,81 @@ are child processes with an argv list. A process started by cargo gets the silen
 tested on a fake clock. `gear_status` reports the links a job holds (`working`) and the armed
 reminders (`reminders`); `gear_dismiss_reminder` stops one by link. A hold, its release, a
 job's end and a dismiss send `gear-changed`.
+
+### 7.12 Blackbox pull and erase (task BB)
+
+The FC's flash fills with logs and Betaflight then stops logging. QuadCam pulls the logs off,
+keeps them, and clears the flash, so the next flights are logged. Replaces the radio's
+BLACKBOX ERASE switch habit.
+
+**Read.** `MSP_DATAFLASH_SUMMARY` gives ready, supported, total and used bytes. The read asks
+for the used bytes only, as `MSP_DATAFLASH_READ` over MSP v2: address (u32), size (u16, 4096),
+compression flag (u8, always 0); the reply is address, size sent, a compressed flag and the data.
+A reply with the flag set is an error, not data: QuadCam has no decompressor, and the real one
+is Huffman-coded with a table it would have to reproduce. A short reply continues where it ended;
+a failed chunk is asked again twice; a gone port fails the job at once. Measured 2026-10-07: about
+84 KB/s, so 16 MB takes 3.3 minutes. API 1.40 or later is required; older FCs refuse.
+
+**Order of the job** (`core/blackbox.rs`, one `fc_job`, one cue at the end):
+
+1. Refuse a port another process holds (`Env.holders`) and any FC that is not Betaflight.
+2. Identify over MSP, read the summary. 0 used: nothing to pull.
+3. Heat check. The USB timer (7.11) gives the seconds left with a battery in. The read takes
+   `used / 84 KB/s`. If it does not fit, refuse (`usb_heat`) unless `force`.
+4. Read: MSP, or the USB disk path when `gearBlackboxMsc` allows (below).
+5. Verify (`bf::blackbox::check_image`): size equals used, the data starts with a log header,
+   each log has a firmware line. A failure stores nothing and erases nothing.
+6. Store: under the blob store's lock, `put` the image, read it back and compare, write the
+   record. The same bytes as the device's latest unerased pull add no record.
+7. Erase, only if `gearEraseBlackbox` is on and `keep` is not set, and only after 1 to 6:
+   - the USB timer must hold the erase estimate (4 s per MiB of flash, 20 to 120 s) plus 10 s,
+     else the erase is skipped and the result and the record say why (a forced pull ends here);
+   - the summary is read again; if used changed since the read, skip;
+   - send `MSP_DATAFLASH_ERASE`, poll the summary until ready with 0 used, for at most twice
+     the estimate (capped by `Timing::erase_max`); a timeout fails the job and the record keeps
+     the reason. The pull stays stored.
+8. Release the port. The cue "done, safe to unplug" plays after step 7 ends.
+
+**Consent.** Two switches, like deleting clips after import. `gearOnConnect` lists `blackbox`
+for a kind to pull on plug-in (off by default). `gearEraseBlackbox` (off by default) allows the
+erase. A call can only turn the erase off for its run (`keep`); nothing on the CLI or in MCP turns
+it on. A manual erase (`gear_blackbox_erase`, `confirm=true`) needs a stored pull whose used size
+equals the flash's now (the flash only grows) and whose blob reads back. The owner's request was an
+automatic pull then wipe. The setting defaults to off because the request names the
+`delete_clips_after_import` pattern, which is off, and a wipe cannot be undone. Turn it on in
+Settings > Gear to get the request as asked.
+
+**Dates and flights.** FCs have no clock: every log reads `0000-01-01`. A pull's day is the day it
+ran. `gear/blackbox.rs::link` pairs a pull's logs with the flights of the FC's aircraft (radio
+logs, 7.6) that ended before the pull and started after the device's last erased pull, by order:
+the newest flight-sized log (32 KB or more) with the newest flight, and so on back. Extra logs or
+flights stay unpaired. Each pair carries `fits`: bytes per second of flight within half to double the
+median pair (three pairs or more). The result carries a note that this is a guess. Matching the
+blackbox RC traces with the radio's 10 Hz logs needs the decoder and is not done here.
+
+**Header reader, not a decoder.** `bf/blackbox.rs` reads `H name:value` lines: firmware revision,
+craft name, start date, loop time. It decodes no frames (sim-design BB keeps that). Written from
+the public format description; the GPL decoder was not read.
+
+**USB disk path (needs a real-FC trial).** With `gearBlackboxMsc` (or `mode=msc`): enter the CLI,
+`help` must list `msc`, send `msc` (the FC reboots as a disk), wait for a new volume that holds
+`.bbl` or `.bfl` files, copy them in name order into one image, unmount the disk, wait for the
+port. The same verify (step 5) applies, so a file layout that does not add up to the used size
+fails and nothing is erased. If the port does not come back the pull is stored and the erase is
+skipped with the reason. Without `msc` in the CLI the pull falls back to MSP (`mode=msc` fails
+instead). Unknown on real hardware: the disk's layout and names, its speed, whether eject or a
+replug returns the FC to serial, and the extra reboot's cost against the heat timer. Tests use
+`FakeFc::with_msc` and a temporary folder as the disk.
+
+**Pause and other programs.** The on-connect step skips a port whose reads are paused
+(`gear_poll_pause`). Every pull checks `Env.holders`, and a real open refuses a port another
+process has (`serial::other_holders`). A manual pull of a paused port runs.
+
+**Surfaces.** App: the FC page's Blackbox segment (Pull blackbox, Erase flash with a prompt, the
+pulls and their logs); Settings > Gear. CLI: `gear blackbox pull|list|export|erase`. MCP:
+`quadcam_gear blackbox`, `quadcam_gear_edit blackbox_export`, `quadcam_gear_apply blackbox_pull|
+blackbox_erase`. Rows: `gear_blackbox_pull`, `gear_blackbox`, `gear_blackbox_export`,
+`gear_blackbox_erase`.
 
 ## 8. Safety model
 
@@ -1846,6 +1979,7 @@ docs, and its rows in `api`, CLI and MCP.
 | WP11 | Card prep. **Done, with the app button** | `disk.rs` changes, `card_prep*` rows, `quadcam_format_card` `prep`, the Prepare card button | – (existing code) | 1 |
 | WP12 | Flights and packs | `logs.rs` columns, `gear/flights.rs`, `gear/packs.rs`, Flights and Packs pages | WP1 (reads log folders; the log store once WP4 lands) | 1 |
 | WP13 | Gear shell UI. **Done** | Sidebar Gear section, page frame and segments, Connected rows, plug-in bar, shared components (`DiffView`, `ChecksList`, `DeviceHeader`), mock-core scenarios | WP1 (types) | 1 |
+| BB | Blackbox pull and erase (7.12). **Built; the USB disk path and every real-FC behaviour need a trial** | `gear/bf/blackbox.rs`, `gear/blackbox.rs`, `core/blackbox.rs`, Blackbox segment, `gear blackbox` | WP2, WP4, WP12 | 2 |
 | WP14 | Modules and third-party notices | `modules/` (the module manager, 7.10), the Modules section in Settings, `media.rs` finding ffmpeg through it; `THIRD_PARTY_NOTICES` generated at build (`cargo about` or equivalent for crates, the pnpm license list for `app/`, the OFL text for the bundled fonts) and shipped in the `.app`; an About window entry; a CI check that fails on a dependency with no license or a license outside the allow list (MIT, Apache-2.0, BSD, ISC, MPL-2.0, OFL-1.1, Unicode, Zlib) | – | 1 |
 
 **Parallel groups:** 0 → 1 → 2 → 3 → 4. WP14 (modules) runs in group 1 because firmware
@@ -1869,6 +2003,7 @@ split: their read-only halves run early; their write halves wait for WP5.
 | WP11 | Disk-image test: prep refuses with a clip not in the library, passes otherwise; DJI refused |
 | WP12 | Each measure in 7.6 matches the synthetic log's known values; pack history; old `LogRow` tests still pass |
 | WP13 | Mock scenarios render; axe passes in both themes; Gear section collapses; plug-in bar appears for a device with staged changes |
+| BB | Against `FakeFc`: the pull reads only the used bytes and verifies; the blob reads back; the erase runs only after verify and only with the setting on; a lying summary, junk data or a compressed reply stores and erases nothing; a stuck erase fails and keeps the pull; the heat timer refuses a long pull and skips an erase it cannot finish; a held or paused port is left alone; the USB disk path copies files and falls back; logs pair with flights by order and say guess; export and manual erase refuse as 7.12 says; a prune keeps the blobs |
 | WP14 | Against a fixture server: download, checksum match and mismatch, install, run, update, remove, the license prompt (mock core). ffmpeg from the module and from Homebrew both pass the import tests. The built `.app` holds the notices file with every crate, npm package and font; the CI license check passes and fails on a planted bad license |
 
 ## 11. Release plan

@@ -99,6 +99,7 @@ fn ctx_in<'a>(tts: &'a dyn Tts, cache: &'a Cache, settings: &'a RenderSettings) 
         model: "m1",
         settings,
         tools: None,
+        cuts: None,
     }
 }
 

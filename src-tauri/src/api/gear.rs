@@ -11,6 +11,10 @@ pub use crate::core::{
     ImportBackupsParams, PruneParams, RepairResult, StopParams,
 };
 pub use crate::core::{
+    BlackboxEntry, BlackboxEraseParams, BlackboxErased, BlackboxExportParams, BlackboxExported,
+    BlackboxFilter, BlackboxPullParams, BlackboxPullResult,
+};
+pub use crate::core::{
     BoardNotesParams, CardClean, CardCleanParams, CardParams, CardPreview, CardPreviewParams,
     DeviceSaveParams, FcJob, FcPortParams, FcReadParams, GearCard, GearStatus, OsdParams,
     PollPauseParams, RadioParams, RadioWatchParams, RatesParams, RatesPreview, RatesPreviewParams,
@@ -26,6 +30,10 @@ pub use crate::core::{
     RadioCliParams, RadioCliReport, RadioMatch, RadioVerify, RenderReport, RestoreParams,
     SimRestoreParams, SimRestoreRequest, StageParams, VoiceChooseParams, VoiceEditParams,
     VoiceLine, VoicePack, VoiceParams, VoicePreviewParams, VoiceRenderParams, VoiceView,
+};
+pub use crate::core::{
+    Catalog, CatalogParams, EstimateParams, KeyParams, KeyStatus, SampleParams, SampleReport,
+    StudioEstimate, StudioView,
 };
 pub use crate::core::{
     CrashSaveParams, FlightFilter, FlightFoldersParams, FlightReport, FlightSetParams, FlightsView,
@@ -83,6 +91,15 @@ macro_rules! with_gear_rows {
             gear_device_forget(params: IdParams) -> Device = |c| c.gear_device_forget(&params.id);
             /// Reads an FC's identity over MSP (board, firmware, version, its device id). No
             /// reboot. One cue at the end.
+            /// Pulls an FC's blackbox flash (only the used bytes), verifies and stores it, and
+            /// erases the flash when the setting or `erase` allows and the checks pass.
+            gear_blackbox_pull(params: BlackboxPullParams) -> FcJob<BlackboxPullResult> = |c| c.gear_blackbox_pull(&params);
+            /// Stored blackbox pulls, newest first, each with its guessed flights.
+            gear_blackbox(params: BlackboxFilter) -> Vec<BlackboxEntry> = |c| c.gear_blackbox(&params);
+            /// Writes a stored pull (and with `split` each log) to a folder.
+            gear_blackbox_export(params: BlackboxExportParams) -> BlackboxExported = |c| c.gear_blackbox_export(&params);
+            /// Erases an FC's blackbox flash. Needs `confirm` and a stored pull of exactly what the flash holds.
+            gear_blackbox_erase(params: BlackboxEraseParams) -> FcJob<BlackboxErased> = |c| c.gear_blackbox_erase(&params);
             gear_fc_identify(params: FcPortParams) -> FcJob<FcInfo> = |c| c.gear_fc_identify(&params);
             /// Reads an FC through its CLI: read-only commands, a backup's set by default. The FC
             /// reboots when it ends. Writes nothing.
@@ -163,6 +180,19 @@ macro_rules! with_gear_rows {
             /// Renders QuadCam's lines (and the person's own) with the provider from the settings into
             /// a local pack. A render that costs money waits for `confirm`; `dry_run` only reports.
             gear_voice_render(params: VoiceRenderParams) -> RenderReport = |c| c.gear_voice_render(&params);
+            /// The voice studio's ElevenLabs key: `status` (set or not, never the key), `set` (into the
+            /// Keychain) or `delete`.
+            gear_voice_key(params: KeyParams) -> KeyStatus = |c| c.gear_voice_key(&params);
+            /// The line sets a person can render, and whether a key is stored. No network.
+            gear_voice_sets() -> StudioView = |c| c.gear_voice_sets();
+            /// The account's ElevenLabs voices, models (with what a character costs) and credits. Free calls.
+            gear_voice_catalog(params: CatalogParams) -> Catalog = |c| c.gear_voice_catalog(&params);
+            /// What rendering line sets as carrier-sentence batches would cost, and whether the
+            /// credits cover it. Makes no paid call.
+            gear_voice_estimate(params: EstimateParams) -> StudioEstimate = |c| c.gear_voice_estimate(&params);
+            /// Renders a few lines in every voice and model for A/B listening. A paid call:
+            /// `confirm` allows it; `dry_run` only prices it.
+            gear_voice_sample(params: SampleParams) -> SampleReport = |c| c.gear_voice_sample(&params);
             /// Installs a voice pack from the index after a hash check.
             gear_voice_pack_install(params: PackInstallParams) -> VoicePack = |c| c.gear_voice_pack_install(&params);
             /// Stages one card change that puts a pack's sounds on a radio, keeping the person's

@@ -231,13 +231,25 @@ pub const KEYS: &[Key] = &[
     Key {
         file: "gearOnConnect",
         name: Some("gear_on_connect"),
-        about: "an object of device kind (fc, radio, elrs_tx, elrs_rx, goggles, dvr_card) to a list of backup, import, apply_ready",
+        about: "an object of device kind (fc, radio, elrs_tx, elrs_rx, goggles, dvr_card) to a list of backup, import, apply_ready, blackbox",
         check: |v| {
             typed::<std::collections::BTreeMap<crate::gear::model::DeviceKind, Vec<crate::gear::Automation>>>(
                 v,
-                "an object of device kind to a list of backup, import, apply_ready",
+                "an object of device kind to a list of backup, import, apply_ready, blackbox",
             )
         },
+    },
+    Key {
+        file: "gearEraseBlackbox",
+        name: Some("gear_erase_blackbox"),
+        about: "true or false (erase the FC's blackbox flash after a pull verified; off by default)",
+        check: boolean,
+    },
+    Key {
+        file: "gearBlackboxMsc",
+        name: Some("gear_blackbox_msc"),
+        about: "true or false (try the FC's USB disk mode before MSP for a blackbox pull; unproven, off by default)",
+        check: boolean,
     },
     Key {
         file: "gearCues",
