@@ -1,7 +1,8 @@
 //! Line sets (design 7.4): the lists of lines a person picks to render. Each set is a data
-//! file in `resources/voice/sets/` (`path,text,group,tone,why`); the aircraft sets hold only
-//! the lines that setup plays, on top of `radio.csv`, the prompts every radio plays. Sets
-//! combine, and a path in two sets renders once. The person's own lines (`custom`) come from
+//! file in `resources/voice/sets/` (`path,text,group,tone,why`, and for the EdgeTX lists a
+//! sixth field `kinds`, the aircraft types that play the line). An aircraft set is the
+//! radio's prompts, the units, the EdgeTX lines tagged with its kind, and its own file.
+//! Sets combine, and a path in two sets renders once. The person's own lines (`custom`) come from
 //! `gear.json`, not from here.
 //!
 //! The tone of a line decides its batch: `calm` status, `alert` warnings, `number`s and
@@ -15,11 +16,16 @@ use specta::Type;
 /// The tones a line can have.
 pub const TONES: &[&str] = &["calm", "alert", "number", "fun"];
 
+/// The aircraft kinds a line can be tagged with.
+pub const KINDS: &[&str] = &["quad", "heli", "plane", "glider", "car"];
+
 /// A line with the tone that batches it.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SetLine {
     pub line: Line,
     pub tone: String,
+    /// The aircraft kinds that play the line (empty: no aircraft set picks it by kind).
+    pub kinds: Vec<String>,
 }
 
 /// What a person sees of a set.
@@ -37,6 +43,8 @@ struct Def {
     about: &'static str,
     /// The files that make up the set, in order.
     files: &'static [&'static str],
+    /// Files that give a line only when it carries this kind.
+    by_kind: Option<(&'static str, &'static [&'static str])>,
 }
 
 macro_rules! file {
@@ -49,6 +57,8 @@ const FILES: &[(&str, &str)] = &[
     ("radio", file!("radio")),
     ("units", file!("units")),
     ("edgetx", file!("edgetx")),
+    ("scripts", file!("scripts")),
+    ("general", file!("general")),
     ("quad", file!("quad")),
     ("heli", file!("heli")),
     ("plane", file!("plane")),
@@ -62,50 +72,72 @@ const SETS: &[Def] = &[
     Def {
         id: "edgetx",
         title: "Full EdgeTX English",
-        about: "Every prompt the radio plays by itself, the numbers and units, and the general prompts a model can name.",
-        files: &["radio", "units", "edgetx"],
+        about: "Every prompt EdgeTX plays: the radio's own prompts, numbers and units, the model prompts, and the telemetry-script prompts.",
+        files: &["radio", "units", "edgetx", "scripts"],
+        by_kind: None,
     },
     Def {
         id: "quad",
         title: "FPV quad",
-        about: "The radio's own prompts and numbers, and the callouts a quad's radio plays.",
-        files: &["radio", "quad"],
+        about: "The radio's prompts, numbers and units, the EdgeTX prompts a quad's radio plays, and QuadCam's quad callouts.",
+        files: &["radio", "units", "quad"],
+        by_kind: Some(("quad", &["edgetx", "scripts"])),
     },
     Def {
         id: "heli",
         title: "Helicopter",
-        about: "The radio's own prompts and numbers, and the callouts a helicopter's radio plays.",
-        files: &["radio", "heli"],
+        about: "The radio's prompts, numbers and units, the EdgeTX prompts a helicopter's radio plays, and QuadCam's helicopter callouts.",
+        files: &["radio", "units", "heli"],
+        by_kind: Some(("heli", &["edgetx", "scripts"])),
     },
     Def {
         id: "plane",
         title: "Plane",
-        about: "The radio's own prompts and numbers, and the callouts a plane's radio plays.",
-        files: &["radio", "plane"],
+        about: "The radio's prompts, numbers and units, the EdgeTX prompts a plane's radio plays, and QuadCam's plane callouts.",
+        files: &["radio", "units", "plane"],
+        by_kind: Some(("plane", &["edgetx", "scripts"])),
     },
     Def {
         id: "glider",
         title: "Glider",
-        about: "The radio's own prompts and numbers, and the callouts a glider's radio plays.",
-        files: &["radio", "glider"],
+        about: "The radio's prompts, numbers and units, the EdgeTX prompts a glider's radio plays, and QuadCam's glider callouts.",
+        files: &["radio", "units", "glider"],
+        by_kind: Some(("glider", &["edgetx", "scripts"])),
+    },
+    Def {
+        id: "car",
+        title: "Car",
+        about: "The radio's prompts, numbers and units, and the EdgeTX prompts a car's radio plays: drive modes, steering, gears, drift.",
+        files: &["radio", "units"],
+        by_kind: Some(("car", &["edgetx"])),
+    },
+    Def {
+        id: "scripts",
+        title: "Telemetry scripts",
+        about: "The prompts the Betaflight, INAV and Yaapu telemetry scripts play.",
+        files: &["scripts"],
+        by_kind: None,
     },
     Def {
         id: "extras",
         title: "FPV extras",
-        about: "More FPV callouts: arming states, profiles, VTX, OSD, recording, finder.",
-        files: &["extras"],
+        about: "More FPV callouts: arming states, battery stages, link stages, rate profiles, VTX, OSD, recording, race timing, finder, helper words.",
+        files: &["extras", "general"],
+        by_kind: None,
     },
     Def {
         id: "easter",
         title: "Easter eggs",
         about: "Short fun lines in original wording. Off unless a model plays them.",
         files: &["easter"],
+        by_kind: None,
     },
     Def {
         id: "sample",
         title: "Sample",
         about: "A dozen hard lines for comparing voices: a bare number, short words, warnings.",
         files: &["sample"],
+        by_kind: None,
     },
 ];
 
@@ -143,8 +175,15 @@ pub fn parse(text: &str, file: &str) -> Result<Vec<SetLine>> {
         }
         let at = || format!("sets/{file}.csv line {}", i + 1);
         let f = fields(raw).with_context(at)?;
-        if f.len() != 5 {
-            bail!("{} has {} fields, not 5", at(), f.len());
+        let kinds: Vec<String> = f
+            .get(5)
+            .map(|k| k.split_whitespace().map(String::from).collect())
+            .unwrap_or_default();
+        if let Some(k) = kinds.iter().find(|k| !KINDS.contains(&k.as_str())) {
+            bail!("{}: kind {k:?} is not one of {KINDS:?}", at());
+        }
+        if f.len() != 5 && f.len() != 6 {
+            bail!("{} has {} fields, not 5 or 6", at(), f.len());
         }
         check_path(&f[0]).with_context(at)?;
         if !GROUPS.contains(&f[2].as_str()) {
@@ -167,6 +206,7 @@ pub fn parse(text: &str, file: &str) -> Result<Vec<SetLine>> {
                 why: f[4].clone(),
             },
             tone: f[3].clone(),
+            kinds,
         });
     }
     Ok(out)
@@ -188,6 +228,7 @@ pub fn lines_of(id: &str) -> Result<Vec<SetLine>> {
             .map(|l| SetLine {
                 tone: tone_of_group(&l).into(),
                 line: l,
+                kinds: Vec::new(),
             })
             .collect());
     }
@@ -195,11 +236,20 @@ pub fn lines_of(id: &str) -> Result<Vec<SetLine>> {
         bail!("no line set {id:?}: the sets are {}", ids().join(", "));
     };
     let mut out: Vec<SetLine> = Vec::new();
+    let mut take = |l: SetLine| {
+        if !out.iter().any(|o| o.line.path == l.line.path) {
+            out.push(l);
+        }
+    };
     for f in def.files {
-        for l in file_lines(f)? {
-            if !out.iter().any(|o| o.line.path == l.line.path) {
-                out.push(l);
-            }
+        file_lines(f)?.into_iter().for_each(&mut take);
+    }
+    if let Some((kind, files)) = def.by_kind {
+        for f in files {
+            file_lines(f)?
+                .into_iter()
+                .filter(|l| l.kinds.iter().any(|k| k == kind))
+                .for_each(&mut take);
         }
     }
     Ok(out)
@@ -247,6 +297,7 @@ pub fn combine(ids: &[String], custom: &[Line]) -> Result<Vec<SetLine>> {
                 .map(|l| SetLine {
                     line: l.clone(),
                     tone: "calm".into(),
+                    kinds: Vec::new(),
                 })
                 .collect()
         } else {
@@ -407,6 +458,136 @@ mod tests {
         ] {
             assert!(s.iter().any(|t| t == want), "{want}");
         }
+    }
+
+    /// The full EdgeTX set is the upstream English list: 568 prompts plus 179 script prompts.
+    #[test]
+    fn the_full_edgetx_set_holds_every_prompt() {
+        let all = lines_of("edgetx").unwrap();
+        assert_eq!(all.len(), 747);
+        let system = all
+            .iter()
+            .filter(|l| l.line.path.contains("/SYSTEM/"))
+            .count();
+        let scripts = all
+            .iter()
+            .filter(|l| l.line.path.contains("/SCRIPTS/"))
+            .count();
+        assert_eq!((system, scripts), (212, 179));
+        for want in [
+            "SOUNDS/en/SYSTEM/0000.wav",
+            "SOUNDS/en/SYSTEM/0112.wav",
+            "SOUNDS/en/SYSTEM/0176.wav",
+            "SOUNDS/en/SYSTEM/telemco.wav",
+            "SOUNDS/en/SYSTEM/dbm1.wav",
+            "SOUNDS/en/vtxfr8.wav",
+            "SOUNDS/en/drifon.wav",
+            "SOUNDS/en/SCRIPTS/YAAPU/armed.wav",
+            "SOUNDS/en/SCRIPTS/INAV/batcrt.wav",
+        ] {
+            assert!(all.iter().any(|l| l.line.path == want), "{want}");
+        }
+    }
+
+    /// Every set resolves, every path is valid and unique inside it, and the counts hold.
+    #[test]
+    fn every_set_resolves_with_valid_unique_paths_and_counts() {
+        let want = [
+            ("edgetx", 747),
+            ("scripts", 179),
+            ("sample", 12),
+            ("easter", 20),
+        ];
+        for (id, n) in want {
+            assert_eq!(lines_of(id).unwrap().len(), n, "{id}");
+        }
+        for id in ["quad", "heli", "plane", "glider", "car"] {
+            let l = lines_of(id).unwrap();
+            assert!(l.len() > 250, "{id}: {}", l.len());
+            assert!(l.len() < lines_of("edgetx").unwrap().len(), "{id}");
+        }
+        assert!(lines_of("extras").unwrap().len() >= 150);
+        for id in ids() {
+            if id == CUSTOM {
+                continue;
+            }
+            let l = lines_of(id).unwrap();
+            let mut paths: Vec<&str> = l.iter().map(|x| x.line.path.as_str()).collect();
+            for p in &paths {
+                check_path(p).unwrap();
+            }
+            paths.sort();
+            paths.dedup();
+            assert_eq!(paths.len(), l.len(), "{id}");
+        }
+    }
+
+    /// A path is valid for EdgeTX: the file names are lower case, and nothing leaves
+    /// `SOUNDS/en/`.
+    #[test]
+    fn paths_are_edgetx_paths() {
+        for (n, _) in FILES {
+            for l in file_lines(n).unwrap() {
+                let p = &l.line.path;
+                assert!(p.starts_with("SOUNDS/en/") && p.ends_with(".wav"), "{p}");
+                assert!(!p.contains(" ") && !p.contains("//"), "{p}");
+            }
+        }
+        assert!(check_path("SOUNDS/en/SCRIPTS/YAAPU/264977348.wav").is_ok());
+        assert!(check_path("SOUNDS/en/toolongname.wav").is_err());
+        assert!(check_path("SOUNDS/en/SCRIPTS/x/y/z.wav").is_err());
+        assert!(check_path("SOUNDS/en/../a.wav").is_err());
+    }
+
+    /// Each tone is used, and the numbers and units are all `number`.
+    #[test]
+    fn the_tone_groups_are_all_present() {
+        for (id, tones) in [
+            ("edgetx", &["calm", "alert", "number"][..]),
+            ("extras", &["calm", "alert"][..]),
+        ] {
+            let l = lines_of(id).unwrap();
+            for t in tones {
+                assert!(l.iter().any(|x| x.tone == *t), "{id} has no {t}");
+            }
+        }
+        assert!(lines_of("easter").unwrap().iter().all(|l| l.tone == "fun"));
+        for l in lines_of("edgetx").unwrap() {
+            if matches!(l.line.group.as_str(), "numbers" | "units") {
+                assert_eq!(l.tone, "number", "{}", l.line.path);
+            } else {
+                assert_ne!(l.tone, "number", "{}", l.line.path);
+                assert_ne!(l.tone, "fun", "{}", l.line.path);
+            }
+        }
+    }
+
+    /// The aircraft sets pick the EdgeTX lines of their kind, and the kinds are real.
+    #[test]
+    fn the_aircraft_sets_pick_their_own_edgetx_lines() {
+        let has = |id: &str, name: &str| {
+            lines_of(id)
+                .unwrap()
+                .iter()
+                .any(|l| l.line.path.ends_with(&format!("/{name}.wav")))
+        };
+        assert!(has("quad", "turton") && !has("heli", "turton") && !has("car", "turton"));
+        assert!(has("plane", "geardn") && has("glider", "geardn") && !has("quad", "geardn"));
+        assert!(has("glider", "thmmod") && !has("plane", "thmmod"));
+        assert!(has("car", "drifon") && !has("quad", "drifon"));
+        assert!(has("heli", "auro") && has("car", "volt1") && has("quad", "0042"));
+        for (n, _) in FILES {
+            for l in file_lines(n).unwrap() {
+                assert!(l.kinds.iter().all(|k| KINDS.contains(&k.as_str())));
+            }
+        }
+    }
+
+    #[test]
+    fn a_kind_outside_the_list_is_refused() {
+        assert!(parse("h\nSOUNDS/en/a.wav,x,callouts,calm,w,boat\n", "t").is_err());
+        let ok = parse("h\nSOUNDS/en/a.wav,x,callouts,calm,w,quad car\n", "t").unwrap();
+        assert_eq!(ok[0].kinds, ["quad", "car"]);
     }
 
     #[test]

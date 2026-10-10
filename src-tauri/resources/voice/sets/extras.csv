@@ -67,3 +67,43 @@ SOUNDS/en/colder.wav,Colder,extras,calm,Further from the lost quad.
 SOUNDS/en/finder.wav,Finder on,extras,calm,The quad finder is on.
 SOUNDS/en/finderof.wav,Finder off,extras,calm,The quad finder is off.
 SOUNDS/en/simconn.wav,Sim connected,extras,calm,The radio talks to a simulator.
+SOUNDS/en/bat90.wav,Battery ninety percent,extras,calm,The pack is near 90 percent.
+SOUNDS/en/bat80.wav,Battery eighty percent,extras,calm,The pack is near 80 percent.
+SOUNDS/en/bat70.wav,Battery seventy percent,extras,calm,The pack is near 70 percent.
+SOUNDS/en/bat60.wav,Battery sixty percent,extras,calm,The pack is near 60 percent.
+SOUNDS/en/bat50.wav,Battery fifty percent,extras,calm,The pack is near 50 percent.
+SOUNDS/en/bat40.wav,Battery forty percent,extras,calm,The pack is near 40 percent.
+SOUNDS/en/bat30.wav,Battery thirty percent,extras,calm,The pack is near 30 percent.
+SOUNDS/en/bat25.wav,Battery twenty five percent,extras,alert,The pack is near 25 percent.
+SOUNDS/en/bat20.wav,Battery twenty percent,extras,alert,The pack is near 20 percent.
+SOUNDS/en/bat10.wav,Battery ten percent,extras,alert,The pack is near 10 percent.
+SOUNDS/en/batfull.wav,Pack full,extras,calm,The pack is fully charged.
+SOUNDS/en/batempty.wav,Pack empty,extras,alert,The pack is empty.
+SOUNDS/en/lowcutof.wav,Low voltage cutoff,extras,alert,The cutoff is near.
+SOUNDS/en/lqgood.wav,Link quality good,extras,calm,The link quality is high.
+SOUNDS/en/lqfair.wav,Link quality fair,extras,calm,The link quality is middling.
+SOUNDS/en/lqpoor.wav,Link quality poor,extras,alert,The link quality is poor.
+SOUNDS/en/sigok.wav,Signal good,extras,calm,The link signal is good.
+SOUNDS/en/ratefree.wav,Freestyle rates,extras,calm,The freestyle rate profile.
+SOUNDS/en/raterace.wav,Race rates,extras,calm,The race rate profile.
+SOUNDS/en/ratecine.wav,Cinematic rates,extras,calm,The cinematic rate profile.
+SOUNDS/en/ratebegn.wav,Beginner rates,extras,calm,The gentle rate profile.
+SOUNDS/en/beepon.wav,Beeper on,extras,calm,The quad beeper is on.
+SOUNDS/en/beepoff.wav,Beeper off,extras,calm,The quad beeper is off.
+SOUNDS/en/getrdy.wav,Get ready,extras,calm,A race is about to start.
+SOUNDS/en/go.wav,Go,extras,calm,The race has started.
+SOUNDS/en/lap.wav,Lap,extras,calm,A lap finished.
+SOUNDS/en/bestlap.wav,Best lap,extras,calm,The fastest lap so far.
+SOUNDS/en/finlap.wav,Final lap,extras,calm,The last lap.
+SOUNDS/en/timechk.wav,Time check,extras,calm,Check the flight timer.
+SOUNDS/en/propson.wav,Props on,extras,alert,The props are fitted.
+SOUNDS/en/propsoff.wav,Props off,extras,calm,The props are removed.
+SOUNDS/en/chkant.wav,Check antenna,extras,alert,Look at the antennas before flying.
+SOUNDS/en/chkcam.wav,Check camera,extras,calm,Look at the camera view.
+SOUNDS/en/packin.wav,Pack plugged in,extras,calm,The flight pack is connected.
+SOUNDS/en/gpsresc.wav,GPS rescue active,extras,alert,The flight controller flies home.
+SOUNDS/en/satlow.wav,Satellites low,extras,alert,Too few satellites for a fix.
+SOUNDS/en/homeset.wav,Home point set,extras,calm,The home position is saved.
+SOUNDS/en/compass.wav,Compass error,extras,alert,The compass reading is wrong.
+SOUNDS/en/gndchk.wav,Ground check,extras,calm,Check the quad on the ground.
+SOUNDS/en/armspin.wav,"Armed, props spinning",extras,alert,The motors spin on arming.

@@ -378,14 +378,31 @@ inside carrier sentences, and compares voices before it spends credits.
   one credit is one character at the $0.08 rate, so a $0.04 model costs half a credit. After
   a paid call, QuadCam records the character count ElevenLabs reports and uses that next time.
 - **Line sets.** A set is a list of lines to render. Sets combine, and a line in two sets is
-  rendered once. `edgetx` (every prompt the radio plays by itself, the numbers and units, and
-  the general prompts), `quad`, `heli`, `plane` and `glider` (the radio's own prompts and
-  numbers, plus the callouts that setup plays), `extras` (more FPV callouts), `easter` (short
-  fun lines in original wording), `custom` (your own lines) and `quadcam` (the lines a pack
-  holds today). `sample` is twelve hard lines for **Sample**. The number and unit prompts
-  (`0000.wav` to `0099.wav`, `volt0.wav` and so on) and the sounds the radio plays by itself
-  go in `SOUNDS/en/SYSTEM/`, where EdgeTX looks for them; a model's own tracks go in
-  `SOUNDS/en/`.
+  rendered once. Every line has a card path, its text, a tone and the sets that hold it.
+  Four tones batch separately, so a calm word never picks up a warning's voice: `calm`,
+  `alert` (warnings), `number` (numbers and units) and `fun` (easter eggs).
+
+  | Set | Lines | Holds |
+  |---|---|---|
+  | `edgetx` | 747 | Every English prompt EdgeTX 2.x plays: the radio's own 147 prompts and number words, 65 units, 356 model prompts, and 179 telemetry-script prompts |
+  | `quad` | 396 | The radio's prompts and units, the EdgeTX prompts a quad plays (modes, rates, VTX, OSD, turtle, rescue, navigation), and QuadCam's quad callouts |
+  | `heli` | 325 | The same base, the helicopter prompts (idle up, governor, autorotation, engine, glow), and QuadCam's callouts |
+  | `plane` | 368 | The same base, the plane prompts (gear, flaps, spoilers, brakes, reverse thrust, drag brake), and QuadCam's callouts |
+  | `glider` | 328 | The same base, the glider prompts (thermal, launch, crow, butterfly, snapflap), and QuadCam's callouts |
+  | `car` | 308 | The same base and the car prompts (drive modes, steering, gears, drift, stability control) |
+  | `scripts` | 179 | The Betaflight, INAV and Yaapu telemetry-script prompts |
+  | `extras` | 164 | More FPV callouts: arming states, battery stages (ninety to ten percent), link stages, rate profiles (freestyle, race, cinematic), VTX power, beeper, race timing, GPS rescue, checks |
+  | `easter` | 20 | Short fun lines in original wording. Off unless you pick the set |
+  | `sample` | 12 | Hard lines for comparing voices |
+  | `custom`, `quadcam` | yours, 45 | Your own lines, and the lines a pack holds today |
+
+  The number and unit prompts (`0000.wav` to `0112.wav`, `volt0.wav` and so on) and the
+  sounds the radio plays by itself go in `SOUNDS/en/SYSTEM/`, where EdgeTX looks for them; a
+  model's own tracks go in `SOUNDS/en/`; a script's prompts go in
+  `SOUNDS/en/SCRIPTS/<script>/`. A voice reads some lines differently from the written
+  text (for example `P term` for the Betaflight script's `P`), and the spelling rules still
+  apply. The set files are `src-tauri/resources/voice/sets/*.csv`; the `kinds` column of
+  `edgetx.csv` and `scripts.csv` names the aircraft that play a line.
 - **Cost.** The line under the pickers shows the characters (carriers included), the batches,
   the price in USD and the credits (estimated), and the credits left. Batches the cache already
   holds cost nothing. A render the credits do not cover cannot start. A batch stays under the

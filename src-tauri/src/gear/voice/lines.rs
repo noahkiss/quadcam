@@ -96,12 +96,20 @@ pub fn parse_csv(text: &str) -> Result<Vec<Line>> {
 }
 
 /// A sound's path on the card: `SOUNDS/<lang>/[SYSTEM/]<name>.wav`, the name 8 characters
-/// at most.
+/// at most, or `SOUNDS/<lang>/SCRIPTS/<dir>/<name>.wav`, which a script reads by its full
+/// path (the name may be longer).
 pub fn check_path(path: &str) -> Result<()> {
     let parts: Vec<&str> = path.split('/').collect();
     let ok_shape = match parts.as_slice() {
         ["SOUNDS", lang, name] => !lang.is_empty() && !name.is_empty(),
         ["SOUNDS", lang, "SYSTEM", name] => !lang.is_empty() && !name.is_empty(),
+        // A telemetry script's prompts: `SOUNDS/en/SCRIPTS/YAAPU/armed.wav`.
+        ["SOUNDS", lang, "SCRIPTS", dir, name] => {
+            !lang.is_empty()
+                && !name.is_empty()
+                && !dir.is_empty()
+                && dir.chars().all(|c| c.is_ascii_alphanumeric())
+        }
         _ => false,
     };
     if !ok_shape {
@@ -110,19 +118,21 @@ pub fn check_path(path: &str) -> Result<()> {
         );
     }
     let name = parts.last().unwrap();
+    let max = if parts.len() == 5 {
+        32
+    } else {
+        crate::gear::edgetx::model::MAX_TRACK_NAME
+    };
     let Some(stem) = name.strip_suffix(".wav") else {
         bail!("{path:?} is not a .wav file");
     };
     if stem.is_empty()
-        || stem.len() > crate::gear::edgetx::model::MAX_TRACK_NAME
+        || stem.len() > max
         || !stem
             .chars()
             .all(|c| c.is_ascii_alphanumeric() || c == '_' || c == '-')
     {
-        bail!(
-            "{path:?}: a sound name is 1-{} letters, digits, - or _",
-            crate::gear::edgetx::model::MAX_TRACK_NAME
-        );
+        bail!("{path:?}: a sound name is 1-{max} letters, digits, - or _");
     }
     if parts[1]
         .chars()

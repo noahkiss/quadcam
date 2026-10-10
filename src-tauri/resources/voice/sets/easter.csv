@@ -11,3 +11,11 @@ SOUNDS/en/eggshred.wav,Time to shred!,extras,fun,Plays before a flight. Original
 SOUNDS/en/eggfull.wav,Full send!,extras,fun,Plays on arming. Original line.
 SOUNDS/en/eggplum.wav,Gravity wins again.,extras,fun,Plays after a crash. Original line.
 SOUNDS/en/egghous.wav,"Houston, we have a quad.",extras,fun,Plays on power-on. Original line.
+SOUNDS/en/eggsmoth.wav,Smooth is fast.,extras,fun,Plays on a clean line.
+SOUNDS/en/eggbarrl.wav,Do a barrel roll!,extras,fun,Plays on a roll.
+SOUNDS/en/eggtrees.wav,Mind the trees.,extras,fun,Plays at the start of a flight.
+SOUNDS/en/eggpack.wav,One more pack.,extras,fun,Plays when a pack ends.
+SOUNDS/en/eggwash.wav,Prop wash incoming.,extras,fun,Plays on a dive.
+SOUNDS/en/eggland.wav,"Land softly, live happily.",extras,fun,Plays after landing.
+SOUNDS/en/eggpin.wav,Keep it pinned.,extras,fun,Plays on full throttle.
+SOUNDS/en/eggbatt.wav,Hold my battery.,extras,fun,Plays before a bold trick.

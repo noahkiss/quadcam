@@ -1,151 +1,148 @@
 path,text,group,tone,why
+SOUNDS/en/SYSTEM/eebad.wav,Radio data error,system,alert,The radio could not read its memory.
 SOUNDS/en/SYSTEM/hello.wav,Hello,system,calm,The radio powered on.
-SOUNDS/en/SYSTEM/bye.wav,Goodbye,system,calm,The radio powers off.
-SOUNDS/en/SYSTEM/thralert.wav,Throttle warning,system,alert,The throttle is not at idle at power-on.
-SOUNDS/en/SYSTEM/swalert.wav,Switch warning,system,alert,A switch is not in its safe position at power-on.
-SOUNDS/en/SYSTEM/lowbatt.wav,Radio battery low,system,alert,The radio's own battery is low.
 SOUNDS/en/SYSTEM/inactiv.wav,Radio inactive,system,alert,The radio was not touched for a while.
+SOUNDS/en/SYSTEM/lowbatt.wav,Radio battery low,system,alert,The radio's own battery is low.
+SOUNDS/en/SYSTEM/maxtrim.wav,Trim maximum,system,calm,A trim reached its highest value.
+SOUNDS/en/SYSTEM/midtrim.wav,Trim centre,system,calm,A trim is at centre.
+SOUNDS/en/SYSTEM/mintrim.wav,Trim minimum,system,calm,A trim reached its lowest value.
+SOUNDS/en/SYSTEM/modelpwr.wav,Receiver still connected,system,alert,The radio powers off while the receiver still hears it.
 SOUNDS/en/SYSTEM/rssi_org.wav,Signal low,system,alert,The link signal reached the first alarm level.
 SOUNDS/en/SYSTEM/rssi_red.wav,Signal critical,system,alert,The link signal reached the last alarm level.
+SOUNDS/en/SYSTEM/rxko.wav,Receiver battery low,system,alert,The receiver's own battery is low.
+SOUNDS/en/SYSTEM/sensorko.wav,Sensor lost,system,alert,A telemetry sensor stopped answering.
+SOUNDS/en/SYSTEM/servoko.wav,Servo overload,system,alert,A servo draws too much current.
+SOUNDS/en/SYSTEM/swalert.wav,Switch warning,system,alert,A switch is not in its safe position at power-on.
+SOUNDS/en/SYSTEM/swr_red.wav,Antenna problem,system,alert,The antenna reflects too much power.
 SOUNDS/en/SYSTEM/telemco.wav,Telemetry connected,system,calm,The receiver's telemetry arrived.
 SOUNDS/en/SYSTEM/telemko.wav,Telemetry lost,system,alert,The receiver's telemetry stopped.
 SOUNDS/en/SYSTEM/telemok.wav,Telemetry recovered,system,calm,The telemetry came back.
-SOUNDS/en/SYSTEM/sensorko.wav,Sensor lost,system,alert,A telemetry sensor stopped answering.
-SOUNDS/en/SYSTEM/modelpwr.wav,Receiver still connected,system,alert,The radio powers off while the receiver still hears it.
-SOUNDS/en/SYSTEM/servoko.wav,Servo overload,system,alert,A servo draws too much current.
-SOUNDS/en/SYSTEM/rxko.wav,Receiver battery low,system,alert,The receiver's own battery is low.
-SOUNDS/en/SYSTEM/swr_red.wav,Antenna problem,system,alert,The antenna reflects too much power.
-SOUNDS/en/SYSTEM/eebad.wav,Radio data error,system,alert,The radio could not read its memory.
-SOUNDS/en/SYSTEM/timovr1.wav,Timer one elapsed,system,calm,Timer one ran out.
+SOUNDS/en/SYSTEM/thralert.wav,Throttle warning,system,alert,The throttle is not at idle at power-on.
 SOUNDS/en/SYSTEM/timovr2.wav,Timer two elapsed,system,calm,Timer two ran out.
 SOUNDS/en/SYSTEM/timovr3.wav,Timer three elapsed,system,calm,Timer three ran out.
-SOUNDS/en/SYSTEM/mintrim.wav,Trim minimum,system,calm,A trim reached its lowest value.
-SOUNDS/en/SYSTEM/midtrim.wav,Trim centre,system,calm,A trim is at centre.
-SOUNDS/en/SYSTEM/maxtrim.wav,Trim maximum,system,calm,A trim reached its highest value.
 SOUNDS/en/SYSTEM/trainco.wav,Trainer connected,system,calm,A trainer cable is plugged in.
 SOUNDS/en/SYSTEM/trainko.wav,Trainer disconnected,system,alert,The trainer link stopped.
 SOUNDS/en/SYSTEM/trainok.wav,Trainer recovered,system,calm,The trainer link came back.
-SOUNDS/en/SYSTEM/0000.wav,zero,numbers,number,The number 0.
-SOUNDS/en/SYSTEM/0001.wav,one,numbers,number,The number 1.
-SOUNDS/en/SYSTEM/0002.wav,two,numbers,number,The number 2.
-SOUNDS/en/SYSTEM/0003.wav,three,numbers,number,The number 3.
-SOUNDS/en/SYSTEM/0004.wav,four,numbers,number,The number 4.
-SOUNDS/en/SYSTEM/0005.wav,five,numbers,number,The number 5.
-SOUNDS/en/SYSTEM/0006.wav,six,numbers,number,The number 6.
-SOUNDS/en/SYSTEM/0007.wav,seven,numbers,number,The number 7.
-SOUNDS/en/SYSTEM/0008.wav,eight,numbers,number,The number 8.
-SOUNDS/en/SYSTEM/0009.wav,nine,numbers,number,The number 9.
-SOUNDS/en/SYSTEM/0010.wav,ten,numbers,number,The number 10.
-SOUNDS/en/SYSTEM/0011.wav,eleven,numbers,number,The number 11.
-SOUNDS/en/SYSTEM/0012.wav,twelve,numbers,number,The number 12.
-SOUNDS/en/SYSTEM/0013.wav,thirteen,numbers,number,The number 13.
-SOUNDS/en/SYSTEM/0014.wav,fourteen,numbers,number,The number 14.
-SOUNDS/en/SYSTEM/0015.wav,fifteen,numbers,number,The number 15.
-SOUNDS/en/SYSTEM/0016.wav,sixteen,numbers,number,The number 16.
-SOUNDS/en/SYSTEM/0017.wav,seventeen,numbers,number,The number 17.
-SOUNDS/en/SYSTEM/0018.wav,eighteen,numbers,number,The number 18.
-SOUNDS/en/SYSTEM/0019.wav,nineteen,numbers,number,The number 19.
-SOUNDS/en/SYSTEM/0020.wav,twenty,numbers,number,The number 20.
-SOUNDS/en/SYSTEM/0021.wav,twenty one,numbers,number,The number 21.
-SOUNDS/en/SYSTEM/0022.wav,twenty two,numbers,number,The number 22.
-SOUNDS/en/SYSTEM/0023.wav,twenty three,numbers,number,The number 23.
-SOUNDS/en/SYSTEM/0024.wav,twenty four,numbers,number,The number 24.
-SOUNDS/en/SYSTEM/0025.wav,twenty five,numbers,number,The number 25.
-SOUNDS/en/SYSTEM/0026.wav,twenty six,numbers,number,The number 26.
-SOUNDS/en/SYSTEM/0027.wav,twenty seven,numbers,number,The number 27.
-SOUNDS/en/SYSTEM/0028.wav,twenty eight,numbers,number,The number 28.
-SOUNDS/en/SYSTEM/0029.wav,twenty nine,numbers,number,The number 29.
-SOUNDS/en/SYSTEM/0030.wav,thirty,numbers,number,The number 30.
-SOUNDS/en/SYSTEM/0031.wav,thirty one,numbers,number,The number 31.
-SOUNDS/en/SYSTEM/0032.wav,thirty two,numbers,number,The number 32.
-SOUNDS/en/SYSTEM/0033.wav,thirty three,numbers,number,The number 33.
-SOUNDS/en/SYSTEM/0034.wav,thirty four,numbers,number,The number 34.
-SOUNDS/en/SYSTEM/0035.wav,thirty five,numbers,number,The number 35.
-SOUNDS/en/SYSTEM/0036.wav,thirty six,numbers,number,The number 36.
-SOUNDS/en/SYSTEM/0037.wav,thirty seven,numbers,number,The number 37.
-SOUNDS/en/SYSTEM/0038.wav,thirty eight,numbers,number,The number 38.
-SOUNDS/en/SYSTEM/0039.wav,thirty nine,numbers,number,The number 39.
-SOUNDS/en/SYSTEM/0040.wav,forty,numbers,number,The number 40.
-SOUNDS/en/SYSTEM/0041.wav,forty one,numbers,number,The number 41.
-SOUNDS/en/SYSTEM/0042.wav,forty two,numbers,number,The number 42.
-SOUNDS/en/SYSTEM/0043.wav,forty three,numbers,number,The number 43.
-SOUNDS/en/SYSTEM/0044.wav,forty four,numbers,number,The number 44.
-SOUNDS/en/SYSTEM/0045.wav,forty five,numbers,number,The number 45.
-SOUNDS/en/SYSTEM/0046.wav,forty six,numbers,number,The number 46.
-SOUNDS/en/SYSTEM/0047.wav,forty seven,numbers,number,The number 47.
-SOUNDS/en/SYSTEM/0048.wav,forty eight,numbers,number,The number 48.
-SOUNDS/en/SYSTEM/0049.wav,forty nine,numbers,number,The number 49.
-SOUNDS/en/SYSTEM/0050.wav,fifty,numbers,number,The number 50.
-SOUNDS/en/SYSTEM/0051.wav,fifty one,numbers,number,The number 51.
-SOUNDS/en/SYSTEM/0052.wav,fifty two,numbers,number,The number 52.
-SOUNDS/en/SYSTEM/0053.wav,fifty three,numbers,number,The number 53.
-SOUNDS/en/SYSTEM/0054.wav,fifty four,numbers,number,The number 54.
-SOUNDS/en/SYSTEM/0055.wav,fifty five,numbers,number,The number 55.
-SOUNDS/en/SYSTEM/0056.wav,fifty six,numbers,number,The number 56.
-SOUNDS/en/SYSTEM/0057.wav,fifty seven,numbers,number,The number 57.
-SOUNDS/en/SYSTEM/0058.wav,fifty eight,numbers,number,The number 58.
-SOUNDS/en/SYSTEM/0059.wav,fifty nine,numbers,number,The number 59.
-SOUNDS/en/SYSTEM/0060.wav,sixty,numbers,number,The number 60.
-SOUNDS/en/SYSTEM/0061.wav,sixty one,numbers,number,The number 61.
-SOUNDS/en/SYSTEM/0062.wav,sixty two,numbers,number,The number 62.
-SOUNDS/en/SYSTEM/0063.wav,sixty three,numbers,number,The number 63.
-SOUNDS/en/SYSTEM/0064.wav,sixty four,numbers,number,The number 64.
-SOUNDS/en/SYSTEM/0065.wav,sixty five,numbers,number,The number 65.
-SOUNDS/en/SYSTEM/0066.wav,sixty six,numbers,number,The number 66.
-SOUNDS/en/SYSTEM/0067.wav,sixty seven,numbers,number,The number 67.
-SOUNDS/en/SYSTEM/0068.wav,sixty eight,numbers,number,The number 68.
-SOUNDS/en/SYSTEM/0069.wav,sixty nine,numbers,number,The number 69.
-SOUNDS/en/SYSTEM/0070.wav,seventy,numbers,number,The number 70.
-SOUNDS/en/SYSTEM/0071.wav,seventy one,numbers,number,The number 71.
-SOUNDS/en/SYSTEM/0072.wav,seventy two,numbers,number,The number 72.
-SOUNDS/en/SYSTEM/0073.wav,seventy three,numbers,number,The number 73.
-SOUNDS/en/SYSTEM/0074.wav,seventy four,numbers,number,The number 74.
-SOUNDS/en/SYSTEM/0075.wav,seventy five,numbers,number,The number 75.
-SOUNDS/en/SYSTEM/0076.wav,seventy six,numbers,number,The number 76.
-SOUNDS/en/SYSTEM/0077.wav,seventy seven,numbers,number,The number 77.
-SOUNDS/en/SYSTEM/0078.wav,seventy eight,numbers,number,The number 78.
-SOUNDS/en/SYSTEM/0079.wav,seventy nine,numbers,number,The number 79.
-SOUNDS/en/SYSTEM/0080.wav,eighty,numbers,number,The number 80.
-SOUNDS/en/SYSTEM/0081.wav,eighty one,numbers,number,The number 81.
-SOUNDS/en/SYSTEM/0082.wav,eighty two,numbers,number,The number 82.
-SOUNDS/en/SYSTEM/0083.wav,eighty three,numbers,number,The number 83.
-SOUNDS/en/SYSTEM/0084.wav,eighty four,numbers,number,The number 84.
-SOUNDS/en/SYSTEM/0085.wav,eighty five,numbers,number,The number 85.
-SOUNDS/en/SYSTEM/0086.wav,eighty six,numbers,number,The number 86.
-SOUNDS/en/SYSTEM/0087.wav,eighty seven,numbers,number,The number 87.
-SOUNDS/en/SYSTEM/0088.wav,eighty eight,numbers,number,The number 88.
-SOUNDS/en/SYSTEM/0089.wav,eighty nine,numbers,number,The number 89.
-SOUNDS/en/SYSTEM/0090.wav,ninety,numbers,number,The number 90.
-SOUNDS/en/SYSTEM/0091.wav,ninety one,numbers,number,The number 91.
-SOUNDS/en/SYSTEM/0092.wav,ninety two,numbers,number,The number 92.
-SOUNDS/en/SYSTEM/0093.wav,ninety three,numbers,number,The number 93.
-SOUNDS/en/SYSTEM/0094.wav,ninety four,numbers,number,The number 94.
-SOUNDS/en/SYSTEM/0095.wav,ninety five,numbers,number,The number 95.
-SOUNDS/en/SYSTEM/0096.wav,ninety six,numbers,number,The number 96.
-SOUNDS/en/SYSTEM/0097.wav,ninety seven,numbers,number,The number 97.
-SOUNDS/en/SYSTEM/0098.wav,ninety eight,numbers,number,The number 98.
-SOUNDS/en/SYSTEM/0099.wav,ninety nine,numbers,number,The number 99.
-SOUNDS/en/SYSTEM/0100.wav,one hundred,numbers,number,The number 100.
-SOUNDS/en/SYSTEM/0101.wav,two hundred,numbers,number,The number 200.
-SOUNDS/en/SYSTEM/0102.wav,three hundred,numbers,number,The number 300.
-SOUNDS/en/SYSTEM/0103.wav,four hundred,numbers,number,The number 400.
-SOUNDS/en/SYSTEM/0104.wav,five hundred,numbers,number,The number 500.
-SOUNDS/en/SYSTEM/0105.wav,six hundred,numbers,number,The number 600.
-SOUNDS/en/SYSTEM/0106.wav,seven hundred,numbers,number,The number 700.
-SOUNDS/en/SYSTEM/0107.wav,eight hundred,numbers,number,The number 800.
-SOUNDS/en/SYSTEM/0108.wav,nine hundred,numbers,number,The number 900.
-SOUNDS/en/SYSTEM/0109.wav,thousand,numbers,number,The word thousand.
-SOUNDS/en/SYSTEM/0110.wav,and,numbers,number,Joins minutes and seconds.
-SOUNDS/en/SYSTEM/0111.wav,minus,numbers,number,Before a negative number.
-SOUNDS/en/SYSTEM/0167.wav,point zero,numbers,number,"A decimal, .0."
-SOUNDS/en/SYSTEM/0168.wav,point one,numbers,number,"A decimal, .1."
-SOUNDS/en/SYSTEM/0169.wav,point two,numbers,number,"A decimal, .2."
-SOUNDS/en/SYSTEM/0170.wav,point three,numbers,number,"A decimal, .3."
-SOUNDS/en/SYSTEM/0171.wav,point four,numbers,number,"A decimal, .4."
-SOUNDS/en/SYSTEM/0172.wav,point five,numbers,number,"A decimal, .5."
-SOUNDS/en/SYSTEM/0173.wav,point six,numbers,number,"A decimal, .6."
-SOUNDS/en/SYSTEM/0174.wav,point seven,numbers,number,"A decimal, .7."
-SOUNDS/en/SYSTEM/0175.wav,point eight,numbers,number,"A decimal, .8."
-SOUNDS/en/SYSTEM/0176.wav,point nine,numbers,number,"A decimal, .9."
-SOUNDS/en/SYSTEM/dbm0.wav,dBm,units,number,"The unit dBm, for one."
-SOUNDS/en/SYSTEM/dbm1.wav,dBm,units,number,"The unit dBm, for more than one."
+SOUNDS/en/SYSTEM/0000.wav,zero,numbers,number,A number word the radio speaks.
+SOUNDS/en/SYSTEM/0001.wav,one,numbers,number,A number word the radio speaks.
+SOUNDS/en/SYSTEM/0002.wav,two,numbers,number,A number word the radio speaks.
+SOUNDS/en/SYSTEM/0003.wav,three,numbers,number,A number word the radio speaks.
+SOUNDS/en/SYSTEM/0004.wav,four,numbers,number,A number word the radio speaks.
+SOUNDS/en/SYSTEM/0005.wav,five,numbers,number,A number word the radio speaks.
+SOUNDS/en/SYSTEM/0006.wav,six,numbers,number,A number word the radio speaks.
+SOUNDS/en/SYSTEM/0007.wav,seven,numbers,number,A number word the radio speaks.
+SOUNDS/en/SYSTEM/0008.wav,eight,numbers,number,A number word the radio speaks.
+SOUNDS/en/SYSTEM/0009.wav,nine,numbers,number,A number word the radio speaks.
+SOUNDS/en/SYSTEM/0010.wav,ten,numbers,number,A number word the radio speaks.
+SOUNDS/en/SYSTEM/0011.wav,eleven,numbers,number,A number word the radio speaks.
+SOUNDS/en/SYSTEM/0012.wav,twelve,numbers,number,A number word the radio speaks.
+SOUNDS/en/SYSTEM/0013.wav,thirteen,numbers,number,A number word the radio speaks.
+SOUNDS/en/SYSTEM/0014.wav,fourteen,numbers,number,A number word the radio speaks.
+SOUNDS/en/SYSTEM/0015.wav,fifteen,numbers,number,A number word the radio speaks.
+SOUNDS/en/SYSTEM/0016.wav,sixteen,numbers,number,A number word the radio speaks.
+SOUNDS/en/SYSTEM/0017.wav,seventeen,numbers,number,A number word the radio speaks.
+SOUNDS/en/SYSTEM/0018.wav,eighteen,numbers,number,A number word the radio speaks.
+SOUNDS/en/SYSTEM/0019.wav,nineteen,numbers,number,A number word the radio speaks.
+SOUNDS/en/SYSTEM/0020.wav,twenty,numbers,number,A number word the radio speaks.
+SOUNDS/en/SYSTEM/0021.wav,twenty one,numbers,number,A number word the radio speaks.
+SOUNDS/en/SYSTEM/0022.wav,twenty two,numbers,number,A number word the radio speaks.
+SOUNDS/en/SYSTEM/0023.wav,twenty three,numbers,number,A number word the radio speaks.
+SOUNDS/en/SYSTEM/0024.wav,twenty four,numbers,number,A number word the radio speaks.
+SOUNDS/en/SYSTEM/0025.wav,twenty five,numbers,number,A number word the radio speaks.
+SOUNDS/en/SYSTEM/0026.wav,twenty six,numbers,number,A number word the radio speaks.
+SOUNDS/en/SYSTEM/0027.wav,twenty seven,numbers,number,A number word the radio speaks.
+SOUNDS/en/SYSTEM/0028.wav,twenty eight,numbers,number,A number word the radio speaks.
+SOUNDS/en/SYSTEM/0029.wav,twenty nine,numbers,number,A number word the radio speaks.
+SOUNDS/en/SYSTEM/0030.wav,thirty,numbers,number,A number word the radio speaks.
+SOUNDS/en/SYSTEM/0031.wav,thirty one,numbers,number,A number word the radio speaks.
+SOUNDS/en/SYSTEM/0032.wav,thirty two,numbers,number,A number word the radio speaks.
+SOUNDS/en/SYSTEM/0033.wav,thirty three,numbers,number,A number word the radio speaks.
+SOUNDS/en/SYSTEM/0034.wav,thirty four,numbers,number,A number word the radio speaks.
+SOUNDS/en/SYSTEM/0035.wav,thirty five,numbers,number,A number word the radio speaks.
+SOUNDS/en/SYSTEM/0036.wav,thirty six,numbers,number,A number word the radio speaks.
+SOUNDS/en/SYSTEM/0037.wav,thirty seven,numbers,number,A number word the radio speaks.
+SOUNDS/en/SYSTEM/0038.wav,thirty eight,numbers,number,A number word the radio speaks.
+SOUNDS/en/SYSTEM/0039.wav,thirty nine,numbers,number,A number word the radio speaks.
+SOUNDS/en/SYSTEM/0040.wav,forty,numbers,number,A number word the radio speaks.
+SOUNDS/en/SYSTEM/0041.wav,forty one,numbers,number,A number word the radio speaks.
+SOUNDS/en/SYSTEM/0042.wav,forty two,numbers,number,A number word the radio speaks.
+SOUNDS/en/SYSTEM/0043.wav,forty three,numbers,number,A number word the radio speaks.
+SOUNDS/en/SYSTEM/0044.wav,forty four,numbers,number,A number word the radio speaks.
+SOUNDS/en/SYSTEM/0045.wav,forty five,numbers,number,A number word the radio speaks.
+SOUNDS/en/SYSTEM/0046.wav,forty six,numbers,number,A number word the radio speaks.
+SOUNDS/en/SYSTEM/0047.wav,forty seven,numbers,number,A number word the radio speaks.
+SOUNDS/en/SYSTEM/0048.wav,forty eight,numbers,number,A number word the radio speaks.
+SOUNDS/en/SYSTEM/0049.wav,forty nine,numbers,number,A number word the radio speaks.
+SOUNDS/en/SYSTEM/0050.wav,fifty,numbers,number,A number word the radio speaks.
+SOUNDS/en/SYSTEM/0051.wav,fifty one,numbers,number,A number word the radio speaks.
+SOUNDS/en/SYSTEM/0052.wav,fifty two,numbers,number,A number word the radio speaks.
+SOUNDS/en/SYSTEM/0053.wav,fifty three,numbers,number,A number word the radio speaks.
+SOUNDS/en/SYSTEM/0054.wav,fifty four,numbers,number,A number word the radio speaks.
+SOUNDS/en/SYSTEM/0055.wav,fifty five,numbers,number,A number word the radio speaks.
+SOUNDS/en/SYSTEM/0056.wav,fifty six,numbers,number,A number word the radio speaks.
+SOUNDS/en/SYSTEM/0057.wav,fifty seven,numbers,number,A number word the radio speaks.
+SOUNDS/en/SYSTEM/0058.wav,fifty eight,numbers,number,A number word the radio speaks.
+SOUNDS/en/SYSTEM/0059.wav,fifty nine,numbers,number,A number word the radio speaks.
+SOUNDS/en/SYSTEM/0060.wav,sixty,numbers,number,A number word the radio speaks.
+SOUNDS/en/SYSTEM/0061.wav,sixty one,numbers,number,A number word the radio speaks.
+SOUNDS/en/SYSTEM/0062.wav,sixty two,numbers,number,A number word the radio speaks.
+SOUNDS/en/SYSTEM/0063.wav,sixty three,numbers,number,A number word the radio speaks.
+SOUNDS/en/SYSTEM/0064.wav,sixty four,numbers,number,A number word the radio speaks.
+SOUNDS/en/SYSTEM/0065.wav,sixty five,numbers,number,A number word the radio speaks.
+SOUNDS/en/SYSTEM/0066.wav,sixty six,numbers,number,A number word the radio speaks.
+SOUNDS/en/SYSTEM/0067.wav,sixty seven,numbers,number,A number word the radio speaks.
+SOUNDS/en/SYSTEM/0068.wav,sixty eight,numbers,number,A number word the radio speaks.
+SOUNDS/en/SYSTEM/0069.wav,sixty nine,numbers,number,A number word the radio speaks.
+SOUNDS/en/SYSTEM/0070.wav,seventy,numbers,number,A number word the radio speaks.
+SOUNDS/en/SYSTEM/0071.wav,seventy one,numbers,number,A number word the radio speaks.
+SOUNDS/en/SYSTEM/0072.wav,seventy two,numbers,number,A number word the radio speaks.
+SOUNDS/en/SYSTEM/0073.wav,seventy three,numbers,number,A number word the radio speaks.
+SOUNDS/en/SYSTEM/0074.wav,seventy four,numbers,number,A number word the radio speaks.
+SOUNDS/en/SYSTEM/0075.wav,seventy five,numbers,number,A number word the radio speaks.
+SOUNDS/en/SYSTEM/0076.wav,seventy six,numbers,number,A number word the radio speaks.
+SOUNDS/en/SYSTEM/0077.wav,seventy seven,numbers,number,A number word the radio speaks.
+SOUNDS/en/SYSTEM/0078.wav,seventy eight,numbers,number,A number word the radio speaks.
+SOUNDS/en/SYSTEM/0079.wav,seventy nine,numbers,number,A number word the radio speaks.
+SOUNDS/en/SYSTEM/0080.wav,eighty,numbers,number,A number word the radio speaks.
+SOUNDS/en/SYSTEM/0081.wav,eighty one,numbers,number,A number word the radio speaks.
+SOUNDS/en/SYSTEM/0082.wav,eighty two,numbers,number,A number word the radio speaks.
+SOUNDS/en/SYSTEM/0083.wav,eighty three,numbers,number,A number word the radio speaks.
+SOUNDS/en/SYSTEM/0084.wav,eighty four,numbers,number,A number word the radio speaks.
+SOUNDS/en/SYSTEM/0085.wav,eighty five,numbers,number,A number word the radio speaks.
+SOUNDS/en/SYSTEM/0086.wav,eighty six,numbers,number,A number word the radio speaks.
+SOUNDS/en/SYSTEM/0087.wav,eighty seven,numbers,number,A number word the radio speaks.
+SOUNDS/en/SYSTEM/0088.wav,eighty eight,numbers,number,A number word the radio speaks.
+SOUNDS/en/SYSTEM/0089.wav,eighty nine,numbers,number,A number word the radio speaks.
+SOUNDS/en/SYSTEM/0090.wav,ninety,numbers,number,A number word the radio speaks.
+SOUNDS/en/SYSTEM/0091.wav,ninety one,numbers,number,A number word the radio speaks.
+SOUNDS/en/SYSTEM/0092.wav,ninety two,numbers,number,A number word the radio speaks.
+SOUNDS/en/SYSTEM/0093.wav,ninety three,numbers,number,A number word the radio speaks.
+SOUNDS/en/SYSTEM/0094.wav,ninety four,numbers,number,A number word the radio speaks.
+SOUNDS/en/SYSTEM/0095.wav,ninety five,numbers,number,A number word the radio speaks.
+SOUNDS/en/SYSTEM/0096.wav,ninety six,numbers,number,A number word the radio speaks.
+SOUNDS/en/SYSTEM/0097.wav,ninety seven,numbers,number,A number word the radio speaks.
+SOUNDS/en/SYSTEM/0098.wav,ninety eight,numbers,number,A number word the radio speaks.
+SOUNDS/en/SYSTEM/0099.wav,ninety nine,numbers,number,A number word the radio speaks.
+SOUNDS/en/SYSTEM/0100.wav,one hundred,numbers,number,A number word the radio speaks.
+SOUNDS/en/SYSTEM/0101.wav,two hundred,numbers,number,A number word the radio speaks.
+SOUNDS/en/SYSTEM/0102.wav,three hundred,numbers,number,A number word the radio speaks.
+SOUNDS/en/SYSTEM/0103.wav,four hundred,numbers,number,A number word the radio speaks.
+SOUNDS/en/SYSTEM/0104.wav,five hundred,numbers,number,A number word the radio speaks.
+SOUNDS/en/SYSTEM/0105.wav,six hundred,numbers,number,A number word the radio speaks.
+SOUNDS/en/SYSTEM/0106.wav,seven hundred,numbers,number,A number word the radio speaks.
+SOUNDS/en/SYSTEM/0107.wav,eight hundred,numbers,number,A number word the radio speaks.
+SOUNDS/en/SYSTEM/0108.wav,nine hundred,numbers,number,A number word the radio speaks.
+SOUNDS/en/SYSTEM/0109.wav,thousand,numbers,number,A number word the radio speaks.
+SOUNDS/en/SYSTEM/0110.wav,and,numbers,number,A number word the radio speaks.
+SOUNDS/en/SYSTEM/0111.wav,minus,numbers,number,A number word the radio speaks.
+SOUNDS/en/SYSTEM/0112.wav,Point,numbers,number,A number word the radio speaks.
+SOUNDS/en/SYSTEM/0167.wav,point zero,numbers,number,A number word the radio speaks.
+SOUNDS/en/SYSTEM/0168.wav,point one,numbers,number,A number word the radio speaks.
+SOUNDS/en/SYSTEM/0169.wav,point two,numbers,number,A number word the radio speaks.
+SOUNDS/en/SYSTEM/0170.wav,point three,numbers,number,A number word the radio speaks.
+SOUNDS/en/SYSTEM/0171.wav,point four,numbers,number,A number word the radio speaks.
+SOUNDS/en/SYSTEM/0172.wav,point five,numbers,number,A number word the radio speaks.
+SOUNDS/en/SYSTEM/0173.wav,point six,numbers,number,A number word the radio speaks.
+SOUNDS/en/SYSTEM/0174.wav,point seven,numbers,number,A number word the radio speaks.
+SOUNDS/en/SYSTEM/0175.wav,point eight,numbers,number,A number word the radio speaks.
+SOUNDS/en/SYSTEM/0176.wav,point nine,numbers,number,A number word the radio speaks.
