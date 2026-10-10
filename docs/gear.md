@@ -92,6 +92,8 @@ serial is linked to a saved radio once and kept in that radio's record:
 
 ## Flight controllers
 
+![A flight controller's page: the Overview section with board, firmware, version, port, background reads and last backup, and tabs for OSD, Rates, Switches, Changes, Blackbox and Backups](images/gear-fc-dark.png)
+
 QuadCam talks to Betaflight over USB in two ways:
 
 - **MSP** (identify): board, firmware, version, the device id. No reboot.

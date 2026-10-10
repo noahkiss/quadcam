@@ -100,6 +100,7 @@ QuadCam follows the system's light or dark appearance. [A light-mode screenshot]
 | [Format safety](docs/format-safety.md) | When QuadCam erases a card, and the guards it checks first |
 | [Command line](docs/cli.md) | `quadcam-cli`: import, library, places, profiles, settings, JSON output |
 | [MCP server](docs/mcp.md) | Connect a coding agent, the 19 tools, the control socket |
+| [Changelog](CHANGELOG.md) | What changed in each release |
 | [Development](docs/development.md) | Build from source, tests, project layout, releases |
 | [Gear](docs/gear.md) | Devices QuadCam finds, saved devices, EdgeTX cards, backups, the card check, cues, flights, packs, crashes, `quadcam-cli gear` |
 | [Gear design](docs/gear-design.md) | The plan for gear: device backups, staged changes, OSD, rates, sims, voice packs, firmware, flight analysis |
