@@ -11,9 +11,9 @@ Open Settings with the gear icon or Command-comma. **Done** saves every change a
 | **Places** | The saved places and the place search provider. See [Metadata](metadata.md#place-search-providers). |
 | **Import** | The format (MP4 or MOV), the MP4 encoder, the default short name, the time in file names, **Delete clips after import**, **Join split recordings**, and the tolerances for log matching, the DJI clip clock skew included. |
 | **Photos** | The album. An empty album means the library only. See [Photos](photos.md). |
-| **Gear** | Back up on connect, how many backups to keep, the USB power warning, the steps per device kind when it is plugged in, and the cues: which play, as speech, sound or notification, mute, the voice and quiet hours. See [Gear](gear.md). |
-| **Modules** | Tools QuadCam downloads on request (ffmpeg, esptool): install, update, remove, check for updates, and where ffmpeg comes from. See [Modules and notices](modules.md). |
-| **Advanced** | Where ffmpeg and the agent socket are. |
+| **Gear** | The previews (**Show the Sim page**, **Betaflight flashing (preview)**, **Show the ELRS tools**), **Back up on connect**, how many backups to keep, the USB power warning, the blackbox options (**Erase blackbox after download**, **Read through USB disk mode first (not proven)**), the **Steps on connect** table per device kind, and the cues: which play, as speech, sound or notification, mute, the voice and quiet hours. See [Gear](gear.md). |
+| **Modules** | Tools QuadCam downloads on request (ffmpeg, esptool): install, update, remove, **Check for updates**, and **Use ffmpeg from** (the QuadCam module, else Homebrew; or Homebrew only). See [Modules and notices](modules.md). |
+| **Advanced** | Read-only: the ffmpeg in use and the agent socket path. |
 
 ### Formats
 
@@ -81,7 +81,7 @@ The app, the command-line tool and the MCP server all read and write this file.
 | `gear_keep_weeks` | 8 | Then one backup a week for this many weeks |
 | `gear_keep_monthly` | on | Then one a month |
 | `gear_usb_minutes` | 20 | Minutes an FC may run on USB with its battery in before "Unplug now"; a board's own shorter limit wins (0: off). See [Gear](gear.md#flight-controllers) |
-| `gear_on_connect` | `backup` for every kind | Steps per device kind on plug-in: `backup`, `import`, `apply_ready` (opens the apply sheet for the device's Ready changes; nothing is written until you click Apply), `blackbox` (FCs: pulls the blackbox flash; see [Gear](gear.md#blackbox)) |
+| `gear_on_connect` | `backup` for every kind | Steps per device kind on plug-in: `backup`, `import` (goggles and DVR cards; the Settings table offers it, but no step runs yet), `apply_ready` (opens the apply sheet for the device's Ready changes; nothing is written until you click Apply), `blackbox` (FCs: pulls the blackbox flash; see [Gear](gear.md#blackbox)) |
 | `gear_erase_blackbox` | off | Erases an FC's blackbox flash after a pull verified. Off by default, like `delete_clips_after_import`. The CLI and agents respect it and can only skip it for one run |
 | `gear_blackbox_msc` | off | A blackbox pull tries the FC's USB disk mode before MSP. Not proven on a real FC |
 | `gear_cues` | speech and notifications on | Cues, their channels, mute, debounce, the reminder and quiet hours. See [Gear](gear.md#cues) |
