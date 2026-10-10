@@ -81,6 +81,7 @@ pub struct ElrsView {
     /// Whether a binding phrase is set. Never the phrase.
     pub phrase_set: bool,
     pub region: String,
+    /// Seconds without a link before a flashed device starts its WiFi; 0 is never. 60 when unset.
     pub wifi_interval: u32,
     pub warnings: Vec<String>,
 }

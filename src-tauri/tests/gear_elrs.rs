@@ -322,6 +322,17 @@ fn every_job_refuses_while_the_preview_is_off() {
 }
 
 #[test]
+fn the_view_reports_the_wifi_delay_in_effect() {
+    let (b, _, _) = bench(true, true);
+    let wifi = |b: &Bench| b.core.gear_elrs(&ElrsParams::default()).unwrap().wifi_interval;
+    assert_eq!(wifi(&b), 60, "unset: the default");
+    set_settings(b.dir.path(), json!({"elrs_wifi_interval": 0}));
+    assert_eq!(wifi(&b), 0, "0 means never");
+    set_settings(b.dir.path(), json!({"elrs_wifi_interval": 90}));
+    assert_eq!(wifi(&b), 90);
+}
+
+#[test]
 fn the_transmitter_module_is_read_through_the_radio() {
     let (b, tx, _) = bench(true, true);
     let r = read(&b, &b.radio).unwrap();
