@@ -165,11 +165,17 @@ pub struct Ctx<'a> {
     pub settings: &'a RenderSettings,
     /// Needed only when a take needs `atempo` or a resample.
     pub tools: Option<&'a Tools>,
+    /// Takes already cut from batches (`batch::render_all`), by spoken text. A line found
+    /// here never reaches the provider.
+    pub cuts: Option<&'a std::collections::HashMap<String, Pcm>>,
 }
 
 /// One take: from the cache, or from the provider (then cached). Returns whether the cache
 /// answered.
 pub fn take(ctx: &Ctx<'_>, spoken: &str) -> Result<(Pcm, bool)> {
+    if let Some(p) = ctx.cuts.and_then(|c| c.get(spoken)) {
+        return Ok((p.clone(), true));
+    }
     let s = ctx.settings;
     let key = Cache::key(ctx.tts.id(), ctx.voice, ctx.model, s.speed, spoken, s.seed);
     if let Some(p) = ctx.cache.get(ctx.tts.id(), &key) {

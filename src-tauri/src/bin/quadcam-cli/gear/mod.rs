@@ -9,6 +9,7 @@ use quadcam_lib::core::Core;
 use serde_json::Value;
 
 mod backup;
+mod blackbox;
 mod card;
 mod changes;
 mod elrs;
@@ -36,6 +37,11 @@ pub enum GearCmd {
     Fc {
         #[command(subcommand)]
         cmd: fc::FcCmd,
+    },
+    /// An FC's blackbox flash: `pull` (read, verify, store, maybe erase), `list`, `export`, `erase`.
+    Blackbox {
+        #[command(subcommand)]
+        cmd: blackbox::BlackboxCmd,
     },
     /// An FC's OSD layout per OSD profile, drawn on its grid and checked for overlaps and
     /// cells off screen. Reads a dump or diff file.
@@ -233,6 +239,7 @@ pub enum DevicesCmd {
 pub fn run(core: &Core, cmd: GearCmd) -> Result<Value> {
     Ok(match cmd {
         GearCmd::Fc { cmd } => fc::run(core, cmd)?,
+        GearCmd::Blackbox { cmd } => blackbox::run(core, cmd)?,
         GearCmd::Osd(a) => osd::run(core, a)?,
         GearCmd::OsdEdit(a) => osd::edit(core, a)?,
         GearCmd::Voice(a) => voice::run(core, a)?,

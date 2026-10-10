@@ -10,6 +10,7 @@ import { RatesSegment } from "./Rates/RatesSegment";
 import { SwitchesSegment } from "./Switches/SwitchesSegment";
 import { ChangesSegment } from "./Changes/ChangesSegment";
 import { BackupsSegment } from "./Backups/BackupsSegment";
+import { BlackboxSegment } from "./Blackbox/BlackboxSegment";
 import { SplashSegment } from "./Splash/SplashSegment";
 import type { DeviceRef, DeviceSegment } from "./slots";
 
@@ -30,6 +31,8 @@ export const DEVICE_SEGMENTS: DeviceSegment[] = [
   { id: "changes", label: "Changes", kinds: ["fc", "radio"], render: (d) => <ChangesSegment d={d} /> },
   // The start-up picture, patched into the radio's firmware (WP10).
   { id: "splash", label: "Splash", kinds: ["radio"], render: (d) => <SplashSegment key={d.key} d={d} /> },
+  // The FC's blackbox flash: pull, erase, the stored pulls and their guessed flights.
+  { id: "blackbox", label: "Blackbox", kinds: ["fc"], render: (d) => <BlackboxSegment key={d.key} d={d} /> },
   { id: "backups", label: "Backups", kinds: ["radio", "fc", "goggles", "dvr_card"], render: (d) => <BackupsSegment d={d} /> },
 ];
 

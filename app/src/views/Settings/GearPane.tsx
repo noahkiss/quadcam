@@ -6,7 +6,7 @@ import { tilde } from "../../lib/format";
 import { AUTOMATIONS, GEAR_KINDS, type Draft, type GearDraft } from "./draft";
 import styles from "./SettingsSheet.module.css";
 
-const AUTOMATION_LABEL: Record<Automation, string> = { backup: "Back up", import: "Import clips", apply_ready: "Apply ready changes" };
+const AUTOMATION_LABEL: Record<Automation, string> = { backup: "Back up", import: "Import clips", apply_ready: "Apply ready changes", blackbox: "Pull blackbox" };
 
 /** The steps that make sense for a kind: Import only for a card with clips, Apply only for a
  *  device QuadCam writes settings to. */
@@ -14,6 +14,7 @@ const OFFERED: Record<Automation, DeviceKind[]> = {
   backup: GEAR_KINDS,
   import: ["goggles", "dvr_card"],
   apply_ready: ["radio", "fc", "elrs_tx", "elrs_rx"],
+  blackbox: ["fc"],
 };
 
 export function GearPane({ d, setD }: { d: Draft; setD: (f: (d: Draft) => Draft) => void }) {
@@ -42,6 +43,10 @@ export function GearPane({ d, setD }: { d: Draft; setD: (f: (d: Draft) => Draft)
       <div className={styles.row}>
         <TextField label="USB power warning (min, 0 for off)" type="number" min={0} max={240} step={1} value={g.usbMinutes} onChange={(e) => set({ usbMinutes: e.target.value })} />
       </div>
+
+      <h3>Blackbox</h3>
+      <Checkbox label="Erase blackbox after download" checked={g.eraseBlackbox} onChange={(e) => set({ eraseBlackbox: e.target.checked })} />
+      <Checkbox label="Read through USB disk mode first (not proven)" checked={g.blackboxMsc} onChange={(e) => set({ blackboxMsc: e.target.checked })} />
 
       <h3>When a device is plugged in</h3>
       <table className={styles.modules} aria-label="Steps on connect">

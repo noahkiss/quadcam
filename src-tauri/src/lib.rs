@@ -582,6 +582,11 @@ pub fn specta_builder() -> tauri_specta::Builder<tauri::Wry> {
             c::gear_voice_edit,
             c::gear_voice_preview,
             c::gear_voice_render,
+            c::gear_voice_key,
+            c::gear_voice_sets,
+            c::gear_voice_catalog,
+            c::gear_voice_estimate,
+            c::gear_voice_sample,
             c::gear_voice_pack_install,
             c::gear_voice_choose,
             c::gear_model,
@@ -628,6 +633,10 @@ pub fn specta_builder() -> tauri_specta::Builder<tauri::Wry> {
             c::gear_crash_save,
             c::gear_crash_delete,
             c::gear_backup,
+            c::gear_blackbox_pull,
+            c::gear_blackbox,
+            c::gear_blackbox_export,
+            c::gear_blackbox_erase,
             c::gear_backups,
             c::gear_backup_read,
             c::gear_backup_diff,
@@ -774,6 +783,7 @@ pub fn run() {
             for h in crate::core::backup_hooks()
                 .into_iter()
                 .chain(crate::core::apply_ready_hooks())
+                .chain(crate::core::blackbox_hooks())
             {
                 core.gear_add_hook(h);
             }

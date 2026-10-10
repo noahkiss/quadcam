@@ -147,10 +147,6 @@ export const commands = {
 	gearDeviceSave: (params: DeviceSaveParams) => typedError<Device, string>(__TAURI_INVOKE("gear_device_save", { params })),
 	/**  Forgets a device. Its backups stay. */
 	gearDeviceForget: (params: IdParams) => typedError<Device, string>(__TAURI_INVOKE("gear_device_forget", { params })),
-	/**
-	 *  Reads an FC's identity over MSP (board, firmware, version, its device id). No
-	 *  reboot. One cue at the end.
-	 */
 	gearFcIdentify: (params: FcPortParams) => typedError<FcJob<FcInfo>, string>(__TAURI_INVOKE("gear_fc_identify", { params })),
 	/**
 	 *  Reads an FC through its CLI: read-only commands, a backup's set by default. The FC
@@ -215,6 +211,25 @@ export const commands = {
 	 *  a local pack. A render that costs money waits for `confirm`; `dry_run` only reports.
 	 */
 	gearVoiceRender: (params: VoiceRenderParams) => typedError<RenderReport, string>(__TAURI_INVOKE("gear_voice_render", { params })),
+	/**
+	 *  The voice studio's ElevenLabs key: `status` (set or not, never the key), `set` (into the
+	 *  Keychain) or `delete`.
+	 */
+	gearVoiceKey: (params: KeyParams) => typedError<KeyStatus, string>(__TAURI_INVOKE("gear_voice_key", { params })),
+	/**  The line sets a person can render, and whether a key is stored. No network. */
+	gearVoiceSets: () => typedError<StudioView, string>(__TAURI_INVOKE("gear_voice_sets")),
+	/**  The account's ElevenLabs voices, models (with what a character costs) and credits. Free calls. */
+	gearVoiceCatalog: (params: CatalogParams) => typedError<Catalog, string>(__TAURI_INVOKE("gear_voice_catalog", { params })),
+	/**
+	 *  What rendering line sets as carrier-sentence batches would cost, and whether the
+	 *  credits cover it. Makes no paid call.
+	 */
+	gearVoiceEstimate: (params: EstimateParams) => typedError<StudioEstimate, string>(__TAURI_INVOKE("gear_voice_estimate", { params })),
+	/**
+	 *  Renders a few lines in every voice and model for A/B listening. A paid call:
+	 *  `confirm` allows it; `dry_run` only prices it.
+	 */
+	gearVoiceSample: (params: SampleParams) => typedError<SampleReport, string>(__TAURI_INVOKE("gear_voice_sample", { params })),
 	/**  Installs a voice pack from the index after a hash check. */
 	gearVoicePackInstall: (params: PackInstallParams) => typedError<VoicePack, string>(__TAURI_INVOKE("gear_voice_pack_install", { params })),
 	/**
@@ -380,6 +395,19 @@ export const commands = {
 	gearCrashDelete: (params: IdParams) => typedError<Crash, string>(__TAURI_INVOKE("gear_crash_delete", { params })),
 	/**  Backs up a radio card or an FC (the FC reboots). Writes nothing when nothing changed. */
 	gearBackup: (params: BackupParams) => typedError<BackupResult, string>(__TAURI_INVOKE("gear_backup", { params })),
+	/**
+	 *  Reads an FC's identity over MSP (board, firmware, version, its device id). No
+	 *  reboot. One cue at the end.
+	 *  Pulls an FC's blackbox flash (only the used bytes), verifies and stores it, and
+	 *  erases the flash when the setting or `erase` allows and the checks pass.
+	 */
+	gearBlackboxPull: (params: BlackboxPullParams) => typedError<FcJob<BlackboxPullResult>, string>(__TAURI_INVOKE("gear_blackbox_pull", { params })),
+	/**  Stored blackbox pulls, newest first, each with its guessed flights. */
+	gearBlackbox: (params: BlackboxFilter) => typedError<BlackboxEntry[], string>(__TAURI_INVOKE("gear_blackbox", { params })),
+	/**  Writes a stored pull (and with `split` each log) to a folder. */
+	gearBlackboxExport: (params: BlackboxExportParams) => typedError<BlackboxExported, string>(__TAURI_INVOKE("gear_blackbox_export", { params })),
+	/**  Erases an FC's blackbox flash. Needs `confirm` and a stored pull of exactly what the flash holds. */
+	gearBlackboxErase: (params: BlackboxEraseParams) => typedError<FcJob<BlackboxErased>, string>(__TAURI_INVOKE("gear_blackbox_erase", { params })),
 	/**  Snapshots, newest first, without their file lists. */
 	gearBackups: (params: BackupFilter) => typedError<BackupSummary[], string>(__TAURI_INVOKE("gear_backups", { params })),
 	/**  A snapshot with its files, or one file's content. */
@@ -672,7 +700,9 @@ export type Automation =
 /**  Import the clips on a card. */
 "import" | 
 /**  Apply the device's staged changes that are Ready. */
-"apply_ready";
+"apply_ready" | 
+/**  Pull an FC's blackbox flash (and erase it, when `erase_blackbox` is on). */
+"blackbox";
 
 /**  A Betaflight `aux` line in use. */
 export type AuxMode = {
@@ -878,6 +908,96 @@ export type BackupSummary = {
 };
 
 export type Badge = "matched" | "likely" | "unmatched";
+
+/**  How lines are batched and cut. Part of a batch's cache key only through the batch text. */
+export type BatchSettings = {
+	/**  The sentence around a line; `{line}` stands for it, and the line ends the sentence. */
+	carrier?: string,
+	/**  A carrier for one tone (`alert`, `number`, `fun`, `calm`) instead of `carrier`. */
+	tone_carriers?: { [key in string]: string },
+	/**  Sentences in one batch at most. */
+	max_lines?: number,
+	/**  Each cut edge moves to the quietest point within this many milliseconds. */
+	snap_ms?: number,
+};
+
+/**  A pull with its guessed flights. */
+export type BlackboxEntry = {
+	pull: Pull,
+	flights: Linked,
+};
+
+/**  `gear_blackbox_erase`: erase the FC's flash by hand. */
+export type BlackboxEraseParams = {
+	port?: string | null,
+	/**  Required. The erase deletes the FC's logs for good. */
+	confirm?: boolean,
+};
+
+/**  `gear_blackbox_erase`'s answer. */
+export type BlackboxErased = {
+	/**  The stored pull that holds what was erased. */
+	pull: string,
+	secs: number | null,
+};
+
+/**  `gear_blackbox_export`: a pull to a folder. */
+export type BlackboxExportParams = {
+	id: string,
+	to: string,
+	/**  Also write each log as its own file. */
+	split?: boolean,
+};
+
+/**  `gear_blackbox_export`'s answer. */
+export type BlackboxExported = {
+	files: string[],
+	bytes: number,
+};
+
+/**  `gear_blackbox`: one device's pulls, or every device's. */
+export type BlackboxFilter = {
+	device?: string | null,
+};
+
+/**  `gear_blackbox_pull`. */
+export type BlackboxPullParams = {
+	/**  The FC's port; omitted when exactly one FC is plugged in. */
+	port?: string | null,
+	/**
+	 *  Keep the flash this run: do not erase it even when the `gear_erase_blackbox` setting
+	 *  is on. Nothing here turns the erase on; `gear_blackbox_erase` is its own call.
+	 */
+	keep?: boolean,
+	mode?: PullMode | null,
+	/**
+	 *  Pull although the USB heat timer says the read would outlast it. An erase that
+	 *  could not finish still does not start.
+	 */
+	force?: boolean,
+};
+
+/**  `gear_blackbox_pull`'s answer. */
+export type BlackboxPullResult = {
+	/**  None when the flash was empty. */
+	pull: Pull | null,
+	/**  False when the stored pull already holds these bytes. */
+	new: boolean,
+	method: Method | null,
+	read_bytes: number,
+	read_secs: number | null,
+	erase: EraseState,
+	erase_note: string | null,
+	erase_secs: number | null,
+	notes: string[],
+};
+
+/**  A blob's identity: its content hash and size. */
+export type BlobRef = {
+	/**  XXH64 as 16 hex digits. */
+	xxh64: string,
+	size: number,
+};
 
 /**  One known issue of a board, or a board and build. */
 export type BoardNote = {
@@ -1196,6 +1316,19 @@ export type CardView = {
 	marker?: string | null,
 	/**  The typed view of the model asked for. */
 	model?: ModelView | null,
+};
+
+export type Catalog = {
+	voices: VoiceInfo[],
+	models: ModelInfo[],
+	credits?: Credits | null,
+};
+
+/**  `gear_voice_catalog`: what the account offers. With none of the three set, all of them. */
+export type CatalogParams = {
+	voices?: boolean,
+	models?: boolean,
+	credits?: boolean,
 };
 
 /**  One entry in a change's history. */
@@ -1643,6 +1776,16 @@ export type CrashSaveParams = {
 	parts?: string[] | null,
 	note?: string | null,
 	repaired?: boolean | null,
+};
+
+/**  What an account may still spend. */
+export type Credits = {
+	used: number,
+	limit: number,
+	remaining: number,
+	tier: string,
+	/**  When the allowance resets, seconds since 1970; 0 when unknown. */
+	resets_at: number,
 };
 
 /**  The `gearCues` setting. Missing fields take their defaults. */
@@ -2191,6 +2334,53 @@ export type EnvCheck = {
 	build: string,
 };
 
+/**  What a pull did about the erase. */
+export type EraseState = 
+/**  Not asked for. */
+"off" | 
+/**  The flash was erased and reads empty. */
+"done" | 
+/**  Asked for and not done; `erase_note` says why. The pull itself is stored. */
+"skipped";
+
+/**  What a set of batches would cost. */
+export type Estimate = {
+	batches: number,
+	/**  Batches the cache already holds. */
+	cached_batches: number,
+	/**  Lines in the batches still to render. */
+	lines: number,
+	/**  Characters of those batches, carriers included. */
+	chars: number,
+	cost_per_char: number | null,
+	/**  `estimated`, `recorded` or `account`: where `cost_per_char` comes from. */
+	credits_basis?: string,
+	/**  USD per 1,000 characters today. */
+	usd_per_1k?: number | null,
+	/**  The last day of a promo rate in `usd_per_1k`. */
+	promo_until?: string | null,
+	/**  Credits the render bills (an estimate unless `credits_basis` is `recorded`). */
+	credits: number,
+	/**  What the render costs in USD. */
+	usd?: number | null,
+	remaining: number | null,
+	/**  The credits cover the render (true when the provider cannot say). */
+	affordable: boolean,
+};
+
+/**  `gear_voice_estimate`. */
+export type EstimateParams = {
+	/**  Line set ids (`gear_voice_sets`); they combine. */
+	sets: string[],
+	/**  A voice name or id from the account. */
+	voice: string,
+	model: string,
+	/**  Only these card paths of the sets; empty for every line. */
+	lines?: string[],
+	settings?: RenderSettings | null,
+	batch?: BatchSettings | null,
+};
+
 /**  `gear_export`: a snapshot, or every snapshot of a device, to a folder. */
 export type ExportParams = {
 	device?: string | null,
@@ -2431,6 +2621,20 @@ export type FlightLine = {
 	secs: number | null,
 };
 
+/**  One log paired with one flight. */
+export type FlightLink = {
+	/**  The log's number in the image (1-based). */
+	log: number,
+	log_bytes: number,
+	flight: string,
+	flight_secs: number | null,
+	/**
+	 *  Bytes per second of flight: a log and its flight agree when these are alike across
+	 *  pairs. None with fewer than three pairs.
+	 */
+	fits: boolean | null,
+};
+
 /**  A flight with what QuadCam joins to it. */
 export type FlightReport = {
 	flight: Flight,
@@ -2626,6 +2830,16 @@ export type GearSettings = {
 	firmware_check: string,
 	/**  The voice provider: `say` (macOS) or another a later version adds. */
 	tts_provider: string,
+	/**
+	 *  Erase the FC's blackbox flash after a pull verified (`gearEraseBlackbox`). Off by
+	 *  default, like `delete_clips_after_import`.
+	 */
+	erase_blackbox: boolean,
+	/**
+	 *  Try the FC's USB disk mode before MSP for a blackbox pull (`gearBlackboxMsc`).
+	 *  Unproven on real FCs; off by default.
+	 */
+	blackbox_msc: boolean,
 	/**
 	 *  What runs when a device of each kind is plugged in (`gearOnConnect`). Backup also
 	 *  needs `auto_backup`.
@@ -2836,6 +3050,25 @@ export type Join = {
 	/**  Bytes of every file's source, for the free-space check. */
 	bytes: number,
 	swap: Swap,
+};
+
+/**  `gear_voice_key`. */
+export type KeyParams = {
+	/**  `status` (default), `set` or `delete`. */
+	action?: string,
+	/**  For `set`: the key. It goes to the Keychain and nowhere else. */
+	key?: string | null,
+};
+
+/**  Whether a key is stored, never the key. */
+export type KeyStatus = {
+	set: boolean,
+	/**  What tells keys apart without showing one: `ends in 3f9a`. */
+	hint: string,
+	/**  `keychain`, or `environment` when QUADCAM_TTS_KEY holds it for this run. */
+	source: string,
+	/**  Why the Keychain could not be read, when it could not. */
+	problem?: string | null,
 };
 
 /**  `format_plan`: the volume name; None uses the setting. */
@@ -3227,6 +3460,19 @@ export type LinkEdge = {
 	tx_power_mw: number | null,
 };
 
+/**  The pairing of a pull's logs with flights, and what it left over. */
+export type Linked = {
+	links: FlightLink[],
+	/**  Flight logs (not test arms) with no flight to pair with. */
+	unpaired_logs: number,
+	/**  Candidate flights with no log. */
+	unpaired_flights: number,
+	/**  Logs shorter than `MIN_FLIGHT_LOG_BYTES`. */
+	short_logs: number,
+	/**  Always says this is a guess and how it was made. */
+	note: string,
+};
+
 /**  Channel values matched to the map: where each control is, and what the FC has on. */
 export type Live = {
 	/**  `fc` (`MSP_RC`) or `radio` (the USB joystick). */
@@ -3261,6 +3507,26 @@ export type LogCounts = {
 	same: number,
 	kept_both: number,
 	unchanged: number,
+};
+
+/**  One log in the flash image, from its headers. */
+export type LogInfo = {
+	/**  Position in the image, 1-based. */
+	index: number,
+	offset: number,
+	size: number,
+	/**  `H Firmware revision`. */
+	firmware: string | null,
+	/**  `H Craft name`. */
+	craft: string | null,
+	/**  `H Log start datetime`, as the log prints it. */
+	start: string | null,
+	/**  The start is a real date (not the `0000-01-01` an FC without a clock prints). */
+	dated: boolean,
+	/**  `H looptime`, microseconds. */
+	looptime_us: number | null,
+	/**  Header lines. */
+	headers: number,
 };
 
 /**  The switch that writes the radio's log, and how often. */
@@ -3313,6 +3579,13 @@ export type Meta = {
 	date: string,
 	description: string,
 };
+
+/**  How the image was read. */
+export type Method = 
+/**  MSP over the serial port (about 84 KB/s). */
+"msp" | 
+/**  The FC in USB disk mode (`msc`). Not proven on a real FC. */
+"msc";
 
 export type Mix = {
 	/**  0 is CH1. */
@@ -3375,6 +3648,23 @@ export type ModelEntry = {
 	file: string,
 	name: string,
 	selected: boolean,
+};
+
+/**  A model a provider offers. */
+export type ModelInfo = {
+	id: string,
+	name: string,
+	/**
+	 *  Credits one character costs on this model: estimated from the rate table, or the
+	 *  account's own figure for a model the table lacks.
+	 */
+	cost_per_char: number | null,
+	/**  USD per 1,000 characters today (the promo rate while it lasts); 0 when unknown. */
+	usd_per_1k?: number | null,
+	/**  The last day of a promo rate that applies today. */
+	promo_until?: string | null,
+	/**  The longest text one request takes; 0 when the provider does not say. */
+	max_chars: number,
 };
 
 /**  One edit to a model file. Ops apply in order; a later op sees the earlier ones. */
@@ -4134,6 +4424,41 @@ export type PruneReport = {
 	collected: Collected,
 };
 
+/**  One pull. */
+export type Pull = {
+	/**  `<device>/<YYYY-MM-DDTHHMMSS>`. */
+	id: string,
+	/**  The FC's device id. */
+	device: string,
+	/**  The aircraft profile the device is linked to, when it is. */
+	aircraft?: string | null,
+	pulled_at: string,
+	/**  The local day of the pull. */
+	day: string,
+	method: Method,
+	blob: BlobRef,
+	/**  Bytes the flash reported used, and its size. */
+	used: number,
+	total: number,
+	logs: LogInfo[],
+	/**  The firmware of the first log, and the craft name of the first log that has one. */
+	firmware?: string | null,
+	craft?: string | null,
+	/**  The flash was erased after the pull verified. */
+	erased?: boolean,
+	/**  Why the flash was not erased, or what the erase did. */
+	erase_note?: string | null,
+};
+
+/**  How a pull reads the flash. */
+export type PullMode = 
+/**  USB disk mode when the `gear_blackbox_msc` setting is on and the FC has it, else MSP. */
+"auto" | 
+/**  MSP only. */
+"msp" | 
+/**  USB disk mode only (unproven on real FCs); fails when the FC lacks it. */
+"msc";
+
 /**
  *  Speech and sound stay silent from `start` to `end` (local time, `HH:MM`; may cross
  *  midnight).
@@ -4451,6 +4776,10 @@ export type RenderReport = {
 	needs_confirm: boolean,
 	dry_run: boolean,
 	notes: string[],
+	/**  A batched render: what it costs. Absent for a line-by-line render. */
+	estimate?: Estimate | null,
+	/**  Cuts whose length looks wrong (batched renders). */
+	warnings?: string[],
 };
 
 /**  How a voice is rendered. Every field is in the pack's index entry. */
@@ -4531,6 +4860,41 @@ export type RfAlarms = {
 };
 
 export type RowState = "pass" | "warn" | "unknown";
+
+export type SampleItem = {
+	voice: string,
+	voice_name: string,
+	model: string,
+	/**  The line's card path. */
+	line: string,
+	text: string,
+	/**  The WAV, in the cache. */
+	file: string,
+	ms: number,
+};
+
+/**  `gear_voice_sample`: short A/B renders of a few lines in every voice and model. */
+export type SampleParams = {
+	voices: string[],
+	models: string[],
+	/**  Line sets to sample; empty for `sample`. */
+	sets?: string[],
+	lines?: string[],
+	dry_run?: boolean,
+	confirm?: boolean,
+	settings?: RenderSettings | null,
+	batch?: BatchSettings | null,
+};
+
+export type SampleReport = {
+	items: SampleItem[],
+	/**  The total over every voice and model. */
+	estimate: Estimate,
+	combos: number,
+	needs_confirm: boolean,
+	dry_run: boolean,
+	warnings: string[],
+};
 
 /**  One radio's saved calibration and what it was made with. */
 export type SavedCalibration = {
@@ -4712,6 +5076,14 @@ export type Session_Serialize = {
 	 *  `join_split_recordings` setting.
 	 */
 	join: boolean | null,
+};
+
+/**  What a person sees of a set. */
+export type SetInfo = {
+	id: string,
+	title: string,
+	about: string,
+	lines: number,
 };
 
 /**  `settings_set`: settings by file key or CLI/MCP name; null resets one. */
@@ -5306,6 +5678,23 @@ export type StorageView = {
 	devices: DeviceStorage[],
 };
 
+export type StudioEstimate = {
+	voice: string,
+	voice_name: string,
+	model: string,
+	/**  Lines in the sets after combining. */
+	lines: number,
+	estimate: Estimate,
+};
+
+/**  `gear_voice_sets`: the line sets and the key, with no network call. */
+export type StudioView = {
+	key: KeyStatus,
+	sets: SetInfo[],
+	/**  The carrier and batch size used when none is given. */
+	batch: BatchSettings,
+};
+
 /**  `suggest`: changes to clip plans. Without `editor`, an agent made them. */
 export type SuggestParams = {
 	patches: PlanPatch[],
@@ -5623,6 +6012,17 @@ export type VoiceEditParams = {
 	confirm?: boolean,
 };
 
+/**  A voice a provider offers. */
+export type VoiceInfo = {
+	id: string,
+	name: string,
+	/**  `premade`, `cloned`, `generated`, `professional` and so on. */
+	category: string,
+	/**  What the provider says about it: accent, gender, age, use. */
+	labels: string,
+	preview_url?: string | null,
+};
+
 export type VoiceLine = {
 	path: string,
 	text: string,
@@ -5690,6 +6090,15 @@ export type VoiceRenderParams = {
 	confirm?: boolean,
 	/**  How it is rendered; the defaults when left out. */
 	settings?: RenderSettings | null,
+	/**
+	 *  Line sets to render as carrier-sentence batches with ElevenLabs (`quadcam-cli gear
+	 *  voice sets` lists them). Empty renders `lines` or every line one at a time.
+	 */
+	sets?: string[],
+	/**  The model for a batched render; empty for the setting `tts_model`. */
+	model?: string,
+	/**  The carrier and batch size of a batched render; the defaults when left out. */
+	batch?: BatchSettings | null,
 };
 
 /**  What speaks the cue lines. */

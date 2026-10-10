@@ -1,5 +1,7 @@
 //! MSP, read-only: v1 and v2 framing, and the identity messages (design 6.2). MSP never
-//! writes in 1.0: this module has no "set" message.
+//! writes configuration in 1.0: this module has no "set" message. The one command that
+//! changes the FC is the blackbox flash erase (`blackbox`, design 7.12); it sits behind that
+//! module's verified-pull gate.
 //!
 //! Written from the public MSP protocol description:
 //!
@@ -232,6 +234,38 @@ pub fn decode_all(mut buf: &[u8]) -> (Vec<Frame>, Vec<u8>) {
 /// Sends a request and waits for its reply. A `!` reply (unknown command) is an error.
 pub fn call(link: &mut dyn SerialLink, cmd: u16, timeout: Duration) -> Result<Vec<u8>> {
     link.write_all(&request(cmd))?;
+    let buf = read_until(link, Wait::new(timeout), |b| {
+        decode_all(b)
+            .0
+            .iter()
+            .any(|f| f.cmd == cmd && f.direction != Direction::Request)
+    })?;
+    let f = decode_all(&buf)
+        .0
+        .into_iter()
+        .find(|f| f.cmd == cmd && f.direction != Direction::Request)
+        .ok_or_else(|| anyhow!("no MSP reply to command {cmd}"))?;
+    if f.direction == Direction::Error {
+        bail!("the FC does not answer MSP command {cmd}");
+    }
+    Ok(f.payload)
+}
+
+/// `call` with a request payload, in the framing the caller picks. A reply carries no
+/// request payload; an error reply (`!`) is an error.
+pub fn call_with(
+    link: &mut dyn SerialLink,
+    version: Version,
+    cmd: u16,
+    payload: &[u8],
+    timeout: Duration,
+) -> Result<Vec<u8>> {
+    link.write_all(&encode(&Frame {
+        version,
+        direction: Direction::Request,
+        cmd,
+        payload: payload.to_vec(),
+    })?)?;
     let buf = read_until(link, Wait::new(timeout), |b| {
         decode_all(b)
             .0

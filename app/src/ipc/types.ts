@@ -8,6 +8,15 @@ import type * as G from "../bindings";
 
 export type {
   Automation,
+  BlackboxEntry,
+  BlackboxErased,
+  BlackboxPullResult,
+  EraseState,
+  FcJob,
+  FlightLink,
+  Linked,
+  LogInfo,
+  Pull,
   BackupContent,
   BackupImportItem,
   BackupProgress,
@@ -453,4 +462,23 @@ export type {
   VoicePreviewParams,
   VoiceRenderParams,
   VoiceView,
+} from "../bindings";
+
+// The voice studio, as generated.
+export type {
+  Catalog,
+  CatalogParams,
+  Credits,
+  Estimate as VoiceEstimate,
+  EstimateParams,
+  KeyParams,
+  KeyStatus,
+  ModelInfo,
+  SampleItem,
+  SampleParams,
+  SampleReport,
+  SetInfo,
+  StudioEstimate,
+  StudioView,
+  VoiceInfo,
 } from "../bindings";

@@ -43,6 +43,8 @@ pub struct Timing {
     pub poll: Duration,
     /// MSP replies.
     pub msp: Duration,
+    /// The most a blackbox erase may be given to finish, whatever its estimate says.
+    pub erase_max: Duration,
 }
 
 impl Default for Timing {
@@ -56,6 +58,7 @@ impl Default for Timing {
             reboot: Duration::from_secs(30),
             poll: Duration::from_millis(250),
             msp: Duration::from_secs(1),
+            erase_max: Duration::from_secs(300),
         }
     }
 }
@@ -73,6 +76,7 @@ impl Timing {
             reboot: Duration::from_secs(2),
             poll: Duration::from_millis(1),
             msp: Duration::from_millis(500),
+            erase_max: Duration::from_secs(1),
         }
     }
 }
@@ -158,8 +162,18 @@ impl CliSession {
 
     /// Sends `save`. The FC writes, reboots and the port vanishes; the link is dropped.
     /// Fails when the port is still there after `Timing::save`.
-    pub fn save(mut self) -> Result<String> {
-        self.link.write_all(b"save\n")?;
+    pub fn save(self) -> Result<String> {
+        self.leave("save")
+    }
+
+    /// Sends `msc`: the FC reboots as a USB disk and the port vanishes; the link is dropped.
+    /// Fails when the port is still there after `Timing::save`.
+    pub fn msc(self) -> Result<String> {
+        self.leave("msc")
+    }
+
+    fn leave(mut self, line: &str) -> Result<String> {
+        self.link.write_all(format!("{line}\n").as_bytes())?;
         let port = self.link.port().to_string();
         let mut out = Vec::new();
         let deadline = Instant::now() + self.timing.save;
@@ -167,12 +181,12 @@ impl CliSession {
             match self.link.read_some(Duration::from_millis(100)) {
                 Ok(b) => out.extend_from_slice(&b),
                 Err(e) if is_gone(&e) => {
-                    return Ok(clean(&String::from_utf8_lossy(&out), "save"));
+                    return Ok(clean(&String::from_utf8_lossy(&out), line));
                 }
                 Err(e) => return Err(e),
             }
         }
-        bail!("After save the port {port} is still there; check the FC.")
+        bail!("After {line} the port {port} is still there; check the FC.")
     }
 
     /// Sends `exit`: the FC leaves the CLI, drops unsaved changes and reboots. The link is

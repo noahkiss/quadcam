@@ -137,6 +137,69 @@ At the limit it says "Unplug <FC> now." once, and the device shows the time left
 the `gear_usb_minutes` setting (20), or the board's own limit when it is shorter (10 minutes for
 the boards above). `gear_usb_minutes` 0 turns the timer off. Pulling the battery resets it.
 
+## Blackbox
+
+An FC with a flash chip logs its flights to it. When the flash is full, Betaflight stops logging, so
+the next flights leave no log. QuadCam pulls the logs off the flash and, if you allow it, erases
+the flash afterwards.
+
+**Pull.** **Pull blackbox** on the FC's **Blackbox** segment (also `gear blackbox pull`, and the
+on-connect step below) does this in one job:
+
+1. Reads the flash summary over MSP: size, bytes used, ready.
+2. Reads only the used bytes, 4 KB at a time, with the compression flag off. MSP gives about
+   84 KB/s, so a full 16 MB flash takes about 3.3 minutes. A chunk that fails is asked again
+   twice; a plug pulled mid-read fails the job.
+3. Checks the image. Its size must equal the used bytes, it must start with a log header, and
+   each log needs a firmware line. QuadCam counts the logs and reads the firmware, the craft
+   name and the log date from the headers.
+4. Stores the image in the gear folder's blob store and reads it back. A record in
+   `<gear>/blackbox/<device>/` ties it to the FC, its aircraft and the day, and names the logs.
+   A pull of the same bytes as the last one adds no second record.
+5. Erases the flash only if all of the above passed and the **Erase blackbox after download**
+   setting (`gear_erase_blackbox`) is on. It waits until the flash reads ready with 0 bytes used.
+   A flash that grew since the read is not erased.
+
+"Done, safe to unplug." plays after step 5 ends, not before. If the erase does not finish, the job
+fails, the pull stays stored, and the record says why.
+
+`gear_erase_blackbox` is off by default, like `delete_clips_after_import`. The CLI and the MCP tools
+only respect it: `--keep` (CLI) and `keep` (MCP) skip the erase for one run, and nothing turns it on
+except the setting. **Erase flash** (`gear blackbox erase --yes`, `blackbox_erase`) erases by hand.
+It needs a stored pull of exactly what the flash holds (the same used size; flash only grows), and
+asks first in the app.
+
+**USB heat.** A quad on USB with its battery in heats up. When the timer (see
+[Flight controllers](#flight-controllers)) shows less time left than the read needs, the pull is
+refused ("USB heat") and reads nothing; unplug the battery, or force the pull. A forced pull still
+never starts an erase it could not finish: the erase estimate (4 s per MiB, 20 to 120 s) plus 10 s
+must fit in the time left, else the erase is skipped and the answer says so. With no battery in,
+there is no timer.
+
+**Other programs and Pause reads.** A pull refuses a port another program has open. The on-connect
+step skips a port whose reads you paused; a pull you start yourself still runs.
+
+**Steps on connect.** `blackbox` is a step in `gear_on_connect` for FCs. It is off until you tick
+**Pull blackbox** for FC in Settings > Gear (or list `blackbox` in `gear_on_connect.fc`).
+
+**Dates and flights.** A flight controller has no clock, so its logs read `0000-01-01`. QuadCam
+dates a pull by the day it ran. If the FC is linked to an aircraft (Overview, or `gear devices
+save --aircraft`), the Blackbox segment pairs the pull's logs with that aircraft's flights from the
+radio logs **by order**, newest log with newest flight, since the previous erased pull. This is a
+guess and the segment says so. Logs under 32 KB (test arms) are skipped. Pairs whose size per
+second of flight differ from the others by more than 2 times are marked "size does not fit". QuadCam
+does not decode the flight data yet.
+
+**USB disk mode (not proven).** With `gear_blackbox_msc` on, a pull first tries the FC's USB mass
+storage mode: it enters the CLI, checks that `help` lists `msc`, sends `msc`, copies the `.bbl` files
+from the new disk in name order, unmounts it, and waits for the FC to come back. It falls back to
+MSP when the FC has no `msc`. This path is built and tested on a simulated FC only. **It needs a trial
+on a real FC**: the disk's file layout, the speed, and whether the FC returns to serial after the
+eject are unknown. The estimate for the heat check stays the MSP one.
+
+**Export.** `gear blackbox export <id> DIR [--split]` writes the image as `.bbl`, and with `--split`
+each log as its own file. It never overwrites.
+
 ## Saved devices
 
 QuadCam keeps the devices you name in `gear.json`, in the gear folder:
@@ -298,9 +361,50 @@ sound a radio plays and the text a voice reads, and puts a voice's takes of them
   **Reset** clears it. The play buttons play a take. A line you add this way that QuadCam does
   not list becomes one of your own lines.
 
-Not built: rendering many lines at once inside carrier sentences ("The word is six.") and
-cutting them out by word timestamps. The list holds 45 lines so far: callouts, the numbers 0
-to 20 and six system sounds. The rest of EdgeTX's sound set is yet to be added.
+### Voice studio
+
+The **Voice studio** at the top of the Voice segment renders whole line sets with ElevenLabs,
+inside carrier sentences, and compares voices before it spends credits.
+
+- **Key.** Paste the ElevenLabs API key and **Save key**. It goes to the macOS Keychain
+  (service `app.quadcam`) and nowhere else: not `settings.json`, not a log, not an answer.
+  The studio shows only the last four characters. **Remove key** deletes it. From the command
+  line, `quadcam-cli gear voice key set` reads the key from stdin. `QUADCAM_TTS_KEY` in the
+  environment takes the place of the Keychain for one run.
+- **Account.** The studio lists the account's voices and models and the credits left. Each
+  model shows its price in USD per 1,000 characters and the credits a character costs. QuadCam
+  holds one rate table (the pricing page of 2026-10-09). A promo rate, such as the one on v4
+  and v4 turbo until 2026-10-12, shows with its last day. The credit figure is an estimate:
+  one credit is one character at the $0.08 rate, so a $0.04 model costs half a credit. After
+  a paid call, QuadCam records the character count ElevenLabs reports and uses that next time.
+- **Line sets.** A set is a list of lines to render. Sets combine, and a line in two sets is
+  rendered once. `edgetx` (every prompt the radio plays by itself, the numbers and units, and
+  the general prompts), `quad`, `heli`, `plane` and `glider` (the radio's own prompts and
+  numbers, plus the callouts that setup plays), `extras` (more FPV callouts), `easter` (short
+  fun lines in original wording), `custom` (your own lines) and `quadcam` (the lines a pack
+  holds today). `sample` is twelve hard lines for **Sample**. The number and unit prompts
+  (`0000.wav` to `0099.wav`, `volt0.wav` and so on) and the sounds the radio plays by itself
+  go in `SOUNDS/en/SYSTEM/`, where EdgeTX looks for them; a model's own tracks go in
+  `SOUNDS/en/`.
+- **Cost.** The line under the pickers shows the characters (carriers included), the batches,
+  the price in USD and the credits (estimated), and the credits left. Batches the cache already
+  holds cost nothing. A render the credits do not cover cannot start. A batch stays under the
+  model's per-request limit (v3 5,000 characters, multilingual v2 10,000, flash and turbo
+  40,000).
+- **Sample.** Tick voices and models and press **Sample**. QuadCam renders the sample lines
+  in each pair, shows the cost, and waits for **Sample and pay**. Each play button in the grid
+  plays one line in one voice and model.
+- **Render pack.** Needs one voice, one model and at least one set. After **Render and pay**
+  the lines go into a local pack named for the voice and model; a second set adds to the
+  same pack. **Choose voice** puts it on a radio like any other pack.
+- **How a line is cut.** A bare word sounds wrong from a voice, so each line is spoken in a
+  carrier ("The word is six.") and cut out. Lines are grouped by tone (calm, alert, number,
+  fun), up to 30 sentences in a batch. ElevenLabs returns the time of every character; QuadCam
+  cuts from the start of the line's first character to the end of its last, moving each edge
+  to the quietest point within 40 ms. The cut then gets the usual trim, fades and tempo.
+  A cut that is silent, under 120 ms, or long for its text is reported. The raw audio and
+  timestamps of each batch are kept by provider, voice, model, speed, text and seed, so a new
+  trim or tempo setting re-cuts for free. `--carrier "I said {line}."` changes the carrier.
 
 ## Unplugging cards
 
@@ -344,7 +448,7 @@ QuadCam posts through `osascript`.
 ## Steps on connect
 
 The `gear_on_connect` setting names the steps that run when a device of each kind is plugged in:
-`backup`, `import` and `apply_ready`. Only `backup` is on by default, and only while
+`backup`, `import`, `apply_ready` and `blackbox` (FCs only; see [Blackbox](#blackbox)). Only `backup` is on by default, and only while
 `gear_auto_backup` is on. `backup` runs two steps: **Card check** (a card QuadCam knows) and
 **Backup** (a radio card or an FC). `import` is accepted in the setting and does nothing yet. `apply_ready` is described
 under [Apply on connect](#apply-on-connect).
@@ -1075,6 +1179,10 @@ quadcam-cli --json gear fc check STEM.diff_all.txt expected.cli  # offline: line
 quadcam-cli --json gear fc notes [--board B] [--version V]       # known issues
 quadcam-cli --json gear fc pause|resume [--port ...]                 # pause the running app's FC reads
 quadcam-cli --json gear fc usb                                   # USB timers
+quadcam-cli --json gear blackbox pull [--port P] [--keep] [--mode auto|msp|msc] [--force]   # read, verify, store; erase if the setting allows
+quadcam-cli --json gear blackbox list [--device ID]              # stored pulls with their guessed flights
+quadcam-cli --json gear blackbox export <pull> DIR [--split]     # .bbl files
+quadcam-cli --json gear blackbox erase [--port P] --yes      # erase the flash; needs a stored pull of it
 quadcam-cli gear osd quad.dump_all.txt --text        # each OSD profile drawn, and the check
 quadcam-cli --json gear osd quad.dump_all.txt apply.cli --grid PAL
 quadcam-cli --json gear osd <fc> --staged                    # the layout with its staged OSD edits on top
@@ -1174,3 +1282,13 @@ A process started by cargo never reaches real gear:
 Card unmounts (`diskutil unmountDisk`) follow `QUADCAM_SERIAL`, and so does the list of DFU
 devices. The firmware tests serve releases from memory and flash a fake DFU device. The ExpressLRS tests (`tests/gear_elrs.rs`) use a simulated radio, FC and ELRS device on fake ports and `esptool` as a recorder; ExpressLRS and esptool are never downloaded or run for real. Tests use the synthetic card
 (`gear::edgetx::synth`) in a temporary folder.
+
+**Blackbox: tested on a simulated FC only.** The tests drive `FakeFc` with a flash image. These need a
+trial on a real FC before you trust them:
+
+- The MSP flash messages on a real board: the summary flags, the 4 KB read, and that a reply is never
+  compressed when the flag is off.
+- How long a real erase takes, against the 4 s per MiB estimate behind the heat check.
+- USB disk mode (`gear_blackbox_msc`): the disk's file names and layout, its speed, and whether the FC
+  returns to serial after the disk is released.
+- Pairing logs with flights by order, on days with test arms and missed flights.

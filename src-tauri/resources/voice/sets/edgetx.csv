@@ -1,0 +1,99 @@
+path,text,group,tone,why
+SOUNDS/en/on.wav,on,callouts,calm,A prompt EdgeTX can play by name.
+SOUNDS/en/off.wav,off,callouts,calm,A prompt EdgeTX can play by name.
+SOUNDS/en/ok.wav,okay,callouts,calm,A prompt EdgeTX can play by name.
+SOUNDS/en/no.wav,no,callouts,calm,A prompt EdgeTX can play by name.
+SOUNDS/en/done.wav,done,callouts,calm,A prompt EdgeTX can play by name.
+SOUNDS/en/error.wav,error,callouts,alert,A prompt EdgeTX can play by name.
+SOUNDS/en/failed.wav,failed,callouts,alert,A prompt EdgeTX can play by name.
+SOUNDS/en/saved.wav,saved,callouts,calm,A prompt EdgeTX can play by name.
+SOUNDS/en/reset.wav,reset,callouts,calm,A prompt EdgeTX can play by name.
+SOUNDS/en/check.wav,check,callouts,calm,A prompt EdgeTX can play by name.
+SOUNDS/en/warnng.wav,warning,callouts,alert,A prompt EdgeTX can play by name.
+SOUNDS/en/danger.wav,danger,callouts,alert,A prompt EdgeTX can play by name.
+SOUNDS/en/enabl.wav,enabled,callouts,calm,A prompt EdgeTX can play by name.
+SOUNDS/en/disabl.wav,disabled,callouts,calm,A prompt EdgeTX can play by name.
+SOUNDS/en/active.wav,active,callouts,calm,A prompt EdgeTX can play by name.
+SOUNDS/en/ready.wav,ready,callouts,calm,A prompt EdgeTX can play by name.
+SOUNDS/en/start.wav,start,callouts,calm,A prompt EdgeTX can play by name.
+SOUNDS/en/confirm.wav,confirm,callouts,calm,A prompt EdgeTX can play by name.
+SOUNDS/en/cancel.wav,cancel,callouts,calm,A prompt EdgeTX can play by name.
+SOUNDS/en/next.wav,next,callouts,calm,A prompt EdgeTX can play by name.
+SOUNDS/en/left.wav,left,callouts,calm,A prompt EdgeTX can play by name.
+SOUNDS/en/right.wav,right,callouts,calm,A prompt EdgeTX can play by name.
+SOUNDS/en/high.wav,high,callouts,calm,A prompt EdgeTX can play by name.
+SOUNDS/en/low.wav,low,callouts,calm,A prompt EdgeTX can play by name.
+SOUNDS/en/medium.wav,medium,callouts,calm,A prompt EdgeTX can play by name.
+SOUNDS/en/normal.wav,normal,callouts,calm,A prompt EdgeTX can play by name.
+SOUNDS/en/manual.wav,manual,callouts,calm,A prompt EdgeTX can play by name.
+SOUNDS/en/auto.wav,auto,callouts,calm,A prompt EdgeTX can play by name.
+SOUNDS/en/full.wav,full,callouts,calm,A prompt EdgeTX can play by name.
+SOUNDS/en/good.wav,good,callouts,calm,A prompt EdgeTX can play by name.
+SOUNDS/en/bad.wav,bad,callouts,alert,A prompt EdgeTX can play by name.
+SOUNDS/en/hot.wav,hot,callouts,alert,A prompt EdgeTX can play by name.
+SOUNDS/en/cold.wav,cold,callouts,calm,A prompt EdgeTX can play by name.
+SOUNDS/en/sec10.wav,ten seconds,callouts,calm,A prompt EdgeTX can play by name.
+SOUNDS/en/sec15.wav,fifteen seconds,callouts,calm,A prompt EdgeTX can play by name.
+SOUNDS/en/sec30.wav,thirty seconds,callouts,calm,A prompt EdgeTX can play by name.
+SOUNDS/en/min1.wav,one minute,callouts,calm,A prompt EdgeTX can play by name.
+SOUNDS/en/min2.wav,two minutes,callouts,calm,A prompt EdgeTX can play by name.
+SOUNDS/en/min3.wav,three minutes,callouts,calm,A prompt EdgeTX can play by name.
+SOUNDS/en/min4.wav,four minutes,callouts,calm,A prompt EdgeTX can play by name.
+SOUNDS/en/min5.wav,five minutes,callouts,calm,A prompt EdgeTX can play by name.
+SOUNDS/en/timeup.wav,time is up,callouts,alert,A prompt EdgeTX can play by name.
+SOUNDS/en/bind.wav,bind,callouts,calm,A prompt EdgeTX can play by name.
+SOUNDS/en/calib.wav,calibrating,callouts,calm,A prompt EdgeTX can play by name.
+SOUNDS/en/calibok.wav,calibration done,callouts,calm,A prompt EdgeTX can play by name.
+SOUNDS/en/sag.wav,Voltage sag,callouts,alert,A prompt EdgeTX can play by name.
+SOUNDS/en/storage.wav,Storage voltage,callouts,calm,A prompt EdgeTX can play by name.
+SOUNDS/en/swapbatt.wav,Swap battery,callouts,alert,A prompt EdgeTX can play by name.
+SOUNDS/en/lastpack.wav,Last pack,callouts,calm,A prompt EdgeTX can play by name.
+SOUNDS/en/halfpack.wav,Half pack,callouts,calm,A prompt EdgeTX can play by name.
+SOUNDS/en/cellchk.wav,Check cells,callouts,calm,A prompt EdgeTX can play by name.
+SOUNDS/en/linkok.wav,Link good,callouts,calm,A prompt EdgeTX can play by name.
+SOUNDS/en/linkweak.wav,Link weak,callouts,alert,A prompt EdgeTX can play by name.
+SOUNDS/en/linklost.wav,Link lost,callouts,alert,A prompt EdgeTX can play by name.
+SOUNDS/en/lostmdl.wav,Lost model,callouts,alert,A prompt EdgeTX can play by name.
+SOUNDS/en/foundit.wav,Found it,callouts,calm,A prompt EdgeTX can play by name.
+SOUNDS/en/telem.wav,telemetry,callouts,calm,A prompt EdgeTX can play by name.
+SOUNDS/en/gps.wav,GPS,callouts,calm,A prompt EdgeTX can play by name.
+SOUNDS/en/home.wav,home,callouts,calm,A prompt EdgeTX can play by name.
+SOUNDS/en/landnow.wav,Land now,callouts,alert,A prompt EdgeTX can play by name.
+SOUNDS/en/ch1.wav,channel one,callouts,calm,A prompt EdgeTX can play by name.
+SOUNDS/en/ch2.wav,channel two,callouts,calm,A prompt EdgeTX can play by name.
+SOUNDS/en/ch3.wav,channel three,callouts,calm,A prompt EdgeTX can play by name.
+SOUNDS/en/ch4.wav,channel four,callouts,calm,A prompt EdgeTX can play by name.
+SOUNDS/en/ch5.wav,channel five,callouts,calm,A prompt EdgeTX can play by name.
+SOUNDS/en/ch6.wav,channel six,callouts,calm,A prompt EdgeTX can play by name.
+SOUNDS/en/ch7.wav,channel seven,callouts,calm,A prompt EdgeTX can play by name.
+SOUNDS/en/ch8.wav,channel eight,callouts,calm,A prompt EdgeTX can play by name.
+SOUNDS/en/flp1.wav,flaps one,callouts,calm,A prompt EdgeTX can play by name.
+SOUNDS/en/flp2.wav,flaps two,callouts,calm,A prompt EdgeTX can play by name.
+SOUNDS/en/flp3.wav,flaps three,callouts,calm,A prompt EdgeTX can play by name.
+SOUNDS/en/flp4.wav,flaps four,callouts,calm,A prompt EdgeTX can play by name.
+SOUNDS/en/flp5.wav,flaps five,callouts,calm,A prompt EdgeTX can play by name.
+SOUNDS/en/pack1.wav,pack one,callouts,calm,A prompt EdgeTX can play by name.
+SOUNDS/en/pack2.wav,pack two,callouts,calm,A prompt EdgeTX can play by name.
+SOUNDS/en/pack3.wav,pack three,callouts,calm,A prompt EdgeTX can play by name.
+SOUNDS/en/pack4.wav,pack four,callouts,calm,A prompt EdgeTX can play by name.
+SOUNDS/en/pack5.wav,pack five,callouts,calm,A prompt EdgeTX can play by name.
+SOUNDS/en/pack6.wav,pack six,callouts,calm,A prompt EdgeTX can play by name.
+SOUNDS/en/pack7.wav,pack seven,callouts,calm,A prompt EdgeTX can play by name.
+SOUNDS/en/pack8.wav,pack eight,callouts,calm,A prompt EdgeTX can play by name.
+SOUNDS/en/pack9.wav,pack nine,callouts,calm,A prompt EdgeTX can play by name.
+SOUNDS/en/pack10.wav,pack ten,callouts,calm,A prompt EdgeTX can play by name.
+SOUNDS/en/fm-1.wav,flight mode one,callouts,calm,A prompt EdgeTX can play by name.
+SOUNDS/en/fm-2.wav,flight mode two,callouts,calm,A prompt EdgeTX can play by name.
+SOUNDS/en/fm-3.wav,flight mode three,callouts,calm,A prompt EdgeTX can play by name.
+SOUNDS/en/fm-4.wav,flight mode four,callouts,calm,A prompt EdgeTX can play by name.
+SOUNDS/en/fm-5.wav,flight mode five,callouts,calm,A prompt EdgeTX can play by name.
+SOUNDS/en/fm-6.wav,flight mode six,callouts,calm,A prompt EdgeTX can play by name.
+SOUNDS/en/fm-7.wav,flight mode seven,callouts,calm,A prompt EdgeTX can play by name.
+SOUNDS/en/fm-8.wav,flight mode eight,callouts,calm,A prompt EdgeTX can play by name.
+SOUNDS/en/bank-0.wav,bank zero,callouts,calm,A prompt EdgeTX can play by name.
+SOUNDS/en/bank-1.wav,bank one,callouts,calm,A prompt EdgeTX can play by name.
+SOUNDS/en/bank-2.wav,bank two,callouts,calm,A prompt EdgeTX can play by name.
+SOUNDS/en/bank-3.wav,bank three,callouts,calm,A prompt EdgeTX can play by name.
+SOUNDS/en/expo1.wav,expo one,callouts,calm,A prompt EdgeTX can play by name.
+SOUNDS/en/expo2.wav,expo two,callouts,calm,A prompt EdgeTX can play by name.
+SOUNDS/en/expo3.wav,expo three,callouts,calm,A prompt EdgeTX can play by name.

@@ -1,0 +1,13 @@
+path,text,group,tone,why
+SOUNDS/en/SYSTEM/0006.wav,Six,numbers,number,A bare number: the hardest case for a lone word.
+SOUNDS/en/armed.wav,Armed,callouts,calm,A short word with a hard start.
+SOUNDS/en/disarm.wav,Disarmed,callouts,calm,The matching pair of Armed.
+SOUNDS/en/turtle.wav,Turtle mode,callouts,calm,A two-word callout.
+SOUNDS/en/lowbat.wav,Battery low,callouts,alert,A warning.
+SOUNDS/en/critbat.wav,Battery critical,callouts,alert,A last warning.
+SOUNDS/en/critrssi.wav,Signal critical,callouts,alert,"A warning that starts with S, like the carrier's last sound."
+SOUNDS/en/failsafe.wav,Failsafe,callouts,alert,One word with a hard F.
+SOUNDS/en/linkback.wav,Link back,callouts,calm,A calm status.
+SOUNDS/en/rth.wav,Return to home,callouts,alert,A longer callout.
+SOUNDS/en/mahwarn.wav,Capacity warning,callouts,alert,A longer warning.
+SOUNDS/en/SYSTEM/0010.wav,ten,numbers,number,A number that ends in a nasal.

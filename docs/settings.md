@@ -81,7 +81,9 @@ The app, the command-line tool and the MCP server all read and write this file.
 | `gear_keep_weeks` | 8 | Then one backup a week for this many weeks |
 | `gear_keep_monthly` | on | Then one a month |
 | `gear_usb_minutes` | 20 | Minutes an FC may run on USB with its battery in before "Unplug now"; a board's own shorter limit wins (0: off). See [Gear](gear.md#flight-controllers) |
-| `gear_on_connect` | `backup` for every kind | Steps per device kind on plug-in: `backup`, `import`, `apply_ready` (opens the apply sheet for the device's Ready changes; nothing is written until you click Apply) |
+| `gear_on_connect` | `backup` for every kind | Steps per device kind on plug-in: `backup`, `import`, `apply_ready` (opens the apply sheet for the device's Ready changes; nothing is written until you click Apply), `blackbox` (FCs: pulls the blackbox flash; see [Gear](gear.md#blackbox)) |
+| `gear_erase_blackbox` | off | Erases an FC's blackbox flash after a pull verified. Off by default, like `delete_clips_after_import`. The CLI and agents respect it and can only skip it for one run |
+| `gear_blackbox_msc` | off | A blackbox pull tries the FC's USB disk mode before MSP. Not proven on a real FC |
 | `gear_cues` | speech and notifications on | Cues, their channels, mute, debounce, the reminder and quiet hours. See [Gear](gear.md#cues) |
 | `sim_preview` | off | Shows **Gear > Sim**, the flight sim preview. Set it in Settings > Gear, or with `quadcam-cli settings set sim_preview=true` |
 | `elrs_preview` | off | Shows the ExpressLRS tools on the Firmware page (a preview). Every ExpressLRS job refuses while it is off. See [Gear](gear.md#expresslrs-preview) |
@@ -89,7 +91,7 @@ The app, the command-line tool and the MCP server all read and write this file.
 | `elrs_region` | `FCC` | `FCC` or `LBT`: which image folder of a release a flash uses |
 | `elrs_wifi_interval` | 60 | Seconds without a link before a flashed device starts its WiFi (0: never) |
 | `firmware_check` | `manual` | `manual` or `daily`. `manual`: the Firmware page reads the network only when you select **Check for updates**. `daily`: it also checks when the last answer is a day old. See [Gear](gear.md#check) |
-| `tts_provider`, `tts_key` | `say`, none | The voice provider: `say` or `openai`. `QUADCAM_TTS_KEY` in the environment wins over the key. Reads show the key only as `(set)` |
+| `tts_provider`, `tts_key` | `say`, none | The voice provider: `say` or `openai`. The Voice studio always uses ElevenLabs, with a key in the Keychain, whatever this says. `QUADCAM_TTS_KEY` in the environment wins over the key. Reads show the key only as `(set)` |
 | `tts_base_url`, `tts_model`, `tts_voice` | none | For `openai`: the server (such as `http://127.0.0.1:8880`), its model, and the voice your own lines render with. For `say`, `tts_voice` is a `say` voice |
 | `voice_index` | none | The address or path of the voice pack index (`voices.json`) |
 

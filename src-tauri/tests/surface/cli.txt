@@ -8,6 +8,8 @@ cli.arg gear backup diff [B]
 cli.arg gear backup pin <ID>
 cli.arg gear backup show <ID>
 cli.arg gear backup show [PATH]
+cli.arg gear blackbox export <DIR>
+cli.arg gear blackbox export <ID>
 cli.arg gear card-mount <DEVICE>
 cli.arg gear card-unmount <DEVICE>
 cli.arg gear crashes delete <ID>
@@ -82,6 +84,11 @@ cli.command gear backup diff
 cli.command gear backup pin
 cli.command gear backup show
 cli.command gear backups
+cli.command gear blackbox
+cli.command gear blackbox erase
+cli.command gear blackbox export
+cli.command gear blackbox list
+cli.command gear blackbox pull
 cli.command gear card
 cli.command gear card preview
 cli.command gear card-check
@@ -152,9 +159,19 @@ cli.command gear update
 cli.command gear voice
 cli.command gear voice build-pack
 cli.command gear voice choose
+cli.command gear voice credits
 cli.command gear voice edit
+cli.command gear voice estimate
 cli.command gear voice install
+cli.command gear voice key
+cli.command gear voice key delete
+cli.command gear voice key set
+cli.command gear voice key status
+cli.command gear voice models
 cli.command gear voice render
+cli.command gear voice sample
+cli.command gear voice sets
+cli.command gear voice voices
 cli.command import
 cli.command library
 cli.command library apply-name-format
@@ -226,6 +243,14 @@ cli.flag gear backup --port VALUE
 cli.flag gear backup diff --path VALUE
 cli.flag gear backup pin --off
 cli.flag gear backups --device VALUE
+cli.flag gear blackbox erase --port VALUE
+cli.flag gear blackbox erase --yes
+cli.flag gear blackbox export --split
+cli.flag gear blackbox list --device VALUE
+cli.flag gear blackbox pull --force
+cli.flag gear blackbox pull --keep
+cli.flag gear blackbox pull --mode VALUE
+cli.flag gear blackbox pull --port VALUE
 cli.flag gear card --device VALUE
 cli.flag gear card --model VALUE
 cli.flag gear card --mount VALUE
@@ -427,17 +452,50 @@ cli.flag gear voice edit --line VALUE
 cli.flag gear voice edit --pack VALUE
 cli.flag gear voice edit --radio VALUE
 cli.flag gear voice edit --text VALUE
+cli.flag gear voice estimate --carrier VALUE
+cli.flag gear voice estimate --fade-out-ms VALUE
+cli.flag gear voice estimate --lines VALUE
+cli.flag gear voice estimate --max-lines VALUE
+cli.flag gear voice estimate --model VALUE
+cli.flag gear voice estimate --seed VALUE
+cli.flag gear voice estimate --set VALUE
+cli.flag gear voice estimate --snap-ms VALUE
+cli.flag gear voice estimate --speed VALUE
+cli.flag gear voice estimate --tail-ms VALUE
+cli.flag gear voice estimate --tempo VALUE
+cli.flag gear voice estimate --trim-db VALUE
+cli.flag gear voice estimate --voice VALUE
 cli.flag gear voice install --source VALUE
+cli.flag gear voice render --carrier VALUE
 cli.flag gear voice render --confirm
 cli.flag gear voice render --dry-run
 cli.flag gear voice render --fade-out-ms VALUE
 cli.flag gear voice render --lines VALUE
+cli.flag gear voice render --max-lines VALUE
+cli.flag gear voice render --model VALUE
 cli.flag gear voice render --seed VALUE
+cli.flag gear voice render --set VALUE
+cli.flag gear voice render --snap-ms VALUE
 cli.flag gear voice render --speed VALUE
 cli.flag gear voice render --tail-ms VALUE
 cli.flag gear voice render --tempo VALUE
 cli.flag gear voice render --trim-db VALUE
 cli.flag gear voice render --voice VALUE
+cli.flag gear voice sample --carrier VALUE
+cli.flag gear voice sample --confirm
+cli.flag gear voice sample --dry-run
+cli.flag gear voice sample --fade-out-ms VALUE
+cli.flag gear voice sample --lines VALUE
+cli.flag gear voice sample --max-lines VALUE
+cli.flag gear voice sample --models VALUE
+cli.flag gear voice sample --seed VALUE
+cli.flag gear voice sample --set VALUE
+cli.flag gear voice sample --snap-ms VALUE
+cli.flag gear voice sample --speed VALUE
+cli.flag gear voice sample --tail-ms VALUE
+cli.flag gear voice sample --tempo VALUE
+cli.flag gear voice sample --trim-db VALUE
+cli.flag gear voice sample --voices VALUE
 cli.flag import --add-time
 cli.flag import --add-to-photos
 cli.flag import --album VALUE

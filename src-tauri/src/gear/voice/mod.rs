@@ -2,9 +2,14 @@
 //! providers, the render pipeline with its raw cache and normalisation, and voice packs.
 //! `core/voice.rs` holds the `Core` methods; nothing here touches a device.
 
+pub mod batch;
+pub mod eleven;
+pub mod keychain;
 pub mod lines;
 pub mod packs;
+pub mod rates;
 pub mod render;
+pub mod sets;
 pub mod tts;
 pub mod wav;
 
