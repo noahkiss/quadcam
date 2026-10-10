@@ -15,8 +15,12 @@ it.
   [Flights and packs](#flights-and-packs).
 - **Sims** lists the sims on this Mac against one quad's rates. The item says **Out of date**
   while a sim's rates differ from the quad's. See [Sims](#sims-page).
-- **Firmware** compares each device's firmware with the newest release and flashes an EdgeTX
-  radio. See [Firmware and splash](#firmware-and-splash).
+- **Controls** shows the radio's sticks and switches live. See [Controls](#controls).
+- **Firmware** compares each device's firmware with the newest release. It reads a radio's
+  firmware, flashes an EdgeTX radio, and, with the previews on, flashes a Betaflight FC and
+  reads ExpressLRS devices. See [Firmware and splash](#firmware-and-splash).
+- **Storage** shows the gear folder. See [Backups](#backups).
+- **Sim** and **Sim radio** show only while **Show the Sim page** is on. See [Sim](sim.md).
 - A device's page shows its kind and state, what it reports about itself (board, firmware,
   version), where it is mounted, its aircraft and its latest backup. **Save…** names a device
   QuadCam does not know and links it to an aircraft; **Edit…** changes that; **Forget…**
@@ -30,7 +34,7 @@ are several. Each item shows a state:
 |---|---|
 | Working | A QuadCam job is using the device |
 | Safe to unplug | The card is unmounted and still in |
-| Still inserted | The "still inserted" reminder is due. **Dismiss** stops it |
+| Still inserted | The "still inserted" reminder is due. **Dismiss** (**Dismiss reminder** on the device page) stops it |
 | Needs attention | QuadCam does not know the device yet: save it |
 | Connected | Plugged in, nothing to do |
 
@@ -87,6 +91,8 @@ serial is linked to a saved radio once and kept in that radio's record:
 - Once linked, the DFU device shows in the device list under the radio's name.
 
 ## Flight controllers
+
+![A flight controller's page: the Overview section with board, firmware, version, port, background reads and last backup, and tabs for OSD, Rates, Switches, Changes, Blackbox and Backups](images/gear-fc-dark.png)
 
 QuadCam talks to Betaflight over USB in two ways:
 
@@ -171,7 +177,8 @@ asks first in the app.
 
 **USB heat.** A quad on USB with its battery in heats up. When the timer (see
 [Flight controllers](#flight-controllers)) shows less time left than the read needs, the pull is
-refused ("USB heat") and reads nothing; unplug the battery, or force the pull. A forced pull still
+refused ("USB heat") and reads nothing; unplug the battery, or force the pull (`gear blackbox pull
+--force`). A forced pull still
 never starts an erase it could not finish: the erase estimate (4 s per MiB, 20 to 120 s) plus 10 s
 must fit in the time left, else the erase is skipped and the answer says so. With no battery in,
 there is no timer.
@@ -180,7 +187,8 @@ there is no timer.
 step skips a port whose reads you paused; a pull you start yourself still runs.
 
 **Steps on connect.** `blackbox` is a step in `gear_on_connect` for FCs. It is off until you tick
-**Pull blackbox** for FC in Settings > Gear (or list `blackbox` in `gear_on_connect.fc`).
+**Pull blackbox** in the FC row of **Settings > Gear > When a device is plugged in** (or list
+`blackbox` in `gear_on_connect.fc`).
 
 **Dates and flights.** A flight controller has no clock, so its logs read `0000-01-01`. QuadCam
 dates a pull by the day it ran. If the FC is linked to an aircraft (Overview, or `gear devices
@@ -190,7 +198,8 @@ guess and the segment says so. Logs under 32 KB (test arms) are skipped. Pairs w
 second of flight differ from the others by more than 2 times are marked "size does not fit". QuadCam
 does not decode the flight data yet.
 
-**USB disk mode (not proven).** With `gear_blackbox_msc` on, a pull first tries the FC's USB mass
+**USB disk mode (not proven).** With `gear_blackbox_msc` on (**Read through USB disk mode
+first (not proven)** in Settings > Gear), a pull first tries the FC's USB mass
 storage mode: it enters the CLI, checks that `help` lists `msc`, sends `msc`, copies the `.bbl` files
 from the new disk in name order, unmounts it, and waits for the FC to come back. It falls back to
 MSP when the FC has no `msc`. This path is built and tested on a simulated FC only. **It needs a trial
@@ -199,6 +208,12 @@ eject are unknown. The estimate for the heat check stays the MSP one.
 
 **Export.** `gear blackbox export <id> DIR [--split]` writes the image as `.bbl`, and with `--split`
 each log as its own file. It never overwrites.
+
+**CLI and MCP.** `gear blackbox list|pull|erase|export` covers the job. `gear blackbox pull
+--mode` picks MSP or USB disk mode for one run. The MCP `blackbox_pull` takes `mode`, `keep` and
+`force` the same way. In MCP, `quadcam_gear` `blackbox` lists the
+pulls, `quadcam_gear_apply` `blackbox_pull` and `blackbox_erase` write (both need `confirm`), and
+`quadcam_gear_edit` `blackbox_export` exports.
 
 ## Saved devices
 
@@ -991,8 +1006,9 @@ Packs, pack types, the pack set on each flight, added log folders and crashes ar
 | ExpressLRS | The ExpressLRS release index |
 
 - **Check for updates** reads the network. Without it, the page shows the last answer, or
-  "Not checked yet." The setting `firmwareCheck` (**Settings > Gear**) is `manual` by default.
-  With `daily`, the page checks when the last answer is a day old.
+  "Not checked yet." The setting `firmware_check` (`firmwareCheck` in the settings file) is `manual` by default.
+  With `daily`, the page checks when the last answer is a day old. Settings has no control for
+  it: run `quadcam-cli settings set firmware_check=daily`.
 - A row says **Up to date**, **Update available** or **Unknown** (the device reports no
   version, or no check has run). A source that fails shows a notice; the others still show.
 - The sidebar shows how many devices have an update.
@@ -1004,9 +1020,9 @@ Packs, pack types, the pack set on each flight, added log folders and crashes ar
   target for, when it has proven that release on the board (see
   [Flash a Betaflight FC](#flash-a-betaflight-fc-preview)).
 
-### Read the firmware (the first trial)
+### Read the firmware
 
-**Firmware > Read firmware** reads the firmware that runs on a radio and saves a copy. It
+The **Read radio firmware** section of **Gear > Firmware** has a **Read firmware** button. It reads the firmware that runs on a radio and saves a copy. It
 cannot erase, write or restart the radio: the USB path it uses refuses every command except
 status polls, aborts, the address pointer and uploads. Run it before any flash.
 
@@ -1170,7 +1186,7 @@ when the USB timer would run out first.
 
 ### ExpressLRS (preview)
 
-A preview for 1.1, off by default. Select **Show the ELRS tools** under **Firmware > ExpressLRS
+A preview, off by default. Select **Show the ELRS tools** under **Firmware > ExpressLRS
 (preview)**, or turn on **Settings > Gear > Show the ELRS tools**
 (`quadcam-cli settings set elrs_preview=true`). **QuadCam has not tried any of this on a real
 radio, FC or ExpressLRS device yet.** Every job refuses while the setting is off.
@@ -1214,9 +1230,9 @@ option over CRSF, reads them back and compares. From a terminal:
 - QuadCam configures the image: the device name, your binding phrase as the UID, the hardware
   layout and the WiFi delay (`elrs_wifi_interval`, 60 s by default). It reads the image back and
   checks that no other byte changed. **The plan shows only a fingerprint of the UID, never the
-  phrase.** Set the phrase in the ELRS section (write-only) or with
+  phrase.** Type the phrase in **Binding phrase** and select **Save phrase** (write-only), or use
   `settings set elrs_binding_phrase=…`; reads show `(set)`. The plan refuses without a phrase.
-- The region (`elrs_region`, `FCC` or `LBT`) picks the image folder.
+- The region (`elrs_region`, `FCC` or `LBT`; the **Region** list in the ELRS section) picks the image folder.
 - The **esptool** module must be installed ([Modules](modules.md)). Nothing downloads except the
   release, on your action.
 - Mixed majors (4.x on one end, 3.x on the other) do not link; the plan warns, and the page warns
@@ -1352,6 +1368,9 @@ copy or a model delete. Model ops: `rename`, `set_model_id`, `set_flags`, `set_c
 `set_sensor_logs`, `set_rf_alarms`, `set_callout` and `remove_callout`. Radio ops:
 `set_scalar` and `select_model`. A logical switch or special function may name a telemetry
 sensor by label, `tele({RxBt}),35`; QuadCam finds its slot.
+
+These are the common commands. [Command line](cli.md) lists every `gear` command, including
+`gear voice`, `gear model`, `gear model-edit` and `gear sim`.
 
 Agents use the `quadcam_gear`, `quadcam_gear_edit` and `quadcam_gear_apply` tools. See
 [MCP server](mcp.md#gear).

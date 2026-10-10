@@ -33,7 +33,7 @@ QuadCam bundles no tool. The cask installs only the app and `quadcam-cli`.
 
 ### First run
 
-When QuadCam finds no ffmpeg, a banner says so and import stays off. Select **Install ffmpeg** in the banner. QuadCam shows the version, size, license, source and download address first, and downloads nothing until you select **Download**. The tool works at once, with no restart. **Cancel** downloads nothing. Settings > Modules does the same for every module, and you can remove one there at any time.
+When QuadCam finds no ffmpeg, a banner says so and import stays off. Select **Install ffmpeg…** in the banner. QuadCam shows the version, size, license, source and download address first, and downloads nothing until you select **Download**. The tool works at once, with no restart. **Cancel** downloads nothing. Settings > Modules does the same for every module, and you can remove one there at any time.
 
 ### Install, update and remove
 

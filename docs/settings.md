@@ -11,9 +11,9 @@ Open Settings with the gear icon or Command-comma. **Done** saves every change a
 | **Places** | The saved places and the place search provider. See [Metadata](metadata.md#place-search-providers). |
 | **Import** | The format (MP4 or MOV), the MP4 encoder, the default short name, the time in file names, **Delete clips after import**, **Join split recordings**, and the tolerances for log matching, the DJI clip clock skew included. |
 | **Photos** | The album. An empty album means the library only. See [Photos](photos.md). |
-| **Gear** | Back up on connect, how many backups to keep, the USB power warning, the steps per device kind when it is plugged in, and the cues: which play, as speech, sound or notification, mute, the voice and quiet hours. See [Gear](gear.md). |
-| **Modules** | Tools QuadCam downloads on request (ffmpeg, esptool): install, update, remove, check for updates, and where ffmpeg comes from. See [Modules and notices](modules.md). |
-| **Advanced** | Where ffmpeg and the agent socket are. |
+| **Gear** | The previews (**Show the Sim page**, **Betaflight flashing (preview)**, **Show the ELRS tools**), **Back up on connect**, how many backups to keep, the USB power warning, the blackbox options (**Erase blackbox after download**, **Read through USB disk mode first (not proven)**), the **Steps on connect** table per device kind, and the cues: which play, as speech, sound or notification, mute, the voice and quiet hours. See [Gear](gear.md). |
+| **Modules** | Tools QuadCam downloads on request (ffmpeg, esptool): install, update, remove, **Check for updates**, and **Use ffmpeg from** (the QuadCam module, else Homebrew; or Homebrew only). See [Modules and notices](modules.md). |
+| **Advanced** | Read-only: the ffmpeg in use and the agent socket path. |
 
 ### Formats
 

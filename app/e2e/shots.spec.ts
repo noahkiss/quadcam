@@ -49,6 +49,28 @@ for (const scheme of ["dark", "light"] as const) {
       await page.screenshot({ path: shot("import-review") });
     });
 
+    test("gear", async ({ app, page }) => {
+      await app.open("gear");
+      await app.core(`c => {
+        const fc = { id: c.gearSeed.FC.id, kind: "fc", link: { kind: "serial", port: "/dev/cu.usbmodem0", vid: 0x0483, pid: 0x5740, product: null }, identity: {} };
+        c.plug([fc], []);
+      }`);
+      const nav = page.getByRole("navigation", { name: "Library" });
+      await nav.getByRole("button", { name: /^Connected/ }).click();
+      await page.mouse.move(10, 10);
+      await page.waitForTimeout(300);
+      await page.screenshot({ path: shot("gear-connected") });
+      await page.getByRole("button", { name: /Whoop FC/ }).first().click();
+      const fc = page.getByRole("region", { name: "Whoop FC" });
+      await page.mouse.move(10, 10);
+      await page.waitForTimeout(300);
+      await page.screenshot({ path: shot("gear-fc") });
+      await fc.getByRole("group", { name: "Sections" }).getByRole("button", { name: "Blackbox" }).click();
+      await page.mouse.move(10, 10);
+      await page.waitForTimeout(300);
+      await page.screenshot({ path: shot("gear-blackbox") });
+    });
+
     test("first run", async ({ app, page }) => {
       await app.open("empty");
       await expect(page.getByRole("heading", { name: "Import your first flights" })).toBeVisible();
