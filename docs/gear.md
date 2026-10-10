@@ -467,7 +467,7 @@ QuadCam posts through `osascript`.
 The `gear_on_connect` setting names the steps that run when a device of each kind is plugged in:
 `backup`, `import`, `apply_ready` and `blackbox` (FCs only; see [Blackbox](#blackbox)). Only `backup` is on by default, and only while
 `gear_auto_backup` is on. `backup` runs two steps: **Card check** (a card QuadCam knows) and
-**Backup** (a radio card or an FC). `import` is accepted in the setting and does nothing yet. `apply_ready` is described
+**Backup** (a radio card or an FC). `import` is accepted in the setting and does nothing; Settings does not offer it. `apply_ready` is described
 under [Apply on connect](#apply-on-connect).
 
 A card is unmounted (`diskutil unmountDisk`) at the end of every job: the on-connect steps, a

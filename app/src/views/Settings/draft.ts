@@ -54,7 +54,7 @@ export interface GearDraft {
   usbMinutes: string;
   eraseBlackbox: boolean;
   blackboxMsc: boolean;
-  onConnect: Record<DeviceKind, Automation[]>;
+  onConnect: Record<DeviceKind, ShownAutomation[]>;
   cues: Required<Omit<CueSettings, "quiet_hours" | "voice">> & { voice: string };
   quiet: boolean;
   quietStart: string;
@@ -62,7 +62,10 @@ export interface GearDraft {
 }
 
 export const GEAR_KINDS: DeviceKind[] = ["radio", "fc", "elrs_tx", "elrs_rx", "goggles", "dvr_card"];
-export const AUTOMATIONS: Automation[] = ["backup", "import", "apply_ready", "blackbox"];
+/** The on-connect steps Settings offers. `import` stays valid in the file, the CLI and MCP, and
+ *  does nothing, so the pane does not show it. */
+export type ShownAutomation = Exclude<Automation, "import">;
+export const AUTOMATIONS: ShownAutomation[] = ["backup", "apply_ready", "blackbox"];
 
 /** `CueSettings::default()` and `GearSettings::defaults` in the core, for a core that has not
  *  answered yet. */

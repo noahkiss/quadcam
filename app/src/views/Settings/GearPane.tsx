@@ -1,18 +1,16 @@
 import { useStore } from "../../store";
 import { Checkbox, SelectField, TextField } from "../../components/Field";
-import type { Automation, DeviceKind } from "../../ipc/types";
+import type { DeviceKind } from "../../ipc/types";
 import { KIND_LABEL } from "../../lib/gear";
 import { tilde } from "../../lib/format";
-import { AUTOMATIONS, GEAR_KINDS, type Draft, type GearDraft } from "./draft";
+import { AUTOMATIONS, GEAR_KINDS, type Draft, type GearDraft, type ShownAutomation } from "./draft";
 import styles from "./SettingsSheet.module.css";
 
-const AUTOMATION_LABEL: Record<Automation, string> = { backup: "Back up", import: "Import clips", apply_ready: "Apply ready changes", blackbox: "Pull blackbox" };
+const AUTOMATION_LABEL: Record<ShownAutomation, string> = { backup: "Back up", apply_ready: "Apply ready changes", blackbox: "Pull blackbox" };
 
-/** The steps that make sense for a kind: Import only for a card with clips, Apply only for a
- *  device QuadCam writes settings to. */
-const OFFERED: Record<Automation, DeviceKind[]> = {
+/** The steps that make sense for a kind: Apply only for a device QuadCam writes settings to. */
+const OFFERED: Record<ShownAutomation, DeviceKind[]> = {
   backup: GEAR_KINDS,
-  import: ["goggles", "dvr_card"],
   apply_ready: ["radio", "fc", "elrs_tx", "elrs_rx"],
   blackbox: ["fc"],
 };
@@ -23,7 +21,7 @@ export function GearPane({ d, setD }: { d: Draft; setD: (f: (d: Draft) => Draft)
   const g = d.gear;
   const set = (patch: Partial<GearDraft>) => setD((x) => ({ ...x, gear: { ...x.gear, ...patch } }));
   const cue = (patch: Partial<GearDraft["cues"]>) => set({ cues: { ...g.cues, ...patch } });
-  const toggle = (k: DeviceKind, a: Automation, on: boolean) => {
+  const toggle = (k: DeviceKind, a: ShownAutomation, on: boolean) => {
     const cur = g.onConnect[k] || [];
     set({ onConnect: { ...g.onConnect, [k]: AUTOMATIONS.filter((x) => (x === a ? on : cur.includes(x))) } });
   };

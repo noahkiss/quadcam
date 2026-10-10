@@ -169,7 +169,7 @@ A new **Gear** section:
 | Check for firmware | `firmwareCheck` | `manual` (`manual` or `daily`) |
 | Tools (esptool, ffmpeg) | `modules` | QuadCam's own modules (7.10); a path per tool overrides one |
 | Use Homebrew ffmpeg | `ffmpegSource` | `module` (`module` or `homebrew`) |
-| Steps on connect | `gearOnConnect` | per device kind: `backup` only (`import`, `apply_ready`, `blackbox` off) (7.11) |
+| Steps on connect | `gearOnConnect` | per device kind: `backup` only (`apply_ready`, `blackbox` off; `import` does nothing) (7.11) |
 | Erase blackbox after download | `gearEraseBlackbox` | off (7.12) |
 | Read the blackbox through USB disk mode first | `gearBlackboxMsc` | off; not proven on a real FC (7.12) |
 | Cues | `gearCues` | speech and notifications on, sound off, each cue on, not muted; debounce 30 s; reminder after 60 s, every 300 s, 3 at most; no quiet hours (7.11) |
