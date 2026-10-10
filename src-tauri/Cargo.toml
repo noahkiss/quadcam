@@ -1,6 +1,6 @@
 [package]
 name = "quadcam"
-version = "0.11.0"
+version = "0.11.1"
 description = "Import analog FPV DVR clips: date, name, convert, verify, then format the card"
 edition = "2021"
 license = "MIT"
