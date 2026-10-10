@@ -30,6 +30,7 @@ export function ImportSheet() {
   const step = useStore((s) => s.step);
   const busy = useStore((s) => s.busy);
   const session = useStore((s) => s.session);
+  const release = useStore((s) => s.cardRelease);
   const setOpen = useStore((s) => s.setImportOpen);
   const staging = useStore((s) => s.staging);
   const hasCard = !!session?.card;
@@ -115,7 +116,7 @@ export function ImportSheet() {
                 Back to review
               </Button>
             )}
-            <span className={styles.footNote}>{step === "finish" && hasCard ? "The card stays mounted until you make it safe to remove." : ""}</span>
+            <span className={styles.footNote}>{step === "finish" && hasCard && release?.released ? "The card is unmounted." : ""}</span>
             {step === "finish" && (
               <Button variant="primary" onClick={doneImport}>
                 Done · show in Library
