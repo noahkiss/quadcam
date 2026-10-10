@@ -21,6 +21,7 @@ mod bf_flash;
 mod blackbox;
 mod cuts;
 mod dfu_link;
+mod elrs;
 mod fc;
 mod files;
 mod firmware;
@@ -59,6 +60,10 @@ pub use blackbox::{
     BlackboxExported, BlackboxFilter, BlackboxPullParams, BlackboxPullResult, EraseState, PullMode,
 };
 pub use dfu_link::{DfuLinkParams, DfuLinked};
+pub use elrs::{
+    ElrsDeviceView, ElrsFlashParams, ElrsFlashRequest, ElrsHost, ElrsParams, ElrsReadParams,
+    ElrsReadReport, ElrsView, ELRS_FLASH_CHANGE,
+};
 pub use fc::{
     BoardNotesParams, FcJob, FcPortParams, FcReadParams, PollPauseParams, UsbTimer, USB_PROBE,
 };

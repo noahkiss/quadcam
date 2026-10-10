@@ -635,6 +635,7 @@ fn edit_name(e: &Edit) -> &'static str {
         Edit::Model { .. } | Edit::Radio { .. } | Edit::Checklist { .. } => "Radio",
         Edit::ModelCopy { .. } | Edit::ModelDelete { .. } => "Radio model",
         Edit::Restore { .. } => "Restore",
+        Edit::ElrsOptions { .. } => "ELRS",
         _ => "These",
     }
 }

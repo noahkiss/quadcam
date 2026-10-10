@@ -49,6 +49,7 @@ pub mod cues;
 pub mod detect;
 pub mod dfu;
 pub mod edgetx;
+pub mod elrs;
 pub mod events;
 pub mod firmware;
 pub mod flights;

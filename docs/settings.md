@@ -87,6 +87,10 @@ The app, the command-line tool and the MCP server all read and write this file.
 | `gear_cues` | speech and notifications on | Cues, their channels, mute, debounce, the reminder and quiet hours. See [Gear](gear.md#cues) |
 | `sim_preview` | off | Shows **Gear > Sim**, the flight sim preview. Set it in Settings > Gear, or with `quadcam-cli settings set sim_preview=true` |
 | `betaflight_flash_preview` | off | Offers **Flash…** for a Betaflight FC on the Firmware page. A preview: it has not been tried on a real FC. Set it in Settings > Gear, or with `quadcam-cli settings set betaflight_flash_preview=true`. See [Gear](gear.md#flash-a-betaflight-fc-preview) |
+| `elrs_preview` | off | Shows the ExpressLRS tools on the Firmware page (a preview). Every ExpressLRS job refuses while it is off. See [Gear](gear.md#expresslrs-preview) |
+| `elrs_binding_phrase` | none | The binding phrase a flashed ExpressLRS image carries, 1 to 64 characters. Reads show only `(set)`; plans and reports show a fingerprint of the UID. `settings set elrs_binding_phrase=…` puts it in your shell history, so prefer the field in the ELRS section |
+| `elrs_region` | `FCC` | `FCC` or `LBT`: which image folder of a release a flash uses |
+| `elrs_wifi_interval` | 60 | Seconds without a link before a flashed device starts its WiFi (0: never) |
 | `firmware_check` | `manual` | `manual` or `daily`. `manual`: the Firmware page reads the network only when you select **Check for updates**. `daily`: it also checks when the last answer is a day old. See [Gear](gear.md#check) |
 | `tts_provider`, `tts_key` | `say`, none | The voice provider: `say` or `openai`. The Voice studio always uses ElevenLabs, with a key in the Keychain, whatever this says. `QUADCAM_TTS_KEY` in the environment wins over the key. Reads show the key only as `(set)` |
 | `tts_base_url`, `tts_model`, `tts_voice` | none | For `openai`: the server (such as `http://127.0.0.1:8880`), its model, and the voice your own lines render with. For `say`, `tts_voice` is a `say` voice |

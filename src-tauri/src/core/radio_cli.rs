@@ -111,7 +111,7 @@ impl Core {
     }
 
     /// The radio port to use: the one asked for, or the only one.
-    fn radio_pick(&self, port: Option<&str>) -> Result<String> {
+    pub(super) fn radio_pick(&self, port: Option<&str>) -> Result<String> {
         let list = self.radio_serials();
         let handles: Vec<String> = list.iter().map(|c| super::link_handle(&c.link)).collect();
         if let Some(p) = port.map(str::trim).filter(|p| !p.is_empty()) {

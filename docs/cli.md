@@ -136,7 +136,7 @@ See [Modules and notices](modules.md) for what a module install checks.
 - `photos_album`, `format_label`, `log_dir`, `layout`, `place_folders`, `tunables`
 - `geocoder` (`apple`, `nominatim`, `census` or `google`), `google_places_key`
 - `name_date_format` (`YYYY-MM-DD` or `YY.MM.DD`), `default_profile`
-- Gear: `gear_dir`, `gear_auto_backup`, `gear_erase_blackbox`, `gear_blackbox_msc`, `gear_keep_recent`, `gear_keep_weeks`, `gear_keep_monthly`, `gear_usb_minutes`, `gear_on_connect`, `gear_cues`, `firmware_check`, `betaflight_flash_preview`, `tts_provider`, `tts_base_url`, `tts_model`, `tts_voice`, `voice_index`, `tts_key`, `sim_preview` (see [Settings](settings.md#gear))
+- Gear: `gear_dir`, `gear_auto_backup`, `gear_erase_blackbox`, `gear_blackbox_msc`, `gear_keep_recent`, `gear_keep_weeks`, `gear_keep_monthly`, `gear_usb_minutes`, `gear_on_connect`, `gear_cues`, `firmware_check`, `betaflight_flash_preview`, `tts_provider`, `tts_base_url`, `tts_model`, `tts_voice`, `voice_index`, `tts_key`, `sim_preview`, `elrs_preview`, `elrs_binding_phrase`, `elrs_region`, `elrs_wifi_interval` (see [Settings](settings.md#gear))
 - `ffmpeg_source` (`module` or `homebrew`), `modules` (`{"ffmpeg": "/path/to/ffmpeg"}`: a file per tool; see [Modules](modules.md#where-ffmpeg-comes-from))
 
 A value is JSON or plain text.
@@ -179,6 +179,11 @@ quadcam-cli --json gear sims [FILE ...|DEVICE] [--backup ID] [--rate-profile N] 
 quadcam-cli --json gear sims SIM --restore [--backup ID] [--digest D --yes]   # put a sim's file back from a backup (the plan without --digest)
 quadcam-cli --json gear sims FILE|DEVICE [--rate-profile N] --sync --to SIM[:PROFILE][@FILE] [--to ...] [--digest D --yes]   # write the quad's rates into sim profiles
 quadcam-cli --json gear firmware [--check]                    # each device's firmware against the newest release; --check reads the network
+quadcam-cli --json gear elrs [status [--check]]               # ExpressLRS devices read so far (preview: settings set elrs_preview=true)
+quadcam-cli --json gear elrs read HOST [--port P]             # the module behind a saved radio or the receiver behind a saved FC
+quadcam-cli --json gear elrs set DEVICE OPTION=VALUE [...]    # stage ELRS options (packet_rate, telemetry_ratio, power, dynamic_power, switch_mode, model_match); apply with gear apply
+quadcam-cli --json gear elrs flash DEVICE [--version V] [--sha256 H] [--port P]   # an ExpressLRS flash: checks, diff, digest
+quadcam-cli --json gear elrs flash DEVICE [--version V] --digest D --yes          # flash with the esptool module
 quadcam-cli --json gear splash IMAGE.png [--threshold N] [--invert] [--board pocket] [--out preview.png]   # a PNG as the radio's 128x64 splash; --out writes the 4x preview
 quadcam-cli --json gear firmware --read [--device RADIO]       # read-only DFU trial: copy the firmware, compare the version
 quadcam-cli --json gear firmware --plan --device RADIO [--version V] [--splash IMAGE.png] [--threshold N] [--invert]   # an EdgeTX flash: checks, diff, digest

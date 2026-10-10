@@ -405,6 +405,18 @@ pub struct SettingsValues {
     /// Gear: offer flashing Betaflight firmware to an FC (a preview). Off by default.
     #[schemars(extend("x-nullable" = true))]
     pub betaflight_flash_preview: Option<bool>,
+    /// Gear: show the ExpressLRS tools on the Firmware page (a preview). Off by default.
+    #[schemars(extend("x-nullable" = true))]
+    pub elrs_preview: Option<bool>,
+    /// Gear: the ExpressLRS binding phrase, baked into a flashed image. Never read back; plans show only a fingerprint of its UID.
+    #[schemars(extend("x-nullable" = true))]
+    pub elrs_binding_phrase: Option<String>,
+    /// Gear: the ExpressLRS 2.4 GHz region of a flashed image (default FCC).
+    #[schemars(extend("x-nullable" = true, "enum" = ["FCC", "LBT", null]))]
+    pub elrs_region: Option<String>,
+    /// Gear: seconds without a link before a flashed device starts its WiFi; 0 for never (default 60).
+    #[schemars(range(min = 0, max = 3600), extend("x-nullable" = true))]
+    pub elrs_wifi_interval: Option<u64>,
     /// Gear: back up a device when it is plugged in. On by default.
     #[schemars(extend("x-nullable" = true))]
     pub gear_auto_backup: Option<bool>,
