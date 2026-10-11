@@ -12,7 +12,6 @@ User-facing changes in each release, newest first. Release notes on
 - **Studio packs are named by the voice id.** Two voices with one name (a clone named like a premade voice) no longer share a pack. A pack from 0.12.0 or earlier moves to the new name at the next render of that voice and model; the radios that chose it, and line overrides that take its takes, follow it.
 - **Samples** keep the card path in their file names, so `armed.wav` and a script's `armed.wav` no longer overwrite each other.
 - **Recorded credit rate.** QuadCam keeps the rate ElevenLabs reports only within 5% of the model's credits a character, so a plain character count never doubles the estimate. It logs every count in `voice/charcost.log` in the cache.
-- **Line sets.** "Timer one elapsed" (`timovr1.wav`) is a calm radio prompt, like timers two and three, not a unit. The `edgetx` set still holds 747 lines. The calm batches after it change, so a later render of a set rendered before (a re-take included) renders those batches again; the estimate shows the cost first.
 - **Deleting a voice pack** also clears each line override that takes its take (`overrides` in the result).
 - The settings and MCP descriptions name `elevenlabs` as a `tts_provider`.
 

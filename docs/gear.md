@@ -451,7 +451,7 @@ inside carrier sentences, and compares voices before it spends credits.
 
   | Set | Lines | Holds |
   |---|---|---|
-  | `edgetx` | 747 | Every English prompt EdgeTX 2.x plays: the radio's own 148 prompts and number words, 64 units, 356 model prompts, and 179 telemetry-script prompts |
+  | `edgetx` | 747 | Every English prompt EdgeTX 2.x plays: the radio's own 147 prompts and number words, 65 unit files (64 units and the timer-one prompt, which stays there so cached batches keep their boundaries), 356 model prompts, and 179 telemetry-script prompts |
   | `quad` | 396 | The radio's prompts and units, the EdgeTX prompts a quad plays (modes, rates, VTX, OSD, turtle, rescue, navigation), and QuadCam's quad callouts |
   | `heli` | 325 | The same base, the helicopter prompts (idle up, governor, autorotation, engine, glow), and QuadCam's callouts |
   | `plane` | 368 | The same base, the plane prompts (gear, flaps, spoilers, brakes, reverse thrust, drag brake), and QuadCam's callouts |

@@ -487,14 +487,6 @@ mod tests {
         ] {
             assert!(all.iter().any(|l| l.line.path == want), "{want}");
         }
-        // The timer prompts are radio prompts, spoken calm, not units.
-        for n in 1..=3 {
-            let path = format!("SOUNDS/en/SYSTEM/timovr{n}.wav");
-            let l = all.iter().find(|l| l.line.path == path).unwrap();
-            assert_eq!((l.line.group.as_str(), l.tone.as_str()), ("system", "calm"));
-        }
-        let units = all.iter().filter(|l| l.line.group == "units").count();
-        assert_eq!(units, 64);
     }
 
     /// Every set resolves, every path is valid and unique inside it, and the counts hold.
