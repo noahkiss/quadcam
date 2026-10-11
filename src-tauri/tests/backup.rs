@@ -205,6 +205,82 @@ fn a_second_snapshot_of_an_unchanged_card_writes_nothing() {
     assert_eq!(b.cues.spoken().len(), 2);
 }
 
+/// Edits `MODELS/model01.yml` in place to the same length, and gives it `mtime`.
+fn same_length_edit(b: &Bench, mtime: std::time::SystemTime) -> Vec<u8> {
+    let model = b.card().join("MODELS/model01.yml");
+    let mut bytes = std::fs::read(&model).unwrap();
+    let at = bytes.iter().position(u8::is_ascii_digit).unwrap();
+    bytes[at] = if bytes[at] == b'5' { b'6' } else { b'5' };
+    std::fs::write(&model, &bytes).unwrap();
+    std::fs::File::options()
+        .write(true)
+        .open(&model)
+        .unwrap()
+        .set_modified(mtime)
+        .unwrap();
+    bytes
+}
+
+fn model_blob(b: &Bench, r: &quadcam_lib::core::BackupResult) -> Option<Vec<u8>> {
+    let f = r
+        .report
+        .backup
+        .files
+        .iter()
+        .find(|f| f.path == "MODELS/model01.yml")?;
+    b.snaps().blobs().get(&backup::blob_of(f)).ok()
+}
+
+#[test]
+fn a_reset_radio_clock_makes_the_backup_read_the_files_it_wrote() {
+    // A time from the radio's reset clock (before 2020) proves nothing about a file.
+    let b = bench();
+    let model = b.card().join("MODELS/model01.yml");
+    let old = std::time::UNIX_EPOCH + std::time::Duration::from_secs(946_684_800 + 42);
+    std::fs::File::options()
+        .write(true)
+        .open(&model)
+        .unwrap()
+        .set_modified(old)
+        .unwrap();
+    b.core.gear_backup(&by_mount(&b)).unwrap();
+    let edited = same_length_edit(&b, old);
+    let second = b.core.gear_backup(&by_mount(&b)).unwrap();
+    assert!(second.report.new, "the same-length edit is seen");
+    assert_eq!(second.report.read, 1, "only the file with the reset time");
+    assert_eq!(model_blob(&b, &second).as_deref(), Some(&edited[..]));
+
+    // A reset clock (a log from 2000, next to the older logs) makes every YAML file suspect,
+    // even one whose time looks right.
+    let b = bench();
+    let first = b.core.gear_backup(&by_mount(&b)).unwrap();
+    let kept = first
+        .report
+        .backup
+        .files
+        .iter()
+        .find(|f| f.path == "MODELS/model01.yml")
+        .unwrap()
+        .mtime
+        .unwrap();
+    let edited = same_length_edit(&b, kept.into());
+    // Without the reset, size and time match and the file is not read: the old bytes stay.
+    let blind = b.core.gear_backup(&by_mount(&b)).unwrap();
+    assert_eq!(blind.report.read, 0);
+    std::fs::write(b.card().join("LOGS/Model01-2000-01-01.csv"), b"Date,Time\n").unwrap();
+    let third = b.core.gear_backup(&by_mount(&b)).unwrap();
+    assert!(third.report.new);
+    assert_eq!(model_blob(&b, &third).as_deref(), Some(&edited[..]));
+    let yaml = third
+        .report
+        .backup
+        .files
+        .iter()
+        .filter(|f| f.path.ends_with(".yml"))
+        .count() as u32;
+    assert_eq!(third.report.read, yaml, "every YAML file, and nothing else");
+}
+
 #[test]
 fn a_changed_model_file_adds_one_blob() {
     let b = bench();

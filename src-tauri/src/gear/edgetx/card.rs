@@ -233,18 +233,30 @@ pub fn read_marker(root: &Path) -> Option<String> {
     (!v.is_empty() && v.len() <= 200).then_some(v)
 }
 
-/// The radio clock from log names (`<model>-YYYY-MM-DD.csv`): a date before 2020 means
-/// the clock reset (EdgeTX starts at 2000-01-01 when its clock battery is flat), and a
-/// date after `today` means it runs ahead.
-pub fn clock_check(logs: &[String], today: chrono::NaiveDate) -> ClockCheck {
-    let dated: Vec<(chrono::NaiveDate, &String)> = logs
-        .iter()
+/// The date in each log name (`<model>-YYYY-MM-DD.csv`), for the names that carry one.
+fn log_dates(logs: &[String]) -> Vec<(chrono::NaiveDate, &String)> {
+    logs.iter()
         .filter_map(|n| {
             let stem = n.strip_suffix(".csv").or_else(|| n.strip_suffix(".CSV"))?;
             let d = stem.get(stem.len().checked_sub(10)?..)?;
             Some((chrono::NaiveDate::parse_from_str(d, "%Y-%m-%d").ok()?, n))
         })
-        .collect();
+        .collect()
+}
+
+/// True when a log is dated before 2020: the radio's clock has reset to 2000-01-01 (a flat
+/// clock battery) and may again. Older logs keep their dates, so the newest log does not
+/// show it. While it runs from 2000, the times it gives the files it writes repeat from one
+/// boot to the next.
+pub fn clock_reset(logs: &[String]) -> bool {
+    log_dates(logs).iter().any(|(d, _)| d.year_ce().1 < 2020)
+}
+
+/// The radio clock from log names (`<model>-YYYY-MM-DD.csv`): a date before 2020 means
+/// the clock reset (EdgeTX starts at 2000-01-01 when its clock battery is flat), and a
+/// date after `today` means it runs ahead.
+pub fn clock_check(logs: &[String], today: chrono::NaiveDate) -> ClockCheck {
+    let dated = log_dates(logs);
     let Some((date, name)) = dated.iter().max_by_key(|(d, _)| *d) else {
         return ClockCheck {
             ok: true,

@@ -10,7 +10,10 @@
 //!   removes them. The store's lock is held from the first blob to the manifest.
 //! - **Unchanged files are not read:** a card file whose size and modified time match the
 //!   device's latest snapshot keeps that snapshot's hash. A radio over USB reads about
-//!   0.5 MB/s, so a plug-in backup of an unchanged card reads nothing.
+//!   0.5 MB/s, so a plug-in backup of an unchanged card reads nothing. A time the radio's
+//!   reset clock gave (before 2020) proves nothing: such a file is read again, and once a log
+//!   on the card shows a reset clock, every YAML file is (the files the radio writes;
+//!   `untrusted_time`).
 //! - **No empty snapshots:** a snapshot whose files equal the latest one's is not written.
 //!   An FC's `status` (uptime, load) changes on every read and does not count. A snapshot
 //!   before an apply or a flash is always written (it is always kept; its blobs are shared).
@@ -19,7 +22,7 @@
 //!   Pruning then collects the blobs no manifest, log or staged change names.
 
 use super::blobs::{BlobRef, Blobs, Collected};
-use super::edgetx::card::{identity_from_radio_yml, read_marker, RADIO_FILE};
+use super::edgetx::card::{clock_reset, identity_from_radio_yml, read_marker, RADIO_FILE};
 use super::model::{
     device_id, Backup, BackupFile, Device, DeviceKind, DiffItem, Identity, Trigger,
 };
@@ -299,14 +302,16 @@ impl Snapshots {
             .flat_map(|b| b.files.iter())
             .map(|f| (f.path.as_str(), f))
             .collect();
-        let changed: Vec<&CardEntry> = listed
-            .iter()
-            .filter(|(p, size, mtime)| {
-                !known
-                    .get(p.as_str())
-                    .is_some_and(|k| k.size == *size && mtime.is_some() && k.mtime == *mtime)
+        let reset = clock_reset(&log_names(&root.join(logs_dir_name(root))));
+        let same = |(p, size, mtime): &CardEntry| {
+            known.get(p.as_str()).copied().filter(|k| {
+                k.size == *size
+                    && mtime.is_some()
+                    && k.mtime == *mtime
+                    && !untrusted_time(p, *mtime, reset)
             })
-            .collect();
+        };
+        let changed: Vec<&CardEntry> = listed.iter().filter(|e| same(e).is_none()).collect();
         let mut prog = BackupProgress {
             stage: "reading".into(),
             files_total: changed.len() as u32,
@@ -316,12 +321,10 @@ impl Snapshots {
         opts.report(&prog);
         let mut files = Vec::with_capacity(listed.len());
         let (mut read, mut skipped) = (0u32, 0u32);
-        for (path, size, mtime) in &listed {
-            if let Some(k) = known
-                .get(path.as_str())
-                .filter(|k| k.size == *size && mtime.is_some() && k.mtime == *mtime)
-            {
-                files.push((*k).clone());
+        for e in &listed {
+            let (path, _, mtime) = e;
+            if let Some(k) = same(e) {
+                files.push(k.clone());
                 skipped += 1;
                 continue;
             }
@@ -754,6 +757,28 @@ pub fn kind_of_id(id: &str) -> Option<DeviceKind> {
 }
 
 /// The card's log folder name (`LOGS`, in whatever case the card has it).
+/// The file names in a card's `LOGS/`, for the clock check.
+fn log_names(dir: &Path) -> Vec<String> {
+    std::fs::read_dir(dir)
+        .into_iter()
+        .flatten()
+        .flatten()
+        .filter_map(|e| e.file_name().to_str().map(str::to_string))
+        .collect()
+}
+
+/// True when a card file's modified time cannot show that it is unchanged: the radio's
+/// clock gave it a time before 2020, or a log shows the clock resets (`reset`) and the file
+/// is YAML, which the radio writes itself. The radio's times then repeat from boot to boot,
+/// and an edit of the same length can keep the size and time of the last snapshot.
+pub fn untrusted_time(path: &str, mtime: Option<DateTime<Utc>>, reset: bool) -> bool {
+    let yaml = {
+        let p = path.to_ascii_lowercase();
+        p.ends_with(".yml") || p.ends_with(".yaml")
+    };
+    mtime.is_some_and(|t| t.year() < 2020) || (reset && yaml)
+}
+
 fn logs_dir_name(root: &Path) -> String {
     std::fs::read_dir(root)
         .into_iter()

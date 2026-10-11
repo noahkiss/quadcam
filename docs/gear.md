@@ -583,6 +583,10 @@ its SD card except `LOGS/`. A backup of a flight controller holds `version`, `st
 - **Slow links.** A radio over USB reads about 0.5 MB/s. QuadCam reads only files whose size or
   modified time changed since the latest backup, and shows its progress. **Stop** ends a
   backup between files; no backup is saved.
+- **A reset radio clock.** A radio whose clock battery is flat starts its clock at 2000-01-01,
+  so the times it gives files repeat. QuadCam reads again every file dated before 2020, and
+  every YAML file once a log on the card is dated before 2020. An edit of the same length
+  then still reaches the backup.
 - **Radio logs** are flight data, not backup content. Each log is kept once per radio in
   `logs/<radio>/`. A log that grew replaces the kept one; a log that changed another way is kept
   as a second file (`<name> (2).csv`). Logs are never pruned.

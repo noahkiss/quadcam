@@ -5,6 +5,7 @@ User-facing changes in each release, newest first. Release notes on
 
 ## Unreleased
 
+- **Radio backups with a reset clock.** A backup reads again every card file dated before 2020, and every YAML file once a radio log is dated before 2020. Before, a model edit of the same length that got the same time from a reset radio clock kept the old bytes in the backup.
 - **EdgeTX flash and firmware read are jobs.** Gear status lists a running radio flash or **Read firmware** (`dfu:<serial>`), and a second flash or read of the same radio refuses with `port_busy` instead of failing on the USB claim.
 - **EdgeTX flash: the right radio.** Before the erase, a flash compares the board the radio's current firmware names with the saved radio's board, and refuses another board. This also covers a DFU device not yet linked to a radio. **Read firmware** says when the image names another board than the radio you picked.
 - **EdgeTX flash: one proven release.** A radio flash needs the exact release QuadCam has proven on the board (the Pocket on 2.12.4), not any 2.12 version, and a prerelease tag (`2.12.5-rc1`) always refuses. **Flash …** on the Firmware page follows the same rule.
