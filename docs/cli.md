@@ -183,7 +183,7 @@ quadcam-cli --json gear sims SIM --restore [--backup ID] [--digest D --yes]   # 
 quadcam-cli --json gear sims FILE|DEVICE [--rate-profile N] --sync --to SIM[:PROFILE][@FILE] [--to ...] [--digest D --yes]   # write the quad's rates into sim profiles
 quadcam-cli --json gear firmware [--check]                    # each device's firmware against the newest release; --check reads the network
 quadcam-cli --json gear elrs [status [--check]]               # ExpressLRS devices read so far (preview: settings set elrs_preview=true)
-quadcam-cli --json gear elrs read HOST [--port P]             # the module behind a saved radio or the receiver behind a saved FC
+quadcam-cli --json gear elrs read HOST [--port P]             # the module behind a saved radio (stops its pulses) or the receiver behind a saved FC
 quadcam-cli --json gear elrs set DEVICE OPTION=VALUE [...]    # stage ELRS options (packet_rate, telemetry_ratio, power, dynamic_power, switch_mode, model_match); apply with gear apply
 quadcam-cli --json gear elrs flash DEVICE [--version V] [--sha256 H] [--port P]   # an ExpressLRS flash: checks, diff, digest
 quadcam-cli --json gear elrs flash DEVICE [--version V] --digest D --yes          # flash with the esptool module

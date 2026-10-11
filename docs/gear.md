@@ -1202,7 +1202,9 @@ port to the device and asks it over CRSF for its name, version, target and param
 | Radio | The radio's USB serial port must be set to CLI (as for the radio CLI). QuadCam stops the pulses and starts `serialpassthrough rfmod 0 400000` |
 | FC | The FC must identify itself over MSP as the saved FC; another FC, or one that does not answer, refuses. QuadCam checks that the serial receiver is CRSF, not inverted and not half duplex, finds the UART with the serial receiver and starts `serialpassthrough <uart> 420000` |
 
-The radio or FC **stays in passthrough** until you restart the radio or unplug the FC. A second
+A read through a radio stops its pulses: the radio stops sending at once, and a quad linked
+to it goes to failsafe. Read with no quad powered on that radio. The radio or FC **stays in
+passthrough** until you restart the radio or unplug the FC. A second
 job needs that restart first. The version comes from a text the device lists in its parameters
 (`ELRS 4.1.0 …`), else from its device info; the report says which. A device it cannot read a
 version from is saved without one.
