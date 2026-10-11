@@ -1,5 +1,5 @@
 // Gear > Storage (design 2.2, 7.1): the gear folder's size as tiles and per device as a table,
-// the folder with Show in Finder, Prune now, Export…, and Import backups… (an old backup
+// the folder (the subtitle) with Show in Finder, Prune now, Export…, and Import backups… (an old backup
 // folder, shown first as a dry run).
 import { useEffect, useState } from "react";
 import { ask, useStore } from "../../../store";
@@ -9,7 +9,6 @@ import { Button } from "../../../components/Button";
 import { Badge, type BadgeTone } from "../../../components/dash/Badge";
 import { DataTable, type Column } from "../../../components/dash/DataTable";
 import { EmptyState } from "../../../components/dash/EmptyState";
-import { FactList } from "../../../components/dash/FactList";
 import { PageHeader } from "../../../components/dash/PageHeader";
 import { SectionCard } from "../../../components/dash/SectionCard";
 import { Stat, StatRow } from "../../../components/dash/StatRow";
@@ -146,8 +145,12 @@ export function StoragePage() {
       <PageHeader
         id="storage-title"
         title="Storage"
+        subtitle={view && <span className="selectable">{tilde(view.gear_dir, home)}</span>}
         actions={
           <>
+            <Button size="sm" variant="ghost" icon="finder" disabled={!view} onClick={() => view && void reveal(view.gear_dir).catch((e) => toast(errText(e), true))}>
+              Show in Finder
+            </Button>
             <Button size="sm" icon="import" onClick={importFolder} disabled={busy}>
               Import backups…
             </Button>
@@ -164,24 +167,10 @@ export function StoragePage() {
         <Stat label="Radio logs" value={view ? fmtBytes(view.log_bytes) : "—"} />
       </StatRow>
       {view && (
-        <FactList
-          label="Gear folder"
-          facts={[
-            {
-              label: "Folder",
-              value: (
-                <span className={styles.folder}>
-                  <span className="selectable">{tilde(view.gear_dir, home)}</span>
-                  <Button size="sm" variant="ghost" icon="finder" onClick={() => void reveal(view.gear_dir).catch((e) => toast(errText(e), true))}>
-                    Show in Finder
-                  </Button>
-                </span>
-              ),
-            },
-          ]}
-        />
+        <div className={styles.rows}>
+          <DataTable label="Storage by device" columns={columns} rows={view.devices} rowKey={(d) => d.device} empty={<EmptyState icon="hdd">No backups yet.</EmptyState>} />
+        </div>
       )}
-      {view && <DataTable label="Storage by device" columns={columns} rows={view.devices} rowKey={(d) => d.device} empty={<EmptyState icon="hdd">No backups yet.</EmptyState>} />}
       {report && (
         <SectionCard title={report.dry_run ? "Import (not run)" : "Import"} label="Import">
           <DataTable label="Import items" columns={items} rows={report.items} rowKey={(i) => i.path} compact />

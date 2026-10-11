@@ -48,3 +48,8 @@
   margin: 0;
   color: var(--warning-text);
 }
+/* Rows with a status control or buttons: every cell on the control's centre line. */
+.rows table td,
+.rows table tbody th {
+  vertical-align: middle;
+}

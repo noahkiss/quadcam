@@ -84,7 +84,11 @@ export function StagedTable({ rows, label, present }: { rows: StagedChange[]; la
       ),
     },
   ];
-  return <DataTable label={label} columns={columns} rows={rows} rowKey={(c) => c.id} />;
+  return (
+    <div className={styles.rows}>
+      <DataTable label={label} columns={columns} rows={rows} rowKey={(c) => c.id} />
+    </div>
+  );
 }
 
 /** Applied Try changes: fly, then Keep or Revert. */
@@ -111,7 +115,11 @@ export function AwaitingTable({ rows, label }: { rows: StagedChange[]; label: st
       ),
     },
   ];
-  return <DataTable label={label} columns={columns} rows={rows} rowKey={(c) => c.id} />;
+  return (
+    <div className={styles.rows}>
+      <DataTable label={label} columns={columns} rows={rows} rowKey={(c) => c.id} />
+    </div>
+  );
 }
 
 /** Applied, failed, reverted and discarded changes, newest first. `names` adds a Device column. */

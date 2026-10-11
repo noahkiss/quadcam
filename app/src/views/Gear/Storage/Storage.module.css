@@ -1,6 +1,5 @@
-.folder {
-  display: inline-flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: var(--s-2);
+/* Rows with buttons: every cell on the button's centre line. */
+.rows table td,
+.rows table tbody th {
+  vertical-align: middle;
 }

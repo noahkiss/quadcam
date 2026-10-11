@@ -19,6 +19,12 @@ import { linkHandle } from "../../../lib/gear";
 import type { DeviceRef } from "../slots";
 import styles from "./Backups.module.css";
 
+/** A backup's time in the list: "Oct 5, 6:00 AM", with the year when it is not this year. */
+const fmtShort = (t: string) => {
+  const d = new Date(t);
+  return d.toLocaleString(undefined, { month: "short", day: "numeric", year: d.getFullYear() === new Date().getFullYear() ? undefined : "numeric", hour: "numeric", minute: "2-digit" });
+};
+
 /** The device's id: saved, or as plugged in. */
 const idOf = (d: DeviceRef) => d.device?.id || d.connected?.id || null;
 
@@ -118,17 +124,17 @@ export function BackupsSegment({ d }: { d: DeviceRef }) {
       rowHeader: true,
       cell: (b) => (
         <button type="button" className={styles.pick} aria-current={b.id === sel?.id} onClick={() => setPicked(b.id)}>
-          {fmtWhen(b.taken_at)}
+          {fmtShort(b.taken_at)}
         </button>
       ),
     },
-    { key: "kind", header: "Kind", cell: (b) => TRIGGER_LABEL[b.trigger] },
+    { key: "kind", header: "Kind", cell: (b) => <span className={styles.nowrap}>{TRIGGER_LABEL[b.trigger]}</span> },
     { key: "files", header: "Files", numeric: true, cell: (b) => b.files },
     { key: "size", header: "Size", numeric: true, cell: (b) => fmtBytes(b.bytes) },
     {
       key: "pinned",
-      header: "Pinned",
-      width: "3.5rem",
+      header: "Pin",
+      width: "2.5rem",
       cell: (b) => <input type="checkbox" className={styles.check} checked={b.pinned} aria-label={`Pin the backup of ${fmtWhen(b.taken_at)}`} onChange={(e) => pin(b, e.target.checked)} />,
     },
   ];
