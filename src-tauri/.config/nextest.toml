@@ -1,0 +1,58 @@
+# cargo-nextest runs every test in its own process, many at once. Only the tests that share
+# something machine-wide run one at a time, in the `serial` group. See docs/development.md.
+#
+#   cargo nextest run              # everything (the `default` profile)
+#   cargo nextest run -P quick     # skips the slow disk-image tests and tests/join.rs
+#   cargo nextest run -P ci        # what CI runs: everything, JUnit, two known flakes retried
+#
+# Doc tests are not nextest's: `cargo test --doc` runs them (the crates have none today).
+
+[test-groups]
+# hdiutil and diskutil go through one system daemon, and a detached image's disk number is
+# reused by the next attach: the disk-image tests attach, unmount and erase one at a time.
+serial = { max-threads = 1 }
+
+[profile.default]
+slow-timeout = { period = "60s" }
+
+# Every test that attaches a disk image (tests/common/mod.rs `Image`).
+[[profile.default.overrides]]
+filter = '''
+    binary_id(quadcam::disk_image)
+  | binary_id(quadcam::card_prep)
+  | binary_id(quadcam::mount_cycle)
+  | (binary_id(quadcam::cli) & test(=format_a_disk_image_only_with_every_flag))
+  | (binary_id(quadcam::mcp) & test(=format_through_mcp_needs_the_gui_click))
+'''
+test-group = 'serial'
+# One at a time they take about 150 s: start them first, beside everything else.
+priority = 100
+
+# The fast local loop: everything but the disk images and the split-recording joins (ffmpeg,
+# about 95 s of test time). default-filter cannot name a group: keep the disk-image lines in
+# step with the `serial` filter above.
+[profile.quick]
+default-filter = '''
+not (
+    binary_id(quadcam::disk_image)
+  | binary_id(quadcam::card_prep)
+  | binary_id(quadcam::mount_cycle)
+  | (binary_id(quadcam::cli) & test(=format_a_disk_image_only_with_every_flag))
+  | (binary_id(quadcam::mcp) & test(=format_through_mcp_needs_the_gui_click))
+  | binary_id(quadcam::join)
+)
+'''
+
+[profile.ci]
+fail-fast = false
+slow-timeout = { period = "60s", terminate-after = 10 }
+failure-output = "immediate-final"
+
+[profile.ci.junit]
+path = "junit.xml"
+
+# Known load flakes, retried once: the joined output's frame-count verify (tests/join.rs) and
+# diskutil mounting and unmounting the image (tests/mount_cycle.rs). Nothing else retries.
+[[profile.ci.overrides]]
+filter = 'binary_id(quadcam::join) | binary_id(quadcam::mount_cycle)'
+retries = 1

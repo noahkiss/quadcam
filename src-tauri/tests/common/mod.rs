@@ -4,8 +4,10 @@
 pub mod server;
 
 use quadcam_lib::media::{self, Tools};
+use std::cell::RefCell;
 use std::path::{Path, PathBuf};
 use std::process::Command;
+use std::sync::{Mutex, MutexGuard, OnceLock};
 
 pub fn tools() -> Tools {
     media::find_tools().expect("tests need ffmpeg and ffprobe (brew install ffmpeg)")
@@ -101,8 +103,33 @@ pub struct Image {
     _dir: tempfile::TempDir,
 }
 
+/// Disk-image tests take turns machine-wide, across processes and worktrees: hdiutil and
+/// diskutil share one daemon, and a detached image's disk number goes to the next attach, so
+/// another test could mount or erase this image by a stale number. The first image in a
+/// process takes a lock file and holds it until the process exits; the first image in a test
+/// thread (plain `cargo test` runs a file's tests side by side) holds a mutex until the thread
+/// ends. A test that makes several images takes each lock once.
+fn disk_image_lock() {
+    static FILE: OnceLock<std::fs::File> = OnceLock::new();
+    static THREADS: Mutex<()> = Mutex::new(());
+    thread_local! {
+        static HELD: RefCell<Option<MutexGuard<'static, ()>>> = const { RefCell::new(None) };
+    }
+    FILE.get_or_init(|| {
+        let path = std::env::temp_dir().join("quadcam-disk-image-tests.lock");
+        let f = std::fs::File::create(&path).unwrap();
+        f.lock().unwrap();
+        f
+    });
+    HELD.with(|h| {
+        h.borrow_mut()
+            .get_or_insert_with(|| THREADS.lock().unwrap_or_else(|e| e.into_inner()));
+    });
+}
+
 impl Image {
     pub fn create(size: &str, label: &str, sparse: bool) -> Image {
+        disk_image_lock();
         let dir = tempfile::tempdir().unwrap();
         let base = dir.path().join("card");
         let mut c = Command::new("/usr/bin/hdiutil");
