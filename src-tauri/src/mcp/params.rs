@@ -446,7 +446,7 @@ pub struct SettingsValues {
     pub gear_cues: Option<std::collections::BTreeMap<String, Value>>,
     #[schemars(extend("x-nullable" = true, "enum" = ["manual", "daily", null]))]
     pub firmware_check: Option<String>,
-    /// Gear: the voice provider (default say, macOS).
+    /// Gear: the voice provider: say (default, macOS), openai or elevenlabs. ElevenLabs renders only in the Voice studio (voice_render with sets); its tts_model and tts_voice are the studio's defaults.
     #[schemars(extend("x-nullable" = true))]
     pub tts_provider: Option<String>,
     /// Gear: the address of an OpenAI-compatible voice server (for tts_provider openai), such as http://127.0.0.1:8880.
@@ -461,7 +461,7 @@ pub struct SettingsValues {
     /// Gear: the address or path of the voice pack index (voices.json).
     #[schemars(extend("x-nullable" = true))]
     pub voice_index: Option<String>,
-    /// Gear: the voice provider's API key. Never read back.
+    /// Gear: the openai voice server's API key (QUADCAM_OPENAI_KEY in the environment wins). Never read back. The ElevenLabs key lives in the Keychain.
     #[schemars(extend("x-nullable" = true))]
     pub tts_key: Option<String>,
     /// Where ffmpeg comes from: QuadCam's module when installed, else Homebrew (module), or Homebrew only.

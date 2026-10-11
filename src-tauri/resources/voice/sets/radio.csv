@@ -18,6 +18,7 @@ SOUNDS/en/SYSTEM/telemco.wav,Telemetry connected,system,calm,The receiver's tele
 SOUNDS/en/SYSTEM/telemko.wav,Telemetry lost,system,alert,The receiver's telemetry stopped.
 SOUNDS/en/SYSTEM/telemok.wav,Telemetry recovered,system,calm,The telemetry came back.
 SOUNDS/en/SYSTEM/thralert.wav,Throttle warning,system,alert,The throttle is not at idle at power-on.
+SOUNDS/en/SYSTEM/timovr1.wav,Timer one elapsed,system,calm,Timer one ran out.
 SOUNDS/en/SYSTEM/timovr2.wav,Timer two elapsed,system,calm,Timer two ran out.
 SOUNDS/en/SYSTEM/timovr3.wav,Timer three elapsed,system,calm,Timer three ran out.
 SOUNDS/en/SYSTEM/trainco.wav,Trainer connected,system,calm,A trainer cable is plugged in.

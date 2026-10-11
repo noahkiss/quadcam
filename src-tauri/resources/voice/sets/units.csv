@@ -57,7 +57,6 @@ SOUNDS/en/SYSTEM/rpm0.wav,RPM,units,number,A unit the radio speaks after a numbe
 SOUNDS/en/SYSTEM/rpm1.wav,RPM,units,number,A unit the radio speaks after a number.
 SOUNDS/en/SYSTEM/second0.wav,second,units,number,A unit the radio speaks after a number.
 SOUNDS/en/SYSTEM/second1.wav,seconds,units,number,A unit the radio speaks after a number.
-SOUNDS/en/SYSTEM/timovr1.wav,Timer one elapsed,units,number,A unit the radio speaks after a number.
 SOUNDS/en/SYSTEM/us0.wav,microsecond,units,number,A unit the radio speaks after a number.
 SOUNDS/en/SYSTEM/us1.wav,microseconds,units,number,A unit the radio speaks after a number.
 SOUNDS/en/SYSTEM/volt0.wav,volt,units,number,A unit the radio speaks after a number.
