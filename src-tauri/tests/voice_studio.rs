@@ -316,16 +316,23 @@ fn a_sample_waits_for_confirm_then_writes_one_wav_per_voice_model_and_line() {
 #[test]
 fn a_recorded_character_count_replaces_the_estimate() {
     let b = bench(50000, true);
-    // The header says each character billed a quarter credit on v4, not one.
+    // The header says each character billed a quarter credit on v4, far from its one credit:
+    // logged, not kept.
     b.http.bill(0.25);
     let before = estimate(&b, &["sample"], "eleven_v4").unwrap();
     assert_eq!(before.estimate.credits_basis, "estimated");
     paid_sample(&b, sample(&["Callum"], &["eleven_v4"], false, true));
-    // Other batches (another set) are priced at the recorded rate.
+    let after = estimate(&b, &["quad"], "eleven_v4").unwrap();
+    assert_eq!(after.estimate.credits_basis, "estimated");
+    let log = std::fs::read_to_string(b.dir.path().join("cache/voice/charcost.log")).unwrap();
+    assert!(log.contains("eleven_v4: billed") && log.contains("not kept"), "{log}");
+    // Close to its multiplier: kept, and other batches (another set) are priced at it.
+    b.http.bill(0.97);
+    paid_sample(&b, sample(&["Matilda"], &["eleven_v4"], false, true));
     let after = estimate(&b, &["quad"], "eleven_v4").unwrap();
     assert_eq!(after.estimate.credits_basis, "recorded");
-    assert!((after.estimate.cost_per_char - 0.25).abs() < 0.01);
-    assert!(after.estimate.credits < after.estimate.chars / 3);
+    assert!((after.estimate.cost_per_char - 0.97).abs() < 0.01);
+    assert!(after.estimate.credits < after.estimate.chars);
     let text = quadcam_lib::core::voice_estimate_text(&after.estimate);
     assert!(text.contains("recorded rate"), "{text}");
     // Another model keeps its estimate.

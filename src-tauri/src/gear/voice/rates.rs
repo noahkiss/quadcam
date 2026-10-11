@@ -3,7 +3,8 @@
 //! estimate reads it. Credits come from the dollar rate: one credit is one character at the
 //! base rate of the 0.08 models, so a model's credits per character are its base rate over
 //! 0.08. That figure is an estimate. After a paid call, the `x-character-count` header gives
-//! the real cost, and `Recorded` keeps it; the next estimate prefers it.
+//! the real cost, and `Recorded` keeps it when it is close to a known multiplier; the next
+//! estimate prefers it. Every reading goes to `charcost.log`, kept or not.
 
 use serde_json::{json, Value};
 use std::collections::BTreeMap;
@@ -129,17 +130,50 @@ impl Recorded {
         self.load().get(model).copied().filter(|r| *r > 0.0)
     }
 
-    /// Keeps what a call billed: `billed` characters for `sent` characters of text.
-    pub fn record(&self, model: &str, billed: u64, sent: u64) {
+    /// Keeps what a call billed: `billed` characters for `sent` characters of text. The rate
+    /// is kept only within 5% of the model's own multiplier in the table (any multiplier
+    /// there for a model the table lacks): the header may count plain characters, and a
+    /// wrong rate would skew every later estimate. Both values are logged either way.
+    /// Returns whether the rate was kept.
+    pub fn record(&self, model: &str, billed: u64, sent: u64) -> bool {
         if sent == 0 || billed == 0 {
-            return;
+            return false;
         }
-        let mut all = self.load();
-        all.insert(model.to_string(), billed as f64 / sent as f64);
+        let got = billed as f64 / sent as f64;
+        let known: Vec<f64> = match rate(model) {
+            Some(r) => vec![r.credits_per_char()],
+            None => RATES.iter().map(Rate::credits_per_char).collect(),
+        };
+        let kept = known.iter().any(|m| (got - m).abs() <= m * 0.05);
+        let line = format!(
+            "{} {model}: billed {billed} for {sent} characters, {got:.3} credits a character; known {}; {}",
+            chrono::Local::now().format("%Y-%m-%dT%H:%M:%S"),
+            known
+                .iter()
+                .map(|m| format!("{m}"))
+                .collect::<Vec<_>>()
+                .join(", "),
+            if kept { "kept" } else { "not kept" }
+        );
+        eprintln!("quadcam: voice cost: {line}");
         if let Some(dir) = self.path.parent() {
             let _ = std::fs::create_dir_all(dir);
+            use std::io::Write;
+            if let Ok(mut f) = std::fs::OpenOptions::new()
+                .create(true)
+                .append(true)
+                .open(dir.join("charcost.log"))
+            {
+                let _ = writeln!(f, "{line}");
+            }
         }
+        if !kept {
+            return false;
+        }
+        let mut all = self.load();
+        all.insert(model.to_string(), got);
         let _ = std::fs::write(&self.path, json!(all).to_string());
+        true
     }
 }
 
@@ -174,8 +208,24 @@ mod tests {
         let d = tempfile::tempdir().unwrap();
         let r = Recorded::new(d.path());
         assert_eq!(r.get("eleven_v4"), None);
-        r.record("eleven_v4", 50, 100);
-        r.record("eleven_v4", 0, 100);
-        assert_eq!(Recorded::new(d.path()).get("eleven_v4"), Some(0.5));
+        assert!(r.record("eleven_v4", 98, 100));
+        assert!(!r.record("eleven_v4", 0, 100));
+        assert_eq!(Recorded::new(d.path()).get("eleven_v4"), Some(0.98));
+    }
+
+    #[test]
+    fn a_rate_far_from_the_models_multiplier_is_logged_not_kept() {
+        let d = tempfile::tempdir().unwrap();
+        let r = Recorded::new(d.path());
+        // The header counted plain characters on a half-credit model.
+        assert!(!r.record("eleven_flash_v2_5", 100, 100));
+        assert_eq!(r.get("eleven_flash_v2_5"), None);
+        assert!(r.record("eleven_flash_v2_5", 51, 100));
+        // A model the table lacks takes any known multiplier.
+        assert!(r.record("eleven_turbo_v2", 50, 100));
+        assert!(!r.record("eleven_turbo_v2", 25, 100));
+        let log = std::fs::read_to_string(d.path().join("voice/charcost.log")).unwrap();
+        assert_eq!(log.lines().count(), 4);
+        assert!(log.contains("eleven_flash_v2_5: billed 100 for 100 characters, 1.000 credits a character; known 0.5; not kept"), "{log}");
     }
 }
