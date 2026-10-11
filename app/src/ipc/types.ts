@@ -498,6 +498,7 @@ export type {
   SampleParams,
   SampleReport,
   SetInfo,
+  SetsParams,
   StudioEstimate,
   StudioView,
   VoiceInfo,

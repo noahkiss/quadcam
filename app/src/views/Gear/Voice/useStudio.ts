@@ -11,7 +11,10 @@ export type Paid = "sample" | "render";
 
 export interface UseStudio {
   key: KeyStatus | null;
+  /** The sets; with one voice and one model ticked, each says how many lines are rendered. */
   sets: SetInfo[];
+  /** The aircraft kinds the person flies (from the profiles). */
+  aircraft: string[];
   catalog: Catalog | null;
   /** Ids of the voices, the models and the sets the person ticked. */
   voices: string[];
@@ -39,10 +42,11 @@ export interface UseStudio {
 export function useStudio(onRendered: () => Promise<void>): UseStudio {
   const [key, setKey] = useState<KeyStatus | null>(null);
   const [sets, setSets] = useState<SetInfo[]>([]);
+  const [aircraft, setAircraft] = useState<string[]>([]);
   const [catalog, setCatalog] = useState<Catalog | null>(null);
   const [voices, pickVoices] = useState<string[]>([]);
   const [models, pickModels] = useState<string[]>([]);
-  const [picked, pickSets] = useState<string[]>(["quad"]);
+  const [picked, pickSets] = useState<string[]>([]);
   const [priced, setPriced] = useState<{ k: string; e: StudioEstimate } | null>(null);
   /** Counts finished paid calls: the cache changed, so the estimate is read again. */
   const [ran, setRan] = useState(0);
@@ -80,6 +84,8 @@ export function useStudio(onRendered: () => Promise<void>): UseStudio {
         if (gone) return;
         setKey(v.key);
         setSets(v.sets);
+        setAircraft(v.aircraft ?? []);
+        pickSets((p) => (p.length ? p : (v.picks ?? [])));
         if (v.key.set) void loadCatalog();
       },
       (e) => {
@@ -111,6 +117,25 @@ export function useStudio(onRendered: () => Promise<void>): UseStudio {
     };
   }, [keySet, v0, m0, picked, want]);
   const estimate = priced && priced.k === want ? priced.e : null;
+
+  // How many lines of each set the one ticked voice and model have rendered (no network).
+  const single = voices.length === 1 && models.length === 1;
+  const progressKey = single ? [v0, m0, ran].join("|") : "";
+  const [progress, setProgress] = useState<{ k: string; sets: SetInfo[] } | null>(null);
+  useEffect(() => {
+    let gone = false;
+    if (!progressKey || !v0 || !m0) return;
+    api.gearVoiceSets({ voice: v0, model: m0, settings: null, batch: null }).then(
+      (v) => {
+        if (!gone) setProgress({ k: progressKey, sets: v.sets });
+      },
+      () => undefined,
+    );
+    return () => {
+      gone = true;
+    };
+  }, [progressKey, v0, m0]);
+  const shownSets = progress && progress.k === progressKey ? progress.sets : sets;
 
   const saveKey = useCallback(
     async (k: string) => {
@@ -173,5 +198,5 @@ export function useStudio(onRendered: () => Promise<void>): UseStudio {
   // Any seed but 0 makes new takes; the pack keeps every batch whose lines all passed.
   const retake = useCallback(() => call("render", false, 1 + Math.floor(Math.random() * 2_000_000_000)), [call]);
 
-  return { key, sets, catalog, voices, models, picked, setVoices, setModels, setPicked, estimate, sample, render, asking, busy, error, saveKey, deleteKey, run, retake, cancel: stop };
+  return { key, sets: shownSets, aircraft, catalog, voices, models, picked, setVoices, setModels, setPicked, estimate, sample, render, asking, busy, error, saveKey, deleteKey, run, retake, cancel: stop };
 }

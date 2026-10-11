@@ -509,7 +509,7 @@ export class MockCore {
       case "gear_voice_key":
         return voice.key(this.gear, p as never);
       case "gear_voice_sets":
-        return voice.sets(this.gear);
+        return voice.sets(this.gear, p as never);
       case "gear_voice_catalog":
         return voice.catalog(this.gear, p as never);
       case "gear_voice_estimate":

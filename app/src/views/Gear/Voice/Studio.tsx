@@ -7,7 +7,7 @@ import { Banner } from "../../../components/Banner";
 import { Button } from "../../../components/Button";
 import { Checkbox, TextField } from "../../../components/Field";
 import { fileSrc } from "../../../ipc/api";
-import type { Retake, SampleItem, VoiceEstimate } from "../../../ipc/types";
+import type { Retake, SampleItem, SetInfo, StudioEstimate, VoiceEstimate } from "../../../ipc/types";
 import { useStudio, type UseStudio } from "./useStudio";
 import styles from "./Voice.module.css";
 
@@ -81,43 +81,112 @@ function costText(e: VoiceEstimate) {
   return `${n(e.chars)} characters in ${e.batches} ${e.batches === 1 ? "batch" : "batches"} (${e.cached_batches} cached): $${(e.usd ?? 0).toFixed(2)}${rate}, ${n(e.credits)} credits (${basis})${left}.`;
 }
 
-function Grid({ items }: { items: SampleItem[] }) {
-  const cols = [...new Map(items.map((i) => [`${i.voice}|${i.model}`, i])).values()];
+/** One line per row; with several voices or models, one play button per pair, numbered. */
+function Samples({ items }: { items: SampleItem[] }) {
+  const combos = [...new Map(items.map((i) => [`${i.voice}|${i.model}`, i])).values()];
   const rows = [...new Map(items.map((i) => [i.line, i.text])).entries()];
   const cell = (line: string, c: SampleItem) => items.find((i) => i.line === line && i.voice === c.voice && i.model === c.model);
+  const many = combos.length > 1;
   return (
-    <div className={styles.tableWrap}>
-      <table className={styles.table} aria-label="Sample voices">
-        <thead>
-          <tr>
-            <th scope="col">Line</th>
-            {cols.map((c) => (
-              <th scope="col" key={`${c.voice}|${c.model}`}>
-                {c.voice_name}
-                <br />
-                <span className={styles.muted}>{c.model}</span>
-              </th>
-            ))}
-          </tr>
-        </thead>
-        <tbody>
-          {rows.map(([line, text]) => (
-            <tr key={line}>
-              <th scope="row">{text}</th>
-              {cols.map((c) => {
-                const it = cell(line, c);
-                return (
-                  <td key={`${c.voice}|${c.model}`}>
-                    {it && <Button size="sm" icon="play" aria-label={`Play ${text} in ${c.voice_name} with ${c.model}`} onClick={() => play(it.file)} />}
-                  </td>
-                );
-              })}
-            </tr>
+    <div className={styles.samples} data-component="voice-samples">
+      {many && (
+        <ol className={styles.legend} aria-label="Voices and models">
+          {combos.map((c) => (
+            <li key={`${c.voice}|${c.model}`}>
+              {c.voice_name}, {c.model}
+            </li>
           ))}
-        </tbody>
-      </table>
+        </ol>
+      )}
+      <ul className={styles.chips} aria-label="Sample voices" style={many ? { gridTemplateColumns: `repeat(auto-fill, minmax(${140 + 52 * combos.length}px, 1fr))` } : undefined}>
+        {rows.map(([line, text]) => (
+          <li key={line} className={styles.chip} aria-label={text}>
+            {many && <span className={styles.chipText}>{text}</span>}
+            {combos.map((c, n) => {
+              const it = cell(line, c);
+              if (!it) return null;
+              const label = `Play ${text} in ${c.voice_name} with ${c.model}`;
+              return many ? (
+                <Button key={`${c.voice}|${c.model}`} size="sm" variant="ghost" icon="play" aria-label={label} title={`${c.voice_name}, ${c.model}`} onClick={() => play(it.file)}>
+                  {n + 1}
+                </Button>
+              ) : (
+                <Button key={`${c.voice}|${c.model}`} size="sm" variant="ghost" icon="play" aria-label={label} onClick={() => play(it.file)}>
+                  {text}
+                </Button>
+              );
+            })}
+          </li>
+        ))}
+      </ul>
     </div>
   );
+}
+
+const PLURAL: Record<string, string> = { quad: "quads", heli: "helicopters", plane: "planes", glider: "gliders", car: "cars" };
+
+function andList(words: string[]) {
+  return words.length < 2 ? words.join("") : `${words.slice(0, -1).join(", ")} and ${words.at(-1)}`;
+}
+
+/** The sets in three groups: made for the aircraft flown, for any aircraft, for other aircraft. */
+function groupSets(sets: SetInfo[], aircraft: string[]) {
+  const kinds = (x: SetInfo) => x.kinds ?? [];
+  const mine = sets.filter((x) => kinds(x).length > 0 && kinds(x).every((k) => aircraft.includes(k)));
+  const any = sets.filter((x) => kinds(x).length === 0);
+  const other = sets.filter((x) => kinds(x).some((k) => !aircraft.includes(k)));
+  return [
+    { id: "mine", title: `For your ${andList(aircraft.map((k) => PLURAL[k] ?? k))}`, sets: mine },
+    { id: "any", title: "Any aircraft", sets: any },
+    { id: "other", title: "Other aircraft", sets: other },
+  ].filter((g) => g.sets.length > 0);
+}
+
+function setMeta(x: SetInfo) {
+  const lines = `${n(x.lines)} ${x.lines === 1 ? "line" : "lines"}`;
+  return x.rendered == null ? lines : `${lines} · ${n(x.rendered)} rendered`;
+}
+
+function LineSets({ s }: { s: UseStudio }) {
+  const shown = s.sets.filter((x) => x.id !== "sample" && !(x.id === "custom" && x.lines === 0));
+  return (
+    <fieldset className={styles.sets} data-component="line-sets">
+      <legend>Line sets</legend>
+      {groupSets(shown, s.aircraft).map((g) => (
+        <div key={g.id} role="group" aria-labelledby={`sets-${g.id}`} className={styles.setGroup}>
+          <h4 id={`sets-${g.id}`} className={styles.setGroupTitle}>
+            {g.title}
+          </h4>
+          <div className={styles.setList}>
+            {g.sets.map((x) => (
+              <Checkbox
+                key={x.id}
+                className={styles.set}
+                label={x.title}
+                detail={
+                  <>
+                    <span className={styles.setAbout}>{x.about}</span>
+                    <span className={styles.setMeta}>{setMeta(x)}</span>
+                  </>
+                }
+                checked={s.picked.includes(x.id)}
+                onChange={(ev) => s.setPicked(toggle(s.picked, x.id, ev.target.checked))}
+              />
+            ))}
+          </div>
+        </div>
+      ))}
+    </fieldset>
+  );
+}
+
+function estimateText(e: StudioEstimate) {
+  const done = e.rendered ?? 0;
+  const left = e.to_render ?? e.estimate.lines;
+  const retakes = e.retakes ? `, ${n(e.retakes)} need a re-take` : "";
+  const head = `${e.voice_name}, ${e.model}: ${n(e.lines)} lines, ${n(done)} rendered${retakes}, ${n(left)} to render.`;
+  if (left === 0) return head;
+  return `${head} ${costText(e.estimate)}${e.estimate.affordable ? "" : " The account does not have enough."}`;
 }
 
 function Retakes({ s, retakes }: { s: UseStudio; retakes: Retake[] }) {
@@ -173,17 +242,10 @@ export function Studio({ onRendered }: { onRendered: () => Promise<void> }) {
                 <Checkbox key={m.id} label={m.name} detail={`${m.id}, $${m.usd_per_1k ?? "?"} per 1K characters${m.promo_until ? ` (promo until ${m.promo_until})` : ""}, about ${m.cost_per_char ?? "?"} ${m.cost_per_char === 1 ? "credit" : "credits"} a character (estimated)`} checked={s.models.includes(m.id)} onChange={(ev) => s.setModels(toggle(s.models, m.id, ev.target.checked))} />
               ))}
             </fieldset>
-            <fieldset className={styles.pick}>
-              <legend>Line sets</legend>
-              {s.sets
-                .filter((x) => x.id !== "sample" && !(x.id === "custom" && x.lines === 0))
-                .map((x) => (
-                  <Checkbox key={x.id} label={x.title} detail={`${x.lines} lines`} checked={s.picked.includes(x.id)} onChange={(ev) => s.setPicked(toggle(s.picked, x.id, ev.target.checked))} />
-                ))}
-            </fieldset>
           </div>
+          <LineSets s={s} />
           <p className={e && !e.estimate.affordable ? styles.error : styles.status} role="status" aria-label="Cost">
-            {e ? `${e.voice_name}, ${e.model}: ${e.lines} lines, ${costText(e.estimate)}${e.estimate.affordable ? "" : " The account does not have enough."}` : one ? "Working out the cost…" : "Pick one voice, one model and a line set to see what a render costs."}
+            {e ? estimateText(e) : one ? "Working out the cost…" : "Pick one voice, one model and a line set to see what a render costs."}
           </p>
           <div className={styles.bar}>
             <Button size="sm" disabled={s.busy || s.voices.length === 0 || s.models.length === 0} onClick={() => s.run("sample", false)}>
@@ -217,7 +279,7 @@ export function Studio({ onRendered }: { onRendered: () => Promise<void> }) {
             </p>
           )}
           {s.render && !s.render.needs_confirm && !s.asking && (s.render.retakes?.length ?? 0) > 0 && <Retakes s={s} retakes={s.render.retakes ?? []} />}
-          {s.sample && s.sample.items.length > 0 && <Grid items={s.sample.items} />}
+          {s.sample && s.sample.items.length > 0 && <Samples items={s.sample.items} />}
         </>
       )}
     </section>

@@ -46,13 +46,15 @@ export interface MockVoice {
   spent: number;
   /** A line a studio render without a seed leaves out for a re-take. */
   retake: string | null;
+  /** The sets rendered per `voice|model`: their lines have a take. */
+  rendered: Record<string, string[]>;
   /** Packs deleted with their raw takes. */
   takesDeleted: string[];
   /** Each rendered pack's lines that need a re-take (its `pack.json` `retakes`). */
   retakes: Record<string, Retake[]>;
 }
 
-export const freshVoice = (): MockVoice => ({ installed: [], index: false, overrides: {}, chosen: {}, custom: [], paid: false, keySet: "", spent: 0, retake: null, takesDeleted: [], retakes: {} });
+export const freshVoice = (): MockVoice => ({ installed: [], index: false, overrides: {}, chosen: {}, custom: [], paid: false, keySet: "", spent: 0, retake: null, rendered: {}, takesDeleted: [], retakes: {} });
 
 type Paid = { confirm?: boolean; digest?: string | null; settings?: { seed?: number | null } | null };
 
@@ -239,18 +241,24 @@ const MODELS: ModelInfo[] = [
   { id: "eleven_v4_turbo", name: "Eleven v4 Turbo", cost_per_char: 0.5, usd_per_1k: 0.04, promo_until: null, max_chars: 5000 },
   { id: "eleven_turbo_v2_5", name: "Turbo v2.5", cost_per_char: 0.5, usd_per_1k: 0.04, promo_until: null, max_chars: 40000 },
 ];
+const QUAD = ["quad"];
 const SETS: SetInfo[] = [
-  { id: "edgetx", title: "Full EdgeTX English", about: "Every prompt the radio plays by itself, the numbers and units, and the general prompts a model can name.", lines: 311 },
-  { id: "quad", title: "FPV quad", about: "The radio's own prompts and numbers, and the callouts a quad's radio plays.", lines: 168 },
-  { id: "heli", title: "Helicopter", about: "The radio's own prompts and numbers, and the callouts a helicopter's radio plays.", lines: 164 },
-  { id: "plane", title: "Plane", about: "The radio's own prompts and numbers, and the callouts a plane's radio plays.", lines: 169 },
-  { id: "glider", title: "Glider", about: "The radio's own prompts and numbers, and the callouts a glider's radio plays.", lines: 164 },
-  { id: "extras", title: "FPV extras", about: "More FPV callouts: arming states, profiles, VTX, OSD, recording, finder.", lines: 68 },
-  { id: "easter", title: "Easter eggs", about: "Short fun lines in original wording. Off unless a model plays them.", lines: 12 },
-  { id: "sample", title: "Sample", about: "A dozen hard lines for comparing voices: a bare number, short words, warnings.", lines: 12 },
-  { id: "quadcam", title: "QuadCam default", about: "The lines QuadCam's packs hold.", lines: 45 },
-  { id: "custom", title: "Your lines", about: "The lines you added.", lines: 0 },
+  { id: "quad", title: "FPV quad", about: "What a quad's radio says: its own prompts (power on, alarms, timers), numbers and units for telemetry, and quad callouts such as armed, battery low, signal low, failsafe, turtle mode and the flight modes.", lines: 168, kinds: QUAD },
+  { id: "extras", title: "FPV extras", about: "More quad callouts for switches and special functions: arming checks, Betaflight modes, VTX, DVR and recording, rate and PID profiles, TX power, battery percent, link quality, race laps, the finder. Each plays only when a model's special function names it.", lines: 68, kinds: QUAD },
+  { id: "easter", title: "Easter eggs", about: 'Short fun lines, such as "Engines hot. Send it!". Each plays only when a model\'s special function names it.', lines: 12, kinds: [] },
+  { id: "scripts", title: "Telemetry scripts", about: "The prompts the INAV and ArduPilot (Yaapu) telemetry scripts play on the radio. FPV quad already holds the Betaflight script's prompts.", lines: 90, kinds: [] },
+  { id: "edgetx", title: "Full EdgeTX English", about: "Every prompt of the EdgeTX English pack: the radio's prompts, numbers and units, the model prompts for quads, helicopters, planes, gliders and cars, and the telemetry-script prompts.", lines: 311, kinds: ["quad", "heli", "plane", "glider", "car"] },
+  { id: "heli", title: "Helicopter", about: "The radio's prompts, numbers and units, and helicopter callouts: throttle hold, idle up, governor, rescue, autorotation, head speed.", lines: 164, kinds: ["heli"] },
+  { id: "plane", title: "Plane", about: "The radio's prompts, numbers and units, and plane callouts: stall, airspeed, landing gear, flaps, lights, fuel.", lines: 169, kinds: ["plane"] },
+  { id: "glider", title: "Glider", about: "The radio's prompts, numbers and units, and glider callouts: thermal mode, lift and sink, crow, launch, ballast.", lines: 164, kinds: ["glider"] },
+  { id: "car", title: "Car", about: "The radio's prompts, numbers and units, and car callouts: drive modes, steering, gears, drift.", lines: 160, kinds: ["car"] },
+  { id: "sample", title: "Sample", about: "A dozen hard lines for comparing voices: a bare number, short words, warnings.", lines: 12, kinds: [] },
+  { id: "quadcam", title: "QuadCam default", about: "The lines of QuadCam's ready-made voice packs: arming, battery, signal, flight modes, timers and numbers.", lines: 45, kinds: [] },
+  { id: "custom", title: "Your lines", about: "Lines you added on a radio's Voice segment.", lines: 0, kinds: [] },
 ];
+/** The radio's prompts, numbers and units: every aircraft set and the full set hold them. */
+const SHARED = 140;
+const holdsShared = (id: string) => ["quad", "heli", "plane", "glider", "car", "edgetx"].includes(id);
 const CREDITS = 98_500;
 const CARRIER = "The word is .".length;
 
@@ -267,9 +275,30 @@ export function key(g: MockGear, p: { action?: string; key?: string | null }): K
   return keyStatus(g);
 }
 
+/** Lines of a set with a take for this voice and model: all of a rendered set, and the shared
+ * radio lines once any set that holds them is rendered. */
+function renderedOf(g: MockGear, id: string, voice: string, model: string): number {
+  const done = g.voice.rendered[`${voice}|${model}`] ?? [];
+  const set = SETS.find((s) => s.id === id);
+  if (!set) return 0;
+  if (done.includes(id)) return set.lines;
+  return holdsShared(id) && done.some(holdsShared) ? Math.min(SHARED, set.lines) : 0;
+}
+
 /** `gear_voice_sets`. */
-export function sets(g: MockGear): StudioView {
-  return { key: keyStatus(g), sets: SETS.map((s) => (s.id === "custom" ? { ...s, lines: g.voice.custom.length } : s)), batch: { carrier: "The word is {line}.", tone_carriers: {}, max_lines: 30, snap_ms: 40 } };
+export function sets(g: MockGear, p?: { voice?: string; model?: string } | null): StudioView {
+  const custom = g.voice.custom.length;
+  const asked = !!(p?.voice && p?.model);
+  return {
+    key: keyStatus(g),
+    sets: SETS.map((s) => {
+      const x = s.id === "custom" ? { ...s, lines: custom } : s;
+      return { ...x, rendered: asked ? renderedOf(g, x.id, p!.voice!, p!.model!) : null };
+    }),
+    batch: { carrier: "The word is {line}.", tone_carriers: {}, max_lines: 30, snap_ms: 40 },
+    aircraft: ["quad"],
+    picks: custom ? ["quad", "extras", "custom"] : ["quad", "extras"],
+  };
 }
 
 const needKey = (g: MockGear) => {
@@ -287,10 +316,11 @@ export function catalog(g: MockGear, p: { voices?: boolean; models?: boolean; cr
   };
 }
 
-function price(g: MockGear, setIds: string[], model: string): VoiceEstimate {
+function price(g: MockGear, setIds: string[], model: string, voice = ""): VoiceEstimate {
   const m = MODELS.find((x) => x.id === model);
   if (!m) throw `The account lists no model "${model}".`;
-  const lines = SETS.filter((s) => setIds.includes(s.id)).reduce((n, s) => n + s.lines, 0);
+  const picked = SETS.filter((s) => setIds.includes(s.id));
+  const lines = picked.reduce((n, s) => n + s.lines - renderedOf(g, s.id, voice, model), 0);
   const chars = lines * (CARRIER + 10);
   const credits = Math.ceil(chars * (m.cost_per_char ?? 1));
   const remaining = CREDITS - g.voice.spent;
@@ -308,8 +338,9 @@ function voiceOf(want: string): VoiceInfo {
 export function estimate(g: MockGear, p: { sets: string[]; voice: string; model: string }): StudioEstimate {
   needKey(g);
   const v = voiceOf(p.voice);
-  const e = price(g, p.sets, p.model);
-  return { voice: v.id, voice_name: v.name, model: p.model, lines: e.lines, estimate: e };
+  const e = price(g, p.sets, p.model, v.id);
+  const lines = SETS.filter((s) => p.sets.includes(s.id)).reduce((n, s) => n + s.lines, 0);
+  return { voice: v.id, voice_name: v.name, model: p.model, lines, rendered: lines - e.lines, retakes: 0, to_render: e.lines, estimate: e };
 }
 
 /** `gear_voice_sample`: three lines per voice and model. */
@@ -351,7 +382,7 @@ export function sample(g: MockGear, p: { voices: string[]; models: string[]; dry
 function studioRender(g: MockGear, p: { voice?: string; sets: string[]; model?: string; dry_run?: boolean } & Paid): RenderReport {
   needKey(g);
   const voice = voiceOf(p.voice ?? "");
-  const e = price(g, p.sets, p.model ?? "");
+  const e = price(g, p.sets, p.model ?? "", voice.id);
   // The core names the pack by a short hash of the voice id; the mock uses the id itself.
   const id = `local-elevenlabs-${voice.id}-${(p.model ?? "").replace(/_/g, "-")}`;
   const seed = p.settings?.seed ?? 0;
@@ -363,6 +394,8 @@ function studioRender(g: MockGear, p: { voice?: string; sets: string[]; model?: 
   samePlan(p, digest);
   g.voice.spent += e.credits;
   if (!g.voice.installed.includes(id)) g.voice.installed.push(id);
+  const k = `${voice.id}|${p.model ?? ""}`;
+  g.voice.rendered[k] = [...new Set([...(g.voice.rendered[k] ?? []), ...p.sets])];
   const flagged = LINES.find((l) => l.path === g.voice.retake);
   if (flagged && seed === 0) {
     const retakes = [{ path: flagged.path, text: flagged.text, reason: "the cut is silent" }];

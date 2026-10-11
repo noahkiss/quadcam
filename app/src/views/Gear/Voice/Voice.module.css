@@ -164,3 +164,81 @@
   gap: var(--s-3);
   min-width: 360px;
 }
+.sets {
+  margin: 0;
+  padding: var(--s-3);
+  border: 1px solid var(--border);
+  border-radius: var(--r-2);
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-4);
+  min-width: 0;
+}
+.sets legend {
+  padding: 0 var(--s-2);
+  font-size: var(--t-sm);
+  font-weight: 600;
+}
+.setGroup {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-2);
+}
+.setGroupTitle {
+  margin: 0;
+  font-size: var(--t-sm);
+  font-weight: 600;
+  color: var(--muted);
+}
+.setList {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+  gap: var(--s-3) var(--s-6);
+}
+.set {
+  min-width: 0;
+}
+.setAbout {
+  display: block;
+}
+.setMeta {
+  display: block;
+  margin-top: var(--s-1);
+  color: var(--fg);
+  font-variant-numeric: tabular-nums;
+}
+.samples {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-2);
+}
+.legend {
+  margin: 0;
+  padding-left: var(--s-4);
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s-1) var(--s-6);
+  font-size: var(--t-sm);
+  color: var(--muted);
+}
+.chips {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: var(--s-1) var(--s-3);
+}
+.chip {
+  display: flex;
+  align-items: center;
+  gap: var(--s-1);
+  min-width: 0;
+  border-bottom: 1px solid var(--border);
+  padding: 2px 0;
+}
+.chipText {
+  flex: 1;
+  min-width: 0;
+  font-size: var(--t-sm);
+}

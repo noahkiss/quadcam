@@ -391,9 +391,9 @@ in `specta_builder` (`lib.rs`).
 | `gear_voice_edit` | `VoiceEditParams { line, text, pack, confirm, dry_run, digest }` → `VoiceLine` (with `cost` on a `dry_run`) | gear.json |
 | `gear_voice_render` | `VoiceRenderParams { voice, lines, dry_run }` → `RenderReport` | cache; network |
 | `gear_voice_key` | `KeyParams { action, key }` → `KeyStatus` (never the key) | Keychain |
-| `gear_voice_sets` | → `StudioView` (key state, line sets) | no |
+| `gear_voice_sets` | `SetsParams { voice, model }` (both optional) → `StudioView` (key state, line sets with their aircraft kinds, the kinds flown, the first picks; with a voice id and model, each set's rendered lines) | no |
 | `gear_voice_catalog` | `CatalogParams { voices, models, credits }` → `Catalog` | network (free calls) |
-| `gear_voice_estimate` | `EstimateParams { sets, voice, model }` → `StudioEstimate` | network (free calls) |
+| `gear_voice_estimate` | `EstimateParams { sets, voice, model }` → `StudioEstimate` (lines, rendered, re-takes, to render, the estimate of the lines to render) | network (free calls) |
 | `gear_voice_sample` | `SampleParams { voices, models, sets, confirm }` → `SampleReport` | cache; network (paid) |
 | `gear_voice_pack_install` | `PackInstallParams { pack }` → `VoicePack` | gear folder; network |
 | `gear_voice_choose` | `VoiceChooseParams { radio, pack, keep_overrides }` → `StagedChange` | gear folder |

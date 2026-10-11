@@ -466,6 +466,17 @@ inside carrier sentences, and compares voices before it spends credits.
   | `sample` | 12 | Hard lines for comparing voices |
   | `custom`, `quadcam` | yours, 45 | Your own lines, and the lines a pack holds today |
 
+  The studio shows each set with what it holds, and groups the sets: **For your quads** (sets
+  made only for the aircraft you fly), **Any aircraft** (easter eggs, the telemetry scripts,
+  QuadCam's default lines, your lines) and **Other aircraft** (helicopter, plane, glider, car,
+  and the full EdgeTX set, which holds every kind's prompts). QuadCam reads the aircraft you
+  fly from the aircraft profiles: a word in a profile's name or aircraft ("5-inch freestyle",
+  "whoop", "heli", "glider", "wing", "crawler"), and a profile linked to an FC is a quad. With
+  no profile, it takes quads. The sets made only for those aircraft start ticked: for quads,
+  `quad` and `extras`, and your own lines when you have some. A Betaflight quad needs no other
+  set: `quad` already holds the Betaflight script's prompts, and `scripts` is for INAV and
+  ArduPilot. With one voice and one model ticked, each set shows "N lines · M rendered".
+
   The number and unit prompts (`0000.wav` to `0112.wav`, `volt0.wav` and so on) and the
   sounds the radio plays by itself go in `SOUNDS/en/SYSTEM/`, where EdgeTX looks for them; a
   model's own tracks go in `SOUNDS/en/`; a script's prompts go in
@@ -473,14 +484,22 @@ inside carrier sentences, and compares voices before it spends credits.
   text (for example `P term` for the Betaflight script's `P`), and the spelling rules still
   apply. The set files are `src-tauri/resources/voice/sets/*.csv`; the `kinds` column of
   `edgetx.csv` and `scripts.csv` names the aircraft that play a line.
-- **Cost.** The line under the pickers shows the characters (carriers included), the batches,
-  the price in USD and the credits (estimated), and the credits left. Batches the cache already
-  holds cost nothing. A render the credits do not cover cannot start. A batch stays under the
+- **Cost.** The line under the pickers shows the lines, how many are rendered and how many are
+  left to render, then the characters (carriers included), the batches, the price in USD and
+  the credits (estimated), and the credits left. Only the lines left to render cost anything.
+- **A line is billed once.** A voice and model never speak the same sentence twice: a line
+  that any earlier render or sample spoke (the same text, voice, model and speed, ignoring
+  case) is cut again from that take, whatever set it came in. So a set added later, a set
+  that shares lines with one you rendered (every aircraft set holds the radio's prompts,
+  numbers and units), or a render after a sample pays only for its new lines. QuadCam keeps
+  which lines each take holds in `voice/lines/` in the cache; without that file it prices the
+  lines again. A render the credits do not cover cannot start. A batch stays under the
   model's per-request limit (v3 5,000 characters, multilingual v2 10,000, flash and turbo
   40,000).
 - **Sample.** Tick voices and models and press **Sample**. QuadCam renders the sample lines
-  in each pair, shows the cost, and waits for **Sample and pay**. Each play button in the grid
-  plays one line in one voice and model. The sample files keep the card path, so two lines
+  in each pair, shows the cost, and waits for **Sample and pay**. With one voice and model,
+  each line is one play button. With several, a numbered list names the pairs, and each line
+  has one play button per pair, numbered the same. The sample files keep the card path, so two lines
   with one file name (`armed.wav` and a script's `armed.wav`) stay apart.
 - **Render pack.** Needs one voice, one model and at least one set. After **Render and pay**
   the lines go into a local pack named for the voice id and the model, so two voices with one
@@ -495,8 +514,9 @@ inside carrier sentences, and compares voices before it spends credits.
 - **Re-takes.** A cut that fails a check (silent, under 120 ms, too long, or long or short for
   its text) stays out of the pack. The result and the pack's `pack.json` (`retakes`) list it as
   "needs a re-take" with the reason. The paid batch stays in the cache. **Re-take** renders
-  again with a new seed (CLI `--seed`, MCP `seed`): only the batches that hold a re-take go to
-  ElevenLabs. The pack keeps every batch whose lines all passed.
+  again with a new seed (CLI `--seed`, MCP `seed`): only the lines that need a re-take go to
+  ElevenLabs. The same seed again sends nothing: it is the same take, so the line stays a
+  re-take. The pack keeps every line that passed.
 - **How a line is cut.** A bare word sounds wrong from a voice, so each line is spoken in a
   carrier ("The word is six.") and cut out. Lines are grouped by tone (calm, alert, number,
   fun), up to 30 sentences in a batch. ElevenLabs returns the time of every character; QuadCam
