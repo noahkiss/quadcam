@@ -51,10 +51,13 @@ test("stage a setting, review it, apply it and see it verified", async ({ app, p
   await page.keyboard.press("Enter");
   expect(await app.method("gear_apply_click")).toHaveLength(0);
 
+  // The click carries the digest of the plan the sheet shows, as the core plans it.
+  const id = String((await app.method("gear_apply_plan")).at(-1)?.id);
+  const planned = await app.core<{ digest: string }>(`c => c.handle("gear_apply_plan", { params: { id: "${id}", port: null } })`);
   await sheet.getByRole("button", { name: "Apply" }).click();
   await expect(sheet.getByRole("region", { name: "Result" })).toContainText("Verified");
   await expect(sheet.getByRole("list", { name: "Steps" })).toContainText("Verify");
-  expect((await app.method("gear_apply_click")).at(-1)).toMatchObject({ confirm: true, digest: `digest-${(await app.method("gear_apply_click")).at(-1)?.id}` });
+  expect((await app.method("gear_apply_click")).at(-1)).toMatchObject({ id, confirm: true, digest: planned.digest });
   await sheet.getByRole("button", { name: "Done" }).click();
   await expect(sheet).toHaveCount(0);
   await expect(page.getByRole("status").filter({ hasText: "change ready" })).toHaveCount(0);
