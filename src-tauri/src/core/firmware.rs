@@ -149,9 +149,7 @@ impl Core {
         let busy = |what: &str| {
             refuse(
                 RefusalCode::PortBusy,
-                format!(
-                    "{what} is already running on the radio in DFU mode. Wait for it to end."
-                ),
+                format!("{what} is already running on the radio in DFU mode. Wait for it to end."),
             )
         };
         if let Some(j) = self.gear_jobs().into_iter().find(|j| j.handle == handle) {
@@ -160,13 +158,11 @@ impl Core {
         let (job, _) = self
             .job_start(&handle, device, step)
             .map_err(|_| busy("Another job"))?;
-        let hold = self.gear_hold(&super::gear::link_handle(
-            &crate::gear::model::Link::Dfu {
-                vid: info.vid,
-                pid: info.pid,
-                serial: info.serial.clone(),
-            },
-        ));
+        let hold = self.gear_hold(&super::gear::link_handle(&crate::gear::model::Link::Dfu {
+            vid: info.vid,
+            pid: info.pid,
+            serial: info.serial.clone(),
+        }));
         Ok((job, hold))
     }
 
@@ -475,7 +471,11 @@ impl Core {
                 ))
             }
         };
-        let _job = self.dfu_job(&info, device.as_ref().map(|d| d.id.as_str()), "Reading firmware")?;
+        let _job = self.dfu_job(
+            &info,
+            device.as_ref().map(|d| d.id.as_str()),
+            "Reading firmware",
+        )?;
         let flasher: &dyn Flasher = self.firmware.flasher.as_ref();
         let quick = flasher.quick();
         let mut usb = flasher

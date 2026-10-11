@@ -312,7 +312,8 @@ pub fn compare_listing(cli: &mut RadioCli, want: &[(String, u64)]) -> Result<Lis
     }
     let mut out = Listing::default();
     for (dir, files) in by_dir {
-        let unlisted = |out: &mut Listing| out.not_checked.extend(files.iter().map(|f| f.0.clone()));
+        let unlisted =
+            |out: &mut Listing| out.not_checked.extend(files.iter().map(|f| f.0.clone()));
         if dir.contains(' ') || check_path(&dir).is_err() {
             unlisted(&mut out);
             continue;

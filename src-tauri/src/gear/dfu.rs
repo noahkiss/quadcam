@@ -885,7 +885,8 @@ impl Usb for FakeDfu {
                 }
                 let to = (from + len.min(TRANSFER)).min(self.flash.len());
                 let mut b = self.flash[from..to].to_vec();
-                self.log.push(format!("upload {at:#010x} {} bytes", b.len()));
+                self.log
+                    .push(format!("upload {at:#010x} {} bytes", b.len()));
                 self.reads += 1;
                 let flaky = self.faults.flip_after_reads.is_some_and(|n| self.reads > n);
                 if (self.faults.corrupt_read || flaky) && !b.is_empty() {
@@ -997,7 +998,11 @@ mod tests {
             let writes: Vec<usize> = (0..ops.len())
                 .filter(|&i| ops[i].0 == "write" && seg(ops[i].1) == n)
                 .collect();
-            assert_eq!(writes.len(), (end - start).div_ceil(TRANSFER), "segment {n}");
+            assert_eq!(
+                writes.len(),
+                (end - start).div_ceil(TRANSFER),
+                "segment {n}"
+            );
             let last_write = *writes.last().unwrap();
             let next_write = (0..ops.len())
                 .find(|&i| ops[i].0 == "write" && seg(ops[i].1) == n + 1)
@@ -1008,7 +1013,9 @@ mod tests {
             for &(kind, at, len) in &ops[last_write + 1..next_write] {
                 assert_eq!(kind, "upload", "segment {n}: a write before its read back");
                 // After the last segment, the full read back covers the others too.
-                let Some(from) = (at as usize).checked_sub(start).filter(|f| *f < end - start)
+                let Some(from) = (at as usize)
+                    .checked_sub(start)
+                    .filter(|f| *f < end - start)
                 else {
                     continue;
                 };

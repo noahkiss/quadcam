@@ -153,7 +153,12 @@ pub fn check_image(bin: &[u8], spec: &BoardSpec, version: &str) -> Result<(), Re
             "The file does not start with a bootloader's vector table; it is not a full image.",
         ));
     }
-    if !is_vector_table(bin, spec.app_offset, app, FLASH_BASE + spec.flash_bytes as u32) {
+    if !is_vector_table(
+        bin,
+        spec.app_offset,
+        app,
+        FLASH_BASE + spec.flash_bytes as u32,
+    ) {
         return Err(bad_image(
             "The file has no firmware after the bootloader; it is not a full image.",
         ));
