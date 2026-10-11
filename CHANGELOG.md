@@ -5,6 +5,8 @@ User-facing changes in each release, newest first. Release notes on
 
 ## Unreleased
 
+## 0.17.0 (2026-10-11)
+
 - **QuadCam Voices.** Voice packs now have a home: [noahkiss/quadcam-voices](https://github.com/noahkiss/quadcam-voices), with a site at <https://noahkiss.github.io/quadcam-voices/> that lists each pack and plays a few of its lines in the browser. The `voice_index` setting reads its index by default; an empty setting turns it off. Packs download from the repo's releases, still checked against the index's hash.
 - **Preview before you install.** On the Voices page, **Preview** on an index pack plays its preview lines, each checked against its hash. CLI `gear voice preview`; MCP `quadcam_gear` `voice_preview`.
 - **Publish a pack.** **Publish…** on a pack you rendered prepares it for QuadCam Voices: the zip, about ten AAC preview lines and the index entry. It refuses until the speech check heard every line right or you accepted each line it flagged, and it refuses packs made with macOS `say`. The review lists every line with a play button and what was heard, accepted lines first, and a random spot check of 10 to 15 lines. Only **Approve and publish** publishes: it creates the release and opens a pull request for the index with GitHub's `gh`, or shows the commands to run. An agent can prepare and show the review (MCP `quadcam_gear_edit` `voice_publish`, CLI `gear voice publish`) but cannot approve; `gear voice publish --approve` works only at a terminal. See [Publish a pack](docs/gear.md#publish-a-pack).
