@@ -53,6 +53,9 @@ jobs:
     name: Build, sign and attach
     runs-on: xcode-27
     environment: release
+    env:
+      # build.rs fails instead of bundling a stand-in when the Swift helper does not build.
+      QUADCAM_INTEL_REQUIRED: '1'
     timeout-minutes: 90
     permissions:
       contents: write

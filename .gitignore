@@ -4,3 +4,5 @@
 /test-clips/*
 !/test-clips/README.md
 .DS_Store
+/src-tauri/binaries/
+/intel/.build/
