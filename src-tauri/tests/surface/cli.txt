@@ -69,6 +69,7 @@ cli.arg profiles delete <NAME>
 cli.arg profiles save <NAME>
 cli.arg scan <PATH>
 cli.arg settings set <KEY=VALUE>...
+cli.arg settings set-secret <KEY>
 cli.arg stage [PATH]
 cli.arg verify [OUTPUT]
 cli.command analyze
@@ -209,6 +210,7 @@ cli.command profiles save
 cli.command scan
 cli.command settings
 cli.command settings set
+cli.command settings set-secret
 cli.command settings show
 cli.command show
 cli.command stage

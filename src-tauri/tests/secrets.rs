@@ -174,3 +174,89 @@ fn the_core_reports_hints_only() {
         no_secret(&format!("core answer {i}"), s);
     }
 }
+
+/// Runs `quadcam-cli --json <args>` with `stdin`; returns (exit code, stdout + stderr).
+fn cli(home: &std::path::Path, args: &[&str], stdin: &str) -> (i32, String) {
+    use std::io::Write;
+    use std::process::{Command, Stdio};
+    let mut child = Command::new(env!("CARGO_BIN_EXE_quadcam-cli"))
+        .env("HOME", home)
+        .env("QUADCAM_PHOTOS", "dry-run")
+        .arg("--json")
+        .args(args)
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .unwrap();
+    child
+        .stdin
+        .take()
+        .unwrap()
+        .write_all(stdin.as_bytes())
+        .unwrap();
+    let out = child.wait_with_output().unwrap();
+    let all =
+        String::from_utf8_lossy(&out.stdout).to_string() + &String::from_utf8_lossy(&out.stderr);
+    (out.status.code().unwrap_or(-1), all)
+}
+
+#[test]
+fn the_cli_sets_secrets_from_stdin_and_shows_only_hints() {
+    let home = tempfile::tempdir().unwrap();
+    let h = home.path();
+    let mut seen = Vec::new();
+    for (k, v) in [
+        ("google_places_key", GOOGLE),
+        ("tts_key", TTS),
+        ("elrs_binding_phrase", PHRASE),
+    ] {
+        let (code, out) = cli(h, &["settings", "set-secret", k], &format!("{v}\n"));
+        assert_eq!(code, 0, "{out}");
+        seen.push(out);
+    }
+    let (code, out) = cli(h, &["settings", "show"], "");
+    assert_eq!(code, 0, "{out}");
+    let v: Value = serde_json::from_str(out.lines().next().unwrap()).unwrap();
+    let sec = &v["result"]["secrets"];
+    assert_eq!(sec["googlePlacesKey"]["hint"], "AIza…q7Rt (22 chars)");
+    assert_eq!(sec["ttsKey"]["hint"], "tts-…0042 (18 chars)");
+    assert_eq!(sec["elrsBindingPhrase"]["hint"], "my P…ords (21 chars)");
+    assert_eq!(v["result"]["values"]["ttsKey"], "(set)");
+    seen.push(out);
+    // The file holds the values exactly, without the line ending.
+    let f = h.join("Library/Application Support/app.quadcam/settings.json");
+    let file: Value = serde_json::from_slice(&std::fs::read(&f).unwrap()).unwrap();
+    assert_eq!(file["elrsBindingPhrase"], PHRASE);
+    assert_eq!(file["googlePlacesKey"], GOOGLE);
+
+    // `settings set` of a secret still works, and says that argv is visible.
+    let (code, out) = cli(h, &["settings", "set", "tts_key=tts-TTSMIDDLE-0042"], "");
+    assert_eq!(code, 0, "{out}");
+    assert!(out.contains("set-secret"), "{out}");
+    seen.push(out);
+
+    // Refusals: not a secret, no value, a bad phrase, and the Keychain closed under cargo.
+    let (code, out) = cli(h, &["settings", "set-secret", "layout"], "flat\n");
+    assert_ne!(code, 0);
+    let (code, _) = cli(h, &["settings", "set-secret", "tts_key"], "");
+    assert_ne!(code, 0);
+    let (code, out2) = cli(
+        h,
+        &["settings", "set-secret", "elrs_binding_phrase"],
+        "PHRASEMIDDLE\"x\n",
+    );
+    assert_ne!(code, 0);
+    let (code, out3) = cli(h, &["gear", "voice", "key", "set"], &format!("{ELEVEN}\n"));
+    assert_ne!(code, 0, "{out3}");
+    seen.extend([out, out2, out3]);
+    let (_, out) = cli(h, &["gear", "voice", "key", "status"], "");
+    seen.push(out);
+    let (_, out) = cli(h, &["status"], "");
+    seen.push(out);
+
+    for (i, out) in seen.iter().enumerate() {
+        no_secret(&format!("cli output {i}"), out);
+    }
+    no_secret("files", &files_but_settings(h));
+}
