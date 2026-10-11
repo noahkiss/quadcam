@@ -1041,3 +1041,69 @@ fn a_module_flash_checks_the_radio_board_before_the_boot_pin() {
     quadcam_lib::gear::elrs::save_snapshot(&root, &snap).unwrap();
     assert_ne!(b.core.gear_elrs_flash_plan(&p).unwrap().digest, plan.digest);
 }
+
+fn stage_and_plan(b: &Bench, device: &str, edits: &[(&str, &str)]) -> (String, ApplyPlan) {
+    let c = b
+        .core
+        .gear_change_stage(&StageParams {
+            device: device.into(),
+            edits: sets(edits),
+            ..Default::default()
+        })
+        .unwrap();
+    let plan = b
+        .core
+        .gear_apply_plan(&ApplyPlanParams {
+            id: c.id.clone(),
+            port: None,
+        })
+        .unwrap();
+    assert!(failed(&plan).is_empty(), "{:?}", failed(&plan));
+    (c.id, plan)
+}
+
+fn apply(b: &Bench, id: &str, digest: &str) -> anyhow::Result<ApplyReport> {
+    b.core.gear_apply(&ApplyRequest {
+        id: id.into(),
+        digest: digest.into(),
+        confirm: true,
+        port: None,
+    })
+}
+
+#[test]
+fn an_apply_refuses_when_a_list_was_reordered_since_the_read() {
+    let (b, tx, _) = bench(true, true);
+    let id = read(&b, &b.radio).unwrap().device;
+    let (c, plan) = stage_and_plan(&b, &id, &[("switch_mode", "Hybrid")]);
+    // Another firmware lists the same switch modes in another order; the value is the same.
+    tx.restart();
+    tx.device().set_choices(3, &["Wide", "Hybrid"]);
+    assert_eq!(
+        tx.device().param("Switch Mode").unwrap().name,
+        "Switch Mode"
+    );
+    let r = refusal(apply(&b, &c, &plan.digest).unwrap_err());
+    assert_eq!(r.code, RefusalCode::BeforeMismatch);
+    assert!(r.reason.contains("offers other values"), "{}", r.reason);
+    assert!(tx.device().writes().is_empty());
+}
+
+#[test]
+fn a_write_that_relists_another_option_is_followed_by_a_fresh_read() {
+    let (b, tx, _) = bench(true, true);
+    // Writing the packet rate reorders the switch modes, as a rate change can.
+    let device = FakeElrs::tx("RM Radio", "4.1.0").relist_on_write(1, 3, &["Wide", "Hybrid"]);
+    tx.replace_device(device.clone());
+    let id = read(&b, &b.radio).unwrap().device;
+    let (c, plan) = stage_and_plan(
+        &b,
+        &id,
+        &[("packet_rate", "250hz"), ("switch_mode", "Hybrid")],
+    );
+    tx.restart();
+    let report = apply(&b, &c, &plan.digest).unwrap();
+    assert_eq!(report.status, ChangeStatus::Verified, "{}", report.message);
+    // Hybrid was index 0 at the read and is index 1 after the packet-rate write.
+    assert_eq!(device.writes(), [(1, vec![2]), (3, vec![1])]);
+}

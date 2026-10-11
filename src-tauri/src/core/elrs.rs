@@ -21,7 +21,7 @@ use super::apply::refusal;
 use super::{link_handle, Core};
 use crate::gear::apply::{check, first_refusal, pass, ApplyReport, StepReport, StepState};
 use crate::gear::blobs;
-use crate::gear::elrs::crsf::{self, Param};
+use crate::gear::elrs::crsf::{self, Param, WriteValue};
 use crate::gear::elrs::flash::{self, Built};
 use crate::gear::elrs::image::{self, Side};
 use crate::gear::elrs::link::{self, CrsfLink, ModuleStart, Timing};
@@ -671,11 +671,12 @@ impl Core {
                 ),
             )));
         }
-        let live = c.read_params(&info)?;
+        let mut live = c.read_params(&info)?;
         let live_opts = elrs::options_of(&live);
+        // The value, the id and the list must be the read's: a choice is written as its index.
         for (o, _, _) in &writes {
             let now = live_opts.iter().find(|l| l.key == o.key);
-            if now.map(|l| (&l.value, l.id)) != Some((&o.value, o.id)) {
+            let Some(l) = now.filter(|l| (&l.value, l.id) == (&o.value, o.id)) else {
                 return Err(refusal(Refusal::new(
                     RefusalCode::BeforeMismatch,
                     format!(
@@ -683,6 +684,15 @@ impl Core {
                         o.label,
                         now.map(|l| l.value.as_str()).unwrap_or("missing"),
                         o.value
+                    ),
+                )));
+            };
+            if (&l.choices, l.min, l.max) != (&o.choices, o.min, o.max) {
+                return Err(refusal(Refusal::new(
+                    RefusalCode::BeforeMismatch,
+                    format!(
+                        "{} offers other values on the device than at the read. Nothing was written; read it again.",
+                        o.label
                     ),
                 )));
             }
@@ -716,40 +726,71 @@ impl Core {
             Some(taken.backup.id.clone()),
         ));
 
+        // The device saves a parameter a moment after the write.
+        let save_wait = if self.elrs_timing().settle.is_zero() {
+            Duration::ZERO
+        } else {
+            Duration::from_millis(800)
+        };
         let mut failed: Option<String> = None;
+        let mut wrote = false;
         for (o, w, to) in &writes {
-            if &o.value == to {
-                continue;
+            let set = format!("Set {}", o.label);
+            // One write can change another parameter's list (a packet rate changes the switch
+            // modes): after a write, read again and take the index from the list as it is now.
+            if wrote {
+                std::thread::sleep(save_wait);
+                match c.read_params(&info) {
+                    Ok(l) => live = l,
+                    Err(e) => {
+                        failed = Some(format!("The read after a write failed: {e:#}"));
+                        steps.push(step(&set, StepState::Failed, failed.clone()));
+                        break;
+                    }
+                }
             }
-            let Some(p) = live.iter().find(|p| p.id == o.id) else {
-                failed = Some(format!("{} has no parameter {}", o.label, o.id));
+            let opts = elrs::options_of(&live);
+            let Some(now) = opts.iter().find(|l| l.key == o.key) else {
+                failed = Some(format!("The device no longer lists {}", o.label));
+                steps.push(step(&set, StepState::Failed, failed.clone()));
                 break;
             };
-            let bytes = crsf::encode_value(p, w)?;
-            let r = c.write_value(want, o.id, &bytes);
-            match r {
-                Ok(()) => steps.push(step(
-                    &format!("Set {}", o.label),
-                    StepState::Done,
-                    Some(to.clone()),
-                )),
+            if &now.value == to {
+                continue;
+            }
+            let w = match w {
+                WriteValue::Index(_) => match now.choices.iter().position(|x| x == to) {
+                    Some(i) => WriteValue::Index(i as u8),
+                    None => {
+                        failed = Some(format!(
+                            "{} no longer offers {to} after the earlier write",
+                            o.label
+                        ));
+                        steps.push(step(&set, StepState::Failed, failed.clone()));
+                        break;
+                    }
+                },
+                n => n.clone(),
+            };
+            let Some(p) = live.iter().find(|p| p.id == now.id) else {
+                failed = Some(format!("{} has no parameter {}", o.label, now.id));
+                break;
+            };
+            let bytes = crsf::encode_value(p, &w)?;
+            match c.write_value(want, now.id, &bytes) {
+                Ok(()) => {
+                    wrote = true;
+                    steps.push(step(&set, StepState::Done, Some(to.clone())));
+                }
                 Err(e) => {
-                    steps.push(step(
-                        &format!("Set {}", o.label),
-                        StepState::Failed,
-                        Some(format!("{e:#}")),
-                    ));
+                    steps.push(step(&set, StepState::Failed, Some(format!("{e:#}"))));
                     failed = Some(format!("{e:#}"));
                     break;
                 }
             }
         }
-        // The device saves a parameter a moment after the write; give it time, then read back.
-        std::thread::sleep(if self.elrs_timing().settle.is_zero() {
-            Duration::ZERO
-        } else {
-            Duration::from_millis(800)
-        });
+        // Give the last write time, then read back.
+        std::thread::sleep(save_wait);
         let after = c.read_params(&info)?;
         drop(c);
         let after_opts = elrs::options_of(&after);

@@ -129,6 +129,8 @@ struct DeviceState {
     bootloader_requests: u32,
     /// What the bootloader prints when asked (the receiver's target name).
     bootloader_text: String,
+    /// A write to the first id gives the choice parameter of the second id this list.
+    relists: Vec<(u8, u8, Vec<String>)>,
     parser: FrameParser,
 }
 
@@ -220,6 +222,7 @@ impl FakeElrs {
                 mute: false,
                 bootloader_requests: 0,
                 bootloader_text: name.to_ascii_uppercase(),
+                relists: Vec::new(),
                 parser: FrameParser::new(),
             })),
         }
@@ -264,6 +267,28 @@ impl FakeElrs {
         {
             *index = to;
         }
+    }
+
+    /// Gives choice parameter `id` the list `options`, keeping its value where the new list
+    /// has it (a firmware that orders a list another way).
+    pub fn set_choices(&self, id: u8, options: &[&str]) {
+        let mut s = self.st.lock().unwrap();
+        relist(
+            &mut s.params,
+            id,
+            options.iter().map(|o| o.to_string()).collect(),
+        );
+    }
+
+    /// A write to parameter `trigger` gives choice parameter `id` the list `options`, as a
+    /// packet-rate change does to the switch modes.
+    pub fn relist_on_write(self, trigger: u8, id: u8, options: &[&str]) -> FakeElrs {
+        self.st.lock().unwrap().relists.push((
+            trigger,
+            id,
+            options.iter().map(|o| o.to_string()).collect(),
+        ));
+        self
     }
 
     /// Every write received: field id and bytes.
@@ -365,10 +390,33 @@ impl FakeElrs {
                         _ => {}
                     }
                 }
+                let lists: Vec<(u8, Vec<String>)> = s
+                    .relists
+                    .iter()
+                    .filter(|(t, _, _)| *t == id)
+                    .map(|(_, target, o)| (*target, o.clone()))
+                    .collect();
+                for (target, options) in lists {
+                    relist(&mut s.params, target, options);
+                }
                 Vec::new()
             }
             _ => Vec::new(),
         }
+    }
+}
+
+fn relist(params: &mut [Param], id: u8, new: Vec<String>) {
+    if let Some(Param {
+        value: Value::Select { options, index },
+        ..
+    }) = params.iter_mut().find(|p| p.id == id)
+    {
+        let was = options.get(*index as usize).cloned();
+        *index = was
+            .and_then(|w| new.iter().position(|o| *o == w))
+            .unwrap_or(0) as u8;
+        *options = new;
     }
 }
 

@@ -1330,8 +1330,10 @@ binaries only (open question 10).
       patch. The report names the source. All three are unverified.
     - **Options.** `Edit::ElrsOptions` stages packet rate, telemetry ratio, max power, dynamic
       power, switch mode and model match by the Lua parameter's name. The apply reads the device
-      again, refuses when a value differs from the read (`before_mismatch`), keeps the
-      parameters as a `BeforeApply` backup, writes, reads back and compares. The binding phrase
+      again, refuses when a value or a choice list differs from the read (`before_mismatch`),
+      keeps the parameters as a `BeforeApply` backup, writes, reads back and compares. A
+      choice is written as its index, so after each write the job reads again and takes the
+      next index from the list as it is then. The binding phrase
       is not an option and cannot be staged (it is not readable over CRSF either).
     - **Release bundle.** `index.json` gives the tag's commit; `<commit>/firmware.zip` holds
       `FCC|LBT/<firmware>/` and `hardware/targets.json` with `hardware/{RX,TX}/<layout>.json`.

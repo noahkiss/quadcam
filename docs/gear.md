@@ -1214,8 +1214,10 @@ change.
 **Options.** For a device that was read, **Options** lists packet rate, telemetry ratio, max power,
 dynamic power, switch mode and model match, as far as the device offers them. **Stage changes**
 queues one change; **Apply** opens the apply sheet like any change. The apply reads the device
-again and refuses if an option moved since your read, keeps the parameters as a backup, writes each
-option over CRSF, reads them back and compares. From a terminal:
+again and refuses if an option's value or list of values changed since your read, keeps the
+parameters as a backup, writes each option over CRSF, reads them back and compares. After a write
+it reads the device again before the next one, because one option can change another's list (a
+packet rate changes the switch modes). From a terminal:
 `quadcam-cli gear elrs set <device> packet_rate=250Hz telemetry_ratio=1:16`, then
 `gear apply`. A choice matches the device's text or the text before its `(`.
 
