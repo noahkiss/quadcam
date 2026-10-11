@@ -5,6 +5,10 @@ User-facing changes in each release, newest first. Release notes on
 
 ## Unreleased
 
+- **In-app updates.** QuadCam checks for a newer release when it opens and once a day, and **QuadCam > Check for Updates…** checks at any time. A banner offers **Restart to update** (download with progress, signature check, install, restart) or **Later**, with a link to the release notes. It never restarts during an import, a card or device write, or a flash. **Settings > Advanced > Check for updates automatically** (`update_check`) turns the automatic check off. A failed check never opens a dialog.
+- **Homebrew:** the cask is now marked `auto_updates`, so `brew upgrade` leaves QuadCam to its own updater. `brew upgrade --cask --greedy quadcam` still updates it through Homebrew.
+- **Agents:** `quadcam_status` reports the app's update state in `status.update` (read-only). `quadcam_settings` takes `update_check`.
+
 ## 0.12.0 (2026-10-11)
 
 - **Sim sync:** two profiles in one sim file (for example two Liftoff profiles) now sync together. Before, the second write put the first profile back to its old rates.

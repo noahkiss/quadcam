@@ -136,6 +136,7 @@ See [Modules and notices](modules.md) for what a module install checks.
 - `output_dir`, `format`, `encoder`, `keep_originals`, `add_time`, `default_name`
 - `delete_clips_after_import` (`true` or `false`; see [Settings](settings.md#delete-clips-after-import))
 - `join_split_recordings` (`true` or `false`; see [Joined recordings](library.md#joined-recordings))
+- `update_check` (`true` or `false`; see [Updates](settings.md#updates))
 - `photos_album`, `format_label`, `log_dir`, `layout`, `place_folders`, `tunables`
 - `geocoder` (`apple`, `nominatim`, `census` or `google`), `google_places_key`
 - `name_date_format` (`YYYY-MM-DD` or `YY.MM.DD`), `default_profile`

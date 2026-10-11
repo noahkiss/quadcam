@@ -61,7 +61,13 @@ The cask installs:
 
 QuadCam needs ffmpeg to convert and verify clips. The first time you open the app, a banner offers to download it as a module. It shows the license, size and source first, and downloads nothing until you select **Download**. **Settings > Modules** manages it later. A Homebrew ffmpeg that is already installed also works. See [Modules and notices](docs/modules.md).
 
-To update, run `brew upgrade --cask quadcam`. To remove the app, run `brew uninstall --cask quadcam`. Uninstall keeps your settings and your videos.
+To remove the app, run `brew uninstall --cask quadcam`. Uninstall keeps your settings and your videos.
+
+### Updates
+
+QuadCam updates itself. It checks GitHub for a newer release when it opens and once a day, and **QuadCam > Check for Updates…** checks at any time. When a newer version is out, a banner shows **Restart to update** and **Later**, with a link to the release notes. **Restart to update** downloads the update, checks its signature, and restarts QuadCam. QuadCam never restarts during an import, a card or device write, or a flash: it offers the restart when the job ends. To stop the automatic check, clear **Settings > Advanced > Check for updates automatically**.
+
+Because the app updates itself, the cask is marked `auto_updates`. So `brew upgrade` skips QuadCam, and Homebrew may show the version you first installed. To update through Homebrew anyway, run `brew upgrade --cask --greedy quadcam`.
 
 ### Signing
 
@@ -110,7 +116,9 @@ QuadCam follows the system's light or dark appearance. [A light-mode screenshot]
 
 ## Privacy
 
-QuadCam works on your Mac. It sends data out only when you ask it to:
+QuadCam works on your Mac. It sends data out only when you ask it to, with one exception:
+
+- The update check reads `latest.json` from QuadCam's latest GitHub release when the app opens and once a day. It sends nothing but the request. Clear **Settings > Advanced > Check for updates automatically** to check only on request. See [Updates](#updates).
 
 - A place search sends the search text to the provider you picked. See [Metadata](docs/metadata.md#place-search-providers).
 - A module install downloads the module from its upstream, and **Check for updates** reads `modules.json` from QuadCam's latest GitHub release. See [Modules](docs/modules.md).
