@@ -434,7 +434,14 @@ fn a_set_renders_into_a_local_pack_and_recutting_costs_nothing() {
     let mut go = render("Callum", "eleven_turbo_v2_5", &["quad"], false, true);
     go.digest = Some(wait.digest.clone());
     let r = b.core.gear_voice_render(&go).unwrap();
-    assert_eq!(r.pack, "local-elevenlabs-callum-eleven-turbo-v2-5");
+    // The pack is named by the voice id, not the voice's name.
+    assert_eq!(
+        r.pack,
+        format!(
+            "local-elevenlabs-{}-eleven-turbo-v2-5",
+            &quadcam_lib::gear::voice::sha256_hex(b"v-callum")[..12]
+        )
+    );
     assert!(r.rendered > 0 && !r.needs_confirm, "{r:?}");
     let posts = b.http.posts();
     assert_eq!(posts as u32, r.rendered);
@@ -796,4 +803,73 @@ fn a_flagged_line_stays_out_of_the_pack_until_a_re_take_redoes_its_batch() {
         .unwrap()
         .iter()
         .any(|f| f == "SOUNDS/en/critbat.wav"));
+}
+
+#[test]
+fn a_pack_named_for_its_voice_moves_to_the_voice_id_and_keeps_its_radios() {
+    let b = bench(50000, true);
+    let r = paid_render(
+        &b,
+        render("Callum", "eleven_turbo_v2_5", &["sample"], false, true),
+    );
+    let voices = b.dir.path().join("support/gear/voices");
+    // Make it a pack from before 0.12.1: named for the voice's name, no voice id recorded.
+    let legacy = "local-elevenlabs-callum-eleven-turbo-v2-5";
+    std::fs::rename(voices.join(&r.pack), voices.join(legacy)).unwrap();
+    let mf = voices.join(legacy).join("pack.json");
+    let mut m: serde_json::Value = serde_json::from_slice(&std::fs::read(&mf).unwrap()).unwrap();
+    m["id"] = legacy.into();
+    m["voice_id"] = "".into();
+    std::fs::write(&mf, m.to_string()).unwrap();
+    let gear = b.dir.path().join("support/gear/gear.json");
+    let mut g: serde_json::Value = std::fs::read(&gear)
+        .ok()
+        .and_then(|b| serde_json::from_slice(&b).ok())
+        .unwrap_or_else(|| json!({}));
+    g["voice"] = json!({
+        "chosen": {"radio-1": legacy, "radio-2": "en-demo-v1"},
+        "overrides": {"radio-1": {"SOUNDS/en/armed.wav": {"kind": "pack", "pack": legacy}}},
+    });
+    std::fs::write(&gear, g.to_string()).unwrap();
+    // Another voice of the same name does not take it.
+    let e = b
+        .core
+        .gear_voice_estimate(&EstimateParams {
+            sets: vec!["sample".into()],
+            voice: "Matilda".into(),
+            model: "eleven_turbo_v2_5".into(),
+            ..Default::default()
+        })
+        .unwrap();
+    assert!(e.estimate.chars > 0);
+    // The same voice finds it: every batch is kept, nothing to pay.
+    let posts = b.http.posts();
+    let again = b
+        .core
+        .gear_voice_render(&render(
+            "Callum",
+            "eleven_turbo_v2_5",
+            &["sample"],
+            false,
+            false,
+        ))
+        .unwrap();
+    assert!(!again.needs_confirm, "{again:?}");
+    assert_eq!(b.http.posts(), posts);
+    assert_eq!(again.pack, r.pack);
+    assert!(voices.join(&r.pack).join("pack.json").is_file());
+    assert!(!voices.join(legacy).exists());
+    let g: serde_json::Value = serde_json::from_slice(&std::fs::read(&gear).unwrap()).unwrap();
+    assert_eq!(g["voice"]["chosen"]["radio-1"], r.pack.as_str());
+    assert_eq!(g["voice"]["chosen"]["radio-2"], "en-demo-v1");
+    assert_eq!(
+        g["voice"]["overrides"]["radio-1"]["SOUNDS/en/armed.wav"]["pack"],
+        r.pack.as_str()
+    );
+    let m: serde_json::Value = serde_json::from_slice(
+        &std::fs::read(voices.join(&r.pack).join("pack.json")).unwrap(),
+    )
+    .unwrap();
+    assert_eq!(m["id"], r.pack.as_str());
+    assert_eq!(m["voice_id"], "v-callum");
 }

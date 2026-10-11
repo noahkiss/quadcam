@@ -356,7 +356,8 @@ impl Core {
         let price = self.pricing(&tts.models()?, &model, &tts.credits()?)?;
         let lines = self.studio_lines(&p.sets, &p.lines)?;
         let all = batch::plan_within(&Self::studio_items(&lines), &bs, price.batch_limit);
-        let old = self.local_pack(&local_pack_id(&voice_name, &model));
+        let (_, old) = self.studio_pack(&voice, &voice_name, &model);
+        let old = old.map(|(_, m)| m);
         let (batches, _) = still_to_do(all, old.as_ref(), &voice, &model, &settings);
         let cache = BatchCache::new(&self.cache);
         let ctx = batch::Ctx {
@@ -537,8 +538,11 @@ impl Core {
         let model = self.studio_model(&p.model)?;
         let price = self.pricing(&tts.models()?, &model, &tts.credits()?)?;
         let lines = self.studio_lines(&p.sets, &p.lines)?;
-        let id = local_pack_id(&voice_name, &model);
-        let old = self.local_pack(&id);
+        let (id, found) = self.studio_pack(&voice, &voice_name, &model);
+        let (old_id, old) = match found {
+            Some((k, m)) => (Some(k), Some(m)),
+            None => (None, None),
+        };
         let all = batch::plan_within(&Self::studio_items(&lines), &bs, price.batch_limit);
         let (batches, kept) = still_to_do(all, old.as_ref(), &voice, &model, &settings);
         let cache = BatchCache::new(&self.cache);
@@ -626,9 +630,11 @@ impl Core {
         let stage = self.voices_dir().join(format!(".rendering-{id}"));
         let _ = std::fs::remove_dir_all(&stage);
         std::fs::create_dir_all(&stage)?;
-        // A local pack keeps what an earlier render made: a second set adds to it.
-        if dir.is_dir() {
-            copy_dir(&dir, &stage)?;
+        // A local pack keeps what an earlier render made: a second set adds to it. A pack
+        // from before 0.12.1, named for the voice's name, moves to the new id here.
+        let old_dir = self.voices_dir().join(old_id.as_deref().unwrap_or(&id));
+        if old_dir.is_dir() {
+            copy_dir(&old_dir, &stage)?;
         }
         let opts = BuildOpts {
             id: id.clone(),
@@ -709,6 +715,11 @@ impl Core {
         )?;
         let _ = std::fs::remove_dir_all(&dir);
         std::fs::rename(&stage, &dir)?;
+        if let Some(from) = old_id.filter(|k| *k != id) {
+            self.move_pack_refs(&from, &id)?;
+            let _ = std::fs::remove_dir_all(&old_dir);
+            report.notes.push(format!("The pack {from} is now {id}; radios that chose it keep it."));
+        }
         report.rendered = done.batches_rendered;
         report.from_cache = done.batches_cached;
         if !retakes.is_empty() {
@@ -727,14 +738,45 @@ impl Core {
         serde_json::from_slice(&b).ok()
     }
 
+    /// The local pack id of a voice and model, and the pack a render adds to, with its id:
+    /// the pack under that id, or a pack from before 0.12.1 under the voice's name that this
+    /// voice made (or that recorded no voice id).
+    fn studio_pack(
+        &self,
+        voice: &str,
+        voice_name: &str,
+        model: &str,
+    ) -> (String, Option<(String, PackManifest)>) {
+        let id = local_pack_id(voice, model);
+        if let Some(m) = self.local_pack(&id) {
+            return (id.clone(), Some((id, m)));
+        }
+        let legacy = legacy_pack_id(voice_name, model);
+        let found = self
+            .local_pack(&legacy)
+            .filter(|m| m.voice_id.is_empty() || m.voice_id == voice)
+            .map(|m| (legacy, m));
+        (id, found)
+    }
+
     /// Where the samples go (for the CLI to print).
     pub fn voice_samples_dir(&self) -> PathBuf {
         self.cache.join("voice").join("samples")
     }
 }
 
-/// The local pack of a voice and model.
-fn local_pack_id(voice_name: &str, model: &str) -> String {
+/// The local pack of a voice and model. A short hash of the voice id names it, so two voices
+/// with the same name never share a pack.
+fn local_pack_id(voice: &str, model: &str) -> String {
+    format!(
+        "local-elevenlabs-{}-{}",
+        &crate::gear::voice::sha256_hex(voice.as_bytes())[..12],
+        slug(model).chars().take(24).collect::<String>()
+    )
+}
+
+/// The id a local pack had before 0.12.1: the voice's name and the model.
+fn legacy_pack_id(voice_name: &str, model: &str) -> String {
     format!(
         "local-elevenlabs-{}-{}",
         slug(voice_name).chars().take(24).collect::<String>(),

@@ -1013,6 +1013,34 @@ impl Core {
         })
     }
 
+    /// Points every radio that chose pack `from`, and every override that takes a line from
+    /// it, at pack `to`.
+    pub(super) fn move_pack_refs(&self, from: &str, to: &str) -> Result<()> {
+        self.gear_store().update(|v| {
+            let voice = voice_obj(v)?;
+            for (_, k) in sub(voice, "chosen")?.iter_mut() {
+                if k.as_str() == Some(from) {
+                    *k = json!(to);
+                }
+            }
+            for (_, per) in sub(voice, "overrides")?.iter_mut() {
+                let Some(per) = per.as_object_mut() else {
+                    continue;
+                };
+                for (_, o) in per.iter_mut() {
+                    if o.get("kind").and_then(Value::as_str) == Some("pack")
+                        && o.get("pack").and_then(Value::as_str) == Some(from)
+                    {
+                        o["pack"] = json!(to);
+                    }
+                }
+            }
+            Ok(())
+        })?;
+        self.hooks.gear_changed();
+        Ok(())
+    }
+
     /// The raw takes and batches a pack was made from, removed from the cache.
     fn remove_takes(&self, m: &packs::PackManifest) -> Result<u32> {
         let voice = if m.voice_id.is_empty() {

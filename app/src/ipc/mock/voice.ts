@@ -73,8 +73,8 @@ function packs(v: MockVoice): VoicePack[] {
   const mine = (id: string, k: Partial<VoicePack>): VoicePack => ({ ...AVAILABLE, id, license: "Rendered by you; yours to use.", attribution: "", version: "", installed: true, local: true, bytes: 412_000, dir: `/Users/pilot/gear/voices/${id}`, sets: ["quadcam"], made: MADE, radios: radios(id), retakes: v.retakes[id] ?? [], ...k });
   if (v.installed.includes(LOCAL_ID)) out.push(mine(LOCAL_ID, { voice: "Samantha", provider: "say" }));
   for (const id of v.installed.filter((x) => x.startsWith("local-elevenlabs-"))) {
-    const name = id.split("-")[2] ?? "voice";
-    out.push(mine(id, { voice: name.charAt(0).toUpperCase() + name.slice(1), provider: "elevenlabs", model: id.split("-").slice(3).join("_"), sets: ["quad"], bytes: 2_300_000 }));
+    const [, name = "voice", model = ""] = /^local-elevenlabs-voice-([a-z]+)-(.*)$/.exec(id) ?? [];
+    out.push(mine(id, { voice: name.charAt(0).toUpperCase() + name.slice(1), provider: "elevenlabs", model: model.replace(/-/g, "_"), sets: ["quad"], bytes: 2_300_000 }));
   }
   if (v.installed.includes(AVAILABLE.id)) out.push({ ...AVAILABLE, installed: true, dir: `/Users/pilot/gear/voices/${AVAILABLE.id}`, sets: ["quadcam"], made: MADE, radios: radios(AVAILABLE.id) });
   else if (v.index) out.push({ ...AVAILABLE });
@@ -341,7 +341,8 @@ function studioRender(g: MockGear, p: { voice?: string; sets: string[]; model?: 
   needKey(g);
   const voice = voiceOf(p.voice ?? "");
   const e = price(g, p.sets, p.model ?? "");
-  const id = `local-elevenlabs-${voice.name.toLowerCase()}-${(p.model ?? "").replace(/_/g, "-")}`;
+  // The core names the pack by a short hash of the voice id; the mock uses the id itself.
+  const id = `local-elevenlabs-${voice.id}-${(p.model ?? "").replace(/_/g, "-")}`;
   const seed = p.settings?.seed ?? 0;
   const digest = digestOf({ voice: voice.id, model: p.model, sets: p.sets, seed, chars: e.chars });
   const base = { pack: id, provider: "elevenlabs", voice: voice.name, plan: { lines: e.lines, cached: 0, to_render: e.lines, chars: e.chars }, paid: true, dry_run: !!p.dry_run, notes: [] as string[], estimate: e, warnings: [] as string[], digest, retakes: [] };

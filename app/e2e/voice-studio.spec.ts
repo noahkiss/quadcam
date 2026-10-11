@@ -105,7 +105,7 @@ test("a line whose cut failed a check is listed, and Re-take renders again with 
   await expect(list).toContainText("Battery low (SOUNDS/en/lowbat.wav): the cut is silent");
   await expect(studio).toContainText("1 line needs a re-take and is not in the pack");
   // The pack library lists the line too (pack.json `retakes`).
-  const row = page.getByRole("table", { name: "Voice packs on this Mac" }).getByRole("row", { name: /^Callum local-elevenlabs-callum/ });
+  const row = page.getByRole("table", { name: "Voice packs on this Mac" }).getByRole("row", { name: /^Callum local-elevenlabs-voice-callum/ });
   await expect(row.getByRole("list", { name: "Callum needs a re-take" })).toContainText("Needs a re-take: Battery low (SOUNDS/en/lowbat.wav): the cut is silent");
   await studio.getByRole("button", { name: "Re-take" }).click();
   await expect(studio.getByRole("button", { name: "Render and pay" })).toBeVisible();
@@ -132,8 +132,8 @@ test("Render pack needs one voice and one model, asks, then adds a local pack", 
   await expect(studio).toContainText("This sends text to ElevenLabs, which bills it.");
   await studio.getByRole("button", { name: "Render and pay" }).click();
   expect((await app.method("gear_voice_render")).at(-1)).toMatchObject({ confirm: true });
-  await expect(studio).toContainText("Rendered into local-elevenlabs-callum-eleven-v4");
-  await expect(page.getByRole("table", { name: "Voice packs on this Mac" }).getByRole("row", { name: /^Callum local-elevenlabs-callum-eleven-v4/ })).toContainText("FPV quad");
+  await expect(studio).toContainText("Rendered into local-elevenlabs-voice-callum-eleven-v4");
+  await expect(page.getByRole("table", { name: "Voice packs on this Mac" }).getByRole("row", { name: /^Callum local-elevenlabs-voice-callum-eleven-v4/ })).toContainText("FPV quad");
 });
 
 test("a render the credits do not cover cannot start", async ({ app, page }) => {
