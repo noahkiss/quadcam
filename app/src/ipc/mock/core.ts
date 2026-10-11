@@ -609,7 +609,7 @@ export class MockCore {
       case "gear_session_report_save":
         return { path: String(p.path), bytes: this.flights.report((p.day as string | null) ?? null).markdown.length };
       case "gear_preflight":
-        return this.flights.preflight();
+        return this.flights.preflight(this.gear.devices, this.gear.connected, this.profiles());
       case "gear_crashes":
         return this.flights.crashList((p.clip as string | null) ?? null, (p.aircraft as string | null) ?? null);
       case "gear_crash_save":

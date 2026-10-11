@@ -1096,6 +1096,9 @@ cache of each log's flights in `<gear>/flights.json` and reads a log again only 
 | Worst link | The lowest `RQly` and `1RSS` |
 | Dropouts | Spans of 0.3 s or more while armed with `FM` blank and `RxBt` at 0. Each shows the link before and after it. "Telemetry only" means the flight went on and no failsafe mode showed |
 
+Tiles above the table sum up the day: flights, air time, the longest flight, the worst link
+and dropouts. Click a flight's start time for its details and dropouts.
+
 Pick the pack for each flight in its row. QuadCam suggests the next label after the last
 pack used that day, in label order. The flight's aircraft comes from the profile whose EdgeTX
 model names match the log. Its place comes from the place you set, else the clip that holds
@@ -1107,9 +1110,11 @@ last import; the import's Finish step has **Show report**. **Copy as Markdown** 
 share. **Save…** writes it to a Markdown file you pick.
 
 Under the flights, **Range by place** charts the worst link quality (LQ) of each flight at
-each place, oldest first. **Values** under a chart lists LQ and RSSI per flight.
+each place, oldest first. The axis names the first and last day, or the first and last time
+when every flight was on one day. **Values** under a chart lists LQ and RSSI per flight.
 
-**Packs** lists each pack with its type, its charge state, its cycles (flights on it), and
+**Packs** shows tiles for the packs in use, how many are charged, how many are marked weak and
+their cycles. The table lists each pack with its type, its charge state, its cycles (flights on it), and
 its median resting voltage and flight time. A pack whose resting voltage sits 0.05 V a cell
 under its type's median, or whose flights are 20 % shorter, is marked. **Mark charged** records
 a charge; a flight after it makes the pack "Flown" again. Click a label for its history.
@@ -1118,7 +1123,8 @@ volts a cell, charge current, mAh warning) with a suggested warning: the mAh whe
 resting voltage reaches 3.7 V a cell, from a straight line through the type's flights. The
 notes field is free text.
 
-**Pack up** checks, before a session:
+**Pack up** checks, before a session. Tiles show how many checks pass, the packs charged, and
+the card space and backups rows; the table lists each check with its state and detail.
 
 | Row | Pass when |
 |---|---|
@@ -1131,7 +1137,8 @@ notes field is free text.
 A row QuadCam cannot judge (nothing plugged in, no backups kept yet) reads as unknown. Each radio
 backup records the card's free space for this check.
 
-**Repairs** lists crashes by aircraft. Log a crash from a clip: open the clip, choose the
+**Repairs** lists crashes in one table, grouped by aircraft, with tiles for open and repaired
+crashes and the last crash. Log a crash from a clip: open the clip, choose the
 **Flight** tab, then **Log crash…**. The time is the playhead; add what broke and the parts
 used. The clip's Flight tab lists its crashes.
 

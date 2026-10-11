@@ -52,7 +52,7 @@ test("the session report reads the day and copies as Markdown", async ({ app, pa
   const r = page.getByRole("region", { name: "Session report" });
   await expect(r).toContainText("Air time");
   await expect(r).toContainText("1:50");
-  await expect(r).toContainText("LQ 60 %, RSSI -95 dB at 10:00");
+  await expect(r.getByRole("group", { name: "Report summary" })).toContainText("60 %RSSI -95 dB at 10:00");
   await expect(r.getByRole("table", { name: "Pack use" })).toContainText("A1");
   await page.getByRole("button", { name: "Copy as Markdown" }).click();
   await expect(page.getByRole("status")).toContainText("report");
@@ -95,7 +95,7 @@ test("packs: history, mark charged, and Pack up passes once all are charged", as
   await expect(page.getByRole("table", { name: "Pack types" })).toContainText("4.35 V");
 
   await side(page).getByRole("button", { name: /^Pack up/ }).click();
-  const checks = page.getByRole("list", { name: "Checks" });
+  const checks = page.getByRole("table", { name: "Checks" });
   await expect(checks).toContainText("3 of 3 charged.");
   await expect(checks).toContainText("No card in the Mac.");
 });
@@ -133,9 +133,13 @@ test("a crash logged on a clip shows there and under Repairs", async ({ app, pag
 for (const scheme of axeSchemes) {
   test.describe(`${scheme} theme`, () => {
     test.use({ colorScheme: scheme });
-    for (const name of ["Flights", "Packs", "Pack up"]) {
+    for (const name of ["Flights", "Packs", "Pack up", "Repairs"]) {
       test(`${name} passes axe`, async ({ app, page }) => {
         await openPage(app, page, name);
+        if (name === "Repairs") {
+          await app.core(`c => { c.flights.crashes = [{ id: "crash-1", clip: null, time_s: 65, aircraft: "Whoop", day: "2026-10-04", broke: "arm", parts: ["frame"], note: "", repaired: false }]; c.emit("gear-changed"); }`);
+          await expect(page.getByRole("table", { name: "Crashes" })).toBeVisible();
+        }
         if (name === "Flights") await page.getByRole("button", { name: "10:00" }).click();
         const r = await new AxeBuilder({ page }).withTags(["wcag2a", "wcag2aa", "wcag21aa"]).analyze();
         expect(r.violations.map((v) => `${v.id}: ${v.nodes.map((n) => n.target.join(" ") + " " + n.failureSummary).join(", ")}`)).toEqual([]);

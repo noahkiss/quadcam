@@ -14,6 +14,11 @@ User-facing changes in each release, newest first. Release notes on
 - **Device Overview.** The header adds the firmware. Summary tiles show the firmware against the newest, the last backup, the staged changes and the latest blackbox pull (FC), the aircraft count (radio), or the new clips, last card check and free space (DVR and goggles cards); a tile opens its section. The facts sit in a **Details** card, two columns wide. The row of section links under them is gone: the tabs above do that.
 - **Forget…** moves into the **…** menu on a device page. The header's buttons are plain buttons, primary last.
 - **One left edge.** Every Gear page and device section lines up with the page title: the Bench, OSD, Rates, Switches, Models, Checklists and Voice sections lost their extra inset. Empty lines are left-aligned under the title, not centred.
+- **Pack up as a dashboard.** Tiles show the checks that pass, the packs charged, card space and backups. The checks are a table with a state dot per row.
+- **Flights as a dashboard.** Tiles sum up the day: flights, air time, the longest flight, the worst link and dropouts. The Pack column is a compact pop-up button. A flight's details and the range chart sit in cards. When every flight on a chart was on one day, the axis shows the first and last time, not the same date twice.
+- **Session report** shows its numbers as tiles, and pack use and crashes as tables.
+- **Packs:** tiles for packs in use, charged, weak and cycles. **Mark charged** and **Edit…** are buttons. **Add pack…** and **Add type…** sit in the page header.
+- **Repairs:** one table grouped by aircraft, so the columns line up, with tiles for open and repaired crashes and the last crash.
 - **For developers:** shared `PageHeader`, `EmptyState`, `FactList`, `StatusDot` and `MoreMenu` in `app/src/components/dash/`, and the `--s-5` spacing token the Apply sheet, Bench and Firmware already used. `docs/development.md` describes how to build a dashboard page.
 ## 0.14.0 (2026-10-11)
 

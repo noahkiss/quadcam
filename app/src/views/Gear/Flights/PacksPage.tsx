@@ -2,16 +2,21 @@ import { useState } from "react";
 import { useStore } from "../../../store";
 import { ask } from "../../../store";
 import { api, errText } from "../../../ipc/api";
-import type { Chemistry, Pack, PackType, PackView, PacksView } from "../../../ipc/types";
+import type { ChargeState, Chemistry, Pack, PackType, PackTypeView, PackView, PacksView } from "../../../ipc/types";
 import { Button } from "../../../components/Button";
 import { Checkbox, SelectField, TextField } from "../../../components/Field";
 import { Dialog } from "../../../components/Dialog";
 import { SegmentedControl } from "../../../components/SegmentedControl";
+import { DataTable, type Column } from "../../../components/dash/DataTable";
+import { EmptyState } from "../../../components/dash/EmptyState";
+import { PageHeader } from "../../../components/dash/PageHeader";
+import { SectionCard } from "../../../components/dash/SectionCard";
+import { Stat, StatRow } from "../../../components/dash/StatRow";
+import { StatusDot, type StatusTone } from "../../../components/dash/StatusDot";
 import { toast } from "../../../components/toastStore";
 import { fmtDay } from "../../../lib/format";
 import { CHARGE_LABEL, CHEMISTRY_LABEL, hhmm, mmss, num } from "../../../lib/flights";
 import { useGearData } from "./useGearData";
-import g from "../Gear.module.css";
 import styles from "./Flights.module.css";
 
 const run = async (f: () => Promise<unknown>) => {
@@ -22,15 +27,42 @@ const run = async (f: () => Promise<unknown>) => {
   }
 };
 
+const TONE: Record<ChargeState, StatusTone> = { charged: "ok", flown: "warn", unknown: "idle" };
+
 /** Gear > Packs: the packs with their history, and the charging sheet. */
 export function PacksPage() {
   const segment = useStore((s) => s.gearSegment);
   const setSegment = useStore((s) => s.setGearSegment);
   const seg = segment === "charging" ? "charging" : "packs";
   const { data, error } = useGearData(() => api.gearPacks());
+  const [pack, setPack] = useState<Pack | null>(null);
+  const [type, setType] = useState<PackType | null>(null);
+  const live = (data?.packs ?? []).filter((p) => !p.pack.retired);
+  const charged = live.filter((p) => p.state === "charged").length;
+  const weak = live.filter((p) => p.weak).length;
   return (
     <>
-      <h2 className={g.title}>Packs</h2>
+      <PageHeader
+        id="gear-title"
+        title="Packs"
+        actions={
+          seg === "charging" ? (
+            <Button icon="add" onClick={() => setType({ name: "", chemistry: "lipo", cells: 1 })}>
+              Add type…
+            </Button>
+          ) : (
+            <Button icon="add" onClick={() => setPack({ label: "", pack_type: data?.types[0]?.pack_type.name ?? null })}>
+              Add pack…
+            </Button>
+          )
+        }
+      />
+      <StatRow label="Summary">
+        <Stat label="Packs" value={live.length} sub={data && data.packs.length > live.length ? `${data.packs.length - live.length} retired` : undefined} />
+        <Stat label="Charged" value={`${charged} of ${live.length}`} tone={live.length && charged < live.length ? "warn" : undefined} />
+        <Stat label="Weak" value={weak} tone={weak ? "warn" : undefined} />
+        <Stat label="Cycles" value={live.reduce((n, p) => n + p.cycles, 0)} />
+      </StatRow>
       <SegmentedControl
         label="Sections"
         value={seg}
@@ -41,113 +73,74 @@ export function PacksPage() {
         ]}
       />
       {error && <p className={styles.muted}>{error}</p>}
-      {data && (seg === "charging" ? <Charging v={data} /> : <Packs v={data} />)}
+      {data && (seg === "charging" ? <Charging v={data} onEdit={setType} /> : <Packs v={data} onEdit={setPack} />)}
+      {pack && data && <PackSheet pack={pack} types={data.types.map((t) => t.pack_type.name)} onClose={() => setPack(null)} />}
+      {type && <TypeSheet t={type} onClose={() => setType(null)} />}
     </>
   );
 }
 
-function Packs({ v }: { v: PacksView }) {
+function Packs({ v, onEdit }: { v: PacksView; onEdit: (p: Pack) => void }) {
   const [open, setOpen] = useState<string | null>(null);
-  const [editing, setEditing] = useState<Pack | null>(null);
   const sel = v.packs.find((p) => p.pack.label === open) || null;
+  const columns: Column<PackView>[] = [
+    {
+      key: "label",
+      header: "Label",
+      rowHeader: true,
+      cell: (p) => (
+        <button type="button" className={styles.rowButton} aria-expanded={p === sel} onClick={() => setOpen(p === sel ? null : p.pack.label)}>
+          {p.pack.label}
+        </button>
+      ),
+    },
+    { key: "type", header: "Type", cell: (p) => p.pack.pack_type || "–" },
+    { key: "state", header: "State", cell: (p) => (p.pack.retired ? <StatusDot tone="idle">Retired</StatusDot> : <StatusDot tone={TONE[p.state]}>{CHARGE_LABEL[p.state]}</StatusDot>) },
+    { key: "cycles", header: "Cycles", numeric: true, cell: (p) => p.cycles },
+    { key: "resting", header: "Resting", numeric: true, optional: true, cell: (p) => num(p.median_resting_v, 2, "V") },
+    { key: "time", header: "Flight time", numeric: true, optional: true, cell: (p) => mmss(p.median_secs) },
+    { key: "note", header: "Note", cell: (p) => (p.weak ? <span className={styles.warn}>Low: {p.weak}</span> : p.pack.note || "") },
+    {
+      key: "actions",
+      header: <span className="visually-hidden">Actions</span>,
+      cell: (p) => (
+        <div className={styles.actions}>
+          {p.state !== "charged" && !p.pack.retired && (
+            <Button size="sm" onClick={() => run(() => api.gearPackSave(p.pack, true))}>
+              Mark charged
+            </Button>
+          )}
+          <Button size="sm" onClick={() => onEdit(p.pack)}>
+            Edit…
+          </Button>
+        </div>
+      ),
+    },
+  ];
   return (
     <>
-      <div className={styles.bar}>
-        <span className={styles.grow} />
-        <Button icon="add" onClick={() => setEditing({ label: "", pack_type: v.types[0]?.pack_type.name ?? null })}>
-          Add pack…
-        </Button>
-      </div>
-      {v.packs.length === 0 ? (
-        <p className={g.empty}>No packs saved.</p>
-      ) : (
-        <div className={styles.tableWrap}>
-          <table className={styles.table} aria-label="Packs">
-            <thead>
-              <tr>
-                <th scope="col">Label</th>
-                <th scope="col">Type</th>
-                <th scope="col">State</th>
-                <th scope="col">Cycles</th>
-                <th scope="col">Resting</th>
-                <th scope="col">Flight time</th>
-                <th scope="col">Note</th>
-                <th scope="col">
-                  <span className="visually-hidden">Actions</span>
-                </th>
-              </tr>
-            </thead>
-            <tbody>
-              {v.packs.map((p) => (
-                <tr key={p.pack.label} aria-selected={p === sel}>
-                  <td>
-                    <button type="button" className={styles.rowButton} aria-expanded={p === sel} onClick={() => setOpen(p === sel ? null : p.pack.label)}>
-                      {p.pack.label}
-                    </button>
-                  </td>
-                  <td>{p.pack.pack_type || "–"}</td>
-                  <td>{p.pack.retired ? "Retired" : CHARGE_LABEL[p.state]}</td>
-                  <td>{p.cycles}</td>
-                  <td>{num(p.median_resting_v, 2, "V")}</td>
-                  <td>{mmss(p.median_secs)}</td>
-                  <td className={p.weak ? styles.warn : undefined}>{p.weak ? `Low: ${p.weak}` : p.pack.note || ""}</td>
-                  <td>
-                    {p.state !== "charged" && !p.pack.retired && (
-                      <Button size="sm" variant="ghost" onClick={() => run(() => api.gearPackSave(p.pack, true))}>
-                        Mark charged
-                      </Button>
-                    )}
-                    <Button size="sm" variant="ghost" onClick={() => setEditing(p.pack)}>
-                      Edit…
-                    </Button>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
+      <DataTable label="Packs" columns={columns} rows={v.packs} rowKey={(p) => p.pack.label} empty={<EmptyState icon="battery">No packs saved.</EmptyState>} />
       {sel && <History p={sel} />}
-      {editing && <PackSheet pack={editing} types={v.types.map((t) => t.pack_type.name)} onClose={() => setEditing(null)} />}
     </>
   );
 }
+
+type PackFlight = PackView["history"][number];
+
+const historyColumns: Column<PackFlight>[] = [
+  { key: "day", header: "Day", rowHeader: true, cell: (h) => fmtDay(h.start.slice(0, 10)) },
+  { key: "start", header: "Start", numeric: true, cell: (h) => hhmm(h.start) },
+  { key: "length", header: "Length", numeric: true, cell: (h) => mmss(h.secs) },
+  { key: "used", header: "Used", numeric: true, cell: (h) => num(h.mah, 0, "mAh") },
+  { key: "sag", header: "Sag (p5 / min)", numeric: true, cell: (h) => `${num(h.sag_p5_v, 2)} / ${num(h.sag_min_v, 2, "V")}` },
+  { key: "resting", header: "Resting", numeric: true, cell: (h) => num(h.resting_v, 2, "V") },
+];
 
 function History({ p }: { p: PackView }) {
   return (
-    <section className={styles.panel} aria-label={`History of ${p.pack.label}`}>
-      <h3>History of {p.pack.label}</h3>
-      {p.history.length === 0 ? (
-        <p className={styles.muted}>No flights on this pack yet.</p>
-      ) : (
-        <table className={styles.table} aria-label={`Flights on ${p.pack.label}`}>
-          <thead>
-            <tr>
-              <th scope="col">Day</th>
-              <th scope="col">Start</th>
-              <th scope="col">Length</th>
-              <th scope="col">Used</th>
-              <th scope="col">Sag (p5 / min)</th>
-              <th scope="col">Resting</th>
-            </tr>
-          </thead>
-          <tbody>
-            {p.history.map((h) => (
-              <tr key={h.flight}>
-                <td>{fmtDay(h.start.slice(0, 10))}</td>
-                <td>{hhmm(h.start)}</td>
-                <td>{mmss(h.secs)}</td>
-                <td>{num(h.mah, 0, "mAh")}</td>
-                <td>
-                  {num(h.sag_p5_v, 2)} / {num(h.sag_min_v, 2, "V")}
-                </td>
-                <td>{num(h.resting_v, 2, "V")}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      )}
-    </section>
+    <SectionCard title={`History of ${p.pack.label}`}>
+      <DataTable label={`Flights on ${p.pack.label}`} compact columns={historyColumns} rows={p.history} rowKey={(h) => h.flight} empty={<EmptyState>No flights on this pack yet.</EmptyState>} />
+    </SectionCard>
   );
 }
 
@@ -201,80 +194,43 @@ function PackSheet({ pack, types, onClose }: { pack: Pack; types: string[]; onCl
   );
 }
 
-function Charging({ v }: { v: PacksView }) {
-  const [editing, setEditing] = useState<PackType | null>(null);
+function Charging({ v, onEdit }: { v: PacksView; onEdit: (t: PackType) => void }) {
   const [notes, setNotes] = useState<string | null>(null);
+  const columns: Column<PackTypeView>[] = [
+    { key: "type", header: "Type", rowHeader: true, cell: (t) => t.pack_type.name },
+    { key: "chem", header: "Chemistry", cell: (t) => `${CHEMISTRY_LABEL[t.pack_type.chemistry || "lipo"]} ${t.pack_type.cells ?? 1}S` },
+    { key: "capacity", header: "Capacity", numeric: true, cell: (t) => num(t.pack_type.capacity_mah, 0, "mAh") },
+    { key: "connector", header: "Connector", optional: true, cell: (t) => t.pack_type.connector || "–" },
+    { key: "full", header: "Full", numeric: true, cell: (t) => num(t.full_total_v, 2, "V") },
+    { key: "storage", header: "Storage", numeric: true, cell: (t) => num(t.storage_total_v, 2, "V") },
+    { key: "charge", header: "Charge", numeric: true, optional: true, cell: (t) => num(t.pack_type.charge_a, 1, "A") },
+    { key: "warn", header: "Warning", numeric: true, cell: (t) => num(t.pack_type.warn_mah, 0, "mAh") },
+    { key: "suggested", header: "Suggested warning", numeric: true, optional: true, cell: (t) => (t.suggested_warn_mah != null ? `${num(t.suggested_warn_mah, 0, "mAh")} for ${num(v.target_v, 2, "V")} a cell` : "–") },
+    {
+      key: "actions",
+      header: <span className="visually-hidden">Actions</span>,
+      cell: (t) => (
+        <Button size="sm" className={styles.inCell} onClick={() => onEdit(t.pack_type)}>
+          Edit…
+        </Button>
+      ),
+    },
+  ];
   return (
     <>
-      <div className={styles.bar}>
-        <span className={styles.grow} />
-        <Button icon="add" onClick={() => setEditing({ name: "", chemistry: "lipo", cells: 1 })}>
-          Add type…
-        </Button>
-      </div>
-      {v.types.length === 0 ? (
-        <p className={g.empty}>No pack types saved.</p>
-      ) : (
-        <div className={styles.tableWrap}>
-          <table className={styles.table} aria-label="Pack types">
-            <thead>
-              <tr>
-                <th scope="col">Type</th>
-                <th scope="col">Chemistry</th>
-                <th scope="col">Capacity</th>
-                <th scope="col">Connector</th>
-                <th scope="col">Full</th>
-                <th scope="col">Storage</th>
-                <th scope="col">Charge</th>
-                <th scope="col">Warning</th>
-                <th scope="col">Suggested warning</th>
-                <th scope="col">
-                  <span className="visually-hidden">Actions</span>
-                </th>
-              </tr>
-            </thead>
-            <tbody>
-              {v.types.map((t) => {
-                const pt = t.pack_type;
-                return (
-                  <tr key={pt.name}>
-                    <td>{pt.name}</td>
-                    <td>
-                      {CHEMISTRY_LABEL[pt.chemistry || "lipo"]} {pt.cells ?? 1}S
-                    </td>
-                    <td>{num(pt.capacity_mah, 0, "mAh")}</td>
-                    <td>{pt.connector || "–"}</td>
-                    <td>{num(t.full_total_v, 2, "V")}</td>
-                    <td>{num(t.storage_total_v, 2, "V")}</td>
-                    <td>{num(pt.charge_a, 1, "A")}</td>
-                    <td>{num(pt.warn_mah, 0, "mAh")}</td>
-                    <td>{t.suggested_warn_mah != null ? `${num(t.suggested_warn_mah, 0, "mAh")} for ${num(v.target_v, 2, "V")} a cell` : "–"}</td>
-                    <td>
-                      <Button size="sm" variant="ghost" onClick={() => setEditing(pt)}>
-                        Edit…
-                      </Button>
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
-      )}
-      <label className={styles.muted} htmlFor="charging-notes">
-        Notes
-      </label>
-      <textarea
-        id="charging-notes"
-        className={styles.notes}
-        value={notes ?? v.notes}
-        onChange={(e) => setNotes(e.target.value)}
-        onBlur={() => {
-          if (notes != null && notes !== v.notes) run(() => api.gearPackNotes(notes));
-          setNotes(null);
-        }}
-      />
-      {editing && <TypeSheet t={editing} onClose={() => setEditing(null)} />}
+      <DataTable label="Pack types" columns={columns} rows={v.types} rowKey={(t) => t.pack_type.name} empty={<EmptyState icon="battery">No pack types saved.</EmptyState>} />
+      <SectionCard title={<label htmlFor="charging-notes">Notes</label>} label="Charging notes">
+        <textarea
+          id="charging-notes"
+          className={styles.notes}
+          value={notes ?? v.notes}
+          onChange={(e) => setNotes(e.target.value)}
+          onBlur={() => {
+            if (notes != null && notes !== v.notes) run(() => api.gearPackNotes(notes));
+            setNotes(null);
+          }}
+        />
+      </SectionCard>
     </>
   );
 }

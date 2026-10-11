@@ -1,6 +1,7 @@
 import type { PlaceTrend } from "../../../ipc/types";
 import { fmtDay } from "../../../lib/format";
 import { hhmm, num } from "../../../lib/flights";
+import { SectionCard } from "../../../components/dash/SectionCard";
 import styles from "./RangeTrend.module.css";
 
 const W = 560;
@@ -12,12 +13,13 @@ const TICKS = [0, 50, 100];
 export function RangeTrend({ places }: { places: PlaceTrend[] }) {
   if (!places.length) return null;
   return (
-    <section className={styles.section} aria-label="Range by place">
-      <h3 className={styles.title}>Range by place</h3>
-      {places.map((p) => (
-        <PlaceChart key={p.place} trend={p} />
-      ))}
-    </section>
+    <SectionCard title="Range by place">
+      <div className={styles.section}>
+        {places.map((p) => (
+          <PlaceChart key={p.place} trend={p} />
+        ))}
+      </div>
+    </SectionCard>
   );
 }
 
@@ -31,9 +33,15 @@ function PlaceChart({ trend }: { trend: PlaceTrend }) {
   const summary = first
     ? `Worst link quality at ${trend.place}: ${withLq.length} ${withLq.length === 1 ? "flight" : "flights"}, from ${num(first.worst_lq, 0, "%")} on ${fmtDay(first.start.slice(0, 10), true)} to ${num(last.worst_lq, 0, "%")} on ${fmtDay(last.start.slice(0, 10), true)}.`
     : `No link quality was logged at ${trend.place}.`;
+  // One day: the axis ends name the times and the caption names the day once.
+  const oneDay = !!first && first.start.slice(0, 10) === last.start.slice(0, 10);
+  const end = (p: (typeof pts)[number]) => (oneDay ? hhmm(p.start) : fmtDay(p.start.slice(0, 10), true));
   return (
     <figure className={styles.figure}>
-      <figcaption className={styles.caption}>{trend.place}</figcaption>
+      <figcaption className={styles.caption}>
+        {trend.place}
+        {oneDay && <span className={styles.day}> · {fmtDay(first.start.slice(0, 10), true)}</span>}
+      </figcaption>
       {first ? (
         <svg className={styles.chart} viewBox={`0 0 ${W} ${H}`} role="img" aria-label={summary}>
           {TICKS.map((t) => (
@@ -49,11 +57,11 @@ function PlaceChart({ trend }: { trend: PlaceTrend }) {
             <circle key={p.flight} className={styles.dot} cx={x(i)} cy={y(p.worst_lq as number)} r={3.5} />
           ))}
           <text className={styles.tick} x={PAD.l} y={H - 6}>
-            {fmtDay(first.start.slice(0, 10), true)}
+            {end(first)}
           </text>
           {withLq.length > 1 && (
             <text className={styles.tick} x={W - PAD.r} y={H - 6} textAnchor="end">
-              {fmtDay(last.start.slice(0, 10), true)}
+              {end(last)}
             </text>
           )}
         </svg>
