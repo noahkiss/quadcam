@@ -227,7 +227,7 @@ quadcam-cli --json gear stage --device ID --cli FILE   # raw CLI lines, no save/
 quadcam-cli --json gear stage --device RADIO_ID --edits FILE.json   # card edits (JSON array)
 quadcam-cli --json gear changes [--device ID] [--status ready] [--history]
 quadcam-cli --json gear update CHANGE --status draft|ready|try|read_first [--title T] [--note N] [--order N]
-quadcam-cli --json gear apply CHANGE --plan            # every check, the diff, the digest; no reboot
+quadcam-cli --json gear apply CHANGE --plan            # every check, the diff, the digest; no reboot. A Draft or Read first change refuses (draft, read_first)
 quadcam-cli --json gear apply CHANGE --digest D --yes  # FC: backup, write, save, read back, verify; card: mount, backup, write, read back, roll back on a mismatch, unmount
 quadcam-cli --json gear restore BACKUP [--path P]...   # stage a backup back (a card backup needs --path)
 quadcam-cli --json gear keep CHANGE                    # an applied Try change becomes Verified

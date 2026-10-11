@@ -748,7 +748,7 @@ the order the next session applies them.
 
   | Status | Means |
   |---|---|
-  | Draft | Being edited. The plug-in bar and **Review** skip it, and its own **Review…** is off |
+  | Draft | Being edited. The plug-in bar, **Review** and the on-connect apply skip it, its own **Review…** is off, and a plan refuses it (`draft`) |
   | Ready | Agreed. Apply it when the device is in |
   | Try | Apply, fly, then keep or revert |
   | Read first | Read the real value on the device before changing anything. It does not apply until you mark it Ready; its **Review…** is off until then |

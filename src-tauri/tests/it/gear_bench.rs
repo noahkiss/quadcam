@@ -308,6 +308,30 @@ fn a_read_first_change_refuses_until_it_is_ready() {
 }
 
 #[test]
+fn a_draft_change_refuses_until_it_is_ready() {
+    let fc = FakeFc::new(G473).with_uid(UID);
+    let b = bench(&fc);
+    let c = stage(&b, vec![set("osd_cap_alarm", "1500")]);
+    mark(&b, &c, ChangeStatus::Draft);
+    let p = plan(&b, &c.id);
+    let first = p.checks.iter().find(|k| !k.ok).unwrap();
+    assert_eq!(first.refusal.as_ref().unwrap().code, RefusalCode::Draft);
+    let e = b
+        .core
+        .gear_apply(&ApplyRequest {
+            id: c.id.clone(),
+            digest: p.digest,
+            confirm: true,
+            port: None,
+        })
+        .unwrap_err();
+    assert_eq!(code(&e), RefusalCode::Draft);
+    assert_eq!(fc.saves(), 0);
+    mark(&b, &c, ChangeStatus::Ready);
+    assert!(plan(&b, &c.id).ready());
+}
+
+#[test]
 fn copy_settings_between_quads_stages_one_change_that_applies() {
     let fc = FakeFc::new(G473).with_uid(UID);
     let b = bench(&fc);

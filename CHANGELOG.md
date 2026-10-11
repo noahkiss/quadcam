@@ -6,6 +6,8 @@ User-facing changes in each release, newest first. Release notes on
 ## Unreleased
 
 - **Library:** the day summary keeps each number and its label on one line, so the stats line up (`3.20 V` no longer wraps). Best moments chips shorten a long clip name with an ellipsis and show it in full on hover. A narrow window puts Best moments below the stats.
+- **A Draft change no longer applies.** The core refuses a Draft at the plan (`draft`, new refusal code), for an FC, a radio card and ExpressLRS options alike; before, only the app's **Review…** was off. An ExpressLRS options change marked Read first now refuses too (`read_first`), as FC and card changes did.
+- **CLI help:** `gear apply --help` names every device a staged change applies to (an FC, a radio card, ExpressLRS options); `gear changes --status` lists every status (`try`, `read_first` and `reverted` too); `gear firmware --help` names the Betaflight FC flash beside the EdgeTX one.
 
 ## 0.13.1 (2026-10-11)
 

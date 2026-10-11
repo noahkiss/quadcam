@@ -527,6 +527,24 @@ fn a_read_first_change_is_not_applied() {
 }
 
 #[test]
+fn a_draft_change_is_not_applied() {
+    let b = bench(Opts::default());
+    let c = stage(&b, vec![contrast("30")]);
+    b.core
+        .gear_change_update(&quadcam_lib::core::ChangeUpdateParams {
+            id: c.id.clone(),
+            status: Some(ChangeStatus::Draft),
+            ..Default::default()
+        })
+        .unwrap();
+    let p = plan(&b, &c);
+    assert_eq!(failed(&p), RefusalCode::Draft);
+    let e = b.core.gear_apply(&req(&c, &p)).unwrap_err();
+    assert_eq!(code(&e), RefusalCode::Draft);
+    assert!(read(&b, "RADIO/radio.yml").contains("contrast: 20"));
+}
+
+#[test]
 fn a_card_that_changed_since_the_plan_is_before_mismatch() {
     let b = bench(Opts::default());
     let c = stage(&b, vec![contrast("30")]);

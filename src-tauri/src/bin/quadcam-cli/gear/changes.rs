@@ -1,6 +1,7 @@
-//! `quadcam-cli gear changes|stage|discard|restore|apply`: staged changes and the FC apply
-//! (design 8). `apply --plan` runs every guard and prints the diff and the digest; `apply
-//! --digest D --yes` writes. Nothing here writes a device without both.
+//! `quadcam-cli gear changes|stage|discard|restore|apply`: staged changes and their apply (FC,
+//! radio card, ExpressLRS options; design 8). `apply --plan` runs every guard and prints the
+//! diff and the digest; `apply --digest D --yes` writes. Nothing here writes a device without
+//! both.
 
 use anyhow::{bail, Context, Result};
 use clap::Args;
@@ -15,7 +16,8 @@ pub struct ChangesArgs {
     /// One device's changes.
     #[arg(long)]
     device: Option<String>,
-    /// Only changes in this status (draft, ready, applied, verified, failed, discarded).
+    /// Only changes in this status (draft, ready, try, read_first, applied, verified, failed,
+    /// reverted, discarded).
     #[arg(long)]
     status: Option<String>,
     /// Include applied, failed and discarded changes.

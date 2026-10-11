@@ -195,14 +195,16 @@ pub enum GearCmd {
         /// The card's device id.
         device: String,
     },
-    /// Apply a staged change to the FC: `--plan` shows the checks, diff and digest;
-    /// `--digest D --yes` backs up, writes, saves, reads back and verifies.
+    /// Apply a staged change to its device (an FC, a radio card, or ExpressLRS options):
+    /// `--plan` shows the checks, diff and digest; `--digest D --yes` backs up, writes,
+    /// reads back and verifies.
     Apply(changes::ApplyArgs),
     /// Stop a running backup or card check (its handle from `gear status`).
     Stop { handle: String },
     /// Firmware: each saved device against the newest release (--check reads the network).
-    /// `--plan --device ID [--version V] [--splash IMAGE]` shows an EdgeTX flash with its
-    /// checks and digest; `--digest D --yes` flashes the radio in DFU mode.
+    /// `--plan --device ID [--version V] [--splash IMAGE]` shows a flash with its checks and
+    /// digest: EdgeTX for a radio, or Betaflight for an FC (betaflight_flash_preview);
+    /// `--digest D --yes` flashes the radio in DFU mode, or backs up and flashes the FC.
     Firmware(firmware::FirmwareArgs),
     /// A PNG as the radio's splash screen: 128 x 64, one bit; --out writes the preview.
     Splash(firmware::SplashArgs),

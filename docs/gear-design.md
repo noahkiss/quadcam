@@ -1927,12 +1927,12 @@ dialog, Mount and Done on a radio's page. Deviations and choices:
 - **One path, two plans.** `gear_apply_plan` and `gear_apply` look at the change's device:
   an FC goes the 5a way, a radio goes `plan_card`. The card digest covers the card's id, board
   and version, and for each file the path and the hashes of the bytes before and after.
-- **Card checks** (`gear/apply/card.rs`, in order): Read first, one card plugged in, same card
+- **Card checks** (`gear/apply/card.rs`, in order): not a Draft, Read first, one card plugged in, same card
   as planned (`device_changed`), card check state (`card_check`), nothing else writing
   (`port_busy`, a job runs on the link), then the engine's own: known version
   (`unknown_version`, `unknown_board`), shape understood, round trip, model identity (the
   expected name: "wrong card?"), values in range, selected model kept, and something to write.
-  New codes: `card_check`, `read_first`, `incompatible` (copy).
+  New codes: `card_check`, `read_first`, `incompatible` (copy), `draft`.
 - **Backup.** A full card snapshot (`BeforeApply`, always kept; WP4's size and mtime skip keeps
   it cheap), then the writer's backup callback checks that the snapshot holds each touched
   file's exact bytes. A failed snapshot is `no_backup`, nothing written.
@@ -1965,7 +1965,9 @@ dialog, Mount and Done on a radio's page. Deviations and choices:
   makes each path read as in the backup (a path the backup lacks is removed), through
   `Card::plan_files`. A whole-card restore is not offered.
 - **Statuses.** Try, Read first and Draft are set by hand (`gear_change_update`). A Read first
-  change refuses at plan time (`read_first`) until the person marks it Ready. A Try change that
+  change refuses at plan time (`read_first`) until the person marks it Ready, and a Draft
+  (`draft`) until it is Ready or Try. Both gates (`status_checks`) open every plan: FC, card and
+  ExpressLRS options. The on-connect apply takes Ready changes only, so it never meets one. A Try change that
   verifies becomes `Applied` (the report still says verified); Keep makes it Verified; Revert
   stages a restore (`StagedChange.reverts` names the original) and the original becomes
   Reverted when that restore verifies. **An FC revert stages only the inverse of that change's
