@@ -2,8 +2,9 @@ name: Release
 
 # A pushed `v*` tag builds QuadCam.app on an Apple Silicon runner, signs it
 # with the Developer ID of NKMK Digital Co., notarizes and staples it, waits for
-# a green ci.yml run on the tagged commit, attaches quadcam-X.Y.Z-arm64.zip and
-# modules.json (the module pins) to the tag's GitHub Release, then bumps the Homebrew cask
+# a green ci.yml run on the tagged commit, attaches quadcam-X.Y.Z-arm64.zip,
+# the in-app updater's quadcam-X.Y.Z-arm64.app.tar.gz, its .sig and latest.json,
+# and modules.json (the module pins) to the tag's GitHub Release, then bumps the Homebrew cask
 # (`noahkiss/tap/quadcam`) through the tap's own `bump.yml`.
 #
 # The steps are the shared composite actions in noahkiss/workflows
@@ -26,9 +27,11 @@ name: Release
 # A re-run never replaces a zip that is already attached: the cask's sha256
 # pins what was published, and a rebuilt zip is not byte-identical.
 #
-# Secrets: the signing certificate and the App Store Connect API key live in
-# the `release` environment (MAC_CERT_P12, MAC_CERT_PASSWORD, ASC_KEY_P8,
-# ASC_KEY_ID, ASC_ISSUER_ID), which only `v*` tags can use. The tap hop needs
+# Secrets: the signing certificate, the App Store Connect API key and the
+# updater key live in the `release` environment (MAC_CERT_P12,
+# MAC_CERT_PASSWORD, ASC_KEY_P8, ASC_KEY_ID, ASC_ISSUER_ID,
+# TAURI_SIGNING_PRIVATE_KEY, TAURI_SIGNING_PRIVATE_KEY_PASSWORD), which only
+# `v*` tags can use. The updater key has no password. The tap hop needs
 # the repository secret HOMEBREW_TAP_TOKEN, a PAT with `actions: write` on the
 # tap: this repo's GITHUB_TOKEN cannot dispatch another repository.
 
@@ -64,14 +67,14 @@ jobs:
           ref: ${{ inputs.tag || github.ref }}
 
       - id: build
-        uses: noahkiss/workflows/actions/tauri-macos-build@main
+        uses: noahkiss/workflows/actions/tauri-macos-build@4fb66c6b16bcd4ca940eeb0eac1a209fb721198f # updater-artifacts (noahkiss/workflows#5)
         with:
           tag: ${{ inputs.tag }}
           app-name: QuadCam
           asset-prefix: quadcam
           brew-packages: ffmpeg
 
-      - uses: noahkiss/workflows/actions/macos-sign-notarize@main
+      - uses: noahkiss/workflows/actions/macos-sign-notarize@4fb66c6b16bcd4ca940eeb0eac1a209fb721198f # updater-artifacts (noahkiss/workflows#5)
         with:
           path: ${{ steps.build.outputs.app }}
           identity: 'Developer ID Application: NKMK Digital Co. (2Z88BYP37C)'
@@ -83,13 +86,18 @@ jobs:
           notary-key-id: ${{ secrets.ASC_KEY_ID }}
           notary-issuer-id: ${{ secrets.ASC_ISSUER_ID }}
 
-      - uses: noahkiss/workflows/actions/release-attach@main
+      - uses: noahkiss/workflows/actions/release-attach@4fb66c6b16bcd4ca940eeb0eac1a209fb721198f # updater-artifacts (noahkiss/workflows#5)
         with:
           path: ${{ steps.build.outputs.app }}
           tag: ${{ steps.build.outputs.tag }}
           asset: ${{ steps.build.outputs.asset }}
           smoke-command: '"$APP/Contents/MacOS/quadcam-cli" --version'
           require-ci-workflow: ci.yml
+          # The in-app updater's archive, its signature and latest.json, made from the
+          # notarized app (tauri.conf.json leaves createUpdaterArtifacts off).
+          updater: true
+          updater-private-key: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          updater-private-key-password: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
 
       # The app reads newer module pins from the latest release's modules.json
       # (Settings > Modules > Check for updates). The signed app's own CLI
