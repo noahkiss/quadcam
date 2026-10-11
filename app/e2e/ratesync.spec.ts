@@ -93,7 +93,8 @@ test("syncing a sim profile plans, backs up through the sheet and reads as match
   await page.getByRole("group", { name: "Sections" }).getByRole("button", { name: "Rates" }).click();
   await profiles(page).getByRole("button", { name: "1 RACE" }).click();
   const sims = page.getByRole("region", { name: "Sims" });
-  const row = (name: string) => sims.getByRole("listitem").filter({ has: page.getByText(name, { exact: true }) }).first();
+  const row = (name: string) => sims.getByRole("row").filter({ has: page.getByText(name, { exact: true }) }).first();
+  const prof = (name: string, profile: string) => sims.getByRole("row").filter({ has: page.getByRole("rowheader", { name: new RegExp(`^${name} ${profile}( |$)`) }) });
   await expect(row("Uncrashed")).toContainText("Out of date");
 
   await sims.getByRole("button", { name: "Sync 1 RACE into Uncrashed FREE" }).click();
@@ -112,7 +113,7 @@ test("syncing a sim profile plans, backs up through the sheet and reads as match
   await sheet.getByRole("button", { name: "Done" }).click();
 
   // The segment reads the sim again: the profile matches and Sync is off.
-  await expect(row("Uncrashed")).toContainText("same as the quad");
+  await expect(prof("Uncrashed", "FREE")).toContainText("Same as the quad");
   await expect(sims.getByRole("button", { name: "Sync 1 RACE into Uncrashed FREE" })).toBeDisabled();
 });
 

@@ -888,6 +888,9 @@ profile, and checks each screen.
 
 Open a flight controller's page under **Gear > Devices** and choose **OSD**, then **Open
 dump…**. A saved FC with a backup shows its latest backup's `dump all` until you open a file.
+The line at the top says where the layout came from ("From backup · Oct 5, 2026, 10:00 AM",
+or the file names) and the firmware. Each profile button shows its problem count, and a badge
+beside them counts the problems across the profiles.
 
 ### Edit the OSD
 
@@ -920,7 +923,8 @@ The Rates segment shows how an FC's rate profiles turn stick movement into rotat
 each sim on this Mac compares. You can edit a profile and write the quad's rates into a sim;
 both go through the apply sheet. Open a flight controller's page under **Gear > Devices** and
 choose **Rates**. A saved FC with a backup shows its latest backup; **Open dump…** reads a
-`dump all` or `diff all` file instead (a file is read only).
+`dump all` or `diff all` file instead (a file is read only). The line beside it says where the
+rates came from ("From backup" and its time, or the file names).
 
 - **Profiles:** one button per rate profile, with its name (FREE, RACE, CINE). The profile the
   FC uses has an "In use" mark. The line under the buttons names the rates type: Betaflight,
@@ -934,7 +938,8 @@ choose **Rates**. A saved FC with a backup shows its latest backup; **Open dump�
 - **A diff alone:** a diff lists only values that differ from the defaults. QuadCam fills in
   Betaflight's defaults and says so. Use a dump for exact curves.
 - **Sims:** QuadCam reads the rate files of Liftoff, Liftoff: Micro Drones, Uncrashed and The
-  Zone, and lists each profile's maximum rates. Each sim says "Matches the quad" or "Out of date"
+  Zone, and lists each profile's maximum rates in the **Sims** card, the same table as the Sims
+  page (**Open Sims** opens that page). Each sim says "Matches the quad" or "Out of date"
   against the selected profile, and shows the largest gap in degrees per second. A sim
   takes Betaflight rates, so a quad on Actual or Quick is fitted to the Betaflight model first.
   The fit stays within 6 % of the maximum rate for Actual profiles with a centre of 40 to 200
@@ -957,9 +962,11 @@ choose **Rates**. A saved FC with a backup shows its latest backup; **Open dump�
 
 **Gear > Sims** lists every sim on this Mac against one quad's profile in use. The quad is the
 saved flight controller that QuadCam saw last and has a backup; **Compare with** picks another
-when there are several. Each sim shows **Matches the quad** or **Out of date**, its files and
-profiles with **Sync**, and **Restore backup** for a sim QuadCam backed up (the same sheets as
-in the Rates segment). Velocidrone shows **Off** with the reason.
+when there are several. Tiles count the sims found, the ones out of date and the ones running.
+The table has a row per sim (its state, **Matches the quad** or **Out of date**, its files, and
+**Restore…** for a sim QuadCam backed up) and a row per profile under it (the maximum rates,
+the difference from the quad and **Sync…**). Both open the same sheets as in the Rates segment.
+Velocidrone shows **Off** with the reason.
 
 The sidebar item says **Out of date** while at least one enabled sim differs from that quad.
 It clears after a sync or when the quad's rates change. `gear status` carries the count as
@@ -967,7 +974,7 @@ It clears after a sync or when the quad's rates change. `gear status` carries th
 
 ### Sync the quad's rates into a sim
 
-**Sync** beside a sim profile opens the apply sheet on a plan to write the selected rate
+**Sync…** beside a sim profile opens the apply sheet on a plan to write the selected rate
 profile of the quad into that sim profile. It overwrites the profile you pick; QuadCam does not
 create sim profiles.
 
@@ -1004,8 +1011,7 @@ are not synced: they are outside what the sims' rate adapters cover.
 
 ### Restore a sim's backup
 
-A sim that QuadCam backed up shows when, with **Restore backup** in the Rates segment's Sims
-list. It opens the same apply sheet on a plan to put the file back as it was before a sync.
+A sim that QuadCam backed up shows when, with **Restore…** in its row of the Sims table. It opens the same apply sheet on a plan to put the file back as it was before a sync.
 
 - **The backup:** the newest one that differs from the file now. A second restore therefore
   undoes the first. `gear sims --restore SIM --backup ID` picks one from `gear backups --device
@@ -1045,8 +1051,11 @@ a copy of its folder) or one model file (**Open model…**), and the FC's dump (
   (`down with SB down`) with only what that adds. A control with only such effects is not
   reported as doing nothing, and the live match counts these lines. A group of more than 4
   controls is not tried, and a note says so.
+- **Summary:** tiles count the controls, the modes, the conflicts and the logical switches not
+  mapped. The **Conflicts** card comes first when there are any; **Modes** is a table of each
+  mode's channel and range.
 - **Not mapped:** a logical switch on telemetry, a timer or sticky state cannot be worked out.
-  The **Not mapped** list shows each with its condition (`RxBt > 3.5`), the controls it reads
+  The **Not mapped** table shows each with its condition (`RxBt > 3.5`), the controls it reads
   and what uses it. It lights no position. A control that only feeds one is not reported as
   doing nothing.
 - **Conflicts:** two modes on one range, a switch that does nothing, a mode no control
@@ -1064,7 +1073,7 @@ it as a game controller).
 - **Sticks:** both sticks in your stick mode (**Mode 1** to **Mode 4**; Mode 2 by default,
   saved as the `stickMode` setting). Each axis says what it does: throttle is power, yaw turns
   the nose, pitch tilts forward and back, roll banks.
-- **Channels:** CH1 to CH8 in µs, and the 24 buttons. In the radio's Classic joystick mode,
+- **Channels:** CH1 to CH8 in µs, and the 24 buttons under **Buttons**. In the radio's Classic joystick mode,
   CH9 to CH32 are buttons 1 to 24 (EdgeTX manual, USB Joystick). In Advanced mode the model
   sets which channels are buttons, so the numbering can differ.
 - **Switch map:** open the card or model file and the dump, and the map marks what each

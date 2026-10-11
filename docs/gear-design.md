@@ -1064,7 +1064,7 @@ FC effect (`aux` modes, `adjrange` selections such as rate or OSD profile), the 
     deadzone is one `DeadZone` float per controller file under `RC/` (shape checked against a
     real install, one of five files holds none); a later package can add it.
   - **The Sims page and the sidebar "Out of date" badge** are built (shell gaps). The Sims
-    list is one component (`Sims/SimList.tsx`) in the Rates segment and on the page. The badge
+    list is one table (`Sims/SimTable.tsx`) in the Rates segment and on the page. The badge
     comes from `GearStatus.sims_out_of_date`: the count of enabled sims whose rates differ from
     the quad's profile in use. The quad is `GearStatus.sims_quad`, the saved FC seen last that
     has a backup; the page's **Compare with** picks another. The count is cached on the quad's

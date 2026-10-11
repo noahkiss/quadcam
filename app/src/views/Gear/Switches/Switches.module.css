@@ -3,20 +3,6 @@
   flex-direction: column;
   gap: var(--s-4);
 }
-.controls {
-  display: flex;
-  flex-direction: column;
-  gap: var(--s-6);
-}
-.title {
-  margin: 0;
-  font-size: var(--t-xl);
-  font-weight: 700;
-}
-.status {
-  margin: calc(-1 * var(--s-4)) 0 0;
-  color: var(--muted);
-}
 .panel {
   display: flex;
   flex-direction: column;
@@ -94,7 +80,6 @@
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
 }
-.modes,
 .notes {
   margin: 0;
   padding: 0;
@@ -103,17 +88,9 @@
   flex-direction: column;
   gap: var(--s-1);
 }
-.modes li {
-  display: flex;
-  gap: var(--s-3);
-  justify-content: space-between;
-  max-width: 420px;
-  padding: 2px var(--s-2);
-  border-radius: var(--r-1);
-}
-.modes li[data-on] {
-  background: var(--selected);
-  font-weight: 600;
+.mono {
+  font-family: var(--mono);
+  font-size: var(--t-sm);
 }
 .notes li::before {
   content: "• ";
@@ -183,4 +160,12 @@
 }
 .combo td:first-of-type {
   padding-left: var(--s-4);
+}
+.more summary {
+  cursor: default;
+  color: var(--muted);
+  font-size: var(--t-sm);
+}
+.more[open] summary {
+  margin-bottom: var(--s-2);
 }

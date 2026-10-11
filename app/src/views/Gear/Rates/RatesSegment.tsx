@@ -11,8 +11,11 @@ import { Banner } from "../../../components/Banner";
 import { Button } from "../../../components/Button";
 import { Chip } from "../../../components/Chip";
 import { SegmentedControl } from "../../../components/SegmentedControl";
+import { DataTable, type Column } from "../../../components/dash/DataTable";
+import { EmptyState } from "../../../components/dash/EmptyState";
+import { SectionCard } from "../../../components/dash/SectionCard";
 import { api, errText, pickFiles } from "../../../ipc/api";
-import type { RateProfile, RatesView, SimRates } from "../../../ipc/types";
+import type { RateAxis, RateProfile, RatesView, SimRates } from "../../../ipc/types";
 import {
   AXIS_LABEL,
   LIMIT_LABEL,
@@ -24,10 +27,11 @@ import {
   simTargets,
   type CompareTarget,
 } from "../../../lib/rates";
+import { sourceText } from "../../../lib/source";
 import { useStore } from "../../../store";
 import { RateEditor } from "./RateEditor";
 import { RatesChart } from "./RatesChart";
-import { SimList } from "../Sims/SimList";
+import { SimTable } from "../Sims/SimTable";
 import styles from "./Rates.module.css";
 
 interface Props {
@@ -40,8 +44,27 @@ interface Props {
 const NONE = "none";
 const pct = (v: number) => `${Math.round(v * 100)}%`;
 
+/** The rate table's columns; with a target, its maximum per axis too. */
+function rateColumns(target: CompareTarget | undefined): Column<RateAxis>[] {
+  const cols: Column<RateAxis>[] = [
+    { key: "axis", header: "Axis", rowHeader: true, cell: (a) => AXIS_LABEL[a.axis] ?? a.axis },
+    { key: "rc", header: "RC rate", numeric: true, cell: (a) => a.rc_rate },
+    { key: "srate", header: "Super rate", numeric: true, cell: (a) => a.srate },
+    { key: "expo", header: "Expo", numeric: true, cell: (a) => a.expo },
+    { key: "limit", header: "Limit", numeric: true, cell: (a) => a.rate_limit },
+    { key: "centre", header: "Centre", numeric: true, cell: (a) => deg(a.center_deg_s) },
+    { key: "max", header: "Maximum", numeric: true, cell: (a) => deg(a.max_deg_s) },
+  ];
+  if (target) {
+    const by = new Map(target.axes.map((a) => [a.axis, a]));
+    cols.push({ key: "target", header: `Maximum, ${target.label}`, numeric: true, cell: (a) => (by.get(a.axis) ? deg(by.get(a.axis)!.max_deg_s) : "–") });
+  }
+  return cols;
+}
+
 export function RatesSegment({ paths: initial = [], device = null }: Props) {
   const devices = useStore((s) => s.devices);
+  const openGear = useStore((s) => s.openGear);
   const [paths, setPaths] = useState(initial);
   const [view, setView] = useState<RatesView | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -148,17 +171,21 @@ export function RatesSegment({ paths: initial = [], device = null }: Props) {
   return (
     <div className={styles.segment}>
       <div className={styles.bar}>
-        <Button icon="folder-open" onClick={open}>
+        {view && (
+          <span className={styles.source} title={view.source.join(", ")}>
+            {sourceText(view.source, view.firmware)}
+          </span>
+        )}
+        <Button className={styles.end} icon="folder-open" onClick={open}>
           Open dump…
         </Button>
-        {view && <span className={styles.source}>{[view.firmware, view.source.join(", ")].filter(Boolean).join(" · ")}</span>}
       </div>
       {error && (
         <Banner kind="error" icon="danger-triangle" tint="red">
           {error}
         </Banner>
       )}
-      {!view && !error && <p className={styles.empty}>Open a Betaflight dump or diff to see its rates.</p>}
+      {!view && !error && <EmptyState icon="folder-open">No dump open.</EmptyState>}
       {view && profile && (
         <>
           <div className={styles.bar}>
@@ -247,39 +274,23 @@ export function RatesSegment({ paths: initial = [], device = null }: Props) {
               }}
             />
           )}
-          {!editing && <table className={styles.table} aria-label={`Rates of ${profileLabel(profile)}`}>
-            <thead>
-              <tr>
-                <th scope="col">Axis</th>
-                <th scope="col">RC rate</th>
-                <th scope="col">Super rate</th>
-                <th scope="col">Expo</th>
-                <th scope="col">Limit</th>
-                <th scope="col">Centre</th>
-                <th scope="col">Maximum</th>
-                {target && <th scope="col">Maximum, {target.label}</th>}
-              </tr>
-            </thead>
-            <tbody>
-              {axes.map((a, i) => (
-                <tr key={a.axis}>
-                  <th scope="row">{AXIS_LABEL[a.axis] ?? a.axis}</th>
-                  <td>{a.rc_rate}</td>
-                  <td>{a.srate}</td>
-                  <td>{a.expo}</td>
-                  <td>{a.rate_limit}</td>
-                  <td>{deg(a.center_deg_s)}</td>
-                  <td>{deg(a.max_deg_s)}</td>
-                  {target && <td>{target.axes[i] ? deg(target.axes[i].max_deg_s) : "–"}</td>}
-                </tr>
-              ))}
-            </tbody>
-          </table>}
+          {!editing && <DataTable label={`Rates of ${profileLabel(profile)}`} columns={rateColumns(target)} rows={axes} rowKey={(a) => a.axis} />}
           <p className={styles.meta}>
             Throttle: mid {profile.throttle.mid}, expo {profile.throttle.expo}
             {profile.throttle.hover != null && `, hover ${profile.throttle.hover}`}, limit {LIMIT_LABEL[profile.throttle.limit] ?? profile.throttle.limit} {profile.throttle.limit_percent}%
           </p>
-          <SimList sims={sims} error={simError} profile={profile} quad={source} />
+          {(sims.length > 0 || simError) && (
+            <SectionCard
+              title="Sims"
+              actions={
+                <Button size="sm" onClick={() => openGear({ page: "slot", id: "sims" })}>
+                  Open Sims
+                </Button>
+              }
+            >
+              <SimTable sims={sims} error={simError} profile={profile} quad={source} compact />
+            </SectionCard>
+          )}
         </>
       )}
     </div>

@@ -30,7 +30,7 @@ Betaflight modes (the latest backups of the radio and FC linked to it), the page
 | Arm, Angle, Horizon, Turtle, Air mode | The quad's `aux` ranges, named by the switch position that reaches them (`SA down`) |
 | Reset | A button or trim that moves a channel but does nothing in the model or on the quad |
 
-Each line says where it came from. **Change** sets a control by moving it on the radio;
+The **Switches** card lists them, each with where it came from. **Change** sets a control by moving it on the radio;
 **Clear** removes it. Channels 9 and up reach the joystick as buttons, on above 1500 µs.
 
 **The steps.**

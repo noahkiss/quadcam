@@ -19,6 +19,10 @@ User-facing changes in each release, newest first. Release notes on
 - **Session report** shows its numbers as tiles, and pack use and crashes as tables.
 - **Packs:** tiles for packs in use, charged, weak and cycles. **Mark charged** and **Edit…** are buttons. **Add pack…** and **Add type…** sit in the page header.
 - **Repairs:** one table grouped by aircraft, so the columns line up, with tiles for open and repaired crashes and the last crash.
+- **Sims as a table.** Tiles count the sims found, out of date and running. Each sim is a row with its state and files, and each profile a row under it with the maximum rates, the difference from the quad and a clear **Sync…** button. The Rates segment shows the same table in a **Sims** card with **Open Sims**.
+- **Rates and OSD say where they came from:** "From backup" and its time, or the file names, with **Open dump…** on the right. The rate table lines up its numbers. The OSD shows its problem count as a badge.
+- **Switches:** tiles count the controls, modes, conflicts and unmapped switches. Conflicts come first in their own card; modes and unmapped switches are tables.
+- **Controls and Sim radio** use the page header and cards. Controls keeps its 24 buttons under **Buttons**. Sim radio lists its switches in a table with **Change**, and the calibration in a **Calibrate** card.
 - **For developers:** shared `PageHeader`, `EmptyState`, `FactList`, `StatusDot` and `MoreMenu` in `app/src/components/dash/`, and the `--s-5` spacing token the Apply sheet, Bench and Firmware already used. `docs/development.md` describes how to build a dashboard page.
 ## 0.14.0 (2026-10-11)
 

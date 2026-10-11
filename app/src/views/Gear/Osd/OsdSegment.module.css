@@ -10,6 +10,7 @@
   gap: var(--s-3);
 }
 .source {
+  flex: 1;
   color: var(--muted);
   font-size: var(--t-sm);
   min-width: 0;

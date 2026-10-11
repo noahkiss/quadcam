@@ -7,6 +7,8 @@
 import { useEffect, useState } from "react";
 import { Banner } from "../../../components/Banner";
 import { SegmentedControl } from "../../../components/SegmentedControl";
+import { EmptyState } from "../../../components/dash/EmptyState";
+import { Stat, StatRow } from "../../../components/dash/StatRow";
 import { api, errText } from "../../../ipc/api";
 import type { Live } from "../../../ipc/types";
 import { live as liveOf } from "../../../lib/controls";
@@ -65,6 +67,14 @@ export function SwitchesSegment({ d }: { d?: DeviceRef }) {
     <div className={styles.segment}>
       <MapSourceBar src={m.src} map={m.map} openCard={m.openCard} openModel={m.openModel} openDump={m.openDump} />
       {m.map && (
+        <StatRow label="Switch map summary">
+          <Stat label="Controls" value={m.map.rows.length} />
+          <Stat label="Modes" value={m.map.modes.length} />
+          <Stat label="Conflicts" value={m.map.conflicts.length} tone={m.map.conflicts.length ? "warn" : undefined} />
+          <Stat label="Not mapped" value={m.map.unmapped.length} />
+        </StatRow>
+      )}
+      {m.map && (
         <div className={styles.bar}>
           <SegmentedControl
             label="Live"
@@ -85,7 +95,7 @@ export function SwitchesSegment({ d }: { d?: DeviceRef }) {
           {m.error || liveError}
         </Banner>
       )}
-      {m.map ? <SwitchMapView map={m.map} live={live} /> : !m.error && <p className={styles.empty}>Open the radio's card or model file, and the FC's dump, to see what each switch does.</p>}
+      {m.map ? <SwitchMapView map={m.map} live={live} /> : !m.error && <EmptyState icon="sd-card">No radio card, model file or FC dump open.</EmptyState>}
     </div>
   );
 }

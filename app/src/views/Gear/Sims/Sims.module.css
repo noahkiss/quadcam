@@ -1,0 +1,66 @@
+.wrap {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-2);
+  min-width: 0;
+}
+/* A sim's own row heads the rows of its profiles. */
+.wrap tbody tr:has([data-sim-row]) > * {
+  padding-top: var(--s-4);
+}
+.wrap tbody tr:first-child:has([data-sim-row]) > * {
+  padding-top: var(--s-2);
+}
+.wrap tbody tr:has(+ tr [data-sim-row]) > *,
+.wrap tbody tr:last-child > * {
+  border-bottom-color: var(--border-strong);
+}
+.sim {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.profile {
+  padding-left: var(--s-4);
+  font-weight: 400;
+}
+.simName {
+  font-weight: 600;
+}
+.note {
+  color: var(--muted);
+  font-size: var(--t-sm);
+  font-weight: 400;
+}
+.path {
+  color: var(--muted);
+  font-family: var(--mono);
+  font-size: var(--t-xs);
+  font-weight: 400;
+  overflow-wrap: anywhere;
+}
+.muted {
+  color: var(--muted);
+}
+.problem {
+  color: var(--error-text);
+}
+.state {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--s-1) var(--s-2);
+}
+.footnote {
+  margin: 0;
+  color: var(--muted);
+  font-size: var(--t-sm);
+}
+.compare {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s-2);
+  color: var(--muted);
+  font-size: var(--t-md);
+}

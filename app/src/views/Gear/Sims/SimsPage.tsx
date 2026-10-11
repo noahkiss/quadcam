@@ -3,13 +3,15 @@
 // rates differ from the quad the status names (the saved FC seen last that has a backup).
 import { useEffect, useRef, useState } from "react";
 import { Banner } from "../../../components/Banner";
-import { SelectField } from "../../../components/Field";
+import { EmptyState } from "../../../components/dash/EmptyState";
+import { PageHeader } from "../../../components/dash/PageHeader";
+import { Stat, StatRow } from "../../../components/dash/StatRow";
 import { api, errText } from "../../../ipc/api";
 import type { RateProfile, SimRates } from "../../../ipc/types";
 import { profileLabel } from "../../../lib/rates";
 import { useStore } from "../../../store";
-import { SimList } from "./SimList";
-import styles from "../Storage/Storage.module.css";
+import { SimTable } from "./SimTable";
+import styles from "./Sims.module.css";
 
 export function SimsPage() {
   const devices = useStore((s) => s.devices);
@@ -53,36 +55,45 @@ export function SimsPage() {
     };
   }, [id, reload]);
 
+  const shown = quad && profile ? sims : [];
+  const found = shown.filter((s) => s.enabled && s.found).length;
+  const late = shown.filter((s) => s.in_sync === false).length;
+  const running = shown.filter((s) => s.running).length;
+
   return (
-    <div className={styles.page} aria-labelledby="sims-title">
-      <h2 id="sims-title" className={styles.title}>
-        Sims
-      </h2>
-      {!quad && (
-        <p className={styles.muted}>
-          No quad to compare with. Back up a flight controller, then its rates show here against each sim on this Mac.
-        </p>
-      )}
-      {quad && quads.length > 1 && (
-        <SelectField label="Compare with" value={quad.id} onChange={(e) => setPick(e.target.value)}>
-          {quads.map((d) => (
-            <option key={d.id} value={d.id}>
-              {d.name || d.id}
-            </option>
-          ))}
-        </SelectField>
-      )}
-      {quad && profile && (
-        <p className={styles.muted}>
-          {quad.name || "The quad"}: {profileLabel(profile)}, from its latest backup. A sim is out of date when its rates differ from these.
-        </p>
-      )}
+    <>
+      <PageHeader
+        id="sims-title"
+        title="Sims"
+        subtitle={quad && profile ? `Compared with ${quad.name || quad.id} · ${profileLabel(profile)}` : undefined}
+        actions={
+          quad &&
+          quads.length > 1 && (
+            <label className={styles.compare}>
+              Compare with
+              <select value={quad.id} onChange={(e) => setPick(e.target.value)}>
+                {quads.map((d) => (
+                  <option key={d.id} value={d.id}>
+                    {d.name || d.id}
+                  </option>
+                ))}
+              </select>
+            </label>
+          )
+        }
+      />
+      <StatRow label="Sims summary">
+        <Stat label="Sims found" value={quad && profile ? found : "—"} />
+        <Stat label="Out of date" value={quad && profile ? late : "—"} tone={late > 0 ? "warn" : undefined} />
+        <Stat label="Running" value={quad && profile ? running : "—"} />
+      </StatRow>
+      {!quad && <EmptyState icon="play">No quad to compare with. Back up a flight controller first.</EmptyState>}
       {error && (
         <Banner kind="error" icon="danger-triangle" tint="red">
           {error}
         </Banner>
       )}
-      {quad && profile && <SimList sims={sims} error={null} profile={profile} quad={{ paths: [], device: quad.id }} heading={false} />}
-    </div>
+      {quad && profile && <SimTable sims={sims} error={null} profile={profile} quad={{ paths: [], device: quad.id }} />}
+    </>
   );
 }

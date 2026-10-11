@@ -20,11 +20,11 @@ const step = (page: Page) => page.getByRole("status", { name: "Step" });
 test("a known radio model gets the short check, suggestions show their source, and the calibration saves", async ({ app, page }) => {
   await openSim(app, page);
   await expect(page.getByRole("status", { name: "Radio" })).toContainText("Test Radio Joystick: No saved radio is this model yet");
-  const sug = page.getByRole("region", { name: "Suggestions" });
+  const sug = page.getByRole("region", { name: "Switches" });
   await expect(sug.locator('[data-target="arm"]')).toContainText("SA down (from your radio model)");
   await expect(sug.locator('[data-target="turtle"]')).toContainText("SE down (from your radio model)");
   await expect(sug.locator('[data-target="reset"]')).toContainText("TrimRudLeft (from your radio model)");
-  await expect(sug).toContainText("Roll CH1, pitch CH2, throttle CH3, yaw CH4 (from your radio model)");
+  await expect(sug).toContainText("Sticks: roll CH1, pitch CH2, throttle CH3, yaw CH4 (from your radio model)");
 
   // The short check: move, then the reset control (the arm switch is known), then review.
   await expect(step(page)).toHaveText("Move each stick all the way both ways.");
