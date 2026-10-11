@@ -5,6 +5,8 @@ User-facing changes in each release, newest first. Release notes on
 
 ## Unreleased
 
+- **Library:** the day summary keeps each number and its label on one line, so the stats line up (`3.20 V` no longer wraps). Best moments chips shorten a long clip name with an ellipsis and show it in full on hover. A narrow window puts Best moments below the stats.
+
 ## 0.13.1 (2026-10-11)
 
 - **Development:** the integration tests build as one test binary per crate (`src-tauri/tests/it/`), so a test build links the app 10 times instead of 57. No change to the app.

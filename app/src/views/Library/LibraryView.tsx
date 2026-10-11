@@ -191,20 +191,22 @@ function DaySummary({ clips: cs }: { clips: LibClip[] }) {
   );
   return (
     <section className={styles.summary} aria-label="Day summary">
-      {stat(String(cs.length), cs.length === 1 ? "clip" : "clips")}
-      {stat(fmtDur(air), withStats.length ? "armed time" : "flying")}
-      {flights > 0 && stat(String(flights), flights === 1 ? "flight" : "flights")}
-      {volts.length > 0 && stat(`${Math.min(...volts).toFixed(2)} V`, "lowest battery")}
+      <div className={styles.stats}>
+        {stat(String(cs.length), cs.length === 1 ? "clip" : "clips")}
+        {stat(fmtDur(air), withStats.length ? "armed time" : "flying")}
+        {flights > 0 && stat(String(flights), flights === 1 ? "flight" : "flights")}
+        {volts.length > 0 && stat(`${Math.min(...volts).toFixed(2)} V`, "lowest battery")}
+      </div>
       {best.length > 0 && (
         <div className={styles.best}>
           <span className={styles.lbl}>Best moments</span>
           <ul>
             {best.map(({ c, m }, i) => (
               <li key={i}>
-                <button type="button" onClick={() => openDetail(c.id, m.start)}>
+                <button type="button" title={`${c.name} ${fmtDur(m.start)}`} onClick={() => openDetail(c.id, m.start)}>
                   <span className={styles.mini} style={stripStyle(c, Math.min(9, Math.floor((m.start / c.duration) * 10)))} />
                   <Icon name={KIND_ICON[m.kind]} size={14} />
-                  <span>{c.name}</span>
+                  <span className={styles.name}>{c.name}</span>
                   <span className="mono">{fmtDur(m.start)}</span>
                 </button>
               </li>
