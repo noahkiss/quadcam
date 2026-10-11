@@ -557,7 +557,12 @@ impl Core {
             .into_iter()
             .find(|c| c.port == port)
             .ok_or_else(|| refuse(RefusalCode::NoDevice, "The FC is no longer plugged in."))?;
-        if cand.id.as_deref() != Some(prep.device.id.as_str()) {
+        // A fresh read, not the port's cached identity: another FC on the same port must not
+        // be backed up under this one.
+        let now = bf::identify(ports, port, t)?;
+        if cand.id.as_deref() != Some(prep.device.id.as_str())
+            || now.id.as_deref() != Some(prep.device.id.as_str())
+        {
             return Err(refuse(
                 RefusalCode::DeviceChanged,
                 "This is not the FC the flash was planned for.",
