@@ -7,6 +7,7 @@ User-facing changes in each release, newest first. Release notes on
 
 - **USB timer.** The FC's USB heat timer keeps counting while the port drops out for a reboot, USB disk mode or a flash. Before, every job that rebooted the FC started it again at zero.
 - **USB heat checks.** A flash, an FC apply and a blackbox pull read the battery before their heat check. A battery in with no timer counting (reads paused, or just plugged in) refuses a flash and is a warning on the others.
+- **Betaflight flash reports.** A flash that fails after the erase points to Betaflight Configurator to flash an official build, not to a second QuadCam flash. A flash that fails before the erase says nothing was erased and starts the old firmware again. The sheet and the guide list the firmware copy step.
 
 ## 0.11.0 (2026-10-10)
 

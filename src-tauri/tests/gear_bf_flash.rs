@@ -62,6 +62,8 @@ struct FcFlasher {
     new_dump: String,
     old_dump: String,
     opened: AtomicUsize,
+    /// The `wTransferSize` the DFU device reports after the firmware copy; 0 for none.
+    transfer: Arc<AtomicUsize>,
 }
 
 struct Wrapped {
@@ -70,6 +72,8 @@ struct Wrapped {
     image: Vec<u8>,
     new_dump: String,
     old_dump: String,
+    transfer: Arc<AtomicUsize>,
+    asked: usize,
 }
 
 impl Usb for Wrapped {
@@ -92,6 +96,11 @@ impl Usb for Wrapped {
     fn layout(&mut self) -> anyhow::Result<String> {
         self.dfu.lock().unwrap().layout()
     }
+    fn transfer_size(&mut self) -> Option<usize> {
+        // The copy asks first and gets none; the flash asks next.
+        self.asked += 1;
+        Some(self.transfer.load(Ordering::SeqCst)).filter(|&n| n > 0 && self.asked > 1)
+    }
 }
 
 impl Flasher for FcFlasher {
@@ -103,6 +112,8 @@ impl Flasher for FcFlasher {
             image: self.image.clone(),
             new_dump: self.new_dump.clone(),
             old_dump: self.old_dump.clone(),
+            transfer: self.transfer.clone(),
+            asked: 0,
         }))
     }
     fn quick(&self) -> bool {
@@ -238,6 +249,7 @@ fn bench(o: Opts) -> Bench {
         new_dump: NEW.to_string(),
         old_dump: o.old.clone(),
         opened: AtomicUsize::new(0),
+        transfer: Arc::new(AtomicUsize::new(0)),
     });
     let fetch = Arc::new(FixtureFetch::new());
     let rel = |t: &str| serde_json::json!([{"tag_name": t, "prerelease": false, "draft": false, "assets": []}]);
@@ -709,6 +721,12 @@ fn a_dropped_block_leaves_the_fc_in_its_bootloader_and_says_so() {
         report.message
     );
     assert!(report.message.contains("boot button"), "{}", report.message);
+    assert!(
+        report.message.contains("Betaflight Configurator")
+            && !report.message.contains("flash again"),
+        "{}",
+        report.message
+    );
     assert!(report.message.contains(report.backup.as_deref().unwrap()));
     // The write reads each segment back before the next: the bad one stops the flash.
     use quadcam_lib::gear::apply::StepState;
@@ -726,6 +744,35 @@ fn a_dropped_block_leaves_the_fc_in_its_bootloader_and_says_so() {
         })
         .unwrap()
         .is_empty());
+}
+
+#[test]
+fn a_flash_that_fails_before_the_erase_says_nothing_was_erased() {
+    let b = bench(Opts::default());
+    // The bootloader moves another block size than QuadCam writes.
+    b.flasher.transfer.store(1024, Ordering::SeqCst);
+    let plan = b.core.gear_flash_plan(&params(&b)).unwrap();
+    let report = b.core.gear_flash(&request(&b, &plan)).unwrap();
+    assert_eq!(report.status, ChangeStatus::Failed);
+    assert!(
+        report.message.contains("Nothing was erased"),
+        "{}",
+        report.message
+    );
+    assert!(!report.message.contains("half"), "{}", report.message);
+    use quadcam_lib::gear::apply::StepState;
+    for s in ["Erase", "Write", "Read back", "Leave DFU"] {
+        assert_eq!(step(&report, s).state, StepState::Skipped, "{s}");
+    }
+    assert!(step(&report, "Erase")
+        .detail
+        .as_deref()
+        .unwrap()
+        .contains("1024"));
+    assert!(b.flasher.dfu.lock().unwrap().erased.is_empty());
+    // QuadCam left DFU: the FC runs its old firmware again.
+    assert!(!b.fc.in_bootloader());
+    assert!(!report.saved);
 }
 
 #[test]

@@ -1145,8 +1145,13 @@ flashed to a proven one.
      `before_flash`);
    - restarts the FC into its ROM bootloader (CLI `bl`) and waits for exactly one new DFU
      device;
-   - checks the chip's flash is the size the board has, erases the sectors it needs, writes
-     the image, reads it back and compares every byte, then leaves DFU mode;
+   - checks the chip's flash is the size the board has;
+   - reads the whole flash twice, compares the two reads, and saves the firmware the FC runs
+     now as a firmware copy, read back from disk. Nothing is erased before this copy is kept.
+     A blank flash (an interrupted flash) has nothing to copy. The two reads take most of the
+     flash's time;
+   - erases the sectors it needs, writes the image, reads it back and compares every byte,
+     then leaves DFU mode;
    - waits for the FC and checks it is the same FC (its MCU id);
    - reads the new firmware's `dump all` and a `get` for each old setting, and saves it as a
      backup;
@@ -1182,8 +1187,16 @@ If something goes wrong:
   device already plugged in, a busy port or a USB timer that would run out all stop here.
 - **The FC does not show up as a DFU device.** Nothing was written. Unplug USB and the
   battery and plug USB in again; the report names the backup.
-- **A flash step fails, or the read back differs.** The FC has half a firmware and stays in
-  its bootloader. Run the flash again, or unplug and enter the bootloader again first.
+- **The flash fails before the erase** (for example, the bootloader moves another block size).
+  Nothing was erased, and the FC still holds its old firmware. QuadCam asks the FC to leave
+  DFU mode and start it. If it stays in its bootloader, unplug USB and the battery and plug USB
+  in again.
+- **A flash step fails after the erase, or the read back differs.** The FC has half a firmware
+  and stays in its bootloader. QuadCam cannot flash an FC that is in its bootloader: its flash
+  starts from a serial FC. Leave USB plugged in and flash an official build for the board from
+  Betaflight Configurator, which finds the FC in DFU mode. If you unplugged it, use the boot
+  button (next item). Then put your settings back from the `before_flash` backup with
+  **Restore**.
 - **The FC does not start afterwards.** Unplug USB and the battery, hold the FC's boot
   button, plug USB in, and flash an official build from Betaflight Configurator. The ROM
   bootloader cannot be overwritten, so an FC can always be flashed again.
