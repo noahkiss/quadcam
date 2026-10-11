@@ -7,7 +7,8 @@
 //!
 //! A take whose cut failed its checks is reused only with the seed that made it: that is
 //! the same take, so the line stays a re-take and nothing is billed. Another seed sends it
-//! again. The index is a cache of the cache: a take it names that the cache lost is skipped,
+//! again. A take is always cut again when it is used, so a new `batch::CUT_VERSION` reaches
+//! every reused line; a flag from an older cut version does not count until then. The index is a cache of the cache: a take it names that the cache lost is skipped,
 //! and a lost index only means lines are priced and sent again.
 
 use super::batch::{self, Batch, BatchCache, BatchSettings, Item, Rendered};
@@ -86,6 +87,10 @@ pub struct Entry {
     /// The spoken texts whose cut failed its checks.
     #[serde(default)]
     pub flagged: Vec<String>,
+    /// The `batch::CUT_VERSION` that cut and checked it. `flagged` holds for that version
+    /// only: under another, the take is cut and checked again when it is used.
+    #[serde(default)]
+    pub cut: u32,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -122,6 +127,7 @@ impl Entry {
                 .filter(|(i, _)| flagged.contains(i.spoken.as_str()))
                 .map(|(i, _)| i.spoken.clone())
                 .collect(),
+            cut: batch::CUT_VERSION,
         }
     }
 
@@ -233,8 +239,12 @@ impl Reuse {
     /// Every line's spoken text reused, with whether its take flagged it.
     pub fn lines(&self) -> impl Iterator<Item = (&str, bool)> {
         self.takes.iter().flat_map(|(e, want)| {
-            want.iter()
-                .map(move |w| (w.line.as_str(), e.flagged.contains(&w.take)))
+            want.iter().map(move |w| {
+                (
+                    w.line.as_str(),
+                    e.cut == batch::CUT_VERSION && e.flagged.contains(&w.take),
+                )
+            })
         })
     }
 
@@ -274,7 +284,8 @@ pub fn split(
             else {
                 continue;
             };
-            let flagged = e.flagged.contains(&it.spoken);
+            // Under another cut version the checks are not known yet: the take is cut again.
+            let flagged = e.cut == batch::CUT_VERSION && e.flagged.contains(&it.spoken);
             let same_seed = e.seed == s.settings.seed;
             let rank = match (flagged, same_seed) {
                 (false, true) => 0,
@@ -353,6 +364,7 @@ pub fn cut_reused(
         done.batches_cached += 1;
         out.push(Entry {
             flagged: flags.into_iter().map(|f| f.spoken).collect(),
+            cut: batch::CUT_VERSION,
             ..e.clone()
         });
     }

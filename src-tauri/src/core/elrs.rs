@@ -517,7 +517,7 @@ impl Core {
             .gear_store()
             .device(&change.device)?
             .with_context(|| format!("Unknown device {:?}.", change.device))?;
-        let mut checks = vec![];
+        let mut checks = crate::gear::apply::card::status_checks(change);
         checks.push(if self.elrs_prefs().preview {
             pass("ELRS tools (preview) are on")
         } else {

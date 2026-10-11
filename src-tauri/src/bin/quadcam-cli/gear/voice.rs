@@ -80,7 +80,8 @@ pub struct BatchArgs {
     /// Sentences in one batch at most (default 30).
     #[arg(long)]
     pub max_lines: Option<u32>,
-    /// Each cut edge moves to the quietest point within this many ms (default 40).
+    /// Each cut edge looks for the quiet at least this many ms either side of its timestamp
+    /// (default 40; 0 cuts at the timestamps).
     #[arg(long)]
     pub snap_ms: Option<u32>,
 }

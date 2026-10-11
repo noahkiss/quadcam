@@ -522,6 +522,60 @@ fn a_set_renders_into_a_local_pack_and_recutting_costs_nothing() {
 }
 
 #[test]
+fn a_pack_cut_by_an_older_quadcam_is_cut_again_from_the_cache() {
+    let b = bench(50000, true);
+    let r = paid_render(
+        &b,
+        render("Callum", "eleven_turbo_v2_5", &["quad"], false, true),
+    );
+    let posts = b.http.posts();
+    let pack = b.dir.path().join("support/gear/voices").join(&r.pack);
+    let read = || -> serde_json::Value {
+        serde_json::from_slice(&std::fs::read(pack.join("pack.json")).unwrap()).unwrap()
+    };
+    let kept = read()["kept_batches"].clone();
+    assert!(!kept.as_array().unwrap().is_empty());
+
+    // Rendered again as it is: every batch is kept, none is cut again.
+    let same = b
+        .core
+        .gear_voice_render(&render(
+            "Callum",
+            "eleven_turbo_v2_5",
+            &["quad"],
+            false,
+            false,
+        ))
+        .unwrap();
+    assert_eq!((same.rendered, same.from_cache), (0, 0), "{same:?}");
+
+    // A pack whose kept batches were cut by an older cut (another cut version in their keys):
+    // the render cuts every batch again from the batch cache, with no confirm and no request.
+    let mut m = read();
+    m["kept_batches"] = serde_json::json!(["cut-by-an-older-quadcam"]);
+    std::fs::write(pack.join("pack.json"), serde_json::to_vec(&m).unwrap()).unwrap();
+    let again = b
+        .core
+        .gear_voice_render(&render(
+            "Callum",
+            "eleven_turbo_v2_5",
+            &["quad"],
+            false,
+            false,
+        ))
+        .unwrap();
+    assert!(!again.needs_confirm, "{again:?}");
+    assert_eq!(again.plan.chars, 0);
+    assert_eq!(again.rendered, 0);
+    assert_eq!(again.from_cache, r.rendered);
+    assert_eq!(b.http.posts(), posts);
+    let now = read()["kept_batches"].clone();
+    for k in kept.as_array().unwrap() {
+        assert!(now.as_array().unwrap().contains(k), "{k}");
+    }
+}
+
+#[test]
 fn deleting_a_studio_pack_keeps_its_batches_unless_asked() {
     use quadcam_lib::core::{PackDeleteParams, VoiceParams};
     let b = bench(90_000, true);
@@ -1107,4 +1161,40 @@ fn the_sets_picked_at_first_follow_the_aircraft_flown() {
         t.contains("Aircraft flown (from the profiles): quad, heli"),
         "{t}"
     );
+}
+
+/// A flag from an older cut version does not count: the take is cut and checked again when it
+/// is used, at no cost, and the new checks decide.
+#[test]
+fn a_cut_version_change_checks_reused_lines_again() {
+    let b = bench(50_000, true);
+    let m = "eleven_turbo_v2_5";
+    b.http.mute("Signal low");
+    paid_render(&b, render("Callum", m, &["quad"], false, true));
+    assert_eq!(estimate(&b, &["quad"], m).unwrap().retakes, 2);
+    let posts = b.http.posts();
+    // Mark every take as cut by an older version.
+    let dir = b.dir.path().join("cache/voice/lines/elevenlabs");
+    for f in std::fs::read_dir(&dir).unwrap().flatten() {
+        let p = f.path();
+        if p.extension().is_some_and(|x| x == "json") {
+            let mut v: serde_json::Value =
+                serde_json::from_slice(&std::fs::read(&p).unwrap()).unwrap();
+            for e in v["batches"].as_array_mut().unwrap() {
+                e["cut"] = 1.into();
+            }
+            std::fs::write(&p, v.to_string()).unwrap();
+        }
+    }
+    let e = estimate(&b, &["quad"], m).unwrap();
+    assert_eq!((e.retakes, e.to_render), (0, 0), "{e:?}");
+    // The render cuts again from the cache: nothing is sent, and the silent cut is flagged anew.
+    let r = b
+        .core
+        .gear_voice_render(&render("Callum", m, &["quad"], false, false))
+        .unwrap();
+    assert!(!r.needs_confirm);
+    assert_eq!(r.retakes.len(), 2);
+    assert_eq!(b.http.posts(), posts);
+    assert_eq!(estimate(&b, &["quad"], m).unwrap().retakes, 2);
 }

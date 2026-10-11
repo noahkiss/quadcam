@@ -1,10 +1,10 @@
 //! The card's plan and checks (design 8.2), pure over what the core read. `plan` writes
 //! nothing; `core/apply_card.rs` mounts the card, gathers the inputs and runs the job.
 //!
-//! The checks, in order: one card plugged in, the same card as planned (its id), known
+//! The checks, in order: not a Draft and not Read first (`status_checks`, which the FC and
+//! ExpressLRS plans share), one card plugged in, the same card as planned (its id), known
 //! version, the edits understood (shape, round trip, model name, values, selected model
-//! kept; all from `Card::plan`), the card check state, nothing else writing, and not a
-//! Read first change. The digest covers the card's id, board and version, and for every
+//! kept; all from `Card::plan`), the card check state, and nothing else writing. The digest covers the card's id, board and version, and for every
 //! file the plan touches its path and the hashes of the bytes before and after.
 
 use super::check;
@@ -66,8 +66,29 @@ pub fn digest(device: &str, plan: &CardPlan) -> String {
     blobs::hash(text.as_bytes())
 }
 
-/// The gate every staged change passes before a plan: a change marked Read first is not
-/// applied until the person has read the real value and marked it Ready.
+/// The gates every staged change passes first, in every plan (FC, card, ExpressLRS options):
+/// not a Draft, and not Read first.
+pub fn status_checks(change: &StagedChange) -> Vec<Check> {
+    vec![draft(change), read_first(change)]
+}
+
+/// A Draft is not applied until the person marks it Ready or Try.
+pub fn draft(change: &StagedChange) -> Check {
+    check(
+        "Not a draft",
+        if change.status == crate::gear::model::ChangeStatus::Draft {
+            Err(Refusal::new(
+                RefusalCode::Draft,
+                "This change is a Draft. Mark it Ready or Try to apply it.",
+            ))
+        } else {
+            Ok(())
+        },
+    )
+}
+
+/// A change marked Read first is not applied until the person has read the real value and
+/// marked it Ready.
 pub fn read_first(change: &StagedChange) -> Check {
     check(
         "Read first",
@@ -89,7 +110,7 @@ pub fn plan(
     cands: &[CardCand],
     facts: &CardFacts,
 ) -> CardPlanned {
-    let mut checks: Vec<Check> = vec![read_first(change)];
+    let mut checks: Vec<Check> = status_checks(change);
     let out = |checks: Vec<Check>, cand: Option<CardCand>, identity: Identity| CardPlanned {
         plan: ApplyPlan {
             change: change.id.clone(),
@@ -462,7 +483,7 @@ mod tests {
     }
 
     #[test]
-    fn nothing_to_write_and_read_first_refuse() {
+    fn nothing_to_write_read_first_and_draft_refuse() {
         let (_d, root) = card();
         // contrast is 20 already: no file changes.
         let c = change(ChangeStatus::Ready, "r1", vec![]);
@@ -480,6 +501,13 @@ mod tests {
             &CardFacts::default(),
         );
         assert_eq!(first_failed(&rf), Some(RefusalCode::ReadFirst));
+        let draft = plan(
+            &change(ChangeStatus::Draft, "r1", vec![]),
+            &CardWork::Edits(vec![contrast("25")]),
+            &[cand(&root, "r1")],
+            &CardFacts::default(),
+        );
+        assert_eq!(first_failed(&draft), Some(RefusalCode::Draft));
     }
 
     #[test]

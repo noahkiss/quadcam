@@ -511,8 +511,8 @@ inside carrier sentences, and compares voices before it spends credits.
   sets, seed and characters. **Sample and pay** and **Render and pay** send that digest, and
   QuadCam refuses a confirm whose plan changed ("estimate again"). A change to any picker
   closes the question. The CLI (`--digest`) and MCP (`digest`) work the same way.
-- **Re-takes.** A cut that fails a check (silent, under 120 ms, too long, or long or short for
-  its text) stays out of the pack. The result and the pack's `pack.json` (`retakes`) list it as
+- **Re-takes.** A cut that fails a check (silent, under 120 ms, too long, long or short for
+  its text, or starting with the carrier's last sound) stays out of the pack. The result and the pack's `pack.json` (`retakes`) list it as
   "needs a re-take" with the reason. The paid batch stays in the cache. **Re-take** renders
   again with a new seed (CLI `--seed`, MCP `seed`): only the lines that need a re-take go to
   ElevenLabs. The same seed again sends nothing: it is the same take, so the line stays a
@@ -520,12 +520,19 @@ inside carrier sentences, and compares voices before it spends credits.
 - **How a line is cut.** A bare word sounds wrong from a voice, so each line is spoken in a
   carrier ("The word is six.") and cut out. Lines are grouped by tone (calm, alert, number,
   fun), up to 30 sentences in a batch. ElevenLabs returns the time of every character; QuadCam
-  cuts from the start of the line's first character to the end of its last, moving each edge
-  to the quietest point within 40 ms. The cut then gets the usual trim, fades and tempo.
+  cuts from the start of the line's first character to the end of its last. Those times can
+  run 0.1 s early or late, so the audio decides each edge: the start moves into the quiet
+  between the carrier's last letter and the line ("is" ends in a hiss), the end into the quiet
+  before the next sentence, each at least 40 ms either way. A line that runs straight on from
+  the carrier ("The word is Six") has no quiet, so its edge stays near the timestamp. The cut
+  then gets the usual trim, fades and tempo.
   A cut that fails a check becomes a re-take (above). The raw audio and
   timestamps of each batch are kept by provider, voice, model, speed, text and seed, so a new
   trim or tempo setting re-cuts for free. QuadCam keeps a batch only after it cuts: when
-  ElevenLabs changed the text, the take is not kept, and the next render asks again. A paid
+  ElevenLabs changed the text, the take is not kept, and the next render asks again. When a
+  QuadCam update cuts differently, **Sample** again (samples are cut fresh every time) and
+  **Render pack** again with the same voice, model, sets and seed: the pack's batches are cut
+  again from the cache, and the estimate shows 0 credits. A paid
   request is retried only after a 429 (busy), never after a server error, which may already be
   billed. `--carrier "I said {line}."` changes the carrier.
 
@@ -768,7 +775,7 @@ the order the next session applies them.
 
   | Status | Means |
   |---|---|
-  | Draft | Being edited. The plug-in bar and **Review** skip it, and its own **Review…** is off |
+  | Draft | Being edited. The plug-in bar, **Review** and the on-connect apply skip it, its own **Review…** is off, and a plan refuses it (`draft`) |
   | Ready | Agreed. Apply it when the device is in |
   | Try | Apply, fly, then keep or revert |
   | Read first | Read the real value on the device before changing anything. It does not apply until you mark it Ready; its **Review…** is off until then |

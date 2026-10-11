@@ -18,7 +18,7 @@ use crate::gear::voice::sets::{self, SetInfo, SetLine};
 use crate::gear::voice::tts::{Credits, ModelInfo, ProviderConfig, Tts, VoiceInfo};
 use anyhow::{anyhow, bail, Result};
 use serde::{Deserialize, Serialize};
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
 
 /// `gear_voice_key`.
@@ -213,9 +213,30 @@ impl StudioPlan {
         limit: usize,
         pack: Option<&PackManifest>,
     ) -> Self {
-        let (fresh, reuse) = reuse::split(s, index, &Core::studio_items(lines), bs);
+        let (fresh, mut reuse) = reuse::split(s, index, &Core::studio_items(lines), bs);
         let all = batch::plan_within(&fresh, bs, limit);
-        let (batches, kept) = still_to_do(all, pack, s.voice, s.model, s.settings);
+        let (batches, mut kept) = still_to_do(all, pack, s.voice, s.model, s.settings);
+        // A take the pack holds whole, with every path of its wanted lines, needs no new cut.
+        if let Some(p) = pack {
+            let mut paths: HashMap<&str, Vec<&str>> = HashMap::new();
+            for (l, spoken) in lines {
+                paths.entry(spoken).or_default().push(&l.line.path);
+            }
+            reuse.takes.retain(|(e, want)| {
+                let whole =
+                    p.kept_batches
+                        .contains(&kept_key(s.voice, s.model, s.settings, &e.batch()))
+                        && want.iter().all(|w| {
+                            paths
+                                .get(w.line.as_str())
+                                .into_iter()
+                                .flatten()
+                                .all(|path| p.files.iter().any(|f| f == path))
+                        });
+                kept += u32::from(whole);
+                !whole
+            });
+        }
         StudioPlan {
             reuse,
             batches,
@@ -258,17 +279,24 @@ impl StudioPlan {
         ctx: &batch::Ctx<'_>,
         bs: &BatchSettings,
         notes: &mut Vec<String>,
-    ) -> Result<batch::Rendered> {
+    ) -> Result<(batch::Rendered, Vec<Batch>)> {
         let s = Scope::of(ctx);
         let mut done = batch::render_all(ctx, &self.batches, bs.snap_ms, &mut |_, _| {})?;
         let mut entries = reuse::entries(&s, &self.batches, bs, &done);
-        entries.extend(reuse::cut_reused(&s, &self.reuse, bs.snap_ms, &mut done)?);
+        let reused = reuse::cut_reused(&s, &self.reuse, bs.snap_ms, &mut done)?;
+        // The reused takes whose lines all passed: the pack keeps them whole.
+        let whole: Vec<Batch> = reused
+            .iter()
+            .filter(|e| e.flagged.is_empty())
+            .map(|e| e.batch())
+            .collect();
+        entries.extend(reused);
         if let Err(e) = LineIndex::record(&s, entries) {
             notes.push(format!(
                 "The line index was not saved ({e:#}): the next estimate may price these lines again."
             ));
         }
-        Ok(done)
+        Ok((done, whole))
     }
 }
 
@@ -694,7 +722,7 @@ impl Core {
                 settings: &settings,
             };
             let mut notes = Vec::new();
-            let done = plan.render(&ctx, &bs, &mut notes)?;
+            let (done, _) = plan.render(&ctx, &bs, &mut notes)?;
             report.warnings.extend(notes);
             report.warnings.extend(
                 done.warnings
@@ -827,7 +855,7 @@ impl Core {
             }
             same_plan(p.digest.as_deref(), &digest)?;
         }
-        let done = plan.render(&bctx, &bs, &mut report.notes)?;
+        let (done, whole) = plan.render(&bctx, &bs, &mut report.notes)?;
         report.warnings = done.warnings.clone();
         let tools = crate::media::find_tools().ok();
         let rcache = self.voice_cache();
@@ -899,7 +927,7 @@ impl Core {
             );
             kept_batches = o.kept_batches.clone();
         }
-        for b in batches {
+        for b in batches.iter().chain(&whole) {
             if b.items
                 .iter()
                 .all(|(i, _)| !done.flagged.contains_key(&i.spoken))
@@ -1008,17 +1036,22 @@ fn legacy_pack_id(voice_name: &str, model: &str) -> String {
     )
 }
 
-/// A batch as the pack remembers it: voice, model, settings and text, without the seed, so a
-/// re-render with a new seed knows which batches the pack holds whole.
+/// A batch as the pack remembers it: voice, model, settings, text and the cut's version,
+/// without the seed, so a re-render with a new seed knows which batches the pack holds whole.
+/// A new `batch::CUT_VERSION` makes every batch new again: a re-render cuts it once more (from
+/// the batch cache, at no cost).
 fn kept_key(voice: &str, model: &str, settings: &RenderSettings, b: &Batch) -> String {
     let settings = RenderSettings {
         seed: 0,
         ..settings.clone()
     };
     crate::gear::voice::sha256_hex(
-        serde_json::json!({"voice": voice, "model": model, "settings": settings, "text": b.text})
-            .to_string()
-            .as_bytes(),
+        serde_json::json!({
+            "voice": voice, "model": model, "settings": settings, "text": b.text,
+            "cut": batch::CUT_VERSION,
+        })
+        .to_string()
+        .as_bytes(),
     )
 }
 
