@@ -453,6 +453,8 @@ cli.flag gear voice choose --radio VALUE
 cli.flag gear voice delete --takes
 cli.flag gear voice delete --yes
 cli.flag gear voice edit --confirm
+cli.flag gear voice edit --digest VALUE
+cli.flag gear voice edit --dry-run
 cli.flag gear voice edit --line VALUE
 cli.flag gear voice edit --pack VALUE
 cli.flag gear voice edit --radio VALUE

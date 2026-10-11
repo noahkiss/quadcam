@@ -1144,7 +1144,13 @@ fn my_text_on_a_paid_provider_shows_the_characters_and_pays_with_the_digest() {
     assert!(l.cost.is_none());
     assert_eq!(b.calls.load(Ordering::SeqCst), 1);
     // The take is in the cache now: free, no confirm needed.
-    assert!(!edit("Motors live", true, false, None).unwrap().cost.unwrap().paid);
+    assert!(
+        !edit("Motors live", true, false, None)
+            .unwrap()
+            .cost
+            .unwrap()
+            .paid
+    );
     edit("Motors live", false, false, None).unwrap();
     assert_eq!(b.calls.load(Ordering::SeqCst), 1);
 }
@@ -1188,7 +1194,14 @@ fn deleting_a_pack_clears_the_overrides_that_take_its_lines() {
         }]
     );
     let v = view(&b);
-    let ov = |p: &str| v.lines.iter().find(|l| l.path == p).unwrap().override_.clone();
+    let ov = |p: &str| {
+        v.lines
+            .iter()
+            .find(|l| l.path == p)
+            .unwrap()
+            .override_
+            .clone()
+    };
     assert!(ov(ARMED).is_none());
     assert_eq!(ov(LOWBAT).unwrap().pack.as_deref(), Some("en-a-v1"));
 }

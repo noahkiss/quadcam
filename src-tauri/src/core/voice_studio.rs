@@ -627,7 +627,7 @@ impl Core {
         let _ = std::fs::remove_dir_all(&stage);
         std::fs::create_dir_all(&stage)?;
         // A local pack keeps what an earlier render made: a second set adds to it. A pack
-        // from before 0.12.1, named for the voice's name, moves to the new id here.
+        // from 0.12.0 or earlier, named for the voice's name, moves to the new id here.
         let old_dir = self.voices_dir().join(old_id.as_deref().unwrap_or(&id));
         if old_dir.is_dir() {
             copy_dir(&old_dir, &stage)?;
@@ -714,7 +714,9 @@ impl Core {
         if let Some(from) = old_id.filter(|k| *k != id) {
             self.move_pack_refs(&from, &id)?;
             let _ = std::fs::remove_dir_all(&old_dir);
-            report.notes.push(format!("The pack {from} is now {id}; radios that chose it keep it."));
+            report.notes.push(format!(
+                "The pack {from} is now {id}; radios that chose it keep it."
+            ));
         }
         report.rendered = done.batches_rendered;
         report.from_cache = done.batches_cached;
@@ -735,7 +737,7 @@ impl Core {
     }
 
     /// The local pack id of a voice and model, and the pack a render adds to, with its id:
-    /// the pack under that id, or a pack from before 0.12.1 under the voice's name that this
+    /// the pack under that id, or a pack from 0.12.0 or earlier under the voice's name that this
     /// voice made (or that recorded no voice id).
     fn studio_pack(
         &self,
@@ -771,7 +773,7 @@ fn local_pack_id(voice: &str, model: &str) -> String {
     )
 }
 
-/// The id a local pack had before 0.12.1: the voice's name and the model.
+/// The id a local pack had in 0.12.0 and earlier: the voice's name and the model.
 fn legacy_pack_id(voice_name: &str, model: &str) -> String {
     format!(
         "local-elevenlabs-{}-{}",

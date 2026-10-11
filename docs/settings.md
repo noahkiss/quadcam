@@ -94,7 +94,7 @@ The app, the command-line tool and the MCP server all read and write this file.
 | `elrs_region` | `FCC` | `FCC` or `LBT`: which image folder of a release a flash uses |
 | `elrs_wifi_interval` | 60 | Seconds without a link before a flashed device starts its WiFi (0: never) |
 | `firmware_check` | `manual` | `manual` or `daily`; **Check for firmware updates daily** in Settings > Gear sets `daily`. `manual`: the Firmware page reads the network only when you select **Check for updates**. `daily`: it also checks when the last answer is a day old. See [Gear](gear.md#check) |
-| `tts_provider`, `tts_key` | `say`, none | The voice provider: `say` or `openai`. The Voice studio always uses ElevenLabs, with a key in the Keychain, whatever this says. `QUADCAM_TTS_KEY` in the environment wins over the key. Reads show the key only as `(set)` |
+| `tts_provider`, `tts_key` | `say`, none | The voice provider: `say`, `openai` or `elevenlabs`. ElevenLabs renders only in the Voice studio, with a key in the Keychain; the studio uses ElevenLabs whatever this says. `tts_key` is the `openai` server's key; `QUADCAM_OPENAI_KEY` in the environment wins over it. Reads show the key only as `(set)` |
 | `tts_base_url`, `tts_model`, `tts_voice` | none | For `openai`: the server (such as `http://127.0.0.1:8880`), its model, and the voice your own lines render with. For `say`, `tts_voice` is a `say` voice |
 | `voice_index` | none | The address or path of the voice pack index (`voices.json`) |
 

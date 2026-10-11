@@ -325,7 +325,10 @@ fn a_recorded_character_count_replaces_the_estimate() {
     let after = estimate(&b, &["quad"], "eleven_v4").unwrap();
     assert_eq!(after.estimate.credits_basis, "estimated");
     let log = std::fs::read_to_string(b.dir.path().join("cache/voice/charcost.log")).unwrap();
-    assert!(log.contains("eleven_v4: billed") && log.contains("not kept"), "{log}");
+    assert!(
+        log.contains("eleven_v4: billed") && log.contains("not kept"),
+        "{log}"
+    );
     // Close to its multiplier: kept, and other batches (another set) are priced at it.
     b.http.bill(0.97);
     paid_sample(&b, sample(&["Matilda"], &["eleven_v4"], false, true));
@@ -820,7 +823,7 @@ fn a_pack_named_for_its_voice_moves_to_the_voice_id_and_keeps_its_radios() {
         render("Callum", "eleven_turbo_v2_5", &["sample"], false, true),
     );
     let voices = b.dir.path().join("support/gear/voices");
-    // Make it a pack from before 0.12.1: named for the voice's name, no voice id recorded.
+    // Make it a pack from 0.12.0 or earlier: named for the voice's name, no voice id recorded.
     let legacy = "local-elevenlabs-callum-eleven-turbo-v2-5";
     std::fs::rename(voices.join(&r.pack), voices.join(legacy)).unwrap();
     let mf = voices.join(legacy).join("pack.json");
@@ -873,10 +876,9 @@ fn a_pack_named_for_its_voice_moves_to_the_voice_id_and_keeps_its_radios() {
         g["voice"]["overrides"]["radio-1"]["SOUNDS/en/armed.wav"]["pack"],
         r.pack.as_str()
     );
-    let m: serde_json::Value = serde_json::from_slice(
-        &std::fs::read(voices.join(&r.pack).join("pack.json")).unwrap(),
-    )
-    .unwrap();
+    let m: serde_json::Value =
+        serde_json::from_slice(&std::fs::read(voices.join(&r.pack).join("pack.json")).unwrap())
+            .unwrap();
     assert_eq!(m["id"], r.pack.as_str());
     assert_eq!(m["voice_id"], "v-callum");
 }

@@ -398,18 +398,23 @@ pack records its firmware family (`edgetx`) in `pack.json`.
   apply sheet (it mounts and unmounts the card as usual). The others keep the staged change
   and apply it when they are next plugged in, like any staged change.
 - **Delete.** The trash button asks first, and names the radios that chose the pack. It
-  removes the pack's folder and clears those radios' choice; radio cards keep the sounds they
-  have, and a staged voice change keeps its own copy of them. The raw takes stay in
+  removes the pack's folder and clears those radios' choice, and every line override that
+  takes the pack's take; radio cards keep the sounds they have, and a staged voice change keeps
+  its own copy of them. The raw takes stay in
   the cache, so rendering that voice and model again costs nothing. Tick **Also delete the raw
   takes** to remove them too.
 - **Get voice packs.** A voice pack is a zip of WAVs for one voice. **Refresh packs** reads
-  the pack index (the `voice_index` setting: an address or a file) and **Install** unpacks a
-  pack into the gear folder after a hash check. No pack ships with QuadCam yet.
+  the pack index (the `voice_index` setting: an https address or a file; plain http only on
+  this Mac) and **Install** unpacks a pack into the gear folder after a hash check. An index
+  entry without a hash, a path outside `SOUNDS/`, and a symbolic link in the zip refuse the
+  install. No pack ships with QuadCam yet.
 - **Render my voice.** QuadCam can also speak every line itself, with the provider in the
   settings, and keep the takes as a local pack: `tts_provider` is `say` (macOS, free, offline)
   or `openai` (any server with an OpenAI-compatible `/v1/audio/speech`, such as a Kokoro
-  server on this Mac: set `tts_base_url`, `tts_model` and `tts_voice`). A key goes in
-  `QUADCAM_TTS_KEY` or the `tts_key` setting and is never shown or logged. **Check cost**
+  server on this Mac: set `tts_base_url`, `tts_model` and `tts_voice`). The server's key goes
+  in `QUADCAM_OPENAI_KEY` or the `tts_key` setting and is never shown or logged. ElevenLabs
+  renders only in the [Voice studio](#voice-studio), which prices a render first: with
+  `tts_provider` `elevenlabs`, **Render my voice** and **My text…** say so. **Check cost**
   reports the lines, how many the cache already holds, and the characters a provider would
   speak. A provider that is not on this Mac may charge: **Render my voice** then stops and
   shows the characters, and **Render and pay** goes ahead.
@@ -428,14 +433,17 @@ inside carrier sentences, and compares voices before it spends credits.
 - **Key.** Paste the ElevenLabs API key and **Save key**. It goes to the macOS Keychain
   (service `app.quadcam`) and nowhere else: not `settings.json`, not a log, not an answer.
   The studio shows only the last four characters. **Remove key** deletes it. From the command
-  line, `quadcam-cli gear voice key set` reads the key from stdin. `QUADCAM_TTS_KEY` in the
-  environment takes the place of the Keychain for one run.
+  line, `quadcam-cli gear voice key set` reads the key from stdin. `QUADCAM_ELEVENLABS_KEY` in
+  the environment takes the place of the Keychain for one run. The older `QUADCAM_TTS_KEY`
+  still works, for ElevenLabs only: no other provider gets it.
 - **Account.** The studio lists the account's voices and models and the credits left. Each
   model shows its price in USD per 1,000 characters and the credits a character costs. QuadCam
   holds one rate table (the pricing page of 2026-10-09). A promo rate, such as the one on v4
   and v4 turbo until 2026-10-12, shows with its last day. The credit figure is an estimate:
   one credit is one character at the $0.08 rate, so a $0.04 model costs half a credit. After
-  a paid call, QuadCam records the character count ElevenLabs reports and uses that next time.
+  a paid call, QuadCam records the character count ElevenLabs reports and uses that next time,
+  when it is within 5% of the model's credits a character. It logs every count, kept or not,
+  in `voice/charcost.log` in the cache.
 - **Line sets.** A set is a list of lines to render. Sets combine, and a line in two sets is
   rendered once. Every line has a card path, its text, a tone and the sets that hold it.
   Four tones batch separately, so a calm word never picks up a warning's voice: `calm`,
@@ -443,7 +451,7 @@ inside carrier sentences, and compares voices before it spends credits.
 
   | Set | Lines | Holds |
   |---|---|---|
-  | `edgetx` | 747 | Every English prompt EdgeTX 2.x plays: the radio's own 147 prompts and number words, 65 units, 356 model prompts, and 179 telemetry-script prompts |
+  | `edgetx` | 747 | Every English prompt EdgeTX 2.x plays: the radio's own 148 prompts and number words, 64 units, 356 model prompts, and 179 telemetry-script prompts |
   | `quad` | 396 | The radio's prompts and units, the EdgeTX prompts a quad plays (modes, rates, VTX, OSD, turtle, rescue, navigation), and QuadCam's quad callouts |
   | `heli` | 325 | The same base, the helicopter prompts (idle up, governor, autorotation, engine, glow), and QuadCam's callouts |
   | `plane` | 368 | The same base, the plane prompts (gear, flaps, spoilers, brakes, reverse thrust, drag brake), and QuadCam's callouts |
@@ -469,11 +477,14 @@ inside carrier sentences, and compares voices before it spends credits.
   40,000).
 - **Sample.** Tick voices and models and press **Sample**. QuadCam renders the sample lines
   in each pair, shows the cost, and waits for **Sample and pay**. Each play button in the grid
-  plays one line in one voice and model.
+  plays one line in one voice and model. The sample files keep the card path, so two lines
+  with one file name (`armed.wav` and a script's `armed.wav`) stay apart.
 - **Render pack.** Needs one voice, one model and at least one set. After **Render and pay**
-  the lines go into a local pack named for the voice and model; a second set adds to the
-  same pack. It joins the library, and **Apply to radios…** or a radio's **Choose voice** puts
-  it on a radio like any other pack.
+  the lines go into a local pack named for the voice id and the model, so two voices with one
+  name never share a pack; a second set adds to the same pack. A pack from 0.12.0 or earlier
+  is named for the voice's name: the next render of that voice and model moves it to the new
+  name, and the radios that chose it keep it. The pack joins the library, and **Apply to
+  radios…** or a radio's **Choose voice** puts it on a radio like any other pack.
 - **Pay for what was priced.** The question names a digest of its plan: the voices, models,
   sets, seed and characters. **Sample and pay** and **Render and pay** send that digest, and
   QuadCam refuses a confirm whose plan changed ("estimate again"). A change to any picker
@@ -513,7 +524,8 @@ them on the card.
   **Review…** opens the apply sheet: backup first, write, read back, compare. Over the radio's
   USB a whole pack takes minutes.
 - **One line.** **Use another voice…** takes another installed voice's take for that line
-  on this radio. **My text…** speaks your own text with your provider for that line only.
+  on this radio. **My text…** speaks your own text with your provider for that line only. A
+  provider that may charge shows the characters first, and **Render and pay** goes ahead.
   **Reset** clears it. The play buttons play a take. A line you add this way that QuadCam does
   not list becomes one of your own lines.
 

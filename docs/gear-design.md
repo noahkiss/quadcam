@@ -172,7 +172,7 @@ A new **Gear** section:
 | Keep one a month | `gearKeepMonthly` | on (no limit) |
 | USB time warning | `gearUsbMinutes` | 20 |
 | Voice provider | `ttsProvider` | `say` (macOS) |
-| Voice provider key | `ttsKey` | none; read from `QUADCAM_TTS_KEY` first; in `SECRET_KEYS`. The ElevenLabs key is not a setting: it lives in the Keychain (service `app.quadcam`, account `elevenlabs-api-key`) |
+| Voice provider key | `ttsKey` | none; the openai server's key, read from `QUADCAM_OPENAI_KEY` first; in `SECRET_KEYS`. The ElevenLabs key is not a setting: it lives in the Keychain (service `app.quadcam`, account `elevenlabs-api-key`), read from `QUADCAM_ELEVENLABS_KEY` (or the older `QUADCAM_TTS_KEY`) first. No provider gets another's key |
 | Check for firmware | `firmwareCheck` | `manual` (`manual` or `daily`) |
 | Tools (esptool, ffmpeg) | `modules` | QuadCam's own modules (7.10); a path per tool overrides one |
 | Use Homebrew ffmpeg | `ffmpegSource` | `module` (`module` or `homebrew`) |
@@ -388,7 +388,7 @@ in `specta_builder` (`lib.rs`).
 | `gear_sim_sync_plan` | `SimSyncParams { sims, rates }` → `ApplyPlan` | no |
 | `gear_sim_sync` | `SimSyncRequest { digest, confirm }` → `ApplyReport` | **sim files** |
 | `gear_voice` | `VoiceParams` → `VoiceView` (lines, packs installed and available, card state) | no |
-| `gear_voice_edit` | `VoiceEditParams { line, text, pack }` → `VoiceLine` | gear.json |
+| `gear_voice_edit` | `VoiceEditParams { line, text, pack, confirm, dry_run, digest }` → `VoiceLine` (with `cost` on a `dry_run`) | gear.json |
 | `gear_voice_render` | `VoiceRenderParams { voice, lines, dry_run }` → `RenderReport` | cache; network |
 | `gear_voice_key` | `KeyParams { action, key }` → `KeyStatus` (never the key) | Keychain |
 | `gear_voice_sets` | → `StudioView` (key state, line sets) | no |
@@ -1111,17 +1111,22 @@ protocol serves; the gear folder is outside its scope). `build-pack` is CLI only
   tests use fakes. The key goes to curl on stdin in a config file. No ElevenLabs adapter: the
   design asks for one, and a paid adapter waits for open question 6.
 - Settings: `tts_provider`, `tts_key`, and new `tts_base_url`, `tts_model`, `tts_voice`,
-  `voice_index` (in `settings.json`, not in `GearSettings`). `QUADCAM_TTS_KEY` beats `tts_key`.
+  `voice_index` (in `settings.json`, not in `GearSettings`). `QUADCAM_OPENAI_KEY` beats `tts_key`
+  for `openai`. `tts_provider = elevenlabs` renders only in the studio: line-by-line renders,
+  `build-pack` and a line's own text refuse it, since only the studio prices a render and checks
+  the credits.
 - Render: `Cache` keys a take by provider, voice, model, provider speed, spoken text and seed
   (sha-256) and stores it as a WAV, not a `.pcm`, so the rate travels with it. `normalise` runs
   ffmpeg only for a tempo or a rate other than 32 kHz; the trim, pads and fades are integer
   math, so `tests/fixtures/voice/golden.wav` pins the bytes. The fades act on the speech, and
   the lead and tail pads are silence added after.
 - Packs: `build` renders the lines to a folder and zips it with `/usr/bin/zip` (no zip crate),
-  then writes the entry into `voices.json`. `install` checks the zip's hash, lists its members
-  with `unzip -Z1` and refuses a path outside `pack.json` and `SOUNDS/`, unpacks, and checks the
-  manifest's id and files. The index is read from `voice_index` (a path, or an address through
-  `Fetch`) into the cache; a pack zip sits next to its index.
+  then writes the entry into `voices.json`. `install` refuses an index entry without a hash and
+  checks the zip's hash, lists its members with `unzip -Z1` and refuses a path outside `pack.json`
+  and `SOUNDS/` (folder entries included), refuses a symbolic link (`zipinfo`), unpacks, refuses
+  anything unpacked that is not a plain file or folder (`symlink_metadata`), and checks the
+  manifest's id and files. The index is read from `voice_index` (a path, an https address, or an
+  http address on this Mac, through `Fetch`) into the cache; a pack zip sits next to its index.
 - Choose voice: `Edit::CardFiles` is now applied. `card_work` reads each `CardFile` from the blob
   store and plans it like a restore (`Card::plan_files`), so backup, write, read back and
   rollback are WP5's. A change of card files stands alone. Overrides live in `gear.json`
@@ -1151,7 +1156,9 @@ its last day, and the per-request character limit (v4 and v4 turbo: the v3 limit
 until the account says otherwise). Credits a character are the base USD rate over 0.08 and
 read as an estimate; a model the table lacks keeps the account's `character_cost_multiplier`
 (turbo and flash v2 fall back to 0.5). The `x-character-count` header of a paid call is kept
-per model in `<cache>/voice/charcost.json` and wins over the estimate next time.
+per model in `<cache>/voice/charcost.json` and wins over the estimate next time, but only within
+5% of the model's multiplier in the table (any table multiplier for a model the table lacks).
+Every reading, kept or not, goes to stderr and `<cache>/voice/charcost.log`.
 
 - Batches (`batch.rs`): `plan` groups lines by tone, wraps each in the carrier (default
   `The word is {line}.`, the line ends the sentence; a line with its own end mark takes no
