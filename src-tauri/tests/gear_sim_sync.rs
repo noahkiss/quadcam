@@ -482,6 +482,74 @@ fn a_file_that_cannot_be_written_refuses_in_words() {
     }
 }
 
+#[test]
+fn two_profiles_in_one_file_are_one_write_that_keeps_both() {
+    let dir = tempfile::tempdir().unwrap();
+    let (h, paths) = home();
+    let c = core(dir.path());
+    // The quad's RACE profile (Actual, fitted) differs from both Liftoff profiles.
+    let p = params(
+        vec![target("liftoff", "Freestyle"), target("liftoff", "Race")],
+        1,
+    );
+    let before = std::fs::read(&paths.liftoff).unwrap();
+    let plan = c.gear_sim_sync_plan_at(&p, h.path(), &never).unwrap();
+    assert!(plan.ready(), "{:?}", plan.checks);
+    let r = c
+        .sim_sync_at(&request(p.clone(), &plan, true), true, h.path(), &never)
+        .unwrap();
+    assert_eq!(r.status, ChangeStatus::Verified, "{}", r.message);
+    assert_eq!(r.files.len(), 1);
+    assert!(r.message.contains("Freestyle, Race"), "{}", r.message);
+    assert_eq!(
+        r.steps.iter().filter(|s| s.name == "Write Liftoff").count(),
+        1
+    );
+
+    // Both profiles hold the quad's rates; the first write was not undone by the second.
+    let after = sim_of("liftoff")
+        .parse(&std::fs::read(&paths.liftoff).unwrap())
+        .unwrap();
+    let rates = |name: &str| {
+        after
+            .profiles
+            .iter()
+            .find(|p| p.name == name)
+            .unwrap()
+            .rates
+            .unwrap()
+    };
+    assert_ne!(rates("Freestyle").axes[0].rc_rate, 127.0);
+    assert_eq!(rates("Freestyle"), rates("Race"));
+
+    // One backup, of the file as it was before either edit.
+    let list = c
+        .gear_backups(&BackupFilter {
+            device: Some("sim-liftoff".into()),
+        })
+        .unwrap();
+    assert_eq!(list.len(), 1);
+    let content = c
+        .gear_backup_read(&BackupReadParams {
+            id: list[0].id.clone(),
+            path: None,
+        })
+        .unwrap();
+    let one = c
+        .gear_backup_read(&BackupReadParams {
+            id: list[0].id.clone(),
+            path: Some(content.backup.files[0].path.clone()),
+        })
+        .unwrap();
+    assert_eq!(one.text.unwrap().as_bytes(), before.as_slice());
+
+    // Planning again: both already hold the rates.
+    assert!(!c
+        .gear_sim_sync_plan_at(&p, h.path(), &never)
+        .unwrap()
+        .ready());
+}
+
 fn request(p: SimSyncParams, plan: &ApplyPlan, confirm: bool) -> SimSyncRequest {
     SimSyncRequest {
         params: p,

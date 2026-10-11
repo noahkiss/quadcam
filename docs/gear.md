@@ -837,7 +837,8 @@ create sim profiles.
 - **The write:** QuadCam backs up each file first (the gear folder, as device `sim-<id>`, always
   kept), writes it through a temporary file and a rename with the file's own permissions, reads it
   back and parses it. If one file fails, every file already written is put back. Only the values
-  that differ change; the rest of the file stays as it was.
+  that differ change; the rest of the file stays as it was. Two profiles in one file (two
+  Liftoff profiles, say) are one write that holds both.
 - **Throttle:** Uncrashed gets the quad's throttle mid and expo. A sim has no hover value, so
   the quad's `thr_hover` is not counted as a difference.
 
