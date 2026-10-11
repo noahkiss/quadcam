@@ -452,6 +452,7 @@ export type {
 // Radio voice, as generated.
 export type {
   LineOverride,
+  EditCost,
   PackDeleteParams,
   PackDeleteReport,
   PackInstallParams,

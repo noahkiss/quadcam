@@ -1110,3 +1110,41 @@ fn elevenlabs_renders_line_by_line_nowhere_but_the_studio() {
     assert!(format!("{e:#}").contains("Voice studio"), "{e:#}");
     assert_eq!(b.calls.load(Ordering::SeqCst), 0);
 }
+
+#[test]
+fn my_text_on_a_paid_provider_shows_the_characters_and_pays_with_the_digest() {
+    let b = bench(Opts::default());
+    b.paid.store(true, Ordering::SeqCst);
+    let edit = |text: &str, dry_run: bool, confirm: bool, digest: Option<String>| {
+        b.core.gear_voice_edit(&VoiceEditParams {
+            radio: b.id.clone(),
+            line: ARMED.into(),
+            text: Some(text.into()),
+            pack: None,
+            confirm,
+            dry_run,
+            digest,
+        })
+    };
+    let e = edit("Motors live", false, false, None).unwrap_err();
+    assert!(format!("{e:#}").contains("dry_run"), "{e:#}");
+    let dry = edit("Motors live", true, false, None).unwrap();
+    let cost = dry.cost.clone().unwrap();
+    assert!(cost.paid && cost.chars == 11 && !cost.digest.is_empty());
+    assert!(dry.override_.is_none(), "a dry run changes nothing");
+    assert_eq!(b.calls.load(Ordering::SeqCst), 0);
+    // Confirm needs the digest, and the digest of this text.
+    let e = edit("Motors live", false, true, None).unwrap_err();
+    assert!(format!("{e:#}").contains("digest"), "{e:#}");
+    let e = edit("Motors on", false, true, Some(cost.digest.clone())).unwrap_err();
+    assert!(format!("{e:#}").contains("plan changed"), "{e:#}");
+    assert_eq!(b.calls.load(Ordering::SeqCst), 0);
+    let l = edit("Motors live", false, true, Some(cost.digest)).unwrap();
+    assert_eq!(l.override_.unwrap().kind, "text");
+    assert!(l.cost.is_none());
+    assert_eq!(b.calls.load(Ordering::SeqCst), 1);
+    // The take is in the cache now: free, no confirm needed.
+    assert!(!edit("Motors live", true, false, None).unwrap().cost.unwrap().paid);
+    edit("Motors live", false, false, None).unwrap();
+    assert_eq!(b.calls.load(Ordering::SeqCst), 1);
+}

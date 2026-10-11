@@ -105,7 +105,8 @@ pub use sim_host::{
 pub use sim_restore::{SimRestoreParams, SimRestoreRequest};
 pub use switchmap::{RadioParams, RadioWatchParams, SwitchMapParams};
 pub use voice::{
-    report_text as voice_report_text, view_text as voice_view_text, BuildPackParams, LineOverride,
+    report_text as voice_report_text, view_text as voice_view_text, BuildPackParams, EditCost,
+    LineOverride,
     PackDeleteParams, PackDeleteReport, PackInstallParams, ProviderView, RenderReport,
     VoiceChooseParams, VoiceChooseRadiosParams, VoiceChooseRadiosReport, VoiceEditParams,
     VoiceLine, VoicePack, VoiceParams, VoicePreviewParams, VoiceRenderParams, VoiceView,

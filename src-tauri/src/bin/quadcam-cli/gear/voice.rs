@@ -227,9 +227,16 @@ pub enum VoiceCmd {
         text: Option<String>,
         #[arg(long)]
         pack: Option<String>,
-        /// Allow a render that sends text to a provider that may charge.
+        /// With --text: report the characters and the digest; change nothing.
+        #[arg(long)]
+        dry_run: bool,
+        /// Allow a render that sends text to a provider that may charge (needs --digest).
         #[arg(long)]
         confirm: bool,
+        /// With --text and --confirm: the digest the --dry-run printed. Refused when the
+        /// text, voice or provider changed since.
+        #[arg(long)]
+        digest: Option<String>,
     },
     /// Stage one card change that puts a pack's sounds on a radio, or on each of several
     /// radios (--radio again, or --all-radios).
@@ -447,7 +454,9 @@ pub fn run(core: &Core, a: VoiceArgs) -> Result<Value> {
             line,
             text,
             pack,
+            dry_run,
             confirm,
+            digest,
         }) => serde_json::to_value(call::gear_voice_edit(
             core,
             api::VoiceEditParams {
@@ -456,6 +465,8 @@ pub fn run(core: &Core, a: VoiceArgs) -> Result<Value> {
                 text,
                 pack,
                 confirm,
+                dry_run,
+                digest,
             },
         )?)?,
         Some(VoiceCmd::Choose {

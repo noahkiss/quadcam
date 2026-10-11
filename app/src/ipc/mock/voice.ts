@@ -140,7 +140,7 @@ export function render(g: MockGear, p: { voice?: string; lines?: string[]; dry_r
 }
 
 /** `gear_voice_edit`. */
-export function edit(g: MockGear, p: { radio: string; line: string; text?: string | null; pack?: string | null; confirm?: boolean }): VoiceLine {
+export function edit(g: MockGear, p: { radio: string; line: string; text?: string | null; pack?: string | null; confirm?: boolean; dry_run?: boolean; digest?: string | null }): VoiceLine {
   radioOf(g, p.radio);
   checkPath(p.line);
   const v = g.voice;
@@ -153,7 +153,13 @@ export function edit(g: MockGear, p: { radio: string; line: string; text?: strin
     per[p.line] = { kind: "pack", pack: p.pack, text: null };
   } else if (p.text) {
     if (!p.text.trim()) throw "The text is empty.";
-    if (v.paid && !p.confirm) throw `This render sends ${spoken(p.text).length} characters to a provider that may charge for them. Pass confirm to go ahead.`;
+    const cost = { chars: spoken(p.text).length, paid: v.paid, provider: "openai", digest: `edit-${p.radio}-${p.line}-${p.text}` };
+    if (p.dry_run) {
+      const line = view(g, { radio: p.radio }).lines.find((l) => l.path === p.line) ?? { path: p.line, text: p.text, spoken: spoken(p.text), group: "extras", why: "Your own line.", custom: true, packs: [], override: null };
+      return { ...line, cost };
+    }
+    if (v.paid && !p.confirm) throw `This render sends ${cost.chars} characters to a provider that may charge for them. Run it with dry_run, show the person the characters, then confirm with that digest.`;
+    if (v.paid && p.digest !== cost.digest) throw p.digest ? "The plan changed since its estimate (voices, models, sets, seed or characters): estimate again." : "A paid call needs the digest of its estimate: run it without confirm, show the person the cost, then confirm with that digest.";
     if (!known) v.custom.push({ path: p.line, text: p.text });
     per[p.line] = { kind: "text", pack: null, text: p.text };
   } else delete per[p.line];

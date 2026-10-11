@@ -65,6 +65,21 @@ pub struct VoiceLine {
     pub packs: Vec<String>,
     #[serde(default, rename = "override")]
     pub override_: Option<LineOverride>,
+    /// `gear_voice_edit` with `dry_run` and a `text`: what rendering that text costs.
+    #[serde(default)]
+    pub cost: Option<EditCost>,
+}
+
+/// What a `gear_voice_edit` of the person's own text costs.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, specta::Type)]
+pub struct EditCost {
+    /// The characters the provider would speak.
+    pub chars: u32,
+    /// The take costs money: a provider that may charge, and no take in the cache.
+    pub paid: bool,
+    pub provider: String,
+    /// The digest a paid `confirm` repeats.
+    pub digest: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, specta::Type)]
@@ -147,9 +162,16 @@ pub struct VoiceEditParams {
     pub text: Option<String>,
     #[serde(default)]
     pub pack: Option<String>,
-    /// Allows a render that costs money.
+    /// Allows a render that costs money; needs `digest`.
     #[serde(default)]
     pub confirm: bool,
+    /// With `text`: report what the render costs (`cost`, with its digest); change nothing.
+    #[serde(default)]
+    pub dry_run: bool,
+    /// A paid render of `text`: the digest the `dry_run` returned. A `confirm` needs it, and
+    /// is refused when the text, voice or provider changed since.
+    #[serde(default)]
+    pub digest: Option<String>,
 }
 
 /// `gear_voice_render`: QuadCam's lines, and the person's own, rendered with the provider
@@ -678,6 +700,7 @@ impl Core {
                     pack: o.pack.clone(),
                     text: o.text.clone(),
                 }),
+                cost: None,
                 path: l.path,
                 text: l.text,
                 group: l.group,
@@ -1074,11 +1097,51 @@ impl Core {
                     tools.as_ref(),
                 );
                 let spoken = spelling.apply(text);
-                if tts.paid() && !render::cached(&ctx, &spoken) && !p.confirm {
-                    bail!(
-                        "This render sends {} characters to a provider that may charge for them. Pass confirm to go ahead.",
-                        spoken.chars().count()
-                    );
+                let (cfg, _, _) = self.voice_config();
+                let cost = EditCost {
+                    chars: spoken.chars().count() as u32,
+                    paid: tts.paid() && !render::cached(&ctx, &spoken),
+                    provider: tts.id().into(),
+                    digest: super::voice_studio::plan_digest(&json!({
+                        "kind": "edit", "provider": tts.id(), "base_url": cfg.base_url,
+                        "voice": voice, "model": model, "radio": p.radio, "line": p.line,
+                        "spoken": spoken,
+                    })),
+                };
+                if p.dry_run {
+                    let mut line = match self
+                        .gear_voice(&VoiceParams {
+                            radio: Some(p.radio.clone()),
+                            refresh_index: false,
+                        })?
+                        .lines
+                        .into_iter()
+                        .find(|l| l.path == p.line)
+                    {
+                        Some(l) => l,
+                        None => VoiceLine {
+                            path: p.line.clone(),
+                            text: text.clone(),
+                            spoken: spoken.clone(),
+                            group: "extras".into(),
+                            why: "Your own line.".into(),
+                            custom: true,
+                            packs: Vec::new(),
+                            override_: None,
+                            cost: None,
+                        },
+                    };
+                    line.cost = Some(cost);
+                    return Ok(line);
+                }
+                if cost.paid {
+                    if !p.confirm {
+                        bail!(
+                            "This render sends {} characters to a provider that may charge for them. Run it with dry_run, show the person the characters, then confirm with that digest.",
+                            cost.chars
+                        );
+                    }
+                    super::voice_studio::same_plan(p.digest.as_deref(), &cost.digest)?;
                 }
                 let (wav, _) = render::render_line(&ctx, &spoken)?;
                 let blob = blobs.put(&wav)?;

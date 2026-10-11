@@ -791,12 +791,12 @@ fn to_render(ctx: &batch::Ctx<'_>, batches: &[Batch]) -> Vec<String> {
 }
 
 /// The digest a paid call's `confirm` repeats.
-fn plan_digest(plan: &serde_json::Value) -> String {
+pub(super) fn plan_digest(plan: &serde_json::Value) -> String {
     crate::gear::voice::sha256_hex(plan.to_string().as_bytes())
 }
 
 /// A paid `confirm` pays only for the plan its estimate showed.
-fn same_plan(given: Option<&str>, want: &str) -> Result<()> {
+pub(super) fn same_plan(given: Option<&str>, want: &str) -> Result<()> {
     match given.map(str::trim).filter(|d| !d.is_empty()) {
         None => bail!("A paid call needs the digest of its estimate: run it without confirm, show the person the cost, then confirm with that digest."),
         Some(d) if d == want => Ok(()),
