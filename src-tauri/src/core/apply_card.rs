@@ -363,6 +363,22 @@ impl Core {
                 }
             }
         }
+        for e in edits {
+            let names: Vec<&str> = match e {
+                Edit::Model { ops, .. } => ops
+                    .iter()
+                    .filter_map(|o| match o {
+                        crate::gear::edgetx::model::ModelOp::Rename { name } => Some(name.as_str()),
+                        _ => None,
+                    })
+                    .collect(),
+                Edit::ModelCopy { name, .. } => vec![name.as_str()],
+                _ => vec![],
+            };
+            for n in names {
+                crate::gear::edgetx::model::check_model_name(n).map_err(refusal)?;
+            }
+        }
         self.card_work(edits).map(|_| ())
     }
 
@@ -489,9 +505,12 @@ impl Core {
             }
         };
         let _hold = self.gear_hold(&handle);
-        let out = self.apply_card_inner(change, planned, &l, &stop, stash);
+        let (out, still_writing) = match self.apply_card_inner(change, planned, &l, &stop, stash) {
+            Ok((r, w)) => (Ok(r), w),
+            Err(e) => (Err(e), false),
+        };
         // Mount, work, unmount: the card is released whatever the job did; "safe to
-        // unplug" plays only when it worked.
+        // unplug" plays only when it worked. A write still running keeps it mounted.
         let (failed, refused) = match &out {
             Ok(r) if r.status == ChangeStatus::Verified => (None, false),
             Ok(r) => (Some(r.message.clone()), false),
@@ -501,11 +520,21 @@ impl Core {
             ),
         };
         if refused {
-            // A refusal plays no cue.
-            self.card_quiet_unmount(&Located {
-                mounted_here: true,
-                ..l
-            });
+            // A refusal plays no cue, and leaves a card the person mounted mounted.
+            self.card_quiet_unmount(&l);
+        } else if still_writing {
+            // The card stays mounted as if the person had pressed Mount, so its page shows
+            // Done. The timer's unmount fails while a file is still open.
+            self.gear_mounted_for_user.lock().unwrap().insert(
+                change.device.clone(),
+                (
+                    Instant::now() + Duration::from_secs(MOUNT_MINUTES as u64 * 60),
+                    Utc::now() + chrono::Duration::minutes(MOUNT_MINUTES as i64),
+                ),
+            );
+            let why = failed.unwrap_or_default();
+            self.gear_note_failure(&c, "Apply", &why);
+            self.gear_job_done(&c, Some("Apply"));
         } else if let Err(why) = self.gear_finish_card(&c, failed.as_deref().map(|m| ("Apply", m)))
         {
             if let Ok(r) = &out {
@@ -524,20 +553,22 @@ impl Core {
         l: &Located,
         stop: &std::sync::Arc<std::sync::atomic::AtomicBool>,
         stash: &std::sync::Mutex<Option<ApplyReport>>,
-    ) -> Result<ApplyReport> {
+    ) -> Result<(ApplyReport, bool)> {
         let _ = stash;
         let handle = link_handle(&l.connected.link);
         let step = |s: &str| self.job_step(&handle, s);
         let snaps = self.snapshots();
         let plan = planned.files.context("The plan holds no files.")?;
         let radio_usb = l.connected.usb.is_some();
-        let mut opts = if radio_usb {
-            WriteOptions::radio_usb()
-        } else {
-            WriteOptions::reader()
+        let mut opts = match &self.gear.card_write {
+            Some(o) => o.clone(),
+            None if radio_usb => WriteOptions::radio_usb(),
+            None => WriteOptions::reader(),
         };
         opts.stop = stop.clone();
-        opts.fail_readback = self.gear.fail_readback.clone();
+        if opts.fail_readback.is_none() {
+            opts.fail_readback = self.gear.fail_readback.clone();
+        }
 
         // Backup first; a failed backup stops everything. A full snapshot, always kept.
         step("Backing up");
@@ -638,38 +669,46 @@ impl Core {
                 if let Some(r) = e.downcast_ref::<Refusal>() {
                     return Err(refusal(r.clone()));
                 }
-                // A write or a read-back went wrong: put every file back.
-                let rb = cardplan::roll_back(&l.root, &plan, &opts);
                 steps.push(StepReport {
                     name: "Write".into(),
                     state: StepState::Failed,
                     detail: Some(format!("{e:#}")),
                 });
-                steps.push(StepReport {
-                    name: "Roll back".into(),
-                    state: if rb.failed.is_empty() {
-                        StepState::Done
-                    } else {
-                        StepState::Failed
-                    },
-                    detail: Some(if rb.failed.is_empty() {
-                        format!("{} files put back", rb.restored.len())
-                    } else {
-                        rb.failed.join("; ")
-                    }),
-                });
+                // A write that ran past its timeout is still running: nothing else touches
+                // the card until it ends.
+                if let Some(s) = e.downcast_ref::<engine::Stuck>() {
+                    step("Waiting for the card");
+                    if !s.wait(opts.stuck_wait) {
+                        steps.push(StepReport {
+                            name: "Roll back".into(),
+                            state: StepState::Skipped,
+                            detail: Some("a write is still running".into()),
+                        });
+                        steps.push(skipped("Read back"));
+                        steps.push(skipped("Verify"));
+                        report.message = still_writing_message(&format!("{e:#}"), &backup.id);
+                        return Ok((self.record_card(change, report, steps)?, true));
+                    }
+                }
+                // A write or a read-back went wrong: put every file back.
+                let rb = cardplan::roll_back(&l.root, &plan, &opts);
+                steps.push(roll_back_step(&rb));
                 steps.push(skipped("Read back"));
                 steps.push(skipped("Verify"));
                 report.files = rb.restored.clone();
-                report.message = if rb.failed.is_empty() {
-                    format!("{e:#} The card is as it was.")
+                report.message = if let Some(w) = &rb.still_writing {
+                    still_writing_message(&format!("{e:#} Putting the files back: {w}"), &backup.id)
+                } else if rb.as_it_was() {
+                    format!("{e:#} QuadCam put the files back and read them back. The card is as it was.")
                 } else {
                     format!(
-                        "{e:#} Putting the files back failed for {}. Restore the backup.",
-                        rb.failed.join(", ")
+                        "{e:#} Putting the files back failed for {}. Restore the backup {}.",
+                        rb.failed.join(", "),
+                        backup.id
                     )
                 };
-                return self.record_card(change, report, steps);
+                let still = rb.still_writing.is_some();
+                return Ok((self.record_card(change, report, steps)?, still));
             }
         };
         report.files = done
@@ -689,22 +728,26 @@ impl Core {
         });
         if done.stopped {
             let rb = cardplan::roll_back(&l.root, &plan, &opts);
-            steps.push(StepReport {
-                name: "Roll back".into(),
-                state: if rb.failed.is_empty() {
-                    StepState::Done
-                } else {
-                    StepState::Failed
-                },
-                detail: Some(format!("{} files put back", rb.restored.len())),
-            });
+            steps.push(roll_back_step(&rb));
             steps.push(skipped("Read back"));
             steps.push(skipped("Verify"));
-            report.message = format!(
-                "Stopped after {} files; QuadCam put them back. The card is as it was.",
-                done.written.len() + done.deleted.len()
-            );
-            return self.record_card(change, report, steps);
+            let n = done.written.len() + done.deleted.len();
+            report.message = if let Some(w) = &rb.still_writing {
+                still_writing_message(
+                    &format!("Stopped after {n} files. Putting them back: {w}"),
+                    &backup.id,
+                )
+            } else if rb.as_it_was() {
+                format!("Stopped after {n} files; QuadCam put them back and read them back. The card is as it was.")
+            } else {
+                format!(
+                    "Stopped after {n} files. Putting the files back failed for {}. Restore the backup {}.",
+                    rb.failed.join(", "),
+                    backup.id
+                )
+            };
+            let still = rb.still_writing.is_some();
+            return Ok((self.record_card(change, report, steps)?, still));
         }
         report.saved = true;
 
@@ -752,28 +795,32 @@ impl Core {
                 state: StepState::Failed,
                 detail: Some(format!("{} files differ", wrong.len())),
             });
-            steps.push(StepReport {
-                name: "Roll back".into(),
-                state: if rb.failed.is_empty() {
-                    StepState::Done
-                } else {
-                    StepState::Failed
-                },
-                detail: Some(format!("{} files put back", rb.restored.len())),
-            });
-            report.message = if rb.failed.is_empty() {
+            steps.push(roll_back_step(&rb));
+            report.message = if let Some(w) = &rb.still_writing {
+                still_writing_message(
+                    &format!(
+                        "{} did not read back as written. Putting the files back: {w}",
+                        wrong.join(", ")
+                    ),
+                    &backup.id,
+                )
+            } else if rb.as_it_was() {
                 format!(
-                    "{} did not read back as written; QuadCam put the files back. The card is as it was.",
+                    "{} did not read back as written; QuadCam put the files back and read them back. The card is as it was.",
                     wrong.join(", ")
                 )
             } else {
                 format!(
-                    "{} did not read back as written, and putting the files back failed. Restore the backup.",
-                    wrong.join(", ")
+                    "{} did not read back as written, and putting the files back failed for {}. Restore the backup {}.",
+                    wrong.join(", "),
+                    rb.failed.join(", "),
+                    backup.id
                 )
             };
+            let still = rb.still_writing.is_some();
+            return Ok((self.record_card(change, report, steps)?, still));
         }
-        self.record_card(change, report, steps)
+        Ok((self.record_card(change, report, steps)?, false))
     }
 
     fn record_card(
@@ -826,6 +873,31 @@ impl Core {
         let stash = std::sync::Mutex::new(None);
         self.apply_card(&change, planned, l, &stash)
     }
+}
+
+/// The roll back's step: done only when every file read back as it was.
+fn roll_back_step(rb: &cardplan::RollBack) -> StepReport {
+    StepReport {
+        name: "Roll back".into(),
+        state: if rb.as_it_was() {
+            StepState::Done
+        } else {
+            StepState::Failed
+        },
+        detail: Some(match &rb.still_writing {
+            Some(w) => format!("a write is still running: {w}"),
+            None if rb.failed.is_empty() => format!("{} files put back", rb.restored.len()),
+            None => rb.failed.join("; "),
+        }),
+    }
+}
+
+/// A write still running after the wait: QuadCam keeps the card mounted and does not put
+/// files back, so nothing races that write.
+fn still_writing_message(what: &str, backup: &str) -> String {
+    format!(
+        "{what} macOS is still writing to the card, so QuadCam did not put the files back and left the card mounted. Leave it plugged in until the radio responds again, then press Done on its Gear page to unmount it, and restore the backup {backup}."
+    )
 }
 
 fn connected_label(c: &Connected) -> String {

@@ -166,6 +166,10 @@ pub enum VoiceCmd {
         /// Allow the paid call.
         #[arg(long)]
         confirm: bool,
+        /// With --confirm: the digest the run without --confirm printed. Refused when the
+        /// plan changed since.
+        #[arg(long)]
+        digest: Option<String>,
         #[command(flatten)]
         batch: BatchArgs,
         #[command(flatten)]
@@ -195,6 +199,10 @@ pub enum VoiceCmd {
         /// Allow a render that sends text to a provider that may charge.
         #[arg(long)]
         confirm: bool,
+        /// With --set and --confirm: the digest the run without --confirm printed. Refused
+        /// when the plan changed since.
+        #[arg(long)]
+        digest: Option<String>,
         #[command(flatten)]
         settings: SettingsArgs,
     },
@@ -360,6 +368,7 @@ pub fn run(core: &Core, a: VoiceArgs) -> Result<Value> {
             lines,
             dry_run,
             confirm,
+            digest,
             batch,
             settings,
         }) => serde_json::to_value(call::gear_voice_sample(
@@ -373,6 +382,7 @@ pub fn run(core: &Core, a: VoiceArgs) -> Result<Value> {
                 confirm,
                 settings: settings.get(),
                 batch: batch.get(),
+                digest,
             },
         )?)?,
         Some(VoiceCmd::Render {
@@ -383,6 +393,7 @@ pub fn run(core: &Core, a: VoiceArgs) -> Result<Value> {
             batch,
             dry_run,
             confirm,
+            digest,
             settings,
         }) => serde_json::to_value(call::gear_voice_render(
             core,
@@ -395,6 +406,7 @@ pub fn run(core: &Core, a: VoiceArgs) -> Result<Value> {
                 sets,
                 model: model.unwrap_or_default(),
                 batch: batch.get(),
+                digest,
             },
         )?)?,
         Some(VoiceCmd::Install { pack, source }) => serde_json::to_value(

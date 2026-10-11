@@ -454,6 +454,7 @@ export type {
   Plan as VoicePlan,
   ProviderView,
   RenderReport,
+  Retake,
   VoiceChooseParams,
   VoiceEditParams,
   VoiceLine,

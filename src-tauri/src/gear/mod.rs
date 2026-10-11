@@ -255,6 +255,9 @@ pub struct Env {
     pub mount: MountFn,
     /// Tests: a card path whose read-back counts as a mismatch (`WriteOptions.fail_readback`).
     pub fail_readback: Option<String>,
+    /// Tests: the card write's options in place of a reader's or a radio's (timeouts, a
+    /// stalled file).
+    pub card_write: Option<edgetx::card::WriteOptions>,
     /// Runs `diskutil` for the card check and repair (`health`).
     pub disk: Arc<dyn health::DiskRunner>,
     /// The other processes that have a serial port open, as `(pid, name)`.
@@ -279,6 +282,7 @@ impl Env {
             unmount: Arc::new(|d| edgetx::card::release(d, edgetx::card::UNMOUNT_TIMEOUT)),
             mount: Arc::new(|d| edgetx::card::attach(d, edgetx::card::UNMOUNT_TIMEOUT)),
             fail_readback: None,
+            card_write: None,
             disk: health::system(),
             holders: Arc::new(serial::other_holders),
             tts: Arc::new(voice::tts::System {
@@ -304,6 +308,7 @@ impl Env {
             unmount: Arc::new(|_| Ok(())),
             mount: Arc::new(|_| Ok(())),
             fail_readback: None,
+            card_write: None,
             disk: Arc::new(health::FakeDisk::ok()),
             holders: Arc::new(|_| Vec::new()),
             tts: Arc::new(voice::tts::NoProviders),

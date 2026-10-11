@@ -101,7 +101,14 @@ pub fn save(
     }
     let d = dir(store, device);
     std::fs::create_dir_all(&d).with_context(|| format!("creating {}", d.display()))?;
-    let stem = format!("{}-{}", taken_at.format("%Y-%m-%dT%H%M%S"), kind.tag());
+    // Two copies in the same second get -2, -3: a copy never replaces another.
+    let base = format!("{}-{}", taken_at.format("%Y-%m-%dT%H%M%S"), kind.tag());
+    let mut stem = base.clone();
+    let mut n = 2;
+    while d.join(format!("{stem}.bin")).exists() || d.join(format!("{stem}.json")).exists() {
+        stem = format!("{base}-{n}");
+        n += 1;
+    }
     let (image_board, image_version) = match image {
         Some((b, v)) => (Some(b), Some(v)),
         None => (None, None),
@@ -191,6 +198,38 @@ mod tests {
         assert!(read(&s, &c).is_err());
         assert!(save(&s, "radio-1", CopyKind::Read, at, &[], None).is_err());
         assert!(list(&s, "radio-2").is_empty());
+    }
+
+    #[test]
+    fn copies_in_the_same_second_get_their_own_names() {
+        let (_d, s) = store();
+        let at = "2026-10-09T12:00:00Z".parse().unwrap();
+        let ids: Vec<String> = [b"one".as_slice(), b"two", b"three"]
+            .iter()
+            .map(|b| {
+                save(&s, "radio-1", CopyKind::BeforeFlash, at, b, None)
+                    .unwrap()
+                    .id
+            })
+            .collect();
+        assert_eq!(
+            ids,
+            [
+                "radio-1/2026-10-09T120000-before-flash",
+                "radio-1/2026-10-09T120000-before-flash-2",
+                "radio-1/2026-10-09T120000-before-flash-3",
+            ]
+        );
+        // Each copy keeps its own bytes; none replaced another.
+        let copies = list(&s, "radio-1");
+        assert_eq!(copies.len(), 3);
+        for (c, want) in copies
+            .iter()
+            .rev()
+            .zip([b"one".as_slice(), b"two", b"three"])
+        {
+            assert_eq!(read(&s, c).unwrap(), want);
+        }
     }
 
     #[test]

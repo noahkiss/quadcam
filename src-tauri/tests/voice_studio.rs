@@ -220,6 +220,42 @@ fn the_estimate_prices_carriers_at_the_models_rate_and_makes_no_paid_call() {
     assert!(two.lines < one.lines + 12);
 }
 
+/// A paid sample the way the studio runs it: ask, then confirm with the digest.
+fn paid_sample(b: &Bench, p: SampleParams) -> quadcam_lib::core::SampleReport {
+    let ask = b
+        .core
+        .gear_voice_sample(&SampleParams {
+            confirm: false,
+            ..p.clone()
+        })
+        .unwrap();
+    b.core
+        .gear_voice_sample(&SampleParams {
+            confirm: true,
+            digest: Some(ask.digest),
+            ..p
+        })
+        .unwrap()
+}
+
+/// A paid render the way the studio runs it: ask, then confirm with the digest.
+fn paid_render(b: &Bench, p: VoiceRenderParams) -> quadcam_lib::core::RenderReport {
+    let ask = b
+        .core
+        .gear_voice_render(&VoiceRenderParams {
+            confirm: false,
+            ..p.clone()
+        })
+        .unwrap();
+    b.core
+        .gear_voice_render(&VoiceRenderParams {
+            confirm: true,
+            digest: Some(ask.digest),
+            ..p
+        })
+        .unwrap()
+}
+
 fn sample(voices: &[&str], models: &[&str], dry: bool, confirm: bool) -> SampleParams {
     SampleParams {
         voices: voices.iter().map(|s| s.to_string()).collect(),
@@ -250,10 +286,9 @@ fn a_sample_waits_for_confirm_then_writes_one_wav_per_voice_model_and_line() {
     assert!(wait.needs_confirm && wait.items.is_empty());
     assert_eq!(b.http.posts(), 0);
 
-    let done = b
-        .core
-        .gear_voice_sample(&sample(&["Callum", "Matilda"], &both, false, true))
-        .unwrap();
+    let mut go = sample(&["Callum", "Matilda"], &both, false, true);
+    go.digest = Some(wait.digest.clone());
+    let done = b.core.gear_voice_sample(&go).unwrap();
     assert_eq!(b.http.posts(), 12);
     assert_eq!(done.items.len(), 4 * 12);
     for i in &done.items {
@@ -285,9 +320,7 @@ fn a_recorded_character_count_replaces_the_estimate() {
     b.http.bill(0.25);
     let before = estimate(&b, &["sample"], "eleven_v4").unwrap();
     assert_eq!(before.estimate.credits_basis, "estimated");
-    b.core
-        .gear_voice_sample(&sample(&["Callum"], &["eleven_v4"], false, true))
-        .unwrap();
+    paid_sample(&b, sample(&["Callum"], &["eleven_v4"], false, true));
     // Other batches (another set) are priced at the recorded rate.
     let after = estimate(&b, &["quad"], "eleven_v4").unwrap();
     assert_eq!(after.estimate.credits_basis, "recorded");
@@ -398,16 +431,9 @@ fn a_set_renders_into_a_local_pack_and_recutting_costs_nothing() {
     assert!(wait.needs_confirm);
     assert_eq!(b.http.posts(), 0);
 
-    let r = b
-        .core
-        .gear_voice_render(&render(
-            "Callum",
-            "eleven_turbo_v2_5",
-            &["quad"],
-            false,
-            true,
-        ))
-        .unwrap();
+    let mut go = render("Callum", "eleven_turbo_v2_5", &["quad"], false, true);
+    go.digest = Some(wait.digest.clone());
+    let r = b.core.gear_voice_render(&go).unwrap();
     assert_eq!(r.pack, "local-elevenlabs-callum-eleven-turbo-v2-5");
     assert!(r.rendered > 0 && !r.needs_confirm, "{r:?}");
     let posts = b.http.posts();
@@ -437,16 +463,10 @@ fn a_set_renders_into_a_local_pack_and_recutting_costs_nothing() {
     assert_eq!(b.http.posts(), posts);
 
     // A second set adds to the same pack.
-    let r3 = b
-        .core
-        .gear_voice_render(&render(
-            "Callum",
-            "eleven_turbo_v2_5",
-            &["heli"],
-            false,
-            true,
-        ))
-        .unwrap();
+    let r3 = paid_render(
+        &b,
+        render("Callum", "eleven_turbo_v2_5", &["heli"], false, true),
+    );
     assert_eq!(r3.pack, r.pack);
     let m: serde_json::Value =
         serde_json::from_slice(&std::fs::read(pack.join("pack.json")).unwrap()).unwrap();
@@ -514,13 +534,28 @@ fn the_mcp_tools_price_first_and_a_paid_sample_needs_confirm() {
     let ask = json!({"action": "voice_sample", "voices": ["Callum"], "voice_models": ["eleven_turbo_v2_5"]});
     let r = s.call_tool("quadcam_gear_edit", ask);
     assert_eq!(r["isError"], false, "{r}");
+    let t = r["content"][0]["text"].as_str().unwrap();
+    let digest = r["structuredContent"]["digest"]
+        .as_str()
+        .unwrap()
+        .to_string();
+    assert!(t.contains("Not rendered") && t.contains(&digest), "{t}");
+    assert_eq!(http.posts(), 0);
+
+    // A confirm without the digest, or with a digest of another plan, pays nothing.
+    let bare = json!({"action": "voice_sample", "voices": ["Callum"], "voice_models": ["eleven_turbo_v2_5"], "confirm": true});
+    let r = s.call_tool("quadcam_gear_edit", bare);
+    assert_eq!(r["isError"], true, "{r}");
+    let more = json!({"action": "voice_sample", "voices": ["Callum", "Matilda"], "voice_models": ["eleven_turbo_v2_5"], "confirm": true, "digest": digest});
+    let r = s.call_tool("quadcam_gear_edit", more);
+    assert_eq!(r["isError"], true, "{r}");
     assert!(r["content"][0]["text"]
         .as_str()
         .unwrap()
-        .contains("Not rendered"));
+        .contains("plan changed"));
     assert_eq!(http.posts(), 0);
 
-    let go = json!({"action": "voice_sample", "voices": ["Callum"], "voice_models": ["eleven_turbo_v2_5"], "confirm": true});
+    let go = json!({"action": "voice_sample", "voices": ["Callum"], "voice_models": ["eleven_turbo_v2_5"], "confirm": true, "digest": digest});
     let r = s.call_tool("quadcam_gear_edit", go);
     assert_eq!(r["isError"], false, "{r}");
     assert_eq!(http.posts(), 3);
@@ -537,4 +572,159 @@ fn the_mcp_tools_price_first_and_a_paid_sample_needs_confirm() {
         json!({"action": "voice_key_set", "key": KEY}),
     );
     assert_eq!(r["isError"], true);
+}
+
+#[test]
+fn a_confirm_pays_only_for_the_plan_its_estimate_priced() {
+    let b = bench(50000, true);
+    // Sample: priced with one voice and one model, confirmed after more were ticked.
+    let one = b
+        .core
+        .gear_voice_sample(&sample(&["Callum"], &["eleven_turbo_v2_5"], false, false))
+        .unwrap();
+    assert!(one.needs_confirm && !one.digest.is_empty());
+    let mut more = sample(
+        &["Callum", "Matilda"],
+        &["eleven_turbo_v2_5", "eleven_v4"],
+        false,
+        true,
+    );
+    more.digest = Some(one.digest.clone());
+    let e = b.core.gear_voice_sample(&more).unwrap_err();
+    assert!(e.to_string().contains("plan changed"), "{e}");
+    let e = b
+        .core
+        .gear_voice_sample(&sample(&["Callum"], &["eleven_turbo_v2_5"], false, true))
+        .unwrap_err();
+    assert!(e.to_string().contains("digest"), "{e}");
+    assert_eq!(b.http.posts(), 0);
+
+    // Render: priced for one set, confirmed for another, or with another seed.
+    let ask = b
+        .core
+        .gear_voice_render(&render(
+            "Callum",
+            "eleven_turbo_v2_5",
+            &["quad"],
+            false,
+            false,
+        ))
+        .unwrap();
+    assert!(ask.needs_confirm && !ask.digest.is_empty());
+    let mut other = render("Callum", "eleven_turbo_v2_5", &["heli"], false, true);
+    other.digest = Some(ask.digest.clone());
+    assert!(b
+        .core
+        .gear_voice_render(&other)
+        .unwrap_err()
+        .to_string()
+        .contains("plan changed"));
+    let mut seeded = render("Callum", "eleven_turbo_v2_5", &["quad"], false, true);
+    seeded.digest = Some(ask.digest.clone());
+    seeded.settings = Some(quadcam_lib::gear::voice::render::RenderSettings {
+        seed: 5,
+        ..Default::default()
+    });
+    assert!(b
+        .core
+        .gear_voice_render(&seeded)
+        .unwrap_err()
+        .to_string()
+        .contains("plan changed"));
+    assert_eq!(b.http.posts(), 0);
+    // The plan it priced goes ahead.
+    let mut same = render("Callum", "eleven_turbo_v2_5", &["quad"], false, true);
+    same.digest = Some(ask.digest);
+    assert!(b.core.gear_voice_render(&same).unwrap().rendered > 0);
+}
+
+#[test]
+fn a_flagged_line_stays_out_of_the_pack_until_a_re_take_redoes_its_batch() {
+    let b = bench(50000, true);
+    // The first take of "Signal low" is silent; a take with a seed is not.
+    b.http.mute("Signal low");
+    let r = paid_render(
+        &b,
+        render("Callum", "eleven_turbo_v2_5", &["quad"], false, true),
+    );
+    let batches = r.rendered;
+    assert!(batches > 1, "{r:?}");
+    // Two card paths speak "Signal low": both need the re-take.
+    let mut paths: Vec<&str> = r.retakes.iter().map(|t| t.path.as_str()).collect();
+    paths.sort();
+    assert_eq!(
+        paths,
+        ["SOUNDS/en/SYSTEM/rssi_org.wav", "SOUNDS/en/lowrssi.wav"],
+        "{r:?}"
+    );
+    assert!(r.retakes.iter().all(|t| t.reason == "the cut is silent"));
+    let text = quadcam_lib::core::voice_report_text(&r);
+    assert!(
+        text.contains("re-take") && text.contains("lowrssi"),
+        "{text}"
+    );
+    let pack = b.dir.path().join("support/gear/voices").join(&r.pack);
+    assert!(!pack.join("SOUNDS/en/lowrssi.wav").exists());
+    assert!(pack.join("SOUNDS/en/critbat.wav").is_file());
+    let m: serde_json::Value =
+        serde_json::from_slice(&std::fs::read(pack.join("pack.json")).unwrap()).unwrap();
+    assert!(!m["files"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .any(|f| f == "SOUNDS/en/lowrssi.wav"));
+    assert_eq!(m["retakes"].as_array().unwrap().len(), 2);
+    let posts = b.http.posts();
+    assert_eq!(posts as u32, batches);
+
+    // The paid batch stays cached: the same render again pays nothing and still leaves it out.
+    let again = b
+        .core
+        .gear_voice_render(&render(
+            "Callum",
+            "eleven_turbo_v2_5",
+            &["quad"],
+            false,
+            false,
+        ))
+        .unwrap();
+    assert!(!again.needs_confirm);
+    assert_eq!(again.retakes.len(), 2);
+    assert_eq!(b.http.posts(), posts);
+
+    // A re-take with a new seed redoes only the batch that holds the flagged line.
+    let mut retake = render("Callum", "eleven_turbo_v2_5", &["quad"], false, true);
+    retake.settings = Some(quadcam_lib::gear::voice::render::RenderSettings {
+        seed: 7,
+        ..Default::default()
+    });
+    let est = b
+        .core
+        .gear_voice_estimate(&EstimateParams {
+            sets: vec!["quad".into()],
+            voice: "Callum".into(),
+            model: "eleven_turbo_v2_5".into(),
+            settings: retake.settings.clone(),
+            ..Default::default()
+        })
+        .unwrap();
+    assert_eq!(est.estimate.batches, 1);
+    let r2 = paid_render(&b, retake);
+    assert_eq!(r2.rendered, 1, "{r2:?}");
+    assert_eq!(b.http.posts(), posts + 1);
+    assert!(r2.retakes.is_empty(), "{:?}", r2.retakes);
+    assert!(pack.join("SOUNDS/en/lowrssi.wav").is_file());
+    let m: serde_json::Value =
+        serde_json::from_slice(&std::fs::read(pack.join("pack.json")).unwrap()).unwrap();
+    assert!(m["retakes"].as_array().unwrap().is_empty());
+    assert!(m["files"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .any(|f| f == "SOUNDS/en/lowrssi.wav"));
+    assert!(m["files"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .any(|f| f == "SOUNDS/en/critbat.wav"));
 }

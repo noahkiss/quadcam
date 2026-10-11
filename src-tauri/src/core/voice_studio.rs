@@ -1,15 +1,16 @@
 //! The voice studio on the core (design 7.4): the ElevenLabs key in the Keychain, the
 //! account's voices, models and credits, an estimate before any paid call, A/B samples per
 //! voice and model, and a batched render of line sets into a local pack. Every paid call
-//! checks the estimate against the credits first and waits for `confirm`.
+//! checks the estimate against the credits first and waits for `confirm` with the digest of
+//! the plan it priced. A cut that fails a check stays out of the pack as a re-take.
 //! The studio always speaks to ElevenLabs; the `tts_provider` setting stays what it was.
 
 use super::voice::{collect_sounds, copy_dir, slug};
 use super::{Core, RenderReport, VoiceRenderParams};
-use crate::gear::voice::batch::{self, BatchCache, BatchSettings, Estimate, Item, Pricing};
+use crate::gear::voice::batch::{self, Batch, BatchCache, BatchSettings, Estimate, Item, Pricing};
 use crate::gear::voice::keychain::{self, ELEVENLABS};
 use crate::gear::voice::lines::{self, Line, Spelling};
-use crate::gear::voice::packs::{self, BuildOpts};
+use crate::gear::voice::packs::{self, BuildOpts, PackManifest, Retake};
 use crate::gear::voice::rates;
 use crate::gear::voice::render::{self, Plan, RenderSettings};
 use crate::gear::voice::sets::{self, SetInfo, SetLine};
@@ -115,6 +116,10 @@ pub struct SampleParams {
     pub settings: Option<RenderSettings>,
     #[serde(default)]
     pub batch: Option<BatchSettings>,
+    /// The `digest` of the unconfirmed call. A paid `confirm` needs it, and is refused when
+    /// the plan changed since.
+    #[serde(default)]
+    pub digest: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, specta::Type)]
@@ -139,6 +144,9 @@ pub struct SampleReport {
     pub needs_confirm: bool,
     pub dry_run: bool,
     pub warnings: Vec<String>,
+    /// The digest of this plan, which `confirm` repeats.
+    #[serde(default)]
+    pub digest: String,
 }
 
 /// The env var that holds a key for one run, ahead of the Keychain.
@@ -342,7 +350,9 @@ impl Core {
         let model = self.studio_model(&p.model)?;
         let price = self.pricing(&tts.models()?, &model, &tts.credits()?)?;
         let lines = self.studio_lines(&p.sets, &p.lines)?;
-        let batches = batch::plan_within(&Self::studio_items(&lines), &bs, price.batch_limit);
+        let all = batch::plan_within(&Self::studio_items(&lines), &bs, price.batch_limit);
+        let old = self.local_pack(&local_pack_id(&voice_name, &model));
+        let (batches, _) = still_to_do(all, old.as_ref(), &voice, &model, &settings);
         let cache = BatchCache::new(&self.cache);
         let ctx = batch::Ctx {
             tts: tts.as_ref(),
@@ -397,6 +407,7 @@ impl Core {
         let items = Self::studio_items(&lines);
         let cache = BatchCache::new(&self.cache);
         let mut combos = Vec::new();
+        let mut priced = Vec::new();
         let mut total = Estimate {
             remaining: Some(credits.remaining),
             affordable: true,
@@ -426,10 +437,17 @@ impl Core {
                 } else if total.credits_basis != e.credits_basis {
                     total.credits_basis = "estimated".into();
                 }
+                priced.push(serde_json::json!({
+                    "voice": vid, "model": m, "to_render": to_render(&ctx, &batches),
+                }));
                 combos.push((vid.clone(), vname.clone(), m.clone(), batches));
             }
         }
         total.affordable = credits.remaining >= total.credits;
+        let digest = plan_digest(&serde_json::json!({
+            "kind": "sample", "combos": priced, "sets": ids, "lines": p.lines,
+            "settings": settings, "batch": bs, "chars": total.chars, "credits": total.credits,
+        }));
         let mut report = SampleReport {
             items: Vec::new(),
             estimate: total.clone(),
@@ -437,6 +455,7 @@ impl Core {
             needs_confirm: false,
             dry_run: p.dry_run,
             warnings: Vec::new(),
+            digest: digest.clone(),
         };
         if p.dry_run {
             return Ok(report);
@@ -447,6 +466,7 @@ impl Core {
                 report.needs_confirm = true;
                 return Ok(report);
             }
+            same_plan(p.digest.as_deref(), &digest)?;
         }
         let tools = crate::media::find_tools().ok();
         let out_root = self.cache.join("voice").join("samples");
@@ -512,7 +532,10 @@ impl Core {
         let model = self.studio_model(&p.model)?;
         let price = self.pricing(&tts.models()?, &model, &tts.credits()?)?;
         let lines = self.studio_lines(&p.sets, &p.lines)?;
-        let batches = batch::plan_within(&Self::studio_items(&lines), &bs, price.batch_limit);
+        let id = local_pack_id(&voice_name, &model);
+        let old = self.local_pack(&id);
+        let all = batch::plan_within(&Self::studio_items(&lines), &bs, price.batch_limit);
+        let (batches, kept) = still_to_do(all, old.as_ref(), &voice, &model, &settings);
         let cache = BatchCache::new(&self.cache);
         let bctx = batch::Ctx {
             tts: tts.as_ref(),
@@ -522,11 +545,11 @@ impl Core {
             settings: &settings,
         };
         let est = batch::estimate(&bctx, &batches, &price);
-        let id = format!(
-            "local-elevenlabs-{}-{}",
-            slug(&voice_name).chars().take(24).collect::<String>(),
-            slug(&model).chars().take(24).collect::<String>()
-        );
+        let digest = plan_digest(&serde_json::json!({
+            "kind": "render", "voice": voice, "model": model, "sets": p.sets, "lines": p.lines,
+            "settings": settings, "batch": bs, "to_render": to_render(&bctx, &batches),
+            "chars": est.chars, "credits": est.credits,
+        }));
         let unique: std::collections::HashSet<&String> = lines.iter().map(|(_, s)| s).collect();
         let mut report = RenderReport {
             pack: id.clone(),
@@ -554,7 +577,14 @@ impl Core {
             )],
             estimate: Some(est.clone()),
             warnings: Vec::new(),
+            digest: digest.clone(),
+            retakes: Vec::new(),
         };
+        if kept > 0 {
+            report.notes.push(format!(
+                "{kept} batches already in the pack with every line passing its checks: kept, not rendered again."
+            ));
+        }
         if p.dry_run {
             return Ok(report);
         }
@@ -564,6 +594,7 @@ impl Core {
                 report.needs_confirm = true;
                 return Ok(report);
             }
+            same_plan(p.digest.as_deref(), &digest)?;
         }
         let done = batch::render_all(&bctx, &batches, bs.snap_ms, &mut |_, _| {})?;
         report.warnings = done.warnings.clone();
@@ -578,7 +609,13 @@ impl Core {
             tools.as_ref(),
         );
         ctx.cuts = Some(&done.cuts);
-        let chosen: Vec<Line> = lines.iter().map(|(l, _)| l.line.clone()).collect();
+        // Only lines with a cut that passed its checks: a line missing from `cuts` would go
+        // to the provider one at a time, unpriced. Kept batches' lines are in the pack already.
+        let chosen: Vec<Line> = lines
+            .iter()
+            .filter(|(_, spoken)| done.cuts.contains_key(spoken))
+            .map(|(l, _)| l.line.clone())
+            .collect();
         let spelling = Spelling::builtin()?;
         let dir = self.voices_dir().join(&id);
         let stage = self.voices_dir().join(format!(".rendering-{id}"));
@@ -591,25 +628,74 @@ impl Core {
         let opts = BuildOpts {
             id: id.clone(),
             version: String::new(),
-            voice: voice_name,
+            voice: voice_name.clone(),
             lang: "en".into(),
             license: "Rendered by you; yours to use.".into(),
             attribution: String::new(),
             lines_csv_sha: lines::builtin_sha(),
         };
-        let (mut manifest, _) =
-            match packs::render_to(&opts, &ctx, &chosen, &spelling, &stage, &mut |_, _| {}) {
-                Ok(v) => v,
-                Err(e) => {
-                    let _ = std::fs::remove_dir_all(&stage);
-                    return Err(e);
+        if !chosen.is_empty() {
+            if let Err(e) =
+                packs::render_to(&opts, &ctx, &chosen, &spelling, &stage, &mut |_, _| {})
+            {
+                let _ = std::fs::remove_dir_all(&stage);
+                return Err(e);
+            }
+        }
+        // A flagged line has no take in the pack, not even an older one.
+        let mut retakes: Vec<Retake> = Vec::new();
+        for (l, spoken) in &lines {
+            if let Some(reason) = done.flagged.get(spoken) {
+                let _ = std::fs::remove_file(stage.join(&l.line.path));
+                retakes.push(Retake {
+                    path: l.line.path.clone(),
+                    text: l.line.text.clone(),
+                    reason: reason.clone(),
+                });
+            }
+        }
+        let rendered_now: std::collections::HashSet<&str> =
+            lines.iter().map(|(l, _)| l.line.path.as_str()).collect();
+        let mut kept_batches: Vec<String> = Vec::new();
+        if let Some(o) = &old {
+            retakes.extend(
+                o.retakes
+                    .iter()
+                    .filter(|r| !rendered_now.contains(r.path.as_str()))
+                    .cloned(),
+            );
+            kept_batches = o.kept_batches.clone();
+        }
+        for b in &batches {
+            if b.items
+                .iter()
+                .all(|(i, _)| !done.flagged.contains_key(&i.spoken))
+            {
+                let k = kept_key(&voice, &model, &settings, b);
+                if !kept_batches.contains(&k) {
+                    kept_batches.push(k);
                 }
-            };
+            }
+        }
         let mut files: Vec<String> = Vec::new();
         collect_sounds(&stage, &stage, &mut files);
         files.sort();
-        manifest.lines = files.len() as u32;
-        manifest.files = files;
+        let manifest = PackManifest {
+            id: id.clone(),
+            voice: voice_name,
+            lang: opts.lang,
+            provider: "elevenlabs".into(),
+            model: model.clone(),
+            settings: settings.clone(),
+            lines: files.len() as u32,
+            license: opts.license,
+            attribution: opts.attribution,
+            lines_csv_sha: opts.lines_csv_sha,
+            version: String::new(),
+            files,
+            retakes: retakes.clone(),
+            kept_batches,
+        };
         std::fs::write(
             stage.join("pack.json"),
             serde_json::to_vec_pretty(&manifest)?,
@@ -618,12 +704,96 @@ impl Core {
         std::fs::rename(&stage, &dir)?;
         report.rendered = done.batches_rendered;
         report.from_cache = done.batches_cached;
+        if !retakes.is_empty() {
+            report.notes.push(format!(
+                "{} lines need a re-take and are not in the pack: render again with another seed to redo only their batches.",
+                retakes.len()
+            ));
+        }
+        report.retakes = retakes;
         Ok(report)
+    }
+
+    /// The manifest of a local pack, when there is one.
+    fn local_pack(&self, id: &str) -> Option<PackManifest> {
+        let b = std::fs::read(self.voices_dir().join(id).join("pack.json")).ok()?;
+        serde_json::from_slice(&b).ok()
     }
 
     /// Where the samples go (for the CLI to print).
     pub fn voice_samples_dir(&self) -> PathBuf {
         self.cache.join("voice").join("samples")
+    }
+}
+
+/// The local pack of a voice and model.
+fn local_pack_id(voice_name: &str, model: &str) -> String {
+    format!(
+        "local-elevenlabs-{}-{}",
+        slug(voice_name).chars().take(24).collect::<String>(),
+        slug(model).chars().take(24).collect::<String>()
+    )
+}
+
+/// A batch as the pack remembers it: voice, model, settings and text, without the seed, so a
+/// re-render with a new seed knows which batches the pack holds whole.
+fn kept_key(voice: &str, model: &str, settings: &RenderSettings, b: &Batch) -> String {
+    let settings = RenderSettings {
+        seed: 0,
+        ..settings.clone()
+    };
+    crate::gear::voice::sha256_hex(
+        serde_json::json!({"voice": voice, "model": model, "settings": settings, "text": b.text})
+            .to_string()
+            .as_bytes(),
+    )
+}
+
+/// The batches a render still has to make: those the pack does not already hold with every
+/// line passing its checks. Returns them and how many were kept.
+fn still_to_do(
+    all: Vec<Batch>,
+    pack: Option<&PackManifest>,
+    voice: &str,
+    model: &str,
+    settings: &RenderSettings,
+) -> (Vec<Batch>, u32) {
+    let Some(pack) = pack else {
+        return (all, 0);
+    };
+    let n = all.len();
+    let todo: Vec<Batch> = all
+        .into_iter()
+        .filter(|b| {
+            !pack
+                .kept_batches
+                .contains(&kept_key(voice, model, settings, b))
+        })
+        .collect();
+    let kept = (n - todo.len()) as u32;
+    (todo, kept)
+}
+
+/// The cache keys of the batches the provider would make: what a paid call pays for.
+fn to_render(ctx: &batch::Ctx<'_>, batches: &[Batch]) -> Vec<String> {
+    batches
+        .iter()
+        .filter(|b| !ctx.cached(b))
+        .map(|b| ctx.key(b))
+        .collect()
+}
+
+/// The digest a paid call's `confirm` repeats.
+fn plan_digest(plan: &serde_json::Value) -> String {
+    crate::gear::voice::sha256_hex(plan.to_string().as_bytes())
+}
+
+/// A paid `confirm` pays only for the plan its estimate showed.
+fn same_plan(given: Option<&str>, want: &str) -> Result<()> {
+    match given.map(str::trim).filter(|d| !d.is_empty()) {
+        None => bail!("A paid call needs the digest of its estimate: run it without confirm, show the person the cost, then confirm with that digest."),
+        Some(d) if d == want => Ok(()),
+        Some(_) => bail!("The plan changed since its estimate (voices, models, sets, seed or characters): estimate again."),
     }
 }
 
@@ -728,9 +898,13 @@ pub fn sample_text(r: &SampleReport) -> String {
     use std::fmt::Write;
     let mut s = String::new();
     if r.needs_confirm {
-        let _ = writeln!(s, "Not rendered: this sends text to ElevenLabs, which bills it. Ask the person, then run again with confirm.");
+        let _ = writeln!(s, "Not rendered: this sends text to ElevenLabs, which bills it. Ask the person, then run again with confirm and digest {}.", r.digest);
     } else if r.dry_run {
-        let _ = writeln!(s, "Dry run: nothing was rendered.");
+        let _ = writeln!(
+            s,
+            "Dry run: nothing was rendered. A paid run confirms with digest {}.",
+            r.digest
+        );
     }
     let _ = writeln!(
         s,
@@ -746,7 +920,7 @@ pub fn sample_text(r: &SampleReport) -> String {
         );
     }
     for w in &r.warnings {
-        let _ = writeln!(s, "Check: {w}");
+        let _ = writeln!(s, "Needs a re-take: {w}");
     }
     s
 }

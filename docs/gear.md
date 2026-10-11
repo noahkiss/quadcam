@@ -275,6 +275,12 @@ QuadCam never asks you to unplug it before the unmount. A mount or unmount that 
 finish within its time limit (60 seconds for an unmount) ends with "macOS did not finish ...
 a reboot may be needed" and leaves the radio plugged in.
 
+A file write that macOS does not finish within its time limit keeps running. QuadCam starts no
+other file and waits for that write to end (up to 2 minutes over the radio's USB) before it
+puts files back. If the write is still running after that wait, QuadCam puts nothing back and
+leaves the card mounted. The sheet names the backup to restore. Keep the radio plugged in until
+it responds again, press **Done** on its Gear page, then restore that backup.
+
 If the radio's firmware stops at an error, hold both horizontal trims inward while you power
 it on. The bootloader then shows the SD card over USB.
 
@@ -284,8 +290,9 @@ macOS writes hidden `._*` files (AppleDouble) next to files it copies to a FAT c
 does not use them. QuadCam removes the `._` file beside every file it writes, and does not
 create the others. For files that are already there, **Clean ._ files** on the radio's
 **Backups** segment lists them, asks, then deletes them and unmounts the card. It deletes only
-files that start with the AppleDouble header; a file you named `._notes` stays. On the command
-line: `gear card-clean --device ID` lists, `--remove --yes` deletes.
+files that start with the AppleDouble header; a file you named `._notes` stays. It deletes only
+on a card Gear detects or a folder that is an EdgeTX card (`RADIO/radio.yml` or `MODELS/`). On
+the command line: `gear card-clean --device ID` lists, `--remove --yes` deletes.
 
 ### Radio over USB Serial
 
@@ -344,6 +351,10 @@ the radio first.
 characters on the RadioMaster Pocket (the `=` counts), and a checklist holds 99 lines.
 QuadCam writes `MODELS/<model name>.txt` and turns on `displayChecklist` and
 `checklistInteractive`. Staging a checklist turns it on; the checkbox turns it on or off.
+Because the file is named after the model, a model name may not hold `/` or `..` or start with
+`.`. QuadCam refuses such a name when you rename or copy a model, and refuses the checklist of
+a model whose name on the card is like that. The writer also refuses any file path outside
+the card.
 
 **Not yet checked on a real radio:** the logging function (`LOGS`, its period in 0.1 s), the
 value screens' limit of 4 lines and 3 sources, the list of timer modes the pop-up offers
@@ -440,14 +451,26 @@ inside carrier sentences, and compares voices before it spends credits.
 - **Render pack.** Needs one voice, one model and at least one set. After **Render and pay**
   the lines go into a local pack named for the voice and model; a second set adds to the
   same pack. **Choose voice** puts it on a radio like any other pack.
+- **Pay for what was priced.** The question names a digest of its plan: the voices, models,
+  sets, seed and characters. **Sample and pay** and **Render and pay** send that digest, and
+  QuadCam refuses a confirm whose plan changed ("estimate again"). A change to any picker
+  closes the question. The CLI (`--digest`) and MCP (`digest`) work the same way.
+- **Re-takes.** A cut that fails a check (silent, under 120 ms, too long, or long or short for
+  its text) stays out of the pack. The result and the pack's `pack.json` (`retakes`) list it as
+  "needs a re-take" with the reason. The paid batch stays in the cache. **Re-take** renders
+  again with a new seed (CLI `--seed`, MCP `seed`): only the batches that hold a re-take go to
+  ElevenLabs. The pack keeps every batch whose lines all passed.
 - **How a line is cut.** A bare word sounds wrong from a voice, so each line is spoken in a
   carrier ("The word is six.") and cut out. Lines are grouped by tone (calm, alert, number,
   fun), up to 30 sentences in a batch. ElevenLabs returns the time of every character; QuadCam
   cuts from the start of the line's first character to the end of its last, moving each edge
   to the quietest point within 40 ms. The cut then gets the usual trim, fades and tempo.
-  A cut that is silent, under 120 ms, or long for its text is reported. The raw audio and
+  A cut that fails a check becomes a re-take (above). The raw audio and
   timestamps of each batch are kept by provider, voice, model, speed, text and seed, so a new
-  trim or tempo setting re-cuts for free. `--carrier "I said {line}."` changes the carrier.
+  trim or tempo setting re-cuts for free. QuadCam keeps a batch only after it cuts: when
+  ElevenLabs changed the text, the take is not kept, and the next render asks again. A paid
+  request is retried only after a 429 (busy), never after a server error, which may already be
+  billed. `--carrier "I said {line}."` changes the carrier.
 
 ## Unplugging cards
 
@@ -617,8 +640,9 @@ segment lists them and **Review…** opens the same sheet. The checks:
 **Apply** backs the card up first (a full snapshot, **Before apply**, which QuadCam always
 keeps), then writes one file at a time under a temporary name, reads each back and compares it,
 then reads every file again. If a file reads back different, or a write fails, QuadCam puts
-every file back to the bytes in the backup, and the sheet says the card is as it was. A new file
-is removed. Over the radio's USB a write is slow and **Stop** finishes the current file, then
+every file back to the bytes in the backup and removes a new file. It then reads every file
+again. Only when all of them read as before does the sheet say the card is as it was; else it
+names the files and the backup to restore. Over the radio's USB a write is slow and **Stop** finishes the current file, then
 puts the written files back.
 
 **Mount, work, unmount.** QuadCam keeps a card unmounted between jobs, for every kind of
@@ -1049,7 +1073,8 @@ copy, reads the saved file back and compares it, then compares the version the i
 they match. A mismatch is not an error; check the radio's About screen.
 
 - The copy is a file pair under the gear folder, `firmware/<radio>/<time>-read.bin` and
-  `.json`. It is not a card backup and does not appear in **Backups**.
+  `.json`. A second copy in the same second gets `-2`, `-3`; a copy never replaces another.
+  It is not a card backup and does not appear in **Backups**.
 - A flash that reads as blank, as all zeros (a protected chip) or differently on the two reads
   is refused with the reason.
 - With no radio in DFU mode, the read says so and tells you the steps above.

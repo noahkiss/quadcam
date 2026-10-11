@@ -288,6 +288,12 @@ impl Core {
         if !p.remove {
             return Ok(out);
         }
+        // A removal needs a card: one Gear detected, or a folder that is an EdgeTX card.
+        if c.is_none() {
+            if let Err(e) = crate::gear::edgetx::card::Card::open(&root) {
+                bail!("Refused: {e:#} QuadCam removes ._ files only from a card it detects or an EdgeTX card.");
+            }
+        }
         if !crate::gear::edgetx::card::writes_allowed(
             &root,
             std::env::var("QUADCAM_CARD_WRITE").ok().as_deref(),

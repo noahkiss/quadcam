@@ -468,6 +468,7 @@ cli.flag gear voice estimate --voice VALUE
 cli.flag gear voice install --source VALUE
 cli.flag gear voice render --carrier VALUE
 cli.flag gear voice render --confirm
+cli.flag gear voice render --digest VALUE
 cli.flag gear voice render --dry-run
 cli.flag gear voice render --fade-out-ms VALUE
 cli.flag gear voice render --lines VALUE
@@ -483,6 +484,7 @@ cli.flag gear voice render --trim-db VALUE
 cli.flag gear voice render --voice VALUE
 cli.flag gear voice sample --carrier VALUE
 cli.flag gear voice sample --confirm
+cli.flag gear voice sample --digest VALUE
 cli.flag gear voice sample --dry-run
 cli.flag gear voice sample --fade-out-ms VALUE
 cli.flag gear voice sample --lines VALUE

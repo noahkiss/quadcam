@@ -61,6 +61,22 @@ pub struct PackManifest {
     pub version: String,
     /// Card paths of the WAVs.
     pub files: Vec<String>,
+    /// Lines whose cut failed a check: left out of the pack, they need a re-take.
+    #[serde(default)]
+    pub retakes: Vec<Retake>,
+    /// A batched render: the batches (keyed without the seed) whose lines are all in the
+    /// pack. A re-render with another seed and the same settings skips them.
+    #[serde(default)]
+    pub kept_batches: Vec<String>,
+}
+
+/// A line that needs a re-take, and why.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Type)]
+pub struct Retake {
+    /// The card path.
+    pub path: String,
+    pub text: String,
+    pub reason: String,
 }
 
 /// What a pack is called and where it stands.
@@ -135,6 +151,8 @@ pub fn render_to(
         lines_csv_sha: opts.lines_csv_sha.clone(),
         version: opts.version.clone(),
         files,
+        retakes: Vec::new(),
+        kept_batches: Vec::new(),
     };
     std::fs::write(dir.join("pack.json"), serde_json::to_vec_pretty(&m)?)?;
     Ok((m, made))
