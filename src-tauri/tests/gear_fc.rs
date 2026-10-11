@@ -344,11 +344,19 @@ struct Blinking {
 impl Ports for Blinking {
     fn list(&self) -> Vec<PortInfo> {
         use std::sync::atomic::Ordering::SeqCst;
-        if self
-            .hide
-            .fetch_update(SeqCst, SeqCst, |n| n.checked_sub(1))
-            .is_ok()
-        {
+        // A compare-exchange loop: `fetch_update` is deprecated on newer toolchains.
+        let mut n = self.hide.load(SeqCst);
+        let mut hidden = false;
+        while n > 0 {
+            match self.hide.compare_exchange(n, n - 1, SeqCst, SeqCst) {
+                Ok(_) => {
+                    hidden = true;
+                    break;
+                }
+                Err(now) => n = now,
+            }
+        }
+        if hidden {
             return Vec::new();
         }
         self.inner.list()
