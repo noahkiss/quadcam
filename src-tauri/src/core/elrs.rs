@@ -1139,7 +1139,7 @@ impl Core {
     }
 
     pub fn gear_elrs_flash(&self, req: &ElrsFlashRequest) -> Result<ApplyReport> {
-        self.elrs_flash_at(req, false)
+        self.agent_write(|| self.elrs_flash_at(req, false))
     }
 
     /// The apply sheet's own Apply click: the click is the confirm.

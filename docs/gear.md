@@ -748,10 +748,10 @@ the order the next session applies them.
 
   | Status | Means |
   |---|---|
-  | Draft | Being edited. The plug-in bar and **Review** skip it |
+  | Draft | Being edited. The plug-in bar and **Review** skip it, and its own **Review…** is off |
   | Ready | Agreed. Apply it when the device is in |
   | Try | Apply, fly, then keep or revert |
-  | Read first | Read the real value on the device before changing anything. It does not apply until you mark it Ready |
+  | Read first | Read the real value on the device before changing anything. It does not apply until you mark it Ready; its **Review…** is off until then |
   | Applied | A Try change that applied and verified. It waits for **Keep** or **Revert…** |
   | Verified, Failed, Reverted, Discarded | After the apply sheet, or Discard |
 
@@ -789,10 +789,11 @@ QuadCam leaves out, and lists, what it should not copy:
 
 ### Apply on connect
 
-**Settings > Gear > Steps on connect** can list `apply_ready` for a kind of device. It is off
+**Settings > Gear > Steps on connect** can list `apply_ready` for an FC or a radio. It is off
 by default. When the device is plugged in, QuadCam plans each Ready change of that device, and
 a plan whose checks all pass opens the apply sheet. Nothing is written until you click
-**Apply**. With no window to click in, the step does nothing.
+**Apply**; the sheet then shows the write and its result. With no window to click in, the step
+does nothing.
 
 ### OSD element moves
 
@@ -1398,7 +1399,7 @@ passthrough is one of the things a real-device trial has to show.
    cuts it to two tones.
 2. **Threshold** sets how dark a pixel must be to count as dark. **Invert** swaps the tones.
    The preview shows the radio's pixels at 4 times the size.
-3. **Make firmware…** opens the flash sheet for the radio's installed version, with the
+3. **Flash with splash…** opens the flash sheet for the radio's installed version, with the
    picture put into the board's image.
 
 QuadCam finds the splash in the image by its markers: `SPS`, a zero byte, the width 128 and the
@@ -1514,6 +1515,13 @@ These are the common commands. [Command line](cli.md) lists every `gear` command
 
 Agents use the `quadcam_gear`, `quadcam_gear_edit` and `quadcam_gear_apply` tools. See
 [MCP server](mcp.md#gear).
+
+With the app running, an agent's write (an apply, a flash, a sim sync or restore) opens the
+apply sheet, and nothing is written until you click **Apply**. **Apply on connect** uses the
+same sheet. After the click the sheet stays open: it shows the progress, then the result, with
+**Restore backup** when the write failed. A request never replaces a sheet that is open. It
+waits, the open sheet says so, and it opens when you close that sheet. A request still waiting
+after 3 minutes is refused.
 
 ## Tests and real devices
 

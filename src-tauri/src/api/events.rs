@@ -158,6 +158,15 @@ pub struct AgentApplyRequest {
 #[derive(Debug, Clone, Serialize, Deserialize, Type, tauri_specta::Event)]
 pub struct AgentApplyClosed(pub u64);
 
+/// The outcome of the agent's apply request with this id, after the person approved it:
+/// the report, or the error the write stopped with.
+#[derive(Debug, Clone, Serialize, Deserialize, Type, tauri_specta::Event)]
+pub struct AgentApplyResult {
+    pub id: u64,
+    pub report: Option<crate::gear::apply::ApplyReport>,
+    pub error: Option<String>,
+}
+
 /// A menu item was chosen: its id.
 #[derive(Debug, Clone, Serialize, Deserialize, Type, tauri_specta::Event)]
 pub struct Menu(pub String);
@@ -205,6 +214,7 @@ mod tests {
         assert_eq!(AgentFormatClosed::NAME, "agent-format-closed");
         assert_eq!(AgentApplyRequest::NAME, "agent-apply-request");
         assert_eq!(AgentApplyClosed::NAME, "agent-apply-closed");
+        assert_eq!(AgentApplyResult::NAME, "agent-apply-result");
         assert_eq!(VolumesChanged::NAME, "volumes-changed");
         assert_eq!(Menu::NAME, "menu");
         assert_eq!(GearChanged::NAME, "gear-changed");

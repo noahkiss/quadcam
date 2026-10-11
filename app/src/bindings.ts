@@ -565,6 +565,7 @@ export const commands = {
 export const events = {
 	agentApplyClosed: makeEvent<AgentApplyClosed>("agent-apply-closed"),
 	agentApplyRequest: makeEvent<AgentApplyRequest_Deserialize>("agent-apply-request"),
+	agentApplyResult: makeEvent<AgentApplyResult>("agent-apply-result"),
 	agentFormatClosed: makeEvent<AgentFormatClosed>("agent-format-closed"),
 	agentFormatRequest: makeEvent<AgentFormatRequest>("agent-format-request"),
 	deviceChanged: makeEvent<DeviceChanged>("device-changed"),
@@ -618,6 +619,16 @@ export type AgentApplyRequest_Serialize = {
 	id: number,
 	change: StagedChange_Serialize,
 	plan: ApplyPlan,
+};
+
+/**
+ *  The outcome of the agent's apply request with this id, after the person approved it:
+ *  the report, or the error the write stopped with.
+ */
+export type AgentApplyResult = {
+	id: number,
+	report: ApplyReport | null,
+	error: string | null,
 };
 
 /**  The agent's format request with this id is closed (answered or timed out). */

@@ -29,7 +29,33 @@ export interface ApplySheetState {
   restore?: SimRestoreParams | null;
   /** Set when the sheet shows a firmware flash: the click flashes this radio. */
   flash?: FlashParams | null;
+  /** Which opening of the sheet this is: an answer that arrives later lands only in the sheet it started from. */
+  token: number;
+  /** The person approved the agent's request: the sheet shows the write and its result. */
+  approved?: boolean;
 }
+
+/** An agent's apply request (`agent-apply-request`). */
+export interface AgentApplyAsk {
+  id: number;
+  change: StagedChange;
+  plan: ApplyPlan;
+}
+
+let tokens = 0;
+/** A newly opened sheet, with its own token. */
+const opened = (a: Omit<ApplySheetState, "token">): ApplySheetState => ({ ...a, token: ++tokens });
+/** The sheet with this token is still the one open. */
+const same = (s: State, token: number) => s.applySheet?.token === token;
+const agentSheet = (q: AgentApplyAsk) => opened({ device: q.change.device, change: q.change, plan: q.plan, report: null, agent: q.id, busy: false, error: null });
+/** The sheet closes; the first queued request, if any, takes its place. */
+const nextAsk = (s: State): Partial<State> => {
+  const [q, ...rest] = s.applyQueue;
+  return q && !s.writeSheet ? { applySheet: agentSheet(q), applyQueue: rest } : { applySheet: null };
+};
+
+/** The id of the change an agent's ExpressLRS flash request carries (the core's `ELRS_FLASH_CHANGE`). */
+export const ELRS_FLASH = "elrs-flash";
 
 /** The device id a sim sync's sheet, report and stand-in change carry (the core's `DEVICE`). */
 export const SIMS_DEVICE = "sims";
@@ -71,6 +97,11 @@ export interface GearSlice {
   /** Every change, staged or not: the Bench's applied-and-undecided items and history. */
   allChanges: StagedChange[];
   applySheet: ApplySheetState | null;
+  /** Agent requests that arrived while a sheet was open: each shows when the sheet before it closes. */
+  applyQueue: AgentApplyAsk[];
+  /** A sheet outside the store that writes a device (the ExpressLRS flash) is open: agent requests wait. */
+  writeSheet: boolean;
+  setWriteSheet: (open: boolean) => void;
   /** Opens the sheet on a device's first staged change, or a given one. */
   openApply: (device: string, change?: string) => Promise<void>;
   /** Opens the sheet on a plan to write the quad's rates into sim profiles. */
@@ -98,8 +129,11 @@ export interface GearSlice {
   /** Mounts an unmounted card for the person to browse, or unmounts it (Done). */
   mountCard: (device: string) => Promise<void>;
   unmountCard: (device: string) => Promise<void>;
-  agentApply: (id: number, change: StagedChange, plan: ApplyPlan) => void;
+  /** Shows an agent's request, or queues it while another sheet is open. */
+  agentApply: (q: AgentApplyAsk) => void;
   agentApplyClosed: (id: number) => void;
+  /** The outcome of an approved agent request: shown in the sheet that approved it. */
+  agentApplyResult: (id: number, report: ApplyReport | null, error: string | null) => void;
   gear: GearStatus | null;
   devices: Device[];
   /** Cards unmounted but still in (from `device-changed`). */
@@ -128,43 +162,53 @@ export const createGearSlice: StateCreator<State, [], [], GearSlice> = (set, get
   changes: [],
   allChanges: [],
   applySheet: null,
+  applyQueue: [],
+  writeSheet: false,
+  setWriteSheet: (open) => {
+    set({ writeSheet: open });
+    if (!open && !get().applySheet) set(nextAsk(get()));
+  },
   openApply: async (device, change) => {
     await get().loadGear();
     const c = (change ? get().changes.find((x) => x.id === change) : ready(get().changes, device)[0]) || null;
-    set({ applySheet: { device, change: c, plan: null, report: null, agent: null, busy: !!c, error: null } });
+    const sheet = opened({ device, change: c, plan: null, report: null, agent: null, busy: !!c, error: null });
+    set({ applySheet: sheet });
     if (!c) return;
     try {
       const plan = await api.gearApplyPlan(c.id);
-      set((s) => (s.applySheet?.change?.id === c.id ? { applySheet: { ...s.applySheet, plan, busy: false } } : {}));
+      set((s) => (same(s, sheet.token) ? { applySheet: { ...s.applySheet!, plan, busy: false } } : {}));
     } catch (e) {
-      set((s) => (s.applySheet ? { applySheet: { ...s.applySheet, busy: false, error: errText(e) } } : {}));
+      set((s) => (same(s, sheet.token) ? { applySheet: { ...s.applySheet!, busy: false, error: errText(e) } } : {}));
     }
   },
   openSimSync: async (params) => {
-    set({ applySheet: { device: SIMS_DEVICE, change: simChange(null), plan: null, report: null, agent: null, busy: true, error: null, sim: params } });
+    const sheet = opened({ device: SIMS_DEVICE, change: simChange(null), plan: null, report: null, agent: null, busy: true, error: null, sim: params });
+    set({ applySheet: sheet });
     try {
       const plan = await api.gearSimSyncPlan(params);
-      set((s) => (s.applySheet?.sim === params ? { applySheet: { ...s.applySheet, change: simChange(plan), plan, busy: false } } : {}));
+      set((s) => (same(s, sheet.token) ? { applySheet: { ...s.applySheet!, change: simChange(plan), plan, busy: false } } : {}));
     } catch (e) {
-      set((s) => (s.applySheet?.sim === params ? { applySheet: { ...s.applySheet, busy: false, error: errText(e) } } : {}));
+      set((s) => (same(s, sheet.token) ? { applySheet: { ...s.applySheet!, busy: false, error: errText(e) } } : {}));
     }
   },
   openSimRestore: async (params) => {
-    set({ applySheet: { device: SIMS_DEVICE, change: restoreChange(null), plan: null, report: null, agent: null, busy: true, error: null, restore: params } });
+    const sheet = opened({ device: SIMS_DEVICE, change: restoreChange(null), plan: null, report: null, agent: null, busy: true, error: null, restore: params });
+    set({ applySheet: sheet });
     try {
       const plan = await api.gearSimRestorePlan(params);
-      set((s) => (s.applySheet?.restore === params ? { applySheet: { ...s.applySheet, change: restoreChange(plan), plan, busy: false } } : {}));
+      set((s) => (same(s, sheet.token) ? { applySheet: { ...s.applySheet!, change: restoreChange(plan), plan, busy: false } } : {}));
     } catch (e) {
-      set((s) => (s.applySheet?.restore === params ? { applySheet: { ...s.applySheet, busy: false, error: errText(e) } } : {}));
+      set((s) => (same(s, sheet.token) ? { applySheet: { ...s.applySheet!, busy: false, error: errText(e) } } : {}));
     }
   },
   openFlash: async (params) => {
-    set({ applySheet: { device: params.device, change: flashChange(params.device, null), plan: null, report: null, agent: null, busy: true, error: null, flash: params } });
+    const sheet = opened({ device: params.device, change: flashChange(params.device, null), plan: null, report: null, agent: null, busy: true, error: null, flash: params });
+    set({ applySheet: sheet });
     try {
       const plan = await api.gearFlashPlan(params);
-      set((s) => (s.applySheet?.flash === params ? { applySheet: { ...s.applySheet, change: flashChange(params.device, plan), plan, busy: false } } : {}));
+      set((s) => (same(s, sheet.token) ? { applySheet: { ...s.applySheet!, change: flashChange(params.device, plan), plan, busy: false } } : {}));
     } catch (e) {
-      set((s) => (s.applySheet?.flash === params ? { applySheet: { ...s.applySheet, busy: false, error: errText(e) } } : {}));
+      set((s) => (same(s, sheet.token) ? { applySheet: { ...s.applySheet!, busy: false, error: errText(e) } } : {}));
     }
   },
   firmware: null,
@@ -178,23 +222,31 @@ export const createGearSlice: StateCreator<State, [], [], GearSlice> = (set, get
   closeApply: () => {
     const a = get().applySheet;
     if (a?.busy && a.report === null && a.agent === null && a.plan === null) return;
-    if (a?.agent != null) void api.answerApplyRequest(a.agent, false);
-    set({ applySheet: null });
+    // An approved request's write is running: the sheet stays until its result.
+    if (a?.approved && a.busy) return;
+    if (a?.agent != null && !a.approved) void api.answerApplyRequest(a.agent, false);
+    set(nextAsk(get()));
   },
   runApply: async () => {
     const a = get().applySheet;
-    if (!a?.change || !a.plan || a.busy) return;
-    set({ applySheet: { ...a, busy: true, error: null } });
-    // An agent's request is answered by the click; the agent's own call does the apply.
+    if (!a?.change || !a.plan || a.busy || a.approved) return;
+    // An agent's request is answered by the click; the agent's own call does the apply, and
+    // `agent-apply-result` brings its report back to this sheet.
     if (a.agent != null) {
-      await api.answerApplyRequest(a.agent, true);
+      set({ applySheet: { ...a, busy: true, approved: true, error: null } });
+      try {
+        await api.answerApplyRequest(a.agent, true);
+      } catch (e) {
+        set((s) => (same(s, a.token) ? { applySheet: { ...s.applySheet!, busy: false, approved: false, error: errText(e) } } : {}));
+      }
       return;
     }
+    set({ applySheet: { ...a, busy: true, error: null } });
     try {
       const report = a.sim ? await api.gearSimSyncClick(a.sim, a.plan.digest) : a.restore ? await api.gearSimRestoreClick(a.restore, a.plan.digest) : a.flash ? await api.gearFlashClick(a.flash, a.plan.digest) : await api.gearApplyClick(a.change.id, a.plan.digest);
-      set((s) => (s.applySheet ? { applySheet: { ...s.applySheet, report, busy: false } } : {}));
+      set((s) => (same(s, a.token) ? { applySheet: { ...s.applySheet!, report, busy: false } } : {}));
     } catch (e) {
-      set((s) => (s.applySheet ? { applySheet: { ...s.applySheet, busy: false, error: errText(e) } } : {}));
+      set((s) => (same(s, a.token) ? { applySheet: { ...s.applySheet!, busy: false, error: errText(e) } } : {}));
     }
     await get().loadGear();
   },
@@ -206,15 +258,16 @@ export const createGearSlice: StateCreator<State, [], [], GearSlice> = (set, get
       const c = await api.gearRestoreStage(backup, a.report?.files ?? []);
       await get().openApply(a.device, c.id);
     } catch (e) {
-      set((s) => (s.applySheet ? { applySheet: { ...s.applySheet, error: errText(e) } } : {}));
+      set((s) => (same(s, a.token) ? { applySheet: { ...s.applySheet!, error: errText(e) } } : {}));
     }
   },
   nextApply: async () => {
     const a = get().applySheet;
     if (!a) return;
     await get().loadGear();
+    if (!same(get(), a.token)) return;
     if (ready(get().changes, a.device).length) await get().openApply(a.device);
-    else set({ applySheet: null });
+    else get().closeApply();
   },
   discardChange: async (id) => {
     try {
@@ -264,8 +317,21 @@ export const createGearSlice: StateCreator<State, [], [], GearSlice> = (set, get
       toast(errText(e), true);
     }
   },
-  agentApply: (id, change, plan) => set({ applySheet: { device: change.device, change, plan, report: null, agent: id, busy: false, error: null } }),
-  agentApplyClosed: (id) => set((s) => (s.applySheet?.agent === id ? { applySheet: null } : {})),
+  agentApply: (q) => {
+    // Never over the person's own sheet, or over another request: it waits its turn.
+    if (get().applySheet || get().writeSheet) set((s) => ({ applyQueue: [...s.applyQueue, q] }));
+    else set({ applySheet: agentSheet(q) });
+  },
+  agentApplyClosed: (id) => {
+    set((s) => ({ applyQueue: s.applyQueue.filter((q) => q.id !== id) }));
+    // Cancelled or timed out before the click. An approved request waits for its result.
+    const a = get().applySheet;
+    if (a?.agent === id && !a.approved) set(nextAsk(get()));
+  },
+  agentApplyResult: (id, report, error) => {
+    set((s) => (s.applySheet?.agent === id && s.applySheet.approved ? { applySheet: { ...s.applySheet, report, error, busy: false } } : {}));
+    void get().loadGear();
+  },
   gear: null,
   devices: [],
   unmounted: [],

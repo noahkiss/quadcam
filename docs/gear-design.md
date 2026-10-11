@@ -1259,7 +1259,7 @@ Flow on the Radio > Splash segment:
 1. Pick an image. The preview shows it at the radio's resolution and bit depth (128 × 64,
    1 bit for B&W radios) with a threshold slider and **Invert**, at 4× with nearest-neighbour
    scaling.
-2. **Make firmware…** opens the flash plan: the board, the EdgeTX version (default: the one
+2. **Flash with splash…** opens the flash plan: the board, the EdgeTX version (default: the one
    installed), the download, the patch.
 3. Patch: find the marker `SPS\0` followed by width 0x80 and height 0x40; the 1,024 bytes
    after it are the image (8 vertical pixels per byte, column-major per 8-row band, bit set =
@@ -1887,7 +1887,11 @@ check), `core/apply.rs` (stage, update, discard, restore, plan, apply as one FC 
 `gear_changes`, `gear_change_stage`, `gear_change_update`, `gear_change_discard`,
 `gear_restore_stage`, `gear_apply_plan`, `gear_apply`. The sheet's own click is the Tauri command
 `gear_apply_click`; `Hooks::confirm_apply` asks the app's sheet for any other caller (events
-`agent-apply-request` and `agent-apply-closed`, the command `answer_apply_request`). Deviations:
+`agent-apply-request` and `agent-apply-closed`, the command `answer_apply_request`). After the
+click, `Hooks::apply_done` sends the write's outcome to the sheet that approved it (event
+`agent-apply-result`, with the report or the error), so the sheet shows the progress, the
+result and Restore backup. A request that arrives while a sheet is open waits in the app's
+queue; every sheet result is tied to the sheet it started from. Deviations:
 
 - **The plan reads no CLI.** The before state is the touched settings in the device's latest
   `dump all` backup, so a plan needs no reboot. The apply takes a fresh `before_apply` backup

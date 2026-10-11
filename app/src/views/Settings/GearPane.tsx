@@ -8,10 +8,10 @@ import styles from "./SettingsSheet.module.css";
 
 const AUTOMATION_LABEL: Record<ShownAutomation, string> = { backup: "Back up", apply_ready: "Apply ready changes", blackbox: "Pull blackbox" };
 
-/** The steps that make sense for a kind: Apply only for a device QuadCam writes settings to. */
+/** The steps that make sense for a kind: Apply only for the kinds the core runs it for (`bench::apply_ready_hooks`). */
 const OFFERED: Record<ShownAutomation, DeviceKind[]> = {
   backup: GEAR_KINDS,
-  apply_ready: ["radio", "fc", "elrs_tx", "elrs_rx"],
+  apply_ready: ["radio", "fc"],
   blackbox: ["fc"],
 };
 

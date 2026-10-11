@@ -2,7 +2,7 @@
 import { getCurrentWebview } from "@tauri-apps/api/webview";
 import { events } from "../bindings";
 import * as N from "./normalize";
-import type { AgentApplyRequest, AgentFormatRequest, CalibrateView, ClipResult, DeviceChanged, FirmwareReadProgress, ImportProgress, LibraryTask, RadioEvent, StageProgress } from "./types";
+import type { AgentApplyRequest, AgentApplyResult, AgentFormatRequest, CalibrateView, ClipResult, DeviceChanged, FirmwareReadProgress, ImportProgress, LibraryTask, RadioEvent, StageProgress } from "./types";
 
 export interface CoreEvents {
   "library-changed": null;
@@ -21,6 +21,8 @@ export interface CoreEvents {
   "agent-format-closed": number;
   "agent-apply-request": AgentApplyRequest;
   "agent-apply-closed": number;
+  /** An approved apply request's report, or the error its write stopped with. */
+  "agent-apply-result": AgentApplyResult;
   /** A native menu item: its id. */
   menu: string;
   /** The radio in USB Joystick mode, while `gearRadioWatch(true)` runs. */
@@ -49,6 +51,7 @@ const SOURCES: Record<keyof CoreEvents, Listen> = {
   "agent-format-closed": wrap(events.agentFormatClosed),
   "agent-apply-request": wrap(events.agentApplyRequest),
   "agent-apply-closed": wrap(events.agentApplyClosed),
+  "agent-apply-result": wrap(events.agentApplyResult),
   menu: wrap(events.menu),
   "radio-input": wrap(events.radioInput, N.radioEvent),
   "sim-calibration-event": wrap(events.simCalibrationEvent),

@@ -13,6 +13,9 @@ export interface MockHandle {
   emit: (event: string, payload?: unknown) => void;
   /** Simulates a drag of `paths` onto the window and a drop. */
   drop: (paths: string[]) => void;
+  /** Holds every call of `cmd` until `release(cmd)`: a write that is still running. */
+  hold: (cmd: string) => void;
+  release: (cmd: string) => void;
 }
 
 declare global {
@@ -40,10 +43,13 @@ export function installMock(opts: MockOptions = {}): MockHandle {
   const emitLater = (event: string, payload?: unknown) => setTimeout(() => emit(event, payload), 0);
   const core = new MockCore(emitLater, opts);
   const latency = opts.latency ?? 0;
+  const held = new Map<string, (() => void)[]>();
 
   const invoke = async (cmd: string, args: Record<string, unknown> = {}) => {
     core.calls.push({ cmd, args: structuredClone(args) });
     if (latency) await new Promise((r) => setTimeout(r, latency));
+    const wait = held.get(cmd);
+    if (wait) await new Promise<void>((r) => wait.push(r));
     switch (cmd) {
       case "plugin:event|listen": {
         const id = nextListener++;
@@ -96,6 +102,12 @@ export function installMock(opts: MockOptions = {}): MockHandle {
     drop: (paths) => {
       emit("tauri://drag-enter", { paths, position: { x: 400, y: 300 } });
       emit("tauri://drag-drop", { paths, position: { x: 400, y: 300 } });
+    },
+    hold: (cmd) => void held.set(cmd, held.get(cmd) ?? []),
+    release: (cmd) => {
+      const wait = held.get(cmd) ?? [];
+      held.delete(cmd);
+      wait.forEach((r) => r());
     },
   };
   window.__qc = handle;
