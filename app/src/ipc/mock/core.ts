@@ -14,6 +14,7 @@ import type {
   LibraryView,
   Moved,
   PlanPatch,
+  Profile,
   Session,
   SettingsView,
   Span,
@@ -40,7 +41,7 @@ import { live as liveOf } from "../../lib/controls";
 const DISPATCH = new Set([
   "library", "library_rate", "library_edit", "library_rename", "library_cuts", "library_export_cuts", "library_trash", "library_untrash",
   "library_photos", "library_apply_name_format", "library_match_logs", "library_rebuild", "library_rescan", "library_preview", "library_strips", "card_status",
-  "settings", "settings_set", "place_search", "place_save", "session_cuts", "profiles", "session_split", "library_split",
+  "settings", "settings_set", "place_search", "place_save", "session_cuts", "profiles", "profile_save", "session_split", "library_split",
   "modules", "module_install", "module_remove", "modules_check", "gear_osd", "gear_osd_edit", "gear_model", "gear_model_edit", "gear_voice", "gear_voice_edit", "gear_voice_preview", "gear_voice_render", "gear_voice_key", "gear_voice_sets", "gear_voice_catalog", "gear_voice_estimate", "gear_voice_sample", "gear_voice_pack_install", "gear_voice_choose", "gear_rates", "gear_rates_preview", "gear_sims", "gear_sim_sync_plan", "gear_sim_sync", "gear_sim_restore_plan", "gear_sim_restore", "gear_radio_cli", "gear_dfu_link", "gear_firmware", "gear_firmware_read", "gear_splash", "gear_flash_plan", "gear_flash", "gear_elrs", "gear_elrs_read", "gear_elrs_flash_plan", "gear_elrs_flash",
   "gear_status", "gear_devices", "gear_device_save", "gear_device_forget", "gear_dismiss_reminder", "gear_poll_pause",
   "gear_switch_map", "gear_radio", "gear_radio_watch", "gear_sim_calibration", "gear_sim_calibration_save", "gear_sim_defaults", "gear_sim_calibrate",
@@ -309,6 +310,8 @@ export class MockCore {
         const add = flightCuts(c.stats?.flight_spans || [], c.duration);
         return this.libraryCuts(c.id, withSpans([...c.cuts, ...c.pending_cuts], add), null);
       }
+      case "profile_save":
+        return this.profileSave(String(p.name), (p.fields as Record<string, unknown> | null) ?? {});
       case "profiles":
         return { profiles: this.settings.values.profiles || [], default_profile: this.settings.values.defaultProfile || null };
       case "gear_status": {
@@ -320,7 +323,7 @@ export class MockCore {
         return st;
       }
       case "gear_devices":
-        return structuredClone(this.gear.devices);
+        return this.gear.devices.map((d) => gear.withAircraft(d, this.profiles(), false));
       case "gear_device_save":
         return this.deviceSave(String(p.id), (p.name as string | null) ?? null, (p.aircraft as string | null) ?? null);
       case "gear_device_forget": {
@@ -693,22 +696,57 @@ export class MockCore {
     return true;
   }
 
-  /** `Core::gear_device_save`: a new device must be plugged in. */
+  /** The saved aircraft profiles. */
+  profiles(): Profile[] {
+    return (this.settings.values.profiles as Profile[] | undefined) ?? [];
+  }
+
+  /** `Core::profile_save` for an existing profile: changes the given fields. */
+  profileSave(name: string, fields: Record<string, unknown>) {
+    const same = (a: string) => a.trim().toLowerCase() === name.trim().toLowerCase();
+    const list = this.profiles();
+    const at = list.findIndex((p) => same(p.name));
+    if (at < 0) throw `No profile ${JSON.stringify(name)}; profiles: ${list.map((p) => p.name).join(", ") || "none"}`;
+    const p = { ...list[at], ...fields } as Profile;
+    this.settingsSet({ profiles: list.map((q, i) => (i === at ? p : q)) });
+    return structuredClone(p);
+  }
+
+  /** `Core::radio_link`: the profile names the radio; empty takes every aircraft off it. */
+  radioLink(radio: string, aircraft: string) {
+    const list = this.profiles();
+    const a = aircraft.trim().toLowerCase();
+    if (a && !list.some((p) => p.name.toLowerCase() === a)) throw `No aircraft profile ${JSON.stringify(aircraft)}. Profiles: ${list.map((p) => p.name).join(", ") || "none"}`;
+    const next = list.map((p) => {
+      if (a ? p.name.toLowerCase() === a : p.gear?.radio === radio) {
+        const g = { ...(p.gear ?? {}) };
+        if (a) g.radio = radio;
+        else delete g.radio;
+        return { ...p, gear: g };
+      }
+      return p;
+    });
+    this.settingsSet({ profiles: next });
+  }
+
+  /** `Core::gear_device_save`: a new device must be plugged in. A radio's aircraft are the
+   *  profiles that name it. */
   deviceSave(id: string, name: string | null, aircraft: string | null) {
     let d = this.gear.devices.find((x) => x.id === id);
+    const c = this.gear.connected.find((x) => x.id === id);
     if (!d) {
-      const c = this.gear.connected.find((x) => x.id === id);
       if (!c) throw `No device ${id} is known or plugged in.`;
       d = { id, kind: c.kind, name: "", aircraft: null, identity: c.identity, last_seen: "2026-10-07T12:00:00Z", last_backup: null };
       this.gear.devices.push(d);
     }
     if (name != null) d.name = name.trim();
-    if (aircraft != null) {
-      if (aircraft && !(this.settings.values.profiles || []).some((p) => p.name === aircraft)) throw `No aircraft profile named ${aircraft}.`;
+    if (aircraft != null && d.kind === "radio") this.radioLink(id, aircraft);
+    else if (aircraft != null) {
+      if (aircraft && !this.profiles().some((p) => p.name === aircraft)) throw `No aircraft profile named ${aircraft}.`;
       d.aircraft = aircraft || null;
     }
     this.emit("gear-changed");
-    return structuredClone(d);
+    return gear.withAircraft(d, this.profiles(), false);
   }
 
   /** `Core::gear_backup`: the device plugged in that `p` names (or the only one). */

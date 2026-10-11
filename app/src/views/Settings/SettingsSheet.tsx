@@ -11,6 +11,8 @@ import { Icon, type IconName } from "../../components/Icon";
 import { SegmentedControl } from "../../components/SegmentedControl";
 import { toast } from "../../components/toastStore";
 import { tilde } from "../../lib/format";
+import { deviceName } from "../../lib/gear";
+import { withRadio } from "../../lib/radioAircraft";
 import { applyNameFormat, matchLibraryLogs, rebuildLibrary, revealLibrary } from "../../actions/setup";
 import { draftFrom, emptyProfile, layoutExample, validPlaces, valuesOf, VIDEO_SYSTEMS, type Draft } from "./draft";
 import { ModulesPane } from "./ModulesPane";
@@ -211,6 +213,7 @@ function LibraryPane({ d, set }: { d: Draft; set: SetFn }) {
 
 function AircraftPane({ d, setD, at, setAt }: { d: Draft; setD: (f: (d: Draft) => Draft) => void; at: number; setAt: (i: number) => void }) {
   const places = useStore(sel.places);
+  const radios = useStore((s) => s.devices).filter((x) => x.kind === "radio");
   const aircraftCounts = useStore((s) => s.lib?.groups?.aircraft);
   const counts = new Map(aircraftCounts || []);
   const saved = useStore(sel.defaultProfile);
@@ -267,6 +270,26 @@ function AircraftPane({ d, setD, at, setAt }: { d: Draft; setD: (f: (d: Draft) =
               onChange={(v) => edit({ edgetx_models: list(v) })}
             />
           </div>
+          <SelectField label="Radio" value={p.gear?.radio || ""} onChange={(e) => edit({ gear: withRadio(p, e.target.value || null) })}>
+            <option value="">None</option>
+            {radios.map((r) => (
+              <option key={r.id} value={r.id}>
+                {deviceName(r)}
+              </option>
+            ))}
+            {p.gear?.radio && !radios.some((r) => r.id === p.gear?.radio) && <option value={p.gear.radio}>{p.gear.radio}</option>}
+          </SelectField>
+          <TextField
+            label="EdgeTX model file"
+            placeholder="model01.yml"
+            value={p.gear?.edgetx_model || ""}
+            onChange={(e) => {
+              const g = { ...(p.gear ?? {}) };
+              if (e.target.value.trim()) g.edgetx_model = e.target.value.trim();
+              else delete g.edgetx_model;
+              edit({ gear: g });
+            }}
+          />
           <SelectField label="Default place" value={p.place || ""} onChange={(e) => edit({ place: e.target.value || null })}>
             <option value="">None</option>
             {places.map((x) => (

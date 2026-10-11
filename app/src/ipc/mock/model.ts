@@ -269,7 +269,8 @@ function build(file: string, edits: Edit[]): { state: State; used: number } {
   return { state, used };
 }
 
-const FILES = [
+/** The made-up radio's models (`model01.yml` selected). */
+export const FILES = [
   { file: "model00.yml", name: "ALPHA" },
   { file: "model01.yml", name: "BRAVO 2" },
 ];
