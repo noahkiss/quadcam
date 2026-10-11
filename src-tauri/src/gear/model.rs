@@ -515,6 +515,8 @@ pub enum RefusalCode {
     /// The change is marked "Read first": read the real value on the device, then mark it
     /// Ready.
     ReadFirst,
+    /// The change is a Draft: mark it Ready (or Try) first.
+    Draft,
     /// Settings do not fit the device they would go to (board or firmware).
     Incompatible,
     /// A file QuadCam would write cannot be written (a sim file's folder or permissions).
@@ -542,6 +544,7 @@ impl RefusalCode {
             RefusalCode::UsbHeat => "usb_heat",
             RefusalCode::CardCheck => "card_check",
             RefusalCode::ReadFirst => "read_first",
+            RefusalCode::Draft => "draft",
             RefusalCode::Incompatible => "incompatible",
             RefusalCode::NotWritable => "not_writable",
         }
@@ -704,6 +707,7 @@ mod tests {
             UsbHeat,
             CardCheck,
             ReadFirst,
+            Draft,
             Incompatible,
             NotWritable,
         ];
@@ -711,7 +715,7 @@ mod tests {
             match c {
                 UnknownVersion | UnknownBoard | DeviceChanged | BeforeMismatch | ShapeUnknown
                 | RoundTrip | NoBackup | SeveralDevices | SimRunning | BadImage | BadSetting
-                | PortBusy | Disabled | NoDevice | UsbHeat | CardCheck | ReadFirst
+                | PortBusy | Disabled | NoDevice | UsbHeat | CardCheck | ReadFirst | Draft
                 | Incompatible | NotWritable => {}
             }
         }

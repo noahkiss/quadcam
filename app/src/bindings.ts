@@ -4896,6 +4896,8 @@ export type RefusalCode = "unknown_version" | "unknown_board" | "device_changed"
  *  Ready.
  */
 "read_first" | 
+/**  The change is a Draft: mark it Ready (or Try) first. */
+"draft" | 
 /**  Settings do not fit the device they would go to (board or firmware). */
 "incompatible" | 
 /**  A file QuadCam would write cannot be written (a sim file's folder or permissions). */

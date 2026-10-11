@@ -626,6 +626,59 @@ fn options_are_staged_planned_applied_and_read_back() {
 }
 
 #[test]
+fn options_refuse_a_draft_or_read_first_change() {
+    let (b, tx, _) = bench(true, true);
+    let id = read(&b, &b.radio).unwrap().device;
+    let c = b
+        .core
+        .gear_change_stage(&StageParams {
+            device: id,
+            edits: sets(&[("switch_mode", "Hybrid")]),
+            draft: true,
+            ..Default::default()
+        })
+        .unwrap();
+    assert_eq!(c.status, ChangeStatus::Draft);
+    let mark = |status| {
+        b.core
+            .gear_change_update(&quadcam_lib::core::ChangeUpdateParams {
+                id: c.id.clone(),
+                status: Some(status),
+                ..Default::default()
+            })
+            .unwrap();
+    };
+    let plan = || {
+        b.core
+            .gear_apply_plan(&ApplyPlanParams {
+                id: c.id.clone(),
+                port: None,
+            })
+            .unwrap()
+    };
+    let apply = |digest: String| {
+        b.core.gear_apply(&ApplyRequest {
+            id: c.id.clone(),
+            digest,
+            confirm: true,
+            port: None,
+        })
+    };
+    for (status, want) in [
+        (ChangeStatus::Draft, RefusalCode::Draft),
+        (ChangeStatus::ReadFirst, RefusalCode::ReadFirst),
+    ] {
+        mark(status);
+        let p = plan();
+        assert_eq!(failed(&p).first().map(|f| f.1), Some(want), "{status:?}");
+        assert_eq!(refusal(apply(p.digest).unwrap_err()).code, want);
+    }
+    assert!(tx.device().writes().is_empty());
+    mark(ChangeStatus::Ready);
+    assert!(failed(&plan()).is_empty());
+}
+
+#[test]
 fn an_apply_refuses_when_the_device_moved_since_the_read() {
     let (b, tx, _) = bench(true, true);
     let id = read(&b, &b.radio).unwrap().device;

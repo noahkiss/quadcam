@@ -310,7 +310,7 @@ impl Core {
         planned
             .plan
             .checks
-            .insert(0, crate::gear::apply::card::read_first(&change));
+            .splice(0..0, crate::gear::apply::card::status_checks(&change));
         Ok((change, planned))
     }
 

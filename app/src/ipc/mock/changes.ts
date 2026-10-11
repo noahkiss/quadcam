@@ -229,6 +229,7 @@ export function plan(g: MockGear, id: string): ApplyPlan {
   if (!c) throw `No staged change "${id}". See \`gear changes\`.`;
   if (!staged(c)) throw `Change ${id} is ${c.status}; only a staged change can be applied.`;
   const dev = g.devices.find((d) => d.id === c.device);
+  const draft: Check = c.status === "draft" ? fail("Not a draft", "draft", "This change is a Draft. Mark it Ready or Try to apply it.") : ok("Not a draft");
   const readFirst: Check = c.status === "read_first" ? fail("Read first", "read_first", "This change is marked Read first. Read the real value on the device, then mark it Ready.") : ok("Read first");
   if (dev?.kind === "elrs_tx" || dev?.kind === "elrs_rx") {
     const sets = c.edits.flatMap((e) => (e.kind === "elrs_options" ? e.options : []));
@@ -236,7 +237,7 @@ export function plan(g: MockGear, id: string): ApplyPlan {
     return {
       change: id,
       device: dev.identity ?? {},
-      checks: [readFirst, ok("ELRS tools (preview) are on"), ok("The device was read"), ok("The options exist and the values are in range"), ok("The radio or FC it sits behind is plugged in on serial")],
+      checks: [draft, readFirst, ok("ELRS tools (preview) are on"), ok("The device was read"), ok("The options exist and the values are in range"), ok("The radio or FC it sits behind is plugged in on serial")],
       diff,
       digest: digestOf(c, diff),
       warnings: ["QuadCam reads the device again first and refuses when an option moved since the read.", "Writing ExpressLRS options over a passthrough has not been checked on a real device yet."],
@@ -246,6 +247,7 @@ export function plan(g: MockGear, id: string): ApplyPlan {
     const card = cardOf(g, c.device);
     const failedCheck = g.checks.find((k) => k.device === c.device);
     const checks: Check[] = [
+      draft,
       readFirst,
       card ? ok("One card plugged in") : fail("One card plugged in", "no_device", "No radio card is mounted. Plug the radio in (USB Storage) or insert its card."),
       ...(card
@@ -265,6 +267,7 @@ export function plan(g: MockGear, id: string): ApplyPlan {
   }
   const plugged = g.connected.some((x) => x.kind === "fc" && x.link.kind === "serial");
   const checks: Check[] = [
+    draft,
     readFirst,
     plugged ? ok("One FC plugged in") : fail("One FC plugged in", "no_device", "No FC is plugged in. Plug USB in before the battery."),
     ok("Same FC as planned"),

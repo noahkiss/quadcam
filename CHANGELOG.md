@@ -5,6 +5,7 @@ User-facing changes in each release, newest first. Release notes on
 
 ## Unreleased
 
+- **A Draft change no longer applies.** The core refuses a Draft at the plan (`draft`, new refusal code), for an FC, a radio card and ExpressLRS options alike; before, only the app's **Review…** was off. An ExpressLRS options change marked Read first now refuses too (`read_first`), as FC and card changes did.
 - **CLI help:** `gear apply --help` names every device a staged change applies to (an FC, a radio card, ExpressLRS options); `gear changes --status` lists every status (`try`, `read_first` and `reverted` too); `gear firmware --help` names the Betaflight FC flash beside the EdgeTX one.
 
 ## 0.13.1 (2026-10-11)
