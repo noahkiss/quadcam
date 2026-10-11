@@ -21,7 +21,7 @@ export const GEAR_PAGES: GearPageSlot[] = [
   // The radio in USB Joystick mode, live (WP6).
   { id: "controls", label: "Controls", icon: "radio", render: () => <ControlsPage /> },
   // The voice packs on this Mac and the Voice studio; a radio's Voice segment picks one.
-  { id: "voices", label: "Voices", icon: "signal", render: () => <VoicesPage /> },
+  { id: "voices", label: "Voices", icon: "volume-loud", render: () => <VoicesPage /> },
   // Fly the sim in the plain room (S5).
   { id: "sim", label: "Sim", icon: "quad", preview: "simPreview", render: () => <SimPage /> },
   // The sims on this Mac against the quad's rates; the badge counts the ones that differ (WP8).
