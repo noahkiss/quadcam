@@ -167,7 +167,7 @@ export function Publish({ pack, onClose }: { pack: VoicePack; onClose: () => voi
           Attribution
           <Input aria-label="Attribution" placeholder="By provider" value={form.attribution} onChange={set("attribution")} />
         </label>
-        <Button size="sm" variant={review ? "secondary" : "primary"} disabled={busy} onClick={prepare}>
+        <Button size="sm" disabled={busy} onClick={prepare}>
           Prepare
         </Button>
       </div>
