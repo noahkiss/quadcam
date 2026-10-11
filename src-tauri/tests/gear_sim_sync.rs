@@ -1235,3 +1235,24 @@ fn a_test_process_writes_no_sim_file_outside_the_temporary_folder() {
     assert_eq!(refused(&e), RefusalCode::Disabled, "{e:#}");
     assert_eq!(std::fs::read(&file).unwrap(), before);
 }
+
+/// A restore under cargo writes no sim file outside the temporary folder either: a ready
+/// plan for a file in cargo's target folder is `Disabled` at the write.
+#[test]
+fn a_test_process_restores_no_sim_file_outside_the_temporary_folder() {
+    let dir = tempfile::tempdir().unwrap();
+    let (h, paths) = home();
+    let c = core(dir.path());
+    synced(&c, h.path(), &paths);
+    let after_sync = std::fs::read(&paths.liftoff).unwrap();
+    let t = tempfile::tempdir_in(env!("CARGO_TARGET_TMPDIR")).unwrap();
+    let file = put(t.path(), LIFTOFF, &after_sync);
+    let p = restore_params("liftoff");
+    let plan = c.gear_sim_restore_plan_at(&p, t.path(), &never).unwrap();
+    assert!(plan.ready(), "{:?}", plan.checks);
+    let e = c
+        .sim_restore_at(&restore_request(&p, &plan), true, t.path(), &never)
+        .unwrap_err();
+    assert_eq!(refused(&e), RefusalCode::Disabled, "{e:#}");
+    assert_eq!(std::fs::read(&file).unwrap(), after_sync);
+}
