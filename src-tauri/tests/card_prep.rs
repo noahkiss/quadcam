@@ -325,7 +325,7 @@ fn prep_never_erases_a_dji_volume_while_a_dji_usb_device_is_attached() {
     use std::sync::atomic::{AtomicBool, Ordering};
 
     let card = Image::create("64m", "QCDJIUSB", false);
-    assert_is_test_image(&card);
+    card.assert_is_test_image();
     std::fs::create_dir_all(card.mount.join("DCIM/DJI_001")).unwrap();
     let work = tempfile::tempdir().unwrap();
     let attached = Arc::new(AtomicBool::new(true));
@@ -362,7 +362,7 @@ fn prep_never_erases_a_dji_volume_while_a_dji_usb_device_is_attached() {
     // The erase asks right before `diskutil eraseDisk`.
     let id = CardIdentity::from_info(&disk::info(&card.mount.to_string_lossy()).unwrap());
     let dji = sources::dji::Dji.card_policy();
-    assert_is_test_image(&card);
+    card.assert_is_test_image();
     let e = disk::format_card_with(
         &id,
         &card.mount,
