@@ -57,6 +57,7 @@ describe("MockCore", () => {
     const v = core.dispatch("gear_voice", { radio: null }) as { packs: { id: string; radios: string[] }[] };
     expect(v.packs.find((k) => k.id === "local-say-samantha")?.radios).toHaveLength(2);
     expect(core.dispatch("gear_voice_pack_delete", { pack: "local-say-samantha", takes: false })).toMatchObject({ takes: 0, radios: ["radio-1f2e3d4c5b6a7980", "radio-two"] });
+    expect(core.gear.voice.chosen).toEqual({});
     expect(() => core.dispatch("gear_voice_pack_delete", { pack: "local-say-samantha" })).toThrow(/not installed/);
   });
 });

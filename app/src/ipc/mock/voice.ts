@@ -199,6 +199,8 @@ export function remove(g: MockGear, p: { pack: string; takes?: boolean }): PackD
   if (!k) throw `Pack "${p.pack}" is not installed.`;
   g.voice.installed = g.voice.installed.filter((x) => x !== p.pack);
   if (p.takes) g.voice.takesDeleted.push(p.pack);
+  // A choice of a pack that is gone names nothing.
+  for (const r of k.radios ?? []) delete g.voice.chosen[r];
   return { pack: p.pack, bytes: k.bytes, takes: p.takes ? k.lines : 0, radios: k.radios ?? [] };
 }
 

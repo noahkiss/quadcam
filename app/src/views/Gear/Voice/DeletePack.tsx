@@ -30,7 +30,7 @@ export function DeletePack({ pack, radios, onClose }: { pack: VoicePack; radios:
       <div className={styles.form}>
         <p className={styles.status}>
           Removes {pack.id} ({fmtBytes(pack.bytes)}) from this Mac. Radio cards keep the sounds they have.
-          {radios.length > 0 ? ` Chosen for ${radios.join(", ")}.` : ""}
+          {radios.length > 0 ? ` Chosen for ${radios.join(", ")}: the delete clears that choice.` : ""}
         </p>
         <Checkbox label="Also delete the raw takes" detail="A new render of this voice and model then calls the provider again." checked={takes} onChange={(e) => setTakes(e.target.checked)} />
       </div>

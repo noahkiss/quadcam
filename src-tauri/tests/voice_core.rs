@@ -998,7 +998,10 @@ fn the_mcp_actions_choose_on_several_radios_and_delete_after_confirm() {
     assert_eq!(r["isError"], false, "{r}");
     let t = r["content"][0]["text"].as_str().unwrap();
     assert!(
-        t.starts_with("Not deleted.") && t.contains("2 radios chose it"),
+        t.starts_with("Not deleted.")
+            && t.contains("Radios that chose it: ")
+            && t.contains("Radio radio-two (radio-two)")
+            && t.contains("The delete clears their choice"),
         "{t}"
     );
     assert!(b
@@ -1011,6 +1014,19 @@ fn the_mcp_actions_choose_on_several_radios_and_delete_after_confirm() {
         json!({"action": "voice_delete", "pack": pack, "confirm": true}),
     );
     assert_eq!(r["isError"], false, "{r}");
+    let t = r["content"][0]["text"].as_str().unwrap();
+    assert!(t.contains("Cleared the choice on "), "{t}");
+    // No radio is left choosing a pack that is gone.
+    for radio in [b.id.as_str(), "radio-two"] {
+        let v = b
+            .core
+            .gear_voice(&VoiceParams {
+                radio: Some(radio.into()),
+                ..Default::default()
+            })
+            .unwrap();
+        assert_eq!(v.chosen, None, "{radio}");
+    }
     assert!(!b
         .dir
         .path()

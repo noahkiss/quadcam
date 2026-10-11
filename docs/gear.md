@@ -388,8 +388,9 @@ pack records its firmware family (`edgetx`) in `pack.json`.
   each radio's overrides**. A radio whose card is connected has **Review…**, which opens the
   apply sheet (it mounts and unmounts the card as usual). The others keep the staged change
   and apply it when they are next plugged in, like any staged change.
-- **Delete.** The trash button asks first. It removes the pack's folder; radio cards keep the
-  sounds they have, and a staged voice change keeps its own copy of them. The raw takes stay in
+- **Delete.** The trash button asks first, and names the radios that chose the pack. It
+  removes the pack's folder and clears those radios' choice; radio cards keep the sounds they
+  have, and a staged voice change keeps its own copy of them. The raw takes stay in
   the cache, so rendering that voice and model again costs nothing. Tick **Also delete the raw
   takes** to remove them too.
 - **Get voice packs.** A voice pack is a zip of WAVs for one voice. **Refresh packs** reads

@@ -246,7 +246,8 @@ pub enum VoiceCmd {
         #[arg(long)]
         drop_overrides: bool,
     },
-    /// Remove an installed or rendered pack from this Mac. Cards keep its sounds. Needs --yes.
+    /// Remove an installed or rendered pack from this Mac and clear the radios' choice of it.
+    /// Cards keep its sounds. Needs --yes.
     Delete {
         /// The pack id.
         pack: String,
@@ -324,6 +325,18 @@ fn read_key() -> Result<String> {
         bail!("No key was given: pipe it in, or type it at the prompt.");
     }
     Ok(key)
+}
+
+/// Saved devices' ids as "name (id)", for a refusal that lists them.
+fn radio_names(core: &Core, ids: &[String]) -> Result<Vec<String>> {
+    let devices = call::gear_devices(core)?;
+    Ok(ids
+        .iter()
+        .map(|id| match devices.iter().find(|d| &d.id == id) {
+            Some(d) if !d.name.is_empty() => format!("{} ({id})", d.name),
+            _ => id.clone(),
+        })
+        .collect())
 }
 
 pub fn run(core: &Core, a: VoiceArgs) -> Result<Value> {
@@ -476,7 +489,25 @@ pub fn run(core: &Core, a: VoiceArgs) -> Result<Value> {
         }
         Some(VoiceCmd::Delete { pack, takes, yes }) => {
             if !yes {
-                bail!("Refused: delete needs --yes. It removes pack {pack} from this Mac.");
+                let view = call::gear_voice(core, api::VoiceParams::default())?;
+                let radios = view
+                    .packs
+                    .iter()
+                    .find(|k| k.id == pack && k.installed)
+                    .map(|k| radio_names(core, &k.radios))
+                    .transpose()?
+                    .unwrap_or_default();
+                bail!(
+                    "Refused: delete needs --yes. It removes pack {pack} from this Mac.{}",
+                    if radios.is_empty() {
+                        String::new()
+                    } else {
+                        format!(
+                            " Radios that chose it: {}. The delete clears their choice; their cards keep its sounds.",
+                            radios.join(", ")
+                        )
+                    }
+                );
             }
             serde_json::to_value(call::gear_voice_pack_delete(
                 core,

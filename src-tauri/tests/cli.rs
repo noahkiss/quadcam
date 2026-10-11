@@ -663,3 +663,64 @@ fn voice_studio_commands_list_sets_and_keep_the_key_out_of_every_answer() {
     ]);
     assert_ne!(code, 0, "{v}");
 }
+
+#[test]
+fn voice_delete_lists_the_radios_that_chose_the_pack_and_clears_their_choice() {
+    let env = Env::new();
+    let support = env
+        .home
+        .path()
+        .join("Library/Application Support/app.quadcam");
+    let pack = support.join("gear/voices/local-say-test");
+    std::fs::create_dir_all(pack.join("SOUNDS/en")).unwrap();
+    std::fs::write(pack.join("SOUNDS/en/armed.wav"), b"RIFF").unwrap();
+    std::fs::write(
+        pack.join("pack.json"),
+        serde_json::to_vec(&serde_json::json!({
+            "id": "local-say-test", "voice": "Test", "lang": "en", "provider": "say",
+            "settings": {}, "lines": 1, "license": "", "attribution": "", "lines_csv_sha": "",
+            "files": ["SOUNDS/en/armed.wav"]
+        }))
+        .unwrap(),
+    )
+    .unwrap();
+    let gear = support.join("gear/gear.json");
+    std::fs::write(
+        &gear,
+        serde_json::to_vec(&serde_json::json!({
+            "devices": [
+                {"id": "radio-a", "kind": "radio", "name": "Field radio"},
+                {"id": "radio-b", "kind": "radio"},
+                {"id": "radio-c", "kind": "radio", "name": "Spare"}
+            ],
+            "voice": {"chosen": {"radio-a": "local-say-test", "radio-b": "local-say-test", "radio-c": "other"}}
+        }))
+        .unwrap(),
+    )
+    .unwrap();
+
+    // Without --yes: refused, naming the radios whose choice the delete clears.
+    let (code, v) = env.run(&["gear", "voice", "delete", "local-say-test"]);
+    assert_ne!(code, 0, "{v}");
+    let e = v.to_string();
+    assert!(
+        e.contains("Radios that chose it: Field radio (radio-a), radio-b.")
+            && e.contains("clears their choice"),
+        "{e}"
+    );
+    assert!(pack.is_dir());
+
+    let r = env.ok(&["gear", "voice", "delete", "local-say-test", "--yes"]);
+    assert_eq!(
+        r["radios"],
+        serde_json::json!(["radio-a", "radio-b"]),
+        "{r}"
+    );
+    assert!(!pack.exists());
+    let g: Value = serde_json::from_slice(&std::fs::read(&gear).unwrap()).unwrap();
+    assert_eq!(
+        g["voice"]["chosen"],
+        serde_json::json!({"radio-c": "other"}),
+        "only the deleted pack's choices go"
+    );
+}

@@ -71,6 +71,20 @@ test("Delete asks first, and keeps the raw takes unless the box is ticked", asyn
   await expect(page.getByRole("region", { name: "Library" })).toContainText("No voice pack on this Mac.");
 });
 
+test("Delete names the radios that chose the pack and clears their choice", async ({ app, page }) => {
+  await openVoices(app, page, true);
+  await page.getByRole("button", { name: "Render my voice" }).click();
+  await expect(library(page)).toContainText("Samantha");
+  await app.core(`c => { c.gear.voice.chosen = { "${RADIO_ID}": "local-say-samantha", "radio-two": "local-say-samantha" }; }`);
+  await page.getByRole("button", { name: "Refresh packs" }).click();
+  await library(page).getByRole("button", { name: "Delete Samantha" }).click();
+  const confirm = dialog(page, "Delete Samantha?");
+  await expect(confirm).toContainText("Chosen for Field radio, Bench radio: the delete clears that choice.");
+  await confirm.getByRole("button", { name: "Delete" }).click();
+  await expect(library(page)).toHaveCount(0);
+  expect(await app.core(`c => c.gear.voice.chosen`)).toEqual({});
+});
+
 test("Apply to radios stages one change per radio, says which cards are connected, and opens the apply sheet", async ({ app, page }) => {
   await openVoices(app, page, true);
   await installDemo(page);

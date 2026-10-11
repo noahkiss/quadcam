@@ -4048,7 +4048,10 @@ export type PackDeleteReport = {
 	bytes: number,
 	/**  Raw takes and batches removed from the cache (0 unless `takes`). */
 	takes: number,
-	/**  Saved radios that had chosen the pack. Their cards keep its sounds. */
+	/**
+	 *  Saved radios that had chosen the pack. The delete clears their choice; their cards
+	 *  keep its sounds.
+	 */
 	radios: string[],
 };
 

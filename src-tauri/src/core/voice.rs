@@ -293,7 +293,8 @@ pub struct PackDeleteReport {
     pub bytes: u64,
     /// Raw takes and batches removed from the cache (0 unless `takes`).
     pub takes: u32,
-    /// Saved radios that had chosen the pack. Their cards keep its sounds.
+    /// Saved radios that had chosen the pack. The delete clears their choice; their cards
+    /// keep its sounds.
     pub radios: Vec<String>,
 }
 
@@ -939,8 +940,8 @@ impl Core {
 
     /// Removes an installed or rendered pack from this Mac. With `takes`, the raw takes and
     /// batches it was made from go too; without, a later render of that voice and model
-    /// comes from the cache. Radios that chose the pack keep its sounds on their cards; a
-    /// staged voice change keeps its own copy of them.
+    /// comes from the cache. Radios that chose the pack lose that choice but keep its sounds
+    /// on their cards; a staged voice change keeps its own copy of them.
     pub fn gear_voice_pack_delete(&self, p: &PackDeleteParams) -> Result<PackDeleteReport> {
         packs::check_id(&p.pack)?;
         let inst = packs::installed(&self.voices_dir())
@@ -952,12 +953,23 @@ impl Core {
             takes = self.remove_takes(&inst.manifest)?;
         }
         let bytes = packs::delete(&self.voices_dir(), &p.pack)?;
-        let radios = self
+        let radios: Vec<String> = self
             .chosen_all()
             .into_iter()
             .filter(|(_, k)| *k == p.pack)
             .map(|(r, _)| r)
             .collect();
+        // A choice of a pack that is gone names nothing: clear it.
+        if !radios.is_empty() {
+            self.gear_store().update(|v| {
+                let chosen = sub(voice_obj(v)?, "chosen")?;
+                for r in &radios {
+                    chosen.remove(r);
+                }
+                Ok(())
+            })?;
+            self.hooks.gear_changed();
+        }
         Ok(PackDeleteReport {
             pack: p.pack.clone(),
             bytes,
