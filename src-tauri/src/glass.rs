@@ -38,8 +38,11 @@ pub fn configure<'a, R: Runtime, M: tauri::Manager<R>>(
     let builder = builder
         .title_bar_style(tauri::TitleBarStyle::Overlay)
         .hidden_title(true)
-        // The traffic lights' left edge and their top inset, centred in the toolbar's height.
-        .traffic_light_position(tauri::LogicalPosition::new(20.0, (BAR_HEIGHT - 14.0) / 2.0));
+        // The traffic lights' left edge, and the extra title bar height that centres them in
+        // the toolbar. tao makes the title bar the buttons' height plus `y`, and AppKit keeps
+        // each button 9.5 pt above its bottom (measured on macOS 27), so the centre sits at
+        // `y - 2.5` from the top.
+        .traffic_light_position(tauri::LogicalPosition::new(20.0, BAR_HEIGHT / 2.0 + 2.5));
     builder.initialization_script(MARK)
 }
 
