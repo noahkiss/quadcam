@@ -14,7 +14,7 @@ use quadcam_lib::gear::apply::{ApplyPlanParams, ApplyRequest};
 use quadcam_lib::gear::bf::cli::Timing;
 use quadcam_lib::gear::changes::ChangeFilter;
 use quadcam_lib::gear::cues::{CueService, RecordedCues};
-use quadcam_lib::gear::edgetx::card::RadioOp;
+use quadcam_lib::gear::edgetx::card::{RadioOp, WriteOptions};
 use quadcam_lib::gear::edgetx::model::ModelOp;
 use quadcam_lib::gear::edgetx::synth::{self, SynthCard};
 use quadcam_lib::gear::events::Presence;
@@ -69,6 +69,7 @@ struct Opts {
     fail_readback: Option<String>,
     hooks: Arc<dyn Hooks>,
     uuid: &'static str,
+    card_write: Option<WriteOptions>,
 }
 
 impl Default for Opts {
@@ -78,6 +79,7 @@ impl Default for Opts {
             fail_readback: None,
             hooks: Arc::new(NoHooks),
             uuid: "11111111-2222-3333-4444-555555555555",
+            card_write: None,
         }
     }
 }
@@ -128,6 +130,7 @@ fn bench(o: Opts) -> Bench {
         Ok(())
     });
     env.fail_readback = o.fail_readback;
+    env.card_write = o.card_write;
     // Cues play every time here: the debounce would hide a second "safe to unplug".
     std::fs::create_dir_all(dir.path().join("support")).unwrap();
     std::fs::write(
@@ -910,4 +913,262 @@ fn a_card_pulled_before_the_job_is_not_mounted() {
         .unwrap_err();
     assert!(format!("{e:#}").contains("not plugged in"), "{e:#}");
     assert!(b.log.lock().unwrap().is_empty());
+}
+
+/// Write options whose write of `path` stalls `stall` past a 150 ms timeout; a failed apply
+/// waits `wait` for it to end.
+fn stalled(path: &str, stall: u64, wait: u64) -> WriteOptions {
+    let mut o = WriteOptions::reader();
+    o.base_timeout = std::time::Duration::from_millis(150);
+    o.floor_bytes_per_s = u64::MAX;
+    o.stall = Some((path.into(), std::time::Duration::from_millis(stall)));
+    o.stuck_wait = std::time::Duration::from_millis(wait);
+    o
+}
+
+fn no_temp_files(b: &Bench) {
+    for d in ["RADIO", "MODELS"] {
+        let left: Vec<String> = std::fs::read_dir(b.root.join(d))
+            .unwrap()
+            .flatten()
+            .map(|e| e.file_name().to_string_lossy().to_string())
+            .filter(|n| n.contains("quadcam-tmp"))
+            .collect();
+        assert!(left.is_empty(), "{left:?}");
+    }
+}
+
+#[test]
+fn a_write_past_its_timeout_is_waited_for_before_the_roll_back() {
+    let b = bench(Opts {
+        card_write: Some(stalled("RADIO/radio.yml", 700, 20_000)),
+        ..Default::default()
+    });
+    let radio = std::fs::read(b.root.join("RADIO/radio.yml")).unwrap();
+    let model = std::fs::read(b.root.join("MODELS/model00.yml")).unwrap();
+    let c = stage(
+        &b,
+        vec![contrast("29"), rename("model00.yml", None, "ALPHA TWO")],
+    );
+    let p = plan(&b, &c);
+    let t = std::time::Instant::now();
+    let r = b.core.gear_apply(&req(&c, &p)).unwrap();
+    // The roll back ran only after the stalled write ended.
+    assert!(t.elapsed() >= std::time::Duration::from_millis(700));
+    assert_eq!(r.status, ChangeStatus::Failed, "{}", r.message);
+    let steps: Vec<_> = r.steps.iter().map(|s| (s.name.as_str(), s.state)).collect();
+    use quadcam_lib::gear::apply::StepState::*;
+    assert_eq!(
+        steps,
+        [
+            ("Back up", Done),
+            ("Write", Failed),
+            ("Roll back", Done),
+            ("Read back", Skipped),
+            ("Verify", Skipped)
+        ]
+    );
+    assert!(
+        r.message.contains("did not finish writing RADIO/radio.yml"),
+        "{}",
+        r.message
+    );
+    assert!(r.message.contains("The card is as it was"), "{}", r.message);
+    assert!(!r.message.contains("do not pull"), "{}", r.message);
+    // Nothing lands after the report: both files hold their old bytes, and stay so.
+    std::thread::sleep(std::time::Duration::from_millis(300));
+    assert_eq!(
+        std::fs::read(b.root.join("RADIO/radio.yml")).unwrap(),
+        radio
+    );
+    assert_eq!(
+        std::fs::read(b.root.join("MODELS/model00.yml")).unwrap(),
+        model
+    );
+    no_temp_files(&b);
+    // The job ended and the card is released, with the failure cue.
+    assert_eq!(*b.log.lock().unwrap(), [format!("unmount {DISK}")]);
+    assert!(!spoken(&b).iter().any(|s| s.contains("safe to unplug")));
+}
+
+#[test]
+fn a_write_still_running_is_not_raced_and_the_card_stays_mounted() {
+    let b = bench(Opts {
+        card_write: Some(stalled("RADIO/radio.yml", 2_500, 200)),
+        ..Default::default()
+    });
+    let c = stage(&b, vec![contrast("29")]);
+    let p = plan(&b, &c);
+    let r = b.core.gear_apply(&req(&c, &p)).unwrap();
+    assert_eq!(r.status, ChangeStatus::Failed, "{}", r.message);
+    let steps: Vec<_> = r.steps.iter().map(|s| (s.name.as_str(), s.state)).collect();
+    use quadcam_lib::gear::apply::StepState::*;
+    assert_eq!(
+        steps,
+        [
+            ("Back up", Done),
+            ("Write", Failed),
+            ("Roll back", Skipped),
+            ("Read back", Skipped),
+            ("Verify", Skipped)
+        ]
+    );
+    // It does not claim the card is as it was, and names the backup to restore.
+    assert!(!r.message.contains("as it was"), "{}", r.message);
+    assert!(r.message.contains("still writing"), "{}", r.message);
+    assert!(
+        r.message.contains(r.backup.as_deref().unwrap()),
+        "{}",
+        r.message
+    );
+    // The card stays mounted, with Done on its page; no unmount, no "safe to unplug".
+    assert!(
+        b.log.lock().unwrap().is_empty(),
+        "{:?}",
+        b.log.lock().unwrap()
+    );
+    assert!(b.mounted.load(Ordering::SeqCst));
+    assert_eq!(b.core.gear_mounted_cards().len(), 1);
+    assert!(!spoken(&b).iter().any(|s| s.contains("safe to unplug")));
+    // The late write lands whole, alone: nothing raced it.
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(20);
+    while !read(&b, "RADIO/radio.yml").contains("contrast: 29") {
+        assert!(
+            std::time::Instant::now() < deadline,
+            "the late write never landed"
+        );
+        std::thread::sleep(std::time::Duration::from_millis(50));
+    }
+    std::thread::sleep(std::time::Duration::from_millis(200));
+    no_temp_files(&b);
+}
+
+/// Hooks whose confirm changes the card at the path set, as someone editing it between
+/// the plan and the write would.
+#[derive(Default)]
+struct ChangeOnConfirm(Mutex<Option<PathBuf>>);
+
+impl Hooks for ChangeOnConfirm {
+    fn confirm_apply(&self, _c: &StagedChange, _p: &ApplyPlan) -> anyhow::Result<()> {
+        if let Some(root) = self.0.lock().unwrap().as_ref() {
+            let f = root.join("RADIO/radio.yml");
+            let text = std::fs::read_to_string(&f)
+                .unwrap()
+                .replace("vBatWarn: 66", "vBatWarn: 67");
+            std::fs::write(&f, text).unwrap();
+        }
+        Ok(())
+    }
+}
+
+#[test]
+fn a_refused_apply_leaves_a_card_the_person_mounted_mounted() {
+    let hooks = Arc::new(ChangeOnConfirm::default());
+    let b = bench(Opts {
+        hooks: hooks.clone(),
+        ..Default::default()
+    });
+    *hooks.0.lock().unwrap() = Some(b.root.clone());
+    // The person mounts the card to browse it.
+    b.core
+        .gear_card_unmount(&CardMountParams {
+            device: b.id.clone(),
+            minutes: None,
+        })
+        .unwrap();
+    b.core
+        .gear_card_mount(&CardMountParams {
+            device: b.id.clone(),
+            minutes: None,
+        })
+        .unwrap();
+    b.log.lock().unwrap().clear();
+    let c = stage(&b, vec![contrast("30")]);
+    let p = plan(&b, &c);
+    let e = b.core.gear_apply(&req(&c, &p)).unwrap_err();
+    assert_eq!(code(&e), RefusalCode::BeforeMismatch);
+    // The refusal unmounted nothing: the person's Mount stands.
+    assert!(
+        b.log.lock().unwrap().is_empty(),
+        "{:?}",
+        b.log.lock().unwrap()
+    );
+    assert!(b.mounted.load(Ordering::SeqCst));
+    assert_eq!(b.core.gear_mounted_cards().len(), 1);
+    assert!(read(&b, "RADIO/radio.yml").contains("contrast: 20"));
+}
+
+#[test]
+fn a_model_name_that_leaves_models_is_refused_at_stage() {
+    let b = bench(Opts::default());
+    for bad in ["../../../tmp/x", "A/B", ".HIDDEN"] {
+        let e = b
+            .core
+            .gear_change_stage(&StageParams {
+                device: b.id.clone(),
+                edits: vec![rename("model00.yml", None, bad)],
+                ..Default::default()
+            })
+            .unwrap_err();
+        assert_eq!(code(&e), RefusalCode::BadSetting, "{bad}: {e:#}");
+        let e = b
+            .core
+            .gear_change_stage(&StageParams {
+                device: b.id.clone(),
+                edits: vec![Edit::ModelCopy {
+                    from: "model00.yml".into(),
+                    to: "model05.yml".into(),
+                    name: bad.into(),
+                }],
+                ..Default::default()
+            })
+            .unwrap_err();
+        assert_eq!(code(&e), RefusalCode::BadSetting, "{bad}: {e:#}");
+    }
+}
+
+#[test]
+fn a_clean_removal_needs_a_card() {
+    let b = bench(Opts::default());
+    let mut junk = vec![0x00, 0x05, 0x16, 0x07, 0x00, 0x02, 0x00, 0x00];
+    junk.extend_from_slice(b"Mac OS X        ");
+    junk.resize(120, 0);
+    // A folder that is not a card: listed, never removed.
+    let plain = b.dir.path().join("plain");
+    std::fs::create_dir_all(plain.join("sub")).unwrap();
+    std::fs::write(plain.join("sub/._photo.jpg"), &junk).unwrap();
+    let listed = b
+        .core
+        .gear_card_clean(&CardCleanParams {
+            mount: Some(plain.clone()),
+            ..Default::default()
+        })
+        .unwrap();
+    assert_eq!(listed.files.len(), 1);
+    let e = b
+        .core
+        .gear_card_clean(&CardCleanParams {
+            mount: Some(plain.clone()),
+            remove: true,
+            confirm: true,
+            ..Default::default()
+        })
+        .unwrap_err();
+    assert!(format!("{e:#}").contains("not an EdgeTX card"), "{e:#}");
+    assert!(plain.join("sub/._photo.jpg").exists());
+    // An EdgeTX card folder Gear does not list: removed.
+    let other = b.dir.path().join("other");
+    synth::write_card(&other, &SynthCard::default()).unwrap();
+    std::fs::write(other.join("MODELS/._model00.yml"), &junk).unwrap();
+    let r = b
+        .core
+        .gear_card_clean(&CardCleanParams {
+            mount: Some(other.clone()),
+            remove: true,
+            confirm: true,
+            ..Default::default()
+        })
+        .unwrap();
+    assert_eq!(r.removed, 1);
+    assert!(!other.join("MODELS/._model00.yml").exists());
 }

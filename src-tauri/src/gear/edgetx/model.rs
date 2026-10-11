@@ -652,8 +652,25 @@ pub const PROTECTED_KEYS: &[&str] = &[
     "modelRegistrationID",
 ];
 
-fn rename(doc: &mut Doc, name: &str) -> Result<(), Refusal> {
+/// Checks a model name: `check_text`, and a name that is also a file name, since the
+/// checklist is `MODELS/<name>.txt`: no `/`, no leading `.`, no `..`.
+pub fn check_model_name(name: &str) -> Result<(), Refusal> {
     check_text("A model name", name, MAX_MODEL_NAME)?;
+    if !name_is_a_file_name(name) {
+        return Err(bad(format!(
+            "A model name {name:?} may not hold \"/\" or \"..\" or start with \".\": its checklist file is named after it."
+        )));
+    }
+    Ok(())
+}
+
+/// True when `MODELS/<name>.txt` stays one file inside `MODELS/`.
+pub fn name_is_a_file_name(name: &str) -> bool {
+    !(name.contains('/') || name.contains('\\') || name.starts_with('.') || name.contains(".."))
+}
+
+fn rename(doc: &mut Doc, name: &str) -> Result<(), Refusal> {
+    check_model_name(name)?;
     let n = doc.find(&["header", "name"])?.ok_or_else(|| {
         bad(format!(
             "{} has no header name; nothing was written.",
