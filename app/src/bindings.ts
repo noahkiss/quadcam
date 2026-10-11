@@ -147,6 +147,10 @@ export const commands = {
 	gearDeviceSave: (params: DeviceSaveParams) => typedError<Device, string>(__TAURI_INVOKE("gear_device_save", { params })),
 	/**  Forgets a device. Its backups stay. */
 	gearDeviceForget: (params: IdParams) => typedError<Device, string>(__TAURI_INVOKE("gear_device_forget", { params })),
+	/**
+	 *  Reads an FC's identity over MSP (board, firmware, version, its device id). No
+	 *  reboot. One cue at the end.
+	 */
 	gearFcIdentify: (params: FcPortParams) => typedError<FcJob<FcInfo>, string>(__TAURI_INVOKE("gear_fc_identify", { params })),
 	/**
 	 *  Reads an FC through its CLI: read-only commands, a backup's set by default. The FC
@@ -415,8 +419,6 @@ export const commands = {
 	/**  Backs up a radio card or an FC (the FC reboots). Writes nothing when nothing changed. */
 	gearBackup: (params: BackupParams) => typedError<BackupResult, string>(__TAURI_INVOKE("gear_backup", { params })),
 	/**
-	 *  Reads an FC's identity over MSP (board, firmware, version, its device id). No
-	 *  reboot. One cue at the end.
 	 *  Pulls an FC's blackbox flash (only the used bytes), verifies and stores it, and
 	 *  erases the flash when the setting or `erase` allows and the checks pass.
 	 */
@@ -427,6 +429,8 @@ export const commands = {
 	gearBlackboxExport: (params: BlackboxExportParams) => typedError<BlackboxExported, string>(__TAURI_INVOKE("gear_blackbox_export", { params })),
 	/**  Erases an FC's blackbox flash. Needs `confirm` and a stored pull of exactly what the flash holds. */
 	gearBlackboxErase: (params: BlackboxEraseParams) => typedError<FcJob<BlackboxErased>, string>(__TAURI_INVOKE("gear_blackbox_erase", { params })),
+	/**  An FC's blackbox flash now (size, used, ready) over MSP: no pull, no cue. */
+	gearBlackboxSummary: (params: FcPortParams) => typedError<BlackboxFlash, string>(__TAURI_INVOKE("gear_blackbox_summary", { params })),
 	/**  Snapshots, newest first, without their file lists. */
 	gearBackups: (params: BackupFilter) => typedError<BackupSummary[], string>(__TAURI_INVOKE("gear_backups", { params })),
 	/**  A snapshot with its files, or one file's content. */
@@ -1020,6 +1024,24 @@ export type BlackboxExported = {
 /**  `gear_blackbox`: one device's pulls, or every device's. */
 export type BlackboxFilter = {
 	device?: string | null,
+};
+
+/**
+ *  `gear_blackbox_summary`'s answer: what the FC's flash holds now, read over MSP without a
+ *  pull.
+ */
+export type BlackboxFlash = {
+	port: string,
+	/**  The FC's device id, when QuadCam knows it. */
+	device: string | null,
+	/**  The flash can be read and erased now (an erase in progress reads false). */
+	ready: boolean,
+	/**  The board has a flash chip QuadCam can read. */
+	supported: boolean,
+	total: number,
+	used: number,
+	/**  The device's latest stored pull holds exactly what the flash holds. */
+	pulled: boolean,
 };
 
 /**  `gear_blackbox_pull`. */

@@ -90,6 +90,7 @@ export const api = {
   gearDismissReminder: (handle: string) => ok(commands.gearDismissReminder({ handle })),
   gearBackup: (target: { device?: string | null; port?: string | null; mount?: string | null }) => ok(commands.gearBackup(target)),
   gearBlackbox: (device: string | null) => ok(commands.gearBlackbox({ device })),
+  gearBlackboxSummary: (port: string | null) => ok(commands.gearBlackboxSummary({ port })),
   gearBlackboxPull: (port: string | null, keep = false) => ok(commands.gearBlackboxPull({ port, keep })),
   gearBlackboxErase: (port: string | null) => ok(commands.gearBlackboxErase({ port, confirm: true })),
   gearBackups: (device: string | null) => ok(commands.gearBackups({ device })),

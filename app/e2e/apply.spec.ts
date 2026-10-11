@@ -31,7 +31,7 @@ async function stageSetting(page: Page, name: string, value: string) {
 test("stage a setting, review it, apply it and see it verified", async ({ app, page }) => {
   await openChanges(app, page);
   await stageSetting(page, "osd_cap_alarm", "1500");
-  const list = page.getByRole("list", { name: "Staged changes" });
+  const list = page.getByRole("table", { name: "Staged changes" });
   await expect(list).toContainText("Set osd_cap_alarm = 1500");
   expect((await app.method("gear_change_stage")).at(-1)).toMatchObject({ device: FC_ID, edits: [{ kind: "fc_set", name: "osd_cap_alarm", value: "1500" }] });
 
@@ -204,7 +204,7 @@ test("an agent's ExpressLRS flash request says it flashes", async ({ app, page }
 test("Review… is off for a Draft or Read first change", async ({ app, page }) => {
   await openChanges(app, page);
   await stageSetting(page, "osd_cap_alarm", "1500");
-  const row = page.getByRole("list", { name: "Staged changes" }).getByRole("listitem");
+  const row = page.getByRole("table", { name: "Staged changes" }).getByRole("row").nth(1);
   await expect(row.getByRole("button", { name: "Review…" })).toBeEnabled();
   for (const status of ["draft", "read_first"]) {
     await app.core(`c => { c.gear.changeStore.changes[0].status = "${status}"; }`);

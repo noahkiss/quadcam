@@ -6,7 +6,7 @@
 use quadcam_lib::api;
 use quadcam_lib::core::{
     blackbox_hooks, BlackboxEraseParams, BlackboxExportParams, BlackboxFilter, BlackboxPullParams,
-    Core, EraseState, HookOutcome, NoHooks, PollPauseParams, PullMode,
+    Core, EraseState, FcPortParams, HookOutcome, NoHooks, PollPauseParams, PullMode,
 };
 use quadcam_lib::disk::{DiskInfo, Volume};
 use quadcam_lib::gear::bf::blackbox::synth_image;
@@ -819,6 +819,12 @@ fn the_cli_pulls_lists_and_refuses_an_erase_without_confirm() {
         (4, Some("no_device")),
         "{v}"
     );
+    let (code, v) = run(&["summary"]);
+    assert_eq!(
+        (code, v["error"]["code"].as_str()),
+        (4, Some("no_device")),
+        "{v}"
+    );
     let (code, v) = run(&["erase"]);
     assert_eq!(code, 3, "{v}");
     let msg = v["error"]["message"].as_str().unwrap();
@@ -858,4 +864,50 @@ fn a_flash_that_grew_since_the_read_is_not_erased() {
     let p = r.pull.unwrap();
     assert!(!p.erased);
     assert_eq!(b.blobs().get(&p.blob).unwrap(), img);
+}
+
+/// The summary is one MSP read: used and total, no pull, no cue, the port released; it says
+/// when a stored pull holds exactly the flash, and refuses a port another program holds.
+#[test]
+fn the_summary_reads_the_flash_without_a_pull_or_a_cue() {
+    let img = image();
+    let fc = fc_with(img.clone());
+    let b = bench(&fc);
+    let sum = |b: &Bench| b.core.gear_blackbox_summary(&FcPortParams::default());
+    let s = sum(&b).unwrap();
+    assert_eq!((s.used as usize, s.total), (img.len(), FLASH as u64));
+    assert!(s.ready && s.supported && !s.pulled);
+    assert_eq!(s.port, PORT);
+    assert_eq!(fc.dataflash_reads(), 0, "no pull");
+    assert!(b.cues.spoken().is_empty(), "no cue");
+    assert!(b.released());
+    assert!(
+        fc.log().iter().all(|l| l.starts_with("msp ")),
+        "{:?}",
+        fc.log()
+    );
+    // After a pull the same bytes read as pulled; once the flash grows they do not.
+    pull(&b).unwrap();
+    assert!(sum(&b).unwrap().pulled);
+    fc.append_dataflash(&synth_image(&[("Whoop", 100)], NOTHING));
+    assert!(!sum(&b).unwrap().pulled);
+    // MCP and the dispatch row.
+    let mut s = Server::new(LocalBackend(b.core.clone()));
+    let r = s.call_tool("quadcam_gear", json!({"action": "blackbox_summary"}));
+    assert_eq!(r["isError"], false, "{r}");
+    let text = r["content"][0]["text"].as_str().unwrap();
+    assert!(
+        text.contains("of 16.0 MB used") && text.contains("Not pulled"),
+        "{text}"
+    );
+    let v = b.core.dispatch("gear_blackbox_summary", json!({})).unwrap();
+    assert_eq!(v["total"], FLASH);
+
+    let held = fc_with(image());
+    let b = bench_env(&held, |env| {
+        env.holders = Arc::new(|_| vec![(4242, "Configurator".to_string())]);
+    });
+    let e = sum(&b).unwrap_err();
+    assert_eq!(refusal(&e), Some(RefusalCode::PortBusy), "{e:#}");
+    assert_eq!(held.opens(), 0, "not even an open");
 }

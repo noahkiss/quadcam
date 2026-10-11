@@ -359,6 +359,7 @@ in `specta_builder` (`lib.rs`).
 | `gear_card_preview` | `CardPreviewParams { mount or device, edits }` → `CardPreview` (checks, diff, files, bytes, ETA) | no |
 | `gear_backup` | `BackupParams { device }` → `Backup` | device read, gear folder |
 | `gear_blackbox_pull` | `BlackboxPullParams { port, keep, mode, force }` → `FcJob<BlackboxPullResult>` | device read; **device erase** only when `gearEraseBlackbox` is on and the pull verified; blobs, gear folder |
+| `gear_blackbox_summary` | `FcPortParams { port }` → `BlackboxFlash` (port, device, ready, supported, total, used, pulled) | device read (one MSP exchange, no cue) |
 | `gear_blackbox` | `BlackboxFilter { device }` → `Vec<BlackboxEntry>` (a pull and its guessed flights) | no |
 | `gear_blackbox_export` | `BlackboxExportParams { id, to, split }` → `BlackboxExported` | files in `to` |
 | `gear_blackbox_erase` | `BlackboxEraseParams { port, confirm }` → `FcJob<BlackboxErased>` | **device erase** |
@@ -430,7 +431,7 @@ work packages do not edit one shared file.
 ```bash
 quadcam-cli --json gear devices
 quadcam-cli --json gear fc identify|read|check|notes|usb          # WP2 (read: --cmd, --out STEM)
-quadcam-cli --json gear blackbox pull|list|export|erase           # BB (7.12; pull: --keep, --mode, --force; erase: --yes)
+quadcam-cli --json gear blackbox pull|summary|list|export|erase           # BB (7.12; pull: --keep, --mode, --force; erase: --yes)
 quadcam-cli --json gear card [--mount M | --device ID] [--model model01.yml]
 quadcam-cli --json gear card preview --edits edits.json             # checks and diff; writes nothing
 quadcam-cli --json gear backup --device <id>|--port /dev/cu.usbmodemX|--mount /Volumes/RADIO
@@ -473,7 +474,7 @@ can then allow the read tool freely and gate the other two.
 
 | Tool | Changes | Actions |
 |---|---|---|
-| `quadcam_gear` | Nothing | `status`, `devices`, `fc_identify`, `board_notes`, `usb_timers`, `card`, `card_preview`, `storage`, `backups`, `backup_read`, `backup_diff`, `blackbox`, `switch_map`, `osd`, `rates`, `sims`, `changes`, `apply_plan`, `voice`, `firmware_check`, `flights`, `packs`, `session_report`, `preflight`, `crashes` |
+| `quadcam_gear` | Nothing | `status`, `devices`, `fc_identify`, `board_notes`, `usb_timers`, `card`, `card_preview`, `storage`, `backups`, `backup_read`, `backup_diff`, `blackbox`, `blackbox_summary`, `switch_map`, `osd`, `rates`, `sims`, `changes`, `apply_plan`, `voice`, `firmware_check`, `flights`, `packs`, `session_report`, `preflight`, `crashes` |
 | `quadcam_gear_edit` | QuadCam's own data only: never a device, a sim or a card | `device_save`, `device_forget`, `fc_read` (a CLI read; the FC reboots), `stage`, `update`, `discard`, `restore_stage`, `voice_edit`, `voice_render`, `voice_choose`, `pack_save`, `pack_delete`, `pack_type_save`, `pack_type_delete`, `pack_notes`, `flight_set`, `flight_folders`, `crash_save`, `crash_delete`, `backup` (a read of the device; writes only to the gear folder), `blackbox_export` (files in a folder), `import_backups`, `prune`, `export` |
 | `quadcam_gear_apply` | A device, a sim or the radio firmware | `apply`, `sim_sync`, `flash`. Each needs the `digest` from a plan and `confirm=true`. `blackbox_pull` and `blackbox_erase` need `confirm=true` only: a pull may erase the FC's flash when the person's `gearEraseBlackbox` setting is on, so it sits in the tool a harness gates, though it has no plan or sheet (like `card_repair`) |
 
@@ -1837,6 +1838,10 @@ A reply with the flag set is an error, not data: QuadCam has no decompressor, an
 is Huffman-coded with a table it would have to reproduce. A short reply continues where it ended;
 a failed chunk is asked again twice; a gone port fails the job at once. Measured 2026-10-07: about
 84 KB/s, so 16 MB takes 3.3 minutes. API 1.40 or later is required; older FCs refuse.
+
+**Summary.** `gear_blackbox_summary` sends `MSP_DATAFLASH_SUMMARY` alone: no job, no cue, no
+pull. It holds the port for that one exchange, like a live switch map read, and refuses a port a
+job or another program holds. The Blackbox segment reads it while the FC is plugged in.
 
 **Order of the job** (`core/blackbox.rs`, one `fc_job`, one cue at the end):
 

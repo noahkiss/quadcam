@@ -50,7 +50,7 @@ const DISPATCH = new Set([
   "gear_switch_map", "gear_radio", "gear_radio_watch", "gear_sim_calibration", "gear_sim_calibration_save", "gear_sim_defaults", "gear_sim_calibrate",
   "gear_flights", "gear_flight_set", "gear_flight_folders", "gear_packs", "gear_pack_save", "gear_pack_delete", "gear_pack_type_save",
   "gear_pack_type_delete", "gear_pack_notes", "gear_session_report", "gear_session_report_save", "gear_preflight", "gear_crashes", "gear_crash_save", "gear_crash_delete",
-  "gear_blackbox", "gear_blackbox_pull", "gear_blackbox_erase", "gear_blackbox_export", "gear_backup", "gear_backups", "gear_backup_read", "gear_backup_diff", "gear_backup_pin", "gear_storage", "gear_prune",
+  "gear_blackbox", "gear_blackbox_summary", "gear_blackbox_pull", "gear_blackbox_erase", "gear_blackbox_export", "gear_backup", "gear_backups", "gear_backup_read", "gear_backup_diff", "gear_backup_pin", "gear_storage", "gear_prune",
   "gear_export", "gear_import_backups", "gear_card_check", "gear_card_clean", "gear_card_checks", "gear_card_repair", "gear_stop",
   "gear_changes", "gear_change_stage", "gear_change_update", "gear_change_discard", "gear_restore_stage", "gear_apply_plan", "gear_apply",
   "gear_change_keep", "gear_change_revert", "gear_copy_plan", "gear_copy_stage", "gear_card_mount", "gear_card_unmount",
@@ -394,6 +394,8 @@ export class MockCore {
         return this.radio.watching;
       case "gear_blackbox":
         return blackbox.list(this.blackbox, (p.device as string | null) ?? null);
+      case "gear_blackbox_summary":
+        return blackbox.summary(this.blackbox, this.gear.connected, (p.port as string | null) ?? null);
       case "gear_blackbox_pull": {
         const r = blackbox.pull(this.blackbox, this.gear.connected, this.settings.values, p.keep === true, new Date());
         this.emit("gear-changed");

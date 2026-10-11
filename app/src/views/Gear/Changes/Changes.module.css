@@ -1,49 +1,42 @@
-.segment {
-  display: flex;
-  flex-direction: column;
-  gap: var(--s-4);
-}
-.bar {
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: var(--s-2);
-}
 .muted {
   margin: 0;
   color: var(--muted);
 }
-.list {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-  display: flex;
-  flex-direction: column;
-  gap: var(--s-3);
+/* One line of the edit; the full text is its tooltip and stays selectable. */
+.edit {
+  display: block;
+  max-width: 22rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: var(--t-sm);
 }
-.row {
-  display: flex;
-  align-items: center;
-  gap: var(--s-2);
-}
-.title {
-  flex: 1;
-  min-width: 0;
-  font-weight: 600;
-}
-.status {
+.note {
+  display: block;
+  margin-top: 2px;
+  font-size: var(--t-sm);
+  font-weight: 400;
   color: var(--muted);
 }
-.status[data-state="verified"] {
-  color: var(--success-text);
+.status {
+  width: 100%;
+  min-width: 0;
 }
-.status[data-state="failed"] {
-  color: var(--warning-text);
+.actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--s-1);
+  white-space: nowrap;
 }
-.code {
-  display: block;
-  white-space: pre-wrap;
-  word-break: break-all;
+.history {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--s-2);
+}
+.history > [data-component="data-table"],
+.history > p {
+  align-self: stretch;
 }
 .form {
   display: flex;
@@ -54,4 +47,9 @@
 .error {
   margin: 0;
   color: var(--warning-text);
+}
+/* Rows with a status control or buttons: every cell on the control's centre line. */
+.rows table td,
+.rows table tbody th {
+  vertical-align: middle;
 }

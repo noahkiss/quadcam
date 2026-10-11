@@ -25,6 +25,12 @@ User-facing changes in each release, newest first. Release notes on
 - **Radio Splash** is a card: the preview sits in a frame of the radio's 128 × 64 screen at twice the size, beside the controls. A line under **Flash with splash…** says why it is off.
 - **Aircraft on this radio** is a card: the add picker is in its head, the aircraft are in the shared table, and the selected model has a **Selected** badge.
 - **Settings > Gear** reads as a macOS form: each group's title on the left, its controls on the right.
+- **Bench as a dashboard.** **Copy as Markdown** and **Copy settings…** sit on the right of the title. Tiles count the staged and ready changes, the devices, the ones plugged in and the applied Try changes waiting for **Keep**. Each device is a card with its state and **Review…**, and its changes as a table: title, edit, status, who staged it, **Review…** and **Discard**.
+- **Changes as a table.** An FC's or radio's **Changes** uses the Bench's table, with tiles for staged, ready, verified and the last apply. Its **Review…** is primary and counts the changes. A row's status can now be set there too, and applied Try changes show **Keep** and **Revert…**.
+- **Backups without tabs in tabs.** Tiles show the count, pinned, last backup and size. The backups list sits on the left; the selected backup's changes from the one before and its files sit on the right, both at once.
+- **Blackbox tiles.** **Flash used** shows the FC's flash use against its size while it is plugged in, and whether a stored pull holds it; tiles also show the pulls, the last pull and its logs. The logs table's column reads "Flight, paired by order" in place of the paragraph under it.
+- **Storage as a dashboard.** The gear folder is the subtitle with **Show in Finder**; **Import backups…** and **Prune now** sit in the header; tiles show the total, backups, stored files and radio logs.
+- **CLI and MCP:** `gear blackbox summary [--port P]` and MCP `quadcam_gear blackbox_summary` read an FC's flash size, bytes used and ready state over one MSP message, and say whether a stored pull holds them. No pull, no cue.
 
 ## 0.14.1 (2026-10-11)
 

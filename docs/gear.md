@@ -171,6 +171,12 @@ An FC with a flash chip logs its flights to it. When the flash is full, Betaflig
 the next flights leave no log. QuadCam pulls the logs off the flash and, if you allow it, erases
 the flash afterwards.
 
+**The segment.** An FC's **Blackbox** segment shows tiles: **Flash used** (bytes used of the
+flash size, and whether a stored pull holds them), the pulls, the last pull and its logs. While the
+FC is plugged in, QuadCam reads the flash size and use over one MSP message (`gear blackbox
+summary`, MCP `blackbox_summary`): no pull, no cue. It skips that read while a job runs or the
+port's reads are paused. Pick a pull to see its logs and the flight each one is paired with.
+
 **Pull.** **Pull blackbox** on the FC's **Blackbox** segment (also `gear blackbox pull`, and the
 on-connect step below) does this in one job:
 
@@ -218,8 +224,8 @@ step skips a port whose reads you paused; a pull you start yourself still runs.
 dates a pull by the day it ran. If the FC is linked to an aircraft (Overview, or `gear devices
 save --aircraft`), the Blackbox segment pairs the pull's logs with that aircraft's flights from the
 radio logs **by order**, newest log with newest flight, since the previous erased pull. This is a
-guess and the segment says so. Logs under 32 KB (test arms) are skipped. Pairs whose size per
-second of flight differ from the others by more than 2 times are marked "size does not fit". QuadCam
+guess: the segment's column reads "Flight, paired by order". Logs under 32 KB (test arms) are skipped. Pairs whose size per
+second of flight differ from the others by more than 2 times are marked "Size does not fit". QuadCam
 does not decode the flight data yet.
 
 **USB disk mode (not proven).** With `gear_blackbox_msc` on (**Read through USB disk mode
@@ -659,11 +665,13 @@ its SD card except `LOGS/`. A backup of a flight controller holds `version`, `st
   `gear_keep_weeks` (8), then one a month (`gear_keep_monthly`). Pruning runs after each new
   backup, then removes stored files no backup, log or staged change uses.
 
-On a device page, **Backups** lists the device's backups. Pick one to see its changes from the
-backup before it, or its files and each text file. **Pinned** keeps a backup. **Back up now**
-backs the device up.
+On a device page, **Backups** shows tiles for the count, the pinned backups, the last backup
+and the size, then the device's backups on the left. Pick one: the right side shows its changes
+from the backup before it, and below them its files; click a file to read its text. **Pin** keeps
+a backup. **Back up now** backs the device up.
 
-**Gear > Storage** shows the gear folder's size in total and per device. **Prune now** shows
+**Gear > Storage** shows the gear folder (with **Show in Finder**), tiles for its total size,
+backups, stored files and radio logs, and a table per device. **Prune now** shows
 what would go and asks first. **Export…** writes a device's backups as plain folders, one per
 backup. **Import backups…** takes an old backup folder:
 
@@ -788,12 +796,15 @@ does not hold.
 ### The Bench
 
 **Bench** (in the sidebar, with a count) lists every device that has a waiting change, in
-the order the next session applies them.
+the order the next session applies them. Tiles count the staged and ready changes, the devices,
+the ones plugged in, and the applied Try changes that wait for **Keep**. Each device is a card
+with a table of its changes: title, edit, status, who staged it, **Review…** and **Discard**.
+A device's **Changes** segment shows the same table for that device.
 
 - Each device shows whether it is plugged in, unmounted but still in, or away. A device that is
   away shows what to do: "Plug in the radio in USB Storage mode to apply 3 changes." **Next
   session** names the first Ready or Try change.
-- Each change has a status you set from its list:
+- Each change has a status you set from its row:
 
   | Status | Means |
   |---|---|
@@ -1496,6 +1507,7 @@ quadcam-cli --json gear fc notes [--board B] [--version V]       # known issues
 quadcam-cli --json gear fc pause|resume [--port ...]                 # pause the running app's FC reads
 quadcam-cli --json gear fc usb                                   # USB timers
 quadcam-cli --json gear blackbox pull [--port P] [--keep] [--mode auto|msp|msc] [--force]   # read, verify, store; erase if the setting allows
+quadcam-cli --json gear blackbox summary [--port P]               # flash size and used; no pull, no cue
 quadcam-cli --json gear blackbox list [--device ID]              # stored pulls with their guessed flights
 quadcam-cli --json gear blackbox export <pull> DIR [--split]     # .bbl files
 quadcam-cli --json gear blackbox erase [--port P] --yes      # erase the flash; needs a stored pull of it

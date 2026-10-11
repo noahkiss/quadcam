@@ -24,7 +24,6 @@ test("a radio's backups: changes from the one before, files, pin, back up now", 
   await expect(detail.getByRole("region", { name: "Files" })).toContainText("MODELS/model01.yml");
   await expect(detail.getByRole("region", { name: "MODELS/model01.yml" })).toContainText("countdownBeep: 2");
 
-  await detail.getByRole("group", { name: "Backup view" }).getByRole("button", { name: "Files" }).click();
   await detail.getByRole("button", { name: /RADIO\/radio\.yml/ }).click();
   await expect(detail.getByLabel("RADIO/radio.yml")).toContainText("semver: 2.11.2");
 

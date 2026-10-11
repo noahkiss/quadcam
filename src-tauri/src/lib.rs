@@ -664,6 +664,7 @@ pub fn specta_builder() -> tauri_specta::Builder<tauri::Wry> {
             c::gear_blackbox,
             c::gear_blackbox_export,
             c::gear_blackbox_erase,
+            c::gear_blackbox_summary,
             c::gear_backups,
             c::gear_backup_read,
             c::gear_backup_diff,

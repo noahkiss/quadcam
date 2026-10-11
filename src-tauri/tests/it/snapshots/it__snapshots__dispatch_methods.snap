@@ -62,6 +62,7 @@ expression: "Core::METHODS"
   "gear_blackbox",
   "gear_blackbox_export",
   "gear_blackbox_erase",
+  "gear_blackbox_summary",
   "gear_fc_identify",
   "gear_fc_read",
   "gear_board_notes",

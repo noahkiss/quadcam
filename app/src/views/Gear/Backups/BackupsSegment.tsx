@@ -1,20 +1,29 @@
-// A device page's Backups segment (design 2.2, 7.1): back up now, the card check and its
-// repair, the device's snapshots, and for the one selected its changes from the one before
-// and its files.
+// A device page's Backups segment (design 2.2, 7.1): the summary tiles, back up now, the card
+// check and its repair, then a split view: the device's snapshots on the left, and for the one
+// selected its changes from the one before and its files on the right, as two cards.
 import { useEffect, useState } from "react";
 import { ask, useStore } from "../../../store";
 import { api, errText } from "../../../ipc/api";
 import type { BackupContent, BackupSummary, DiffItem } from "../../../ipc/types";
 import { Banner } from "../../../components/Banner";
 import { Button } from "../../../components/Button";
-import { SegmentedControl } from "../../../components/SegmentedControl";
+import { DataTable, type Column } from "../../../components/dash/DataTable";
+import { EmptyState } from "../../../components/dash/EmptyState";
+import { SectionCard } from "../../../components/dash/SectionCard";
+import { Stat, StatRow } from "../../../components/dash/StatRow";
 import { DiffView, type DiffEntry } from "../../../components/gear/DiffView";
 import { toast } from "../../../components/toastStore";
-import { fmtBytes, plural } from "../../../lib/format";
+import { fmtAgo, fmtBytes, plural } from "../../../lib/format";
 import { checkFailed, checkFor, failureFor, fmtWhen, jobFor, jobText, TRIGGER_LABEL } from "../../../lib/backups";
 import { linkHandle } from "../../../lib/gear";
 import type { DeviceRef } from "../slots";
 import styles from "./Backups.module.css";
+
+/** A backup's time in the list: "Oct 5, 6:00 AM", with the year when it is not this year. */
+const fmtShort = (t: string) => {
+  const d = new Date(t);
+  return d.toLocaleString(undefined, { month: "short", day: "numeric", year: d.getFullYear() === new Date().getFullYear() ? undefined : "numeric", hour: "numeric", minute: "2-digit" });
+};
 
 /** The device's id: saved, or as plugged in. */
 const idOf = (d: DeviceRef) => d.device?.id || d.connected?.id || null;
@@ -106,34 +115,37 @@ export function BackupsSegment({ d }: { d: DeviceRef }) {
     }
   };
 
-  if (!id) return <p className={styles.empty}>QuadCam backs this device up once it knows its id.</p>;
+  if (!id) return <EmptyState icon="history">QuadCam backs this device up once it knows its id.</EmptyState>;
+  const newest = list?.[0];
+  const columns: Column<BackupSummary>[] = [
+    {
+      key: "taken",
+      header: "Taken",
+      rowHeader: true,
+      cell: (b) => (
+        <button type="button" className={styles.pick} aria-current={b.id === sel?.id} onClick={() => setPicked(b.id)}>
+          {fmtShort(b.taken_at)}
+        </button>
+      ),
+    },
+    { key: "kind", header: "Kind", cell: (b) => <span className={styles.nowrap}>{TRIGGER_LABEL[b.trigger]}</span> },
+    { key: "files", header: "Files", numeric: true, cell: (b) => b.files },
+    { key: "size", header: "Size", numeric: true, cell: (b) => fmtBytes(b.bytes) },
+    {
+      key: "pinned",
+      header: "Pin",
+      width: "2.5rem",
+      cell: (b) => <input type="checkbox" className={styles.check} checked={b.pinned} aria-label={`Pin the backup of ${fmtWhen(b.taken_at)}`} onChange={(e) => pin(b, e.target.checked)} />,
+    },
+  ];
   return (
-    <div className={styles.segment}>
-      <div className={styles.bar}>
-        {canBackUp(d) && (
-          <Button icon="history" onClick={backUp} disabled={busy || !!job}>
-            Back up now
-          </Button>
-        )}
-        {isCard && d.device && !d.unmounted && (
-          <Button icon="shield" onClick={checkCard} disabled={busy || !!job}>
-            Check card
-          </Button>
-        )}
-        {d.kind === "radio" && isCard && d.device && !d.unmounted && (
-          <Button icon="trash-bin-trash" onClick={cleanCard} disabled={busy || !!job}>
-            Clean ._ files
-          </Button>
-        )}
-        {job && (
-          <span className={styles.job} role="status">
-            {job.step}: {jobText(job)}
-            <Button size="sm" variant="ghost" onClick={() => api.gearStop(job.handle).catch((e) => toast(errText(e), true))} disabled={job.stopping}>
-              Stop
-            </Button>
-          </span>
-        )}
-      </div>
+    <>
+      <StatRow label="Backups summary">
+        <Stat label="Backups" value={list ? list.length : "—"} />
+        <Stat label="Pinned" value={list ? list.filter((b) => b.pinned).length : "—"} />
+        <Stat label="Last backup" value={fmtAgo(newest?.taken_at)} sub={newest ? fmtWhen(newest.taken_at) : "None"} />
+        <Stat label="Size" value={list ? fmtBytes(list.reduce((n, b) => n + b.bytes, 0)) : "—"} sub="All backups" />
+      </StatRow>
       {failure && failure.step !== "Card check" && (
         <Banner kind="warning" icon="danger-triangle">
           {failure.step} failed: {failure.message}
@@ -154,49 +166,50 @@ export function BackupsSegment({ d }: { d: DeviceRef }) {
           Card check failed: {check!.summary}
         </Banner>
       )}
-      {list && !list.length && <p className={styles.empty}>No backups yet.</p>}
-      {list && list.length > 0 && (
-        <table className={styles.table} aria-label="Backups">
-          <thead>
-            <tr>
-              <th scope="col">Taken</th>
-              <th scope="col">Kind</th>
-              <th scope="col" className={styles.num}>
-                Files
-              </th>
-              <th scope="col" className={styles.num}>
-                Size
-              </th>
-              <th scope="col">Pinned</th>
-            </tr>
-          </thead>
-          <tbody>
-            {list.map((b) => (
-              <tr key={b.id} className={b.id === sel?.id ? styles.selected : undefined}>
-                <td>
-                  <button type="button" className={styles.pick} aria-current={b.id === sel?.id} onClick={() => setPicked(b.id)}>
-                    {fmtWhen(b.taken_at)}
-                  </button>
-                </td>
-                <td>{TRIGGER_LABEL[b.trigger]}</td>
-                <td className={styles.num}>{b.files}</td>
-                <td className={styles.num}>{fmtBytes(b.bytes)}</td>
-                <td>
-                  <input type="checkbox" checked={b.pinned} aria-label={`Pin the backup of ${fmtWhen(b.taken_at)}`} onChange={(e) => pin(b, e.target.checked)} />
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      )}
-      {sel && <BackupDetail key={sel.id} b={sel} first={list![list!.length - 1].id === sel.id} />}
-    </div>
+      <div className={styles.split}>
+        <SectionCard
+          title="Backups"
+          label="Backup list"
+          status={
+            job && (
+              <span className={styles.job} role="status">
+                {job.step}: {jobText(job)}
+                <Button size="sm" variant="ghost" onClick={() => api.gearStop(job.handle).catch((e) => toast(errText(e), true))} disabled={job.stopping}>
+                  Stop
+                </Button>
+              </span>
+            )
+          }
+          actions={
+            <>
+              {d.kind === "radio" && isCard && d.device && !d.unmounted && (
+                <Button size="sm" icon="trash-bin-trash" onClick={cleanCard} disabled={busy || !!job}>
+                  Clean ._ files
+                </Button>
+              )}
+              {isCard && d.device && !d.unmounted && (
+                <Button size="sm" icon="shield" onClick={checkCard} disabled={busy || !!job}>
+                  Check card
+                </Button>
+              )}
+              {canBackUp(d) && (
+                <Button size="sm" variant="primary" icon="history" onClick={backUp} disabled={busy || !!job}>
+                  Back up now
+                </Button>
+              )}
+            </>
+          }
+        >
+          {list && <DataTable label="Backups" columns={columns} rows={list} rowKey={(b) => b.id} compact empty={<EmptyState icon="history">No backups yet.</EmptyState>} />}
+        </SectionCard>
+        {sel && <BackupDetail key={sel.id} b={sel} first={list![list!.length - 1].id === sel.id} />}
+      </div>
+    </>
   );
 }
 
-/** One backup: its changes from the one before, or its files and one file's text. */
+/** One backup: its changes from the one before, and its files with one file's text. */
 function BackupDetail({ b, first }: { b: BackupSummary; first: boolean }) {
-  const [view, setView] = useState<"changes" | "files">(first ? "files" : "changes");
   const [diff, setDiff] = useState<DiffItem[] | null>(null);
   const [content, setContent] = useState<BackupContent | null>(null);
   const [file, setFile] = useState<BackupContent | null>(null);
@@ -204,50 +217,46 @@ function BackupDetail({ b, first }: { b: BackupSummary; first: boolean }) {
   useEffect(() => {
     let gone = false;
     const fail = (e: unknown) => !gone && toast(errText(e), true);
-    if (view === "changes" && !first) api.gearBackupDiff(b.id).then((x) => !gone && setDiff(x), fail);
-    if (view === "files") api.gearBackupRead(b.id, null).then((x) => !gone && setContent(x), fail);
+    if (!first) api.gearBackupDiff(b.id).then((x) => !gone && setDiff(x), fail);
+    api.gearBackupRead(b.id, null).then((x) => !gone && setContent(x), fail);
     return () => {
       gone = true;
     };
-  }, [b.id, view, first]);
+  }, [b.id, first]);
 
   const open = (path: string) => api.gearBackupRead(b.id, path).then(setFile, (e) => toast(errText(e), true));
 
   return (
     <section className={styles.detail} aria-label={`Backup of ${fmtWhen(b.taken_at)}`}>
-      <SegmentedControl
-        label="Backup view"
-        value={view}
-        onChange={(v) => setView(v as "changes" | "files")}
-        segments={[
-          { value: "changes", label: "Changes" },
-          { value: "files", label: "Files" },
-        ]}
-      />
-      {view === "changes" &&
-        (first ? <p className={styles.empty}>The first backup of this device.</p> : diff && (diff.length ? <DiffView items={diff as DiffEntry[]} /> : <p className={styles.empty}>No changes.</p>))}
-      {view === "files" && content && (
-        <div className={styles.files}>
-          <ul aria-label="Files" className={styles.fileList}>
+      <SectionCard title="Changes from the one before">
+        {first ? (
+          <EmptyState icon="history">The first backup of this device.</EmptyState>
+        ) : (
+          diff && (diff.length ? <DiffView items={diff as DiffEntry[]} /> : <EmptyState icon="check-circle">No changes.</EmptyState>)
+        )}
+      </SectionCard>
+      <SectionCard title="Contents">
+        {content && (
+          <ul aria-label="Backup files" className={styles.fileList}>
             {content.backup.files.map((f) => (
               <li key={f.path}>
-                <button type="button" className={styles.pick} aria-current={file?.path === f.path} onClick={() => open(f.path)}>
+                <button type="button" className={styles.file} aria-current={file?.path === f.path} onClick={() => open(f.path)}>
                   <span className="mono">{f.path}</span>
                   <span className={styles.size}>{fmtBytes(f.size)}</span>
                 </button>
               </li>
             ))}
           </ul>
-          {file &&
-            (file.text != null ? (
-              <pre className={`${styles.text} mono selectable`} aria-label={file.path || ""}>
-                {file.text}
-              </pre>
-            ) : (
-              <p className={styles.empty}>{file.path} is not a text file.</p>
-            ))}
-        </div>
-      )}
+        )}
+        {file &&
+          (file.text != null ? (
+            <pre className={`${styles.text} mono selectable`} aria-label={file.path || ""}>
+              {file.text}
+            </pre>
+          ) : (
+            <p className={styles.empty}>{file.path} is not a text file.</p>
+          ))}
+      </SectionCard>
     </section>
   );
 }

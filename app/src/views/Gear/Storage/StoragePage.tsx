@@ -1,10 +1,17 @@
-// Gear > Storage (design 2.2, 7.1): the gear folder's size in total and per device, Prune
-// now, Export…, and Import backups… (an old backup folder, shown first as a dry run).
+// Gear > Storage (design 2.2, 7.1): the gear folder's size as tiles and per device as a table,
+// the folder (the subtitle) with Show in Finder, Prune now, Export…, and Import backups… (an old backup
+// folder, shown first as a dry run).
 import { useEffect, useState } from "react";
 import { ask, useStore } from "../../../store";
-import { api, errText, pickFolder } from "../../../ipc/api";
-import type { ImportBackupsReport, StorageView } from "../../../ipc/types";
+import { api, errText, pickFolder, reveal } from "../../../ipc/api";
+import type { DeviceStorage, ImportBackupsReport, StorageView } from "../../../ipc/types";
 import { Button } from "../../../components/Button";
+import { Badge, type BadgeTone } from "../../../components/dash/Badge";
+import { DataTable, type Column } from "../../../components/dash/DataTable";
+import { EmptyState } from "../../../components/dash/EmptyState";
+import { PageHeader } from "../../../components/dash/PageHeader";
+import { SectionCard } from "../../../components/dash/SectionCard";
+import { Stat, StatRow } from "../../../components/dash/StatRow";
 import { toast } from "../../../components/toastStore";
 import { fmtBytes, plural, tilde } from "../../../lib/format";
 import { KIND_LABEL } from "../../../lib/gear";
@@ -17,6 +24,10 @@ const OUTCOME_LABEL: Record<ImportBackupsReport["items"][number]["outcome"], str
   logs: "Logs",
   skipped: "Skipped",
 };
+
+const OUTCOME_TONE: Record<ImportBackupsReport["items"][number]["outcome"], BadgeTone> = { imported: "ok", same: "neutral", logs: "accent", skipped: "warn" };
+
+type ImportItem = ImportBackupsReport["items"][number];
 
 export function StoragePage() {
   const home = useStore((s) => s.home);
@@ -89,106 +100,82 @@ export function StoragePage() {
       toast(`Exported ${plural(r.folders.length, "backup")}.`);
     });
 
+  const name = (d: DeviceStorage) => d.name || (d.kind ? `${KIND_LABEL[d.kind]} not in the list` : d.device);
+  const columns: Column<DeviceStorage>[] = [
+    {
+      key: "device",
+      header: "Device",
+      rowHeader: true,
+      cell: (d) => (
+        <>
+          {name(d)}
+          {d.pinned > 0 && (
+            <>
+              {" "}
+              <Badge>{d.pinned} pinned</Badge>
+            </>
+          )}
+        </>
+      ),
+    },
+    { key: "backups", header: "Backups", numeric: true, cell: (d) => d.snapshots },
+    { key: "logs", header: "Logs", numeric: true, cell: (d) => d.logs },
+    { key: "size", header: "Size", numeric: true, cell: (d) => fmtBytes(d.total_bytes) },
+    { key: "latest", header: "Latest", optional: true, cell: (d) => fmtWhen(d.latest) },
+    {
+      key: "export",
+      header: <span className="visually-hidden">Export</span>,
+      width: "6rem",
+      cell: (d) =>
+        d.snapshots > 0 && (
+          <Button size="sm" variant="ghost" onClick={() => exportDevice(d.device)} disabled={busy} aria-label={`Export ${d.name || d.device}`}>
+            Export…
+          </Button>
+        ),
+    },
+  ];
+  const items: Column<ImportItem>[] = [
+    { key: "outcome", header: "Outcome", width: "8rem", cell: (i) => <Badge tone={OUTCOME_TONE[i.outcome]}>{OUTCOME_LABEL[i.outcome]}</Badge> },
+    { key: "path", header: "Folder", rowHeader: true, cell: (i) => <span className="selectable">{tilde(i.path, home)}</span> },
+    { key: "reason", header: "Reason", cell: (i) => (i.outcome === "skipped" && i.reason) || "" },
+  ];
+
   return (
-    <div className={styles.page} aria-labelledby="storage-title">
-      <h2 id="storage-title" className={styles.title}>
-        Storage
-      </h2>
+    <>
+      <PageHeader
+        id="storage-title"
+        title="Storage"
+        subtitle={view && <span className="selectable">{tilde(view.gear_dir, home)}</span>}
+        actions={
+          <>
+            <Button size="sm" variant="ghost" icon="finder" disabled={!view} onClick={() => view && void reveal(view.gear_dir).catch((e) => toast(errText(e), true))}>
+              Show in Finder
+            </Button>
+            <Button size="sm" icon="import" onClick={importFolder} disabled={busy}>
+              Import backups…
+            </Button>
+            <Button size="sm" onClick={prune} disabled={busy}>
+              Prune now
+            </Button>
+          </>
+        }
+      />
+      <StatRow label="Summary">
+        <Stat label="Total" value={view ? fmtBytes(view.total_bytes) : "—"} />
+        <Stat label="Backups" value={view ? view.snapshots : "—"} />
+        <Stat label="Stored files" value={view ? fmtBytes(view.blob_bytes) : "—"} sub={view && view.shared_blob_bytes > 0 ? `${fmtBytes(view.shared_blob_bytes)} shared` : undefined} />
+        <Stat label="Radio logs" value={view ? fmtBytes(view.log_bytes) : "—"} />
+      </StatRow>
       {view && (
-        <dl className={styles.facts}>
-          <div>
-            <dt>Total</dt>
-            <dd>{fmtBytes(view.total_bytes)}</dd>
-          </div>
-          <div>
-            <dt>Backups</dt>
-            <dd>{view.snapshots}</dd>
-          </div>
-          <div>
-            <dt>Stored files</dt>
-            <dd>
-              {fmtBytes(view.blob_bytes)}
-              {view.shared_blob_bytes > 0 && <span className={styles.muted}> ({fmtBytes(view.shared_blob_bytes)} shared)</span>}
-            </dd>
-          </div>
-          <div>
-            <dt>Radio logs</dt>
-            <dd>{fmtBytes(view.log_bytes)}</dd>
-          </div>
-          <div>
-            <dt>Folder</dt>
-            <dd className="selectable">{tilde(view.gear_dir, home)}</dd>
-          </div>
-        </dl>
+        <div className={styles.rows}>
+          <DataTable label="Storage by device" columns={columns} rows={view.devices} rowKey={(d) => d.device} empty={<EmptyState icon="hdd">No backups yet.</EmptyState>} />
+        </div>
       )}
-      <div className={styles.bar}>
-        <Button onClick={prune} disabled={busy}>
-          Prune now
-        </Button>
-        <Button icon="import" onClick={importFolder} disabled={busy}>
-          Import backups…
-        </Button>
-      </div>
-      {view && view.devices.length > 0 && (
-        <table className={styles.table} aria-label="Storage by device">
-          <thead>
-            <tr>
-              <th scope="col">Device</th>
-              <th scope="col" className={styles.num}>
-                Backups
-              </th>
-              <th scope="col" className={styles.num}>
-                Logs
-              </th>
-              <th scope="col" className={styles.num}>
-                Size
-              </th>
-              <th scope="col">Latest</th>
-              <th scope="col">
-                <span className="visually-hidden">Export</span>
-              </th>
-            </tr>
-          </thead>
-          <tbody>
-            {view.devices.map((d) => (
-              <tr key={d.device}>
-                <th scope="row">
-                  {d.name || (d.kind ? `${KIND_LABEL[d.kind]} not in the list` : d.device)}
-                  {d.pinned > 0 && <span className={styles.muted}> · {d.pinned} pinned</span>}
-                </th>
-                <td className={styles.num}>{d.snapshots}</td>
-                <td className={styles.num}>{d.logs}</td>
-                <td className={styles.num}>{fmtBytes(d.total_bytes)}</td>
-                <td>{fmtWhen(d.latest)}</td>
-                <td>
-                  {d.snapshots > 0 && (
-                    <Button size="sm" variant="ghost" onClick={() => exportDevice(d.device)} disabled={busy} aria-label={`Export ${d.name || d.device}`}>
-                      Export…
-                    </Button>
-                  )}
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      )}
-      {view && !view.devices.length && <p className={styles.muted}>No backups yet.</p>}
       {report && (
-        <section aria-label="Import" className={styles.report}>
-          <h3>{report.dry_run ? "Import (not run)" : "Import"}</h3>
-          <ul className={styles.items}>
-            {report.items.map((i) => (
-              <li key={i.path}>
-                <span className={styles.outcome} data-outcome={i.outcome}>
-                  {OUTCOME_LABEL[i.outcome]}
-                </span>
-                <span className="selectable">{tilde(i.path, home)}</span>
-                {i.outcome === "skipped" && i.reason && <span className={styles.muted}>{i.reason}</span>}
-              </li>
-            ))}
-          </ul>
-        </section>
+        <SectionCard title={report.dry_run ? "Import (not run)" : "Import"} label="Import">
+          <DataTable label="Import items" columns={items} rows={report.items} rowKey={(i) => i.path} compact />
+        </SectionCard>
       )}
-    </div>
+    </>
   );
 }

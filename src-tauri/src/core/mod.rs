@@ -59,7 +59,8 @@ pub use backup::{
 pub use bench::{apply_ready_hooks, CopyParams};
 pub use blackbox::{
     blackbox_hooks, BlackboxEntry, BlackboxEraseParams, BlackboxErased, BlackboxExportParams,
-    BlackboxExported, BlackboxFilter, BlackboxPullParams, BlackboxPullResult, EraseState, PullMode,
+    BlackboxExported, BlackboxFilter, BlackboxFlash, BlackboxPullParams, BlackboxPullResult,
+    EraseState, PullMode,
 };
 pub use dfu_link::{DfuLinkParams, DfuLinked};
 pub use elrs::{

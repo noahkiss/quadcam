@@ -66,12 +66,12 @@ test("a Try change on a radio card applies, unmounts the card, then waits for Ke
 
   // The card is unmounted and still in; the change waits for the decision.
   await expect(group.getByText("Unmounted, still in")).toBeVisible();
-  await expect(group.getByRole("list", { name: "Applied changes for Field radio" })).toContainText("Try more contrast");
+  await expect(group.getByRole("table", { name: "Applied changes for Field radio" })).toContainText("Try more contrast");
   await group.getByRole("button", { name: "Keep" }).click();
   expect((await app.method("gear_change_keep")).at(-1)).toMatchObject({ id });
   await expect(page.getByText("Nothing staged.")).toBeVisible();
   await page.getByRole("button", { name: "History" }).click();
-  await expect(page.getByRole("list", { name: "Applied changes" })).toContainText("Verified");
+  await expect(page.getByRole("table", { name: "Applied changes" })).toContainText("Verified");
 });
 
 test("Revert stages a restore of the card files and marks the change Reverted when it verifies", async ({ app, page }) => {
@@ -95,7 +95,7 @@ test("Revert stages a restore of the card files and marks the change Reverted wh
   await expect(sheet2.getByRole("region", { name: "Result" })).toContainText("Verified");
   await sheet2.getByRole("button", { name: "Done" }).click();
   await page.getByRole("button", { name: "History" }).click();
-  await expect(page.getByRole("list", { name: "Applied changes" })).toContainText("Reverted");
+  await expect(page.getByRole("table", { name: "Applied changes" })).toContainText("Reverted");
 });
 
 test("a Read first change does not apply until it is marked Ready", async ({ app, page }) => {
@@ -105,7 +105,7 @@ test("a Read first change does not apply until it is marked Ready", async ({ app
   await openBench(page);
   const group = page.getByRole("region", { name: "Field radio" });
   await expect(group).toContainText("Read the real value on the device");
-  const item = group.getByRole("list", { name: "Staged changes for Field radio" });
+  const item = group.getByRole("table", { name: "Staged changes for Field radio" });
   await expect(item.getByRole("button", { name: "Review…" })).toBeDisabled();
   await group.getByLabel("Status of Check the value").selectOption("ready");
   await expect(item.getByRole("button", { name: "Review…" })).toBeEnabled();
@@ -166,7 +166,7 @@ test("copy settings: pick the quads and the parts, read the diff, stage one chan
   const staged = (await app.method("gear_copy_stage")).at(-1);
   expect(staged).toMatchObject({ from: "fc-5a5a5a5a5a5a5a5a", to: "fc-0a1b2c3d4e5f6071", parts: ["osd"] });
   const group = page.getByRole("region", { name: "Whoop FC" });
-  await expect(group.getByRole("list", { name: "Staged changes for Whoop FC" })).toContainText("Copy OSD from Five-inch FC");
+  await expect(group.getByRole("table", { name: "Staged changes for Whoop FC" })).toContainText("Copy OSD from Five-inch FC");
   await expect(group).toContainText("set osd_cap_alarm = 1800");
 });
 

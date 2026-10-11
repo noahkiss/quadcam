@@ -1,6 +1,7 @@
 //! `quadcam-cli gear blackbox ...`: an FC's blackbox flash (design 7.12). `pull` reads the
 //! used bytes, verifies and stores them, and erases only when the `gear_erase_blackbox`
-//! setting allows and the checks pass (`--keep` skips the erase for one run). `list` shows stored pulls with their
+//! setting allows and the checks pass (`--keep` skips the erase for one run). `summary` reads
+//! the flash's size and used bytes without a pull. `list` shows stored pulls with their
 //! guessed flights, `export` writes one to a folder, `erase` empties the flash by hand.
 
 use anyhow::Result;
@@ -39,6 +40,13 @@ pub enum BlackboxCmd {
         /// does not start.
         #[arg(long)]
         force: bool,
+    },
+    /// The FC's flash now: size, used bytes, ready, and whether a stored pull holds it. One
+    /// MSP read; no pull, no cue.
+    Summary {
+        /// The FC's port; omit when one FC is plugged in.
+        #[arg(long)]
+        port: Option<String>,
     },
     /// Stored pulls, newest first, each with its guessed flights.
     List {
@@ -82,6 +90,10 @@ pub fn run(core: &Core, cmd: BlackboxCmd) -> Result<Value> {
                 }),
                 force,
             },
+        )?)?,
+        BlackboxCmd::Summary { port } => serde_json::to_value(call::gear_blackbox_summary(
+            core,
+            api::FcPortParams { port },
         )?)?,
         BlackboxCmd::List { device } => {
             serde_json::to_value(call::gear_blackbox(core, api::BlackboxFilter { device })?)?
