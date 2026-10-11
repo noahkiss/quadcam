@@ -725,6 +725,11 @@ fn a_flash_runs_esptool_after_a_backup_and_reports_its_hash_check() {
         write_call.contains("--before no-reset") && write_call.contains("write-flash 0x0000"),
         "{write_call}"
     );
+    // Through an FC esptool keeps the receiver UART's speed, for the read and the write.
+    for c in &calls {
+        assert!(c.join(" ").contains("--baud 420000"), "{c:?}");
+    }
+    assert_eq!(rx.passthrough_baud(), Some(420_000));
     // The backup of the chip's flash is kept.
     assert!(report.backup.is_some());
     assert!(report
@@ -1014,6 +1019,11 @@ fn a_module_flash_checks_the_radio_board_before_the_boot_pin() {
         "{:?}",
         calls[1]
     );
+    // Through a radio esptool runs at the speed its passthrough set for the module UART.
+    assert_eq!(tx.passthrough_baud(), Some(460_800));
+    for c in &calls {
+        assert!(c.join(" ").contains("--baud 460800"), "{c:?}");
+    }
     // A read that did not record the board plans no flash, and the board is in the digest.
     let root = b.core.gear_store().root().to_path_buf();
     let mut snap = quadcam_lib::gear::elrs::load_snapshot(&root, &id).unwrap();

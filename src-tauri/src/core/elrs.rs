@@ -1228,7 +1228,15 @@ impl Core {
         ));
         let _ = std::fs::remove_dir_all(&work);
         flash::stage_files(built, &work)?;
-        let baud = link::FLASH_BAUD.to_string();
+        // esptool's `change_baud` must land on the speed the host's UART runs: the radio's
+        // module UART is set to FLASH_BAUD by its passthrough, the FC's receiver UART stays at
+        // RECEIVER_BAUD.
+        let esp_baud = if prep.host.kind == DeviceKind::Radio {
+            link::FLASH_BAUD
+        } else {
+            link::RECEIVER_BAUD
+        };
+        let baud = esp_baud.to_string();
         let current = work.join("current.bin");
         let read_args: Vec<std::ffi::OsString> = [
             "--chip",
@@ -1289,7 +1297,7 @@ impl Core {
         };
 
         // 3. Write. esptool compares the flash with the data it sent before it finishes.
-        let write_args = flash::esptool_args(built, &port, link::FLASH_BAUD, &work);
+        let write_args = flash::esptool_args(built, &port, esp_baud, &work);
         let outcome = self.run_esptool(&write_args, "Writing the firmware");
         let _ = std::fs::remove_dir_all(&work);
         let (status, message) = match &outcome {

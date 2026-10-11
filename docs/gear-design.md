@@ -1354,7 +1354,8 @@ binaries only (open question 10).
       it prints must name the planned target (prior target, product or unified firmware name;
       an empty reply or a bare `UNIFIED` refuses). The radio's board is in the plan's digest. The chip's flash is read with esptool and kept (`firmware.bin`,
       `BeforeFlash`); a failed read stops before any write. `esptool write-flash` runs with
-      `--before no-reset`; the flash counts as verified only when esptool prints that it
+      `--before no-reset`, at 420000 through an FC (the FC's receiver UART stays at that speed,
+      so esptool's `change_baud` must land on it) and 460800 through a radio; the flash counts as verified only when esptool prints that it
       verified the data. Stock esptool lacks ExpressLRS's fork-only `--passthrough` flag, so
       whether a receiver behind an FC accepts this needs a real-device trial.
     - **Needs a real device:** the CLI sequences of both hosts (`set rfmod`, `serialpassthrough`

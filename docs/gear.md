@@ -1254,7 +1254,9 @@ wipes a receiver's Options page, so note your settings first. A flash that fails
 in its bootloader: power-cycle it and flash again.
 
 Stock esptool does not have the `--passthrough` flag ExpressLRS's own tools add. QuadCam uses
-`--before no-reset` after it has put the device in its bootloader. Whether that works through a
+`--before no-reset` after it has put the device in its bootloader. esptool runs at the speed of
+the host's UART: 420000 through an FC (the receiver UART keeps that speed) and 460800 through a
+radio (the passthrough sets the module UART to it). Whether that works through a
 passthrough is one of the things a real-device trial has to show.
 
 ### Splash

@@ -5,7 +5,7 @@ User-facing changes in each release, newest first. Release notes on
 
 ## Unreleased
 
-- **ExpressLRS (preview) guards.** An ELRS job through an FC refuses an FC that does not identify itself over MSP as the saved FC. A flash checks the device first: a receiver must answer a CRSF ping with the name read before, and its bootloader reply must name the planned target (an empty reply or a bare `UNIFIED` refuses); a radio must be the board the read went through, before its module's boot pin is held.
+- **ExpressLRS (preview) guards.** An ELRS job through an FC refuses an FC that does not identify itself over MSP as the saved FC. A flash checks the device first: a receiver must answer a CRSF ping with the name read before, and its bootloader reply must name the planned target (an empty reply or a bare `UNIFIED` refuses); a radio must be the board the read went through, before its module's boot pin is held. A receiver flash through an FC runs esptool at the receiver UART's 420000 baud, not 460800.
 
 ## 0.11.0 (2026-10-10)
 
