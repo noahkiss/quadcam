@@ -1450,3 +1450,105 @@ fn a_model_copy_and_delete_apply_with_a_backup() {
         .expect("the deleted model is in the backup");
     assert_eq!(f.size, deleted.len() as u64);
 }
+
+/// The MCP card and change actions an agent uses: `card_clean` lists, then removes only with
+/// confirm; `card_unmount` and `card_mount`; `restore_stage` stages a restore that
+/// `discard` drops; `radio_cli` reboot needs confirm; `device_forget` keeps the backups.
+#[test]
+fn mcp_card_and_change_actions() {
+    use quadcam_lib::mcp::{LocalBackend, Server};
+    use serde_json::json;
+    let b = bench(Opts::default());
+    let mut s = Server::new(LocalBackend(b.core.clone()));
+    let mut call = |tool: &str, args: serde_json::Value| {
+        let r = s.call_tool(tool, args.clone());
+        (r["isError"] == true, r)
+    };
+
+    let mut junk = vec![0x00, 0x05, 0x16, 0x07, 0x00, 0x02, 0x00, 0x00];
+    junk.extend_from_slice(b"Mac OS X        ");
+    junk.resize(120, 0);
+    let dot = b.root.join("MODELS/._model00.yml");
+    std::fs::write(&dot, &junk).unwrap();
+    let (err, r) = call(
+        "quadcam_gear_edit",
+        json!({"action": "card_clean", "device": b.id}),
+    );
+    assert!(!err, "{r}");
+    assert!(r["content"][0]["text"]
+        .as_str()
+        .unwrap()
+        .contains("confirm=true"));
+    assert!(dot.exists(), "a listing removes nothing");
+    b.mounted.store(true, Ordering::SeqCst);
+    let (err, r) = call(
+        "quadcam_gear_edit",
+        json!({"action": "card_clean", "device": b.id, "confirm": true}),
+    );
+    assert!(!err, "{r}");
+    assert!(!dot.exists());
+
+    b.mounted.store(true, Ordering::SeqCst);
+    b.log.lock().unwrap().clear();
+    let (err, r) = call(
+        "quadcam_gear_edit",
+        json!({"action": "card_unmount", "device": b.id}),
+    );
+    assert!(!err, "{r}");
+    assert!(!b.mounted.load(Ordering::SeqCst));
+    let (err, r) = call(
+        "quadcam_gear_edit",
+        json!({"action": "card_mount", "device": b.id, "minutes": 1}),
+    );
+    assert!(!err, "{r}");
+    assert!(b.mounted.load(Ordering::SeqCst));
+    assert_eq!(
+        *b.log.lock().unwrap(),
+        [format!("unmount {DISK}"), format!("mount {DISK}")]
+    );
+
+    // A backup to restore from: the apply's own.
+    let c = stage(&b, vec![contrast("28")]);
+    let p = plan(&b, &c);
+    let applied = b.core.gear_apply(&req(&c, &p)).unwrap();
+    assert_eq!(
+        applied.status,
+        ChangeStatus::Verified,
+        "{}",
+        applied.message
+    );
+    let (err, r) = call(
+        "quadcam_gear_edit",
+        json!({"action": "restore_stage", "backup": applied.backup, "paths": ["RADIO/radio.yml"]}),
+    );
+    assert!(!err, "{r}");
+    let restore = r["structuredContent"]["id"].as_str().unwrap().to_string();
+    assert_eq!(status(&b, &restore), ChangeStatus::Ready);
+    let (err, r) = call(
+        "quadcam_gear_edit",
+        json!({"action": "discard", "change": restore}),
+    );
+    assert!(!err, "{r}");
+    assert_eq!(status(&b, &restore), ChangeStatus::Discarded);
+    b.mounted.store(true, Ordering::SeqCst);
+    assert!(read(&b, "RADIO/radio.yml").contains("contrast: 28"));
+
+    let (err, r) = call(
+        "quadcam_gear_edit",
+        json!({"action": "radio_cli", "command": "reboot"}),
+    );
+    assert!(err, "{r}");
+    assert!(r.to_string().contains("confirm=true"), "{r}");
+
+    let backups = b.core.gear_backups(&Default::default()).unwrap().len();
+    let (err, r) = call(
+        "quadcam_gear_edit",
+        json!({"action": "device_forget", "id": b.id}),
+    );
+    assert!(!err, "{r}");
+    assert!(!b.core.gear_devices().unwrap().iter().any(|d| d.id == b.id));
+    assert_eq!(
+        b.core.gear_backups(&Default::default()).unwrap().len(),
+        backups
+    );
+}
