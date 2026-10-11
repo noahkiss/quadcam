@@ -21,6 +21,9 @@ use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use std::path::{Path, PathBuf};
 
+/// The env var that holds the openai server's key for one run, ahead of the `tts_key` setting.
+pub const OPENAI_KEY_ENV: &str = "QUADCAM_OPENAI_KEY";
+
 /// The title prefix of the change Choose voice keeps.
 pub const VOICE_CHANGE: &str = "Voice: ";
 
@@ -383,21 +386,17 @@ impl Core {
             "" => "say".to_string(),
             p => p.to_string(),
         };
-        // ElevenLabs keeps its key in the Keychain; the setting `ttsKey` never holds it.
-        let key = std::env::var("QUADCAM_TTS_KEY")
-            .ok()
-            .filter(|k| !k.is_empty())
-            .or_else(|| {
-                if provider == "elevenlabs" {
-                    self.gear
-                        .keys
-                        .get(crate::gear::voice::keychain::ELEVENLABS)
-                        .ok()
-                        .flatten()
-                } else {
-                    Some(s("ttsKey")).filter(|k| !k.is_empty())
-                }
-            });
+        // Each provider has its own key, so one never reaches another's server. ElevenLabs
+        // keeps its key in the Keychain; the setting `ttsKey` is the openai server's key.
+        let key = match provider.as_str() {
+            "elevenlabs" => self.eleven_key().ok().flatten().map(|(k, _)| k),
+            "openai" => std::env::var(OPENAI_KEY_ENV)
+                .ok()
+                .map(|k| k.trim().to_string())
+                .filter(|k| !k.is_empty())
+                .or_else(|| Some(s("ttsKey")).filter(|k| !k.is_empty())),
+            _ => None,
+        };
         (
             ProviderConfig {
                 provider,

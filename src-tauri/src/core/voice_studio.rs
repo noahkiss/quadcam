@@ -36,7 +36,8 @@ pub struct KeyStatus {
     pub set: bool,
     /// What tells keys apart without showing one: `ends in 3f9a`.
     pub hint: String,
-    /// `keychain`, or `environment` when QUADCAM_TTS_KEY holds it for this run.
+    /// `keychain`, or `environment` when QUADCAM_ELEVENLABS_KEY (or the older QUADCAM_TTS_KEY)
+    /// holds it for this run.
     pub source: String,
     /// Why the Keychain could not be read, when it could not.
     #[serde(default)]
@@ -149,13 +150,17 @@ pub struct SampleReport {
     pub digest: String,
 }
 
-/// The env var that holds a key for one run, ahead of the Keychain.
-const KEY_ENV: &str = "QUADCAM_TTS_KEY";
+/// The env var that holds the ElevenLabs key for one run, ahead of the Keychain.
+pub const KEY_ENV: &str = "QUADCAM_ELEVENLABS_KEY";
+/// The older name of `KEY_ENV`, still read for ElevenLabs only: no other provider gets it.
+pub const OLD_KEY_ENV: &str = "QUADCAM_TTS_KEY";
 
 impl Core {
-    fn eleven_key(&self) -> Result<Option<(String, &'static str)>> {
-        if let Some(k) = std::env::var(KEY_ENV).ok().filter(|k| !k.trim().is_empty()) {
-            return Ok(Some((k.trim().to_string(), "environment")));
+    pub(super) fn eleven_key(&self) -> Result<Option<(String, &'static str)>> {
+        for var in [KEY_ENV, OLD_KEY_ENV] {
+            if let Some(k) = std::env::var(var).ok().filter(|k| !k.trim().is_empty()) {
+                return Ok(Some((k.trim().to_string(), "environment")));
+            }
         }
         Ok(self.gear.keys.get(ELEVENLABS)?.map(|k| (k, "keychain")))
     }

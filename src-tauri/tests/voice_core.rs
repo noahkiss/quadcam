@@ -1055,3 +1055,24 @@ fn the_mcp_actions_choose_on_several_radios_and_delete_after_confirm() {
         .join(format!("support/gear/voices/{pack}"))
         .exists());
 }
+
+#[test]
+fn each_provider_reads_only_its_own_key_from_the_environment() {
+    let b = bench(Opts::default());
+    std::fs::write(
+        b.dir.path().join("support/settings.json"),
+        r#"{"ttsProvider": "openai", "ttsBaseUrl": "https://voice.example.com"}"#,
+    )
+    .unwrap();
+    let key = |b: &Bench| {
+        view(b);
+        b.last.lock().unwrap().clone().unwrap().key
+    };
+    // The ElevenLabs key in the old variable never goes to an openai server.
+    std::env::set_var("QUADCAM_TTS_KEY", "eleven-secret");
+    assert_eq!(key(&b), None);
+    std::env::set_var("QUADCAM_OPENAI_KEY", "openai-key");
+    assert_eq!(key(&b).as_deref(), Some("openai-key"));
+    std::env::remove_var("QUADCAM_OPENAI_KEY");
+    std::env::remove_var("QUADCAM_TTS_KEY");
+}
