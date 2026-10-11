@@ -595,6 +595,41 @@ fn a_flash_replaces_the_firmware_and_puts_the_settings_back() {
 }
 
 #[test]
+fn the_old_active_profiles_come_back_after_the_flash() {
+    // The person flew on PID profile 2 and rate profile 1.
+    let old = old_dump()
+        .replace(
+            "# restore original profile selection\nprofile 0",
+            "# restore original profile selection\nprofile 2",
+        )
+        .replace(
+            "# restore original rateprofile selection\nrateprofile 0",
+            "# restore original rateprofile selection\nrateprofile 1",
+        );
+    assert_ne!(old, old_dump());
+    let b = bench(Opts {
+        old,
+        ..Opts::default()
+    });
+    let plan = b.core.gear_flash_plan(&params(&b)).unwrap();
+    let report = b.core.gear_flash(&request(&b, &plan)).unwrap();
+    assert_eq!(report.status, ChangeStatus::Verified, "{}", report.message);
+    let saved = quadcam_lib::gear::bf::dump::Config::parse(&b.fc.saved_dump());
+    let last = |verb: &str| {
+        saved
+            .lines
+            .iter()
+            .rev()
+            .map(|l| l.text.trim().to_string())
+            .find(|t| {
+                t.split_whitespace().next() == Some(verb) && t.split_whitespace().count() == 2
+            })
+    };
+    assert_eq!(last("profile").as_deref(), Some("profile 2"));
+    assert_eq!(last("rateprofile").as_deref(), Some("rateprofile 1"));
+}
+
+#[test]
 fn a_value_the_new_version_refuses_is_skipped_with_its_reason() {
     let b = bench(Opts {
         allowed: Some(("small_angle", "Allowed range: 0 - 90")),

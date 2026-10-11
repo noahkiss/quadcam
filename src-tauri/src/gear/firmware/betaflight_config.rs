@@ -3,7 +3,8 @@
 //! the FC and stages the lines it keeps through the FC apply.
 //!
 //! - A `set` the new version still has, with a different value than its new default, is
-//!   carried (`changes::restore_lines`: sets, modes, adjustments, features, beepers).
+//!   carried (`changes::restore_lines`: sets, modes, adjustments, features, beepers). The old
+//!   active PID and rate profile are selected again last.
 //! - A `set` the new version no longer has is **reported and skipped**. So is a carried `set`
 //!   whose value the new FC's `get` answer does not allow. Nothing is guessed or renamed.
 //! - Board lines (`resource`, `serial`, `timer`, `dma`, `mixer`, `map`...) are not carried:
@@ -12,7 +13,7 @@
 
 use crate::gear::apply::fc::range_problem;
 use crate::gear::bf::dump::{parse_cmd, Cmd, Config};
-use crate::gear::changes::{restore_lines, SetRef};
+use crate::gear::changes::{restore_lines, selection_lines, SetRef};
 use crate::gear::model::Section;
 use std::collections::HashMap;
 
@@ -117,6 +118,8 @@ pub fn carry(old: &Config, new: &Config, gets: &HashMap<String, String>) -> Carr
             _ => out.lines.push(l),
         }
     }
+    // The old active profiles last; a select line left pending above was only a section.
+    out.lines.extend(selection_lines(old, new));
 
     for l in &old.lines {
         let Some(Cmd::Other { verb, .. }) = &l.cmd else {
@@ -283,6 +286,18 @@ batch end
         let c = carry(&Config::parse(OLD), &Config::parse(NEW), &g);
         assert!(!c.lines.iter().any(|l| l.starts_with("profile")));
         assert_eq!(c.refused.len(), 1);
+    }
+
+    #[test]
+    fn the_old_active_profiles_are_selected_again() {
+        let old = format!("{OLD}profile 2\nrateprofile 1\n");
+        let new = format!("{NEW}profile 0\nrateprofile 0\n");
+        let c = carry(&Config::parse(&old), &Config::parse(&new), &gets());
+        let n = c.lines.len();
+        assert_eq!(c.lines[n - 2..], ["profile 2", "rateprofile 1"]);
+        // The same selection is not sent again.
+        let c = carry(&Config::parse(&new), &Config::parse(&new), &gets());
+        assert!(c.lines.is_empty(), "{:?}", c.lines);
     }
 
     #[test]

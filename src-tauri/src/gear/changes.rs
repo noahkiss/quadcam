@@ -307,6 +307,16 @@ fn family(s: Section) -> Option<Family> {
     }
 }
 
+const FAMILIES: [Family; 3] = [Family::Profile, Family::Rate, Family::Battery];
+
+fn slot(f: Family) -> usize {
+    match f {
+        Family::Profile => 0,
+        Family::Rate => 1,
+        Family::Battery => 2,
+    }
+}
+
 fn select_of(f: Family, n: u8) -> Section {
     match f {
         Family::Profile => Section::Profile(n),
@@ -350,6 +360,10 @@ struct Item {
 pub fn render_fc(edits: &[Edit], base: Option<&Config>) -> FcRender {
     let mut out = FcRender::default();
     let mut items: Vec<Item> = Vec::new();
+    // A selection in `FcLines` with no line of its kind after it is the selection to end on
+    // (a restore or a flash's carry-over puts the old active profile back): its index, and
+    // how many items came before it.
+    let mut wanted: [Option<(u8, usize)>; 3] = [None; 3];
     let push_set =
         |items: &mut Vec<Item>, out: &mut FcRender, section: Section, name: &str, value: &str| {
             let name = name.trim().to_ascii_lowercase();
@@ -414,7 +428,12 @@ pub fn render_fc(edits: &[Edit], base: Option<&Config>) -> FcRender {
                         continue;
                     }
                     match parse_cmd(&l) {
-                        Cmd::Select(s) => cur = s,
+                        Cmd::Select(s) => {
+                            cur = s;
+                            if let Some(f) = family(s) {
+                                wanted[slot(f)] = Some((index(s), items.len()));
+                            }
+                        }
                         Cmd::Control => out.problems.push(bad(
                             RefusalCode::ShapeUnknown,
                             format!("`{l}` is not sent; QuadCam saves and exits itself."),
@@ -511,11 +530,6 @@ pub fn render_fc(edits: &[Edit], base: Option<&Config>) -> FcRender {
     // Selections: switch only when the next item lives elsewhere, and put the FC's own
     // selection back at the end (a saved `profile N` would change the active profile).
     let mut selected: [Option<u8>; 3] = [None; 3];
-    let slot = |f: Family| match f {
-        Family::Profile => 0,
-        Family::Rate => 1,
-        Family::Battery => 2,
-    };
     let mut touched: Vec<Family> = Vec::new();
     let mut seq: Vec<(Section, String)> = Vec::new();
     for it in &items {
@@ -530,22 +544,32 @@ pub fn render_fc(edits: &[Edit], base: Option<&Config>) -> FcRender {
         }
         seq.push((it.section, it.line.clone()));
     }
-    if let Some(b) = base {
-        for f in touched {
-            if let Some(o) = original(b, f) {
-                if selected[slot(f)] != Some(o) {
-                    let s = select_of(f, o);
-                    seq.push((s, s.select_line().unwrap_or_default()));
-                }
+    let mut ends: Vec<usize> = Vec::new();
+    for f in FAMILIES {
+        let end = wanted[slot(f)]
+            .filter(|(_, pos)| items[*pos..].iter().all(|it| family(it.section) != Some(f)))
+            .map(|(n, _)| n);
+        let orig = base.and_then(|b| original(b, f));
+        let target = end.or(orig.filter(|_| touched.contains(&f)));
+        if let Some(n) = target.filter(|n| selected[slot(f)] != Some(*n)) {
+            if end.is_some() && end != orig {
+                ends.push(seq.len());
             }
+            let s = select_of(f, n);
+            seq.push((s, s.select_line().unwrap_or_default()));
         }
     }
-    for (section, line) in &seq {
+    for (i, (section, line)) in seq.iter().enumerate() {
         out.lines.push(line.clone());
         let is_select = matches!(parse_cmd(line), Cmd::Select(_));
         if is_select {
+            // A selection the change ends on is a change of its own.
             out.diff.push(DiffLine {
-                op: LineOp::Same,
+                op: if ends.contains(&i) {
+                    LineOp::Add
+                } else {
+                    LineOp::Same
+                },
                 text: line.clone(),
             });
             continue;
@@ -640,9 +664,10 @@ fn edit_name(e: &Edit) -> &'static str {
     }
 }
 
-/// Lines that make `base` read as `target`: every `set` whose value differs, and the
-/// list-like commands (modes, adjustments, features) whose text differs. Restoring a
-/// backup stages these; resources, serial ports and timers stay as they are.
+/// Lines that make `base` read as `target`: every `set` whose value differs, the list-like
+/// commands (modes, adjustments, features) whose text differs, and last the active PID,
+/// rate and battery profile when they differ. Restoring a backup stages these; resources,
+/// serial ports and timers stay as they are.
 pub fn restore_lines(target: &Config, base: &Config) -> Vec<String> {
     const VERBS: &[&str] = &[
         "aux",
@@ -691,7 +716,21 @@ pub fn restore_lines(target: &Config, base: &Config) -> Vec<String> {
             _ => {}
         }
     }
+    out.extend(selection_lines(target, base));
     out
+}
+
+/// The select lines that make `base`'s active profiles those of `target` (the last
+/// selection of each kind in a dump or diff), for the kinds where both name one and they
+/// differ.
+pub fn selection_lines(target: &Config, base: &Config) -> Vec<String> {
+    FAMILIES
+        .into_iter()
+        .filter_map(|f| match (original(target, f), original(base, f)) {
+            (Some(t), Some(b)) if t != b => select_of(f, t).select_line(),
+            _ => None,
+        })
+        .collect()
 }
 
 /// One setting or list-like line a change touches, as the revert and its overlap check
@@ -1015,6 +1054,38 @@ set roll_expo = 10
         let (inv, lost) = inverse_lines(&lines, &before);
         assert_eq!(inv, ["set a = 1", "rateprofile 1", "set roll_expo = 10"]);
         assert_eq!(lost, ["set new"]);
+    }
+
+    #[test]
+    fn a_restore_puts_the_active_profiles_back() {
+        let base = Config::parse(
+            "profile 0\nset p_roll = 40\nprofile 2\nset p_roll = 40\nrateprofile 0\nset roll_expo = 0\n\
+             profile 0\nrateprofile 0\n",
+        );
+        let target = Config::parse(
+            "profile 2\nset p_roll = 50\nrateprofile 0\nset roll_expo = 0\nprofile 2\nrateprofile 0\n",
+        );
+        let lines = restore_lines(&target, &base);
+        assert_eq!(lines, ["profile 2", "set p_roll = 50", "profile 2"]);
+        // The render ends on profile 2, not on the base's profile 0, and the diff shows it.
+        let r = render_fc(&[Edit::FcLines { lines }], Some(&base));
+        assert_eq!(r.lines, ["profile 2", "set p_roll = 50"]);
+        let r = render_fc(
+            &[Edit::FcLines {
+                lines: vec!["profile 2".into(), "rateprofile 1".into()],
+            }],
+            Some(&base),
+        );
+        assert_eq!(r.lines, ["profile 2", "rateprofile 1"]);
+        assert!(r.diff.iter().all(|d| d.op == LineOp::Add), "{:?}", r.diff);
+        // A selection followed by its own lines is not one to end on.
+        let r = render_fc(
+            &[Edit::FcLines {
+                lines: vec!["profile 2".into(), "set p_roll = 60".into()],
+            }],
+            Some(&base),
+        );
+        assert_eq!(r.lines, ["profile 2", "set p_roll = 60", "profile 0"]);
     }
 
     #[test]

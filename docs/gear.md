@@ -587,8 +587,8 @@ value outside the allowed range or list is refused before any line is sent.
 and the FC is as it was. The sheet names the line. If the FC saves but a line does not read back
 as written, the sheet lists those lines and offers **Restore backup**, which stages the backup
 taken before the write as a new change and opens it in the same sheet. A restore sets back
-every setting, mode, adjustment and feature that differs; it leaves resources, serial ports
-and timers alone.
+every setting, mode, adjustment and feature that differs, and the active PID and rate profile
+the backup had; it leaves resources, serial ports and timers alone.
 
 After an apply QuadCam stores the FC's new state as a backup (**After apply**), so the next
 plan compares with it. A profile selection changes the FC's active profile once saved, so
@@ -1162,7 +1162,7 @@ flashed to a proven one.
 What comes back, and what does not:
 
 - A setting whose value differs from the new firmware's default comes back. So do modes,
-  adjustments and features.
+  adjustments and features, and the PID and rate profile the FC flew on.
 - A setting the new version no longer has is **listed in the report and skipped**. QuadCam
   does not rename or guess. The same holds for a value the new version's `get` answer does
   not allow.
