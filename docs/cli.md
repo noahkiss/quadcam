@@ -269,7 +269,8 @@ From 1.0 the command line is a contract. The schema version is 1; `quadcam-cli -
 - **Removals and renames need a schema version bump and a deprecation period.** QuadCam marks the old command or flag deprecated first. It keeps working and prints a warning on stderr (`warnings` in `--json` output) that names the replacement. A later schema version removes it.
 - **Output fields stay.** A field that scripts read does not change its meaning or type.
 - **Exit codes stay** as the table below lists them.
-- `tests/surface/cli.txt` records every command, flag and argument. A test compares it with the built tool, so a removal or a rename fails the build.
+- **Values only widen.** A new value for a flag that already lists values is an addition. A value list on a flag that took any value narrows it, and fails like a removal.
+- `tests/surface/cli.txt` records every command, flag, argument and listed value. A test compares it with the built tool, so a removal, a rename or a narrowing fails the build.
 
 ### MCP equivalents
 
