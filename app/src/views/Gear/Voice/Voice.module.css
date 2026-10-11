@@ -216,3 +216,37 @@
   gap: var(--s-1);
   white-space: nowrap;
 }
+.link {
+  border: 0;
+  padding: 0;
+  background: transparent;
+  color: var(--primary-text);
+  font-size: inherit;
+  text-decoration: underline;
+  cursor: pointer;
+}
+.subtitle {
+  margin: 0;
+  font-size: var(--t-md);
+  font-weight: 600;
+}
+.commands {
+  margin: 0;
+  padding: var(--s-3);
+  overflow-x: auto;
+  border: 1px solid var(--border);
+  border-radius: var(--r-2);
+  background: var(--mantle);
+  font-family: var(--mono);
+  font-size: var(--t-sm);
+  white-space: pre;
+}
+.previewLines {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  flex-basis: 100%;
+}

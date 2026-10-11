@@ -1,6 +1,7 @@
 // The mock core's voice (`core/voice.rs`, `gear/voice/`), written by hand: a few of QuadCam's
 // lines, one pack in a made-up index, per-line overrides, a local render, Choose voice (one
 // `card_files` change, as the core stages it, on one radio or several) and pack delete.
+import type { PreviewLine, PreviewTake, PublishApproveReport, PublishReview, ReviewLine } from "../types";
 import type { Catalog, Edit, HeardLine, ImportReport, KeyStatus, LineOverride, ModelInfo, PackDeleteReport, RenderReport, Retake, SampleItem, SampleReport, SetInfo, StagedChange, StudioEstimate, StudioView, VoiceChooseRadiosReport, VoiceEstimate, VoiceCheckReport, VoiceInfo, VoiceLine, VoicePack, VoiceView } from "../types";
 import type { MockGear } from "./gear";
 import { hint as secretHint } from "./secret";
@@ -75,7 +76,8 @@ function samePlan(p: Paid, digest: string) {
   if (p.digest !== digest) throw "The plan changed since its estimate (voices, models, sets, seed or characters): estimate again.";
 }
 
-const AVAILABLE: VoicePack = { id: "en-demo-v1", voice: "Demo", lang: "en", provider: "demo", model: "", lines: LINES.length, license: "CC BY 4.0", attribution: "Made up for the mock core", version: "1", installed: false, local: false, bytes: 3_700_000, stale: false, dir: null, firmware: "edgetx", sets: [], made: null, radios: [], retakes: [] };
+const PREVIEW: PreviewLine[] = LINES.slice(0, 3).map((l, i) => ({ path: l.path, text: l.text, file: `previews/en-demo-v1/0${i + 1}.m4a`, sha256: "0".repeat(64) }));
+const AVAILABLE: VoicePack = { id: "en-demo-v1", voice: "Demo", lang: "en", provider: "demo", model: "", lines: LINES.length, license: "CC BY 4.0", attribution: "Made up for the mock core", version: "1", installed: false, local: false, bytes: 3_700_000, stale: false, dir: null, firmware: "edgetx", sets: [], made: null, radios: [], retakes: [], preview: PREVIEW, zip_bytes: 1_600_000 };
 const LOCAL_ID = "local-say-samantha";
 const MADE = "2026-10-01T18:30:00Z";
 
@@ -88,7 +90,7 @@ function packs(v: MockVoice): VoicePack[] {
     const [, name = "voice", model = ""] = /^local-elevenlabs-voice-([a-z]+)-(.*)$/.exec(id) ?? [];
     out.push(mine(id, { voice: name.charAt(0).toUpperCase() + name.slice(1), provider: "elevenlabs", model: model.replace(/-/g, "_"), sets: ["quad"], bytes: 2_300_000 }));
   }
-  if (v.installed.includes(AVAILABLE.id)) out.push({ ...AVAILABLE, installed: true, dir: `/Users/pilot/gear/voices/${AVAILABLE.id}`, sets: ["quadcam"], made: MADE, radios: radios(AVAILABLE.id), heard: v.heard[AVAILABLE.id] ?? [] });
+  if (v.installed.includes(AVAILABLE.id)) out.push({ ...AVAILABLE, preview: [], zip_bytes: 0, installed: true, dir: `/Users/pilot/gear/voices/${AVAILABLE.id}`, sets: ["quadcam"], made: MADE, radios: radios(AVAILABLE.id), heard: v.heard[AVAILABLE.id] ?? [] });
   else if (v.index) out.push({ ...AVAILABLE });
   return out;
 }
@@ -495,4 +497,68 @@ function studioRender(g: MockGear, p: { voice?: string; sets: string[]; model?: 
   const lines = heard();
   const retakes = g.voice.retakes[id] ?? [];
   return { ...base, rendered: seed ? Math.max(1, redo) : e.batches, from_cache: 0, needs_confirm: false, retakes, heard: lines };
+}
+
+/** `gear_voice_pack_preview`: the index pack's preview lines, "fetched" into the cache. */
+export function packPreview(g: MockGear, p: { pack: string }): PreviewTake[] {
+  if (!g.voice.index || p.pack !== AVAILABLE.id) throw `The index lists no pack "${p.pack}".`;
+  return PREVIEW.map((l, i) => ({ path: l.path, text: l.text, file: `/mock/cache/voice/index-preview/en-demo-v1-1/0${i + 1}.m4a` }));
+}
+
+/** The bundles `gear_voice_publish` prepared, by digest. */
+const bundles = new Map<string, PublishReview>();
+
+/** `gear_voice_publish` (`core/voice_publish.rs`): the speech check's gate, then the review. */
+export function publish(g: MockGear, p: { pack: string; id?: string | null; version?: string | null; voice_name?: string | null; license?: string | null; attribution?: string | null }): PublishReview {
+  const v = g.voice;
+  const k = packs(v).find((x) => x.id === p.pack && x.installed);
+  if (!k) throw `Pack "${p.pack}" is not on this Mac.`;
+  if (k.provider === "say") throw "This pack was made with macOS say: Apple's voices are licensed for use on the Mac, so it cannot be published.";
+  const heard = v.heard[p.pack] ?? [];
+  const files = LINES.filter((l) => !(v.retakes[p.pack] ?? []).some((r) => r.path === l.path)).map((l) => l.path);
+  const unheard = files.filter((f) => !heard.some((h) => h.path === f));
+  if (unheard.length) throw `The speech check has not heard ${unheard.length} of the pack's ${files.length} lines: run Check speech (quadcam-cli gear voice check ${p.pack}) first.`;
+  const wrong = heard.filter((h) => files.includes(h.path) && !h.ok && !h.accepted);
+  if (wrong.length) throw `${wrong.length} lines the speech check heard wrong are not accepted (${wrong.map((h) => h.path).join(", ")}): render them again, or listen and accept what was heard.`;
+  const voice = p.voice_name?.trim() || k.voice;
+  const id = p.id?.trim() || `en-${voice.toLowerCase()}`;
+  const version = p.version?.trim() || "1";
+  const license = p.license?.trim() || "ElevenLabs output, paid plan: commercial use allowed";
+  const attribution = p.attribution?.trim() || `Voice: ${voice} (ElevenLabs)`;
+  const preview: PreviewLine[] = files.slice(0, 10).map((f, i) => ({ path: f, text: LINES.find((l) => l.path === f)!.text, file: `previews/${id}-${version}/${String(i + 1).padStart(2, "0")}.m4a`, sha256: "0".repeat(64) }));
+  const digest = `mock-${id}-${version}`;
+  const dir = `/mock/cache/voice/publish/${id}-v${version}`;
+  const lines: ReviewLine[] = files
+    .map((f) => {
+      const h = heard.find((x) => x.path === f)!;
+      return { path: f, text: h.text, heard: h.heard, ok: h.ok, accepted: !!h.accepted, file: `${dir}/stage/${f}`, spot: true, preview: preview.some((x) => x.path === f) };
+    })
+    .sort((a, b) => Number(b.accepted) - Number(a.accepted));
+  const review: PublishReview = {
+    pack: p.pack,
+    repo: "noahkiss/quadcam-voices",
+    entry: { id, voice, lang: "en", provider: k.provider, model: k.model, settings: { speed: 1, tempo: 1, trim_db: -55, lead_ms: 20, tail_ms: 150, fade_in_ms: 5, fade_out_ms: 30, seed: 0 }, lines: files.length, bytes: 410_000, sha256: "0".repeat(64), license, attribution, lines_csv_sha: "csv", version, file: `voice-${id}-${version}.zip`, firmware: "edgetx", url: `https://github.com/noahkiss/quadcam-voices/releases/download/${id}-v${version}/voice-${id}-${version}.zip`, zip_bytes: 180_000, date: "2026-10-11", preview },
+    dir,
+    zip: `${dir}/voice-${id}-${version}.zip`,
+    lines,
+    spot_check: files,
+    accepted: lines.filter((l) => l.accepted).length,
+    left_out: [],
+    digest,
+    gh: { ready: true, reason: null },
+    commands: [`gh release create ${id}-v${version} ${dir}/voice-${id}-${version}.zip -R noahkiss/quadcam-voices`],
+    notes: [],
+  };
+  bundles.set(digest, review);
+  return review;
+}
+
+/** `gear_voice_publish_approve`, the review's own Approve click. */
+export function approve(p: { digest: string; id?: string | null }): PublishApproveReport {
+  const r = bundles.get(p.digest);
+  if (!r) throw `No prepared pack has the digest ${p.digest}: prepare it again.`;
+  const { id, version } = r.entry;
+  if (p.id && p.id !== id) throw `The digest is for ${id}, not "${p.id}": nothing was published.`;
+  const published = { release_url: `https://github.com/noahkiss/quadcam-voices/releases/tag/${id}-v${version}`, pr_url: "https://github.com/noahkiss/quadcam-voices/pull/1", branch: `pack/${id}-v${version}` };
+  return { id, version, published, commands: [], notes: [`Released ${published.release_url} and opened ${published.pr_url}. Merging the pull request publishes the pack.`] };
 }
