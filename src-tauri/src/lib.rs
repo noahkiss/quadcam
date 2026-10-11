@@ -10,6 +10,7 @@ pub mod disk;
 pub mod gear;
 pub mod geocode;
 pub mod glass;
+pub mod highlights;
 pub mod identity;
 pub mod intel;
 pub mod join;
@@ -154,6 +155,12 @@ impl Hooks for GuiHooks {
         std::thread::spawn(move || {
             if let Some(st) = app.try_state::<AppState>() {
                 st.core.make_previews();
+            }
+        });
+        let app = self.app.clone();
+        std::thread::spawn(move || {
+            if let Some(st) = app.try_state::<AppState>() {
+                st.core.analyse_video();
             }
         });
     }
@@ -577,6 +584,8 @@ pub fn specta_builder() -> tauri_specta::Builder<tauri::Wry> {
             c::library_apply_name_format,
             c::library_match_logs,
             c::library_rescan,
+            c::library_analyze_video,
+            c::video_feature,
             c::library_preview,
             c::library_strips,
             c::card_status,

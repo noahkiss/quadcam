@@ -4,7 +4,7 @@
 use super::params::*;
 use super::render::{
     clip_views, deletion_lines, lib_line, lib_view, names, photos_line, places_text, source_label,
-    table, text, update_note,
+    table, text, update_note, video_text,
 };
 use super::tools::{tools, INSTRUCTIONS};
 use crate::control::{self, Client};
@@ -350,7 +350,7 @@ impl<B: Backend> Server<B> {
             "quadcam_library_files" => {
                 let x: LibraryFilesArgs = args(a)?;
                 let action = x.action
-                    .context("action is required: cuts, split_by_flight, export_cuts, trash, photos, rebuild, apply_name_format or match_logs")?;
+                    .context("action is required: cuts, split_by_flight, export_cuts, trash, photos, rebuild, apply_name_format, match_logs or analyze_video")?;
                 let ids: Vec<String> = x.ids.unwrap_or_default();
                 let one = || -> Result<String> {
                     match ids.as_slice() {
@@ -467,6 +467,13 @@ impl<B: Backend> Server<B> {
                         }
                         Ok((vec![text(lines.join("\n"))], r))
                     }
+                    "analyze_video" => {
+                        let r = self.backend.call(
+                            "library_analyze_video",
+                            json!({"ids": ids, "again": x.again.unwrap_or(false)}),
+                        )?;
+                        Ok((vec![text(video_text(&r))], r))
+                    }
                     "apply_name_format" => {
                         let r = self.backend.call(
                             "library_apply_name_format",
@@ -502,7 +509,7 @@ impl<B: Backend> Server<B> {
                         ))
                     }
                     other => Err(anyhow!(
-                        "unknown action {other:?}; use cuts, split_by_flight, export_cuts, trash, photos, rebuild, apply_name_format or match_logs"
+                        "unknown action {other:?}; use cuts, split_by_flight, export_cuts, trash, photos, rebuild, apply_name_format, match_logs or analyze_video"
                     )),
                 }
             }

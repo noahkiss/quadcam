@@ -107,6 +107,10 @@ export const commands = {
 	libraryMatchLogs: (params: LibMatchParams) => typedError<LibMatchReport_Serialize, string>(__TAURI_INVOKE("library_match_logs", { params })),
 	/**  Finds dead air again in a clip. */
 	libraryRescan: (params: ClipIdParams) => typedError<LibClip_Serialize, string>(__TAURI_INVOKE("library_rescan", { params })),
+	/**  Highlights and the key frame of library clips, with macOS video analysis. */
+	libraryAnalyzeVideo: (params: VideoParams) => typedError<VideoReport, string>(__TAURI_INVOKE("library_analyze_video", { params })),
+	/**  Video analysis on this Mac: available, or why not. */
+	videoFeature: () => typedError<Feature, string>(__TAURI_INVOKE("video_feature")),
 	/**  A file the web view can play. */
 	libraryPreview: (params: ClipIdParams) => typedError<string, string>(__TAURI_INVOKE("library_preview", { params })),
 	/**  Makes missing hover-scrub strips (for every clip when `ids` is empty). */
@@ -1551,6 +1555,11 @@ export type Clip = {
 	/**  Dead air found in the clip's frames, and the ranges worth keeping. */
 	signal?: SignalScan | null,
 	/**
+	 *  Highlights and the key frame from macOS video analysis, once the background job
+	 *  analysed the clip (`Core::analyse_video`).
+	 */
+	video?: VideoScan | null,
+	/**
 	 *  Content fingerprint (see `fingerprint`). Names the clip's cached thumbnail and
 	 *  preview, since DVRs reuse file names: the Echo restarts at PICT0001 after a format.
 	 */
@@ -1974,6 +1983,12 @@ export type Defaults_Deserialize = {
 	 */
 	join_split_recordings?: boolean,
 	/**
+	 *  Find highlights and the key frame of new clips with macOS video analysis (macOS 27
+	 *  or later), in the background. On by default; the library's "Find highlights" runs
+	 *  either way.
+	 */
+	video_analysis?: boolean,
+	/**
 	 *  The app checks for a newer QuadCam at launch and once a day. On by default; the
 	 *  app menu's Check for Updates works either way.
 	 */
@@ -2022,6 +2037,12 @@ export type Defaults_Serialize = {
 	 *  default; a run or a clip may keep the files separate.
 	 */
 	join_split_recordings: boolean,
+	/**
+	 *  Find highlights and the key frame of new clips with macOS video analysis (macOS 27
+	 *  or later), in the background. On by default; the library's "Find highlights" runs
+	 *  either way.
+	 */
+	video_analysis: boolean,
 	/**
 	 *  The app checks for a newer QuadCam at launch and once a day. On by default; the
 	 *  app menu's Check for Updates works either way.
@@ -2577,7 +2598,7 @@ export type FcReadParams = {
 
 /**  One feature as the helper's `caps` reports it. */
 export type Feature = {
-	/**  `asr`: the speech check of voice lines. */
+	/**  `asr`: the speech check of voice lines; `video`: highlights and the key frame. */
 	name: string,
 	available: boolean,
 	/**  The oldest macOS the feature runs on. */
@@ -3327,8 +3348,10 @@ export type LibClip_Deserialize = {
 	aircraft?: string | null,
 	keywords?: string[],
 	author?: string | null,
-	/**  Radio-log moments, in clip seconds. */
+	/**  Radio-log moments, in clip seconds; when there are none, the highlights of `video`. */
 	moments?: Moment[],
+	/**  What macOS video analysis found; None until the clip was analysed. */
+	video?: VideoScan | null,
 	/**  Ranges with a picture; empty when the clip has no dead air (or was never scanned). */
 	keep?: Span[],
 	stats?: FlightStats_Deserialize | null,
@@ -3374,8 +3397,10 @@ export type LibClip_Serialize = {
 	aircraft: string | null,
 	keywords: string[],
 	author: string | null,
-	/**  Radio-log moments, in clip seconds. */
+	/**  Radio-log moments, in clip seconds; when there are none, the highlights of `video`. */
 	moments: Moment[],
+	/**  What macOS video analysis found; None until the clip was analysed. */
+	video?: VideoScan | null,
 	/**  Ranges with a picture; empty when the clip has no dead air (or was never scanned). */
 	keep: Span[],
 	stats: FlightStats_Serialize | null,
@@ -3439,6 +3464,8 @@ export type LibItem_Deserialize = {
 	strip: string | null,
 	/**  One frame, when no strip could be made. */
 	poster: string | null,
+	/**  The key frame video analysis picked: the clip's picture at rest, over the strip. */
+	cover: string | null,
 	/**  Neither a strip nor a poster could be made. */
 	no_picture: boolean,
 	last_import: boolean,
@@ -3452,6 +3479,8 @@ export type LibItem_Serialize = {
 	strip: string | null,
 	/**  One frame, when no strip could be made. */
 	poster: string | null,
+	/**  The key frame video analysis picked: the clip's picture at rest, over the strip. */
+	cover: string | null,
 	/**  Neither a strip nor a poster could be made. */
 	no_picture: boolean,
 	last_import: boolean,
@@ -4024,7 +4053,9 @@ export type MomentKind =
 /**  The log segment ends right after big inputs. Low confidence. */
 "crash" | 
 /**  No usable picture: blue screen, static, test pattern, black. */
-"dead_air";
+"dead_air" | 
+/**  A stretch macOS video analysis rates as interesting (`crate::highlights`). */
+"highlight";
 
 /**  `card_status`: a card's mount point. */
 export type MountParams = {
@@ -5787,7 +5818,11 @@ export type SimsParams = {
 };
 
 /**  Where a moment's evidence came from. */
-export type Source = "radio_log" | "video";
+export type Source = "radio_log" | 
+/**  The clip's own frames (dead air). */
+"video" | 
+/**  macOS video analysis (`crate::highlights`). */
+"video_analysis";
 
 /**  Which video system a clip came from. */
 export type SourceKind = 
@@ -6168,7 +6203,9 @@ export type TakeReport = {
 };
 
 /**  The long library jobs. */
-export type Task = "rebuild" | "cuts" | "thumbnails" | "moments";
+export type Task = "rebuild" | "cuts" | "thumbnails" | "moments" | 
+/**  Video analysis: highlights and key frames. */
+"video";
 
 /**  The throttle curve of a rate profile. */
 export type ThrottleView = {
@@ -6373,6 +6410,43 @@ export type VerifyReport = {
 	output: string,
 	ok: boolean,
 	error: string | null,
+};
+
+/**  What a library analysis did with one clip. */
+export type VideoClip = {
+	id: string,
+	path: string,
+	highlights: number,
+	/**  Seconds into the clip: the frame that now stands for it. */
+	key_frame: number | null,
+	/**  The answer came from the cache. */
+	cached: boolean,
+	error: string | null,
+};
+
+/**  `library_analyze_video`: which clips, and whether to analyse them again. */
+export type VideoParams = {
+	/**  Library clip ids; empty means every clip (cuts excluded). */
+	ids?: string[],
+	/**  Analyse clips again, past the cache. Without it, clips analysed already are skipped. */
+	again?: boolean,
+};
+
+export type VideoReport = {
+	/**  Why video analysis cannot run on this Mac; nothing ran. */
+	unavailable: string | null,
+	clips: VideoClip[],
+};
+
+/**  What video analysis found in one clip. */
+export type VideoScan = {
+	/**  Highlights as moments (kind `highlight`, source `video_analysis`), by start time. */
+	highlights?: Moment[],
+	/**
+	 *  Seconds into the clip: the frame the analyzer picked to stand for it. None when it
+	 *  picked none, or the frame is in dead air.
+	 */
+	key_frame?: number | null,
 };
 
 /**  `gear_voice_check`. */

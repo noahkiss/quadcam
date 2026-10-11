@@ -124,6 +124,12 @@ pub const KEYS: &[Key] = &[
         check: boolean,
     },
     Key {
+        file: "videoAnalysis",
+        name: Some("video_analysis"),
+        about: "true or false",
+        check: boolean,
+    },
+    Key {
         file: "updateCheck",
         name: Some("update_check"),
         about: "true or false",
@@ -581,6 +587,11 @@ pub struct Defaults {
     /// default; a run or a clip may keep the files separate.
     #[serde(default = "yes")]
     pub join_split_recordings: bool,
+    /// Find highlights and the key frame of new clips with macOS video analysis (macOS 27
+    /// or later), in the background. On by default; the library's "Find highlights" runs
+    /// either way.
+    #[serde(default = "yes")]
+    pub video_analysis: bool,
     /// The app checks for a newer QuadCam at launch and once a day. On by default; the
     /// app menu's Check for Updates works either way.
     #[serde(default = "yes")]
@@ -637,6 +648,7 @@ impl Default for Defaults {
             add_time: false,
             delete_clips_after_import: false,
             join_split_recordings: true,
+            video_analysis: true,
             update_check: true,
             default_name: crate::naming::DEFAULT_NAME.into(),
             photos_album: crate::photos::DEFAULT_ALBUM.into(),
@@ -692,6 +704,9 @@ impl Defaults {
         }
         if let Some(b) = get(v, "joinSplitRecordings") {
             d.join_split_recordings = b;
+        }
+        if let Some(b) = get(v, "videoAnalysis") {
+            d.video_analysis = b;
         }
         if let Some(b) = get(v, "updateCheck") {
             d.update_check = b;
@@ -763,6 +778,7 @@ mod tests {
         assert_eq!(x.profiles.len(), 1);
         assert_eq!(x.profiles[0].edgetx_models, vec!["WHOOP A"]);
         assert_eq!(x.tunables.max_log_age_days, 60);
+        assert!(x.video_analysis, "video analysis is on unless turned off");
         // New settings get their defaults.
         assert_eq!(x.geocoder, "apple");
         assert!(!x.delete_clips_after_import);

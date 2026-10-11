@@ -94,6 +94,7 @@ quadcam-cli library cut <id> 12-18 1:02-1:10 --export   # set the cuts and write
 quadcam-cli library cut <id> --by-flight --export        # add one cut per radio-log flight and write them
 quadcam-cli library apply-name-format             # rename clips to the name_date_format setting
 quadcam-cli library match-logs --logs /path/to/LOGS   # report which clips match a radio log; --apply writes flight numbers and moments
+quadcam-cli library analyze-video [<id>...]       # highlights and key frame (macOS 27); skips clips done; --again redoes them
 quadcam-cli library trash <id>                    # clip, cuts and original to the Trash
 quadcam-cli library photos <id> --album Drone
 ```
@@ -137,6 +138,7 @@ See [Modules and notices](modules.md) for what a module install checks.
 - `output_dir`, `format`, `encoder`, `keep_originals`, `add_time`, `default_name`
 - `delete_clips_after_import` (`true` or `false`; see [Settings](settings.md#delete-clips-after-import))
 - `join_split_recordings` (`true` or `false`; see [Joined recordings](library.md#joined-recordings))
+- `video_analysis` (`true` or `false`; see [Settings](settings.md#find-highlights-in-new-clips))
 - `update_check` (`true` or `false`; see [Updates](settings.md#updates))
 - `photos_album`, `format_label`, `log_dir`, `layout`, `place_folders`, `tunables`
 - `geocoder` (`apple`, `nominatim`, `census` or `google`), `google_places_key`

@@ -5,6 +5,9 @@
 //! a timeout. A missing helper, a macOS older than a feature needs, or a locale without its
 //! speech assets makes that feature unavailable, never an error.
 //!
+//! Features: `asr` (the speech check of voice lines, macOS 26+) and `video` (highlights and the
+//! key frame of a clip, MediaIntelligence's VideoAnalyzer, macOS 27+).
+//!
 //! A process started by cargo gets no helper unless `QUADCAM_INTEL=real`, so tests never
 //! depend on the Mac they run on; they pass a fake `Runner` through `Intel::with`.
 
@@ -22,7 +25,7 @@ pub const HELPER: &str = "quadcam-intel";
 /// One feature as the helper's `caps` reports it.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, specta::Type)]
 pub struct Feature {
-    /// `asr`: the speech check of voice lines.
+    /// `asr`: the speech check of voice lines; `video`: highlights and the key frame.
     pub name: String,
     pub available: bool,
     /// The oldest macOS the feature runs on.
@@ -82,6 +85,50 @@ pub struct Heard {
     pub error: Option<String>,
 }
 
+/// A time range in a video file, in seconds.
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
+pub struct Range {
+    pub start: f64,
+    pub end: f64,
+}
+
+/// One segment of the analyzer's interest curve: 0 dull, higher more interesting.
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
+pub struct Level {
+    pub start: f64,
+    pub end: f64,
+    pub level: f64,
+}
+
+/// What the video analyzer found in one file. Each request reports its own error; `error`
+/// means the file could not be analysed at all.
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+pub struct Watched {
+    pub file: String,
+    /// None when highlights were not asked for, or failed (`highlights_error`).
+    #[serde(default)]
+    pub highlights: Option<Vec<Range>>,
+    #[serde(default)]
+    pub levels: Vec<Level>,
+    /// Seconds into the file: the frame that best stands for the clip.
+    #[serde(default)]
+    pub keyframe: Option<f64>,
+    #[serde(default)]
+    pub highlights_error: Option<String>,
+    #[serde(default)]
+    pub keyframe_error: Option<String>,
+    #[serde(default)]
+    pub error: Option<String>,
+}
+
+/// The answer of a video analysis: what the analyzer found, or why the feature is
+/// unavailable.
+#[derive(Debug, Clone, Default)]
+pub struct VideoAnswer {
+    pub watched: Option<Watched>,
+    pub unavailable: Option<String>,
+}
+
 /// The answer of a transcription: what each file said, or why the feature is unavailable.
 #[derive(Debug, Clone, Default)]
 pub struct Transcripts {
@@ -95,6 +142,7 @@ pub struct Transcripts {
 enum Out {
     Caps(Caps),
     Asr(Heard),
+    Video(Watched),
     Install { status: String },
     Error { code: String, message: String },
 }
@@ -112,6 +160,8 @@ pub struct Intel {
     runner: Arc<dyn Runner>,
     /// `caps` per locale, asked once per process (an install clears it).
     caps: Mutex<Vec<(String, Feature)>>,
+    /// The `video` feature from `caps`, asked once per process.
+    video: Mutex<Option<Feature>>,
 }
 
 impl Intel {
@@ -134,6 +184,7 @@ impl Intel {
             program: Ok(program),
             runner,
             caps: Mutex::new(Vec::new()),
+            video: Mutex::new(None),
         }
     }
 
@@ -143,6 +194,7 @@ impl Intel {
             program: Err(reason.into()),
             runner: Arc::new(Process),
             caps: Mutex::new(Vec::new()),
+            video: Mutex::new(None),
         }
     }
 
@@ -201,6 +253,92 @@ impl Intel {
             .unwrap()
             .push((locale.to_string(), f.clone()));
         f
+    }
+
+    /// Video analysis's state: available (macOS 27 or later with a helper built on its SDK),
+    /// or why not. Never an error.
+    pub fn video_feature(&self) -> Feature {
+        if let Some(f) = self.video.lock().unwrap().clone() {
+            return f;
+        }
+        let f = match &self.program {
+            Err(why) => Feature::unavailable("video", why),
+            Ok(_) => match self.run(vec!["caps".into()], Duration::from_secs(20)) {
+                Ok((lines, _)) => lines
+                    .into_iter()
+                    .find_map(|o| match o {
+                        Out::Caps(c) => c.features.into_iter().find(|f| f.name == "video"),
+                        Out::Error { message, .. } => Some(Feature::unavailable("video", &message)),
+                        _ => None,
+                    })
+                    .unwrap_or_else(|| {
+                        Feature::unavailable(
+                            "video",
+                            "This quadcam-intel helper has no video analysis.",
+                        )
+                    }),
+                Err(e) => Feature::unavailable("video", &format!("{e:#}")),
+            },
+        };
+        *self.video.lock().unwrap() = Some(f.clone());
+        f
+    }
+
+    /// Analyses one video file: its highlights and their levels, its key frame, or both. A
+    /// missing helper or a macOS older than 27 gives `unavailable`; a file the analyzer could
+    /// not read has its own `error`. Errors only when the helper failed to run. `seconds` is
+    /// the clip's length; the timeout grows with it (the analyzer runs about 5x real time).
+    pub fn video(
+        &self,
+        file: &Path,
+        highlights: bool,
+        keyframe: bool,
+        seconds: f64,
+    ) -> Result<VideoAnswer> {
+        let mut a = VideoAnswer::default();
+        if let Err(why) = &self.program {
+            a.unavailable = Some(why.clone());
+            return Ok(a);
+        }
+        let f = self.video_feature();
+        if !f.available {
+            a.unavailable = f.reason.or(Some("Video analysis is unavailable.".into()));
+            return Ok(a);
+        }
+        let mut args: Vec<OsString> = vec!["video".into(), file.as_os_str().to_owned()];
+        if highlights {
+            args.push("--highlights".into());
+        }
+        if keyframe {
+            args.push("--keyframe".into());
+        }
+        let timeout = Duration::from_secs(120 + seconds.max(0.0) as u64);
+        let (lines, code) = self.run(args, timeout)?;
+        for o in lines {
+            match o {
+                Out::Video(w) => a.watched = Some(w),
+                Out::Error { code: c, message } => {
+                    if code == UNAVAILABLE || c == "unavailable" {
+                        a.unavailable = Some(message);
+                        return Ok(a);
+                    }
+                    bail!("quadcam-intel: {message}");
+                }
+                _ => {}
+            }
+        }
+        if a.watched.is_none() {
+            if code == UNAVAILABLE {
+                a.unavailable =
+                    Some("The quadcam-intel helper says video analysis is unavailable.".into());
+            } else {
+                bail!(
+                    "quadcam-intel reported nothing for {} (exit {code})",
+                    file.display()
+                );
+            }
+        }
+        Ok(a)
     }
 
     /// Transcribes each file in `locale`. A helper that is missing, a macOS without the
@@ -287,7 +425,8 @@ pub fn locale_of(lang: &str) -> String {
     }
 }
 
-/// A helper for tests: it answers `caps`, `asr` and `install` without running anything.
+/// A helper for tests: it answers `caps`, `asr`, `video` and `install` without running
+/// anything.
 pub mod fake {
     use super::*;
     use std::os::unix::process::ExitStatusExt;
@@ -295,11 +434,42 @@ pub mod fake {
 
     /// What the fake hears in a file, by its path; None makes the file unreadable.
     pub type Hear = Box<dyn Fn(&str) -> Option<String> + Send + Sync>;
+    /// What the fake's video analysis finds in a file, by its path; None makes the file
+    /// unreadable.
+    pub type See = Box<dyn Fn(&str) -> Option<Watched> + Send + Sync>;
+
+    /// The fake's video answer for every file: highlights at 2-6 s and 20-30 s on a level
+    /// curve that peaks in the first, and the key frame at 3 s.
+    pub fn seen(file: &str) -> Watched {
+        Watched {
+            file: file.into(),
+            highlights: Some(vec![
+                Range {
+                    start: 2.0,
+                    end: 6.0,
+                },
+                Range {
+                    start: 20.0,
+                    end: 30.0,
+                },
+            ]),
+            levels: (0..80)
+                .map(|i| Level {
+                    start: i as f64 * 0.5,
+                    end: i as f64 * 0.5 + 0.5,
+                    level: if (4..12).contains(&i) { 6.0 } else { 2.0 },
+                })
+                .collect(),
+            keyframe: Some(3.0),
+            ..Default::default()
+        }
+    }
 
     pub struct FakeHelper {
         /// The `caps` line.
         pub caps: String,
         pub hear: Hear,
+        pub see: See,
         /// The exit code of every run.
         pub code: i32,
         /// Every run's arguments.
@@ -310,8 +480,9 @@ pub mod fake {
         /// A helper whose speech check is available and hears what `hear` says.
         pub fn new(hear: Hear) -> Self {
             FakeHelper {
-                caps: r#"{"kind":"caps","helper":1,"os":"27.0","features":[{"name":"asr","available":true,"min_os":"26.0","locale":"en-US","assets":"installed"}]}"#.into(),
+                caps: r#"{"kind":"caps","helper":1,"os":"27.0","features":[{"name":"asr","available":true,"min_os":"26.0","locale":"en-US","assets":"installed"},{"name":"video","available":true,"min_os":"27.0"}]}"#.into(),
                 hear,
+                see: Box::new(|f| Some(seen(f))),
                 code: 0,
                 calls: Mutex::new(Vec::new()),
             }
@@ -325,6 +496,17 @@ pub mod fake {
                 .iter()
                 .filter(|c| c[0] == "asr")
                 .flat_map(|c| c[3..].to_vec())
+                .collect()
+        }
+
+        /// The files `video` runs were asked about.
+        pub fn seen_files(&self) -> Vec<String> {
+            self.calls
+                .lock()
+                .unwrap()
+                .iter()
+                .filter(|c| c[0] == "video")
+                .map(|c| c[1].clone())
                 .collect()
         }
     }
@@ -358,6 +540,16 @@ pub mod fake {
                         out.push_str(&line.to_string());
                         out.push('\n');
                     }
+                }
+                "video" => {
+                    let w = (self.see)(&args[1]).unwrap_or_else(|| Watched {
+                        file: args[1].clone(),
+                        error: Some("unreadable".into()),
+                        ..Default::default()
+                    });
+                    let mut v = serde_json::to_value(&w).unwrap();
+                    v["kind"] = "video".into();
+                    out = v.to_string();
                 }
                 _ => out = r#"{"kind":"install","locale":"en-US","status":"already"}"#.into(),
             }
@@ -492,6 +684,96 @@ mod tests {
         assert_eq!(t.unavailable, None);
         let text = t.heard[0].text.clone().unwrap_or_default();
         assert!(text.to_lowercase().contains("battery low"), "{text:?}");
+    }
+
+    #[test]
+    fn video_analysis_runs_the_helper_once_per_file() {
+        let fake = Arc::new(fake(&[]));
+        let i = Intel::with("/helper".into(), fake.clone());
+        assert!(i.video_feature().available);
+        let a = i.video(Path::new("/c/a.mp4"), true, true, 60.0).unwrap();
+        assert_eq!(a.unavailable, None);
+        let w = a.watched.unwrap();
+        assert_eq!(w.keyframe, Some(3.0));
+        assert_eq!(w.highlights.unwrap().len(), 2);
+        let calls = fake.calls.lock().unwrap();
+        assert_eq!(calls.iter().filter(|c| c[0] == "caps").count(), 1);
+        assert_eq!(
+            calls[1],
+            ["video", "/c/a.mp4", "--highlights", "--keyframe"]
+        );
+    }
+
+    #[test]
+    fn video_analysis_is_unavailable_before_macos_27() {
+        let mut f = fake(&[]);
+        f.caps = r#"{"kind":"caps","helper":1,"os":"26.1","features":[{"name":"video","available":false,"min_os":"27.0","reason":"Video analysis on this Mac needs macOS 27 or later."}]}"#.into();
+        let f = Arc::new(f);
+        let i = Intel::with("/helper".into(), f.clone());
+        let a = i.video(Path::new("/a.mp4"), true, true, 10.0).unwrap();
+        assert!(a.unavailable.unwrap().contains("macOS 27"));
+        assert!(f.seen_files().is_empty(), "no video run on an older macOS");
+        // An older helper without the feature at all.
+        let mut f = fake(&[]);
+        f.caps = r#"{"kind":"caps","helper":1,"os":"27.0","features":[]}"#.into();
+        let i = Intel::with("/helper".into(), Arc::new(f));
+        assert!(!i.video_feature().available);
+        let none = Intel::unavailable("no helper");
+        assert_eq!(
+            none.video(Path::new("/a.mp4"), true, true, 1.0)
+                .unwrap()
+                .unavailable
+                .as_deref(),
+            Some("no helper")
+        );
+    }
+
+    /// The real helper on a synthetic clip. Runs only with `QUADCAM_INTEL=real` where the
+    /// helper was built and video analysis is available (macOS 27 or later); skips elsewhere.
+    #[test]
+    fn the_real_helper_analyses_a_clip() {
+        if std::env::var("QUADCAM_INTEL").as_deref() != Ok("real") {
+            eprintln!("skipped: QUADCAM_INTEL=real runs the real helper");
+            return;
+        }
+        let Some(helper) = locate() else {
+            eprintln!("skipped: no quadcam-intel beside the test binary");
+            return;
+        };
+        let i = Intel::with(helper, Arc::new(Process));
+        let f = i.video_feature();
+        if !f.available {
+            eprintln!("skipped: {}", f.reason.unwrap_or_default());
+            return;
+        }
+        let Ok(tools) = crate::media::find_tools() else {
+            eprintln!("skipped: no ffmpeg");
+            return;
+        };
+        let d = tempfile::tempdir().unwrap();
+        let clip = d.path().join("clip.mp4");
+        let made = std::process::Command::new(&tools.ffmpeg)
+            .args([
+                "-v",
+                "error",
+                "-f",
+                "lavfi",
+                "-i",
+                "testsrc=duration=6:size=320x240:rate=25",
+            ])
+            .args(["-pix_fmt", "yuv420p"])
+            .arg(&clip)
+            .status()
+            .unwrap();
+        assert!(made.success());
+        let a = i.video(&clip, true, true, 6.0).unwrap();
+        assert_eq!(a.unavailable, None);
+        let w = a.watched.unwrap();
+        assert_eq!(w.error, None, "{w:?}");
+        let k = w.keyframe.expect("a key frame");
+        assert!((0.0..=6.0).contains(&k), "{k}");
+        assert!(w.highlights.is_some(), "{w:?}");
+        assert!(!w.levels.is_empty(), "{w:?}");
     }
 
     #[test]

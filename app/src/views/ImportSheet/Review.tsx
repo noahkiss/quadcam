@@ -309,7 +309,7 @@ function sessionTrimModel(s: Session, c: Clip, p: ClipPlan): TrimModel {
     deadAir: c.signal?.dead_air || [],
     keep: c.signal?.keep || [],
     cuts,
-    hasLog: p.source === "log" || moments.length > 0,
+    hasLog: p.source === "log" || moments.some((m) => m.source === "radio_log"),
     logOffset: p.log_offset_s,
     logInterval: p.log_interval_s,
     flights: p.flight?.flight_spans.length ?? 0,

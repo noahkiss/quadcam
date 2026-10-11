@@ -34,7 +34,7 @@ func caps(locale: String) async {
     } else {
         asr.reason = "Speech recognition on this Mac needs macOS 26 or later."
     }
-    emit(Caps(features: [asr]))
+    emit(Caps(features: [asr, videoFeature()]))
 }
 
 struct Word: Encodable {

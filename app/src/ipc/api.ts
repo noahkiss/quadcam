@@ -69,6 +69,8 @@ export const api = {
   rebuild: () => ok(commands.libraryRebuild()),
   matchLogs: (apply: boolean, ids: string[] = []) => ok(commands.libraryMatchLogs({ ids, logs: null, day: null, apply })),
   rescan: (id: string) => ok(commands.libraryRescan({ id })),
+  analyzeVideo: (ids: string[], again = false) => ok(commands.libraryAnalyzeVideo({ ids, again })),
+  videoFeature: () => ok(commands.videoFeature()),
   libraryPreview: (id: string) => ok(commands.libraryPreview({ id })),
   strips: () => ok(commands.libraryStrips({})),
   cardStatus: (mount: string) => ok(commands.cardStatus({ mount })),

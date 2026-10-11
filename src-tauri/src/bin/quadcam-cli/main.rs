@@ -367,6 +367,15 @@ enum LibCmd {
         #[arg(long)]
         apply: bool,
     },
+    /// Find highlights and the key frame of clips with macOS video analysis (macOS 27 or
+    /// later), and write them into the clip files. Skips clips analysed already.
+    AnalyzeVideo {
+        /// Clip ids. Default: every clip.
+        ids: Vec<String>,
+        /// Analyse the clips again, even when they were analysed already.
+        #[arg(long)]
+        again: bool,
+    },
     /// Move clips, with their cuts and originals, to the Trash.
     Trash {
         #[arg(required = true)]
@@ -1351,6 +1360,10 @@ fn library(core: &Core, cmd: LibCmd) -> Result<Value> {
                 day,
                 apply,
             },
+        )?)?,
+        LibCmd::AnalyzeVideo { ids, again } => serde_json::to_value(call::library_analyze_video(
+            core,
+            quadcam_lib::core::VideoParams { ids, again },
         )?)?,
         LibCmd::Trash { ids } => {
             serde_json::to_value(call::library_trash(core, api::IdsParams { ids })?)?

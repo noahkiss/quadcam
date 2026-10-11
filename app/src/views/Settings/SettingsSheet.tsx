@@ -1,4 +1,4 @@
-import { useState, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { store, useStore } from "../../store";
 import { sel } from "../../store/settings";
 import type { SettingsSection } from "../../store/ui";
@@ -473,6 +473,7 @@ function ImportPane({ d, set }: { d: Draft; set: SetFn }) {
       <Checkbox label="Add the time to file names (radio-log dates only)" checked={d.addTime} onChange={(e) => set("addTime", e.target.checked)} />
       <Checkbox label="Delete clips after import" detail="Deletes each clip that verified from the card or folder. Other files stay." checked={d.deleteClips} onChange={(e) => set("deleteClips", e.target.checked)} />
       <Checkbox label="Join split recordings" detail="Imports a recording the DVR split into several files as one clip." checked={d.joinSplit} onChange={(e) => set("joinSplit", e.target.checked)} />
+      <VideoAnalysisBox d={d} set={set} />
       <h3>Log matching</h3>
       <div className={styles.row}>
         <TextField label="Segment gap (s)" type="number" min={1} step={1} value={d.segGap} onChange={(e) => set("segGap", e.target.value)} />
@@ -482,6 +483,19 @@ function ImportPane({ d, set }: { d: Draft; set: SetFn }) {
       </div>
     </section>
   );
+}
+
+/** The video analysis switch, and why this Mac cannot run it when it cannot. */
+function VideoAnalysisBox({ d, set }: { d: Draft; set: SetFn }) {
+  const [why, setWhy] = useState<string | null>(null);
+  useEffect(() => {
+    api
+      .videoFeature()
+      .then((f) => setWhy(f.available ? null : f.reason || "Video analysis is unavailable on this Mac."))
+      .catch(() => {});
+  }, []);
+  const what = "Marks highlights in clips without a radio log and picks each clip's poster frame, with macOS video analysis.";
+  return <Checkbox label="Find highlights in new clips" detail={why ? `${what} ${why}` : what} checked={d.videoAnalysis} onChange={(e) => set("videoAnalysis", e.target.checked)} />;
 }
 
 function AdvancedPane({ d, set }: { d: Draft; set: SetFn }) {

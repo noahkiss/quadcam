@@ -108,6 +108,7 @@ pub fn run_import(
                 .filter(|m| m.end > 0.0 && m.start < c.duration)
                 .cloned()
                 .collect::<Vec<_>>(),
+            c.video.as_ref(),
             c.signal.as_ref().map(|s| &s.keep[..]).unwrap_or(&[]),
             p.flight.as_ref(),
         );

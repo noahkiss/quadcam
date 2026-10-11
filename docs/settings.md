@@ -55,6 +55,10 @@ Nothing in an import turns the delete on while the setting is off. The import re
 
 On by default. QuadCam imports a recording that an analog DVR split into several files as one clip. Off, every file imports as a clip of its own. Each import, and each recording in the Review step, can choose otherwise. See [Joined recordings](library.md#joined-recordings). In the settings file it is `joinSplitRecordings`.
 
+### Find highlights in new clips
+
+On by default. On macOS 27 or later, QuadCam runs video analysis on each clip in the background after a card loads, and on clips an import added before it finished. It marks highlights on clips without a radio log and picks each clip's picture. See [Highlights from video analysis](moments-and-cuts.md#highlights-from-video-analysis). Off, nothing runs on its own; **Find highlights again** in the library and `quadcam-cli library analyze-video` still work. On an older macOS the setting changes nothing, and Settings says why. In the settings file it is `videoAnalysis`; on the command line and in MCP it is `video_analysis`.
+
 ### Updates
 
 On by default. QuadCam checks GitHub for a newer release about 30 seconds after it opens, then once a day while it runs. Off, it checks only when you select **QuadCam > Check for Updates…** or **Check now** in Settings > Advanced. In the settings file it is `updateCheck`; on the command line and in MCP it is `update_check`.

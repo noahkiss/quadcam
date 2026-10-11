@@ -432,6 +432,12 @@ impl Session {
             .map(|(c, p)| pipeline::DateInput::of(c, self.kind, p.meta.profile.as_deref()))
             .collect();
         let plan = pipeline::plan_dates_with(&inputs, log_dir, day, today, tun, profiles);
+        // Highlights stand in for log moments on a clip the logs did not match.
+        let video: std::collections::HashMap<usize, crate::highlights::VideoScan> = self
+            .clips
+            .iter()
+            .filter_map(|c| c.video.clone().map(|v| (c.id, v)))
+            .collect();
         let plans = self
             .plans
             .iter_mut()
@@ -448,6 +454,7 @@ impl Session {
                 .iter()
                 .map(|m| m.shifted(p.log_offset_s))
                 .collect();
+            p.moments = crate::highlights::merged(&p.moments, video.get(&p.id));
             p.log_interval_s = s.log_interval_s;
             p.log_model = s.log_model.clone();
             p.flight = s.flight.as_ref().map(|f| f.shifted(p.log_offset_s));
@@ -465,6 +472,26 @@ impl Session {
         self.log_day = plan.day_used;
         self.log_days = plan.log_days;
         self.date_warnings = plan.warnings;
+    }
+
+    /// Records what video analysis found in clip `id`: the clip keeps it, and its plan shows
+    /// the highlights when it has no radio-log moments. `thumb`, a picture of the key frame,
+    /// replaces the clip's thumbnail.
+    pub fn set_video(
+        &mut self,
+        id: usize,
+        scan: crate::highlights::VideoScan,
+        thumb: Option<PathBuf>,
+    ) {
+        if let Some(c) = self.clips.iter_mut().find(|c| c.id == id) {
+            if thumb.is_some() {
+                c.thumb = thumb;
+            }
+            c.video = Some(scan.clone());
+        }
+        if let Some(p) = self.plans.iter_mut().find(|p| p.id == id) {
+            p.moments = crate::highlights::merged(&p.moments, Some(&scan));
+        }
     }
 
     pub fn plan_mut(&mut self, id: usize) -> Result<&mut ClipPlan> {
@@ -603,7 +630,18 @@ impl Session {
             }
             if let Some(o) = patch.log_offset_s {
                 let by = o - p.log_offset_s;
-                p.moments = p.moments.iter().map(|m| m.shifted(by)).collect();
+                // Only radio-log moments follow the log; highlights are the clip's own.
+                p.moments = p
+                    .moments
+                    .iter()
+                    .map(|m| {
+                        if m.source == crate::moments::Source::RadioLog {
+                            m.shifted(by)
+                        } else {
+                            m.clone()
+                        }
+                    })
+                    .collect();
                 p.flight = p.flight.as_ref().map(|f| f.shifted(by));
                 p.log_offset_s = o;
             }
@@ -748,6 +786,7 @@ mod tests {
             thumb: None,
             detail: String::new(),
             signal: None,
+            video: None,
             key: String::new(),
             kind: Default::default(),
             clock: None,

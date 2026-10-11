@@ -127,6 +127,7 @@ Right-click a clip for these commands:
 | Add to *album* (shown when Settings names a Photos album) | |
 | Show in Finder | Command-R |
 | Find dead air again | |
+| Find highlights again (macOS 27; see [Highlights](moments-and-cuts.md#highlights-from-video-analysis)) | |
 | Move to Trash | Command-Delete |
 
 Move to Trash takes the clip's cuts and kept original with it.

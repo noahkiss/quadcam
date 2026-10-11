@@ -3,7 +3,7 @@ import { Button } from "../Button";
 import { Kbd, AgentBadge } from "../Chip";
 import { Icon } from "../Icon";
 import { fmtT, parseT } from "../../lib/format";
-import { KIND, KIND_ICON } from "../../views/Library/moments";
+import { KIND, KIND_ICON, SOURCE } from "../../views/Library/moments";
 import { dragPoint, frameMoment, rulerStep } from "./model";
 import type { Trim } from "./useTrim";
 import styles from "./TrimEditor.module.css";
@@ -176,7 +176,7 @@ export function TrimEditor({ trim, strip }: { trim: Trim; strip?: string }) {
                 type="button"
                 className={[styles.mark, m.score < 0.5 && styles.low].filter(Boolean).join(" ")}
                 style={{ left: pct(m.start) }}
-                title={`${KIND[m.kind]} at ${fmtT(m.start)} · score ${Math.round(m.score * 100)} %`}
+                title={`${KIND[m.kind]} at ${fmtT(m.start)} · score ${Math.round(m.score * 100)} % · ${SOURCE[m.source]}`}
                 aria-label={`${KIND[m.kind]} at ${fmtT(m.start)}`}
                 onClick={() => trim.frame(m)}
               >
@@ -340,6 +340,7 @@ export function MomentList({ trim }: { trim: Trim }) {
                 <button type="button" className={styles.momentName} onClick={() => trim.frame(m)}>
                   {KIND[m.kind]}
                 </button>
+                <span className={styles.momentSource}>{SOURCE[m.source]}</span>
                 <span className={styles.score} title={`Score ${m.score.toFixed(2)}`} aria-hidden="true">
                   <span style={{ width: `${Math.round(m.score * 100)}%` }} />
                 </span>

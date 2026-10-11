@@ -45,7 +45,8 @@ expression: session
       "stage_error": null,
       "staged": "$TMP/cache/staging/$STAMP/PICT0001.AVI",
       "status": "ok",
-      "thumb": "$TMP/cache/thumbs/PICT0001-$HASH.jpg"
+      "thumb": "$TMP/cache/thumbs/PICT0001-$HASH.jpg",
+      "video": null
     },
     {
       "card_path": "$TMP/card/DCIM/PICT0002.AVI",
@@ -85,7 +86,8 @@ expression: session
       "stage_error": null,
       "staged": "$TMP/cache/staging/$STAMP/PICT0002.AVI",
       "status": "ok",
-      "thumb": "$TMP/cache/thumbs/PICT0002-$HASH.jpg"
+      "thumb": "$TMP/cache/thumbs/PICT0002-$HASH.jpg",
+      "video": null
     },
     {
       "card_path": "$TMP/card/DCIM/PICT0003.AVI",
@@ -108,7 +110,8 @@ expression: session
       "stage_error": null,
       "staged": "$TMP/cache/staging/$STAMP/PICT0003.AVI",
       "status": "empty",
-      "thumb": null
+      "thumb": null,
+      "video": null
     }
   ],
   "date_warnings": [],

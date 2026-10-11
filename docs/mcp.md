@@ -44,7 +44,7 @@ The server has 19 tools.
 |---|---|
 | `quadcam_library` | Lists and searches the clips already in the library (read-only) |
 | `quadcam_library_edit` | Changes library clips: rating, flag, name, note, keywords, author, place, aircraft, date, time |
-| `quadcam_library_files` | Sets and writes cuts, adds one cut per radio-log flight (`split_by_flight`), moves clips to the Trash (`removed_cuts` is `keep` or `trash` when a change drops exported cuts), adds them to Photos, rebuilds the index, renames clips to the file-name date format, matches radio logs to library clips |
+| `quadcam_library_files` | Sets and writes cuts, adds one cut per radio-log flight (`split_by_flight`), moves clips to the Trash (`removed_cuts` is `keep` or `trash` when a change drops exported cuts), adds them to Photos, rebuilds the index, renames clips to the file-name date format, matches radio logs to library clips, finds highlights and the key frame with macOS video analysis (`analyze_video`, `again`) |
 
 **Setup:**
 

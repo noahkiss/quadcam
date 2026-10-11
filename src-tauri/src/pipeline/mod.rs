@@ -49,6 +49,10 @@ pub struct Clip {
     /// Dead air found in the clip's frames, and the ranges worth keeping.
     #[serde(default)]
     pub signal: Option<SignalScan>,
+    /// Highlights and the key frame from macOS video analysis, once the background job
+    /// analysed the clip (`Core::analyse_video`).
+    #[serde(default)]
+    pub video: Option<crate::highlights::VideoScan>,
     /// Content fingerprint (see `fingerprint`). Names the clip's cached thumbnail and
     /// preview, since DVRs reuse file names: the Echo restarts at PICT0001 after a format.
     #[serde(default)]
@@ -187,6 +191,7 @@ pub fn stage_found(
             thumb: None,
             detail: String::new(),
             signal: None,
+            video: None,
             key: String::new(),
             kind,
             clock: None,

@@ -133,6 +133,20 @@ export async function rescan(id: string) {
   }
 }
 
+/** Runs video analysis on clips again: highlights and the key frame. */
+export async function findHighlights(ids: string[]) {
+  try {
+    const r = await api.analyzeVideo(ids, true);
+    if (r.unavailable) return toast(r.unavailable, true);
+    const failed = r.clips.filter((c) => c.error);
+    if (failed.length) return toast(failed.map((c) => c.error).join(" "), true);
+    const n = r.clips.reduce((a, c) => a + c.highlights, 0);
+    toast(n === 1 ? "1 highlight found." : `${n} highlights found.`);
+  } catch (e) {
+    toast(errText(e), true);
+  }
+}
+
 export function revealClip(id: string) {
   const c = libClip(S(), id);
   if (c) reveal(c.file).catch((e) => toast(errText(e), true));

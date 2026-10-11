@@ -434,6 +434,7 @@ mod tests {
             thumb: None,
             detail: String::new(),
             signal: None,
+            video: None,
             key: format!("k{id}"),
             kind: SourceKind::Analog,
             clock: None,

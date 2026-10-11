@@ -25,10 +25,11 @@ In the library, open a clip and use its **Details** tab. See [The library](libra
 | Software | `com.apple.quicktime.software` | `QuadCam <version>` |
 | Title, description, comment | `com.apple.quicktime.title`, `.description`, `.comment` | The short name, the source file and date source (`DVR PICT0001.AVI; date source: radio log`, `DJI DJI_20261004183012_0001_D.MP4; date source: clip clock`), the note |
 | Author | `com.apple.quicktime.author` | The clip, else the profile |
-| Keywords | `com.apple.quicktime.keywords` | `FPV`, the profile's, the clip's, and the moment kinds found (roll, flip, punch-out, dive) |
+| Keywords | `com.apple.quicktime.keywords` | `FPV`, the profile's, the clip's, and the radio-log moment kinds found (roll, flip, punch-out, dive) |
 | Aircraft, video system | `app.quadcam.aircraft`, `app.quadcam.video_system` | The profile |
 | Flight numbers | `app.quadcam.flight`, `app.quadcam.stats` | The matched radio log: armed time, flights and each flight's time in the clip, lowest receiver voltage, link quality and RSSI, highest throttle. QuadCam 0.6.4 and earlier wrote `packs` and `pack_spans` here; QuadCam still reads them |
 | Library | `app.quadcam.source`, `.dvr`, `.parts`, `.import`, `.place`, `.profile`, `.moments`, `.keep`, `.cut` | The source file's content fingerprint and file name, the later files of a [joined recording](library.md#joined-recordings), the import, the place and aircraft names, the radio-log moments, the keep ranges, a cut's range |
+| Video analysis | `app.quadcam.video` | The highlights and key frame from [video analysis](moments-and-cuts.md#highlights-from-video-analysis), as JSON (`{"v":1,"k":22.0,"h":[[start,end,score],...]}`). Present once a clip was analysed, even when nothing was found. Kept apart from `.moments`, so older QuadCam versions still read the radio-log moments |
 | Rating, flag, Photos | `app.quadcam.rating`, `.flag`, `.photos` | Set in the library |
 | Time source | `app.quadcam.time` | `log`, `clip` (the DJI clip clock) or `manual` when the clip has a time of day. Without one, QuadCam shows no time (the creation date holds noon) |
 

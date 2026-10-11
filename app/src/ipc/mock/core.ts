@@ -3,6 +3,7 @@
 // `session-changed`, `settings-changed`, progress). Shapes follow the recorded fixtures;
 // behaviour follows `Core` closely enough for the parity specs.
 import type {
+  Moment,
   ModuleStatus,
   ClipPlan,
   ClipResult,
@@ -43,7 +44,7 @@ import { live as liveOf } from "../../lib/controls";
 /** `Core::dispatch` methods, each also a typed Tauri command of the same name. */
 const DISPATCH = new Set([
   "library", "library_rate", "library_edit", "library_rename", "library_cuts", "library_export_cuts", "library_trash", "library_untrash",
-  "library_photos", "library_apply_name_format", "library_match_logs", "library_rebuild", "library_rescan", "library_preview", "library_strips", "card_status",
+  "library_photos", "library_apply_name_format", "library_match_logs", "library_rebuild", "library_rescan", "library_analyze_video", "video_feature", "library_preview", "library_strips", "card_status",
   "settings", "settings_set", "place_search", "place_save", "session_cuts", "profiles", "profile_save", "session_split", "library_split",
   "modules", "module_install", "module_remove", "modules_check", "gear_osd", "gear_osd_edit", "gear_model", "gear_model_edit", "gear_voice", "gear_voice_edit", "gear_voice_preview", "gear_voice_render", "gear_voice_key", "gear_voice_sets", "gear_voice_catalog", "gear_voice_estimate", "gear_voice_sample", "gear_voice_import_takes", "gear_voice_check", "gear_voice_pack_install", "gear_voice_choose", "gear_voice_choose_radios", "gear_voice_pack_delete", "gear_rates", "gear_rates_preview", "gear_sims", "gear_sim_sync_plan", "gear_sim_sync", "gear_sim_restore_plan", "gear_sim_restore", "gear_radio_cli", "gear_dfu_link", "gear_firmware", "gear_firmware_read", "gear_splash", "gear_flash_plan", "gear_flash", "gear_elrs", "gear_elrs_read", "gear_elrs_flash_plan", "gear_elrs_flash",
   "gear_status", "gear_devices", "gear_device_save", "gear_device_forget", "gear_dismiss_reminder", "gear_poll_pause",
@@ -64,6 +65,8 @@ export interface MockOptions {
   latency?: number;
   /** Settings file values to start with. */
   settings?: Record<string, unknown>;
+  /** Video analysis runs here (macOS 27 or later). */
+  video?: boolean;
 }
 
 export type Emit = (event: string, payload?: unknown) => void;
@@ -73,6 +76,7 @@ export interface Call {
   args: Record<string, unknown>;
 }
 
+const VIDEO_OFF = "Video analysis on this Mac needs macOS 27 or later.";
 const sameSpan = (a: Span, b: Span) => Math.abs(a.start - b.start) < 0.001 && Math.abs(a.end - b.end) < 0.001;
 const base = (p: string) => p.split("/").pop() || p;
 const dirOf = (p: string) => p.split("/").slice(0, -1).join("/");
@@ -86,6 +90,9 @@ export class MockCore {
   initialValues: SettingsView["values"];
   volumes: Volume[];
   tools = true;
+  /** Video analysis runs here (macOS 27 or later). Off by default, like an older macOS, so
+   * the recorded library keeps its moments; a spec turns it on. */
+  videoAvailable = false;
   modules: ModuleStatus[] = seed.modules();
   gear: gear.MockGear = gear.quietGear();
   /** The Gear seed helpers, for specs (`core.gearSeed.radioConnected()`). */
@@ -128,6 +135,7 @@ export class MockCore {
     if (sc === "many") this.lib = seed.recount(manyClips(this.lib));
     this.settings = seed.settings();
     Object.assign(this.settings.values, opts.settings);
+    this.videoAvailable = !!opts.video;
     this.initialValues = structuredClone(this.settings.values);
     this.volumes = sc === "card" || sc === "finished-card" ? [seed.cardVolume()] : [];
     this.session = null;
@@ -296,6 +304,10 @@ export class MockCore {
         return { clips: this.lib.clips.length, cuts: this.lib.clips.reduce((a, c) => a + c.cuts.length, 0), problems: [] };
       case "library_rescan":
         return this.clip(String(p.id));
+      case "library_analyze_video":
+        return this.analyzeVideo((p.ids as string[]) || [], !!p.again);
+      case "video_feature":
+        return { name: "video", available: this.videoAvailable, min_os: "27.0", reason: this.videoAvailable ? null : VIDEO_OFF, locale: null, assets: null };
       case "library_preview":
         this.clip(String(p.id));
         return seed.PREVIEW;
@@ -992,6 +1004,27 @@ export class MockCore {
     return { added, failed: [], album: album || null };
   }
 
+  /** Video analysis: one highlight of up to 10 s from a quarter in (at most 4 s), and the
+   * key frame at the start of it, per clip. */
+  analyzeVideo(ids: string[], again: boolean) {
+    if (!this.videoAvailable) return { unavailable: VIDEO_OFF, clips: [] };
+    for (const id of ids) this.clip(id);
+    const todo = this.lib.clips.filter((c) => !c.cut_of && (!ids.length || ids.includes(c.id)) && (again || !c.video));
+    const clips = todo.map((c, i) => {
+      this.emit("library-task", { task: "video", done: i, total: todo.length });
+      const start = Math.min(4, c.duration / 4);
+      const highlights: Moment[] = [{ kind: "highlight", start, end: Math.min(c.duration, start + 10), score: 0.8, source: "video_analysis", detail: "video analysis, level 6.0 of 8" }];
+      c.video = { highlights, key_frame: start };
+      if (!c.moments.some((m) => m.source === "radio_log")) c.moments = [...c.moments.filter((m) => m.source !== "video_analysis"), ...highlights];
+      return { id: c.id, path: c.path, highlights: 1, key_frame: start, cached: false, error: null };
+    });
+    if (todo.length) {
+      this.emit("library-task", { task: "video", done: todo.length, total: todo.length });
+      this.libraryChanged();
+    }
+    return { unavailable: null, clips };
+  }
+
   strips() {
     const todo = this.lib.clips.filter((c) => !c.strip && !c.poster && !c.no_picture);
     todo.forEach((c, i) => {
@@ -1217,7 +1250,7 @@ export class MockCore {
         id: c.key || `k${p.id}`, path: output.slice(opts.output_dir.length + 1), title: p.name, note: p.note, date: p.date, time: p.time ? p.time.slice(0, 5) : null,
         duration: c.duration, size: r.size, rating: 0, flag: "none", place: loc?.name || null, location: loc || null, aircraft: p.meta.profile || (this.settings.values.defaultProfile as string) || null,
         keywords: ["FPV", ...p.meta.keywords], author: p.meta.author, moments: p.moments, keep: c.signal?.keep || [], stats: p.flight, cuts: cuts.map((k) => ({ path: k.output.slice(opts.output_dir.length + 1), start: k.start, end: k.end, size: k.size })),
-        pending_cuts: [], in_photos: false, original: null, aliases: [], parts: (c.join?.on ? c.join.parts : []).map((id) => { const x = s.clips.find((y) => y.id === id)!; return { source: x.key, dvr: x.name }; }), dvr: c.name, import: "20261001-120000", cut_of: null, name: p.name || defaultName, file: output, strip: null, poster: null, no_picture: false, last_import: true,
+        pending_cuts: [], in_photos: false, original: null, aliases: [], parts: (c.join?.on ? c.join.parts : []).map((id) => { const x = s.clips.find((y) => y.id === id)!; return { source: x.key, dvr: x.name }; }), dvr: c.name, import: "20261001-120000", cut_of: null, name: p.name || defaultName, file: output, strip: null, poster: null, cover: null, video: c.video ?? null, no_picture: false, last_import: true,
       });
     }
     this.lib.last_import = "20261001-120000";

@@ -277,6 +277,7 @@ export interface SettingsValues {
   addTime?: boolean;
   deleteClipsAfterImport?: boolean;
   joinSplitRecordings?: boolean;
+  videoAnalysis?: boolean;
   defaultName?: string;
   photosAlbum?: string;
   formatLabel?: string;

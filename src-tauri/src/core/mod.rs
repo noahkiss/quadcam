@@ -46,6 +46,7 @@ mod sim_restore;
 mod sim_sync;
 mod switchmap;
 mod update;
+mod video;
 mod voice;
 mod voice_check;
 mod voice_studio;
@@ -108,6 +109,7 @@ pub use sim_host::{
 pub use sim_restore::{SimRestoreParams, SimRestoreRequest};
 pub use switchmap::{RadioParams, RadioWatchParams, SwitchMapParams};
 pub use update::{notes_url, restart_blocker, UpdatePhase, UpdateStatus};
+pub use video::{VideoClip, VideoParams, VideoReport};
 pub use voice::{
     report_text as voice_report_text, view_text as voice_view_text, BuildPackParams, EditCost,
     LineOverride, PackDeleteParams, PackDeleteReport, PackInstallParams, PackOverride,
@@ -157,7 +159,8 @@ pub trait Hooks: Send + Sync {
     fn library_changed(&self) {}
     /// The settings file changed (profiles, places, preferences). The GUI re-reads it.
     fn settings_changed(&self) {}
-    /// The session's clips were analysed. The GUI starts making their previews.
+    /// The session's clips were analysed. The GUI starts making their previews and runs
+    /// video analysis (`Core::analyse_video`).
     fn analysed(&self) {}
     /// `gear.json` changed (devices, links). The GUI re-reads Gear.
     fn gear_changed(&self) {}
