@@ -5,6 +5,10 @@ User-facing changes in each release, newest first. Release notes on
 
 ## Unreleased
 
+- **A native window on macOS 26 and later.** The sidebar sits on Liquid Glass and runs the window's full height, with the window buttons over it. The toolbar spans the content beside it, and you drag the window by the toolbar or the strip above the sidebar. Focus rings take the system accent color. macOS 13 to 15 keep the standard title bar.
+- **Pop-up menus** such as **Sort by** open as a list drawn like the app's other menus, with a check beside the current choice, where the system's web view supports it (macOS 27). Elsewhere they open the system menu.
+- **For developers:** `src-tauri/src/glass.rs` sets up the window chrome; `html[data-glass]` marks the page for it. `e2e/glass.spec.ts` covers both layouts. `docs/development.md` "Window chrome and theme" describes it.
+
 ## 0.15.0 (2026-10-11)
 
 - **Connected as a dashboard.** Tiles count the devices plugged in, the ones that need attention, the ones working and the changes staged for them. Each device is a card with its state and its next step: **Save…**, **Review…** or **Import…**.

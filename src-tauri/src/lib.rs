@@ -9,6 +9,7 @@ pub mod cuts;
 pub mod disk;
 pub mod gear;
 pub mod geocode;
+pub mod glass;
 pub mod identity;
 pub mod join;
 pub mod library;
@@ -497,7 +498,10 @@ fn no_focus() -> bool {
 /// Makes the main window from its config. With `QUADCAM_NO_FOCUS` it opens unfocused, below
 /// other windows, and keeps rendering there so `screencapture -l` sees it.
 fn main_window(app: &AppHandle) -> tauri::Result<()> {
-    let mut builder = tauri::WebviewWindowBuilder::from_config(app, &app.config().app.windows[0])?;
+    let mut builder = glass::configure(tauri::WebviewWindowBuilder::from_config(
+        app,
+        &app.config().app.windows[0],
+    )?);
     if no_focus() {
         app.set_activation_policy(tauri::ActivationPolicy::Accessory)?;
         builder = builder
@@ -506,6 +510,7 @@ fn main_window(app: &AppHandle) -> tauri::Result<()> {
             .background_throttling(tauri::utils::config::BackgroundThrottlingPolicy::Disabled);
     }
     let window = builder.build()?;
+    glass::install(&window);
     dev_eval(app, window);
     Ok(())
 }

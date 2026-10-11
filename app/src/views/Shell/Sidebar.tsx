@@ -73,6 +73,7 @@ export function Sidebar() {
   const n = (fn: (c: (typeof clips)[number]) => boolean) => clips.filter(fn).length;
   return (
     <nav aria-label="Library" className={styles.side}>
+      <div className={styles.lights} data-tauri-drag-region />
       <div className={styles.groups}>
         <Group title="Library">
           <Item icon="film" tint="blue" label="All clips" count={clips.length} current={cur({ group: "all" })} onClick={go({ group: "all" })} />

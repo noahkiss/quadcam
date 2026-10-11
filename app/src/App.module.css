@@ -1,20 +1,48 @@
+/* The window's frame: toolbar, banners, sidebar, content, status bar. With the glass chrome
+   (macOS 26 and later) the sidebar runs the full height under the traffic lights, and the
+   toolbar and status bar span the content column only, as in an AppKit sidebar window. */
 .app {
   height: 100%;
-  display: flex;
-  flex-direction: column;
+  display: grid;
+  grid-template-columns: var(--sidebar-w) minmax(0, 1fr);
+  grid-template-rows: auto auto minmax(0, 1fr) auto;
+  grid-template-areas:
+    "bar bar"
+    "banners banners"
+    "side main"
+    "status status";
+}
+:global([data-glass]) .app {
+  grid-template-areas:
+    "side bar"
+    "side banners"
+    "side main"
+    "side status";
+}
+.app > header {
+  grid-area: bar;
+}
+.app > nav {
+  grid-area: side;
+}
+.app > footer {
+  grid-area: status;
+}
+.banners {
+  grid-area: banners;
+  min-width: 0;
+}
+:global([data-glass]) .banners {
+  background: var(--bg);
 }
 .banner {
   padding: var(--s-2) var(--s-4) 0;
 }
-.body {
-  flex: 1;
-  min-height: 0;
-  display: flex;
-}
 .main {
-  flex: 1;
+  grid-area: main;
   min-width: 0;
   display: flex;
   flex-direction: column;
   min-height: 0;
+  background: var(--bg);
 }

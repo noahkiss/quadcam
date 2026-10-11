@@ -73,6 +73,11 @@
   --t-lg: 15px;
   --t-xl: 18px;
 
+  /* The window frame. `src-tauri/src/glass.rs` uses the same sizes for the glass and the
+     traffic lights. */
+  --sidebar-w: 232px;
+  --bar-h: 52px;
+
   --control-h: 32px;
   --control-h-sm: 28px;
 

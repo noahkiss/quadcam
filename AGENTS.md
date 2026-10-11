@@ -129,6 +129,9 @@ scripts/make-fixtures.sh                   # re-record the mock core's data (nee
   Gear pages follow one dashboard pattern (`components/dash/`: `PageHeader`, `StatRow`,
   `SectionCard`, `DataTable`, `FactList`, `StatusDot`, `Badge`, `EmptyState`, `MoreMenu`);
   `docs/development.md` "How to build a dashboard page" describes it.
+  On macOS 26 and later `src-tauri/src/glass.rs` gives the window an overlay title bar and a
+  glass sidebar, and `html[data-glass]` lays the page out for it (`docs/development.md`
+  "Window chrome and theme").
   Every axe spec loops over `axeSchemes` (`e2e/fixtures.ts`); `QC_AXE_THEMES=dark` limits them
   to one theme, as CI does on a branch (main and tags run both).
 - **Dev in a browser:** `pnpm dev`, then `http://localhost:4719/?mock=<scenario>` (your `QUADCAM_DEV_PORT` instead of 4719) runs the

@@ -71,6 +71,17 @@ for (const scheme of ["dark", "light"] as const) {
       await page.screenshot({ path: shot("gear-blackbox") });
     });
 
+    // The layout under the macOS 26 glass chrome; the glass itself is native, so the
+    // sidebar shows the page's clear background here.
+    test("glass", async ({ app, page }) => {
+      await page.addInitScript(() => (window.__QUADCAM_GLASS__ = true));
+      await app.open();
+      await expect(page.getByRole("article").first()).toBeVisible();
+      await page.mouse.move(10, 10);
+      await page.waitForTimeout(300);
+      await page.screenshot({ path: shot("glass-library") });
+    });
+
     test("first run", async ({ app, page }) => {
       await app.open("empty");
       await expect(page.getByRole("heading", { name: "Import your first flights" })).toBeVisible();
