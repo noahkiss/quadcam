@@ -5,6 +5,8 @@ User-facing changes in each release, newest first. Release notes on
 
 ## Unreleased
 
+## 0.12.0 (2026-10-11)
+
 - **Sim sync:** two profiles in one sim file (for example two Liftoff profiles) now sync together. Before, the second write put the first profile back to its old rates.
 - **Sim sync plan:** the check "Rewrites unchanged" is now "Reads back as written", which is what it checked.
 - **Import card:** the unmount after an import, a later card step and **Safe to remove** find the card by its volume UUID first. If the card was pulled and another disk took its disk number, QuadCam leaves that disk alone.
