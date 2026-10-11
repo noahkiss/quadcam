@@ -119,17 +119,13 @@ export function FirmwarePage() {
         </Banner>
       ))}
       {view && (
-        // A block wrapper: the page frame is a flex column that would squeeze the table's
-        // scroll box to no height once the page scrolls.
-        <div>
-          <DataTable
-            label="Firmware"
-            columns={columns}
-            rows={devices}
-            rowKey={(d) => d.device}
-            empty={<EmptyState icon="upload-minimalistic">No saved device runs firmware QuadCam checks.</EmptyState>}
-          />
-        </div>
+        <DataTable
+          label="Firmware"
+          columns={columns}
+          rows={devices}
+          rowKey={(d) => d.device}
+          empty={<EmptyState icon="upload-minimalistic">No saved device runs firmware QuadCam checks.</EmptyState>}
+        />
       )}
       <ElrsSection />
       <ReadFirmware radios={devices.filter((d) => d.kind === "radio")} />
