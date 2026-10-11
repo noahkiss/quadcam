@@ -11,6 +11,10 @@
   max-width: 960px;
   width: 100%;
 }
+/* The page scrolls, so its children keep their height instead of shrinking to fit. */
+.page > * {
+  flex-shrink: 0;
+}
 .page > [role="group"] {
   align-self: flex-start;
 }

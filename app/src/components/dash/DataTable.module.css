@@ -1,4 +1,6 @@
 .wrap {
+  /* overflow-x makes the min-height 0: keep the height in a flex column. */
+  flex-shrink: 0;
   overflow-x: auto;
   container-type: inline-size;
   min-width: 0;
