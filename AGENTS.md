@@ -163,15 +163,12 @@ GitHub (`noahkiss/quadcam`, public) is the only remote. Users install the cask
 5. Watch it: `gh run watch -R noahkiss/quadcam --exit-status`. Re-run for an existing tag with
    `gh workflow run release.yml -R noahkiss/quadcam --ref vX.Y.Z -f tag=vX.Y.Z`.
 
-- **The CI wait:** the push of main and the tag starts new `ci.yml` runs on the tagged commit
-  (full suite, axe in both themes, never cancelled), and the release waits for the newest
-  one. It runs beside the build. The branch run already proved the commit, so a red tag run
-  means a main-only check (the second axe theme) or a flake, not an untested change.
-- **Residual:** `release-attach` (`noahkiss/workflows`) reads `gh run list --commit <sha>
-  --limit 1`: only the newest run on the sha counts, whatever pushed it. A later run on that
-  sha (a re-run, or another branch pushed at that commit, which is cancellable and may skip
-  the slow tests) becomes the one the release judges. Push nothing else at the tagged commit
-  until the zip is attached. The fix (judge every run on the sha) belongs in that repo.
+- **The CI wait:** `release-attach` (`noahkiss/workflows`) accepts any green `ci.yml` run on
+  the tagged commit, so the release branch's green run counts and the release does not wait
+  for the runs that the push of main and the tag start. It fails only when every run on the
+  commit ended without success. The tag run (full suite, axe in both themes, never
+  cancelled) still runs; the branch run already proved the commit, so a red tag run means a
+  main-only check (the second axe theme) or a flake, not an untested change.
 
 - **Signing:** `release.yml`'s own job names the `release` environment and runs the composite
   actions `tauri-macos-build`, `macos-sign-notarize` and `release-attach` from `noahkiss/workflows`.

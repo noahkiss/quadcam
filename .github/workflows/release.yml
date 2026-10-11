@@ -67,14 +67,14 @@ jobs:
           ref: ${{ inputs.tag || github.ref }}
 
       - id: build
-        uses: noahkiss/workflows/actions/tauri-macos-build@4fb66c6b16bcd4ca940eeb0eac1a209fb721198f # updater-artifacts (noahkiss/workflows#5)
+        uses: noahkiss/workflows/actions/tauri-macos-build@dff600318cd6c3077c8b4d6aa6408a33b1d1412a # main after noahkiss/workflows#5 (updater files; any green CI run counts)
         with:
           tag: ${{ inputs.tag }}
           app-name: QuadCam
           asset-prefix: quadcam
           brew-packages: ffmpeg
 
-      - uses: noahkiss/workflows/actions/macos-sign-notarize@4fb66c6b16bcd4ca940eeb0eac1a209fb721198f # updater-artifacts (noahkiss/workflows#5)
+      - uses: noahkiss/workflows/actions/macos-sign-notarize@dff600318cd6c3077c8b4d6aa6408a33b1d1412a # main after noahkiss/workflows#5 (updater files; any green CI run counts)
         with:
           path: ${{ steps.build.outputs.app }}
           identity: 'Developer ID Application: NKMK Digital Co. (2Z88BYP37C)'
@@ -86,7 +86,7 @@ jobs:
           notary-key-id: ${{ secrets.ASC_KEY_ID }}
           notary-issuer-id: ${{ secrets.ASC_ISSUER_ID }}
 
-      - uses: noahkiss/workflows/actions/release-attach@4fb66c6b16bcd4ca940eeb0eac1a209fb721198f # updater-artifacts (noahkiss/workflows#5)
+      - uses: noahkiss/workflows/actions/release-attach@dff600318cd6c3077c8b4d6aa6408a33b1d1412a # main after noahkiss/workflows#5 (updater files; any green CI run counts)
         with:
           path: ${{ steps.build.outputs.app }}
           tag: ${{ steps.build.outputs.tag }}

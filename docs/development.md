@@ -163,8 +163,8 @@ Users install the Homebrew cask `noahkiss/tap/quadcam`. A release is a pushed ta
    - It checks that both manifests state the tag's version.
    - It builds `QuadCam.app` on an Apple Silicon runner (`macos-26`) with the prebuilt Tauri CLI from `app/`.
    - It signs, notarizes and staples the app (see [Signing](#signing)).
-   - It waits for a green CI run on the tagged commit: the newest run on that commit, which the push of `main` and the tag starts beside the build. It does not run the tests itself. If CI fails, or does not finish within 40 minutes, there is no release.
-   - It zips the app as `quadcam-X.Y.Z-arm64.zip` and attaches the zip to the GitHub Release.
+   - It waits for a green CI run on the tagged commit. Any green run counts, so the release branch's run passes it at once. It does not run the tests itself. If every run on the commit fails, or none passes within 40 minutes, there is no release.
+   - It zips the app as `quadcam-X.Y.Z-arm64.zip` and attaches the zip to the GitHub Release, with the in-app updater's files: `quadcam-X.Y.Z-arm64.app.tar.gz`, its `.sig` and `latest.json`.
    - It starts the tap's `bump.yml`. That workflow rewrites `Casks/quadcam.rb`, installs the cask on macOS, and commits.
 4. Watch it with `gh run watch -R noahkiss/quadcam --exit-status`.
 
