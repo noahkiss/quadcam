@@ -320,16 +320,26 @@ fn a_sample_waits_for_confirm_then_writes_one_wav_per_voice_model_and_line() {
 #[test]
 fn a_recorded_character_count_replaces_the_estimate() {
     let b = bench(50000, true);
-    // The header says each character billed a quarter credit on v4, not one.
+    // The header says each character billed a quarter credit on v4, far from its one credit:
+    // logged, not kept.
     b.http.bill(0.25);
     let before = estimate(&b, &["sample"], "eleven_v4").unwrap();
     assert_eq!(before.estimate.credits_basis, "estimated");
     paid_sample(&b, sample(&["Callum"], &["eleven_v4"], false, true));
-    // Other batches (another set) are priced at the recorded rate.
+    let after = estimate(&b, &["quad"], "eleven_v4").unwrap();
+    assert_eq!(after.estimate.credits_basis, "estimated");
+    let log = std::fs::read_to_string(b.dir.path().join("cache/voice/charcost.log")).unwrap();
+    assert!(
+        log.contains("eleven_v4: billed") && log.contains("not kept"),
+        "{log}"
+    );
+    // Close to its multiplier: kept, and other batches (another set) are priced at it.
+    b.http.bill(0.97);
+    paid_sample(&b, sample(&["Matilda"], &["eleven_v4"], false, true));
     let after = estimate(&b, &["quad"], "eleven_v4").unwrap();
     assert_eq!(after.estimate.credits_basis, "recorded");
-    assert!((after.estimate.cost_per_char - 0.25).abs() < 0.01);
-    assert!(after.estimate.credits < after.estimate.chars / 3);
+    assert!((after.estimate.cost_per_char - 0.97).abs() < 0.01);
+    assert!(after.estimate.credits < after.estimate.chars);
     let text = quadcam_lib::core::voice_estimate_text(&after.estimate);
     assert!(text.contains("recorded rate"), "{text}");
     // Another model keeps its estimate.
@@ -438,7 +448,14 @@ fn a_set_renders_into_a_local_pack_and_recutting_costs_nothing() {
     let mut go = render("Callum", "eleven_turbo_v2_5", &["quad"], false, true);
     go.digest = Some(wait.digest.clone());
     let r = b.core.gear_voice_render(&go).unwrap();
-    assert_eq!(r.pack, "local-elevenlabs-callum-eleven-turbo-v2-5");
+    // The pack is named by the voice id, not the voice's name.
+    assert_eq!(
+        r.pack,
+        format!(
+            "local-elevenlabs-{}-eleven-turbo-v2-5",
+            &quadcam_lib::gear::voice::sha256_hex(b"v-callum")[..12]
+        )
+    );
     assert!(r.rendered > 0 && !r.needs_confirm, "{r:?}");
     let posts = b.http.posts();
     assert_eq!(posts as u32, r.rendered);
@@ -803,4 +820,89 @@ fn a_flagged_line_stays_out_of_the_pack_until_a_re_take_redoes_its_batch() {
         .unwrap()
         .iter()
         .any(|f| f == "SOUNDS/en/critbat.wav"));
+}
+
+#[test]
+fn a_pack_named_for_its_voice_moves_to_the_voice_id_and_keeps_its_radios() {
+    let b = bench(50000, true);
+    let r = paid_render(
+        &b,
+        render("Callum", "eleven_turbo_v2_5", &["sample"], false, true),
+    );
+    let voices = b.dir.path().join("support/gear/voices");
+    // Make it a pack from 0.12.0 or earlier: named for the voice's name, no voice id recorded.
+    let legacy = "local-elevenlabs-callum-eleven-turbo-v2-5";
+    std::fs::rename(voices.join(&r.pack), voices.join(legacy)).unwrap();
+    let mf = voices.join(legacy).join("pack.json");
+    let mut m: serde_json::Value = serde_json::from_slice(&std::fs::read(&mf).unwrap()).unwrap();
+    m["id"] = legacy.into();
+    m["voice_id"] = "".into();
+    std::fs::write(&mf, m.to_string()).unwrap();
+    let gear = b.dir.path().join("support/gear/gear.json");
+    let mut g: serde_json::Value = std::fs::read(&gear)
+        .ok()
+        .and_then(|b| serde_json::from_slice(&b).ok())
+        .unwrap_or_else(|| json!({}));
+    g["voice"] = json!({
+        "chosen": {"radio-1": legacy, "radio-2": "en-demo-v1"},
+        "overrides": {"radio-1": {"SOUNDS/en/armed.wav": {"kind": "pack", "pack": legacy}}},
+    });
+    std::fs::write(&gear, g.to_string()).unwrap();
+    // Another voice of the same name does not take it.
+    let e = b
+        .core
+        .gear_voice_estimate(&EstimateParams {
+            sets: vec!["sample".into()],
+            voice: "Matilda".into(),
+            model: "eleven_turbo_v2_5".into(),
+            ..Default::default()
+        })
+        .unwrap();
+    assert!(e.estimate.chars > 0);
+    // The same voice finds it: every batch is kept, nothing to pay.
+    let posts = b.http.posts();
+    let again = b
+        .core
+        .gear_voice_render(&render(
+            "Callum",
+            "eleven_turbo_v2_5",
+            &["sample"],
+            false,
+            false,
+        ))
+        .unwrap();
+    assert!(!again.needs_confirm, "{again:?}");
+    assert_eq!(b.http.posts(), posts);
+    assert_eq!(again.pack, r.pack);
+    assert!(voices.join(&r.pack).join("pack.json").is_file());
+    assert!(!voices.join(legacy).exists());
+    let g: serde_json::Value = serde_json::from_slice(&std::fs::read(&gear).unwrap()).unwrap();
+    assert_eq!(g["voice"]["chosen"]["radio-1"], r.pack.as_str());
+    assert_eq!(g["voice"]["chosen"]["radio-2"], "en-demo-v1");
+    assert_eq!(
+        g["voice"]["overrides"]["radio-1"]["SOUNDS/en/armed.wav"]["pack"],
+        r.pack.as_str()
+    );
+    let m: serde_json::Value =
+        serde_json::from_slice(&std::fs::read(voices.join(&r.pack).join("pack.json")).unwrap())
+            .unwrap();
+    assert_eq!(m["id"], r.pack.as_str());
+    assert_eq!(m["voice_id"], "v-callum");
+}
+
+#[test]
+fn samples_of_two_lines_with_one_file_name_keep_both() {
+    let b = bench(50000, true);
+    let mut p = sample(&["Callum"], &["eleven_turbo_v2_5"], false, false);
+    p.sets = vec!["sample".into(), "scripts".into()];
+    p.lines = vec![
+        "SOUNDS/en/armed.wav".into(),
+        "SOUNDS/en/SCRIPTS/YAAPU/armed.wav".into(),
+    ];
+    let done = paid_sample(&b, p);
+    assert_eq!(done.items.len(), 2, "{:?}", done.items);
+    let (a, y) = (&done.items[0].file, &done.items[1].file);
+    assert_ne!(a, y);
+    assert!(y.ends_with("SOUNDS/en/SCRIPTS/YAAPU/armed.wav"), "{y}");
+    assert_ne!(std::fs::read(a).unwrap(), std::fs::read(y).unwrap());
 }

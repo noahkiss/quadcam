@@ -43,7 +43,8 @@ pub struct KeyStatus {
     pub suffix: String,
     #[serde(default)]
     pub length: u32,
-    /// `keychain`, or `environment` when QUADCAM_TTS_KEY holds it for this run.
+    /// `keychain`, or `environment` when QUADCAM_ELEVENLABS_KEY (or the older QUADCAM_TTS_KEY)
+    /// holds it for this run.
     pub source: String,
     /// Why the Keychain could not be read, when it could not.
     #[serde(default)]
@@ -156,13 +157,17 @@ pub struct SampleReport {
     pub digest: String,
 }
 
-/// The env var that holds a key for one run, ahead of the Keychain.
-const KEY_ENV: &str = "QUADCAM_TTS_KEY";
+/// The env var that holds the ElevenLabs key for one run, ahead of the Keychain.
+pub const KEY_ENV: &str = "QUADCAM_ELEVENLABS_KEY";
+/// The older name of `KEY_ENV`, still read for ElevenLabs only: no other provider gets it.
+pub const OLD_KEY_ENV: &str = "QUADCAM_TTS_KEY";
 
 impl Core {
-    fn eleven_key(&self) -> Result<Option<(String, &'static str)>> {
-        if let Some(k) = std::env::var(KEY_ENV).ok().filter(|k| !k.trim().is_empty()) {
-            return Ok(Some((k.trim().to_string(), "environment")));
+    pub(super) fn eleven_key(&self) -> Result<Option<(String, &'static str)>> {
+        for var in [KEY_ENV, OLD_KEY_ENV] {
+            if let Some(k) = std::env::var(var).ok().filter(|k| !k.trim().is_empty()) {
+                return Ok(Some((k.trim().to_string(), "environment")));
+            }
         }
         Ok(self.gear.keys.get(ELEVENLABS)?.map(|k| (k, "keychain")))
     }
@@ -367,7 +372,8 @@ impl Core {
         let price = self.pricing(&tts.models()?, &model, &tts.credits()?)?;
         let lines = self.studio_lines(&p.sets, &p.lines)?;
         let all = batch::plan_within(&Self::studio_items(&lines), &bs, price.batch_limit);
-        let old = self.local_pack(&local_pack_id(&voice_name, &model));
+        let (_, old) = self.studio_pack(&voice, &voice_name, &model);
+        let old = old.map(|(_, m)| m);
         let (batches, _) = still_to_do(all, old.as_ref(), &voice, &model, &settings);
         let cache = BatchCache::new(&self.cache);
         let ctx = batch::Ctx {
@@ -507,14 +513,10 @@ impl Core {
                     continue;
                 };
                 let wav = render::normalise(cut, &settings, tools.as_ref())?;
-                let name = l
-                    .line
-                    .path
-                    .rsplit('/')
-                    .next()
-                    .unwrap_or("line.wav")
-                    .to_string();
-                let file = dir.join(&name);
+                // The whole card path: SOUNDS/en/armed.wav and a script's armed.wav differ.
+                lines::check_path(&l.line.path)?;
+                let file = dir.join(&l.line.path);
+                std::fs::create_dir_all(file.parent().unwrap_or(&dir))?;
                 std::fs::write(&file, &wav)?;
                 report.items.push(SampleItem {
                     voice: vid.clone(),
@@ -548,8 +550,11 @@ impl Core {
         let model = self.studio_model(&p.model)?;
         let price = self.pricing(&tts.models()?, &model, &tts.credits()?)?;
         let lines = self.studio_lines(&p.sets, &p.lines)?;
-        let id = local_pack_id(&voice_name, &model);
-        let old = self.local_pack(&id);
+        let (id, found) = self.studio_pack(&voice, &voice_name, &model);
+        let (old_id, old) = match found {
+            Some((k, m)) => (Some(k), Some(m)),
+            None => (None, None),
+        };
         let all = batch::plan_within(&Self::studio_items(&lines), &bs, price.batch_limit);
         let (batches, kept) = still_to_do(all, old.as_ref(), &voice, &model, &settings);
         let cache = BatchCache::new(&self.cache);
@@ -637,9 +642,11 @@ impl Core {
         let stage = self.voices_dir().join(format!(".rendering-{id}"));
         let _ = std::fs::remove_dir_all(&stage);
         std::fs::create_dir_all(&stage)?;
-        // A local pack keeps what an earlier render made: a second set adds to it.
-        if dir.is_dir() {
-            copy_dir(&dir, &stage)?;
+        // A local pack keeps what an earlier render made: a second set adds to it. A pack
+        // from 0.12.0 or earlier, named for the voice's name, moves to the new id here.
+        let old_dir = self.voices_dir().join(old_id.as_deref().unwrap_or(&id));
+        if old_dir.is_dir() {
+            copy_dir(&old_dir, &stage)?;
         }
         let opts = BuildOpts {
             id: id.clone(),
@@ -720,6 +727,13 @@ impl Core {
         )?;
         let _ = std::fs::remove_dir_all(&dir);
         std::fs::rename(&stage, &dir)?;
+        if let Some(from) = old_id.filter(|k| *k != id) {
+            self.move_pack_refs(&from, &id)?;
+            let _ = std::fs::remove_dir_all(&old_dir);
+            report.notes.push(format!(
+                "The pack {from} is now {id}; radios that chose it keep it."
+            ));
+        }
         report.rendered = done.batches_rendered;
         report.from_cache = done.batches_cached;
         if !retakes.is_empty() {
@@ -738,14 +752,45 @@ impl Core {
         serde_json::from_slice(&b).ok()
     }
 
+    /// The local pack id of a voice and model, and the pack a render adds to, with its id:
+    /// the pack under that id, or a pack from 0.12.0 or earlier under the voice's name that this
+    /// voice made (or that recorded no voice id).
+    fn studio_pack(
+        &self,
+        voice: &str,
+        voice_name: &str,
+        model: &str,
+    ) -> (String, Option<(String, PackManifest)>) {
+        let id = local_pack_id(voice, model);
+        if let Some(m) = self.local_pack(&id) {
+            return (id.clone(), Some((id, m)));
+        }
+        let legacy = legacy_pack_id(voice_name, model);
+        let found = self
+            .local_pack(&legacy)
+            .filter(|m| m.voice_id.is_empty() || m.voice_id == voice)
+            .map(|m| (legacy, m));
+        (id, found)
+    }
+
     /// Where the samples go (for the CLI to print).
     pub fn voice_samples_dir(&self) -> PathBuf {
         self.cache.join("voice").join("samples")
     }
 }
 
-/// The local pack of a voice and model.
-fn local_pack_id(voice_name: &str, model: &str) -> String {
+/// The local pack of a voice and model. A short hash of the voice id names it, so two voices
+/// with the same name never share a pack.
+fn local_pack_id(voice: &str, model: &str) -> String {
+    format!(
+        "local-elevenlabs-{}-{}",
+        &crate::gear::voice::sha256_hex(voice.as_bytes())[..12],
+        slug(model).chars().take(24).collect::<String>()
+    )
+}
+
+/// The id a local pack had in 0.12.0 and earlier: the voice's name and the model.
+fn legacy_pack_id(voice_name: &str, model: &str) -> String {
     format!(
         "local-elevenlabs-{}-{}",
         slug(voice_name).chars().take(24).collect::<String>(),
@@ -802,12 +847,12 @@ fn to_render(ctx: &batch::Ctx<'_>, batches: &[Batch]) -> Vec<String> {
 }
 
 /// The digest a paid call's `confirm` repeats.
-fn plan_digest(plan: &serde_json::Value) -> String {
+pub(super) fn plan_digest(plan: &serde_json::Value) -> String {
     crate::gear::voice::sha256_hex(plan.to_string().as_bytes())
 }
 
 /// A paid `confirm` pays only for the plan its estimate showed.
-fn same_plan(given: Option<&str>, want: &str) -> Result<()> {
+pub(super) fn same_plan(given: Option<&str>, want: &str) -> Result<()> {
     match given.map(str::trim).filter(|d| !d.is_empty()) {
         None => bail!("A paid call needs the digest of its estimate: run it without confirm, show the person the cost, then confirm with that digest."),
         Some(d) if d == want => Ok(()),

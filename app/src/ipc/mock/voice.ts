@@ -75,8 +75,8 @@ function packs(v: MockVoice): VoicePack[] {
   const mine = (id: string, k: Partial<VoicePack>): VoicePack => ({ ...AVAILABLE, id, license: "Rendered by you; yours to use.", attribution: "", version: "", installed: true, local: true, bytes: 412_000, dir: `/Users/pilot/gear/voices/${id}`, sets: ["quadcam"], made: MADE, radios: radios(id), retakes: v.retakes[id] ?? [], ...k });
   if (v.installed.includes(LOCAL_ID)) out.push(mine(LOCAL_ID, { voice: "Samantha", provider: "say" }));
   for (const id of v.installed.filter((x) => x.startsWith("local-elevenlabs-"))) {
-    const name = id.split("-")[2] ?? "voice";
-    out.push(mine(id, { voice: name.charAt(0).toUpperCase() + name.slice(1), provider: "elevenlabs", model: id.split("-").slice(3).join("_"), sets: ["quad"], bytes: 2_300_000 }));
+    const [, name = "voice", model = ""] = /^local-elevenlabs-voice-([a-z]+)-(.*)$/.exec(id) ?? [];
+    out.push(mine(id, { voice: name.charAt(0).toUpperCase() + name.slice(1), provider: "elevenlabs", model: model.replace(/-/g, "_"), sets: ["quad"], bytes: 2_300_000 }));
   }
   if (v.installed.includes(AVAILABLE.id)) out.push({ ...AVAILABLE, installed: true, dir: `/Users/pilot/gear/voices/${AVAILABLE.id}`, sets: ["quadcam"], made: MADE, radios: radios(AVAILABLE.id) });
   else if (v.index) out.push({ ...AVAILABLE });
@@ -142,7 +142,7 @@ export function render(g: MockGear, p: { voice?: string; lines?: string[]; dry_r
 }
 
 /** `gear_voice_edit`. */
-export function edit(g: MockGear, p: { radio: string; line: string; text?: string | null; pack?: string | null; confirm?: boolean }): VoiceLine {
+export function edit(g: MockGear, p: { radio: string; line: string; text?: string | null; pack?: string | null; confirm?: boolean; dry_run?: boolean; digest?: string | null }): VoiceLine {
   radioOf(g, p.radio);
   checkPath(p.line);
   const v = g.voice;
@@ -155,7 +155,13 @@ export function edit(g: MockGear, p: { radio: string; line: string; text?: strin
     per[p.line] = { kind: "pack", pack: p.pack, text: null };
   } else if (p.text) {
     if (!p.text.trim()) throw "The text is empty.";
-    if (v.paid && !p.confirm) throw `This render sends ${spoken(p.text).length} characters to a provider that may charge for them. Pass confirm to go ahead.`;
+    const cost = { chars: spoken(p.text).length, paid: v.paid, provider: "openai", digest: `edit-${p.radio}-${p.line}-${p.text}` };
+    if (p.dry_run) {
+      const line = view(g, { radio: p.radio }).lines.find((l) => l.path === p.line) ?? { path: p.line, text: p.text, spoken: spoken(p.text), group: "extras", why: "Your own line.", custom: true, packs: [], override: null };
+      return { ...line, cost };
+    }
+    if (v.paid && !p.confirm) throw `This render sends ${cost.chars} characters to a provider that may charge for them. Run it with dry_run, show the person the characters, then confirm with that digest.`;
+    if (v.paid && p.digest !== cost.digest) throw p.digest ? "The plan changed since its estimate (voices, models, sets, seed or characters): estimate again." : "A paid call needs the digest of its estimate: run it without confirm, show the person the cost, then confirm with that digest.";
     if (!known) v.custom.push({ path: p.line, text: p.text });
     per[p.line] = { kind: "text", pack: null, text: p.text };
   } else delete per[p.line];
@@ -201,9 +207,16 @@ export function remove(g: MockGear, p: { pack: string; takes?: boolean }): PackD
   if (!k) throw `Pack "${p.pack}" is not installed.`;
   g.voice.installed = g.voice.installed.filter((x) => x !== p.pack);
   if (p.takes) g.voice.takesDeleted.push(p.pack);
-  // A choice of a pack that is gone names nothing.
+  // A choice of a pack that is gone names nothing, and nor does an override that takes its line.
   for (const r of k.radios ?? []) delete g.voice.chosen[r];
-  return { pack: p.pack, bytes: k.bytes, takes: p.takes ? k.lines : 0, radios: k.radios ?? [] };
+  const overrides: { radio: string; line: string }[] = [];
+  for (const [radio, per] of Object.entries(g.voice.overrides))
+    for (const [line, o] of Object.entries(per))
+      if (o.kind === "pack" && o.pack === p.pack) {
+        delete per[line];
+        overrides.push({ radio, line });
+      }
+  return { pack: p.pack, bytes: k.bytes, takes: p.takes ? k.lines : 0, radios: k.radios ?? [], overrides };
 }
 
 /** `gear_voice_preview`: a path under the cache, as the core's copy would be. */
@@ -339,7 +352,8 @@ function studioRender(g: MockGear, p: { voice?: string; sets: string[]; model?: 
   needKey(g);
   const voice = voiceOf(p.voice ?? "");
   const e = price(g, p.sets, p.model ?? "");
-  const id = `local-elevenlabs-${voice.name.toLowerCase()}-${(p.model ?? "").replace(/_/g, "-")}`;
+  // The core names the pack by a short hash of the voice id; the mock uses the id itself.
+  const id = `local-elevenlabs-${voice.id}-${(p.model ?? "").replace(/_/g, "-")}`;
   const seed = p.settings?.seed ?? 0;
   const digest = digestOf({ voice: voice.id, model: p.model, sets: p.sets, seed, chars: e.chars });
   const base = { pack: id, provider: "elevenlabs", voice: voice.name, plan: { lines: e.lines, cached: 0, to_render: e.lines, chars: e.chars }, paid: true, dry_run: !!p.dry_run, notes: [] as string[], estimate: e, warnings: [] as string[], digest, retakes: [] };

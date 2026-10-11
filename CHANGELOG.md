@@ -9,6 +9,15 @@ User-facing changes in each release, newest first. Release notes on
 - **Replace… for a stored secret.** The Google Places key, the binding phrase and the ElevenLabs key show the hint and **Replace…**; **Keep current** closes the field.
 - **CLI `settings set-secret KEY`** reads a secret from stdin (hidden at a terminal), for example piped from a password manager. `settings set` of a secret still works and notes that other processes can read a command's arguments.
 - **MCP `voice_key_set`** (`quadcam_gear_edit`) stores the ElevenLabs key; the answer shows only its hint. `quadcam_settings` `read` lists the secrets' hints. Both tool descriptions say that a value passed through MCP sits in the agent's transcript.
+- **Voice pack install.** An index entry without a hash no longer installs. The index must be an https address or a file; plain http works only on this Mac. A zip with a symbolic link, or a folder entry with `..`, refuses before anything is written, and QuadCam checks every unpacked file is a plain file.
+- **Voice keys.** Each provider reads its own key: `QUADCAM_ELEVENLABS_KEY` (the older `QUADCAM_TTS_KEY` still works, for ElevenLabs only) and `QUADCAM_OPENAI_KEY`, then the `tts_key` setting, for an openai server. Before, `QUADCAM_TTS_KEY` went to any provider, a remote openai server included.
+- **ElevenLabs renders only in the Voice studio.** With `tts_provider` `elevenlabs`, a line-by-line render, `build-pack` and **My text…** refuse and point to the studio, which prices a render and checks the credits first.
+- **My text… on a provider that may charge** shows the characters and **Render and pay**, which confirms with the digest of that text. CLI `gear voice edit --dry-run` and `--digest`; MCP `voice_edit` `dry_run` and `digest`. A paid confirm needs the digest.
+- **Studio packs are named by the voice id.** Two voices with one name (a clone named like a premade voice) no longer share a pack. A pack from 0.12.0 or earlier moves to the new name at the next render of that voice and model; the radios that chose it, and line overrides that take its takes, follow it.
+- **Samples** keep the card path in their file names, so `armed.wav` and a script's `armed.wav` no longer overwrite each other.
+- **Recorded credit rate.** QuadCam keeps the rate ElevenLabs reports only within 5% of the model's credits a character, so a plain character count never doubles the estimate. It logs every count in `voice/charcost.log` in the cache.
+- **Deleting a voice pack** also clears each line override that takes its take (`overrides` in the result).
+- The settings and MCP descriptions name `elevenlabs` as a `tts_provider`.
 
 ## 0.12.0 (2026-10-11)
 

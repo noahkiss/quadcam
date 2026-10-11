@@ -65,12 +65,33 @@ test("Choose voice stages one change and keeps the overrides when asked", async 
   await expect(page.getByText(/Voice: Demo is staged/)).toHaveCount(0);
 });
 
+test("my text on a provider that may charge shows the characters, and Render and pay sends the digest", async ({ app, page }) => {
+  await openVoice(app, page);
+  await app.core(`c => { c.gear.voice.paid = true; }`);
+  await page.getByRole("group", { name: "Sections" }).getByRole("button", { name: "Overview" }).click();
+  await page.getByRole("group", { name: "Sections" }).getByRole("button", { name: "Voice" }).click();
+  const row = page.getByRole("row", { name: /armed\.wav/ });
+  await row.getByRole("button", { name: "My text…" }).click();
+  await row.getByLabel("My text for Armed").fill("Motors live");
+  await row.getByRole("button", { name: "Render", exact: true }).click();
+  await expect(row).toContainText("11 characters go to openai, which may charge for them.");
+  expect((await app.method("gear_voice_edit")).at(-1)).toMatchObject({ text: "Motors live", dry_run: true, confirm: false });
+  await expect(row).not.toContainText("my text: Motors live");
+  // A change to the text closes the question.
+  await row.getByLabel("My text for Armed").fill("Motors on");
+  await expect(row.getByRole("button", { name: "Render and pay" })).toHaveCount(0);
+  await row.getByRole("button", { name: "Render", exact: true }).click();
+  await row.getByRole("button", { name: "Render and pay" }).click();
+  expect((await app.method("gear_voice_edit")).at(-1)).toMatchObject({ text: "Motors on", confirm: true, dry_run: false, digest: `edit-${RADIO_ID}-SOUNDS/en/armed.wav-Motors on` });
+  await expect(row).toContainText("my text: Motors on");
+});
+
 test("one line takes another voice's take or the person's own text, and Reset clears it", async ({ app, page }) => {
   await openVoice(app, page);
   await installDemo(page);
   const row = page.getByRole("row", { name: /armed\.wav/ });
   await row.getByRole("combobox", { name: "Take for Armed" }).selectOption("en-demo-v1");
-  expect((await app.method("gear_voice_edit")).at(-1)).toEqual({ radio: RADIO_ID, line: "SOUNDS/en/armed.wav", text: null, pack: "en-demo-v1", confirm: false });
+  expect((await app.method("gear_voice_edit")).at(-1)).toEqual({ radio: RADIO_ID, line: "SOUNDS/en/armed.wav", text: null, pack: "en-demo-v1", confirm: false, dry_run: false, digest: null });
   await expect(row).toContainText("take from en-demo-v1");
   await row.getByRole("button", { name: "My text…" }).click();
   await row.getByLabel("My text for Armed").fill("Motors live");

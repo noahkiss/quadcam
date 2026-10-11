@@ -2185,6 +2185,17 @@ export type Edit =
  */
 { kind: "elrs_options"; options: ElrsSet[] };
 
+/**  What a `gear_voice_edit` of the person's own text costs. */
+export type EditCost = {
+	/**  The characters the provider would speak. */
+	chars: number,
+	/**  The take costs money: a provider that may charge, and no take in the cache. */
+	paid: boolean,
+	provider: string,
+	/**  The digest a paid `confirm` repeats. */
+	digest: string,
+};
+
 export type Editor = "user" | "agent";
 
 /**  What the editors show of a model. */
@@ -3108,7 +3119,10 @@ export type KeyStatus = {
 	prefix?: string,
 	suffix?: string,
 	length?: number,
-	/**  `keychain`, or `environment` when QUADCAM_TTS_KEY holds it for this run. */
+	/**
+	 *  `keychain`, or `environment` when QUADCAM_ELEVENLABS_KEY (or the older QUADCAM_TTS_KEY)
+	 *  holds it for this run.
+	 */
 	source: string,
 	/**  Why the Keychain could not be read, when it could not. */
 	problem?: string | null,
@@ -4067,6 +4081,8 @@ export type PackDeleteReport = {
 	 *  keep its sounds.
 	 */
 	radios: string[],
+	/**  Lines whose override took the pack's take. The delete clears those overrides too. */
+	overrides?: PackOverride[],
 };
 
 /**  One flight in a pack's history. */
@@ -4086,6 +4102,13 @@ export type PackInstallParams = {
 	pack: string,
 	/**  The index (a path or an address) when the setting `voice_index` names none. */
 	source?: string | null,
+};
+
+/**  One radio's override of one line. */
+export type PackOverride = {
+	radio: string,
+	/**  The card path. */
+	line: string,
 };
 
 /**
@@ -6149,8 +6172,15 @@ export type VoiceEditParams = {
 	line: string,
 	text?: string | null,
 	pack?: string | null,
-	/**  Allows a render that costs money. */
+	/**  Allows a render that costs money; needs `digest`. */
 	confirm?: boolean,
+	/**  With `text`: report what the render costs (`cost`, with its digest); change nothing. */
+	dry_run?: boolean,
+	/**
+	 *  A paid render of `text`: the digest the `dry_run` returned. A `confirm` needs it, and
+	 *  is refused when the text, voice or provider changed since.
+	 */
+	digest?: string | null,
 };
 
 /**  A voice a provider offers. */
@@ -6176,6 +6206,8 @@ export type VoiceLine = {
 	/**  Installed packs that hold this line. */
 	packs: string[],
 	override?: LineOverride | null,
+	/**  `gear_voice_edit` with `dry_run` and a `text`: what rendering that text costs. */
+	cost?: EditCost | null,
 };
 
 export type VoicePack = {

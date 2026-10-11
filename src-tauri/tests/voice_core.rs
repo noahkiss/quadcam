@@ -420,6 +420,28 @@ fn a_pack_installs_from_an_index_after_a_hash_check() {
 }
 
 #[test]
+fn a_plain_http_index_is_refused_unless_it_is_on_this_mac() {
+    let b = bench(Opts::default());
+    let e = b
+        .core
+        .gear_voice_pack_install(&PackInstallParams {
+            pack: "en-test-v1".into(),
+            source: Some("http://voices.example.com/voices.json".into()),
+        })
+        .unwrap_err();
+    assert!(format!("{e:#}").contains("plain http"), "{e:#}");
+    // Loopback passes the check (and then finds no server).
+    let e = b
+        .core
+        .gear_voice_pack_install(&PackInstallParams {
+            pack: "en-test-v1".into(),
+            source: Some("http://127.0.0.1:9/voices.json".into()),
+        })
+        .unwrap_err();
+    assert!(!format!("{e:#}").contains("plain http"), "{e:#}");
+}
+
+#[test]
 fn choose_voice_stages_one_change_and_keeps_overrides_when_asked() {
     let b = bench(Opts::default());
     let out = b.dir.path().join("release");
@@ -1032,4 +1054,154 @@ fn the_mcp_actions_choose_on_several_radios_and_delete_after_confirm() {
         .path()
         .join(format!("support/gear/voices/{pack}"))
         .exists());
+}
+
+#[test]
+fn each_provider_reads_only_its_own_key_from_the_environment() {
+    let b = bench(Opts::default());
+    std::fs::write(
+        b.dir.path().join("support/settings.json"),
+        r#"{"ttsProvider": "openai", "ttsBaseUrl": "https://voice.example.com"}"#,
+    )
+    .unwrap();
+    let key = |b: &Bench| {
+        view(b);
+        b.last.lock().unwrap().clone().unwrap().key
+    };
+    // The ElevenLabs key in the old variable never goes to an openai server.
+    std::env::set_var("QUADCAM_TTS_KEY", "eleven-secret");
+    assert_eq!(key(&b), None);
+    std::env::set_var("QUADCAM_OPENAI_KEY", "openai-key");
+    assert_eq!(key(&b).as_deref(), Some("openai-key"));
+    std::env::remove_var("QUADCAM_OPENAI_KEY");
+    std::env::remove_var("QUADCAM_TTS_KEY");
+}
+
+#[test]
+fn elevenlabs_renders_line_by_line_nowhere_but_the_studio() {
+    let b = bench(Opts::default());
+    std::fs::write(
+        b.dir.path().join("support/settings.json"),
+        r#"{"ttsProvider": "elevenlabs", "ttsVoice": "Test Voice"}"#,
+    )
+    .unwrap();
+    let v = view(&b);
+    assert!(!v.provider.ready && v.provider.paid);
+    assert!(v.provider.problem.unwrap().contains("Voice studio"));
+    let e = b
+        .core
+        .gear_voice_render(&VoiceRenderParams {
+            confirm: true,
+            ..Default::default()
+        })
+        .unwrap_err();
+    assert!(format!("{e:#}").contains("Voice studio"), "{e:#}");
+    let e = b
+        .core
+        .gear_voice_edit(&VoiceEditParams {
+            radio: b.id.clone(),
+            line: ARMED.into(),
+            text: Some("Motors live".into()),
+            pack: None,
+            confirm: true,
+            ..Default::default()
+        })
+        .unwrap_err();
+    assert!(format!("{e:#}").contains("Voice studio"), "{e:#}");
+    assert_eq!(b.calls.load(Ordering::SeqCst), 0);
+}
+
+#[test]
+fn my_text_on_a_paid_provider_shows_the_characters_and_pays_with_the_digest() {
+    let b = bench(Opts::default());
+    b.paid.store(true, Ordering::SeqCst);
+    let edit = |text: &str, dry_run: bool, confirm: bool, digest: Option<String>| {
+        b.core.gear_voice_edit(&VoiceEditParams {
+            radio: b.id.clone(),
+            line: ARMED.into(),
+            text: Some(text.into()),
+            pack: None,
+            confirm,
+            dry_run,
+            digest,
+        })
+    };
+    let e = edit("Motors live", false, false, None).unwrap_err();
+    assert!(format!("{e:#}").contains("dry_run"), "{e:#}");
+    let dry = edit("Motors live", true, false, None).unwrap();
+    let cost = dry.cost.clone().unwrap();
+    assert!(cost.paid && cost.chars == 11 && !cost.digest.is_empty());
+    assert!(dry.override_.is_none(), "a dry run changes nothing");
+    assert_eq!(b.calls.load(Ordering::SeqCst), 0);
+    // Confirm needs the digest, and the digest of this text.
+    let e = edit("Motors live", false, true, None).unwrap_err();
+    assert!(format!("{e:#}").contains("digest"), "{e:#}");
+    let e = edit("Motors on", false, true, Some(cost.digest.clone())).unwrap_err();
+    assert!(format!("{e:#}").contains("plan changed"), "{e:#}");
+    assert_eq!(b.calls.load(Ordering::SeqCst), 0);
+    let l = edit("Motors live", false, true, Some(cost.digest)).unwrap();
+    assert_eq!(l.override_.unwrap().kind, "text");
+    assert!(l.cost.is_none());
+    assert_eq!(b.calls.load(Ordering::SeqCst), 1);
+    // The take is in the cache now: free, no confirm needed.
+    assert!(
+        !edit("Motors live", true, false, None)
+            .unwrap()
+            .cost
+            .unwrap()
+            .paid
+    );
+    edit("Motors live", false, false, None).unwrap();
+    assert_eq!(b.calls.load(Ordering::SeqCst), 1);
+}
+
+#[test]
+fn deleting_a_pack_clears_the_overrides_that_take_its_lines() {
+    let b = bench(Opts::default());
+    let out = b.dir.path().join("release");
+    let idx = build(&b, &out, "en-a-v1", 150);
+    build(&b, &out, "en-b-v1", 90);
+    for id in ["en-a-v1", "en-b-v1"] {
+        b.core
+            .gear_voice_pack_install(&PackInstallParams {
+                pack: id.into(),
+                source: Some(idx.display().to_string()),
+            })
+            .unwrap();
+    }
+    for (line, pack) in [(ARMED, "en-b-v1"), (LOWBAT, "en-a-v1")] {
+        b.core
+            .gear_voice_edit(&VoiceEditParams {
+                radio: b.id.clone(),
+                line: line.into(),
+                pack: Some(pack.into()),
+                ..Default::default()
+            })
+            .unwrap();
+    }
+    let r = b
+        .core
+        .gear_voice_pack_delete(&quadcam_lib::core::PackDeleteParams {
+            pack: "en-b-v1".into(),
+            takes: false,
+        })
+        .unwrap();
+    assert_eq!(
+        r.overrides,
+        vec![quadcam_lib::core::PackOverride {
+            radio: b.id.clone(),
+            line: ARMED.into(),
+        }]
+    );
+    let v = view(&b);
+    let ov = |p: &str| {
+        v.lines
+            .iter()
+            .find(|l| l.path == p)
+            .unwrap()
+            .override_
+            .clone()
+    };
+    assert!(ov(ARMED).is_none());
+    assert_eq!(ov(LOWBAT).unwrap().pack.as_deref(), Some("en-a-v1"));
 }

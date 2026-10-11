@@ -271,7 +271,7 @@ pub const KEYS: &[Key] = &[
     Key {
         file: "ttsProvider",
         name: Some("tts_provider"),
-        about: "a voice provider name",
+        about: "the voice provider: say, openai or elevenlabs (the Voice studio only)",
         check: string,
     },
     Key {
@@ -301,7 +301,7 @@ pub const KEYS: &[Key] = &[
     Key {
         file: "ttsKey",
         name: Some("tts_key"),
-        about: "a voice provider API key",
+        about: "the openai voice server's API key",
         check: string,
     },
     Key {

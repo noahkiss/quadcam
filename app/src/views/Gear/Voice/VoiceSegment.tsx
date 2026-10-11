@@ -7,7 +7,7 @@ import { Banner } from "../../../components/Banner";
 import { Button } from "../../../components/Button";
 import { Checkbox, Input, Select } from "../../../components/Field";
 import { api, errText, fileSrc } from "../../../ipc/api";
-import type { StagedChange, VoiceLine, VoiceView } from "../../../ipc/types";
+import type { EditCost, StagedChange, VoiceLine, VoiceView } from "../../../ipc/types";
 import { useStore } from "../../../store";
 import type { DeviceRef } from "../slots";
 import { useVoice } from "./useVoice";
@@ -98,6 +98,8 @@ function play(path: string) {
 
 function LineRow({ radio, line, view, act, setError }: { radio: string; line: VoiceLine; view: VoiceView; act: <T>(f: () => Promise<T>) => Promise<T | undefined>; setError: (e: string | null) => void }) {
   const [own, setOwn] = useState<string | null>(null);
+  // A paid take of the person's text: its characters and the digest Render and pay sends.
+  const [ask, setAsk] = useState<EditCost | null>(null);
   const packs = view.packs.filter((k) => k.installed && line.packs.includes(k.id));
   const preview = async (pack: string | null) => {
     try {
@@ -107,6 +109,22 @@ function LineRow({ radio, line, view, act, setError }: { radio: string; line: Vo
     }
   };
   const ov = line.override;
+  const edit = (text: string, confirm: boolean, digest: string | null) => act(() => api.gearVoiceEdit({ radio, line: line.path, text, pack: null, confirm, dry_run: false, digest }));
+  const close = () => {
+    setOwn(null);
+    setAsk(null);
+  };
+  const renderOwn = async (text: string) => {
+    if (view.provider.paid) {
+      const dry = await act(() => api.gearVoiceEdit({ radio, line: line.path, text, pack: null, confirm: false, dry_run: true, digest: null }));
+      if (!dry?.cost) return;
+      if (dry.cost.paid) {
+        setAsk(dry.cost);
+        return;
+      }
+    }
+    if ((await edit(text, false, null)) !== undefined) close();
+  };
   return (
     <tr>
       <td className={styles.path}>{line.path.replace(/^SOUNDS\//, "")}</td>
@@ -125,7 +143,7 @@ function LineRow({ radio, line, view, act, setError }: { radio: string; line: Vo
       <td>
         <div className={styles.cell}>
           {ov && <span>{ov.kind === "pack" ? `take from ${ov.pack}` : `my text: ${ov.text}`}</span>}
-          <Select aria-label={`Take for ${line.text}`} value="" onChange={(e) => e.target.value && act(() => api.gearVoiceEdit({ radio, line: line.path, text: null, pack: e.target.value, confirm: false }))}>
+          <Select aria-label={`Take for ${line.text}`} value="" onChange={(e) => e.target.value && act(() => api.gearVoiceEdit({ radio, line: line.path, text: null, pack: e.target.value, confirm: false, dry_run: false, digest: null }))}>
             <option value="">Use another voice…</option>
             {packs.map((k) => (
               <option key={k.id} value={k.id}>
@@ -139,24 +157,41 @@ function LineRow({ radio, line, view, act, setError }: { radio: string; line: Vo
             </Button>
           ) : (
             <span className={styles.own}>
-              <Input aria-label={`My text for ${line.text}`} value={own} onChange={(e) => setOwn(e.target.value)} />
-              <Button
-                size="sm"
-                variant="primary"
-                onClick={async () => {
-                  await act(() => api.gearVoiceEdit({ radio, line: line.path, text: own, pack: null, confirm: false }));
-                  setOwn(null);
+              <Input
+                aria-label={`My text for ${line.text}`}
+                value={own}
+                onChange={(e) => {
+                  setOwn(e.target.value);
+                  setAsk(null);
                 }}
-              >
-                Render
-              </Button>
-              <Button size="sm" onClick={() => setOwn(null)}>
+              />
+              {ask ? (
+                <>
+                  <span className={styles.muted}>
+                    {ask.chars} characters go to {ask.provider}, which may charge for them.
+                  </span>
+                  <Button
+                    size="sm"
+                    variant="primary"
+                    onClick={async () => {
+                      if ((await edit(own, true, ask.digest)) !== undefined) close();
+                    }}
+                  >
+                    Render and pay
+                  </Button>
+                </>
+              ) : (
+                <Button size="sm" variant="primary" onClick={() => renderOwn(own)}>
+                  Render
+                </Button>
+              )}
+              <Button size="sm" onClick={close}>
                 Cancel
               </Button>
             </span>
           )}
           {ov && (
-            <Button size="sm" variant="ghost" onClick={() => act(() => api.gearVoiceEdit({ radio, line: line.path, text: null, pack: null, confirm: false }))}>
+            <Button size="sm" variant="ghost" onClick={() => act(() => api.gearVoiceEdit({ radio, line: line.path, text: null, pack: null, confirm: false, dry_run: false, digest: null }))}>
               Reset
             </Button>
           )}

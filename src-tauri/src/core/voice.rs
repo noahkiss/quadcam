@@ -21,6 +21,9 @@ use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use std::path::{Path, PathBuf};
 
+/// The env var that holds the openai server's key for one run, ahead of the `tts_key` setting.
+pub const OPENAI_KEY_ENV: &str = "QUADCAM_OPENAI_KEY";
+
 /// The title prefix of the change Choose voice keeps.
 pub const VOICE_CHANGE: &str = "Voice: ";
 
@@ -62,6 +65,21 @@ pub struct VoiceLine {
     pub packs: Vec<String>,
     #[serde(default, rename = "override")]
     pub override_: Option<LineOverride>,
+    /// `gear_voice_edit` with `dry_run` and a `text`: what rendering that text costs.
+    #[serde(default)]
+    pub cost: Option<EditCost>,
+}
+
+/// What a `gear_voice_edit` of the person's own text costs.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, specta::Type)]
+pub struct EditCost {
+    /// The characters the provider would speak.
+    pub chars: u32,
+    /// The take costs money: a provider that may charge, and no take in the cache.
+    pub paid: bool,
+    pub provider: String,
+    /// The digest a paid `confirm` repeats.
+    pub digest: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, specta::Type)]
@@ -144,9 +162,16 @@ pub struct VoiceEditParams {
     pub text: Option<String>,
     #[serde(default)]
     pub pack: Option<String>,
-    /// Allows a render that costs money.
+    /// Allows a render that costs money; needs `digest`.
     #[serde(default)]
     pub confirm: bool,
+    /// With `text`: report what the render costs (`cost`, with its digest); change nothing.
+    #[serde(default)]
+    pub dry_run: bool,
+    /// A paid render of `text`: the digest the `dry_run` returned. A `confirm` needs it, and
+    /// is refused when the text, voice or provider changed since.
+    #[serde(default)]
+    pub digest: Option<String>,
 }
 
 /// `gear_voice_render`: QuadCam's lines, and the person's own, rendered with the provider
@@ -296,6 +321,17 @@ pub struct PackDeleteReport {
     /// Saved radios that had chosen the pack. The delete clears their choice; their cards
     /// keep its sounds.
     pub radios: Vec<String>,
+    /// Lines whose override took the pack's take. The delete clears those overrides too.
+    #[serde(default)]
+    pub overrides: Vec<PackOverride>,
+}
+
+/// One radio's override of one line.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, specta::Type)]
+pub struct PackOverride {
+    pub radio: String,
+    /// The card path.
+    pub line: String,
 }
 
 /// The maintainer's `build-pack`.
@@ -383,21 +419,17 @@ impl Core {
             "" => "say".to_string(),
             p => p.to_string(),
         };
-        // ElevenLabs keeps its key in the Keychain; the setting `ttsKey` never holds it.
-        let key = std::env::var("QUADCAM_TTS_KEY")
-            .ok()
-            .filter(|k| !k.is_empty())
-            .or_else(|| {
-                if provider == "elevenlabs" {
-                    self.gear
-                        .keys
-                        .get(crate::gear::voice::keychain::ELEVENLABS)
-                        .ok()
-                        .flatten()
-                } else {
-                    Some(s("ttsKey")).filter(|k| !k.is_empty())
-                }
-            });
+        // Each provider has its own key, so one never reaches another's server. ElevenLabs
+        // keeps its key in the Keychain; the setting `ttsKey` is the openai server's key.
+        let key = match provider.as_str() {
+            "elevenlabs" => self.eleven_key().ok().flatten().map(|(k, _)| k),
+            "openai" => std::env::var(OPENAI_KEY_ENV)
+                .ok()
+                .map(|k| k.trim().to_string())
+                .filter(|k| !k.is_empty())
+                .or_else(|| Some(s("ttsKey")).filter(|k| !k.is_empty())),
+            _ => None,
+        };
         (
             ProviderConfig {
                 provider,
@@ -411,7 +443,16 @@ impl Core {
 
     fn voice_provider(&self) -> Result<(Box<dyn Tts>, String, String)> {
         let (cfg, model, voice) = self.voice_config();
-        Ok((self.gear.tts.make(&cfg)?, model, voice))
+        Ok((self.line_provider(&cfg)?, model, voice))
+    }
+
+    /// The provider for line-by-line renders. ElevenLabs bills by the character, and only the
+    /// studio prices a render and checks the credits first, so it renders there alone.
+    fn line_provider(&self, cfg: &ProviderConfig) -> Result<Box<dyn Tts>> {
+        if cfg.provider == "elevenlabs" {
+            bail!("ElevenLabs renders in the Voice studio only, which prices a render and checks the credits first: render line sets there (gear voice render --set), or set tts_provider to say or openai.");
+        }
+        self.gear.tts.make(cfg)
     }
 
     fn voice_index_source(&self) -> Option<String> {
@@ -566,6 +607,7 @@ impl Core {
     /// Reads the pack index from its source into the cache. A path reads the file; an
     /// address downloads it.
     fn refresh_index(&self, source: &str) -> Result<VoiceIndex> {
+        check_index_source(source)?;
         let dest = self.index_cache_file();
         std::fs::create_dir_all(dest.parent().unwrap())?;
         if source.starts_with("http://") || source.starts_with("https://") {
@@ -585,13 +627,16 @@ impl Core {
 
     pub(super) fn provider_view(&self) -> ProviderView {
         let (cfg, model, voice) = self.voice_config();
-        let made = self.gear.tts.make(&cfg);
+        let made = self.line_provider(&cfg);
         ProviderView {
             provider: cfg.provider.clone(),
             base_url: cfg.base_url.clone(),
             model,
             voice,
-            paid: made.as_ref().map(|t| t.paid()).unwrap_or(false),
+            paid: made
+                .as_ref()
+                .map(|t| t.paid())
+                .unwrap_or(cfg.provider == "elevenlabs"),
             key_set: cfg.key.is_some(),
             ready: made.is_ok(),
             problem: made.err().map(|e| format!("{e:#}")),
@@ -666,6 +711,7 @@ impl Core {
                     pack: o.pack.clone(),
                     text: o.text.clone(),
                 }),
+                cost: None,
                 path: l.path,
                 text: l.text,
                 group: l.group,
@@ -941,7 +987,8 @@ impl Core {
     /// Removes an installed or rendered pack from this Mac. With `takes`, the raw takes and
     /// batches it was made from go too; without, a later render of that voice and model
     /// comes from the cache. Radios that chose the pack lose that choice but keep its sounds
-    /// on their cards; a staged voice change keeps its own copy of them.
+    /// on their cards; a staged voice change keeps its own copy of them. Overrides that take a
+    /// line from the pack are cleared.
     pub fn gear_voice_pack_delete(&self, p: &PackDeleteParams) -> Result<PackDeleteReport> {
         packs::check_id(&p.pack)?;
         let inst = packs::installed(&self.voices_dir())
@@ -959,23 +1006,93 @@ impl Core {
             .filter(|(_, k)| *k == p.pack)
             .map(|(r, _)| r)
             .collect();
-        // A choice of a pack that is gone names nothing: clear it.
-        if !radios.is_empty() {
-            self.gear_store().update(|v| {
-                let chosen = sub(voice_obj(v)?, "chosen")?;
-                for r in &radios {
-                    chosen.remove(r);
-                }
-                Ok(())
-            })?;
-            self.hooks.gear_changed();
+        // A choice of a pack that is gone names nothing, and nor does an override that takes
+        // a line from it: clear them.
+        let mut overrides = Vec::new();
+        let takes_from_it = |o: &Value| {
+            o.get("kind").and_then(Value::as_str) == Some("pack")
+                && o.get("pack").and_then(Value::as_str) == Some(p.pack.as_str())
+        };
+        let referenced = self
+            .gear_store()
+            .read()?
+            .get("voice")
+            .and_then(|v| v.get("overrides"))
+            .and_then(Value::as_object)
+            .is_some_and(|all| {
+                all.values()
+                    .filter_map(Value::as_object)
+                    .any(|per| per.values().any(takes_from_it))
+            });
+        if radios.is_empty() && !referenced {
+            return Ok(PackDeleteReport {
+                pack: p.pack.clone(),
+                bytes,
+                takes,
+                radios,
+                overrides,
+            });
         }
+        self.gear_store().update(|v| {
+            overrides.clear();
+            let voice = voice_obj(v)?;
+            let chosen = sub(voice, "chosen")?;
+            for r in &radios {
+                chosen.remove(r);
+            }
+            for (radio, per) in sub(voice, "overrides")?.iter_mut() {
+                let Some(per) = per.as_object_mut() else {
+                    continue;
+                };
+                per.retain(|line, o| {
+                    let gone = takes_from_it(o);
+                    if gone {
+                        overrides.push(PackOverride {
+                            radio: radio.clone(),
+                            line: line.clone(),
+                        });
+                    }
+                    !gone
+                });
+            }
+            Ok(())
+        })?;
+        self.hooks.gear_changed();
         Ok(PackDeleteReport {
             pack: p.pack.clone(),
             bytes,
             takes,
             radios,
+            overrides,
         })
+    }
+
+    /// Points every radio that chose pack `from`, and every override that takes a line from
+    /// it, at pack `to`.
+    pub(super) fn move_pack_refs(&self, from: &str, to: &str) -> Result<()> {
+        self.gear_store().update(|v| {
+            let voice = voice_obj(v)?;
+            for (_, k) in sub(voice, "chosen")?.iter_mut() {
+                if k.as_str() == Some(from) {
+                    *k = json!(to);
+                }
+            }
+            for (_, per) in sub(voice, "overrides")?.iter_mut() {
+                let Some(per) = per.as_object_mut() else {
+                    continue;
+                };
+                for (_, o) in per.iter_mut() {
+                    if o.get("kind").and_then(Value::as_str) == Some("pack")
+                        && o.get("pack").and_then(Value::as_str) == Some(from)
+                    {
+                        o["pack"] = json!(to);
+                    }
+                }
+            }
+            Ok(())
+        })?;
+        self.hooks.gear_changed();
+        Ok(())
     }
 
     /// The raw takes and batches a pack was made from, removed from the cache.
@@ -1062,11 +1179,51 @@ impl Core {
                     tools.as_ref(),
                 );
                 let spoken = spelling.apply(text);
-                if tts.paid() && !render::cached(&ctx, &spoken) && !p.confirm {
-                    bail!(
-                        "This render sends {} characters to a provider that may charge for them. Pass confirm to go ahead.",
-                        spoken.chars().count()
-                    );
+                let (cfg, _, _) = self.voice_config();
+                let cost = EditCost {
+                    chars: spoken.chars().count() as u32,
+                    paid: tts.paid() && !render::cached(&ctx, &spoken),
+                    provider: tts.id().into(),
+                    digest: super::voice_studio::plan_digest(&json!({
+                        "kind": "edit", "provider": tts.id(), "base_url": cfg.base_url,
+                        "voice": voice, "model": model, "radio": p.radio, "line": p.line,
+                        "spoken": spoken,
+                    })),
+                };
+                if p.dry_run {
+                    let mut line = match self
+                        .gear_voice(&VoiceParams {
+                            radio: Some(p.radio.clone()),
+                            refresh_index: false,
+                        })?
+                        .lines
+                        .into_iter()
+                        .find(|l| l.path == p.line)
+                    {
+                        Some(l) => l,
+                        None => VoiceLine {
+                            path: p.line.clone(),
+                            text: text.clone(),
+                            spoken: spoken.clone(),
+                            group: "extras".into(),
+                            why: "Your own line.".into(),
+                            custom: true,
+                            packs: Vec::new(),
+                            override_: None,
+                            cost: None,
+                        },
+                    };
+                    line.cost = Some(cost);
+                    return Ok(line);
+                }
+                if cost.paid {
+                    if !p.confirm {
+                        bail!(
+                            "This render sends {} characters to a provider that may charge for them. Run it with dry_run, show the person the characters, then confirm with that digest.",
+                            cost.chars
+                        );
+                    }
+                    super::voice_studio::same_plan(p.digest.as_deref(), &cost.digest)?;
                 }
                 let (wav, _) = render::render_line(&ctx, &spoken)?;
                 let blob = blobs.put(&wav)?;
@@ -1322,6 +1479,15 @@ impl Core {
     pub fn voice_installed(&self) -> Vec<Installed> {
         packs::installed(&self.voices_dir())
     }
+}
+
+/// An index address is https, or http only to this Mac: the zip comes from beside it, and
+/// its hash from inside it.
+fn check_index_source(source: &str) -> Result<()> {
+    if source.starts_with("http://") && !crate::modules::fetch::is_loopback(source) {
+        bail!("The pack index {source} is a plain http address: use https. Plain http reaches only this Mac (127.0.0.1, localhost).");
+    }
+    Ok(())
 }
 
 pub(super) fn slug(s: &str) -> String {
