@@ -48,6 +48,11 @@ struct Bench {
 /// A core that sees the image as a card and mounts and unmounts it with `diskutil`, only
 /// for that image's disk. The log holds each request.
 fn bench(img: &Image) -> Bench {
+    bench_with(img, false)
+}
+
+/// `bench`, with a mount that fails when `mount_fails`.
+fn bench_with(img: &Image, mount_fails: bool) -> Bench {
     assert_is_test_image(img);
     let work = tempfile::tempdir().unwrap();
     let disk_id = img.disk.clone();
@@ -77,6 +82,9 @@ fn bench(img: &Image) -> Bench {
     env.mount = Arc::new(move |w| {
         assert_eq!(w, d, "only the test image is mounted");
         l.lock().unwrap().push(format!("mount {w}"));
+        if mount_fails {
+            anyhow::bail!("the test's mount fails");
+        }
         diskutil("mountDisk", w)
     });
     std::fs::create_dir_all(work.path().join("support")).unwrap();
@@ -203,6 +211,41 @@ fn a_pulled_card_is_never_confused_with_the_disk_that_took_its_number() {
         b.log.lock().unwrap()
     );
     assert!(other.is_mounted(), "the other disk stays mounted");
+}
+
+#[test]
+fn a_card_that_does_not_mount_for_deleting_clips_says_so_per_clip() {
+    let img = Image::create("64m", "QCMC7", false);
+    std::fs::create_dir_all(img.mount.join("DCIM")).unwrap();
+    make_clip(&img.mount.join("DCIM/PICT0001.AVI"), 2, true);
+    let b = bench_with(&img, true);
+    let mut d = b.core.defaults();
+    d.delete_clips_after_import = true;
+    b.core.set_defaults(d);
+    b.core.load(Some(&img.mount)).unwrap();
+    // The card was unmounted after the stage; the mount for the deletion fails.
+    diskutil("unmountDisk", &img.disk).unwrap();
+    let out = b.core.import(&mp4()).unwrap();
+    let d = out.clip_deletion.expect("the setting is on");
+    assert_eq!(d.len(), 1);
+    assert_eq!(d[0].state, quadcam_lib::core::DeletionState::Kept);
+    let why = d[0].reason.as_deref().unwrap();
+    assert!(why.contains("did not mount"), "{why}");
+    assert!(why.contains("the test's mount fails"), "{why}");
+    assert!(b
+        .core
+        .session()
+        .unwrap()
+        .warnings
+        .iter()
+        .any(|w| w.starts_with("No clips were deleted: the card did not mount")));
+    assert_eq!(
+        *b.log.lock().unwrap(),
+        [
+            format!("mount {}", img.disk),
+            format!("unmount {}", img.disk)
+        ]
+    );
 }
 
 #[test]

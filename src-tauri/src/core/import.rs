@@ -359,11 +359,23 @@ impl Core {
         // unmount: a card released by an earlier export is mounted again to delete from it.
         let clip_deletion =
             (self.defaults().delete_clips_after_import && !o.keep_clips).then(|| {
-                if let Err(e) = self.ensure_session_card() {
-                    eprintln!("quadcam: card not mounted for deleting clips: {e:#}");
+                match self.ensure_session_card() {
+                    Ok(_) => {
+                        let s = self.session().unwrap_or_else(|| s.clone());
+                        delete_imported_clips(&tools, &s)
+                    }
+                    // The outcome says why every clip stays, not "no longer on the card".
+                    Err(e) => {
+                        let why = format!("the card did not mount ({e:#})");
+                        if let Ok(mut latest) = self.current() {
+                            latest
+                                .warnings
+                                .push(format!("No clips were deleted: {why}."));
+                            let _ = self.commit(Some(latest));
+                        }
+                        kept_clips(&s, &why)
+                    }
                 }
-                let s = self.session().unwrap_or_else(|| s.clone());
-                delete_imported_clips(&tools, &s)
             });
         if let Some(d) = &clip_deletion {
             let deleted = d
@@ -648,6 +660,19 @@ pub(crate) fn delete_imported_clips(tools: &media::Tools, s: &Session) -> Vec<Cl
                 },
                 reason,
             }
+        })
+        .collect()
+}
+
+/// Every clip stays, for one reason.
+fn kept_clips(s: &Session, why: &str) -> Vec<ClipDeletion> {
+    s.clips
+        .iter()
+        .map(|c| ClipDeletion {
+            id: c.id,
+            path: c.card_path.clone(),
+            state: DeletionState::Kept,
+            reason: Some(why.to_string()),
         })
         .collect()
 }

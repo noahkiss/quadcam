@@ -37,6 +37,8 @@ Everything else stays:
 - Skipped clips, clips that failed, and clips whose output did not verify again.
 - Every file that is not a clip. On a DJI O4 air unit, QuadCam deletes `DCIM/DJI_001/*.MP4` and keeps `MISC/`, the `.SRT` files and the empty `DCIM` folders. On an analog card, it deletes only the imported `.AVI` files.
 
+If the card does not mount again for the delete, every clip stays, and the result says the card did not mount.
+
 QuadCam never formats a card for this and never changes its file system. Format card is a separate step, with its own rules; see [Format safety](format-safety.md).
 
 Each import can turn the delete off for that import only:
