@@ -1742,3 +1742,208 @@ fn an_imported_take_is_not_judged_for_a_carrier() {
     assert!(r.retakes.is_empty(), "{:?}", r.retakes);
     assert_eq!(b.http.posts(), 0);
 }
+
+/// A bench whose speech check hears every line right except the card paths in `wrong`,
+/// where it hears "Battery.".
+fn bench_hearing(
+    wrong: Arc<std::sync::Mutex<Vec<String>>>,
+) -> (Bench, Arc<quadcam_lib::intel::fake::FakeHelper>) {
+    let mut texts: Vec<(String, String)> = Vec::new();
+    for id in quadcam_lib::gear::voice::sets::ids() {
+        if id == "custom" {
+            continue;
+        }
+        for l in quadcam_lib::gear::voice::sets::lines_of(id).unwrap() {
+            texts.push((l.line.path, l.line.text));
+        }
+    }
+    let helper = Arc::new(quadcam_lib::intel::fake::FakeHelper::new(Box::new(
+        move |f: &str| {
+            if wrong
+                .lock()
+                .unwrap()
+                .iter()
+                .any(|w| f.ends_with(w.as_str()))
+            {
+                return Some("Battery.".into());
+            }
+            texts
+                .iter()
+                .find(|(p, _)| f.ends_with(p.as_str()))
+                .map(|(_, t)| format!("{t}."))
+        },
+    )));
+    let mut b = bench(99_000, true);
+    let intel = quadcam_lib::intel::Intel::with("/helper/quadcam-intel".into(), helper.clone());
+    b.core = b.core.with_intel(Arc::new(intel));
+    (b, helper)
+}
+
+fn check(b: &Bench, pack: &str, accept: &[&str]) -> quadcam_lib::core::VoiceCheckReport {
+    b.core
+        .gear_voice_check(&quadcam_lib::core::VoiceCheckParams {
+            pack: pack.into(),
+            accept: accept.iter().map(|s| s.to_string()).collect(),
+            ..Default::default()
+        })
+        .unwrap()
+}
+
+#[test]
+fn a_line_the_speech_check_hears_wrong_is_a_re_take_until_accepted() {
+    const LOW: &str = "SOUNDS/en/lowbat.wav";
+    let wrong = Arc::new(std::sync::Mutex::new(vec![LOW.to_string()]));
+    let (b, helper) = bench_hearing(wrong.clone());
+    let m = "eleven_turbo_v2_5";
+    let r = paid_render(&b, render("Callum", m, &["quad"], false, true));
+    // The check ran after the render, on every line it put in the pack.
+    assert!(r.heard.len() > 10, "{r:?}");
+    let low = r.heard.iter().find(|h| h.path == LOW).unwrap();
+    assert!(!low.ok && !low.accepted);
+    assert_eq!(low.heard, "Battery.");
+    assert!(r.heard.iter().filter(|h| h.path != LOW).all(|h| h.ok));
+    let retake = r.retakes.iter().find(|t| t.path == LOW).expect("a re-take");
+    assert_eq!(retake.reason, "The speech check heard \"Battery.\".");
+    let pack = b.dir.path().join("support/gear/voices").join(&r.pack);
+    assert!(!pack.join(LOW).exists());
+    let held = b
+        .dir
+        .path()
+        .join("cache/voice/held")
+        .join(&r.pack)
+        .join(LOW);
+    assert!(held.is_file());
+    // The library shows what was heard per line.
+    let k = b
+        .core
+        .gear_voice(&Default::default())
+        .unwrap()
+        .packs
+        .into_iter()
+        .find(|k| k.id == r.pack)
+        .unwrap();
+    assert!(k.heard.iter().any(|h| h.path == LOW && !h.ok));
+    assert!(k.retakes.iter().any(|t| t.path == LOW));
+    let posts = b.http.posts();
+
+    // The same render again costs nothing and keeps the line out, without hearing it again.
+    helper.calls.lock().unwrap().clear();
+    let again = b
+        .core
+        .gear_voice_render(&render("Callum", m, &["quad"], false, false))
+        .unwrap();
+    assert!(!again.needs_confirm);
+    assert_eq!(b.http.posts(), posts);
+    assert!(again.retakes.iter().any(|t| t.path == LOW), "{again:?}");
+    assert!(!helper.heard_files().iter().any(|f| f.ends_with(LOW)));
+    // An estimate with another seed prices only the batch that holds the line.
+    let est = b
+        .core
+        .gear_voice_estimate(&EstimateParams {
+            sets: vec!["quad".into()],
+            voice: "Callum".into(),
+            model: m.into(),
+            settings: Some(quadcam_lib::gear::voice::render::RenderSettings {
+                seed: 7,
+                ..Default::default()
+            }),
+            ..Default::default()
+        })
+        .unwrap();
+    assert_eq!(est.estimate.batches, 1, "{est:?}");
+    assert!(est.retakes == 0 && est.to_render >= 1, "{est:?}");
+
+    // Accepted, the line goes back into the pack and a render keeps it there for free.
+    let a = check(&b, &r.pack, &[LOW]);
+    assert!(a.lines[0].accepted);
+    assert!(pack.join(LOW).is_file());
+    assert!(!held.exists());
+    let again = b
+        .core
+        .gear_voice_render(&render("Callum", m, &["quad"], false, false))
+        .unwrap();
+    assert!(!again.retakes.iter().any(|t| t.path == LOW), "{again:?}");
+    assert!(pack.join(LOW).is_file());
+    assert_eq!(b.http.posts(), posts);
+    let k = b
+        .core
+        .gear_voice(&Default::default())
+        .unwrap()
+        .packs
+        .into_iter()
+        .find(|k| k.id == r.pack)
+        .unwrap();
+    assert!(
+        k.heard.iter().any(|h| h.path == LOW && h.accepted),
+        "{:?}",
+        k.heard
+    );
+
+    // A check on request hears the pack again; a line heard right needs nothing.
+    wrong.lock().unwrap().clear();
+    let c = check(&b, &r.pack, &[]);
+    assert!(c.available && c.mismatches == 0, "{c:?}");
+    assert!(c.lines.iter().all(|h| h.ok));
+    let text = quadcam_lib::core::voice_check_text(&c);
+    assert!(text.contains("0 heard wrong"), "{text}");
+}
+
+#[test]
+fn a_sample_heard_wrong_warns_and_its_line_is_a_re_take() {
+    const SIX: &str = "SOUNDS/en/SYSTEM/0006.wav";
+    let wrong = Arc::new(std::sync::Mutex::new(vec![SIX.to_string()]));
+    let (b, _) = bench_hearing(wrong);
+    let m = "eleven_turbo_v2_5";
+    let s = paid_sample(&b, sample(&["Callum"], &[m], false, true));
+    let six = s.items.iter().find(|i| i.line == SIX).unwrap();
+    assert_eq!(six.heard.as_deref(), Some("Battery."));
+    assert_eq!(six.heard_ok, Some(false));
+    assert!(s
+        .items
+        .iter()
+        .filter(|i| i.line != SIX)
+        .all(|i| i.heard_ok == Some(true)));
+    assert!(
+        s.warnings
+            .iter()
+            .any(|w| w.contains(SIX) && w.contains("heard")),
+        "{:?}",
+        s.warnings
+    );
+    // A render of the set with the same seed keeps the sampled line out at no cost.
+    let est = estimate(&b, &["sample"], m).unwrap();
+    assert!(est.retakes >= 1, "{est:?}");
+}
+
+#[test]
+fn without_the_helper_the_check_is_unavailable_and_renders_go_on() {
+    let b = bench(99_000, true);
+    let r = paid_render(
+        &b,
+        render("Callum", "eleven_turbo_v2_5", &["sample"], false, true),
+    );
+    assert!(r.heard.is_empty());
+    let c = check(&b, &r.pack, &[]);
+    assert!(!c.available);
+    assert!(c.reason.unwrap().contains("helper"));
+    let v = b.core.gear_voice(&Default::default()).unwrap();
+    assert!(!v.speech.available);
+    assert!(quadcam_lib::core::voice_view_text(&v).contains("Speech check: unavailable"));
+    // Accepting a line the check never heard is refused.
+    let e = b
+        .core
+        .gear_voice_check(&quadcam_lib::core::VoiceCheckParams {
+            pack: r.pack.clone(),
+            accept: vec!["SOUNDS/en/armed.wav".into()],
+            ..Default::default()
+        })
+        .unwrap_err();
+    assert!(e.to_string().contains("has not heard"), "{e}");
+    assert!(b
+        .core
+        .gear_voice_check(&quadcam_lib::core::VoiceCheckParams {
+            pack: "no-such-pack".into(),
+            ..Default::default()
+        })
+        .is_err());
+}

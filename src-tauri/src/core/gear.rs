@@ -140,6 +140,12 @@ impl Core {
         self
     }
 
+    /// The Swift helper this core runs (`crate::intel`); tests pass one with a fake runner.
+    pub fn with_intel(mut self, intel: std::sync::Arc<crate::intel::Intel>) -> Core {
+        self.gear.intel = intel;
+        self
+    }
+
     /// What is plugged in now, each with its saved record. Reads only.
     pub fn gear_connected(&self) -> Result<Vec<Connected>> {
         let saved = self.gear_store().devices()?;

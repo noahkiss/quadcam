@@ -178,6 +178,12 @@ pub struct SampleItem {
     /// The WAV, in the cache.
     pub file: String,
     pub ms: u32,
+    /// What the speech check heard; absent when it did not run.
+    #[serde(default)]
+    pub heard: Option<String>,
+    /// The heard text matches the line.
+    #[serde(default)]
+    pub heard_ok: Option<bool>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, specta::Type)]
@@ -205,7 +211,7 @@ pub struct ImportTakesParams {
 }
 
 /// The provider id the studio's takes are cached under.
-const PROVIDER: &str = "elevenlabs";
+pub(super) const PROVIDER: &str = "elevenlabs";
 
 /// A studio plan for one voice and model: the lines earlier takes hold, and the batches still
 /// to make for the rest.
@@ -336,7 +342,7 @@ impl StudioPlan {
         // The reused takes whose lines all passed: the pack keeps them whole.
         let whole: Vec<Batch> = reused
             .iter()
-            .filter(|e| e.flagged.is_empty())
+            .filter(|e| e.items.iter().all(|i| !e.needs_retake(&i.spoken)))
             .map(|e| e.batch())
             .collect();
         entries.extend(reused);
@@ -815,9 +821,12 @@ impl Core {
                     text: l.line.text.clone(),
                     file: file.display().to_string(),
                     ms: ((wav.len().saturating_sub(44)) as u64 * 1000 / (32000 * 2)) as u32,
+                    heard: None,
+                    heard_ok: None,
                 });
             }
         }
+        self.check_samples(&mut report, &settings);
         Ok(report)
     }
 
@@ -898,6 +907,7 @@ impl Core {
             warnings: Vec::new(),
             digest: digest.clone(),
             retakes: Vec::new(),
+            heard: Vec::new(),
         };
         let reused = plan.reuse.lines().count();
         if reused > 0 {
@@ -984,7 +994,19 @@ impl Core {
         let rendered_now: std::collections::HashSet<&str> =
             lines.iter().map(|(l, _)| l.line.path.as_str()).collect();
         let mut kept_batches: Vec<String> = Vec::new();
+        let mut heard = Vec::new();
         if let Some(o) = &old {
+            // What the check heard still holds for a line not rendered into the pack now: one
+            // the render left alone, or a re-take whose take is the one heard.
+            heard = o
+                .heard
+                .iter()
+                .filter(|h| {
+                    !rendered_now.contains(h.path.as_str())
+                        || !done.cuts.contains_key(&spelling.apply(&h.text))
+                })
+                .cloned()
+                .collect();
             retakes.extend(
                 o.retakes
                     .iter()
@@ -1024,6 +1046,7 @@ impl Core {
             kept_batches,
             firmware: packs::EDGETX.into(),
             voice_id: voice.clone(),
+            heard,
         };
         std::fs::write(
             stage.join("pack.json"),
@@ -1040,6 +1063,14 @@ impl Core {
         }
         report.rendered = done.batches_rendered;
         report.from_cache = done.batches_cached;
+        // The lines rendered into the pack now, heard by the speech check.
+        let into_pack: Vec<String> = chosen
+            .iter()
+            .map(|l| l.path.clone())
+            .filter(|p| manifest.files.contains(p))
+            .collect();
+        self.check_after_render(&id, &into_pack, &mut report);
+        let retakes = self.local_pack(&id).map(|m| m.retakes).unwrap_or(retakes);
         if !retakes.is_empty() {
             report.notes.push(format!(
                 "{} lines need a re-take and are not in the pack: render again with another seed to redo only their batches.",
@@ -1106,7 +1137,7 @@ fn legacy_pack_id(voice_name: &str, model: &str) -> String {
 /// without the seed, so a re-render with a new seed knows which batches the pack holds whole.
 /// A new `batch::CUT_VERSION` makes every batch new again: a re-render cuts it once more (from
 /// the batch cache, at no cost).
-fn kept_key(voice: &str, model: &str, settings: &RenderSettings, b: &Batch) -> String {
+pub(super) fn kept_key(voice: &str, model: &str, settings: &RenderSettings, b: &Batch) -> String {
     let settings = RenderSettings {
         seed: 0,
         ..settings.clone()

@@ -34,7 +34,7 @@ pub use crate::core::{
 };
 pub use crate::core::{
     Catalog, CatalogParams, EstimateParams, ImportTakesParams, KeyParams, KeyStatus, SampleParams,
-    SampleReport, SetsParams, StudioEstimate, StudioView,
+    SampleReport, SetsParams, StudioEstimate, StudioView, VoiceCheckParams, VoiceCheckReport,
 };
 pub use crate::core::{
     CrashSaveParams, FlightFilter, FlightFoldersParams, FlightReport, FlightSetParams, FlightsView,
@@ -221,6 +221,10 @@ macro_rules! with_gear_rows {
             /// Copies earlier ElevenLabs takes of single lines from a folder into the cache, so
             /// the studio counts them and never sends their lines again. Reads the folder only.
             gear_voice_import_takes(params: ImportTakesParams) -> ImportReport = |c| c.gear_voice_import_takes(&params);
+            /// Hears each line of a voice pack with the on-device speech recognizer and compares
+            /// it with the line's text; a line heard wrong in a rendered pack leaves the pack as
+            /// a re-take. `accept` keeps what was heard instead. Calls no provider.
+            gear_voice_check(params: VoiceCheckParams) -> VoiceCheckReport = |c| c.gear_voice_check(&params);
             /// Installs a voice pack from the index after a hash check.
             gear_voice_pack_install(params: PackInstallParams) -> VoicePack = |c| c.gear_voice_pack_install(&params);
             /// Stages one card change that puts a pack's sounds on a radio, keeping the person's

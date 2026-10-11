@@ -243,6 +243,12 @@ export const commands = {
 	 *  the studio counts them and never sends their lines again. Reads the folder only.
 	 */
 	gearVoiceImportTakes: (params: ImportTakesParams) => typedError<ImportReport, string>(__TAURI_INVOKE("gear_voice_import_takes", { params })),
+	/**
+	 *  Hears each line of a voice pack with the on-device speech recognizer and compares
+	 *  it with the line's text; a line heard wrong in a rendered pack leaves the pack as
+	 *  a re-take. `accept` keeps what was heard instead. Calls no provider.
+	 */
+	gearVoiceCheck: (params: VoiceCheckParams) => typedError<VoiceCheckReport, string>(__TAURI_INVOKE("gear_voice_check", { params })),
 	/**  Installs a voice pack from the index after a hash check. */
 	gearVoicePackInstall: (params: PackInstallParams) => typedError<VoicePack, string>(__TAURI_INVOKE("gear_voice_pack_install", { params })),
 	/**
@@ -2569,6 +2575,23 @@ export type FcReadParams = {
 	commands?: string[],
 };
 
+/**  One feature as the helper's `caps` reports it. */
+export type Feature = {
+	/**  `asr`: the speech check of voice lines. */
+	name: string,
+	available: boolean,
+	/**  The oldest macOS the feature runs on. */
+	min_os?: string,
+	/**  Why it is unavailable, when it is. */
+	reason?: string | null,
+	/**
+	 *  The locale asked about, and the state of its assets: `installed`, `supported` (can be
+	 *  installed), `downloading` or `unsupported`.
+	 */
+	locale?: string | null,
+	assets?: string | null,
+};
+
 /**  Where ffmpeg and ffprobe come from (setting `ffmpegSource`). */
 export type FfmpegSource = 
 /**  QuadCam's ffmpeg module when it is installed, else Homebrew. */
@@ -3028,6 +3051,25 @@ export type Grid = {
 	name: string,
 	width: number,
 	height: number,
+};
+
+/**  What the speech check heard in one line of a pack. */
+export type HeardLine = {
+	/**  The card path. */
+	path: string,
+	/**  The line's text. */
+	text: string,
+	/**  What the recognizer heard; empty when it heard nothing. */
+	heard: string,
+	/**
+	 *  The heard text matches the line (case, punctuation, spacing, numbers and spelling
+	 *  aside).
+	 */
+	ok: boolean,
+	/**  The person kept the line although the check heard something else. */
+	accepted?: boolean,
+	/**  The recognizer's confidence, 0-1. */
+	confidence?: number | null,
 };
 
 /**  A secret as QuadCam may show it. */
@@ -5015,6 +5057,8 @@ export type RenderReport = {
 	digest?: string,
 	/**  A batched render: the pack's lines left out because their cut failed a check. */
 	retakes?: Retake[],
+	/**  What the speech check heard in the lines rendered now (empty when it is unavailable). */
+	heard?: HeardLine[],
 };
 
 /**  How a voice is rendered. Every field is in the pack's index entry. */
@@ -5114,6 +5158,10 @@ export type SampleItem = {
 	/**  The WAV, in the cache. */
 	file: string,
 	ms: number,
+	/**  What the speech check heard; absent when it did not run. */
+	heard?: string | null,
+	/**  The heard text matches the line. */
+	heard_ok?: boolean | null,
 };
 
 /**  `gear_voice_sample`: short A/B renders of a few lines in every voice and model. */
@@ -6327,6 +6375,35 @@ export type VerifyReport = {
 	error: string | null,
 };
 
+/**  `gear_voice_check`. */
+export type VoiceCheckParams = {
+	/**  An installed or rendered pack id. */
+	pack: string,
+	/**  Card paths to check; empty for every line of the pack. */
+	lines?: string[],
+	/**
+	 *  Card paths whose heard text the person accepts: each passes, and a line the check took
+	 *  out of the pack goes back in. Nothing is heard again.
+	 */
+	accept?: string[],
+	/**  First install the recognizer's assets for the pack's language through macOS. */
+	install?: boolean,
+};
+
+export type VoiceCheckReport = {
+	pack: string,
+	/**  The speech check ran; else `reason` says why it could not. */
+	available: boolean,
+	reason?: string | null,
+	/**  The lines heard (or accepted) now. */
+	lines: HeardLine[],
+	/**  Lines whose heard text does not match. */
+	mismatches: number,
+	/**  Of those, lines taken out of the pack as re-takes. */
+	held?: number,
+	notes: string[],
+};
+
 /**  `gear_voice_choose`. */
 export type VoiceChooseParams = {
 	radio: string,
@@ -6446,6 +6523,8 @@ export type VoicePack = {
 	 *  (`pack.json` `retakes`). A render with another seed redoes them.
 	 */
 	retakes?: Retake[],
+	/**  What the speech check heard in each line it checked (`pack.json` `heard`). */
+	heard?: HeardLine[],
 };
 
 /**  `gear_voice`. */
@@ -6509,6 +6588,8 @@ export type VoiceView = {
 	/**  Where the index is read from, when a setting names one. */
 	index_source?: string | null,
 	notes: string[],
+	/**  The speech check of voice lines (English): available, or why not. */
+	speech: Feature,
 };
 
 /**  A mounted volume the app may care about. */

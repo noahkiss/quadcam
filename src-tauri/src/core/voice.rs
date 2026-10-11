@@ -118,6 +118,9 @@ pub struct VoicePack {
     /// (`pack.json` `retakes`). A render with another seed redoes them.
     #[serde(default)]
     pub retakes: Vec<packs::Retake>,
+    /// What the speech check heard in each line it checked (`pack.json` `heard`).
+    #[serde(default)]
+    pub heard: Vec<packs::HeardLine>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, specta::Type)]
@@ -147,6 +150,8 @@ pub struct VoiceView {
     #[serde(default)]
     pub index_source: Option<String>,
     pub notes: Vec<String>,
+    /// The speech check of voice lines (English): available, or why not.
+    pub speech: crate::intel::Feature,
 }
 
 /// `gear_voice_edit`: override one line on one radio. `pack` takes another installed pack's
@@ -236,6 +241,9 @@ pub struct RenderReport {
     /// A batched render: the pack's lines left out because their cut failed a check.
     #[serde(default)]
     pub retakes: Vec<crate::gear::voice::packs::Retake>,
+    /// What the speech check heard in the lines rendered now (empty when it is unavailable).
+    #[serde(default)]
+    pub heard: Vec<packs::HeardLine>,
 }
 
 /// `gear_voice_preview`: a sound to play.
@@ -469,7 +477,7 @@ impl Core {
             .map(String::from)
     }
 
-    fn all_lines(&self) -> Result<Vec<Line>> {
+    pub(super) fn all_lines(&self) -> Result<Vec<Line>> {
         let mut out = lines::builtin()?;
         for c in self.custom_lines()? {
             if !out.iter().any(|l| l.path == c.path) {
@@ -574,6 +582,7 @@ impl Core {
                 .map(|(r, _)| r.clone())
                 .collect(),
             retakes: m.retakes.clone(),
+            heard: m.heard.clone(),
         }
     }
 
@@ -687,6 +696,7 @@ impl Core {
                     made: None,
                     radios: Vec::new(),
                     retakes: Vec::new(),
+                    heard: Vec::new(),
                 });
             }
         }
@@ -725,6 +735,7 @@ impl Core {
             chosen: p.radio.as_deref().and_then(|r| self.chosen_of(r)),
             index_source: source,
             notes,
+            speech: self.speech("en"),
         })
     }
 
@@ -810,6 +821,7 @@ impl Core {
             warnings: Vec::new(),
             digest: String::new(),
             retakes: Vec::new(),
+            heard: Vec::new(),
         };
         if paid && plan.to_render > 0 {
             report.notes.push(format!(
@@ -858,11 +870,24 @@ impl Core {
         files.sort();
         m.lines = files.len() as u32;
         m.files = files;
+        let now: Vec<String> = chosen.iter().map(|l| l.path.clone()).collect();
+        // What the check heard in the lines not rendered now still holds; the check hears
+        // the others again below.
+        if let Ok(old) = std::fs::read(dir.join("pack.json")) {
+            if let Ok(old) = serde_json::from_slice::<packs::PackManifest>(&old) {
+                m.heard = old
+                    .heard
+                    .into_iter()
+                    .filter(|h| !now.contains(&h.path) && m.files.contains(&h.path))
+                    .collect();
+            }
+        }
         std::fs::write(stage.join("pack.json"), serde_json::to_vec_pretty(&m)?)?;
         let _ = std::fs::remove_dir_all(&dir);
         std::fs::rename(&stage, &dir)?;
         report.rendered = made;
         report.from_cache = plan.lines.saturating_sub(made);
+        self.check_after_render(&id, &now, &mut report);
         Ok(report)
     }
 
@@ -1603,7 +1628,7 @@ pub fn view_text(v: &VoiceView) -> String {
     for k in &v.packs {
         let _ = writeln!(
             s,
-            "  {} {}: {} lines, {}{}{}{}{}{}{}",
+            "  {} {}: {} lines, {}{}{}{}{}{}{}{}",
             k.id,
             k.voice,
             k.lines,
@@ -1633,7 +1658,23 @@ pub fn view_text(v: &VoiceView) -> String {
                 String::new()
             } else {
                 format!(", {} lines need a re-take", k.retakes.len())
+            },
+            match k.heard.iter().filter(|h| !h.ok && !h.accepted).count() {
+                0 if k.heard.is_empty() => String::new(),
+                0 => format!(", {} lines heard right", k.heard.len()),
+                n => format!(", {n} lines heard wrong"),
             }
+        );
+    }
+    if !v.speech.available {
+        let _ = writeln!(
+            s,
+            "Speech check: unavailable ({}).",
+            v.speech
+                .reason
+                .as_deref()
+                .unwrap_or("no reason given")
+                .trim_end_matches('.')
         );
     }
     if let Some(c) = &v.chosen {
@@ -1700,6 +1741,13 @@ pub fn report_text(r: &RenderReport) -> String {
         for t in &r.retakes {
             s.push_str(&format!("\n  {} ({:?}): {}", t.path, t.text, t.reason));
         }
+    }
+    if !r.heard.is_empty() {
+        let wrong = r.heard.iter().filter(|h| !h.ok && !h.accepted).count();
+        s.push_str(&format!(
+            "\nSpeech check: {} lines heard, {wrong} heard wrong.",
+            r.heard.len()
+        ));
     }
     s
 }

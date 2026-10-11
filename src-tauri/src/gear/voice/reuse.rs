@@ -66,6 +66,17 @@ impl<'a> Scope<'a> {
         )
     }
 
+    #[cfg(test)]
+    fn of_parts(s: &Scope<'a>) -> Self {
+        Scope {
+            cache: s.cache,
+            provider: s.provider,
+            voice: s.voice,
+            model: s.model,
+            settings: s.settings,
+        }
+    }
+
     fn path(&self) -> PathBuf {
         let who = serde_json::json!({
             "voice": self.voice, "model": self.model, "speed": format!("{:.4}", self.settings.speed),
@@ -107,6 +118,23 @@ pub struct Entry {
     /// the cut, and it matches a line by its spoken text.
     #[serde(default)]
     pub alone: bool,
+    /// What the speech check heard in its lines (`asr`).
+    #[serde(default)]
+    pub heard: Vec<EntryHeard>,
+}
+
+/// What the speech check heard in one line of a take.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct EntryHeard {
+    pub spoken: String,
+    pub heard: String,
+    /// The heard text matched the line.
+    pub ok: bool,
+    /// The person kept the line although the check heard something else.
+    #[serde(default)]
+    pub accepted: bool,
+    /// The `batch::CUT_VERSION` of the cut it heard; under another, the result no longer holds.
+    pub cut: u32,
 }
 
 /// The index key of a line spoken alone.
@@ -150,7 +178,29 @@ impl Entry {
                 .collect(),
             cut: batch::CUT_VERSION,
             alone: false,
+            heard: Vec::new(),
         }
+    }
+
+    /// The speech check's mismatch for a line of this take, unless the person accepted it or
+    /// another cut version made it.
+    pub fn misheard(&self, spoken: &str) -> Option<&EntryHeard> {
+        self.heard
+            .iter()
+            .find(|h| h.cut == batch::CUT_VERSION && h.spoken == spoken && !h.ok && !h.accepted)
+    }
+
+    /// A line of this take needs a re-take: its cut failed a check, or the speech check heard
+    /// something else.
+    pub fn needs_retake(&self, spoken: &str) -> bool {
+        (self.cut == batch::CUT_VERSION && self.flagged.iter().any(|f| f == spoken))
+            || self.misheard(spoken).is_some()
+    }
+
+    /// Records what the speech check heard in one of its lines, replacing an earlier result.
+    pub fn set_heard(&mut self, h: EntryHeard) {
+        self.heard.retain(|x| x.spoken != h.spoken);
+        self.heard.push(h);
     }
 
     /// The batch to cut this take with.
@@ -223,8 +273,7 @@ pub fn rendered_counts(cache: &BatchCache, provider: &str) -> Vec<TakeCount> {
                 continue;
             }
             for i in &e.items {
-                let flagged = e.cut == batch::CUT_VERSION && e.flagged.contains(&i.spoken);
-                if !flagged {
+                if !e.needs_retake(&i.spoken) {
                     said.insert(i.spoken.to_lowercase());
                 }
             }
@@ -294,9 +343,20 @@ impl LineIndex {
             .context("opening the line index lock")?;
         lock.lock().context("locking the line index")?;
         let new: HashSet<String> = entries.iter().map(|e| e.key.clone()).collect();
-        let mut all: Vec<Entry> = Self::read(&path)
-            .into_iter()
+        let old = Self::read(&path);
+        // The same key is the same take: what the speech check heard in it still holds.
+        let entries = entries.into_iter().map(|mut e| {
+            if e.heard.is_empty() {
+                if let Some(o) = old.iter().find(|o| o.key == e.key) {
+                    e.heard = o.heard.clone();
+                }
+            }
+            e
+        });
+        let mut all: Vec<Entry> = old
+            .iter()
             .filter(|e| !new.contains(&e.key) && s.cache.has(s.provider, &e.key))
+            .cloned()
             .collect();
         all.extend(entries);
         let tmp = path.with_extension("tmp");
@@ -309,6 +369,35 @@ impl LineIndex {
         std::fs::write(&tmp, serde_json::to_vec(&file)?)?;
         std::fs::rename(&tmp, &path)?;
         Ok(())
+    }
+
+    /// The take a render picks for a line spoken as `spoken` with this seed, as `split` ranks
+    /// them: one that passes with this seed, one that passes with any seed, one that needs a
+    /// re-take with this seed; the newest wins a tie. Its index in `entries`.
+    pub fn take_of(&self, s: &Scope, spoken: &str) -> Option<usize> {
+        let want = spoken.to_lowercase();
+        let mut best: Option<(u8, usize)> = None;
+        for (n, e) in self.batches.iter().enumerate() {
+            let Some(it) = e.items.iter().find(|i| i.spoken.to_lowercase() == want) else {
+                continue;
+            };
+            let rank = match (e.needs_retake(&it.spoken), e.seed == s.settings.seed) {
+                (false, true) => 0,
+                (false, false) => 1,
+                (true, true) => 2,
+                (true, false) => continue,
+            };
+            if best.is_some_and(|(r, _)| r < rank) || !s.cache.has(s.provider, &e.key) {
+                continue;
+            }
+            best = Some((rank, n));
+        }
+        best.map(|(_, n)| n)
+    }
+
+    /// The takes, as `take_of` numbers them.
+    pub fn entries(&self) -> &[Entry] {
+        &self.batches
     }
 }
 
@@ -330,12 +419,8 @@ impl Reuse {
     /// Every line's spoken text reused, with whether its take flagged it.
     pub fn lines(&self) -> impl Iterator<Item = (&str, bool)> {
         self.takes.iter().flat_map(|(e, want)| {
-            want.iter().map(move |w| {
-                (
-                    w.line.as_str(),
-                    e.cut == batch::CUT_VERSION && e.flagged.contains(&w.take),
-                )
-            })
+            want.iter()
+                .map(move |w| (w.line.as_str(), e.needs_retake(&w.take)))
         })
     }
 
@@ -383,7 +468,7 @@ pub fn split(
                 continue;
             };
             // Under another cut version the checks are not known yet: the take is cut again.
-            let flagged = e.cut == batch::CUT_VERSION && e.flagged.contains(&it.spoken);
+            let flagged = e.needs_retake(&it.spoken);
             let same_seed = e.seed == s.settings.seed;
             let rank = match (flagged, same_seed) {
                 (false, true) => 0,
@@ -452,10 +537,15 @@ pub fn cut_reused(
         let flags = batch::check(&cuts, !e.alone);
         for c in &cuts {
             for w in want.iter().filter(|w| w.take == c.spoken) {
-                match flags.iter().find(|f| f.spoken == c.spoken) {
-                    Some(f) => {
-                        done.warnings.push(format!("{:?}: {}", w.line, f.reason));
-                        done.flagged.insert(w.line.clone(), f.reason.clone());
+                let reason = flags
+                    .iter()
+                    .find(|f| f.spoken == c.spoken)
+                    .map(|f| f.reason.clone())
+                    .or_else(|| e.misheard(&c.spoken).map(|h| super::asr::reason(&h.heard)));
+                match reason {
+                    Some(reason) => {
+                        done.warnings.push(format!("{:?}: {reason}", w.line));
+                        done.flagged.insert(w.line.clone(), reason);
                     }
                     None => {
                         done.cuts.insert(w.line.clone(), c.pcm.clone());
@@ -728,6 +818,7 @@ pub fn import_takes(
             // Not checked yet: the first render that uses it cuts and checks it.
             cut: 0,
             alone: true,
+            heard: Vec::new(),
         };
         by.entry((t.voice.clone(), t.model.clone(), format!("{:.4}", t.speed)))
             .or_insert_with(|| (t.speed, Vec::new()))
@@ -818,5 +909,106 @@ mod tests {
         cache.remove("elevenlabs", &c.key);
         LineIndex::record(&s, Vec::new()).unwrap();
         assert_eq!(keys(&s), [b.key]);
+    }
+
+    #[test]
+    fn a_line_the_speech_check_misheard_is_a_retake_until_accepted() {
+        let dir = tempfile::tempdir().unwrap();
+        let cache = BatchCache::new(dir.path());
+        let settings = RenderSettings::default();
+        let s = Scope {
+            cache: &cache,
+            provider: "elevenlabs",
+            voice: "v",
+            model: "m",
+            settings: &settings,
+        };
+        let bs = BatchSettings::default();
+        let item = |t: &str| Item {
+            spoken: t.into(),
+            tone: "calm".into(),
+        };
+        // A take of the line alone, a second of tone: the whole take is its cut.
+        let mut e = Entry {
+            alone: true,
+            ..take(&s, "Armed")
+        };
+        let tone = Aligned {
+            pcm: Pcm {
+                rate: 32_000,
+                samples: (0..32_000)
+                    .map(|i| ((i as f32 * 0.07).sin() * 8000.0) as i16)
+                    .collect(),
+            },
+            alignment: Default::default(),
+            billed_chars: None,
+        };
+        cache
+            .put("elevenlabs", &e.key, "v", "m", 1.0, 0, &e.text, &tone)
+            .unwrap();
+        let misheard = EntryHeard {
+            spoken: "Armed".into(),
+            heard: "Unarmed.".into(),
+            ok: false,
+            accepted: false,
+            cut: batch::CUT_VERSION,
+        };
+        e.set_heard(misheard.clone());
+        LineIndex::record(&s, vec![e.clone()]).unwrap();
+        // The same take written again without a result keeps what the check heard.
+        LineIndex::record(
+            &s,
+            vec![Entry {
+                heard: Vec::new(),
+                ..e.clone()
+            }],
+        )
+        .unwrap();
+        let index = LineIndex::load(&s);
+        assert_eq!(index.entries()[0].heard, std::slice::from_ref(&misheard));
+        assert!(index.entries()[0].needs_retake("Armed"));
+        assert_eq!(index.take_of(&s, "armed"), Some(0));
+        // With this seed: a re-take from the same take, nothing sent.
+        let (fresh, reuse) = split(&s, &index, &[item("Armed")], &bs);
+        assert!(fresh.is_empty());
+        assert_eq!(reuse.lines().collect::<Vec<_>>(), [("Armed", true)]);
+        // Cut again, the line stays out with the check's reason.
+        let mut done = Rendered::default();
+        cut_reused(&s, &reuse, bs.snap_ms, &mut done).unwrap();
+        assert_eq!(
+            done.flagged.get("Armed").map(String::as_str),
+            Some("The speech check heard \"Unarmed.\".")
+        );
+        // Another seed sends the line again.
+        let other = RenderSettings {
+            seed: 7,
+            ..RenderSettings::default()
+        };
+        let s7 = Scope {
+            settings: &other,
+            ..Scope::of_parts(&s)
+        };
+        let (fresh, reuse) = split(&s7, &LineIndex::load(&s7), &[item("Armed")], &bs);
+        assert_eq!(fresh.len(), 1);
+        assert!(reuse.is_empty());
+        // Accepted, the take passes again.
+        e.set_heard(EntryHeard {
+            accepted: true,
+            ..misheard.clone()
+        });
+        LineIndex::record(&s, vec![e]).unwrap();
+        let index = LineIndex::load(&s);
+        assert!(!index.entries()[0].needs_retake("Armed"));
+        let (_, reuse) = split(&s, &index, &[item("Armed")], &bs);
+        assert_eq!(reuse.lines().collect::<Vec<_>>(), [("Armed", false)]);
+        // A result from another cut version does not count.
+        let old = Entry {
+            heard: vec![EntryHeard {
+                cut: batch::CUT_VERSION - 1,
+                ..misheard
+            }],
+            ..index.entries()[0].clone()
+        };
+        assert!(!old.needs_retake("Armed"));
     }
 }

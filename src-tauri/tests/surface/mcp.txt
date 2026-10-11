@@ -88,6 +88,7 @@ mcp.action quadcam_gear_edit.sim_calibration_save
 mcp.action quadcam_gear_edit.stage
 mcp.action quadcam_gear_edit.stop
 mcp.action quadcam_gear_edit.update
+mcp.action quadcam_gear_edit.voice_check
 mcp.action quadcam_gear_edit.voice_choose
 mcp.action quadcam_gear_edit.voice_delete
 mcp.action quadcam_gear_edit.voice_edit
@@ -197,6 +198,7 @@ mcp.param quadcam_gear_apply.sim string
 mcp.param quadcam_gear_apply.sim_targets array<string>
 mcp.param quadcam_gear_apply.threshold integer
 mcp.param quadcam_gear_apply.version string
+mcp.param quadcam_gear_edit.accept array<string>
 mcp.param quadcam_gear_edit.action string
 mcp.param quadcam_gear_edit.add_folder string
 mcp.param quadcam_gear_edit.aircraft string
@@ -229,6 +231,7 @@ mcp.param quadcam_gear_edit.from string
 mcp.param quadcam_gear_edit.full_v number
 mcp.param quadcam_gear_edit.handle string
 mcp.param quadcam_gear_edit.id string
+mcp.param quadcam_gear_edit.install boolean
 mcp.param quadcam_gear_edit.keep_overrides boolean
 mcp.param quadcam_gear_edit.key string
 mcp.param quadcam_gear_edit.line string

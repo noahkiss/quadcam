@@ -228,6 +228,23 @@ pub enum VoiceCmd {
         #[command(flatten)]
         settings: SettingsArgs,
     },
+    /// Hear each line of a pack with the on-device speech recognizer (macOS 26 or later) and
+    /// compare it with the line's text. In a pack the studio rendered, a line heard wrong
+    /// leaves the pack as a re-take. Calls no provider.
+    Check {
+        /// The pack id.
+        pack: String,
+        /// Only these card paths, comma separated.
+        #[arg(long, value_delimiter = ',')]
+        lines: Vec<String>,
+        /// Keep what was heard for these card paths, comma separated: each passes, and goes
+        /// back into the pack. Hears nothing.
+        #[arg(long, value_delimiter = ',')]
+        accept: Vec<String>,
+        /// First install the recognizer's assets for the pack's language (macOS downloads them).
+        #[arg(long)]
+        install: bool,
+    },
     /// Install a pack from the index after a hash check.
     Install {
         /// The pack id.
@@ -413,6 +430,20 @@ pub fn run(core: &Core, a: VoiceArgs) -> Result<Value> {
                 lines,
                 settings: settings.get(),
                 batch: batch.get(),
+            },
+        )?)?,
+        Some(VoiceCmd::Check {
+            pack,
+            lines,
+            accept,
+            install,
+        }) => serde_json::to_value(call::gear_voice_check(
+            core,
+            api::VoiceCheckParams {
+                pack,
+                lines,
+                accept,
+                install,
             },
         )?)?,
         Some(VoiceCmd::ImportTakes { folder, dry_run }) => {

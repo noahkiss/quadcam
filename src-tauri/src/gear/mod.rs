@@ -273,6 +273,8 @@ pub struct Env {
     pub tts: Arc<dyn voice::tts::Providers>,
     /// Secrets (the voice provider's API key): the login Keychain.
     pub keys: Arc<dyn voice::keychain::KeyStore>,
+    /// The Swift helper (`crate::intel`): the speech check of voice lines.
+    pub intel: Arc<crate::intel::Intel>,
 }
 
 impl Env {
@@ -298,6 +300,7 @@ impl Env {
                 scratch: cache.join("voice").join("tmp"),
             }),
             keys: Arc::new(voice::keychain::Keychain),
+            intel: Arc::new(crate::intel::Intel::system()),
         }
     }
 
@@ -324,6 +327,9 @@ impl Env {
             holders: Arc::new(|_| Vec::new()),
             tts: Arc::new(voice::tts::NoProviders),
             keys: Arc::new(voice::keychain::MemKeys::default()),
+            intel: Arc::new(crate::intel::Intel::unavailable(
+                "Tests have no quadcam-intel helper.",
+            )),
         }
     }
 

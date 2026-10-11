@@ -44,6 +44,7 @@ cli.arg gear sims [TARGET]...
 cli.arg gear splash <IMAGE>
 cli.arg gear stop <HANDLE>
 cli.arg gear update <CHANGE>
+cli.arg gear voice check <PACK>
 cli.arg gear voice delete <PACK>
 cli.arg gear voice import-takes <FOLDER>
 cli.arg gear voice install <PACK>
@@ -162,6 +163,7 @@ cli.command gear storage
 cli.command gear update
 cli.command gear voice
 cli.command gear voice build-pack
+cli.command gear voice check
 cli.command gear voice choose
 cli.command gear voice credits
 cli.command gear voice delete
@@ -452,6 +454,9 @@ cli.flag gear voice build-pack --tempo VALUE
 cli.flag gear voice build-pack --trim-db VALUE
 cli.flag gear voice build-pack --version VALUE
 cli.flag gear voice build-pack --voice VALUE
+cli.flag gear voice check --accept VALUE
+cli.flag gear voice check --install
+cli.flag gear voice check --lines VALUE
 cli.flag gear voice choose --all-radios
 cli.flag gear voice choose --drop-overrides
 cli.flag gear voice choose --pack VALUE

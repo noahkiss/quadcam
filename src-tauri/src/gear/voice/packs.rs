@@ -86,6 +86,29 @@ pub struct PackManifest {
     /// voice id). Empty in packs made before 0.12.
     #[serde(default)]
     pub voice_id: String,
+    /// What the speech check heard in its lines, by card path (`gear_voice_check`).
+    #[serde(default)]
+    pub heard: Vec<HeardLine>,
+}
+
+/// What the speech check heard in one line of a pack.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Type)]
+pub struct HeardLine {
+    /// The card path.
+    pub path: String,
+    /// The line's text.
+    pub text: String,
+    /// What the recognizer heard; empty when it heard nothing.
+    pub heard: String,
+    /// The heard text matches the line (case, punctuation, spacing, numbers and spelling
+    /// aside).
+    pub ok: bool,
+    /// The person kept the line although the check heard something else.
+    #[serde(default)]
+    pub accepted: bool,
+    /// The recognizer's confidence, 0-1.
+    #[serde(default)]
+    pub confidence: Option<f64>,
 }
 
 /// A line that needs a re-take, and why.
@@ -173,6 +196,7 @@ pub fn render_to(
         kept_batches: Vec::new(),
         firmware: EDGETX.into(),
         voice_id: ctx.voice.into(),
+        heard: Vec::new(),
     };
     std::fs::write(dir.join("pack.json"), serde_json::to_vec_pretty(&m)?)?;
     Ok((m, made))

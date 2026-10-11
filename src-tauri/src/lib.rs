@@ -10,6 +10,7 @@ pub mod disk;
 pub mod gear;
 pub mod geocode;
 pub mod identity;
+pub mod intel;
 pub mod join;
 pub mod library;
 pub mod logmatch;
@@ -612,6 +613,7 @@ pub fn specta_builder() -> tauri_specta::Builder<tauri::Wry> {
             c::gear_voice_estimate,
             c::gear_voice_sample,
             c::gear_voice_import_takes,
+            c::gear_voice_check,
             c::gear_voice_pack_install,
             c::gear_voice_choose,
             c::gear_voice_choose_radios,

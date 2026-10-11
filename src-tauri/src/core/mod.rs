@@ -47,6 +47,7 @@ mod sim_sync;
 mod switchmap;
 mod update;
 mod voice;
+mod voice_check;
 mod voice_studio;
 pub use crate::paths::{cache_dir, default_session_file, default_settings_file, support_dir};
 pub use apply::{ChangeUpdateParams, RestoreParams, StageParams};
@@ -114,6 +115,7 @@ pub use voice::{
     VoiceChooseRadiosReport, VoiceEditParams, VoiceLine, VoicePack, VoiceParams,
     VoicePreviewParams, VoiceRenderParams, VoiceView, VOICE_CHANGE,
 };
+pub use voice_check::{check_text as voice_check_text, VoiceCheckParams, VoiceCheckReport};
 pub use voice_studio::{
     catalog_text as voice_catalog_text, estimate_text as voice_estimate_text,
     import_text as voice_import_text, key_text as voice_key_text, sample_text as voice_sample_text,
