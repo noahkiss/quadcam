@@ -63,6 +63,26 @@ test("stage a setting, review it, apply it and see it verified", async ({ app, p
   await expect(page.getByRole("status").filter({ hasText: "change ready" })).toHaveCount(0);
 });
 
+test("a change edited after its sheet planned refuses the stale plan and writes nothing", async ({ app, page }) => {
+  await openChanges(app, page);
+  await stageSetting(page, "osd_cap_alarm", "1500");
+  await page.getByRole("button", { name: "Review…" }).first().click();
+  const sheet = page.getByRole("dialog", { name: "Apply to Whoop FC" });
+  await expect(sheet.getByRole("button", { name: "Apply" })).toBeEnabled();
+  const id = String((await app.method("gear_apply_plan")).at(-1)?.id);
+  const shown = await app.core<{ digest: string }>(`c => c.handle("gear_apply_plan", { params: { id: "${id}", port: null } })`);
+  // Another surface edits the change while the sheet is open: its plan has a new digest.
+  await app.core(`c => c.dispatch("gear_change_update", { id: "${id}", edits: [{ kind: "fc_set", section: { kind: "master" }, name: "osd_cap_alarm", value: "1600" }] })`);
+  const fresh = await app.core<{ digest: string }>(`c => c.handle("gear_apply_plan", { params: { id: "${id}", port: null } })`);
+  expect(fresh.digest).not.toBe(shown.digest);
+  await sheet.getByRole("button", { name: "Apply" }).click();
+  await expect(sheet.getByText(/plan changed since you read it/)).toBeVisible();
+  expect((await app.method("gear_apply_click")).at(-1)).toMatchObject({ id, digest: shown.digest });
+  await expect(sheet.getByRole("region", { name: "Result" })).toHaveCount(0);
+  const status = await app.core<string>(`c => c.gear.changeStore.changes.find((x) => x.id === "${id}").status`);
+  expect(status).toBe("ready");
+});
+
 test("a setting the FC does not have is refused when staged", async ({ app, page }) => {
   await openChanges(app, page);
   await stageSetting(page, "no_such_setting", "1");
