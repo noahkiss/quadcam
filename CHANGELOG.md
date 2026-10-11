@@ -5,6 +5,8 @@ User-facing changes in each release, newest first. Release notes on
 
 ## Unreleased
 
+## 0.11.2 (2026-10-10)
+
 - **Voice studio: pay only for what was priced.** **Sample and pay** and **Render and pay** confirm the exact plan the question priced, by its digest. A picker change closes the question. The CLI takes `--digest`, MCP `digest`.
 - **Voice studio: re-takes.** A cut that fails a check (silent, too short, too long) no longer goes into the pack or onto the radio. The result lists it as needing a re-take, and **Re-take** renders again with a new seed, paying only for the batches that hold one. MCP takes `seed`.
 - **Voice studio: no bad take kept.** A batch whose timestamps do not match its text is not cached, so the next render asks again instead of failing from the cache. A paid request is no longer retried after a server error, which may already be billed.
