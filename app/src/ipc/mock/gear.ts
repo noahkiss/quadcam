@@ -110,7 +110,8 @@ export const busyGear = (): MockGear => ({ ...quietGear(), connected: [radioConn
 
 /** `gear_status`, each connected device with its saved record. */
 /** `core/radio_aircraft.rs`: the aircraft whose profiles name a radio, each with its model on
- *  the mounted card (`card`), else the latest backup. Other kinds come back unchanged. */
+ *  the mounted card (`card`), else the latest backup, and `aircraft` the selected one. Other
+ *  kinds come back unchanged. */
 export function withAircraft(d: Device, profiles: Profile[], card: boolean): Device {
   if (d.kind !== "radio") return structuredClone(d);
   const checked = card ? "card" : d.last_backup ? "latest backup" : null;
@@ -123,7 +124,8 @@ export function withAircraft(d: Device, profiles: Profile[], card: boolean): Dev
       const model = named ?? hit?.file ?? null;
       return { profile: p.name, model, model_name: hit?.name ?? null, checked, found: checked ? !!hit : null, selected: !!checked && model === "model01.yml" };
     });
-  return { ...structuredClone(d), radio_aircraft };
+  // `aircraft` on output: the one whose model the radio selects.
+  return { ...structuredClone(d), aircraft: radio_aircraft.find((a) => a.selected)?.profile ?? null, radio_aircraft };
 }
 
 export function gearStatus(g: MockGear, values: Record<string, unknown>): GearStatus {

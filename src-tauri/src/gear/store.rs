@@ -30,6 +30,9 @@ pub const DEVICES: &str = "devices";
 /// `Device.radio_aircraft`: a read's field, never in `gear.json`.
 const RADIO_AIRCRAFT: &str = "radio_aircraft";
 
+/// `Device.aircraft`: for a radio, a read's field too (the aircraft it selects now).
+const AIRCRAFT: &str = "aircraft";
+
 /// A gear folder.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Store {
@@ -132,9 +135,12 @@ impl Store {
     /// stay as they are, unknown fields of the entries included.
     pub fn save_device(&self, device: &Device) -> Result<Device> {
         let mut entry = serde_json::to_value(device)?;
-        // Worked out on every read, never saved.
+        // Worked out on every read, never saved: a radio's aircraft are in the profiles.
         if let Value::Object(m) = &mut entry {
             m.remove(RADIO_AIRCRAFT);
+            if device.kind == DeviceKind::Radio {
+                m.remove(AIRCRAFT);
+            }
         }
         self.update(|v| {
             let list = devices_mut(v)?;

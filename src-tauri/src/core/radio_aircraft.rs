@@ -2,7 +2,8 @@
 //! (`Device.aircraft`). A radio flies many: each aircraft profile names its radio
 //! (`ProfileGear.radio`), and that is the one source of truth. Reads list a radio's aircraft
 //! in `Device.radio_aircraft`, each with its EdgeTX model and whether that model is on the
-//! mounted card, else in the latest backup.
+//! mounted card, else in the latest backup. A radio's `Device.aircraft` on output is the one
+//! of them whose model the radio selects; it is never saved for a radio.
 //!
 //! `gear.json` files from before kept one aircraft on a radio too. `move_radio_links` moves
 //! that link onto the profile the first time Core sees the file: the profile gets this radio
@@ -328,8 +329,10 @@ impl Core {
         Some(models_in(&card, paths, "latest backup"))
     }
 
-    /// Fills `radio_aircraft` on a radio's record (`mount`: its card, mounted now). Other
-    /// kinds stay as they are.
+    /// Fills `radio_aircraft` on a radio's record (`mount`: its card, mounted now), and
+    /// `aircraft` with the one whose model the radio selects (None when none is, or QuadCam
+    /// could not look): the field keeps its schema 1 meaning, the aircraft the radio flies.
+    /// Other kinds stay as they are.
     pub(super) fn fill_radio_aircraft(
         &self,
         d: &mut Device,
@@ -340,7 +343,9 @@ impl Core {
             return;
         }
         let models = self.radio_models(&d.id, mount);
-        d.radio_aircraft = Some(aircraft_on(profiles, &d.id, models.as_ref()));
+        let list = aircraft_on(profiles, &d.id, models.as_ref());
+        d.aircraft = list.iter().find(|a| a.selected).map(|a| a.profile.clone());
+        d.radio_aircraft = Some(list);
     }
 }
 

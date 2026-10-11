@@ -361,6 +361,80 @@ fn a_radios_aircraft_link_from_before_moves_onto_the_profile() {
 }
 
 #[test]
+fn a_radios_aircraft_field_is_the_aircraft_whose_model_it_selects() {
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path().join("RADIO");
+    let card = radio_card(&root);
+    std::fs::write(
+        root.join("RADIO/radio.yml"),
+        "checksum: 0\r\nsemver: 2.12.4\r\nboard: pocket\r\ncurrModelFilename: \"model02.yml\"\r\n",
+    )
+    .unwrap();
+    for (f, name) in [("model01.yml", "Whoop"), ("model02.yml", "Cine")] {
+        std::fs::write(
+            root.join("MODELS").join(f),
+            format!("header:\r\n  name: \"{name}\"\r\n"),
+        )
+        .unwrap();
+    }
+    let mounted: Mounted = Arc::new(Mutex::new(vec![card]));
+    let c = core(dir.path(), Arc::new(NoHooks), &mounted);
+    let id = radio_id(&c.dispatch("gear_status", Value::Null).unwrap());
+    for (name, model) in [("Whoop", "model01.yml"), ("Cine", "model02.yml")] {
+        c.profile_save(
+            name,
+            &serde_json::from_value(json!({"gear": {"radio": id, "edgetx_model": model}})).unwrap(),
+            None,
+        )
+        .unwrap();
+    }
+    let saved = c
+        .dispatch("gear_device_save", json!({"id": id, "name": "Radio"}))
+        .unwrap();
+    // No card read and no backup: QuadCam cannot tell which model is selected.
+    assert!(saved["aircraft"].is_null(), "{saved}");
+    assert_eq!(saved["radio_aircraft"].as_array().unwrap().len(), 2);
+
+    // With the card mounted, `aircraft` is the selected model's aircraft; the list stays whole.
+    let s = c.dispatch("gear_status", Value::Null).unwrap();
+    let d = s["connected"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|x| x["kind"] == "radio")
+        .unwrap()["device"]
+        .clone();
+    assert_eq!(d["aircraft"], "Cine", "{d}");
+    let list = d["radio_aircraft"].as_array().unwrap();
+    assert_eq!(list.len(), 2);
+    assert_eq!(list[1]["profile"], "Cine");
+    assert_eq!(list[1]["selected"], true);
+    assert_eq!(list[0]["selected"], false);
+
+    // The output field is never saved for a radio.
+    let file = dir.path().join("support/gear/gear.json");
+    let v: Value = serde_json::from_slice(&std::fs::read(&file).unwrap()).unwrap();
+    assert!(v["devices"][0].get("aircraft").is_none(), "{v}");
+
+    // A selected model no aircraft on this radio flies: none.
+    c.profile_save(
+        "Cine",
+        &serde_json::from_value(json!({"gear": {"edgetx_model": "model02.yml"}})).unwrap(),
+        None,
+    )
+    .unwrap();
+    let s = c.dispatch("gear_status", Value::Null).unwrap();
+    let d = &s["connected"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|x| x["kind"] == "radio")
+        .unwrap()["device"];
+    assert!(d["aircraft"].is_null(), "{d}");
+    assert_eq!(d["radio_aircraft"].as_array().unwrap().len(), 1);
+}
+
+#[test]
 fn the_poll_reports_plug_ins_and_marks_known_devices_seen() {
     let dir = tempfile::tempdir().unwrap();
     let card = radio_card(&dir.path().join("RADIO"));

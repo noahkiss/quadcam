@@ -241,7 +241,8 @@ An aircraft profile can name its gear (`gear`: `fc`, `radio`, `edgetx_model`, `r
 
 A device record links an FC to its one aircraft (`aircraft`). A radio keeps no aircraft of its
 own: the profiles that name it in `gear.radio` are its aircraft, and reads list them in
-`radio_aircraft` (never saved). A `gear.json` from 0.11 or earlier may hold a radio linked to
+`radio_aircraft` (never saved). A read fills a radio's `aircraft` with the one whose EdgeTX
+model the radio selects (as the mounted card, else the latest backup, shows it), or none. A `gear.json` from 0.11 or earlier may hold a radio linked to
 one aircraft. QuadCam moves that link the first time it reads the file: the profile gets the
 radio when it names no radio yet, and the radio's `aircraft` is cleared. A link the profile
 cannot take (it names another radio, or the profile is gone) stays in the radio's entry as
