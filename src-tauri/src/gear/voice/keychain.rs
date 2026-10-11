@@ -22,16 +22,6 @@ pub trait KeyStore: Send + Sync {
     fn delete(&self, account: &str) -> Result<bool>;
 }
 
-/// A key as the app may show it: never the secret, only enough to tell keys apart.
-pub fn hint(secret: &str) -> String {
-    let n = secret.chars().count();
-    if n < 12 {
-        return "set".into();
-    }
-    let tail: String = secret.chars().skip(n - 4).collect();
-    format!("ends in {tail}")
-}
-
 /// Secrets in memory, for tests.
 #[derive(Default)]
 pub struct MemKeys(Mutex<BTreeMap<String, String>>);
@@ -129,13 +119,6 @@ mod tests {
         );
         assert!(k.delete(ELEVENLABS).unwrap());
         assert!(!k.delete(ELEVENLABS).unwrap());
-    }
-
-    #[test]
-    fn a_hint_never_shows_the_key() {
-        assert_eq!(hint("sk_abcdef123456"), "ends in 3456");
-        assert_eq!(hint("short"), "set");
-        assert!(!hint("sk_abcdef123456").contains("abcdef"));
     }
 
     #[test]

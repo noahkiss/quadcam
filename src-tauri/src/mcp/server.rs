@@ -713,7 +713,7 @@ impl<B: Backend> Server<B> {
                     e["format"].as_str().unwrap_or("?"), e["encoder"].as_str().unwrap_or("?"), e["keep_originals"], e["add_time"], e["delete_clips_after_import"], e["join_split_recordings"],
                     e["default_name"].as_str().unwrap_or(""), e["photos_album"].as_str().unwrap_or(""), e["format_label"].as_str().unwrap_or(""),
                     e["log_dir"].as_str().unwrap_or("none"), e["geocoder"].as_str().unwrap_or("?"), e["name_date_format"].as_str().unwrap_or("?"), e["default_profile"].as_str().unwrap_or("none"), e["tunables"], e["ffmpeg_source"].as_str().unwrap_or("?"),
-                    if view["values"]["googlePlacesKey"].is_null() { "not set" } else { "set" },
+                    view["secrets"]["googlePlacesKey"]["hint"].as_str().unwrap_or("not set"),
                 );
                 let settings: serde_json::Map<String, Value> = [
                     "output_dir",

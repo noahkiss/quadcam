@@ -105,7 +105,11 @@ fn the_key_lives_in_the_keychain_and_never_comes_back() {
     let s = b.core.gear_voice_key(&key("set", Some(KEY))).unwrap();
     assert!(s.set);
     assert_eq!(s.source, "keychain");
-    assert_eq!(s.hint, "ends in cdef");
+    assert_eq!(s.hint, "fake…cdef (25 chars)");
+    assert_eq!(
+        (s.prefix.as_str(), s.suffix.as_str(), s.length),
+        ("fake", "cdef", 25)
+    );
     let shown = serde_json::to_string(&s).unwrap();
     assert!(
         !shown.contains(KEY) && !shown.contains("0123456789"),
