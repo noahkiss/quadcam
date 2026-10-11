@@ -127,3 +127,33 @@
   font-size: var(--t-sm);
   font-weight: 600;
 }
+.voices {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-4);
+}
+.title {
+  margin: 0;
+  font-size: var(--t-xl);
+  font-weight: 700;
+}
+.sub {
+  display: block;
+  font-weight: 400;
+  font-size: var(--t-sm);
+  color: var(--muted);
+}
+.hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+.form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-3);
+  min-width: 360px;
+}

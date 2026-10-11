@@ -1,5 +1,6 @@
-// The Voice segment's data: the lines, the packs and the provider for one radio, read again
-// after each change and whenever the radio's staged changes move.
+// The voice data: the lines, the packs and the provider, for one radio (the Voice segment)
+// or for none (the Voices page). Read again after each change and whenever the staged
+// changes move.
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { api, errText } from "../../../ipc/api";
 import type { VoiceView } from "../../../ipc/types";
@@ -14,28 +15,30 @@ export interface UseVoice {
   refresh: () => Promise<void>;
 }
 
-export function useVoice(radio: string | null): UseVoice {
+/** `library`: read without a radio (the Voices page). */
+export function useVoice(radio: string | null, library = false): UseVoice {
   const [view, setView] = useState<VoiceView | null>(null);
   const [error, setError] = useState<string | null>(null);
   const loadGear = useStore((s) => s.loadGear);
   const changes = useStore((s) => s.changes);
-  const key = useMemo(() => JSON.stringify(changes.filter((c) => c.device === radio).map((c) => [c.id, c.status, c.title])), [changes, radio]);
+  const on = library || radio !== null;
+  const key = useMemo(() => JSON.stringify(changes.filter((c) => library || c.device === radio).map((c) => [c.id, c.status, c.title])), [changes, radio, library]);
 
   const read = useCallback(
     async (refreshIndex = false) => {
-      if (!radio) return;
+      if (!on) return;
       try {
         setView(await api.gearVoice({ radio, refresh_index: refreshIndex }));
       } catch (e) {
         setError(errText(e));
       }
     },
-    [radio],
+    [radio, on],
   );
 
   useEffect(() => {
     let gone = false;
-    if (!radio) return;
+    if (!on) return;
     api.gearVoice({ radio, refresh_index: false }).then(
       (v) => {
         if (!gone) setView(v);
@@ -47,7 +50,7 @@ export function useVoice(radio: string | null): UseVoice {
     return () => {
       gone = true;
     };
-  }, [radio, key]);
+  }, [radio, key, on]);
 
   const act = useCallback(
     async <T,>(f: () => Promise<T>) => {

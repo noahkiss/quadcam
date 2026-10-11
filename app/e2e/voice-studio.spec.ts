@@ -1,15 +1,14 @@
-// The Voice studio on the mock core (design 7.4): the key (kept out of every answer), the
-// voice and model pickers, the credits, the line sets with a cost, a Sample that waits for
-// the person's go-ahead and then shows an A/B grid, a Render into a local pack, and axe.
+// The Voice studio on Gear > Voices, on the mock core (design 7.4): the key (kept out of every
+// answer), the voice and model pickers, the credits, the line sets with a cost, a Sample that
+// waits for the person's go-ahead and then shows an A/B grid, a Render into a local pack that
+// joins the library, and axe.
 import AxeBuilder from "@axe-core/playwright";
 import type { Page } from "@playwright/test";
 import { expect, test, type AppFixture } from "./fixtures";
 
 async function openStudio(app: AppFixture, page: Page) {
   await app.open();
-  await page.getByRole("navigation", { name: "Library" }).getByRole("button", { name: /^Devices/ }).click();
-  await page.getByRole("list", { name: "Devices" }).getByRole("button", { name: /Field radio/ }).click();
-  await page.getByRole("group", { name: "Sections" }).getByRole("button", { name: "Voice" }).click();
+  await page.getByRole("navigation", { name: "Library" }).getByRole("button", { name: /^Voices/ }).click();
   return page.getByRole("region", { name: "Voice studio" });
 }
 
@@ -91,7 +90,7 @@ test("Render pack needs one voice and one model, asks, then adds a local pack", 
   await studio.getByRole("button", { name: "Render and pay" }).click();
   expect((await app.method("gear_voice_render")).at(-1)).toMatchObject({ confirm: true });
   await expect(studio).toContainText("Rendered into local-elevenlabs-callum-eleven-v4");
-  await expect(page.getByRole("region", { name: "Voice packs" })).toContainText("Callum (local-elevenlabs-callum-eleven-v4)");
+  await expect(page.getByRole("table", { name: "Voice packs on this Mac" }).getByRole("row", { name: /^Callum local-elevenlabs-callum-eleven-v4/ })).toContainText("FPV quad");
 });
 
 test("a render the credits do not cover cannot start", async ({ app, page }) => {

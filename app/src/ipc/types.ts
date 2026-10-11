@@ -450,11 +450,15 @@ export type {
 // Radio voice, as generated.
 export type {
   LineOverride,
+  PackDeleteParams,
+  PackDeleteReport,
   PackInstallParams,
   Plan as VoicePlan,
   ProviderView,
   RenderReport,
   VoiceChooseParams,
+  VoiceChooseRadiosParams,
+  VoiceChooseRadiosReport,
   VoiceEditParams,
   VoiceLine,
   VoiceParams,

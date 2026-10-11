@@ -7,7 +7,7 @@ import { open as openDialog, save as saveDialog } from "@tauri-apps/plugin-dialo
 import { openPath, openUrl, revealItemInDir } from "@tauri-apps/plugin-opener";
 import { commands } from "../bindings";
 import * as N from "./normalize";
-import type { ElrsFlashParams, FormatRequest, ChangeStatus, CopyRequest, Edit, SimFrame, SimPreset, SimStartInfo, SimStartParams, SimStopInfo, CrashSaveParams, ImportOptions, LibEdit, LibraryFilter, Moved, ModelEditParams, ModelParams, PackInstallParams, CatalogParams, EstimateParams, KeyParams, SampleParams, VoiceChooseParams, VoiceEditParams, VoiceParams, VoicePreviewParams, VoiceRenderParams, OsdEditParams, OsdParams, RatesParams, RatesPreview, RateProfile, FlashParams, SplashParams, SimRestoreParams, SimSyncParams, SimsParams, Pack, PackType, PlanPatch, RemovedCuts, SettingsValues, Span, SwitchMapParams, SimCalibrationSaveParams, CalibrateParams } from "./types";
+import type { ElrsFlashParams, FormatRequest, ChangeStatus, CopyRequest, Edit, SimFrame, SimPreset, SimStartInfo, SimStartParams, SimStopInfo, CrashSaveParams, ImportOptions, LibEdit, LibraryFilter, Moved, ModelEditParams, ModelParams, PackDeleteParams, PackInstallParams, CatalogParams, EstimateParams, KeyParams, SampleParams, VoiceChooseParams, VoiceChooseRadiosParams, VoiceEditParams, VoiceParams, VoicePreviewParams, VoiceRenderParams, OsdEditParams, OsdParams, RatesParams, RatesPreview, RateProfile, FlashParams, SplashParams, SimRestoreParams, SimSyncParams, SimsParams, Pack, PackType, PlanPatch, RemovedCuts, SettingsValues, Span, SwitchMapParams, SimCalibrationSaveParams, CalibrateParams } from "./types";
 
 type Result<T> = Promise<{ status: "ok"; data: T } | { status: "error"; error: string }>;
 
@@ -131,6 +131,8 @@ export const api = {
   gearVoiceSample: (params: SampleParams) => ok(commands.gearVoiceSample(params)),
   gearVoicePackInstall: (params: PackInstallParams) => ok(commands.gearVoicePackInstall(params)),
   gearVoiceChoose: (params: VoiceChooseParams) => ok(commands.gearVoiceChoose(params)),
+  gearVoiceChooseRadios: (params: VoiceChooseRadiosParams) => ok(commands.gearVoiceChooseRadios(params)),
+  gearVoicePackDelete: (params: PackDeleteParams) => ok(commands.gearVoicePackDelete(params)),
   gearModel: (params: ModelParams) => ok(commands.gearModel(params)),
   gearModelEdit: (params: ModelEditParams) => ok(commands.gearModelEdit(params)),
   gearOsd: (params: OsdParams) => ok(commands.gearOsd(params)),
