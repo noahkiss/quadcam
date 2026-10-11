@@ -5,13 +5,13 @@
 import { useState } from "react";
 import { Banner } from "../../../components/Banner";
 import { Button } from "../../../components/Button";
-import { TextField } from "../../../components/Field";
+import { SelectField, TextField } from "../../../components/Field";
 import { Badge } from "../../../components/dash/Badge";
 import { DataTable, type Column } from "../../../components/dash/DataTable";
 import { SectionCard } from "../../../components/dash/SectionCard";
 import { Stat, StatRow } from "../../../components/dash/StatRow";
-import { fileSrc } from "../../../ipc/api";
-import type { ModelInfo, Retake, SampleItem, SetInfo, StudioEstimate, VoiceEstimate, VoiceInfo } from "../../../ipc/types";
+import { fileSrc, pickFolder } from "../../../ipc/api";
+import type { ImportReport, ModelInfo, Retake, SampleItem, SetInfo, StudioEstimate, VoiceEstimate, VoiceInfo } from "../../../ipc/types";
 import { takesOf, type UseStudio } from "./useStudio";
 import styles from "./Voice.module.css";
 
@@ -266,6 +266,13 @@ function Retakes({ s, retakes }: { s: UseStudio; retakes: Retake[] }) {
   );
 }
 
+const SPEEDS = [0.8, 0.9, 1, 1.1, 1.2];
+
+function importText(r: ImportReport) {
+  const left = r.skipped.length ? `, ${r.skipped.length} left out` : "";
+  return `${r.imported} ${r.imported === 1 ? "take" : "takes"} imported, ${r.already} in the cache already${left}.`;
+}
+
 /** The Voice studio card. `s` comes from the page, which also shows its summary. */
 export function Studio({ s }: { s: UseStudio }) {
   const [replacing, setReplacing] = useState(false);
@@ -303,13 +310,38 @@ export function Studio({ s }: { s: UseStudio }) {
             </p>
           )}
           <div className={styles.bar}>
+            <SelectField label="Speed" inline value={String(s.speed)} onChange={(ev) => s.setSpeed(Number(ev.target.value))}>
+              {SPEEDS.map((x) => (
+                <option key={x} value={String(x)}>
+                  {x.toFixed(1)}
+                </option>
+              ))}
+            </SelectField>
             <Button size="sm" disabled={s.busy || s.voices.length === 0 || s.models.length === 0} onClick={() => s.run("sample", false)}>
               Sample
             </Button>
             <Button size="sm" variant="primary" disabled={s.busy || !one || !(e?.estimate.affordable ?? true)} onClick={() => s.run("render", false)}>
               Render pack
             </Button>
+            <span className={styles.grow} />
+            <Button
+              size="sm"
+              variant="ghost"
+              icon="import"
+              disabled={s.busy}
+              onClick={async () => {
+                const f = await pickFolder("Folder of earlier takes");
+                if (f) await s.importTakes(f);
+              }}
+            >
+              Import takes…
+            </Button>
           </div>
+          {s.imported && (
+            <p className={styles.status} role="status" aria-label="Import">
+              {importText(s.imported)}
+            </p>
+          )}
           {s.asking && ask && (
             <Banner
               kind="warning"

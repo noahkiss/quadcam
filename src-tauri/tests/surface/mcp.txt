@@ -90,6 +90,7 @@ mcp.action quadcam_gear_edit.update
 mcp.action quadcam_gear_edit.voice_choose
 mcp.action quadcam_gear_edit.voice_delete
 mcp.action quadcam_gear_edit.voice_edit
+mcp.action quadcam_gear_edit.voice_import_takes
 mcp.action quadcam_gear_edit.voice_install
 mcp.action quadcam_gear_edit.voice_key_delete
 mcp.action quadcam_gear_edit.voice_key_set

@@ -91,6 +91,15 @@ pub struct Entry {
     /// only: under another, the take is cut and checked again when it is used.
     #[serde(default)]
     pub cut: u32,
+    /// A take of one line spoken alone, with no carrier (`import_takes`): the whole take is
+    /// the cut, and it matches a line by its spoken text.
+    #[serde(default)]
+    pub alone: bool,
+}
+
+/// The index key of a line spoken alone.
+fn alone_key(spoken: &str) -> String {
+    format!("\u{1}{}", spoken.to_lowercase())
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -128,6 +137,7 @@ impl Entry {
                 .map(|(i, _)| i.spoken.clone())
                 .collect(),
             cut: batch::CUT_VERSION,
+            alone: false,
         }
     }
 
@@ -241,10 +251,12 @@ impl LineIndex {
         let mut by_sentence: HashMap<String, Vec<usize>> = HashMap::new();
         for (n, e) in batches.iter().enumerate() {
             for i in &e.items {
-                by_sentence
-                    .entry(i.sentence.to_lowercase())
-                    .or_default()
-                    .push(n);
+                let k = if e.alone {
+                    alone_key(&i.spoken)
+                } else {
+                    i.sentence.to_lowercase()
+                };
+                by_sentence.entry(k).or_default().push(n);
             }
         }
         LineIndex {
@@ -323,8 +335,9 @@ impl Reuse {
 /// Splits `items` into the lines a cached take already holds and the rest, which still go to
 /// the provider, in order. A take holds a line when it holds the same sentence, ignoring case
 /// ("Six" and "six" sound alike). A repeated spoken text counts once (the first wins, as in
-/// `batch::plan`). A take is picked in this order: one that passed its checks with this seed,
-/// one that passed with any seed, one that failed with this seed.
+/// `batch::plan`). A take spoken alone (imported) holds a line with the same spoken text. A
+/// take is picked in this order: one that passed its checks with this seed, one that passed
+/// with any seed, one that failed with this seed; a carrier take before a lone one.
 pub fn split(
     s: &Scope,
     index: &LineIndex,
@@ -341,14 +354,20 @@ pub fn split(
             continue;
         }
         let sentence = batch::sentence_of(bs, i).to_lowercase();
+        let alone = alone_key(&i.spoken);
         let mut best: Option<(u8, usize, &str)> = None;
-        for &n in index.by_sentence.get(&sentence).into_iter().flatten() {
+        let found = [&sentence, &alone]
+            .into_iter()
+            .flat_map(|k| index.by_sentence.get(k).into_iter().flatten());
+        for &n in found {
             let e = &index.batches[n];
-            let Some(it) = e
-                .items
-                .iter()
-                .find(|x| x.sentence.to_lowercase() == sentence)
-            else {
+            let Some(it) = e.items.iter().find(|x| {
+                if e.alone {
+                    x.spoken.to_lowercase() == i.spoken.to_lowercase()
+                } else {
+                    x.sentence.to_lowercase() == sentence
+                }
+            }) else {
                 continue;
             };
             // Under another cut version the checks are not known yet: the take is cut again.
@@ -360,6 +379,8 @@ pub fn split(
                 (true, true) => 2,
                 (true, false) => continue,
             };
+            // A take in a carrier wins over one spoken alone.
+            let rank = rank * 2 + u8::from(e.alone);
             // The newest take wins a tie.
             if best.is_some_and(|(r, _, _)| r < rank) {
                 continue;
@@ -407,13 +428,27 @@ pub fn cut_reused(
                 b.items.len()
             )
         })?;
-        let cuts = batch::cut(&b, &a, snap_ms).with_context(|| {
-            format!(
-                "the cached take of a batch of {} {} lines does not cut",
-                b.items.len(),
-                b.tone
-            )
-        })?;
+        let cuts = if e.alone {
+            // The whole take is the line.
+            let secs = a.pcm.samples.len() as f64 / f64::from(a.pcm.rate.max(1));
+            b.items
+                .iter()
+                .map(|(i, _)| batch::Cut {
+                    spoken: i.spoken.clone(),
+                    pcm: a.pcm.clone(),
+                    from_s: 0.0,
+                    to_s: secs,
+                })
+                .collect()
+        } else {
+            batch::cut(&b, &a, snap_ms).with_context(|| {
+                format!(
+                    "the cached take of a batch of {} {} lines does not cut",
+                    b.items.len(),
+                    b.tone
+                )
+            })?
+        };
         let flags = batch::check(&cuts);
         for c in &cuts {
             for w in want.iter().filter(|w| w.take == c.spoken) {
@@ -446,4 +481,226 @@ pub fn entries(s: &Scope, batches: &[Batch], bs: &BatchSettings, done: &Rendered
         .filter(|b| s.cached(b))
         .map(|b| Entry::new(s, b, bs, &flagged))
         .collect()
+}
+
+/// What `import_takes` found and did.
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize, specta::Type)]
+pub struct ImportReport {
+    /// Takes found: a `.json` beside a `.pcm` of the same name.
+    pub found: u32,
+    /// Takes copied into the cache (with `dry_run`, that would be).
+    pub imported: u32,
+    /// Takes the cache held already.
+    pub already: u32,
+    /// Files left out, each with why.
+    pub skipped: Vec<String>,
+    /// The lines each voice, model and speed have a take of afterwards.
+    pub counts: Vec<TakeCount>,
+    pub dry_run: bool,
+}
+
+/// One take's sidecar: what an earlier line-by-line render wrote beside its PCM.
+#[derive(Debug, Deserialize)]
+struct TakeFile {
+    text: String,
+    voice: String,
+    model: String,
+    #[serde(default = "one")]
+    speed: f64,
+    #[serde(default)]
+    seed: u64,
+    /// The PCM's sample rate; 32000 when the file does not say.
+    #[serde(default, alias = "sample_rate")]
+    rate: Option<u32>,
+}
+
+fn one() -> f64 {
+    1.0
+}
+
+/// The PCM a take may be: 16-bit mono, at most 10 minutes at 48 kHz.
+const MAX_PCM: u64 = 48_000 * 2 * 600;
+
+fn walk(dir: &std::path::Path, depth: u32, out: &mut Vec<PathBuf>) {
+    if depth > 6 {
+        return;
+    }
+    let Ok(rd) = std::fs::read_dir(dir) else {
+        return;
+    };
+    for e in rd.flatten() {
+        let p = e.path();
+        let Ok(t) = e.file_type() else { continue };
+        if t.is_dir() {
+            walk(&p, depth + 1, out);
+        } else if t.is_file() && p.extension().is_some_and(|x| x == "json") {
+            out.push(p);
+        }
+    }
+}
+
+/// Copies takes an earlier line-by-line render left in `folder` into the batch cache, each as
+/// one line spoken alone, and records them in the line index. A take is a `.json` (text,
+/// voice, model, speed, seed, and the sample rate when not 32000) beside a `.pcm` of the same
+/// name (16-bit little-endian mono). The folder is only read. `dry_run` writes nothing.
+pub fn import_takes(
+    cache: &BatchCache,
+    provider: &str,
+    folder: &std::path::Path,
+    dry_run: bool,
+) -> Result<ImportReport> {
+    if !folder.is_dir() {
+        anyhow::bail!("{} is not a folder", folder.display());
+    }
+    let mut files = Vec::new();
+    walk(folder, 0, &mut files);
+    files.sort();
+    let mut r = ImportReport {
+        dry_run,
+        ..Default::default()
+    };
+    // Entries per voice, model and speed.
+    let mut by: HashMap<(String, String, String), (f64, Vec<Entry>)> = HashMap::new();
+    for json in files {
+        let pcm_path = json.with_extension("pcm");
+        let name = json
+            .strip_prefix(folder)
+            .unwrap_or(&json)
+            .display()
+            .to_string();
+        if !pcm_path.is_file() {
+            continue;
+        }
+        r.found += 1;
+        let t: TakeFile = match std::fs::read(&json)
+            .ok()
+            .and_then(|b| serde_json::from_slice(&b).ok())
+        {
+            Some(t) => t,
+            None => {
+                r.skipped
+                    .push(format!("{name}: not a take's JSON (text, voice, model)"));
+                continue;
+            }
+        };
+        let text = t.text.trim().to_string();
+        let ok_id = |v: &str| {
+            !v.is_empty()
+                && v.len() <= 100
+                && v.chars()
+                    .all(|c| c.is_ascii_alphanumeric() || "_-.".contains(c))
+        };
+        if text.is_empty() || !ok_id(&t.voice) || !ok_id(&t.model) {
+            r.skipped.push(format!(
+                "{name}: no text, or a voice or model id that is not one"
+            ));
+            continue;
+        }
+        if !(0.5..=2.0).contains(&t.speed) {
+            r.skipped
+                .push(format!("{name}: speed {} is outside 0.5 to 2", t.speed));
+            continue;
+        }
+        let rate = t.rate.unwrap_or(32_000);
+        if !(8_000..=48_000).contains(&rate) {
+            r.skipped.push(format!(
+                "{name}: sample rate {rate} is outside 8000 to 48000"
+            ));
+            continue;
+        }
+        let len = std::fs::metadata(&pcm_path).map(|m| m.len()).unwrap_or(0);
+        if len == 0 || len % 2 != 0 || len > MAX_PCM {
+            r.skipped
+                .push(format!("{name}: the PCM is empty, odd-sized or too long"));
+            continue;
+        }
+        let settings = RenderSettings {
+            speed: t.speed,
+            seed: t.seed,
+            ..Default::default()
+        };
+        let s = Scope {
+            cache,
+            provider,
+            voice: &t.voice,
+            model: &t.model,
+            settings: &settings,
+        };
+        let n = text.chars().count();
+        let b = Batch {
+            tone: "calm".into(),
+            text: text.clone(),
+            items: vec![(
+                Item {
+                    spoken: text.clone(),
+                    tone: "calm".into(),
+                },
+                0..n,
+            )],
+        };
+        let key = s.key(&b);
+        if cache.has(provider, &key) {
+            r.already += 1;
+        } else {
+            r.imported += 1;
+            if !dry_run {
+                let bytes = std::fs::read(&pcm_path)?;
+                let pcm = super::wav::Pcm {
+                    rate,
+                    samples: bytes
+                        .as_chunks::<2>()
+                        .0
+                        .iter()
+                        .map(|c| i16::from_le_bytes(*c))
+                        .collect(),
+                };
+                let a = super::tts::Aligned {
+                    pcm,
+                    alignment: Default::default(),
+                    billed_chars: None,
+                };
+                cache.put(
+                    provider, &key, &t.voice, &t.model, t.speed, t.seed, &text, &a,
+                )?;
+            }
+        }
+        let entry = Entry {
+            key,
+            seed: t.seed,
+            tone: "calm".into(),
+            text: text.clone(),
+            items: vec![EntryItem {
+                spoken: text,
+                sentence: String::new(),
+                start: 0,
+                end: n,
+            }],
+            flagged: Vec::new(),
+            // Not checked yet: the first render that uses it cuts and checks it.
+            cut: 0,
+            alone: true,
+        };
+        by.entry((t.voice.clone(), t.model.clone(), format!("{:.4}", t.speed)))
+            .or_insert_with(|| (t.speed, Vec::new()))
+            .1
+            .push(entry);
+    }
+    if !dry_run {
+        for ((voice, model, _), (speed, entries)) in by {
+            let settings = RenderSettings {
+                speed,
+                ..Default::default()
+            };
+            let s = Scope {
+                cache,
+                provider,
+                voice: &voice,
+                model: &model,
+                settings: &settings,
+            };
+            LineIndex::record(&s, entries)?;
+        }
+    }
+    r.counts = rendered_counts(cache, provider);
+    Ok(r)
 }

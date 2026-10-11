@@ -13,7 +13,7 @@ use crate::gear::voice::lines::{self, Line, Spelling};
 use crate::gear::voice::packs::{self, BuildOpts, PackManifest, Retake};
 use crate::gear::voice::rates;
 use crate::gear::voice::render::{self, Plan, RenderSettings};
-use crate::gear::voice::reuse::{self, LineIndex, Reuse, Scope, TakeCount};
+use crate::gear::voice::reuse::{self, ImportReport, LineIndex, Reuse, Scope, TakeCount};
 use crate::gear::voice::sets::{self, SetInfo, SetLine};
 use crate::gear::voice::tts::{Credits, ModelInfo, ProviderConfig, Tts, VoiceInfo};
 use anyhow::{anyhow, bail, Result};
@@ -192,6 +192,16 @@ pub struct SampleReport {
     /// The digest of this plan, which `confirm` repeats.
     #[serde(default)]
     pub digest: String,
+}
+
+/// `gear_voice_import_takes`.
+#[derive(Debug, Clone, Default, Serialize, Deserialize, specta::Type)]
+pub struct ImportTakesParams {
+    /// A folder of takes an earlier line-by-line render left: a `.json` (text, voice, model,
+    /// speed, seed) beside a `.pcm` of the same name. QuadCam only reads it.
+    pub folder: String,
+    #[serde(default)]
+    pub dry_run: bool,
 }
 
 /// The provider id the studio's takes are cached under.
@@ -425,6 +435,22 @@ impl Core {
             picks,
             rendered: reuse::rendered_counts(&BatchCache::new(&self.cache), PROVIDER),
         })
+    }
+
+    /// Copies earlier ElevenLabs takes of single lines into the cache, so the studio counts
+    /// them as rendered and never sends their lines again at that voice, model and speed. No
+    /// network; the folder is only read.
+    pub fn gear_voice_import_takes(&self, p: &ImportTakesParams) -> Result<ImportReport> {
+        let folder = p.folder.trim();
+        if folder.is_empty() {
+            bail!("Name the folder of takes.");
+        }
+        reuse::import_takes(
+            &BatchCache::new(&self.cache),
+            PROVIDER,
+            std::path::Path::new(folder),
+            p.dry_run,
+        )
     }
 
     /// The aircraft kinds the person flies: a word in a profile's name or aircraft
@@ -1252,6 +1278,36 @@ pub fn sets_text(v: &StudioView) -> String {
             s,
             "\n{}: {} ({} lines{rendered}).{kinds} {}",
             x.id, x.title, x.lines, x.about
+        );
+    }
+    s
+}
+
+/// An import of takes as text.
+pub fn import_text(r: &ImportReport) -> String {
+    use std::fmt::Write;
+    let mut s = format!(
+        "{} {} takes found: {} {}, {} in the cache already.",
+        if r.dry_run { "Dry run:" } else { "" },
+        r.found,
+        r.imported,
+        if r.dry_run {
+            "would be imported"
+        } else {
+            "imported"
+        },
+        r.already
+    )
+    .trim_start()
+    .to_string();
+    for k in &r.skipped {
+        let _ = write!(s, "\nLeft out: {k}");
+    }
+    for t in &r.counts {
+        let _ = write!(
+            s,
+            "\n{} lines in voice {} with {} at speed {}.",
+            t.lines, t.voice, t.model, t.speed
         );
     }
     s

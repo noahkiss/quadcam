@@ -33,8 +33,8 @@ pub use crate::core::{
     VoiceLine, VoicePack, VoiceParams, VoicePreviewParams, VoiceRenderParams, VoiceView,
 };
 pub use crate::core::{
-    Catalog, CatalogParams, EstimateParams, KeyParams, KeyStatus, SampleParams, SampleReport,
-    SetsParams, StudioEstimate, StudioView,
+    Catalog, CatalogParams, EstimateParams, ImportTakesParams, KeyParams, KeyStatus, SampleParams,
+    SampleReport, SetsParams, StudioEstimate, StudioView,
 };
 pub use crate::core::{
     CrashSaveParams, FlightFilter, FlightFoldersParams, FlightReport, FlightSetParams, FlightsView,
@@ -70,6 +70,7 @@ pub use crate::gear::sim_cal::{SavedCalibration, SimDefaults};
 pub use crate::gear::sims::SimStatus;
 pub use crate::gear::splash::{SplashParams, SplashPreview};
 pub use crate::gear::switchmap::SwitchMap;
+pub use crate::gear::voice::reuse::ImportReport;
 pub use quadcam_sim::validate::{CheckOutcome, CheckResult, ValidationReport};
 use serde::{Deserialize, Serialize};
 use specta::Type;
@@ -215,6 +216,9 @@ macro_rules! with_gear_rows {
             /// Renders a few lines in every voice and model for A/B listening. A paid call:
             /// `confirm` allows it; `dry_run` only prices it.
             gear_voice_sample(params: SampleParams) -> SampleReport = |c| c.gear_voice_sample(&params);
+            /// Copies earlier ElevenLabs takes of single lines from a folder into the cache, so
+            /// the studio counts them and never sends their lines again. Reads the folder only.
+            gear_voice_import_takes(params: ImportTakesParams) -> ImportReport = |c| c.gear_voice_import_takes(&params);
             /// Installs a voice pack from the index after a hash check.
             gear_voice_pack_install(params: PackInstallParams) -> VoicePack = |c| c.gear_voice_pack_install(&params);
             /// Stages one card change that puts a pack's sounds on a radio, keeping the person's

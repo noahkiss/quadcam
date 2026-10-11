@@ -491,6 +491,8 @@ export type {
   Credits,
   Estimate as VoiceEstimate,
   EstimateParams,
+  ImportReport,
+  ImportTakesParams,
   KeyParams,
   KeyStatus,
   ModelInfo,

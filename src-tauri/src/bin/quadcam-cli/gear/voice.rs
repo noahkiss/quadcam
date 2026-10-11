@@ -157,6 +157,16 @@ pub enum VoiceCmd {
         #[command(flatten)]
         settings: SettingsArgs,
     },
+    /// Copy earlier ElevenLabs takes of single lines from a folder into the cache, so the
+    /// studio counts them as rendered and never sends their lines again at that voice, model
+    /// and speed. A take is a .json (text, voice, model, speed, seed) beside a .pcm of the same
+    /// name (16-bit mono, 32000 Hz unless the JSON names a rate). Reads the folder only.
+    ImportTakes {
+        folder: PathBuf,
+        /// Report what would be copied; copy nothing.
+        #[arg(long)]
+        dry_run: bool,
+    },
     /// Render a few lines in every voice and model, cut out of carrier sentences, and write
     /// the WAVs to the cache for listening. Bills ElevenLabs: it needs --confirm.
     Sample {
@@ -405,6 +415,15 @@ pub fn run(core: &Core, a: VoiceArgs) -> Result<Value> {
                 batch: batch.get(),
             },
         )?)?,
+        Some(VoiceCmd::ImportTakes { folder, dry_run }) => {
+            serde_json::to_value(call::gear_voice_import_takes(
+                core,
+                api::ImportTakesParams {
+                    folder: folder.display().to_string(),
+                    dry_run,
+                },
+            )?)?
+        }
         Some(VoiceCmd::Sample {
             voices,
             models,

@@ -466,7 +466,9 @@ inside carrier sentences, and compares voices before it spends credits.
   | `sample` | 12 | Hard lines for comparing voices |
   | `custom`, `quadcam` | yours, 45 | Your own lines, and the lines a pack holds today |
 
-  The studio shows each set with what it holds, and groups the sets: **For your quads** (sets
+  The page opens with a summary: the ElevenLabs credits left, the packs on this Mac, the radios
+  with a pack, and the lines each voice has rendered. The voice and model tables show how many
+  lines each one has rendered. The line sets table shows each set with what it holds, and groups the sets: **For your quads** (sets
   made only for the aircraft you fly), **Any aircraft** (easter eggs, the telemetry scripts,
   QuadCam's default lines, your lines) and **Other aircraft** (helicopter, plane, glider, car,
   and the full EdgeTX set, which holds every kind's prompts). QuadCam reads the aircraft you
@@ -475,7 +477,7 @@ inside carrier sentences, and compares voices before it spends credits.
   no profile, it takes quads. The sets made only for those aircraft start ticked: for quads,
   `quad` and `extras`, and your own lines when you have some. A Betaflight quad needs no other
   set: `quad` already holds the Betaflight script's prompts, and `scripts` is for INAV and
-  ArduPilot. With one voice and one model ticked, each set shows "N lines · M rendered".
+  ArduPilot. With one voice and one model ticked, each set shows how many of its lines are rendered.
 
   The number and unit prompts (`0000.wav` to `0112.wav`, `volt0.wav` and so on) and the
   sounds the radio plays by itself go in `SOUNDS/en/SYSTEM/`, where EdgeTX looks for them; a
@@ -484,9 +486,17 @@ inside carrier sentences, and compares voices before it spends credits.
   text (for example `P term` for the Betaflight script's `P`), and the spelling rules still
   apply. The set files are `src-tauri/resources/voice/sets/*.csv`; the `kinds` column of
   `edgetx.csv` and `scripts.csv` names the aircraft that play a line.
-- **Cost.** The line under the pickers shows the lines, how many are rendered and how many are
-  left to render, then the characters (carriers included), the batches, the price in USD and
-  the credits (estimated), and the credits left. Only the lines left to render cost anything.
+- **Cost.** Tiles under the line sets show the lines left to render (of how many, and how many
+  are rendered), the characters (carriers included) and batches, the price in USD with a promo
+  badge while one applies, and the credits left after the render (estimated). Only the lines left to render cost anything.
+- **Import takes…** copies a folder of earlier takes into QuadCam's cache: takes of single
+  lines that an older line-by-line ElevenLabs render left, each a `.json` (text, voice, model,
+  speed, seed, and the sample rate when it is not 32,000 Hz) beside a `.pcm` of the same name
+  (16-bit mono). QuadCam only reads the folder. The takes count as rendered for their voice,
+  model and speed, and a render at that speed (the **Speed** control, CLI `--speed`, MCP
+  `settings`) cuts them from the cache instead of sending their lines. A take spoken in a
+  carrier wins over one spoken alone. CLI `gear voice import-takes FOLDER [--dry-run]`, MCP
+  `quadcam_gear_edit voice_import_takes` (`folder`, `dry_run`).
 - **A line is billed once.** A voice and model never speak the same sentence twice: a line
   that any earlier render or sample spoke (the same text, voice, model and speed, ignoring
   case) is cut again from that take, whatever set it came in. So a set added later, a set

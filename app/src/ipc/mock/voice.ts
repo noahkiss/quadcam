@@ -1,7 +1,7 @@
 // The mock core's voice (`core/voice.rs`, `gear/voice/`), written by hand: a few of QuadCam's
 // lines, one pack in a made-up index, per-line overrides, a local render, Choose voice (one
 // `card_files` change, as the core stages it, on one radio or several) and pack delete.
-import type { Catalog, Edit, KeyStatus, LineOverride, ModelInfo, PackDeleteReport, RenderReport, Retake, SampleItem, SampleReport, SetInfo, StagedChange, StudioEstimate, StudioView, VoiceChooseRadiosReport, VoiceEstimate, VoiceInfo, VoiceLine, VoicePack, VoiceView } from "../types";
+import type { Catalog, Edit, ImportReport, KeyStatus, LineOverride, ModelInfo, PackDeleteReport, RenderReport, Retake, SampleItem, SampleReport, SetInfo, StagedChange, StudioEstimate, StudioView, VoiceChooseRadiosReport, VoiceEstimate, VoiceInfo, VoiceLine, VoicePack, VoiceView } from "../types";
 import type { MockGear } from "./gear";
 import { hint as secretHint } from "./secret";
 import * as changes from "./changes";
@@ -48,13 +48,15 @@ export interface MockVoice {
   retake: string | null;
   /** The sets rendered per `voice|model`: their lines have a take. */
   rendered: Record<string, string[]>;
+  /** Takes an import copied in: lines per voice, model and speed. */
+  imported: { voice: string; model: string; speed: number; lines: number }[];
   /** Packs deleted with their raw takes. */
   takesDeleted: string[];
   /** Each rendered pack's lines that need a re-take (its `pack.json` `retakes`). */
   retakes: Record<string, Retake[]>;
 }
 
-export const freshVoice = (): MockVoice => ({ installed: [], index: false, overrides: {}, chosen: {}, custom: [], paid: false, keySet: "", spent: 0, retake: null, rendered: {}, takesDeleted: [], retakes: {} });
+export const freshVoice = (): MockVoice => ({ installed: [], index: false, overrides: {}, chosen: {}, custom: [], paid: false, keySet: "", spent: 0, retake: null, rendered: {}, imported: [], takesDeleted: [], retakes: {} });
 
 type Paid = { confirm?: boolean; digest?: string | null; settings?: { seed?: number | null } | null };
 
@@ -304,6 +306,7 @@ export function sets(g: MockGear, p?: { voice?: string; model?: string } | null)
         const lines = SETS.filter((x) => ids.includes(x.id)).reduce((n, x) => n + x.lines, 0);
         return { voice, model, speed: 1, lines };
       })
+      .concat(g.voice.imported)
       .sort((a, b) => b.lines - a.lines),
   };
 }
@@ -311,6 +314,15 @@ export function sets(g: MockGear, p?: { voice?: string; model?: string } | null)
 const needKey = (g: MockGear) => {
   if (!g.voice.keySet) throw "No ElevenLabs key is stored: run `quadcam-cli gear voice key set`, or paste it in the Voice studio.";
 };
+
+/** `gear_voice_import_takes`: any folder holds 161 takes of Callum on turbo v2.5 at 1.2. */
+export function importTakes(g: MockGear, p: { folder: string; dry_run?: boolean }): ImportReport {
+  if (!p.folder) throw "Name the folder of takes.";
+  const take = { voice: "voice-callum", model: "eleven_turbo_v2_5", speed: 1.2, lines: 161 };
+  const already = g.voice.imported.length ? 161 : 0;
+  if (!p.dry_run && !already) g.voice.imported.push(take);
+  return { found: 162, imported: 161 - already, already, skipped: ["bad/x.json: not a take's JSON (text, voice, model)"], counts: [take], dry_run: !!p.dry_run };
+}
 
 /** `gear_voice_catalog`. */
 export function catalog(g: MockGear, p: { voices?: boolean; models?: boolean; credits?: boolean }): Catalog {

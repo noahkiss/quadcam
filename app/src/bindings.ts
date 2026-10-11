@@ -234,6 +234,11 @@ export const commands = {
 	 *  `confirm` allows it; `dry_run` only prices it.
 	 */
 	gearVoiceSample: (params: SampleParams) => typedError<SampleReport, string>(__TAURI_INVOKE("gear_voice_sample", { params })),
+	/**
+	 *  Copies earlier ElevenLabs takes of single lines from a folder into the cache, so
+	 *  the studio counts them and never sends their lines again. Reads the folder only.
+	 */
+	gearVoiceImportTakes: (params: ImportTakesParams) => typedError<ImportReport, string>(__TAURI_INVOKE("gear_voice_import_takes", { params })),
 	/**  Installs a voice pack from the index after a hash check. */
 	gearVoicePackInstall: (params: PackInstallParams) => typedError<VoicePack, string>(__TAURI_INVOKE("gear_voice_pack_install", { params })),
 	/**
@@ -3118,8 +3123,33 @@ export type ImportProgress = {
 	duration: number | null,
 };
 
+/**  What `import_takes` found and did. */
+export type ImportReport = {
+	/**  Takes found: a `.json` beside a `.pcm` of the same name. */
+	found: number,
+	/**  Takes copied into the cache (with `dry_run`, that would be). */
+	imported: number,
+	/**  Takes the cache held already. */
+	already: number,
+	/**  Files left out, each with why. */
+	skipped: string[],
+	/**  The lines each voice, model and speed have a take of afterwards. */
+	counts: TakeCount[],
+	dry_run: boolean,
+};
+
 /**  One clip finished converting (verified, failed or skipped). */
 export type ImportResult = ClipResult;
+
+/**  `gear_voice_import_takes`. */
+export type ImportTakesParams = {
+	/**
+	 *  A folder of takes an earlier line-by-line render left: a `.json` (text, voice, model,
+	 *  speed, seed) beside a `.pcm` of the same name. QuadCam only reads it.
+	 */
+	folder: string,
+	dry_run?: boolean,
+};
 
 /**  `installed.json` in a module's version folder. */
 export type Installed = {

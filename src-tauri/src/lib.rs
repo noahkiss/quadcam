@@ -611,6 +611,7 @@ pub fn specta_builder() -> tauri_specta::Builder<tauri::Wry> {
             c::gear_voice_catalog,
             c::gear_voice_estimate,
             c::gear_voice_sample,
+            c::gear_voice_import_takes,
             c::gear_voice_pack_install,
             c::gear_voice_choose,
             c::gear_voice_choose_radios,

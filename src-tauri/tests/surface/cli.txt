@@ -45,6 +45,7 @@ cli.arg gear splash <IMAGE>
 cli.arg gear stop <HANDLE>
 cli.arg gear update <CHANGE>
 cli.arg gear voice delete <PACK>
+cli.arg gear voice import-takes <FOLDER>
 cli.arg gear voice install <PACK>
 cli.arg library apply-name-format [IDS]...
 cli.arg library cut <ID>
@@ -165,6 +166,7 @@ cli.command gear voice credits
 cli.command gear voice delete
 cli.command gear voice edit
 cli.command gear voice estimate
+cli.command gear voice import-takes
 cli.command gear voice install
 cli.command gear voice key
 cli.command gear voice key delete
@@ -474,6 +476,7 @@ cli.flag gear voice estimate --tail-ms VALUE
 cli.flag gear voice estimate --tempo VALUE
 cli.flag gear voice estimate --trim-db VALUE
 cli.flag gear voice estimate --voice VALUE
+cli.flag gear voice import-takes --dry-run
 cli.flag gear voice install --source VALUE
 cli.flag gear voice render --carrier VALUE
 cli.flag gear voice render --confirm

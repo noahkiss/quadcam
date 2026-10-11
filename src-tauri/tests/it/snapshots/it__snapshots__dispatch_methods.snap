@@ -98,6 +98,7 @@ expression: "Core::METHODS"
   "gear_voice_catalog",
   "gear_voice_estimate",
   "gear_voice_sample",
+  "gear_voice_import_takes",
   "gear_voice_pack_install",
   "gear_voice_choose",
   "gear_voice_choose_radios",

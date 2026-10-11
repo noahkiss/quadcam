@@ -5,7 +5,7 @@
 // digest, and the core refuses it when the plan changed. A picker change drops the question.
 import { useCallback, useEffect, useState } from "react";
 import { api, errText } from "../../../ipc/api";
-import type { Catalog, KeyStatus, RenderReport, SampleReport, SetInfo, StudioEstimate, TakeCount } from "../../../ipc/types";
+import type { Catalog, ImportReport, KeyStatus, RenderReport, SampleReport, SetInfo, StudioEstimate, TakeCount } from "../../../ipc/types";
 
 export type Paid = "sample" | "render";
 
@@ -18,6 +18,12 @@ export interface UseStudio {
   key: KeyStatus | null;
   /** The sets; with one voice and one model ticked, each says how many lines are rendered. */
   sets: SetInfo[];
+  /** The provider's speaking speed: 1, or another speed earlier takes were made at. */
+  speed: number;
+  setSpeed: (v: number) => void;
+  /** Copies a folder of earlier takes into the cache. */
+  importTakes: (folder: string) => Promise<void>;
+  imported: ImportReport | null;
   /** The aircraft kinds the person flies (from the profiles). */
   aircraft: string[];
   /** The lines each voice, model and speed have a take of. */
@@ -69,6 +75,9 @@ export function useStudio(onRendered: () => Promise<void>): UseStudio {
   const setVoices = useCallback((v: string[]) => (pickVoices(v), stop()), [stop]);
   const setModels = useCallback((v: string[]) => (pickModels(v), stop()), [stop]);
   const setPicked = useCallback((v: string[]) => (pickSets(v), stop()), [stop]);
+  const [speed, pickSpeed] = useState(1);
+  const setSpeed = useCallback((v: number) => (pickSpeed(v), stop()), [stop]);
+  const [imported, setImported] = useState<ImportReport | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -107,11 +116,11 @@ export function useStudio(onRendered: () => Promise<void>): UseStudio {
   const keySet = key?.set ?? false;
   const v0 = voices[0];
   const m0 = models[0];
-  const want = [keySet, v0, m0, picked.join(","), ran].join("|");
+  const want = [keySet, v0, m0, picked.join(","), speed, ran].join("|");
   useEffect(() => {
     let gone = false;
     if (!keySet || !v0 || !m0 || picked.length === 0) return;
-    api.gearVoiceEstimate({ sets: picked, voice: v0, model: m0, lines: [], settings: null, batch: null }).then(
+    api.gearVoiceEstimate({ sets: picked, voice: v0, model: m0, lines: [], settings: speed === 1 ? null : { speed }, batch: null }).then(
       (e) => {
         if (!gone) setPriced({ k: want, e });
       },
@@ -122,17 +131,17 @@ export function useStudio(onRendered: () => Promise<void>): UseStudio {
     return () => {
       gone = true;
     };
-  }, [keySet, v0, m0, picked, want]);
+  }, [keySet, v0, m0, picked, speed, want]);
   const estimate = priced && priced.k === want ? priced.e : null;
 
   // The takes per voice and, with one voice and one model ticked, how many lines of each set
   // they have rendered (no network). Read again after every paid call.
   const single = voices.length === 1 && models.length === 1 && !!v0 && !!m0;
-  const progressKey = [single ? v0 : "", single ? m0 : "", ran].join("|");
+  const progressKey = [single ? v0 : "", single ? m0 : "", speed, ran].join("|");
   const [progress, setProgress] = useState<{ k: string; sets: SetInfo[]; takes: TakeCount[] } | null>(null);
   useEffect(() => {
     let gone = false;
-    const asked = single ? { voice: v0 ?? "", model: m0 ?? "", settings: null, batch: null } : undefined;
+    const asked = single ? { voice: v0 ?? "", model: m0 ?? "", settings: speed === 1 ? null : { speed }, batch: null } : undefined;
     api.gearVoiceSets(asked).then(
       (v) => {
         if (!gone) setProgress({ k: progressKey, sets: v.sets, takes: v.rendered ?? [] });
@@ -142,7 +151,7 @@ export function useStudio(onRendered: () => Promise<void>): UseStudio {
     return () => {
       gone = true;
     };
-  }, [progressKey, single, v0, m0]);
+  }, [progressKey, single, v0, m0, speed]);
   const fresh = progress && progress.k === progressKey ? progress : null;
   const shownSets = fresh && single ? fresh.sets : sets.map((x) => ({ ...x, rendered: null }));
   const takes = progress?.takes ?? [];
@@ -178,7 +187,7 @@ export function useStudio(onRendered: () => Promise<void>): UseStudio {
       setError(null);
       const seed = go ? (plan?.seed ?? 0) : (newSeed ?? 0);
       const digest = go ? (plan?.digest ?? null) : null;
-      const settings = seed ? { seed } : null;
+      const settings = seed || speed !== 1 ? { seed, speed } : null;
       try {
         if (what === "sample") {
           const r = await api.gearVoiceSample({ voices, models, sets: ["sample"], lines: [], dry_run: false, confirm: go, settings, batch: null, digest });
@@ -202,11 +211,21 @@ export function useStudio(onRendered: () => Promise<void>): UseStudio {
         setBusy(false);
       }
     },
-    [voices, models, picked, v0, m0, onRendered, plan, stop],
+    [voices, models, picked, v0, m0, speed, onRendered, plan, stop],
   );
+  const importTakes = useCallback(async (folder: string) => {
+    setError(null);
+    try {
+      setImported(await api.gearVoiceImportTakes({ folder, dry_run: false }));
+    } catch (e) {
+      setError(errText(e));
+    } finally {
+      setRan((r) => r + 1);
+    }
+  }, []);
   const run = useCallback((what: Paid, go: boolean) => call(what, go), [call]);
   // Any seed but 0 makes new takes; the pack keeps every batch whose lines all passed.
   const retake = useCallback(() => call("render", false, 1 + Math.floor(Math.random() * 2_000_000_000)), [call]);
 
-  return { key, sets: shownSets, aircraft, takes, catalog, voices, models, picked, setVoices, setModels, setPicked, estimate, sample, render, asking, busy, error, saveKey, deleteKey, run, retake, cancel: stop };
+  return { key, sets: shownSets, aircraft, takes, speed, setSpeed, importTakes, imported, catalog, voices, models, picked, setVoices, setModels, setPicked, estimate, sample, render, asking, busy, error, saveKey, deleteKey, run, retake, cancel: stop };
 }

@@ -393,6 +393,7 @@ in `specta_builder` (`lib.rs`).
 | `gear_voice_key` | `KeyParams { action, key }` → `KeyStatus` (never the key) | Keychain |
 | `gear_voice_sets` | `SetsParams { voice, model }` (both optional) → `StudioView` (key state, line sets with their aircraft kinds, the kinds flown, the first picks; with a voice id and model, each set's rendered lines) | no |
 | `gear_voice_catalog` | `CatalogParams { voices, models, credits }` → `Catalog` | network (free calls) |
+| `gear_voice_import_takes` | `ImportTakesParams { folder, dry_run }` → `ImportReport` (found, imported, already, skipped, counts) | cache (reads the folder) |
 | `gear_voice_estimate` | `EstimateParams { sets, voice, model }` → `StudioEstimate` (lines, rendered, re-takes, to render, the estimate of the lines to render) | network (free calls) |
 | `gear_voice_sample` | `SampleParams { voices, models, sets, confirm }` → `SampleReport` | cache; network (paid) |
 | `gear_voice_pack_install` | `PackInstallParams { pack }` → `VoicePack` | gear folder; network |

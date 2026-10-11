@@ -203,6 +203,24 @@ test("the line sets group by aircraft, start with the quad sets, and count what 
   await expect(cells("FPV quad").nth(2)).toHaveText("—");
 });
 
+test("Import takes… copies a folder of earlier takes, and the voice list counts them", async ({ app, page }) => {
+  const studio = await openStudio(app, page);
+  await saveKey(studio);
+  await app.core(`c => { c.dialogAnswers.push("/Users/someone/old-takes"); }`);
+  await studio.getByRole("button", { name: "Import takes…" }).click();
+  await expect(studio.getByRole("status", { name: "Import" })).toHaveText("161 takes imported, 0 in the cache already, 1 left out.");
+  expect((await app.method("gear_voice_import_takes")).at(-1)).toEqual({ folder: "/Users/someone/old-takes", dry_run: false });
+  await studio.getByRole("table", { name: "Models" }).getByRole("checkbox", { name: /\(eleven_v4\)/ }).uncheck();
+  await studio.getByRole("table", { name: "Models" }).getByRole("checkbox", { name: /\(eleven_turbo_v2_5\)/ }).check();
+  await expect(studio.getByRole("table", { name: "Voices" }).getByRole("row", { name: /^Callum/ })).toContainText("161");
+  await expect(stat(page.getByRole("group", { name: "Summary" }), "Lines rendered")).toHaveText("161");
+  // The speed goes with every estimate and paid call.
+  await studio.getByLabel("Speed").selectOption("1.2");
+  await expect.poll(async () => (await app.method("gear_voice_estimate")).at(-1)).toMatchObject({ settings: { speed: 1.2 } });
+  await studio.getByRole("button", { name: "Render pack" }).click();
+  expect((await app.method("gear_voice_render")).at(-1)).toMatchObject({ settings: { speed: 1.2 }, confirm: false });
+});
+
 test("a render the credits do not cover cannot start", async ({ app, page }) => {
   const studio = await openStudio(app, page);
   await saveKey(studio);

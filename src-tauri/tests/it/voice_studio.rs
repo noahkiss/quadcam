@@ -1206,3 +1206,118 @@ fn a_cut_version_change_checks_reused_lines_again() {
     assert_eq!(b.http.posts(), posts);
     assert_eq!(estimate(&b, &["quad"], m).unwrap().retakes, 2);
 }
+
+/// Writes one take as an older line-by-line render left it: a JSON beside raw PCM.
+fn old_take(dir: &std::path::Path, name: &str, text: &str, voice: &str, speed: f64) {
+    let d = dir.join(name);
+    std::fs::create_dir_all(&d).unwrap();
+    std::fs::write(
+        d.join("ab12_seed1.json"),
+        json!({"path": format!("{name}.wav"), "text": text, "voice": voice, "model": "eleven_turbo_v2_5", "speed": speed, "seed": 1, "cost": 4}).to_string(),
+    )
+    .unwrap();
+    // Half a second of a 220 Hz tone at 32 kHz, 16-bit mono.
+    let pcm: Vec<u8> = (0..16_000)
+        .flat_map(|i| {
+            let v = (8000.0 * (i as f64 * 220.0 * std::f64::consts::TAU / 32_000.0).sin()) as i16;
+            v.to_le_bytes()
+        })
+        .collect();
+    std::fs::write(d.join("ab12_seed1.pcm"), pcm).unwrap();
+}
+
+/// Takes an older line-by-line render left count as rendered after an import, and a render at
+/// their speed cuts them from the cache instead of sending their lines.
+#[test]
+fn imported_takes_count_as_rendered_and_are_never_sent_again() {
+    let b = bench(50_000, true);
+    let m = "eleven_turbo_v2_5";
+    let old = tempfile::tempdir().unwrap();
+    old_take(old.path(), "armed", "Armed", "v-callum", 1.2);
+    old_take(old.path(), "disarm", "Disarmed", "v-callum", 1.2);
+    std::fs::create_dir_all(old.path().join("bad")).unwrap();
+    std::fs::write(old.path().join("bad/x.json"), "{}").unwrap();
+    std::fs::write(old.path().join("bad/x.pcm"), [0u8; 4]).unwrap();
+    let before: Vec<_> = std::fs::read_dir(old.path())
+        .unwrap()
+        .flatten()
+        .map(|e| e.path())
+        .collect();
+
+    let dry = b
+        .core
+        .gear_voice_import_takes(&quadcam_lib::core::ImportTakesParams {
+            folder: old.path().display().to_string(),
+            dry_run: true,
+        })
+        .unwrap();
+    assert_eq!((dry.found, dry.imported, dry.already), (3, 2, 0), "{dry:?}");
+    assert_eq!(dry.skipped.len(), 1);
+    assert!(dry.counts.is_empty());
+    let go = |b: &Bench| {
+        b.core
+            .gear_voice_import_takes(&quadcam_lib::core::ImportTakesParams {
+                folder: old.path().display().to_string(),
+                dry_run: false,
+            })
+            .unwrap()
+    };
+    let r = go(&b);
+    assert_eq!(r.imported, 2);
+    assert_eq!(r.counts.len(), 1);
+    assert_eq!(
+        (
+            r.counts[0].voice.as_str(),
+            r.counts[0].lines,
+            r.counts[0].speed
+        ),
+        ("v-callum", 2, 1.2)
+    );
+    assert!(quadcam_lib::core::voice_import_text(&r).contains("2 imported"));
+    // Again: nothing new. The folder is unchanged.
+    assert_eq!(go(&b).already, 2);
+    let after: Vec<_> = std::fs::read_dir(old.path())
+        .unwrap()
+        .flatten()
+        .map(|e| e.path())
+        .collect();
+    assert_eq!(before, after);
+
+    // The voice list shows them; at the studio's speed 1 they are another take.
+    let v = b.core.gear_voice_sets(&Default::default()).unwrap();
+    assert_eq!(v.rendered[0].lines, 2);
+    assert_eq!(estimate(&b, &["sample"], m).unwrap().rendered, 0);
+    // At their speed, the sample set's "Armed" and "Disarmed" come from the import.
+    let fast = Some(quadcam_lib::gear::voice::render::RenderSettings {
+        speed: 1.2,
+        ..Default::default()
+    });
+    let e = b
+        .core
+        .gear_voice_estimate(&EstimateParams {
+            sets: vec!["sample".into()],
+            voice: "Callum".into(),
+            model: m.into(),
+            settings: fast.clone(),
+            ..Default::default()
+        })
+        .unwrap();
+    assert_eq!(e.rendered, 2, "{e:?}");
+    let mut p = render("Callum", m, &["sample"], false, false);
+    p.settings = fast;
+    let r = paid_render(&b, VoiceRenderParams { confirm: true, ..p });
+    assert!(
+        r.notes
+            .iter()
+            .any(|n| n.starts_with("2 lines come from earlier takes")),
+        "{:?}",
+        r.notes
+    );
+    let pack = b.dir.path().join("support/gear/voices").join(&r.pack);
+    assert!(pack.join("SOUNDS/en/armed.wav").is_file());
+    assert!(
+        !r.retakes.iter().any(|t| t.text == "Armed"),
+        "{:?}",
+        r.retakes
+    );
+}
