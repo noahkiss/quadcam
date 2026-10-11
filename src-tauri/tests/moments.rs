@@ -477,3 +477,104 @@ fn dead_air_times_survive_dropped_frames() {
     assert_eq!(scan.keep.len(), 1);
     assert!((scan.keep[0].start - 5.0).abs() <= 0.1);
 }
+
+/// Matching radio logs to library clips again: an unknown id and a missing folder refuse;
+/// without `apply` no file changes; with it the matched clip's file gains the flight, and
+/// its date, time and name stay as they were.
+#[test]
+fn library_match_logs_writes_only_with_apply_and_keeps_date_time_and_name() {
+    use quadcam_lib::core::{Core, LibMatchParams, LogChoice, NoHooks};
+    use quadcam_lib::photos::Recorder;
+    use quadcam_lib::session::{Editor, PlanPatch};
+    use std::sync::Arc;
+
+    let src = tempfile::tempdir().unwrap();
+    make_clip(&src.path().join("PICT0001.AVI"), 7, true);
+    let work = tempfile::tempdir().unwrap();
+    let core = Core::new(
+        work.path().join("cache"),
+        None,
+        Arc::new(NoHooks),
+        Arc::new(Recorder::default()),
+    );
+    let mut d = core.defaults();
+    d.output_dir = Some(work.path().join("out"));
+    std::fs::create_dir_all(work.path().join("out")).unwrap();
+    core.set_defaults(d);
+    core.load(Some(src.path())).unwrap();
+    let day = NaiveDate::from_ymd_opt(2026, 9, 28).unwrap();
+    core.plan_dates(LogChoice::None, Some(day)).unwrap();
+    core.patch(
+        &[PlanPatch {
+            id: 0,
+            name: Some("loops".into()),
+            date: Some(day),
+            ..Default::default()
+        }],
+        Editor::User,
+    )
+    .unwrap();
+    core.import(&Default::default()).unwrap();
+    let lib = core.library(&Default::default()).unwrap().clips;
+    let item = lib[0].clone();
+    let (id, file) = (item.clip.id.clone(), item.file.clone());
+    let bytes = std::fs::read(&file).unwrap();
+
+    // A radio log of that day: armed for about the clip's length.
+    let logs = tempfile::tempdir().unwrap();
+    std::fs::create_dir(logs.path().join("LOGS")).unwrap();
+    let mut csv = String::from("Date,Time,1RSS(dB),RQly(%),RxBt(V),Rud,Ele,Thr,Ail\n");
+    for i in 0..70 {
+        csv.push_str(&format!(
+            "2026-09-28,10:00:{:04.1},-60,100,{:.2},0,0,{},0\n",
+            i as f64 / 10.0,
+            4.2 - i as f64 * 0.005,
+            if i < 68 { 400 } else { -1024 }
+        ));
+    }
+    std::fs::write(logs.path().join("LOGS/Whoop-2026-09-28-100000.csv"), csv).unwrap();
+
+    let params = |ids: Vec<String>, logs: Option<std::path::PathBuf>, apply| LibMatchParams {
+        ids,
+        logs,
+        day: None,
+        apply,
+    };
+    let e = core
+        .library_match_logs(&params(
+            vec!["nosuchclip".into()],
+            Some(logs.path().to_path_buf()),
+            true,
+        ))
+        .unwrap_err();
+    assert!(format!("{e:#}").contains("No clip nosuchclip"), "{e:#}");
+    assert!(core
+        .library_match_logs(&params(vec![], Some(work.path().join("none")), true))
+        .is_err());
+
+    let dry = core
+        .library_match_logs(&params(vec![], Some(logs.path().to_path_buf()), false))
+        .unwrap();
+    assert_eq!(dry.clips.len(), 1, "{dry:?}");
+    assert_eq!(std::fs::read(&file).unwrap(), bytes, "no apply, no write");
+
+    let applied = core
+        .library_match_logs(&params(vec![], Some(logs.path().to_path_buf()), true))
+        .unwrap();
+    let after = core.library(&Default::default()).unwrap().clips;
+    let now = after.iter().find(|c| c.clip.id == id).unwrap();
+    assert_eq!(now.file, file, "the name stays");
+    assert_eq!(now.clip.date, item.clip.date);
+    assert_eq!(now.clip.time, item.clip.time);
+    assert_eq!(now.name, item.name);
+    assert_eq!(
+        applied.clips[0].badge,
+        quadcam_lib::logs::Badge::Matched,
+        "{applied:?}"
+    );
+    assert_ne!(
+        std::fs::read(&file).unwrap(),
+        bytes,
+        "the flight is written"
+    );
+}
