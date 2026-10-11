@@ -5,6 +5,8 @@ User-facing changes in each release, newest first. Release notes on
 
 ## Unreleased
 
+## 0.14.1 (2026-10-11)
+
 - **Voice studio: a take that no longer cuts is removed.** A line reused from an earlier take whose files cannot be read or cut no longer fails every render: QuadCam removes the take before it sends anything, and the next estimate prices its lines. Before, the render failed on that take every time until its cache file was deleted by hand.
 - **Voice studio: nothing is sent that the estimate did not price.** A batch the estimate counted as cached but whose take cannot be read is removed, not sent; the next estimate prices it. A render that fails part way keeps the batches it made, so their lines are not billed again.
 - **Import takes:** an imported take no longer shares its cache key with a one-line batch under the carrier `{line}`, and its start is not checked for a carrier's last sound (it had none). Takes imported by 0.14.0 keep working; importing the folder again files them under the new key.
