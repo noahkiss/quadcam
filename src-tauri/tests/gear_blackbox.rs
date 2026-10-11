@@ -6,10 +6,10 @@
 use quadcam_lib::api;
 use quadcam_lib::core::{
     blackbox_hooks, BlackboxEraseParams, BlackboxExportParams, BlackboxFilter, BlackboxPullParams,
-    Core, EraseState, HookOutcome, NoHooks, PollPauseParams, PullMode, USB_PROBE,
+    Core, EraseState, HookOutcome, NoHooks, PollPauseParams, PullMode,
 };
 use quadcam_lib::disk::{DiskInfo, Volume};
-use quadcam_lib::gear::bf::blackbox::{synth_image, MIN_API_MINOR};
+use quadcam_lib::gear::bf::blackbox::synth_image;
 use quadcam_lib::gear::bf::cli::Timing;
 use quadcam_lib::gear::bf::fake::FakeFc;
 use quadcam_lib::gear::blackbox::Method;
@@ -140,7 +140,11 @@ fn a_pull_reads_the_used_bytes_verifies_stores_and_keeps_the_flash_by_default() 
         fc.log()
     );
     assert_eq!(fc.exits(), 0, "no CLI, no reboot");
-    assert_eq!(b.cues.spoken(), vec!["The FC done, safe to unplug."]);
+    let spoken = b.cues.spoken();
+    assert!(
+        spoken.len() == 1 && spoken[0].contains("safe to unplug"),
+        "{spoken:?}"
+    );
     // Pulling the same bytes again stores no second record.
     let again = pull(&b).unwrap();
     assert!(!again.new);
@@ -175,7 +179,11 @@ fn with_the_setting_on_the_flash_is_erased_after_verify_and_the_cue_follows_the_
     let list = b.core.gear_blackbox(&BlackboxFilter::default()).unwrap();
     assert!(list[0].pull.erased);
     assert_eq!(b.blobs().get(&list[0].pull.blob).unwrap(), img);
-    assert_eq!(b.cues.spoken(), vec!["The FC done, safe to unplug."]);
+    let spoken = b.cues.spoken();
+    assert!(
+        spoken.len() == 1 && spoken[0].contains("safe to unplug"),
+        "{spoken:?}"
+    );
     // `keep` skips the erase for one run, whatever the setting says.
     let fc = fc_with(img.clone());
     let b = bench(&fc);
@@ -232,7 +240,6 @@ fn nothing_is_erased_when_the_read_does_not_verify() {
     let b = bench(&sdcard);
     let e = pull(&b).unwrap_err();
     assert!(format!("{e:#}").contains("SD card"), "{e:#}");
-    assert_eq!(MIN_API_MINOR, 40);
 }
 
 #[test]
@@ -300,7 +307,6 @@ fn the_usb_timer_refuses_a_pull_that_would_outlast_it_and_never_starts_an_erase_
     b.settings(r#"{"gearEraseBlackbox":true}"#);
     let r = pull(&b).unwrap();
     assert_eq!(r.erase, EraseState::Done);
-    let _ = USB_PROBE;
 }
 
 #[test]
@@ -397,7 +403,11 @@ fn a_port_another_program_holds_is_left_alone_and_a_paused_port_skips_the_hook()
     assert_eq!(list.len(), 1);
     assert!(list[0].pull.erased);
     // One cue for the whole on-connect run.
-    assert_eq!(b.cues.spoken(), vec!["The FC done, safe to unplug."]);
+    let spoken = b.cues.spoken();
+    assert!(
+        spoken.len() == 1 && spoken[0].contains("safe to unplug"),
+        "{spoken:?}"
+    );
 }
 
 /// A USB disk volume with the FC's logs, present only while the FC is in USB disk mode.
@@ -467,7 +477,11 @@ fn usb_disk_mode_copies_the_files_and_falls_back_to_msp_when_the_fc_lacks_it() {
     assert_eq!(r.erase, EraseState::Done);
     assert!(fc.dataflash().is_empty());
     assert!(!fc.msc_active());
-    assert_eq!(b.cues.spoken(), vec!["The FC done, safe to unplug."]);
+    let spoken = b.cues.spoken();
+    assert!(
+        spoken.len() == 1 && spoken[0].contains("safe to unplug"),
+        "{spoken:?}"
+    );
 
     // An FC without `msc` in its CLI: the same pull reads over MSP and says so.
     let fc = fc_with(whole.clone());

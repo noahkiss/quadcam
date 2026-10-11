@@ -1,6 +1,6 @@
 //! A radio over USB: the same saved radio in a reader and in USB Storage mode, cleaning
-//! AppleDouble files, the EdgeTX serial link and linking a DFU device. Fakes only: no real
-//! volume, port or USB device is touched.
+//! AppleDouble files and the EdgeTX serial link (linking a DFU device is in
+//! `gear_firmware.rs`). Fakes only: no real volume, port or USB device is touched.
 
 use quadcam_lib::core::{Core, NoHooks};
 use quadcam_lib::disk::{DiskInfo, Volume};
@@ -337,7 +337,7 @@ fn verify_compares_the_radio_with_the_latest_backup() {
         "a folder the CLI cannot list is not missing"
     );
 
-    // Without a device the one saved radio of the board is used once identify saved a board.
+    // Without a device, the one saved radio is used.
     let r = core.gear_radio_cli(&p(RadioCliAction::Verify)).unwrap();
     assert_eq!(
         r.verify.unwrap().backup.split('/').next(),

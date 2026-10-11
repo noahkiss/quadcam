@@ -1,6 +1,5 @@
-//! The model editors (design 6.3, WP9 part A): each editor op in both file layouts, each
-//! against a synthetic card; ownership of callouts; idempotence; the value rules. Every
-//! card here is synthetic.
+//! The model editors (design 6.3, WP9 part A): each editor op in both file layouts, on a
+//! parsed synthetic model file; ownership of callouts; idempotence; the value rules.
 
 use quadcam_lib::gear::edgetx::editors::{self, CalloutDef, CalloutWhen, LoggingDef, SensorLog};
 use quadcam_lib::gear::edgetx::model::{self as em, Field, ModelOp};

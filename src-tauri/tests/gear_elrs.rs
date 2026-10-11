@@ -112,7 +112,6 @@ struct Bench {
     dir: tempfile::TempDir,
     core: Arc<Core>,
     esptool: Arc<FakeEsptool>,
-    fetch: Arc<FixtureFetch>,
     gui: Arc<Gui>,
     radio: String,
     fc: String,
@@ -261,7 +260,7 @@ fn bench(preview: bool, esptool: bool) -> (Bench, FakeHost, FakeHost) {
         .with_fc_timing(quadcam_lib::gear::bf::cli::Timing::fast())
         .with_modules(modules)
         .with_firmware_env(FwEnv {
-            fetch: fetch.clone(),
+            fetch,
             flasher: Arc::new(FlashRecorder::empty()),
         }),
     );
@@ -286,7 +285,6 @@ fn bench(preview: bool, esptool: bool) -> (Bench, FakeHost, FakeHost) {
         dir,
         core,
         esptool: runner,
-        fetch,
         gui,
         radio: "radio-0000000000000001".into(),
         fc: fc_id,
@@ -908,7 +906,6 @@ fn the_plan_refuses_without_esptool_a_phrase_a_known_target_or_a_good_checksum()
         && c.refusal
             .as_ref()
             .is_some_and(|r| r.reason.contains("expected checksum"))));
-    let _ = (&b.fetch, &b.radio);
 }
 
 #[test]

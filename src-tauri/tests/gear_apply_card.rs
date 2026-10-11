@@ -594,13 +594,6 @@ fn confirm_needs_the_digest_and_the_flag() {
 fn a_card_unmounted_between_operations_is_mounted_for_the_job() {
     let b = bench(Opts::default());
     // Between operations the card is unmounted (an earlier job released it).
-    let l = b
-        .core
-        .gear_connected()
-        .unwrap()
-        .into_iter()
-        .find(|c| c.id.as_deref() == Some(b.id.as_str()))
-        .unwrap();
     b.core
         .gear_card_unmount(&CardMountParams {
             device: b.id.clone(),
@@ -610,7 +603,6 @@ fn a_card_unmounted_between_operations_is_mounted_for_the_job() {
     assert!(!b.mounted.load(Ordering::SeqCst));
     b.log.lock().unwrap().clear();
     b.cues.played.lock().unwrap().clear();
-    let _ = l;
 
     let c = stage(&b, vec![contrast("24")]);
     // A plan mounts, reads and unmounts, quietly.
@@ -643,11 +635,7 @@ fn a_card_unmounted_between_operations_is_mounted_for_the_job() {
             .count(),
         1
     );
-    assert!(read_unmounted(&b).contains("contrast: 24"));
-}
-
-fn read_unmounted(b: &Bench) -> String {
-    read(b, "RADIO/radio.yml")
+    assert!(read(&b, "RADIO/radio.yml").contains("contrast: 24"));
 }
 
 #[test]

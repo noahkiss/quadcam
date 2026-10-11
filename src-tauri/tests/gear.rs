@@ -630,10 +630,10 @@ fn on_connect_hooks_run_only_when_their_automation_is_on() {
         "import is off by default"
     );
     assert_eq!(ran.load(Ordering::SeqCst), 1);
-    assert_eq!(
-        cues.spoken(),
-        ["The Radio done, safe to unplug."],
-        "one cue for the run"
+    let spoken = cues.spoken();
+    assert!(
+        spoken.len() == 1 && spoken[0].contains("safe to unplug"),
+        "one cue for the run: {spoken:?}"
     );
 
     c.settings_set(

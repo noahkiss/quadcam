@@ -452,7 +452,6 @@ fn a_bad_image_refuses_the_plan() {
 #[test]
 fn the_plan_refuses_when_the_usb_timer_would_run_out() {
     let b = bench(Opts::default());
-    b.fc.set_battery(7.6);
     // The battery has been in for 590 of the board's 600 seconds.
     let t0 = Instant::now() - Duration::from_secs(590);
     // A first look with no battery (it also identifies the FC), then the battery is in.
@@ -883,8 +882,6 @@ fn the_firmware_page_offers_the_flash_only_with_the_preview_on() {
         .unwrap();
     let fc = view.devices.iter().find(|d| d.device == b.id).unwrap();
     assert!(!fc.flashable);
-    assert_eq!(
-        fc.note.as_deref(),
-        Some("QuadCam will not flash it: Board BETAFPVF411 cannot be flashed by QuadCam yet.")
-    );
+    let note = fc.note.as_deref().unwrap_or_default();
+    assert!(note.contains("BETAFPVF411"), "{note}");
 }

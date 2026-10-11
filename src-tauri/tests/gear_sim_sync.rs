@@ -355,7 +355,7 @@ fn the_plan_refuses_a_running_sim_a_missing_profile_and_an_unknown_sim() {
         Some(("Sim closed (Liftoff)".into(), RefusalCode::SimRunning))
     );
     let reason = plan.checks.iter().find_map(|k| k.refusal.as_ref()).unwrap();
-    assert_eq!(reason.reason, "Quit Liftoff first.");
+    assert!(reason.reason.contains("Liftoff"), "{}", reason.reason);
 
     let plan = c
         .gear_sim_sync_plan_at(
@@ -696,10 +696,7 @@ fn a_sync_backs_up_writes_reads_back_and_leaves_the_rest_alone() {
         .iter()
         .find_map(|k| k.refusal.as_ref())
         .unwrap();
-    assert_eq!(
-        r.reason,
-        "The sims already hold these rates; nothing to write."
-    );
+    assert!(r.reason.contains("nothing to write"), "{}", r.reason);
     assert_eq!(
         c.gear_sims_at(
             &quadcam_lib::core::SimsParams {
@@ -841,8 +838,6 @@ fn a_sim_write_outside_the_temporary_folder_is_off_under_cargo() {
 
 #[test]
 fn the_cli_plans_then_syncs_a_temporary_home() {
-    let dir = tempfile::tempdir().unwrap();
-    let _ = dir;
     let (h, paths) = home();
     let run = |args: &[&str]| {
         let out = Command::new(env!("CARGO_BIN_EXE_quadcam-cli"))

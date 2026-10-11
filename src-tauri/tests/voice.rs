@@ -181,10 +181,9 @@ fn normalisation_matches_the_golden_wav() {
 
 #[test]
 fn tempo_and_rate_run_in_ffmpeg() {
-    let Ok(tools) = quadcam_lib::media::find_tools() else {
-        eprintln!("ffmpeg is not installed; skipping");
-        return;
-    };
+    // The suite needs ffmpeg (AGENTS.md): fail, as `common::tools()` does, rather than pass.
+    let tools = quadcam_lib::media::find_tools()
+        .expect("tests need ffmpeg and ffprobe (brew install ffmpeg)");
     let take = Pcm {
         rate: 24000,
         samples: {

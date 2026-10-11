@@ -434,7 +434,7 @@ fn a_checklist_stages_as_text_and_turns_the_checklist_on() {
     let m = model(&b);
     assert!(m.view.checklist);
     assert!(m.checklist.unwrap().contains("Battery strapped"));
-    // Same text as the file has: it drops out.
+    // Discarded by hand: the change is done.
     let c = b.core.gear_change_discard(&c.id).unwrap();
     assert_eq!(c.status, ChangeStatus::Discarded);
 }

@@ -7,7 +7,7 @@ use quadcam_lib::core::{
     NoHooks,
 };
 use quadcam_lib::gear::detect::DfuInfo;
-use quadcam_lib::gear::dfu::{FakeDfu, FLASH_BASE};
+use quadcam_lib::gear::dfu::FakeDfu;
 use quadcam_lib::gear::firmware::check::{
     FirmwareState, BETAFLIGHT_RELEASES, EDGETX_RELEASES, ELRS_INDEX,
 };
@@ -616,7 +616,6 @@ fn a_flash_backs_up_writes_reads_back_and_leaves() {
     assert!(gui.changed.load(Ordering::SeqCst) >= 1);
     // Nothing logs the picture's path or the radio's name in the report's notes.
     assert!(!report.message.contains("splash.png"));
-    let _ = FLASH_BASE;
 }
 
 #[test]

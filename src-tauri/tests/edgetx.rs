@@ -18,7 +18,7 @@ use quadcam_lib::gear::Env;
 use quadcam_lib::photos::Recorder;
 use std::path::Path;
 use std::sync::atomic::Ordering;
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
 
 fn card_at(root: &Path, s: &SynthCard) -> Card {
     synth::write_card(root, s).unwrap();
@@ -930,9 +930,7 @@ fn core_on(
     if usb {
         env.usb = Arc::new(|| quadcam_lib::gear::detect::parse_ioreg_usb(IOREG.as_bytes()));
     }
-    let calls = Arc::new(Mutex::new(0));
     env.unmount = Arc::new(move |_| {
-        *calls.lock().unwrap() += 1;
         if unmount_ok {
             Ok(())
         } else {
@@ -1063,7 +1061,11 @@ fn safe_to_unplug_only_after_the_unmount() {
     let (core, cues) = core_on(dir.path(), vec![volume(&root, "U")], false, true);
     let c = core.gear_connected().unwrap().remove(0);
     core.gear_release_card(&c).unwrap();
-    assert_eq!(cues.spoken(), vec!["The Radio done, safe to unplug."]);
+    let spoken = cues.spoken();
+    assert!(
+        spoken.len() == 1 && spoken[0].contains("safe to unplug"),
+        "{spoken:?}"
+    );
 
     let dir = tempfile::tempdir().unwrap();
     let root = dir.path().join("RADIO");

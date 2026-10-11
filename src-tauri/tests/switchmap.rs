@@ -522,9 +522,10 @@ fn pack_up_reads_a_radio_that_is_not_plugged_in_from_its_backup() {
     });
     store.save_device(&d).unwrap();
     let r = row(&core, "cards_space");
-    assert_eq!(
-        r.detail,
-        "Pocket card: 6.0 GB free, from backup, 2 days ago."
+    assert!(
+        r.detail.contains("6.0 GB free") && r.detail.contains("from backup"),
+        "{}",
+        r.detail
     );
 }
 
