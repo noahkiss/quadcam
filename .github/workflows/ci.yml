@@ -41,10 +41,11 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
+      # rust-toolchain.toml at the repo root names the version and components.
       - name: Install Rust and ffmpeg
         run: |
-          rustup toolchain install stable --profile minimal -c clippy,rustfmt
-          rustup default stable
+          rustup toolchain install
+          rustc --version
           brew install ffmpeg
 
       - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
@@ -95,8 +96,8 @@ jobs:
 
       - name: Install Rust (for cargo metadata)
         run: |
-          rustup toolchain install stable --profile minimal
-          rustup default stable
+          rustup toolchain install
+          rustc --version
 
       - run: pnpm install --frozen-lockfile
       - name: License check (fails on a license outside the allow list)

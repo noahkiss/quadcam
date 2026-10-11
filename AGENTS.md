@@ -35,7 +35,8 @@ README and `docs/`. Personal preferences go in the app's settings file on the ma
 
 ## Requirements
 
-- Rust via rustup (stable). The Tauri CLI is a dev dependency of `app/` (`@tauri-apps/cli`): run it as
+- Rust via rustup, at the version `rust-toolchain.toml` (repo root) pins; rustup installs it on the
+  first `cargo` run. The Tauri CLI is a dev dependency of `app/` (`@tauri-apps/cli`): run it as
   `app/node_modules/.bin/tauri` after `pnpm install`, or install it globally with
   `cargo install tauri-cli --version "^2" --locked` to type `cargo tauri`. Releases use the prebuilt one.
 - specta `=2.0.0-rc.25`, tauri-specta `=2.0.0-rc.25` and specta-typescript `=0.0.12` are release
@@ -86,6 +87,11 @@ open target/release/bundle/macos/QuadCam.app
   thread against the wall clock (`sim/tests/runner.rs` stall, `sim/tests/bench.rs`,
   `tests/sim_host.rs` frames advance) run alone (`threads-required`); a new one joins them. Doc tests are not nextest's: the crates have
   none; if one is added, CI needs `cargo test --doc`.
+- **Rust version:** `rust-toolchain.toml` pins one Rust release (channel, clippy, rustfmt) for
+  every folder and for CI, so a new stable lint never fails CI first. To bump it: set the new
+  `channel`, run `cargo clippy --workspace --all-targets -- -D warnings` and `cargo nextest run`,
+  and fix every new lint or warning in that same commit (`rust: 1.NN.0`). `rust-version` in
+  `Cargo.toml` is the oldest supported release and moves only when the code needs a newer one.
 - **Build cache:** sccache (`brew install sccache`, then `RUSTC_WRAPPER=sccache`) shares
   compiled dependencies across worktrees, which each have their own `target/`. sccache cannot
   cache incremental builds, so set `CARGO_INCREMENTAL=0` with it. `CARGO_INCREMENTAL=0` also
