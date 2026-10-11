@@ -46,8 +46,9 @@ export async function start(): Promise<() => void> {
       }
     }),
     // An agent asked to apply a staged change: the person must click Apply in the sheet.
-    on("agent-apply-request", ({ id, change, plan }) => S().agentApply(id, change, plan)),
+    on("agent-apply-request", ({ id, change, plan }) => S().agentApply({ id, change, plan })),
     on("agent-apply-closed", (id) => S().agentApplyClosed(id)),
+    on("agent-apply-result", ({ id, report, error }) => S().agentApplyResult(id, report ?? null, error ?? null)),
     onDragDrop((e) => {
       const s = S();
       const blocked = s.busy || !s.env?.tools || dialogOpen(s);

@@ -338,6 +338,7 @@ export type LibraryTask = G.LibraryTask;
 export type AgentFormatRequest = G.AgentFormatRequest;
 export type FormatRequest = G.FormatRequest;
 export type AgentApplyRequest = G.AgentApplyRequest;
+export type AgentApplyResult = G.AgentApplyResult;
 export type { ApplyPlan, ApplyReport, CardMounted, ChangeStatus, Check, CopyPart, CopyPlan, Edit, StagedChange, StepReport } from "../bindings";
 
 /** `gear_copy_plan` and `gear_copy_stage`: where settings come from and go to. */

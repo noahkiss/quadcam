@@ -37,6 +37,14 @@ export function ElrsSection() {
   const [draft, setDraft] = useState<Record<string, string>>({});
   const [phrase, setPhrase] = useState("");
   const [sheet, setSheet] = useState<FlashSheet | null>(null);
+  const setWriteSheet = useStore((s) => s.setWriteSheet);
+  const sheetOpen = !!sheet;
+  // While this sheet is open, an agent's apply request waits instead of opening over it.
+  useEffect(() => {
+    if (!sheetOpen) return;
+    setWriteSheet(true);
+    return () => setWriteSheet(false);
+  }, [sheetOpen, setWriteSheet]);
 
   const load = useCallback(async () => {
     try {
@@ -96,9 +104,9 @@ export function ElrsSection() {
     setSheet({ ...sheet, busy: true, error: null });
     try {
       const report = await api.gearElrsFlashClick(params, p.digest);
-      setSheet((s) => (s ? { ...s, report, busy: false } : s));
+      setSheet((s) => (s?.params === params ? { ...s, report, busy: false } : s));
     } catch (e) {
-      setSheet((s) => (s ? { ...s, busy: false, error: errText(e) } : s));
+      setSheet((s) => (s?.params === params ? { ...s, busy: false, error: errText(e) } : s));
     }
     await load();
     await loadGear();
