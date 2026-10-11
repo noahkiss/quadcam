@@ -47,12 +47,28 @@ The Vite dev server uses port 4719 with `strictPort`. Set `QUADCAM_DEV_PORT` to 
 Run these in `src-tauri/`:
 
 ```bash
-cargo test -- --test-threads=1                     # unit and integration tests
+cargo nextest run -P quick                         # fast loop: skips the disk-image and long ffmpeg tests
+cargo nextest run                                  # every unit and integration test
+cargo nextest run --test join                      # one test file
+cargo test                                         # also works, more slowly
 cargo test --test import size_and_speed -- --ignored --nocapture   # MP4 against MOV size and speed
 INSTA_UPDATE=always cargo test --test snapshots    # accept a deliberate shape change, then review the diff
 QUADCAM_UPDATE_BINDINGS=1 cargo test --test bindings   # write app/src/bindings.ts after an api change
 ```
 
+- The tests run under [cargo-nextest](https://nexte.st) (`cargo install cargo-nextest --locked`). nextest runs each test in its own process, many at once. `src-tauri/.config/nextest.toml` holds three profiles:
+
+  | Profile | Runs |
+  |---|---|
+  | `default` | Every test |
+  | `quick` (`-P quick`) | Every test except the disk-image tests and `tests/join.rs` |
+  | `ci` | Every test, with a JUnit report and one retry for `tests/join.rs` and `tests/mount_cycle.rs`, which can fail on a loaded machine |
+
+- While you work, run `-P quick` and the test files of the area you changed. CI runs the full suite on every push, on every branch.
+- On a busy machine, cap the load: `CARGO_BUILD_JOBS=4 cargo nextest run --test-threads 4`.
+- The disk-image tests are in the `serial` test group: they run one at a time, because `hdiutil` and `diskutil` share one system daemon and a detached image's disk number goes to the next image. They also take a lock file in the temporary folder, so disk-image tests in two checkouts take turns. A new test that attaches a disk image belongs in the `serial` filter and the `quick` exclusion.
+- nextest does not run doc tests. The crates have none. If you add one, run `cargo test --doc` too.
+- Each git worktree has its own `target/`. [sccache](https://github.com/mozilla/sccache) shares compiled dependencies between them: `brew install sccache`, then `export RUSTC_WRAPPER=sccache CARGO_INCREMENTAL=0` (sccache does not cache incremental builds). With many worktrees, `CARGO_INCREMENTAL=0` saves disk space even without sccache.
 - The tests need ffmpeg. They make their own synthetic clips with `ffmpeg -f lavfi -i testsrc`.
 - The format tests attach small FAT32 disk images with `hdiutil`. They erase only an image that they created, and they check that the target is a disk image first.
 - No test can reach your Photos library or your Trash. Under `cargo`, "Move to Trash" moves files into a temporary folder.
@@ -81,10 +97,12 @@ pnpm build                                 # -> app/dist
 
 ### CI
 
-`.github/workflows/ci.yml` runs on every push and pull request:
+`.github/workflows/ci.yml` runs on every push to a branch or a `v*` tag, and on pull requests from forks:
 
-- `cargo fmt --check`, clippy, the tests, and a release build.
+- `cargo fmt --check`, clippy, the tests (`cargo nextest run --profile ci`, with the JUnit report as the `junit` artifact), and a release build.
 - A `ui` job for `app/`: typecheck, lint, Vitest, Playwright, and a build.
+
+A newer push to the same branch or pull request cancels the older run. A run on `main` or on a tag is never cancelled, because the release waits for a green run on the tagged commit.
 
 ### Try the app without it taking focus
 

@@ -57,7 +57,10 @@ README and `docs/`. Personal preferences go in the app's settings file on the ma
 Run these in `src-tauri/`:
 
 ```bash
-cargo test -- --test-threads=1  # unit + integration tests (needs ffmpeg; attaches small disk images)
+cargo nextest run -P quick      # the fast loop: all but the disk-image and long ffmpeg tests
+cargo nextest run               # every test (needs ffmpeg; attaches small disk images one at a time)
+cargo nextest run --test join   # one test file; -E 'test(name)' picks tests by name
+cargo test                      # still works; nextest is faster (each test its own process)
 cargo test --test import size_and_speed -- --ignored --nocapture   # MP4 vs MOV size/speed
 INSTA_UPDATE=always cargo test --test snapshots   # accept a deliberate shape change, then review the diff
 QUADCAM_UPDATE_SURFACE=1 cargo test --test surface   # record new tools, actions, flags in tests/surface/ (additions only)
@@ -67,6 +70,25 @@ cargo tauri build               # -> target/release/bundle/macos/QuadCam.app (ru
 cargo build --release --bin quadcam-cli   # -> target/release/quadcam-cli
 open target/release/bundle/macos/QuadCam.app
 ```
+
+- **Test loop:** run `cargo nextest run -P quick` plus the tests of the area you touched
+  (`--test <file>`). The full suite is CI's job: it runs on every push to every branch.
+  Run it locally only before a release, or when CI is down. On a busy machine (other
+  worktrees building) cap it: `--test-threads 4`, and `CARGO_BUILD_JOBS=4`.
+- **nextest** (`cargo install cargo-nextest --locked`, or `brew install cargo-nextest`):
+  `src-tauri/.config/nextest.toml` holds the profiles. `default` runs everything; `quick`
+  skips the disk-image tests and `tests/join.rs`; `ci` adds JUnit and one retry for the two
+  known load flakes (`tests/join.rs`, `tests/mount_cycle.rs`). The `serial` group runs the
+  disk-image tests one at a time (hdiutil and diskutil share one daemon, and a detached
+  image's disk number is reused). `tests/common` `Image` also takes a machine-wide lock, so
+  disk-image tests in two worktrees take turns. A new test that attaches an `Image` goes into
+  the `serial` filter and the `quick` exclusion. Doc tests are not nextest's: the crates have
+  none; if one is added, CI needs `cargo test --doc`.
+- **Build cache:** sccache (`brew install sccache`, then `RUSTC_WRAPPER=sccache`) shares
+  compiled dependencies across worktrees, which each have their own `target/`. sccache cannot
+  cache incremental builds, so set `CARGO_INCREMENTAL=0` with it. `CARGO_INCREMENTAL=0` also
+  suits many worktrees without sccache: incremental data is large on disk and helps only the
+  crate you edit.
 
 In `app/` (`pnpm install` first):
 
@@ -126,8 +148,11 @@ GitHub (`noahkiss/quadcam`, public) is the only remote. Users install the cask
   environment (`v*` tags only), so a re-run dispatches on the tag, with that tag's `release.yml`:
   `gh workflow run release.yml -R noahkiss/quadcam --ref vX.Y.Z -f tag=vX.Y.Z`.
 - **Secret:** `HOMEBREW_TAP_TOKEN` (the tap PAT) lets the release dispatch the tap.
-- `.github/workflows/ci.yml` runs fmt, clippy, tests and a release build on every push and PR,
-  and a `ui` job for `app/` (typecheck, lint, Vitest, Playwright, build).
+- `.github/workflows/ci.yml` runs fmt, clippy, tests (`cargo nextest run --profile ci`) and a
+  release build on every push to a branch or `v*` tag and on pull requests from forks, and a
+  `ui` job for `app/` (typecheck, lint, Vitest, Playwright, build). A newer push cancels an
+  older run on the same branch or PR. A run on `main` or a tag is never cancelled: the release
+  waits for it.
 
 ## Behaviour notes
 
