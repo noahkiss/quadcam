@@ -11,38 +11,75 @@ export const OSD_CHANGE = "OSD layout";
 const isOsd = (e: Edit): e is OsdEdit => e.kind === "osd_element";
 const name = (s: string) => s.trim().toLowerCase().replace(/^osd_/, "").replace(/_pos$/, "");
 
-/** The box an element's cells take on the grid, before clipping. The horizon draws its level line at x-4, y+4. */
-function rect(e: OsdElement) {
-  return e.name === "ah" ? { x: e.x - 4, y: e.y + 4, w: 9, h: 1 } : { x: e.x, y: e.y, w: e.width, h: e.height };
+// The drawing and the check follow `gear/osd.rs` `render_profile`: each element draws its
+// cells in order (the camera frame first, the crosshairs last, the rest by name), a cell
+// another element already drew counts as an overlap, and the horizon draws its level line
+// while its full pitch sweep is checked against the screen on its own.
+const HORIZON_HALF = 4;
+const HORIZON_ROWS = 10;
+const STICK = { w: 7, h: 5 };
+
+/** The cells an element draws, as `gear/osd.rs` `cells` does. */
+function cells(e: OsdElement): [number, number, string][] {
+  const out: [number, number, string][] = [];
+  if (e.name === "ah") {
+    for (let dx = -HORIZON_HALF; dx <= HORIZON_HALF; dx++) out.push([e.x + dx, e.y + HORIZON_ROWS / 2 - 1, "="]);
+  } else if (e.name.startsWith("stick_overlay")) {
+    for (let dy = 0; dy < STICK.h; dy++) for (let dx = 0; dx < STICK.w; dx++) out.push([e.x + dx, e.y + dy, dx === (STICK.w >> 1) || dy === (STICK.h >> 1) ? "+" : " "]);
+  } else if (e.name === "camera_frame") {
+    for (let dy = 0; dy < e.height; dy++) for (let dx = 0; dx < e.width; dx++) {
+      const ex = dx === 0 || dx === e.width - 1, ey = dy === 0 || dy === e.height - 1;
+      if (ex || ey) out.push([e.x + dx, e.y + dy, ex && ey ? "+" : ey ? "-" : "|"]);
+    }
+  } else {
+    const chars = [...e.sample.padEnd(e.width, " ")].slice(0, e.width);
+    chars.forEach((ch, i) => out.push([e.x + i, e.y, ch]));
+  }
+  return out;
 }
 
+const mayOverlap = (a: string, b: string) => [a, b].sort().join() === "ah,crosshairs" || a === "camera_frame" || b === "camera_frame";
+const drawOrder = (n: string) => (n === "camera_frame" ? 0 : n === "crosshairs" ? 2 : 1);
+
 function profile(base: OsdProfile, els: OsdElement[], w: number, h: number): OsdProfile {
-  const on = els.filter((e) => e.profiles.includes(base.index));
+  const on = els.filter((e) => e.profiles.includes(base.index)).sort((a, b) => drawOrder(a.name) - drawOrder(b.name) || (a.name < b.name ? -1 : a.name > b.name ? 1 : 0));
   const rows = Array.from({ length: h }, () => Array.from({ length: w }, () => " "));
+  const owner: (string | null)[][] = Array.from({ length: h }, () => Array.from({ length: w }, () => null));
   const boxes: OsdBox[] = [];
   const problems: OsdProblem[] = [];
+  const notes: string[] = [];
+  const off = new Map<string, number>();
+  const overlaps = new Map<string, number>();
   for (const e of on) {
-    const r = rect(e);
-    const x0 = Math.max(0, r.x), y0 = Math.max(0, r.y);
-    const x1 = Math.min(w, r.x + r.w), y1 = Math.min(h, r.y + r.h);
-    if (x1 > x0 && y1 > y0) boxes.push({ element: e.name, label: e.label, x: x0, y: y0, width: x1 - x0, height: y1 - y0 });
-    if (r.h === 1) [...e.sample].forEach((ch, i) => {
-      const cx = r.x + i;
-      if (cx >= 0 && cx < w && r.y >= 0 && r.y < h) rows[r.y][cx] = ch;
-    });
-    const off = r.w * r.h - Math.max(0, x1 - x0) * Math.max(0, y1 - y0);
-    if (off > 0) problems.push({ kind: "off_screen", element: e.name, other: null, cells: off, message: `${e.name}: ${off} cells off screen.` });
-  }
-  for (let i = 0; i < boxes.length; i++) {
-    for (let j = i + 1; j < boxes.length; j++) {
-      const a = boxes[i], b = boxes[j];
-      // The crosshairs sit on the horizon's level line by design.
-      if ([a.element, b.element].sort().join() === "ah,crosshairs") continue;
-      const cells = Math.max(0, Math.min(a.x + a.width, b.x + b.width) - Math.max(a.x, b.x)) * Math.max(0, Math.min(a.y + a.height, b.y + b.height) - Math.max(a.y, b.y));
-      if (cells > 0) problems.push({ kind: "overlap", element: a.element, other: b.element, cells, message: `${a.element} overlaps ${b.element} (${cells} cells).` });
+    if (e.name === "ah_sbar") {
+      notes.push(`${e.name} is on: drawn around the screen centre, not shown here.`);
+      continue;
     }
+    if (e.name === "ah") {
+      const left = e.x - HORIZON_HALF, right = e.x + HORIZON_HALF, bottom = e.y + HORIZON_ROWS - 1;
+      if (left < 0 || right >= w || bottom >= h) problems.push({ kind: "off_screen", element: e.name, other: null, cells: 0, message: `${e.name}: the moving horizon reaches off screen (columns ${left}-${right}, rows ${e.y}-${bottom}).` });
+      notes.push(`${e.name}: the level line is drawn; at full pitch it sweeps rows ${e.y}-${bottom}.`);
+    }
+    let [x0, y0, x1, y1] = [Infinity, Infinity, -Infinity, -Infinity];
+    for (const [cx, cy, ch] of cells(e)) {
+      if (cx < 0 || cx >= w || cy < 0 || cy >= h) {
+        if (e.name !== "ah") off.set(e.name, (off.get(e.name) ?? 0) + 1);
+        continue;
+      }
+      const prev = owner[cy][cx];
+      if (prev && prev !== e.name && !mayOverlap(prev, e.name)) overlaps.set(`${e.name}\n${prev}`, (overlaps.get(`${e.name}\n${prev}`) ?? 0) + 1);
+      owner[cy][cx] = e.name;
+      rows[cy][cx] = ch;
+      [x0, y0, x1, y1] = [Math.min(x0, cx), Math.min(y0, cy), Math.max(x1, cx), Math.max(y1, cy)];
+    }
+    if (x0 <= x1) boxes.push({ element: e.name, label: e.label, x: x0, y: y0, width: x1 - x0 + 1, height: y1 - y0 + 1 });
   }
-  return { ...base, elements: on.map((e) => e.name), rows: rows.map((r) => r.join("")), boxes, problems, notes: [] };
+  for (const [name, n] of [...off].sort()) problems.push({ kind: "off_screen", element: name, other: null, cells: n, message: `${name}: ${n} cells off screen.` });
+  for (const [key, n] of [...overlaps].sort()) {
+    const [a, b] = key.split("\n");
+    problems.push({ kind: "overlap", element: a, other: b, cells: n, message: `${a} overlaps ${b} (${n} cells).` });
+  }
+  return { ...base, elements: on.map((e) => e.name), rows: rows.map((r) => r.join("")), boxes, problems, notes };
 }
 
 /** The recorded view with `edits` applied and every profile redrawn and checked. */
