@@ -45,11 +45,37 @@ pub struct PackIndexEntry {
     /// The firmware family the pack is for (`edgetx`).
     #[serde(default = "edgetx")]
     pub firmware: String,
+    /// The zip's https address (a release asset); empty: `file` next to the index.
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub url: String,
+    /// The zip's size, the download.
+    #[serde(default)]
+    pub zip_bytes: u64,
+    /// The day the pack was published, `YYYY-MM-DD`.
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub date: String,
+    /// A few lines to listen to before the download.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub preview: Vec<PreviewLine>,
 }
 
-/// `voices.json`.
+/// One preview line of an index entry: a short AAC file next to the index.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Type)]
+pub struct PreviewLine {
+    /// The card path of the line.
+    pub path: String,
+    pub text: String,
+    /// The file, relative to the index's folder or address.
+    pub file: String,
+    pub sha256: String,
+}
+
+/// The index (`voices.json`, or `index.json` in the voices repo).
 #[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, Type)]
 pub struct VoiceIndex {
+    /// The format's version: 1.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub schema: Option<u32>,
     #[serde(default)]
     pub packs: Vec<PackIndexEntry>,
 }
@@ -241,22 +267,10 @@ pub fn build(
     std::fs::create_dir_all(out)?;
     let name = format!("voice-{}-{}.zip", opts.id, opts.version);
     let zip = out.join(&name);
-    let _ = std::fs::remove_file(&zip);
-    let ran = Command::new("/usr/bin/zip")
-        .current_dir(&stage)
-        .args(["-X", "-q", "-r"])
-        .arg(&zip)
-        .args(["pack.json", "SOUNDS"])
-        .output()
-        .context("starting zip")?;
+    let zipped = zip_dir(&stage, &zip);
     let bytes_in = dir_bytes(&stage);
     let _ = std::fs::remove_dir_all(&stage);
-    if !ran.status.success() {
-        bail!(
-            "zip failed: {}",
-            String::from_utf8_lossy(&ran.stderr).trim()
-        );
-    }
+    zipped?;
     let bytes = std::fs::read(&zip)?;
     let entry = PackIndexEntry {
         id: manifest.id,
@@ -274,6 +288,10 @@ pub fn build(
         version: manifest.version,
         file: name,
         firmware: manifest.firmware,
+        url: String::new(),
+        zip_bytes: bytes.len() as u64,
+        date: String::new(),
+        preview: Vec::new(),
     };
     let idx_path = out.join("voices.json");
     let mut idx = read_index(&idx_path).unwrap_or_default();
@@ -282,6 +300,25 @@ pub fn build(
     idx.packs.sort_by(|a, b| a.id.cmp(&b.id));
     std::fs::write(&idx_path, serde_json::to_vec_pretty(&idx)?)?;
     Ok((zip, entry))
+}
+
+/// Zips a pack folder (`pack.json` and `SOUNDS/`) into `zip`, replacing it.
+pub fn zip_dir(stage: &Path, zip: &Path) -> Result<()> {
+    let _ = std::fs::remove_file(zip);
+    let ran = Command::new("/usr/bin/zip")
+        .current_dir(stage)
+        .args(["-X", "-q", "-r"])
+        .arg(zip)
+        .args(["pack.json", "SOUNDS"])
+        .output()
+        .context("starting zip")?;
+    if !ran.status.success() {
+        bail!(
+            "zip failed: {}",
+            String::from_utf8_lossy(&ran.stderr).trim()
+        );
+    }
+    Ok(())
 }
 
 pub fn read_index(path: &Path) -> Result<VoiceIndex> {

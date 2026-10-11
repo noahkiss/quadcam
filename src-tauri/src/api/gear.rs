@@ -46,6 +46,10 @@ pub use crate::core::{
 pub use crate::core::{
     FirmwareParams, FirmwareRead, FirmwareReadParams, FirmwareView, FlashParams, FlashRequest,
 };
+pub use crate::core::{
+    PackPreviewParams, PreviewTake, PublishApproveParams, PublishApproveReport, PublishParams,
+    PublishReview, ReviewLine,
+};
 pub use crate::gear::apply::sim::{SimSyncParams, SimSyncRequest, SimTarget};
 pub use crate::gear::apply::{ApplyPlanParams, ApplyReport, ApplyRequest, StepReport, StepState};
 pub use crate::gear::backup::{
@@ -227,6 +231,13 @@ macro_rules! with_gear_rows {
             gear_voice_check(params: VoiceCheckParams) -> VoiceCheckReport = |c| c.gear_voice_check(&params);
             /// Installs a voice pack from the index after a hash check.
             gear_voice_pack_install(params: PackInstallParams) -> VoicePack = |c| c.gear_voice_pack_install(&params);
+            /// Fetches an index pack's preview lines into the cache, each checked against its
+            /// hash, to play before an install.
+            gear_voice_pack_preview(params: PackPreviewParams) -> Vec<PreviewTake> = |c| c.gear_voice_pack_preview(&params);
+            /// Prepares a pack on this Mac for the voices repo: refuses unless the speech check
+            /// cleared every line, then builds the zip, the previews and the index entry, and
+            /// answers the review with a digest. Publishes nothing: only the person approves.
+            gear_voice_publish(params: PublishParams) -> PublishReview = |c| c.gear_voice_publish(&params);
             /// Stages one card change that puts a pack's sounds on a radio, keeping the person's
             /// per-line overrides when asked. The apply sheet writes the card.
             gear_voice_choose(params: VoiceChooseParams) -> StagedChange = |c| c.gear_voice_choose(&params);

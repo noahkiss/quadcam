@@ -47,4 +47,5 @@ mod switchmap;
 mod upgrade;
 mod video;
 mod voice;
+mod voice_publish;
 mod voice_studio;

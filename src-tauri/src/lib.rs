@@ -290,6 +290,18 @@ async fn gear_apply_click(
     blocking(move || core.gear_apply_click(&params)).await
 }
 
+/// The publish review's own Approve button: the click is the person's approval. No `api` row,
+/// so MCP and the socket cannot reach it.
+#[tauri::command]
+#[specta::specta]
+async fn gear_voice_publish_approve(
+    state: State<'_, AppState>,
+    params: api::PublishApproveParams,
+) -> Result<api::PublishApproveReport, String> {
+    let core = state.core.clone();
+    blocking(move || core.voice_publish_approve(&params)).await
+}
+
 /// The apply sheet's own Apply button for a sim sync: the click is the confirmation.
 #[tauri::command]
 #[specta::specta]
@@ -629,6 +641,8 @@ pub fn specta_builder() -> tauri_specta::Builder<tauri::Wry> {
             c::gear_voice_import_takes,
             c::gear_voice_check,
             c::gear_voice_pack_install,
+            c::gear_voice_pack_preview,
+            c::gear_voice_publish,
             c::gear_voice_choose,
             c::gear_voice_choose_radios,
             c::gear_voice_pack_delete,
@@ -723,6 +737,7 @@ pub fn specta_builder() -> tauri_specta::Builder<tauri::Wry> {
             card_prep_click,
             answer_format_request,
             gear_apply_click,
+            gear_voice_publish_approve,
             gear_sim_sync_click,
             gear_sim_restore_click,
             gear_flash_click,

@@ -12,6 +12,7 @@ use crate::gear::changes::ChangeFilter;
 use crate::gear::model::{CardFile, ChangeStatus, DeviceKind, Edit, StagedChange};
 use crate::gear::voice::lines::{self, Line, Spelling};
 use crate::gear::voice::packs::{self, BuildOpts, Installed, PackIndexEntry, VoiceIndex};
+use crate::gear::voice::publish as packs_publish;
 use crate::gear::voice::render::{self, Cache, Ctx, Plan, RenderSettings};
 use crate::gear::voice::sets;
 use crate::gear::voice::tts::{ProviderConfig, Tts};
@@ -121,6 +122,12 @@ pub struct VoicePack {
     /// What the speech check heard in each line it checked (`pack.json` `heard`).
     #[serde(default)]
     pub heard: Vec<packs::HeardLine>,
+    /// An index pack's preview lines (`gear_voice_pack_preview` fetches them).
+    #[serde(default)]
+    pub preview: Vec<packs::PreviewLine>,
+    /// An index pack's download size.
+    #[serde(default)]
+    pub zip_bytes: u64,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, specta::Type)]
@@ -463,18 +470,22 @@ impl Core {
         self.gear.tts.make(cfg)
     }
 
-    fn voice_index_source(&self) -> Option<String> {
+    /// The pack index: the `voice_index` setting, else QuadCam's voices repo. A setting
+    /// written empty turns the index off.
+    pub(super) fn voice_index_source(&self) -> Option<String> {
         let values = self
             .settings_file
             .as_deref()
             .map(|f| crate::settings::read(f).unwrap_or_default())
             .unwrap_or_default();
-        values
-            .get("voiceIndex")
-            .and_then(Value::as_str)
-            .map(str::trim)
-            .filter(|s| !s.is_empty())
-            .map(String::from)
+        match values.get("voiceIndex").filter(|v| !v.is_null()) {
+            None => Some(packs_publish::INDEX_URL.into()),
+            Some(v) => v
+                .as_str()
+                .map(str::trim)
+                .filter(|s| !s.is_empty())
+                .map(String::from),
+        }
     }
 
     pub(super) fn all_lines(&self) -> Result<Vec<Line>> {
@@ -583,6 +594,8 @@ impl Core {
                 .collect(),
             retakes: m.retakes.clone(),
             heard: m.heard.clone(),
+            preview: Vec::new(),
+            zip_bytes: 0,
         }
     }
 
@@ -615,7 +628,7 @@ impl Core {
 
     /// Reads the pack index from its source into the cache. A path reads the file; an
     /// address downloads it.
-    fn refresh_index(&self, source: &str) -> Result<VoiceIndex> {
+    pub(super) fn refresh_index(&self, source: &str) -> Result<VoiceIndex> {
         check_index_source(source)?;
         let dest = self.index_cache_file();
         std::fs::create_dir_all(dest.parent().unwrap())?;
@@ -625,6 +638,22 @@ impl Core {
             std::fs::copy(source, &dest).with_context(|| format!("reading {source}"))?;
         }
         packs::read_index(&dest)
+    }
+
+    /// Fetches `file`, named relative to the index `source`, to `dest`: from the index's
+    /// address, or from the index file's folder.
+    pub(super) fn fetch_beside(&self, source: &str, file: &str, dest: &Path) -> Result<()> {
+        if source.starts_with("http://") || source.starts_with("https://") {
+            let base = source.rsplit_once('/').map(|(b, _)| b).unwrap_or("");
+            self.voice_fetch().download(&format!("{base}/{file}"), dest)
+        } else {
+            let from = Path::new(source)
+                .parent()
+                .unwrap_or_else(|| Path::new("."))
+                .join(file);
+            std::fs::copy(&from, dest).with_context(|| format!("reading {}", from.display()))?;
+            Ok(())
+        }
     }
 
     fn voice_fetch(&self) -> crate::modules::fetch::Curl {
@@ -697,6 +726,8 @@ impl Core {
                     radios: Vec::new(),
                     retakes: Vec::new(),
                     heard: Vec::new(),
+                    preview: e.preview.clone(),
+                    zip_bytes: e.zip_bytes,
                 });
             }
         }
@@ -987,16 +1018,17 @@ impl Core {
         let tmp = self.voice_scratch();
         std::fs::create_dir_all(&tmp)?;
         let zip = tmp.join(&name);
-        if source.starts_with("http://") || source.starts_with("https://") {
-            let base = source.rsplit_once('/').map(|(b, _)| b).unwrap_or("");
-            self.voice_fetch()
-                .download(&format!("{base}/{name}"), &zip)?;
+        if entry.url.is_empty() {
+            self.fetch_beside(&source, &name, &zip)?;
         } else {
-            let from = Path::new(&source)
-                .parent()
-                .unwrap_or_else(|| Path::new("."))
-                .join(&name);
-            std::fs::copy(&from, &zip).with_context(|| format!("reading {}", from.display()))?;
+            if !entry.url.starts_with("https://") && !entry.url.starts_with("http://") {
+                bail!(
+                    "The index gives {:?} as the pack's address, which is not https.",
+                    entry.url
+                );
+            }
+            check_index_source(&entry.url)?;
+            self.voice_fetch().download(&entry.url, &zip)?;
         }
         let r = packs::install(&self.voices_dir(), &zip, &entry);
         let _ = std::fs::remove_file(&zip);
@@ -1577,6 +1609,10 @@ fn dummy_entry(id: &str) -> PackIndexEntry {
         version: String::new(),
         file: String::new(),
         firmware: packs::EDGETX.into(),
+        url: String::new(),
+        zip_bytes: 0,
+        date: String::new(),
+        preview: Vec::new(),
     }
 }
 

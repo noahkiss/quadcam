@@ -463,7 +463,7 @@ pub struct SettingsValues {
     /// Gear: the voice your own lines render with: a say voice name, or the server's voice id.
     #[schemars(extend("x-nullable" = true))]
     pub tts_voice: Option<String>,
-    /// Gear: the address or path of the voice pack index (voices.json).
+    /// Gear: the address or path of the voice pack index; default the QuadCam Voices index, empty for none.
     #[schemars(extend("x-nullable" = true))]
     pub voice_index: Option<String>,
     /// Gear: the openai voice server's API key (QUADCAM_OPENAI_KEY in the environment wins). Never read back. The ElevenLabs key lives in the Keychain.

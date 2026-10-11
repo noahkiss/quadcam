@@ -41,6 +41,7 @@ mcp.action quadcam_gear.usb_timers
 mcp.action quadcam_gear.voice
 mcp.action quadcam_gear.voice_catalog
 mcp.action quadcam_gear.voice_estimate
+mcp.action quadcam_gear.voice_preview
 mcp.action quadcam_gear.voice_sets
 mcp.action quadcam_gear_apply.apply
 mcp.action quadcam_gear_apply.blackbox_erase
@@ -96,6 +97,7 @@ mcp.action quadcam_gear_edit.voice_import_takes
 mcp.action quadcam_gear_edit.voice_install
 mcp.action quadcam_gear_edit.voice_key_delete
 mcp.action quadcam_gear_edit.voice_key_set
+mcp.action quadcam_gear_edit.voice_publish
 mcp.action quadcam_gear_edit.voice_render
 mcp.action quadcam_gear_edit.voice_sample
 mcp.action quadcam_library_files.analyze_video
@@ -204,6 +206,7 @@ mcp.param quadcam_gear_edit.action string
 mcp.param quadcam_gear_edit.add_folder string
 mcp.param quadcam_gear_edit.aircraft string
 mcp.param quadcam_gear_edit.all_radios boolean
+mcp.param quadcam_gear_edit.attribution string
 mcp.param quadcam_gear_edit.backup string
 mcp.param quadcam_gear_edit.broke string
 mcp.param quadcam_gear_edit.calibration any
@@ -235,6 +238,7 @@ mcp.param quadcam_gear_edit.id string
 mcp.param quadcam_gear_edit.install boolean
 mcp.param quadcam_gear_edit.keep_overrides boolean
 mcp.param quadcam_gear_edit.key string
+mcp.param quadcam_gear_edit.license string
 mcp.param quadcam_gear_edit.line string
 mcp.param quadcam_gear_edit.lines array<string>
 mcp.param quadcam_gear_edit.minutes integer
@@ -276,6 +280,7 @@ mcp.param quadcam_gear_edit.time_s number
 mcp.param quadcam_gear_edit.title string
 mcp.param quadcam_gear_edit.to string
 mcp.param quadcam_gear_edit.unlink boolean
+mcp.param quadcam_gear_edit.version string
 mcp.param quadcam_gear_edit.voice string
 mcp.param quadcam_gear_edit.voice_model string
 mcp.param quadcam_gear_edit.voice_models array<string>

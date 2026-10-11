@@ -420,10 +420,15 @@ pack records its firmware family (`edgetx`) in `pack.json`.
   the cache, so rendering that voice and model again costs nothing. Tick **Also delete the raw
   takes** to remove them too.
 - **Get voice packs.** A voice pack is a zip of WAVs for one voice. **Refresh packs** reads
-  the pack index (the `voice_index` setting: an https address or a file; plain http only on
-  this Mac) and **Install** unpacks a pack into the gear folder after a hash check. An index
-  entry without a hash, a path outside `SOUNDS/`, and a symbolic link in the zip refuse the
-  install. No pack ships with QuadCam yet.
+  the pack index: the `voice_index` setting, by default the
+  [QuadCam Voices](https://noahkiss.github.io/quadcam-voices/) index (an https address or a
+  file; plain http only on this Mac; an empty setting turns the index off). Each pack shows its
+  voice, model, line count, download size and license. **Preview** downloads its preview lines
+  (about ten short AAC files, each checked against the index's hash) and plays one per click.
+  **Install** downloads the zip from its release address and unpacks it into the gear folder
+  after a hash check. An index entry without a hash, a path outside `SOUNDS/`, and a symbolic
+  link in the zip refuse the install. The QuadCam Voices site plays the same previews in a
+  browser.
 - **Render my voice.** QuadCam can also speak every line itself, with the provider in the
   settings, and keep the takes as a local pack: `tts_provider` is `say` (macOS, free, offline)
   or `openai` (any server with an OpenAI-compatible `/v1/audio/speech`, such as a Kokoro
@@ -436,10 +441,52 @@ pack records its firmware family (`edgetx`) in `pack.json`.
   shows the characters, and **Render and pay** goes ahead.
 - **The cache.** A take is kept by provider, voice, model, speed, spoken text and seed. A
   render with other trim or tempo settings finds the take and calls no provider.
+- **Publish…** on a pack rendered here offers it to QuadCam Voices. See
+  [Publish a pack](#publish-a-pack).
 - **The shape of a sound.** Each WAV is 32 kHz, 16-bit, mono. QuadCam trims the silence
   (speech is every 5 ms window within 55 dB of the loudest), adds 20 ms before and 150 ms
   after, and fades the speech in over 5 ms and out over 30 ms. A tempo other than 1 runs
   first, in ffmpeg.
+
+### Publish a pack
+
+**Publish…** on a pack you rendered opens the publish section. QuadCam prepares the pack,
+shows a review, and publishes nothing until you click **Approve and publish**.
+
+1. **Prepare.** Give the pack an id (default `<language>-<voice name>`), a version (default 1),
+   the voice's name, a license and an attribution. ElevenLabs packs get "ElevenLabs output, paid
+   plan: commercial use allowed", and Kokoro packs (a model name with `kokoro`) get Apache-2.0.
+   **Prepare** builds, in QuadCam's cache, the zip, about ten preview lines as AAC (from the
+   `sample` line set first, encoded by macOS's `afconvert`) and the index entry with every hash.
+   It refuses:
+   - a pack the speech check has not heard in full: run **Check speech** first,
+   - a line the check heard wrong that you did not accept: render it again, or listen and
+     **Accept** it,
+   - a pack made with macOS `say`, whose voices are licensed for use on the Mac,
+   - a pack without a license.
+
+   Your own lines (not in QuadCam's line sets) stay on this Mac: the published pack leaves them
+   out, and the review says how many.
+2. **Review.** Tiles show the lines, the lines you accepted, the download size and the size on
+   the card. **Spot check** lists 10 to 15 lines picked at random (every line in a small pack):
+   listen to those at least. **Every line** lists all of them with a play button, the text, what
+   the speech check heard and the result; accepted lines come first.
+3. **Approve and publish.** QuadCam checks that the prepared files still match the review's
+   digest. With GitHub's `gh` installed (Homebrew) and signed in, it creates the release
+   `<id>-v<version>` on [noahkiss/quadcam-voices](https://github.com/noahkiss/quadcam-voices)
+   with the zip, pushes a branch with the previews and `index.json`, and opens a pull request.
+   Merging the pull request publishes the pack. Without `gh`, it shows the commands to run.
+
+An agent can prepare a pack and show you the review (MCP `quadcam_gear_edit` `voice_publish`),
+but no MCP call approves. From a terminal, `quadcam-cli gear voice publish PACK` prepares, and
+`--approve --digest D` publishes after you type the pack's id; it refuses without a terminal.
+
+**Kokoro packs.** Kokoro is a free, open voice model (Apache-2.0). Run a Kokoro-FastAPI server
+on this Mac, set `tts_provider` to `openai`, `tts_base_url` to its address (for example
+`http://127.0.0.1:8880`), `tts_model` to `kokoro` and `tts_voice` to one of its voices, then
+**Render my voice**. The voices repo's
+[docs/kokoro.md](https://github.com/noahkiss/quadcam-voices/blob/main/docs/kokoro.md) has the
+steps.
 
 ### Voice studio
 

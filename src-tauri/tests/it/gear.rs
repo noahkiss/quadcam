@@ -99,6 +99,9 @@ fn env(mounted: &Mounted, present: &Present, cues: &Arc<RecordedCues>) -> Env {
         tts: Arc::new(quadcam_lib::gear::voice::tts::NoProviders),
         keys: Arc::new(quadcam_lib::gear::voice::keychain::MemKeys::default()),
         intel: Arc::new(quadcam_lib::intel::Intel::unavailable("no helper in tests")),
+        gh: Arc::new(quadcam_lib::gear::voice::publish::Gh::unavailable(
+            "no gh in tests",
+        )),
     }
 }
 

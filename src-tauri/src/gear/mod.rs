@@ -275,6 +275,8 @@ pub struct Env {
     pub keys: Arc<dyn voice::keychain::KeyStore>,
     /// The Swift helper (`crate::intel`): the speech check of voice lines.
     pub intel: Arc<crate::intel::Intel>,
+    /// GitHub's `gh`: a voice pack's Approve publishes through it.
+    pub gh: Arc<voice::publish::Gh>,
 }
 
 impl Env {
@@ -301,6 +303,7 @@ impl Env {
             }),
             keys: Arc::new(voice::keychain::Keychain),
             intel: Arc::new(crate::intel::Intel::system()),
+            gh: Arc::new(voice::publish::Gh::system()),
         }
     }
 
@@ -330,6 +333,7 @@ impl Env {
             intel: Arc::new(crate::intel::Intel::unavailable(
                 "Tests have no quadcam-intel helper.",
             )),
+            gh: Arc::new(voice::publish::Gh::unavailable("Tests have no gh.")),
         }
     }
 

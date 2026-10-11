@@ -1,5 +1,6 @@
 // Gear > Voices (design 7.4): the voice packs on this Mac, rendered or installed, with a sample,
-// Apply to radios… and Delete; the index's packs and Render my voice; and the Voice studio.
+// Apply to radios…, Publish… and Delete; the index's packs with their preview lines and Render
+// my voice; and the Voice studio.
 // Packs are not per radio: a radio's Voice segment picks one of these.
 import { useState } from "react";
 import { Banner } from "../../../components/Banner";
@@ -9,13 +10,15 @@ import { Badge } from "../../../components/dash/Badge";
 import { DataTable, type Column } from "../../../components/dash/DataTable";
 import { SectionCard } from "../../../components/dash/SectionCard";
 import { Stat, StatRow } from "../../../components/dash/StatRow";
-import { api, errText, fileSrc } from "../../../ipc/api";
-import type { RenderReport, SetInfo, VoicePack, VoiceView } from "../../../ipc/types";
+import { api, errText } from "../../../ipc/api";
+import type { PreviewTake, RenderReport, SetInfo, VoicePack, VoiceView } from "../../../ipc/types";
 import { fmtBytes } from "../../../lib/format";
 import { deviceName } from "../../../lib/gear";
 import { useStore } from "../../../store";
 import { ApplyToRadios } from "./ApplyToRadios";
 import { DeletePack } from "./DeletePack";
+import { playFile } from "./play";
+import { Publish } from "./Publish";
 import { SpeechBadge, SpeechCheck } from "./SpeechCheck";
 import { Studio } from "./Studio";
 import { takesOf, useStudio, type UseStudio } from "./useStudio";
@@ -27,12 +30,7 @@ const SAMPLE_LINE = "SOUNDS/en/armed.wav";
 
 const fmtDay = (t: string | null | undefined) => (t ? new Date(t).toLocaleDateString(undefined, { dateStyle: "medium" }) : "");
 
-function play(path: string) {
-  const a = new Audio(fileSrc(path));
-  void a.play().catch(() => undefined);
-}
-
-function Library({ v, view, sets, onCheck }: { v: UseVoice; view: VoiceView; sets: SetInfo[]; onCheck: (k: VoicePack) => void }) {
+function Library({ v, view, sets, onCheck, onPublish }: { v: UseVoice; view: VoiceView; sets: SetInfo[]; onCheck: (k: VoicePack) => void; onPublish: (k: VoicePack) => void }) {
   const devices = useStore((s) => s.devices);
   const [applying, setApplying] = useState<VoicePack | null>(null);
   const [deleting, setDeleting] = useState<VoicePack | null>(null);
@@ -47,7 +45,7 @@ function Library({ v, view, sets, onCheck }: { v: UseVoice; view: VoiceView; set
     const line = lines.find((l) => l.path === SAMPLE_LINE) ?? lines[0];
     if (!line) return v.setError(`${k.voice} holds no line QuadCam knows.`);
     try {
-      play(await api.gearVoicePreview({ line: line.path, pack: k.id, radio: null }));
+      playFile(await api.gearVoicePreview({ line: line.path, pack: k.id, radio: null }));
     } catch (e) {
       v.setError(errText(e));
     }
@@ -96,6 +94,11 @@ function Library({ v, view, sets, onCheck }: { v: UseVoice; view: VoiceView; set
           <Button size="sm" onClick={() => setApplying(k)}>
             Apply to radios…
           </Button>
+          {k.local && (
+            <Button size="sm" variant="ghost" aria-label={`Publish ${k.voice}`} onClick={() => onPublish(k)}>
+              Publish…
+            </Button>
+          )}
           <Button size="sm" variant="danger-ghost" icon="trash-bin-trash" aria-label={`Delete ${k.voice}`} onClick={() => setDeleting(k)} />
         </div>
       ),
@@ -127,6 +130,41 @@ const reportText = (r: RenderReport) => {
   return `Rendered ${r.rendered} of ${p.lines} lines into ${r.pack}; ${r.from_cache} came from the cache.`;
 };
 
+/** An index pack's preview lines: fetched on the first Preview click, then played from the
+ *  cache. */
+function PreviewLines({ v, pack }: { v: UseVoice; pack: VoicePack }) {
+  const [takes, setTakes] = useState<PreviewTake[] | null>(null);
+  const [open, setOpen] = useState(false);
+  const toggle = async () => {
+    if (!open && !takes) {
+      try {
+        setTakes(await api.gearVoicePackPreview({ pack: pack.id, source: null }));
+      } catch (e) {
+        return v.setError(errText(e));
+      }
+    }
+    setOpen(!open);
+  };
+  return (
+    <>
+      <Button size="sm" variant="ghost" icon="volume-loud" aria-expanded={open} aria-label={`Preview ${pack.voice}`} onClick={toggle}>
+        Preview
+      </Button>
+      {open && takes && (
+        <ul className={styles.previewLines} aria-label={`Preview lines of ${pack.voice}`}>
+          {takes.map((t) => (
+            <li key={t.path}>
+              <Button size="sm" icon="play" onClick={() => playFile(t.file)}>
+                {t.text}
+              </Button>
+            </li>
+          ))}
+        </ul>
+      )}
+    </>
+  );
+}
+
 /** The index's packs to install, and a render of QuadCam's lines with the provider from the
  *  settings. */
 function GetPacks({ v, view }: { v: UseVoice; view: VoiceView }) {
@@ -144,10 +182,11 @@ function GetPacks({ v, view }: { v: UseVoice; view: VoiceView }) {
           {available.map((k) => (
             <li key={k.id} className={styles.pack}>
               <span className={styles.grow}>
-                <strong>{k.voice}</strong> ({k.id}) · {k.lines} lines · {fmtBytes(k.bytes)}
+                <strong>{k.voice}</strong> ({k.id}) · {k.model || k.provider} · {k.lines} lines · {fmtBytes(k.zip_bytes || k.bytes)}
                 {k.stale ? " · from older lines" : ""}
                 {k.license ? ` · ${k.license}` : ""}
               </span>
+              {(k.preview?.length ?? 0) > 0 && <PreviewLines v={v} pack={k} />}
               <Button size="sm" icon="import" aria-label={`Install ${k.voice}`} onClick={() => v.act(() => api.gearVoicePackInstall({ pack: k.id, source: null }))}>
                 Install
               </Button>
@@ -224,7 +263,9 @@ export function VoicesPage() {
   const v = useVoice(null, true);
   const s = useStudio(() => v.refresh());
   const [checking, setChecking] = useState<string | null>(null);
+  const [publishing, setPublishing] = useState<string | null>(null);
   const checked = v.view?.packs.find((k) => k.id === checking && k.installed) ?? null;
+  const published = v.view?.packs.find((k) => k.id === publishing && k.local) ?? null;
   return (
     <div className={styles.voices} aria-labelledby="voices-title">
       <h2 id="voices-title" className={styles.title}>
@@ -236,8 +277,9 @@ export function VoicesPage() {
           {v.error}
         </Banner>
       )}
-      {v.view && <Library v={v} view={v.view} sets={s.sets} onCheck={(k) => setChecking(k.id)} />}
+      {v.view && <Library v={v} view={v.view} sets={s.sets} onCheck={(k) => setChecking(k.id)} onPublish={(k) => setPublishing(k.id)} />}
       {v.view && checked && <SpeechCheck key={checked.id} v={v} view={v.view} pack={checked} onClose={() => setChecking(null)} />}
+      {published && <Publish key={published.id} pack={published} onClose={() => setPublishing(null)} />}
       <Studio s={s} />
       {v.view && <GetPacks v={v} view={v.view} />}
     </div>

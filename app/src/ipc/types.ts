@@ -488,6 +488,16 @@ export type {
   VoicePreviewParams,
   VoiceRenderParams,
   VoiceView,
+  PreviewLine,
+  PreviewTake,
+  PackPreviewParams,
+  PublishParams,
+  PublishReview_Serialize as PublishReview,
+  ReviewLine,
+  GhStatus,
+  Published,
+  PublishApproveParams,
+  PublishApproveReport,
 } from "../bindings";
 
 // The voice studio, as generated.

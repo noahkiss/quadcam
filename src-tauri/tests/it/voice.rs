@@ -579,6 +579,10 @@ fn install_refuses_a_symbolic_link() {
             version: String::new(),
             file: String::new(),
             firmware: "edgetx".into(),
+            url: String::new(),
+            zip_bytes: 0,
+            date: String::new(),
+            preview: Vec::new(),
         },
     )
     .unwrap_err();

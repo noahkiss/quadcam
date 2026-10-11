@@ -307,7 +307,7 @@ pub const KEYS: &[Key] = &[
     Key {
         file: "voiceIndex",
         name: Some("voice_index"),
-        about: "the address or path of the voice pack index (voices.json)",
+        about: "the address or path of the voice pack index; default the QuadCam Voices index, empty for none",
         check: string,
     },
     Key {

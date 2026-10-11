@@ -27,6 +27,8 @@ Every program QuadCam runs is a macOS system tool, a module, or optional. `tests
 | `diskutil`, `ioreg`, `system_profiler`, `df`, `ps` | macOS | Cards, disks, USB devices and free space |
 | `curl`, `tar`, `unzip`, `zipinfo`, `zip`, `ditto`, `codesign`, `xattr` | macOS | Downloads and unpacking (zipinfo lists a voice pack before it is unpacked), signing a module |
 | `say`, `afplay`, `osascript` | macOS | Spoken cues and voice previews |
+| `afconvert` | macOS | A published voice pack's AAC preview lines |
+| `gh` | Optional. QuadCam uses Homebrew's copy when it finds one | **Approve and publish** of a voice pack. Without it, QuadCam shows the commands to run |
 | `stty` | macOS | Hides the key as `quadcam-cli gear voice key set` reads it from a terminal |
 
 QuadCam bundles no tool. The cask installs only the app and `quadcam-cli`.

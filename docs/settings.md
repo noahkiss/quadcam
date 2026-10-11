@@ -115,6 +115,6 @@ Three settings hold secrets: `google_places_key`, `tts_key` and `elrs_binding_ph
 | `firmware_check` | `manual` | `manual` or `daily`; **Check for firmware updates daily** in Settings > Gear sets `daily`. `manual`: the Firmware page reads the network only when you select **Check for updates**. `daily`: it also checks when the last answer is a day old. See [Gear](gear.md#check) |
 | `tts_provider`, `tts_key` | `say`, none | The voice provider: `say`, `openai` or `elevenlabs`. ElevenLabs renders only in the Voice studio, with a key in the Keychain; the studio uses ElevenLabs whatever this says. `tts_key` is the `openai` server's key; `QUADCAM_OPENAI_KEY` in the environment wins over it. Write-only: reads show its [hint](#secrets) |
 | `tts_base_url`, `tts_model`, `tts_voice` | none | For `openai`: the server (such as `http://127.0.0.1:8880`), its model, and the voice your own lines render with. For `say`, `tts_voice` is a `say` voice |
-| `voice_index` | none | The address or path of the voice pack index (`voices.json`) |
+| `voice_index` | The QuadCam Voices index (`https://noahkiss.github.io/quadcam-voices/index.json`) | The address or path of the voice pack index. Empty turns the index off |
 
 To read and change settings from a terminal, see [Command line](cli.md#places-profiles-and-settings).
