@@ -70,6 +70,8 @@ struct Opts {
     hooks: Arc<dyn Hooks>,
     uuid: &'static str,
     card_write: Option<WriteOptions>,
+    /// The bench's folder is where real cards mount (`Env.real_cards`).
+    real_cards_here: bool,
 }
 
 impl Default for Opts {
@@ -80,6 +82,7 @@ impl Default for Opts {
             hooks: Arc::new(NoHooks),
             uuid: "11111111-2222-3333-4444-555555555555",
             card_write: None,
+            real_cards_here: false,
         }
     }
 }
@@ -131,6 +134,9 @@ fn bench(o: Opts) -> Bench {
     });
     env.fail_readback = o.fail_readback;
     env.card_write = o.card_write;
+    if o.real_cards_here {
+        env.real_cards = dir.path().to_path_buf();
+    }
     // Cues play every time here: the debounce would hide a second "safe to unplug".
     std::fs::create_dir_all(dir.path().join("support")).unwrap();
     std::fs::write(
@@ -1171,4 +1177,128 @@ fn a_clean_removal_needs_a_card() {
         .unwrap();
     assert_eq!(r.removed, 1);
     assert!(!other.join("MODELS/._model00.yml").exists());
+}
+
+/// A snapshot that cannot be saved stops the apply before the first byte: `NoBackup`, the
+/// card unchanged, the change still Ready. The manifest folder is the store's own
+/// (`Store::snapshots_dir`), so the failure is certain.
+#[test]
+fn a_snapshot_that_fails_is_no_backup_and_writes_nothing() {
+    use std::os::unix::fs::PermissionsExt;
+    let b = bench(Opts::default());
+    let c = stage(&b, vec![contrast("30")]);
+    let p = plan(&b, &c);
+    let snaps = Store::new(b.dir.path().join("support/gear")).snapshots_dir(&b.id);
+    assert!(snaps.is_dir(), "the first backup made {}", snaps.display());
+    std::fs::set_permissions(&snaps, std::fs::Permissions::from_mode(0o555)).unwrap();
+    let r = b.core.gear_apply(&req(&c, &p));
+    std::fs::set_permissions(&snaps, std::fs::Permissions::from_mode(0o755)).unwrap();
+    let e = r.expect_err("an apply with no backup");
+    assert_eq!(code(&e), RefusalCode::NoBackup, "{e:#}");
+    assert!(read(&b, "RADIO/radio.yml").contains("contrast: 20"));
+    assert_eq!(status(&b, &c.id), ChangeStatus::Ready);
+}
+
+/// An apply an agent asks for (not the sheet's own click) waits on the person: a "no"
+/// writes nothing and leaves the change Ready. The sheet's click skips the question.
+#[test]
+fn the_card_waits_for_the_persons_click_and_a_no_writes_nothing() {
+    struct Gate {
+        answer: AtomicBool,
+        asked: AtomicBool,
+    }
+    impl Hooks for Gate {
+        fn confirm_apply(&self, _c: &StagedChange, _p: &ApplyPlan) -> anyhow::Result<()> {
+            self.asked.store(true, Ordering::SeqCst);
+            if self.answer.load(Ordering::SeqCst) {
+                Ok(())
+            } else {
+                anyhow::bail!("Refused: the user cancelled the apply in quadcam.")
+            }
+        }
+    }
+    let gate = Arc::new(Gate {
+        answer: AtomicBool::new(false),
+        asked: AtomicBool::new(false),
+    });
+    let b = bench(Opts {
+        hooks: gate.clone(),
+        ..Default::default()
+    });
+    let c = stage(&b, vec![contrast("30")]);
+    let p = plan(&b, &c);
+    let e = b.core.gear_apply(&req(&c, &p)).unwrap_err();
+    assert!(gate.asked.load(Ordering::SeqCst));
+    assert!(format!("{e:#}").contains("cancelled"), "{e:#}");
+    assert!(read(&b, "RADIO/radio.yml").contains("contrast: 20"));
+    assert_eq!(status(&b, &c.id), ChangeStatus::Ready);
+
+    // The sheet's own click is the confirm: no question, and it writes.
+    gate.asked.store(false, Ordering::SeqCst);
+    b.mounted.store(true, Ordering::SeqCst);
+    let p = plan(&b, &c);
+    let r = b.core.gear_apply_click(&req(&c, &p)).unwrap();
+    assert_eq!(r.status, ChangeStatus::Verified, "{}", r.message);
+    assert!(!gate.asked.load(Ordering::SeqCst));
+    assert!(read(&b, "RADIO/radio.yml").contains("contrast: 30"));
+}
+
+/// The fresh read after the write is its own check: a card that changed after the engine's
+/// read-back fails Verify and is rolled back to the old bytes.
+#[test]
+fn a_card_that_changes_after_the_write_fails_verify_and_rolls_back() {
+    let mut o = WriteOptions::reader();
+    o.change_after = Some("RADIO/radio.yml".into());
+    let b = bench(Opts {
+        card_write: Some(o),
+        ..Default::default()
+    });
+    let before = std::fs::read(b.root.join("RADIO/radio.yml")).unwrap();
+    let c = stage(&b, vec![contrast("31")]);
+    let p = plan(&b, &c);
+    let r = b.core.gear_apply(&req(&c, &p)).unwrap();
+    assert_eq!(r.status, ChangeStatus::Failed, "{}", r.message);
+    use quadcam_lib::gear::apply::StepState::*;
+    let steps: Vec<_> = r.steps.iter().map(|s| (s.name.as_str(), s.state)).collect();
+    assert!(steps.contains(&("Verify", Failed)), "{steps:?}");
+    assert!(steps.contains(&("Roll back", Done)), "{steps:?}");
+    assert_eq!(
+        std::fs::read(b.root.join("RADIO/radio.yml")).unwrap(),
+        before
+    );
+    assert_eq!(status(&b, &c.id), ChangeStatus::Failed);
+}
+
+/// Under cargo no card under the real cards' folder is written: the apply and the `._`
+/// clean both refuse, and the card is unchanged. The bench names its own folder as that
+/// place (`Env.real_cards`).
+#[test]
+fn a_test_process_writes_no_card_where_real_cards_mount() {
+    let b = bench(Opts {
+        real_cards_here: true,
+        ..Default::default()
+    });
+    let c = stage(&b, vec![contrast("30")]);
+    let p = plan(&b, &c);
+    let e = b.core.gear_apply(&req(&c, &p)).unwrap_err();
+    assert_eq!(code(&e), RefusalCode::Disabled, "{e:#}");
+    assert!(read(&b, "RADIO/radio.yml").contains("contrast: 20"));
+    assert_eq!(status(&b, &c.id), ChangeStatus::Ready);
+
+    let mut junk = vec![0x00, 0x05, 0x16, 0x07, 0x00, 0x02, 0x00, 0x00];
+    junk.extend_from_slice(b"Mac OS X        ");
+    junk.resize(120, 0);
+    std::fs::write(b.root.join("MODELS/._model00.yml"), &junk).unwrap();
+    b.mounted.store(true, Ordering::SeqCst);
+    let e = b
+        .core
+        .gear_card_clean(&CardCleanParams {
+            device: Some(b.id.clone()),
+            remove: true,
+            confirm: true,
+            ..Default::default()
+        })
+        .unwrap_err();
+    assert!(format!("{e:#}").contains("QUADCAM_CARD_WRITE"), "{e:#}");
+    assert!(b.root.join("MODELS/._model00.yml").exists());
 }

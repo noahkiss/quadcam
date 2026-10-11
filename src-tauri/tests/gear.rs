@@ -92,6 +92,7 @@ fn env(mounted: &Mounted, present: &Present, cues: &Arc<RecordedCues>) -> Env {
         mount: Arc::new(|_| Ok(())),
         fail_readback: None,
         card_write: None,
+        real_cards: "/Volumes".into(),
         disk: Arc::new(quadcam_lib::gear::health::FakeDisk::ok()),
         holders: Arc::new(|_| Vec::new()),
         tts: Arc::new(quadcam_lib::gear::voice::tts::NoProviders),
