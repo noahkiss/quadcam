@@ -80,7 +80,7 @@
 .problems {
   margin: 0;
   padding-left: var(--s-4);
-  color: var(--error-text);
+  color: var(--warning-text);
   font-size: var(--t-sm);
 }
 .list {

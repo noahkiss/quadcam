@@ -10,6 +10,10 @@ User-facing changes in each release, newest first. Release notes on
 - **Device Overview.** The header adds the firmware. Summary tiles show the firmware against the newest, the last backup, the staged changes and the latest blackbox pull (FC), the aircraft count (radio), or the new clips, last card check and free space (DVR and goggles cards); a tile opens its section. The facts sit in a **Details** card, two columns wide. The row of section links under them is gone: the tabs above do that.
 - **Forget…** moves into the **…** menu on a device page. The header's buttons are plain buttons, primary last.
 - **One left edge.** Every Gear page and device section lines up with the page title: the Bench, OSD, Rates, Switches, Models, Checklists and Voice sections lost their extra inset. Empty lines are left-aligned under the title, not centred.
+- **Sims as a table.** Tiles count the sims found, out of date and running. Each sim is a row with its state and files, and each profile a row under it with the maximum rates, the difference from the quad and a clear **Sync…** button. The Rates segment shows the same table in a **Sims** card with **Open Sims**.
+- **Rates and OSD say where they came from:** "From backup" and its time, or the file names, with **Open dump…** on the right. The rate table lines up its numbers. The OSD shows its problem count as a badge.
+- **Switches:** tiles count the controls, modes, conflicts and unmapped switches. Conflicts come first in their own card; modes and unmapped switches are tables.
+- **Controls and Sim radio** use the page header and cards. Controls keeps its 24 buttons under **Buttons**. Sim radio lists its switches in a table with **Change**, and the calibration in a **Calibrate** card.
 - **For developers:** shared `PageHeader`, `EmptyState`, `FactList`, `StatusDot` and `MoreMenu` in `app/src/components/dash/`, and the `--s-5` spacing token the Apply sheet, Bench and Firmware already used. `docs/development.md` describes how to build a dashboard page.
 
 ## 0.14.0 (2026-10-11)

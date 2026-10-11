@@ -18,7 +18,7 @@ const DUMP = "/Users/pilot/bench/quad.dump_all.txt";
 test("opens a dump and shows each profile with its check", async ({ app, page }) => {
   await openOsd(app, page);
   // The FC's latest backup shows first.
-  await expect(page.getByText(/before_apply dump all/)).toBeVisible();
+  await expect(page.getByText(/^From backup · /)).toBeVisible();
   await app.core(`c => c.dialogAnswers.push([${JSON.stringify(DUMP)}])`);
   await page.getByRole("button", { name: "Open dump…" }).click();
 
@@ -36,7 +36,7 @@ test("opens a dump and shows each profile with its check", async ({ app, page })
   await expect(page.getByRole("list", { name: "Problems" })).toContainText("mah_drawn overlaps current");
   const table = page.getByRole("table", { name: "Elements in profile 1" });
   await expect(table.getByRole("row", { name: /Capacity used 1 14/ })).toBeVisible();
-  await expect(page.getByText("2 problems across the profiles.")).toBeVisible();
+  await expect(page.getByRole("region", { name: "OSD" }).getByText("2 problems", { exact: true })).toBeVisible();
 
   await profiles.getByRole("button", { name: "3", exact: true }).click();
   await expect(page.getByRole("list", { name: "Problems" })).toHaveCount(0);

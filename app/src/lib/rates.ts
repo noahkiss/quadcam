@@ -72,6 +72,15 @@ export function simState(s: SimRates): string {
   return "Read";
 }
 
+/** A sim's state as a status tone: matches ok, out of date warn, unreadable error. */
+export function simTone(s: SimRates): "ok" | "warn" | "error" | "idle" {
+  if (!s.enabled || !s.found) return "idle";
+  if (s.files.every((f) => f.error)) return "error";
+  if (s.in_sync === true) return "ok";
+  if (s.in_sync === false) return "warn";
+  return "idle";
+}
+
 /** The largest per-axis difference of a sim profile from the quad, in deg/s. */
 export const worstDiff = (d: { max_diff: number[] } | null): number | null => (d ? Math.max(0, ...d.max_diff) : null);
 

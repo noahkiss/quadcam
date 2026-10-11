@@ -7,6 +7,9 @@ import { useEffect, useState } from "react";
 import { Banner } from "../../../components/Banner";
 import { Button } from "../../../components/Button";
 import { Sticks, StickModePicker } from "../../../components/gear/Sticks";
+import { DataTable } from "../../../components/dash/DataTable";
+import { PageHeader } from "../../../components/dash/PageHeader";
+import { SectionCard } from "../../../components/dash/SectionCard";
 import { api, errText } from "../../../ipc/api";
 import { on } from "../../../ipc/events";
 import type { AxisCal, CalibrateParams, CalibrateView, Calibration, CaptureTarget, SimCalibration, SimDefaults, SuggestedControl } from "../../../ipc/types";
@@ -134,10 +137,14 @@ export function CalibrationPage() {
 
   return (
     <div className={styles.page} data-component="sim-calibration">
-      <h2 className={styles.title}>Sim radio</h2>
-      <p className={styles.status} role="status" aria-label="Radio">
-        {res ? `${res.product}: ${res.how}` : error ? "" : "Looking for the radio…"}
-      </p>
+      <PageHeader
+        title="Sim radio"
+        subtitle={
+          <span role="status" aria-label="Radio">
+            {res ? `${res.product}: ${res.how}` : error ? "" : "Looking for the radio…"}
+          </span>
+        }
+      />
       {error && (
         <Banner kind="error" icon="danger-triangle" tint="red">
           {error}
@@ -158,9 +165,9 @@ export function CalibrationPage() {
         </label>
       )}
 
-      <section className={styles.panel} aria-label="Suggestions">
-        <div className={styles.bar}>
-          <h3 className={styles.h3}>Sim controls</h3>
+      <SectionCard
+        title="Switches"
+        actions={
           <label className={styles.row}>
             <span>Aircraft</span>
             <select aria-label="Aircraft" value={aircraft} onChange={(e) => setAircraft(e.target.value)}>
@@ -172,30 +179,44 @@ export function CalibrationPage() {
               ))}
             </select>
           </label>
-        </div>
+        }
+      >
         {defaults && (
-          <dl className={styles.suggestions}>
-            <dt>Sticks</dt>
-            <dd>
-              Roll CH{cal?.roll.ch ?? defaults.map.roll}, pitch CH{cal?.pitch.ch ?? defaults.map.pitch}, throttle CH{cal?.throttle.ch ?? defaults.map.throttle}, yaw CH
+          <>
+            <p className={styles.sticks}>
+              Sticks: roll CH{cal?.roll.ch ?? defaults.map.roll}, pitch CH{cal?.pitch.ch ?? defaults.map.pitch}, throttle CH{cal?.throttle.ch ?? defaults.map.throttle}, yaw CH
               {cal?.yaw.ch ?? defaults.map.yaw} <span className={styles.source}>(from {defaults.map.source})</span>
-            </dd>
-            {TARGETS.map((t) => (
-              <Suggestion key={t} target={t} current={cal?.[t] ?? null} suggested={defaults[t] ?? null} canChange={view?.phase === "review"} onChange={() => act({ action: "capture", target: t })} />
-            ))}
-          </dl>
+            </p>
+            <DataTable
+              label="Switches"
+              compact
+              rows={TARGETS}
+              rowKey={(t) => t}
+              columns={[
+                { key: "action", header: "Action", rowHeader: true, width: "9rem", cell: (t) => TARGET_TEXT[t] },
+                { key: "switch", header: "Switch", cell: (t) => <Suggestion target={t} current={cal?.[t] ?? null} suggested={defaults[t] ?? null} /> },
+                {
+                  key: "change",
+                  header: <span className="visually-hidden">Change</span>,
+                  width: "6rem",
+                  cell: (t) => (
+                    <Button size="sm" disabled={view?.phase !== "review"} onClick={() => act({ action: "capture", target: t })} aria-label={`Change ${TARGET_TEXT[t]}`}>
+                      Change
+                    </Button>
+                  ),
+                },
+              ]}
+            />
+          </>
         )}
         {defaults?.notes.map((n) => (
           <p key={n} className={styles.note}>
             {n}
           </p>
         ))}
-      </section>
+      </SectionCard>
 
-      <section className={styles.panel} aria-label="Calibration">
-        <div className={styles.bar}>
-          <StickModePicker mode={mode} onChange={setMode} />
-        </div>
+      <SectionCard title="Calibrate" actions={<StickModePicker mode={mode} onChange={setMode} />}>
         <Sticks values={sticksOf(view)} mode={mode} />
         {view && (
           <>
@@ -245,29 +266,23 @@ export function CalibrationPage() {
             {view.phase === "review" && cal && <AxisTable cal={cal} onAxis={setAxis} />}
           </>
         )}
-      </section>
+      </SectionCard>
     </div>
   );
 }
 
-function Suggestion({ target, current, suggested, canChange, onChange }: { target: CaptureTarget; current: Calibration["arm"]; suggested: SuggestedControl | null; canChange: boolean; onChange: () => void }) {
+function Suggestion({ target, current, suggested }: { target: CaptureTarget; current: Calibration["arm"]; suggested: SuggestedControl | null }) {
   const same = suggested && current && JSON.stringify(suggested.control) === JSON.stringify(current);
   return (
-    <>
-      <dt>{TARGET_TEXT[target]}</dt>
-      <dd data-target={target}>
-        {same && suggested ? (
-          <>
-            {suggested.label} <span className={styles.source}>(from {suggested.source})</span>
-          </>
-        ) : (
-          controlText(current)
-        )}
-        <Button size="sm" variant="ghost" disabled={!canChange} onClick={onChange} aria-label={`Change ${TARGET_TEXT[target]}`}>
-          Change
-        </Button>
-      </dd>
-    </>
+    <span data-target={target}>
+      {same && suggested ? (
+        <>
+          {suggested.label} <span className={styles.source}>(from {suggested.source})</span>
+        </>
+      ) : (
+        controlText(current)
+      )}
+    </span>
   );
 }
 

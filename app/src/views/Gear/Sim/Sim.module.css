@@ -4,48 +4,16 @@
   gap: var(--s-6);
   max-width: 960px;
 }
-.title {
-  margin: 0;
-  font-size: var(--t-xl);
-  font-weight: 700;
-}
-.status {
-  margin: calc(-1 * var(--s-4)) 0 0;
-  color: var(--muted);
-}
-.panel {
-  display: flex;
-  flex-direction: column;
-  gap: var(--s-3);
-}
-.h3 {
-  margin: 0;
-  font-size: var(--t-lg);
-  font-weight: 600;
-}
 .bar {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   gap: var(--s-3);
 }
+.sticks {
+  margin: 0;
+}
 .row {
-  display: flex;
-  align-items: center;
-  gap: var(--s-2);
-}
-.suggestions {
-  margin: 0;
-  display: grid;
-  grid-template-columns: max-content 1fr;
-  gap: var(--s-2) var(--s-4);
-  align-items: center;
-}
-.suggestions dt {
-  color: var(--muted);
-}
-.suggestions dd {
-  margin: 0;
   display: flex;
   align-items: center;
   gap: var(--s-2);

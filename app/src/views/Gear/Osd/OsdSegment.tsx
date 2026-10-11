@@ -10,8 +10,10 @@ import { Banner } from "../../../components/Banner";
 import { Button } from "../../../components/Button";
 import { Select } from "../../../components/Field";
 import { SegmentedControl } from "../../../components/SegmentedControl";
+import { EmptyState } from "../../../components/dash/EmptyState";
 import { api, errText, pickFiles } from "../../../ipc/api";
 import type { OsdMove, OsdView } from "../../../ipc/types";
+import { sourceText } from "../../../lib/source";
 import { useStore } from "../../../store";
 import { CopyDialog } from "../Bench/CopyDialog";
 import { OsdScreen } from "./OsdScreen";
@@ -134,9 +136,11 @@ export function OsdSegment({ paths: initial = [], device = null }: Props) {
   return (
     <div className={styles.segment}>
       <div className={styles.bar}>
-        <Button icon="folder-open" onClick={openFile}>
-          Open dump…
-        </Button>
+        {view && (
+          <span className={styles.source} title={view.source.join(", ")}>
+            {sourceText(view.source, view.firmware)}
+          </span>
+        )}
         <SegmentedControl
           label="Grid"
           size="sm"
@@ -149,7 +153,9 @@ export function OsdSegment({ paths: initial = [], device = null }: Props) {
             { value: "HD", label: "HD" },
           ]}
         />
-        {view && <span className={styles.source}>{[view.firmware, view.source.join(", ")].filter(Boolean).join(" · ")}</span>}
+        <Button icon="folder-open" onClick={openFile}>
+          Open dump…
+        </Button>
       </div>
       {editable && view && (
         <div className={styles.bar} role="group" aria-label="Copy layout">
@@ -200,10 +206,10 @@ export function OsdSegment({ paths: initial = [], device = null }: Props) {
       {shown ? (
         <>
           <OsdScreen view={shown} edit={editable ? { move, status } : undefined} />
-          {editable && <p className={styles.hint}>An element has one position for every profile. Drag it, or focus it and press the arrow keys (Shift moves five cells). The profile boxes only turn it on or off.</p>}
+          {editable && <p className={styles.hint}>Drag an element, or focus it and use the arrow keys (Shift: 5 cells). Its position is the same in every profile.</p>}
         </>
       ) : (
-        !error && <p className={styles.empty}>Open a Betaflight dump or diff to see its OSD.</p>
+        !error && <EmptyState icon="folder-open">No dump open.</EmptyState>
       )}
       {copying && device && (
         <CopyDialog

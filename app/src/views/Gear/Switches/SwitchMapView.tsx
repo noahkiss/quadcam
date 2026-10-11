@@ -2,11 +2,36 @@
 // channel values, FC modes and radio effects. The position a control is in now is marked.
 import { Fragment } from "react";
 import { Button } from "../../../components/Button";
-import type { Live, SwitchMap } from "../../../ipc/types";
+import { Badge } from "../../../components/dash/Badge";
+import { DataTable, type Column } from "../../../components/dash/DataTable";
+import { SectionCard } from "../../../components/dash/SectionCard";
+import { StatusDot } from "../../../components/dash/StatusDot";
+import type { AuxMode, Live, SwitchMap, Unmapped } from "../../../ipc/types";
 import type { MapSources } from "./hooks";
 import styles from "./Switches.module.css";
 
 const base = (p: string) => p.split("/").pop() || p;
+
+/** The FC's modes: name, channel and range; with live input, which are on. */
+function modeColumns(live: Live | null): Column<AuxMode>[] {
+  const cols: Column<AuxMode>[] = [
+    { key: "mode", header: "Mode", rowHeader: true, cell: (m) => m.name },
+    { key: "ch", header: "Channel", cell: (m) => (m.linked ? "—" : `AUX${m.ch - 4} (CH${m.ch})`) },
+    { key: "range", header: "Range", numeric: true, cell: (m) => (m.linked ? `Linked to ${m.linked}` : `${m.start}–${m.end}`) },
+  ];
+  if (live) cols.push({ key: "now", header: "Now", width: "6rem", cell: (m) => (live.modes.includes(m.name) ? <StatusDot tone="ok">On</StatusDot> : <StatusDot tone="idle">Off</StatusDot>) });
+  return cols;
+}
+
+const UNMAPPED: Column<Unmapped>[] = [
+  { key: "switch", header: "Switch", rowHeader: true, width: "5rem", cell: (u) => u.switch },
+  { key: "kind", header: "Kind", width: "6rem", cell: (u) => u.kind },
+  { key: "condition", header: "Condition", cell: (u) => <span className={styles.mono}>{u.condition}</span> },
+  { key: "reads", header: "Reads", optional: true, cell: (u) => u.reads.join(", ") || "—" },
+  { key: "used", header: "Used by", cell: (u) => u.used_by.join(", ") || "—" },
+];
+
+const CONFLICT: Column<string>[] = [{ key: "conflict", header: "Conflict", cell: (c) => c }];
 
 /** The source pickers and what was read. */
 export function MapSourceBar({ src, map, openCard, openModel, openDump }: { src: MapSources; map: SwitchMap | null; openCard: () => void; openModel: () => void; openDump: () => void }) {
@@ -31,6 +56,11 @@ export function MapSourceBar({ src, map, openCard, openModel, openDump }: { src:
 export function SwitchMapView({ map, live }: { map: SwitchMap; live: Live | null }) {
   return (
     <div className={styles.map}>
+      {map.conflicts.length > 0 && (
+        <SectionCard title="Conflicts" status={<Badge tone="warn">{map.conflicts.length}</Badge>}>
+          <DataTable label="Conflicts" columns={CONFLICT} rows={map.conflicts} rowKey={(c) => c} compact />
+        </SectionCard>
+      )}
       {live && (
         <p className={styles.live} aria-live="polite">
           <strong>{live.source === "fc" ? "FC" : "Radio"}</strong>
@@ -87,42 +117,15 @@ export function SwitchMapView({ map, live }: { map: SwitchMap; live: Live | null
         </table>
       )}
       {map.modes.length > 0 && (
-        <section aria-label="Modes">
-          <h3 className={styles.h3}>Modes</h3>
-          <ul className={styles.modes}>
-            {map.modes.map((m) => (
-              <li key={m.slot} data-on={live?.modes.includes(m.name) ? "" : undefined}>
-                <span>{m.name}</span>
-                <span className={styles.num}>{m.linked ? `linked to ${m.linked}` : `AUX${m.ch - 4} (CH${m.ch}) ${m.start}-${m.end}`}</span>
-              </li>
-            ))}
-          </ul>
-        </section>
+        <SectionCard title="Modes" status={<Badge>{map.modes.length}</Badge>}>
+          <DataTable label="Modes" columns={modeColumns(live)} rows={map.modes} rowKey={(m) => String(m.slot)} compact />
+        </SectionCard>
       )}
       {map.unmapped.length > 0 && (
-        <section aria-label="Not mapped">
-          <h3 className={styles.h3}>Not mapped</h3>
+        <SectionCard title="Not mapped" status={<Badge>{map.unmapped.length}</Badge>}>
+          <DataTable label="Not mapped" columns={UNMAPPED} rows={map.unmapped} rowKey={(u) => u.switch} compact />
           <p className={styles.muted}>Logical switches on telemetry, timers or sticky state. The map cannot say when they are on.</p>
-          <ul className={styles.notes}>
-            {map.unmapped.map((u) => (
-              <li key={u.switch}>
-                {`${u.switch} (${u.kind}): ${u.condition}`}
-                {u.reads.length > 0 && `. Reads ${u.reads.join(", ")}`}
-                {u.used_by.length > 0 && `. Used by ${u.used_by.join(", ")}`}
-              </li>
-            ))}
-          </ul>
-        </section>
-      )}
-      {map.conflicts.length > 0 && (
-        <section aria-label="Conflicts">
-          <h3 className={styles.h3}>Conflicts</h3>
-          <ul className={styles.notes}>
-            {map.conflicts.map((c) => (
-              <li key={c}>{c}</li>
-            ))}
-          </ul>
-        </section>
+        </SectionCard>
       )}
       {map.notes.length > 0 && (
         <ul className={[styles.notes, styles.muted].join(" ")} aria-label="Notes">

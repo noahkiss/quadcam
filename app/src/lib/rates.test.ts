@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { RateAxis, RateProfile, SimRates } from "../ipc/types";
-import { MODEL_BOUNDS, MODEL_FIELDS, RATE_MODELS, editTitle, maxDiff, niceMax, points, profileEdits, profileLabel, simState, simTargets, ticks, wholeNumber, worstDiff } from "./rates";
+import { MODEL_BOUNDS, MODEL_FIELDS, RATE_MODELS, editTitle, maxDiff, niceMax, points, profileEdits, profileLabel, simState, simTargets, simTone, ticks, wholeNumber, worstDiff } from "./rates";
 
 const axis = (curve: number[]): RateAxis => ({ axis: "roll", rc_rate: 1, srate: 1, expo: 1, rate_limit: 1998, max_deg_s: curve.at(-1) ?? 0, center_deg_s: 0, curve });
 const sim = (over: Partial<SimRates> = {}): SimRates => ({ id: "liftoff", name: "Liftoff", enabled: true, found: true, running: false, note: null, files: [], in_sync: null, ...over });
@@ -125,5 +125,17 @@ describe("model tables", () => {
     expect(wholeNumber("-3", 0, 100)).toBe(0);
     expect(wholeNumber("", 0, 100)).toBeNull();
     expect(wholeNumber("abc", 0, 100)).toBeNull();
+  });
+});
+
+describe("simTone", () => {
+  it("follows the sim's state", () => {
+    expect(simTone(sim({ enabled: false }))).toBe("idle");
+    expect(simTone(sim({ found: false }))).toBe("idle");
+    expect(simTone(sim({ files: [{ path: "a", error: "bad", profiles: [] }] }))).toBe("error");
+    const files = [{ path: "a", error: null, profiles: [] }];
+    expect(simTone(sim({ files, in_sync: true }))).toBe("ok");
+    expect(simTone(sim({ files, in_sync: false }))).toBe("warn");
+    expect(simTone(sim({ files: [{ path: "a", error: null, profiles: [] }] }))).toBe("idle");
   });
 });

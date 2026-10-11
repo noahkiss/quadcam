@@ -6,6 +6,7 @@
 import { useRef, useState, type KeyboardEvent, type PointerEvent } from "react";
 import { Banner } from "../../../components/Banner";
 import { SegmentedControl } from "../../../components/SegmentedControl";
+import { Badge } from "../../../components/dash/Badge";
 import type { OsdElement, OsdMove, OsdView } from "../../../ipc/types";
 import styles from "./OsdScreen.module.css";
 
@@ -98,6 +99,7 @@ export function OsdScreen({ view, edit }: Props) {
           {view.grid.name} {gw}×{gh}
           {profile.active ? " · in use" : ""}
         </span>
+        {problems === 0 ? <Badge tone="ok">No problems</Badge> : <Badge tone="warn">{problems === 1 ? "1 problem" : `${problems} problems`}</Badge>}
       </header>
       {!view.complete && (
         <Banner kind="warning" icon="danger-triangle" tint="yellow">
@@ -158,9 +160,6 @@ export function OsdScreen({ view, edit }: Props) {
               })}
             </div>
           </div>
-          <figcaption className={styles.caption}>
-            {problems === 0 ? "Every profile passes the check: no overlaps, nothing off screen." : `${problems} ${problems === 1 ? "problem" : "problems"} across the profiles.`}
-          </figcaption>
           {edit && (
             <p role="status" className={styles.caption}>
               {edit.status}

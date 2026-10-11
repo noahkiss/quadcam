@@ -99,7 +99,7 @@ test("the check follows the edit: overlap and off screen", async ({ app, page })
   await box(page, "flymode").focus();
   await page.keyboard.press("Shift+ArrowRight");
   await expect(page.getByRole("list", { name: "Problems" })).toContainText("flymode: 3 cells off screen.");
-  await expect(page.getByText("1 problem across the profiles.").or(page.getByText(/problems? across the profiles/))).toBeVisible();
+  await expect(page.getByRole("region", { name: "OSD" }).getByText(/^\d+ problems?$/)).toBeVisible();
 });
 
 test("toggle an element per profile, and set a position in the list", async ({ app, page }) => {

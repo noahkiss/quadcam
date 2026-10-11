@@ -12,9 +12,10 @@ test("the Sims item says Out of date while a sim differs, and the page lists eve
   await item.click();
 
   await expect(page.getByRole("heading", { name: "Sims" })).toBeVisible();
-  await expect(page.getByText("Whoop FC: 0 FREE", { exact: false })).toBeVisible();
-  const sims = page.getByRole("region", { name: "Sims" });
-  const row = (name: string) => sims.getByRole("listitem").filter({ has: page.getByText(name, { exact: true }) }).first();
+  await expect(page.getByText("Compared with Whoop FC · 0 FREE")).toBeVisible();
+  await expect(page.getByRole("group", { name: "Sims summary" })).toContainText("Out of date1");
+  const sims = page.getByRole("table", { name: "Sims" });
+  const row = (name: string) => sims.getByRole("row").filter({ has: page.getByText(name, { exact: true }) }).first();
   await expect(row("Liftoff: Micro Drones")).toContainText("Out of date");
   await expect(row("Liftoff")).toContainText("Matches the quad");
   await expect(row("Velocidrone")).toContainText("Off");

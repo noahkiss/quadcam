@@ -34,7 +34,8 @@ test("the Switches segment shows what each switch does and marks where it is", a
   await expect(page.getByRole("region", { name: "Conflicts" })).toContainText('Sound "lapclr" is not on the card');
   // Combinations of controls, and the logical switches the map cannot work out.
   await expect(sa.getByRole("row", { name: /down with SD down CH8 2012 BEEPER L2 on/ })).toBeVisible();
-  await expect(page.getByRole("region", { name: "Not mapped" })).toContainText("L4 (telemetry): RxBt > 10. Used by Reads RxBt");
+  await expect(page.getByRole("region", { name: "Not mapped" }).getByRole("row", { name: /^L4 telemetry RxBt > 10/ })).toBeVisible();
+  await expect(page.getByRole("group", { name: "Switch map summary" })).toContainText(/Conflicts[1-9]/);
 
   // Live from the radio's joystick: SA down is marked, ARM is on.
   await page.getByRole("group", { name: "Live" }).getByRole("button", { name: "Radio" }).click();
@@ -65,7 +66,7 @@ test("the Controls page draws the sticks in the chosen mode, the channels and th
   await app.open();
   await side(page).getByRole("button", { name: /^Controls/ }).click();
   await expect(page.getByRole("heading", { name: "Controls" })).toBeVisible();
-  await expect(page.getByRole("status", { name: "Radio" })).toHaveText("No radio in USB Joystick mode. Plug the radio in and choose USB Joystick on it.");
+  await expect(page.getByRole("status", { name: "Radio" })).toHaveText("No radio in USB Joystick mode");
 
   // Throttle up, yaw right, roll left; button 2 on.
   await app.core(`c => c.radioFrame([0, 1024, 2048, 2048, 0, 0, 0, 0], 2)`);
@@ -76,6 +77,7 @@ test("the Controls page draws the sticks in the chosen mode, the channels and th
   await expect(page.getByRole("img", { name: "Right stick: Pitch 0%, Roll -100%" })).toBeVisible();
   await expect(page.getByRole("figure", { name: "Left stick" })).toContainText("Left and right: turns the nose");
   await expect(page.getByRole("meter", { name: "CH3" })).toHaveAttribute("aria-valuenow", "2012");
+  await page.locator("summary", { hasText: "Buttons" }).click();
   await expect(page.getByRole("list", { name: "Buttons" }).getByRole("listitem", { name: "Button 2, on" })).toBeVisible();
 
   // Mode 1: pitch and yaw on the left. The choice is saved.

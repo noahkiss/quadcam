@@ -19,7 +19,7 @@ const DUMP = "/Users/pilot/bench/quad.dump_all.txt";
 
 test("shows each profile with its curves, table and throttle", async ({ app, page }) => {
   await openRates(app, page);
-  await expect(page.getByText(/before_apply dump all/)).toBeVisible();
+  await expect(page.getByText(/^From backup · .* · Betaflight/)).toBeVisible();
   const calls = await app.method("gear_rates");
   expect(calls[0]).toEqual({ paths: [], device: "fc-0a1b2c3d4e5f6071" });
 
@@ -49,18 +49,21 @@ test("shows each profile with its curves, table and throttle", async ({ app, pag
 
 test("lists the sims and says which match the quad", async ({ app, page }) => {
   await openRates(app, page);
-  const sims = page.getByRole("region", { name: "Sims" });
-  const row = (name: string) => sims.getByRole("listitem").filter({ has: page.getByText(name, { exact: true }) }).first();
+  const sims = page.getByRole("table", { name: "Sims" });
+  const row = (name: string) => sims.getByRole("row").filter({ has: page.getByText(name, { exact: true }) }).first();
+  const prof = (name: string, profile: string) => sims.getByRole("row").filter({ has: page.getByRole("rowheader", { name: new RegExp(`^${name} ${profile}( |$)`) }) });
   // FREE (profile 0) is the profile in use; Liftoff's Freestyle and The Zone's profile 0 equal it.
   await expect(row("Liftoff")).toContainText("Matches the quad");
   await expect(row("Liftoff")).toContainText("Running");
-  await expect(row("Liftoff")).toContainText("Freestyle maximum 907 / 907 / 800 °/s, same as the quad");
-  await expect(row("Liftoff")).toContainText("Race maximum 667 / 667 / 667 °/s, differs by up to");
+  await expect(prof("Liftoff", "Freestyle")).toContainText("907 / 907 / 800");
+  await expect(prof("Liftoff", "Freestyle")).toContainText("Same as the quad");
+  await expect(prof("Liftoff", "Race")).toContainText("667 / 667 / 667");
+  await expect(prof("Liftoff", "Race")).toContainText("Up to");
   await expect(row("Liftoff: Micro Drones")).toContainText("Out of date");
   await expect(row("Uncrashed")).toContainText("Matches the quad");
-  await expect(row("Uncrashed")).toContainText("empty profile");
+  await expect(prof("Uncrashed", "EMPTY")).toContainText("empty profile");
   await expect(row("The Zone")).toContainText("Matches the quad");
-  await expect(row("The Zone")).toContainText("uses the actual type");
+  await expect(prof("The Zone", "Profile 1")).toContainText("uses the actual type");
   await expect(row("Velocidrone")).toContainText("Off");
   await expect(row("Velocidrone")).toContainText("Not supported yet. QuadCam needs a sample Velocidrone save");
   await expect((await app.method("gear_sims")).at(-1)).toEqual({ paths: [], device: "fc-0a1b2c3d4e5f6071", profile: 0 });
