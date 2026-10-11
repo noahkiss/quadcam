@@ -401,6 +401,8 @@ pub mod fake {
         /// Texts a synthesised take without a seed speaks as silence (a bad take that a
         /// re-take with a seed fixes).
         pub muted: Mutex<Vec<String>>,
+        /// When set, a synthesised take after this many answers it fails with a 500.
+        pub fail_after: Mutex<Option<usize>>,
     }
 
     impl FakeHttp {
@@ -417,6 +419,11 @@ pub mod fake {
         /// Makes every synthesised take report that many billed characters per character.
         pub fn bill(&self, per_char: f64) {
             *self.bill.lock().unwrap() = Some(per_char);
+        }
+
+        /// Fails every synthesised take after the first `n`.
+        pub fn fail_after(&self, n: usize) {
+            *self.fail_after.lock().unwrap() = Some(n);
         }
 
         pub fn on(&self, path_part: &str, status: u16, body: impl Into<String>) {
@@ -442,6 +449,20 @@ pub mod fake {
             let Some(i) = a.iter().position(|(p, _, _)| req.url.contains(p.as_str())) else {
                 let step = *self.synth_step.lock().unwrap();
                 if let (Some(step), true) = (step, req.url.contains("with-timestamps")) {
+                    let takes = self
+                        .seen
+                        .lock()
+                        .unwrap()
+                        .iter()
+                        .filter(|r| r.url.contains("with-timestamps"))
+                        .count();
+                    if self.fail_after.lock().unwrap().is_some_and(|n| takes > n) {
+                        return Ok(HttpResponse {
+                            status: 500,
+                            body: r#"{"detail":"failed"}"#.into(),
+                            char_count: None,
+                        });
+                    }
                     let body: Value = serde_json::from_str(req.body.as_deref().unwrap_or("{}"))
                         .unwrap_or_default();
                     let text = body["text"].as_str().unwrap_or("");

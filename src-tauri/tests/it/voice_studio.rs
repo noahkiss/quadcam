@@ -1321,3 +1321,424 @@ fn imported_takes_count_as_rendered_and_are_never_sent_again() {
         r.retakes
     );
 }
+
+/// The files of every cached take of a test bench, by extension.
+fn cached_takes(b: &Bench, ext: &str) -> Vec<std::path::PathBuf> {
+    let dir = b.dir.path().join("cache/voice/batch/elevenlabs");
+    let mut v: Vec<_> = std::fs::read_dir(dir)
+        .into_iter()
+        .flatten()
+        .flatten()
+        .map(|e| e.path())
+        .filter(|p| p.extension().is_some_and(|x| x == ext))
+        .collect();
+    v.sort();
+    v
+}
+
+/// Every take the line index files of a test bench name.
+fn indexed_keys(b: &Bench) -> Vec<String> {
+    let dir = b.dir.path().join("cache/voice/lines/elevenlabs");
+    let mut keys = Vec::new();
+    for f in std::fs::read_dir(dir).into_iter().flatten().flatten() {
+        let p = f.path();
+        if p.extension().is_some_and(|x| x == "json") {
+            let v: serde_json::Value = serde_json::from_slice(&std::fs::read(&p).unwrap()).unwrap();
+            for e in v["batches"].as_array().unwrap() {
+                keys.push(e["key"].as_str().unwrap().to_string());
+            }
+        }
+    }
+    keys
+}
+
+/// Rewrites every entry of every line index file of a test bench.
+fn edit_index(b: &Bench, f: impl Fn(&mut serde_json::Value)) {
+    let dir = b.dir.path().join("cache/voice/lines/elevenlabs");
+    for e in std::fs::read_dir(&dir).unwrap().flatten() {
+        let p = e.path();
+        if p.extension().is_some_and(|x| x == "json") {
+            let mut v: serde_json::Value =
+                serde_json::from_slice(&std::fs::read(&p).unwrap()).unwrap();
+            for e in v["batches"].as_array_mut().unwrap() {
+                f(e);
+            }
+            std::fs::write(&p, v.to_string()).unwrap();
+        }
+    }
+}
+
+/// A reused take that can no longer be read or cut is removed, from the cache and the line
+/// index, before anything is sent; the next estimate prices its lines, and nothing loops.
+#[test]
+fn a_reused_take_that_cannot_be_read_or_cut_is_removed_and_priced_again() {
+    let m = "eleven_turbo_v2_5";
+    let unreadable = |b: &Bench| {
+        for w in cached_takes(b, "wav") {
+            std::fs::write(w, b"not a wav").unwrap();
+        }
+    };
+    let uncuttable = |b: &Bench| {
+        // A hand-edited index: the text no longer matches the take's timestamps.
+        edit_index(b, |e| {
+            let t = format!("{} Again.", e["text"].as_str().unwrap());
+            e["text"] = t.into();
+        })
+    };
+    for (what, spoil) in [
+        ("unreadable", &unreadable as &dyn Fn(&Bench)),
+        ("uncuttable", &uncuttable),
+    ] {
+        let b = bench(99_000, true);
+        paid_sample(&b, sample(&["Callum"], &[m], false, true));
+        assert!(!indexed_keys(&b).is_empty());
+        spoil(&b);
+        let posts = b.http.posts();
+        // The estimate still counts every line as rendered: nothing to confirm.
+        let e = estimate(&b, &["sample"], m).unwrap();
+        assert_eq!((e.to_render, e.estimate.chars), (0, 0), "{what}: {e:?}");
+        // The render (of another set, with lines of its own) fails before it sends anything.
+        let ask = b
+            .core
+            .gear_voice_render(&render("Callum", m, &["quad"], false, false))
+            .unwrap();
+        assert!(ask.needs_confirm);
+        let err = b
+            .core
+            .gear_voice_render(&VoiceRenderParams {
+                digest: Some(ask.digest),
+                ..render("Callum", m, &["quad"], false, true)
+            })
+            .unwrap_err();
+        assert!(
+            format!("{err:#}").contains("so it was removed; a new estimate prices it again"),
+            "{what}: {err:#}"
+        );
+        assert_eq!(b.http.posts(), posts, "{what}");
+        // The takes are gone from the cache and the index; the estimate prices their lines.
+        assert!(cached_takes(&b, "wav").is_empty(), "{what}");
+        assert!(indexed_keys(&b).is_empty(), "{what}");
+        let e = estimate(&b, &["sample"], m).unwrap();
+        assert_eq!(e.to_render, e.lines, "{what}: {e:?}");
+        // A render of that estimate works.
+        let r = paid_render(&b, render("Callum", m, &["sample"], false, true));
+        assert!(r.retakes.is_empty(), "{what}: {:?}", r.retakes);
+        assert!(b.http.posts() > posts, "{what}");
+    }
+}
+
+/// Batches a render made before a later batch failed are paid for: the line index holds
+/// them, so a later plan that groups their lines otherwise does not send them again.
+#[test]
+fn batches_made_before_a_failed_render_count_as_rendered() {
+    let b = bench(99_000, true);
+    let m = "eleven_turbo_v2_5";
+    b.http.fail_after(1);
+    let ask = b
+        .core
+        .gear_voice_render(&render("Callum", m, &["quad"], false, false))
+        .unwrap();
+    assert!(ask.estimate.as_ref().unwrap().batches > 2);
+    let err = b
+        .core
+        .gear_voice_render(&VoiceRenderParams {
+            digest: Some(ask.digest),
+            ..render("Callum", m, &["quad"], false, true)
+        })
+        .unwrap_err();
+    assert_eq!(b.http.posts(), 2, "{err:#}");
+    assert_eq!(cached_takes(&b, "wav").len(), 1);
+    // Smaller batches group the quad lines otherwise: the batch made counts all the same.
+    let e = b
+        .core
+        .gear_voice_estimate(&EstimateParams {
+            sets: vec!["quad".into()],
+            voice: "Callum".into(),
+            model: m.into(),
+            batch: Some(quadcam_lib::gear::voice::batch::BatchSettings {
+                max_lines: 7,
+                ..Default::default()
+            }),
+            ..Default::default()
+        })
+        .unwrap();
+    assert!(e.rendered >= 7, "{e:?}");
+}
+
+/// One take file: a JSON of `meta` and a PCM of `pcm_len` bytes (a sparse file, so a long one
+/// costs no disk).
+fn take_file(dir: &std::path::Path, name: &str, meta: serde_json::Value, pcm_len: u64) {
+    std::fs::write(dir.join(format!("{name}.json")), meta.to_string()).unwrap();
+    let f = std::fs::File::create(dir.join(format!("{name}.pcm"))).unwrap();
+    f.set_len(pcm_len).unwrap();
+}
+
+/// An import keeps a take only at a speed of 0.5 to 2, a rate of 8000 to 48000, and a PCM
+/// of whole 16-bit samples, at most 10 minutes at 48 kHz.
+#[test]
+fn an_import_keeps_only_takes_within_its_bounds() {
+    let b = bench(50_000, true);
+    let old = tempfile::tempdir().unwrap();
+    let max: u64 = 48_000 * 2 * 600;
+    let take = |name: &str, speed: f64, rate: u32, len: u64| {
+        take_file(
+            old.path(),
+            name,
+            json!({"text": name, "voice": "v-callum", "model": "eleven_turbo_v2_5",
+                   "speed": speed, "seed": 1, "rate": rate}),
+            len,
+        )
+    };
+    // At the bounds: kept.
+    take("slow", 0.5, 8_000, 2);
+    take("fast", 2.0, 48_000, max);
+    // Past them: skipped, each with its reason.
+    take("slower", 0.49, 32_000, 2);
+    take("faster", 2.01, 32_000, 2);
+    take("low", 1.0, 7_999, 2);
+    take("high", 1.0, 48_001, 2);
+    take("odd", 1.0, 32_000, 3);
+    take("empty", 1.0, 32_000, 0);
+    take("long", 1.0, 32_000, max + 2);
+    let r = b
+        .core
+        .gear_voice_import_takes(&quadcam_lib::core::ImportTakesParams {
+            folder: old.path().display().to_string(),
+            dry_run: true,
+        })
+        .unwrap();
+    assert_eq!((r.found, r.imported), (9, 2), "{r:?}");
+    let why = |name: &str| {
+        r.skipped
+            .iter()
+            .find(|s| s.starts_with(&format!("{name}.json")))
+            .unwrap_or_else(|| panic!("{name}: {:?}", r.skipped))
+            .clone()
+    };
+    for n in ["slower", "faster"] {
+        assert!(why(n).contains("outside 0.5 to 2"), "{}", why(n));
+    }
+    for n in ["low", "high"] {
+        assert!(why(n).contains("outside 8000 to 48000"), "{}", why(n));
+    }
+    for n in ["odd", "empty", "long"] {
+        assert!(
+            why(n).contains("empty, odd-sized or too long"),
+            "{}",
+            why(n)
+        );
+    }
+    assert_eq!(r.skipped.len(), 7);
+}
+
+/// A take is reused only in the carrier sentence it was spoken in: another carrier sends the
+/// line again, and the same carrier reuses it.
+#[test]
+fn a_take_is_reused_only_with_its_own_carrier() {
+    let b = bench(99_000, true);
+    let m = "eleven_turbo_v2_5";
+    let say = quadcam_lib::gear::voice::batch::BatchSettings {
+        carrier: "Say {line}.".into(),
+        ..Default::default()
+    };
+    paid_render(
+        &b,
+        VoiceRenderParams {
+            batch: Some(say.clone()),
+            ..render("Callum", m, &["sample"], false, true)
+        },
+    );
+    let with = |bs: Option<quadcam_lib::gear::voice::batch::BatchSettings>| {
+        b.core
+            .gear_voice_estimate(&EstimateParams {
+                sets: vec!["sample".into()],
+                voice: "Callum".into(),
+                model: m.into(),
+                batch: bs,
+                ..Default::default()
+            })
+            .unwrap()
+    };
+    let same = with(Some(say));
+    assert_eq!((same.rendered, same.to_render), (same.lines, 0), "{same:?}");
+    let other = with(None);
+    assert_eq!(
+        (other.rendered, other.to_render),
+        (0, other.lines),
+        "{other:?}"
+    );
+    // The heli set reuses them only under the same carrier, too.
+    let tone = quadcam_lib::gear::voice::batch::BatchSettings {
+        tone_carriers: [("calm".to_string(), "Say {line}.".to_string())].into(),
+        ..Default::default()
+    };
+    let part = with(Some(tone));
+    assert!(part.rendered > 0 && part.rendered < part.lines, "{part:?}");
+}
+
+/// An imported take and a batch of one line under the carrier `{line}` never share a key: a
+/// lost line index makes the batch priced and sent, and the imported take stays.
+#[test]
+fn an_imported_take_never_stands_in_for_a_batch() {
+    let b = bench(50_000, true);
+    let m = "eleven_turbo_v2_5";
+    let old = tempfile::tempdir().unwrap();
+    old_take(old.path(), "armed", "Armed", "v-callum", 1.0);
+    b.core
+        .gear_voice_import_takes(&quadcam_lib::core::ImportTakesParams {
+            folder: old.path().display().to_string(),
+            dry_run: false,
+        })
+        .unwrap();
+    let imported = cached_takes(&b, "wav");
+    assert_eq!(imported.len(), 1);
+    std::fs::remove_dir_all(b.dir.path().join("cache/voice/lines")).unwrap();
+    let bare = quadcam_lib::gear::voice::batch::BatchSettings {
+        carrier: "{line}".into(),
+        ..Default::default()
+    };
+    let mut p = render("Callum", m, &["sample"], false, false);
+    p.lines = vec!["SOUNDS/en/armed.wav".into()];
+    p.batch = Some(bare);
+    p.settings = Some(quadcam_lib::gear::voice::render::RenderSettings {
+        seed: 1,
+        ..Default::default()
+    });
+    let ask = b.core.gear_voice_render(&p).unwrap();
+    assert!(ask.needs_confirm, "{ask:?}");
+    assert!(ask.plan.chars > 0);
+    paid_render(&b, VoiceRenderParams { confirm: true, ..p });
+    assert_eq!(b.http.posts(), 1);
+    let now = cached_takes(&b, "wav");
+    assert_eq!(now.len(), 2);
+    assert!(now.contains(&imported[0]));
+}
+
+/// A take imported by 0.14.0 sits at the key a batch of its text has. Importing it again
+/// moves it to its own key.
+#[test]
+fn an_import_moves_a_take_from_its_old_key() {
+    use quadcam_lib::gear::voice::{batch::BatchCache, tts::Aligned, wav::Pcm};
+    let b = bench(50_000, true);
+    let old = tempfile::tempdir().unwrap();
+    old_take(old.path(), "armed", "Armed", "v-callum", 1.2);
+    let cache = BatchCache::new(&b.dir.path().join("cache"));
+    let legacy = BatchCache::key(
+        "elevenlabs",
+        "v-callum",
+        "eleven_turbo_v2_5",
+        1.2,
+        "Armed",
+        1,
+    );
+    let a = Aligned {
+        pcm: Pcm {
+            rate: 32_000,
+            samples: vec![1000; 16_000],
+        },
+        alignment: Default::default(),
+        billed_chars: None,
+    };
+    cache
+        .put(
+            "elevenlabs",
+            &legacy,
+            "v-callum",
+            "eleven_turbo_v2_5",
+            1.2,
+            1,
+            "Armed",
+            &a,
+        )
+        .unwrap();
+    // A real one-line batch at that key (non-empty alignment) is never touched.
+    let real = BatchCache::key(
+        "elevenlabs",
+        "v-callum",
+        "eleven_turbo_v2_5",
+        1.2,
+        "Disarmed",
+        1,
+    );
+    let mut aligned = a.clone();
+    aligned.alignment.characters = vec!["D".into()];
+    aligned.alignment.starts = vec![0.0];
+    aligned.alignment.ends = vec![0.1];
+    cache
+        .put(
+            "elevenlabs",
+            &real,
+            "v-callum",
+            "eleven_turbo_v2_5",
+            1.2,
+            1,
+            "Disarmed",
+            &aligned,
+        )
+        .unwrap();
+    old_take(old.path(), "disarm", "Disarmed", "v-callum", 1.2);
+    let r = b
+        .core
+        .gear_voice_import_takes(&quadcam_lib::core::ImportTakesParams {
+            folder: old.path().display().to_string(),
+            dry_run: false,
+        })
+        .unwrap();
+    assert_eq!((r.imported, r.already), (1, 1), "{r:?}");
+    assert!(!cache.has("elevenlabs", &legacy));
+    assert!(cache.has("elevenlabs", &real));
+    let alone = BatchCache::alone_key(
+        "elevenlabs",
+        "v-callum",
+        "eleven_turbo_v2_5",
+        1.2,
+        "Armed",
+        1,
+    );
+    assert_eq!(
+        cache.get("elevenlabs", &alone).unwrap().pcm.samples,
+        a.pcm.samples
+    );
+    assert!(indexed_keys(&b).contains(&alone));
+}
+
+/// An imported take was spoken alone: a breath or hiss before its first word is not a
+/// carrier's last sound, and the take is not flagged for one.
+#[test]
+fn an_imported_take_is_not_judged_for_a_carrier() {
+    let b = bench(50_000, true);
+    let m = "eleven_turbo_v2_5";
+    let old = tempfile::tempdir().unwrap();
+    old_take(old.path(), "armed", "Armed", "v-callum", 1.2);
+    // 60 ms of loud hiss, 40 ms of quiet, then the word.
+    let mut seed: u32 = 7;
+    let mut v: Vec<i16> = (0..32 * 60)
+        .map(|_| {
+            seed = seed.wrapping_mul(1_103_515_245).wrapping_add(12_345);
+            ((seed >> 16) as i32 % 12_000 - 6_000) as i16
+        })
+        .collect();
+    v.extend(std::iter::repeat_n(0i16, 32 * 40));
+    v.extend(
+        (0..16_000)
+            .map(|i| (8000.0 * (i as f64 * 220.0 * std::f64::consts::TAU / 32_000.0).sin()) as i16),
+    );
+    let pcm: Vec<u8> = v.iter().flat_map(|s| s.to_le_bytes()).collect();
+    std::fs::write(old.path().join("armed/ab12_seed1.pcm"), pcm).unwrap();
+    b.core
+        .gear_voice_import_takes(&quadcam_lib::core::ImportTakesParams {
+            folder: old.path().display().to_string(),
+            dry_run: false,
+        })
+        .unwrap();
+    let mut p = render("Callum", m, &["sample"], false, false);
+    p.lines = vec!["SOUNDS/en/armed.wav".into()];
+    p.settings = Some(quadcam_lib::gear::voice::render::RenderSettings {
+        speed: 1.2,
+        ..Default::default()
+    });
+    let r = b.core.gear_voice_render(&p).unwrap();
+    assert!(!r.needs_confirm, "{r:?}");
+    assert!(r.retakes.is_empty(), "{:?}", r.retakes);
+    assert_eq!(b.http.posts(), 0);
+}

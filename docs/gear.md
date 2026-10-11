@@ -509,7 +509,9 @@ inside carrier sentences, and compares voices before it spends credits.
   (16-bit mono). QuadCam only reads the folder. The takes count as rendered for their voice,
   model and speed, and a render at that speed (the **Speed** control, CLI `--speed`, MCP
   `settings`) cuts them from the cache instead of sending their lines. A take spoken in a
-  carrier wins over one spoken alone. CLI `gear voice import-takes FOLDER [--dry-run]`, MCP
+  carrier wins over one spoken alone. A take spoken alone is not checked for the carrier's
+  last sound at its start. Takes imported by 0.14.0 keep working; import the folder again to
+  file them apart from batches. CLI `gear voice import-takes FOLDER [--dry-run]`, MCP
   `quadcam_gear_edit voice_import_takes` (`folder`, `dry_run`).
 - **A line is billed once.** A voice and model never speak the same sentence twice: a line
   that any earlier render or sample spoke (the same text, voice, model and speed, ignoring
@@ -517,7 +519,8 @@ inside carrier sentences, and compares voices before it spends credits.
   that shares lines with one you rendered (every aircraft set holds the radio's prompts,
   numbers and units), or a render after a sample pays only for its new lines. QuadCam keeps
   which lines each take holds in `voice/lines/` in the cache; without that file it prices the
-  lines again. A render the credits do not cover cannot start. A batch stays under the
+  lines again. A take in the cache that can no longer be read or cut is removed before
+  anything is sent, and the render stops; estimate again, and its lines are priced. A render the credits do not cover cannot start. A batch stays under the
   model's per-request limit (v3 5,000 characters, multilingual v2 10,000, flash and turbo
   40,000).
 - **Sample.** Tick voices and models and press **Sample**. QuadCam renders the sample lines
