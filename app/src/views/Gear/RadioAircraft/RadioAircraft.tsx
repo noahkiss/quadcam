@@ -7,11 +7,15 @@ import { useStore } from "../../../store";
 import { sel } from "../../../store/settings";
 import { api, errText } from "../../../ipc/api";
 import { Button } from "../../../components/Button";
-import { Chip } from "../../../components/Chip";
+import { Badge } from "../../../components/dash/Badge";
+import { DataTable, type Column } from "../../../components/dash/DataTable";
+import { EmptyState } from "../../../components/dash/EmptyState";
+import { SectionCard } from "../../../components/dash/SectionCard";
 import { Select } from "../../../components/Field";
 import { toast } from "../../../components/toastStore";
 import { deviceName } from "../../../lib/gear";
 import { addable, aircraftOf, modelStatus, modelText, withRadio } from "../../../lib/radioAircraft";
+import type { RadioAircraft as RadioAircraftRow } from "../../../ipc/types";
 import type { DeviceRef } from "../slots";
 import styles from "./RadioAircraft.module.css";
 
@@ -44,62 +48,58 @@ export function RadioAircraft({ d }: { d: DeviceRef }) {
     }
   };
 
-  return (
-    <section className={styles.section} aria-labelledby="radio-aircraft">
-      <h3 id="radio-aircraft">Aircraft on this radio</h3>
-      {list.length === 0 ? (
-        <p className={styles.empty}>No aircraft yet.</p>
-      ) : (
-        <table className={styles.table}>
-          <thead>
-            <tr>
-              <th>Aircraft</th>
-              <th>EdgeTX model</th>
-              <th>On the radio</th>
-              <th>
-                <span className="visually-hidden">Actions</span>
-              </th>
-            </tr>
-          </thead>
-          <tbody>
-            {list.map((a) => (
-              <tr key={a.profile}>
-                <td>
-                  <span className={styles.name}>
-                    {a.profile}
-                    {a.selected && <Chip kind="accent">Selected</Chip>}
-                  </span>
-                </td>
-                <td className="selectable">{modelText(a)}</td>
-                <td>{modelStatus(a)}</td>
-                <td className={styles.actions}>
-                  <Button size="sm" variant="ghost" onClick={() => setFilter({ group: "all", aircraft: a.profile })}>
-                    Show clips
-                  </Button>
-                  <Button size="sm" variant="danger-ghost" disabled={busy} aria-label={`Remove ${a.profile}`} onClick={() => void save(a.profile, false)}>
-                    Remove
-                  </Button>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      )}
-      {options.length > 0 && (
-        <div className={styles.add}>
-          <Select aria-label="Aircraft to add" value={pick} onChange={(e) => setPick(e.target.value)}>
-            <option value="">Choose an aircraft</option>
-            {options.map((p) => (
-              <option key={p.name} value={p.name}>
-                {p.gear?.radio ? `${p.name} (now on ${radioName(p.gear.radio)})` : p.name}
-              </option>
-            ))}
-          </Select>
-          <Button size="sm" disabled={!pick || busy} onClick={() => void save(pick, true)}>
-            Add aircraft
+  const columns: Column<RadioAircraftRow>[] = [
+    {
+      key: "aircraft",
+      header: "Aircraft",
+      rowHeader: true,
+      cell: (a) => (
+        <span className={styles.name}>
+          {a.profile}
+          {a.selected && <Badge tone="accent">Selected</Badge>}
+        </span>
+      ),
+    },
+    { key: "model", header: "EdgeTX model", cell: (a) => <span className="selectable">{modelText(a)}</span> },
+    { key: "status", header: "On the radio", optional: true, cell: (a) => modelStatus(a) },
+    {
+      key: "actions",
+      header: <span className="visually-hidden">Actions</span>,
+      cell: (a) => (
+        <div className={styles.actions}>
+          <Button size="sm" variant="ghost" onClick={() => setFilter({ group: "all", aircraft: a.profile })}>
+            Show clips
+          </Button>
+          <Button size="sm" variant="danger-ghost" disabled={busy} aria-label={`Remove ${a.profile}`} onClick={() => void save(a.profile, false)}>
+            Remove
           </Button>
         </div>
-      )}
-    </section>
+      ),
+    },
+  ];
+
+  return (
+    <SectionCard
+      title="Aircraft on this radio"
+      actions={
+        options.length > 0 && (
+          <>
+            <Select aria-label="Aircraft to add" value={pick} onChange={(e) => setPick(e.target.value)}>
+              <option value="">Choose an aircraft</option>
+              {options.map((p) => (
+                <option key={p.name} value={p.name}>
+                  {p.gear?.radio ? `${p.name} (now on ${radioName(p.gear.radio)})` : p.name}
+                </option>
+              ))}
+            </Select>
+            <Button size="sm" disabled={!pick || busy} onClick={() => void save(pick, true)}>
+              Add aircraft
+            </Button>
+          </>
+        )
+      }
+    >
+      <DataTable label="Aircraft on this radio" columns={columns} rows={list} rowKey={(a) => a.profile} empty={<EmptyState icon="list">No aircraft yet.</EmptyState>} />
+    </SectionCard>
   );
 }
