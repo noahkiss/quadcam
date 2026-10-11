@@ -5,6 +5,8 @@ User-facing changes in each release, newest first. Release notes on
 
 ## Unreleased
 
+## 0.17.1 (2026-10-11)
+
 - **The MCP server follows updates.** When QuadCam updates, an agent's `quadcam-cli mcp` moves to the new version in the same process, between calls, and tells the agent its tool list changed. You no longer restart the agent after an update. It never switches during a call or a job, and never to an older version; `QUADCAM_MCP_RELOAD=0` turns it off. See [Updates](docs/mcp.md#updates).
 - **Restart to update in Settings.** When a newer version is known, Settings > Advanced shows **Restart to update** (download with progress, signature check, install, restart) and the release notes link beside **Check now**, as the banner does. It waits while a job runs, as the banner does.
 - **Updates find the newest release.** Once QuadCam knew of an update, it stopped checking, so the banner could not move on to a newer release. Every check now runs while an update is known; a newer release replaces the known one in the banner and Settings, and drops an older download. **Restart to update** checks once more before it downloads, so it installs the newest release. QuadCam never installs a version at or below the one running.
