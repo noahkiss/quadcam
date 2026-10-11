@@ -67,14 +67,53 @@ test("Sample asks before it pays, then shows the A/B grid", async ({ app, page }
   expect((await app.method("gear_voice_sample")).at(-1)).toMatchObject({ voices: ["voice-callum", "voice-daniel"], models: ["eleven_v4", "eleven_turbo_v2_5"], confirm: false });
   await expect(studio).toContainText("This sends text to ElevenLabs, which bills it.");
   await expect(studio.getByRole("table", { name: "Sample voices" })).toHaveCount(0);
+  const asked = (await app.method("gear_voice_sample")).length;
   await studio.getByRole("button", { name: "Sample and pay" }).click();
-  expect((await app.method("gear_voice_sample")).at(-1)).toMatchObject({ confirm: true });
+  await expect.poll(async () => (await app.method("gear_voice_sample")).length).toBe(asked + 1);
+  // The go-ahead repeats the digest of the plan the banner priced.
+  expect((await app.method("gear_voice_sample")).at(-1)).toMatchObject({ confirm: true, digest: expect.stringMatching(/^mock-/) });
   const grid = studio.getByRole("table", { name: "Sample voices" });
   await expect(grid.getByRole("columnheader")).toHaveCount(1 + 4);
   await expect(grid.getByRole("row", { name: /^Six/ })).toBeVisible();
   await grid.getByRole("button", { name: "Play Six in Daniel with eleven_turbo_v2_5" }).click();
   // The credits went down by what the sample cost.
   await expect(studio.getByRole("status").first()).not.toContainText("98,500");
+});
+
+test("a picker change after Sample drops the question, so the go-ahead never pays for another plan", async ({ app, page }) => {
+  const studio = await openStudio(app, page);
+  await saveKey(studio);
+  await studio.getByRole("button", { name: "Sample", exact: true }).click();
+  await expect(studio.getByRole("button", { name: "Sample and pay" })).toBeVisible();
+  await studio.getByRole("group", { name: "Voices" }).getByRole("checkbox", { name: /Daniel/ }).check();
+  await expect(studio.getByRole("button", { name: "Sample and pay" })).toHaveCount(0);
+  await studio.getByRole("group", { name: "Voices" }).getByRole("checkbox", { name: /Daniel/ }).uncheck();
+  await studio.getByRole("button", { name: "Render pack" }).click();
+  await expect(studio.getByRole("button", { name: "Render and pay" })).toBeVisible();
+  await studio.getByRole("group", { name: "Line sets" }).getByRole("checkbox", { name: /Easter eggs/ }).check();
+  await expect(studio.getByRole("button", { name: "Render and pay" })).toHaveCount(0);
+  expect((await app.method("gear_voice_sample")).every((p) => !p.confirm)).toBe(true);
+  expect((await app.method("gear_voice_render")).every((p) => !p.confirm)).toBe(true);
+});
+
+test("a line whose cut failed a check is listed, and Re-take renders again with a new seed", async ({ app, page }) => {
+  const studio = await openStudio(app, page);
+  await saveKey(studio);
+  await app.core(`c => { c.gear.voice.retake = "SOUNDS/en/lowbat.wav"; }`);
+  await studio.getByRole("button", { name: "Render pack" }).click();
+  await studio.getByRole("button", { name: "Render and pay" }).click();
+  const list = studio.getByRole("list", { name: "Needs a re-take" });
+  await expect(list).toContainText("Battery low (SOUNDS/en/lowbat.wav): the cut is silent");
+  await expect(studio).toContainText("1 line needs a re-take and is not in the pack");
+  await studio.getByRole("button", { name: "Re-take" }).click();
+  await expect(studio.getByRole("button", { name: "Render and pay" })).toBeVisible();
+  const ask = (await app.method("gear_voice_render")).at(-1) as { confirm: boolean; settings: { seed: number } };
+  expect(ask.confirm).toBe(false);
+  expect(ask.settings.seed).toBeGreaterThan(0);
+  await studio.getByRole("button", { name: "Render and pay" }).click();
+  await expect(studio).toContainText("1 batch made");
+  expect((await app.method("gear_voice_render")).at(-1)).toMatchObject({ confirm: true, settings: { seed: ask.settings.seed } });
+  await expect(list).toHaveCount(0);
 });
 
 test("Render pack needs one voice and one model, asks, then adds a local pack", async ({ app, page }) => {

@@ -42,9 +42,22 @@ export interface MockVoice {
   keySet: boolean;
   /** Credits the studio has spent in this run. */
   spent: number;
+  /** A line a studio render without a seed leaves out for a re-take. */
+  retake: string | null;
 }
 
-export const freshVoice = (): MockVoice => ({ installed: [], index: false, overrides: {}, chosen: {}, custom: [], paid: false, keySet: false, spent: 0 });
+export const freshVoice = (): MockVoice => ({ installed: [], index: false, overrides: {}, chosen: {}, custom: [], paid: false, keySet: false, spent: 0, retake: null });
+
+type Paid = { confirm?: boolean; digest?: string | null; settings?: { seed?: number | null } | null };
+
+/** The plan's digest, and the core's refusal of a confirm without it or for another plan. */
+function digestOf(plan: unknown): string {
+  return `mock-${JSON.stringify(plan)}`;
+}
+function samePlan(p: Paid, digest: string) {
+  if (!p.digest) throw "A paid call needs the digest of its estimate: run it without confirm, show the person the cost, then confirm with that digest.";
+  if (p.digest !== digest) throw "The plan changed since its estimate (voices, models, sets, seed or characters): estimate again.";
+}
 
 const AVAILABLE: VoicePack = { id: "en-demo-v1", voice: "Demo", lang: "en", provider: "demo", model: "", lines: LINES.length, license: "CC BY 4.0", attribution: "Made up for the mock core", version: "1", installed: false, local: false, bytes: 3_700_000, stale: false, dir: null };
 const LOCAL_ID = "local-say-samantha";
@@ -250,7 +263,7 @@ export function estimate(g: MockGear, p: { sets: string[]; voice: string; model:
 }
 
 /** `gear_voice_sample`: three lines per voice and model. */
-export function sample(g: MockGear, p: { voices: string[]; models: string[]; dry_run?: boolean; confirm?: boolean }): SampleReport {
+export function sample(g: MockGear, p: { voices: string[]; models: string[]; dry_run?: boolean } & Paid): SampleReport {
   needKey(g);
   const sum = { batches: 0, cached_batches: 0, lines: 0, chars: 0, cost_per_char: 0, credits_basis: "estimated", usd_per_1k: 0, promo_until: null, credits: 0, usd: 0, remaining: CREDITS - g.voice.spent, affordable: true };
   const combos = p.voices.flatMap((v) => p.models.map((m) => ({ v: voiceOf(v), m })));
@@ -263,10 +276,12 @@ export function sample(g: MockGear, p: { voices: string[]; models: string[]; dry
     sum.usd += e.usd ?? 0;
   }
   sum.affordable = sum.credits <= sum.remaining;
-  const base = { estimate: sum, combos: combos.length, dry_run: !!p.dry_run, warnings: [] as string[] };
+  const digest = digestOf({ voices: p.voices, models: p.models, seed: p.settings?.seed ?? 0, chars: sum.chars });
+  const base = { estimate: sum, combos: combos.length, dry_run: !!p.dry_run, warnings: [] as string[], digest };
   if (p.dry_run) return { ...base, items: [], needs_confirm: false };
   if (!sum.affordable) throw `this render needs ${sum.credits} credits but the account has ${sum.remaining}`;
   if (!p.confirm) return { ...base, items: [], needs_confirm: true };
+  samePlan(p, digest);
   g.voice.spent += sum.credits;
   const items = combos.flatMap<SampleItem>((c) =>
     [["SOUNDS/en/SYSTEM/0006.wav", "Six"], ["SOUNDS/en/armed.wav", "Armed"], ["SOUNDS/en/turtle.wav", "Turtle mode"]].map(([line, text]) => ({
@@ -283,16 +298,25 @@ export function sample(g: MockGear, p: { voices: string[]; models: string[]; dry
 }
 
 /** `gear_voice_render` with sets: a batched render into a local pack. */
-function studioRender(g: MockGear, p: { voice?: string; sets: string[]; model?: string; dry_run?: boolean; confirm?: boolean }): RenderReport {
+function studioRender(g: MockGear, p: { voice?: string; sets: string[]; model?: string; dry_run?: boolean } & Paid): RenderReport {
   needKey(g);
   const voice = voiceOf(p.voice ?? "");
   const e = price(g, p.sets, p.model ?? "");
   const id = `local-elevenlabs-${voice.name.toLowerCase()}-${(p.model ?? "").replace(/_/g, "-")}`;
-  const base = { pack: id, provider: "elevenlabs", voice: voice.name, plan: { lines: e.lines, cached: 0, to_render: e.lines, chars: e.chars }, paid: true, dry_run: !!p.dry_run, notes: [] as string[], estimate: e, warnings: [] as string[] };
+  const seed = p.settings?.seed ?? 0;
+  const digest = digestOf({ voice: voice.id, model: p.model, sets: p.sets, seed, chars: e.chars });
+  const base = { pack: id, provider: "elevenlabs", voice: voice.name, plan: { lines: e.lines, cached: 0, to_render: e.lines, chars: e.chars }, paid: true, dry_run: !!p.dry_run, notes: [] as string[], estimate: e, warnings: [] as string[], digest, retakes: [] };
   if (p.dry_run) return { ...base, rendered: 0, from_cache: 0, needs_confirm: false };
   if (!e.affordable) throw `this render needs ${e.credits} credits but the account has ${e.remaining}`;
   if (!p.confirm) return { ...base, rendered: 0, from_cache: 0, needs_confirm: true };
+  samePlan(p, digest);
   g.voice.spent += e.credits;
   if (!g.voice.installed.includes(id)) g.voice.installed.push(id);
-  return { ...base, rendered: e.batches, from_cache: 0, needs_confirm: false };
+  const flagged = LINES.find((l) => l.path === g.voice.retake);
+  if (flagged && seed === 0) {
+    const retakes = [{ path: flagged.path, text: flagged.text, reason: "the cut is silent" }];
+    return { ...base, rendered: e.batches, from_cache: 0, needs_confirm: false, warnings: [`"${flagged.text}": the cut is silent`], retakes };
+  }
+  // A re-take with a seed redoes only the batch that held the flagged line.
+  return { ...base, rendered: seed ? 1 : e.batches, from_cache: 0, needs_confirm: false };
 }

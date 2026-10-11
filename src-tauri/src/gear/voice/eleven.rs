@@ -125,15 +125,17 @@ impl Eleven {
     }
 
     fn call(&self, method: &'static str, path: &str, body: Option<Value>) -> Result<Value> {
-        Ok(self.call_counted(method, path, body)?.0)
+        Ok(self.call_counted(method, path, body, false)?.0)
     }
 
-    /// `call`, and the characters the answer says it billed.
+    /// `call`, and the characters the answer says it billed. A `paid` call retries only a 429:
+    /// a 5xx may come after the provider made, and billed, the audio.
     fn call_counted(
         &self,
         method: &'static str,
         path: &str,
         body: Option<Value>,
+        paid: bool,
     ) -> Result<(Value, Option<u64>)> {
         let req = HttpRequest {
             method,
@@ -153,7 +155,7 @@ impl Eleven {
                     .map(|v| (v, r.char_count))
                     .map_err(|_| anyhow!("ElevenLabs answered something that is not JSON"));
             }
-            let busy = r.status == 429 || r.status >= 500;
+            let busy = r.status == 429 || (!paid && r.status >= 500);
             if busy && attempt < 3 {
                 if wait > 0 {
                     std::thread::sleep(std::time::Duration::from_millis(wait));
@@ -261,6 +263,7 @@ impl Tts for Eleven {
                 req.voice
             ),
             Some(body),
+            true,
         )?;
         let r: WithTimestamps = serde_json::from_value(v)
             .map_err(|_| anyhow!("ElevenLabs answered without audio and timestamps"))?;
@@ -395,12 +398,20 @@ pub mod fake {
         /// When set, a synthesised take reports `x-character-count` of this many billed
         /// characters per character of text.
         pub bill: Mutex<Option<f64>>,
+        /// Texts a synthesised take without a seed speaks as silence (a bad take that a
+        /// re-take with a seed fixes).
+        pub muted: Mutex<Vec<String>>,
     }
 
     impl FakeHttp {
         /// Answers every with-timestamps request with a take of the text it carries.
         pub fn synth(&self, step: f64) {
             *self.synth_step.lock().unwrap() = Some(step);
+        }
+
+        /// Makes a synthesised take without a seed silent wherever it holds `text`.
+        pub fn mute(&self, text: &str) {
+            self.muted.lock().unwrap().push(text.into());
         }
 
         /// Makes every synthesised take report that many billed characters per character.
@@ -434,9 +445,14 @@ pub mod fake {
                     let body: Value = serde_json::from_str(req.body.as_deref().unwrap_or("{}"))
                         .unwrap_or_default();
                     let text = body["text"].as_str().unwrap_or("");
+                    let muted = if body["seed"].is_null() {
+                        self.muted.lock().unwrap().clone()
+                    } else {
+                        Vec::new()
+                    };
                     return Ok(HttpResponse {
                         status: 200,
-                        body: timestamps_json(text, step),
+                        body: timestamps_json_muted(text, step, &muted),
                         char_count: self
                             .bill
                             .lock()
@@ -468,12 +484,26 @@ pub mod fake {
     /// The with-timestamps answer for `text`: each character takes `step` seconds, and the
     /// audio is `loud` samples of +-4000 where a character is not a space.
     pub fn timestamps_json(text: &str, step: f64) -> String {
+        timestamps_json_muted(text, step, &[])
+    }
+
+    /// `timestamps_json`, with every occurrence of the `muted` texts silent.
+    pub fn timestamps_json_muted(text: &str, step: f64, muted: &[String]) -> String {
         let rate = super::super::render::OUT_RATE as f64;
         let n = text.chars().count();
         let per = (step * rate) as usize;
+        let mut quiet = vec![false; n];
+        for m in muted {
+            for (at, _) in text.match_indices(m.as_str()) {
+                let from = text[..at].chars().count();
+                for q in quiet.iter_mut().skip(from).take(m.chars().count()) {
+                    *q = true;
+                }
+            }
+        }
         let mut pcm: Vec<u8> = Vec::with_capacity(n * per * 2);
-        for ch in text.chars() {
-            let silent = ch == ' ' || ch == '.';
+        for (i, ch) in text.chars().enumerate() {
+            let silent = ch == ' ' || ch == '.' || quiet[i];
             for j in 0..per {
                 let v: i16 = if silent {
                     0
@@ -676,6 +706,28 @@ mod tests {
             .to_string()
             .contains("HTTP 500"));
         assert_eq!(h.seen.lock().unwrap().len(), 4);
+    }
+
+    #[test]
+    fn a_paid_take_retries_a_429_but_never_a_5xx() {
+        let req = TtsRequest {
+            text: "ab",
+            voice: "abc",
+            model: "m",
+            speed: 1.0,
+            seed: 0,
+        };
+        let h = Arc::new(FakeHttp::default());
+        h.on("with-timestamps", 502, "{}");
+        h.on("with-timestamps", 200, timestamps_json("ab", 0.05));
+        let e = client(&h).render_aligned(&req).unwrap_err().to_string();
+        assert!(e.contains("HTTP 502"), "{e}");
+        assert_eq!(h.posts(), 1);
+        let h = Arc::new(FakeHttp::default());
+        h.on("with-timestamps", 429, "{}");
+        h.on("with-timestamps", 200, timestamps_json("ab", 0.05));
+        assert!(client(&h).render_aligned(&req).is_ok());
+        assert_eq!(h.posts(), 2);
     }
 
     #[test]

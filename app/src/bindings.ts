@@ -4779,8 +4779,12 @@ export type RenderReport = {
 	notes: string[],
 	/**  A batched render: what it costs. Absent for a line-by-line render. */
 	estimate?: Estimate | null,
-	/**  Cuts whose length looks wrong (batched renders). */
+	/**  Cuts that failed a check (batched renders). */
 	warnings?: string[],
+	/**  A batched render: the digest of this plan, which `confirm` repeats. */
+	digest?: string,
+	/**  A batched render: the pack's lines left out because their cut failed a check. */
+	retakes?: Retake[],
 };
 
 /**  How a voice is rendered. Every field is in the pack's index entry. */
@@ -4855,6 +4859,14 @@ export type RestoreParams = {
 	editor?: Editor | null,
 };
 
+/**  A line that needs a re-take, and why. */
+export type Retake = {
+	/**  The card path. */
+	path: string,
+	text: string,
+	reason: string,
+};
+
 export type RfAlarms = {
 	warning: number,
 	critical: number,
@@ -4885,6 +4897,11 @@ export type SampleParams = {
 	confirm?: boolean,
 	settings?: RenderSettings | null,
 	batch?: BatchSettings | null,
+	/**
+	 *  The `digest` of the unconfirmed call. A paid `confirm` needs it, and is refused when
+	 *  the plan changed since.
+	 */
+	digest?: string | null,
 };
 
 export type SampleReport = {
@@ -4895,6 +4912,8 @@ export type SampleReport = {
 	needs_confirm: boolean,
 	dry_run: boolean,
 	warnings: string[],
+	/**  The digest of this plan, which `confirm` repeats. */
+	digest?: string,
 };
 
 /**  One radio's saved calibration and what it was made with. */
@@ -6100,6 +6119,11 @@ export type VoiceRenderParams = {
 	model?: string,
 	/**  The carrier and batch size of a batched render; the defaults when left out. */
 	batch?: BatchSettings | null,
+	/**
+	 *  A paid batched render: the `digest` of the unconfirmed call. A `confirm` needs it, and
+	 *  is refused when the plan changed since.
+	 */
+	digest?: string | null,
 };
 
 /**  What speaks the cue lines. */

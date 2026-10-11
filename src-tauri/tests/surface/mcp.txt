@@ -214,6 +214,7 @@ mcp.param quadcam_gear_edit.connector string
 mcp.param quadcam_gear_edit.copy any
 mcp.param quadcam_gear_edit.day string
 mcp.param quadcam_gear_edit.device string
+mcp.param quadcam_gear_edit.digest string
 mcp.param quadcam_gear_edit.draft boolean
 mcp.param quadcam_gear_edit.dry_run boolean
 mcp.param quadcam_gear_edit.edits array
@@ -250,6 +251,7 @@ mcp.param quadcam_gear_edit.received string
 mcp.param quadcam_gear_edit.remove_folder string
 mcp.param quadcam_gear_edit.repaired boolean
 mcp.param quadcam_gear_edit.retired boolean
+mcp.param quadcam_gear_edit.seed integer
 mcp.param quadcam_gear_edit.serial string
 mcp.param quadcam_gear_edit.sets array<string>
 mcp.param quadcam_gear_edit.settings array<string>

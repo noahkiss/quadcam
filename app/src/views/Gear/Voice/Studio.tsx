@@ -7,7 +7,7 @@ import { Banner } from "../../../components/Banner";
 import { Button } from "../../../components/Button";
 import { Checkbox, TextField } from "../../../components/Field";
 import { fileSrc } from "../../../ipc/api";
-import type { SampleItem, VoiceEstimate } from "../../../ipc/types";
+import type { Retake, SampleItem, VoiceEstimate } from "../../../ipc/types";
 import { useStudio, type UseStudio } from "./useStudio";
 import styles from "./Voice.module.css";
 
@@ -103,6 +103,29 @@ function Grid({ items }: { items: SampleItem[] }) {
   );
 }
 
+function Retakes({ s, retakes }: { s: UseStudio; retakes: Retake[] }) {
+  return (
+    <Banner
+      kind="warning"
+      icon="danger-triangle"
+      action={
+        <Button size="sm" disabled={s.busy} onClick={() => s.retake()}>
+          Re-take
+        </Button>
+      }
+    >
+      {retakes.length === 1 ? "1 line needs" : `${retakes.length} lines need`} a re-take and {retakes.length === 1 ? "is" : "are"} not in the pack:
+      <ul aria-label="Needs a re-take">
+        {retakes.map((t) => (
+          <li key={t.path}>
+            {t.text} ({t.path}): {t.reason}
+          </li>
+        ))}
+      </ul>
+    </Banner>
+  );
+}
+
 export function Studio({ onRendered }: { onRendered: () => Promise<void> }) {
   const s = useStudio(onRendered);
   const keySet = s.key?.set ?? false;
@@ -174,9 +197,9 @@ export function Studio({ onRendered }: { onRendered: () => Promise<void> }) {
           {s.render && !s.render.needs_confirm && !s.asking && (
             <p className={styles.status} role="status">
               Rendered into {s.render.pack}: {s.render.rendered} {s.render.rendered === 1 ? "batch" : "batches"} made, {s.render.from_cache} from the cache.
-              {s.render.warnings?.length ? ` Check: ${s.render.warnings.join("; ")}` : ""}
             </p>
           )}
+          {s.render && !s.render.needs_confirm && !s.asking && (s.render.retakes?.length ?? 0) > 0 && <Retakes s={s} retakes={s.render.retakes ?? []} />}
           {s.sample && s.sample.items.length > 0 && <Grid items={s.sample.items} />}
         </>
       )}

@@ -7,8 +7,10 @@
 //! 2. `fetch` renders a batch with character timestamps, or finds it in the `BatchCache`
 //!    (raw audio and alignment, by provider, voice, model, speed, batch text and seed).
 //! 3. `cut` takes each line from its first character's start to its last character's end,
-//!    each edge moved to the quietest point within +-`snap_ms`.
-//! 4. `check` flags cuts whose length is off for their text.
+//!    each edge moved to the quietest point within +-`snap_ms`. A fresh take is cached only
+//!    after it cuts; a cached take that no longer cuts is removed.
+//! 4. `check` flags cuts that are silent or whose length is off for their text. A flagged
+//!    line stays out of the pack and needs a re-take; its batch stays cached (it was paid).
 //! 5. The cut goes on through `render::normalise` (trim, fades, loudness, tempo) like any take.
 //!
 //! Re-cutting from the cache costs nothing; `estimate` prices only the batches the cache
@@ -248,6 +250,12 @@ impl BatchCache {
         self.path(provider, key, "wav").is_file() && self.path(provider, key, "json").is_file()
     }
 
+    /// Forgets a batch: its audio and its alignment.
+    pub fn remove(&self, provider: &str, key: &str) {
+        let _ = std::fs::remove_file(self.path(provider, key, "wav"));
+        let _ = std::fs::remove_file(self.path(provider, key, "json"));
+    }
+
     pub fn get(&self, provider: &str, key: &str) -> Option<Aligned> {
         let pcm = wav::read(&std::fs::read(self.path(provider, key, "wav")).ok()?).ok()?;
         let st: Stored =
@@ -305,7 +313,7 @@ pub struct Ctx<'a> {
 }
 
 impl Ctx<'_> {
-    fn key(&self, b: &Batch) -> String {
+    pub fn key(&self, b: &Batch) -> String {
         BatchCache::key(
             self.tts.id(),
             self.voice,
@@ -321,11 +329,23 @@ impl Ctx<'_> {
     }
 }
 
-/// One batch: from the cache, or from the provider (then cached). True when the cache answered.
-pub fn fetch(ctx: &Ctx<'_>, b: &Batch) -> Result<(Aligned, bool)> {
+/// One batch, cut: from the cache, or from the provider. A fresh take is cached only when it
+/// cuts, so a take the provider changed never stays cached; a cached take that does not cut
+/// is removed, and the next render fetches it again. True when the cache answered.
+pub fn fetch(ctx: &Ctx<'_>, b: &Batch, snap_ms: u32) -> Result<(Vec<Cut>, bool)> {
     let key = ctx.key(b);
     if let Some(a) = ctx.cache.get(ctx.tts.id(), &key) {
-        return Ok((a, true));
+        return match cut(b, &a, snap_ms) {
+            Ok(c) => Ok((c, true)),
+            Err(e) => {
+                ctx.cache.remove(ctx.tts.id(), &key);
+                Err(e.context(format!(
+                    "the cached batch of {} {} lines does not cut, so it was removed; a new estimate prices it again",
+                    b.items.len(),
+                    b.tone
+                )))
+            }
+        };
     }
     let a = ctx
         .tts
@@ -344,6 +364,13 @@ pub fn fetch(ctx: &Ctx<'_>, b: &Batch) -> Result<(Aligned, bool)> {
             b.text.chars().count() as u64,
         );
     }
+    let cuts = cut(b, &a, snap_ms).with_context(|| {
+        format!(
+            "the take of a batch of {} {} lines does not cut, so it was not kept",
+            b.items.len(),
+            b.tone
+        )
+    })?;
     ctx.cache.put(
         ctx.tts.id(),
         &key,
@@ -354,7 +381,7 @@ pub fn fetch(ctx: &Ctx<'_>, b: &Batch) -> Result<(Aligned, bool)> {
         &b.text,
         &a,
     )?;
-    Ok((a, false))
+    Ok((cuts, false))
 }
 
 // ----- cutting -----
@@ -463,9 +490,22 @@ const MAX_MS: f64 = 4500.0;
 /// A cut whose loudest sample is under this holds no speech.
 const MIN_PEAK: i32 = 100;
 
+/// A cut the checks found wrong: its line needs a re-take.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Flag {
+    pub spoken: String,
+    pub reason: String,
+}
+
+impl std::fmt::Display for Flag {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{:?}: {}", self.spoken, self.reason)
+    }
+}
+
 /// What is wrong with a cut, if anything. Reads the batch's cuts together: a line is long or
 /// short for its letters against the batch's median pace.
-pub fn check(cuts: &[Cut]) -> Vec<String> {
+pub fn check(cuts: &[Cut]) -> Vec<Flag> {
     let ms = |c: &Cut| c.pcm.samples.len() as f64 * 1000.0 / f64::from(c.pcm.rate);
     let letters = |c: &Cut| {
         c.spoken
@@ -491,29 +531,32 @@ pub fn check(cuts: &[Cut]) -> Vec<String> {
             .map(|v| i32::from(*v).abs())
             .max()
             .unwrap_or(0);
-        if peak < MIN_PEAK {
-            out.push(format!("{:?}: the cut is silent", c.spoken));
+        let reason = if peak < MIN_PEAK {
+            Some("the cut is silent".to_string())
         } else if d < MIN_MS {
-            out.push(format!("{:?}: only {d:.0} ms", c.spoken));
+            Some(format!("only {d:.0} ms"))
         } else if d > MAX_MS {
-            out.push(format!(
-                "{:?}: {d:.0} ms is too long for one line",
-                c.spoken
-            ));
+            Some(format!("{d:.0} ms is too long for one line"))
         } else if let Some(m) = median {
             let p = d / letters(c);
             // Short words are slower per letter than long ones, so the band is wide.
             if p > m * 3.5 {
-                out.push(format!(
-                    "{:?}: {d:.0} ms is long for its text (carrier or neighbour in the cut?)",
-                    c.spoken
-                ));
+                Some(format!(
+                    "{d:.0} ms is long for its text (carrier or neighbour in the cut?)"
+                ))
             } else if p < m * 0.25 {
-                out.push(format!(
-                    "{:?}: {d:.0} ms is short for its text (clipped?)",
-                    c.spoken
-                ));
+                Some(format!("{d:.0} ms is short for its text (clipped?)"))
+            } else {
+                None
             }
+        } else {
+            None
+        };
+        if let Some(reason) = reason {
+            out.push(Flag {
+                spoken: c.spoken.clone(),
+                reason,
+            });
         }
     }
     out
@@ -614,14 +657,17 @@ impl Estimate {
 /// What `render_all` returns.
 #[derive(Debug, Default)]
 pub struct Rendered {
-    /// Each spoken text with its cut.
+    /// Each spoken text with its cut; never a flagged one.
     pub cuts: HashMap<String, Pcm>,
+    /// The cuts `check` flagged, by spoken text, with the reason. They need a re-take.
+    pub flagged: HashMap<String, String>,
     pub warnings: Vec<String>,
     pub batches_rendered: u32,
     pub batches_cached: u32,
 }
 
-/// Renders (or finds) every batch and cuts it. `each` hears (done, total) after each batch.
+/// Renders (or finds) every batch and cuts it. A flagged cut goes to `flagged`, not `cuts`.
+/// `each` hears (done, total) after each batch.
 pub fn render_all(
     ctx: &Ctx<'_>,
     batches: &[Batch],
@@ -630,16 +676,20 @@ pub fn render_all(
 ) -> Result<Rendered> {
     let mut r = Rendered::default();
     for (n, b) in batches.iter().enumerate() {
-        let (a, hit) = fetch(ctx, b)?;
+        let (cuts, hit) = fetch(ctx, b, snap_ms)?;
         if hit {
             r.batches_cached += 1;
         } else {
             r.batches_rendered += 1;
         }
-        let cuts = cut(b, &a, snap_ms)?;
-        r.warnings.extend(check(&cuts));
+        for f in check(&cuts) {
+            r.warnings.push(f.to_string());
+            r.flagged.insert(f.spoken, f.reason);
+        }
         for c in cuts {
-            r.cuts.insert(c.spoken, c.pcm);
+            if !r.flagged.contains_key(&c.spoken) {
+                r.cuts.insert(c.spoken, c.pcm);
+            }
         }
         each(n + 1, batches.len());
     }
@@ -904,7 +954,7 @@ mod tests {
             cut_of("six", 60, 3000),        // clipped
             cut_of("turtle mode", 700, 5),  // silent
         ];
-        let w = check(&cuts);
+        let w: Vec<String> = check(&cuts).iter().map(Flag::to_string).collect();
         assert_eq!(w.len(), 3, "{w:?}");
         assert!(w
             .iter()
@@ -989,6 +1039,106 @@ mod tests {
             ..ctx
         };
         assert!(!other.cached(&batches[0]));
+    }
+
+    #[test]
+    fn a_take_that_does_not_cut_is_never_cached() {
+        let dir = tempfile::tempdir().unwrap();
+        let batches = plan(&[item("Six", "number")], &BatchSettings::default());
+        // The provider changed the text: the timestamps cover other characters.
+        let h = Arc::new(FakeHttp::default());
+        h.on(
+            "with-timestamps",
+            200,
+            timestamps_json("The word is 6.", 0.06),
+        );
+        let tts = Eleven::new(h.clone(), "sk_test_key_00000".into()).without_backoff();
+        let cache = BatchCache::new(dir.path());
+        let settings = RenderSettings::default();
+        let ctx = Ctx {
+            tts: &tts,
+            cache: &cache,
+            voice: "abc",
+            model: "m",
+            settings: &settings,
+        };
+        let e = render_all(&ctx, &batches, 40, &mut |_, _| {}).unwrap_err();
+        assert!(format!("{e:#}").contains("changed the text"), "{e:#}");
+        assert!(!ctx.cached(&batches[0]));
+        assert_eq!(
+            estimate(&ctx, &batches, &price(1.0, None)).cached_batches,
+            0
+        );
+        // A re-run asks the provider again instead of failing from the cache.
+        assert!(render_all(&ctx, &batches, 40, &mut |_, _| {}).is_err());
+        assert_eq!(h.posts(), 2);
+
+        // A bad take already in the cache (from an older QuadCam) is removed.
+        let bad: Aligned = Eleven::new(
+            {
+                let h = Arc::new(FakeHttp::default());
+                h.on(
+                    "with-timestamps",
+                    200,
+                    timestamps_json("The word is 6.", 0.06),
+                );
+                h
+            },
+            "sk_test_key_00000".into(),
+        )
+        .render_aligned(&TtsRequest {
+            text: "x",
+            voice: "abc",
+            model: "m",
+            speed: 1.0,
+            seed: 0,
+        })
+        .unwrap();
+        let key = ctx.key(&batches[0]);
+        cache
+            .put(
+                "elevenlabs",
+                &key,
+                "abc",
+                "m",
+                1.0,
+                0,
+                &batches[0].text,
+                &bad,
+            )
+            .unwrap();
+        assert!(ctx.cached(&batches[0]));
+        let e = render_all(&ctx, &batches, 40, &mut |_, _| {}).unwrap_err();
+        assert!(format!("{e:#}").contains("removed"), "{e:#}");
+        assert!(!ctx.cached(&batches[0]));
+        assert_eq!(h.posts(), 2);
+    }
+
+    #[test]
+    fn a_flagged_cut_stays_out_and_its_batch_stays_cached() {
+        let dir = tempfile::tempdir().unwrap();
+        // "..." is silence in the fake take: its cut has a peak of 0.
+        let batches = plan(
+            &[item("Six", "number"), item("...", "number")],
+            &BatchSettings::default(),
+        );
+        let (http, tts) = eleven_with(0.06, &batches[0]);
+        let cache = BatchCache::new(dir.path());
+        let settings = RenderSettings::default();
+        let ctx = Ctx {
+            tts: &tts,
+            cache: &cache,
+            voice: "abc",
+            model: "m",
+            settings: &settings,
+        };
+        let r = render_all(&ctx, &batches, 40, &mut |_, _| {}).unwrap();
+        assert!(r.cuts.contains_key("Six"));
+        assert!(!r.cuts.contains_key("..."));
+        assert_eq!(r.flagged["..."], "the cut is silent");
+        assert_eq!(r.warnings.len(), 1);
+        assert!(ctx.cached(&batches[0]));
+        assert_eq!(http.posts(), 1);
     }
 
     #[test]

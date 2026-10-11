@@ -161,6 +161,10 @@ pub struct VoiceRenderParams {
     /// The carrier and batch size of a batched render; the defaults when left out.
     #[serde(default)]
     pub batch: Option<crate::gear::voice::batch::BatchSettings>,
+    /// A paid batched render: the `digest` of the unconfirmed call. A `confirm` needs it, and
+    /// is refused when the plan changed since.
+    #[serde(default)]
+    pub digest: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, specta::Type)]
@@ -181,9 +185,15 @@ pub struct RenderReport {
     /// A batched render: what it costs. Absent for a line-by-line render.
     #[serde(default)]
     pub estimate: Option<crate::gear::voice::batch::Estimate>,
-    /// Cuts whose length looks wrong (batched renders).
+    /// Cuts that failed a check (batched renders).
     #[serde(default)]
     pub warnings: Vec<String>,
+    /// A batched render: the digest of this plan, which `confirm` repeats.
+    #[serde(default)]
+    pub digest: String,
+    /// A batched render: the pack's lines left out because their cut failed a check.
+    #[serde(default)]
+    pub retakes: Vec<crate::gear::voice::packs::Retake>,
 }
 
 /// `gear_voice_preview`: a sound to play.
@@ -629,6 +639,8 @@ impl Core {
             notes: Vec::new(),
             estimate: None,
             warnings: Vec::new(),
+            digest: String::new(),
+            retakes: Vec::new(),
         };
         if paid && plan.to_render > 0 {
             report.notes.push(format!(
@@ -1232,26 +1244,42 @@ pub fn view_text(v: &VoiceView) -> String {
 /// A render report as text.
 pub fn report_text(r: &RenderReport) -> String {
     let p = &r.plan;
+    let digest = if r.digest.is_empty() {
+        String::new()
+    } else {
+        format!(" Confirm with digest {}.", r.digest)
+    };
     if r.needs_confirm {
         return format!(
-            "Not rendered: {} characters would go to {} ({}), which may charge for them. Ask the person, then run again with confirm.\nPlan: {} lines, {} from the cache, {} to render.",
+            "Not rendered: {} characters would go to {} ({}), which may charge for them. Ask the person, then run again with confirm.{digest}\nPlan: {} lines, {} from the cache, {} to render.",
             p.chars, r.provider, r.voice, p.lines, p.cached, p.to_render
         );
     }
     if r.dry_run {
         return format!(
-            "Dry run: would render {} of {} lines with {} ({}); {} come from the cache; {} characters{}.",
+            "Dry run: would render {} of {} lines with {} ({}); {} come from the cache; {} characters{}.{}",
             p.to_render,
             p.lines,
             r.provider,
             r.voice,
             p.cached,
             p.chars,
-            if r.paid { ", which may be charged" } else { "" }
+            if r.paid { ", which may be charged" } else { "" },
+            if r.paid { digest.as_str() } else { "" }
         );
     }
-    format!(
+    let mut s = format!(
         "Rendered {} of {} lines with {} ({}) into pack {}; {} came from the cache.",
         r.rendered, p.lines, r.provider, r.voice, r.pack, r.from_cache
-    )
+    );
+    if !r.retakes.is_empty() {
+        s.push_str(&format!(
+            "\nNeeds a re-take ({} lines, left out of the pack; render again with another seed):",
+            r.retakes.len()
+        ));
+        for t in &r.retakes {
+            s.push_str(&format!("\n  {} ({:?}): {}", t.path, t.text, t.reason));
+        }
+    }
+    s
 }
