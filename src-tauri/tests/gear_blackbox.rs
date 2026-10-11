@@ -503,15 +503,22 @@ fn usb_disk_mode_copies_the_files_and_falls_back_to_msp_when_the_fc_lacks_it() {
 }
 
 #[test]
-fn an_msc_pull_that_does_not_match_the_flash_is_not_stored_or_erased() {
+fn an_msc_pull_that_does_not_match_the_flash_is_read_over_msp_or_refused() {
     // The disk shows fewer bytes than the flash reports used.
     let whole = synth_image(&[("Whoop", 9_000)], NOTHING);
     let tmp = tempfile::tempdir().unwrap();
     let fc = fc_with(whole.clone()).with_msc();
     let part = whole[..whole.len() - 10].to_vec();
-    let b = msc_bench(&fc, &[("BTFL_001.BBL", part)], tmp.path());
+    let b = msc_bench(&fc, &[("BTFL_001.BBL", part.clone())], tmp.path());
     b.settings(r#"{"gearBlackboxMsc":true,"gearEraseBlackbox":true}"#);
-    let e = pull(&b).unwrap_err();
+    // Asked for by name: the pull fails, and nothing is stored or erased.
+    let e = b
+        .core
+        .gear_blackbox_pull(&BlackboxPullParams {
+            mode: Some(PullMode::Msc),
+            ..Default::default()
+        })
+        .unwrap_err();
     assert!(format!("{e:#}").contains("did not verify"), "{e:#}");
     assert_eq!(fc.dataflash_erases(), 0);
     assert!(b
@@ -519,6 +526,23 @@ fn an_msc_pull_that_does_not_match_the_flash_is_not_stored_or_erased() {
         .gear_blackbox(&BlackboxFilter::default())
         .unwrap()
         .is_empty());
+    // Through the setting (Auto): the pull reads the flash again over MSP and says why.
+    let tmp = tempfile::tempdir().unwrap();
+    let fc = fc_with(whole.clone()).with_msc();
+    let b = msc_bench(&fc, &[("BTFL_001.BBL", part)], tmp.path());
+    b.settings(r#"{"gearBlackboxMsc":true,"gearEraseBlackbox":true}"#);
+    let r = pull(&b).unwrap();
+    assert_eq!(r.method, Some(Method::Msp));
+    assert!(
+        r.notes.iter().any(|n| n.contains("read over MSP")),
+        "{:?}",
+        r.notes
+    );
+    assert!(fc.dataflash_reads() > 0);
+    let p = r.pull.unwrap();
+    assert_eq!(b.blobs().get(&p.blob).unwrap(), whole);
+    assert_eq!(p.method, Method::Msp);
+    assert_eq!(r.erase, EraseState::Done);
 }
 
 fn flights_bench(fc: &FakeFc) -> Bench {

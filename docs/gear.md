@@ -211,7 +211,9 @@ does not decode the flight data yet.
 first (not proven)** in Settings > Gear), a pull first tries the FC's USB mass
 storage mode: it enters the CLI, checks that `help` lists `msc`, sends `msc`, copies the `.bbl` files
 from the new disk in name order, unmounts it, and waits for the FC to come back. It falls back to
-MSP when the FC has no `msc`. This path is built and tested on a simulated FC only. **It needs a trial
+MSP when the FC has no `msc`, and when the disk's files do not verify as the flash (not the bytes
+used, or a log without a header): the answer says why. With `--mode msc` it fails instead. This
+path is built and tested on a simulated FC only. **It needs a trial
 on a real FC**: the disk's file layout, the speed, and whether the FC returns to serial after the
 eject are unknown. The estimate for the heat check stays the MSP one.
 

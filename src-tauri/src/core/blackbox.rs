@@ -355,33 +355,45 @@ impl Core {
                 "The FC did not come back after USB disk mode. Unplug USB, plug it in again and pull again.",
             )?;
         }
-        let image = match image {
-            Some(i) => i,
-            None => {
-                let progress = |done: u64| {
-                    self.job_progress(
-                        port,
-                        &BackupProgress {
-                            stage: "reading".into(),
-                            files_done: 0,
-                            files_total: 1,
-                            bytes_done: done,
-                            bytes_total: used,
-                            path: "blackbox flash".into(),
-                        },
-                    );
-                    !stop.load(Ordering::SeqCst)
-                };
-                let mut progress = progress;
-                bb::read_used(link.as_mut(), sum.used, t.msp, &mut progress)?
-            }
+        let read_msp = |link: &mut dyn crate::gear::serial::SerialLink| {
+            let mut progress = |done: u64| {
+                self.job_progress(
+                    port,
+                    &BackupProgress {
+                        stage: "reading".into(),
+                        files_done: 0,
+                        files_total: 1,
+                        bytes_done: done,
+                        bytes_total: used,
+                        path: "blackbox flash".into(),
+                    },
+                );
+                !stop.load(Ordering::SeqCst)
+            };
+            bb::read_used(link, sum.used, t.msp, &mut progress)
         };
+        let mut image = match image {
+            Some(i) => i,
+            None => read_msp(link.as_mut())?,
+        };
+        let mut checked = bb::check_image(&image, used);
+        // The USB disk's files are not proven to be the flash as it is: in Auto, a disk
+        // image that does not verify is read again over MSP.
+        if method == Method::Msc && !checked.problems.is_empty() && a.mode == PullMode::Auto {
+            res.notes.push(format!(
+                "The USB disk did not give the flash as it is ({}); read over MSP.",
+                checked.problems.join(" ")
+            ));
+            image = read_msp(link.as_mut())?;
+            method = Method::Msp;
+            checked = bb::check_image(&image, used);
+        }
         res.read_secs = started.elapsed().as_secs_f64();
         res.read_bytes = image.len() as u64;
         res.method = Some(method);
 
         // Verify, store, read back.
-        let ImageCheck { logs, problems } = bb::check_image(&image, used);
+        let ImageCheck { logs, problems } = checked;
         if !problems.is_empty() {
             bail!(
                 "The blackbox read did not verify, so nothing was stored or erased: {}",
