@@ -4,6 +4,7 @@ mcp.action quadcam_gear.backup_diff
 mcp.action quadcam_gear.backup_read
 mcp.action quadcam_gear.backups
 mcp.action quadcam_gear.blackbox
+mcp.action quadcam_gear.blackbox_summary
 mcp.action quadcam_gear.board_notes
 mcp.action quadcam_gear.card
 mcp.action quadcam_gear.card_checks

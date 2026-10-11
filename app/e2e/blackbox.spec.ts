@@ -30,7 +30,7 @@ test("Pull blackbox stores the flash and keeps it while the erase setting is off
   // The logs, and the guess label under them.
   const logs = fc.getByRole("table", { name: "Logs" });
   await expect(logs.getByRole("row")).toHaveCount(4);
-  await expect(fc.getByText(/^Guess: the FC has no clock/)).toBeVisible();
+  await expect(fc.getByText(/pair .* by order, newest with newest/)).toBeVisible();
   expect(await new AxeBuilder({ page }).analyze().then((r) => r.violations)).toEqual([]);
 });
 

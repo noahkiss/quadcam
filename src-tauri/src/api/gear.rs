@@ -12,7 +12,7 @@ pub use crate::core::{
 };
 pub use crate::core::{
     BlackboxEntry, BlackboxEraseParams, BlackboxErased, BlackboxExportParams, BlackboxExported,
-    BlackboxFilter, BlackboxPullParams, BlackboxPullResult,
+    BlackboxFilter, BlackboxFlash, BlackboxPullParams, BlackboxPullResult,
 };
 pub use crate::core::{
     BoardNotesParams, CardClean, CardCleanParams, CardParams, CardPreview, CardPreviewParams,
@@ -94,8 +94,6 @@ macro_rules! with_gear_rows {
             gear_device_save(params: DeviceSaveParams) -> Device = |c| c.gear_device_save(&params);
             /// Forgets a device. Its backups stay.
             gear_device_forget(params: IdParams) -> Device = |c| c.gear_device_forget(&params.id);
-            /// Reads an FC's identity over MSP (board, firmware, version, its device id). No
-            /// reboot. One cue at the end.
             /// Pulls an FC's blackbox flash (only the used bytes), verifies and stores it, and
             /// erases the flash when the setting or `erase` allows and the checks pass.
             gear_blackbox_pull(params: BlackboxPullParams) -> FcJob<BlackboxPullResult> = |c| c.gear_blackbox_pull(&params);
@@ -105,6 +103,10 @@ macro_rules! with_gear_rows {
             gear_blackbox_export(params: BlackboxExportParams) -> BlackboxExported = |c| c.gear_blackbox_export(&params);
             /// Erases an FC's blackbox flash. Needs `confirm` and a stored pull of exactly what the flash holds.
             gear_blackbox_erase(params: BlackboxEraseParams) -> FcJob<BlackboxErased> = |c| c.gear_blackbox_erase(&params);
+            /// An FC's blackbox flash now (size, used, ready) over MSP: no pull, no cue.
+            gear_blackbox_summary(params: FcPortParams) -> BlackboxFlash = |c| c.gear_blackbox_summary(&params);
+            /// Reads an FC's identity over MSP (board, firmware, version, its device id). No
+            /// reboot. One cue at the end.
             gear_fc_identify(params: FcPortParams) -> FcJob<FcInfo> = |c| c.gear_fc_identify(&params);
             /// Reads an FC through its CLI: read-only commands, a backup's set by default. The FC
             /// reboots when it ends. Writes nothing.

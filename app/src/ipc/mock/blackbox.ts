@@ -1,7 +1,7 @@
-// The mock core's blackbox pulls: `gear_blackbox_pull`, `gear_blackbox` and
-// `gear_blackbox_erase`, written by hand from `core/blackbox.rs`. One FC flash with a few
+// The mock core's blackbox pulls: `gear_blackbox_pull`, `gear_blackbox`, `gear_blackbox_summary`
+// and `gear_blackbox_erase`, written by hand from `core/blackbox.rs`. One FC flash with a few
 // logs; a pull stores it, and erases it only when the `gearEraseBlackbox` setting is on.
-import type { BlackboxEntry, BlackboxErased, BlackboxPullResult, Connected, FcJob, Pull } from "../types";
+import type { BlackboxEntry, BlackboxErased, BlackboxFlash, BlackboxPullResult, Connected, FcJob, Pull } from "../types";
 import { FC } from "./gear";
 
 const TOTAL = 16_777_216;
@@ -22,6 +22,15 @@ function fcOf(connected: Connected[]): Connected {
   const fc = connected.find((c) => c.kind === "fc" && c.link.kind === "serial");
   if (!fc) throw "No device: no FC found. Plug USB in before the battery.";
   return fc;
+}
+
+/** The flash now: size and used bytes, and whether the latest pull holds exactly that. */
+export function summary(b: MockBlackbox, connected: Connected[], port: string | null): BlackboxFlash {
+  const fc = port ? connected.find((c) => c.link.kind === "serial" && c.link.port === port) : fcOf(connected);
+  if (!fc || fc.link.kind !== "serial") throw `No device: no FC on ${port}.`;
+  const device = fc.id || FC.id;
+  const latest = [...b.pulls].reverse().find((e) => e.pull.device === device)?.pull;
+  return { port: fc.link.port, device, ready: true, supported: true, total: TOTAL, used: b.used, pulled: b.used > 0 && !!latest && !latest.erased && latest.used === b.used };
 }
 
 export function list(b: MockBlackbox, device: string | null): BlackboxEntry[] {

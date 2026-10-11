@@ -4,15 +4,19 @@
 import { useState } from "react";
 import { useStore } from "../../../store";
 import { api, errText } from "../../../ipc/api";
-import type { Edit, StagedChange } from "../../../ipc/types";
+import type { Edit } from "../../../ipc/types";
 import { Button } from "../../../components/Button";
 import { Dialog } from "../../../components/Dialog";
 import { SelectField, TextField } from "../../../components/Field";
-import { toast } from "../../../components/toastStore";
+import { EmptyState } from "../../../components/dash/EmptyState";
+import { SectionCard } from "../../../components/dash/SectionCard";
+import { Stat, StatRow } from "../../../components/dash/StatRow";
 import { fmtWhen } from "../../../lib/backups";
-import { STATUS_LABEL as STATUS, summary } from "../../../lib/bench";
+import { fmtAgo } from "../../../lib/format";
+import { summary } from "../../../lib/bench";
 import { CopyDialog } from "../Bench/CopyDialog";
 import type { DeviceRef } from "../slots";
+import { AwaitingTable, History, historyOf, StagedTable } from "./ChangeTable";
 import styles from "./Changes.module.css";
 
 export { summary };
@@ -20,109 +24,59 @@ export { summary };
 export function ChangesSegment({ d }: { d: DeviceRef }) {
   const id = d.device?.id || d.connected?.id || null;
   const changes = useStore((s) => s.changes);
+  const all = useStore((s) => s.allChanges);
   const open = useStore((s) => s.openApply);
-  const discard = useStore((s) => s.discardChange);
   const [editing, setEditing] = useState(false);
   const [copying, setCopying] = useState(false);
   const mine = changes.filter((c) => c.device === id);
+  const ours = all.filter((c) => c.device === id);
+  const awaiting = ours.filter((c) => c.status === "applied");
+  const history = historyOf(ours);
+  const ready = mine.filter((c) => c.status === "ready" || c.status === "try").length;
+  const verified = history.filter((c) => c.status === "verified").length;
+  const last = history.find((c) => c.status === "verified")?.history?.at(-1)?.at;
   const canStage = !!d.device;
   const fc = d.kind === "fc";
   return (
-    <div className={styles.segment}>
-      <div className={styles.bar}>
-        {fc && (
-          <Button size="sm" variant="primary" disabled={!canStage} onClick={() => setEditing(true)}>
-            Edit setting…
-          </Button>
-        )}
-        {fc && (
-          <Button size="sm" disabled={!canStage || !d.device?.last_backup} onClick={() => setCopying(true)}>
-            Copy settings…
-          </Button>
-        )}
-        <Button size="sm" disabled={!mine.some((c) => c.status === "ready" || c.status === "try")} onClick={() => id && open(id)}>
-          Review…
-        </Button>
-        {!canStage && <span className={styles.muted}>Save this device first.</span>}
-      </div>
-      {mine.length === 0 ? (
-        <p className={styles.muted}>No staged changes.</p>
-      ) : (
-        <ul className={styles.list} aria-label="Staged changes">
-          {mine.map((c) => (
-            <li key={c.id}>
-              <div className={styles.row}>
-                <span className={styles.title}>{c.title}</span>
-                <span className={styles.status} data-state={c.status}>
-                  {STATUS[c.status]}
-                </span>
-                <Button size="sm" variant="ghost" disabled={c.status === "draft" || c.status === "read_first"} onClick={() => open(c.device, c.id)}>
-                  Review…
-                </Button>
-                <Button size="sm" variant="danger-ghost" onClick={() => discard(c.id)}>
-                  Discard
-                </Button>
-              </div>
-              <code className={`${styles.code} mono selectable`}>{summary(c)}</code>
-              <span className={styles.muted}>{c.editor === "agent" ? "Staged by an agent" : "Staged by you"}</span>
-            </li>
-          ))}
-        </ul>
+    <>
+      <StatRow label="Changes summary">
+        <Stat label="Staged" value={mine.length} />
+        <Stat label="Ready to apply" value={ready} />
+        <Stat label="Verified" value={verified} />
+        <Stat label="Last applied" value={fmtAgo(last)} sub={last ? fmtWhen(last) : "Never"} />
+      </StatRow>
+      <SectionCard
+        title="Staged"
+        status={!canStage && <span className={styles.muted}>Save this device first.</span>}
+        actions={
+          <>
+            {fc && (
+              <Button size="sm" disabled={!canStage || !d.device?.last_backup} onClick={() => setCopying(true)}>
+                Copy settings…
+              </Button>
+            )}
+            {fc && (
+              <Button size="sm" disabled={!canStage} onClick={() => setEditing(true)}>
+                Edit setting…
+              </Button>
+            )}
+            <Button size="sm" variant="primary" disabled={!ready} onClick={() => id && open(id)}>
+              {ready > 1 ? `Review ${ready} changes…` : "Review…"}
+            </Button>
+          </>
+        }
+      >
+        {mine.length === 0 ? <EmptyState icon="sliders">No staged changes.</EmptyState> : <StagedTable rows={mine} label="Staged changes" present />}
+      </SectionCard>
+      {awaiting.length > 0 && (
+        <SectionCard title="Applied, waiting for Keep or Revert">
+          <AwaitingTable rows={awaiting} label="Applied changes waiting" />
+        </SectionCard>
       )}
-      <History device={id} />
+      <History rows={history} />
       {editing && id && <EditSetting device={id} onClose={() => setEditing(false)} />}
       {copying && id && <CopyDialog to={id} onClose={() => setCopying(false)} />}
-    </div>
-  );
-}
-
-/** Applied, failed and discarded changes of the device, newest first. */
-function History({ device }: { device: string | null }) {
-  const [rows, setRows] = useState<StagedChange[] | null>(null);
-  const changes = useStore((s) => s.changes);
-  const [shown, setShown] = useState(false);
-  const load = async () => {
-    if (!device) return;
-    try {
-      setRows((await api.gearChanges(device, true)).filter((c) => !["ready", "draft", "try", "read_first"].includes(c.status)).reverse());
-    } catch (e) {
-      toast(errText(e), true);
-    }
-  };
-  void changes;
-  return (
-    <section aria-label="History">
-      <Button
-        size="sm"
-        variant="ghost"
-        iconEnd={shown ? "chev-down" : "chev-right"}
-        onClick={() => {
-          setShown(!shown);
-          if (!shown) void load();
-        }}
-      >
-        History
-      </Button>
-      {shown &&
-        (rows?.length ? (
-          <ul className={styles.list} aria-label="Applied changes">
-            {rows.map((c) => (
-              <li key={c.id}>
-                <div className={styles.row}>
-                  <span className={styles.title}>{c.title}</span>
-                  <span className={styles.status} data-state={c.status}>
-                    {STATUS[c.status]}
-                  </span>
-                  <span className={styles.muted}>{fmtWhen(c.history?.at(-1)?.at)}</span>
-                </div>
-                <code className={`${styles.code} mono selectable`}>{summary(c)}</code>
-              </li>
-            ))}
-          </ul>
-        ) : (
-          <p className={styles.muted}>Nothing applied yet.</p>
-        ))}
-    </section>
+    </>
   );
 }
 

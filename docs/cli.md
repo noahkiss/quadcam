@@ -162,6 +162,7 @@ quadcam-cli --json gear fc notes [--board BOARD] [--version V]     # known issue
 quadcam-cli --json gear fc pause|resume [--port ...]                 # pause the running app's FC reads
 quadcam-cli --json gear fc usb                                   # USB timers
 quadcam-cli --json gear blackbox pull [--port P] [--keep] [--mode auto|msp|msc] [--force]
+quadcam-cli --json gear blackbox summary [--port P]                # the flash's size and used bytes; no pull
 quadcam-cli --json gear blackbox list [--device ID]
 quadcam-cli --json gear blackbox export PULL DIR [--split]
 quadcam-cli --json gear blackbox erase [--port P] --yes
@@ -249,7 +250,9 @@ value never shows in `diff all`.
 `gear_erase_blackbox` setting is on and the checks pass. `--keep` skips the erase for that run; no flag turns it on.
 `pull` needs no `--yes`, even when it erases; MCP `blackbox_pull` needs `confirm=true` (see MCP equivalents).
 `--mode auto` (the default) uses the FC's USB disk only when the `gear_blackbox_msc` setting is on and the FC has one, else MSP; `msp` and `msc` force one path. It refuses a pull that would outlast the USB heat timer (`--force` overrides that, never an erase that could not
-finish) and a port another program has open. `list` shows the stored pulls newest first, each log paired with a
+finish) and a port another program has open. `summary` reads the flash's size, used bytes and
+ready state over one MSP read, and says whether a stored pull holds exactly that; it pulls nothing
+and plays no cue. `list` shows the stored pulls newest first, each log paired with a
 radio-log flight by order (a labelled guess). `erase --yes` empties the flash when QuadCam holds a stored pull of
 exactly what it holds. See [Gear](gear.md#blackbox).
 

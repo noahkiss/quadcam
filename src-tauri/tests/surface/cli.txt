@@ -92,6 +92,7 @@ cli.command gear blackbox erase
 cli.command gear blackbox export
 cli.command gear blackbox list
 cli.command gear blackbox pull
+cli.command gear blackbox summary
 cli.command gear card
 cli.command gear card preview
 cli.command gear card-check
@@ -257,6 +258,7 @@ cli.flag gear blackbox pull --force
 cli.flag gear blackbox pull --keep
 cli.flag gear blackbox pull --mode VALUE
 cli.flag gear blackbox pull --port VALUE
+cli.flag gear blackbox summary --port VALUE
 cli.flag gear card --device VALUE
 cli.flag gear card --model VALUE
 cli.flag gear card --mount VALUE

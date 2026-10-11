@@ -38,7 +38,7 @@ pub enum GearCmd {
         #[command(subcommand)]
         cmd: fc::FcCmd,
     },
-    /// An FC's blackbox flash: `pull` (read, verify, store, maybe erase), `list`, `export`, `erase`.
+    /// An FC's blackbox flash: `pull` (read, verify, store, maybe erase), `summary`, `list`, `export`, `erase`.
     Blackbox {
         #[command(subcommand)]
         cmd: blackbox::BlackboxCmd,

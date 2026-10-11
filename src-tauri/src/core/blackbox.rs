@@ -135,6 +135,23 @@ pub struct BlackboxExported {
     pub bytes: u64,
 }
 
+/// `gear_blackbox_summary`'s answer: what the FC's flash holds now, read over MSP without a
+/// pull.
+#[derive(Debug, Clone, Serialize, Deserialize, Type)]
+pub struct BlackboxFlash {
+    pub port: String,
+    /// The FC's device id, when QuadCam knows it.
+    pub device: Option<String>,
+    /// The flash can be read and erased now (an erase in progress reads false).
+    pub ready: bool,
+    /// The board has a flash chip QuadCam can read.
+    pub supported: bool,
+    pub total: u64,
+    pub used: u64,
+    /// The device's latest stored pull holds exactly what the flash holds.
+    pub pulled: bool,
+}
+
 /// `gear_blackbox_erase`'s answer.
 #[derive(Debug, Clone, Serialize, Deserialize, Type)]
 pub struct BlackboxErased {
@@ -567,6 +584,48 @@ impl Core {
         let released = (self.gear.unmount)(&vol.info.parent_whole_disk).is_ok();
         let back = released && wait_for_port(ports, port, t).map(drop).is_ok();
         Ok(Some(MscRead { image, back }))
+    }
+
+    /// The FC's flash summary (size, used, ready) over one MSP exchange: no pull, no CLI, no
+    /// cue. It holds the port while it reads and refuses a port a job or another program holds.
+    pub fn gear_blackbox_summary(&self, p: &super::FcPortParams) -> Result<BlackboxFlash> {
+        let c = self.gear_fc_pick(p.port.as_deref())?;
+        let port = link_handle(&c.link);
+        if let Some((_, name)) = (self.gear.holders)(&port).into_iter().next() {
+            return Err(Refusal::new(
+                RefusalCode::PortBusy,
+                format!("{port} is open in {name}. Close it there; QuadCam does not share a port."),
+            )
+            .into());
+        }
+        if self.held_by_job(&port) {
+            bail!("The FC is busy with another job; try again when it ends.");
+        }
+        let sum = {
+            let _hold = self.gear_hold(&port);
+            let mut link = self.gear.ports.open(&port, BAUD)?;
+            bb::summary(link.as_mut(), self.fc_timing().msp).context(
+                "The FC did not answer the blackbox flash summary: it may log to an SD card, which QuadCam does not read.",
+            )?
+        };
+        // Detection alone knows no FC id; the last job's identify does.
+        let device =
+            c.id.clone()
+                .or_else(|| self.gear_fc_seen(&port).and_then(|i| i.id));
+        let pulled = sum.used > 0
+            && device
+                .as_deref()
+                .and_then(|d| self.pulls().latest(d))
+                .is_some_and(|l| !l.erased && l.used == sum.used as u64);
+        Ok(BlackboxFlash {
+            port,
+            device,
+            ready: sum.ready,
+            supported: sum.supported,
+            total: sum.total as u64,
+            used: sum.used as u64,
+            pulled,
+        })
     }
 
     /// Pulls with their guessed flights, newest first.

@@ -12,6 +12,7 @@ export type {
   Automation,
   BlackboxEntry,
   BlackboxErased,
+  BlackboxFlash,
   BlackboxPullResult,
   EraseState,
   FcJob,
