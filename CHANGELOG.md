@@ -5,6 +5,8 @@ User-facing changes in each release, newest first. Release notes on
 
 ## Unreleased
 
+- **CLI help:** `gear apply --help` names every device a staged change applies to (an FC, a radio card, ExpressLRS options); `gear changes --status` lists every status (`try`, `read_first` and `reverted` too); `gear firmware --help` names the Betaflight FC flash beside the EdgeTX one.
+
 ## 0.13.1 (2026-10-11)
 
 - **Development:** the integration tests build as one test binary per crate (`src-tauri/tests/it/`), so a test build links the app 10 times instead of 57. No change to the app.
