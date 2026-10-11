@@ -1104,3 +1104,28 @@ fn a_write_that_relists_another_option_is_followed_by_a_fresh_read() {
     // Hybrid was index 0 at the read and is index 1 after the packet-rate write.
     assert_eq!(device.writes(), [(1, vec![2]), (3, vec![1])]);
 }
+
+/// A device that takes a write and does not keep it: the read-back finds the old value, the
+/// apply is Failed with the option named, and the change is not Verified.
+#[test]
+fn a_write_the_device_does_not_keep_fails_verify() {
+    let (b, tx, _) = bench(true, true);
+    let device = FakeElrs::tx("RM Radio", "4.1.0").forget(1);
+    tx.replace_device(device.clone());
+    let id = read(&b, &b.radio).unwrap().device;
+    let (c, plan) = stage_and_plan(&b, &id, &[("packet_rate", "250hz")]);
+    tx.restart();
+    let report = apply(&b, &c, &plan.digest).unwrap();
+    assert_eq!(report.status, ChangeStatus::Failed, "{}", report.message);
+    assert!(!report.saved);
+    assert_eq!(device.writes().len(), 1, "the write went out");
+    let verify = report.steps.iter().find(|s| s.name == "Verify").unwrap();
+    assert_eq!(verify.state, quadcam_lib::gear::apply::StepState::Failed);
+    let detail = verify.detail.clone().unwrap_or_default();
+    assert!(detail.starts_with("Packet rate: wanted 250Hz"), "{detail}");
+    assert!(
+        report.message.contains("did not verify"),
+        "{}",
+        report.message
+    );
+}

@@ -131,6 +131,8 @@ struct DeviceState {
     bootloader_text: String,
     /// A write to the first id gives the choice parameter of the second id this list.
     relists: Vec<(u8, u8, Vec<String>)>,
+    /// Writes to these ids are received and not kept.
+    forget: Vec<u8>,
     parser: FrameParser,
 }
 
@@ -223,6 +225,7 @@ impl FakeElrs {
                 bootloader_requests: 0,
                 bootloader_text: name.to_ascii_uppercase(),
                 relists: Vec::new(),
+                forget: Vec::new(),
                 parser: FrameParser::new(),
             })),
         }
@@ -288,6 +291,12 @@ impl FakeElrs {
             id,
             options.iter().map(|o| o.to_string()).collect(),
         ));
+        self
+    }
+
+    /// A write to parameter `id` is received and not kept, as a device that drops a value.
+    pub fn forget(self, id: u8) -> FakeElrs {
+        self.st.lock().unwrap().forget.push(id);
         self
     }
 
@@ -369,7 +378,8 @@ impl FakeElrs {
                 let id = e.body[0];
                 let val = e.body[1..].to_vec();
                 s.writes.push((id, val.clone()));
-                if let Some(p) = s.params.iter_mut().find(|p| p.id == id) {
+                let kept = !s.forget.contains(&id);
+                if let Some(p) = s.params.iter_mut().find(|p| kept && p.id == id) {
                     match &mut p.value {
                         Value::Select { index, options } if (val[0] as usize) < options.len() => {
                             *index = val[0]
