@@ -5,6 +5,10 @@ User-facing changes in each release, newest first. Release notes on
 
 ## Unreleased
 
+## 0.13.1 (2026-10-11)
+
+- **Development:** the integration tests build as one test binary per crate (`src-tauri/tests/it/`), so a test build links the app 10 times instead of 57. No change to the app.
+
 ## 0.13.0 (2026-10-11)
 
 - **In-app updates.** QuadCam checks for a newer release when it opens and once a day, and **QuadCam > Check for Updates…** checks at any time. A banner offers **Restart to update** (download with progress, signature check, install, restart) or **Later**, with a link to the release notes. It never restarts during an import, a card or device write, or a flash. **Settings > Advanced > Check for updates automatically** (`update_check`) turns the automatic check off. A failed check never opens a dialog.
