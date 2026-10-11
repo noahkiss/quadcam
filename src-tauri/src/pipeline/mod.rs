@@ -1112,15 +1112,8 @@ pub fn export_cuts(
 }
 
 #[cfg(test)]
-pub(crate) mod tests {
+mod tests {
     use super::*;
-
-    /// Fixed bytes for the identity test vectors.
-    pub(crate) fn pattern(len: usize) -> Vec<u8> {
-        (0..len)
-            .map(|i| (i.wrapping_mul(31) ^ (i >> 7)) as u8)
-            .collect()
-    }
 
     /// A local wall-clock time on 2026-09-28 as the UTC instant a clip clock holds.
     fn local(hms: &str) -> DateTime<Utc> {
@@ -1273,19 +1266,6 @@ pub(crate) mod tests {
         let p = run(Some(reset));
         assert_eq!(p.suggestions[0].source, DateSource::Log);
         assert_eq!(p.warnings.len(), 1);
-    }
-
-    /// A clip's fingerprint is persisted (`app.quadcam.source`) and compared on every card
-    /// insert, so the same bytes must always give the same id.
-    #[test]
-    fn fingerprint_test_vector() {
-        let d = tempfile::tempdir().unwrap();
-        let small = d.path().join("small.avi");
-        std::fs::write(&small, pattern(1000)).unwrap();
-        let big = d.path().join("big.avi");
-        std::fs::write(&big, pattern(3 * (1 << 20) + 123)).unwrap();
-        assert_eq!(fingerprint(&small).unwrap(), "x1c63a88ed3c3c2d9");
-        assert_eq!(fingerprint(&big).unwrap(), "x472bd6ccd6749ca4");
     }
 
     /// An EdgeTX CSV: rows every 0.5 s over each `(day, from, to)` span, in the order given

@@ -151,7 +151,13 @@ pub mod legacy {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::pipeline::tests::pattern;
+
+    /// Fixed bytes for the identity test vectors.
+    fn pattern(len: usize) -> Vec<u8> {
+        (0..len)
+            .map(|i| (i.wrapping_mul(31) ^ (i >> 7)) as u8)
+            .collect()
+    }
 
     /// The ids 0.4 wrote for these bytes (`DefaultHasher`, recorded before it was
     /// replaced). The legacy functions must keep giving them.
@@ -170,7 +176,10 @@ mod tests {
         assert_eq!(legacy::head_id(&head).unwrap(), "hec51a6f45c0fb3e4");
     }
 
-    /// The current ids for the same bytes. A change here breaks every library.
+    /// The current ids for the same bytes. A clip's fingerprint is persisted
+    /// (`app.quadcam.source`) and compared on every card insert, and a head id is persisted in
+    /// the index, so a change here breaks every library. `pipeline::fingerprint` and
+    /// `library::head_id` only call these.
     #[test]
     fn current_ids_test_vector() {
         let d = tempfile::tempdir().unwrap();

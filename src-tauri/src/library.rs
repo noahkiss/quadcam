@@ -1000,8 +1000,6 @@ mod tests {
         NaiveDate::parse_from_str(s, "%Y-%m-%d").unwrap()
     }
 
-    /// An adopted file's id is persisted in the index, so the same bytes must always give
-    /// the same id.
     #[test]
     fn files_kept_with_an_original() {
         for ok in [".srt", ".SRT", ".part2.avi", ".part12.AVI"] {
@@ -1020,14 +1018,6 @@ mod tests {
         ] {
             assert!(!sidecar_suffix(no), "{no}");
         }
-    }
-
-    #[test]
-    fn head_id_test_vector() {
-        let d = tempfile::tempdir().unwrap();
-        let big = d.path().join("big.mp4");
-        std::fs::write(&big, crate::pipeline::tests::pattern(2 << 20)).unwrap();
-        assert_eq!(head_id(&big).unwrap(), "hxd516db1b487859c5");
     }
 
     #[test]
