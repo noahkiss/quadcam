@@ -98,6 +98,7 @@ mcp.action quadcam_gear_edit.voice_key_delete
 mcp.action quadcam_gear_edit.voice_key_set
 mcp.action quadcam_gear_edit.voice_render
 mcp.action quadcam_gear_edit.voice_sample
+mcp.action quadcam_library_files.analyze_video
 mcp.action quadcam_library_files.apply_name_format
 mcp.action quadcam_library_files.cuts
 mcp.action quadcam_library_files.export_cuts
@@ -302,6 +303,7 @@ mcp.param quadcam_library_edit.profile string
 mcp.param quadcam_library_edit.rating integer
 mcp.param quadcam_library_edit.time string
 mcp.param quadcam_library_files.action string
+mcp.param quadcam_library_files.again boolean
 mcp.param quadcam_library_files.album string
 mcp.param quadcam_library_files.apply boolean
 mcp.param quadcam_library_files.cuts array<object>

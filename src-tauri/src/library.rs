@@ -52,6 +52,9 @@ pub const KEY_TIME: &str = "app.quadcam.time";
 /// The later files of a recording the DVR split, joined into this clip: a JSON list of
 /// `{"source": fingerprint, "dvr": file name}`. The first file is `KEY_SOURCE`/`KEY_DVR`.
 pub const KEY_PARTS: &str = "app.quadcam.parts";
+/// What macOS video analysis found: highlights and the key frame (`highlights::value`).
+/// Present once the clip was analysed, even when it found nothing.
+pub const KEY_VIDEO: &str = "app.quadcam.video";
 const QT: &str = "com.apple.quicktime.";
 
 // ---------- layout ----------
@@ -192,9 +195,12 @@ pub struct LibClip {
     pub keywords: Vec<String>,
     #[serde(default)]
     pub author: Option<String>,
-    /// Radio-log moments, in clip seconds.
+    /// Radio-log moments, in clip seconds; when there are none, the highlights of `video`.
     #[serde(default)]
     pub moments: Vec<Moment>,
+    /// What macOS video analysis found; None until the clip was analysed.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub video: Option<crate::highlights::VideoScan>,
     /// Ranges with a picture; empty when the clip has no dead air (or was never scanned).
     #[serde(default)]
     pub keep: Vec<Span>,
@@ -397,10 +403,12 @@ struct MomentLite {
     c: f64,
 }
 
+/// The `app.quadcam.moments` value: radio-log moments only. Highlights go in `KEY_VIDEO`, so
+/// an older QuadCam, which knows no `highlight` kind, still reads this item.
 pub fn moments_value(moments: &[Moment]) -> String {
     let lite: Vec<MomentLite> = moments
         .iter()
-        .filter(|m| m.kind != MomentKind::DeadAir)
+        .filter(|m| m.kind != MomentKind::DeadAir && m.source == Source::RadioLog)
         .map(|m| MomentLite {
             k: m.kind,
             s: (m.start * 10.0).round() / 10.0,
@@ -611,6 +619,7 @@ pub fn read_file(root: &Path, rel: &Path) -> Result<Found> {
         Some(s) => (s.clone(), Vec::new()),
         None => head()?,
     };
+    let video = get(KEY_VIDEO).and_then(|v| crate::highlights::parse(&v));
     Ok(Found::Clip(Box::new(LibClip {
         id,
         path: rel.to_path_buf(),
@@ -639,9 +648,13 @@ pub fn read_file(root: &Path, rel: &Path) -> Result<Found> {
             })
             .unwrap_or_default(),
         author: get(&format!("{QT}author")).filter(|a| !a.is_empty()),
-        moments: get(KEY_MOMENTS)
-            .map(|m| parse_moments(&m))
-            .unwrap_or_default(),
+        moments: crate::highlights::merged(
+            &get(KEY_MOMENTS)
+                .map(|m| parse_moments(&m))
+                .unwrap_or_default(),
+            video.as_ref(),
+        ),
+        video,
         keep: get(KEY_KEEP).map(|k| parse_spans(&k)).unwrap_or_default(),
         stats: get(KEY_STATS).and_then(|s| serde_json::from_str(&s).ok()),
         cuts: Vec::new(),
@@ -803,6 +816,7 @@ pub fn import_items(
     place: Option<&str>,
     profile: Option<&str>,
     moments: &[Moment],
+    video: Option<&crate::highlights::VideoScan>,
     keep: &[Span],
     stats: Option<&FlightStats>,
 ) -> Vec<Item> {
@@ -813,6 +827,10 @@ pub fn import_items(
         (KEY_PLACE.to_string(), place.unwrap_or("").to_string()),
         (KEY_PROFILE.to_string(), profile.unwrap_or("").to_string()),
         (KEY_MOMENTS.to_string(), moments_value(moments)),
+        (
+            KEY_VIDEO.to_string(),
+            video.map(crate::highlights::value).unwrap_or_default(),
+        ),
         (KEY_KEEP.to_string(), spans_value(keep)),
         (
             KEY_STATS.to_string(),
@@ -1148,6 +1166,7 @@ mod tests {
             keywords: vec![],
             author: None,
             moments: vec![],
+            video: None,
             keep: vec![],
             stats: None,
             cuts: vec![],

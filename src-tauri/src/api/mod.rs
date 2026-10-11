@@ -27,10 +27,11 @@ pub use setup::*;
 use crate::core::{
     CardStatus, Core, FormatPlan, FormatRequest, ImportOptions, ImportOutcome, LibMatchParams,
     LibMatchReport, LibraryView, PlaceRemoved, RebuildReport, RenameReport, SettingsView, Status,
-    TrashReport, VerifyReport,
+    TrashReport, VerifyReport, VideoParams, VideoReport,
 };
 use crate::disk::Volume;
 use crate::geocode::GeoResult;
+use crate::intel::Feature;
 use crate::library::{Filter, LibClip, LibCut};
 use crate::metadata::{Place, Profile};
 use crate::modules::ModuleStatus;
@@ -205,6 +206,10 @@ with_gear_rows! {
     library_match_logs(params: LibMatchParams) -> LibMatchReport = |c| c.library_match_logs(&params);
     /// Finds dead air again in a clip.
     library_rescan(params: ClipIdParams) -> LibClip = |c| c.library_rescan(&params.id);
+    /// Highlights and the key frame of library clips, with macOS video analysis.
+    library_analyze_video(params: VideoParams) -> VideoReport = |c| c.library_analyze_video(&params);
+    /// Video analysis on this Mac: available, or why not.
+    video_feature() -> Feature = |c| Ok(c.video_feature());
     /// A file the web view can play.
     library_preview(params: ClipIdParams) -> PathBuf = |c| c.library_preview(&params.id);
     /// Makes missing hover-scrub strips (for every clip when `ids` is empty).

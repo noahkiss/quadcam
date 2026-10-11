@@ -238,6 +238,7 @@ pub fn resolve(
     let kinds: Vec<&str> = moments
         .iter()
         .filter(|m| m.kind != MomentKind::DeadAir && m.score >= 0.5)
+        .filter(|m| m.source == crate::moments::Source::RadioLog)
         .filter(|m| m.end > 0.0 && m.start < duration)
         .map(|m| m.kind.label())
         .collect();

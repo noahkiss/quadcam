@@ -102,6 +102,8 @@ pub enum Task {
     Cuts,
     Thumbnails,
     Moments,
+    /// Video analysis: highlights and key frames.
+    Video,
 }
 
 /// A library job's progress: `done` of `total`.

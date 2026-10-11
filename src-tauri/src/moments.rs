@@ -4,6 +4,8 @@
 //! - `RadioLog`: EdgeTX stick channels from the log rows a clip claimed (see `logs`).
 //! - `VideoSignal`: the clip's own frames, sampled at low rate and resolution, for dead air
 //!   (no-signal blue screen, static, test pattern, black).
+//! - `VideoAnalysis`: highlights from macOS video analysis (`crate::highlights`), for clips
+//!   with no radio-log moments.
 //! - A Betaflight blackbox source (gyro rates, far better for flips) can be added as another
 //!   `Source` variant and `MomentSource` implementation. It is not implemented.
 //!
@@ -111,6 +113,8 @@ pub enum MomentKind {
     Crash,
     /// No usable picture: blue screen, static, test pattern, black.
     DeadAir,
+    /// A stretch macOS video analysis rates as interesting (`crate::highlights`).
+    Highlight,
 }
 
 impl MomentKind {
@@ -122,6 +126,7 @@ impl MomentKind {
             MomentKind::Dive => "dive",
             MomentKind::Crash => "crash?",
             MomentKind::DeadAir => "dead air",
+            MomentKind::Highlight => "highlight",
         }
     }
 }
@@ -131,7 +136,10 @@ impl MomentKind {
 #[serde(rename_all = "snake_case")]
 pub enum Source {
     RadioLog,
+    /// The clip's own frames (dead air).
     Video,
+    /// macOS video analysis (`crate::highlights`).
+    VideoAnalysis,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, specta::Type)]

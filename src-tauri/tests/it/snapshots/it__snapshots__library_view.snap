@@ -7,6 +7,7 @@ expression: library
     {
       "aircraft": null,
       "author": null,
+      "cover": null,
       "cut_of": null,
       "cuts": [],
       "date": "$TODAY",
@@ -43,6 +44,7 @@ expression: library
     {
       "aircraft": null,
       "author": null,
+      "cover": null,
       "cut_of": null,
       "cuts": [
         {

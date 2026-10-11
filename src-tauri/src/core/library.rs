@@ -22,6 +22,8 @@ pub struct LibItem {
     pub strip: Option<PathBuf>,
     /// One frame, when no strip could be made.
     pub poster: Option<PathBuf>,
+    /// The key frame video analysis picked: the clip's picture at rest, over the strip.
+    pub cover: Option<PathBuf>,
     /// Neither a strip nor a poster could be made.
     pub no_picture: bool,
     pub last_import: bool,
@@ -214,6 +216,7 @@ impl Core {
                 (self.strip_path(&c.id), self.strip_path(&now.id)),
                 (self.poster_path(&c.id), self.poster_path(&now.id)),
                 (self.no_picture_path(&c.id), self.no_picture_path(&now.id)),
+                (self.cover_path(&c.id), self.cover_path(&now.id)),
             ] {
                 if old.is_file() && !new.exists() {
                     let _ = std::fs::rename(&old, &new);
@@ -255,7 +258,11 @@ impl Core {
                 .map(|c| {
                     let strip = self.strip_path(&c.id);
                     let poster = self.poster_path(&c.id);
+                    let cover = self.cover_path(&c.id);
                     LibItem {
+                        cover: (c.video.as_ref().is_some_and(|v| v.key_frame.is_some())
+                            && cover.is_file())
+                        .then_some(cover),
                         name: c.display_name(),
                         file: root.join(&c.path),
                         strip: strip.is_file().then_some(strip),

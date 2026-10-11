@@ -48,6 +48,7 @@ cli.arg gear voice check <PACK>
 cli.arg gear voice delete <PACK>
 cli.arg gear voice import-takes <FOLDER>
 cli.arg gear voice install <PACK>
+cli.arg library analyze-video [IDS]...
 cli.arg library apply-name-format [IDS]...
 cli.arg library cut <ID>
 cli.arg library cut [RANGES]...
@@ -182,6 +183,7 @@ cli.command gear voice sets
 cli.command gear voice voices
 cli.command import
 cli.command library
+cli.command library analyze-video
 cli.command library apply-name-format
 cli.command library cut
 cli.command library edit
@@ -546,6 +548,7 @@ cli.flag import --separate VALUE
 cli.flag import --skip VALUE
 cli.flag import --time VALUE
 cli.flag import --unskip VALUE
+cli.flag library analyze-video --again
 cli.flag library cut --by-flight
 cli.flag library cut --clear
 cli.flag library cut --export

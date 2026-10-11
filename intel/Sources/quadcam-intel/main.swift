@@ -7,6 +7,7 @@ let usage = """
     quadcam-intel caps [--locale en-US]
     quadcam-intel asr FILE... [--locale en-US]
     quadcam-intel install [--locale en-US]
+    quadcam-intel video FILE [--highlights] [--keyframe]
     """
 
 var args = Array(CommandLine.arguments.dropFirst())
@@ -27,6 +28,15 @@ case "asr":
     await asr(files: rest, locale: locale)
 case "install":
     await install(locale: locale)
+case "video":
+    var flags = Set(rest.filter { $0.hasPrefix("--") })
+    let files = rest.filter { !$0.hasPrefix("--") }
+    guard files.count == 1 else { fail("usage", "Name one video file.\n\(usage)", .usage) }
+    let highlights = flags.remove("--highlights") != nil
+    let keyframe = flags.remove("--keyframe") != nil
+    if let bad = flags.first { fail("usage", "Unknown option \(bad).\n\(usage)", .usage) }
+    // Neither flag asks for both.
+    await video(file: files[0], highlights: highlights || !keyframe, keyframe: keyframe || !highlights)
 case "--version", "version":
     print("quadcam-intel \(protocolVersion)")
 default:

@@ -45,5 +45,6 @@ mod snapshots;
 mod surface;
 mod switchmap;
 mod upgrade;
+mod video;
 mod voice;
 mod voice_studio;

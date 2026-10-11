@@ -13,7 +13,7 @@ pub(super) fn lib_view(c: &Value) -> Value {
         "time": c["time"], "duration_s": c["duration"], "rating": c["rating"],
         "flag": c["flag"], "place": c["place"], "location": c["location"], "aircraft": c["aircraft"],
         "note": c["note"], "keywords": c["keywords"], "author": c["author"],
-        "moments": c["moments"].as_array().map(|m| m.iter().map(|x| json!({"kind": x["kind"], "start": x["start"], "score": x["score"]})).collect::<Vec<_>>()),
+        "moments": c["moments"].as_array().map(|m| m.iter().map(|x| json!({"kind": x["kind"], "start": x["start"], "score": x["score"], "source": x["source"]})).collect::<Vec<_>>()),
         "keep": c["keep"], "cuts": c["cuts"], "unsaved_cuts": c["pending_cuts"],
         "in_photos": c["in_photos"], "last_import": c["last_import"], "dvr": c["dvr"],
     })
@@ -43,6 +43,42 @@ pub(super) fn lib_line(c: &Value) -> String {
             .map(|m| format!(" {} moments", m.len()))
             .unwrap_or_default()
     )
+}
+
+/// `library_analyze_video`'s report: one line per clip, or why nothing ran.
+pub(super) fn video_text(r: &Value) -> String {
+    let mut lines: Vec<String> = Vec::new();
+    if let Some(why) = r["unavailable"].as_str() {
+        lines.push(format!("Video analysis is unavailable: {why}"));
+    }
+    let clips = r["clips"].as_array().cloned().unwrap_or_default();
+    if clips.is_empty() && lines.is_empty() {
+        lines.push(
+            "Nothing to analyse: every clip was analysed already (again=true analyses them again)."
+                .into(),
+        );
+    }
+    for c in &clips {
+        lines.push(match c["error"].as_str() {
+            Some(e) => format!(
+                "{} {}: failed: {e}",
+                c["id"].as_str().unwrap_or(""),
+                c["path"].as_str().unwrap_or("")
+            ),
+            None => format!(
+                "{} {}: {} highlights, key frame {}{}",
+                c["id"].as_str().unwrap_or(""),
+                c["path"].as_str().unwrap_or(""),
+                c["highlights"],
+                c["key_frame"]
+                    .as_f64()
+                    .map(|k| format!("{k:.1} s"))
+                    .unwrap_or_else(|| "none".into()),
+                if c["cached"] == true { " (cached)" } else { "" }
+            ),
+        });
+    }
+    lines.join("\n")
 }
 
 pub(super) fn places_text(places: &Value) -> String {

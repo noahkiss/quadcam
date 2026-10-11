@@ -252,9 +252,9 @@ pub struct LibraryEditArgs {
 #[derive(Debug, Clone, Default, Deserialize, JsonSchema)]
 #[schemars(deny_unknown_fields)]
 pub struct LibraryFilesArgs {
-    #[schemars(required, extend("enum" = ["cuts", "split_by_flight", "export_cuts", "trash", "photos", "rebuild", "apply_name_format", "match_logs"]))]
+    #[schemars(required, extend("enum" = ["cuts", "split_by_flight", "export_cuts", "trash", "photos", "rebuild", "apply_name_format", "match_logs", "analyze_video"]))]
     pub action: Option<String>,
-    /// Library clip ids from quadcam_library. cuts, split_by_flight and export_cuts take exactly one; rebuild takes none; apply_name_format takes some or none (every clip).
+    /// Library clip ids from quadcam_library. cuts, split_by_flight and export_cuts take exactly one; rebuild takes none; apply_name_format, match_logs and analyze_video take some or none (every clip).
     #[schemars(length(max = 500))]
     pub ids: Option<Vec<String>>,
     /// For cuts: ranges in clip seconds, each at least 0.5 s.
@@ -273,6 +273,8 @@ pub struct LibraryFilesArgs {
     pub day: Option<String>,
     /// For match_logs: write flight numbers and moments into "matched" clips (and "likely" ones named in ids). Omit to only report.
     pub apply: Option<bool>,
+    /// For analyze_video: analyse clips again, even those analysed already. Omit to skip them.
+    pub again: Option<bool>,
 }
 
 // ----- setup -----

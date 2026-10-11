@@ -326,6 +326,23 @@ impl Core {
                 false,
             ))
         })?;
+        // Key-frame pictures for clips video analysis already found a key frame in (an
+        // import writes it when the session's analysis finished first).
+        let covers: Vec<(PathBuf, LibClip)> = self.with_index(|root, ix| {
+            Ok((
+                ix.clips
+                    .iter()
+                    .filter(|c| ids.as_ref().is_none_or(|ids| ids.contains(&c.id)))
+                    .filter(|c| c.video.as_ref().is_some_and(|v| v.key_frame.is_some()))
+                    .filter(|c| !self.cover_path(&c.id).is_file())
+                    .map(|c| (root.to_path_buf(), c.clone()))
+                    .collect(),
+                false,
+            ))
+        })?;
+        for (root, c) in &covers {
+            self.make_cover(&tools, root, c, false);
+        }
         let total = todo.len();
         let mut made = 0;
         for (i, (root, c)) in todo.iter().enumerate() {
@@ -351,6 +368,9 @@ impl Core {
                     strip.unwrap_err()
                 );
             }
+        }
+        if total == 0 && !covers.is_empty() {
+            self.hooks.library_changed();
         }
         if total > 0 {
             self.hooks.event(Event::LibraryTask(LibraryTask {
