@@ -678,15 +678,14 @@ fn a_sync_backs_up_writes_reads_back_and_leaves_the_rest_alone() {
             })
             .unwrap();
         assert_eq!(content.backup.files.len(), 1);
-        let one = c
-            .gear_backup_read(&BackupReadParams {
-                id: list[0].id.clone(),
-                path: Some(content.backup.files[0].path.clone()),
-            })
+        // The raw blob, so the binary Uncrashed save is compared too.
+        let blobs = quadcam_lib::gear::backup::Snapshots::new(c.gear_store()).blobs();
+        let held = blobs
+            .get(&quadcam_lib::gear::backup::blob_of(
+                &content.backup.files[0],
+            ))
             .unwrap();
-        if let Some(t) = one.text {
-            assert_eq!(t.as_bytes(), bytes.as_slice());
-        }
+        assert_eq!(&held, bytes, "{sim}: the backup holds the old bytes");
     }
 
     // Planning again: the sims hold these rates, so there is nothing to write.

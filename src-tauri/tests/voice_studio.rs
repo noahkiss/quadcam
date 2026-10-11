@@ -378,9 +378,34 @@ fn batches_stay_below_the_models_request_limit() {
         short.batches,
         long.batches
     );
-    // No batch is longer than nine tenths of the model's limit.
-    assert!(short.chars / short.batches as u64 <= 4500);
-    assert!(long.chars / long.batches as u64 <= 36000);
+    // No batch is longer than nine tenths of the model's limit: the planner the estimate
+    // uses, on the same lines and carrier, batch by batch.
+    use quadcam_lib::gear::voice::{batch, rates, sets};
+    let bs = batch::BatchSettings {
+        carrier: format!(
+            "{} The word is {{line}}.",
+            "A long run of words that carries on.".repeat(3)
+        ),
+        max_lines: 100,
+        ..Default::default()
+    };
+    let items: Vec<batch::Item> = sets::lines_of("edgetx")
+        .unwrap()
+        .into_iter()
+        .map(|l| batch::Item {
+            spoken: l.line.text,
+            tone: l.tone,
+        })
+        .collect();
+    for (model, limit) in [("eleven_v3", 4500), ("eleven_flash_v2_5", 36000)] {
+        assert_eq!(rates::batch_limit(model, 5000), limit, "{model}");
+        let longest = batch::plan_within(&items, &bs, limit)
+            .iter()
+            .map(|b| b.text.chars().count())
+            .max()
+            .unwrap();
+        assert!(longest <= limit, "{model}: a batch of {longest} characters");
+    }
 }
 
 #[test]

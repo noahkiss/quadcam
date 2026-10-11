@@ -490,7 +490,8 @@ fn checklist_name_width_and_on_off() {
             ".metadata_never_index"
         ]
     );
-    let after = String::from_utf8(plan.files[1].after.clone().unwrap()).unwrap();
+    let on = plan.files[1].after.clone().unwrap();
+    let after = String::from_utf8(on.clone()).unwrap();
     assert!(after.contains("displayChecklist: 1\r\n"));
     assert!(after.contains("checklistInteractive: 1\r\n"));
     assert!(
@@ -508,6 +509,28 @@ fn checklist_name_width_and_on_off() {
         )
         .unwrap();
     assert!(!plan.ready());
+    // Off, on a card where it is on: the model stops showing it.
+    std::fs::write(dir.path().join("MODELS/model01.yml"), &on).unwrap();
+    let c = Card::open(dir.path()).unwrap();
+    let plan = c
+        .plan(
+            &[Edit::Model {
+                file: "model01.yml".into(),
+                name: None,
+                ops: vec![ModelOp::SetChecklist { enabled: false }],
+            }],
+            None,
+        )
+        .unwrap();
+    assert!(plan.ready(), "{:?}", plan.checks);
+    let yml = plan
+        .files
+        .iter()
+        .find(|f| f.path == "MODELS/model01.yml")
+        .unwrap();
+    let after = String::from_utf8(yml.after.clone().unwrap()).unwrap();
+    assert!(after.contains("displayChecklist: 0\r\n"), "{after}");
+    assert!(after.contains("checklistInteractive: 0\r\n"), "{after}");
 }
 
 #[test]

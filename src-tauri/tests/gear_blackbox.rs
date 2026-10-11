@@ -323,13 +323,11 @@ fn a_battery_with_no_usb_timer_is_a_warning_on_a_pull() {
 }
 
 #[test]
-fn a_flash_that_grew_after_the_read_is_not_erased() {
-    // A second reader appends while we work: simulate by growing the flash before the erase
-    // check runs, through a pull whose image is already stored.
+fn a_manual_erase_refuses_a_flash_that_grew_after_the_last_pull() {
+    // A `keep` pull, the flash grows, then a manual erase.
     let fc = fc_with(image());
     let b = bench(&fc);
     b.settings(r#"{"gearEraseBlackbox":true}"#);
-    // First pull without erase (keep), then the flash grows, then a manual erase refuses.
     b.core
         .gear_blackbox_pull(&BlackboxPullParams {
             keep: true,
@@ -784,15 +782,35 @@ fn the_surfaces_exist_and_respect_the_setting() {
 
 #[test]
 fn the_cli_pulls_lists_and_refuses_an_erase_without_confirm() {
-    // The CLI binary runs its own core; with no serial access under cargo it reports so.
+    // The CLI binary runs its own core in a temp HOME; with no serial access under cargo it
+    // finds no FC.
+    let home = tempfile::tempdir().unwrap();
+    let run = |args: &[&str]| {
+        let out = std::process::Command::new(env!("CARGO_BIN_EXE_quadcam-cli"))
+            .env("HOME", home.path())
+            .env("QUADCAM_PHOTOS", "dry-run")
+            .arg("--json")
+            .args(["gear", "blackbox"])
+            .args(args)
+            .output()
+            .unwrap();
+        let v: serde_json::Value = serde_json::from_slice(&out.stdout).unwrap();
+        (out.status.code().unwrap(), v)
+    };
+    let (code, v) = run(&["list"]);
+    assert_eq!((code, &v["result"]), (0, &serde_json::json!([])), "{v}");
+    let (code, v) = run(&["pull"]);
+    assert_eq!(
+        (code, v["error"]["code"].as_str()),
+        (4, Some("no_device")),
+        "{v}"
+    );
+    let (code, v) = run(&["erase"]);
+    assert_eq!(code, 3, "{v}");
+    let msg = v["error"]["message"].as_str().unwrap();
+    assert!(msg.contains("confirm=true"), "{msg}");
     let out = std::process::Command::new(env!("CARGO_BIN_EXE_quadcam-cli"))
-        .args(["gear", "blackbox", "erase"])
-        .output()
-        .unwrap();
-    assert!(!out.status.success());
-    let err = String::from_utf8_lossy(&out.stderr);
-    assert!(err.contains("confirm=true"), "{err}");
-    let out = std::process::Command::new(env!("CARGO_BIN_EXE_quadcam-cli"))
+        .env("HOME", home.path())
         .args(["gear", "blackbox", "pull", "--help"])
         .output()
         .unwrap();

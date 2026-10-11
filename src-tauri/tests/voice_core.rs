@@ -614,6 +614,20 @@ fn choosing_again_updates_the_open_change_and_the_overrides_survive_a_restage() 
     assert_eq!(c2.id, c.id, "one voice change per radio");
     assert_eq!(staged(&b).len(), 1);
     assert!(c2.title.ends_with("Test Voice"));
+    // The override survived the second choose, and the change still puts its file.
+    let armed = view(&b)
+        .lines
+        .into_iter()
+        .find(|l| l.path == ARMED)
+        .unwrap();
+    assert_eq!(
+        armed.override_.as_ref().map(|o| o.kind.as_str()),
+        Some("text")
+    );
+    let Edit::CardFiles { put, .. } = &c2.edits[0] else {
+        panic!("{:?}", c2.edits[0])
+    };
+    assert!(put.iter().any(|f| f.path == ARMED), "{put:?}");
     // Resetting an override removes it.
     let l = b
         .core
