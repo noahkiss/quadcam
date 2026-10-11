@@ -180,6 +180,9 @@ quadcam-cli --json gear voice sample --voices Callum,Daniel --models eleven_v4,e
 quadcam-cli --json gear voice render --set quad,extras --voice Callum --model eleven_turbo_v2_5 [--dry-run] [--confirm --digest D] [--seed N]   # the sets as carrier-sentence batches into a local pack; same confirm, digest and credit check; lines whose cut failed a check are listed under retakes, and --seed N redoes only their batches
 quadcam-cli --json gear voice check PACK [--lines PATH,...] [--accept PATH,...] [--install]   # hear each line with the on-device speech recognizer (macOS 26 or later) and compare it with its text; in a studio pack a line heard wrong becomes a re-take; --accept keeps what was heard; --install first installs the speech assets; no provider call
 quadcam-cli --json gear voice install PACK [--source INDEX]   # a pack from the index, after a hash check
+quadcam-cli --json gear voice preview PACK [--source INDEX]   # an index pack's preview lines, fetched into the cache after a hash check
+quadcam-cli --json gear voice publish PACK [--id ID --version N --voice-name V --license L --attribution A] [--text]   # prepare a pack rendered here for QuadCam Voices: refuses unless the speech check cleared every line; prints the review and its digest; publishes nothing
+quadcam-cli gear voice publish PACK --approve --digest D   # at a terminal only: type the pack's id, then the release and the index pull request (gh), or the commands to run
 quadcam-cli --json gear voice edit --radio ID --line PATH [--text T | --pack P | (neither: clear)] [--dry-run] [--confirm --digest D]   # one line on one radio; a paid --text: --dry-run prints the characters and the digest
 quadcam-cli --json gear voice choose --radio ID --pack P [--drop-overrides]   # stages one card change; nothing is written to the card
 quadcam-cli --json gear voice choose --radio ID,ID2 | --all-radios --pack P [--drop-overrides]   # one card change per radio (every saved EdgeTX radio with --all-radios); answers {pack, staged}
@@ -296,6 +299,7 @@ Every MCP tool has a command. The command line also has `scan`, `analyze`, `clea
 | `quadcam_suggest` | `import` flags (`--name`, `--note`, `--date`, `--cut`, ...), `meta`, `cut`, `dates` |
 | `quadcam_settings` `read`, `write` | `settings show`, `settings set` (a secret: `settings set-secret`) |
 | `quadcam_gear_edit` `voice_key_set`, `voice_key_delete` | `gear voice key set`, `gear voice key delete` |
+| none | `gear voice publish --approve`: only a person at a terminal approves a publish |
 | `quadcam_profiles` `set_default` | `profiles default` |
 | `quadcam_gear` `switch_map` | `gear map` |
 | `quadcam_gear` `session_report` | `gear report` |

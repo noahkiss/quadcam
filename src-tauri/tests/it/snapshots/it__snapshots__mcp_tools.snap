@@ -1241,7 +1241,7 @@ expression: "quadcam_lib::mcp::tools()"
               ]
             },
             "voice_index": {
-              "description": "Gear: the address or path of the voice pack index (voices.json).",
+              "description": "Gear: the address or path of the voice pack index; default the QuadCam Voices index, empty for none.",
               "type": [
                 "string",
                 "null"
