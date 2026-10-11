@@ -220,7 +220,7 @@ existing logic modules. `core/gear.rs` holds the `Core` methods; `api/gear.rs` t
 | `gear/osd.rs` | OSD position encode and decode, element widths, grids, render, overlap and off-screen check | `bf/dump` |
 | `gear/rates.rs` | Rate curves (Betaflight, Actual, Quick), sampling for the chart, conversion between types | none |
 | `gear/sims/mod.rs` + `liftoff.rs`, `micro.rs`, `uncrashed.rs`, `zone.rs`, `velocidrone.rs` | One `Sim` adapter per game: find, read rate profiles, write, "running" check | `rates` |
-| `gear/voice/` (`lines.rs`, `tts.rs`, `eleven.rs`, `keychain.rs`, `batch.rs`, `sets.rs`, `render.rs`, `packs.rs`) | Voice lines and spelling rules, TTS providers (`say`, OpenAI-compatible, ElevenLabs), the Keychain key, batched carrier-sentence renders, line sets, the render cache and normalisation, pack index and install | `media` (ffmpeg), `store` |
+| `gear/voice/` (`lines.rs`, `tts.rs`, `eleven.rs`, `keychain.rs`, `batch.rs`, `reuse.rs`, `sets.rs`, `render.rs`, `packs.rs`) | Voice lines and spelling rules, TTS providers (`say`, OpenAI-compatible, ElevenLabs), the Keychain key, batched carrier-sentence renders, line reuse, line sets, the render cache and normalisation, pack index and install | `media` (ffmpeg), `store` |
 | `gear/splash.rs` | Image to 1-bit 128x64 with threshold and preview; patch and decode a firmware image | `image` crate (PNG decode) |
 | `gear/firmware/` (`check.rs`, `edgetx.rs`, `elrs.rs`) | Version checks; EdgeTX download, splash, DFU flash; ELRS options and flash | `splash`, `serial`, external `dfu-util`, `esptool` |
 | `modules/` (`manifest.rs`, `fetch.rs`, `install.rs`, `run.rs`) | The module manager (7.10): pinned manifests, download, checksum, install, run as a subprocess, update check, removal. Used by `media` for ffmpeg too | `paths`, `settings` |
@@ -1177,14 +1177,26 @@ Every reading, kept or not, goes to stderr and `<cache>/voice/charcost.log`.
   `check` flags silent cuts, cuts under 120 ms or over 4.5 s, cuts far from the batch's
   median pace per letter, and carrier bleed: 20-120 ms of hiss (30 or more zero crossings a
   10 ms frame), then 20 ms or more under a tenth of the cut's loudest frame, then the line.
-  A line that starts with s, z, x, c, f or j is not judged for bleed. The cuts feed `render::Ctx.cuts`, so `render_line` and `packs::render_to`
+  A line that starts with s, z, x, c, f or j is not judged for bleed, nor is a take spoken
+  alone (an import), which had no carrier. The cuts feed `render::Ctx.cuts`, so `render_line` and `packs::render_to`
   take them like any cached take, then trim, fade and tempo.
+- Reuse (`reuse.rs`): `LineIndex` records which sentences each cached take holds, per
+  provider, voice, model and speed, in `<cache>/voice/lines/`. `split` takes a line with a
+  cached take of the same sentence out of the plan, and `cut_reused` cuts it from that take,
+  before any batch is sent. A reused take that cannot be read or cut is removed from the cache,
+  and the next index write drops it, so the next estimate prices its lines. When a render
+  fails part way, the batches it made go into the index unchecked (cut version 0). An imported
+  take (`import_takes`) has its own key (`BatchCache::alone_key`), which no batch shares,
+  even one line under the carrier `{line}`; the next import moves a take imported by 0.14.0
+  to it.
 - Cost: `estimate` counts the characters of the batches the cache lacks, carriers included,
   times the model's rate, in credits and in USD (`Estimate.usd`, `usd_per_1k`, `promo_until`,
   `credits_basis`: `estimated`, `recorded` or `account`); `plan_within` keeps each batch under
   nine tenths of the model's request limit; `Estimate::check` refuses when the credits
   (`/v1/user/subscription`) fall short. Every paid row (`gear_voice_sample`, `gear_voice_render` with `sets`) prices
-  first and waits for `confirm`. MCP can delete the key and cannot set it.
+  first and waits for `confirm`. The confirm digest names the keys of the batches the estimate
+  priced, and `render_all` sends only those: a batch the estimate counted as cached whose take
+  cannot be read is removed, never sent, and the next estimate prices it. MCP can delete the key and cannot set it.
 - Sets (`sets.rs`, `resources/voice/sets/*.csv`, `path,text,group,tone,why`): `edgetx`,
   `quad`, `heli`, `plane`, `glider`, `extras`, `easter`, `sample`, `quadcam` (the built-in
   `lines.csv`) and `custom` (from `gear.json`). The aircraft sets are `radio.csv` plus their own
