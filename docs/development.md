@@ -242,11 +242,15 @@ A newer push to the same branch or pull request cancels the older run. A run on 
 Users install the Homebrew cask `noahkiss/tap/quadcam`. A release is a pushed tag.
 
 1. On the release branch, set the new version in `src-tauri/Cargo.toml` and `src-tauri/tauri.conf.json`. They must match. Commit, push the branch, and wait for its CI run to pass.
-2. Fast-forward `main` to that commit, then tag the same commit and push both:
+2. Fast-forward `main` to that commit, then tag the same commit and push both. The main checkout must be clean, and the tag must name the release branch's head before you push it:
 
    ```bash
+   set -e
+   test -z "$(git status --porcelain)"
    git switch main && git merge --ff-only rel-X.Y.Z
-   git tag vX.Y.Z && git push origin main vX.Y.Z
+   git tag vX.Y.Z
+   test "$(git rev-parse 'vX.Y.Z^{commit}')" = "$(git rev-parse rel-X.Y.Z)"
+   git push origin main vX.Y.Z
    ```
 
 3. `.github/workflows/release.yml` runs the shared composite actions `tauri-macos-build`, `macos-sign-notarize` and `release-attach` from [`noahkiss/workflows`](https://github.com/noahkiss/workflows). They run in this repo's own job, because that job names the `release` environment; a reusable workflow from another repo cannot read this repo's environment secrets.
@@ -256,7 +260,8 @@ Users install the Homebrew cask `noahkiss/tap/quadcam`. A release is a pushed ta
    - It waits for a green CI run on the tagged commit. Any green run counts, so the release branch's run passes it at once. It does not run the tests itself. If every run on the commit fails, or none passes within 40 minutes, there is no release.
    - It zips the app as `quadcam-X.Y.Z-arm64.zip` and attaches the zip to the GitHub Release, with the in-app updater's files: `quadcam-X.Y.Z-arm64.app.tar.gz`, its `.sig` and `latest.json`.
    - It starts the tap's `bump.yml`. That workflow rewrites `Casks/quadcam.rb`, installs the cask on macOS, and commits.
-4. Watch it with `gh run watch -R noahkiss/quadcam --exit-status`.
+4. Watch it with `gh run watch <id> -R noahkiss/quadcam --interval 60 --exit-status`. The 3 s default hits GitHub's API rate limit when several watchers run.
+5. Once the release is out, delete every branch it merged, local and remote (`git branch -d`, `git push origin --delete`), with their worktrees. Keep `main` and branches with unmerged work.
 
 To run the pipeline again for an existing tag:
 

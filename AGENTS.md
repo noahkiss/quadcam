@@ -154,13 +154,19 @@ GitHub (`noahkiss/quadcam`, public) is the only remote. Users install the cask
    `src-tauri/Cargo.toml` and `src-tauri/tauri.conf.json` (they must match), commit
    `release: X.Y.Z`, and push the branch. CI runs on that commit; the bump touches
    `Cargo.toml`, so the path filter runs every Rust test.
-2. Wait for that run to go green (`gh run watch -R noahkiss/quadcam --exit-status`).
+2. Wait for that run to go green (`gh run watch <id> -R noahkiss/quadcam --interval 60 --exit-status`).
 3. Fast-forward main to that same commit and tag it. No merge commit, no rebase: the tag
-   names the commit that went green.
+   names the commit that went green. Check that the main checkout is clean first, and check
+   the tag against the release branch before you push it. A failed fast-forward once let a
+   script tag the old commit.
 
    ```bash
+   set -e
+   test -z "$(git status --porcelain)"
    git switch main && git merge --ff-only rel-X.Y.Z
-   git tag vX.Y.Z && git push origin main vX.Y.Z
+   git tag vX.Y.Z
+   test "$(git rev-parse 'vX.Y.Z^{commit}')" = "$(git rev-parse rel-X.Y.Z)"
+   git push origin main vX.Y.Z
    ```
 
 4. `.github/workflows/release.yml` (through the shared composite actions) builds, signs
@@ -172,8 +178,13 @@ GitHub (`noahkiss/quadcam`, public) is the only remote. Users install the cask
    files: `quadcam-X.Y.Z-arm64.app.tar.gz` (the notarized, stapled app), its minisign `.sig`, and
    `latest.json`, which the app reads from `releases/latest/download/`. It then fires the tap's
    `bump.yml`, which rewrites `Casks/quadcam.rb`, installs it on macOS, and commits.
-5. Watch it: `gh run watch -R noahkiss/quadcam --exit-status`. Re-run for an existing tag with
-   `gh workflow run release.yml -R noahkiss/quadcam --ref vX.Y.Z -f tag=vX.Y.Z`.
+5. Watch it: `gh run watch <id> -R noahkiss/quadcam --interval 60 --exit-status`. Re-run for an
+   existing tag with `gh workflow run release.yml -R noahkiss/quadcam --ref vX.Y.Z -f tag=vX.Y.Z`.
+6. Once the release is out, prune. Delete every branch merged into it, local and remote:
+   `rel-X.Y.Z` and each feature branch it merged (`git branch -d <branch>`,
+   `git push origin --delete <branch>`). Remove their worktrees (`git worktree remove`). Keep
+   only main and branches with unmerged work. GitHub deletes a pull request's head branch on
+   merge ("Automatically delete head branches"); the rest is this step.
 
 - **Runner image:** `ci.yml` and `release.yml` run on GitHub's `xcode-27` image (macOS 27,
   arm64, Xcode 27), which is a public preview: it may change or be retired without notice.
@@ -216,6 +227,8 @@ GitHub (`noahkiss/quadcam`, public) is the only remote. Users install the cask
   filter in `ci.yml`. A newer push cancels an
   older run on the same branch or PR. A run on `main` or a tag is never cancelled: the release
   waits for it.
+- **Watching runs:** use `gh run watch <id> --interval 60`. Several watchers at the 3 s default
+  hit GitHub's API rate limit (HTTP 403); after one, wait 2 minutes and retry.
 
 ## Behaviour notes
 
