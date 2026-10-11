@@ -265,7 +265,10 @@ fn kept_srt_moves_with_its_clip() {
     assert!(rep.failed.is_empty(), "{:?}", rep.failed);
     assert!(rep.trashed.contains(&srt), "{:?}", rep.trashed);
     assert!(!srt.exists());
-    assert_eq!(core.library_untrash(&rep.moved).unwrap(), [id.clone()]);
+    assert_eq!(
+        core.library_untrash(&rep.moved).unwrap(),
+        std::slice::from_ref(&id)
+    );
     assert!(srt.is_file(), "the .srt is back next to its original");
     let back = core.library(&Default::default()).unwrap().clips[0]
         .clip
