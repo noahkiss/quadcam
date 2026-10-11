@@ -18,6 +18,8 @@
 //! - **Confirm.** The sheet's own Apply calls `gear_flash_click`. Any other caller needs the
 //!   plan's digest and `confirm`, and with the app running the person also clicks Apply in the
 //!   sheet (`Hooks::confirm_apply`).
+//! - **One job per chip.** The flash and the read each run as a job on `dfu:<serial>`, so
+//!   Gear status shows them and a second flash or read of that chip refuses with `port_busy`.
 //! - **Fail-safe.** `gear::firmware::Flasher` hands out the USB path; a process started by
 //!   cargo gets a recorder unless `QUADCAM_FLASH=real`, and tests pass their own fake.
 
@@ -129,7 +131,41 @@ fn fail(name: &str, code: RefusalCode, reason: impl Into<String>) -> Check {
     check(name, Err(Refusal::new(code, reason)))
 }
 
+/// The job handle of a radio in DFU mode: its chip's serial.
+pub fn dfu_handle(info: &DfuInfo) -> String {
+    format!("dfu:{}", info.serial.as_deref().unwrap_or_default())
+}
+
 impl Core {
+    /// Registers a flash or a read as the one job on this DFU chip, and holds its link. A job
+    /// already on the chip refuses with `port_busy`.
+    fn dfu_job(
+        &self,
+        info: &DfuInfo,
+        device: Option<&str>,
+        step: &str,
+    ) -> Result<(super::backup::JobGuard<'_>, super::gear::Hold<'_>)> {
+        let handle = dfu_handle(info);
+        let busy = |what: &str| {
+            refuse(
+                RefusalCode::PortBusy,
+                format!("{what} is already running on the radio in DFU mode. Wait for it to end."),
+            )
+        };
+        if let Some(j) = self.gear_jobs().into_iter().find(|j| j.handle == handle) {
+            return Err(busy(&j.step));
+        }
+        let (job, _) = self
+            .job_start(&handle, device, step)
+            .map_err(|_| busy("Another job"))?;
+        let hold = self.gear_hold(&super::gear::link_handle(&crate::gear::model::Link::Dfu {
+            vid: info.vid,
+            pid: info.pid,
+            serial: info.serial.clone(),
+        }));
+        Ok((job, hold))
+    }
+
     /// Replaces the network and the USB path the firmware code uses (tests pass fakes).
     pub fn with_firmware_env(mut self, env: FwEnv) -> Core {
         self.firmware = env;
@@ -205,7 +241,7 @@ impl Core {
             .ok_or_else(|| anyhow!("The radio reports no version; name the version to flash."))?;
 
         let mut checks: Vec<Check> = Vec::new();
-        let known = compat::check_writable(Product::Edgetx, board.as_deref(), Some(&target));
+        let known = compat::check_writable(Product::EdgetxFlash, board.as_deref(), Some(&target));
         let known_ok = known.is_ok();
         checks.push(check("Known board and version", known));
 
@@ -435,6 +471,11 @@ impl Core {
                 ))
             }
         };
+        let _job = self.dfu_job(
+            &info,
+            device.as_ref().map(|d| d.id.as_str()),
+            "Reading firmware",
+        )?;
         let flasher: &dyn Flasher = self.firmware.flasher.as_ref();
         let quick = flasher.quick();
         let mut usb = flasher
@@ -505,6 +546,15 @@ impl Core {
         });
         let known = device.as_ref().and_then(|d| d.identity.version.clone());
         let image = identity.as_ref().map(|(_, v)| v.clone());
+        // The board the image names, when it is not the named radio's board.
+        let other_board = match (&device, &identity) {
+            (Some(d), Some((b, _)))
+                if !edgetx::same_board(d.identity.board.as_deref().unwrap_or_default(), b) =>
+            {
+                Some(b.clone())
+            }
+            _ => None,
+        };
         let matches = match (&known, &image) {
             (Some(k), Some(i)) => Some(k.trim().trim_start_matches(['v', 'V']) == i),
             _ => None,
@@ -520,6 +570,15 @@ impl Core {
                 "The firmware names EdgeTX {i}. QuadCam has no version to compare it with. The copy is saved."
             ),
             (None, _, _) => "The copy is saved, but it holds no EdgeTX version string. This may not be EdgeTX firmware.".into(),
+        };
+        let message = match (&other_board, &device) {
+            (Some(b), Some(d)) => format!(
+                "The firmware is for board {b}, not {}: the radio in DFU mode may not be {}. A flash of {} refuses it. {message}",
+                d.identity.board.as_deref().unwrap_or("(none)"),
+                d.display_name(),
+                d.display_name()
+            ),
+            _ => message,
         };
         self.hooks.gear_changed();
         Ok(FirmwareRead {
@@ -567,6 +626,7 @@ impl Core {
                 .confirm_apply(&flash_change(&prep.device, &prep.plan), &prep.plan)?;
         }
         let dfu_info = prep.dfu.clone().expect("one DFU device passed its check");
+        let _job = self.dfu_job(&dfu_info, Some(&prep.device.id), "Flashing")?;
         let flasher: &dyn Flasher = self.firmware.flasher.as_ref();
         let quick = flasher.quick();
         let mut usb = flasher
@@ -608,6 +668,19 @@ impl Core {
         let current = copy.trimmed();
         let blank = copy.is_blank();
         let identity = edgetx::image_identity(&current);
+        // A radio in DFU mode shows no name, and two radios can share a chip. The firmware it
+        // runs names its board: another board is another radio, also before any link exists.
+        if let Some((image_board, _)) = &identity {
+            let board = prep.device.identity.board.as_deref().unwrap_or_default();
+            if !edgetx::same_board(board, image_board) {
+                return Err(refuse(
+                    RefusalCode::DeviceChanged,
+                    format!(
+                        "The radio in DFU mode runs firmware for board {image_board}, not {board}: it is not {name}. Plug in {name}, or pick the radio in DFU mode. Nothing was erased."
+                    ),
+                ));
+            }
+        }
         let kept = if blank {
             None
         } else {

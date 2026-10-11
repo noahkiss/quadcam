@@ -343,6 +343,23 @@ fn a_version_or_board_not_in_compat_refuses_without_a_download() {
         ("Known board and version", RefusalCode::UnknownVersion)
     );
     assert!(plan.digest.is_empty());
+    // A flash is proven for one release, not the card files' 2.12 prefix, and never a
+    // prerelease.
+    for v in ["2.12.9", "2.12.5-rc1", "2.12.4-rc1"] {
+        let plan = b
+            .core
+            .gear_flash_plan(&FlashParams {
+                device: b.radio.clone(),
+                version: Some(v.into()),
+                splash: None,
+            })
+            .unwrap();
+        assert_eq!(
+            failed(&plan)[0],
+            ("Known board and version", RefusalCode::UnknownVersion),
+            "{v}"
+        );
+    }
     let other = bench(Arc::new(NoHooks), "tx16s", VERSION, true);
     let plan = other.core.gear_flash_plan(&params(&other, None)).unwrap();
     assert_eq!(
@@ -800,6 +817,132 @@ fn a_flash_never_erases_when_its_copy_cannot_be_made() {
     assert!(r.reason.contains("Nothing was written"), "{}", r.reason);
     assert_eq!(b.flasher.device.lock().unwrap().mutations, 0);
     assert!(quadcam_lib::gear::fwcopy::list(&b.core.gear_store(), &b.radio).is_empty());
+}
+
+/// Hooks that, while a read runs, try a second read and a flash of the same chip, and note
+/// the jobs Gear status lists.
+#[derive(Default)]
+struct Busy {
+    core: std::sync::OnceLock<std::sync::Weak<Core>>,
+    flash: Mutex<Option<FlashRequest>>,
+    second: Mutex<Vec<RefusalCode>>,
+    jobs: Mutex<Vec<(String, String)>>,
+}
+
+impl Hooks for Busy {
+    fn event(&self, _event: quadcam_lib::api::Event) {
+        let Some(core) = self.core.get().and_then(|w| w.upgrade()) else {
+            return;
+        };
+        if !self.second.lock().unwrap().is_empty() {
+            return;
+        }
+        let read = core.gear_firmware_read(&FirmwareReadParams::default());
+        let mut second = vec![refusal(read.unwrap_err()).code];
+        if let Some(req) = self.flash.lock().unwrap().clone() {
+            second.push(refusal(core.gear_flash(&req).unwrap_err()).code);
+        }
+        *self.second.lock().unwrap() = second;
+    }
+    fn gear_changed(&self) {
+        if let Some(core) = self.core.get().and_then(|w| w.upgrade()) {
+            for j in core.gear_jobs() {
+                self.jobs.lock().unwrap().push((j.handle, j.step));
+            }
+        }
+    }
+}
+
+#[test]
+fn a_flash_and_a_read_are_jobs_on_the_dfu_chip_and_a_second_call_is_port_busy() {
+    let hooks = Arc::new(Busy::default());
+    let b = bench(hooks.clone(), "pocket", VERSION, true);
+    hooks.core.set(Arc::downgrade(&b.core)).unwrap();
+    let p = params(&b, None);
+    let plan = b.core.gear_flash_plan(&p).unwrap();
+    assert!(plan.ready(), "{:?}", failed(&plan));
+    *hooks.flash.lock().unwrap() = Some(request(&p, &plan));
+
+    let r = b
+        .core
+        .gear_firmware_read(&FirmwareReadParams {
+            device: Some(b.radio.clone()),
+        })
+        .unwrap();
+    assert_eq!(r.matches, Some(true), "{}", r.message);
+    assert_eq!(
+        hooks.second.lock().unwrap().as_slice(),
+        [RefusalCode::PortBusy, RefusalCode::PortBusy],
+        "a second read and a flash wait for the read"
+    );
+    assert!(hooks
+        .jobs
+        .lock()
+        .unwrap()
+        .contains(&("dfu:0001".to_string(), "Reading firmware".to_string())));
+    // The flash refused while the read ran wrote nothing.
+    assert_eq!(b.flasher.device.lock().unwrap().mutations, 0);
+    assert!(b.core.gear_jobs().is_empty(), "the job ends with the read");
+
+    // The flash is a job too, and ends with the flash.
+    hooks.jobs.lock().unwrap().clear();
+    let report = b.core.gear_flash(&request(&p, &plan)).unwrap();
+    assert_eq!(report.status, ChangeStatus::Verified, "{}", report.message);
+    assert!(hooks
+        .jobs
+        .lock()
+        .unwrap()
+        .contains(&("dfu:0001".to_string(), "Flashing".to_string())));
+    assert!(b.core.gear_jobs().is_empty());
+}
+
+/// `full_image`, but the firmware names another board.
+fn other_board_image(salt: u8) -> Vec<u8> {
+    let mut b = full_image(salt);
+    let v = b"edgetx-tx16s-2.12.4 (def35ad3)\0";
+    b[0x9000..0x9000 + v.len()].copy_from_slice(v);
+    b
+}
+
+#[test]
+fn a_flash_refuses_a_radio_whose_firmware_names_another_board_before_the_erase() {
+    // The DFU device is not linked to any radio: the first flash of a radio. Its chip has the
+    // Pocket's flash size, but the firmware it runs is another board's.
+    let b = plain();
+    *b.flasher.device.lock().unwrap() = FakeDfu::with_firmware(&other_board_image(3));
+    let p = params(&b, None);
+    let plan = b.core.gear_flash_plan(&p).unwrap();
+    assert!(plan.ready(), "{:?}", failed(&plan));
+    let e = b.core.gear_flash(&request(&p, &plan)).unwrap_err();
+    let r = refusal(e);
+    assert_eq!(r.code, RefusalCode::DeviceChanged);
+    assert!(
+        r.reason.contains("tx16s") && r.reason.contains("Nothing was erased"),
+        "{}",
+        r.reason
+    );
+    let dev = b.flasher.device.lock().unwrap();
+    assert_eq!(dev.mutations, 0, "{:?}", dev.log);
+    assert!(!dev.log.iter().any(|l| l.starts_with("erase")));
+    drop(dev);
+    // No copy is filed under the wrong radio, and the DFU device stays unlinked.
+    assert!(quadcam_lib::gear::fwcopy::list(&b.core.gear_store(), &b.radio).is_empty());
+    let saved = b.core.gear_store().devices().unwrap();
+    assert!(saved.iter().all(|d| d.dfu_serial.is_none()));
+
+    // The read-only trial says so when a radio is named.
+    let r = b
+        .core
+        .gear_firmware_read(&FirmwareReadParams {
+            device: Some(b.radio.clone()),
+        })
+        .unwrap();
+    assert!(
+        r.message.contains("board tx16s, not pocket"),
+        "{}",
+        r.message
+    );
+    assert_eq!(r.copy.image_board.as_deref(), Some("tx16s"));
 }
 
 #[test]

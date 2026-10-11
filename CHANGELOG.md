@@ -18,7 +18,11 @@ User-facing changes in each release, newest first. Release notes on
 - **Recorded credit rate.** QuadCam keeps the rate ElevenLabs reports only within 5% of the model's credits a character, so a plain character count never doubles the estimate. It logs every count in `voice/charcost.log` in the cache.
 - **Deleting a voice pack** also clears each line override that takes its take (`overrides` in the result).
 - The settings and MCP descriptions name `elevenlabs` as a `tts_provider`.
-
+- **Radio verify over USB serial.** A backup file in a folder the radio's CLI cannot list (a space in the folder name, an `ls` that fails) or with a name that is not plain ASCII is reported as not checked (`not_checked`), not as missing. A folder the card lacks still counts as missing.
+- **Radio backups with a reset clock.** A backup reads again every card file dated before 2020, and every YAML file once a radio log is dated before 2020. Before, a model edit of the same length that got the same time from a reset radio clock kept the old bytes in the backup.
+- **EdgeTX flash and firmware read are jobs.** Gear status lists a running radio flash or **Read firmware** (`dfu:<serial>`), and a second flash or read of the same radio refuses with `port_busy` instead of failing on the USB claim.
+- **EdgeTX flash: the right radio.** Before the erase, a flash compares the board the radio's current firmware names with the saved radio's board, and refuses another board. This also covers a DFU device not yet linked to a radio. **Read firmware** says when the image names another board than the radio you picked.
+- **EdgeTX flash: one proven release.** A radio flash needs the exact release QuadCam has proven on the board (the Pocket on 2.12.4), not any 2.12 version, and a prerelease tag (`2.12.5-rc1`) always refuses. **Flash …** on the Firmware page follows the same rule.
 ## 0.12.0 (2026-10-11)
 
 - **Sim sync:** two profiles in one sim file (for example two Liftoff profiles) now sync together. Before, the second write put the first profile back to its old rates.

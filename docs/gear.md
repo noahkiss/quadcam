@@ -324,7 +324,7 @@ jobs only. `gear radio-cli ACTION` runs one:
 | `play --path /SOUNDS/en/hello.wav` | plays a sound file on the radio's speaker. A voice line's card path works as it is, so after a voice pack is applied you can hear a line on the radio itself |
 | `beep` | the radio beeps |
 | `reboot --yes` | restarts the radio |
-| `verify [--device ID]` | `ls` each folder of the saved radio's latest backup, and lists the files the radio lacks or holds at another size. Use it after a card apply, with the card back in the radio. `LOGS/` is skipped |
+| `verify [--device ID]` | `ls` each folder of the saved radio's latest backup, and lists the files the radio lacks or holds at another size. Use it after a card apply, with the card back in the radio. `LOGS/` is skipped. A file in a folder the CLI cannot list (a space or another character it does not take in the folder name, or an `ls` that fails), or with a name that is not plain ASCII, is listed as not checked, not as missing |
 
 QuadCam sends no other command. A path is an absolute card path of plain characters. QuadCam
 refuses a port another program has open ("is open in screen"), as it does for a flight
@@ -598,6 +598,10 @@ its SD card except `LOGS/`. A backup of a flight controller holds `version`, `st
 - **Slow links.** A radio over USB reads about 0.5 MB/s. QuadCam reads only files whose size or
   modified time changed since the latest backup, and shows its progress. **Stop** ends a
   backup between files; no backup is saved.
+- **A reset radio clock.** A radio whose clock battery is flat starts its clock at 2000-01-01,
+  so the times it gives files repeat. QuadCam reads again every file dated before 2020, and
+  every YAML file once a log on the card is dated before 2020. An edit of the same length
+  then still reaches the backup.
 - **Radio logs** are flight data, not backup content. Each log is kept once per radio in
   `logs/<radio>/`. A log that grew replaces the kept one; a log that changed another way is kept
   as a second file (`<name> (2).csv`). Logs are never pruned.
@@ -1134,7 +1138,9 @@ status polls, aborts, the address pointer and uploads. Run it before any flash.
 QuadCam reads the flash twice and keeps the copy only when both reads are equal. It saves the
 copy, reads the saved file back and compares it, then compares the version the image names
 (`edgetx-pocket-2.12.4 ...`) with the version it knows for the radio. The result says whether
-they match. A mismatch is not an error; check the radio's About screen.
+they match. A mismatch is not an error; check the radio's About screen. When the image names
+another board than the radio you picked, the result says so: the radio in DFU mode may be
+another radio, and a flash of the picked radio refuses it.
 
 - The copy is a file pair under the gear folder, `firmware/<radio>/<time>-read.bin` and
   `.json`. A second copy in the same second gets `-2`, `-3`; a copy never replaces another.
@@ -1142,14 +1148,16 @@ they match. A mismatch is not an error; check the radio's About screen.
 - A flash that reads as blank, as all zeros (a protected chip) or differently on the two reads
   is refused with the reason.
 - With no radio in DFU mode, the read says so and tells you the steps above.
+- A read and a flash each run as a job on the radio in DFU mode (`dfu:<serial>` in
+  `gear status`). A second read or a flash of the same radio meanwhile refuses with `port_busy`.
 - Command line: `quadcam-cli --json gear firmware --read [--device RADIO]`. MCP:
   `quadcam_gear` `firmware_read`.
 
 ### Flash an EdgeTX radio
 
-QuadCam flashes only a board and an EdgeTX version listed in `compat.rs`. Today that is the
-RadioMaster Pocket on EdgeTX 2.12. A splash needs a version it has checked: 2.12.4.
-Anything else is refused with the reason.
+QuadCam flashes only a board and an exact EdgeTX release listed in `compat.rs`. Today that is
+the RadioMaster Pocket on EdgeTX 2.12.4, with or without a splash. Another release, another
+board and any prerelease tag (`2.12.5-rc1`) are refused with the reason.
 
 1. Back up the radio's card (**Backups**). The flash plan refuses without a backup.
 2. Open **Firmware > Flash…**, or make a splash first (below). The sheet shows the checks:
@@ -1164,6 +1172,9 @@ Anything else is refused with the reason.
    - reads the firmware the radio runs now twice, saves it as a copy and reads the saved file
      back. Nothing is erased until both reads are equal and the file matches. A blank flash
      (an earlier flash that stopped) has nothing to copy and may be flashed;
+   - compares the board the current firmware names (`edgetx-<board>-...`) with the radio's
+     board. Another board is another radio: QuadCam refuses and erases nothing, also for a
+     DFU device not yet linked to a radio;
    - erases the sectors it needs and writes the image in 16 KB segments, reading each segment
      back before it writes the next;
    - reads the whole image back and compares every byte;
@@ -1210,6 +1221,7 @@ Where a failure can leave the radio, and what QuadCam does:
 | Two reads differ | A bad cable or port | No copy, no erase |
 | The saved copy does not match | A failing disk | No erase |
 | The chip is not the expected size | The wrong radio in DFU mode | Refuses before any command |
+| The current firmware names another board | The wrong radio in DFU mode | Refuses before the erase |
 | The device moves another block size than 2,048 bytes | Blocks land at the wrong address | Refuses before the erase |
 | Power or USB drops during the erase or the write | The radio has no valid firmware | The radio stays in DFU mode; flash again |
 | A block does not program | A corrupt image | Caught by the segment read back; the image is not started |

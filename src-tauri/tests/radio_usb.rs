@@ -290,6 +290,9 @@ fn verify_compares_the_radio_with_the_latest_backup() {
     std::fs::write(root.join("MODELS/model01.yml"), "header:\n  name: A\n").unwrap();
     std::fs::write(root.join("MODELS/model02.yml"), "header:\n  name: B\n").unwrap();
     std::fs::write(root.join("LOGS/x.csv"), "not checked").unwrap();
+    // A folder with a space: the CLI splits the argument, so it cannot list it.
+    std::fs::create_dir_all(root.join("SOUNDS/My Pack")).unwrap();
+    std::fs::write(root.join("SOUNDS/My Pack/a.wav"), "RIFF").unwrap();
     let size = |p: &str| std::fs::metadata(root.join(p)).unwrap().len();
     let radio = FakeRadioCli::new("pocket", "2.12.4")
         .with_file("/RADIO/radio.yml", size("RADIO/radio.yml"))
@@ -328,6 +331,11 @@ fn verify_compares_the_radio_with_the_latest_backup() {
     assert!(v.differ.is_empty());
     assert!(!v.ok);
     assert_eq!(v.checked, 3, "LOGS are not checked");
+    assert_eq!(
+        v.not_checked,
+        ["SOUNDS/My Pack/a.wav"],
+        "a folder the CLI cannot list is not missing"
+    );
 
     // Without a device the one saved radio of the board is used once identify saved a board.
     let r = core.gear_radio_cli(&p(RadioCliAction::Verify)).unwrap();

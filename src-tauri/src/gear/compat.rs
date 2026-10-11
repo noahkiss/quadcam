@@ -4,6 +4,8 @@
 //!
 //! A version entry matches that version and every version under it: `2.12` matches
 //! `2.12.4`, and `2026.6` matches `2026.6.0-alpha`. A board of `None` matches any board.
+//! A firmware flash is narrower (`Product::exact`): its entry names one release, matched
+//! exactly, and a prerelease tag (`2.12.5-rc1`) never matches.
 
 use super::model::{Refusal, RefusalCode};
 use serde::Serialize;
@@ -15,6 +17,8 @@ use specta::Type;
 pub enum Product {
     /// EdgeTX SD-card files (YAML models, `radio.yml`, sounds).
     Edgetx,
+    /// An EdgeTX firmware flash over DFU: one board and one exact release.
+    EdgetxFlash,
     /// The Betaflight CLI (backup, apply, verify).
     Betaflight,
     /// An ExpressLRS flash target.
@@ -29,11 +33,17 @@ impl Product {
     pub fn label(self) -> &'static str {
         match self {
             Product::Edgetx => "EdgeTX",
+            Product::EdgetxFlash => "EdgeTX",
             Product::Betaflight => "Betaflight",
             Product::Elrs => "ExpressLRS",
             Product::Splash => "The splash of EdgeTX",
             Product::Sim => "The sim file",
         }
+    }
+
+    /// True when an entry matches one release exactly, not a version prefix.
+    pub fn exact(self) -> bool {
+        matches!(self, Product::EdgetxFlash)
     }
 }
 
@@ -54,6 +64,14 @@ pub const PROVEN: &[Proven] = &[
         product: Product::Edgetx,
         board: Some("pocket"),
         version: "2.12",
+    },
+    // The EdgeTX flash: the release whose image checks (vector tables, size band, version
+    // string) and splash markers are proven on this board. A flash on a real radio is
+    // trial 10 (docs/trials.md).
+    Proven {
+        product: Product::EdgetxFlash,
+        board: Some("pocket"),
+        version: "2.12.4",
     },
     // Betaflight's CLI, by the serial runner, keyed by board and build: a vendor build on
     // one board says nothing about another board. Other boards are read-only.
@@ -76,6 +94,11 @@ pub const PROVEN: &[Proven] = &[
     // ExpressLRS targets and sim file versions are added by the packages that prove them.
 ];
 
+/// True when `version` names a prerelease (`2.12.5-rc1`, `2026.6.0-alpha`).
+pub fn is_prerelease(version: &str) -> bool {
+    version.trim().contains('-')
+}
+
 /// True when `version` is `prefix` or starts with `prefix` and then `.` or `-`.
 pub fn version_matches(prefix: &str, version: &str) -> bool {
     let v = version.trim().trim_start_matches(['v', 'V']);
@@ -91,7 +114,11 @@ pub fn proven(product: Product, board: Option<&str>, version: &str) -> Option<&'
     let board = board.map(|b| b.trim().to_ascii_lowercase());
     PROVEN.iter().find(|p| {
         p.product == product
-            && version_matches(p.version, version)
+            && if product.exact() {
+                version.trim().trim_start_matches(['v', 'V']) == p.version
+            } else {
+                version_matches(p.version, version)
+            }
             && match (p.board, board.as_deref()) {
                 (None, _) => true,
                 (Some(want), Some(have)) => want == have,
@@ -117,6 +144,16 @@ pub fn check_writable(
             ),
         ));
     };
+    if product.exact() && is_prerelease(version) {
+        return Err(Refusal::new(
+            RefusalCode::UnknownVersion,
+            format!(
+                "{} {} is a prerelease; QuadCam flashes releases only.",
+                product.label(),
+                version.trim()
+            ),
+        ));
+    }
     if proven(product, board, version).is_some() {
         return Ok(());
     }
@@ -135,12 +172,14 @@ pub fn check_writable(
         ));
     }
     let on = board.map(|b| format!(" on board {b}")).unwrap_or_default();
+    let what = if product.exact() {
+        "QuadCam does not flash it"
+    } else {
+        "QuadCam reads it but does not write it"
+    };
     Err(Refusal::new(
         RefusalCode::UnknownVersion,
-        format!(
-            "{} {version}{on} is not proven; QuadCam reads it but does not write it.",
-            product.label()
-        ),
+        format!("{} {version}{on} is not proven; {what}.", product.label()),
     ))
 }
 
@@ -175,6 +214,29 @@ mod tests {
         assert_eq!(e.code, RefusalCode::UnknownBoard);
         let e = check_writable(Product::Edgetx, Some("pocket"), None).unwrap_err();
         assert_eq!(e.code, RefusalCode::UnknownVersion);
+    }
+
+    #[test]
+    fn edgetx_flash_guard_is_one_exact_release() {
+        assert!(check_writable(Product::EdgetxFlash, Some("pocket"), Some("2.12.4")).is_ok());
+        assert!(check_writable(Product::EdgetxFlash, Some("Pocket"), Some("v2.12.4")).is_ok());
+        // The card entry's prefix does not carry over: another 2.12 release is not proven.
+        assert!(check_writable(Product::Edgetx, Some("pocket"), Some("2.12.9")).is_ok());
+        let e = check_writable(Product::EdgetxFlash, Some("pocket"), Some("2.12.9")).unwrap_err();
+        assert_eq!(e.code, RefusalCode::UnknownVersion);
+        assert_eq!(
+            e.reason,
+            "EdgeTX 2.12.9 on board pocket is not proven; QuadCam does not flash it."
+        );
+        assert!(check_writable(Product::EdgetxFlash, Some("pocket"), Some("2.12.4.1")).is_err());
+        // A prerelease never flashes, even of the proven release.
+        for v in ["2.12.4-rc1", "2.12.9-rc1"] {
+            let e = check_writable(Product::EdgetxFlash, Some("pocket"), Some(v)).unwrap_err();
+            assert_eq!(e.code, RefusalCode::UnknownVersion);
+            assert!(e.reason.contains("prerelease"), "{}", e.reason);
+        }
+        let e = check_writable(Product::EdgetxFlash, Some("tx16s"), Some("2.12.4")).unwrap_err();
+        assert_eq!(e.code, RefusalCode::UnknownBoard);
     }
 
     #[test]
