@@ -1232,8 +1232,11 @@ packet rate changes the switch modes). From a terminal:
   refuses any other target, a name that matches none or several, and a version the target does not
   support.
 - QuadCam configures the image: the device name, your binding phrase as the UID, the hardware
-  layout and the WiFi delay (`elrs_wifi_interval`, 60 s by default). It reads the image back and
-  checks that no other byte changed. **The plan shows only a fingerprint of the UID, never the
+  layout (with the target's overrides from `targets.json`, such as its power table) and the WiFi
+  delay (`elrs_wifi_interval`, 60 s by default). It reads the image back and
+  checks that no other byte changed. As with ExpressLRS's own configurator, the options hold only
+  the UID, the WiFi delay and a build number. A target whose screen shows a logo refuses.
+  **The plan shows only a fingerprint of the UID, never the
   phrase.** Type the phrase in **Binding phrase** and select **Save phrase** (write-only), or use
   `settings set elrs_binding_phrase=…`; reads show `(set)`. The plan refuses without a phrase.
 - The region (`elrs_region`, `FCC` or `LBT`; the **Region** list in the ELRS section) picks the image folder.

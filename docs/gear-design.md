@@ -1341,10 +1341,17 @@ binaries only (open question 10).
       expected digest is checked and deletes the download on a mismatch.
     - **Image.** After its ESP segments an image holds the product name (128 bytes), the Lua name
       (16), the options JSON (512: `uid`, `wifi-on-interval`, `flash-discriminator`) and the
-      hardware layout JSON (2048), then a trailer of `BE EF CA FE` and the prior target name.
-      QuadCam learned the places by comparing a stock image with the same image configured by
+      hardware layout JSON (2048: the layout file, with the target's `overlay` keys from
+      `targets.json` replacing the file's), then a trailer of `BE EF CA FE` and the prior target
+      name in capitals (none for a target without one). The options hold only those three keys,
+      as ExpressLRS's configurator writes them; the stock block's build defaults are not carried
+      over. A target with a `logo_file` refuses: QuadCam does not append the logo. QuadCam
+      learned the places by comparing a stock image with the same image configured by
       ExpressLRS's own tools, writes them itself, reads them back and checks that no other byte
-      changed. The UID is MD5 of `-DMY_BINDING_PHRASE="<phrase>"`, first 6 bytes (`uid.rs`,
+      changed. With `QUADCAM_ELRS_BUNDLE` (an unpacked release) and `QUADCAM_ELRS_REFERENCE` (a
+      folder of images the ExpressLRS configurator wrote from it), a test checks that QuadCam
+      writes the same blocks, trailer and every other byte; the hardware JSON is compared as
+      JSON, because QuadCam orders its keys alphabetically. The UID is MD5 of `-DMY_BINDING_PHRASE="<phrase>"`, first 6 bytes (`uid.rs`,
       written here: no dependency). The phrase is the write-only setting `elrsBindingPhrase`
       (redacted like the other secrets); plans and reports show a fingerprint of the UID.
     - **Flash.** Targets: the unified ESP8285 receiver and ESP32 transmitter-module

@@ -74,6 +74,15 @@ pub fn check_target(t: &Target, version: &str) -> Result<&'static Platform, Refu
                 ),
             )
         })?;
+    if let Some(logo) = &t.logo_file {
+        return Err(refuse(
+            RefusalCode::UnknownBoard,
+            format!(
+                "{} shows a logo ({logo}) that ExpressLRS's tools put into the image; QuadCam does not write it yet.",
+                t.product_name
+            ),
+        ));
+    }
     let v = triple(version).ok_or_else(|| {
         refuse(
             RefusalCode::UnknownVersion,
@@ -171,7 +180,7 @@ pub fn build(
         .join("hardware")
         .join(target.side.dir())
         .join(&target.layout_file);
-    let layout: serde_json::Value = serde_json::from_slice(&read_file(
+    let mut layout: serde_json::Value = serde_json::from_slice(&read_file(
         &layout_path,
         &format!("hardware layout {}", target.layout_file),
     )?)
@@ -181,6 +190,18 @@ pub fn build(
             format!("The hardware layout is not JSON: {e}"),
         )
     })?;
+    // The target's overlay replaces the layout file's keys one by one.
+    if let Some(overlay) = &target.overlay {
+        let map = layout.as_object_mut().ok_or_else(|| {
+            refuse(
+                RefusalCode::BadImage,
+                "The hardware layout is not a JSON object.",
+            )
+        })?;
+        for (k, v) in overlay {
+            map.insert(k.clone(), v.clone());
+        }
+    }
     let firmware = image::configure(
         &stock,
         &Configure {
@@ -380,6 +401,106 @@ mod tests {
         assert!(out.join("firmware.bin").is_file());
         assert!(build(&b, &t, p, "EU", [0; 6], None, 0).is_err());
         assert_eq!(built.image_sha, built.files[0].sha256);
+    }
+
+    #[test]
+    fn the_overlay_replaces_layout_keys_and_a_logo_target_refuses() {
+        let d = tempfile::tempdir().unwrap();
+        let b = bundle(d.path());
+        let mut t = rx();
+        t.overlay = serde_json::json!({"power_values": [10, 12], "radio_dcdc": true})
+            .as_object()
+            .cloned();
+        let p = check_target(&t, "4.1.0").unwrap();
+        let built = build(&b, &t, p, "FCC", [1, 2, 3, 4, 5, 6], None, 5).unwrap();
+        let hw = image::read_blocks(&built.files[0].bytes).unwrap().hardware;
+        assert_eq!(hw["power_values"], serde_json::json!([10, 12]), "replaced");
+        assert_eq!(hw["radio_dcdc"], true, "added");
+        assert_eq!(hw["serial_rx"], 3, "kept");
+        t.logo_file = Some("screen.bin".into());
+        assert_eq!(
+            check_target(&t, "4.1.0").unwrap_err().code,
+            RefusalCode::UnknownBoard
+        );
+    }
+
+    /// Against images ExpressLRS's own configurator wrote, when `QUADCAM_ELRS_BUNDLE` names an
+    /// unpacked release and `QUADCAM_ELRS_REFERENCE` a folder of configured `.bin` files from
+    /// it (FCC). QuadCam configures the same stock image with each one's UID, WiFi delay and
+    /// discriminator, and must write the same blocks and trailer. The hardware JSON is compared
+    /// as JSON: QuadCam writes its keys in another order. CI skips it. No value of a UID is
+    /// printed.
+    #[test]
+    fn images_match_what_the_expresslrs_tools_configured() {
+        let (Some(root), Some(refs)) = (
+            std::env::var_os("QUADCAM_ELRS_BUNDLE"),
+            std::env::var_os("QUADCAM_ELRS_REFERENCE"),
+        ) else {
+            return;
+        };
+        let b = Bundle {
+            version: String::new(),
+            commit: String::new(),
+            sha256: String::new(),
+            pinned: false,
+            root: std::path::PathBuf::from(root),
+            url: String::new(),
+        };
+        let targets =
+            image::parse_targets(&std::fs::read(b.root.join("hardware/targets.json")).unwrap())
+                .unwrap();
+        let mut seen = 0;
+        for e in std::fs::read_dir(refs).unwrap().flatten() {
+            let path = e.path();
+            if path.extension().and_then(|x| x.to_str()) != Some("bin") {
+                continue;
+            }
+            let name = path.display().to_string();
+            let theirs = std::fs::read(&path).unwrap();
+            let tb = image::read_blocks(&theirs).unwrap();
+            let t = targets
+                .iter()
+                .find(|t| t.product_name == tb.product && t.lua_name == tb.lua_name)
+                .unwrap_or_else(|| panic!("{name}: no target {}", tb.product));
+            let o = &tb.options;
+            let uid: Vec<u8> = o["uid"]
+                .as_array()
+                .expect("a uid")
+                .iter()
+                .map(|x| x.as_u64().unwrap() as u8)
+                .collect();
+            let p = check_target(t, "4.1.0").unwrap();
+            let built = build(
+                &b,
+                t,
+                p,
+                "FCC",
+                uid.try_into().unwrap(),
+                o["wifi-on-interval"].as_u64().map(|w| w as u32),
+                o["flash-discriminator"].as_u64().unwrap() as u32,
+            )
+            .unwrap();
+            let ours = &built.files.last().unwrap().bytes;
+            let ob = image::read_blocks(ours).unwrap();
+            assert_eq!(ob.product, tb.product, "{name}");
+            assert_eq!(ob.lua_name, tb.lua_name, "{name}");
+            assert_eq!(ob.hardware, tb.hardware, "{name}: hardware");
+            assert_eq!(ob.trailer, tb.trailer, "{name}: trailer");
+            let keys =
+                |v: &serde_json::Value| v.as_object().unwrap().keys().cloned().collect::<Vec<_>>();
+            assert_eq!(keys(&ob.options), keys(o), "{name}: option keys");
+            assert!(ob.options == *o, "{name}: option values differ");
+            // Every byte outside the options and hardware blocks is the same.
+            let end = image::blocks_at(ours).unwrap();
+            assert_eq!(ours.len(), theirs.len(), "{name}: length");
+            assert!(ours[..end + 144] == theirs[..end + 144], "{name}: head");
+            assert!(
+                ours[end + 656 + 2048..] == theirs[end + 656 + 2048..],
+                "{name}: tail"
+            );
+            seen += 1;
+        }
+        assert!(seen > 0, "no .bin in QUADCAM_ELRS_REFERENCE");
     }
 
     #[test]
