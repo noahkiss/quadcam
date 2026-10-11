@@ -386,12 +386,11 @@ fn cli_report_markdown() {
 }
 
 /// Writes the mock core's Flights seed (`app/e2e/fixtures/flights.json`) from the real core
-/// on the synthetic log, when `QUADCAM_UPDATE_FIXTURES=1`. Paths are made generic.
+/// on the synthetic log. Paths are made generic. A fixture writer, not a test: run it with
+/// `cargo test --test flights record_mock_fixture -- --ignored`.
 #[test]
+#[ignore = "writes app/e2e/fixtures/flights.json; run with --ignored"]
 fn record_mock_fixture() {
-    if std::env::var("QUADCAM_UPDATE_FIXTURES").as_deref() != Ok("1") {
-        return;
-    }
     let dir = tempfile::tempdir().unwrap();
     let c = setup(dir.path());
     c.gear_pack_type_save(&PackType {
