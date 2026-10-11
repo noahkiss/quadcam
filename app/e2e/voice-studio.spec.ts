@@ -4,7 +4,7 @@
 // joins the library, and axe.
 import AxeBuilder from "@axe-core/playwright";
 import type { Page } from "@playwright/test";
-import { expect, test, type AppFixture } from "./fixtures";
+import { axeSchemes, expect, test, type AppFixture } from "./fixtures";
 
 async function openStudio(app: AppFixture, page: Page) {
   await app.open();
@@ -161,7 +161,7 @@ test("a render the credits do not cover cannot start", async ({ app, page }) => 
   await expect(studio.getByRole("button", { name: "Render pack" })).toBeDisabled();
 });
 
-for (const scheme of ["dark", "light"] as const) {
+for (const scheme of axeSchemes) {
   test.describe(`${scheme} theme`, () => {
     test.use({ colorScheme: scheme });
     test("the Voice studio passes axe", async ({ app, page }) => {

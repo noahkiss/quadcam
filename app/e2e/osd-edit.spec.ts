@@ -5,7 +5,7 @@
 // the CLI line. Axe in both themes.
 import AxeBuilder from "@axe-core/playwright";
 import type { Locator, Page } from "@playwright/test";
-import { expect, test, type AppFixture } from "./fixtures";
+import { axeSchemes, expect, test, type AppFixture } from "./fixtures";
 
 const FC_ID = "fc-0a1b2c3d4e5f6071";
 const PORT = "/dev/cu.usbmodemFAKE1";
@@ -153,7 +153,7 @@ test("copy the layout from another quad opens the copy dialog on OSD", async ({ 
   await expect(d.getByLabel("Copy to")).toHaveValue(FC_ID);
 });
 
-for (const scheme of ["dark", "light"] as const) {
+for (const scheme of axeSchemes) {
   test.describe(`${scheme} theme`, () => {
     test.use({ colorScheme: scheme });
     test("the OSD editor passes axe", async ({ app, page }) => {

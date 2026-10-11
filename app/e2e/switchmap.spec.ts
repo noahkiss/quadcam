@@ -3,7 +3,7 @@
 // radio in USB Joystick mode (`core.radioFrame`). Axes are CH1-8, 0..2048: 1024 is centre.
 import AxeBuilder from "@axe-core/playwright";
 import type { Page } from "@playwright/test";
-import { expect, test, type AppFixture } from "./fixtures";
+import { axeSchemes, expect, test, type AppFixture } from "./fixtures";
 
 const CARD = "/Users/pilot/bench/RADIO-COPY";
 const DUMP = "/Users/pilot/bench/quad.diff_all.txt";
@@ -99,7 +99,7 @@ test("the Controls page draws the sticks in the chosen mode, the channels and th
   await expect.poll(async () => (await app.method("gear_radio_watch")).at(-1)).toEqual({ on: false });
 });
 
-for (const scheme of ["dark", "light"] as const) {
+for (const scheme of axeSchemes) {
   test.describe(`${scheme} theme`, () => {
     test.use({ colorScheme: scheme });
     test("the Controls page and the Switches segment pass axe", async ({ app, page }) => {

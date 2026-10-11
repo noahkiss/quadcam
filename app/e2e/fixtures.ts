@@ -36,6 +36,17 @@ export const test = base.extend<{ app: AppFixture }>({
 
 export { expect };
 
+/** The color schemes the axe specs loop over: both, or the ones `QC_AXE_THEMES` names
+ *  (comma separated). CI on a branch sets `dark`; main and tags run both. */
+export const axeSchemes = (() => {
+  const all = ["dark", "light"] as const;
+  const want = process.env.QC_AXE_THEMES?.split(",").map((t) => t.trim()).filter(Boolean);
+  if (!want?.length) return all;
+  const picked = all.filter((s) => want.includes(s));
+  if (picked.length !== want.length) throw new Error(`QC_AXE_THEMES: expected dark and/or light, got "${process.env.QC_AXE_THEMES}"`);
+  return picked;
+})();
+
 /** An open dialog by its heading. */
 export const dialog = (page: Page, heading: string | RegExp) =>
   page.getByRole("dialog").filter({ has: page.getByRole("heading", { name: heading }) });

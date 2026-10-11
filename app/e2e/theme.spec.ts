@@ -2,7 +2,7 @@
 // for review with QC_SHOTS=<dir>.
 import AxeBuilder from "@axe-core/playwright";
 import type { Page } from "@playwright/test";
-import { expect, test } from "./fixtures";
+import { axeSchemes, expect, test } from "./fixtures";
 
 /** Axe reads a color wherever a transition is at that moment: a button fading back after
  *  the mouse left it, a dialog rising. The hover change lands on the frame after the
@@ -12,7 +12,7 @@ const settled = async (page: Page) => {
   await page.waitForFunction(() => document.getAnimations().every((a) => a.playState === "finished"));
 };
 
-for (const scheme of ["dark", "light"] as const) {
+for (const scheme of axeSchemes) {
   test.describe(`${scheme} theme`, () => {
     test.use({ colorScheme: scheme });
 

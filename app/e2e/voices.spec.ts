@@ -4,7 +4,7 @@
 // cost check, and axe in both themes.
 import AxeBuilder from "@axe-core/playwright";
 import type { Page } from "@playwright/test";
-import { dialog, expect, test, type AppFixture } from "./fixtures";
+import { axeSchemes, dialog, expect, test, type AppFixture } from "./fixtures";
 
 const RADIO_ID = "radio-1f2e3d4c5b6a7980";
 const RADIO_LINK = `{ kind: "volume", mount: "/Volumes/RADIO", volume_uuid: null, bus_protocol: "USB", whole_disk: "disk4" }`;
@@ -136,7 +136,7 @@ test("Render my voice checks the cost first, and a provider that may charge wait
   await expect(library(page).getByRole("row", { name: /^Samantha local-say-samantha · rendered here/ })).toBeVisible();
 });
 
-for (const scheme of ["dark", "light"] as const) {
+for (const scheme of axeSchemes) {
   test.describe(`${scheme} theme`, () => {
     test.use({ colorScheme: scheme });
     test("the Voices page passes axe", async ({ app, page }) => {

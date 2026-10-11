@@ -23,6 +23,7 @@ const SYSTEM: &[&str] = &[
     "/usr/bin/tar",
     "/usr/bin/true",
     "/usr/bin/unzip",
+    "/usr/bin/zipinfo",
     "/usr/bin/xattr",
     "/usr/bin/zip",
     "/usr/sbin/diskutil",
