@@ -5,6 +5,7 @@
 #   cargo nextest run              # everything (the `default` profile)
 #   cargo nextest run -P quick     # skips the slow disk-image tests and tests/join.rs
 #   cargo nextest run -P ci        # what CI runs: everything, JUnit, two known flakes retried
+#   cargo nextest run -P ci-quick  # CI on a branch whose change misses the slow tests' code
 #
 # Doc tests are not nextest's: `cargo test --doc` runs them (the crates have none today).
 
@@ -67,3 +68,15 @@ path = "junit.xml"
 [[profile.ci.overrides]]
 filter = 'binary_id(quadcam::join) | binary_id(quadcam::mount_cycle)'
 retries = 1
+
+# CI on a branch push or pull request whose change touches nothing the disk-image tests and
+# tests/join.rs cover (the path filter in .github/workflows/ci.yml): `quick`'s filter with
+# `ci`'s settings. main and tags always run `ci`.
+[profile.ci-quick]
+inherits = "quick"
+fail-fast = false
+slow-timeout = { period = "60s", terminate-after = 10 }
+failure-output = "immediate-final"
+
+[profile.ci-quick.junit]
+path = "junit.xml"

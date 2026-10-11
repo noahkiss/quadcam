@@ -73,13 +73,15 @@ open target/release/bundle/macos/QuadCam.app
 ```
 
 - **Test loop:** run `cargo nextest run -P quick` plus the tests of the area you touched
-  (`--test <file>`). The full suite is CI's job: it runs on every push to every branch.
+  (`--test <file>`). The full suite is CI's job: it runs on every push to main or a tag, and on a
+  branch push whose change touches the slow tests' code (see the path filter below).
   Run it locally only before a release, or when CI is down. On a busy machine (other
   worktrees building) cap it: `--test-threads 4`, and `CARGO_BUILD_JOBS=4`.
 - **nextest** (`cargo install cargo-nextest --locked`, or `brew install cargo-nextest`):
   `src-tauri/.config/nextest.toml` holds the profiles. `default` runs everything; `quick`
   skips the disk-image tests and `tests/join.rs`; `ci` adds JUnit and one retry for the two
-  known load flakes (`tests/join.rs`, `tests/mount_cycle.rs`). The `serial` group runs the
+  known load flakes (`tests/join.rs`, `tests/mount_cycle.rs`); `ci-quick` is `quick`'s filter
+  with `ci`'s settings, for a branch whose change misses the slow tests' code. The `serial` group runs the
   disk-image tests one at a time (hdiutil and diskutil share one daemon, and a detached
   image's disk number is reused). `tests/common` `Image` also takes a machine-wide lock, so
   disk-image tests in two worktrees take turns. A new test that attaches an `Image` goes into
@@ -158,7 +160,13 @@ GitHub (`noahkiss/quadcam`, public) is the only remote. Users install the cask
 - **Secret:** `HOMEBREW_TAP_TOKEN` (the tap PAT) lets the release dispatch the tap.
 - `.github/workflows/ci.yml` runs fmt, clippy, tests (`cargo nextest run --profile ci`) and a
   release build on every push to a branch or `v*` tag and on pull requests from forks, and a
-  `ui` job for `app/` (typecheck, lint, Vitest, Playwright, build). A newer push cancels an
+  `ui` job for `app/` (typecheck, lint, Vitest, Playwright, build). On a branch or pull request,
+  a path filter (`dorny/paths-filter`, against the merge base with main) picks `ci` only when
+  the change touches what the slow tests cover (import, disk, card, prep, join, media, scan,
+  session, sources, the CLI's `main.rs`, the MCP server's non-Gear files, `tests/common`, those
+  test files, `Cargo.toml`/`Cargo.lock`, the toolchain file, `nextest.toml`, `ci.yml`), else
+  `ci-quick`; main and tags always run `ci`. A new slow test, or new code under one, joins that
+  filter in `ci.yml`. A newer push cancels an
   older run on the same branch or PR. A run on `main` or a tag is never cancelled: the release
   waits for it.
 

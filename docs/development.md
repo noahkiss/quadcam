@@ -63,8 +63,9 @@ QUADCAM_UPDATE_BINDINGS=1 cargo test --test bindings   # write app/src/bindings.
   | `default` | Every test |
   | `quick` (`-P quick`) | Every test except the disk-image tests and `tests/join.rs` |
   | `ci` | Every test, with a JUnit report and one retry for `tests/join.rs` and `tests/mount_cycle.rs`, which can fail on a loaded machine |
+  | `ci-quick` | The `quick` tests with the `ci` settings. CI runs it on a branch whose change does not touch the slow tests' code |
 
-- While you work, run `-P quick` and the test files of the area you changed. CI runs the full suite on every push, on every branch.
+- While you work, run `-P quick` and the test files of the area you changed. CI runs on every push, on every branch (see [CI](#ci) for when it skips the slow tests).
 - On a busy machine, cap the load: `CARGO_BUILD_JOBS=4 cargo nextest run --test-threads 4`.
 - The disk-image tests are in the `serial` test group: they run one at a time, because `hdiutil` and `diskutil` share one system daemon and a detached image's disk number goes to the next image. They also take a lock file in the temporary folder, so disk-image tests in two checkouts take turns. A new test that attaches a disk image belongs in the `serial` filter and the `quick` exclusion.
 - Three tests time the sim's real-time thread against the wall clock: the stall in `sim/tests/runner.rs`, the step cost in `sim/tests/bench.rs`, and the frame count in `tests/sim_host.rs`. They run alone, with no other test beside them, because the thread oversleeps on a loaded machine.
@@ -101,6 +102,7 @@ pnpm build                                 # -> app/dist
 `.github/workflows/ci.yml` runs on every push to a branch or a `v*` tag, and on pull requests from forks:
 
 - `cargo fmt --check`, clippy, the tests (`cargo nextest run --profile ci`, with the JUnit report as the `junit` artifact), and a release build.
+- On a branch or a pull request, the disk-image tests and `tests/join.rs` run only when the change since the merge base with `main` touches the code they cover: import, disks, cards, card prep, joins, media, scan, the session, the sources, the CLI's `main.rs`, the MCP server outside Gear, `tests/common` and those test files, `Cargo.toml`, `Cargo.lock`, `rust-toolchain.toml`, `nextest.toml` or `ci.yml`. Otherwise CI runs the `ci-quick` profile. The filter is in `ci.yml`; a new slow test, or new code it covers, joins it. On `main` and on a tag, CI runs every test.
 - A `ui` job for `app/`: typecheck, lint, Vitest, Playwright, and a build.
 
 A newer push to the same branch or pull request cancels the older run. A run on `main` or on a tag is never cancelled, because the release waits for a green run on the tagged commit.
