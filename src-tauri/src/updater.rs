@@ -213,6 +213,9 @@ fn tell_when_free(core: Arc<Core>) {
 #[specta::specta]
 pub async fn update_restart(app: AppHandle, core: State<'_, Arc<Core>>) -> Result<(), String> {
     if let Some(job) = core.restart_blocker() {
+        // The banner shows the wait and offers the restart again when the job ends.
+        core.set_update(|_| {});
+        tell_when_free(core.inner().clone());
         return Err(format!("QuadCam restarts after {job} ends."));
     }
     let pending = app.state::<Pending>();
