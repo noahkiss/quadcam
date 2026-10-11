@@ -238,6 +238,16 @@ export const commands = {
 	 */
 	gearVoiceChoose: (params: VoiceChooseParams) => typedError<StagedChange_Serialize, string>(__TAURI_INVOKE("gear_voice_choose", { params })),
 	/**
+	 *  Choose voice on several saved radios (or every saved EdgeTX radio): one staged
+	 *  card change each. The apply sheet writes each card.
+	 */
+	gearVoiceChooseRadios: (params: VoiceChooseRadiosParams) => typedError<VoiceChooseRadiosReport_Serialize, string>(__TAURI_INVOKE("gear_voice_choose_radios", { params })),
+	/**
+	 *  Removes an installed or rendered voice pack from this Mac; `takes` also removes
+	 *  the raw takes it was made from. Cards that hold its sounds keep them.
+	 */
+	gearVoicePackDelete: (params: PackDeleteParams) => typedError<PackDeleteReport, string>(__TAURI_INVOKE("gear_voice_pack_delete", { params })),
+	/**
 	 *  A radio's model for the editors: timers, value screens, logging, alarms, callouts and
 	 *  the checklist, from the mounted card or the latest backup, with staged edits on top. Reads only.
 	 */
@@ -4022,6 +4032,26 @@ export type Pack = {
 	note?: string,
 };
 
+/**  `gear_voice_pack_delete`: removes an installed or rendered pack from this Mac. */
+export type PackDeleteParams = {
+	pack: string,
+	/**
+	 *  Also remove the raw takes the pack was made from. A later render of that voice and
+	 *  model then calls the provider again (and pays again).
+	 */
+	takes?: boolean,
+};
+
+export type PackDeleteReport = {
+	pack: string,
+	/**  The bytes the pack's folder held. */
+	bytes: number,
+	/**  Raw takes and batches removed from the cache (0 unless `takes`). */
+	takes: number,
+	/**  Saved radios that had chosen the pack. Their cards keep its sounds. */
+	radios: string[],
+};
+
 /**  One flight in a pack's history. */
 export type PackFlight = {
 	flight: string,
@@ -6057,6 +6087,33 @@ export type VoiceChooseParams = {
 	editor?: Editor | null,
 };
 
+/**  `gear_voice_choose_radios`: Choose voice on several radios at once. */
+export type VoiceChooseRadiosParams = {
+	pack: string,
+	/**  Saved radios' device ids. */
+	radios?: string[],
+	/**  Every saved EdgeTX radio, with or without `radios`. */
+	all?: boolean,
+	/**  Keep each radio's overrides (default true). */
+	keep_overrides?: boolean,
+	editor?: Editor | null,
+};
+
+/**  One staged voice change per radio, in the order the radios were named. */
+export type VoiceChooseRadiosReport = VoiceChooseRadiosReport_Serialize | VoiceChooseRadiosReport_Deserialize;
+
+/**  One staged voice change per radio, in the order the radios were named. */
+export type VoiceChooseRadiosReport_Deserialize = {
+	pack: string,
+	staged: StagedChange_Deserialize[],
+};
+
+/**  One staged voice change per radio, in the order the radios were named. */
+export type VoiceChooseRadiosReport_Serialize = {
+	pack: string,
+	staged: StagedChange_Serialize[],
+};
+
 /**
  *  `gear_voice_edit`: override one line on one radio. `pack` takes another installed pack's
  *  take; `text` renders the person's own text with their provider; neither removes the
@@ -6118,6 +6175,19 @@ export type VoicePack = {
 	stale: boolean,
 	/**  Where an installed pack's files are (the app plays them from here). */
 	dir?: string | null,
+	/**  The firmware family the pack is for (`edgetx`). */
+	firmware?: string,
+	/**  The line sets (`gear_voice_sets`) whose every line the pack holds. Installed packs only. */
+	sets?: string[],
+	/**  When the pack was rendered or built (its `pack.json`). Installed packs only. */
+	made?: string | null,
+	/**  The saved radios this pack is chosen for. */
+	radios?: string[],
+	/**
+	 *  Lines a studio render left out of the pack because their cut failed a check
+	 *  (`pack.json` `retakes`). A render with another seed redoes them.
+	 */
+	retakes?: Retake[],
 };
 
 /**  `gear_voice`. */

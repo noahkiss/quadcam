@@ -13,12 +13,15 @@ import { FirmwarePage } from "./Firmware/FirmwarePage";
 import { CalibrationPage } from "./Sim/CalibrationPage";
 import { SimPage } from "./Sim/SimPage";
 import { SimsPage } from "./Sims/SimsPage";
+import { VoicesPage } from "./Voice/VoicesPage";
 
 export const GEAR_PAGES: GearPageSlot[] = [
   // The changes staged for each device, in the order the next session applies them (WP5).
   { id: "bench", label: "Bench", icon: "sliders", count: (s) => s.changes.length, render: () => <BenchPage /> },
   // The radio in USB Joystick mode, live (WP6).
   { id: "controls", label: "Controls", icon: "radio", render: () => <ControlsPage /> },
+  // The voice packs on this Mac and the Voice studio; a radio's Voice segment picks one.
+  { id: "voices", label: "Voices", icon: "signal", render: () => <VoicesPage /> },
   // Fly the sim in the plain room (S5).
   { id: "sim", label: "Sim", icon: "quad", preview: "simPreview", render: () => <SimPage /> },
   // The sims on this Mac against the quad's rates; the badge counts the ones that differ (WP8).

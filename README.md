@@ -22,7 +22,7 @@ QuadCam is a macOS app that imports the recordings from your FPV goggles into a 
   - **Devices.** QuadCam finds EdgeTX radios, DJI goggles and air units, DVR cards, flight controllers and ExpressLRS devices when you plug them in. Save a device to name it and link it to an aircraft.
   - **Card jobs.** QuadCam mounts a card for each job and unmounts it when the job ends. It backs up radio cards and flight controllers, checks a known card's file system, and prepares spare cards.
   - **Flight controllers.** Draw and edit the Betaflight OSD and rates, copy settings between quads, and pull the blackbox flash. Stage changes, check them, apply them and read them back. The Bench lists what waits.
-  - **Radios.** Edit models and checklists, build a voice pack in the voice studio, and see what each switch does on the radio and the quad. The Controls page shows sticks and switches live in USB Joystick mode.
+  - **Radios.** Edit models and checklists, build voice packs on the Voices page and apply one to several radios, and see what each switch does on the radio and the quad. The Controls page shows sticks and switches live in USB Joystick mode.
   - **Firmware.** Check for new releases and **Read firmware** from a radio. Flashing an EdgeTX radio is available. Betaflight flashing and ExpressLRS tools are previews that you turn on in Settings.
   - **Flights and packs.** QuadCam reads flights from radio logs, keeps packs with their history, logs crashes and repairs, writes a session report after an import, and checks your gear before a session.
 - **Scripts and agents.** A command-line tool and an MCP server do everything the app does.

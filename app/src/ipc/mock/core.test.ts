@@ -45,4 +45,18 @@ describe("MockCore", () => {
     expect(before).toContain("x07fee4b870d01a6f");
     expect(new Set(ids).size).toBe(ids.length);
   });
+
+  it("stages a voice on several radios and deletes a pack", () => {
+    const { core } = make();
+    core.gear.devices.push({ ...structuredClone(core.gear.devices[0]), id: "radio-two", name: "Bench radio" });
+    core.gear.devices.push({ ...structuredClone(core.gear.devices[0]), id: "radio-ethos", name: "Other radio", identity: { firmware: "ETHOS" } });
+    core.dispatch("gear_voice_render", { voice: "", lines: [], dry_run: false, confirm: false });
+    expect(() => core.dispatch("gear_voice_choose_radios", { pack: "local-say-samantha", radios: ["radio-ethos"] })).toThrow(/EdgeTX radios/);
+    const r = core.dispatch("gear_voice_choose_radios", { pack: "local-say-samantha", all: true }) as { staged: { device: string }[] };
+    expect(r.staged.map((c) => c.device)).toEqual(["radio-1f2e3d4c5b6a7980", "radio-two"]);
+    const v = core.dispatch("gear_voice", { radio: null }) as { packs: { id: string; radios: string[] }[] };
+    expect(v.packs.find((k) => k.id === "local-say-samantha")?.radios).toHaveLength(2);
+    expect(core.dispatch("gear_voice_pack_delete", { pack: "local-say-samantha", takes: false })).toMatchObject({ takes: 0, radios: ["radio-1f2e3d4c5b6a7980", "radio-two"] });
+    expect(() => core.dispatch("gear_voice_pack_delete", { pack: "local-say-samantha" })).toThrow(/not installed/);
+  });
 });

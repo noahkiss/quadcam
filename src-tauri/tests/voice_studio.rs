@@ -476,6 +476,58 @@ fn a_set_renders_into_a_local_pack_and_recutting_costs_nothing() {
 }
 
 #[test]
+fn deleting_a_studio_pack_keeps_its_batches_unless_asked() {
+    use quadcam_lib::core::{PackDeleteParams, VoiceParams};
+    let b = bench(90_000, true);
+    let r = paid_render(
+        &b,
+        render("Callum", "eleven_turbo_v2_5", &["quad"], false, true),
+    );
+    let posts = b.http.posts();
+    let v = b.core.gear_voice(&VoiceParams::default()).unwrap();
+    let k = v.packs.iter().find(|k| k.id == r.pack).unwrap();
+    assert_eq!(
+        (k.firmware.as_str(), k.model.as_str()),
+        ("edgetx", "eleven_turbo_v2_5")
+    );
+    assert!(k.sets.contains(&"quad".to_string()), "{:?}", k.sets);
+    let gone = b
+        .core
+        .gear_voice_pack_delete(&PackDeleteParams {
+            pack: r.pack.clone(),
+            takes: false,
+        })
+        .unwrap();
+    assert_eq!(gone.takes, 0);
+    // The same render again comes from the batch cache: no request.
+    paid_render(
+        &b,
+        render("Callum", "eleven_turbo_v2_5", &["quad"], false, true),
+    );
+    assert_eq!(b.http.posts(), posts);
+    let gone = b
+        .core
+        .gear_voice_pack_delete(&PackDeleteParams {
+            pack: r.pack.clone(),
+            takes: true,
+        })
+        .unwrap();
+    assert_eq!(gone.takes as usize, posts);
+    // Now it pays again: the render waits for confirm.
+    let again = b
+        .core
+        .gear_voice_render(&render(
+            "Callum",
+            "eleven_turbo_v2_5",
+            &["quad"],
+            false,
+            false,
+        ))
+        .unwrap();
+    assert!(again.needs_confirm);
+}
+
+#[test]
 fn a_render_without_a_voice_or_model_says_what_to_name() {
     let b = bench(50000, true);
     let e = b
@@ -674,6 +726,22 @@ fn a_flagged_line_stays_out_of_the_pack_until_a_re_take_redoes_its_batch() {
         .iter()
         .any(|f| f == "SOUNDS/en/lowrssi.wav"));
     assert_eq!(m["retakes"].as_array().unwrap().len(), 2);
+    // The pack library shows the lines that need a re-take.
+    let library = |b: &Bench| {
+        let v = b
+            .core
+            .gear_voice(&quadcam_lib::core::VoiceParams::default())
+            .unwrap();
+        v.packs.into_iter().find(|k| k.id == r.pack).unwrap()
+    };
+    let k = library(&b);
+    assert_eq!(k.retakes.len(), 2, "{k:?}");
+    assert!(quadcam_lib::core::voice_view_text(
+        &b.core
+            .gear_voice(&quadcam_lib::core::VoiceParams::default())
+            .unwrap()
+    )
+    .contains("2 lines need a re-take"));
     let posts = b.http.posts();
     assert_eq!(posts as u32, batches);
 
@@ -717,6 +785,7 @@ fn a_flagged_line_stays_out_of_the_pack_until_a_re_take_redoes_its_batch() {
     let m: serde_json::Value =
         serde_json::from_slice(&std::fs::read(pack.join("pack.json")).unwrap()).unwrap();
     assert!(m["retakes"].as_array().unwrap().is_empty());
+    assert!(library(&b).retakes.is_empty());
     assert!(m["files"]
         .as_array()
         .unwrap()

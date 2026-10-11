@@ -1,7 +1,7 @@
 // The mock core's voice (`core/voice.rs`, `gear/voice/`), written by hand: a few of QuadCam's
-// lines, one pack in a made-up index, per-line overrides, a local render and Choose voice,
-// which stages one `card_files` change as the core does.
-import type { Catalog, Edit, KeyStatus, LineOverride, ModelInfo, RenderReport, SampleItem, SampleReport, SetInfo, StagedChange, StudioEstimate, StudioView, VoiceEstimate, VoiceInfo, VoiceLine, VoicePack, VoiceView } from "../types";
+// lines, one pack in a made-up index, per-line overrides, a local render, Choose voice (one
+// `card_files` change, as the core stages it, on one radio or several) and pack delete.
+import type { Catalog, Edit, KeyStatus, LineOverride, ModelInfo, PackDeleteReport, RenderReport, Retake, SampleItem, SampleReport, SetInfo, StagedChange, StudioEstimate, StudioView, VoiceChooseRadiosReport, VoiceEstimate, VoiceInfo, VoiceLine, VoicePack, VoiceView } from "../types";
 import type { MockGear } from "./gear";
 import * as changes from "./changes";
 
@@ -44,9 +44,13 @@ export interface MockVoice {
   spent: number;
   /** A line a studio render without a seed leaves out for a re-take. */
   retake: string | null;
+  /** Packs deleted with their raw takes. */
+  takesDeleted: string[];
+  /** Each rendered pack's lines that need a re-take (its `pack.json` `retakes`). */
+  retakes: Record<string, Retake[]>;
 }
 
-export const freshVoice = (): MockVoice => ({ installed: [], index: false, overrides: {}, chosen: {}, custom: [], paid: false, keySet: false, spent: 0, retake: null });
+export const freshVoice = (): MockVoice => ({ installed: [], index: false, overrides: {}, chosen: {}, custom: [], paid: false, keySet: false, spent: 0, retake: null, takesDeleted: [], retakes: {} });
 
 type Paid = { confirm?: boolean; digest?: string | null; settings?: { seed?: number | null } | null };
 
@@ -59,17 +63,20 @@ function samePlan(p: Paid, digest: string) {
   if (p.digest !== digest) throw "The plan changed since its estimate (voices, models, sets, seed or characters): estimate again.";
 }
 
-const AVAILABLE: VoicePack = { id: "en-demo-v1", voice: "Demo", lang: "en", provider: "demo", model: "", lines: LINES.length, license: "CC BY 4.0", attribution: "Made up for the mock core", version: "1", installed: false, local: false, bytes: 3_700_000, stale: false, dir: null };
+const AVAILABLE: VoicePack = { id: "en-demo-v1", voice: "Demo", lang: "en", provider: "demo", model: "", lines: LINES.length, license: "CC BY 4.0", attribution: "Made up for the mock core", version: "1", installed: false, local: false, bytes: 3_700_000, stale: false, dir: null, firmware: "edgetx", sets: [], made: null, radios: [], retakes: [] };
 const LOCAL_ID = "local-say-samantha";
+const MADE = "2026-10-01T18:30:00Z";
 
 function packs(v: MockVoice): VoicePack[] {
   const out: VoicePack[] = [];
-  if (v.installed.includes(LOCAL_ID)) out.push({ ...AVAILABLE, id: LOCAL_ID, voice: "Samantha", provider: "say", license: "Rendered by you; yours to use.", attribution: "", version: "", installed: true, local: true, bytes: 0, dir: `/Users/pilot/gear/voices/${LOCAL_ID}` });
+  const radios = (id: string) => Object.keys(v.chosen).filter((r) => v.chosen[r] === id);
+  const mine = (id: string, k: Partial<VoicePack>): VoicePack => ({ ...AVAILABLE, id, license: "Rendered by you; yours to use.", attribution: "", version: "", installed: true, local: true, bytes: 412_000, dir: `/Users/pilot/gear/voices/${id}`, sets: ["quadcam"], made: MADE, radios: radios(id), retakes: v.retakes[id] ?? [], ...k });
+  if (v.installed.includes(LOCAL_ID)) out.push(mine(LOCAL_ID, { voice: "Samantha", provider: "say" }));
   for (const id of v.installed.filter((x) => x.startsWith("local-elevenlabs-"))) {
     const name = id.split("-")[2] ?? "voice";
-    out.push({ ...AVAILABLE, id, voice: name.charAt(0).toUpperCase() + name.slice(1), provider: "elevenlabs", model: id.split("-").slice(3).join("_"), license: "Rendered by you; yours to use.", attribution: "", version: "", installed: true, local: true, bytes: 0, dir: `/Users/pilot/gear/voices/${id}` });
+    out.push(mine(id, { voice: name.charAt(0).toUpperCase() + name.slice(1), provider: "elevenlabs", model: id.split("-").slice(3).join("_"), sets: ["quad"], bytes: 2_300_000 }));
   }
-  if (v.installed.includes(AVAILABLE.id)) out.push({ ...AVAILABLE, installed: true, dir: `/Users/pilot/gear/voices/${AVAILABLE.id}` });
+  if (v.installed.includes(AVAILABLE.id)) out.push({ ...AVAILABLE, installed: true, dir: `/Users/pilot/gear/voices/${AVAILABLE.id}`, sets: ["quadcam"], made: MADE, radios: radios(AVAILABLE.id) });
   else if (v.index) out.push({ ...AVAILABLE });
   return out;
 }
@@ -172,6 +179,29 @@ export function choose(g: MockGear, p: { radio: string; pack: string; keep_overr
   return changes.stage(g, p.radio, edits, title, editor);
 }
 
+/** `gear_voice_choose_radios`: every radio checked first, then one change each. */
+export function chooseRadios(g: MockGear, p: { pack: string; radios?: string[]; all?: boolean; keep_overrides?: boolean }, editor: "user" | "agent"): VoiceChooseRadiosReport {
+  const radios = [...(p.radios ?? [])];
+  if (p.all) for (const d of g.devices) if (d.kind === "radio" && (!d.identity?.firmware || d.identity.firmware.toLowerCase() === "edgetx") && !radios.includes(d.id)) radios.push(d.id);
+  if (radios.length === 0) throw "Name at least one radio, or ask for all radios.";
+  for (const r of radios) {
+    const d = radioOf(g, r);
+    const f = d.identity?.firmware;
+    if (f && f.toLowerCase() !== "edgetx") throw `${d.name || r} runs ${f}: voice packs are for EdgeTX radios.`;
+  }
+  if (!g.voice.installed.includes(p.pack)) throw `Pack "${p.pack}" is not installed: install it first.`;
+  return { pack: p.pack, staged: radios.map((radio) => choose(g, { radio, pack: p.pack, keep_overrides: p.keep_overrides }, editor)) };
+}
+
+/** `gear_voice_pack_delete`. */
+export function remove(g: MockGear, p: { pack: string; takes?: boolean }): PackDeleteReport {
+  const k = packs(g.voice).find((x) => x.id === p.pack && x.installed);
+  if (!k) throw `Pack "${p.pack}" is not installed.`;
+  g.voice.installed = g.voice.installed.filter((x) => x !== p.pack);
+  if (p.takes) g.voice.takesDeleted.push(p.pack);
+  return { pack: p.pack, bytes: k.bytes, takes: p.takes ? k.lines : 0, radios: k.radios ?? [] };
+}
+
 /** `gear_voice_preview`: a path under the cache, as the core's copy would be. */
 export function preview(g: MockGear, p: { line: string; pack?: string | null; radio?: string | null }): string {
   checkPath(p.line);
@@ -201,6 +231,7 @@ const SETS: SetInfo[] = [
   { id: "extras", title: "FPV extras", about: "More FPV callouts: arming states, profiles, VTX, OSD, recording, finder.", lines: 68 },
   { id: "easter", title: "Easter eggs", about: "Short fun lines in original wording. Off unless a model plays them.", lines: 12 },
   { id: "sample", title: "Sample", about: "A dozen hard lines for comparing voices: a bare number, short words, warnings.", lines: 12 },
+  { id: "quadcam", title: "QuadCam default", about: "The lines QuadCam's packs hold.", lines: 45 },
   { id: "custom", title: "Your lines", about: "The lines you added.", lines: 0 },
 ];
 const CREDITS = 98_500;
@@ -315,8 +346,10 @@ function studioRender(g: MockGear, p: { voice?: string; sets: string[]; model?: 
   const flagged = LINES.find((l) => l.path === g.voice.retake);
   if (flagged && seed === 0) {
     const retakes = [{ path: flagged.path, text: flagged.text, reason: "the cut is silent" }];
+    g.voice.retakes[id] = retakes;
     return { ...base, rendered: e.batches, from_cache: 0, needs_confirm: false, warnings: [`"${flagged.text}": the cut is silent`], retakes };
   }
   // A re-take with a seed redoes only the batch that held the flagged line.
+  delete g.voice.retakes[id];
   return { ...base, rendered: seed ? 1 : e.batches, from_cache: 0, needs_confirm: false };
 }

@@ -1,16 +1,15 @@
-// The radio's Voice segment (design 7.4, WP9): the lines QuadCam knows with the text a voice
-// speaks, the voice packs (install one, or render your own with your provider), Choose voice,
-// which stages one card change, and a per-line override. Nothing reaches the card until the
-// apply sheet writes it.
+// The radio's Voice segment (design 7.4, WP9): which pack the radio uses (Choose voice, which
+// stages one card change), the lines QuadCam knows with the text a voice speaks, and a
+// per-line override. Packs are rendered and installed on the Voices page. Nothing reaches the
+// card until the apply sheet writes it.
 import { useState } from "react";
 import { Banner } from "../../../components/Banner";
 import { Button } from "../../../components/Button";
 import { Checkbox, Input, Select } from "../../../components/Field";
 import { api, errText, fileSrc } from "../../../ipc/api";
-import type { RenderReport, StagedChange, VoiceLine, VoicePack, VoiceView } from "../../../ipc/types";
+import type { StagedChange, VoiceLine, VoiceView } from "../../../ipc/types";
 import { useStore } from "../../../store";
 import type { DeviceRef } from "../slots";
-import { Studio } from "./Studio";
 import { useVoice } from "./useVoice";
 import styles from "./Voice.module.css";
 
@@ -46,78 +45,17 @@ function StagedVoice({ radio }: { radio: string | null }) {
   );
 }
 
-const reportText = (r: RenderReport) => {
-  const p = r.plan;
-  if (r.needs_confirm) return `Not rendered: ${p.chars} characters would go to ${r.provider}, which may charge for them.`;
-  if (r.dry_run) return `Would render ${p.to_render} of ${p.lines} lines with ${r.provider}; ${p.cached} come from the cache; ${p.chars} characters${r.paid ? ", which may be charged" : ""}.`;
-  return `Rendered ${r.rendered} of ${p.lines} lines into ${r.pack}; ${r.from_cache} came from the cache.`;
-};
-
-function Packs({ view, act, refresh }: { view: VoiceView; act: <T>(f: () => Promise<T>) => Promise<T | undefined>; refresh: () => Promise<void> }) {
-  const [voice, setVoice] = useState("");
-  const [report, setReport] = useState<RenderReport | null>(null);
-  const render = async (dry: boolean, confirm = false) => {
-    const r = await act(() => api.gearVoiceRender({ voice, lines: [], dry_run: dry, confirm, settings: null }));
-    if (r) setReport(r);
-  };
+function OpenVoices() {
+  const open = useStore((s) => s.openGear);
   return (
-    <section className={styles.section} aria-label="Voice packs">
-      <h3>Voice packs</h3>
-      {view.packs.length === 0 && <p className={styles.muted}>No voice pack is installed or listed.</p>}
-      <ul className={styles.packs}>
-        {view.packs.map((k: VoicePack) => (
-          <li key={k.id} className={styles.pack}>
-            <span className={styles.grow}>
-              <strong>{k.voice}</strong> ({k.id}) · {k.lines} lines · {k.installed ? (k.local ? "rendered here" : "installed") : "available"}
-              {k.stale ? " · from older lines" : ""}
-              {k.license ? ` · ${k.license}` : ""}
-            </span>
-            {!k.installed && (
-              <Button size="sm" icon="import" aria-label={`Install ${k.voice}`} onClick={() => act(() => api.gearVoicePackInstall({ pack: k.id, source: null }))}>
-                Install
-              </Button>
-            )}
-          </li>
-        ))}
-      </ul>
-      <div className={styles.bar}>
-        <Button size="sm" icon="refresh" onClick={() => act(refresh)}>
-          Refresh packs
-        </Button>
-      </div>
-      <div className={styles.bar} role="group" aria-label="Render my voice">
-        <label className={styles.field}>
-          My voice
-          <Input aria-label="My voice" placeholder={view.provider.voice || "the provider's default"} value={voice} onChange={(e) => setVoice(e.target.value)} />
-        </label>
-        <Button size="sm" onClick={() => render(true)}>
-          Check cost
-        </Button>
-        <Button size="sm" variant="primary" disabled={!view.provider.ready} onClick={() => render(false)}>
-          Render my voice
-        </Button>
-        {report?.needs_confirm && (
-          <Button size="sm" variant="danger" onClick={() => render(false, true)}>
-            Render and pay
-          </Button>
-        )}
-      </div>
-      {!view.provider.ready && (
-        <p className={styles.error} role="alert">
-          The voice provider is not ready: {view.provider.problem ?? "unknown"}
-        </p>
-      )}
-      {report && (
-        <p className={styles.status} role="status">
-          {reportText(report)}
-        </p>
-      )}
-    </section>
+    <Button size="sm" onClick={() => open({ page: "slot", id: "voices" })}>
+      Open Voices
+    </Button>
   );
 }
 
 function Choose({ radio, view, act }: { radio: string; view: VoiceView; act: <T>(f: () => Promise<T>) => Promise<T | undefined> }) {
-  const installed = view.packs.filter((k) => k.installed);
+  const installed = view.packs.filter((k) => k.installed && (k.firmware ?? "edgetx") === "edgetx");
   const [pack, setPack] = useState("");
   const [keep, setKeep] = useState(true);
   const current = installed.some((k) => k.id === pack) ? pack : (installed[0]?.id ?? "");
@@ -125,7 +63,10 @@ function Choose({ radio, view, act }: { radio: string; view: VoiceView; act: <T>
     <section className={styles.section} aria-label="Choose voice">
       <h3>Choose voice</h3>
       {installed.length === 0 ? (
-        <p className={styles.muted}>Install a voice pack, or render your own, to choose a voice.</p>
+        <div className={styles.bar}>
+          <p className={styles.muted}>No voice pack on this Mac. Render or install one on the Voices page.</p>
+          <OpenVoices />
+        </div>
       ) : (
         <div className={styles.bar}>
           <label className={styles.field}>
@@ -142,6 +83,7 @@ function Choose({ radio, view, act }: { radio: string; view: VoiceView; act: <T>
           <Button variant="primary" onClick={() => act(() => api.gearVoiceChoose({ radio, pack: current, keep_overrides: keep, editor: null }))}>
             Choose voice
           </Button>
+          <OpenVoices />
         </div>
       )}
       {view.chosen && <p className={styles.status}>Chosen for this radio: {view.chosen}.</p>}
@@ -241,8 +183,6 @@ export function VoiceSegment({ d }: { d: DeviceRef }) {
       {view && radio && (
         <>
           <Choose radio={radio} view={view} act={v.act} />
-          <Studio onRendered={v.refresh} />
-          <Packs view={view} act={v.act} refresh={v.refresh} />
           <section className={styles.section} aria-label="Lines">
             <h3>Lines</h3>
             <div className={styles.bar}>

@@ -695,6 +695,8 @@ impl Core {
             files,
             retakes: retakes.clone(),
             kept_batches,
+            firmware: packs::EDGETX.into(),
+            voice_id: voice.clone(),
         };
         std::fs::write(
             stage.join("pack.json"),

@@ -267,6 +267,34 @@ impl BatchCache {
         })
     }
 
+    /// Removes every batch of one voice and model. Returns how many it removed.
+    pub fn remove_voice(&self, provider: &str, voice: &str, model: &str) -> u32 {
+        let dir = self.path(provider, "x", "json");
+        let Some(dir) = dir.parent() else {
+            return 0;
+        };
+        let mut n = 0;
+        for e in std::fs::read_dir(dir).into_iter().flatten().flatten() {
+            let p = e.path();
+            if p.extension().is_none_or(|x| x != "json") {
+                continue;
+            }
+            let Some(st) = std::fs::read(&p)
+                .ok()
+                .and_then(|b| serde_json::from_slice::<Stored>(&b).ok())
+            else {
+                continue;
+            };
+            if st.voice == voice && st.model == model {
+                let _ = std::fs::remove_file(p.with_extension("wav"));
+                if std::fs::remove_file(&p).is_ok() {
+                    n += 1;
+                }
+            }
+        }
+        n
+    }
+
     #[allow(clippy::too_many_arguments)]
     pub fn put(
         &self,

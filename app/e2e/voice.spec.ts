@@ -1,6 +1,6 @@
-// The radio's Voice segment on the mock core (design 7.4, WP9): packs from the index, Render
-// my voice with its cost check and confirm, Choose voice (one staged change, Keep my
-// overrides), per-line overrides, the apply sheet's card diff, and axe in both themes.
+// The radio's Voice segment on the mock core (design 7.4, WP9): Choose voice from the packs on
+// the Voices page (one staged change, Keep my overrides), per-line overrides, the apply
+// sheet's card diff, and axe in both themes.
 import AxeBuilder from "@axe-core/playwright";
 import type { Page } from "@playwright/test";
 import { expect, test, type AppFixture } from "./fixtures";
@@ -17,26 +17,30 @@ async function openVoice(app: AppFixture, page: Page, plugged = false) {
   await page.getByRole("group", { name: "Sections" }).getByRole("button", { name: "Voice" }).click();
 }
 
+/** Installs the index's Demo pack on the Voices page, then opens the radio's Voice segment. */
 async function installDemo(page: Page) {
+  await page.getByRole("navigation", { name: "Library" }).getByRole("button", { name: /^Voices/ }).click();
   await page.getByRole("button", { name: "Refresh packs" }).click();
   await page.getByRole("button", { name: "Install Demo" }).click();
-  await expect(page.getByRole("region", { name: "Voice packs" })).toContainText("installed");
+  await expect(page.getByRole("table", { name: "Voice packs on this Mac" })).toContainText("Demo");
+  await page.getByRole("navigation", { name: "Library" }).getByRole("button", { name: /^Devices/ }).click();
+  await page.getByRole("list", { name: "Devices" }).getByRole("button", { name: /Field radio/ }).click();
+  await page.getByRole("group", { name: "Sections" }).getByRole("button", { name: "Voice" }).click();
 }
 
-test("the lines show the spoken text, and a pack comes from the index", async ({ app, page }) => {
+test("the lines show the spoken text, and Choose voice lists the packs on the Voices page", async ({ app, page }) => {
   await openVoice(app, page);
   const lines = page.getByRole("table", { name: "Voice lines" });
   await expect(lines.getByRole("row", { name: /armed\.wav Armed/ })).toBeVisible();
   await expect(lines.getByRole("row", { name: /gpsfix\.wav GPS fix \(spoken: G\.P\.S\. fix\)/ })).toBeVisible();
   const choose = page.getByRole("region", { name: "Choose voice" });
-  await expect(choose).toContainText("Install a voice pack, or render your own");
-  await expect(page.getByRole("region", { name: "Voice packs" })).toContainText("No voice pack is installed or listed.");
-  await page.getByRole("button", { name: "Refresh packs" }).click();
-  expect((await app.method("gear_voice")).some((p) => p.refresh_index === true)).toBe(true);
-  await expect(page.getByRole("region", { name: "Voice packs" })).toContainText("Demo (en-demo-v1) · 7 lines · available · CC BY 4.0");
-  await page.getByRole("button", { name: "Install Demo" }).click();
-  expect((await app.method("gear_voice_pack_install")).at(-1)).toEqual({ pack: "en-demo-v1", source: null });
-  await expect(page.getByRole("region", { name: "Voice packs" })).toContainText("installed");
+  await expect(choose).toContainText("No voice pack on this Mac.");
+  // The studio and the pack list live on the Voices page now.
+  await expect(page.getByRole("region", { name: "Voice studio" })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Refresh packs" })).toHaveCount(0);
+  await choose.getByRole("button", { name: "Open Voices" }).click();
+  await expect(page.getByRole("heading", { name: "Voices", level: 2 })).toBeVisible();
+  await installDemo(page);
   await expect(choose.getByRole("combobox", { name: "Voice" })).toHaveValue("en-demo-v1");
   await expect(lines.getByRole("button", { name: "Play Armed in Demo" })).toBeVisible();
 });
@@ -82,21 +86,6 @@ test("one line takes another voice's take or the person's own text, and Reset cl
   await page.getByRole("combobox", { name: "Group" }).selectOption("numbers");
   await expect(page.getByRole("row", { name: /armed\.wav/ })).toHaveCount(0);
   await expect(page.getByRole("row", { name: /0001\.wav one/ })).toBeVisible();
-});
-
-test("Render my voice checks the cost first, and a provider that may charge waits for the click", async ({ app, page }) => {
-  await openVoice(app, page);
-  const packs = page.getByRole("region", { name: "Voice packs" });
-  await packs.getByRole("button", { name: "Check cost" }).click();
-  await expect(packs.getByRole("status")).toContainText("Would render 7 of 7 lines with say; 0 come from the cache; 46 characters.");
-  await app.core(`c => { c.gear.voice.paid = true; }`);
-  await packs.getByRole("button", { name: "Render my voice" }).click();
-  await expect(packs.getByRole("status")).toContainText("Not rendered: 46 characters would go to say, which may charge for them.");
-  expect((await app.method("gear_voice_render")).at(-1)).toMatchObject({ confirm: false, dry_run: false });
-  await packs.getByRole("button", { name: "Render and pay" }).click();
-  expect((await app.method("gear_voice_render")).at(-1)).toMatchObject({ confirm: true });
-  await expect(packs.getByRole("status")).toContainText("Rendered 7 of 7 lines into local-say-samantha");
-  await expect(packs).toContainText("Samantha (local-say-samantha) · 7 lines · rendered here");
 });
 
 test("Review shows the sounds that go on the card, and the apply verifies", async ({ app, page }) => {

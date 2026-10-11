@@ -26,9 +26,10 @@ pub use crate::core::{
 };
 pub use crate::core::{
     CardMountParams, CardMounted, ChangeUpdateParams, CopyParams, DfuLinkParams, DfuLinked,
-    ModelDetail, ModelEditParams, ModelParams, OsdEditParams, PackInstallParams, RadioCliAction,
-    RadioCliParams, RadioCliReport, RadioMatch, RadioVerify, RenderReport, RestoreParams,
-    SimRestoreParams, SimRestoreRequest, StageParams, VoiceChooseParams, VoiceEditParams,
+    ModelDetail, ModelEditParams, ModelParams, OsdEditParams, PackDeleteParams, PackDeleteReport,
+    PackInstallParams, RadioCliAction, RadioCliParams, RadioCliReport, RadioMatch, RadioVerify,
+    RenderReport, RestoreParams, SimRestoreParams, SimRestoreRequest, StageParams,
+    VoiceChooseParams, VoiceChooseRadiosParams, VoiceChooseRadiosReport, VoiceEditParams,
     VoiceLine, VoicePack, VoiceParams, VoicePreviewParams, VoiceRenderParams, VoiceView,
 };
 pub use crate::core::{
@@ -217,6 +218,12 @@ macro_rules! with_gear_rows {
             /// Stages one card change that puts a pack's sounds on a radio, keeping the person's
             /// per-line overrides when asked. The apply sheet writes the card.
             gear_voice_choose(params: VoiceChooseParams) -> StagedChange = |c| c.gear_voice_choose(&params);
+            /// Choose voice on several saved radios (or every saved EdgeTX radio): one staged
+            /// card change each. The apply sheet writes each card.
+            gear_voice_choose_radios(params: VoiceChooseRadiosParams) -> VoiceChooseRadiosReport = |c| c.gear_voice_choose_radios(&params);
+            /// Removes an installed or rendered voice pack from this Mac; `takes` also removes
+            /// the raw takes it was made from. Cards that hold its sounds keep them.
+            gear_voice_pack_delete(params: PackDeleteParams) -> PackDeleteReport = |c| c.gear_voice_pack_delete(&params);
             /// Checks and diffs EdgeTX card edits. Writes nothing.
             gear_card_preview(params: CardPreviewParams) -> CardPreview = |c| c.gear_card_preview(&params);
             /// The switch map: each control's positions with their channel values, FC modes

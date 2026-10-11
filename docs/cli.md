@@ -174,6 +174,8 @@ quadcam-cli --json gear voice render --set quad,extras --voice Callum --model el
 quadcam-cli --json gear voice install PACK [--source INDEX]   # a pack from the index, after a hash check
 quadcam-cli --json gear voice edit --radio ID --line PATH [--text T | --pack P | (neither: clear)] [--confirm]   # one line on one radio
 quadcam-cli --json gear voice choose --radio ID --pack P [--drop-overrides]   # stages one card change; nothing is written to the card
+quadcam-cli --json gear voice choose --radio ID,ID2 | --all-radios --pack P [--drop-overrides]   # one card change per radio (every saved EdgeTX radio with --all-radios); answers {pack, staged}
+quadcam-cli --json gear voice delete PACK --yes [--takes]   # removes an installed or rendered pack from this Mac; --takes also removes its raw takes from the cache
 quadcam-cli --json gear voice build-pack --voice V --out DIR [--id ID --version N --lang en --license L --attribution A] [--dry-run] [--confirm] [render flags]   # maintainer tool: a zip and a voices.json entry
 quadcam-cli --json gear model DEVICE [--model model01.yml] [--no-staged] [--text]   # a radio's model for the editors, from the card or the latest backup
 quadcam-cli --json gear model-edit DEVICE --model model01.yml [--timer 2:name=FLT,minuteBeep=1]... [--timer-off N]... [--screen 1:'{RxBt},Tmr1/{Capa}']... [--screen-script N:NAME]... [--screen-off N]... [--logging SA2:0.5|off] [--log-sensor RxBt=off]... [--rf-alarm 50:40] [--callout lowbat:below:'{RxBt}':3.5:2:5]... [--callout armed:switch:L1:'!1x']... [--callout-off TRACK]... [--checklist-file FILE|-] [--checklist on|off] [--ops FILE]   # stages into the one "Model edits" change; writes nothing to the card
@@ -292,7 +294,7 @@ Every MCP tool has a command. The command line also has `scan`, `analyze`, `clea
 | `quadcam_gear_apply` | the same command with `--digest D --yes` (MCP `confirm=true`) |
 | `quadcam_library_files` `cuts`, `split_by_flight`, `export_cuts` | `library cut` (`--by-flight`, `--export`) |
 
-Flags that mean one thing everywhere: `--yes` is MCP `confirm`, `--plan` shows the checks and digest and writes nothing, `--device` is a saved device id, `--mount` is a mount point, `--profile` is an aircraft profile. `gear voice` keeps `--confirm`: it allows a voice provider that may charge, which is a different consent. `gear blackbox pull` takes no `--yes`, while MCP `blackbox_pull` needs `confirm=true`. When the `gear_erase_blackbox` setting is on, `pull` erases the flash after a verified pull: the setting is the consent, as `delete_clips_after_import` is for `import`, and `--keep` skips the erase for one run. A new `--yes` requirement would break schema 1 scripts, so the command keeps working without it.
+Flags that mean one thing everywhere: `--yes` is MCP `confirm`, `--plan` shows the checks and digest and writes nothing, `--device` is a saved device id, `--mount` is a mount point, `--profile` is an aircraft profile. `gear voice` keeps `--confirm`: it allows a voice provider that may charge, which is a different consent. `gear blackbox pull` takes no `--yes`, while MCP `blackbox_pull` needs `confirm=true`. When the `gear_erase_blackbox` setting is on, `pull` erases the flash after a verified pull: the setting is the consent, as `delete_clips_after_import` is for `import`, and `--keep` skips the erase for one run. A new `--yes` requirement would break schema 1 scripts, so the command keeps working without it. `gear voice delete` takes `--yes` like any other write.
 
 ## MCP server
 
