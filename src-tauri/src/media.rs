@@ -72,7 +72,7 @@ fn homebrew_tool(name: &str) -> Option<PathBuf> {
 /// the source is `module` and it is installed), then Homebrew and PATH.
 pub fn find_tools() -> Result<Tools> {
     find_tools_with(
-        &ToolPrefs::from_settings(&crate::paths::default_settings_file()),
+        &ToolPrefs::from_settings(&crate::paths::support_dir_or_stand_in().join("settings.json")),
         &crate::modules::Modules::default(),
     )
 }

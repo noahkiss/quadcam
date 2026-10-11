@@ -72,7 +72,7 @@ pub struct Modules {
 impl Default for Modules {
     fn default() -> Self {
         Modules::new(
-            crate::paths::support_dir().join("modules"),
+            crate::paths::support_dir_or_stand_in().join("modules"),
             crate::paths::cache_dir().join("modules"),
             Manifest::built_in(),
             NEWEST_URL.into(),

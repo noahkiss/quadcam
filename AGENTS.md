@@ -28,7 +28,7 @@ README and `docs/`. Personal preferences go in the app's settings file on the ma
 | `scripts/notices.mjs` | Third-party notices (crates, npm packages, fonts, icons) and the license allow list; `pnpm build` writes `app/dist/THIRD_PARTY_NOTICES.txt`, which `tauri.conf.json` copies to `Contents/Resources`. `scripts/licenses/` holds SPDX standard texts |
 | `src-tauri/Info.plist` | Photos and speech recognition usage strings, merged into the bundle's Info.plist |
 | `src-tauri/Entitlements.plist` | Hardened-runtime entitlements (Photos library) for every signature |
-| `src-tauri/tests/` | Integration tests on synthetic clips and FAT32 disk images. `it/` is one test binary, one module per area; the three files beside it change an environment variable and stay binaries of their own |
+| `src-tauri/tests/` | Integration tests on synthetic clips and FAT32 disk images. `it/` is one test binary, one module per area; the four files beside it change an environment variable and stay binaries of their own |
 | `test-clips/` | Local test corpus. Git tracks only its README |
 | `scripts/make-corpus.sh` | Builds `test-clips/synthetic/` |
 | `assets/icon.svg` | Icon source. Regenerate with `cargo tauri icon` |
@@ -67,7 +67,7 @@ cargo test --test it import::size_and_speed -- --ignored --nocapture   # MP4 vs 
 INSTA_UPDATE=always cargo test --test it snapshots::   # accept a deliberate shape change, then review the diff
 QUADCAM_UPDATE_SURFACE=1 cargo test --test it surface::   # record new tools, actions, flags in tests/surface/ (additions only)
 QUADCAM_UPDATE_BINDINGS=1 cargo test --test it bindings::   # write app/src/bindings.ts after an api change
-cargo tauri dev                 # run from source (Photos is dry-run; QUADCAM_PHOTOS=real to test it)
+HOME=$(mktemp -d) cargo tauri dev   # run from source (Photos is dry-run; QUADCAM_PHOTOS=real to test it; the real HOME needs QUADCAM_PATHS=real)
 cargo tauri build               # -> target/release/bundle/macos/QuadCam.app (runs pnpm --dir app build)
 cargo build --release --bin quadcam-cli   # -> target/release/quadcam-cli
 open target/release/bundle/macos/QuadCam.app
@@ -86,8 +86,8 @@ open target/release/bundle/macos/QuadCam.app
   disk-image tests one at a time (hdiutil and diskutil share one daemon, and a detached
   image's disk number is reused). The integration tests are one binary per crate, `it`
   (`tests/it/main.rs`, a module per area), so a test's name starts with its module
-  (`join::...`) and the crate links once, not once per file. `tests/output_dir.rs`, `rates.rs`
-  and `voice_core.rs` change an environment variable that other areas read, so each stays a
+  (`join::...`) and the crate links once, not once per file. `tests/output_dir.rs`, `rates.rs`,
+  `real_paths.rs` and `voice_core.rs` change an environment variable that other areas read, so each stays a
   binary of its own (`Cargo.toml` lists every `[[test]]`; `autotests = false`), as does the
   sim's `tests/bench.rs`. `tests/it/common` `Image` also takes a machine-wide lock, so
   disk-image tests in two worktrees take turns. A new test that attaches an `Image` goes into
@@ -542,7 +542,13 @@ claude mcp add quadcam -- "$(brew --prefix)/bin/quadcam-cli" mcp
   mock core fakes the feed (`app/src/ipc/mock/update.ts`).
 - **Never touch the real settings file or library while testing.** Tests and manual runs
   set `HOME` to a temp folder (the CLI and MCP derive every path from it) or pass
-  `Core::with_settings` a temp file.
+  `Core::with_settings` a temp file (`AutoBackend::with_settings` for a headless MCP core).
+  As a fail-safe, a process started by cargo whose `HOME` is the account's own home panics on
+  the support folder and every path under it (settings, gear folder, control socket) unless
+  `QUADCAM_PATHS=real` (`paths::support_dir`; `tests/real_paths.rs` proves it). A core built
+  without `with_settings` therefore refuses its default gear folder. Code that only finds
+  things there (the installed modules, the tool settings) gets a temporary stand-in
+  (`paths::support_dir_or_stand_in`). `cargo tauri dev` needs a temp `HOME` or `QUADCAM_PATHS=real`.
 - The control socket and MCP server expose the same `Core::dispatch` methods. Add a feature
   to `Core` first, then add its row to the `api!` table (that makes the dispatch method and the
   typed GUI command), then wire it into the CLI and the MCP tools. Debug builds of the app

@@ -6,6 +6,7 @@ User-facing changes in each release, newest first. Release notes on
 ## Unreleased
 
 - **Restart to update in Settings.** When a newer version is known, Settings > Advanced shows **Restart to update** (download with progress, signature check, install, restart) and the release notes link beside **Check now**, as the banner does. It waits while a job runs, as the banner does.
+- **Development: tests never reach the real gear folder.** A process started by cargo whose `HOME` is the account's own home now refuses QuadCam's support folder (settings, gear folder, control socket) unless `QUADCAM_PATHS=real`. A test core built without a settings file once wrote into the real gear folder. `cargo tauri dev` needs a temporary `HOME` or `QUADCAM_PATHS=real`.
 
 ## 0.17.0 (2026-10-11)
 

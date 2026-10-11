@@ -32,6 +32,8 @@ pub trait Backend {
 pub struct AutoBackend {
     socket: PathBuf,
     session_file: Option<PathBuf>,
+    /// The headless core's settings file; None for the shared one.
+    settings_file: Option<PathBuf>,
     local: Option<Arc<Core>>,
 }
 
@@ -40,8 +42,15 @@ impl AutoBackend {
         Self {
             socket,
             session_file,
+            settings_file: None,
             local: None,
         }
+    }
+
+    /// The headless core reads and writes this settings file (tests pass a temp one).
+    pub fn with_settings(mut self, file: PathBuf) -> Self {
+        self.settings_file = Some(file);
+        self
     }
 
     /// A new connection to the app, or None when no app answers the ping.
@@ -52,10 +61,11 @@ impl AutoBackend {
     fn local(&mut self) -> Arc<Core> {
         self.local
             .get_or_insert_with(|| {
-                Arc::new(Core::headless(
-                    self.session_file.clone(),
-                    Core::real_photos(),
-                ))
+                let session = self.session_file.clone();
+                Arc::new(match self.settings_file.clone() {
+                    Some(f) => Core::headless_with(session, Core::real_photos(), f),
+                    None => Core::headless(session, Core::real_photos()),
+                })
             })
             .clone()
     }

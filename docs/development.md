@@ -85,6 +85,8 @@ running OS (`#available`) and reports itself unavailable on an older one.
 
 `cargo tauri dev` does not touch your Photos library: Photos runs as a dry run. To try the real path, set `QUADCAM_PHOTOS=real`. See [Photos](photos.md#test-without-photos).
 
+`cargo tauri dev` with your own `HOME` stops at QuadCam's support folder, so it never writes your settings or gear folder. Run it with `HOME=$(mktemp -d)`, or set `QUADCAM_PATHS=real` to use your real ones.
+
 ## Test
 
 ### Core
@@ -110,7 +112,7 @@ QUADCAM_UPDATE_BINDINGS=1 cargo test --test it bindings::   # write app/src/bind
   | `ci` | Every test, with a JUnit report and one retry for `tests/it/join.rs` and `tests/it/mount_cycle.rs`, which can fail on a loaded machine |
   | `ci-quick` | The `quick` tests with the `ci` settings. CI runs it on a branch whose change does not touch the slow tests' code |
 
-- The integration tests are one binary per crate, `it`: `tests/it/main.rs` declares a module per area, so a test's name starts with its module (`join::keep_separate_per_run_per_clip_and_by_setting`). Each test binary links the whole crate, so one binary builds much faster than one per file. A new area is a new file in `tests/it/` and a `mod` line in `main.rs`. `tests/output_dir.rs`, `tests/rates.rs` and `tests/voice_core.rs` set an environment variable that code in other areas reads; under `cargo test` that would leak into tests running in the same process, so each stays a binary of its own. So does the sim's `tests/bench.rs`, which times a real-time loop. `Cargo.toml` lists every test binary (`autotests = false`).
+- The integration tests are one binary per crate, `it`: `tests/it/main.rs` declares a module per area, so a test's name starts with its module (`join::keep_separate_per_run_per_clip_and_by_setting`). Each test binary links the whole crate, so one binary builds much faster than one per file. A new area is a new file in `tests/it/` and a `mod` line in `main.rs`. `tests/output_dir.rs`, `tests/rates.rs`, `tests/real_paths.rs` and `tests/voice_core.rs` set an environment variable that code in other areas reads; under `cargo test` that would leak into tests running in the same process, so each stays a binary of its own. So does the sim's `tests/bench.rs`, which times a real-time loop. `Cargo.toml` lists every test binary (`autotests = false`).
 - While you work, run `-P quick` and the tests of the area you changed. CI runs on every push, on every branch (see [CI](#ci) for when it skips the slow tests).
 - On a busy machine, cap the load: `CARGO_BUILD_JOBS=4 cargo nextest run --test-threads 4`.
 - The disk-image tests are in the `serial` test group: they run one at a time, because `hdiutil` and `diskutil` share one system daemon and a detached image's disk number goes to the next image. They also take a lock file in the temporary folder, so disk-image tests in two checkouts take turns. A new test that attaches a disk image belongs in the `serial` filter and the `quick` exclusion.
@@ -119,6 +121,7 @@ QUADCAM_UPDATE_BINDINGS=1 cargo test --test it bindings::   # write app/src/bind
 - Each git worktree has its own `target/`. [sccache](https://github.com/mozilla/sccache) shares compiled dependencies between them: `brew install sccache`, then `export RUSTC_WRAPPER=sccache CARGO_INCREMENTAL=0` (sccache does not cache incremental builds). With many worktrees, `CARGO_INCREMENTAL=0` saves disk space even without sccache.
 - The tests need ffmpeg. They make their own synthetic clips with `ffmpeg -f lavfi -i testsrc`.
 - The format tests attach small FAT32 disk images with `hdiutil`. They erase only an image that they created, and they check that the target is a disk image first.
+- No test can reach your settings file or gear folder. A process started by `cargo` whose `HOME` is your own home panics on QuadCam's support folder (`~/Library/Application Support/app.quadcam`: settings, the gear folder, the control socket) unless `QUADCAM_PATHS=real`. A test sets `HOME` to a temporary folder or gives the core a temporary settings file (`Core::with_settings`). `tests/real_paths.rs` checks that a core without one refuses its default gear folder.
 - No test can reach your Photos library or your Trash. Under `cargo`, "Move to Trash" moves files into a temporary folder.
 - `test-clips/README.md` describes an optional local corpus of real clips and logs. `scripts/make-corpus.sh` builds its synthetic part, a DJI-like card (`synthetic/dji-card/`) included.
 - `tests/it/dji.rs` stages, dates, imports (MP4 copy and MOV remux) and verifies a synthetic DJI-like MP4 with a cover picture and an `.SRT` file.
@@ -196,7 +199,7 @@ A newer push to the same branch or pull request cancels the older run. A run on 
 
 - Start a debug build with `QUADCAM_NO_FOCUS=1`. The window opens unfocused, behind other windows.
 - In a debug build, `QUADCAM_DEV_EVAL=<file>` runs the script in that file in the window, then deletes the file. A script reports back with `window.__TAURI__.event.emit("dev-log", text)`, which the app prints to stderr.
-- Set `HOME` to a temporary folder. The settings, cache and session then stay out of your real ones.
+- Set `HOME` to a temporary folder. The settings, cache and session then stay out of your real ones. With your own `HOME`, a build run by `cargo` (`cargo tauri dev`, `cargo run`) stops at the support folder unless `QUADCAM_PATHS=real`.
 - Take screenshots with `screencapture -l <windowid>`.
 
 ## Project layout

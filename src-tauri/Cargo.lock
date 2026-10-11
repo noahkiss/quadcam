@@ -3604,6 +3604,7 @@ dependencies = [
  "clap",
  "hidapi",
  "insta",
+ "libc",
  "notify",
  "nusb",
  "objc2",
