@@ -262,6 +262,34 @@ impl Core {
             outings.entry(key).or_default().push((pl, r));
         }
 
+        // The frame the model looks at: mid-flight, not the thumbnail's first second (often
+        // the ground before take-off). Only where the model takes images.
+        let images = self.gear.intel.suggestions().images == Some(true);
+        let tools = images.then(|| crate::media::find_tools().ok()).flatten();
+        let frame_of = |c: &crate::pipeline::Clip| -> Vec<std::path::PathBuf> {
+            if !images {
+                return Vec::new();
+            }
+            let (Some(tools), Some(src), Some(thumb)) = (&tools, c.source(), c.thumb.as_ref()) else {
+                return c.thumb.iter().filter(|t| t.is_file()).cloned().collect();
+            };
+            let at = c
+                .signal
+                .as_ref()
+                .and_then(|s| s.keep.first())
+                .map(|k| (k.start + k.end) / 2.0)
+                .unwrap_or(c.duration * 0.4);
+            let dst = thumb.with_file_name(format!(
+                "{}-model.jpg",
+                thumb.file_stem().unwrap_or_default().to_string_lossy()
+            ));
+            if dst.is_file() || crate::media::frame_at(tools, src, &dst, at, 480).is_ok() {
+                vec![dst]
+            } else {
+                c.thumb.iter().filter(|t| t.is_file()).cloned().collect()
+            }
+        };
+
         let total: usize = outings
             .values()
             .map(|v| v.iter().filter(|(pl, _)| wanted(pl.id)).count())
@@ -282,7 +310,7 @@ impl Core {
                     ClipAsk {
                         id: pl.id,
                         facts: facts(pl, r, c.duration),
-                        frames: c.thumb.iter().filter(|t| t.is_file()).cloned().collect(),
+                        frames: frame_of(c),
                     }
                 })
                 .collect();

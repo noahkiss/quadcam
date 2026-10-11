@@ -1156,7 +1156,10 @@ the flight, else the profile.
 **Session report** (a segment of Flights) sums up one day: flights, air time, the longest
 flight, the worst link, dropouts, pack use and crashes. By default it shows the days of the
 last import; the import's Finish step has **Show report**. **Copy as Markdown** copies it to
-share. **Save…** writes it to a Markdown file you pick.
+share. **Save…** writes it to a Markdown file you pick. **Summarize day** adds a short
+paragraph about the day from Apple's on-device model (macOS 26 or later, Apple Intelligence
+on; see [On-device suggestions](library.md#on-device-suggestions)); the copy and the saved file
+then hold it too.
 
 Under the flights, **Range by place** charts the worst link quality (LQ) of each flight at
 each place, oldest first. The axis names the first and last day, or the first and last time
@@ -1571,6 +1574,7 @@ quadcam-cli --json gear flights [--day 2026-10-04] [--aircraft A] [--pack P] [--
 quadcam-cli --json gear flights set <flight> --pack A1 [--place NAME]   # "" clears
 quadcam-cli --json gear flights folders [--add DIR | --remove DIR]
 quadcam-cli gear report [--day 2026-10-04] --markdown  # the session report
+quadcam-cli --json gear report --summarize             # with the on-device model's paragraph
 quadcam-cli --json gear report [--day 2026-10-04] --out report.md [--force]   # save it as a file
 quadcam-cli --json gear preflight                    # the Pack up check
 quadcam-cli --json gear packs [--target-v 3.7]       # packs, types, charging notes

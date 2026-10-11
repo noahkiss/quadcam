@@ -27,6 +27,18 @@ A clip without a name gets one that is unique in its day:
 - If a radio log dated the clip, the name is the aircraft and the time (`Whoop 14:03`).
 - Otherwise, the name is `flight-1`, `flight-2`, and so on. **Default short name** in Settings > Import sets the word.
 
+### On-device suggestions
+
+On a Mac with Apple's on-device model (macOS 26 or later, Apple Intelligence on), QuadCam suggests a short name, keywords and a note for each clip after a card loads. The model reads what QuadCam knows about the clip: the date and time of day, the place, the aircraft, the length, the radio-log moments and the flight. On macOS 27 it also looks at one frame from mid-flight. It runs on the Mac, offline and free; nothing leaves the Mac.
+
+- **One outing, one name.** Clips from the same day, place and aircraft share one name with a pack number in time order: `morning loops pack 1`, `morning loops pack 2`. The numbers continue after the day's numbered clips in the library. The model picks the words; QuadCam numbers the packs, in the word your earlier names use.
+- **Your values stay.** A suggestion fills only an empty name, note or keyword list, or one that still holds the model's last suggestion. A name you typed, or an agent suggested, never changes.
+- **Marked on-device.** A suggested field has a dotted outline and an **on-device** badge until you edit it. When you typed a name, the model's name shows under it with **Use**.
+- **Suggest names** in the Review step asks again, for example after you match radio logs.
+- **On-device suggestions** in Settings > Import turns it off. On an older Mac, or with Apple Intelligence off, QuadCam skips it without a message.
+
+The command line runs it with `quadcam-cli names [IDS]`; an agent passes `on_device: true` to `quadcam_suggest`.
+
 **Date in file names** sets the date format: `2026-09-25_<name>.mp4` (default) or `26.09.25_<name>.mp4`. **Rename library files to this format** renames the clips already in the library, with their cuts and originals. Folder names keep `YYYY-MM-DD`.
 
 QuadCam reads both formats. It takes a clip's date from the file's metadata first, then from the name.

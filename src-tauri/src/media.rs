@@ -672,6 +672,23 @@ pub fn thumbnail(tools: &Tools, src: &Path, dst: &Path) -> Result<()> {
     bail!("could not make a thumbnail")
 }
 
+/// One frame `at` seconds in, `width` pixels wide (`ffmpeg -ss AT -i in -frames:v 1`), for
+/// the on-device model; the first frame when the clip is shorter.
+pub fn frame_at(tools: &Tools, src: &Path, dst: &Path, at: f64, width: u32) -> Result<()> {
+    for ss in [format!("{:.2}", at.max(0.0)), "0".into()] {
+        let out = Command::new(&tools.ffmpeg)
+            .args(["-v", "error", "-y", "-ss", &ss, "-i"])
+            .arg(src)
+            .args(["-map", "0:V:0", "-frames:v", "1", "-vf", &format!("scale={width}:-2")])
+            .arg(dst)
+            .output()?;
+        if out.status.success() && dst.metadata().is_ok_and(|m| m.len() > 0) {
+            return Ok(());
+        }
+    }
+    bail!("could not take a frame")
+}
+
 /// A small H.264 proxy the webview can play, since it cannot play MJPEG AVI.
 pub fn proxy(tools: &Tools, src: &Path, dst: &Path) -> Result<()> {
     let tmp = dst.with_extension("part.mp4");

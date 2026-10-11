@@ -49,7 +49,10 @@ frameworks that Rust cannot reach (they are Swift-only). It prints one JSON obje
 quadcam-intel caps [--locale en-US]          # which features this Mac has, and why not
 quadcam-intel asr FILE... [--locale en-US]   # SpeechAnalyzer + SpeechTranscriber: text, words, confidence per file
 quadcam-intel install [--locale en-US]       # asks macOS to install the speech assets (AssetInventory)
+quadcam-intel suggest [REQUEST.json | -]     # Foundation Models: clip names, keywords, notes; a day's summary
 ```
+
+`suggest` reads a JSON request from a file or stdin. `{"task": "names", "examples": [...], "clips": [{"id", "facts", "frames"}]}` answers one `suggestion` line per clip (`name`, `keywords`, `note`, `images`, `ms`, or `error`) and a `group` line with one name for the outing. `{"task": "summary", "facts": "..."}` answers a `summary` line. QuadCam owns the facts (`core/ondevice.rs`); the helper owns the instructions and the `@Generable` answer shapes (`Names.swift`). Text runs on macOS 26; the frames join the prompt on macOS 27 (`caps` reports `suggest` with `images`). The model's context is 4096 tokens, so QuadCam sends one frame per clip and short facts. FoundationModels is weak-linked, so the helper still launches on macOS 13. Private Cloud Compute is not used: it needs an App Store entitlement. To try a prompt by hand, `/usr/bin/fm` on macOS 27 runs the same model once its license is accepted.
 
 Exit codes: 0 done, 1 failed, 2 usage, 3 unavailable here (an older macOS, or a locale without
 its assets). It builds with the newest SDK and launches on macOS 13: each feature checks the
@@ -70,7 +73,8 @@ running OS (`#available`) and reports itself unavailable on an older one.
   helper, an older macOS or missing assets make a feature unavailable, never an error. A
   process started by cargo gets no helper unless `QUADCAM_INTEL=real`; tests pass
   `intel::fake::FakeHelper`. One test runs the real helper on a line `say` spoke, and skips
-  where the speech check is unavailable.
+  where the speech check is unavailable. `intel::names::tests::the_real_helper_names_a_clip`
+  runs the model only with `QUADCAM_INTEL=real`, and skips where it is unavailable.
 
 `cargo tauri dev` does not touch your Photos library: Photos runs as a dry run. To try the real path, set `QUADCAM_PHOTOS=real`. See [Photos](photos.md#test-without-photos).
 

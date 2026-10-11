@@ -181,7 +181,16 @@ enum Names {
                 let session = LanguageModelSession(instructions: clipInstructions)
                 let frames = images ? (clip.frames ?? []).prefix(maxFrames).compactMap(loadFrame) : []
                 out.images = frames.count
-                let idea = try await respond(session, examples: examples, facts: clip.facts, frames: frames)
+                let idea: ClipIdea
+                do {
+                    idea = try await respond(session, examples: examples, facts: clip.facts, frames: frames)
+                } catch where retryable(error) {
+                    // The model is sometimes busy (ModelManagerError 1001, 1032): one retry.
+                    try await Task.sleep(nanoseconds: 3_000_000_000)
+                    idea = try await respond(
+                        LanguageModelSession(instructions: clipInstructions), examples: examples,
+                        facts: clip.facts, frames: frames)
+                }
                 out.name = tidy(idea.name)
                 out.keywords = idea.keywords.map(tidy).filter { !$0.isEmpty }
                 out.note = idea.note.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -256,6 +265,19 @@ enum Names {
         s.lowercased()
             .trimmingCharacters(in: .whitespacesAndNewlines.union(CharacterSet(charactersIn: "\"'.")))
             .split(whereSeparator: \.isWhitespace).joined(separator: " ")
+    }
+
+    /// An error worth one more try: not a refusal, a guardrail or too long a prompt.
+    static func retryable(_ error: Error) -> Bool {
+        if let e = error as? LanguageModelSession.GenerationError {
+            switch e {
+            case .guardrailViolation, .refusal, .exceededContextWindowSize, .unsupportedLanguageOrLocale:
+                return false
+            default:
+                return true
+            }
+        }
+        return true
     }
 
     static func describe(_ error: Error) -> String {

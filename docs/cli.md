@@ -21,6 +21,7 @@ quadcam-cli dates --logs /path/to/LOGS    # date clips from radio logs
 quadcam-cli dates --set 2=2026-10-03      # set one clip's date
 quadcam-cli dates --no-logs               # ignore radio logs; every clip gets the import date
 quadcam-cli dates --logs /path/to/LOGS --day 2026-10-03   # match against one log day
+quadcam-cli names                         # names, keywords and notes from Apple's on-device model (empty fields only)
 quadcam-cli import --name 0=backyard-loops --skip 3 --format mp4
 quadcam-cli import --plan plan.json       # names, dates, notes and options from a file
 quadcam-cli moments                       # moments, dead air, keep ranges and cuts per clip
@@ -137,6 +138,7 @@ See [Modules and notices](modules.md) for what a module install checks.
 - `output_dir`, `format`, `encoder`, `keep_originals`, `add_time`, `default_name`
 - `delete_clips_after_import` (`true` or `false`; see [Settings](settings.md#delete-clips-after-import))
 - `join_split_recordings` (`true` or `false`; see [Joined recordings](library.md#joined-recordings))
+- `on_device_suggestions` (`true` or `false`; see [On-device suggestions](settings.md#on-device-suggestions))
 - `update_check` (`true` or `false`; see [Updates](settings.md#updates))
 - `photos_album`, `format_label`, `log_dir`, `layout`, `place_folders`, `tunables`
 - `geocoder` (`apple`, `nominatim`, `census` or `google`), `google_places_key`
@@ -211,6 +213,7 @@ quadcam-cli --json gear sim defaults [--aircraft NAME | --radio CARD --fc FILE] 
 quadcam-cli --json gear sim validate PROFILE --logs DIR [--poles N] [--text]      # a sim profile against decoded blackbox logs
 quadcam-cli --json gear flights [--day D] [--aircraft A] [--pack L] [--place P] [--logs DIR] [set <flight> --pack L --place P | folders --add DIR | folders --remove DIR]
 quadcam-cli gear report [--day D] --markdown                     # the session report
+quadcam-cli --json gear report [--day D] --summarize             # with a paragraph from the on-device model
 quadcam-cli --json gear report [--day D] --out FILE [--force]     # write the Markdown to FILE
 quadcam-cli --json gear preflight                                # the Pack up check
 quadcam-cli --json gear packs [save L --type T --charged | delete L | type save T --cells N --capacity MAH ... | type delete T | notes TEXT]
@@ -293,7 +296,7 @@ Every MCP tool has a command. The command line also has `scan`, `analyze`, `clea
 |---|---|
 | `quadcam_status` | `status` (the card list alone: `cards`; the session alone: `show`) |
 | `quadcam_load_clips` | `stage`, then `analyze` and `dates` |
-| `quadcam_suggest` | `import` flags (`--name`, `--note`, `--date`, `--cut`, ...), `meta`, `cut`, `dates` |
+| `quadcam_suggest` | `import` flags (`--name`, `--note`, `--date`, `--cut`, ...), `meta`, `cut`, `dates`; `on_device`: `names` |
 | `quadcam_settings` `read`, `write` | `settings show`, `settings set` (a secret: `settings set-secret`) |
 | `quadcam_gear_edit` `voice_key_set`, `voice_key_delete` | `gear voice key set`, `gear voice key delete` |
 | `quadcam_profiles` `set_default` | `profiles default` |
