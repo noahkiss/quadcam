@@ -145,6 +145,7 @@ test("the splash segment previews a PNG, refuses a colour radio, and plans a fla
   // The radio is a TX16S: its splash is not supported yet.
   await expect(page.getByText("This radio's splash format is not supported yet (board tx16s).")).toBeVisible();
   await expect(page.getByRole("button", { name: "Flash with splash…" })).toBeDisabled();
+  await expect(page.getByRole("button", { name: "Flash with splash…" })).toHaveAccessibleDescription("This radio cannot take a splash yet.");
 
   await makePocket(app, "2.12.4");
   await page.getByRole("group", { name: "Sections" }).getByRole("button", { name: "Overview" }).click();
