@@ -559,6 +559,33 @@ export const commands = {
 	 *  from the top left of the window's content).
 	 */
 	share: (paths: string[], x: number | null, y: number | null, w: number | null, h: number | null) => typedError<null, string>(__TAURI_INVOKE("share", { paths, x, y, w, h })),
+	/**  The update state now (None never happens in the app; it has a GUI). */
+	updateStatus: () => __TAURI_INVOKE<{
+	phase: UpdatePhase,
+	/**  The running version. */
+	current: string,
+	/**  The newer version, from `available` on. */
+	version: string | null,
+	/**  Its release page. */
+	notes_url: string | null,
+	/**  Bytes downloaded, and the size when the server sent one. */
+	done: number,
+	total: number | null,
+	error: string | null,
+	/**  When the last check ended. */
+	checked_at: string | null,
+	/**  The job that holds the restart back now, as words ("the device job"). None: free to restart. */
+	waiting_for: string | null,
+} | null>("update_status"),
+	/**  Checks now (the app menu's Check for Updates, or Settings > Advanced). */
+	updateCheck: () => typedError<UpdateStatus, string>(__TAURI_INVOKE("update_check")),
+	/**  Downloads the found update and checks its signature. It installs only at the restart. */
+	updateDownload: () => typedError<UpdateStatus, string>(__TAURI_INVOKE("update_download")),
+	/**
+	 *  Installs the downloaded update and restarts the app. Refuses while a job runs, so an
+	 *  import, a card or device write, or a flash is never cut off.
+	 */
+	updateRestart: () => typedError<null, string>(__TAURI_INVOKE("update_restart")),
 };
 
 /** Events */
@@ -580,6 +607,7 @@ export const events = {
 	sessionChanged: makeEvent<SessionChanged>("session-changed"),
 	settingsChanged: makeEvent<SettingsChanged>("settings-changed"),
 	simCalibrationEvent: makeEvent<SimCalibrationEvent>("sim-calibration-event"),
+	updateChanged: makeEvent<UpdateChanged>("update-changed"),
 	volumesChanged: makeEvent<VolumesChanged>("volumes-changed"),
 };
 
@@ -1893,6 +1921,11 @@ export type Defaults_Deserialize = {
 	 *  default; a run or a clip may keep the files separate.
 	 */
 	join_split_recordings?: boolean,
+	/**
+	 *  The app checks for a newer QuadCam at launch and once a day. On by default; the
+	 *  app menu's Check for Updates works either way.
+	 */
+	update_check?: boolean,
 	default_name: string,
 	photos_album: string,
 	log_dir: string | null,
@@ -1937,6 +1970,11 @@ export type Defaults_Serialize = {
 	 *  default; a run or a clip may keep the files separate.
 	 */
 	join_split_recordings: boolean,
+	/**
+	 *  The app checks for a newer QuadCam at launch and once a day. On by default; the
+	 *  app menu's Check for Updates works either way.
+	 */
+	update_check: boolean,
 	default_name: string,
 	photos_album: string,
 	log_dir: string | null,
@@ -5698,6 +5736,8 @@ export type Status_Deserialize = {
 	tools: SerdeResult<Tools, string>,
 	defaults: Defaults_Deserialize,
 	session: SessionBrief | null,
+	/**  The app's own update: found, downloading, ready to install. None without the app. */
+	update: UpdateStatus | null,
 };
 
 export type Status_Serialize = {
@@ -5705,6 +5745,8 @@ export type Status_Serialize = {
 	tools: SerdeResult<Tools, string>,
 	defaults: Defaults_Serialize,
 	session: SessionBrief | null,
+	/**  The app's own update: found, downloading, ready to install. None without the app. */
+	update: UpdateStatus | null,
 };
 
 /**  A step that failed on a device, and why. */
@@ -6024,6 +6066,44 @@ export type Unmapped = {
 /**  `library_untrash`: the files `library_trash` moved. */
 export type UntrashParams = {
 	moved: Moved[],
+};
+
+/**
+ *  The app's own update moved on: checked, found, downloaded, or a job that held the restart
+ *  back ended.
+ */
+export type UpdateChanged = UpdateStatus;
+
+/**  Where an update stands. */
+export type UpdatePhase = 
+/**  Not checked since launch. */
+"idle" | "checking" | 
+/**  The running version is the newest. */
+"current" | 
+/**  A newer version is published. */
+"available" | "downloading" | 
+/**  Downloaded and verified; installs at the restart. */
+"ready" | 
+/**  The last check or download failed (`error`). */
+"failed";
+
+/**  The update state the GUI shows and `status.update` reports. */
+export type UpdateStatus = {
+	phase: UpdatePhase,
+	/**  The running version. */
+	current: string,
+	/**  The newer version, from `available` on. */
+	version: string | null,
+	/**  Its release page. */
+	notes_url: string | null,
+	/**  Bytes downloaded, and the size when the server sent one. */
+	done: number,
+	total: number | null,
+	error: string | null,
+	/**  When the last check ended. */
+	checked_at: string | null,
+	/**  The job that holds the restart back now, as words ("the device job"). None: free to restart. */
+	waiting_for: string | null,
 };
 
 /**  What a USB device says about itself. */

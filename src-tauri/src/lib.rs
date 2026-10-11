@@ -33,6 +33,7 @@ mod share;
 pub mod sources;
 pub mod trash;
 pub mod trim;
+mod updater;
 pub mod watch;
 
 use crate::core::{Core, FormatPlan, FormatRequest, Hooks};
@@ -690,6 +691,10 @@ pub fn specta_builder() -> tauri_specta::Builder<tauri::Wry> {
             third_party_notices,
             menu::menu_state,
             share::share,
+            updater::update_status,
+            updater::update_check,
+            updater::update_download,
+            updater::update_restart,
         ])
         .events(tauri_specta::collect_events![
             api::Progress,
@@ -710,6 +715,7 @@ pub fn specta_builder() -> tauri_specta::Builder<tauri::Wry> {
             api::RadioInput,
             api::SimCalibrationEvent,
             api::FirmwareReadProgress,
+            api::UpdateChanged,
         ])
         // Sizes and counts fit a JS number.
         .dangerously_cast_bigints_to_number()
@@ -742,6 +748,7 @@ pub fn run() {
         .activate_ignoring_other_apps(false)
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_opener::init())
+        .plugin(tauri_plugin_updater::Builder::new().build())
         .setup(move |app| {
             let handle = app.handle().clone();
             let hooks = Arc::new(GuiHooks {
@@ -790,6 +797,7 @@ pub fn run() {
                 core.gear_add_hook(h);
             }
             let gear_core = core.clone();
+            updater::install(&handle, core.clone());
             specta.mount_events(app);
             app.manage(core.clone());
             app.manage(AppState { core, hooks });

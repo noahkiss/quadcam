@@ -124,6 +124,12 @@ pub const KEYS: &[Key] = &[
         check: boolean,
     },
     Key {
+        file: "updateCheck",
+        name: Some("update_check"),
+        about: "true or false",
+        check: boolean,
+    },
+    Key {
         file: "defaultName",
         name: Some("default_name"),
         about: "text",
@@ -553,6 +559,10 @@ pub struct Defaults {
     /// default; a run or a clip may keep the files separate.
     #[serde(default = "yes")]
     pub join_split_recordings: bool,
+    /// The app checks for a newer QuadCam at launch and once a day. On by default; the
+    /// app menu's Check for Updates works either way.
+    #[serde(default = "yes")]
+    pub update_check: bool,
     pub default_name: String,
     pub photos_album: String,
     pub log_dir: Option<PathBuf>,
@@ -605,6 +615,7 @@ impl Default for Defaults {
             add_time: false,
             delete_clips_after_import: false,
             join_split_recordings: true,
+            update_check: true,
             default_name: crate::naming::DEFAULT_NAME.into(),
             photos_album: crate::photos::DEFAULT_ALBUM.into(),
             log_dir: None,
@@ -659,6 +670,9 @@ impl Defaults {
         }
         if let Some(b) = get(v, "joinSplitRecordings") {
             d.join_split_recordings = b;
+        }
+        if let Some(b) = get(v, "updateCheck") {
+            d.update_check = b;
         }
         if let Some(n) = get::<String>(v, "defaultName").filter(|n| !n.trim().is_empty()) {
             d.default_name = n;

@@ -45,6 +45,7 @@ mod sim_host;
 mod sim_restore;
 mod sim_sync;
 mod switchmap;
+mod update;
 mod voice;
 mod voice_studio;
 pub use crate::paths::{cache_dir, default_session_file, default_settings_file, support_dir};
@@ -104,6 +105,7 @@ pub use sim_host::{
 };
 pub use sim_restore::{SimRestoreParams, SimRestoreRequest};
 pub use switchmap::{RadioParams, RadioWatchParams, SwitchMapParams};
+pub use update::{notes_url, restart_blocker, UpdatePhase, UpdateStatus};
 pub use voice::{
     report_text as voice_report_text, view_text as voice_view_text, BuildPackParams, LineOverride,
     PackDeleteParams, PackDeleteReport, PackInstallParams, ProviderView, RenderReport,
@@ -264,6 +266,8 @@ pub struct Status {
     pub tools: Result<media::Tools, String>,
     pub defaults: Defaults,
     pub session: Option<SessionBrief>,
+    /// The app's own update: found, downloading, ready to install. None without the app.
+    pub update: Option<UpdateStatus>,
 }
 
 #[derive(Debug, Clone, Serialize, specta::Type)]
@@ -341,6 +345,8 @@ pub struct Core {
     /// The `gear.json` the radio link move last checked, and its stamp then
     /// (`core/radio_aircraft.rs`).
     radio_links_checked: Mutex<Option<radio_aircraft::Checked>>,
+    /// The app's own update, as the GUI's updater left it (`core/update.rs`).
+    update: Mutex<UpdateStatus>,
 }
 
 struct Busy<'a>(&'a AtomicBool);
@@ -398,6 +404,10 @@ impl Core {
             gear_released: Mutex::default(),
             gear_mounted_for_user: Mutex::default(),
             radio_links_checked: Mutex::default(),
+            update: Mutex::new(UpdateStatus {
+                current: env!("CARGO_PKG_VERSION").into(),
+                ..Default::default()
+            }),
         }
     }
 
@@ -544,6 +554,7 @@ impl Core {
             tools: media::find_tools().map_err(|e| format!("{e:#}")),
             defaults: self.defaults(),
             session,
+            update: self.update_status(),
         }
     }
 

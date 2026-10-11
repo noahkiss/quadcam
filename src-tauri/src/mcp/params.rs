@@ -376,6 +376,9 @@ pub struct SettingsValues {
     /// Import a recording the DVR split into files (about 600 s each) as one clip. On by default.
     #[schemars(extend("x-nullable" = true))]
     pub join_split_recordings: Option<bool>,
+    /// The app checks for a newer QuadCam at launch and once a day. On by default.
+    #[schemars(extend("x-nullable" = true))]
+    pub update_check: Option<bool>,
     #[schemars(extend("x-nullable" = true))]
     pub default_name: Option<String>,
     #[schemars(extend("x-nullable" = true))]

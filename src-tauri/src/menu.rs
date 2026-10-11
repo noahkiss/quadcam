@@ -76,10 +76,12 @@ pub fn install<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<()> {
 
     let settings = b.item("settings", "Settings…", Some("CmdOrCtrl+Comma"))?;
     let notices = b.item("acknowledgements", "Acknowledgements", None)?;
+    let updates = b.item("check-updates", "Check for Updates…", None)?;
     let app_menu = b.submenu(
         &info.name,
         &[
             &PredefinedMenuItem::about(app, None, Some(about))?,
+            &updates,
             &notices,
             &sep()?,
             &settings,
