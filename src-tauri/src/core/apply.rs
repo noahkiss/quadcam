@@ -349,7 +349,7 @@ impl Core {
     /// Applies a staged change. Needs the plan's digest and `confirm`; with the app
     /// running, the person also clicks Apply in the sheet.
     pub fn gear_apply(&self, req: &ApplyRequest) -> Result<ApplyReport> {
-        self.apply_inner(req, false)
+        self.agent_write(|| self.apply_inner(req, false))
     }
 
     /// The apply sheet's own Apply click: the click is the confirm.

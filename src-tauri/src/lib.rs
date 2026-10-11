@@ -51,6 +51,12 @@ use tauri_specta::Event as _;
 /// How long an agent's format request waits for the click in the GUI.
 const FORMAT_CONFIRM_TIMEOUT: Duration = Duration::from_secs(180);
 
+thread_local! {
+    /// The apply request the person approved on this thread: the write that follows runs on
+    /// the same thread, and `apply_done` sends its outcome to that request's sheet.
+    static APPROVED: std::cell::Cell<Option<u64>> = const { std::cell::Cell::new(None) };
+}
+
 /// GUI hooks: events to the webview, and the Erase click for agent-started formats.
 struct GuiHooks {
     app: AppHandle,
@@ -104,12 +110,28 @@ impl Hooks for GuiHooks {
         self.pending.lock().unwrap().remove(&id);
         let _ = self.app.emit(api::AgentApplyClosed::NAME, id);
         match answer {
-            Ok(true) => Ok(()),
+            Ok(true) => {
+                APPROVED.with(|a| a.set(Some(id)));
+                Ok(())
+            }
             Ok(false) => Err(anyhow!("Refused: the user cancelled the apply in quadcam.")),
             Err(_) => Err(anyhow!(
                 "Refused: nobody clicked Apply in quadcam within 3 minutes."
             )),
         }
+    }
+    fn apply_done(&self, out: &Result<api::ApplyReport>) {
+        let Some(id) = APPROVED.with(|a| a.take()) else {
+            return;
+        };
+        let (report, error) = match out {
+            Ok(r) => (Some(r.clone()), None),
+            Err(e) => (None, Some(format!("{e:#}"))),
+        };
+        let _ = self.app.emit(
+            api::AgentApplyResult::NAME,
+            api::AgentApplyResult { id, report, error },
+        );
     }
     fn has_gui(&self) -> bool {
         true
@@ -706,6 +728,7 @@ pub fn specta_builder() -> tauri_specta::Builder<tauri::Wry> {
             api::AgentFormatClosed,
             api::AgentApplyRequest,
             api::AgentApplyClosed,
+            api::AgentApplyResult,
             api::Menu,
             api::RadioInput,
             api::SimCalibrationEvent,

@@ -278,8 +278,10 @@ impl Core {
     /// running, the person also clicks Apply in the sheet.
     pub fn gear_sim_restore(&self, req: &SimRestoreRequest) -> Result<ApplyReport> {
         let running = sims::running_processes();
-        self.sim_restore_at(req, false, &crate::paths::home_dir(), &|n| {
-            running.iter().any(|r| r == n)
+        self.agent_write(|| {
+            self.sim_restore_at(req, false, &crate::paths::home_dir(), &|n| {
+                running.iter().any(|r| r == n)
+            })
         })
     }
 

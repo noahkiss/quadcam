@@ -536,7 +536,7 @@ impl Core {
     /// Flashes the planned image. Needs the plan's digest and `confirm`; with the app running,
     /// the person also clicks Apply in the sheet.
     pub fn gear_flash(&self, req: &FlashRequest) -> Result<ApplyReport> {
-        self.flash_at(req, false)
+        self.agent_write(|| self.flash_at(req, false))
     }
 
     /// The apply sheet's own Apply click: the click is the confirm.

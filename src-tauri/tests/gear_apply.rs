@@ -20,7 +20,7 @@ use quadcam_lib::gear::serial::{lock_port, FakePorts, PortInfo, Ports};
 use quadcam_lib::gear::Env;
 use quadcam_lib::photos::Recorder;
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
 const PORT: &str = "/dev/cu.usbmodemFAKE1";
@@ -625,14 +625,16 @@ fn a_value_the_fc_does_not_keep_fails_verify_and_a_restore_undoes_it() {
 }
 
 struct Gate {
-    answer: bool,
+    answer: AtomicBool,
     asked: AtomicBool,
+    /// Each outcome `apply_done` got: the report's status, or the error.
+    done: Mutex<Vec<String>>,
 }
 
 impl Hooks for Gate {
     fn confirm_apply(&self, _c: &StagedChange, _p: &ApplyPlan) -> anyhow::Result<()> {
         self.asked.store(true, Ordering::SeqCst);
-        if self.answer {
+        if self.answer.load(Ordering::SeqCst) {
             Ok(())
         } else {
             Err(anyhow::anyhow!(
@@ -640,14 +642,21 @@ impl Hooks for Gate {
             ))
         }
     }
+    fn apply_done(&self, out: &anyhow::Result<quadcam_lib::gear::apply::ApplyReport>) {
+        self.done.lock().unwrap().push(match out {
+            Ok(r) => format!("{:?}", r.status),
+            Err(e) => format!("{e}"),
+        });
+    }
 }
 
 #[test]
 fn confirm_is_the_digest_the_flag_and_the_click() {
     let fc = FakeFc::new(G473).with_uid(UID);
     let gate = Arc::new(Gate {
-        answer: false,
+        answer: AtomicBool::new(false),
         asked: AtomicBool::new(false),
+        done: Mutex::new(vec![]),
     });
     let b = bench_with(&fc, None, gate.clone(), true);
     let c = stage(&b, vec![set("osd_cap_alarm", "1500")]);
@@ -667,6 +676,17 @@ fn confirm_is_the_digest_the_flag_and_the_click() {
     // The sheet's own Apply click is the confirm.
     let r = b.core.gear_apply_click(&req(&c, &p)).unwrap();
     assert_eq!(r.status, ChangeStatus::Verified);
+    // Each agent call's outcome reaches the host; the sheet's own click does not.
+    let done = gate.done.lock().unwrap().clone();
+    assert_eq!(done.len(), 2, "{done:?}");
+    assert!(done.iter().all(|d| d.starts_with("Refused")), "{done:?}");
+    // The person says yes: the host gets the report of the write that follows.
+    let c = stage(&b, vec![set("osd_cap_alarm", "1400")]);
+    let p = plan(&b, &c);
+    gate.answer.store(true, Ordering::SeqCst);
+    let r = b.core.gear_apply(&req(&c, &p)).unwrap();
+    assert_eq!(r.status, ChangeStatus::Verified);
+    assert_eq!(gate.done.lock().unwrap().last().unwrap(), "Verified");
 }
 
 #[test]

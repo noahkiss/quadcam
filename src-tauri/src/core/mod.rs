@@ -139,6 +139,10 @@ pub trait Hooks: Send + Sync {
     ) -> Result<()> {
         Ok(())
     }
+    /// Called with the outcome of an apply, flash, sim sync or restore that an agent or a
+    /// hook started (not the sheet's own click). The GUI shows it in the sheet that
+    /// approved it.
+    fn apply_done(&self, _out: &Result<crate::gear::apply::ApplyReport>) {}
     /// True when a person is watching (the GUI).
     fn has_gui(&self) -> bool {
         false
@@ -155,6 +159,18 @@ pub trait Hooks: Send + Sync {
 
 pub struct NoHooks;
 impl Hooks for NoHooks {}
+
+impl Core {
+    /// Runs a write an agent or a hook started and hands its outcome to `Hooks::apply_done`.
+    pub(crate) fn agent_write(
+        &self,
+        f: impl FnOnce() -> Result<crate::gear::apply::ApplyReport>,
+    ) -> Result<crate::gear::apply::ApplyReport> {
+        let out = f();
+        self.hooks.apply_done(&out);
+        out
+    }
+}
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, specta::Type)]
 pub struct FormatPlan {
