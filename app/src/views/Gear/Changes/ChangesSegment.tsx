@@ -56,7 +56,7 @@ export function ChangesSegment({ d }: { d: DeviceRef }) {
                 <span className={styles.status} data-state={c.status}>
                   {STATUS[c.status]}
                 </span>
-                <Button size="sm" variant="ghost" onClick={() => open(c.device, c.id)}>
+                <Button size="sm" variant="ghost" disabled={c.status === "draft" || c.status === "read_first"} onClick={() => open(c.device, c.id)}>
                   Review…
                 </Button>
                 <Button size="sm" variant="danger-ghost" onClick={() => discard(c.id)}>

@@ -729,10 +729,10 @@ the order the next session applies them.
 
   | Status | Means |
   |---|---|
-  | Draft | Being edited. The plug-in bar and **Review** skip it |
+  | Draft | Being edited. The plug-in bar and **Review** skip it, and its own **Review…** is off |
   | Ready | Agreed. Apply it when the device is in |
   | Try | Apply, fly, then keep or revert |
-  | Read first | Read the real value on the device before changing anything. It does not apply until you mark it Ready |
+  | Read first | Read the real value on the device before changing anything. It does not apply until you mark it Ready; its **Review…** is off until then |
   | Applied | A Try change that applied and verified. It waits for **Keep** or **Revert…** |
   | Verified, Failed, Reverted, Discarded | After the apply sheet, or Discard |
 

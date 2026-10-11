@@ -177,3 +177,15 @@ test("an agent's ExpressLRS flash request says it flashes", async ({ app, page }
   await expect(sheet).toHaveCount(0);
   expect(await app.calls("answer_apply_request")).toHaveLength(1);
 });
+
+test("Review… is off for a Draft or Read first change", async ({ app, page }) => {
+  await openChanges(app, page);
+  await stageSetting(page, "osd_cap_alarm", "1500");
+  const row = page.getByRole("list", { name: "Staged changes" }).getByRole("listitem");
+  await expect(row.getByRole("button", { name: "Review…" })).toBeEnabled();
+  for (const status of ["draft", "read_first"]) {
+    await app.core(`c => { c.gear.changeStore.changes[0].status = "${status}"; }`);
+    await page.evaluate(() => window.__qc!.emit("gear-changed"));
+    await expect(row.getByRole("button", { name: "Review…" })).toBeDisabled();
+  }
+});
