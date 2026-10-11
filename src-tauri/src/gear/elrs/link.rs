@@ -2,9 +2,10 @@
 //! behind it (the radio's internal module, or the receiver on a flight controller UART), then
 //! speak CRSF to it.
 //!
-//! - **Radio.** The EdgeTX CLI (USB serial set to CLI) stops the pulses and starts a serial
-//!   passthrough to the internal module (`serialpassthrough rfmod 0 <baud>`). To flash, it
-//!   first holds the module's boot pin while the module powers up.
+//! - **Radio.** The EdgeTX CLI (USB serial set to CLI) names the radio's board (`ver`), stops
+//!   the pulses and starts a serial passthrough to the internal module
+//!   (`serialpassthrough rfmod 0 <baud>`). To flash, it first holds the module's boot pin while
+//!   the module powers up.
 //! - **Flight controller.** The Betaflight CLI names the UART with the serial receiver
 //!   (function bit 64), checks that the receiver protocol is CRSF and the line is not inverted
 //!   or half duplex, and starts `serialpassthrough <uart> <baud>`.
@@ -16,7 +17,8 @@
 //! and copies no ExpressLRS code. The sequences have not run on a real device yet.
 
 use super::crsf::{self, DeviceInfo, Frame, FrameParser, Param};
-use crate::gear::edgetx::cli::at_prompt;
+use crate::gear::edgetx::cli::{at_prompt, parse_ver};
+use crate::gear::model::{Refusal, RefusalCode};
 use crate::gear::serial::{read_until, Ports, SerialLink, Wait};
 use anyhow::{anyhow, bail, Context, Result};
 use std::time::{Duration, Instant};
@@ -105,18 +107,37 @@ pub enum ModuleStart {
 
 /// Hands a radio's USB serial port to its internal ELRS module at `baud`. The radio's CLI
 /// must be on (`serialPort: VCP` set to CLI in the radio) and the radio plugged in as USB
-/// Serial.
+/// Serial. First it asks the radio's `ver` for its board; with `expect_board` a radio of
+/// another board, or one that names none, refuses before anything changes. Returns the link
+/// and the board.
 pub fn radio_passthrough(
     ports: &dyn Ports,
     port: &str,
     baud: u32,
     start: ModuleStart,
+    expect_board: Option<&str>,
     t: &Timing,
-) -> Result<Box<dyn SerialLink>> {
+) -> Result<(Box<dyn SerialLink>, Option<String>)> {
     let mut link = ports.open(port, CLI_BAUD)?;
     link.write_all(b"\n")?;
     read_until(link.as_mut(), wait(t, t.command), at_prompt)
         .map_err(|_| anyhow!(crate::gear::edgetx::cli::NO_PROMPT))?;
+    let board = parse_ver(&cli_line(link.as_mut(), t, "ver", at_prompt)?).board;
+    if let Some(want) = expect_board {
+        if !board
+            .as_deref()
+            .is_some_and(|b| b.eq_ignore_ascii_case(want))
+        {
+            return Err(Refusal::new(
+                RefusalCode::DeviceChanged,
+                format!(
+                    "The radio on {port} is {}, not the {want} the device was read through. Nothing was changed.",
+                    board.as_deref().map_or("a radio that names no board".to_string(), |b| format!("a {b}"))
+                ),
+            )
+            .into());
+        }
+    }
     let mut lines = vec!["set pulses 0", "set rfmod 0 power off"];
     if start == ModuleStart::Bootloader {
         lines.push("set rfmod 0 bootpin 1");
@@ -135,7 +156,7 @@ pub fn radio_passthrough(
     link.write_all(format!("serialpassthrough rfmod 0 {baud}\n").as_bytes())?;
     std::thread::sleep(t.settle);
     drop(link);
-    ports.open(port, baud)
+    Ok((ports.open(port, baud)?, board))
 }
 
 /// What the FC's settings say about the receiver, found while entering passthrough.

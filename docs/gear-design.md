@@ -1346,9 +1346,13 @@ binaries only (open question 10).
       written here: no dependency). The phrase is the write-only setting `elrsBindingPhrase`
       (redacted like the other secrets); plans and reports show a fingerprint of the UID.
     - **Flash.** Targets: the unified ESP8285 receiver and ESP32 transmitter-module
-      firmwares, ExpressLRS 3 and newer, nothing else (`flash.rs`). A radio's module is started
-      with the boot pin held; a receiver is asked to restart into its bootloader and must
-      name the planned target. The chip's flash is read with esptool and kept (`firmware.bin`,
+      firmwares, ExpressLRS 3 and newer, nothing else (`flash.rs`). A radio must name the board the
+      read recorded (`ver`, before the pulses stop: an ESP32 in its ROM bootloader cannot answer
+      CRSF, and the radio stays in passthrough, so the module is not pinged); its module is then
+      started with the boot pin held. A receiver must answer a CRSF ping with the name the read
+      saved, on the same passthrough; it is then asked to restart into its bootloader, and what
+      it prints must name the planned target (prior target, product or unified firmware name;
+      an empty reply or a bare `UNIFIED` refuses). The radio's board is in the plan's digest. The chip's flash is read with esptool and kept (`firmware.bin`,
       `BeforeFlash`); a failed read stops before any write. `esptool write-flash` runs with
       `--before no-reset`; the flash counts as verified only when esptool prints that it
       verified the data. Stock esptool lacks ExpressLRS's fork-only `--passthrough` flag, so

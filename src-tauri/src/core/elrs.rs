@@ -138,6 +138,7 @@ struct FlashPrep {
     plan: ApplyPlan,
     device: Device,
     host: Device,
+    snapshot: ElrsSnapshot,
     built: Option<Built>,
     version: String,
 }
@@ -346,17 +347,19 @@ impl Core {
         Ok(host)
     }
 
-    /// Hands the host's port to the device behind it. Returns the CRSF link and notes.
+    /// Hands the host's port to the device behind it. Returns the CRSF link and, for a radio,
+    /// the board its `ver` named; with `expect_board` a radio of another board refuses first.
     fn elrs_open(
         &self,
         host: &Device,
         port: &str,
         start: ModuleStart,
+        expect_board: Option<&str>,
         notes: &mut Vec<String>,
-    ) -> Result<CrsfLink> {
+    ) -> Result<(CrsfLink, Option<String>)> {
         let t = self.elrs_timing();
         let ports = self.gear.ports.as_ref();
-        let raw = match host.kind {
+        let (raw, board) = match host.kind {
             DeviceKind::Radio => {
                 let baud = if start == ModuleStart::Run {
                     link::MODULE_BAUD
@@ -367,7 +370,7 @@ impl Core {
                     "The radio's module has its pulses off until the radio restarts: restart the radio when you are done."
                         .into(),
                 );
-                link::radio_passthrough(ports, port, baud, start, &t)?
+                link::radio_passthrough(ports, port, baud, start, expect_board, &t)?
             }
             _ => {
                 let (l, r) = link::fc_passthrough(ports, port, link::RECEIVER_BAUD, &t)?;
@@ -375,10 +378,10 @@ impl Core {
                     "The FC passes its receiver UART ({}) through until you unplug USB: unplug it and plug it in again when you are done.",
                     r.uart
                 ));
-                l
+                (l, None)
             }
         };
-        Ok(CrsfLink::new(raw, t))
+        Ok((CrsfLink::new(raw, t), board))
     }
 
     /// Finds the device behind the host and reads its parameters.
@@ -387,13 +390,13 @@ impl Core {
         host: &Device,
         port: &str,
         notes: &mut Vec<String>,
-    ) -> Result<(crsf::DeviceInfo, Vec<Param>)> {
+    ) -> Result<(crsf::DeviceInfo, Vec<Param>, Option<String>)> {
         let want = if host.kind == DeviceKind::Radio {
             crsf::ADDR_TX
         } else {
             crsf::ADDR_RX
         };
-        let mut c = self.elrs_open(host, port, ModuleStart::Run, notes)?;
+        let (mut c, board) = self.elrs_open(host, port, ModuleStart::Run, None, notes)?;
         let found = c.ping()?;
         let info = found.into_iter().find(|d| d.origin == want).ok_or_else(|| {
             anyhow!(
@@ -408,7 +411,7 @@ impl Core {
             )
         })?;
         let params = c.read_params(&info)?;
-        Ok((info, params))
+        Ok((info, params, board))
     }
 
     /// Reads the ELRS device behind a saved radio or FC and saves what it found.
@@ -417,7 +420,7 @@ impl Core {
         let host = self.elrs_host(&p.host)?;
         let port = self.elrs_host_port(&host, p.port.as_deref())?;
         let mut notes = Vec::new();
-        let (info, params) = {
+        let (info, params, host_board) = {
             let _hold = self.gear_hold(&port);
             self.elrs_read_live(&host, &port, &mut notes)?
         };
@@ -459,6 +462,7 @@ impl Core {
             options: elrs::options_of(&params),
             params: elrs::param_views(&params),
             read_at: Utc::now(),
+            host_board,
         };
         elrs::save_snapshot(store.root(), &snapshot)?;
         self.hooks.gear_changed();
@@ -643,7 +647,7 @@ impl Core {
         let mut steps: Vec<StepReport> = Vec::new();
         let mut notes = plan.warnings.clone();
         let _hold = self.gear_hold(&port);
-        let mut c = self.elrs_open(&host, &port, ModuleStart::Run, &mut notes)?;
+        let (mut c, _) = self.elrs_open(&host, &port, ModuleStart::Run, None, &mut notes)?;
         let want = side_of(device.kind)
             .map(|s| {
                 if s == Side::Tx {
@@ -886,6 +890,17 @@ impl Core {
             ),
         });
 
+        if host.kind == DeviceKind::Radio {
+            checks.push(match &snapshot.host_board {
+                Some(b) => pass(&format!("The read names the radio's board ({b})")),
+                None => fail(
+                    "The read names the radio's board",
+                    RefusalCode::ReadFirst,
+                    "Read this device again (`gear elrs read`): the read did not record the radio's board, which a flash checks first.",
+                ),
+            });
+        }
+
         let port = match self.elrs_host_port(&host, p.port.as_deref()) {
             Ok(port) => {
                 checks.push(pass(&format!(
@@ -1049,9 +1064,10 @@ impl Core {
         let digest = if ready {
             blobs::hash(
                 format!(
-                    "elrs-flash|{}|{}|{}|{}|{}|{}|{}",
+                    "elrs-flash|{}|{}|{}|{}|{}|{}|{}|{}",
                     device.id,
                     host.id,
+                    snapshot.host_board.clone().unwrap_or_default(),
                     snapshot.name,
                     version,
                     bundle_sha,
@@ -1075,6 +1091,7 @@ impl Core {
             },
             device,
             host,
+            snapshot,
             built,
             version,
         })
@@ -1138,22 +1155,48 @@ impl Core {
         let mut notes = prep.plan.warnings.clone();
         let _hold = self.gear_hold(&port);
 
-        // 1. The bootloader. A receiver prints its target name; it must be the one planned.
-        let mut c = self.elrs_open(&prep.host, &port, ModuleStart::Bootloader, &mut notes)?;
+        // 1. The device must be the one planned, then its bootloader. A radio must be the board
+        // the read went through (its `ver`, before the pulses stop); an ESP32 in its ROM
+        // bootloader cannot answer CRSF, and the radio stays in passthrough, so its module
+        // cannot be pinged first. A receiver answers a CRSF ping on the same passthrough, then
+        // prints its target as it restarts into its bootloader.
+        let expect = (prep.host.kind == DeviceKind::Radio)
+            .then(|| prep.snapshot.host_board.clone())
+            .flatten();
+        let (mut c, board) = self.elrs_open(
+            &prep.host,
+            &port,
+            ModuleStart::Bootloader,
+            expect.as_deref(),
+            &mut notes,
+        )?;
         if prep.host.kind == DeviceKind::Fc {
-            let said = c.enter_bootloader()?;
-            let want = built.target.prior_target_name.to_ascii_uppercase();
-            let product = built.target.product_name.to_ascii_uppercase();
-            let said_up = said.to_ascii_uppercase();
-            if !said_up.is_empty()
-                && !said_up.contains(&want)
-                && !said_up.contains(&product)
-                && !said_up.contains("UNIFIED")
-            {
+            let info = c
+                .ping()?
+                .into_iter()
+                .find(|d| d.origin == crsf::ADDR_RX)
+                .ok_or_else(|| {
+                    refusal(Refusal::new(
+                        RefusalCode::DeviceChanged,
+                        "The receiver did not answer a CRSF ping, so QuadCam cannot tell it is the one planned. Nothing was written.",
+                    ))
+                })?;
+            if info.name != prep.snapshot.name {
                 return Err(refusal(Refusal::new(
                     RefusalCode::DeviceChanged,
                     format!(
-                        "The receiver in its bootloader says `{}`, not {}. Nothing was written.",
+                        "The receiver now calls itself `{}`, not `{}`. Nothing was written; read it again.",
+                        info.name, prep.snapshot.name
+                    ),
+                )));
+            }
+            steps.push(step("Ping the receiver", StepState::Done, Some(info.name)));
+            let said = c.enter_bootloader()?;
+            if !flash::bootloader_names(&said, &built.target) {
+                return Err(refusal(Refusal::new(
+                    RefusalCode::DeviceChanged,
+                    format!(
+                        "The receiver in its bootloader says `{}`, which does not name {}. Nothing was written.",
                         said.trim(),
                         built.target.product_name
                     ),
@@ -1162,9 +1205,14 @@ impl Core {
             steps.push(step(
                 "Restart the receiver into its bootloader",
                 StepState::Done,
-                (!said.is_empty()).then(|| said.trim().to_string()),
+                Some(said.trim().to_string()),
             ));
         } else {
+            steps.push(step(
+                "Check the radio",
+                StepState::Done,
+                board.map(|b| format!("board {b}")),
+            ));
             steps.push(step(
                 "Start the module with its boot pin held",
                 StepState::Done,

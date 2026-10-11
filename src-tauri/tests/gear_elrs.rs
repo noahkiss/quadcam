@@ -7,7 +7,7 @@ use quadcam_lib::core::{
     Core, ElrsFlashParams, ElrsFlashRequest, ElrsParams, ElrsReadParams, Hooks, NoHooks,
     StageParams,
 };
-use quadcam_lib::gear::apply::{ApplyPlanParams, ApplyRequest};
+use quadcam_lib::gear::apply::{ApplyPlanParams, ApplyReport, ApplyRequest};
 use quadcam_lib::gear::bf::fake::FakeFc;
 use quadcam_lib::gear::elrs::fake::{FakeElrs, FakeHost};
 use quadcam_lib::gear::elrs::image::{fixtures, INDEX_URL};
@@ -130,6 +130,18 @@ fn bundle_zip(dir: &Path) -> PathBuf {
     std::fs::write(
         root.join("hardware/RX/Generic 2400.json"),
         fixtures::layout().to_string(),
+    )
+    .unwrap();
+    let tx = root.join("FCC").join("Unified_ESP32_2400_TX");
+    std::fs::create_dir_all(&tx).unwrap();
+    std::fs::write(tx.join("firmware.bin"), fixtures::stock_esp32(4)).unwrap();
+    for f in ["bootloader.bin", "partitions.bin", "boot_app0.bin"] {
+        std::fs::write(tx.join(f), f.as_bytes()).unwrap();
+    }
+    std::fs::create_dir_all(root.join("hardware/TX")).unwrap();
+    std::fs::write(
+        root.join("hardware/TX/Radio.json"),
+        json!({"serial_rx": 13, "serial_tx": 13, "power_values": [10, 14]}).to_string(),
     )
     .unwrap();
     let zip = dir.join("firmware.zip");
@@ -903,4 +915,119 @@ fn a_pair_on_different_majors_is_warned_about() {
         "{:?}",
         plan.warnings
     );
+}
+
+fn flash(b: &Bench, p: &ElrsFlashParams, digest: &str) -> anyhow::Result<ApplyReport> {
+    b.core.gear_elrs_flash(&ElrsFlashRequest {
+        params: p.clone(),
+        digest: digest.into(),
+        confirm: true,
+    })
+}
+
+#[test]
+fn a_receiver_flash_pings_the_receiver_and_refuses_another_one() {
+    let (b, _, rx) = bench(true, true);
+    let id = rx_device(&b);
+    let (p, plan) = planned(&b, &id);
+    // The receiver on the quad was swapped after the read.
+    rx.restart();
+    let other = FakeElrs::rx("Other Vendor RX", "3.5.3");
+    rx.replace_device(other.clone());
+    let r = refusal(flash(&b, &p, &plan.digest).unwrap_err());
+    assert_eq!(r.code, RefusalCode::DeviceChanged);
+    assert!(
+        r.reason.contains("now calls itself `Other Vendor RX`"),
+        "{}",
+        r.reason
+    );
+    assert_eq!(
+        other.bootloader_requests(),
+        0,
+        "no bootloader before the ping matched"
+    );
+    assert!(b.esptool.calls.lock().unwrap().is_empty());
+    // A receiver that does not answer the ping refuses too.
+    rx.restart();
+    let mute = FakeElrs::rx("Vendor 2.4GHz AIO RX", "3.5.3").mute();
+    rx.replace_device(mute.clone());
+    let r = refusal(flash(&b, &p, &plan.digest).unwrap_err());
+    assert_eq!(r.code, RefusalCode::DeviceChanged);
+    assert!(r.reason.contains("did not answer"), "{}", r.reason);
+    assert_eq!(mute.bootloader_requests(), 0);
+    assert!(b.esptool.calls.lock().unwrap().is_empty());
+}
+
+#[test]
+fn a_bootloader_reply_that_does_not_name_the_target_refuses() {
+    let (b, _, rx) = bench(true, true);
+    let id = rx_device(&b);
+    let (p, plan) = planned(&b, &id);
+    for said in ["", "UNIFIED", "OTHER_RX"] {
+        rx.restart();
+        let _ = rx.device().with_bootloader_text(said);
+        let r = refusal(flash(&b, &p, &plan.digest).unwrap_err());
+        assert_eq!(r.code, RefusalCode::DeviceChanged, "{said:?}");
+        assert!(r.reason.contains("Nothing was written"), "{}", r.reason);
+        assert!(b.esptool.calls.lock().unwrap().is_empty(), "{said:?}");
+    }
+    // The unified firmware's own name is the planned target's.
+    rx.restart();
+    let _ = rx.device().with_bootloader_text("UNIFIED_ESP8285_2400_RX");
+    let report = flash(&b, &p, &plan.digest).unwrap();
+    assert_eq!(report.status, ChangeStatus::Verified, "{}", report.message);
+    assert!(report.steps.iter().any(|s| s.name == "Ping the receiver"));
+}
+
+#[test]
+fn a_module_flash_checks_the_radio_board_before_the_boot_pin() {
+    let (b, tx, _) = bench(true, true);
+    let id = read(&b, &b.radio).unwrap().device;
+    let snap = quadcam_lib::gear::elrs::load_snapshot(b.core.gear_store().root(), &id).unwrap();
+    assert_eq!(snap.host_board.as_deref(), Some("pocket"));
+    let (p, plan) = planned(&b, &id);
+    assert!(failed(&plan).is_empty(), "{:?}", plan.checks);
+    // Another radio model is plugged in for the flash.
+    tx.restart();
+    let _ = tx.clone().with_board("tx16s");
+    let before = tx.log().len();
+    let r = refusal(flash(&b, &p, &plan.digest).unwrap_err());
+    assert_eq!(r.code, RefusalCode::DeviceChanged);
+    assert!(
+        r.reason.contains("is a tx16s, not the pocket"),
+        "{}",
+        r.reason
+    );
+    assert_eq!(tx.log()[before..], ["ver".to_string()], "nothing after ver");
+    assert!(!tx.module_in_bootloader());
+    assert!(b.esptool.calls.lock().unwrap().is_empty());
+    // The radio it was read through.
+    tx.restart();
+    let _ = tx.clone().with_board("pocket");
+    let report = flash(&b, &p, &plan.digest).unwrap();
+    assert_eq!(report.status, ChangeStatus::Verified, "{}", report.message);
+    assert!(tx.module_in_bootloader());
+    assert!(report.steps.iter().any(|s| s.name == "Check the radio"));
+    let calls = b.esptool.calls.lock().unwrap().clone();
+    assert!(
+        calls[1].join(" ").contains("--chip esp32"),
+        "{:?}",
+        calls[1]
+    );
+    // A read that did not record the board plans no flash, and the board is in the digest.
+    let root = b.core.gear_store().root().to_path_buf();
+    let mut snap = quadcam_lib::gear::elrs::load_snapshot(&root, &id).unwrap();
+    snap.host_board = None;
+    quadcam_lib::gear::elrs::save_snapshot(&root, &snap).unwrap();
+    let again = b.core.gear_elrs_flash_plan(&p).unwrap();
+    assert!(
+        failed(&again)
+            .iter()
+            .any(|(n, c)| *n == "The read names the radio's board" && *c == RefusalCode::ReadFirst),
+        "{:?}",
+        failed(&again)
+    );
+    snap.host_board = Some("tx16s".into());
+    quadcam_lib::gear::elrs::save_snapshot(&root, &snap).unwrap();
+    assert_ne!(b.core.gear_elrs_flash_plan(&p).unwrap().digest, plan.digest);
 }

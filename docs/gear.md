@@ -1240,9 +1240,14 @@ option over CRSF, reads them back and compares. From a terminal:
 - Mixed majors (4.x on one end, 3.x on the other) do not link; the plan warns, and the page warns
   about a read pair. Flash the receiver first.
 
-**Apply** puts the device in its bootloader (a radio: the module's boot pin held while it powers
-up; an FC: the receiver restarts into its bootloader on a CRSF request, and its name must match),
-reads the chip's current flash with esptool and keeps it as a backup (`firmware.bin`), writes with
+**Apply** first checks that the device is the one planned, then puts it in its bootloader:
+
+| Host | Check | Bootloader |
+|---|---|---|
+| Radio | The radio's `ver` must name the board the read recorded. A radio of another model refuses before the pulses stop. Two radios of one model look the same | The module's boot pin is held while it powers up |
+| FC | The FC must identify itself as the saved FC. The receiver must answer a CRSF ping with the name the read saved | The receiver restarts into its bootloader on a CRSF request. What it prints must name the planned target (its prior target name, product name or unified firmware name). An empty reply, or a bare `UNIFIED`, refuses |
+
+Every refusal comes before anything is written. Then QuadCam reads the chip's current flash with esptool and keeps it as a backup (`firmware.bin`), writes with
 `esptool write-flash` and reports success only when esptool prints that it verified the data.
 Afterwards restart the radio or power-cycle the quad, then read the device again. ExpressLRS 4
 wipes a receiver's Options page, so note your settings first. A flash that fails leaves the device

@@ -101,6 +101,18 @@ pub fn check_target(t: &Target, version: &str) -> Result<&'static Platform, Refu
     Ok(p)
 }
 
+/// Whether what a receiver printed as it restarted into its bootloader names `t`: its prior
+/// target name, its product name, or its unified firmware (`UNIFIED_ESP8285_2400_RX`). An
+/// empty reply, or a bare `UNIFIED` that every unified receiver prints, names nothing.
+pub fn bootloader_names(said: &str, t: &Target) -> bool {
+    let said = said.trim().to_ascii_uppercase();
+    !said.is_empty()
+        && [&t.prior_target_name, &t.product_name, &t.firmware]
+            .iter()
+            .map(|n| n.trim().to_ascii_uppercase())
+            .any(|n| !n.is_empty() && said.contains(&n))
+}
+
 /// One file `esptool` writes.
 #[derive(Debug, Clone)]
 pub struct FlashFile {
@@ -323,6 +335,25 @@ mod tests {
         let mut wrong_side = t.clone();
         wrong_side.side = Side::Tx;
         assert!(check_target(&wrong_side, "4.1.0").is_err());
+    }
+
+    #[test]
+    fn the_bootloader_reply_must_name_the_planned_target() {
+        let t = rx();
+        assert!(bootloader_names("DIY_2400_RX_ESP8285_SX1280\n", &t));
+        assert!(bootloader_names("vendor 2.4ghz aio rx", &t));
+        assert!(bootloader_names("ELRS UNIFIED_ESP8285_2400_RX", &t));
+        assert!(!bootloader_names("", &t), "an empty reply");
+        assert!(!bootloader_names("  \n", &t));
+        assert!(
+            !bootloader_names("UNIFIED", &t),
+            "any unified receiver says that"
+        );
+        assert!(!bootloader_names("OTHER_RX", &t));
+        // A target with no prior name is not matched by everything.
+        let mut bare = t.clone();
+        bare.prior_target_name = String::new();
+        assert!(!bootloader_names("OTHER_RX", &bare));
     }
 
     #[test]

@@ -488,6 +488,27 @@ pub mod fixtures {
             raw.extend((0..64).map(|i| (i as u8) ^ salt ^ s));
         }
         let end = (raw.len() + 16) & !15;
+        stock_blocks(raw, end)
+    }
+
+    /// A stock-like ESP32 image: the 24-byte header, five segments (an app image has more
+    /// than two; `blocks_at` reads a count of 2 as an ESP8285 image), the 32-byte digest, then
+    /// the blocks.
+    pub fn stock_esp32(salt: u8) -> Vec<u8> {
+        let mut raw = vec![0u8; 24];
+        raw[0] = 0xE9;
+        raw[1] = 5;
+        for s in 0..5u8 {
+            raw.extend_from_slice(&0x3F40_0000u32.to_le_bytes());
+            raw.extend_from_slice(&1024u32.to_le_bytes());
+            raw.extend((0..1024).map(|i| (i as u8) ^ salt ^ s ^ 0x5A));
+        }
+        let end = ((raw.len() + 16) & !15) + 32;
+        stock_blocks(raw, end)
+    }
+
+    /// The zeroed blocks at `end`, but for the product `Unified` and a stock options text.
+    fn stock_blocks(mut raw: Vec<u8>, end: usize) -> Vec<u8> {
         raw.resize(end + HARDWARE_AT + HARDWARE_LEN, 0);
         raw[end..end + 7].copy_from_slice(b"Unified");
         let o = br#"{"flash-discriminator": 7, "wifi-on-interval": 60, "lock-on-first-connection": true, "domain": 0}"#;

@@ -483,6 +483,11 @@ impl FakeHost {
         self.st.lock().unwrap().device.clone()
     }
 
+    /// Puts another ELRS device behind the host (a receiver swapped on the quad).
+    pub fn replace_device(&self, device: FakeElrs) {
+        self.st.lock().unwrap().device = device;
+    }
+
     pub fn log(&self) -> Vec<String> {
         self.st.lock().unwrap().log.clone()
     }

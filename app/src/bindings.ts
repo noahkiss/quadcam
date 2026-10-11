@@ -2293,6 +2293,11 @@ export type ElrsSnapshot = {
 	options: ElrsOption[],
 	params: ElrsParamView[],
 	read_at: string,
+	/**
+	 *  The board the radio's `ver` named at the read (a radio host only). A flash compares it
+	 *  with the radio plugged in before it holds the module's boot pin.
+	 */
+	host_board?: string | null,
 };
 
 export type ElrsView = {
