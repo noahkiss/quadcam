@@ -780,3 +780,240 @@ fn a_take_copies_into_the_cache_so_the_app_can_play_it() {
         .unwrap_err();
     assert!(format!("{e:#}").contains("no override"), "{e:#}");
 }
+
+/// Adds saved radios to `gear.json` beside the bench's one: a copy of it under each id, with
+/// the firmware family given.
+fn add_radios(b: &Bench, more: &[(&str, &str)]) {
+    let path = b.dir.path().join("support/gear/gear.json");
+    let mut v: serde_json::Value = serde_json::from_slice(&std::fs::read(&path).unwrap()).unwrap();
+    let devices = v["devices"].as_array_mut().unwrap();
+    let first = devices
+        .iter()
+        .find(|d| d["id"] == b.id.as_str())
+        .unwrap()
+        .clone();
+    for (id, firmware) in more {
+        let mut d = first.clone();
+        d["id"] = (*id).into();
+        d["name"] = format!("Radio {id}").into();
+        d["aliases"] = serde_json::json!([]);
+        d["identity"]["firmware"] = (*firmware).into();
+        devices.push(d);
+    }
+    std::fs::write(&path, serde_json::to_vec_pretty(&v).unwrap()).unwrap();
+}
+
+#[test]
+fn the_library_lists_each_pack_with_its_sets_size_date_and_radios() {
+    let b = bench(Opts::default());
+    let r = render(&b, &[], false, false);
+    let id = r.pack.clone();
+    let v = b.core.gear_voice(&VoiceParams::default()).unwrap();
+    let k = v.packs.iter().find(|k| k.id == id).unwrap();
+    assert_eq!(k.firmware, "edgetx");
+    assert!(k.bytes > 0, "a rendered pack has a size");
+    assert!(k.made.is_some());
+    // Every QuadCam line is in it, so it covers the QuadCam set.
+    assert!(k.sets.contains(&"quadcam".to_string()), "{:?}", k.sets);
+    assert!(k.radios.is_empty());
+    let m: serde_json::Value = serde_json::from_slice(
+        &std::fs::read(
+            b.dir
+                .path()
+                .join(format!("support/gear/voices/{id}/pack.json")),
+        )
+        .unwrap(),
+    )
+    .unwrap();
+    assert_eq!(m["firmware"], "edgetx");
+    assert_eq!(m["voice_id"], "Test Voice");
+    b.core
+        .gear_voice_choose(&VoiceChooseParams {
+            radio: b.id.clone(),
+            pack: id.clone(),
+            keep_overrides: true,
+            editor: None,
+        })
+        .unwrap();
+    let v = b.core.gear_voice(&VoiceParams::default()).unwrap();
+    assert_eq!(
+        v.packs.iter().find(|k| k.id == id).unwrap().radios,
+        vec![b.id.clone()]
+    );
+}
+
+#[test]
+fn a_pack_deletes_and_keeps_its_raw_takes_unless_asked() {
+    use quadcam_lib::core::PackDeleteParams;
+    let b = bench(Opts::default());
+    let id = render(&b, &[ARMED, LOWBAT], false, false).pack;
+    let calls = b.calls.load(Ordering::SeqCst);
+    let raw = b.dir.path().join("cache/voice/raw");
+    let count = |d: &std::path::Path| walk(d);
+    let takes = count(&raw);
+    assert_eq!(takes, 2);
+    let r = b
+        .core
+        .gear_voice_pack_delete(&PackDeleteParams {
+            pack: id.clone(),
+            takes: false,
+        })
+        .unwrap();
+    assert!(r.bytes > 0 && r.takes == 0);
+    assert!(!b
+        .dir
+        .path()
+        .join(format!("support/gear/voices/{id}"))
+        .exists());
+    assert_eq!(count(&raw), 2, "the raw takes stay");
+    // A second render of the same lines comes from the cache: no provider call.
+    render(&b, &[ARMED, LOWBAT], false, false);
+    assert_eq!(b.calls.load(Ordering::SeqCst), calls);
+    // With takes, the raw takes go too.
+    let r = b
+        .core
+        .gear_voice_pack_delete(&PackDeleteParams {
+            pack: id.clone(),
+            takes: true,
+        })
+        .unwrap();
+    assert_eq!(r.takes, 2);
+    assert_eq!(count(&raw), 0);
+    let e = b
+        .core
+        .gear_voice_pack_delete(&PackDeleteParams {
+            pack: id,
+            takes: false,
+        })
+        .unwrap_err();
+    assert!(format!("{e:#}").contains("not installed"), "{e:#}");
+    let e = b
+        .core
+        .gear_voice_pack_delete(&PackDeleteParams {
+            pack: "../x".into(),
+            takes: false,
+        })
+        .unwrap_err();
+    assert!(format!("{e:#}").contains("not a pack id"), "{e:#}");
+}
+
+fn walk(d: &std::path::Path) -> usize {
+    std::fs::read_dir(d)
+        .into_iter()
+        .flatten()
+        .flatten()
+        .map(|e| {
+            if e.path().is_dir() {
+                walk(&e.path())
+            } else {
+                1
+            }
+        })
+        .sum()
+}
+
+#[test]
+fn choose_on_several_radios_stages_one_change_each_and_skips_other_firmware() {
+    use quadcam_lib::core::VoiceChooseRadiosParams;
+    let b = bench(Opts::default());
+    add_radios(&b, &[("radio-two", "EdgeTX"), ("radio-ethos", "ETHOS")]);
+    let pack = render(&b, &[ARMED], false, false).pack;
+    // A radio on other firmware refuses, and nothing is staged.
+    let e = b
+        .core
+        .gear_voice_choose_radios(&VoiceChooseRadiosParams {
+            pack: pack.clone(),
+            radios: vec![b.id.clone(), "radio-ethos".into()],
+            keep_overrides: true,
+            ..Default::default()
+        })
+        .unwrap_err();
+    assert!(format!("{e:#}").contains("EdgeTX radios"), "{e:#}");
+    assert!(staged(&b).is_empty());
+    let e = b
+        .core
+        .gear_voice_choose_radios(&VoiceChooseRadiosParams {
+            pack: pack.clone(),
+            ..Default::default()
+        })
+        .unwrap_err();
+    assert!(format!("{e:#}").contains("at least one radio"), "{e:#}");
+    // All radios: every saved EdgeTX radio, one change each.
+    let r = b
+        .core
+        .gear_voice_choose_radios(&VoiceChooseRadiosParams {
+            pack: pack.clone(),
+            all: true,
+            keep_overrides: true,
+            ..Default::default()
+        })
+        .unwrap();
+    let mut devices: Vec<String> = r.staged.iter().map(|c| c.device.clone()).collect();
+    devices.sort();
+    let mut want = vec![b.id.clone(), "radio-two".to_string()];
+    want.sort();
+    assert_eq!(devices, want);
+    assert_eq!(staged(&b).len(), 2);
+    // Again: the same two changes, updated.
+    b.core
+        .gear_voice_choose_radios(&VoiceChooseRadiosParams {
+            pack: pack.clone(),
+            radios: vec!["radio-two".into()],
+            keep_overrides: true,
+            ..Default::default()
+        })
+        .unwrap();
+    assert_eq!(staged(&b).len(), 2);
+    let v = b.core.gear_voice(&VoiceParams::default()).unwrap();
+    assert_eq!(
+        v.packs.iter().find(|k| k.id == pack).unwrap().radios.len(),
+        2
+    );
+}
+
+#[test]
+fn the_mcp_actions_choose_on_several_radios_and_delete_after_confirm() {
+    use quadcam_lib::mcp::{LocalBackend, Server};
+    use serde_json::json;
+    let b = bench(Opts::default());
+    add_radios(&b, &[("radio-two", "EdgeTX")]);
+    let pack = render(&b, &[ARMED], false, false).pack;
+    let mut s = Server::new(LocalBackend(b.core.clone()));
+    let r = s.call_tool(
+        "quadcam_gear_edit",
+        json!({"action": "voice_choose", "pack": pack, "all_radios": true}),
+    );
+    assert_eq!(r["isError"], false, "{r}");
+    assert!(
+        r["content"][0]["text"]
+            .as_str()
+            .unwrap()
+            .contains("Staged on 2 radios"),
+        "{r}"
+    );
+    let r = s.call_tool(
+        "quadcam_gear_edit",
+        json!({"action": "voice_delete", "pack": pack}),
+    );
+    assert_eq!(r["isError"], false, "{r}");
+    let t = r["content"][0]["text"].as_str().unwrap();
+    assert!(
+        t.starts_with("Not deleted.") && t.contains("2 radios chose it"),
+        "{t}"
+    );
+    assert!(b
+        .dir
+        .path()
+        .join(format!("support/gear/voices/{pack}"))
+        .is_dir());
+    let r = s.call_tool(
+        "quadcam_gear_edit",
+        json!({"action": "voice_delete", "pack": pack, "confirm": true}),
+    );
+    assert_eq!(r["isError"], false, "{r}");
+    assert!(!b
+        .dir
+        .path()
+        .join(format!("support/gear/voices/{pack}"))
+        .exists());
+}

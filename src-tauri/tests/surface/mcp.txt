@@ -88,6 +88,7 @@ mcp.action quadcam_gear_edit.stage
 mcp.action quadcam_gear_edit.stop
 mcp.action quadcam_gear_edit.update
 mcp.action quadcam_gear_edit.voice_choose
+mcp.action quadcam_gear_edit.voice_delete
 mcp.action quadcam_gear_edit.voice_edit
 mcp.action quadcam_gear_edit.voice_install
 mcp.action quadcam_gear_edit.voice_key_delete
@@ -196,6 +197,7 @@ mcp.param quadcam_gear_apply.version string
 mcp.param quadcam_gear_edit.action string
 mcp.param quadcam_gear_edit.add_folder string
 mcp.param quadcam_gear_edit.aircraft string
+mcp.param quadcam_gear_edit.all_radios boolean
 mcp.param quadcam_gear_edit.backup string
 mcp.param quadcam_gear_edit.broke string
 mcp.param quadcam_gear_edit.calibration any
@@ -246,6 +248,7 @@ mcp.param quadcam_gear_edit.place string
 mcp.param quadcam_gear_edit.port string
 mcp.param quadcam_gear_edit.product string
 mcp.param quadcam_gear_edit.radio string
+mcp.param quadcam_gear_edit.radios array<string>
 mcp.param quadcam_gear_edit.received string
 mcp.param quadcam_gear_edit.remove_folder string
 mcp.param quadcam_gear_edit.repaired boolean
@@ -257,6 +260,7 @@ mcp.param quadcam_gear_edit.source string
 mcp.param quadcam_gear_edit.split boolean
 mcp.param quadcam_gear_edit.status string
 mcp.param quadcam_gear_edit.storage_v number
+mcp.param quadcam_gear_edit.takes boolean
 mcp.param quadcam_gear_edit.text string
 mcp.param quadcam_gear_edit.time_s number
 mcp.param quadcam_gear_edit.title string

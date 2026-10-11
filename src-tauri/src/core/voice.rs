@@ -13,6 +13,7 @@ use crate::gear::model::{CardFile, ChangeStatus, DeviceKind, Edit, StagedChange}
 use crate::gear::voice::lines::{self, Line, Spelling};
 use crate::gear::voice::packs::{self, BuildOpts, Installed, PackIndexEntry, VoiceIndex};
 use crate::gear::voice::render::{self, Cache, Ctx, Plan, RenderSettings};
+use crate::gear::voice::sets;
 use crate::gear::voice::tts::{ProviderConfig, Tts};
 use crate::modules::fetch::Fetch;
 use anyhow::{anyhow, bail, Context, Result};
@@ -83,6 +84,18 @@ pub struct VoicePack {
     /// Where an installed pack's files are (the app plays them from here).
     #[serde(default)]
     pub dir: Option<String>,
+    /// The firmware family the pack is for (`edgetx`).
+    #[serde(default)]
+    pub firmware: String,
+    /// The line sets (`gear_voice_sets`) whose every line the pack holds. Installed packs only.
+    #[serde(default)]
+    pub sets: Vec<String>,
+    /// When the pack was rendered or built (its `pack.json`). Installed packs only.
+    #[serde(default)]
+    pub made: Option<chrono::DateTime<chrono::Utc>>,
+    /// The saved radios this pack is chosen for.
+    #[serde(default)]
+    pub radios: Vec<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, specta::Type)]
@@ -223,6 +236,51 @@ pub struct VoiceChooseParams {
 
 fn yes() -> bool {
     true
+}
+
+/// `gear_voice_choose_radios`: Choose voice on several radios at once.
+#[derive(Debug, Clone, Default, Serialize, Deserialize, specta::Type)]
+pub struct VoiceChooseRadiosParams {
+    pub pack: String,
+    /// Saved radios' device ids.
+    #[serde(default)]
+    pub radios: Vec<String>,
+    /// Every saved EdgeTX radio, with or without `radios`.
+    #[serde(default)]
+    pub all: bool,
+    /// Keep each radio's overrides (default true).
+    #[serde(default = "yes")]
+    pub keep_overrides: bool,
+    #[serde(default)]
+    pub editor: Option<crate::session::Editor>,
+}
+
+/// One staged voice change per radio, in the order the radios were named.
+#[derive(Debug, Clone, Serialize, Deserialize, specta::Type)]
+pub struct VoiceChooseRadiosReport {
+    pub pack: String,
+    pub staged: Vec<StagedChange>,
+}
+
+/// `gear_voice_pack_delete`: removes an installed or rendered pack from this Mac.
+#[derive(Debug, Clone, Default, Serialize, Deserialize, specta::Type)]
+pub struct PackDeleteParams {
+    pub pack: String,
+    /// Also remove the raw takes the pack was made from. A later render of that voice and
+    /// model then calls the provider again (and pays again).
+    #[serde(default)]
+    pub takes: bool,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, specta::Type)]
+pub struct PackDeleteReport {
+    pub pack: String,
+    /// The bytes the pack's folder held.
+    pub bytes: u64,
+    /// Raw takes and batches removed from the cache (0 unless `takes`).
+    pub takes: u32,
+    /// Saved radios that had chosen the pack. Their cards keep its sounds.
+    pub radios: Vec<String>,
 }
 
 /// The maintainer's `build-pack`.
@@ -396,12 +454,87 @@ impl Core {
             .map(String::from)
     }
 
+    /// Every radio's chosen pack.
+    fn chosen_all(&self) -> std::collections::BTreeMap<String, String> {
+        self.gear_store()
+            .read()
+            .ok()
+            .and_then(|v| v.get("voice")?.get("chosen").cloned())
+            .and_then(|c| serde_json::from_value(c).ok())
+            .unwrap_or_default()
+    }
+
     fn radio_device(&self, id: &str) -> Result<()> {
         match self.gear_store().device(id)? {
-            Some(d) if d.kind == DeviceKind::Radio => Ok(()),
+            Some(d) if d.kind == DeviceKind::Radio => match d.identity.firmware.as_deref() {
+                Some(f) if !f.eq_ignore_ascii_case(packs::EDGETX) => bail!(
+                    "{} runs {f}: voice packs are for EdgeTX radios.",
+                    if d.name.is_empty() { id } else { &d.name }
+                ),
+                _ => Ok(()),
+            },
             Some(_) => bail!("{id:?} is not a radio."),
             None => bail!("No device {id:?} in QuadCam's list (quadcam-cli gear devices)."),
         }
+    }
+
+    /// An installed pack as the library shows it.
+    fn installed_pack(
+        i: &Installed,
+        covered: &[(String, Vec<String>)],
+        chosen: &std::collections::BTreeMap<String, String>,
+        csv_sha: &str,
+    ) -> VoicePack {
+        let m = &i.manifest;
+        let dir = Path::new(&i.dir);
+        VoicePack {
+            id: m.id.clone(),
+            voice: m.voice.clone(),
+            lang: m.lang.clone(),
+            provider: m.provider.clone(),
+            model: m.model.clone(),
+            lines: m.lines,
+            license: m.license.clone(),
+            attribution: m.attribution.clone(),
+            version: m.version.clone(),
+            installed: true,
+            local: m.id.starts_with("local-"),
+            bytes: packs::dir_bytes(dir),
+            stale: !m.lines_csv_sha.is_empty() && m.lines_csv_sha != csv_sha,
+            dir: Some(i.dir.clone()),
+            firmware: m.firmware.clone(),
+            sets: covered
+                .iter()
+                .filter(|(_, paths)| !paths.is_empty() && paths.iter().all(|p| m.files.contains(p)))
+                .map(|(id, _)| id.clone())
+                .collect(),
+            made: std::fs::metadata(dir.join("pack.json"))
+                .and_then(|x| x.modified())
+                .ok()
+                .map(chrono::DateTime::<chrono::Utc>::from),
+            radios: chosen
+                .iter()
+                .filter(|(_, p)| **p == m.id)
+                .map(|(r, _)| r.clone())
+                .collect(),
+        }
+    }
+
+    /// Each line set a library entry can cover, with its card paths (`sample` and the
+    /// person's own lines left out).
+    fn set_paths() -> Result<Vec<(String, Vec<String>)>> {
+        let mut out = Vec::new();
+        for id in sets::ids() {
+            if id == "sample" || id == "custom" {
+                continue;
+            }
+            let paths = sets::lines_of(id)?
+                .into_iter()
+                .map(|l| l.line.path)
+                .collect();
+            out.push((id.to_string(), paths));
+        }
+        Ok(out)
     }
 
     // ----- reading -----
@@ -465,32 +598,11 @@ impl Core {
         };
         let installed = packs::installed(&self.voices_dir());
         let csv_sha = lines::builtin_sha();
+        let covered = Self::set_paths()?;
+        let chosen = self.chosen_all();
         let mut packs_out: Vec<VoicePack> = installed
             .iter()
-            .map(|i| {
-                let m = &i.manifest;
-                VoicePack {
-                    id: m.id.clone(),
-                    voice: m.voice.clone(),
-                    lang: m.lang.clone(),
-                    provider: m.provider.clone(),
-                    model: m.model.clone(),
-                    lines: m.lines,
-                    license: m.license.clone(),
-                    attribution: m.attribution.clone(),
-                    version: m.version.clone(),
-                    installed: true,
-                    local: m.id.starts_with("local-"),
-                    bytes: index
-                        .packs
-                        .iter()
-                        .find(|e| e.id == m.id)
-                        .map(|e| e.bytes)
-                        .unwrap_or(0),
-                    stale: !m.lines_csv_sha.is_empty() && m.lines_csv_sha != csv_sha,
-                    dir: Some(i.dir.clone()),
-                }
-            })
+            .map(|i| Self::installed_pack(i, &covered, &chosen, &csv_sha))
             .collect();
         for e in &index.packs {
             if !packs_out.iter().any(|p| p.id == e.id) {
@@ -509,6 +621,10 @@ impl Core {
                     bytes: e.bytes,
                     stale: e.lines_csv_sha != csv_sha,
                     dir: None,
+                    firmware: e.firmware.clone(),
+                    sets: Vec::new(),
+                    made: None,
+                    radios: Vec::new(),
                 });
             }
         }
@@ -795,23 +911,75 @@ impl Core {
         let r = packs::install(&self.voices_dir(), &zip, &entry);
         let _ = std::fs::remove_file(&zip);
         let inst = r?;
-        let m = inst.manifest;
-        Ok(VoicePack {
-            id: m.id,
-            voice: m.voice,
-            lang: m.lang,
-            provider: m.provider,
-            model: m.model,
-            lines: m.lines,
-            license: m.license,
-            attribution: m.attribution,
-            version: m.version,
-            installed: true,
-            local: false,
-            bytes: entry.bytes,
-            stale: m.lines_csv_sha != lines::builtin_sha(),
-            dir: Some(inst.dir),
+        Ok(Self::installed_pack(
+            &inst,
+            &Self::set_paths()?,
+            &self.chosen_all(),
+            &lines::builtin_sha(),
+        ))
+    }
+
+    /// Removes an installed or rendered pack from this Mac. With `takes`, the raw takes and
+    /// batches it was made from go too; without, a later render of that voice and model
+    /// comes from the cache. Radios that chose the pack keep its sounds on their cards; a
+    /// staged voice change keeps its own copy of them.
+    pub fn gear_voice_pack_delete(&self, p: &PackDeleteParams) -> Result<PackDeleteReport> {
+        packs::check_id(&p.pack)?;
+        let inst = packs::installed(&self.voices_dir())
+            .into_iter()
+            .find(|i| i.manifest.id == p.pack)
+            .ok_or_else(|| anyhow!("Pack {:?} is not installed.", p.pack))?;
+        let mut takes = 0;
+        if p.takes {
+            takes = self.remove_takes(&inst.manifest)?;
+        }
+        let bytes = packs::delete(&self.voices_dir(), &p.pack)?;
+        let radios = self
+            .chosen_all()
+            .into_iter()
+            .filter(|(_, k)| *k == p.pack)
+            .map(|(r, _)| r)
+            .collect();
+        Ok(PackDeleteReport {
+            pack: p.pack.clone(),
+            bytes,
+            takes,
+            radios,
         })
+    }
+
+    /// The raw takes and batches a pack was made from, removed from the cache.
+    fn remove_takes(&self, m: &packs::PackManifest) -> Result<u32> {
+        let voice = if m.voice_id.is_empty() {
+            &m.voice
+        } else {
+            &m.voice_id
+        };
+        let mut n = crate::gear::voice::batch::BatchCache::new(&self.cache).remove_voice(
+            &m.provider,
+            voice,
+            &m.model,
+        );
+        let cache = self.voice_cache();
+        let spelling = Spelling::builtin()?;
+        let all = self.all_lines()?;
+        for f in &m.files {
+            let Some(l) = all.iter().find(|l| &l.path == f) else {
+                continue;
+            };
+            let key = Cache::key(
+                &m.provider,
+                voice,
+                &m.model,
+                m.settings.speed,
+                &spelling.apply(&l.text),
+                m.settings.seed,
+            );
+            if cache.remove(&m.provider, &key) {
+                n += 1;
+            }
+        }
+        Ok(n)
     }
 
     // ----- one line, one radio -----
@@ -1073,6 +1241,53 @@ impl Core {
         }
     }
 
+    /// Choose voice on several radios: one staged change each, as `gear_voice_choose` stages
+    /// it. `all` takes every saved EdgeTX radio. Every radio is checked before any change
+    /// is staged.
+    pub fn gear_voice_choose_radios(
+        &self,
+        p: &VoiceChooseRadiosParams,
+    ) -> Result<VoiceChooseRadiosReport> {
+        let mut radios = p.radios.clone();
+        if p.all {
+            for d in self.gear_store().devices()? {
+                let edgetx = d
+                    .identity
+                    .firmware
+                    .as_deref()
+                    .is_none_or(|f| f.eq_ignore_ascii_case(packs::EDGETX));
+                if d.kind == DeviceKind::Radio && edgetx && !radios.contains(&d.id) {
+                    radios.push(d.id);
+                }
+            }
+        }
+        if radios.is_empty() {
+            bail!("Name at least one radio, or pass all.");
+        }
+        for r in &radios {
+            self.radio_device(r)?;
+        }
+        if !packs::installed(&self.voices_dir())
+            .iter()
+            .any(|i| i.manifest.id == p.pack)
+        {
+            bail!("Pack {:?} is not installed: install it first.", p.pack);
+        }
+        let mut staged = Vec::new();
+        for r in radios {
+            staged.push(self.gear_voice_choose(&VoiceChooseParams {
+                radio: r,
+                pack: p.pack.clone(),
+                keep_overrides: p.keep_overrides,
+                editor: p.editor,
+            })?);
+        }
+        Ok(VoiceChooseRadiosReport {
+            pack: p.pack.clone(),
+            staged,
+        })
+    }
+
     /// An installed pack, for the CLI.
     pub fn voice_installed(&self) -> Vec<Installed> {
         packs::installed(&self.voices_dir())
@@ -1140,6 +1355,7 @@ fn dummy_entry(id: &str) -> PackIndexEntry {
         lines_csv_sha: String::new(),
         version: String::new(),
         file: String::new(),
+        firmware: packs::EDGETX.into(),
     }
 }
 
@@ -1191,7 +1407,7 @@ pub fn view_text(v: &VoiceView) -> String {
     for k in &v.packs {
         let _ = writeln!(
             s,
-            "  {} {}: {} lines, {}{}{}",
+            "  {} {}: {} lines, {}{}{}{}{}{}",
             k.id,
             k.voice,
             k.lines,
@@ -1201,7 +1417,22 @@ pub fn view_text(v: &VoiceView) -> String {
                 "available"
             },
             if k.local { ", rendered here" } else { "" },
-            if k.stale { ", from older lines" } else { "" }
+            if k.stale { ", from older lines" } else { "" },
+            if k.model.is_empty() {
+                String::new()
+            } else {
+                format!(", model {}", k.model)
+            },
+            if k.sets.is_empty() {
+                String::new()
+            } else {
+                format!(", sets {}", k.sets.join(", "))
+            },
+            if k.radios.is_empty() {
+                String::new()
+            } else {
+                format!(", chosen for {} radios", k.radios.len())
+            }
         );
     }
     if let Some(c) = &v.chosen {

@@ -456,6 +456,69 @@ fn a_set_renders_into_a_local_pack_and_recutting_costs_nothing() {
 }
 
 #[test]
+fn deleting_a_studio_pack_keeps_its_batches_unless_asked() {
+    use quadcam_lib::core::{PackDeleteParams, VoiceParams};
+    let b = bench(90_000, true);
+    let r = b
+        .core
+        .gear_voice_render(&render(
+            "Callum",
+            "eleven_turbo_v2_5",
+            &["quad"],
+            false,
+            true,
+        ))
+        .unwrap();
+    let posts = b.http.posts();
+    let v = b.core.gear_voice(&VoiceParams::default()).unwrap();
+    let k = v.packs.iter().find(|k| k.id == r.pack).unwrap();
+    assert_eq!(
+        (k.firmware.as_str(), k.model.as_str()),
+        ("edgetx", "eleven_turbo_v2_5")
+    );
+    assert!(k.sets.contains(&"quad".to_string()), "{:?}", k.sets);
+    let gone = b
+        .core
+        .gear_voice_pack_delete(&PackDeleteParams {
+            pack: r.pack.clone(),
+            takes: false,
+        })
+        .unwrap();
+    assert_eq!(gone.takes, 0);
+    // The same render again comes from the batch cache: no request.
+    b.core
+        .gear_voice_render(&render(
+            "Callum",
+            "eleven_turbo_v2_5",
+            &["quad"],
+            false,
+            true,
+        ))
+        .unwrap();
+    assert_eq!(b.http.posts(), posts);
+    let gone = b
+        .core
+        .gear_voice_pack_delete(&PackDeleteParams {
+            pack: r.pack.clone(),
+            takes: true,
+        })
+        .unwrap();
+    assert_eq!(gone.takes as usize, posts);
+    // Now it pays again: the render waits for confirm.
+    let again = b
+        .core
+        .gear_voice_render(&render(
+            "Callum",
+            "eleven_turbo_v2_5",
+            &["quad"],
+            false,
+            false,
+        ))
+        .unwrap();
+    assert!(again.needs_confirm);
+}
+
+#[test]
 fn a_render_without_a_voice_or_model_says_what_to_name() {
     let b = bench(50000, true);
     let e = b

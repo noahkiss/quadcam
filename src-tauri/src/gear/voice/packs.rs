@@ -12,6 +12,14 @@ use specta::Type;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
+/// The firmware family a pack is for. Only EdgeTX packs exist; the field leaves room for
+/// another family's packs, whose card paths differ.
+pub const EDGETX: &str = "edgetx";
+
+fn edgetx() -> String {
+    EDGETX.into()
+}
+
 /// What the index says about one pack.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Type)]
 pub struct PackIndexEntry {
@@ -34,6 +42,9 @@ pub struct PackIndexEntry {
     /// The zip's file name; the index's own folder or URL holds it.
     #[serde(default)]
     pub file: String,
+    /// The firmware family the pack is for (`edgetx`).
+    #[serde(default = "edgetx")]
+    pub firmware: String,
 }
 
 /// `voices.json`.
@@ -61,6 +72,13 @@ pub struct PackManifest {
     pub version: String,
     /// Card paths of the WAVs.
     pub files: Vec<String>,
+    /// The firmware family the pack is for (`edgetx`).
+    #[serde(default = "edgetx")]
+    pub firmware: String,
+    /// The provider's voice id the takes were made with (a say voice name, an ElevenLabs
+    /// voice id). Empty in packs made before 0.12.
+    #[serde(default)]
+    pub voice_id: String,
 }
 
 /// What a pack is called and where it stands.
@@ -135,12 +153,15 @@ pub fn render_to(
         lines_csv_sha: opts.lines_csv_sha.clone(),
         version: opts.version.clone(),
         files,
+        firmware: EDGETX.into(),
+        voice_id: ctx.voice.into(),
     };
     std::fs::write(dir.join("pack.json"), serde_json::to_vec_pretty(&m)?)?;
     Ok((m, made))
 }
 
-fn dir_bytes(dir: &Path) -> u64 {
+/// The size of the files under `dir`.
+pub fn dir_bytes(dir: &Path) -> u64 {
     let mut n = 0;
     for e in std::fs::read_dir(dir).into_iter().flatten().flatten() {
         let p = e.path();
@@ -210,6 +231,7 @@ pub fn build(
         lines_csv_sha: manifest.lines_csv_sha,
         version: manifest.version,
         file: name,
+        firmware: manifest.firmware,
     };
     let idx_path = out.join("voices.json");
     let mut idx = read_index(&idx_path).unwrap_or_default();
@@ -340,6 +362,18 @@ pub fn install(voices: &Path, zip: &Path, entry: &PackIndexEntry) -> Result<Inst
         manifest,
         dir: dest.display().to_string(),
     })
+}
+
+/// Removes the installed pack `id` from `<voices>/`. Returns the bytes it held.
+pub fn delete(voices: &Path, id: &str) -> Result<u64> {
+    check_id(id)?;
+    let dir = voices.join(id);
+    if !dir.join("pack.json").is_file() {
+        bail!("Pack {id:?} is not installed.");
+    }
+    let bytes = dir_bytes(&dir);
+    std::fs::remove_dir_all(&dir).with_context(|| format!("removing {}", dir.display()))?;
+    Ok(bytes)
 }
 
 /// A pack's files: each card path with its bytes.

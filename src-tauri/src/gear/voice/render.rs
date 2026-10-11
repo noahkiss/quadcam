@@ -144,6 +144,11 @@ impl Cache {
         self.path(provider, key).is_file()
     }
 
+    /// Removes one take. True when there was one.
+    pub fn remove(&self, provider: &str, key: &str) -> bool {
+        std::fs::remove_file(self.path(provider, key)).is_ok()
+    }
+
     pub fn put(&self, provider: &str, key: &str, take: &Pcm) -> Result<()> {
         let p = self.path(provider, key);
         std::fs::create_dir_all(p.parent().unwrap())?;

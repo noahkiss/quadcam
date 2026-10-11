@@ -223,15 +223,32 @@ pub enum VoiceCmd {
         #[arg(long)]
         confirm: bool,
     },
-    /// Stage one card change that puts a pack's sounds on a radio.
+    /// Stage one card change that puts a pack's sounds on a radio, or on each of several
+    /// radios (--radio again, or --all-radios).
     Choose {
+        /// A saved radio's device id; repeat it, or separate ids with commas, for several.
+        #[arg(long, value_delimiter = ',')]
+        radio: Vec<String>,
+        /// Every saved EdgeTX radio.
         #[arg(long)]
-        radio: String,
+        all_radios: bool,
         #[arg(long)]
         pack: String,
         /// Clear the lines you overrode instead of keeping them.
         #[arg(long)]
         drop_overrides: bool,
+    },
+    /// Remove an installed or rendered pack from this Mac. Cards keep its sounds. Needs --yes.
+    Delete {
+        /// The pack id.
+        pack: String,
+        /// Also remove the raw takes it was made from; a later render of that voice and model
+        /// then calls the provider again.
+        #[arg(long)]
+        takes: bool,
+        /// Delete it.
+        #[arg(long)]
+        yes: bool,
     },
     /// Maintainer tool: render QuadCam's lines into a pack zip and a voices.json entry.
     BuildPack {
@@ -417,18 +434,43 @@ pub fn run(core: &Core, a: VoiceArgs) -> Result<Value> {
             },
         )?)?,
         Some(VoiceCmd::Choose {
-            radio,
+            mut radio,
+            all_radios,
             pack,
             drop_overrides,
-        }) => serde_json::to_value(call::gear_voice_choose(
-            core,
-            api::VoiceChooseParams {
-                radio,
-                pack,
-                keep_overrides: !drop_overrides,
-                editor: None,
-            },
-        )?)?,
+        }) => {
+            if radio.len() == 1 && !all_radios {
+                serde_json::to_value(call::gear_voice_choose(
+                    core,
+                    api::VoiceChooseParams {
+                        radio: radio.remove(0),
+                        pack,
+                        keep_overrides: !drop_overrides,
+                        editor: None,
+                    },
+                )?)?
+            } else {
+                serde_json::to_value(call::gear_voice_choose_radios(
+                    core,
+                    api::VoiceChooseRadiosParams {
+                        pack,
+                        radios: radio,
+                        all: all_radios,
+                        keep_overrides: !drop_overrides,
+                        editor: None,
+                    },
+                )?)?
+            }
+        }
+        Some(VoiceCmd::Delete { pack, takes, yes }) => {
+            if !yes {
+                bail!("Refused: delete needs --yes. It removes pack {pack} from this Mac.");
+            }
+            serde_json::to_value(call::gear_voice_pack_delete(
+                core,
+                api::PackDeleteParams { pack, takes },
+            )?)?
+        }
         Some(VoiceCmd::BuildPack {
             voice,
             out,

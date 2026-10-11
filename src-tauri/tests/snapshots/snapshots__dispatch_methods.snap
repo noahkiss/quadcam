@@ -100,6 +100,8 @@ expression: "Core::METHODS"
   "gear_voice_sample",
   "gear_voice_pack_install",
   "gear_voice_choose",
+  "gear_voice_choose_radios",
+  "gear_voice_pack_delete",
   "gear_card_preview",
   "gear_switch_map",
   "gear_radio",
