@@ -7,6 +7,7 @@ import { on } from "../ipc/events";
 import * as lib from "../actions/library";
 import { albumAction } from "../lib/library";
 import { importAction, openFolderAction } from "../actions/session";
+import { checkForUpdates } from "../actions/update";
 import { store, type State } from "../store";
 import { libClip, screenOf, targets, visible } from "../store/library";
 import { sel } from "../store/settings";
@@ -18,6 +19,7 @@ const typingIn = () => (document.activeElement as Element | null)?.closest?.("in
 export const MENU_ACTIONS: Record<string, () => void> = {
   settings: () => S().openSettings("library"),
   acknowledgements: () => S().setNoticesOpen(true),
+  "check-updates": () => void checkForUpdates(),
   import: () => importAction(),
   "open-folder": () => openFolderAction(),
   "reveal-library": () => {
@@ -69,6 +71,7 @@ export function menuState(s: State, typing: boolean) {
   const enabled: Record<string, boolean> = {
     settings: free,
     acknowledgements: free,
+    "check-updates": true,
     import: free && !!s.env?.tools,
     "open-folder": free && !!s.env?.tools,
     "reveal-library": true,

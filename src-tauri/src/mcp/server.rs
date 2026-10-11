@@ -4,7 +4,7 @@
 use super::params::*;
 use super::render::{
     clip_views, deletion_lines, lib_line, lib_view, names, photos_line, places_text, source_label,
-    table, text,
+    table, text, update_note,
 };
 use super::tools::{tools, INSTRUCTIONS};
 use crate::control::{self, Client};
@@ -232,7 +232,7 @@ impl<B: Backend> Server<B> {
                     .collect();
                 let sess = &status["session"];
                 let line = format!(
-                    "Schema {SCHEMA_VERSION}. Mode: {mode}{}. Cards: {}. Radios: {}. Session: {}.",
+                    "Schema {SCHEMA_VERSION}. Mode: {mode}{}. Cards: {}. Radios: {}. Session: {}.{}",
                     if mode == "app" {
                         " (the person sees changes live in quadcam)"
                     } else {
@@ -250,7 +250,8 @@ impl<B: Backend> Server<B> {
                             sess["source"].as_str().unwrap_or("?"),
                             sess["imported"]
                         )
-                    }
+                    },
+                    update_note(&status["update"])
                 );
                 Ok((
                     vec![text(line)],
@@ -713,11 +714,11 @@ impl<B: Backend> Server<B> {
                         .to_string()
                 };
                 let line = format!(
-                    "{}Settings file {}.\noutput_dir {} | layout {} | place_folders {} | format {} | encoder {} | keep_originals {} | add_time {} | delete_clips_after_import {} | join_split_recordings {} | default_name {:?} | photos_album {:?} | format_label {} | log_dir {} | geocoder {} | name_date_format {} | default_profile {} | tunables {} | ffmpeg_source {} | google_places_key {} | tts_key {} | elrs_binding_phrase {}",
+                    "{}Settings file {}.\noutput_dir {} | layout {} | place_folders {} | format {} | encoder {} | keep_originals {} | add_time {} | delete_clips_after_import {} | join_split_recordings {} | update_check {} | default_name {:?} | photos_album {:?} | format_label {} | log_dir {} | geocoder {} | name_date_format {} | default_profile {} | tunables {} | ffmpeg_source {} | google_places_key {} | tts_key {} | elrs_binding_phrase {}",
                     if action == "write" { "Saved. " } else { "" },
                     view["path"].as_str().unwrap_or("?"),
                     e["output_dir"].as_str().unwrap_or("none"), e["layout"].as_str().unwrap_or("?"), e["place_folders"],
-                    e["format"].as_str().unwrap_or("?"), e["encoder"].as_str().unwrap_or("?"), e["keep_originals"], e["add_time"], e["delete_clips_after_import"], e["join_split_recordings"],
+                    e["format"].as_str().unwrap_or("?"), e["encoder"].as_str().unwrap_or("?"), e["keep_originals"], e["add_time"], e["delete_clips_after_import"], e["join_split_recordings"], e["update_check"],
                     e["default_name"].as_str().unwrap_or(""), e["photos_album"].as_str().unwrap_or(""), e["format_label"].as_str().unwrap_or(""),
                     e["log_dir"].as_str().unwrap_or("none"), e["geocoder"].as_str().unwrap_or("?"), e["name_date_format"].as_str().unwrap_or("?"), e["default_profile"].as_str().unwrap_or("none"), e["tunables"], e["ffmpeg_source"].as_str().unwrap_or("?"),
                     secret("googlePlacesKey"), secret("ttsKey"), secret("elrsBindingPhrase"),
@@ -732,6 +733,7 @@ impl<B: Backend> Server<B> {
                     "add_time",
                     "delete_clips_after_import",
                     "join_split_recordings",
+                    "update_check",
                     "default_name",
                     "photos_album",
                     "format_label",

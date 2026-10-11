@@ -77,6 +77,19 @@ pub(super) fn date_source_label(source: &Value) -> String {
         .unwrap_or_else(|_| source.as_str().unwrap_or("?").to_string())
 }
 
+/// The status line's note on the app's own update: empty unless a newer QuadCam is found.
+pub(super) fn update_note(u: &Value) -> String {
+    let v = u["version"].as_str().unwrap_or("?");
+    match u["phase"].as_str() {
+        Some("available") => {
+            format!(" Update: QuadCam {v} is available (the person installs it in the app).")
+        }
+        Some("downloading") => format!(" Update: QuadCam {v} is downloading."),
+        Some("ready") => format!(" Update: QuadCam {v} installs when the app restarts."),
+        _ => String::new(),
+    }
+}
+
 pub(super) fn names(v: &[&Value]) -> String {
     if v.is_empty() {
         return "none".into();

@@ -18,6 +18,7 @@ pub enum Event {
     RadioInput(RadioInput),
     SimCalibration(SimCalibrationEvent),
     FirmwareRead(FirmwareReadProgress),
+    Update(UpdateChanged),
 }
 
 impl Event {
@@ -34,6 +35,7 @@ impl Event {
             Event::RadioInput(x) => (RadioInput::NAME, v(x)),
             Event::SimCalibration(x) => (SimCalibrationEvent::NAME, v(x)),
             Event::FirmwareRead(x) => (FirmwareReadProgress::NAME, v(x)),
+            Event::Update(x) => (UpdateChanged::NAME, v(x)),
         }
     }
 }
@@ -79,6 +81,11 @@ pub struct RadioInput(pub crate::gear::radio_hid::RadioEvent);
 /// (`gear_sim_calibrate` starts it).
 #[derive(Debug, Clone, Serialize, Deserialize, Type, tauri_specta::Event)]
 pub struct SimCalibrationEvent(pub crate::core::CalibrateView);
+
+/// The app's own update moved on: checked, found, downloaded, or a job that held the restart
+/// back ended.
+#[derive(Debug, Clone, Serialize, Type, tauri_specta::Event)]
+pub struct UpdateChanged(pub crate::core::UpdateStatus);
 
 /// The read-only DFU trial: `done` of `total` bytes of both reads (`gear_firmware_read`).
 #[derive(Debug, Clone, Serialize, Deserialize, Type, tauri_specta::Event)]

@@ -2,6 +2,7 @@ import { useEffect } from "react";
 import { useStore } from "./store";
 import { screenOf } from "./store/library";
 import { sel } from "./store/settings";
+import { updateBanner } from "./store/update";
 import { Banner } from "./components/Banner";
 import { Button } from "./components/Button";
 import { installModule } from "./actions/modules";
@@ -12,6 +13,7 @@ import { Overlays } from "./views/Shell/Overlays";
 import { Sidebar } from "./views/Shell/Sidebar";
 import { Toolbar } from "./views/Shell/Toolbar";
 import { StatusBar } from "./views/Shell/StatusBar";
+import { UpdateBanner } from "./views/Shell/UpdateBanner";
 import { GearView } from "./views/Gear/GearView";
 import { LibraryView } from "./views/Library/LibraryView";
 import { FirstRun } from "./views/FirstRun/FirstRun";
@@ -39,6 +41,16 @@ function Suggestions() {
       {list("recent-notes", recents.notes)}
     </>
   );
+}
+
+/** The update banner, in the same row as the ffmpeg banner. */
+function UpdateBannerRow() {
+  const shown = useStore((s) => !!updateBanner(s));
+  return shown ? (
+    <div className={styles.banner}>
+      <UpdateBanner />
+    </div>
+  ) : null;
 }
 
 export function App() {
@@ -81,6 +93,7 @@ export function App() {
           </Banner>
         </div>
       )}
+      <UpdateBannerRow />
       <div className={styles.body}>
         <Sidebar />
         <main className={styles.main}>

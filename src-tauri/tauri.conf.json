@@ -57,5 +57,14 @@
       "hardenedRuntime": true,
       "entitlements": "./Entitlements.plist"
     }
+  },
+  "plugins": {
+    "updater": {
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IEMyNTEyODNFODE1RTVBMDkKUldRSldsNkJQaWhSd3FJb2N4Q3BCWTIrWmd0UVVTSDdzdWpDL05aN2JGOEFiYitHWUgzZlVWZjAK",
+      "endpoints": [
+        "https://github.com/noahkiss/quadcam/releases/latest/download/latest.json"
+      ],
+      "requireSignedVersion": true
+    }
   }
 }

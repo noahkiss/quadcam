@@ -5,6 +5,10 @@ User-facing changes in each release, newest first. Release notes on
 
 ## Unreleased
 
+- **In-app updates.** QuadCam checks for a newer release when it opens and once a day, and **QuadCam > Check for Updates…** checks at any time. A banner offers **Restart to update** (download with progress, signature check, install, restart) or **Later**, with a link to the release notes. It never restarts during an import, a card or device write, or a flash. **Settings > Advanced > Check for updates automatically** (`update_check`) turns the automatic check off. A failed check never opens a dialog.
+- **Homebrew:** the cask is now marked `auto_updates`, so `brew upgrade` leaves QuadCam to its own updater. `brew upgrade --cask --greedy quadcam` still updates it through Homebrew.
+- **Agents:** `quadcam_status` reports the app's update state in `status.update` (read-only). `quadcam_settings` takes `update_check`.
+
 ## 0.12.1 (2026-10-11)
 
 - **Secrets are write-only everywhere.** QuadCam shows a stored secret (the ElevenLabs key, `google_places_key`, `tts_key`, `elrs_binding_phrase`) only as its hint: the first and last characters and the length, such as `sk_9…8d4d (51 chars)`, never more than half the value. It replaces "ends in 3f9a" and "(set)" in the Voice studio, the Settings window, the ELRS section, the CLI and MCP. `settings show` and the settings answer keep `"(set)"` in `values` and add `secrets` with each hint; the key status adds `prefix`, `suffix` and `length`.

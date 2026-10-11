@@ -27,7 +27,7 @@ The server has 19 tools.
 
 | Tool | What it does |
 |---|---|
-| `quadcam_status` | Shows the schema version, the mode (app or headless), the cards with their source (analog or DJI), the radios, and the session with its source |
+| `quadcam_status` | Shows the schema version, the mode (app or headless), the cards with their source (analog or DJI), the radios, the session with its source, and the app's own update (`status.update`; null headless; read-only) |
 | `quadcam_load_clips` | Stages, checks, and dates a card or a folder. `card` names a card that is unmounted but still in (its device id from `quadcam_gear`); QuadCam mounts it, and `quadcam_export` unmounts it when the import is done. Joins recordings the DVR split into files; `join=false` keeps them apart for that load. See [Joined recordings](library.md#joined-recordings) |
 | `quadcam_read_clips` | Reads the clips, their source, plans, moments, keep ranges and cuts. Returns thumbnails as images. The date source reads `radio log`, `clip clock`, `import` or `edited` |
 | `quadcam_match_logs` | Dates the clips from EdgeTX logs |
