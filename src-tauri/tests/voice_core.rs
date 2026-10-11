@@ -1148,3 +1148,47 @@ fn my_text_on_a_paid_provider_shows_the_characters_and_pays_with_the_digest() {
     edit("Motors live", false, false, None).unwrap();
     assert_eq!(b.calls.load(Ordering::SeqCst), 1);
 }
+
+#[test]
+fn deleting_a_pack_clears_the_overrides_that_take_its_lines() {
+    let b = bench(Opts::default());
+    let out = b.dir.path().join("release");
+    let idx = build(&b, &out, "en-a-v1", 150);
+    build(&b, &out, "en-b-v1", 90);
+    for id in ["en-a-v1", "en-b-v1"] {
+        b.core
+            .gear_voice_pack_install(&PackInstallParams {
+                pack: id.into(),
+                source: Some(idx.display().to_string()),
+            })
+            .unwrap();
+    }
+    for (line, pack) in [(ARMED, "en-b-v1"), (LOWBAT, "en-a-v1")] {
+        b.core
+            .gear_voice_edit(&VoiceEditParams {
+                radio: b.id.clone(),
+                line: line.into(),
+                pack: Some(pack.into()),
+                ..Default::default()
+            })
+            .unwrap();
+    }
+    let r = b
+        .core
+        .gear_voice_pack_delete(&quadcam_lib::core::PackDeleteParams {
+            pack: "en-b-v1".into(),
+            takes: false,
+        })
+        .unwrap();
+    assert_eq!(
+        r.overrides,
+        vec![quadcam_lib::core::PackOverride {
+            radio: b.id.clone(),
+            line: ARMED.into(),
+        }]
+    );
+    let v = view(&b);
+    let ov = |p: &str| v.lines.iter().find(|l| l.path == p).unwrap().override_.clone();
+    assert!(ov(ARMED).is_none());
+    assert_eq!(ov(LOWBAT).unwrap().pack.as_deref(), Some("en-a-v1"));
+}

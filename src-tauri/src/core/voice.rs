@@ -321,6 +321,17 @@ pub struct PackDeleteReport {
     /// Saved radios that had chosen the pack. The delete clears their choice; their cards
     /// keep its sounds.
     pub radios: Vec<String>,
+    /// Lines whose override took the pack's take. The delete clears those overrides too.
+    #[serde(default)]
+    pub overrides: Vec<PackOverride>,
+}
+
+/// One radio's override of one line.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, specta::Type)]
+pub struct PackOverride {
+    pub radio: String,
+    /// The card path.
+    pub line: String,
 }
 
 /// The maintainer's `build-pack`.
@@ -976,7 +987,8 @@ impl Core {
     /// Removes an installed or rendered pack from this Mac. With `takes`, the raw takes and
     /// batches it was made from go too; without, a later render of that voice and model
     /// comes from the cache. Radios that chose the pack lose that choice but keep its sounds
-    /// on their cards; a staged voice change keeps its own copy of them.
+    /// on their cards; a staged voice change keeps its own copy of them. Overrides that take a
+    /// line from the pack are cleared.
     pub fn gear_voice_pack_delete(&self, p: &PackDeleteParams) -> Result<PackDeleteReport> {
         packs::check_id(&p.pack)?;
         let inst = packs::installed(&self.voices_dir())
@@ -994,22 +1006,64 @@ impl Core {
             .filter(|(_, k)| *k == p.pack)
             .map(|(r, _)| r)
             .collect();
-        // A choice of a pack that is gone names nothing: clear it.
-        if !radios.is_empty() {
-            self.gear_store().update(|v| {
-                let chosen = sub(voice_obj(v)?, "chosen")?;
-                for r in &radios {
-                    chosen.remove(r);
-                }
-                Ok(())
-            })?;
-            self.hooks.gear_changed();
+        // A choice of a pack that is gone names nothing, and nor does an override that takes
+        // a line from it: clear them.
+        let mut overrides = Vec::new();
+        let takes_from_it = |o: &Value| {
+            o.get("kind").and_then(Value::as_str) == Some("pack")
+                && o.get("pack").and_then(Value::as_str) == Some(p.pack.as_str())
+        };
+        let referenced = self
+            .gear_store()
+            .read()?
+            .get("voice")
+            .and_then(|v| v.get("overrides"))
+            .and_then(Value::as_object)
+            .is_some_and(|all| {
+                all.values()
+                    .filter_map(Value::as_object)
+                    .any(|per| per.values().any(takes_from_it))
+            });
+        if radios.is_empty() && !referenced {
+            return Ok(PackDeleteReport {
+                pack: p.pack.clone(),
+                bytes,
+                takes,
+                radios,
+                overrides,
+            });
         }
+        self.gear_store().update(|v| {
+            overrides.clear();
+            let voice = voice_obj(v)?;
+            let chosen = sub(voice, "chosen")?;
+            for r in &radios {
+                chosen.remove(r);
+            }
+            for (radio, per) in sub(voice, "overrides")?.iter_mut() {
+                let Some(per) = per.as_object_mut() else {
+                    continue;
+                };
+                per.retain(|line, o| {
+                    let gone = takes_from_it(o);
+                    if gone {
+                        overrides.push(PackOverride {
+                            radio: radio.clone(),
+                            line: line.clone(),
+                        });
+                    }
+                    !gone
+                });
+            }
+            Ok(())
+        })?;
+        self.hooks.gear_changed();
         Ok(PackDeleteReport {
             pack: p.pack.clone(),
             bytes,
             takes,
             radios,
+            overrides,
         })
     }
 

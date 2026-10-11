@@ -4067,6 +4067,8 @@ export type PackDeleteReport = {
 	 *  keep its sounds.
 	 */
 	radios: string[],
+	/**  Lines whose override took the pack's take. The delete clears those overrides too. */
+	overrides?: PackOverride[],
 };
 
 /**  One flight in a pack's history. */
@@ -4086,6 +4088,13 @@ export type PackInstallParams = {
 	pack: string,
 	/**  The index (a path or an address) when the setting `voice_index` names none. */
 	source?: string | null,
+};
+
+/**  One radio's override of one line. */
+export type PackOverride = {
+	radio: string,
+	/**  The card path. */
+	line: string,
 };
 
 /**
