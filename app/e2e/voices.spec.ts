@@ -136,6 +136,26 @@ test("Render my voice checks the cost first, and a provider that may charge wait
   await expect(library(page).getByRole("row", { name: /^Samantha local-say-samantha/ })).toContainText("Rendered here");
 });
 
+test("the speech check says why it is unavailable and installs the speech assets on request", async ({ app, page }) => {
+  await openVoices(app, page);
+  await page.getByRole("button", { name: "Render my voice" }).click();
+  await app.core(`c => { c.gear.voice.speech = false; }`);
+  await page.getByRole("button", { name: "Refresh packs" }).click();
+  const row = library(page).getByRole("row", { name: /^Samantha local-say-samantha/ });
+  await expect(row).toContainText("Not checked");
+  await row.getByRole("button", { name: "Check speech of Samantha" }).click();
+  const check = page.getByRole("region", { name: "Speech check" });
+  await expect(check).toContainText("The speech check is unavailable: The speech assets for en-US are not installed");
+  await expect(check.getByRole("button", { name: "Check speech" })).toBeDisabled();
+  await check.getByRole("button", { name: "Install speech assets" }).click();
+  expect((await app.method("gear_voice_check")).at(-1)).toEqual({ pack: "local-say-samantha", lines: [], accept: [], install: true });
+  await expect(check.getByRole("status")).toContainText("The speech assets for en-US are installed.");
+  await expect(row).toContainText("Heard right");
+  await expect(check.getByRole("table", { name: "Speech check of Samantha" }).getByRole("row", { name: /^Armed/ })).toContainText("Heard right");
+  await check.getByRole("button", { name: "Close" }).click();
+  await expect(check).toHaveCount(0);
+});
+
 for (const scheme of axeSchemes) {
   test.describe(`${scheme} theme`, () => {
     test.use({ colorScheme: scheme });
@@ -149,6 +169,11 @@ for (const scheme of axeSchemes) {
       r = await new AxeBuilder({ page }).withTags(["wcag2a", "wcag2aa", "wcag21aa"]).analyze();
       expect(r.violations.map((v) => `${v.id}: ${v.nodes.map((n) => n.target.join(" ") + " " + n.failureSummary).join(", ")}`)).toEqual([]);
       await dialog(page, "Apply Demo to radios").getByRole("button", { name: "Cancel" }).click();
+      await library(page).getByRole("button", { name: "Check speech of Demo" }).click();
+      await page.getByRole("region", { name: "Speech check" }).getByRole("button", { name: "Check speech" }).click();
+      await expect(page.getByRole("table", { name: "Speech check of Demo" })).toBeVisible();
+      r = await new AxeBuilder({ page }).withTags(["wcag2a", "wcag2aa", "wcag21aa"]).analyze();
+      expect(r.violations.map((v) => `${v.id}: ${v.nodes.map((n) => n.target.join(" ") + " " + n.failureSummary).join(", ")}`)).toEqual([]);
       await library(page).getByRole("button", { name: "Delete Demo" }).click();
       await expect(dialog(page, "Delete Demo?")).toBeVisible();
       r = await new AxeBuilder({ page }).withTags(["wcag2a", "wcag2aa", "wcag21aa"]).analyze();

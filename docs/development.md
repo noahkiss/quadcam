@@ -9,6 +9,8 @@ QuadCam is a Tauri 2 app. The core is Rust in `src-tauri/`. The frontend is Reac
 - Node.js 24 through [fnm](https://github.com/Schniz/fnm), which reads `.node-version`.
 - pnpm, the version that `packageManager` in `app/package.json` names.
 - exiftool is optional. The tests use it when it is installed.
+- Xcode 26 or newer, for the Swift helper `quadcam-intel` (below). Without it the build still
+  works and the speech check is unavailable.
 
 ```bash
 brew install ffmpeg fnm pnpm
@@ -37,6 +39,38 @@ cargo build --release --bin quadcam-cli   # -> target/release/quadcam-cli
 `cargo tauri build` builds the frontend first (`pnpm --dir app build`). The bundle also holds the command-line tool, `QuadCam.app/Contents/MacOS/quadcam-cli`.
 
 The Vite dev server uses port 4719 with `strictPort`. Set `QUADCAM_DEV_PORT` to run `pnpm dev` and `pnpm e2e` on another port, for a second git worktree beside the first (Vite and Playwright read the same variable). `cargo tauri dev` always loads 4719.
+
+### The Swift helper
+
+`intel/` is a Swift package: `quadcam-intel`, a small command-line helper for Apple's on-device
+frameworks that Rust cannot reach (they are Swift-only). It prints one JSON object per line:
+
+```bash
+quadcam-intel caps [--locale en-US]          # which features this Mac has, and why not
+quadcam-intel asr FILE... [--locale en-US]   # SpeechAnalyzer + SpeechTranscriber: text, words, confidence per file
+quadcam-intel install [--locale en-US]       # asks macOS to install the speech assets (AssetInventory)
+```
+
+Exit codes: 0 done, 1 failed, 2 usage, 3 unavailable here (an older macOS, or a locale without
+its assets). It builds with the newest SDK and launches on macOS 13: each feature checks the
+running OS (`#available`) and reports itself unavailable on an older one.
+
+- **Build.** `src-tauri/build.rs` runs `xcrun swift build -c release --arch arm64` (scratch in
+  `target/intel-swift/`) and copies the result to `src-tauri/binaries/quadcam-intel-<target>`.
+  `tauri.conf.json` names it as an external binary, so tauri-build copies it beside the app's
+  own binaries (`target/<profile>/quadcam-intel`, next to `quadcam-cli`) and the bundler puts it
+  in `QuadCam.app/Contents/MacOS/`. Without Xcode 26 or newer, build.rs writes a stand-in that
+  answers "unavailable" and prints a cargo warning; with `QUADCAM_INTEL_REQUIRED=1` (CI and
+  releases) it fails instead.
+- **Signing.** The bundler signs it with the app (ad-hoc locally). A release's
+  `macos-sign-notarize` signs every Mach-O inside the bundle with the Developer ID, hardened
+  runtime and timestamp, so it is notarized with the app.
+- **From Rust.** `src-tauri/src/intel.rs` finds it beside the running binary and runs it
+  through `modules::run::Runner` (absolute path, minimal environment, a timeout). A missing
+  helper, an older macOS or missing assets make a feature unavailable, never an error. A
+  process started by cargo gets no helper unless `QUADCAM_INTEL=real`; tests pass
+  `intel::fake::FakeHelper`. One test runs the real helper on a line `say` spoke, and skips
+  where the speech check is unavailable.
 
 `cargo tauri dev` does not touch your Photos library: Photos runs as a dry run. To try the real path, set `QUADCAM_PHOTOS=real`. See [Photos](photos.md#test-without-photos).
 
@@ -129,6 +163,7 @@ Every Gear page and device page follows one pattern. The shared parts live in `a
 - `cargo fmt --check`, clippy, the tests (`cargo nextest run --profile ci`, with the JUnit report as the `junit` artifact), and a release build.
 - On a branch or a pull request, the disk-image tests and `tests/it/join.rs` run only when the change since the merge base with `main` touches the code they cover: import, disks, cards, card prep, joins, media, scan, the session, the sources, the CLI's `main.rs`, the MCP server outside Gear, `tests/it/common` and those test files, `Cargo.toml`, `Cargo.lock`, `rust-toolchain.toml`, `nextest.toml` or `ci.yml`. Otherwise CI runs the `ci-quick` profile. The filter is in `ci.yml`; a new slow test, or new code it covers, joins it. On `main` and on a tag, CI runs every test.
 - A `ui` job for `app/`: typecheck, lint, Vitest, Playwright, and a build. On a branch or a pull request, the axe specs run in the dark theme only.
+- Both jobs, and the release, run on GitHub's `xcode-27` image (macOS 27, Xcode 27), a public preview. It builds the Swift helper; move to a GA image once one ships Xcode 27.
 
 A newer push to the same branch or pull request cancels the older run. A run on `main` or on a tag is never cancelled, because the release waits for a green run on the tagged commit.
 
@@ -165,6 +200,8 @@ A newer push to the same branch or pull request cancels the older run. A run on 
 | `src-tauri/src/{scan,disk,media,logs,naming,session,photos}.rs`, `pipeline/` | Scanning, disks, ffmpeg, radio logs, file names, the session, Photos, the import steps |
 | `src-tauri/src/moments.rs` | Moments from radio-log sticks and dead air from video frames. Every threshold is in `moments::tune` |
 | `src-tauri/src/metadata.rs`, `qtmeta.rs` | Places, profiles and per-clip metadata. Writing QuickTime metadata into the files |
+| `intel/` | The Swift helper `quadcam-intel` (see [The Swift helper](#the-swift-helper)) |
+| `src-tauri/src/intel.rs` | Runs the Swift helper: its features, the speech check of voice files |
 | `src-tauri/tests/` | Integration tests on synthetic clips and FAT32 disk images. `it/` is one test binary, one module per area; the three files beside it change an environment variable and stay binaries of their own |
 | `scripts/make-corpus.sh` | Builds `test-clips/synthetic/` |
 | `assets/icon.svg` | The icon source. Regenerate the icons with `cargo tauri icon` |
@@ -207,6 +244,6 @@ A re-run never replaces a zip that is already attached. The cask's sha256 pins w
 The release signs the app with `Developer ID Application: NKMK Digital Co. (2Z88BYP37C)`, with hardened runtime and a secure timestamp. Apple's notary service checks it, and the ticket is stapled to the app before it is zipped. The shared action `macos-sign-notarize` does this, then verifies the result with `codesign --verify --deep --strict`, the team ID, `spctl --assess`, `xcrun stapler validate` and an online notarization check.
 
 - The certificate and the App Store Connect API key are secrets of the `release` environment (`MAC_CERT_P12`, `MAC_CERT_PASSWORD`, `ASC_KEY_P8`, `ASC_KEY_ID`, `ASC_ISSUER_ID`). Only `v*` tags can use it.
-- `src-tauri/Entitlements.plist` holds one entitlement: `com.apple.security.personal-information.photos-library`. Hardened runtime blocks PhotoKit without it. QuadCam needs nothing else: ffmpeg, ffprobe, curl and diskutil run as separate processes, the app is not sandboxed, and it sends no Apple Events.
+- `src-tauri/Entitlements.plist` holds one entitlement: `com.apple.security.personal-information.photos-library`. Hardened runtime blocks PhotoKit without it. QuadCam needs nothing else: ffmpeg, ffprobe, curl, diskutil and `quadcam-intel` run as separate processes, the app is not sandboxed, and it sends no Apple Events.
 - Local builds keep the ad-hoc signature (`signingIdentity "-"`), with the same hardened runtime and entitlements (`tauri.conf.json`).
 

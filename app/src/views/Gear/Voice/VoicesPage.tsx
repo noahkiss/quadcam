@@ -16,6 +16,7 @@ import { deviceName } from "../../../lib/gear";
 import { useStore } from "../../../store";
 import { ApplyToRadios } from "./ApplyToRadios";
 import { DeletePack } from "./DeletePack";
+import { SpeechBadge, SpeechCheck } from "./SpeechCheck";
 import { Studio } from "./Studio";
 import { takesOf, useStudio, type UseStudio } from "./useStudio";
 import { useVoice, type UseVoice } from "./useVoice";
@@ -31,7 +32,7 @@ function play(path: string) {
   void a.play().catch(() => undefined);
 }
 
-function Library({ v, view, sets }: { v: UseVoice; view: VoiceView; sets: SetInfo[] }) {
+function Library({ v, view, sets, onCheck }: { v: UseVoice; view: VoiceView; sets: SetInfo[]; onCheck: (k: VoicePack) => void }) {
   const devices = useStore((s) => s.devices);
   const [applying, setApplying] = useState<VoicePack | null>(null);
   const [deleting, setDeleting] = useState<VoicePack | null>(null);
@@ -79,6 +80,7 @@ function Library({ v, view, sets }: { v: UseVoice; view: VoiceView; sets: SetInf
     { key: "model", header: "Model", optional: true, cell: (k) => k.model || k.provider },
     { key: "sets", header: "Line sets", optional: true, cell: (k) => (k.sets ?? []).map(setTitle).join(", ") || "Some lines" },
     { key: "lines", header: "Lines", numeric: true, cell: (k) => k.lines },
+    { key: "speech", header: "Speech check", cell: (k) => <SpeechBadge pack={k} /> },
     { key: "size", header: "Size", numeric: true, optional: true, cell: (k) => fmtBytes(k.bytes) },
     { key: "date", header: "Date", optional: true, cell: (k) => fmtDay(k.made) },
     { key: "radios", header: "Radios", cell: (k) => (k.radios ?? []).map(radioName).join(", ") || <span className={styles.muted}>None</span> },
@@ -88,6 +90,9 @@ function Library({ v, view, sets }: { v: UseVoice; view: VoiceView; sets: SetInf
       cell: (k) => (
         <div className={styles.rowActions}>
           <Button size="sm" variant="ghost" icon="play" aria-label={`Play a sample of ${k.voice}`} onClick={() => sample(k)} />
+          <Button size="sm" variant="ghost" aria-label={`Check speech of ${k.voice}`} onClick={() => onCheck(k)}>
+            Check speech
+          </Button>
           <Button size="sm" onClick={() => setApplying(k)}>
             Apply to radios…
           </Button>
@@ -218,6 +223,8 @@ const n = (v: number) => v.toLocaleString("en-US");
 export function VoicesPage() {
   const v = useVoice(null, true);
   const s = useStudio(() => v.refresh());
+  const [checking, setChecking] = useState<string | null>(null);
+  const checked = v.view?.packs.find((k) => k.id === checking && k.installed) ?? null;
   return (
     <div className={styles.voices} aria-labelledby="voices-title">
       <h2 id="voices-title" className={styles.title}>
@@ -229,7 +236,8 @@ export function VoicesPage() {
           {v.error}
         </Banner>
       )}
-      {v.view && <Library v={v} view={v.view} sets={s.sets} />}
+      {v.view && <Library v={v} view={v.view} sets={s.sets} onCheck={(k) => setChecking(k.id)} />}
+      {v.view && checked && <SpeechCheck key={checked.id} v={v} view={v.view} pack={checked} onClose={() => setChecking(null)} />}
       <Studio s={s} />
       {v.view && <GetPacks v={v} view={v.view} />}
     </div>

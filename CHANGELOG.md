@@ -5,6 +5,9 @@ User-facing changes in each release, newest first. Release notes on
 
 ## Unreleased
 
+- **Speech check of voice lines.** On macOS 26 or later, QuadCam listens to each line of a voice pack with the speech recognizer built into macOS and compares what it heard with the line's text (spelling, numbers, case and punctuation aside). It runs after every render and sample, and on request: **Check speech** on a Voices row opens the pack's check, with the heard text and a result per line. In a pack the Voice studio rendered, a line heard wrong leaves the pack as a re-take: **Re-take** prices it and renders it again, and a render with the same seed sends nothing. **Accept** keeps what was heard and puts the line back. It is free, offline, and never calls ElevenLabs. **Install speech assets** asks macOS for its English speech assets when they are missing. CLI `gear voice check`; MCP `quadcam_gear_edit` `voice_check`.
+- **For developers:** `quadcam-intel`, a Swift helper in `intel/`, carries Apple's Swift-only frameworks (Speech now). The build makes it and the app bundles, signs and notarizes it beside `quadcam-cli`; on an older macOS or without it, its features are unavailable. CI and releases run on GitHub's `xcode-27` image (a public preview).
+
 ## 0.15.0 (2026-10-11)
 
 - **Connected as a dashboard.** Tiles count the devices plugged in, the ones that need attention, the ones working and the changes staged for them. Each device is a card with its state and its next step: **Save…**, **Review…** or **Import…**.

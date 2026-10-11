@@ -402,9 +402,10 @@ pack records its firmware family (`edgetx`) in `pack.json`.
 
 - **Library.** One row per pack, rendered here or installed: the voice, the model (or the
   provider), the line sets it holds every line of, the line count, the size on disk, the date
-  it was made, and the radios that chose it. A rendered pack also lists each line that needs a
-  re-take ([Voice studio](#voice-studio)). The play button plays one line (Armed, when the
-  pack has it).
+  it was made, the [speech check](#speech-check) (**Not checked**, **Heard right** or how many
+  lines it heard wrong), and the radios that chose it. A rendered pack also lists each line
+  that needs a re-take ([Voice studio](#voice-studio)). The play button plays one line (Armed,
+  when the pack has it). **Check speech** opens the pack's speech check.
 - **Apply to radios…** lists every saved EdgeTX radio with a tick box, and **All radios**.
   Each radio shows **Card connected** when its card is mounted or unmounted and still in, and
   **Not connected** otherwise. **Stage** stages one voice change per radio, the same change a
@@ -563,6 +564,33 @@ inside carrier sentences, and compares voices before it spends credits.
   again from the cache, and the estimate shows 0 credits. A paid
   request is retried only after a 429 (busy), never after a server error, which may already be
   billed. `--carrier "I said {line}."` changes the carrier.
+
+### Speech check
+
+The speech check listens to each line of a pack with the speech recognizer built into macOS
+and compares what it heard with the line's text. It needs macOS 26 or later; it runs on this
+Mac, offline, and costs nothing. QuadCam runs it through its helper `quadcam-intel`, which
+the app carries. On an older macOS, or without the helper, the check is unavailable and
+everything else works as before.
+
+- **When it runs.** After every render, on the lines the render put into the pack, and after
+  every **Sample**, on each sample. **Check speech** on a library row opens the pack's check,
+  and **Check speech** (later **Check again**) hears every line of the pack again.
+- **How it compares.** Both texts go through the spelling rules, then lose case, punctuation
+  and spaces, and numbers read as words. So "GPS fix" heard for "G.P.S. fix", "10" for
+  "ten" and "Fail safe" for "Failsafe" all count as heard right.
+- **A line heard wrong.** In a pack the Voice studio rendered, the line leaves the pack and is
+  a [re-take](#voice-studio) with the reason "The speech check heard …". A render with the same
+  seed keeps it out and sends nothing; **Re-take** (another seed) prices its batch, asks, and
+  renders it again. A sample heard wrong is listed under the samples, and a later render
+  treats its line the same way. In any other pack the check only marks the line.
+- **Accept.** When the recognizer is wrong (a name, an unusual word), **Accept** keeps what it
+  heard: the line passes, goes back into the pack, and later renders keep it.
+- **Speech assets.** macOS needs its English speech assets. When they are missing, the check
+  says so, and **Install speech assets** asks macOS to download them.
+- **Command line and agents.** `quadcam-cli gear voice check <pack>` (`--lines`, `--accept`,
+  `--install`), and the MCP action `voice_check` on `quadcam_gear_edit` (`pack`, `lines`,
+  `accept`, `install`).
 
 ## Radio voice
 

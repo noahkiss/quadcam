@@ -140,6 +140,42 @@ test("a line whose cut failed a check is listed, and Re-take renders again with 
   await expect(row.getByRole("list", { name: "Callum needs a re-take" })).toHaveCount(0);
 });
 
+test("a line the speech check hears wrong is a re-take; Accept on the Voices page puts it back", async ({ app, page }) => {
+  const studio = await openStudio(app, page);
+  await saveKey(studio);
+  await app.core(`c => { c.gear.voice.misheard = "SOUNDS/en/lowbat.wav"; }`);
+  await studio.getByRole("button", { name: "Render pack" }).click();
+  await studio.getByRole("button", { name: "Render and pay" }).click();
+  await expect(studio.getByRole("list", { name: "Needs a re-take" })).toContainText('Battery low (SOUNDS/en/lowbat.wav): The speech check heard "Battery.".');
+  const row = page.getByRole("table", { name: "Voice packs on this Mac" }).getByRole("row", { name: /^Callum local-elevenlabs-voice-callum/ });
+  await expect(row).toContainText("1 heard wrong");
+  await row.getByRole("button", { name: "Check speech of Callum" }).click();
+  const check = page.getByRole("region", { name: "Speech check" });
+  const table = check.getByRole("table", { name: "Speech check of Callum" });
+  await expect(table.getByRole("row", { name: /^Battery low/ })).toContainText("Battery.");
+  await expect(table.getByRole("row", { name: /^Battery low/ })).toContainText("Heard wrong");
+  await expect(table.getByRole("row", { name: /^Armed/ })).toContainText("Heard right");
+  await check.getByRole("button", { name: "Accept what was heard for Battery low" }).click();
+  expect((await app.method("gear_voice_check")).at(-1)).toEqual({ pack: "local-elevenlabs-voice-callum-eleven-v4", lines: [], accept: ["SOUNDS/en/lowbat.wav"], install: false });
+  await expect(table.getByRole("row", { name: /^Battery low/ })).toContainText("Accepted");
+  await expect(row).toContainText("Heard right");
+  await expect(row.getByRole("list", { name: "Callum needs a re-take" })).toHaveCount(0);
+  // Check again hears the pack once more; nothing is sent to ElevenLabs.
+  const renders = (await app.method("gear_voice_render")).length;
+  await check.getByRole("button", { name: "Check again" }).click();
+  await expect(check.getByRole("status")).toContainText("heard wrong");
+  expect((await app.method("gear_voice_render")).length).toBe(renders);
+});
+
+test("a sample the speech check hears wrong is listed under the samples", async ({ app, page }) => {
+  const studio = await openStudio(app, page);
+  await saveKey(studio);
+  await app.core(`c => { c.gear.voice.misheard = "SOUNDS/en/SYSTEM/0006.wav"; }`);
+  await studio.getByRole("button", { name: "Sample", exact: true }).click();
+  await studio.getByRole("button", { name: "Sample and pay" }).click();
+  await expect(studio.getByRole("list", { name: "Heard wrong" })).toContainText("Six in Callum, eleven_v4: the speech check heard “Battery.”");
+});
+
 test("Render pack needs one voice and one model, asks, then adds a local pack", async ({ app, page }) => {
   const studio = await openStudio(app, page);
   await saveKey(studio);

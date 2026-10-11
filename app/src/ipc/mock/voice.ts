@@ -1,7 +1,7 @@
 // The mock core's voice (`core/voice.rs`, `gear/voice/`), written by hand: a few of QuadCam's
 // lines, one pack in a made-up index, per-line overrides, a local render, Choose voice (one
 // `card_files` change, as the core stages it, on one radio or several) and pack delete.
-import type { Catalog, Edit, ImportReport, KeyStatus, LineOverride, ModelInfo, PackDeleteReport, RenderReport, Retake, SampleItem, SampleReport, SetInfo, StagedChange, StudioEstimate, StudioView, VoiceChooseRadiosReport, VoiceEstimate, VoiceInfo, VoiceLine, VoicePack, VoiceView } from "../types";
+import type { Catalog, Edit, HeardLine, ImportReport, KeyStatus, LineOverride, ModelInfo, PackDeleteReport, RenderReport, Retake, SampleItem, SampleReport, SetInfo, StagedChange, StudioEstimate, StudioView, VoiceChooseRadiosReport, VoiceEstimate, VoiceCheckReport, VoiceInfo, VoiceLine, VoicePack, VoiceView } from "../types";
 import type { MockGear } from "./gear";
 import { hint as secretHint } from "./secret";
 import * as changes from "./changes";
@@ -54,9 +54,15 @@ export interface MockVoice {
   takesDeleted: string[];
   /** Each rendered pack's lines that need a re-take (its `pack.json` `retakes`). */
   retakes: Record<string, Retake[]>;
+  /** What the speech check heard per pack (its `pack.json` `heard`). */
+  heard: Record<string, HeardLine[]>;
+  /** The speech check is available (macOS 26 or later with the helper). */
+  speech: boolean;
+  /** A line the speech check hears as "Battery.". */
+  misheard: string | null;
 }
 
-export const freshVoice = (): MockVoice => ({ installed: [], index: false, overrides: {}, chosen: {}, custom: [], paid: false, keySet: "", spent: 0, retake: null, rendered: {}, imported: [], takesDeleted: [], retakes: {} });
+export const freshVoice = (): MockVoice => ({ installed: [], index: false, overrides: {}, chosen: {}, custom: [], paid: false, keySet: "", spent: 0, retake: null, rendered: {}, imported: [], takesDeleted: [], retakes: {}, heard: {}, speech: true, misheard: null });
 
 type Paid = { confirm?: boolean; digest?: string | null; settings?: { seed?: number | null } | null };
 
@@ -76,13 +82,13 @@ const MADE = "2026-10-01T18:30:00Z";
 function packs(v: MockVoice): VoicePack[] {
   const out: VoicePack[] = [];
   const radios = (id: string) => Object.keys(v.chosen).filter((r) => v.chosen[r] === id);
-  const mine = (id: string, k: Partial<VoicePack>): VoicePack => ({ ...AVAILABLE, id, license: "Rendered by you; yours to use.", attribution: "", version: "", installed: true, local: true, bytes: 412_000, dir: `/Users/pilot/gear/voices/${id}`, sets: ["quadcam"], made: MADE, radios: radios(id), retakes: v.retakes[id] ?? [], ...k });
+  const mine = (id: string, k: Partial<VoicePack>): VoicePack => ({ ...AVAILABLE, id, license: "Rendered by you; yours to use.", attribution: "", version: "", installed: true, local: true, bytes: 412_000, dir: `/Users/pilot/gear/voices/${id}`, sets: ["quadcam"], made: MADE, radios: radios(id), retakes: v.retakes[id] ?? [], heard: v.heard[id] ?? [], ...k });
   if (v.installed.includes(LOCAL_ID)) out.push(mine(LOCAL_ID, { voice: "Samantha", provider: "say" }));
   for (const id of v.installed.filter((x) => x.startsWith("local-elevenlabs-"))) {
     const [, name = "voice", model = ""] = /^local-elevenlabs-voice-([a-z]+)-(.*)$/.exec(id) ?? [];
     out.push(mine(id, { voice: name.charAt(0).toUpperCase() + name.slice(1), provider: "elevenlabs", model: model.replace(/-/g, "_"), sets: ["quad"], bytes: 2_300_000 }));
   }
-  if (v.installed.includes(AVAILABLE.id)) out.push({ ...AVAILABLE, installed: true, dir: `/Users/pilot/gear/voices/${AVAILABLE.id}`, sets: ["quadcam"], made: MADE, radios: radios(AVAILABLE.id) });
+  if (v.installed.includes(AVAILABLE.id)) out.push({ ...AVAILABLE, installed: true, dir: `/Users/pilot/gear/voices/${AVAILABLE.id}`, sets: ["quadcam"], made: MADE, radios: radios(AVAILABLE.id), heard: v.heard[AVAILABLE.id] ?? [] });
   else if (v.index) out.push({ ...AVAILABLE });
   return out;
 }
@@ -119,7 +125,64 @@ export function view(g: MockGear, p: { radio?: string | null; refresh_index?: bo
     chosen: p.radio ? (v.chosen[p.radio] ?? null) : null,
     index_source: "https://example.invalid/voices.json",
     notes,
+    speech: v.speech
+      ? { name: "asr", available: true, min_os: "26.0", reason: null, locale: "en-US", assets: "installed" }
+      : { name: "asr", available: false, min_os: "26.0", reason: "The speech assets for en-US are not installed: run quadcam-intel install --locale en-US.", locale: "en-US", assets: "supported" },
   };
+}
+
+const SPEECH_REASON = (heard: string) => `The speech check heard ${JSON.stringify(heard)}.`;
+
+/** The speech check of a pack's lines (`core/voice_check.rs`): the mock hears each line's
+ *  text, except `misheard`, which it hears as "Battery.". A studio pack holds a line heard
+ *  wrong out as a re-take. */
+function hear(v: MockVoice, id: string, only: string[] = []): VoiceCheckReport {
+  const lines: HeardLine[] = [];
+  const studio = id.startsWith("local-elevenlabs-");
+  let held = 0;
+  for (const l of LINES) {
+    if (only.length && !only.includes(l.path)) continue;
+    if ((v.retakes[id] ?? []).some((r) => r.path === l.path)) continue;
+    const heard = l.path === v.misheard ? "Battery." : `${l.text}.`;
+    const ok = heard !== "Battery.";
+    const before = (v.heard[id] ?? []).find((h) => h.path === l.path);
+    const accepted = !ok && !!before?.accepted && before.heard === heard;
+    lines.push({ path: l.path, text: l.text, heard, ok, accepted, confidence: 0.9 });
+    if (!ok && !accepted && studio) {
+      (v.retakes[id] ??= []).push({ path: l.path, text: l.text, reason: SPEECH_REASON(heard) });
+      held++;
+    }
+  }
+  const keep = (v.heard[id] ?? []).filter((h) => !lines.some((x) => x.path === h.path));
+  v.heard[id] = [...keep, ...lines].sort((a, b) => a.path.localeCompare(b.path));
+  const mismatches = lines.filter((h) => !h.ok && !h.accepted).length;
+  const notes = held ? [`${held} lines the check heard wrong are out of the pack as re-takes: render again with another seed to redo them (priced first), or accept what was heard.`] : [];
+  return { pack: id, available: true, reason: null, lines, mismatches, held, notes };
+}
+
+/** `gear_voice_check`. */
+export function check(g: MockGear, p: { pack: string; lines?: string[]; accept?: string[]; install?: boolean }): VoiceCheckReport {
+  const v = g.voice;
+  if (!v.installed.includes(p.pack)) throw `Pack "${p.pack}" is not on this Mac.`;
+  const notes: string[] = [];
+  if (p.install) {
+    v.speech = true;
+    notes.push("The speech assets for en-US are installed.");
+  }
+  if (!v.speech) return { pack: p.pack, available: false, reason: view(g, {}).speech.reason, lines: [], mismatches: 0, held: 0, notes };
+  if (p.accept?.length) {
+    const lines: HeardLine[] = [];
+    for (const path of p.accept) {
+      const h = (v.heard[p.pack] ?? []).find((x) => x.path === path);
+      if (!h) throw `The speech check has not heard "${path}" in the pack ${p.pack}.`;
+      h.accepted = !h.ok;
+      lines.push({ ...h });
+      v.retakes[p.pack] = (v.retakes[p.pack] ?? []).filter((r) => !(r.path === path && r.reason.startsWith("The speech check heard")));
+    }
+    return { pack: p.pack, available: true, reason: null, lines, mismatches: 0, held: 0, notes };
+  }
+  const r = hear(v, p.pack, p.lines ?? []);
+  return { ...r, notes: [...notes, ...r.notes] };
 }
 
 /** `gear_voice_pack_install`. */
@@ -392,6 +455,8 @@ export function sample(g: MockGear, p: { voices: string[]; models: string[]; dry
       text,
       file: `/Users/pilot/Library/Caches/app.quadcam/voice/samples/${c.v.name.toLowerCase()}-${c.m}/${line.split("/").pop()}`,
       ms: 520,
+      heard: g.voice.speech ? (line === g.voice.misheard ? "Battery." : `${text}.`) : null,
+      heard_ok: g.voice.speech ? line !== g.voice.misheard : null,
     })),
   );
   return { ...base, items, needs_confirm: false };
@@ -416,12 +481,18 @@ function studioRender(g: MockGear, p: { voice?: string; sets: string[]; model?: 
   const k = `${voice.id}|${p.model ?? ""}`;
   g.voice.rendered[k] = [...new Set([...(g.voice.rendered[k] ?? []), ...p.sets])];
   const flagged = LINES.find((l) => l.path === g.voice.retake);
+  // The speech check hears the lines rendered into the pack now.
+  const heard = () => (g.voice.speech ? hear(g.voice, id).lines : []);
   if (flagged && seed === 0) {
-    const retakes = [{ path: flagged.path, text: flagged.text, reason: "the cut is silent" }];
-    g.voice.retakes[id] = retakes;
-    return { ...base, rendered: e.batches, from_cache: 0, needs_confirm: false, warnings: [`"${flagged.text}": the cut is silent`], retakes };
+    g.voice.retakes[id] = [{ path: flagged.path, text: flagged.text, reason: "the cut is silent" }];
+    const lines = heard();
+    return { ...base, rendered: e.batches, from_cache: 0, needs_confirm: false, warnings: [`"${flagged.text}": the cut is silent`], retakes: g.voice.retakes[id], heard: lines };
   }
-  // A re-take with a seed redoes only the batch that held the flagged line.
+  // A re-take with a seed redoes only the batches that held a flagged line.
+  const redo = (g.voice.retakes[id] ?? []).length;
   delete g.voice.retakes[id];
-  return { ...base, rendered: seed ? 1 : e.batches, from_cache: 0, needs_confirm: false };
+  if (seed) g.voice.misheard = null;
+  const lines = heard();
+  const retakes = g.voice.retakes[id] ?? [];
+  return { ...base, rendered: seed ? Math.max(1, redo) : e.batches, from_cache: 0, needs_confirm: false, retakes, heard: lines };
 }

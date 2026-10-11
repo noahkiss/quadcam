@@ -144,6 +144,7 @@ function Samples({ items }: { items: SampleItem[] }) {
   const rows = [...new Map(items.map((i) => [i.line, i.text])).entries()];
   const cell = (line: string, c: SampleItem) => items.find((i) => i.line === line && i.voice === c.voice && i.model === c.model);
   const many = combos.length > 1;
+  const wrong = items.filter((i) => i.heard_ok === false);
   return (
     <div className={styles.samples} data-component="voice-samples">
       {many && (
@@ -176,6 +177,15 @@ function Samples({ items }: { items: SampleItem[] }) {
           </li>
         ))}
       </ul>
+      {wrong.length > 0 && (
+        <ul className={styles.retakes} aria-label="Heard wrong">
+          {wrong.map((i) => (
+            <li key={`${i.voice}|${i.model}|${i.line}`}>
+              {i.text} in {i.voice_name}, {i.model}: the speech check heard {i.heard ? `“${i.heard}”` : "nothing"}
+            </li>
+          ))}
+        </ul>
+      )}
     </div>
   );
 }

@@ -466,6 +466,10 @@ export type {
 export type {
   LineOverride,
   EditCost,
+  Feature as SpeechFeature,
+  HeardLine,
+  VoiceCheckParams,
+  VoiceCheckReport,
   PackDeleteParams,
   PackDeleteReport,
   PackInstallParams,
