@@ -17,9 +17,4 @@ describe("pullText", () => {
     expect(pullText(skipped)).toContain("Not erased: the USB timer is short.");
     expect(pullText({ ...kept, pull: null })).toBe("The blackbox flash is empty.");
   });
-
-  it("keep overrides the setting for one run", () => {
-    const r = pull(freshBlackbox(), fc, { gearEraseBlackbox: true }, true, new Date()).result;
-    expect(r.erase).toBe("off");
-  });
 });

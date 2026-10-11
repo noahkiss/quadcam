@@ -515,3 +515,65 @@ fn checklist_rules() {
         .reason
         .contains("Latin-1"));
 }
+
+/// Staged model ops merge as the editor stages them: an op replaces the op about the same
+/// setting (a timer's set and remove, a callout's set and remove), two edits of one timer
+/// merge their fields with the last word winning, and sensor logging merges by label.
+#[test]
+fn staged_ops_merge_by_setting_and_the_last_word_wins() {
+    let timer = |fields: &[(&str, &str)]| ModelOp::SetTimer {
+        index: 1,
+        fields: fields.iter().map(|(k, v)| Field::new(k, v)).collect(),
+    };
+    let logs = |s: &[(&str, bool)]| ModelOp::SetSensorLogs {
+        sensors: s
+            .iter()
+            .map(|(label, logs)| SensorLog {
+                label: label.to_string(),
+                logs: *logs,
+            })
+            .collect(),
+    };
+    let merged = editors::merge_ops(
+        &[timer(&[("name", "A")]), logs(&[("RxBt", false)])],
+        &[
+            timer(&[("name", "B"), ("mode", "ON")]),
+            logs(&[("Capa", false), ("RxBt", true)]),
+            ModelOp::SetRfAlarms {
+                warning: 50,
+                critical: 40,
+            },
+        ],
+    );
+    assert_eq!(
+        merged,
+        [
+            timer(&[("name", "B"), ("mode", "ON")]),
+            logs(&[("RxBt", true), ("Capa", false)]),
+            ModelOp::SetRfAlarms {
+                warning: 50,
+                critical: 40
+            },
+        ]
+    );
+    // A remove replaces the set about the same timer or callout.
+    let callout = ModelOp::SetCallout {
+        callout: CalloutDef {
+            track: "lowbat".into(),
+            when: CalloutWhen::Switch {
+                swtch: "SA2".into(),
+            },
+            repeat: None,
+        },
+    };
+    let remove_callout = ModelOp::RemoveCallout {
+        track: "lowbat".into(),
+    };
+    assert_eq!(
+        editors::merge_ops(
+            &[timer(&[("name", "A")]), callout],
+            &[ModelOp::RemoveTimer { index: 1 }, remove_callout.clone()]
+        ),
+        [ModelOp::RemoveTimer { index: 1 }, remove_callout]
+    );
+}

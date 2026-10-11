@@ -101,7 +101,7 @@ describe("profileEdits", () => {
   it("leaves an empty name alone and writes a limit in capitals", () => {
     const b = profile({ name: "  " });
     b.throttle.limit = "scale";
-    expect(profileEdits(profile(), b).map((x) => (x.kind === "fc_set" ? x.name : ""))).toEqual(["throttle_limit_type"]);
+    expect(profileEdits(profile(), b).map((x) => (x.kind === "fc_set" ? [x.name, x.value] : []))).toEqual([["throttle_limit_type", "SCALE"]]);
   });
   it("titles a change by what it does", () => {
     const a = profile();
