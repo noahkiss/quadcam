@@ -15,40 +15,6 @@
 .warn {
   color: var(--warning-text);
 }
-.tableWrap {
-  overflow-x: auto;
-}
-.table {
-  width: 100%;
-  border-collapse: collapse;
-  font-size: var(--t-md);
-  font-variant-numeric: tabular-nums;
-}
-.table caption {
-  text-align: left;
-  font-weight: 600;
-  padding-bottom: var(--s-2);
-}
-.table th {
-  text-align: left;
-  font-weight: 500;
-  color: var(--muted);
-  padding: var(--s-1) var(--s-2);
-  border-bottom: 1px solid var(--border-strong);
-  white-space: nowrap;
-}
-.table td {
-  padding: var(--s-1) var(--s-2);
-  border-bottom: 1px solid var(--border);
-  vertical-align: middle;
-  white-space: nowrap;
-}
-.table tr[aria-selected="true"] td {
-  background: var(--selected);
-}
-.table select {
-  min-width: 120px;
-}
 .rowButton {
   border: 0;
   padding: 0;
@@ -56,57 +22,6 @@
   color: var(--primary-text);
   font: inherit;
   text-decoration: underline;
-}
-.panel {
-  display: flex;
-  flex-direction: column;
-  gap: var(--s-3);
-  padding: var(--s-4);
-  border: 1px solid var(--border);
-  border-radius: var(--r-2);
-  background: var(--mantle);
-}
-.panel h3 {
-  margin: 0;
-  font-size: var(--t-lg);
-}
-.facts {
-  margin: 0;
-  display: grid;
-  grid-template-columns: max-content 1fr;
-  column-gap: var(--s-6);
-  row-gap: var(--s-2);
-  font-size: var(--t-md);
-}
-.facts > div {
-  display: contents;
-}
-.facts dt {
-  color: var(--muted);
-}
-.facts dd {
-  margin: 0;
-}
-.rows {
-  margin: 0;
-  padding: 0;
-  list-style: none;
-  display: flex;
-  flex-direction: column;
-}
-.rows li {
-  display: grid;
-  grid-template-columns: 20px 160px 1fr;
-  align-items: start;
-  gap: var(--s-3);
-  padding: var(--s-3) var(--s-2);
-  font-size: var(--t-md);
-}
-.rows li + li {
-  border-top: 1px solid var(--border);
-}
-.rows b {
-  font-weight: 600;
 }
 .form {
   display: flex;
@@ -131,7 +46,40 @@
   font-size: var(--t-md);
   resize: vertical;
 }
-.group h3 {
-  margin: var(--s-2) 0;
+/* Controls in a table row: pulled up so their text sits on the row's text line. */
+.actions,
+.inCell {
+  margin-block: -4px;
+}
+.actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--s-2);
+}
+/* The Pack column's pop-up button: compact and borderless until hovered or focused, like a
+   pop-up button in a macOS table. */
+select.popup {
+  height: var(--control-h-sm);
+  width: 10rem;
+  margin-block: -4px;
+  padding-top: 0;
+  padding-bottom: 0;
+  padding-left: var(--s-2);
+  font-size: var(--t-sm);
+  border-color: transparent;
+  background-color: transparent;
+}
+select.popup:hover,
+select.popup:focus-visible {
+  border-color: var(--border-strong);
+  background-color: var(--field);
+}
+.report {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-6);
+}
+.reportTitle {
+  margin: 0;
   font-size: var(--t-lg);
 }

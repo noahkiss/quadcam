@@ -3,7 +3,21 @@
 // `cargo test --test it flights::record_mock_fixture -- --ignored`); the edits
 // follow `core/flights.rs` closely enough for the specs.
 import flightsFixture from "../../../e2e/fixtures/flights.json";
-import type { Crash, CrashSaveParams, FlightsView, Pack, PackType, PacksView, Preflight, SessionReport } from "../types";
+import type { CheckRow, Connected, Crash, CrashSaveParams, Device, FlightsView, Pack, PackType, PacksView, Preflight, Profile, SessionReport } from "../types";
+import { KIND_LABEL } from "../../lib/gear";
+import { withAircraft } from "./gear";
+import { FILES } from "./model";
+
+/** The mock's clock for Pack up's backup ages, so the rows stay the same from run to run. */
+const NOW = Date.parse("2026-10-09T12:00:00Z");
+/** `preflight::BACKUP_MAX_DAYS`. */
+const BACKUP_MAX_DAYS = 14;
+/** The time in a snapshot id (`<device>/2026-10-06T182000-manual`), UTC. */
+const backupTime = (id: string | null | undefined) => {
+  const m = id?.match(/\/(\d{4}-\d{2}-\d{2})T(\d{2})(\d{2})(\d{2})/);
+  return m ? Date.parse(`${m[1]}T${m[2]}:${m[3]}:${m[4]}Z`) : null;
+};
+const daysAgo = (t: number) => Math.max(0, Math.floor((NOW - t) / 86_400_000));
 
 interface Seed {
   flights: FlightsView;
@@ -119,14 +133,41 @@ export class MockFlights {
     return r;
   }
 
-  preflight(): Preflight {
+  /** `core/flights.rs` `gear_preflight` over the mock gear: the packs row from the packs, the
+   *  radio, card space, backups and cards-out rows from the saved and plugged-in devices. */
+  preflight(devices: Device[], connected: Connected[], profiles: Profile[]): Preflight {
     const p = structuredClone(this.s.preflight);
     const live = this.packsView().packs.filter((x) => !x.pack.retired);
     const not = live.filter((x) => x.state !== "charged").map((x) => x.pack.label);
     const charged = live.length - not.length;
-    p.rows[0] = live.length
-      ? { ...p.rows[0], state: not.length ? "warn" : "pass", detail: not.length ? `${charged} of ${live.length} charged. Not charged: ${not.join(", ")}.` : `${charged} of ${live.length} charged.` }
-      : { ...p.rows[0], state: "unknown", detail: "No packs saved." };
+    const set = (id: string, r: Partial<CheckRow>) => (p.rows = p.rows.map((x) => (x.id === id ? { ...x, ...r } : x)));
+    set(
+      "packs",
+      live.length
+        ? { state: not.length ? "warn" : "pass", detail: not.length ? `${charged} of ${live.length} charged. Not charged: ${not.join(", ")}.` : `${charged} of ${live.length} charged.` }
+        : { state: "unknown", detail: "No packs saved." },
+    );
+    const name = (id: string | null | undefined, kind: Device["kind"]) => devices.find((d) => d.id === id)?.name?.trim() || KIND_LABEL[kind];
+    const model = FILES.find((f) => f.file === "model01.yml")!.name;
+    const plugged = connected.find((c) => c.kind === "radio");
+    const saved = devices.find((d) => d.kind === "radio" && d.id === plugged?.id) ?? devices.find((d) => d.kind === "radio" && d.last_backup);
+    if (plugged || saved) {
+      const n = name(plugged?.id ?? saved!.id, "radio");
+      const aircraft = saved ? withAircraft(saved, profiles, !!plugged).aircraft : null;
+      const t = backupTime(saved?.last_backup);
+      const age = plugged || t == null ? "" : `, from backup, ${daysAgo(t) === 1 ? "1 day" : `${daysAgo(t)} days`} ago`;
+      set("radio", { state: aircraft ? "pass" : "warn", detail: aircraft ? `${n}: model ${model} selected (${aircraft})${age}.` : `${n}: model ${model} selected, not linked to an aircraft${age}.` });
+    } else set("radio", { state: "unknown", detail: "No radio saved." });
+    const vols = connected.filter((c) => c.link.kind === "volume");
+    const cards = vols.filter((c) => c.kind === "dvr_card" || c.kind === "goggles");
+    if (cards.length) set("cards_space", { state: "pass", detail: `${cards.map((c) => `${name(c.id, c.kind)}: free space unknown`).join("; ")}.` });
+    const backed = devices.filter((d) => d.kind === "radio" || d.kind === "fc");
+    if (backed.length) {
+      const ages = backed.map((d) => [name(d.id, d.kind), backupTime(d.last_backup)] as const);
+      const old = ages.some(([, t]) => t == null || daysAgo(t) > BACKUP_MAX_DAYS);
+      set("backups", { state: old ? "warn" : "pass", detail: `${ages.map(([n, t]) => (t == null ? `${n}: never` : `${n}: ${daysAgo(t)} days ago`)).join("; ")}.` });
+    }
+    if (vols.length) set("cards_in", { state: "warn", detail: `Still in the Mac: ${vols.map((c) => name(c.id, c.kind)).join(", ")}.` });
     return p;
   }
 

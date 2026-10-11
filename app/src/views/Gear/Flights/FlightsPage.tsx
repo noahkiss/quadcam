@@ -1,16 +1,21 @@
 import { useState } from "react";
 import { useStore } from "../../../store";
 import { api, errText, pickFolder, pickSavePath } from "../../../ipc/api";
-import type { FlightReport, SessionReport } from "../../../ipc/types";
+import type { Crash, FlightReport, SessionReport } from "../../../ipc/types";
 import { Button } from "../../../components/Button";
 import { Select, SelectField } from "../../../components/Field";
 import { SegmentedControl } from "../../../components/SegmentedControl";
+import { DataTable, type Column } from "../../../components/dash/DataTable";
+import { EmptyState } from "../../../components/dash/EmptyState";
+import { FactList } from "../../../components/dash/FactList";
+import { PageHeader } from "../../../components/dash/PageHeader";
+import { SectionCard } from "../../../components/dash/SectionCard";
+import { Stat, StatRow } from "../../../components/dash/StatRow";
 import { toast } from "../../../components/toastStore";
 import { fmtDay } from "../../../lib/format";
 import { copyText, hhmm, mmss, num } from "../../../lib/flights";
 import { RangeTrend } from "./RangeTrend";
 import { useGearData } from "./useGearData";
-import g from "../Gear.module.css";
 import styles from "./Flights.module.css";
 
 /** Gear > Flights: the flights of a day from the radio logs, and the session report. */
@@ -20,7 +25,15 @@ export function FlightsPage() {
   const seg = segment === "report" ? "report" : "flights";
   return (
     <>
-      <h2 className={g.title}>Flights</h2>
+      <PageHeader
+        id="gear-title"
+        title="Flights"
+        actions={
+          <Button icon="folder-open" onClick={addFolder}>
+            Add log folder…
+          </Button>
+        }
+      />
       <SegmentedControl
         label="Sections"
         value={seg}
@@ -45,28 +58,59 @@ async function addFolder() {
   }
 }
 
+/** The day's numbers as tiles: "—" for a value the day does not have. */
+function DayStats({ r }: { r: SessionReport | null }) {
+  return (
+    <StatRow label="Day summary">
+      <Stat label="Flights" value={r ? r.flights : 0} />
+      <Stat label="Air time" value={mmss(r?.air_s)} />
+      <Stat label="Longest" value={mmss(r?.longest?.secs)} sub={r?.longest ? `at ${hhmm(r.longest.start)}` : undefined} />
+      <Stat label="Worst link" value={num(r?.worst_link?.lq, 0, "%")} sub={r?.worst_link ? `${num(r.worst_link.rssi_db, 0, "dB")} at ${hhmm(r.worst_link.start)}` : undefined} />
+      <Stat label="Dropouts" value={r ? r.dropouts : 0} tone={r?.dropouts ? "warn" : undefined} sub={r?.downlink_only ? `${r.downlink_only} telemetry only` : undefined} />
+    </StatRow>
+  );
+}
+
 function Flights() {
   const { data, error } = useGearData(() => api.gearFlights());
   const packs = useGearData(() => api.gearPacks());
   const [day, setDay] = useState<string | null>(null);
   const [open, setOpen] = useState<string | null>(null);
+  const shown = data && (day && data.days.includes(day) ? day : data.days[0]);
+  const report = useGearData(() => (shown ? api.gearSessionReport(shown) : Promise.resolve(null)), [shown]);
   if (error) return <p className={styles.muted}>{error}</p>;
   if (!data) return null;
-  if (!data.flights.length)
+  if (!data.flights.length || !shown)
     return (
       <>
-        <p className={g.empty}>No flights in the radio logs.</p>
-        <div>
-          <Button icon="folder-open" onClick={addFolder}>
-            Add log folder…
-          </Button>
-        </div>
+        <DayStats r={null} />
+        <EmptyState icon="stopwatch">No flights in the radio logs.</EmptyState>
       </>
     );
-  const shown = day && data.days.includes(day) ? day : data.days[0];
-  const list = data.flights.filter((f) => f.flight.day === shown);
+  const list = [...data.flights.filter((f) => f.flight.day === shown)].reverse();
   const labels = (packs.data?.packs || []).filter((p) => !p.pack.retired).map((p) => p.pack.label);
   const sel = list.find((f) => f.flight.id === open) || null;
+  const columns: Column<FlightReport>[] = [
+    {
+      key: "start",
+      header: "Start",
+      rowHeader: true,
+      cell: (r) => (
+        <button type="button" className={styles.rowButton} onClick={() => setOpen(r.flight.id === open ? null : r.flight.id)} aria-expanded={r === sel}>
+          {hhmm(r.flight.start)}
+        </button>
+      ),
+    },
+    { key: "length", header: "Length", numeric: true, cell: (r) => mmss(r.flight.secs) },
+    { key: "aircraft", header: "Aircraft", cell: (r) => r.aircraft || r.flight.model || "–" },
+    { key: "pack", header: "Pack", cell: (r) => <PackPicker r={r} labels={labels} /> },
+    { key: "hover", header: "Hover", numeric: true, optional: true, cell: (r) => num(r.flight.hover.all, 0, "%") },
+    { key: "sag", header: "Sag (p5 / min)", numeric: true, optional: true, cell: (r) => `${num(r.flight.sag_p5_v, 2)} / ${num(r.flight.sag_min_v, 2, "V")}` },
+    { key: "resting", header: "Resting", numeric: true, cell: (r) => num(r.flight.resting_v, 2, "V") },
+    { key: "used", header: "Used", numeric: true, cell: (r) => num(r.flight.mah, 0, "mAh") },
+    { key: "link", header: "Worst link", numeric: true, cell: (r) => `${num(r.flight.worst_lq, 0, "%")} · ${num(r.flight.worst_rssi_db, 0, "dB")}` },
+    { key: "dropouts", header: "Dropouts", numeric: true, cell: (r) => <span className={r.flight.dropouts.length ? styles.warn : undefined}>{r.flight.dropouts.length}</span> },
+  ];
   return (
     <>
       <div className={styles.bar}>
@@ -77,162 +121,73 @@ function Flights() {
             </option>
           ))}
         </SelectField>
-        <span className={styles.grow} />
-        <Button icon="folder-open" onClick={addFolder}>
-          Add log folder…
-        </Button>
       </div>
-      <div className={styles.tableWrap}>
-        <table className={styles.table} aria-label={`Flights on ${shown}`}>
-          <thead>
-            <tr>
-              <th scope="col">Start</th>
-              <th scope="col">Length</th>
-              <th scope="col">Aircraft</th>
-              <th scope="col">Pack</th>
-              <th scope="col">Hover</th>
-              <th scope="col">Sag (p5 / min)</th>
-              <th scope="col">Resting</th>
-              <th scope="col">Used</th>
-              <th scope="col">Worst link</th>
-              <th scope="col">Dropouts</th>
-            </tr>
-          </thead>
-          <tbody>
-            {[...list].reverse().map((r) => (
-              <Row key={r.flight.id} r={r} labels={labels} selected={r === sel} onOpen={() => setOpen(r.flight.id === open ? null : r.flight.id)} />
-            ))}
-          </tbody>
-        </table>
-      </div>
+      <DayStats r={report.data && report.data.days.includes(shown) ? report.data : null} />
+      <DataTable label={`Flights on ${shown}`} columns={columns} rows={list} rowKey={(r) => r.flight.id} />
       {sel && <FlightDetail r={sel} />}
       <RangeTrend places={data.places} />
     </>
   );
 }
 
-function Row({ r, labels, selected, onOpen }: { r: FlightReport; labels: string[]; selected: boolean; onOpen: () => void }) {
-  const f = r.flight;
-  const at = hhmm(f.start);
+/** The flight's pack as a compact pop-up button; "None" names the pack QuadCam suggests. */
+function PackPicker({ r, labels }: { r: FlightReport; labels: string[] }) {
+  const at = hhmm(r.flight.start);
   const setPack = async (pack: string) => {
     try {
-      await api.gearFlightSet(f.id, pack);
+      await api.gearFlightSet(r.flight.id, pack);
     } catch (e) {
       toast(errText(e), true);
     }
   };
   return (
-    <tr aria-selected={selected}>
-      <td>
-        <button type="button" className={styles.rowButton} onClick={onOpen} aria-expanded={selected}>
-          {at}
-        </button>
-      </td>
-      <td>{mmss(f.secs)}</td>
-      <td>{r.aircraft || f.model || "–"}</td>
-      <td>
-        <Select aria-label={`Pack for ${at}`} value={r.pack || ""} onChange={(e) => setPack(e.target.value)}>
-          <option value="">{r.suggested_pack ? `None (next: ${r.suggested_pack})` : "None"}</option>
-          {labels.map((l) => (
-            <option key={l} value={l}>
-              {l}
-            </option>
-          ))}
-          {r.pack && !labels.includes(r.pack) && <option value={r.pack}>{r.pack}</option>}
-        </Select>
-      </td>
-      <td>{num(f.hover.all, 0, "%")}</td>
-      <td>
-        {num(f.sag_p5_v, 2)} / {num(f.sag_min_v, 2, "V")}
-      </td>
-      <td>{num(f.resting_v, 2, "V")}</td>
-      <td>{num(f.mah, 0, "mAh")}</td>
-      <td>
-        {num(f.worst_lq, 0, "%")} · {num(f.worst_rssi_db, 0, "dB")}
-      </td>
-      <td className={f.dropouts.length ? styles.warn : undefined}>{f.dropouts.length}</td>
-    </tr>
+    <Select className={styles.popup} aria-label={`Pack for ${at}`} value={r.pack || ""} onChange={(e) => setPack(e.target.value)}>
+      <option value="">{r.suggested_pack ? `None (next: ${r.suggested_pack})` : "None"}</option>
+      {labels.map((l) => (
+        <option key={l} value={l}>
+          {l}
+        </option>
+      ))}
+      {r.pack && !labels.includes(r.pack) && <option value={r.pack}>{r.pack}</option>}
+    </Select>
   );
 }
 
 function FlightDetail({ r }: { r: FlightReport }) {
   const f = r.flight;
   const openDetail = useStore((s) => s.openDetail);
+  const facts = [
+    { label: "Hover", value: `${num(f.hover.all, 0, "%")} · first third ${num(f.hover.early, 0, "%")} · last third ${num(f.hover.late, 0, "%")}` },
+    { label: "Resting voltage", value: `${num(f.resting_v, 2, "V")}${f.resting_from === "next_arm" ? " (first reading of the next flight)" : ""}` },
+    ...(r.threshold_mah != null ? [{ label: `Warning at ${num(r.threshold_mah, 0, "mAh")}`, value: r.crossed_at_s != null ? `after ${mmss(r.crossed_at_s)}` : "Not reached" }] : []),
+    { label: "Most current", value: num(f.max_current_a, 1, "A") },
+    { label: "Place", value: r.place || "–" },
+    {
+      label: "Clip",
+      value: r.clip ? (
+        <button type="button" className={styles.rowButton} onClick={() => openDetail(r.clip!, null, "flight")}>
+          {r.clip_name || r.clip}
+        </button>
+      ) : (
+        "None"
+      ),
+    },
+    { label: "Log", value: f.file.split("/").pop(), selectable: true },
+  ];
+  type Drop = (typeof f.dropouts)[number];
+  const link = (l: Drop["before"]) => `${num(l.lq, 0, "%")}, ${num(l.rssi_db, 0, "dB")}, ${num(l.tx_power_mw, 0, "mW")}`;
+  const drops: Column<Drop>[] = [
+    { key: "at", header: "At", numeric: true, cell: (d) => mmss(d.start_s) },
+    { key: "len", header: "Length", numeric: true, cell: (d) => num(d.secs, 1, "s") },
+    { key: "before", header: "Before (LQ, RSSI, power)", cell: (d) => link(d.before) },
+    { key: "after", header: "After", cell: (d) => (d.after ? link(d.after) : "Log ended") },
+    { key: "kind", header: "Kind", cell: (d) => (d.downlink_only ? "Telemetry only" : "Link lost") },
+  ];
   return (
-    <section className={styles.panel} aria-label={`Flight at ${hhmm(f.start)}`}>
-      <h3>Flight at {hhmm(f.start)}</h3>
-      <dl className={styles.facts}>
-        <div>
-          <dt>Hover</dt>
-          <dd>
-            {num(f.hover.all, 0, "%")} · first third {num(f.hover.early, 0, "%")} · last third {num(f.hover.late, 0, "%")}
-          </dd>
-        </div>
-        <div>
-          <dt>Resting voltage</dt>
-          <dd>
-            {num(f.resting_v, 2, "V")}
-            {f.resting_from === "next_arm" ? " (first reading of the next flight)" : ""}
-          </dd>
-        </div>
-        {r.threshold_mah != null && (
-          <div>
-            <dt>Warning at {num(r.threshold_mah, 0, "mAh")}</dt>
-            <dd>{r.crossed_at_s != null ? `after ${mmss(r.crossed_at_s)}` : "Not reached"}</dd>
-          </div>
-        )}
-        <div>
-          <dt>Most current</dt>
-          <dd>{num(f.max_current_a, 1, "A")}</dd>
-        </div>
-        <div>
-          <dt>Place</dt>
-          <dd>{r.place || "–"}</dd>
-        </div>
-        <div>
-          <dt>Clip</dt>
-          <dd>
-            {r.clip ? (
-              <button type="button" className={styles.rowButton} onClick={() => openDetail(r.clip!, null, "flight")}>
-                {r.clip_name || r.clip}
-              </button>
-            ) : (
-              "None"
-            )}
-          </dd>
-        </div>
-        <div>
-          <dt>Log</dt>
-          <dd className="selectable">{f.file.split("/").pop()}</dd>
-        </div>
-      </dl>
-      {f.dropouts.length > 0 && (
-        <table className={styles.table} aria-label="Dropouts">
-          <thead>
-            <tr>
-              <th scope="col">At</th>
-              <th scope="col">Length</th>
-              <th scope="col">Before (LQ, RSSI, power)</th>
-              <th scope="col">After</th>
-              <th scope="col">Kind</th>
-            </tr>
-          </thead>
-          <tbody>
-            {f.dropouts.map((d) => (
-              <tr key={d.start_s}>
-                <td>{mmss(d.start_s)}</td>
-                <td>{num(d.secs, 1, "s")}</td>
-                <td>
-                  {num(d.before.lq, 0, "%")}, {num(d.before.rssi_db, 0, "dB")}, {num(d.before.tx_power_mw, 0, "mW")}
-                </td>
-                <td>{d.after ? `${num(d.after.lq, 0, "%")}, ${num(d.after.rssi_db, 0, "dB")}, ${num(d.after.tx_power_mw, 0, "mW")}` : "Log ended"}</td>
-                <td>{d.downlink_only ? "Telemetry only" : "Link lost"}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      )}
-    </section>
+    <SectionCard title={`Flight at ${hhmm(f.start)}`}>
+      <FactList facts={facts} />
+      {f.dropouts.length > 0 && <DataTable label="Dropouts" compact columns={drops} rows={f.dropouts} rowKey={(d) => String(d.start_s)} />}
+    </SectionCard>
   );
 }
 
@@ -286,91 +241,41 @@ function Report() {
   );
 }
 
+type PackRow = { pack: string; flights: number; mah: number | null };
+
 export function ReportView({ r }: { r: SessionReport }) {
+  const packRows: PackRow[] = [...r.packs.map((p) => ({ pack: p.pack, flights: p.flights, mah: p.mah })), ...(r.no_pack > 0 ? [{ pack: "None", flights: r.no_pack, mah: null }] : [])];
+  const packCols: Column<PackRow>[] = [
+    { key: "pack", header: "Pack", rowHeader: true, cell: (p) => p.pack },
+    { key: "flights", header: "Flights", numeric: true, cell: (p) => p.flights },
+    { key: "used", header: "Used", numeric: true, cell: (p) => num(p.mah, 0, "mAh") },
+  ];
+  const crashCols: Column<Crash>[] = [
+    { key: "aircraft", header: "Aircraft", rowHeader: true, cell: (c) => c.aircraft || "Unknown aircraft" },
+    { key: "broke", header: "Broke", cell: (c) => c.broke || "Crash" },
+    { key: "parts", header: "Parts", cell: (c) => (c.parts?.length ? c.parts.join(", ") : "–") },
+    { key: "repaired", header: "Repaired", cell: (c) => (c.repaired ? "Yes" : "No") },
+  ];
   return (
-    <section className={styles.panel} aria-label="Session report">
-      <h3>{r.days.length ? r.days.map((d) => fmtDay(d, true)).join(", ") : "No flights"}</h3>
-      <dl className={styles.facts}>
-        {r.clips > 0 && (
-          <div>
-            <dt>Clips imported</dt>
-            <dd>{r.clips}</dd>
-          </div>
-        )}
-        <div>
-          <dt>Flights</dt>
-          <dd>{r.flights}</dd>
-        </div>
-        <div>
-          <dt>Air time</dt>
-          <dd>{mmss(r.air_s)}</dd>
-        </div>
-        {r.longest && (
-          <div>
-            <dt>Longest flight</dt>
-            <dd>
-              {mmss(r.longest.secs)} at {hhmm(r.longest.start)}
-              {r.longest.model ? ` (${r.longest.model})` : ""}
-            </dd>
-          </div>
-        )}
-        {r.worst_link && (
-          <div>
-            <dt>Worst link</dt>
-            <dd>
-              LQ {num(r.worst_link.lq, 0, "%")}, RSSI {num(r.worst_link.rssi_db, 0, "dB")} at {hhmm(r.worst_link.start)}
-            </dd>
-          </div>
-        )}
-        <div>
-          <dt>Dropouts</dt>
-          <dd>
-            {r.dropouts}
-            {r.downlink_only ? ` (${r.downlink_only} telemetry only)` : ""}
-          </dd>
-        </div>
-      </dl>
-      {(r.packs.length > 0 || r.no_pack > 0) && (
-        <table className={styles.table} aria-label="Pack use">
-          <thead>
-            <tr>
-              <th scope="col">Pack</th>
-              <th scope="col">Flights</th>
-              <th scope="col">Used</th>
-            </tr>
-          </thead>
-          <tbody>
-            {r.packs.map((p) => (
-              <tr key={p.pack}>
-                <td>{p.pack}</td>
-                <td>{p.flights}</td>
-                <td>{num(p.mah, 0, "mAh")}</td>
-              </tr>
-            ))}
-            {r.no_pack > 0 && (
-              <tr>
-                <td>None</td>
-                <td>{r.no_pack}</td>
-                <td>–</td>
-              </tr>
-            )}
-          </tbody>
-        </table>
+    <section className={styles.report} aria-label="Session report">
+      <h3 className={styles.reportTitle}>{r.days.length ? r.days.map((d) => fmtDay(d, true)).join(", ") : "No flights"}</h3>
+      <StatRow label="Report summary">
+        {r.clips > 0 && <Stat label="Clips imported" value={r.clips} />}
+        <Stat label="Flights" value={r.flights} />
+        <Stat label="Air time" value={mmss(r.air_s)} />
+        <Stat label="Longest" value={mmss(r.longest?.secs)} sub={r.longest ? `at ${hhmm(r.longest.start)}${r.longest.model ? ` (${r.longest.model})` : ""}` : undefined} />
+        <Stat label="Worst link" value={num(r.worst_link?.lq, 0, "%")} sub={r.worst_link ? `RSSI ${num(r.worst_link.rssi_db, 0, "dB")} at ${hhmm(r.worst_link.start)}` : undefined} />
+        <Stat label="Dropouts" value={r.dropouts} tone={r.dropouts ? "warn" : undefined} sub={r.downlink_only ? `${r.downlink_only} telemetry only` : undefined} />
+      </StatRow>
+      {packRows.length > 0 && (
+        <SectionCard title="Packs" label="Packs used">
+          <DataTable label="Pack use" columns={packCols} rows={packRows} rowKey={(p) => p.pack} />
+        </SectionCard>
       )}
       {r.crashes.length > 0 && (
-        <ul className={styles.rows} aria-label="Crashes">
-          {r.crashes.map((c) => (
-            <li key={c.id}>
-              <span />
-              <b>{c.aircraft || "Unknown aircraft"}</b>
-              <span>
-                {c.broke || "Crash"}
-                {c.parts?.length ? `; parts: ${c.parts.join(", ")}` : ""}
-                {c.repaired ? " (repaired)" : ""}
-              </span>
-            </li>
-          ))}
-        </ul>
+        <SectionCard title="Crashes" label="Crashes in the report">
+          <DataTable label="Crashes" columns={crashCols} rows={r.crashes} rowKey={(c) => c.id} />
+        </SectionCard>
       )}
     </section>
   );
