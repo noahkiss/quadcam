@@ -1055,3 +1055,14 @@ fn mcp_flashes_the_fc_only_with_the_digest_and_confirm() {
         .unwrap_or_default()
         .contains("To flash"));
 }
+
+/// Under cargo the system's build service reaches no server but this Mac: a build refuses
+/// before curl runs.
+#[test]
+fn the_default_build_service_reaches_only_this_mac_under_cargo() {
+    use quadcam_lib::gear::firmware::betaflight::{Cloud, CurlCloud};
+    let c = CurlCloud::system();
+    assert!(c.loopback_only);
+    let e = c.build(TARGET, RELEASE).err().expect("refused under cargo");
+    assert!(format!("{e:#}").contains("off in tests"), "{e:#}");
+}
