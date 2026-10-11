@@ -95,6 +95,7 @@ pnpm build                                 # -> app/dist
 
 - `pnpm dev`, then `http://localhost:4719/?mock=<scenario>`, runs the UI in a browser on the mocked core. The scenarios are in `app/src/ipc/mock/core.ts`.
 - `app/scripts/make-fixtures.sh` records the mocked core's data from the real core. It needs the CLI and the corpus.
+- The axe specs loop over both themes (`axeSchemes` in `e2e/fixtures.ts`). `QC_AXE_THEMES=dark` (or `light`) runs them in one theme only; CI sets `dark` on a branch or a pull request and both on `main` and on a tag. Every other spec runs whatever the variable says. A new axe spec loops over `axeSchemes`, not its own list.
 - `QC_SHOTS=<dir> pnpm exec playwright test e2e/shots.spec.ts` writes screenshots of each screen in both themes. The images in `docs/images/` come from this spec.
 
 ### CI
@@ -103,7 +104,7 @@ pnpm build                                 # -> app/dist
 
 - `cargo fmt --check`, clippy, the tests (`cargo nextest run --profile ci`, with the JUnit report as the `junit` artifact), and a release build.
 - On a branch or a pull request, the disk-image tests and `tests/join.rs` run only when the change since the merge base with `main` touches the code they cover: import, disks, cards, card prep, joins, media, scan, the session, the sources, the CLI's `main.rs`, the MCP server outside Gear, `tests/common` and those test files, `Cargo.toml`, `Cargo.lock`, `rust-toolchain.toml`, `nextest.toml` or `ci.yml`. Otherwise CI runs the `ci-quick` profile. The filter is in `ci.yml`; a new slow test, or new code it covers, joins it. On `main` and on a tag, CI runs every test.
-- A `ui` job for `app/`: typecheck, lint, Vitest, Playwright, and a build.
+- A `ui` job for `app/`: typecheck, lint, Vitest, Playwright, and a build. On a branch or a pull request, the axe specs run in the dark theme only.
 
 A newer push to the same branch or pull request cancels the older run. A run on `main` or on a tag is never cancelled, because the release waits for a green run on the tagged commit.
 

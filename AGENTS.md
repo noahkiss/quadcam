@@ -121,6 +121,8 @@ scripts/make-fixtures.sh                   # re-record the mock core's data (nee
   semantic names (Mocha for dark, Latte for light) plus the 8-pt spacing, radii and type
   scale. Components use CSS Modules and tokens only, never a hex value. `e2e/theme.spec.ts`
   runs axe, contrast included, on the component gallery (`/?gallery` in dev) in both themes.
+  Every axe spec loops over `axeSchemes` (`e2e/fixtures.ts`); `QC_AXE_THEMES=dark` limits them
+  to one theme, as CI does on a branch (main and tags run both).
 - **Dev in a browser:** `pnpm dev`, then `http://localhost:4719/?mock=<scenario>` (your `QUADCAM_DEV_PORT` instead of 4719) runs the
   UI on the mock core (scenarios in `app/src/ipc/mock/core.ts`; `gear` has devices plugged
   in). The mock's Gear (`ipc/mock/gear.ts`) is written by hand, not recorded: a recorded
