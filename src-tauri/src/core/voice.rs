@@ -410,7 +410,16 @@ impl Core {
 
     fn voice_provider(&self) -> Result<(Box<dyn Tts>, String, String)> {
         let (cfg, model, voice) = self.voice_config();
-        Ok((self.gear.tts.make(&cfg)?, model, voice))
+        Ok((self.line_provider(&cfg)?, model, voice))
+    }
+
+    /// The provider for line-by-line renders. ElevenLabs bills by the character, and only the
+    /// studio prices a render and checks the credits first, so it renders there alone.
+    fn line_provider(&self, cfg: &ProviderConfig) -> Result<Box<dyn Tts>> {
+        if cfg.provider == "elevenlabs" {
+            bail!("ElevenLabs renders in the Voice studio only, which prices a render and checks the credits first: render line sets there (gear voice render --set), or set tts_provider to say or openai.");
+        }
+        self.gear.tts.make(cfg)
     }
 
     fn voice_index_source(&self) -> Option<String> {
@@ -585,13 +594,16 @@ impl Core {
 
     pub(super) fn provider_view(&self) -> ProviderView {
         let (cfg, model, voice) = self.voice_config();
-        let made = self.gear.tts.make(&cfg);
+        let made = self.line_provider(&cfg);
         ProviderView {
             provider: cfg.provider.clone(),
             base_url: cfg.base_url.clone(),
             model,
             voice,
-            paid: made.as_ref().map(|t| t.paid()).unwrap_or(false),
+            paid: made
+                .as_ref()
+                .map(|t| t.paid())
+                .unwrap_or(cfg.provider == "elevenlabs"),
             key_set: cfg.key.is_some(),
             ready: made.is_ok(),
             problem: made.err().map(|e| format!("{e:#}")),

@@ -1076,3 +1076,37 @@ fn each_provider_reads_only_its_own_key_from_the_environment() {
     std::env::remove_var("QUADCAM_OPENAI_KEY");
     std::env::remove_var("QUADCAM_TTS_KEY");
 }
+
+#[test]
+fn elevenlabs_renders_line_by_line_nowhere_but_the_studio() {
+    let b = bench(Opts::default());
+    std::fs::write(
+        b.dir.path().join("support/settings.json"),
+        r#"{"ttsProvider": "elevenlabs", "ttsVoice": "Test Voice"}"#,
+    )
+    .unwrap();
+    let v = view(&b);
+    assert!(!v.provider.ready && v.provider.paid);
+    assert!(v.provider.problem.unwrap().contains("Voice studio"));
+    let e = b
+        .core
+        .gear_voice_render(&VoiceRenderParams {
+            confirm: true,
+            ..Default::default()
+        })
+        .unwrap_err();
+    assert!(format!("{e:#}").contains("Voice studio"), "{e:#}");
+    let e = b
+        .core
+        .gear_voice_edit(&VoiceEditParams {
+            radio: b.id.clone(),
+            line: ARMED.into(),
+            text: Some("Motors live".into()),
+            pack: None,
+            confirm: true,
+            ..Default::default()
+        })
+        .unwrap_err();
+    assert!(format!("{e:#}").contains("Voice studio"), "{e:#}");
+    assert_eq!(b.calls.load(Ordering::SeqCst), 0);
+}
