@@ -5,10 +5,11 @@ User-facing changes in each release, newest first. Release notes on
 
 ## Unreleased
 
+## 0.13.2 (2026-10-11)
+
 - **Library:** the day summary keeps each number and its label on one line, so the stats line up (`3.20 V` no longer wraps). Best moments chips shorten a long clip name with an ellipsis and show it in full on hover. A narrow window puts Best moments below the stats.
 - **A Draft change no longer applies.** The core refuses a Draft at the plan (`draft`, new refusal code), for an FC, a radio card and ExpressLRS options alike; before, only the app's **Review…** was off. An ExpressLRS options change marked Read first now refuses too (`read_first`), as FC and card changes did.
 - **CLI help:** `gear apply --help` names every device a staged change applies to (an FC, a radio card, ExpressLRS options); `gear changes --status` lists every status (`try`, `read_first` and `reverted` too); `gear firmware --help` names the Betaflight FC flash beside the EdgeTX one.
-
 - **Voice studio cuts.** A line no longer starts with the hiss of the carrier's "is" (the "s" heard before "Battery critical"), and its end keeps the word's tail. ElevenLabs' character times can run 0.1 s off, so QuadCam now places each cut in the quiet the audio shows between the carrier and the line. A check flags a cut that starts with the carrier's hiss and a gap. To re-cut, **Sample** again and **Render pack** again with the same voice, model, sets and seed: both cut from the cached batches and cost no credits.
 
 ## 0.13.1 (2026-10-11)
