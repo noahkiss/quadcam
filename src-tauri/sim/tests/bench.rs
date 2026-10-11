@@ -1,9 +1,11 @@
-//! The S1 cost bar in CI: p99 step cost under 100 µs at 2 kHz, in free flight and in
-//! contact, and contact no more than twice a free-flight step (sim-design 2.2, 4.7).
+//! The S1 cost bar: p99 step cost under 100 µs at 2 kHz, in free flight and in contact, and
+//! contact no more than twice a free-flight step (sim-design 2.2, 4.7). A wall-clock gate, so
+//! it is ignored in the default run; CI runs it in its own step with `--ignored`.
 
 use quadcam_sim::bench;
 
 #[test]
+#[ignore = "wall-clock cost bar; run with --ignored on an idle machine"]
 fn step_cost_p99_is_under_100_us_free_and_in_contact() {
     for id in ["meteor75", "five_inch"] {
         let free = bench::free_flight(id, 40_000);

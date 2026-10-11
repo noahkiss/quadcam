@@ -135,9 +135,16 @@ fn turtle_flips_an_upside_down_quad() {
         }
         assert!(done, "{id}: still at {:.0} deg", s.tilt_deg());
         let snap = s.snapshot();
-        // Reversed motors only on the side the stick points at.
-        assert!(snap.motor_u.iter().any(|u| *u < -0.5), "{:?}", snap.motor_u);
-        assert!(snap.motor_u.contains(&0.0), "{:?}", snap.motor_u);
+        // Reversed motors only on the side the stick points at: roll right reverses the
+        // right-hand motors (body y < 0); the left-hand ones stay off.
+        let pos = preset(id).unwrap().params().rotor_pos;
+        for (i, u) in snap.motor_u.iter().enumerate() {
+            if pos[i][1] < 0.0 {
+                assert!(*u < -0.5, "{id}: motor {i} {:?}", snap.motor_u);
+            } else {
+                assert_eq!(*u, 0.0, "{id}: motor {i} {:?}", snap.motor_u);
+            }
+        }
     }
 }
 
