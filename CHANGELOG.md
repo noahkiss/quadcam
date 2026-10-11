@@ -5,6 +5,7 @@ User-facing changes in each release, newest first. Release notes on
 
 ## Unreleased
 
+- **EdgeTX flash: one proven release.** A radio flash needs the exact release QuadCam has proven on the board (the Pocket on 2.12.4), not any 2.12 version, and a prerelease tag (`2.12.5-rc1`) always refuses. **Flash …** on the Firmware page follows the same rule.
 ## 0.12.0 (2026-10-11)
 
 - **Sim sync:** two profiles in one sim file (for example two Liftoff profiles) now sync together. Before, the second write put the first profile back to its old rates.

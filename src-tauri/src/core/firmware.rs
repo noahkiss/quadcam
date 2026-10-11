@@ -205,7 +205,7 @@ impl Core {
             .ok_or_else(|| anyhow!("The radio reports no version; name the version to flash."))?;
 
         let mut checks: Vec<Check> = Vec::new();
-        let known = compat::check_writable(Product::Edgetx, board.as_deref(), Some(&target));
+        let known = compat::check_writable(Product::EdgetxFlash, board.as_deref(), Some(&target));
         let known_ok = known.is_ok();
         checks.push(check("Known board and version", known));
 

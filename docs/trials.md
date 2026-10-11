@@ -543,7 +543,8 @@ can always be put back in DFU mode.
 
 **Needs**
 
-- A RadioMaster Pocket on EdgeTX 2.12. Other boards and versions are refused.
+- A RadioMaster Pocket, flashed with EdgeTX 2.12.4. Other boards, releases and prereleases are
+  refused.
 - Trials 1, 2 and 8 passed. Trial 2's copy is in `firmware/<radio>/`.
 - A fresh card backup: **Back up now** on the radio's **Backups** segment. The flash plan refuses
   without one.

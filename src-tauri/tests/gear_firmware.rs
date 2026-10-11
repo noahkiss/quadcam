@@ -343,6 +343,23 @@ fn a_version_or_board_not_in_compat_refuses_without_a_download() {
         ("Known board and version", RefusalCode::UnknownVersion)
     );
     assert!(plan.digest.is_empty());
+    // A flash is proven for one release, not the card files' 2.12 prefix, and never a
+    // prerelease.
+    for v in ["2.12.9", "2.12.5-rc1", "2.12.4-rc1"] {
+        let plan = b
+            .core
+            .gear_flash_plan(&FlashParams {
+                device: b.radio.clone(),
+                version: Some(v.into()),
+                splash: None,
+            })
+            .unwrap();
+        assert_eq!(
+            failed(&plan)[0],
+            ("Known board and version", RefusalCode::UnknownVersion),
+            "{v}"
+        );
+    }
     let other = bench(Arc::new(NoHooks), "tx16s", VERSION, true);
     let plan = other.core.gear_flash_plan(&params(&other, None)).unwrap();
     assert_eq!(

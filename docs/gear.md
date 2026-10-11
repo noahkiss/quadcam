@@ -1132,9 +1132,9 @@ they match. A mismatch is not an error; check the radio's About screen.
 
 ### Flash an EdgeTX radio
 
-QuadCam flashes only a board and an EdgeTX version listed in `compat.rs`. Today that is the
-RadioMaster Pocket on EdgeTX 2.12. A splash needs a version it has checked: 2.12.4.
-Anything else is refused with the reason.
+QuadCam flashes only a board and an exact EdgeTX release listed in `compat.rs`. Today that is
+the RadioMaster Pocket on EdgeTX 2.12.4, with or without a splash. Another release, another
+board and any prerelease tag (`2.12.5-rc1`) are refused with the reason.
 
 1. Back up the radio's card (**Backups**). The flash plan refuses without a backup.
 2. Open **Firmware > Flash…**, or make a splash first (below). The sheet shows the checks:

@@ -262,7 +262,7 @@ pub struct FirmwareStatus {
 fn product_of(kind: DeviceKind) -> Option<(&'static str, Option<Product>)> {
     match kind {
         DeviceKind::Fc => Some(("Betaflight", None)),
-        DeviceKind::Radio => Some(("EdgeTX", Some(Product::Edgetx))),
+        DeviceKind::Radio => Some(("EdgeTX", Some(Product::EdgetxFlash))),
         DeviceKind::ElrsTx | DeviceKind::ElrsRx => Some(("ExpressLRS", None)),
         DeviceKind::Goggles | DeviceKind::DvrCard => None,
     }
