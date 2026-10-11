@@ -132,28 +132,49 @@ impl Image {
         disk_image_lock();
         let dir = tempfile::tempdir().unwrap();
         let base = dir.path().join("card");
-        let mut c = Command::new("/usr/bin/hdiutil");
-        c.args([
-            "create",
-            "-quiet",
-            "-size",
-            size,
-            "-fs",
-            "MS-DOS FAT32",
-            "-layout",
-            "MBRSPUD",
-            "-volname",
-            label,
-        ]);
-        if sparse {
-            c.args(["-type", "SPARSE"]);
-        }
-        assert!(c.arg(&base).status().unwrap().success(), "hdiutil create");
         let file = if sparse {
             base.with_extension("sparseimage")
         } else {
             base.with_extension("dmg")
         };
+        // `hdiutil create` attaches the new image to format it, so it can fail on a loaded
+        // machine as an attach does: a failed create removes what it left and tries again,
+        // up to 3 times.
+        let mut tries = 0;
+        let out = loop {
+            tries += 1;
+            let mut c = Command::new("/usr/bin/hdiutil");
+            c.args([
+                "create",
+                "-quiet",
+                "-size",
+                size,
+                "-fs",
+                "MS-DOS FAT32",
+                "-layout",
+                "MBRSPUD",
+                "-volname",
+                label,
+            ]);
+            if sparse {
+                c.args(["-type", "SPARSE"]);
+            }
+            let out = c.arg(&base).output().unwrap();
+            if out.status.success() || tries == 3 {
+                break out;
+            }
+            eprintln!(
+                "hdiutil create, try {tries}: {}",
+                String::from_utf8_lossy(&out.stderr).trim()
+            );
+            let _ = std::fs::remove_file(&file);
+            std::thread::sleep(std::time::Duration::from_secs(2));
+        };
+        assert!(
+            out.status.success(),
+            "hdiutil create: {}",
+            String::from_utf8_lossy(&out.stderr)
+        );
         let mount = dir.path().join("mnt");
         std::fs::create_dir(&mount).unwrap();
         let mut img = Image {
