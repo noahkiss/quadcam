@@ -1119,7 +1119,9 @@ status polls, aborts, the address pointer and uploads. Run it before any flash.
 QuadCam reads the flash twice and keeps the copy only when both reads are equal. It saves the
 copy, reads the saved file back and compares it, then compares the version the image names
 (`edgetx-pocket-2.12.4 ...`) with the version it knows for the radio. The result says whether
-they match. A mismatch is not an error; check the radio's About screen.
+they match. A mismatch is not an error; check the radio's About screen. When the image names
+another board than the radio you picked, the result says so: the radio in DFU mode may be
+another radio, and a flash of the picked radio refuses it.
 
 - The copy is a file pair under the gear folder, `firmware/<radio>/<time>-read.bin` and
   `.json`. A second copy in the same second gets `-2`, `-3`; a copy never replaces another.
@@ -1149,6 +1151,9 @@ board and any prerelease tag (`2.12.5-rc1`) are refused with the reason.
    - reads the firmware the radio runs now twice, saves it as a copy and reads the saved file
      back. Nothing is erased until both reads are equal and the file matches. A blank flash
      (an earlier flash that stopped) has nothing to copy and may be flashed;
+   - compares the board the current firmware names (`edgetx-<board>-...`) with the radio's
+     board. Another board is another radio: QuadCam refuses and erases nothing, also for a
+     DFU device not yet linked to a radio;
    - erases the sectors it needs and writes the image in 16 KB segments, reading each segment
      back before it writes the next;
    - reads the whole image back and compares every byte;
@@ -1195,6 +1200,7 @@ Where a failure can leave the radio, and what QuadCam does:
 | Two reads differ | A bad cable or port | No copy, no erase |
 | The saved copy does not match | A failing disk | No erase |
 | The chip is not the expected size | The wrong radio in DFU mode | Refuses before any command |
+| The current firmware names another board | The wrong radio in DFU mode | Refuses before the erase |
 | The device moves another block size than 2,048 bytes | Blocks land at the wrong address | Refuses before the erase |
 | Power or USB drops during the erase or the write | The radio has no valid firmware | The radio stays in DFU mode; flash again |
 | A block does not program | A corrupt image | Caught by the segment read back; the image is not started |

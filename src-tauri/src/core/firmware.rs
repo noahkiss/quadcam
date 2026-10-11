@@ -505,6 +505,15 @@ impl Core {
         });
         let known = device.as_ref().and_then(|d| d.identity.version.clone());
         let image = identity.as_ref().map(|(_, v)| v.clone());
+        // The board the image names, when it is not the named radio's board.
+        let other_board = match (&device, &identity) {
+            (Some(d), Some((b, _)))
+                if !edgetx::same_board(d.identity.board.as_deref().unwrap_or_default(), b) =>
+            {
+                Some(b.clone())
+            }
+            _ => None,
+        };
         let matches = match (&known, &image) {
             (Some(k), Some(i)) => Some(k.trim().trim_start_matches(['v', 'V']) == i),
             _ => None,
@@ -520,6 +529,15 @@ impl Core {
                 "The firmware names EdgeTX {i}. QuadCam has no version to compare it with. The copy is saved."
             ),
             (None, _, _) => "The copy is saved, but it holds no EdgeTX version string. This may not be EdgeTX firmware.".into(),
+        };
+        let message = match (&other_board, &device) {
+            (Some(b), Some(d)) => format!(
+                "The firmware is for board {b}, not {}: the radio in DFU mode may not be {}. A flash of {} refuses it. {message}",
+                d.identity.board.as_deref().unwrap_or("(none)"),
+                d.display_name(),
+                d.display_name()
+            ),
+            _ => message,
         };
         self.hooks.gear_changed();
         Ok(FirmwareRead {
@@ -608,6 +626,19 @@ impl Core {
         let current = copy.trimmed();
         let blank = copy.is_blank();
         let identity = edgetx::image_identity(&current);
+        // A radio in DFU mode shows no name, and two radios can share a chip. The firmware it
+        // runs names its board: another board is another radio, also before any link exists.
+        if let Some((image_board, _)) = &identity {
+            let board = prep.device.identity.board.as_deref().unwrap_or_default();
+            if !edgetx::same_board(board, image_board) {
+                return Err(refuse(
+                    RefusalCode::DeviceChanged,
+                    format!(
+                        "The radio in DFU mode runs firmware for board {image_board}, not {board}: it is not {name}. Plug in {name}, or pick the radio in DFU mode. Nothing was erased."
+                    ),
+                ));
+            }
+        }
         let kept = if blank {
             None
         } else {

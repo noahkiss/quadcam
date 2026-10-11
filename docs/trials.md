@@ -570,9 +570,10 @@ quadcam-cli --json gear firmware --plan --device <radio id>
 quadcam-cli --json gear firmware --device <radio id> --digest <digest> --yes
 ```
 
-QuadCam checks the chip's flash size, reads the current firmware twice and saves a copy, erases
-the sectors it needs, writes the image in 16 KB segments (reading each back), reads the whole
-image back and compares every byte, then leaves DFU mode.
+QuadCam checks the chip's flash size, reads the current firmware twice, checks that it names the
+radio's board and saves a copy. It then erases the sectors it needs, writes the image in 16 KB
+segments (reading each back), reads the whole image back and compares every byte, then leaves
+DFU mode.
 
 **Pass**
 
@@ -597,6 +598,7 @@ Recovery, from [Gear](gear.md#if-a-flash-fails-or-the-radio-will-not-start):
 | The cable or Mac drops during the read | Nothing changed. Nothing was erased |
 | Two reads differ, or the saved copy does not match | No copy and no erase |
 | The chip is not the expected size | Refuses before any command |
+| The current firmware names another board | Refuses before the erase |
 | Power or USB drops during the erase or write | The radio stays in DFU mode. Flash again |
 | A segment or the final read back differs | The image is not started. Select **Apply** again |
 | The image is not the board's or the version's | Refused in the plan |

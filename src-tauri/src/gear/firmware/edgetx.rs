@@ -68,6 +68,14 @@ pub fn spec(board: &str) -> Option<&'static BoardSpec> {
     BOARDS.iter().find(|s| s.id == b)
 }
 
+/// True when the board an image names (`image_identity`) is the saved radio's board: its
+/// `radio.yml` id, or one of the names the board table gives its binary.
+pub fn same_board(board: &str, image_board: &str) -> bool {
+    let b = board.trim().to_ascii_lowercase();
+    let i = image_board.trim().to_ascii_lowercase();
+    !i.is_empty() && (b == i || spec(&b).is_some_and(|s| s.names.contains(&i.as_str())))
+}
+
 fn bad_image(reason: impl Into<String>) -> Refusal {
     Refusal::new(RefusalCode::BadImage, reason)
 }
@@ -583,6 +591,17 @@ mod tests {
         }
         assert!(check_image(&b, pocket, "2.12.4").is_err());
         assert_eq!(image_version(&b, "pocket"), None);
+    }
+
+    #[test]
+    fn an_image_board_matches_the_radio_board_by_the_board_table() {
+        assert!(same_board("pocket", "pocket"));
+        assert!(same_board("Pocket", "POCKET"));
+        assert!(!same_board("pocket", "tx16s"));
+        assert!(!same_board("pocket", ""));
+        // A board without a table row still compares by its id.
+        assert!(same_board("boxer", "boxer"));
+        assert!(!same_board("", "pocket"));
     }
 
     #[test]

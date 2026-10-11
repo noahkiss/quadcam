@@ -819,6 +819,55 @@ fn a_flash_never_erases_when_its_copy_cannot_be_made() {
     assert!(quadcam_lib::gear::fwcopy::list(&b.core.gear_store(), &b.radio).is_empty());
 }
 
+/// `full_image`, but the firmware names another board.
+fn other_board_image(salt: u8) -> Vec<u8> {
+    let mut b = full_image(salt);
+    let v = b"edgetx-tx16s-2.12.4 (def35ad3)\0";
+    b[0x9000..0x9000 + v.len()].copy_from_slice(v);
+    b
+}
+
+#[test]
+fn a_flash_refuses_a_radio_whose_firmware_names_another_board_before_the_erase() {
+    // The DFU device is not linked to any radio: the first flash of a radio. Its chip has the
+    // Pocket's flash size, but the firmware it runs is another board's.
+    let b = plain();
+    *b.flasher.device.lock().unwrap() = FakeDfu::with_firmware(&other_board_image(3));
+    let p = params(&b, None);
+    let plan = b.core.gear_flash_plan(&p).unwrap();
+    assert!(plan.ready(), "{:?}", failed(&plan));
+    let e = b.core.gear_flash(&request(&p, &plan)).unwrap_err();
+    let r = refusal(e);
+    assert_eq!(r.code, RefusalCode::DeviceChanged);
+    assert!(
+        r.reason.contains("tx16s") && r.reason.contains("Nothing was erased"),
+        "{}",
+        r.reason
+    );
+    let dev = b.flasher.device.lock().unwrap();
+    assert_eq!(dev.mutations, 0, "{:?}", dev.log);
+    assert!(!dev.log.iter().any(|l| l.starts_with("erase")));
+    drop(dev);
+    // No copy is filed under the wrong radio, and the DFU device stays unlinked.
+    assert!(quadcam_lib::gear::fwcopy::list(&b.core.gear_store(), &b.radio).is_empty());
+    let saved = b.core.gear_store().devices().unwrap();
+    assert!(saved.iter().all(|d| d.dfu_serial.is_none()));
+
+    // The read-only trial says so when a radio is named.
+    let r = b
+        .core
+        .gear_firmware_read(&FirmwareReadParams {
+            device: Some(b.radio.clone()),
+        })
+        .unwrap();
+    assert!(
+        r.message.contains("board tx16s, not pocket"),
+        "{}",
+        r.message
+    );
+    assert_eq!(r.copy.image_board.as_deref(), Some("tx16s"));
+}
+
 #[test]
 fn a_blank_radio_can_be_flashed_and_a_wrong_sized_chip_cannot() {
     let b = plain();
