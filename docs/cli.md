@@ -239,6 +239,7 @@ value never shows in `diff all`.
 
 `gear blackbox pull` reads an FC's blackbox flash, verifies and stores it, and erases the flash only when the
 `gear_erase_blackbox` setting is on and the checks pass. `--keep` skips the erase for that run; no flag turns it on.
+`pull` needs no `--yes`, even when it erases; MCP `blackbox_pull` needs `confirm=true` (see MCP equivalents).
 `--mode auto` (the default) uses the FC's USB disk only when the `gear_blackbox_msc` setting is on and the FC has one, else MSP; `msp` and `msc` force one path. It refuses a pull that would outlast the USB heat timer (`--force` overrides that, never an erase that could not
 finish) and a port another program has open. `list` shows the stored pulls newest first, each log paired with a
 radio-log flight by order (a labelled guess). `erase --yes` empties the flash when QuadCam holds a stored pull of
@@ -291,7 +292,7 @@ Every MCP tool has a command. The command line also has `scan`, `analyze`, `clea
 | `quadcam_gear_apply` | the same command with `--digest D --yes` (MCP `confirm=true`) |
 | `quadcam_library_files` `cuts`, `split_by_flight`, `export_cuts` | `library cut` (`--by-flight`, `--export`) |
 
-Flags that mean one thing everywhere: `--yes` is MCP `confirm`, `--plan` shows the checks and digest and writes nothing, `--device` is a saved device id, `--mount` is a mount point, `--profile` is an aircraft profile. `gear voice` keeps `--confirm`: it allows a voice provider that may charge, which is a different consent.
+Flags that mean one thing everywhere: `--yes` is MCP `confirm`, `--plan` shows the checks and digest and writes nothing, `--device` is a saved device id, `--mount` is a mount point, `--profile` is an aircraft profile. `gear voice` keeps `--confirm`: it allows a voice provider that may charge, which is a different consent. `gear blackbox pull` takes no `--yes`, while MCP `blackbox_pull` needs `confirm=true`. When the `gear_erase_blackbox` setting is on, `pull` erases the flash after a verified pull: the setting is the consent, as `delete_clips_after_import` is for `import`, and `--keep` skips the erase for one run. A new `--yes` requirement would break schema 1 scripts, so the command keeps working without it.
 
 ## MCP server
 
