@@ -398,6 +398,7 @@ mcp.param quadcam_settings.values.tts_provider string|null
 mcp.param quadcam_settings.values.tts_voice string|null
 mcp.param quadcam_settings.values.tunables object|null
 mcp.param quadcam_settings.values.update_check boolean|null
+mcp.param quadcam_settings.values.video_analysis boolean|null
 mcp.param quadcam_settings.values.voice_index string|null
 mcp.param quadcam_suggest.on_device boolean
 mcp.param quadcam_suggest.suggestions array<object>

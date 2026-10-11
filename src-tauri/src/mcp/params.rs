@@ -380,6 +380,9 @@ pub struct SettingsValues {
     /// Import a recording the DVR split into files (about 600 s each) as one clip. On by default.
     #[schemars(extend("x-nullable" = true))]
     pub join_split_recordings: Option<bool>,
+    /// Find highlights and the key frame of new clips with macOS video analysis (macOS 27 or later), in the background. On by default.
+    #[schemars(extend("x-nullable" = true))]
+    pub video_analysis: Option<bool>,
     /// Apple's on-device model suggests clip names, keywords and notes after a card loads, where the Mac has it (macOS 26 or later, Apple Intelligence on). On by default.
     #[schemars(extend("x-nullable" = true))]
     pub on_device_suggestions: Option<bool>,
