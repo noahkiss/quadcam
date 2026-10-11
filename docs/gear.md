@@ -1199,7 +1199,7 @@ port to the device and asks it over CRSF for its name, version, target and param
 
 | Host | What QuadCam does |
 |---|---|
-| Radio | The radio's USB serial port must be set to CLI (as for the radio CLI). QuadCam stops the pulses and starts `serialpassthrough rfmod 0 400000` |
+| Radio | The radio's USB serial port must be set to CLI (as for the radio CLI). QuadCam reads the radio's board (`ver`) and keeps it with the read, stops the pulses and starts `serialpassthrough rfmod 0 400000` |
 | FC | The FC must identify itself over MSP as the saved FC; another FC, or one that does not answer, refuses. QuadCam checks that the serial receiver is CRSF, not inverted and not half duplex, finds the UART with the serial receiver and starts `serialpassthrough <uart> 420000` |
 
 A read through a radio stops its pulses: the radio stops sending at once, and a quad linked
