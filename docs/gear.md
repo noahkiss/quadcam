@@ -773,7 +773,8 @@ QuadCam leaves out, and lists, what it should not copy:
 **Settings > Gear > Steps on connect** can list `apply_ready` for an FC or a radio. It is off
 by default. When the device is plugged in, QuadCam plans each Ready change of that device, and
 a plan whose checks all pass opens the apply sheet. Nothing is written until you click
-**Apply**. With no window to click in, the step does nothing.
+**Apply**; the sheet then shows the write and its result. With no window to click in, the step
+does nothing.
 
 ### OSD element moves
 
@@ -1487,6 +1488,13 @@ These are the common commands. [Command line](cli.md) lists every `gear` command
 
 Agents use the `quadcam_gear`, `quadcam_gear_edit` and `quadcam_gear_apply` tools. See
 [MCP server](mcp.md#gear).
+
+With the app running, an agent's write (an apply, a flash, a sim sync or restore) opens the
+apply sheet, and nothing is written until you click **Apply**. **Apply on connect** uses the
+same sheet. After the click the sheet stays open: it shows the progress, then the result, with
+**Restore backup** when the write failed. A request never replaces a sheet that is open. It
+waits, the open sheet says so, and it opens when you close that sheet. A request still waiting
+after 3 minutes is refused.
 
 ## Tests and real devices
 

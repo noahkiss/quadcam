@@ -1880,7 +1880,11 @@ check), `core/apply.rs` (stage, update, discard, restore, plan, apply as one FC 
 `gear_changes`, `gear_change_stage`, `gear_change_update`, `gear_change_discard`,
 `gear_restore_stage`, `gear_apply_plan`, `gear_apply`. The sheet's own click is the Tauri command
 `gear_apply_click`; `Hooks::confirm_apply` asks the app's sheet for any other caller (events
-`agent-apply-request` and `agent-apply-closed`, the command `answer_apply_request`). Deviations:
+`agent-apply-request` and `agent-apply-closed`, the command `answer_apply_request`). After the
+click, `Hooks::apply_done` sends the write's outcome to the sheet that approved it (event
+`agent-apply-result`, with the report or the error), so the sheet shows the progress, the
+result and Restore backup. A request that arrives while a sheet is open waits in the app's
+queue; every sheet result is tied to the sheet it started from. Deviations:
 
 - **The plan reads no CLI.** The before state is the touched settings in the device's latest
   `dump all` backup, so a plan needs no reboot. The apply takes a fresh `before_apply` backup

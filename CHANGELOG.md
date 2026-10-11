@@ -5,6 +5,13 @@ User-facing changes in each release, newest first. Release notes on
 
 ## Unreleased
 
+- **Agent requests wait their turn.** An agent's apply or flash request, or **Apply on connect**, no longer replaces a sheet that is open, such as your own apply while it writes. The request waits, the sheet says so, and it opens when you close that sheet. A result always lands in the sheet it started from.
+- **Approved requests show their outcome.** After you click **Apply** on an agent's or **Apply on connect**'s request, the sheet stays open and shows the progress, the result and **Restore backup**. Before, it closed at the click.
+- **ExpressLRS flash requests.** An agent's ExpressLRS flash opens a sheet titled **Flash** that says what the flash does (the chip's flash kept as a backup, esptool verifies). Before, it described an options write.
+- **Settings > Gear** offers **Apply ready changes** only for FCs and radios, the kinds it runs for.
+- **Changes:** **Review…** is off for a Draft or Read first change, as on the Bench.
+- **Splash:** **Make firmware…** is now **Flash with splash…**.
+
 ## 0.12.0 (2026-10-11)
 
 - **Sim sync:** two profiles in one sim file (for example two Liftoff profiles) now sync together. Before, the second write put the first profile back to its old rates.
