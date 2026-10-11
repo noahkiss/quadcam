@@ -24,7 +24,8 @@ const lastEdit = async (app: AppFixture) => (await app.method("gear_model_edit")
 
 test("a radio that is not plugged in reads its models from the latest backup", async ({ app, page }) => {
   await openSegment(app, page, "Models");
-  await expect(page.getByText(/Read from the backup/)).toBeVisible();
+  await expect(page.getByText(/^From backup · /)).toBeVisible();
+  await expect(page.getByText(/radio-1f2e/)).toHaveCount(0);
   const picker = page.getByRole("combobox", { name: "Model" });
   await expect(picker).toHaveValue("model01.yml");
   await expect(picker.locator("option")).toHaveText(["ALPHA", "BRAVO 2 (selected on the radio)"]);

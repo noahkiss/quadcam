@@ -5,6 +5,8 @@ import { useState } from "react";
 import { Banner } from "../../../components/Banner";
 import { Button } from "../../../components/Button";
 import { Checkbox, Input } from "../../../components/Field";
+import { EmptyState } from "../../../components/dash/EmptyState";
+import { SectionCard } from "../../../components/dash/SectionCard";
 import { checklistText, overWidth, parseChecklist, type CheckItem } from "../../../lib/models";
 import type { DeviceRef } from "../slots";
 import { ModelPicker } from "./ModelPicker";
@@ -38,7 +40,7 @@ export function ChecklistSegment({ d }: { d: DeviceRef }) {
   };
   return (
     <div className={styles.segment}>
-      {!device && <p className={styles.muted}>Save this radio from Overview to edit its checklists.</p>}
+      {!device && <EmptyState icon="info">Save this radio from Overview to edit its checklists.</EmptyState>}
       <StagedBar device={device} />
       {m.error && (
         <Banner kind="error" icon="danger-triangle">
@@ -48,8 +50,7 @@ export function ChecklistSegment({ d }: { d: DeviceRef }) {
       {detail && (
         <>
           <ModelPicker detail={detail} file={m.file} pick={m.pick} />
-          <section className={styles.section} aria-label="Checklist">
-            <h3>Checklist</h3>
+          <SectionCard title="Checklist">
             <Checkbox label="Show the checklist when the model loads" checked={detail.view.checklist} onChange={(e) => m.stage([{ op: "set_checklist", enabled: e.target.checked }])} />
             <ul className={styles.items} aria-label="Checklist items">
               {items.map((it, i) => {
@@ -69,7 +70,7 @@ export function ChecklistSegment({ d }: { d: DeviceRef }) {
                 );
               })}
             </ul>
-            {items.length === 0 && <p className={styles.muted}>This model has no checklist items.</p>}
+            {items.length === 0 && <EmptyState icon="list">This model has no checklist items.</EmptyState>}
             {over > 0 && (
               <p className={styles.error} role="alert">
                 {over === 1 ? "One item is" : `${over} items are`} over {width} characters, the width of the radio's screen.
@@ -83,7 +84,7 @@ export function ChecklistSegment({ d }: { d: DeviceRef }) {
                 Stage checklist
               </Button>
             </div>
-          </section>
+          </SectionCard>
         </>
       )}
     </div>

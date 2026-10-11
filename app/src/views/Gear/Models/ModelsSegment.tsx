@@ -2,6 +2,7 @@
 // callouts of one model. Each change stages through `gear_model_edit` into the radio's one
 // "Model edits" change; nothing reaches the card until the apply sheet writes it.
 import { Banner } from "../../../components/Banner";
+import { EmptyState } from "../../../components/dash/EmptyState";
 import type { DeviceRef } from "../slots";
 import { CalloutsEditor } from "./CalloutsEditor";
 import { LoggingEditor } from "./LoggingEditor";
@@ -17,7 +18,7 @@ export function ModelsSegment({ d }: { d: DeviceRef }) {
   const m = useModel(device);
   return (
     <div className={styles.segment}>
-      {!device && <p className={styles.muted}>Save this radio from Overview to edit its models.</p>}
+      {!device && <EmptyState icon="info">Save this radio from Overview to edit its models.</EmptyState>}
       <StagedBar device={device} />
       {m.error && (
         <Banner kind="error" icon="danger-triangle">
