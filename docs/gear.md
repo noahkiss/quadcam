@@ -144,6 +144,9 @@ FC is on USB with a battery in (more than 1 V on its battery lead), QuadCam coun
 At the limit it says "Unplug <FC> now." once, and the device shows the time left. The limit is
 the `gear_usb_minutes` setting (20), or the board's own limit when it is shorter (10 minutes for
 the boards above). `gear_usb_minutes` 0 turns the timer off. Pulling the battery resets it.
+The timer follows the FC, not one detection poll: it keeps counting while the port drops out for a
+reboot after a job, for USB disk mode or for a flash. It ends once the port has been gone for a
+minute, or for 15 minutes while a DFU device is attached (an FC in its bootloader).
 
 ## Blackbox
 

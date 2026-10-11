@@ -5,6 +5,8 @@ User-facing changes in each release, newest first. Release notes on
 
 ## Unreleased
 
+- **USB timer.** The FC's USB heat timer keeps counting while the port drops out for a reboot, USB disk mode or a flash. Before, every job that rebooted the FC started it again at zero.
+
 ## 0.11.0 (2026-10-10)
 
 - **Blackbox.** The FC page has a Blackbox segment. QuadCam reads the flight controller's blackbox flash over MSP, or from its USB disk, and keeps each pull as a record. It pairs logs with flights by order. Erasing the flash needs a confirmation. CLI and MCP have matching actions.
