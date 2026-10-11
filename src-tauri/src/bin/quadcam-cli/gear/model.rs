@@ -381,6 +381,22 @@ mod tests {
             }
         );
         assert_eq!(
+            ops[4],
+            ModelOp::SetSensorLogs {
+                sensors: vec![SensorLog {
+                    label: "RxBt".into(),
+                    logs: false
+                }]
+            }
+        );
+        assert_eq!(
+            ops[5],
+            ModelOp::SetRfAlarms {
+                warning: 50,
+                critical: 40
+            }
+        );
+        assert_eq!(
             ops[6],
             ModelOp::SetCallout {
                 callout: CalloutDef {
@@ -391,6 +407,16 @@ mod tests {
                         delay_ds: 20
                     },
                     repeat: Some("5".into())
+                }
+            }
+        );
+        assert_eq!(
+            ops[7],
+            ModelOp::SetCallout {
+                callout: CalloutDef {
+                    track: "armed".into(),
+                    when: CalloutWhen::Switch { swtch: "L1".into() },
+                    repeat: Some("!1x".into())
                 }
             }
         );

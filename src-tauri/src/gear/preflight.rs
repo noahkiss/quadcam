@@ -356,9 +356,11 @@ mod tests {
             now: now(),
             ..Default::default()
         });
-        let states: Vec<RowState> = p.rows.iter().map(|r| r.state).collect();
-        use RowState::*;
-        assert_eq!(states, vec![Unknown, Unknown, Unknown, Unknown, Pass]);
+        let state = |id: &str| p.rows.iter().find(|r| r.id == id).unwrap().state;
+        for id in ["packs", "radio", "cards_space", "backups"] {
+            assert_eq!(state(id), RowState::Unknown, "{id}");
+        }
+        assert_eq!(state("cards_in"), RowState::Pass);
     }
 
     #[test]
@@ -459,6 +461,7 @@ mod tests {
             now: now(),
             ..Default::default()
         });
-        assert_eq!(p.rows[1].detail, "Live: model B selected (B).");
+        let radio = p.rows.iter().find(|r| r.id == "radio").unwrap();
+        assert_eq!(radio.detail, "Live: model B selected (B).");
     }
 }

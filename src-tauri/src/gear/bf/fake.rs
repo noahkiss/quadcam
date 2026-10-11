@@ -913,8 +913,10 @@ mod tests {
         assert!(d.text.starts_with("# version"), "{}", &d.text[..40]);
     }
 
+    /// A fidelity test of the fake: `FakeFc`'s `diff all`, `get` and `exit` act as a
+    /// Betaflight FC does, so the tests that drive it see real answers.
     #[test]
-    fn diff_all_shows_only_changed_values_and_get_reads() {
+    fn the_fake_fc_diffs_only_changed_values_and_answers_get() {
         let fc = FakeFc::new(DUMP);
         let ports = fc.ports(PORT, None);
         let (mut s, _) =
