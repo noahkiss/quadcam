@@ -802,6 +802,14 @@ fn timeouts_report_a_stuck_disk_instead_of_hanging() {
     })
     .unwrap_err();
     assert!(format!("{e}").contains("writing X"));
+    // The error can wait for the thread it left running, and does not tell the person to
+    // leave the card alone: the caller decides what comes next.
+    let s = e.downcast_ref::<card::Stuck>().expect("a Stuck error");
+    assert!(!format!("{e}").contains("do not pull"), "{e}");
+    assert!(
+        s.wait(std::time::Duration::from_secs(10)),
+        "the thread ended"
+    );
     assert!(card::run_with_timeout(
         std::process::Command::new("/bin/echo").arg("ok"),
         "echo",
@@ -1156,4 +1164,147 @@ fn the_mcp_card_actions_read_and_preview() {
     );
     let text = r["content"][0]["text"].as_str().unwrap();
     assert!(text.contains("REFUSED"), "{text}");
+}
+
+#[test]
+fn a_write_past_its_timeout_reports_stuck_and_can_be_waited_for() {
+    let dir = tempfile::tempdir().unwrap();
+    let c = card_at(dir.path(), &SynthCard::default());
+    let plan = c
+        .plan(
+            &[model_edit(vec![ModelOp::SetChecklist { enabled: true }])],
+            None,
+        )
+        .unwrap();
+    let mut opts = WriteOptions::reader();
+    opts.base_timeout = std::time::Duration::from_millis(100);
+    opts.floor_bytes_per_s = u64::MAX;
+    opts.stall = Some((
+        "MODELS/model00.yml".into(),
+        std::time::Duration::from_millis(600),
+    ));
+    let e = card::write(dir.path(), &plan, &opts, &mut |_, _| Ok(()), &mut |_| {}).unwrap_err();
+    let s = e.downcast_ref::<card::Stuck>().expect("a Stuck error");
+    // The write goes on after the timeout: the file is not new yet, then it is.
+    assert!(s.wait(std::time::Duration::from_secs(20)));
+    let f = plan
+        .files
+        .iter()
+        .find(|f| f.path == "MODELS/model00.yml")
+        .unwrap();
+    assert_eq!(
+        std::fs::read(dir.path().join(&f.path)).ok(),
+        f.after,
+        "the late write landed"
+    );
+    // No file after the stuck one was started.
+    assert!(!dir.path().join(".metadata_never_index").exists());
+}
+
+#[test]
+fn the_writer_refuses_a_path_outside_the_card() {
+    for p in [
+        "MODELS/model00.yml",
+        "RADIO/radio.yml",
+        ".metadata_never_index",
+        "SOUNDS/en/a b.wav",
+    ] {
+        assert!(card::inside_card(p), "{p}");
+    }
+    for p in [
+        "",
+        "/tmp/x.txt",
+        "../x.txt",
+        "MODELS/../../x.txt",
+        "MODELS/./x",
+        "MODELS//x",
+        "MODELS\\..\\x",
+    ] {
+        assert!(!card::inside_card(p), "{p}");
+    }
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path().join("CARD");
+    let c = card_at(&root, &SynthCard::default());
+    for bad in [
+        "../outside.txt",
+        "MODELS/../../outside.txt",
+        "/tmp/quadcam-outside.txt",
+    ] {
+        let mut plan = c
+            .plan(
+                &[model_edit(vec![ModelOp::SetChecklist { enabled: true }])],
+                None,
+            )
+            .unwrap();
+        plan.files.push(card::FileChange {
+            path: bad.into(),
+            before: None,
+            after: Some(b"x".to_vec()),
+        });
+        let before = std::fs::read(root.join("MODELS/model00.yml")).unwrap();
+        let e = card::write(
+            &root,
+            &plan,
+            &WriteOptions::reader(),
+            &mut |_, _| Ok(()),
+            &mut |_| {},
+        )
+        .unwrap_err();
+        assert_eq!(
+            e.downcast_ref::<quadcam_lib::gear::model::Refusal>()
+                .unwrap()
+                .code,
+            RefusalCode::ShapeUnknown
+        );
+        assert!(!dir.path().join("outside.txt").exists());
+        assert_eq!(
+            std::fs::read(root.join("MODELS/model00.yml")).unwrap(),
+            before,
+            "nothing was written"
+        );
+    }
+}
+
+#[test]
+fn a_model_name_that_leaves_models_is_refused() {
+    for bad in ["../../../tmp/x", "a/b", ".hidden", "x..y", "..", "a\\b"] {
+        assert!(
+            apply(Layout::Saved212, &[ModelOp::Rename { name: bad.into() }]).is_err(),
+            "{bad}"
+        );
+    }
+    assert!(apply(
+        Layout::Saved212,
+        &[ModelOp::Rename {
+            name: "ALPHA 2.1".into()
+        }]
+    )
+    .is_ok());
+    // A name already on the card that would escape: the checklist edit refuses.
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path().join("CARD");
+    let c = card_at(&root, &SynthCard::default());
+    std::fs::write(
+        root.join("MODELS/model00.yml"),
+        synth::model_yml("../../x", Layout::Saved212, "2.12.4", true),
+    )
+    .unwrap();
+    let plan = c
+        .plan(
+            &[Edit::Checklist {
+                model: "model00.yml".into(),
+                text: "=Props\n".into(),
+            }],
+            None,
+        )
+        .unwrap();
+    assert!(!plan.ready());
+    let why = plan
+        .checks
+        .iter()
+        .find_map(|k| k.refusal.as_ref())
+        .unwrap()
+        .to_string();
+    assert!(why.contains("outside MODELS/"), "{why}");
+    assert!(plan.files.iter().all(|f| card::inside_card(&f.path)));
 }

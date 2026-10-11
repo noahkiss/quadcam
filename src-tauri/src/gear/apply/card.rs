@@ -9,7 +9,9 @@
 
 use super::check;
 use crate::gear::blobs;
-use crate::gear::edgetx::card::{with_timeout, write_file_atomic, Card, CardPlan, WriteOptions};
+use crate::gear::edgetx::card::{
+    inside_card, with_timeout, write_file_atomic, Card, CardPlan, Stuck, WriteOptions,
+};
 use crate::gear::model::{
     ApplyPlan, Check, Connected, Edit, Identity, Refusal, RefusalCode, StagedChange,
 };
@@ -225,16 +227,33 @@ pub fn plan(
 pub struct RollBack {
     /// Files put back to their backed-up bytes (or removed, for a new file).
     pub restored: Vec<String>,
-    /// Files that could not be put back, with why.
+    /// Files that could not be put back, or that do not read back as they were, with why.
     pub failed: Vec<String>,
+    /// A put-back that ran past its timeout and was still running after `stuck_wait`: the
+    /// roll back stopped there and checked nothing.
+    pub still_writing: Option<String>,
+}
+
+impl RollBack {
+    /// Every file reads back as it was before the plan.
+    pub fn as_it_was(&self) -> bool {
+        self.failed.is_empty() && self.still_writing.is_none()
+    }
 }
 
 /// Puts every file of the plan back to the bytes it had before (design 8.4): after a
 /// read-back mismatch, or a write that stopped on an error. A file that already reads as it
-/// did is left alone. Each write runs under the engine's timeouts.
+/// did is left alone. Each write runs under the engine's timeouts. A put-back that runs past
+/// its timeout is waited for (`stuck_wait`) before the next file. At the end every file is
+/// read again: one that does not read as it was is in `failed`.
 pub fn roll_back(root: &Path, plan: &CardPlan, opts: &WriteOptions) -> RollBack {
     let mut out = RollBack::default();
     for f in plan.files.iter().rev() {
+        if !inside_card(&f.path) {
+            out.failed
+                .push(format!("{}: not a file path inside the card", f.path));
+            continue;
+        }
         let path = root.join(&f.path);
         let now = std::fs::read(&path).ok();
         if now == f.before {
@@ -270,7 +289,32 @@ pub fn roll_back(root: &Path, plan: &CardPlan, opts: &WriteOptions) -> RollBack 
         };
         match res {
             Ok(()) => out.restored.push(f.path.clone()),
-            Err(e) => out.failed.push(format!("{}: {e:#}", f.path)),
+            Err(e) => match e.downcast_ref::<Stuck>() {
+                // It ended: the read below says whether the file is back.
+                Some(s) if s.wait(opts.stuck_wait) => {}
+                Some(_) => {
+                    out.still_writing = Some(format!("{}: {e:#}", f.path));
+                    return out;
+                }
+                None => out.failed.push(format!("{}: {e:#}", f.path)),
+            },
+        }
+    }
+    for f in &plan.files {
+        if !inside_card(&f.path)
+            || out
+                .failed
+                .iter()
+                .any(|x| x.starts_with(&format!("{}: ", f.path)))
+        {
+            continue;
+        }
+        match std::fs::read(root.join(&f.path)) {
+            Ok(b) if f.before.as_ref() == Some(&b) => {}
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound && f.before.is_none() => {}
+            Ok(_) | Err(_) => out
+                .failed
+                .push(format!("{}: does not read back as it was", f.path)),
         }
     }
     out

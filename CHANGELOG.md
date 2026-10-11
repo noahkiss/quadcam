@@ -9,6 +9,12 @@ User-facing changes in each release, newest first. Release notes on
 - **Voice studio: re-takes.** A cut that fails a check (silent, too short, too long) no longer goes into the pack or onto the radio. The result lists it as needing a re-take, and **Re-take** renders again with a new seed, paying only for the batches that hold one. MCP takes `seed`.
 - **Voice studio: no bad take kept.** A batch whose timestamps do not match its text is not cached, so the next render asks again instead of failing from the cache. A paid request is no longer retried after a server error, which may already be billed.
 
+- **Safer card writes.** A card write that macOS does not finish in time is now waited for before QuadCam puts files back; if it is still running, QuadCam leaves the card mounted and names the backup to restore. "The card is as it was" now shows only after every file read back as before.
+- **Model names and card paths.** A model name with `/`, `..` or a leading `.` is refused, since its checklist file is named after it. The card writer refuses any path outside the card.
+- **Mount kept.** An apply that refuses no longer unmounts a card you mounted with **Mount**.
+- **Clean ._ files** deletes only on a detected card or an EdgeTX card folder.
+- **Firmware copies** made in the same second no longer replace each other.
+
 ## 0.11.0 (2026-10-10)
 
 - **Blackbox.** The FC page has a Blackbox segment. QuadCam reads the flight controller's blackbox flash over MSP, or from its USB disk, and keeps each pull as a record. It pairs logs with flights by order. Erasing the flash needs a confirmation. CLI and MCP have matching actions.

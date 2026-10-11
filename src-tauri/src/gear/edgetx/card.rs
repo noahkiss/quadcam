@@ -18,13 +18,13 @@ use super::model::{self as em, ModelOp};
 use super::yaml::{latin1, to_latin1, unquote, Doc};
 use crate::gear::compat::{self, Product};
 use crate::gear::model::{Check, DiffItem, DiffLine, Edit, Identity, LineOp, Refusal, RefusalCode};
-use anyhow::{anyhow, bail, Context, Result};
+use anyhow::{bail, Context, Result};
 use serde::{Deserialize, Serialize};
 use specta::Type;
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::Arc;
+use std::sync::{Arc, Condvar, Mutex};
 use std::time::{Duration, Instant};
 
 /// `RADIO/radio.yml`.
@@ -737,6 +737,11 @@ impl Work<'_> {
         let name = em::model_name(d)?
             .filter(|n| !n.is_empty())
             .ok_or_else(|| bad(format!("{f} has no name; a checklist is named after it.")))?;
+        if !em::name_is_a_file_name(&name) {
+            return Err(bad(format!(
+                "{f} is named {name:?}, which would put its checklist outside MODELS/; rename the model first."
+            )));
+        }
         let width = checklist_width(self.board.as_deref());
         let mut body = String::new();
         for line in text.lines() {
@@ -940,6 +945,11 @@ pub struct WriteOptions {
     pub stop: Arc<AtomicBool>,
     /// Tests: this path's read-back counts as a mismatch, as a bad card would give.
     pub fail_readback: Option<String>,
+    /// How long a failed apply waits for a write that ran past its timeout to end. Files
+    /// are put back only after it ended.
+    pub stuck_wait: Duration,
+    /// Tests: writing this path first sleeps this long, as a radio that stops answering.
+    pub stall: Option<(String, Duration)>,
 }
 
 impl WriteOptions {
@@ -951,6 +961,8 @@ impl WriteOptions {
             bytes_per_s: 10_000_000,
             stop: Arc::new(AtomicBool::new(false)),
             fail_readback: None,
+            stuck_wait: Duration::from_secs(60),
+            stall: None,
         }
     }
 
@@ -962,6 +974,8 @@ impl WriteOptions {
             bytes_per_s: 300_000,
             stop: Arc::new(AtomicBool::new(false)),
             fail_readback: None,
+            stuck_wait: Duration::from_secs(120),
+            stall: None,
         }
     }
 
@@ -1003,21 +1017,87 @@ pub fn stuck_message(what: &str, after: Duration) -> String {
     )
 }
 
+/// A file operation that ran past its timeout. Its thread is still running: nothing may
+/// touch the same files until `wait` says it ended.
+#[derive(Debug, Clone)]
+pub struct Stuck {
+    pub what: String,
+    pub after: Duration,
+    done: Arc<(Mutex<bool>, Condvar)>,
+}
+
+impl Stuck {
+    /// Waits at most `timeout` for the thread to end. True when it has ended.
+    pub fn wait(&self, timeout: Duration) -> bool {
+        let (m, cv) = &*self.done;
+        let g = m.lock().unwrap_or_else(|e| e.into_inner());
+        let (g, _) = cv
+            .wait_timeout_while(g, timeout, |done| !*done)
+            .unwrap_or_else(|e| e.into_inner());
+        *g
+    }
+}
+
+impl std::fmt::Display for Stuck {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "macOS did not finish {} within {} s.",
+            self.what,
+            self.after.as_secs()
+        )
+    }
+}
+
+impl std::error::Error for Stuck {}
+
+/// Sets the done flag when the thread ends, a panic included.
+struct Ended(Arc<(Mutex<bool>, Condvar)>);
+
+impl Drop for Ended {
+    fn drop(&mut self) {
+        let (m, cv) = &*self.0;
+        *m.lock().unwrap_or_else(|e| e.into_inner()) = true;
+        cv.notify_all();
+    }
+}
+
 /// Runs `f` on its own thread and waits at most `timeout`. On a timeout the thread is
-/// left to finish (a write is never stopped mid-file) and the error says so.
+/// left to finish (a write is never stopped mid-file) and the error is a `Stuck`, which
+/// can wait for it.
 pub fn with_timeout<T: Send + 'static>(
     timeout: Duration,
     what: &str,
     f: impl FnOnce() -> Result<T> + Send + 'static,
 ) -> Result<T> {
+    let done = Arc::new((Mutex::new(false), Condvar::new()));
     let (tx, rx) = std::sync::mpsc::channel();
+    let ended = Ended(done.clone());
     std::thread::spawn(move || {
+        let _ended = ended;
         let _ = tx.send(f());
     });
     match rx.recv_timeout(timeout) {
         Ok(r) => r,
-        Err(_) => Err(anyhow!(stuck_message(what, timeout))),
+        Err(_) => Err(anyhow::Error::new(Stuck {
+            what: what.to_string(),
+            after: timeout,
+            done,
+        })),
     }
+}
+
+/// True when `rel` is a path inside the card: relative, and every part a plain name (no
+/// `..`, `.`, empty part or backslash).
+pub fn inside_card(rel: &str) -> bool {
+    !rel.is_empty()
+        && !rel.contains('\\')
+        && rel
+            .split('/')
+            .all(|c| !c.is_empty() && c != "." && c != "..")
+        && Path::new(rel)
+            .components()
+            .all(|c| matches!(c, std::path::Component::Normal(_)))
 }
 
 /// True when this process may write card files at `root`. A process started by cargo
@@ -1049,9 +1129,12 @@ fn full_fsync(f: &std::fs::File) -> std::io::Result<()> {
 }
 
 /// Writes one file: a temporary name beside it, the bytes, a full sync, a rename, a
-/// sync of the folder, then a read-back. True when the bytes read back equal.
+/// sync of the folder, then a read-back. True when the bytes read back equal. Each call
+/// has its own temporary name, so a write that ran past its timeout never shares one with
+/// the next write of the same file.
 pub fn write_file_atomic(path: &Path, bytes: &[u8]) -> Result<bool> {
     use std::io::Write;
+    static CALLS: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
     let dir = path.parent().context("no parent folder")?;
     std::fs::create_dir_all(dir).with_context(|| format!("creating {}", dir.display()))?;
     let name = path
@@ -1059,7 +1142,12 @@ pub fn write_file_atomic(path: &Path, bytes: &[u8]) -> Result<bool> {
         .context("no file name")?
         .to_string_lossy()
         .to_string();
-    let tmp = dir.join(format!(".{name}.quadcam-tmp"));
+    let tmp_name = format!(
+        ".{name}.{}-{}.quadcam-tmp",
+        std::process::id(),
+        CALLS.fetch_add(1, Ordering::SeqCst)
+    );
+    let tmp = dir.join(&tmp_name);
     {
         let mut f =
             std::fs::File::create(&tmp).with_context(|| format!("creating {}", tmp.display()))?;
@@ -1068,7 +1156,7 @@ pub fn write_file_atomic(path: &Path, bytes: &[u8]) -> Result<bool> {
     }
     std::fs::rename(&tmp, path).with_context(|| format!("renaming onto {}", path.display()))?;
     remove_apple_double(dir, &name);
-    remove_apple_double(dir, &format!(".{name}.quadcam-tmp"));
+    remove_apple_double(dir, &tmp_name);
     if let Ok(d) = std::fs::File::open(dir) {
         let _ = d.sync_all();
     }
@@ -1191,6 +1279,15 @@ pub fn write(
             .map(|r| r.to_string())
             .unwrap_or_else(|| "Refused: the plan's checks did not pass.".into()));
     }
+    if let Some(f) = plan.files.iter().find(|f| !inside_card(&f.path)) {
+        return Err(anyhow::Error::new(Refusal::new(
+            RefusalCode::ShapeUnknown,
+            format!(
+                "{:?} is not a file path inside the card; nothing was written.",
+                f.path
+            ),
+        )));
+    }
     if !writes_allowed(
         root,
         std::env::var("QUADCAM_CARD_WRITE").ok().as_deref(),
@@ -1262,10 +1359,20 @@ pub fn write(
             }
             Some(bytes) => {
                 let (p, b) = (path.clone(), bytes.clone());
+                let stall = opts
+                    .stall
+                    .as_ref()
+                    .filter(|(s, _)| *s == f.path)
+                    .map(|(_, d)| *d);
                 let same = with_timeout(
                     opts.timeout_for(size),
                     &format!("writing {}", f.path),
-                    move || write_file_atomic(&p, &b),
+                    move || {
+                        if let Some(d) = stall {
+                            std::thread::sleep(d);
+                        }
+                        write_file_atomic(&p, &b)
+                    },
                 )? && opts.fail_readback.as_deref() != Some(f.path.as_str());
                 if !same {
                     let restore = match &f.before {
@@ -1279,6 +1386,13 @@ pub fn write(
                                 Ok(true) => "the backed-up bytes are back".to_string(),
                                 Ok(false) => {
                                     "restoring the backed-up bytes also read back wrong".into()
+                                }
+                                // Still running: the caller waits for it before anything else.
+                                Err(e) if e.downcast_ref::<Stuck>().is_some() => {
+                                    return Err(e.context(format!(
+                                        "{} read back different from what was written",
+                                        f.path
+                                    )));
                                 }
                                 Err(e) => format!("restoring failed: {e:#}"),
                             }
