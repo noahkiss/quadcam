@@ -131,12 +131,13 @@ impl Core {
             self.hooks.confirm_format(&p.plan)?;
         }
         let _b = self.claim()?;
-        let eject_error = disk::format_card(
+        let eject_error = disk::format_card_with(
             &p.card,
             &p.mount,
             &p.plan.label,
             &p.policy,
             disk::EraseBy::Prep,
+            &*self.gear.dji_usb,
             &|| self.check_all_in_library(&p.mount).map(|_| ()),
         )?;
         // A session read from this card can no longer format it.
@@ -169,7 +170,7 @@ impl Core {
         // What the card holds and is refuses first: a radio's card, a DJI device over USB,
         // then a source whose policy does not offer prep. A card with DJI folders (even
         // emptied) is prepared for DJI goggles; a card with no clips for an analog DVR.
-        disk::check_volume_contents(&mount, &info, crate::gear::events::dji_usb_attached())?;
+        disk::check_volume_contents(&mount, &info, (self.gear.dji_usb)())?;
         let source: &dyn sources::Source = match sources::detect(&mount) {
             Some(s) => s,
             None if sources::dji::looks_like_dji_volume(&mount) => &sources::dji::Dji,

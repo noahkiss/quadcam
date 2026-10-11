@@ -393,7 +393,7 @@ claude mcp add quadcam -- "$(brew --prefix)/bin/quadcam-cli" mcp
 - **DJI, two rules.** (a) Never format a DJI device over USB (an O4 air unit, goggles in
   storage mode): absolute. `check_volume_contents` refuses a DJI volume whose media name names
   DJI, or that is not a built-in-slot card while a DJI USB device is attached
-  (`gear::events::dji_usb_attached`, fails closed). (b) A removable DJI goggles card may be
+  (`gear::events::dji_usb_attached` through `Env.dji_usb`, fails closed). (b) A removable DJI goggles card may be
   erased by card prep only, as exFAT, behind the every-clip-in-the-library guard. A card that
   once held DJI clips (empty `DCIM/DJI_*` folders) is a goggles card under (b).
 - A source's `CardPolicy` says whether "Format card" (after an import, `format_offered`) and
