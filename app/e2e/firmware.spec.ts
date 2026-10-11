@@ -141,7 +141,7 @@ test("the splash segment previews a PNG, refuses a colour radio, and plans a fla
   await page.getByRole("button", { name: "Choose image…" }).click();
   // The radio is a TX16S: its splash is not supported yet.
   await expect(page.getByText("This radio's splash format is not supported yet (board tx16s).")).toBeVisible();
-  await expect(page.getByRole("button", { name: "Make firmware…" })).toBeDisabled();
+  await expect(page.getByRole("button", { name: "Flash with splash…" })).toBeDisabled();
 
   await makePocket(app, "2.12.4");
   await page.getByRole("group", { name: "Sections" }).getByRole("button", { name: "Overview" }).click();
@@ -153,7 +153,7 @@ test("the splash segment previews a PNG, refuses a colour radio, and plans a fla
   await page.getByLabel("Invert").check();
   await expect.poll(async () => (await app.method("gear_splash")).at(-1)).toMatchObject({ image: "/Users/me/Pictures/logo.png", threshold: 200, invert: true, board: "pocket" });
 
-  await page.getByRole("button", { name: "Make firmware…" }).click();
+  await page.getByRole("button", { name: "Flash with splash…" }).click();
   const sheet = page.getByRole("dialog", { name: "Flash Field radio" });
   await expect(sheet.getByRole("list", { name: "Checks" })).toContainText("Splash markers");
   await expect(sheet.getByRole("region", { name: "Changes" })).toContainText("Splash:");

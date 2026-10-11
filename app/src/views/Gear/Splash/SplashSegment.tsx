@@ -1,5 +1,5 @@
 // The radio's Splash segment (design 7.5): a PNG made into the radio's start-up picture,
-// 128 x 64 and one bit, with a threshold and Invert. Make firmware… opens the flash sheet
+// 128 x 64 and one bit, with a threshold and Invert. Flash with splash… opens the flash sheet
 // with the picture patched into the board's EdgeTX binary. Nothing is written until Apply.
 import { useEffect, useState } from "react";
 import { Banner } from "../../../components/Banner";
@@ -88,7 +88,7 @@ export function SplashSegment({ d }: { d: DeviceRef }) {
       )}
       <div className={styles.bar}>
         <Button variant="primary" disabled={!ready} onClick={() => device && image && void openFlash({ device, version: null, splash: { image, threshold, invert, board } })}>
-          Make firmware…
+          Flash with splash…
         </Button>
       </div>
     </section>

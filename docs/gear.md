@@ -1371,7 +1371,7 @@ passthrough is one of the things a real-device trial has to show.
    cuts it to two tones.
 2. **Threshold** sets how dark a pixel must be to count as dark. **Invert** swaps the tones.
    The preview shows the radio's pixels at 4 times the size.
-3. **Make firmware…** opens the flash sheet for the radio's installed version, with the
+3. **Flash with splash…** opens the flash sheet for the radio's installed version, with the
    picture put into the board's image.
 
 QuadCam finds the splash in the image by its markers: `SPS`, a zero byte, the width 128 and the

@@ -1252,7 +1252,7 @@ Flow on the Radio > Splash segment:
 1. Pick an image. The preview shows it at the radio's resolution and bit depth (128 × 64,
    1 bit for B&W radios) with a threshold slider and **Invert**, at 4× with nearest-neighbour
    scaling.
-2. **Make firmware…** opens the flash plan: the board, the EdgeTX version (default: the one
+2. **Flash with splash…** opens the flash plan: the board, the EdgeTX version (default: the one
    installed), the download, the patch.
 3. Patch: find the marker `SPS\0` followed by width 0x80 and height 0x40; the 1,024 bytes
    after it are the image (8 vertical pixels per byte, column-major per 8-row band, bit set =
