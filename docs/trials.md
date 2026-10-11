@@ -240,7 +240,8 @@ QuadCam has not tried on any real device. Do not select **Flash …** in this tr
 
 - **Settings > Gear > Preview > Show the ELRS tools** on, or **Show the ELRS tools** under
   **Firmware > ExpressLRS (preview)**. Every job refuses while it is off.
-- For the radio's internal module: a saved radio with its USB serial port set to **CLI**.
+- For the radio's internal module: a saved radio with its USB serial port set to **CLI**, and no
+  quad powered on that is linked to it. A read stops the radio's RF output at once.
 - For an FC's receiver: a saved FC whose serial receiver is CRSF, not inverted and not half duplex.
   Keep the battery out. If the receiver does not answer on USB power, put the battery in and
   watch the USB timer.
@@ -283,6 +284,9 @@ CLI: `quadcam-cli --json gear elrs read <saved radio or FC>`.
 - A read fails on a radio: the USB serial port is not on **CLI**.
 - A read fails on an FC: the serial receiver is not CRSF, or is inverted or half duplex. QuadCam
   names the check.
+- A read refuses an FC it cannot identify over MSP: unplug the FC and plug it in again.
+- The apply refuses because a list of values changed: the device's firmware lists them another
+  way now. Read again.
 - The apply refuses: an option moved since your read. Read again.
 - A device stuck in passthrough: restart the radio, or unplug the FC.
 - Report: the host (radio or FC) and its model, the ELRS target and version the read showed, the
