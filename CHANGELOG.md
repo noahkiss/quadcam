@@ -5,6 +5,8 @@ User-facing changes in each release, newest first. Release notes on
 
 ## Unreleased
 
+- **Restart to update in Settings.** When a newer version is known, Settings > Advanced shows **Restart to update** (download with progress, signature check, install, restart) and the release notes link beside **Check now**, as the banner does. It waits while a job runs, as the banner does.
+
 ## 0.17.0 (2026-10-11)
 
 - **QuadCam Voices.** Voice packs now have a home: [noahkiss/quadcam-voices](https://github.com/noahkiss/quadcam-voices), with a site at <https://noahkiss.github.io/quadcam-voices/> that lists each pack and plays a few of its lines in the browser. The `voice_index` setting reads its index by default; an empty setting turns it off. Packs download from the repo's releases, still checked against the index's hash.
