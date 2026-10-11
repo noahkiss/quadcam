@@ -215,6 +215,9 @@ struct StudioPlan {
     batches: Vec<Batch>,
     /// Batches the pack keeps whole.
     kept: u32,
+    /// The cache keys of the batches still to make (`batch::priced`): what the estimate
+    /// prices, what the confirm digest names, and the only batches the render may send.
+    priced: Vec<String>,
 }
 
 impl StudioPlan {
@@ -250,10 +253,16 @@ impl StudioPlan {
                 !whole
             });
         }
+        let priced = batches
+            .iter()
+            .filter(|b| !s.cached(b))
+            .map(|b| s.key(b))
+            .collect();
         StudioPlan {
             reuse,
             batches,
             kept,
+            priced,
         }
     }
 
@@ -263,7 +272,7 @@ impl StudioPlan {
         let billed: HashSet<&str> = self
             .batches
             .iter()
-            .filter(|b| !s.cached(b))
+            .filter(|b| self.priced.contains(&s.key(b)))
             .flat_map(|b| b.items.iter().map(|(i, _)| i.spoken.as_str()))
             .collect();
         let retake: HashSet<&str> = self
@@ -285,8 +294,10 @@ impl StudioPlan {
         (done, again, todo)
     }
 
-    /// Makes the batches, cuts the reused lines from their takes, and records both in the
-    /// line index. A failed index write is a note, not an error: the takes are paid for.
+    /// Cuts the reused lines from their takes, makes the batches the estimate priced, and
+    /// records both in the line index. The reused lines go first, as they cost nothing: a
+    /// take that no longer cuts is removed before anything is sent. A failed index write is
+    /// a note, not an error: the takes are paid for.
     fn render(
         &self,
         ctx: &batch::Ctx<'_>,
@@ -294,9 +305,34 @@ impl StudioPlan {
         notes: &mut Vec<String>,
     ) -> Result<(batch::Rendered, Vec<Batch>)> {
         let s = Scope::of(ctx);
-        let mut done = batch::render_all(ctx, &self.batches, bs.snap_ms, &mut |_, _| {})?;
+        let mut from_takes = batch::Rendered::default();
+        let reused = match reuse::cut_reused(&s, &self.reuse, bs.snap_ms, &mut from_takes) {
+            Ok(r) => r,
+            Err(e) => {
+                // Drops the removed takes from the index.
+                let _ = LineIndex::record(&s, Vec::new());
+                return Err(e);
+            }
+        };
+        let mut done =
+            match batch::render_all(ctx, &self.batches, bs.snap_ms, &self.priced, &mut |_, _| {}) {
+                Ok(d) => d,
+                Err(e) => {
+                    // The batches made before the error are paid for: index them, unchecked
+                    // (cut 0), so a later plan reuses their lines instead of sending them again.
+                    let made = reuse::entries(&s, &self.batches, bs, &Default::default())
+                        .into_iter()
+                        .map(|e| reuse::Entry { cut: 0, ..e })
+                        .collect();
+                    let _ = LineIndex::record(&s, made);
+                    return Err(e);
+                }
+            };
         let mut entries = reuse::entries(&s, &self.batches, bs, &done);
-        let reused = reuse::cut_reused(&s, &self.reuse, bs.snap_ms, &mut done)?;
+        done.cuts.extend(from_takes.cuts);
+        done.flagged.extend(from_takes.flagged);
+        done.warnings.extend(from_takes.warnings);
+        done.batches_cached += from_takes.batches_cached;
         // The reused takes whose lines all passed: the pack keeps them whole.
         let whole: Vec<Batch> = reused
             .iter()
@@ -711,7 +747,7 @@ impl Core {
                     total.credits_basis = "estimated".into();
                 }
                 priced.push(serde_json::json!({
-                    "voice": vid, "model": m, "to_render": to_render(&ctx, &plan.batches),
+                    "voice": vid, "model": m, "to_render": plan.priced,
                 }));
                 combos.push((vid.clone(), vname.clone(), m.clone(), plan));
             }
@@ -830,7 +866,7 @@ impl Core {
         let (_, _, paths_to_render) = plan.counts(&scope, &lines);
         let digest = plan_digest(&serde_json::json!({
             "kind": "render", "voice": voice, "model": model, "sets": p.sets, "lines": p.lines,
-            "settings": settings, "batch": bs, "to_render": to_render(&bctx, batches),
+            "settings": settings, "batch": bs, "to_render": plan.priced,
             "chars": est.chars, "credits": est.credits,
         }));
         let unique: std::collections::HashSet<&String> = lines.iter().map(|(_, s)| s).collect();
@@ -1108,15 +1144,6 @@ fn still_to_do(
         .collect();
     let kept = (n - todo.len()) as u32;
     (todo, kept)
-}
-
-/// The cache keys of the batches the provider would make: what a paid call pays for.
-fn to_render(ctx: &batch::Ctx<'_>, batches: &[Batch]) -> Vec<String> {
-    batches
-        .iter()
-        .filter(|b| !ctx.cached(b))
-        .map(|b| ctx.key(b))
-        .collect()
 }
 
 /// The digest a paid call's `confirm` repeats.

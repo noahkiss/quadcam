@@ -54,6 +54,18 @@ impl<'a> Scope<'a> {
         self.cache.has(self.provider, &self.key(b))
     }
 
+    /// The cache key of one line spoken alone (`BatchCache::alone_key`).
+    pub fn alone_key(&self, text: &str) -> String {
+        BatchCache::alone_key(
+            self.provider,
+            self.voice,
+            self.model,
+            self.settings.speed,
+            text,
+            self.settings.seed,
+        )
+    }
+
     fn path(&self) -> PathBuf {
         let who = serde_json::json!({
             "voice": self.voice, "model": self.model, "speed": format!("{:.4}", self.settings.speed),
@@ -265,13 +277,13 @@ impl LineIndex {
         }
     }
 
-    /// Adds or replaces these takes, and drops takes the cache no longer holds. Holds a lock
-    /// on the index while it reads and writes it.
+    /// Adds or replaces these takes, and drops takes the cache no longer holds (with no
+    /// entries, only that). Holds a lock on the index while it reads and writes it.
     pub fn record(s: &Scope, entries: Vec<Entry>) -> Result<()> {
-        if entries.is_empty() {
+        let path = s.path();
+        if entries.is_empty() && !path.is_file() {
             return Ok(());
         }
-        let path = s.path();
         let dir = path.parent().context("no index folder")?;
         std::fs::create_dir_all(dir)?;
         let lock = std::fs::File::options()
@@ -412,7 +424,9 @@ pub fn split(
 
 /// Cuts the reused lines out of their cached takes into `done`, as `batch::render_all` does
 /// for a batch: a flagged cut goes to `flagged`. Never calls the provider. Returns each take
-/// with the lines its checks flag now, for `LineIndex::record`.
+/// with the lines its checks flag now, for `LineIndex::record`. A take that cannot be read
+/// or does not cut is removed from the cache, as `batch::fetch` removes one, so the next
+/// estimate prices its lines; every take is tried before the first such error returns.
 pub fn cut_reused(
     s: &Scope,
     reuse: &Reuse,
@@ -420,36 +434,22 @@ pub fn cut_reused(
     done: &mut Rendered,
 ) -> Result<Vec<Entry>> {
     let mut out = Vec::new();
+    let mut failed: Vec<anyhow::Error> = Vec::new();
     for (e, want) in &reuse.takes {
         let b = e.batch();
-        let a = s.cache.get(s.provider, &e.key).with_context(|| {
-            format!(
-                "a cached take of {} lines went missing: estimate again",
-                b.items.len()
-            )
-        })?;
-        let cuts = if e.alone {
-            // The whole take is the line.
-            let secs = a.pcm.samples.len() as f64 / f64::from(a.pcm.rate.max(1));
-            b.items
-                .iter()
-                .map(|(i, _)| batch::Cut {
-                    spoken: i.spoken.clone(),
-                    pcm: a.pcm.clone(),
-                    from_s: 0.0,
-                    to_s: secs,
-                })
-                .collect()
-        } else {
-            batch::cut(&b, &a, snap_ms).with_context(|| {
-                format!(
-                    "the cached take of a batch of {} {} lines does not cut",
+        let cuts = match cut_take(s, e, &b, snap_ms) {
+            Ok(c) => c,
+            Err(err) => {
+                s.cache.remove(s.provider, &e.key);
+                failed.push(err.context(format!(
+                    "the cached take of {} {} lines could not be reused, so it was removed; a new estimate prices it again",
                     b.items.len(),
                     b.tone
-                )
-            })?
+                )));
+                continue;
+            }
         };
-        let flags = batch::check(&cuts);
+        let flags = batch::check(&cuts, !e.alone);
         for c in &cuts {
             for w in want.iter().filter(|w| w.take == c.spoken) {
                 match flags.iter().find(|f| f.spoken == c.spoken) {
@@ -470,7 +470,39 @@ pub fn cut_reused(
             ..e.clone()
         });
     }
+    let n = failed.len();
+    if let Some(first) = failed.into_iter().next() {
+        return Err(if n > 1 {
+            first.context(format!(
+                "{n} cached takes could not be reused and were removed"
+            ))
+        } else {
+            first
+        });
+    }
     Ok(out)
+}
+
+/// One cached take, read and cut.
+fn cut_take(s: &Scope, e: &Entry, b: &Batch, snap_ms: u32) -> Result<Vec<batch::Cut>> {
+    let a = s
+        .cache
+        .get(s.provider, &e.key)
+        .context("its files are missing or unreadable")?;
+    if !e.alone {
+        return batch::cut(b, &a, snap_ms);
+    }
+    // The whole take is the line.
+    let secs = a.pcm.samples.len() as f64 / f64::from(a.pcm.rate.max(1));
+    Ok(b.items
+        .iter()
+        .map(|(i, _)| batch::Cut {
+            spoken: i.spoken.clone(),
+            pcm: a.pcm.clone(),
+            from_s: 0.0,
+            to_s: secs,
+        })
+        .collect())
 }
 
 /// The index entries of batches `render_all` made or found, with the lines it flagged.
@@ -638,9 +670,23 @@ pub fn import_takes(
                 0..n,
             )],
         };
-        let key = s.key(&b);
+        let key = s.alone_key(&text);
+        // 0.14.0 keyed an import as a batch of its text, which a batch of one line under the
+        // carrier `{line}` shares. Such a take (no alignment) moves to the new key here.
+        let legacy = s.key(&b);
+        let legacy = cache
+            .get(provider, &legacy)
+            .filter(|a| a.alignment.characters.is_empty())
+            .map(|a| (legacy, a));
         if cache.has(provider, &key) {
             r.already += 1;
+        } else if let Some((_, a)) = &legacy {
+            r.already += 1;
+            if !dry_run {
+                cache.put(
+                    provider, &key, &t.voice, &t.model, t.speed, t.seed, &text, a,
+                )?;
+            }
         } else {
             r.imported += 1;
             if !dry_run {
@@ -663,6 +709,9 @@ pub fn import_takes(
                     provider, &key, &t.voice, &t.model, t.speed, t.seed, &text, &a,
                 )?;
             }
+        }
+        if let (Some((old, _)), false) = (&legacy, dry_run) {
+            cache.remove(provider, old);
         }
         let entry = Entry {
             key,
@@ -703,4 +752,71 @@ pub fn import_takes(
     }
     r.counts = rendered_counts(cache, provider);
     Ok(r)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::gear::voice::tts::Aligned;
+    use crate::gear::voice::wav::Pcm;
+
+    fn take(s: &Scope, text: &str) -> Entry {
+        let b = batch::plan(
+            &[Item {
+                spoken: text.into(),
+                tone: "calm".into(),
+            }],
+            &BatchSettings::default(),
+        )
+        .remove(0);
+        let a = Aligned {
+            pcm: Pcm {
+                rate: 32_000,
+                samples: vec![1000; 3200],
+            },
+            alignment: Default::default(),
+            billed_chars: None,
+        };
+        let e = Entry::new(s, &b, &BatchSettings::default(), &HashSet::new());
+        s.cache
+            .put(s.provider, &e.key, s.voice, s.model, 1.0, 0, &b.text, &a)
+            .unwrap();
+        e
+    }
+
+    fn keys(s: &Scope) -> Vec<String> {
+        LineIndex::load(s)
+            .batches
+            .into_iter()
+            .map(|e| e.key)
+            .collect()
+    }
+
+    #[test]
+    fn the_index_drops_takes_the_cache_lost() {
+        let dir = tempfile::tempdir().unwrap();
+        let cache = BatchCache::new(dir.path());
+        let settings = RenderSettings::default();
+        let s = Scope {
+            cache: &cache,
+            provider: "elevenlabs",
+            voice: "v",
+            model: "m",
+            settings: &settings,
+        };
+        // Nothing recorded and nothing to drop: no index file.
+        LineIndex::record(&s, Vec::new()).unwrap();
+        assert!(!s.path().exists());
+        let (a, b, c) = (take(&s, "Armed"), take(&s, "Disarmed"), take(&s, "Six"));
+        LineIndex::record(&s, vec![a.clone(), b.clone()]).unwrap();
+        assert_eq!(keys(&s), [a.key.clone(), b.key.clone()]);
+        // A take the cache lost is dropped at the next write.
+        cache.remove("elevenlabs", &a.key);
+        LineIndex::record(&s, vec![c.clone()]).unwrap();
+        assert_eq!(keys(&s), [b.key.clone(), c.key.clone()]);
+        // With nothing to add, a write only drops.
+        cache.remove("elevenlabs", &c.key);
+        LineIndex::record(&s, Vec::new()).unwrap();
+        assert_eq!(keys(&s), [b.key]);
+    }
 }
