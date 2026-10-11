@@ -7,6 +7,7 @@ User-facing changes in each release, newest first. Release notes on
 
 - **Sim sync:** two profiles in one sim file (for example two Liftoff profiles) now sync together. Before, the second write put the first profile back to its old rates.
 - **Sim sync plan:** the check "Rewrites unchanged" is now "Reads back as written", which is what it checked.
+- **Import card:** the unmount after an import, a later card step and **Safe to remove** find the card by its volume UUID first. If the card was pulled and another disk took its disk number, QuadCam leaves that disk alone.
 - **Surface guard:** a new MCP tool's required parameters no longer fail the 1.0 surface test, so the documented baseline update works. The guard now also checks the keys of object parameters (settings names under `values`, profile `fields`, cut and suggestion items) and fails when a value list narrows a parameter or flag that took any value.
 
 ## 0.11.0 (2026-10-10)

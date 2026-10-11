@@ -624,7 +624,9 @@ unmounted but still in, does its work, and unmounts it again:
 | Format and card prep | The erase unmounts the card. A refused erase unmounts it too |
 
 A card that is mounted already stays as it is for a plan, a view or a preview. A DJI device
-over USB (an air unit) is never unmounted this way. If an unmount fails, the sheet says so and
+over USB (an air unit) is never unmounted this way. For the import's card, QuadCam finds the
+card by its volume UUID each time and acts only when it is still on the same disk: if you pulled
+the card and another disk took its place, QuadCam mounts, unmounts and ejects nothing. If an unmount fails, the sheet says so and
 the cue is "failed". Lists such as Connected and the Pack up check never mount a card: they read
 what is mounted, or the latest backup.
 

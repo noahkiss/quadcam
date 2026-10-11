@@ -452,8 +452,14 @@ impl Core {
                     bail!("This session came from a folder; there is no card to eject.");
                 };
                 // By disk, not mount point: the end of an import may have unmounted the
-                // card already, and unmounting a disk again is harmless.
-                format!("/dev/{}", card.whole_disk)
+                // card already, and unmounting a disk again is harmless. Only the disk the
+                // card's volume UUID finds, and only when it is the saved one.
+                let Some(whole) = super::session_card::card_disk(card) else {
+                    bail!(
+                        "The session's card is not plugged in, or another disk took its place. Nothing was ejected."
+                    );
+                };
+                format!("/dev/{whole}")
             }
         };
         disk::safe_remove(&target)

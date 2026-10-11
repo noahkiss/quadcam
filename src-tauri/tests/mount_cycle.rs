@@ -176,6 +176,36 @@ fn an_import_unmounts_its_card_and_the_card_steps_mount_it_again() {
 }
 
 #[test]
+fn a_pulled_card_is_never_confused_with_the_disk_that_took_its_number() {
+    let img = Image::create("64m", "QCMC5", false);
+    std::fs::create_dir_all(img.mount.join("DCIM")).unwrap();
+    make_clip(&img.mount.join("DCIM/PICT0001.AVI"), 2, true);
+    let b = bench(&img);
+    b.core.load(Some(&img.mount)).unwrap();
+    assert!(b.core.import(&mp4()).unwrap().card.unwrap().released);
+
+    // The card is pulled; another disk attaches, often on the same disk number.
+    img.detach();
+    let other = Image::create("64m", "QCMC6", false);
+    assert_is_test_image(&other);
+    assert!(other.is_mounted());
+    b.log.lock().unwrap().clear();
+
+    // "Safe to remove" ejects nothing.
+    let e = b.core.eject(None).unwrap_err();
+    assert!(format!("{e:#}").contains("not plugged in"), "{e:#}");
+    // A card step does not mount the other disk, and its release unmounts nothing.
+    let e = b.core.format_plan(Some("QCMC5")).unwrap_err();
+    assert!(format!("{e:#}").contains("not plugged in"), "{e:#}");
+    assert!(
+        b.log.lock().unwrap().is_empty(),
+        "{:?}",
+        b.log.lock().unwrap()
+    );
+    assert!(other.is_mounted(), "the other disk stays mounted");
+}
+
+#[test]
 fn a_folder_import_has_no_card_to_release() {
     let img = Image::create("64m", "QCMC2", false);
     let b = bench(&img);
