@@ -282,6 +282,8 @@ mcp.param quadcam_library_edit.flag string
 mcp.param quadcam_library_edit.ids array<string>
 mcp.param quadcam_library_edit.keywords array<string>
 mcp.param quadcam_library_edit.location object
+mcp.param quadcam_library_edit.location.lat number
+mcp.param quadcam_library_edit.location.lon number
 mcp.param quadcam_library_edit.name string
 mcp.param quadcam_library_edit.note string
 mcp.param quadcam_library_edit.place string
@@ -292,6 +294,8 @@ mcp.param quadcam_library_files.action string
 mcp.param quadcam_library_files.album string
 mcp.param quadcam_library_files.apply boolean
 mcp.param quadcam_library_files.cuts array<object>
+mcp.param quadcam_library_files.cuts.end number
+mcp.param quadcam_library_files.cuts.start number
 mcp.param quadcam_library_files.day string
 mcp.param quadcam_library_files.export boolean
 mcp.param quadcam_library_files.ids array<string>
@@ -314,6 +318,14 @@ mcp.param quadcam_places.query string
 mcp.param quadcam_profiles.action string
 mcp.param quadcam_profiles.default boolean
 mcp.param quadcam_profiles.fields object
+mcp.param quadcam_profiles.fields.aircraft string
+mcp.param quadcam_profiles.fields.author string
+mcp.param quadcam_profiles.fields.camera_make string
+mcp.param quadcam_profiles.fields.camera_model string
+mcp.param quadcam_profiles.fields.edgetx_models array<string>
+mcp.param quadcam_profiles.fields.keywords array<string>
+mcp.param quadcam_profiles.fields.place string|null
+mcp.param quadcam_profiles.fields.video_system string
 mcp.param quadcam_profiles.name string
 mcp.param quadcam_profiles.new_name string
 mcp.param quadcam_read_clips.ids array<integer>
@@ -323,17 +335,82 @@ mcp.param quadcam_settings.action string
 mcp.param quadcam_settings.confirm boolean
 mcp.param quadcam_settings.module string
 mcp.param quadcam_settings.values object
+mcp.param quadcam_settings.values.add_time boolean|null
+mcp.param quadcam_settings.values.betaflight_flash_preview boolean|null
+mcp.param quadcam_settings.values.default_name string|null
+mcp.param quadcam_settings.values.default_profile string|null
+mcp.param quadcam_settings.values.delete_clips_after_import boolean|null
+mcp.param quadcam_settings.values.elrs_binding_phrase string|null
+mcp.param quadcam_settings.values.elrs_preview boolean|null
+mcp.param quadcam_settings.values.elrs_region string|null
+mcp.param quadcam_settings.values.elrs_wifi_interval integer|null
+mcp.param quadcam_settings.values.encoder string|null
+mcp.param quadcam_settings.values.ffmpeg_source string|null
+mcp.param quadcam_settings.values.firmware_check string|null
+mcp.param quadcam_settings.values.format string|null
+mcp.param quadcam_settings.values.format_label string|null
+mcp.param quadcam_settings.values.gear_auto_backup boolean|null
+mcp.param quadcam_settings.values.gear_blackbox_msc boolean|null
+mcp.param quadcam_settings.values.gear_cues object|null
+mcp.param quadcam_settings.values.gear_dir string|null
+mcp.param quadcam_settings.values.gear_erase_blackbox boolean|null
+mcp.param quadcam_settings.values.gear_keep_monthly boolean|null
+mcp.param quadcam_settings.values.gear_keep_recent integer|null
+mcp.param quadcam_settings.values.gear_keep_weeks integer|null
+mcp.param quadcam_settings.values.gear_on_connect object|null
+mcp.param quadcam_settings.values.gear_usb_minutes integer|null
+mcp.param quadcam_settings.values.geocoder string|null
+mcp.param quadcam_settings.values.google_places_key string|null
+mcp.param quadcam_settings.values.join_split_recordings boolean|null
+mcp.param quadcam_settings.values.keep_originals boolean|null
+mcp.param quadcam_settings.values.layout string|null
+mcp.param quadcam_settings.values.log_dir string|null
+mcp.param quadcam_settings.values.modules object|null
+mcp.param quadcam_settings.values.name_date_format string|null
+mcp.param quadcam_settings.values.output_dir string|null
+mcp.param quadcam_settings.values.photos_album string|null
+mcp.param quadcam_settings.values.place_folders boolean|null
+mcp.param quadcam_settings.values.sim_preview boolean|null
+mcp.param quadcam_settings.values.tts_base_url string|null
+mcp.param quadcam_settings.values.tts_key string|null
+mcp.param quadcam_settings.values.tts_model string|null
+mcp.param quadcam_settings.values.tts_provider string|null
+mcp.param quadcam_settings.values.tts_voice string|null
+mcp.param quadcam_settings.values.tunables object|null
+mcp.param quadcam_settings.values.voice_index string|null
 mcp.param quadcam_suggest.suggestions array<object>
+mcp.param quadcam_suggest.suggestions.author string
+mcp.param quadcam_suggest.suggestions.cuts array<object>
+mcp.param quadcam_suggest.suggestions.date string
+mcp.param quadcam_suggest.suggestions.id integer
+mcp.param quadcam_suggest.suggestions.joined boolean
+mcp.param quadcam_suggest.suggestions.keywords array<string>
+mcp.param quadcam_suggest.suggestions.location object
+mcp.param quadcam_suggest.suggestions.log_offset_s number
+mcp.param quadcam_suggest.suggestions.name string
+mcp.param quadcam_suggest.suggestions.note string
+mcp.param quadcam_suggest.suggestions.place string
+mcp.param quadcam_suggest.suggestions.profile string
+mcp.param quadcam_suggest.suggestions.reason string
+mcp.param quadcam_suggest.suggestions.removed_cuts string
+mcp.param quadcam_suggest.suggestions.skip boolean
+mcp.param quadcam_suggest.suggestions.split_by_flight boolean
+mcp.param quadcam_suggest.suggestions.time string
 mcp.param quadcam_verify.ids array<integer>
 mcp.required quadcam_gear.action
 mcp.required quadcam_gear_apply.action
 mcp.required quadcam_gear_edit.action
 mcp.required quadcam_library_edit.ids
+mcp.required quadcam_library_edit.location.lat
+mcp.required quadcam_library_edit.location.lon
 mcp.required quadcam_library_files.action
+mcp.required quadcam_library_files.cuts.end
+mcp.required quadcam_library_files.cuts.start
 mcp.required quadcam_places.action
 mcp.required quadcam_profiles.action
 mcp.required quadcam_settings.action
 mcp.required quadcam_suggest.suggestions
+mcp.required quadcam_suggest.suggestions.id
 mcp.tool quadcam_add_to_photos
 mcp.tool quadcam_eject
 mcp.tool quadcam_export
@@ -370,3 +447,32 @@ mcp.value quadcam_places.provider=apple
 mcp.value quadcam_places.provider=census
 mcp.value quadcam_places.provider=google
 mcp.value quadcam_places.provider=nominatim
+mcp.value quadcam_settings.values.elrs_region=FCC
+mcp.value quadcam_settings.values.elrs_region=LBT
+mcp.value quadcam_settings.values.elrs_region=null
+mcp.value quadcam_settings.values.encoder=null
+mcp.value quadcam_settings.values.encoder=videotoolbox
+mcp.value quadcam_settings.values.encoder=x264
+mcp.value quadcam_settings.values.ffmpeg_source=homebrew
+mcp.value quadcam_settings.values.ffmpeg_source=module
+mcp.value quadcam_settings.values.ffmpeg_source=null
+mcp.value quadcam_settings.values.firmware_check=daily
+mcp.value quadcam_settings.values.firmware_check=manual
+mcp.value quadcam_settings.values.firmware_check=null
+mcp.value quadcam_settings.values.format=mov
+mcp.value quadcam_settings.values.format=mp4
+mcp.value quadcam_settings.values.format=null
+mcp.value quadcam_settings.values.geocoder=apple
+mcp.value quadcam_settings.values.geocoder=census
+mcp.value quadcam_settings.values.geocoder=google
+mcp.value quadcam_settings.values.geocoder=nominatim
+mcp.value quadcam_settings.values.geocoder=null
+mcp.value quadcam_settings.values.layout=day
+mcp.value quadcam_settings.values.layout=flat
+mcp.value quadcam_settings.values.layout=null
+mcp.value quadcam_settings.values.layout=year_day
+mcp.value quadcam_settings.values.name_date_format=YY.MM.DD
+mcp.value quadcam_settings.values.name_date_format=YYYY-MM-DD
+mcp.value quadcam_settings.values.name_date_format=null
+mcp.value quadcam_suggest.suggestions.removed_cuts=keep
+mcp.value quadcam_suggest.suggestions.removed_cuts=trash

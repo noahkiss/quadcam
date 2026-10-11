@@ -173,7 +173,8 @@ fails, the pull stays stored, and the record says why.
 
 `gear_erase_blackbox` is off by default, like `delete_clips_after_import`. The CLI and the MCP tools
 only respect it: `--keep` (CLI) and `keep` (MCP) skip the erase for one run, and nothing turns it on
-except the setting. **Erase flash** (`gear blackbox erase --yes`, `blackbox_erase`) erases by hand.
+except the setting. MCP `blackbox_pull` needs `confirm=true`; CLI `gear blackbox pull` needs no
+`--yes`, so with the setting on it erases after a verified pull. **Erase flash** (`gear blackbox erase --yes`, `blackbox_erase`) erases by hand.
 It needs a stored pull of exactly what the flash holds (the same used size; flash only grows), and
 asks first in the app.
 
@@ -648,7 +649,9 @@ unmounted but still in, does its work, and unmounts it again:
 | Format and card prep | The erase unmounts the card. A refused erase unmounts it too |
 
 A card that is mounted already stays as it is for a plan, a view or a preview. A DJI device
-over USB (an air unit) is never unmounted this way. If an unmount fails, the sheet says so and
+over USB (an air unit) is never unmounted this way. For the import's card, QuadCam finds the
+card by its volume UUID each time and acts only when it is still on the same disk: if you pulled
+the card and another disk took its place, QuadCam mounts, unmounts and ejects nothing. If an unmount fails, the sheet says so and
 the cue is "failed". Lists such as Connected and the Pack up check never mount a card: they read
 what is mounted, or the latest backup.
 
@@ -850,8 +853,8 @@ create sim profiles.
 - **Sims:** Liftoff, Liftoff: Micro Drones (its file lives inside the game's app bundle),
   Uncrashed (one file per profile; the file name is the profile name) and The Zone.
 - **The plan** lists the checks, the values that change per file (old line out, new line in),
-  warnings and a digest. Checks: the game is not running, the file is understood, the file
-  rewrites unchanged byte for byte, and it is writable. **A sim that runs is never written**
+  warnings and a digest. Checks: the game is not running, the file is understood, the new
+  file reads back as written, and it is writable. **A sim that runs is never written**
   ("Quit Liftoff first."); the Sync button is off while it runs, and the check runs again
   right before the write.
 - **Warnings:** a quad on Actual or Quick is fitted to Betaflight first, with the largest gap;
@@ -861,7 +864,8 @@ create sim profiles.
 - **The write:** QuadCam backs up each file first (the gear folder, as device `sim-<id>`, always
   kept), writes it through a temporary file and a rename with the file's own permissions, reads it
   back and parses it. If one file fails, every file already written is put back. Only the values
-  that differ change; the rest of the file stays as it was.
+  that differ change; the rest of the file stays as it was. Two profiles in one file (two
+  Liftoff profiles, say) are one write that holds both.
 - **Throttle:** Uncrashed gets the quad's throttle mid and expo. A sim has no hover value, so
   the quad's `thr_hover` is not counted as a difference.
 

@@ -67,6 +67,9 @@ impl Item {
                 line == format!("mcp.required {tool}.{param}")
                     || line.starts_with(&format!("mcp.param {tool}.{param} "))
                     || line.starts_with(&format!("mcp.value {tool}.{param}="))
+                    || ["param", "value", "required"]
+                        .iter()
+                        .any(|k| line.starts_with(&format!("mcp.{k} {tool}.{param}.")))
             }
             Item::CliCommand(c) => {
                 line == format!("cli.command {c}")
@@ -207,36 +210,58 @@ pub fn annotate_tools(tools: &mut Value, table: &[Deprecation]) {
 // ----- the surface as lines -----
 
 /// The MCP surface as sorted lines: one per tool, `action` value and parameter (with its type
-/// and enum values), and one per required parameter.
+/// and enum values), and one per required parameter. An object parameter with `properties`
+/// (or an array of such objects) adds its keys one level down, as `tool.param.key`.
 pub fn mcp_surface(tools: &Value) -> BTreeSet<String> {
     let mut out = BTreeSet::new();
     for tool in tools.as_array().into_iter().flatten() {
         let name = tool["name"].as_str().unwrap_or("?");
         out.insert(format!("mcp.tool {name}"));
         let schema = &tool["inputSchema"];
-        for r in schema["required"].as_array().into_iter().flatten() {
-            out.insert(format!("mcp.required {name}.{}", r.as_str().unwrap_or("?")));
-        }
+        object_lines(&mut out, name, schema);
         let Some(props) = schema["properties"].as_object() else {
             continue;
         };
         for (p, v) in props {
-            out.insert(format!("mcp.param {name}.{p} {}", type_of(v)));
-            let values = v
-                .get("enum")
-                .or_else(|| v["items"].get("enum"))
-                .and_then(Value::as_array);
-            for e in values.into_iter().flatten() {
-                let e = e.as_str().map_or_else(|| e.to_string(), str::to_string);
-                if p == "action" {
-                    out.insert(format!("mcp.action {name}.{e}"));
-                } else {
-                    out.insert(format!("mcp.value {name}.{p}={e}"));
-                }
+            let inner = if v.get("properties").is_some() {
+                v
+            } else {
+                &v["items"]
+            };
+            if inner.get("properties").is_some() {
+                object_lines(&mut out, &format!("{name}.{p}"), inner);
             }
         }
     }
     out
+}
+
+/// The lines of one object schema's properties and required keys, under `prefix`.
+fn object_lines(out: &mut BTreeSet<String>, prefix: &str, schema: &Value) {
+    for r in schema["required"].as_array().into_iter().flatten() {
+        out.insert(format!(
+            "mcp.required {prefix}.{}",
+            r.as_str().unwrap_or("?")
+        ));
+    }
+    let Some(props) = schema["properties"].as_object() else {
+        return;
+    };
+    for (p, v) in props {
+        out.insert(format!("mcp.param {prefix}.{p} {}", type_of(v)));
+        let values = v
+            .get("enum")
+            .or_else(|| v["items"].get("enum"))
+            .and_then(Value::as_array);
+        for e in values.into_iter().flatten() {
+            let e = e.as_str().map_or_else(|| e.to_string(), str::to_string);
+            if p == "action" && !prefix.contains('.') {
+                out.insert(format!("mcp.action {prefix}.{e}"));
+            } else {
+                out.insert(format!("mcp.value {prefix}.{p}={e}"));
+            }
+        }
+    }
 }
 
 /// A property's type as one word: `string`, `array<string>`, `integer|null`, `any`.
@@ -291,13 +316,16 @@ pub struct Report {
     pub removed_allowed: Vec<String>,
     /// A parameter that became required: breaks callers, so it fails the guard.
     pub newly_required: Vec<String>,
+    /// A value list on a parameter or flag that took any value before: a narrowing that
+    /// breaks callers, so it fails the guard.
+    pub narrowed: Vec<String>,
     /// New items: allowed, but the baseline wants updating.
     pub added: Vec<String>,
 }
 
 impl Report {
     pub fn ok(&self) -> bool {
-        self.removed.is_empty() && self.newly_required.is_empty()
+        self.removed.is_empty() && self.newly_required.is_empty() && self.narrowed.is_empty()
     }
 }
 
@@ -328,13 +356,70 @@ pub fn check(
         }
     }
     for new in current.difference(base) {
-        if new.starts_with("mcp.required ") {
-            r.newly_required.push(new.clone());
+        if let Some(key) = new.strip_prefix("mcp.required ") {
+            if required_breaks(base, key) {
+                r.newly_required.push(new.clone());
+            } else {
+                r.added.push(new.clone());
+            }
+        } else if narrows(base, new) {
+            r.narrowed.push(new.clone());
         } else {
             r.added.push(new.clone());
         }
     }
     r
+}
+
+/// Whether a new required key (`tool.param` or `tool.param.key`) breaks a caller: only when
+/// the baseline knew what holds it. A new tool's required parameter, or a required key of a
+/// new object parameter, breaks no one. A baseline with no keys of a parameter predates the
+/// one-level guard, so its keys count as added.
+fn required_breaks(base: &BTreeSet<String>, key: &str) -> bool {
+    match key.split('.').collect::<Vec<_>>()[..] {
+        [tool, _] => base.contains(&format!("mcp.tool {tool}")),
+        [tool, param, _] => base
+            .iter()
+            .any(|l| l.starts_with(&format!("mcp.param {tool}.{param}."))),
+        _ => true,
+    }
+}
+
+/// Whether a new value line puts a value list on a parameter or flag the baseline has with
+/// no values: it took any value before, so the list narrows it.
+fn narrows(base: &BTreeSet<String>, line: &str) -> bool {
+    if let Some(rest) = line.strip_prefix("mcp.value ") {
+        let Some((key, _)) = rest.split_once('=') else {
+            return false;
+        };
+        let known = base
+            .iter()
+            .any(|l| l.starts_with(&format!("mcp.param {key} ")));
+        let had_values = base
+            .iter()
+            .any(|l| l.starts_with(&format!("mcp.value {key}=")));
+        return known && !had_values;
+    }
+    if let Some(rest) = line.strip_prefix("cli.value ") {
+        let Some((head, _)) = rest.split_once('=') else {
+            return false;
+        };
+        let Some((command, long)) = head.rsplit_once(' ') else {
+            return false;
+        };
+        let flag = format!("cli.flag {command} ");
+        let known = base.iter().any(|l| {
+            l.strip_prefix(&flag).is_some_and(|f| {
+                f.strip_suffix(" VALUE")
+                    .is_some_and(|f| f == long || f.ends_with(&format!(",{long}")))
+            })
+        });
+        let had_values = base
+            .iter()
+            .any(|l| l.starts_with(&format!("cli.value {command} {long}=")));
+        return known && !had_values;
+    }
+    false
 }
 
 #[cfg(test)]
@@ -398,6 +483,152 @@ mod tests {
         let r = check((1, &base), &now, 1, &[]);
         assert!(!r.ok());
         assert_eq!(r.newly_required, ["mcp.required quadcam_x.ids"]);
+    }
+
+    #[test]
+    fn a_new_tools_required_parameter_is_an_addition() {
+        let base = set(&["mcp.tool quadcam_x"]);
+        let now = set(&[
+            "mcp.tool quadcam_x",
+            "mcp.tool quadcam_y",
+            "mcp.required quadcam_y.action",
+        ]);
+        let r = check((1, &base), &now, 1, &[]);
+        assert!(r.ok(), "{r:?}");
+        assert_eq!(r.added.len(), 2);
+    }
+
+    #[test]
+    fn a_nested_key_that_becomes_required_fails_unless_its_object_is_new() {
+        let base = set(&[
+            "mcp.tool quadcam_x",
+            "mcp.param quadcam_x.values object",
+            "mcp.param quadcam_x.values.a string",
+        ]);
+        let mut now = base.clone();
+        now.insert("mcp.param quadcam_x.values.b string".into());
+        now.insert("mcp.required quadcam_x.values.b".into());
+        let r = check((1, &base), &now, 1, &[]);
+        assert_eq!(r.newly_required, ["mcp.required quadcam_x.values.b"]);
+
+        // A new object parameter with a required key breaks no caller.
+        let mut now = base.clone();
+        now.insert("mcp.param quadcam_x.where object".into());
+        now.insert("mcp.param quadcam_x.where.lat number".into());
+        now.insert("mcp.required quadcam_x.where.lat".into());
+        let r = check((1, &base), &now, 1, &[]);
+        assert!(r.ok(), "{r:?}");
+    }
+
+    #[test]
+    fn a_removed_nested_key_fails() {
+        let base = set(&[
+            "mcp.param quadcam_x.values object",
+            "mcp.param quadcam_x.values.elrs_wifi_interval integer|null",
+        ]);
+        let now = set(&[
+            "mcp.param quadcam_x.values object",
+            "mcp.param quadcam_x.values.wifi_interval integer|null",
+        ]);
+        let r = check((1, &base), &now, 1, &[]);
+        assert_eq!(
+            r.removed,
+            ["mcp.param quadcam_x.values.elrs_wifi_interval integer|null"]
+        );
+        // Deprecating the parameter covers its keys.
+        let dep = Deprecation {
+            item: Item::McpParam {
+                tool: "quadcam_x",
+                param: "values",
+            },
+            replacement: "x",
+            since: 1,
+        };
+        assert!(check((1, &base), &now, 2, &[dep]).ok());
+    }
+
+    #[test]
+    fn a_value_list_on_a_free_parameter_narrows_it() {
+        let base = set(&[
+            "mcp.param quadcam_x.label string",
+            "mcp.param quadcam_x.kind string",
+            "mcp.value quadcam_x.kind=a",
+        ]);
+        let mut now = base.clone();
+        now.insert("mcp.value quadcam_x.label=one".into());
+        now.insert("mcp.value quadcam_x.kind=b".into());
+        let r = check((1, &base), &now, 1, &[]);
+        assert_eq!(r.narrowed, ["mcp.value quadcam_x.label=one"]);
+        assert_eq!(r.added, ["mcp.value quadcam_x.kind=b"]);
+        assert!(!r.ok());
+
+        // A new parameter with values is an addition.
+        let now = set(&[
+            "mcp.param quadcam_x.label string",
+            "mcp.param quadcam_x.kind string",
+            "mcp.value quadcam_x.kind=a",
+            "mcp.param quadcam_x.mode string",
+            "mcp.value quadcam_x.mode=fast",
+        ]);
+        assert!(check((1, &base), &now, 1, &[]).ok());
+    }
+
+    #[test]
+    fn a_value_list_on_a_free_cli_flag_narrows_it() {
+        let base = set(&[
+            "cli.flag gear sims --to VALUE",
+            "cli.flag gear sims -p,--rate-profile VALUE",
+            "cli.flag cut --removed VALUE",
+            "cli.value cut --removed=keep",
+        ]);
+        let mut now = base.clone();
+        now.insert("cli.value gear sims --to=liftoff".into());
+        now.insert("cli.value gear sims --rate-profile=1".into());
+        now.insert("cli.value cut --removed=trash".into());
+        let r = check((1, &base), &now, 1, &[]);
+        assert_eq!(
+            r.narrowed,
+            [
+                "cli.value gear sims --rate-profile=1",
+                "cli.value gear sims --to=liftoff"
+            ]
+        );
+        assert_eq!(r.added, ["cli.value cut --removed=trash"]);
+    }
+
+    #[test]
+    fn the_mcp_surface_reads_object_parameters_one_level_down() {
+        let tools = json!([{
+            "name": "quadcam_x",
+            "inputSchema": {
+                "required": ["action"],
+                "properties": {
+                    "action": {"type": "string", "enum": ["read"]},
+                    "values": {"type": "object", "properties": {
+                        "mode": {"type": ["string", "null"], "enum": ["a", "b", null]},
+                        "deep": {"type": "object", "properties": {"z": {"type": "string"}}}
+                    }},
+                    "cuts": {"type": "array", "items": {"type": "object",
+                        "required": ["start"],
+                        "properties": {"start": {"type": "number"}}}}
+                }
+            }
+        }]);
+        let lines = mcp_surface(&tools);
+        for l in [
+            "mcp.action quadcam_x.read",
+            "mcp.required quadcam_x.action",
+            "mcp.param quadcam_x.values object",
+            "mcp.param quadcam_x.values.mode string|null",
+            "mcp.value quadcam_x.values.mode=a",
+            "mcp.param quadcam_x.values.deep object",
+            "mcp.param quadcam_x.cuts array<object>",
+            "mcp.param quadcam_x.cuts.start number",
+            "mcp.required quadcam_x.cuts.start",
+        ] {
+            assert!(lines.contains(l), "{l} in {lines:#?}");
+        }
+        assert!(!lines.iter().any(|l| l.contains("deep.z")));
     }
 
     #[test]

@@ -73,7 +73,8 @@ From 1.0 the tools are a contract. The schema version is 1. The server reports i
 - **Removals and renames need a schema version bump and a deprecation period.** This covers a tool, an `action` value, a parameter, an enum value, and a parameter that becomes required. QuadCam first marks the old item deprecated: it keeps working, the result carries a `deprecations` list and a warning line that names the replacement, and the tool description says so. A later schema version removes it.
 - **Meanings stay.** A parameter keeps its type and its meaning. A write that needed `confirm` or a plan's `digest` keeps needing it.
 - **Old names that were renamed before 1.0 still work.** `logs` (now `log_dir`) and `profile` (now `rate_profile`) on `quadcam_gear` and `quadcam_gear_apply` are accepted and not listed.
-- `tests/surface/mcp.txt` records every tool, `action` value and parameter. A test compares it with the live tool list, so a removal or a rename fails the build.
+- **Values only widen.** An enum value added to a parameter that already lists values is an addition. An enum on a parameter that took any value narrows it, and fails like a removal.
+- `tests/surface/mcp.txt` records every tool, `action` value and parameter, with its type, enum values and whether it is required. For an object parameter with listed keys (`values` of `quadcam_settings`, `fields` of `quadcam_profiles`, the items of `cuts` and `suggestions`) it records each key one level down the same way. A test compares it with the live tool list, so a removal, a rename, a narrowing or a newly required parameter or key fails the build. A required parameter of a new tool, or a required key of a new object parameter, is an addition.
 
 ## Suggestions in the app
 

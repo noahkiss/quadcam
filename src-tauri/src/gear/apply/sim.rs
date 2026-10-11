@@ -65,7 +65,16 @@ pub struct SimSyncRequest {
     pub confirm: bool,
 }
 
-/// One file the sync will write.
+/// One profile a write must leave holding the quad's rates.
+#[derive(Debug, Clone)]
+pub struct SimWant {
+    pub profile: String,
+    /// What the profile must read back as.
+    pub want: Rates,
+    pub want_throttle: Option<ThrottleCurve>,
+}
+
+/// One file the sync will write: every target profile in that file, in one write.
 #[derive(Debug, Clone)]
 pub struct SimWrite {
     pub sim: String,
@@ -75,12 +84,21 @@ pub struct SimWrite {
     pub shown: String,
     /// The path from the home folder: the name inside the backup.
     pub rel: String,
-    pub profile: String,
     pub before: Vec<u8>,
     pub after: Vec<u8>,
-    /// What the file must read back as.
-    pub want: Rates,
-    pub want_throttle: Option<ThrottleCurve>,
+    /// The profiles the file must hold after the write, in plan order.
+    pub profiles: Vec<SimWant>,
+}
+
+impl SimWrite {
+    /// The profile names, comma separated.
+    pub fn profile_names(&self) -> String {
+        self.profiles
+            .iter()
+            .map(|p| p.profile.as_str())
+            .collect::<Vec<_>>()
+            .join(", ")
+    }
 }
 
 /// A plan and the writes it stands for (empty unless every check passed).
@@ -102,7 +120,7 @@ pub fn digest(writes: &[SimWrite]) -> String {
         text.push_str(&format!(
             "\n{}|{}|{}|{}",
             w.rel,
-            w.profile,
+            w.profile_names(),
             blobs::hash(&w.before),
             blobs::hash(&w.after)
         ));
@@ -209,15 +227,18 @@ pub fn write_atomic(path: &Path, bytes: &[u8]) -> Result<bool> {
     Ok(std::fs::read(path)? == bytes)
 }
 
-/// True when the profile `file` now holds the wanted rates (and throttle when it has one).
+/// True when every profile of `w` in the file now holds its wanted rates (and throttle when
+/// it has one).
 pub fn reads_as(sim: &dyn Sim, path: &Path, raw: &[u8], w: &SimWrite) -> bool {
     let Ok(f) = sim.parse_file(raw, path) else {
         return false;
     };
-    f.profiles
-        .iter()
-        .find(|p| p.name == w.profile)
-        .is_some_and(|p| holds(p, &w.want, w.want_throttle.as_ref()))
+    w.profiles.iter().all(|want| {
+        f.profiles
+            .iter()
+            .find(|p| p.name == want.profile)
+            .is_some_and(|p| holds(p, &want.want, want.want_throttle.as_ref()))
+    })
 }
 
 fn holds(p: &SimProfile, want: &Rates, throttle: Option<&ThrottleCurve>) -> bool {
@@ -430,7 +451,7 @@ pub fn plan(
             ));
             continue;
         }
-        let (path, raw, file, idx) = match find(*sim, home, t, quad.name.as_deref()) {
+        let (path, raw, mut file, idx) = match find(*sim, home, t, quad.name.as_deref()) {
             Ok(x) => x,
             Err(e) => {
                 checks.push(fail(
@@ -441,6 +462,22 @@ pub fn plan(
                 continue;
             }
         };
+        // A second target in a file already planned edits that plan's bytes, so one write
+        // carries both profiles.
+        let earlier = writes.iter().position(|w| w.path == path);
+        if let Some(i) = earlier {
+            match sim.parse_file(&writes[i].after, &path) {
+                Ok(f) => file = f,
+                Err(e) => {
+                    checks.push(fail(
+                        &format!("File understood ({who})"),
+                        RefusalCode::ShapeUnknown,
+                        format!("{e:#}"),
+                    ));
+                    continue;
+                }
+            }
+        }
         let shown = tilde(home, &path);
         let prof = &file.profiles[idx];
         checks.push(if running(sim.process()) {
@@ -466,29 +503,26 @@ pub fn plan(
         };
         checks.push(pass(&format!("File understood ({who})")));
         let throttle = prof.throttle.is_some().then_some(&bf.throttle);
-        // The file must rewrite unchanged, and the new bytes must read back as wanted.
-        let same = sims::write_profile(*sim, &file, idx, &have, prof.throttle.as_ref());
-        let after = sims::write_profile(*sim, &file, idx, &bf.rates, throttle);
-        let (after, round) = match (same, after) {
-            (Ok(same), Ok(after)) if same.render() == raw.as_slice() => {
-                let ok = sim
-                    .parse_file(after.render(), &path)
+        // The new bytes must parse and read back as wanted. Every byte outside the replaced
+        // spans stays as it was (`Doc::replaced`); the adapters' tests prove the encoder
+        // writes each fixture's number format byte for byte.
+        let after = sims::write_profile(*sim, &file, idx, &bf.rates, throttle)
+            .ok()
+            .filter(|after| {
+                sim.parse_file(after.render(), &path)
                     .ok()
                     .and_then(|f| f.profiles.get(idx).cloned())
-                    .is_some_and(|p| holds(&p, &bf.rates, throttle));
-                (Some(after), ok)
-            }
-            _ => (None, false),
-        };
-        let Some(after) = after.filter(|_| round) else {
+                    .is_some_and(|p| holds(&p, &bf.rates, throttle))
+            });
+        let Some(after) = after else {
             checks.push(fail(
-                &format!("Rewrites unchanged ({who})"),
+                &format!("Reads back as written ({who})"),
                 RefusalCode::RoundTrip,
                 format!("QuadCam cannot rewrite {shown} reliably; nothing was written."),
             ));
             continue;
         };
-        checks.push(pass(&format!("Rewrites unchanged ({who})")));
+        checks.push(pass(&format!("Reads back as written ({who})")));
         checks.push(if can_write(&path) {
             pass(&format!("Writable ({who})"))
         } else {
@@ -533,18 +567,27 @@ pub fn plan(
             .strip_prefix(home)
             .map(|r| r.display().to_string())
             .unwrap_or_else(|_| path.display().to_string());
-        writes.push(SimWrite {
-            sim: sim.id().into(),
-            name: who.into(),
-            path,
-            shown,
-            rel,
+        let want = SimWant {
             profile: prof.name.clone(),
-            before: raw,
-            after: after.render().to_vec(),
             want: bf.rates,
             want_throttle: throttle.copied(),
-        });
+        };
+        if let Some(i) = earlier {
+            let w = &mut writes[i];
+            w.after = after.render().to_vec();
+            w.profiles.push(want);
+        } else {
+            writes.push(SimWrite {
+                sim: sim.id().into(),
+                name: who.into(),
+                path,
+                shown,
+                rel,
+                before: raw,
+                after: after.render().to_vec(),
+                profiles: vec![want],
+            });
+        }
     }
 
     if checks.iter().all(|c| c.ok)

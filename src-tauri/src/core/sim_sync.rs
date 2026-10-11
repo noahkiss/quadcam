@@ -182,7 +182,7 @@ impl Core {
                         steps.push(StepReport {
                             name: format!("Read back {}", w.name),
                             state: StepState::Done,
-                            detail: Some(format!("{} holds the new rates", w.profile)),
+                            detail: Some(format!("{} holds the new rates", w.profile_names())),
                         });
                     } else {
                         steps.push(StepReport {
@@ -240,7 +240,7 @@ impl Core {
                 planned
                     .writes
                     .iter()
-                    .map(|w| format!("{} ({})", w.name, w.profile))
+                    .map(|w| format!("{} ({})", w.name, w.profile_names()))
                     .collect::<Vec<_>>()
                     .join(", ")
             ),

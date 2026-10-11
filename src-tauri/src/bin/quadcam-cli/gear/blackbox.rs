@@ -22,7 +22,9 @@ pub enum Mode {
 
 #[derive(Subcommand)]
 pub enum BlackboxCmd {
-    /// Pull the FC's blackbox flash: read the used bytes, verify, store.
+    /// Pull the FC's blackbox flash: read the used bytes, verify, store. With the
+    /// gear_erase_blackbox setting on, it then erases the flash (no --yes: the setting is the
+    /// consent; --keep skips the erase).
     Pull {
         /// The FC's port; omit when one FC is plugged in.
         #[arg(long)]

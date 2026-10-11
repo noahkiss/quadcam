@@ -9,9 +9,12 @@
 //!   mounted: QuadCam never unmounts or ejects it on its own.
 //! - **Later.** Format, a second deletion and "Safe to remove" mount the card again first
 //!   (`ensure_session_card`).
+//! - **The same card.** Every mount, unmount and eject acts on the disk found by the card's
+//!   volume UUID, and only when it is the whole disk the session saved (`card_disk`). A card
+//!   that was pulled, or whose disk number another disk took, is left alone.
 
 use super::Core;
-use crate::disk::{self, CardIdentity};
+use crate::disk::{self, CardIdentity, DiskInfo};
 use anyhow::{bail, Context, Result};
 use std::path::PathBuf;
 use std::time::Duration;
@@ -66,7 +69,13 @@ impl Core {
         if let Some(m) = mount_of(&card) {
             return Ok(Some(m));
         }
-        (self.gear.mount)(&card.whole_disk).with_context(|| {
+        let Some(whole) = card_disk(&card) else {
+            bail!(
+                "{} is not plugged in. Put the card back in.",
+                card.volume_name.as_deref().unwrap_or("The card")
+            );
+        };
+        (self.gear.mount)(&whole).with_context(|| {
             format!(
                 "Mounting {} for the card step",
                 card.volume_name.as_deref().unwrap_or("the card")
@@ -106,8 +115,19 @@ impl Core {
     /// says whether the card is safe to remove.
     pub(super) fn release_session_card(&self) -> Option<CardRelease> {
         let card = self.session()?.card?;
-        let whole = format!("/dev/{}", card.whole_disk);
-        let info = disk::info(&whole).ok()?;
+        let name = card
+            .volume_name
+            .clone()
+            .unwrap_or_else(|| "The card".into());
+        let Some(whole_id) = card_disk(&card) else {
+            return Some(CardRelease {
+                released: false,
+                message: format!(
+                    "{name} is not plugged in, or another disk took its place. QuadCam unmounted nothing."
+                ),
+            });
+        };
+        let info = disk::info(&format!("/dev/{whole_id}")).ok()?;
         // A card only: never a DJI device over USB (an air unit, goggles in storage mode).
         let dji_device = info
             .media_name
@@ -117,13 +137,9 @@ impl Core {
         if !disk::is_removable(&info) || dji_device {
             return None;
         }
-        let name = card
-            .volume_name
-            .clone()
-            .unwrap_or_else(|| "The card".into());
         let r = {
-            let _hold = self.gear_hold(&card.whole_disk);
-            (self.gear.unmount)(&card.whole_disk)
+            let _hold = self.gear_hold(&whole_id);
+            (self.gear.unmount)(&whole_id)
         };
         Some(match r {
             Ok(()) => CardRelease {
@@ -138,6 +154,20 @@ impl Core {
             },
         })
     }
+}
+
+/// The session card's whole disk (`diskN`), found now by its volume UUID. Some only when it
+/// is the whole disk the session saved: a pulled card, or another disk on its number, is None.
+pub(super) fn card_disk(card: &CardIdentity) -> Option<String> {
+    let found = disk::info(card.volume_uuid.as_deref()?).ok()?;
+    is_same_card(card, &found).then(|| card.whole_disk.clone())
+}
+
+/// True when `found` (a volume's `diskutil info`) is the card's volume on its saved disk.
+fn is_same_card(card: &CardIdentity, found: &DiskInfo) -> bool {
+    card.volume_uuid.is_some()
+        && found.volume_uuid == card.volume_uuid
+        && disk::whole_disk_of(&found.parent_whole_disk) == card.whole_disk
 }
 
 /// The mount point of the card's volume, when it is mounted.
@@ -156,4 +186,43 @@ fn mount_of(card: &CardIdentity) -> Option<PathBuf> {
         })
         .and_then(|i| i.mount_point)
         .map(PathBuf::from)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn card() -> CardIdentity {
+        CardIdentity {
+            device_identifier: "disk4s1".into(),
+            whole_disk: "disk4".into(),
+            volume_uuid: Some("A-UUID".into()),
+            volume_name: Some("CARD".into()),
+            total_size: 1,
+            media_name: None,
+        }
+    }
+
+    fn found(uuid: Option<&str>, parent: &str) -> DiskInfo {
+        DiskInfo {
+            device_identifier: format!("{parent}s1"),
+            parent_whole_disk: parent.into(),
+            volume_uuid: uuid.map(str::to_string),
+            ..Default::default()
+        }
+    }
+
+    #[test]
+    fn only_the_cards_volume_on_its_saved_disk_is_the_card() {
+        assert!(is_same_card(&card(), &found(Some("A-UUID"), "disk4")));
+        // The card came back on another disk number: not the saved disk.
+        assert!(!is_same_card(&card(), &found(Some("A-UUID"), "disk5")));
+        // Another disk took the card's number.
+        assert!(!is_same_card(&card(), &found(Some("B-UUID"), "disk4")));
+        assert!(!is_same_card(&card(), &found(None, "disk4")));
+        // A card saved without a volume UUID cannot be told apart: never acted on.
+        let mut no_uuid = card();
+        no_uuid.volume_uuid = None;
+        assert!(!is_same_card(&no_uuid, &found(None, "disk4")));
+    }
 }

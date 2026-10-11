@@ -182,10 +182,12 @@ fn guard(file: &str, current: BTreeSet<String>, table: &[Deprecation]) {
         "the {file} surface broke the 1.0 contract.\n\
          Removed or renamed with no schema bump and deprecation:\n  {}\n\
          Newly required:\n  {}\n\
+         Narrowed to a value list:\n  {}\n\
          Keep the old item working and add the new one, or deprecate the old one in \
          schema::DEPRECATIONS, bump SCHEMA_VERSION in a later release, then update the baseline.",
         report.removed.join("\n  "),
         report.newly_required.join("\n  "),
+        report.narrowed.join("\n  "),
     );
     if update {
         std::fs::create_dir_all(path.parent().unwrap()).unwrap();
