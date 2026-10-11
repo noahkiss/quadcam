@@ -1,0 +1,7 @@
+# The Rust toolchain for the whole repo: rustup reads this file from any folder below it
+# (src-tauri/, the sim crate, app/ for `cargo metadata`), and CI installs from it. Bump it in
+# one commit that also fixes any new lints (AGENTS.md, Build, test, run).
+[toolchain]
+channel = "1.99.0"
+components = ["clippy", "rustfmt"]
+profile = "minimal"

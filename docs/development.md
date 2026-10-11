@@ -4,7 +4,7 @@ QuadCam is a Tauri 2 app. The core is Rust in `src-tauri/`. The frontend is Reac
 
 ## Requirements
 
-- Rust, through [rustup](https://rustup.rs) (stable).
+- Rust, through [rustup](https://rustup.rs). `rust-toolchain.toml` in the repo root pins the version; rustup installs it the first time you run `cargo`. CI uses the same file.
 - ffmpeg and ffprobe from Homebrew, for the tests and for `cargo tauri dev`. The app looks in its ffmpeg module first (see [Modules](modules.md)), then in `/opt/homebrew/bin` and `/usr/local/bin`, then `PATH`.
 - Node.js 24 through [fnm](https://github.com/Schniz/fnm), which reads `.node-version`.
 - pnpm, the version that `packageManager` in `app/package.json` names.
@@ -47,12 +47,30 @@ The Vite dev server uses port 4719 with `strictPort`. Set `QUADCAM_DEV_PORT` to 
 Run these in `src-tauri/`:
 
 ```bash
-cargo test -- --test-threads=1                     # unit and integration tests
+cargo nextest run -P quick                         # fast loop: skips the disk-image and long ffmpeg tests
+cargo nextest run                                  # every unit and integration test
+cargo nextest run --test join                      # one test file
+cargo test                                         # also works, more slowly
 cargo test --test import size_and_speed -- --ignored --nocapture   # MP4 against MOV size and speed
 INSTA_UPDATE=always cargo test --test snapshots    # accept a deliberate shape change, then review the diff
 QUADCAM_UPDATE_BINDINGS=1 cargo test --test bindings   # write app/src/bindings.ts after an api change
 ```
 
+- The tests run under [cargo-nextest](https://nexte.st) (`cargo install cargo-nextest --locked`). nextest runs each test in its own process, many at once. `src-tauri/.config/nextest.toml` holds three profiles:
+
+  | Profile | Runs |
+  |---|---|
+  | `default` | Every test |
+  | `quick` (`-P quick`) | Every test except the disk-image tests and `tests/join.rs` |
+  | `ci` | Every test, with a JUnit report and one retry for `tests/join.rs` and `tests/mount_cycle.rs`, which can fail on a loaded machine |
+  | `ci-quick` | The `quick` tests with the `ci` settings. CI runs it on a branch whose change does not touch the slow tests' code |
+
+- While you work, run `-P quick` and the test files of the area you changed. CI runs on every push, on every branch (see [CI](#ci) for when it skips the slow tests).
+- On a busy machine, cap the load: `CARGO_BUILD_JOBS=4 cargo nextest run --test-threads 4`.
+- The disk-image tests are in the `serial` test group: they run one at a time, because `hdiutil` and `diskutil` share one system daemon and a detached image's disk number goes to the next image. They also take a lock file in the temporary folder, so disk-image tests in two checkouts take turns. A new test that attaches a disk image belongs in the `serial` filter and the `quick` exclusion.
+- Three tests time the sim's real-time thread against the wall clock: the stall in `sim/tests/runner.rs`, the step cost in `sim/tests/bench.rs`, and the frame count in `tests/sim_host.rs`. They run alone, with no other test beside them, because the thread oversleeps on a loaded machine.
+- nextest does not run doc tests. The crates have none. If you add one, run `cargo test --doc` too.
+- Each git worktree has its own `target/`. [sccache](https://github.com/mozilla/sccache) shares compiled dependencies between them: `brew install sccache`, then `export RUSTC_WRAPPER=sccache CARGO_INCREMENTAL=0` (sccache does not cache incremental builds). With many worktrees, `CARGO_INCREMENTAL=0` saves disk space even without sccache.
 - The tests need ffmpeg. They make their own synthetic clips with `ffmpeg -f lavfi -i testsrc`.
 - The format tests attach small FAT32 disk images with `hdiutil`. They erase only an image that they created, and they check that the target is a disk image first.
 - No test can reach your Photos library or your Trash. Under `cargo`, "Move to Trash" moves files into a temporary folder.
@@ -77,14 +95,18 @@ pnpm build                                 # -> app/dist
 
 - `pnpm dev`, then `http://localhost:4719/?mock=<scenario>`, runs the UI in a browser on the mocked core. The scenarios are in `app/src/ipc/mock/core.ts`.
 - `app/scripts/make-fixtures.sh` records the mocked core's data from the real core. It needs the CLI and the corpus.
+- The axe specs loop over both themes (`axeSchemes` in `e2e/fixtures.ts`). `QC_AXE_THEMES=dark` (or `light`) runs them in one theme only; CI sets `dark` on a branch or a pull request and both on `main` and on a tag. Every other spec runs whatever the variable says. A new axe spec loops over `axeSchemes`, not its own list.
 - `QC_SHOTS=<dir> pnpm exec playwright test e2e/shots.spec.ts` writes screenshots of each screen in both themes. The images in `docs/images/` come from this spec.
 
 ### CI
 
-`.github/workflows/ci.yml` runs on every push and pull request:
+`.github/workflows/ci.yml` runs on every push to a branch or a `v*` tag, and on pull requests from forks:
 
-- `cargo fmt --check`, clippy, the tests, and a release build.
-- A `ui` job for `app/`: typecheck, lint, Vitest, Playwright, and a build.
+- `cargo fmt --check`, clippy, the tests (`cargo nextest run --profile ci`, with the JUnit report as the `junit` artifact), and a release build.
+- On a branch or a pull request, the disk-image tests and `tests/join.rs` run only when the change since the merge base with `main` touches the code they cover: import, disks, cards, card prep, joins, media, scan, the session, the sources, the CLI's `main.rs`, the MCP server outside Gear, `tests/common` and those test files, `Cargo.toml`, `Cargo.lock`, `rust-toolchain.toml`, `nextest.toml` or `ci.yml`. Otherwise CI runs the `ci-quick` profile. The filter is in `ci.yml`; a new slow test, or new code it covers, joins it. On `main` and on a tag, CI runs every test.
+- A `ui` job for `app/`: typecheck, lint, Vitest, Playwright, and a build. On a branch or a pull request, the axe specs run in the dark theme only.
+
+A newer push to the same branch or pull request cancels the older run. A run on `main` or on a tag is never cancelled, because the release waits for a green run on the tagged commit.
 
 ### Try the app without it taking focus
 
@@ -129,10 +151,11 @@ pnpm build                                 # -> app/dist
 
 Users install the Homebrew cask `noahkiss/tap/quadcam`. A release is a pushed tag.
 
-1. Set the new version in `src-tauri/Cargo.toml` and `src-tauri/tauri.conf.json`. They must match.
-2. Commit, then push the commit and a tag:
+1. On the release branch, set the new version in `src-tauri/Cargo.toml` and `src-tauri/tauri.conf.json`. They must match. Commit, push the branch, and wait for its CI run to pass.
+2. Fast-forward `main` to that commit, then tag the same commit and push both:
 
    ```bash
+   git switch main && git merge --ff-only rel-X.Y.Z
    git tag vX.Y.Z && git push origin main vX.Y.Z
    ```
 
@@ -140,7 +163,7 @@ Users install the Homebrew cask `noahkiss/tap/quadcam`. A release is a pushed ta
    - It checks that both manifests state the tag's version.
    - It builds `QuadCam.app` on an Apple Silicon runner (`macos-26`) with the prebuilt Tauri CLI from `app/`.
    - It signs, notarizes and staples the app (see [Signing](#signing)).
-   - It waits for a green CI run on the tagged commit. It does not run the tests again. If CI fails, or does not finish within 40 minutes, there is no release.
+   - It waits for a green CI run on the tagged commit: the newest run on that commit, which the push of `main` and the tag starts beside the build. It does not run the tests itself. If CI fails, or does not finish within 40 minutes, there is no release.
    - It zips the app as `quadcam-X.Y.Z-arm64.zip` and attaches the zip to the GitHub Release.
    - It starts the tap's `bump.yml`. That workflow rewrites `Casks/quadcam.rb`, installs the cask on macOS, and commits.
 4. Watch it with `gh run watch -R noahkiss/quadcam --exit-status`.

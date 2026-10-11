@@ -5,7 +5,7 @@
 // verifies. Axe in both themes.
 import AxeBuilder from "@axe-core/playwright";
 import type { Page } from "@playwright/test";
-import { expect, test, type AppFixture } from "./fixtures";
+import { axeSchemes, expect, test, type AppFixture } from "./fixtures";
 
 const RADIO_ID = "radio-1f2e3d4c5b6a7980";
 const RADIO_LINK = `{ kind: "volume", mount: "/Volumes/RADIO", volume_uuid: null, bus_protocol: "USB", whole_disk: "disk4" }`;
@@ -177,7 +177,7 @@ test("Review shows the card diff, and the apply verifies; the next read shows th
   await expect(callouts).toContainText("lowbat RxBt below 3.5");
 });
 
-for (const scheme of ["dark", "light"] as const) {
+for (const scheme of axeSchemes) {
   test.describe(`${scheme} theme`, () => {
     test.use({ colorScheme: scheme });
     for (const segment of ["Models", "Checklists"] as const) {

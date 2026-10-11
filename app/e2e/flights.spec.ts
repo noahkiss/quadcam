@@ -2,7 +2,7 @@
 // are the real core's answer on the synthetic log (e2e/fixtures/flights.json).
 import AxeBuilder from "@axe-core/playwright";
 import type { Page } from "@playwright/test";
-import { dialog, expect, test, type AppFixture } from "./fixtures";
+import { axeSchemes, dialog, expect, test, type AppFixture } from "./fixtures";
 
 const side = (page: Page) => page.getByRole("navigation", { name: "Library" });
 
@@ -130,7 +130,7 @@ test("a crash logged on a clip shows there and under Repairs", async ({ app, pag
   await expect(page.getByRole("table", { name: "Crashes" })).toContainText("arm, prop");
 });
 
-for (const scheme of ["dark", "light"] as const) {
+for (const scheme of axeSchemes) {
   test.describe(`${scheme} theme`, () => {
     test.use({ colorScheme: scheme });
     for (const name of ["Flights", "Packs", "Pack up"]) {

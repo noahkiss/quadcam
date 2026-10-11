@@ -4,8 +4,10 @@
 pub mod server;
 
 use quadcam_lib::media::{self, Tools};
+use std::cell::RefCell;
 use std::path::{Path, PathBuf};
 use std::process::Command;
+use std::sync::{Mutex, MutexGuard, OnceLock};
 
 pub fn tools() -> Tools {
     media::find_tools().expect("tests need ffmpeg and ffprobe (brew install ffmpeg)")
@@ -101,32 +103,78 @@ pub struct Image {
     _dir: tempfile::TempDir,
 }
 
+/// Disk-image tests take turns machine-wide, across processes and worktrees: hdiutil and
+/// diskutil share one daemon, and a detached image's disk number goes to the next attach, so
+/// another test could mount or erase this image by a stale number. The first image in a
+/// process takes a lock file and holds it until the process exits; the first image in a test
+/// thread (plain `cargo test` runs a file's tests side by side) holds a mutex until the thread
+/// ends. A test that makes several images takes each lock once.
+fn disk_image_lock() {
+    static FILE: OnceLock<std::fs::File> = OnceLock::new();
+    static THREADS: Mutex<()> = Mutex::new(());
+    thread_local! {
+        static HELD: RefCell<Option<MutexGuard<'static, ()>>> = const { RefCell::new(None) };
+    }
+    FILE.get_or_init(|| {
+        let path = std::env::temp_dir().join("quadcam-disk-image-tests.lock");
+        let f = std::fs::File::create(&path).unwrap();
+        f.lock().unwrap();
+        f
+    });
+    HELD.with(|h| {
+        h.borrow_mut()
+            .get_or_insert_with(|| THREADS.lock().unwrap_or_else(|e| e.into_inner()));
+    });
+}
+
 impl Image {
     pub fn create(size: &str, label: &str, sparse: bool) -> Image {
+        disk_image_lock();
         let dir = tempfile::tempdir().unwrap();
         let base = dir.path().join("card");
-        let mut c = Command::new("/usr/bin/hdiutil");
-        c.args([
-            "create",
-            "-quiet",
-            "-size",
-            size,
-            "-fs",
-            "MS-DOS FAT32",
-            "-layout",
-            "MBRSPUD",
-            "-volname",
-            label,
-        ]);
-        if sparse {
-            c.args(["-type", "SPARSE"]);
-        }
-        assert!(c.arg(&base).status().unwrap().success(), "hdiutil create");
         let file = if sparse {
             base.with_extension("sparseimage")
         } else {
             base.with_extension("dmg")
         };
+        // `hdiutil create` attaches the new image to format it, so it can fail on a loaded
+        // machine as an attach does: a failed create removes what it left and tries again,
+        // up to 3 times.
+        let mut tries = 0;
+        let out = loop {
+            tries += 1;
+            let mut c = Command::new("/usr/bin/hdiutil");
+            c.args([
+                "create",
+                "-quiet",
+                "-size",
+                size,
+                "-fs",
+                "MS-DOS FAT32",
+                "-layout",
+                "MBRSPUD",
+                "-volname",
+                label,
+            ]);
+            if sparse {
+                c.args(["-type", "SPARSE"]);
+            }
+            let out = c.arg(&base).output().unwrap();
+            if out.status.success() || tries == 3 {
+                break out;
+            }
+            eprintln!(
+                "hdiutil create, try {tries}: {}",
+                String::from_utf8_lossy(&out.stderr).trim()
+            );
+            let _ = std::fs::remove_file(&file);
+            std::thread::sleep(std::time::Duration::from_secs(2));
+        };
+        assert!(
+            out.status.success(),
+            "hdiutil create: {}",
+            String::from_utf8_lossy(&out.stderr)
+        );
         let mount = dir.path().join("mnt");
         std::fs::create_dir(&mount).unwrap();
         let mut img = Image {
@@ -139,13 +187,26 @@ impl Image {
         img
     }
 
+    /// Attaches at our mount point. On a loaded machine the file system probe can time out
+    /// ("no mountable file systems"): that one error detaches and tries again, up to 3 times.
     pub fn attach(&mut self) {
-        let out = Command::new("/usr/bin/hdiutil")
-            .args(["attach", "-nobrowse", "-mountpoint"])
-            .arg(&self.mount)
-            .arg(&self.file)
-            .output()
-            .unwrap();
+        let mut tries = 0;
+        let out = loop {
+            tries += 1;
+            let out = Command::new("/usr/bin/hdiutil")
+                .args(["attach", "-nobrowse", "-mountpoint"])
+                .arg(&self.mount)
+                .arg(&self.file)
+                .output()
+                .unwrap();
+            let err = String::from_utf8_lossy(&out.stderr);
+            if out.status.success() || tries == 3 || !err.contains("no mountable file systems") {
+                break out;
+            }
+            eprintln!("hdiutil attach, try {tries}: {}", err.trim());
+            self.detach();
+            std::thread::sleep(std::time::Duration::from_secs(2));
+        };
         assert!(
             out.status.success(),
             "hdiutil attach: {}",

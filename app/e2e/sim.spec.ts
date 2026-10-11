@@ -3,7 +3,7 @@
 // known model, changing a suggestion, editing an end, Recalibrate, and saving by radio key.
 import AxeBuilder from "@axe-core/playwright";
 import type { Page } from "@playwright/test";
-import { expect, test, type AppFixture } from "./fixtures";
+import { axeSchemes, expect, test, type AppFixture } from "./fixtures";
 
 const REST = [1024, 1024, 0, 1024, 0, 0, 0, 0];
 const side = (page: Page) => page.getByRole("navigation", { name: "Library" });
@@ -59,7 +59,7 @@ test("a known radio model gets the short check, suggestions show their source, a
   await expect(step(page)).toHaveText("Move both sticks around their full travel.");
 });
 
-for (const scheme of ["dark", "light"] as const) {
+for (const scheme of axeSchemes) {
   test.describe(`${scheme} theme`, () => {
     test.use({ colorScheme: scheme });
     test("the Sim radio page passes axe", async ({ app, page }) => {

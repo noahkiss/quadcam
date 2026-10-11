@@ -4,7 +4,7 @@
 // smoke test (WebGL in headless WebKit); the loop's maths is in `lib/simhost.test.ts`.
 import AxeBuilder from "@axe-core/playwright";
 import type { Locator, Page } from "@playwright/test";
-import { expect, test, type AppFixture } from "./fixtures";
+import { axeSchemes, expect, test, type AppFixture } from "./fixtures";
 
 const REST = [1024, 1024, 0, 1024, 0, 0, 0, 0];
 const side = (page: Page) => page.getByRole("navigation", { name: "Library" });
@@ -164,7 +164,7 @@ for (const [name, size, aspect] of [
   });
 }
 
-for (const scheme of ["dark", "light"] as const) {
+for (const scheme of axeSchemes) {
   test.describe(`${scheme} theme`, () => {
     test.use({ colorScheme: scheme });
     test("the running Sim page passes axe", async ({ app, page }) => {

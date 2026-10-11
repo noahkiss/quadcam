@@ -2,7 +2,7 @@
 // with its model on the card, and Add and Remove saving the profile's `gear.radio`.
 import AxeBuilder from "@axe-core/playwright";
 import type { Page } from "@playwright/test";
-import { expect, test } from "./fixtures";
+import { axeSchemes, expect, test } from "./fixtures";
 
 const RADIO_ID = "radio-1f2e3d4c5b6a7980";
 const profile = (name: string, model: string, gear: Record<string, string>) => ({ name, aircraft: "", camera_make: "Generic", camera_model: "", video_system: "Analog", keywords: [], author: "", place: null, edgetx_models: [model], gear });
@@ -71,7 +71,7 @@ test("Settings > Aircraft edits the same link the radio page lists", async ({ ap
   await expect(radio.getByRole("region", { name: "Aircraft on this radio" })).toContainText("No aircraft yet.");
 });
 
-for (const scheme of ["dark", "light"] as const) {
+for (const scheme of axeSchemes) {
   test.describe(`${scheme} theme`, () => {
     test.use({ colorScheme: scheme });
     test("Aircraft on this radio passes axe", async ({ app, page }) => {
