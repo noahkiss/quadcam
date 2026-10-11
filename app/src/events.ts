@@ -48,6 +48,7 @@ export async function start(): Promise<() => void> {
     // An agent asked to apply a staged change: the person must click Apply in the sheet.
     on("agent-apply-request", ({ id, change, plan }) => S().agentApply(id, change, plan)),
     on("agent-apply-closed", (id) => S().agentApplyClosed(id)),
+    on("update-changed", (u) => S().setUpdate(u)),
     onDragDrop((e) => {
       const s = S();
       const blocked = s.busy || !s.env?.tools || dialogOpen(s);
@@ -60,6 +61,7 @@ export async function start(): Promise<() => void> {
 
   await S().loadSettings();
   await loadEnv();
+  S().setUpdate(await api.updateStatus().catch(() => null));
   const out = (S().values.outputDir as string | undefined) || (await api.defaultOutputDir()) || "";
   store.setState({ home: (out.match(/^\/Users\/[^/]+/) || [""])[0] });
   api.libraryScope().catch(() => {});

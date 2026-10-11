@@ -32,6 +32,7 @@ import * as simsync from "./simsync";
 import * as blackbox from "./blackbox";
 import * as firmware from "./firmware";
 import * as elrs from "./elrs";
+import * as update from "./update";
 import * as ratemath from "./ratemath";
 import { MockHost, MockSim, defaults as simDefaults } from "./sim";
 import { location as normLocation, spans as normSpans } from "../normalize";
@@ -105,6 +106,8 @@ export class MockCore {
   firmware = firmware.freshFirmware();
   /** ExpressLRS tools (`./elrs.ts`). */
   elrs = elrs.freshElrs();
+  /** The app's own update (`./update.ts`). */
+  update = update.freshUpdate();
   /** The sim's calibration (`./sim.ts`). */
   sim = new MockSim();
   /** The sim host's canned flight (`./sim.ts`). */
@@ -230,6 +233,14 @@ export class MockCore {
         return null;
       case "third_party_notices":
         return seed.NOTICES;
+      case "update_status":
+        return update.status(this.update);
+      case "update_check":
+        return update.check(this.update);
+      case "update_download":
+        return update.download(this.update, (s) => this.emit("update-changed", s));
+      case "update_restart":
+        return update.restart(this.update);
       case "sim_presets":
         return this.simHost.presets();
       case "sim_start":

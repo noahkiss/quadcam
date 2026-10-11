@@ -7,6 +7,8 @@
 import type * as G from "../bindings";
 
 export type {
+  UpdatePhase,
+  UpdateStatus,
   Automation,
   BlackboxEntry,
   BlackboxErased,
@@ -266,6 +268,7 @@ export type CardRelease = G.CardRelease;
 
 /** The settings file's values, by file key (camelCase). */
 export interface SettingsValues {
+  updateCheck?: boolean;
   outputDir?: Path | null;
   format?: "mp4" | "mov";
   encoder?: "videotoolbox" | "x264";

@@ -9,8 +9,9 @@ import { createSessionSlice, type SessionSlice } from "./session";
 import { createSettingsSlice, type SettingsSlice } from "./settings";
 import { createTasksSlice, type TasksSlice } from "./tasks";
 import { createUiSlice, type UiSlice } from "./ui";
+import { createUpdateSlice, type UpdateSlice } from "./update";
 
-export type State = LibrarySlice & SessionSlice & SettingsSlice & TasksSlice & UiSlice & HistorySlice & GearSlice;
+export type State = LibrarySlice & SessionSlice & SettingsSlice & TasksSlice & UiSlice & HistorySlice & GearSlice & UpdateSlice;
 
 export const useStore = create<State>()((...a) => ({
   ...createLibrarySlice(...a),
@@ -20,6 +21,7 @@ export const useStore = create<State>()((...a) => ({
   ...createUiSlice(...a),
   ...createHistorySlice(...a),
   ...createGearSlice(...a),
+  ...createUpdateSlice(...a),
 }));
 
 /** The store outside React. */

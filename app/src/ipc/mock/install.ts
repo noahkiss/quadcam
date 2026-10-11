@@ -61,7 +61,9 @@ export function installMock(opts: MockOptions = {}): MockHandle {
         return null;
     }
     try {
-      return structuredClone(core.handle(cmd, args));
+      const r = core.handle(cmd, args);
+      // A few mock commands (the update download) take time and answer later.
+      return structuredClone(r instanceof Promise ? await r : r);
     } catch (e) {
       throw typeof e === "string" ? e : String(e);
     }

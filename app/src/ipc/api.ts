@@ -26,6 +26,12 @@ export const api = {
   menuState: (enabled: Record<string, boolean>, checked: Record<string, boolean>, albumItem: string | null) => commands.menuState(enabled, checked, albumItem),
   share: (paths: string[], r: { x: number; y: number; w: number; h: number }) => ok(commands.share(paths, r.x, r.y, r.w, r.h)),
 
+  // The app's own updates (GUI commands; the core never updates itself for an agent)
+  updateStatus: () => commands.updateStatus(),
+  updateCheck: () => ok(commands.updateCheck()),
+  updateDownload: () => ok(commands.updateDownload()),
+  updateRestart: () => ok(commands.updateRestart()),
+
   // Session
   getSession: async () => N.session(await ok(commands.session())),
   loadSource: async (path: string) => N.session(await ok(commands.load({ source: path })))!,
