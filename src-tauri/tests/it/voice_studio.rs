@@ -1017,6 +1017,14 @@ fn a_line_rendered_once_is_never_billed_again() {
     // Every quad line is rendered now; the heli set shares the radio's prompts, numbers and
     // units, and the extras share the EdgeTX prompts the quad set holds.
     let after = sets_view(&b, "v-callum", m);
+    // The voice list counts the lines each voice and model have.
+    let counts = &after.rendered;
+    assert_eq!(counts.len(), 1, "{counts:?}");
+    assert_eq!(
+        (counts[0].voice.as_str(), counts[0].model.as_str()),
+        ("v-callum", m)
+    );
+    assert!(counts[0].lines > 300 && counts[0].lines < 396, "{counts:?}");
     let (done, all) = rendered_of(&after, "quad");
     assert_eq!(done, all);
     let (heli_done, heli_all) = rendered_of(&after, "heli");

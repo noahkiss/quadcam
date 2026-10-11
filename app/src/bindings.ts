@@ -5934,6 +5934,8 @@ export type StudioView = {
 	aircraft?: string[],
 	/**  The sets picked at first: those made only for those kinds, and the person's own lines. */
 	picks?: string[],
+	/**  The lines each voice, model and speed already have a take of, most first. */
+	rendered?: TakeCount[],
 };
 
 /**  `suggest`: changes to clip plans. Without `editor`, an agent made them. */
@@ -6039,6 +6041,15 @@ export type SwitchWarning = {
 	switch: string,
 	/**  `up`, `mid` or `down`. */
 	pos: string,
+};
+
+/**  How many lines one voice, model and speed have a take of. */
+export type TakeCount = {
+	voice: string,
+	model: string,
+	speed: number | null,
+	/**  Distinct spoken texts (ignoring case) with a take whose cut passed its checks. */
+	lines: number,
 };
 
 /**  What a snapshot run did. */

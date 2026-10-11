@@ -13,7 +13,7 @@ use crate::gear::voice::lines::{self, Line, Spelling};
 use crate::gear::voice::packs::{self, BuildOpts, PackManifest, Retake};
 use crate::gear::voice::rates;
 use crate::gear::voice::render::{self, Plan, RenderSettings};
-use crate::gear::voice::reuse::{self, LineIndex, Reuse, Scope};
+use crate::gear::voice::reuse::{self, LineIndex, Reuse, Scope, TakeCount};
 use crate::gear::voice::sets::{self, SetInfo, SetLine};
 use crate::gear::voice::tts::{Credits, ModelInfo, ProviderConfig, Tts, VoiceInfo};
 use anyhow::{anyhow, bail, Result};
@@ -101,6 +101,9 @@ pub struct StudioView {
     /// The sets picked at first: those made only for those kinds, and the person's own lines.
     #[serde(default)]
     pub picks: Vec<String>,
+    /// The lines each voice, model and speed already have a take of, most first.
+    #[serde(default)]
+    pub rendered: Vec<TakeCount>,
 }
 
 /// `gear_voice_estimate`.
@@ -420,6 +423,7 @@ impl Core {
             batch: BatchSettings::default(),
             aircraft,
             picks,
+            rendered: reuse::rendered_counts(&BatchCache::new(&self.cache), PROVIDER),
         })
     }
 
@@ -1227,6 +1231,13 @@ pub fn sets_text(v: &StudioView) -> String {
         v.aircraft.join(", "),
         v.picks.join(", ")
     );
+    for t in &v.rendered {
+        let _ = write!(
+            s,
+            "\nRendered: {} lines in voice {} with {} at speed {}.",
+            t.lines, t.voice, t.model, t.speed
+        );
+    }
     for x in &v.sets {
         let rendered = x
             .rendered

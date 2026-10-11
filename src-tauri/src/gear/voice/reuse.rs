@@ -155,8 +155,69 @@ impl Entry {
 
 #[derive(Debug, Default, Serialize, Deserialize)]
 struct IndexFile {
+    /// Whose takes these are, for `rendered_counts`.
+    #[serde(default)]
+    voice: String,
+    #[serde(default)]
+    model: String,
+    #[serde(default)]
+    speed: f64,
     #[serde(default)]
     batches: Vec<Entry>,
+}
+
+/// How many lines one voice, model and speed have a take of.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, specta::Type)]
+pub struct TakeCount {
+    pub voice: String,
+    pub model: String,
+    pub speed: f64,
+    /// Distinct spoken texts (ignoring case) with a take whose cut passed its checks.
+    pub lines: u32,
+}
+
+/// The lines each voice, model and speed have a take of, from every line index of the
+/// provider, most first. Takes the cache lost do not count.
+pub fn rendered_counts(cache: &BatchCache, provider: &str) -> Vec<TakeCount> {
+    let dir = cache.cache_dir().join("voice").join("lines").join(provider);
+    let mut out = Vec::new();
+    for f in std::fs::read_dir(dir).into_iter().flatten().flatten() {
+        let p = f.path();
+        if p.extension().is_none_or(|x| x != "json") {
+            continue;
+        }
+        let Some(file) = std::fs::read(&p)
+            .ok()
+            .and_then(|b| serde_json::from_slice::<IndexFile>(&b).ok())
+        else {
+            continue;
+        };
+        if file.voice.is_empty() {
+            continue;
+        }
+        let mut said: HashSet<String> = HashSet::new();
+        for e in &file.batches {
+            if !cache.has(provider, &e.key) {
+                continue;
+            }
+            for i in &e.items {
+                let flagged = e.cut == batch::CUT_VERSION && e.flagged.contains(&i.spoken);
+                if !flagged {
+                    said.insert(i.spoken.to_lowercase());
+                }
+            }
+        }
+        if !said.is_empty() {
+            out.push(TakeCount {
+                voice: file.voice,
+                model: file.model,
+                speed: file.speed,
+                lines: said.len() as u32,
+            });
+        }
+    }
+    out.sort_by(|a, b| b.lines.cmp(&a.lines).then(a.voice.cmp(&b.voice)));
+    out
 }
 
 /// The takes of one provider, voice, model and speed, by sentence.
@@ -215,7 +276,13 @@ impl LineIndex {
             .collect();
         all.extend(entries);
         let tmp = path.with_extension("tmp");
-        std::fs::write(&tmp, serde_json::to_vec(&IndexFile { batches: all })?)?;
+        let file = IndexFile {
+            voice: s.voice.into(),
+            model: s.model.into(),
+            speed: s.settings.speed,
+            batches: all,
+        };
+        std::fs::write(&tmp, serde_json::to_vec(&file)?)?;
         std::fs::rename(&tmp, &path)?;
         Ok(())
     }
