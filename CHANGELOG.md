@@ -17,6 +17,12 @@ User-facing changes in each release, newest first. Release notes on
 - **Settings > Gear** reads as a macOS form: each group's title on the left, its controls on the right.
 - **For developers:** shared `PageHeader`, `EmptyState`, `FactList`, `StatusDot` and `MoreMenu` in `app/src/components/dash/`, and the `--s-5` spacing token the Apply sheet, Bench and Firmware already used. `docs/development.md` describes how to build a dashboard page.
 
+## 0.14.1 (2026-10-11)
+
+- **Voice studio: a take that no longer cuts is removed.** A line reused from an earlier take whose files cannot be read or cut no longer fails every render: QuadCam removes the take before it sends anything, and the next estimate prices its lines. Before, the render failed on that take every time until its cache file was deleted by hand.
+- **Voice studio: nothing is sent that the estimate did not price.** A batch the estimate counted as cached but whose take cannot be read is removed, not sent; the next estimate prices it. A render that fails part way keeps the batches it made, so their lines are not billed again.
+- **Import takes:** an imported take no longer shares its cache key with a one-line batch under the carrier `{line}`, and its start is not checked for a carrier's last sound (it had none). Takes imported by 0.14.0 keep working; importing the folder again files them under the new key.
+
 ## 0.14.0 (2026-10-11)
 
 - **Voice studio: a line is billed once.** A line any earlier render or sample spoke in the same voice, model and speed is cut again from that take, whatever set it comes in. Before, the cache knew whole batches only, so adding a set, rendering a second aircraft set (they share the radio's prompts, numbers and units) or rendering after a sample sent lines again that were already paid for. A re-take with a new seed now sends only the lines that need one.

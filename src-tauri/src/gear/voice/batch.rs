@@ -251,6 +251,23 @@ impl BatchCache {
         super::sha256_hex(canon.to_string().as_bytes())
     }
 
+    /// The key of a take of one line spoken alone (`reuse::import_takes`). It never equals a
+    /// batch's key, even a batch of one line whose carrier is only `{line}`.
+    pub fn alone_key(
+        provider: &str,
+        voice: &str,
+        model: &str,
+        speed: f64,
+        text: &str,
+        seed: u64,
+    ) -> String {
+        let canon = serde_json::json!({
+            "alone": true, "provider": provider, "voice": voice, "model": model,
+            "speed": format!("{speed:.4}"), "text": text, "seed": seed,
+        });
+        super::sha256_hex(canon.to_string().as_bytes())
+    }
+
     fn path(&self, provider: &str, key: &str, ext: &str) -> PathBuf {
         let p: String = provider
             .chars()
@@ -372,8 +389,10 @@ impl Ctx<'_> {
 
 /// One batch, cut: from the cache, or from the provider. A fresh take is cached only when it
 /// cuts, so a take the provider changed never stays cached; a cached take that does not cut
-/// is removed, and the next render fetches it again. True when the cache answered.
-pub fn fetch(ctx: &Ctx<'_>, b: &Batch, snap_ms: u32) -> Result<(Vec<Cut>, bool)> {
+/// is removed, and the next render fetches it again. The provider is asked only when
+/// `may_send` (the estimate priced the batch): a cached take that cannot be read is removed
+/// instead, so the next estimate prices it. True when the cache answered.
+pub fn fetch(ctx: &Ctx<'_>, b: &Batch, snap_ms: u32, may_send: bool) -> Result<(Vec<Cut>, bool)> {
     let key = ctx.key(b);
     if let Some(a) = ctx.cache.get(ctx.tts.id(), &key) {
         return match cut(b, &a, snap_ms) {
@@ -387,6 +406,14 @@ pub fn fetch(ctx: &Ctx<'_>, b: &Batch, snap_ms: u32) -> Result<(Vec<Cut>, bool)>
                 )))
             }
         };
+    }
+    if !may_send {
+        ctx.cache.remove(ctx.tts.id(), &key);
+        bail!(
+            "the cached batch of {} {} lines could not be read, so it was removed; a new estimate prices it again",
+            b.items.len(),
+            b.tone
+        );
     }
     let a = ctx
         .tts
@@ -644,8 +671,9 @@ impl std::fmt::Display for Flag {
 }
 
 /// What is wrong with a cut, if anything. Reads the batch's cuts together: a line is long or
-/// short for its letters against the batch's median pace.
-pub fn check(cuts: &[Cut]) -> Vec<Flag> {
+/// short for its letters against the batch's median pace. A take spoken alone (`carrier`
+/// false) had no carrier, so its start is not judged for one.
+pub fn check(cuts: &[Cut], carrier: bool) -> Vec<Flag> {
     let ms = |c: &Cut| c.pcm.samples.len() as f64 * 1000.0 / f64::from(c.pcm.rate);
     let letters = |c: &Cut| {
         c.spoken
@@ -673,7 +701,7 @@ pub fn check(cuts: &[Cut]) -> Vec<Flag> {
             .unwrap_or(0);
         let reason = if peak < MIN_PEAK {
             Some("the cut is silent".to_string())
-        } else if let Some((hiss, gap)) = carrier_bleed(c) {
+        } else if let Some((hiss, gap)) = carrier.then(|| carrier_bleed(c)).flatten() {
             Some(format!(
                 "starts with {hiss} ms of hiss and a {gap} ms gap: the carrier's last sound"
             ))
@@ -811,22 +839,24 @@ pub struct Rendered {
 }
 
 /// Renders (or finds) every batch and cuts it. A flagged cut goes to `flagged`, not `cuts`.
-/// `each` hears (done, total) after each batch.
+/// Only the batches whose keys are in `priced` go to the provider. `each` hears (done,
+/// total) after each batch.
 pub fn render_all(
     ctx: &Ctx<'_>,
     batches: &[Batch],
     snap_ms: u32,
+    priced: &[String],
     each: &mut dyn FnMut(usize, usize),
 ) -> Result<Rendered> {
     let mut r = Rendered::default();
     for (n, b) in batches.iter().enumerate() {
-        let (cuts, hit) = fetch(ctx, b, snap_ms)?;
+        let (cuts, hit) = fetch(ctx, b, snap_ms, priced.contains(&ctx.key(b)))?;
         if hit {
             r.batches_cached += 1;
         } else {
             r.batches_rendered += 1;
         }
-        for f in check(&cuts) {
+        for f in check(&cuts, true) {
             r.warnings.push(f.to_string());
             r.flagged.insert(f.spoken, f.reason);
         }
@@ -846,6 +876,15 @@ mod tests {
     use crate::gear::voice::eleven::fake::{timestamps_json, FakeHttp};
     use crate::gear::voice::eleven::Eleven;
     use std::sync::Arc;
+
+    /// The keys an estimate made now would price.
+    fn priced(ctx: &Ctx<'_>, batches: &[Batch]) -> Vec<String> {
+        batches
+            .iter()
+            .filter(|b| !ctx.cached(b))
+            .map(|b| ctx.key(b))
+            .collect()
+    }
 
     fn item(s: &str, tone: &str) -> Item {
         Item {
@@ -1104,17 +1143,20 @@ mod tests {
         );
         // After the word's tail, before the next "The".
         assert!((4.37..=4.80).contains(&c[0].to_s), "ends at {}", c[0].to_s);
-        assert!(check(&c).is_empty(), "{:?}", check(&c));
+        assert!(check(&c, true).is_empty(), "{:?}", check(&c, true));
         // Cut on the timestamps alone, the line starts with the carrier's "s": flagged.
         let raw = cut(&b, &a, 0).unwrap();
         assert!((raw[0].from_s - 3.12).abs() < 1e-4);
-        let flags = check(&raw);
+        let flags = check(&raw, true);
         assert_eq!(flags.len(), 1, "{flags:?}");
         assert!(
             flags[0].reason.contains("hiss") && flags[0].reason.contains("gap"),
             "{}",
             flags[0].reason
         );
+        // A take spoken alone had no carrier: its start is not judged for one.
+        let alone = check(&raw, false);
+        assert!(alone.is_empty(), "{alone:?}");
     }
 
     #[test]
@@ -1226,7 +1268,7 @@ mod tests {
             cut_of("six", 60, 3000),        // clipped
             cut_of("turtle mode", 700, 5),  // silent
         ];
-        let w: Vec<String> = check(&cuts).iter().map(Flag::to_string).collect();
+        let w: Vec<String> = check(&cuts, true).iter().map(Flag::to_string).collect();
         assert_eq!(w.len(), 3, "{w:?}");
         assert!(w
             .iter()
@@ -1235,7 +1277,7 @@ mod tests {
         assert!(w
             .iter()
             .any(|x| x.contains("turtle mode") && x.contains("silent")));
-        assert!(check(&cuts[..4]).is_empty());
+        assert!(check(&cuts[..4], true).is_empty());
     }
 
     fn eleven_with(text_step: f64, batch: &Batch) -> (Arc<FakeHttp>, Eleven) {
@@ -1283,13 +1325,15 @@ mod tests {
         );
         assert!(before.affordable);
 
-        let first = render_all(&ctx, &batches, 40, &mut |_, _| {}).unwrap();
+        let first =
+            render_all(&ctx, &batches, 40, &priced(&ctx, &batches), &mut |_, _| {}).unwrap();
         assert_eq!((first.batches_rendered, first.batches_cached), (1, 0));
         assert_eq!(first.cuts.len(), 3);
         assert_eq!(http.posts(), 1);
 
         // The same batch again: no request, and the estimate is zero.
-        let second = render_all(&ctx, &batches, 40, &mut |_, _| {}).unwrap();
+        let second =
+            render_all(&ctx, &batches, 40, &priced(&ctx, &batches), &mut |_, _| {}).unwrap();
         assert_eq!((second.batches_rendered, second.batches_cached), (0, 1));
         assert_eq!(http.posts(), 1);
         let after = estimate(&ctx, &batches, &price);
@@ -1334,7 +1378,8 @@ mod tests {
             model: "m",
             settings: &settings,
         };
-        let e = render_all(&ctx, &batches, 40, &mut |_, _| {}).unwrap_err();
+        let e =
+            render_all(&ctx, &batches, 40, &priced(&ctx, &batches), &mut |_, _| {}).unwrap_err();
         assert!(format!("{e:#}").contains("changed the text"), "{e:#}");
         assert!(!ctx.cached(&batches[0]));
         assert_eq!(
@@ -1342,7 +1387,7 @@ mod tests {
             0
         );
         // A re-run asks the provider again instead of failing from the cache.
-        assert!(render_all(&ctx, &batches, 40, &mut |_, _| {}).is_err());
+        assert!(render_all(&ctx, &batches, 40, &priced(&ctx, &batches), &mut |_, _| {}).is_err());
         assert_eq!(h.posts(), 2);
 
         // A bad take already in the cache (from an older QuadCam) is removed.
@@ -1380,10 +1425,49 @@ mod tests {
             )
             .unwrap();
         assert!(ctx.cached(&batches[0]));
-        let e = render_all(&ctx, &batches, 40, &mut |_, _| {}).unwrap_err();
+        let e =
+            render_all(&ctx, &batches, 40, &priced(&ctx, &batches), &mut |_, _| {}).unwrap_err();
         assert!(format!("{e:#}").contains("removed"), "{e:#}");
         assert!(!ctx.cached(&batches[0]));
         assert_eq!(h.posts(), 2);
+    }
+
+    #[test]
+    fn a_cached_take_that_cannot_be_read_is_never_sent_unpriced() {
+        let dir = tempfile::tempdir().unwrap();
+        let batches = plan(&[item("Six", "number")], &BatchSettings::default());
+        let (http, tts) = eleven_with(0.06, &batches[0]);
+        let cache = BatchCache::new(dir.path());
+        let settings = RenderSettings::default();
+        let ctx = Ctx {
+            tts: &tts,
+            cache: &cache,
+            voice: "abc",
+            model: "m",
+            settings: &settings,
+        };
+        render_all(&ctx, &batches, 40, &priced(&ctx, &batches), &mut |_, _| {}).unwrap();
+        assert_eq!(http.posts(), 1);
+        // Both files are there, but the audio is not a WAV.
+        let key = ctx.key(&batches[0]);
+        std::fs::write(cache.path("elevenlabs", &key, "wav"), b"not a wav").unwrap();
+        let e = estimate(&ctx, &batches, &price(1.0, None));
+        assert_eq!((e.chars, e.cached_batches), (0, 1));
+        // The estimate priced nothing, so nothing is sent: the take is removed instead.
+        let p = priced(&ctx, &batches);
+        assert!(p.is_empty());
+        let e = render_all(&ctx, &batches, 40, &p, &mut |_, _| {}).unwrap_err();
+        assert!(
+            format!("{e:#}").contains("could not be read, so it was removed"),
+            "{e:#}"
+        );
+        assert_eq!(http.posts(), 1);
+        // The next estimate prices it, and a render of that estimate sends it.
+        let e = estimate(&ctx, &batches, &price(1.0, None));
+        assert_eq!(e.cached_batches, 0);
+        assert!(e.chars > 0);
+        render_all(&ctx, &batches, 40, &priced(&ctx, &batches), &mut |_, _| {}).unwrap();
+        assert_eq!(http.posts(), 2);
     }
 
     #[test]
@@ -1404,7 +1488,7 @@ mod tests {
             model: "m",
             settings: &settings,
         };
-        let r = render_all(&ctx, &batches, 40, &mut |_, _| {}).unwrap();
+        let r = render_all(&ctx, &batches, 40, &priced(&ctx, &batches), &mut |_, _| {}).unwrap();
         assert!(r.cuts.contains_key("Six"));
         assert!(!r.cuts.contains_key("..."));
         assert_eq!(r.flagged["..."], "the cut is silent");
