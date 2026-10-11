@@ -1,6 +1,7 @@
 //! `quadcam-cli gear voice`: the radio's voice lines and packs, rendering with the provider
 //! from the settings, installing a pack, a per-line override, Choose voice (stages one card
-//! change; nothing is written to the card), and `build-pack`, the maintainer's tool.
+//! change; nothing is written to the card), `publish` (prepare a pack for the voices repo;
+//! `--approve` only at a terminal), and `build-pack`, the maintainer's tool.
 
 use anyhow::{bail, Result};
 use clap::{Args, Subcommand};
@@ -244,6 +245,48 @@ pub enum VoiceCmd {
         /// First install the recognizer's assets for the pack's language (macOS downloads them).
         #[arg(long)]
         install: bool,
+    },
+    /// Fetch an index pack's preview lines into the cache, each checked against its hash.
+    Preview {
+        /// The pack id from the index.
+        pack: String,
+        /// The index (a path or an address) when the voice_index setting names none.
+        #[arg(long)]
+        source: Option<String>,
+    },
+    /// Prepare a pack on this Mac for the QuadCam voices repo and print the review: every line
+    /// with what the speech check heard, and a spot check to listen to. Publishes nothing.
+    /// With --approve, at a terminal only: publishes the prepared pack the digest names.
+    Publish {
+        /// The pack on this Mac (local-...).
+        pack: String,
+        /// The published pack's id (default <lang>-<voice name>).
+        #[arg(long)]
+        id: Option<String>,
+        /// The pack's version (default 1).
+        #[arg(long)]
+        version: Option<String>,
+        /// The voice's name in the index (default the pack's).
+        #[arg(long)]
+        voice_name: Option<String>,
+        /// The pack's license (ElevenLabs and Kokoro packs get theirs filled in).
+        #[arg(long)]
+        license: Option<String>,
+        #[arg(long)]
+        attribution: Option<String>,
+        /// The GitHub repo, owner/name (default the QuadCam voices repo).
+        #[arg(long)]
+        repo: Option<String>,
+        /// Publish the prepared pack: creates the release and the index pull request with gh,
+        /// or prints the commands. Asks you to type the pack's id at the terminal.
+        #[arg(long, requires = "digest")]
+        approve: bool,
+        /// The digest the review printed.
+        #[arg(long)]
+        digest: Option<String>,
+        /// Print the review as text.
+        #[arg(long)]
+        text: bool,
     },
     /// Install a pack from the index after a hash check.
     Install {
@@ -503,6 +546,52 @@ pub fn run(core: &Core, a: VoiceArgs) -> Result<Value> {
                 digest,
             },
         )?)?,
+        Some(VoiceCmd::Preview { pack, source }) => serde_json::to_value(
+            call::gear_voice_pack_preview(core, api::PackPreviewParams { pack, source })?,
+        )?,
+        Some(VoiceCmd::Publish {
+            approve: true,
+            digest,
+            ..
+        }) => {
+            let digest = digest.unwrap_or_default();
+            let typed = approve_at_terminal(&digest)?;
+            let r = core.voice_publish_approve(&api::PublishApproveParams {
+                digest,
+                id: Some(typed),
+            })?;
+            eprint!("{}", core::voice_approve_text(&r));
+            serde_json::to_value(r)?
+        }
+        Some(VoiceCmd::Publish {
+            pack,
+            id,
+            version,
+            voice_name,
+            license,
+            attribution,
+            repo,
+            text,
+            ..
+        }) => {
+            let r = call::gear_voice_publish(
+                core,
+                api::PublishParams {
+                    pack,
+                    id,
+                    version,
+                    voice_name,
+                    license,
+                    attribution,
+                    repo,
+                },
+            )?;
+            if text {
+                Value::String(core::voice_review_text(&r))
+            } else {
+                serde_json::to_value(r)?
+            }
+        }
         Some(VoiceCmd::Install { pack, source }) => serde_json::to_value(
             call::gear_voice_pack_install(core, api::PackInstallParams { pack, source })?,
         )?,
@@ -614,4 +703,22 @@ pub fn run(core: &Core, a: VoiceArgs) -> Result<Value> {
             })
         }
     })
+}
+
+/// The person's Approve at a terminal: refuses without one, then reads the pack id they type.
+/// An agent's shell has no terminal, so it cannot approve.
+fn approve_at_terminal(digest: &str) -> Result<String> {
+    use std::io::{IsTerminal, Write};
+    if !std::io::stdin().is_terminal() || !std::io::stderr().is_terminal() {
+        bail!("Approve publishes a pack, so it runs only at a terminal, where you type the pack's id. In the app: Gear > Voices > Publish….");
+    }
+    eprint!("Approve publishes the pack prepared with digest {digest}.\nType the pack's id to approve: ");
+    std::io::stderr().flush()?;
+    let mut line = String::new();
+    std::io::stdin().read_line(&mut line)?;
+    let typed = line.trim().to_string();
+    if typed.is_empty() {
+        bail!("Nothing was published.");
+    }
+    Ok(typed)
 }

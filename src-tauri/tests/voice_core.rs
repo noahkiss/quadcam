@@ -706,6 +706,11 @@ fn bad_calls_say_what_is_wrong() {
         })
         .unwrap_err();
     assert!(format!("{e:#}").contains("not SOUNDS"), "{e:#}");
+    // An empty voice_index turns the default index off.
+    let f = b.dir.path().join("support/settings.json");
+    let mut v: serde_json::Value = serde_json::from_slice(&std::fs::read(&f).unwrap()).unwrap();
+    v["voiceIndex"] = "".into();
+    std::fs::write(&f, v.to_string()).unwrap();
     let e = b
         .core
         .gear_voice_pack_install(&PackInstallParams {

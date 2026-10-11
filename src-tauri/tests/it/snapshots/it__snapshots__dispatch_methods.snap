@@ -102,6 +102,8 @@ expression: "Core::METHODS"
   "gear_voice_import_takes",
   "gear_voice_check",
   "gear_voice_pack_install",
+  "gear_voice_pack_preview",
+  "gear_voice_publish",
   "gear_voice_choose",
   "gear_voice_choose_radios",
   "gear_voice_pack_delete",

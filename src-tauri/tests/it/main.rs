@@ -46,4 +46,5 @@ mod surface;
 mod switchmap;
 mod upgrade;
 mod voice;
+mod voice_publish;
 mod voice_studio;

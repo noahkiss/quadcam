@@ -48,6 +48,8 @@ cli.arg gear voice check <PACK>
 cli.arg gear voice delete <PACK>
 cli.arg gear voice import-takes <FOLDER>
 cli.arg gear voice install <PACK>
+cli.arg gear voice preview <PACK>
+cli.arg gear voice publish <PACK>
 cli.arg library apply-name-format [IDS]...
 cli.arg library cut <ID>
 cli.arg library cut [RANGES]...
@@ -176,6 +178,8 @@ cli.command gear voice key delete
 cli.command gear voice key set
 cli.command gear voice key status
 cli.command gear voice models
+cli.command gear voice preview
+cli.command gear voice publish
 cli.command gear voice render
 cli.command gear voice sample
 cli.command gear voice sets
@@ -485,6 +489,16 @@ cli.flag gear voice estimate --trim-db VALUE
 cli.flag gear voice estimate --voice VALUE
 cli.flag gear voice import-takes --dry-run
 cli.flag gear voice install --source VALUE
+cli.flag gear voice preview --source VALUE
+cli.flag gear voice publish --approve
+cli.flag gear voice publish --attribution VALUE
+cli.flag gear voice publish --digest VALUE
+cli.flag gear voice publish --id VALUE
+cli.flag gear voice publish --license VALUE
+cli.flag gear voice publish --repo VALUE
+cli.flag gear voice publish --text
+cli.flag gear voice publish --version VALUE
+cli.flag gear voice publish --voice-name VALUE
 cli.flag gear voice render --carrier VALUE
 cli.flag gear voice render --confirm
 cli.flag gear voice render --digest VALUE

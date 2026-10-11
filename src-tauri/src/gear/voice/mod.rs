@@ -8,6 +8,7 @@ pub mod eleven;
 pub mod keychain;
 pub mod lines;
 pub mod packs;
+pub mod publish;
 pub mod rates;
 pub mod render;
 pub mod reuse;

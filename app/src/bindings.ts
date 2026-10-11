@@ -252,6 +252,17 @@ export const commands = {
 	/**  Installs a voice pack from the index after a hash check. */
 	gearVoicePackInstall: (params: PackInstallParams) => typedError<VoicePack, string>(__TAURI_INVOKE("gear_voice_pack_install", { params })),
 	/**
+	 *  Fetches an index pack's preview lines into the cache, each checked against its
+	 *  hash, to play before an install.
+	 */
+	gearVoicePackPreview: (params: PackPreviewParams) => typedError<PreviewTake[], string>(__TAURI_INVOKE("gear_voice_pack_preview", { params })),
+	/**
+	 *  Prepares a pack on this Mac for the voices repo: refuses unless the speech check
+	 *  cleared every line, then builds the zip, the previews and the index entry, and
+	 *  answers the review with a digest. Publishes nothing: only the person approves.
+	 */
+	gearVoicePublish: (params: PublishParams) => typedError<PublishReview_Serialize, string>(__TAURI_INVOKE("gear_voice_publish", { params })),
+	/**
 	 *  Stages one card change that puts a pack's sounds on a radio, keeping the person's
 	 *  per-line overrides when asked. The apply sheet writes the card.
 	 */
@@ -551,6 +562,11 @@ export const commands = {
 	answerFormatRequest: (id: number, approve: boolean) => __TAURI_INVOKE<void>("answer_format_request", { id, approve }),
 	/**  The apply sheet's own Apply button: the click is the confirmation. */
 	gearApplyClick: (params: ApplyRequest) => typedError<ApplyReport, string>(__TAURI_INVOKE("gear_apply_click", { params })),
+	/**
+	 *  The publish review's own Approve button: the click is the person's approval. No `api` row,
+	 *  so MCP and the socket cannot reach it.
+	 */
+	gearVoicePublishApprove: (params: PublishApproveParams) => typedError<PublishApproveReport, string>(__TAURI_INVOKE("gear_voice_publish_approve", { params })),
 	/**  The apply sheet's own Apply button for a sim sync: the click is the confirmation. */
 	gearSimSyncClick: (params: SimSyncRequest) => typedError<ApplyReport, string>(__TAURI_INVOKE("gear_sim_sync_click", { params })),
 	/**  The apply sheet's own Apply button for a sim restore: the click is the confirmation. */
@@ -3045,6 +3061,13 @@ export type GeoResult = {
 	provider: string,
 };
 
+/**  Whether `gh` can publish. */
+export type GhStatus = {
+	/**  `gh` is installed and signed in to github.com. */
+	ready: boolean,
+	reason?: string | null,
+};
+
 /**  The screen the OSD draws on. */
 export type Grid = {
 	/**  `NTSC`, `PAL`, `HD`, or `WxH` for a given size. */
@@ -4247,6 +4270,69 @@ export type PackFlight = {
 	resting_v: number | null,
 };
 
+/**  What the index says about one pack. */
+export type PackIndexEntry = PackIndexEntry_Serialize | PackIndexEntry_Deserialize;
+
+/**  What the index says about one pack. */
+export type PackIndexEntry_Deserialize = {
+	id: string,
+	voice: string,
+	lang: string,
+	provider: string,
+	model?: string,
+	settings: RenderSettings,
+	lines: number,
+	bytes: number,
+	sha256: string,
+	license: string,
+	attribution: string,
+	/**  The sha256 of the `lines.csv` the pack was rendered from. */
+	lines_csv_sha: string,
+	version?: string,
+	/**  The zip's file name; the index's own folder or URL holds it. */
+	file?: string,
+	/**  The firmware family the pack is for (`edgetx`). */
+	firmware?: string,
+	/**  The zip's https address (a release asset); empty: `file` next to the index. */
+	url?: string,
+	/**  The zip's size, the download. */
+	zip_bytes?: number,
+	/**  The day the pack was published, `YYYY-MM-DD`. */
+	date?: string,
+	/**  A few lines to listen to before the download. */
+	preview?: PreviewLine[],
+};
+
+/**  What the index says about one pack. */
+export type PackIndexEntry_Serialize = {
+	id: string,
+	voice: string,
+	lang: string,
+	provider: string,
+	model: string,
+	settings: RenderSettings,
+	lines: number,
+	bytes: number,
+	sha256: string,
+	license: string,
+	attribution: string,
+	/**  The sha256 of the `lines.csv` the pack was rendered from. */
+	lines_csv_sha: string,
+	version: string,
+	/**  The zip's file name; the index's own folder or URL holds it. */
+	file: string,
+	/**  The firmware family the pack is for (`edgetx`). */
+	firmware: string,
+	/**  The zip's https address (a release asset); empty: `file` next to the index. */
+	url?: string,
+	/**  The zip's size, the download. */
+	zip_bytes: number,
+	/**  The day the pack was published, `YYYY-MM-DD`. */
+	date?: string,
+	/**  A few lines to listen to before the download. */
+	preview?: PreviewLine[],
+};
+
 /**  `gear_voice_pack_install`. */
 export type PackInstallParams = {
 	/**  A pack id from the index. */
@@ -4260,6 +4346,14 @@ export type PackOverride = {
 	radio: string,
 	/**  The card path. */
 	line: string,
+};
+
+/**  `gear_voice_pack_preview`. */
+export type PackPreviewParams = {
+	/**  A pack id from the index. */
+	pack: string,
+	/**  The index (a path or an address) when the setting `voice_index` names none. */
+	source?: string | null,
 };
 
 /**
@@ -4497,6 +4591,24 @@ export type Preflight = {
 	rows: CheckRow[],
 };
 
+/**  One preview line of an index entry: a short AAC file next to the index. */
+export type PreviewLine = {
+	/**  The card path of the line. */
+	path: string,
+	text: string,
+	/**  The file, relative to the index's folder or address. */
+	file: string,
+	sha256: string,
+};
+
+/**  One preview line on this Mac. */
+export type PreviewTake = {
+	path: string,
+	text: string,
+	/**  The file the app plays. */
+	file: string,
+};
+
 export type Probe = {
 	duration: number | null,
 	video_packets: number,
@@ -4662,6 +4774,108 @@ export type PruneReport = {
 	dropped: string[],
 	kept: number,
 	collected: Collected,
+};
+
+/**  `voice_publish_approve`: the person's Approve. */
+export type PublishApproveParams = {
+	/**  The digest of the review the person approved. */
+	digest: string,
+	/**
+	 *  The published pack's id, as the person confirmed it: refused unless it is the
+	 *  bundle's.
+	 */
+	id?: string | null,
+};
+
+export type PublishApproveReport = {
+	id: string,
+	version: string,
+	/**  What `gh` created; none when it could not run. */
+	published?: Published | null,
+	/**  Without `gh`: the commands to run. */
+	commands: string[],
+	notes: string[],
+};
+
+/**  `gear_voice_publish`: prepare a local pack for the voices repo. */
+export type PublishParams = {
+	/**  A pack on this Mac (`local-…`). */
+	pack: string,
+	/**  The published id; default `<lang>-<voice name>`. */
+	id?: string | null,
+	/**  Default `1`. */
+	version?: string | null,
+	/**  The voice's name in the index; default the pack's. */
+	voice_name?: string | null,
+	/**  Default by provider: ElevenLabs (paid plan) and Kokoro fill it in. */
+	license?: string | null,
+	attribution?: string | null,
+	/**  `owner/name`; default the QuadCam voices repo. */
+	repo?: string | null,
+};
+
+/**  What `gear_voice_publish` prepared, for the review. */
+export type PublishReview = PublishReview_Serialize | PublishReview_Deserialize;
+
+/**  What `gear_voice_publish` prepared, for the review. */
+export type PublishReview_Deserialize = {
+	/**  The pack on this Mac. */
+	pack: string,
+	repo: string,
+	/**  The index entry Approve adds. */
+	entry: PackIndexEntry_Deserialize,
+	/**  The bundle's folder in the cache. */
+	dir: string,
+	zip: string,
+	/**  Every line: those the person accepted first, then in card order. */
+	lines: ReviewLine[],
+	/**  The spot check: lines picked at random to listen to. */
+	spot_check: string[],
+	/**  Lines the check heard otherwise and the person accepted. */
+	accepted: number,
+	/**  The person's own lines, left out of the published pack. */
+	left_out: string[],
+	/**  Approve repeats it. */
+	digest: string,
+	/**  Whether Approve can publish through `gh`, or prints commands. */
+	gh: GhStatus,
+	/**  The commands that publish the bundle by hand. */
+	commands: string[],
+	notes: string[],
+};
+
+/**  What `gear_voice_publish` prepared, for the review. */
+export type PublishReview_Serialize = {
+	/**  The pack on this Mac. */
+	pack: string,
+	repo: string,
+	/**  The index entry Approve adds. */
+	entry: PackIndexEntry_Serialize,
+	/**  The bundle's folder in the cache. */
+	dir: string,
+	zip: string,
+	/**  Every line: those the person accepted first, then in card order. */
+	lines: ReviewLine[],
+	/**  The spot check: lines picked at random to listen to. */
+	spot_check: string[],
+	/**  Lines the check heard otherwise and the person accepted. */
+	accepted: number,
+	/**  The person's own lines, left out of the published pack. */
+	left_out: string[],
+	/**  Approve repeats it. */
+	digest: string,
+	/**  Whether Approve can publish through `gh`, or prints commands. */
+	gh: GhStatus,
+	/**  The commands that publish the bundle by hand. */
+	commands: string[],
+	notes: string[],
+};
+
+/**  What Approve did. */
+export type Published = {
+	release_url: string,
+	pr_url: string,
+	branch: string,
 };
 
 /**  One pull. */
@@ -5139,6 +5353,23 @@ export type Retake = {
 	path: string,
 	text: string,
 	reason: string,
+};
+
+/**  One line of the review. */
+export type ReviewLine = {
+	path: string,
+	text: string,
+	/**  What the speech check heard. */
+	heard: string,
+	ok: boolean,
+	/**  Heard otherwise, and the person accepted it. */
+	accepted: boolean,
+	/**  The WAV as it goes into the zip (the app plays it). */
+	file: string,
+	/**  One of the spot check's lines. */
+	spot: boolean,
+	/**  One of the preview lines. */
+	preview: boolean,
 };
 
 export type RfAlarms = {
@@ -6525,6 +6756,10 @@ export type VoicePack = {
 	retakes?: Retake[],
 	/**  What the speech check heard in each line it checked (`pack.json` `heard`). */
 	heard?: HeardLine[],
+	/**  An index pack's preview lines (`gear_voice_pack_preview` fetches them). */
+	preview?: PreviewLine[],
+	/**  An index pack's download size. */
+	zip_bytes?: number,
 };
 
 /**  `gear_voice`. */
