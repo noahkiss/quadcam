@@ -72,7 +72,7 @@ QuadCam searches only when you ask, never per keystroke.
 Google Places needs an API key from a Google Cloud project with the Places API (New) and billing turned on. Light use stays in the free tier.
 
 - Type the key in **Google Places API key**, or set `QUADCAM_GOOGLE_PLACES_KEY` in the environment. The environment variable wins.
-- QuadCam never shows the key again. It sends the key to Google in a request header.
+- QuadCam never shows the key again, only its [hint](settings.md#secrets) and **Replace…**. It sends the key to Google in a request header.
 
 The search sends what you type to the provider you picked, and to the US Census Bureau when the fallback runs. Nothing else leaves your Mac.
 

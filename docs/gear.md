@@ -427,9 +427,12 @@ inside carrier sentences, and compares voices before it spends credits.
 
 - **Key.** Paste the ElevenLabs API key and **Save key**. It goes to the macOS Keychain
   (service `app.quadcam`) and nowhere else: not `settings.json`, not a log, not an answer.
-  The studio shows only the last four characters. **Remove key** deletes it. From the command
-  line, `quadcam-cli gear voice key set` reads the key from stdin. `QUADCAM_TTS_KEY` in the
-  environment takes the place of the Keychain for one run.
+  The studio shows only its hint: the first and last characters and the length, such as
+  `sk_9…8d4d (51 chars)` ([Secrets](settings.md#secrets)). **Replace…** opens the field for a
+  new key; **Remove key** deletes it. From the command line, `quadcam-cli gear voice key set`
+  reads the key from stdin, for example piped from a password manager. An agent sets it with
+  MCP `voice_key_set`; a key passed that way sits in the agent's transcript. `QUADCAM_TTS_KEY`
+  in the environment takes the place of the Keychain for one run.
 - **Account.** The studio lists the account's voices and models and the credits left. Each
   model shows its price in USD per 1,000 characters and the credits a character costs. QuadCam
   holds one rate table (the pricing page of 2026-10-09). A promo rate, such as the one on v4
@@ -1337,7 +1340,7 @@ packet rate changes the switch modes). From a terminal:
   the UID, the WiFi delay and a build number. A target whose screen shows a logo refuses.
   **The plan shows only a fingerprint of the UID, never the
   phrase.** Type the phrase in **Binding phrase** and select **Save phrase** (write-only), or use
-  `settings set elrs_binding_phrase=…`; reads show `(set)`. The plan refuses without a phrase.
+  `settings set-secret elrs_binding_phrase` (the phrase on stdin); reads show only its hint. The plan refuses without a phrase.
 - The region (`elrs_region`, `FCC` or `LBT`; the **Region** list in the ELRS section) picks the image folder.
 - The **esptool** module must be installed ([Modules](modules.md)). Nothing downloads except the
   release, on your action.

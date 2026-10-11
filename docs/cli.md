@@ -121,6 +121,7 @@ quadcam-cli profiles delete Whoop
 quadcam-cli settings                              # the file, its values, the effective settings
 quadcam-cli settings set layout=day place_folders=true photos_album=Drone
 quadcam-cli settings set output_dir=null          # back to the default
+op read "op://<vault>/<item>/<field>" | quadcam-cli settings set-secret google_places_key   # a secret from stdin
 quadcam-cli modules                               # downloaded tools: versions, license, source
 quadcam-cli modules install ffmpeg --yes          # without --yes: refuses (exit 3), shows the license
 quadcam-cli modules check                         # newest pins from the latest release
@@ -144,6 +145,8 @@ See [Modules and notices](modules.md) for what a module install checks.
 
 A value is JSON or plain text.
 
+`google_places_key`, `tts_key` and `elrs_binding_phrase` are secrets. `settings set-secret KEY` reads one from one line of stdin (hidden at a terminal), so it never sits in argv or shell history. `settings set` still sets one, and prints a note on stderr that other processes can read a command's arguments. `settings show` keeps `"(set)"` in `values` and puts each secret's hint in `secrets` (`hint`, `prefix`, `suffix`, `length`; see [Secrets](settings.md#secrets)).
+
 ## Gear
 
 ```bash
@@ -166,7 +169,7 @@ quadcam-cli --json gear osd DEVICE [--staged] [--grid ...] [--text]   # --staged
 quadcam-cli --json gear osd-edit DEVICE [--move ELEMENT=X,Y]... [--profiles ELEMENT=1,3|none]... [--copy FROM:TO]   # stages into the one "OSD layout" change; writes nothing to the FC
 quadcam-cli --json gear voice [--radio ID] [--refresh] [--text]   # lines, packs, the provider; --refresh reads the pack index
 quadcam-cli --json gear voice render [--voice V] [--lines SOUNDS/en/armed.wav,...] [--dry-run] [--confirm] [--speed S --tempo T --trim-db D --tail-ms N --fade-out-ms N --seed N]   # without --set: render with the tts_provider into a local pack; a provider that may charge needs --confirm
-quadcam-cli gear voice key set|delete|status   # the ElevenLabs key in the Keychain; `set` reads one line from stdin (hidden on a terminal); never printed
+quadcam-cli gear voice key set|delete|status   # the ElevenLabs key in the Keychain; `set` reads one line from stdin (hidden on a terminal); prints only the key's hint
 quadcam-cli --json gear voice sets|voices|models|credits   # the line sets; the account's voices; its models with USD per 1K characters, the estimated credits a character and the request limit; the credits left
 quadcam-cli --json gear voice estimate --set quad,easter --voice Callum --model eleven_turbo_v2_5 [--lines PATH,...] [--carrier T --max-lines N --snap-ms N]   # the characters (carriers included), batches and credits; no paid call
 quadcam-cli --json gear voice sample --voices Callum,Daniel --models eleven_v4,eleven_turbo_v2_5 [--set sample] [--lines PATH,...] [--dry-run] [--confirm --digest D]   # a few hard lines per voice and model as WAVs in the cache; bills ElevenLabs, so it needs --confirm with the digest the run without it printed, and refuses when the credits fall short or the plan changed
@@ -284,7 +287,8 @@ Every MCP tool has a command. The command line also has `scan`, `analyze`, `clea
 | `quadcam_status` | `status` (the card list alone: `cards`; the session alone: `show`) |
 | `quadcam_load_clips` | `stage`, then `analyze` and `dates` |
 | `quadcam_suggest` | `import` flags (`--name`, `--note`, `--date`, `--cut`, ...), `meta`, `cut`, `dates` |
-| `quadcam_settings` `read`, `write` | `settings show`, `settings set` |
+| `quadcam_settings` `read`, `write` | `settings show`, `settings set` (a secret: `settings set-secret`) |
+| `quadcam_gear_edit` `voice_key_set`, `voice_key_delete` | `gear voice key set`, `gear voice key delete` |
 | `quadcam_profiles` `set_default` | `profiles default` |
 | `quadcam_gear` `switch_map` | `gear map` |
 | `quadcam_gear` `session_report` | `gear report` |
