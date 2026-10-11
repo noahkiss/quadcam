@@ -69,6 +69,10 @@ test("a flash needs the phrase, then runs only on Apply", async ({ app, page }) 
 
   await page.getByLabel("Binding phrase").fill("bench-phrase-not-real");
   await page.getByRole("button", { name: "Save phrase" }).click();
+  // The field closes on its hint; the phrase never comes back.
+  await expect(page.getByLabel("Binding phrase")).toHaveText("benc…real (21 chars)");
+  await expect(page.getByRole("button", { name: "Replace…" })).toBeVisible();
+  await expect(page.locator("body")).not.toContainText("phrase-not");
   await page.getByRole("button", { name: "Flash 4.1.0…" }).click();
   await expect(sheet.getByRole("region", { name: "Firmware image" })).toContainText("UID fingerprint");
   await expect(sheet).not.toContainText("bench-phrase-not-real");

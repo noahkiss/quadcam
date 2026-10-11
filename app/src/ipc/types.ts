@@ -302,9 +302,17 @@ export type Defaults = Omit<G.Defaults_Serialize, "tunables" | "places" | "profi
   profiles: Profile[];
 };
 
+/** A secret as the core shows it: first and last characters and the length. */
+export type Hint = G.Hint;
+
+/** The secret settings (`settings::SECRET_KEYS`): reads show only their hint. */
+export const SECRET_KEYS = ["googlePlacesKey", "ttsKey", "elrsBindingPhrase"] as const;
+
 export interface SettingsView {
   path: Path;
   values: SettingsValues;
+  /** Each secret that is set, by file key. */
+  secrets: Record<string, Hint>;
   effective: Defaults;
 }
 

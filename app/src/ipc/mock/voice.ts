@@ -3,6 +3,7 @@
 // `card_files` change, as the core stages it, on one radio or several) and pack delete.
 import type { Catalog, Edit, KeyStatus, LineOverride, ModelInfo, PackDeleteReport, RenderReport, Retake, SampleItem, SampleReport, SetInfo, StagedChange, StudioEstimate, StudioView, VoiceChooseRadiosReport, VoiceEstimate, VoiceInfo, VoiceLine, VoicePack, VoiceView } from "../types";
 import type { MockGear } from "./gear";
+import { hint as secretHint } from "./secret";
 import * as changes from "./changes";
 
 export const VOICE_CHANGE = "Voice: ";
@@ -39,7 +40,8 @@ export interface MockVoice {
   /** The provider may charge (the next render waits for confirm). */
   paid: boolean;
   /** An ElevenLabs key is stored (the mock keeps only that fact). */
-  keySet: boolean;
+  /** The stored key; empty for none. */
+  keySet: string;
   /** Credits the studio has spent in this run. */
   spent: number;
   /** A line a studio render without a seed leaves out for a re-take. */
@@ -50,7 +52,7 @@ export interface MockVoice {
   retakes: Record<string, Retake[]>;
 }
 
-export const freshVoice = (): MockVoice => ({ installed: [], index: false, overrides: {}, chosen: {}, custom: [], paid: false, keySet: false, spent: 0, retake: null, takesDeleted: [], retakes: {} });
+export const freshVoice = (): MockVoice => ({ installed: [], index: false, overrides: {}, chosen: {}, custom: [], paid: false, keySet: "", spent: 0, retake: null, takesDeleted: [], retakes: {} });
 
 type Paid = { confirm?: boolean; digest?: string | null; settings?: { seed?: number | null } | null };
 
@@ -239,14 +241,16 @@ const SETS: SetInfo[] = [
 const CREDITS = 98_500;
 const CARRIER = "The word is .".length;
 
-const keyStatus = (g: MockGear): KeyStatus => (g.voice.keySet ? { set: true, hint: "ends in 3f9a", source: "keychain", problem: null } : { set: false, hint: "", source: "", problem: null });
+const keyStatus = (g: MockGear): KeyStatus => (g.voice.keySet ? { set: true, ...secretHint(g.voice.keySet), source: "keychain", problem: null } : { set: false, hint: "", prefix: "", suffix: "", length: 0, source: "", problem: null });
 
 /** `gear_voice_key`. */
 export function key(g: MockGear, p: { action?: string; key?: string | null }): KeyStatus {
   if (p.action === "set") {
-    if (!p.key?.trim()) throw "The key is empty.";
-    g.voice.keySet = true;
-  } else if (p.action === "delete") g.voice.keySet = false;
+    const k = p.key?.trim() ?? "";
+    if (!k) throw "The key is empty.";
+    if (/[\s\p{Cc}]/u.test(k)) throw "A key has no spaces or line breaks: paste only the key.";
+    g.voice.keySet = k;
+  } else if (p.action === "delete") g.voice.keySet = "";
   return keyStatus(g);
 }
 

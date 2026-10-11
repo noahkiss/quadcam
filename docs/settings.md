@@ -71,6 +71,15 @@ The app, the command-line tool and the MCP server all read and write this file.
 - Settings from QuadCam 0.3.0 carry over as they are.
 - The bottom of the section list shows the QuadCam version and the build (the commit it was built from). **About QuadCam** shows them too.
 
+## Secrets
+
+Three settings hold secrets: `google_places_key`, `tts_key` and `elrs_binding_phrase`. The ElevenLabs key is not a setting; it lives in the macOS Keychain ([Voice studio](gear.md#voice-studio)).
+
+- **Write-only.** QuadCam never shows a stored secret. Every read shows its hint: the first and last characters and the length, for example `sk_9…8d4d (51 chars)`. A value of 16 or more characters shows 4 at each end, a shorter one a quarter of its length at each end, and one under 4 characters only its length. A hint never shows more than half the value.
+- **The Settings window** shows the hint and **Replace…**. **Replace…** opens an empty field; **Keep current** closes it.
+- **Command line.** `quadcam-cli settings set-secret KEY` reads the value from one line of stdin, hidden at a terminal, so it stays out of the process list and your shell history: `op read "op://<vault>/<item>/<field>" | quadcam-cli settings set-secret google_places_key`. `settings set KEY=VALUE` still works for a secret, and prints a note that other processes can read a command's arguments. `settings show` keeps `"(set)"` in `values` and lists each hint in `secrets`.
+- **Agents.** MCP `quadcam_settings` `write` sets a secret, and `read` shows only the hints. A value an agent passes sits in the agent's transcript; `set-secret` from stdin keeps it out.
+
 ## Gear
 
 **Settings > Gear** sets most of these. `gear_dir`, `tts_provider` and the other voice settings are set with `quadcam-cli settings set` or an agent.
@@ -90,11 +99,11 @@ The app, the command-line tool and the MCP server all read and write this file.
 | `sim_preview` | off | Shows **Gear > Sim**, the flight sim preview. Set it in Settings > Gear, or with `quadcam-cli settings set sim_preview=true` |
 | `betaflight_flash_preview` | off | Offers **Flash…** for a Betaflight FC on the Firmware page. A preview: it has not been tried on a real FC. Set it in Settings > Gear, or with `quadcam-cli settings set betaflight_flash_preview=true`. See [Gear](gear.md#flash-a-betaflight-fc-preview) |
 | `elrs_preview` | off | Shows the ExpressLRS tools on the Firmware page (a preview). Every ExpressLRS job refuses while it is off. See [Gear](gear.md#expresslrs-preview) |
-| `elrs_binding_phrase` | none | The binding phrase a flashed ExpressLRS image carries, 1 to 64 characters. Reads show only `(set)`; plans and reports show a fingerprint of the UID. `settings set elrs_binding_phrase=…` puts it in your shell history, so prefer the field in the ELRS section |
+| `elrs_binding_phrase` | none | The binding phrase a flashed ExpressLRS image carries, 1 to 64 characters. Write-only: reads show its [hint](#secrets); plans and reports show a fingerprint of the UID. Set it in the ELRS section or with `settings set-secret elrs_binding_phrase` |
 | `elrs_region` | `FCC` | `FCC` or `LBT`: which image folder of a release a flash uses |
 | `elrs_wifi_interval` | 60 | Seconds without a link before a flashed device starts its WiFi (0: never) |
 | `firmware_check` | `manual` | `manual` or `daily`; **Check for firmware updates daily** in Settings > Gear sets `daily`. `manual`: the Firmware page reads the network only when you select **Check for updates**. `daily`: it also checks when the last answer is a day old. See [Gear](gear.md#check) |
-| `tts_provider`, `tts_key` | `say`, none | The voice provider: `say` or `openai`. The Voice studio always uses ElevenLabs, with a key in the Keychain, whatever this says. `QUADCAM_TTS_KEY` in the environment wins over the key. Reads show the key only as `(set)` |
+| `tts_provider`, `tts_key` | `say`, none | The voice provider: `say` or `openai`. The Voice studio always uses ElevenLabs, with a key in the Keychain, whatever this says. `QUADCAM_TTS_KEY` in the environment wins over the key. Write-only: reads show its [hint](#secrets) |
 | `tts_base_url`, `tts_model`, `tts_voice` | none | For `openai`: the server (such as `http://127.0.0.1:8880`), its model, and the voice your own lines render with. For `say`, `tts_voice` is a `say` voice |
 | `voice_index` | none | The address or path of the voice pack index (`voices.json`) |
 

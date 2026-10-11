@@ -8,7 +8,7 @@
 use super::voice::{collect_sounds, copy_dir, slug};
 use super::{Core, RenderReport, VoiceRenderParams};
 use crate::gear::voice::batch::{self, Batch, BatchCache, BatchSettings, Estimate, Item, Pricing};
-use crate::gear::voice::keychain::{self, ELEVENLABS};
+use crate::gear::voice::keychain::ELEVENLABS;
 use crate::gear::voice::lines::{self, Line, Spelling};
 use crate::gear::voice::packs::{self, BuildOpts, PackManifest, Retake};
 use crate::gear::voice::rates;
@@ -34,8 +34,15 @@ pub struct KeyParams {
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, specta::Type)]
 pub struct KeyStatus {
     pub set: bool,
-    /// What tells keys apart without showing one: `ends in 3f9a`.
+    /// What tells keys apart without showing one: `sk_9…8d4d (51 chars)` (`secret::hint`).
     pub hint: String,
+    /// The hint's first and last characters and the key's length; empty and 0 with no key.
+    #[serde(default)]
+    pub prefix: String,
+    #[serde(default)]
+    pub suffix: String,
+    #[serde(default)]
+    pub length: u32,
     /// `keychain`, or `environment` when QUADCAM_TTS_KEY holds it for this run.
     pub source: String,
     /// Why the Keychain could not be read, when it could not.
@@ -175,16 +182,25 @@ impl Core {
         let none = |problem| KeyStatus {
             set: false,
             hint: String::new(),
+            prefix: String::new(),
+            suffix: String::new(),
+            length: 0,
             source: String::new(),
             problem,
         };
         match self.eleven_key() {
-            Ok(Some((k, source))) => KeyStatus {
-                set: true,
-                hint: keychain::hint(&k),
-                source: source.into(),
-                problem: None,
-            },
+            Ok(Some((k, source))) => {
+                let h = crate::secret::hint(&k);
+                KeyStatus {
+                    set: true,
+                    hint: h.hint,
+                    prefix: h.prefix,
+                    suffix: h.suffix,
+                    length: h.length,
+                    source: source.into(),
+                    problem: None,
+                }
+            }
             Ok(None) => none(None),
             Err(e) => none(Some(format!("{e:#}"))),
         }

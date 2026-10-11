@@ -225,6 +225,9 @@ fn the_google_key_is_written_but_never_read_back() {
         )
         .unwrap();
     assert_eq!(v.values["googlePlacesKey"], "(set)");
+    assert_eq!(v.secrets["googlePlacesKey"].hint, "tes…123 (12 chars)");
+    assert_eq!(v.secrets["googlePlacesKey"].length, 12);
+    assert!(!v.secrets.contains_key("ttsKey"));
     assert_eq!(read(&f)["googlePlacesKey"], "test-key-123");
     assert_eq!(
         c.defaults().google_places_key.as_deref(),
@@ -239,5 +242,5 @@ fn the_google_key_is_written_but_never_read_back() {
     assert!(r["content"][0]["text"]
         .as_str()
         .unwrap()
-        .contains("google_places_key set"));
+        .contains("google_places_key tes…123 (12 chars)"));
 }

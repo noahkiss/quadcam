@@ -705,15 +705,22 @@ impl<B: Backend> Server<B> {
                     }
                 };
                 let e = &view["effective"];
+                // A secret reads as its hint (`secret::hint`), never its value.
+                let secret = |k: &str| {
+                    view["secrets"][k]["hint"]
+                        .as_str()
+                        .unwrap_or("not set")
+                        .to_string()
+                };
                 let line = format!(
-                    "{}Settings file {}.\noutput_dir {} | layout {} | place_folders {} | format {} | encoder {} | keep_originals {} | add_time {} | delete_clips_after_import {} | join_split_recordings {} | default_name {:?} | photos_album {:?} | format_label {} | log_dir {} | geocoder {} | name_date_format {} | default_profile {} | tunables {} | ffmpeg_source {} | google_places_key {}",
+                    "{}Settings file {}.\noutput_dir {} | layout {} | place_folders {} | format {} | encoder {} | keep_originals {} | add_time {} | delete_clips_after_import {} | join_split_recordings {} | default_name {:?} | photos_album {:?} | format_label {} | log_dir {} | geocoder {} | name_date_format {} | default_profile {} | tunables {} | ffmpeg_source {} | google_places_key {} | tts_key {} | elrs_binding_phrase {}",
                     if action == "write" { "Saved. " } else { "" },
                     view["path"].as_str().unwrap_or("?"),
                     e["output_dir"].as_str().unwrap_or("none"), e["layout"].as_str().unwrap_or("?"), e["place_folders"],
                     e["format"].as_str().unwrap_or("?"), e["encoder"].as_str().unwrap_or("?"), e["keep_originals"], e["add_time"], e["delete_clips_after_import"], e["join_split_recordings"],
                     e["default_name"].as_str().unwrap_or(""), e["photos_album"].as_str().unwrap_or(""), e["format_label"].as_str().unwrap_or(""),
                     e["log_dir"].as_str().unwrap_or("none"), e["geocoder"].as_str().unwrap_or("?"), e["name_date_format"].as_str().unwrap_or("?"), e["default_profile"].as_str().unwrap_or("none"), e["tunables"], e["ffmpeg_source"].as_str().unwrap_or("?"),
-                    if view["values"]["googlePlacesKey"].is_null() { "not set" } else { "set" },
+                    secret("googlePlacesKey"), secret("ttsKey"), secret("elrsBindingPhrase"),
                 );
                 let settings: serde_json::Map<String, Value> = [
                     "output_dir",
@@ -738,9 +745,16 @@ impl<B: Backend> Server<B> {
                 .iter()
                 .map(|k| (k.to_string(), e[*k].clone()))
                 .collect();
+                let secrets: serde_json::Map<String, Value> = crate::settings::SECRET_KEYS
+                    .iter()
+                    .filter_map(|k| {
+                        let h = view["secrets"].get(*k)?;
+                        Some((crate::settings::key(k).ok()?.name?.to_string(), h.clone()))
+                    })
+                    .collect();
                 Ok((
                     vec![text(line)],
-                    json!({"path": view["path"], "settings": settings}),
+                    json!({"path": view["path"], "settings": settings, "secrets": secrets}),
                 ))
             }
             "quadcam_load_clips" => {

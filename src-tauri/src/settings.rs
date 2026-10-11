@@ -495,10 +495,32 @@ pub fn update<T>(path: &Path, edit: impl FnOnce(&mut Values) -> Result<T>) -> Re
     Ok((out, values))
 }
 
-/// Settings that hold secrets: reads show only whether they are set.
+/// Settings that hold secrets: reads show only their `secret::hint`, never the value.
 pub const SECRET_KEYS: &[&str] = &["googlePlacesKey", "ttsKey", "elrsBindingPhrase"];
 
-/// The values with secrets replaced by `"(set)"`.
+/// Whether `name` (file key or CLI/MCP name) is a secret setting.
+pub fn is_secret(name: &str) -> bool {
+    key(name).is_ok_and(|k| SECRET_KEYS.contains(&k.file))
+}
+
+/// The hint of each secret that is set, by file key.
+pub fn secret_hints(values: &Values) -> std::collections::BTreeMap<String, crate::secret::Hint> {
+    SECRET_KEYS
+        .iter()
+        .filter_map(|k| {
+            let v = values.get(*k)?;
+            let s = match v {
+                Value::Null => return None,
+                Value::String(s) => s.clone(),
+                other => other.to_string(),
+            };
+            Some((k.to_string(), crate::secret::hint(&s)))
+        })
+        .collect()
+}
+
+/// The values with secrets replaced by `"(set)"` (schema 1 kept that marker; the hint is in
+/// `secret_hints`).
 pub fn redacted(mut values: Values) -> Values {
     for k in SECRET_KEYS {
         if let Some(v) = values.get_mut(*k) {

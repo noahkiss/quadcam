@@ -11,7 +11,7 @@ use quadcam_lib::media::{self, Encoder, Format};
 use quadcam_lib::moments::Span;
 use quadcam_lib::photos::{self, PhotosLibrary, Recorder};
 use quadcam_lib::session::{Editor, PlanPatch};
-use quadcam_lib::{disk, sources};
+use quadcam_lib::{disk, settings, sources};
 use serde::Deserialize;
 use serde_json::{json, Value};
 use std::path::PathBuf;
@@ -492,6 +492,40 @@ enum SetCmd {
         #[arg(required = true, value_name = "KEY=VALUE")]
         values: Vec<String>,
     },
+    /// Set a secret setting (google_places_key, tts_key, elrs_binding_phrase) from one line
+    /// of stdin, hidden when stdin is a terminal, so the value never sits in argv or shell
+    /// history. Reads show only its hint.
+    SetSecret {
+        /// The secret setting.
+        #[arg(value_name = "KEY")]
+        key: String,
+    },
+}
+
+/// One line from stdin without its line ending. A terminal gets a prompt and no echo.
+pub(crate) fn read_secret(what: &str) -> Result<String> {
+    use std::io::IsTerminal;
+    let tty = std::io::stdin().is_terminal();
+    let stty = |on: bool| {
+        let _ = std::process::Command::new("/bin/stty")
+            .arg(if on { "echo" } else { "-echo" })
+            .stdin(std::process::Stdio::inherit())
+            .status();
+    };
+    if tty {
+        eprint!("{what} (not shown): ");
+        stty(false);
+    }
+    let mut line = String::new();
+    let r = std::io::stdin().read_line(&mut line);
+    if tty {
+        stty(true);
+        eprintln!();
+    }
+    r?;
+    let end = line.trim_end_matches(['\n', '\r']).len();
+    line.truncate(end);
+    Ok(line)
 }
 
 fn removed(s: Option<String>) -> Option<quadcam_lib::trim::RemovedCuts> {
@@ -719,6 +753,39 @@ fn run(cmd: Cmd, session: Option<PathBuf>) -> Result<Value> {
                         .unwrap_or_else(|_| Value::String(v.to_string()));
                     changes.insert(k.trim().to_string(), v);
                 }
+                let secrets: Vec<&str> = changes
+                    .keys()
+                    .map(String::as_str)
+                    .filter(|k| settings::is_secret(k))
+                    .collect();
+                if !secrets.is_empty() {
+                    eprintln!(
+                        "quadcam-cli: note: other processes can read a command's arguments; set {} with `quadcam-cli settings set-secret KEY` and the value on stdin.",
+                        secrets.join(", ")
+                    );
+                }
+                serde_json::to_value(call::settings_set(
+                    &core,
+                    api::SetSettingsParams { values: changes },
+                )?)?
+            }
+            SetCmd::SetSecret { key } => {
+                if !settings::is_secret(&key) {
+                    let names: Vec<&str> = settings::SECRET_KEYS
+                        .iter()
+                        .filter_map(|k| settings::key(k).ok()?.name)
+                        .collect();
+                    bail!(
+                        "{key:?} is not a secret setting ({}); use `settings set` for it.",
+                        names.join(", ")
+                    );
+                }
+                let value = read_secret(&key)?;
+                if value.is_empty() {
+                    bail!("No value was given: pipe it in, or type it at the prompt.");
+                }
+                let mut changes = serde_json::Map::new();
+                changes.insert(key, Value::String(value));
                 serde_json::to_value(call::settings_set(
                     &core,
                     api::SetSettingsParams { values: changes },

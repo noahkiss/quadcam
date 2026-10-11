@@ -105,7 +105,11 @@ fn the_key_lives_in_the_keychain_and_never_comes_back() {
     let s = b.core.gear_voice_key(&key("set", Some(KEY))).unwrap();
     assert!(s.set);
     assert_eq!(s.source, "keychain");
-    assert_eq!(s.hint, "ends in cdef");
+    assert_eq!(s.hint, "fake…cdef (25 chars)");
+    assert_eq!(
+        (s.prefix.as_str(), s.suffix.as_str(), s.length),
+        ("fake", "cdef", 25)
+    );
     let shown = serde_json::to_string(&s).unwrap();
     assert!(
         !shown.contains(KEY) && !shown.contains("0123456789"),
@@ -612,7 +616,7 @@ fn the_mcp_tools_price_first_and_a_paid_sample_needs_confirm() {
     assert_eq!(r["isError"], false, "{r}");
     assert_eq!(http.posts(), 3);
 
-    // An agent can delete the key but has no way to set one.
+    // An agent can delete the key and set one; the answer shows only the hint.
     let r = s.call_tool("quadcam_gear_edit", json!({"action": "voice_key_delete"}));
     assert_eq!(r["isError"], false, "{r}");
     assert!(r["content"][0]["text"]
@@ -621,9 +625,12 @@ fn the_mcp_tools_price_first_and_a_paid_sample_needs_confirm() {
         .contains("No ElevenLabs key"));
     let r = s.call_tool(
         "quadcam_gear_edit",
-        json!({"action": "voice_key_set", "key": KEY}),
+        json!({"action": "voice_key_set", "key": format!("{KEY}\n")}),
     );
-    assert_eq!(r["isError"], true);
+    assert_eq!(r["isError"], false, "{r}");
+    assert!(!r.to_string().contains("0123456789"), "{r}");
+    assert_eq!(r["structuredContent"]["hint"], "fake…cdef (25 chars)");
+    assert_eq!(r["structuredContent"]["length"], 25);
 }
 
 #[test]

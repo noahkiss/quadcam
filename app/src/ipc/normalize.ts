@@ -155,7 +155,7 @@ export function cutChange(c: G.CutChange): CutChange {
 export function settingsView(v: G.SettingsView_Serialize): SettingsView {
   const e = v.effective;
   const effective: Defaults = { ...e, tunables: tunables(e.tunables), places: places(e.places), profiles: e.profiles.map(profile) };
-  return { path: v.path, values: v.values as SettingsValues, effective };
+  return { path: v.path, values: v.values as SettingsValues, secrets: v.secrets ?? {}, effective };
 }
 
 export const importProgress = (p: G.ImportProgress): ImportProgress => ({ id: p.id, seconds: n(p.seconds), duration: n(p.duration) });

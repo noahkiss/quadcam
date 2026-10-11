@@ -2935,6 +2935,16 @@ export type Grid = {
 	height: number,
 };
 
+/**  A secret as QuadCam may show it. */
+export type Hint = {
+	/**  `sk_9…8d4d (51 chars)`; `(3 chars)` for a value under 4 characters. */
+	hint: string,
+	prefix: string,
+	suffix: string,
+	/**  Characters, not bytes. */
+	length: number,
+};
+
 /**
  *  Median throttle in hover, in percent (0-100): over the whole flight, its first third and
  *  its last third. None where the flight has no hover window.
@@ -3092,8 +3102,12 @@ export type KeyParams = {
 /**  Whether a key is stored, never the key. */
 export type KeyStatus = {
 	set: boolean,
-	/**  What tells keys apart without showing one: `ends in 3f9a`. */
+	/**  What tells keys apart without showing one: `sk_9…8d4d (51 chars)` (`secret::hint`). */
 	hint: string,
+	/**  The hint's first and last characters and the key's length; empty and 0 with no key. */
+	prefix?: string,
+	suffix?: string,
+	length?: number,
 	/**  `keychain`, or `environment` when QUADCAM_TTS_KEY holds it for this run. */
 	source: string,
 	/**  Why the Keychain could not be read, when it could not. */
@@ -5196,8 +5210,10 @@ export type SettingsView = SettingsView_Serialize | SettingsView_Deserialize;
 /**  The settings file: where it is, what it holds, and the defaults that come out of it. */
 export type SettingsView_Deserialize = {
 	path: string,
-	/**  The file's values, by file key. Secrets read `"(set)"`. */
+	/**  The file's values, by file key. Secrets read `"(set)"`; `secrets` holds their hints. */
 	values: { [key in string]: unknown },
+	/**  Each secret that is set, by file key: its hint, never the value. */
+	secrets: { [key in string]: Hint },
 	/**  What every surface uses: the values on top of the defaults. */
 	effective: Defaults_Deserialize,
 };
@@ -5205,8 +5221,10 @@ export type SettingsView_Deserialize = {
 /**  The settings file: where it is, what it holds, and the defaults that come out of it. */
 export type SettingsView_Serialize = {
 	path: string,
-	/**  The file's values, by file key. Secrets read `"(set)"`. */
+	/**  The file's values, by file key. Secrets read `"(set)"`; `secrets` holds their hints. */
 	values: { [key in string]: unknown },
+	/**  Each secret that is set, by file key: its hint, never the value. */
+	secrets: { [key in string]: Hint },
 	/**  What every surface uses: the values on top of the defaults. */
 	effective: Defaults_Serialize,
 };

@@ -9,7 +9,6 @@ use quadcam_lib::core::{self, Core};
 use quadcam_lib::gear::voice::batch::BatchSettings;
 use quadcam_lib::gear::voice::render::RenderSettings;
 use serde_json::Value;
-use std::io::IsTerminal;
 use std::path::PathBuf;
 
 #[derive(Args)]
@@ -300,27 +299,9 @@ fn catalog(core: &Core, voices: bool, models: bool, credits: bool) -> Result<Val
     )?)?)
 }
 
-/// One line from stdin. A terminal gets a prompt and no echo.
+/// The key from one line of stdin (`read_secret`).
 fn read_key() -> Result<String> {
-    let tty = std::io::stdin().is_terminal();
-    let stty = |on: bool| {
-        let _ = std::process::Command::new("/bin/stty")
-            .arg(if on { "echo" } else { "-echo" })
-            .stdin(std::process::Stdio::inherit())
-            .status();
-    };
-    if tty {
-        eprint!("ElevenLabs API key (not shown): ");
-        stty(false);
-    }
-    let mut line = String::new();
-    let r = std::io::stdin().read_line(&mut line);
-    if tty {
-        stty(true);
-        eprintln!();
-    }
-    r?;
-    let key = line.trim().to_string();
+    let key = crate::read_secret("ElevenLabs API key")?.trim().to_string();
     if key.is_empty() {
         bail!("No key was given: pipe it in, or type it at the prompt.");
     }

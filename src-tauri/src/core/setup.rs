@@ -16,9 +16,11 @@ use std::path::{Path, PathBuf};
 #[derive(Debug, Clone, Serialize, specta::Type)]
 pub struct SettingsView {
     pub path: PathBuf,
-    /// The file's values, by file key. Secrets read `"(set)"`.
+    /// The file's values, by file key. Secrets read `"(set)"`; `secrets` holds their hints.
     #[specta(type = std::collections::BTreeMap<String, specta_typescript::Unknown>)]
     pub values: Values,
+    /// Each secret that is set, by file key: its hint, never the value.
+    pub secrets: std::collections::BTreeMap<String, crate::secret::Hint>,
     /// What every surface uses: the values on top of the defaults.
     pub effective: Defaults,
 }
@@ -89,6 +91,7 @@ impl Core {
         let values = settings::read(&path)?;
         Ok(SettingsView {
             effective: Defaults::from_values(&values),
+            secrets: settings::secret_hints(&values),
             path,
             values: settings::redacted(values),
         })

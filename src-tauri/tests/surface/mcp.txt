@@ -92,6 +92,7 @@ mcp.action quadcam_gear_edit.voice_delete
 mcp.action quadcam_gear_edit.voice_edit
 mcp.action quadcam_gear_edit.voice_install
 mcp.action quadcam_gear_edit.voice_key_delete
+mcp.action quadcam_gear_edit.voice_key_set
 mcp.action quadcam_gear_edit.voice_render
 mcp.action quadcam_gear_edit.voice_sample
 mcp.action quadcam_library_files.apply_name_format
@@ -227,6 +228,7 @@ mcp.param quadcam_gear_edit.full_v number
 mcp.param quadcam_gear_edit.handle string
 mcp.param quadcam_gear_edit.id string
 mcp.param quadcam_gear_edit.keep_overrides boolean
+mcp.param quadcam_gear_edit.key string
 mcp.param quadcam_gear_edit.line string
 mcp.param quadcam_gear_edit.lines array<string>
 mcp.param quadcam_gear_edit.minutes integer

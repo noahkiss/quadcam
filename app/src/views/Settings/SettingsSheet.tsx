@@ -8,6 +8,7 @@ import { Button } from "../../components/Button";
 import { Dialog } from "../../components/Dialog";
 import { Checkbox, Field, Input, SearchField, SelectField, TextField } from "../../components/Field";
 import { Icon, type IconName } from "../../components/Icon";
+import { SecretField } from "../../components/SecretField";
 import { SegmentedControl } from "../../components/SegmentedControl";
 import { toast } from "../../components/toastStore";
 import { tilde } from "../../lib/format";
@@ -349,7 +350,7 @@ function PlacesPane({ d, set }: { d: Draft; set: SetFn }) {
   const [query, setQuery] = useState("");
   const [hits, setHits] = useState<GeoResult[] | string | null>(null);
   const [target, setTarget] = useState<number | null>(null);
-  const googleSet = useStore((s) => s.googleKeySet);
+  const googleHint = useStore((s) => s.secrets.googlePlacesKey?.hint);
   const search = async () => {
     const q = query.trim();
     if (!q) return;
@@ -446,7 +447,7 @@ function PlacesPane({ d, set }: { d: Draft; set: SetFn }) {
           <option value="census">US Census (US street addresses)</option>
           <option value="google">Google Places (API key)</option>
         </SelectField>
-        <TextField label="Google Places API key" type="password" autoComplete="off" placeholder={googleSet ? "Saved" : "Not set"} value={d.googleKey} onChange={(e) => set("googleKey", e.target.value)} />
+        <SecretField label="Google Places API key" hint={googleHint} value={d.googleKey} onChange={(v) => set("googleKey", v)} />
       </div>
     </section>
   );

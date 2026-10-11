@@ -22,7 +22,8 @@ function play(path: string) {
 
 function KeyRow({ s }: { s: UseStudio }) {
   const [draft, setDraft] = useState("");
-  if (s.key?.set) {
+  const [replacing, setReplacing] = useState(false);
+  if (s.key?.set && !replacing) {
     const c = s.catalog?.credits;
     return (
       <div className={styles.bar}>
@@ -32,6 +33,9 @@ function KeyRow({ s }: { s: UseStudio }) {
             {n(c.remaining)} credits left of {n(c.limit)}.
           </span>
         )}
+        <Button size="sm" variant="secondary" onClick={() => setReplacing(true)}>
+          Replace…
+        </Button>
         <Button size="sm" variant="danger-ghost" onClick={() => s.deleteKey()}>
           Remove key
         </Button>
@@ -45,13 +49,26 @@ function KeyRow({ s }: { s: UseStudio }) {
         e.preventDefault();
         const k = draft.trim();
         setDraft("");
+        setReplacing(false);
         if (k) void s.saveKey(k);
       }}
     >
-      <TextField label="ElevenLabs API key" type="password" autoComplete="off" value={draft} onChange={(e) => setDraft(e.target.value)} />
+      <TextField label="ElevenLabs API key" type="password" autoComplete="off" autoFocus={replacing} value={draft} onChange={(e) => setDraft(e.target.value)} />
       <Button type="submit" size="sm" variant="primary" disabled={!draft.trim()}>
         Save key
       </Button>
+      {replacing && (
+        <Button
+          size="sm"
+          variant="ghost"
+          onClick={() => {
+            setDraft("");
+            setReplacing(false);
+          }}
+        >
+          Keep current
+        </Button>
+      )}
       {s.key?.problem && <span className={styles.error}>{s.key.problem}</span>}
     </form>
   );

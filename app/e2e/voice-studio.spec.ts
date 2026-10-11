@@ -23,9 +23,19 @@ test("the key goes to the core once, is cleared from the field, and is never sho
   await expect(studio.getByRole("button", { name: "Save key" })).toBeDisabled();
   await saveKey(studio);
   expect((await app.method("gear_voice_key")).at(-1)).toEqual({ action: "set", key: "fake-key-0123456789abcdef" });
-  await expect(studio).toContainText("ElevenLabs key stored (ends in 3f9a).");
+  await expect(studio).toContainText("ElevenLabs key stored (fake…cdef (25 chars)).");
   await expect(studio.getByLabel("ElevenLabs API key")).toHaveCount(0);
-  await expect(page.locator("body")).not.toContainText("fake-key-0123456789abcdef");
+  await expect(page.locator("body")).not.toContainText("0123456789");
+  // Replace… opens an empty field; Keep current keeps the stored key.
+  await studio.getByRole("button", { name: "Replace…" }).click();
+  await expect(studio.getByLabel("ElevenLabs API key")).toHaveValue("");
+  await studio.getByRole("button", { name: "Keep current" }).click();
+  await expect(studio).toContainText("ElevenLabs key stored (fake…cdef (25 chars)).");
+  await studio.getByRole("button", { name: "Replace…" }).click();
+  await studio.getByLabel("ElevenLabs API key").fill("sk_new-REPLACEMIDDLE-9z9z");
+  await studio.getByRole("button", { name: "Save key" }).click();
+  await expect(studio).toContainText("ElevenLabs key stored (sk_n…9z9z (25 chars)).");
+  await expect(page.locator("body")).not.toContainText("REPLACEMIDDLE");
   await expect(studio.getByRole("status").first()).toContainText("98,500 credits left of 100,000.");
   await studio.getByRole("button", { name: "Remove key" }).click();
   expect((await app.method("gear_voice_key")).at(-1)).toMatchObject({ action: "delete" });
