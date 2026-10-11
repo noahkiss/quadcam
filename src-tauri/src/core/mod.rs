@@ -32,6 +32,7 @@ mod import;
 mod library;
 pub mod model_edit;
 mod modules;
+mod ondevice;
 mod osd;
 mod prep;
 mod radio_aircraft;
@@ -91,6 +92,7 @@ pub use gear_card::{
 pub use import::CardStatus;
 pub use library::{LibEdit, LibItem, LibUpdate, LibraryView, RebuildReport, RenameReport};
 pub use model_edit::{ModelDetail, ModelEditParams, ModelEntry, ModelParams, MODEL_CHANGE};
+pub use ondevice::{OnDeviceClip, OnDeviceParams, OnDeviceReport};
 pub use osd::{OsdEditParams, OsdParams};
 pub use radio_cli::{RadioCliAction, RadioCliParams, RadioCliReport, RadioMatch, RadioVerify};
 pub use rates::{RatesParams, RatesPreview, RatesPreviewParams, SimsParams};
@@ -319,6 +321,8 @@ pub struct Core {
     session: Mutex<Option<Session>>,
     defaults: Mutex<Defaults>,
     busy: AtomicBool,
+    /// On-device suggestions are running (`core/ondevice.rs`); one run at a time.
+    ondevice_running: AtomicBool,
     hooks: Arc<dyn Hooks>,
     photos: Arc<dyn PhotosLibrary>,
     cache: PathBuf,
@@ -400,6 +404,7 @@ impl Core {
             session: Mutex::new(session),
             defaults: Mutex::new(Defaults::default()),
             busy: AtomicBool::new(false),
+            ondevice_running: AtomicBool::new(false),
             hooks,
             photos,
             session_file,

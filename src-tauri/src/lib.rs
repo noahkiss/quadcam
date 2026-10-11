@@ -155,6 +155,13 @@ impl Hooks for GuiHooks {
                 st.core.make_previews();
             }
         });
+        // On-device names beside the previews: the model runs on its own thread.
+        let app = self.app.clone();
+        std::thread::spawn(move || {
+            if let Some(st) = app.try_state::<AppState>() {
+                st.core.suggest_on_device_auto();
+            }
+        });
     }
 }
 
@@ -550,6 +557,7 @@ pub fn specta_builder() -> tauri_specta::Builder<tauri::Wry> {
             c::load,
             c::dates,
             c::suggest,
+            c::suggest_on_device,
             c::import,
             c::photos,
             c::verify,
@@ -744,6 +752,7 @@ pub fn specta_builder() -> tauri_specta::Builder<tauri::Wry> {
             api::SimCalibrationEvent,
             api::FirmwareReadProgress,
             api::UpdateChanged,
+            api::OnDeviceProgress,
         ])
         // Sizes and counts fit a JS number.
         .dangerously_cast_bigints_to_number()

@@ -124,6 +124,12 @@ pub const KEYS: &[Key] = &[
         check: boolean,
     },
     Key {
+        file: "onDeviceSuggestions",
+        name: Some("on_device_suggestions"),
+        about: "true or false",
+        check: boolean,
+    },
+    Key {
         file: "updateCheck",
         name: Some("update_check"),
         about: "true or false",
@@ -581,6 +587,10 @@ pub struct Defaults {
     /// default; a run or a clip may keep the files separate.
     #[serde(default = "yes")]
     pub join_split_recordings: bool,
+    /// Apple's on-device model suggests clip names, keywords and notes in the import's
+    /// review, where the Mac has it (`core/ondevice.rs`). On by default.
+    #[serde(default = "yes")]
+    pub on_device_suggestions: bool,
     /// The app checks for a newer QuadCam at launch and once a day. On by default; the
     /// app menu's Check for Updates works either way.
     #[serde(default = "yes")]
@@ -637,6 +647,7 @@ impl Default for Defaults {
             add_time: false,
             delete_clips_after_import: false,
             join_split_recordings: true,
+            on_device_suggestions: true,
             update_check: true,
             default_name: crate::naming::DEFAULT_NAME.into(),
             photos_album: crate::photos::DEFAULT_ALBUM.into(),
@@ -692,6 +703,9 @@ impl Defaults {
         }
         if let Some(b) = get(v, "joinSplitRecordings") {
             d.join_split_recordings = b;
+        }
+        if let Some(b) = get(v, "onDeviceSuggestions") {
+            d.on_device_suggestions = b;
         }
         if let Some(b) = get(v, "updateCheck") {
             d.update_check = b;

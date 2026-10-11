@@ -220,7 +220,10 @@ pub(super) fn read<B: Backend>(
             Ok((vec![text(packs_text(&v))], v))
         }
         "session_report" => {
-            let v = backend.call("gear_session_report", json!({"day": x.day}))?;
+            let v = backend.call(
+                "gear_session_report",
+                json!({"day": x.day, "summarize": x.summarize}),
+            )?;
             Ok((
                 vec![text(v["markdown"].as_str().unwrap_or("").to_string())],
                 v,

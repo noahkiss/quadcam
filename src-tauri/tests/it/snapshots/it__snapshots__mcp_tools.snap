@@ -172,10 +172,14 @@ expression: "quadcam_lib::mcp::tools()"
       "readOnlyHint": false,
       "title": "Suggest names and dates"
     },
-    "description": "Suggest a short name, date, time of day, note, skip or cut ranges for clips. The values are marked agent-suggested, and in the app they appear as editable suggestions the person can accept or change. Names become the filename slug (YYYY-MM-DD_<name>.mp4, lowercased); an empty name uses the default name (\"flight\"), auto-numbered. `cuts` replaces the clip's cut list; each range exports as an extra file <name>_cutN next to the clip (an empty list removes them). `split_by_flight` true adds one cut per radio-log flight (each flight's armed range plus up to 2 s each side). `joined` on the first file of a split recording (a clip with `files`) imports its files as one clip (true) or as clips of their own (false); the clips are matched to the radio logs again. `log_offset_s` says where the first armed log row falls in the clip and moves the log moments. Metadata: `profile` (an aircraft profile name from quadcam_status; empty string to fall back to the log's model, then the default), `place` (a saved place name; empty string removes the location) or `location` {lat, lon}, `keywords` (replaces the clip's own; FPV, the profile's and the moment kinds are added at export), `author`. To apply one value to every clip, send one suggestion per clip id.\n\nBest for: proposing names from what the thumbnails show, dates and times from a clock burned into the video, and cuts from moments or the keep ranges.\nReturns: every clip's current plan.\nFollow up with quadcam_read_clips to read the final values before quadcam_export; the person may have changed them.",
+    "description": "Suggest a short name, date, time of day, note, skip or cut ranges for clips. The values are marked agent-suggested, and in the app they appear as editable suggestions the person can accept or change. Names become the filename slug (YYYY-MM-DD_<name>.mp4, lowercased); an empty name uses the default name (\"flight\"), auto-numbered. `cuts` replaces the clip's cut list; each range exports as an extra file <name>_cutN next to the clip (an empty list removes them). `split_by_flight` true adds one cut per radio-log flight (each flight's armed range plus up to 2 s each side). `joined` on the first file of a split recording (a clip with `files`) imports its files as one clip (true) or as clips of their own (false); the clips are matched to the radio logs again. `log_offset_s` says where the first armed log row falls in the clip and moves the log moments. Metadata: `profile` (an aircraft profile name from quadcam_status; empty string to fall back to the log's model, then the default), `place` (a saved place name; empty string removes the location) or `location` {lat, lon}, `keywords` (replaces the clip's own; FPV, the profile's and the moment kinds are added at export), `author`. To apply one value to every clip, send one suggestion per clip id. `on_device` true first asks the Mac's on-device model for names, keywords and notes (marked on-device in the app; one outing shares a name with pack numbers); it skips when the Mac has no model.\n\nBest for: proposing names from what the thumbnails show, dates and times from a clock burned into the video, and cuts from moments or the keep ranges.\nReturns: every clip's current plan.\nFollow up with quadcam_read_clips to read the final values before quadcam_export; the person may have changed them.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
+        "on_device": {
+          "description": "true asks Apple's on-device model (macOS 26 or later with Apple Intelligence on) for a name, keywords and a note per clip first; it fills only empty fields and never a value the person or an agent set. `suggestions` then apply on top. Send `suggestions`, `on_device`, or both.",
+          "type": "boolean"
+        },
         "suggestions": {
           "items": {
             "additionalProperties": false,
@@ -302,9 +306,6 @@ expression: "quadcam_lib::mcp::tools()"
           "type": "array"
         }
       },
-      "required": [
-        "suggestions"
-      ],
       "type": "object"
     },
     "name": "quadcam_suggest"
@@ -1142,6 +1143,13 @@ expression: "quadcam_lib::mcp::tools()"
                 "null"
               ]
             },
+            "on_device_suggestions": {
+              "description": "Apple's on-device model suggests clip names, keywords and notes after a card loads, where the Mac has it (macOS 26 or later, Apple Intelligence on). On by default.",
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
             "output_dir": {
               "description": "Absolute folder path.",
               "type": [
@@ -1493,6 +1501,10 @@ expression: "quadcam_lib::mcp::tools()"
         },
         "staged": {
           "description": "For osd with a device: show the layout after the device's staged OSD edits, with their check. For model: show the model after its staged edits (default true).",
+          "type": "boolean"
+        },
+        "summarize": {
+          "description": "For session_report: true adds a short paragraph about the day from Apple's on-device model (macOS 26 or later with Apple Intelligence on); `summary_unavailable` says why when there is none.",
           "type": "boolean"
         },
         "target_v": {

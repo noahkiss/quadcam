@@ -54,6 +54,11 @@ export const commands = {
 	dates: (params: DatesParams) => typedError<Session_Serialize, string>(__TAURI_INVOKE("dates", { params })),
 	/**  Changes clip plans (an agent's suggestions unless `editor` is `user`). */
 	suggest: (params: SuggestParams) => typedError<Session_Serialize, string>(__TAURI_INVOKE("suggest", { params })),
+	/**
+	 *  Asks Apple's on-device model for clip names, keywords and notes, and fills the empty
+	 *  fields (`core/ondevice.rs`).
+	 */
+	suggestOnDevice: (params: OnDeviceParams) => typedError<OnDeviceReport, string>(__TAURI_INVOKE("suggest_on_device", { params })),
 	/**  Converts and verifies the clips, and optionally adds them to Photos. */
 	import: (params: ImportOptions) => typedError<ImportOutcome, string>(__TAURI_INVOKE("import", { params })),
 	/**  Adds verified outputs to Photos. */
@@ -622,6 +627,7 @@ export const events = {
 	libraryChanged: makeEvent<LibraryChanged>("library-changed"),
 	libraryTask: makeEvent<LibraryTask>("library-task"),
 	menu: makeEvent<Menu>("menu"),
+	onDeviceProgress: makeEvent<OnDeviceProgress>("on-device-progress"),
 	progress: makeEvent<Progress>("progress"),
 	radioInput: makeEvent<RadioInput>("radio-input"),
 	sessionChanged: makeEvent<SessionChanged>("session-changed"),
@@ -1642,6 +1648,8 @@ export type ClipPlan_Deserialize = {
 	flight?: FlightStats_Deserialize | null,
 	/**  Why the radio log matched, or how sure the match is. */
 	match_reason?: string | null,
+	/**  The on-device model's suggestion, when it made one. */
+	ondevice?: OnDevice | null,
 };
 
 /**
@@ -1680,6 +1688,8 @@ export type ClipPlan_Serialize = {
 	flight: FlightStats_Serialize | null,
 	/**  Why the radio log matched, or how sure the match is. */
 	match_reason: string | null,
+	/**  The on-device model's suggestion, when it made one. */
+	ondevice: OnDevice | null,
 };
 
 export type ClipResult = {
@@ -1974,6 +1984,11 @@ export type Defaults_Deserialize = {
 	 */
 	join_split_recordings?: boolean,
 	/**
+	 *  Apple's on-device model suggests clip names, keywords and notes in the import's
+	 *  review, where the Mac has it (`core/ondevice.rs`). On by default.
+	 */
+	on_device_suggestions?: boolean,
+	/**
 	 *  The app checks for a newer QuadCam at launch and once a day. On by default; the
 	 *  app menu's Check for Updates works either way.
 	 */
@@ -2022,6 +2037,11 @@ export type Defaults_Serialize = {
 	 *  default; a run or a clip may keep the files separate.
 	 */
 	join_split_recordings: boolean,
+	/**
+	 *  Apple's on-device model suggests clip names, keywords and notes in the import's
+	 *  review, where the Mac has it (`core/ondevice.rs`). On by default.
+	 */
+	on_device_suggestions: boolean,
 	/**
 	 *  The app checks for a newer QuadCam at launch and once a day. On by default; the
 	 *  app menu's Check for Updates works either way.
@@ -2577,7 +2597,7 @@ export type FcReadParams = {
 
 /**  One feature as the helper's `caps` reports it. */
 export type Feature = {
-	/**  `asr`: the speech check of voice lines. */
+	/**  `asr`: the speech check of voice lines; `suggest`: on-device clip names and notes. */
 	name: string,
 	available: boolean,
 	/**  The oldest macOS the feature runs on. */
@@ -2590,6 +2610,8 @@ export type Feature = {
 	 */
 	locale?: string | null,
 	assets?: string | null,
+	/**  `suggest`: whether the model also looks at frames (macOS 27). */
+	images?: boolean | null,
 };
 
 /**  Where ffmpeg and ffprobe come from (setting `ffmpegSource`). */
@@ -4055,6 +4077,57 @@ export type NotesParams = {
 	text: string,
 };
 
+/**
+ *  What Apple's on-device model suggested for one clip (`core/ondevice.rs`). It fills a
+ *  name, note or keywords field only while that field is empty or still holds the last
+ *  on-device value; a value the person or an agent wrote stays.
+ */
+export type OnDevice = {
+	/**  The suggested name: the outing's name and the pack number, or the clip's own. */
+	name: string,
+	/**  The model's name for this clip alone. */
+	words: string,
+	keywords: string[],
+	note: string,
+	/**  The frames the model looked at (0 on macOS 26: text only). */
+	images: number,
+};
+
+/**  One clip's on-device suggestion, and which fields it filled. */
+export type OnDeviceClip = {
+	id: number,
+	suggestion: OnDevice | null,
+	/**
+	 *  The fields it filled: `name`, `note`, `keywords`. A field the person or an agent set
+	 *  keeps its value.
+	 */
+	filled: string[],
+	/**  Why this clip has no suggestion. */
+	error: string | null,
+};
+
+/**  `suggest_on_device`: the clips to ask about (every clip to import when None). */
+export type OnDeviceParams = {
+	ids?: number[] | null,
+};
+
+/**  On-device suggestions (`core/ondevice.rs`): running, and clips `done` of `total`. */
+export type OnDeviceProgress = {
+	running: boolean,
+	done: number,
+	total: number,
+};
+
+/**  `suggest_on_device`'s answer. */
+export type OnDeviceReport = {
+	/**  False when this Mac has no on-device model, or the setting is off. */
+	available: boolean,
+	reason: string | null,
+	clips: OnDeviceClip[],
+	/**  Seconds the model took. */
+	seconds: number | null,
+};
+
 /**  A rectangle an element takes on one profile's grid, after clipping to the grid. */
 export type OsdBox = {
 	element: string,
@@ -5102,6 +5175,11 @@ export type Reply = {
  */
 export type ReportParams = {
 	day?: string | null,
+	/**
+	 *  Adds a short paragraph about the day from Apple's on-device model, where the Mac
+	 *  has it (`summary`).
+	 */
+	summarize?: boolean | null,
 };
 
 /**  `gear_session_report_save`: the report for a day, written as a Markdown file. */
@@ -5111,6 +5189,8 @@ export type ReportSaveParams = {
 	path: string,
 	/**  Replace a file that is already there. The GUI's save dialog has asked already. */
 	overwrite?: boolean,
+	/**  Adds the on-device summary, as `gear_session_report` does. */
+	summarize?: boolean | null,
 };
 
 /**  What `gear_session_report_save` wrote. */
@@ -5312,6 +5392,10 @@ export type SessionReport = {
 	/**  Flights with no pack assigned. */
 	no_pack: number,
 	crashes: Crash[],
+	/**  A short paragraph about the day from the on-device model, when it was asked for. */
+	summary?: string | null,
+	/**  Why there is no summary, when one was asked for. */
+	summary_unavailable?: string | null,
 	/**  The same, as Markdown. */
 	markdown: string,
 };

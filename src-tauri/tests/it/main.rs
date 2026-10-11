@@ -32,6 +32,7 @@ mod model_editors;
 mod modules;
 mod moments;
 mod mount_cycle;
+mod ondevice;
 mod osd;
 mod osd_edit;
 mod qol;

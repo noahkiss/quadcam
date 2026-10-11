@@ -7,6 +7,7 @@ let usage = """
     quadcam-intel caps [--locale en-US]
     quadcam-intel asr FILE... [--locale en-US]
     quadcam-intel install [--locale en-US]
+    quadcam-intel suggest [REQUEST.json | -]
     """
 
 var args = Array(CommandLine.arguments.dropFirst())
@@ -27,6 +28,8 @@ case "asr":
     await asr(files: rest, locale: locale)
 case "install":
     await install(locale: locale)
+case "suggest":
+    await suggest(path: rest.first)
 case "--version", "version":
     print("quadcam-intel \(protocolVersion)")
 default:

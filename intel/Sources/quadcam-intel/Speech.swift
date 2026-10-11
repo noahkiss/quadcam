@@ -14,9 +14,11 @@ struct Feature: Encodable {
     /// installed), downloading, or unsupported.
     var locale: String?
     var assets: String?
+    /// `suggest`: whether the model takes images (macOS 27).
+    var images: Bool?
 
     enum CodingKeys: String, CodingKey {
-        case name, available, minOS = "min_os", reason, locale, assets
+        case name, available, minOS = "min_os", reason, locale, assets, images
     }
 }
 
@@ -34,7 +36,7 @@ func caps(locale: String) async {
     } else {
         asr.reason = "Speech recognition on this Mac needs macOS 26 or later."
     }
-    emit(Caps(features: [asr]))
+    emit(Caps(features: [asr, namesFeature()]))
 }
 
 struct Word: Encodable {

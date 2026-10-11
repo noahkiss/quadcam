@@ -85,6 +85,13 @@ enum Cmd {
     Show,
     /// Forget the current session and delete the session file (staged copies stay).
     Clear,
+    /// Ask Apple's on-device model for clip names, keywords and notes (macOS 26 or later
+    /// with Apple Intelligence on). Fills only empty fields, or ones that still hold its last
+    /// suggestion; a name you or an agent set stays.
+    Names {
+        /// Clip ids. Default: every clip to import.
+        ids: Vec<usize>,
+    },
     /// Show each clip's moments (radio-log sticks and dead air), keep ranges and cuts.
     Moments {
         /// Clip ids. Default: every clip.
@@ -484,7 +491,7 @@ enum SetCmd {
     Show,
     /// Set settings: KEY=VALUE, where VALUE is JSON or plain text ("null" resets a key).
     /// Keys: output_dir, format, encoder, keep_originals, add_time,
-    /// delete_clips_after_import, join_split_recordings, update_check, default_name, photos_album, format_label, log_dir, layout, place_folders, tunables, geocoder,
+    /// delete_clips_after_import, join_split_recordings, on_device_suggestions, update_check, default_name, photos_album, format_label, log_dir, layout, place_folders, tunables, geocoder,
     /// name_date_format, default_profile, ffmpeg_source, modules; Gear: gear_dir, gear_auto_backup, gear_keep_recent,
     /// gear_keep_weeks, gear_keep_monthly, gear_usb_minutes, gear_on_connect, gear_cues,
     /// firmware_check, tts_provider, tts_base_url, tts_model, tts_voice, voice_index, tts_key; sim_preview, betaflight_flash_preview; elrs_preview, elrs_binding_phrase, elrs_region, elrs_wifi_interval.
@@ -847,6 +854,12 @@ fn run(cmd: Cmd, session: Option<PathBuf>) -> Result<Value> {
                 .map(|p| json!({"id": p.id, "metadata": p.meta, "log_model": p.log_model}))
                 .collect::<Vec<_>>())
         }
+        Cmd::Names { ids } => serde_json::to_value(call::suggest_on_device(
+            &core,
+            quadcam_lib::core::OnDeviceParams {
+                ids: (!ids.is_empty()).then_some(ids),
+            },
+        )?)?,
         Cmd::Moments { ids } => {
             let s = core
                 .session()

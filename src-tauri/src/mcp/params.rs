@@ -125,8 +125,10 @@ pub struct Suggestion {
 #[schemars(deny_unknown_fields)]
 pub struct SuggestArgs {
     // Passed on to the core's `suggest`, which reads each as a `PlanPatch`.
-    #[schemars(required, length(min = 1), with = "Vec<Suggestion>")]
+    #[schemars(length(min = 1), with = "Option<Vec<Suggestion>>")]
     pub suggestions: Option<Value>,
+    /// true asks Apple's on-device model (macOS 26 or later with Apple Intelligence on) for a name, keywords and a note per clip first; it fills only empty fields and never a value the person or an agent set. `suggestions` then apply on top. Send `suggestions`, `on_device`, or both.
+    pub on_device: Option<bool>,
 }
 
 #[derive(Debug, Clone, Default, Deserialize, JsonSchema)]
@@ -376,6 +378,9 @@ pub struct SettingsValues {
     /// Import a recording the DVR split into files (about 600 s each) as one clip. On by default.
     #[schemars(extend("x-nullable" = true))]
     pub join_split_recordings: Option<bool>,
+    /// Apple's on-device model suggests clip names, keywords and notes after a card loads, where the Mac has it (macOS 26 or later, Apple Intelligence on). On by default.
+    #[schemars(extend("x-nullable" = true))]
+    pub on_device_suggestions: Option<bool>,
     /// The app checks for a newer QuadCam at launch and once a day. On by default.
     #[schemars(extend("x-nullable" = true))]
     pub update_check: Option<bool>,

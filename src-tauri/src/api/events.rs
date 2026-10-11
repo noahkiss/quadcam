@@ -19,6 +19,7 @@ pub enum Event {
     SimCalibration(SimCalibrationEvent),
     FirmwareRead(FirmwareReadProgress),
     Update(UpdateChanged),
+    OnDeviceProgress(OnDeviceProgress),
 }
 
 impl Event {
@@ -36,6 +37,7 @@ impl Event {
             Event::SimCalibration(x) => (SimCalibrationEvent::NAME, v(x)),
             Event::FirmwareRead(x) => (FirmwareReadProgress::NAME, v(x)),
             Event::Update(x) => (UpdateChanged::NAME, v(x)),
+            Event::OnDeviceProgress(x) => (OnDeviceProgress::NAME, v(x)),
         }
     }
 }
@@ -66,6 +68,14 @@ pub struct ImportProgress {
     pub id: usize,
     pub seconds: f64,
     pub duration: f64,
+}
+
+/// On-device suggestions (`core/ondevice.rs`): running, and clips `done` of `total`.
+#[derive(Debug, Clone, Serialize, Deserialize, Type, tauri_specta::Event)]
+pub struct OnDeviceProgress {
+    pub running: bool,
+    pub done: usize,
+    pub total: usize,
 }
 
 /// One clip finished converting (verified, failed or skipped).

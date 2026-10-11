@@ -125,6 +125,8 @@ pub struct GearArgs {
     /// For flights and session_report: a day, YYYY-MM-DD. session_report without it: the days of the last import.
     #[schemars(length(max = 10))]
     pub day: Option<String>,
+    /// For session_report: true adds a short paragraph about the day from Apple's on-device model (macOS 26 or later with Apple Intelligence on); `summary_unavailable` says why when there is none.
+    pub summarize: Option<bool>,
     /// For flights and crashes: an aircraft profile name. For switch_map: reads the latest backups of the radio and FC saved with that aircraft. For sim_validate: a built-in sim profile (meteor75, air65ii, five_inch, seven_inch).
     #[schemars(length(max = 80))]
     pub aircraft: Option<String>,
