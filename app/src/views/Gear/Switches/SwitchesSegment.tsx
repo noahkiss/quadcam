@@ -2,7 +2,8 @@
 // model file and the FC's dump, with the position each control is in now. Live comes from
 // the radio in USB Joystick mode, or from the FC's channels over MSP once a second. The FC
 // and radio device pages mount it (`views/Gear/segments.tsx`). A device with a backup shows
-// its aircraft's latest backups (or its own) until files are picked.
+// its aircraft's latest backups (or its own) until files are picked. A radio's aircraft is
+// the one whose model the radio selects.
 import { useEffect, useState } from "react";
 import { Banner } from "../../../components/Banner";
 import { SegmentedControl } from "../../../components/SegmentedControl";
@@ -10,6 +11,7 @@ import { api, errText } from "../../../ipc/api";
 import type { Live } from "../../../ipc/types";
 import { live as liveOf } from "../../../lib/controls";
 import { useStore } from "../../../store";
+import { aircraftOf } from "../../../lib/radioAircraft";
 import type { DeviceRef } from "../slots";
 import { useRadio, useSwitchMap } from "./hooks";
 import { MapSourceBar, SwitchMapView } from "./SwitchMapView";
@@ -22,7 +24,9 @@ const FC_POLL_MS = 1000;
 
 export function SwitchesSegment({ d }: { d?: DeviceRef }) {
   const dev = d?.device;
-  const m = useSwitchMap(dev?.last_backup ? (dev.aircraft ? { aircraft: dev.aircraft } : { devices: [dev.id] }) : null);
+  const saved = useStore((s) => s.devices);
+  const aircraft = dev?.kind === "radio" ? (aircraftOf(dev, saved).find((a) => a.selected)?.profile ?? null) : dev?.aircraft;
+  const m = useSwitchMap(dev?.last_backup ? (aircraft ? { aircraft } : { devices: [dev.id] }) : null);
   const [source, setSource] = useState<LiveSource>("off");
   const connected = useStore((s) => s.gear?.connected);
   const fcs = (connected ?? []).filter((c) => c.kind === "fc" && c.link.kind === "serial");

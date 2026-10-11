@@ -98,7 +98,7 @@ The search sends what you type to the provider you picked, and to the US Census 
 }
 ```
 
-`edgetx_models` holds the model names as they start the radio's log files. `AIR65-2026-10-04-101500.csv` is model `AIR65`. In Settings > Aircraft, this is **Radio model names**.
+`edgetx_models` holds the model names as they start the radio's log files. `AIR65-2026-10-04-101500.csv` is model `AIR65`. In Settings > Aircraft, this is **Radio model names**. **Radio** is the radio this aircraft flies with and **EdgeTX model file** its model on that radio (`gear.radio`, `gear.edgetx_model`); the radio's page in Gear lists the same aircraft.
 
 The model names tie a radio model to an aircraft and its video system. A log of a listed model matches only the clips that profile fits: clips set to that profile, or clips from its **Video system** (`Analog` or `DJI`). So with `AIR65` on an analog profile and `METEOR75` on a DJI profile, a DJI clip never takes the `AIR65` log. A log whose model no profile lists matches any clip, by shape alone, and its match says so.
 

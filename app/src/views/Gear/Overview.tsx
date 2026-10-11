@@ -5,6 +5,7 @@ import { linkHandle, linkText } from "../../lib/gear";
 import { tilde } from "../../lib/format";
 import { gearSlots, type DeviceRef } from "./slots";
 import { segmentsFor } from "./segments";
+import { RadioAircraft } from "./RadioAircraft/RadioAircraft";
 import styles from "./Gear.module.css";
 
 const IDENTITY: [keyof NonNullable<DeviceRef["connected"]>["identity"], string][] = [
@@ -18,7 +19,8 @@ const IDENTITY: [keyof NonNullable<DeviceRef["connected"]>["identity"], string][
 const fmtTime = (t: string | null | undefined) => (t ? new Date(t).toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" }) : null);
 
 /** A device's Overview: the bar for staged changes, its identity, where it is plugged in,
- *  its aircraft and its latest backup, and the device's other segments. */
+ *  its aircraft (a radio's list of them) and its latest backup, and the device's other
+ *  segments. */
 export function Overview({ d }: { d: DeviceRef }) {
   const home = useStore((s) => s.home);
   useStore((s) => s.changes); // the bar follows the staged changes
@@ -29,6 +31,7 @@ export function Overview({ d }: { d: DeviceRef }) {
   const backup = gearSlots.lastBackup(d.device);
   const others = segmentsFor(d).filter((s) => s.id !== "overview");
   const aircraft = d.device?.aircraft;
+  const isRadio = d.kind === "radio";
   const paused = useStore((s) => s.gear?.paused);
   const setPollPaused = useStore((s) => s.setPollPaused);
   const fcPort = d.connected?.kind === "fc" && d.connected.link.kind === "serial" ? linkHandle(d.connected.link) : null;
@@ -60,17 +63,19 @@ export function Overview({ d }: { d: DeviceRef }) {
             </dd>
           </div>
         )}
-        <div>
-          <dt>Aircraft</dt>
-          <dd>
-            {aircraft || "None"}
-            {aircraft && (
-              <Button size="sm" variant="ghost" onClick={() => setFilter({ group: "all", aircraft })}>
-                Show clips
-              </Button>
-            )}
-          </dd>
-        </div>
+        {!isRadio && (
+          <div>
+            <dt>Aircraft</dt>
+            <dd>
+              {aircraft || "None"}
+              {aircraft && (
+                <Button size="sm" variant="ghost" onClick={() => setFilter({ group: "all", aircraft })}>
+                  Show clips
+                </Button>
+              )}
+            </dd>
+          </div>
+        )}
         <div>
           <dt>Last backup</dt>
           <dd>{fmtTime(backup) || "None"}</dd>
@@ -82,6 +87,7 @@ export function Overview({ d }: { d: DeviceRef }) {
           </div>
         )}
       </dl>
+      {isRadio && d.device && <RadioAircraft d={d} />}
       {others.length > 0 && (
         <nav aria-label="Sections" className={styles.sections}>
           {others.map((s) => (

@@ -1965,7 +1965,11 @@ export type Device = {
 	kind: DeviceKind,
 	/**  The person's name for it. Empty until they give one ("Unnamed FC"). */
 	name?: string,
-	/**  The aircraft profile it belongs to. */
+	/**
+	 *  The aircraft profile it belongs to. An FC sits in one aircraft; a radio flies many,
+	 *  so a radio keeps none here: the profiles name it (`ProfileGear.radio`), and
+	 *  `radio_aircraft` lists them.
+	 */
 	aircraft?: string | null,
 	identity?: Identity,
 	last_seen?: string | null,
@@ -1984,6 +1988,11 @@ export type Device = {
 	 *  once; DFU mode is the only mode that shows it.
 	 */
 	dfu_serial?: string | null,
+	/**
+	 *  For a radio: the aircraft profiles whose gear names it, as reads report them. Worked
+	 *  out from the profiles on every read and never saved (`Store::save_device` drops it).
+	 */
+	radio_aircraft?: RadioAircraft[] | null,
 };
 
 /**
@@ -2029,7 +2038,11 @@ export type DeviceSaveParams = {
 	id: string,
 	/**  The person's name for it; empty for none. */
 	name?: string | null,
-	/**  An aircraft profile name; empty to unlink. */
+	/**
+	 *  An aircraft profile name; empty to unlink. For a radio, which flies many aircraft,
+	 *  it adds this aircraft to the radio (the profile's `gear.radio`), and empty takes
+	 *  every aircraft off it.
+	 */
 	aircraft?: string | null,
 };
 
@@ -4472,6 +4485,31 @@ export type PullMode =
 export type QuietHours = {
 	start: string,
 	end: string,
+};
+
+/**
+ *  One aircraft on a radio: a profile whose `gear.radio` names the radio, and its EdgeTX
+ *  model on that radio.
+ */
+export type RadioAircraft = {
+	/**  The aircraft profile's name. */
+	profile: string,
+	/**
+	 *  The model file (`model01.yml`): the profile's `gear.edgetx_model`, else the file whose
+	 *  model name is one of the profile's EdgeTX model names.
+	 */
+	model?: string | null,
+	/**  That model's name on the radio. */
+	model_name?: string | null,
+	/**
+	 *  Where QuadCam looked for the model: `card` (mounted now) or `latest backup`. None
+	 *  when it could not look.
+	 */
+	checked?: string | null,
+	/**  Whether the model is there; None when QuadCam could not look. */
+	found?: boolean | null,
+	/**  The radio selects this model now (as last seen). */
+	selected?: boolean,
 };
 
 /**  A saved radio the user can pick. */

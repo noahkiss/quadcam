@@ -25,8 +25,13 @@ it.
 - **Sim** and **Sim radio** show only while **Show the Sim page** is on. See [Sim](sim.md).
 - A device's page shows its kind and state, what it reports about itself (board, firmware,
   version), where it is mounted, its aircraft and its latest backup. **Save…** names a device
-  QuadCam does not know and links it to an aircraft; **Edit…** changes that; **Forget…**
+  QuadCam does not know and links an FC to its aircraft; **Edit…** changes that; **Forget…**
   removes it from `gear.json` and keeps its backups. **Show clips** opens the aircraft's clips.
+- A radio flies many aircraft, so its page lists them under **Aircraft on this radio**: every
+  aircraft profile that names the radio, with its EdgeTX model, whether that model is on the
+  mounted card (else in the latest backup), and **Selected** on the model the radio selects.
+  **Add aircraft** and **Remove** set or clear the profile's radio. **Settings > Aircraft**
+  edits the same field (**Radio**, **EdgeTX model file**), so the two always agree.
 
 The bar along the bottom of the window shows one item for each kind of device plugged in:
 radio, quad, DJI and DVR card. Click one to open the device, or the Connected list when there
@@ -232,6 +237,14 @@ running app sees a change from the command line or an agent within 2 seconds.
 
 An aircraft profile can name its gear (`gear`: `fc`, `radio`, `edgetx_model`, `rx`,
 `pack_type`). Profiles without it load and save as before.
+
+A device record links an FC to its one aircraft (`aircraft`). A radio keeps no aircraft of its
+own: the profiles that name it in `gear.radio` are its aircraft, and reads list them in
+`radio_aircraft` (never saved). A `gear.json` from 0.11 or earlier may hold a radio linked to
+one aircraft. QuadCam moves that link the first time it reads the file: the profile gets the
+radio when it names no radio yet, and the radio's `aircraft` is cleared. A link the profile
+cannot take (it names another radio, or the profile is gone) stays in the radio's entry as
+`legacy_aircraft`.
 
 ## EdgeTX cards
 
@@ -901,9 +914,10 @@ list. It opens the same apply sheet on a plan to put the file back as it was bef
 
 The switch map says what each radio control does, position by position. Open a flight
 controller's or a radio's page under **Gear > Devices** and choose **Switches**. A device with a
-backup shows the latest backups of its aircraft's radio and FC (or its own, with no aircraft);
-the radio's model is the one the aircraft profile names under EdgeTX models, else the radio's
-selected model. To read files instead, open the radio's card (**Open card…**: a mounted card or
+backup shows the latest backups of its aircraft's radio and FC (or its own, with no aircraft).
+An FC's aircraft is the one it is linked to; a radio's is the aircraft whose model the radio
+selects. The radio's model is the profile's EdgeTX model file, else the model the profile
+names under EdgeTX models, else the radio's selected model. To read files instead, open the radio's card (**Open card…**: a mounted card or
 a copy of its folder) or one model file (**Open model…**), and the FC's dump (**Open dump…**).
 
 - **Rows:** each switch (with its type from `radio.yml`: 2-position, 3-position or toggle),
@@ -1321,8 +1335,8 @@ the same layout. If another release differs, the plan refuses.
 
 ```bash
 quadcam-cli --json gear status                       # gear folder, Gear settings, what is plugged in
-quadcam-cli --json gear devices                      # saved devices
-quadcam-cli --json gear devices save <id> --name "Bench radio" --aircraft Whoop
+quadcam-cli --json gear devices                      # saved devices; a radio lists its aircraft (radio_aircraft)
+quadcam-cli --json gear devices save <id> --name "Bench radio" --aircraft Whoop   # a radio: adds Whoop to it
 quadcam-cli --json gear devices forget <id>          # its backups stay
 quadcam-cli --json gear fc identify [--port /dev/cu.usbmodemX]   # MSP: board, version, id
 quadcam-cli --json gear fc read [--cmd "diff all"]... [--out STEM]   # CLI read; the FC reboots

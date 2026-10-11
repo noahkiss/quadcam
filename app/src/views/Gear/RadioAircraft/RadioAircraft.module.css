@@ -1,0 +1,44 @@
+.section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-2);
+}
+.section h3 {
+  margin: 0;
+  font-size: var(--t-md);
+  font-weight: 600;
+}
+.empty {
+  margin: 0;
+  color: var(--muted);
+}
+.table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--t-md);
+}
+.table th {
+  text-align: left;
+  font-weight: 600;
+  color: var(--muted);
+  padding: var(--s-1) var(--s-2);
+  border-bottom: 1px solid var(--border);
+}
+.table td {
+  padding: var(--s-1) var(--s-2);
+  border-bottom: 1px solid var(--border);
+}
+.name {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s-2);
+}
+.actions {
+  text-align: right;
+  white-space: nowrap;
+}
+.add {
+  display: flex;
+  align-items: center;
+  gap: var(--s-2);
+}

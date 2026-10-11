@@ -2,7 +2,8 @@
 // event, written by hand from `api/gear.rs` (a recorded `gear status` would hold the
 // recording machine's devices). Behaviour follows `core/gear.rs` closely enough for the
 // parity specs.
-import type { Connected, Device, DeviceKind, GearSettings, GearStatus } from "../types";
+import type { Connected, Device, DeviceKind, GearSettings, GearStatus, Profile, RadioAircraft } from "../types";
+import { FILES } from "./model";
 import { HOME } from "./seed";
 import { latestChecks, seedBackups, type MockBackup } from "./backups";
 import type { CardCheck, CardMounted, GearJob, StepFailure } from "../types";
@@ -108,11 +109,32 @@ export const quietGear = (): MockGear => ({ devices: [structuredClone(RADIO), st
 export const busyGear = (): MockGear => ({ ...quietGear(), connected: [radioConnected(), dvrConnected(), gogglesConnected()], working: ["disk6"] });
 
 /** `gear_status`, each connected device with its saved record. */
+/** `core/radio_aircraft.rs`: the aircraft whose profiles name a radio, each with its model on
+ *  the mounted card (`card`), else the latest backup. Other kinds come back unchanged. */
+export function withAircraft(d: Device, profiles: Profile[], card: boolean): Device {
+  if (d.kind !== "radio") return structuredClone(d);
+  const checked = card ? "card" : d.last_backup ? "latest backup" : null;
+  const same = (a: string, b: string) => a.trim().toLowerCase() === b.trim().toLowerCase();
+  const radio_aircraft: RadioAircraft[] = profiles
+    .filter((p) => p.gear?.radio === d.id)
+    .map((p) => {
+      const named = p.gear?.edgetx_model?.trim() || null;
+      const hit = checked ? FILES.find((f) => (named ? same(f.file, named) : p.edgetx_models.some((x) => same(x, f.name)))) : undefined;
+      const model = named ?? hit?.file ?? null;
+      return { profile: p.name, model, model_name: hit?.name ?? null, checked, found: checked ? !!hit : null, selected: !!checked && model === "model01.yml" };
+    });
+  return { ...structuredClone(d), radio_aircraft };
+}
+
 export function gearStatus(g: MockGear, values: Record<string, unknown>): GearStatus {
+  const profiles = (values.profiles as Profile[] | undefined) ?? [];
   return {
     gear_dir: GEAR_DIR,
     settings: gearSettings(values),
-    connected: g.connected.map((c) => ({ ...c, device: g.devices.find((d) => d.id === c.id) || null })),
+    connected: g.connected.map((c) => {
+      const d = g.devices.find((x) => x.id === c.id);
+      return { ...c, device: d ? withAircraft(d, profiles, c.link.kind === "volume") : null };
+    }),
     devices: g.devices.length,
     staged: g.changeStore.changes.filter((c) => ["draft", "ready", "try", "read_first"].includes(c.status)).length,
     sims_out_of_date: 0,

@@ -27,6 +27,9 @@ pub const GEAR_FILE: &str = "gear.json";
 /// `gear.json` key: the list of devices.
 pub const DEVICES: &str = "devices";
 
+/// `Device.radio_aircraft`: a read's field, never in `gear.json`.
+const RADIO_AIRCRAFT: &str = "radio_aircraft";
+
 /// A gear folder.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Store {
@@ -128,7 +131,11 @@ impl Store {
     /// Adds a device or replaces the one with its id. Other devices and every other key
     /// stay as they are, unknown fields of the entries included.
     pub fn save_device(&self, device: &Device) -> Result<Device> {
-        let entry = serde_json::to_value(device)?;
+        let mut entry = serde_json::to_value(device)?;
+        // Worked out on every read, never saved.
+        if let Value::Object(m) = &mut entry {
+            m.remove(RADIO_AIRCRAFT);
+        }
         self.update(|v| {
             let list = devices_mut(v)?;
             match list
@@ -181,6 +188,7 @@ impl Store {
             last_space: None,
             aliases: Vec::new(),
             dfu_serial: None,
+            radio_aircraft: None,
         });
         d.last_seen = Some(now);
         merge_identity(&mut d.identity, identity);
@@ -305,6 +313,7 @@ mod tests {
             last_space: None,
             aliases: Vec::new(),
             dfu_serial: None,
+            radio_aircraft: None,
         }
     }
 

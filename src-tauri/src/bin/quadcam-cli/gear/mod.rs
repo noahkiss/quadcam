@@ -225,7 +225,8 @@ pub enum DevicesCmd {
         /// The device's name ("" for none).
         #[arg(long)]
         name: Option<String>,
-        /// An aircraft profile name ("" to unlink).
+        /// An aircraft profile name ("" to unlink). A radio flies many: this adds the aircraft
+        /// to the radio (its profile's gear radio), and "" takes every aircraft off it.
         #[arg(long)]
         aircraft: Option<String>,
     },

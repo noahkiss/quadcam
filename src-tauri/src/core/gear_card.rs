@@ -179,17 +179,27 @@ impl Core {
         }
     }
 
-    /// The aircraft profile a model file (or its name) belongs to.
+    /// The aircraft profile a model file (or its name) belongs to. With a `radio`, the
+    /// aircraft on that radio (their profiles name it) come first, and a model file never
+    /// matches a profile that names another radio: a file name is a slot on one card.
     pub(super) fn aircraft_of_model(
         &self,
         file: Option<&str>,
         name: Option<&str>,
+        radio: Option<&str>,
     ) -> Result<Option<String>> {
         let Some(file) = file else { return Ok(None) };
-        let (profiles, _) = self.profiles()?;
+        let (mut profiles, _) = self.profiles()?;
+        // A stable sort: the radio's own aircraft first, each group in profile order.
+        profiles.sort_by_key(|pr| radio.is_none() || pr.gear.radio.as_deref() != radio);
         Ok(profiles
             .iter()
-            .find(|pr| pr.gear.edgetx_model.as_deref() == Some(file))
+            .find(|pr| {
+                pr.gear.edgetx_model.as_deref() == Some(file)
+                    && (radio.is_none()
+                        || pr.gear.radio.is_none()
+                        || pr.gear.radio.as_deref() == radio)
+            })
             .or_else(|| {
                 name.and_then(|n| {
                     profiles
@@ -210,6 +220,7 @@ impl Core {
             let selected_aircraft = self.aircraft_of_model(
                 view.selected_model.as_deref(),
                 view.selected_name.as_deref(),
+                t.c.as_ref().and_then(|c| c.id.as_deref()),
             )?;
             Ok(GearCard {
                 card: view,

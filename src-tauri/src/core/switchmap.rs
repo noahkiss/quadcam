@@ -14,6 +14,7 @@ use crate::api::{Event, RadioInput};
 use crate::gear::bf::dump::Config;
 use crate::gear::edgetx::card::Card;
 use crate::gear::edgetx::{model as em, yaml::Doc};
+use crate::gear::model::DeviceKind;
 use crate::gear::radio_hid::{self, HidSource, RadioSnapshot};
 use crate::gear::switchmap::{self, Inputs, SwitchMap};
 use anyhow::{bail, Context, Result};
@@ -267,25 +268,42 @@ impl Core {
     pub fn gear_switch_map(&self, p: &SwitchMapParams) -> Result<SwitchMap> {
         let mut devices = p.devices.clone();
         let mut names = Vec::new();
+        let mut model = p.model.clone();
         if let Some(a) = p
             .aircraft
             .as_deref()
             .map(str::trim)
             .filter(|a| !a.is_empty())
         {
-            let linked: Vec<String> = self
-                .gear_store()
-                .devices()?
+            // The aircraft's devices: its profile's FC and radio, and every device linked
+            // to it (an FC names its one aircraft; a radio's aircraft name the radio).
+            let profile = self
+                .profiles()?
+                .0
                 .into_iter()
-                .filter(|d| d.aircraft.as_deref() == Some(a))
-                .map(|d| d.id)
+                .find(|x| x.name.trim().eq_ignore_ascii_case(a));
+            let mut linked: Vec<String> = profile
+                .iter()
+                .flat_map(|pr| [pr.gear.fc.clone(), pr.gear.radio.clone()])
+                .flatten()
                 .collect();
+            for d in self.gear_store().devices()? {
+                if d.kind != DeviceKind::Radio
+                    && d.aircraft
+                        .as_deref()
+                        .is_some_and(|x| x.eq_ignore_ascii_case(a))
+                    && !linked.contains(&d.id)
+                {
+                    linked.push(d.id);
+                }
+            }
             if linked.is_empty() {
                 bail!("No saved device is linked to aircraft {a:?} (quadcam-cli gear devices save <id> --aircraft {a:?}).");
             }
-            devices.extend(linked);
-            if let Some(pr) = self.profiles()?.0.into_iter().find(|x| x.name == a) {
+            devices.extend(linked.into_iter().filter(|id| !p.devices.contains(id)));
+            if let Some(pr) = profile {
                 names = pr.edgetx_models;
+                model = model.or(pr.gear.edgetx_model);
             }
         }
         if p.radio.is_none() && p.fc.is_empty() && devices.is_empty() {
@@ -313,7 +331,7 @@ impl Core {
                         snaps: &snaps,
                         backup: b,
                     },
-                    p.model.as_deref(),
+                    model.as_deref(),
                     &names,
                     &label,
                     &mut inputs,

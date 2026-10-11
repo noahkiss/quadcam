@@ -34,6 +34,8 @@ export type {
   Connected,
   CueSettings,
   Device,
+  ProfileGear,
+  RadioAircraft,
   DeviceChanged,
   DeviceEvent,
   DeviceKind,

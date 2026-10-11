@@ -185,6 +185,7 @@ fn bench(hooks: Arc<dyn Hooks>, board: &str, version: &str, backed_up: bool) -> 
         last_space: None,
         aliases: Vec::new(),
         dfu_serial: None,
+        radio_aircraft: None,
     };
     core.gear_store().save_device(&radio).unwrap();
     Bench {
@@ -474,6 +475,7 @@ fn only_a_radio_can_be_flashed() {
         last_space: None,
         aliases: Vec::new(),
         dfu_serial: None,
+        radio_aircraft: None,
     };
     b.core.gear_store().save_device(&fc).unwrap();
     let e = b
@@ -1007,6 +1009,7 @@ fn the_cli_previews_a_splash_and_plans_in_a_temporary_home() {
         last_space: None,
         aliases: Vec::new(),
         dfu_serial: None,
+        radio_aircraft: None,
     };
     std::fs::write(
         gear.join("gear.json"),
@@ -1054,6 +1057,7 @@ fn second_radio(b: &Bench, seen: bool) -> Device {
         last_space: None,
         aliases: Vec::new(),
         dfu_serial: None,
+        radio_aircraft: None,
     };
     b.core.gear_store().save_device(&d).unwrap();
     d

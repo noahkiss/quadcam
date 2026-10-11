@@ -100,7 +100,9 @@ pub struct DeviceSaveParams {
     /// The person's name for it; empty for none.
     #[serde(default)]
     pub name: Option<String>,
-    /// An aircraft profile name; empty to unlink.
+    /// An aircraft profile name; empty to unlink. For a radio, which flies many aircraft,
+    /// it adds this aircraft to the radio (the profile's `gear.radio`), and empty takes
+    /// every aircraft off it.
     #[serde(default)]
     pub aircraft: Option<String>,
 }
@@ -124,9 +126,12 @@ impl Core {
         GearSettings::from_values(&values, default_dir)
     }
 
-    /// The gear folder.
+    /// The gear folder. A `gear.json` from before radios listed their aircraft is moved
+    /// on first sight (`move_radio_links`).
     pub fn gear_store(&self) -> Store {
-        Store::new(self.gear_settings().gear_dir)
+        let store = Store::new(self.gear_settings().gear_dir);
+        self.move_radio_links(&store);
+        store
     }
 
     /// Replaces what Gear reaches outside the process (tests pass fakes).
@@ -163,7 +168,17 @@ impl Core {
     pub fn gear_status(&self) -> Result<GearStatus> {
         let settings = self.gear_settings();
         let store = Store::new(settings.gear_dir.clone());
-        let connected = self.gear_connected()?;
+        let mut connected = self.gear_connected()?;
+        let (profiles, _) = self.profiles().unwrap_or_default();
+        for c in &mut connected {
+            let mount = match &c.link {
+                Link::Volume { mount, .. } => Some(mount.clone()),
+                _ => None,
+            };
+            if let Some(d) = &mut c.device {
+                self.fill_radio_aircraft(d, &profiles, mount.as_deref());
+            }
+        }
         let handles: Vec<String> = connected.iter().map(|c| link_handle(&c.link)).collect();
         let mut failures: Vec<StepFailure> = self
             .gear_failures
@@ -208,8 +223,14 @@ impl Core {
         v
     }
 
+    /// The saved devices; each radio with the aircraft whose profiles name it.
     pub fn gear_devices(&self) -> Result<Vec<Device>> {
-        self.gear_store().devices()
+        let mut list = self.gear_store().devices()?;
+        let (profiles, _) = self.profiles().unwrap_or_default();
+        for d in &mut list {
+            self.fill_radio_aircraft(d, &profiles, None);
+        }
+        Ok(list)
     }
 
     /// Names a device or links it to an aircraft. A new device is saved from what is
@@ -243,6 +264,7 @@ impl Core {
                     last_space: None,
                     aliases: Vec::new(),
                     dfu_serial: None,
+                    radio_aircraft: None,
                 }
             }
         };
@@ -253,7 +275,12 @@ impl Core {
             }
             d.name = n.to_string();
         }
-        if let Some(a) = &p.aircraft {
+        // A radio flies many aircraft: the profile takes the link (`radio_link`).
+        let radio_aircraft = match &p.aircraft {
+            Some(a) if d.kind == DeviceKind::Radio => Some(a.clone()),
+            _ => None,
+        };
+        if let (Some(a), None) = (&p.aircraft, &radio_aircraft) {
             let a = a.trim();
             d.aircraft = if a.is_empty() {
                 None
@@ -279,7 +306,12 @@ impl Core {
                 Some(p.name.clone())
             };
         }
-        let d = store.save_device(&d)?;
+        if let Some(a) = radio_aircraft {
+            self.radio_link(&d.id, &a)?;
+        }
+        let mut d = store.save_device(&d)?;
+        let (profiles, _) = self.profiles().unwrap_or_default();
+        self.fill_radio_aircraft(&mut d, &profiles, None);
         self.hooks.gear_changed();
         Ok(d)
     }

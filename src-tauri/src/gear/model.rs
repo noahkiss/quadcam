@@ -94,7 +94,9 @@ pub struct Device {
     /// The person's name for it. Empty until they give one ("Unnamed FC").
     #[serde(default)]
     pub name: String,
-    /// The aircraft profile it belongs to.
+    /// The aircraft profile it belongs to. An FC sits in one aircraft; a radio flies many,
+    /// so a radio keeps none here: the profiles name it (`ProfileGear.radio`), and
+    /// `radio_aircraft` lists them.
     #[serde(default)]
     pub aircraft: Option<String>,
     #[serde(default)]
@@ -116,6 +118,35 @@ pub struct Device {
     /// once; DFU mode is the only mode that shows it.
     #[serde(default)]
     pub dfu_serial: Option<String>,
+    /// For a radio: the aircraft profiles whose gear names it, as reads report them. Worked
+    /// out from the profiles on every read and never saved (`Store::save_device` drops it).
+    #[serde(default)]
+    pub radio_aircraft: Option<Vec<RadioAircraft>>,
+}
+
+/// One aircraft on a radio: a profile whose `gear.radio` names the radio, and its EdgeTX
+/// model on that radio.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Type)]
+pub struct RadioAircraft {
+    /// The aircraft profile's name.
+    pub profile: String,
+    /// The model file (`model01.yml`): the profile's `gear.edgetx_model`, else the file whose
+    /// model name is one of the profile's EdgeTX model names.
+    #[serde(default)]
+    pub model: Option<String>,
+    /// That model's name on the radio.
+    #[serde(default)]
+    pub model_name: Option<String>,
+    /// Where QuadCam looked for the model: `card` (mounted now) or `latest backup`. None
+    /// when it could not look.
+    #[serde(default)]
+    pub checked: Option<String>,
+    /// Whether the model is there; None when QuadCam could not look.
+    #[serde(default)]
+    pub found: Option<bool>,
+    /// The radio selects this model now (as last seen).
+    #[serde(default)]
+    pub selected: bool,
 }
 
 /// A card's space at one moment, in bytes.

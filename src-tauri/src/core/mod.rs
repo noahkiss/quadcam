@@ -34,6 +34,7 @@ pub mod model_edit;
 mod modules;
 mod osd;
 mod prep;
+mod radio_aircraft;
 mod radio_cli;
 mod rates;
 mod rematch;
@@ -335,6 +336,9 @@ pub struct Core {
     gear_mounted_for_user: Mutex<
         std::collections::HashMap<String, (std::time::Instant, chrono::DateTime<chrono::Utc>)>,
     >,
+    /// The `gear.json` the radio link move last checked, and its stamp then
+    /// (`core/radio_aircraft.rs`).
+    radio_links_checked: Mutex<Option<radio_aircraft::Checked>>,
 }
 
 struct Busy<'a>(&'a AtomicBool);
@@ -391,6 +395,7 @@ impl Core {
             sims_badge: Mutex::default(),
             gear_released: Mutex::default(),
             gear_mounted_for_user: Mutex::default(),
+            radio_links_checked: Mutex::default(),
         }
     }
 

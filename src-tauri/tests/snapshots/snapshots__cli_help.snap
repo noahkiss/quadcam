@@ -678,7 +678,7 @@ Arguments:
 Options:
       --json                 Print one JSON object: {"ok":true,"result":...} or {"ok":false,"error":{...}}
       --name <NAME>          The device's name ("" for none)
-      --aircraft <AIRCRAFT>  An aircraft profile name ("" to unlink)
+      --aircraft <AIRCRAFT>  An aircraft profile name ("" to unlink). A radio flies many: this adds the aircraft to the radio (its profile's gear radio), and "" takes every aircraft off it
       --session <FILE>       Session file (default: ~/Library/Caches/app.quadcam/session.json)
   -h, --help                 Print help
 ===== quadcam-cli gear devices forget --help
