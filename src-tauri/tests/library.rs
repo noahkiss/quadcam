@@ -923,3 +923,80 @@ fn split_by_flight_in_the_library() {
     let err = l.core.library_split_by_flight(&b.clip.id).unwrap_err();
     assert!(err.to_string().contains("nothing to split"), "{err:#}");
 }
+
+/// A rename whose cut or original would land on a file that exists refuses before it moves
+/// anything: the clip, its cut and its original stay where they were.
+#[test]
+fn a_rename_onto_a_taken_cut_name_moves_nothing() {
+    let l = lab(Layout::YearDay, false, true);
+    import(&l);
+    let a = by_name(&l, "backyard loops");
+    let dir = l.root.join("2026/2026-09-27");
+    let blocker = dir.join("2026-09-27_fence_flips_cut1.mp4");
+    std::fs::write(&blocker, b"someone else's file").unwrap();
+    let before: Vec<PathBuf> = std::fs::read_dir(&dir)
+        .unwrap()
+        .flatten()
+        .map(|e| e.path())
+        .collect();
+    let e = l
+        .core
+        .library_rename(&a.clip.id, "fence flips")
+        .unwrap_err();
+    assert!(
+        format!("{e:#}").contains("exists already; not moving"),
+        "{e:#}"
+    );
+    assert!(a.file.is_file());
+    assert!(dir.join("2026-09-27_backyard_loops_cut1.mp4").is_file());
+    assert!(dir
+        .join("originals/2026-09-27_backyard_loops.avi")
+        .is_file());
+    assert_eq!(std::fs::read(&blocker).unwrap(), b"someone else's file");
+    let mut after: Vec<PathBuf> = std::fs::read_dir(&dir)
+        .unwrap()
+        .flatten()
+        .map(|e| e.path())
+        .collect();
+    let mut before = before;
+    before.sort();
+    after.sort();
+    assert_eq!(after, before);
+    assert_eq!(by_name(&l, "backyard loops").clip.id, a.clip.id);
+}
+
+/// A put-back refuses before it moves anything: a `from` outside the library, or a place
+/// that is taken now. Nothing leaves the Trash.
+#[test]
+fn a_put_back_refuses_outside_the_library_and_onto_a_taken_place() {
+    let l = lab(Layout::YearDay, false, false);
+    import(&l);
+    let a = by_name(&l, "gap run");
+    let r = l
+        .core
+        .library_trash(std::slice::from_ref(&a.clip.id))
+        .unwrap();
+    assert_eq!(r.moved.len(), 1, "{r:?}");
+    let m = r.moved[0].clone();
+    assert!(m.to.is_file());
+
+    let outside = l._dir.path().join("elsewhere/x.mp4");
+    let forged = quadcam_lib::core::Moved {
+        from: outside.clone(),
+        ..m.clone()
+    };
+    // The good entry first: the refusal still comes before any move.
+    let e = l.core.library_untrash(&[m.clone(), forged]).unwrap_err();
+    assert!(format!("{e:#}").contains("is not in the library"), "{e:#}");
+    assert!(!outside.exists());
+    assert!(m.to.is_file() && !m.from.exists(), "nothing moved");
+
+    std::fs::write(&m.from, b"a new file in its place").unwrap();
+    let e = l
+        .core
+        .library_untrash(std::slice::from_ref(&m))
+        .unwrap_err();
+    assert!(format!("{e:#}").contains("exists already"), "{e:#}");
+    assert_eq!(std::fs::read(&m.from).unwrap(), b"a new file in its place");
+    assert!(m.to.is_file());
+}

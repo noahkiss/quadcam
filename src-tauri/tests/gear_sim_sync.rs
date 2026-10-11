@@ -1170,3 +1170,89 @@ fn a_restore_refuses_while_the_sim_runs_or_when_the_file_changed() {
     let plan = c.gear_sim_restore_plan_at(&p, h.path(), &never).unwrap();
     assert!(!plan.ready());
 }
+
+/// A value the sim's file cannot hold exactly (Uncrashed keeps rates as f32 fractions) does
+/// not read back as written: the plan refuses with `RoundTrip` and offers no digest.
+#[test]
+fn a_rate_the_sim_cannot_hold_is_refused_as_round_trip() {
+    let dir = tempfile::tempdir().unwrap();
+    let (h, p) = home();
+    let dump = std::fs::read_to_string(three()).unwrap().replacen(
+        "set roll_rc_rate = 127",
+        "set roll_rc_rate = 1677721701",
+        1,
+    );
+    let quad = dir.path().join("quad.dump_all.txt");
+    std::fs::write(&quad, dump).unwrap();
+    let c = core(dir.path());
+    let plan = c
+        .gear_sim_sync_plan_at(
+            &SimSyncParams {
+                sims: vec![target("uncrashed", "FREE")],
+                paths: vec![quad],
+                profile: Some(0),
+                ..Default::default()
+            },
+            h.path(),
+            &never,
+        )
+        .unwrap();
+    let k = plan
+        .checks
+        .iter()
+        .find(|k| k.name == "Reads back as written (Uncrashed)")
+        .expect("the round-trip check ran");
+    assert!(!k.ok, "{:?}", plan.checks);
+    assert_eq!(
+        k.refusal.as_ref().map(|r| r.code),
+        Some(RefusalCode::RoundTrip)
+    );
+    assert!(plan.digest.is_empty());
+    assert_eq!(
+        std::fs::read(&p.uncrashed).unwrap(),
+        gvas(&[0.50, 1.00, 0.10, 0.50, 1.00, 0.10, 0.50, 1.00, 0.0, 0.0, 0.50, 0.00])
+    );
+}
+
+/// Under cargo a sim file outside the temporary folder is never written, even with a ready
+/// plan, its digest and the click: `Disabled`, the file unchanged. The home sits in cargo's
+/// target folder, which is not the temporary folder.
+#[test]
+fn a_test_process_writes_no_sim_file_outside_the_temporary_folder() {
+    let dir = tempfile::tempdir().unwrap();
+    let h = tempfile::tempdir_in(env!("CARGO_TARGET_TMPDIR")).unwrap();
+    let before = gvas(&[
+        0.50, 1.00, 0.10, 0.50, 1.00, 0.10, 0.50, 1.00, 0.0, 0.0, 0.50, 0.00,
+    ]);
+    let file = put(h.path(), UNCRASHED, &before);
+    let c = core(dir.path());
+    let p = params(vec![target("uncrashed", "FREE")], 0);
+    let plan = c.gear_sim_sync_plan_at(&p, h.path(), &never).unwrap();
+    assert!(plan.ready(), "{:?}", plan.checks);
+    let e = c
+        .sim_sync_at(&request(p, &plan, true), true, h.path(), &never)
+        .unwrap_err();
+    assert_eq!(refused(&e), RefusalCode::Disabled, "{e:#}");
+    assert_eq!(std::fs::read(&file).unwrap(), before);
+}
+
+/// A restore under cargo writes no sim file outside the temporary folder either: a ready
+/// plan for a file in cargo's target folder is `Disabled` at the write.
+#[test]
+fn a_test_process_restores_no_sim_file_outside_the_temporary_folder() {
+    let dir = tempfile::tempdir().unwrap();
+    let (h, paths) = home();
+    let c = core(dir.path());
+    synced(&c, h.path(), &paths);
+    let after_sync = std::fs::read(&paths.liftoff).unwrap();
+    let t = tempfile::tempdir_in(env!("CARGO_TARGET_TMPDIR")).unwrap();
+    let file = put(t.path(), LIFTOFF, &after_sync);
+    let p = restore_params("liftoff");
+    let plan = c.gear_sim_restore_plan_at(&p, t.path(), &never).unwrap();
+    assert!(plan.ready(), "{:?}", plan.checks);
+    let e = c
+        .sim_restore_at(&restore_request(&p, &plan), true, t.path(), &never)
+        .unwrap_err();
+    assert_eq!(refused(&e), RefusalCode::Disabled, "{e:#}");
+    assert_eq!(std::fs::read(&file).unwrap(), after_sync);
+}

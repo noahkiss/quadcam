@@ -327,3 +327,65 @@ fn prep_through_cli_and_mcp() {
     assert_eq!(r["isError"], true, "no confirm: {r}");
     assert!(card.is_attached());
 }
+
+/// Never a DJI device over USB: while one is attached (`Env.dji_usb`), a DJI volume that is
+/// not in the built-in slot is refused by the plan, by the prep, and by the erase itself.
+/// The image is never erased here.
+#[test]
+fn prep_never_erases_a_dji_volume_while_a_dji_usb_device_is_attached() {
+    use quadcam_lib::gear::serial::FakePorts;
+    use std::sync::atomic::{AtomicBool, Ordering};
+
+    let card = Image::create("64m", "QCDJIUSB", false);
+    assert_is_test_image(&card);
+    std::fs::create_dir_all(card.mount.join("DCIM/DJI_001")).unwrap();
+    let work = tempfile::tempdir().unwrap();
+    let attached = Arc::new(AtomicBool::new(true));
+    let mut env = quadcam_lib::gear::Env::fake(vec![], Arc::new(FakePorts::new(vec![])));
+    let a = attached.clone();
+    env.dji_usb = Arc::new(move || a.load(Ordering::SeqCst));
+    let core = Core::new(
+        work.path().join("cache"),
+        None,
+        Arc::new(NoHooks),
+        Arc::new(Recorder::default()),
+    )
+    .with_gear_env(env);
+    const DJI_USB: &str = "never formats a DJI device over USB";
+
+    let e = err(core.card_prep_plan(&card.mount, None));
+    assert!(e.contains(DJI_USB), "{e}");
+
+    // Planned while nothing was attached; the device is plugged in before the erase.
+    attached.store(false, Ordering::SeqCst);
+    let plan = core.card_prep_plan(&card.mount, None).unwrap();
+    assert_eq!(plan.filesystem, "exFAT");
+    attached.store(true, Ordering::SeqCst);
+    let req = FormatRequest {
+        device: plan.device.clone(),
+        volume_uuid: plan.volume_uuid.clone(),
+        label: None,
+        confirm: true,
+    };
+    let e = err(core.card_prep(&req, false));
+    assert!(e.contains(DJI_USB), "{e}");
+    assert!(card.is_mounted() && card.mount.join("DCIM/DJI_001").is_dir());
+
+    // The erase asks right before `diskutil eraseDisk`.
+    let id = CardIdentity::from_info(&disk::info(&card.mount.to_string_lossy()).unwrap());
+    let dji = sources::dji::Dji.card_policy();
+    assert_is_test_image(&card);
+    let e = disk::format_card_with(
+        &id,
+        &card.mount,
+        "GOGGLES",
+        &dji,
+        disk::EraseBy::Prep,
+        &|| true,
+        &|| Ok(()),
+    )
+    .unwrap_err()
+    .to_string();
+    assert!(e.contains(DJI_USB), "{e}");
+    assert!(card.is_mounted() && card.mount.join("DCIM/DJI_001").is_dir());
+}

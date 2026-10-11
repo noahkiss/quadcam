@@ -70,6 +70,8 @@ struct Opts {
     hooks: Arc<dyn Hooks>,
     uuid: &'static str,
     card_write: Option<WriteOptions>,
+    /// The bench's folder is where real cards mount (`Env.real_cards`).
+    real_cards_here: bool,
 }
 
 impl Default for Opts {
@@ -80,6 +82,7 @@ impl Default for Opts {
             hooks: Arc::new(NoHooks),
             uuid: "11111111-2222-3333-4444-555555555555",
             card_write: None,
+            real_cards_here: false,
         }
     }
 }
@@ -131,6 +134,9 @@ fn bench(o: Opts) -> Bench {
     });
     env.fail_readback = o.fail_readback;
     env.card_write = o.card_write;
+    if o.real_cards_here {
+        env.real_cards = dir.path().to_path_buf();
+    }
     // Cues play every time here: the debounce would hide a second "safe to unplug".
     std::fs::create_dir_all(dir.path().join("support")).unwrap();
     std::fs::write(
@@ -1171,4 +1177,378 @@ fn a_clean_removal_needs_a_card() {
         .unwrap();
     assert_eq!(r.removed, 1);
     assert!(!other.join("MODELS/._model00.yml").exists());
+}
+
+/// A snapshot that cannot be saved stops the apply before the first byte: `NoBackup`, the
+/// card unchanged, the change still Ready. The manifest folder is the store's own
+/// (`Store::snapshots_dir`), so the failure is certain.
+#[test]
+fn a_snapshot_that_fails_is_no_backup_and_writes_nothing() {
+    use std::os::unix::fs::PermissionsExt;
+    let b = bench(Opts::default());
+    let c = stage(&b, vec![contrast("30")]);
+    let p = plan(&b, &c);
+    let snaps = Store::new(b.dir.path().join("support/gear")).snapshots_dir(&b.id);
+    assert!(snaps.is_dir(), "the first backup made {}", snaps.display());
+    std::fs::set_permissions(&snaps, std::fs::Permissions::from_mode(0o555)).unwrap();
+    let r = b.core.gear_apply(&req(&c, &p));
+    std::fs::set_permissions(&snaps, std::fs::Permissions::from_mode(0o755)).unwrap();
+    let e = r.expect_err("an apply with no backup");
+    assert_eq!(code(&e), RefusalCode::NoBackup, "{e:#}");
+    assert!(read(&b, "RADIO/radio.yml").contains("contrast: 20"));
+    assert_eq!(status(&b, &c.id), ChangeStatus::Ready);
+}
+
+/// An apply an agent asks for (not the sheet's own click) waits on the person: a "no"
+/// writes nothing and leaves the change Ready. The sheet's click skips the question.
+#[test]
+fn the_card_waits_for_the_persons_click_and_a_no_writes_nothing() {
+    struct Gate {
+        answer: AtomicBool,
+        asked: AtomicBool,
+    }
+    impl Hooks for Gate {
+        fn confirm_apply(&self, _c: &StagedChange, _p: &ApplyPlan) -> anyhow::Result<()> {
+            self.asked.store(true, Ordering::SeqCst);
+            if self.answer.load(Ordering::SeqCst) {
+                Ok(())
+            } else {
+                anyhow::bail!("Refused: the user cancelled the apply in quadcam.")
+            }
+        }
+    }
+    let gate = Arc::new(Gate {
+        answer: AtomicBool::new(false),
+        asked: AtomicBool::new(false),
+    });
+    let b = bench(Opts {
+        hooks: gate.clone(),
+        ..Default::default()
+    });
+    let c = stage(&b, vec![contrast("30")]);
+    let p = plan(&b, &c);
+    let e = b.core.gear_apply(&req(&c, &p)).unwrap_err();
+    assert!(gate.asked.load(Ordering::SeqCst));
+    assert!(format!("{e:#}").contains("cancelled"), "{e:#}");
+    assert!(read(&b, "RADIO/radio.yml").contains("contrast: 20"));
+    assert_eq!(status(&b, &c.id), ChangeStatus::Ready);
+
+    // The sheet's own click is the confirm: no question, and it writes.
+    gate.asked.store(false, Ordering::SeqCst);
+    b.mounted.store(true, Ordering::SeqCst);
+    let p = plan(&b, &c);
+    let r = b.core.gear_apply_click(&req(&c, &p)).unwrap();
+    assert_eq!(r.status, ChangeStatus::Verified, "{}", r.message);
+    assert!(!gate.asked.load(Ordering::SeqCst));
+    assert!(read(&b, "RADIO/radio.yml").contains("contrast: 30"));
+}
+
+/// The fresh read after the write is its own check: a card that changed after the engine's
+/// read-back fails Verify and is rolled back to the old bytes.
+#[test]
+fn a_card_that_changes_after_the_write_fails_verify_and_rolls_back() {
+    let mut o = WriteOptions::reader();
+    o.change_after = Some("RADIO/radio.yml".into());
+    let b = bench(Opts {
+        card_write: Some(o),
+        ..Default::default()
+    });
+    let before = std::fs::read(b.root.join("RADIO/radio.yml")).unwrap();
+    let c = stage(&b, vec![contrast("31")]);
+    let p = plan(&b, &c);
+    let r = b.core.gear_apply(&req(&c, &p)).unwrap();
+    assert_eq!(r.status, ChangeStatus::Failed, "{}", r.message);
+    use quadcam_lib::gear::apply::StepState::*;
+    let steps: Vec<_> = r.steps.iter().map(|s| (s.name.as_str(), s.state)).collect();
+    assert!(steps.contains(&("Verify", Failed)), "{steps:?}");
+    assert!(steps.contains(&("Roll back", Done)), "{steps:?}");
+    assert_eq!(
+        std::fs::read(b.root.join("RADIO/radio.yml")).unwrap(),
+        before
+    );
+    assert_eq!(status(&b, &c.id), ChangeStatus::Failed);
+}
+
+/// Under cargo no card under the real cards' folder is written: the apply and the `._`
+/// clean both refuse, and the card is unchanged. The bench names its own folder as that
+/// place (`Env.real_cards`).
+#[test]
+fn a_test_process_writes_no_card_where_real_cards_mount() {
+    let b = bench(Opts {
+        real_cards_here: true,
+        ..Default::default()
+    });
+    let c = stage(&b, vec![contrast("30")]);
+    let p = plan(&b, &c);
+    let e = b.core.gear_apply(&req(&c, &p)).unwrap_err();
+    assert_eq!(code(&e), RefusalCode::Disabled, "{e:#}");
+    assert!(read(&b, "RADIO/radio.yml").contains("contrast: 20"));
+    assert_eq!(status(&b, &c.id), ChangeStatus::Ready);
+
+    let mut junk = vec![0x00, 0x05, 0x16, 0x07, 0x00, 0x02, 0x00, 0x00];
+    junk.extend_from_slice(b"Mac OS X        ");
+    junk.resize(120, 0);
+    std::fs::write(b.root.join("MODELS/._model00.yml"), &junk).unwrap();
+    b.mounted.store(true, Ordering::SeqCst);
+    let e = b
+        .core
+        .gear_card_clean(&CardCleanParams {
+            device: Some(b.id.clone()),
+            remove: true,
+            confirm: true,
+            ..Default::default()
+        })
+        .unwrap_err();
+    assert!(format!("{e:#}").contains("QUADCAM_CARD_WRITE"), "{e:#}");
+    assert!(b.root.join("MODELS/._model00.yml").exists());
+}
+
+/// The bench's blob store holds `bytes`: a `CardFile` that puts them at `path`.
+fn card_file(b: &Bench, path: &str, bytes: &[u8]) -> quadcam_lib::gear::model::CardFile {
+    let r =
+        quadcam_lib::gear::backup::Snapshots::new(Store::new(b.dir.path().join("support/gear")))
+            .blobs()
+            .put(bytes)
+            .unwrap();
+    quadcam_lib::gear::model::CardFile {
+        path: path.into(),
+        xxh64: r.xxh64,
+        size: r.size,
+    }
+}
+
+/// Card files put one sound and delete another: backed up first (the deleted file's bytes
+/// are in the snapshot), written, read back and verified.
+#[test]
+fn card_files_put_and_delete_apply_with_a_backup() {
+    let b = bench(Opts::default());
+    std::fs::create_dir_all(b.root.join("SOUNDS/en")).unwrap();
+    std::fs::write(b.root.join("SOUNDS/en/old.wav"), b"RIFF old").unwrap();
+    let new = card_file(&b, "SOUNDS/en/new.wav", b"RIFF new take");
+    let c = stage(
+        &b,
+        vec![Edit::CardFiles {
+            put: vec![new],
+            delete: vec!["SOUNDS/en/old.wav".into()],
+        }],
+    );
+    let p = plan(&b, &c);
+    assert!(p.checks.iter().all(|k| k.ok), "{:?}", p.checks);
+    let r = b.core.gear_apply(&req(&c, &p)).unwrap();
+    assert_eq!(r.status, ChangeStatus::Verified, "{}", r.message);
+    assert_eq!(
+        std::fs::read(b.root.join("SOUNDS/en/new.wav")).unwrap(),
+        b"RIFF new take"
+    );
+    assert!(!b.root.join("SOUNDS/en/old.wav").exists());
+    assert!(
+        r.files.iter().any(|f| f == "SOUNDS/en/old.wav"),
+        "{:?}",
+        r.files
+    );
+    let snaps =
+        quadcam_lib::gear::backup::Snapshots::new(Store::new(b.dir.path().join("support/gear")));
+    let old = snaps
+        .read(r.backup.as_ref().unwrap(), Some("SOUNDS/en/old.wav"))
+        .unwrap();
+    assert_eq!(old.text.as_deref(), Some("RIFF old"));
+}
+
+/// Card files stand alone, and each path stays under SOUNDS/: a mixed change and a path
+/// outside refuse, and the card is unchanged.
+#[test]
+fn card_files_refuse_a_mixed_change_and_paths_outside_sounds() {
+    let b = bench(Opts::default());
+    let radio = read(&b, "RADIO/radio.yml");
+    let sound = card_file(&b, "SOUNDS/en/new.wav", b"RIFF new");
+    let refused = |edits: Vec<Edit>| -> String {
+        let staged = b.core.gear_change_stage(&StageParams {
+            device: b.id.clone(),
+            edits,
+            ..Default::default()
+        });
+        match staged {
+            Err(e) => format!("{e:#}"),
+            Ok(c) => match b.core.gear_apply_plan(&ApplyPlanParams {
+                id: c.id.clone(),
+                port: None,
+            }) {
+                Err(e) => format!("{e:#}"),
+                Ok(p) => {
+                    let e = b.core.gear_apply(&req(&c, &p)).unwrap_err();
+                    format!("{e:#}")
+                }
+            },
+        }
+    };
+    let e = refused(vec![
+        Edit::CardFiles {
+            put: vec![sound.clone()],
+            delete: vec![],
+        },
+        contrast("30"),
+    ]);
+    assert!(e.contains("stand with no model or radio edit"), "{e}");
+    for (put, delete) in [
+        ("MODELS/model09.yml", None),
+        ("SOUNDS/../RADIO/radio.yml", None),
+        ("/SOUNDS/en/x.wav", None),
+        ("SOUNDS/en/new.wav", Some("RADIO/radio.yml")),
+        (
+            "SOUNDS/en/new.wav",
+            Some("SOUNDS/en/../../MODELS/model00.yml"),
+        ),
+    ] {
+        let mut f = sound.clone();
+        f.path = put.into();
+        let e = refused(vec![Edit::CardFiles {
+            put: vec![f],
+            delete: delete.map(|d| vec![d.to_string()]).unwrap_or_default(),
+        }]);
+        assert!(e.contains("Refused"), "{put} {delete:?}: {e}");
+    }
+    assert_eq!(read(&b, "RADIO/radio.yml"), radio);
+    assert!(b.root.join("MODELS/model00.yml").is_file());
+    assert!(!b.root.join("SOUNDS/en/new.wav").exists());
+    assert!(!b.root.join("MODELS/model09.yml").exists());
+}
+
+/// A model copy and a model delete apply with a backup and read back: the copy holds the
+/// new name, the deleted model's bytes are in the snapshot.
+#[test]
+fn a_model_copy_and_delete_apply_with_a_backup() {
+    let b = bench(Opts::default());
+    // model01.yml is the selected model: copy it, delete the other.
+    let deleted = std::fs::read(b.root.join("MODELS/model00.yml")).unwrap();
+    let c = stage(
+        &b,
+        vec![
+            Edit::ModelCopy {
+                from: "model01.yml".into(),
+                to: "model05.yml".into(),
+                name: "BRAVO COPY".into(),
+            },
+            Edit::ModelDelete {
+                file: "model00.yml".into(),
+            },
+        ],
+    );
+    let p = plan(&b, &c);
+    assert!(p.checks.iter().all(|k| k.ok), "{:?}", p.checks);
+    let r = b.core.gear_apply(&req(&c, &p)).unwrap();
+    assert_eq!(r.status, ChangeStatus::Verified, "{}", r.message);
+    assert!(read(&b, "MODELS/model05.yml").contains("BRAVO COPY"));
+    assert!(!b.root.join("MODELS/model00.yml").exists());
+    assert!(read(&b, "MODELS/model01.yml").contains("BRAVO 2"));
+    let snaps =
+        quadcam_lib::gear::backup::Snapshots::new(Store::new(b.dir.path().join("support/gear")));
+    let backup = snaps.get(r.backup.as_ref().unwrap()).unwrap();
+    let f = backup
+        .files
+        .iter()
+        .find(|f| f.path == "MODELS/model00.yml")
+        .expect("the deleted model is in the backup");
+    assert_eq!(f.size, deleted.len() as u64);
+}
+
+/// The MCP card and change actions an agent uses: `card_clean` lists, then removes only with
+/// confirm; `card_unmount` and `card_mount`; `restore_stage` stages a restore that
+/// `discard` drops; `radio_cli` reboot needs confirm; `device_forget` keeps the backups.
+#[test]
+fn mcp_card_and_change_actions() {
+    use quadcam_lib::mcp::{LocalBackend, Server};
+    use serde_json::json;
+    let b = bench(Opts::default());
+    let mut s = Server::new(LocalBackend(b.core.clone()));
+    let mut call = |tool: &str, args: serde_json::Value| {
+        let r = s.call_tool(tool, args.clone());
+        (r["isError"] == true, r)
+    };
+
+    let mut junk = vec![0x00, 0x05, 0x16, 0x07, 0x00, 0x02, 0x00, 0x00];
+    junk.extend_from_slice(b"Mac OS X        ");
+    junk.resize(120, 0);
+    let dot = b.root.join("MODELS/._model00.yml");
+    std::fs::write(&dot, &junk).unwrap();
+    let (err, r) = call(
+        "quadcam_gear_edit",
+        json!({"action": "card_clean", "device": b.id}),
+    );
+    assert!(!err, "{r}");
+    assert!(r["content"][0]["text"]
+        .as_str()
+        .unwrap()
+        .contains("confirm=true"));
+    assert!(dot.exists(), "a listing removes nothing");
+    b.mounted.store(true, Ordering::SeqCst);
+    let (err, r) = call(
+        "quadcam_gear_edit",
+        json!({"action": "card_clean", "device": b.id, "confirm": true}),
+    );
+    assert!(!err, "{r}");
+    assert!(!dot.exists());
+
+    b.mounted.store(true, Ordering::SeqCst);
+    b.log.lock().unwrap().clear();
+    let (err, r) = call(
+        "quadcam_gear_edit",
+        json!({"action": "card_unmount", "device": b.id}),
+    );
+    assert!(!err, "{r}");
+    assert!(!b.mounted.load(Ordering::SeqCst));
+    let (err, r) = call(
+        "quadcam_gear_edit",
+        json!({"action": "card_mount", "device": b.id, "minutes": 1}),
+    );
+    assert!(!err, "{r}");
+    assert!(b.mounted.load(Ordering::SeqCst));
+    assert_eq!(
+        *b.log.lock().unwrap(),
+        [format!("unmount {DISK}"), format!("mount {DISK}")]
+    );
+
+    // A backup to restore from: the apply's own.
+    let c = stage(&b, vec![contrast("28")]);
+    let p = plan(&b, &c);
+    let applied = b.core.gear_apply(&req(&c, &p)).unwrap();
+    assert_eq!(
+        applied.status,
+        ChangeStatus::Verified,
+        "{}",
+        applied.message
+    );
+    let (err, r) = call(
+        "quadcam_gear_edit",
+        json!({"action": "restore_stage", "backup": applied.backup, "paths": ["RADIO/radio.yml"]}),
+    );
+    assert!(!err, "{r}");
+    let restore = r["structuredContent"]["id"].as_str().unwrap().to_string();
+    assert_eq!(status(&b, &restore), ChangeStatus::Ready);
+    let (err, r) = call(
+        "quadcam_gear_edit",
+        json!({"action": "discard", "change": restore}),
+    );
+    assert!(!err, "{r}");
+    assert_eq!(status(&b, &restore), ChangeStatus::Discarded);
+    b.mounted.store(true, Ordering::SeqCst);
+    assert!(read(&b, "RADIO/radio.yml").contains("contrast: 28"));
+
+    let (err, r) = call(
+        "quadcam_gear_edit",
+        json!({"action": "radio_cli", "command": "reboot"}),
+    );
+    assert!(err, "{r}");
+    assert!(r.to_string().contains("confirm=true"), "{r}");
+
+    let backups = b.core.gear_backups(&Default::default()).unwrap().len();
+    let (err, r) = call(
+        "quadcam_gear_edit",
+        json!({"action": "device_forget", "id": b.id}),
+    );
+    assert!(!err, "{r}");
+    assert!(!b.core.gear_devices().unwrap().iter().any(|d| d.id == b.id));
+    assert_eq!(
+        b.core.gear_backups(&Default::default()).unwrap().len(),
+        backups
+    );
 }

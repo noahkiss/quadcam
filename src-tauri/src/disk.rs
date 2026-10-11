@@ -404,11 +404,33 @@ pub fn format_card(
     by: EraseBy,
     recheck: &dyn Fn() -> Result<()>,
 ) -> Result<Option<String>> {
+    format_card_with(
+        expected,
+        mount,
+        label,
+        policy,
+        by,
+        &crate::gear::events::dji_usb_attached,
+        recheck,
+    )
+}
+
+/// `format_card`, asking `dji_usb` whether a DJI USB device is attached (`Env.dji_usb`; the
+/// system's answer is `gear::events::dji_usb_attached`). It asks right before the erase.
+pub fn format_card_with(
+    expected: &CardIdentity,
+    mount: &Path,
+    label: &str,
+    policy: &crate::sources::CardPolicy,
+    by: EraseBy,
+    dji_usb: &dyn Fn() -> bool,
+    recheck: &dyn Fn() -> Result<()>,
+) -> Result<Option<String>> {
     check_policy(policy, by)?;
     let personality = erase_personality(policy.filesystem)?;
     let label = fat_label(label)?;
     let whole = verify_card_for_format(expected, mount)?;
-    check_volume_contents(mount, &whole, crate::gear::events::dji_usb_attached())?;
+    check_volume_contents(mount, &whole, dji_usb())?;
     recheck()?;
     let disk = format!("/dev/{}", whole_disk_of(&whole.device_identifier));
     let out = Command::new("/usr/sbin/diskutil")

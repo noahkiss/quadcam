@@ -457,7 +457,7 @@ claude mcp add quadcam -- "$(brew --prefix)/bin/quadcam-cli" mcp
 - **DJI, two rules.** (a) Never format a DJI device over USB (an O4 air unit, goggles in
   storage mode): absolute. `check_volume_contents` refuses a DJI volume whose media name names
   DJI, or that is not a built-in-slot card while a DJI USB device is attached
-  (`gear::events::dji_usb_attached`, fails closed). (b) A removable DJI goggles card may be
+  (`gear::events::dji_usb_attached` through `Env.dji_usb`, fails closed). (b) A removable DJI goggles card may be
   erased by card prep only, as exFAT, behind the every-clip-in-the-library guard. A card that
   once held DJI clips (empty `DCIM/DJI_*` folders) is a goggles card under (b).
 - A source's `CardPolicy` says whether "Format card" (after an import, `format_offered`) and
@@ -500,7 +500,8 @@ claude mcp add quadcam -- "$(brew --prefix)/bin/quadcam-cli" mcp
 - **Never write a real EdgeTX card while testing.** `edgetx::card::write` refuses a path under
   `/Volumes` in a process started by cargo unless `QUADCAM_CARD_WRITE=real`, and
   `edgetx::card::release` unmounts nothing unless `QUADCAM_SERIAL=real`. Tests write the
-  synthetic card (`edgetx::synth`) into a temporary folder. EdgeTX files are edited line by
+  synthetic card (`edgetx::synth`) into a temporary folder; a test that sets `Env.real_cards`
+  to its own folder sees that refusal. EdgeTX files are edited line by
   line (`edgetx::yaml`), never through a YAML library.
 - **Never `diskutil eject` a card; `safe_remove` (method `eject`) unmounts cards and ejects
   only non-card disks.** Only an unmounted card still inserted stays visible to Gear

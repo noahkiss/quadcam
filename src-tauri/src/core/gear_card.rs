@@ -305,11 +305,7 @@ impl Core {
                 bail!("Refused: {e:#} QuadCam removes ._ files only from a card it detects or an EdgeTX card.");
             }
         }
-        if !crate::gear::edgetx::card::writes_allowed(
-            &root,
-            std::env::var("QUADCAM_CARD_WRITE").ok().as_deref(),
-            std::env::var_os("CARGO_MANIFEST_DIR").is_some(),
-        ) {
+        if !crate::gear::edgetx::card::process_writes_allowed(&root, &self.gear.real_cards) {
             bail!("Refused: this process writes no real card under /Volumes (set QUADCAM_CARD_WRITE=real).");
         }
         if out.files.is_empty() {

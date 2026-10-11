@@ -577,12 +577,13 @@ impl Core {
             .clone()
             .context("Clips came from a folder, not a card.")?;
         let policy = crate::sources::get(s.kind).card_policy();
-        let eject_error = disk::format_card(
+        let eject_error = disk::format_card_with(
             &card,
             &s.source,
             &plan.label,
             &policy,
             disk::EraseBy::Import,
+            &*self.gear.dji_usb,
             &|| self.current()?.format_ready(),
         )?;
         let mut latest = self.current()?;

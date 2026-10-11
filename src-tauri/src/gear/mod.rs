@@ -258,6 +258,13 @@ pub struct Env {
     /// Tests: the card write's options in place of a reader's or a radio's (timeouts, a
     /// stalled file).
     pub card_write: Option<edgetx::card::WriteOptions>,
+    /// Where real cards mount (`/Volumes`): a process started by cargo writes no card
+    /// under it unless `QUADCAM_CARD_WRITE=real`. Tests name their own folder to see that
+    /// refusal.
+    pub real_cards: std::path::PathBuf,
+    /// Whether a DJI USB device (an air unit, goggles in storage mode) is attached: the
+    /// format guard asks it right before an erase (`disk::format_card_with`).
+    pub dji_usb: Arc<dyn Fn() -> bool + Send + Sync>,
     /// Runs `diskutil` for the card check and repair (`health`).
     pub disk: Arc<dyn health::DiskRunner>,
     /// The other processes that have a serial port open, as `(pid, name)`.
@@ -283,6 +290,8 @@ impl Env {
             mount: Arc::new(|d| edgetx::card::attach(d, edgetx::card::UNMOUNT_TIMEOUT)),
             fail_readback: None,
             card_write: None,
+            real_cards: edgetx::card::REAL_CARDS.into(),
+            dji_usb: Arc::new(events::dji_usb_attached),
             disk: health::system(),
             holders: Arc::new(serial::other_holders),
             tts: Arc::new(voice::tts::System {
@@ -309,6 +318,8 @@ impl Env {
             mount: Arc::new(|_| Ok(())),
             fail_readback: None,
             card_write: None,
+            real_cards: edgetx::card::REAL_CARDS.into(),
+            dji_usb: Arc::new(|| false),
             disk: Arc::new(health::FakeDisk::ok()),
             holders: Arc::new(|_| Vec::new()),
             tts: Arc::new(voice::tts::NoProviders),

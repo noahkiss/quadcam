@@ -791,3 +791,199 @@ fn mcp_apply_needs_the_digest_and_confirm() {
         Some("1500")
     );
 }
+
+/// The port drops out while the backup reads `dump all`: `NoBackup` before a line is sent,
+/// nothing saved, no snapshot before the apply, the change still Ready.
+#[test]
+fn a_backup_read_that_fails_in_the_job_writes_nothing() {
+    let fc = FakeFc::new(G473).with_uid(UID);
+    let b = bench(&fc);
+    let c = stage(&b, vec![set("osd_cap_alarm", "1500")]);
+    let p = plan(&b, &c);
+    assert!(p.ready(), "{:?}", p.checks);
+    let _ = fc.clone().lose_port_on("dump all");
+    let e = b.core.gear_apply(&req(&c, &p)).unwrap_err();
+    assert_eq!(code(&e), RefusalCode::NoBackup, "{e:#}");
+    assert!(format!("{e}").contains("Nothing was written"), "{e}");
+    assert_eq!(fc.saves(), 0);
+    assert!(
+        !fc.log().iter().any(|l| l.starts_with("set ")),
+        "{:?}",
+        fc.log()
+    );
+    assert_eq!(status(&b, &c.id), ChangeStatus::Ready);
+    let list = b
+        .core
+        .gear_backups(&BackupFilter {
+            device: Some(b.id.clone()),
+        })
+        .unwrap();
+    assert!(!list.iter().any(|s| s.trigger == Trigger::BeforeApply));
+}
+
+/// The snapshot before an apply holds every backup file, and its `dump all` is the FC's
+/// state before the write.
+#[test]
+fn the_backup_before_an_apply_holds_every_file_and_the_old_value() {
+    let fc = FakeFc::new(G473).with_uid(UID);
+    let b = bench(&fc);
+    let c = stage(&b, vec![set("osd_cap_alarm", "1500")]);
+    let p = plan(&b, &c);
+    let r = b.core.gear_apply(&req(&c, &p)).unwrap();
+    assert_eq!(r.status, ChangeStatus::Verified, "{}", r.message);
+    let snaps = quadcam_lib::gear::backup::Snapshots::new(quadcam_lib::gear::store::Store::new(
+        b._dir.path().join("support/gear"),
+    ));
+    let id = r.backup.unwrap();
+    let files = snaps.read(&id, None).unwrap().backup.files;
+    let mut paths: Vec<_> = files.iter().map(|f| f.path.as_str()).collect();
+    paths.sort();
+    assert_eq!(paths, ["diff all", "dump all", "status", "version"]);
+    assert!(files.iter().all(|f| f.size > 0), "{files:?}");
+    let dump = snaps.read(&id, Some("dump all")).unwrap().text.unwrap();
+    let old = G473
+        .lines()
+        .find(|l| l.starts_with("set osd_cap_alarm ="))
+        .unwrap();
+    assert!(dump.contains(old), "{old}");
+}
+
+/// `aux` and `adjrange` edits stage, plan, write and verify: the FC keeps the new lines.
+#[test]
+fn aux_and_adjrange_edits_apply_and_verify() {
+    let fc = FakeFc::new(G473).with_uid(UID);
+    let b = bench(&fc);
+    let c = stage(
+        &b,
+        vec![
+            Edit::FcAux {
+                slot: 4,
+                mode: 1,
+                aux: 1,
+                start: 1300,
+                end: 2100,
+            },
+            Edit::FcAdjrange {
+                slot: 2,
+                range_aux: 3,
+                start: 1700,
+                end: 2100,
+                function: 12,
+                select_aux: 3,
+            },
+        ],
+    );
+    assert_eq!(c.status, ChangeStatus::Ready);
+    let p = plan(&b, &c);
+    assert!(p.ready(), "{:?}", p.checks);
+    let r = b.core.gear_apply(&req(&c, &p)).unwrap();
+    assert_eq!(r.status, ChangeStatus::Verified, "{}", r.message);
+    assert!(
+        r.sent.iter().any(|l| l.line == "aux 4 1 1 1300 2100 0 0"),
+        "{:?}",
+        r.sent
+    );
+    assert!(
+        r.sent
+            .iter()
+            .any(|l| l.line == "adjrange 2 0 3 1700 2100 12 3 0 0"),
+        "{:?}",
+        r.sent
+    );
+    let saved = fc.saved_dump();
+    assert!(saved.contains("aux 4 1 1 1300 2100 0 0"), "{saved}");
+    assert!(
+        saved.contains("adjrange 2 0 3 1700 2100 12 3 0 0"),
+        "{saved}"
+    );
+    // The other slots are as they were.
+    assert!(saved.contains("aux 3 13 3 1700 2100 0 0"));
+    assert!(saved.contains("adjrange 1 0 1 900 2100 29 1 0 0"));
+}
+
+/// `quadcam-cli gear apply`: no `--digest` and no `--yes` each exit 3 and write nothing;
+/// `--plan` in a process with no FC shows the refusal; the digest of a ready
+/// plan from another process still refuses there (no FC under cargo), exit 3. The change
+/// stays Ready.
+#[test]
+fn the_cli_apply_needs_the_digest_and_yes() {
+    let home = tempfile::tempdir().unwrap();
+    let support = home.path().join("Library/Application Support/app.quadcam");
+    std::fs::create_dir_all(&support).unwrap();
+    let fc = FakeFc::new(G473).with_uid(UID);
+    let mut env = Env::fake(vec![], Arc::new(fc.ports(PORT, None)));
+    env.cues = Arc::new(CueService::inline(Arc::new(RecordedCues::default())));
+    let core = Core::new(
+        home.path().join("cache"),
+        None,
+        Arc::new(NoHooks),
+        Arc::new(Recorder::default()),
+    )
+    .with_settings(support.join("settings.json"))
+    .with_gear_env(env)
+    .with_fc_timing(Timing::fast());
+    core.gear_backup(&BackupParams {
+        port: Some(PORT.into()),
+        ..Default::default()
+    })
+    .unwrap();
+    let c = core
+        .gear_change_stage(&StageParams {
+            device: id_of(&fc),
+            edits: vec![set("osd_cap_alarm", "1500")],
+            ..Default::default()
+        })
+        .unwrap();
+    let ready = core
+        .gear_apply_plan(&ApplyPlanParams {
+            id: c.id.clone(),
+            port: None,
+        })
+        .unwrap();
+    assert!(ready.ready(), "{:?}", ready.checks);
+
+    let cli = |args: &[&str]| -> (i32, serde_json::Value) {
+        let out = std::process::Command::new(env!("CARGO_BIN_EXE_quadcam-cli"))
+            .env("HOME", home.path())
+            .env_remove("QUADCAM_SERIAL")
+            .arg("--json")
+            .args(args)
+            .output()
+            .unwrap();
+        let v = serde_json::from_slice(&out.stdout).unwrap_or(serde_json::Value::Null);
+        (out.status.code().unwrap(), v)
+    };
+    let (code, v) = cli(&["gear", "apply", &c.id]);
+    assert_eq!(code, 3, "no digest: {v}");
+    assert!(
+        v["error"]["message"].as_str().unwrap().contains("--digest"),
+        "{v}"
+    );
+    let (code, v) = cli(&["gear", "apply", &c.id, "--digest", &ready.digest]);
+    assert_eq!(code, 3, "no --yes: {v}");
+    assert!(
+        v["error"]["message"].as_str().unwrap().contains("confirm"),
+        "{v}"
+    );
+    let (code, v) = cli(&["gear", "apply", &c.id, "--plan"]);
+    assert_eq!(code, 0, "{v}");
+    let refused: Vec<&str> = v["result"]["checks"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .filter_map(|k| k["refusal"]["code"].as_str())
+        .collect();
+    assert!(refused.contains(&"no_device"), "{v}");
+    let (code, v) = cli(&["gear", "apply", &c.id, "--digest", &ready.digest, "--yes"]);
+    assert_eq!(code, 3, "{v}");
+    assert_eq!(v["error"]["code"], "refused", "{v}");
+    assert_eq!(fc.saves(), 0);
+    let status = core
+        .gear_changes(&ChangeFilter::default())
+        .unwrap()
+        .into_iter()
+        .find(|x| x.id == c.id)
+        .unwrap()
+        .status;
+    assert_eq!(status, ChangeStatus::Ready);
+}

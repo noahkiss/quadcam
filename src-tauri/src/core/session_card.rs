@@ -133,7 +133,7 @@ impl Core {
             .media_name
             .as_deref()
             .is_some_and(|n| n.to_uppercase().contains("DJI"))
-            || (!info.is_slot_card() && crate::gear::events::dji_usb_attached());
+            || (!info.is_slot_card() && (self.gear.dji_usb)());
         if !disk::is_removable(&info) || dji_device {
             return None;
         }

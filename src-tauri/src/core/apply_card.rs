@@ -566,6 +566,7 @@ impl Core {
             None => WriteOptions::reader(),
         };
         opts.stop = stop.clone();
+        opts.real_cards = self.gear.real_cards.clone();
         if opts.fail_readback.is_none() {
             opts.fail_readback = self.gear.fail_readback.clone();
         }

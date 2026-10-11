@@ -888,3 +888,183 @@ fn the_firmware_page_offers_the_flash_only_with_the_preview_on() {
         Some("QuadCam will not flash it: Board BETAFPVF411 cannot be flashed by QuadCam yet.")
     );
 }
+
+/// The snapshots saved for the bench's FC.
+fn snapshots(b: &Bench) -> Vec<quadcam_lib::gear::model::Backup> {
+    quadcam_lib::gear::backup::Snapshots::new(quadcam_lib::gear::store::Store::new(
+        b._dir.path().join("support/gear"),
+    ))
+    .list(&b.id)
+}
+
+/// Another FC on the port after the plan (same board, another UID): refused before the
+/// backup, so no snapshot of it is saved under the planned FC, and no `bl`.
+#[test]
+fn another_fc_on_the_port_is_refused_before_the_backup() {
+    let b = bench(Opts::default());
+    let plan = b.core.gear_flash_plan(&params(&b)).unwrap();
+    let snaps = snapshots(&b).len();
+    let _ = b.fc.clone().with_uid([7; 12]);
+    let e = b.core.gear_flash(&request(&b, &plan)).unwrap_err();
+    assert_eq!(
+        e.downcast_ref::<Refusal>().map(|r| r.code),
+        Some(RefusalCode::DeviceChanged),
+        "{e:#}"
+    );
+    let list = snapshots(&b);
+    assert_eq!(list.len(), snaps, "no backup of another FC: {list:#?}");
+    assert!(!b.fc.log().iter().any(|l| l == "bl"), "{:?}", b.fc.log());
+    assert!(!b.fc.in_bootloader());
+    assert_eq!(b.flasher.opened.load(Ordering::SeqCst), 0);
+}
+
+/// `to_bootloader` checks the FC itself, right before `bl`: another UID refuses with
+/// `DeviceChanged`, a board the caller does not take refuses with its refusal. Neither
+/// sends `bl`.
+#[test]
+fn the_bootloader_request_checks_the_fc_before_bl() {
+    let ports_for = |fc: &FakeFc| fc.ports(PORT, None);
+    let id = |fc: &FakeFc| device_id(DeviceKind::Fc, &format!("bf-uid:{}", fc.uid_hex()));
+    let any_board = |_: &str| Ok(());
+
+    let fc = FakeFc::new(&old_dump()).with_uid([7; 12]);
+    let planned = id(&FakeFc::new(&old_dump()).with_uid(UID));
+    let e = quadcam_lib::gear::bf::to_bootloader(
+        &ports_for(&fc),
+        PORT,
+        Some(&planned),
+        &any_board,
+        Timing::fast(),
+    )
+    .unwrap_err();
+    assert_eq!(
+        e.downcast_ref::<Refusal>().map(|r| r.code),
+        Some(RefusalCode::DeviceChanged),
+        "{e:#}"
+    );
+    assert!(!fc.log().iter().any(|l| l == "bl"), "{:?}", fc.log());
+    assert!(!fc.in_bootloader());
+
+    let fc = FakeFc::new(&old_dump()).with_uid(UID);
+    let no_board = |b: &str| {
+        Err(Refusal::new(
+            RefusalCode::UnknownBoard,
+            format!("Board {b} cannot be flashed."),
+        ))
+    };
+    let e = quadcam_lib::gear::bf::to_bootloader(
+        &ports_for(&fc),
+        PORT,
+        Some(&id(&fc)),
+        &no_board,
+        Timing::fast(),
+    )
+    .unwrap_err();
+    assert_eq!(
+        e.downcast_ref::<Refusal>().map(|r| r.code),
+        Some(RefusalCode::UnknownBoard),
+        "{e:#}"
+    );
+    assert!(!fc.log().iter().any(|l| l == "bl"));
+
+    // The planned FC on a board the caller takes enters the bootloader.
+    let fc = FakeFc::new(&old_dump()).with_uid(UID);
+    quadcam_lib::gear::bf::to_bootloader(
+        &ports_for(&fc),
+        PORT,
+        Some(&id(&fc)),
+        &any_board,
+        Timing::fast(),
+    )
+    .unwrap();
+    assert!(fc.log().iter().any(|l| l == "bl"));
+    assert!(fc.in_bootloader());
+}
+
+/// The same FC with a board the flash has no target for (its firmware changed after the
+/// plan): the job's own board check refuses before `bl`.
+#[test]
+fn a_board_with_no_target_is_refused_before_bl() {
+    let b = bench(Opts::default());
+    let plan = b.core.gear_flash_plan(&params(&b)).unwrap();
+    b.fc.install(&old_dump().replace("board_name BETAFPVG473_V2", "board_name NOSUCHBOARD"));
+    let e = b.core.gear_flash(&request(&b, &plan)).unwrap_err();
+    assert_eq!(
+        e.downcast_ref::<Refusal>().map(|r| r.code),
+        Some(RefusalCode::UnknownBoard),
+        "{e:#}"
+    );
+    assert!(!b.fc.log().iter().any(|l| l == "bl"), "{:?}", b.fc.log());
+    assert!(!b.fc.in_bootloader());
+    assert_eq!(b.flasher.opened.load(Ordering::SeqCst), 0);
+}
+
+/// Through MCP: `flash_plan` on the FC gives the digest; `flash` without confirm, without
+/// the digest or with another digest sends no `bl`; with both it flashes and verifies.
+/// With the preview off, the plan offers no flash.
+#[test]
+fn mcp_flashes_the_fc_only_with_the_digest_and_confirm() {
+    use quadcam_lib::mcp::{LocalBackend, Server};
+    use serde_json::json;
+    let b = bench(Opts::default());
+    let mut s = Server::new(LocalBackend(b.core.clone()));
+    let r = s.call_tool(
+        "quadcam_gear",
+        json!({"action": "flash_plan", "device": b.id, "version": RELEASE}),
+    );
+    assert_eq!(r["isError"], false, "{r}");
+    let digest = r["structuredContent"]["digest"]
+        .as_str()
+        .unwrap()
+        .to_string();
+    assert!(!digest.is_empty());
+    assert!(r["content"][0]["text"]
+        .as_str()
+        .unwrap()
+        .contains(&format!("digest={digest}")));
+    for args in [
+        json!({"action": "flash", "device": b.id, "version": RELEASE, "confirm": true}),
+        json!({"action": "flash", "device": b.id, "version": RELEASE, "digest": digest}),
+        json!({"action": "flash", "device": b.id, "version": RELEASE, "digest": "0000", "confirm": true}),
+    ] {
+        let r = s.call_tool("quadcam_gear_apply", args.clone());
+        assert_eq!(r["isError"], true, "{args}: {r}");
+    }
+    assert!(!b.fc.log().iter().any(|l| l == "bl"));
+    assert_eq!(b.flasher.opened.load(Ordering::SeqCst), 0);
+    let r = s.call_tool(
+        "quadcam_gear_apply",
+        json!({"action": "flash", "device": b.id, "version": RELEASE, "digest": digest, "confirm": true}),
+    );
+    assert_eq!(r["isError"], false, "{r}");
+    assert_eq!(r["structuredContent"]["status"], "verified", "{r}");
+    assert!(b.fc.saved_dump().contains("2026.6.0"));
+
+    let off = bench(Opts {
+        preview: false,
+        ..Opts::default()
+    });
+    let mut s = Server::new(LocalBackend(off.core.clone()));
+    let r = s.call_tool(
+        "quadcam_gear",
+        json!({"action": "flash_plan", "device": off.id, "version": RELEASE}),
+    );
+    assert_eq!(r["structuredContent"]["digest"], "", "{r}");
+    assert!(!r["content"][0]["text"]
+        .as_str()
+        .unwrap_or_default()
+        .contains("To flash"));
+}
+
+/// Under cargo the system's build service reaches no server but this Mac: a build refuses
+/// before curl runs.
+#[test]
+fn the_default_build_service_reaches_only_this_mac_under_cargo() {
+    use quadcam_lib::gear::firmware::betaflight::{Cloud, CurlCloud};
+    let c = CurlCloud::system();
+    assert!(c.loopback_only);
+    let Err(e) = c.build(TARGET, RELEASE) else {
+        panic!("refused under cargo")
+    };
+    assert!(format!("{e:#}").contains("off in tests"), "{e:#}");
+}

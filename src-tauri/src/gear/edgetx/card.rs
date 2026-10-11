@@ -962,6 +962,12 @@ pub struct WriteOptions {
     pub stuck_wait: Duration,
     /// Tests: writing this path first sleeps this long, as a radio that stops answering.
     pub stall: Option<(String, Duration)>,
+    /// Tests: this path gains a byte after the whole write read back, as a card that
+    /// changes under QuadCam. Only the fresh-read verify after the write can see it.
+    pub change_after: Option<String>,
+    /// Where real cards mount (`Env.real_cards`): a process started by cargo writes no
+    /// card under it.
+    pub real_cards: PathBuf,
 }
 
 impl WriteOptions {
@@ -975,6 +981,8 @@ impl WriteOptions {
             fail_readback: None,
             stuck_wait: Duration::from_secs(60),
             stall: None,
+            change_after: None,
+            real_cards: PathBuf::from(REAL_CARDS),
         }
     }
 
@@ -988,6 +996,8 @@ impl WriteOptions {
             fail_readback: None,
             stuck_wait: Duration::from_secs(120),
             stall: None,
+            change_after: None,
+            real_cards: PathBuf::from(REAL_CARDS),
         }
     }
 
@@ -1115,7 +1125,32 @@ pub fn inside_card(rel: &str) -> bool {
 /// True when this process may write card files at `root`. A process started by cargo
 /// never writes under `/Volumes` (a real card) unless `QUADCAM_CARD_WRITE=real`.
 pub fn writes_allowed(root: &Path, flag: Option<&str>, under_cargo: bool) -> bool {
-    !(under_cargo && root.starts_with("/Volumes") && flag != Some("real"))
+    writes_allowed_under(root, Path::new(REAL_CARDS), flag, under_cargo)
+}
+
+/// Where real cards mount.
+pub const REAL_CARDS: &str = "/Volumes";
+
+/// `writes_allowed` with the folder where real cards mount (`Env.real_cards`; a test names
+/// its own folder to see the refusal).
+pub fn writes_allowed_under(
+    root: &Path,
+    real_cards: &Path,
+    flag: Option<&str>,
+    under_cargo: bool,
+) -> bool {
+    !(under_cargo && root.starts_with(real_cards) && flag != Some("real"))
+}
+
+/// `writes_allowed_under` for this process: its `QUADCAM_CARD_WRITE` and whether cargo
+/// started it.
+pub fn process_writes_allowed(root: &Path, real_cards: &Path) -> bool {
+    writes_allowed_under(
+        root,
+        real_cards,
+        std::env::var("QUADCAM_CARD_WRITE").ok().as_deref(),
+        std::env::var_os("CARGO_MANIFEST_DIR").is_some(),
+    )
 }
 
 #[cfg(target_os = "macos")]
@@ -1300,11 +1335,7 @@ pub fn write(
             ),
         )));
     }
-    if !writes_allowed(
-        root,
-        std::env::var("QUADCAM_CARD_WRITE").ok().as_deref(),
-        std::env::var_os("CARGO_MANIFEST_DIR").is_some(),
-    ) {
+    if !process_writes_allowed(root, &opts.real_cards) {
         return Err(anyhow::Error::new(Refusal::new(
             RefusalCode::Disabled,
             "Card writes under /Volumes are off in tests.",
@@ -1434,6 +1465,16 @@ pub fn write(
                 stopping: true,
             });
         }
+    }
+    if let Some(p) = opts
+        .change_after
+        .as_ref()
+        .filter(|p| report.written.contains(p))
+    {
+        let mut f = std::fs::OpenOptions::new()
+            .append(true)
+            .open(root.join(p))?;
+        std::io::Write::write_all(&mut f, b"\n")?;
     }
     Ok(report)
 }

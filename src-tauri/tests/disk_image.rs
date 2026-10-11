@@ -238,3 +238,32 @@ fn safe_remove_unmounts_and_keeps_the_disk() {
     card.remount();
     assert!(card.is_mounted() && card.mount.join("DCIM/PICT0001.AVI").is_file());
 }
+
+/// `Core::eject` with no target: a folder session has no card and refuses; a card session
+/// unmounts the disk its saved volume UUID finds, and the disk stays attached.
+#[test]
+fn eject_unmounts_the_session_card_and_refuses_a_folder_session() {
+    use quadcam_lib::core::{Core, NoHooks};
+    use quadcam_lib::photos::Recorder;
+    use std::sync::Arc;
+    let work = tempfile::tempdir().unwrap();
+    let core = Core::new(
+        work.path().join("cache"),
+        None,
+        Arc::new(NoHooks),
+        Arc::new(Recorder::default()),
+    );
+    let folder = tempfile::tempdir().unwrap();
+    put_clips(folder.path());
+    core.load(Some(folder.path())).unwrap();
+    let e = core.eject(None).unwrap_err();
+    assert!(format!("{e:#}").contains("came from a folder"), "{e:#}");
+
+    let mut card = Image::create("64m", "QCEJECT", false);
+    put_clips(&card.mount);
+    core.load(Some(&card.mount)).unwrap();
+    core.eject(None).unwrap();
+    assert!(card.is_attached() && !card.is_mounted());
+    card.remount();
+    assert!(card.mount.join("DCIM/PICT0001.AVI").is_file());
+}

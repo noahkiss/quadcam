@@ -644,3 +644,39 @@ fn stored_zip(files: &[(&str, &[u8])]) -> Vec<u8> {
     out.extend(0u16.to_le_bytes());
     out
 }
+
+/// Under cargo the system's voice providers reach no server but this Mac: `say` and
+/// ElevenLabs refuse to start, and an openai server elsewhere refuses before curl runs.
+#[test]
+fn the_default_providers_reach_only_this_mac_under_cargo() {
+    use quadcam_lib::gear::voice::tts::ProviderConfig;
+    let cache = tempfile::tempdir().unwrap();
+    let env = quadcam_lib::gear::Env::system(cache.path());
+    let cfg = |provider: &str, base_url: &str| ProviderConfig {
+        provider: provider.into(),
+        base_url: base_url.into(),
+        key: Some("sk-test".into()),
+    };
+    for p in ["say", "elevenlabs"] {
+        let e = env
+            .tts
+            .make(&cfg(p, ""))
+            .err()
+            .expect("refused under cargo");
+        assert!(format!("{e:#}").contains("off in tests"), "{p}: {e:#}");
+    }
+    let remote = env
+        .tts
+        .make(&cfg("openai", "https://api.example.com"))
+        .unwrap();
+    let e = remote
+        .render(&TtsRequest {
+            text: "armed",
+            voice: "",
+            model: "",
+            speed: 1.0,
+            seed: 0,
+        })
+        .unwrap_err();
+    assert!(format!("{e:#}").contains("off in tests"), "{e:#}");
+}

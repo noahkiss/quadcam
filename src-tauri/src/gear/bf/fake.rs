@@ -81,6 +81,8 @@ struct Flash {
     lie_used: u32,
     /// An erase starts and the flash never becomes ready again.
     stuck_erase: bool,
+    /// The first summary after a read appends these bytes: the FC logged on.
+    grow_after_read: Vec<u8>,
 }
 
 /// The simulator. Clones share the FC.
@@ -226,6 +228,7 @@ impl FakeFc {
             compress: false,
             lie_used: 0,
             stuck_erase: false,
+            grow_after_read: Vec::new(),
         });
         self
     }
@@ -259,6 +262,12 @@ impl FakeFc {
     /// The summary reports `extra` more bytes used than the flash holds.
     pub fn lie_used(self, extra: u32) -> Self {
         self.flash(|f| f.lie_used = extra);
+        self
+    }
+    /// The first summary after a read finds `bytes` more on the flash, as an FC that logs
+    /// between the read and the erase.
+    pub fn grow_after_read(self, bytes: Vec<u8>) -> Self {
+        self.flash(|f| f.grow_after_read = bytes);
         self
     }
     /// An erase starts and never ends.
@@ -699,6 +708,10 @@ fn flash_msp(fl: &mut Flash, f: &Frame) -> Option<Vec<u8>> {
         }
         _ => {
             // Summary.
+            if fl.reads > 0 && !fl.grow_after_read.is_empty() {
+                let more = std::mem::take(&mut fl.grow_after_read);
+                fl.image.extend_from_slice(&more);
+            }
             let ready = fl.erasing == 0;
             if fl.erasing > 0 && fl.erasing != u32::MAX {
                 fl.erasing -= 1;

@@ -510,7 +510,9 @@ pub fn render_fc(edits: &[Edit], base: Option<&Config>) -> FcRender {
                 function,
                 select_aux,
             } => {
-                let tail = tail_words(base, "adjrange", *slot, 7, "0 0");
+                // `adjrange` slot, 0, range aux, start, end, function, select aux, then
+                // center and scale: the tail is the ninth word on.
+                let tail = tail_words(base, "adjrange", *slot, 8, "0 0");
                 items.push(Item {
                     section: Section::Master,
                     line: format!(
@@ -1014,6 +1016,25 @@ mod tests {
         );
         assert_eq!(r.lines, ["aux 0 0 1 1300 2100 0 0"]);
         assert!(r.diff.iter().any(|l| l.op == LineOp::Remove));
+    }
+
+    #[test]
+    fn adjrange_keeps_center_and_scale() {
+        let base = Config::parse(
+            "# dump all\n# master\nadjrange 0 0 2 900 2100 12 2 5 7\nadjrange 1 0 0 900 900 0 0 0 0\n",
+        );
+        let r = render_fc(
+            &[Edit::FcAdjrange {
+                slot: 0,
+                range_aux: 1,
+                start: 1300,
+                end: 2100,
+                function: 13,
+                select_aux: 1,
+            }],
+            Some(&base),
+        );
+        assert_eq!(r.lines, ["adjrange 0 0 1 1300 2100 13 1 5 7"]);
     }
 
     #[test]
