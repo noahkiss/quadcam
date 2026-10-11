@@ -10,21 +10,7 @@ User-facing changes in each release, newest first. Release notes on
 - **Device Overview.** The header adds the firmware. Summary tiles show the firmware against the newest, the last backup, the staged changes and the latest blackbox pull (FC), the aircraft count (radio), or the new clips, last card check and free space (DVR and goggles cards); a tile opens its section. The facts sit in a **Details** card, two columns wide. The row of section links under them is gone: the tabs above do that.
 - **Forget…** moves into the **…** menu on a device page. The header's buttons are plain buttons, primary last.
 - **One left edge.** Every Gear page and device section lines up with the page title: the Bench, OSD, Rates, Switches, Models, Checklists and Voice sections lost their extra inset. Empty lines are left-aligned under the title, not centred.
-- **Firmware as a dashboard.** **Check for updates** sits in the header with the last check under the title. Tiles count the devices, the updates and the devices up to date, and show the last check. The table shows **Installed → newest** and a status dot; before the first check a row says **Not checked**, so **Unknown** means the version is unknown. **ExpressLRS (preview)** and **Read radio firmware** are cards, and the read steps are numbered inside the card. An ELRS device's options open under the table.
-- **Radio Models and Checklists** say where the model came from in words: "From the radio's card" or "From backup · Oct 6, 2:20 PM", not a backup id. The checklist is a card with its empty line inside.
-- **Radio Splash** is a card: the preview sits in a frame of the radio's 128 × 64 screen at twice the size, beside the controls. A line under **Flash with splash…** says why it is off.
-- **Aircraft on this radio** is a card: the add picker is in its head, the aircraft are in the shared table, and the selected model has a **Selected** badge.
-- **Settings > Gear** reads as a macOS form: each group's title on the left, its controls on the right.
 - **For developers:** shared `PageHeader`, `EmptyState`, `FactList`, `StatusDot` and `MoreMenu` in `app/src/components/dash/`, and the `--s-5` spacing token the Apply sheet, Bench and Firmware already used. `docs/development.md` describes how to build a dashboard page.
-## 0.14.1 (2026-10-11)
-- **Voice studio: a take that no longer cuts is removed.** A line reused from an earlier take whose files cannot be read or cut no longer fails every render: QuadCam removes the take before it sends anything, and the next estimate prices its lines. Before, the render failed on that take every time until its cache file was deleted by hand.
-- **Voice studio: nothing is sent that the estimate did not price.** A batch the estimate counted as cached but whose take cannot be read is removed, not sent; the next estimate prices it. A render that fails part way keeps the batches it made, so their lines are not billed again.
-- **Import takes:** an imported take no longer shares its cache key with a one-line batch under the carrier `{line}`, and its start is not checked for a carrier's last sound (it had none). Takes imported by 0.14.0 keep working; importing the folder again files them under the new key.
-- **Connected as a dashboard.** Tiles count the devices plugged in, the ones that need attention, the ones working and the changes staged for them. Each device is a card with its state and its next step: **Save…**, **Review…** or **Import…**.
-- **Devices as a table:** name, kind, state, last backup, firmware (installed → newest) and staged changes.
-- **Device Overview.** The header adds the firmware. Summary tiles show the firmware against the newest, the last backup, the staged changes and the latest blackbox pull (FC), the aircraft count (radio), or the new clips, last card check and free space (DVR and goggles cards); a tile opens its section. The facts sit in a **Details** card, two columns wide. The row of section links under them is gone: the tabs above do that.
-- **Forget…** moves into the **…** menu on a device page. The header's buttons are plain buttons, primary last.
-- **One left edge.** Every Gear page and device section lines up with the page title: the Bench, OSD, Rates, Switches, Models, Checklists and Voice sections lost their extra inset. Empty lines are left-aligned under the title, not centred.
 - **Pack up as a dashboard.** Tiles show the checks that pass, the packs charged, card space and backups. The checks are a table with a state dot per row.
 - **Flights as a dashboard.** Tiles sum up the day: flights, air time, the longest flight, the worst link and dropouts. The Pack column is a compact pop-up button. A flight's details and the range chart sit in cards. When every flight on a chart was on one day, the axis shows the first and last time, not the same date twice.
 - **Session report** shows its numbers as tiles, and pack use and crashes as tables.
@@ -34,11 +20,18 @@ User-facing changes in each release, newest first. Release notes on
 - **Rates and OSD say where they came from:** "From backup" and its time, or the file names, with **Open dump…** on the right. The rate table lines up its numbers. The OSD shows its problem count as a badge.
 - **Switches:** tiles count the controls, modes, conflicts and unmapped switches. Conflicts come first in their own card; modes and unmapped switches are tables.
 - **Controls and Sim radio** use the page header and cards. Controls keeps its 24 buttons under **Buttons**. Sim radio lists its switches in a table with **Change**, and the calibration in a **Calibrate** card.
-- **For developers:** shared `PageHeader`, `EmptyState`, `FactList`, `StatusDot` and `MoreMenu` in `app/src/components/dash/`, and the `--s-5` spacing token the Apply sheet, Bench and Firmware already used. `docs/development.md` describes how to build a dashboard page.
->>
-=======
+- **Firmware as a dashboard.** **Check for updates** sits in the header with the last check under the title. Tiles count the devices, the updates and the devices up to date, and show the last check. The table shows **Installed → newest** and a status dot; before the first check a row says **Not checked**, so **Unknown** means the version is unknown. **ExpressLRS (preview)** and **Read radio firmware** are cards, and the read steps are numbered inside the card. An ELRS device's options open under the table.
+- **Radio Models and Checklists** say where the model came from in words: "From the radio's card" or "From backup · Oct 6, 2:20 PM", not a backup id. The checklist is a card with its empty line inside.
+- **Radio Splash** is a card: the preview sits in a frame of the radio's 128 × 64 screen at twice the size, beside the controls. A line under **Flash with splash…** says why it is off.
+- **Aircraft on this radio** is a card: the add picker is in its head, the aircraft are in the shared table, and the selected model has a **Selected** badge.
+- **Settings > Gear** reads as a macOS form: each group's title on the left, its controls on the right.
 
->>>>>>> origin/ui-b5
+## 0.14.1 (2026-10-11)
+
+- **Voice studio: a take that no longer cuts is removed.** A line reused from an earlier take whose files cannot be read or cut no longer fails every render: QuadCam removes the take before it sends anything, and the next estimate prices its lines. Before, the render failed on that take every time until its cache file was deleted by hand.
+- **Voice studio: nothing is sent that the estimate did not price.** A batch the estimate counted as cached but whose take cannot be read is removed, not sent; the next estimate prices it. A render that fails part way keeps the batches it made, so their lines are not billed again.
+- **Import takes:** an imported take no longer shares its cache key with a one-line batch under the carrier `{line}`, and its start is not checked for a carrier's last sound (it had none). Takes imported by 0.14.0 keep working; importing the folder again files them under the new key.
+
 ## 0.14.0 (2026-10-11)
 
 - **Voice studio: a line is billed once.** A line any earlier render or sample spoke in the same voice, model and speed is cut again from that take, whatever set it comes in. Before, the cache knew whole batches only, so adding a set, rendering a second aircraft set (they share the radio's prompts, numbers and units) or rendering after a sample sent lines again that were already paid for. A re-take with a new seed now sends only the lines that need one.
