@@ -287,8 +287,8 @@ impl Core {
         })
     }
 
-    /// The serial port of a saved FC: the one asked for, or the only FC. An FC that identifies
-    /// itself as another device refuses.
+    /// The serial port of a saved FC: the one asked for, or the only FC. The FC must identify
+    /// itself as `host`: another device, or one that does not answer MSP, refuses.
     fn elrs_fc_port(&self, host: &Device, port: Option<&str>) -> Result<String> {
         let c = self.gear_fc_pick(port)?;
         let handle = link_handle(&c.link);
@@ -297,19 +297,29 @@ impl Core {
                 .or_else(|| self.gear_fc_seen(&handle).and_then(|i| i.id));
         if id.is_none() && (self.gear.holders)(&handle).is_empty() {
             let _hold = self.gear_hold(&handle);
-            id = crate::gear::bf::identify(self.gear.ports.as_ref(), &handle, self.fc_timing())
-                .ok()
-                .and_then(|i| i.id);
+            if let Ok(i) =
+                crate::gear::bf::identify(self.gear.ports.as_ref(), &handle, self.fc_timing())
+            {
+                id = i.id.clone();
+                self.fc_state.lock().unwrap().seen.insert(handle.clone(), i);
+            }
         }
         match id {
-            Some(i) if i != host.id && !host.aliases.contains(&i) => Err(refusal(Refusal::new(
+            Some(i) if i == host.id || host.aliases.contains(&i) => Ok(handle),
+            Some(_) => Err(refusal(Refusal::new(
                 RefusalCode::DeviceChanged,
                 format!(
                     "The FC on {handle} is not {}. Pick that FC's device, or unplug the other FC.",
                     host.display_name()
                 ),
             ))),
-            _ => Ok(handle),
+            None => Err(refusal(Refusal::new(
+                RefusalCode::DeviceChanged,
+                format!(
+                    "QuadCam cannot tell whether the FC on {handle} is {}: it did not identify itself over MSP. Unplug it and plug it in again (a passthrough from an earlier job ends then), or close the program that holds the port.",
+                    host.display_name()
+                ),
+            ))),
         }
     }
 

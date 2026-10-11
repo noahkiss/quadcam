@@ -8,6 +8,7 @@ use quadcam_lib::core::{
     StageParams,
 };
 use quadcam_lib::gear::apply::{ApplyPlanParams, ApplyRequest};
+use quadcam_lib::gear::bf::fake::FakeFc;
 use quadcam_lib::gear::elrs::fake::{FakeElrs, FakeHost};
 use quadcam_lib::gear::elrs::image::{fixtures, INDEX_URL};
 use quadcam_lib::gear::elrs::ElrsSet;
@@ -31,6 +32,15 @@ use std::time::Duration;
 
 const PHRASE: &str = "bench-phrase-not-real";
 const COMMIT: &str = "0123456789abcdef0123456789abcdef01234567";
+const DUMP: &str = include_str!("fixtures/bf/g473-2025.12.5.dump_all.txt");
+
+/// An FC that answers MSP with its MCU id, and the device id QuadCam gives it.
+fn msp_fc(uid: u8) -> (FakeFc, String) {
+    let fc = FakeFc::new(DUMP).with_uid([uid; 12]);
+    let id =
+        quadcam_lib::gear::model::device_id(DeviceKind::Fc, &format!("bf-uid:{}", fc.uid_hex()));
+    (fc, id)
+}
 
 #[derive(Default)]
 struct Gui {
@@ -177,7 +187,8 @@ fn set_settings(dir: &Path, v: serde_json::Value) {
 fn bench(preview: bool, esptool: bool) -> (Bench, FakeHost, FakeHost) {
     let dir = tempfile::tempdir().unwrap();
     let tx = FakeHost::radio(FakeElrs::tx("RM Radio", "4.1.0"));
-    let rx = FakeHost::fc(FakeElrs::rx("Vendor 2.4GHz AIO RX", "3.5.3"));
+    let (msp, fc_id) = msp_fc(0x11);
+    let rx = FakeHost::fc(FakeElrs::rx("Vendor 2.4GHz AIO RX", "3.5.3")).with_msp(msp);
     let radio_ports = tx.ports("/dev/cu.radio");
     let fc_ports = rx.ports("/dev/cu.fc");
     let both = quadcam_lib::gear::serial::FakePorts::new(
@@ -256,7 +267,7 @@ fn bench(preview: bool, esptool: bool) -> (Bench, FakeHost, FakeHost) {
         ))
         .unwrap();
     store
-        .save_device(&saved("fc-0000000000000001", DeviceKind::Fc, "Air"))
+        .save_device(&saved(&fc_id, DeviceKind::Fc, "Air"))
         .unwrap();
     let b = Bench {
         dir,
@@ -265,7 +276,7 @@ fn bench(preview: bool, esptool: bool) -> (Bench, FakeHost, FakeHost) {
         fetch,
         gui,
         radio: "radio-0000000000000001".into(),
-        fc: "fc-0000000000000001".into(),
+        fc: fc_id,
     };
     (b, tx, rx)
 }
@@ -405,7 +416,8 @@ fn an_fc_with_the_wrong_receiver_settings_never_starts_a_passthrough() {
     let (b, _, _) = bench(true, true);
     // Replace the FC with one whose receiver is SBUS and inverted.
     let bad = FakeHost::fc(FakeElrs::rx("Vendor 2.4GHz AIO RX", "4.1.0"))
-        .with_receiver_settings("SBUS", "ON", "OFF");
+        .with_receiver_settings("SBUS", "ON", "OFF")
+        .with_msp(msp_fc(0x11).0);
     let ports = bad.ports("/dev/cu.fc");
     let env = quadcam_lib::gear::Env::fake(vec![], Arc::new(ports));
     let core = Core::new(
@@ -427,6 +439,56 @@ fn an_fc_with_the_wrong_receiver_settings_never_starts_a_passthrough() {
     assert!(text.contains("serialrx_provider is SBUS"), "{text}");
     assert!(text.contains("serialrx_inverted is ON"), "{text}");
     assert!(!bad.log().iter().any(|l| l.starts_with("serialpassthrough")));
+}
+
+/// A core whose only serial device is `host` on `/dev/cu.fc`.
+fn core_with(b: &Bench, host: &FakeHost, cache: &str) -> Core {
+    let env = quadcam_lib::gear::Env::fake(vec![], Arc::new(host.ports("/dev/cu.fc")));
+    Core::new(
+        b.dir.path().join(cache),
+        None,
+        Arc::new(NoHooks),
+        Arc::new(Recorder::default()),
+    )
+    .with_settings(b.dir.path().join("support/settings.json"))
+    .with_gear_env(env)
+    .with_fc_timing(quadcam_lib::gear::bf::cli::Timing::fast())
+}
+
+#[test]
+fn an_fc_that_is_not_the_host_or_does_not_identify_itself_refuses() {
+    let (b, _, _) = bench(true, true);
+    // Another FC (another MCU id) on the port.
+    let other =
+        FakeHost::fc(FakeElrs::rx("Vendor 2.4GHz AIO RX", "3.5.3")).with_msp(msp_fc(0x22).0);
+    let e = core_with(&b, &other, "cache-other")
+        .gear_elrs_read(&ElrsReadParams {
+            host: b.fc.clone(),
+            port: None,
+        })
+        .unwrap_err();
+    let r = refusal(e);
+    assert_eq!(r.code, RefusalCode::DeviceChanged);
+    assert!(r.reason.contains("is not Air"), "{}", r.reason);
+    assert!(!other
+        .log()
+        .iter()
+        .any(|l| l.starts_with("serialpassthrough")));
+    // An FC that does not answer MSP.
+    let silent = FakeHost::fc(FakeElrs::rx("Vendor 2.4GHz AIO RX", "3.5.3"));
+    let e = core_with(&b, &silent, "cache-silent")
+        .gear_elrs_read(&ElrsReadParams {
+            host: b.fc.clone(),
+            port: None,
+        })
+        .unwrap_err();
+    let r = refusal(e);
+    assert_eq!(r.code, RefusalCode::DeviceChanged);
+    assert!(r.reason.contains("did not identify itself"), "{}", r.reason);
+    assert!(!silent
+        .log()
+        .iter()
+        .any(|l| l.starts_with("serialpassthrough")));
 }
 
 #[test]
