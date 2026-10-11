@@ -885,6 +885,7 @@ impl Usb for FakeDfu {
                 }
                 let to = (from + len.min(TRANSFER)).min(self.flash.len());
                 let mut b = self.flash[from..to].to_vec();
+                self.log.push(format!("upload {at:#010x} {} bytes", b.len()));
                 self.reads += 1;
                 let flaky = self.faults.flip_after_reads.is_some_and(|n| self.reads > n);
                 if (self.faults.corrupt_read || flaky) && !b.is_empty() {
@@ -970,27 +971,57 @@ mod tests {
     fn every_segment_is_read_back_before_the_next_is_written() {
         let mut dev = FakeDfu::with_firmware(&image(1000));
         let c = copy(&dev);
-        flash(
-            &mut dev,
-            FLASH_BASE,
-            &image(40 * 1024),
-            &c,
-            true,
-            &mut |_| {},
-        )
-        .unwrap();
-        // Writes are 2 KB blocks; a segment is 8 of them. The log has no write of segment
-        // n + 1 before a set_address back to segment n's start (the read-back).
-        let sets: Vec<&String> = dev
+        let img = image(40 * 1024);
+        flash(&mut dev, FLASH_BASE, &img, &c, true, &mut |_| {}).unwrap();
+        // The address and kind of each write and upload, in the order the device saw them.
+        let ops: Vec<(&str, u32, usize)> = dev
             .log
             .iter()
-            .filter(|l| l.starts_with("set_address"))
+            .filter_map(|l| {
+                let mut w = l.split(' ');
+                let kind = w.next()?;
+                if kind != "write" && kind != "upload" {
+                    return None;
+                }
+                let at = u32::from_str_radix(w.next()?.trim_start_matches("0x"), 16).ok()?;
+                Some((kind, at, w.next()?.parse().ok()?))
+            })
             .collect();
-        assert!(
-            sets.len() >= 3 * 2,
-            "a write and a read per segment: {sets:?}"
-        );
-        assert!(dev.log.iter().any(|l| l == "write 0x08004000 2048 bytes"));
+        let segments = img.len().div_ceil(SEGMENT);
+        assert_eq!(segments, 3);
+        let base = FLASH_BASE as usize;
+        let seg = |at: u32| (at as usize - base) / SEGMENT;
+        for n in 0..segments {
+            let start = base + n * SEGMENT;
+            let end = (start + SEGMENT).min(base + img.len());
+            let writes: Vec<usize> = (0..ops.len())
+                .filter(|&i| ops[i].0 == "write" && seg(ops[i].1) == n)
+                .collect();
+            assert_eq!(writes.len(), (end - start).div_ceil(TRANSFER), "segment {n}");
+            let last_write = *writes.last().unwrap();
+            let next_write = (0..ops.len())
+                .find(|&i| ops[i].0 == "write" && seg(ops[i].1) == n + 1)
+                .unwrap_or(ops.len());
+            // Between segment n's last write and segment n + 1's first, uploads cover every
+            // byte of segment n.
+            let mut covered = vec![false; end - start];
+            for &(kind, at, len) in &ops[last_write + 1..next_write] {
+                assert_eq!(kind, "upload", "segment {n}: a write before its read back");
+                // After the last segment, the full read back covers the others too.
+                let Some(from) = (at as usize).checked_sub(start).filter(|f| *f < end - start)
+                else {
+                    continue;
+                };
+                for c in covered.iter_mut().skip(from).take(len) {
+                    *c = true;
+                }
+            }
+            assert!(
+                covered.iter().all(|c| *c),
+                "segment {n} is read back in full before segment {} is written",
+                n + 1
+            );
+        }
     }
 
     #[test]
