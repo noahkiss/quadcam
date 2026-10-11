@@ -278,13 +278,30 @@ fn looks_like_error(text: &str) -> bool {
     .any(|w| t.contains(w))
 }
 
+/// What `compare_listing` found.
+#[derive(Debug, Default, PartialEq)]
+pub struct Listing {
+    /// Files the radio's `ls` does not show.
+    pub missing: Vec<String>,
+    /// Files whose size `ls` printed and differs.
+    pub differ: Vec<String>,
+    /// Files QuadCam could not check: their folder is not one the CLI can list (a name
+    /// `check_path` refuses, or a space, which the CLI splits on, or `ls` failed), or their
+    /// own name is not plain ASCII, which a listing may print another way.
+    pub not_checked: Vec<String>,
+}
+
+/// True when `name` holds only the characters the CLI prints as they are.
+fn plain_name(name: &str) -> bool {
+    name.chars()
+        .all(|c| c.is_ascii_alphanumeric() || matches!(c, '.' | '_' | '-' | ' '))
+}
+
 /// The files `want` (card paths) that the radio's `ls` does not show, and those whose
 /// size differs when `ls` printed one. A name matches without regard to case (the card is
-/// FAT). Folders are listed once each.
-pub fn compare_listing(
-    cli: &mut RadioCli,
-    want: &[(String, u64)],
-) -> Result<(Vec<String>, Vec<String>)> {
+/// FAT). Folders are listed once each. A folder the CLI cannot list is "not checked", never
+/// "missing".
+pub fn compare_listing(cli: &mut RadioCli, want: &[(String, u64)]) -> Result<Listing> {
     let mut by_dir: BTreeMap<String, Vec<&(String, u64)>> = BTreeMap::new();
     for w in want {
         let dir = match w.0.rsplit_once('/') {
@@ -293,26 +310,45 @@ pub fn compare_listing(
         };
         by_dir.entry(dir).or_default().push(w);
     }
-    let (mut missing, mut differ) = (Vec::new(), Vec::new());
+    let mut out = Listing::default();
     for (dir, files) in by_dir {
+        let unlisted = |out: &mut Listing| out.not_checked.extend(files.iter().map(|f| f.0.clone()));
+        if dir.contains(' ') || check_path(&dir).is_err() {
+            unlisted(&mut out);
+            continue;
+        }
         let listed = match cli.ls(&dir) {
             Ok(l) => l,
             Err(e) if is_gone(&e) => return Err(e),
             Err(_) => {
-                missing.extend(files.iter().map(|f| f.0.clone()));
+                // A folder its parent's listing lacks is missing, files and all. Any other
+                // failure says nothing about the files.
+                let (parent, name) = dir.rsplit_once('/').unwrap_or(("", &dir));
+                let parent = if parent.is_empty() { "/" } else { parent };
+                match cli.ls(parent) {
+                    Ok(up) if !up.iter().any(|e| e.name.eq_ignore_ascii_case(name)) => {
+                        out.missing.extend(files.iter().map(|f| f.0.clone()))
+                    }
+                    Err(e) if is_gone(&e) => return Err(e),
+                    _ => unlisted(&mut out),
+                }
                 continue;
             }
         };
         for (path, size) in files {
             let name = path.rsplit('/').next().unwrap_or(path);
+            if !plain_name(name) {
+                out.not_checked.push(path.clone());
+                continue;
+            }
             match listed.iter().find(|e| e.name.eq_ignore_ascii_case(name)) {
-                None => missing.push(path.clone()),
-                Some(e) if e.size.is_some_and(|s| s != *size) => differ.push(path.clone()),
+                None => out.missing.push(path.clone()),
+                Some(e) if e.size.is_some_and(|s| s != *size) => out.differ.push(path.clone()),
                 Some(_) => {}
             }
         }
     }
-    Ok((missing, differ))
+    Ok(out)
 }
 
 /// A simulated radio on its serial port: answers `ver`, `ls`, `play`, `beep`, `reboot`,
@@ -588,9 +624,48 @@ mod tests {
             ("SOUNDS/en/hello.wav".to_string(), 5000),
             ("SCRIPTS/x.lua".to_string(), 1),
         ];
-        let (missing, differ) = compare_listing(&mut c, &want).unwrap();
-        assert_eq!(missing, ["MODELS/model02.yml", "SCRIPTS/x.lua"]);
-        assert_eq!(differ, ["SOUNDS/en/hello.wav"]);
+        let l = compare_listing(&mut c, &want).unwrap();
+        assert_eq!(l.missing, ["MODELS/model02.yml", "SCRIPTS/x.lua"]);
+        assert_eq!(l.differ, ["SOUNDS/en/hello.wav"]);
+        assert!(l.not_checked.is_empty());
+    }
+
+    #[test]
+    fn a_folder_the_cli_cannot_list_is_not_checked_not_missing() {
+        let radio = FakeRadioCli::new("pocket", "2.12.4")
+            .with_file("/MODELS/model01.yml", 1200)
+            .with_file("/MODELS/My Model.txt", 30)
+            .with_file("/SOUNDS/My Pack/a.wav", 10)
+            .with_file("/SOUNDS/fr/\u{e9}t\u{e9}.wav", 10);
+        let mut c = cli(&radio).unwrap();
+        let want = vec![
+            ("MODELS/model01.yml".to_string(), 1200),
+            // A space in a name: its folder lists, and `ls` shows the name.
+            ("MODELS/My Model.txt".to_string(), 30),
+            // A space in the folder: the CLI would split the argument.
+            ("SOUNDS/My Pack/a.wav".to_string(), 10),
+            // A folder check_path refuses, and a non-ASCII name in a folder that lists.
+            ("SOUNDS/x;y/b.wav".to_string(), 1),
+            ("SOUNDS/fr/\u{e9}t\u{e9}.wav".to_string(), 10),
+            // A folder the card lacks: its parent lists, without it.
+            ("NOPE/c.wav".to_string(), 1),
+        ];
+        let l = compare_listing(&mut c, &want).unwrap();
+        assert_eq!(l.missing, ["NOPE/c.wav"], "{l:?}");
+        assert!(l.differ.is_empty(), "{l:?}");
+        assert_eq!(
+            l.not_checked,
+            [
+                "SOUNDS/My Pack/a.wav",
+                "SOUNDS/fr/\u{e9}t\u{e9}.wav",
+                "SOUNDS/x;y/b.wav"
+            ]
+        );
+        // Neither the folder with a space nor the refused one went out.
+        assert!(!radio
+            .log()
+            .iter()
+            .any(|l| l.contains("My Pack") || l.contains(';')));
     }
 
     #[test]

@@ -64,6 +64,11 @@ pub struct RadioVerify {
     pub missing: Vec<String>,
     /// Files whose size `ls` shows and differs from the backup's.
     pub differ: Vec<String>,
+    /// Backup files the CLI cannot check: a folder it cannot list (a space or another
+    /// character it does not take, or `ls` failed), or a name that is not plain ASCII.
+    #[serde(default)]
+    pub not_checked: Vec<String>,
+    /// Nothing is missing or at another size. Files not checked do not count.
     pub ok: bool,
 }
 
@@ -235,13 +240,14 @@ impl Core {
                     .filter(|f| verifiable(&f.path))
                     .map(|f| (f.path.clone(), f.size))
                     .collect();
-                let (missing, differ) = cli::compare_listing(&mut cli, &want)?;
+                let l = cli::compare_listing(&mut cli, &want)?;
                 report.verify = Some(RadioVerify {
                     backup: backup.id.clone(),
-                    checked: want.len() as u32,
-                    ok: missing.is_empty() && differ.is_empty(),
-                    missing,
-                    differ,
+                    checked: (want.len() - l.not_checked.len()) as u32,
+                    ok: l.missing.is_empty() && l.differ.is_empty(),
+                    missing: l.missing,
+                    differ: l.differ,
+                    not_checked: l.not_checked,
                 });
                 report.info = Some(info);
             }

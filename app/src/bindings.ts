@@ -4696,6 +4696,12 @@ export type RadioVerify = {
 	missing: string[],
 	/**  Files whose size `ls` shows and differs from the backup's. */
 	differ: string[],
+	/**
+	 *  Backup files the CLI cannot check: a folder it cannot list (a space or another
+	 *  character it does not take, or `ls` failed), or a name that is not plain ASCII.
+	 */
+	not_checked?: string[],
+	/**  Nothing is missing or at another size. Files not checked do not count. */
 	ok: boolean,
 };
 

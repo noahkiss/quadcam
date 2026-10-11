@@ -324,7 +324,7 @@ jobs only. `gear radio-cli ACTION` runs one:
 | `play --path /SOUNDS/en/hello.wav` | plays a sound file on the radio's speaker. A voice line's card path works as it is, so after a voice pack is applied you can hear a line on the radio itself |
 | `beep` | the radio beeps |
 | `reboot --yes` | restarts the radio |
-| `verify [--device ID]` | `ls` each folder of the saved radio's latest backup, and lists the files the radio lacks or holds at another size. Use it after a card apply, with the card back in the radio. `LOGS/` is skipped |
+| `verify [--device ID]` | `ls` each folder of the saved radio's latest backup, and lists the files the radio lacks or holds at another size. Use it after a card apply, with the card back in the radio. `LOGS/` is skipped. A file in a folder the CLI cannot list (a space or another character it does not take in the folder name, or an `ls` that fails), or with a name that is not plain ASCII, is listed as not checked, not as missing |
 
 QuadCam sends no other command. A path is an absolute card path of plain characters. QuadCam
 refuses a port another program has open ("is open in screen"), as it does for a flight

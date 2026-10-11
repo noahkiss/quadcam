@@ -1353,11 +1353,20 @@ fn backup_read_text(v: &Value) -> String {
 fn radio_cli_text(command: &str, v: &Value) -> String {
     if let Some(vf) = v.get("verify").filter(|x| !x.is_null()) {
         let n = |k: &str| vf[k].as_array().map_or(0, Vec::len);
-        return if vf["ok"] == true {
+        let unchecked = match n("not_checked") {
+            0 => String::new(),
+            u => format!(" {u} not checked: the radio's CLI cannot list them."),
+        };
+        return if vf["ok"] == true && unchecked.is_empty() {
             format!("The radio holds all {} files of the backup.", vf["checked"])
+        } else if vf["ok"] == true {
+            format!(
+                "The radio holds the {} files of the backup it checked.{unchecked}",
+                vf["checked"]
+            )
         } else {
             format!(
-                "Checked {} files against the backup: {} missing, {} at another size.",
+                "Checked {} files against the backup: {} missing, {} at another size.{unchecked}",
                 vf["checked"],
                 n("missing"),
                 n("differ")

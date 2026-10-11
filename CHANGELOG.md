@@ -5,6 +5,7 @@ User-facing changes in each release, newest first. Release notes on
 
 ## Unreleased
 
+- **Radio verify over USB serial.** A backup file in a folder the radio's CLI cannot list (a space in the folder name, an `ls` that fails) or with a name that is not plain ASCII is reported as not checked (`not_checked`), not as missing. A folder the card lacks still counts as missing.
 - **Radio backups with a reset clock.** A backup reads again every card file dated before 2020, and every YAML file once a radio log is dated before 2020. Before, a model edit of the same length that got the same time from a reset radio clock kept the old bytes in the backup.
 - **EdgeTX flash and firmware read are jobs.** Gear status lists a running radio flash or **Read firmware** (`dfu:<serial>`), and a second flash or read of the same radio refuses with `port_busy` instead of failing on the USB claim.
 - **EdgeTX flash: the right radio.** Before the erase, a flash compares the board the radio's current firmware names with the saved radio's board, and refuses another board. This also covers a DFU device not yet linked to a radio. **Read firmware** says when the image names another board than the radio you picked.
