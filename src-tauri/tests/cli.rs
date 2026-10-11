@@ -348,16 +348,6 @@ fn errors_and_exit_codes() {
     assert!(v["error"]["message"].as_str().unwrap().contains("--device"));
 }
 
-/// Test-only check before any erase: the target is a disk image this test attached.
-fn assert_is_test_image(img: &Image) {
-    let whole = quadcam_lib::disk::info(&img.disk).unwrap();
-    assert_eq!(
-        whole.bus_protocol.as_deref(),
-        Some("Disk Image"),
-        "refusing to format a non-image disk"
-    );
-}
-
 #[test]
 fn format_a_disk_image_only_with_every_flag() {
     let env = Env::new();
@@ -415,7 +405,7 @@ fn format_a_disk_image_only_with_every_flag() {
         assert!(card.mount.join("DCIM/PICT0001.AVI").is_file());
     }
 
-    assert_is_test_image(&card);
+    card.assert_is_test_image();
     let done = env.ok(&[
         "format",
         "--device",
@@ -464,7 +454,10 @@ fn mcp_over_stdio() {
         .collect();
     assert_eq!(lines.len(), 3);
     assert_eq!(lines[0]["result"]["protocolVersion"], "2025-11-25");
-    assert_eq!(lines[1]["result"]["tools"].as_array().unwrap().len(), 19);
+    // The whole list, as the server builds it; tests/surface pins its contents.
+    let tools = lines[1]["result"]["tools"].as_array().unwrap();
+    assert_eq!(tools, quadcam_lib::mcp::tools().as_array().unwrap());
+    assert!(tools.iter().any(|t| t["name"] == "quadcam_status"));
     assert_eq!(lines[2]["result"]["structuredContent"]["mode"], "headless");
 }
 
@@ -648,7 +641,8 @@ fn voice_studio_commands_list_sets_and_keep_the_key_out_of_every_answer() {
     assert!(all.contains("off in tests"), "{all}");
     assert!(!all.contains(key), "{all}");
 
-    // A render of sets without a reachable key says what to do.
+    // A render of sets without a reachable key refuses and says why: under cargo, the
+    // Keychain is closed.
     let (code, v) = env.run(&[
         "gear",
         "voice",
@@ -662,6 +656,8 @@ fn voice_studio_commands_list_sets_and_keep_the_key_out_of_every_answer() {
         "--dry-run",
     ]);
     assert_ne!(code, 0, "{v}");
+    let msg = v["error"]["message"].as_str().unwrap_or_default();
+    assert!(msg.contains("Keychain"), "{v}");
 }
 
 #[test]
