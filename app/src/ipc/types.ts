@@ -277,6 +277,7 @@ export interface SettingsValues {
   addTime?: boolean;
   deleteClipsAfterImport?: boolean;
   joinSplitRecordings?: boolean;
+  onDeviceSuggestions?: boolean;
   defaultName?: string;
   photosAlbum?: string;
   formatLabel?: string;
@@ -345,6 +346,7 @@ export type RadioSnapshot = RadioEvent & { message: string | null };
 
 // Events the core emits.
 export type StageProgress = G.Progress;
+export type { OnDevice, OnDeviceProgress, OnDeviceReport, Feature as OnDeviceFeature } from "../bindings";
 export type ImportProgress = Num<G.ImportProgress, "seconds" | "duration">;
 export type LibraryTask = G.LibraryTask;
 export type AgentFormatRequest = G.AgentFormatRequest;

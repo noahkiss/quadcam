@@ -131,6 +131,7 @@ export function plan(p: G.ClipPlan): ClipPlan {
     log_model: p.log_model ?? null,
     match_reason: p.match_reason ?? null,
     flight: flight(p.flight),
+    ondevice: p.ondevice ?? null,
   };
 }
 

@@ -83,3 +83,13 @@ select.popup:focus-visible {
   margin: 0;
   font-size: var(--t-lg);
 }
+
+.summary {
+  margin: 0;
+  max-width: 70ch;
+  padding: var(--s-2) var(--s-3);
+  border-left: 2px dotted var(--c-sky);
+  color: var(--fg);
+  font-size: var(--t-md);
+  line-height: 1.5;
+}

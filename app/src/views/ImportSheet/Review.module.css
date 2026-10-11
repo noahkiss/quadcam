@@ -44,6 +44,9 @@
   font-size: var(--t-sm);
   color: var(--muted);
 }
+.suggestNames {
+  color: var(--fg);
+}
 .warnings {
   margin: 0;
   padding: var(--s-2) var(--s-6);
@@ -130,6 +133,17 @@
 .suggested {
   outline: 1px dashed var(--accent) !important;
   outline-offset: 1px;
+}
+.ondevice {
+  outline: 1px dotted var(--c-sky) !important;
+  outline-offset: 1px;
+}
+.odHint {
+  display: flex;
+  align-items: center;
+  gap: var(--s-2);
+  font-size: var(--t-sm);
+  color: var(--muted);
 }
 .agentHint {
   font-size: var(--t-sm);

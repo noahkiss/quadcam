@@ -30,6 +30,15 @@ export function AgentBadge({ title }: { title?: string }) {
   );
 }
 
+/** The mark on a value Apple's on-device model suggested. */
+export function OnDeviceBadge({ title }: { title?: string }) {
+  return (
+    <span className={styles.ondevice} title={title}>
+      on-device
+    </span>
+  );
+}
+
 /** A key name, as in a shortcut hint. */
 export function Kbd({ children }: { children: ReactNode }) {
   return <kbd className={styles.kbd}>{children}</kbd>;

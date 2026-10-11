@@ -4,7 +4,7 @@ import { clipsOf, filesOf, planOf, resultOf } from "../../store/session";
 import { sel } from "../../store/settings";
 import { api, errText, fileSrc } from "../../ipc/api";
 import type { Clip, ClipPlan, Session } from "../../ipc/types";
-import { AgentBadge, Chip } from "../../components/Chip";
+import { AgentBadge, Chip, OnDeviceBadge } from "../../components/Chip";
 import { Button } from "../../components/Button";
 import { CommitInput } from "../../components/CommitInput";
 import { Checkbox, Field, Input, Select } from "../../components/Field";
@@ -14,7 +14,7 @@ import { MomentList, TrimEditor } from "../../components/trim/TrimEditor";
 import type { TrimModel } from "../../components/trim/model";
 import { useTrim } from "../../components/trim/useTrim";
 import { base, fmtBytes, fmtDur, tilde, SOURCE_LABEL } from "../../lib/format";
-import { edit, forAll, metaToAll, pickLogs, runExport, savePlace, setLogDay, setLogDir } from "../../actions/session";
+import { checkOnDevice, edit, forAll, metaToAll, pickLogs, runExport, savePlace, setLogDay, setLogDir, suggestNames } from "../../actions/session";
 import { remember, setSessionCuts, splitByFlight } from "../../actions/cuts";
 import { MiniBar, MomentChips } from "../Library/ClipCard";
 import { Flight } from "../ClipDetail/Inspector";
@@ -63,6 +63,12 @@ function SessionBar({ s }: { s: Session }) {
   const busy = useStore((x) => x.busy);
   const deleteClips = useStore(sel.deleteClips);
   const keepClips = useStore((x) => x.keepClips);
+  const onDeviceOn = useStore(sel.onDevice);
+  const onDeviceReady = useStore((x) => x.onDeviceReady);
+  const running = useStore((x) => x.onDevice);
+  useEffect(() => {
+    if (onDeviceOn) checkOnDevice();
+  }, [onDeviceOn]);
   const plans = s.plans.filter((p) => !p.skip);
   const allProf = new Set(plans.map((p) => p.meta?.profile || ""));
   const allPlace = new Set(plans.map((p) => p.meta?.location?.name || (p.meta?.location ? "*coords" : "")));
@@ -129,6 +135,11 @@ function SessionBar({ s }: { s: Session }) {
         <span className="mono">
           {clipsOf(s).length} clips · {fmtDur(dur - dead)} flying · {fmtDur(dead)} dead air
         </span>
+        {onDeviceOn && onDeviceReady && (
+          <Button size="sm" icon="sparkle" className={styles.suggestNames} disabled={busy || !!running} onClick={suggestNames}>
+            {running ? `Suggesting ${running.done} of ${running.total}…` : "Suggest names"}
+          </Button>
+        )}
         {deleteClips && <Checkbox label="Delete clips after import" checked={!keepClips} disabled={busy} onChange={(e) => store.setState({ keepClips: !e.target.checked })} />}
         <Button variant="primary" iconEnd="arrow-right" title={`Add ${todo} clip${todo === 1 ? "" : "s"} to the library (⌘↩)`} disabled={!tools || busy} onClick={runExport}>
           Add to Library
@@ -156,7 +167,12 @@ const ClipRow = memo(function ClipRow({ clip: c, plan: p, session: s, selected, 
   const r = resultOf(s, c.id);
   const outcome = r && r.outcome !== "skipped" ? r.outcome : null;
   const unusable = c.status === "empty" || !!c.stage_error;
-  const sugg = p.suggested && Object.values(p.suggested).some(Boolean);
+  // A field holds the on-device model's value while it still equals what the model said.
+  const od = p.ondevice;
+  const odName = !!od && p.suggested.name && p.name === od.name;
+  const odNote = !!od && p.suggested.note && p.note === od.note;
+  const odMeta = !!od && p.suggested.meta && p.meta.keywords.join("\n") === od.keywords.join("\n");
+  const sugg = (p.suggested.name && !odName) || (p.suggested.note && !odNote) || (p.suggested.meta && !odMeta) || p.suggested.date || p.suggested.skip || p.suggested.cuts;
   const hhmm = p.time ? p.time.slice(0, 5) : "";
   const moments = (p.moments || []).filter((m) => m.end > 0 && m.start < c.duration);
   return (
@@ -178,14 +194,25 @@ const ClipRow = memo(function ClipRow({ clip: c, plan: p, session: s, selected, 
           <CommitInput
             aria-label={`Short name for ${c.name}`}
             placeholder={defaultName}
-            className={p.suggested.name ? styles.suggested : undefined}
-            title={p.suggested.name ? `Agent suggestion${p.reason ? ": " + p.reason : ""}` : undefined}
+            className={odName ? styles.ondevice : p.suggested.name ? styles.suggested : undefined}
+            title={odName ? "On-device suggestion" : p.suggested.name ? `Agent suggestion${p.reason ? ": " + p.reason : ""}` : undefined}
             value={p.name}
             onCommit={(v) => edit({ id: c.id, name: v })}
             onFocus={() => selectClip(c.id)}
           />
+          {(odName || odNote || odMeta) && <OnDeviceBadge title="Suggested by Apple's on-device model" />}
           {sugg && <AgentBadge title={p.reason || "Suggested by an agent"} />}
         </div>
+        {od && od.name && p.name !== od.name && !outcome && (
+          <div className={styles.odHint}>
+            <span>
+              On-device: <span className="selectable">{od.name}</span>
+            </span>
+            <Button size="sm" variant="ghost" aria-label={`Use the on-device name for ${c.name}`} onClick={() => edit({ id: c.id, name: od.name })}>
+              Use
+            </Button>
+          </div>
+        )}
         <div className={styles.meta}>
           <CommitInput type="date" aria-label={`Date for ${c.name}`} className={p.suggested.date ? styles.suggested : undefined} value={p.date} onCommit={(v) => v && edit({ id: c.id, date: v, time: hhmm })} />
           <CommitInput type="time" aria-label={`Time for ${c.name}`} title="Time of day (empty: noon)" className={p.suggested.date ? styles.suggested : undefined} value={hhmm} onCommit={(v) => edit({ id: c.id, time: v })} />
@@ -201,7 +228,7 @@ const ClipRow = memo(function ClipRow({ clip: c, plan: p, session: s, selected, 
           aria-label={`Note for ${c.name}`}
           placeholder="Note"
           list="recent-notes"
-          className={p.suggested.note ? styles.suggested : undefined}
+          className={odNote ? styles.ondevice : p.suggested.note ? styles.suggested : undefined}
           value={p.note}
           onCommit={(v) => {
             remember("notes", v);

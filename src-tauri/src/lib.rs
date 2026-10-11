@@ -231,6 +231,15 @@ fn default_output_dir() -> Option<PathBuf> {
     pipeline::default_output_dir()
 }
 
+/// Whether this Mac has Apple's on-device model for suggestions, and whether it looks at
+/// frames. The Review step shows its controls only when it does.
+#[tauri::command]
+#[specta::specta]
+async fn on_device_status(state: State<'_, AppState>) -> Result<intel::Feature, String> {
+    let core = state.core.clone();
+    blocking(move || Ok(core.on_device_feature())).await
+}
+
 /// A folder or clip files dropped on the window.
 #[tauri::command]
 #[specta::specta]
@@ -707,6 +716,7 @@ pub fn specta_builder() -> tauri_specta::Builder<tauri::Wry> {
             env_check,
             default_output_dir,
             load_dropped,
+            on_device_status,
             preview,
             sim_presets,
             sim_start,

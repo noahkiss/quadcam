@@ -41,6 +41,10 @@ export const api = {
   planDates: async (logDir: string | null, day: string | null) => N.session(await ok(commands.dates({ logs: logDir ? { kind: "dir", path: logDir } : { kind: "none" }, day })))!,
   editPlan: async (patch: PlanPatch) => N.session(await ok(commands.suggest({ patches: [patch], editor: "user" })))!,
   editPlans: async (patches: PlanPatch[]) => N.session(await ok(commands.suggest({ patches, editor: "user" })))!,
+  /** Apple's on-device model: is it here, and does it look at frames. */
+  onDeviceStatus: () => ok(commands.onDeviceStatus()),
+  /** Names, keywords and notes from the on-device model; it fills only empty fields. */
+  suggestOnDevice: (ids: number[] | null = null) => ok(commands.suggestOnDevice({ ids })),
   importClips: (options: ImportOptions) => ok(commands.import(options)),
   addToPhotos: (ids: number[], album: string | null) => ok(commands.photos({ ids, album })),
   formatPlan: (label: string | null) => ok(commands.formatPlan({ label })),
@@ -198,8 +202,9 @@ export const api = {
   gearPackTypeSave: (t: PackType) => ok(commands.gearPackTypeSave(t)),
   gearPackTypeDelete: (name: string) => ok(commands.gearPackTypeDelete({ name })),
   gearPackNotes: (text: string) => ok(commands.gearPackNotes({ text })),
-  gearSessionReport: (day: string | null = null) => ok(commands.gearSessionReport({ day })),
-  gearSessionReportSave: (day: string | null, path: string) => ok(commands.gearSessionReportSave({ day, path, overwrite: true })),
+  /** `summarize` adds a paragraph about the day from the on-device model. */
+  gearSessionReport: (day: string | null = null, summarize = false) => ok(commands.gearSessionReport({ day, summarize })),
+  gearSessionReportSave: (day: string | null, path: string, summarize = false) => ok(commands.gearSessionReportSave({ day, path, overwrite: true, summarize })),
   gearPreflight: () => ok(commands.gearPreflight()),
   gearCrashes: (clip: string | null = null, aircraft: string | null = null) => ok(commands.gearCrashes({ clip, aircraft })),
   gearCrashSave: (c: CrashSaveParams) => ok(commands.gearCrashSave(c)),

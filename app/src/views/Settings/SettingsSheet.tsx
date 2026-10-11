@@ -473,6 +473,7 @@ function ImportPane({ d, set }: { d: Draft; set: SetFn }) {
       <Checkbox label="Add the time to file names (radio-log dates only)" checked={d.addTime} onChange={(e) => set("addTime", e.target.checked)} />
       <Checkbox label="Delete clips after import" detail="Deletes each clip that verified from the card or folder. Other files stay." checked={d.deleteClips} onChange={(e) => set("deleteClips", e.target.checked)} />
       <Checkbox label="Join split recordings" detail="Imports a recording the DVR split into several files as one clip." checked={d.joinSplit} onChange={(e) => set("joinSplit", e.target.checked)} />
+      <Checkbox label="On-device suggestions" detail="Suggests clip names, keywords and notes with Apple's on-device model, on Macs that have it." checked={d.onDevice} onChange={(e) => set("onDevice", e.target.checked)} />
       <h3>Log matching</h3>
       <div className={styles.row}>
         <TextField label="Segment gap (s)" type="number" min={1} step={1} value={d.segGap} onChange={(e) => set("segGap", e.target.value)} />

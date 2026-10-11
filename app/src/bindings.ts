@@ -527,6 +527,11 @@ export const commands = {
 	defaultOutputDir: () => __TAURI_INVOKE<string | null>("default_output_dir"),
 	/**  A folder or clip files dropped on the window. */
 	loadDropped: (paths: string[]) => typedError<Session_Serialize, string>(__TAURI_INVOKE("load_dropped", { paths })),
+	/**
+	 *  Whether this Mac has Apple's on-device model for suggestions, and whether it looks at
+	 *  frames. The Review step shows its controls only when it does.
+	 */
+	onDeviceStatus: () => typedError<Feature, string>(__TAURI_INVOKE("on_device_status")),
 	/**  Makes (or reuses) a small H.264 preview of a clip. */
 	preview: (id: number) => typedError<string, string>(__TAURI_INVOKE("preview", { id })),
 	/**  The built-in sim profiles the Sim page offers. */

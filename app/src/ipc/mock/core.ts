@@ -86,6 +86,8 @@ export class MockCore {
   initialValues: SettingsView["values"];
   volumes: Volume[];
   tools = true;
+  /** Apple's on-device model is here (specs turn it off). */
+  onDevice = true;
   modules: ModuleStatus[] = seed.modules();
   gear: gear.MockGear = gear.quietGear();
   /** The Gear seed helpers, for specs (`core.gearSeed.radioConnected()`). */
@@ -172,6 +174,8 @@ export class MockCore {
       }
       case "suggest":
         return this.patch(p.patches as PlanPatch[]);
+      case "suggest_on_device":
+        return this.suggestOnDevice((p.ids as number[] | null) ?? null);
       case "import":
         return this.importClips(p as { output_dir: string; format: string; keep_clips?: boolean });
       case "photos":
@@ -198,6 +202,10 @@ export class MockCore {
           : { tools: null, error: "ffmpeg and ffprobe not found.", install_hint: "brew install ffmpeg", socket: null, ...seed.VERSION };
       case "default_output_dir":
         return seed.LIBRARY_ROOT;
+      case "on_device_status":
+        return this.onDevice
+          ? { name: "suggest", available: true, min_os: "26.0", reason: null, locale: null, assets: null, images: true }
+          : { name: "suggest", available: false, min_os: "26.0", reason: "Apple Intelligence is off.", locale: null, assets: null, images: null };
       case "load_dropped":
         return this.load((args.paths as string[])[0] ?? "dropped");
       case "format_card":
@@ -608,8 +616,12 @@ export class MockCore {
       case "gear_pack_notes":
         this.flights.notes = String(p.text);
         return this.gearChanged(this.flights.notes);
-      case "gear_session_report":
-        return this.flights.report((p.day as string | null) ?? null);
+      case "gear_session_report": {
+        const r = this.flights.report((p.day as string | null) ?? null);
+        if (p.summarize !== true) return r;
+        const summary = "A calm morning at the field: three flights on one whoop, the longest just under a minute, with no crashes.";
+        return this.onDevice ? { ...r, summary, markdown: r.markdown.replace("\n\n", `\n\n${summary}\n\n`) } : { ...r, summary: null, summary_unavailable: "Apple Intelligence is off." };
+      }
       case "gear_session_report_save":
         return { path: String(p.path), bytes: this.flights.report((p.day as string | null) ?? null).markdown.length };
       case "gear_preflight":
@@ -1137,6 +1149,41 @@ export class MockCore {
     }
     this.sessionChanged();
     return structuredClone(s);
+  }
+
+  /** `core/ondevice.rs`: one outing name with pack numbers, a keyword and a note per clip;
+   *  it fills only empty fields or ones that still hold its last value. */
+  suggestOnDevice(ids: number[] | null) {
+    const s = this.need();
+    if (!this.onDevice) return { available: false, reason: "Apple Intelligence is off.", clips: [], seconds: 0 };
+    const plans = s.plans.filter((p) => !p.skip && (!ids || ids.includes(p.id)) && !s.clips.find((c) => c.id === p.id)?.part_of);
+    this.emit("on-device-progress", { running: true, done: 0, total: plans.length });
+    const clips = plans.map((p, i) => {
+      const od = { name: `morning loops pack ${i + 1}`, words: "backyard loops", keywords: ["backyard"], note: "Loops over the backyard.", images: 1 };
+      const last = p.ondevice;
+      const ours = (v: string, by: boolean, was: string | undefined) => !v.trim() || (by && !!was && v === was);
+      const filled: string[] = [];
+      if (ours(p.name, p.suggested.name, last?.name)) {
+        p.name = od.name;
+        p.suggested.name = true;
+        filled.push("name");
+      }
+      if (ours(p.note, p.suggested.note, last?.note)) {
+        p.note = od.note;
+        p.suggested.note = true;
+        filled.push("note");
+      }
+      if (!p.meta.keywords.length) {
+        p.meta.keywords = od.keywords;
+        p.suggested.meta = true;
+        filled.push("keywords");
+      }
+      p.ondevice = od;
+      return { id: p.id, suggestion: od, filled, error: null };
+    });
+    this.emit("on-device-progress", { running: false, done: plans.length, total: plans.length });
+    this.sessionChanged();
+    return { available: true, reason: null, clips, seconds: 6.5 };
   }
 
   /** Joins a split recording into one clip, or keeps its files apart, as `Session::set_joined`. */

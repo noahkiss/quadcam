@@ -186,6 +186,11 @@ impl Core {
         self.ondevice_run(&s, p)
     }
 
+    /// The helper's on-device suggestions feature: available, frames, or why not.
+    pub fn on_device_feature(&self) -> crate::intel::Feature {
+        self.gear.intel.suggestions()
+    }
+
     /// The GUI's run after a card is analysed: only with the setting on and the model here;
     /// a failure is dropped.
     pub fn suggest_on_device_auto(&self) {

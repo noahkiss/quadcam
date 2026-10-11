@@ -50,6 +50,7 @@ export async function start(): Promise<() => void> {
     on("agent-apply-closed", (id) => S().agentApplyClosed(id)),
     on("agent-apply-result", ({ id, report, error }) => S().agentApplyResult(id, report ?? null, error ?? null)),
     on("update-changed", (u) => S().setUpdate(u)),
+    on("on-device-progress", (p) => store.setState({ onDevice: p.running ? p : null })),
     onDragDrop((e) => {
       const s = S();
       const blocked = s.busy || !s.env?.tools || dialogOpen(s);
