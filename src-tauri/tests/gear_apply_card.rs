@@ -1302,3 +1302,151 @@ fn a_test_process_writes_no_card_where_real_cards_mount() {
     assert!(format!("{e:#}").contains("QUADCAM_CARD_WRITE"), "{e:#}");
     assert!(b.root.join("MODELS/._model00.yml").exists());
 }
+
+/// The bench's blob store holds `bytes`: a `CardFile` that puts them at `path`.
+fn card_file(b: &Bench, path: &str, bytes: &[u8]) -> quadcam_lib::gear::model::CardFile {
+    let r =
+        quadcam_lib::gear::backup::Snapshots::new(Store::new(b.dir.path().join("support/gear")))
+            .blobs()
+            .put(bytes)
+            .unwrap();
+    quadcam_lib::gear::model::CardFile {
+        path: path.into(),
+        xxh64: r.xxh64,
+        size: r.size,
+    }
+}
+
+/// Card files put one sound and delete another: backed up first (the deleted file's bytes
+/// are in the snapshot), written, read back and verified.
+#[test]
+fn card_files_put_and_delete_apply_with_a_backup() {
+    let b = bench(Opts::default());
+    std::fs::create_dir_all(b.root.join("SOUNDS/en")).unwrap();
+    std::fs::write(b.root.join("SOUNDS/en/old.wav"), b"RIFF old").unwrap();
+    let new = card_file(&b, "SOUNDS/en/new.wav", b"RIFF new take");
+    let c = stage(
+        &b,
+        vec![Edit::CardFiles {
+            put: vec![new],
+            delete: vec!["SOUNDS/en/old.wav".into()],
+        }],
+    );
+    let p = plan(&b, &c);
+    assert!(p.checks.iter().all(|k| k.ok), "{:?}", p.checks);
+    let r = b.core.gear_apply(&req(&c, &p)).unwrap();
+    assert_eq!(r.status, ChangeStatus::Verified, "{}", r.message);
+    assert_eq!(
+        std::fs::read(b.root.join("SOUNDS/en/new.wav")).unwrap(),
+        b"RIFF new take"
+    );
+    assert!(!b.root.join("SOUNDS/en/old.wav").exists());
+    assert!(
+        r.files.iter().any(|f| f == "SOUNDS/en/old.wav"),
+        "{:?}",
+        r.files
+    );
+    let snaps =
+        quadcam_lib::gear::backup::Snapshots::new(Store::new(b.dir.path().join("support/gear")));
+    let old = snaps
+        .read(r.backup.as_ref().unwrap(), Some("SOUNDS/en/old.wav"))
+        .unwrap();
+    assert_eq!(old.text.as_deref(), Some("RIFF old"));
+}
+
+/// Card files stand alone, and each path stays under SOUNDS/: a mixed change and a path
+/// outside refuse, and the card is unchanged.
+#[test]
+fn card_files_refuse_a_mixed_change_and_paths_outside_sounds() {
+    let b = bench(Opts::default());
+    let radio = read(&b, "RADIO/radio.yml");
+    let sound = card_file(&b, "SOUNDS/en/new.wav", b"RIFF new");
+    let refused = |edits: Vec<Edit>| -> String {
+        let staged = b.core.gear_change_stage(&StageParams {
+            device: b.id.clone(),
+            edits,
+            ..Default::default()
+        });
+        match staged {
+            Err(e) => format!("{e:#}"),
+            Ok(c) => match b.core.gear_apply_plan(&ApplyPlanParams {
+                id: c.id.clone(),
+                port: None,
+            }) {
+                Err(e) => format!("{e:#}"),
+                Ok(p) => {
+                    let e = b.core.gear_apply(&req(&c, &p)).unwrap_err();
+                    format!("{e:#}")
+                }
+            },
+        }
+    };
+    let e = refused(vec![
+        Edit::CardFiles {
+            put: vec![sound.clone()],
+            delete: vec![],
+        },
+        contrast("30"),
+    ]);
+    assert!(e.contains("stand with no model or radio edit"), "{e}");
+    for (put, delete) in [
+        ("MODELS/model09.yml", None),
+        ("SOUNDS/../RADIO/radio.yml", None),
+        ("/SOUNDS/en/x.wav", None),
+        ("SOUNDS/en/new.wav", Some("RADIO/radio.yml")),
+        (
+            "SOUNDS/en/new.wav",
+            Some("SOUNDS/en/../../MODELS/model00.yml"),
+        ),
+    ] {
+        let mut f = sound.clone();
+        f.path = put.into();
+        let e = refused(vec![Edit::CardFiles {
+            put: vec![f],
+            delete: delete.map(|d| vec![d.to_string()]).unwrap_or_default(),
+        }]);
+        assert!(e.contains("Refused"), "{put} {delete:?}: {e}");
+    }
+    assert_eq!(read(&b, "RADIO/radio.yml"), radio);
+    assert!(b.root.join("MODELS/model00.yml").is_file());
+    assert!(!b.root.join("SOUNDS/en/new.wav").exists());
+    assert!(!b.root.join("MODELS/model09.yml").exists());
+}
+
+/// A model copy and a model delete apply with a backup and read back: the copy holds the
+/// new name, the deleted model's bytes are in the snapshot.
+#[test]
+fn a_model_copy_and_delete_apply_with_a_backup() {
+    let b = bench(Opts::default());
+    // model01.yml is the selected model: copy it, delete the other.
+    let deleted = std::fs::read(b.root.join("MODELS/model00.yml")).unwrap();
+    let c = stage(
+        &b,
+        vec![
+            Edit::ModelCopy {
+                from: "model01.yml".into(),
+                to: "model05.yml".into(),
+                name: "BRAVO COPY".into(),
+            },
+            Edit::ModelDelete {
+                file: "model00.yml".into(),
+            },
+        ],
+    );
+    let p = plan(&b, &c);
+    assert!(p.checks.iter().all(|k| k.ok), "{:?}", p.checks);
+    let r = b.core.gear_apply(&req(&c, &p)).unwrap();
+    assert_eq!(r.status, ChangeStatus::Verified, "{}", r.message);
+    assert!(read(&b, "MODELS/model05.yml").contains("BRAVO COPY"));
+    assert!(!b.root.join("MODELS/model00.yml").exists());
+    assert!(read(&b, "MODELS/model01.yml").contains("BRAVO 2"));
+    let snaps =
+        quadcam_lib::gear::backup::Snapshots::new(Store::new(b.dir.path().join("support/gear")));
+    let backup = snaps.get(r.backup.as_ref().unwrap()).unwrap();
+    let f = backup
+        .files
+        .iter()
+        .find(|f| f.path == "MODELS/model00.yml")
+        .expect("the deleted model is in the backup");
+    assert_eq!(f.size, deleted.len() as u64);
+}
