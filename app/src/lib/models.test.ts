@@ -1,7 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { CalloutView, ModelTimer } from "../ipc/types";
 import { calloutOp, checklistText, formOf, freeTimer, nextScreen, overWidth, parseChecklist, parseSources, repeatText, timerField, whenText } from "./models";
-import { mergeOps, opKey } from "../ipc/mock/model";
 
 const timer = (index: number): ModelTimer => ({ index, name: "", swtch: "NONE", mode: "ON", value: 0, persistent: "0", fields: [{ key: "name", value: '"FLT"' }, { key: "minuteBeep", value: "1" }] });
 
@@ -66,21 +65,3 @@ describe("checklist", () => {
   });
 });
 
-describe("staged ops", () => {
-  it("keys an op by the setting it is about", () => {
-    expect(opKey({ op: "set_timer", index: 1, fields: [] })).toBe("timer:1");
-    expect(opKey({ op: "remove_timer", index: 1 })).toBe("timer:1");
-    expect(opKey({ op: "remove_callout", track: "lowbat" })).toBe(opKey({ op: "set_callout", callout: { track: "lowbat", when: "switch", swtch: "SA2" } }));
-  });
-  it("lets the last word win and merges timer fields and sensor logs", () => {
-    const merged = mergeOps(
-      [{ op: "set_timer", index: 1, fields: [{ key: "name", value: "A" }] }, { op: "set_sensor_logs", sensors: [{ label: "RxBt", logs: false }] }],
-      [{ op: "set_timer", index: 1, fields: [{ key: "name", value: "B" }, { key: "mode", value: "ON" }] }, { op: "set_sensor_logs", sensors: [{ label: "Capa", logs: false }, { label: "RxBt", logs: true }] }, { op: "set_rf_alarms", warning: 50, critical: 40 }],
-    );
-    expect(merged).toEqual([
-      { op: "set_timer", index: 1, fields: [{ key: "name", value: "B" }, { key: "mode", value: "ON" }] },
-      { op: "set_sensor_logs", sensors: [{ label: "RxBt", logs: true }, { label: "Capa", logs: false }] },
-      { op: "set_rf_alarms", warning: 50, critical: 40 },
-    ]);
-  });
-});

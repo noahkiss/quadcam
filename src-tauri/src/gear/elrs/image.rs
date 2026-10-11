@@ -704,35 +704,4 @@ mod tests {
         c.layout = serde_json::json!({"x": "y".repeat(3000)});
         assert!(configure(&stock_8285(1), &c).is_err());
     }
-
-    /// Against a real unpacked bundle, when `QUADCAM_ELRS_BUNDLE` names one. CI skips it.
-    #[test]
-    fn a_real_bundle_configures_when_one_is_at_hand() {
-        let Some(root) = std::env::var_os("QUADCAM_ELRS_BUNDLE") else {
-            return;
-        };
-        let root = PathBuf::from(root);
-        for (fw, name) in [
-            ("Unified_ESP8285_2400_RX", "RX"),
-            ("Unified_ESP32_2400_TX", "TX"),
-        ] {
-            let stock = std::fs::read(root.join("FCC").join(fw).join("firmware.bin")).unwrap();
-            let blocks = read_blocks(&stock).unwrap();
-            assert_eq!(blocks.product, "Unified", "{name}");
-            let out = configure(
-                &stock,
-                &Configure {
-                    product: "Test".into(),
-                    lua_name: "Test".into(),
-                    layout: serde_json::json!({"serial_rx": 3}),
-                    prior_target_name: "X".into(),
-                    uid: [1, 2, 3, 4, 5, 6],
-                    wifi_interval: Some(60),
-                    discriminator: 1,
-                },
-            )
-            .unwrap();
-            assert_eq!(read_blocks(&out).unwrap().product, "Test");
-        }
-    }
 }

@@ -82,7 +82,11 @@ fn protocol_and_tool_list() {
         .handle(&json!({"jsonrpc": "2.0", "id": 2, "method": "tools/list"}))
         .unwrap();
     let tools = list["result"]["tools"].as_array().unwrap();
-    assert_eq!(tools.len(), 19);
+    assert_eq!(
+        tools.len(),
+        quadcam_lib::mcp::tools().as_array().unwrap().len()
+    );
+    assert!(tools.iter().any(|t| t["name"] == "quadcam_status"));
     for t in tools {
         assert!(t["name"].as_str().unwrap().starts_with("quadcam_"));
         assert_eq!(t["inputSchema"]["type"], "object");
@@ -439,16 +443,6 @@ fn survives_an_app_restart() {
     assert_eq!(st["structuredContent"]["mode"], "app");
 }
 
-/// Test-only check before any erase: the target is a disk image this test attached.
-fn assert_is_test_image(img: &Image) {
-    let whole = quadcam_lib::disk::info(&img.disk).unwrap();
-    assert_eq!(
-        whole.bus_protocol.as_deref(),
-        Some("Disk Image"),
-        "refusing to format a non-image disk"
-    );
-}
-
 /// Format through MCP in app mode: every guard, explicit device + UUID + confirm, and the
 /// person's click in the GUI.
 #[test]
@@ -502,7 +496,7 @@ fn format_through_mcp_needs_the_gui_click() {
 
     // The person clicks Erase.
     gui.approve.store(true, Ordering::SeqCst);
-    assert_is_test_image(&card);
+    card.assert_is_test_image();
     let r = call(
         &mut s,
         "quadcam_format_card",
@@ -648,15 +642,19 @@ fn library_and_setup_tools() {
     );
     let l = call(&mut s, "quadcam_library", json!({}));
     assert_eq!(l["structuredContent"]["total"], 1);
+    assert_eq!(
+        std::fs::read_dir(&trash).unwrap().count(),
+        2,
+        "the cut and the clip"
+    );
+    // A rebuild from the files finds the one clip left.
     call(
         &mut s,
         "quadcam_library_files",
         json!({"action": "rebuild"}),
     );
-    assert!(
-        std::fs::read_dir(&trash).unwrap().count() >= 2,
-        "the cut and the clip"
-    );
+    let l = call(&mut s, "quadcam_library", json!({}));
+    assert_eq!(l["structuredContent"]["total"], 1);
 }
 
 /// `quadcam_add_to_photos` after an export adds the verified clips to the album named, once;

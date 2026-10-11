@@ -112,7 +112,6 @@ struct Bench {
     dir: tempfile::TempDir,
     core: Arc<Core>,
     esptool: Arc<FakeEsptool>,
-    fetch: Arc<FixtureFetch>,
     gui: Arc<Gui>,
     radio: String,
     fc: String,
@@ -261,7 +260,7 @@ fn bench(preview: bool, esptool: bool) -> (Bench, FakeHost, FakeHost) {
         .with_fc_timing(quadcam_lib::gear::bf::cli::Timing::fast())
         .with_modules(modules)
         .with_firmware_env(FwEnv {
-            fetch: fetch.clone(),
+            fetch,
             flasher: Arc::new(FlashRecorder::empty()),
         }),
     );
@@ -286,7 +285,6 @@ fn bench(preview: bool, esptool: bool) -> (Bench, FakeHost, FakeHost) {
         dir,
         core,
         esptool: runner,
-        fetch,
         gui,
         radio: "radio-0000000000000001".into(),
         fc: fc_id,
@@ -690,8 +688,20 @@ fn a_flash_plan_shows_the_image_and_only_a_fingerprint_of_the_phrase() {
     assert!(text.contains("Binding: UID fingerprint"));
     assert!(text.contains("Vendor 2.4GHz AIO RX"));
     assert!(!text.contains(PHRASE));
+    // The UID in any form serde or a person would write it: a JSON array, hex, or a list.
     let uid = quadcam_lib::gear::elrs::uid::uid_of(PHRASE);
-    assert!(!text.contains(&format!("{:?}", uid)));
+    let hex: String = uid.iter().map(|b| format!("{b:02x}")).collect();
+    let list = uid.map(|b| b.to_string()).join(",");
+    for form in [
+        serde_json::to_string(&uid).unwrap(),
+        hex.clone(),
+        hex.to_uppercase(),
+        list.clone(),
+        list.replace(',', ", "),
+    ] {
+        assert!(!text.contains(&form), "the plan shows the UID as {form}");
+    }
+    assert!(text.contains(&quadcam_lib::gear::elrs::uid::fingerprint(&uid)));
     // The download is recorded, not trusted: the plan says so.
     assert!(plan.warnings.iter().any(|w| w.contains("recorded")));
     // The same plan twice agrees.
@@ -896,7 +906,6 @@ fn the_plan_refuses_without_esptool_a_phrase_a_known_target_or_a_good_checksum()
         && c.refusal
             .as_ref()
             .is_some_and(|r| r.reason.contains("expected checksum"))));
-    let _ = (&b.fetch, &b.radio);
 }
 
 #[test]

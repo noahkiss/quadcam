@@ -167,15 +167,11 @@ test("a sim that runs cannot be synced, even if it starts after the plan", async
   expect(await app.core<string[]>(`c => c.simSync.written`)).toEqual([]);
 });
 
-test("Liftoff runs in the recording: its Sync button is off and its plan refuses", async ({ app, page }) => {
+test("Liftoff runs in the recording: its Sync button is off", async ({ app, page }) => {
+  // The core's refusal is tests/gear_sim_sync.rs; the UI's part is the disabled button.
   await openRates(app, page);
   await profiles(page).getByRole("button", { name: "1 RACE" }).click();
   await expect(page.getByRole("region", { name: "Sims" }).getByRole("button", { name: "Sync 1 RACE into Liftoff Race" })).toBeDisabled();
-  const plan = await app.core<{ checks: { name: string; ok: boolean; refusal?: { code: string; reason: string } }[]; digest: string }>(
-    `c => c.dispatch("gear_sim_sync_plan", { sims: [{ sim: "liftoff", file: null, profile: "Race" }], paths: [], device: null, backup: null, profile: 1 })`,
-  );
-  expect(plan.digest).toBe("");
-  expect(plan.checks.find((k) => !k.ok)?.refusal).toEqual({ code: "sim_running", reason: "Quit Liftoff first." });
 });
 
 test("an agent's sim sync request waits for the person's click", async ({ app, page }) => {

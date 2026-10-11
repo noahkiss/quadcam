@@ -22,18 +22,6 @@ fn put_clips(root: &Path) {
     make_clip(&root.join("DCIM/PICT0002.AVI"), 1, true);
 }
 
-/// Test-only belt and braces: the target must be a disk image this test attached.
-fn assert_is_test_image(img: &Image) {
-    let whole = disk::info(&img.disk).unwrap();
-    assert_eq!(
-        whole.bus_protocol.as_deref(),
-        Some("Disk Image"),
-        "refusing to format a non-image disk"
-    );
-    let vol = disk::info(&img.mount.to_string_lossy()).unwrap();
-    assert_eq!(disk::whole_disk_of(&vol.parent_whole_disk), img.disk);
-}
-
 /// Check 1: a FAT32 image holding PICT files is flagged as a card; one without is not.
 #[test]
 fn detection() {
@@ -142,7 +130,7 @@ fn format_after_verified_import() {
     .is_err());
     assert!(card.mount.join("DCIM/PICT0001.AVI").is_file());
 
-    assert_is_test_image(&card);
+    card.assert_is_test_image();
     assert_eq!(
         disk::format_card(
             &id,

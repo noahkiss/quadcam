@@ -78,19 +78,32 @@ test("the picture draws and moves, or says it cannot open WebGL", async ({ app, 
   await page.waitForTimeout(300);
   if (await alert.isVisible()) {
     // A machine with no WebGL: the page keeps its controls and the message names the cause.
+    // The picture is not checked, so the run reports a skip, not a pass.
     await expect(alert).toContainText("needs WebGL");
+    test.skip(true, "this browser has no WebGL: the picture was not checked");
     return;
   }
   const a = await canvas.screenshot();
   await page.waitForTimeout(1500);
   const b = await canvas.screenshot();
   expect(a.equals(b), "the canned flight moves the camera, so the picture changes").toBe(false);
-  // Not one flat colour: the room has edges and gates.
-  const colours = await page.evaluate(() => {
-    const c = document.querySelector<HTMLCanvasElement>('canvas[aria-label="Sim view"]')!;
-    return { w: c.width, h: c.height };
-  });
-  expect(colours.w).toBeGreaterThan(100);
+  // Not one flat colour: the room has edges and gates. Count the distinct colours on a
+  // grid of samples from the screenshot.
+  const colours = await page.evaluate(async (png) => {
+    const img = new Image();
+    img.src = `data:image/png;base64,${png}`;
+    await img.decode();
+    const c = document.createElement("canvas");
+    [c.width, c.height] = [img.width, img.height];
+    const ctx = c.getContext("2d")!;
+    ctx.drawImage(img, 0, 0);
+    const seen = new Set<string>();
+    for (let y = 0; y < c.height; y += Math.max(1, c.height >> 4)) {
+      for (let x = 0; x < c.width; x += Math.max(1, c.width >> 4)) seen.add(ctx.getImageData(x, y, 1, 1).data.slice(0, 3).join());
+    }
+    return seen.size;
+  }, b.toString("base64"));
+  expect(colours, "distinct colours in the picture").toBeGreaterThan(2);
 });
 
 test("the settings popover opens, saves a change, closes on an outside click and on Escape", async ({ app, page }) => {

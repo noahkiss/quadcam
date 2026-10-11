@@ -434,7 +434,7 @@ fn a_checklist_stages_as_text_and_turns_the_checklist_on() {
     let m = model(&b);
     assert!(m.view.checklist);
     assert!(m.checklist.unwrap().contains("Battery strapped"));
-    // Same text as the file has: it drops out.
+    // Discarded by hand: the change is done.
     let c = b.core.gear_change_discard(&c.id).unwrap();
     assert_eq!(c.status, ChangeStatus::Discarded);
 }
@@ -508,7 +508,7 @@ fn a_staged_model_edit_applies_to_the_card_with_read_back_and_keeps_other_models
 }
 
 #[test]
-fn staged_model_edits_on_a_stage_call_use_the_same_engine() {
+fn a_generic_stage_and_an_editor_edit_stay_separate() {
     // The generic stage call still takes a model edit; the editor's change and a generic
     // one do not mix in one change.
     let b = bench(Opts::default());

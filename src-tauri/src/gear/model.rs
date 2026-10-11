@@ -738,6 +738,10 @@ mod tests {
                 r.to_string(),
                 format!("Refused ({name}): Do the thing first.")
             );
+            // Through `anyhow`, the frame prints the same and the code comes back out.
+            let e = anyhow::Error::new(r);
+            assert!(format!("{e:#}").starts_with(&format!("Refused ({name}): ")));
+            assert_eq!(e.downcast_ref::<Refusal>().unwrap().code, code);
         }
     }
 
@@ -746,19 +750,6 @@ mod tests {
         let d: Device = serde_json::from_value(json!({"id": "fc-1", "kind": "fc"})).unwrap();
         assert_eq!(d.display_name(), "Unnamed FC");
         assert_eq!(d.identity, Identity::default());
-    }
-
-    #[test]
-    fn a_refusal_reads_as_refused() {
-        let e = anyhow::Error::new(Refusal::new(
-            RefusalCode::UnknownVersion,
-            "Betaflight 4.3.2 is not proven; QuadCam reads it but does not write it.",
-        ));
-        assert!(format!("{e:#}").starts_with("Refused (unknown_version): "));
-        assert_eq!(
-            e.downcast_ref::<Refusal>().unwrap().code,
-            RefusalCode::UnknownVersion
-        );
     }
 
     #[test]

@@ -28,16 +28,20 @@ const UID: [u8; 12] = [
 struct Bench {
     core: Arc<Core>,
     id: String,
-    _dir: tempfile::TempDir,
+    /// The bench's `HOME`: the support folder sits where the CLI looks for it.
+    home: tempfile::TempDir,
 }
+
+const SUPPORT: &str = "Library/Application Support/app.quadcam";
 
 fn bench(fc: &FakeFc) -> Bench {
     let dir = tempfile::tempdir().unwrap();
     let ports: Arc<dyn Ports> = Arc::new(fc.ports(PORT, Some(dir.path().join("locks"))));
     let mut env = Env::fake(vec![], ports);
     env.cues = Arc::new(CueService::inline(Arc::new(RecordedCues::default())));
-    std::fs::create_dir_all(dir.path().join("support")).unwrap();
-    std::fs::write(dir.path().join("support/settings.json"), "{}").unwrap();
+    let support = dir.path().join(SUPPORT);
+    std::fs::create_dir_all(&support).unwrap();
+    std::fs::write(support.join("settings.json"), "{}").unwrap();
     let core = Arc::new(
         Core::new(
             dir.path().join("cache"),
@@ -45,7 +49,7 @@ fn bench(fc: &FakeFc) -> Bench {
             Arc::new(NoHooks),
             Arc::new(Recorder::default()),
         )
-        .with_settings(dir.path().join("support/settings.json"))
+        .with_settings(support.join("settings.json"))
         .with_gear_env(env)
         .with_fc_timing(Timing::fast()),
     );
@@ -57,7 +61,7 @@ fn bench(fc: &FakeFc) -> Bench {
     Bench {
         core,
         id: device_id(DeviceKind::Fc, &format!("bf-uid:{}", fc.uid_hex())),
-        _dir: dir,
+        home: dir,
     }
 }
 
@@ -278,7 +282,15 @@ fn refusals_and_the_apply() {
         assert!(edit(&b, vec![bad.clone()], None).is_err(), "{bad:?}");
     }
     assert!(open_changes(&b).is_empty());
-    let c = edit(&b, vec![mv("vbat", Some(20), Some(9), None)], None).unwrap();
+    let c = edit(
+        &b,
+        vec![
+            mv("vbat", Some(20), Some(9), None),
+            mv("rssi", Some(2), Some(3), Some(vec![1, 2])),
+        ],
+        None,
+    )
+    .unwrap();
     let p = b
         .core
         .gear_apply_plan(&ApplyPlanParams {
@@ -303,6 +315,14 @@ fn refusals_and_the_apply() {
         .unwrap();
     let pos = Pos::decode(held);
     assert_eq!((pos.x, pos.y, pos.profiles), (20, 9, 7));
+    // Profiles 1 and 2 are the mask 0b011.
+    let held: u16 = fc
+        .saved_value(Section::Master, "osd_rssi_pos")
+        .unwrap()
+        .parse()
+        .unwrap();
+    let pos = Pos::decode(held);
+    assert_eq!((pos.x, pos.y, pos.profiles), (2, 3, 0b011));
     // After the apply the change is done: the next edit starts a new one.
     let next = edit(&b, vec![mv("vbat", Some(21), None, None)], None).unwrap();
     assert_eq!(next.status, ChangeStatus::Ready);
@@ -350,10 +370,27 @@ fn the_row_and_the_mcp_action() {
 
 #[test]
 fn the_cli_stages_a_move() {
-    // Edits arrive as the typed enum: the kind tag is what the CLI, MCP and app all send.
-    let e: Edit = serde_json::from_value(json!(
-        {"kind": "osd_element", "element": "vbat", "x": 1, "y": 2, "profiles": [1]}
-    ))
-    .unwrap();
-    assert!(matches!(e, Edit::OsdElement { x: 1, y: 2, .. }));
+    let fc = FakeFc::new(G473).with_uid(UID);
+    let b = bench(&fc);
+    let out = std::process::Command::new(env!("CARGO_BIN_EXE_quadcam-cli"))
+        .env("HOME", b.home.path())
+        .env("QUADCAM_PHOTOS", "dry-run")
+        .args(["--json", "gear", "osd-edit", &b.id])
+        .args(["--move", "vbat=1,2", "--profiles", "vbat=1"])
+        .output()
+        .unwrap();
+    let v: serde_json::Value = serde_json::from_slice(&out.stdout)
+        .unwrap_or_else(|e| panic!("{e}: {}", String::from_utf8_lossy(&out.stderr)));
+    assert_eq!(v["ok"], true, "{v}");
+    let open = open_changes(&b);
+    assert_eq!(open.len(), 1);
+    assert!(
+        matches!(
+            open[0].edits.as_slice(),
+            [Edit::OsdElement { element, x: 1, y: 2, profiles }]
+                if element == "vbat" && profiles == &[1]
+        ),
+        "{:?}",
+        open[0].edits
+    );
 }

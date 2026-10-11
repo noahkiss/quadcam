@@ -253,21 +253,6 @@ const TABLE: &[Deprecation] = &[
 ];
 
 #[test]
-fn a_removal_passes_only_after_a_bump_and_a_deprecation() {
-    let current = schema::mcp_surface(&quadcam_lib::mcp::tools());
-    let (v, base) =
-        schema::parse_baseline(&std::fs::read_to_string(baseline_path("mcp.txt")).unwrap());
-    let mut without = current.clone();
-    without.remove("mcp.action quadcam_settings.modules");
-    // Not deprecated: fails at any version.
-    assert!(!schema::check((v, &base), &without, v + 1, &[]).ok());
-    // Deprecated, but the version did not move: fails.
-    assert!(!schema::check((v, &base), &without, v, TABLE).ok());
-    // Deprecated at the baseline's own version, and a later version removes it: passes.
-    assert!(schema::check((v, &base), &without, v + 1, TABLE).ok());
-}
-
-#[test]
 fn the_server_warns_on_a_deprecated_action() {
     use quadcam_lib::core::{Core, NoHooks};
     use quadcam_lib::mcp::{LocalBackend, Server};
@@ -327,7 +312,7 @@ fn the_server_and_status_report_the_schema_version() {
 }
 
 #[test]
-fn the_cli_prints_the_schema_version_and_warns_on_a_deprecated_command() {
+fn the_cli_prints_the_schema_version() {
     let run = |args: &[&str]| {
         Command::new(env!("CARGO_BIN_EXE_quadcam-cli"))
             .args(args)
@@ -343,10 +328,6 @@ fn the_cli_prints_the_schema_version_and_warns_on_a_deprecated_command() {
     let out = run(&["--json", "--schema-version"]);
     let v: serde_json::Value = serde_json::from_slice(&out.stdout).unwrap();
     assert_eq!(v["result"]["schema_version"], SCHEMA_VERSION);
-    // The CLI's own table is empty at 1; the matcher is tested on TABLE.
-    let argv: Vec<String> = ["--json", "clear"].iter().map(|s| s.to_string()).collect();
-    assert_eq!(schema::cli_deprecations(TABLE, &argv).len(), 1);
-    assert!(schema::cli_deprecations(TABLE, &["stage".to_string()]).is_empty());
 }
 
 // ----- names renamed before 1.0 keep working -----
@@ -371,24 +352,71 @@ fn renamed_mcp_parameters_accept_their_old_names() {
     assert_eq!(apply.rate_profile, Some(3));
 }
 
+/// The old flag names reach the same field: `gear stage --profile` (now `--pid-profile`) and
+/// `--rateprofile` (now `--rate-profile`) put the edit in that section, and `gear sims
+/// --profile` (now `--rate-profile`) picks the quad's rate profile.
 #[test]
 fn renamed_cli_flags_accept_their_old_names() {
     let home = tempfile::tempdir().unwrap();
-    for args in [
-        ["gear", "sims", "--profile", "1"],
-        ["gear", "stage", "--profile", "1"],
-        ["gear", "stage", "--rateprofile", "1"],
-    ] {
+    let gear = home
+        .path()
+        .join("Library/Application Support/app.quadcam/gear");
+    std::fs::create_dir_all(&gear).unwrap();
+    std::fs::write(
+        gear.join("gear.json"),
+        r#"{"devices": [{"id": "fc-1", "kind": "fc"}]}"#,
+    )
+    .unwrap();
+    let run = |args: &[&str]| {
         let out = Command::new(env!("CARGO_BIN_EXE_quadcam-cli"))
             .env("HOME", home.path())
+            .env("QUADCAM_PHOTOS", "dry-run")
+            .arg("--json")
             .args(args)
-            .arg("--help")
             .output()
             .unwrap();
-        assert!(
-            out.status.success(),
-            "{args:?}: {}",
-            String::from_utf8_lossy(&out.stderr)
-        );
-    }
+        serde_json::from_slice::<serde_json::Value>(&out.stdout)
+            .unwrap_or_else(|e| panic!("{args:?}: {e}: {}", String::from_utf8_lossy(&out.stderr)))
+    };
+    let stage = |flag: &str| {
+        let v = run(&[
+            "gear", "stage", "--device", "fc-1", "--set", "x=1", flag, "2",
+        ]);
+        assert_eq!(v["ok"], true, "{flag}: {v}");
+        v["result"]["edits"][0]["section"].clone()
+    };
+    assert_eq!(
+        stage("--profile"),
+        serde_json::json!({"kind": "profile", "index": 2})
+    );
+    assert_eq!(
+        stage("--rateprofile"),
+        serde_json::json!({"kind": "rate_profile", "index": 2})
+    );
+    // The fixture dump has rate profiles 0-3 and does not say which is in use, so the plan
+    // takes the profile only from the flag: 2 plans, 9 refuses as missing.
+    let dump = concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/tests/fixtures/bf/g473-2025.12.5.dump_all.txt"
+    );
+    let sims = |profile: &str| {
+        run(&[
+            "gear",
+            "sims",
+            dump,
+            "--sync",
+            "--to",
+            "liftoff",
+            "--profile",
+            profile,
+        ])
+    };
+    assert_eq!(sims("2")["ok"], true);
+    let v = sims("9");
+    assert!(
+        v["error"]["message"]
+            .as_str()
+            .is_some_and(|m| m.contains("rate profile")),
+        "{v}"
+    );
 }

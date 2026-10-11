@@ -14,18 +14,6 @@ use quadcam_lib::sources::{self, Source};
 use std::path::Path;
 use std::sync::Arc;
 
-/// Test-only belt and braces: the target must be a disk image this test attached.
-fn assert_is_test_image(img: &Image) {
-    let whole = disk::info(&img.disk).unwrap();
-    assert_eq!(
-        whole.bus_protocol.as_deref(),
-        Some("Disk Image"),
-        "refusing to format a non-image disk"
-    );
-    let vol = disk::info(&img.mount.to_string_lossy()).unwrap();
-    assert_eq!(disk::whole_disk_of(&vol.parent_whole_disk), img.disk);
-}
-
 fn core(work: &Path) -> Core {
     let core = Core::new(
         work.join("cache"),
@@ -51,7 +39,7 @@ fn err(r: anyhow::Result<impl std::fmt::Debug>) -> String {
 fn prep_needs_every_clip_in_the_library() {
     let mut card = Image::create("64m", "QCPREP", false);
     // Every call below that could reach an erase targets this image.
-    assert_is_test_image(&card);
+    card.assert_is_test_image();
     std::fs::create_dir_all(card.mount.join("DCIM")).unwrap();
     make_clip(&card.mount.join("DCIM/PICT0001.AVI"), 2, true);
     make_clip(&card.mount.join("DCIM/PICT0002.AVI"), 1, true);
@@ -131,7 +119,7 @@ fn prep_needs_every_clip_in_the_library() {
     assert_eq!(e, "Refused: recheck");
     assert!(card.is_attached() && card.mount.join("DCIM/PICT0001.AVI").is_file());
 
-    assert_is_test_image(&card);
+    card.assert_is_test_image();
     let done = core.card_prep(&req, false).unwrap();
     assert_eq!(done.label, "SPARE1");
     assert_eq!(done.filesystem, "FAT32");
@@ -185,7 +173,7 @@ fn prep_plans_a_blank_card_and_refuses_a_radio() {
 #[test]
 fn prep_erases_a_dji_goggles_card_as_exfat() {
     let mut card = Image::create("64m", "QCDJI", false);
-    assert_is_test_image(&card);
+    card.assert_is_test_image();
     let dir = card.mount.join("DCIM/DJI_001");
     std::fs::create_dir_all(&dir).unwrap();
     let clip = dir.join("DJI_20260105120000_0001_D.MP4");
@@ -217,7 +205,7 @@ fn prep_erases_a_dji_goggles_card_as_exfat() {
         label: Some("GOGGLES".into()),
         confirm: true,
     };
-    assert_is_test_image(&card);
+    card.assert_is_test_image();
     let done = core.card_prep(&req, false).unwrap();
     assert_eq!(done.filesystem, "exFAT");
     assert!(card.is_attached() && !card.is_mounted());
@@ -249,7 +237,7 @@ fn prep_through_cli_and_mcp() {
     use serde_json::{json, Value};
 
     let card = Image::create("64m", "QCSURF", false);
-    assert_is_test_image(&card);
+    card.assert_is_test_image();
     let home = tempfile::tempdir().unwrap();
     let cli = |args: &[&str]| -> (i32, Value) {
         let out = std::process::Command::new(env!("CARGO_BIN_EXE_quadcam-cli"))

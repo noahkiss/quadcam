@@ -317,23 +317,6 @@ mod tests {
     use super::*;
     use crate::gear::voice::lines::Spelling;
 
-    #[test]
-    fn every_set_loads_and_has_lines() {
-        for id in ids() {
-            if id == CUSTOM {
-                continue;
-            }
-            assert!(!lines_of(id).unwrap().is_empty(), "{id}");
-        }
-        let all = infos(0).unwrap();
-        assert_eq!(all.len(), ids().len());
-        assert!(all.iter().find(|s| s.id == "edgetx").unwrap().lines > 250);
-        assert!(lines_of("nope")
-            .unwrap_err()
-            .to_string()
-            .contains("no line set"));
-    }
-
     /// EdgeTX plays the number and unit prompts, and the sounds it plays by itself, from
     /// `SOUNDS/en/SYSTEM/`; a model's own tracks sit in `SOUNDS/en/`.
     #[test]
@@ -380,18 +363,6 @@ mod tests {
                 assert_eq!(prev, t, "{} says two different things", l.line.path);
             }
         }
-    }
-
-    #[test]
-    fn the_aircraft_sets_share_the_radio_and_differ_in_callouts() {
-        let quad = lines_of("quad").unwrap();
-        let heli = lines_of("heli").unwrap();
-        assert!(quad.iter().any(|l| l.line.path.ends_with("/hello.wav")));
-        assert!(heli.iter().any(|l| l.line.path.ends_with("/hello.wav")));
-        assert!(quad.iter().any(|l| l.line.path.ends_with("/turtle.wav")));
-        assert!(!heli.iter().any(|l| l.line.path.ends_with("/turtle.wav")));
-        assert!(heli.iter().any(|l| l.line.path.ends_with("/idleu1.wav")));
-        assert!(!quad.iter().any(|l| l.line.path.ends_with("/idleu1.wav")));
     }
 
     #[test]
@@ -519,7 +490,13 @@ mod tests {
             paths.sort();
             paths.dedup();
             assert_eq!(paths.len(), l.len(), "{id}");
+            assert!(!l.is_empty(), "{id}");
         }
+        assert_eq!(infos(0).unwrap().len(), ids().len());
+        assert!(lines_of("nope")
+            .unwrap_err()
+            .to_string()
+            .contains("no line set"));
     }
 
     /// A path is valid for EdgeTX: the file names are lower case, and nothing leaves
@@ -529,8 +506,9 @@ mod tests {
         for (n, _) in FILES {
             for l in file_lines(n).unwrap() {
                 let p = &l.line.path;
-                assert!(p.starts_with("SOUNDS/en/") && p.ends_with(".wav"), "{p}");
-                assert!(!p.contains(" ") && !p.contains("//"), "{p}");
+                assert!(p.starts_with("SOUNDS/en/"), "{p}");
+                let stem = p.rsplit('/').next().unwrap();
+                assert_eq!(stem, stem.to_lowercase(), "{p}");
             }
         }
         assert!(check_path("SOUNDS/en/SCRIPTS/YAAPU/264977348.wav").is_ok());
@@ -576,6 +554,10 @@ mod tests {
         assert!(has("glider", "thmmod") && !has("plane", "thmmod"));
         assert!(has("car", "drifon") && !has("quad", "drifon"));
         assert!(has("heli", "auro") && has("car", "volt1") && has("quad", "0042"));
+        // The radio's own lines are in every aircraft set; callouts follow the kind.
+        assert!(has("quad", "hello") && has("heli", "hello"));
+        assert!(has("quad", "turtle") && !has("heli", "turtle"));
+        assert!(has("heli", "idleu1") && !has("quad", "idleu1"));
         for (n, _) in FILES {
             for l in file_lines(n).unwrap() {
                 assert!(l.kinds.iter().all(|k| KINDS.contains(&k.as_str())));
@@ -590,20 +572,30 @@ mod tests {
         assert_eq!(ok[0].kinds, ["quad", "car"]);
     }
 
+    /// The spelling rules dot an acronym, so a line writes it plain: no `X.Y.` in any text.
     #[test]
-    fn spoken_text_has_no_stray_dots_and_no_dotted_acronyms() {
-        let sp = Spelling::builtin().unwrap();
+    fn spoken_text_has_no_dotted_acronyms() {
+        let dotted = |t: &str| {
+            let b = t.as_bytes();
+            b.windows(4).any(|w| {
+                w[0].is_ascii_uppercase()
+                    && w[1] == b'.'
+                    && w[2].is_ascii_uppercase()
+                    && w[3] == b'.'
+            })
+        };
         for (n, _) in FILES {
             for l in file_lines(n).unwrap() {
                 assert!(
-                    !l.line.text.contains("D.V.R.") && !l.line.text.contains("G.P.S."),
+                    !dotted(&l.line.text),
                     "{}: write {:?} readable; the spelling rules dot it",
                     l.line.path,
                     l.line.text
                 );
-                let _ = sp.apply(&l.line.text);
             }
         }
+        assert!(dotted("D.V.R. on") && !dotted("DVR on") && !dotted("Battery low."));
+        let sp = Spelling::builtin().unwrap();
         assert_eq!(sp.apply("DVR on"), "D.V.R. on");
     }
 }

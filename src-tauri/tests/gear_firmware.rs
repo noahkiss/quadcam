@@ -7,7 +7,7 @@ use quadcam_lib::core::{
     NoHooks,
 };
 use quadcam_lib::gear::detect::DfuInfo;
-use quadcam_lib::gear::dfu::{FakeDfu, FLASH_BASE};
+use quadcam_lib::gear::dfu::FakeDfu;
 use quadcam_lib::gear::firmware::check::{
     FirmwareState, BETAFLIGHT_RELEASES, EDGETX_RELEASES, ELRS_INDEX,
 };
@@ -280,13 +280,19 @@ fn the_check_reads_the_network_only_when_asked_and_remembers_the_answer() {
     b.core
         .settings_set(&serde_json::from_value(json!({"firmware_check": "daily"})).unwrap())
         .unwrap();
-    let before = b.fetch.requested.lock().unwrap().len();
+    let fetches = || b.fetch.requested.lock().unwrap().len();
+    let before = fetches();
     b.core.gear_firmware(&FirmwareParams::default()).unwrap();
-    assert_eq!(
-        b.fetch.requested.lock().unwrap().len(),
-        before,
-        "answer is fresh"
-    );
+    assert_eq!(fetches(), before, "answer is fresh");
+    // A day-old answer: `daily` checks once (three sources), then the answer is fresh again.
+    let saved = b._dir.path().join("cache/firmware/latest.json");
+    let mut v: serde_json::Value = serde_json::from_slice(&std::fs::read(&saved).unwrap()).unwrap();
+    v["checked_at"] = json!((chrono::Utc::now() - chrono::Duration::hours(25)).to_rfc3339());
+    std::fs::write(&saved, v.to_string()).unwrap();
+    b.core.gear_firmware(&FirmwareParams::default()).unwrap();
+    assert_eq!(fetches(), before + 3, "a day-old answer");
+    b.core.gear_firmware(&FirmwareParams::default()).unwrap();
+    assert_eq!(fetches(), before + 3, "checked once");
 }
 
 #[test]
@@ -610,7 +616,6 @@ fn a_flash_backs_up_writes_reads_back_and_leaves() {
     assert!(gui.changed.load(Ordering::SeqCst) >= 1);
     // Nothing logs the picture's path or the radio's name in the report's notes.
     assert!(!report.message.contains("splash.png"));
-    let _ = FLASH_BASE;
 }
 
 #[test]

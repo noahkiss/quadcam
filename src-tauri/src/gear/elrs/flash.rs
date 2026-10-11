@@ -428,16 +428,13 @@ mod tests {
     /// unpacked release and `QUADCAM_ELRS_REFERENCE` a folder of configured `.bin` files from
     /// it (FCC). QuadCam configures the same stock image with each one's UID, WiFi delay and
     /// discriminator, and must write the same blocks and trailer. The hardware JSON is compared
-    /// as JSON: QuadCam writes its keys in another order. CI skips it. No value of a UID is
-    /// printed.
+    /// as JSON: QuadCam writes its keys in another order. Run it with `--ignored`. No value
+    /// of a UID is printed.
     #[test]
+    #[ignore = "needs QUADCAM_ELRS_BUNDLE and QUADCAM_ELRS_REFERENCE"]
     fn images_match_what_the_expresslrs_tools_configured() {
-        let (Some(root), Some(refs)) = (
-            std::env::var_os("QUADCAM_ELRS_BUNDLE"),
-            std::env::var_os("QUADCAM_ELRS_REFERENCE"),
-        ) else {
-            return;
-        };
+        let root = std::env::var_os("QUADCAM_ELRS_BUNDLE").expect("QUADCAM_ELRS_BUNDLE");
+        let refs = std::env::var_os("QUADCAM_ELRS_REFERENCE").expect("QUADCAM_ELRS_REFERENCE");
         let b = Bundle {
             version: String::new(),
             commit: String::new(),

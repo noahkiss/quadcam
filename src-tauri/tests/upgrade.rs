@@ -308,7 +308,8 @@ fn a_cache_that_does_not_parse_is_rebuilt() {
     let l = lab("0.7.0");
     let logs = l.root().join("logs");
     synth::write_known(&logs).unwrap();
-    std::fs::write(l.gear().join("flights.json"), b"{not json").unwrap();
+    let cache = l.gear().join("flights.json");
+    std::fs::write(&cache, b"{not json").unwrap();
     let v = l
         .core
         .gear_flights(&FlightFilter {
@@ -317,6 +318,9 @@ fn a_cache_that_does_not_parse_is_rebuilt() {
         })
         .unwrap();
     assert_eq!(v.flights.len(), synth::KNOWN.flights);
+    // The broken cache was written again, not only ignored.
+    let after: Value = serde_json::from_slice(&std::fs::read(&cache).unwrap()).unwrap();
+    assert_eq!(after["version"], flights::CACHE_VERSION);
 }
 
 #[test]

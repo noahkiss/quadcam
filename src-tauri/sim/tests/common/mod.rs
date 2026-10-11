@@ -46,32 +46,7 @@ pub fn arm(sim: &mut Sim, sw: Switches) {
     assert!(sim.fc.armed, "did not arm: {:?}", sim.fc.block);
 }
 
-/// An altitude-hold pilot on the throttle stick: PI on height error through climb rate.
-pub struct HoverPilot {
-    pub target_z: f64,
-    pub throttle: f64,
-    i: f64,
-}
-
-impl HoverPilot {
-    pub fn new(target_z: f64, throttle: f64) -> HoverPilot {
-        HoverPilot {
-            target_z,
-            throttle,
-            i: throttle,
-        }
-    }
-
-    pub fn throttle(&mut self, sim: &Sim) -> f64 {
-        let z = sim.position()[2];
-        let vz = sim.velocity()[2];
-        let want_vz = (1.5 * (self.target_z - z)).clamp(-1.0, 1.0);
-        let e = want_vz - vz;
-        self.i = (self.i + 0.4 * e * sim.dt).clamp(0.0, 1.0);
-        self.throttle = (self.i + 0.15 * e).clamp(0.0, 1.0);
-        self.throttle
-    }
-}
+pub use quadcam_sim::validate::HoverPilot;
 
 /// Fly an Angle-mode hover at `z` for `seconds`; returns the mean motor duty and rpm over
 /// the last second.

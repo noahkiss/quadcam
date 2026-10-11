@@ -67,18 +67,20 @@ const refused = (code: string, reason: string) => `Refused (${code}): ${reason}`
 
 const CARD_EDITS = ["model", "radio", "checklist", "model_copy", "model_delete", "restore", "card_files"];
 
-function validateFc(edits: Edit[]) {
+/** As `Core::check_stageable`: a setting is checked against the FC only when a base backup
+ * says which settings it has. */
+function validateFc(edits: Edit[], hasBackup: boolean) {
   for (const l of lines(edits.filter((e) => e.kind !== "osd_element"))) {
     if (/^(save|exit|defaults|bl|dfu|batch)\b/.test(l)) throw refused("shape_unknown", `\`${l}\` is not sent; QuadCam saves and exits itself.`);
     const m = /^set\s+(\S+)\s*=\s*(.+)$/.exec(l);
-    if (m && !(m[1] in FC_SETTINGS)) throw refused("bad_setting", `\`${m[1]}\` is not a setting on this FC.`);
+    if (hasBackup && m && !(m[1] in FC_SETTINGS)) throw refused("bad_setting", `\`${m[1]}\` is not a setting on this FC.`);
   }
 }
 
 export function stage(g: MockGear, device: string, edits: Edit[], title: string | null, editor: "user" | "agent" = "user", reverts: string | null = null, draft = false): StagedChange {
   const d = g.devices.find((x) => x.id === device);
   if (!d) throw `Unknown device "${device}". See \`gear devices\`.`;
-  if (d.kind === "fc") validateFc(edits);
+  if (d.kind === "fc") validateFc(edits, !!d.last_backup);
   else if (d.kind === "radio") {
     const bad = edits.find((e) => !CARD_EDITS.includes(e.kind));
     if (bad) throw refused("shape_unknown", `${bad.kind} edits are not a radio card change.`);
@@ -211,6 +213,17 @@ function cardDiff(c: StagedChange): DiffItem[] {
   return [{ kind: "files", label: "Card files", put: [...put, ".metadata_never_index"], delete: [] }, ...out];
 }
 
+/** A 64-bit FNV-1a hash as 16 hex digits. */
+function fnv64(text: string): string {
+  let h = 0xcbf29ce484222325n;
+  for (const b of new TextEncoder().encode(text)) h = BigInt.asUintN(64, (h ^ BigInt(b)) * 0x100000001b3n);
+  return h.toString(16).padStart(16, "0");
+}
+
+/** The digest over what an apply would do, as the core's is over its plan: editing a change
+ * gives its plan a new digest, so an apply with the old one refuses as `before_mismatch`. */
+const digestOf = (c: StagedChange, diff: DiffItem[]) => fnv64(JSON.stringify([c.device, c.edits, diff]));
+
 export function plan(g: MockGear, id: string): ApplyPlan {
   const c = g.changeStore.changes.find((x) => x.id === id);
   if (!c) throw `No staged change "${id}". See \`gear changes\`.`;
@@ -219,12 +232,13 @@ export function plan(g: MockGear, id: string): ApplyPlan {
   const readFirst: Check = c.status === "read_first" ? fail("Read first", "read_first", "This change is marked Read first. Read the real value on the device, then mark it Ready.") : ok("Read first");
   if (dev?.kind === "elrs_tx" || dev?.kind === "elrs_rx") {
     const sets = c.edits.flatMap((e) => (e.kind === "elrs_options" ? e.options : []));
+    const diff: DiffItem[] = [{ kind: "lines", label: `${dev.name || "ELRS device"} options`, lines: sets.map((s) => ({ op: "add" as const, text: `${s.option}: ${s.value}` })) }];
     return {
       change: id,
       device: dev.identity ?? {},
       checks: [readFirst, ok("ELRS tools (preview) are on"), ok("The device was read"), ok("The options exist and the values are in range"), ok("The radio or FC it sits behind is plugged in on serial")],
-      diff: [{ kind: "lines", label: `${dev.name || "ELRS device"} options`, lines: sets.map((s) => ({ op: "add" as const, text: `${s.option}: ${s.value}` })) }],
-      digest: `digest-${id}`,
+      diff,
+      digest: digestOf(c, diff),
       warnings: ["QuadCam reads the device again first and refuses when an option moved since the read.", "Writing ExpressLRS options over a passthrough has not been checked on a real device yet."],
     };
   }
@@ -246,7 +260,8 @@ export function plan(g: MockGear, id: string): ApplyPlan {
           ]
         : []),
     ];
-    return { change: id, device: { board: "tx16s", firmware: "EdgeTX", version: "2.11.2" }, checks, diff: cardDiff(c), digest: `digest-${id}` };
+    const diff = cardDiff(c);
+    return { change: id, device: { board: "tx16s", firmware: "EdgeTX", version: "2.11.2" }, checks, diff, digest: digestOf(c, diff) };
   }
   const plugged = g.connected.some((x) => x.kind === "fc" && x.link.kind === "serial");
   const checks: Check[] = [
@@ -271,7 +286,7 @@ export function plan(g: MockGear, id: string): ApplyPlan {
       }),
     },
   ];
-  return { change: id, device: { board: "BETAFPVG473", firmware: "Betaflight", version: "2025.12.5-alpha" }, checks, diff, digest: `digest-${id}` };
+  return { change: id, device: { board: "BETAFPVG473", firmware: "Betaflight", version: "2025.12.5-alpha" }, checks, diff, digest: digestOf(c, diff) };
 }
 
 /** Records an apply the way `Core::finish_change` does. */

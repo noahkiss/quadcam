@@ -652,15 +652,11 @@ mod tests {
     }
 
     #[test]
-    fn guards_accept_the_same_small_removable_card() {
-        let (id, v, w) = card();
-        check_format_guards(&id, &v, &w, &["disk0".into(), "disk3".into()]).unwrap();
-    }
-
-    #[test]
     fn guards_refuse() {
         let boot = vec!["disk0".to_string(), "disk3".to_string()];
         let (id, v, w) = card();
+        // The baseline: the same small removable card passes.
+        check_format_guards(&id, &v, &w, &boot).unwrap();
 
         let mut w2 = w.clone();
         w2.internal = true;
@@ -804,19 +800,22 @@ mod tests {
 
     #[test]
     fn fat32_detection() {
+        let policy = analog_policy();
         let (_, v, _) = card();
         assert!(v.is_fat32());
-        assert!(card_warnings(&v, &analog_policy()).is_empty());
+        assert!(card_warnings(&v, &policy).is_empty());
         let mut x = v.clone();
         x.filesystem = Some("ExFAT".into());
-        x.total_size = 64_000_000_000;
-        assert_eq!(
-            card_warnings(&x, &analog_policy()),
-            [
-                "Card is ExFAT, not FAT32. Most analog DVRs need a FAT32 card of 32 GB or less. Import works; you can format it to FAT32 at the end.",
-                "Card is larger than 32 GB. Most analog DVRs take cards up to 32 GB; this DVR may not read it.",
-            ]
-        );
+        x.total_size = policy.warn_above_bytes + 1;
+        let w = card_warnings(&x, &policy);
+        assert_eq!(w.len(), 2, "{w:?}");
+        assert!(w[0].starts_with("Card is ExFAT, not FAT32."), "{}", w[0]);
+        assert!(w[0].ends_with(policy.filesystem_advice), "{}", w[0]);
+        assert_eq!(w[1], policy.size_warning);
+        // The size warning starts one byte above the policy's limit.
+        x.filesystem = v.filesystem.clone();
+        x.total_size = policy.warn_above_bytes;
+        assert!(card_warnings(&x, &policy).is_empty());
     }
 
     #[test]
@@ -828,10 +827,13 @@ mod tests {
         x.total_size = 512_000_000_000;
         assert!(card_warnings(&x, &dji).is_empty(), "exFAT of any size");
         let w = card_warnings(&v, &dji);
-        assert_eq!(
-            w,
-            ["Card is MS-DOS FAT32, not exFAT. Import works. DJI goggles want exFAT: card prep can erase the card as exFAT once every clip is in the library."]
+        assert_eq!(w.len(), 1, "{w:?}");
+        assert!(
+            w[0].starts_with("Card is MS-DOS FAT32, not exFAT."),
+            "{}",
+            w[0]
         );
+        assert!(w[0].ends_with(dji.filesystem_advice), "{}", w[0]);
         assert!(!w[0].contains("analog"));
     }
 }

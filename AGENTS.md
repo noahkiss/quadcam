@@ -407,8 +407,7 @@ claude mcp add quadcam -- "$(brew --prefix)/bin/quadcam-cli" mcp
   add an action or a field to a tool before adding a tool. Each tool's arguments are a type in
   `mcp/params.rs`; `mcp/tools.rs` derives the input schema from it (schemars) and keeps the
   descriptions as written. The handler deserializes the arguments into that type once. A
-  schema change shows in the `snapshots` tests: `mcp_tools` and the frozen
-  `tests/fixtures/mcp_tools_before.json`. Gear's tools are `quadcam_gear` (reads),
+  schema change shows in the `snapshots` test `mcp_tools`. Gear's tools are `quadcam_gear` (reads),
   `quadcam_gear_edit` (QuadCam's own data) and `quadcam_gear_apply` (devices; digest and
   `confirm=true`); a Gear feature adds an action to one of them, in `mcp/gear.rs`.
   `quadcam_library_edit` is one `library_update`

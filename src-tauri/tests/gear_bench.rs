@@ -20,7 +20,6 @@ use quadcam_lib::gear::model::{
     device_id, ApplyPlan, ChangeStatus, DeviceKind, Edit, LineOp, Refusal, RefusalCode, Section,
     StagedChange, Trigger,
 };
-use quadcam_lib::gear::osd::Pos;
 use quadcam_lib::gear::serial::Ports;
 use quadcam_lib::gear::store::Store;
 use quadcam_lib::gear::Env;
@@ -306,32 +305,6 @@ fn a_read_first_change_refuses_until_it_is_ready() {
     assert_eq!(fc.saves(), 0);
     mark(&b, &c, ChangeStatus::Ready);
     assert!(plan(&b, &c.id).ready());
-}
-
-#[test]
-fn an_osd_element_move_applies_and_verifies() {
-    let fc = FakeFc::new(G473).with_uid(UID);
-    let b = bench(&fc);
-    let c = stage(
-        &b,
-        vec![Edit::OsdElement {
-            element: "vbat".into(),
-            x: 20,
-            y: 9,
-            profiles: vec![1, 2],
-        }],
-    );
-    let p = plan(&b, &c.id);
-    assert!(p.ready(), "{:?}", p.checks);
-    let r = apply(&b, &c.id);
-    assert_eq!(r.status, ChangeStatus::Verified, "{}", r.message);
-    let held: u16 = fc
-        .saved_value(Section::Master, "osd_vbat_pos")
-        .unwrap()
-        .parse()
-        .unwrap();
-    let pos = Pos::decode(held);
-    assert_eq!((pos.x, pos.y, pos.profiles), (20, 9, 0b011));
 }
 
 #[test]

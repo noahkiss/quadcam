@@ -368,71 +368,6 @@ pub enum Badge {
     Unmatched,
 }
 
-#[derive(Debug, Clone, Serialize, PartialEq, specta::Type)]
-pub struct ClipMatch {
-    pub badge: Badge,
-    /// Start of the first claimed segment.
-    pub start: Option<NaiveDateTime>,
-    pub segments: usize,
-    /// First start to last end of the claimed segments, in seconds.
-    pub span_s: f64,
-    /// Index of the first claimed segment in the list given to `match_clips`.
-    #[serde(skip)]
-    pub first: usize,
-}
-
-impl ClipMatch {
-    fn unmatched() -> Self {
-        Self {
-            badge: Badge::Unmatched,
-            start: None,
-            segments: 0,
-            span_s: 0.0,
-            first: 0,
-        }
-    }
-}
-
-/// Walks clips (PICT order) and segments (time order) together. A clip claims consecutive
-/// segments of one session while their span fits inside its duration plus the tolerance.
-/// **matched**: the unarmed time left over is within twice the tolerance.
-/// **likely**: the order fits but the clip holds much more unarmed time than the span.
-/// **unmatched**: the next segment does not fit; the segment stays for the next clip.
-pub fn match_clips(durations: &[f64], segs: &[Segment], tun: &Tunables) -> Vec<ClipMatch> {
-    let mut out = Vec::with_capacity(durations.len());
-    let mut j = 0;
-    for &dur in durations {
-        let limit = dur + tun.tolerance_s;
-        if j >= segs.len() || dur <= 0.0 || segs[j].secs() > limit {
-            out.push(ClipMatch::unmatched());
-            continue;
-        }
-        let first = segs[j];
-        let mut k = j;
-        while k + 1 < segs.len()
-            && segs[k + 1].session == first.session
-            && (segs[k + 1].end - first.start).num_milliseconds() as f64 / 1000.0 <= limit
-        {
-            k += 1;
-        }
-        let span = (segs[k].end - first.start).num_milliseconds() as f64 / 1000.0;
-        let badge = if dur - span <= 2.0 * tun.tolerance_s {
-            Badge::Matched
-        } else {
-            Badge::Likely
-        };
-        out.push(ClipMatch {
-            badge,
-            start: Some(first.start),
-            segments: k - j + 1,
-            span_s: span,
-            first: j,
-        });
-        j = k + 1;
-    }
-    out
-}
-
 /// A log dated before 2020 (2000-01-01 after an RTC reset) or far from the import date.
 pub fn day_is_plausible(day: NaiveDate, import_day: NaiveDate, tun: &Tunables) -> bool {
     day.year() >= 2020 && (import_day - day).num_days().abs() <= tun.max_log_age_days
@@ -467,27 +402,6 @@ mod tests {
         assert_eq!(s.len(), 3);
         assert_eq!((s[0].session, s[1].session, s[2].session), (0, 0, 1));
         assert_eq!(s[0].secs(), 180.0);
-    }
-
-    #[test]
-    fn matching_badges() {
-        let tun = Tunables::default();
-        let mut r = rows("10:00:00", "10:03:00");
-        r.extend(rows("10:05:00", "10:08:00"));
-        r.extend(rows("11:00:00", "11:02:00"));
-        let s = segments(&r, &tun);
-        // Clip 1: two flights in one file, 8 min 20 s long (span 8:00) -> matched, 2 segments.
-        // Clip 2: a 10 s bench clip -> unmatched, next segment stays.
-        // Clip 3: 6 min for a 2 min flight -> likely.
-        // Clip 4: nothing left -> unmatched.
-        let m = match_clips(&[500.0, 10.0, 360.0, 60.0], &s, &tun);
-        assert_eq!(m[0].badge, Badge::Matched);
-        assert_eq!(m[0].segments, 2);
-        assert_eq!(m[0].start, Some(t("10:00:00")));
-        assert_eq!(m[1].badge, Badge::Unmatched);
-        assert_eq!(m[2].badge, Badge::Likely);
-        assert_eq!(m[2].start, Some(t("11:00:00")));
-        assert_eq!(m[3].badge, Badge::Unmatched);
     }
 
     #[test]

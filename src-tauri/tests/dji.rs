@@ -13,27 +13,10 @@ use quadcam_lib::metadata::Profile;
 use quadcam_lib::photos::Recorder;
 use quadcam_lib::pipeline::{ClipStatus, DateSource, Outcome};
 use quadcam_lib::sources::{EncodePlan, SourceKind};
-use std::path::{Path, PathBuf};
+use std::path::Path;
 use std::sync::Arc;
 
-const NAME: &str = "DJI_20260105120000_0001_D.MP4";
-
-/// A card like an O4 air unit shows over USB: `DCIM/DJI_001/` with one clip and its `.SRT`,
-/// and DJI's `MISC/` housekeeping.
-fn dji_card(root: &Path) -> PathBuf {
-    let dir = root.join("DCIM/DJI_001");
-    std::fs::create_dir_all(&dir).unwrap();
-    std::fs::create_dir_all(root.join("MISC/THM")).unwrap();
-    std::fs::write(root.join("MISC/FC8770.db"), b"housekeeping").unwrap();
-    let clip = dir.join(NAME);
-    make_dji_clip(&clip, 3, "2026-01-05T17:00:00Z");
-    std::fs::write(
-        clip.with_extension("SRT"),
-        "1\n00:00:00,000 --> 00:00:01,000\nsubtitle\n",
-    )
-    .unwrap();
-    clip
-}
+const NAME: &str = common::DJI_NAME;
 
 fn core(work: &Path) -> Core {
     let core = Core::new(
@@ -76,7 +59,7 @@ fn noon_jan_5() -> chrono::DateTime<Utc> {
 #[test]
 fn dji_clip_imports_by_copy_with_its_clock() {
     let card = tempfile::tempdir().unwrap();
-    let src = dji_card(card.path());
+    let src = dji_card(card.path(), 3);
     let work = tempfile::tempdir().unwrap();
     let core = core(work.path());
 
@@ -183,7 +166,7 @@ fn dji_clip_imports_by_copy_with_its_clock() {
 #[test]
 fn dji_clip_remuxes_into_mov() {
     let card = tempfile::tempdir().unwrap();
-    dji_card(card.path());
+    dji_card(card.path(), 3);
     let work = tempfile::tempdir().unwrap();
     let core = core(work.path());
     core.load(Some(&card.path().join("DCIM/DJI_001"))).unwrap();
@@ -206,12 +189,12 @@ fn dji_clip_remuxes_into_mov() {
     );
 }
 
-/// The kept `.srt` follows its original through a rename, a redate to a new day, and the
-/// Trash.
+/// The kept `.srt` follows its original through a rename, a redate to a new day, the Trash
+/// and back out of it.
 #[test]
 fn kept_srt_moves_with_its_clip() {
     let card = tempfile::tempdir().unwrap();
-    dji_card(card.path());
+    dji_card(card.path(), 3);
     let work = tempfile::tempdir().unwrap();
     let trash = work.path().join("trash");
     std::fs::create_dir_all(&trash).unwrap();
@@ -282,4 +265,13 @@ fn kept_srt_moves_with_its_clip() {
     assert!(rep.failed.is_empty(), "{:?}", rep.failed);
     assert!(rep.trashed.contains(&srt), "{:?}", rep.trashed);
     assert!(!srt.exists());
+    assert_eq!(
+        core.library_untrash(&rep.moved).unwrap(),
+        std::slice::from_ref(&id)
+    );
+    assert!(srt.is_file(), "the .srt is back next to its original");
+    let back = core.library(&Default::default()).unwrap().clips[0]
+        .clip
+        .clone();
+    assert_eq!(srt_of(&back), srt);
 }

@@ -3,8 +3,11 @@ import { gearDraft, gearValues } from "./draft";
 import { gearDefaults } from "../../ipc/mock/gear";
 
 describe("the blackbox settings in the Gear draft", () => {
-  it("are off by default, as in the core", () => {
-    const d = gearDraft(gearDefaults());
+  // The core's defaults are guarded in Rust (gear::tests::automations_are_off_but_backup);
+  // here the input is spelled out, so only the mapping is under test.
+  it("map off settings to off in the draft and back", () => {
+    const off = { ...gearDefaults(), erase_blackbox: false, blackbox_msc: false, on_connect: { fc: ["backup"] } } as ReturnType<typeof gearDefaults>;
+    const d = gearDraft(off);
     expect(d.eraseBlackbox).toBe(false);
     expect(d.blackboxMsc).toBe(false);
     expect(d.onConnect.fc).toEqual(["backup"]);
@@ -23,8 +26,8 @@ describe("the blackbox settings in the Gear draft", () => {
 });
 
 describe("the firmware check in the Gear draft", () => {
-  it("is manual by default and round-trips as daily", () => {
-    const d = gearDraft(gearDefaults());
+  it("round-trips manual and daily", () => {
+    const d = gearDraft({ ...gearDefaults(), firmware_check: "manual" });
     expect(d.firmwareDaily).toBe(false);
     expect(gearValues(d).firmwareCheck).toBe("manual");
     const daily = gearDraft({ ...gearDefaults(), firmware_check: "daily" });

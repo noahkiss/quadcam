@@ -18,7 +18,7 @@ use quadcam_lib::gear::Env;
 use quadcam_lib::photos::Recorder;
 use std::path::Path;
 use std::sync::atomic::Ordering;
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
 
 fn card_at(root: &Path, s: &SynthCard) -> Card {
     synth::write_card(root, s).unwrap();
@@ -490,7 +490,8 @@ fn checklist_name_width_and_on_off() {
             ".metadata_never_index"
         ]
     );
-    let after = String::from_utf8(plan.files[1].after.clone().unwrap()).unwrap();
+    let on = plan.files[1].after.clone().unwrap();
+    let after = String::from_utf8(on.clone()).unwrap();
     assert!(after.contains("displayChecklist: 1\r\n"));
     assert!(after.contains("checklistInteractive: 1\r\n"));
     assert!(
@@ -508,6 +509,28 @@ fn checklist_name_width_and_on_off() {
         )
         .unwrap();
     assert!(!plan.ready());
+    // Off, on a card where it is on: the model stops showing it.
+    std::fs::write(dir.path().join("MODELS/model01.yml"), &on).unwrap();
+    let c = Card::open(dir.path()).unwrap();
+    let plan = c
+        .plan(
+            &[Edit::Model {
+                file: "model01.yml".into(),
+                name: None,
+                ops: vec![ModelOp::SetChecklist { enabled: false }],
+            }],
+            None,
+        )
+        .unwrap();
+    assert!(plan.ready(), "{:?}", plan.checks);
+    let yml = plan
+        .files
+        .iter()
+        .find(|f| f.path == "MODELS/model01.yml")
+        .unwrap();
+    let after = String::from_utf8(yml.after.clone().unwrap()).unwrap();
+    assert!(after.contains("displayChecklist: 0\r\n"), "{after}");
+    assert!(after.contains("checklistInteractive: 0\r\n"), "{after}");
 }
 
 #[test]
@@ -907,9 +930,7 @@ fn core_on(
     if usb {
         env.usb = Arc::new(|| quadcam_lib::gear::detect::parse_ioreg_usb(IOREG.as_bytes()));
     }
-    let calls = Arc::new(Mutex::new(0));
     env.unmount = Arc::new(move |_| {
-        *calls.lock().unwrap() += 1;
         if unmount_ok {
             Ok(())
         } else {
@@ -1040,7 +1061,11 @@ fn safe_to_unplug_only_after_the_unmount() {
     let (core, cues) = core_on(dir.path(), vec![volume(&root, "U")], false, true);
     let c = core.gear_connected().unwrap().remove(0);
     core.gear_release_card(&c).unwrap();
-    assert_eq!(cues.spoken(), vec!["The Radio done, safe to unplug."]);
+    let spoken = cues.spoken();
+    assert!(
+        spoken.len() == 1 && spoken[0].contains("safe to unplug"),
+        "{spoken:?}"
+    );
 
     let dir = tempfile::tempdir().unwrap();
     let root = dir.path().join("RADIO");

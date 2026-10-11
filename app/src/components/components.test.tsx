@@ -3,7 +3,6 @@ import userEvent from "@testing-library/user-event";
 import { useState } from "react";
 import { describe, expect, it, vi } from "vitest";
 import { axeViolations } from "../test/axe";
-import { limitContextMenu } from "../native";
 import { Button } from "./Button";
 import { Dialog } from "./Dialog";
 import { Checkbox, SearchField, SelectField, TextField } from "./Field";
@@ -150,13 +149,3 @@ describe("toast", () => {
   });
 });
 
-describe("limitContextMenu", () => {
-  it("allows the web menu only over text fields", () => {
-    const off = limitContextMenu();
-    document.body.innerHTML = "<h2>Day</h2><input type=text>";
-    const fire = (el: Element) => !el.dispatchEvent(new MouseEvent("contextmenu", { bubbles: true, cancelable: true }));
-    expect(fire(document.querySelector("h2")!)).toBe(true);
-    expect(fire(document.querySelector("input")!)).toBe(false);
-    off();
-  });
-});

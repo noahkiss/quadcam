@@ -683,8 +683,11 @@ mod tests {
         }
     }
 
+    /// A fidelity test of the fake every serial test uses: `FakePorts` replays its script,
+    /// fails a write the script does not expect, and reads an unknown port as gone.
+    /// `read_until` and `is_gone` are the product code it runs.
     #[test]
-    fn a_script_replays_and_checks_writes() {
+    fn the_fake_port_replays_its_script_and_refuses_an_unexpected_write() {
         let ports = FakePorts::new(vec![port("/dev/cu.fake1")]).with_script(
             "/dev/cu.fake1",
             vec![

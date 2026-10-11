@@ -1399,7 +1399,8 @@ binaries only (open question 10).
       learned the places by comparing a stock image with the same image configured by
       ExpressLRS's own tools, writes them itself, reads them back and checks that no other byte
       changed. With `QUADCAM_ELRS_BUNDLE` (an unpacked release) and `QUADCAM_ELRS_REFERENCE` (a
-      folder of images the ExpressLRS configurator wrote from it), a test checks that QuadCam
+      folder of images the ExpressLRS configurator wrote from it), an ignored test (run it with
+      `--ignored`) checks that QuadCam
       writes the same blocks, trailer and every other byte; the hardware JSON is compared as
       JSON, because QuadCam orders its keys alphabetically. The UID is MD5 of `-DMY_BINDING_PHRASE="<phrase>"`, first 6 bytes (`uid.rs`,
       written here: no dependency). The phrase is the write-only setting `elrsBindingPhrase`

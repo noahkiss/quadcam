@@ -109,19 +109,6 @@ mod tests {
     use super::*;
 
     #[test]
-    fn memory_keys_store_read_and_delete() {
-        let k = MemKeys::default();
-        assert_eq!(k.get(ELEVENLABS).unwrap(), None);
-        k.set(ELEVENLABS, "sk_abcdef123456").unwrap();
-        assert_eq!(
-            k.get(ELEVENLABS).unwrap().as_deref(),
-            Some("sk_abcdef123456")
-        );
-        assert!(k.delete(ELEVENLABS).unwrap());
-        assert!(!k.delete(ELEVENLABS).unwrap());
-    }
-
-    #[test]
     fn the_real_keychain_is_closed_under_cargo() {
         let e = Keychain.get(ELEVENLABS).unwrap_err().to_string();
         assert!(e.contains("off in tests"), "{e}");

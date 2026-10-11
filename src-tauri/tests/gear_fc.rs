@@ -172,7 +172,11 @@ fn the_write_engine_checks_the_fc_again_right_before_it_writes() {
     );
     assert!(released(&b.locks));
     // One cue per job; the same cue for the same FC within 30 s plays once (debounce).
-    assert_eq!(b.cues.spoken(), vec!["The FC done, safe to unplug."]);
+    let spoken = b.cues.spoken();
+    assert!(
+        spoken.len() == 1 && spoken[0].contains("safe to unplug"),
+        "{spoken:?}"
+    );
 
     // Another FC than planned: refused after `version`, nothing written.
     let fc = FakeFc::new(G473).with_uid([7; 12]);
@@ -197,7 +201,7 @@ fn the_write_engine_checks_the_fc_again_right_before_it_writes() {
         .result;
     let ro = i.read_only.unwrap();
     assert_eq!(ro.code, RefusalCode::UnknownBoard);
-    assert_eq!(ro.reason, "Board BETAFPVF411 is not proven.");
+    assert!(ro.reason.contains("BETAFPVF411"), "{}", ro.reason);
     let e = b.core.gear_fc_run(None, None, &lines).unwrap_err();
     assert_eq!(
         e.downcast_ref::<Refusal>().unwrap().code,

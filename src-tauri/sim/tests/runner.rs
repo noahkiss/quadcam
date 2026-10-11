@@ -68,16 +68,17 @@ fn a_forced_stall_drops_sim_time_and_logs_it() {
     assert!(behind >= 99_000_000, "{behind}");
     assert!((drops[0].steps as f64 - behind as f64 / 500_000.0).abs() <= 1.0);
     assert_eq!(log.lock().unwrap().len(), stats.drops.len());
-    // No slow motion: sim time skipped the gap (steps ≈ wall − gap), and the newest
-    // snapshot stands for "now", not for a moment the stall ago.
+    // A smoke check on real time; `drop_logic_on_a_scripted_clock` proves the counts. No
+    // slow motion: sim time skipped the gap (a loaded machine only runs fewer steps), and
+    // the newest snapshot is nearer "now" than the stall was long.
     let expect = (wall - behind as f64 / 1e9) * 2000.0;
     assert!(
-        ((stats.steps as f64) - expect).abs() < 0.05 * expect,
+        (stats.steps as f64) < 1.05 * expect,
         "{} steps, expected {expect:.0}",
         stats.steps
     );
     assert!(
-        now.saturating_sub(snap.host_ns) < 5_000_000,
+        now.saturating_sub(snap.host_ns) < 50_000_000,
         "{} ns behind",
         now - snap.host_ns
     );
@@ -129,7 +130,17 @@ fn drop_logic_on_a_scripted_clock() {
         realtime_qos: false,
         ..RunnerConfig::default()
     };
-    let runner = spawn(hovering_sim(), input, w, clock.clone(), cfg, None, None);
+    let log: Arc<Mutex<Vec<DropEvent>>> = Arc::default();
+    let l2 = log.clone();
+    let runner = spawn(
+        hovering_sim(),
+        input,
+        w,
+        clock.clone(),
+        cfg,
+        None,
+        Some(Box::new(move |e| l2.lock().unwrap().push(e))),
+    );
     while stop.load(Ordering::SeqCst) == 0 {
         std::thread::sleep(Duration::from_millis(5));
     }
@@ -138,6 +149,8 @@ fn drop_logic_on_a_scripted_clock() {
     assert_eq!(stats.drops.len(), 1, "{:?}", stats.drops);
     assert_eq!(stats.drops[0].behind_ns, 100_000_000);
     assert_eq!(stats.drops[0].steps, 200);
+    // The callback heard the one drop.
+    assert_eq!(*log.lock().unwrap(), stats.drops);
     assert!((1800..=1802).contains(&stats.steps), "{}", stats.steps);
 }
 

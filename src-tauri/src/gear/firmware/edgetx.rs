@@ -531,12 +531,6 @@ mod tests {
     }
 
     #[test]
-    fn boards_without_a_spec_have_none() {
-        assert!(spec("Pocket").is_some());
-        assert!(spec("tx16s").is_none());
-    }
-
-    #[test]
     fn image_checks_size_and_the_two_vector_tables() {
         let pocket = spec("pocket").unwrap();
         assert!(check_image(&full_image(0), pocket, "2.12.4").is_ok());
@@ -700,5 +694,7 @@ mod tests {
         let e = board_binary(&rel, "tx16s").unwrap_err();
         let r = e.downcast_ref::<Refusal>().unwrap();
         assert_eq!(r.code, RefusalCode::UnknownBoard);
+        // A board name matches in any case.
+        assert!(spec("Pocket").is_some());
     }
 }

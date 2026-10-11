@@ -15,24 +15,6 @@ use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::sync::Arc;
 
-const DJI_NAME: &str = "DJI_20260105120000_0001_D.MP4";
-
-/// An O4 air unit's storage: `DCIM/DJI_001/` with one clip and its `.SRT`, and `MISC/`.
-fn dji_card(root: &Path) -> PathBuf {
-    let dir = root.join("DCIM/DJI_001");
-    std::fs::create_dir_all(&dir).unwrap();
-    std::fs::create_dir_all(root.join("MISC/THM")).unwrap();
-    std::fs::write(root.join("MISC/FC8770.db"), b"housekeeping").unwrap();
-    let clip = dir.join(DJI_NAME);
-    make_dji_clip(&clip, 2, "2026-01-05T17:00:00Z");
-    std::fs::write(
-        clip.with_extension("SRT"),
-        "1\n00:00:00,000 --> 00:00:01,000\nx\n",
-    )
-    .unwrap();
-    clip
-}
-
 /// An analog DVR card: two clips and a file that is not a clip.
 fn analog_card(root: &Path) -> (PathBuf, PathBuf, PathBuf) {
     let dir = root.join("DCIM");
@@ -72,7 +54,7 @@ fn mp4() -> ImportOptions {
 #[test]
 fn dji_verified_clip_goes_and_everything_else_stays() {
     let card = tempfile::tempdir().unwrap();
-    let clip = dji_card(card.path());
+    let clip = dji_card(card.path(), 2);
     let work = tempfile::tempdir().unwrap();
     let core = core(work.path(), true);
     core.load(Some(card.path())).unwrap();
@@ -170,7 +152,7 @@ fn a_clip_whose_output_fails_the_recheck_stays() {
 #[test]
 fn setting_off_deletes_nothing() {
     let card = tempfile::tempdir().unwrap();
-    let clip = dji_card(card.path());
+    let clip = dji_card(card.path(), 2);
     let work = tempfile::tempdir().unwrap();
     let core = core(work.path(), false);
     assert!(!core.defaults().delete_clips_after_import, "off by default");
