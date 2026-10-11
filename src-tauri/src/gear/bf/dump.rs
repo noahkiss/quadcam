@@ -588,13 +588,13 @@ mod tests {
 
     #[test]
     fn scrubber_removes_what_identifies() {
-        let raw = "mcu_id 002f00383435511330363939\r\nsignature abc\r\n# name: My Quad\r\nset craft_name = My Quad\r\nset pilot_name = Someone\r\nset profile_name = -\r\nset rateprofile_name = HOME\r\nset expresslrs_uid = 1,2,3,4,5,6\r\nset osd_ah_pos = 4174\r\n";
+        let raw = "mcu_id 0123456789abcdef01234567\r\nsignature abc\r\n# name: My Quad\r\nset craft_name = My Quad\r\nset pilot_name = Someone\r\nset profile_name = -\r\nset rateprofile_name = HOME\r\nset expresslrs_uid = 1,2,3,4,5,6\r\nset osd_ah_pos = 4174\r\n";
         let s = scrub(raw);
         assert_eq!(
             s,
             "mcu_id 000000000000000000000000\r\nsignature \r\n# name: CRAFT\r\nset craft_name = CRAFT\r\nset pilot_name = PILOT\r\nset profile_name = -\r\nset rateprofile_name = NAME\r\nset expresslrs_uid = 0,0,0,0,0,0\r\nset osd_ah_pos = 4174\r\n"
         );
-        assert_eq!(uid_shaped(raw), vec!["002f00383435511330363939"]);
+        assert_eq!(uid_shaped(raw), vec!["0123456789abcdef01234567"]);
         assert!(uid_shaped(&s).is_empty());
         assert_eq!(scrub(&s), s, "scrubbing is idempotent");
     }
