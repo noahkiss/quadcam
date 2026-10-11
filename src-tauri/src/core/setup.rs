@@ -102,7 +102,7 @@ impl Core {
     }
 
     /// Changes the settings file under its lock and reports the change.
-    fn settings_update<T>(&self, f: impl FnOnce(&mut Values) -> Result<T>) -> Result<T> {
+    pub(super) fn settings_update<T>(&self, f: impl FnOnce(&mut Values) -> Result<T>) -> Result<T> {
         let (out, _) = settings::update(self.settings_file()?, f)?;
         self.settings_written();
         Ok(out)

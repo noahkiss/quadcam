@@ -191,7 +191,14 @@ fn gear_json_writes_from_the_cli_and_an_agent_are_kept_and_seen() {
         )
         .unwrap();
     assert_eq!(d["name"], "Bench radio");
-    assert_eq!(d["aircraft"], "Whoop", "the profile's own spelling");
+    // A radio flies many aircraft: the profile names the radio, and the radio lists it.
+    assert!(d["aircraft"].is_null(), "{d}");
+    assert_eq!(
+        d["radio_aircraft"][0]["profile"], "Whoop",
+        "the profile's own spelling"
+    );
+    let (profiles, _) = cli.profiles().unwrap();
+    assert_eq!(profiles[0].gear.radio.as_deref(), Some(id.as_str()));
     assert_eq!(d["identity"]["board"], "pocket");
     assert_ne!(store.stamp(), stamp, "the app's poll sees the CLI's write");
 
@@ -215,6 +222,15 @@ fn gear_json_writes_from_the_cli_and_an_agent_are_kept_and_seen() {
     assert_eq!(v["packs"][0]["label"], "1", "the unknown key survived");
     assert_eq!(v["devices"][0]["name"], "Radio");
     assert!(v["devices"][0]["aircraft"].is_null());
+    assert!(
+        v["devices"][0].get("radio_aircraft").is_none(),
+        "a read's field is never saved"
+    );
+    assert_eq!(
+        app.profiles().unwrap().0[0].gear.radio,
+        None,
+        "empty took the aircraft off"
+    );
 
     // Refusals: an id nothing knows, an aircraft with no profile.
     let e = cli
@@ -234,6 +250,113 @@ fn gear_json_writes_from_the_cli_and_an_agent_are_kept_and_seen() {
     assert!(app.gear_devices().unwrap().is_empty());
     let v: Value = serde_json::from_slice(&std::fs::read(store.gear_file()).unwrap()).unwrap();
     assert_eq!(v["packs"][0]["label"], "1");
+}
+
+#[test]
+fn a_radios_aircraft_link_from_before_moves_onto_the_profile() {
+    let dir = tempfile::tempdir().unwrap();
+    let mounted: Mounted = Arc::default();
+    let c = core(dir.path(), Arc::new(NoHooks), &mounted);
+    for (name, gear) in [
+        ("Whoop", json!({"fc": "fc-1"})),
+        ("Cine", json!({"radio": "radio-other"})),
+    ] {
+        c.profile_save(
+            name,
+            &serde_json::from_value(json!({"gear": gear})).unwrap(),
+            None,
+        )
+        .unwrap();
+    }
+    // gear.json as 0.11 wrote it: a radio linked to one aircraft, and an FC.
+    let file = dir.path().join("support/gear/gear.json");
+    std::fs::create_dir_all(file.parent().unwrap()).unwrap();
+    std::fs::write(
+        &file,
+        json!({"devices": [
+            {"id": "radio-a", "kind": "radio", "name": "Field radio", "aircraft": "whoop", "later": 1},
+            {"id": "radio-b", "kind": "radio", "name": "Spare", "aircraft": "Cine"},
+            {"id": "fc-1", "kind": "fc", "name": "Whoop FC", "aircraft": "Whoop"},
+        ]})
+        .to_string(),
+    )
+    .unwrap();
+
+    let devs = c.gear_devices().unwrap();
+    let (profiles, _) = c.profiles().unwrap();
+    assert_eq!(
+        profiles[0].gear.radio.as_deref(),
+        Some("radio-a"),
+        "the profile took the radio"
+    );
+    assert_eq!(
+        profiles[0].gear.fc.as_deref(),
+        Some("fc-1"),
+        "its other gear stays"
+    );
+    assert_eq!(
+        profiles[1].gear.radio.as_deref(),
+        Some("radio-other"),
+        "a profile's own radio wins"
+    );
+    let a = devs.iter().find(|d| d.id == "radio-a").unwrap();
+    assert_eq!(a.aircraft, None);
+    let list = a.radio_aircraft.as_ref().unwrap();
+    assert_eq!(list.len(), 1);
+    assert_eq!(list[0].profile, "Whoop");
+    assert_eq!(list[0].found, None, "no backup to look in");
+    assert_eq!(
+        devs.iter()
+            .find(|d| d.id == "fc-1")
+            .unwrap()
+            .aircraft
+            .as_deref(),
+        Some("Whoop")
+    );
+    assert!(devs
+        .iter()
+        .find(|d| d.id == "fc-1")
+        .unwrap()
+        .radio_aircraft
+        .is_none());
+
+    let v: Value = serde_json::from_slice(&std::fs::read(&file).unwrap()).unwrap();
+    assert!(v["devices"][0]["aircraft"].is_null());
+    assert_eq!(v["devices"][0]["later"], 1, "unknown keys stay");
+    assert!(v["devices"][0].get("legacy_aircraft").is_none());
+    assert!(v["devices"][1]["aircraft"].is_null());
+    assert_eq!(
+        v["devices"][1]["legacy_aircraft"], "Cine",
+        "a link the profile could not take is kept"
+    );
+    assert_eq!(
+        v["devices"][2]["aircraft"], "Whoop",
+        "an FC keeps its one aircraft"
+    );
+
+    // Once: a second look writes nothing.
+    let stamp = std::fs::metadata(&file).unwrap().modified().unwrap();
+    let fresh = core(dir.path(), Arc::new(NoHooks), &mounted);
+    fresh.gear_devices().unwrap();
+    assert_eq!(std::fs::metadata(&file).unwrap().modified().unwrap(), stamp);
+
+    // The radio list follows the profiles: Settings and the radio page edit one field.
+    c.profile_save(
+        "Cine",
+        &serde_json::from_value(json!({"gear": {"radio": "radio-a"}})).unwrap(),
+        None,
+    )
+    .unwrap();
+    let devs = c.gear_devices().unwrap();
+    let a = devs.iter().find(|d| d.id == "radio-a").unwrap();
+    let names: Vec<&str> = a
+        .radio_aircraft
+        .as_ref()
+        .unwrap()
+        .iter()
+        .map(|x| x.profile.as_str())
+        .collect();
+    assert_eq!(names, ["Whoop", "Cine"]);
 }
 
 #[test]
@@ -381,6 +504,7 @@ fn renamed(c: &quadcam_lib::gear::model::Connected) -> quadcam_lib::gear::model:
         last_space: None,
         aliases: Vec::new(),
         dfu_serial: None,
+        radio_aircraft: None,
     });
     d
 }

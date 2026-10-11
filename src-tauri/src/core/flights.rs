@@ -672,7 +672,7 @@ impl Core {
             .and_then(|d| model_name(&d).ok().flatten())
             .filter(|n| !n.is_empty());
         let aircraft = self
-            .aircraft_of_model(Some(&file), name.as_deref())
+            .aircraft_of_model(Some(&file), name.as_deref(), Some(id))
             .ok()
             .flatten();
         (Some(name.unwrap_or(file)), aircraft, Some(b.taken_at))

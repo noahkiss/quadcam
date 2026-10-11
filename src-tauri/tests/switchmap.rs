@@ -216,13 +216,21 @@ fn an_aircraft_reads_its_radio_and_fc_backups() {
     use quadcam_lib::gear::model::{Device, DeviceKind, Identity};
     let dir = tempfile::tempdir().unwrap();
     let core = plain_core(&dir);
+    // The FC names its one aircraft; the aircraft's profile names its radio.
+    core.profile_save(
+        "Whoop",
+        &serde_json::from_value(serde_json::json!({"gear": {"radio": "radio-00000000000000aa"}}))
+            .unwrap(),
+        None,
+    )
+    .unwrap();
     let save = |id: &str, kind: DeviceKind, board: &str| {
         core.gear_store()
             .save_device(&Device {
                 id: id.into(),
                 kind,
                 name: String::new(),
-                aircraft: Some("Whoop".into()),
+                aircraft: (kind == DeviceKind::Fc).then(|| "Whoop".into()),
                 identity: Identity {
                     board: Some(board.into()),
                     ..Default::default()
@@ -232,6 +240,7 @@ fn an_aircraft_reads_its_radio_and_fc_backups() {
                 last_space: None,
                 aliases: Vec::new(),
                 dfu_serial: None,
+                radio_aircraft: None,
             })
             .unwrap();
     };
@@ -477,6 +486,7 @@ fn pack_up_reads_a_radio_that_is_not_plugged_in_from_its_backup() {
         last_space: None,
         aliases: Vec::new(),
         dfu_serial: None,
+        radio_aircraft: None,
     };
     store.save_device(&d).unwrap();
     // No backup yet: the model stays unknown.
