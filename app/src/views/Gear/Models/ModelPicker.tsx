@@ -1,6 +1,7 @@
 import { Banner } from "../../../components/Banner";
 import { Select } from "../../../components/Field";
 import type { ModelDetail } from "../../../ipc/types";
+import { sourceText } from "../../../lib/models";
 import styles from "./Models.module.css";
 
 interface Props {
@@ -25,7 +26,7 @@ export function ModelPicker({ detail, file, pick }: Props) {
             ))}
           </Select>
         </label>
-        <span className={styles.source}>Read from the {detail.source}</span>
+        <span className={styles.source}>{sourceText(detail.source)}</span>
       </div>
       {detail.notes.map((n) => (
         <Banner key={n} kind="info" icon="info">

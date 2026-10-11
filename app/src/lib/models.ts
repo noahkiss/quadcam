@@ -126,3 +126,15 @@ export function overWidth(items: CheckItem[], width: number | null | undefined):
   if (!width) return 0;
   return items.filter((i) => (i.tick ? 1 : 0) + i.text.length > width).length;
 }
+
+/** Where the model was read from, for people: "From the radio's card", or "From backup · Oct 6,
+ *  2:20 PM" for the core's `backup <id> (YYYY-MM-DD HH:MM)` (UTC). Anything else as it is. */
+export function sourceText(source: string, locale?: string, timeZone?: string): string {
+  if (source === "card") return "From the radio's card";
+  const m = /^backup \S+ \((\d{4})-(\d{2})-(\d{2}) (\d{2}):(\d{2})\)$/.exec(source);
+  if (!m) return source;
+  const at = new Date(Date.UTC(+m[1], +m[2] - 1, +m[3], +m[4], +m[5]));
+  const day = at.toLocaleDateString(locale, { month: "short", day: "numeric", timeZone });
+  const time = at.toLocaleTimeString(locale, { hour: "numeric", minute: "2-digit", timeZone });
+  return `From backup · ${day}, ${time}`;
+}

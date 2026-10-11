@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { CalloutView, ModelTimer } from "../ipc/types";
-import { calloutOp, checklistText, formOf, freeTimer, nextScreen, overWidth, parseChecklist, parseSources, repeatText, timerField, whenText } from "./models";
+import { calloutOp, checklistText, formOf, freeTimer, nextScreen, overWidth, parseChecklist, parseSources, repeatText, sourceText, timerField, whenText } from "./models";
 
 const timer = (index: number): ModelTimer => ({ index, name: "", swtch: "NONE", mode: "ON", value: 0, persistent: "0", fields: [{ key: "name", value: '"FLT"' }, { key: "minuteBeep", value: "1" }] });
 
@@ -65,3 +65,11 @@ describe("checklist", () => {
   });
 });
 
+
+describe("source", () => {
+  it("names the card and dates the backup without its id", () => {
+    expect(sourceText("card")).toBe("From the radio's card");
+    expect(sourceText("backup radio-1f2e3d4c5b6a7980/2026-10-06T182000-manual (2026-10-06 18:20)", "en-US", "America/New_York")).toBe("From backup · Oct 6, 2:20 PM");
+    expect(sourceText("something else")).toBe("something else");
+  });
+});

@@ -1,10 +1,11 @@
 // The radio's Splash segment (design 7.5): a PNG made into the radio's start-up picture,
 // 128 x 64 and one bit, with a threshold and Invert. Flash with splash… opens the flash sheet
 // with the picture patched into the board's EdgeTX binary. Nothing is written until Apply.
-import { useEffect, useState } from "react";
+import { useEffect, useId, useState } from "react";
 import { Banner } from "../../../components/Banner";
 import { Button } from "../../../components/Button";
 import { Checkbox, Field } from "../../../components/Field";
+import { SectionCard } from "../../../components/dash/SectionCard";
 import { api, errText, pickFiles } from "../../../ipc/api";
 import type { SplashPreview } from "../../../ipc/types";
 import { useStore } from "../../../store";
@@ -52,45 +53,73 @@ export function SplashSegment({ d }: { d: DeviceRef }) {
   const device = d.device?.id;
   const shown = image ? preview : null;
   const ready = !!image && !!device && !!shown?.supported;
+  const reasonId = useId();
+  // Why Flash with splash… is off: the first missing step.
+  const reason = !device
+    ? "Save this radio first: plug it in and give it a name."
+    : !image
+      ? "Choose an image first."
+      : error
+        ? "The image has no preview."
+        : shown && !shown.supported
+          ? "This radio cannot take a splash yet."
+          : null;
 
   return (
-    <section className={styles.segment} aria-label="Splash">
-      <div className={styles.bar}>
+    <SectionCard
+      title="Splash"
+      actions={
         <Button variant="secondary" icon="gallery-add" onClick={() => void choose()}>
           Choose image…
         </Button>
-        {image && <span className={`${styles.muted} selectable`}>{tilde(image, home)}</span>}
-      </div>
+      }
+    >
       {error && <Banner kind="error">{error}</Banner>}
       {shown && !shown.supported && (
         <Banner kind="warning" icon="danger-triangle">
           {shown.reason}
         </Banner>
       )}
-      {!device && (
-        <Banner icon="info">Save this radio first: plug it in and give it a name.</Banner>
-      )}
-      <div className={styles.controls}>
-        <Field label="Threshold" inline>
-          {(id) => <input id={id} type="range" min={0} max={255} value={threshold} onChange={(e) => setThreshold(Number(e.target.value))} aria-valuetext={`${threshold} of 255`} />}
-        </Field>
-        <Checkbox label="Invert" checked={invert} onChange={(e) => setInvert(e.target.checked)} />
-      </div>
-      {shown ? (
+      <div className={styles.layout}>
         <figure className={styles.figure}>
-          <img className={styles.picture} alt={`Splash preview, ${shown.width} by ${shown.height}, ${shown.dark} dark pixels`} src={`data:image/png;base64,${shown.png_base64}`} width={512} height={256} />
-          <figcaption className={styles.muted}>
-            {shown.width} × {shown.height}, 1 bit · {shown.dark} dark pixels
-          </figcaption>
+          <div className={styles.frame}>
+            {shown ? (
+              <img
+                className={styles.picture}
+                alt={`Splash preview, ${shown.width} by ${shown.height}, ${shown.dark} dark pixels`}
+                src={`data:image/png;base64,${shown.png_base64}`}
+                width={256}
+                height={128}
+              />
+            ) : (
+              <span className={styles.placeholder}>128 × 64</span>
+            )}
+          </div>
+          <figcaption className={styles.caption}>{shown ? `${shown.width} × ${shown.height}, 1 bit · ${shown.dark} dark pixels` : "PNG, scaled to fit, two tones"}</figcaption>
         </figure>
-      ) : (
-        !image && <p className={styles.muted}>Choose a PNG. It is scaled to fit and cut to two tones.</p>
-      )}
-      <div className={styles.bar}>
-        <Button variant="primary" disabled={!ready} onClick={() => device && image && void openFlash({ device, version: null, splash: { image, threshold, invert, board } })}>
-          Flash with splash…
-        </Button>
+        <div className={styles.controls}>
+          {image && <span className={`${styles.path} selectable`}>{tilde(image, home)}</span>}
+          <Field label="Threshold" inline>
+            {(id) => <input id={id} type="range" min={0} max={255} value={threshold} onChange={(e) => setThreshold(Number(e.target.value))} aria-valuetext={`${threshold} of 255`} />}
+          </Field>
+          <Checkbox label="Invert" checked={invert} onChange={(e) => setInvert(e.target.checked)} />
+          <div className={styles.flash}>
+            <Button
+              variant="primary"
+              disabled={!ready}
+              aria-describedby={reason ? reasonId : undefined}
+              onClick={() => device && image && void openFlash({ device, version: null, splash: { image, threshold, invert, board } })}
+            >
+              Flash with splash…
+            </Button>
+            {reason && (
+              <span id={reasonId} className={styles.reason}>
+                {reason}
+              </span>
+            )}
+          </div>
+        </div>
       </div>
-    </section>
+    </SectionCard>
   );
 }

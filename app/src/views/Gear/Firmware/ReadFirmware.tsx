@@ -4,6 +4,7 @@
 import { useEffect, useState } from "react";
 import { Banner } from "../../../components/Banner";
 import { Button } from "../../../components/Button";
+import { SectionCard } from "../../../components/dash/SectionCard";
 import { api } from "../../../ipc/api";
 import { on } from "../../../ipc/events";
 import type { FirmwareRead, FirmwareStatus } from "../../../ipc/types";
@@ -52,11 +53,7 @@ export function ReadFirmware({ radios }: Props) {
   };
 
   return (
-    <section className={styles.read} aria-labelledby="read-firmware-title">
-      <h3 id="read-firmware-title" className={styles.subtitle}>
-        Read radio firmware
-      </h3>
-      <p className={styles.muted}>Saves a copy of the firmware on the radio. It does not change the radio.</p>
+    <SectionCard title="Read radio firmware" status="Read only">
       <ol className={styles.steps} aria-label="Steps">
         <li>Turn the radio off.</li>
         <li>Plug the radio into this Mac with the USB cable. Do not hold any buttons.</li>
@@ -80,9 +77,7 @@ export function ReadFirmware({ radios }: Props) {
         <Button variant="secondary" disabled={busy} onClick={() => void read()}>
           {busy ? "Reading…" : "Read firmware"}
         </Button>
-        {busy && (
-          <progress className={styles.progress} aria-label="Reading the radio" max={100} value={Math.round(progress * 100)} />
-        )}
+        {busy && <progress className={styles.progress} aria-label="Reading the radio" max={100} value={Math.round(progress * 100)} />}
       </div>
       {error && (
         <Banner kind="warning" icon="danger-triangle">
@@ -94,7 +89,7 @@ export function ReadFirmware({ radios }: Props) {
           <Banner kind={result.matches === false ? "warning" : "info"} icon={result.matches === false ? "danger-triangle" : "check-circle"}>
             {result.message}
           </Banner>
-          <ul className={styles.steps} aria-label="Read steps">
+          <ul className={styles.done} aria-label="Read steps">
             {result.steps.map((s) => (
               <li key={s.name}>
                 {s.name}: done{s.detail ? ` (${s.detail})` : ""}
@@ -106,6 +101,6 @@ export function ReadFirmware({ radios }: Props) {
           </p>
         </div>
       )}
-    </section>
+    </SectionCard>
   );
 }

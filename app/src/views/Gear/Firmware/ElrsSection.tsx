@@ -7,6 +7,9 @@ import { api, errText } from "../../../ipc/api";
 import { Banner } from "../../../components/Banner";
 import { Button } from "../../../components/Button";
 import { Dialog } from "../../../components/Dialog";
+import { DataTable, type Column } from "../../../components/dash/DataTable";
+import { EmptyState } from "../../../components/dash/EmptyState";
+import { SectionCard } from "../../../components/dash/SectionCard";
 import { Checkbox, SelectField, TextField } from "../../../components/Field";
 import { ChecksList } from "../../../components/gear/ChecksList";
 import { DiffView, type DiffEntry } from "../../../components/gear/DiffView";
@@ -120,12 +123,59 @@ export function ElrsSection() {
   };
 
   const ready = !!sheet?.plan && sheet.plan.checks.every((c) => c.ok);
+  const latest = view?.latest ?? null;
+  const shownOptions = view?.devices.find((d) => d.snapshot.device === open) ?? null;
+  const columns: Column<ElrsDeviceView>[] = [
+    {
+      key: "device",
+      header: "Device",
+      rowHeader: true,
+      cell: (d) => (
+        <>
+          {d.name}
+          <span className={styles.muted}> · {d.snapshot.role === "tx" ? "Transmitter" : "Receiver"}</span>
+          {d.staged > 0 && <span className={styles.muted}> · {d.staged} staged</span>}
+        </>
+      ),
+    },
+    { key: "target", header: "Target", cell: (d) => <span className="selectable">{d.snapshot.target ?? d.snapshot.name}</span> },
+    {
+      key: "version",
+      header: "Installed → newest",
+      numeric: true,
+      cell: (d) => (
+        <span className="selectable">
+          {d.snapshot.version ?? "—"}
+          {latest && latest !== d.snapshot.version && ` → ${latest}`}
+        </span>
+      ),
+    },
+    { key: "read", header: "Read", optional: true, cell: (d) => fmtWhen(d.snapshot.read_at) },
+    {
+      key: "actions",
+      header: <span className="visually-hidden">Actions</span>,
+      cell: (d) => (
+        <div className={styles.actions}>
+          <Button
+            size="sm"
+            variant="secondary"
+            aria-expanded={open === d.snapshot.device}
+            onClick={() => {
+              setDraft({});
+              setOpen(open === d.snapshot.device ? null : d.snapshot.device);
+            }}
+          >
+            Options
+          </Button>
+          <Button size="sm" variant="secondary" disabled={!latest} onClick={() => void plan(d)}>
+            Flash {latest ?? ""}…
+          </Button>
+        </div>
+      ),
+    },
+  ];
   return (
-    <section className={styles.section} aria-labelledby="elrs-title">
-      <h3 id="elrs-title" className={styles.heading}>
-        ExpressLRS (preview)
-      </h3>
-      <Checkbox label="Show the ELRS tools" checked={preview} onChange={(e) => void saveSetting("elrsPreview", e.target.checked)} />
+    <SectionCard title="ExpressLRS (preview)" actions={<Checkbox label="Show the ELRS tools" checked={preview} onChange={(e) => void saveSetting("elrsPreview", e.target.checked)} />}>
       {preview && (
         <>
           <Banner icon="info">QuadCam has not tried these on a real radio, FC or ExpressLRS device yet.</Banner>
@@ -147,41 +197,10 @@ export function ElrsSection() {
             ))}
             {view && view.hosts.length === 0 && <span className={styles.muted}>Save a radio or an FC first.</span>}
           </div>
-          {view && view.devices.length === 0 && <p className={styles.muted}>No ELRS device read yet.</p>}
-          {view && view.devices.length > 0 && (
-            <table className={styles.table} aria-label="ExpressLRS devices">
-              <thead>
-                <tr>
-                  <th scope="col">Device</th>
-                  <th scope="col">Target</th>
-                  <th scope="col">Installed</th>
-                  <th scope="col">Newest</th>
-                  <th scope="col">Read</th>
-                  <th scope="col">
-                    <span className="visually-hidden">Actions</span>
-                  </th>
-                </tr>
-              </thead>
-              <tbody>
-                {view.devices.map((d) => (
-                  <ElrsRow
-                    key={d.snapshot.device}
-                    d={d}
-                    latest={view.latest}
-                    open={open === d.snapshot.device}
-                    draft={draft}
-                    setDraft={setDraft}
-                    onOpen={() => {
-                      setDraft({});
-                      setOpen(open === d.snapshot.device ? null : d.snapshot.device);
-                    }}
-                    onStage={() => void stage(d)}
-                    onFlash={() => void plan(d)}
-                  />
-                ))}
-              </tbody>
-            </table>
+          {view && (
+            <DataTable label="ExpressLRS devices" columns={columns} rows={view.devices} rowKey={(d) => d.snapshot.device} empty={<EmptyState icon="signal">No ELRS device read yet.</EmptyState>} />
           )}
+          {shownOptions && <ElrsOptions d={shownOptions} draft={draft} setDraft={setDraft} onStage={() => void stage(shownOptions)} />}
           <div className={styles.phrase}>
             <SecretField label="Binding phrase" hint={phraseHint} value={phrase} onChange={setPhrase}>
               <Button variant="secondary" disabled={!phrase.trim()} onClick={() => void savePhrase()}>
@@ -252,78 +271,55 @@ export function ElrsSection() {
           </div>
         )}
       </Dialog>
-    </section>
+    </SectionCard>
   );
 }
 
-function ElrsRow({
+/** The options of one ELRS device, under the table, staged as one change. */
+function ElrsOptions({
   d,
-  latest,
-  open,
   draft,
   setDraft,
-  onOpen,
   onStage,
-  onFlash,
 }: {
   d: ElrsDeviceView;
-  latest: string | null;
-  open: boolean;
   draft: Record<string, string>;
   setDraft: (f: (x: Record<string, string>) => Record<string, string>) => void;
-  onOpen: () => void;
   onStage: () => void;
-  onFlash: () => void;
 }) {
   const s = d.snapshot;
   return (
-    <>
-      <tr>
-        <th scope="row">
-          {d.name}
-          <span className={styles.muted}> · {s.role === "tx" ? "Transmitter" : "Receiver"}</span>
-          {d.staged > 0 && <span className={styles.muted}> · {d.staged} staged</span>}
-        </th>
-        <td className="selectable">{s.target ?? s.name}</td>
-        <td className="mono selectable">{s.version ?? "Unknown"}</td>
-        <td className="mono selectable">{latest ?? "Unknown"}</td>
-        <td>{fmtWhen(s.read_at)}</td>
-        <td className={styles.actions}>
-          <Button variant="secondary" aria-expanded={open} onClick={onOpen}>
-            Options
-          </Button>{" "}
-          <Button variant="secondary" disabled={!latest} onClick={onFlash}>
-            Flash {latest ?? ""}…
-          </Button>
-        </td>
-      </tr>
-      {open && (
-        <tr>
-          <td colSpan={6}>
-            <div className={styles.options} role="group" aria-label={`Options of ${d.name}`}>
-              {s.options.length === 0 && <p className={styles.muted}>The device lists no option QuadCam sets.</p>}
-              {s.options.map((o) =>
-                o.choices.length > 0 ? (
-                  <SelectField key={o.key} label={o.label} value={draft[o.key] ?? o.value} onChange={(e) => setDraft((x) => ({ ...x, [o.key]: e.target.value }))}>
-                    {o.choices.map((c) => (
-                      <option key={c} value={c}>
-                        {c}
-                      </option>
-                    ))}
-                  </SelectField>
-                ) : (
-                  <TextField key={o.key} label={o.label} type="number" min={o.min ?? undefined} max={o.max ?? undefined} value={draft[o.key] ?? o.value} onChange={(e) => setDraft((x) => ({ ...x, [o.key]: e.target.value }))} />
-                ),
-              )}
-              <div className={styles.optionsBar}>
-                <Button variant="primary" disabled={Object.keys(draft).length === 0} onClick={onStage}>
-                  Stage changes
-                </Button>
-              </div>
-            </div>
-          </td>
-        </tr>
+    <div className={styles.options} role="group" aria-label={`Options of ${d.name}`}>
+      <span className={styles.optionsTitle} aria-hidden="true">
+        Options of {d.name}
+      </span>
+      {s.options.length === 0 && <p className={styles.muted}>The device lists no option QuadCam sets.</p>}
+      {s.options.map((o) =>
+        o.choices.length > 0 ? (
+          <SelectField key={o.key} label={o.label} value={draft[o.key] ?? o.value} onChange={(e) => setDraft((x) => ({ ...x, [o.key]: e.target.value }))}>
+            {o.choices.map((c) => (
+              <option key={c} value={c}>
+                {c}
+              </option>
+            ))}
+          </SelectField>
+        ) : (
+          <TextField
+            key={o.key}
+            label={o.label}
+            type="number"
+            min={o.min ?? undefined}
+            max={o.max ?? undefined}
+            value={draft[o.key] ?? o.value}
+            onChange={(e) => setDraft((x) => ({ ...x, [o.key]: e.target.value }))}
+          />
+        ),
       )}
-    </>
+      <div className={styles.optionsBar}>
+        <Button variant="primary" disabled={Object.keys(draft).length === 0} onClick={onStage}>
+          Stage changes
+        </Button>
+      </div>
+    </div>
   );
 }

@@ -1,34 +1,65 @@
-.segment {
+/* The preview frame on the left, the controls on the right; stacked when narrow. */
+.layout {
   display: flex;
-  flex-direction: column;
-  gap: var(--s-4);
-}
-.bar {
-  display: flex;
-  align-items: center;
-  gap: var(--s-3);
   flex-wrap: wrap;
-}
-.controls {
-  display: flex;
-  align-items: center;
+  align-items: flex-start;
   gap: var(--s-6);
-  flex-wrap: wrap;
-}
-.muted {
-  color: var(--muted);
 }
 .figure {
   margin: 0;
   display: flex;
   flex-direction: column;
   gap: var(--s-2);
-  align-items: flex-start;
+}
+/* The radio's 128 x 64 screen at 2x. */
+.frame {
+  display: grid;
+  place-items: center;
+  width: 256px;
+  height: 128px;
+  box-sizing: content-box;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--r-2);
+  background: var(--surface);
+  overflow: hidden;
 }
 .picture {
+  display: block;
+  width: 256px;
+  height: 128px;
+  object-fit: contain;
   image-rendering: pixelated;
-  max-width: 100%;
-  height: auto;
-  border: 1px solid var(--border);
-  border-radius: var(--r-2);
+}
+.placeholder {
+  color: var(--muted);
+  font-family: var(--mono);
+  font-size: var(--t-sm);
+}
+.caption {
+  color: var(--muted);
+  font-size: var(--t-sm);
+}
+.controls {
+  flex: 1;
+  min-width: 240px;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--s-3);
+}
+.path {
+  color: var(--muted);
+  font-size: var(--t-sm);
+  word-break: break-all;
+}
+.flash {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--s-1);
+  margin-top: var(--s-2);
+}
+.reason {
+  color: var(--muted);
+  font-size: var(--t-sm);
 }
