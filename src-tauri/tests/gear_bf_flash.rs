@@ -1063,6 +1063,8 @@ fn the_default_build_service_reaches_only_this_mac_under_cargo() {
     use quadcam_lib::gear::firmware::betaflight::{Cloud, CurlCloud};
     let c = CurlCloud::system();
     assert!(c.loopback_only);
-    let e = c.build(TARGET, RELEASE).err().expect("refused under cargo");
+    let Err(e) = c.build(TARGET, RELEASE) else {
+        panic!("refused under cargo")
+    };
     assert!(format!("{e:#}").contains("off in tests"), "{e:#}");
 }

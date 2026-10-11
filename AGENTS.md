@@ -500,7 +500,8 @@ claude mcp add quadcam -- "$(brew --prefix)/bin/quadcam-cli" mcp
 - **Never write a real EdgeTX card while testing.** `edgetx::card::write` refuses a path under
   `/Volumes` in a process started by cargo unless `QUADCAM_CARD_WRITE=real`, and
   `edgetx::card::release` unmounts nothing unless `QUADCAM_SERIAL=real`. Tests write the
-  synthetic card (`edgetx::synth`) into a temporary folder. EdgeTX files are edited line by
+  synthetic card (`edgetx::synth`) into a temporary folder; a test that sets `Env.real_cards`
+  to its own folder sees that refusal. EdgeTX files are edited line by
   line (`edgetx::yaml`), never through a YAML library.
 - **Never `diskutil eject` a card; `safe_remove` (method `eject`) unmounts cards and ejects
   only non-card disks.** Only an unmounted card still inserted stays visible to Gear
