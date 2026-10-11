@@ -113,6 +113,7 @@ export function finishedSession(): Session {
 export function settings(): SettingsView {
   const v = clone(settingsFixture) as unknown as SettingsView;
   v.values.outputDir = LIBRARY_ROOT;
+  v.secrets = {};
   return v;
 }
 

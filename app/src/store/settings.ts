@@ -4,7 +4,7 @@
 import type { StateCreator } from "zustand";
 import type { State } from ".";
 import { api, errText } from "../ipc/api";
-import type { Place, Profile, SettingsValues } from "../ipc/types";
+import { SECRET_KEYS, type Hint, type Place, type Profile, type SettingsValues } from "../ipc/types";
 import { toast } from "../components/toastStore";
 import { validSort, type Sort } from "../lib/library";
 import { asMode } from "../lib/controls";
@@ -14,6 +14,8 @@ export interface SettingsSlice {
   /** What every surface uses: the values over the core's defaults. */
   effective: Record<string, unknown>;
   googleKeySet: boolean;
+  /** Each secret that is set, by file key: the core's hint, never the value. */
+  secrets: Record<string, Hint>;
   /** The user's home folder, for `~` in paths. */
   home: string;
   loadSettings: () => Promise<void>;
@@ -27,34 +29,39 @@ export const createSettingsSlice: StateCreator<State, [], [], SettingsSlice> = (
   values: {},
   effective: {},
   googleKeySet: false,
+  secrets: {},
   home: "",
   loadSettings: async () => {
     try {
       const v = await api.settings();
-      set({ values: v.values, effective: v.effective, googleKeySet: !!v.values.googlePlacesKey });
+      set({ values: v.values, effective: v.effective, googleKeySet: !!v.values.googlePlacesKey, secrets: v.secrets });
     } catch (e) {
       console.warn("settings unavailable", e);
     }
   },
   saveSetting: async (key, value) => {
-    set((s) => ({ values: { ...s.values, [key]: value } }));
-    try {
-      await api.settingsSet({ [key]: value } as SettingsValues);
-    } catch (e) {
-      toast(`Settings not saved: ${errText(e)}`, true);
-    }
+    await saveValues(set, { [key]: value });
   },
   saveChanged: async (values, before) => {
     const changed = Object.fromEntries(Object.entries(values).filter(([k, v]) => !sameValue(v, (before as Record<string, unknown>)[k])));
     if (!Object.keys(changed).length) return;
-    set((s) => ({ values: { ...s.values, ...changed } }));
-    try {
-      await api.settingsSet(changed);
-    } catch (e) {
-      toast(`Settings not saved: ${errText(e)}`, true);
-    }
+    await saveValues(set, changed);
   },
 });
+
+const isSecret = (k: string) => (SECRET_KEYS as readonly string[]).includes(k);
+
+/** Writes `changed`. A secret never stays in the store: the core's answer brings its hint. */
+async function saveValues(set: (f: (s: State) => Partial<State>) => void, changed: SettingsValues) {
+  const plain = Object.fromEntries(Object.entries(changed).filter(([k]) => !isSecret(k)));
+  set((s) => ({ values: { ...s.values, ...plain } }));
+  try {
+    const v = await api.settingsSet(changed);
+    if (Object.keys(changed).some(isSecret)) set(() => ({ values: v.values, googleKeySet: !!v.values.googlePlacesKey, secrets: v.secrets }));
+  } catch (e) {
+    toast(`Settings not saved: ${errText(e)}`, true);
+  }
+}
 
 /** Deep equality that ignores key order: the core sorts keys, the UI does not. */
 export function sameValue(a: unknown, b: unknown): boolean {

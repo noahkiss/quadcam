@@ -21,6 +21,8 @@ import type {
   Volume,
 } from "../types";
 import * as seed from "./seed";
+import { hint as secretHint } from "./secret";
+import { SECRET_KEYS } from "../types";
 import * as gear from "./gear";
 import * as changes from "./changes";
 import * as model from "./model";
@@ -291,7 +293,7 @@ export class MockCore {
       case "card_status":
         return { mount: p.mount, clips: 5, new: this.session?.results.length ? 0 : 4, free: 30_000_000_000, size: 31_914_983_424 };
       case "settings":
-        return structuredClone(this.settings);
+        return this.settingsView();
       case "settings_set":
         return this.settingsSet(p.values as Record<string, unknown>);
       case "place_search":
@@ -996,7 +998,20 @@ export class MockCore {
     }
     if (typeof values.outputDir === "string") this.lib.root = values.outputDir;
     this.emit("settings-changed");
-    return structuredClone(this.settings);
+    return this.settingsView();
+  }
+
+  /** The settings as the core answers: each secret as `"(set)"` and its hint, never the value. */
+  settingsView(): SettingsView {
+    const v = structuredClone(this.settings);
+    const values = v.values as Record<string, unknown>;
+    v.secrets = {};
+    for (const k of SECRET_KEYS) {
+      if (values[k] == null) continue;
+      v.secrets[k] = secretHint(String(values[k]));
+      values[k] = "(set)";
+    }
+    return v;
   }
 
   placeSearch(query: string): GeoResult[] {

@@ -10,6 +10,7 @@ import { Dialog } from "../../../components/Dialog";
 import { Checkbox, SelectField, TextField } from "../../../components/Field";
 import { ChecksList } from "../../../components/gear/ChecksList";
 import { DiffView, type DiffEntry } from "../../../components/gear/DiffView";
+import { SecretField } from "../../../components/SecretField";
 import { toast } from "../../../components/toastStore";
 import { fmtWhen } from "../../../lib/backups";
 import type { ApplyPlan, ApplyReport, ElrsDeviceView, ElrsFlashParams, ElrsView } from "../../../ipc/types";
@@ -26,7 +27,7 @@ interface FlashSheet {
 
 export function ElrsSection() {
   const preview = useStore((s) => s.values.elrsPreview === true);
-  const phraseSet = useStore((s) => !!s.values.elrsBindingPhrase);
+  const phraseHint = useStore((s) => s.secrets.elrsBindingPhrase?.hint);
   const saveSetting = useStore((s) => s.saveSetting);
   const loadGear = useStore((s) => s.loadGear);
   const openApply = useStore((s) => s.openApply);
@@ -174,10 +175,11 @@ export function ElrsSection() {
             </table>
           )}
           <div className={styles.phrase}>
-            <TextField label="Binding phrase" type="password" autoComplete="off" value={phrase} placeholder={phraseSet || view?.phrase_set ? "(set)" : ""} onChange={(e) => setPhrase(e.target.value)} />
-            <Button variant="secondary" disabled={!phrase.trim()} onClick={() => void savePhrase()}>
-              Save phrase
-            </Button>
+            <SecretField label="Binding phrase" hint={phraseHint} value={phrase} onChange={setPhrase}>
+              <Button variant="secondary" disabled={!phrase.trim()} onClick={() => void savePhrase()}>
+                Save phrase
+              </Button>
+            </SecretField>
             <SelectField label="Region" value={view?.region ?? "FCC"} onChange={(e) => void saveSetting("elrsRegion", e.target.value).then(load)}>
               <option value="FCC">FCC</option>
               <option value="LBT">LBT</option>

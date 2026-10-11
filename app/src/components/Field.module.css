@@ -100,3 +100,16 @@
 .search input::placeholder {
   color: var(--muted);
 }
+.secret {
+  display: flex;
+  align-items: flex-end;
+  gap: var(--s-2);
+  min-width: 0;
+}
+.secretHint {
+  display: flex;
+  align-items: center;
+  height: var(--control-h);
+  font-family: var(--mono);
+  font-size: var(--t-md);
+}
