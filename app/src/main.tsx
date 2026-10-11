@@ -4,7 +4,7 @@ import "./theme/fonts.css";
 import "./theme/tokens.css";
 import "./theme/base.css";
 import { App } from "./App";
-import { limitContextMenu } from "./native";
+import { limitContextMenu, markGlass } from "./native";
 
 async function start() {
   const query = new URLSearchParams(location.search);
@@ -13,6 +13,9 @@ async function start() {
     const { installMock } = await import("./ipc/mock/install");
     installMock({ scenario: (query.get("mock") || "library") as never });
   }
+  // ?glass in dev shows the macOS 26 chrome's layout in a plain browser.
+  if (import.meta.env.DEV && query.has("glass")) window.__QUADCAM_GLASS__ = true;
+  markGlass();
   let root = <App />;
   if (import.meta.env.DEV && query.has("gallery")) {
     const { Gallery } = await import("./views/Gallery/Gallery");

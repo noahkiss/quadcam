@@ -48,7 +48,7 @@ QuadCam was built with a Fat Shark Echo and a RadioMaster Pocket on EdgeTX in mi
 
 ## Install
 
-QuadCam needs an Apple Silicon Mac with macOS 13 or later. Install it with Homebrew:
+QuadCam needs an Apple Silicon Mac with macOS 13 or later. On macOS 26 and later its sidebar sits on Liquid Glass. Install it with Homebrew:
 
 ```bash
 brew install --cask noahkiss/tap/quadcam

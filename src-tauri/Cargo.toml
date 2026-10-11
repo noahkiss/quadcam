@@ -94,10 +94,10 @@ path = "tests/voice_core.rs"
 hidapi = { version = "2.6", default-features = false, features = ["macos-shared-device"] }
 block2 = "0.6"
 objc2 = "0.6"
-objc2-foundation = { version = "0.3", features = ["NSURL", "NSString", "NSArray", "NSError", "NSFileManager", "NSGeometry", "NSThread", "NSRunLoop", "NSDate", "NSBundle", "block2"] }
+objc2-foundation = { version = "0.3", features = ["NSURL", "NSString", "NSArray", "NSError", "NSFileManager", "NSGeometry", "NSThread", "NSRunLoop", "NSDate", "NSBundle", "NSValue", "block2"] }
 objc2-map-kit = { version = "0.3", default-features = false, features = ["std", "block2", "objc2-core-location", "MKAnnotation", "MKLocalSearch", "MKLocalSearchRequest", "MKLocalSearchResponse", "MKMapItem", "MKPlacemark"] }
 objc2-core-location = { version = "0.3", default-features = false, features = ["std", "CLLocation", "CLPlacemark"] }
 objc2-photos = "0.3"
 objc2-user-notifications = { version = "0.3", default-features = false, features = ["std", "block2", "UNUserNotificationCenter", "UNNotificationContent", "UNNotificationRequest", "UNNotificationTrigger"] }
-objc2-app-kit = { version = "0.3", default-features = false, features = ["std", "NSSharingService", "NSResponder", "NSView"] }
+objc2-app-kit = { version = "0.3", default-features = false, features = ["std", "NSSharingService", "NSResponder", "NSView", "NSGlassEffectView", "NSGraphics"] }
 security-framework = "3.5"

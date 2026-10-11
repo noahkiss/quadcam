@@ -1,11 +1,31 @@
 .side {
-  width: 232px;
-  flex: none;
   display: flex;
   flex-direction: column;
   background: var(--mantle);
   border-right: 1px solid var(--border);
+  min-width: 0;
   min-height: 0;
+}
+/* The strip under the traffic lights: shown, and a drag handle, over the glass only. */
+.lights {
+  display: none;
+}
+:global([data-glass]) .side {
+  background: transparent;
+}
+:global([data-glass]) .lights {
+  display: block;
+  flex: none;
+  height: var(--bar-h);
+}
+:global([data-glass]) .groups {
+  padding-top: 0;
+}
+:global([data-glass]) .item:not(:disabled):hover {
+  background: color-mix(in srgb, var(--fg) 6%, transparent);
+}
+:global([data-glass]) .item[aria-current="true"] {
+  background: color-mix(in srgb, var(--fg) 11%, transparent);
 }
 .groups {
   flex: 1;

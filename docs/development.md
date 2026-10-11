@@ -156,6 +156,20 @@ Every Gear page and device page follows one pattern. The shared parts live in `a
 
 `/?gallery` in dev shows each of them in both themes, and `e2e/theme.spec.ts` runs axe on it. `views/Gear/DeviceLists.tsx` (Connected, Devices) and `views/Gear/Overview.tsx` are worked examples.
 
+### Window chrome and theme
+
+The window looks like an AppKit sidebar window on macOS 26 and later, and keeps the standard title bar on older macOS. `src-tauri/src/glass.rs` decides at launch (`glass::supported`, a runtime `available!` check) and sets it up:
+
+- **Title bar.** `glass::configure` gives the window an overlay title bar with a hidden title, the traffic lights centred in the toolbar's height. It also sets `window.__QUADCAM_GLASS__` before the page loads.
+- **Glass.** `glass::install` stops the web view drawing its background and puts an `NSGlassEffectView` (regular style, square corners, full height, `glass::SIDEBAR_WIDTH` wide) behind it. This matches the view an `NSSplitViewController` sidebar uses on macOS 27. The glass is decoration: the web view still takes every click.
+- **Page.** `native.ts` `markGlass` sets `html[data-glass]`. Under it the page and the sidebar are clear, every other region paints `--bg`, and `App.module.css` moves the sidebar to the full height with the toolbar, banners and status bar beside it. `--focus` becomes `AccentColor`.
+- **Dragging.** The toolbar (`data-tauri-drag-region="deep"`: its controls still click) and the strip above the sidebar move the window. The capability grants `core:window:allow-start-dragging`.
+- **Sizes.** `--sidebar-w` and `--bar-h` in `tokens.css` must equal `glass::SIDEBAR_WIDTH` and `glass::BAR_HEIGHT`; `glass::tests` checks it.
+- **Pop-up menus.** The shared `Select` uses `appearance: base-select` under `@supports`, with a picker drawn like `Menu`. Older WebKit opens the system menu.
+- **Try it in a browser.** `?glass` in dev, or `window.__QUADCAM_GLASS__ = true` in an init script as `e2e/glass.spec.ts` does, gives the glass layout. The glass itself is native, so the sidebar shows the page's clear background there.
+
+Keep a new frame region inside the grid areas in `App.module.css`, and give it its own background, or it shows the glass.
+
 ### CI
 
 `.github/workflows/ci.yml` runs on every push to a branch or a `v*` tag, and on pull requests from forks:

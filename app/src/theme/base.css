@@ -54,6 +54,17 @@ button {
   outline-offset: 2px;
 }
 
+/* The glass chrome (macOS 26 and later, `native.ts`): the page is clear so the sidebar's
+   glass shows; every other region paints its own background. Controls take the system
+   accent color. */
+html[data-glass],
+html[data-glass] body {
+  background: transparent;
+}
+html[data-glass] {
+  --focus: AccentColor;
+}
+
 .mono {
   font-family: var(--mono);
 }
