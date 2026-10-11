@@ -5,6 +5,8 @@ User-facing changes in each release, newest first. Release notes on
 
 ## Unreleased
 
+- **Voice studio cuts.** A line no longer starts with the hiss of the carrier's "is" (the "s" heard before "Battery critical"), and its end keeps the word's tail. ElevenLabs' character times can run 0.1 s off, so QuadCam now places each cut in the quiet the audio shows between the carrier and the line. A check flags a cut that starts with the carrier's hiss and a gap. To re-cut, **Sample** again and **Render pack** again with the same voice, model, sets and seed: both cut from the cached batches and cost no credits.
+
 ## 0.13.1 (2026-10-11)
 
 - **Development:** the integration tests build as one test binary per crate (`src-tauri/tests/it/`), so a test build links the app 10 times instead of 57. No change to the app.

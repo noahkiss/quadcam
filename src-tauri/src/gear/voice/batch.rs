@@ -7,10 +7,12 @@
 //! 2. `fetch` renders a batch with character timestamps, or finds it in the `BatchCache`
 //!    (raw audio and alignment, by provider, voice, model, speed, batch text and seed).
 //! 3. `cut` takes each line from its first character's start to its last character's end,
-//!    each edge moved to the quietest point within +-`snap_ms`. A fresh take is cached only
-//!    after it cuts; a cached take that no longer cuts is removed.
-//! 4. `check` flags cuts that are silent or whose length is off for their text. A flagged
-//!    line stays out of the pack and needs a re-take; its batch stays cached (it was paid).
+//!    each edge moved into the quiet between the line and the carrier (`snap_edge`): the
+//!    timestamps can run 0.1 s off, so the audio decides. A fresh take is cached only after it
+//!    cuts; a cached take that no longer cuts is removed.
+//! 4. `check` flags cuts that are silent, whose length is off for their text, or that start
+//!    with the carrier's last sound. A flagged line stays out of the pack and needs a re-take;
+//!    its batch stays cached (it was paid).
 //! 5. The cut goes on through `render::normalise` (trim, fades, loudness, tempo) like any take.
 //!
 //! Re-cutting from the cache costs nothing; `estimate` prices only the batches the cache
@@ -39,6 +41,10 @@ fn snap_ms() -> u32 {
     40
 }
 
+/// The version of the way `cut` cuts. It changes whenever a cut comes out differently, so a
+/// pack cuts its kept batches again (from the batch cache, at no cost).
+pub const CUT_VERSION: u32 = 2;
+
 /// How lines are batched and cut. Part of a batch's cache key only through the batch text.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Type)]
 pub struct BatchSettings {
@@ -51,7 +57,9 @@ pub struct BatchSettings {
     /// Sentences in one batch at most.
     #[serde(default = "max_lines")]
     pub max_lines: u32,
-    /// Each cut edge moves to the quietest point within this many milliseconds.
+    /// Each cut edge looks for the quiet at least this many milliseconds either side of its
+    /// timestamp, and also back to the carrier's last letter or on to the next sentence's
+    /// first. 0 cuts at the timestamps.
     #[serde(default = "snap_ms")]
     pub snap_ms: u32,
 }
@@ -424,43 +432,75 @@ pub struct Cut {
     pub to_s: f64,
 }
 
-/// The sample nearest `centre` (a time in seconds) with the least sound around it, looking
-/// `radius_ms` either way. The sound around a point is its mean absolute level over 2 ms.
-pub fn quietest(p: &Pcm, centre_s: f64, radius_ms: u32) -> usize {
-    let rate = f64::from(p.rate);
-    let c = (centre_s * rate).round().clamp(0.0, p.samples.len() as f64) as usize;
-    if radius_ms == 0 || p.samples.is_empty() {
-        return c;
+/// Where a cut edge goes, as a sample, searching `lo..=hi` (samples). The level at a point is
+/// the mean square over the 10 ms around it, in 3 dB steps (`ilog2`; under 64, an RMS of 8,
+/// counts as silence). The points at the lowest step make runs; the run nearest `at` is the
+/// gap between line and carrier. A start edge sits up to 10 ms before the gap's end (the line
+/// follows it), an end edge up to 10 ms after its start, never past the gap's middle. When the
+/// gap holds `at`, the edge stays at `at`, at least that far inside the gap. Integer math, so
+/// the same take always cuts the same.
+pub fn snap_edge(p: &Pcm, lo: usize, hi: usize, at: usize, start: bool) -> usize {
+    let len = p.samples.len();
+    let hi = hi.min(len);
+    if p.samples.is_empty() || lo >= hi {
+        return at.min(len);
     }
     let step = (p.rate / 1000).max(1) as usize;
-    let half = (p.rate as usize * 2 / 1000 / 2).max(1);
-    let reach = p.rate as usize * radius_ms as usize / 1000;
-    let lo = c.saturating_sub(reach);
-    let hi = (c + reach).min(p.samples.len());
-    let level = |at: usize| -> u64 {
-        let a = at.saturating_sub(half);
-        let b = (at + half).min(p.samples.len());
+    let half = (p.rate as usize / 200).max(1);
+    let base = lo.saturating_sub(half);
+    let top = (hi + half).min(len);
+    // Sums of squares from `base`, so each window costs two lookups.
+    let mut sums = Vec::with_capacity(top - base + 1);
+    sums.push(0u64);
+    for v in &p.samples[base..top] {
+        let sq = (i64::from(*v) * i64::from(*v)) as u64;
+        sums.push(sums.last().copied().unwrap_or(0) + sq);
+    }
+    let step_of = |at: usize| -> u32 {
+        let a = at.saturating_sub(half).max(base);
+        let b = (at + half).min(top);
         if b <= a {
             return 0;
         }
-        p.samples[a..b]
-            .iter()
-            .map(|v| u64::from(v.unsigned_abs()))
-            .sum::<u64>()
-            / (b - a) as u64
-    };
-    let mut best = (level(c), 0usize, c);
-    let mut at = lo;
-    while at <= hi {
-        let l = level(at);
-        let d = at.abs_diff(c);
-        // Quieter wins; at equal level the point nearer the alignment wins.
-        if l < best.0 || (l == best.0 && d < best.1) {
-            best = (l, d, at);
+        let ms = (sums[b - base] - sums[a - base]) / (b - a) as u64;
+        if ms < 64 {
+            0
+        } else {
+            ms.ilog2()
         }
-        at += step;
+    };
+    let points: Vec<(usize, u32)> = (lo..=hi).step_by(step).map(|x| (x, step_of(x))).collect();
+    let least = points.iter().map(|(_, l)| *l).min().unwrap_or(0);
+    // The runs of points at the lowest step, as (first, last).
+    let mut runs: Vec<(usize, usize)> = Vec::new();
+    let mut open: Option<(usize, usize)> = None;
+    for (x, l) in &points {
+        if *l == least {
+            open = Some(open.map_or((*x, *x), |(a, _)| (a, *x)));
+        } else if let Some(r) = open.take() {
+            runs.push(r);
+        }
     }
-    best.2
+    runs.extend(open);
+    let away = |r: &(usize, usize)| {
+        if (r.0..=r.1).contains(&at) {
+            0
+        } else {
+            r.0.abs_diff(at).min(r.1.abs_diff(at))
+        }
+    };
+    let Some(gap) = runs.into_iter().min_by_key(away) else {
+        return at.min(len);
+    };
+    let inset = ((gap.1 - gap.0) / 2).min(half * 2);
+    if (gap.0..=gap.1).contains(&at) {
+        // The timestamp is in the quiet already (or the window holds no quieter place).
+        at.clamp(gap.0 + inset, gap.1 - inset)
+    } else if start {
+        gap.1 - inset
+    } else {
+        gap.0 + inset
+    }
 }
 
 /// Cuts every item of a batch out of its take. Fails when the alignment does not describe
@@ -479,15 +519,29 @@ pub fn cut(b: &Batch, a: &Aligned, snap_ms: u32) -> Result<Vec<Cut>> {
     if last > audio_s + 0.25 {
         bail!("the audio is {audio_s:.2} s but the timestamps run to {last:.2} s");
     }
+    let chars: Vec<char> = b.text.chars().collect();
+    let rate = f64::from(a.pcm.rate);
+    let sample = |t: f64| ((t.max(0.0) * rate).round() as usize).min(a.pcm.samples.len());
+    let snap = f64::from(snap_ms) / 1000.0;
     let mut out = Vec::new();
     for (item, r) in &b.items {
         if r.is_empty() || r.end > n {
             bail!("the line {:?} has no place in the batch", item.spoken);
         }
         let (t0, t1) = (al.starts[r.start], al.ends[r.end - 1]);
-        let rate = f64::from(a.pcm.rate);
-        let mut s0 = quietest(&a.pcm, t0, snap_ms);
-        let mut s1 = quietest(&a.pcm, t1, snap_ms);
+        let (mut s0, mut s1) = (sample(t0), sample(t1));
+        if snap_ms > 0 {
+            // The start looks back to the end of the letter before the line (the carrier's
+            // last) and on through the line's first letter; the end looks on to the start of
+            // the next letter (the next sentence), or to the end of the take.
+            let before = (0..r.start).rev().find(|&i| chars[i].is_alphanumeric());
+            let after = (r.end..n).find(|&i| chars[i].is_alphanumeric());
+            let lo0 = before.map_or(t0 - snap, |i| al.ends[i].min(t0 - snap));
+            let hi0 = al.ends[r.start].max(t0 + snap);
+            let hi1 = after.map_or(audio_s, |i| al.starts[i].max(t1 + snap));
+            s0 = snap_edge(&a.pcm, sample(lo0), sample(hi0), s0, true);
+            s1 = snap_edge(&a.pcm, sample(t1 - snap), sample(hi1), s1, false);
+        }
         if s1 <= s0 {
             // Snapping closed the gap: fall back to the alignment itself.
             s0 = (t0 * rate) as usize;
@@ -517,6 +571,59 @@ const MIN_MS: f64 = 120.0;
 const MAX_MS: f64 = 4500.0;
 /// A cut whose loudest sample is under this holds no speech.
 const MIN_PEAK: i32 = 100;
+/// A 10 ms frame with this many zero crossings or more is hiss (3 kHz and up), not voice.
+const HISS_CROSSINGS: u32 = 30;
+
+/// The mean square and zero crossings of each whole 10 ms frame.
+fn frames(p: &Pcm) -> Vec<(u64, u32)> {
+    let n = (p.rate as usize / 100).max(1);
+    p.samples
+        .chunks_exact(n)
+        .map(|f| {
+            let ms = f
+                .iter()
+                .map(|v| (i64::from(*v) * i64::from(*v)) as u64)
+                .sum::<u64>()
+                / n as u64;
+            let zc = f.windows(2).filter(|w| (w[0] < 0) != (w[1] < 0)).count() as u32;
+            (ms, zc)
+        })
+        .collect()
+}
+
+/// The carrier's last sound at the start of a cut: 20 to 120 ms of hiss, then 20 ms or more of
+/// quiet, then the line (the cut began on the timestamp, inside the carrier's "s"). Returns the
+/// hiss and the gap in ms. A line that starts with a hissing letter may start with a hiss and
+/// a stop ("Stop", "Sky"), so it is not judged.
+fn carrier_bleed(c: &Cut) -> Option<(u32, u32)> {
+    let first = c.spoken.chars().find(|x| x.is_alphanumeric())?;
+    if "szxcfj".contains(first.to_ascii_lowercase()) {
+        return None;
+    }
+    let f = frames(&c.pcm);
+    let peak = f.iter().map(|(ms, _)| *ms).max()?;
+    // Sound is within 20 dB of the cut's loudest frame.
+    let sound = |i: usize| f[i].0.saturating_mul(100) >= peak;
+    let mut i = 0;
+    // The cut may start one frame before the hiss.
+    if i < f.len() && !sound(i) {
+        i += 1;
+    }
+    let mut j = i;
+    while j < f.len() && sound(j) {
+        j += 1;
+    }
+    let mut g = j;
+    while g < f.len() && !sound(g) {
+        g += 1;
+    }
+    let hiss = j - i;
+    if !(2..=12).contains(&hiss) || g - j < 2 || g >= f.len() {
+        return None;
+    }
+    let crossings = f[i..j].iter().map(|(_, z)| *z).sum::<u32>() / hiss as u32;
+    (crossings >= HISS_CROSSINGS).then_some((hiss as u32 * 10, (g - j) as u32 * 10))
+}
 
 /// A cut the checks found wrong: its line needs a re-take.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -561,6 +668,10 @@ pub fn check(cuts: &[Cut]) -> Vec<Flag> {
             .unwrap_or(0);
         let reason = if peak < MIN_PEAK {
             Some("the cut is silent".to_string())
+        } else if let Some((hiss, gap)) = carrier_bleed(c) {
+            Some(format!(
+                "starts with {hiss} ms of hiss and a {gap} ms gap: the carrier's last sound"
+            ))
         } else if d < MIN_MS {
             Some(format!("only {d:.0} ms"))
         } else if d > MAX_MS {
@@ -890,15 +1001,143 @@ mod tests {
     #[test]
     fn snapping_moves_a_cut_into_the_quiet() {
         let p = burst_take();
-        // An alignment edge 20 ms inside the first burst's end lands in the silence after it.
-        let at = quietest(&p, 0.48, 40);
-        let t = at as f64 / 32000.0;
-        assert!((0.50..=0.52).contains(&t), "{t}");
-        // An edge already in silence stays closest to where it was.
-        let at = quietest(&p, 0.65, 40);
-        assert_eq!(at, (0.65f64 * 32000.0) as usize);
-        // No snap: the alignment itself.
-        assert_eq!(quietest(&p, 0.48, 0), (0.48f64 * 32000.0) as usize);
+        let s = |t: f64| (t * 32000.0) as usize;
+        // An end edge 20 ms inside the first burst lands in the silence after it.
+        let at = snap_edge(&p, s(0.44), s(0.70), s(0.48), false) as f64 / 32000.0;
+        assert!((0.50..=0.52).contains(&at), "{at}");
+        // A start edge 20 ms late, inside the second burst, lands in the silence before it.
+        let at = snap_edge(&p, s(0.50), s(0.86), s(0.82), true) as f64 / 32000.0;
+        assert!((0.78..=0.80).contains(&at), "{at}");
+        // An empty window keeps the edge where it was.
+        assert_eq!(snap_edge(&p, s(0.6), s(0.6), s(0.65), true), s(0.65));
+    }
+
+    /// A deterministic hiss: white noise of +-`amp`.
+    fn hiss(n: usize, amp: i32, seed: &mut u32) -> Vec<i16> {
+        (0..n)
+            .map(|_| {
+                *seed = seed.wrapping_mul(1_664_525).wrapping_add(1_013_904_223);
+                ((*seed >> 16) as i32 % (2 * amp + 1) - amp) as i16
+            })
+            .collect()
+    }
+
+    /// A tone of `hz` at `amp` for `n` samples at 32 kHz.
+    fn tone(n: usize, hz: f64, amp: f64) -> Vec<i16> {
+        (0..n)
+            .map(|i| (amp * (i as f64 * hz * std::f64::consts::TAU / 32000.0).sin()) as i16)
+            .collect()
+    }
+
+    /// The shape of a real take ("The word is Battery critical. The ..."), measured in 10 ms
+    /// frames: "is" voiced to 3.11 s, its "s" hiss 3.11-3.165, a quiet gap 3.165-3.21, the
+    /// line voiced 3.21-4.37, silence, the next "The" from 4.80. The timestamps put the
+    /// line's "B" at 3.12, inside the hiss, and its last letter's end at 4.24, inside the word.
+    fn carrier_take() -> (Batch, Aligned) {
+        let ms = |t: f64| (t * 32000.0).round() as usize;
+        let mut seed = 7;
+        let mut v = hiss(ms(2.90), 2, &mut seed);
+        v.extend(tone(ms(3.11) - v.len(), 220.0, 3000.0));
+        v.extend(hiss(ms(3.165) - v.len(), 2500, &mut seed));
+        v.extend(tone(ms(3.21) - v.len(), 60.0, 200.0));
+        v.extend(tone(ms(4.30) - v.len(), 180.0, 6000.0));
+        v.extend(tone(ms(4.37) - v.len(), 180.0, 300.0));
+        v.extend(hiss(ms(4.80) - v.len(), 2, &mut seed));
+        v.extend(tone(ms(5.10) - v.len(), 200.0, 5000.0));
+        v.extend(hiss(ms(5.30) - v.len(), 2, &mut seed));
+        let text = "is Battery critical. The";
+        let n = text.chars().count();
+        // Letters 2.88 s on at 80 ms each up to the line, the line's letters spread to 4.24,
+        // the full stop and space to 4.80, then "The".
+        let line = 3..19;
+        let mut starts = Vec::with_capacity(n);
+        for i in 0..n {
+            starts.push(if i < line.start {
+                2.88 + 0.08 * i as f64
+            } else if i < line.end {
+                3.12 + (4.24 - 3.12) * (i - line.start) as f64 / (line.end - line.start) as f64
+            } else if i < 21 {
+                4.24 + 0.28 * (i - line.end) as f64
+            } else {
+                4.80 + 0.08 * (i - 21) as f64
+            });
+        }
+        let mut ends: Vec<f64> = starts.iter().skip(1).copied().collect();
+        ends.push(starts[n - 1] + 0.08);
+        let ch = |c: char| c.to_string();
+        (
+            Batch {
+                tone: "alert".into(),
+                text: text.into(),
+                items: vec![(item("Battery critical", "alert"), line)],
+            },
+            Aligned {
+                pcm: Pcm {
+                    rate: 32000,
+                    samples: v,
+                },
+                alignment: Alignment {
+                    characters: text.chars().map(ch).collect(),
+                    starts,
+                    ends,
+                },
+                billed_chars: None,
+            },
+        )
+    }
+
+    #[test]
+    fn a_cut_starts_after_the_carriers_hiss_and_ends_after_the_word() {
+        let (b, a) = carrier_take();
+        assert!((a.alignment.starts[3] - 3.12).abs() < 1e-9);
+        let c = cut(&b, &a, 40).unwrap();
+        // In the gap: after the hiss, before the word.
+        assert!(
+            (3.165..=3.21).contains(&c[0].from_s),
+            "starts at {}",
+            c[0].from_s
+        );
+        // After the word's tail, before the next "The".
+        assert!((4.37..=4.80).contains(&c[0].to_s), "ends at {}", c[0].to_s);
+        assert!(check(&c).is_empty(), "{:?}", check(&c));
+        // Cut on the timestamps alone, the line starts with the carrier's "s": flagged.
+        let raw = cut(&b, &a, 0).unwrap();
+        assert!((raw[0].from_s - 3.12).abs() < 1e-4);
+        let flags = check(&raw);
+        assert_eq!(flags.len(), 1, "{flags:?}");
+        assert!(
+            flags[0].reason.contains("hiss") && flags[0].reason.contains("gap"),
+            "{}",
+            flags[0].reason
+        );
+    }
+
+    #[test]
+    fn a_line_that_starts_with_a_hiss_keeps_it() {
+        // "Six" after "is": one hiss from the carrier's "s" into the line, no gap. The cut
+        // stays near the timestamp, and a hissing first letter is never flagged.
+        let mut seed = 3;
+        let mut v = tone(32000 / 2, 220.0, 3000.0);
+        v.extend(hiss(32000 * 3 / 10, 2000, &mut seed));
+        v.extend(tone(32000 / 5, 180.0, 6000.0));
+        v.extend(hiss(32000 * 3 / 10, 2, &mut seed));
+        let pcm = Pcm {
+            rate: 32000,
+            samples: v,
+        };
+        let s = |t: f64| (t * 32000.0) as usize;
+        let at = snap_edge(&pcm, s(0.55), s(0.71), s(0.65), true) as f64 / 32000.0;
+        assert!((0.60..=0.70).contains(&at), "{at}");
+        let c = Cut {
+            spoken: "Six".into(),
+            pcm: Pcm {
+                rate: 32000,
+                samples: pcm.samples[s(0.62)..s(1.1)].to_vec(),
+            },
+            from_s: 0.62,
+            to_s: 1.1,
+        };
+        assert_eq!(carrier_bleed(&c), None);
     }
 
     fn two_item_batch() -> Batch {

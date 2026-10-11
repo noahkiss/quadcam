@@ -522,6 +522,60 @@ fn a_set_renders_into_a_local_pack_and_recutting_costs_nothing() {
 }
 
 #[test]
+fn a_pack_cut_by_an_older_quadcam_is_cut_again_from_the_cache() {
+    let b = bench(50000, true);
+    let r = paid_render(
+        &b,
+        render("Callum", "eleven_turbo_v2_5", &["quad"], false, true),
+    );
+    let posts = b.http.posts();
+    let pack = b.dir.path().join("support/gear/voices").join(&r.pack);
+    let read = || -> serde_json::Value {
+        serde_json::from_slice(&std::fs::read(pack.join("pack.json")).unwrap()).unwrap()
+    };
+    let kept = read()["kept_batches"].clone();
+    assert!(!kept.as_array().unwrap().is_empty());
+
+    // Rendered again as it is: every batch is kept, none is cut again.
+    let same = b
+        .core
+        .gear_voice_render(&render(
+            "Callum",
+            "eleven_turbo_v2_5",
+            &["quad"],
+            false,
+            false,
+        ))
+        .unwrap();
+    assert_eq!((same.rendered, same.from_cache), (0, 0), "{same:?}");
+
+    // A pack whose kept batches were cut by an older cut (another cut version in their keys):
+    // the render cuts every batch again from the batch cache, with no confirm and no request.
+    let mut m = read();
+    m["kept_batches"] = serde_json::json!(["cut-by-an-older-quadcam"]);
+    std::fs::write(pack.join("pack.json"), serde_json::to_vec(&m).unwrap()).unwrap();
+    let again = b
+        .core
+        .gear_voice_render(&render(
+            "Callum",
+            "eleven_turbo_v2_5",
+            &["quad"],
+            false,
+            false,
+        ))
+        .unwrap();
+    assert!(!again.needs_confirm, "{again:?}");
+    assert_eq!(again.plan.chars, 0);
+    assert_eq!(again.rendered, 0);
+    assert_eq!(again.from_cache, r.rendered);
+    assert_eq!(b.http.posts(), posts);
+    let now = read()["kept_batches"].clone();
+    for k in kept.as_array().unwrap() {
+        assert!(now.as_array().unwrap().contains(k), "{k}");
+    }
+}
+
+#[test]
 fn deleting_a_studio_pack_keeps_its_batches_unless_asked() {
     use quadcam_lib::core::{PackDeleteParams, VoiceParams};
     let b = bench(90_000, true);
