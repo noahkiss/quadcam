@@ -1,46 +1,9 @@
-.header {
-  display: flex;
-  align-items: center;
-  gap: var(--s-3);
-}
-.headIcon {
-  display: grid;
-  place-items: center;
-  width: 44px;
-  height: 44px;
-  border-radius: var(--r-3);
-  background: var(--surface);
-  color: var(--fg);
-}
-.headText {
-  flex: 1;
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-}
-.headText h2 {
-  margin: 0;
-  font-size: var(--t-xl);
-  font-weight: 700;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.sub {
-  color: var(--muted);
-  font-size: var(--t-md);
-}
-.sub [data-state="attention"],
-.sub [data-state="inserted"] {
+.header [data-state="attention"],
+.header [data-state="inserted"] {
   color: var(--warning-text);
 }
-.sub [data-state="safe"] {
+.header [data-state="safe"] {
   color: var(--success-text);
-}
-.headActions {
-  display: flex;
-  gap: var(--s-2);
 }
 
 .plugBar {

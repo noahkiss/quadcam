@@ -130,7 +130,7 @@ test("Mount mounts an unmounted card to browse and Done unmounts it", async ({ a
   await app.open();
   await app.core(`c => c.plug([], [${radio}])`);
   await page.getByRole("navigation", { name: "Library" }).getByRole("button", { name: /^Devices/ }).click();
-  await page.getByRole("list", { name: "Devices" }).getByRole("button", { name: /Field radio/ }).click();
+  await page.getByRole("table", { name: "Devices" }).getByRole("button", { name: /Field radio/ }).click();
   await page.getByRole("button", { name: "Mount" }).click();
   expect((await app.method("gear_card_mount")).at(-1)).toMatchObject({ device: RADIO_ID });
   await expect(page.getByText(/Mounted until/)).toBeVisible();

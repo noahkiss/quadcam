@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { seedLibrary } from "../test/seed";
-import { fmtBytes, fmtDur, fmtLong, fmtT, parseT } from "./format";
+import { fmtAgo, fmtBytes, fmtDur, fmtLong, fmtT, parseT } from "./format";
 import { albumAction, byDay, daySub, deadOf, flyingOf, matches, nextSort, sortClips, validSort, visibleClips } from "./library";
 
 describe("format", () => {
@@ -18,6 +18,13 @@ describe("format", () => {
     expect(parseT("12")).toBe(12);
     expect(parseT("")).toBeNull();
     expect(parseT("x")).toBeNull();
+    const now = Date.parse("2026-10-11T12:00:00Z");
+    expect(fmtAgo(null, now)).toBe("—");
+    expect(fmtAgo("2026-10-11T11:59:40Z", now)).toBe("Now");
+    expect(fmtAgo("2026-10-11T11:15:00Z", now)).toBe("45 min");
+    expect(fmtAgo("2026-10-11T07:00:00Z", now)).toBe("5 h");
+    expect(fmtAgo("2026-10-05T06:00:00Z", now)).toBe("6 d");
+    expect(fmtAgo("2026-08-30T12:00:00Z", now)).toBe("6 wk");
   });
 });
 

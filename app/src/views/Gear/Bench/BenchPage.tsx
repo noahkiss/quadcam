@@ -43,7 +43,7 @@ export function BenchPage() {
     }
   };
   return (
-    <section className={page.page} aria-labelledby="bench-title">
+    <section className={page.stack} aria-labelledby="bench-title">
       <h2 id="bench-title" className={page.title}>
         Bench
       </h2>

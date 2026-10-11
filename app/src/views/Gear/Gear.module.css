@@ -1,3 +1,5 @@
+/* The frame of every Gear page and device page. It owns the one left edge: pages and
+   segments inside it add no padding of their own. */
 .page {
   flex: 1;
   min-height: 0;
@@ -5,67 +7,39 @@
   padding: var(--s-6);
   display: flex;
   flex-direction: column;
-  gap: var(--s-4);
+  gap: var(--s-6);
   max-width: 960px;
   width: 100%;
 }
+/* The page scrolls, so its children keep their height instead of shrinking to fit. */
+.page > * {
+  flex-shrink: 0;
+}
+.page > [role="group"] {
+  align-self: flex-start;
+}
+.page > [data-component="stat-row"] {
+  align-self: stretch;
+}
+/* A page's own wrapper inside the frame (a region with its own name): same rhythm. */
+.stack {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-6);
+}
+/* Older page titles, until each page moves to PageHeader. */
 .title {
   margin: 0;
   font-size: var(--t-xl);
   font-weight: 700;
 }
+/* Older empty lines, until each page moves to EmptyState: left-aligned like it. */
 .empty {
-  margin: var(--s-6) 0;
-  color: var(--muted);
-  font-size: var(--t-lg);
-  text-align: center;
-}
-.list {
   margin: 0;
-  padding: 0;
-  list-style: none;
-  display: flex;
-  flex-direction: column;
-}
-.list li + li {
-  border-top: 1px solid var(--border);
-}
-.row {
-  display: flex;
-  align-items: center;
-  gap: var(--s-3);
-  width: 100%;
-  min-height: 44px;
-  padding: var(--s-2) var(--s-2);
-  border: 0;
-  border-radius: var(--r-1);
-  background: transparent;
-  font-size: var(--t-md);
-  text-align: left;
-}
-.row:hover {
-  background: color-mix(in srgb, var(--surface) 60%, transparent);
-}
-.rowName {
-  flex: 1;
-  min-width: 0;
-  font-weight: 600;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.rowKind,
-.rowState {
   color: var(--muted);
-  min-width: 110px;
+  font-size: var(--t-md);
 }
-.row[data-state="attention"] .rowState,
-.row[data-state="inserted"] .rowState {
-  color: var(--warning-text);
-}
-.row[data-state="safe"] .rowState {
-  color: var(--success-text);
-}
+
 .segment {
   display: flex;
   flex-direction: column;
@@ -74,33 +48,7 @@
 .overview {
   display: flex;
   flex-direction: column;
-  gap: var(--s-4);
-}
-.facts {
-  margin: 0;
-  display: grid;
-  grid-template-columns: max-content 1fr;
-  column-gap: var(--s-6);
-  row-gap: var(--s-2);
-  font-size: var(--t-md);
-}
-.facts > div {
-  display: contents;
-}
-.facts dt {
-  color: var(--muted);
-}
-.facts dd {
-  margin: 0;
-  display: flex;
-  align-items: center;
-  gap: var(--s-2);
-  min-height: 24px;
-}
-.sections {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--s-2);
+  gap: var(--s-6);
 }
 .form {
   display: flex;
@@ -108,6 +56,83 @@
   gap: var(--s-3);
   min-width: 320px;
 }
-.page > [role="group"] {
-  align-self: flex-start;
+
+/* Connected: a card per device, two columns once there is room. */
+.cards {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+  gap: var(--s-3);
+}
+.card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-2);
+  height: 100%;
+  padding: var(--s-3) var(--s-4);
+  border: 1px solid var(--border);
+  border-radius: var(--r-3);
+  background: var(--raised);
+}
+.cardHead {
+  display: flex;
+  align-items: center;
+  gap: var(--s-2);
+  font-size: var(--t-md);
+}
+.cardName {
+  flex: 1;
+  min-width: 0;
+  padding: 0;
+  border: 0;
+  background: none;
+  font: inherit;
+  font-weight: 600;
+  color: var(--fg);
+  text-align: left;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.cardName:hover {
+  text-decoration: underline;
+}
+.cardBody {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--s-2) var(--s-3);
+  min-height: var(--control-h-sm);
+  font-size: var(--t-md);
+}
+.cardKind {
+  color: var(--muted);
+}
+.cardNext {
+  flex: 1;
+  min-width: 0;
+}
+
+/* Devices: the name cell opens the device. */
+.rowLink {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s-2);
+  padding: 0;
+  border: 0;
+  background: none;
+  font: inherit;
+  font-weight: 600;
+  color: var(--fg);
+  text-align: left;
+  cursor: pointer;
+}
+.rowLink:hover {
+  text-decoration: underline;
+}
+.update {
+  color: var(--warning-text);
 }

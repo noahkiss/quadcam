@@ -57,3 +57,15 @@ export const base = (p: string | null | undefined) => (p || "").split("/").pop()
 
 /** `/Users/me/Movies/x` -> `~/Movies/x` when `home` is known. */
 export const tilde = (p: string | null | undefined, home: string) => (p && home && p.startsWith(home) ? "~" + p.slice(home.length) : p || "");
+
+/** How long ago `t` was, short: `Now`, `5 min`, `3 h`, `6 d`, `5 wk`; `—` without a time. */
+export function fmtAgo(t: string | null | undefined, now = Date.now()): string {
+  const ms = t ? Date.parse(t) : NaN;
+  if (!Number.isFinite(ms)) return "—";
+  const m = Math.max(0, Math.floor((now - ms) / 60000));
+  if (m < 1) return "Now";
+  if (m < 60) return `${m} min`;
+  if (m < 60 * 24) return `${Math.floor(m / 60)} h`;
+  const d = Math.floor(m / (60 * 24));
+  return d < 28 ? `${d} d` : `${Math.floor(d / 7)} wk`;
+}

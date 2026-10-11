@@ -49,7 +49,7 @@ test("Edit on a radio saves the name only; an FC keeps its one aircraft", async 
   await expect.poll(async () => (await app.method("gear_device_save")).at(-1)).toEqual({ id: RADIO_ID, name: "Field radio", aircraft: null });
 
   await page.getByRole("navigation", { name: "Library" }).getByRole("button", { name: /^Devices/ }).click();
-  await page.getByRole("list", { name: "Devices" }).getByRole("button", { name: /Whoop FC/ }).click();
+  await page.getByRole("table", { name: "Devices" }).getByRole("button", { name: /Whoop FC/ }).click();
   const fc = page.getByRole("region", { name: "Whoop FC" });
   await expect(fc.getByRole("definition").filter({ hasText: /^Whoop/ })).toBeVisible();
   await expect(fc.getByRole("region", { name: "Aircraft on this radio" })).toHaveCount(0);

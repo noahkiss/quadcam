@@ -16,7 +16,7 @@ async function openSegment(app: AppFixture, page: Page, segment: "Models" | "Che
   await app.open();
   if (plugged) await app.core(`c => c.plug([${radio}])`);
   await page.getByRole("navigation", { name: "Library" }).getByRole("button", { name: /^Devices/ }).click();
-  await page.getByRole("list", { name: "Devices" }).getByRole("button", { name: /Field radio/ }).click();
+  await page.getByRole("table", { name: "Devices" }).getByRole("button", { name: /Field radio/ }).click();
   await page.getByRole("group", { name: "Sections" }).getByRole("button", { name: segment }).click();
 }
 
