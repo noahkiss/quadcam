@@ -22,6 +22,7 @@ export interface Draft {
   addTime: boolean;
   deleteClips: boolean;
   joinSplit: boolean;
+  videoAnalysis: boolean;
   updateCheck: boolean;
   segGap: string;
   sessionGap: string;
@@ -154,6 +155,7 @@ export function draftFrom(s: State): Draft {
     addTime: sel.addTime(s),
     deleteClips: sel.deleteClips(s),
     joinSplit: sel.joinSplit(s),
+    videoAnalysis: sel.videoAnalysis(s),
     updateCheck: sel.updateCheck(s),
     segGap: String(t.segment_gap_s),
     sessionGap: String(t.session_gap_min),
@@ -193,6 +195,7 @@ export function valuesOf(d: Draft, before: Tunables): SettingsValues {
     addTime: d.addTime,
     deleteClipsAfterImport: d.deleteClips,
     joinSplitRecordings: d.joinSplit,
+    videoAnalysis: d.videoAnalysis,
     updateCheck: d.updateCheck,
     photosAlbum: d.photosAlbum.trim(),
     libraryLayout: d.libraryLayout,

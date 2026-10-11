@@ -13,8 +13,11 @@ import { KIND, KIND_ICON } from "./moments";
 import { NameEdit, useNameClick } from "./NameEdit";
 import styles from "./ClipCard.module.css";
 
-/** The strip shows frame `f` of 10; a clip without one shows its poster. */
-export function stripStyle(c: Pick<LibClip, "strip" | "poster">, frame = 2) {
+/** At rest a clip shows its key frame, else frame 2 of its strip; scrubbing shows frame
+ * `frame` of 10. A clip without a strip shows its poster. */
+export function stripStyle(c: Pick<LibClip, "strip" | "poster" | "cover">, frame?: number) {
+  if (frame == null && c.cover) return { backgroundImage: `url("${fileSrc(c.cover)}")`, backgroundSize: "cover", backgroundPosition: "center" };
+  frame ??= 2;
   if (c.strip) return { backgroundImage: `url("${fileSrc(c.strip)}")`, backgroundSize: "1000% 100%", backgroundPosition: `${(frame / 9) * 100}% 0` };
   if (c.poster) return { backgroundImage: `url("${fileSrc(c.poster)}")`, backgroundSize: "cover", backgroundPosition: "center" };
   return {};
@@ -100,7 +103,7 @@ export const ClipCard = memo(function ClipCard({ clip: c, selected, onMenu }: Pr
 function Thumb({ clip: c, selected }: { clip: LibClip; selected: boolean }) {
   const [scrub, setScrub] = useState<number | null>(null);
   const ref = useRef<HTMLDivElement>(null);
-  const style = stripStyle(c, scrub == null ? 2 : Math.floor(scrub * 10));
+  const style = stripStyle(c, scrub == null ? undefined : Math.floor(scrub * 10));
   return (
     <div
       ref={ref}

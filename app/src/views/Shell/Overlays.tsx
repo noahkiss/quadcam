@@ -10,7 +10,7 @@ import { Menu, type MenuItem } from "../../components/Menu";
 import { Toast } from "../../components/Toast";
 import { base } from "../../lib/format";
 import { albumAction } from "../../lib/library";
-import { addLibToPhotos, rescan, revealClip, shareClips, trashClips } from "../../actions/library";
+import { addLibToPhotos, findHighlights, rescan, revealClip, shareClips, trashClips } from "../../actions/library";
 import { cancelErase, confirmErase } from "../../actions/session";
 import { api, errText } from "../../ipc/api";
 import { ApplySheet } from "../Gear/Apply/ApplySheet";
@@ -195,6 +195,7 @@ function ClipMenu() {
       : [
           { label: "Show in Finder", icon: "finder" as const, keys: "⌘R", run: () => revealClip(id) },
           { label: "Find dead air again", icon: "refresh-moments" as const, run: () => rescan(id) },
+          { label: "Find highlights again", icon: "sparkle" as const, run: () => findHighlights([id]) },
         ]),
     null,
     { label: many ? `Move ${ids.length} to Trash` : "Move to Trash", icon: "trash-bin-trash", keys: "⌘⌫", danger: true, run: () => trashClips(ids) },

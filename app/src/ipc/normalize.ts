@@ -73,6 +73,8 @@ export const tunables = (t: G.Tunables): Tunables => ({ ...t, segment_gap_s: n(t
 
 export const geo = (xs: G.GeoResult[]): GeoResult[] => xs.filter((g) => has(g.lat) && has(g.lon)).map((g) => ({ ...g, lat: g.lat!, lon: g.lon! }));
 
+const videoScan = (v: G.VideoScan | null | undefined): G.VideoScan | null => (v ? { highlights: moments(v.highlights), key_frame: v.key_frame ?? null } : null);
+
 export function libClip(c: G.LibItem_Serialize): LibClip {
   return {
     ...c,
@@ -96,6 +98,8 @@ export function libClip(c: G.LibItem_Serialize): LibClip {
     import: c.import ?? null,
     aliases: c.aliases ?? [],
     parts: c.parts ?? [],
+    video: videoScan(c.video),
+    cover: c.cover ?? null,
     cut_of: c.cut_of && has(c.cut_of[1].start) && has(c.cut_of[1].end) ? [c.cut_of[0], { start: c.cut_of[1].start!, end: c.cut_of[1].end! }] : null,
   };
 }
@@ -112,7 +116,7 @@ export function libraryView(v: G.LibraryView_Serialize): LibraryView {
 const signal = (s: G.SignalScan | null | undefined): SignalScan | null => (s ? { ...s, step: n(s.step), dead_air: moments(s.dead_air), keep: spans(s.keep) } : null);
 
 export function clip(c: G.Clip): Clip {
-  return { ...c, kind: c.kind ?? "analog", duration: n(c.duration), probe: c.probe ? { ...c.probe, duration: n(c.probe.duration) } : null, signal: signal(c.signal), key: c.key ?? "", clock: c.clock ?? null, sidecars: c.sidecars ?? [], mtime: c.mtime ?? null, join: c.join ?? null, part_of: c.part_of ?? null };
+  return { ...c, kind: c.kind ?? "analog", duration: n(c.duration), probe: c.probe ? { ...c.probe, duration: n(c.probe.duration) } : null, signal: signal(c.signal), key: c.key ?? "", clock: c.clock ?? null, sidecars: c.sidecars ?? [], mtime: c.mtime ?? null, join: c.join ?? null, part_of: c.part_of ?? null, video: videoScan(c.video) };
 }
 
 const meta = (m: G.ClipMeta | undefined): ClipMeta => ({ profile: m?.profile ?? null, location: location(m?.location), keywords: m?.keywords ?? [], author: m?.author ?? null });

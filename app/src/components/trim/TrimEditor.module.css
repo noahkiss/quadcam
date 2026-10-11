@@ -295,6 +295,11 @@
   text-align: left;
   font-size: var(--t-md);
 }
+.momentSource {
+  color: var(--muted);
+  font-size: var(--t-sm);
+  white-space: nowrap;
+}
 .score {
   width: 40px;
   height: 4px;

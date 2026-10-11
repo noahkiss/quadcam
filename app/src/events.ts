@@ -5,12 +5,16 @@ import { on, onDragDrop } from "./ipc/events";
 import { confirmText, importDropped, sessionChanged } from "./actions/session";
 import { store } from "./store";
 import { dialogOpen } from "./store/ui";
+import { sel } from "./store/settings";
 
 const S = () => store.getState();
 
 export async function start(): Promise<() => void> {
   const offs = await Promise.all([
-    on("library-changed", () => S().loadLibrary()),
+    on("library-changed", async () => {
+      await S().loadLibrary();
+      findNewHighlights();
+    }),
     on("settings-changed", async () => {
       // The Settings sheet reads them fresh when it closes.
       if (S().settingsOpen) return;
@@ -72,6 +76,7 @@ export async function start(): Promise<() => void> {
   await S().refreshVolumes();
   await S().loadGear();
   makeStrips();
+  findNewHighlights();
   return () => {
     offs.forEach((off) => off());
     window.removeEventListener("focus", onFocus);
@@ -91,6 +96,30 @@ export async function makeStrips() {
     console.warn(e);
   } finally {
     stripsRunning = false;
+  }
+}
+
+let videoRunning = false;
+let videoUnavailable = false;
+/** Clips the analyzer failed on; they are not tried again until the app restarts. */
+const videoFailed = new Set<string>();
+/** The last import's clips get highlights and a key frame in the background, when the
+ * setting is on and this Mac can run video analysis. Older clips wait for "Find highlights
+ * again" (or the CLI). */
+export async function findNewHighlights() {
+  const s = S();
+  if (videoRunning || videoUnavailable || !sel.videoAnalysis(s)) return;
+  const ids = (s.lib?.clips || []).filter((c) => c.last_import && !c.video && !c.cut_of && !videoFailed.has(c.id)).map((c) => c.id);
+  if (!ids.length) return;
+  videoRunning = true;
+  try {
+    const r = await api.analyzeVideo(ids);
+    if (r.unavailable) videoUnavailable = true;
+    for (const c of r.clips) if (c.error) videoFailed.add(c.id);
+  } catch (e) {
+    console.warn(e);
+  } finally {
+    videoRunning = false;
   }
 }
 
