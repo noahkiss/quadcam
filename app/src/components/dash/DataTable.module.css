@@ -44,6 +44,9 @@
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
 }
+.table thead th.num {
+  font-family: inherit;
+}
 .check {
   width: 24px;
 }

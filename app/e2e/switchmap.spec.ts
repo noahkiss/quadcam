@@ -15,7 +15,7 @@ const side = (page: Page) => page.getByRole("navigation", { name: "Library" });
 async function openSwitches(app: AppFixture, page: Page) {
   await app.open();
   await side(page).getByRole("button", { name: /^Devices/ }).click();
-  await page.getByRole("list", { name: "Devices" }).getByRole("button", { name: /Whoop FC/ }).click();
+  await page.getByRole("table", { name: "Devices" }).getByRole("button", { name: /Whoop FC/ }).click();
   await page.getByRole("group", { name: "Sections" }).getByRole("button", { name: "Switches" }).click();
   await app.core(`c => c.dialogAnswers.push(${JSON.stringify(CARD)}, [${JSON.stringify(DUMP)}])`);
   await page.getByRole("button", { name: "Open card…" }).click();

@@ -18,6 +18,13 @@ import { ChecksList } from "../../components/gear/ChecksList";
 import { DeviceHeader } from "../../components/gear/DeviceHeader";
 import { DiffView } from "../../components/gear/DiffView";
 import { PlugInBar } from "../../components/gear/PlugInBar";
+import { EmptyState } from "../../components/dash/EmptyState";
+import { FactList } from "../../components/dash/FactList";
+import { MoreMenu } from "../../components/dash/MoreMenu";
+import { PageHeader } from "../../components/dash/PageHeader";
+import { SectionCard } from "../../components/dash/SectionCard";
+import { Stat, StatRow } from "../../components/dash/StatRow";
+import { StatusDot } from "../../components/dash/StatusDot";
 import styles from "./Gallery.module.css";
 
 export function Gallery() {
@@ -120,8 +127,46 @@ export function Gallery() {
           <b>ffmpeg not found.</b> Install it with <code>brew install ffmpeg</code>, then restart QuadCam.
         </Banner>
       </section>
+      <section aria-label="Dashboard" className={styles.col}>
+        <PageHeader
+          title="Bench"
+          subtitle="3 staged · 1 plugged in"
+          actions={
+            <>
+              <Button size="sm">Copy as Markdown</Button>
+              <Button size="sm" variant="primary">
+                Copy settings…
+              </Button>
+            </>
+          }
+        />
+        <StatRow label="Summary">
+          <Stat label="Plugged in" value={2} />
+          <Stat label="Need attention" value={1} tone="warn" />
+          <Stat label="Free space" value="21 GB" sub="of 32 GB" meter={0.34} />
+        </StatRow>
+        <SectionCard title="Details" status={<StatusDot tone="ok">Connected</StatusDot>}>
+          <FactList
+            facts={[
+              { label: "Board", value: "STM32F411", selectable: true },
+              { label: "Version", value: "4.5.1", selectable: true },
+              { label: "Port", value: "/dev/cu.usbmodem0", selectable: true },
+              { label: "Last backup", value: "Oct 5, 2026, 6:00 AM" },
+            ]}
+          />
+        </SectionCard>
+        <div className={styles.row}>
+          <StatusDot tone="ok">Up to date</StatusDot>
+          <StatusDot tone="warn">Update available</StatusDot>
+          <StatusDot tone="error">Check failed</StatusDot>
+          <StatusDot tone="idle">Not connected</StatusDot>
+        </div>
+        <EmptyState icon="sliders" action={<Button size="sm">Open Devices</Button>}>
+          Nothing staged.
+        </EmptyState>
+      </section>
       <section aria-label="Gear" className={styles.col}>
-        <DeviceHeader kind="fc" name="Whoop FC" state="attention" actions={<Button size="sm">Edit…</Button>} />
+        <DeviceHeader kind="fc" name="Whoop FC" state="attention" facts={["Betaflight 4.5.1"]} actions={<><Button size="sm">Edit…</Button><MoreMenu items={[{ label: "Forget…", danger: true, run: () => {} }]} /></>} />
         <DeviceHeader kind="dvr_card" name="DVR card" state="safe" />
         <PlugInBar count={3} onReview={() => toast("Review")} />
         <ChecksList

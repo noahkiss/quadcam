@@ -11,7 +11,7 @@ import { axeSchemes, expect, test, type AppFixture } from "./fixtures";
 async function openRates(app: AppFixture, page: Page) {
   await app.open();
   await page.getByRole("navigation", { name: "Library" }).getByRole("button", { name: /^Devices/ }).click();
-  await page.getByRole("list", { name: "Devices" }).getByRole("button", { name: /Whoop FC/ }).click();
+  await page.getByRole("table", { name: "Devices" }).getByRole("button", { name: /Whoop FC/ }).click();
   await page.getByRole("group", { name: "Sections" }).getByRole("button", { name: "Rates" }).click();
 }
 

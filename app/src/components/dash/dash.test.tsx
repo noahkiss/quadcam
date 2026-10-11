@@ -1,0 +1,55 @@
+import { render, screen } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
+import { describe, expect, it, vi } from "vitest";
+import { axeViolations } from "../../test/axe";
+import { Button } from "../Button";
+import { EmptyState } from "./EmptyState";
+import { FactList } from "./FactList";
+import { MoreMenu } from "./MoreMenu";
+import { PageHeader } from "./PageHeader";
+import { StatusDot } from "./StatusDot";
+
+describe("PageHeader", () => {
+  it("puts the title, subtitle and actions in one header, the heading under its id", async () => {
+    const { container } = render(
+      <section aria-labelledby="t">
+        <PageHeader id="t" title="Bench" subtitle="3 staged" actions={<Button>Copy</Button>} />
+      </section>,
+    );
+    expect(screen.getByRole("region", { name: "Bench" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { level: 2, name: "Bench" })).toBeInTheDocument();
+    expect(screen.getByText("3 staged")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Copy" })).toBeInTheDocument();
+    expect(await axeViolations(container)).toEqual([]);
+  });
+});
+
+describe("EmptyState, FactList and StatusDot", () => {
+  it("say what is missing, list facts, and name a state in words", async () => {
+    const { container } = render(
+      <>
+        <EmptyState action={<Button>Add</Button>}>No packs saved.</EmptyState>
+        <FactList label="Details" facts={[{ label: "Board", value: "STM32F411", selectable: true }, { label: "Port", value: "/dev/cu.usbmodem0" }]} />
+        <StatusDot tone="warn">Update available</StatusDot>
+      </>,
+    );
+    expect(screen.getByText("No packs saved.")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Add" })).toBeInTheDocument();
+    expect(screen.getByText("Board").nextElementSibling).toHaveTextContent("STM32F411");
+    expect(screen.getByText("Update available")).toBeInTheDocument();
+    expect(await axeViolations(container)).toEqual([]);
+  });
+});
+
+describe("MoreMenu", () => {
+  it("opens a menu of the page's rare actions and runs one", async () => {
+    const run = vi.fn();
+    render(<MoreMenu items={[{ label: "Forget…", danger: true, run }]} />);
+    const button = screen.getByRole("button", { name: "More actions" });
+    expect(button).toHaveAttribute("aria-expanded", "false");
+    await userEvent.click(button);
+    await userEvent.click(screen.getByRole("menuitem", { name: "Forget…" }));
+    expect(run).toHaveBeenCalledOnce();
+    expect(screen.queryByRole("menu")).toBeNull();
+  });
+});

@@ -10,8 +10,11 @@ First time on real hardware? Follow the ordered checklist in [Device trials](tri
 **Gear** is a section of the sidebar, under the library groups. Its triangle opens and closes
 it.
 
-- **Connected** lists what is plugged in now. Each device also has its own row under it.
-- **Devices** lists the devices you saved, plugged in or not.
+- **Connected** shows what is plugged in now: tiles for how many are plugged in, need
+  attention, are working and have changes staged, then a card per device with its state and
+  its next step (**Save…**, **Review…**, **Import…**). Each device also has its own row under it.
+- **Devices** is a table of the devices you saved, plugged in or not: kind, state, last backup,
+  firmware (installed → newest when an update is out) and staged changes.
 - **Bench** lists the changes staged for each device. See [The Bench](#the-bench).
 - **Pack up**, **Flights**, **Packs** and **Repairs** are described under
   [Flights and packs](#flights-and-packs).
@@ -24,10 +27,15 @@ it.
   reads ExpressLRS devices. See [Firmware and splash](#firmware-and-splash).
 - **Storage** shows the gear folder. See [Backups](#backups).
 - **Sim** and **Sim radio** show only while **Show the Sim page** is on. See [Sim](sim.md).
-- A device's page shows its kind and state, what it reports about itself (board, firmware,
-  version), where it is mounted, its aircraft and its latest backup. **Save…** names a device
-  QuadCam does not know and links an FC to its aircraft; **Edit…** changes that; **Forget…**
-  removes it from `gear.json` and keeps its backups. **Show clips** opens the aircraft's clips.
+- A device's page shows its kind, state and firmware in the header. Its Overview has summary
+  tiles: for an FC the firmware (against the newest), the last backup, the staged changes and
+  the latest blackbox pull; for a radio the same with its aircraft count in place of the
+  blackbox; for a DVR or goggles card the new clips, the last card check, the free space and
+  the last backup. A tile opens the section it sums up. **Details** lists what the device
+  reports about itself (board, firmware, version), where it is mounted and its aircraft.
+  **Save…** names a device QuadCam does not know and links an FC to its aircraft; **Edit…**
+  changes that; **Forget…** (in the **…** menu) removes it from `gear.json` and keeps its
+  backups. **Show clips** opens the aircraft's clips.
 - A radio flies many aircraft, so its page lists them under **Aircraft on this radio**: every
   aircraft profile that names the radio, with its EdgeTX model, whether that model is on the
   mounted card (else in the latest backup), and **Selected** on the model the radio selects.
@@ -100,7 +108,7 @@ serial is linked to a saved radio once and kept in that radio's record:
 
 ## Flight controllers
 
-![A flight controller's page: the Overview section with board, firmware, version, port, background reads and last backup, and tabs for OSD, Rates, Switches, Changes, Blackbox and Backups](images/gear-fc-dark.png)
+![A flight controller's page: the header, tabs for Overview, OSD, Rates, Switches, Changes, Blackbox and Backups, the summary tiles, and the Details card with board, firmware, version, port and background reads](images/gear-fc-dark.png)
 
 QuadCam talks to Betaflight over USB in two ways:
 

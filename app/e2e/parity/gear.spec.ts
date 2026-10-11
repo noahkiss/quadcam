@@ -85,16 +85,17 @@ test("a device plugged in shows in the sidebar; Forget removes a saved one", asy
   await expect(page.getByRole("heading", { name: "Field radio" })).toBeVisible();
 
   await side(page).getByRole("button", { name: /^Devices/ }).click();
-  await page.getByRole("list", { name: "Devices" }).getByRole("button", { name: /Whoop FC/ }).click();
+  await page.getByRole("table", { name: "Devices" }).getByRole("button", { name: /Whoop FC/ }).click();
   const fc = page.getByRole("region", { name: "Whoop FC" });
   await expect(fc).toContainText("Not connected");
   await expect(fc).toContainText("4.5.1");
-  // An FC's page has the OSD segment; Overview links to it.
-  await fc.getByRole("navigation", { name: "Sections" }).getByRole("button", { name: "OSD" }).click();
+  // An FC's page has the OSD segment.
+  await fc.getByRole("group", { name: "Sections" }).getByRole("button", { name: "OSD" }).click();
   await expect(fc.getByRole("group", { name: "Sections" }).getByRole("button", { name: "OSD" })).toHaveAttribute("aria-pressed", "true");
   await expect(fc.getByRole("button", { name: /Open/ })).toBeVisible();
   await fc.getByRole("group", { name: "Sections" }).getByRole("button", { name: "Overview" }).click();
-  await fc.getByRole("button", { name: "Forget…" }).click();
+  await fc.getByRole("button", { name: "More actions" }).click();
+  await page.getByRole("menu", { name: "More actions" }).getByRole("menuitem", { name: "Forget…" }).click();
   await dialog(page, "Forget Whoop FC?").getByRole("button", { name: "Forget" }).click();
   expect(await app.method("gear_device_forget")).toEqual([{ id: "fc-0a1b2c3d4e5f6071" }]);
   await expect(page.getByText("This device is not connected or saved.")).toBeVisible();

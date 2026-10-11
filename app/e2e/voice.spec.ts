@@ -13,7 +13,7 @@ async function openVoice(app: AppFixture, page: Page, plugged = false) {
   await app.open();
   if (plugged) await app.core(`c => c.plug([${radio}])`);
   await page.getByRole("navigation", { name: "Library" }).getByRole("button", { name: /^Devices/ }).click();
-  await page.getByRole("list", { name: "Devices" }).getByRole("button", { name: /Field radio/ }).click();
+  await page.getByRole("table", { name: "Devices" }).getByRole("button", { name: /Field radio/ }).click();
   await page.getByRole("group", { name: "Sections" }).getByRole("button", { name: "Voice" }).click();
 }
 
@@ -24,7 +24,7 @@ async function installDemo(page: Page) {
   await page.getByRole("button", { name: "Install Demo" }).click();
   await expect(page.getByRole("table", { name: "Voice packs on this Mac" })).toContainText("Demo");
   await page.getByRole("navigation", { name: "Library" }).getByRole("button", { name: /^Devices/ }).click();
-  await page.getByRole("list", { name: "Devices" }).getByRole("button", { name: /Field radio/ }).click();
+  await page.getByRole("table", { name: "Devices" }).getByRole("button", { name: /Field radio/ }).click();
   await page.getByRole("group", { name: "Sections" }).getByRole("button", { name: "Voice" }).click();
 }
 

@@ -1,8 +1,16 @@
+import { useEffect, useState } from "react";
 import { useStore } from "../../store";
+import { api } from "../../ipc/api";
+import type { BlackboxEntry } from "../../ipc/types";
 import { Button } from "../../components/Button";
+import { FactList, type Fact } from "../../components/dash/FactList";
+import { SectionCard } from "../../components/dash/SectionCard";
+import { Stat, StatRow } from "../../components/dash/StatRow";
 import { PlugInBar } from "../../components/gear/PlugInBar";
+import { checkFor, fmtWhen } from "../../lib/backups";
 import { linkHandle, linkText } from "../../lib/gear";
-import { tilde } from "../../lib/format";
+import { aircraftOf } from "../../lib/radioAircraft";
+import { fmtAgo, fmtBytes, plural, tilde } from "../../lib/format";
 import { gearSlots, type DeviceRef } from "./slots";
 import { segmentsFor } from "./segments";
 import { RadioAircraft } from "./RadioAircraft/RadioAircraft";
@@ -16,87 +24,143 @@ const IDENTITY: [keyof NonNullable<DeviceRef["connected"]>["identity"], string][
   ["target", "Target"],
 ];
 
-const fmtTime = (t: string | null | undefined) => (t ? new Date(t).toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" }) : null);
+/** The identity a device page shows: the saved one, with what the device reports now on top. */
+export const identityOf = (d: DeviceRef) => ({ ...(d.device?.identity || {}), ...Object.fromEntries(Object.entries(d.connected?.identity || {}).filter(([, v]) => v)) });
 
-/** A device's Overview: the bar for staged changes, its identity, where it is plugged in,
- *  its aircraft (a radio's list of them) and its latest backup, and the device's other
- *  segments. */
+/** A device's Overview: the bar for staged changes, the summary tiles for its kind, and its
+ *  details (identity, where it is plugged in, its aircraft); a radio adds
+ *  its list of aircraft. */
 export function Overview({ d }: { d: DeviceRef }) {
   const home = useStore((s) => s.home);
-  useStore((s) => s.changes); // the bar follows the staged changes
+  useStore((s) => s.changes); // the bar and the Staged tile follow the staged changes
   const setFilter = useStore((s) => s.setFilter);
-  const setSegment = useStore((s) => s.setGearSegment);
-  const identity = { ...(d.device?.identity || {}), ...Object.fromEntries(Object.entries(d.connected?.identity || {}).filter(([, v]) => v)) };
-  const shown = IDENTITY.filter(([k]) => identity[k]);
-  const backup = gearSlots.lastBackup(d.device);
-  const others = segmentsFor(d).filter((s) => s.id !== "overview");
-  const aircraft = d.device?.aircraft;
-  const isRadio = d.kind === "radio";
   const paused = useStore((s) => s.gear?.paused);
   const setPollPaused = useStore((s) => s.setPollPaused);
+  const identity = identityOf(d);
+  const aircraft = d.device?.aircraft;
+  const isRadio = d.kind === "radio";
   const fcPort = d.connected?.kind === "fc" && d.connected.link.kind === "serial" ? linkHandle(d.connected.link) : null;
   const isPaused = fcPort !== null && !!paused?.includes(fcPort);
+  const facts: Fact[] = IDENTITY.filter(([k]) => identity[k]).map(([k, label]) => ({ label, value: identity[k], selectable: true }));
+  if (d.connected) facts.push({ label: d.connected.link.kind === "volume" ? "Mounted at" : "Port", value: d.unmounted ? "Unmounted" : tilde(linkText(d.connected.link), home), selectable: !d.unmounted });
+  if (fcPort)
+    facts.push({
+      label: "Background reads",
+      value: (
+        <>
+          {isPaused ? "Paused" : "On"}
+          <Button size="sm" variant="ghost" onClick={() => setPollPaused(fcPort, !isPaused)}>
+            {isPaused ? "Resume reads" : "Pause reads"}
+          </Button>
+        </>
+      ),
+    });
+  if (!isRadio)
+    facts.push({
+      label: "Aircraft",
+      value: (
+        <>
+          {aircraft || "None"}
+          {aircraft && (
+            <Button size="sm" variant="ghost" onClick={() => setFilter({ group: "all", aircraft })}>
+              Show clips
+            </Button>
+          )}
+        </>
+      ),
+    });
+  if (d.device?.last_seen) facts.push({ label: "Last seen", value: fmtWhen(d.device.last_seen) });
   return (
     <div className={styles.overview}>
       {d.device && <PlugInBar count={gearSlots.stagedFor(d.device.id)} onReview={() => gearSlots.review(d.device!.id)} />}
-      <dl className={styles.facts}>
-        {shown.map(([k, label]) => (
-          <div key={k}>
-            <dt>{label}</dt>
-            <dd className="selectable">{identity[k]}</dd>
-          </div>
-        ))}
-        {d.connected && (
-          <div>
-            <dt>{d.connected.link.kind === "volume" ? "Mounted at" : "Port"}</dt>
-            <dd className="selectable">{d.unmounted ? "Unmounted" : tilde(linkText(d.connected.link), home)}</dd>
-          </div>
-        )}
-        {fcPort && (
-          <div>
-            <dt>Background reads</dt>
-            <dd>
-              {isPaused ? "Paused" : "On"}
-              <Button size="sm" variant="ghost" onClick={() => setPollPaused(fcPort, !isPaused)}>
-                {isPaused ? "Resume reads" : "Pause reads"}
-              </Button>
-            </dd>
-          </div>
-        )}
-        {!isRadio && (
-          <div>
-            <dt>Aircraft</dt>
-            <dd>
-              {aircraft || "None"}
-              {aircraft && (
-                <Button size="sm" variant="ghost" onClick={() => setFilter({ group: "all", aircraft })}>
-                  Show clips
-                </Button>
-              )}
-            </dd>
-          </div>
-        )}
-        <div>
-          <dt>Last backup</dt>
-          <dd>{fmtTime(backup) || "None"}</dd>
-        </div>
-        {d.device?.last_seen && (
-          <div>
-            <dt>Last seen</dt>
-            <dd>{fmtTime(d.device.last_seen)}</dd>
-          </div>
-        )}
-      </dl>
+      <Tiles d={d} />
+      <SectionCard title="Details">
+        <FactList facts={facts} label="Details" />
+      </SectionCard>
       {isRadio && d.device && <RadioAircraft d={d} />}
-      {others.length > 0 && (
-        <nav aria-label="Sections" className={styles.sections}>
-          {others.map((s) => (
-            <Button key={s.id} size="sm" variant="ghost" iconEnd="chev-right" onClick={() => setSegment(s.id)}>
-              {s.label}
-            </Button>
-          ))}
-        </nav>
-      )}
     </div>
   );
+}
+
+/** The summary tiles for a device's kind. A tile that sums up a segment opens it. */
+function Tiles({ d }: { d: DeviceRef }) {
+  const firmware = useStore((s) => s.firmware);
+  const saved = useStore((s) => s.devices);
+  const gear = useStore((s) => s.gear);
+  const cards = useStore((s) => s.cards);
+  const setSegment = useStore((s) => s.setGearSegment);
+  const openGear = useStore((s) => s.openGear);
+  const pulls = useBlackbox(d.kind === "fc" ? (d.device?.id ?? null) : null);
+  const ids = new Set(segmentsFor(d).map((s) => s.id));
+  const go = (seg: string) => (ids.has(seg) ? () => setSegment(seg) : undefined);
+  const id = d.device?.id ?? d.connected?.id ?? null;
+  const backup = gearSlots.lastBackup(d.device);
+  const staged = d.device ? gearSlots.stagedFor(d.device.id) : 0;
+
+  const fw = firmware?.devices.find((f) => f.device === id);
+  const installed = fw?.installed ?? identityOf(d).version ?? null;
+  const fwTile = (
+    <Stat
+      key="firmware"
+      label="Firmware"
+      value={installed ?? "—"}
+      sub={!fw?.latest ? "Newest not checked" : fw.state === "update" ? `Newest ${fw.latest}` : "Up to date"}
+      tone={fw?.state === "update" ? "warn" : undefined}
+      onClick={() => openGear({ page: "slot", id: "firmware" })}
+    />
+  );
+  const backupTile = <Stat key="backup" label="Last backup" value={fmtAgo(backup)} sub={backup ? fmtWhen(backup) : "None"} onClick={go("backups")} />;
+  const stagedTile = <Stat key="staged" label="Staged" value={staged} sub={staged ? "Ready to apply" : undefined} onClick={go("changes")} />;
+
+  let tiles;
+  if (d.kind === "fc") {
+    const last = pulls?.[0]?.pull;
+    tiles = [
+      fwTile,
+      backupTile,
+      stagedTile,
+      <Stat key="blackbox" label="Blackbox" value={last ? plural(last.logs.length, "log") : "—"} sub={last ? fmtWhen(last.pulled_at) : "Not pulled"} onClick={go("blackbox")} />,
+    ];
+  } else if (d.kind === "radio") {
+    const n = aircraftOf(d.device, saved).length;
+    tiles = [fwTile, backupTile, stagedTile, <Stat key="aircraft" label="Aircraft" value={n} />];
+  } else if (d.kind === "dvr_card" || d.kind === "goggles") {
+    const mount = d.connected?.link.kind === "volume" && !d.unmounted ? d.connected.link.mount : null;
+    const card = mount ? cards[mount] : undefined;
+    const check = checkFor(gear, id);
+    const space = d.device?.last_space;
+    const checkWord = check ? { ok: "Passed", failed: "Problems", stopped: "Stopped", error: "Did not run" }[check.state] : "—";
+    tiles = [
+      <Stat key="new" label="New clips" value={card ? card.new : "—"} sub={card ? plural(card.clips, "clip") + " on the card" : undefined} />,
+      <Stat key="check" label="Last check" value={checkWord} sub={check ? fmtWhen(check.at) : "Not checked"} tone={check ? (check.state === "ok" ? "ok" : check.state === "stopped" ? undefined : "error") : undefined} />,
+      <Stat
+        key="space"
+        label="Free space"
+        value={space ? fmtBytes(space.free) : "—"}
+        sub={space?.total ? `of ${fmtBytes(space.total)}` : undefined}
+        meter={space?.total ? 1 - space.free / space.total : undefined}
+      />,
+      backupTile,
+    ];
+  } else {
+    tiles = [fwTile, backupTile, stagedTile];
+  }
+  return <StatRow label="Summary">{tiles}</StatRow>;
+}
+
+/** The FC's stored blackbox pulls, newest first; null until they load. */
+function useBlackbox(device: string | null) {
+  const [list, setList] = useState<BlackboxEntry[] | null>(null);
+  useEffect(() => {
+    if (!device) return;
+    let gone = false;
+    api.gearBlackbox(device).then(
+      (l) => !gone && setList([...l].sort((a, b) => b.pull.pulled_at.localeCompare(a.pull.pulled_at))),
+      () => undefined,
+    );
+    return () => {
+      gone = true;
+    };
+  }, [device]);
+  return device ? list : null;
 }

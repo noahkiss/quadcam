@@ -99,6 +99,29 @@ pnpm build                                 # -> app/dist
 - The axe specs loop over both themes (`axeSchemes` in `e2e/fixtures.ts`). `QC_AXE_THEMES=dark` (or `light`) runs them in one theme only; CI sets `dark` on a branch or a pull request and both on `main` and on a tag. Every other spec runs whatever the variable says. A new axe spec loops over `axeSchemes`, not its own list.
 - `QC_SHOTS=<dir> pnpm exec playwright test e2e/shots.spec.ts` writes screenshots of each screen in both themes. The images in `docs/images/` come from this spec.
 
+### How to build a dashboard page
+
+Every Gear page and device page follows one pattern. The shared parts live in `app/src/components/dash/`; import them, never copy them.
+
+- **Frame.** `views/Gear/GearView.tsx` puts each page in `Gear.module.css .page`: padding `--s-6`, a `--s-6` gap, at most 960 px wide. A page returns its content (or one wrapper with `.stack` when it needs its own region name) and adds no padding. A segment adds none either, so every page has one left edge.
+- **Order.** `PageHeader`, then a `StatRow` of 3 to 5 tiles, then 2 to 4 `SectionCard`s or one `DataTable`.
+- **Header.** `<PageHeader title subtitle? icon? actions? id? />`. Actions sit on the right, primary last. A rare or destructive action goes in `<MoreMenu items={[...]} />` (a `…` button with a `Menu`), not inline. The subtitle is one line (kind · state · a fact), never a sentence. Device pages use `components/gear/DeviceHeader.tsx` (`kind name state facts? actions?`), which is a `PageHeader`.
+- **Empty.** `<EmptyState icon? action?>One line saying what is missing.</EmptyState>`, left-aligned where the content would be. A page with tiles keeps them, showing 0 or "—".
+
+| Component | Props | Use for |
+|---|---|---|
+| `PageHeader` | `title`, `subtitle?`, `icon?`, `actions?`, `id?` (the heading's id, for the page's `aria-labelledby`) | The top of every page |
+| `StatRow`, `Stat` | `StatRow label`; `Stat label value sub? tone? meter? badge? onClick?` | The summary tiles. `onClick` makes a tile open what it sums up. `tone` colours the value only |
+| `SectionCard` | `title`, `label?`, `status?`, `actions?` | A titled block of a page. No card holds a single line |
+| `DataTable`, `Column` | `label columns rows rowKey selection? group? compact? empty?` | Rows that share columns. `numeric` columns are mono and right-aligned; `group` adds group header rows; `optional` columns hide under 720 px |
+| `FactList`, `Fact` | `facts: { label, value, selectable? }[]`, `label?` | Key and value rows of one object; two columns of pairs from 720 px |
+| `StatusDot`, `StatusTone` | `tone: "ok" \| "warn" \| "error" \| "idle"`, children (the label) | A state in a table cell, a card head or a header |
+| `Badge`, `BadgeTone` | `tone? title?`, children | A short mark beside a value or a row |
+| `EmptyState` | `icon?`, `action?`, children | An empty page or section |
+| `MoreMenu` | `items: (MenuItem \| null)[]`, `label?` (default "More actions") | Rare and destructive actions |
+
+`/?gallery` in dev shows each of them in both themes, and `e2e/theme.spec.ts` runs axe on it. `views/Gear/DeviceLists.tsx` (Connected, Devices) and `views/Gear/Overview.tsx` are worked examples.
+
 ### CI
 
 `.github/workflows/ci.yml` runs on every push to a branch or a `v*` tag, and on pull requests from forks:
