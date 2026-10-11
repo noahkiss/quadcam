@@ -900,3 +900,90 @@ fn aux_and_adjrange_edits_apply_and_verify() {
     assert!(saved.contains("aux 3 13 3 1700 2100 0 0"));
     assert!(saved.contains("adjrange 1 0 1 900 2100 29 1 0 0"));
 }
+
+/// `quadcam-cli gear apply`: no `--digest` and no `--yes` each exit 3 and write nothing;
+/// `--plan` in a process with no FC shows the refusal; the digest of a ready
+/// plan from another process still refuses there (no FC under cargo), exit 3. The change
+/// stays Ready.
+#[test]
+fn the_cli_apply_needs_the_digest_and_yes() {
+    let home = tempfile::tempdir().unwrap();
+    let support = home.path().join("Library/Application Support/app.quadcam");
+    std::fs::create_dir_all(&support).unwrap();
+    let fc = FakeFc::new(G473).with_uid(UID);
+    let mut env = Env::fake(vec![], Arc::new(fc.ports(PORT, None)));
+    env.cues = Arc::new(CueService::inline(Arc::new(RecordedCues::default())));
+    let core = Core::new(
+        home.path().join("cache"),
+        None,
+        Arc::new(NoHooks),
+        Arc::new(Recorder::default()),
+    )
+    .with_settings(support.join("settings.json"))
+    .with_gear_env(env)
+    .with_fc_timing(Timing::fast());
+    core.gear_backup(&BackupParams {
+        port: Some(PORT.into()),
+        ..Default::default()
+    })
+    .unwrap();
+    let c = core
+        .gear_change_stage(&StageParams {
+            device: id_of(&fc),
+            edits: vec![set("osd_cap_alarm", "1500")],
+            ..Default::default()
+        })
+        .unwrap();
+    let ready = core
+        .gear_apply_plan(&ApplyPlanParams {
+            id: c.id.clone(),
+            port: None,
+        })
+        .unwrap();
+    assert!(ready.ready(), "{:?}", ready.checks);
+
+    let cli = |args: &[&str]| -> (i32, serde_json::Value) {
+        let out = std::process::Command::new(env!("CARGO_BIN_EXE_quadcam-cli"))
+            .env("HOME", home.path())
+            .env_remove("QUADCAM_SERIAL")
+            .arg("--json")
+            .args(args)
+            .output()
+            .unwrap();
+        let v = serde_json::from_slice(&out.stdout).unwrap_or(serde_json::Value::Null);
+        (out.status.code().unwrap(), v)
+    };
+    let (code, v) = cli(&["gear", "apply", &c.id]);
+    assert_eq!(code, 3, "no digest: {v}");
+    assert!(
+        v["error"]["message"].as_str().unwrap().contains("--digest"),
+        "{v}"
+    );
+    let (code, v) = cli(&["gear", "apply", &c.id, "--digest", &ready.digest]);
+    assert_eq!(code, 3, "no --yes: {v}");
+    assert!(
+        v["error"]["message"].as_str().unwrap().contains("confirm"),
+        "{v}"
+    );
+    let (code, v) = cli(&["gear", "apply", &c.id, "--plan"]);
+    assert_eq!(code, 0, "{v}");
+    let refused: Vec<&str> = v["result"]["checks"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .filter_map(|k| k["refusal"]["code"].as_str())
+        .collect();
+    assert!(refused.contains(&"no_device"), "{v}");
+    let (code, v) = cli(&["gear", "apply", &c.id, "--digest", &ready.digest, "--yes"]);
+    assert_eq!(code, 3, "{v}");
+    assert_eq!(v["error"]["code"], "refused", "{v}");
+    assert_eq!(fc.saves(), 0);
+    let status = core
+        .gear_changes(&ChangeFilter::default())
+        .unwrap()
+        .into_iter()
+        .find(|x| x.id == c.id)
+        .unwrap()
+        .status;
+    assert_eq!(status, ChangeStatus::Ready);
+}
