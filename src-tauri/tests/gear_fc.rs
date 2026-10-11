@@ -22,7 +22,7 @@ const G473_AFTER: &str = include_str!("fixtures/bf/g473-2025.12.5.after.dump_all
 const V2: &str = include_str!("fixtures/bf/g473v2-2026.6.0.dump_all.txt");
 
 const UID: [u8; 12] = [
-    0x2f, 0, 0x38, 0, 0x35, 0x34, 0x11, 0x51, 0x39, 0x36, 0x30, 0x13,
+    0x01, 0x23, 0x45, 0x67, 0x89, 0xab, 0xcd, 0xef, 0x10, 0x32, 0x54, 0x76,
 ];
 
 struct Bench {
@@ -332,6 +332,66 @@ fn the_usb_timer_warns_once_at_the_board_limit() {
     // Status carries the timers for the device row.
     let s = b.core.gear_status().unwrap();
     assert_eq!(s.usb_timers.len(), 1);
+}
+
+/// The FC's ports, with the port left out of the next `hide` lists: the FC rebooting after a
+/// CLI job, as the detection poll sees it.
+struct Blinking {
+    inner: quadcam_lib::gear::serial::FakePorts,
+    hide: std::sync::atomic::AtomicU32,
+}
+
+impl Ports for Blinking {
+    fn list(&self) -> Vec<PortInfo> {
+        use std::sync::atomic::Ordering::SeqCst;
+        if self
+            .hide
+            .fetch_update(SeqCst, SeqCst, |n| n.checked_sub(1))
+            .is_ok()
+        {
+            return Vec::new();
+        }
+        self.inner.list()
+    }
+    fn open(
+        &self,
+        port: &str,
+        baud: u32,
+    ) -> anyhow::Result<Box<dyn quadcam_lib::gear::serial::SerialLink>> {
+        self.inner.open(port, baud)
+    }
+}
+
+#[test]
+fn the_usb_timer_keeps_counting_while_the_fc_reboots() {
+    let fc = FakeFc::new(V2).with_uid(UID);
+    let dir = tempfile::tempdir().unwrap();
+    let locks = dir.path().join("locks");
+    let ports = Arc::new(Blinking {
+        inner: fc.ports(PORT, Some(locks.clone())),
+        hide: Default::default(),
+    });
+    let b = bench_with(ports.clone(), locks, dir);
+    fc.set_battery(7.6);
+    let t0 = Instant::now();
+    let t = b.core.gear_usb_tick(t0);
+    assert!(t[0].battery);
+    // A read ends in a reboot; the poll misses the port twice while the FC restarts.
+    b.core.gear_fc_read(&FcReadParams::default()).unwrap();
+    assert!(fc.exits() > 0, "the read rebooted the FC");
+    ports.hide.store(2, std::sync::atomic::Ordering::SeqCst);
+    assert!(b.core.gear_connected().unwrap().is_empty());
+    let s = b.core.gear_status().unwrap();
+    assert!(s.connected.is_empty());
+    assert_eq!(s.usb_timers.len(), 1, "the timer outlives the reboot");
+    assert!(s.usb_timers[0].battery);
+    assert_eq!(b.core.gear_connected().unwrap().len(), 1, "the FC is back");
+    // Five minutes on: the timer counts from the first battery reading, not from the reboot.
+    let t = b.core.gear_usb_tick(t0 + Duration::from_secs(300));
+    assert_eq!(t.len(), 1);
+    assert!(t[0].battery);
+    assert!(t[0].elapsed_s >= 300, "{t:?}");
+    assert_eq!(t[0].limit_s, Some(600));
 }
 
 #[test]

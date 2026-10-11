@@ -128,6 +128,9 @@ a port only when no other program has it open:
   no chance of a probe at all, pause the reads: **Pause reads** on the FC's Overview, `gear fc
   pause` in the CLI, or `poll_pause` in `quadcam_gear_edit`. The USB timer stops counting while
   paused, and the pause lasts until QuadCam quits. A job you start yourself still runs.
+- A pause also turns off the USB heat checks, because they read the timer. A job still reads
+  the battery once before its heat check: with a battery in and no timer counting, a flash
+  refuses, and an apply or a blackbox pull warns in its answer.
 
 Plug USB in before the battery: many FCs do not show up on USB when the battery is first.
 When several FCs are plugged in, name the port; QuadCam does not guess.
@@ -150,6 +153,9 @@ FC is on USB with a battery in (more than 1 V on its battery lead), QuadCam coun
 At the limit it says "Unplug <FC> now." once, and the device shows the time left. The limit is
 the `gear_usb_minutes` setting (20), or the board's own limit when it is shorter (10 minutes for
 the boards above). `gear_usb_minutes` 0 turns the timer off. Pulling the battery resets it.
+The timer follows the FC, not one detection poll: it keeps counting while the port drops out for a
+reboot after a job, for USB disk mode or for a flash. It ends once the port has been gone for a
+minute, or for 15 minutes while a DFU device is attached (an FC in its bootloader).
 
 ## Blackbox
 
@@ -190,7 +196,8 @@ refused ("USB heat") and reads nothing; unplug the battery, or force the pull (`
 --force`). A forced pull still
 never starts an erase it could not finish: the erase estimate (4 s per MiB, 20 to 120 s) plus 10 s
 must fit in the time left, else the erase is skipped and the answer says so. With no battery in,
-there is no timer.
+there is no timer. With a battery in and no timer counting (reads paused, or the FC plugged in
+moments ago), the pull runs and its answer warns.
 
 **Other programs and Pause reads.** A pull refuses a port another program has open. The on-connect
 step skips a port whose reads you paused; a pull you start yourself still runs.
@@ -211,7 +218,9 @@ does not decode the flight data yet.
 first (not proven)** in Settings > Gear), a pull first tries the FC's USB mass
 storage mode: it enters the CLI, checks that `help` lists `msc`, sends `msc`, copies the `.bbl` files
 from the new disk in name order, unmounts it, and waits for the FC to come back. It falls back to
-MSP when the FC has no `msc`. This path is built and tested on a simulated FC only. **It needs a trial
+MSP when the FC has no `msc`, and when the disk's files do not verify as the flash (not the bytes
+used, or a log without a header): the answer says why. With `--mode msc` it fails instead. This
+path is built and tested on a simulated FC only. **It needs a trial
 on a real FC**: the disk's file layout, the speed, and whether the FC returns to serial after the
 eject are unknown. The estimate for the heat check stays the MSP one.
 
@@ -648,8 +657,8 @@ value outside the allowed range or list is refused before any line is sent.
 and the FC is as it was. The sheet names the line. If the FC saves but a line does not read back
 as written, the sheet lists those lines and offers **Restore backup**, which stages the backup
 taken before the write as a new change and opens it in the same sheet. A restore sets back
-every setting, mode, adjustment and feature that differs; it leaves resources, serial ports
-and timers alone.
+every setting, mode, adjustment and feature that differs, and the active PID and rate profile
+the backup had; it leaves resources, serial ports and timers alone.
 
 After an apply QuadCam stores the FC's new state as a backup (**After apply**), so the next
 plan compares with it. A profile selection changes the FC's active profile once saved, so
@@ -1212,8 +1221,13 @@ flashed to a proven one.
      `before_flash`);
    - restarts the FC into its ROM bootloader (CLI `bl`) and waits for exactly one new DFU
      device;
-   - checks the chip's flash is the size the board has, erases the sectors it needs, writes
-     the image, reads it back and compares every byte, then leaves DFU mode;
+   - checks the chip's flash is the size the board has;
+   - reads the whole flash twice, compares the two reads, and saves the firmware the FC runs
+     now as a firmware copy, read back from disk. Nothing is erased before this copy is kept.
+     A blank flash (an interrupted flash) has nothing to copy. The two reads take most of the
+     flash's time;
+   - erases the sectors it needs, writes the image, reads it back and compares every byte,
+     then leaves DFU mode;
    - waits for the FC and checks it is the same FC (its MCU id);
    - reads the new firmware's `dump all` and a `get` for each old setting, and saves it as a
      backup;
@@ -1224,7 +1238,7 @@ flashed to a proven one.
 What comes back, and what does not:
 
 - A setting whose value differs from the new firmware's default comes back. So do modes,
-  adjustments and features.
+  adjustments and features, and the PID and rate profile the FC flew on.
 - A setting the new version no longer has is **listed in the report and skipped**. QuadCam
   does not rename or guess. The same holds for a value the new version's `get` answer does
   not allow.
@@ -1249,8 +1263,16 @@ If something goes wrong:
   device already plugged in, a busy port or a USB timer that would run out all stop here.
 - **The FC does not show up as a DFU device.** Nothing was written. Unplug USB and the
   battery and plug USB in again; the report names the backup.
-- **A flash step fails, or the read back differs.** The FC has half a firmware and stays in
-  its bootloader. Run the flash again, or unplug and enter the bootloader again first.
+- **The flash fails before the erase** (for example, the bootloader moves another block size).
+  Nothing was erased, and the FC still holds its old firmware. QuadCam asks the FC to leave
+  DFU mode and start it. If it stays in its bootloader, unplug USB and the battery and plug USB
+  in again.
+- **A flash step fails after the erase, or the read back differs.** The FC has half a firmware
+  and stays in its bootloader. QuadCam cannot flash an FC that is in its bootloader: its flash
+  starts from a serial FC. Leave USB plugged in and flash an official build for the board from
+  Betaflight Configurator, which finds the FC in DFU mode. If you unplugged it, use the boot
+  button (next item). Then put your settings back from the `before_flash` backup with
+  **Restore**.
 - **The FC does not start afterwards.** Unplug USB and the battery, hold the FC's boot
   button, plug USB in, and flash an official build from Betaflight Configurator. The ROM
   bootloader cannot be overwritten, so an FC can always be flashed again.
@@ -1258,7 +1280,8 @@ If something goes wrong:
   settings are in the `before_flash` backup, and the staged change stays in **Changes**.
 
 A flash with the battery in runs on USB power for about a minute and a half. The plan refuses
-when the USB timer would run out first.
+when the USB timer would run out first. The flash reads the battery again before it starts and
+refuses a battery in while no USB timer counts (reads paused, or the FC plugged in moments ago).
 
 ### ExpressLRS (preview)
 

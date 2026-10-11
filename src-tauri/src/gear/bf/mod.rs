@@ -392,8 +392,8 @@ mod tests {
 
     #[test]
     fn ids() {
-        let (raw, s) = id_source(Some("002F00383435"), None, None).unwrap();
-        assert_eq!((raw.as_str(), s), ("bf-uid:002f00383435", IdSource::McuUid));
+        let (raw, s) = id_source(Some("0123456789AB"), None, None).unwrap();
+        assert_eq!((raw.as_str(), s), ("bf-uid:0123456789ab", IdSource::McuUid));
         assert!(id_source(Some("000000"), None, None).is_none());
         let (raw, s) = id_source(Some("0000"), Some("betafpvg473"), Some("3A0F")).unwrap();
         assert_eq!(

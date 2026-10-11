@@ -16,7 +16,7 @@ use super::{link_handle, Core, FcJob, HookFn, OnConnectHook, Skip};
 use crate::gear::backup::BackupProgress;
 use crate::gear::bf::blackbox::{self as bb, ImageCheck};
 use crate::gear::bf::cli::{wait_for_port, CliSession, Timing, BAUD};
-use crate::gear::bf::{self, FcInfo};
+use crate::gear::bf::{self, msp, FcInfo};
 use crate::gear::blackbox::{self, Candidate, Linked, Method, Pull, Pulls};
 use crate::gear::blobs::Blobs;
 use crate::gear::model::{Connected, DeviceKind, Refusal, RefusalCode};
@@ -300,7 +300,14 @@ impl Core {
         // The USB heat timer: a pull that cannot finish is not started.
         let read_s = bb::read_seconds(used);
         let erase_s = bb::erase_seconds(sum.total as u64);
-        let remaining = self.usb_remaining(port);
+        let volts = msp::call(link.as_mut(), msp::MSP_ANALOG, t.msp)
+            .ok()
+            .and_then(|p| msp::parse_analog_volts(&p));
+        let heat = self.usb_heat(port, volts);
+        if heat.untimed {
+            res.notes.push(super::fc::UNTIMED_NOTE.into());
+        }
+        let remaining = heat.remaining_s;
         if !fits(read_s, remaining) && !a.force {
             return Err(Refusal::new(
                 RefusalCode::UsbHeat,
@@ -348,33 +355,45 @@ impl Core {
                 "The FC did not come back after USB disk mode. Unplug USB, plug it in again and pull again.",
             )?;
         }
-        let image = match image {
-            Some(i) => i,
-            None => {
-                let progress = |done: u64| {
-                    self.job_progress(
-                        port,
-                        &BackupProgress {
-                            stage: "reading".into(),
-                            files_done: 0,
-                            files_total: 1,
-                            bytes_done: done,
-                            bytes_total: used,
-                            path: "blackbox flash".into(),
-                        },
-                    );
-                    !stop.load(Ordering::SeqCst)
-                };
-                let mut progress = progress;
-                bb::read_used(link.as_mut(), sum.used, t.msp, &mut progress)?
-            }
+        let read_msp = |link: &mut dyn crate::gear::serial::SerialLink| {
+            let mut progress = |done: u64| {
+                self.job_progress(
+                    port,
+                    &BackupProgress {
+                        stage: "reading".into(),
+                        files_done: 0,
+                        files_total: 1,
+                        bytes_done: done,
+                        bytes_total: used,
+                        path: "blackbox flash".into(),
+                    },
+                );
+                !stop.load(Ordering::SeqCst)
+            };
+            bb::read_used(link, sum.used, t.msp, &mut progress)
         };
+        let mut image = match image {
+            Some(i) => i,
+            None => read_msp(link.as_mut())?,
+        };
+        let mut checked = bb::check_image(&image, used);
+        // The USB disk's files are not proven to be the flash as it is: in Auto, a disk
+        // image that does not verify is read again over MSP.
+        if method == Method::Msc && !checked.problems.is_empty() && a.mode == PullMode::Auto {
+            res.notes.push(format!(
+                "The USB disk did not give the flash as it is ({}); read over MSP.",
+                checked.problems.join(" ")
+            ));
+            image = read_msp(link.as_mut())?;
+            method = Method::Msp;
+            checked = bb::check_image(&image, used);
+        }
         res.read_secs = started.elapsed().as_secs_f64();
         res.read_bytes = image.len() as u64;
         res.method = Some(method);
 
         // Verify, store, read back.
-        let ImageCheck { logs, problems } = bb::check_image(&image, used);
+        let ImageCheck { logs, problems } = checked;
         if !problems.is_empty() {
             bail!(
                 "The blackbox read did not verify, so nothing was stored or erased: {}",

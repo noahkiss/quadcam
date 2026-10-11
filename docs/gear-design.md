@@ -123,7 +123,14 @@ limit QuadCam plays one "Unplug <FC> now." cue (speech and notification): small 
 on USB with a battery and no airflow. The limit is `gearUsbMinutes` (default 20), or the
 board's own shorter limit in `bf/boards.rs` (10 min for the proven BetaFPV G473 boards).
 `Core::gear_usb_tick` runs from the app's poll; `gear_usb_timers` and `GearStatus.usb_timers`
-give the countdown (built in WP2).
+give the countdown (built in WP2). The timer outlives its port (`core::fc::keep_usb`): every CLI
+job ends in a reboot, and USB disk mode and a flash drop the port too, while the battery keeps the
+FC hot. A timer stays while a job holds its port, for 60 s after the port left the list, and for
+15 min while an STM32 DFU device is attached. It keeps the FC's id and board, moves to another
+port when the same id shows up there, and starts over when another FC's id shows up on its port.
+A job reads the battery itself before its heat check (`Core::usb_heat`): a battery in with no
+timer counting (reads paused, or no probe yet) refuses a Betaflight flash and is a note on an FC
+apply and a blackbox pull.
 
 ### 2.4 The apply sheet
 
@@ -1435,29 +1442,35 @@ binaries only (open question 10).
     one new STM32 DFU device (a DFU device already attached refuses, since the FC could not be
     told apart), open it through `Flasher`, compare the DFU layout with the board's flash size
     (a mismatch leaves DFU without erasing, which starts the old firmware), then `dfu::flash`
-    (erase, write, read back, compare, leave). The firmware is not read out of the FC first,
-    unlike the radio flash: the FC's recovery is an official build, and the pre-flash `diff all`
-    and `dump all` are the backup that matters.
+    (erase, write, read back, compare, leave). Before the erase, `dfu::read_verified` reads the
+    whole flash twice and the job saves the copy (`fwcopy`, `before_flash`), as the radio flash
+    does. A `dfu::flash` error before its erase step leaves the old firmware whole: the job asks
+    the FC to leave DFU, and the report says nothing was erased.
   - **Heat.** The plan and the apply refuse when a battery is in and the USB timer's remaining
     time is shorter than the estimate (`betaflight::flash_seconds`: 90 s plus 1 s per 8 KB).
-    The plan also warns to unplug the battery.
+    The plan also warns to unplug the battery. The apply reads the battery again first and
+    refuses a battery in while no timer counts.
   - **Carry-over.** After the flash QuadCam reads `dump all` and one `get` per old setting,
     saves them as a backup (trigger `after_apply`, so the apply compares with the new
     firmware), computes `changes::restore_lines(old diff, new dump)`, drops every `set` the
-    `get` answer refuses, stages the rest as one change and applies it through the FC apply
+    `get` answer refuses, adds the old active PID and rate profile last
+    (`changes::selection_lines`; `render_fc` ends on a selection no line of its kind follows),
+    stages the rest as one change and applies it through the FC apply
     (`apply_inner`), which backs up, range checks, writes, saves and verifies against `dump
     all`. The flash's confirm covers that apply; the plan says the settings come back. Missing
     settings, refused values and the board lines left out (resource, serial, timer, dma, mixer,
     map, ...) go into the report's notes. Nothing is renamed or guessed.
   - **Half states.** A failure before `bl` changes nothing and returns a refusal. After it the
     report (status `failed`, `saved` true only once the flash read back equal) names the state
-    (bootloader, new firmware, settings not put back), the backup, and the recovery path: the
-    boot button and ROM DFU.
+    (bootloader, new firmware, settings not put back), the backup, and the recovery path: a
+    Betaflight Configurator flash of an official build over ROM DFU, with the boot button if the
+    FC was unplugged. QuadCam cannot flash an FC that sits in its bootloader: its plan starts
+    from a serial FC.
   - **Needs a real-FC trial:** the `bl` command and the DFU re-enumeration on a real FC, the
     build service's request and reply shapes, the target names, the chip's DFU layout string,
     the time the FC takes to come back after a first boot, and a real `get` on every old
     setting. See `docs/gear.md`.
-  - Tests: `tests/gear_bf_flash.rs` (13) and unit tests in the two modules, on `FakeFc`,
+  - Tests: `tests/gear_bf_flash.rs` (16) and unit tests in the two modules, on `FakeFc`,
     `FakeDfu` and `FixtureCloud`; `app/e2e/bfflash.spec.ts` on the mock core.
 
 - **Built (radio over USB):** four follow-ups, branch `radio-usb`.
@@ -1801,7 +1814,8 @@ a failed chunk is asked again twice; a gone port fails the job at once. Measured
 1. Refuse a port another process holds (`Env.holders`) and any FC that is not Betaflight.
 2. Identify over MSP, read the summary. 0 used: nothing to pull.
 3. Heat check. The USB timer (7.11) gives the seconds left with a battery in. The read takes
-   `used / 84 KB/s`. If it does not fit, refuse (`usb_heat`) unless `force`.
+   `used / 84 KB/s`. If it does not fit, refuse (`usb_heat`) unless `force`. The job reads the
+   battery over MSP first; a battery in with no timer counting is a note.
 4. Read: MSP, or the USB disk path when `gearBlackboxMsc` allows (below).
 5. Verify (`bf::blackbox::check_image`): size equals used, the data starts with a log header,
    each log has a firmware line. A failure stores nothing and erases nothing.
@@ -1840,8 +1854,8 @@ the public format description; the GPL decoder was not read.
 **USB disk path (needs a real-FC trial).** With `gearBlackboxMsc` (or `mode=msc`): enter the CLI,
 `help` must list `msc`, send `msc` (the FC reboots as a disk), wait for a new volume that holds
 `.bbl` or `.bfl` files, copy them in name order into one image, unmount the disk, wait for the
-port. The same verify (step 5) applies, so a file layout that does not add up to the used size
-fails and nothing is erased. If the port does not come back the pull is stored and the erase is
+port. The same verify (step 5) applies: with `mode=auto` an image that does not verify is read
+again over MSP (the answer says why); with `mode=msc` it fails and nothing is erased. If the port does not come back the pull is stored and the erase is
 skipped with the reason. Without `msc` in the CLI the pull falls back to MSP (`mode=msc` fails
 instead). Unknown on real hardware: the disk's layout and names, its speed, whether eject or a
 replug returns the FC to serial, and the extra reboot's cost against the heat timer. Tests use

@@ -394,7 +394,7 @@ impl Core {
         match out {
             Ok(job) => {
                 let mut r = job.result;
-                r.notes = job.notes;
+                r.notes.extend(job.notes);
                 Ok(r)
             }
             Err(e) => match stash.lock().unwrap().take() {
@@ -435,15 +435,14 @@ impl Core {
                 format!("{port} is open in {name}. Close it there; QuadCam does not share a port."),
             )));
         }
-        if let Ok(v) = bf::battery_volts(ports, port, t) {
-            let timer = self.gear_usb_timers().into_iter().find(|x| x.port == port);
-            if v > bf::BATTERY_IN_VOLTS && timer.is_some_and(|x| x.remaining_s == Some(0)) {
-                return Err(refusal(Refusal::new(
-                    RefusalCode::UsbHeat,
-                    "This FC has run on USB with its battery in past its limit. Unplug the battery and let it cool.",
-                )));
-            }
+        let heat = self.usb_heat(port, bf::battery_volts(ports, port, t).ok());
+        if heat.battery && heat.remaining_s == Some(0) {
+            return Err(refusal(Refusal::new(
+                RefusalCode::UsbHeat,
+                "This FC has run on USB with its battery in past its limit. Unplug the battery and let it cool.",
+            )));
         }
+        let heat_note = heat.untimed.then(|| super::fc::UNTIMED_NOTE.to_string());
 
         // Backup first; a failed backup stops everything.
         step("Backing up");
@@ -553,7 +552,7 @@ impl Core {
             saved: run.saved,
             files: Vec::new(),
             message: String::new(),
-            notes: Vec::new(),
+            notes: heat_note.into_iter().collect(),
             at: Utc::now(),
         };
         let skipped = |n: &str| StepReport {

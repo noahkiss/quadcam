@@ -83,6 +83,14 @@ pub struct UsbTimer {
 /// between reads).
 pub const USB_PROBE: Duration = Duration::from_secs(30);
 
+/// How long a USB timer outlives its port. Every CLI job ends in a reboot and USB disk mode
+/// drops the port too, while the battery keeps the FC and VTX hot.
+pub const USB_GONE_GRACE: Duration = Duration::from_secs(60);
+
+/// How long a USB timer outlives its port while an STM32 DFU device is attached: the FC may
+/// sit in its bootloader after a flash, still powered by its battery.
+pub const USB_DFU_GRACE: Duration = Duration::from_secs(15 * 60);
+
 /// One port's USB timer state.
 #[derive(Debug, Clone, Default)]
 pub struct UsbState {
@@ -90,6 +98,63 @@ pub struct UsbState {
     last_probe: Option<Instant>,
     volts: Option<f32>,
     warned: bool,
+    /// The FC's id and board, kept while the port is gone so the timer follows the FC.
+    id: Option<String>,
+    board: Option<String>,
+    /// When the port left the device list; None while it is listed or a job holds it.
+    gone_since: Option<Instant>,
+}
+
+/// Keeps each USB timer across a short absence of its port (`present`: each listed FC port
+/// with the id a job read, if any). A timer whose FC shows up on another port moves there; a
+/// port that comes back with another FC's id starts over. A timer is dropped once its port
+/// has been gone past its grace and no job holds it.
+pub(super) fn keep_usb(
+    usb: &mut HashMap<String, UsbState>,
+    present: &[(String, Option<String>)],
+    held: impl Fn(&str) -> bool,
+    dfu_attached: bool,
+    now: Instant,
+) {
+    for (port, id) in present {
+        let Some(id) = id else { continue };
+        if usb
+            .get(port)
+            .is_some_and(|u| u.id.as_ref().is_some_and(|x| x != id))
+        {
+            usb.remove(port);
+        }
+        if usb.contains_key(port) {
+            continue;
+        }
+        let moved = usb
+            .iter()
+            .find(|(p, u)| u.gone_since.is_some() && u.id.as_ref() == Some(id) && *p != port)
+            .map(|(p, _)| p.clone());
+        if let Some(from) = moved.and_then(|p| usb.remove(&p)) {
+            usb.insert(port.clone(), from);
+        }
+    }
+    let grace = if dfu_attached {
+        USB_DFU_GRACE
+    } else {
+        USB_GONE_GRACE
+    };
+    usb.retain(|port, u| {
+        if let Some((_, id)) = present.iter().find(|(p, _)| p == port) {
+            u.gone_since = None;
+            if id.is_some() {
+                u.id.clone_from(id);
+            }
+            return true;
+        }
+        if held(port) {
+            u.gone_since = None;
+            return true;
+        }
+        let since = *u.gone_since.get_or_insert(now);
+        now.saturating_duration_since(since) < grace
+    });
 }
 
 /// Per-port FC state the core keeps between jobs and polls.
@@ -245,17 +310,32 @@ impl Core {
     }
 
     /// Fills the id and identity of serial FCs that a job identified. Drops ports that
-    /// are gone.
+    /// are gone; a USB timer outlives its port for a while (`keep_usb`).
     pub(super) fn fc_fill(&self, found: &mut [Connected]) {
-        let mut st = self.fc_state.lock().unwrap();
         let ports: Vec<String> = found
             .iter()
             .filter(|c| matches!(c.link, Link::Serial { .. }))
             .map(|c| super::gear::link_handle(&c.link))
             .collect();
+        let dfu = found.iter().any(|c| {
+            matches!(c.link, Link::Dfu { vid, pid, .. }
+                if (vid, pid) == crate::gear::detect::STM32_DFU)
+        });
+        let held: HashSet<String> = self.gear_working().into_iter().collect();
+        let mut st = self.fc_state.lock().unwrap();
         st.seen.retain(|p, _| ports.contains(p));
-        st.usb.retain(|p, _| ports.contains(p));
         st.radio.retain(|p, _| ports.contains(p));
+        let present: Vec<(String, Option<String>)> = ports
+            .iter()
+            .map(|p| (p.clone(), st.seen.get(p).and_then(|i| i.id.clone())))
+            .collect();
+        keep_usb(
+            &mut st.usb,
+            &present,
+            |p| held.contains(p),
+            dfu,
+            Instant::now(),
+        );
         for c in found.iter_mut() {
             if let Some(i) = st.seen.get(&super::gear::link_handle(&c.link)) {
                 if c.kind == DeviceKind::Fc {
@@ -360,8 +440,13 @@ impl Core {
                 bf::battery_volts(self.gear.ports.as_ref(), &port, t).ok()
             };
             let mut st = self.fc_state.lock().unwrap();
+            let info = st.seen.get(&port).cloned();
             let u = st.usb.entry(port.clone()).or_default();
             u.last_probe = Some(now);
+            if let Some(i) = info {
+                u.id = i.id.or(u.id.take());
+                u.board = i.identity.board.or(u.board.take());
+            }
             let Some(v) = volts else { continue };
             u.volts = Some(v);
             if v > bf::BATTERY_IN_VOLTS {
@@ -412,16 +497,17 @@ impl Core {
             .iter()
             .map(|(port, u)| {
                 let info = st.seen.get(port);
-                let limit_s =
-                    boards::usb_limit(minutes, info.and_then(|i| i.identity.board.as_deref()))
-                        .map(|m| m * 60);
+                let board = info
+                    .and_then(|i| i.identity.board.as_deref())
+                    .or(u.board.as_deref());
+                let limit_s = boards::usb_limit(minutes, board).map(|m| m * 60);
                 let elapsed_s = u
                     .battery_since
                     .map(|s| now.saturating_duration_since(s).as_secs() as u32)
                     .unwrap_or(0);
                 UsbTimer {
                     port: port.clone(),
-                    id: info.and_then(|i| i.id.clone()),
+                    id: info.and_then(|i| i.id.clone()).or_else(|| u.id.clone()),
                     battery: u.battery_since.is_some(),
                     volts: u.volts,
                     elapsed_s,
@@ -438,5 +524,120 @@ impl Core {
     /// The USB timers now, without reading any FC.
     pub fn gear_usb_timers(&self) -> Vec<UsbTimer> {
         self.usb_timers(Instant::now())
+    }
+
+    /// The heat gate's view of the FC on `port`, with the battery `volts` a job read just
+    /// before the gate. A battery the job reads while no timer counts (reads paused, or the
+    /// first probe not yet run) is `untimed`.
+    pub(super) fn usb_heat(&self, port: &str, volts: Option<f32>) -> UsbHeat {
+        let timer = self
+            .gear_usb_timers()
+            .into_iter()
+            .find(|t| t.port == port && t.battery);
+        let read_in = volts.is_some_and(|v| v > bf::BATTERY_IN_VOLTS);
+        UsbHeat {
+            battery: timer.is_some() || read_in,
+            remaining_s: timer.as_ref().and_then(|t| t.remaining_s),
+            untimed: read_in && timer.is_none(),
+        }
+    }
+}
+
+/// A job's USB heat state: see `Core::usb_heat`.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub(super) struct UsbHeat {
+    pub battery: bool,
+    /// Seconds left on the timer; None when no timer counts.
+    pub remaining_s: Option<u32>,
+    /// A battery is in and no timer counts, so the time on USB is unknown.
+    pub untimed: bool,
+}
+
+/// What a job says when it finds a battery in and no USB timer counting.
+pub const UNTIMED_NOTE: &str = "A battery is in, and QuadCam's USB timer is not counting for this FC (its reads are paused, or it was plugged in moments ago). Keep the job short or unplug the battery: the quad heats on USB.";
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn running(id: &str, since: Instant) -> UsbState {
+        UsbState {
+            battery_since: Some(since),
+            id: Some(id.into()),
+            ..Default::default()
+        }
+    }
+
+    #[test]
+    fn a_usb_timer_outlives_its_port_for_a_grace_time() {
+        let t0 = Instant::now();
+        let mut usb = HashMap::from([("/dev/a".to_string(), running("fc1", t0))]);
+        let s = Duration::from_secs;
+        // Gone for one poll (a reboot): kept, and it counts on when the port is back.
+        keep_usb(&mut usb, &[], |_| false, false, t0 + s(2));
+        assert!(usb["/dev/a"].gone_since.is_some());
+        keep_usb(
+            &mut usb,
+            &[("/dev/a".into(), None)],
+            |_| false,
+            false,
+            t0 + s(4),
+        );
+        assert_eq!(usb["/dev/a"].gone_since, None);
+        assert_eq!(usb["/dev/a"].battery_since, Some(t0));
+        // Gone past the grace: dropped.
+        keep_usb(&mut usb, &[], |_| false, false, t0 + s(10));
+        keep_usb(&mut usb, &[], |_| false, false, t0 + s(10) + USB_GONE_GRACE);
+        assert!(usb.is_empty());
+    }
+
+    #[test]
+    fn a_held_port_or_a_dfu_device_keeps_the_timer_longer() {
+        let t0 = Instant::now();
+        let s = Duration::from_secs;
+        let mut usb = HashMap::from([("/dev/a".to_string(), running("fc1", t0))]);
+        // A job holds the port (a flash in DFU): kept however long.
+        keep_usb(&mut usb, &[], |p| p == "/dev/a", false, t0 + s(600));
+        assert_eq!(usb["/dev/a"].gone_since, None);
+        // The job ended with the FC in its bootloader: the DFU grace applies.
+        keep_usb(&mut usb, &[], |_| false, true, t0 + s(601));
+        keep_usb(
+            &mut usb,
+            &[],
+            |_| false,
+            true,
+            t0 + s(601) + USB_GONE_GRACE * 2,
+        );
+        assert!(usb.contains_key("/dev/a"));
+        keep_usb(&mut usb, &[], |_| false, true, t0 + s(601) + USB_DFU_GRACE);
+        assert!(usb.is_empty());
+    }
+
+    #[test]
+    fn a_timer_follows_its_fc_and_another_fc_starts_over() {
+        let t0 = Instant::now();
+        let s = Duration::from_secs;
+        let mut usb = HashMap::from([("/dev/a".to_string(), running("fc1", t0))]);
+        keep_usb(&mut usb, &[], |_| false, false, t0 + s(1));
+        // The same FC on another port takes its timer along.
+        keep_usb(
+            &mut usb,
+            &[("/dev/b".into(), Some("fc1".into()))],
+            |_| false,
+            false,
+            t0 + s(3),
+        );
+        assert_eq!(usb.len(), 1);
+        assert_eq!(usb["/dev/b"].battery_since, Some(t0));
+        assert_eq!(usb["/dev/b"].gone_since, None);
+        // Another FC on that port: its timer starts over.
+        keep_usb(
+            &mut usb,
+            &[("/dev/b".into(), Some("fc2".into()))],
+            |_| false,
+            false,
+            t0 + s(5),
+        );
+        assert!(usb.is_empty());
     }
 }

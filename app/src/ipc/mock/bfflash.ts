@@ -75,7 +75,7 @@ export function flash(d: Device, p: FlashParams, pl: ApplyPlan, failNext: boolea
       status: "failed",
       saved: false,
       steps: [...steps, { name: "Erase", state: "done", detail: "150 sectors" }, { name: "Write", state: "done", detail: "300 KB" }, { name: "Read back", state: "failed", detail: "The device holds different bytes than were written (first difference at 0x08001800)." }, { name: "Leave DFU", state: "skipped" }],
-      message: `The flash failed: The device holds different bytes than were written. The FC has half a firmware and stays in its bootloader: run the flash again, or unplug and re-enter the bootloader first. If the FC does not start: unplug USB and the battery, hold the FC's boot button, plug USB in, and flash an official build from Betaflight Configurator. Your settings are in backup ${backup}.`,
+      message: `The flash failed: The device holds different bytes than were written. The FC has half a firmware and stays in its bootloader. QuadCam cannot flash an FC that is in its bootloader. Leave USB plugged in and flash an official BETAFPVG473_V2 build from Betaflight Configurator, which finds the FC in DFU mode. If the FC does not start: unplug USB and the battery, hold the FC's boot button, plug USB in, and flash an official build from Betaflight Configurator. The ROM bootloader cannot be overwritten, so the FC can always be flashed again. Your settings are in backup ${backup}: put them back with Restore once the FC runs Betaflight.`,
     };
   }
   return {

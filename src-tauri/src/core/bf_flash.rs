@@ -552,7 +552,7 @@ impl Core {
         // The guards again, right before the first step.
         self.job_step(port, "Checking");
         drop(bf::cli::wait_for_port(ports, port, t)?);
-        let cand = self
+        let mut cand = self
             .fc_cands()
             .into_iter()
             .find(|c| c.port == port)
@@ -563,6 +563,16 @@ impl Core {
                 "This is not the FC the flash was planned for.",
             ));
         }
+        // The battery as it is now: a battery in while no timer counts refuses.
+        let heat = self.usb_heat(port, bf::battery_volts(ports, port, t).ok());
+        if heat.untimed {
+            return Err(refuse(
+                RefusalCode::UsbHeat,
+                "A battery is in, and QuadCam's USB timer is not counting for this FC (its reads are paused, or it was plugged in moments ago), so it cannot tell whether the flash would outlast it. Unplug the battery, then flash again.",
+            ));
+        }
+        cand.battery = heat.battery;
+        cand.remaining_s = heat.remaining_s;
         for c in self.bf_live_checks(&cand, bfw::flash_seconds(image.image.bytes.len())) {
             if let Some(r) = c.refusal {
                 return Err(r.into());
@@ -816,6 +826,31 @@ impl Core {
                 }
                 out.flashed = true;
             }
+            Err(e) if seen.is_empty() => {
+                // It failed before the erase: the old firmware is whole. Leaving DFU starts it.
+                let left = if quick {
+                    Dfu::quick(usb.as_mut()).leave(FLASH_BASE)
+                } else {
+                    Dfu::new(usb.as_mut()).leave(FLASH_BASE)
+                }
+                .is_ok();
+                for (i, (_, label)) in labels.iter().enumerate() {
+                    out.steps.push(step(
+                        label,
+                        StepState::Skipped,
+                        (i == 0).then(|| format!("{e:#}")),
+                    ));
+                }
+                out.failed = Some(format!(
+                    "The flash did not start: {e:#} Nothing was erased, so the FC still holds its old firmware. {} Your settings are in backup {backup_id}.",
+                    if left {
+                        "QuadCam asked the FC to start it again."
+                    } else {
+                        "The FC waits in its bootloader: unplug USB and the battery and plug USB in again to start it."
+                    }
+                ));
+                return Ok(out);
+            }
             Err(e) => {
                 let failed = seen.len().saturating_sub(1);
                 for (i, (_, label)) in labels.iter().enumerate() {
@@ -831,7 +866,8 @@ impl Core {
                     ));
                 }
                 out.failed = Some(format!(
-                    "The flash failed: {e:#} The FC has half a firmware and stays in its bootloader: run the flash again, or unplug and re-enter the bootloader first. {RECOVERY} Your settings are in backup {backup_id}."
+                    "The flash failed: {e:#} The FC has half a firmware and stays in its bootloader. QuadCam cannot flash an FC that is in its bootloader. Leave USB plugged in and flash an official {} build from Betaflight Configurator, which finds the FC in DFU mode. {RECOVERY} Your settings are in backup {backup_id}: put them back with Restore once the FC runs Betaflight.",
+                    target.target
                 ));
                 return Ok(out);
             }

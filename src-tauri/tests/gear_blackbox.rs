@@ -304,6 +304,25 @@ fn the_usb_timer_refuses_a_pull_that_would_outlast_it_and_never_starts_an_erase_
 }
 
 #[test]
+fn a_battery_with_no_usb_timer_is_a_warning_on_a_pull() {
+    let fc = fc_with(image());
+    fc.set_battery(7.6);
+    // No probe has run yet: the battery is in, but no timer counts.
+    let b = bench(&fc);
+    let r = pull(&b).unwrap();
+    assert!(r.pull.is_some());
+    assert!(
+        r.notes.iter().any(|n| n.contains("not counting")),
+        "{:?}",
+        r.notes
+    );
+    // Without a battery there is nothing to say.
+    let fc = fc_with(image());
+    let r = pull(&bench(&fc)).unwrap();
+    assert!(!r.notes.iter().any(|n| n.contains("not counting")));
+}
+
+#[test]
 fn a_flash_that_grew_after_the_read_is_not_erased() {
     // A second reader appends while we work: simulate by growing the flash before the erase
     // check runs, through a pull whose image is already stored.
@@ -484,15 +503,22 @@ fn usb_disk_mode_copies_the_files_and_falls_back_to_msp_when_the_fc_lacks_it() {
 }
 
 #[test]
-fn an_msc_pull_that_does_not_match_the_flash_is_not_stored_or_erased() {
+fn an_msc_pull_that_does_not_match_the_flash_is_read_over_msp_or_refused() {
     // The disk shows fewer bytes than the flash reports used.
     let whole = synth_image(&[("Whoop", 9_000)], NOTHING);
     let tmp = tempfile::tempdir().unwrap();
     let fc = fc_with(whole.clone()).with_msc();
     let part = whole[..whole.len() - 10].to_vec();
-    let b = msc_bench(&fc, &[("BTFL_001.BBL", part)], tmp.path());
+    let b = msc_bench(&fc, &[("BTFL_001.BBL", part.clone())], tmp.path());
     b.settings(r#"{"gearBlackboxMsc":true,"gearEraseBlackbox":true}"#);
-    let e = pull(&b).unwrap_err();
+    // Asked for by name: the pull fails, and nothing is stored or erased.
+    let e = b
+        .core
+        .gear_blackbox_pull(&BlackboxPullParams {
+            mode: Some(PullMode::Msc),
+            ..Default::default()
+        })
+        .unwrap_err();
     assert!(format!("{e:#}").contains("did not verify"), "{e:#}");
     assert_eq!(fc.dataflash_erases(), 0);
     assert!(b
@@ -500,6 +526,23 @@ fn an_msc_pull_that_does_not_match_the_flash_is_not_stored_or_erased() {
         .gear_blackbox(&BlackboxFilter::default())
         .unwrap()
         .is_empty());
+    // Through the setting (Auto): the pull reads the flash again over MSP and says why.
+    let tmp = tempfile::tempdir().unwrap();
+    let fc = fc_with(whole.clone()).with_msc();
+    let b = msc_bench(&fc, &[("BTFL_001.BBL", part)], tmp.path());
+    b.settings(r#"{"gearBlackboxMsc":true,"gearEraseBlackbox":true}"#);
+    let r = pull(&b).unwrap();
+    assert_eq!(r.method, Some(Method::Msp));
+    assert!(
+        r.notes.iter().any(|n| n.contains("read over MSP")),
+        "{:?}",
+        r.notes
+    );
+    assert!(fc.dataflash_reads() > 0);
+    let p = r.pull.unwrap();
+    assert_eq!(b.blobs().get(&p.blob).unwrap(), whole);
+    assert_eq!(p.method, Method::Msp);
+    assert_eq!(r.erase, EraseState::Done);
 }
 
 fn flights_bench(fc: &FakeFc) -> Bench {

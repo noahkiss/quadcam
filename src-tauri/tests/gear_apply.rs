@@ -26,7 +26,7 @@ use std::time::{Duration, Instant};
 const PORT: &str = "/dev/cu.usbmodemFAKE1";
 const G473: &str = include_str!("fixtures/bf/g473-2025.12.5.dump_all.txt");
 const UID: [u8; 12] = [
-    0x2f, 0, 0x38, 0, 0x35, 0x34, 0x11, 0x51, 0x39, 0x36, 0x30, 0x13,
+    0x01, 0x23, 0x45, 0x67, 0x89, 0xab, 0xcd, 0xef, 0x10, 0x32, 0x54, 0x76,
 ];
 
 struct Bench {
@@ -530,6 +530,24 @@ fn a_battery_in_past_the_usb_limit_refuses() {
     fc.set_battery(0.0);
     b.core.gear_usb_tick(past + Duration::from_secs(31));
     assert!(plan(&b, &c).ready());
+}
+
+#[test]
+fn a_battery_with_no_usb_timer_is_a_warning_on_an_apply() {
+    let fc = FakeFc::new(G473).with_uid(UID).with_reboot_opens(0);
+    let b = bench(&fc);
+    let c = stage(&b, vec![set("osd_cap_alarm", "1500")]);
+    // The battery is in, but no probe has run: the job reads it and warns.
+    fc.set_battery(4.0);
+    let p = plan(&b, &c);
+    assert!(p.ready());
+    let r = b.core.gear_apply(&req(&c, &p)).unwrap();
+    assert_eq!(r.status, ChangeStatus::Verified, "{}", r.message);
+    assert!(
+        r.notes.iter().any(|n| n.contains("not counting")),
+        "{:?}",
+        r.notes
+    );
 }
 
 #[test]

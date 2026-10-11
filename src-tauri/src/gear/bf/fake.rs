@@ -522,6 +522,21 @@ impl FakeLink {
         let answer = match parse_cmd(&line) {
             Cmd::Select(sec) => {
                 s.section = sec;
+                // A selection is also the FC's active profile of its kind: the last select
+                // line of that kind in a dump names it.
+                if let Some(sel) = sec.select_line() {
+                    let verb = sel
+                        .split_whitespace()
+                        .next()
+                        .unwrap_or_default()
+                        .to_string();
+                    if let Some(l) = s.current.iter_mut().rev().find(|l| {
+                        let w: Vec<&str> = l.split_whitespace().collect();
+                        w.len() == 2 && w[0] == verb
+                    }) {
+                        *l = sel;
+                    }
+                }
                 String::new()
             }
             Cmd::Set { name, value } => {
@@ -730,6 +745,18 @@ fn diff_all(s: &State, version: &str, board: &str) -> String {
             section = sec;
         }
         out.push_str(&format!("set {name} = {value}\r\n"));
+    }
+    // As Betaflight does: the active selection of each kind last.
+    for verb in ["profile", "rateprofile", "battery_profile"] {
+        if let Some(l) = s.current.iter().rev().find(|l| {
+            let w: Vec<&str> = l.split_whitespace().collect();
+            w.len() == 2 && w[0] == verb
+        }) {
+            out.push_str(&format!(
+                "\r\n# restore original {verb} selection\r\n{}\r\n",
+                l.trim()
+            ));
+        }
     }
     out.push_str("\r\nbatch end");
     out
