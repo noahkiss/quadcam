@@ -166,13 +166,26 @@ impl Image {
         img
     }
 
+    /// Attaches at our mount point. On a loaded machine the file system probe can time out
+    /// ("no mountable file systems"): that one error detaches and tries again, up to 3 times.
     pub fn attach(&mut self) {
-        let out = Command::new("/usr/bin/hdiutil")
-            .args(["attach", "-nobrowse", "-mountpoint"])
-            .arg(&self.mount)
-            .arg(&self.file)
-            .output()
-            .unwrap();
+        let mut tries = 0;
+        let out = loop {
+            tries += 1;
+            let out = Command::new("/usr/bin/hdiutil")
+                .args(["attach", "-nobrowse", "-mountpoint"])
+                .arg(&self.mount)
+                .arg(&self.file)
+                .output()
+                .unwrap();
+            let err = String::from_utf8_lossy(&out.stderr);
+            if out.status.success() || tries == 3 || !err.contains("no mountable file systems") {
+                break out;
+            }
+            eprintln!("hdiutil attach, try {tries}: {}", err.trim());
+            self.detach();
+            std::thread::sleep(std::time::Duration::from_secs(2));
+        };
         assert!(
             out.status.success(),
             "hdiutil attach: {}",
