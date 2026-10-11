@@ -1,0 +1,81 @@
+.wrap {
+  overflow-x: auto;
+  container-type: inline-size;
+  min-width: 0;
+}
+.table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--t-md);
+}
+.table th,
+.table td {
+  padding: var(--s-2) var(--s-3);
+  text-align: left;
+  vertical-align: top;
+  border-bottom: 1px solid var(--border);
+}
+.table thead th {
+  padding-top: 0;
+  font-size: var(--t-sm);
+  font-weight: 600;
+  color: var(--muted);
+  white-space: nowrap;
+  border-bottom-color: var(--border-strong);
+}
+.table tbody th {
+  font-weight: 500;
+}
+.table tr > :first-child {
+  padding-left: 0;
+}
+.table tr > :last-child {
+  padding-right: 0;
+}
+.compact th,
+.compact td {
+  padding-top: 6px;
+  padding-bottom: 6px;
+}
+.num {
+  text-align: right !important;
+  font-family: var(--mono);
+  font-size: var(--t-sm);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.check {
+  width: 24px;
+}
+.check input {
+  margin: 2px 0 0;
+  width: 16px;
+  height: 16px;
+  accent-color: var(--primary-fill);
+  cursor: pointer;
+}
+.group th {
+  padding-top: var(--s-4);
+  font-size: var(--t-sm);
+  font-weight: 600;
+  color: var(--muted);
+}
+.table tbody tr:first-child.group th {
+  padding-top: var(--s-2);
+}
+.on {
+  background: color-mix(in srgb, var(--primary) 6%, transparent);
+}
+.hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+@container (max-width: 720px) {
+  .optional {
+    display: none;
+  }
+}

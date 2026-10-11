@@ -298,6 +298,13 @@ export function sets(g: MockGear, p?: { voice?: string; model?: string } | null)
     batch: { carrier: "The word is {line}.", tone_carriers: {}, max_lines: 30, snap_ms: 40 },
     aircraft: ["quad"],
     picks: custom ? ["quad", "extras", "custom"] : ["quad", "extras"],
+    rendered: Object.entries(g.voice.rendered)
+      .map(([k, ids]) => {
+        const [voice, model] = k.split("|");
+        const lines = SETS.filter((x) => ids.includes(x.id)).reduce((n, x) => n + x.lines, 0);
+        return { voice, model, speed: 1, lines };
+      })
+      .sort((a, b) => b.lines - a.lines),
   };
 }
 

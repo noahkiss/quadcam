@@ -13,19 +13,6 @@
   align-items: center;
   gap: var(--s-3);
 }
-.section {
-  background: var(--raised);
-  border: 1px solid var(--border);
-  border-radius: var(--r-3);
-  padding: var(--s-4);
-  display: flex;
-  flex-direction: column;
-  gap: var(--s-3);
-}
-.section > h3 {
-  margin: 0;
-  font-size: var(--t-lg);
-}
 .muted {
   margin: 0;
   color: var(--muted);
@@ -67,26 +54,6 @@
 .field input[type="text"] {
   width: 180px;
 }
-.tableWrap {
-  overflow-x: auto;
-}
-.table {
-  width: 100%;
-  border-collapse: collapse;
-  font-size: var(--t-md);
-}
-.table th {
-  text-align: left;
-  font-weight: 600;
-  padding: var(--s-2);
-  border-bottom: 1px solid var(--border-strong);
-  white-space: nowrap;
-}
-.table td {
-  padding: var(--s-2);
-  border-bottom: 1px solid var(--border);
-  vertical-align: middle;
-}
 .path {
   font-family: var(--mono);
   font-size: var(--t-sm);
@@ -104,28 +71,6 @@
 }
 .own input[type="text"] {
   width: 220px;
-}
-.picks {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-  gap: var(--s-3);
-}
-.pick {
-  margin: 0;
-  padding: var(--s-3);
-  border: 1px solid var(--border);
-  border-radius: var(--r-2);
-  display: flex;
-  flex-direction: column;
-  gap: var(--s-2);
-  max-height: 240px;
-  overflow-y: auto;
-  min-width: 0;
-}
-.pick legend {
-  padding: 0 var(--s-2);
-  font-size: var(--t-sm);
-  font-weight: 600;
 }
 .voices {
   display: flex;
@@ -164,49 +109,6 @@
   gap: var(--s-3);
   min-width: 360px;
 }
-.sets {
-  margin: 0;
-  padding: var(--s-3);
-  border: 1px solid var(--border);
-  border-radius: var(--r-2);
-  display: flex;
-  flex-direction: column;
-  gap: var(--s-4);
-  min-width: 0;
-}
-.sets legend {
-  padding: 0 var(--s-2);
-  font-size: var(--t-sm);
-  font-weight: 600;
-}
-.setGroup {
-  display: flex;
-  flex-direction: column;
-  gap: var(--s-2);
-}
-.setGroupTitle {
-  margin: 0;
-  font-size: var(--t-sm);
-  font-weight: 600;
-  color: var(--muted);
-}
-.setList {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
-  gap: var(--s-3) var(--s-6);
-}
-.set {
-  min-width: 0;
-}
-.setAbout {
-  display: block;
-}
-.setMeta {
-  display: block;
-  margin-top: var(--s-1);
-  color: var(--fg);
-  font-variant-numeric: tabular-nums;
-}
 .samples {
   display: flex;
   flex-direction: column;
@@ -241,4 +143,80 @@
   flex: 1;
   min-width: 0;
   font-size: var(--t-sm);
+}
+.pickers {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(340px, 1fr));
+  gap: var(--s-4) var(--s-6);
+  align-items: start;
+}
+.price {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s-2);
+}
+.about {
+  display: block;
+  margin-top: 2px;
+  font-weight: 400;
+  font-size: var(--t-sm);
+  color: var(--muted);
+}
+
+.section {
+  background: var(--raised);
+  border: 1px solid var(--border);
+  border-radius: var(--r-3);
+  padding: var(--s-4);
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-3);
+}
+.section > h3 {
+  margin: 0;
+  font-size: var(--t-lg);
+}
+.tableWrap {
+  overflow-x: auto;
+}
+.table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--t-md);
+}
+.table th {
+  text-align: left;
+  font-weight: 600;
+  padding: var(--s-2);
+  border-bottom: 1px solid var(--border-strong);
+  white-space: nowrap;
+}
+.table td {
+  padding: var(--s-2);
+  border-bottom: 1px solid var(--border);
+  vertical-align: middle;
+}
+.pick {
+  margin: 0;
+  padding: var(--s-3);
+  border: 1px solid var(--border);
+  border-radius: var(--r-2);
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-2);
+  max-height: 240px;
+  overflow-y: auto;
+  min-width: 0;
+}
+.pick legend {
+  padding: 0 var(--s-2);
+  font-size: var(--t-sm);
+  font-weight: 600;
+}
+.rowActions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--s-1);
+  white-space: nowrap;
 }

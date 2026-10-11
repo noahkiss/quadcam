@@ -5,10 +5,14 @@
 import { useState } from "react";
 import { Banner } from "../../../components/Banner";
 import { Button } from "../../../components/Button";
-import { Checkbox, TextField } from "../../../components/Field";
+import { TextField } from "../../../components/Field";
+import { Badge } from "../../../components/dash/Badge";
+import { DataTable, type Column } from "../../../components/dash/DataTable";
+import { SectionCard } from "../../../components/dash/SectionCard";
+import { Stat, StatRow } from "../../../components/dash/StatRow";
 import { fileSrc } from "../../../ipc/api";
-import type { Retake, SampleItem, SetInfo, StudioEstimate, VoiceEstimate } from "../../../ipc/types";
-import { useStudio, type UseStudio } from "./useStudio";
+import type { ModelInfo, Retake, SampleItem, SetInfo, StudioEstimate, VoiceEstimate, VoiceInfo } from "../../../ipc/types";
+import { takesOf, type UseStudio } from "./useStudio";
 import styles from "./Voice.module.css";
 
 const n = (v: number) => v.toLocaleString("en-US");
@@ -20,28 +24,23 @@ function play(path: string) {
   void a.play().catch(() => undefined);
 }
 
-function KeyRow({ s }: { s: UseStudio }) {
+/** The key's state for the card header: the hint and Replace…, Remove key. */
+function KeyActions({ s, onReplace }: { s: UseStudio; onReplace: () => void }) {
+  if (!s.key?.set) return null;
+  return (
+    <>
+      <Button size="sm" variant="secondary" onClick={onReplace}>
+        Replace…
+      </Button>
+      <Button size="sm" variant="danger-ghost" onClick={() => s.deleteKey()}>
+        Remove key
+      </Button>
+    </>
+  );
+}
+
+function KeyForm({ s, replacing, done }: { s: UseStudio; replacing: boolean; done: () => void }) {
   const [draft, setDraft] = useState("");
-  const [replacing, setReplacing] = useState(false);
-  if (s.key?.set && !replacing) {
-    const c = s.catalog?.credits;
-    return (
-      <div className={styles.bar}>
-        <span>ElevenLabs key stored ({s.key.hint}).</span>
-        {c && (
-          <span role="status">
-            {n(c.remaining)} credits left of {n(c.limit)}.
-          </span>
-        )}
-        <Button size="sm" variant="secondary" onClick={() => setReplacing(true)}>
-          Replace…
-        </Button>
-        <Button size="sm" variant="danger-ghost" onClick={() => s.deleteKey()}>
-          Remove key
-        </Button>
-      </div>
-    );
-  }
   return (
     <form
       className={styles.bar}
@@ -49,7 +48,7 @@ function KeyRow({ s }: { s: UseStudio }) {
         e.preventDefault();
         const k = draft.trim();
         setDraft("");
-        setReplacing(false);
+        done();
         if (k) void s.saveKey(k);
       }}
     >
@@ -63,7 +62,7 @@ function KeyRow({ s }: { s: UseStudio }) {
           variant="ghost"
           onClick={() => {
             setDraft("");
-            setReplacing(false);
+            done();
           }}
         >
           Keep current
@@ -71,6 +70,64 @@ function KeyRow({ s }: { s: UseStudio }) {
       )}
       {s.key?.problem && <span className={styles.error}>{s.key.problem}</span>}
     </form>
+  );
+}
+
+const fmtDay = (d: string) => new Date(`${d}T12:00:00`).toLocaleDateString(undefined, { month: "short", day: "numeric" });
+
+function Pickers({ s }: { s: UseStudio }) {
+  const cat = s.catalog!;
+  const v0 = s.voices[0];
+  const m0 = s.models.length === 1 ? s.models[0] : undefined;
+  const voiceCols: Column<VoiceInfo>[] = [
+    { key: "name", header: "Voice", rowHeader: true, cell: (v) => v.name },
+    { key: "tags", header: "Tags", optional: true, cell: (v) => <span className={styles.muted}>{[v.category, v.labels].filter(Boolean).join(", ")}</span> },
+    { key: "done", header: "Rendered", numeric: true, cell: (v) => n(takesOf(s.takes, v.id, m0)) },
+  ];
+  const modelCols: Column<ModelInfo>[] = [
+    {
+      key: "name",
+      header: "Model",
+      rowHeader: true,
+      cell: (m) => (
+        <>
+          {m.name}
+          <span className={styles.sub}>{m.id}</span>
+        </>
+      ),
+    },
+    {
+      key: "price",
+      header: "Per 1K",
+      numeric: true,
+      cell: (m) => (
+        <span className={styles.price}>
+          {m.promo_until && <Badge tone="accent">Promo to {fmtDay(m.promo_until)}</Badge>}${m.usd_per_1k ?? "?"}
+        </span>
+      ),
+    },
+    { key: "credits", header: "Credits/char", numeric: true, optional: true, cell: (m) => `${m.cost_per_char ?? "?"}` },
+    { key: "done", header: "Rendered", numeric: true, cell: (m) => (v0 ? n(takesOf(s.takes, v0, m.id)) : "—") },
+  ];
+  return (
+    <div className={styles.pickers}>
+      <DataTable
+        label="Voices"
+        compact
+        columns={voiceCols}
+        rows={cat.voices}
+        rowKey={(v) => v.id}
+        selection={{ selected: (v) => s.voices.includes(v.id), onChange: (v, on) => s.setVoices(toggle(s.voices, v.id, on)), label: (v) => v.name }}
+      />
+      <DataTable
+        label="Models"
+        compact
+        columns={modelCols}
+        rows={cat.models}
+        rowKey={(m) => m.id}
+        selection={{ selected: (m) => s.models.includes(m.id), onChange: (m, on) => s.setModels(toggle(s.models, m.id, on)), label: (m) => `${m.name} (${m.id})` }}
+      />
+    </div>
   );
 }
 
@@ -129,64 +186,61 @@ function andList(words: string[]) {
   return words.length < 2 ? words.join("") : `${words.slice(0, -1).join(", ")} and ${words.at(-1)}`;
 }
 
-/** The sets in three groups: made for the aircraft flown, for any aircraft, for other aircraft. */
-function groupSets(sets: SetInfo[], aircraft: string[]) {
-  const kinds = (x: SetInfo) => x.kinds ?? [];
-  const mine = sets.filter((x) => kinds(x).length > 0 && kinds(x).every((k) => aircraft.includes(k)));
-  const any = sets.filter((x) => kinds(x).length === 0);
-  const other = sets.filter((x) => kinds(x).some((k) => !aircraft.includes(k)));
-  return [
-    { id: "mine", title: `For your ${andList(aircraft.map((k) => PLURAL[k] ?? k))}`, sets: mine },
-    { id: "any", title: "Any aircraft", sets: any },
-    { id: "other", title: "Other aircraft", sets: other },
-  ].filter((g) => g.sets.length > 0);
-}
-
-function setMeta(x: SetInfo) {
-  const lines = `${n(x.lines)} ${x.lines === 1 ? "line" : "lines"}`;
-  return x.rendered == null ? lines : `${lines} · ${n(x.rendered)} rendered`;
+/** Where a set goes: made for the aircraft flown (0), for any aircraft (1), for others (2). */
+function rank(x: SetInfo, aircraft: string[]) {
+  const k = x.kinds ?? [];
+  if (k.length === 0) return 1;
+  return k.every((a) => aircraft.includes(a)) ? 0 : 2;
 }
 
 function LineSets({ s }: { s: UseStudio }) {
-  const shown = s.sets.filter((x) => x.id !== "sample" && !(x.id === "custom" && x.lines === 0));
+  const mine = `For your ${andList(s.aircraft.map((k) => PLURAL[k] ?? k))}`;
+  const titles = [mine, "Any aircraft", "Other aircraft"];
+  const rows = s.sets
+    .filter((x) => x.id !== "sample" && !(x.id === "custom" && x.lines === 0))
+    .map((x, i) => ({ x, r: rank(x, s.aircraft), i }))
+    .sort((a, b) => a.r - b.r || a.i - b.i);
+  const cols: Column<(typeof rows)[number]>[] = [
+    {
+      key: "set",
+      header: "Set",
+      rowHeader: true,
+      cell: ({ x }) => (
+        <>
+          {x.title}
+          <span className={styles.about}>{x.about}</span>
+        </>
+      ),
+    },
+    { key: "lines", header: "Lines", numeric: true, width: "5rem", cell: ({ x }) => n(x.lines) },
+    { key: "done", header: "Rendered", numeric: true, width: "6rem", cell: ({ x }) => (x.rendered == null ? "—" : n(x.rendered)) },
+  ];
   return (
-    <fieldset className={styles.sets} data-component="line-sets">
-      <legend>Line sets</legend>
-      {groupSets(shown, s.aircraft).map((g) => (
-        <div key={g.id} role="group" aria-labelledby={`sets-${g.id}`} className={styles.setGroup}>
-          <h4 id={`sets-${g.id}`} className={styles.setGroupTitle}>
-            {g.title}
-          </h4>
-          <div className={styles.setList}>
-            {g.sets.map((x) => (
-              <Checkbox
-                key={x.id}
-                className={styles.set}
-                label={x.title}
-                detail={
-                  <>
-                    <span className={styles.setAbout}>{x.about}</span>
-                    <span className={styles.setMeta}>{setMeta(x)}</span>
-                  </>
-                }
-                checked={s.picked.includes(x.id)}
-                onChange={(ev) => s.setPicked(toggle(s.picked, x.id, ev.target.checked))}
-              />
-            ))}
-          </div>
-        </div>
-      ))}
-    </fieldset>
+    <DataTable
+      label="Line sets"
+      columns={cols}
+      rows={rows}
+      rowKey={({ x }) => x.id}
+      group={({ r }) => titles[r]}
+      selection={{ selected: ({ x }) => s.picked.includes(x.id), onChange: ({ x }, on) => s.setPicked(toggle(s.picked, x.id, on)), label: ({ x }) => x.title }}
+    />
   );
 }
 
-function estimateText(e: StudioEstimate) {
-  const done = e.rendered ?? 0;
-  const left = e.to_render ?? e.estimate.lines;
-  const retakes = e.retakes ? `, ${n(e.retakes)} need a re-take` : "";
-  const head = `${e.voice_name}, ${e.model}: ${n(e.lines)} lines, ${n(done)} rendered${retakes}, ${n(left)} to render.`;
-  if (left === 0) return head;
-  return `${head} ${costText(e.estimate)}${e.estimate.affordable ? "" : " The account does not have enough."}`;
+/** The estimate as tiles: lines to render, characters, cost, credits after. */
+function EstimateStats({ e }: { e: StudioEstimate }) {
+  const x = e.estimate;
+  const left = e.to_render ?? x.lines;
+  const after = x.remaining === null ? null : x.remaining - x.credits;
+  const basis = x.credits_basis === "recorded" ? "recorded rate" : "estimated";
+  return (
+    <StatRow label="Cost" role="status">
+      <Stat label="To render" value={n(left)} sub={`of ${n(e.lines)} lines · ${n(e.rendered ?? 0)} rendered${e.retakes ? ` · ${n(e.retakes)} re-takes` : ""}`} tone={left === 0 ? "ok" : undefined} />
+      <Stat label="Characters" value={n(x.chars)} sub={`${x.batches} ${x.batches === 1 ? "batch" : "batches"}, ${x.cached_batches} cached`} />
+      <Stat label="Cost" value={`$${(x.usd ?? 0).toFixed(2)}`} sub={(x.usd_per_1k ?? 0) > 0 ? `$${x.usd_per_1k} per 1K characters` : undefined} badge={x.promo_until ? <Badge tone="accent">Promo to {fmtDay(x.promo_until)}</Badge> : undefined} />
+      <Stat label="Credits after" value={after === null ? "—" : n(after)} sub={`${n(x.credits)} credits (${basis})`} tone={x.affordable ? undefined : "error"} />
+    </StatRow>
+  );
 }
 
 function Retakes({ s, retakes }: { s: UseStudio; retakes: Retake[] }) {
@@ -212,16 +266,21 @@ function Retakes({ s, retakes }: { s: UseStudio; retakes: Retake[] }) {
   );
 }
 
-export function Studio({ onRendered }: { onRendered: () => Promise<void> }) {
-  const s = useStudio(onRendered);
+/** The Voice studio card. `s` comes from the page, which also shows its summary. */
+export function Studio({ s }: { s: UseStudio }) {
+  const [replacing, setReplacing] = useState(false);
   const keySet = s.key?.set ?? false;
   const e = s.estimate;
   const one = s.voices.length === 1 && s.models.length === 1 && s.picked.length > 0;
   const ask = s.asking === "sample" ? s.sample?.estimate : s.asking === "render" ? s.render?.estimate : null;
   return (
-    <section className={styles.section} aria-label="Voice studio">
-      <h3>Voice studio</h3>
-      <KeyRow s={s} />
+    <SectionCard
+      title="Voice studio"
+      label="Voice studio"
+      status={keySet && !replacing ? <Badge tone="ok">ElevenLabs key {s.key?.hint}</Badge> : undefined}
+      actions={replacing ? undefined : <KeyActions s={s} onReplace={() => setReplacing(true)} />}
+    >
+      {(!keySet || replacing) && <KeyForm s={s} replacing={replacing} done={() => setReplacing(false)} />}
       {s.error && (
         <Banner kind="error" icon="danger-triangle">
           {s.error}
@@ -229,24 +288,20 @@ export function Studio({ onRendered }: { onRendered: () => Promise<void> }) {
       )}
       {keySet && s.catalog && (
         <>
-          <div className={styles.picks}>
-            <fieldset className={styles.pick}>
-              <legend>Voices</legend>
-              {s.catalog.voices.map((v) => (
-                <Checkbox key={v.id} label={v.name} detail={[v.category, v.labels].filter(Boolean).join(", ")} checked={s.voices.includes(v.id)} onChange={(ev) => s.setVoices(toggle(s.voices, v.id, ev.target.checked))} />
-              ))}
-            </fieldset>
-            <fieldset className={styles.pick}>
-              <legend>Models</legend>
-              {s.catalog.models.map((m) => (
-                <Checkbox key={m.id} label={m.name} detail={`${m.id}, $${m.usd_per_1k ?? "?"} per 1K characters${m.promo_until ? ` (promo until ${m.promo_until})` : ""}, about ${m.cost_per_char ?? "?"} ${m.cost_per_char === 1 ? "credit" : "credits"} a character (estimated)`} checked={s.models.includes(m.id)} onChange={(ev) => s.setModels(toggle(s.models, m.id, ev.target.checked))} />
-              ))}
-            </fieldset>
-          </div>
+          <Pickers s={s} />
           <LineSets s={s} />
-          <p className={e && !e.estimate.affordable ? styles.error : styles.status} role="status" aria-label="Cost">
-            {e ? estimateText(e) : one ? "Working out the cost…" : "Pick one voice, one model and a line set to see what a render costs."}
-          </p>
+          {e ? (
+            <EstimateStats e={e} />
+          ) : (
+            <p className={styles.status} role="status" aria-label="Cost">
+              {one ? "Working out the cost…" : "Pick one voice, one model and a line set to see what a render costs."}
+            </p>
+          )}
+          {e && !e.estimate.affordable && (
+            <p className={styles.error} role="alert">
+              The account does not have enough credits.
+            </p>
+          )}
           <div className={styles.bar}>
             <Button size="sm" disabled={s.busy || s.voices.length === 0 || s.models.length === 0} onClick={() => s.run("sample", false)}>
               Sample
@@ -282,6 +337,6 @@ export function Studio({ onRendered }: { onRendered: () => Promise<void> }) {
           {s.sample && s.sample.items.length > 0 && <Samples items={s.sample.items} />}
         </>
       )}
-    </section>
+    </SectionCard>
   );
 }

@@ -133,7 +133,7 @@ test("Render my voice checks the cost first, and a provider that may charge wait
   await get.getByRole("button", { name: "Render and pay" }).click();
   expect((await app.method("gear_voice_render")).at(-1)).toMatchObject({ confirm: true });
   await expect(get.getByRole("status")).toContainText("Rendered 7 of 7 lines into local-say-samantha");
-  await expect(library(page).getByRole("row", { name: /^Samantha local-say-samantha · rendered here/ })).toBeVisible();
+  await expect(library(page).getByRole("row", { name: /^Samantha local-say-samantha/ })).toContainText("Rendered here");
 });
 
 for (const scheme of axeSchemes) {

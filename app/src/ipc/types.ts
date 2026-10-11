@@ -501,5 +501,6 @@ export type {
   SetsParams,
   StudioEstimate,
   StudioView,
+  TakeCount,
   VoiceInfo,
 } from "../bindings";

@@ -1,10 +1,14 @@
 // Gear > Voices (design 7.4): the voice packs on this Mac, rendered or installed, with a sample,
 // Apply to radios… and Delete; the index's packs and Render my voice; and the Voice studio.
 // Packs are not per radio: a radio's Voice segment picks one of these.
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { Banner } from "../../../components/Banner";
 import { Button } from "../../../components/Button";
 import { Input } from "../../../components/Field";
+import { Badge } from "../../../components/dash/Badge";
+import { DataTable, type Column } from "../../../components/dash/DataTable";
+import { SectionCard } from "../../../components/dash/SectionCard";
+import { Stat, StatRow } from "../../../components/dash/StatRow";
 import { api, errText, fileSrc } from "../../../ipc/api";
 import type { RenderReport, SetInfo, VoicePack, VoiceView } from "../../../ipc/types";
 import { fmtBytes } from "../../../lib/format";
@@ -13,6 +17,7 @@ import { useStore } from "../../../store";
 import { ApplyToRadios } from "./ApplyToRadios";
 import { DeletePack } from "./DeletePack";
 import { Studio } from "./Studio";
+import { takesOf, useStudio, type UseStudio } from "./useStudio";
 import { useVoice, type UseVoice } from "./useVoice";
 import styles from "./Voice.module.css";
 
@@ -46,69 +51,54 @@ function Library({ v, view, sets }: { v: UseVoice; view: VoiceView; sets: SetInf
       v.setError(errText(e));
     }
   };
-  return (
-    <section className={styles.section} aria-label="Library">
-      <h3>Library</h3>
-      {packs.length === 0 ? (
-        <p className={styles.muted}>No voice pack on this Mac. Render one in the Voice studio, or install one below.</p>
-      ) : (
-        <div className={styles.tableWrap}>
-          <table className={styles.table} aria-label="Voice packs on this Mac">
-            <thead>
-              <tr>
-                <th scope="col">Voice</th>
-                <th scope="col">Model</th>
-                <th scope="col">Line sets</th>
-                <th scope="col">Lines</th>
-                <th scope="col">Size</th>
-                <th scope="col">Date</th>
-                <th scope="col">Radios</th>
-                <th scope="col">
-                  <span className={styles.hidden}>Actions</span>
-                </th>
-              </tr>
-            </thead>
-            <tbody>
-              {packs.map((k) => (
-                <tr key={k.id}>
-                  <th scope="row">
-                    {k.voice}
-                    <span className={styles.sub}>
-                      {k.id}
-                      {k.local ? " · rendered here" : " · installed"}
-                      {k.stale ? " · from older lines" : ""}
-                    </span>
-                    {(k.retakes?.length ?? 0) > 0 && (
-                      <ul className={styles.retakes} aria-label={`${k.voice} needs a re-take`}>
-                        {(k.retakes ?? []).map((t) => (
-                          <li key={t.path}>
-                            Needs a re-take: {t.text} ({t.path}): {t.reason}
-                          </li>
-                        ))}
-                      </ul>
-                    )}
-                  </th>
-                  <td>{k.model || k.provider}</td>
-                  <td>{(k.sets ?? []).map(setTitle).join(", ") || "Some lines"}</td>
-                  <td>{k.lines}</td>
-                  <td>{fmtBytes(k.bytes)}</td>
-                  <td>{fmtDay(k.made)}</td>
-                  <td>{(k.radios ?? []).map(radioName).join(", ")}</td>
-                  <td>
-                    <div className={styles.cell}>
-                      <Button size="sm" icon="play" aria-label={`Play a sample of ${k.voice}`} onClick={() => sample(k)} />
-                      <Button size="sm" onClick={() => setApplying(k)}>
-                        Apply to radios…
-                      </Button>
-                      <Button size="sm" variant="danger-ghost" icon="trash-bin-trash" aria-label={`Delete ${k.voice}`} onClick={() => setDeleting(k)} />
-                    </div>
-                  </td>
-                </tr>
+  const cols: Column<VoicePack>[] = [
+    {
+      key: "voice",
+      header: "Voice",
+      rowHeader: true,
+      cell: (k) => (
+        <>
+          {k.voice}
+          <span className={styles.sub}>
+            {k.id}
+            {k.stale ? " · from older lines" : ""}
+          </span>
+          {(k.retakes?.length ?? 0) > 0 && (
+            <ul className={styles.retakes} aria-label={`${k.voice} needs a re-take`}>
+              {(k.retakes ?? []).map((t) => (
+                <li key={t.path}>
+                  Needs a re-take: {t.text} ({t.path}): {t.reason}
+                </li>
               ))}
-            </tbody>
-          </table>
+            </ul>
+          )}
+        </>
+      ),
+    },
+    { key: "source", header: "Source", cell: (k) => <Badge tone={k.local ? "accent" : "neutral"}>{k.local ? "Rendered here" : "Installed"}</Badge> },
+    { key: "model", header: "Model", optional: true, cell: (k) => k.model || k.provider },
+    { key: "sets", header: "Line sets", optional: true, cell: (k) => (k.sets ?? []).map(setTitle).join(", ") || "Some lines" },
+    { key: "lines", header: "Lines", numeric: true, cell: (k) => k.lines },
+    { key: "size", header: "Size", numeric: true, optional: true, cell: (k) => fmtBytes(k.bytes) },
+    { key: "date", header: "Date", optional: true, cell: (k) => fmtDay(k.made) },
+    { key: "radios", header: "Radios", cell: (k) => (k.radios ?? []).map(radioName).join(", ") || <span className={styles.muted}>None</span> },
+    {
+      key: "actions",
+      header: <span className={styles.hidden}>Actions</span>,
+      cell: (k) => (
+        <div className={styles.rowActions}>
+          <Button size="sm" variant="ghost" icon="play" aria-label={`Play a sample of ${k.voice}`} onClick={() => sample(k)} />
+          <Button size="sm" onClick={() => setApplying(k)}>
+            Apply to radios…
+          </Button>
+          <Button size="sm" variant="danger-ghost" icon="trash-bin-trash" aria-label={`Delete ${k.voice}`} onClick={() => setDeleting(k)} />
         </div>
-      )}
+      ),
+    },
+  ];
+  return (
+    <SectionCard title="Voice packs on this Mac" label="Library">
+      <DataTable label="Voice packs on this Mac" columns={cols} rows={packs} rowKey={(k) => k.id} empty={<p className={styles.muted}>No voice pack on this Mac. Render one in the Voice studio, or install one below.</p>} />
       {applying && <ApplyToRadios pack={applying} onClose={() => setApplying(null)} onStaged={v.refresh} />}
       {deleting && (
         <DeletePack
@@ -121,7 +111,7 @@ function Library({ v, view, sets }: { v: UseVoice; view: VoiceView; sets: SetInf
           }}
         />
       )}
-    </section>
+    </SectionCard>
   );
 }
 
@@ -143,8 +133,7 @@ function GetPacks({ v, view }: { v: UseVoice; view: VoiceView }) {
     if (r) setReport(r);
   };
   return (
-    <section className={styles.section} aria-label="Get voice packs">
-      <h3>Get voice packs</h3>
+    <SectionCard title="Get voice packs">
       {available.length > 0 && (
         <ul className={styles.packs} aria-label="Packs in the index">
           {available.map((k) => (
@@ -193,35 +182,55 @@ function GetPacks({ v, view }: { v: UseVoice; view: VoiceView }) {
           {reportText(report)}
         </p>
       )}
-    </section>
+    </SectionCard>
   );
 }
 
+/** The page's summary: the key and credits, the packs on this Mac, the lines each voice has. */
+function Summary({ s, view }: { s: UseStudio; view: VoiceView | null }) {
+  const c = s.catalog?.credits;
+  const packs = view?.packs.filter((k) => k.installed) ?? [];
+  const local = packs.filter((k) => k.local).length;
+  const radios = new Set(packs.flatMap((k) => k.radios ?? [])).size;
+  const name = (id: string) => s.catalog?.voices.find((v) => v.id === id)?.name ?? id;
+  const voices = [...new Set(s.takes.map((t) => t.voice))].map((v) => ({ v, lines: takesOf(s.takes, v) })).sort((a, b) => b.lines - a.lines);
+  const left = c && c.limit > 0 ? c.remaining / c.limit : undefined;
+  return (
+    <StatRow label="Summary">
+      {s.key?.set ? (
+        <Stat label="ElevenLabs credits" value={c ? n(c.remaining) : "—"} sub={c ? `of ${n(c.limit)} · ${c.tier} plan` : "Key stored"} meter={left} tone={left !== undefined && left < 0.1 ? "warn" : undefined} />
+      ) : (
+        <Stat label="ElevenLabs credits" value="No key" sub="Add a key in the Voice studio" />
+      )}
+      <Stat label="Packs on this Mac" value={n(packs.length)} sub={`${local} rendered here · ${packs.length - local} installed`} />
+      <Stat label="Radios with a pack" value={n(radios)} />
+      <Stat
+        label="Lines rendered"
+        value={voices.length ? n(voices[0].lines) : "0"}
+        sub={voices.length ? voices.slice(0, 3).map((x) => `${name(x.v)} · ${n(x.lines)}`).join("  ") : "No takes yet"}
+      />
+    </StatRow>
+  );
+}
+
+const n = (v: number) => v.toLocaleString("en-US");
+
 export function VoicesPage() {
   const v = useVoice(null, true);
-  const [sets, setSets] = useState<SetInfo[]>([]);
-  useEffect(() => {
-    let gone = false;
-    api.gearVoiceSets().then(
-      (x) => !gone && setSets(x.sets),
-      () => undefined,
-    );
-    return () => {
-      gone = true;
-    };
-  }, []);
+  const s = useStudio(() => v.refresh());
   return (
     <div className={styles.voices} aria-labelledby="voices-title">
       <h2 id="voices-title" className={styles.title}>
         Voices
       </h2>
+      <Summary s={s} view={v.view} />
       {v.error && (
         <Banner kind="error" icon="danger-triangle">
           {v.error}
         </Banner>
       )}
-      {v.view && <Library v={v} view={v.view} sets={sets} />}
-      <Studio onRendered={() => v.refresh()} />
+      {v.view && <Library v={v} view={v.view} sets={s.sets} />}
+      <Studio s={s} />
       {v.view && <GetPacks v={v} view={v.view} />}
     </div>
   );

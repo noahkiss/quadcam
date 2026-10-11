@@ -5,9 +5,14 @@
 // digest, and the core refuses it when the plan changed. A picker change drops the question.
 import { useCallback, useEffect, useState } from "react";
 import { api, errText } from "../../../ipc/api";
-import type { Catalog, KeyStatus, RenderReport, SampleReport, SetInfo, StudioEstimate } from "../../../ipc/types";
+import type { Catalog, KeyStatus, RenderReport, SampleReport, SetInfo, StudioEstimate, TakeCount } from "../../../ipc/types";
 
 export type Paid = "sample" | "render";
+
+/** Lines a voice (and model) have a take of: the best of their models and speeds. */
+export function takesOf(takes: TakeCount[], voice: string, model?: string) {
+  return takes.filter((t) => t.voice === voice && (!model || t.model === model)).reduce((m, t) => Math.max(m, t.lines), 0);
+}
 
 export interface UseStudio {
   key: KeyStatus | null;
@@ -15,6 +20,8 @@ export interface UseStudio {
   sets: SetInfo[];
   /** The aircraft kinds the person flies (from the profiles). */
   aircraft: string[];
+  /** The lines each voice, model and speed have a take of. */
+  takes: TakeCount[];
   catalog: Catalog | null;
   /** Ids of the voices, the models and the sets the person ticked. */
   voices: string[];
@@ -118,24 +125,27 @@ export function useStudio(onRendered: () => Promise<void>): UseStudio {
   }, [keySet, v0, m0, picked, want]);
   const estimate = priced && priced.k === want ? priced.e : null;
 
-  // How many lines of each set the one ticked voice and model have rendered (no network).
-  const single = voices.length === 1 && models.length === 1;
-  const progressKey = single ? [v0, m0, ran].join("|") : "";
-  const [progress, setProgress] = useState<{ k: string; sets: SetInfo[] } | null>(null);
+  // The takes per voice and, with one voice and one model ticked, how many lines of each set
+  // they have rendered (no network). Read again after every paid call.
+  const single = voices.length === 1 && models.length === 1 && !!v0 && !!m0;
+  const progressKey = [single ? v0 : "", single ? m0 : "", ran].join("|");
+  const [progress, setProgress] = useState<{ k: string; sets: SetInfo[]; takes: TakeCount[] } | null>(null);
   useEffect(() => {
     let gone = false;
-    if (!progressKey || !v0 || !m0) return;
-    api.gearVoiceSets({ voice: v0, model: m0, settings: null, batch: null }).then(
+    const asked = single ? { voice: v0 ?? "", model: m0 ?? "", settings: null, batch: null } : undefined;
+    api.gearVoiceSets(asked).then(
       (v) => {
-        if (!gone) setProgress({ k: progressKey, sets: v.sets });
+        if (!gone) setProgress({ k: progressKey, sets: v.sets, takes: v.rendered ?? [] });
       },
       () => undefined,
     );
     return () => {
       gone = true;
     };
-  }, [progressKey, v0, m0]);
-  const shownSets = progress && progress.k === progressKey ? progress.sets : sets;
+  }, [progressKey, single, v0, m0]);
+  const fresh = progress && progress.k === progressKey ? progress : null;
+  const shownSets = fresh && single ? fresh.sets : sets.map((x) => ({ ...x, rendered: null }));
+  const takes = progress?.takes ?? [];
 
   const saveKey = useCallback(
     async (k: string) => {
@@ -198,5 +208,5 @@ export function useStudio(onRendered: () => Promise<void>): UseStudio {
   // Any seed but 0 makes new takes; the pack keeps every batch whose lines all passed.
   const retake = useCallback(() => call("render", false, 1 + Math.floor(Math.random() * 2_000_000_000)), [call]);
 
-  return { key, sets: shownSets, aircraft, catalog, voices, models, picked, setVoices, setModels, setPicked, estimate, sample, render, asking, busy, error, saveKey, deleteKey, run, retake, cancel: stop };
+  return { key, sets: shownSets, aircraft, takes, catalog, voices, models, picked, setVoices, setModels, setPicked, estimate, sample, render, asking, busy, error, saveKey, deleteKey, run, retake, cancel: stop };
 }

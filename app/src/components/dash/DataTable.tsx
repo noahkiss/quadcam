@@ -1,0 +1,106 @@
+import { Fragment, type ReactNode } from "react";
+import styles from "./DataTable.module.css";
+
+export interface Column<T> {
+  key: string;
+  header: ReactNode;
+  cell: (row: T) => ReactNode;
+  /** A number: right-aligned, mono, tabular. */
+  numeric?: boolean;
+  /** The column that names the row (`<th scope="row">`). One per table. */
+  rowHeader?: boolean;
+  /** Hidden when the table is narrower than 720 px. */
+  optional?: boolean;
+  /** A CSS width, such as `6rem`; the other columns share the rest. */
+  width?: string;
+}
+
+export interface Selection<T> {
+  selected: (row: T) => boolean;
+  onChange: (row: T, on: boolean) => void;
+  /** The checkbox's accessible name. */
+  label: (row: T) => string;
+}
+
+export interface DataTableProps<T> {
+  /** The table's accessible name. */
+  label: string;
+  columns: Column<T>[];
+  rows: T[];
+  rowKey: (row: T) => string;
+  /** A checkbox column first, for rows a person picks. */
+  selection?: Selection<T>;
+  /** Group rows: a header row before each run of rows with a new group. */
+  group?: (row: T) => string;
+  /** Tighter rows, for long lists. */
+  compact?: boolean;
+  /** Shown in place of the table when there are no rows. */
+  empty?: ReactNode;
+}
+
+/** A table of rows that share columns: aligned numbers, an optional checkbox column, optional
+ *  group header rows, row actions in a last column. It scrolls sideways inside its own box
+ *  when the window is too narrow, and drops `optional` columns first. */
+export function DataTable<T>({ label, columns, rows, rowKey, selection, group, compact, empty }: DataTableProps<T>) {
+  if (rows.length === 0 && empty) return <>{empty}</>;
+  const span = columns.length + (selection ? 1 : 0);
+  const cls = (c: Column<T>) => [c.numeric && styles.num, c.optional && styles.optional].filter(Boolean).join(" ") || undefined;
+  let last: string | null = null;
+  return (
+    <div className={styles.wrap} data-component="data-table">
+      <table className={[styles.table, compact && styles.compact].filter(Boolean).join(" ")} aria-label={label}>
+        <thead>
+          <tr>
+            {selection && (
+              <th scope="col" className={styles.check}>
+                <span className={styles.hidden}>Pick</span>
+              </th>
+            )}
+            {columns.map((c) => (
+              <th key={c.key} scope="col" className={cls(c)} style={c.width ? { width: c.width } : undefined}>
+                {c.header}
+              </th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((r) => {
+            const g = group?.(r) ?? null;
+            const head = g !== null && g !== last;
+            last = g;
+            const on = selection?.selected(r) ?? false;
+            return (
+              <Fragment key={rowKey(r)}>
+                {head && (
+                  <tr className={styles.group}>
+                    <th scope="colgroup" colSpan={span}>
+                      {g}
+                    </th>
+                  </tr>
+                )}
+                <tr className={on ? styles.on : undefined}>
+                  {selection && (
+                    <td className={styles.check}>
+                      <input type="checkbox" aria-label={selection.label(r)} checked={on} onChange={(e) => selection.onChange(r, e.target.checked)} />
+                    </td>
+                  )}
+                  {columns.map((c) =>
+                    c.rowHeader ? (
+                      <th key={c.key} scope="row" className={cls(c)}>
+                        {c.cell(r)}
+                      </th>
+                    ) : (
+                      <td key={c.key} className={cls(c)}>
+                        {c.cell(r)}
+                      </td>
+                    ),
+                  )}
+                </tr>
+              </Fragment>
+            );
+          })}
+        </tbody>
+      </table>
+    </div>
+  );
+}
