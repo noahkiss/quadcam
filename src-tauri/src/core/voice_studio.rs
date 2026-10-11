@@ -497,14 +497,10 @@ impl Core {
                     continue;
                 };
                 let wav = render::normalise(cut, &settings, tools.as_ref())?;
-                let name = l
-                    .line
-                    .path
-                    .rsplit('/')
-                    .next()
-                    .unwrap_or("line.wav")
-                    .to_string();
-                let file = dir.join(&name);
+                // The whole card path: SOUNDS/en/armed.wav and a script's armed.wav differ.
+                lines::check_path(&l.line.path)?;
+                let file = dir.join(&l.line.path);
+                std::fs::create_dir_all(file.parent().unwrap_or(&dir))?;
                 std::fs::write(&file, &wav)?;
                 report.items.push(SampleItem {
                     voice: vid.clone(),

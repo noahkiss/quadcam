@@ -873,3 +873,20 @@ fn a_pack_named_for_its_voice_moves_to_the_voice_id_and_keeps_its_radios() {
     assert_eq!(m["id"], r.pack.as_str());
     assert_eq!(m["voice_id"], "v-callum");
 }
+
+#[test]
+fn samples_of_two_lines_with_one_file_name_keep_both() {
+    let b = bench(50000, true);
+    let mut p = sample(&["Callum"], &["eleven_turbo_v2_5"], false, false);
+    p.sets = vec!["sample".into(), "scripts".into()];
+    p.lines = vec![
+        "SOUNDS/en/armed.wav".into(),
+        "SOUNDS/en/SCRIPTS/YAAPU/armed.wav".into(),
+    ];
+    let done = paid_sample(&b, p);
+    assert_eq!(done.items.len(), 2, "{:?}", done.items);
+    let (a, y) = (&done.items[0].file, &done.items[1].file);
+    assert_ne!(a, y);
+    assert!(y.ends_with("SOUNDS/en/SCRIPTS/YAAPU/armed.wav"), "{y}");
+    assert_ne!(std::fs::read(a).unwrap(), std::fs::read(y).unwrap());
+}
