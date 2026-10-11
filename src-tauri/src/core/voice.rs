@@ -1262,7 +1262,7 @@ impl Core {
             }
         }
         if radios.is_empty() {
-            bail!("Name at least one radio, or pass all.");
+            bail!("Name at least one radio, or ask for all radios.");
         }
         for r in &radios {
             self.radio_device(r)?;

@@ -168,7 +168,7 @@ export function choose(g: MockGear, p: { radio: string; pack: string; keep_overr
 export function chooseRadios(g: MockGear, p: { pack: string; radios?: string[]; all?: boolean; keep_overrides?: boolean }, editor: "user" | "agent"): VoiceChooseRadiosReport {
   const radios = [...(p.radios ?? [])];
   if (p.all) for (const d of g.devices) if (d.kind === "radio" && (!d.identity?.firmware || d.identity.firmware.toLowerCase() === "edgetx") && !radios.includes(d.id)) radios.push(d.id);
-  if (radios.length === 0) throw "Name at least one radio, or pass all.";
+  if (radios.length === 0) throw "Name at least one radio, or ask for all radios.";
   for (const r of radios) {
     const d = radioOf(g, r);
     const f = d.identity?.firmware;
