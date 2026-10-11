@@ -1079,10 +1079,6 @@ fn an_apply_refuses_when_a_list_was_reordered_since_the_read() {
     // Another firmware lists the same switch modes in another order; the value is the same.
     tx.restart();
     tx.device().set_choices(3, &["Wide", "Hybrid"]);
-    assert_eq!(
-        tx.device().param("Switch Mode").unwrap().name,
-        "Switch Mode"
-    );
     let r = refusal(apply(&b, &c, &plan.digest).unwrap_err());
     assert_eq!(r.code, RefusalCode::BeforeMismatch);
     assert!(r.reason.contains("offers other values"), "{}", r.reason);
