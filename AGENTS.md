@@ -138,17 +138,38 @@ scripts/make-fixtures.sh                   # re-record the mock core's data (nee
 GitHub (`noahkiss/quadcam`, public) is the only remote. Users install the cask
 `noahkiss/tap/quadcam`.
 
-1. Set the new version in `src-tauri/Cargo.toml` and `src-tauri/tauri.conf.json`. They must match.
-2. Commit, then push a tag: `git tag vX.Y.Z && git push origin main vX.Y.Z`.
-3. `.github/workflows/release.yml` (through the shared composite actions) builds, signs
+1. On the release branch (`rel-X.Y.Z`, every change merged in), set the new version in
+   `src-tauri/Cargo.toml` and `src-tauri/tauri.conf.json` (they must match), commit
+   `release: X.Y.Z`, and push the branch. CI runs on that commit; the bump touches
+   `Cargo.toml`, so the path filter runs every Rust test.
+2. Wait for that run to go green (`gh run watch -R noahkiss/quadcam --exit-status`).
+3. Fast-forward main to that same commit and tag it. No merge commit, no rebase: the tag
+   names the commit that went green.
+
+   ```bash
+   git switch main && git merge --ff-only rel-X.Y.Z
+   git tag vX.Y.Z && git push origin main vX.Y.Z
+   ```
+
+4. `.github/workflows/release.yml` (through the shared composite actions) builds, signs
    and notarizes `QuadCam.app` on a `macos-26` (arm64) runner with the
    prebuilt Tauri CLI from `app/`. It does not run the tests: before it attaches the zip
    (`quadcam-X.Y.Z-arm64.zip`) to the GitHub Release, it waits up to 40 minutes for a green
    `ci.yml` run on the tagged commit, and fails without one. It also attaches `modules.json`
    (`quadcam-cli modules manifest`, the pins Settings > Modules checks). It then fires the tap's
    `bump.yml`, which rewrites `Casks/quadcam.rb`, installs it on macOS, and commits.
-4. Watch it: `gh run watch -R noahkiss/quadcam --exit-status`. Re-run for an existing tag with
+5. Watch it: `gh run watch -R noahkiss/quadcam --exit-status`. Re-run for an existing tag with
    `gh workflow run release.yml -R noahkiss/quadcam --ref vX.Y.Z -f tag=vX.Y.Z`.
+
+- **The CI wait:** the push of main and the tag starts new `ci.yml` runs on the tagged commit
+  (full suite, axe in both themes, never cancelled), and the release waits for the newest
+  one. It runs beside the build. The branch run already proved the commit, so a red tag run
+  means a main-only check (the second axe theme) or a flake, not an untested change.
+- **Residual:** `release-attach` (`noahkiss/workflows`) reads `gh run list --commit <sha>
+  --limit 1`: only the newest run on the sha counts, whatever pushed it. A later run on that
+  sha (a re-run, or another branch pushed at that commit, which is cancellable and may skip
+  the slow tests) becomes the one the release judges. Push nothing else at the tagged commit
+  until the zip is attached. The fix (judge every run on the sha) belongs in that repo.
 
 - **Signing:** `release.yml`'s own job names the `release` environment and runs the composite
   actions `tauri-macos-build`, `macos-sign-notarize` and `release-attach` from `noahkiss/workflows`.

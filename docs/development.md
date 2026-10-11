@@ -151,10 +151,11 @@ A newer push to the same branch or pull request cancels the older run. A run on 
 
 Users install the Homebrew cask `noahkiss/tap/quadcam`. A release is a pushed tag.
 
-1. Set the new version in `src-tauri/Cargo.toml` and `src-tauri/tauri.conf.json`. They must match.
-2. Commit, then push the commit and a tag:
+1. On the release branch, set the new version in `src-tauri/Cargo.toml` and `src-tauri/tauri.conf.json`. They must match. Commit, push the branch, and wait for its CI run to pass.
+2. Fast-forward `main` to that commit, then tag the same commit and push both:
 
    ```bash
+   git switch main && git merge --ff-only rel-X.Y.Z
    git tag vX.Y.Z && git push origin main vX.Y.Z
    ```
 
@@ -162,7 +163,7 @@ Users install the Homebrew cask `noahkiss/tap/quadcam`. A release is a pushed ta
    - It checks that both manifests state the tag's version.
    - It builds `QuadCam.app` on an Apple Silicon runner (`macos-26`) with the prebuilt Tauri CLI from `app/`.
    - It signs, notarizes and staples the app (see [Signing](#signing)).
-   - It waits for a green CI run on the tagged commit. It does not run the tests again. If CI fails, or does not finish within 40 minutes, there is no release.
+   - It waits for a green CI run on the tagged commit: the newest run on that commit, which the push of `main` and the tag starts beside the build. It does not run the tests itself. If CI fails, or does not finish within 40 minutes, there is no release.
    - It zips the app as `quadcam-X.Y.Z-arm64.zip` and attaches the zip to the GitHub Release.
    - It starts the tap's `bump.yml`. That workflow rewrites `Casks/quadcam.rb`, installs the cask on macOS, and commits.
 4. Watch it with `gh run watch -R noahkiss/quadcam --exit-status`.
