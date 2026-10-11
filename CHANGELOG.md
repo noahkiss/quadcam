@@ -10,6 +10,11 @@ User-facing changes in each release, newest first. Release notes on
 - **Device Overview.** The header adds the firmware. Summary tiles show the firmware against the newest, the last backup, the staged changes and the latest blackbox pull (FC), the aircraft count (radio), or the new clips, last card check and free space (DVR and goggles cards); a tile opens its section. The facts sit in a **Details** card, two columns wide. The row of section links under them is gone: the tabs above do that.
 - **Forget…** moves into the **…** menu on a device page. The header's buttons are plain buttons, primary last.
 - **One left edge.** Every Gear page and device section lines up with the page title: the Bench, OSD, Rates, Switches, Models, Checklists and Voice sections lost their extra inset. Empty lines are left-aligned under the title, not centred.
+- **Firmware as a dashboard.** **Check for updates** sits in the header with the last check under the title. Tiles count the devices, the updates and the devices up to date, and show the last check. The table shows **Installed → newest** and a status dot; before the first check a row says **Not checked**, so **Unknown** means the version is unknown. **ExpressLRS (preview)** and **Read radio firmware** are cards, and the read steps are numbered inside the card. An ELRS device's options open under the table.
+- **Radio Models and Checklists** say where the model came from in words: "From the radio's card" or "From backup · Oct 6, 2:20 PM", not a backup id. The checklist is a card with its empty line inside.
+- **Radio Splash** is a card: the preview sits in a frame of the radio's 128 × 64 screen at twice the size, beside the controls. A line under **Flash with splash…** says why it is off.
+- **Aircraft on this radio** is a card: the add picker is in its head, the aircraft are in the shared table, and the selected model has a **Selected** badge.
+- **Settings > Gear** reads as a macOS form: each group's title on the left, its controls on the right.
 - **For developers:** shared `PageHeader`, `EmptyState`, `FactList`, `StatusDot` and `MoreMenu` in `app/src/components/dash/`, and the `--s-5` spacing token the Apply sheet, Bench and Firmware already used. `docs/development.md` describes how to build a dashboard page.
 
 ## 0.14.0 (2026-10-11)

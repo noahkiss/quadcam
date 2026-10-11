@@ -342,7 +342,8 @@ serial radio shows its board and version in the device list.
 ## Radio model editors
 
 A saved radio's page has a **Models** and a **Checklists** segment. They read the model from the
-mounted card, or from the radio's latest backup when it is not plugged in, and show the
+mounted card, or from the radio's latest backup when it is not plugged in (the line beside
+**Model** says "From the radio's card" or "From backup · Oct 6, 2:20 PM"), and show the
 radio's staged model edits on top. Every control stages its change at once. All edits join
 one change per radio, "Model edits". A later edit of a setting replaces the earlier one,
 and an edit that puts the model back as the radio has it drops out. Nothing reaches the card
@@ -1146,7 +1147,9 @@ Packs, pack types, the pack set on each flight, added log folders and crashes ar
 
 ### Check
 
-**Gear > Firmware** lists each saved device with its installed version and the newest release:
+**Gear > Firmware** lists each saved device with its installed version and the newest release
+(**Installed → newest**). Tiles above the table count the devices, the updates and the devices
+that are up to date, and show the last check:
 
 | Product | Newest release comes from |
 |---|---|
@@ -1155,11 +1158,12 @@ Packs, pack types, the pack set on each flight, added log folders and crashes ar
 | ExpressLRS | The ExpressLRS release index |
 
 - **Check for updates** reads the network. Without it, the page shows the last answer, or
-  "Not checked yet." The setting `firmware_check` (`firmwareCheck` in the settings file) is `manual` by default.
+  "Not checked yet" under the title. The setting `firmware_check` (`firmwareCheck` in the settings file) is `manual` by default.
   With `daily`, the page checks when the last answer is a day old. Settings has no control for
   it: run `quadcam-cli settings set firmware_check=daily`.
 - A row says **Up to date**, **Update available** or **Unknown** (the device reports no
-  version, or no check has run). A source that fails shows a notice; the others still show.
+  version, or its source failed). Before the first check it says **Not checked**. A source that
+  fails shows a notice; the others still show.
 - The sidebar shows how many devices have an update.
 - QuadCam checks Betaflight and ExpressLRS versions. It flashes only EdgeTX radios, and
   Betaflight FCs when **Betaflight flashing (preview)** is on. For ExpressLRS, see
@@ -1443,9 +1447,10 @@ passthrough is one of the things a real-device trial has to show.
 1. **Choose image…** picks a PNG. QuadCam scales it to fit 128 × 64, centres it on white and
    cuts it to two tones.
 2. **Threshold** sets how dark a pixel must be to count as dark. **Invert** swaps the tones.
-   The preview shows the radio's pixels at 4 times the size.
+   The preview frame shows the radio's 128 × 64 screen at twice the size.
 3. **Flash with splash…** opens the flash sheet for the radio's installed version, with the
-   picture put into the board's image.
+   picture put into the board's image. While it is off, the line under it says why: the radio
+   is not saved, no image is chosen, or the radio cannot take a splash.
 
 QuadCam finds the splash in the image by its markers: `SPS`, a zero byte, the width 128 and the
 height 64, then 1,024 picture bytes, then `SPE`. It refuses an image where a marker is missing,
