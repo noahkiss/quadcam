@@ -9,8 +9,8 @@ QuadCam is a Tauri 2 app. The core is Rust in `src-tauri/`. The frontend is Reac
 - Node.js 24 through [fnm](https://github.com/Schniz/fnm), which reads `.node-version`.
 - pnpm, the version that `packageManager` in `app/package.json` names.
 - exiftool is optional. The tests use it when it is installed.
-- Xcode 26 or newer, for the Swift helper `quadcam-intel` (below). Without it the build still
-  works and the speech check is unavailable.
+- Xcode 26 or newer, for the Swift helper `quadcam-intel` (below), and Xcode 27 for its video
+  analysis. Without it the build still works and those features are unavailable.
 
 ```bash
 brew install ffmpeg fnm pnpm
@@ -49,6 +49,7 @@ frameworks that Rust cannot reach (they are Swift-only). It prints one JSON obje
 quadcam-intel caps [--locale en-US]          # which features this Mac has, and why not
 quadcam-intel asr FILE... [--locale en-US]   # SpeechAnalyzer + SpeechTranscriber: text, words, confidence per file
 quadcam-intel install [--locale en-US]       # asks macOS to install the speech assets (AssetInventory)
+quadcam-intel video FILE [--highlights] [--keyframe]   # MediaIntelligence VideoAnalyzer (macOS 27+): highlights, levels, key frame
 ```
 
 Exit codes: 0 done, 1 failed, 2 usage, 3 unavailable here (an older macOS, or a locale without
@@ -70,7 +71,12 @@ running OS (`#available`) and reports itself unavailable on an older one.
   helper, an older macOS or missing assets make a feature unavailable, never an error. A
   process started by cargo gets no helper unless `QUADCAM_INTEL=real`; tests pass
   `intel::fake::FakeHelper`. One test runs the real helper on a line `say` spoke, and skips
-  where the speech check is unavailable.
+  where the speech check is unavailable. Another runs its video analysis on a synthetic clip
+  with `QUADCAM_INTEL=real` on macOS 27, and skips elsewhere.
+- **Video analysis.** `video` runs both requests in one pass (asking for one costs as much as
+  both). `src-tauri/src/highlights.rs` turns the answer into `highlight` moments and a key
+  frame, and caches it by content fingerprint under `<cache>/video/`; `core/video.rs` holds the
+  session's background job (from `Hooks::analysed`) and `library_analyze_video`.
 
 `cargo tauri dev` does not touch your Photos library: Photos runs as a dry run. To try the real path, set `QUADCAM_PHOTOS=real`. See [Photos](photos.md#test-without-photos).
 
@@ -199,9 +205,10 @@ A newer push to the same branch or pull request cancels the older run. A run on 
 | `src-tauri/src/bin/quadcam-cli/` | The command-line tool |
 | `src-tauri/src/{scan,disk,media,logs,naming,session,photos}.rs`, `pipeline/` | Scanning, disks, ffmpeg, radio logs, file names, the session, Photos, the import steps |
 | `src-tauri/src/moments.rs` | Moments from radio-log sticks and dead air from video frames. Every threshold is in `moments::tune` |
+| `src-tauri/src/highlights.rs` | Highlights and the key frame from macOS video analysis: moments, the file item, the cache |
 | `src-tauri/src/metadata.rs`, `qtmeta.rs` | Places, profiles and per-clip metadata. Writing QuickTime metadata into the files |
 | `intel/` | The Swift helper `quadcam-intel` (see [The Swift helper](#the-swift-helper)) |
-| `src-tauri/src/intel.rs` | Runs the Swift helper: its features, the speech check of voice files |
+| `src-tauri/src/intel.rs` | Runs the Swift helper: its features, the speech check of voice files, video analysis |
 | `src-tauri/tests/` | Integration tests on synthetic clips and FAT32 disk images. `it/` is one test binary, one module per area; the three files beside it change an environment variable and stay binaries of their own |
 | `scripts/make-corpus.sh` | Builds `test-clips/synthetic/` |
 | `assets/icon.svg` | The icon source. Regenerate the icons with `cargo tauri icon` |

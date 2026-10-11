@@ -15,7 +15,7 @@ Play starts at once. On import, QuadCam makes a small preview of each clip in th
 |---|---|
 | Video | Frames from the clip |
 | Signal | Flying (the picture is there) and **dead air** (striped) |
-| Moments | Markers found in the radio log's stick channels |
+| Moments | Markers found in the radio log's stick channels, or highlights from video analysis |
 | Cuts | The ranges that export as extra files |
 
 **Keep ranges** are the clip without its dead air. Select **Use keep ranges** to turn them into cuts.
@@ -55,6 +55,21 @@ QuadCam finds moments in the radio log's stick channels:
 Each moment has a score from 0 to 1. If the receiver sends attitude telemetry and it shows the quad upside down during a roll or flip, the score goes up.
 
 Every threshold is in `moments::tune` (`src-tauri/src/moments.rs`).
+
+### Highlights from video analysis
+
+On macOS 27 or later, QuadCam also asks macOS's video analysis (MediaIntelligence) which stretches of each clip are interesting. A clip with no radio-log moments, such as a DJI clip or an analog clip without a log, shows these stretches as **Highlight** moments. A clip with radio-log moments shows only those; its highlights stay in the file in case they are needed later.
+
+- Each moment in the list says where it came from: **Radio log**, **Video analysis** or **Video signal** (dead air).
+- A highlight scores its mean interest level over the clip's highest level, so the best stretch of each clip scores near 1.
+- A highlight that is mostly dead air is dropped: analog static can look interesting to the analyzer.
+- The analyzer also picks a **key frame**, the frame that best stands for the clip. It becomes the clip's picture in the Import sheet and in the library (outside dead air). Hover still scrubs the strip.
+
+The analysis runs in the background, at about 5 times real time: a 10-minute clip takes about 2 minutes on an M1 Pro. It starts after a card loads, and an import never waits for it. Clips the import added before it finished are analysed after the import. QuadCam keeps each answer by the clip's content, so a clip is analysed once.
+
+To analyse clips that were in the library before, or to run it again: right-click a clip and select **Find highlights again**, or use `quadcam-cli library analyze-video` (MCP: `quadcam_library_files` with `analyze_video`). Settings > Import > **Find highlights in new clips** turns the background analysis off.
+
+On macOS 26 or older, or without QuadCam's `quadcam-intel` helper, nothing runs and nothing changes. The highlights are general-purpose: in tests on real FPV clips they did not line up with the rolls and flips a radio log found. Treat them as stretches worth a look.
 
 ### Better moments from the radio log
 
