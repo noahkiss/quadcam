@@ -34,7 +34,7 @@ pub use crate::core::{
 };
 pub use crate::core::{
     Catalog, CatalogParams, EstimateParams, KeyParams, KeyStatus, SampleParams, SampleReport,
-    StudioEstimate, StudioView,
+    SetsParams, StudioEstimate, StudioView,
 };
 pub use crate::core::{
     CrashSaveParams, FlightFilter, FlightFoldersParams, FlightReport, FlightSetParams, FlightsView,
@@ -203,8 +203,10 @@ macro_rules! with_gear_rows {
             /// The voice studio's ElevenLabs key: `status` (set or not, never the key), `set` (into the
             /// Keychain) or `delete`.
             gear_voice_key(params: KeyParams) -> KeyStatus = |c| c.gear_voice_key(&params);
-            /// The line sets a person can render, and whether a key is stored. No network.
-            gear_voice_sets() -> StudioView = |c| c.gear_voice_sets();
+            /// The line sets a person can render, the aircraft kinds the person flies with the
+            /// sets picked at first, and whether a key is stored; with a voice id and a model,
+            /// how many lines of each set already have a take. No network.
+            gear_voice_sets(params: SetsParams) -> StudioView = |c| c.gear_voice_sets(&params);
             /// The account's ElevenLabs voices, models (with what a character costs) and credits. Free calls.
             gear_voice_catalog(params: CatalogParams) -> Catalog = |c| c.gear_voice_catalog(&params);
             /// What rendering line sets as carrier-sentence batches would cost, and whether the

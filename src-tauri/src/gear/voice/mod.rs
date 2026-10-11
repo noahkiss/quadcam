@@ -9,6 +9,7 @@ pub mod lines;
 pub mod packs;
 pub mod rates;
 pub mod render;
+pub mod reuse;
 pub mod sets;
 pub mod tts;
 pub mod wav;

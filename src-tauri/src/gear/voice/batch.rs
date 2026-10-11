@@ -133,6 +133,11 @@ fn sentence(carrier: &str, line: &str) -> (String, std::ops::Range<usize>) {
     (format!("{pre}{line}{post}"), start..end)
 }
 
+/// The sentence an item is spoken in: its tone's carrier around it.
+pub fn sentence_of(s: &BatchSettings, i: &Item) -> String {
+    sentence(s.carrier_for(&i.tone), &i.spoken).0
+}
+
 /// Groups items by tone (the order tones first appear in), drops repeats of the same spoken
 /// text, and cuts each tone's list into batches of `max_lines`.
 pub fn plan(items: &[Item], s: &BatchSettings) -> Vec<Batch> {

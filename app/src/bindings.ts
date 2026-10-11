@@ -216,8 +216,12 @@ export const commands = {
 	 *  Keychain) or `delete`.
 	 */
 	gearVoiceKey: (params: KeyParams) => typedError<KeyStatus, string>(__TAURI_INVOKE("gear_voice_key", { params })),
-	/**  The line sets a person can render, and whether a key is stored. No network. */
-	gearVoiceSets: () => typedError<StudioView, string>(__TAURI_INVOKE("gear_voice_sets")),
+	/**
+	 *  The line sets a person can render, the aircraft kinds the person flies with the
+	 *  sets picked at first, and whether a key is stored; with a voice id and a model,
+	 *  how many lines of each set already have a take. No network.
+	 */
+	gearVoiceSets: (params: SetsParams) => typedError<StudioView, string>(__TAURI_INVOKE("gear_voice_sets", { params })),
 	/**  The account's ElevenLabs voices, models (with what a character costs) and credits. Free calls. */
 	gearVoiceCatalog: (params: CatalogParams) => typedError<Catalog, string>(__TAURI_INVOKE("gear_voice_catalog", { params })),
 	/**
@@ -5272,11 +5276,30 @@ export type SetInfo = {
 	title: string,
 	about: string,
 	lines: number,
+	/**  The aircraft kinds the set is made for; empty for a set not made for one kind. */
+	kinds?: string[],
+	/**
+	 *  Lines with a take that passed its checks, for the voice and model `gear_voice_sets`
+	 *  was asked about; none without both.
+	 */
+	rendered?: number | null,
 };
 
 /**  `settings_set`: settings by file key or CLI/MCP name; null resets one. */
 export type SetSettingsParams = {
 	values: { [key in string]: unknown },
+};
+
+/**
+ *  `gear_voice_sets`. With a voice id and a model, each set says how many of its lines that
+ *  voice and model already have a take of.
+ */
+export type SetsParams = {
+	/**  A voice id from the account (`gear_voice_catalog`); no name, as this makes no call. */
+	voice?: string,
+	model?: string,
+	settings?: RenderSettings | null,
+	batch?: BatchSettings | null,
 };
 
 /**  The settings file changed. Read it again with `settings`. */
@@ -5880,6 +5903,15 @@ export type StudioEstimate = {
 	model: string,
 	/**  Lines in the sets after combining. */
 	lines: number,
+	/**  Of those, lines with a take that passed its checks: nothing is sent for them. */
+	rendered?: number,
+	/**
+	 *  Lines whose take with this seed failed its checks: nothing is sent; another seed
+	 *  renders them again.
+	 */
+	retakes?: number,
+	/**  Lines whose text goes to ElevenLabs. */
+	to_render?: number,
 	estimate: Estimate,
 };
 
@@ -5889,6 +5921,13 @@ export type StudioView = {
 	sets: SetInfo[],
 	/**  The carrier and batch size used when none is given. */
 	batch: BatchSettings,
+	/**
+	 *  The aircraft kinds the person flies, from the aircraft profiles (`quad` when no
+	 *  profile names one).
+	 */
+	aircraft?: string[],
+	/**  The sets picked at first: those made only for those kinds, and the person's own lines. */
+	picks?: string[],
 };
 
 /**  `suggest`: changes to clip plans. Without `editor`, an agent made them. */

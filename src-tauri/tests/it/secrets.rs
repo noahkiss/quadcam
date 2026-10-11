@@ -167,7 +167,7 @@ fn the_core_reports_hints_only() {
         serde_json::to_string(&c.settings().unwrap()).unwrap(),
         serde_json::to_string(&c.status()).unwrap(),
         serde_json::to_string(&c.gear_status().unwrap()).unwrap(),
-        serde_json::to_string(&c.gear_voice_sets().unwrap()).unwrap(),
+        serde_json::to_string(&c.gear_voice_sets(&Default::default()).unwrap()).unwrap(),
         format!("{e:#}"),
     ];
     for (i, s) in shown.iter().enumerate() {

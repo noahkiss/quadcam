@@ -13,10 +13,12 @@ use crate::gear::voice::lines::{self, Line, Spelling};
 use crate::gear::voice::packs::{self, BuildOpts, PackManifest, Retake};
 use crate::gear::voice::rates;
 use crate::gear::voice::render::{self, Plan, RenderSettings};
+use crate::gear::voice::reuse::{self, LineIndex, Reuse, Scope};
 use crate::gear::voice::sets::{self, SetInfo, SetLine};
 use crate::gear::voice::tts::{Credits, ModelInfo, ProviderConfig, Tts, VoiceInfo};
 use anyhow::{anyhow, bail, Result};
 use serde::{Deserialize, Serialize};
+use std::collections::HashSet;
 use std::path::PathBuf;
 
 /// `gear_voice_key`.
@@ -70,6 +72,21 @@ pub struct Catalog {
     pub credits: Option<Credits>,
 }
 
+/// `gear_voice_sets`. With a voice id and a model, each set says how many of its lines that
+/// voice and model already have a take of.
+#[derive(Debug, Clone, Default, Serialize, Deserialize, specta::Type)]
+pub struct SetsParams {
+    /// A voice id from the account (`gear_voice_catalog`); no name, as this makes no call.
+    #[serde(default)]
+    pub voice: String,
+    #[serde(default)]
+    pub model: String,
+    #[serde(default)]
+    pub settings: Option<RenderSettings>,
+    #[serde(default)]
+    pub batch: Option<BatchSettings>,
+}
+
 /// `gear_voice_sets`: the line sets and the key, with no network call.
 #[derive(Debug, Clone, Serialize, Deserialize, specta::Type)]
 pub struct StudioView {
@@ -77,6 +94,13 @@ pub struct StudioView {
     pub sets: Vec<SetInfo>,
     /// The carrier and batch size used when none is given.
     pub batch: BatchSettings,
+    /// The aircraft kinds the person flies, from the aircraft profiles (`quad` when no
+    /// profile names one).
+    #[serde(default)]
+    pub aircraft: Vec<String>,
+    /// The sets picked at first: those made only for those kinds, and the person's own lines.
+    #[serde(default)]
+    pub picks: Vec<String>,
 }
 
 /// `gear_voice_estimate`.
@@ -103,6 +127,16 @@ pub struct StudioEstimate {
     pub model: String,
     /// Lines in the sets after combining.
     pub lines: u32,
+    /// Of those, lines with a take that passed its checks: nothing is sent for them.
+    #[serde(default)]
+    pub rendered: u32,
+    /// Lines whose take with this seed failed its checks: nothing is sent; another seed
+    /// renders them again.
+    #[serde(default)]
+    pub retakes: u32,
+    /// Lines whose text goes to ElevenLabs.
+    #[serde(default)]
+    pub to_render: u32,
     pub estimate: Estimate,
 }
 
@@ -155,6 +189,87 @@ pub struct SampleReport {
     /// The digest of this plan, which `confirm` repeats.
     #[serde(default)]
     pub digest: String,
+}
+
+/// The provider id the studio's takes are cached under.
+const PROVIDER: &str = "elevenlabs";
+
+/// A studio plan for one voice and model: the lines earlier takes hold, and the batches still
+/// to make for the rest.
+struct StudioPlan {
+    reuse: Reuse,
+    /// Batches of the other lines, less those the pack keeps whole.
+    batches: Vec<Batch>,
+    /// Batches the pack keeps whole.
+    kept: u32,
+}
+
+impl StudioPlan {
+    fn new(
+        s: &Scope,
+        index: &LineIndex,
+        lines: &[(SetLine, String)],
+        bs: &BatchSettings,
+        limit: usize,
+        pack: Option<&PackManifest>,
+    ) -> Self {
+        let (fresh, reuse) = reuse::split(s, index, &Core::studio_items(lines), bs);
+        let all = batch::plan_within(&fresh, bs, limit);
+        let (batches, kept) = still_to_do(all, pack, s.voice, s.model, s.settings);
+        StudioPlan {
+            reuse,
+            batches,
+            kept,
+        }
+    }
+
+    /// The card paths of `lines` as (rendered, re-takes, to render). A text in two paths
+    /// counts in both.
+    fn counts(&self, s: &Scope, lines: &[(SetLine, String)]) -> (u32, u32, u32) {
+        let billed: HashSet<&str> = self
+            .batches
+            .iter()
+            .filter(|b| !s.cached(b))
+            .flat_map(|b| b.items.iter().map(|(i, _)| i.spoken.as_str()))
+            .collect();
+        let retake: HashSet<&str> = self
+            .reuse
+            .lines()
+            .filter(|(_, flagged)| *flagged)
+            .map(|(l, _)| l)
+            .collect();
+        let (mut done, mut again, mut todo) = (0, 0, 0);
+        for (_, spoken) in lines {
+            if billed.contains(spoken.as_str()) {
+                todo += 1;
+            } else if retake.contains(spoken.as_str()) {
+                again += 1;
+            } else {
+                done += 1;
+            }
+        }
+        (done, again, todo)
+    }
+
+    /// Makes the batches, cuts the reused lines from their takes, and records both in the
+    /// line index. A failed index write is a note, not an error: the takes are paid for.
+    fn render(
+        &self,
+        ctx: &batch::Ctx<'_>,
+        bs: &BatchSettings,
+        notes: &mut Vec<String>,
+    ) -> Result<batch::Rendered> {
+        let s = Scope::of(ctx);
+        let mut done = batch::render_all(ctx, &self.batches, bs.snap_ms, &mut |_, _| {})?;
+        let mut entries = reuse::entries(&s, &self.batches, bs, &done);
+        entries.extend(reuse::cut_reused(&s, &self.reuse, bs.snap_ms, &mut done)?);
+        if let Err(e) = LineIndex::record(&s, entries) {
+            notes.push(format!(
+                "The line index was not saved ({e:#}): the next estimate may price these lines again."
+            ));
+        }
+        Ok(done)
+    }
 }
 
 /// The env var that holds the ElevenLabs key for one run, ahead of the Keychain.
@@ -233,13 +348,73 @@ impl Core {
         Ok(self.key_status())
     }
 
-    /// The key and the line sets. No network.
-    pub fn gear_voice_sets(&self) -> Result<StudioView> {
+    /// The key and the line sets, with the default picks for the aircraft the person flies;
+    /// with a voice id and a model, how many lines of each set have a take. No network.
+    pub fn gear_voice_sets(&self, p: &SetsParams) -> Result<StudioView> {
+        let custom = self.custom_lines()?.len();
+        let mut list = sets::infos(custom)?;
+        let aircraft = self.flown_kinds();
+        let mut picks = sets::default_picks(&aircraft);
+        if custom > 0 {
+            picks.push(sets::CUSTOM.into());
+        }
+        let (voice, model) = (p.voice.trim(), p.model.trim());
+        if !voice.is_empty() && !model.is_empty() {
+            let settings = p.settings.clone().unwrap_or_default();
+            settings.check()?;
+            let bs = p.batch.clone().unwrap_or_default();
+            bs.check()?;
+            let cache = BatchCache::new(&self.cache);
+            let s = Scope {
+                cache: &cache,
+                provider: PROVIDER,
+                voice,
+                model,
+                settings: &settings,
+            };
+            let index = LineIndex::load(&s);
+            let pack = self.local_pack(&local_pack_id(voice, model));
+            // The account's request limit needs a call; the rate table knows the usual models.
+            let limit = rates::batch_limit(model, 5000);
+            for info in &mut list {
+                let lines = if info.lines == 0 {
+                    Vec::new()
+                } else {
+                    self.studio_lines(std::slice::from_ref(&info.id), &[])?
+                };
+                let plan = StudioPlan::new(&s, &index, &lines, &bs, limit, pack.as_ref());
+                info.rendered = Some(plan.counts(&s, &lines).0);
+            }
+        }
         Ok(StudioView {
             key: self.key_status(),
-            sets: sets::infos(self.custom_lines()?.len())?,
+            sets: list,
             batch: BatchSettings::default(),
+            aircraft,
+            picks,
         })
+    }
+
+    /// The aircraft kinds the person flies: a word in a profile's name or aircraft
+    /// (`sets::kind_of`), else a profile linked to an FC is a quad. `quad` when none says.
+    fn flown_kinds(&self) -> Vec<String> {
+        let mut out: Vec<String> = Vec::new();
+        for p in self.profiles().map(|(p, _)| p).unwrap_or_default() {
+            let kind = sets::kind_of(&format!("{} {}", p.name, p.aircraft)).or(p
+                .gear
+                .fc
+                .as_ref()
+                .map(|_| "quad"));
+            if let Some(k) = kind {
+                if !out.iter().any(|o| o == k) {
+                    out.push(k.into());
+                }
+            }
+        }
+        if out.is_empty() {
+            out.push("quad".into());
+        }
+        out
     }
 
     /// The account's voices, models and credits (free calls).
@@ -371,10 +546,8 @@ impl Core {
         let model = self.studio_model(&p.model)?;
         let price = self.pricing(&tts.models()?, &model, &tts.credits()?)?;
         let lines = self.studio_lines(&p.sets, &p.lines)?;
-        let all = batch::plan_within(&Self::studio_items(&lines), &bs, price.batch_limit);
         let (_, old) = self.studio_pack(&voice, &voice_name, &model);
         let old = old.map(|(_, m)| m);
-        let (batches, _) = still_to_do(all, old.as_ref(), &voice, &model, &settings);
         let cache = BatchCache::new(&self.cache);
         let ctx = batch::Ctx {
             tts: tts.as_ref(),
@@ -383,12 +556,25 @@ impl Core {
             model: &model,
             settings: &settings,
         };
-        let estimate = batch::estimate(&ctx, &batches, &price);
+        let s = Scope::of(&ctx);
+        let plan = StudioPlan::new(
+            &s,
+            &LineIndex::load(&s),
+            &lines,
+            &bs,
+            price.batch_limit,
+            old.as_ref(),
+        );
+        let estimate = batch::estimate(&ctx, &plan.batches, &price);
+        let (rendered, retakes, to_render) = plan.counts(&s, &lines);
         Ok(StudioEstimate {
-            voice,
+            voice: voice.clone(),
             voice_name,
-            model,
+            model: model.clone(),
             lines: lines.len() as u32,
+            rendered,
+            retakes,
+            to_render,
             estimate,
         })
     }
@@ -426,7 +612,6 @@ impl Core {
             p.sets.clone()
         };
         let lines = self.studio_lines(&ids, &p.lines)?;
-        let items = Self::studio_items(&lines);
         let cache = BatchCache::new(&self.cache);
         let mut combos = Vec::new();
         let mut priced = Vec::new();
@@ -439,7 +624,6 @@ impl Core {
             let (vid, vname) = Self::resolve_voice(&voices, v)?;
             for m in &p.models {
                 let price = self.pricing(&models, m, &credits)?;
-                let batches = batch::plan_within(&items, &bs, price.batch_limit);
                 let ctx = batch::Ctx {
                     tts: tts.as_ref(),
                     cache: &cache,
@@ -447,7 +631,16 @@ impl Core {
                     model: m,
                     settings: &settings,
                 };
-                let e = batch::estimate(&ctx, &batches, &price);
+                let s = Scope::of(&ctx);
+                let plan = StudioPlan::new(
+                    &s,
+                    &LineIndex::load(&s),
+                    &lines,
+                    &bs,
+                    price.batch_limit,
+                    None,
+                );
+                let e = batch::estimate(&ctx, &plan.batches, &price);
                 total.batches += e.batches;
                 total.cached_batches += e.cached_batches;
                 total.lines += e.lines;
@@ -460,9 +653,9 @@ impl Core {
                     total.credits_basis = "estimated".into();
                 }
                 priced.push(serde_json::json!({
-                    "voice": vid, "model": m, "to_render": to_render(&ctx, &batches),
+                    "voice": vid, "model": m, "to_render": to_render(&ctx, &plan.batches),
                 }));
-                combos.push((vid.clone(), vname.clone(), m.clone(), batches));
+                combos.push((vid.clone(), vname.clone(), m.clone(), plan));
             }
         }
         total.affordable = credits.remaining >= total.credits;
@@ -492,7 +685,7 @@ impl Core {
         }
         let tools = crate::media::find_tools().ok();
         let out_root = self.cache.join("voice").join("samples");
-        for (vid, vname, model, batches) in combos {
+        for (vid, vname, model, plan) in combos {
             let ctx = batch::Ctx {
                 tts: tts.as_ref(),
                 cache: &cache,
@@ -500,7 +693,9 @@ impl Core {
                 model: &model,
                 settings: &settings,
             };
-            let done = batch::render_all(&ctx, &batches, bs.snap_ms, &mut |_, _| {})?;
+            let mut notes = Vec::new();
+            let done = plan.render(&ctx, &bs, &mut notes)?;
+            report.warnings.extend(notes);
             report.warnings.extend(
                 done.warnings
                     .iter()
@@ -555,8 +750,6 @@ impl Core {
             Some((k, m)) => (Some(k), Some(m)),
             None => (None, None),
         };
-        let all = batch::plan_within(&Self::studio_items(&lines), &bs, price.batch_limit);
-        let (batches, kept) = still_to_do(all, old.as_ref(), &voice, &model, &settings);
         let cache = BatchCache::new(&self.cache);
         let bctx = batch::Ctx {
             tts: tts.as_ref(),
@@ -565,10 +758,21 @@ impl Core {
             model: &model,
             settings: &settings,
         };
-        let est = batch::estimate(&bctx, &batches, &price);
+        let scope = Scope::of(&bctx);
+        let plan = StudioPlan::new(
+            &scope,
+            &LineIndex::load(&scope),
+            &lines,
+            &bs,
+            price.batch_limit,
+            old.as_ref(),
+        );
+        let (batches, kept) = (&plan.batches, plan.kept);
+        let est = batch::estimate(&bctx, batches, &price);
+        let (_, _, paths_to_render) = plan.counts(&scope, &lines);
         let digest = plan_digest(&serde_json::json!({
             "kind": "render", "voice": voice, "model": model, "sets": p.sets, "lines": p.lines,
-            "settings": settings, "batch": bs, "to_render": to_render(&bctx, &batches),
+            "settings": settings, "batch": bs, "to_render": to_render(&bctx, batches),
             "chars": est.chars, "credits": est.credits,
         }));
         let unique: std::collections::HashSet<&String> = lines.iter().map(|(_, s)| s).collect();
@@ -578,8 +782,8 @@ impl Core {
             voice: voice_name.clone(),
             plan: Plan {
                 lines: lines.len() as u32,
-                cached: (lines.len() as u32).saturating_sub(est.lines),
-                to_render: est.lines,
+                cached: (lines.len() as u32).saturating_sub(paths_to_render),
+                to_render: paths_to_render,
                 chars: est.chars,
             },
             rendered: 0,
@@ -601,6 +805,12 @@ impl Core {
             digest: digest.clone(),
             retakes: Vec::new(),
         };
+        let reused = plan.reuse.lines().count();
+        if reused > 0 {
+            report.notes.push(format!(
+                "{reused} lines come from earlier takes of this voice and model: cut again, not sent."
+            ));
+        }
         if kept > 0 {
             report.notes.push(format!(
                 "{kept} batches already in the pack with every line passing its checks: kept, not rendered again."
@@ -617,7 +827,7 @@ impl Core {
             }
             same_plan(p.digest.as_deref(), &digest)?;
         }
-        let done = batch::render_all(&bctx, &batches, bs.snap_ms, &mut |_, _| {})?;
+        let done = plan.render(&bctx, &bs, &mut report.notes)?;
         report.warnings = done.warnings.clone();
         let tools = crate::media::find_tools().ok();
         let rcache = self.voice_cache();
@@ -689,7 +899,7 @@ impl Core {
             );
             kept_batches = o.kept_batches.clone();
         }
-        for b in &batches {
+        for b in batches {
             if b.items
                 .iter()
                 .all(|(i, _)| !done.flagged.contains_key(&i.spoken))
@@ -954,6 +1164,53 @@ pub fn estimate_text(e: &Estimate) -> String {
             .unwrap_or_else(|| "unknown".into()),
         if e.affordable { "" } else { " (not enough)" }
     )
+}
+
+/// A studio estimate as text: the lines, how many are rendered, and the cost of the rest.
+pub fn studio_estimate_text(e: &StudioEstimate) -> String {
+    let retakes = if e.retakes > 0 {
+        format!(", {} need a re-take", e.retakes)
+    } else {
+        String::new()
+    };
+    format!(
+        "{} lines, {} with {}: {} rendered{retakes}, {} to render. {}",
+        e.lines,
+        e.voice_name,
+        e.model,
+        e.rendered,
+        e.to_render,
+        estimate_text(&e.estimate)
+    )
+}
+
+/// The line sets as text: the aircraft flown, the first picks, and per set what it holds.
+pub fn sets_text(v: &StudioView) -> String {
+    use std::fmt::Write;
+    let mut s = key_text(&v.key);
+    let _ = write!(
+        s,
+        "\nAircraft flown (from the profiles): {}. Picked at first: {}.",
+        v.aircraft.join(", "),
+        v.picks.join(", ")
+    );
+    for x in &v.sets {
+        let rendered = x
+            .rendered
+            .map(|r| format!(", {r} rendered"))
+            .unwrap_or_default();
+        let kinds = if x.kinds.is_empty() {
+            String::new()
+        } else {
+            format!(" For: {}.", x.kinds.join(", "))
+        };
+        let _ = write!(
+            s,
+            "\n{}: {} ({} lines{rendered}).{kinds} {}",
+            x.id, x.title, x.lines, x.about
+        );
+    }
+    s
 }
 
 /// A sample report as text.

@@ -507,6 +507,17 @@ cli.flag gear voice sample --tail-ms VALUE
 cli.flag gear voice sample --tempo VALUE
 cli.flag gear voice sample --trim-db VALUE
 cli.flag gear voice sample --voices VALUE
+cli.flag gear voice sets --carrier VALUE
+cli.flag gear voice sets --fade-out-ms VALUE
+cli.flag gear voice sets --max-lines VALUE
+cli.flag gear voice sets --model VALUE
+cli.flag gear voice sets --seed VALUE
+cli.flag gear voice sets --snap-ms VALUE
+cli.flag gear voice sets --speed VALUE
+cli.flag gear voice sets --tail-ms VALUE
+cli.flag gear voice sets --tempo VALUE
+cli.flag gear voice sets --trim-db VALUE
+cli.flag gear voice sets --voice VALUE
 cli.flag import --add-time
 cli.flag import --add-to-photos
 cli.flag import --album VALUE

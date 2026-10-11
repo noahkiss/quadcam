@@ -118,8 +118,20 @@ pub enum VoiceCmd {
         #[command(subcommand)]
         cmd: KeyCmd,
     },
-    /// The line sets that can be rendered (`--set` takes their ids), and whether a key is stored.
-    Sets,
+    /// The line sets that can be rendered (`--set` takes their ids), the aircraft you fly
+    /// with the sets picked at first, and whether a key is stored. With --voice and --model,
+    /// how many lines of each set already have a take. Makes no call.
+    Sets {
+        /// A voice id from the account (`gear voice voices`).
+        #[arg(long)]
+        voice: Option<String>,
+        #[arg(long)]
+        model: Option<String>,
+        #[command(flatten)]
+        batch: BatchArgs,
+        #[command(flatten)]
+        settings: SettingsArgs,
+    },
     /// The account's ElevenLabs voices.
     Voices,
     /// The account's ElevenLabs models, with USD per 1K characters and the estimated credits a character.
@@ -357,7 +369,20 @@ pub fn run(core: &Core, a: VoiceArgs) -> Result<Value> {
                 },
             )?)?
         }
-        Some(VoiceCmd::Sets) => serde_json::to_value(call::gear_voice_sets(core)?)?,
+        Some(VoiceCmd::Sets {
+            voice,
+            model,
+            batch,
+            settings,
+        }) => serde_json::to_value(call::gear_voice_sets(
+            core,
+            api::SetsParams {
+                voice: voice.unwrap_or_default(),
+                model: model.unwrap_or_default(),
+                settings: settings.get(),
+                batch: batch.get(),
+            },
+        )?)?,
         Some(VoiceCmd::Voices) => catalog(core, true, false, false)?,
         Some(VoiceCmd::Models) => catalog(core, false, true, false)?,
         Some(VoiceCmd::Credits) => catalog(core, false, false, true)?,

@@ -35,6 +35,13 @@ pub struct SetInfo {
     pub title: String,
     pub about: String,
     pub lines: u32,
+    /// The aircraft kinds the set is made for; empty for a set not made for one kind.
+    #[serde(default)]
+    pub kinds: Vec<String>,
+    /// Lines with a take that passed its checks, for the voice and model `gear_voice_sets`
+    /// was asked about; none without both.
+    #[serde(default)]
+    pub rendered: Option<u32>,
 }
 
 struct Def {
@@ -45,6 +52,8 @@ struct Def {
     files: &'static [&'static str],
     /// Files that give a line only when it carries this kind.
     by_kind: Option<(&'static str, &'static [&'static str])>,
+    /// The aircraft kinds the set is made for; empty for a set not made for one kind.
+    kinds: &'static [&'static str],
 }
 
 macro_rules! file {
@@ -70,67 +79,76 @@ const FILES: &[(&str, &str)] = &[
 
 const SETS: &[Def] = &[
     Def {
-        id: "edgetx",
-        title: "Full EdgeTX English",
-        about: "Every prompt EdgeTX plays: the radio's own prompts, numbers and units, the model prompts, and the telemetry-script prompts.",
-        files: &["radio", "units", "edgetx", "scripts"],
-        by_kind: None,
-    },
-    Def {
         id: "quad",
         title: "FPV quad",
-        about: "The radio's prompts, numbers and units, the EdgeTX prompts a quad's radio plays, and QuadCam's quad callouts.",
+        about: "What a quad's radio says: its own prompts (power on, alarms, timers), numbers and units for telemetry, and quad callouts such as armed, battery low, signal low, failsafe, turtle mode and the flight modes.",
         files: &["radio", "units", "quad"],
         by_kind: Some(("quad", &["edgetx", "scripts"])),
-    },
-    Def {
-        id: "heli",
-        title: "Helicopter",
-        about: "The radio's prompts, numbers and units, the EdgeTX prompts a helicopter's radio plays, and QuadCam's helicopter callouts.",
-        files: &["radio", "units", "heli"],
-        by_kind: Some(("heli", &["edgetx", "scripts"])),
-    },
-    Def {
-        id: "plane",
-        title: "Plane",
-        about: "The radio's prompts, numbers and units, the EdgeTX prompts a plane's radio plays, and QuadCam's plane callouts.",
-        files: &["radio", "units", "plane"],
-        by_kind: Some(("plane", &["edgetx", "scripts"])),
-    },
-    Def {
-        id: "glider",
-        title: "Glider",
-        about: "The radio's prompts, numbers and units, the EdgeTX prompts a glider's radio plays, and QuadCam's glider callouts.",
-        files: &["radio", "units", "glider"],
-        by_kind: Some(("glider", &["edgetx", "scripts"])),
-    },
-    Def {
-        id: "car",
-        title: "Car",
-        about: "The radio's prompts, numbers and units, and the EdgeTX prompts a car's radio plays: drive modes, steering, gears, drift.",
-        files: &["radio", "units"],
-        by_kind: Some(("car", &["edgetx"])),
-    },
-    Def {
-        id: "scripts",
-        title: "Telemetry scripts",
-        about: "The prompts the Betaflight, INAV and Yaapu telemetry scripts play.",
-        files: &["scripts"],
-        by_kind: None,
+        kinds: &["quad"],
     },
     Def {
         id: "extras",
         title: "FPV extras",
-        about: "More FPV callouts: arming states, battery stages, link stages, rate profiles, VTX, OSD, recording, race timing, finder, helper words.",
+        about: "More quad callouts for switches and special functions: arming checks, Betaflight modes, VTX, DVR and recording, rate and PID profiles, TX power, battery percent, link quality, race laps, the finder. Each plays only when a model's special function names it.",
         files: &["extras", "general"],
         by_kind: None,
+        kinds: &["quad"],
     },
     Def {
         id: "easter",
         title: "Easter eggs",
-        about: "Short fun lines in original wording. Off unless a model plays them.",
+        about: "Short fun lines, such as \"Engines hot. Send it!\". Each plays only when a model's special function names it.",
         files: &["easter"],
         by_kind: None,
+        kinds: &[],
+    },
+    Def {
+        id: "scripts",
+        title: "Telemetry scripts",
+        about: "The prompts the INAV and ArduPilot (Yaapu) telemetry scripts play on the radio. FPV quad already holds the Betaflight script's prompts.",
+        files: &["scripts"],
+        by_kind: None,
+        kinds: &[],
+    },
+    Def {
+        id: "edgetx",
+        title: "Full EdgeTX English",
+        about: "Every prompt of the EdgeTX English pack: the radio's prompts, numbers and units, the model prompts for quads, helicopters, planes, gliders and cars, and the telemetry-script prompts.",
+        files: &["radio", "units", "edgetx", "scripts"],
+        by_kind: None,
+        kinds: &["quad", "heli", "plane", "glider", "car"],
+    },
+    Def {
+        id: "heli",
+        title: "Helicopter",
+        about: "The radio's prompts, numbers and units, and helicopter callouts: throttle hold, idle up, governor, rescue, autorotation, head speed.",
+        files: &["radio", "units", "heli"],
+        by_kind: Some(("heli", &["edgetx", "scripts"])),
+        kinds: &["heli"],
+    },
+    Def {
+        id: "plane",
+        title: "Plane",
+        about: "The radio's prompts, numbers and units, and plane callouts: stall, airspeed, landing gear, flaps, lights, fuel.",
+        files: &["radio", "units", "plane"],
+        by_kind: Some(("plane", &["edgetx", "scripts"])),
+        kinds: &["plane"],
+    },
+    Def {
+        id: "glider",
+        title: "Glider",
+        about: "The radio's prompts, numbers and units, and glider callouts: thermal mode, lift and sink, crow, launch, ballast.",
+        files: &["radio", "units", "glider"],
+        by_kind: Some(("glider", &["edgetx", "scripts"])),
+        kinds: &["glider"],
+    },
+    Def {
+        id: "car",
+        title: "Car",
+        about: "The radio's prompts, numbers and units, and car callouts: drive modes, steering, gears, drift.",
+        files: &["radio", "units"],
+        by_kind: Some(("car", &["edgetx"])),
+        kinds: &["car"],
     },
     Def {
         id: "sample",
@@ -138,6 +156,7 @@ const SETS: &[Def] = &[
         about: "A dozen hard lines for comparing voices: a bare number, short words, warnings.",
         files: &["sample"],
         by_kind: None,
+        kinds: &[],
     },
 ];
 
@@ -269,21 +288,77 @@ pub fn infos(custom: usize) -> Result<Vec<SetInfo>> {
             title: d.title.into(),
             about: d.about.into(),
             lines: lines_of(d.id)?.len() as u32,
+            kinds: d.kinds.iter().map(|k| k.to_string()).collect(),
+            rendered: None,
         });
     }
     out.push(SetInfo {
         id: QUADCAM.into(),
         title: "QuadCam default".into(),
-        about: "The lines QuadCam's packs hold.".into(),
+        about: "The lines of QuadCam's ready-made voice packs: arming, battery, signal, flight modes, timers and numbers.".into(),
         lines: lines_of(QUADCAM)?.len() as u32,
+        kinds: Vec::new(),
+        rendered: None,
     });
     out.push(SetInfo {
         id: CUSTOM.into(),
         title: "Your lines".into(),
-        about: "The lines you added.".into(),
+        about: "Lines you added on a radio's Voice segment.".into(),
         lines: custom as u32,
+        kinds: Vec::new(),
+        rendered: None,
     });
     Ok(out)
+}
+
+/// The aircraft kind an aircraft profile names, from words in its name or aircraft text:
+/// "5-inch freestyle" and "Whoop" are quads, "Goblin heli" a helicopter. None when no word
+/// says.
+pub fn kind_of(text: &str) -> Option<&'static str> {
+    let t = text.to_lowercase();
+    let words: Vec<&str> = t
+        .split(|c: char| !c.is_alphanumeric())
+        .filter(|w| !w.is_empty())
+        .collect();
+    let has = |list: &[&str]| words.iter().any(|w| list.contains(w));
+    // A word that names another kind wins over the FPV words: an "FPV wing" is a plane.
+    if has(&["heli", "helicopter", "helis"]) {
+        Some("heli")
+    } else if has(&["glider", "sailplane", "dlg", "f3k", "f5j"]) {
+        Some("glider")
+    } else if has(&["plane", "airplane", "aeroplane", "wing", "warbird", "jet"]) {
+        Some("plane")
+    } else if has(&["car", "truck", "crawler", "buggy", "rover"]) {
+        Some("car")
+    } else if has(&[
+        "quad",
+        "quadcopter",
+        "whoop",
+        "tinywhoop",
+        "cinewhoop",
+        "toothpick",
+        "freestyle",
+        "racer",
+        "racing",
+        "drone",
+        "fpv",
+        "inch",
+        "cinelifter",
+        "longrange",
+    ]) {
+        Some("quad")
+    } else {
+        None
+    }
+}
+
+/// The sets picked at first for someone who flies `kinds`: each set made only for kinds in
+/// that list.
+pub fn default_picks(kinds: &[String]) -> Vec<String> {
+    SETS.iter()
+        .filter(|d| !d.kinds.is_empty() && d.kinds.iter().all(|k| kinds.iter().any(|f| f == k)))
+        .map(|d| d.id.to_string())
+        .collect()
 }
 
 /// Several sets as one list. The first set to hold a path wins it; `custom` takes the
@@ -562,6 +637,36 @@ mod tests {
             for l in file_lines(n).unwrap() {
                 assert!(l.kinds.iter().all(|k| KINDS.contains(&k.as_str())));
             }
+        }
+    }
+
+    #[test]
+    fn a_profile_names_its_kind_and_the_picks_follow() {
+        for (t, k) in [
+            ("5-inch freestyle", Some("quad")),
+            ("Whoop", Some("quad")),
+            ("Cinewhoop 3\"", Some("quad")),
+            ("FPV wing", Some("plane")),
+            ("Goblin 700 heli", Some("heli")),
+            ("F5J sailplane", Some("glider")),
+            ("Crawler", Some("car")),
+            ("Bob", None),
+        ] {
+            assert_eq!(kind_of(t), k, "{t}");
+        }
+        assert_eq!(default_picks(&["quad".into()]), ["quad", "extras"]);
+        assert_eq!(default_picks(&["plane".into()]), ["plane"]);
+        let all: Vec<String> = KINDS.iter().map(|k| k.to_string()).collect();
+        assert!(default_picks(&all).contains(&"edgetx".to_string()));
+        assert!(default_picks(&[]).is_empty());
+        // Every set says what it holds, and names only real kinds.
+        for i in infos(0).unwrap() {
+            assert!(i.about.len() > 30, "{}", i.id);
+            assert!(
+                i.kinds.iter().all(|k| KINDS.contains(&k.as_str())),
+                "{}",
+                i.id
+            );
         }
     }
 

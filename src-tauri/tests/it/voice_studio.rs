@@ -931,3 +931,180 @@ fn samples_of_two_lines_with_one_file_name_keep_both() {
     assert!(y.ends_with("SOUNDS/en/SCRIPTS/YAAPU/armed.wav"), "{y}");
     assert_ne!(std::fs::read(a).unwrap(), std::fs::read(y).unwrap());
 }
+
+fn sets_view(b: &Bench, voice: &str, model: &str) -> quadcam_lib::core::StudioView {
+    b.core
+        .gear_voice_sets(&quadcam_lib::core::SetsParams {
+            voice: voice.into(),
+            model: model.into(),
+            ..Default::default()
+        })
+        .unwrap()
+}
+
+fn rendered_of(v: &quadcam_lib::core::StudioView, id: &str) -> (u32, u32) {
+    let s = v.sets.iter().find(|s| s.id == id).unwrap();
+    (s.rendered.unwrap(), s.lines)
+}
+
+/// A line one render paid for is cut again from its take in every later render, whatever set
+/// it comes in: the estimate prices only lines no take holds, and counts the rest as rendered.
+#[test]
+fn a_line_rendered_once_is_never_billed_again() {
+    use quadcam_lib::gear::voice::{batch, lines::Spelling, sets};
+    let b = bench(99_000, true);
+    let m = "eleven_turbo_v2_5";
+    let before = sets_view(&b, "v-callum", m);
+    assert_eq!(rendered_of(&before, "quad").0, 0);
+    let r = paid_render(&b, render("Callum", m, &["quad"], false, true));
+    assert!(r.warnings.is_empty(), "{:?}", r.warnings);
+    let posts = b.http.posts();
+
+    // Every quad line is rendered now; the heli set shares the radio's prompts, numbers and
+    // units, and the extras share the EdgeTX prompts the quad set holds.
+    let after = sets_view(&b, "v-callum", m);
+    let (done, all) = rendered_of(&after, "quad");
+    assert_eq!(done, all);
+    let (heli_done, heli_all) = rendered_of(&after, "heli");
+    assert!(
+        heli_done > 200 && heli_done < heli_all,
+        "{heli_done}/{heli_all}"
+    );
+    let (extras_done, _) = rendered_of(&after, "extras");
+    assert!(extras_done >= 28, "{extras_done}");
+    // Another voice has none.
+    assert_eq!(rendered_of(&sets_view(&b, "v-matilda", m), "quad").0, 0);
+
+    // Adding the extras prices only their own lines: an extras line that says what a quad line
+    // says (at another path) is rendered too.
+    let both = estimate(&b, &["quad", "extras"], m).unwrap();
+    assert_eq!(both.rendered + both.to_render + both.retakes, both.lines);
+    let sp = Spelling::builtin().unwrap();
+    let quad_said: std::collections::HashSet<String> = sets::lines_of("quad")
+        .unwrap()
+        .iter()
+        .map(|l| sp.apply(&l.line.text))
+        .collect();
+    let new: std::collections::HashSet<String> = sets::lines_of("extras")
+        .unwrap()
+        .iter()
+        .map(|l| sp.apply(&l.line.text))
+        .filter(|t| !quad_said.contains(t))
+        .collect();
+    assert_eq!(both.estimate.lines as usize, new.len());
+    let same_text = sets::combine(&["quad".into(), "extras".into()], &[])
+        .unwrap()
+        .iter()
+        .filter(|l| quad_said.contains(&sp.apply(&l.line.text)))
+        .count();
+    assert_eq!(both.rendered as usize, same_text);
+    assert!(both.rendered > all, "{} {all}", both.rendered);
+    // Planned the old way, as whole batches keyed by their text, the last part-full batch of
+    // each tone takes extras lines and every quad line in it would be billed again.
+    let items: Vec<batch::Item> = sets::combine(&["quad".into(), "extras".into()], &[])
+        .unwrap()
+        .into_iter()
+        .map(|l| batch::Item {
+            spoken: sp.apply(&l.line.text),
+            tone: l.tone,
+        })
+        .collect();
+    let whole = batch::plan_within(&items, &Default::default(), 0);
+    let quad_in_new_batches: usize = whole
+        .iter()
+        .filter(|w| w.items.iter().any(|(i, _)| new.contains(&i.spoken)))
+        .flat_map(|w| w.items.iter())
+        .filter(|(i, _)| quad_said.contains(&i.spoken))
+        .count();
+    assert!(quad_in_new_batches > 0, "{quad_in_new_batches}");
+
+    // Rendering the helicopter set sends only the helicopter's own lines.
+    let heli = estimate(&b, &["heli"], m).unwrap();
+    assert_eq!(heli.rendered, heli_done);
+    assert_eq!(heli.to_render, heli_all - heli_done);
+    let r = paid_render(&b, render("Callum", m, &["heli"], false, true));
+    assert_eq!(b.http.posts() - posts, heli.estimate.batches as usize);
+    assert!(
+        r.notes.iter().any(|n| n.contains("from earlier takes")),
+        "{:?}",
+        r.notes
+    );
+    let pack = b.dir.path().join("support/gear/voices").join(&r.pack);
+    for f in [
+        "SOUNDS/en/idleu1.wav",
+        "SOUNDS/en/turtle.wav",
+        "SOUNDS/en/SYSTEM/hello.wav",
+    ] {
+        assert!(pack.join(f).is_file(), "{f}");
+    }
+    let posts = b.http.posts();
+
+    // The sample's lines are all quad lines: sampling this voice and model is free now.
+    let s = b
+        .core
+        .gear_voice_sample(&sample(&["Callum"], &[m], false, false))
+        .unwrap();
+    assert!(!s.needs_confirm, "{s:?}");
+    assert_eq!(s.estimate.credits, 0);
+    assert_eq!(s.items.len(), 12);
+    assert_eq!(b.http.posts(), posts);
+    let quad_again = estimate(&b, &["quad", "heli"], m).unwrap();
+    assert_eq!(quad_again.to_render, 0);
+    assert_eq!(quad_again.estimate.chars, 0);
+}
+
+/// A sample's takes count too: a render after it does not send the sampled lines again.
+#[test]
+fn a_render_after_a_sample_reuses_the_sampled_lines() {
+    let b = bench(99_000, true);
+    let m = "eleven_turbo_v2_5";
+    let cold = estimate(&b, &["quad"], m).unwrap();
+    paid_sample(&b, sample(&["Callum"], &[m], false, true));
+    let warm = estimate(&b, &["quad"], m).unwrap();
+    // Every sample line is a quad line, some at more than one path.
+    assert!(warm.rendered >= 12, "{warm:?}");
+    assert!(warm.estimate.chars < cold.estimate.chars);
+    let r = paid_render(&b, render("Callum", m, &["quad"], false, true));
+    assert!(
+        r.notes
+            .iter()
+            .any(|n| n.contains("come from earlier takes")),
+        "{:?}",
+        r.notes
+    );
+    let pack = b.dir.path().join("support/gear/voices").join(&r.pack);
+    assert!(pack.join("SOUNDS/en/SYSTEM/0006.wav").is_file());
+}
+
+/// The aircraft the profiles name pick the sets: quads get the quad sets, a helicopter adds
+/// its own; with no profile, quads.
+#[test]
+fn the_sets_picked_at_first_follow_the_aircraft_flown() {
+    let b = bench(50_000, true);
+    let v = b.core.gear_voice_sets(&Default::default()).unwrap();
+    assert_eq!(v.aircraft, ["quad"]);
+    assert_eq!(v.picks, ["quad", "extras"]);
+    assert!(v.sets.iter().all(|s| s.rendered.is_none()));
+    let kinds = |id: &str| v.sets.iter().find(|s| s.id == id).unwrap().kinds.clone();
+    assert_eq!(kinds("quad"), ["quad"]);
+    assert_eq!(kinds("heli"), ["heli"]);
+    assert!(kinds("easter").is_empty());
+    assert_eq!(kinds("edgetx").len(), 5);
+    for (name, aircraft) in [("Whoop", "65 mm whoop"), ("Goblin", "700 heli")] {
+        b.core
+            .profile_save(
+                name,
+                &serde_json::from_value(json!({"aircraft": aircraft})).unwrap(),
+                None,
+            )
+            .unwrap();
+    }
+    let v = b.core.gear_voice_sets(&Default::default()).unwrap();
+    assert_eq!(v.aircraft, ["quad", "heli"]);
+    assert_eq!(v.picks, ["quad", "extras", "heli"]);
+    let t = quadcam_lib::core::voice_sets_text(&v);
+    assert!(
+        t.contains("Aircraft flown (from the profiles): quad, heli"),
+        "{t}"
+    );
+}
