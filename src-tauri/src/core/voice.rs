@@ -566,6 +566,7 @@ impl Core {
     /// Reads the pack index from its source into the cache. A path reads the file; an
     /// address downloads it.
     fn refresh_index(&self, source: &str) -> Result<VoiceIndex> {
+        check_index_source(source)?;
         let dest = self.index_cache_file();
         std::fs::create_dir_all(dest.parent().unwrap())?;
         if source.starts_with("http://") || source.starts_with("https://") {
@@ -1322,6 +1323,15 @@ impl Core {
     pub fn voice_installed(&self) -> Vec<Installed> {
         packs::installed(&self.voices_dir())
     }
+}
+
+/// An index address is https, or http only to this Mac: the zip comes from beside it, and
+/// its hash from inside it.
+fn check_index_source(source: &str) -> Result<()> {
+    if source.starts_with("http://") && !crate::modules::fetch::is_loopback(source) {
+        bail!("The pack index {source} is a plain http address: use https. Plain http reaches only this Mac (127.0.0.1, localhost).");
+    }
+    Ok(())
 }
 
 pub(super) fn slug(s: &str) -> String {

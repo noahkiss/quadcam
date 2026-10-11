@@ -420,6 +420,28 @@ fn a_pack_installs_from_an_index_after_a_hash_check() {
 }
 
 #[test]
+fn a_plain_http_index_is_refused_unless_it_is_on_this_mac() {
+    let b = bench(Opts::default());
+    let e = b
+        .core
+        .gear_voice_pack_install(&PackInstallParams {
+            pack: "en-test-v1".into(),
+            source: Some("http://voices.example.com/voices.json".into()),
+        })
+        .unwrap_err();
+    assert!(format!("{e:#}").contains("plain http"), "{e:#}");
+    // Loopback passes the check (and then finds no server).
+    let e = b
+        .core
+        .gear_voice_pack_install(&PackInstallParams {
+            pack: "en-test-v1".into(),
+            source: Some("http://127.0.0.1:9/voices.json".into()),
+        })
+        .unwrap_err();
+    assert!(!format!("{e:#}").contains("plain http"), "{e:#}");
+}
+
+#[test]
 fn choose_voice_stages_one_change_and_keeps_overrides_when_asked() {
     let b = bench(Opts::default());
     let out = b.dir.path().join("release");

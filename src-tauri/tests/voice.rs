@@ -500,24 +500,91 @@ fn install_checks_the_hash_and_the_paths() {
         .contains("the index says"));
     // A zip with a path out of its folder does not install, and writes nothing.
     let evil = dir.path().join("evil.zip");
-    std::fs::write(
-        &evil,
-        stored_zip(&[("pack.json", b"{}"), ("SOUNDS/en/../../x.wav", b"x")]),
-    )
-    .unwrap();
+    let install_evil = |files: &[(&str, &[u8])]| {
+        let bytes = stored_zip(files);
+        std::fs::write(&evil, &bytes).unwrap();
+        packs::install(
+            &voices,
+            &evil,
+            &PackIndexEntry {
+                id: "evil".into(),
+                sha256: sha256_hex(&bytes),
+                ..entry.clone()
+            },
+        )
+        .unwrap_err()
+    };
+    let e = install_evil(&[("pack.json", b"{}"), ("SOUNDS/en/../../x.wav", b"x")]);
+    assert!(format!("{e:#}").contains("outside its folder"), "{e:#}");
+    // A folder entry under SOUNDS/ gets the same path checks.
+    let e = install_evil(&[("pack.json", b"{}"), ("SOUNDS/../../x/", b"")]);
+    assert!(format!("{e:#}").contains("outside its folder"), "{e:#}");
+    assert!(!voices.join("evil").exists());
+    assert!(!dir.path().join("x.wav").exists());
+    // An index entry without a hash does not install.
     let e = packs::install(
         &voices,
-        &evil,
+        &zip,
         &PackIndexEntry {
-            id: "evil".into(),
             sha256: String::new(),
             ..entry.clone()
         },
     )
     .unwrap_err();
-    assert!(format!("{e:#}").contains("outside its folder"), "{e:#}");
+    assert!(format!("{e:#}").contains("no hash"), "{e:#}");
+}
+
+#[test]
+fn install_refuses_a_symbolic_link() {
+    let dir = tempfile::tempdir().unwrap();
+    let src = dir.path().join("src");
+    std::fs::create_dir_all(src.join("SOUNDS/en")).unwrap();
+    std::fs::write(dir.path().join("secret.txt"), b"not a sound").unwrap();
+    std::os::unix::fs::symlink(
+        dir.path().join("secret.txt"),
+        src.join("SOUNDS/en/armed.wav"),
+    )
+    .unwrap();
+    let m = serde_json::json!({
+        "id": "evil", "voice": "v", "lang": "en", "provider": "say",
+        "settings": RenderSettings::default(), "lines": 1, "license": "", "attribution": "",
+        "lines_csv_sha": "", "files": ["SOUNDS/en/armed.wav"],
+    });
+    std::fs::write(src.join("pack.json"), m.to_string()).unwrap();
+    let zip = dir.path().join("evil.zip");
+    let ran = std::process::Command::new("/usr/bin/zip")
+        .current_dir(&src)
+        .args(["-q", "-r", "-y"])
+        .arg(&zip)
+        .args(["pack.json", "SOUNDS"])
+        .status()
+        .unwrap();
+    assert!(ran.success());
+    let voices = dir.path().join("voices");
+    let e = packs::install(
+        &voices,
+        &zip,
+        &PackIndexEntry {
+            id: "evil".into(),
+            voice: "v".into(),
+            lang: "en".into(),
+            provider: "say".into(),
+            model: String::new(),
+            settings: RenderSettings::default(),
+            lines: 1,
+            bytes: 0,
+            sha256: sha256_hex(&std::fs::read(&zip).unwrap()),
+            license: String::new(),
+            attribution: String::new(),
+            lines_csv_sha: String::new(),
+            version: String::new(),
+            file: String::new(),
+            firmware: "edgetx".into(),
+        },
+    )
+    .unwrap_err();
+    assert!(format!("{e:#}").contains("symbolic link"), "{e:#}");
     assert!(!voices.join("evil").exists());
-    assert!(!dir.path().join("x.wav").exists());
 }
 
 /// A zip of stored (uncompressed) entries, built by hand so a hostile name can be tested.

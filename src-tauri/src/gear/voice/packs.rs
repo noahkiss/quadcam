@@ -1,8 +1,8 @@
 //! Voice packs (design 7.4). A pack is a zip per voice, `voice-<id>-<version>.zip`, holding
 //! `pack.json` and the WAVs at their card paths. A `voices.json` index lists the packs. The
 //! maintainer builds a pack with `build`; a user renders their own lines through the same
-//! code into a local pack (`render_to`). `install` checks the zip's hash, unpacks it into
-//! `<gear>/voices/<id>/` and never trusts a path inside it.
+//! code into a local pack (`render_to`). `install` needs the zip's hash and checks it, unpacks
+//! it into `<gear>/voices/<id>/` and never trusts a path or a link inside it.
 
 use super::lines::{check_path, Line, Spelling};
 use super::render::{self, Ctx, RenderSettings};
@@ -292,23 +292,65 @@ pub fn installed(voices: &Path) -> Vec<Installed> {
     out
 }
 
-/// A name inside a pack zip is `pack.json` or a sound path under `SOUNDS/`.
+/// A name inside a pack zip is `pack.json`, a folder under `SOUNDS/`, or a sound path under
+/// `SOUNDS/`. The path checks run first, so no folder name gets past them.
 fn check_member(name: &str) -> Result<()> {
-    if name == "pack.json" || name.ends_with('/') && name.starts_with("SOUNDS/") {
-        return Ok(());
-    }
     if name.starts_with('/') || name.contains("..") || name.contains('\\') {
         bail!("the pack holds {name:?}, a path outside its folder");
     }
+    if name == "pack.json" || name.ends_with('/') && name.starts_with("SOUNDS/") {
+        return Ok(());
+    }
     check_path(name).with_context(|| format!("the pack holds {name:?}"))
+}
+
+/// Refuses a zip that holds a symbolic link: `zipinfo` shows its mode as `l...`.
+fn check_no_links(zip: &Path) -> Result<()> {
+    let listed = Command::new("/usr/bin/zipinfo")
+        .arg(zip)
+        .output()
+        .context("starting zipinfo")?;
+    if !listed.status.success() {
+        bail!("{} is not a zip file", zip.display());
+    }
+    for line in String::from_utf8_lossy(&listed.stdout).lines() {
+        let mut words = line.split_whitespace();
+        let (Some(mode), Some(name)) = (words.next(), words.last()) else {
+            continue;
+        };
+        if mode.len() == 10 && mode.starts_with('l') {
+            bail!("the pack holds {name:?}, a symbolic link");
+        }
+    }
+    Ok(())
+}
+
+/// Refuses anything under `dir` that is not a plain file or a folder (a link, a device).
+fn check_plain(dir: &Path) -> Result<()> {
+    for e in std::fs::read_dir(dir)?.flatten() {
+        let p = e.path();
+        let t = std::fs::symlink_metadata(&p)?.file_type();
+        if t.is_dir() {
+            check_plain(&p)?;
+        } else if !t.is_file() {
+            bail!("the pack holds {}, which is not a plain file", p.display());
+        }
+    }
+    Ok(())
 }
 
 /// Checks a zip's hash against the index entry, unpacks it into `<voices>/<id>/` and reads
 /// its manifest. A zip with a path outside `SOUNDS/` refuses before anything is written.
 pub fn install(voices: &Path, zip: &Path, entry: &PackIndexEntry) -> Result<Installed> {
     check_id(&entry.id)?;
+    if entry.sha256.trim().is_empty() {
+        bail!(
+            "the index gives no hash for {}; it was not installed",
+            entry.id
+        );
+    }
     let bytes = std::fs::read(zip).with_context(|| format!("reading {}", zip.display()))?;
-    if !entry.sha256.is_empty() && super::sha256_hex(&bytes) != entry.sha256 {
+    if super::sha256_hex(&bytes) != entry.sha256 {
         bail!(
             "{} does not match the hash in the index; it was not installed",
             zip.display()
@@ -325,6 +367,7 @@ pub fn install(voices: &Path, zip: &Path, entry: &PackIndexEntry) -> Result<Inst
     for name in String::from_utf8_lossy(&listed.stdout).lines() {
         check_member(name)?;
     }
+    check_no_links(zip)?;
     std::fs::create_dir_all(voices)?;
     let tmp = voices.join(format!(".installing-{}", entry.id));
     let _ = std::fs::remove_dir_all(&tmp);
@@ -347,7 +390,13 @@ pub fn install(voices: &Path, zip: &Path, entry: &PackIndexEntry) -> Result<Inst
         .context("the pack has no pack.json")
         .and_then(|b| serde_json::from_slice(&b).context("pack.json is not a pack manifest"));
     let manifest = match manifest {
-        Ok(m) if m.id == entry.id => m,
+        Ok(m) if m.id == entry.id => match check_plain(&tmp) {
+            Ok(()) => m,
+            Err(e) => {
+                let _ = std::fs::remove_dir_all(&tmp);
+                return Err(e);
+            }
+        },
         Ok(m) => {
             let _ = std::fs::remove_dir_all(&tmp);
             bail!(
