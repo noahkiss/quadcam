@@ -38,7 +38,7 @@ describe("sticks from channels", () => {
 
 describe("live matching", () => {
   it("marks each control's position and the modes on, as the core does", () => {
-    // The core's own test (tests/switchmap.rs, whoop): SA down, SB mid, SC down, SD up.
+    // The core's own test (tests/it/switchmap.rs, whoop): SA down, SB mid, SC down, SD up.
     const l = live(map, "radio", [1500, 1500, 988, 1500, 2012, 1500, 2012, 988]);
     expect(l.positions).toMatchObject({ SA: 1, SB: 1, SC: 2, SD: 0, SE: null });
     expect(l.modes).toEqual(["ARM", "HORIZON"]);

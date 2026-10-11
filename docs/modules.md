@@ -17,7 +17,7 @@ The app bundles no GPL tool. Each QuadCam release pins one version of each modul
 
 ### What QuadCam needs
 
-Every program QuadCam runs is a macOS system tool, a module, or optional. `tests/external_tools.rs` fails when the code runs a program that is not on this list.
+Every program QuadCam runs is a macOS system tool, a module, or optional. `tests/it/external_tools.rs` fails when the code runs a program that is not on this list.
 
 | Program | Where it comes from | Used for |
 |---|---|---|

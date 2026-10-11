@@ -1537,7 +1537,7 @@ A process started by cargo never reaches real gear:
 | `QUADCAM_FETCH` | Downloads reach only this Mac | Downloads reach the internet |
 
 Card unmounts (`diskutil unmountDisk`) follow `QUADCAM_SERIAL`, and so does the list of DFU
-devices. The firmware tests serve releases from memory and flash a fake DFU device. The ExpressLRS tests (`tests/gear_elrs.rs`) use a simulated radio, FC and ELRS device on fake ports and `esptool` as a recorder; ExpressLRS and esptool are never downloaded or run for real. Tests use the synthetic card
+devices. The firmware tests serve releases from memory and flash a fake DFU device. The ExpressLRS tests (`tests/it/gear_elrs.rs`) use a simulated radio, FC and ELRS device on fake ports and `esptool` as a recorder; ExpressLRS and esptool are never downloaded or run for real. Tests use the synthetic card
 (`gear::edgetx::synth`) in a temporary folder.
 
 **Blackbox: tested on a simulated FC only.** The tests drive `FakeFc` with a flash image. These need a

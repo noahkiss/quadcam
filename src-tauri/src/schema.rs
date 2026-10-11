@@ -2,7 +2,7 @@
 //!
 //! From 1.0 the surface (MCP tools, their `action` values and parameters; CLI commands, flags
 //! and positional arguments) only grows. A removal or a rename needs a [`SCHEMA_VERSION`] bump
-//! and a [`Deprecation`] listed here for at least one version before it. `tests/surface.rs`
+//! and a [`Deprecation`] listed here for at least one version before it. `tests/it/surface.rs`
 //! compares the surface with the baseline in `tests/surface/` through [`check`].
 
 use serde_json::{json, Value};

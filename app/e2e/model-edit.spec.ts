@@ -46,7 +46,7 @@ test("a timer edit stages, and a second edit of the same timer joins the same ch
   await timers.getByRole("checkbox", { name: "Beep every minute" }).nth(1).uncheck();
   await expect(timers.getByLabel("Timer 2 name")).toHaveValue("FLY");
   // Every edit goes to the model editor, one field each, and none to a generic stage; the
-  // core joins them into one change (tests/model_edit.rs
+  // core joins them into one change (tests/it/model_edit.rs
   // edits_join_one_change_and_the_last_word_per_setting_wins).
   expect(await app.method("gear_change_stage")).toHaveLength(0);
   const sent = (await app.method("gear_model_edit")) as { ops: { op: string; index: number; fields: { key: string }[] }[] }[];

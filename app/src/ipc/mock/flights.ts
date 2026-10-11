@@ -1,6 +1,6 @@
 // The mock core's flights, packs, crashes, session report and "Pack up" check. The seed is
 // the real core's answer on the synthetic log (e2e/fixtures/flights.json, written by
-// `cargo test --test flights record_mock_fixture -- --ignored`); the edits
+// `cargo test --test it flights::record_mock_fixture -- --ignored`); the edits
 // follow `core/flights.rs` closely enough for the specs.
 import flightsFixture from "../../../e2e/fixtures/flights.json";
 import type { Crash, CrashSaveParams, FlightsView, Pack, PackType, PacksView, Preflight, SessionReport } from "../types";

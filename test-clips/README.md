@@ -44,7 +44,7 @@ match badge. Record the card's folder layout too (some DVRs write to the root, s
 
 ## Size and speed (check 8)
 
-`cargo test --test import size_and_speed -- --ignored --nocapture` on an Apple Silicon Mac, 2026-09-30.
+`cargo test --test it import::size_and_speed -- --ignored --nocapture` on an Apple Silicon Mac, 2026-09-30.
 Set `QUADCAM_BENCH_SECS` to change the clip length.
 
 | 120 s synthetic clip | Size | Time (convert + verify) |

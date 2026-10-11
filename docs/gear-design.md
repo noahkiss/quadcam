@@ -671,8 +671,8 @@ per setting (`op_key`; timer fields and sensor logs merge), an edit that leaves 
 the radio has it drops out, an empty change is discarded, and a refusal stages nothing.
 Staging a checklist turns the checklist on. Rows `gear_model` and `gear_model_edit`; CLI
 `gear model`, `gear model-edit`; MCP `quadcam_gear model`, `quadcam_gear_edit model_edit`; UI
-Models and Checklists segments (`views/Gear/Models/`). Acceptance: `tests/model_editors.rs` (each
-op in both file layouts, ownership, idempotence, the limits), `tests/model_edit.rs` (read from card
+Models and Checklists segments (`views/Gear/Models/`). Acceptance: `tests/it/model_editors.rs` (each
+op in both file layouts, ownership, idempotence, the limits), `tests/it/model_edit.rs` (read from card
 and backup, merge, drop-out, apply with read-back on the synthetic card, row and MCP),
 `e2e/model-edit.spec.ts`.
 Deviations: the design's "telemetry screens" editor covers value and script screens, not bars or
@@ -995,8 +995,8 @@ FC effect (`aux` modes, `adjrange` selections such as rate or OSD profile), the 
   Elements draw as sample text, not Betaflight font glyphs. Variant bits are kept, never
   edited. Edits to an element a diff-only backup leaves out are refused (the core cannot see
   its value). Acceptance: the exhaustive `Pos` round trip, an edit-to-FC-line round trip, the
-  NTSC, PAL and HD goldens (`tests/osd.rs`), overlap and off-screen checks, and
-  `tests/osd_edit.rs` plus `e2e/osd-edit.spec.ts` for the staged line.
+  NTSC, PAL and HD goldens (`tests/it/osd.rs`), overlap and off-screen checks, and
+  `tests/it/osd_edit.rs` plus `e2e/osd-edit.spec.ts` for the staged line.
 - **Built (WP8 read half):** `gear/rates.rs` re-exports `quadcam_sim::rates` (the one
   implementation of the curves), reads every `rateprofile` of a dump or diff, samples the curves
   (51 points), and fits one model onto another (`fit`, `to_betaflight`). `gear/sims/` holds one
@@ -1139,7 +1139,7 @@ protocol serves; the gear folder is outside its scope). `build-pack` is CLI only
   The numbers sit at `SOUNDS/en/SYSTEM/0000.wav`, where EdgeTX plays them (the manual:
   `SYSTEM` holds what the radio plays by itself; `SOUNDS/en/` holds tracks a model names);
   a test keeps every number and unit prompt in `SYSTEM`.
-- Acceptance: `tests/voice.rs` (the spelling golden, a cache hit with no provider call, the
+- Acceptance: `tests/it/voice.rs` (the spelling golden, a cache hit with no provider call, the
   normalisation golden WAV, the providers' requests, `build-pack`'s zip and index entry, the
   install checks, a hostile zip) and `tests/voice_core.rs` (render and cost, confirm, install,
   Choose voice staging one change and keeping overrides, apply with read-back),
@@ -1181,7 +1181,7 @@ Every reading, kept or not, goes to stderr and `<cache>/voice/charcost.log`.
   `lines.csv`) and `custom` (from `gear.json`). The aircraft sets are `radio.csv` plus their own
   callouts. The text is QuadCam's wording; file names are the names the firmware plays.
 - Acceptance: unit tests in `eleven.rs`, `keychain.rs`, `batch.rs`, `sets.rs`;
-  `tests/voice_studio.rs` (key, catalogue, estimate, sample, set render, credits refusal, MCP)
+  `tests/it/voice_studio.rs` (key, catalogue, estimate, sample, set render, credits refusal, MCP)
   and `e2e/voice-studio.spec.ts`.
 
 **Voices page (built, 0.12).** Packs are not per radio, so the studio and the pack list moved
@@ -1204,7 +1204,7 @@ Choose voice (a picker of library packs), the per-line overrides and its apply.
   pack's lines). MCP `quadcam_gear_edit` `voice_choose` with `radios` or `all_radios`, and
   `voice_delete` (describes without `confirm`); CLI `gear voice choose --radio A,B | --all-radios`
   and `gear voice delete PACK --yes [--takes]`.
-- Acceptance: `tests/voice_core.rs` and `tests/voice_studio.rs` (library fields, delete with and
+- Acceptance: `tests/voice_core.rs` and `tests/it/voice_studio.rs` (library fields, delete with and
   without takes, several radios, MCP), `e2e/voices.spec.ts` and the moved
   `e2e/voice-studio.spec.ts`.
 
@@ -1478,7 +1478,7 @@ binaries only (open question 10).
     build service's request and reply shapes, the target names, the chip's DFU layout string,
     the time the FC takes to come back after a first boot, and a real `get` on every old
     setting. See `docs/gear.md`.
-  - Tests: `tests/gear_bf_flash.rs` (16) and unit tests in the two modules, on `FakeFc`,
+  - Tests: `tests/it/gear_bf_flash.rs` (16) and unit tests in the two modules, on `FakeFc`,
     `FakeDfu` and `FixtureCloud`; `app/e2e/bfflash.spec.ts` on the mock core.
 
 - **Built (radio over USB):** four follow-ups, branch `radio-usb`.

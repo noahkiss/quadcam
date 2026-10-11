@@ -329,10 +329,10 @@ tests green before merge. Rollback is `git revert` of that PR unless the table s
 | R3 One proxy, one Photos path | One proxy fn with the lock; one `share_files` helper | Existing; new concurrent-preview test | S | After R2 |
 | R4 Split god modules | Pure moves: `core/` dir, `session.rs` loses `run_import` to `pipeline/import.rs`, `mcp.rs` into `server/tools/render` | Existing suite; no snapshot diff | M | After R1-R3 |
 | R5 `api` table + specta | Param/result types into `api/`; macro generates `dispatch` and Tauri commands; tauri-specta writes `bindings.ts` (debug build and a test); typed `Event` enum | Snapshots unchanged; `bindings.ts` check in CI | M | After R4 |
-| R6 Derived MCP schemas | schemars on tool params; handlers deserialize once; atomic `library_edit` | `tests/mcp.rs`; tools snapshot diff reviewed once, then frozen | M | With U1-U3 |
+| R6 Derived MCP schemas | schemars on tool params; handlers deserialize once; atomic `library_edit` | `tests/it/mcp.rs`; tools snapshot diff reviewed once, then frozen | M | With U1-U3 |
 | R7a `Source` trait | `sources/` with `analog` wrapping `scan` + `check_avi` + recover; pipeline calls the trait | Existing import tests on the synthetic corpus | M | After R4 |
 | R7b Encode and signal policy | `EncodePlan`, `signal()`, `original_ext()`, `CardPolicy` through the trait; analog returns today's values | Existing; unit tests per method | M | After R7a |
-| R8 CLI on `api` | clap builds `api` params; `--plan` uses them; output uses result types | `tests/cli.rs` unchanged | S | After R5 |
+| R8 CLI on `api` | clap builds `api` params; `--plan` uses them; output uses result types | `tests/it/cli.rs` unchanged | S | After R5 |
 | R9 Workspace split (optional) | `quadcam-core` (no Tauri), `quadcam-app`, `quadcam-cli` | Full suite; CLI builds without Tauri | L | Last; skip if not needed |
 
 ### 4.2 UI track

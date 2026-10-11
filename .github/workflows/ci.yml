@@ -56,7 +56,7 @@ jobs:
         with:
           tool: cargo-nextest@0.9.146
 
-      # The slow tests (the `serial` disk-image group and tests/join.rs) run on a branch or a
+      # The slow tests (the `serial` disk-image group and tests/it/join.rs) run on a branch or a
       # pull request only when the change since its merge base with main touches the code they
       # cover; otherwise the profile `ci-quick` skips them. main and tags always run them all.
       - name: Changes the slow tests cover
@@ -85,13 +85,13 @@ jobs:
               - 'src-tauri/src/mcp/params.rs'
               - 'src-tauri/src/mcp/tools.rs'
               - 'src-tauri/src/mcp/render.rs'
-              - 'src-tauri/tests/common/**'
-              - 'src-tauri/tests/disk_image.rs'
-              - 'src-tauri/tests/card_prep.rs'
-              - 'src-tauri/tests/mount_cycle.rs'
-              - 'src-tauri/tests/cli.rs'
-              - 'src-tauri/tests/mcp.rs'
-              - 'src-tauri/tests/join.rs'
+              - 'src-tauri/tests/it/common/**'
+              - 'src-tauri/tests/it/disk_image.rs'
+              - 'src-tauri/tests/it/card_prep.rs'
+              - 'src-tauri/tests/it/mount_cycle.rs'
+              - 'src-tauri/tests/it/cli.rs'
+              - 'src-tauri/tests/it/mcp.rs'
+              - 'src-tauri/tests/it/join.rs'
               - 'src-tauri/Cargo.toml'
               - 'src-tauri/Cargo.lock'
               - 'src-tauri/.config/nextest.toml'

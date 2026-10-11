@@ -168,7 +168,7 @@ test("a sim that runs cannot be synced, even if it starts after the plan", async
 });
 
 test("Liftoff runs in the recording: its Sync button is off", async ({ app, page }) => {
-  // The core's refusal is tests/gear_sim_sync.rs; the UI's part is the disabled button.
+  // The core's refusal is tests/it/gear_sim_sync.rs; the UI's part is the disabled button.
   await openRates(app, page);
   await profiles(page).getByRole("button", { name: "1 RACE" }).click();
   await expect(page.getByRole("region", { name: "Sims" }).getByRole("button", { name: "Sync 1 RACE into Liftoff Race" })).toBeDisabled();

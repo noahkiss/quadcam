@@ -49,11 +49,11 @@ Run these in `src-tauri/`:
 ```bash
 cargo nextest run -P quick                         # fast loop: skips the disk-image and long ffmpeg tests
 cargo nextest run                                  # every unit and integration test
-cargo nextest run --test join                      # one test file
+cargo nextest run --test it join::                 # one area's tests (tests/it/join.rs)
 cargo test                                         # also works, more slowly
-cargo test --test import size_and_speed -- --ignored --nocapture   # MP4 against MOV size and speed
-INSTA_UPDATE=always cargo test --test snapshots    # accept a deliberate shape change, then review the diff
-QUADCAM_UPDATE_BINDINGS=1 cargo test --test bindings   # write app/src/bindings.ts after an api change
+cargo test --test it import::size_and_speed -- --ignored --nocapture   # MP4 against MOV size and speed
+INSTA_UPDATE=always cargo test --test it snapshots::   # accept a deliberate shape change, then review the diff
+QUADCAM_UPDATE_BINDINGS=1 cargo test --test it bindings::   # write app/src/bindings.ts after an api change
 ```
 
 - The tests run under [cargo-nextest](https://nexte.st) (`cargo install cargo-nextest --locked`). nextest runs each test in its own process, many at once. `src-tauri/.config/nextest.toml` holds three profiles:
@@ -61,27 +61,28 @@ QUADCAM_UPDATE_BINDINGS=1 cargo test --test bindings   # write app/src/bindings.
   | Profile | Runs |
   |---|---|
   | `default` | Every test |
-  | `quick` (`-P quick`) | Every test except the disk-image tests and `tests/join.rs` |
-  | `ci` | Every test, with a JUnit report and one retry for `tests/join.rs` and `tests/mount_cycle.rs`, which can fail on a loaded machine |
+  | `quick` (`-P quick`) | Every test except the disk-image tests and `tests/it/join.rs` |
+  | `ci` | Every test, with a JUnit report and one retry for `tests/it/join.rs` and `tests/it/mount_cycle.rs`, which can fail on a loaded machine |
   | `ci-quick` | The `quick` tests with the `ci` settings. CI runs it on a branch whose change does not touch the slow tests' code |
 
-- While you work, run `-P quick` and the test files of the area you changed. CI runs on every push, on every branch (see [CI](#ci) for when it skips the slow tests).
+- The integration tests are one binary per crate, `it`: `tests/it/main.rs` declares a module per area, so a test's name starts with its module (`join::keep_separate_per_run_per_clip_and_by_setting`). Each test binary links the whole crate, so one binary builds much faster than one per file. A new area is a new file in `tests/it/` and a `mod` line in `main.rs`. `tests/output_dir.rs`, `tests/rates.rs` and `tests/voice_core.rs` set an environment variable that code in other areas reads; under `cargo test` that would leak into tests running in the same process, so each stays a binary of its own. So does the sim's `tests/bench.rs`, which times a real-time loop. `Cargo.toml` lists every test binary (`autotests = false`).
+- While you work, run `-P quick` and the tests of the area you changed. CI runs on every push, on every branch (see [CI](#ci) for when it skips the slow tests).
 - On a busy machine, cap the load: `CARGO_BUILD_JOBS=4 cargo nextest run --test-threads 4`.
 - The disk-image tests are in the `serial` test group: they run one at a time, because `hdiutil` and `diskutil` share one system daemon and a detached image's disk number goes to the next image. They also take a lock file in the temporary folder, so disk-image tests in two checkouts take turns. A new test that attaches a disk image belongs in the `serial` filter and the `quick` exclusion.
-- Three tests time the sim's real-time thread against the wall clock: the stall in `sim/tests/runner.rs`, the step cost in `sim/tests/bench.rs`, and the frame count in `tests/sim_host.rs`. They run alone, with no other test beside them, because the thread oversleeps on a loaded machine.
+- Three tests time the sim's real-time thread against the wall clock: the stall in `sim/tests/it/runner.rs`, the step cost in `sim/tests/bench.rs`, and the frame count in `tests/it/sim_host.rs`. They run alone, with no other test beside them, because the thread oversleeps on a loaded machine.
 - nextest does not run doc tests. The crates have none. If you add one, run `cargo test --doc` too.
 - Each git worktree has its own `target/`. [sccache](https://github.com/mozilla/sccache) shares compiled dependencies between them: `brew install sccache`, then `export RUSTC_WRAPPER=sccache CARGO_INCREMENTAL=0` (sccache does not cache incremental builds). With many worktrees, `CARGO_INCREMENTAL=0` saves disk space even without sccache.
 - The tests need ffmpeg. They make their own synthetic clips with `ffmpeg -f lavfi -i testsrc`.
 - The format tests attach small FAT32 disk images with `hdiutil`. They erase only an image that they created, and they check that the target is a disk image first.
 - No test can reach your Photos library or your Trash. Under `cargo`, "Move to Trash" moves files into a temporary folder.
 - `test-clips/README.md` describes an optional local corpus of real clips and logs. `scripts/make-corpus.sh` builds its synthetic part, a DJI-like card (`synthetic/dji-card/`) included.
-- `tests/dji.rs` stages, dates, imports (MP4 copy and MOV remux) and verifies a synthetic DJI-like MP4 with a cover picture and an `.SRT` file.
-- `tests/join.rs` splits one synthetic 630 s recording with ffmpeg into a 600 s and a 30 s file, as an Echo does, and checks the joined import: one output with every frame, every file's identity in the library and the card count, kept originals, joining per run and per clip, and "Delete clips after import" on the joined output. No real Echo files are in the tests.
-- `tests/modules.rs` runs the module manager against a fixture HTTP server on 127.0.0.1: the license refusal, download, checksum match and mismatch, install, run, a changed file, check and update, removal, and ffmpeg found through the module, Homebrew or a set path. `import_mp4_with_the_ffmpeg_module` imports with ffmpeg from a fixture module. No test downloads from the internet: under `cargo`, the downloader reaches only 127.0.0.1 unless `QUADCAM_FETCH=real`.
-- `tests/gear_firmware.rs` checks the firmware path with no network and no USB: the check reads three sources from memory and only when asked, the flash plan (every check, the digest), the apply (a backup of the old firmware, erase, write, read back, leave) against a fake DFU device, the refusals (a board or version not in `compat.rs`, missing or doubled splash markers, no backup, no or two DFU devices, a bad read back that stays in DFU), the MCP actions and the CLI. The DFU code (`gear/dfu.rs`) and the splash patch have unit tests on a fake device and a synthetic binary.
-- `tests/gear_bf_flash.rs` checks the Betaflight flash preview on a fake FC (`FakeFc`), a fake DFU device (`FakeDfu`) and a fake build service (`FixtureCloud`), with nothing real: the plan's refusals (preview off, board without a target, unproven release, a DFU device already attached, a bad image, no build, a USB timer that would run out), the whole flash with the settings put back and verified, a setting the new version lacks or refuses, the digest, confirm and click, an FC that never shows as DFU, a dropped block that leaves the FC in its bootloader, a flash that fails before the erase and says nothing was erased, a chip of the wrong size, a failed backup that stops before the bootloader, a battery in with no USB timer, and the old active PID and rate profile coming back. `app/e2e/bfflash.spec.ts` covers the Settings switch, the Firmware page and the sheet.
+- `tests/it/dji.rs` stages, dates, imports (MP4 copy and MOV remux) and verifies a synthetic DJI-like MP4 with a cover picture and an `.SRT` file.
+- `tests/it/join.rs` splits one synthetic 630 s recording with ffmpeg into a 600 s and a 30 s file, as an Echo does, and checks the joined import: one output with every frame, every file's identity in the library and the card count, kept originals, joining per run and per clip, and "Delete clips after import" on the joined output. No real Echo files are in the tests.
+- `tests/it/modules.rs` runs the module manager against a fixture HTTP server on 127.0.0.1: the license refusal, download, checksum match and mismatch, install, run, a changed file, check and update, removal, and ffmpeg found through the module, Homebrew or a set path. `import_mp4_with_the_ffmpeg_module` imports with ffmpeg from a fixture module. No test downloads from the internet: under `cargo`, the downloader reaches only 127.0.0.1 unless `QUADCAM_FETCH=real`.
+- `tests/it/gear_firmware.rs` checks the firmware path with no network and no USB: the check reads three sources from memory and only when asked, the flash plan (every check, the digest), the apply (a backup of the old firmware, erase, write, read back, leave) against a fake DFU device, the refusals (a board or version not in `compat.rs`, missing or doubled splash markers, no backup, no or two DFU devices, a bad read back that stays in DFU), the MCP actions and the CLI. The DFU code (`gear/dfu.rs`) and the splash patch have unit tests on a fake device and a synthetic binary.
+- `tests/it/gear_bf_flash.rs` checks the Betaflight flash preview on a fake FC (`FakeFc`), a fake DFU device (`FakeDfu`) and a fake build service (`FixtureCloud`), with nothing real: the plan's refusals (preview off, board without a target, unproven release, a DFU device already attached, a bad image, no build, a USB timer that would run out), the whole flash with the settings put back and verified, a setting the new version lacks or refuses, the digest, confirm and click, an FC that never shows as DFU, a dropped block that leaves the FC in its bootloader, a flash that fails before the erase and says nothing was erased, a chip of the wrong size, a failed backup that stops before the bootloader, a battery in with no USB timer, and the old active PID and rate profile coming back. `app/e2e/bfflash.spec.ts` covers the Settings switch, the Firmware page and the sheet.
 - `scripts/notices.test.mjs` (`node --test scripts/notices.test.mjs`) checks the license allow list, and that a planted bad license fails it.
-- `tests/delete_clips.rs` checks "Delete clips after import" on temp folders: only verified clip files go, every other file stays, the setting off deletes nothing, a run can turn it off, and nothing in the core, CLI or MCP turns it on.
+- `tests/it/delete_clips.rs` checks "Delete clips after import" on temp folders: only verified clip files go, every other file stays, the setting off deletes nothing, a run can turn it off, and nothing in the core, CLI or MCP turns it on.
 
 ### Frontend
 
@@ -103,7 +104,7 @@ pnpm build                                 # -> app/dist
 `.github/workflows/ci.yml` runs on every push to a branch or a `v*` tag, and on pull requests from forks:
 
 - `cargo fmt --check`, clippy, the tests (`cargo nextest run --profile ci`, with the JUnit report as the `junit` artifact), and a release build.
-- On a branch or a pull request, the disk-image tests and `tests/join.rs` run only when the change since the merge base with `main` touches the code they cover: import, disks, cards, card prep, joins, media, scan, the session, the sources, the CLI's `main.rs`, the MCP server outside Gear, `tests/common` and those test files, `Cargo.toml`, `Cargo.lock`, `rust-toolchain.toml`, `nextest.toml` or `ci.yml`. Otherwise CI runs the `ci-quick` profile. The filter is in `ci.yml`; a new slow test, or new code it covers, joins it. On `main` and on a tag, CI runs every test.
+- On a branch or a pull request, the disk-image tests and `tests/it/join.rs` run only when the change since the merge base with `main` touches the code they cover: import, disks, cards, card prep, joins, media, scan, the session, the sources, the CLI's `main.rs`, the MCP server outside Gear, `tests/it/common` and those test files, `Cargo.toml`, `Cargo.lock`, `rust-toolchain.toml`, `nextest.toml` or `ci.yml`. Otherwise CI runs the `ci-quick` profile. The filter is in `ci.yml`; a new slow test, or new code it covers, joins it. On `main` and on a tag, CI runs every test.
 - A `ui` job for `app/`: typecheck, lint, Vitest, Playwright, and a build. On a branch or a pull request, the axe specs run in the dark theme only.
 
 A newer push to the same branch or pull request cancels the older run. A run on `main` or on a tag is never cancelled, because the release waits for a green run on the tagged commit.
@@ -141,7 +142,7 @@ A newer push to the same branch or pull request cancels the older run. A run on 
 | `src-tauri/src/{scan,disk,media,logs,naming,session,photos}.rs`, `pipeline/` | Scanning, disks, ffmpeg, radio logs, file names, the session, Photos, the import steps |
 | `src-tauri/src/moments.rs` | Moments from radio-log sticks and dead air from video frames. Every threshold is in `moments::tune` |
 | `src-tauri/src/metadata.rs`, `qtmeta.rs` | Places, profiles and per-clip metadata. Writing QuickTime metadata into the files |
-| `src-tauri/tests/` | Integration tests on synthetic clips and FAT32 disk images |
+| `src-tauri/tests/` | Integration tests on synthetic clips and FAT32 disk images. `it/` is one test binary, one module per area; the three files beside it change an environment variable and stay binaries of their own |
 | `scripts/make-corpus.sh` | Builds `test-clips/synthetic/` |
 | `assets/icon.svg` | The icon source. Regenerate the icons with `cargo tauri icon` |
 

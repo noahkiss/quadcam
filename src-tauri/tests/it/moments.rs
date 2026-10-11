@@ -377,7 +377,7 @@ fn profile_place_and_flight_stats_through_the_core() {
 
 /// Prints the dead air and keep ranges of real clips, for checking the thresholds against
 /// footage that cannot live in the repo:
-/// `QUADCAM_REAL_CLIPS="a.AVI:b.AVI" cargo test --test moments real_clips -- --ignored --nocapture`
+/// `QUADCAM_REAL_CLIPS="a.AVI:b.AVI" cargo test --test it moments::real_clips -- --ignored --nocapture`
 #[test]
 #[ignore]
 fn real_clips() {

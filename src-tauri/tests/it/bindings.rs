@@ -29,7 +29,7 @@ fn bindings_are_current() {
     let on_disk = std::fs::read_to_string(&path).unwrap_or_default();
     assert!(
         on_disk == fresh,
-        "app/src/bindings.ts is out of date: QUADCAM_UPDATE_BINDINGS=1 cargo test --test bindings"
+        "app/src/bindings.ts is out of date: QUADCAM_UPDATE_BINDINGS=1 cargo test --test it bindings::"
     );
 }
 

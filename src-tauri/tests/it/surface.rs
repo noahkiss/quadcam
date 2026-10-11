@@ -4,7 +4,7 @@
 //! the item. An addition passes, and the test prints a reminder to update the baseline:
 //!
 //! ```text
-//! QUADCAM_UPDATE_SURFACE=1 cargo test --test surface
+//! QUADCAM_UPDATE_SURFACE=1 cargo test --test it surface::
 //! ```
 
 use quadcam_lib::schema::{self, Deprecation, Item, SCHEMA_VERSION};
@@ -172,7 +172,7 @@ fn guard(file: &str, current: BTreeSet<String>, table: &[Deprecation]) {
     }
     if !report.added.is_empty() {
         eprintln!(
-            "surface: {} new item(s) in {file}. Update the baseline: QUADCAM_UPDATE_SURFACE=1 cargo test --test surface\n  {}",
+            "surface: {} new item(s) in {file}. Update the baseline: QUADCAM_UPDATE_SURFACE=1 cargo test --test it surface::\n  {}",
             report.added.len(),
             report.added.join("\n  ")
         );

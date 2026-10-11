@@ -387,7 +387,7 @@ fn cli_report_markdown() {
 
 /// Writes the mock core's Flights seed (`app/e2e/fixtures/flights.json`) from the real core
 /// on the synthetic log. Paths are made generic. A fixture writer, not a test: run it with
-/// `cargo test --test flights record_mock_fixture -- --ignored`.
+/// `cargo test --test it flights::record_mock_fixture -- --ignored`.
 #[test]
 #[ignore = "writes app/e2e/fixtures/flights.json; run with --ignored"]
 fn record_mock_fixture() {
