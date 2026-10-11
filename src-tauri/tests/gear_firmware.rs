@@ -819,6 +819,83 @@ fn a_flash_never_erases_when_its_copy_cannot_be_made() {
     assert!(quadcam_lib::gear::fwcopy::list(&b.core.gear_store(), &b.radio).is_empty());
 }
 
+/// Hooks that, while a read runs, try a second read and a flash of the same chip, and note
+/// the jobs Gear status lists.
+#[derive(Default)]
+struct Busy {
+    core: std::sync::OnceLock<std::sync::Weak<Core>>,
+    flash: Mutex<Option<FlashRequest>>,
+    second: Mutex<Vec<RefusalCode>>,
+    jobs: Mutex<Vec<(String, String)>>,
+}
+
+impl Hooks for Busy {
+    fn event(&self, _event: quadcam_lib::api::Event) {
+        let Some(core) = self.core.get().and_then(|w| w.upgrade()) else {
+            return;
+        };
+        if !self.second.lock().unwrap().is_empty() {
+            return;
+        }
+        let read = core.gear_firmware_read(&FirmwareReadParams::default());
+        let mut second = vec![refusal(read.unwrap_err()).code];
+        if let Some(req) = self.flash.lock().unwrap().clone() {
+            second.push(refusal(core.gear_flash(&req).unwrap_err()).code);
+        }
+        *self.second.lock().unwrap() = second;
+    }
+    fn gear_changed(&self) {
+        if let Some(core) = self.core.get().and_then(|w| w.upgrade()) {
+            for j in core.gear_jobs() {
+                self.jobs.lock().unwrap().push((j.handle, j.step));
+            }
+        }
+    }
+}
+
+#[test]
+fn a_flash_and_a_read_are_jobs_on_the_dfu_chip_and_a_second_call_is_port_busy() {
+    let hooks = Arc::new(Busy::default());
+    let b = bench(hooks.clone(), "pocket", VERSION, true);
+    hooks.core.set(Arc::downgrade(&b.core)).unwrap();
+    let p = params(&b, None);
+    let plan = b.core.gear_flash_plan(&p).unwrap();
+    assert!(plan.ready(), "{:?}", failed(&plan));
+    *hooks.flash.lock().unwrap() = Some(request(&p, &plan));
+
+    let r = b
+        .core
+        .gear_firmware_read(&FirmwareReadParams {
+            device: Some(b.radio.clone()),
+        })
+        .unwrap();
+    assert_eq!(r.matches, Some(true), "{}", r.message);
+    assert_eq!(
+        hooks.second.lock().unwrap().as_slice(),
+        [RefusalCode::PortBusy, RefusalCode::PortBusy],
+        "a second read and a flash wait for the read"
+    );
+    assert!(hooks
+        .jobs
+        .lock()
+        .unwrap()
+        .contains(&("dfu:0001".to_string(), "Reading firmware".to_string())));
+    // The flash refused while the read ran wrote nothing.
+    assert_eq!(b.flasher.device.lock().unwrap().mutations, 0);
+    assert!(b.core.gear_jobs().is_empty(), "the job ends with the read");
+
+    // The flash is a job too, and ends with the flash.
+    hooks.jobs.lock().unwrap().clear();
+    let report = b.core.gear_flash(&request(&p, &plan)).unwrap();
+    assert_eq!(report.status, ChangeStatus::Verified, "{}", report.message);
+    assert!(hooks
+        .jobs
+        .lock()
+        .unwrap()
+        .contains(&("dfu:0001".to_string(), "Flashing".to_string())));
+    assert!(b.core.gear_jobs().is_empty());
+}
+
 /// `full_image`, but the firmware names another board.
 fn other_board_image(salt: u8) -> Vec<u8> {
     let mut b = full_image(salt);

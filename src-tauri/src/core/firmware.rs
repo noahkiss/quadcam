@@ -18,6 +18,8 @@
 //! - **Confirm.** The sheet's own Apply calls `gear_flash_click`. Any other caller needs the
 //!   plan's digest and `confirm`, and with the app running the person also clicks Apply in the
 //!   sheet (`Hooks::confirm_apply`).
+//! - **One job per chip.** The flash and the read each run as a job on `dfu:<serial>`, so
+//!   Gear status shows them and a second flash or read of that chip refuses with `port_busy`.
 //! - **Fail-safe.** `gear::firmware::Flasher` hands out the USB path; a process started by
 //!   cargo gets a recorder unless `QUADCAM_FLASH=real`, and tests pass their own fake.
 
@@ -129,7 +131,45 @@ fn fail(name: &str, code: RefusalCode, reason: impl Into<String>) -> Check {
     check(name, Err(Refusal::new(code, reason)))
 }
 
+/// The job handle of a radio in DFU mode: its chip's serial.
+pub fn dfu_handle(info: &DfuInfo) -> String {
+    format!("dfu:{}", info.serial.as_deref().unwrap_or_default())
+}
+
 impl Core {
+    /// Registers a flash or a read as the one job on this DFU chip, and holds its link. A job
+    /// already on the chip refuses with `port_busy`.
+    fn dfu_job(
+        &self,
+        info: &DfuInfo,
+        device: Option<&str>,
+        step: &str,
+    ) -> Result<(super::backup::JobGuard<'_>, super::gear::Hold<'_>)> {
+        let handle = dfu_handle(info);
+        let busy = |what: &str| {
+            refuse(
+                RefusalCode::PortBusy,
+                format!(
+                    "{what} is already running on the radio in DFU mode. Wait for it to end."
+                ),
+            )
+        };
+        if let Some(j) = self.gear_jobs().into_iter().find(|j| j.handle == handle) {
+            return Err(busy(&j.step));
+        }
+        let (job, _) = self
+            .job_start(&handle, device, step)
+            .map_err(|_| busy("Another job"))?;
+        let hold = self.gear_hold(&super::gear::link_handle(
+            &crate::gear::model::Link::Dfu {
+                vid: info.vid,
+                pid: info.pid,
+                serial: info.serial.clone(),
+            },
+        ));
+        Ok((job, hold))
+    }
+
     /// Replaces the network and the USB path the firmware code uses (tests pass fakes).
     pub fn with_firmware_env(mut self, env: FwEnv) -> Core {
         self.firmware = env;
@@ -435,6 +475,7 @@ impl Core {
                 ))
             }
         };
+        let _job = self.dfu_job(&info, device.as_ref().map(|d| d.id.as_str()), "Reading firmware")?;
         let flasher: &dyn Flasher = self.firmware.flasher.as_ref();
         let quick = flasher.quick();
         let mut usb = flasher
@@ -585,6 +626,7 @@ impl Core {
                 .confirm_apply(&flash_change(&prep.device, &prep.plan), &prep.plan)?;
         }
         let dfu_info = prep.dfu.clone().expect("one DFU device passed its check");
+        let _job = self.dfu_job(&dfu_info, Some(&prep.device.id), "Flashing")?;
         let flasher: &dyn Flasher = self.firmware.flasher.as_ref();
         let quick = flasher.quick();
         let mut usb = flasher

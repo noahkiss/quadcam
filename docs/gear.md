@@ -1129,6 +1129,8 @@ another radio, and a flash of the picked radio refuses it.
 - A flash that reads as blank, as all zeros (a protected chip) or differently on the two reads
   is refused with the reason.
 - With no radio in DFU mode, the read says so and tells you the steps above.
+- A read and a flash each run as a job on the radio in DFU mode (`dfu:<serial>` in
+  `gear status`). A second read or a flash of the same radio meanwhile refuses with `port_busy`.
 - Command line: `quadcam-cli --json gear firmware --read [--device RADIO]`. MCP:
   `quadcam_gear` `firmware_read`.
 
