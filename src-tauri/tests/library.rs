@@ -644,13 +644,25 @@ fn a_clip_without_a_picture_is_marked_once_not_retried() {
     l.core.library_strips(None).unwrap();
     let strip = a.strip.clone().unwrap();
     std::fs::remove_file(&strip).unwrap();
+    let video = std::fs::read(&a.file).unwrap();
     std::fs::write(&a.file, b"not a video").unwrap();
     assert_eq!(l.core.library_strips(None).unwrap(), 0);
     let a = by_name(&l, "gap run");
     assert!(a.no_picture && a.strip.is_none() && a.poster.is_none());
-    // Nothing is tried again until asked for by id.
+    // The video is good again, but nothing is tried again: a retry would make a strip now.
+    std::fs::write(&a.file, &video).unwrap();
     assert_eq!(l.core.library_strips(None).unwrap(), 0);
-    assert!(by_name(&l, "gap run").no_picture);
+    let a = by_name(&l, "gap run");
+    assert!(a.no_picture && a.strip.is_none());
+    // Asked for by id, it is tried again and makes one.
+    assert_eq!(
+        l.core
+            .library_strips(Some(vec![a.clip.id.clone()]))
+            .unwrap(),
+        1
+    );
+    let a = by_name(&l, "gap run");
+    assert!(!a.no_picture && a.strip.is_some());
 }
 
 #[test]

@@ -243,7 +243,9 @@ fn keep_separate_per_run_per_clip_and_by_setting() {
     // A re-analysis keeps the run's choice.
     let s = core.analyse().unwrap();
     assert!(s.clips[0].join.as_ref().unwrap().on);
-    core.plan_dates(LogChoice::None, None).unwrap();
+    // So does dating.
+    let s = core.plan_dates(LogChoice::None, None).unwrap();
+    assert!(s.clips[0].join.as_ref().unwrap().on);
 }
 
 #[test]
