@@ -1029,7 +1029,7 @@ FC effect (`aux` modes, `adjrange` selections such as rate or OSD profile), the 
     model and its gap, a sim without a throttle curve, the unverified shapes. New refusal code
     `not_writable`.
   - **Checks:** sim closed (`sim_running`, again right before the write), file understood
-    (`shape_unknown`), rewrites unchanged byte for byte and reads back as wanted (`round_trip`),
+    (`shape_unknown`), the new bytes read back as wanted (`round_trip`; only the changed spans are replaced, and the adapters' tests prove each encoder writes its fixture byte for byte),
     writable (`not_writable`), something differs (`incompatible`). A changed file after the plan
     is `before_mismatch`. Under cargo a write outside the temporary folder is refused
     (`disabled`), so no test reaches a real player's files.

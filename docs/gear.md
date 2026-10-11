@@ -826,8 +826,8 @@ create sim profiles.
 - **Sims:** Liftoff, Liftoff: Micro Drones (its file lives inside the game's app bundle),
   Uncrashed (one file per profile; the file name is the profile name) and The Zone.
 - **The plan** lists the checks, the values that change per file (old line out, new line in),
-  warnings and a digest. Checks: the game is not running, the file is understood, the file
-  rewrites unchanged byte for byte, and it is writable. **A sim that runs is never written**
+  warnings and a digest. Checks: the game is not running, the file is understood, the new
+  file reads back as written, and it is writable. **A sim that runs is never written**
   ("Quit Liftoff first."); the Sync button is off while it runs, and the check runs again
   right before the write.
 - **Warnings:** a quad on Actual or Quick is fitted to Betaflight first, with the largest gap;

@@ -498,7 +498,7 @@ Try the sims one at a time, Uncrashed first ([Gear](gear.md#sync-the-quads-rates
 
 1. Open **Gear > Sims**. Each sim shows **Matches the quad** or **Out of date**.
 2. Beside the profile to overwrite, select **Sync**. The sheet opens.
-3. Read **Checks** (the game is not running, the file is understood, it rewrites unchanged,
+3. Read **Checks** (the game is not running, the file is understood, it reads back as written,
    it is writable) and **Warnings**. Select **Apply**.
 4. Start the game. Open its rates screen. Compare the values with the quad's.
 5. To undo, select **Restore backup** beside the sim, then **Apply**.

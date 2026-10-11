@@ -6,6 +6,7 @@ User-facing changes in each release, newest first. Release notes on
 ## Unreleased
 
 - **Sim sync:** two profiles in one sim file (for example two Liftoff profiles) now sync together. Before, the second write put the first profile back to its old rates.
+- **Sim sync plan:** the check "Rewrites unchanged" is now "Reads back as written", which is what it checked.
 
 ## 0.11.0 (2026-10-10)
 

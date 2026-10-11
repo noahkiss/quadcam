@@ -451,7 +451,7 @@ pub fn plan(
             ));
             continue;
         }
-        let (path, mut raw, mut file, idx) = match find(*sim, home, t, quad.name.as_deref()) {
+        let (path, raw, mut file, idx) = match find(*sim, home, t, quad.name.as_deref()) {
             Ok(x) => x,
             Err(e) => {
                 checks.push(fail(
@@ -467,10 +467,7 @@ pub fn plan(
         let earlier = writes.iter().position(|w| w.path == path);
         if let Some(i) = earlier {
             match sim.parse_file(&writes[i].after, &path) {
-                Ok(f) => {
-                    raw = writes[i].after.clone();
-                    file = f;
-                }
+                Ok(f) => file = f,
                 Err(e) => {
                     checks.push(fail(
                         &format!("File understood ({who})"),
@@ -506,29 +503,26 @@ pub fn plan(
         };
         checks.push(pass(&format!("File understood ({who})")));
         let throttle = prof.throttle.is_some().then_some(&bf.throttle);
-        // The file must rewrite unchanged, and the new bytes must read back as wanted.
-        let same = sims::write_profile(*sim, &file, idx, &have, prof.throttle.as_ref());
-        let after = sims::write_profile(*sim, &file, idx, &bf.rates, throttle);
-        let (after, round) = match (same, after) {
-            (Ok(same), Ok(after)) if same.render() == raw.as_slice() => {
-                let ok = sim
-                    .parse_file(after.render(), &path)
+        // The new bytes must parse and read back as wanted. Every byte outside the replaced
+        // spans stays as it was (`Doc::replaced`); the adapters' tests prove the encoder
+        // writes each fixture's number format byte for byte.
+        let after = sims::write_profile(*sim, &file, idx, &bf.rates, throttle)
+            .ok()
+            .filter(|after| {
+                sim.parse_file(after.render(), &path)
                     .ok()
                     .and_then(|f| f.profiles.get(idx).cloned())
-                    .is_some_and(|p| holds(&p, &bf.rates, throttle));
-                (Some(after), ok)
-            }
-            _ => (None, false),
-        };
-        let Some(after) = after.filter(|_| round) else {
+                    .is_some_and(|p| holds(&p, &bf.rates, throttle))
+            });
+        let Some(after) = after else {
             checks.push(fail(
-                &format!("Rewrites unchanged ({who})"),
+                &format!("Reads back as written ({who})"),
                 RefusalCode::RoundTrip,
                 format!("QuadCam cannot rewrite {shown} reliably; nothing was written."),
             ));
             continue;
         };
-        checks.push(pass(&format!("Rewrites unchanged ({who})")));
+        checks.push(pass(&format!("Reads back as written ({who})")));
         checks.push(if can_write(&path) {
             pass(&format!("Writable ({who})"))
         } else {

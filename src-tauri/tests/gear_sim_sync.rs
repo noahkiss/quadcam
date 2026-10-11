@@ -7,7 +7,7 @@ use quadcam_lib::core::{BackupFilter, BackupReadParams, Core, Hooks, NoHooks};
 use quadcam_lib::gear::apply::sim::{SimSyncParams, SimSyncRequest, SimTarget};
 use quadcam_lib::gear::model::{ApplyPlan, ChangeStatus, Refusal, RefusalCode, StagedChange};
 use quadcam_lib::gear::rates::{RateAxis, Rates, RatesType, ThrottleCurve};
-use quadcam_lib::gear::sims::{self, Sim};
+use quadcam_lib::gear::sims::{self, Sim, Slot};
 use quadcam_lib::photos::Recorder;
 use serde_json::{json, Value};
 use std::path::{Path, PathBuf};
@@ -181,6 +181,39 @@ fn each_adapter_writes_its_synthetic_file_byte_exact() {
             "{id} writes its own values unchanged"
         );
 
+        // The encoder writes this file's number format: every readable profile, each value
+        // re-encoded from what was read, gives the same bytes.
+        for prof in file.profiles.iter().filter(|p| p.rates.is_some()) {
+            let r = prof.rates.unwrap();
+            let mut edits: Vec<_> = sim
+                .slots()
+                .into_iter()
+                .zip(&prof.spans)
+                .filter_map(|(slot, span)| {
+                    let v = match slot {
+                        Slot::Rc(a) => r.axes[a].rc_rate,
+                        Slot::Super(a) => r.axes[a].srate,
+                        Slot::Expo(a) => r.axes[a].expo,
+                        Slot::ThrMid => prof.throttle?.mid,
+                        Slot::ThrExpo => prof.throttle?.expo,
+                        Slot::Keep => return None,
+                    };
+                    Some((span.clone(), sim.encode(v)))
+                })
+                .collect();
+            edits.sort_by_key(|(span, _)| std::cmp::Reverse(span.start));
+            let mut doc = file.doc.clone();
+            for (span, bytes) in &edits {
+                doc = doc.replaced(span, bytes);
+            }
+            assert_eq!(
+                doc.render(),
+                raw.as_slice(),
+                "{id} {} re-encodes byte for byte",
+                prof.name
+            );
+        }
+
         // New values: only that profile's value bytes move; the file reads back as wanted
         // and renders to itself.
         let want = bf(150.0, 80.0, 25.0);
@@ -248,7 +281,7 @@ fn the_plan_shows_checks_the_diff_warnings_and_a_digest() {
     for name in [
         "Sim closed (Liftoff)",
         "File understood (Liftoff)",
-        "Rewrites unchanged (Liftoff)",
+        "Reads back as written (Liftoff)",
         "Writable (Liftoff)",
         "Sim closed (Uncrashed)",
     ] {

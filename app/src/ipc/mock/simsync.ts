@@ -86,7 +86,7 @@ function build(st: MockSimSync, p: SimSyncParams): { plan: ApplyPlan; picks: Res
         checks.push(fail(`File understood (${s.name})`, "shape_unknown", `${hit.pr.name} in ${hit.f.path} holds ${hit.pr.note ?? "rates it cannot read"}; QuadCam writes Betaflight rates only.`));
         continue;
       }
-      checks.push(ok(`File understood (${s.name})`), ok(`Rewrites unchanged (${s.name})`), ok(`Writable (${s.name})`));
+      checks.push(ok(`File understood (${s.name})`), ok(`Reads back as written (${s.name})`), ok(`Writable (${s.name})`));
       const lines: { op: "same" | "add" | "remove"; text: string }[] = [{ op: "same", text: `Profile ${hit.pr.name}` }];
       const same = hit.pr.diff?.same;
       if (same) lines.push({ op: "same", text: "already holds these rates" });
