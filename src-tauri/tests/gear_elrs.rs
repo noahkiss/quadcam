@@ -7,7 +7,8 @@ use quadcam_lib::core::{
     Core, ElrsFlashParams, ElrsFlashRequest, ElrsParams, ElrsReadParams, Hooks, NoHooks,
     StageParams,
 };
-use quadcam_lib::gear::apply::{ApplyPlanParams, ApplyRequest};
+use quadcam_lib::gear::apply::{ApplyPlanParams, ApplyReport, ApplyRequest};
+use quadcam_lib::gear::bf::fake::FakeFc;
 use quadcam_lib::gear::elrs::fake::{FakeElrs, FakeHost};
 use quadcam_lib::gear::elrs::image::{fixtures, INDEX_URL};
 use quadcam_lib::gear::elrs::ElrsSet;
@@ -31,6 +32,15 @@ use std::time::Duration;
 
 const PHRASE: &str = "bench-phrase-not-real";
 const COMMIT: &str = "0123456789abcdef0123456789abcdef01234567";
+const DUMP: &str = include_str!("fixtures/bf/g473-2025.12.5.dump_all.txt");
+
+/// An FC that answers MSP with its MCU id, and the device id QuadCam gives it.
+fn msp_fc(uid: u8) -> (FakeFc, String) {
+    let fc = FakeFc::new(DUMP).with_uid([uid; 12]);
+    let id =
+        quadcam_lib::gear::model::device_id(DeviceKind::Fc, &format!("bf-uid:{}", fc.uid_hex()));
+    (fc, id)
+}
 
 #[derive(Default)]
 struct Gui {
@@ -122,6 +132,18 @@ fn bundle_zip(dir: &Path) -> PathBuf {
         fixtures::layout().to_string(),
     )
     .unwrap();
+    let tx = root.join("FCC").join("Unified_ESP32_2400_TX");
+    std::fs::create_dir_all(&tx).unwrap();
+    std::fs::write(tx.join("firmware.bin"), fixtures::stock_esp32(4)).unwrap();
+    for f in ["bootloader.bin", "partitions.bin", "boot_app0.bin"] {
+        std::fs::write(tx.join(f), f.as_bytes()).unwrap();
+    }
+    std::fs::create_dir_all(root.join("hardware/TX")).unwrap();
+    std::fs::write(
+        root.join("hardware/TX/Radio.json"),
+        json!({"serial_rx": 13, "serial_tx": 13, "power_values": [10, 14]}).to_string(),
+    )
+    .unwrap();
     let zip = dir.join("firmware.zip");
     let st = std::process::Command::new("/usr/bin/ditto")
         .args(["-c", "-k", "--sequesterRsrc"])
@@ -177,7 +199,8 @@ fn set_settings(dir: &Path, v: serde_json::Value) {
 fn bench(preview: bool, esptool: bool) -> (Bench, FakeHost, FakeHost) {
     let dir = tempfile::tempdir().unwrap();
     let tx = FakeHost::radio(FakeElrs::tx("RM Radio", "4.1.0"));
-    let rx = FakeHost::fc(FakeElrs::rx("Vendor 2.4GHz AIO RX", "3.5.3"));
+    let (msp, fc_id) = msp_fc(0x11);
+    let rx = FakeHost::fc(FakeElrs::rx("Vendor 2.4GHz AIO RX", "3.5.3")).with_msp(msp);
     let radio_ports = tx.ports("/dev/cu.radio");
     let fc_ports = rx.ports("/dev/cu.fc");
     let both = quadcam_lib::gear::serial::FakePorts::new(
@@ -256,7 +279,7 @@ fn bench(preview: bool, esptool: bool) -> (Bench, FakeHost, FakeHost) {
         ))
         .unwrap();
     store
-        .save_device(&saved("fc-0000000000000001", DeviceKind::Fc, "Air"))
+        .save_device(&saved(&fc_id, DeviceKind::Fc, "Air"))
         .unwrap();
     let b = Bench {
         dir,
@@ -265,7 +288,7 @@ fn bench(preview: bool, esptool: bool) -> (Bench, FakeHost, FakeHost) {
         fetch,
         gui,
         radio: "radio-0000000000000001".into(),
-        fc: "fc-0000000000000001".into(),
+        fc: fc_id,
     };
     (b, tx, rx)
 }
@@ -405,7 +428,8 @@ fn an_fc_with_the_wrong_receiver_settings_never_starts_a_passthrough() {
     let (b, _, _) = bench(true, true);
     // Replace the FC with one whose receiver is SBUS and inverted.
     let bad = FakeHost::fc(FakeElrs::rx("Vendor 2.4GHz AIO RX", "4.1.0"))
-        .with_receiver_settings("SBUS", "ON", "OFF");
+        .with_receiver_settings("SBUS", "ON", "OFF")
+        .with_msp(msp_fc(0x11).0);
     let ports = bad.ports("/dev/cu.fc");
     let env = quadcam_lib::gear::Env::fake(vec![], Arc::new(ports));
     let core = Core::new(
@@ -427,6 +451,56 @@ fn an_fc_with_the_wrong_receiver_settings_never_starts_a_passthrough() {
     assert!(text.contains("serialrx_provider is SBUS"), "{text}");
     assert!(text.contains("serialrx_inverted is ON"), "{text}");
     assert!(!bad.log().iter().any(|l| l.starts_with("serialpassthrough")));
+}
+
+/// A core whose only serial device is `host` on `/dev/cu.fc`.
+fn core_with(b: &Bench, host: &FakeHost, cache: &str) -> Core {
+    let env = quadcam_lib::gear::Env::fake(vec![], Arc::new(host.ports("/dev/cu.fc")));
+    Core::new(
+        b.dir.path().join(cache),
+        None,
+        Arc::new(NoHooks),
+        Arc::new(Recorder::default()),
+    )
+    .with_settings(b.dir.path().join("support/settings.json"))
+    .with_gear_env(env)
+    .with_fc_timing(quadcam_lib::gear::bf::cli::Timing::fast())
+}
+
+#[test]
+fn an_fc_that_is_not_the_host_or_does_not_identify_itself_refuses() {
+    let (b, _, _) = bench(true, true);
+    // Another FC (another MCU id) on the port.
+    let other =
+        FakeHost::fc(FakeElrs::rx("Vendor 2.4GHz AIO RX", "3.5.3")).with_msp(msp_fc(0x22).0);
+    let e = core_with(&b, &other, "cache-other")
+        .gear_elrs_read(&ElrsReadParams {
+            host: b.fc.clone(),
+            port: None,
+        })
+        .unwrap_err();
+    let r = refusal(e);
+    assert_eq!(r.code, RefusalCode::DeviceChanged);
+    assert!(r.reason.contains("is not Air"), "{}", r.reason);
+    assert!(!other
+        .log()
+        .iter()
+        .any(|l| l.starts_with("serialpassthrough")));
+    // An FC that does not answer MSP.
+    let silent = FakeHost::fc(FakeElrs::rx("Vendor 2.4GHz AIO RX", "3.5.3"));
+    let e = core_with(&b, &silent, "cache-silent")
+        .gear_elrs_read(&ElrsReadParams {
+            host: b.fc.clone(),
+            port: None,
+        })
+        .unwrap_err();
+    let r = refusal(e);
+    assert_eq!(r.code, RefusalCode::DeviceChanged);
+    assert!(r.reason.contains("did not identify itself"), "{}", r.reason);
+    assert!(!silent
+        .log()
+        .iter()
+        .any(|l| l.starts_with("serialpassthrough")));
 }
 
 #[test]
@@ -651,6 +725,11 @@ fn a_flash_runs_esptool_after_a_backup_and_reports_its_hash_check() {
         write_call.contains("--before no-reset") && write_call.contains("write-flash 0x0000"),
         "{write_call}"
     );
+    // Through an FC esptool keeps the receiver UART's speed, for the read and the write.
+    for c in &calls {
+        assert!(c.join(" ").contains("--baud 420000"), "{c:?}");
+    }
+    assert_eq!(rx.passthrough_baud(), Some(420_000));
     // The backup of the chip's flash is kept.
     assert!(report.backup.is_some());
     assert!(report
@@ -841,4 +920,186 @@ fn a_pair_on_different_majors_is_warned_about() {
         "{:?}",
         plan.warnings
     );
+}
+
+fn flash(b: &Bench, p: &ElrsFlashParams, digest: &str) -> anyhow::Result<ApplyReport> {
+    b.core.gear_elrs_flash(&ElrsFlashRequest {
+        params: p.clone(),
+        digest: digest.into(),
+        confirm: true,
+    })
+}
+
+#[test]
+fn a_receiver_flash_pings_the_receiver_and_refuses_another_one() {
+    let (b, _, rx) = bench(true, true);
+    let id = rx_device(&b);
+    let (p, plan) = planned(&b, &id);
+    // The receiver on the quad was swapped after the read.
+    rx.restart();
+    let other = FakeElrs::rx("Other Vendor RX", "3.5.3");
+    rx.replace_device(other.clone());
+    let r = refusal(flash(&b, &p, &plan.digest).unwrap_err());
+    assert_eq!(r.code, RefusalCode::DeviceChanged);
+    assert!(
+        r.reason.contains("now calls itself `Other Vendor RX`"),
+        "{}",
+        r.reason
+    );
+    assert_eq!(
+        other.bootloader_requests(),
+        0,
+        "no bootloader before the ping matched"
+    );
+    assert!(b.esptool.calls.lock().unwrap().is_empty());
+    // A receiver that does not answer the ping refuses too.
+    rx.restart();
+    let mute = FakeElrs::rx("Vendor 2.4GHz AIO RX", "3.5.3").mute();
+    rx.replace_device(mute.clone());
+    let r = refusal(flash(&b, &p, &plan.digest).unwrap_err());
+    assert_eq!(r.code, RefusalCode::DeviceChanged);
+    assert!(r.reason.contains("did not answer"), "{}", r.reason);
+    assert_eq!(mute.bootloader_requests(), 0);
+    assert!(b.esptool.calls.lock().unwrap().is_empty());
+}
+
+#[test]
+fn a_bootloader_reply_that_does_not_name_the_target_refuses() {
+    let (b, _, rx) = bench(true, true);
+    let id = rx_device(&b);
+    let (p, plan) = planned(&b, &id);
+    for said in ["", "UNIFIED", "OTHER_RX"] {
+        rx.restart();
+        let _ = rx.device().with_bootloader_text(said);
+        let r = refusal(flash(&b, &p, &plan.digest).unwrap_err());
+        assert_eq!(r.code, RefusalCode::DeviceChanged, "{said:?}");
+        assert!(r.reason.contains("Nothing was written"), "{}", r.reason);
+        assert!(b.esptool.calls.lock().unwrap().is_empty(), "{said:?}");
+    }
+    // The unified firmware's own name is the planned target's.
+    rx.restart();
+    let _ = rx.device().with_bootloader_text("UNIFIED_ESP8285_2400_RX");
+    let report = flash(&b, &p, &plan.digest).unwrap();
+    assert_eq!(report.status, ChangeStatus::Verified, "{}", report.message);
+    assert!(report.steps.iter().any(|s| s.name == "Ping the receiver"));
+}
+
+#[test]
+fn a_module_flash_checks_the_radio_board_before_the_boot_pin() {
+    let (b, tx, _) = bench(true, true);
+    let id = read(&b, &b.radio).unwrap().device;
+    let snap = quadcam_lib::gear::elrs::load_snapshot(b.core.gear_store().root(), &id).unwrap();
+    assert_eq!(snap.host_board.as_deref(), Some("pocket"));
+    let (p, plan) = planned(&b, &id);
+    assert!(failed(&plan).is_empty(), "{:?}", plan.checks);
+    // Another radio model is plugged in for the flash.
+    tx.restart();
+    let _ = tx.clone().with_board("tx16s");
+    let before = tx.log().len();
+    let r = refusal(flash(&b, &p, &plan.digest).unwrap_err());
+    assert_eq!(r.code, RefusalCode::DeviceChanged);
+    assert!(
+        r.reason.contains("is a tx16s, not the pocket"),
+        "{}",
+        r.reason
+    );
+    assert_eq!(tx.log()[before..], ["ver".to_string()], "nothing after ver");
+    assert!(!tx.module_in_bootloader());
+    assert!(b.esptool.calls.lock().unwrap().is_empty());
+    // The radio it was read through.
+    tx.restart();
+    let _ = tx.clone().with_board("pocket");
+    let report = flash(&b, &p, &plan.digest).unwrap();
+    assert_eq!(report.status, ChangeStatus::Verified, "{}", report.message);
+    assert!(tx.module_in_bootloader());
+    assert!(report.steps.iter().any(|s| s.name == "Check the radio"));
+    let calls = b.esptool.calls.lock().unwrap().clone();
+    assert!(
+        calls[1].join(" ").contains("--chip esp32"),
+        "{:?}",
+        calls[1]
+    );
+    // Through a radio esptool runs at the speed its passthrough set for the module UART.
+    assert_eq!(tx.passthrough_baud(), Some(460_800));
+    for c in &calls {
+        assert!(c.join(" ").contains("--baud 460800"), "{c:?}");
+    }
+    // A read that did not record the board plans no flash, and the board is in the digest.
+    let root = b.core.gear_store().root().to_path_buf();
+    let mut snap = quadcam_lib::gear::elrs::load_snapshot(&root, &id).unwrap();
+    snap.host_board = None;
+    quadcam_lib::gear::elrs::save_snapshot(&root, &snap).unwrap();
+    let again = b.core.gear_elrs_flash_plan(&p).unwrap();
+    assert!(
+        failed(&again)
+            .iter()
+            .any(|(n, c)| *n == "The read names the radio's board" && *c == RefusalCode::ReadFirst),
+        "{:?}",
+        failed(&again)
+    );
+    snap.host_board = Some("tx16s".into());
+    quadcam_lib::gear::elrs::save_snapshot(&root, &snap).unwrap();
+    assert_ne!(b.core.gear_elrs_flash_plan(&p).unwrap().digest, plan.digest);
+}
+
+fn stage_and_plan(b: &Bench, device: &str, edits: &[(&str, &str)]) -> (String, ApplyPlan) {
+    let c = b
+        .core
+        .gear_change_stage(&StageParams {
+            device: device.into(),
+            edits: sets(edits),
+            ..Default::default()
+        })
+        .unwrap();
+    let plan = b
+        .core
+        .gear_apply_plan(&ApplyPlanParams {
+            id: c.id.clone(),
+            port: None,
+        })
+        .unwrap();
+    assert!(failed(&plan).is_empty(), "{:?}", failed(&plan));
+    (c.id, plan)
+}
+
+fn apply(b: &Bench, id: &str, digest: &str) -> anyhow::Result<ApplyReport> {
+    b.core.gear_apply(&ApplyRequest {
+        id: id.into(),
+        digest: digest.into(),
+        confirm: true,
+        port: None,
+    })
+}
+
+#[test]
+fn an_apply_refuses_when_a_list_was_reordered_since_the_read() {
+    let (b, tx, _) = bench(true, true);
+    let id = read(&b, &b.radio).unwrap().device;
+    let (c, plan) = stage_and_plan(&b, &id, &[("switch_mode", "Hybrid")]);
+    // Another firmware lists the same switch modes in another order; the value is the same.
+    tx.restart();
+    tx.device().set_choices(3, &["Wide", "Hybrid"]);
+    let r = refusal(apply(&b, &c, &plan.digest).unwrap_err());
+    assert_eq!(r.code, RefusalCode::BeforeMismatch);
+    assert!(r.reason.contains("offers other values"), "{}", r.reason);
+    assert!(tx.device().writes().is_empty());
+}
+
+#[test]
+fn a_write_that_relists_another_option_is_followed_by_a_fresh_read() {
+    let (b, tx, _) = bench(true, true);
+    // Writing the packet rate reorders the switch modes, as a rate change can.
+    let device = FakeElrs::tx("RM Radio", "4.1.0").relist_on_write(1, 3, &["Wide", "Hybrid"]);
+    tx.replace_device(device.clone());
+    let id = read(&b, &b.radio).unwrap().device;
+    let (c, plan) = stage_and_plan(
+        &b,
+        &id,
+        &[("packet_rate", "250hz"), ("switch_mode", "Hybrid")],
+    );
+    tx.restart();
+    let report = apply(&b, &c, &plan.digest).unwrap();
+    assert_eq!(report.status, ChangeStatus::Verified, "{}", report.message);
+    // Hybrid was index 0 at the read and is index 1 after the packet-rate write.
+    assert_eq!(device.writes(), [(1, vec![2]), (3, vec![1])]);
 }

@@ -21,7 +21,7 @@ use super::apply::refusal;
 use super::{link_handle, Core};
 use crate::gear::apply::{check, first_refusal, pass, ApplyReport, StepReport, StepState};
 use crate::gear::blobs;
-use crate::gear::elrs::crsf::{self, Param};
+use crate::gear::elrs::crsf::{self, Param, WriteValue};
 use crate::gear::elrs::flash::{self, Built};
 use crate::gear::elrs::image::{self, Side};
 use crate::gear::elrs::link::{self, CrsfLink, ModuleStart, Timing};
@@ -138,6 +138,7 @@ struct FlashPrep {
     plan: ApplyPlan,
     device: Device,
     host: Device,
+    snapshot: ElrsSnapshot,
     built: Option<Built>,
     version: String,
 }
@@ -287,8 +288,8 @@ impl Core {
         })
     }
 
-    /// The serial port of a saved FC: the one asked for, or the only FC. An FC that identifies
-    /// itself as another device refuses.
+    /// The serial port of a saved FC: the one asked for, or the only FC. The FC must identify
+    /// itself as `host`: another device, or one that does not answer MSP, refuses.
     fn elrs_fc_port(&self, host: &Device, port: Option<&str>) -> Result<String> {
         let c = self.gear_fc_pick(port)?;
         let handle = link_handle(&c.link);
@@ -297,19 +298,29 @@ impl Core {
                 .or_else(|| self.gear_fc_seen(&handle).and_then(|i| i.id));
         if id.is_none() && (self.gear.holders)(&handle).is_empty() {
             let _hold = self.gear_hold(&handle);
-            id = crate::gear::bf::identify(self.gear.ports.as_ref(), &handle, self.fc_timing())
-                .ok()
-                .and_then(|i| i.id);
+            if let Ok(i) =
+                crate::gear::bf::identify(self.gear.ports.as_ref(), &handle, self.fc_timing())
+            {
+                id = i.id.clone();
+                self.fc_state.lock().unwrap().seen.insert(handle.clone(), i);
+            }
         }
         match id {
-            Some(i) if i != host.id && !host.aliases.contains(&i) => Err(refusal(Refusal::new(
+            Some(i) if i == host.id || host.aliases.contains(&i) => Ok(handle),
+            Some(_) => Err(refusal(Refusal::new(
                 RefusalCode::DeviceChanged,
                 format!(
                     "The FC on {handle} is not {}. Pick that FC's device, or unplug the other FC.",
                     host.display_name()
                 ),
             ))),
-            _ => Ok(handle),
+            None => Err(refusal(Refusal::new(
+                RefusalCode::DeviceChanged,
+                format!(
+                    "QuadCam cannot tell whether the FC on {handle} is {}: it did not identify itself over MSP. Unplug it and plug it in again (a passthrough from an earlier job ends then), or close the program that holds the port.",
+                    host.display_name()
+                ),
+            ))),
         }
     }
 
@@ -336,17 +347,19 @@ impl Core {
         Ok(host)
     }
 
-    /// Hands the host's port to the device behind it. Returns the CRSF link and notes.
+    /// Hands the host's port to the device behind it. Returns the CRSF link and, for a radio,
+    /// the board its `ver` named; with `expect_board` a radio of another board refuses first.
     fn elrs_open(
         &self,
         host: &Device,
         port: &str,
         start: ModuleStart,
+        expect_board: Option<&str>,
         notes: &mut Vec<String>,
-    ) -> Result<CrsfLink> {
+    ) -> Result<(CrsfLink, Option<String>)> {
         let t = self.elrs_timing();
         let ports = self.gear.ports.as_ref();
-        let raw = match host.kind {
+        let (raw, board) = match host.kind {
             DeviceKind::Radio => {
                 let baud = if start == ModuleStart::Run {
                     link::MODULE_BAUD
@@ -357,7 +370,7 @@ impl Core {
                     "The radio's module has its pulses off until the radio restarts: restart the radio when you are done."
                         .into(),
                 );
-                link::radio_passthrough(ports, port, baud, start, &t)?
+                link::radio_passthrough(ports, port, baud, start, expect_board, &t)?
             }
             _ => {
                 let (l, r) = link::fc_passthrough(ports, port, link::RECEIVER_BAUD, &t)?;
@@ -365,10 +378,10 @@ impl Core {
                     "The FC passes its receiver UART ({}) through until you unplug USB: unplug it and plug it in again when you are done.",
                     r.uart
                 ));
-                l
+                (l, None)
             }
         };
-        Ok(CrsfLink::new(raw, t))
+        Ok((CrsfLink::new(raw, t), board))
     }
 
     /// Finds the device behind the host and reads its parameters.
@@ -377,13 +390,13 @@ impl Core {
         host: &Device,
         port: &str,
         notes: &mut Vec<String>,
-    ) -> Result<(crsf::DeviceInfo, Vec<Param>)> {
+    ) -> Result<(crsf::DeviceInfo, Vec<Param>, Option<String>)> {
         let want = if host.kind == DeviceKind::Radio {
             crsf::ADDR_TX
         } else {
             crsf::ADDR_RX
         };
-        let mut c = self.elrs_open(host, port, ModuleStart::Run, notes)?;
+        let (mut c, board) = self.elrs_open(host, port, ModuleStart::Run, None, notes)?;
         let found = c.ping()?;
         let info = found.into_iter().find(|d| d.origin == want).ok_or_else(|| {
             anyhow!(
@@ -398,7 +411,7 @@ impl Core {
             )
         })?;
         let params = c.read_params(&info)?;
-        Ok((info, params))
+        Ok((info, params, board))
     }
 
     /// Reads the ELRS device behind a saved radio or FC and saves what it found.
@@ -407,7 +420,7 @@ impl Core {
         let host = self.elrs_host(&p.host)?;
         let port = self.elrs_host_port(&host, p.port.as_deref())?;
         let mut notes = Vec::new();
-        let (info, params) = {
+        let (info, params, host_board) = {
             let _hold = self.gear_hold(&port);
             self.elrs_read_live(&host, &port, &mut notes)?
         };
@@ -449,6 +462,7 @@ impl Core {
             options: elrs::options_of(&params),
             params: elrs::param_views(&params),
             read_at: Utc::now(),
+            host_board,
         };
         elrs::save_snapshot(store.root(), &snapshot)?;
         self.hooks.gear_changed();
@@ -633,7 +647,7 @@ impl Core {
         let mut steps: Vec<StepReport> = Vec::new();
         let mut notes = plan.warnings.clone();
         let _hold = self.gear_hold(&port);
-        let mut c = self.elrs_open(&host, &port, ModuleStart::Run, &mut notes)?;
+        let (mut c, _) = self.elrs_open(&host, &port, ModuleStart::Run, None, &mut notes)?;
         let want = side_of(device.kind)
             .map(|s| {
                 if s == Side::Tx {
@@ -657,11 +671,12 @@ impl Core {
                 ),
             )));
         }
-        let live = c.read_params(&info)?;
+        let mut live = c.read_params(&info)?;
         let live_opts = elrs::options_of(&live);
+        // The value, the id and the list must be the read's: a choice is written as its index.
         for (o, _, _) in &writes {
             let now = live_opts.iter().find(|l| l.key == o.key);
-            if now.map(|l| (&l.value, l.id)) != Some((&o.value, o.id)) {
+            let Some(l) = now.filter(|l| (&l.value, l.id) == (&o.value, o.id)) else {
                 return Err(refusal(Refusal::new(
                     RefusalCode::BeforeMismatch,
                     format!(
@@ -669,6 +684,15 @@ impl Core {
                         o.label,
                         now.map(|l| l.value.as_str()).unwrap_or("missing"),
                         o.value
+                    ),
+                )));
+            };
+            if (&l.choices, l.min, l.max) != (&o.choices, o.min, o.max) {
+                return Err(refusal(Refusal::new(
+                    RefusalCode::BeforeMismatch,
+                    format!(
+                        "{} offers other values on the device than at the read. Nothing was written; read it again.",
+                        o.label
                     ),
                 )));
             }
@@ -702,40 +726,71 @@ impl Core {
             Some(taken.backup.id.clone()),
         ));
 
+        // The device saves a parameter a moment after the write.
+        let save_wait = if self.elrs_timing().settle.is_zero() {
+            Duration::ZERO
+        } else {
+            Duration::from_millis(800)
+        };
         let mut failed: Option<String> = None;
+        let mut wrote = false;
         for (o, w, to) in &writes {
-            if &o.value == to {
-                continue;
+            let set = format!("Set {}", o.label);
+            // One write can change another parameter's list (a packet rate changes the switch
+            // modes): after a write, read again and take the index from the list as it is now.
+            if wrote {
+                std::thread::sleep(save_wait);
+                match c.read_params(&info) {
+                    Ok(l) => live = l,
+                    Err(e) => {
+                        failed = Some(format!("The read after a write failed: {e:#}"));
+                        steps.push(step(&set, StepState::Failed, failed.clone()));
+                        break;
+                    }
+                }
             }
-            let Some(p) = live.iter().find(|p| p.id == o.id) else {
-                failed = Some(format!("{} has no parameter {}", o.label, o.id));
+            let opts = elrs::options_of(&live);
+            let Some(now) = opts.iter().find(|l| l.key == o.key) else {
+                failed = Some(format!("The device no longer lists {}", o.label));
+                steps.push(step(&set, StepState::Failed, failed.clone()));
                 break;
             };
-            let bytes = crsf::encode_value(p, w)?;
-            let r = c.write_value(want, o.id, &bytes);
-            match r {
-                Ok(()) => steps.push(step(
-                    &format!("Set {}", o.label),
-                    StepState::Done,
-                    Some(to.clone()),
-                )),
+            if &now.value == to {
+                continue;
+            }
+            let w = match w {
+                WriteValue::Index(_) => match now.choices.iter().position(|x| x == to) {
+                    Some(i) => WriteValue::Index(i as u8),
+                    None => {
+                        failed = Some(format!(
+                            "{} no longer offers {to} after the earlier write",
+                            o.label
+                        ));
+                        steps.push(step(&set, StepState::Failed, failed.clone()));
+                        break;
+                    }
+                },
+                n => n.clone(),
+            };
+            let Some(p) = live.iter().find(|p| p.id == now.id) else {
+                failed = Some(format!("{} has no parameter {}", o.label, now.id));
+                break;
+            };
+            let bytes = crsf::encode_value(p, &w)?;
+            match c.write_value(want, now.id, &bytes) {
+                Ok(()) => {
+                    wrote = true;
+                    steps.push(step(&set, StepState::Done, Some(to.clone())));
+                }
                 Err(e) => {
-                    steps.push(step(
-                        &format!("Set {}", o.label),
-                        StepState::Failed,
-                        Some(format!("{e:#}")),
-                    ));
+                    steps.push(step(&set, StepState::Failed, Some(format!("{e:#}"))));
                     failed = Some(format!("{e:#}"));
                     break;
                 }
             }
         }
-        // The device saves a parameter a moment after the write; give it time, then read back.
-        std::thread::sleep(if self.elrs_timing().settle.is_zero() {
-            Duration::ZERO
-        } else {
-            Duration::from_millis(800)
-        });
+        // Give the last write time, then read back.
+        std::thread::sleep(save_wait);
         let after = c.read_params(&info)?;
         drop(c);
         let after_opts = elrs::options_of(&after);
@@ -875,6 +930,17 @@ impl Core {
                 "Set the binding phrase first (quadcam-cli settings set elrs_binding_phrase=...). A device flashed without one would not bind to your others.",
             ),
         });
+
+        if host.kind == DeviceKind::Radio {
+            checks.push(match &snapshot.host_board {
+                Some(b) => pass(&format!("The read names the radio's board ({b})")),
+                None => fail(
+                    "The read names the radio's board",
+                    RefusalCode::ReadFirst,
+                    "Read this device again (`gear elrs read`): the read did not record the radio's board, which a flash checks first.",
+                ),
+            });
+        }
 
         let port = match self.elrs_host_port(&host, p.port.as_deref()) {
             Ok(port) => {
@@ -1039,9 +1105,10 @@ impl Core {
         let digest = if ready {
             blobs::hash(
                 format!(
-                    "elrs-flash|{}|{}|{}|{}|{}|{}|{}",
+                    "elrs-flash|{}|{}|{}|{}|{}|{}|{}|{}",
                     device.id,
                     host.id,
+                    snapshot.host_board.clone().unwrap_or_default(),
                     snapshot.name,
                     version,
                     bundle_sha,
@@ -1065,6 +1132,7 @@ impl Core {
             },
             device,
             host,
+            snapshot,
             built,
             version,
         })
@@ -1128,22 +1196,48 @@ impl Core {
         let mut notes = prep.plan.warnings.clone();
         let _hold = self.gear_hold(&port);
 
-        // 1. The bootloader. A receiver prints its target name; it must be the one planned.
-        let mut c = self.elrs_open(&prep.host, &port, ModuleStart::Bootloader, &mut notes)?;
+        // 1. The device must be the one planned, then its bootloader. A radio must be the board
+        // the read went through (its `ver`, before the pulses stop); an ESP32 in its ROM
+        // bootloader cannot answer CRSF, and the radio stays in passthrough, so its module
+        // cannot be pinged first. A receiver answers a CRSF ping on the same passthrough, then
+        // prints its target as it restarts into its bootloader.
+        let expect = (prep.host.kind == DeviceKind::Radio)
+            .then(|| prep.snapshot.host_board.clone())
+            .flatten();
+        let (mut c, board) = self.elrs_open(
+            &prep.host,
+            &port,
+            ModuleStart::Bootloader,
+            expect.as_deref(),
+            &mut notes,
+        )?;
         if prep.host.kind == DeviceKind::Fc {
-            let said = c.enter_bootloader()?;
-            let want = built.target.prior_target_name.to_ascii_uppercase();
-            let product = built.target.product_name.to_ascii_uppercase();
-            let said_up = said.to_ascii_uppercase();
-            if !said_up.is_empty()
-                && !said_up.contains(&want)
-                && !said_up.contains(&product)
-                && !said_up.contains("UNIFIED")
-            {
+            let info = c
+                .ping()?
+                .into_iter()
+                .find(|d| d.origin == crsf::ADDR_RX)
+                .ok_or_else(|| {
+                    refusal(Refusal::new(
+                        RefusalCode::DeviceChanged,
+                        "The receiver did not answer a CRSF ping, so QuadCam cannot tell it is the one planned. Nothing was written.",
+                    ))
+                })?;
+            if info.name != prep.snapshot.name {
                 return Err(refusal(Refusal::new(
                     RefusalCode::DeviceChanged,
                     format!(
-                        "The receiver in its bootloader says `{}`, not {}. Nothing was written.",
+                        "The receiver now calls itself `{}`, not `{}`. Nothing was written; read it again.",
+                        info.name, prep.snapshot.name
+                    ),
+                )));
+            }
+            steps.push(step("Ping the receiver", StepState::Done, Some(info.name)));
+            let said = c.enter_bootloader()?;
+            if !flash::bootloader_names(&said, &built.target) {
+                return Err(refusal(Refusal::new(
+                    RefusalCode::DeviceChanged,
+                    format!(
+                        "The receiver in its bootloader says `{}`, which does not name {}. Nothing was written.",
                         said.trim(),
                         built.target.product_name
                     ),
@@ -1152,9 +1246,14 @@ impl Core {
             steps.push(step(
                 "Restart the receiver into its bootloader",
                 StepState::Done,
-                (!said.is_empty()).then(|| said.trim().to_string()),
+                Some(said.trim().to_string()),
             ));
         } else {
+            steps.push(step(
+                "Check the radio",
+                StepState::Done,
+                board.map(|b| format!("board {b}")),
+            ));
             steps.push(step(
                 "Start the module with its boot pin held",
                 StepState::Done,
@@ -1170,7 +1269,15 @@ impl Core {
         ));
         let _ = std::fs::remove_dir_all(&work);
         flash::stage_files(built, &work)?;
-        let baud = link::FLASH_BAUD.to_string();
+        // esptool's `change_baud` must land on the speed the host's UART runs: the radio's
+        // module UART is set to FLASH_BAUD by its passthrough, the FC's receiver UART stays at
+        // RECEIVER_BAUD.
+        let esp_baud = if prep.host.kind == DeviceKind::Radio {
+            link::FLASH_BAUD
+        } else {
+            link::RECEIVER_BAUD
+        };
+        let baud = esp_baud.to_string();
         let current = work.join("current.bin");
         let read_args: Vec<std::ffi::OsString> = [
             "--chip",
@@ -1231,7 +1338,7 @@ impl Core {
         };
 
         // 3. Write. esptool compares the flash with the data it sent before it finishes.
-        let write_args = flash::esptool_args(built, &port, link::FLASH_BAUD, &work);
+        let write_args = flash::esptool_args(built, &port, esp_baud, &work);
         let outcome = self.run_esptool(&write_args, "Writing the firmware");
         let _ = std::fs::remove_dir_all(&work);
         let (status, message) = match &outcome {

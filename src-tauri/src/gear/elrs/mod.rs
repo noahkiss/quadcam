@@ -102,6 +102,10 @@ pub struct ElrsSnapshot {
     pub options: Vec<ElrsOption>,
     pub params: Vec<ElrsParamView>,
     pub read_at: DateTime<Utc>,
+    /// The board the radio's `ver` named at the read (a radio host only). A flash compares it
+    /// with the radio plugged in before it holds the module's boot pin.
+    #[serde(default)]
+    pub host_board: Option<String>,
 }
 
 /// The device id of the ExpressLRS module in `host` (a saved radio) or the receiver behind
@@ -474,6 +478,7 @@ mod tests {
             options: tx_options(),
             params: Vec::new(),
             read_at: Utc::now(),
+            host_board: Some("pocket".into()),
         };
         save_snapshot(dir.path(), &s).unwrap();
         assert_eq!(load_snapshot(dir.path(), &id), Some(s));

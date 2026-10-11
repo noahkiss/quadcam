@@ -3,9 +3,11 @@
 //!
 //! A `FakeHost` is one device on one port. Its CLI answers the few commands the passthrough
 //! needs; after `serialpassthrough` the port speaks CRSF to the `FakeElrs` behind it. Clones
-//! share the state, so a test reads what was written after the job.
+//! share the state, so a test reads what was written after the job. An FC host built `with_msp`
+//! answers the MSP identity through a `bf::fake::FakeFc`, as a real FC does before its CLI.
 
 use super::crsf::{self, Frame, FrameParser, Param, Value};
+use crate::gear::bf::fake::FakeFc;
 use crate::gear::serial::{FakePorts, PortInfo, SerialLink};
 use anyhow::Result;
 use std::collections::VecDeque;
@@ -127,6 +129,8 @@ struct DeviceState {
     bootloader_requests: u32,
     /// What the bootloader prints when asked (the receiver's target name).
     bootloader_text: String,
+    /// A write to the first id gives the choice parameter of the second id this list.
+    relists: Vec<(u8, u8, Vec<String>)>,
     parser: FrameParser,
 }
 
@@ -218,6 +222,7 @@ impl FakeElrs {
                 mute: false,
                 bootloader_requests: 0,
                 bootloader_text: name.to_ascii_uppercase(),
+                relists: Vec::new(),
                 parser: FrameParser::new(),
             })),
         }
@@ -262,6 +267,28 @@ impl FakeElrs {
         {
             *index = to;
         }
+    }
+
+    /// Gives choice parameter `id` the list `options`, keeping its value where the new list
+    /// has it (a firmware that orders a list another way).
+    pub fn set_choices(&self, id: u8, options: &[&str]) {
+        let mut s = self.st.lock().unwrap();
+        relist(
+            &mut s.params,
+            id,
+            options.iter().map(|o| o.to_string()).collect(),
+        );
+    }
+
+    /// A write to parameter `trigger` gives choice parameter `id` the list `options`, as a
+    /// packet-rate change does to the switch modes.
+    pub fn relist_on_write(self, trigger: u8, id: u8, options: &[&str]) -> FakeElrs {
+        self.st.lock().unwrap().relists.push((
+            trigger,
+            id,
+            options.iter().map(|o| o.to_string()).collect(),
+        ));
+        self
     }
 
     /// Every write received: field id and bytes.
@@ -363,10 +390,33 @@ impl FakeElrs {
                         _ => {}
                     }
                 }
+                let lists: Vec<(u8, Vec<String>)> = s
+                    .relists
+                    .iter()
+                    .filter(|(t, _, _)| *t == id)
+                    .map(|(_, target, o)| (*target, o.clone()))
+                    .collect();
+                for (target, options) in lists {
+                    relist(&mut s.params, target, options);
+                }
                 Vec::new()
             }
             _ => Vec::new(),
         }
+    }
+}
+
+fn relist(params: &mut [Param], id: u8, new: Vec<String>) {
+    if let Some(Param {
+        value: Value::Select { options, index },
+        ..
+    }) = params.iter_mut().find(|p| p.id == id)
+    {
+        let was = options.get(*index as usize).cloned();
+        *index = was
+            .and_then(|w| new.iter().position(|o| *o == w))
+            .unwrap_or(0) as u8;
+        *options = new;
     }
 }
 
@@ -393,6 +443,10 @@ struct HostState {
     /// The radio's module is in bootloader mode (boot pin held at power-on).
     bootpin: bool,
     boot_mode: bool,
+    /// The board the radio's `ver` names.
+    board: String,
+    /// What answers MSP on the FC's port before its CLI starts.
+    msp: Option<FakeFc>,
 }
 
 /// A radio or an FC on a serial port, with an ELRS device behind it.
@@ -427,6 +481,8 @@ impl FakeHost {
                 opens: Vec::new(),
                 bootpin: false,
                 boot_mode: false,
+                board: "pocket".into(),
+                msp: None,
             })),
         }
     }
@@ -446,6 +502,18 @@ impl FakeHost {
         self
     }
 
+    /// The FC answers the MSP identity of `fc` (its MCU id) until a passthrough starts.
+    pub fn with_msp(self, fc: FakeFc) -> FakeHost {
+        self.st.lock().unwrap().msp = Some(fc);
+        self
+    }
+
+    /// The board the radio's `ver` names (default `pocket`).
+    pub fn with_board(self, board: &str) -> FakeHost {
+        self.st.lock().unwrap().board = board.into();
+        self
+    }
+
     pub fn without_receiver_uart(self) -> FakeHost {
         self.st.lock().unwrap().uart_line = None;
         self
@@ -461,6 +529,11 @@ impl FakeHost {
 
     pub fn device(&self) -> FakeElrs {
         self.st.lock().unwrap().device.clone()
+    }
+
+    /// Puts another ELRS device behind the host (a receiver swapped on the quad).
+    pub fn replace_device(&self, device: FakeElrs) {
+        self.st.lock().unwrap().device = device;
     }
 
     pub fn log(&self) -> Vec<String> {
@@ -503,6 +576,7 @@ impl FakeHost {
                 host: host.clone(),
                 line: Vec::new(),
                 out: VecDeque::new(),
+                msp: None,
             }))
         })
     }
@@ -527,6 +601,10 @@ impl FakeHost {
                     s.passthrough = baud;
                     String::new()
                 }
+                "ver" => format!(
+                    "{line}\r\nboard: {b}\r\nvers: edgetx-{b}-2.11.0\r\n> ",
+                    b = s.board
+                ),
                 _ => format!("{line}\r\nUnknown command: {verb}\r\n> "),
             },
             HostKind::Fc => match verb {
@@ -559,6 +637,8 @@ struct HostLink {
     host: FakeHost,
     line: Vec<u8>,
     out: VecDeque<u8>,
+    /// The `FakeFc` link MSP frames go to, opened at the first one.
+    msp: Option<Box<dyn SerialLink>>,
 }
 
 impl SerialLink for HostLink {
@@ -572,6 +652,16 @@ impl SerialLink for HostLink {
             let device = self.host.device();
             self.out.extend(device.feed(data));
             return Ok(());
+        }
+        // An MSP frame (`$M<`, `$X<`) on an FC that answers MSP.
+        if data.first() == Some(&b'$') && self.line.is_empty() {
+            let fc = self.host.st.lock().unwrap().msp.clone();
+            if let Some(fc) = fc {
+                if self.msp.is_none() {
+                    self.msp = Some(fc.open(&self.port)?);
+                }
+                return self.msp.as_mut().expect("opened above").write_all(data);
+            }
         }
         for &b in data {
             match b {
@@ -601,7 +691,13 @@ impl SerialLink for HostLink {
         Ok(())
     }
 
-    fn read_some(&mut self, _timeout: Duration) -> Result<Vec<u8>> {
+    fn read_some(&mut self, timeout: Duration) -> Result<Vec<u8>> {
+        if let Some(m) = self.msp.as_mut() {
+            let got = m.read_some(timeout)?;
+            if !got.is_empty() {
+                return Ok(got);
+            }
+        }
         if self.out.is_empty() {
             std::thread::yield_now();
             return Ok(Vec::new());

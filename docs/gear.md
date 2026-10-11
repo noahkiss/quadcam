@@ -1228,10 +1228,12 @@ port to the device and asks it over CRSF for its name, version, target and param
 
 | Host | What QuadCam does |
 |---|---|
-| Radio | The radio's USB serial port must be set to CLI (as for the radio CLI). QuadCam stops the pulses and starts `serialpassthrough rfmod 0 400000` |
-| FC | QuadCam checks that the serial receiver is CRSF, not inverted and not half duplex, finds the UART with the serial receiver and starts `serialpassthrough <uart> 420000` |
+| Radio | The radio's USB serial port must be set to CLI (as for the radio CLI). QuadCam reads the radio's board (`ver`) and keeps it with the read, stops the pulses and starts `serialpassthrough rfmod 0 400000` |
+| FC | The FC must identify itself over MSP as the saved FC; another FC, or one that does not answer, refuses. QuadCam checks that the serial receiver is CRSF, not inverted and not half duplex, finds the UART with the serial receiver and starts `serialpassthrough <uart> 420000` |
 
-The radio or FC **stays in passthrough** until you restart the radio or unplug the FC. A second
+A read through a radio stops its pulses: the radio stops sending at once, and a quad linked
+to it goes to failsafe. Read with no quad powered on that radio. The radio or FC **stays in
+passthrough** until you restart the radio or unplug the FC. A second
 job needs that restart first. The version comes from a text the device lists in its parameters
 (`ELRS 4.1.0 …`), else from its device info; the report says which. A device it cannot read a
 version from is saved without one.
@@ -1243,8 +1245,10 @@ change.
 **Options.** For a device that was read, **Options** lists packet rate, telemetry ratio, max power,
 dynamic power, switch mode and model match, as far as the device offers them. **Stage changes**
 queues one change; **Apply** opens the apply sheet like any change. The apply reads the device
-again and refuses if an option moved since your read, keeps the parameters as a backup, writes each
-option over CRSF, reads them back and compares. From a terminal:
+again and refuses if an option's value or list of values changed since your read, keeps the
+parameters as a backup, writes each option over CRSF, reads them back and compares. After a write
+it reads the device again before the next one, because one option can change another's list (a
+packet rate changes the switch modes). From a terminal:
 `quadcam-cli gear elrs set <device> packet_rate=250Hz telemetry_ratio=1:16`, then
 `gear apply`. A choice matches the device's text or the text before its `(`.
 
@@ -1259,8 +1263,11 @@ option over CRSF, reads them back and compares. From a terminal:
   refuses any other target, a name that matches none or several, and a version the target does not
   support.
 - QuadCam configures the image: the device name, your binding phrase as the UID, the hardware
-  layout and the WiFi delay (`elrs_wifi_interval`, 60 s by default). It reads the image back and
-  checks that no other byte changed. **The plan shows only a fingerprint of the UID, never the
+  layout (with the target's overrides from `targets.json`, such as its power table) and the WiFi
+  delay (`elrs_wifi_interval`, 60 s by default). It reads the image back and
+  checks that no other byte changed. As with ExpressLRS's own configurator, the options hold only
+  the UID, the WiFi delay and a build number. A target whose screen shows a logo refuses.
+  **The plan shows only a fingerprint of the UID, never the
   phrase.** Type the phrase in **Binding phrase** and select **Save phrase** (write-only), or use
   `settings set elrs_binding_phrase=…`; reads show `(set)`. The plan refuses without a phrase.
 - The region (`elrs_region`, `FCC` or `LBT`; the **Region** list in the ELRS section) picks the image folder.
@@ -1269,16 +1276,23 @@ option over CRSF, reads them back and compares. From a terminal:
 - Mixed majors (4.x on one end, 3.x on the other) do not link; the plan warns, and the page warns
   about a read pair. Flash the receiver first.
 
-**Apply** puts the device in its bootloader (a radio: the module's boot pin held while it powers
-up; an FC: the receiver restarts into its bootloader on a CRSF request, and its name must match),
-reads the chip's current flash with esptool and keeps it as a backup (`firmware.bin`), writes with
+**Apply** first checks that the device is the one planned, then puts it in its bootloader:
+
+| Host | Check | Bootloader |
+|---|---|---|
+| Radio | The radio's `ver` must name the board the read recorded. A radio of another model refuses before the pulses stop. Two radios of one model look the same | The module's boot pin is held while it powers up |
+| FC | The FC must identify itself as the saved FC. The receiver must answer a CRSF ping with the name the read saved | The receiver restarts into its bootloader on a CRSF request. What it prints must name the planned target (its prior target name, product name or unified firmware name). An empty reply, or a bare `UNIFIED`, refuses |
+
+Every refusal comes before anything is written. Then QuadCam reads the chip's current flash with esptool and keeps it as a backup (`firmware.bin`), writes with
 `esptool write-flash` and reports success only when esptool prints that it verified the data.
 Afterwards restart the radio or power-cycle the quad, then read the device again. ExpressLRS 4
 wipes a receiver's Options page, so note your settings first. A flash that fails leaves the device
 in its bootloader: power-cycle it and flash again.
 
 Stock esptool does not have the `--passthrough` flag ExpressLRS's own tools add. QuadCam uses
-`--before no-reset` after it has put the device in its bootloader. Whether that works through a
+`--before no-reset` after it has put the device in its bootloader. esptool runs at the speed of
+the host's UART: 420000 through an FC (the receiver UART keeps that speed) and 460800 through a
+radio (the passthrough sets the module UART to it). Whether that works through a
 passthrough is one of the things a real-device trial has to show.
 
 ### Splash

@@ -702,17 +702,29 @@ logical switches a change owns is recorded in the change, so a later change can 
 | Path | When | How |
 |---|---|---|
 | TX through EdgeTX passthrough | Internal ESP32 modules | The radio's USB-VCP set to CLI and USB Serial chosen at plug-in; QuadCam starts the passthrough over serial, then runs `esptool` (ESP32, 460800) |
-| RX through Betaflight passthrough | Serial ESP82xx receivers on an FC UART | FC not in CLI mode first; `serialpassthrough <uart> 420000`, then `esptool` (ESP8266) |
+| RX through Betaflight passthrough | Serial ESP82xx receivers on an FC UART | FC not in CLI mode first; `serialpassthrough <uart> 420000`, then `esptool` (ESP8266, 420000) |
 | WiFi | Any ESP target | Out of scope for 1.0: needs joining the device's access point |
 
-- **Firmware source:** the ELRS artifactory index (`index.json` maps a tag to a build;
-  `firmware.zip` holds the per-target binaries). Each download is checked against its hash.
-- **Options:** the binding phrase (hashed into the 6-byte UID), the regulatory domain, and
-  the auto-WiFi delay are written into the binary's options block. QuadCam implements this
-  from the published format, then reads it back and checks the UID. The phrase is user data
-  (`gear.json`, in `SECRET_KEYS`-style redaction for CLI and MCP reads).
+- **Firmware source:** the ELRS artifactory index (`index.json` maps a tag to a commit;
+  `<commit>/firmware.zip` holds the per-target binaries and `hardware/`). ExpressLRS publishes
+  no checksum: QuadCam records the download's SHA-256 and shows it, and checks it against a
+  digest the person gives (`sha256`), deleting the download on a mismatch.
+- **Options:** the binding phrase (hashed into the 6-byte UID) and the auto-WiFi delay are
+  written into the binary's options block, with a flash discriminator; nothing else is (no
+  `domain` key, and the stock block's build defaults are not carried over, as with
+  ExpressLRS's configurator). The regulatory domain is the image folder, `FCC` or `LBT`
+  (`elrsRegion`). QuadCam implements the blocks from the published format, then reads them
+  back and checks every value and that no other byte changed. The phrase is the write-only
+  setting `elrsBindingPhrase` in `settings.json`, in `SECRET_KEYS` (redacted for CLI and MCP
+  reads); it is never in `gear.json`, a change, a plan or a report, which show a fingerprint
+  of the UID.
 - **Version read:** a CRSF device-info ping over the same passthrough gives the name; the version
   comes from a parameter text or the firmware id. Unverified on hardware (open question 9).
+- **Identity before a flash:** an FC must identify itself over MSP as the saved host. A receiver
+  must answer a CRSF ping with the name the read saved, and its bootloader reply must name the
+  planned target. A radio must report the board (`ver`) the read recorded, before its pulses
+  stop; its ESP32 module cannot be pinged, since the radio stays in passthrough and the ROM
+  bootloader speaks no CRSF. Two radios of one model look the same.
 - **Order trap:** TX and RX on different major versions cannot link. The flash plan warns
   when a flash would leave a linked pair on different majors, and suggests RX first.
 
@@ -1330,8 +1342,10 @@ binaries only (open question 10).
       patch. The report names the source. All three are unverified.
     - **Options.** `Edit::ElrsOptions` stages packet rate, telemetry ratio, max power, dynamic
       power, switch mode and model match by the Lua parameter's name. The apply reads the device
-      again, refuses when a value differs from the read (`before_mismatch`), keeps the
-      parameters as a `BeforeApply` backup, writes, reads back and compares. The binding phrase
+      again, refuses when a value or a choice list differs from the read (`before_mismatch`),
+      keeps the parameters as a `BeforeApply` backup, writes, reads back and compares. A
+      choice is written as its index, so after each write the job reads again and takes the
+      next index from the list as it is then. The binding phrase
       is not an option and cannot be staged (it is not readable over CRSF either).
     - **Release bundle.** `index.json` gives the tag's commit; `<commit>/firmware.zip` holds
       `FCC|LBT/<firmware>/` and `hardware/targets.json` with `hardware/{RX,TX}/<layout>.json`.
@@ -1339,18 +1353,30 @@ binaries only (open question 10).
       expected digest is checked and deletes the download on a mismatch.
     - **Image.** After its ESP segments an image holds the product name (128 bytes), the Lua name
       (16), the options JSON (512: `uid`, `wifi-on-interval`, `flash-discriminator`) and the
-      hardware layout JSON (2048), then a trailer of `BE EF CA FE` and the prior target name.
-      QuadCam learned the places by comparing a stock image with the same image configured by
+      hardware layout JSON (2048: the layout file, with the target's `overlay` keys from
+      `targets.json` replacing the file's), then a trailer of `BE EF CA FE` and the prior target
+      name in capitals (none for a target without one). The options hold only those three keys,
+      as ExpressLRS's configurator writes them; the stock block's build defaults are not carried
+      over. A target with a `logo_file` refuses: QuadCam does not append the logo. QuadCam
+      learned the places by comparing a stock image with the same image configured by
       ExpressLRS's own tools, writes them itself, reads them back and checks that no other byte
-      changed. The UID is MD5 of `-DMY_BINDING_PHRASE="<phrase>"`, first 6 bytes (`uid.rs`,
+      changed. With `QUADCAM_ELRS_BUNDLE` (an unpacked release) and `QUADCAM_ELRS_REFERENCE` (a
+      folder of images the ExpressLRS configurator wrote from it), a test checks that QuadCam
+      writes the same blocks, trailer and every other byte; the hardware JSON is compared as
+      JSON, because QuadCam orders its keys alphabetically. The UID is MD5 of `-DMY_BINDING_PHRASE="<phrase>"`, first 6 bytes (`uid.rs`,
       written here: no dependency). The phrase is the write-only setting `elrsBindingPhrase`
       (redacted like the other secrets); plans and reports show a fingerprint of the UID.
     - **Flash.** Targets: the unified ESP8285 receiver and ESP32 transmitter-module
-      firmwares, ExpressLRS 3 and newer, nothing else (`flash.rs`). A radio's module is started
-      with the boot pin held; a receiver is asked to restart into its bootloader and must
-      name the planned target. The chip's flash is read with esptool and kept (`firmware.bin`,
+      firmwares, ExpressLRS 3 and newer, nothing else (`flash.rs`). A radio must name the board the
+      read recorded (`ver`, before the pulses stop: an ESP32 in its ROM bootloader cannot answer
+      CRSF, and the radio stays in passthrough, so the module is not pinged); its module is then
+      started with the boot pin held. A receiver must answer a CRSF ping with the name the read
+      saved, on the same passthrough; it is then asked to restart into its bootloader, and what
+      it prints must name the planned target (prior target, product or unified firmware name;
+      an empty reply or a bare `UNIFIED` refuses). The radio's board is in the plan's digest. The chip's flash is read with esptool and kept (`firmware.bin`,
       `BeforeFlash`); a failed read stops before any write. `esptool write-flash` runs with
-      `--before no-reset`; the flash counts as verified only when esptool prints that it
+      `--before no-reset`, at 420000 through an FC (the FC's receiver UART stays at that speed,
+      so esptool's `change_baud` must land on it) and 460800 through a radio; the flash counts as verified only when esptool prints that it
       verified the data. Stock esptool lacks ExpressLRS's fork-only `--passthrough` flag, so
       whether a receiver behind an FC accepts this needs a real-device trial.
     - **Needs a real device:** the CLI sequences of both hosts (`set rfmod`, `serialpassthrough`

@@ -4,7 +4,8 @@
 //! `<commit>/firmware.zip` holds `FCC/<firmware>/` and `LBT/<firmware>/` per unified target
 //! (`firmware.bin`, and for an ESP32 also `bootloader.bin`, `partitions.bin`, `boot_app0.bin`)
 //! and `hardware/targets.json` with each device (`product_name`, `lua_name`, `layout_file`,
-//! `platform`, `firmware`, `prior_target_name`, `min_version`) and `hardware/{RX,TX}/<layout>.json`.
+//! `platform`, `firmware`, `prior_target_name`, `min_version`, and an optional `overlay` of
+//! layout keys that replace the layout file's) and `hardware/{RX,TX}/<layout>.json`.
 //!
 //! **The options block.** A unified image carries, after its ESP segments, blocks that name
 //! the device and configure it. QuadCam learned their places by comparing a stock image with
@@ -15,8 +16,11 @@
 //! | Product name | `end` | 128 | NUL-padded text |
 //! | Lua name | `end + 128` | 16 | NUL-padded text |
 //! | Options | `end + 144` | 512 | JSON: `uid`, `wifi-on-interval`, `flash-discriminator` |
-//! | Hardware | `end + 656` | 2048 | The layout file's JSON |
-//! | Trailer | image end | 5 + name | `BE EF CA FE` and the prior target name, NUL |
+//! | Hardware | `end + 656` | 2048 | The layout file's JSON, the target's `overlay` keys over it |
+//! | Trailer | image end | 5 + name | `BE EF CA FE` and the prior target name in capitals, NUL; none for a target without one |
+//!
+//! The options hold only what QuadCam sets, as ExpressLRS's own configurator writes them: the
+//! stock block's build defaults (`lock-on-first-connection`, `domain`) are not carried over.
 //!
 //! `end` is the end of the last ESP segment, rounded to 16 after the checksum byte (plus 32
 //! for an ESP32 image, which holds a 32-byte digest after the checksum). A write reads every
@@ -194,6 +198,10 @@ pub struct Target {
     pub prior_target_name: String,
     pub min_version: Option<String>,
     pub side: Side,
+    /// Layout keys that replace the layout file's (`power_values`, pins).
+    pub overlay: Option<serde_json::Map<String, Value>>,
+    /// A picture a target with a screen appends after the hardware block.
+    pub logo_file: Option<String>,
 }
 
 /// Every device in `targets.json` with a layout and a firmware.
@@ -241,6 +249,8 @@ pub fn parse_targets(json: &[u8]) -> Result<Vec<Target>> {
                     prior_target_name: s("prior_target_name").unwrap_or_default(),
                     min_version: s("min_version"),
                     side,
+                    overlay: t["overlay"].as_object().cloned(),
+                    logo_file: s("logo_file"),
                 });
             }
         }
@@ -443,16 +453,19 @@ pub fn configure(stock: &[u8], c: &Configure) -> Result<Vec<u8>, Refusal> {
         &json_text(&c.layout),
         "hardware layout",
     )?;
-    raw.extend_from_slice(&TRAILER_MAGIC);
-    raw.extend_from_slice(c.prior_target_name.as_bytes());
-    raw.push(0);
+    let prior = c.prior_target_name.trim().to_ascii_uppercase();
+    if !prior.is_empty() {
+        raw.extend_from_slice(&TRAILER_MAGIC);
+        raw.extend_from_slice(prior.as_bytes());
+        raw.push(0);
+    }
 
     let after = read_blocks(&raw)?;
     let ok = after.product == c.product
         && after.lua_name == c.lua_name
         && after.options == Value::Object(opts)
         && after.hardware == c.layout
-        && after.trailer.as_deref() == Some(c.prior_target_name.as_str());
+        && after.trailer == (!prior.is_empty()).then_some(prior);
     if !ok {
         return Err(bad_image(
             "The configured image does not read back as written.",
@@ -488,6 +501,27 @@ pub mod fixtures {
             raw.extend((0..64).map(|i| (i as u8) ^ salt ^ s));
         }
         let end = (raw.len() + 16) & !15;
+        stock_blocks(raw, end)
+    }
+
+    /// A stock-like ESP32 image: the 24-byte header, five segments (an app image has more
+    /// than two; `blocks_at` reads a count of 2 as an ESP8285 image), the 32-byte digest, then
+    /// the blocks.
+    pub fn stock_esp32(salt: u8) -> Vec<u8> {
+        let mut raw = vec![0u8; 24];
+        raw[0] = 0xE9;
+        raw[1] = 5;
+        for s in 0..5u8 {
+            raw.extend_from_slice(&0x3F40_0000u32.to_le_bytes());
+            raw.extend_from_slice(&1024u32.to_le_bytes());
+            raw.extend((0..1024).map(|i| (i as u8) ^ salt ^ s ^ 0x5A));
+        }
+        let end = ((raw.len() + 16) & !15) + 32;
+        stock_blocks(raw, end)
+    }
+
+    /// The zeroed blocks at `end`, but for the product `Unified` and a stock options text.
+    fn stock_blocks(mut raw: Vec<u8>, end: usize) -> Vec<u8> {
         raw.resize(end + HARDWARE_AT + HARDWARE_LEN, 0);
         raw[end..end + 7].copy_from_slice(b"Unified");
         let o = br#"{"flash-discriminator": 7, "wifi-on-interval": 60, "lock-on-first-connection": true, "domain": 0}"#;
@@ -604,6 +638,42 @@ mod tests {
         assert_eq!(b.options["wifi-on-interval"], 60);
         assert_eq!(b.hardware, layout());
         assert_eq!(b.trailer.as_deref(), Some("DIY_2400_RX_ESP8285_SX1280"));
+        // Only what QuadCam sets: the stock block's build defaults are not carried over.
+        let keys: Vec<&String> = b.options.as_object().unwrap().keys().collect();
+        assert_eq!(keys, ["flash-discriminator", "uid", "wifi-on-interval"]);
+    }
+
+    #[test]
+    fn the_trailer_is_in_capitals_and_absent_without_a_prior_name() {
+        let mut c = cfg();
+        c.prior_target_name = "RadioMaster_Zorro_2400_TX".into();
+        let out = configure(&stock_8285(1), &c).unwrap();
+        assert_eq!(
+            read_blocks(&out).unwrap().trailer.as_deref(),
+            Some("RADIOMASTER_ZORRO_2400_TX")
+        );
+        c.prior_target_name = String::new();
+        let stock = stock_8285(1);
+        let out = configure(&stock, &c).unwrap();
+        assert_eq!(read_blocks(&out).unwrap().trailer, None);
+        assert_eq!(out.len(), stock.len());
+    }
+
+    #[test]
+    fn a_target_overlay_is_parsed() {
+        let mut j: Value = serde_json::from_slice(&targets_json()).unwrap();
+        j["vendor"]["rx_2400"]["aio"]["overlay"] =
+            serde_json::json!({"power_values": [12], "radio_dcdc": true});
+        let t = parse_targets(j.to_string().as_bytes()).unwrap();
+        let aio = t.iter().find(|t| t.path == "vendor.rx_2400.aio").unwrap();
+        let o = aio.overlay.as_ref().unwrap();
+        assert_eq!(o["power_values"], serde_json::json!([12]));
+        assert!(t
+            .iter()
+            .find(|t| t.path == "vendor.rx_2400.twin")
+            .unwrap()
+            .overlay
+            .is_none());
     }
 
     #[test]
