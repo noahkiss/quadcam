@@ -4,6 +4,10 @@ name: CI
 # `v*` tag, and on every pull request from a fork. The app is macOS-only, so this runs on
 # an Apple Silicon runner. The repository is public, so macOS minutes are free.
 #
+# The runner is GitHub's `xcode-27` image (public preview: macOS 27, arm64, Xcode 27). The
+# Swift helper `quadcam-intel` (intel/) needs the macOS 26 SDK or newer; build.rs builds it
+# with the image's Xcode. Move back to a `macos-NN` label once a GA image ships Xcode 27.
+#
 # The tests need ffmpeg, which comes from Homebrew. They run under cargo-nextest
 # (src-tauri/.config/nextest.toml, profile `ci`, or `ci-quick` on a branch whose change
 # misses the slow tests' code): in parallel, except the disk-image tests, which attach small
@@ -33,7 +37,7 @@ jobs:
   check:
     # A pull request from this repository's own branches already ran on its push.
     if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name != github.repository
-    runs-on: macos-26
+    runs-on: xcode-27
     timeout-minutes: 45
     defaults:
       run:
@@ -46,6 +50,8 @@ jobs:
         run: |
           rustup toolchain install
           rustc --version
+          xcodebuild -version
+          swift --version
           brew install ffmpeg
 
       - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
@@ -128,7 +134,7 @@ jobs:
   # `pnpm build` writes read `cargo metadata`, so this job needs Rust too.
   ui:
     if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name != github.repository
-    runs-on: macos-26
+    runs-on: xcode-27
     timeout-minutes: 20
     defaults:
       run:

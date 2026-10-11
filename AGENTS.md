@@ -160,7 +160,7 @@ GitHub (`noahkiss/quadcam`, public) is the only remote. Users install the cask
    ```
 
 4. `.github/workflows/release.yml` (through the shared composite actions) builds, signs
-   and notarizes `QuadCam.app` on a `macos-26` (arm64) runner with the
+   and notarizes `QuadCam.app` on an `xcode-27` (arm64) runner with the
    prebuilt Tauri CLI from `app/`. It does not run the tests: before it attaches the zip
    (`quadcam-X.Y.Z-arm64.zip`) to the GitHub Release, it waits up to 40 minutes for a green
    `ci.yml` run on the tagged commit, and fails without one. It also attaches `modules.json`
@@ -171,6 +171,12 @@ GitHub (`noahkiss/quadcam`, public) is the only remote. Users install the cask
 5. Watch it: `gh run watch -R noahkiss/quadcam --exit-status`. Re-run for an existing tag with
    `gh workflow run release.yml -R noahkiss/quadcam --ref vX.Y.Z -f tag=vX.Y.Z`.
 
+- **Runner image:** `ci.yml` and `release.yml` run on GitHub's `xcode-27` image (macOS 27,
+  arm64, Xcode 27), which is a public preview: it may change or be retired without notice.
+  The Swift helper (`intel/`) builds against its SDK: its speech check needs the macOS 26 SDK,
+  and the macOS 27 APIs it is meant to add need Xcode 27. Move both files to a GA label once
+  one ships Xcode 27. A red run that fails before any
+  step of ours (image missing, queue never starts) is the preview, not the change.
 - **The CI wait:** `release-attach` (`noahkiss/workflows`) accepts any green `ci.yml` run on
   the tagged commit, so the release branch's green run counts and the release does not wait
   for the runs that the push of main and the tag start. It fails only when every run on the

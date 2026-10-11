@@ -1,6 +1,7 @@
 name: Release
 
-# A pushed `v*` tag builds QuadCam.app on an Apple Silicon runner, signs it
+# A pushed `v*` tag builds QuadCam.app on an Apple Silicon runner (the `xcode-27`
+# image, public preview: macOS 27, Xcode 27, which the Swift helper needs), signs it
 # with the Developer ID of NKMK Digital Co., notarizes and staples it, waits for
 # a green ci.yml run on the tagged commit, attaches quadcam-X.Y.Z-arm64.zip,
 # the in-app updater's quadcam-X.Y.Z-arm64.app.tar.gz, its .sig and latest.json,
@@ -50,7 +51,7 @@ permissions: {}
 jobs:
   release:
     name: Build, sign and attach
-    runs-on: macos-26
+    runs-on: xcode-27
     environment: release
     timeout-minutes: 90
     permissions:

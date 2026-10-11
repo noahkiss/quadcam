@@ -185,7 +185,7 @@ Users install the Homebrew cask `noahkiss/tap/quadcam`. A release is a pushed ta
 
 3. `.github/workflows/release.yml` runs the shared composite actions `tauri-macos-build`, `macos-sign-notarize` and `release-attach` from [`noahkiss/workflows`](https://github.com/noahkiss/workflows). They run in this repo's own job, because that job names the `release` environment; a reusable workflow from another repo cannot read this repo's environment secrets.
    - It checks that both manifests state the tag's version.
-   - It builds `QuadCam.app` on an Apple Silicon runner (`macos-26`) with the prebuilt Tauri CLI from `app/`.
+   - It builds `QuadCam.app` on an Apple Silicon runner (`xcode-27`, a public-preview image with Xcode 27) with the prebuilt Tauri CLI from `app/`.
    - It signs, notarizes and staples the app (see [Signing](#signing)).
    - It waits for a green CI run on the tagged commit. Any green run counts, so the release branch's run passes it at once. It does not run the tests itself. If every run on the commit fails, or none passes within 40 minutes, there is no release.
    - It zips the app as `quadcam-X.Y.Z-arm64.zip` and attaches the zip to the GitHub Release, with the in-app updater's files: `quadcam-X.Y.Z-arm64.app.tar.gz`, its `.sig` and `latest.json`.
