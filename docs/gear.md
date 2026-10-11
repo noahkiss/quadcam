@@ -122,6 +122,9 @@ a port only when no other program has it open:
   no chance of a probe at all, pause the reads: **Pause reads** on the FC's Overview, `gear fc
   pause` in the CLI, or `poll_pause` in `quadcam_gear_edit`. The USB timer stops counting while
   paused, and the pause lasts until QuadCam quits. A job you start yourself still runs.
+- A pause also turns off the USB heat checks, because they read the timer. A job still reads
+  the battery once before its heat check: with a battery in and no timer counting, a flash
+  refuses, and an apply or a blackbox pull warns in its answer.
 
 Plug USB in before the battery: many FCs do not show up on USB when the battery is first.
 When several FCs are plugged in, name the port; QuadCam does not guess.
@@ -186,7 +189,8 @@ refused ("USB heat") and reads nothing; unplug the battery, or force the pull (`
 --force`). A forced pull still
 never starts an erase it could not finish: the erase estimate (4 s per MiB, 20 to 120 s) plus 10 s
 must fit in the time left, else the erase is skipped and the answer says so. With no battery in,
-there is no timer.
+there is no timer. With a battery in and no timer counting (reads paused, or the FC plugged in
+moments ago), the pull runs and its answer warns.
 
 **Other programs and Pause reads.** A pull refuses a port another program has open. The on-connect
 step skips a port whose reads you paused; a pull you start yourself still runs.
@@ -1187,7 +1191,8 @@ If something goes wrong:
   settings are in the `before_flash` backup, and the staged change stays in **Changes**.
 
 A flash with the battery in runs on USB power for about a minute and a half. The plan refuses
-when the USB timer would run out first.
+when the USB timer would run out first. The flash reads the battery again before it starts and
+refuses a battery in while no USB timer counts (reads paused, or the FC plugged in moments ago).
 
 ### ExpressLRS (preview)
 

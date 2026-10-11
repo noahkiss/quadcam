@@ -464,6 +464,28 @@ fn the_plan_refuses_when_the_usb_timer_would_run_out() {
 }
 
 #[test]
+fn a_battery_with_no_usb_timer_refuses_the_flash() {
+    let b = bench(Opts::default());
+    // The reads are paused (or the first probe has not run): no timer counts.
+    b.core
+        .gear_poll_pause(&quadcam_lib::core::PollPauseParams {
+            port: Some(PORT.into()),
+            paused: true,
+        })
+        .unwrap();
+    b.fc.set_battery(7.6);
+    let plan = b.core.gear_flash_plan(&params(&b)).unwrap();
+    assert!(!plan.digest.is_empty(), "{:?}", plan.checks);
+    // The job reads the battery before its heat check, and an untimed battery refuses.
+    let e = b.core.gear_flash(&request(&b, &plan)).unwrap_err();
+    let r = e.downcast_ref::<Refusal>().expect("a refusal");
+    assert_eq!(r.code, RefusalCode::UsbHeat, "{r:?}");
+    assert!(r.reason.contains("not counting"), "{}", r.reason);
+    assert!(!b.fc.log().iter().any(|l| l == "bl"));
+    assert_eq!(b.flasher.opened.load(Ordering::SeqCst), 0);
+}
+
+#[test]
 fn a_flash_replaces_the_firmware_and_puts_the_settings_back() {
     let b = bench(Opts::default());
     let plan = b.core.gear_flash_plan(&params(&b)).unwrap();

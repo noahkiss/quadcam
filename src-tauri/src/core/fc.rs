@@ -525,7 +525,36 @@ impl Core {
     pub fn gear_usb_timers(&self) -> Vec<UsbTimer> {
         self.usb_timers(Instant::now())
     }
+
+    /// The heat gate's view of the FC on `port`, with the battery `volts` a job read just
+    /// before the gate. A battery the job reads while no timer counts (reads paused, or the
+    /// first probe not yet run) is `untimed`.
+    pub(super) fn usb_heat(&self, port: &str, volts: Option<f32>) -> UsbHeat {
+        let timer = self
+            .gear_usb_timers()
+            .into_iter()
+            .find(|t| t.port == port && t.battery);
+        let read_in = volts.is_some_and(|v| v > bf::BATTERY_IN_VOLTS);
+        UsbHeat {
+            battery: timer.is_some() || read_in,
+            remaining_s: timer.as_ref().and_then(|t| t.remaining_s),
+            untimed: read_in && timer.is_none(),
+        }
+    }
 }
+
+/// A job's USB heat state: see `Core::usb_heat`.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub(super) struct UsbHeat {
+    pub battery: bool,
+    /// Seconds left on the timer; None when no timer counts.
+    pub remaining_s: Option<u32>,
+    /// A battery is in and no timer counts, so the time on USB is unknown.
+    pub untimed: bool,
+}
+
+/// What a job says when it finds a battery in and no USB timer counting.
+pub const UNTIMED_NOTE: &str = "A battery is in, and QuadCam's USB timer is not counting for this FC (its reads are paused, or it was plugged in moments ago). Keep the job short or unplug the battery: the quad heats on USB.";
 
 #[cfg(test)]
 mod tests {

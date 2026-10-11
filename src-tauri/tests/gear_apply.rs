@@ -533,6 +533,24 @@ fn a_battery_in_past_the_usb_limit_refuses() {
 }
 
 #[test]
+fn a_battery_with_no_usb_timer_is_a_warning_on_an_apply() {
+    let fc = FakeFc::new(G473).with_uid(UID).with_reboot_opens(0);
+    let b = bench(&fc);
+    let c = stage(&b, vec![set("osd_cap_alarm", "1500")]);
+    // The battery is in, but no probe has run: the job reads it and warns.
+    fc.set_battery(4.0);
+    let p = plan(&b, &c);
+    assert!(p.ready());
+    let r = b.core.gear_apply(&req(&c, &p)).unwrap();
+    assert_eq!(r.status, ChangeStatus::Verified, "{}", r.message);
+    assert!(
+        r.notes.iter().any(|n| n.contains("not counting")),
+        "{:?}",
+        r.notes
+    );
+}
+
+#[test]
 fn an_error_before_save_discards_everything() {
     let fc = FakeFc::new(G473).with_uid(UID).reject("set osd_ah_pos = 1");
     let b = bench(&fc);

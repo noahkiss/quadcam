@@ -552,7 +552,7 @@ impl Core {
         // The guards again, right before the first step.
         self.job_step(port, "Checking");
         drop(bf::cli::wait_for_port(ports, port, t)?);
-        let cand = self
+        let mut cand = self
             .fc_cands()
             .into_iter()
             .find(|c| c.port == port)
@@ -563,6 +563,16 @@ impl Core {
                 "This is not the FC the flash was planned for.",
             ));
         }
+        // The battery as it is now: a battery in while no timer counts refuses.
+        let heat = self.usb_heat(port, bf::battery_volts(ports, port, t).ok());
+        if heat.untimed {
+            return Err(refuse(
+                RefusalCode::UsbHeat,
+                "A battery is in, and QuadCam's USB timer is not counting for this FC (its reads are paused, or it was plugged in moments ago), so it cannot tell whether the flash would outlast it. Unplug the battery, then flash again.",
+            ));
+        }
+        cand.battery = heat.battery;
+        cand.remaining_s = heat.remaining_s;
         for c in self.bf_live_checks(&cand, bfw::flash_seconds(image.image.bytes.len())) {
             if let Some(r) = c.refusal {
                 return Err(r.into());

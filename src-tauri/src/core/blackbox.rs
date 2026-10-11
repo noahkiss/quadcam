@@ -16,7 +16,7 @@ use super::{link_handle, Core, FcJob, HookFn, OnConnectHook, Skip};
 use crate::gear::backup::BackupProgress;
 use crate::gear::bf::blackbox::{self as bb, ImageCheck};
 use crate::gear::bf::cli::{wait_for_port, CliSession, Timing, BAUD};
-use crate::gear::bf::{self, FcInfo};
+use crate::gear::bf::{self, msp, FcInfo};
 use crate::gear::blackbox::{self, Candidate, Linked, Method, Pull, Pulls};
 use crate::gear::blobs::Blobs;
 use crate::gear::model::{Connected, DeviceKind, Refusal, RefusalCode};
@@ -300,7 +300,14 @@ impl Core {
         // The USB heat timer: a pull that cannot finish is not started.
         let read_s = bb::read_seconds(used);
         let erase_s = bb::erase_seconds(sum.total as u64);
-        let remaining = self.usb_remaining(port);
+        let volts = msp::call(link.as_mut(), msp::MSP_ANALOG, t.msp)
+            .ok()
+            .and_then(|p| msp::parse_analog_volts(&p));
+        let heat = self.usb_heat(port, volts);
+        if heat.untimed {
+            res.notes.push(super::fc::UNTIMED_NOTE.into());
+        }
+        let remaining = heat.remaining_s;
         if !fits(read_s, remaining) && !a.force {
             return Err(Refusal::new(
                 RefusalCode::UsbHeat,

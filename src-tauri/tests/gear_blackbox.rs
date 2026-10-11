@@ -304,6 +304,25 @@ fn the_usb_timer_refuses_a_pull_that_would_outlast_it_and_never_starts_an_erase_
 }
 
 #[test]
+fn a_battery_with_no_usb_timer_is_a_warning_on_a_pull() {
+    let fc = fc_with(image());
+    fc.set_battery(7.6);
+    // No probe has run yet: the battery is in, but no timer counts.
+    let b = bench(&fc);
+    let r = pull(&b).unwrap();
+    assert!(r.pull.is_some());
+    assert!(
+        r.notes.iter().any(|n| n.contains("not counting")),
+        "{:?}",
+        r.notes
+    );
+    // Without a battery there is nothing to say.
+    let fc = fc_with(image());
+    let r = pull(&bench(&fc)).unwrap();
+    assert!(!r.notes.iter().any(|n| n.contains("not counting")));
+}
+
+#[test]
 fn a_flash_that_grew_after_the_read_is_not_erased() {
     // A second reader appends while we work: simulate by growing the flash before the erase
     // check runs, through a pull whose image is already stored.
