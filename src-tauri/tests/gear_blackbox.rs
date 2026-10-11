@@ -802,3 +802,28 @@ fn the_cli_pulls_lists_and_refuses_an_erase_without_confirm() {
         "{help}"
     );
 }
+
+/// The FC logs between the read and the erase: the pull is stored, the erase is skipped
+/// with the reason, and the new bytes stay on the flash.
+#[test]
+fn a_flash_that_grew_since_the_read_is_not_erased() {
+    let img = image();
+    let fc = fc_with(img.clone()).grow_after_read(vec![0x5a; 512]);
+    let b = bench(&fc);
+    b.settings(r#"{"gearEraseBlackbox":true}"#);
+    let r = pull(&b).unwrap();
+    assert_eq!(r.erase, EraseState::Skipped, "{:?}", r.erase_note);
+    assert!(
+        r.erase_note
+            .as_deref()
+            .unwrap_or_default()
+            .contains("not the"),
+        "{:?}",
+        r.erase_note
+    );
+    assert_eq!(fc.dataflash_erases(), 0);
+    assert_eq!(fc.dataflash().len(), img.len() + 512);
+    let p = r.pull.unwrap();
+    assert!(!p.erased);
+    assert_eq!(b.blobs().get(&p.blob).unwrap(), img);
+}
