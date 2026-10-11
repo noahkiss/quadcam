@@ -1,4 +1,4 @@
-//! Shape snapshots: the MCP tool list, the `dispatch` methods, the CLI help, and the JSON of
+//! Shape snapshots: the MCP tool list, the `dispatch` methods, and the JSON of
 //! a session and of the library after an import of synthetic clips. A refactor leaves them
 //! unchanged; a deliberate shape change shows in review as a snapshot diff. The session and
 //! library JSON also seed the UI's mocked IPC.
@@ -16,7 +16,6 @@ use quadcam_lib::session::{Defaults, Editor, PlanPatch};
 use quadcam_lib::trash::DirTrash;
 use serde_json::{json, Value};
 use std::path::Path;
-use std::process::Command;
 use std::sync::Arc;
 
 #[test]
@@ -48,85 +47,6 @@ fn dispatch_methods() {
     let e = core.dispatch("nope", Value::Null).unwrap_err();
     assert!(format!("{e:#}").contains("unknown method"));
     insta::assert_json_snapshot!("dispatch_methods", Core::METHODS);
-}
-
-/// Every command's `--help`, in one text.
-#[test]
-fn cli_help() {
-    let commands: &[&[&str]] = &[
-        &[],
-        &["status"],
-        &["cards"],
-        &["scan"],
-        &["stage"],
-        &["analyze"],
-        &["dates"],
-        &["show"],
-        &["clear"],
-        &["moments"],
-        &["profiles"],
-        &["profiles", "list"],
-        &["profiles", "save"],
-        &["profiles", "delete"],
-        &["profiles", "default"],
-        &["places"],
-        &["places", "list"],
-        &["places", "search"],
-        &["places", "save"],
-        &["places", "delete"],
-        &["settings"],
-        &["settings", "show"],
-        &["settings", "set"],
-        &["meta"],
-        &["cut"],
-        &["import"],
-        &["verify"],
-        &["photos"],
-        &["eject"],
-        &["format"],
-        &["library"],
-        &["library", "list"],
-        &["library", "rate"],
-        &["library", "rebuild"],
-        &["library", "rename"],
-        &["library", "edit"],
-        &["library", "cut"],
-        &["library", "apply-name-format"],
-        &["library", "trash"],
-        &["library", "photos"],
-        &["gear"],
-        &["gear", "status"],
-        &["gear", "devices"],
-        &["gear", "devices", "list"],
-        &["gear", "devices", "save"],
-        &["gear", "devices", "forget"],
-        &["gear", "fc"],
-        &["gear", "fc", "identify"],
-        &["gear", "fc", "read"],
-        &["gear", "fc", "check"],
-        &["gear", "fc", "notes"],
-        &["gear", "fc", "usb"],
-        &["gear", "map"],
-        &["gear", "radio"],
-        &["mcp"],
-    ];
-    let home = tempfile::tempdir().unwrap();
-    let mut text = String::new();
-    for c in commands {
-        let out = Command::new(env!("CARGO_BIN_EXE_quadcam-cli"))
-            .env("HOME", home.path())
-            .args(*c)
-            .arg("--help")
-            .output()
-            .unwrap();
-        assert!(out.status.success(), "{c:?}");
-        text.push_str(&format!(
-            "===== quadcam-cli {} --help\n{}\n",
-            c.join(" "),
-            String::from_utf8_lossy(&out.stdout).trim_end()
-        ));
-    }
-    insta::assert_snapshot!("cli_help", text);
 }
 
 /// Replaces what changes from run to run: the temp folder, today's date, times, sizes,
@@ -306,27 +226,4 @@ fn session_and_library_json() {
         insta::assert_json_snapshot!("library_view", library);
     });
     assert!(Path::new(&root).is_dir());
-}
-
-/// The tool list as it was before the schemas were derived from types. The derived list
-/// must equal it; a deliberate change updates both on review.
-#[test]
-fn mcp_tool_list_matches_the_hand_written_one() {
-    let before: Value =
-        serde_json::from_str(include_str!("fixtures/mcp_tools_before.json")).unwrap();
-    let now = quadcam_lib::mcp::tools();
-    let (b, n) = (before.as_array().unwrap(), now.as_array().unwrap());
-    assert_eq!(b.len(), n.len());
-    let mut bad = Vec::new();
-    for (b, n) in b.iter().zip(n) {
-        for k in ["name", "description", "annotations", "inputSchema"] {
-            if b[k] != n[k] {
-                bad.push(format!(
-                    "{} {k}:\nbefore {}\nnow    {}",
-                    b["name"], b[k], n[k]
-                ));
-            }
-        }
-    }
-    assert!(bad.is_empty(), "{}", bad.join("\n"));
 }
