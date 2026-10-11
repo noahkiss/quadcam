@@ -679,7 +679,14 @@ pub fn frame_at(tools: &Tools, src: &Path, dst: &Path, at: f64, width: u32) -> R
         let out = Command::new(&tools.ffmpeg)
             .args(["-v", "error", "-y", "-ss", &ss, "-i"])
             .arg(src)
-            .args(["-map", "0:V:0", "-frames:v", "1", "-vf", &format!("scale={width}:-2")])
+            .args([
+                "-map",
+                "0:V:0",
+                "-frames:v",
+                "1",
+                "-vf",
+                &format!("scale={width}:-2"),
+            ])
             .arg(dst)
             .output()?;
         if out.status.success() && dst.metadata().is_ok_and(|m| m.len() > 0) {

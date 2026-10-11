@@ -270,7 +270,8 @@ impl Core {
             if !images {
                 return Vec::new();
             }
-            let (Some(tools), Some(src), Some(thumb)) = (&tools, c.source(), c.thumb.as_ref()) else {
+            let (Some(tools), Some(src), Some(thumb)) = (&tools, c.source(), c.thumb.as_ref())
+            else {
                 return c.thumb.iter().filter(|t| t.is_file()).cloned().collect();
             };
             let at = c
