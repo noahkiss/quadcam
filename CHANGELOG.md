@@ -18,8 +18,6 @@ User-facing changes in each release, newest first. Release notes on
 - **CLI and MCP:** `gear blackbox summary [--port P]` and MCP `quadcam_gear blackbox_summary` read an FC's flash size, bytes used and ready state over one MSP message, and say whether a stored pull holds them. No pull, no cue.
 - **For developers:** shared `PageHeader`, `EmptyState`, `FactList`, `StatusDot` and `MoreMenu` in `app/src/components/dash/`, and the `--s-5` spacing token the Apply sheet, Bench and Firmware already used. `docs/development.md` describes how to build a dashboard page.
 
-||||||| 13e3b56
-
 ## 0.14.1 (2026-10-11)
 
 - **Voice studio: a take that no longer cuts is removed.** A line reused from an earlier take whose files cannot be read or cut no longer fails every render: QuadCam removes the take before it sends anything, and the next estimate prices its lines. Before, the render failed on that take every time until its cache file was deleted by hand.
