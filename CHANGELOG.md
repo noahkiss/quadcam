@@ -5,6 +5,8 @@ User-facing changes in each release, newest first. Release notes on
 
 ## Unreleased
 
+## 0.14.0 (2026-10-11)
+
 - **Voice studio: a line is billed once.** A line any earlier render or sample spoke in the same voice, model and speed is cut again from that take, whatever set it comes in. Before, the cache knew whole batches only, so adding a set, rendering a second aircraft set (they share the radio's prompts, numbers and units) or rendering after a sample sent lines again that were already paid for. A re-take with a new seed now sends only the lines that need one.
 - **Voice studio: line sets say what they hold.** Each set shows a one-line description, and the sets group into **For your quads**, **Any aircraft** and **Other aircraft**, from the aircraft your profiles name (quads when none does). The sets for your aircraft start ticked: for quads, FPV quad and FPV extras.
 - **Voice studio: progress.** With one voice and one model ticked, each set shows "N lines · M rendered", and the cost line says how many lines are rendered and how many are left to render.
