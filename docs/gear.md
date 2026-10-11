@@ -770,7 +770,7 @@ QuadCam leaves out, and lists, what it should not copy:
 
 ### Apply on connect
 
-**Settings > Gear > Steps on connect** can list `apply_ready` for a kind of device. It is off
+**Settings > Gear > Steps on connect** can list `apply_ready` for an FC or a radio. It is off
 by default. When the device is plugged in, QuadCam plans each Ready change of that device, and
 a plan whose checks all pass opens the apply sheet. Nothing is written until you click
 **Apply**. With no window to click in, the step does nothing.

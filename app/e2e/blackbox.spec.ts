@@ -68,6 +68,11 @@ test("Settings > Gear holds the blackbox erase setting and the Pull blackbox ste
   await expect(dlg.getByLabel("Erase blackbox after download")).not.toBeChecked();
   await expect(dlg.getByLabel("Pull blackbox: FC")).not.toBeChecked();
   await expect(dlg.getByLabel("Pull blackbox: Radio")).toHaveCount(0);
+  // Apply ready changes runs for an FC and a radio only.
+  await expect(dlg.getByLabel("Apply ready changes: FC")).toBeVisible();
+  await expect(dlg.getByLabel("Apply ready changes: Radio")).toBeVisible();
+  await expect(dlg.getByLabel("Apply ready changes: ELRS TX")).toHaveCount(0);
+  await expect(dlg.getByLabel("Apply ready changes: ELRS RX")).toHaveCount(0);
   await dlg.getByLabel("Erase blackbox after download").check();
   await dlg.getByLabel("Pull blackbox: FC").check();
   await dlg.getByRole("button", { name: "Done" }).click();
