@@ -1,5 +1,5 @@
 import AxeBuilder from "@axe-core/playwright";
-import { dialog, expect, test } from "./fixtures";
+import { axeSchemes, dialog, expect, test } from "./fixtures";
 import type { Page } from "@playwright/test";
 
 const RADIO_ID = "radio-1f2e3d4c5b6a7980";
@@ -113,7 +113,7 @@ test("a failed unmount shows its reason and marks the radio", async ({ page, app
   await expect(radio.getByText(/^Unmount failed: .*could not be unmounted/)).toBeVisible();
 });
 
-for (const scheme of ["dark", "light"] as const) {
+for (const scheme of axeSchemes) {
   test.describe(`${scheme} theme`, () => {
     test.use({ colorScheme: scheme });
     test("Backups and Storage pass axe", async ({ app, page }) => {

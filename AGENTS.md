@@ -35,7 +35,8 @@ README and `docs/`. Personal preferences go in the app's settings file on the ma
 
 ## Requirements
 
-- Rust via rustup (stable). The Tauri CLI is a dev dependency of `app/` (`@tauri-apps/cli`): run it as
+- Rust via rustup, at the version `rust-toolchain.toml` (repo root) pins; rustup installs it on the
+  first `cargo` run. The Tauri CLI is a dev dependency of `app/` (`@tauri-apps/cli`): run it as
   `app/node_modules/.bin/tauri` after `pnpm install`, or install it globally with
   `cargo install tauri-cli --version "^2" --locked` to type `cargo tauri`. Releases use the prebuilt one.
 - specta `=2.0.0-rc.25`, tauri-specta `=2.0.0-rc.25` and specta-typescript `=0.0.12` are release
@@ -57,7 +58,10 @@ README and `docs/`. Personal preferences go in the app's settings file on the ma
 Run these in `src-tauri/`:
 
 ```bash
-cargo test -- --test-threads=1  # unit + integration tests (needs ffmpeg; attaches small disk images)
+cargo nextest run -P quick      # the fast loop: all but the disk-image and long ffmpeg tests
+cargo nextest run               # every test (needs ffmpeg; attaches small disk images one at a time)
+cargo nextest run --test join   # one test file; -E 'test(name)' picks tests by name
+cargo test                      # still works; nextest is faster (each test its own process)
 cargo test --test import size_and_speed -- --ignored --nocapture   # MP4 vs MOV size/speed
 INSTA_UPDATE=always cargo test --test snapshots   # accept a deliberate shape change, then review the diff
 QUADCAM_UPDATE_SURFACE=1 cargo test --test surface   # record new tools, actions, flags in tests/surface/ (additions only)
@@ -67,6 +71,34 @@ cargo tauri build               # -> target/release/bundle/macos/QuadCam.app (ru
 cargo build --release --bin quadcam-cli   # -> target/release/quadcam-cli
 open target/release/bundle/macos/QuadCam.app
 ```
+
+- **Test loop:** run `cargo nextest run -P quick` plus the tests of the area you touched
+  (`--test <file>`). The full suite is CI's job: it runs on every push to main or a tag, and on a
+  branch push whose change touches the slow tests' code (see the path filter below).
+  Run it locally only before a release, or when CI is down. On a busy machine (other
+  worktrees building) cap it: `--test-threads 4`, and `CARGO_BUILD_JOBS=4`.
+- **nextest** (`cargo install cargo-nextest --locked`, or `brew install cargo-nextest`):
+  `src-tauri/.config/nextest.toml` holds the profiles. `default` runs everything; `quick`
+  skips the disk-image tests and `tests/join.rs`; `ci` adds JUnit and one retry for the two
+  known load flakes (`tests/join.rs`, `tests/mount_cycle.rs`); `ci-quick` is `quick`'s filter
+  with `ci`'s settings, for a branch whose change misses the slow tests' code. The `serial` group runs the
+  disk-image tests one at a time (hdiutil and diskutil share one daemon, and a detached
+  image's disk number is reused). `tests/common` `Image` also takes a machine-wide lock, so
+  disk-image tests in two worktrees take turns. A new test that attaches an `Image` goes into
+  the `serial` filter and the `quick` exclusion. Three tests that time the sim's real-time
+  thread against the wall clock (`sim/tests/runner.rs` stall, `sim/tests/bench.rs`,
+  `tests/sim_host.rs` frames advance) run alone (`threads-required`); a new one joins them. Doc tests are not nextest's: the crates have
+  none; if one is added, CI needs `cargo test --doc`.
+- **Rust version:** `rust-toolchain.toml` pins one Rust release (channel, clippy, rustfmt) for
+  every folder and for CI, so a new stable lint never fails CI first. To bump it: set the new
+  `channel`, run `cargo clippy --workspace --all-targets -- -D warnings` and `cargo nextest run`,
+  and fix every new lint or warning in that same commit (`rust: 1.NN.0`). `rust-version` in
+  `Cargo.toml` is the oldest supported release and moves only when the code needs a newer one.
+- **Build cache:** sccache (`brew install sccache`, then `RUSTC_WRAPPER=sccache`) shares
+  compiled dependencies across worktrees, which each have their own `target/`. sccache cannot
+  cache incremental builds, so set `CARGO_INCREMENTAL=0` with it. `CARGO_INCREMENTAL=0` also
+  suits many worktrees without sccache: incremental data is large on disk and helps only the
+  crate you edit.
 
 In `app/` (`pnpm install` first):
 
@@ -89,6 +121,8 @@ scripts/make-fixtures.sh                   # re-record the mock core's data (nee
   semantic names (Mocha for dark, Latte for light) plus the 8-pt spacing, radii and type
   scale. Components use CSS Modules and tokens only, never a hex value. `e2e/theme.spec.ts`
   runs axe, contrast included, on the component gallery (`/?gallery` in dev) in both themes.
+  Every axe spec loops over `axeSchemes` (`e2e/fixtures.ts`); `QC_AXE_THEMES=dark` limits them
+  to one theme, as CI does on a branch (main and tags run both).
 - **Dev in a browser:** `pnpm dev`, then `http://localhost:4719/?mock=<scenario>` (your `QUADCAM_DEV_PORT` instead of 4719) runs the
   UI on the mock core (scenarios in `app/src/ipc/mock/core.ts`; `gear` has devices plugged
   in). The mock's Gear (`ipc/mock/gear.ts`) is written by hand, not recorded: a recorded
@@ -104,17 +138,38 @@ scripts/make-fixtures.sh                   # re-record the mock core's data (nee
 GitHub (`noahkiss/quadcam`, public) is the only remote. Users install the cask
 `noahkiss/tap/quadcam`.
 
-1. Set the new version in `src-tauri/Cargo.toml` and `src-tauri/tauri.conf.json`. They must match.
-2. Commit, then push a tag: `git tag vX.Y.Z && git push origin main vX.Y.Z`.
-3. `.github/workflows/release.yml` (through the shared composite actions) builds, signs
+1. On the release branch (`rel-X.Y.Z`, every change merged in), set the new version in
+   `src-tauri/Cargo.toml` and `src-tauri/tauri.conf.json` (they must match), commit
+   `release: X.Y.Z`, and push the branch. CI runs on that commit; the bump touches
+   `Cargo.toml`, so the path filter runs every Rust test.
+2. Wait for that run to go green (`gh run watch -R noahkiss/quadcam --exit-status`).
+3. Fast-forward main to that same commit and tag it. No merge commit, no rebase: the tag
+   names the commit that went green.
+
+   ```bash
+   git switch main && git merge --ff-only rel-X.Y.Z
+   git tag vX.Y.Z && git push origin main vX.Y.Z
+   ```
+
+4. `.github/workflows/release.yml` (through the shared composite actions) builds, signs
    and notarizes `QuadCam.app` on a `macos-26` (arm64) runner with the
    prebuilt Tauri CLI from `app/`. It does not run the tests: before it attaches the zip
    (`quadcam-X.Y.Z-arm64.zip`) to the GitHub Release, it waits up to 40 minutes for a green
    `ci.yml` run on the tagged commit, and fails without one. It also attaches `modules.json`
    (`quadcam-cli modules manifest`, the pins Settings > Modules checks). It then fires the tap's
    `bump.yml`, which rewrites `Casks/quadcam.rb`, installs it on macOS, and commits.
-4. Watch it: `gh run watch -R noahkiss/quadcam --exit-status`. Re-run for an existing tag with
+5. Watch it: `gh run watch -R noahkiss/quadcam --exit-status`. Re-run for an existing tag with
    `gh workflow run release.yml -R noahkiss/quadcam --ref vX.Y.Z -f tag=vX.Y.Z`.
+
+- **The CI wait:** the push of main and the tag starts new `ci.yml` runs on the tagged commit
+  (full suite, axe in both themes, never cancelled), and the release waits for the newest
+  one. It runs beside the build. The branch run already proved the commit, so a red tag run
+  means a main-only check (the second axe theme) or a flake, not an untested change.
+- **Residual:** `release-attach` (`noahkiss/workflows`) reads `gh run list --commit <sha>
+  --limit 1`: only the newest run on the sha counts, whatever pushed it. A later run on that
+  sha (a re-run, or another branch pushed at that commit, which is cancellable and may skip
+  the slow tests) becomes the one the release judges. Push nothing else at the tagged commit
+  until the zip is attached. The fix (judge every run on the sha) belongs in that repo.
 
 - **Signing:** `release.yml`'s own job names the `release` environment and runs the composite
   actions `tauri-macos-build`, `macos-sign-notarize` and `release-attach` from `noahkiss/workflows`.
@@ -126,8 +181,17 @@ GitHub (`noahkiss/quadcam`, public) is the only remote. Users install the cask
   environment (`v*` tags only), so a re-run dispatches on the tag, with that tag's `release.yml`:
   `gh workflow run release.yml -R noahkiss/quadcam --ref vX.Y.Z -f tag=vX.Y.Z`.
 - **Secret:** `HOMEBREW_TAP_TOKEN` (the tap PAT) lets the release dispatch the tap.
-- `.github/workflows/ci.yml` runs fmt, clippy, tests and a release build on every push and PR,
-  and a `ui` job for `app/` (typecheck, lint, Vitest, Playwright, build).
+- `.github/workflows/ci.yml` runs fmt, clippy, tests (`cargo nextest run --profile ci`) and a
+  release build on every push to a branch or `v*` tag and on pull requests from forks, and a
+  `ui` job for `app/` (typecheck, lint, Vitest, Playwright, build). On a branch or pull request,
+  a path filter (`dorny/paths-filter`, against the merge base with main) picks `ci` only when
+  the change touches what the slow tests cover (import, disk, card, prep, join, media, scan,
+  session, sources, the CLI's `main.rs`, the MCP server's non-Gear files, `tests/common`, those
+  test files, `Cargo.toml`/`Cargo.lock`, the toolchain file, `nextest.toml`, `ci.yml`), else
+  `ci-quick`; main and tags always run `ci`. A new slow test, or new code under one, joins that
+  filter in `ci.yml`. A newer push cancels an
+  older run on the same branch or PR. A run on `main` or a tag is never cancelled: the release
+  waits for it.
 
 ## Behaviour notes
 

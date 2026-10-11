@@ -3,7 +3,7 @@
 // from the synthetic PAL dump (e2e/fixtures/osd.json).
 import AxeBuilder from "@axe-core/playwright";
 import type { Page } from "@playwright/test";
-import { expect, test, type AppFixture } from "./fixtures";
+import { axeSchemes, expect, test, type AppFixture } from "./fixtures";
 
 /** The saved FC's page, on its OSD segment. */
 async function openOsd(app: AppFixture, page: Page) {
@@ -45,7 +45,7 @@ test("opens a dump and shows each profile with its check", async ({ app, page })
   await expect.poll(async () => (await app.method("gear_osd")).at(-1)?.grid).toBe("HD");
 });
 
-for (const scheme of ["dark", "light"] as const) {
+for (const scheme of axeSchemes) {
   test.describe(`${scheme} theme`, () => {
     test.use({ colorScheme: scheme });
     test("the OSD segment passes axe", async ({ app, page }) => {

@@ -5,6 +5,8 @@ User-facing changes in each release, newest first. Release notes on
 
 ## Unreleased
 
+## 0.12.1 (2026-10-11)
+
 - **Secrets are write-only everywhere.** QuadCam shows a stored secret (the ElevenLabs key, `google_places_key`, `tts_key`, `elrs_binding_phrase`) only as its hint: the first and last characters and the length, such as `sk_9…8d4d (51 chars)`, never more than half the value. It replaces "ends in 3f9a" and "(set)" in the Voice studio, the Settings window, the ELRS section, the CLI and MCP. `settings show` and the settings answer keep `"(set)"` in `values` and add `secrets` with each hint; the key status adds `prefix`, `suffix` and `length`.
 - **Replace… for a stored secret.** The Google Places key, the binding phrase and the ElevenLabs key show the hint and **Replace…**; **Keep current** closes the field.
 - **CLI `settings set-secret KEY`** reads a secret from stdin (hidden at a terminal), for example piped from a password manager. `settings set` of a secret still works and notes that other processes can read a command's arguments.

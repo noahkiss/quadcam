@@ -5,7 +5,7 @@
 // sims.json).
 import AxeBuilder from "@axe-core/playwright";
 import type { Page } from "@playwright/test";
-import { expect, test, type AppFixture } from "./fixtures";
+import { axeSchemes, expect, test, type AppFixture } from "./fixtures";
 
 /** The saved FC's page, on its Rates segment. */
 async function openRates(app: AppFixture, page: Page) {
@@ -99,7 +99,7 @@ test("compares with another profile, another quad and a sim's profile", async ({
   expect((await app.method("gear_rates")).at(-1)).toEqual({ paths: [], device: "fc-9999aaaabbbbcccc" });
 });
 
-for (const scheme of ["dark", "light"] as const) {
+for (const scheme of axeSchemes) {
   test.describe(`${scheme} theme`, () => {
     test.use({ colorScheme: scheme });
     test("the Rates segment passes axe", async ({ app, page }) => {

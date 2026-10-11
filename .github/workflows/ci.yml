@@ -1,29 +1,38 @@
 name: CI
 
-# Format, clippy, tests and a release build of the app on every push to main
-# and every pull request. The app is macOS-only, so this runs on an Apple
-# Silicon runner. The repository is public, so macOS minutes are free.
+# Format, clippy, tests and a release build of the app on every push to any branch or
+# `v*` tag, and on every pull request from a fork. The app is macOS-only, so this runs on
+# an Apple Silicon runner. The repository is public, so macOS minutes are free.
 #
-# The tests need ffmpeg, which comes from Homebrew. The format tests attach
-# small FAT32 disk images with hdiutil and erase only those images. No test
-# reaches a Photos library: processes started by cargo use the dry-run
+# The tests need ffmpeg, which comes from Homebrew. They run under cargo-nextest
+# (src-tauri/.config/nextest.toml, profile `ci`, or `ci-quick` on a branch whose change
+# misses the slow tests' code): in parallel, except the disk-image tests, which attach small
+# FAT32 disk images with hdiutil, one at a time, and erase only those images. No test reaches a Photos library: processes started by cargo use the dry-run
 # recorder unless QUADCAM_PHOTOS=real.
 
 on:
   push:
-    branches: [main]
+    branches: ['**']
+    tags: ['v*']
   pull_request:
   workflow_dispatch:
 
 permissions:
   contents: read
 
+# A new push to a branch or pull request cancels its older run. A run on main or on a tag
+# gets a group of its own and is never cancelled or replaced: the Release workflow waits
+# for a green run on the tagged commit.
 concurrency:
-  group: ci-${{ github.ref }}
-  cancel-in-progress: true
+  group: >-
+    ci-${{ (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/'))
+    && github.run_id || github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' && !startsWith(github.ref, 'refs/tags/') }}
 
 jobs:
   check:
+    # A pull request from this repository's own branches already ran on its push.
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name != github.repository
     runs-on: macos-26
     timeout-minutes: 45
     defaults:
@@ -32,19 +41,85 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
+      # rust-toolchain.toml at the repo root names the version and components.
       - name: Install Rust and ffmpeg
         run: |
-          rustup toolchain install stable --profile minimal -c clippy,rustfmt
-          rustup default stable
+          rustup toolchain install
+          rustc --version
           brew install ffmpeg
 
       - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
         with:
           workspaces: src-tauri
 
+      - uses: taiki-e/install-action@4cef1412cce204788f482e778a0b9187f9626a29 # v2.87.21
+        with:
+          tool: cargo-nextest@0.9.146
+
+      # The slow tests (the `serial` disk-image group and tests/join.rs) run on a branch or a
+      # pull request only when the change since its merge base with main touches the code they
+      # cover; otherwise the profile `ci-quick` skips them. main and tags always run them all.
+      - name: Changes the slow tests cover
+        id: slow
+        if: github.ref != 'refs/heads/main' && !startsWith(github.ref, 'refs/tags/')
+        uses: dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d # v4.0.3
+        with:
+          base: main
+          filters: |
+            slow:
+              - 'src-tauri/src/core/import.rs'
+              - 'src-tauri/src/core/prep.rs'
+              - 'src-tauri/src/core/*card*.rs'
+              - 'src-tauri/src/disk.rs'
+              - 'src-tauri/src/join.rs'
+              - 'src-tauri/src/media.rs'
+              - 'src-tauri/src/scan.rs'
+              - 'src-tauri/src/session.rs'
+              - 'src-tauri/src/pipeline/**'
+              - 'src-tauri/src/sources/**'
+              - 'src-tauri/src/gear/events.rs'
+              - 'src-tauri/src/gear/detect.rs'
+              - 'src-tauri/src/bin/quadcam-cli/main.rs'
+              - 'src-tauri/src/mcp/mod.rs'
+              - 'src-tauri/src/mcp/server.rs'
+              - 'src-tauri/src/mcp/params.rs'
+              - 'src-tauri/src/mcp/tools.rs'
+              - 'src-tauri/src/mcp/render.rs'
+              - 'src-tauri/tests/common/**'
+              - 'src-tauri/tests/disk_image.rs'
+              - 'src-tauri/tests/card_prep.rs'
+              - 'src-tauri/tests/mount_cycle.rs'
+              - 'src-tauri/tests/cli.rs'
+              - 'src-tauri/tests/mcp.rs'
+              - 'src-tauri/tests/join.rs'
+              - 'src-tauri/Cargo.toml'
+              - 'src-tauri/Cargo.lock'
+              - 'src-tauri/.config/nextest.toml'
+              - 'rust-toolchain.toml'
+              - '.github/workflows/ci.yml'
+
+      - name: Pick the test profile
+        id: profile
+        env:
+          SKIPPED: ${{ steps.slow.outcome == 'skipped' }}
+          SLOW: ${{ steps.slow.outputs.slow }}
+        run: |
+          if [ "$SKIPPED" = true ] || [ "$SLOW" = true ]; then p=ci; else p=ci-quick; fi
+          echo "Test profile: $p"
+          echo "name=$p" >> "$GITHUB_OUTPUT"
+
       - run: cargo fmt --all --check
       - run: cargo clippy --workspace --all-targets --locked -- -D warnings
-      - run: cargo test --workspace --locked -- --nocapture --test-threads=1
+      - run: cargo nextest run --workspace --locked --profile ${{ steps.profile.outputs.name }}
+
+      - name: Upload the test report
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: junit
+          path: src-tauri/target/nextest/${{ steps.profile.outputs.name }}/junit.xml
+          if-no-files-found: ignore
+
       - run: cargo build --release --locked --bins
 
   # The React UI in app/: typecheck, lint, unit tests, build, and the Playwright specs
@@ -52,6 +127,7 @@ jobs:
   # from packageManager in app/package.json. The license check and the notices that
   # `pnpm build` writes read `cargo metadata`, so this job needs Rust too.
   ui:
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name != github.repository
     runs-on: macos-26
     timeout-minutes: 20
     defaults:
@@ -72,8 +148,8 @@ jobs:
 
       - name: Install Rust (for cargo metadata)
         run: |
-          rustup toolchain install stable --profile minimal
-          rustup default stable
+          rustup toolchain install
+          rustc --version
 
       - run: pnpm install --frozen-lockfile
       - name: License check (fails on a license outside the allow list)
@@ -83,6 +159,10 @@ jobs:
       - run: pnpm lint
       - run: pnpm test
       - run: pnpm exec playwright install webkit
+      # The axe specs run in the dark theme only on a branch or pull request, and in both on
+      # main and tags (e2e/fixtures.ts `axeSchemes`). Every other spec runs every time.
       - run: pnpm e2e
+        env:
+          QC_AXE_THEMES: ${{ (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/')) && 'dark,light' || 'dark' }}
       - run: pnpm build
       - run: test -s dist/THIRD_PARTY_NOTICES.txt
