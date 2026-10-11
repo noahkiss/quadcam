@@ -966,7 +966,11 @@ export type BatchSettings = {
 	tone_carriers?: { [key in string]: string },
 	/**  Sentences in one batch at most. */
 	max_lines?: number,
-	/**  Each cut edge moves to the quietest point within this many milliseconds. */
+	/**
+	 *  Each cut edge looks for the quiet at least this many milliseconds either side of its
+	 *  timestamp, and also back to the carrier's last letter or on to the next sentence's
+	 *  first. 0 cuts at the timestamps.
+	 */
 	snap_ms?: number,
 };
 

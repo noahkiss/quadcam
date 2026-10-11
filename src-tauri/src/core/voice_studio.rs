@@ -798,17 +798,22 @@ fn legacy_pack_id(voice_name: &str, model: &str) -> String {
     )
 }
 
-/// A batch as the pack remembers it: voice, model, settings and text, without the seed, so a
-/// re-render with a new seed knows which batches the pack holds whole.
+/// A batch as the pack remembers it: voice, model, settings, text and the cut's version,
+/// without the seed, so a re-render with a new seed knows which batches the pack holds whole.
+/// A new `batch::CUT_VERSION` makes every batch new again: a re-render cuts it once more (from
+/// the batch cache, at no cost).
 fn kept_key(voice: &str, model: &str, settings: &RenderSettings, b: &Batch) -> String {
     let settings = RenderSettings {
         seed: 0,
         ..settings.clone()
     };
     crate::gear::voice::sha256_hex(
-        serde_json::json!({"voice": voice, "model": model, "settings": settings, "text": b.text})
-            .to_string()
-            .as_bytes(),
+        serde_json::json!({
+            "voice": voice, "model": model, "settings": settings, "text": b.text,
+            "cut": batch::CUT_VERSION,
+        })
+        .to_string()
+        .as_bytes(),
     )
 }
 

@@ -1165,10 +1165,18 @@ Every reading, kept or not, goes to stderr and `<cache>/voice/charcost.log`.
   second full stop), joins up to 30 sentences, and drops repeats of the same spoken text.
   `fetch` renders with timestamps or reads `BatchCache` (WAV and alignment JSON by provider,
   voice, model, speed, batch text and seed). `cut` takes each line from its first character's
-  start to its last character's end, each edge moved to the quietest 2 ms window within 40 ms,
-  and fails when the alignment does not describe the batch text or runs past the audio.
-  `check` flags silent cuts, cuts under 120 ms or over 4.5 s, and cuts far from the batch's
-  median pace per letter. The cuts feed `render::Ctx.cuts`, so `render_line` and `packs::render_to`
+  start to its last character's end, and fails when the alignment does not describe the batch
+  text or runs past the audio. `snap_edge` moves each edge into the quiet the audio shows: the
+  10 ms level at 1 ms steps in 3 dB steps, the run at the lowest step nearest the timestamp,
+  the start up to 10 ms before that run's end, the end up to 10 ms after its start. The start
+  searches from the end of the letter before the line (the carrier's last) through the end of
+  the line's first letter, the end from the line's end to the start of the next letter (or the
+  take's end), each at least `snap_ms` (40) either way. `CUT_VERSION` is in each pack's
+  `kept_batches` key, so a new cut re-cuts a pack from the batch cache, free.
+  `check` flags silent cuts, cuts under 120 ms or over 4.5 s, cuts far from the batch's
+  median pace per letter, and carrier bleed: 20-120 ms of hiss (30 or more zero crossings a
+  10 ms frame), then 20 ms or more under a tenth of the cut's loudest frame, then the line.
+  A line that starts with s, z, x, c, f or j is not judged for bleed. The cuts feed `render::Ctx.cuts`, so `render_line` and `packs::render_to`
   take them like any cached take, then trim, fade and tempo.
 - Cost: `estimate` counts the characters of the batches the cache lacks, carriers included,
   times the model's rate, in credits and in USD (`Estimate.usd`, `usd_per_1k`, `promo_until`,
