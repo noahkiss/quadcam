@@ -8,6 +8,9 @@ repository = "https://github.com/noahkiss/quadcam"
 rust-version = "1.89"
 publish = false
 default-run = "quadcam"
+# The integration tests are one binary (tests/it), not one per file: each binary links the
+# whole crate. The [[test]] list below names them all.
+autotests = false
 
 [workspace]
 members = ["sim"]
@@ -67,6 +70,25 @@ nusb = "0.2.7"
 [dev-dependencies]
 tempfile = "3"
 insta = { version = "1", features = ["json", "redactions"] }
+
+[[test]]
+name = "it"
+path = "tests/it/main.rs"
+
+# These change an environment variable that code under test in other modules reads. In
+# one process under `cargo test` that would leak into tests running beside them, so each
+# stays a binary of its own. nextest runs every test in its own process either way.
+[[test]]
+name = "output_dir" # $HOME
+path = "tests/output_dir.rs"
+
+[[test]]
+name = "rates" # QUADCAM_SIMS_HOME, which gear status reads
+path = "tests/rates.rs"
+
+[[test]]
+name = "voice_core" # QUADCAM_TTS_KEY and QUADCAM_OPENAI_KEY, which the voice studio reads
+path = "tests/voice_core.rs"
 
 [target.'cfg(target_os = "macos")'.dependencies]
 hidapi = { version = "2.6", default-features = false, features = ["macos-shared-device"] }

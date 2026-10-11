@@ -3,7 +3,7 @@
 # real-time thread run alone. See docs/development.md.
 #
 #   cargo nextest run              # everything (the `default` profile)
-#   cargo nextest run -P quick     # skips the slow disk-image tests and tests/join.rs
+#   cargo nextest run -P quick     # skips the slow disk-image tests and tests/it/join.rs
 #   cargo nextest run -P ci        # what CI runs: everything, JUnit, two known flakes retried
 #   cargo nextest run -P ci-quick  # CI on a branch whose change misses the slow tests' code
 #
@@ -17,14 +17,17 @@ serial = { max-threads = 1 }
 [profile.default]
 slow-timeout = { period = "60s" }
 
-# Every test that attaches a disk image (tests/common/mod.rs `Image`).
+# Every test that attaches a disk image (tests/it/common/mod.rs `Image`). The integration
+# tests are one binary, `it`; a test's name starts with its module (`disk_image::detection`).
 [[profile.default.overrides]]
 filter = '''
-    binary_id(quadcam::disk_image)
-  | binary_id(quadcam::card_prep)
-  | binary_id(quadcam::mount_cycle)
-  | (binary_id(quadcam::cli) & test(=format_a_disk_image_only_with_every_flag))
-  | (binary_id(quadcam::mcp) & test(=format_through_mcp_needs_the_gui_click))
+binary_id(quadcam::it) & (
+    test(/^disk_image::/)
+  | test(/^card_prep::/)
+  | test(/^mount_cycle::/)
+  | test(=cli::format_a_disk_image_only_with_every_flag)
+  | test(=mcp::format_through_mcp_needs_the_gui_click)
+)
 '''
 test-group = 'serial'
 # One at a time they take about 150 s: start them first, beside everything else.
@@ -34,9 +37,9 @@ priority = 100
 # stall drop, the p99 step cost) run alone: on a loaded runner the thread oversleeps.
 [[profile.default.overrides]]
 filter = '''
-    (binary_id(quadcam-sim::runner) & test(=a_forced_stall_drops_sim_time_and_logs_it))
+    (binary_id(quadcam-sim::it) & test(=runner::a_forced_stall_drops_sim_time_and_logs_it))
   | binary_id(quadcam-sim::bench)
-  | (binary_id(quadcam::sim_host) & test(=start_describes_the_room_and_frames_advance))
+  | (binary_id(quadcam::it) & test(=sim_host::start_describes_the_room_and_frames_advance))
 '''
 threads-required = 'num-test-threads'
 
@@ -45,14 +48,14 @@ threads-required = 'num-test-threads'
 # step with the `serial` filter above.
 [profile.quick]
 default-filter = '''
-not (
-    binary_id(quadcam::disk_image)
-  | binary_id(quadcam::card_prep)
-  | binary_id(quadcam::mount_cycle)
-  | (binary_id(quadcam::cli) & test(=format_a_disk_image_only_with_every_flag))
-  | (binary_id(quadcam::mcp) & test(=format_through_mcp_needs_the_gui_click))
-  | binary_id(quadcam::join)
-)
+not (binary_id(quadcam::it) & (
+    test(/^disk_image::/)
+  | test(/^card_prep::/)
+  | test(/^mount_cycle::/)
+  | test(=cli::format_a_disk_image_only_with_every_flag)
+  | test(=mcp::format_through_mcp_needs_the_gui_click)
+  | test(/^join::/)
+))
 '''
 
 [profile.ci]
@@ -63,14 +66,14 @@ failure-output = "immediate-final"
 [profile.ci.junit]
 path = "junit.xml"
 
-# Known load flakes, retried once: the joined output's frame-count verify (tests/join.rs) and
-# diskutil mounting and unmounting the image (tests/mount_cycle.rs). Nothing else retries.
+# Known load flakes, retried once: the joined output's frame-count verify (tests/it/join.rs)
+# and diskutil mounting and unmounting the image (tests/it/mount_cycle.rs). Nothing else retries.
 [[profile.ci.overrides]]
-filter = 'binary_id(quadcam::join) | binary_id(quadcam::mount_cycle)'
+filter = 'binary_id(quadcam::it) & (test(/^join::/) | test(/^mount_cycle::/))'
 retries = 1
 
 # CI on a branch push or pull request whose change touches nothing the disk-image tests and
-# tests/join.rs cover (the path filter in .github/workflows/ci.yml): `quick`'s filter with
+# tests/it/join.rs cover (the path filter in .github/workflows/ci.yml): `quick`'s filter with
 # `ci`'s settings. main and tags always run `ci`.
 [profile.ci-quick]
 inherits = "quick"

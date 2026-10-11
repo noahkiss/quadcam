@@ -7,6 +7,8 @@ license = "MIT"
 repository = "https://github.com/noahkiss/quadcam"
 rust-version = "1.89"
 publish = false
+# One integration test binary (tests/it), not one per file; the bench stays its own.
+autotests = false
 
 [dependencies]
 rapier3d-f64 = { version = "0.36", features = ["enhanced-determinism"] }
@@ -14,3 +16,13 @@ serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 specta = { version = "=2.0.0-rc.25", features = ["derive"] }
 triple_buffer = "9"
+
+[[test]]
+name = "it"
+path = "tests/it/main.rs"
+
+# The step-cost bar times a real-time loop against the wall clock: under `cargo test` it
+# runs in its own process, beside nothing else. nextest runs it alone (threads-required).
+[[test]]
+name = "bench"
+path = "tests/bench.rs"
