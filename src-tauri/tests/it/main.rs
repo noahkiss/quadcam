@@ -26,6 +26,7 @@ mod import;
 mod join;
 mod library;
 mod mcp;
+mod mcp_reload;
 mod migration;
 mod model_edit;
 mod model_editors;

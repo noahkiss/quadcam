@@ -5,6 +5,8 @@ User-facing changes in each release, newest first. Release notes on
 
 ## Unreleased
 
+- **The MCP server follows updates.** When QuadCam updates, an agent's `quadcam-cli mcp` moves to the new version in the same process, between calls, and tells the agent its tool list changed. You no longer restart the agent after an update. It never switches during a call or a job, and never to an older version; `QUADCAM_MCP_RELOAD=0` turns it off. See [Updates](docs/mcp.md#updates).
+
 ## 0.17.0 (2026-10-11)
 
 - **QuadCam Voices.** Voice packs now have a home: [noahkiss/quadcam-voices](https://github.com/noahkiss/quadcam-voices), with a site at <https://noahkiss.github.io/quadcam-voices/> that lists each pack and plays a few of its lines in the browser. The `voice_index` setting reads its index by default; an empty setting turns it off. Packs download from the repo's releases, still checked against the index's hash.

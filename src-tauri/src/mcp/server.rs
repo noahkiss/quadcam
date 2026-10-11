@@ -2,11 +2,12 @@
 //! core, and one handler per tool.
 
 use super::params::*;
+use super::reload::{self, Handoff, Watch};
 use super::render::{
     clip_views, deletion_lines, lib_line, lib_view, names, on_device_text, photos_line,
     places_text, source_label, table, text, update_note, video_text,
 };
-use super::tools::{tools, INSTRUCTIONS};
+use super::tools::INSTRUCTIONS;
 use crate::control::{self, Client};
 use crate::core::Core;
 use crate::schema::{mcp_deprecations, Deprecation, DEPRECATIONS, SCHEMA_VERSION};
@@ -17,13 +18,19 @@ use std::io::{BufRead, Write};
 use std::path::PathBuf;
 use std::sync::Arc;
 
-const SUPPORTED_VERSIONS: &[&str] = &["2025-11-25", "2025-06-18", "2025-03-26", "2024-11-05"];
+pub(super) const SUPPORTED_VERSIONS: &[&str] =
+    &["2025-11-25", "2025-06-18", "2025-03-26", "2024-11-05"];
 
 /// Where tool calls go: the running app or a local core.
 pub trait Backend {
     fn call(&mut self, method: &str, params: Value) -> Result<Value>;
     /// "app" when a person is watching in the GUI, "headless" otherwise.
     fn mode(&mut self) -> &'static str;
+    /// The job running in this process that a switch to a new build would cut off, as
+    /// words. None: free to switch.
+    fn blocker(&mut self) -> Option<String> {
+        None
+    }
 }
 
 /// Uses the app when its socket answers, else a headless core. Every call opens a fresh
@@ -79,6 +86,12 @@ impl Backend for AutoBackend {
             "headless"
         }
     }
+
+    /// A job of the headless core (`Core::restart_blocker`). The app's own jobs run in the
+    /// app and outlive this process.
+    fn blocker(&mut self) -> Option<String> {
+        self.local.as_ref().and_then(|c| c.restart_blocker())
+    }
 }
 
 /// A core in this process, with no app. Tests use it with a temp cache and a mock Photos.
@@ -93,13 +106,45 @@ impl Backend for LocalBackend {
     }
 }
 
-/// Reads JSON-RPC lines from stdin and answers on stdout until stdin closes.
+/// Reads JSON-RPC lines from stdin and answers on stdout until stdin closes. While it waits
+/// for a line and nothing runs, it switches to a newer build on disk (`reload`).
 pub fn serve_stdio(session_file: Option<PathBuf>) -> Result<()> {
-    let mut server = Server::new(AutoBackend::new(control::socket_path(), session_file));
-    let stdin = std::io::stdin();
     let mut out = std::io::stdout().lock();
-    for line in stdin.lock().lines() {
-        let line = line?;
+    if std::env::var_os(reload::PROBE_ENV).is_some() {
+        writeln!(out, "{}", json!(reload::probe(SUPPORTED_VERSIONS)))?;
+        return Ok(());
+    }
+    let handoff = reload::take_handoff();
+    let mut server = Server::new(AutoBackend::new(control::socket_path(), session_file));
+    if let Some(h) = handoff {
+        if let Some(note) = server.resume(&h) {
+            writeln!(out, "{note}")?;
+            out.flush()?;
+        }
+    }
+    let mut watch = Watch::from_env();
+    // Stdin as a plain file under this process's own buffer: before a switch the buffer
+    // must hold no unread bytes, which `std::io::stdin()`'s hidden buffer would not show.
+    // SAFETY: fd 0 stays open for the life of the process, and nothing else reads it.
+    let fd0 = std::mem::ManuallyDrop::new(unsafe {
+        <std::fs::File as std::os::fd::FromRawFd>::from_raw_fd(0)
+    });
+    let mut input = std::io::BufReader::new(&*fd0);
+    let mut line = String::new();
+    loop {
+        if input.buffer().is_empty() {
+            // Idle: every message read is answered, and no part of the next is read.
+            if let Some(every) = watch.interval() {
+                switch_if_ready(&mut server, &mut watch, &mut out)?;
+                if !reload::readable(0, every)? {
+                    continue;
+                }
+            }
+        }
+        line.clear();
+        if input.read_line(&mut line)? == 0 {
+            break;
+        }
         if line.trim().is_empty() {
             continue;
         }
@@ -117,6 +162,33 @@ pub fn serve_stdio(session_file: Option<PathBuf>) -> Result<()> {
     Ok(())
 }
 
+/// Runs a newer build that settled on disk in this process, when no job would be cut off.
+/// Returns only when it stays: nothing newer, a job runs, or the switch failed.
+fn switch_if_ready<B: Backend>(
+    server: &mut Server<B>,
+    watch: &mut Watch,
+    out: &mut impl Write,
+) -> Result<()> {
+    let Some(next) = watch
+        .check(server.protocol.as_deref())
+        .map(|p| p.version.clone())
+    else {
+        return Ok(());
+    };
+    if let Some(job) = server.backend.blocker() {
+        if server.held_by.as_deref() != Some(job.as_str()) {
+            eprintln!("quadcam-cli mcp: {next} waits for {job} to finish");
+            server.held_by = Some(job);
+        }
+        return Ok(());
+    }
+    out.flush()?;
+    eprintln!("quadcam-cli mcp: switching to {next}");
+    let e = watch.exec(&server.handoff());
+    eprintln!("quadcam-cli mcp: staying on {}: {e}", reload::version());
+    Ok(())
+}
+
 /// A tool's arguments as its type; no arguments are the defaults.
 fn args<T: serde::de::DeserializeOwned + Default>(a: &Value) -> Result<T> {
     if a.is_null() {
@@ -129,6 +201,12 @@ pub struct Server<B: Backend> {
     pub backend: B,
     /// What warns on use (`schema::DEPRECATIONS`; tests give their own).
     deprecations: &'static [Deprecation],
+    /// The protocol version `initialize` agreed on.
+    protocol: Option<String>,
+    /// The client sent `notifications/initialized`.
+    initialized: bool,
+    /// The job a switch to a new build last waited for, so the log says it once.
+    held_by: Option<String>,
 }
 
 impl<B: Backend> Server<B> {
@@ -136,7 +214,35 @@ impl<B: Backend> Server<B> {
         Self {
             backend,
             deprecations: DEPRECATIONS,
+            protocol: None,
+            initialized: false,
+            held_by: None,
         }
+    }
+
+    /// The session's state for a newer build of this server.
+    pub fn handoff(&self) -> Handoff {
+        Handoff {
+            format: reload::HANDOFF_FORMAT,
+            protocol: self.protocol.clone(),
+            initialized: self.initialized,
+            tools: reload::tools_digest(&reload::listed_tools()),
+            from: reload::version().into(),
+        }
+    }
+
+    /// Takes over a session an older build started. Some: the notification to send, when
+    /// the client was told of another tool list.
+    pub fn resume(&mut self, h: &Handoff) -> Option<Value> {
+        self.protocol = h.protocol.clone();
+        self.initialized = h.initialized;
+        eprintln!(
+            "quadcam-cli mcp: {} took over from {}",
+            reload::version(),
+            h.from
+        );
+        (self.initialized && reload::tools_digest(&reload::listed_tools()) != h.tools)
+            .then(|| json!({"jsonrpc": "2.0", "method": "notifications/tools/list_changed"}))
     }
 
     /// The same server with another deprecation table, to test the warnings.
@@ -147,8 +253,11 @@ impl<B: Backend> Server<B> {
 
     /// Handles one message. Notifications get no reply.
     pub fn handle(&mut self, msg: &Value) -> Option<Value> {
-        let id = msg.get("id").cloned()?;
         let method = msg.get("method").and_then(Value::as_str).unwrap_or("");
+        if method == "notifications/initialized" {
+            self.initialized = true;
+        }
+        let id = msg.get("id").cloned()?;
         let params = msg.get("params").cloned().unwrap_or(Value::Null);
         let result = match method {
             "initialize" => {
@@ -161,19 +270,20 @@ impl<B: Backend> Server<B> {
                 } else {
                     SUPPORTED_VERSIONS[1]
                 };
+                self.protocol = Some(version.to_string());
                 Ok(json!({
                     "protocolVersion": version,
-                    "capabilities": {"tools": {"listChanged": false}},
+                    "capabilities": {"tools": {"listChanged": true}},
                     "serverInfo": {
                         "name": "quadcam",
-                        "version": env!("CARGO_PKG_VERSION"),
+                        "version": reload::version(),
                         "schemaVersion": SCHEMA_VERSION,
                     },
                     "instructions": INSTRUCTIONS,
                 }))
             }
             "ping" => Ok(json!({})),
-            "tools/list" => Ok(json!({"tools": tools()})),
+            "tools/list" => Ok(json!({"tools": reload::listed_tools()})),
             "tools/call" => {
                 let name = params.get("name").and_then(Value::as_str).unwrap_or("");
                 let args = params.get("arguments").cloned().unwrap_or(json!({}));

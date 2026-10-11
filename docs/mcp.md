@@ -19,6 +19,20 @@ If you built from source, give the path to `QuadCam.app/Contents/MacOS/quadcam-c
 
 The server checks for the app on every call. You can quit and open the app again without a restart of the server. A call that started against the app is never retried headless.
 
+## Updates
+
+When QuadCam updates (in the app, or with `brew upgrade`), the agent's server moves to the new version on its own. You do not need to restart the agent.
+
+- The server watches the `quadcam-cli` file it started from. It looks every 2 seconds while it waits for the agent.
+- When a newer version has been on disk for a second, the server asks it for its version. Then it runs the new version in the same process. The process ID, stdin and stdout stay, so the agent's session goes on.
+- The server never switches during a call, while part of the next message is read, or while a job it runs (an import step, a device job, a backup or a card check) is not done. It waits and switches after.
+- It never switches to an older or equal version. To go back to an older version, restart the agent.
+- The new version tells the agent when its tool list changed (`notifications/tools/list_changed`; the server declares `tools.listChanged`). Claude Code then reads the list again. An agent that ignores the notice keeps the old list until it restarts. Its calls still run on the new version, and the old tools keep working (see [Stability](#stability)).
+- The agent keeps the `serverInfo` and `instructions` it read at `initialize`.
+- `QUADCAM_MCP_RELOAD=0` in the server's environment turns this off.
+
+The server logs each step on stderr (`switching to`, `took over from`, `staying on`).
+
 ## Tools
 
 The server has 19 tools.
