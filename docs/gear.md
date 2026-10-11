@@ -431,14 +431,26 @@ inside carrier sentences, and compares voices before it spends credits.
 - **Render pack.** Needs one voice, one model and at least one set. After **Render and pay**
   the lines go into a local pack named for the voice and model; a second set adds to the
   same pack. **Choose voice** puts it on a radio like any other pack.
+- **Pay for what was priced.** The question names a digest of its plan: the voices, models,
+  sets, seed and characters. **Sample and pay** and **Render and pay** send that digest, and
+  QuadCam refuses a confirm whose plan changed ("estimate again"). A change to any picker
+  closes the question. The CLI (`--digest`) and MCP (`digest`) work the same way.
+- **Re-takes.** A cut that fails a check (silent, under 120 ms, too long, or long or short for
+  its text) stays out of the pack. The result and the pack's `pack.json` (`retakes`) list it as
+  "needs a re-take" with the reason. The paid batch stays in the cache. **Re-take** renders
+  again with a new seed (CLI `--seed`, MCP `seed`): only the batches that hold a re-take go to
+  ElevenLabs. The pack keeps every batch whose lines all passed.
 - **How a line is cut.** A bare word sounds wrong from a voice, so each line is spoken in a
   carrier ("The word is six.") and cut out. Lines are grouped by tone (calm, alert, number,
   fun), up to 30 sentences in a batch. ElevenLabs returns the time of every character; QuadCam
   cuts from the start of the line's first character to the end of its last, moving each edge
   to the quietest point within 40 ms. The cut then gets the usual trim, fades and tempo.
-  A cut that is silent, under 120 ms, or long for its text is reported. The raw audio and
+  A cut that fails a check becomes a re-take (above). The raw audio and
   timestamps of each batch are kept by provider, voice, model, speed, text and seed, so a new
-  trim or tempo setting re-cuts for free. `--carrier "I said {line}."` changes the carrier.
+  trim or tempo setting re-cuts for free. QuadCam keeps a batch only after it cuts: when
+  ElevenLabs changed the text, the take is not kept, and the next render asks again. A paid
+  request is retried only after a 429 (busy), never after a server error, which may already be
+  billed. `--carrier "I said {line}."` changes the carrier.
 
 ## Unplugging cards
 
