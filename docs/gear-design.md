@@ -1083,7 +1083,7 @@ providers, `render.rs` the cache and normalisation, `packs.rs` build, index and 
 `gear_voice_edit`, `gear_voice_render`, `gear_voice_pack_install`, `gear_voice_choose` and one
 the design did not list, `gear_voice_preview` (copies a take into the cache, which the asset
 protocol serves; the gear folder is outside its scope). `build-pack` is CLI only
-(`Core::voice_build_pack`). The Voice segment is `views/Gear/Voice/`.
+(`Core::voice_build_pack`). The Voice segment and the Voices page are `views/Gear/Voice/`.
 
 - Providers: `say` (`/usr/bin/say`, the text on stdin, a WAV file out) and `openai` (an
   OpenAI-compatible `/v1/audio/speech`, asked for a WAV; a local Kokoro-FastAPI server is the
@@ -1157,6 +1157,30 @@ per model in `<cache>/voice/charcost.json` and wins over the estimate next time.
 - Acceptance: unit tests in `eleven.rs`, `keychain.rs`, `batch.rs`, `sets.rs`;
   `tests/voice_studio.rs` (key, catalogue, estimate, sample, set render, credits refusal, MCP)
   and `e2e/voice-studio.spec.ts`.
+
+**Voices page (built, 0.12).** Packs are not per radio, so the studio and the pack list moved
+out of the radio's Voice segment to a Gear sidebar page, `views/Gear/Voice/VoicesPage.tsx`:
+the library (every installed or rendered pack: voice, model, the line sets it covers, lines,
+size, date, the radios that chose it, a sample, Delete), **Apply to radios…**
+(`ApplyToRadios.tsx`), the index and Render my voice, and the studio. The radio's segment keeps
+Choose voice (a picker of library packs), the per-line overrides and its apply.
+
+- `PackManifest` and `PackIndexEntry` carry `firmware` (serde default `edgetx`) and the manifest
+  the provider's `voice_id`, so another firmware family's packs can be told apart later. Only
+  EdgeTX exists; `radio_device` refuses a saved radio whose known firmware is not EdgeTX.
+- `VoicePack` adds `firmware`, `sets` (the line sets whose every path the pack holds; `sample`
+  and `custom` left out), `made` (the `pack.json` time) and `radios` (from `voice.chosen`);
+  `bytes` of an installed pack is its folder's size.
+- Rows `gear_voice_choose_radios` (named radios and/or `all` saved EdgeTX radios; every radio is
+  checked before any change is staged, then one `gear_voice_choose` each) and
+  `gear_voice_pack_delete` (removes `<gear>/voices/<id>/`; `takes` also removes the raw takes:
+  the batch cache entries whose stored voice and model match, and the raw takes keyed from the
+  pack's lines). MCP `quadcam_gear_edit` `voice_choose` with `radios` or `all_radios`, and
+  `voice_delete` (describes without `confirm`); CLI `gear voice choose --radio A,B | --all-radios`
+  and `gear voice delete PACK --yes [--takes]`.
+- Acceptance: `tests/voice_core.rs` and `tests/voice_studio.rs` (library fields, delete with and
+  without takes, several radios, MCP), `e2e/voices.spec.ts` and the moved
+  `e2e/voice-studio.spec.ts`.
 
 **Packs are release assets, not git files.** A pack is a zip per voice
 (`voice-<id>-<version>.zip`) attached to a GitHub release, plus one `voices.json` index:

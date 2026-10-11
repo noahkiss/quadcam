@@ -5,6 +5,8 @@ User-facing changes in each release, newest first. Release notes on
 
 ## Unreleased
 
+- **Voices page** (Gear > Voices). The Voice studio and the voice packs moved out of a radio's Voice segment. A library lists every pack on this Mac with its model, line sets, lines, size and date, plays a sample, and deletes a pack after a confirmation (the raw takes stay unless you tick the box). **Apply to radios…** stages the pack on each EdgeTX radio you tick, or **All radios**, and shows which cards are connected now; the others apply when plugged in. A radio's Voice segment keeps its pack picker, the per-line overrides and its apply. CLI `gear voice choose --all-radios` and `gear voice delete`; MCP `voice_choose` with `radios` or `all_radios`, and `voice_delete`.
+
 ## 0.11.0 (2026-10-10)
 
 - **Blackbox.** The FC page has a Blackbox segment. QuadCam reads the flight controller's blackbox flash over MSP, or from its USB disk, and keeps each pull as a record. It pairs logs with flights by order. Erasing the flash needs a confirmation. CLI and MCP have matching actions.

@@ -18,6 +18,7 @@ it.
 - **Sims** lists the sims on this Mac against one quad's rates. The item says **Out of date**
   while a sim's rates differ from the quad's. See [Sims](#sims-page).
 - **Controls** shows the radio's sticks and switches live. See [Controls](#controls).
+- **Voices** holds the voice packs on this Mac and the Voice studio. See [Voices](#voices).
 - **Firmware** compares each device's firmware with the newest release. It reads a radio's
   firmware, flashes an EdgeTX radio, and, with the previews on, flashes a Betaflight FC and
   reads ExpressLRS devices. See [Firmware and splash](#firmware-and-splash).
@@ -341,19 +342,32 @@ value screens' limit of 4 lines and 3 sources, the list of timer modes the pop-u
 and the 99-line checklist limit (QuadCam's own cap). Each follows the shape of the
 functions and files a real card does hold. Check each on a real card before relying on it.
 
-## Radio voice
+## Voices
 
-A saved radio's **Voice** segment chooses the voice its callouts and system sounds use. The
-radio plays WAV files from `SOUNDS/<language>/` on its card. QuadCam holds a list of lines, the
-sound a radio plays and the text a voice reads, and puts a voice's takes of them on the card.
+**Voices** in the Gear sidebar holds every voice pack on this Mac and the Voice studio that
+renders them. A pack is not tied to a radio: its files, the raw takes and the cache live in
+the gear folder (`voices/`) and the cache folder. A radio only records which pack it uses and
+its own per-line overrides ([Radio voice](#radio-voice)). Packs are for EdgeTX radios; each
+pack records its firmware family (`edgetx`) in `pack.json`.
 
-- **Lines.** Each line has a card path, its text and a group (callouts, numbers, system,
-  units, extras). A few words read badly, so QuadCam spells them out before a voice speaks them:
-  `GPS` is spoken `G.P.S.`, `TX` `T.X.`, `dBm` `D.B.M.`. The table shows the spoken text
-  beside the text. Your own lines live on your Mac, never in a pack.
-- **Packs.** A voice pack is a zip of WAVs for one voice. **Refresh packs** reads the pack
-  index (the `voice_index` setting: an address or a file) and **Install** unpacks a pack into the
-  gear folder after a hash check. No pack ships with QuadCam yet.
+- **Library.** One row per pack, rendered here or installed: the voice, the model (or the
+  provider), the line sets it holds every line of, the line count, the size on disk, the date
+  it was made, and the radios that chose it. The play button plays one line (Armed, when the
+  pack has it).
+- **Apply to radios…** lists every saved EdgeTX radio with a tick box, and **All radios**.
+  Each radio shows **Card connected** when its card is mounted or unmounted and still in, and
+  **Not connected** otherwise. **Stage** stages one voice change per radio, the same change a
+  radio's **Choose voice** stages, and keeps each radio's overrides unless you untick **Keep
+  each radio's overrides**. A radio whose card is connected has **Review…**, which opens the
+  apply sheet (it mounts and unmounts the card as usual). The others keep the staged change
+  and apply it when they are next plugged in, like any staged change.
+- **Delete.** The trash button asks first. It removes the pack's folder; radio cards keep the
+  sounds they have, and a staged voice change keeps its own copy of them. The raw takes stay in
+  the cache, so rendering that voice and model again costs nothing. Tick **Also delete the raw
+  takes** to remove them too.
+- **Get voice packs.** A voice pack is a zip of WAVs for one voice. **Refresh packs** reads
+  the pack index (the `voice_index` setting: an address or a file) and **Install** unpacks a
+  pack into the gear folder after a hash check. No pack ships with QuadCam yet.
 - **Render my voice.** QuadCam can also speak every line itself, with the provider in the
   settings, and keep the takes as a local pack: `tts_provider` is `say` (macOS, free, offline)
   or `openai` (any server with an OpenAI-compatible `/v1/audio/speech`, such as a Kokoro
@@ -368,19 +382,10 @@ sound a radio plays and the text a voice reads, and puts a voice's takes of them
   (speech is every 5 ms window within 55 dB of the loudest), adds 20 ms before and 150 ms
   after, and fades the speech in over 5 ms and out over 30 ms. A tempo other than 1 runs
   first, in ffmpeg.
-- **Choose voice.** Pick an installed voice and **Choose voice** stages one change that
-  puts every sound of that pack on the card. **Keep my overrides** (on by default) keeps the
-  lines you changed one by one. Sounds on the card that no pack knows are never deleted.
-  **Review…** opens the apply sheet: backup first, write, read back, compare. Over the radio's
-  USB a whole pack takes minutes.
-- **One line.** **Use another voice…** takes another installed voice's take for that line
-  on this radio. **My text…** speaks your own text with your provider for that line only.
-  **Reset** clears it. The play buttons play a take. A line you add this way that QuadCam does
-  not list becomes one of your own lines.
 
 ### Voice studio
 
-The **Voice studio** at the top of the Voice segment renders whole line sets with ElevenLabs,
+The **Voice studio** on the Voices page renders whole line sets with ElevenLabs,
 inside carrier sentences, and compares voices before it spends credits.
 
 - **Key.** Paste the ElevenLabs API key and **Save key**. It goes to the macOS Keychain
@@ -430,7 +435,8 @@ inside carrier sentences, and compares voices before it spends credits.
   plays one line in one voice and model.
 - **Render pack.** Needs one voice, one model and at least one set. After **Render and pay**
   the lines go into a local pack named for the voice and model; a second set adds to the
-  same pack. **Choose voice** puts it on a radio like any other pack.
+  same pack. It joins the library, and **Apply to radios…** or a radio's **Choose voice** puts
+  it on a radio like any other pack.
 - **How a line is cut.** A bare word sounds wrong from a voice, so each line is spoken in a
   carrier ("The word is six.") and cut out. Lines are grouped by tone (calm, alert, number,
   fun), up to 30 sentences in a batch. ElevenLabs returns the time of every character; QuadCam
@@ -439,6 +445,28 @@ inside carrier sentences, and compares voices before it spends credits.
   A cut that is silent, under 120 ms, or long for its text is reported. The raw audio and
   timestamps of each batch are kept by provider, voice, model, speed, text and seed, so a new
   trim or tempo setting re-cuts for free. `--carrier "I said {line}."` changes the carrier.
+
+## Radio voice
+
+A saved radio's **Voice** segment chooses which pack the radio uses and changes single lines
+on that radio. Packs are rendered and installed on the [Voices](#voices) page; **Open Voices**
+goes there. The radio plays WAV files from `SOUNDS/<language>/` on its card. QuadCam holds a
+list of lines, the sound a radio plays and the text a voice reads, and puts a voice's takes of
+them on the card.
+
+- **Lines.** Each line has a card path, its text and a group (callouts, numbers, system,
+  units, extras). A few words read badly, so QuadCam spells them out before a voice speaks them:
+  `GPS` is spoken `G.P.S.`, `TX` `T.X.`, `dBm` `D.B.M.`. The table shows the spoken text
+  beside the text. Your own lines live on your Mac, never in a pack.
+- **Choose voice.** Pick a pack from the library and **Choose voice** stages one change that
+  puts every sound of that pack on the card. **Keep my overrides** (on by default) keeps the
+  lines you changed one by one. Sounds on the card that no pack knows are never deleted.
+  **Review…** opens the apply sheet: backup first, write, read back, compare. Over the radio's
+  USB a whole pack takes minutes.
+- **One line.** **Use another voice…** takes another installed voice's take for that line
+  on this radio. **My text…** speaks your own text with your provider for that line only.
+  **Reset** clears it. The play buttons play a take. A line you add this way that QuadCam does
+  not list becomes one of your own lines.
 
 ## Unplugging cards
 
