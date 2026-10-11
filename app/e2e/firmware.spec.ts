@@ -20,17 +20,20 @@ const makePocket = (app: AppFixture, version = "2.12.3") => app.core(`c => { c.g
 test("the page reads the network only when asked, and says what it found", async ({ app, page }) => {
   await openFirmware(app, page);
   const table = page.getByRole("table", { name: "Firmware" });
-  await expect(page.getByText("Not checked yet.")).toBeVisible();
-  await expect(table.getByRole("row", { name: /Field radio/ })).toContainText("Unknown");
+  await expect(page.getByRole("status").filter({ hasText: "Not checked yet" })).toBeVisible();
+  await expect(table.getByRole("row", { name: /Field radio/ })).toContainText("Not checked");
+  await expect(page.getByRole("group", { name: "Summary" })).toContainText("Updates—");
   expect((await app.method("gear_firmware")).every((c) => c.check !== true)).toBe(true);
 
   await page.getByRole("button", { name: "Check for updates" }).click();
-  await expect(page.getByText(/^Checked /)).toBeVisible();
+  await expect(page.getByRole("status").filter({ hasText: /^Checked / })).toBeVisible();
   expect((await app.method("gear_firmware")).at(-1)).toMatchObject({ check: true });
   const radio = table.getByRole("row", { name: /Field radio/ });
   await expect(radio).toContainText("2.11.2");
   await expect(radio).toContainText("2.12.4");
+  await expect(radio).toContainText("2.11.2 → 2.12.4");
   await expect(radio).toContainText("Update available");
+  await expect(page.getByRole("group", { name: "Summary" })).toContainText("Updates2");
   await expect(radio).toContainText("QuadCam will not flash it: Board tx16s is not proven.");
   await expect(radio.getByRole("button")).toHaveCount(0);
   const fc = table.getByRole("row", { name: /Whoop FC/ });
