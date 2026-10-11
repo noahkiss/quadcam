@@ -18,7 +18,9 @@ import { applyNameFormat, matchLibraryLogs, rebuildLibrary, revealLibrary } from
 import { draftFrom, emptyProfile, layoutExample, validPlaces, valuesOf, VIDEO_SYSTEMS, type Draft } from "./draft";
 import { ModulesPane } from "./ModulesPane";
 import { checkForUpdates } from "../../actions/update";
-import { updateLine } from "../../store/update";
+import { updateLine, updateOffer } from "../../store/update";
+import { Link } from "../../components/ModulePrompt";
+import { RestartToUpdate } from "../Shell/RestartToUpdate";
 import { GearPane } from "./GearPane";
 import styles from "./SettingsSheet.module.css";
 
@@ -502,6 +504,12 @@ function VideoAnalysisBox({ d, set }: { d: Draft; set: SetFn }) {
 function AdvancedPane({ d, set }: { d: Draft; set: SetFn }) {
   const env = useStore((s) => s.env);
   const update = useStore((s) => s.update);
+  const offer = updateOffer(update);
+  const checkNow = (
+    <Button size="sm" onClick={() => void checkForUpdates()} disabled={update?.phase === "checking" || update?.phase === "downloading"}>
+      Check now
+    </Button>
+  );
   const lines = [env?.tools ? `ffmpeg: ${env.tools.ffmpeg}` : env?.error, env?.socket ? `Agent socket: ${env.socket}` : ""].filter(Boolean);
   return (
     <section>
@@ -509,11 +517,9 @@ function AdvancedPane({ d, set }: { d: Draft; set: SetFn }) {
       <Checkbox label="Check for updates automatically" detail="Checks when QuadCam opens and once a day." checked={d.updateCheck} onChange={(e) => set("updateCheck", e.target.checked)} />
       <div className={styles.info}>
         <p role="status" aria-label="Update status">
-          {updateLine(update)}
+          {updateLine(update)} {offer?.notes_url && <Link href={offer.notes_url}>Release notes</Link>}
         </p>
-        <Button size="sm" onClick={() => void checkForUpdates()} disabled={update?.phase === "checking" || update?.phase === "downloading"}>
-          Check now
-        </Button>
+        {offer ? <RestartToUpdate u={offer}>{checkNow}</RestartToUpdate> : checkNow}
       </div>
       <h3>Tools</h3>
       <pre className={`${styles.tools} mono selectable`}>{lines.join("\n")}</pre>

@@ -67,6 +67,7 @@ quadcam-sim = { path = "sim" }
 png = "0.18.1"
 nusb = "0.2.7"
 libc = "0.2"
+semver = "1"
 
 [dev-dependencies]
 tempfile = "3"
@@ -86,6 +87,10 @@ path = "tests/output_dir.rs"
 [[test]]
 name = "rates" # QUADCAM_SIMS_HOME, which gear status reads
 path = "tests/rates.rs"
+
+[[test]]
+name = "real_paths" # $HOME, set to the account's own
+path = "tests/real_paths.rs"
 
 [[test]]
 name = "voice_core" # QUADCAM_TTS_KEY and QUADCAM_OPENAI_KEY, which the voice studio reads

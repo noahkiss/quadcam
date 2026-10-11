@@ -21,14 +21,26 @@ export const createUpdateSlice: StateCreator<State, [], [], UpdateSlice> = (set,
   clearLater: () => set({ updateLater: null }),
 });
 
-/** What the banner shows, or null for no banner. */
-export function updateBanner(s: Pick<State, "update" | "updateLater">) {
-  const u = s.update;
-  if (!u?.version || u.version === s.updateLater) return null;
+/** The update Restart to update offers (the banner and Settings), or null for none. */
+export function updateOffer(u: UpdateStatus | null) {
+  if (!u?.version) return null;
   if (u.phase === "available" || u.phase === "downloading" || u.phase === "ready") return u;
-  // A failed download keeps the version, so the banner offers it again.
+  // A failed download keeps the version, so it is offered again.
   if (u.phase === "failed") return u;
   return null;
+}
+
+/** What the banner shows, or null for no banner. */
+export function updateBanner(s: Pick<State, "update" | "updateLater">) {
+  const u = updateOffer(s.update);
+  return u && u.version !== s.updateLater ? u : null;
+}
+
+/** The download's progress and the restart's state, for the Restart to update button. */
+export function updateProgress(u: UpdateStatus) {
+  const busy = u.phase === "downloading";
+  const pct = u.total ? u.done / u.total : 0;
+  return { busy, pct, waiting: u.phase === "ready" && !!u.waiting_for, percent: u.total ? `${Math.round(pct * 100)}%` : "" };
 }
 
 /** Settings > Advanced's line on updates. */
@@ -44,8 +56,9 @@ export function updateLine(u: UpdateStatus | null): string {
     case "available":
       return `QuadCam ${u.version} is available.`;
     case "downloading":
-      return `Downloading QuadCam ${u.version}…`;
+      return `Downloading QuadCam ${u.version}… ${updateProgress(u).percent}`.trimEnd();
     case "ready":
+      if (u.waiting_for) return `QuadCam ${u.version} is ready. It can restart after ${u.waiting_for} ends.`;
       return `QuadCam ${u.version} installs when QuadCam restarts.`;
     case "failed":
       return u.error || "The last check failed.";

@@ -1,11 +1,13 @@
 //! The app's own updates through tauri-plugin-updater: a check at launch, once the window has
 //! settled, and once a day while the app runs (unless the `update_check` setting is off), and
-//! on request from the app menu. The banner downloads a found update; the restart installs
-//! it, never while a job runs (`Core::restart_blocker`). The state lives in the core
+//! on request from the app menu. Every check runs while an update is known, and a newer
+//! release replaces the known one (`core::weigh`). The banner's Restart to update checks once
+//! more, downloads the newest release, and the restart installs it, never while a job runs
+//! (`Core::restart_blocker`), and never a version at or below the running one. The state lives in the core
 //! (`core/update.rs`), so `status.update` reports it. These are GUI commands only: an agent
 //! never updates or restarts the app.
 
-use crate::core::{notes_url, Core, UpdatePhase, UpdateStatus};
+use crate::core::{is_newer, weigh, Core, Found, UpdatePhase, UpdateStatus};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
@@ -21,11 +23,12 @@ const WAKE: Duration = Duration::from_secs(15 * 60);
 /// How often a ready update looks again whether the job that held the restart ended.
 const JOB_POLL: Duration = Duration::from_secs(2);
 
-/// The update found by the last check, and its verified bytes once downloaded.
+/// The update found by the last check, and its verified bytes (with their version) once
+/// downloaded.
 #[derive(Default)]
 pub struct Pending {
     update: Mutex<Option<Update>>,
-    bytes: Mutex<Option<Vec<u8>>>,
+    bytes: Mutex<Option<(String, Vec<u8>)>>,
     /// A check or download runs now.
     working: AtomicBool,
 }
@@ -60,21 +63,25 @@ pub fn install<R: Runtime>(app: &AppHandle<R>, core: Arc<Core>) {
     });
 }
 
-/// Asks the release feed for a newer version and records the answer. Errors land in the
-/// state (`failed`), never in a dialog.
+/// Asks the release feed for a newer version and records the answer. It runs while an
+/// update is known too: the feed names the newest release, which replaces an older known one.
+/// Errors land in the state, never in a dialog; a failed check keeps a known update.
 async fn check<R: Runtime>(app: &AppHandle<R>, core: &Core) -> UpdateStatus {
     let pending = app.state::<Pending>();
-    // A found update stays found while it downloads or waits for the restart.
-    let phase = core.update_status().map(|s| s.phase).unwrap_or_default();
-    if matches!(phase, UpdatePhase::Downloading | UpdatePhase::Ready)
-        || pending.working.swap(true, Ordering::SeqCst)
-    {
-        return core.update_status().unwrap_or_default();
+    let before = core.update_status().unwrap_or_default();
+    // A download runs now: it checked just before it started.
+    if before.phase == UpdatePhase::Downloading || pending.working.swap(true, Ordering::SeqCst) {
+        return before;
     }
-    core.set_update(|s| {
-        s.phase = UpdatePhase::Checking;
-        s.error = None;
-    });
+    let known = matches!(before.phase, UpdatePhase::Available | UpdatePhase::Ready)
+        .then_some(before.version.clone())
+        .flatten();
+    if known.is_none() {
+        core.set_update(|s| {
+            s.phase = UpdatePhase::Checking;
+            s.error = None;
+        });
+    }
     let found = match app.updater() {
         Ok(u) => u.check().await.map_err(|e| e.to_string()),
         Err(e) => Err(e.to_string()),
@@ -82,29 +89,41 @@ async fn check<R: Runtime>(app: &AppHandle<R>, core: &Core) -> UpdateStatus {
     pending.working.store(false, Ordering::SeqCst);
     let now = chrono::Utc::now();
     match found {
-        Ok(Some(update)) => {
-            let version = update.version.clone();
-            *pending.update.lock().unwrap() = Some(update);
-            core.set_update(|s| {
-                s.phase = UpdatePhase::Available;
-                s.notes_url = Some(notes_url(&version));
-                s.version = Some(version);
-                s.done = 0;
-                s.total = None;
-                s.checked_at = Some(now);
-            })
-        }
-        Ok(None) => {
-            *pending.update.lock().unwrap() = None;
-            core.set_update(|s| {
-                s.phase = UpdatePhase::Current;
-                s.version = None;
-                s.notes_url = None;
-                s.checked_at = Some(now);
-            })
+        Ok(update) => {
+            let version = update.as_ref().map(|u| u.version.clone());
+            match weigh(known.as_deref(), version.as_deref(), &before.current) {
+                Found::Same => {
+                    *pending.update.lock().unwrap() = update;
+                    core.set_update(|s| {
+                        s.error = None;
+                        s.checked_at = Some(now);
+                    })
+                }
+                Found::Take(v) => {
+                    *pending.update.lock().unwrap() = update;
+                    *pending.bytes.lock().unwrap() = None;
+                    core.set_update(|s| {
+                        s.offer(&v);
+                        s.checked_at = Some(now);
+                    })
+                }
+                Found::Nothing => {
+                    *pending.update.lock().unwrap() = None;
+                    *pending.bytes.lock().unwrap() = None;
+                    core.set_update(|s| {
+                        s.phase = UpdatePhase::Current;
+                        s.version = None;
+                        s.notes_url = None;
+                        s.error = None;
+                        s.checked_at = Some(now);
+                    })
+                }
+            }
         }
         Err(e) => core.set_update(|s| {
-            s.phase = UpdatePhase::Failed;
+            if known.is_none() {
+                s.phase = UpdatePhase::Failed;
+            }
             s.error = Some(format!("Could not check for updates: {e}"));
             s.checked_at = Some(now);
         }),
@@ -129,7 +148,8 @@ pub async fn update_check(
     Ok(check(&app, &core).await)
 }
 
-/// Downloads the found update and checks its signature. It installs only at the restart.
+/// Checks once more, then downloads the newest update and checks its signature. A download
+/// of that same version already done is kept. It installs only at the restart.
 #[tauri::command]
 #[specta::specta]
 pub async fn update_download(
@@ -137,6 +157,11 @@ pub async fn update_download(
     core: State<'_, Arc<Core>>,
 ) -> Result<UpdateStatus, String> {
     let core = core.inner().clone();
+    let checked = check(&app, &core).await;
+    if checked.phase != UpdatePhase::Available {
+        // Ready (this version is downloaded), Current, or a failed check.
+        return Ok(checked);
+    }
     let pending = app.state::<Pending>();
     let Some(update) = pending.update.lock().unwrap().clone() else {
         return Err("No update to download. Check for updates first.".into());
@@ -172,7 +197,7 @@ pub async fn update_download(
     match got {
         Ok(bytes) => {
             let size = bytes.len() as u64;
-            *pending.bytes.lock().unwrap() = Some(bytes);
+            *pending.bytes.lock().unwrap() = Some((update.version.clone(), bytes));
             let now = core.set_update(|s| {
                 s.phase = UpdatePhase::Ready;
                 s.done = size;
@@ -221,12 +246,15 @@ pub async fn update_restart(app: AppHandle, core: State<'_, Arc<Core>>) -> Resul
     let pending = app.state::<Pending>();
     let update = pending.update.lock().unwrap().clone();
     let bytes = pending.bytes.lock().unwrap().take();
-    let (Some(update), Some(bytes)) = (update, bytes) else {
+    let (Some(update), Some((version, bytes))) = (update, bytes) else {
         return Err("Download the update first.".into());
     };
+    if version != update.version || !is_newer(&update.version, &update.current_version) {
+        return Err("Download the update first.".into());
+    }
     if let Err(e) = update.install(&bytes) {
         // Keep the bytes, so a second click can try again.
-        *pending.bytes.lock().unwrap() = Some(bytes);
+        *pending.bytes.lock().unwrap() = Some((version, bytes));
         let msg = format!("The update did not install: {e}");
         core.set_update(|s| s.error = Some(msg.clone()));
         return Err(msg);

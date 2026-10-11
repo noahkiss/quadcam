@@ -111,7 +111,7 @@ pub use sim_host::{
 };
 pub use sim_restore::{SimRestoreParams, SimRestoreRequest};
 pub use switchmap::{RadioParams, RadioWatchParams, SwitchMapParams};
-pub use update::{notes_url, restart_blocker, UpdatePhase, UpdateStatus};
+pub use update::{is_newer, notes_url, restart_blocker, weigh, Found, UpdatePhase, UpdateStatus};
 pub use video::{VideoClip, VideoParams, VideoReport};
 pub use voice::{
     report_text as voice_report_text, view_text as voice_view_text, BuildPackParams, EditCost,
@@ -467,13 +467,22 @@ impl Core {
     /// A core for the CLI or a headless MCP server: shared cache, session file, PhotoKit.
     /// Export defaults come from the app's saved settings when there are any.
     pub fn headless(session_file: Option<PathBuf>, photos: Arc<dyn PhotosLibrary>) -> Core {
+        Core::headless_with(session_file, photos, default_settings_file())
+    }
+
+    /// `headless` on the given settings file (tests pass a temp one).
+    pub fn headless_with(
+        session_file: Option<PathBuf>,
+        photos: Arc<dyn PhotosLibrary>,
+        settings_file: PathBuf,
+    ) -> Core {
         Core::new(
             cache_dir(),
             Some(session_file.unwrap_or_else(default_session_file)),
             Arc::new(NoHooks),
             photos,
         )
-        .with_settings(default_settings_file())
+        .with_settings(settings_file)
     }
 
     /// The Photos library to use. `QUADCAM_PHOTOS=real` forces PhotoKit and

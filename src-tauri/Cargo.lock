@@ -3619,6 +3619,7 @@ dependencies = [
  "quadcam-sim",
  "schemars 1.2.2",
  "security-framework",
+ "semver",
  "serde",
  "serde_json",
  "serialport",

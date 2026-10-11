@@ -421,7 +421,8 @@ fn survives_an_app_restart() {
         BufReader::new(stream).read_line(&mut line).unwrap();
         writeln!(out, "{}", control::respond(&first, &line)).unwrap();
     });
-    let mut b = AutoBackend::new(sock.clone(), Some(dir.path().join("headless.json")));
+    let mut b = AutoBackend::new(sock.clone(), Some(dir.path().join("headless.json")))
+        .with_settings(dir.path().join("support/settings.json"));
     assert_eq!(b.mode(), "app");
     app1.join().unwrap();
 
