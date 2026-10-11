@@ -998,3 +998,60 @@ fn a_board_with_no_target_is_refused_before_bl() {
     assert!(!b.fc.in_bootloader());
     assert_eq!(b.flasher.opened.load(Ordering::SeqCst), 0);
 }
+
+/// Through MCP: `flash_plan` on the FC gives the digest; `flash` without confirm, without
+/// the digest or with another digest sends no `bl`; with both it flashes and verifies.
+/// With the preview off, the plan offers no flash.
+#[test]
+fn mcp_flashes_the_fc_only_with_the_digest_and_confirm() {
+    use quadcam_lib::mcp::{LocalBackend, Server};
+    use serde_json::json;
+    let b = bench(Opts::default());
+    let mut s = Server::new(LocalBackend(b.core.clone()));
+    let r = s.call_tool(
+        "quadcam_gear",
+        json!({"action": "flash_plan", "device": b.id, "version": RELEASE}),
+    );
+    assert_eq!(r["isError"], false, "{r}");
+    let digest = r["structuredContent"]["digest"]
+        .as_str()
+        .unwrap()
+        .to_string();
+    assert!(!digest.is_empty());
+    assert!(r["content"][0]["text"]
+        .as_str()
+        .unwrap()
+        .contains(&format!("digest={digest}")));
+    for args in [
+        json!({"action": "flash", "device": b.id, "version": RELEASE, "confirm": true}),
+        json!({"action": "flash", "device": b.id, "version": RELEASE, "digest": digest}),
+        json!({"action": "flash", "device": b.id, "version": RELEASE, "digest": "0000", "confirm": true}),
+    ] {
+        let r = s.call_tool("quadcam_gear_apply", args.clone());
+        assert_eq!(r["isError"], true, "{args}: {r}");
+    }
+    assert!(!b.fc.log().iter().any(|l| l == "bl"));
+    assert_eq!(b.flasher.opened.load(Ordering::SeqCst), 0);
+    let r = s.call_tool(
+        "quadcam_gear_apply",
+        json!({"action": "flash", "device": b.id, "version": RELEASE, "digest": digest, "confirm": true}),
+    );
+    assert_eq!(r["isError"], false, "{r}");
+    assert_eq!(r["structuredContent"]["status"], "verified", "{r}");
+    assert!(b.fc.saved_dump().contains("2026.6.0"));
+
+    let off = bench(Opts {
+        preview: false,
+        ..Opts::default()
+    });
+    let mut s = Server::new(LocalBackend(off.core.clone()));
+    let r = s.call_tool(
+        "quadcam_gear",
+        json!({"action": "flash_plan", "device": off.id, "version": RELEASE}),
+    );
+    assert_eq!(r["structuredContent"]["digest"], "", "{r}");
+    assert!(!r["content"][0]["text"]
+        .as_str()
+        .unwrap_or_default()
+        .contains("To flash"));
+}

@@ -1129,3 +1129,93 @@ fn a_write_the_device_does_not_keep_fails_verify() {
         report.message
     );
 }
+
+/// Through MCP: `elrs_read` reads the receiver, `elrs` lists it, `elrs_flash_plan` gives the
+/// digest, and `elrs_flash` runs esptool only with that digest and confirm=true.
+#[test]
+fn mcp_reads_plans_and_flashes_only_with_the_digest_and_confirm() {
+    use quadcam_lib::mcp::{LocalBackend, Server};
+    let (b, _, rx) = bench(true, true);
+    let mut s = Server::new(LocalBackend(b.core.clone()));
+    let r = s.call_tool(
+        "quadcam_gear_edit",
+        json!({"action": "elrs_read", "device": b.fc}),
+    );
+    assert_eq!(r["isError"], false, "{r}");
+    let id = r["structuredContent"]["device"]
+        .as_str()
+        .unwrap()
+        .to_string();
+    let r = s.call_tool("quadcam_gear", json!({"action": "elrs"}));
+    assert_eq!(r["isError"], false, "{r}");
+    assert!(r["content"][0]["text"]
+        .as_str()
+        .unwrap()
+        .contains("Vendor 2.4GHz AIO RX"));
+    let r = s.call_tool(
+        "quadcam_gear",
+        json!({"action": "elrs_flash_plan", "device": id, "version": "4.1.0"}),
+    );
+    assert_eq!(r["isError"], false, "{r}");
+    let digest = r["structuredContent"]["digest"]
+        .as_str()
+        .unwrap()
+        .to_string();
+    assert!(!digest.is_empty());
+    assert!(r["content"][0]["text"]
+        .as_str()
+        .unwrap()
+        .contains(&format!("digest={digest}")));
+    assert!(!r.to_string().contains(PHRASE));
+    // The receiver is ready for a flash: only the missing digest or confirm stops it.
+    rx.restart();
+    for args in [
+        json!({"action": "elrs_flash", "device": id, "version": "4.1.0", "confirm": true}),
+        json!({"action": "elrs_flash", "device": id, "version": "4.1.0", "digest": digest}),
+        json!({"action": "elrs_flash", "device": id, "version": "4.1.0", "digest": "0000", "confirm": true}),
+    ] {
+        let r = s.call_tool("quadcam_gear_apply", args.clone());
+        assert_eq!(r["isError"], true, "{args}: {r}");
+    }
+    assert!(b.esptool.calls.lock().unwrap().is_empty());
+    assert_eq!(rx.device().bootloader_requests(), 0);
+    rx.restart();
+    let r = s.call_tool(
+        "quadcam_gear_apply",
+        json!({"action": "elrs_flash", "device": id, "version": "4.1.0", "digest": digest, "confirm": true}),
+    );
+    assert_eq!(r["isError"], false, "{r}");
+    assert_eq!(r["structuredContent"]["status"], "verified", "{r}");
+    assert_eq!(b.esptool.calls.lock().unwrap().len(), 2);
+}
+
+/// Through the CLI: a flash with a digest and no `--yes` exits 3 before it reads any port;
+/// with the preview off a plan refuses.
+#[test]
+fn the_cli_flash_needs_yes_and_the_preview() {
+    let home = tempfile::tempdir().unwrap();
+    let cli = |args: &[&str]| -> (i32, serde_json::Value) {
+        let out = std::process::Command::new(env!("CARGO_BIN_EXE_quadcam-cli"))
+            .env("HOME", home.path())
+            .env_remove("QUADCAM_SERIAL")
+            .arg("--json")
+            .args(args)
+            .output()
+            .unwrap();
+        let v = serde_json::from_slice(&out.stdout).unwrap_or(serde_json::Value::Null);
+        (out.status.code().unwrap(), v)
+    };
+    let (code, v) = cli(&["gear", "elrs", "flash", "elrs-x", "--digest", "abc"]);
+    assert_eq!(code, 3, "{v}");
+    assert!(
+        v["error"]["message"].as_str().unwrap().contains("--yes"),
+        "{v}"
+    );
+    let (code, v) = cli(&["gear", "elrs", "flash", "elrs-x"]);
+    assert_ne!(code, 0, "{v}");
+    let (code, v) = cli(&[
+        "gear", "elrs", "flash", "elrs-x", "--digest", "abc", "--yes",
+    ]);
+    assert_ne!(code, 0, "{v}");
+    assert_eq!(v["ok"], false, "{v}");
+}
