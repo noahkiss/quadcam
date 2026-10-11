@@ -81,6 +81,12 @@ test("the session bar sets aircraft, place and date for every clip", async ({ ap
   expect((await batches(app))[0]).toEqual([0, 1, 2, 3].map((id) => ({ id, profile: "Five-inch" })));
   await sheet(page).getByLabel("Place").first().selectOption("Home field");
   await expect.poll(async () => (await batches(app)).length).toBe(2);
+  expect((await batches(app))[1]).toEqual([0, 1, 2, 3].map((id) => ({ id, place: "Home field" })));
+  const date = sheet(page).getByLabel("Date").first();
+  await date.fill("2026-09-20");
+  await date.press("Enter");
+  await expect.poll(async () => (await batches(app)).length).toBe(3);
+  expect((await batches(app))[2]).toEqual([0, 1, 2, 3].map((id) => ({ id, date: "2026-09-20" })));
 });
 
 test("Apply to all clips copies the clip's metadata", async ({ app, page }) => {

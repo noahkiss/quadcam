@@ -45,11 +45,16 @@ test("a timer edit stages, and a second edit of the same timer joins the same ch
   await expect(page.getByText("1 model edit is staged.")).toBeVisible();
   await timers.getByRole("checkbox", { name: "Beep every minute" }).nth(1).uncheck();
   await expect(timers.getByLabel("Timer 2 name")).toHaveValue("FLY");
+  // Every edit goes to the model editor, one field each, and none to a generic stage; the
+  // core joins them into one change (tests/model_edit.rs
+  // edits_join_one_change_and_the_last_word_per_setting_wins).
   expect(await app.method("gear_change_stage")).toHaveLength(0);
-  const changes = await app.core<{ title: string; edits: { ops: { fields: { key: string }[] }[] }[] }[]>(`c => c.dispatch("gear_changes", { device: null, history: false })`);
-  expect(changes).toHaveLength(1);
-  expect(changes[0].title).toBe("Model edits");
-  expect(changes[0].edits[0].ops[0].fields.map((f) => f.key).sort()).toEqual(["countdownBeep", "minuteBeep", "name"]);
+  const sent = (await app.method("gear_model_edit")) as { ops: { op: string; index: number; fields: { key: string }[] }[] }[];
+  expect(sent.map((e) => e.ops.map((o) => [o.op, o.index, o.fields.map((f) => f.key)]))).toEqual([
+    [["set_timer", 1, ["countdownBeep"]]],
+    [["set_timer", 1, ["name"]]],
+    [["set_timer", 1, ["minuteBeep"]]],
+  ]);
   // Undo discards the change.
   await page.getByRole("button", { name: "Undo model edits" }).click();
   await expect(page.getByText(/model edits? (is|are) staged/)).toHaveCount(0);

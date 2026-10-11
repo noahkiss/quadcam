@@ -92,7 +92,7 @@ for (const scheme of ["dark", "light"] as const) {
       await app.open();
       await page.getByRole("button", { name: "Settings" }).click();
       await page.waitForFunction(() => document.getAnimations().every((a) => a.playState === "finished"));
-      for (const pane of ["Library", "Aircraft", "Places", "Import", "Photos", "Gear", "Advanced"]) {
+      for (const pane of ["Library", "Aircraft", "Places", "Import", "Photos", "Gear", "Modules", "Advanced"]) {
         await page.getByRole("navigation", { name: "Settings sections" }).getByRole("button", { name: pane }).click();
         const r = await new AxeBuilder({ page }).withTags(["wcag2a", "wcag2aa", "wcag21aa"]).analyze();
         expect(r.violations.map((v) => `${pane} ${v.id}: ${v.nodes.map((n) => n.target.join(" ") + " " + n.failureSummary).join(", ")}`)).toEqual([]);

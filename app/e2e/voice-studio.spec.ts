@@ -60,7 +60,9 @@ test("the pickers list the account's voices and models, and the cost follows the
   await models.getByRole("checkbox", { name: /eleven_v4,/ }).uncheck();
   await models.getByRole("checkbox", { name: /eleven_turbo_v2_5,/ }).check();
   await expect(cost).toContainText("eleven_turbo_v2_5");
-  expect(await cost.textContent()).not.toEqual(full);
+  const credits = (t: string | null) => Number(/([\d,]+) credits/.exec(t ?? "")![1].replace(/,/g, ""));
+  const half = credits(await cost.textContent());
+  expect(Math.abs(half - credits(full) / 2), `${half} of ${credits(full)}`).toBeLessThanOrEqual(1);
   // A second set adds its lines.
   await studio.getByRole("group", { name: "Line sets" }).getByRole("checkbox", { name: /Easter eggs/ }).check();
   await expect(cost).toContainText("180 lines");
