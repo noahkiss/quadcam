@@ -5,6 +5,10 @@ User-facing changes in each release, newest first. Release notes on
 
 ## Unreleased
 
+- **A radio flies many aircraft.** A radio's page lists **Aircraft on this radio**: each aircraft profile that names the radio, its EdgeTX model, whether that model is on the card or in the latest backup, and which one the radio selects. **Add aircraft** and **Remove** set the profile's radio, and **Settings > Aircraft** has **Radio** and **EdgeTX model file** for the same link. An FC keeps its one aircraft.
+- A radio's own aircraft link from 0.11 or earlier moves onto the profile the first time QuadCam reads `gear.json`. A link the profile cannot take stays in the radio's entry as `legacy_aircraft`.
+- CLI `gear devices save --aircraft` and MCP `device_save` `aircraft` add the aircraft to a radio. `gear devices` and MCP `devices` list a radio's aircraft in `radio_aircraft`; a radio's `aircraft` is now empty.
+
 ## 0.11.0 (2026-10-10)
 
 - **Blackbox.** The FC page has a Blackbox segment. QuadCam reads the flight controller's blackbox flash over MSP, or from its USB disk, and keeps each pull as a record. It pairs logs with flights by order. Erasing the flash needs a confirmation. CLI and MCP have matching actions.

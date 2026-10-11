@@ -149,7 +149,7 @@ A value is JSON or plain text.
 ```bash
 quadcam-cli --json gear status                       # gear folder, Gear settings, what is plugged in
 quadcam-cli --json gear devices                      # saved devices (`devices list` is the same)
-quadcam-cli --json gear devices save <id> --name "Bench radio" --aircraft Whoop
+quadcam-cli --json gear devices save <id> --name "Bench radio" --aircraft Whoop   # a radio: adds Whoop to its aircraft
 quadcam-cli --json gear devices forget <id>
 quadcam-cli --json gear fc identify [--port /dev/cu.usbmodemX]   # MSP identity, no reboot
 quadcam-cli --json gear fc read [--cmd "get osd_ah_pos"]... [--out STEM]   # the FC reboots after
