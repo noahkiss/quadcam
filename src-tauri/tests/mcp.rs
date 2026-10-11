@@ -658,3 +658,32 @@ fn library_and_setup_tools() {
         "the cut and the clip"
     );
 }
+
+/// `quadcam_add_to_photos` after an export adds the verified clips to the album named, once;
+/// `quadcam_eject` refuses a folder session.
+#[test]
+fn add_to_photos_and_eject_through_mcp() {
+    let dir = tempfile::tempdir().unwrap();
+    let rec = Arc::new(Recorder::default());
+    let mut s = Server::new(LocalBackend(core(
+        dir.path(),
+        Arc::new(NoHooks),
+        rec.clone(),
+    )));
+    let src = clips_folder();
+    call(&mut s, "quadcam_load_clips", json!({"source": src.path()}));
+    call(&mut s, "quadcam_export", json!({}));
+    assert!(
+        rec.calls.lock().unwrap().is_empty(),
+        "export alone adds nothing"
+    );
+    call(&mut s, "quadcam_add_to_photos", json!({"album": "Drone"}));
+    let calls = rec.calls.lock().unwrap().clone();
+    assert_eq!(calls.len(), 1, "{calls:?}");
+    assert_eq!(calls[0].0.len(), 2);
+    assert!(calls[0].0.iter().all(|f| f.is_file()));
+    assert_eq!(calls[0].1.as_deref(), Some("Drone"));
+    let r = s.call_tool("quadcam_eject", json!({}));
+    assert_eq!(r["isError"], true, "{r}");
+    assert!(r.to_string().contains("came from a folder"), "{r}");
+}
