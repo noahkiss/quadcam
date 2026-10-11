@@ -57,15 +57,33 @@ pub fn digest(device: &str, base: &Config, render: &FcRender) -> String {
 
 /// The refusal for a `set` the FC's `get` answer does not allow, else None. The answer
 /// holds `Allowed range: LO - HI` or `Allowed values: A, B`; any other shape passes.
+/// Betaflight's `get` matches part of a name, so its answer can hold several settings, each a
+/// `name = value` line and the lines under it: only the block of `set.name` counts, and an
+/// answer whose blocks are all other settings means the name is not one.
 pub fn range_problem(set: &SetRef, reply: &str) -> Option<Refusal> {
     let name = &set.name;
-    if reply.contains("###ERROR") || reply.contains("Invalid") {
-        return Some(Refusal::new(
+    let not_a_setting = || {
+        Some(Refusal::new(
             RefusalCode::BadSetting,
             format!("`{name}` is not a setting on this FC."),
-        ));
-    }
-    for l in reply.lines() {
+        ))
+    };
+    let blocks = get_blocks(reply);
+    let body: Vec<&str> = if blocks.is_empty() {
+        if reply.contains("###ERROR") || reply.contains("Invalid") {
+            return not_a_setting();
+        }
+        reply.lines().collect()
+    } else {
+        match blocks
+            .into_iter()
+            .find(|(n, _)| n.eq_ignore_ascii_case(name))
+        {
+            Some((_, lines)) => lines,
+            None => return not_a_setting(),
+        }
+    };
+    for l in body {
         let l = l.trim();
         if let Some(r) = l.strip_prefix("Allowed range:") {
             let (lo, hi) = r.split_once(" - ")?;
@@ -94,6 +112,24 @@ pub fn range_problem(set: &SetRef, reply: &str) -> Option<Refusal> {
         }
     }
     None
+}
+
+/// A `get` answer cut into one block per setting: each `name = value` line starts one.
+fn get_blocks(reply: &str) -> Vec<(&str, Vec<&str>)> {
+    let mut out: Vec<(&str, Vec<&str>)> = Vec::new();
+    for l in reply.lines() {
+        let head = l
+            .trim()
+            .split_once(" = ")
+            .map(|(n, _)| n.trim())
+            .filter(|n| !n.is_empty() && n.chars().all(|c| c.is_ascii_alphanumeric() || c == '_'));
+        match (head, out.last_mut()) {
+            (Some(n), _) => out.push((n, Vec::new())),
+            (None, Some((_, lines))) => lines.push(l),
+            (None, None) => {}
+        }
+    }
+    out
 }
 
 /// Builds the plan for an FC change. `edits` are the change's edits with restores already
@@ -280,5 +316,51 @@ pub fn plan(
         },
         port: chosen.map(|c| c.port.clone()),
         render,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::gear::model::Section;
+
+    fn set(name: &str, value: &str) -> SetRef {
+        SetRef {
+            section: Section::Master,
+            name: name.into(),
+            value: value.into(),
+        }
+    }
+
+    #[test]
+    fn a_get_answer_is_read_per_setting() {
+        // `get deadband` also lists the settings whose names contain it.
+        let reply =
+            "3d_deadband_low = 1406\r\nAllowed range: 1000 - 2000\r\nDefault value: 1406\r\n\r\n\
+                     deadband = 0\r\nAllowed range: 0 - 32\r\nDefault value: 0\r\n\r\n\
+                     yaw_deadband = 0\r\nAllowed range: 0 - 100\r\nDefault value: 0\r\n";
+        assert!(range_problem(&set("deadband", "20"), reply).is_none());
+        let r = range_problem(&set("deadband", "50"), reply).unwrap();
+        assert!(r.reason.contains("0-32"), "{}", r.reason);
+        assert!(range_problem(&set("yaw_deadband", "50"), reply).is_none());
+        // Only other settings matched: the name is not one.
+        let r = range_problem(
+            &set("deadband", "1"),
+            "yaw_deadband = 0\r\nAllowed range: 0 - 100\r\n",
+        )
+        .unwrap();
+        assert_eq!(r.code, RefusalCode::BadSetting);
+        // Allowed values, and the error answer.
+        let r = range_problem(
+            &set("motor_pwm_protocol", "PWM2"),
+            "motor_pwm_protocol = DSHOT300\r\nAllowed values: PWM, DSHOT300\r\n",
+        )
+        .unwrap();
+        assert!(r.reason.contains("PWM, DSHOT300"));
+        assert!(range_problem(
+            &set("nope", "1"),
+            "###ERROR IN get: INVALID NAME: nope###\r\n"
+        )
+        .is_some());
     }
 }
