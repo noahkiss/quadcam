@@ -9,7 +9,7 @@ Open Settings with the gear icon or Command-comma. **Done** saves every change a
 | **Library** | The library folder (default `~/Movies/quadcam`, made on the first import), the layout, the date in file names, place folders, keep originals, and **Rebuild from files**. See [The library](library.md). |
 | **Aircraft** | The aircraft profiles and the default profile. See [Metadata](metadata.md#places-and-profiles). |
 | **Places** | The saved places and the place search provider. See [Metadata](metadata.md#place-search-providers). |
-| **Import** | The format (MP4 or MOV), the MP4 encoder, the default short name, the time in file names, **Delete clips after import**, **Join split recordings**, and the tolerances for log matching, the DJI clip clock skew included. |
+| **Import** | The format (MP4 or MOV), the MP4 encoder, the default short name, the time in file names, **Delete clips after import**, **Join split recordings**, **On-device suggestions**, and the tolerances for log matching, the DJI clip clock skew included. |
 | **Photos** | The album. An empty album means the library only. See [Photos](photos.md). |
 | **Gear** | The previews (**Show the Sim page**, **Betaflight flashing (preview)**, **Show the ELRS tools**), **Back up on connect**, how many backups to keep, the USB power warning, the blackbox options (**Erase blackbox after download**, **Read through USB disk mode first (not proven)**), the **Steps on connect** table per device kind, and the cues: which play, as speech, sound or notification, mute, the voice and quiet hours. See [Gear](gear.md). |
 | **Modules** | Tools QuadCam downloads on request (ffmpeg, esptool): install, update, remove, **Check for updates**, and **Use ffmpeg from** (the QuadCam module, else Homebrew; or Homebrew only). See [Modules and notices](modules.md). |
@@ -58,6 +58,10 @@ On by default. QuadCam imports a recording that an analog DVR split into several
 ### Find highlights in new clips
 
 On by default. On macOS 27 or later, QuadCam runs video analysis on each clip in the background after a card loads, and on clips an import added before it finished. It marks highlights on clips without a radio log and picks each clip's picture. See [Highlights from video analysis](moments-and-cuts.md#highlights-from-video-analysis). Off, nothing runs on its own; **Find highlights again** in the library and `quadcam-cli library analyze-video` still work. On an older macOS the setting changes nothing, and Settings says why. In the settings file it is `videoAnalysis`; on the command line and in MCP it is `video_analysis`.
+
+### On-device suggestions
+
+On by default. On a Mac with Apple's on-device model (macOS 26 or later, Apple Intelligence on), QuadCam suggests clip names, keywords and notes after a card loads, and the session report offers **Summarize day**. Off, neither runs, for the app, the command line or an agent. See [On-device suggestions](library.md#on-device-suggestions). In the settings file it is `onDeviceSuggestions`; on the command line and in MCP it is `on_device_suggestions`.
 
 ### Updates
 

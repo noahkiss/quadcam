@@ -20,6 +20,18 @@
   background: color-mix(in srgb, var(--ctp-pink) 18%, transparent);
   color: var(--fg);
 }
+.ondevice {
+  display: inline-flex;
+  align-items: center;
+  height: 18px;
+  padding: 0 6px;
+  border-radius: 4px;
+  border: 1px dotted var(--c-sky);
+  color: var(--fg);
+  font-size: var(--t-xs);
+  font-weight: 500;
+  white-space: nowrap;
+}
 .agent {
   display: inline-flex;
   align-items: center;

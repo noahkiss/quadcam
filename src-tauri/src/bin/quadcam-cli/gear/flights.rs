@@ -64,6 +64,10 @@ pub struct ReportArgs {
     /// With --out: replace a file that is already there.
     #[arg(long, requires = "out")]
     force: bool,
+    /// Add a short paragraph about the day from Apple's on-device model (macOS 26 or later
+    /// with Apple Intelligence on).
+    #[arg(long)]
+    summarize: bool,
 }
 
 pub fn flights(core: &Core, a: FlightsArgs) -> Result<Value> {
@@ -104,10 +108,17 @@ pub fn report(core: &Core, a: ReportArgs) -> Result<Value> {
                 day: a.day,
                 path,
                 overwrite: a.force,
+                summarize: a.summarize.then_some(true),
             },
         )?)?);
     }
-    let r = call::gear_session_report(core, api::ReportParams { day: a.day })?;
+    let r = call::gear_session_report(
+        core,
+        api::ReportParams {
+            day: a.day,
+            summarize: a.summarize.then_some(true),
+        },
+    )?;
     Ok(if a.markdown {
         Value::String(r.markdown)
     } else {

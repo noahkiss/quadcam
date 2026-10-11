@@ -120,6 +120,30 @@ export async function edit(patch: PlanPatch) {
   }
 }
 
+let onDeviceAsk: Promise<void> | null = null;
+
+/** Whether this Mac has Apple's on-device model; asked once. */
+export function checkOnDevice() {
+  if (S().onDeviceReady !== null) return Promise.resolve();
+  onDeviceAsk ??= api
+    .onDeviceStatus()
+    .then((f) => store.setState({ onDeviceReady: f.available }))
+    .catch(() => store.setState({ onDeviceReady: false }));
+  return onDeviceAsk;
+}
+
+/** Names, keywords and notes from the on-device model, for every clip to import. */
+export async function suggestNames() {
+  try {
+    const r = await api.suggestOnDevice();
+    if (!r.available) toast(r.reason || "On-device suggestions are unavailable.", true);
+    else if (r.clips.every((c) => !c.suggestion)) toast(r.clips.find((c) => c.error)?.error || "The model gave no names.", true);
+    S().setSession(await api.getSession());
+  } catch (e) {
+    toast(errText(e), true);
+  }
+}
+
 /** One core call for many clips. */
 export async function editAll(patches: PlanPatch[]) {
   if (!patches.length) return true;

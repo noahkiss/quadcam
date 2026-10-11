@@ -65,6 +65,7 @@ cli.arg meta <IDS>...
 cli.arg modules install <NAME>
 cli.arg modules remove <NAME>
 cli.arg moments [IDS]...
+cli.arg names [IDS]...
 cli.arg photos [FILES]...
 cli.arg places delete <NAME>
 cli.arg places save <NAME>
@@ -207,6 +208,7 @@ cli.command modules list
 cli.command modules manifest
 cli.command modules remove
 cli.command moments
+cli.command names
 cli.command photos
 cli.command places
 cli.command places delete
@@ -405,6 +407,7 @@ cli.flag gear report --day VALUE
 cli.flag gear report --force
 cli.flag gear report --markdown
 cli.flag gear report --out VALUE
+cli.flag gear report --summarize
 cli.flag gear restore --path VALUE
 cli.flag gear sim calibration --product VALUE
 cli.flag gear sim calibration --set VALUE

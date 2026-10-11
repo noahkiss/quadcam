@@ -196,6 +196,7 @@ fn session_report_preflight_and_crashes() {
             day: Some("2026-10-04".parse().unwrap()),
             path: path.to_path_buf(),
             overwrite,
+            summarize: None,
         })
     };
     let saved = save(&out, false).unwrap();

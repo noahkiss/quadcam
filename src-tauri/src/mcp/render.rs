@@ -147,6 +147,27 @@ pub(super) fn names(v: &[&Value]) -> String {
         .join(", ")
 }
 
+/// The answer of `suggest_on_device` in a line: how many clips got a name, or why none.
+pub(super) fn on_device_text(r: &Value) -> String {
+    if r["available"] != true {
+        return format!(
+            "On-device suggestions skipped: {}. ",
+            r["reason"].as_str().unwrap_or("unavailable")
+        );
+    }
+    let clips = r["clips"].as_array().cloned().unwrap_or_default();
+    let named = clips.iter().filter(|c| !c["suggestion"].is_null()).count();
+    let filled = clips
+        .iter()
+        .filter(|c| c["filled"].as_array().is_some_and(|f| !f.is_empty()))
+        .count();
+    format!(
+        "On-device model suggested names for {named} of {} clips in {} s; it filled empty fields on {filled} (values the person or an agent set stay). ",
+        clips.len(),
+        r["seconds"]
+    )
+}
+
 pub(super) fn photos_line(p: &Value) -> String {
     match (p.get("Ok"), p.get("Err")) {
         (Some(r), _) => {
@@ -272,6 +293,7 @@ pub fn clip_views(session: &Value, ids: Option<&[u64]>) -> Vec<Value> {
                 "skip": p["skip"],
                 "agent_suggested": p["suggested"],
                 "reason": p["reason"],
+                "on_device": p["ondevice"],
                 "outcome": r["outcome"],
                 "output": r["output"],
                 "error": r["error"],
@@ -336,6 +358,9 @@ pub(super) fn table(view: &[Value]) -> String {
                 .any(|k| sug[k] == true)
             {
                 marks.push("agent-suggested".into());
+            }
+            if let Some(n) = c["on_device"]["name"].as_str() {
+                marks.push(format!("on-device suggestion {n:?}"));
             }
             format!(
                 "#{} {} ({}) {}s {} date={} ({}, {}) name={:?} note={:?}{}",

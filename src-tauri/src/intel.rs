@@ -19,13 +19,17 @@ use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
+mod names;
+pub use names::{ClipAsk, ClipIdea, Ideas, NamesAsk};
+
 /// The helper's file name, beside the app's binaries.
 pub const HELPER: &str = "quadcam-intel";
 
 /// One feature as the helper's `caps` reports it.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, specta::Type)]
 pub struct Feature {
-    /// `asr`: the speech check of voice lines; `video`: highlights and the key frame.
+    /// `asr`: the speech check of voice lines; `video`: highlights and the key frame;
+    /// `suggest`: on-device clip names and notes.
     pub name: String,
     pub available: bool,
     /// The oldest macOS the feature runs on.
@@ -40,6 +44,9 @@ pub struct Feature {
     pub locale: Option<String>,
     #[serde(default)]
     pub assets: Option<String>,
+    /// `suggest`: whether the model also looks at frames (macOS 27).
+    #[serde(default)]
+    pub images: Option<bool>,
 }
 
 impl Feature {
@@ -51,6 +58,7 @@ impl Feature {
             reason: Some(reason.into()),
             locale: None,
             assets: None,
+            images: None,
         }
     }
 }
@@ -162,6 +170,8 @@ pub struct Intel {
     caps: Mutex<Vec<(String, Feature)>>,
     /// The `video` feature from `caps`, asked once per process.
     video: Mutex<Option<Feature>>,
+    /// `caps`' on-device suggestions, asked once per process.
+    names: Mutex<Option<Feature>>,
 }
 
 impl Intel {
@@ -170,7 +180,7 @@ impl Intel {
     pub fn system() -> Self {
         let under_cargo = std::env::var_os("CARGO_MANIFEST_DIR").is_some();
         if under_cargo && std::env::var("QUADCAM_INTEL").as_deref() != Ok("real") {
-            return Self::unavailable("The speech check is off in a process started by cargo (QUADCAM_INTEL=real turns it on).");
+            return Self::unavailable("The quadcam-intel helper is off in a process started by cargo (QUADCAM_INTEL=real turns it on).");
         }
         match locate() {
             Some(p) => Self::with(p, Arc::new(Process)),
@@ -185,6 +195,7 @@ impl Intel {
             runner,
             caps: Mutex::new(Vec::new()),
             video: Mutex::new(None),
+            names: Mutex::new(None),
         }
     }
 
@@ -195,10 +206,12 @@ impl Intel {
             runner: Arc::new(Process),
             caps: Mutex::new(Vec::new()),
             video: Mutex::new(None),
+            names: Mutex::new(None),
         }
     }
 
-    fn run(&self, args: Vec<OsString>, timeout: Duration) -> Result<(Vec<Out>, i32)> {
+    /// The helper's stdout and exit code.
+    fn run_raw(&self, args: Vec<OsString>, timeout: Duration) -> Result<(String, i32)> {
         let program = match &self.program {
             Ok(p) => p,
             Err(why) => bail!("{why}"),
@@ -206,8 +219,16 @@ impl Intel {
         let out = self
             .runner
             .run(program, &args, &std::env::temp_dir(), timeout)?;
+        Ok((
+            String::from_utf8_lossy(&out.stdout).into_owned(),
+            out.status.code().unwrap_or(-1),
+        ))
+    }
+
+    fn run(&self, args: Vec<OsString>, timeout: Duration) -> Result<(Vec<Out>, i32)> {
+        let (stdout, code) = self.run_raw(args, timeout)?;
         let mut lines = Vec::new();
-        for l in String::from_utf8_lossy(&out.stdout).lines() {
+        for l in stdout.lines() {
             if l.trim().is_empty() {
                 continue;
             }
@@ -216,7 +237,7 @@ impl Intel {
                 lines.push(o);
             }
         }
-        Ok((lines, out.status.code().unwrap_or(-1)))
+        Ok((lines, code))
     }
 
     /// The speech check's state for `locale`: available, or why not. Never an error.
@@ -425,7 +446,7 @@ pub fn locale_of(lang: &str) -> String {
     }
 }
 
-/// A helper for tests: it answers `caps`, `asr`, `video` and `install` without running
+/// A helper for tests: it answers `caps`, `asr`, `video`, `install` and `suggest` without running
 /// anything.
 pub mod fake {
     use super::*;
@@ -465,6 +486,9 @@ pub mod fake {
         }
     }
 
+    /// The `suggest` answer (JSON lines) to a request.
+    pub type Answer = Box<dyn Fn(&serde_json::Value) -> String + Send + Sync>;
+
     pub struct FakeHelper {
         /// The `caps` line.
         pub caps: String,
@@ -474,17 +498,51 @@ pub mod fake {
         pub code: i32,
         /// Every run's arguments.
         pub calls: Mutex<Vec<Vec<String>>>,
+        /// Answers `suggest`; None gives `fake_ideas`.
+        pub answer: Option<Answer>,
+        /// Every `suggest` request.
+        pub requests: Mutex<Vec<serde_json::Value>>,
+    }
+
+    /// The default `suggest` answer: `fake <id>` per clip, keywords, a note, `fake outing`
+    /// for more than one clip, and a summary that repeats the first fact.
+    pub fn fake_ideas(req: &serde_json::Value) -> String {
+        let mut out = String::new();
+        if req["task"] == "summary" {
+            let first = req["facts"]
+                .as_str()
+                .unwrap_or("")
+                .lines()
+                .next()
+                .unwrap_or("");
+            out.push_str(&serde_json::json!({"kind": "summary", "text": format!("A fake summary. {first}"), "ms": 5}).to_string());
+            return out;
+        }
+        let clips = req["clips"].as_array().cloned().unwrap_or_default();
+        for c in &clips {
+            let id = c["id"].as_u64().unwrap_or(0);
+            let images = c["frames"].as_array().map_or(0, |f| f.len().min(2));
+            let line = serde_json::json!({"kind": "suggestion", "id": id, "name": format!("fake {id}"), "keywords": ["fake", "whoop"], "note": format!("Fake note for clip {id}."), "images": images, "ms": 5});
+            out.push_str(&line.to_string());
+            out.push('\n');
+        }
+        if clips.len() > 1 {
+            out.push_str(r#"{"kind":"group","name":"fake outing","ms":5}"#);
+        }
+        out
     }
 
     impl FakeHelper {
         /// A helper whose speech check is available and hears what `hear` says.
         pub fn new(hear: Hear) -> Self {
             FakeHelper {
-                caps: r#"{"kind":"caps","helper":1,"os":"27.0","features":[{"name":"asr","available":true,"min_os":"26.0","locale":"en-US","assets":"installed"},{"name":"video","available":true,"min_os":"27.0"}]}"#.into(),
+                caps: r#"{"kind":"caps","helper":1,"os":"27.0","features":[{"name":"asr","available":true,"min_os":"26.0","locale":"en-US","assets":"installed"},{"name":"video","available":true,"min_os":"27.0"},{"name":"suggest","available":true,"min_os":"26.0","images":true}]}"#.into(),
                 hear,
                 see: Box::new(|f| Some(seen(f))),
                 code: 0,
                 calls: Mutex::new(Vec::new()),
+                answer: None,
+                requests: Mutex::new(Vec::new()),
             }
         }
 
@@ -550,6 +608,14 @@ pub mod fake {
                     let mut v = serde_json::to_value(&w).unwrap();
                     v["kind"] = "video".into();
                     out = v.to_string();
+                }
+                "suggest" => {
+                    let req: serde_json::Value = serde_json::from_slice(&std::fs::read(&args[1])?)?;
+                    out = match &self.answer {
+                        Some(a) => a(&req),
+                        None => fake_ideas(&req),
+                    };
+                    self.requests.lock().unwrap().push(req);
                 }
                 _ => out = r#"{"kind":"install","locale":"en-US","status":"already"}"#.into(),
             }

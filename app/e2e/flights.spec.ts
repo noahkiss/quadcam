@@ -65,7 +65,7 @@ test("the session report saves as a Markdown file through the save panel", async
   await app.core(`c => c.dialogAnswers.push("/Users/pilot/report.md")`);
   await page.getByRole("button", { name: "Save…" }).click();
   await expect(page.getByRole("status")).toContainText("Saved the report");
-  expect(await app.method("gear_session_report_save")).toEqual([{ day: null, path: "/Users/pilot/report.md", overwrite: true }]);
+  expect(await app.method("gear_session_report_save")).toEqual([{ day: null, path: "/Users/pilot/report.md", overwrite: true, summarize: false }]);
   // A cancelled panel writes nothing.
   await page.getByRole("button", { name: "Save…" }).click();
   expect(await app.method("gear_session_report_save")).toHaveLength(1);

@@ -175,6 +175,7 @@ mcp.param quadcam_gear.sha256 string
 mcp.param quadcam_gear.sim string
 mcp.param quadcam_gear.sim_targets array<string>
 mcp.param quadcam_gear.staged boolean
+mcp.param quadcam_gear.summarize boolean
 mcp.param quadcam_gear.target_v number
 mcp.param quadcam_gear.threshold integer
 mcp.param quadcam_gear.to string
@@ -385,6 +386,7 @@ mcp.param quadcam_settings.values.layout string|null
 mcp.param quadcam_settings.values.log_dir string|null
 mcp.param quadcam_settings.values.modules object|null
 mcp.param quadcam_settings.values.name_date_format string|null
+mcp.param quadcam_settings.values.on_device_suggestions boolean|null
 mcp.param quadcam_settings.values.output_dir string|null
 mcp.param quadcam_settings.values.photos_album string|null
 mcp.param quadcam_settings.values.place_folders boolean|null
@@ -397,6 +399,7 @@ mcp.param quadcam_settings.values.tts_voice string|null
 mcp.param quadcam_settings.values.tunables object|null
 mcp.param quadcam_settings.values.update_check boolean|null
 mcp.param quadcam_settings.values.voice_index string|null
+mcp.param quadcam_suggest.on_device boolean
 mcp.param quadcam_suggest.suggestions array<object>
 mcp.param quadcam_suggest.suggestions.author string
 mcp.param quadcam_suggest.suggestions.cuts array<object>
@@ -428,7 +431,6 @@ mcp.required quadcam_library_files.cuts.start
 mcp.required quadcam_places.action
 mcp.required quadcam_profiles.action
 mcp.required quadcam_settings.action
-mcp.required quadcam_suggest.suggestions
 mcp.required quadcam_suggest.suggestions.id
 mcp.tool quadcam_add_to_photos
 mcp.tool quadcam_eject

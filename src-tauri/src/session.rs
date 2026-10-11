@@ -39,6 +39,21 @@ impl Suggested {
     }
 }
 
+/// What Apple's on-device model suggested for one clip (`core/ondevice.rs`). It fills a
+/// name, note or keywords field only while that field is empty or still holds the last
+/// on-device value; a value the person or an agent wrote stays.
+#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, specta::Type)]
+pub struct OnDevice {
+    /// The suggested name: the outing's name and the pack number, or the clip's own.
+    pub name: String,
+    /// The model's name for this clip alone.
+    pub words: String,
+    pub keywords: Vec<String>,
+    pub note: String,
+    /// The frames the model looked at (0 on macOS 26: text only).
+    pub images: usize,
+}
+
 /// What will happen to one clip on import. The GUI shows it and edits it; an agent may
 /// suggest values for it.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, specta::Type)]
@@ -82,6 +97,9 @@ pub struct ClipPlan {
     /// Why the radio log matched, or how sure the match is.
     #[serde(default)]
     pub match_reason: Option<String>,
+    /// The on-device model's suggestion, when it made one.
+    #[serde(default)]
+    pub ondevice: Option<OnDevice>,
 }
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, specta::Type)]
@@ -283,6 +301,7 @@ impl Session {
                 meta: ClipMeta::default(),
                 log_model: None,
                 match_reason: None,
+                ondevice: None,
                 flight: None,
             })
             .collect();
@@ -814,6 +833,7 @@ mod tests {
             meta: ClipMeta::default(),
             log_model: None,
             match_reason: None,
+            ondevice: None,
             flight: None,
         };
         Session {

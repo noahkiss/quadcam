@@ -673,40 +673,35 @@ pub fn thumbnail(tools: &Tools, src: &Path, dst: &Path) -> Result<()> {
 }
 
 /// One frame of `src` at `secs`, `width` pixels wide, as a JPEG at `dst` (written under a
-/// temporary name, then renamed).
+/// temporary name, then renamed); the first frame when the clip is shorter.
 pub fn frame_at(tools: &Tools, src: &Path, secs: f64, width: u32, dst: &Path) -> Result<()> {
     if let Some(d) = dst.parent() {
         std::fs::create_dir_all(d)?;
     }
     let tmp = dst.with_extension("part.jpg");
-    let out = Command::new(&tools.ffmpeg)
-        .args([
-            "-v",
-            "error",
-            "-y",
-            "-ss",
-            &format!("{:.3}", secs.max(0.0)),
-            "-i",
-        ])
-        .arg(src)
-        .args([
-            "-map",
-            "0:V:0",
-            "-frames:v",
-            "1",
-            "-vf",
-            &format!("scale={width}:-2"),
-            "-q:v",
-            "4",
-        ])
-        .arg(&tmp)
-        .output()?;
-    if !out.status.success() || !tmp.metadata().is_ok_and(|m| m.len() > 0) {
-        let _ = std::fs::remove_file(&tmp);
-        bail!("could not read the frame at {secs:.1} s");
+    for ss in [format!("{:.3}", secs.max(0.0)), "0".into()] {
+        let out = Command::new(&tools.ffmpeg)
+            .args(["-v", "error", "-y", "-ss", &ss, "-i"])
+            .arg(src)
+            .args([
+                "-map",
+                "0:V:0",
+                "-frames:v",
+                "1",
+                "-vf",
+                &format!("scale={width}:-2"),
+                "-q:v",
+                "4",
+            ])
+            .arg(&tmp)
+            .output()?;
+        if out.status.success() && tmp.metadata().is_ok_and(|m| m.len() > 0) {
+            std::fs::rename(&tmp, dst)?;
+            return Ok(());
+        }
     }
-    std::fs::rename(&tmp, dst)?;
-    Ok(())
+    let _ = std::fs::remove_file(&tmp);
+    bail!("could not read the frame at {secs:.1} s")
 }
 
 /// A small H.264 proxy the webview can play, since it cannot play MJPEG AVI.

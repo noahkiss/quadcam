@@ -50,7 +50,10 @@ quadcam-intel caps [--locale en-US]          # which features this Mac has, and 
 quadcam-intel asr FILE... [--locale en-US]   # SpeechAnalyzer + SpeechTranscriber: text, words, confidence per file
 quadcam-intel install [--locale en-US]       # asks macOS to install the speech assets (AssetInventory)
 quadcam-intel video FILE [--highlights] [--keyframe]   # MediaIntelligence VideoAnalyzer (macOS 27+): highlights, levels, key frame
+quadcam-intel suggest [REQUEST.json | -]     # Foundation Models: clip names, keywords, notes; a day's summary
 ```
+
+`suggest` reads a JSON request from a file or stdin. `{"task": "names", "examples": [...], "clips": [{"id", "facts", "frames"}]}` answers one `suggestion` line per clip (`name`, `keywords`, `note`, `images`, `ms`, or `error`) and a `group` line with one name for the outing. `{"task": "summary", "facts": "..."}` answers a `summary` line. QuadCam owns the facts (`core/ondevice.rs`); the helper owns the instructions and the `@Generable` answer shapes (`Names.swift`). Text runs on macOS 26; the frames join the prompt on macOS 27 (`caps` reports `suggest` with `images`). The model's context is 4096 tokens, so QuadCam sends one frame per clip and short facts. FoundationModels is weak-linked, so the helper still launches on macOS 13. Private Cloud Compute is not used: it needs an App Store entitlement. To try a prompt by hand, `/usr/bin/fm` on macOS 27 runs the same model once its license is accepted.
 
 Exit codes: 0 done, 1 failed, 2 usage, 3 unavailable here (an older macOS, or a locale without
 its assets). It builds with the newest SDK and launches on macOS 13: each feature checks the
@@ -73,6 +76,8 @@ running OS (`#available`) and reports itself unavailable on an older one.
   `intel::fake::FakeHelper`. One test runs the real helper on a line `say` spoke, and skips
   where the speech check is unavailable. Another runs its video analysis on a synthetic clip
   with `QUADCAM_INTEL=real` on macOS 27, and skips elsewhere.
+  `intel::names::tests::the_real_helper_names_a_clip` runs the model only with
+  `QUADCAM_INTEL=real`, and skips where it is unavailable.
 - **Video analysis.** `video` runs both requests in one pass (asking for one costs as much as
   both). `src-tauri/src/highlights.rs` turns the answer into `highlight` moments and a key
   frame, and caches it by content fingerprint under `<cache>/video/`; `core/video.rs` holds the

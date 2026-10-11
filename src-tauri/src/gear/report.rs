@@ -55,6 +55,12 @@ pub struct SessionReport {
     /// Flights with no pack assigned.
     pub no_pack: usize,
     pub crashes: Vec<Crash>,
+    /// A short paragraph about the day from the on-device model, when it was asked for.
+    #[serde(default)]
+    pub summary: Option<String>,
+    /// Why there is no summary, when one was asked for.
+    #[serde(default)]
+    pub summary_unavailable: Option<String>,
     /// The same, as Markdown.
     pub markdown: String,
 }
@@ -145,6 +151,8 @@ pub fn build(
         packs,
         no_pack,
         crashes,
+        summary: None,
+        summary_unavailable: None,
         markdown: String::new(),
     };
     r.markdown = markdown(&r);
@@ -162,6 +170,9 @@ pub fn markdown(r: &SessionReport) -> String {
             days.join(", ")
         }
     );
+    if let Some(t) = &r.summary {
+        let _ = writeln!(s, "{t}\n");
+    }
     if r.clips > 0 {
         let _ = writeln!(s, "- Clips imported: {}", r.clips);
     }

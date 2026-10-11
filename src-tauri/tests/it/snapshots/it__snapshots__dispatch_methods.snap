@@ -12,6 +12,7 @@ expression: "Core::METHODS"
   "load",
   "dates",
   "suggest",
+  "suggest_on_device",
   "import",
   "photos",
   "verify",

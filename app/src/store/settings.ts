@@ -86,6 +86,7 @@ export const sel = {
   deleteClips: (s: State) => eff<boolean>(s, "deleteClipsAfterImport", "delete_clips_after_import", false),
   joinSplit: (s: State) => eff<boolean>(s, "joinSplitRecordings", "join_split_recordings", true),
   videoAnalysis: (s: State) => eff<boolean>(s, "videoAnalysis", "video_analysis", true),
+  onDevice: (s: State) => eff<boolean>(s, "onDeviceSuggestions", "on_device_suggestions", true),
   updateCheck: (s: State) => eff<boolean>(s, "updateCheck", "update_check", true),
   defaultName: (s: State) => eff<string>(s, "defaultName", "default_name", "flight") || "flight",
   photosAlbum: (s: State) => eff<string>(s, "photosAlbum", "photos_album", "Drone"),

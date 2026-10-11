@@ -133,6 +133,10 @@ pub struct NotesParams {
 pub struct ReportParams {
     #[serde(default)]
     pub day: Option<NaiveDate>,
+    /// Adds a short paragraph about the day from Apple's on-device model, where the Mac
+    /// has it (`summary`).
+    #[serde(default)]
+    pub summarize: Option<bool>,
 }
 
 /// `gear_session_report_save`: the report for a day, written as a Markdown file.
@@ -145,6 +149,9 @@ pub struct ReportSaveParams {
     /// Replace a file that is already there. The GUI's save dialog has asked already.
     #[serde(default)]
     pub overwrite: bool,
+    /// Adds the on-device summary, as `gear_session_report` does.
+    #[serde(default)]
+    pub summarize: Option<bool>,
 }
 
 /// What `gear_session_report_save` wrote.
@@ -497,13 +504,17 @@ impl Core {
                 }
             }
         };
-        Ok(report::build(
+        let mut r = report::build(
             &days,
             &all,
             &packs::flight_sets(&store)?,
             &crashes::list(&store, &CrashFilter::default())?,
             clips,
-        ))
+        );
+        if p.summarize == Some(true) {
+            self.summarize_day(&mut r);
+        }
+        Ok(r)
     }
 
     /// Writes the session report's Markdown to a file, through a temp file and a rename.
@@ -517,7 +528,10 @@ impl Core {
         let Some(dir) = p.path.parent().filter(|d| d.is_dir()) else {
             bail!("The folder of {} does not exist.", p.path.display());
         };
-        let r = self.gear_session_report(&ReportParams { day: p.day })?;
+        let r = self.gear_session_report(&ReportParams {
+            day: p.day,
+            summarize: p.summarize,
+        })?;
         let name = p
             .path
             .file_name()

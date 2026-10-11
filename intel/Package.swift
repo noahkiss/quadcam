@@ -11,7 +11,9 @@ let package = Package(
     targets: [
         .executableTarget(
             name: "quadcam-intel",
-            path: "Sources/quadcam-intel"
+            path: "Sources/quadcam-intel",
+            // FoundationModels exists from macOS 26: weak, so the helper still launches on 13.
+            linkerSettings: [.unsafeFlags(["-Xlinker", "-weak_framework", "-Xlinker", "FoundationModels"])]
         )
     ]
 )

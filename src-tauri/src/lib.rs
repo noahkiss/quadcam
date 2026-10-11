@@ -163,6 +163,13 @@ impl Hooks for GuiHooks {
                 st.core.analyse_video();
             }
         });
+        // On-device names beside the previews: the model runs on its own thread.
+        let app = self.app.clone();
+        std::thread::spawn(move || {
+            if let Some(st) = app.try_state::<AppState>() {
+                st.core.suggest_on_device_auto();
+            }
+        });
     }
 }
 
@@ -230,6 +237,15 @@ pub const BUILD: &str = env!("QUADCAM_BUILD");
 #[specta::specta]
 fn default_output_dir() -> Option<PathBuf> {
     pipeline::default_output_dir()
+}
+
+/// Whether this Mac has Apple's on-device model for suggestions, and whether it looks at
+/// frames. The Review step shows its controls only when it does.
+#[tauri::command]
+#[specta::specta]
+async fn on_device_status(state: State<'_, AppState>) -> Result<intel::Feature, String> {
+    let core = state.core.clone();
+    blocking(move || Ok(core.on_device_feature())).await
 }
 
 /// A folder or clip files dropped on the window.
@@ -574,6 +590,7 @@ pub fn specta_builder() -> tauri_specta::Builder<tauri::Wry> {
             c::load,
             c::dates,
             c::suggest,
+            c::suggest_on_device,
             c::import,
             c::photos,
             c::verify,
@@ -727,6 +744,7 @@ pub fn specta_builder() -> tauri_specta::Builder<tauri::Wry> {
             env_check,
             default_output_dir,
             load_dropped,
+            on_device_status,
             preview,
             sim_presets,
             sim_start,
@@ -773,6 +791,7 @@ pub fn specta_builder() -> tauri_specta::Builder<tauri::Wry> {
             api::SimCalibrationEvent,
             api::FirmwareReadProgress,
             api::UpdateChanged,
+            api::OnDeviceProgress,
         ])
         // Sizes and counts fit a JS number.
         .dangerously_cast_bigints_to_number()

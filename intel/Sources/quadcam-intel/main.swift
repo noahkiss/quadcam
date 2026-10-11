@@ -8,6 +8,7 @@ let usage = """
     quadcam-intel asr FILE... [--locale en-US]
     quadcam-intel install [--locale en-US]
     quadcam-intel video FILE [--highlights] [--keyframe]
+    quadcam-intel suggest [REQUEST.json | -]
     """
 
 var args = Array(CommandLine.arguments.dropFirst())
@@ -37,6 +38,8 @@ case "video":
     if let bad = flags.first { fail("usage", "Unknown option \(bad).\n\(usage)", .usage) }
     // Neither flag asks for both.
     await video(file: files[0], highlights: highlights || !keyframe, keyframe: keyframe || !highlights)
+case "suggest":
+    await suggest(path: rest.first)
 case "--version", "version":
     print("quadcam-intel \(protocolVersion)")
 default:

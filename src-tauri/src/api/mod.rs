@@ -26,8 +26,8 @@ pub use setup::*;
 
 use crate::core::{
     CardStatus, Core, FormatPlan, FormatRequest, ImportOptions, ImportOutcome, LibMatchParams,
-    LibMatchReport, LibraryView, PlaceRemoved, RebuildReport, RenameReport, SettingsView, Status,
-    TrashReport, VerifyReport, VideoParams, VideoReport,
+    LibMatchReport, LibraryView, OnDeviceParams, OnDeviceReport, PlaceRemoved, RebuildReport,
+    RenameReport, SettingsView, Status, TrashReport, VerifyReport, VideoParams, VideoReport,
 };
 use crate::disk::Volume;
 use crate::geocode::GeoResult;
@@ -149,6 +149,9 @@ with_gear_rows! {
     /// Changes clip plans (an agent's suggestions unless `editor` is `user`).
     suggest(params: SuggestParams) -> Session =
         |c| c.patch(&params.patches, params.editor.unwrap_or(Editor::Agent));
+    /// Asks Apple's on-device model for clip names, keywords and notes, and fills the empty
+    /// fields (`core/ondevice.rs`).
+    suggest_on_device(params: OnDeviceParams) -> OnDeviceReport = |c| c.suggest_on_device(&params);
     /// Converts and verifies the clips, and optionally adds them to Photos.
     import(params: ImportOptions) -> ImportOutcome = |c| c.import(&params);
     /// Adds verified outputs to Photos.

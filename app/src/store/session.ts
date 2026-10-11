@@ -2,7 +2,7 @@
 // (step, selected clip, progress) lives here too.
 import type { StateCreator } from "zustand";
 import type { State } from ".";
-import type { CardRelease, Clip, ClipDeletion, ClipPlan, ClipResult, FormatPlan, Session, StageProgress } from "../ipc/types";
+import type { CardRelease, Clip, ClipDeletion, ClipPlan, ClipResult, FormatPlan, OnDeviceProgress, Session, StageProgress } from "../ipc/types";
 
 export type Step = "load" | "review" | "export" | "finish";
 
@@ -35,6 +35,10 @@ export interface SessionSlice {
   clipDeletion: ClipDeletion[] | null;
   /** What the end of the last export did with the card: unmounted, or why not. */
   cardRelease: CardRelease | null;
+  /** Apple's on-device model is here (null: not asked yet). */
+  onDeviceReady: boolean | null;
+  /** On-device suggestions running now. */
+  onDevice: OnDeviceProgress | null;
   setSession: (s: Session | null) => void;
   setStep: (step: Step) => void;
   setImportOpen: (open: boolean) => void;
@@ -63,6 +67,8 @@ export const createSessionSlice: StateCreator<State, [], [], SessionSlice> = (se
   keepClips: false,
   clipDeletion: null,
   cardRelease: null,
+  onDeviceReady: null,
+  onDevice: null,
   setSession: (session) => {
     const cur = get().selectedClip;
     const keep = session && cur != null && session.clips.some((c) => c.id === cur);

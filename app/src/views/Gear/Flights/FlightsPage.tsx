@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useStore } from "../../../store";
 import { api, errText, pickFolder, pickSavePath } from "../../../ipc/api";
 import type { Crash, FlightReport, SessionReport } from "../../../ipc/types";
@@ -13,6 +13,8 @@ import { SectionCard } from "../../../components/dash/SectionCard";
 import { Stat, StatRow } from "../../../components/dash/StatRow";
 import { toast } from "../../../components/toastStore";
 import { fmtDay } from "../../../lib/format";
+import { checkOnDevice } from "../../../actions/session";
+import { sel } from "../../../store/settings";
 import { copyText, hhmm, mmss, num } from "../../../lib/flights";
 import { RangeTrend } from "./RangeTrend";
 import { useGearData } from "./useGearData";
@@ -195,8 +197,29 @@ function Report() {
   const flights = useGearData(() => api.gearFlights());
   const [day, setDay] = useState<string>("");
   const { data, error } = useGearData(() => api.gearSessionReport(day || null), [day]);
+  const onDeviceOn = useStore(sel.onDevice);
+  const onDeviceReady = useStore((x) => x.onDeviceReady);
+  // The on-device summary of the day shown, with its report's Markdown.
+  const [summary, setSummary] = useState<{ day: string; text: string; markdown: string } | null>(null);
+  const [summarizing, setSummarizing] = useState(false);
+  useEffect(() => {
+    if (onDeviceOn) checkOnDevice();
+  }, [onDeviceOn]);
   if (error) return <p className={styles.muted}>{error}</p>;
   if (!data) return null;
+  const shown = summary && summary.day === day ? summary : null;
+  const summarize = async () => {
+    setSummarizing(true);
+    try {
+      const r = await api.gearSessionReport(day || null, true);
+      if (r.summary) setSummary({ day, text: r.summary, markdown: r.markdown });
+      else toast(r.summary_unavailable || "No summary.", true);
+    } catch (e) {
+      toast(errText(e), true);
+    } finally {
+      setSummarizing(false);
+    }
+  };
   return (
     <>
       <div className={styles.bar}>
@@ -209,10 +232,15 @@ function Report() {
           ))}
         </SelectField>
         <span className={styles.grow} />
+        {onDeviceOn && onDeviceReady && !shown && (
+          <Button icon="sparkle" disabled={summarizing} onClick={summarize}>
+            {summarizing ? "Summarizing…" : "Summarize day"}
+          </Button>
+        )}
         <Button
           icon="share"
           onClick={async () => {
-            const ok = await copyText(data.markdown);
+            const ok = await copyText(shown ? shown.markdown : data.markdown);
             toast(ok ? "Copied the report as Markdown." : "Could not copy the report.", !ok);
           }}
         >
@@ -226,7 +254,7 @@ function Report() {
             ]);
             if (!path) return;
             try {
-              await api.gearSessionReportSave(day || null, path);
+              await api.gearSessionReportSave(day || null, path, !!shown);
               toast("Saved the report.");
             } catch (e) {
               toast(errText(e), true);
@@ -236,14 +264,14 @@ function Report() {
           Save…
         </Button>
       </div>
-      <ReportView r={data} />
+      <ReportView r={data} summary={shown?.text} />
     </>
   );
 }
 
 type PackRow = { pack: string; flights: number; mah: number | null };
 
-export function ReportView({ r }: { r: SessionReport }) {
+export function ReportView({ r, summary }: { r: SessionReport; summary?: string }) {
   const packRows: PackRow[] = [...r.packs.map((p) => ({ pack: p.pack, flights: p.flights, mah: p.mah })), ...(r.no_pack > 0 ? [{ pack: "None", flights: r.no_pack, mah: null }] : [])];
   const packCols: Column<PackRow>[] = [
     { key: "pack", header: "Pack", rowHeader: true, cell: (p) => p.pack },
@@ -259,6 +287,11 @@ export function ReportView({ r }: { r: SessionReport }) {
   return (
     <section className={styles.report} aria-label="Session report">
       <h3 className={styles.reportTitle}>{r.days.length ? r.days.map((d) => fmtDay(d, true)).join(", ") : "No flights"}</h3>
+      {summary && (
+        <p className={`${styles.summary} selectable`} aria-label="Summary of the day">
+          {summary}
+        </p>
+      )}
       <StatRow label="Report summary">
         {r.clips > 0 && <Stat label="Clips imported" value={r.clips} />}
         <Stat label="Flights" value={r.flights} />
