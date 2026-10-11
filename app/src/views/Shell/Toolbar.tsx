@@ -8,6 +8,7 @@ import { SegmentedControl } from "../../components/SegmentedControl";
 import { setSort, setThumbSize, setView } from "../../actions/library";
 import { importAction } from "../../actions/session";
 import type { SortKey } from "../../lib/library";
+import { onGlass } from "../../native";
 import styles from "./Toolbar.module.css";
 
 /** The window's top bar: search, thumbnail size, sort, grid or list, Import, Settings. */
@@ -22,7 +23,7 @@ export function Toolbar() {
   const openSettings = useStore((s) => s.openSettings);
   const lib = screen === "library";
   return (
-    <header className={styles.bar}>
+    <header className={styles.bar} data-tauri-drag-region={onGlass() ? "deep" : undefined}>
       <div className={styles.brand}>
         <img className={styles.logo} src="/emblem.png" alt="" aria-hidden="true" draggable={false} />
         <h1>QuadCam</h1>

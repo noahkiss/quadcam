@@ -53,6 +53,55 @@
   background-size: 4px 4px;
   background-repeat: no-repeat;
 }
+/* WebKit with customizable selects (Safari 26, macOS 27's web view): the list opens as a
+   picker drawn like the app's menus, and the closed control keeps the look above. Older
+   WebKit opens the system menu. */
+@supports (appearance: base-select) {
+  .select,
+  .select::picker(select) {
+    appearance: base-select;
+  }
+  .select {
+    display: inline-flex;
+    align-items: center;
+  }
+  .select::picker-icon {
+    display: none;
+  }
+  .select::picker(select) {
+    min-width: anchor-size(width);
+    margin-block: var(--s-1);
+    padding: var(--s-1);
+    border-radius: var(--r-2);
+    border: 1px solid var(--border-strong);
+    background: var(--mantle);
+    color: var(--fg);
+    box-shadow: var(--shadow);
+  }
+  .select option {
+    display: flex;
+    align-items: center;
+    gap: var(--s-1);
+    min-height: 26px;
+    padding: 0 var(--s-3) 0 var(--s-1);
+    border-radius: var(--r-1);
+    font-size: var(--t-md);
+    white-space: nowrap;
+  }
+  .select option::checkmark {
+    width: 14px;
+    text-align: center;
+  }
+  .select option:hover,
+  .select option:focus-visible {
+    background: var(--primary-fill);
+    color: var(--on-primary);
+    outline: none;
+  }
+  .select option:disabled {
+    opacity: 0.45;
+  }
+}
 .check {
   display: inline-flex;
   align-items: flex-start;

@@ -2,17 +2,25 @@
   display: flex;
   align-items: center;
   gap: var(--s-4);
-  height: 52px;
-  flex: none;
+  height: var(--bar-h);
+  min-width: 0;
   padding: 0 var(--s-4);
   background: var(--mantle);
   border-bottom: 1px solid var(--border);
+}
+/* Beside the glass sidebar the bar is the content's toolbar: no brand (the traffic lights sit
+   over the sidebar), the content's background. */
+:global([data-glass]) .bar {
+  background: var(--bg);
+}
+:global([data-glass]) .brand {
+  display: none;
 }
 .brand {
   display: flex;
   align-items: center;
   gap: var(--s-2);
-  width: 200px;
+  width: calc(var(--sidebar-w) - 2 * var(--s-4));
   flex: none;
 }
 .brand h1 {

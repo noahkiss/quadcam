@@ -77,29 +77,29 @@ export function App() {
   return (
     <div className={styles.app}>
       <Toolbar />
-      {env && !env.tools && (
-        <div className={styles.banner}>
-          <Banner
-            kind="error"
-            icon="danger-triangle"
-            tint="red"
-            action={
-              <Button size="sm" variant="primary" onClick={() => void installModule("ffmpeg")}>
-                Install ffmpeg…
-              </Button>
-            }
-          >
-            <b>ffmpeg not found.</b> Import is blocked until QuadCam has ffmpeg. You can also run <code>{env.install_hint}</code>, then restart QuadCam.
-          </Banner>
-        </div>
-      )}
-      <UpdateBannerRow />
-      <div className={styles.body}>
-        <Sidebar />
-        <main className={styles.main}>
-          {screen === "gear" ? <GearView /> : screen === "detail" ? <ClipDetail /> : screen === "first-run" ? <FirstRun /> : <LibraryView onMenu={onMenu} />}
-        </main>
+      <div className={styles.banners}>
+        {env && !env.tools && (
+          <div className={styles.banner}>
+            <Banner
+              kind="error"
+              icon="danger-triangle"
+              tint="red"
+              action={
+                <Button size="sm" variant="primary" onClick={() => void installModule("ffmpeg")}>
+                  Install ffmpeg…
+                </Button>
+              }
+            >
+              <b>ffmpeg not found.</b> Import is blocked until QuadCam has ffmpeg. You can also run <code>{env.install_hint}</code>, then restart QuadCam.
+            </Banner>
+          </div>
+        )}
+        <UpdateBannerRow />
       </div>
+      <Sidebar />
+      <main className={styles.main}>
+        {screen === "gear" ? <GearView /> : screen === "detail" ? <ClipDetail /> : screen === "first-run" ? <FirstRun /> : <LibraryView onMenu={onMenu} />}
+      </main>
       <StatusBar />
       <ImportSheet />
       <SettingsSheet />
