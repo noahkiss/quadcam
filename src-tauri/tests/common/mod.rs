@@ -91,6 +91,25 @@ pub fn truncate_copy(src: &Path, dst: &Path, fraction: f64) {
     let n = (data.len() as f64 * fraction) as usize;
     std::fs::write(dst, &data[..n]).unwrap();
 }
+/// The clip name an O4 air unit writes.
+pub const DJI_NAME: &str = "DJI_20260105120000_0001_D.MP4";
+
+/// A card like an O4 air unit shows over USB: `DCIM/DJI_001/` with one `secs`-long clip and
+/// its `.SRT`, and DJI's `MISC/` housekeeping. Returns the clip.
+pub fn dji_card(root: &Path, secs: u64) -> PathBuf {
+    let dir = root.join("DCIM/DJI_001");
+    std::fs::create_dir_all(&dir).unwrap();
+    std::fs::create_dir_all(root.join("MISC/THM")).unwrap();
+    std::fs::write(root.join("MISC/FC8770.db"), b"housekeeping").unwrap();
+    let clip = dir.join(DJI_NAME);
+    make_dji_clip(&clip, secs, "2026-01-05T17:00:00Z");
+    std::fs::write(
+        clip.with_extension("SRT"),
+        "1\n00:00:00,000 --> 00:00:01,000\nsubtitle\n",
+    )
+    .unwrap();
+    clip
+}
 
 /// A FAT32 disk image attached at a private mount point (never under /Volumes, so it can
 /// not collide with a real card). Detaches on drop.
@@ -192,6 +211,32 @@ impl Image {
                 .args(["detach", "-quiet", "-force"])
                 .arg(format!("/dev/{d}"))
                 .status();
+        }
+    }
+
+    /// The safety check before any erase or unmount: our disk number is a disk image, it is
+    /// the one our image file is attached as now, and a volume mounted at our mount point
+    /// sits on it.
+    pub fn assert_is_test_image(&self) {
+        let whole = quadcam_lib::disk::info(&self.disk).unwrap();
+        assert_eq!(
+            whole.bus_protocol.as_deref(),
+            Some("Disk Image"),
+            "refusing to touch a non-image disk"
+        );
+        assert_eq!(
+            self.attached_disk().as_deref(),
+            Some(self.disk.as_str()),
+            "{} is not our image",
+            self.disk
+        );
+        if let Ok(vol) = quadcam_lib::disk::info(&self.mount.to_string_lossy()) {
+            if vol.mount_point.is_some() {
+                assert_eq!(
+                    quadcam_lib::disk::whole_disk_of(&vol.parent_whole_disk),
+                    self.disk
+                );
+            }
         }
     }
 

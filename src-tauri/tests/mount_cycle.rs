@@ -17,16 +17,6 @@ use std::path::Path;
 use std::process::Command;
 use std::sync::{Arc, Mutex};
 
-/// Test-only belt and braces: the target must be a disk image this test attached.
-fn assert_is_test_image(img: &Image) {
-    let whole = disk::info(&img.disk).unwrap();
-    assert_eq!(
-        whole.bus_protocol.as_deref(),
-        Some("Disk Image"),
-        "refusing to touch a non-image disk"
-    );
-}
-
 fn diskutil(verb: &str, disk: &str) -> anyhow::Result<()> {
     let out = Command::new("/usr/sbin/diskutil")
         .args([verb, &format!("/dev/{disk}")])
@@ -53,7 +43,7 @@ fn bench(img: &Image) -> Bench {
 
 /// `bench`, with a mount that fails when `mount_fails`.
 fn bench_with(img: &Image, mount_fails: bool) -> Bench {
-    assert_is_test_image(img);
+    img.assert_is_test_image();
     let work = tempfile::tempdir().unwrap();
     let disk_id = img.disk.clone();
     let uuid = disk::info(&img.mount.to_string_lossy())
@@ -124,11 +114,6 @@ fn card_id(b: &Bench) -> String {
         .expect("the image shows as a card")
 }
 
-/// The image mounted under another path than the one it was attached at is the same card.
-fn mounted_somewhere(img: &Image) -> bool {
-    img.is_mounted()
-}
-
 #[test]
 fn an_import_unmounts_its_card_and_the_card_steps_mount_it_again() {
     let img = Image::create("64m", "QCMC1", false);
@@ -137,7 +122,7 @@ fn an_import_unmounts_its_card_and_the_card_steps_mount_it_again() {
     let b = bench(&img);
 
     b.core.load(Some(&img.mount)).unwrap();
-    assert!(mounted_somewhere(&img), "staging leaves the card mounted");
+    assert!(img.is_mounted(), "staging leaves the card mounted");
     let out = b.core.import(&mp4()).unwrap();
 
     // Work done: the card is unmounted, and the outcome says it is safe to remove.
@@ -164,7 +149,7 @@ fn an_import_unmounts_its_card_and_the_card_steps_mount_it_again() {
 
     // The erase mounts it, erases, and leaves it unmounted.
     b.log.lock().unwrap().clear();
-    assert_is_test_image(&img);
+    img.assert_is_test_image();
     b.core
         .format(
             &FormatRequest {
@@ -195,7 +180,7 @@ fn a_pulled_card_is_never_confused_with_the_disk_that_took_its_number() {
     // The card is pulled; another disk attaches, often on the same disk number.
     img.detach();
     let other = Image::create("64m", "QCMC6", false);
-    assert_is_test_image(&other);
+    other.assert_is_test_image();
     assert!(other.is_mounted());
     b.log.lock().unwrap().clear();
 
@@ -336,7 +321,7 @@ fn card_prep_mounts_an_unmounted_card_for_the_plan_and_the_erase() {
 
     // The erase mounts the card, erases it, and leaves it unmounted.
     b.log.lock().unwrap().clear();
-    assert_is_test_image(&img);
+    img.assert_is_test_image();
     let done = b
         .core
         .card_prep(
