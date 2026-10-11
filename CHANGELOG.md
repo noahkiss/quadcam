@@ -6,6 +6,7 @@ User-facing changes in each release, newest first. Release notes on
 ## Unreleased
 
 - **Restart to update in Settings.** When a newer version is known, Settings > Advanced shows **Restart to update** (download with progress, signature check, install, restart) and the release notes link beside **Check now**, as the banner does. It waits while a job runs, as the banner does.
+- **Updates find the newest release.** Once QuadCam knew of an update, it stopped checking, so the banner could not move on to a newer release. Every check now runs while an update is known; a newer release replaces the known one in the banner and Settings, and drops an older download. **Restart to update** checks once more before it downloads, so it installs the newest release. QuadCam never installs a version at or below the one running.
 - **Development: tests never reach the real gear folder.** A process started by cargo whose `HOME` is the account's own home now refuses QuadCam's support folder (settings, gear folder, control socket) unless `QUADCAM_PATHS=real`. A test core built without a settings file once wrote into the real gear folder. `cargo tauri dev` needs a temporary `HOME` or `QUADCAM_PATHS=real`.
 
 ## 0.17.0 (2026-10-11)

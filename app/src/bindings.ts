@@ -628,7 +628,10 @@ export const commands = {
 } | null>("update_status"),
 	/**  Checks now (the app menu's Check for Updates, or Settings > Advanced). */
 	updateCheck: () => typedError<UpdateStatus, string>(__TAURI_INVOKE("update_check")),
-	/**  Downloads the found update and checks its signature. It installs only at the restart. */
+	/**
+	 *  Checks once more, then downloads the newest update and checks its signature. A download
+	 *  of that same version already done is kept. It installs only at the restart.
+	 */
 	updateDownload: () => typedError<UpdateStatus, string>(__TAURI_INVOKE("update_download")),
 	/**
 	 *  Installs the downloaded update and restarts the app. Refuses while a job runs, so an

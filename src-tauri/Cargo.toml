@@ -67,6 +67,7 @@ quadcam-sim = { path = "sim" }
 png = "0.18.1"
 nusb = "0.2.7"
 libc = "0.2"
+semver = "1"
 
 [dev-dependencies]
 tempfile = "3"

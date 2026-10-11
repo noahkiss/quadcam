@@ -111,7 +111,7 @@ pub use sim_host::{
 };
 pub use sim_restore::{SimRestoreParams, SimRestoreRequest};
 pub use switchmap::{RadioParams, RadioWatchParams, SwitchMapParams};
-pub use update::{notes_url, restart_blocker, UpdatePhase, UpdateStatus};
+pub use update::{is_newer, notes_url, restart_blocker, weigh, Found, UpdatePhase, UpdateStatus};
 pub use video::{VideoClip, VideoParams, VideoReport};
 pub use voice::{
     report_text as voice_report_text, view_text as voice_view_text, BuildPackParams, EditCost,

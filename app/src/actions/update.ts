@@ -19,14 +19,12 @@ export async function checkForUpdates() {
   }
 }
 
-/** Restart to update: downloads first when needed, then restarts unless a job runs. */
+/** Restart to update: the core checks once more and downloads the newest release (a download
+ * of that version already done is kept), then restarts unless a job runs. */
 export async function restartToUpdate() {
   try {
-    let u = S().update;
-    if (u?.phase !== "ready") {
-      u = await api.updateDownload();
-      S().setUpdate(u);
-    }
+    const u = await api.updateDownload();
+    S().setUpdate(u);
     if (u.phase !== "ready" || u.waiting_for) return;
     await api.updateRestart();
   } catch (e) {
