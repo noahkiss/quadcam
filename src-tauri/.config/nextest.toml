@@ -1,5 +1,6 @@
-# cargo-nextest runs every test in its own process, many at once. Only the tests that share
-# something machine-wide run one at a time, in the `serial` group. See docs/development.md.
+# cargo-nextest runs every test in its own process, many at once. The tests that share
+# something machine-wide run one at a time, in the `serial` group; the few that time a
+# real-time thread run alone. See docs/development.md.
 #
 #   cargo nextest run              # everything (the `default` profile)
 #   cargo nextest run -P quick     # skips the slow disk-image tests and tests/join.rs
@@ -27,6 +28,16 @@ filter = '''
 test-group = 'serial'
 # One at a time they take about 150 s: start them first, beside everything else.
 priority = 100
+
+# Tests that time the sim's real-time thread against the wall clock (2 kHz steps, the
+# stall drop, the p99 step cost) run alone: on a loaded runner the thread oversleeps.
+[[profile.default.overrides]]
+filter = '''
+    (binary_id(quadcam-sim::runner) & test(=a_forced_stall_drops_sim_time_and_logs_it))
+  | binary_id(quadcam-sim::bench)
+  | (binary_id(quadcam::sim_host) & test(=start_describes_the_room_and_frames_advance))
+'''
+threads-required = 'num-test-threads'
 
 # The fast local loop: everything but the disk images and the split-recording joins (ffmpeg,
 # about 95 s of test time). default-filter cannot name a group: keep the disk-image lines in

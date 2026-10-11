@@ -82,7 +82,9 @@ open target/release/bundle/macos/QuadCam.app
   disk-image tests one at a time (hdiutil and diskutil share one daemon, and a detached
   image's disk number is reused). `tests/common` `Image` also takes a machine-wide lock, so
   disk-image tests in two worktrees take turns. A new test that attaches an `Image` goes into
-  the `serial` filter and the `quick` exclusion. Doc tests are not nextest's: the crates have
+  the `serial` filter and the `quick` exclusion. Three tests that time the sim's real-time
+  thread against the wall clock (`sim/tests/runner.rs` stall, `sim/tests/bench.rs`,
+  `tests/sim_host.rs` frames advance) run alone (`threads-required`); a new one joins them. Doc tests are not nextest's: the crates have
   none; if one is added, CI needs `cargo test --doc`.
 - **Build cache:** sccache (`brew install sccache`, then `RUSTC_WRAPPER=sccache`) shares
   compiled dependencies across worktrees, which each have their own `target/`. sccache cannot

@@ -67,6 +67,7 @@ QUADCAM_UPDATE_BINDINGS=1 cargo test --test bindings   # write app/src/bindings.
 - While you work, run `-P quick` and the test files of the area you changed. CI runs the full suite on every push, on every branch.
 - On a busy machine, cap the load: `CARGO_BUILD_JOBS=4 cargo nextest run --test-threads 4`.
 - The disk-image tests are in the `serial` test group: they run one at a time, because `hdiutil` and `diskutil` share one system daemon and a detached image's disk number goes to the next image. They also take a lock file in the temporary folder, so disk-image tests in two checkouts take turns. A new test that attaches a disk image belongs in the `serial` filter and the `quick` exclusion.
+- Three tests time the sim's real-time thread against the wall clock: the stall in `sim/tests/runner.rs`, the step cost in `sim/tests/bench.rs`, and the frame count in `tests/sim_host.rs`. They run alone, with no other test beside them, because the thread oversleeps on a loaded machine.
 - nextest does not run doc tests. The crates have none. If you add one, run `cargo test --doc` too.
 - Each git worktree has its own `target/`. [sccache](https://github.com/mozilla/sccache) shares compiled dependencies between them: `brew install sccache`, then `export RUSTC_WRAPPER=sccache CARGO_INCREMENTAL=0` (sccache does not cache incremental builds). With many worktrees, `CARGO_INCREMENTAL=0` saves disk space even without sccache.
 - The tests need ffmpeg. They make their own synthetic clips with `ffmpeg -f lavfi -i testsrc`.
