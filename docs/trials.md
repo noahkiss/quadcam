@@ -354,7 +354,8 @@ Recovery, from [Gear](gear.md#flash-a-betaflight-fc-preview):
 |---|---|---|
 | Before the restart into the bootloader | Nothing changed | Fix the named check and retry |
 | The FC never shows as a DFU device | Nothing written | Unplug USB and the battery, plug USB in, retry. The report names the backup |
-| A flash step or the read back fails | Half a firmware. The FC stays in its bootloader | Run the flash again, or unplug and enter the bootloader first |
+| The flash fails before the erase | Nothing erased; the old firmware is whole | QuadCam asks the FC to leave DFU. If it stays there, unplug USB and the battery and plug USB in |
+| A flash step after the erase or the read back fails | Half a firmware. The FC stays in its bootloader | Leave USB in. Flash an official build from Betaflight Configurator, which finds the FC in DFU mode. QuadCam cannot flash it from there |
 | The FC does not start afterwards | The ROM bootloader is intact | Unplug USB and battery. Hold the FC's boot button. Plug USB in. Flash an official build from Betaflight Configurator |
 | Flashed, but settings did not return | Firmware is fine | The old settings are in the `before_flash` backup. The staged change stays in **Changes** |
 
