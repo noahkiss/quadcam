@@ -120,7 +120,7 @@ export const commands = {
 	/**  Highlights and the key frame of library clips, with macOS video analysis. */
 	libraryAnalyzeVideo: (params: VideoParams) => typedError<VideoReport, string>(__TAURI_INVOKE("library_analyze_video", { params })),
 	/**
-	 *  The wind and temperature of library clips' places and hours, from Open-Meteo; only
+	 *  The wind, temperature and sky of library clips' places and hours, from Open-Meteo; only
 	 *  while the weather setting is on.
 	 */
 	libraryWeather: (params: WeatherParams) => typedError<WeatherReport, string>(__TAURI_INVOKE("library_weather", { params })),
@@ -3552,7 +3552,7 @@ export type LibClip_Deserialize = {
 	moments?: Moment[],
 	/**  What macOS video analysis found; None until the clip was analysed. */
 	video?: VideoScan | null,
-	/**  The wind and temperature of its place and hour; None until looked up (`weather`). */
+	/**  The wind, temperature and sky of its place and hour; None until looked up (`weather`). */
 	weather?: Weather | null,
 	/**  Ranges with a picture; empty when the clip has no dead air (or was never scanned). */
 	keep?: Span[],
@@ -3603,7 +3603,7 @@ export type LibClip_Serialize = {
 	moments: Moment[],
 	/**  What macOS video analysis found; None until the clip was analysed. */
 	video?: VideoScan | null,
-	/**  The wind and temperature of its place and hour; None until looked up (`weather`). */
+	/**  The wind, temperature and sky of its place and hour; None until looked up (`weather`). */
 	weather?: Weather | null,
 	/**  Ranges with a picture; empty when the clip has no dead air (or was never scanned). */
 	keep: Span[],
@@ -6684,6 +6684,9 @@ export type SimsParams = {
 	profile?: number | null,
 };
 
+/**  The sky of an hour, from its WMO weather code (`sky`). */
+export type Sky = "clear" | "partly_cloudy" | "cloudy" | "fog" | "drizzle" | "rain" | "heavy_rain" | "sleet" | "snow" | "thunderstorm" | "hail";
+
 /**  Where a moment's evidence came from. */
 export type Source = "radio_log" | 
 /**  The clip's own frames (dead air). */
@@ -7648,6 +7651,22 @@ export type Weather = {
 	wind_from_deg?: number | null,
 	/**  `archive` or `historical_forecast`. */
 	source: string,
+	/**  Cloud cover, percent of the sky. */
+	cloud_cover_pct?: number | null,
+	/**  Rain, showers and snow of the hour, in mm of water. */
+	precipitation_mm?: number | null,
+	rain_mm?: number | null,
+	snowfall_cm?: number | null,
+	/**  The WMO weather code of the hour. */
+	weather_code?: number | null,
+	/**  The sky that code names (`sky`). */
+	sky?: Sky | null,
+	/**  Relative humidity 2 m above ground, percent. */
+	humidity_pct?: number | null,
+	/**  Whether the sun was up. */
+	is_day?: boolean | null,
+	/**  Visibility in metres; only the historical forecast has it. */
+	visibility_m?: number | null,
 };
 
 /**  What a weather run did with one clip. */
@@ -7655,7 +7674,10 @@ export type WeatherClip = {
 	id: string,
 	path: string,
 	weather: Weather | null,
-	/**  The clip had its weather already; nothing was asked. */
+	/**
+	 *  The clip had its weather already; nothing was asked. A record without the sky values
+	 *  is not kept: it is looked up again.
+	 */
 	kept: boolean,
 	/**  Why nothing was looked up or found: no place, no time, no data for that hour yet. */
 	skipped: string | null,
@@ -7664,7 +7686,10 @@ export type WeatherClip = {
 
 /**  `library_weather`: which clips. */
 export type WeatherParams = {
-	/**  Library clip ids; empty means every clip without weather (cuts excluded). */
+	/**
+	 *  Library clip ids; empty means every clip without weather, or with a record saved
+	 *  before the sky values (cuts excluded).
+	 */
 	ids?: string[],
 };
 

@@ -215,7 +215,7 @@ with_gear_rows! {
     library_rescan(params: ClipIdParams) -> LibClip = |c| c.library_rescan(&params.id);
     /// Highlights and the key frame of library clips, with macOS video analysis.
     library_analyze_video(params: VideoParams) -> VideoReport = |c| c.library_analyze_video(&params);
-    /// The wind and temperature of library clips' places and hours, from Open-Meteo; only
+    /// The wind, temperature and sky of library clips' places and hours, from Open-Meteo; only
     /// while the weather setting is on.
     library_weather(params: WeatherParams) -> WeatherReport = |c| c.library_weather(&params);
     /// Video analysis on this Mac: available, or why not.

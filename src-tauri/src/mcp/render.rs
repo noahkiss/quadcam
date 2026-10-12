@@ -53,7 +53,9 @@ pub(super) fn lib_line(c: &Value) -> String {
     )
 }
 
-/// A clip's weather as one phrase: `18.2 °C, wind 12 km/h from 270° (gusts 20)`.
+/// A clip's weather as one phrase: `18.2 °C, wind 12 km/h from 270° (gusts 20), rain,
+/// cloud 75%, precipitation 1.2 mm, humidity 88%, visibility 9.0 km`. Each sky value only
+/// when the record has it; precipitation only above 0.
 pub(super) fn weather_phrase(w: &Value) -> Option<String> {
     let t = w["temperature_c"].as_f64()?;
     let wind = w["wind_kmh"].as_f64()?;
@@ -63,6 +65,21 @@ pub(super) fn weather_phrase(w: &Value) -> Option<String> {
     }
     if let Some(g) = w["gusts_kmh"].as_f64() {
         s += &format!(" (gusts {g:.0})");
+    }
+    if let Some(k) = w["sky"].as_str() {
+        s += &format!(", {}", k.replace('_', " "));
+    }
+    if let Some(c) = w["cloud_cover_pct"].as_f64() {
+        s += &format!(", cloud {c:.0}%");
+    }
+    if let Some(p) = w["precipitation_mm"].as_f64().filter(|p| *p > 0.0) {
+        s += &format!(", precipitation {p:.1} mm");
+    }
+    if let Some(h) = w["humidity_pct"].as_f64() {
+        s += &format!(", humidity {h:.0}%");
+    }
+    if let Some(v) = w["visibility_m"].as_f64() {
+        s += &format!(", visibility {:.1} km", v / 1000.0);
     }
     Some(s)
 }

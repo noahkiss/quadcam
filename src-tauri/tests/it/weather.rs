@@ -7,12 +7,14 @@ use quadcam_lib::library as lib;
 use quadcam_lib::metadata::Location;
 use quadcam_lib::modules::fetch::Fetch;
 use quadcam_lib::photos::Recorder;
+use quadcam_lib::weather::Sky;
 use serde_json::json;
 use std::path::Path;
 use std::sync::{Arc, Mutex};
 
 /// Open-Meteo stand-in: an hourly day for the asked date, with no values from the archive
-/// when `archive_behind`. Records every URL.
+/// when `archive_behind`. The archive's visibility is null, as Open-Meteo's is. Records every
+/// URL.
 #[derive(Default)]
 struct FakeMeteo {
     archive_behind: bool,
@@ -36,6 +38,7 @@ impl Fetch for FakeMeteo {
             .to_string();
         let empty = self.archive_behind && url.starts_with(quadcam_lib::weather::ARCHIVE);
         let v = |x: f64| if empty { None } else { Some(x) };
+        let archive = url.starts_with(quadcam_lib::weather::ARCHIVE);
         let body = json!({
             "hourly": {
                 "time": (0..24).map(|h| format!("{day}T{h:02}:00")).collect::<Vec<_>>(),
@@ -43,6 +46,14 @@ impl Fetch for FakeMeteo {
                 "wind_speed_10m": (0..24).map(|_| v(14.0)).collect::<Vec<_>>(),
                 "wind_gusts_10m": (0..24).map(|_| v(25.0)).collect::<Vec<_>>(),
                 "wind_direction_10m": (0..24).map(|_| v(200.0)).collect::<Vec<_>>(),
+                "cloud_cover": (0..24).map(|_| v(40.0)).collect::<Vec<_>>(),
+                "precipitation": (0..24).map(|_| v(0.4)).collect::<Vec<_>>(),
+                "rain": (0..24).map(|_| v(0.4)).collect::<Vec<_>>(),
+                "snowfall": (0..24).map(|_| v(0.0)).collect::<Vec<_>>(),
+                "weather_code": (0..24).map(|_| v(2.0)).collect::<Vec<_>>(),
+                "relative_humidity_2m": (0..24).map(|_| v(71.0)).collect::<Vec<_>>(),
+                "is_day": (0..24).map(|h| v(if (6..20).contains(&h) { 1.0 } else { 0.0 })).collect::<Vec<_>>(),
+                "visibility": (0..24).map(|_| if archive { None } else { v(24000.0) }).collect::<Vec<_>>(),
             }
         });
         std::fs::write(dest, body.to_string())?;
@@ -51,13 +62,17 @@ impl Fetch for FakeMeteo {
 }
 
 fn core(dir: &Path, fake: &Arc<FakeMeteo>, weather: bool) -> Core {
+    core_with(dir, fake.clone(), weather)
+}
+
+fn core_with(dir: &Path, fetch: Arc<dyn Fetch>, weather: bool) -> Core {
     let c = Core::new(
         dir.join("cache"),
         None,
         Arc::new(NoHooks),
         Arc::new(Recorder::default()),
     )
-    .with_weather_fetch(fake.clone());
+    .with_weather_fetch(fetch);
     let mut d = c.defaults();
     d.output_dir = Some(dir.join("out"));
     d.weather = weather;
@@ -139,6 +154,14 @@ fn weather_is_looked_up_once_and_a_new_time_makes_it_stale() {
         (14.0, Some(25.0), Some(200.0))
     );
     assert_eq!(w.source, "archive");
+    assert_eq!(w.sky, Some(Sky::PartlyCloudy));
+    assert_eq!(
+        (w.cloud_cover_pct, w.precipitation_mm, w.humidity_pct),
+        (Some(40.0), Some(0.4), Some(71.0))
+    );
+    assert_eq!(w.weather_code, Some(2));
+    assert!(w.is_day.is_some());
+    assert_eq!(w.visibility_m, None, "the archive has no visibility");
     let asked = fake.asked();
     assert_eq!(asked.len(), 1, "{asked:?}");
     assert!(
@@ -196,10 +219,9 @@ fn a_recent_hour_comes_from_the_historical_forecast() {
     let (_src, id) = imported(&core);
     place(&core, &id, "12:00");
     let r = core.library_weather(&WeatherParams::default()).unwrap();
-    assert_eq!(
-        r.clips[0].weather.as_ref().unwrap().source,
-        "historical_forecast"
-    );
+    let w = r.clips[0].weather.as_ref().unwrap();
+    assert_eq!(w.source, "historical_forecast");
+    assert_eq!(w.visibility_m, Some(24000.0));
     let asked = fake.asked();
     assert_eq!(asked.len(), 2);
     assert!(asked[0].starts_with(quadcam_lib::weather::ARCHIVE));
@@ -218,10 +240,19 @@ fn mcp_shows_weather_and_sun_on_library_clips() {
     let r = s.call_tool("quadcam_library_files", json!({"action": "weather"}));
     assert_eq!(r["isError"], false, "{r}");
     let text = r["content"][0]["text"].as_str().unwrap();
-    assert!(text.contains("wind 14 km/h from 200° (gusts 25)"), "{text}");
+    assert!(
+        text.contains("wind 14 km/h from 200° (gusts 25), partly cloudy, cloud 40%, precipitation 0.4 mm, humidity 71%"),
+        "{text}"
+    );
+    assert!(!text.contains("visibility"), "{text}");
     let r = s.call_tool("quadcam_library", json!({}));
     let clip = &r["structuredContent"]["clips"][0];
     assert_eq!(clip["weather"]["wind_kmh"], 14.0, "{r}");
+    assert_eq!(clip["weather"]["sky"], "partly_cloudy", "{r}");
+    assert_eq!(clip["weather"]["cloud_cover_pct"], 40.0, "{r}");
+    assert_eq!(clip["weather"]["visibility_m"], json!(null), "{r}");
+    let line = r["content"][0]["text"].as_str().unwrap();
+    assert!(line.contains("partly cloudy, cloud 40%"), "{line}");
     assert!(clip.get("sun").is_some(), "{r}");
     let r = s.call_tool("quadcam_library_files", json!({"action": "weather"}));
     assert!(r["content"][0]["text"]
@@ -263,4 +294,81 @@ fn the_cli_refuses_weather_while_the_setting_is_off() {
             .contains("off in tests"),
         "{v}"
     );
+}
+
+#[test]
+fn a_record_saved_before_the_sky_values_is_looked_up_once_more() {
+    let work = tempfile::tempdir().unwrap();
+    let fake = Arc::new(FakeMeteo::default());
+    let core = core(work.path(), &fake, true);
+    let (_src, id) = imported(&core);
+    place(&core, &id, "18:30");
+    // The record an earlier QuadCam wrote: wind and temperature only.
+    let file = core.library(&Default::default()).unwrap().clips[0]
+        .file
+        .clone();
+    let old = r#"{"hour":"2026-06-21T22:00Z","temperature_c":21.5,"wind_kmh":9.0,"gusts_kmh":15.0,"wind_from_deg":90.0,"source":"archive"}"#;
+    lib::write_keys(&file, &[(lib::KEY_WEATHER, old.into())]).unwrap();
+    core.library_rebuild().unwrap();
+    let it = core.library(&Default::default()).unwrap().clips[0].clone();
+    let w = it.clip.weather.clone().expect("the old record reads");
+    assert_eq!((w.wind_kmh, w.sky, w.cloud_cover_pct), (9.0, None, None));
+
+    // One more request, which saves the sky values.
+    let r = core.library_weather(&WeatherParams::default()).unwrap();
+    assert_eq!(r.found(), 1, "{r:?}");
+    assert!(!r.clips[0].kept);
+    assert_eq!(fake.asked().len(), 1);
+    let w = r.clips[0].weather.clone().unwrap();
+    assert_eq!((w.wind_kmh, w.sky), (14.0, Some(Sky::PartlyCloudy)));
+    let saved: serde_json::Value =
+        serde_json::from_str(&item(&file, lib::KEY_WEATHER).unwrap()).unwrap();
+    assert_eq!(saved["cloud_cover_pct"], 40.0);
+
+    // Then never again.
+    let r = core.library_weather(&WeatherParams::default()).unwrap();
+    assert!(r.clips.is_empty(), "{r:?}");
+    let r = core
+        .library_weather(&WeatherParams { ids: vec![id] })
+        .unwrap();
+    assert!(r.clips[0].kept, "{r:?}");
+    assert_eq!(fake.asked().len(), 1);
+}
+
+#[test]
+fn an_old_record_stays_when_the_new_lookup_finds_nothing() {
+    let work = tempfile::tempdir().unwrap();
+    let fake = Arc::new(FakeMeteo::default());
+    let core = core(work.path(), &fake, true);
+    let (_src, id) = imported(&core);
+    place(&core, &id, "18:30");
+    let file = core.library(&Default::default()).unwrap().clips[0]
+        .file
+        .clone();
+    let old =
+        r#"{"hour":"2026-06-21T22:00Z","temperature_c":21.5,"wind_kmh":9.0,"source":"archive"}"#;
+    lib::write_keys(&file, &[(lib::KEY_WEATHER, old.into())]).unwrap();
+    core.library_rebuild().unwrap();
+    // Open-Meteo fails now: the clip keeps what it had.
+    let core = core_with(work.path(), Arc::new(Refusing), true);
+    let r = core.library_weather(&WeatherParams::default()).unwrap();
+    assert!(r.clips[0].error.is_some(), "{r:?}");
+    assert_eq!(r.found(), 0, "{r:?}");
+    assert_eq!(r.clips[0].weather.as_ref().unwrap().wind_kmh, 9.0);
+    let saved: serde_json::Value =
+        serde_json::from_str(&item(&file, lib::KEY_WEATHER).unwrap()).unwrap();
+    assert_eq!(saved["wind_kmh"], 9.0);
+    assert!(core.library(&Default::default()).unwrap().clips[0]
+        .clip
+        .weather
+        .is_some());
+}
+
+/// Open-Meteo stand-in that refuses every request.
+struct Refusing;
+
+impl Fetch for Refusing {
+    fn download(&self, _url: &str, _dest: &Path) -> anyhow::Result<()> {
+        anyhow::bail!("offline")
+    }
 }

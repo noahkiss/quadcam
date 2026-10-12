@@ -1,4 +1,4 @@
-//! `Core`'s weather: the wind and temperature of library clips' places and hours, from
+//! `Core`'s weather: the wind, temperature and sky of library clips' places and hours, from
 //! Open-Meteo (`crate::weather`), written into each clip file once. Refused while the
 //! `weather` setting is off, before any request.
 
@@ -18,7 +18,8 @@ static ONE: Mutex<()> = Mutex::new(());
 #[derive(Debug, Clone, Default, Serialize, Deserialize, specta::Type)]
 #[serde(default)]
 pub struct WeatherParams {
-    /// Library clip ids; empty means every clip without weather (cuts excluded).
+    /// Library clip ids; empty means every clip without weather, or with a record saved
+    /// before the sky values (cuts excluded).
     pub ids: Vec<String>,
 }
 
@@ -28,7 +29,8 @@ pub struct WeatherClip {
     pub id: String,
     pub path: PathBuf,
     pub weather: Option<Weather>,
-    /// The clip had its weather already; nothing was asked.
+    /// The clip had its weather already; nothing was asked. A record without the sky values
+    /// is not kept: it is looked up again.
     pub kept: bool,
     /// Why nothing was looked up or found: no place, no time, no data for that hour yet.
     pub skipped: Option<String>,
@@ -45,7 +47,7 @@ impl WeatherReport {
     pub fn found(&self) -> usize {
         self.clips
             .iter()
-            .filter(|c| c.weather.is_some() && !c.kept)
+            .filter(|c| c.weather.is_some() && !c.kept && c.skipped.is_none() && c.error.is_none())
             .count()
     }
 }
@@ -59,10 +61,12 @@ impl Core {
         }));
     }
 
-    /// Looks up the wind and temperature of library clips' places and hours and writes them
-    /// into the clip files (`app.quadcam.weather`). `ids` empty means every clip without
-    /// weather. A clip that has weather keeps it: it is never asked for again. A clip needs a
-    /// location and a time of day. Refused while the `weather` setting is off.
+    /// Looks up the wind, temperature and sky of library clips' places and hours and writes
+    /// them into the clip files (`app.quadcam.weather`). `ids` empty means every clip without
+    /// weather. A clip that has weather keeps it: it is never asked for again, except once
+    /// when its record was saved before the sky values (`Weather::lacks_sky`); until that
+    /// lookup finds the hour, the old record stays. A clip needs a location and a time of
+    /// day. Refused while the `weather` setting is off.
     pub fn library_weather(&self, p: &WeatherParams) -> Result<WeatherReport> {
         if !self.defaults().weather {
             bail!("Weather is off. Turn on the weather setting first (Settings > Import, or settings set weather=true).");
@@ -71,7 +75,7 @@ impl Core {
             self.with_index(|root, ix| Ok(((root.to_path_buf(), ix.clips.clone()), false)))?;
         clips.retain(|c| c.cut_of.is_none());
         if p.ids.is_empty() {
-            clips.retain(|c| c.weather.is_none());
+            clips.retain(|c| c.weather.as_ref().is_none_or(Weather::lacks_sky));
         } else {
             for id in &p.ids {
                 if !clips.iter().any(|c| &c.id == id || c.aliases.contains(id)) {
@@ -91,7 +95,7 @@ impl Core {
                 id: c.id.clone(),
                 path: c.path.clone(),
                 weather: c.weather.clone(),
-                kept: c.weather.is_some(),
+                kept: c.weather.as_ref().is_some_and(|w| !w.lacks_sky()),
                 skipped: None,
                 error: None,
             };

@@ -55,8 +55,9 @@ pub const KEY_PARTS: &str = "app.quadcam.parts";
 /// What macOS video analysis found: highlights and the key frame (`highlights::value`).
 /// Present once the clip was analysed, even when it found nothing.
 pub const KEY_VIDEO: &str = "app.quadcam.video";
-/// The wind and temperature of the clip's place and hour (`weather::Weather` as JSON), once
-/// looked up. Never looked up again; a new place, date or time removes it.
+/// The wind, temperature and sky of the clip's place and hour (`weather::Weather` as JSON),
+/// once looked up. Never looked up again, except once for a record saved before the sky
+/// values; a new place, date or time removes it.
 pub const KEY_WEATHER: &str = "app.quadcam.weather";
 const QT: &str = "com.apple.quicktime.";
 
@@ -204,7 +205,7 @@ pub struct LibClip {
     /// What macOS video analysis found; None until the clip was analysed.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub video: Option<crate::highlights::VideoScan>,
-    /// The wind and temperature of its place and hour; None until looked up (`weather`).
+    /// The wind, temperature and sky of its place and hour; None until looked up (`weather`).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub weather: Option<crate::weather::Weather>,
     /// Ranges with a picture; empty when the clip has no dead air (or was never scanned).

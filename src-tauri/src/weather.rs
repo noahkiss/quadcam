@@ -1,11 +1,13 @@
-//! Weather at a clip's place and time: the wind and temperature of that hour, from
+//! Weather at a clip's place and time: the wind, temperature and sky of that hour, from
 //! Open-Meteo (open-meteo.com, free and keyless). Only when the `weather` setting is on.
 //!
-//! Open-Meteo's archive (ERA5 reanalysis) holds decades of hours but runs about five days
-//! behind; a newer hour comes from its historical forecast instead. A request names a day,
-//! the location rounded to two decimals (about a kilometre), and the hourly values; nothing
-//! else leaves the Mac. One answer is kept per clip, in the file (`app.quadcam.weather`),
-//! and never asked for again.
+//! Open-Meteo's archive (Best Match: ERA5 reanalysis and its newer models) holds decades of
+//! hours and answers up to the previous day; an hour it has no value for yet comes from its
+//! historical forecast instead. The archive has no visibility, so that value comes only from
+//! the historical forecast. A request names a day, the location rounded to two decimals
+//! (about a kilometre), and the hourly values; nothing else leaves the Mac. One answer is
+//! kept per clip, in the file (`app.quadcam.weather`), and never asked for again, except
+//! once for a record saved before the sky values existed (`Weather::lacks_sky`).
 //!
 //! Downloads go through `modules::fetch::Fetch`, so a process started by cargo never reaches
 //! the internet and tests answer with a fake.
@@ -19,7 +21,66 @@ use std::path::Path;
 
 pub const ARCHIVE: &str = "https://archive-api.open-meteo.com/v1/archive";
 pub const HISTORICAL_FORECAST: &str = "https://historical-forecast-api.open-meteo.com/v1/forecast";
-const HOURLY: &str = "temperature_2m,wind_speed_10m,wind_gusts_10m,wind_direction_10m";
+const HOURLY: &str = "temperature_2m,wind_speed_10m,wind_gusts_10m,wind_direction_10m,\
+cloud_cover,precipitation,rain,snowfall,weather_code,relative_humidity_2m,is_day,visibility";
+
+/// The sky of an hour, from its WMO weather code (`sky`).
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, specta::Type)]
+#[serde(rename_all = "snake_case")]
+pub enum Sky {
+    Clear,
+    PartlyCloudy,
+    Cloudy,
+    Fog,
+    Drizzle,
+    Rain,
+    HeavyRain,
+    Sleet,
+    Snow,
+    Thunderstorm,
+    Hail,
+}
+
+impl Sky {
+    /// The sky as a word (`partly cloudy`).
+    pub fn word(self) -> &'static str {
+        match self {
+            Sky::Clear => "clear",
+            Sky::PartlyCloudy => "partly cloudy",
+            Sky::Cloudy => "cloudy",
+            Sky::Fog => "fog",
+            Sky::Drizzle => "drizzle",
+            Sky::Rain => "rain",
+            Sky::HeavyRain => "heavy rain",
+            Sky::Sleet => "sleet",
+            Sky::Snow => "snow",
+            Sky::Thunderstorm => "thunderstorm",
+            Sky::Hail => "hail",
+        }
+    }
+}
+
+/// The sky for a WMO weather code (WMO 4677 as Open-Meteo uses it); None for a code outside
+/// that table. Mainly clear reads as clear; freezing drizzle and freezing rain as sleet;
+/// showers as rain or snow, violent showers as heavy rain; a storm with hail as hail. The
+/// words have no night form: `is_day` picks only the icon (sun or moon) in the app.
+pub fn sky(weather_code: u8) -> Option<Sky> {
+    let s = match weather_code {
+        0 | 1 => Sky::Clear,
+        2 => Sky::PartlyCloudy,
+        3 => Sky::Cloudy,
+        45 | 48 => Sky::Fog,
+        51 | 53 | 55 => Sky::Drizzle,
+        56 | 57 | 66 | 67 => Sky::Sleet,
+        61 | 63 | 80 | 81 => Sky::Rain,
+        65 | 82 => Sky::HeavyRain,
+        71 | 73 | 75 | 77 | 85 | 86 => Sky::Snow,
+        95 => Sky::Thunderstorm,
+        96 | 99 => Sky::Hail,
+        _ => return None,
+    };
+    Some(s)
+}
 
 /// The weather of one hour at one place. Metric: degrees Celsius and km/h.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, specta::Type)]
@@ -36,6 +97,39 @@ pub struct Weather {
     pub wind_from_deg: Option<f64>,
     /// `archive` or `historical_forecast`.
     pub source: String,
+    /// Cloud cover, percent of the sky.
+    #[serde(default)]
+    pub cloud_cover_pct: Option<f64>,
+    /// Rain, showers and snow of the hour, in mm of water.
+    #[serde(default)]
+    pub precipitation_mm: Option<f64>,
+    #[serde(default)]
+    pub rain_mm: Option<f64>,
+    #[serde(default)]
+    pub snowfall_cm: Option<f64>,
+    /// The WMO weather code of the hour.
+    #[serde(default)]
+    pub weather_code: Option<u8>,
+    /// The sky that code names (`sky`).
+    #[serde(default)]
+    pub sky: Option<Sky>,
+    /// Relative humidity 2 m above ground, percent.
+    #[serde(default)]
+    pub humidity_pct: Option<f64>,
+    /// Whether the sun was up.
+    #[serde(default)]
+    pub is_day: Option<bool>,
+    /// Visibility in metres; only the historical forecast has it.
+    #[serde(default)]
+    pub visibility_m: Option<f64>,
+}
+
+impl Weather {
+    /// A record saved before QuadCam asked for the sky: no cloud cover and no weather code.
+    /// Such a clip is looked up once more.
+    pub fn lacks_sky(&self) -> bool {
+        self.cloud_cover_pct.is_none() && self.weather_code.is_none()
+    }
 }
 
 /// The hour nearest `t`.
@@ -65,6 +159,22 @@ pub fn parse(body: &[u8], hour: DateTime<Utc>, source: &str) -> Result<Option<We
         wind_gusts_10m: Vec<Option<f64>>,
         #[serde(default)]
         wind_direction_10m: Vec<Option<f64>>,
+        #[serde(default)]
+        cloud_cover: Vec<Option<f64>>,
+        #[serde(default)]
+        precipitation: Vec<Option<f64>>,
+        #[serde(default)]
+        rain: Vec<Option<f64>>,
+        #[serde(default)]
+        snowfall: Vec<Option<f64>>,
+        #[serde(default)]
+        weather_code: Vec<Option<f64>>,
+        #[serde(default)]
+        relative_humidity_2m: Vec<Option<f64>>,
+        #[serde(default)]
+        is_day: Vec<Option<f64>>,
+        #[serde(default)]
+        visibility: Vec<Option<f64>>,
     }
     #[derive(Deserialize)]
     struct Answer {
@@ -89,6 +199,9 @@ pub fn parse(body: &[u8], hour: DateTime<Utc>, source: &str) -> Result<Option<We
     else {
         return Ok(None);
     };
+    let weather_code = at(&h.weather_code)
+        .filter(|c| (0.0..=255.0).contains(c))
+        .map(|c| c.round() as u8);
     Ok(Some(Weather {
         hour: format!("{want}Z"),
         temperature_c,
@@ -96,6 +209,15 @@ pub fn parse(body: &[u8], hour: DateTime<Utc>, source: &str) -> Result<Option<We
         gusts_kmh: at(&h.wind_gusts_10m),
         wind_from_deg: at(&h.wind_direction_10m),
         source: source.into(),
+        cloud_cover_pct: at(&h.cloud_cover),
+        precipitation_mm: at(&h.precipitation),
+        rain_mm: at(&h.rain),
+        snowfall_cm: at(&h.snowfall),
+        weather_code,
+        sky: weather_code.and_then(sky),
+        humidity_pct: at(&h.relative_humidity_2m),
+        is_day: at(&h.is_day).map(|d| d >= 0.5),
+        visibility_m: at(&h.visibility),
     }))
 }
 
@@ -164,17 +286,29 @@ pub mod tests {
         }
     }
 
-    pub fn day(date: &str, temp: Option<f64>) -> String {
+    /// One hourly day as Open-Meteo answers it. `visibility` false leaves it null, as the
+    /// archive does.
+    pub fn day_with(date: &str, temp: Option<f64>, visibility: bool) -> String {
         let times: Vec<String> = (0..24).map(|h| format!("{date}T{h:02}:00")).collect();
         let t: Vec<Option<f64>> = (0..24).map(|h| temp.map(|x| x + h as f64 / 10.0)).collect();
         let w: Vec<Option<f64>> = (0..24).map(|h| temp.map(|_| 10.0 + h as f64)).collect();
+        let all = |x: f64| vec![temp.map(|_| x); 24];
         serde_json::json!({
             "latitude": 40.7, "longitude": -74.0,
             "hourly": {"time": times, "temperature_2m": t, "wind_speed_10m": w,
                 "wind_gusts_10m": w.iter().map(|x| x.map(|v| v + 8.0)).collect::<Vec<_>>(),
-                "wind_direction_10m": vec![Some(270.0); 24]}
+                "wind_direction_10m": vec![Some(270.0); 24],
+                "cloud_cover": all(75.0), "precipitation": all(1.2), "rain": all(1.2),
+                "snowfall": all(0.0), "weather_code": all(61.0),
+                "relative_humidity_2m": all(88.0),
+                "is_day": (0..24).map(|h| temp.map(|_| if (6..20).contains(&h) { 1.0 } else { 0.0 })).collect::<Vec<_>>(),
+                "visibility": vec![if visibility { temp.map(|_| 9000.0) } else { None }; 24]}
         })
         .to_string()
+    }
+
+    pub fn day(date: &str, temp: Option<f64>) -> String {
+        day_with(date, temp, true)
     }
 
     fn utc(s: &str) -> DateTime<Utc> {
@@ -232,6 +366,14 @@ pub mod tests {
         assert_eq!(w.gusts_kmh, Some(36.0));
         assert_eq!(w.wind_from_deg, Some(270.0));
         assert_eq!(w.source, "historical_forecast");
+        assert_eq!(w.cloud_cover_pct, Some(75.0));
+        assert_eq!(w.precipitation_mm, Some(1.2));
+        assert_eq!(w.weather_code, Some(61));
+        assert_eq!(w.sky, Some(Sky::Rain));
+        assert_eq!(w.humidity_pct, Some(88.0));
+        assert_eq!(w.is_day, Some(true));
+        assert_eq!(w.visibility_m, Some(9000.0));
+        assert!(!w.lacks_sky());
         // A second clip that day asks nothing new.
         lookup(&fake, d.path(), &mut memo, 40.7, -74.0, at).unwrap();
         assert_eq!(fake.asked.lock().unwrap().len(), 2);
@@ -255,5 +397,78 @@ pub mod tests {
         )
         .unwrap_err();
         assert!(format!("{e:#}").contains("out of range"), "{e:#}");
+    }
+
+    #[test]
+    fn the_archive_has_no_visibility_and_null_is_none() {
+        let at = utc("2026-09-28T03:00:00Z");
+        let w = parse(
+            day_with("2026-09-28", Some(5.0), false).as_bytes(),
+            at,
+            "archive",
+        )
+        .unwrap()
+        .unwrap();
+        assert_eq!(w.visibility_m, None);
+        assert_eq!(w.is_day, Some(false));
+        assert_eq!(w.sky, Some(Sky::Rain));
+        // An answer without the sky values at all still reads.
+        let old = br#"{"hourly":{"time":["2026-09-28T03:00"],"temperature_2m":[5.0],"wind_speed_10m":[9.0],"cloud_cover":[null],"weather_code":[null]}}"#;
+        let w = parse(old, at, "archive").unwrap().unwrap();
+        assert_eq!(
+            (w.cloud_cover_pct, w.weather_code, w.sky),
+            (None, None, None)
+        );
+        assert!(w.lacks_sky());
+    }
+
+    #[test]
+    fn a_record_saved_before_the_sky_values_still_reads() {
+        let w: Weather = serde_json::from_str(
+            r#"{"hour":"2026-09-28T18:00Z","temperature_c":18.2,"wind_kmh":12.0,"gusts_kmh":20.0,"wind_from_deg":270.0,"source":"archive"}"#,
+        )
+        .unwrap();
+        assert_eq!(w.wind_kmh, 12.0);
+        assert_eq!((w.sky, w.visibility_m, w.is_day), (None, None, None));
+        assert!(w.lacks_sky());
+    }
+
+    #[test]
+    fn every_wmo_code_group_names_a_sky() {
+        let groups: &[(&[u8], Sky)] = &[
+            (&[0, 1], Sky::Clear),
+            (&[2], Sky::PartlyCloudy),
+            (&[3], Sky::Cloudy),
+            (&[45, 48], Sky::Fog),
+            (&[51, 53, 55], Sky::Drizzle),
+            (&[56, 57], Sky::Sleet),
+            (&[61, 63], Sky::Rain),
+            (&[65], Sky::HeavyRain),
+            (&[66, 67], Sky::Sleet),
+            (&[71, 73, 75, 77], Sky::Snow),
+            (&[80, 81], Sky::Rain),
+            (&[82], Sky::HeavyRain),
+            (&[85, 86], Sky::Snow),
+            (&[95], Sky::Thunderstorm),
+            (&[96, 99], Sky::Hail),
+        ];
+        let mut known = 0;
+        for (codes, want) in groups {
+            for &c in *codes {
+                assert_eq!(sky(c), Some(*want), "code {c}");
+                known += 1;
+            }
+        }
+        // Every other code is outside the table.
+        let unknown = (0..=255u8).filter(|&c| sky(c).is_none()).count();
+        assert_eq!(known + unknown, 256);
+        for c in [4, 10, 44, 50, 60, 70, 90, 98, 100, 255] {
+            assert_eq!(sky(c), None, "code {c}");
+        }
+        assert_eq!(Sky::PartlyCloudy.word(), "partly cloudy");
+        assert_eq!(
+            serde_json::to_value(Sky::HeavyRain).unwrap(),
+            serde_json::json!("heavy_rain")
+        );
     }
 }

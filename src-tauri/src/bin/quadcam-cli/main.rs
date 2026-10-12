@@ -405,10 +405,11 @@ enum LibCmd {
         #[arg(long)]
         again: bool,
     },
-    /// Look up the wind and temperature of clips' places and hours at Open-Meteo, and write
-    /// them into the clip files. Needs the weather setting on; a clip with weather keeps it.
+    /// Look up the wind, temperature and sky of clips' places and hours at Open-Meteo, and
+    /// write them into the clip files. Needs the weather setting on; a clip with weather keeps
+    /// it, except a record saved before the sky values, which is looked up once more.
     Weather {
-        /// Clip ids. Default: every clip without weather.
+        /// Clip ids. Default: every clip without weather or without the sky values.
         ids: Vec<String>,
     },
     /// Move clips, with their cuts and originals, to the Trash.
