@@ -5,6 +5,8 @@ User-facing changes in each release, newest first. Release notes on
 
 ## Unreleased
 
+## 0.19.0 (2026-10-11)
+
 - **Map, off by default.** Settings > Places > **Show the Map page** adds **Map** to the sidebar: your places and clips on an Apple map (Apple Maps on your Mac, no account). A place's pin shows its clip count, and a click shows its clips in the library. A clip with a location but no place has its own pin, which opens the clip. **Map**, **Hybrid** and **Satellite** pick the look; **Show all** zooms to every pin. The `map_view` setting, in the CLI and MCP too. See [The map](docs/library.md#the-map).
 
 ## 0.18.0 (2026-10-11)
