@@ -220,7 +220,7 @@ existing logic modules. `core/gear.rs` holds the `Core` methods; `api/gear.rs` t
 | `gear/osd.rs` | OSD position encode and decode, element widths, grids, render, overlap and off-screen check | `bf/dump` |
 | `gear/rates.rs` | Rate curves (Betaflight, Actual, Quick), sampling for the chart, conversion between types | none |
 | `gear/sims/mod.rs` + `liftoff.rs`, `micro.rs`, `uncrashed.rs`, `zone.rs`, `velocidrone.rs` | One `Sim` adapter per game: find, read rate profiles, write, "running" check | `rates` |
-| `gear/voice/` (`lines.rs`, `tts.rs`, `eleven.rs`, `keychain.rs`, `batch.rs`, `reuse.rs`, `sets.rs`, `render.rs`, `packs.rs`) | Voice lines and spelling rules, TTS providers (`say`, OpenAI-compatible, ElevenLabs), the Keychain key, batched carrier-sentence renders, line reuse, line sets, the render cache and normalisation, pack index and install | `media` (ffmpeg), `store` |
+| `gear/voice/` (`lines.rs`, `tts.rs`, `eleven.rs`, `keychain.rs`, `batch.rs`, `reuse.rs`, `sets.rs`, `render.rs`, `packs.rs`, `asr.rs`, `publish.rs`) | Voice lines and spelling rules, TTS providers (`say`, OpenAI-compatible, ElevenLabs), the Keychain key, batched carrier-sentence renders, line reuse, line sets, the render cache and normalisation, pack index and install, the speech check, pack publishing | `media` (ffmpeg), `store` |
 | `gear/splash.rs` | Image to 1-bit 128x64 with threshold and preview; patch and decode a firmware image | `image` crate (PNG decode) |
 | `gear/firmware/` (`check.rs`, `edgetx.rs`, `elrs.rs`) | Version checks; EdgeTX download, splash, DFU flash; ELRS options and flash | `splash`, `serial`, external `dfu-util`, `esptool` |
 | `modules/` (`manifest.rs`, `fetch.rs`, `install.rs`, `run.rs`) | The module manager (7.10): pinned manifests, download, checksum, install, run as a subprocess, update check, removal. Used by `media` for ffmpeg too | `paths`, `settings` |
@@ -975,11 +975,11 @@ FC effect (`aux` modes, `adjrange` selections such as rate or OSD profile), the 
   in every profile.
 - A move stages `OsdElement` edits. The apply sheet shows the CLI lines.
 - **Built (WP7 read half):** `gear/osd.rs` (decode, element table, render, check),
-  `core/osd.rs` (`Core::gear_osd` on files; `device` refuses until WP4 backups or the WP2 live
-  read feed it the same text), `gear osd` in the CLI, `quadcam_gear` action `osd`. The view is
-  `app/src/views/Gear/Osd/OsdSegment.tsx` (`OsdScreen.tsx` draws one view). The Gear page
-  frame (WP13) mounts `<OsdSegment />` as the FC page's OSD segment (`views/Gear/segments.tsx`),
-  on files for now; it passes the FC's device id once a device source exists (WP4, WP2).
+  `core/osd.rs` (`Core::gear_osd` on files, or on a saved `device`'s latest backup: its `dump
+  all`, or `diff all` without one), `gear osd` in the CLI, `quadcam_gear` action `osd`. The view
+  is `app/src/views/Gear/Osd/OsdSegment.tsx` (`OsdScreen.tsx` draws one view). The Gear page
+  frame (WP13) mounts `<OsdSegment />` as the FC page's OSD segment (`views/Gear/segments.tsx`)
+  and passes the FC's device id when the FC has a backup.
 - **Built (WP7 editor):** on a saved FC with a backup the segment is the editor.
   `OsdParams.staged` draws the backup with the device's staged `OsdElement` edits on top
   (`OsdConfig::apply_edits`, the same bits the FC writer keeps). `gear_osd_edit`
@@ -1106,12 +1106,12 @@ the design did not list, `gear_voice_preview` (copies a take into the cache, whi
 protocol serves; the gear folder is outside its scope). `build-pack` is CLI only
 (`Core::voice_build_pack`). The Voice segment and the Voices page are `views/Gear/Voice/`.
 
-- Providers: `say` (`/usr/bin/say`, the text on stdin, a WAV file out) and `openai` (an
+- Providers: `say` (`/usr/bin/say`, the text on stdin, a WAV file out), `openai` (an
   OpenAI-compatible `/v1/audio/speech`, asked for a WAV; a local Kokoro-FastAPI server is the
-  model). Both sit behind `Tts`, take their outside world through `Run` and `Post`, and are
-  built by `Env.tts`, which is off under cargo (`QUADCAM_TTS=real`, `QUADCAM_FETCH=real`), so
-  tests use fakes. The key goes to curl on stdin in a config file. No ElevenLabs adapter: the
-  design asks for one, and a paid adapter waits for open question 6.
+  model) and `elevenlabs` (`eleven.rs`, see the voice studio below). All sit behind `Tts`, take
+  their outside world through `Run`, `Post` or `Http`, and are built by `Env.tts`, which is off
+  under cargo (`QUADCAM_TTS=real`, `QUADCAM_FETCH=real`), so tests use fakes. The key goes to
+  curl on stdin in a config file.
 - Settings: `tts_provider`, `tts_key`, and new `tts_base_url`, `tts_model`, `tts_voice`,
   `voice_index` (in `settings.json`, not in `GearSettings`). `QUADCAM_OPENAI_KEY` beats `tts_key`
   for `openai`. `tts_provider = elevenlabs` renders only in the studio: line-by-line renders,
@@ -1198,9 +1198,10 @@ Every reading, kept or not, goes to stderr and `<cache>/voice/charcost.log`.
   first and waits for `confirm`. The confirm digest names the keys of the batches the estimate
   priced, and `render_all` sends only those: a batch the estimate counted as cached whose take
   cannot be read is removed, never sent, and the next estimate prices it. MCP can delete the key and cannot set it.
-- Sets (`sets.rs`, `resources/voice/sets/*.csv`, `path,text,group,tone,why`): `edgetx`,
-  `quad`, `heli`, `plane`, `glider`, `extras`, `easter`, `sample`, `quadcam` (the built-in
-  `lines.csv`) and `custom` (from `gear.json`). The aircraft sets are `radio.csv` plus their own
+- Sets (`sets.rs`, `resources/voice/sets/*.csv`, `path,text,group,tone,why`): `edgetx` (the
+  full EdgeTX English set, 747 lines), `quad`, `heli`, `plane`, `glider`, `car`, `extras`,
+  `scripts`, `easter`, `sample`, `quadcam` (the built-in `lines.csv`) and `custom` (from
+  `gear.json`). The aircraft and car sets are `radio.csv` and `units.csv` plus their own
   callouts. The text is QuadCam's wording; file names are the names the firmware plays.
 - Acceptance: unit tests in `eleven.rs`, `keychain.rs`, `batch.rs`, `sets.rs`;
   `tests/it/voice_studio.rs` (key, catalogue, estimate, sample, set render, credits refusal, MCP)
@@ -1386,7 +1387,7 @@ binaries only (open question 10).
     device-info ping, which is open as before. The Betaflight flash plan is built behind
     `bfFlashPreview` ("Built (Betaflight flash, preview)" below), and ExpressLRS options and
     flashing behind `elrsPreview` ("Built (ELRS preview" below).
-  - **Built (ELRS preview, branch `elrs`):** `gear/elrs/` and `core/elrs.rs`. Nothing has touched
+  - **Built (ELRS preview, 0.11.0):** `gear/elrs/` and `core/elrs.rs`. Nothing has touched
     a real device.
     - `crsf.rs` is the CRSF codec (CRC-8 `0xD5`, device info `0x29`, parameter entries `0x2B`
       with chunks, read `0x2C`, write `0x2D`, the receiver's bootloader request). `link.rs`
@@ -1445,7 +1446,7 @@ binaries only (open question 10).
       skipped), the version sources, the bootloader request and the receiver's reply, esptool
       through a passthrough, and the image block places on releases other than 4.1.0.
 
-- **Built (Betaflight flash, preview):** branch `bf-flash`, WP10 part 1 of the 1.1 work, off
+- **Built (Betaflight flash, preview):** 0.11.0, WP10 part 1 of the 1.1 work, off
   by default behind the setting `bfFlashPreview` (`betaflight_flash_preview`, "Betaflight
   flashing (preview)"). Modules: `gear/firmware/betaflight.rs` (the board table, Intel HEX,
   the image checks, the build service behind a `Cloud` trait with `CurlCloud` and
@@ -1503,7 +1504,7 @@ binaries only (open question 10).
   - Tests: `tests/it/gear_bf_flash.rs` (16) and unit tests in the two modules, on `FakeFc`,
     `FakeDfu` and `FixtureCloud`; `app/e2e/bfflash.spec.ts` on the mock core.
 
-- **Built (radio over USB):** four follow-ups, branch `radio-usb`.
+- **Built (radio over USB):** four follow-ups, 0.10.0.
   - **One radio, two ids.** `Device` gained `aliases` and `dfu_serial`; `Connected` gained
     `also`. `detect` lists every id a radio card answers to (hardware serial in the built-in
     slot, marker, volume UUID); `Core::gear_connected` takes the saved radio whose id or alias
@@ -2017,9 +2018,10 @@ dialog, Mount and Done on a radio's page. Deviations and choices:
 - **`OsdElement`** now renders to `set osd_<element>_pos = N` (`render_fc`, keeping the
   variant bits), x 0-63, y 0-31, profiles 1-3; an empty list turns the element off. The WP7
   editor only has to stage it.
-- **Not done:** a radio's Bench item cannot be staged from the app (no card editor yet:
-  CLI and agents stage card edits); `CardFiles` (sound packs) apply since WP9; the mount time is
-  not a setting.
+- **Not done:** a radio's own settings (`radio.yml`, `Edit::Radio`) cannot be staged from the
+  app: CLI and agents stage them. Model edits and checklists (WP9, the Models and Checklists
+  segments) and voice packs (`CardFiles`, the Voice segment) stage from the app. The mount time
+  is not a setting.
 
 ### 8.1 One path for every write
 
@@ -2121,7 +2123,7 @@ docs, and its rows in `api`, CLI and MCP.
 | WP6 | Switch map | `gear/switchmap.rs`, Switches segment | WP2, WP3 | 2 |
 | WP7 | OSD | `gear/osd.rs`, OSD segment (view and editor) | WP2 (parse); WP5 to stage | 1 (pure part), 3 (editor) |
 | WP8 | Rates and sims. **Done:** the Sims page and the sidebar "Out of date" badge | `gear/rates.rs`, `gear/sims/`, `apply/sim.rs`, Rates segment, Sims page | WP2, WP5 (plan/confirm pattern) | 2 (read), 3 (sync) |
-| WP9 | Radio extras: voice and model editors. **Done except the ElevenLabs adapter, the carrier-sentence render and the full line list (see 7.4)** | `gear/voice/`, `resources/voice/`, Voice segment, `build-pack` and the pack index; `ModelOp` editors for checklists, telemetry screens, logging, timers, alarms and callouts; Checklists segment | WP3, WP5, WP14 | 4 |
+| WP9 | Radio extras: voice and model editors. **Done: the ElevenLabs adapter, the carrier-sentence render, the full EdgeTX line set, the speech check and the publish flow (see 7.4). No pack is published yet** | `gear/voice/`, `resources/voice/`, Voice segment, `build-pack` and the pack index; `ModelOp` editors for checklists, telemetry screens, logging, timers, alarms and callouts; Checklists segment | WP3, WP5, WP14 | 4 |
 | WP10 | Firmware and splash. **1.0 holds the version checks, the EdgeTX flash and the splash. The Betaflight flash plan and ELRS options and flashing are built as previews (`bfFlashPreview`, `elrsPreview`), off by default** | `gear/firmware/`, `gear/splash.rs`, `gear/dfu.rs`, Firmware page, Splash segment | WP2, WP3, WP4, WP5, WP14 | 4 |
 | WP11 | Card prep. **Done, with the app button** | `disk.rs` changes, `card_prep*` rows, `quadcam_format_card` `prep`, the Prepare card button | – (existing code) | 1 |
 | WP12 | Flights and packs | `logs.rs` columns, `gear/flights.rs`, `gear/packs.rs`, Flights and Packs pages | WP1 (reads log folders; the log store once WP4 lands) | 1 |
