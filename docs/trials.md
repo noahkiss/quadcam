@@ -5,7 +5,8 @@ built and tested on simulated devices. This page is the order to try them on rea
 first. Each trial reads or writes a little more than the one before.
 
 Work through the trials in order. Stop at the first failure and [report it](#reporting-results).
-A later trial assumes the earlier ones passed.
+A later trial assumes the earlier ones passed. Trials 11 to 16 need at most trials 1 and 3, so you
+can run them before trials 6 to 10. Trial 17, the 1.0 gate, comes last.
 
 ## Before you start
 
@@ -20,8 +21,8 @@ A later trial assumes the earlier ones passed.
   | BetaFPV G473 V2 FC (`BETAFPVG473_V2`) | Betaflight 2026.6.0 |
   | BetaFPV G473 FC (`BETAFPVG473`) | Betaflight 2025.12.5 |
 
-  Any other board or version is read only. Trials 1 to 5 work on any device. Trials 6 to 10 need
-  a proven device. If you have none, stop after trial 5.
+  Any other board or version is read only. Trials 1 to 5 and 11 to 16 work on any device.
+  Trials 6 to 10 and 17 need a proven device. If you have none, skip them.
 - Plug USB in before the battery. Many FCs do not show up on USB when the battery is first.
 - Click **Allow** if macOS asks about a new USB accessory. QuadCam cannot see that question. Until
   you click, it says "Nothing found."
@@ -45,6 +46,13 @@ A later trial assumes the earlier ones passed.
 | [8](#8-radio-card-apply-a-model-edit-and-a-voice-pack) | Radio card (write) | none |
 | [9](#9-sync-rates-into-a-sim) | A sim's rate file (write) | none |
 | [10](#10-flash-edgetx) | Radio firmware (write) | none |
+| [11](#11-card-prep-a-spare-dvr-card-and-a-goggles-card) | A DVR card and a goggles card (erase) | none |
+| [12](#12-card-check-and-repair) | A card's file system (read, repair only after a failed check) | none |
+| [13](#13-import-with-the-ffmpeg-module) | The ffmpeg module (install), clips (import) | none |
+| [14](#14-switch-map-position-by-position) | Radio and FC backups, live channels (read) | none |
+| [15](#15-osd-render-against-the-goggles) | An FC backup (read) | none |
+| [16](#16-cues) | Nothing on a device | **Cues** settings, changed during the trial |
+| [17](#17-one-full-bench-session-in-quadcam-only) | Everything: the 1.0 gate | none |
 
 ## 1. Radio over USB
 
@@ -604,6 +612,339 @@ Recovery, from [Gear](gear.md#if-a-flash-fails-or-the-radio-will-not-start):
 | The image is not the board's or the version's | Refused in the plan |
 
 Report: the radio model, the old and new version, the step that stopped, and the sheet's text.
+
+## 11. Card prep: a spare DVR card and a goggles card
+
+Erases a card that has no import session behind it. QuadCam refuses while a clip on the card is
+not in the library. See [Format safety](format-safety.md#card-prep).
+
+**Needs**
+
+- A spare analog DVR card and a removable DJI goggles card, in a card reader or the Mac's SD
+  slot. Use cards whose clips you have imported, or cards with nothing you want to keep.
+- For the refusal check: one clip on the DVR card that is not in the library. Record a short clip
+  on the DVR, or keep one you have not imported yet.
+
+**A. The refusal**
+
+1. Put the DVR card in. Open it under **Gear > Connected**.
+2. Select **Prepare card…**.
+
+**Pass**
+
+- QuadCam erases nothing. A message says "Refused: N of M clips on the card are not in the
+  library (…). Import them first." and names up to five clips.
+
+**B. The DVR card**
+
+1. Import the missing clip: select the card under **Import from**, then **Add to Library**, and
+   finish the import.
+2. Open the card's page in **Gear** again. If the card is unmounted but still in, it shows
+   **Mount**; **Prepare card…** works either way.
+3. Select **Prepare card…**. Read the dialog. Select **Erase**.
+4. Put the card back in the DVR. Record a short clip.
+
+**Pass**
+
+- The dialog says "Erase /dev/diskN (<volume>, <size>) as FAT32 …? This cannot be undone." It
+  adds size advice for a card over 32 GB. The Return key does not erase.
+- "Card prepared. Safe to remove." shows, and the card unmounts.
+- The DVR records to the card, and QuadCam lists the new clip under **Import from**.
+
+**C. The goggles card**
+
+1. Put the goggles card in. Check that every clip on it is in the library (step A refuses if
+   not).
+2. On its page in **Gear**, select **Prepare card…**, then **Erase**.
+3. Put the card back in the goggles. Record a short clip.
+
+**Pass**
+
+- The dialog names exFAT. The card unmounts after the erase.
+- The goggles read the card and record to it.
+- Optional: plug a DJI air unit or the goggles in over USB (storage mode). Its page offers no
+  erase: **Prepare card…** refuses with "Refused: QuadCam never formats a DJI device over USB
+  …".
+
+**If it fails**
+
+- "Card … is not plugged in": the card left the disk list. Take it out, put it back, and try
+  again.
+- The volume did not mount: take the card out and put it back.
+- The DVR or the goggles do not read the card: format it in the device, and report it.
+- Report: the card's size and brand, the device (DVR or goggles model), the dialog's text, and
+  the message.
+
+## 12. Card check and repair
+
+Checks a card's file system. A repair runs only after a failed check, and asks first.
+
+**Needs**
+
+- A DVR card, a goggles card or a radio in USB Storage mode, saved in QuadCam.
+- **Settings > Gear > Back up on connect** on (the default), for the check on connect.
+
+**Steps**
+
+1. Plug the card in. QuadCam checks a card it knows before its on-connect steps. Wait for "done,
+   safe to unplug."
+2. Open the device's **Backups** segment. Read the check's result in **Overview** (the last card
+   check).
+3. If the card is unmounted, select **Mount**. Then select **Check card**. **Stop** ends a check.
+4. Try the repair refusal on the healthy card:
+
+   ```bash
+   quadcam-cli --json gear card-check --device <id>
+   quadcam-cli --json gear card-repair --check <check id> --yes
+   ```
+
+5. Only if a check ever fails: select **Repair…** in the banner, then **Repair**.
+
+**Pass**
+
+- A check takes about 30 seconds over a radio's USB, less in a card reader. The result says "The
+  file system is OK."
+- The card unmounts after the check, and the cue plays.
+- `card-repair` on a card whose last check passed refuses: "Refused: the card's latest check
+  passed; there is nothing to repair."
+- After a failed check: the device shows **Needs attention**, and a banner says "Card check
+  failed: …" with **Repair…**. The repair backs up the card when it can read it, repairs it,
+  checks it again, and says "Repaired. The card checks out."
+
+**If it fails**
+
+- A check that never ends: select **Stop**, and report how long it ran.
+- "The repair could not fix every error.": copy the files off the card, then format it in the
+  device.
+- Report: the card's kind and size, the summary text, and the check's line in
+  `health/<device>.jsonl` in the gear folder (**Gear > Storage**).
+
+## 13. Import with the ffmpeg module
+
+Imports clips with the ffmpeg module, then with Homebrew's ffmpeg, then with none.
+
+**Needs**
+
+- A DVR card with a few short clips.
+- For part B: Homebrew's `ffmpeg` installed. Skip part B without it.
+
+**A. The module**
+
+1. If the banner says **ffmpeg not found**, select **Install ffmpeg…**. Otherwise open
+   **Settings > Modules** and select **Install** in the ffmpeg and ffprobe row.
+2. Read the dialog: version, size, license, source and address. Select **Download**.
+3. In **Settings > Modules**, set **Use ffmpeg from** to **The QuadCam module, else Homebrew**.
+   Read the **In use:** line.
+4. Import the card: select it under **Import from**, then **Add to Library**.
+5. Play one imported clip.
+
+**Pass**
+
+- Nothing downloads before **Download**. The module installs with no restart.
+- **In use:** names the module's folder (`…/app.quadcam/modules/ffmpeg/…`).
+- Every clip verifies, and the clip plays in QuickTime Player.
+
+**B. Homebrew**
+
+1. Set **Use ffmpeg from** to **Homebrew**. Read **In use:**.
+2. Import the same clips again into a test folder, or import a second card.
+
+**Pass**
+
+- **In use:** names Homebrew's ffmpeg (`/opt/homebrew/bin/ffmpeg`).
+- The clips verify as in part A.
+
+**C. No ffmpeg**
+
+1. Set **Use ffmpeg from** back to **The QuadCam module, else Homebrew**.
+2. Only without Homebrew's ffmpeg: select **Remove** on the module, then **Install ffmpeg…** in
+   the banner again.
+
+**Pass**
+
+- With no ffmpeg, the banner says "ffmpeg not found. Import is blocked until QuadCam has ffmpeg."
+  Import stays off.
+- After the reinstall, import works again with no restart.
+
+**If it fails**
+
+- "The download does not match the expected checksum.": the download was cut or changed. Try
+  again, and report it if it repeats.
+- "ffmpeg was changed after install; reinstall it.": select **Reinstall**.
+- Report: the step, the **In use:** line, the message, and the import sheet's text for a clip
+  that did not verify.
+
+## 14. Switch map, position by position
+
+Reads the switch map off a radio's and an FC's backups, and checks it against the real radio and
+quad. Writes nothing.
+
+**Needs**
+
+- An aircraft profile that names the radio and the FC, both saved, each with a backup (trials 1
+  and 3).
+- For the FC part of **Live**: the quad bound to the radio. Props **off**, battery in, and the
+  USB timer on.
+
+**Steps**
+
+1. Open the FC's page and choose **Switches**. Read the tiles: **Controls**, **Modes**,
+   **Conflicts** and **Not mapped**.
+2. Put the radio in USB Joystick mode and plug it in. Under **Live** choose **Radio**.
+3. Move each switch through each position, one at a time. Compare the marked position and its
+   modes with what you set up on the radio and in Betaflight.
+4. Plug in the FC, put the battery in (props off), and choose **FC** under **Live**. Move each
+   switch again.
+5. Read **Conflicts** and **Not mapped**.
+
+**Pass**
+
+- Each switch shows its type (2-position, 3-position or toggle) and each position's channel
+  value in µs, its Betaflight modes, its adjustments, and the radio's own effects (logical
+  switches, special functions, timers).
+- With **Radio** and with **FC**, the marked position follows the switch within a second. The
+  modes shown on are the ones the quad turns on (check arm and the flight modes in Betaflight
+  Configurator's Modes tab if in doubt).
+- A combination such as "down with SB down" shows only when two switches together do more.
+- **Conflicts** lists only real problems: two modes on one range, a switch that does nothing, a
+  mode no switch reaches, a sound file the card lacks.
+
+**If it fails**
+
+- "No radio in USB Joystick mode.": choose **USB Joystick** on the radio.
+- **FC** is not offered: the FC is not plugged in, or another program holds its port.
+- A position shows the wrong mode: note the switch, the position, what QuadCam shows and what
+  the quad does.
+- Report: the radio and FC models and versions, the switch and position, the model's mix and
+  logical switch lines for that switch (from the backup's `MODELS/` file), and the FC's `aux`
+  and `adjrange` lines.
+
+## 15. OSD render against the goggles
+
+Checks that QuadCam draws the OSD where the goggles show it, for each OSD profile. Writes
+nothing.
+
+**Needs**
+
+- A saved FC with a backup (trial 3), and goggles that show its OSD.
+- Props **off**, the battery in to power the video, and the USB timer on.
+
+**Steps**
+
+1. Open the FC's page and choose **OSD**. The line at the top says "From backup · <date>".
+2. Leave **Grid** on **Auto**, or pick the system the goggles use (**NTSC**, **PAL** or **HD**).
+3. Power the quad and put the goggles on. Switch the quad to OSD profile 1.
+4. Compare each element's place with the screen in **OSD profile** 1.
+5. Repeat for profiles 2 and 3, if the quad uses them.
+
+**Pass**
+
+- Each element sits on the same row and column as in the goggles. Elements draw as sample
+  text, not Betaflight's font, and widths are estimates: an element one or two cells wider or
+  narrower is fine.
+- Each profile shows the elements the goggles show in that profile.
+- A real overlap or an element off screen shows in **Problems**. With none, the badge says
+  **No problems**.
+
+**If it fails**
+
+- The grid is wrong: `vcd_video_system` is `AUTO`. Pick the grid by hand.
+- An element is in the wrong place: note the element, the profile, QuadCam's row and column, and
+  where the goggles show it.
+- Report: the board, the Betaflight version, the video system, the goggles, and a photo of the
+  goggle screen next to a screenshot of QuadCam. Crop out anything personal.
+
+## 16. Cues
+
+Checks that each cue plays once, at the right time, on each channel.
+
+**Needs**
+
+- A card QuadCam knows (DVR card or radio).
+- For **Unplug now**: a saved FC, props **off**, a battery.
+
+**Steps**
+
+1. Open **Settings > Gear > Cues**. Leave **Mute all cues** off. Under **Play cues as** turn on
+   **Speech**, **Sound** and **Notification**. Leave **Voice** on **macOS**. Select **Done**.
+2. Plug in the card and run a job: **Check card** or **Back up now**.
+3. Leave the card in after "done". Wait 60 seconds, then 5 minutes.
+4. Pull the card. Plug it in again and pull it while nothing runs.
+5. Set **USB power warning** to 1 minute. Plug in the FC, put the battery in, and wait. Set the
+   warning back to your value (20 by default) after.
+6. Turn on **Quiet hours for speech and sound**, with **From** and **To** around the current
+   time. Run a job again. Turn quiet hours off after.
+7. Turn on **Mute all cues** and run a job. Turn it off after.
+
+**Pass**
+
+- Step 2: once the job ends, the Mac says "<device> done, safe to unplug.", plays a sound, and
+  posts a notification. The first notification asks to allow notifications.
+- Step 3: "<device> is still inserted." after 60 seconds, then every 5 minutes, 3 times at
+  most. **Dismiss reminder** on the device page stops it.
+- Step 4: pulling the card plays nothing. QuadCam's own mounts and unmounts play nothing.
+- Step 5: "Unplug <FC> now. It has run on USB with a battery for …" plays once for that
+  battery.
+- Step 6: no speech and no sound, only the notification.
+- Step 7: nothing plays.
+- **Step failed** ("<step> failed on <device>.") plays when a step fails in any trial. Note it
+  when it happens.
+
+**If it fails**
+
+- No notification: allow QuadCam in **System Settings > Notifications**.
+- A cue plays twice for one job, or the reminder goes past 3: note the times.
+- Report: the cue, the channel, the setting values, and the times it played.
+
+The **Voice pack** choice under **Voice** is off: cues speak with the macOS voice in this
+release.
+
+## 17. One full bench session in QuadCam only
+
+The 1.0 gate. Run one real session from bench to analysis with QuadCam only: no Betaflight
+Configurator, no EdgeTX Companion, no Finder copies. Do it after the other trials you can run.
+
+**Needs**
+
+- A radio and an FC, saved, linked by an aircraft profile, both proven for writes (see
+  [Before you start](#before-you-start)).
+- One or more staged changes for the session: a harmless FC change (trial 7), a radio model
+  edit (trial 8), or both. Mark each **Ready** or **Try** on the **Bench**.
+- Packs and a pack type set up on the **Packs** page. A DVR or goggles card.
+
+**Steps**
+
+1. **Before.** Open **Pack up**. Fix each row that does not pass: **Packs charged** (**Mark
+   charged** on **Packs**), **Radio model**, **Card space**, **Backups**, **Cards out**.
+2. **Back up.** Plug in the radio (USB Storage) and the FC (battery out). Let the on-connect
+   backups run, or select **Back up now** on each.
+3. **Apply.** Open **Bench**. **Next session** names the first change. For each change select
+   **Review…**, read **Checks**, and select **Apply**. Wait for "done, safe to unplug." each
+   time.
+4. **Verify.** Read each change's result on the **Bench**. Check one value on the device: the
+   name on the radio, the setting in **Overview** or a fresh backup.
+5. **Fly.** Fly the session with the DVR or goggles recording, and the radio logging.
+6. **Keep or revert.** For each applied Try change, select **Keep** or **Revert…**.
+7. **Import.** Plug in the radio (USB Storage) and the card. Import the clips with the radio's
+   logs, and finish. Select **Show report** in the Finish step.
+8. **Analyse.** On **Flights** pick each flight's pack. Read hover, sag, resting voltage, used
+   mAh, worst link and dropouts. Read the **Session report**.
+9. **After.** Pull the blackbox if you fly with one (trial 4). Open **Pack up** again.
+
+**Pass**
+
+- Every step ran in QuadCam. You did not open another tool.
+- Each change ends **Verified** or **Reverted**, and the Bench count drops to 0 or to what you
+  left for later.
+- The clips are dated from the radio logs and verify.
+- The flights match the session: their count, air time, and each pack you flew.
+- The report's numbers agree with what you saw: no dropout you did not have, none missing.
+
+**If it fails**
+
+- Note the step where you left QuadCam, and why. That gap is a 1.0 bug.
+- Report: each step's result, the changes and their final status, the flight count against the
+  packs flown, and the session report (**Copy as Markdown**, with places and names removed).
 
 ## Reporting results
 

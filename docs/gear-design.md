@@ -2167,7 +2167,7 @@ gear before the next release starts.
 | 0.9.0 Staged changes | WP5, WP7 (editor), WP11 | Stage and apply one harmless FC change (an OSD move), check the goggles, revert it. Edit a radio timer name, apply, check on the radio, restore. Prep a spare DVR card |
 | 0.10.0 Radio extras and voice | WP9 | Install a voice pack, Choose voice, hear the callouts on the radio. Override one line. Edit a checklist and a battery callout; check them on the radio |
 | 0.11.0 Firmware | WP10 | Firmware check. Make firmware with a splash for the installed EdgeTX version, flash it, see the splash. Re-flash the installed ELRS version to the receiver and the radio; the link comes back |
-| 1.0.0 | Fixes from the cycles, docs complete, MCP schema frozen | One full bench session done only in QuadCam: back up, apply the queue, verify, fly, analyse the flights |
+| 1.0.0 | Fixes from the cycles, docs complete, MCP schema frozen | One full bench session done only in QuadCam: back up, apply the queue, verify, fly, analyse the flights ([trial 17](trials.md#17-one-full-bench-session-in-quadcam-only)) |
 
 ## 12. Licensing
 
