@@ -618,7 +618,7 @@ pub struct Defaults {
     /// review, where the Mac has it (`core/ondevice.rs`). On by default.
     #[serde(default = "yes")]
     pub on_device_suggestions: bool,
-    /// The app checks for a newer QuadCam at launch and once a day. On by default; the
+    /// The app checks for a newer QuadCam at launch and every hour. On by default; the
     /// app menu's Check for Updates works either way.
     #[serde(default = "yes")]
     pub update_check: bool,

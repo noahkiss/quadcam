@@ -2104,7 +2104,7 @@ export type Defaults_Deserialize = {
 	 */
 	on_device_suggestions?: boolean,
 	/**
-	 *  The app checks for a newer QuadCam at launch and once a day. On by default; the
+	 *  The app checks for a newer QuadCam at launch and every hour. On by default; the
 	 *  app menu's Check for Updates works either way.
 	 */
 	update_check?: boolean,
@@ -2169,7 +2169,7 @@ export type Defaults_Serialize = {
 	 */
 	on_device_suggestions: boolean,
 	/**
-	 *  The app checks for a newer QuadCam at launch and once a day. On by default; the
+	 *  The app checks for a newer QuadCam at launch and every hour. On by default; the
 	 *  app menu's Check for Updates works either way.
 	 */
 	update_check: boolean,

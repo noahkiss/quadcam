@@ -410,7 +410,7 @@ pub struct SettingsValues {
     /// Apple's on-device model suggests clip names, keywords and notes after a card loads, where the Mac has it (macOS 26 or later, Apple Intelligence on). On by default.
     #[schemars(extend("x-nullable" = true))]
     pub on_device_suggestions: Option<bool>,
-    /// The app checks for a newer QuadCam at launch and once a day. On by default.
+    /// The app checks for a newer QuadCam at launch and every hour. On by default.
     #[schemars(extend("x-nullable" = true))]
     pub update_check: Option<bool>,
     #[schemars(extend("x-nullable" = true))]
