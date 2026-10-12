@@ -38,6 +38,32 @@ test("with weather on, clips with a place and a time get it once", async ({ app,
   expect(await app.method("library_weather")).toHaveLength(1);
 });
 
+test("the open clip shows the sky, cloud cover, precipitation and humidity", async ({ app, page }) => {
+  await app.open("library", { settings: { weather: true } });
+  await expect.poll(async () => (await app.method("library_weather")).length).toBe(1);
+  await card(page, "gap-run").dblclick();
+  const meta = inspector(page);
+  const row = (label: string) => meta.locator("dt", { hasText: label }).locator("+ dd");
+  await expect(row("Sky")).toHaveText("Partly cloudy");
+  await expect(row("Cloud cover")).toHaveText("40%");
+  await expect(row("Precipitation")).toHaveText("0.4 mm");
+  await expect(row("Humidity")).toHaveText("71%");
+  // The archive has no visibility.
+  await expect(meta.locator("dt", { hasText: "Visibility" })).toHaveCount(0);
+});
+
+test("a weather record saved before the sky values is looked up once more", async ({ app, page }) => {
+  await app.open("library", { settings: { weather: true }, oldWeather: true });
+  await expect.poll(async () => (await app.method("library_weather")).length).toBe(1);
+  expect((await app.method("library_weather"))[0].ids).toHaveLength(3);
+  await card(page, "gap-run").dblclick();
+  await expect(inspector(page).getByText("Partly cloudy")).toBeVisible();
+  await page.getByRole("button", { name: "Library" }).click();
+  await card(page, "river-dive").dblclick();
+  await expect(inspector(page).getByText("Partly cloudy")).toBeVisible();
+  expect(await app.method("library_weather")).toHaveLength(1);
+});
+
 test("a time near sunset tags the clip, and search finds the tag", async ({ app, page }) => {
   await app.open();
   await card(page, "backyard-loops").dblclick();
@@ -79,6 +105,7 @@ for (const scheme of axeSchemes) {
       await time.press("Enter");
       await expect(inspector(page).getByText("Golden hour")).toBeVisible();
       await expect(inspector(page).getByText(/wind \d+/)).toBeVisible();
+      await expect(inspector(page).getByText("Partly cloudy")).toBeVisible();
       const r = await new AxeBuilder({ page }).withTags(["wcag2a", "wcag2aa", "wcag21aa"]).analyze();
       expect(r.violations.map((v) => `${v.id}: ${v.nodes.map((n) => n.target.join(" ") + " " + n.failureSummary).join(", ")}`)).toEqual([]);
     });

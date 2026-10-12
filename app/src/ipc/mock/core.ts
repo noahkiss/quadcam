@@ -70,6 +70,8 @@ export interface MockOptions {
   settings?: Record<string, unknown>;
   /** Video analysis runs here (macOS 27 or later). */
   video?: boolean;
+  /** Clips with a place and a time start with a weather record saved before the sky values. */
+  oldWeather?: boolean;
 }
 
 export type Emit = (event: string, payload?: unknown) => void;
@@ -185,6 +187,9 @@ export class MockCore {
     }
     if (sc === "no-tools") this.tools = false;
     if (sc === "gear") this.gear = gear.busyGear();
+    if (opts.oldWeather)
+      for (const c of this.lib.clips)
+        if (c.location && c.time && !c.cut_of) c.weather = { hour: `${c.date}T${c.time.slice(0, 2)}:00Z`, temperature_c: 12.1, wind_kmh: 9, gusts_kmh: null, wind_from_deg: null, source: "archive" } as LibClip["weather"];
   }
 
   // ---------- the Tauri commands ----------
@@ -1147,14 +1152,19 @@ export class MockCore {
   weather(ids: string[]) {
     if ((this.settings.values as Record<string, unknown>).weather !== true) throw "Weather is off. Turn on the weather setting first (Settings > Import, or settings set weather=true).";
     for (const id of ids) this.clip(id);
-    const todo = this.lib.clips.filter((c) => !c.cut_of && (ids.length ? ids.includes(c.id) : !c.weather));
+    const old = (c: LibClip) => !!c.weather && c.weather.cloud_cover_pct == null && c.weather.weather_code == null;
+    const todo = this.lib.clips.filter((c) => !c.cut_of && (ids.length ? ids.includes(c.id) : !c.weather || old(c)));
     const clips = todo.map((c, i) => {
       this.emit("library-task", { task: "weather", done: i, total: todo.length });
-      const row = { id: c.id, path: c.path, weather: c.weather, kept: !!c.weather, skipped: null as string | null, error: null };
+      const row = { id: c.id, path: c.path, weather: c.weather, kept: !!c.weather && !old(c), skipped: null as string | null, error: null };
       if (row.kept) return row;
       if (!c.location) return { ...row, skipped: "no place" };
       if (!c.time) return { ...row, skipped: "no time of day" };
-      c.weather = { hour: `${c.date}T${c.time.slice(0, 2)}:00Z`, temperature_c: 18.4, wind_kmh: 20, gusts_kmh: 32, wind_from_deg: 315, source: "archive" };
+      const day = Number(c.time.slice(0, 2)) >= 7 && Number(c.time.slice(0, 2)) < 19;
+      c.weather = {
+        hour: `${c.date}T${c.time.slice(0, 2)}:00Z`, temperature_c: 18.4, wind_kmh: 20, gusts_kmh: 32, wind_from_deg: 315, source: "archive",
+        cloud_cover_pct: 40, precipitation_mm: 0.4, rain_mm: 0.4, snowfall_cm: 0, weather_code: 2, sky: "partly_cloudy", humidity_pct: 71, is_day: day, visibility_m: null,
+      };
       return { ...row, weather: c.weather };
     });
     this.emit("library-task", { task: "weather", done: todo.length, total: todo.length });

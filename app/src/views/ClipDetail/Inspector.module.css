@@ -122,6 +122,12 @@
   font-family: var(--mono);
   overflow-wrap: anywhere;
 }
+.meta dd.sky {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--s-1);
+}
 .muted {
   color: var(--muted);
   font-size: var(--t-sm);

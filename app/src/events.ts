@@ -6,6 +6,7 @@ import { confirmText, importDropped, sessionChanged } from "./actions/session";
 import { store } from "./store";
 import { dialogOpen } from "./store/ui";
 import { sel } from "./store/settings";
+import { lacksSky } from "./lib/weather";
 
 const S = () => store.getState();
 
@@ -133,11 +134,11 @@ let weatherRunning = false;
 /** Clips asked about once this run: found nothing, or failed. Tried again after a restart. */
 const weatherTried = new Set<string>();
 /** While the weather setting is on, clips with a place and a time get their weather in the
- * background, once. */
+ * background, once; a record saved before the sky values, once more. */
 export async function findWeather() {
   const s = S();
   if (weatherRunning || !sel.weather(s)) return;
-  const ids = (s.lib?.clips || []).filter((c) => c.location && c.time && !c.weather && !c.cut_of && !weatherTried.has(c.id)).map((c) => c.id);
+  const ids = (s.lib?.clips || []).filter((c) => c.location && c.time && (!c.weather || lacksSky(c.weather)) && !c.cut_of && !weatherTried.has(c.id)).map((c) => c.id);
   if (!ids.length) return;
   weatherRunning = true;
   try {

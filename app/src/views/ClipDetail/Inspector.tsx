@@ -1,16 +1,17 @@
-import { useState } from "react";
+import { Fragment, useState } from "react";
 import { useStore } from "../../store";
 import { sel } from "../../store/settings";
 import type { FlightStats, LibClip, Moment } from "../../ipc/types";
 import { CommitInput } from "../../components/CommitInput";
 import { Field, Select } from "../../components/Field";
 import { FlagButtons } from "../../components/FlagButton";
+import { Icon } from "../../components/Icon";
 import { Stars } from "../../components/Stars";
 import { fmtBytes, fmtDur } from "../../lib/format";
 import { editClip, rate, renameClip } from "../../actions/library";
 import { remember } from "../../actions/cuts";
 import { KIND } from "../Library/moments";
-import { SUN_LABEL, weatherLine } from "../../lib/weather";
+import { SKY_LABEL, skyFacts, skyIcon, SUN_LABEL, weatherLine } from "../../lib/weather";
 import { ClipCrashes } from "./ClipCrashes";
 import styles from "./Inspector.module.css";
 
@@ -185,6 +186,21 @@ function Details({ clip: c }: { clip: LibClip }) {
           <>
             <dt>Weather</dt>
             <dd title={`Open-Meteo, ${c.weather.hour.replace("T", " ").replace("Z", " UTC")}`}>{weatherLine(c.weather)}</dd>
+            {c.weather.sky && (
+              <>
+                <dt>Sky</dt>
+                <dd className={styles.sky}>
+                  <Icon name={skyIcon(c.weather.sky, c.weather.is_day)} size={14} />
+                  {SKY_LABEL[c.weather.sky]}
+                </dd>
+              </>
+            )}
+            {skyFacts(c.weather).map(([label, value]) => (
+              <Fragment key={label}>
+                <dt>{label}</dt>
+                <dd>{value}</dd>
+              </Fragment>
+            ))}
           </>
         )}
         {c.dvr && (

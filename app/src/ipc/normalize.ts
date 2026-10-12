@@ -100,7 +100,7 @@ export function libClip(c: G.LibItem_Serialize): LibClip {
     parts: c.parts ?? [],
     video: videoScan(c.video),
     sun: c.sun ?? null,
-    weather: c.weather && has(c.weather.temperature_c) && has(c.weather.wind_kmh) ? { ...c.weather, temperature_c: c.weather.temperature_c!, wind_kmh: c.weather.wind_kmh!, gusts_kmh: c.weather.gusts_kmh ?? null, wind_from_deg: c.weather.wind_from_deg ?? null } : null,
+    weather: c.weather && has(c.weather.temperature_c) && has(c.weather.wind_kmh) ? { ...c.weather, temperature_c: c.weather.temperature_c!, wind_kmh: c.weather.wind_kmh!, gusts_kmh: c.weather.gusts_kmh ?? null, wind_from_deg: c.weather.wind_from_deg ?? null, cloud_cover_pct: c.weather.cloud_cover_pct ?? null, precipitation_mm: c.weather.precipitation_mm ?? null, rain_mm: c.weather.rain_mm ?? null, snowfall_cm: c.weather.snowfall_cm ?? null, weather_code: c.weather.weather_code ?? null, sky: c.weather.sky ?? null, humidity_pct: c.weather.humidity_pct ?? null, is_day: c.weather.is_day ?? null, visibility_m: c.weather.visibility_m ?? null } : null,
     cover: c.cover ?? null,
     cut_of: c.cut_of && has(c.cut_of[1].start) && has(c.cut_of[1].end) ? [c.cut_of[0], { start: c.cut_of[1].start!, end: c.cut_of[1].end! }] : null,
   };

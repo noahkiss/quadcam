@@ -214,7 +214,18 @@ export type LibCut = Num<G.LibCut, "start" | "end">;
 
 /** `LibItem`: the index entry flattened, plus absolute paths. */
 export type SunTag = G.SunTag;
-export type Weather = Num<G.Weather, "temperature_c" | "wind_kmh">;
+export type Sky = G.Sky;
+export type Weather = Omit<Num<G.Weather, "temperature_c" | "wind_kmh">, "cloud_cover_pct" | "precipitation_mm" | "rain_mm" | "snowfall_cm" | "weather_code" | "sky" | "humidity_pct" | "is_day" | "visibility_m"> & {
+  cloud_cover_pct: number | null;
+  precipitation_mm: number | null;
+  rain_mm: number | null;
+  snowfall_cm: number | null;
+  weather_code: number | null;
+  sky: Sky | null;
+  humidity_pct: number | null;
+  is_day: boolean | null;
+  visibility_m: number | null;
+};
 
 export type LibClip = Omit<Required<G.LibItem_Serialize>, "duration" | "time" | "location" | "moments" | "keep" | "stats" | "cuts" | "pending_cuts" | "cut_of" | "weather"> & {
   duration: number;
