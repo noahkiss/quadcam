@@ -2,6 +2,7 @@
 // DFU mode twice, saves a copy and compares the version the image names with the radio's
 // known version. It cannot erase, write or restart the radio.
 import { useEffect, useState } from "react";
+import { useStore } from "../../../store";
 import { Banner } from "../../../components/Banner";
 import { Button } from "../../../components/Button";
 import { SectionCard } from "../../../components/dash/SectionCard";
@@ -24,6 +25,7 @@ export function ReadFirmware({ radios }: Props) {
   const [progress, setProgress] = useState(0);
   const [result, setResult] = useState<FirmwareRead | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const loadCopies = useStore((s) => s.loadFwCopies);
 
   useEffect(() => {
     let off: (() => void) | undefined;
@@ -45,6 +47,7 @@ export function ReadFirmware({ radios }: Props) {
     setError(null);
     try {
       setResult(await api.gearFirmwareRead(device === NONE ? null : device));
+      await loadCopies();
     } catch (e) {
       setError(errText(e));
     } finally {

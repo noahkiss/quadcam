@@ -1,5 +1,6 @@
 // Gear > Firmware (design 2.2, 6.5): each saved device's installed firmware against the
-// newest release, and Flash… for an EdgeTX radio QuadCam has proven. A check reads the
+// newest release, Flash… for an EdgeTX radio QuadCam has proven, Read firmware, and the
+// saved firmware copies with Restore…. A check reads the
 // network only when Check for updates is selected, or when firmwareCheck is daily.
 import { useEffect, useState } from "react";
 import { useStore } from "../../../store";
@@ -14,6 +15,7 @@ import type { FirmwareStatus } from "../../../ipc/types";
 import { fmtWhen } from "../../../lib/backups";
 import { fmtAgo } from "../../../lib/format";
 import { ElrsSection } from "./ElrsSection";
+import { FirmwareCopies } from "./FirmwareCopies";
 import { ReadFirmware } from "./ReadFirmware";
 import styles from "./Firmware.module.css";
 
@@ -129,6 +131,7 @@ export function FirmwarePage() {
       )}
       <ElrsSection />
       <ReadFirmware radios={devices.filter((d) => d.kind === "radio")} />
+      <FirmwareCopies radios={devices.filter((d) => d.kind === "radio")} />
     </>
   );
 }

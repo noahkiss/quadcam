@@ -4,7 +4,7 @@
 import type { StateCreator } from "zustand";
 import type { State } from ".";
 import { api, errText } from "../ipc/api";
-import type { ApplyPlan, ApplyReport, Connected, Device, DeviceChanged, FirmwareView, FlashParams, GearStatus, SimRestoreParams, SimSyncParams, StagedChange } from "../ipc/types";
+import type { ApplyPlan, ApplyReport, Connected, Device, DeviceChanged, FirmwareCopy, FirmwareRestoreParams, FirmwareView, FlashParams, GearStatus, SimRestoreParams, SimSyncParams, StagedChange } from "../ipc/types";
 import { linkHandle } from "../lib/gear";
 import { toast } from "../components/toastStore";
 
@@ -29,6 +29,8 @@ export interface ApplySheetState {
   restore?: SimRestoreParams | null;
   /** Set when the sheet shows a firmware flash: the click flashes this radio. */
   flash?: FlashParams | null;
+  /** Set when the sheet shows a firmware restore: the click writes this saved copy back. */
+  fwRestore?: FirmwareRestoreParams | null;
   /** Which opening of the sheet this is: an answer that arrives later lands only in the sheet it started from. */
   token: number;
   /** The person approved the agent's request: the sheet shows the write and its result. */
@@ -91,6 +93,12 @@ const flashChange = (device: string, plan: ApplyPlan | null): StagedChange => ({
   history: [],
 });
 
+/** The id of the change a firmware restore's sheet and report carry (the core's `RESTORE_CHANGE`). */
+export const FW_RESTORE = "firmware-restore";
+
+/** The change the sheet shows for a firmware restore (the core's `restore_change`). */
+const fwRestoreChange = (device: string, plan: ApplyPlan | null): StagedChange => ({ ...flashChange(device, plan), id: FW_RESTORE, title: "Restore firmware" });
+
 export interface GearSlice {
   /** Staged changes waiting to be applied, every device. */
   changes: StagedChange[];
@@ -112,6 +120,11 @@ export interface GearSlice {
   /** The Firmware page's rows. `check`: read the network (true), the saved answer (false), or follow the firmwareCheck setting (null). */
   firmware: FirmwareView | null;
   loadFirmware: (check?: boolean | null) => Promise<void>;
+  /** Opens the sheet on a plan to write a saved firmware copy back to its radio. */
+  openFirmwareRestore: (params: FirmwareRestoreParams) => Promise<void>;
+  /** Saved firmware copies, newest first; null before the first load. */
+  fwCopies: FirmwareCopy[] | null;
+  loadFwCopies: () => Promise<void>;
   closeApply: () => void;
   /** Apply in the open sheet. */
   runApply: () => Promise<void>;
@@ -211,6 +224,24 @@ export const createGearSlice: StateCreator<State, [], [], GearSlice> = (set, get
       set((s) => (same(s, sheet.token) ? { applySheet: { ...s.applySheet!, busy: false, error: errText(e) } } : {}));
     }
   },
+  openFirmwareRestore: async (params) => {
+    const sheet = opened({ device: params.device, change: fwRestoreChange(params.device, null), plan: null, report: null, agent: null, busy: true, error: null, fwRestore: params });
+    set({ applySheet: sheet });
+    try {
+      const plan = await api.gearFirmwareRestorePlan(params);
+      set((s) => (same(s, sheet.token) ? { applySheet: { ...s.applySheet!, change: fwRestoreChange(params.device, plan), plan, busy: false } } : {}));
+    } catch (e) {
+      set((s) => (same(s, sheet.token) ? { applySheet: { ...s.applySheet!, busy: false, error: errText(e) } } : {}));
+    }
+  },
+  fwCopies: null,
+  loadFwCopies: async () => {
+    try {
+      set({ fwCopies: await api.gearFirmwareCopies(null) });
+    } catch (e) {
+      toast(errText(e), true);
+    }
+  },
   firmware: null,
   loadFirmware: async (check = null) => {
     try {
@@ -243,12 +274,14 @@ export const createGearSlice: StateCreator<State, [], [], GearSlice> = (set, get
     }
     set({ applySheet: { ...a, busy: true, error: null } });
     try {
-      const report = a.sim ? await api.gearSimSyncClick(a.sim, a.plan.digest) : a.restore ? await api.gearSimRestoreClick(a.restore, a.plan.digest) : a.flash ? await api.gearFlashClick(a.flash, a.plan.digest) : await api.gearApplyClick(a.change.id, a.plan.digest);
+      const report = a.sim ? await api.gearSimSyncClick(a.sim, a.plan.digest) : a.restore ? await api.gearSimRestoreClick(a.restore, a.plan.digest) : a.flash ? await api.gearFlashClick(a.flash, a.plan.digest) : a.fwRestore ? await api.gearFirmwareRestoreClick(a.fwRestore, a.plan.digest) : await api.gearApplyClick(a.change.id, a.plan.digest);
       set((s) => (same(s, a.token) ? { applySheet: { ...s.applySheet!, report, busy: false } } : {}));
     } catch (e) {
       set((s) => (same(s, a.token) ? { applySheet: { ...s.applySheet!, busy: false, error: errText(e) } } : {}));
     }
     await get().loadGear();
+    // A flash or a restore keeps the radio's firmware as a copy first.
+    if ((a.flash || a.fwRestore) && get().fwCopies) await get().loadFwCopies();
   },
   restoreBeforeApply: async () => {
     const a = get().applySheet;
@@ -331,6 +364,7 @@ export const createGearSlice: StateCreator<State, [], [], GearSlice> = (set, get
   agentApplyResult: (id, report, error) => {
     set((s) => (s.applySheet?.agent === id && s.applySheet.approved ? { applySheet: { ...s.applySheet, report, error, busy: false } } : {}));
     void get().loadGear();
+    if (get().fwCopies && (report?.change === "flash" || report?.change === FW_RESTORE)) void get().loadFwCopies();
   },
   gear: null,
   devices: [],

@@ -1,9 +1,10 @@
 // The mock core's firmware (`Core::gear_firmware`, `gear_splash`, `gear_flash_plan` and
 // `gear_flash`): the check reads "the network" only when asked and remembers its answer,
 // the flash plan runs the core's guards on the mock's devices, and a flash keeps the
-// radio's old firmware as a backup. Written by hand from `core/firmware.rs`.
+// radio's old firmware as a backup. A read saves a copy, and a restore writes one back
+// through the same guards. Written by hand from `core/firmware.rs` and `core/fw_restore.rs`.
 import * as bf from "./bfflash";
-import type { ApplyPlan, ApplyReport, Check, Device, FirmwareRead, FirmwareStatus, FirmwareView, FlashParams, SplashParams, SplashPreview } from "../types";
+import type { ApplyPlan, ApplyReport, Check, Device, FirmwareCopy, FirmwareRead, FirmwareRestoreParams, FirmwareStatus, FirmwareView, FlashParams, FwCopy, SplashParams, SplashPreview } from "../types";
 
 export interface MockFirmware {
   /** What the releases say now. */
@@ -25,6 +26,14 @@ export interface MockFirmware {
   /** Network checks and flashes made, for specs. */
   checks: number;
   flashed: string[];
+  /** Saved firmware copies (`gear::fwcopy`), any order. */
+  copies: FwCopy[];
+  /** The SHA-256 of the firmware the radio in DFU mode runs now. */
+  current: string;
+  /** Copy ids whose file no longer matches its SHA-256. */
+  damaged: string[];
+  /** Copies restored, for specs. */
+  restored: string[];
 }
 
 export const freshFirmware = (): MockFirmware => ({
@@ -38,6 +47,10 @@ export const freshFirmware = (): MockFirmware => ({
   failNext: false,
   checks: 0,
   flashed: [],
+  copies: [],
+  current: "7d1c0f5e".repeat(8),
+  damaged: [],
+  restored: [],
 });
 
 const idOf = (d: Device) => d.identity ?? {};
@@ -133,8 +146,10 @@ export function read(st: MockFirmware, devices: Device[], device: string | null)
   const id = `${d?.id ?? "dfu-0001"}/2026-10-09T120000-read`;
   const message = matches === null ? `The firmware names EdgeTX ${st.readVersion}. QuadCam has no version to compare it with. The copy is saved.` : matches ? `The radio's firmware is EdgeTX ${st.readVersion}, the version QuadCam knows for it. The copy is saved.` : `The firmware names EdgeTX ${st.readVersion}, but QuadCam knows the radio as ${known}. Read the version in the radio's own About screen. The copy is saved.`;
   st.reads += 1;
+  const copy: FwCopy = { id, device: d?.id ?? "dfu-0001", taken_at: "2026-10-09T12:00:00Z", kind: "read", size: 519580, sha256: st.current, image_board: "pocket", image_version: st.readVersion };
+  st.copies = [...st.copies.filter((c) => c.id !== id), copy];
   return {
-    copy: { id, device: d?.id ?? "dfu-0001", taken_at: "2026-10-09T12:00:00Z", kind: "read", size: 519580, sha256: "7d1c0f5e".repeat(8), image_board: "pocket", image_version: st.readVersion },
+    copy,
     device: d?.id ?? null,
     known_version: known,
     flash_bytes: 1048576,
@@ -224,5 +239,99 @@ export function flash(st: MockFirmware, devices: Device[], p: FlashParams, diges
     saved: true,
     steps: [first, { name: "Erase", state: "done", detail: "8 sectors" }, { name: "Write", state: "done", detail: "600 KB" }, { name: "Read back", state: "done", detail: "600 KB, equal" }, { name: "Leave DFU", state: "done" }],
     message: "Verified: the radio holds the new firmware byte for byte and restarted. Connect it in USB Storage mode to check the version.",
+  };
+}
+
+const newest = (a: FwCopy, b: FwCopy) => b.taken_at.localeCompare(a.taken_at) || b.id.localeCompare(a.id);
+
+/** `gear_firmware_copies`: a radio's copies (its folder), or every radio's and the unlinked ones. */
+export function copies(st: MockFirmware, devices: Device[], device: string | null): FirmwareCopy[] {
+  const radios = devices.filter((d) => d.kind === "radio");
+  if (device) {
+    const d = devices.find((x) => x.id === device);
+    if (!d) throw `No saved device ${device}.`;
+    if (d.kind !== "radio") throw "Firmware copies are kept for EdgeTX radios only.";
+  }
+  return [...st.copies]
+    .sort(newest)
+    .map((copy) => ({ radio: radios.some((r) => r.id === copy.device) ? copy.device : null, copy }))
+    .filter((c) => !device || c.radio === device);
+}
+
+/** `gear_firmware_restore_plan`. */
+export function restorePlan(st: MockFirmware, devices: Device[], p: FirmwareRestoreParams): ApplyPlan {
+  const d = devices.find((x) => x.id === p.device);
+  if (!d) throw `No saved device ${p.device}.`;
+  if (d.kind !== "radio") throw refused("incompatible", "QuadCam restores the firmware of EdgeTX radios only.");
+  const copy = st.copies.find((c) => c.id === p.copy && c.device === d.id);
+  if (!copy) throw `${d.name} has no firmware copy ${p.copy}. gear_firmware_copies lists its copies.`;
+  const board = idOf(d).board ?? "";
+  const checks: Check[] = [];
+  const intact = !st.damaged.includes(copy.id);
+  checks.push(intact ? ok("Copy matches its SHA-256") : fail("Copy matches its SHA-256", "bad_image", `The firmware copy ${copy.id} does not match its recorded hash. QuadCam does not write it.`));
+  checks.push(board.toLowerCase() === "pocket" ? ok("Known board") : fail("Known board", "unknown_board", `Board ${board || "(none)"} is not proven.`));
+  if (intact) {
+    if (!copy.image_board) checks.push(fail("Copy is for this radio's board", "bad_image", "The copy holds no EdgeTX version string; it may not be EdgeTX firmware."));
+    else if (copy.image_board.toLowerCase() !== board.toLowerCase()) checks.push(fail("Copy is for this radio's board", "incompatible", `The copy is firmware for board ${copy.image_board}, not ${board || "(none)"}: it is not ${d.name}'s firmware.`));
+    else {
+      checks.push(ok("Copy is for this radio's board"));
+      if (board.toLowerCase() === "pocket") checks.push(ok("Firmware image"));
+    }
+  }
+  checks.push(d.last_backup ? ok("Card backup") : fail("Card backup", "no_backup", "Back up this radio first: connect it in USB Storage mode and back it up. Other firmware can change how the radio reads its card."));
+  checks.push(st.dfu === 1 ? ok("One radio in DFU mode") : st.dfu === 0 ? fail("One radio in DFU mode", "no_device", "No radio is in DFU mode. Turn the radio off, then plug in the USB cable (do not hold the trim buttons, which start the EdgeTX bootloader instead). Wait a few seconds.") : fail("One radio in DFU mode", "several_devices", `${st.dfu} radios are in DFU mode; unplug all but one.`));
+  const ready = checks.every((c) => c.ok);
+  const warnings = [
+    "A radio in DFU mode shows no name. QuadCam writes the one radio in DFU mode; check it is the radio you picked.",
+    "QuadCam reads the radio's current firmware over DFU twice first. If a saved copy already holds it, that copy is the backup; otherwise QuadCam saves a new copy and reads it back. It erases nothing until then. If a restore fails, the radio's ROM bootloader still answers over USB (turn it off, plug in USB) and you can restore again. Restoring has not been tried on a real radio yet.",
+  ];
+  if (copy.image_version && copy.image_version !== "2.12.4") warnings.unshift(`QuadCam has not proven EdgeTX ${copy.image_version} on this board for a release flash. A restore writes the copy's bytes back as they were read.`);
+  return {
+    change: "firmware-restore",
+    device: idOf(d),
+    checks,
+    diff: [
+      { kind: "version", label: "EdgeTX firmware", before: idOf(d).version ?? null, after: copy.image_version ?? "unknown" },
+      { kind: "files", label: "Firmware image", put: [`${copy.id} (${Math.floor(copy.size / 1024)} KB)`, `SHA-256 ${copy.sha256}`], delete: [] },
+    ],
+    digest: ready ? `restore-${d.id}-${copy.id}` : "",
+    warnings,
+  };
+}
+
+/** `gear_firmware_restore` and `gear_firmware_restore_click`. */
+export function restore(st: MockFirmware, devices: Device[], p: FirmwareRestoreParams, digest: string, confirm: boolean): ApplyReport {
+  if (!confirm) throw "Refused: a firmware restore needs the plan's digest and confirm=true.";
+  const pl = restorePlan(st, devices, p);
+  const bad = pl.checks.find((c) => !c.ok);
+  if (bad?.refusal) throw refused(bad.refusal.code, bad.refusal.reason);
+  if (pl.digest !== digest) throw refused("before_mismatch", "The copy or the radio changed since the plan; plan again.");
+  const copy = st.copies.find((c) => c.id === p.copy)!;
+  const held = st.copies.find((c) => c.device === p.device && c.sha256 === st.current && !st.damaged.includes(c.id));
+  let backup = held?.id;
+  if (!held) {
+    backup = `${p.device}/2026-10-09T130000-before-restore`;
+    st.copies.push({ id: backup, device: p.device, taken_at: "2026-10-09T13:00:00Z", kind: "before_restore", size: 519580, sha256: st.current, image_board: "pocket", image_version: idOf(devices.find((d) => d.id === p.device)!).version ?? null });
+  }
+  const first = { name: "Copy the current firmware", state: "done" as const, detail: held ? `507 KB, read twice, already saved as ${backup}` : `507 KB, read twice, saved as ${backup}` };
+  const base = { change: "firmware-restore", device: p.device, backup: backup ?? null, after_backup: null, sent: [], failed_line: null, verify: [], files: [], notes: pl.warnings ?? [], at: "2026-10-09T13:00:00Z" };
+  if (st.failNext) {
+    st.failNext = false;
+    return {
+      ...base,
+      status: "failed",
+      saved: false,
+      steps: [first, { name: "Erase", state: "done", detail: "8 sectors" }, { name: "Write", state: "failed", detail: "The device holds different bytes than were written (first difference at 0x08001800, found while writing)." }, { name: "Read back", state: "skipped" }, { name: "Leave DFU", state: "skipped" }],
+      message: `The restore failed: The device holds different bytes than were written. The radio stays in DFU mode. Restore again, or unplug it, turn it off, plug it in again and retry. The radio's ROM bootloader always answers over USB. The firmware it ran before is kept (${backup}).`,
+    };
+  }
+  st.current = copy.sha256;
+  st.restored.push(copy.id);
+  return {
+    ...base,
+    status: "verified",
+    saved: true,
+    steps: [first, { name: "Erase", state: "done", detail: "8 sectors" }, { name: "Write", state: "done", detail: `${Math.floor(copy.size / 1024)} KB` }, { name: "Read back", state: "done", detail: `${Math.floor(copy.size / 1024)} KB, equal` }, { name: "Leave DFU", state: "done" }],
+    message: `Verified: the radio holds the firmware of copy ${copy.id} byte for byte and restarted. Connect it in USB Storage mode to check the version.`,
   };
 }

@@ -7,7 +7,7 @@ import { open as openDialog, save as saveDialog } from "@tauri-apps/plugin-dialo
 import { openPath, openUrl, revealItemInDir } from "@tauri-apps/plugin-opener";
 import { commands, type MapFrame, type MapPin, type MapStyle } from "../bindings";
 import * as N from "./normalize";
-import type { ProfileGear, ElrsFlashParams, FormatRequest, ChangeStatus, CopyRequest, Edit, SimFrame, SimPreset, SimStartInfo, SimStartParams, SimStopInfo, CrashSaveParams, ImportOptions, LibEdit, LibraryFilter, Moved, ModelEditParams, ModelParams, PackDeleteParams, PackInstallParams, PackPreviewParams, PublishApproveParams, PublishParams, SaveSetsParams, CatalogParams, EstimateParams, ImportTakesParams, KeyParams, LibraryParams, RenderPacksParams, SampleParams, SamplesDeleteParams, FlagParams, RetakeParams, SetsParams, VoiceCheckParams, VoiceChooseParams, VoiceChooseRadiosParams, VoiceEditParams, VoiceParams, VoicePreviewParams, VoiceRenderParams, OsdEditParams, OsdParams, RatesParams, RatesPreview, RateProfile, FlashParams, SplashParams, SimRestoreParams, SimSyncParams, SimsParams, Pack, PackType, PlanPatch, RemovedCuts, SettingsValues, Span, SwitchMapParams, SimCalibrationSaveParams, CalibrateParams } from "./types";
+import type { ProfileGear, ElrsFlashParams, FormatRequest, ChangeStatus, CopyRequest, Edit, SimFrame, SimPreset, SimStartInfo, SimStartParams, SimStopInfo, CrashSaveParams, ImportOptions, LibEdit, LibraryFilter, Moved, ModelEditParams, ModelParams, PackDeleteParams, PackInstallParams, PackPreviewParams, PublishApproveParams, PublishParams, SaveSetsParams, CatalogParams, EstimateParams, ImportTakesParams, KeyParams, LibraryParams, RenderPacksParams, SampleParams, SamplesDeleteParams, FlagParams, RetakeParams, SetsParams, VoiceCheckParams, VoiceChooseParams, VoiceChooseRadiosParams, VoiceEditParams, VoiceParams, VoicePreviewParams, VoiceRenderParams, OsdEditParams, OsdParams, RatesParams, RatesPreview, RateProfile, FirmwareRestoreParams, FlashParams, SplashParams, SimRestoreParams, SimSyncParams, SimsParams, Pack, PackType, PlanPatch, RemovedCuts, SettingsValues, Span, SwitchMapParams, SimCalibrationSaveParams, CalibrateParams } from "./types";
 
 type Result<T> = Promise<{ status: "ok"; data: T } | { status: "error"; error: string }>;
 
@@ -194,6 +194,11 @@ export const api = {
   gearFirmware: (check: boolean | null = null) => ok(commands.gearFirmware({ check })),
   /** The read-only DFU trial: reads the radio in DFU mode twice and saves a copy. Cannot write the radio. */
   gearFirmwareRead: (device: string | null) => ok(commands.gearFirmwareRead({ device })),
+  /** Saved firmware copies of a radio, or of every radio, newest first. Reads files only. */
+  gearFirmwareCopies: (device: string | null = null) => ok(commands.gearFirmwareCopies({ device })),
+  gearFirmwareRestorePlan: (p: FirmwareRestoreParams) => ok(commands.gearFirmwareRestorePlan(p)),
+  /** The apply sheet's own Apply click for a firmware restore: the click is the confirm. */
+  gearFirmwareRestoreClick: (p: FirmwareRestoreParams, digest: string) => ok(commands.gearFirmwareRestoreClick({ ...p, digest, confirm: true })),
   gearSplash: (p: SplashParams) => ok(commands.gearSplash(p)),
   gearFlashPlan: (p: FlashParams) => ok(commands.gearFlashPlan(p)),
   /** The apply sheet's own Apply click for a firmware flash: the click is the confirm. */

@@ -2,7 +2,7 @@
 // its reason, then Cancel and Apply. Return does not press Apply. During the write a row
 // shows the step; after it, "Verified" or the lines that failed, with Restore backup.
 import { useStore } from "../../../store";
-import { ELRS_FLASH, SIMS_DEVICE } from "../../../store/gear";
+import { ELRS_FLASH, FW_RESTORE, SIMS_DEVICE } from "../../../store/gear";
 import { Banner } from "../../../components/Banner";
 import { Button } from "../../../components/Button";
 import { Dialog } from "../../../components/Dialog";
@@ -26,9 +26,10 @@ export function ApplySheet() {
   const dev = a ? devices.find((d) => d.id === a.device) : undefined;
   const queued = useStore((s) => s.applyQueue.length);
   const flash = !!a?.flash || a?.change?.id === "flash";
+  const fwRestore = !!a?.fwRestore || a?.change?.id === FW_RESTORE;
   // The stand-in changes name their kind; a staged change takes its device's.
-  const kind = flash ? "firmware" : a?.change?.id === ELRS_FLASH ? "ELRS flash" : a?.device === SIMS_DEVICE ? "sims" : dev?.kind === "radio" ? "card" : dev?.kind === "elrs_tx" || dev?.kind === "elrs_rx" ? "ELRS" : "FC";
-  const name = kind === "sims" ? "sims" : dev ? deviceName(dev) : kind === "ELRS flash" ? "ExpressLRS device" : kind === "card" || kind === "firmware" ? "radio" : "FC";
+  const kind = fwRestore ? "restore" : flash ? "firmware" : a?.change?.id === ELRS_FLASH ? "ELRS flash" : a?.device === SIMS_DEVICE ? "sims" : dev?.kind === "radio" ? "card" : dev?.kind === "elrs_tx" || dev?.kind === "elrs_rx" ? "ELRS" : "FC";
+  const name = kind === "sims" ? "sims" : dev ? deviceName(dev) : kind === "ELRS flash" ? "ExpressLRS device" : kind === "card" || kind === "firmware" || kind === "restore" ? "radio" : "FC";
   const job = a ? jobs?.find((j) => j.device === a.device) : undefined;
   const more = a?.change ? changes.filter((c) => c.device === a.device && (c.status === "ready" || c.status === "try") && c.id !== a.change?.id).length : 0;
   const overUsb = kind === "card" && !!connected?.find((c) => c.id === a?.device)?.usb;
@@ -41,12 +42,12 @@ export function ApplySheet() {
       kind="sheet"
       blockReturn
       blockEscape={working}
-      title={kind === "firmware" || kind === "ELRS flash" ? `Flash ${name}` : `Apply to ${name}`}
+      title={kind === "restore" ? `Restore firmware on ${name}` : kind === "firmware" || kind === "ELRS flash" ? `Flash ${name}` : `Apply to ${name}`}
       onClose={() => close()}
       actions={
         done ? (
           <>
-            {a?.report?.status === "failed" && a.report.backup && kind !== "sims" && kind !== "firmware" && kind !== "ELRS flash" && (kind === "FC" || a.report.steps.some((x) => x.name === "Roll back" && x.state === "failed")) && (
+            {a?.report?.status === "failed" && a.report.backup && kind !== "sims" && kind !== "firmware" && kind !== "restore" && kind !== "ELRS flash" && (kind === "FC" || a.report.steps.some((x) => x.name === "Roll back" && x.state === "failed")) && (
               <Button variant="ghost" onClick={() => restore()}>
                 Restore backup
               </Button>
@@ -67,7 +68,7 @@ export function ApplySheet() {
               Cancel
             </Button>
             <Button variant="primary" disabled={!ready || working} onClick={() => run()}>
-              Apply
+              {kind === "restore" ? "Restore" : "Apply"}
             </Button>
           </>
         )
@@ -75,13 +76,13 @@ export function ApplySheet() {
     >
       {a && (
         <div className={styles.sheet}>
-          {a.agent != null && !done && !a.approved && <Banner icon="info">An agent, or "Apply ready changes", asked to apply this change. It goes ahead only if you click Apply.</Banner>}
+          {a.agent != null && !done && !a.approved && (kind === "restore" ? <Banner icon="info">An agent asked to restore this firmware copy. It goes ahead only if you click Restore.</Banner> : <Banner icon="info">An agent, or "Apply ready changes", asked to apply this change. It goes ahead only if you click Apply.</Banner>)}
           {queued > 0 && <Banner icon="info">{queued === 1 ? "Another apply request waits. It opens when you close this sheet." : `${queued} more apply requests wait. The next opens when you close this sheet.`}</Banner>}
           {a.error && <Banner kind="error">{a.error}</Banner>}
           {!a.change && !a.error && <p className={styles.muted}>No staged changes for this device.</p>}
           {a.change && (
             <div className={styles.head}>
-              <h3>{a.change.title || (kind === "card" ? "Radio card" : kind === "sims" ? "Sim rates" : kind === "firmware" ? "Radio firmware" : kind === "ELRS flash" ? "ExpressLRS firmware" : "FC settings")}</h3>
+              <h3>{a.change.title || (kind === "card" ? "Radio card" : kind === "sims" ? "Sim rates" : kind === "firmware" || kind === "restore" ? "Radio firmware" : kind === "ELRS flash" ? "ExpressLRS firmware" : "FC settings")}</h3>
               {a.plan && (
                 <p className={`${styles.muted} selectable`}>
                   {[a.plan.device.board, a.plan.device.firmware, a.plan.device.version].filter(Boolean).join(" · ")}
@@ -112,6 +113,8 @@ export function ApplySheet() {
               )}
               {kind === "firmware" && dev?.kind === "fc" ? (
                 <p className={styles.muted}>QuadCam saves the FC's settings first and keeps that backup, restarts the FC into its bootloader, reads the firmware the FC runs now twice and keeps it as a copy, erases and writes the flash, reads it back and compares it, and restarts the FC. It then puts your settings back and checks them against the FC. Unplug the battery first. If the read back differs, the FC stays in its bootloader.</p>
+              ) : kind === "restore" ? (
+                <p className={styles.muted}>QuadCam reads the firmware the radio runs now twice. If a saved copy already holds it, that copy is the backup; otherwise QuadCam saves it as a new copy and reads it back. QuadCam then erases the flash, writes the copy in segments, reads each back, compares the whole image, and restarts the radio. The radio must be in DFU mode: turn it off and plug in the USB cable, holding no button. If a read back differs, the radio stays in DFU mode.</p>
               ) : kind === "firmware" ? (
                 <p className={styles.muted}>QuadCam reads the firmware the radio runs now twice and keeps it as a copy, then erases and writes the flash in segments, reads each back, compares the whole image, and restarts the radio. The radio must be in DFU mode: turn it off and plug in the USB cable, holding no button. If a read back differs, the radio stays in DFU mode.</p>
               ) : kind === "ELRS flash" ? (
@@ -129,7 +132,7 @@ export function ApplySheet() {
           )}
           {working && a.plan && (
             <p className={styles.progress} role="status">
-              <Icon name="refresh" /> {job?.step || (kind === "firmware" || kind === "ELRS flash" ? "Flashing" : "Applying")}…
+              <Icon name="refresh" /> {job?.step || (kind === "restore" ? "Restoring firmware" : kind === "firmware" || kind === "ELRS flash" ? "Flashing" : "Applying")}…
             </p>
           )}
           {working && overUsb && <p className={styles.muted}>Keep the radio plugged in until this sheet shows the result. Writes over USB are slow.</p>}
