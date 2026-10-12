@@ -5,6 +5,11 @@ User-facing changes in each release, newest first. Release notes on
 
 ## Unreleased
 
+## 0.20.1 (2026-10-12)
+
+- **Update checks every hour.** QuadCam now checks for a newer release when it opens and every hour while it runs, not once a day. **Check for Updates** under the version in Settings checks now, from any Settings page.
+- **Check for module updates.** The Modules pane's button has a name of its own, so it is not confused with the app's **Check for Updates**.
+
 ## 0.20.0 (2026-10-12)
 
 - **Price and render several voices at once.** The Voice studio's cost now covers every ticked voice with every ticked model, not only the first: the tiles show the total and **Cost by pack** lists each pair. **Render packs** makes one pack per voice and model in one confirmed run; a failure keeps the packs made before it. CLI `gear voice render-packs`; MCP `voice_estimate` and `voice_render` take `voices` and `voice_models`.
