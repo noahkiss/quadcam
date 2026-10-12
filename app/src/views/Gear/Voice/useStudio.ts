@@ -63,6 +63,9 @@ export interface UseStudio {
   cancel: () => void;
 }
 
+/** The height of the studio's voice lists: they scroll inside it, under their header. */
+export const LIST_HEIGHT = "min(60vh, 480px)";
+
 export function useStudio(onRendered: () => Promise<void>, onSampled: () => Promise<void> = async () => undefined): UseStudio {
   const [key, setKey] = useState<KeyStatus | null>(null);
   const [sets, setSets] = useState<SetInfo[]>([]);
@@ -98,7 +101,15 @@ export function useStudio(onRendered: () => Promise<void>, onSampled: () => Prom
   }, []);
   const setVoices = useCallback((v: string[]) => (pickVoices(v), stop()), [stop]);
   const setModels = useCallback((v: string[]) => (pickModels(v), stop()), [stop]);
-  const setPicked = useCallback((v: string[]) => (pickSets(v), stop()), [stop]);
+  /** A tick saves the sets in the gear folder, for the next time the studio opens. */
+  const setPicked = useCallback(
+    (v: string[]) => {
+      pickSets(v);
+      stop();
+      api.gearVoiceSaveSets({ sets: v }).catch((e) => setError(errText(e)));
+    },
+    [stop],
+  );
   const [speed, pickSpeed] = useState(1);
   const setSpeed = useCallback((v: number) => (pickSpeed(v), stop()), [stop]);
   const [imported, setImported] = useState<ImportReport | null>(null);

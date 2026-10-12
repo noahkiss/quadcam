@@ -322,6 +322,18 @@ async fn gear_voice_publish_approve(
     blocking(move || core.voice_publish_approve(&params)).await
 }
 
+/// The Voice studio's ticked line sets, kept in the gear folder for the next time. A choice
+/// in the window, so no `api` row.
+#[tauri::command]
+#[specta::specta]
+async fn gear_voice_save_sets(
+    state: State<'_, AppState>,
+    params: api::SaveSetsParams,
+) -> Result<(), String> {
+    let core = state.core.clone();
+    blocking(move || core.gear_voice_save_sets(&params)).await
+}
+
 /// The apply sheet's own Apply button for a sim sync: the click is the confirmation.
 #[tauri::command]
 #[specta::specta]
@@ -781,6 +793,7 @@ pub fn specta_builder() -> tauri_specta::Builder<tauri::Wry> {
             answer_format_request,
             gear_apply_click,
             gear_voice_publish_approve,
+            gear_voice_save_sets,
             gear_sim_sync_click,
             gear_sim_restore_click,
             gear_flash_click,

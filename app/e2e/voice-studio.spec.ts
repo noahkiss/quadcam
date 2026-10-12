@@ -9,8 +9,15 @@ import { axeSchemes, expect, test, type AppFixture } from "./fixtures";
 /** The value of one tile of a stat row, such as "To render" in the cost. */
 const stat = (row: ReturnType<Page["getByRole"]>, label: string) => row.locator('[data-component="stat"]', { hasText: label }).locator("b");
 
-async function openStudio(app: AppFixture, page: Page) {
+/** Opens the app on the mock core, whose saved line sets are FPV quad and FPV extras;
+ *  `before` runs against the mock core first. */
+async function openStudio(app: AppFixture, page: Page, before?: string) {
   await app.open();
+  if (before) await app.core(before);
+  return gotoStudio(page);
+}
+
+async function gotoStudio(page: Page) {
   await page.getByRole("navigation", { name: "Library" }).getByRole("button", { name: /^Voices/ }).click();
   return page.getByRole("region", { name: "Voice studio" });
 }
@@ -59,8 +66,8 @@ test("the pickers list the account's voices and models, and the cost follows the
   const models = studio.getByRole("table", { name: "Models" });
   await expect(models.getByRole("checkbox", { name: /\(eleven_turbo_v2_5\)/ })).toBeVisible();
   const cost = studio.getByRole("status", { name: "Cost" });
-  await expect(stat(cost, "To render")).toHaveText("236");
-  await expect(cost).toContainText("of 236 lines · 0 rendered");
+  await expect(stat(cost, "To render")).toHaveText("281");
+  await expect(cost).toContainText("of 281 lines · 0 rendered");
   // The price shows in USD and in estimated credits.
   await expect(stat(cost, "Cost")).toHaveText(/^\$\d+\.\d\d$/);
   await expect(cost).toContainText("$0.08 per 1K characters");
@@ -77,8 +84,8 @@ test("the pickers list the account's voices and models, and the cost follows the
   expect(Math.abs(half - full / 2), `${half} of ${full}`).toBeLessThanOrEqual(1);
   // A second set adds its lines.
   await studio.getByRole("table", { name: "Line sets" }).getByRole("checkbox", { name: /Easter eggs/ }).check();
-  await expect(cost).toContainText("of 248 lines");
-  expect((await app.method("gear_voice_render_packs")).at(-1)).toMatchObject({ sets: ["quad", "extras", "easter"], voices: ["voice-callum"], models: ["eleven_turbo_v2_5"], dry_run: true });
+  await expect(cost).toContainText("of 293 lines");
+  expect((await app.method("gear_voice_render_packs")).at(-1)).toMatchObject({ sets: ["quad", "extras", "quadcam", "easter"], voices: ["voice-callum"], models: ["eleven_turbo_v2_5"], dry_run: true });
 });
 
 test("Sample asks before it pays, then shows one card per voice and model in Samples", async ({ app, page }) => {
@@ -186,7 +193,7 @@ test("Render pack asks, then adds a local pack", async ({ app, page }) => {
   const studio = await openStudio(app, page);
   await saveKey(studio);
   await studio.getByRole("button", { name: "Render pack" }).click();
-  expect((await renders(app)).at(-1)).toMatchObject({ voices: ["voice-callum"], models: ["eleven_v4"], sets: ["quad", "extras"], confirm: false });
+  expect((await renders(app)).at(-1)).toMatchObject({ voices: ["voice-callum"], models: ["eleven_v4"], sets: ["quad", "extras", "quadcam"], confirm: false });
   await expect(studio).toContainText("This sends text to ElevenLabs, which bills it.");
   await studio.getByRole("button", { name: "Render and pay" }).click();
   await expect.poll(async () => (await renders(app)).at(-1)).toMatchObject({ confirm: true });
@@ -203,7 +210,7 @@ test("several voices price as one plan with a row per pack, and render one pack 
   const byPack = studio.getByRole("table", { name: "Cost by pack" });
   await expect(byPack.getByRole("row", { name: /^Callum/ })).toBeVisible();
   await expect(byPack.getByRole("row", { name: /^Daniel/ })).toBeVisible();
-  await expect(cost).toContainText("of 472 lines in 2 packs");
+  await expect(cost).toContainText("of 562 lines in 2 packs");
   await expect(stat(cost, "Characters").first()).toHaveText((2 * one).toLocaleString("en-US"));
   await studio.getByRole("button", { name: "Render packs" }).click();
   await expect(studio).toContainText("2 packs.");
@@ -244,6 +251,7 @@ test("the line sets group by aircraft, start with the quad sets, and count what 
   const row = (t: string) => sets.getByRole("row", { name: new RegExp(`^${t} `) });
   await expect(row("FPV quad").getByRole("checkbox")).toBeChecked();
   await expect(row("FPV extras").getByRole("checkbox")).toBeChecked();
+  await expect(row("QuadCam default").getByRole("checkbox")).toBeChecked();
   for (const t of ["Helicopter", "Plane", "Glider", "Car", "Full EdgeTX English", "Easter eggs"]) await expect(row(t).getByRole("checkbox")).not.toBeChecked();
   await expect(row("FPV extras")).toContainText("Betaflight modes");
   const cells = (t: string) => row(t).getByRole("cell");
@@ -257,17 +265,79 @@ test("the line sets group by aircraft, start with the quad sets, and count what 
   await expect(cells("Helicopter").nth(2)).toHaveText("140");
   const cost = studio.getByRole("status", { name: "Cost" });
   await expect(stat(cost, "To render")).toHaveText("0");
-  await expect(cost).toContainText("of 236 lines · 236 rendered");
+  await expect(cost).toContainText("of 281 lines · 281 rendered");
   await row("Helicopter").getByRole("checkbox").check();
-  await expect(cost).toContainText("of 400 lines · 376 rendered");
+  await expect(cost).toContainText("of 445 lines · 421 rendered");
   await expect(stat(cost, "To render")).toHaveText("24");
   expect((await app.method("gear_voice_sets")).at(-1)).toMatchObject({ voice: "voice-callum", model: "eleven_v4" });
   // The voice list counts each voice's lines, and so does the summary.
-  await expect(studio.getByRole("table", { name: "Voices" }).getByRole("row", { name: /^Callum/ })).toContainText("236");
-  await expect(stat(page.getByRole("group", { name: "Summary" }), "Lines rendered")).toHaveText("236");
+  await expect(studio.getByRole("table", { name: "Voices" }).getByRole("row", { name: /^Callum/ })).toContainText("281");
+  await expect(stat(page.getByRole("group", { name: "Summary" }), "Lines rendered")).toHaveText("281");
   // Two voices: the set counts go, as they belong to one voice and model.
   await studio.getByRole("table", { name: "Voices" }).getByRole("checkbox", { name: "Daniel" }).check();
   await expect(cells("FPV quad").nth(2)).toHaveText("—");
+});
+
+test("a first run ticks every line set; the ticks are saved, and QuadCam default is ticked each time", async ({ app, page }) => {
+  const studio = await openStudio(app, page, `c => { c.gear.voice.savedSets = null; }`);
+  await saveKey(studio);
+  const sets = studio.getByRole("table", { name: "Line sets" });
+  const boxes = sets.getByRole("checkbox");
+  await expect(boxes).toHaveCount(10);
+  for (const b of await boxes.all()) await expect(b).toBeChecked();
+  const note = studio.getByRole("note");
+  await expect(note).toHaveCount(0);
+  // Each tick saves; QuadCam default off shows the note by Render pack and still renders.
+  await sets.getByRole("checkbox", { name: "Full EdgeTX English" }).uncheck();
+  await sets.getByRole("checkbox", { name: "QuadCam default" }).uncheck();
+  await expect(note).toHaveText("QuadCam's own cues need the QuadCam default set. Without it, they use the Mac voice.");
+  await expect(studio.getByRole("button", { name: "Render pack" })).toBeEnabled();
+  const saved = (await app.method("gear_voice_save_sets")).at(-1)!.sets as string[];
+  expect(saved).not.toContain("edgetx");
+  expect(saved).not.toContain("quadcam");
+  expect(saved).toContain("easter");
+  // Next time: the saved ticks come back, and QuadCam default is ticked again.
+  await page.getByRole("navigation", { name: "Library" }).getByRole("button", { name: /^Devices/ }).click();
+  await expect(studio).toHaveCount(0);
+  const again = (await gotoStudio(page)).getByRole("table", { name: "Line sets" });
+  await expect(again.getByRole("checkbox", { name: "QuadCam default" })).toBeChecked();
+  await expect(again.getByRole("checkbox", { name: "Full EdgeTX English" })).not.toBeChecked();
+  for (const t of ["FPV quad", "FPV extras", "Easter eggs", "Helicopter", "Car"]) await expect(again.getByRole("checkbox", { name: t, exact: true })).toBeChecked();
+  await expect(page.getByRole("region", { name: "Voice studio" }).getByRole("note")).toHaveCount(0);
+});
+
+test("the voice list scrolls inside its own box under a header that stays", async ({ app, page }) => {
+  const studio = await openStudio(app, page, `c => { c.gear.voice.extraVoices = 40; }`);
+  await saveKey(studio);
+  const voices = studio.getByRole("table", { name: "Voices" });
+  await expect(voices.getByRole("checkbox")).toHaveCount(48);
+  const box = voices.locator("xpath=..");
+  const size = await box.evaluate((el) => ({ client: el.clientHeight, scroll: el.scrollHeight, max: getComputedStyle(el).maxHeight, vh: window.innerHeight }));
+  expect(size.client).toBeLessThanOrEqual(Math.min(0.6 * size.vh, 480) + 1);
+  expect(size.scroll).toBeGreaterThan(size.client);
+  // The rest of the studio is a short scroll away, not past every voice.
+  const lineSets = studio.getByRole("table", { name: "Line sets" });
+  const [boxBottom, setsTop] = [await box.evaluate((el) => el.getBoundingClientRect().bottom), await lineSets.evaluate((el) => el.getBoundingClientRect().top)];
+  expect(setsTop - boxBottom).toBeLessThan(400);
+  // Scrolled to the end: the header stays at the top of the box, and the last voice shows.
+  await box.evaluate((el) => el.scrollTo(0, el.scrollHeight));
+  const header = voices.getByRole("columnheader", { name: "Accent" });
+  await expect(header).toBeInViewport();
+  const [boxTop, headTop] = [await box.evaluate((el) => el.getBoundingClientRect().top), await header.evaluate((el) => el.getBoundingClientRect().top)];
+  expect(Math.abs(headTop - boxTop)).toBeLessThanOrEqual(2);
+  /** Whether a row shows inside the box, below the header. */
+  const inBox = (row: RegExp) =>
+    voices.getByRole("row", { name: row }).evaluate((tr) => {
+      const b = tr.closest('[data-component="data-table"]')!.getBoundingClientRect();
+      const h = tr.closest("table")!.querySelector("thead th")!.getBoundingClientRect();
+      const r = tr.getBoundingClientRect();
+      return r.top >= h.bottom - 1 && r.bottom <= b.bottom + 1;
+    });
+  expect(await inBox(/^Voice 40/)).toBe(true);
+  expect(await inBox(/^Callum/)).toBe(false);
+  // Keyboard focus brings its row into the box, clear of the header.
+  await voices.getByRole("checkbox", { name: "Callum" }).focus();
+  await expect.poll(() => inBox(/^Callum/)).toBe(true);
 });
 
 test("Import takes… copies a folder of earlier takes, and the voice list counts them", async ({ app, page }) => {
@@ -381,7 +451,7 @@ for (const scheme of axeSchemes) {
   test.describe(`${scheme} theme`, () => {
     test.use({ colorScheme: scheme });
     test("the Voice studio passes axe", async ({ app, page }) => {
-      const studio = await openStudio(app, page);
+      const studio = await openStudio(app, page, `c => { c.gear.voice.extraVoices = 40; }`);
       await saveKey(studio);
       await studio.getByRole("button", { name: "Sample", exact: true }).click();
       await studio.getByRole("button", { name: "Sample and pay" }).click();
@@ -409,6 +479,9 @@ for (const scheme of axeSchemes) {
       await studio.getByRole("button", { name: "Browse voices…" }).click();
       const sheet = page.getByRole("dialog", { name: "Browse voices" });
       await expect(sheet.getByRole("table", { name: "Voice Library" }).getByRole("row", { name: /^Ranger/ })).toBeVisible();
+      // The results scroll in a box of their own, like the studio's voice list.
+      const box = sheet.getByRole("table", { name: "Voice Library" }).locator("xpath=..");
+      expect(await box.evaluate((el) => [getComputedStyle(el).overflowY, getComputedStyle(el).maxHeight !== "none"])).toEqual(["auto", true]);
       await sheet.getByRole("button", { name: "Add Ranger to My Voices" }).click();
       await expect(sheet.getByRole("button", { name: "Add to My Voices" })).toBeVisible();
       const r = await new AxeBuilder({ page }).withTags(["wcag2a", "wcag2aa", "wcag21aa"]).analyze();

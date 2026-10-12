@@ -545,7 +545,7 @@ inside carrier sentences, and compares voices before it spends credits.
   | `car` | 308 | The same base and the car prompts (drive modes, steering, gears, drift, stability control) |
   | `scripts` | 179 | The Betaflight, INAV and Yaapu telemetry-script prompts |
   | `extras` | 164 | More FPV callouts: arming states, battery stages (ninety to ten percent), link stages, rate profiles (freestyle, race, cinematic), VTX power, beeper, race timing, GPS rescue, checks |
-  | `easter` | 20 | Short fun lines in original wording. Off unless you pick the set |
+  | `easter` | 20 | Short fun lines in original wording |
   | `sample` | 12 | Hard lines for comparing voices |
   | `custom`, `quadcam` | yours, 45 | Your own lines, and the lines a pack holds today |
 
@@ -557,10 +557,14 @@ inside carrier sentences, and compares voices before it spends credits.
   and the full EdgeTX set, which holds every kind's prompts). QuadCam reads the aircraft you
   fly from the aircraft profiles: a word in a profile's name or aircraft ("5-inch freestyle",
   "whoop", "heli", "glider", "wing", "crawler"), and a profile linked to an FC is a quad. With
-  no profile, it takes quads. The sets made only for those aircraft start ticked: for quads,
-  `quad` and `extras`, and your own lines when you have some. A Betaflight quad needs no other
-  set: `quad` already holds the Betaflight script's prompts, and `scripts` is for INAV and
-  ArduPilot. With one voice and one model ticked, each set shows how many of its lines are rendered.
+  no profile, it takes quads. The first time, every set starts ticked. After that the studio
+  keeps the sets you tick (`voice-studio.json` in the gear folder) and ticks them again the
+  next time it opens. **QuadCam default** is ticked each time: QuadCam's own cues need it. You
+  can untick it for one render; a note by **Render pack** then says that these cues use the
+  Mac voice. A Betaflight quad needs only `quad` and `extras`: `quad` already holds the
+  Betaflight script's prompts, and `scripts` is for INAV and ArduPilot. With one voice and one
+  model ticked, each set shows how many of its lines are rendered. The voice list scrolls inside
+  its own box, under a header that stays.
 
   The number and unit prompts (`0000.wav` to `0112.wav`, `volt0.wav` and so on) and the
   sounds the radio plays by itself go in `SOUNDS/en/SYSTEM/`, where EdgeTX looks for them; a

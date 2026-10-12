@@ -640,6 +640,11 @@ export const commands = {
 	 *  so MCP and the socket cannot reach it.
 	 */
 	gearVoicePublishApprove: (params: PublishApproveParams) => typedError<PublishApproveReport, string>(__TAURI_INVOKE("gear_voice_publish_approve", { params })),
+	/**
+	 *  The Voice studio's ticked line sets, kept in the gear folder for the next time. A choice
+	 *  in the window, so no `api` row.
+	 */
+	gearVoiceSaveSets: (params: SaveSetsParams) => typedError<null, string>(__TAURI_INVOKE("gear_voice_save_sets", { params })),
 	/**  The apply sheet's own Apply button for a sim sync: the click is the confirmation. */
 	gearSimSyncClick: (params: SimSyncRequest) => typedError<ApplyReport, string>(__TAURI_INVOKE("gear_sim_sync_click", { params })),
 	/**  The apply sheet's own Apply button for a sim restore: the click is the confirmation. */
@@ -6057,6 +6062,11 @@ export type SamplesDeleteParams = {
 	all?: boolean,
 };
 
+/**  `gear_voice_save_sets`: the line sets ticked in the studio, kept for the next time. */
+export type SaveSetsParams = {
+	sets: string[],
+};
+
 /**  One radio's saved calibration and what it was made with. */
 export type SavedCalibration = {
 	/**  The Gear radio's device id, or a provisional `usb-…` key. */
@@ -6916,7 +6926,10 @@ export type StudioView = {
 	 *  profile names one).
 	 */
 	aircraft?: string[],
-	/**  The sets picked at first: those made only for those kinds, and the person's own lines. */
+	/**
+	 *  The sets the studio ticks: every set the first time; after that the sets it saved
+	 *  (`gear_voice_save_sets`), with `quadcam` always ticked.
+	 */
 	picks?: string[],
 	/**  The lines each voice, model and speed already have a take of, most first. */
 	rendered?: TakeCount[],

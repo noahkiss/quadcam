@@ -11,6 +11,7 @@ import { DataTable, type Column } from "../../../components/dash/DataTable";
 import { api, errText } from "../../../ipc/api";
 import type { LibraryPage, LibraryQuery, LibraryVoice } from "../../../ipc/types";
 import { playPreview } from "./play";
+import { LIST_HEIGHT } from "./useStudio";
 import styles from "./Voice.module.css";
 
 const GENDERS = ["male", "female", "neutral"];
@@ -275,7 +276,7 @@ export function BrowseVoices({ onClose, onAdded }: { onClose: () => void; onAdde
             {asking.rate != null ? ` Each character in this voice bills ${asking.rate}× the model's credits.` : ""}
           </Banner>
         )}
-        <DataTable label="Voice Library" compact columns={cols} rows={page?.voices ?? []} rowKey={(v) => v.voice_id} empty={busy ? "Searching…" : "No voice matches."} />
+        <DataTable label="Voice Library" compact columns={cols} rows={page?.voices ?? []} rowKey={(v) => v.voice_id} empty={busy ? "Searching…" : "No voice matches."} maxHeight={LIST_HEIGHT} />
         {page && !single && (
           <div className={styles.bar}>
             <Button size="sm" disabled={busy || page.page === 0} onClick={() => go(page.page - 1)}>

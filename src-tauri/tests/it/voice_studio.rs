@@ -1144,14 +1144,25 @@ fn a_render_after_a_sample_reuses_the_sampled_lines() {
     assert!(pack.join("SOUNDS/en/SYSTEM/0006.wav").is_file());
 }
 
-/// The aircraft the profiles name pick the sets: quads get the quad sets, a helicopter adds
-/// its own; with no profile, quads.
+/// The sets the studio shows, in order: every set but `sample`, and `custom` only with lines.
+fn shown_sets(v: &quadcam_lib::core::StudioView) -> Vec<String> {
+    v.sets
+        .iter()
+        .filter(|x| x.id != "sample" && !(x.id == "custom" && x.lines == 0))
+        .map(|x| x.id.clone())
+        .collect()
+}
+
+/// The profiles name the aircraft flown: quads by default, a helicopter adds its own. With
+/// nothing saved, the studio ticks every set it shows.
 #[test]
-fn the_sets_picked_at_first_follow_the_aircraft_flown() {
+fn the_sets_follow_the_aircraft_flown_and_all_are_ticked_at_first() {
     let b = bench(50_000, true);
     let v = b.core.gear_voice_sets(&Default::default()).unwrap();
     assert_eq!(v.aircraft, ["quad"]);
-    assert_eq!(v.picks, ["quad", "extras"]);
+    assert_eq!(v.picks, shown_sets(&v));
+    assert!(v.picks.iter().any(|p| p == "quadcam"), "{:?}", v.picks);
+    assert!(!v.picks.iter().any(|p| p == "sample"), "{:?}", v.picks);
     assert!(v.sets.iter().all(|s| s.rendered.is_none()));
     let kinds = |id: &str| v.sets.iter().find(|s| s.id == id).unwrap().kinds.clone();
     assert_eq!(kinds("quad"), ["quad"]);
@@ -1169,12 +1180,41 @@ fn the_sets_picked_at_first_follow_the_aircraft_flown() {
     }
     let v = b.core.gear_voice_sets(&Default::default()).unwrap();
     assert_eq!(v.aircraft, ["quad", "heli"]);
-    assert_eq!(v.picks, ["quad", "extras", "heli"]);
+    assert_eq!(v.picks, shown_sets(&v));
     let t = quadcam_lib::core::voice_sets_text(&v);
     assert!(
         t.contains("Aircraft flown (from the profiles): quad, heli"),
         "{t}"
     );
+}
+
+/// The studio's ticked sets live in the gear folder and come back; `quadcam` comes back
+/// ticked even when the saved sets leave it out.
+#[test]
+fn the_ticked_sets_are_saved_and_quadcam_is_always_ticked() {
+    let b = bench(50_000, true);
+    let save = |sets: &[&str]| {
+        b.core
+            .gear_voice_save_sets(&quadcam_lib::core::SaveSetsParams {
+                sets: sets.iter().map(|s| s.to_string()).collect(),
+            })
+            .unwrap()
+    };
+    save(&["easter", "quad", "quadcam"]);
+    assert!(b
+        .dir
+        .path()
+        .join("support/gear/voice-studio.json")
+        .is_file());
+    let v = b.core.gear_voice_sets(&Default::default()).unwrap();
+    assert_eq!(v.picks, ["quad", "easter", "quadcam"]);
+    save(&["extras"]);
+    let v = b.core.gear_voice_sets(&Default::default()).unwrap();
+    assert_eq!(v.picks, ["extras", "quadcam"]);
+    // Nothing ticked is a choice too: only `quadcam` comes back.
+    save(&[]);
+    let v = b.core.gear_voice_sets(&Default::default()).unwrap();
+    assert_eq!(v.picks, ["quadcam"]);
 }
 
 /// A flag from an older cut version does not count: the take is cut and checked again when it

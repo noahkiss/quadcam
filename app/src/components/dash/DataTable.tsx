@@ -36,18 +36,32 @@ export interface DataTableProps<T> {
   compact?: boolean;
   /** Shown in place of the table when there are no rows. */
   empty?: ReactNode;
+  /** A CSS height, such as `min(60vh, 480px)`: the rows scroll inside a box that tall, under
+   *  a header that stays. A focused or picked row scrolls into view. */
+  maxHeight?: string;
+}
+
+/** Scrolls the row that holds `el` into the table's box, when the box scrolls. */
+function reveal(el: Element) {
+  el.closest("tr")?.scrollIntoView({ block: "nearest" });
 }
 
 /** A table of rows that share columns: aligned numbers, an optional checkbox column, optional
  *  group header rows, row actions in a last column. It scrolls sideways inside its own box
- *  when the window is too narrow, and drops `optional` columns first. */
-export function DataTable<T>({ label, columns, rows, rowKey, selection, group, compact, empty }: DataTableProps<T>) {
+ *  when the window is too narrow, and drops `optional` columns first. With `maxHeight` it
+ *  scrolls down inside that box too. */
+export function DataTable<T>({ label, columns, rows, rowKey, selection, group, compact, empty, maxHeight }: DataTableProps<T>) {
   if (rows.length === 0 && empty) return <>{empty}</>;
   const span = columns.length + (selection ? 1 : 0);
   const cls = (c: Column<T>) => [c.numeric && styles.num, c.optional && styles.optional].filter(Boolean).join(" ") || undefined;
   let last: string | null = null;
   return (
-    <div className={styles.wrap} data-component="data-table">
+    <div
+      className={[styles.wrap, maxHeight && styles.scroll].filter(Boolean).join(" ")}
+      data-component="data-table"
+      style={maxHeight ? { maxHeight } : undefined}
+      onFocus={maxHeight ? (e) => reveal(e.target) : undefined}
+    >
       <table className={[styles.table, compact && styles.compact].filter(Boolean).join(" ")} aria-label={label}>
         <thead>
           <tr>
@@ -81,7 +95,15 @@ export function DataTable<T>({ label, columns, rows, rowKey, selection, group, c
                 <tr className={on ? styles.on : undefined}>
                   {selection && (
                     <td className={styles.check}>
-                      <input type="checkbox" aria-label={selection.label(r)} checked={on} onChange={(e) => selection.onChange(r, e.target.checked)} />
+                      <input
+                        type="checkbox"
+                        aria-label={selection.label(r)}
+                        checked={on}
+                        onChange={(e) => {
+                          selection.onChange(r, e.target.checked);
+                          if (maxHeight) reveal(e.target);
+                        }}
+                      />
                     </td>
                   )}
                   {columns.map((c) =>

@@ -509,6 +509,7 @@ export type {
   GhStatus,
   Published,
   PublishApproveParams,
+  SaveSetsParams,
   PublishApproveReport,
 } from "../bindings";
 

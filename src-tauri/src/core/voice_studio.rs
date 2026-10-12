@@ -104,12 +104,28 @@ pub struct StudioView {
     /// profile names one).
     #[serde(default)]
     pub aircraft: Vec<String>,
-    /// The sets picked at first: those made only for those kinds, and the person's own lines.
+    /// The sets the studio ticks: every set the first time; after that the sets it saved
+    /// (`gear_voice_save_sets`), with `quadcam` always ticked.
     #[serde(default)]
     pub picks: Vec<String>,
     /// The lines each voice, model and speed already have a take of, most first.
     #[serde(default)]
     pub rendered: Vec<TakeCount>,
+}
+
+/// `gear_voice_save_sets`: the line sets ticked in the studio, kept for the next time.
+#[derive(Debug, Clone, Default, Serialize, Deserialize, specta::Type)]
+pub struct SaveSetsParams {
+    pub sets: Vec<String>,
+}
+
+/// `<gear>/voice-studio.json`: the studio's saved choices.
+const CHOICES_FILE: &str = "voice-studio.json";
+
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+struct StudioChoices {
+    #[serde(default)]
+    sets: Vec<String>,
 }
 
 /// `gear_voice_estimate`.
@@ -708,10 +724,7 @@ impl Core {
         let custom = self.custom_lines()?.len();
         let mut list = sets::infos(custom)?;
         let aircraft = self.flown_kinds();
-        let mut picks = sets::default_picks(&aircraft);
-        if custom > 0 {
-            picks.push(sets::CUSTOM.into());
-        }
+        let picks = self.studio_picks(&list);
         let (voice, model) = (p.voice.trim(), p.model.trim());
         if !voice.is_empty() && !model.is_empty() {
             let settings = p.settings.clone().unwrap_or_default();
@@ -764,6 +777,39 @@ impl Core {
             std::path::Path::new(folder),
             p.dry_run,
         )
+    }
+
+    /// The sets the studio ticks: every set it shows the first time, then the saved sets.
+    /// `quadcam` is ticked each time, as the app's own cues need it; an untick lasts one run.
+    fn studio_picks(&self, list: &[SetInfo]) -> Vec<String> {
+        let shown = list
+            .iter()
+            .filter(|x| x.id != "sample" && !(x.id == sets::CUSTOM && x.lines == 0))
+            .map(|x| x.id.clone());
+        match self.studio_choices() {
+            None => shown.collect(),
+            Some(c) => shown
+                .filter(|id| id == sets::QUADCAM || c.sets.contains(id))
+                .collect(),
+        }
+    }
+
+    fn studio_choices(&self) -> Option<StudioChoices> {
+        let b = std::fs::read(self.gear_store().root().join(CHOICES_FILE)).ok()?;
+        serde_json::from_slice(&b).ok()
+    }
+
+    /// Saves the line sets ticked in the studio into the gear folder. No network.
+    pub fn gear_voice_save_sets(&self, p: &SaveSetsParams) -> Result<()> {
+        let root = self.gear_store().root().to_path_buf();
+        std::fs::create_dir_all(&root)?;
+        let c = StudioChoices {
+            sets: p.sets.clone(),
+        };
+        let tmp = root.join(format!(".{CHOICES_FILE}.part"));
+        std::fs::write(&tmp, serde_json::to_vec_pretty(&c)?)?;
+        std::fs::rename(&tmp, root.join(CHOICES_FILE))?;
+        Ok(())
     }
 
     /// The aircraft kinds the person flies: a word in a profile's name or aircraft
@@ -1879,13 +1925,13 @@ pub fn studio_estimate_text(e: &StudioEstimate) -> String {
     )
 }
 
-/// The line sets as text: the aircraft flown, the first picks, and per set what it holds.
+/// The line sets as text: the aircraft flown, the sets ticked, and per set what it holds.
 pub fn sets_text(v: &StudioView) -> String {
     use std::fmt::Write;
     let mut s = key_text(&v.key);
     let _ = write!(
         s,
-        "\nAircraft flown (from the profiles): {}. Picked at first: {}.",
+        "\nAircraft flown (from the profiles): {}. Ticked in the studio: {}.",
         v.aircraft.join(", "),
         v.picks.join(", ")
     );

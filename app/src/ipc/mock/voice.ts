@@ -74,9 +74,13 @@ export interface MockVoice {
   seedSamples: number;
   /** The flags beside each pack's takes. */
   packFlags: Record<string, TakeFlag[]>;
+  /** The line sets the studio saved (`<gear>/voice-studio.json`); null before the first save. */
+  savedSets: string[] | null;
+  /** Made-up account voices the catalog adds (a long voice list for layout specs). */
+  extraVoices: number;
 }
 
-export const freshVoice = (): MockVoice => ({ installed: [], index: false, overrides: {}, chosen: {}, custom: [], paid: false, keySet: "", spent: 0, retake: null, rendered: {}, imported: [], takesDeleted: [], retakes: {}, heard: {}, speech: true, misheard: null, stop: false, added: [], slots: 30, samples: [], seedSamples: 0, packFlags: {} });
+export const freshVoice = (): MockVoice => ({ installed: [], index: false, overrides: {}, chosen: {}, custom: [], paid: false, keySet: "", spent: 0, retake: null, rendered: {}, imported: [], takesDeleted: [], retakes: {}, heard: {}, speech: true, misheard: null, stop: false, added: [], slots: 30, samples: [], seedSamples: 0, packFlags: {}, savedSets: ["quad", "extras"], extraVoices: 0 });
 
 type Paid = { confirm?: boolean; digest?: string | null; settings?: { seed?: number | null } | null };
 
@@ -408,6 +412,20 @@ function renderedOf(g: MockGear, id: string, voice: string, model: string): numb
   return holdsShared(id) && done.some(holdsShared) ? Math.min(SHARED, set.lines) : 0;
 }
 
+/** The sets the studio ticks: every set it shows before the first save, then the saved sets;
+ * `quadcam` each time. */
+function picks(g: MockGear, custom: number): string[] {
+  const shown = SETS.filter((s) => s.id !== "sample" && !(s.id === "custom" && custom === 0)).map((s) => s.id);
+  const saved = g.voice.savedSets;
+  return saved ? shown.filter((id) => id === "quadcam" || saved.includes(id)) : shown;
+}
+
+/** `gear_voice_save_sets`, the studio's own save of its ticked sets. */
+export function saveSets(g: MockGear, p: { sets: string[] }): null {
+  g.voice.savedSets = [...p.sets];
+  return null;
+}
+
 /** `gear_voice_sets`. */
 export function sets(g: MockGear, p?: { voice?: string; model?: string } | null): StudioView {
   const custom = g.voice.custom.length;
@@ -420,7 +438,7 @@ export function sets(g: MockGear, p?: { voice?: string; model?: string } | null)
     }),
     batch: { carrier: "The word is {line}.", tone_carriers: {}, max_lines: 30, snap_ms: 40 },
     aircraft: ["quad"],
-    picks: custom ? ["quad", "extras", "custom"] : ["quad", "extras"],
+    picks: picks(g, custom),
     rendered: Object.entries(g.voice.rendered)
       .map(([k, ids]) => {
         const [voice, model] = k.split("|");
@@ -445,12 +463,16 @@ export function importTakes(g: MockGear, p: { folder: string; dry_run?: boolean 
   return { found: 162, imported: 161 - already, already, skipped: ["bad/x.json: not a take's JSON (text, voice, model)"], counts: [take], dry_run: !!p.dry_run };
 }
 
+/** `n` more account voices, Voice 1 to Voice n. */
+const madeUpVoices = (n: number): VoiceInfo[] =>
+  Array.from({ length: n }, (_, i) => ({ ...BASE_VOICES[i % BASE_VOICES.length], id: `voice-extra-${i + 1}`, name: `Voice ${i + 1}`, preview_url: null }));
+
 /** `gear_voice_catalog`. */
 export function catalog(g: MockGear, p: { voices?: boolean; models?: boolean; credits?: boolean }): Catalog {
   needKey(g);
   const all = !(p.voices || p.models || p.credits);
   return {
-    voices: all || p.voices ? [...VOICES, ...g.voice.added] : [],
+    voices: all || p.voices ? [...VOICES, ...g.voice.added, ...madeUpVoices(g.voice.extraVoices)] : [],
     models: all || p.models ? MODELS : [],
     credits: all || p.credits ? { used: 100_000 - CREDITS + g.voice.spent, limit: 100_000, remaining: CREDITS - g.voice.spent, tier: "creator", resets_at: 0 } : null,
   };

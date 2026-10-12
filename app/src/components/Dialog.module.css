@@ -3,6 +3,8 @@
   border: 1px solid var(--border-strong);
   border-radius: var(--r-3);
   background: var(--mantle);
+  /* A table's sticky header paints this (DataTable `maxHeight`). */
+  --table-bg: var(--mantle);
   color: var(--fg);
   box-shadow: var(--shadow);
 }

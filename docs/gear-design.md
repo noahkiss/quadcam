@@ -254,6 +254,7 @@ no GPL tool.
 | Voice renders | `~/Library/Caches/app.quadcam/voice/raw/<provider>/<key>.wav` | Raw takes; a re-render costs nothing |
 | Voice batches | `~/Library/Caches/app.quadcam/voice/batch/<provider>/<key>.wav` and `.json` | A carrier-sentence batch's raw audio and character timestamps; re-cutting costs nothing |
 | Voice samples | `<gear>/voice-samples/<voice>-<id hash>-<model>[-x<speed>]/` | The A/B WAVs, `samples.json` and `flags.json` (moved from `~/Library/Caches/app.quadcam/voice/samples/` once) |
+| Voice studio choices | `<gear>/voice-studio.json` | The line sets the Voice studio ticked (`gear_voice_save_sets`, a GUI command) |
 | Installed voice packs | `<gear>/voices/<pack-id>/` | WAVs and `pack.json` |
 | Blackbox pulls | `<gear>/blackbox/<device-id>/<YYYY-MM-DDTHHMMSS>.json` | One record per pull: the blob ref of the raw flash image (in `blobs/`), aircraft, day, method, used and total size, the logs found in the headers, whether the flash was erased (7.12). A blob a record names is never collected |
 | Flight index | `<gear>/flights.json` | A rebuildable cache over the log store and folders the user adds |
@@ -392,7 +393,7 @@ in `specta_builder` (`lib.rs`).
 | `gear_voice_edit` | `VoiceEditParams { line, text, pack, confirm, dry_run, digest }` → `VoiceLine` (with `cost` on a `dry_run`) | gear.json |
 | `gear_voice_render` | `VoiceRenderParams { voice, lines, dry_run }` → `RenderReport` | cache; network |
 | `gear_voice_key` | `KeyParams { action, key }` → `KeyStatus` (never the key) | Keychain |
-| `gear_voice_sets` | `SetsParams { voice, model }` (both optional) → `StudioView` (key state, line sets with their aircraft kinds, the kinds flown, the first picks; with a voice id and model, each set's rendered lines) | no |
+| `gear_voice_sets` | `SetsParams { voice, model }` (both optional) → `StudioView` (key state, line sets with their aircraft kinds, the kinds flown, the sets the studio ticks (all at first, then the saved ones from `voice-studio.json`, `quadcam` always); with a voice id and model, each set's rendered lines) | no |
 | `gear_voice_catalog` | `CatalogParams { voices, models, credits }` → `Catalog` | network (free calls) |
 | `gear_voice_import_takes` | `ImportTakesParams { folder, dry_run }` → `ImportReport` (found, imported, already, skipped, counts) | cache (reads the folder) |
 | `gear_voice_estimate` | `EstimateParams { sets, voice, model }` → `StudioEstimate` (lines, rendered, re-takes, to render, the estimate of the lines to render) | network (free calls) |

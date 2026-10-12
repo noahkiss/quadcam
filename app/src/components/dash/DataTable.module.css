@@ -5,6 +5,22 @@
   container-type: inline-size;
   min-width: 0;
 }
+/* A box with a height bound: the rows scroll under the header (`maxHeight`). */
+.scroll {
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  /* A row scrolled into view clears the sticky header. */
+  scroll-padding-top: 32px;
+}
+.scroll thead th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  padding-top: var(--s-1);
+  background: var(--table-bg, var(--raised));
+  /* A collapsed border does not stay with a sticky cell: draw the rule as a shadow. */
+  box-shadow: inset 0 -1px 0 var(--border-strong);
+}
 .table {
   width: 100%;
   border-collapse: collapse;

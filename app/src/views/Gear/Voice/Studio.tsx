@@ -14,7 +14,7 @@ import { SectionCard } from "../../../components/dash/SectionCard";
 import { Stat, StatRow } from "../../../components/dash/StatRow";
 import { errText, pickFolder } from "../../../ipc/api";
 import type { ImportReport, ModelInfo, RenderPacksReport, Retake, SetInfo, StudioEstimate, VoiceEstimate, VoiceInfo, VoiceProgress } from "../../../ipc/types";
-import { takesOf, type UseStudio } from "./useStudio";
+import { LIST_HEIGHT, takesOf, type UseStudio } from "./useStudio";
 import styles from "./Voice.module.css";
 
 const n = (v: number) => v.toLocaleString("en-US");
@@ -184,6 +184,7 @@ function Pickers({ s, onError }: { s: UseStudio; onError: (e: string) => void })
         rowKey={(v) => v.id}
         selection={{ selected: (v) => s.voices.includes(v.id), onChange: (v, on) => s.setVoices(toggle(s.voices, v.id, on)), label: (v) => v.name }}
         empty="No voice matches the filter."
+        maxHeight={LIST_HEIGHT}
       />
       </div>
       {browsing && <BrowseVoices onClose={() => setBrowsing(false)} onAdded={s.refreshCatalog} />}
@@ -426,6 +427,11 @@ export function Studio({ s }: { s: UseStudio }) {
             <Button size="sm" variant="primary" disabled={s.busy || !ready || !(e?.estimate.affordable ?? true)} onClick={() => s.run("render", false)}>
               {pairs > 1 ? "Render packs" : "Render pack"}
             </Button>
+            {ready && !s.picked.includes("quadcam") && (
+              <span className={styles.muted} role="note">
+                QuadCam's own cues need the QuadCam default set. Without it, they use the Mac voice.
+              </span>
+            )}
             <span className={styles.grow} />
             <Button
               size="sm"

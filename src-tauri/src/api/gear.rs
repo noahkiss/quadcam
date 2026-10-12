@@ -35,8 +35,8 @@ pub use crate::core::{
 pub use crate::core::{
     Catalog, CatalogParams, EstimateParams, ImportTakesParams, KeyParams, KeyStatus, LibraryParams,
     LibraryPreviewParams, RenderPacksParams, RenderPacksReport, SampleParams, SampleReport,
-    SetsParams, StudioEstimate, StudioView, VoiceAddParams, VoiceAddReport, VoiceCheckParams,
-    VoiceCheckReport,
+    SaveSetsParams, SetsParams, StudioEstimate, StudioView, VoiceAddParams, VoiceAddReport,
+    VoiceCheckParams, VoiceCheckReport,
 };
 pub use crate::core::{
     CrashSaveParams, FlightFilter, FlightFoldersParams, FlightReport, FlightSetParams, FlightsView,
