@@ -838,15 +838,28 @@ pub struct Rendered {
     pub batches_cached: u32,
 }
 
+/// A run stopped between batches at the person's request. The batches made before it are in
+/// the cache; `anyhow::Error::is::<Stopped>` tells it from a failure.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Stopped;
+
+impl std::fmt::Display for Stopped {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str("stopped after the current batch")
+    }
+}
+
+impl std::error::Error for Stopped {}
+
 /// Renders (or finds) every batch and cuts it. A flagged cut goes to `flagged`, not `cuts`.
 /// Only the batches whose keys are in `priced` go to the provider. `each` hears (done,
-/// total) after each batch.
+/// total) after each batch; false from it stops the run there with `Stopped`.
 pub fn render_all(
     ctx: &Ctx<'_>,
     batches: &[Batch],
     snap_ms: u32,
     priced: &[String],
-    each: &mut dyn FnMut(usize, usize),
+    each: &mut dyn FnMut(usize, usize) -> bool,
 ) -> Result<Rendered> {
     let mut r = Rendered::default();
     for (n, b) in batches.iter().enumerate() {
@@ -865,7 +878,9 @@ pub fn render_all(
                 r.cuts.insert(c.spoken, c.pcm);
             }
         }
-        each(n + 1, batches.len());
+        if !each(n + 1, batches.len()) && n + 1 < batches.len() {
+            return Err(Stopped.into());
+        }
     }
     Ok(r)
 }
@@ -1294,6 +1309,46 @@ mod tests {
     }
 
     #[test]
+    fn a_stop_ends_the_run_after_the_current_batch() {
+        let dir = tempfile::tempdir().unwrap();
+        let bs = BatchSettings {
+            max_lines: 1,
+            ..Default::default()
+        };
+        let batches = plan(&[item("Six", "number"), item("Armed", "number")], &bs);
+        assert_eq!(batches.len(), 2);
+        let h = Arc::new(FakeHttp::default());
+        h.synth(0.06);
+        let tts = Eleven::new(h.clone(), "sk_test_key_00000".into()).without_backoff();
+        let cache = BatchCache::new(dir.path());
+        let settings = RenderSettings::default();
+        let ctx = Ctx {
+            tts: &tts,
+            cache: &cache,
+            voice: "abc",
+            model: "m",
+            settings: &settings,
+        };
+        let mut seen = Vec::new();
+        let e = render_all(&ctx, &batches, 40, &priced(&ctx, &batches), &mut |d, t| {
+            seen.push((d, t));
+            false
+        })
+        .unwrap_err();
+        assert!(e.is::<Stopped>(), "{e:#}");
+        assert_eq!(seen, vec![(1, 2)]);
+        assert_eq!(h.posts(), 1);
+        // The batch made before the stop is in the cache: the next run sends only the other.
+        assert!(ctx.cached(&batches[0]));
+        let r = render_all(&ctx, &batches, 40, &priced(&ctx, &batches), &mut |_, _| {
+            true
+        })
+        .unwrap();
+        assert_eq!((r.batches_rendered, r.batches_cached), (1, 1));
+        assert_eq!(h.posts(), 2);
+    }
+
+    #[test]
     fn a_batch_renders_once_and_every_recut_comes_from_the_cache() {
         let dir = tempfile::tempdir().unwrap();
         let batches = plan(
@@ -1325,15 +1380,19 @@ mod tests {
         );
         assert!(before.affordable);
 
-        let first =
-            render_all(&ctx, &batches, 40, &priced(&ctx, &batches), &mut |_, _| {}).unwrap();
+        let first = render_all(&ctx, &batches, 40, &priced(&ctx, &batches), &mut |_, _| {
+            true
+        })
+        .unwrap();
         assert_eq!((first.batches_rendered, first.batches_cached), (1, 0));
         assert_eq!(first.cuts.len(), 3);
         assert_eq!(http.posts(), 1);
 
         // The same batch again: no request, and the estimate is zero.
-        let second =
-            render_all(&ctx, &batches, 40, &priced(&ctx, &batches), &mut |_, _| {}).unwrap();
+        let second = render_all(&ctx, &batches, 40, &priced(&ctx, &batches), &mut |_, _| {
+            true
+        })
+        .unwrap();
         assert_eq!((second.batches_rendered, second.batches_cached), (0, 1));
         assert_eq!(http.posts(), 1);
         let after = estimate(&ctx, &batches, &price);
@@ -1378,8 +1437,10 @@ mod tests {
             model: "m",
             settings: &settings,
         };
-        let e =
-            render_all(&ctx, &batches, 40, &priced(&ctx, &batches), &mut |_, _| {}).unwrap_err();
+        let e = render_all(&ctx, &batches, 40, &priced(&ctx, &batches), &mut |_, _| {
+            true
+        })
+        .unwrap_err();
         assert!(format!("{e:#}").contains("changed the text"), "{e:#}");
         assert!(!ctx.cached(&batches[0]));
         assert_eq!(
@@ -1387,7 +1448,12 @@ mod tests {
             0
         );
         // A re-run asks the provider again instead of failing from the cache.
-        assert!(render_all(&ctx, &batches, 40, &priced(&ctx, &batches), &mut |_, _| {}).is_err());
+        assert!(
+            render_all(&ctx, &batches, 40, &priced(&ctx, &batches), &mut |_, _| {
+                true
+            })
+            .is_err()
+        );
         assert_eq!(h.posts(), 2);
 
         // A bad take already in the cache (from an older QuadCam) is removed.
@@ -1425,8 +1491,10 @@ mod tests {
             )
             .unwrap();
         assert!(ctx.cached(&batches[0]));
-        let e =
-            render_all(&ctx, &batches, 40, &priced(&ctx, &batches), &mut |_, _| {}).unwrap_err();
+        let e = render_all(&ctx, &batches, 40, &priced(&ctx, &batches), &mut |_, _| {
+            true
+        })
+        .unwrap_err();
         assert!(format!("{e:#}").contains("removed"), "{e:#}");
         assert!(!ctx.cached(&batches[0]));
         assert_eq!(h.posts(), 2);
@@ -1446,7 +1514,10 @@ mod tests {
             model: "m",
             settings: &settings,
         };
-        render_all(&ctx, &batches, 40, &priced(&ctx, &batches), &mut |_, _| {}).unwrap();
+        render_all(&ctx, &batches, 40, &priced(&ctx, &batches), &mut |_, _| {
+            true
+        })
+        .unwrap();
         assert_eq!(http.posts(), 1);
         // Both files are there, but the audio is not a WAV.
         let key = ctx.key(&batches[0]);
@@ -1456,7 +1527,7 @@ mod tests {
         // The estimate priced nothing, so nothing is sent: the take is removed instead.
         let p = priced(&ctx, &batches);
         assert!(p.is_empty());
-        let e = render_all(&ctx, &batches, 40, &p, &mut |_, _| {}).unwrap_err();
+        let e = render_all(&ctx, &batches, 40, &p, &mut |_, _| true).unwrap_err();
         assert!(
             format!("{e:#}").contains("could not be read, so it was removed"),
             "{e:#}"
@@ -1466,7 +1537,10 @@ mod tests {
         let e = estimate(&ctx, &batches, &price(1.0, None));
         assert_eq!(e.cached_batches, 0);
         assert!(e.chars > 0);
-        render_all(&ctx, &batches, 40, &priced(&ctx, &batches), &mut |_, _| {}).unwrap();
+        render_all(&ctx, &batches, 40, &priced(&ctx, &batches), &mut |_, _| {
+            true
+        })
+        .unwrap();
         assert_eq!(http.posts(), 2);
     }
 
@@ -1488,7 +1562,10 @@ mod tests {
             model: "m",
             settings: &settings,
         };
-        let r = render_all(&ctx, &batches, 40, &priced(&ctx, &batches), &mut |_, _| {}).unwrap();
+        let r = render_all(&ctx, &batches, 40, &priced(&ctx, &batches), &mut |_, _| {
+            true
+        })
+        .unwrap();
         assert!(r.cuts.contains_key("Six"));
         assert!(!r.cuts.contains_key("..."));
         assert_eq!(r.flagged["..."], "the cut is silent");

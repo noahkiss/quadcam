@@ -1,11 +1,15 @@
 // The Voice studio's data (ElevenLabs): the key's state, the account's voices, models and
-// credits, the line sets, the estimate for the picked voice, model and sets, and the last
-// sample. A paid call runs in two steps: the first asks the core, which answers with the
+// credits, the line sets, the estimate for every picked voice and model with the sets, the
+// last sample, and the progress of a paid run. A paid call runs in two steps: the first asks the core, which answers with the
 // cost, `needs_confirm` and the plan's digest; the second repeats it with `confirm` and that
 // digest, and the core refuses it when the plan changed. A picker change drops the question.
 import { useCallback, useEffect, useState } from "react";
 import { api, errText } from "../../../ipc/api";
-import type { Catalog, ImportReport, KeyStatus, RenderReport, SampleReport, SetInfo, StudioEstimate, TakeCount } from "../../../ipc/types";
+import { on } from "../../../ipc/events";
+import type { Catalog, ImportReport, KeyStatus, RenderPacksReport, SampleReport, SetInfo, TakeCount, VoiceProgress } from "../../../ipc/types";
+
+/** The gear job a paid studio run registers; `gear_stop` with it stops after the batch. */
+export const STUDIO_JOB = "voice-studio";
 
 export type Paid = "sample" | "render";
 
@@ -36,9 +40,14 @@ export interface UseStudio {
   setVoices: (v: string[]) => void;
   setModels: (v: string[]) => void;
   setPicked: (v: string[]) => void;
-  estimate: StudioEstimate | null;
+  /** Every ticked voice with every ticked model: each pair and the total. */
+  estimate: RenderPacksReport | null;
   sample: SampleReport | null;
-  render: RenderReport | null;
+  render: RenderPacksReport | null;
+  /** The paid run going on now, from the core's `voice-progress` events. */
+  progress: VoiceProgress | null;
+  /** Stops the paid run after the current batch. */
+  stopRun: () => Promise<void>;
   /** A paid call waits for the person's go-ahead. */
   asking: Paid | null;
   busy: boolean;
@@ -60,11 +69,24 @@ export function useStudio(onRendered: () => Promise<void>): UseStudio {
   const [voices, pickVoices] = useState<string[]>([]);
   const [models, pickModels] = useState<string[]>([]);
   const [picked, pickSets] = useState<string[]>([]);
-  const [priced, setPriced] = useState<{ k: string; e: StudioEstimate } | null>(null);
+  const [priced, setPriced] = useState<{ k: string; e: RenderPacksReport } | null>(null);
   /** Counts finished paid calls: the cache changed, so the estimate is read again. */
   const [ran, setRan] = useState(0);
   const [sample, setSample] = useState<SampleReport | null>(null);
-  const [render, setRender] = useState<RenderReport | null>(null);
+  const [render, setRender] = useState<RenderPacksReport | null>(null);
+  const [running, setRunning] = useState<VoiceProgress | null>(null);
+  useEffect(() => {
+    let off: (() => void) | undefined;
+    let gone = false;
+    void on("voice-progress", (p) => setRunning(p.running ? p : null)).then((u) => {
+      if (gone) u();
+      else off = u;
+    });
+    return () => {
+      gone = true;
+      off?.();
+    };
+  }, []);
   const [asking, setAsking] = useState<Paid | null>(null);
   /** The asked call's digest and seed: the go-ahead repeats both. */
   const [plan, setPlan] = useState<{ digest: string; seed: number } | null>(null);
@@ -116,11 +138,11 @@ export function useStudio(onRendered: () => Promise<void>): UseStudio {
   const keySet = key?.set ?? false;
   const v0 = voices[0];
   const m0 = models[0];
-  const want = [keySet, v0, m0, picked.join(","), speed, ran].join("|");
+  const want = [keySet, voices.join(","), models.join(","), picked.join(","), speed, ran].join("|");
   useEffect(() => {
     let gone = false;
-    if (!keySet || !v0 || !m0 || picked.length === 0) return;
-    api.gearVoiceEstimate({ sets: picked, voice: v0, model: m0, lines: [], settings: speed === 1 ? null : { speed }, batch: null }).then(
+    if (!keySet || voices.length === 0 || models.length === 0 || picked.length === 0) return;
+    api.gearVoiceRenderPacks({ voices, models, sets: picked, lines: [], dry_run: true, confirm: false, settings: speed === 1 ? null : { speed }, batch: null, digest: null }).then(
       (e) => {
         if (!gone) setPriced({ k: want, e });
       },
@@ -131,7 +153,7 @@ export function useStudio(onRendered: () => Promise<void>): UseStudio {
     return () => {
       gone = true;
     };
-  }, [keySet, v0, m0, picked, speed, want]);
+  }, [keySet, voices, models, picked, speed, want]);
   const estimate = priced && priced.k === want ? priced.e : null;
 
   // The takes per voice and, with one voice and one model ticked, how many lines of each set
@@ -195,10 +217,10 @@ export function useStudio(onRendered: () => Promise<void>): UseStudio {
           setAsking(r.needs_confirm ? "sample" : null);
           setPlan(r.needs_confirm ? { digest: r.digest ?? "", seed } : null);
         } else {
-          const r = await api.gearVoiceRender({ voice: v0 ?? "", lines: [], dry_run: false, confirm: go, settings, sets: picked, model: m0 ?? "", batch: null, digest });
+          const r = await api.gearVoiceRenderPacks({ voices, models, sets: picked, lines: [], dry_run: false, confirm: go, settings, batch: null, digest });
           setRender(r);
           setAsking(r.needs_confirm ? "render" : null);
-          setPlan(r.needs_confirm ? { digest: r.digest ?? "", seed } : null);
+          setPlan(r.needs_confirm ? { digest: r.digest, seed } : null);
           if (!r.needs_confirm) await onRendered();
         }
         // The credits changed.
@@ -209,9 +231,10 @@ export function useStudio(onRendered: () => Promise<void>): UseStudio {
       } finally {
         setRan((r) => r + 1);
         setBusy(false);
+        setRunning(null);
       }
     },
-    [voices, models, picked, v0, m0, speed, onRendered, plan, stop],
+    [voices, models, picked, speed, onRendered, plan, stop],
   );
   const importTakes = useCallback(async (folder: string) => {
     setError(null);
@@ -224,8 +247,15 @@ export function useStudio(onRendered: () => Promise<void>): UseStudio {
     }
   }, []);
   const run = useCallback((what: Paid, go: boolean) => call(what, go), [call]);
+  const stopRun = useCallback(async () => {
+    try {
+      await api.gearStop(STUDIO_JOB);
+    } catch (e) {
+      setError(errText(e));
+    }
+  }, []);
   // Any seed but 0 makes new takes; the pack keeps every batch whose lines all passed.
   const retake = useCallback(() => call("render", false, 1 + Math.floor(Math.random() * 2_000_000_000)), [call]);
 
-  return { key, sets: shownSets, aircraft, takes, speed, setSpeed, importTakes, imported, catalog, voices, models, picked, setVoices, setModels, setPicked, estimate, sample, render, asking, busy, error, saveKey, deleteKey, run, retake, cancel: stop };
+  return { key, sets: shownSets, aircraft, takes, speed, setSpeed, importTakes, imported, catalog, voices, models, picked, setVoices, setModels, setPicked, estimate, sample, render, progress: running, stopRun, asking, busy, error, saveKey, deleteKey, run, retake, cancel: stop };
 }

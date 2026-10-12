@@ -11,7 +11,7 @@ import { DataTable, type Column } from "../../../components/dash/DataTable";
 import { SectionCard } from "../../../components/dash/SectionCard";
 import { Stat, StatRow } from "../../../components/dash/StatRow";
 import { fileSrc, pickFolder } from "../../../ipc/api";
-import type { ImportReport, ModelInfo, Retake, SampleItem, SetInfo, StudioEstimate, VoiceEstimate, VoiceInfo } from "../../../ipc/types";
+import type { ImportReport, ModelInfo, RenderPacksReport, Retake, SampleItem, SetInfo, StudioEstimate, VoiceEstimate, VoiceInfo, VoiceProgress } from "../../../ipc/types";
 import { takesOf, type UseStudio } from "./useStudio";
 import styles from "./Voice.module.css";
 
@@ -238,18 +238,81 @@ function LineSets({ s }: { s: UseStudio }) {
 }
 
 /** The estimate as tiles: lines to render, characters, cost, credits after. */
-function EstimateStats({ e }: { e: StudioEstimate }) {
+function EstimateStats({ e }: { e: RenderPacksReport }) {
   const x = e.estimate;
-  const left = e.to_render ?? x.lines;
+  const sum = (f: (p: StudioEstimate) => number) => e.pairs.reduce((n, p) => n + f(p), 0);
+  const left = sum((p) => p.to_render ?? p.estimate.lines);
+  const all = sum((p) => p.lines);
+  const retakes = sum((p) => p.retakes ?? 0);
   const after = x.remaining === null ? null : x.remaining - x.credits;
   const basis = x.credits_basis === "recorded" ? "recorded rate" : "estimated";
+  const many = e.pairs.length > 1;
   return (
     <StatRow label="Cost" role="status">
-      <Stat label="To render" value={n(left)} sub={`of ${n(e.lines)} lines · ${n(e.rendered ?? 0)} rendered${e.retakes ? ` · ${n(e.retakes)} re-takes` : ""}`} tone={left === 0 ? "ok" : undefined} />
+      <Stat label="To render" value={n(left)} sub={`of ${n(all)} lines${many ? ` in ${e.pairs.length} packs` : ""} · ${n(sum((p) => p.rendered ?? 0))} rendered${retakes ? ` · ${n(retakes)} re-takes` : ""}`} tone={left === 0 ? "ok" : undefined} />
       <Stat label="Characters" value={n(x.chars)} sub={`${x.batches} ${x.batches === 1 ? "batch" : "batches"}, ${x.cached_batches} cached`} />
-      <Stat label="Cost" value={`$${(x.usd ?? 0).toFixed(2)}`} sub={(x.usd_per_1k ?? 0) > 0 ? `$${x.usd_per_1k} per 1K characters` : undefined} badge={x.promo_until ? <Badge tone="accent">Promo to {fmtDay(x.promo_until)}</Badge> : undefined} />
+      <Stat label="Cost" value={`$${(x.usd ?? 0).toFixed(2)}`} sub={(x.usd_per_1k ?? 0) > 0 ? `$${x.usd_per_1k} per 1K characters` : many ? "Models at different rates" : undefined} badge={x.promo_until ? <Badge tone="accent">Promo to {fmtDay(x.promo_until)}</Badge> : undefined} />
       <Stat label="Credits after" value={after === null ? "—" : n(after)} sub={`${n(x.credits)} credits (${basis})`} tone={x.affordable ? undefined : "error"} />
     </StatRow>
+  );
+}
+
+/** With several voices or models: what each pack costs. */
+function CostByPack({ e }: { e: RenderPacksReport }) {
+  const cols: Column<StudioEstimate>[] = [
+    { key: "voice", header: "Voice", rowHeader: true, cell: (p) => p.voice_name },
+    { key: "model", header: "Model", cell: (p) => <span className={styles.muted}>{p.model}</span> },
+    { key: "left", header: "To render", numeric: true, cell: (p) => n(p.to_render ?? p.estimate.lines) },
+    { key: "chars", header: "Characters", numeric: true, cell: (p) => n(p.estimate.chars) },
+    { key: "usd", header: "Cost", numeric: true, cell: (p) => `$${(p.estimate.usd ?? 0).toFixed(2)}` },
+    { key: "credits", header: "Credits", numeric: true, optional: true, cell: (p) => n(p.estimate.credits) },
+  ];
+  return <DataTable label="Cost by pack" compact columns={cols} rows={e.pairs} rowKey={(p) => `${p.voice}|${p.model}`} />;
+}
+
+/** A paid run going on: batches done of total, the pack it is on, and Stop. */
+function RunProgress({ p, onStop }: { p: VoiceProgress; onStop: () => void }) {
+  const what = p.kind === "sample" ? "Sampling" : "Rendering";
+  const on = p.voice_name ? ` · ${p.voice_name}, ${p.model}` : "";
+  return (
+    <div className={styles.bar} role="status" aria-label="Progress">
+      <progress className={styles.progress} aria-label={`${what} batches`} max={Math.max(1, p.total)} value={p.done} />
+      <span className={styles.status}>
+        {p.step === "Rendering" ? `Batch ${n(p.done)} of ${n(p.total)}` : p.step}
+        {on}
+      </span>
+      <Button size="sm" disabled={p.stopping} onClick={onStop}>
+        {p.stopping ? "Stopping…" : "Stop"}
+      </Button>
+    </div>
+  );
+}
+
+/** What a render made: a line per pack, and why it ended early. */
+function RenderResult({ r }: { r: RenderPacksReport }) {
+  const packs = r.packs ?? [];
+  return (
+    <>
+      {packs.length > 0 && (
+        <ul className={styles.packs} aria-label="Rendered packs">
+          {packs.map((p) => (
+            <li key={p.pack} className={styles.status}>
+              {p.voice}: {p.rendered} {p.rendered === 1 ? "batch" : "batches"} made, {p.from_cache} from the cache, into {p.pack}.
+            </li>
+          ))}
+        </ul>
+      )}
+      {r.stopped && (
+        <p className={styles.status} role="status">
+          Stopped after {packs.length} of {r.pairs.length} {r.pairs.length === 1 ? "pack" : "packs"}. The batches already made are not billed again.
+        </p>
+      )}
+      {r.error && (
+        <Banner kind="error" icon="danger-triangle">
+          Stopped after {packs.length} of {r.pairs.length} {r.pairs.length === 1 ? "pack" : "packs"}: {r.error}
+        </Banner>
+      )}
+    </>
   );
 }
 
@@ -266,8 +329,8 @@ function Retakes({ s, retakes }: { s: UseStudio; retakes: Retake[] }) {
     >
       {retakes.length === 1 ? "1 line needs" : `${retakes.length} lines need`} a re-take and {retakes.length === 1 ? "is" : "are"} not in the pack:
       <ul aria-label="Needs a re-take">
-        {retakes.map((t) => (
-          <li key={t.path}>
+        {retakes.map((t, i) => (
+          <li key={`${i}|${t.path}`}>
             {t.text} ({t.path}): {t.reason}
           </li>
         ))}
@@ -288,8 +351,10 @@ export function Studio({ s }: { s: UseStudio }) {
   const [replacing, setReplacing] = useState(false);
   const keySet = s.key?.set ?? false;
   const e = s.estimate;
-  const one = s.voices.length === 1 && s.models.length === 1 && s.picked.length > 0;
+  const ready = s.voices.length > 0 && s.models.length > 0 && s.picked.length > 0;
+  const pairs = s.voices.length * s.models.length;
   const ask = s.asking === "sample" ? s.sample?.estimate : s.asking === "render" ? s.render?.estimate : null;
+  const retakes = (s.render?.packs ?? []).flatMap((p) => p.retakes ?? []);
   return (
     <SectionCard
       title="Voice studio"
@@ -311,9 +376,10 @@ export function Studio({ s }: { s: UseStudio }) {
             <EstimateStats e={e} />
           ) : (
             <p className={styles.status} role="status" aria-label="Cost">
-              {one ? "Working out the cost…" : "Pick one voice, one model and a line set to see what a render costs."}
+              {ready ? "Working out the cost…" : "Pick a voice, a model and a line set to see what a render costs."}
             </p>
           )}
+          {e && e.pairs.length > 1 && <CostByPack e={e} />}
           {e && !e.estimate.affordable && (
             <p className={styles.error} role="alert">
               The account does not have enough credits.
@@ -330,8 +396,8 @@ export function Studio({ s }: { s: UseStudio }) {
             <Button size="sm" disabled={s.busy || s.voices.length === 0 || s.models.length === 0} onClick={() => s.run("sample", false)}>
               Sample
             </Button>
-            <Button size="sm" variant="primary" disabled={s.busy || !one || !(e?.estimate.affordable ?? true)} onClick={() => s.run("render", false)}>
-              Render pack
+            <Button size="sm" variant="primary" disabled={s.busy || !ready || !(e?.estimate.affordable ?? true)} onClick={() => s.run("render", false)}>
+              {pairs > 1 ? "Render packs" : "Render pack"}
             </Button>
             <span className={styles.grow} />
             <Button
@@ -367,15 +433,17 @@ export function Studio({ s }: { s: UseStudio }) {
                 </>
               }
             >
-              This sends text to ElevenLabs, which bills it. {costText(ask)}
+              This sends text to ElevenLabs, which bills it.{s.asking === "render" && s.render && s.render.pairs.length > 1 ? ` ${s.render.pairs.length} packs.` : ""} {costText(ask)}
             </Banner>
           )}
-          {s.render && !s.render.needs_confirm && !s.asking && (
+          {s.busy && s.progress && <RunProgress p={s.progress} onStop={() => void s.stopRun()} />}
+          {s.render && !s.render.needs_confirm && !s.asking && <RenderResult r={s.render} />}
+          {s.render && !s.render.needs_confirm && !s.asking && retakes.length > 0 && <Retakes s={s} retakes={retakes} />}
+          {s.sample?.stopped && !s.asking && (
             <p className={styles.status} role="status">
-              Rendered into {s.render.pack}: {s.render.rendered} {s.render.rendered === 1 ? "batch" : "batches"} made, {s.render.from_cache} from the cache.
+              Stopped: the samples below are the pairs finished before the stop.
             </p>
           )}
-          {s.render && !s.render.needs_confirm && !s.asking && (s.render.retakes?.length ?? 0) > 0 && <Retakes s={s} retakes={s.render.retakes ?? []} />}
           {s.sample && s.sample.items.length > 0 && <Samples items={s.sample.items} />}
         </>
       )}

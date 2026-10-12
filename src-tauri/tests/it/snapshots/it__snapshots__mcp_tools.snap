@@ -1595,6 +1595,20 @@ expression: "quadcam_lib::mcp::tools()"
           "maxLength": 100,
           "type": "string"
         },
+        "voice_models": {
+          "description": "For voice_estimate with `voices`: the model ids to price each voice with.",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "voices": {
+          "description": "For voice_estimate: several ElevenLabs voices (names or ids) to price together, each with every model in `voice_models` (or `voice_model`): one line per voice and model, and the total.",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
         "what": {
           "description": "For voice_catalog: `voices`, `models` or `credits`; omit for all three.",
           "maxLength": 20,
@@ -1825,7 +1839,7 @@ expression: "quadcam_lib::mcp::tools()"
           "type": "number"
         },
         "handle": {
-          "description": "For stop: the running job's handle from quadcam_gear status (jobs).",
+          "description": "For stop: the running job's handle from quadcam_gear status (jobs); `voice-studio` for a paid Voice studio sample or render.",
           "maxLength": 200,
           "type": "string"
         },
@@ -2080,14 +2094,14 @@ expression: "quadcam_lib::mcp::tools()"
           "type": "string"
         },
         "voice_models": {
-          "description": "For voice_sample: ElevenLabs model ids to compare.",
+          "description": "For voice_sample: ElevenLabs model ids to compare. For voice_render with `sets`: the models each voice in `voices` renders with.",
           "items": {
             "type": "string"
           },
           "type": "array"
         },
         "voices": {
-          "description": "For voice_sample: ElevenLabs voices to compare, by name or id.",
+          "description": "For voice_sample: ElevenLabs voices to compare, by name or id. For voice_render with `sets`: render one local pack per voice and model in one confirmed run (one digest for the whole plan; a failure keeps the packs made before it; stop with handle `voice-studio`).",
           "items": {
             "type": "string"
           },

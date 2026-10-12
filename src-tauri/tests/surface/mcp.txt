@@ -185,6 +185,8 @@ mcp.param quadcam_gear.to string
 mcp.param quadcam_gear.version string
 mcp.param quadcam_gear.voice string
 mcp.param quadcam_gear.voice_model string
+mcp.param quadcam_gear.voice_models array<string>
+mcp.param quadcam_gear.voices array<string>
 mcp.param quadcam_gear.what string
 mcp.param quadcam_gear_apply.action string
 mcp.param quadcam_gear_apply.change string

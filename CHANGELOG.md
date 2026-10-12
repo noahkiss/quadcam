@@ -5,6 +5,9 @@ User-facing changes in each release, newest first. Release notes on
 
 ## Unreleased
 
+- **Price and render several voices at once.** The Voice studio's cost now covers every ticked voice with every ticked model, not only the first: the tiles show the total and **Cost by pack** lists each pair. **Render packs** makes one pack per voice and model in one confirmed run; a failure keeps the packs made before it. CLI `gear voice render-packs`; MCP `voice_estimate` and `voice_render` take `voices` and `voice_models`.
+- **Progress and Stop for paid runs.** **Sample and pay** and **Render and pay** show a progress bar (batches done of the total, and the voice and model) and a **Stop** that ends the run after the current batch. A batch already made is never billed again. MCP `stop` with the handle `voice-studio` stops a run in the app.
+
 ## 0.18.0 (2026-10-11)
 
 - **Shift time of many clips.** Select clips, then **Shift time…**: set the real date and time of one clip, and the rest move by the same offset. A clip that a radio log in the log folder matches takes the log's time instead, and the table says **Radio log**. The table shows every new time before you shift; a new day moves the files. CLI `library shift` (`--yes` writes); MCP `quadcam_library_edit` `shift` (`confirm` writes). See [Shift the time of many clips](docs/library.md#shift-the-time-of-many-clips).

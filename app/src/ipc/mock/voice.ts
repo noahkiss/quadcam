@@ -2,7 +2,7 @@
 // lines, one pack in a made-up index, per-line overrides, a local render, Choose voice (one
 // `card_files` change, as the core stages it, on one radio or several) and pack delete.
 import type { PreviewLine, PreviewTake, PublishApproveReport, PublishReview, ReviewLine } from "../types";
-import type { Catalog, Edit, HeardLine, ImportReport, KeyStatus, LineOverride, ModelInfo, PackDeleteReport, RenderReport, Retake, SampleItem, SampleReport, SetInfo, StagedChange, StudioEstimate, StudioView, VoiceChooseRadiosReport, VoiceEstimate, VoiceCheckReport, VoiceInfo, VoiceLine, VoicePack, VoiceView } from "../types";
+import type { Catalog, Edit, HeardLine, RenderPacksReport, ImportReport, KeyStatus, LineOverride, ModelInfo, PackDeleteReport, RenderReport, Retake, SampleItem, SampleReport, SetInfo, StagedChange, StudioEstimate, StudioView, VoiceChooseRadiosReport, VoiceEstimate, VoiceCheckReport, VoiceInfo, VoiceLine, VoicePack, VoiceView } from "../types";
 import type { MockGear } from "./gear";
 import { hint as secretHint } from "./secret";
 import * as changes from "./changes";
@@ -61,9 +61,11 @@ export interface MockVoice {
   speech: boolean;
   /** A line the speech check hears as "Battery.". */
   misheard: string | null;
+  /** A stop was asked for (`gear_stop` with `voice-studio`): the next paid run ends after its first pack. */
+  stop: boolean;
 }
 
-export const freshVoice = (): MockVoice => ({ installed: [], index: false, overrides: {}, chosen: {}, custom: [], paid: false, keySet: "", spent: 0, retake: null, rendered: {}, imported: [], takesDeleted: [], retakes: {}, heard: {}, speech: true, misheard: null });
+export const freshVoice = (): MockVoice => ({ installed: [], index: false, overrides: {}, chosen: {}, custom: [], paid: false, keySet: "", spent: 0, retake: null, rendered: {}, imported: [], takesDeleted: [], retakes: {}, heard: {}, speech: true, misheard: null, stop: false });
 
 type Paid = { confirm?: boolean; digest?: string | null; settings?: { seed?: number | null } | null };
 
@@ -465,7 +467,7 @@ export function sample(g: MockGear, p: { voices: string[]; models: string[]; dry
 }
 
 /** `gear_voice_render` with sets: a batched render into a local pack. */
-function studioRender(g: MockGear, p: { voice?: string; sets: string[]; model?: string; dry_run?: boolean } & Paid): RenderReport {
+function studioRender(g: MockGear, p: { voice?: string; sets: string[]; model?: string; dry_run?: boolean } & Paid, paid = false): RenderReport {
   needKey(g);
   const voice = voiceOf(p.voice ?? "");
   const e = price(g, p.sets, p.model ?? "", voice.id);
@@ -475,9 +477,11 @@ function studioRender(g: MockGear, p: { voice?: string; sets: string[]; model?: 
   const digest = digestOf({ voice: voice.id, model: p.model, sets: p.sets, seed, chars: e.chars });
   const base = { pack: id, provider: "elevenlabs", voice: voice.name, plan: { lines: e.lines, cached: 0, to_render: e.lines, chars: e.chars }, paid: true, dry_run: !!p.dry_run, notes: [] as string[], estimate: e, warnings: [] as string[], digest, retakes: [] };
   if (p.dry_run) return { ...base, rendered: 0, from_cache: 0, needs_confirm: false };
-  if (!e.affordable) throw `this render needs ${e.credits} credits but the account has ${e.remaining}`;
-  if (!p.confirm) return { ...base, rendered: 0, from_cache: 0, needs_confirm: true };
-  samePlan(p, digest);
+  if (!paid) {
+    if (!e.affordable) throw `this render needs ${e.credits} credits but the account has ${e.remaining}`;
+    if (!p.confirm) return { ...base, rendered: 0, from_cache: 0, needs_confirm: true };
+    samePlan(p, digest);
+  }
   g.voice.spent += e.credits;
   if (!g.voice.installed.includes(id)) g.voice.installed.push(id);
   const k = `${voice.id}|${p.model ?? ""}`;
@@ -497,6 +501,44 @@ function studioRender(g: MockGear, p: { voice?: string; sets: string[]; model?: 
   const lines = heard();
   const retakes = g.voice.retakes[id] ?? [];
   return { ...base, rendered: seed ? Math.max(1, redo) : e.batches, from_cache: 0, needs_confirm: false, retakes, heard: lines };
+}
+
+/** `gear_voice_render_packs`: one pack per voice and model, priced as one plan. A stop asked
+ *  for while it was held ends it after the first pack. */
+export function renderPacks(g: MockGear, p: { voices: string[]; models: string[]; sets: string[]; dry_run?: boolean } & Paid): RenderPacksReport {
+  needKey(g);
+  if (!p.voices.length || !p.models.length) throw "Name at least one voice and one model.";
+  const pairs = p.voices.flatMap((v) => p.models.map((m) => estimate(g, { sets: p.sets, voice: v, model: m })));
+  const total = { ...pairs[0].estimate, batches: 0, cached_batches: 0, lines: 0, chars: 0, credits: 0, usd: 0 };
+  for (const x of pairs) {
+    total.batches += x.estimate.batches;
+    total.lines += x.estimate.lines;
+    total.chars += x.estimate.chars;
+    total.credits += x.estimate.credits;
+    total.usd = (total.usd ?? 0) + (x.estimate.usd ?? 0);
+  }
+  if (pairs.some((x) => x.estimate.usd_per_1k !== total.usd_per_1k)) total.usd_per_1k = 0;
+  total.affordable = total.credits <= (total.remaining ?? 0);
+  const seed = p.settings?.seed ?? 0;
+  const digest = digestOf({ pairs: pairs.map((x) => [x.voice, x.model]), sets: p.sets, seed, chars: total.chars });
+  const lines = pairs[0]?.lines ?? 0;
+  const base: RenderPacksReport = { pairs, estimate: total, lines, needs_confirm: false, dry_run: !!p.dry_run, digest, packs: [], stopped: false, error: null, notes: [] };
+  if (p.dry_run) return base;
+  // As `studioRender`: the mock always asks (a re-take's lines are priced only in the core).
+  if (!total.affordable) throw `this render needs ${total.credits} credits but the account has ${total.remaining}`;
+  if (!p.confirm) return { ...base, needs_confirm: true };
+  samePlan(p, digest);
+  const out: RenderPacksReport = { ...base };
+  for (const x of pairs) {
+    const one = studioRender(g, { voice: x.voice, model: x.model, sets: p.sets, settings: p.settings }, true);
+    out.packs = [...(out.packs ?? []), one];
+    if (g.voice.stop) {
+      g.voice.stop = false;
+      out.stopped = (out.packs ?? []).length < pairs.length;
+      break;
+    }
+  }
+  return out;
 }
 
 /** `gear_voice_pack_preview`: the index pack's preview lines, "fetched" into the cache. */

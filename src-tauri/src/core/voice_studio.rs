@@ -7,6 +7,7 @@
 
 use super::voice::{collect_sounds, copy_dir, slug};
 use super::{Core, RenderReport, VoiceRenderParams};
+use crate::api::{Event, VoiceProgress};
 use crate::gear::voice::batch::{self, Batch, BatchCache, BatchSettings, Estimate, Item, Pricing};
 use crate::gear::voice::keychain::ELEVENLABS;
 use crate::gear::voice::lines::{self, Line, Spelling};
@@ -20,6 +21,8 @@ use anyhow::{anyhow, bail, Result};
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::Arc;
 
 /// `gear_voice_key`.
 #[derive(Debug, Clone, Default, Serialize, Deserialize, specta::Type)]
@@ -198,6 +201,9 @@ pub struct SampleReport {
     /// The digest of this plan, which `confirm` repeats.
     #[serde(default)]
     pub digest: String,
+    /// A stop ended the run early: `items` holds the pairs finished before it.
+    #[serde(default)]
+    pub stopped: bool,
 }
 
 /// `gear_voice_import_takes`.
@@ -208,6 +214,213 @@ pub struct ImportTakesParams {
     pub folder: String,
     #[serde(default)]
     pub dry_run: bool,
+}
+
+/// `gear_voice_render_packs`: one local pack per voice and model, in one confirmed run.
+#[derive(Debug, Clone, Default, Serialize, Deserialize, specta::Type)]
+pub struct RenderPacksParams {
+    /// Voice names or ids from the account.
+    pub voices: Vec<String>,
+    pub models: Vec<String>,
+    /// Line set ids (`gear_voice_sets`); they combine.
+    pub sets: Vec<String>,
+    /// Only these card paths of the sets; empty for every line.
+    #[serde(default)]
+    pub lines: Vec<String>,
+    /// Price only; render nothing.
+    #[serde(default)]
+    pub dry_run: bool,
+    #[serde(default)]
+    pub confirm: bool,
+    #[serde(default)]
+    pub settings: Option<RenderSettings>,
+    #[serde(default)]
+    pub batch: Option<BatchSettings>,
+    /// The `digest` of the unconfirmed call. A paid `confirm` needs it, and is refused when
+    /// the plan changed since.
+    #[serde(default)]
+    pub digest: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, specta::Type)]
+pub struct RenderPacksReport {
+    /// Each voice and model: its lines, how many are rendered, and what the rest cost.
+    pub pairs: Vec<StudioEstimate>,
+    /// The total over every pair.
+    pub estimate: Estimate,
+    /// Lines in the sets after combining.
+    pub lines: u32,
+    pub needs_confirm: bool,
+    pub dry_run: bool,
+    /// The digest of the whole plan, which `confirm` repeats.
+    pub digest: String,
+    /// The packs made, in order. A failure or a stop keeps those made before it.
+    #[serde(default)]
+    pub packs: Vec<RenderReport>,
+    /// A stop ended the run early.
+    #[serde(default)]
+    pub stopped: bool,
+    /// What ended the run early, when something failed.
+    #[serde(default)]
+    pub error: Option<String>,
+    #[serde(default)]
+    pub notes: Vec<String>,
+}
+
+/// The gear job a paid studio run registers: `gear_stop` with this handle stops it after the
+/// current batch.
+pub const STUDIO_JOB: &str = "voice-studio";
+
+/// The account's voices, models and credits, read once per call.
+struct Account {
+    voices: Vec<VoiceInfo>,
+    models: Vec<ModelInfo>,
+    credits: Credits,
+}
+
+impl Account {
+    fn of(tts: &dyn Tts) -> Result<Self> {
+        Ok(Account {
+            voices: tts.voices()?,
+            models: tts.models()?,
+            credits: tts.credits()?,
+        })
+    }
+}
+
+/// One voice and model of a render, priced and not yet paid for.
+struct Prepared {
+    voice: String,
+    voice_name: String,
+    model: String,
+    id: String,
+    old_id: Option<String>,
+    old: Option<PackManifest>,
+    plan: StudioPlan,
+    est: Estimate,
+    /// (rendered, re-takes, to render), as `StudioPlan::counts`.
+    counts: (u32, u32, u32),
+    report: RenderReport,
+}
+
+impl Prepared {
+    fn studio_estimate(&self, lines: usize) -> StudioEstimate {
+        StudioEstimate {
+            voice: self.voice.clone(),
+            voice_name: self.voice_name.clone(),
+            model: self.model.clone(),
+            lines: lines as u32,
+            rendered: self.counts.0,
+            retakes: self.counts.1,
+            to_render: self.counts.2,
+            estimate: self.est.clone(),
+        }
+    }
+}
+
+/// Adds one pair's estimate to a total.
+fn add_estimate(total: &mut Estimate, e: &Estimate) {
+    total.batches += e.batches;
+    total.cached_batches += e.cached_batches;
+    total.lines += e.lines;
+    total.chars += e.chars;
+    total.credits += e.credits;
+    total.usd += e.usd;
+    if total.credits_basis.is_empty() {
+        total.credits_basis = e.credits_basis.clone();
+    } else if total.credits_basis != e.credits_basis {
+        total.credits_basis = "estimated".into();
+    }
+}
+
+/// The one USD rate and promo every pair shares; none (0) when they differ.
+fn shared_rate(total: &mut Estimate, each: &[&Estimate]) {
+    let Some(first) = each.first() else {
+        return;
+    };
+    if each.iter().all(|e| {
+        (e.usd_per_1k - first.usd_per_1k).abs() < 1e-9 && e.promo_until == first.promo_until
+    }) {
+        total.usd_per_1k = first.usd_per_1k;
+        total.promo_until = first.promo_until.clone();
+        total.cost_per_char = first.cost_per_char;
+    }
+}
+
+/// A paid run's progress, sent as `VoiceProgress` events, and its stop: the gear job
+/// `STUDIO_JOB` while it lives. Dropping it ends both.
+struct Progress<'a> {
+    core: &'a Core,
+    stop: Arc<AtomicBool>,
+    _job: super::backup::JobGuard<'a>,
+    ev: VoiceProgress,
+}
+
+impl<'a> Progress<'a> {
+    fn start(core: &'a Core, kind: &str, total: usize) -> Result<Self> {
+        let (job, stop) = core.job_start(
+            STUDIO_JOB,
+            None,
+            if kind == "sample" {
+                "Sampling voices"
+            } else {
+                "Rendering voices"
+            },
+        )?;
+        let p = Progress {
+            core,
+            stop,
+            _job: job,
+            ev: VoiceProgress {
+                kind: kind.into(),
+                running: true,
+                total: total as u32,
+                step: "Rendering".into(),
+                ..Default::default()
+            },
+        };
+        p.emit();
+        Ok(p)
+    }
+
+    fn emit(&self) {
+        self.core.hooks.event(Event::VoiceProgress(self.ev.clone()));
+    }
+
+    fn pair(&mut self, voice: &str, voice_name: &str, model: &str) {
+        self.ev.voice = voice.into();
+        self.ev.voice_name = voice_name.into();
+        self.ev.model = model.into();
+        self.ev.step = "Rendering".into();
+        self.emit();
+    }
+
+    fn step(&mut self, step: &str) {
+        self.ev.step = step.into();
+        self.emit();
+    }
+
+    /// One batch done; false when a stop was asked for.
+    fn batch(&mut self) -> bool {
+        self.ev.done = (self.ev.done + 1).min(self.ev.total);
+        self.emit();
+        if self.stopped() && !self.ev.stopping {
+            self.ev.stopping = true;
+            self.emit();
+        }
+        !self.ev.stopping
+    }
+
+    fn stopped(&self) -> bool {
+        self.stop.load(Ordering::SeqCst)
+    }
+}
+
+impl Drop for Progress<'_> {
+    fn drop(&mut self) {
+        self.ev.running = false;
+        self.emit();
+    }
 }
 
 /// The provider id the studio's takes are cached under.
@@ -309,6 +522,7 @@ impl StudioPlan {
         ctx: &batch::Ctx<'_>,
         bs: &BatchSettings,
         notes: &mut Vec<String>,
+        each: &mut dyn FnMut(usize, usize) -> bool,
     ) -> Result<(batch::Rendered, Vec<Batch>)> {
         let s = Scope::of(ctx);
         let mut from_takes = batch::Rendered::default();
@@ -320,20 +534,19 @@ impl StudioPlan {
                 return Err(e);
             }
         };
-        let mut done =
-            match batch::render_all(ctx, &self.batches, bs.snap_ms, &self.priced, &mut |_, _| {}) {
-                Ok(d) => d,
-                Err(e) => {
-                    // The batches made before the error are paid for: index them, unchecked
-                    // (cut 0), so a later plan reuses their lines instead of sending them again.
-                    let made = reuse::entries(&s, &self.batches, bs, &Default::default())
-                        .into_iter()
-                        .map(|e| reuse::Entry { cut: 0, ..e })
-                        .collect();
-                    let _ = LineIndex::record(&s, made);
-                    return Err(e);
-                }
-            };
+        let mut done = match batch::render_all(ctx, &self.batches, bs.snap_ms, &self.priced, each) {
+            Ok(d) => d,
+            Err(e) => {
+                // The batches made before the error are paid for: index them, unchecked
+                // (cut 0), so a later plan reuses their lines instead of sending them again.
+                let made = reuse::entries(&s, &self.batches, bs, &Default::default())
+                    .into_iter()
+                    .map(|e| reuse::Entry { cut: 0, ..e })
+                    .collect();
+                let _ = LineIndex::record(&s, made);
+                return Err(e);
+            }
+        };
         let mut entries = reuse::entries(&s, &self.batches, bs, &done);
         done.cuts.extend(from_takes.cuts);
         done.flagged.extend(from_takes.flagged);
@@ -715,6 +928,7 @@ impl Core {
         let cache = BatchCache::new(&self.cache);
         let mut combos = Vec::new();
         let mut priced = Vec::new();
+        let mut each = Vec::new();
         let mut total = Estimate {
             remaining: Some(credits.remaining),
             affordable: true,
@@ -741,17 +955,8 @@ impl Core {
                     None,
                 );
                 let e = batch::estimate(&ctx, &plan.batches, &price);
-                total.batches += e.batches;
-                total.cached_batches += e.cached_batches;
-                total.lines += e.lines;
-                total.chars += e.chars;
-                total.credits += e.credits;
-                total.usd += e.usd;
-                if total.credits_basis.is_empty() {
-                    total.credits_basis = e.credits_basis.clone();
-                } else if total.credits_basis != e.credits_basis {
-                    total.credits_basis = "estimated".into();
-                }
+                add_estimate(&mut total, &e);
+                each.push(e);
                 priced.push(serde_json::json!({
                     "voice": vid, "model": m, "to_render": plan.priced,
                 }));
@@ -759,6 +964,7 @@ impl Core {
             }
         }
         total.affordable = credits.remaining >= total.credits;
+        shared_rate(&mut total, &each.iter().collect::<Vec<_>>());
         let digest = plan_digest(&serde_json::json!({
             "kind": "sample", "combos": priced, "sets": ids, "lines": p.lines,
             "settings": settings, "batch": bs, "chars": total.chars, "credits": total.credits,
@@ -771,6 +977,7 @@ impl Core {
             dry_run: p.dry_run,
             warnings: Vec::new(),
             digest: digest.clone(),
+            stopped: false,
         };
         if p.dry_run {
             return Ok(report);
@@ -785,7 +992,14 @@ impl Core {
         }
         let tools = crate::media::find_tools().ok();
         let out_root = self.cache.join("voice").join("samples");
+        let batches = combos.iter().map(|(.., plan)| plan.batches.len()).sum();
+        let mut run = Progress::start(self, "sample", batches)?;
         for (vid, vname, model, plan) in combos {
+            if run.stopped() {
+                report.stopped = true;
+                break;
+            }
+            run.pair(&vid, &vname, &model);
             let ctx = batch::Ctx {
                 tts: tts.as_ref(),
                 cache: &cache,
@@ -794,7 +1008,14 @@ impl Core {
                 settings: &settings,
             };
             let mut notes = Vec::new();
-            let (done, _) = plan.render(&ctx, &bs, &mut notes)?;
+            let done = match plan.render(&ctx, &bs, &mut notes, &mut |_, _| run.batch()) {
+                Ok((d, _)) => d,
+                Err(e) if e.is::<batch::Stopped>() => {
+                    report.stopped = true;
+                    break;
+                }
+                Err(e) => return Err(e),
+            };
             report.warnings.extend(notes);
             report.warnings.extend(
                 done.warnings
@@ -826,6 +1047,7 @@ impl Core {
                 });
             }
         }
+        run.step("Checking speech");
         self.check_samples(&mut report, &settings);
         Ok(report)
     }
@@ -844,56 +1066,203 @@ impl Core {
         } else {
             p.voice.clone()
         };
-        let (voice, voice_name) = Self::resolve_voice(&tts.voices()?, &want)?;
         let model = self.studio_model(&p.model)?;
-        let price = self.pricing(&tts.models()?, &model, &tts.credits()?)?;
         let lines = self.studio_lines(&p.sets, &p.lines)?;
-        let (id, found) = self.studio_pack(&voice, &voice_name, &model);
+        let account = Account::of(tts.as_ref())?;
+        let prep = self.studio_prepare(
+            tts.as_ref(),
+            &account,
+            &want,
+            &model,
+            &lines,
+            &settings,
+            &bs,
+        )?;
+        let digest = plan_digest(&serde_json::json!({
+            "kind": "render", "voice": prep.voice, "model": prep.model, "sets": p.sets, "lines": p.lines,
+            "settings": settings, "batch": bs, "to_render": prep.plan.priced,
+            "chars": prep.est.chars, "credits": prep.est.credits,
+        }));
+        let mut report = prep.report.clone();
+        report.dry_run = p.dry_run;
+        report.digest = digest.clone();
+        if p.dry_run {
+            return Ok(report);
+        }
+        if prep.est.chars > 0 {
+            prep.est.check()?;
+            if !p.confirm {
+                report.needs_confirm = true;
+                return Ok(report);
+            }
+            same_plan(p.digest.as_deref(), &digest)?;
+        }
+        let mut run = Progress::start(self, "render", prep.plan.batches.len())?;
+        let mut done = self.studio_finish(tts.as_ref(), prep, &lines, &settings, &bs, &mut run)?;
+        done.digest = digest;
+        Ok(done)
+    }
+
+    /// `gear_voice_render_packs`: the sets into one local pack per voice and model, priced as
+    /// one plan with one digest. Without `confirm` (or with `dry_run`) it only prices: each
+    /// pair's lines, what they cost, and the total. A failure keeps the packs made before it.
+    pub fn gear_voice_render_packs(&self, p: &RenderPacksParams) -> Result<RenderPacksReport> {
+        if p.voices.is_empty() || p.models.is_empty() {
+            bail!("Name at least one voice and one model.");
+        }
+        let tts = self.studio_tts()?;
+        let settings = p.settings.clone().unwrap_or_default();
+        settings.check()?;
+        let bs = p.batch.clone().unwrap_or_default();
+        bs.check()?;
+        let lines = self.studio_lines(&p.sets, &p.lines)?;
+        let account = Account::of(tts.as_ref())?;
+        let mut preps = Vec::new();
+        for v in &p.voices {
+            for m in &p.models {
+                let model = self.studio_model(m)?;
+                preps.push(self.studio_prepare(
+                    tts.as_ref(),
+                    &account,
+                    v,
+                    &model,
+                    &lines,
+                    &settings,
+                    &bs,
+                )?);
+            }
+        }
+        let mut total = Estimate {
+            remaining: Some(account.credits.remaining),
+            affordable: true,
+            ..Default::default()
+        };
+        for x in &preps {
+            add_estimate(&mut total, &x.est);
+        }
+        shared_rate(
+            &mut total,
+            &preps.iter().map(|x| &x.est).collect::<Vec<_>>(),
+        );
+        total.affordable = account.credits.remaining >= total.credits;
+        let digest = plan_digest(&serde_json::json!({
+            "kind": "render_packs",
+            "pairs": preps.iter().map(|x| serde_json::json!({
+                "voice": x.voice, "model": x.model, "to_render": x.plan.priced,
+            })).collect::<Vec<_>>(),
+            "sets": p.sets, "lines": p.lines, "settings": settings, "batch": bs,
+            "chars": total.chars, "credits": total.credits,
+        }));
+        let mut report = RenderPacksReport {
+            pairs: preps
+                .iter()
+                .map(|x| x.studio_estimate(lines.len()))
+                .collect(),
+            estimate: total.clone(),
+            lines: lines.len() as u32,
+            needs_confirm: false,
+            dry_run: p.dry_run,
+            digest: digest.clone(),
+            packs: Vec::new(),
+            stopped: false,
+            error: None,
+            notes: Vec::new(),
+        };
+        if p.dry_run {
+            return Ok(report);
+        }
+        if total.chars > 0 {
+            total.check()?;
+            if !p.confirm {
+                report.needs_confirm = true;
+                return Ok(report);
+            }
+            same_plan(p.digest.as_deref(), &digest)?;
+        }
+        let batches = preps.iter().map(|x| x.plan.batches.len()).sum();
+        let mut run = Progress::start(self, "render", batches)?;
+        for prep in preps {
+            if run.stopped() {
+                report.stopped = true;
+                break;
+            }
+            let name = format!("{}, {}", prep.voice_name, prep.model);
+            match self.studio_finish(tts.as_ref(), prep, &lines, &settings, &bs, &mut run) {
+                Ok(r) => report.packs.push(r),
+                Err(e) if e.is::<batch::Stopped>() => {
+                    report.stopped = true;
+                    report.notes.push(format!(
+                        "Stopped during {name}: its batches made so far are in the cache, and the next render cuts them from there instead of paying again."
+                    ));
+                    break;
+                }
+                Err(e) => {
+                    report.error = Some(format!("{name}: {e:#}"));
+                    break;
+                }
+            }
+        }
+        if report.stopped && report.notes.is_empty() {
+            report.notes.push("Stopped between packs.".into());
+        }
+        Ok(report)
+    }
+
+    /// One voice and model of a studio render, priced: the pack it goes into and the batches
+    /// still to make. Makes no paid call.
+    #[allow(clippy::too_many_arguments)]
+    fn studio_prepare(
+        &self,
+        tts: &dyn Tts,
+        account: &Account,
+        want: &str,
+        model: &str,
+        lines: &[(SetLine, String)],
+        settings: &RenderSettings,
+        bs: &BatchSettings,
+    ) -> Result<Prepared> {
+        let (voice, voice_name) = Self::resolve_voice(&account.voices, want)?;
+        let price = self.pricing(&account.models, model, &account.credits)?;
+        let (id, found) = self.studio_pack(&voice, &voice_name, model);
         let (old_id, old) = match found {
             Some((k, m)) => (Some(k), Some(m)),
             None => (None, None),
         };
         let cache = BatchCache::new(&self.cache);
         let bctx = batch::Ctx {
-            tts: tts.as_ref(),
+            tts,
             cache: &cache,
             voice: &voice,
-            model: &model,
-            settings: &settings,
+            model,
+            settings,
         };
         let scope = Scope::of(&bctx);
         let plan = StudioPlan::new(
             &scope,
             &LineIndex::load(&scope),
-            &lines,
-            &bs,
+            lines,
+            bs,
             price.batch_limit,
             old.as_ref(),
         );
-        let (batches, kept) = (&plan.batches, plan.kept);
-        let est = batch::estimate(&bctx, batches, &price);
-        let (_, _, paths_to_render) = plan.counts(&scope, &lines);
-        let digest = plan_digest(&serde_json::json!({
-            "kind": "render", "voice": voice, "model": model, "sets": p.sets, "lines": p.lines,
-            "settings": settings, "batch": bs, "to_render": plan.priced,
-            "chars": est.chars, "credits": est.credits,
-        }));
-        let unique: std::collections::HashSet<&String> = lines.iter().map(|(_, s)| s).collect();
+        let est = batch::estimate(&bctx, &plan.batches, &price);
+        let counts = plan.counts(&scope, lines);
+        let unique: HashSet<&String> = lines.iter().map(|(_, s)| s).collect();
         let mut report = RenderReport {
             pack: id.clone(),
             provider: "elevenlabs".into(),
             voice: voice_name.clone(),
             plan: Plan {
                 lines: lines.len() as u32,
-                cached: (lines.len() as u32).saturating_sub(paths_to_render),
-                to_render: paths_to_render,
+                cached: (lines.len() as u32).saturating_sub(counts.2),
+                to_render: counts.2,
                 chars: est.chars,
             },
             rendered: 0,
             from_cache: 0,
             paid: true,
             needs_confirm: false,
-            dry_run: p.dry_run,
+            dry_run: false,
             notes: vec![format!(
                 "{} batches ({} cached), {} characters with carriers, {}; {} credits left; {} distinct lines.",
                 est.batches,
@@ -905,7 +1274,7 @@ impl Core {
             )],
             estimate: Some(est.clone()),
             warnings: Vec::new(),
-            digest: digest.clone(),
+            digest: String::new(),
             retakes: Vec::new(),
             heard: Vec::new(),
         };
@@ -915,34 +1284,64 @@ impl Core {
                 "{reused} lines come from earlier takes of this voice and model: cut again, not sent."
             ));
         }
-        if kept > 0 {
+        if plan.kept > 0 {
             report.notes.push(format!(
-                "{kept} batches already in the pack with every line passing its checks: kept, not rendered again."
+                "{} batches already in the pack with every line passing its checks: kept, not rendered again.",
+                plan.kept
             ));
         }
-        if p.dry_run {
-            return Ok(report);
-        }
-        if est.chars > 0 {
-            est.check()?;
-            if !p.confirm {
-                report.needs_confirm = true;
-                return Ok(report);
-            }
-            same_plan(p.digest.as_deref(), &digest)?;
-        }
-        let (done, whole) = plan.render(&bctx, &bs, &mut report.notes)?;
+        Ok(Prepared {
+            voice,
+            voice_name,
+            model: model.to_string(),
+            id,
+            old_id,
+            old,
+            plan,
+            est,
+            counts,
+            report,
+        })
+    }
+
+    /// Makes the batches a prepared render priced and builds its pack. `run` hears each batch
+    /// and may stop the render between two of them (`batch::Stopped`).
+    fn studio_finish(
+        &self,
+        tts: &dyn Tts,
+        prep: Prepared,
+        lines: &[(SetLine, String)],
+        settings: &RenderSettings,
+        bs: &BatchSettings,
+        run: &mut Progress<'_>,
+    ) -> Result<RenderReport> {
+        let Prepared {
+            voice,
+            voice_name,
+            model,
+            id,
+            old_id,
+            old,
+            plan,
+            mut report,
+            ..
+        } = prep;
+        let cache = BatchCache::new(&self.cache);
+        let bctx = batch::Ctx {
+            tts,
+            cache: &cache,
+            voice: &voice,
+            model: &model,
+            settings,
+        };
+        run.pair(&voice, &voice_name, &model);
+        let batches = &plan.batches;
+        let (done, whole) = plan.render(&bctx, bs, &mut report.notes, &mut |_, _| run.batch())?;
+        run.step("Building the pack");
         report.warnings = done.warnings.clone();
         let tools = crate::media::find_tools().ok();
         let rcache = self.voice_cache();
-        let mut ctx = self.render_ctx(
-            tts.as_ref(),
-            &rcache,
-            &voice,
-            &model,
-            &settings,
-            tools.as_ref(),
-        );
+        let mut ctx = self.render_ctx(tts, &rcache, &voice, &model, settings, tools.as_ref());
         ctx.cuts = Some(&done.cuts);
         // Only lines with a cut that passed its checks: a line missing from `cuts` would go
         // to the provider one at a time, unpriced. Kept batches' lines are in the pack already.
@@ -981,7 +1380,7 @@ impl Core {
         }
         // A flagged line has no take in the pack, not even an older one.
         let mut retakes: Vec<Retake> = Vec::new();
-        for (l, spoken) in &lines {
+        for (l, spoken) in lines {
             if let Some(reason) = done.flagged.get(spoken) {
                 let _ = std::fs::remove_file(stage.join(&l.line.path));
                 retakes.push(Retake {
@@ -991,8 +1390,7 @@ impl Core {
                 });
             }
         }
-        let rendered_now: std::collections::HashSet<&str> =
-            lines.iter().map(|(l, _)| l.line.path.as_str()).collect();
+        let rendered_now: HashSet<&str> = lines.iter().map(|(l, _)| l.line.path.as_str()).collect();
         let mut kept_batches: Vec<String> = Vec::new();
         let mut heard = Vec::new();
         if let Some(o) = &old {
@@ -1020,7 +1418,7 @@ impl Core {
                 .iter()
                 .all(|(i, _)| !done.flagged.contains_key(&i.spoken))
             {
-                let k = kept_key(&voice, &model, &settings, b);
+                let k = kept_key(&voice, &model, settings, b);
                 if !kept_batches.contains(&k) {
                     kept_batches.push(k);
                 }
@@ -1069,6 +1467,7 @@ impl Core {
             .map(|l| l.path.clone())
             .filter(|p| manifest.files.contains(p))
             .collect();
+        run.step("Checking speech");
         self.check_after_render(&id, &into_pack, &mut report);
         let retakes = self.local_pack(&id).map(|m| m.retakes).unwrap_or(retakes);
         if !retakes.is_empty() {
@@ -1337,6 +1736,51 @@ pub fn sets_text(v: &StudioView) -> String {
             "\n{}: {} ({} lines{rendered}).{kinds} {}",
             x.id, x.title, x.lines, x.about
         );
+    }
+    s
+}
+
+/// A render of several packs as text: the question or the outcome, each pair, the total.
+pub fn render_packs_text(r: &RenderPacksReport) -> String {
+    use std::fmt::Write;
+    let mut s = String::new();
+    if r.needs_confirm {
+        let _ = writeln!(s, "Not rendered: this sends text to ElevenLabs, which bills it. Ask the person, then run again with confirm and digest {}.", r.digest);
+    } else if r.dry_run {
+        let _ = writeln!(
+            s,
+            "Dry run: nothing was rendered. A paid run confirms with digest {}.",
+            r.digest
+        );
+    }
+    for e in &r.pairs {
+        let _ = writeln!(s, "{}", studio_estimate_text(e));
+    }
+    let _ = writeln!(
+        s,
+        "Total for {} voice and model pairs: {}",
+        r.pairs.len(),
+        estimate_text(&r.estimate)
+    );
+    for p in &r.packs {
+        let _ = writeln!(
+            s,
+            "Rendered {} into {}: {} batches made, {} from the cache, {} re-takes.",
+            p.voice,
+            p.pack,
+            p.rendered,
+            p.from_cache,
+            p.retakes.len()
+        );
+    }
+    if r.stopped {
+        let _ = writeln!(s, "Stopped after {} packs.", r.packs.len());
+    }
+    if let Some(e) = &r.error {
+        let _ = writeln!(s, "Failed after {} packs: {e}", r.packs.len());
+    }
+    for n in &r.notes {
+        let _ = writeln!(s, "{n}");
     }
     s
 }

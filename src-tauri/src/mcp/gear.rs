@@ -101,6 +101,10 @@ pub struct GearArgs {
     /// For voice_estimate and voice_sets: the ElevenLabs model id (voice_catalog lists them with what a character costs).
     #[schemars(length(max = 100))]
     pub voice_model: Option<String>,
+    /// For voice_estimate: several ElevenLabs voices (names or ids) to price together, each with every model in `voice_models` (or `voice_model`): one line per voice and model, and the total.
+    pub voices: Option<Vec<String>>,
+    /// For voice_estimate with `voices`: the model ids to price each voice with.
+    pub voice_models: Option<Vec<String>>,
     /// For osd with a device: show the layout after the device's staged OSD edits, with their check. For model: show the model after its staged edits (default true).
     pub staged: Option<bool>,
     /// For card and card_preview: the card's mount point. Default: the one EdgeTX card mounted. For switch_map: an EdgeTX card's mount or folder, or one model file.
@@ -191,9 +195,9 @@ pub struct GearEditArgs {
     /// For voice_render with `sets`: the ElevenLabs model id; omit for the tts_model setting.
     #[schemars(length(max = 100))]
     pub voice_model: Option<String>,
-    /// For voice_sample: ElevenLabs voices to compare, by name or id.
+    /// For voice_sample: ElevenLabs voices to compare, by name or id. For voice_render with `sets`: render one local pack per voice and model in one confirmed run (one digest for the whole plan; a failure keeps the packs made before it; stop with handle `voice-studio`).
     pub voices: Option<Vec<String>>,
-    /// For voice_sample: ElevenLabs model ids to compare.
+    /// For voice_sample: ElevenLabs model ids to compare. For voice_render with `sets`: the models each voice in `voices` renders with.
     pub voice_models: Option<Vec<String>>,
     /// For voice_key_set: the ElevenLabs API key. It goes to the macOS Keychain; answers show only its hint. A value passed here sits in the agent's transcript.
     #[schemars(length(max = 400))]
@@ -306,7 +310,7 @@ pub struct GearEditArgs {
     /// For import_backups: the old backup folder (absolute path). For voice_import_takes: the folder of earlier takes.
     #[schemars(length(max = 1024))]
     pub folder: Option<String>,
-    /// For stop: the running job's handle from quadcam_gear status (jobs).
+    /// For stop: the running job's handle from quadcam_gear status (jobs); `voice-studio` for a paid Voice studio sample or render.
     #[schemars(length(max = 200))]
     pub handle: Option<String>,
     /// For flight_set: a flight id from quadcam_gear flights.
@@ -793,6 +797,21 @@ fn gear<B: Backend>(backend: &mut B, a: &Value) -> Result<(Vec<Value>, Value)> {
             let c: crate::core::Catalog =
                 serde_json::from_value(v.clone()).context("bad voice answer")?;
             Ok((vec![text(crate::core::voice_catalog_text(&c))], v))
+        }
+        "voice_estimate" if x.voices.is_some() || x.voice_models.is_some() => {
+            let one = |o: &Option<String>| o.clone().into_iter().collect::<Vec<_>>();
+            let v = backend.call(
+                "gear_voice_render_packs",
+                json!({
+                    "voices": x.voices.clone().unwrap_or_else(|| one(&x.voice)),
+                    "models": x.voice_models.clone().unwrap_or_else(|| one(&x.voice_model)),
+                    "sets": x.sets.clone().unwrap_or_default(),
+                    "dry_run": true,
+                }),
+            )?;
+            let r: crate::core::RenderPacksReport =
+                serde_json::from_value(v.clone()).context("bad voice answer")?;
+            Ok((vec![text(crate::core::voice_render_packs_text(&r))], v))
         }
         "voice_estimate" => {
             let v = backend.call(
@@ -2206,7 +2225,9 @@ fn gear_edit<B: Backend>(backend: &mut B, a: &Value) -> Result<(Vec<Value>, Valu
                 .context("handle is required for stop: a job's handle from quadcam_gear status")?;
             let v = backend.call("gear_stop", json!({"handle": handle}))?;
             Ok((
-                vec![text(if v.as_bool() == Some(true) {
+                vec![text(if v.as_bool() == Some(true) && handle == crate::core::STUDIO_JOB {
+                    "Stopping: it ends after the current batch.".to_string()
+                } else if v.as_bool() == Some(true) {
                     "Stopping: it ends after the file being read.".to_string()
                 } else {
                     "Nothing is running on that device.".to_string()
@@ -2339,6 +2360,25 @@ fn gear_edit<B: Backend>(backend: &mut B, a: &Value) -> Result<(Vec<Value>, Valu
             let k: crate::core::KeyStatus =
                 serde_json::from_value(v.clone()).context("bad voice answer")?;
             Ok((vec![text(crate::core::voice_key_text(&k))], v))
+        }
+        "voice_render" if x.voices.is_some() || x.voice_models.is_some() => {
+            let one = |o: &Option<String>| o.clone().into_iter().collect::<Vec<_>>();
+            let v = backend.call(
+                "gear_voice_render_packs",
+                json!({
+                    "voices": x.voices.clone().unwrap_or_else(|| one(&x.voice)),
+                    "models": x.voice_models.clone().unwrap_or_else(|| one(&x.voice_model)),
+                    "sets": x.sets.clone().unwrap_or_default(),
+                    "lines": x.lines.clone().unwrap_or_default(),
+                    "dry_run": x.dry_run.unwrap_or(false),
+                    "confirm": x.confirm.unwrap_or(false),
+                    "digest": x.digest,
+                    "settings": x.seed.map(voice_seed),
+                }),
+            )?;
+            let r: crate::core::RenderPacksReport =
+                serde_json::from_value(v.clone()).context("bad voice answer")?;
+            Ok((vec![text(crate::core::voice_render_packs_text(&r))], v))
         }
         "voice_render" => {
             let v = backend.call(

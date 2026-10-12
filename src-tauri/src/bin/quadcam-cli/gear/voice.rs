@@ -229,6 +229,37 @@ pub enum VoiceCmd {
         #[command(flatten)]
         settings: SettingsArgs,
     },
+    /// Render line sets with ElevenLabs into one local pack per voice and model, priced as one
+    /// plan. Without --confirm it prints each pair's cost, the total and the digest. Bills
+    /// ElevenLabs: it needs --confirm and --digest. A failure keeps the packs made before it.
+    RenderPacks {
+        /// Voice names or ids, comma separated.
+        #[arg(long, value_delimiter = ',', required = true)]
+        voices: Vec<String>,
+        /// Model ids, comma separated.
+        #[arg(long, value_delimiter = ',', required = true)]
+        models: Vec<String>,
+        /// Line set ids, comma separated.
+        #[arg(long = "set", value_delimiter = ',', required = true)]
+        sets: Vec<String>,
+        /// Only these card paths of the sets, comma separated.
+        #[arg(long, value_delimiter = ',')]
+        lines: Vec<String>,
+        /// Price it; render nothing.
+        #[arg(long)]
+        dry_run: bool,
+        /// Allow the paid call.
+        #[arg(long)]
+        confirm: bool,
+        /// With --confirm: the digest the run without --confirm printed. Refused when the
+        /// plan changed since.
+        #[arg(long)]
+        digest: Option<String>,
+        #[command(flatten)]
+        batch: BatchArgs,
+        #[command(flatten)]
+        settings: SettingsArgs,
+    },
     /// Hear each line of a pack with the on-device speech recognizer (macOS 26 or later) and
     /// compare it with the line's text. In a pack the studio rendered, a line heard wrong
     /// leaves the pack as a re-take. Calls no provider.
@@ -542,6 +573,30 @@ pub fn run(core: &Core, a: VoiceArgs) -> Result<Value> {
                 settings: settings.get(),
                 sets,
                 model: model.unwrap_or_default(),
+                batch: batch.get(),
+                digest,
+            },
+        )?)?,
+        Some(VoiceCmd::RenderPacks {
+            voices,
+            models,
+            sets,
+            lines,
+            dry_run,
+            confirm,
+            digest,
+            batch,
+            settings,
+        }) => serde_json::to_value(call::gear_voice_render_packs(
+            core,
+            api::RenderPacksParams {
+                voices,
+                models,
+                sets,
+                lines,
+                dry_run,
+                confirm,
+                settings: settings.get(),
                 batch: batch.get(),
                 digest,
             },

@@ -20,6 +20,7 @@ pub enum Event {
     FirmwareRead(FirmwareReadProgress),
     Update(UpdateChanged),
     OnDeviceProgress(OnDeviceProgress),
+    VoiceProgress(VoiceProgress),
 }
 
 impl Event {
@@ -38,6 +39,7 @@ impl Event {
             Event::FirmwareRead(x) => (FirmwareReadProgress::NAME, v(x)),
             Event::Update(x) => (UpdateChanged::NAME, v(x)),
             Event::OnDeviceProgress(x) => (OnDeviceProgress::NAME, v(x)),
+            Event::VoiceProgress(x) => (VoiceProgress::NAME, v(x)),
         }
     }
 }
@@ -102,6 +104,24 @@ pub struct UpdateChanged(pub crate::core::UpdateStatus);
 pub struct FirmwareReadProgress {
     pub done: u64,
     pub total: u64,
+}
+
+/// A paid Voice studio run (`gear_voice_sample`, `gear_voice_render_packs`): batches `done`
+/// of `total` over every voice and model, and the pair it is on. `running` false ends it.
+#[derive(Debug, Clone, Default, Serialize, Deserialize, Type, tauri_specta::Event)]
+pub struct VoiceProgress {
+    /// `sample` or `render`.
+    pub kind: String,
+    pub running: bool,
+    pub done: u32,
+    pub total: u32,
+    pub voice: String,
+    pub voice_name: String,
+    pub model: String,
+    /// `Rendering`, `Building the pack` or `Checking speech`.
+    pub step: String,
+    /// A stop was asked for; it takes effect after the current batch.
+    pub stopping: bool,
 }
 
 /// The long library jobs.
@@ -240,5 +260,6 @@ mod tests {
         assert_eq!(Menu::NAME, "menu");
         assert_eq!(GearChanged::NAME, "gear-changed");
         assert_eq!(DeviceChanged::NAME, "device-changed");
+        assert_eq!(VoiceProgress::NAME, "voice-progress");
     }
 }

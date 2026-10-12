@@ -2,7 +2,7 @@
 import { getCurrentWebview } from "@tauri-apps/api/webview";
 import { events } from "../bindings";
 import * as N from "./normalize";
-import type { OnDeviceProgress, UpdateStatus, AgentApplyRequest, AgentApplyResult, AgentFormatRequest, CalibrateView, ClipResult, DeviceChanged, FirmwareReadProgress, ImportProgress, LibraryTask, RadioEvent, StageProgress } from "./types";
+import type { OnDeviceProgress, VoiceProgress, UpdateStatus, AgentApplyRequest, AgentApplyResult, AgentFormatRequest, CalibrateView, ClipResult, DeviceChanged, FirmwareReadProgress, ImportProgress, LibraryTask, RadioEvent, StageProgress } from "./types";
 
 export interface CoreEvents {
   "library-changed": null;
@@ -35,6 +35,8 @@ export interface CoreEvents {
   "update-changed": UpdateStatus;
   /** On-device suggestions: running, clips done of total. */
   "on-device-progress": OnDeviceProgress;
+  /** A paid Voice studio run: batches done of total, and the voice and model it is on. */
+  "voice-progress": VoiceProgress;
 }
 
 type Listen = (cb: (payload: never) => void) => Promise<() => void>;
@@ -62,6 +64,7 @@ const SOURCES: Record<keyof CoreEvents, Listen> = {
   "firmware-read-progress": wrap(events.firmwareReadProgress),
   "update-changed": wrap(events.updateChanged),
   "on-device-progress": wrap(events.onDeviceProgress),
+  "voice-progress": wrap(events.voiceProgress),
 };
 
 export function on<K extends keyof CoreEvents>(name: K, handler: (payload: CoreEvents[K]) => void): Promise<() => void> {

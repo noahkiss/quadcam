@@ -250,3 +250,7 @@
   list-style: none;
   flex-basis: 100%;
 }
+
+.progress {
+  width: 200px;
+}

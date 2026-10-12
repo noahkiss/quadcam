@@ -186,6 +186,7 @@ cli.command gear voice models
 cli.command gear voice preview
 cli.command gear voice publish
 cli.command gear voice render
+cli.command gear voice render-packs
 cli.command gear voice sample
 cli.command gear voice sets
 cli.command gear voice voices
@@ -527,6 +528,22 @@ cli.flag gear voice render --tail-ms VALUE
 cli.flag gear voice render --tempo VALUE
 cli.flag gear voice render --trim-db VALUE
 cli.flag gear voice render --voice VALUE
+cli.flag gear voice render-packs --carrier VALUE
+cli.flag gear voice render-packs --confirm
+cli.flag gear voice render-packs --digest VALUE
+cli.flag gear voice render-packs --dry-run
+cli.flag gear voice render-packs --fade-out-ms VALUE
+cli.flag gear voice render-packs --lines VALUE
+cli.flag gear voice render-packs --max-lines VALUE
+cli.flag gear voice render-packs --models VALUE
+cli.flag gear voice render-packs --seed VALUE
+cli.flag gear voice render-packs --set VALUE
+cli.flag gear voice render-packs --snap-ms VALUE
+cli.flag gear voice render-packs --speed VALUE
+cli.flag gear voice render-packs --tail-ms VALUE
+cli.flag gear voice render-packs --tempo VALUE
+cli.flag gear voice render-packs --trim-db VALUE
+cli.flag gear voice render-packs --voices VALUE
 cli.flag gear voice sample --carrier VALUE
 cli.flag gear voice sample --confirm
 cli.flag gear voice sample --digest VALUE

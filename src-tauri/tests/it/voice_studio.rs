@@ -3,8 +3,10 @@
 //! A/B samples, and a batched render of line sets into a local pack. Every request goes to
 //! canned HTTP; a cache hit makes none, and a render the credits do not cover makes none.
 
+use quadcam_lib::api::{Event, VoiceProgress};
 use quadcam_lib::core::{
-    CatalogParams, Core, EstimateParams, KeyParams, NoHooks, SampleParams, VoiceRenderParams,
+    CatalogParams, Core, EstimateParams, Hooks, KeyParams, NoHooks, RenderPacksParams,
+    SampleParams, VoiceRenderParams,
 };
 use quadcam_lib::gear::serial::FakePorts;
 use quadcam_lib::gear::voice::eleven::fake::FakeHttp;
@@ -61,6 +63,10 @@ fn sub(left: u64) -> String {
 }
 
 fn bench(credits_left: u64, key: bool) -> Bench {
+    bench_with(credits_left, key, Arc::new(NoHooks))
+}
+
+fn bench_with(credits_left: u64, key: bool, hooks: Arc<dyn Hooks>) -> Bench {
     let dir = tempfile::tempdir().unwrap();
     let http = Arc::new(FakeHttp::default());
     http.on("/v1/models", 200, MODELS);
@@ -78,7 +84,7 @@ fn bench(credits_left: u64, key: bool) -> Bench {
     let core = Core::new(
         dir.path().join("cache"),
         None,
-        Arc::new(NoHooks),
+        hooks,
         Arc::new(Recorder::default()),
     )
     .with_settings(dir.path().join("support/settings.json"))
@@ -1946,4 +1952,188 @@ fn without_the_helper_the_check_is_unavailable_and_renders_go_on() {
             ..Default::default()
         })
         .is_err());
+}
+
+fn packs(voices: &[&str], models: &[&str], sets: &[&str]) -> RenderPacksParams {
+    RenderPacksParams {
+        voices: voices.iter().map(|s| s.to_string()).collect(),
+        models: models.iter().map(|s| s.to_string()).collect(),
+        sets: sets.iter().map(|s| s.to_string()).collect(),
+        ..Default::default()
+    }
+}
+
+#[test]
+fn several_voices_price_as_one_plan_and_render_one_pack_each() {
+    let b = bench(99_000, true);
+    let m = "eleven_turbo_v2_5";
+    let p = packs(&["Callum", "Matilda"], &[m], &["sample"]);
+    let dry = b
+        .core
+        .gear_voice_render_packs(&RenderPacksParams {
+            dry_run: true,
+            ..p.clone()
+        })
+        .unwrap();
+    assert_eq!(dry.pairs.len(), 2);
+    assert_eq!(dry.pairs[0].voice_name, "Callum");
+    assert_eq!(dry.pairs[1].voice_name, "Matilda");
+    assert_eq!(dry.lines, 12);
+    let chars: u64 = dry.pairs.iter().map(|x| x.estimate.chars).sum();
+    let credits: u64 = dry.pairs.iter().map(|x| x.estimate.credits).sum();
+    assert!(chars > 0);
+    assert_eq!((dry.estimate.chars, dry.estimate.credits), (chars, credits));
+    assert_eq!(dry.estimate.usd_per_1k, dry.pairs[0].estimate.usd_per_1k);
+    assert_eq!(b.http.posts(), 0);
+    // The question: nothing sent until the confirm repeats the digest.
+    let ask = b.core.gear_voice_render_packs(&p).unwrap();
+    assert!(ask.needs_confirm && ask.packs.is_empty());
+    assert_eq!(ask.digest, dry.digest);
+    let e = b
+        .core
+        .gear_voice_render_packs(&RenderPacksParams {
+            confirm: true,
+            ..p.clone()
+        })
+        .unwrap_err();
+    assert!(e.to_string().contains("digest"), "{e}");
+    let e = b
+        .core
+        .gear_voice_render_packs(&RenderPacksParams {
+            confirm: true,
+            digest: Some("0".repeat(64)),
+            ..p.clone()
+        })
+        .unwrap_err();
+    assert!(e.to_string().contains("estimate again"), "{e}");
+    assert_eq!(b.http.posts(), 0);
+    let done = b
+        .core
+        .gear_voice_render_packs(&RenderPacksParams {
+            confirm: true,
+            digest: Some(ask.digest),
+            ..p.clone()
+        })
+        .unwrap();
+    assert!(!done.stopped && done.error.is_none(), "{done:?}");
+    assert_eq!(done.packs.len(), 2);
+    assert_ne!(done.packs[0].pack, done.packs[1].pack);
+    for r in &done.packs {
+        assert!(b
+            .dir
+            .path()
+            .join("support/gear/voices")
+            .join(&r.pack)
+            .join("pack.json")
+            .is_file());
+    }
+    // Every line has a take now: the same plan costs nothing.
+    let again = b
+        .core
+        .gear_voice_render_packs(&RenderPacksParams { dry_run: true, ..p })
+        .unwrap();
+    assert_eq!(again.estimate.chars, 0);
+    assert!(again.pairs.iter().all(|x| x.to_render == 0));
+}
+
+#[test]
+fn a_failed_pack_keeps_the_packs_made_before_it() {
+    let b = bench(99_000, true);
+    let m = "eleven_turbo_v2_5";
+    let p = packs(&["Callum", "Matilda"], &[m], &["sample"]);
+    let ask = b.core.gear_voice_render_packs(&p).unwrap();
+    b.http.fail_after(ask.pairs[0].estimate.batches as usize);
+    let r = b
+        .core
+        .gear_voice_render_packs(&RenderPacksParams {
+            confirm: true,
+            digest: Some(ask.digest),
+            ..p
+        })
+        .unwrap();
+    assert_eq!(r.packs.len(), 1);
+    assert_eq!(r.packs[0].voice, "Callum");
+    let e = r.error.unwrap();
+    assert!(e.starts_with("Matilda"), "{e}");
+}
+
+/// Stops the run on the first batch it hears of.
+#[derive(Default)]
+struct StopOnFirst {
+    core: std::sync::OnceLock<std::sync::Weak<Core>>,
+    seen: std::sync::Mutex<Vec<VoiceProgress>>,
+}
+
+impl Hooks for StopOnFirst {
+    fn event(&self, e: Event) {
+        if let Event::VoiceProgress(p) = e {
+            if p.done == 1 {
+                if let Some(c) = self.core.get().and_then(|w| w.upgrade()) {
+                    assert!(c.gear_stop(quadcam_lib::core::STUDIO_JOB));
+                }
+            }
+            self.seen.lock().unwrap().push(p);
+        }
+    }
+}
+
+#[test]
+fn a_stop_ends_a_render_after_the_current_batch_and_reports_progress() {
+    let hooks = Arc::new(StopOnFirst::default());
+    let b = bench_with(99_000, true, hooks.clone());
+    let core = Arc::new(b.core);
+    hooks.core.set(Arc::downgrade(&core)).unwrap();
+    let m = "eleven_turbo_v2_5";
+    let p = packs(&["Callum", "Matilda"], &[m], &["sample"]);
+    let ask = core.gear_voice_render_packs(&p).unwrap();
+    let total = ask.estimate.batches;
+    assert!(total > 2);
+    let r = core
+        .gear_voice_render_packs(&RenderPacksParams {
+            confirm: true,
+            digest: Some(ask.digest),
+            ..p.clone()
+        })
+        .unwrap();
+    assert!(r.stopped, "{r:?}");
+    assert!(r.packs.is_empty());
+    assert_eq!(b.http.posts(), 1);
+    let seen = hooks.seen.lock().unwrap().clone();
+    assert!(seen[0].running && seen[0].total == total && seen[0].kind == "render");
+    assert!(seen
+        .iter()
+        .any(|e| e.voice_name == "Callum" && e.model == m));
+    assert!(seen.iter().any(|e| e.stopping));
+    assert!(!seen.last().unwrap().running);
+    // The job is gone, and the batch made before the stop is not billed again.
+    assert!(core.gear_jobs().is_empty());
+    let dry = core
+        .gear_voice_render_packs(&RenderPacksParams { dry_run: true, ..p })
+        .unwrap();
+    assert_eq!(dry.estimate.batches, total - 1);
+    assert!(dry.estimate.chars < ask.estimate.chars);
+    assert!(dry.pairs[0].rendered > 0, "{:?}", dry.pairs[0]);
+}
+
+#[test]
+fn a_sample_reports_progress_and_stops_after_the_current_batch() {
+    let hooks = Arc::new(StopOnFirst::default());
+    let b = bench_with(99_000, true, hooks.clone());
+    let core = Arc::new(b.core);
+    hooks.core.set(Arc::downgrade(&core)).unwrap();
+    let p = sample(&["Callum", "Matilda"], &["eleven_turbo_v2_5"], false, false);
+    let ask = core.gear_voice_sample(&p).unwrap();
+    let r = core
+        .gear_voice_sample(&SampleParams {
+            confirm: true,
+            digest: Some(ask.digest),
+            ..p
+        })
+        .unwrap();
+    assert!(r.stopped);
+    assert_eq!(b.http.posts(), 1);
+    let seen = hooks.seen.lock().unwrap().clone();
+    assert_eq!(seen[0].kind, "sample");
+    assert_eq!(seen[0].total, ask.estimate.batches);
+    assert!(!seen.last().unwrap().running);
 }

@@ -15,6 +15,11 @@ async function openStudio(app: AppFixture, page: Page) {
   return page.getByRole("region", { name: "Voice studio" });
 }
 
+/** The studio's paid render calls (not the dry runs that price the picks). */
+async function renders(app: AppFixture) {
+  return (await app.method("gear_voice_render_packs")).filter((p) => !p.dry_run);
+}
+
 async function saveKey(studio: ReturnType<Page["getByRole"]>) {
   await studio.getByLabel("ElevenLabs API key").fill("fake-key-0123456789abcdef");
   await studio.getByRole("button", { name: "Save key" }).click();
@@ -73,7 +78,7 @@ test("the pickers list the account's voices and models, and the cost follows the
   // A second set adds its lines.
   await studio.getByRole("table", { name: "Line sets" }).getByRole("checkbox", { name: /Easter eggs/ }).check();
   await expect(cost).toContainText("of 248 lines");
-  expect((await app.method("gear_voice_estimate")).at(-1)).toMatchObject({ sets: ["quad", "extras", "easter"], voice: "voice-callum", model: "eleven_turbo_v2_5" });
+  expect((await app.method("gear_voice_render_packs")).at(-1)).toMatchObject({ sets: ["quad", "extras", "easter"], voices: ["voice-callum"], models: ["eleven_turbo_v2_5"], dry_run: true });
 });
 
 test("Sample asks before it pays, then shows the A/B grid", async ({ app, page }) => {
@@ -113,7 +118,7 @@ test("a picker change after Sample drops the question, so the go-ahead never pay
   await studio.getByRole("table", { name: "Line sets" }).getByRole("checkbox", { name: /Easter eggs/ }).check();
   await expect(studio.getByRole("button", { name: "Render and pay" })).toHaveCount(0);
   expect((await app.method("gear_voice_sample")).every((p) => !p.confirm)).toBe(true);
-  expect((await app.method("gear_voice_render")).every((p) => !p.confirm)).toBe(true);
+  expect((await renders(app)).every((p) => !p.confirm)).toBe(true);
 });
 
 test("a line whose cut failed a check is listed, and Re-take renders again with a new seed", async ({ app, page }) => {
@@ -130,12 +135,12 @@ test("a line whose cut failed a check is listed, and Re-take renders again with 
   await expect(row.getByRole("list", { name: "Callum needs a re-take" })).toContainText("Needs a re-take: Battery low (SOUNDS/en/lowbat.wav): the cut is silent");
   await studio.getByRole("button", { name: "Re-take" }).click();
   await expect(studio.getByRole("button", { name: "Render and pay" })).toBeVisible();
-  const ask = (await app.method("gear_voice_render")).at(-1) as { confirm: boolean; settings: { seed: number } };
+  const ask = (await renders(app)).at(-1) as { confirm: boolean; settings: { seed: number } };
   expect(ask.confirm).toBe(false);
   expect(ask.settings.seed).toBeGreaterThan(0);
   await studio.getByRole("button", { name: "Render and pay" }).click();
   await expect(studio).toContainText("1 batch made");
-  expect((await app.method("gear_voice_render")).at(-1)).toMatchObject({ confirm: true, settings: { seed: ask.settings.seed } });
+  expect((await renders(app)).at(-1)).toMatchObject({ confirm: true, settings: { seed: ask.settings.seed } });
   await expect(list).toHaveCount(0);
   await expect(row.getByRole("list", { name: "Callum needs a re-take" })).toHaveCount(0);
 });
@@ -161,10 +166,10 @@ test("a line the speech check hears wrong is a re-take; Accept on the Voices pag
   await expect(row).toContainText("Heard right");
   await expect(row.getByRole("list", { name: "Callum needs a re-take" })).toHaveCount(0);
   // Check again hears the pack once more; nothing is sent to ElevenLabs.
-  const renders = (await app.method("gear_voice_render")).length;
+  const paid = (await renders(app)).length;
   await check.getByRole("button", { name: "Check again" }).click();
   await expect(check.getByRole("status")).toContainText("heard wrong");
-  expect((await app.method("gear_voice_render")).length).toBe(renders);
+  expect((await renders(app)).length).toBe(paid);
 });
 
 test("a sample the speech check hears wrong is listed under the samples", async ({ app, page }) => {
@@ -176,21 +181,57 @@ test("a sample the speech check hears wrong is listed under the samples", async 
   await expect(studio.getByRole("list", { name: "Heard wrong" })).toContainText("Six in Callum, eleven_v4: the speech check heard “Battery.”");
 });
 
-test("Render pack needs one voice and one model, asks, then adds a local pack", async ({ app, page }) => {
+test("Render pack asks, then adds a local pack", async ({ app, page }) => {
   const studio = await openStudio(app, page);
   await saveKey(studio);
-  const render = studio.getByRole("button", { name: "Render pack" });
-  await studio.getByRole("table", { name: "Voices" }).getByRole("checkbox", { name: /Daniel/ }).check();
-  await expect(render).toBeDisabled();
-  await studio.getByRole("table", { name: "Voices" }).getByRole("checkbox", { name: /Daniel/ }).uncheck();
-  await expect(render).toBeEnabled();
-  await render.click();
-  expect((await app.method("gear_voice_render")).at(-1)).toMatchObject({ voice: "voice-callum", model: "eleven_v4", sets: ["quad", "extras"], confirm: false });
+  await studio.getByRole("button", { name: "Render pack" }).click();
+  expect((await renders(app)).at(-1)).toMatchObject({ voices: ["voice-callum"], models: ["eleven_v4"], sets: ["quad", "extras"], confirm: false });
   await expect(studio).toContainText("This sends text to ElevenLabs, which bills it.");
   await studio.getByRole("button", { name: "Render and pay" }).click();
-  expect((await app.method("gear_voice_render")).at(-1)).toMatchObject({ confirm: true });
-  await expect(studio).toContainText("Rendered into local-elevenlabs-voice-callum-eleven-v4");
+  await expect.poll(async () => (await renders(app)).at(-1)).toMatchObject({ confirm: true });
+  await expect(studio.getByRole("list", { name: "Rendered packs" })).toContainText("into local-elevenlabs-voice-callum-eleven-v4");
   await expect(page.getByRole("table", { name: "Voice packs on this Mac" }).getByRole("row", { name: /^Callum local-elevenlabs-voice-callum-eleven-v4/ })).toContainText("FPV quad");
+});
+
+test("several voices price as one plan with a row per pack, and render one pack each", async ({ app, page }) => {
+  const studio = await openStudio(app, page);
+  await saveKey(studio);
+  const cost = studio.getByRole("status", { name: "Cost" });
+  const one = Number((await stat(cost, "Characters").first().textContent())!.replace(/,/g, ""));
+  await studio.getByRole("table", { name: "Voices" }).getByRole("checkbox", { name: /Daniel/ }).check();
+  const byPack = studio.getByRole("table", { name: "Cost by pack" });
+  await expect(byPack.getByRole("row", { name: /^Callum/ })).toBeVisible();
+  await expect(byPack.getByRole("row", { name: /^Daniel/ })).toBeVisible();
+  await expect(cost).toContainText("of 472 lines in 2 packs");
+  await expect(stat(cost, "Characters").first()).toHaveText((2 * one).toLocaleString("en-US"));
+  await studio.getByRole("button", { name: "Render packs" }).click();
+  await expect(studio).toContainText("2 packs.");
+  await studio.getByRole("button", { name: "Render and pay" }).click();
+  const made = studio.getByRole("list", { name: "Rendered packs" });
+  await expect(made.getByRole("listitem")).toHaveCount(2);
+  await expect(made).toContainText("Daniel:");
+  expect((await renders(app)).at(-1)).toMatchObject({ voices: ["voice-callum", "voice-daniel"], confirm: true, digest: expect.stringMatching(/^mock-/) });
+});
+
+test("a paid run shows its progress, and Stop ends it after the current batch", async ({ app, page }) => {
+  const studio = await openStudio(app, page);
+  await saveKey(studio);
+  await studio.getByRole("table", { name: "Voices" }).getByRole("checkbox", { name: /Daniel/ }).check();
+  await studio.getByRole("button", { name: "Render packs" }).click();
+  await page.evaluate(() => window.__qc!.hold("gear_voice_render_packs"));
+  await studio.getByRole("button", { name: "Render and pay" }).click();
+  await page.evaluate(() => window.__qc!.emit("voice-progress", { kind: "render", running: true, done: 3, total: 12, voice: "voice-callum", voice_name: "Callum", model: "eleven_v4", step: "Rendering", stopping: false }));
+  const progress = studio.getByRole("status", { name: "Progress" });
+  await expect(progress).toContainText("Batch 3 of 12 · Callum, eleven_v4");
+  await expect(progress.getByRole("progressbar", { name: "Rendering batches" })).toHaveAttribute("value", "3");
+  await progress.getByRole("button", { name: "Stop" }).click();
+  expect((await app.method("gear_stop")).at(-1)).toEqual({ handle: "voice-studio" });
+  await page.evaluate(() => window.__qc!.emit("voice-progress", { kind: "render", running: true, done: 4, total: 12, voice: "voice-callum", voice_name: "Callum", model: "eleven_v4", step: "Rendering", stopping: true }));
+  await expect(progress.getByRole("button", { name: "Stopping…" })).toBeDisabled();
+  await page.evaluate(() => window.__qc!.release("gear_voice_render_packs"));
+  await expect(progress).toHaveCount(0);
+  await expect(studio).toContainText("Stopped after 1 of 2 packs.");
+  await expect(studio.getByRole("list", { name: "Rendered packs" }).getByRole("listitem")).toHaveCount(1);
 });
 
 test("one voice and model sample as one row of play buttons", async ({ app, page }) => {
@@ -220,7 +261,7 @@ test("the line sets group by aircraft, start with the quad sets, and count what 
   await expect(cells("FPV quad").nth(2)).toHaveText("0");
   await studio.getByRole("button", { name: "Render pack" }).click();
   await studio.getByRole("button", { name: "Render and pay" }).click();
-  await expect(studio).toContainText("Rendered into");
+  await expect(studio.getByRole("list", { name: "Rendered packs" })).toBeVisible();
   // The rendered sets count every line; the helicopter shares the radio's lines.
   await expect(cells("FPV quad").nth(2)).toHaveText("168");
   await expect(cells("Helicopter").nth(2)).toHaveText("140");
@@ -252,9 +293,9 @@ test("Import takes… copies a folder of earlier takes, and the voice list count
   await expect(stat(page.getByRole("group", { name: "Summary" }), "Lines rendered")).toHaveText("161");
   // The speed goes with every estimate and paid call.
   await studio.getByLabel("Speed").selectOption("1.2");
-  await expect.poll(async () => (await app.method("gear_voice_estimate")).at(-1)).toMatchObject({ settings: { speed: 1.2 } });
+  await expect.poll(async () => (await app.method("gear_voice_render_packs")).at(-1)).toMatchObject({ settings: { speed: 1.2 }, dry_run: true });
   await studio.getByRole("button", { name: "Render pack" }).click();
-  expect((await app.method("gear_voice_render")).at(-1)).toMatchObject({ settings: { speed: 1.2 }, confirm: false });
+  await expect.poll(async () => (await renders(app)).at(-1)).toMatchObject({ settings: { speed: 1.2 }, confirm: false });
 });
 
 test("a render the credits do not cover cannot start", async ({ app, page }) => {
@@ -279,6 +320,14 @@ for (const scheme of axeSchemes) {
       await studio.getByRole("button", { name: "Sample", exact: true }).click();
       await studio.getByRole("button", { name: "Sample and pay" }).click();
       await expect(studio.getByRole("list", { name: "Sample voices" })).toBeVisible();
+      // Two voices: the cost by pack, and a render going on with its progress and Stop.
+      await studio.getByRole("table", { name: "Voices" }).getByRole("checkbox", { name: /Daniel/ }).check();
+      await expect(studio.getByRole("table", { name: "Cost by pack" })).toBeVisible();
+      await studio.getByRole("button", { name: "Render packs" }).click();
+      await page.evaluate(() => window.__qc!.hold("gear_voice_render_packs"));
+      await studio.getByRole("button", { name: "Render and pay" }).click();
+      await page.evaluate(() => window.__qc!.emit("voice-progress", { kind: "render", running: true, done: 3, total: 12, voice: "voice-callum", voice_name: "Callum", model: "eleven_v4", step: "Rendering", stopping: false }));
+      await expect(studio.getByRole("status", { name: "Progress" })).toBeVisible();
       const r = await new AxeBuilder({ page }).withTags(["wcag2a", "wcag2aa", "wcag21aa"]).analyze();
       expect(r.violations.map((v) => `${v.id}: ${v.nodes.map((n) => n.target.join(" ") + " " + n.failureSummary).join(", ")}`)).toEqual([]);
     });

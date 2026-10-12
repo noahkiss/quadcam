@@ -262,6 +262,13 @@ export const commands = {
 	 */
 	gearVoiceSample: (params: SampleParams) => typedError<SampleReport, string>(__TAURI_INVOKE("gear_voice_sample", { params })),
 	/**
+	 *  Renders line sets into one local pack per voice and model, priced as one plan with
+	 *  one digest. A paid call: without `confirm` (or with `dry_run`) it prices each pair
+	 *  and the total. A failure keeps the packs made before it; `gear_stop` with the handle
+	 *  `voice-studio` stops after the current batch.
+	 */
+	gearVoiceRenderPacks: (params: RenderPacksParams) => typedError<RenderPacksReport, string>(__TAURI_INVOKE("gear_voice_render_packs", { params })),
+	/**
 	 *  Copies earlier ElevenLabs takes of single lines from a folder into the cache, so
 	 *  the studio counts them and never sends their lines again. Reads the folder only.
 	 */
@@ -676,6 +683,7 @@ export const events = {
 	settingsChanged: makeEvent<SettingsChanged>("settings-changed"),
 	simCalibrationEvent: makeEvent<SimCalibrationEvent>("sim-calibration-event"),
 	updateChanged: makeEvent<UpdateChanged>("update-changed"),
+	voiceProgress: makeEvent<VoiceProgress>("voice-progress"),
 	volumesChanged: makeEvent<VolumesChanged>("volumes-changed"),
 };
 
@@ -5457,6 +5465,47 @@ export type RenameReport = {
 	failed: ([string, string])[],
 };
 
+/**  `gear_voice_render_packs`: one local pack per voice and model, in one confirmed run. */
+export type RenderPacksParams = {
+	/**  Voice names or ids from the account. */
+	voices: string[],
+	models: string[],
+	/**  Line set ids (`gear_voice_sets`); they combine. */
+	sets: string[],
+	/**  Only these card paths of the sets; empty for every line. */
+	lines?: string[],
+	/**  Price only; render nothing. */
+	dry_run?: boolean,
+	confirm?: boolean,
+	settings?: RenderSettings | null,
+	batch?: BatchSettings | null,
+	/**
+	 *  The `digest` of the unconfirmed call. A paid `confirm` needs it, and is refused when
+	 *  the plan changed since.
+	 */
+	digest?: string | null,
+};
+
+export type RenderPacksReport = {
+	/**  Each voice and model: its lines, how many are rendered, and what the rest cost. */
+	pairs: StudioEstimate[],
+	/**  The total over every pair. */
+	estimate: Estimate,
+	/**  Lines in the sets after combining. */
+	lines: number,
+	needs_confirm: boolean,
+	dry_run: boolean,
+	/**  The digest of the whole plan, which `confirm` repeats. */
+	digest: string,
+	/**  The packs made, in order. A failure or a stop keeps those made before it. */
+	packs?: RenderReport[],
+	/**  A stop ended the run early. */
+	stopped?: boolean,
+	/**  What ended the run early, when something failed. */
+	error?: string | null,
+	notes?: string[],
+};
+
 export type RenderReport = {
 	/**  The local pack the sounds went into. */
 	pack: string,
@@ -5638,6 +5687,8 @@ export type SampleReport = {
 	warnings: string[],
 	/**  The digest of this plan, which `confirm` repeats. */
 	digest?: string,
+	/**  A stop ended the run early: `items` holds the pairs finished before it. */
+	stopped?: boolean,
 };
 
 /**  One radio's saved calibration and what it was made with. */
@@ -7056,6 +7107,25 @@ export type VoicePreviewParams = {
 	pack?: string | null,
 	/**  Without a pack: the person's own render for the line on this radio. */
 	radio?: string | null,
+};
+
+/**
+ *  A paid Voice studio run (`gear_voice_sample`, `gear_voice_render_packs`): batches `done`
+ *  of `total` over every voice and model, and the pair it is on. `running` false ends it.
+ */
+export type VoiceProgress = {
+	/**  `sample` or `render`. */
+	kind: string,
+	running: boolean,
+	done: number,
+	total: number,
+	voice: string,
+	voice_name: string,
+	model: string,
+	/**  `Rendering`, `Building the pack` or `Checking speech`. */
+	step: string,
+	/**  A stop was asked for; it takes effect after the current batch. */
+	stopping: boolean,
 };
 
 /**

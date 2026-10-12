@@ -662,6 +662,7 @@ pub fn specta_builder() -> tauri_specta::Builder<tauri::Wry> {
             c::gear_voice_catalog,
             c::gear_voice_estimate,
             c::gear_voice_sample,
+            c::gear_voice_render_packs,
             c::gear_voice_import_takes,
             c::gear_voice_check,
             c::gear_voice_pack_install,
@@ -799,6 +800,7 @@ pub fn specta_builder() -> tauri_specta::Builder<tauri::Wry> {
             api::FirmwareReadProgress,
             api::UpdateChanged,
             api::OnDeviceProgress,
+            api::VoiceProgress,
         ])
         // Sizes and counts fit a JS number.
         .dangerously_cast_bigints_to_number()

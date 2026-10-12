@@ -33,8 +33,9 @@ pub use crate::core::{
     VoiceLine, VoicePack, VoiceParams, VoicePreviewParams, VoiceRenderParams, VoiceView,
 };
 pub use crate::core::{
-    Catalog, CatalogParams, EstimateParams, ImportTakesParams, KeyParams, KeyStatus, SampleParams,
-    SampleReport, SetsParams, StudioEstimate, StudioView, VoiceCheckParams, VoiceCheckReport,
+    Catalog, CatalogParams, EstimateParams, ImportTakesParams, KeyParams, KeyStatus,
+    RenderPacksParams, RenderPacksReport, SampleParams, SampleReport, SetsParams, StudioEstimate,
+    StudioView, VoiceCheckParams, VoiceCheckReport,
 };
 pub use crate::core::{
     CrashSaveParams, FlightFilter, FlightFoldersParams, FlightReport, FlightSetParams, FlightsView,
@@ -222,6 +223,11 @@ macro_rules! with_gear_rows {
             /// Renders a few lines in every voice and model for A/B listening. A paid call:
             /// `confirm` allows it; `dry_run` only prices it.
             gear_voice_sample(params: SampleParams) -> SampleReport = |c| c.gear_voice_sample(&params);
+            /// Renders line sets into one local pack per voice and model, priced as one plan with
+            /// one digest. A paid call: without `confirm` (or with `dry_run`) it prices each pair
+            /// and the total. A failure keeps the packs made before it; `gear_stop` with the handle
+            /// `voice-studio` stops after the current batch.
+            gear_voice_render_packs(params: RenderPacksParams) -> RenderPacksReport = |c| c.gear_voice_render_packs(&params);
             /// Copies earlier ElevenLabs takes of single lines from a folder into the cache, so
             /// the studio counts them and never sends their lines again. Reads the folder only.
             gear_voice_import_takes(params: ImportTakesParams) -> ImportReport = |c| c.gear_voice_import_takes(&params);

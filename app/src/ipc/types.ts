@@ -523,6 +523,8 @@ export type {
   KeyParams,
   KeyStatus,
   ModelInfo,
+  RenderPacksParams,
+  RenderPacksReport,
   SampleItem,
   SampleParams,
   SampleReport,
@@ -532,4 +534,5 @@ export type {
   StudioView,
   TakeCount,
   VoiceInfo,
+  VoiceProgress,
 } from "../bindings";

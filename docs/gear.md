@@ -552,6 +552,9 @@ inside carrier sentences, and compares voices before it spends credits.
 - **Cost.** Tiles under the line sets show the lines left to render (of how many, and how many
   are rendered), the characters (carriers included) and batches, the price in USD with a promo
   badge while one applies, and the credits left after the render (estimated). Only the lines left to render cost anything.
+  The cost covers every ticked voice with every ticked model: each pair is one pack. With more
+  than one pair, **Cost by pack** lists each voice and model with its lines to render,
+  characters, price and credits, and the tiles show the total.
 - **Import takes…** copies a folder of earlier takes into QuadCam's cache: takes of single
   lines that an older line-by-line ElevenLabs render left, each a `.json` (text, voice, model,
   speed, seed, and the sample rate when it is not 32,000 Hz) beside a `.pcm` of the same name
@@ -577,12 +580,21 @@ inside carrier sentences, and compares voices before it spends credits.
   each line is one play button. With several, a numbered list names the pairs, and each line
   has one play button per pair, numbered the same. The sample files keep the card path, so two lines
   with one file name (`armed.wav` and a script's `armed.wav`) stay apart.
-- **Render pack.** Needs one voice, one model and at least one set. After **Render and pay**
-  the lines go into a local pack named for the voice id and the model, so two voices with one
-  name never share a pack; a second set adds to the same pack. A pack from 0.12.0 or earlier
+- **Render pack.** Needs a voice, a model and at least one set. With several voices or models
+  ticked it reads **Render packs** and makes one pack per voice and model in one run, priced
+  as one plan with one digest. After **Render and pay** the lines go into a local pack named
+  for the voice id and the model, so two voices with one name never share a pack; a second set
+  adds to the same pack. A pack that fails stops the run: the packs made before it stay, and
+  the result names the pack that failed. A pack from 0.12.0 or earlier
   is named for the voice's name: the next render of that voice and model moves it to the new
   name, and the radios that chose it keep it. The pack joins the library, and **Apply to
   radios…** or a radio's **Choose voice** puts it on a radio like any other pack.
+- **Progress and Stop.** While **Sample and pay** or **Render and pay** runs, a bar shows the
+  batches done of the total over every pack, and the voice and model it is on. **Stop** ends
+  the run after the batch being made: the packs finished stay, and the batches made for the
+  next one are in the cache, so the next render cuts them from there instead of paying
+  again. An agent stops a run in the app with MCP `quadcam_gear_edit` `stop` and the handle
+  `voice-studio`; a run from the command line stops with Control-C.
 - **Pay for what was priced.** The question names a digest of its plan: the voices, models,
   sets, seed and characters. **Sample and pay** and **Render and pay** send that digest, and
   QuadCam refuses a confirm whose plan changed ("estimate again"). A change to any picker
