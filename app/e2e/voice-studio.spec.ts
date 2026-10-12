@@ -1,6 +1,6 @@
 // The Voice studio on Gear > Voices, on the mock core (design 7.4): the key (kept out of every
 // answer), the voice and model pickers, the credits, the line sets with a cost, a Sample that
-// waits for the person's go-ahead and then shows an A/B grid, a Render into a local pack that
+// waits for the person's go-ahead and then fills the Samples gallery, a Render into a local pack that
 // joins the library, and axe.
 import AxeBuilder from "@axe-core/playwright";
 import type { Page } from "@playwright/test";
@@ -81,7 +81,7 @@ test("the pickers list the account's voices and models, and the cost follows the
   expect((await app.method("gear_voice_render_packs")).at(-1)).toMatchObject({ sets: ["quad", "extras", "easter"], voices: ["voice-callum"], models: ["eleven_turbo_v2_5"], dry_run: true });
 });
 
-test("Sample asks before it pays, then shows the A/B grid", async ({ app, page }) => {
+test("Sample asks before it pays, then shows one card per voice and model in Samples", async ({ app, page }) => {
   const studio = await openStudio(app, page);
   await saveKey(studio);
   await studio.getByRole("table", { name: "Voices" }).getByRole("checkbox", { name: /Daniel/ }).check();
@@ -89,18 +89,18 @@ test("Sample asks before it pays, then shows the A/B grid", async ({ app, page }
   await studio.getByRole("button", { name: "Sample", exact: true }).click();
   expect((await app.method("gear_voice_sample")).at(-1)).toMatchObject({ voices: ["voice-callum", "voice-daniel"], models: ["eleven_v4", "eleven_turbo_v2_5"], confirm: false });
   await expect(studio).toContainText("This sends text to ElevenLabs, which bills it.");
-  await expect(studio.getByRole("list", { name: "Sample voices" })).toHaveCount(0);
+  const samples = page.getByRole("region", { name: "Samples" });
+  await expect(samples.locator("article")).toHaveCount(0);
   const asked = (await app.method("gear_voice_sample")).length;
   await studio.getByRole("button", { name: "Sample and pay" }).click();
   await expect.poll(async () => (await app.method("gear_voice_sample")).length).toBe(asked + 1);
   // The go-ahead repeats the digest of the plan the banner priced.
   expect((await app.method("gear_voice_sample")).at(-1)).toMatchObject({ confirm: true, digest: expect.stringMatching(/^mock-/) });
-  const grid = studio.getByRole("list", { name: "Sample voices" });
-  // One row per line, with a numbered play button per voice and model.
-  await expect(studio.getByRole("list", { name: "Voices and models" }).getByRole("listitem")).toHaveCount(4);
-  await expect(grid.getByRole("listitem")).toHaveCount(3);
-  await expect(grid.getByRole("listitem", { name: "Six" }).getByRole("button")).toHaveCount(4);
-  await grid.getByRole("button", { name: "Play Six in Daniel with eleven_turbo_v2_5" }).click();
+  // One card per voice and model, each with its lines as play chips.
+  await expect(samples.locator("article")).toHaveCount(4);
+  const card = samples.getByRole("article", { name: "Daniel, eleven_turbo_v2_5" });
+  await expect(card.getByRole("list", { name: /^Takes of/ }).getByRole("listitem")).toHaveCount(3);
+  await card.getByRole("button", { name: "Play Six" }).click();
   // The credits went down by what the sample cost.
   await expect(stat(page.getByRole("group", { name: "Summary" }), "ElevenLabs credits")).not.toHaveText("98,500");
 });
@@ -172,13 +172,14 @@ test("a line the speech check hears wrong is a re-take; Accept on the Voices pag
   expect((await renders(app)).length).toBe(paid);
 });
 
-test("a sample the speech check hears wrong is listed under the samples", async ({ app, page }) => {
+test("a sample the speech check hears wrong says so on its voice's card", async ({ app, page }) => {
   const studio = await openStudio(app, page);
   await saveKey(studio);
   await app.core(`c => { c.gear.voice.misheard = "SOUNDS/en/SYSTEM/0006.wav"; }`);
   await studio.getByRole("button", { name: "Sample", exact: true }).click();
   await studio.getByRole("button", { name: "Sample and pay" }).click();
-  await expect(studio.getByRole("list", { name: "Heard wrong" })).toContainText("Six in Callum, eleven_v4: the speech check heard “Battery.”");
+  const card = page.getByRole("region", { name: "Samples" }).getByRole("article", { name: "Callum, eleven_v4" });
+  await expect(card.getByRole("list", { name: "Heard wrong in Callum, eleven_v4" })).toContainText("Six: the speech check heard “Battery.”");
 });
 
 test("Render pack asks, then adds a local pack", async ({ app, page }) => {
@@ -232,17 +233,6 @@ test("a paid run shows its progress, and Stop ends it after the current batch", 
   await expect(progress).toHaveCount(0);
   await expect(studio).toContainText("Stopped after 1 of 2 packs.");
   await expect(studio.getByRole("list", { name: "Rendered packs" }).getByRole("listitem")).toHaveCount(1);
-});
-
-test("one voice and model sample as one row of play buttons", async ({ app, page }) => {
-  const studio = await openStudio(app, page);
-  await saveKey(studio);
-  await studio.getByRole("button", { name: "Sample", exact: true }).click();
-  await studio.getByRole("button", { name: "Sample and pay" }).click();
-  const grid = studio.getByRole("list", { name: "Sample voices" });
-  await expect(grid.getByRole("button")).toHaveCount(3);
-  await expect(grid.getByRole("button", { name: "Play Six in Callum with eleven_v4" })).toHaveText("Six");
-  await expect(studio.getByRole("list", { name: "Voices and models" })).toHaveCount(0);
 });
 
 test("the line sets group by aircraft, start with the quad sets, and count what is rendered", async ({ app, page }) => {
@@ -395,7 +385,7 @@ for (const scheme of axeSchemes) {
       await saveKey(studio);
       await studio.getByRole("button", { name: "Sample", exact: true }).click();
       await studio.getByRole("button", { name: "Sample and pay" }).click();
-      await expect(studio.getByRole("list", { name: "Sample voices" })).toBeVisible();
+      await expect(page.getByRole("region", { name: "Samples" }).locator("article")).toHaveCount(1);
       // Two voices: the cost by pack, and a render going on with its progress and Stop.
       await studio.getByRole("table", { name: "Voices" }).getByRole("checkbox", { name: /Daniel/ }).check();
       await expect(studio.getByRole("table", { name: "Cost by pack" })).toBeVisible();

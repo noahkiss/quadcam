@@ -1,0 +1,123 @@
+.grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 280px), 1fr));
+  gap: var(--s-3);
+  align-items: start;
+}
+.card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-2);
+  min-width: 0;
+  padding: var(--s-3);
+  border: 1px solid var(--border);
+  border-radius: var(--r-2);
+}
+.head {
+  display: flex;
+  align-items: center;
+  gap: var(--s-2);
+  min-width: 0;
+}
+.name {
+  margin: 0;
+  min-width: 0;
+  font-size: var(--t-md);
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+.meta {
+  margin: 0;
+  font-size: var(--t-sm);
+  color: var(--muted);
+  overflow-wrap: anywhere;
+}
+.desc {
+  margin: 0;
+  font-size: var(--t-sm);
+  color: var(--muted);
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.takes {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s-1);
+}
+.take {
+  display: inline-flex;
+  align-items: center;
+  max-width: 100%;
+  border: 1px solid var(--border);
+  border-radius: var(--r-2);
+}
+.take.playing {
+  border-color: var(--primary);
+  background: color-mix(in srgb, var(--primary) 12%, transparent);
+}
+.take.flagged {
+  border-color: var(--warning-text);
+}
+.takePlay {
+  min-width: 0;
+  max-width: 100%;
+  white-space: normal;
+  text-align: left;
+  overflow-wrap: anywhere;
+}
+.flagWrap {
+  position: relative;
+  display: inline-flex;
+}
+.flagOn {
+  color: var(--warning-text);
+}
+.flagForm {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-3);
+}
+.flagActions {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--s-2);
+}
+.notes {
+  margin: 0;
+  padding-left: var(--s-4);
+  font-size: var(--t-sm);
+  color: var(--warning-text);
+}
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--s-1);
+}
+.grow {
+  flex: 1;
+}
+.status {
+  margin: 0;
+  font-size: var(--t-sm);
+  color: var(--fg);
+}
+.muted {
+  margin: 0;
+  color: var(--muted);
+}
+.take .flagWrap > button:not(.flagOn) {
+  opacity: 0.45;
+}
+.take:hover .flagWrap > button,
+.take:focus-within .flagWrap > button {
+  opacity: 1;
+}
+.take .takePlay {
+  padding-right: var(--s-1);
+}

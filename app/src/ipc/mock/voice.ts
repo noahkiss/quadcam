@@ -2,6 +2,7 @@
 // lines, one pack in a made-up index, per-line overrides, a local render, Choose voice (one
 // `card_files` change, as the core stages it, on one radio or several) and pack delete.
 import type { PreviewLine, PreviewTake, PublishApproveReport, PublishReview, ReviewLine } from "../types";
+import type { FlagList, FlagRow, RetakeReport, SampleGallery, SampleTake, SampleVoice, TakeFlag } from "../types";
 import type { Catalog, Edit, HeardLine, LibraryPage, LibraryQuery, LibraryVoice, RenderPacksReport, VoiceAddReport, ImportReport, KeyStatus, LineOverride, ModelInfo, PackDeleteReport, RenderReport, Retake, SampleItem, SampleReport, SetInfo, StagedChange, StudioEstimate, StudioView, VoiceChooseRadiosReport, VoiceEstimate, VoiceCheckReport, VoiceInfo, VoiceLine, VoicePack, VoiceView } from "../types";
 import type { MockGear } from "./gear";
 import { hint as secretHint } from "./secret";
@@ -67,9 +68,15 @@ export interface MockVoice {
   added: VoiceInfo[];
   /** The account's voice slots: an add past them fails. */
   slots: number;
+  /** The sample gallery's sample voices (`<gear>/voice-samples`). */
+  samples: SampleVoice[];
+  /** Made-up sample voices the next gallery read adds (a long gallery for layout specs). */
+  seedSamples: number;
+  /** The flags beside each pack's takes. */
+  packFlags: Record<string, TakeFlag[]>;
 }
 
-export const freshVoice = (): MockVoice => ({ installed: [], index: false, overrides: {}, chosen: {}, custom: [], paid: false, keySet: "", spent: 0, retake: null, rendered: {}, imported: [], takesDeleted: [], retakes: {}, heard: {}, speech: true, misheard: null, stop: false, added: [], slots: 30 });
+export const freshVoice = (): MockVoice => ({ installed: [], index: false, overrides: {}, chosen: {}, custom: [], paid: false, keySet: "", spent: 0, retake: null, rendered: {}, imported: [], takesDeleted: [], retakes: {}, heard: {}, speech: true, misheard: null, stop: false, added: [], slots: 30, samples: [], seedSamples: 0, packFlags: {} });
 
 type Paid = { confirm?: boolean; digest?: string | null; settings?: { seed?: number | null } | null };
 
@@ -90,13 +97,13 @@ const MADE = "2026-10-01T18:30:00Z";
 function packs(v: MockVoice): VoicePack[] {
   const out: VoicePack[] = [];
   const radios = (id: string) => Object.keys(v.chosen).filter((r) => v.chosen[r] === id);
-  const mine = (id: string, k: Partial<VoicePack>): VoicePack => ({ ...AVAILABLE, id, license: "Rendered by you; yours to use.", attribution: "", version: "", installed: true, local: true, bytes: 412_000, dir: `/Users/pilot/gear/voices/${id}`, sets: ["quadcam"], made: MADE, radios: radios(id), retakes: v.retakes[id] ?? [], heard: v.heard[id] ?? [], ...k });
+  const mine = (id: string, k: Partial<VoicePack>): VoicePack => ({ ...AVAILABLE, id, license: "Rendered by you; yours to use.", attribution: "", version: "", installed: true, local: true, bytes: 412_000, dir: `/Users/pilot/gear/voices/${id}`, sets: ["quadcam"], made: MADE, radios: radios(id), retakes: v.retakes[id] ?? [], heard: v.heard[id] ?? [], flags: v.packFlags[id] ?? [], ...k });
   if (v.installed.includes(LOCAL_ID)) out.push(mine(LOCAL_ID, { voice: "Samantha", provider: "say" }));
   for (const id of v.installed.filter((x) => x.startsWith("local-elevenlabs-"))) {
     const [, name = "voice", model = ""] = /^local-elevenlabs-voice-([a-z]+)-(.*)$/.exec(id) ?? [];
     out.push(mine(id, { voice: name.charAt(0).toUpperCase() + name.slice(1), provider: "elevenlabs", model: model.replace(/-/g, "_"), sets: ["quad"], bytes: 2_300_000 }));
   }
-  if (v.installed.includes(AVAILABLE.id)) out.push({ ...AVAILABLE, preview: [], zip_bytes: 0, installed: true, dir: `/Users/pilot/gear/voices/${AVAILABLE.id}`, sets: ["quadcam"], made: MADE, radios: radios(AVAILABLE.id), heard: v.heard[AVAILABLE.id] ?? [] });
+  if (v.installed.includes(AVAILABLE.id)) out.push({ ...AVAILABLE, preview: [], zip_bytes: 0, installed: true, dir: `/Users/pilot/gear/voices/${AVAILABLE.id}`, sets: ["quadcam"], made: MADE, radios: radios(AVAILABLE.id), heard: v.heard[AVAILABLE.id] ?? [], flags: v.packFlags[AVAILABLE.id] ?? [] });
   else if (v.index) out.push({ ...AVAILABLE });
   return out;
 }
@@ -504,13 +511,177 @@ export function sample(g: MockGear, p: { voices: string[]; models: string[]; dry
       model: c.m,
       line,
       text,
-      file: `/Users/pilot/Library/Caches/app.quadcam/voice/samples/${c.v.name.toLowerCase()}-${c.m}/${line.split("/").pop()}`,
+      file: `${SAMPLE_ROOT}/${sampleId(c.v.id, c.m)}/${line}`,
       ms: 520,
       heard: g.voice.speech ? (line === g.voice.misheard ? "Battery." : `${text}.`) : null,
       heard_ok: g.voice.speech ? line !== g.voice.misheard : null,
     })),
   );
+  keepSamples(g, items, p.settings?.seed ?? 0);
   return { ...base, items, needs_confirm: false };
+}
+
+// ----- the sample gallery and flags (`core/voice_samples.rs`) -----
+
+const SAMPLE_ROOT = "/Users/pilot/Library/Application Support/app.quadcam/gear/voice-samples";
+const sampleId = (voice: string, model: string) => `${voice.replace(/^voice-/, "")}-${model.replace(/_/g, "-")}`;
+
+/** A sample run's takes into the gallery, by voice and model; a new take drops its flag. */
+function keepSamples(g: MockGear, items: SampleItem[], seed: number) {
+  for (const i of items) {
+    const id = sampleId(i.voice, i.model);
+    let card = g.voice.samples.find((c) => c.id === id);
+    if (!card) {
+      const v = voiceOf(i.voice, g);
+      card = { id, kind: "sample", voice: v.id, voice_name: v.name, model: i.model, provider: "elevenlabs", speed: 1, description: `A ${v.gender} voice for narration.`, accent: v.accent ?? "", languages: v.languages ?? [], updated: null, sets: ["sample"], takes: [] };
+      g.voice.samples.unshift(card);
+    }
+    card.updated = new Date().toISOString();
+    card.takes = card.takes.filter((t) => t.line !== i.line);
+    card.takes.push({ line: i.line, text: i.text, file: `${SAMPLE_ROOT}/${id}/${i.line}`, ms: i.ms, seed, heard: i.heard ?? null, heard_ok: i.heard_ok ?? null });
+    card.takes.sort((a, b) => a.line.localeCompare(b.line));
+  }
+}
+
+/** The lines of a made-up long gallery: the twelve lines of the `sample` set. */
+const SAMPLE_SET: [string, string][] = [
+  ["SOUNDS/en/SYSTEM/0006.wav", "Six"],
+  ["SOUNDS/en/armed.wav", "Armed"],
+  ["SOUNDS/en/turtle.wav", "Turtle mode"],
+  ["SOUNDS/en/lowbat.wav", "Battery low"],
+  ["SOUNDS/en/gpsfix.wav", "GPS fix"],
+  ["SOUNDS/en/rssi_org.wav", "Signal low"],
+  ["SOUNDS/en/failsafe.wav", "Failsafe"],
+  ["SOUNDS/en/SYSTEM/0018.wav", "Eighteen"],
+  ["SOUNDS/en/vtxpit.wav", "VTX pit mode"],
+  ["SOUNDS/en/beeper.wav", "Beeper on"],
+  ["SOUNDS/en/angle.wav", "Angle mode"],
+  ["SOUNDS/en/rescue.wav", "GPS rescue"],
+];
+
+function seedGallery(v: MockVoice) {
+  const names = ["Aria", "Roger", "Sarah", "Laura", "Charlie", "George", "Callum", "River", "Liam", "Charlotte", "Alice", "Matilda", "Will", "Jessica", "Eric", "Chris", "Brian", "Daniel", "Lily", "Bill", "Adam", "Nova", "Ranger", "Juniper", "Harbor", "Quill", "Sable"];
+  for (let i = 0; i < v.seedSamples; i++) {
+    const name = names[i % names.length] + (i >= names.length ? ` ${i}` : "");
+    const id = `seed-${i}`;
+    v.samples.push({
+      id,
+      kind: "sample",
+      voice: `voice-seed-${i}`,
+      voice_name: name,
+      model: i % 3 === 0 ? "eleven_turbo_v2_5" : "eleven_v4",
+      provider: "elevenlabs",
+      speed: 1,
+      description: i % 2 ? "A calm, low voice with a slight rasp, made for narration and long reads." : "",
+      accent: ACCENTS[i % ACCENTS.length],
+      languages: ["en"],
+      updated: `2026-10-11T${String(10 + (i % 10)).padStart(2, "0")}:00:00Z`,
+      sets: ["sample"],
+      takes: SAMPLE_SET.map(([line, text]) => ({ line, text, file: `${SAMPLE_ROOT}/${id}/${line}`, ms: 480, seed: 0, heard: `${text}.`, heard_ok: true })),
+    });
+  }
+  v.seedSamples = 0;
+}
+
+/** A pack on this Mac as a card: its first lines and every flagged line. */
+function packCard(v: MockVoice, k: VoicePack): SampleVoice {
+  const flags = v.packFlags[k.id] ?? [];
+  const lines = LINES.filter((l, i) => i < 4 || flags.some((f) => f.line === l.path));
+  const heard = v.heard[k.id] ?? [];
+  return {
+    id: k.id,
+    kind: "pack",
+    voice: k.provider === "elevenlabs" ? k.id.replace(/^local-elevenlabs-/, "").replace(/-eleven.*$/, "") : "",
+    voice_name: k.voice,
+    model: k.model,
+    provider: k.provider,
+    speed: 1,
+    description: "",
+    accent: "",
+    languages: [],
+    updated: null,
+    sets: [],
+    takes: lines.map<SampleTake>((l) => {
+      const h = heard.find((x) => x.path === l.path);
+      return { line: l.path, text: l.text, file: `${k.dir}/${l.path}`, ms: 500, seed: 0, heard: h?.heard ?? null, heard_ok: h ? h.ok || !!h.accepted : null, flag: flags.find((f) => f.line === l.path) ?? null };
+    }),
+  };
+}
+
+/** `gear_voice_samples`. */
+export function gallery(g: MockGear): SampleGallery {
+  if (g.voice.seedSamples) seedGallery(g.voice);
+  const cards = packs(g.voice).filter((k) => k.installed).map((k) => packCard(g.voice, k));
+  return { voices: [...g.voice.samples, ...cards], dir: SAMPLE_ROOT, notes: [] };
+}
+
+/** `gear_voice_samples_delete`. */
+export function samplesDelete(g: MockGear, p: { ids: string[]; all: boolean }): SampleGallery {
+  if (p.all) g.voice.samples = [];
+  else {
+    if (!p.ids.length) throw "Name the samples to delete (ids), or all.";
+    for (const id of p.ids) if (!g.voice.samples.some((c) => c.id === id)) throw `No sample "${id}": gear_voice_samples lists them. A pack is deleted on the Voices page.`;
+    g.voice.samples = g.voice.samples.filter((c) => !p.ids.includes(c.id));
+  }
+  return gallery(g);
+}
+
+const REASONS = ["mispronounced", "clipped", "wrong_tone", "noise", "other"];
+
+/** `gear_voice_flag`. */
+export function flag(g: MockGear, p: { sample: string; pack: string; line: string; reason: string; note: string; clear: boolean }): SampleVoice {
+  const set = (list: TakeFlag[]) => {
+    const rest = list.filter((f) => f.line !== p.line);
+    if (p.clear) return rest;
+    if (!REASONS.includes(p.reason)) throw `"${p.reason}" is not a reason: use ${REASONS.join(", ")}.`;
+    return [...rest, { line: p.line, reason: p.reason, note: p.note.trim(), at: new Date().toISOString(), retakes: 0 }];
+  };
+  if (p.sample) {
+    const card = g.voice.samples.find((c) => c.id === p.sample);
+    if (!card) throw `No sample "${p.sample}": gear_voice_samples lists them.`;
+    const t = card.takes.find((x) => x.line === p.line);
+    if (!t) throw `The sample ${p.sample} has no take of "${p.line}".`;
+    const [f] = set(t.flag ? [t.flag] : []);
+    t.flag = f ?? null;
+    return card;
+  }
+  const k = packs(g.voice).find((x) => x.id === p.pack && x.installed);
+  if (!k) throw `Pack "${p.pack}" is not on this Mac.`;
+  g.voice.packFlags[k.id] = set(g.voice.packFlags[k.id] ?? []);
+  return packCard(g.voice, k);
+}
+
+/** `gear_voice_flags`. */
+export function flags(g: MockGear): FlagList {
+  const rows: FlagRow[] = [];
+  for (const c of gallery(g).voices) {
+    for (const t of c.takes) {
+      if (!t.flag) continue;
+      rows.push({ kind: c.kind, id: c.id, voice: c.voice, voice_name: c.voice_name, model: c.model, speed: c.speed, seed: t.seed ?? null, line: t.line, text: t.text, heard: t.heard ?? null, file: t.file, reason: t.flag.reason, note: t.flag.note ?? "", at: t.flag.at, retakes: t.flag.retakes ?? 0, retake: c.provider === "elevenlabs" });
+    }
+  }
+  return { flags: rows };
+}
+
+/** `gear_voice_retake`: the flagged takes again, priced first. */
+export function retake(g: MockGear, p: { sample: string; pack: string; lines: string[]; dry_run: boolean } & Paid): RetakeReport {
+  const card = gallery(g).voices.find((c) => c.id === (p.sample || p.pack) && c.kind === (p.sample ? "sample" : "pack"));
+  if (!card) throw `No sample or pack "${p.sample || p.pack}".`;
+  if (card.provider !== "elevenlabs") throw `Only a pack the Voice studio rendered can make a re-take; a flag on ${card.id} is a note.`;
+  const lines = card.takes.filter((t) => t.flag && (!p.lines.length || p.lines.includes(t.line))).map((t) => t.line);
+  if (!lines.length) throw `${card.id} has no flagged take.`;
+  const seed = 1 + (lines.join("|").length * 7919) % 2_000_000_000;
+  const chars = lines.length * (CARRIER + 10);
+  const estimate: VoiceEstimate = { batches: 1, cached_batches: 0, lines: lines.length, chars, cost_per_char: 1, credits_basis: "estimated", usd_per_1k: 0.08, promo_until: null, credits: chars, usd: chars * 0.00008, remaining: CREDITS - g.voice.spent, affordable: true };
+  const digest = digestOf({ retake: card.id, lines, seed, chars });
+  const base: RetakeReport = { kind: card.kind, id: card.id, lines, seed, estimate, needs_confirm: false, dry_run: !!p.dry_run, digest, cleared: [], notes: [] };
+  if (p.dry_run) return base;
+  if (!p.confirm) return { ...base, needs_confirm: true };
+  samePlan(p, digest);
+  g.voice.spent += chars;
+  if (card.kind === "pack") g.voice.packFlags[card.id] = (g.voice.packFlags[card.id] ?? []).filter((f) => !lines.includes(f.line));
+  else for (const t of g.voice.samples.find((c) => c.id === card.id)!.takes) if (lines.includes(t.line)) Object.assign(t, { flag: null, seed });
+  return { ...base, cleared: lines };
 }
 
 /** `gear_voice_render` with sets: a batched render into a local pack. */

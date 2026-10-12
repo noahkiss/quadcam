@@ -1,6 +1,6 @@
 // The Voice studio (design 7.4): the ElevenLabs key (kept in the macOS Keychain), the
 // account's voices and models, the credits, the line sets with what rendering them costs,
-// a Sample that renders a few hard lines per voice and model for A/B listening, and a
+// a Sample that renders a few hard lines per voice and model into the Samples gallery, and a
 // Render that puts the sets into a local voice pack. Every paid call asks first.
 import { useState } from "react";
 import { Banner } from "../../../components/Banner";
@@ -12,19 +12,14 @@ import { Badge } from "../../../components/dash/Badge";
 import { DataTable, type Column } from "../../../components/dash/DataTable";
 import { SectionCard } from "../../../components/dash/SectionCard";
 import { Stat, StatRow } from "../../../components/dash/StatRow";
-import { errText, fileSrc, pickFolder } from "../../../ipc/api";
-import type { ImportReport, ModelInfo, RenderPacksReport, Retake, SampleItem, SetInfo, StudioEstimate, VoiceEstimate, VoiceInfo, VoiceProgress } from "../../../ipc/types";
+import { errText, pickFolder } from "../../../ipc/api";
+import type { ImportReport, ModelInfo, RenderPacksReport, Retake, SetInfo, StudioEstimate, VoiceEstimate, VoiceInfo, VoiceProgress } from "../../../ipc/types";
 import { takesOf, type UseStudio } from "./useStudio";
 import styles from "./Voice.module.css";
 
 const n = (v: number) => v.toLocaleString("en-US");
 
 const toggle = (list: string[], id: string, on: boolean) => (on ? [...list, id] : list.filter((x) => x !== id));
-
-function play(path: string) {
-  const a = new Audio(fileSrc(path));
-  void a.play().catch(() => undefined);
-}
 
 /** The key's state for the card header: the hint and Replace…, Remove key. */
 function KeyActions({ s, onReplace }: { s: UseStudio; onReplace: () => void }) {
@@ -204,63 +199,11 @@ function Pickers({ s, onError }: { s: UseStudio; onError: (e: string) => void })
   );
 }
 
-function costText(e: VoiceEstimate) {
+export function costText(e: VoiceEstimate) {
   const left = e.remaining === null ? "" : ` of ${n(e.remaining)} left`;
   const rate = (e.usd_per_1k ?? 0) > 0 ? ` at $${e.usd_per_1k} per 1K${e.promo_until ? `, promo until ${e.promo_until}` : ""}` : "";
   const basis = e.credits_basis === "recorded" ? "recorded rate" : "estimated";
   return `${n(e.chars)} characters in ${e.batches} ${e.batches === 1 ? "batch" : "batches"} (${e.cached_batches} cached): $${(e.usd ?? 0).toFixed(2)}${rate}, ${n(e.credits)} credits (${basis})${left}.`;
-}
-
-/** One line per row; with several voices or models, one play button per pair, numbered. */
-function Samples({ items }: { items: SampleItem[] }) {
-  const combos = [...new Map(items.map((i) => [`${i.voice}|${i.model}`, i])).values()];
-  const rows = [...new Map(items.map((i) => [i.line, i.text])).entries()];
-  const cell = (line: string, c: SampleItem) => items.find((i) => i.line === line && i.voice === c.voice && i.model === c.model);
-  const many = combos.length > 1;
-  const wrong = items.filter((i) => i.heard_ok === false);
-  return (
-    <div className={styles.samples} data-component="voice-samples">
-      {many && (
-        <ol className={styles.legend} aria-label="Voices and models">
-          {combos.map((c) => (
-            <li key={`${c.voice}|${c.model}`}>
-              {c.voice_name}, {c.model}
-            </li>
-          ))}
-        </ol>
-      )}
-      <ul className={styles.chips} aria-label="Sample voices" style={many ? { gridTemplateColumns: `repeat(auto-fill, minmax(${140 + 52 * combos.length}px, 1fr))` } : undefined}>
-        {rows.map(([line, text]) => (
-          <li key={line} className={styles.chip} aria-label={text}>
-            {many && <span className={styles.chipText}>{text}</span>}
-            {combos.map((c, n) => {
-              const it = cell(line, c);
-              if (!it) return null;
-              const label = `Play ${text} in ${c.voice_name} with ${c.model}`;
-              return many ? (
-                <Button key={`${c.voice}|${c.model}`} size="sm" variant="ghost" icon="play" aria-label={label} title={`${c.voice_name}, ${c.model}`} onClick={() => play(it.file)}>
-                  {n + 1}
-                </Button>
-              ) : (
-                <Button key={`${c.voice}|${c.model}`} size="sm" variant="ghost" icon="play" aria-label={label} onClick={() => play(it.file)}>
-                  {text}
-                </Button>
-              );
-            })}
-          </li>
-        ))}
-      </ul>
-      {wrong.length > 0 && (
-        <ul className={styles.retakes} aria-label="Heard wrong">
-          {wrong.map((i) => (
-            <li key={`${i.voice}|${i.model}|${i.line}`}>
-              {i.text} in {i.voice_name}, {i.model}: the speech check heard {i.heard ? `“${i.heard}”` : "nothing"}
-            </li>
-          ))}
-        </ul>
-      )}
-    </div>
-  );
 }
 
 const PLURAL: Record<string, string> = { quad: "quads", heli: "helicopters", plane: "planes", glider: "gliders", car: "cars" };
@@ -525,10 +468,9 @@ export function Studio({ s }: { s: UseStudio }) {
           {s.render && !s.render.needs_confirm && !s.asking && retakes.length > 0 && <Retakes s={s} retakes={retakes} />}
           {s.sample?.stopped && !s.asking && (
             <p className={styles.status} role="status">
-              Stopped: the samples below are the pairs finished before the stop.
+              Stopped: Samples holds the pairs finished before the stop.
             </p>
           )}
-          {s.sample && s.sample.items.length > 0 && <Samples items={s.sample.items} />}
         </>
       )}
     </SectionCard>

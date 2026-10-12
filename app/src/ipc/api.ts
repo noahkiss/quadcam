@@ -7,7 +7,7 @@ import { open as openDialog, save as saveDialog } from "@tauri-apps/plugin-dialo
 import { openPath, openUrl, revealItemInDir } from "@tauri-apps/plugin-opener";
 import { commands, type MapFrame, type MapPin, type MapStyle } from "../bindings";
 import * as N from "./normalize";
-import type { ProfileGear, ElrsFlashParams, FormatRequest, ChangeStatus, CopyRequest, Edit, SimFrame, SimPreset, SimStartInfo, SimStartParams, SimStopInfo, CrashSaveParams, ImportOptions, LibEdit, LibraryFilter, Moved, ModelEditParams, ModelParams, PackDeleteParams, PackInstallParams, PackPreviewParams, PublishApproveParams, PublishParams, CatalogParams, EstimateParams, ImportTakesParams, KeyParams, LibraryParams, RenderPacksParams, SampleParams, SetsParams, VoiceCheckParams, VoiceChooseParams, VoiceChooseRadiosParams, VoiceEditParams, VoiceParams, VoicePreviewParams, VoiceRenderParams, OsdEditParams, OsdParams, RatesParams, RatesPreview, RateProfile, FlashParams, SplashParams, SimRestoreParams, SimSyncParams, SimsParams, Pack, PackType, PlanPatch, RemovedCuts, SettingsValues, Span, SwitchMapParams, SimCalibrationSaveParams, CalibrateParams } from "./types";
+import type { ProfileGear, ElrsFlashParams, FormatRequest, ChangeStatus, CopyRequest, Edit, SimFrame, SimPreset, SimStartInfo, SimStartParams, SimStopInfo, CrashSaveParams, ImportOptions, LibEdit, LibraryFilter, Moved, ModelEditParams, ModelParams, PackDeleteParams, PackInstallParams, PackPreviewParams, PublishApproveParams, PublishParams, CatalogParams, EstimateParams, ImportTakesParams, KeyParams, LibraryParams, RenderPacksParams, SampleParams, SamplesDeleteParams, FlagParams, RetakeParams, SetsParams, VoiceCheckParams, VoiceChooseParams, VoiceChooseRadiosParams, VoiceEditParams, VoiceParams, VoicePreviewParams, VoiceRenderParams, OsdEditParams, OsdParams, RatesParams, RatesPreview, RateProfile, FlashParams, SplashParams, SimRestoreParams, SimSyncParams, SimsParams, Pack, PackType, PlanPatch, RemovedCuts, SettingsValues, Span, SwitchMapParams, SimCalibrationSaveParams, CalibrateParams } from "./types";
 
 type Result<T> = Promise<{ status: "ok"; data: T } | { status: "error"; error: string }>;
 
@@ -153,6 +153,11 @@ export const api = {
   gearVoiceEstimate: (params: EstimateParams) => ok(commands.gearVoiceEstimate(params)),
   gearVoiceSample: (params: SampleParams) => ok(commands.gearVoiceSample(params)),
   gearVoiceRenderPacks: (params: RenderPacksParams) => ok(commands.gearVoiceRenderPacks(params)),
+  gearVoiceSamples: () => ok(commands.gearVoiceSamples()),
+  gearVoiceSamplesDelete: (params: SamplesDeleteParams) => ok(commands.gearVoiceSamplesDelete(params)),
+  gearVoiceFlag: (params: FlagParams) => ok(commands.gearVoiceFlag(params)),
+  gearVoiceFlags: () => ok(commands.gearVoiceFlags()),
+  gearVoiceRetake: (params: RetakeParams) => ok(commands.gearVoiceRetake(params)),
   gearVoiceLibrary: (params: LibraryParams) => ok(commands.gearVoiceLibrary(params)),
   /** Adds a Voice Library voice to the ElevenLabs account; `confirm` false only describes it. */
   gearVoiceAdd: (voice: string, name: string, confirm: boolean) => ok(commands.gearVoiceAdd({ voice, owner: "", name, confirm })),

@@ -1,6 +1,7 @@
 // Gear > Voices > Speech check (design 7.4): what the on-device speech recognizer heard in each
 // line of one pack, against the line's text. A line heard wrong in a studio pack is out of the
-// pack as a re-take; Accept keeps what was heard and puts the line back. Calls no provider.
+// pack as a re-take; Accept keeps what was heard and puts the line back; Flag marks a line with a
+// reason and a note. Calls no provider.
 import { useState } from "react";
 import { Banner } from "../../../components/Banner";
 import { Button } from "../../../components/Button";
@@ -10,6 +11,7 @@ import { SectionCard } from "../../../components/dash/SectionCard";
 import { Stat, StatRow } from "../../../components/dash/StatRow";
 import { api } from "../../../ipc/api";
 import type { HeardLine, VoiceCheckReport, VoicePack, VoiceView } from "../../../ipc/types";
+import { FlagControl } from "./Gallery";
 import type { UseVoice } from "./useVoice";
 import styles from "./Voice.module.css";
 
@@ -31,7 +33,7 @@ const statusText = (r: VoiceCheckReport) => {
 
 const result = (h: HeardLine) => (h.ok ? <Badge tone="ok">Heard right</Badge> : h.accepted ? <Badge>Accepted</Badge> : <Badge tone="warn">Heard wrong</Badge>);
 
-export function SpeechCheck({ v, view, pack, onClose }: { v: UseVoice; view: VoiceView; pack: VoicePack; onClose: () => void }) {
+export function SpeechCheck({ v, view, pack, onClose, onFlagged }: { v: UseVoice; view: VoiceView; pack: VoicePack; onClose: () => void; onFlagged?: () => Promise<void> }) {
   const [report, setReport] = useState<VoiceCheckReport | null>(null);
   const [busy, setBusy] = useState(false);
   const speech = view.speech;
@@ -60,12 +62,25 @@ export function SpeechCheck({ v, view, pack, onClose }: { v: UseVoice; view: Voi
     {
       key: "actions",
       header: <span className={styles.hidden}>Actions</span>,
-      cell: (h) =>
-        heardWrong(h) ? (
-          <Button size="sm" disabled={busy} aria-label={`Accept what was heard for ${h.text}`} onClick={() => run({ accept: [h.path] })}>
-            Accept
-          </Button>
-        ) : null,
+      cell: (h) => (
+        <span className={styles.rowActions}>
+          {heardWrong(h) && (
+            <Button size="sm" disabled={busy} aria-label={`Accept what was heard for ${h.text}`} onClick={() => run({ accept: [h.path] })}>
+              Accept
+            </Button>
+          )}
+          <FlagControl
+            text={h.text}
+            flag={(pack.flags ?? []).find((f) => f.line === h.path)}
+            disabled={busy}
+            onSave={async (f) => {
+              await v.act(() => api.gearVoiceFlag({ sample: "", pack: pack.id, line: h.path, reason: f?.reason ?? "", note: f?.note ?? "", clear: !f }));
+              await v.refresh();
+              await onFlagged?.();
+            }}
+          />
+        </span>
+      ),
     },
   ];
   return (

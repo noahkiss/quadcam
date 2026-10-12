@@ -1,6 +1,7 @@
 // Gear > Voices (design 7.4): the voice packs on this Mac, rendered or installed, with a sample,
-// Apply to radios…, Publish… and Delete; the index's packs with their preview lines and Render
-// my voice; and the Voice studio.
+// Apply to radios…, Publish… and Delete; the Voice studio; the Samples gallery (every voice
+// sampled and every pack, by voice); the index's packs with their preview lines and Render my
+// voice.
 // Packs are not per radio: a radio's Voice segment picks one of these.
 import { useState } from "react";
 import { Banner } from "../../../components/Banner";
@@ -20,7 +21,10 @@ import { DeletePack } from "./DeletePack";
 import { playFile } from "./play";
 import { Publish } from "./Publish";
 import { SpeechBadge, SpeechCheck } from "./SpeechCheck";
+import { Gallery, reasonText } from "./Gallery";
 import { Studio } from "./Studio";
+import { useGallery } from "./useGallery";
+import { usePlayer } from "./usePlayer";
 import { takesOf, useStudio, type UseStudio } from "./useStudio";
 import { useVoice, type UseVoice } from "./useVoice";
 import styles from "./Voice.module.css";
@@ -67,6 +71,16 @@ function Library({ v, view, sets, onCheck, onPublish }: { v: UseVoice; view: Voi
               {(k.retakes ?? []).map((t) => (
                 <li key={t.path}>
                   Needs a re-take: {t.text} ({t.path}): {t.reason}
+                </li>
+              ))}
+            </ul>
+          )}
+          {(k.flags?.length ?? 0) > 0 && (
+            <ul className={styles.retakes} aria-label={`Flagged in ${k.voice}`}>
+              {(k.flags ?? []).map((f) => (
+                <li key={f.line}>
+                  Flagged: {f.line}: {reasonText(f.reason)}
+                  {f.note ? ` (${f.note})` : ""}
                 </li>
               ))}
             </ul>
@@ -261,7 +275,15 @@ const n = (v: number) => v.toLocaleString("en-US");
 
 export function VoicesPage() {
   const v = useVoice(null, true);
-  const s = useStudio(() => v.refresh());
+  const g = useGallery();
+  const player = usePlayer();
+  const s = useStudio(
+    async () => {
+      await v.refresh();
+      await g.reload();
+    },
+    () => g.reload(),
+  );
   const [checking, setChecking] = useState<string | null>(null);
   const [publishing, setPublishing] = useState<string | null>(null);
   const checked = v.view?.packs.find((k) => k.id === checking && k.installed) ?? null;
@@ -278,9 +300,10 @@ export function VoicesPage() {
         </Banner>
       )}
       {v.view && <Library v={v} view={v.view} sets={s.sets} onCheck={(k) => setChecking(k.id)} onPublish={(k) => setPublishing(k.id)} />}
-      {v.view && checked && <SpeechCheck key={checked.id} v={v} view={v.view} pack={checked} onClose={() => setChecking(null)} />}
+      {v.view && checked && <SpeechCheck key={checked.id} v={v} view={v.view} pack={checked} onClose={() => setChecking(null)} onFlagged={g.reload} />}
       {published && <Publish key={published.id} pack={published} onClose={() => setPublishing(null)} />}
       <Studio s={s} />
+      <Gallery g={g} player={player} />
       {v.view && <GetPacks v={v} view={v.view} />}
     </div>
   );

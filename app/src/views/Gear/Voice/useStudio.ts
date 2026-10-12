@@ -63,7 +63,7 @@ export interface UseStudio {
   cancel: () => void;
 }
 
-export function useStudio(onRendered: () => Promise<void>): UseStudio {
+export function useStudio(onRendered: () => Promise<void>, onSampled: () => Promise<void> = async () => undefined): UseStudio {
   const [key, setKey] = useState<KeyStatus | null>(null);
   const [sets, setSets] = useState<SetInfo[]>([]);
   const [aircraft, setAircraft] = useState<string[]>([]);
@@ -218,6 +218,7 @@ export function useStudio(onRendered: () => Promise<void>): UseStudio {
           setSample(r);
           setAsking(r.needs_confirm ? "sample" : null);
           setPlan(r.needs_confirm ? { digest: r.digest ?? "", seed } : null);
+          if (!r.needs_confirm) await onSampled();
         } else {
           const r = await api.gearVoiceRenderPacks({ voices, models, sets: picked, lines: [], dry_run: false, confirm: go, settings, batch: null, digest });
           setRender(r);
@@ -236,7 +237,7 @@ export function useStudio(onRendered: () => Promise<void>): UseStudio {
         setRunning(null);
       }
     },
-    [voices, models, picked, speed, onRendered, plan, stop],
+    [voices, models, picked, speed, onRendered, onSampled, plan, stop],
   );
   const importTakes = useCallback(async (folder: string) => {
     setError(null);
