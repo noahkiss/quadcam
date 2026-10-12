@@ -3049,6 +3049,7 @@ dependencies = [
  "bitflags 2.13.2",
  "block2",
  "objc2",
+ "objc2-app-kit",
  "objc2-core-location",
  "objc2-foundation",
 ]
@@ -3596,7 +3597,7 @@ dependencies = [
 
 [[package]]
 name = "quadcam"
-version = "0.18.0"
+version = "0.19.0"
 dependencies = [
  "anyhow",
  "base64 0.22.1",

@@ -88,6 +88,7 @@ export const sel = {
   videoAnalysis: (s: State) => eff<boolean>(s, "videoAnalysis", "video_analysis", true),
   weather: (s: State) => eff<boolean>(s, "weather", "weather", false),
   onDevice: (s: State) => eff<boolean>(s, "onDeviceSuggestions", "on_device_suggestions", true),
+  mapView: (s: State) => s.values.mapView === true,
   updateCheck: (s: State) => eff<boolean>(s, "updateCheck", "update_check", true),
   defaultName: (s: State) => eff<string>(s, "defaultName", "default_name", "flight") || "flight",
   photosAlbum: (s: State) => eff<string>(s, "photosAlbum", "photos_album", "Drone"),

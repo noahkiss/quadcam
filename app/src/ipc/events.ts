@@ -35,6 +35,8 @@ export interface CoreEvents {
   "update-changed": UpdateStatus;
   /** On-device suggestions: running, clips done of total. */
   "on-device-progress": OnDeviceProgress;
+  /** A pin on the Map page's native map was clicked: its id. */
+  "map-pick": string;
   /** A paid Voice studio run: batches done of total, and the voice and model it is on. */
   "voice-progress": VoiceProgress;
 }
@@ -64,6 +66,7 @@ const SOURCES: Record<keyof CoreEvents, Listen> = {
   "firmware-read-progress": wrap(events.firmwareReadProgress),
   "update-changed": wrap(events.updateChanged),
   "on-device-progress": wrap(events.onDeviceProgress),
+  "map-pick": wrap(events.mapPick),
   "voice-progress": wrap(events.voiceProgress),
 };
 

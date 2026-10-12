@@ -1,6 +1,6 @@
 [package]
 name = "quadcam"
-version = "0.18.0"
+version = "0.19.0"
 description = "Import analog FPV DVR clips: date, name, convert, verify, then format the card"
 edition = "2021"
 license = "MIT"
@@ -101,9 +101,9 @@ hidapi = { version = "2.6", default-features = false, features = ["macos-shared-
 block2 = "0.6"
 objc2 = "0.6"
 objc2-foundation = { version = "0.3", features = ["NSURL", "NSString", "NSArray", "NSError", "NSFileManager", "NSGeometry", "NSThread", "NSRunLoop", "NSDate", "NSBundle", "NSValue", "block2"] }
-objc2-map-kit = { version = "0.3", default-features = false, features = ["std", "block2", "objc2-core-location", "MKAnnotation", "MKLocalSearch", "MKLocalSearchRequest", "MKLocalSearchResponse", "MKMapItem", "MKPlacemark"] }
+objc2-map-kit = { version = "0.3", default-features = false, features = ["std", "block2", "objc2-core-location", "MKAnnotation", "MKLocalSearch", "MKLocalSearchRequest", "MKLocalSearchResponse", "MKMapItem", "MKPlacemark", "objc2-app-kit", "MKMapView", "MKPointAnnotation", "MKShape", "MKTypes", "MKGeometry", "MKAnnotationView", "MKMarkerAnnotationView", "MKClusterAnnotation", "MKMapConfiguration", "MKStandardMapConfiguration", "MKImageryMapConfiguration", "MKHybridMapConfiguration"] }
 objc2-core-location = { version = "0.3", default-features = false, features = ["std", "block2", "CLLocation", "CLPlacemark", "CLGeocoder", "CLLocationManager", "CLLocationManagerDelegate"] }
 objc2-photos = "0.3"
 objc2-user-notifications = { version = "0.3", default-features = false, features = ["std", "block2", "UNUserNotificationCenter", "UNNotificationContent", "UNNotificationRequest", "UNNotificationTrigger"] }
-objc2-app-kit = { version = "0.3", default-features = false, features = ["std", "NSSharingService", "NSResponder", "NSView", "NSGlassEffectView", "NSGraphics"] }
+objc2-app-kit = { version = "0.3", default-features = false, features = ["std", "NSSharingService", "NSResponder", "NSView", "NSGlassEffectView", "NSGraphics", "NSColor"] }
 security-framework = "3.5"

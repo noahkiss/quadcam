@@ -5,7 +5,7 @@
 import { convertFileSrc } from "@tauri-apps/api/core";
 import { open as openDialog, save as saveDialog } from "@tauri-apps/plugin-dialog";
 import { openPath, openUrl, revealItemInDir } from "@tauri-apps/plugin-opener";
-import { commands } from "../bindings";
+import { commands, type MapFrame, type MapPin, type MapStyle } from "../bindings";
 import * as N from "./normalize";
 import type { ProfileGear, ElrsFlashParams, FormatRequest, ChangeStatus, CopyRequest, Edit, SimFrame, SimPreset, SimStartInfo, SimStartParams, SimStopInfo, CrashSaveParams, ImportOptions, LibEdit, LibraryFilter, Moved, ModelEditParams, ModelParams, PackDeleteParams, PackInstallParams, PackPreviewParams, PublishApproveParams, PublishParams, CatalogParams, EstimateParams, ImportTakesParams, KeyParams, LibraryParams, RenderPacksParams, SampleParams, SetsParams, VoiceCheckParams, VoiceChooseParams, VoiceChooseRadiosParams, VoiceEditParams, VoiceParams, VoicePreviewParams, VoiceRenderParams, OsdEditParams, OsdParams, RatesParams, RatesPreview, RateProfile, FlashParams, SplashParams, SimRestoreParams, SimSyncParams, SimsParams, Pack, PackType, PlanPatch, RemovedCuts, SettingsValues, Span, SwitchMapParams, SimCalibrationSaveParams, CalibrateParams } from "./types";
 
@@ -25,6 +25,9 @@ export const api = {
   thirdPartyNotices: () => ok(commands.thirdPartyNotices()),
   menuState: (enabled: Record<string, boolean>, checked: Record<string, boolean>, albumItem: string | null) => commands.menuState(enabled, checked, albumItem),
   share: (paths: string[], r: { x: number; y: number; w: number; h: number }) => ok(commands.share(paths, r.x, r.y, r.w, r.h)),
+  /** The Map page's native map: where it goes (null hides it), and its pins and look. */
+  mapFrame: (frame: MapFrame | null) => ok(commands.mapFrame(frame)),
+  mapPins: (pins: MapPin[], style: MapStyle, fit: boolean) => ok(commands.mapPins(pins, style, fit)),
 
   // The app's own updates (GUI commands; the core never updates itself for an agent)
   updateStatus: () => commands.updateStatus(),

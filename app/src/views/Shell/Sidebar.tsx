@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 import { useStore, type State } from "../../store";
 import { screenOf } from "../../store/library";
+import { sel } from "../../store/settings";
 import { clipsOf, unfinished } from "../../store/session";
 import { TASK_LABEL } from "../../store/tasks";
 import { Icon, type IconName, type IconTint } from "../../components/Icon";
@@ -63,6 +64,7 @@ export function Sidebar() {
   const L = s.lib;
   const clips = L?.clips || [];
   const detail = screenOf(s) !== "library" && screenOf(s) !== "first-run";
+  const mapOn = sel.mapView(s);
   const cur = (f: Filter) => !detail && sameFilter(s.filter, f);
   const go = (f: Filter) => () => s.setFilter(f);
   const lastN = clips.filter((c) => c.last_import).length;
@@ -81,6 +83,7 @@ export function Sidebar() {
           <Item icon="film" tint="blue" label="All clips" count={clips.length} current={cur({ group: "all" })} onClick={go({ group: "all" })} />
           {lastN > 0 && <Item icon="sparkle" tint="pink" label="Last import" count={lastN} current={cur({ group: "last_import" })} onClick={go({ group: "last_import" })} />}
           {moments > 0 && <Item icon="sparkle" tint="mauve" label="Best moments" count={moments} current={cur({ group: "best_moments" })} onClick={go({ group: "best_moments" })} />}
+          {mapOn && <Item icon="map-point" tint="blue" label="Map" current={screenOf(s) === "map"} onClick={s.openMap} />}
         </Group>
         <Group title="Import from">
           {cards.map((v) => {

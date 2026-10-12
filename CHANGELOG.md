@@ -10,6 +10,10 @@ User-facing changes in each release, newest first. Release notes on
 - **Browse voices.** The Voice studio's **Browse voices…** searches ElevenLabs' Voice Library by words, language (English at first), accent, gender, age, use and category, a page at a time. Each voice shows its labels, languages, a preview, any rate of its own (the estimate prices it) and its notice period. **Add…** asks, then adds the voice to your account's My Voices; a full account says it has no free voice slot. **Voice ID** and **Look up** find one voice by id. CLI `gear voice library` and `gear voice add`; MCP `voice_library` and `voice_add`.
 - **Accent and language columns.** The studio's voice table shows each voice's accent and languages in columns of their own, filters by them and by name, and plays each voice's preview.
 
+## 0.19.0 (2026-10-11)
+
+- **Map, off by default.** Settings > Places > **Show the Map page** adds **Map** to the sidebar: your places and clips on an Apple map (Apple Maps on your Mac, no account). A place's pin shows its clip count, and a click shows its clips in the library. A clip with a location but no place has its own pin, which opens the clip. **Map**, **Hybrid** and **Satellite** pick the look; **Show all** zooms to every pin. The `map_view` setting, in the CLI and MCP too. See [The map](docs/library.md#the-map).
+
 ## 0.18.0 (2026-10-11)
 
 - **Shift time of many clips.** Select clips, then **Shift time…**: set the real date and time of one clip, and the rest move by the same offset. A clip that a radio log in the log folder matches takes the log's time instead, and the table says **Radio log**. The table shows every new time before you shift; a new day moves the files. CLI `library shift` (`--yes` writes); MCP `quadcam_library_edit` `shift` (`confirm` writes). See [Shift the time of many clips](docs/library.md#shift-the-time-of-many-clips).

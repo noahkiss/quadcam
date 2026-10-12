@@ -4,10 +4,11 @@ import type { StateCreator } from "zustand";
 import type { State } from ".";
 import { api } from "../ipc/api";
 import type { LibClip, LibraryView } from "../ipc/types";
+import type { MapStyle } from "../bindings";
 import { visibleClips, type Filter } from "../lib/library";
 import { sel } from "./settings";
 
-export type Screen = "library" | "first-run" | "detail" | "gear";
+export type Screen = "library" | "first-run" | "detail" | "gear" | "map";
 
 export interface LibrarySlice {
   lib: LibraryView | null;
@@ -22,6 +23,9 @@ export interface LibrarySlice {
   /** Seconds to start the open clip at (a moment picked from the day summary). */
   detailSeek: number | null;
   renaming: string | null;
+  /** The Map page shows (Settings > Places > Show the Map page). */
+  mapOpen: boolean;
+  mapStyle: MapStyle;
   /** Reads the library. With `onlyIfChanged` nothing changes unless the clips did. */
   loadLibrary: (onlyIfChanged?: boolean) => Promise<void>;
   setFilter: (f: Filter) => void;
@@ -34,6 +38,8 @@ export interface LibrarySlice {
   closeDetail: () => void;
   setDTab: (t: "details" | "flight") => void;
   setRenaming: (id: string | null) => void;
+  openMap: () => void;
+  setMapStyle: (s: MapStyle) => void;
 }
 
 let libSig = "";
@@ -49,6 +55,8 @@ export const createLibrarySlice: StateCreator<State, [], [], LibrarySlice> = (se
   dTab: "details",
   detailSeek: null,
   renaming: null,
+  mapOpen: false,
+  mapStyle: "standard",
   loadLibrary: async (onlyIfChanged = false) => {
     let lib: LibraryView;
     try {
@@ -65,7 +73,7 @@ export const createLibrarySlice: StateCreator<State, [], [], LibrarySlice> = (se
     const detailId = get().detailId && ids.has(get().detailId!) ? get().detailId : null;
     set({ lib, selected, detailId });
   },
-  setFilter: (filter) => set({ filter, detailId: null, gearPage: null }),
+  setFilter: (filter) => set({ filter, detailId: null, gearPage: null, mapOpen: false }),
   setQuery: (query) => set({ query }),
   select: (id, mods = {}) => {
     const s = get();
@@ -85,10 +93,12 @@ export const createLibrarySlice: StateCreator<State, [], [], LibrarySlice> = (se
   },
   selectAll: () => set((s) => ({ selected: new Set(visible(s).map((c) => c.id)) })),
   clearSelection: () => set({ selected: new Set() }),
-  openDetail: (id, at = null, tab) => set((s) => ({ gearPage: null, detailId: id, selected: new Set([id]), cursor: id, detailSeek: at, dTab: tab || s.dTab })),
+  openDetail: (id, at = null, tab) => set((s) => ({ gearPage: null, mapOpen: false, detailId: id, selected: new Set([id]), cursor: id, detailSeek: at, dTab: tab || s.dTab })),
   closeDetail: () => set({ detailId: null, detailSeek: null }),
   setDTab: (dTab) => set({ dTab }),
   setRenaming: (renaming) => set({ renaming }),
+  setMapStyle: (mapStyle) => set({ mapStyle }),
+  openMap: () => set({ mapOpen: true, gearPage: null, detailId: null, detailSeek: null }),
 });
 
 /** The clips the library shows, in the one order. */
@@ -101,11 +111,12 @@ export const libClip = (s: State, id: string | null | undefined) => (id ? s.lib?
 /** The selected clips that still exist. */
 export const selectedIds = (s: State) => [...s.selected].filter((id) => libClip(s, id));
 
-/** Which screen shows: a Gear page, the open clip, the first-run screen for an empty
- *  library, else the grid. */
+/** Which screen shows: a Gear page, the open clip, the map (while its setting is on), the
+ *  first-run screen for an empty library, else the grid. */
 export function screenOf(s: State): Screen {
   if (s.gearPage) return "gear";
   if (s.detailId && libClip(s, s.detailId)) return "detail";
+  if (s.mapOpen && sel.mapView(s)) return "map";
   const empty = !s.lib?.clips.length && !((s.lib?.unindexed ?? 0) > 0);
   return empty && s.lib ? "first-run" : "library";
 }

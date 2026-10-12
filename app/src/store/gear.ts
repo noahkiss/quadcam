@@ -362,7 +362,7 @@ export const createGearSlice: StateCreator<State, [], [], GearSlice> = (set, get
     }
     set((s) => ({ unmounted: p.unmounted, unmountedSince, gear: s.gear ? { ...s.gear, connected: p.connected } : s.gear }));
   },
-  openGear: (gearPage) => set({ gearPage, gearSegment: "overview", detailId: null, detailSeek: null }),
+  openGear: (gearPage) => set({ gearPage, gearSegment: "overview", detailId: null, detailSeek: null, mapOpen: false }),
   setGearSegment: (gearSegment) => set({ gearSegment }),
   closeGear: () => set({ gearPage: null }),
   setGearExpanded: (gearExpanded) => set({ gearExpanded }),

@@ -399,6 +399,7 @@ mcp.param quadcam_settings.values.join_split_recordings boolean|null
 mcp.param quadcam_settings.values.keep_originals boolean|null
 mcp.param quadcam_settings.values.layout string|null
 mcp.param quadcam_settings.values.log_dir string|null
+mcp.param quadcam_settings.values.map_view boolean|null
 mcp.param quadcam_settings.values.modules object|null
 mcp.param quadcam_settings.values.name_date_format string|null
 mcp.param quadcam_settings.values.on_device_suggestions boolean|null

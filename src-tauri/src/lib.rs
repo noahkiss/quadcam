@@ -18,6 +18,7 @@ pub mod library;
 pub mod locate;
 pub mod logmatch;
 pub mod logs;
+mod mapview;
 pub mod mcp;
 pub mod media;
 mod menu;
@@ -776,6 +777,8 @@ pub fn specta_builder() -> tauri_specta::Builder<tauri::Wry> {
             third_party_notices,
             menu::menu_state,
             share::share,
+            mapview::map_frame,
+            mapview::map_pins,
             updater::update_status,
             updater::update_check,
             updater::update_download,
@@ -803,6 +806,7 @@ pub fn specta_builder() -> tauri_specta::Builder<tauri::Wry> {
             api::FirmwareReadProgress,
             api::UpdateChanged,
             api::OnDeviceProgress,
+            mapview::MapPick,
             api::VoiceProgress,
         ])
         // Sizes and counts fit a JS number.

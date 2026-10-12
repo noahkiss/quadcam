@@ -130,6 +130,9 @@ scripts/make-fixtures.sh                   # re-record the mock core's data (nee
   Gear pages follow one dashboard pattern (`components/dash/`: `PageHeader`, `StatRow`,
   `SectionCard`, `DataTable`, `FactList`, `StatusDot`, `Badge`, `EmptyState`, `MoreMenu`);
   `docs/development.md` "How to build a dashboard page" describes it.
+  The Map page (`views/Map/`, behind the `mapView` setting) lays a native `MKMapView` over the
+  web view at the placeholder's rectangle (`src-tauri/src/mapview.rs`, `docs/development.md`
+  "The native map"); the page's pins come from `lib/map.ts`.
   On macOS 26 and later `src-tauri/src/glass.rs` gives the window an overlay title bar and a
   glass sidebar, and `html[data-glass]` lays the page out for it (`docs/development.md`
   "Window chrome and theme").

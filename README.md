@@ -16,6 +16,7 @@ QuadCam is a macOS app that imports the recordings from your FPV goggles into a 
 - **Long recordings stay whole.** An analog DVR splits a long recording into files of a fixed length (10 minutes on a Fat Shark Echo) or size. QuadCam imports those files as one clip. See [Joined recordings](docs/library.md#joined-recordings).
 - **A library you can trust.** Rate, flag, search, rename and edit your clips. Every detail is written into the file itself, and the index rebuilds from the files.
 - **Metadata that Photos reads.** Date, time, place, aircraft and keywords go into QuickTime tags. Add clips to Photos, into an album.
+- **A map of where you fly.** An optional Map page puts your places and clips on an Apple map; a pin opens the clips flown there. See [The map](docs/library.md#the-map).
 - **Safe card format.** When every clip verified, QuadCam can erase an analog card as FAT32 and unmount it, behind strict guards. Card prep formats a spare card whose clips are all in the library: FAT32 for an analog DVR, exFAT for a DJI goggles card. It never formats a DJI device over USB.
 - **Room for the next flight.** With **Delete clips after import** on, QuadCam deletes each clip that verified from the card, DJI air units included, and leaves every other file. It is off by default. See [Settings](docs/settings.md#delete-clips-after-import).
 - **Gear.** Gear is the FPV bench next to the library. See [Gear](docs/gear.md).
@@ -122,6 +123,7 @@ QuadCam works on your Mac. It sends data out only when you ask it to, with one e
 
 - A place search sends the search text to the provider you picked. See [Metadata](docs/metadata.md#place-search-providers).
 - **Use current location** asks macOS Location Services where your Mac is, once per click, and **Name from coordinates** sends a place's coordinates to Apple's geocoder to name it. See [Metadata](docs/metadata.md#use-your-current-location).
+- The **Map** page (off by default) loads Apple Maps for the area it shows, through macOS, as the Maps app does. See [The map](docs/library.md#the-map).
 - **Look up weather** (off by default) sends each clip's place, rounded to about 1 km, and its date to [Open-Meteo](https://open-meteo.com), once per clip. Off, QuadCam sends no weather request. Sun tags need no network. See [Sun and weather](docs/library.md#sun-and-weather).
 - A module install downloads the module from its upstream, and **Check for updates** reads `modules.json` from QuadCam's latest GitHub release. See [Modules](docs/modules.md).
 - **Gear > Firmware > Check for updates** reads the newest EdgeTX, Betaflight and ExpressLRS releases from GitHub and the ExpressLRS release index. Planning an EdgeTX flash downloads that release's firmware zip. With `firmware_check` set to `daily` in the settings file, the page also checks once a day. **Read firmware** saves a copy of a radio's firmware over USB (DFU) without changing the radio. See [Gear](docs/gear.md#firmware-and-splash).

@@ -644,6 +644,16 @@ export const commands = {
 	 *  from the top left of the window's content).
 	 */
 	share: (paths: string[], x: number | null, y: number | null, w: number | null, h: number | null) => typedError<null, string>(__TAURI_INVOKE("share", { paths, x, y, w, h })),
+	/**  Shows the map at `frame`, or hides it when `frame` is None or empty. */
+	mapFrame: (frame: {
+	x: number | null,
+	y: number | null,
+	w: number | null,
+	h: number | null,
+	page_w: number | null,
+} | null) => typedError<null, string>(__TAURI_INVOKE("map_frame", { frame })),
+	/**  Replaces the pins and the map's look. `fit` zooms the map to show every pin. */
+	mapPins: (pins: MapPin[], style: MapStyle, fit: boolean) => typedError<null, string>(__TAURI_INVOKE("map_pins", { pins, style, fit })),
 	/**  The update state now (None never happens in the app; it has a GUI). */
 	updateStatus: () => __TAURI_INVOKE<{
 	phase: UpdatePhase,
@@ -690,6 +700,7 @@ export const events = {
 	importResult: makeEvent<ImportResult>("import-result"),
 	libraryChanged: makeEvent<LibraryChanged>("library-changed"),
 	libraryTask: makeEvent<LibraryTask>("library-task"),
+	mapPick: makeEvent<MapPick>("map-pick"),
 	menu: makeEvent<Menu>("menu"),
 	onDeviceProgress: makeEvent<OnDeviceProgress>("on-device-progress"),
 	progress: makeEvent<Progress>("progress"),
@@ -4063,6 +4074,36 @@ export type LsDef = {
 	duration?: number,
 };
 
+/**
+ *  Where the map goes, in CSS pixels from the top left of the page, and the page's width in
+ *  CSS pixels (which gives the zoom between CSS pixels and points).
+ */
+export type MapFrame = {
+	x: number | null,
+	y: number | null,
+	w: number | null,
+	h: number | null,
+	page_w: number | null,
+};
+
+/**  A pin was clicked: its id. */
+export type MapPick = string;
+
+/**  One pin. `id` comes back in `map-pick` when the pin is clicked. */
+export type MapPin = {
+	id: string,
+	kind: PinKind,
+	title: string,
+	subtitle: string | null,
+	lat: number | null,
+	lon: number | null,
+	/**  Shown inside the marker (the clip count of a place); empty shows the default glyph. */
+	glyph: string | null,
+};
+
+/**  The map's look: Apple Maps' Standard, Satellite and Hybrid. */
+export type MapStyle = "standard" | "satellite" | "hybrid";
+
 /**  A menu item was chosen: its id. */
 export type Menu = string;
 
@@ -4791,6 +4832,15 @@ export type Pin = {
 	tools: { [key in string]: string },
 	assets: Asset[],
 };
+
+/**  What a pin stands for, which sets its colour. */
+export type PinKind = 
+/**  A place with clips. */
+"place" | 
+/**  A saved place without clips. */
+"empty" | 
+/**  One clip with a location but no place. */
+"clip";
 
 /**  A saved place, kept in the settings file. */
 export type Place = {

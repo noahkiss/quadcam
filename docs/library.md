@@ -191,6 +191,22 @@ Daylight and night have no tag. The grid shows the tag as a sun icon, the list i
 
 With [Look up weather](settings.md#look-up-weather) on, an open clip also shows the **Weather** at its place and hour: temperature, wind speed and direction, and gusts, from Open-Meteo. Temperatures show in °F and speeds in mph where your region uses them. QuadCam asks once per clip and saves the answer in the file (`app.quadcam.weather`). A new place, date or time removes it, and QuadCam asks again for the new hour. Open-Meteo's archive runs about five days behind; for a newer clip QuadCam asks its historical forecast, and a clip from the last hours waits until the next launch.
 
+## The map
+
+With [Show the Map page](settings.md#show-the-map-page) on, **Map** in the sidebar shows your places and clips on an Apple map.
+
+| Pin | Stands for | Click it to |
+|---|---|---|
+| Red, with a number | A place and its clip count | Show the place's clips in the library |
+| Gray | A saved place without clips | Show the place in the library (empty until you fly there) |
+| Blue | A clip with a location but no place | Open the clip |
+
+- A place sits at its saved point. A place that is not saved sits in the middle of its clips' locations.
+- Pins close together merge into one at a wide zoom. Click it to zoom in.
+- **Map**, **Hybrid** and **Satellite** pick the look. **Show all** zooms to every pin.
+- The header counts the places, the clips on the map, and the clips without a location.
+- Scroll or pinch to zoom; drag to move. The map keeps its view when you come back to the page.
+
 ## Unfinished imports
 
 You can close the Import sheet at any time. The import stays in the sidebar as **Unfinished import**, and the app saves it as you work.
