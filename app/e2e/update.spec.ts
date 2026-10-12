@@ -1,6 +1,6 @@
 // The app's own update on the mock core: the banner, Later, the download with progress, the
 // restart held back while a job runs, Check for Updates from the menu, the setting, and the
-// same Restart to update in Settings > Advanced.
+// same Restart to update under the version in Settings.
 import AxeBuilder from "@axe-core/playwright";
 import { test, expect, dialog, axeSchemes } from "./fixtures";
 
@@ -122,7 +122,7 @@ test("Settings > Advanced turns the automatic check off and checks on request", 
   const box = dlg.getByRole("checkbox", { name: /Check for updates automatically/ });
   await expect(box).toBeChecked();
   await expect(dlg.getByRole("status", { name: "Update status" })).toContainText("Not checked yet.");
-  await dlg.getByRole("button", { name: "Check now" }).click();
+  await dlg.getByRole("button", { name: "Check for Updates" }).click();
   await expect(dlg.getByRole("status", { name: "Update status" })).toContainText("QuadCam 0.99.0 is available.");
   await box.uncheck();
   await dlg.getByRole("button", { name: "Done" }).click();
@@ -140,14 +140,14 @@ test("Settings > Advanced offers Restart to update with progress and Release not
   const dlg = await advanced(page);
   const line = dlg.getByRole("status", { name: "Update status" });
   await expect(dlg.getByRole("button", { name: "Restart to update" })).toHaveCount(0);
-  await dlg.getByRole("button", { name: "Check now" }).click();
+  await dlg.getByRole("button", { name: "Check for Updates" }).click();
   await expect(line).toContainText("QuadCam 0.99.0 is available.");
   await expect(dlg.getByRole("link", { name: "Release notes" })).toBeVisible();
-  await expect(dlg.getByRole("button", { name: "Check now" })).toBeVisible();
+  await expect(dlg.getByRole("button", { name: "Check for Updates" })).toHaveCount(0);
+  await expect(dlg.getByText("QuadCam 0.99.0 is available.", { exact: true })).toBeVisible();
   await dlg.getByRole("button", { name: "Restart to update" }).click();
   await expect(dlg.getByRole("progressbar", { name: "Download" })).toBeVisible();
   await expect(line).toContainText(/Downloading QuadCam 0\.99\.0… \d+%/);
-  await expect(dlg.getByRole("button", { name: "Check now" })).toBeDisabled();
   await expect.poll(() => app.core<number>("(c) => c.update.restarts")).toBe(1);
   expect((await app.calls("update_restart")).length).toBe(1);
 });
@@ -155,7 +155,7 @@ test("Settings > Advanced offers Restart to update with progress and Release not
 test("Settings > Advanced holds the restart back while a job runs", async ({ app, page }) => {
   await app.core("(c) => { c.update.job = 'the device job'; }");
   const dlg = await advanced(page);
-  await dlg.getByRole("button", { name: "Check now" }).click();
+  await dlg.getByRole("button", { name: "Check for Updates" }).click();
   const restart = dlg.getByRole("button", { name: "Restart to update" });
   await restart.click();
   await expect(dlg.getByRole("status", { name: "Update status" })).toContainText("QuadCam 0.99.0 is ready. It can restart after the device job ends.");
@@ -176,7 +176,7 @@ for (const scheme of axeSchemes) {
     test.use({ colorScheme: scheme });
     test("Settings > Advanced with an update passes axe", async ({ page }) => {
       const dlg = await advanced(page);
-      await dlg.getByRole("button", { name: "Check now" }).click();
+      await dlg.getByRole("button", { name: "Check for Updates" }).click();
       await expect(dlg.getByRole("button", { name: "Restart to update" })).toBeVisible();
       const r = await new AxeBuilder({ page }).withTags(["wcag2a", "wcag2aa", "wcag21aa"]).analyze();
       expect(r.violations.map((v) => `${v.id}: ${v.nodes.map((n) => n.target.join(" ")).join(", ")}`)).toEqual([]);
@@ -184,10 +184,13 @@ for (const scheme of axeSchemes) {
   });
 }
 
-test("Check for Updates under the version in Settings checks on every pane", async ({ page }) => {
+test("Check for Updates under the version becomes Restart to update on any pane", async ({ app, page }) => {
   await page.evaluate(() => window.__qc!.emit("menu", "settings"));
   const dlg = dialog(page, "Settings");
   await dlg.getByRole("button", { name: "Check for Updates" }).click();
-  await dlg.getByRole("button", { name: "Advanced" }).click();
-  await expect(dlg.getByRole("status", { name: "Update status" })).toContainText("QuadCam 0.99.0 is available.");
+  const restart = dlg.getByRole("button", { name: "Restart to update" });
+  await expect(restart).toBeVisible();
+  await expect(dlg.getByRole("button", { name: "Check for Updates" })).toHaveCount(0);
+  await restart.click();
+  await expect.poll(() => app.core<number>("(c) => c.update.restarts")).toBe(1);
 });

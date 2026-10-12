@@ -5,6 +5,8 @@ User-facing changes in each release, newest first. Release notes on
 
 ## Unreleased
 
+- **Restart to update in the Settings sidebar.** Once a check finds a newer version, **Check for Updates** under the version becomes **Restart to update**, on every Settings page. Settings > Advanced keeps the automatic check and the release notes.
+
 ## 0.21.0 (2026-10-12)
 
 - **The DJI air unit unmounts like a card.** An O4 air unit (or goggles in storage mode) over USB now follows the same mount, work, unmount cycle as every card: QuadCam unmounts it when an import or job ends and says "safe to unplug", it stays on USB, and the next job or **Mount** (10 minutes) mounts it again. **Safe to remove** unmounts it instead of ejecting it. QuadCam still never formats a DJI device over USB.

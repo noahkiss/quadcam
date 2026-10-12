@@ -31,6 +31,11 @@
 .version p {
   margin: 0;
 }
+.versionActions {
+  display: flex;
+  align-items: center;
+  gap: var(--s-2);
+}
 .fieldset {
   margin: 0;
   padding: 0;

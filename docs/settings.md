@@ -13,7 +13,7 @@ Open Settings with the gear icon or Command-comma. **Done** saves every change a
 | **Photos** | The album. An empty album means the library only. See [Photos](photos.md). |
 | **Gear** | The previews (**Show the Sim page**, **Betaflight flashing (preview)**, **Show the ELRS tools**), **Back up on connect**, how many backups to keep, the USB power warning, the blackbox options (**Erase blackbox after download**, **Read through USB disk mode first (not proven)**), the **Steps on connect** table per device kind, and the cues: which play, as speech, sound or notification, mute, the voice and quiet hours. See [Gear](gear.md). |
 | **Modules** | Tools QuadCam downloads on request (ffmpeg, esptool): install, update, remove, **Check for module updates**, and **Use ffmpeg from** (the QuadCam module, else Homebrew; or Homebrew only). See [Modules and notices](modules.md). |
-| **Advanced** | **Check for updates automatically**, the last update check and **Check now**, and **Restart to update** with the release notes when a newer version is known (see [Updates](#updates)). Read-only: the ffmpeg in use and the agent socket path. |
+| **Advanced** | **Check for updates automatically**, and the last update check with the release notes when a newer version is known (see [Updates](#updates)). Read-only: the ffmpeg in use and the agent socket path. |
 
 ### Formats
 
@@ -77,7 +77,7 @@ On by default. On a Mac with Apple's on-device model (macOS 26 or later, Apple I
 
 ### Updates
 
-On by default. QuadCam checks GitHub for a newer release about 30 seconds after it opens, then every hour while it runs. Off, it checks only when you select **QuadCam > Check for Updates…**, **Check for Updates** under the version in Settings, or **Check now** in Settings > Advanced. In the settings file it is `updateCheck`; on the command line and in MCP it is `update_check`.
+On by default. QuadCam checks GitHub for a newer release about 30 seconds after it opens, then every hour while it runs. Off, it checks only when you select **QuadCam > Check for Updates…**, or **Check for Updates** under the version in Settings. Once a newer version is known, that button becomes **Restart to update**. In the settings file it is `updateCheck`; on the command line and in MCP it is `update_check`.
 
 A newer version shows a banner with **Restart to update**, **Later** and a link to the release notes. **Restart to update** checks once more, downloads the newest release with a progress ring, checks its signature, installs it and restarts QuadCam. Every check runs while an update is known, so a newer release replaces the one the banner shows. QuadCam never installs a version at or below the one running. While a job runs (an import, a format, a card or device write, a flash, a backup), the banner waits and offers the restart when the job ends. **Later** hides the banner until the next check finds a newer version. Settings > Advanced offers the same **Restart to update** and release notes link, even after **Later**. A failed check never opens a dialog: Settings > Advanced shows the reason, and **Check for Updates…** shows it in a short message. An agent can read the update state in `quadcam_status` (`status.update`), but it cannot install an update or restart the app.
 

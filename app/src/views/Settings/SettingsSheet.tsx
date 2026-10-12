@@ -131,10 +131,12 @@ function Sheet({ first }: { first: SettingsSection }) {
   );
 }
 
-/** The app version, the commit it was built from, and Check for Updates. */
+/** The app version, the commit it was built from, and Check for Updates, which becomes
+ * Restart to update once a newer version is known. */
 function Version() {
   const env = useStore((s) => s.env);
   const update = useStore((s) => s.update);
+  const offer = updateOffer(update);
   if (!env?.version) return null;
   return (
     <div className={styles.version}>
@@ -143,9 +145,18 @@ function Version() {
         <br />
         Build {env.build}
       </p>
-      <Button size="sm" onClick={() => void checkForUpdates()} disabled={update?.phase === "checking" || update?.phase === "downloading"}>
-        Check for Updates
-      </Button>
+      {offer ? (
+        <>
+          <p>QuadCam {offer.version} is available.</p>
+          <div className={styles.versionActions}>
+            <RestartToUpdate u={offer} />
+          </div>
+        </>
+      ) : (
+        <Button size="sm" onClick={() => void checkForUpdates()} disabled={update?.phase === "checking"}>
+          Check for Updates
+        </Button>
+      )}
     </div>
   );
 }
@@ -545,11 +556,6 @@ function AdvancedPane({ d, set }: { d: Draft; set: SetFn }) {
   const env = useStore((s) => s.env);
   const update = useStore((s) => s.update);
   const offer = updateOffer(update);
-  const checkNow = (
-    <Button size="sm" onClick={() => void checkForUpdates()} disabled={update?.phase === "checking" || update?.phase === "downloading"}>
-      Check now
-    </Button>
-  );
   const lines = [env?.tools ? `ffmpeg: ${env.tools.ffmpeg}` : env?.error, env?.socket ? `Agent socket: ${env.socket}` : ""].filter(Boolean);
   return (
     <section>
@@ -559,7 +565,6 @@ function AdvancedPane({ d, set }: { d: Draft; set: SetFn }) {
         <p role="status" aria-label="Update status">
           {updateLine(update)} {offer?.notes_url && <Link href={offer.notes_url}>Release notes</Link>}
         </p>
-        {offer ? <RestartToUpdate u={offer}>{checkNow}</RestartToUpdate> : checkNow}
       </div>
       <h3>Tools</h3>
       <pre className={`${styles.tools} mono selectable`}>{lines.join("\n")}</pre>
