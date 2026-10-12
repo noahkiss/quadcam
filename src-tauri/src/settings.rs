@@ -377,6 +377,12 @@ pub const KEYS: &[Key] = &[
         check: any,
     },
     Key {
+        file: "mapView",
+        name: Some("map_view"),
+        about: "true or false",
+        check: boolean,
+    },
+    Key {
         file: "simPreview",
         name: Some("sim_preview"),
         about: "true or false",

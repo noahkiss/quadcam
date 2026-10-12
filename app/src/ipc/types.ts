@@ -288,6 +288,7 @@ export interface SettingsValues {
   videoAnalysis?: boolean;
   weather?: boolean;
   onDeviceSuggestions?: boolean;
+  mapView?: boolean;
   defaultName?: string;
   photosAlbum?: string;
   formatLabel?: string;

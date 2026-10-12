@@ -436,6 +436,9 @@ pub struct SettingsValues {
     /// Gear: the gear folder (absolute path); null for the default in the support folder.
     #[schemars(extend("x-nullable" = true))]
     pub gear_dir: Option<String>,
+    /// Show the Map page in the sidebar: places and clips on an Apple map. Off by default.
+    #[schemars(extend("x-nullable" = true))]
+    pub map_view: Option<bool>,
     /// Show the Sim page in the Gear sidebar (a preview). Off by default.
     #[schemars(extend("x-nullable" = true))]
     pub sim_preview: Option<bool>,

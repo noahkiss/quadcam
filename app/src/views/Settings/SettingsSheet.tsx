@@ -476,6 +476,7 @@ function PlacesPane({ d, set }: { d: Draft; set: SetFn }) {
       <Button size="sm" variant="ghost" icon="add" onClick={() => set("places", [...d.places, { name: "", lat: "", lon: "" }])}>
         Add place
       </Button>
+      <Checkbox label="Show the Map page" detail="Adds Map to the sidebar: places and clips on an Apple map." checked={d.mapView} onChange={(e) => set("mapView", e.target.checked)} />
       <div className={styles.row}>
         <SelectField label="Search with" value={d.geocoder} onChange={(e) => set("geocoder", e.target.value)}>
           <option value="apple">Apple Maps</option>

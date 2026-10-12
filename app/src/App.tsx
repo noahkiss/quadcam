@@ -16,6 +16,7 @@ import { StatusBar } from "./views/Shell/StatusBar";
 import { UpdateBanner } from "./views/Shell/UpdateBanner";
 import { GearView } from "./views/Gear/GearView";
 import { LibraryView } from "./views/Library/LibraryView";
+import { MapView } from "./views/Map/MapView";
 import { FirstRun } from "./views/FirstRun/FirstRun";
 import { ClipDetail } from "./views/ClipDetail/ClipDetail";
 import { ImportSheet } from "./views/ImportSheet/ImportSheet";
@@ -98,7 +99,7 @@ export function App() {
       </div>
       <Sidebar />
       <main className={styles.main}>
-        {screen === "gear" ? <GearView /> : screen === "detail" ? <ClipDetail /> : screen === "first-run" ? <FirstRun /> : <LibraryView onMenu={onMenu} />}
+        {screen === "gear" ? <GearView /> : screen === "detail" ? <ClipDetail /> : screen === "map" ? <MapView /> : screen === "first-run" ? <FirstRun /> : <LibraryView onMenu={onMenu} />}
       </main>
       <StatusBar />
       <ImportSheet />

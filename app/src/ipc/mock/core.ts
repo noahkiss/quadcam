@@ -121,6 +121,13 @@ export class MockCore {
   trash = new Map<string, LibClip>();
   calls: Call[] = [];
   menuState: unknown = null;
+  /** The native map's last frame and pins (`map_frame`, `map_pins`). */
+  mapFrame: import("../../bindings").MapFrame | null = null;
+  map: { pins: import("../../bindings").MapPin[]; style: import("../../bindings").MapStyle; fit: boolean } | null = null;
+  /** A click on a native map pin. */
+  mapPick(id: string) {
+    this.emit("map-pick", id);
+  }
   /** Answers for the folder picker, used in order; then null. */
   dialogAnswers: (string | string[] | null)[] = [];
   /** The radio in USB Joystick mode: plugged in or not, its latest frame, and whether the
@@ -257,6 +264,13 @@ export class MockCore {
         return seed.PREVIEW;
       case "library_scope":
       case "share":
+        return null;
+      // The native map: the page's placeholder stands in for it.
+      case "map_frame":
+        this.mapFrame = (args.frame as never) ?? null;
+        return null;
+      case "map_pins":
+        this.map = { pins: args.pins as never, style: args.style as never, fit: !!args.fit };
         return null;
       case "menu_state":
         this.menuState = args;

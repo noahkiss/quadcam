@@ -25,6 +25,8 @@ export interface Draft {
   videoAnalysis: boolean;
   weather: boolean;
   onDevice: boolean;
+  /** Shows the Map page. */
+  mapView: boolean;
   updateCheck: boolean;
   segGap: string;
   sessionGap: string;
@@ -160,6 +162,7 @@ export function draftFrom(s: State): Draft {
     videoAnalysis: sel.videoAnalysis(s),
     weather: sel.weather(s),
     onDevice: sel.onDevice(s),
+    mapView: sel.mapView(s),
     updateCheck: sel.updateCheck(s),
     segGap: String(t.segment_gap_s),
     sessionGap: String(t.session_gap_min),
@@ -202,6 +205,7 @@ export function valuesOf(d: Draft, before: Tunables): SettingsValues {
     videoAnalysis: d.videoAnalysis,
     weather: d.weather,
     onDeviceSuggestions: d.onDevice,
+    mapView: d.mapView,
     updateCheck: d.updateCheck,
     photosAlbum: d.photosAlbum.trim(),
     libraryLayout: d.libraryLayout,
