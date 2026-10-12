@@ -12,7 +12,7 @@ Open Settings with the gear icon or Command-comma. **Done** saves every change a
 | **Import** | The format (MP4 or MOV), the MP4 encoder, the default short name, the time in file names, **Delete clips after import**, **Join split recordings**, **On-device suggestions**, and the tolerances for log matching, the DJI clip clock skew included. |
 | **Photos** | The album. An empty album means the library only. See [Photos](photos.md). |
 | **Gear** | The previews (**Show the Sim page**, **Betaflight flashing (preview)**, **Show the ELRS tools**), **Back up on connect**, how many backups to keep, the USB power warning, the blackbox options (**Erase blackbox after download**, **Read through USB disk mode first (not proven)**), the **Steps on connect** table per device kind, and the cues: which play, as speech, sound or notification, mute, the voice and quiet hours. See [Gear](gear.md). |
-| **Modules** | Tools QuadCam downloads on request (ffmpeg, esptool): install, update, remove, **Check for updates**, and **Use ffmpeg from** (the QuadCam module, else Homebrew; or Homebrew only). See [Modules and notices](modules.md). |
+| **Modules** | Tools QuadCam downloads on request (ffmpeg, esptool): install, update, remove, **Check for module updates**, and **Use ffmpeg from** (the QuadCam module, else Homebrew; or Homebrew only). See [Modules and notices](modules.md). |
 | **Advanced** | **Check for updates automatically**, the last update check and **Check now**, and **Restart to update** with the release notes when a newer version is known (see [Updates](#updates)). Read-only: the ffmpeg in use and the agent socket path. |
 
 ### Formats

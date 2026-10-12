@@ -34,7 +34,7 @@ test("Install shows the license first; Cancel downloads nothing, Download instal
   await expect(dlg).toContainText("/opt/homebrew/bin/ffmpeg");
 });
 
-test("Check for updates offers the newer pin", async ({ app, page }) => {
+test("Check for module updates offers the newer pin", async ({ app, page }) => {
   await page.getByRole("button", { name: "Settings" }).click();
   const dlg = dialog(page, "Settings");
   await dlg.getByRole("button", { name: "Modules" }).click();
@@ -47,7 +47,7 @@ test("Check for updates offers the newer pin", async ({ app, page }) => {
     m.newest = { ...m.pinned, version: "5.5.0" };
     m.update = true;
   }`);
-  await dlg.getByRole("button", { name: "Check for updates" }).click();
+  await dlg.getByRole("button", { name: "Check for module updates" }).click();
   await expect(dlg.getByRole("status")).toHaveText("Updates are available.");
   await expect(dlg.getByRole("button", { name: "Update esptool" })).toHaveText("Update to 5.5.0");
   expect(await app.method("modules_check")).toHaveLength(1);

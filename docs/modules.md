@@ -43,7 +43,7 @@ Open **Settings > Modules**.
 
 - **Install** shows the module's version, size, license, source and download address. Nothing downloads until you select **Download**.
 - QuadCam checks each download against the SHA-256 that the release pins. A mismatch deletes the file and stops the install: "The download does not match the expected checksum."
-- **Check for updates** reads the newest pins that the latest QuadCam release published (`modules.json`). It installs nothing. A newer pin counts only when its download addresses are on the module's known hosts.
+- **Check for module updates** reads the newest pins that the latest QuadCam release published (`modules.json`). It installs nothing. A newer pin counts only when its download addresses are on the module's known hosts.
 - **Update** installs the new version next to the old one, then removes the old one.
 - **Remove** deletes the module's folder.
 

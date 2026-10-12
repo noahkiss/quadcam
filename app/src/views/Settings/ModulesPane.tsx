@@ -127,7 +127,7 @@ export function ModulesPane({ d, set }: { d: Draft; set: <K extends keyof Draft>
       </table>
       <div className={styles.row}>
         <Button size="sm" variant="ghost" icon="refresh" disabled={!!busy} onClick={check}>
-          {busy === "check" ? "Checking…" : "Check for updates"}
+          {busy === "check" ? "Checking…" : "Check for module updates"}
         </Button>
         {note && <span className={styles.sub} role="status">{note}</span>}
       </div>

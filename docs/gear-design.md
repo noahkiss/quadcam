@@ -1705,7 +1705,7 @@ otherwise QuadCam records the hash at first download and shows it in the flash p
 - Before each run, the file's hash is checked against `installed.json`. A changed file is
   refused with "esptool was changed after install; reinstall it."
 
-**Updates and removal.** **Check for updates** (Settings > Modules, or with
+**Updates and removal.** **Check for module updates** (Settings > Modules, or with
 `firmwareCheck` = `daily`) compares installed versions with the newest pins. **Update**
 installs the new version next to the old one, then removes the old. **Remove** deletes the
 module folder. A feature that needs a removed module asks again.

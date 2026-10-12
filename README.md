@@ -125,7 +125,7 @@ QuadCam works on your Mac. It sends data out only when you ask it to, with one e
 - **Use current location** asks macOS Location Services where your Mac is, once per click, and **Name from coordinates** sends a place's coordinates to Apple's geocoder to name it. See [Metadata](docs/metadata.md#use-your-current-location).
 - The **Map** page (off by default) loads Apple Maps for the area it shows, through macOS, as the Maps app does. See [The map](docs/library.md#the-map).
 - **Look up weather** (off by default) sends each clip's place, rounded to about 1 km, and its date to [Open-Meteo](https://open-meteo.com), once per clip. Off, QuadCam sends no weather request. Sun tags need no network. See [Sun and weather](docs/library.md#sun-and-weather).
-- A module install downloads the module from its upstream, and **Check for updates** reads `modules.json` from QuadCam's latest GitHub release. See [Modules](docs/modules.md).
+- A module install downloads the module from its upstream, and **Check for module updates** reads `modules.json` from QuadCam's latest GitHub release. See [Modules](docs/modules.md).
 - **Gear > Firmware > Check for updates** reads the newest EdgeTX, Betaflight and ExpressLRS releases from GitHub and the ExpressLRS release index. Planning an EdgeTX flash downloads that release's firmware zip. With `firmware_check` set to `daily` in the settings file, the page also checks once a day. **Read firmware** saves a copy of a radio's firmware over USB (DFU) without changing the radio. See [Gear](docs/gear.md#firmware-and-splash).
 
 ## License
