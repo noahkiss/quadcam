@@ -109,8 +109,11 @@ mcp.action quadcam_library_files.photos
 mcp.action quadcam_library_files.rebuild
 mcp.action quadcam_library_files.split_by_flight
 mcp.action quadcam_library_files.trash
+mcp.action quadcam_library_files.weather
 mcp.action quadcam_places.delete
+mcp.action quadcam_places.here
 mcp.action quadcam_places.list
+mcp.action quadcam_places.reverse
 mcp.action quadcam_places.save
 mcp.action quadcam_places.search
 mcp.action quadcam_profiles.delete
@@ -400,6 +403,7 @@ mcp.param quadcam_settings.values.tunables object|null
 mcp.param quadcam_settings.values.update_check boolean|null
 mcp.param quadcam_settings.values.video_analysis boolean|null
 mcp.param quadcam_settings.values.voice_index string|null
+mcp.param quadcam_settings.values.weather boolean|null
 mcp.param quadcam_suggest.on_device boolean
 mcp.param quadcam_suggest.suggestions array<object>
 mcp.param quadcam_suggest.suggestions.author string

@@ -61,6 +61,7 @@ cli.arg library rate <IDS>...
 cli.arg library rename <ID>
 cli.arg library rename <NAME>
 cli.arg library trash <IDS>...
+cli.arg library weather [IDS]...
 cli.arg meta <IDS>...
 cli.arg modules install <NAME>
 cli.arg modules remove <NAME>
@@ -68,6 +69,7 @@ cli.arg moments [IDS]...
 cli.arg names [IDS]...
 cli.arg photos [FILES]...
 cli.arg places delete <NAME>
+cli.arg places reverse <LOCATION>
 cli.arg places save <NAME>
 cli.arg places search <QUERY>
 cli.arg profiles default <NAME>
@@ -199,6 +201,7 @@ cli.command library rate
 cli.command library rebuild
 cli.command library rename
 cli.command library trash
+cli.command library weather
 cli.command mcp
 cli.command meta
 cli.command modules
@@ -212,7 +215,9 @@ cli.command names
 cli.command photos
 cli.command places
 cli.command places delete
+cli.command places here
 cli.command places list
+cli.command places reverse
 cli.command places save
 cli.command places search
 cli.command profiles

@@ -5,5 +5,8 @@
   <!-- Hardened runtime: PhotoKit (Add to Photos, the album) needs the Photos library resource. -->
   <key>com.apple.security.personal-information.photos-library</key>
   <true/>
+  <!-- Hardened runtime: Location Services (Use current location, for a saved place). -->
+  <key>com.apple.security.personal-information.location</key>
+  <true/>
 </dict>
 </plist>

@@ -52,6 +52,7 @@ mod voice;
 mod voice_check;
 mod voice_publish;
 mod voice_studio;
+mod weather;
 pub use crate::paths::{cache_dir, default_session_file, default_settings_file, support_dir};
 pub use apply::{ChangeUpdateParams, RestoreParams, StageParams};
 pub use apply_card::{CardMountParams, CardMounted, MOUNT_MINUTES};
@@ -133,6 +134,7 @@ pub use voice_studio::{
     CatalogParams, EstimateParams, ImportTakesParams, KeyParams, KeyStatus, SampleItem,
     SampleParams, SampleReport, SetsParams, StudioEstimate, StudioView,
 };
+pub use weather::{WeatherClip, WeatherParams, WeatherReport};
 
 /// What the host does when the core changes state. The GUI emits events and asks for the
 /// format click; a headless host does nothing.
@@ -380,6 +382,8 @@ pub struct Core {
     radio_links_checked: Mutex<Option<radio_aircraft::Checked>>,
     /// The app's own update, as the GUI's updater left it (`core/update.rs`).
     update: Mutex<UpdateStatus>,
+    /// How weather requests reach Open-Meteo (`core/weather.rs`).
+    weather_fetch: Arc<dyn crate::modules::fetch::Fetch>,
 }
 
 struct Busy<'a>(&'a AtomicBool);
@@ -442,6 +446,7 @@ impl Core {
                 current: env!("CARGO_PKG_VERSION").into(),
                 ..Default::default()
             }),
+            weather_fetch: Arc::new(crate::modules::fetch::real_fetch()),
         }
     }
 
@@ -455,6 +460,12 @@ impl Core {
     /// Replaces the module manager (tests pass a temp folder, a manifest and a fetcher).
     pub fn with_modules(mut self, modules: crate::modules::Modules) -> Core {
         self.modules = modules;
+        self
+    }
+
+    /// Replaces how weather requests are sent (tests pass a fake).
+    pub fn with_weather_fetch(mut self, f: Arc<dyn crate::modules::fetch::Fetch>) -> Core {
+        self.weather_fetch = f;
         self
     }
 

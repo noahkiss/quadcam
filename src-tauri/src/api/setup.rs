@@ -34,6 +34,13 @@ pub struct PlaceSaveParams {
     pub lon: Option<f64>,
 }
 
+/// `place_reverse`: a point in decimal degrees.
+#[derive(Debug, Clone, Default, Serialize, Deserialize, Type)]
+pub struct LatLonParams {
+    pub lat: f64,
+    pub lon: f64,
+}
+
 /// A place or profile, by name.
 #[derive(Debug, Clone, Default, Serialize, Deserialize, Type)]
 pub struct NameParams {

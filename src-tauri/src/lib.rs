@@ -15,6 +15,7 @@ pub mod identity;
 pub mod intel;
 pub mod join;
 pub mod library;
+pub mod locate;
 pub mod logmatch;
 pub mod logs;
 pub mod mcp;
@@ -35,10 +36,12 @@ pub mod session;
 pub mod settings;
 mod share;
 pub mod sources;
+pub mod sun;
 pub mod trash;
 pub mod trim;
 mod updater;
 pub mod watch;
+pub mod weather;
 
 use crate::core::{Core, FormatPlan, FormatRequest, Hooks};
 use crate::gear::model::{ApplyPlan, StagedChange};
@@ -614,6 +617,7 @@ pub fn specta_builder() -> tauri_specta::Builder<tauri::Wry> {
             c::library_match_logs,
             c::library_rescan,
             c::library_analyze_video,
+            c::library_weather,
             c::video_feature,
             c::library_preview,
             c::library_strips,
@@ -622,6 +626,8 @@ pub fn specta_builder() -> tauri_specta::Builder<tauri::Wry> {
             c::settings_set,
             c::places,
             c::place_search,
+            c::place_here,
+            c::place_reverse,
             c::place_save,
             c::place_delete,
             c::profiles,

@@ -114,6 +114,8 @@ pub enum Task {
     Moments,
     /// Video analysis: highlights and key frames.
     Video,
+    /// Weather lookups at Open-Meteo.
+    Weather,
 }
 
 /// A library job's progress: `done` of `total`.

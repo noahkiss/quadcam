@@ -27,6 +27,9 @@ pub struct LibItem {
     /// Neither a strip nor a poster could be made.
     pub no_picture: bool,
     pub last_import: bool,
+    /// Where the sun stood when the clip was flown (`sun`); None without a time and a
+    /// location, or in daylight and at night.
+    pub sun: Option<crate::sun::SunTag>,
 }
 
 #[derive(Debug, Clone, Serialize, specta::Type)]
@@ -269,6 +272,7 @@ impl Core {
                         poster: poster.is_file().then_some(poster),
                         no_picture: self.no_picture_path(&c.id).is_file(),
                         last_import: c.import.is_some() && c.import == ix.last_import,
+                        sun: c.sun(),
                         clip: c.clone(),
                     }
                 })
@@ -568,6 +572,15 @@ impl Core {
         if keywords_changed {
             let words = crate::metadata::clean_keywords(keywords.iter().map(String::as_str));
             set.push(("com.apple.quicktime.keywords", words.join(",")));
+        }
+        // Weather belongs to a place and an hour: a new one makes it stale.
+        let moved = location.as_ref().is_some_and(|l| {
+            l.as_ref().map(|l| (l.lat, l.lon)) != c.location.as_ref().map(|l| (l.lat, l.lon))
+        });
+        let retimed = e.date.is_some_and(|d| d != c.date)
+            || time.is_some_and(|t| t.map(|t| t.format("%H:%M").to_string()) != c.time);
+        if c.weather.is_some() && (moved || retimed) {
+            set.push((lib::KEY_WEATHER, String::new()));
         }
         for f in std::iter::once(c.path.clone()).chain(c.cuts.iter().map(|x| x.path.clone())) {
             lib::write_keys(&root.join(f), &set)?;

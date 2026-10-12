@@ -51,3 +51,4 @@ mod video;
 mod voice;
 mod voice_publish;
 mod voice_studio;
+mod weather;

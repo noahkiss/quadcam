@@ -219,6 +219,10 @@ fn session_and_library_json() {
     normalize(&mut session, &tmp, &today);
     let mut library = serde_json::to_value(core.library(&Filter::default()).unwrap()).unwrap();
     normalize(&mut library, &tmp, &today);
+    // The sun tag follows today's date and this Mac's time zone; `sun.rs` tests its values.
+    for c in library["clips"].as_array_mut().unwrap() {
+        c["sun"] = json!("<by date, time and place>");
+    }
     insta::with_settings!({sort_maps => true}, {
         insta::assert_json_snapshot!("session", session);
         insta::assert_json_snapshot!("library_view", library);

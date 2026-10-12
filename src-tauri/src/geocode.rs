@@ -184,6 +184,152 @@ fn apple(_query: &str) -> Result<Vec<GeoResult>> {
     bail!("Apple place search needs macOS; set geocoder to nominatim")
 }
 
+/// Names a point with Apple's geocoder (`CLGeocoder`, free and keyless): the place of
+/// interest there, else the placemark's name or town. A process started by cargo never asks
+/// it unless `QUADCAM_FETCH=real`.
+pub fn reverse(lat: f64, lon: f64) -> Result<GeoResult> {
+    crate::metadata::Location {
+        lat,
+        lon,
+        name: None,
+    }
+    .check()?;
+    if !crate::modules::fetch::network_allowed(
+        std::env::var("QUADCAM_FETCH").ok().as_deref(),
+        std::env::var_os("CARGO_MANIFEST_DIR").is_some(),
+    ) {
+        bail!("place lookups are off in tests (QUADCAM_FETCH=real turns them on)");
+    }
+    apple_reverse(lat, lon)
+}
+
+/// A short name and an address line from a placemark's parts.
+fn placemark_text(
+    interest: Option<String>,
+    name: Option<String>,
+    number: Option<String>,
+    street: Option<String>,
+    town: Option<String>,
+    region: Option<String>,
+    country: Option<String>,
+) -> (String, String) {
+    let clean = |s: Option<String>| s.map(|s| s.trim().to_string()).filter(|s| !s.is_empty());
+    let street_line = match (clean(number), clean(street)) {
+        (Some(n), Some(s)) => Some(format!("{n} {s}")),
+        (None, s) => s,
+        (n, None) => n,
+    };
+    let town = clean(town);
+    let address = [
+        street_line.clone(),
+        town.clone(),
+        clean(region),
+        clean(country),
+    ]
+    .into_iter()
+    .flatten()
+    .collect::<Vec<_>>()
+    .join(", ");
+    let name = clean(interest)
+        .or(clean(name))
+        .or(street_line)
+        .or(town)
+        .unwrap_or_else(|| address.clone());
+    (name, address)
+}
+
+#[cfg(target_os = "macos")]
+#[allow(deprecated)] // CLGeocoder: MKReverseGeocodingRequest replaces it on macOS 26; the app runs on 13.
+fn apple_reverse(lat: f64, lon: f64) -> Result<GeoResult> {
+    use block2::RcBlock;
+    use objc2::AllocAnyThread;
+    use objc2_core_location::{CLGeocoder, CLLocation, CLPlacemark};
+    use objc2_foundation::{NSArray, NSDate, NSDefaultRunLoopMode, NSError, NSRunLoop, NSThread};
+    use std::sync::mpsc;
+
+    let (tx, rx) = mpsc::channel::<Result<Option<(String, String)>, String>>();
+    let block = RcBlock::new(move |marks: *mut NSArray<CLPlacemark>, err: *mut NSError| {
+        // SAFETY: Core Location passes valid placemarks or a valid error (or null).
+        let out = unsafe {
+            match (marks.as_ref(), err.as_ref()) {
+                (Some(m), _) => Ok(m.firstObject().map(|p| {
+                    let s = |v: Option<objc2::rc::Retained<objc2_foundation::NSString>>| {
+                        v.map(|x| x.to_string())
+                    };
+                    placemark_text(
+                        p.areasOfInterest()
+                            .and_then(|a| a.firstObject())
+                            .map(|x| x.to_string()),
+                        s(p.name()),
+                        s(p.subThoroughfare()),
+                        s(p.thoroughfare()),
+                        s(p.locality()),
+                        s(p.administrativeArea()),
+                        s(p.country()),
+                    )
+                })),
+                // kCLErrorGeocodeFoundNoResult (8) is no name, not a failure.
+                (None, Some(e)) if e.code() == 8 => Ok(None),
+                (None, Some(e)) => Err(e.localizedDescription().to_string()),
+                (None, None) => Ok(None),
+            }
+        };
+        let _ = tx.send(out);
+    });
+    // SAFETY: plain Core Location calls with valid objects; the geocoder copies the block.
+    let geocoder = unsafe {
+        let g = CLGeocoder::new();
+        let at = CLLocation::initWithLatitude_longitude(CLLocation::alloc(), lat, lon);
+        g.reverseGeocodeLocation_completionHandler(&at, RcBlock::as_ptr(&block));
+        g
+    };
+    // The answer arrives on the main queue: on the main thread the run loop has to turn.
+    let started = std::time::Instant::now();
+    let answer = if NSThread::isMainThread_class() {
+        let run_loop = NSRunLoop::currentRunLoop();
+        loop {
+            if let Ok(a) = rx.try_recv() {
+                break Some(a);
+            }
+            if started.elapsed() > TIMEOUT {
+                break None;
+            }
+            // SAFETY: NSDefaultRunLoopMode is a static NSString.
+            run_loop.runMode_beforeDate(
+                unsafe { NSDefaultRunLoopMode },
+                &NSDate::dateWithTimeIntervalSinceNow(0.05),
+            );
+        }
+    } else {
+        rx.recv_timeout(TIMEOUT).ok()
+    };
+    let (name, address) = match answer {
+        Some(Ok(Some(t))) => t,
+        Some(Ok(None)) => bail!("Apple Maps has no name for {lat:.5}, {lon:.5}"),
+        Some(Err(e)) => bail!("Apple place lookup failed: {e}"),
+        None => {
+            // SAFETY: cancelling a running lookup is always allowed.
+            unsafe { geocoder.cancelGeocode() };
+            bail!(
+                "Apple place lookup did not answer within {} s; check the network",
+                TIMEOUT.as_secs()
+            )
+        }
+    };
+    Ok(GeoResult {
+        name,
+        address,
+        lat,
+        lon,
+        provider: "apple".into(),
+    })
+}
+
+#[cfg(not(target_os = "macos"))]
+fn apple_reverse(_lat: f64, _lon: f64) -> Result<GeoResult> {
+    bail!("Apple place lookup needs macOS")
+}
+
 /// The User-Agent Nominatim's policy asks for: the app and where to reach its maintainers.
 fn user_agent() -> String {
     format!(
@@ -429,6 +575,33 @@ mod tests {
             "200 East Main Street"
         );
         assert_eq!(super::address_name("Tour Eiffel, 5, Avenue"), "Tour Eiffel");
+    }
+
+    #[test]
+    fn placemark_names_prefer_the_place_of_interest() {
+        let o = |s: &str| Some(s.to_string());
+        let (n, a) = super::placemark_text(
+            o("Prospect Park"),
+            o("95 Prospect Park W"),
+            o("95"),
+            o("Prospect Park W"),
+            o("Brooklyn"),
+            o("NY"),
+            o("United States"),
+        );
+        assert_eq!(n, "Prospect Park");
+        assert_eq!(a, "95 Prospect Park W, Brooklyn, NY, United States");
+        let (n, a) = super::placemark_text(None, None, None, o(" "), o("Bozeman"), None, None);
+        assert_eq!((n.as_str(), a.as_str()), ("Bozeman", "Bozeman"));
+    }
+
+    #[test]
+    fn reverse_lookups_stay_offline_in_tests() {
+        assert!(super::reverse(91.0, 0.0).is_err());
+        if std::env::var("QUADCAM_FETCH").as_deref() != Ok("real") {
+            let e = super::reverse(40.0, -74.0).unwrap_err();
+            assert!(format!("{e:#}").contains("off in tests"), "{e:#}");
+        }
     }
 
     #[test]
