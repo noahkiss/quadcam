@@ -10,6 +10,7 @@ import { fmtBytes, fmtDur } from "../../lib/format";
 import { editClip, rate, renameClip } from "../../actions/library";
 import { remember } from "../../actions/cuts";
 import { KIND } from "../Library/moments";
+import { SUN_LABEL, weatherLine } from "../../lib/weather";
 import { ClipCrashes } from "./ClipCrashes";
 import styles from "./Inspector.module.css";
 
@@ -174,6 +175,18 @@ function Details({ clip: c }: { clip: LibClip }) {
         <dd className="selectable">{c.path}</dd>
         <dt>Size</dt>
         <dd>{fmtBytes(c.size)}</dd>
+        {c.sun && (
+          <>
+            <dt>Sun</dt>
+            <dd>{SUN_LABEL[c.sun]}</dd>
+          </>
+        )}
+        {c.weather && (
+          <>
+            <dt>Weather</dt>
+            <dd title={`Open-Meteo, ${c.weather.hour.replace("T", " ").replace("Z", " UTC")}`}>{weatherLine(c.weather)}</dd>
+          </>
+        )}
         {c.dvr && (
           <>
             <dt>{c.parts.length ? "DVR files" : "DVR file"}</dt>

@@ -14,6 +14,7 @@ export async function start(): Promise<() => void> {
     on("library-changed", async () => {
       await S().loadLibrary();
       findNewHighlights();
+      findWeather();
     }),
     on("settings-changed", async () => {
       // The Settings sheet reads them fresh when it closes.
@@ -21,6 +22,7 @@ export async function start(): Promise<() => void> {
       await S().loadSettings();
       await S().loadGear();
       await S().loadLibrary();
+      findWeather();
     }),
     on("session-changed", async () => sessionChanged(await api.getSession())),
     on("volumes-changed", () => S().refreshVolumes()),
@@ -78,6 +80,7 @@ export async function start(): Promise<() => void> {
   await S().loadGear();
   makeStrips();
   findNewHighlights();
+  findWeather();
   return () => {
     offs.forEach((off) => off());
     window.removeEventListener("focus", onFocus);
@@ -121,6 +124,28 @@ export async function findNewHighlights() {
     console.warn(e);
   } finally {
     videoRunning = false;
+  }
+}
+
+let weatherRunning = false;
+/** Clips asked about once this run: found nothing, or failed. Tried again after a restart. */
+const weatherTried = new Set<string>();
+/** While the weather setting is on, clips with a place and a time get their weather in the
+ * background, once. */
+export async function findWeather() {
+  const s = S();
+  if (weatherRunning || !sel.weather(s)) return;
+  const ids = (s.lib?.clips || []).filter((c) => c.location && c.time && !c.weather && !c.cut_of && !weatherTried.has(c.id)).map((c) => c.id);
+  if (!ids.length) return;
+  weatherRunning = true;
+  try {
+    const r = await api.weather(ids);
+    for (const c of r.clips) if (!c.weather) weatherTried.add(c.id);
+  } catch (e) {
+    ids.forEach((id) => weatherTried.add(id));
+    console.warn(e);
+  } finally {
+    weatherRunning = false;
   }
 }
 

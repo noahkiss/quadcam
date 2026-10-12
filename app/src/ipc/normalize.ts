@@ -99,6 +99,8 @@ export function libClip(c: G.LibItem_Serialize): LibClip {
     aliases: c.aliases ?? [],
     parts: c.parts ?? [],
     video: videoScan(c.video),
+    sun: c.sun ?? null,
+    weather: c.weather && has(c.weather.temperature_c) && has(c.weather.wind_kmh) ? { ...c.weather, temperature_c: c.weather.temperature_c!, wind_kmh: c.weather.wind_kmh!, gusts_kmh: c.weather.gusts_kmh ?? null, wind_from_deg: c.weather.wind_from_deg ?? null } : null,
     cover: c.cover ?? null,
     cut_of: c.cut_of && has(c.cut_of[1].start) && has(c.cut_of[1].end) ? [c.cut_of[0], { start: c.cut_of[1].start!, end: c.cut_of[1].end! }] : null,
   };

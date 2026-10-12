@@ -45,6 +45,7 @@ export const TASK_LABEL: Record<string, string> = {
   cuts: "Saving cuts",
   moments: "Finding dead air",
   video: "Finding highlights",
+  weather: "Getting weather",
   rebuild: "Reading the library",
   stage: "Copying clips",
   analyse: "Checking clips",

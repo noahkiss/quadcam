@@ -17,6 +17,7 @@ import { withRadio } from "../../lib/radioAircraft";
 import { applyNameFormat, matchLibraryLogs, rebuildLibrary, revealLibrary } from "../../actions/setup";
 import { draftFrom, emptyProfile, layoutExample, validPlaces, valuesOf, VIDEO_SYSTEMS, type Draft } from "./draft";
 import { ModulesPane } from "./ModulesPane";
+import { findWeather } from "../../events";
 import { checkForUpdates } from "../../actions/update";
 import { updateLine, updateOffer } from "../../store/update";
 import { Link } from "../../components/ModulePrompt";
@@ -70,6 +71,7 @@ function Sheet({ first }: { first: SettingsSection }) {
     const sess = store.getState().session;
     if (sess) store.getState().setSession(await api.planDates(sel.logDir(store.getState()), sess.log_day));
     await store.getState().loadLibrary();
+    findWeather();
   };
 
   return (
@@ -382,6 +384,32 @@ function PlacesPane({ d, set }: { d: Draft; set: SetFn }) {
     setTarget(null);
   };
   const editRow = (i: number, k: "name" | "lat" | "lon", v: string) => set("places", d.places.map((r, j) => (j === i ? { ...r, [k]: v } : r)));
+  const [locating, setLocating] = useState(false);
+  const here = async () => {
+    setLocating(true);
+    setHits("Finding your location…");
+    try {
+      const h = await api.placeHere();
+      if (h) pick(h);
+      else setHits("No location.");
+    } catch (e) {
+      setHits(errText(e));
+    } finally {
+      setLocating(false);
+    }
+  };
+  const nameRow = async (i: number) => {
+    const r = d.places[i];
+    const lat = parseFloat(r.lat);
+    const lon = parseFloat(r.lon);
+    if (!Number.isFinite(lat) || !Number.isFinite(lon)) return setHits("Enter a latitude and longitude first.");
+    try {
+      const h = await api.placeReverse(lat, lon);
+      if (h?.name) editRow(i, "name", h.name);
+    } catch (e) {
+      setHits(errText(e));
+    }
+  };
   return (
     <section>
       <h3>Places</h3>
@@ -402,6 +430,9 @@ function PlacesPane({ d, set }: { d: Draft; set: SetFn }) {
         />
         <Button size="sm" variant="ghost" icon="search" onClick={search}>
           Search
+        </Button>
+        <Button size="sm" variant="ghost" icon="gps" onClick={here} disabled={locating}>
+          Use current location
         </Button>
       </div>
       {hits != null && (
@@ -437,6 +468,7 @@ function PlacesPane({ d, set }: { d: Draft; set: SetFn }) {
                 (document.querySelector('input[aria-label="Search for a place"]') as HTMLInputElement | null)?.focus();
               }}
             />
+            <Button size="sm" variant="ghost" icon="tag" aria-label="Name from coordinates" title="Name from coordinates" onClick={() => nameRow(i)} />
             <Button size="sm" variant="ghost" icon="trash-bin-trash" aria-label="Delete this place" title="Delete" onClick={() => set("places", d.places.filter((_, j) => j !== i))} />
           </div>
         ))}
@@ -476,6 +508,7 @@ function ImportPane({ d, set }: { d: Draft; set: SetFn }) {
       <Checkbox label="Delete clips after import" detail="Deletes each clip that verified from the card or folder. Other files stay." checked={d.deleteClips} onChange={(e) => set("deleteClips", e.target.checked)} />
       <Checkbox label="Join split recordings" detail="Imports a recording the DVR split into several files as one clip." checked={d.joinSplit} onChange={(e) => set("joinSplit", e.target.checked)} />
       <VideoAnalysisBox d={d} set={set} />
+      <Checkbox label="Look up weather" detail="Gets the wind and temperature at each clip's place and hour from Open-Meteo. Sends the place, to about 1 km, and the date." checked={d.weather} onChange={(e) => set("weather", e.target.checked)} />
       <Checkbox label="On-device suggestions" detail="Suggests clip names, keywords and notes with Apple's on-device model, on Macs that have it." checked={d.onDevice} onChange={(e) => set("onDevice", e.target.checked)} />
       <h3>Log matching</h3>
       <div className={styles.row}>
