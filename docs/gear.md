@@ -817,9 +817,12 @@ QuadCam selects the profile it needs, then selects the one the FC had.
 
 ### Radio cards
 
-A radio's changes use the same five steps. Stage them from the command line or an agent
-(an edits file, see [Command line and agents](#command-line-and-agents)); a radio's **Changes**
-segment lists them and **Review…** opens the same sheet. The checks:
+A radio's changes use the same five steps. Stage model edits and checklists in the radio's
+**Models** and **Checklists** segments ([Radio model editors](#radio-model-editors)), and a
+voice in its **Voice** segment ([Radio voice](#radio-voice)). The radio's own settings
+(`RADIO/radio.yml`) have no editor in the app: stage them from the command line or an agent
+(an edits file, see [Command line and agents](#command-line-and-agents)). A radio's **Changes**
+segment lists every change and **Review…** opens the same sheet. The checks:
 
 | Check | Fails when |
 |---|---|
