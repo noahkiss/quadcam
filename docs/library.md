@@ -123,7 +123,7 @@ If the library folder already holds videos that are not in the index, the librar
 - **Flag** with P (pick), X (reject), or U (clear).
 - **Rename** with Return.
 - **Undo** (Command-Z) and **Redo** (Shift-Command-Z) work for ratings, flags, renames, notes, keywords, places and Move to Trash. Undo after Move to Trash puts the files back from the Trash.
-- **Search** matches the name, note, place, aircraft, keywords and file name.
+- **Search** matches the name, note, place, aircraft, keywords, file name and [sun tag](#sun-and-weather) (`golden hour`).
 - **Thumbnails** show the clip as you move the pointer across them.
 - **Rejected** in the sidebar shows a **Move to Trash** button for every rejected clip.
 - The day summary shows the clips, armed time, radio-log flights, lowest battery voltage and the best moments of the day.
@@ -153,6 +153,20 @@ Open a clip, then use the **Details** tab. It changes the name, date, time of da
 - A new date moves the clip, its cuts and its kept original to that day's folder. If the file name starts with the date, QuadCam renames them too.
 - A new time of day rewrites the QuickTime creation date and the file times of the clip, its cuts and its original.
 - A new aircraft rewrites the camera make and model, the aircraft, the video system and the profile's keywords in the file and its cuts.
+
+## Sun and weather
+
+A clip with a place and a time of day gets a **sun tag**: where the sun stood when you flew. QuadCam works it out on your Mac from the place, the date and the time; nothing leaves the Mac. A clip gets at most one tag:
+
+| Tag | When |
+|---|---|
+| Sunrise, Sunset | Within 15 minutes of the sun crossing the horizon |
+| Golden hour | The sun up, at most 6 degrees high |
+| Dawn, Dusk | The sun below the horizon, at most 6 degrees (civil twilight) |
+
+Daylight and night have no tag. The grid shows the tag as a sun icon, the list in its **Sun** column, and an open clip under **Details**. Search finds it (`golden hour`, `sunset`). The time is your Mac's time zone, as the library shows it.
+
+With [Look up weather](settings.md#look-up-weather) on, an open clip also shows the **Weather** at its place and hour: temperature, wind speed and direction, and gusts, from Open-Meteo. Temperatures show in °F and speeds in mph where your region uses them. QuadCam asks once per clip and saves the answer in the file (`app.quadcam.weather`). A new place, date or time removes it, and QuadCam asks again for the new hour. Open-Meteo's archive runs about five days behind; for a newer clip QuadCam asks its historical forecast, and a clip from the last hours waits until the next launch.
 
 ## Unfinished imports
 

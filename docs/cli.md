@@ -96,6 +96,7 @@ quadcam-cli library cut <id> --by-flight --export        # add one cut per radio
 quadcam-cli library apply-name-format             # rename clips to the name_date_format setting
 quadcam-cli library match-logs --logs /path/to/LOGS   # report which clips match a radio log; --apply writes flight numbers and moments
 quadcam-cli library analyze-video [<id>...]       # highlights and key frame (macOS 27); skips clips done; --again redoes them
+quadcam-cli library weather [<id>...]             # wind and temperature at each clip's place and hour (Open-Meteo; needs weather=true); a clip with weather keeps it
 quadcam-cli library trash <id>                    # clip, cuts and original to the Trash
 quadcam-cli library photos <id> --album Drone
 ```
@@ -114,6 +115,8 @@ quadcam-cli places save "Home field" --search "Golden Gate Park" --pick 1
 quadcam-cli places save "Home field" --location 37.7694,-122.4862
 quadcam-cli places save "Home field" --rename "Park"   # profiles that use it follow
 quadcam-cli places delete "Park"
+quadcam-cli places here                           # this Mac's location (Location Services), named by Apple's geocoder; saves nothing
+quadcam-cli places reverse 37.7694,-122.4862      # name a point with Apple's geocoder
 quadcam-cli profiles                              # profiles and the default
 quadcam-cli profiles save Whoop --aircraft "65 mm whoop" --camera-make "Fat Shark" \
   --camera-model Echo --keywords tinywhoop --place "Home field" --models AIR65 --default
@@ -140,6 +143,7 @@ See [Modules and notices](modules.md) for what a module install checks.
 - `delete_clips_after_import` (`true` or `false`; see [Settings](settings.md#delete-clips-after-import))
 - `join_split_recordings` (`true` or `false`; see [Joined recordings](library.md#joined-recordings))
 - `video_analysis` (`true` or `false`; see [Settings](settings.md#find-highlights-in-new-clips))
+- `weather` (`true` or `false`, off by default; see [Settings](settings.md#look-up-weather))
 - `on_device_suggestions` (`true` or `false`; see [On-device suggestions](settings.md#on-device-suggestions))
 - `update_check` (`true` or `false`; see [Updates](settings.md#updates))
 - `photos_album`, `format_label`, `log_dir`, `layout`, `place_folders`, `tunables`

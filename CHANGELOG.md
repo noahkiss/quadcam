@@ -5,6 +5,11 @@ User-facing changes in each release, newest first. Release notes on
 
 ## Unreleased
 
+- **Sun tags.** A clip with a place and a time of day shows where the sun stood: dawn, sunrise, golden hour, sunset or dusk. QuadCam works it out on your Mac; nothing leaves it. The grid shows a sun icon, the list a **Sun** column, an open clip its tag under **Details**, and search finds it. CLI `library list` and MCP `quadcam_library` carry `sun`. See [Sun and weather](docs/library.md#sun-and-weather).
+- **Weather, off by default.** Settings > Import > **Look up weather** gets the wind and temperature at each clip's place and hour from Open-Meteo (free, no account), once per clip, and saves them in the file. It sends the place, rounded to about 1 km, and the date; off, QuadCam sends no weather request. An open clip shows it under **Details**. CLI `library weather`; MCP `quadcam_library_files` `weather`; the `weather` setting.
+- **Use current location.** Settings > Places > **Use current location** adds a place where your Mac is, from macOS Location Services, named by Apple's geocoder. The first use shows macOS's permission prompt. CLI `places here`; MCP `quadcam_places` `here`.
+- **Name from coordinates.** The tag button on a place row names its latitude and longitude with Apple's geocoder. CLI `places reverse LAT,LON`; MCP `quadcam_places` `reverse`.
+
 ## 0.17.1 (2026-10-11)
 
 - **The MCP server follows updates.** When QuadCam updates, an agent's `quadcam-cli mcp` moves to the new version in the same process, between calls, and tells the agent its tool list changed. You no longer restart the agent after an update. It never switches during a call or a job, and never to an older version; `QUADCAM_MCP_RELOAD=0` turns it off. See [Updates](docs/mcp.md#updates).

@@ -216,7 +216,10 @@ A newer push to the same branch or pull request cancels the older run. A run on 
 | `src-tauri/src/identity.rs` | Clip ids: the XXH64 source fingerprint and head id, and the 0.4 legacy ids |
 | `src-tauri/src/paths.rs` | Where QuadCam keeps its files under your home folder |
 | `src-tauri/src/settings.rs` | The settings file: the one reader and writer, the setting names and their checks |
-| `src-tauri/src/geocode.rs` | Place search: Apple MapKit, OpenStreetMap Nominatim, US Census, Google Places |
+| `src-tauri/src/geocode.rs` | Place search: Apple MapKit, OpenStreetMap Nominatim, US Census, Google Places; naming a point with Apple's geocoder |
+| `src-tauri/src/locate.rs` | This Mac's location from Location Services, one fix per request. A process started by cargo never asks unless `QUADCAM_LOCATION=real` |
+| `src-tauri/src/sun.rs` | Sun tags: the sun's position, sunrise and sunset from NOAA's formulas, offline |
+| `src-tauri/src/weather.rs` | Weather from Open-Meteo through the `Fetch` trait (`core/weather.rs` writes it into clips); tests pass a fake |
 | `src-tauri/src/library.rs` | The library: layout, the index, and its rebuild from the files |
 | `src-tauri/src/trim.rs` | Cut ranges and the rule for exported cuts, shared by the session and the library |
 | `src-tauri/src/cuts.rs` | The one cut writer for the session and the library: cut, write metadata, verify, rename |
@@ -278,6 +281,6 @@ A re-run never replaces a zip that is already attached. The cask's sha256 pins w
 The release signs the app with `Developer ID Application: NKMK Digital Co. (2Z88BYP37C)`, with hardened runtime and a secure timestamp. Apple's notary service checks it, and the ticket is stapled to the app before it is zipped. The shared action `macos-sign-notarize` does this, then verifies the result with `codesign --verify --deep --strict`, the team ID, `spctl --assess`, `xcrun stapler validate` and an online notarization check.
 
 - The certificate and the App Store Connect API key are secrets of the `release` environment (`MAC_CERT_P12`, `MAC_CERT_PASSWORD`, `ASC_KEY_P8`, `ASC_KEY_ID`, `ASC_ISSUER_ID`). Only `v*` tags can use it.
-- `src-tauri/Entitlements.plist` holds one entitlement: `com.apple.security.personal-information.photos-library`. Hardened runtime blocks PhotoKit without it. QuadCam needs nothing else: ffmpeg, ffprobe, curl, diskutil and `quadcam-intel` run as separate processes, the app is not sandboxed, and it sends no Apple Events.
+- `src-tauri/Entitlements.plist` holds two entitlements: `com.apple.security.personal-information.photos-library` and `com.apple.security.personal-information.location`. Hardened runtime blocks PhotoKit and Location Services (**Use current location**) without them. QuadCam needs nothing else: ffmpeg, ffprobe, curl, diskutil and `quadcam-intel` run as separate processes, the app is not sandboxed, and it sends no Apple Events.
 - Local builds keep the ad-hoc signature (`signingIdentity "-"`), with the same hardened runtime and entitlements (`tauri.conf.json`).
 
