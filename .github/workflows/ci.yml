@@ -68,11 +68,37 @@ jobs:
           fi
           echo "by=$url" >> "$GITHUB_OUTPUT"
 
+  # A Renovate branch (`renovate/*`) that changes only the UI's dependencies (files under
+  # app/, .node-version) runs the Linux jobs and skips the macOS one. Any other change on
+  # it, such as Cargo.lock or an action in this file, runs everything.
+  renovate:
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/heads/renovate/')
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      rust: ${{ steps.diff.outputs.rust }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+      - name: Does the change reach past app/
+        id: diff
+        run: |
+          set -euo pipefail
+          other="$(git diff --name-only origin/main...HEAD | grep -vE '^(app/|\.node-version$)' || true)"
+          if [ -n "$other" ]; then
+            printf 'Outside app/:\n%s\n' "$other"
+            echo "rust=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "::notice::only app/ changed; skipping the macOS job"
+            echo "rust=false" >> "$GITHUB_OUTPUT"
+          fi
+
   check:
-    needs: proven
+    needs: [proven, renovate]
     # A pull request from this repository's own branches already ran on its push.
     if: >-
-      !cancelled() && needs.proven.outputs.by == '' &&
+      !cancelled() && needs.proven.outputs.by == '' && needs.renovate.outputs.rust != 'false' &&
       (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name != github.repository)
     runs-on: xcode-27
     timeout-minutes: 45

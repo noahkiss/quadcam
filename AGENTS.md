@@ -203,6 +203,10 @@ GitHub (`noahkiss/quadcam`, public) is the only remote. Users install the cask
   that green `rel-*` run (`ci.yml` job `proven`) and skip the tests, so they leave the macOS
   runners to the release. A push of main with no green `rel-*` run on its commit (a merge, a
   direct push) runs everything.
+- **Renovate:** a push to a `renovate/*` branch whose change stays inside `app/` (and
+  `.node-version`) skips the macOS `check` job (`ci.yml` job `renovate`) and runs only the UI
+  jobs. A change anywhere else, such as `Cargo.lock` or a workflow, runs everything. The
+  push of main after the merge runs everything too.
 - **Release cache:** a cache saved under a tag is invisible to the next tag, so
   `release-cache.yml` builds the app unsigned on main after each Release run and saves the
   Rust dependency cache under the key `quadcam-release`; `release.yml` restores it
