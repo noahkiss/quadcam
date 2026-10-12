@@ -9,6 +9,7 @@ User-facing changes in each release, newest first. Release notes on
 - **Voice lists scroll in their own box.** The Voice studio's voice list and the **Browse voices…** results now scroll inside a box of their own, under a header that stays. The cost, the Samples and the packs stay close.
 - **The studio remembers its line sets.** The first time, the Voice studio ticks every line set. After that it keeps the sets you ticked, in the gear folder, and ticks them again next time. **QuadCam default** is ticked each time the studio opens: QuadCam's own cues need it. Without it, a note by **Render pack** says that these cues use the Mac voice.
 - **Every setting in a settings read.** `quadcam-cli settings` (in `named`) and the MCP `quadcam_settings` read now show every setting with its value in effect, including the Map page, the Sim and flash previews, Gear, voice and ExpressLRS settings. A write of one of them shows it in the answer too.
+- **The sky at flight time.** With **Look up weather** on, an open clip also shows the sky with an icon (clear, partly cloudy, cloudy, fog, drizzle, rain, heavy rain, sleet, snow, thunderstorm or hail), cloud cover, precipitation, humidity and, where Open-Meteo has it, visibility. A clip looked up before is asked once more. MCP and CLI library output carry the new values.
 
 ## 0.20.1 (2026-10-12)
 

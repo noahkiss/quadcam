@@ -189,7 +189,18 @@ A clip with a place and a time of day gets a **sun tag**: where the sun stood wh
 
 Daylight and night have no tag. The grid shows the tag as a sun icon, the list in its **Sun** column, and an open clip under **Details**. Search finds it (`golden hour`, `sunset`). The time is your Mac's time zone, as the library shows it.
 
-With [Look up weather](settings.md#look-up-weather) on, an open clip also shows the **Weather** at its place and hour: temperature, wind speed and direction, and gusts, from Open-Meteo. Temperatures show in °F and speeds in mph where your region uses them. QuadCam asks once per clip and saves the answer in the file (`app.quadcam.weather`). A new place, date or time removes it, and QuadCam asks again for the new hour. Open-Meteo's archive runs about five days behind; for a newer clip QuadCam asks its historical forecast, and a clip from the last hours waits until the next launch.
+With [Look up weather](settings.md#look-up-weather) on, an open clip also shows the **Weather** at its place and hour, from Open-Meteo:
+
+| Row | Shows |
+|---|---|
+| Weather | Temperature, wind speed and direction, and gusts |
+| Sky | An icon and the sky: clear, partly cloudy, cloudy, fog, drizzle, rain, heavy rain, sleet, snow, thunderstorm or hail. A clear or partly cloudy night shows the moon |
+| Cloud cover | Percent of the sky |
+| Precipitation | Rain and snow of that hour, in mm. Shown only above 0 |
+| Humidity | Relative humidity, percent |
+| Visibility | In km. Only Open-Meteo's historical forecast has it, so a clip from its archive shows none |
+
+Temperatures show in °F, speeds in mph and visibility in mi where your region uses them. QuadCam asks once per clip and saves the answer in the file (`app.quadcam.weather`). A clip looked up before QuadCam saved the sky has only the Weather row; QuadCam asks once more for it. A new place, date or time removes the weather, and QuadCam asks again for the new hour. Open-Meteo's archive answers up to the previous day; for a newer clip QuadCam asks its historical forecast, and a clip from the last hours waits until the next launch.
 
 ## The map
 

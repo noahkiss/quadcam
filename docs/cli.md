@@ -97,7 +97,7 @@ quadcam-cli library apply-name-format             # rename clips to the name_dat
 quadcam-cli library match-logs --logs /path/to/LOGS   # report which clips match a radio log; --apply writes flight numbers and moments
 quadcam-cli library shift <id>... --from <id> --time 18:30 [--date 2026-09-28] [--logs DIR]   # print the plan: every clip shifts by the offset of --from, a matching radio log wins; --yes writes it
 quadcam-cli library analyze-video [<id>...]       # highlights and key frame (macOS 27); skips clips done; --again redoes them
-quadcam-cli library weather [<id>...]             # wind and temperature at each clip's place and hour (Open-Meteo; needs weather=true); a clip with weather keeps it
+quadcam-cli library weather [<id>...]             # wind, temperature and sky at each clip's place and hour (Open-Meteo; needs weather=true); a clip with weather keeps it, except one saved before the sky values
 quadcam-cli library trash <id>                    # clip, cuts and original to the Trash
 quadcam-cli library photos <id> --album Drone
 ```
