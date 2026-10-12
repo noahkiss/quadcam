@@ -1,9 +1,10 @@
 // The segments of a device page. Later packages add theirs to this list (spec 2.2):
 // an aircraft gets Switches, OSD, Rates, Settings, Backups and Changes; a radio Models,
-// Voice, Checklists, Splash, Backups and Changes.
+// Voice, Checklists, Settings, Splash, Backups and Changes.
 import { Overview } from "./Overview";
 import { ChecklistSegment } from "./Models/ChecklistSegment";
 import { ModelsSegment } from "./Models/ModelsSegment";
+import { RadioSettingsSegment } from "./RadioSettings/RadioSettingsSegment";
 import { VoiceSegment } from "./Voice/VoiceSegment";
 import { OsdSegment } from "./Osd/OsdSegment";
 import { RatesSegment } from "./Rates/RatesSegment";
@@ -27,6 +28,8 @@ export const DEVICE_SEGMENTS: DeviceSegment[] = [
   // A radio's voice: packs, Choose voice and per-line overrides (WP9).
   { id: "voice", label: "Voice", kinds: ["radio"], render: (d) => <VoiceSegment key={d.key} d={d} /> },
   { id: "checklists", label: "Checklists", kinds: ["radio"], render: (d) => <ChecklistSegment key={d.key} d={d} /> },
+  // The radio's own settings (radio.yml): each edit stages one "Radio settings" change.
+  { id: "radio-settings", label: "Settings", kinds: ["radio"], render: (d) => <RadioSettingsSegment key={d.key} d={d} /> },
   // Staged changes, the history, and Edit setting (WP5).
   { id: "changes", label: "Changes", kinds: ["fc", "radio"], render: (d) => <ChangesSegment d={d} /> },
   // The start-up picture, patched into the radio's firmware (WP10).

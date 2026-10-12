@@ -30,6 +30,7 @@ import { SECRET_KEYS } from "../types";
 import * as gear from "./gear";
 import * as changes from "./changes";
 import * as model from "./model";
+import * as radio from "./radio";
 import * as voice from "./voice";
 import * as osd from "./osd";
 import { MockFlights } from "./flights";
@@ -49,7 +50,7 @@ const DISPATCH = new Set([
   "library", "library_rate", "library_edit", "library_rename", "library_cuts", "library_export_cuts", "library_trash", "library_untrash",
   "library_photos", "library_apply_name_format", "library_match_logs", "library_time_shift", "library_rebuild", "library_rescan", "library_analyze_video", "library_weather", "video_feature", "library_preview", "library_strips", "card_status",
   "settings", "settings_set", "place_search", "place_here", "place_reverse", "place_save", "session_cuts", "profiles", "profile_save", "session_split", "library_split",
-  "modules", "module_install", "module_remove", "modules_check", "gear_osd", "gear_osd_edit", "gear_model", "gear_model_edit", "gear_voice", "gear_voice_edit", "gear_voice_preview", "gear_voice_render", "gear_voice_key", "gear_voice_sets", "gear_voice_catalog", "gear_voice_estimate", "gear_voice_sample", "gear_voice_samples", "gear_voice_samples_delete", "gear_voice_flag", "gear_voice_flags", "gear_voice_retake", "gear_voice_render_packs", "gear_voice_library", "gear_voice_add", "gear_voice_library_preview", "gear_voice_import_takes", "gear_voice_check", "gear_voice_pack_install", "gear_voice_pack_preview", "gear_voice_publish", "gear_voice_choose", "gear_voice_choose_radios", "gear_voice_pack_delete", "gear_rates", "gear_rates_preview", "gear_sims", "gear_sim_sync_plan", "gear_sim_sync", "gear_sim_restore_plan", "gear_sim_restore", "gear_radio_cli", "gear_dfu_link", "gear_firmware", "gear_firmware_read", "gear_splash", "gear_flash_plan", "gear_flash", "gear_firmware_copies", "gear_firmware_restore_plan", "gear_firmware_restore", "gear_elrs", "gear_elrs_read", "gear_elrs_flash_plan", "gear_elrs_flash",
+  "modules", "module_install", "module_remove", "modules_check", "gear_osd", "gear_osd_edit", "gear_model", "gear_model_edit", "gear_radio_settings", "gear_radio_settings_edit", "gear_voice", "gear_voice_edit", "gear_voice_preview", "gear_voice_render", "gear_voice_key", "gear_voice_sets", "gear_voice_catalog", "gear_voice_estimate", "gear_voice_sample", "gear_voice_samples", "gear_voice_samples_delete", "gear_voice_flag", "gear_voice_flags", "gear_voice_retake", "gear_voice_render_packs", "gear_voice_library", "gear_voice_add", "gear_voice_library_preview", "gear_voice_import_takes", "gear_voice_check", "gear_voice_pack_install", "gear_voice_pack_preview", "gear_voice_publish", "gear_voice_choose", "gear_voice_choose_radios", "gear_voice_pack_delete", "gear_rates", "gear_rates_preview", "gear_sims", "gear_sim_sync_plan", "gear_sim_sync", "gear_sim_restore_plan", "gear_sim_restore", "gear_radio_cli", "gear_dfu_link", "gear_firmware", "gear_firmware_read", "gear_splash", "gear_flash_plan", "gear_flash", "gear_firmware_copies", "gear_firmware_restore_plan", "gear_firmware_restore", "gear_elrs", "gear_elrs_read", "gear_elrs_flash_plan", "gear_elrs_flash",
   "gear_status", "gear_devices", "gear_device_save", "gear_device_forget", "gear_dismiss_reminder", "gear_poll_pause",
   "gear_switch_map", "gear_radio", "gear_radio_watch", "gear_sim_calibration", "gear_sim_calibration_save", "gear_sim_defaults", "gear_sim_calibrate",
   "gear_flights", "gear_flight_set", "gear_flight_folders", "gear_packs", "gear_pack_save", "gear_pack_delete", "gear_pack_type_save",
@@ -630,6 +631,10 @@ export class MockCore {
         return model.view(this.gear, p as never);
       case "gear_model_edit":
         return this.gearChanged(model.edit(this.gear, p as never, (p.editor as "agent" | null) ?? "user"));
+      case "gear_radio_settings":
+        return radio.view(this.gear, p as never);
+      case "gear_radio_settings_edit":
+        return this.gearChanged(radio.edit(this.gear, p as never, (p.editor as "agent" | null) ?? "user"));
       case "gear_rates": {
         const paths = (p.paths as string[] | undefined) ?? [];
         const dev = this.gear.devices.find((d) => d.id === p.device);

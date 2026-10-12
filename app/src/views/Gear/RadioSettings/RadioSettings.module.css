@@ -1,0 +1,64 @@
+.segment {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-4);
+}
+.source,
+.note {
+  margin: 0;
+  color: var(--muted);
+  font-size: var(--t-sm);
+}
+/* macOS form rows: the label on the right of its column, the control after it. */
+.form {
+  display: grid;
+  grid-template-columns: minmax(9rem, 14rem) minmax(0, 1fr);
+  gap: var(--s-3) var(--s-4);
+  align-items: center;
+}
+.label {
+  text-align: right;
+  font-size: var(--t-sm);
+  color: var(--fg);
+}
+.control {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--s-2);
+  min-width: 0;
+}
+.number {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s-2);
+}
+.number input {
+  width: 88px;
+}
+.unit,
+.hint,
+.muted {
+  color: var(--muted);
+  font-size: var(--t-sm);
+}
+.error {
+  color: var(--error-text);
+  font-size: var(--t-sm);
+}
+.check {
+  margin: 0;
+  width: 16px;
+  height: 16px;
+  accent-color: var(--accent);
+}
+@media (max-width: 640px) {
+  .form {
+    grid-template-columns: minmax(0, 1fr);
+    gap: var(--s-1) 0;
+  }
+  .label {
+    text-align: left;
+    margin-top: var(--s-2);
+  }
+}

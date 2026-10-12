@@ -27,8 +27,39 @@ export const FC_SETTINGS: Record<string, string> = {
 const PART_SETTINGS: Record<string, string[]> = { osd: ["osd_cap_alarm", "osd_ah_pos"], pid: ["p_roll"], rates: ["roll_srate"] };
 const PART_LABEL: Record<string, string> = { rates: "rates", pid: "PID profiles", osd: "OSD", modes: "modes", adjustments: "adjustments", vtx: "VTX", features: "features and beeper" };
 
-/** The radio card's files in the mock: what a card edit changes. */
-const RADIO_YML: Record<string, string> = { contrast: "20", vBatWarn: "66", hapticMode: "mode_all" };
+/** The radio card's `radio.yml` in the mock: what a card edit changes. It has no
+ * `USBMode` line, so the Settings editor shows one setting as not on the card. */
+export const RADIO_YML: Record<string, string> = {
+  currModel: "1",
+  contrast: "20",
+  vBatWarn: "66",
+  backlightMode: "backlight_mode_keys",
+  beepMode: "mode_all",
+  disableAlarmWarning: "0",
+  stickMode: "1",
+  timezone: "0",
+  adjustRTC: "1",
+  inactivityTimer: "10",
+  hapticMode: "mode_all",
+  lightAutoOff: "6",
+  templateSetup: "21",
+  hapticLength: "2",
+  beepLength: "2",
+  hapticStrength: "2",
+  gpsFormat: "0",
+  speakerVolume: "12",
+  backlightBright: "0",
+  imperial: "0",
+  disableRssiPoweroffAlarm: "0",
+  beepVolume: "2",
+  wavVolume: "2",
+  varioVolume: "2",
+  backgroundVolume: "2",
+  ownerRegistrationID: '"    test"',
+};
+
+/** The line value a set_scalar writes: the owner ID is quoted. */
+export const radioLine = (key: string, value: string) => (key === "ownerRegistrationID" ? `"${value.replace(/^"|"$/g, "")}"` : value);
 
 const DAY = "2026-10-09";
 
@@ -191,10 +222,9 @@ function cardDiff(c: StagedChange): DiffItem[] {
     if (e.kind === "radio") {
       const l: { op: "add" | "remove" | "same"; text: string }[] = [];
       for (const op of e.ops) {
-        if (op.op === "set_scalar") {
-          const before = RADIO_YML[op.key];
-          if (before != null && before !== op.value) l.push({ op: "remove", text: `${op.key}: ${before}` }, { op: "add", text: `${op.key}: ${op.value}` });
-        }
+        const [key, value] = op.op === "set_scalar" ? [op.key, radioLine(op.key, op.value)] : ["currModel", String(Number(op.file.replace(/\D/g, "")))];
+        const before = RADIO_YML[key];
+        if (before != null && before !== value) l.push({ op: "remove", text: `${key}: ${before}` }, { op: "add", text: `${key}: ${value}` });
       }
       if (l.length) {
         out.push({ kind: "lines", label: "RADIO/radio.yml", lines: l });
@@ -349,7 +379,11 @@ export function apply(g: MockGear, id: string, digest: string): ApplyReport {
       return r;
     }
     for (const e of c.edits) {
-      if (e.kind === "radio") for (const op of e.ops) if (op.op === "set_scalar") RADIO_YML[op.key] = op.value;
+      if (e.kind !== "radio") continue;
+      for (const op of e.ops) {
+        if (op.op === "set_scalar") RADIO_YML[op.key] = radioLine(op.key, op.value);
+        else RADIO_YML.currModel = String(Number(op.file.replace(/\D/g, "")));
+      }
     }
     const r: ApplyReport = {
       ...base,

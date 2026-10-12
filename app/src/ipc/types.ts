@@ -486,6 +486,9 @@ export type {
   Timer as ModelTimer,
 } from "../bindings";
 
+// The radio's Settings editor (radio.yml), as generated.
+export type { Choice as RadioChoiceValue, RadioOp, RadioSetting, RadioSettingsDetail, RadioSettingsEditParams, RadioSettingsParams, RadioSettingsView, SettingKind } from "../bindings";
+
 // Radio voice, as generated.
 export type {
   LineOverride,
