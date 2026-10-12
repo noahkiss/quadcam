@@ -219,6 +219,9 @@ quadcam-cli --json gear elrs flash DEVICE [--version V] [--sha256 H] [--port P] 
 quadcam-cli --json gear elrs flash DEVICE [--version V] --digest D --yes          # flash with the esptool module
 quadcam-cli --json gear splash IMAGE.png [--threshold N] [--invert] [--board pocket] [--out preview.png]   # a PNG as the radio's 128x64 splash; --out writes the 4x preview
 quadcam-cli --json gear firmware --read [--device RADIO]       # read-only DFU trial: copy the firmware, compare the version
+quadcam-cli --json gear firmware --copies [--device RADIO]     # saved firmware copies, newest first: date, version, size, SHA-256
+quadcam-cli --json gear firmware --restore COPY --device RADIO --plan   # restore a saved copy: checks, diff, digest
+quadcam-cli --json gear firmware --restore COPY --device RADIO --digest D --yes   # restore it to the radio in DFU mode
 quadcam-cli --json gear firmware --plan --device RADIO [--version V] [--splash IMAGE.png] [--threshold N] [--invert]   # an EdgeTX flash: checks, diff, digest
 quadcam-cli --json gear firmware --device RADIO [--version V] [--splash IMAGE.png] --digest D --yes      # flash the radio in DFU mode
 quadcam-cli --json gear firmware --plan --device FC [--version 2026.6.0]    # a Betaflight flash (needs betaflight_flash_preview=true): checks, diff, digest
@@ -322,6 +325,7 @@ Every MCP tool has a command. The command line also has `scan`, `analyze`, `clea
 | `quadcam_gear` `switch_map` | `gear map` |
 | `quadcam_gear` `session_report` | `gear report` |
 | `quadcam_gear` `board_notes`, `usb_timers` | `gear fc notes`, `gear fc usb` |
+| `quadcam_gear` `firmware_copies`, `firmware_restore_plan`; `quadcam_gear_apply` `firmware_restore` | `gear firmware --copies`, `gear firmware --restore COPY --plan`, the same with `--digest D --yes` |
 | `quadcam_gear_edit` `poll_pause` | `gear fc pause`, `gear fc resume` |
 | `quadcam_gear` `*_plan` | the same command without `--yes` or `--digest` (or with `--plan`) |
 | `quadcam_gear_apply` | the same command with `--digest D --yes` (MCP `confirm=true`) |

@@ -1439,6 +1439,44 @@ another radio, and a flash of the picked radio refuses it.
 - Command line: `quadcam-cli --json gear firmware --read [--device RADIO]`. MCP:
   `quadcam_gear` `firmware_read`.
 
+### Restore a saved firmware copy
+
+**Saved firmware copies** on **Gear > Firmware** lists each radio's firmware copies, newest
+first: when the copy was taken, why (**Read firmware**, **Before a flash**, **Before a
+restore**), the radio, the EdgeTX version and board the image names, the size and the SHA-256.
+A copy from a DFU device that is not linked to a radio shows **No radio linked** and cannot
+be restored until the device is linked (see [What QuadCam finds](#what-quadcam-finds)).
+
+**Restore…** on a copy opens a sheet with the plan. Nothing is written before you select
+**Restore** in it. The sheet shows the version change, the copy's id and SHA-256, and these
+checks:
+
+- **Copy matches its SHA-256**: the saved file still has the hash recorded when it was saved.
+- **Known board**: the radio's board is one QuadCam flashes (today the RadioMaster Pocket).
+- **Copy is for this radio's board**: the board the image names itself is the radio's board.
+  An image with no EdgeTX version string is refused.
+- **Firmware image**: the checks a release flash passes: the size, the bootloader's vector
+  table at the start, the firmware's after it, and the image's own version string.
+- **Card backup**, **One radio in DFU mode** and **The radio in DFU mode is this radio**, as
+  for a flash.
+
+A restore does not need the copy's version to be a release QuadCam has proven: it writes back
+bytes the radio ran before. The plan warns when the version is not proven.
+
+When you select **Restore**, QuadCam reads the firmware the radio runs now twice. If a saved
+copy of this radio already holds that firmware byte for byte, that copy is the backup.
+Otherwise QuadCam saves a new copy (`<time>-before-restore`) and reads it back from disk.
+QuadCam then erases, writes the copy in 16 KB segments with each one read back, reads the whole
+image back and compares it, and restarts the radio. If a read back differs, the radio stays in
+DFU mode, and the result names the backup. A restore has not been tried on a real radio yet.
+
+- A restore erases only the sectors the copy covers. Bytes in later sectors stay as they were.
+- Command line: `quadcam-cli --json gear firmware --copies [--device RADIO]`, then
+  `gear firmware --restore COPY --device RADIO --plan`, then the same with `--digest D --yes`.
+  MCP: `quadcam_gear` `firmware_copies` and `firmware_restore_plan` (`device`, `id`), then
+  `quadcam_gear_apply` `firmware_restore` with the plan's `digest` and `confirm=true`. With the
+  app running, the person must also select **Restore** in the app's sheet.
+
 ### Flash an EdgeTX radio
 
 QuadCam flashes only a board and an exact EdgeTX release listed in `compat.rs`. Today that is
@@ -1492,7 +1530,8 @@ missing or broken can still be put in DFU mode, and QuadCam can flash it again.
 
 1. Turn the radio off. Unplug other radios.
 2. Plug in the USB cable, with no button held. Wait a few seconds.
-3. Open **Firmware > Flash…** and select **Apply**. A blank flash is allowed.
+3. Open **Firmware > Flash…** and select **Apply**, or **Restore…** on a saved copy. A blank
+   flash is allowed.
 4. If QuadCam cannot do it, use a DFU tool on the copy in `firmware/<radio>/`. Another
    option is STM32CubeProgrammer with the release's `<board>-<hash>.bin` at address
    `0x08000000`.
@@ -1738,6 +1777,9 @@ quadcam-cli --json gear splash logo.png [--threshold 128] [--invert] [--board po
 quadcam-cli --json gear firmware --read [--device <radio>]   # read-only DFU trial: copy the firmware, compare the version
 quadcam-cli --json gear firmware --plan --device <radio> [--version 2.12.4] [--splash logo.png]   # checks, diff, digest
 quadcam-cli --json gear firmware --device <radio> [--splash logo.png] --digest D --yes   # flash (radio in DFU mode)
+quadcam-cli --json gear firmware --copies [--device <radio>]   # saved firmware copies, newest first
+quadcam-cli --json gear firmware --restore <copy> --device <radio> --plan   # checks, diff, digest
+quadcam-cli --json gear firmware --restore <copy> --device <radio> --digest D --yes   # restore (radio in DFU mode)
 quadcam-cli --json gear card [--mount M | --device ID] [--model model01.yml]
 quadcam-cli --json gear card preview --edits edits.json   # checks and diff; writes nothing
 quadcam-cli gear map --radio /Volumes/RADIO --fc quad.diff_all.txt --text   # the switch map
