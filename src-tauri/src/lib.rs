@@ -367,6 +367,17 @@ async fn gear_flash_click(
     blocking(move || core.gear_flash_click(&params)).await
 }
 
+/// The apply sheet's own Apply button for a firmware restore: the click is the confirmation.
+#[tauri::command]
+#[specta::specta]
+async fn gear_firmware_restore_click(
+    state: State<'_, AppState>,
+    params: api::FirmwareRestoreRequest,
+) -> Result<api::ApplyReport, String> {
+    let core = state.core.clone();
+    blocking(move || core.gear_firmware_restore_click(&params)).await
+}
+
 /// The apply sheet's own Apply button for an ExpressLRS flash.
 #[tauri::command]
 #[specta::specta]
@@ -711,6 +722,9 @@ pub fn specta_builder() -> tauri_specta::Builder<tauri::Wry> {
             c::gear_firmware_read,
             c::gear_flash_plan,
             c::gear_flash,
+            c::gear_firmware_copies,
+            c::gear_firmware_restore_plan,
+            c::gear_firmware_restore,
             c::gear_elrs,
             c::gear_elrs_read,
             c::gear_elrs_flash_plan,
@@ -797,6 +811,7 @@ pub fn specta_builder() -> tauri_specta::Builder<tauri::Wry> {
             gear_sim_sync_click,
             gear_sim_restore_click,
             gear_flash_click,
+            gear_firmware_restore_click,
             gear_elrs_flash_click,
             answer_apply_request,
             library_scope,

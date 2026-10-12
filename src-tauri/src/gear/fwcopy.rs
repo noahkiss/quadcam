@@ -25,6 +25,8 @@ pub enum CopyKind {
     Read,
     /// The flash took it before it erased.
     BeforeFlash,
+    /// A restore of a saved copy took it before it erased.
+    BeforeRestore,
 }
 
 impl CopyKind {
@@ -32,6 +34,7 @@ impl CopyKind {
         match self {
             CopyKind::Read => "read",
             CopyKind::BeforeFlash => "before-flash",
+            CopyKind::BeforeRestore => "before-restore",
         }
     }
 }
@@ -70,7 +73,8 @@ fn dir(store: &Store, device: &str) -> PathBuf {
     store.root().join("firmware").join(safe(device))
 }
 
-fn sha256(bytes: &[u8]) -> String {
+/// The SHA-256 of `bytes`, in lowercase hex: the hash a copy records.
+pub fn sha256(bytes: &[u8]) -> String {
     Sha256::digest(bytes)
         .iter()
         .map(|b| format!("{b:02x}"))
@@ -147,6 +151,20 @@ pub fn list(store: &Store, device: &str) -> Vec<FwCopy> {
         .filter_map(|e| serde_json::from_slice(&std::fs::read(e.path()).ok()?).ok())
         .collect();
     out.sort_by(|a, b| b.taken_at.cmp(&a.taken_at).then(b.id.cmp(&a.id)));
+    out
+}
+
+/// The names of the folders that hold copies: saved device ids, and `dfu-<serial>` for a
+/// read that named no radio.
+pub fn folders(store: &Store) -> Vec<String> {
+    let mut out: Vec<String> = std::fs::read_dir(store.root().join("firmware"))
+        .into_iter()
+        .flatten()
+        .flatten()
+        .filter(|e| e.path().is_dir())
+        .filter_map(|e| e.file_name().to_str().map(str::to_string))
+        .collect();
+    out.sort();
     out
 }
 

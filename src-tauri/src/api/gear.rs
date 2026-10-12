@@ -46,7 +46,8 @@ pub use crate::core::{
     ElrsFlashParams, ElrsFlashRequest, ElrsParams, ElrsReadParams, ElrsReadReport, ElrsView,
 };
 pub use crate::core::{
-    FirmwareParams, FirmwareRead, FirmwareReadParams, FirmwareView, FlashParams, FlashRequest,
+    FirmwareCopiesParams, FirmwareCopy, FirmwareParams, FirmwareRead, FirmwareReadParams,
+    FirmwareRestoreParams, FirmwareRestoreRequest, FirmwareView, FlashParams, FlashRequest,
 };
 pub use crate::core::{
     FlagList, FlagParams, RetakeParams, RetakeReport, SampleGallery, SampleVoice,
@@ -176,6 +177,19 @@ macro_rules! with_gear_rows {
             /// the plan's digest and confirm=true; with the app running the person also clicks
             /// Apply in its sheet.
             gear_flash(params: FlashRequest) -> ApplyReport = |c| c.gear_flash(&params);
+            /// The saved firmware copies of a radio (`device`), or of every radio and of DFU
+            /// devices not linked to one, newest first: date, kind, size, SHA-256, and the board
+            /// and EdgeTX version the image names. Reads files only.
+            gear_firmware_copies(params: FirmwareCopiesParams) -> Vec<FirmwareCopy> = |c| c.gear_firmware_copies(&params);
+            /// What restoring a saved firmware copy to its radio would do: the copy's SHA-256,
+            /// its board against the radio's, the image checks, a card backup, exactly one radio
+            /// in DFU mode, and a digest. Writes no device.
+            gear_firmware_restore_plan(params: FirmwareRestoreParams) -> ApplyPlan = |c| c.gear_firmware_restore_plan(&params);
+            /// Restores the planned firmware copy over DFU: reads the radio's current firmware
+            /// and keeps it as a copy unless a saved copy already holds it, erases, writes, reads
+            /// back and compares, then leaves DFU. Needs the plan's digest and confirm=true; with
+            /// the app running the person also clicks Apply in its sheet.
+            gear_firmware_restore(params: FirmwareRestoreRequest) -> ApplyReport = |c| c.gear_firmware_restore(&params);
             /// The ExpressLRS devices QuadCam has read: version, target, options, the radios and
             /// FCs to read through, and what a flash needs. A preview behind `elrsPreview`.
             gear_elrs(params: ElrsParams) -> ElrsView = |c| c.gear_elrs(&params);

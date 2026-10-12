@@ -26,6 +26,7 @@ mod fc;
 mod files;
 mod firmware;
 mod flights;
+mod fw_restore;
 mod gear;
 mod gear_card;
 mod import;
@@ -86,6 +87,10 @@ pub use flights::{
     CrashSaveParams, FlightFilter, FlightFoldersParams, FlightReport, FlightSetParams, FlightsView,
     NotesParams, PackSaveParams, PacksParams, PlaceTrend, ReportParams, ReportSaveParams,
     ReportSaved, TrendPoint,
+};
+pub use fw_restore::{
+    FirmwareCopiesParams, FirmwareCopy, FirmwareRestoreParams, FirmwareRestoreRequest,
+    RESTORE_CHANGE,
 };
 pub use gear::{
     connected_name, link_handle, DeviceSaveParams, GearStatus, Hold, HookFn, HookOutcome, HookRun,

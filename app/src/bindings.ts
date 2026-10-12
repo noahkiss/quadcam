@@ -400,6 +400,25 @@ export const commands = {
 	 */
 	gearFlash: (params: FlashRequest) => typedError<ApplyReport, string>(__TAURI_INVOKE("gear_flash", { params })),
 	/**
+	 *  The saved firmware copies of a radio (`device`), or of every radio and of DFU
+	 *  devices not linked to one, newest first: date, kind, size, SHA-256, and the board
+	 *  and EdgeTX version the image names. Reads files only.
+	 */
+	gearFirmwareCopies: (params: FirmwareCopiesParams) => typedError<FirmwareCopy[], string>(__TAURI_INVOKE("gear_firmware_copies", { params })),
+	/**
+	 *  What restoring a saved firmware copy to its radio would do: the copy's SHA-256,
+	 *  its board against the radio's, the image checks, a card backup, exactly one radio
+	 *  in DFU mode, and a digest. Writes no device.
+	 */
+	gearFirmwareRestorePlan: (params: FirmwareRestoreParams) => typedError<ApplyPlan, string>(__TAURI_INVOKE("gear_firmware_restore_plan", { params })),
+	/**
+	 *  Restores the planned firmware copy over DFU: reads the radio's current firmware
+	 *  and keeps it as a copy unless a saved copy already holds it, erases, writes, reads
+	 *  back and compares, then leaves DFU. Needs the plan's digest and confirm=true; with
+	 *  the app running the person also clicks Apply in its sheet.
+	 */
+	gearFirmwareRestore: (params: FirmwareRestoreRequest) => typedError<ApplyReport, string>(__TAURI_INVOKE("gear_firmware_restore", { params })),
+	/**
 	 *  The ExpressLRS devices QuadCam has read: version, target, options, the radios and
 	 *  FCs to read through, and what a flash needs. A preview behind `elrsPreview`.
 	 */
@@ -651,6 +670,8 @@ export const commands = {
 	gearSimRestoreClick: (params: SimRestoreRequest) => typedError<ApplyReport, string>(__TAURI_INVOKE("gear_sim_restore_click", { params })),
 	/**  The apply sheet's own Apply button for a firmware flash: the click is the confirmation. */
 	gearFlashClick: (params: FlashRequest) => typedError<ApplyReport, string>(__TAURI_INVOKE("gear_flash_click", { params })),
+	/**  The apply sheet's own Apply button for a firmware restore: the click is the confirmation. */
+	gearFirmwareRestoreClick: (params: FirmwareRestoreRequest) => typedError<ApplyReport, string>(__TAURI_INVOKE("gear_firmware_restore_click", { params })),
 	/**  The apply sheet's own Apply button for an ExpressLRS flash. */
 	gearElrsFlashClick: (params: ElrsFlashRequest) => typedError<ApplyReport, string>(__TAURI_INVOKE("gear_elrs_flash_click", { params })),
 	/**  The person's answer to an agent's apply request. */
@@ -1898,7 +1919,9 @@ export type CopyKind =
 /**  The person ran "Read radio firmware". */
 "read" | 
 /**  The flash took it before it erased. */
-"before_flash";
+"before_flash" | 
+/**  A restore of a saved copy took it before it erased. */
+"before_restore";
 
 /**  `gear_copy_plan` and `gear_copy_stage`: where the settings come from and go to. */
 export type CopyParams = {
@@ -2785,6 +2808,22 @@ export type Filter = {
 	min_rating?: number | null,
 };
 
+/**  `gear_firmware_copies`: whose copies. */
+export type FirmwareCopiesParams = {
+	/**
+	 *  A saved radio's device id. Omitted: every radio's copies, and copies of DFU devices
+	 *  not linked to a radio.
+	 */
+	device?: string | null,
+};
+
+/**  One saved copy and the radio it belongs to. */
+export type FirmwareCopy = {
+	/**  The saved radio; none for a copy of a DFU device not linked to a radio. */
+	radio: string | null,
+	copy: FwCopy,
+};
+
 /**  `gear_firmware`: whether to read the network. */
 export type FirmwareParams = {
 	/**
@@ -2825,6 +2864,20 @@ export type FirmwareReadProgress = {
 	done: number,
 	total: number,
 };
+
+/**  `gear_firmware_restore_plan`: which radio, which copy. */
+export type FirmwareRestoreParams = {
+	/**  The saved radio's device id. */
+	device: string,
+	/**  The copy's id (`<device>/<stamp>-<kind>`) from `gear_firmware_copies`. */
+	copy: string,
+};
+
+/**  `gear_firmware_restore`: the same params, the plan's digest and the confirm. */
+export type FirmwareRestoreRequest = {
+	digest: string,
+	confirm?: boolean,
+} & FirmwareRestoreParams;
 
 /**  Where a device stands against the newest release. */
 export type FirmwareState = "up_to_date" | "update" | 

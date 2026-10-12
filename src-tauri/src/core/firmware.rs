@@ -115,6 +115,19 @@ pub struct FirmwareRead {
     pub steps: Vec<StepReport>,
 }
 
+/// What `dfu_write` writes, and for which plan.
+pub(super) struct DfuWrite<'a> {
+    pub device: &'a Device,
+    pub dfu: &'a DfuInfo,
+    pub image: &'a [u8],
+    /// The stand-in change id the report carries.
+    pub change: &'static str,
+    /// The plan's warnings, as the report's notes.
+    pub notes: Vec<String>,
+    /// The saved copy being written back; none for a release flash.
+    pub restore: Option<&'a FwCopy>,
+}
+
 struct Prepared {
     plan: ApplyPlan,
     device: Device,
@@ -326,6 +339,58 @@ impl Core {
             )
         });
 
+        let dfu = self.radio_dfu_checks(&device, "flash", &mut checks, &mut warnings);
+        warnings.push(
+            "A radio in DFU mode shows no name. QuadCam writes the one radio in DFU mode; check it is the radio you picked.".into(),
+        );
+        warnings.push(
+            "QuadCam reads the radio's current firmware over DFU twice first and keeps it as a copy; it erases nothing until both reads agree and the saved file reads back. If a flash fails, the radio's ROM bootloader still answers over USB (turn it off, plug in USB) and you can flash again. Flashing has not been tried on a real radio yet.".into(),
+        );
+
+        let ready = checks.iter().all(|c| c.ok);
+        let digest = if ready {
+            blobs::hash(
+                format!(
+                    "flash|{}|{}|{}|{}|{}|{}",
+                    device.id,
+                    dfu.first()
+                        .and_then(|d| d.serial.clone())
+                        .unwrap_or_default(),
+                    board.clone().unwrap_or_default(),
+                    installed.clone().unwrap_or_default(),
+                    target,
+                    image_sha
+                )
+                .as_bytes(),
+            )
+        } else {
+            String::new()
+        };
+        Ok(Prepared {
+            plan: ApplyPlan {
+                change: FLASH_CHANGE.into(),
+                device: device.identity.clone(),
+                checks,
+                diff,
+                digest,
+                warnings,
+            },
+            device,
+            image,
+            dfu: dfu.into_iter().next(),
+        })
+    }
+
+    /// The DFU checks a flash and a restore share: exactly one radio in DFU mode, and that it
+    /// is `device` (its link, or a warning when no radio holds the link yet). `verb` names
+    /// the write in the warning (`flash`, `restore`).
+    pub(super) fn radio_dfu_checks(
+        &self,
+        device: &Device,
+        verb: &str,
+        checks: &mut Vec<Check>,
+        warnings: &mut Vec<String>,
+    ) -> Vec<DfuInfo> {
         let dfu: Vec<DfuInfo> = (self.gear.dfu)()
             .into_iter()
             .filter(|d| (d.vid, d.pid) == STM32_DFU)
@@ -376,58 +441,20 @@ impl Core {
                     let last = super::dfu_link::last_seen_radio(&saved);
                     warnings.push(match last {
                         Some(l) if l.id != device.id => format!(
-                            "This DFU device is not linked to a radio yet. {} was seen most recently, not {}; check you picked the radio in DFU mode. A verified flash links it to {}.",
+                            "This DFU device is not linked to a radio yet. {} was seen most recently, not {}; check you picked the radio in DFU mode. A verified {verb} links it to {}.",
                             l.display_name(),
                             device.display_name(),
                             device.display_name()
                         ),
                         _ => format!(
-                            "This DFU device is not linked to a radio yet. A verified flash links it to {}.",
+                            "This DFU device is not linked to a radio yet. A verified {verb} links it to {}.",
                             device.display_name()
                         ),
                     });
                 }
             }
         }
-        warnings.push(
-            "A radio in DFU mode shows no name. QuadCam writes the one radio in DFU mode; check it is the radio you picked.".into(),
-        );
-        warnings.push(
-            "QuadCam reads the radio's current firmware over DFU twice first and keeps it as a copy; it erases nothing until both reads agree and the saved file reads back. If a flash fails, the radio's ROM bootloader still answers over USB (turn it off, plug in USB) and you can flash again. Flashing has not been tried on a real radio yet.".into(),
-        );
-
-        let ready = checks.iter().all(|c| c.ok);
-        let digest = if ready {
-            blobs::hash(
-                format!(
-                    "flash|{}|{}|{}|{}|{}|{}",
-                    device.id,
-                    dfu.first()
-                        .and_then(|d| d.serial.clone())
-                        .unwrap_or_default(),
-                    board.clone().unwrap_or_default(),
-                    installed.clone().unwrap_or_default(),
-                    target,
-                    image_sha
-                )
-                .as_bytes(),
-            )
-        } else {
-            String::new()
-        };
-        Ok(Prepared {
-            plan: ApplyPlan {
-                change: FLASH_CHANGE.into(),
-                device: device.identity.clone(),
-                checks,
-                diff,
-                digest,
-                warnings,
-            },
-            device,
-            image,
-            dfu: dfu.into_iter().next(),
-        })
+        dfu
     }
 
     /// The read-only trial: reads all of the flash of the one radio in DFU mode twice, saves it
@@ -626,7 +653,33 @@ impl Core {
                 .confirm_apply(&flash_change(&prep.device, &prep.plan), &prep.plan)?;
         }
         let dfu_info = prep.dfu.clone().expect("one DFU device passed its check");
-        let _job = self.dfu_job(&dfu_info, Some(&prep.device.id), "Flashing")?;
+        self.dfu_write(&DfuWrite {
+            device: &prep.device,
+            dfu: &dfu_info,
+            image: &prep.image,
+            change: FLASH_CHANGE,
+            notes: prep.plan.warnings.clone(),
+            restore: None,
+        })
+    }
+
+    /// Writes `w.image` to the one radio in DFU mode: the chip size check, two reads of the
+    /// firmware it runs now that agree, the board that firmware names, that firmware kept as a
+    /// copy (a restore keeps no second copy of an image a saved copy already holds), then
+    /// erase, write, read back and compare, and leave DFU. A mismatch stays in DFU. The
+    /// caller has run the plan's checks, compared the digest and had the confirm.
+    pub(super) fn dfu_write(&self, w: &DfuWrite<'_>) -> Result<ApplyReport> {
+        let dfu_info = w.dfu;
+        let device = w.device;
+        let _job = self.dfu_job(
+            dfu_info,
+            Some(&device.id),
+            if w.restore.is_some() {
+                "Restoring firmware"
+            } else {
+                "Flashing"
+            },
+        )?;
         let flasher: &dyn Flasher = self.firmware.flasher.as_ref();
         let quick = flasher.quick();
         let mut usb = flasher
@@ -644,11 +697,11 @@ impl Core {
             detail,
         };
 
-        let name = prep.device.display_name();
+        let name = device.display_name();
         let no_copy =
             |why: String| refuse(RefusalCode::NoBackup, format!("{why} Nothing was written."));
         // The device must be the chip the board expects, before any command that changes it.
-        let want = edgetx::spec(prep.device.identity.board.as_deref().unwrap_or_default())
+        let want = edgetx::spec(device.identity.board.as_deref().unwrap_or_default())
             .map(|s| s.flash_bytes)
             .unwrap_or_default();
         let have = dfu::flash_size(usb.as_mut(), quick)
@@ -671,7 +724,7 @@ impl Core {
         // A radio in DFU mode shows no name, and two radios can share a chip. The firmware it
         // runs names its board: another board is another radio, also before any link exists.
         if let Some((image_board, _)) = &identity {
-            let board = prep.device.identity.board.as_deref().unwrap_or_default();
+            let board = device.identity.board.as_deref().unwrap_or_default();
             if !edgetx::same_board(board, image_board) {
                 return Err(refuse(
                     RefusalCode::DeviceChanged,
@@ -681,14 +734,30 @@ impl Core {
                 ));
             }
         }
+        // A restore keeps no second copy of firmware a saved copy already holds, byte for
+        // byte (its hash, and the saved file still reads back with that hash).
+        let already = if blank || w.restore.is_none() {
+            None
+        } else {
+            let sha = fwcopy::sha256(&current);
+            self.saved_copies(device)
+                .into_iter()
+                .find(|c| c.sha256 == sha && fwcopy::read(&self.gear_store(), c).is_ok())
+        };
         let kept = if blank {
             None
+        } else if let Some(c) = already.clone() {
+            Some(c)
         } else {
             Some(
                 fwcopy::save(
                     &self.gear_store(),
-                    &prep.device.id,
-                    CopyKind::BeforeFlash,
+                    &device.id,
+                    if w.restore.is_some() {
+                        CopyKind::BeforeRestore
+                    } else {
+                        CopyKind::BeforeFlash
+                    },
                     Utc::now(),
                     &current,
                     identity,
@@ -703,27 +772,33 @@ impl Core {
         steps.push(step(
             "Copy the current firmware",
             StepState::Done,
-            Some(match &kept {
-                Some(c) => format!("{} KB, read twice, saved as {}", current.len() / 1024, c.id),
-                None => "the flash is blank; there is no firmware to keep".into(),
+            Some(match (&kept, &already) {
+                (Some(c), Some(_)) => format!(
+                    "{} KB, read twice, already saved as {}",
+                    current.len() / 1024,
+                    c.id
+                ),
+                (Some(c), None) => {
+                    format!("{} KB, read twice, saved as {}", current.len() / 1024, c.id)
+                }
+                (None, _) => "the flash is blank; there is no firmware to keep".into(),
             }),
         ));
 
         let mut seen: Vec<dfu::Step> = Vec::new();
-        let outcome = dfu::flash(
-            usb.as_mut(),
-            FLASH_BASE,
-            &prep.image,
-            &copy,
-            quick,
-            &mut |s| seen.push(s),
-        );
+        let outcome = dfu::flash(usb.as_mut(), FLASH_BASE, w.image, &copy, quick, &mut |s| {
+            seen.push(s)
+        });
         let labels = [
             (dfu::Step::Erase, "Erase"),
             (dfu::Step::Write, "Write"),
             (dfu::Step::ReadBack, "Read back"),
             (dfu::Step::Leave, "Leave DFU"),
         ];
+        let what = match w.restore {
+            Some(c) => format!("the firmware of copy {}", c.id),
+            None => "the new firmware".to_string(),
+        };
         let (status, message) = match &outcome {
             Ok(o) => {
                 for (s, label) in labels {
@@ -738,9 +813,9 @@ impl Core {
                         },
                     ));
                 }
-                if prep.device.dfu_serial.is_none() {
+                if device.dfu_serial.is_none() {
                     if let Some(serial) = dfu_info.serial.clone().filter(|s| !s.is_empty()) {
-                        let mut d = prep.device.clone();
+                        let mut d = device.clone();
                         d.dfu_serial = Some(serial);
                         let _ = self.gear_store().save_device(&d);
                     }
@@ -748,7 +823,7 @@ impl Core {
                 (
                     ChangeStatus::Verified,
                     format!(
-                        "Verified: {name} holds the new firmware byte for byte and restarted. Connect it in USB Storage mode to check the version."
+                        "Verified: {name} holds {what} byte for byte and restarted. Connect it in USB Storage mode to check the version."
                     ),
                 )
             }
@@ -770,7 +845,9 @@ impl Core {
                 (
                     ChangeStatus::Failed,
                     format!(
-                        "The flash failed: {e:#} The radio stays in DFU mode. Flash again, or unplug it, turn it off, plug it in again and retry. The radio's ROM bootloader always answers over USB. The firmware it ran before is kept ({}).",
+                        "The {} failed: {e:#} The radio stays in DFU mode. {} again, or unplug it, turn it off, plug it in again and retry. The radio's ROM bootloader always answers over USB. The firmware it ran before is kept ({}).",
+                        if w.restore.is_some() { "restore" } else { "flash" },
+                        if w.restore.is_some() { "Restore" } else { "Flash" },
                         kept.as_ref().map_or("it was blank".to_string(), |c| c.id.clone())
                     ),
                 )
@@ -779,8 +856,8 @@ impl Core {
         self.hooks.gear_changed();
         let ok = outcome.is_ok();
         Ok(ApplyReport {
-            change: FLASH_CHANGE.into(),
-            device: prep.device.id.clone(),
+            change: w.change.into(),
+            device: device.id.clone(),
             status,
             steps,
             backup: kept.map(|c| c.id),
@@ -791,7 +868,7 @@ impl Core {
             saved: ok,
             files: Vec::new(),
             message,
-            notes: prep.plan.warnings.clone(),
+            notes: w.notes.clone(),
             at: Utc::now(),
         })
     }
