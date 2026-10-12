@@ -603,6 +603,50 @@ fn model_file_arg(f: &str) -> Result<String> {
     Ok(f.to_string())
 }
 
+/// Applies one `RadioOp` to a `radio.yml` doc: the protected keys, the value check
+/// (`radio::setting_value`) and its warning. `has_model` says whether `MODELS/<file>` exists.
+pub fn apply_radio_op(
+    d: &mut Doc,
+    op: &RadioOp,
+    has_model: &dyn Fn(&str) -> bool,
+    warnings: &mut Vec<String>,
+) -> Result<(), Refusal> {
+    match op {
+        RadioOp::SetScalar { key, value } => {
+            if RADIO_PROTECTED.contains(&key.as_str()) {
+                return Err(bad(format!(
+                    "{key} is not set this way{}.",
+                    if key.starts_with("currModel") {
+                        "; use select_model"
+                    } else {
+                        ""
+                    }
+                )));
+            }
+            let value = super::radio::setting_value(key, value)?.unwrap_or_else(|| value.clone());
+            if let Some(w) = super::radio::warning(key, &value) {
+                if !warnings.contains(&w) {
+                    warnings.push(w);
+                }
+            }
+            d.set_top_scalar(key, &value)?;
+            Ok(())
+        }
+        RadioOp::SelectModel { file } => {
+            let f = model_file_arg(file).map_err(|e| bad(format!("{e:#}")))?;
+            if !has_model(&f) {
+                return Err(bad(format!("The card has no MODELS/{f}.")));
+            }
+            let n = model_number(&f).unwrap_or(0);
+            d.set_top_scalar("currModel", &n.to_string())?;
+            if d.top("currModelFilename")?.is_some() {
+                d.set_top_scalar("currModelFilename", &format!("\"{f}\""))?;
+            }
+            Ok(())
+        }
+    }
+}
+
 /// The edits' working state: each touched file's doc, or raw bytes for non-YAML files
 /// (None: deleted).
 struct Work<'a> {
@@ -698,49 +742,20 @@ impl Work<'_> {
     }
 
     fn radio_op(&mut self, op: &RadioOp) -> Result<(), Refusal> {
-        match op {
-            RadioOp::SetScalar { key, value } => {
-                if RADIO_PROTECTED.contains(&key.as_str()) {
-                    return Err(bad(format!(
-                        "{key} is not set this way{}.",
-                        if key.starts_with("currModel") {
-                            "; use select_model"
-                        } else {
-                            ""
-                        }
-                    )));
-                }
-                if key == "hapticMode" {
-                    if !HAPTIC_MODES.contains(&value.as_str()) {
-                        return Err(bad(format!(
-                            "hapticMode is one of {}.",
-                            HAPTIC_MODES.join(", ")
-                        )));
-                    }
-                    if value == "mode_alarms" {
-                        self.warnings.push(
-                            "hapticMode mode_alarms drops every special-function haptic.".into(),
-                        );
-                    }
-                }
-                self.doc(RADIO_FILE)?.set_top_scalar(key, value)?;
-                Ok(())
-            }
+        let has_model = match op {
             RadioOp::SelectModel { file } => {
                 let f = model_file_arg(file).map_err(|e| bad(format!("{e:#}")))?;
-                if !self.exists(&format!("MODELS/{f}")) {
-                    return Err(bad(format!("The card has no MODELS/{f}.")));
-                }
-                let n = model_number(&f).unwrap_or(0);
                 self.select_asked = true;
-                let d = self.doc(RADIO_FILE)?;
-                d.set_top_scalar("currModel", &n.to_string())?;
-                if d.top("currModelFilename")?.is_some() {
-                    d.set_top_scalar("currModelFilename", &format!("\"{f}\""))?;
-                }
-                Ok(())
+                self.exists(&format!("MODELS/{f}"))
             }
-        }
+            RadioOp::SetScalar { .. } => false,
+        };
+        let mut warnings = std::mem::take(&mut self.warnings);
+        let r = self
+            .doc(RADIO_FILE)
+            .and_then(|d| apply_radio_op(d, op, &|_| has_model, &mut warnings));
+        self.warnings = warnings;
+        r
     }
 
     fn checklist(&mut self, model: &str, text: &str) -> Result<(), Refusal> {

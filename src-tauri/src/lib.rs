@@ -713,6 +713,8 @@ pub fn specta_builder() -> tauri_specta::Builder<tauri::Wry> {
             c::gear_voice_pack_delete,
             c::gear_model,
             c::gear_model_edit,
+            c::gear_radio_settings,
+            c::gear_radio_settings_edit,
             c::gear_sim_sync_plan,
             c::gear_sim_sync,
             c::gear_sim_restore_plan,

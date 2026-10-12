@@ -40,6 +40,7 @@ mod ondevice;
 mod osd;
 mod osd_edit;
 mod qol;
+mod radio_settings;
 mod radio_usb;
 mod secrets;
 mod settings;

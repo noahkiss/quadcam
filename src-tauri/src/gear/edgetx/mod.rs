@@ -8,6 +8,8 @@
 //! - `card`: the card: identity, models, the selected model, the radio clock; plans
 //!   (`Card::plan`, writes nothing) and the writer (`card::write`, called only by the
 //!   apply engine), and `card::release` (unmount, before "safe to unplug").
+//! - `radio`: the typed view of `radio.yml` for the radio's Settings editor, and the check
+//!   of each value a `RadioOp::SetScalar` writes.
 //! - `synth`: the synthetic card for tests and the mock core.
 //!
 //! QuadCam learned the format from EdgeTX's files and documentation and copies no EdgeTX
@@ -17,5 +19,6 @@ pub mod card;
 pub mod cli;
 pub mod editors;
 pub mod model;
+pub mod radio;
 pub mod synth;
 pub mod yaml;

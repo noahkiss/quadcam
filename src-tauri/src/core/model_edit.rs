@@ -86,13 +86,13 @@ pub struct ModelEditParams {
 }
 
 /// Where the model files are read from.
-struct Base<'a> {
-    reader: Box<dyn CardSource + 'a>,
-    source: String,
+pub(super) struct Base<'a> {
+    pub(super) reader: Box<dyn CardSource + 'a>,
+    pub(super) source: String,
 }
 
 impl Core {
-    fn model_base<'a>(
+    pub(super) fn model_base<'a>(
         &self,
         device: &str,
         snaps: &'a crate::gear::backup::Snapshots,

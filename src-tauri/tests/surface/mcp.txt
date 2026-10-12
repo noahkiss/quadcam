@@ -27,6 +27,7 @@ mcp.action quadcam_gear.osd
 mcp.action quadcam_gear.packs
 mcp.action quadcam_gear.preflight
 mcp.action quadcam_gear.radio
+mcp.action quadcam_gear.radio_settings
 mcp.action quadcam_gear.rates
 mcp.action quadcam_gear.session_report
 mcp.action quadcam_gear.sim_calibration
@@ -88,6 +89,7 @@ mcp.action quadcam_gear_edit.pack_type_save
 mcp.action quadcam_gear_edit.poll_pause
 mcp.action quadcam_gear_edit.prune
 mcp.action quadcam_gear_edit.radio_cli
+mcp.action quadcam_gear_edit.radio_settings_edit
 mcp.action quadcam_gear_edit.report_save
 mcp.action quadcam_gear_edit.restore_stage
 mcp.action quadcam_gear_edit.revert_stage

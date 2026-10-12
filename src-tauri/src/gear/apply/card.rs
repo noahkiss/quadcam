@@ -235,7 +235,9 @@ pub fn plan(
             checks,
             diff: cp.diff.clone(),
             digest,
-            warnings: Vec::new(),
+            // What the sheet shows before the apply (a haptic mode that drops special-function
+            // haptics, a new stick mode).
+            warnings: cp.warnings.clone(),
         },
         cand: Some(cand.clone()),
         warnings: cp.warnings.clone(),

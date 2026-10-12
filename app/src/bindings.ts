@@ -356,6 +356,17 @@ export const commands = {
 	 */
 	gearModelEdit: (params: ModelEditParams) => typedError<StagedChange_Serialize, string>(__TAURI_INVOKE("gear_model_edit", { params })),
 	/**
+	 *  A radio's own settings (`radio.yml`) for the Settings editor, grouped as the radio's
+	 *  Radio Setup screen groups them, with the values each takes, from the mounted card or
+	 *  the latest backup, with staged edits on top. Reads only.
+	 */
+	gearRadioSettings: (params: RadioSettingsParams) => typedError<RadioSettingsDetail, string>(__TAURI_INVOKE("gear_radio_settings", { params })),
+	/**
+	 *  Stages radio settings (`set_scalar`, `select_model`) for a radio as its one "Radio
+	 *  settings" change. Writes only QuadCam's own data; the apply sheet writes the card.
+	 */
+	gearRadioSettingsEdit: (params: RadioSettingsEditParams) => typedError<StagedChange_Serialize, string>(__TAURI_INVOKE("gear_radio_settings_edit", { params })),
+	/**
 	 *  What syncing a quad's rate profile into the sims would write: per sim file the
 	 *  values that change, every guard, warnings and a digest. Writes nothing.
 	 */
@@ -1653,6 +1664,13 @@ export type CheckState =
 "error";
 
 export type Chemistry = "lipo" | "lihv" | "liion";
+
+/**  One value of a choice. */
+export type Choice = {
+	/**  The value in the file. */
+	value: string,
+	label: string,
+};
 
 /**  `clear`'s answer. */
 export type Cleared = {
@@ -5579,6 +5597,61 @@ export type RadioResolution = {
 	how: string,
 };
 
+/**  One setting as the editor shows it. */
+export type RadioSetting = {
+	/**  The `radio.yml` key. */
+	key: string,
+	section: string,
+	label: string,
+	kind: SettingKind,
+	/**  The value in the file (text unquoted); None when the file has no such line. */
+	value?: string | null,
+};
+
+/**  The radio's settings, for the editor. */
+export type RadioSettingsDetail = {
+	device: string,
+	/**  `card` (mounted now) or `backup <id> (<date>)`. */
+	source: string,
+	/**  `board` and `semver` from `radio.yml`. */
+	board?: string | null,
+	version?: string | null,
+	view: RadioSettingsView,
+	/**  The model files, for the selected model. */
+	models: ModelEntry[],
+	/**  Staged radio edits shown on top. */
+	staged: number,
+	notes: string[],
+};
+
+/**  `gear_radio_settings_edit`: radio edits, staged for a radio. */
+export type RadioSettingsEditParams = {
+	device: string,
+	/**  `set_scalar {key, value}` (a value the file has) or `select_model {file}`. */
+	ops?: RadioOp[],
+	/**  Who stages it. The app and the CLI leave it out (the person); MCP says `agent`. */
+	editor?: Editor | null,
+};
+
+/**  `gear_radio_settings`: a radio. */
+export type RadioSettingsParams = {
+	/**  A saved radio's device id. */
+	device: string,
+	/**
+	 *  Show the settings as they will be with the device's staged radio edits applied. On
+	 *  by default for the editor.
+	 */
+	staged?: boolean,
+};
+
+/**  The typed view of `radio.yml`. */
+export type RadioSettingsView = {
+	sections: string[],
+	settings: RadioSetting[],
+	/**  The model the radio selects (`model01.yml`). */
+	selected_model?: string | null,
+};
+
 /**  `gear_radio`: one look at the radio. */
 export type RadioSnapshot = {
 	connected: boolean,
@@ -6342,6 +6415,20 @@ export type SetsParams = {
 	settings?: RenderSettings | null,
 	batch?: BatchSettings | null,
 };
+
+/**  What kind of value a setting holds, and the values it may take. */
+export type SettingKind = 
+/**  One of a list of values. */
+{ type: "choice"; choices: Choice[] } | 
+/**
+ *  A whole number from `min` to `max` in the file. The editor shows
+ *  `value * mul / 10^decimals` in `unit`; with `invert` N it shows `N - value`.
+ */
+{ type: "number"; min: number; max: number; unit: string; mul: number; decimals: number; invert?: number | null } | 
+/**  `0` or `1`. With `invert`, on is `0` (a `disable...` key). */
+{ type: "toggle"; invert: boolean } | 
+/**  Quoted text of at most `max_len` characters: letters, digits, space, `-`, `_`, `.`. */
+{ type: "text"; max_len: number };
 
 /**  The settings file changed. Read it again with `settings`. */
 export type SettingsChanged = null;

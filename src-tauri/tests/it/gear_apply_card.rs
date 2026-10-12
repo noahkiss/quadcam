@@ -441,7 +441,7 @@ fn another_card_is_not_the_planned_one() {
         .core
         .gear_change_stage(&StageParams {
             device: other.id.clone(),
-            edits: vec![contrast("31")],
+            edits: vec![contrast("25")],
             ..Default::default()
         })
         .unwrap();
@@ -1260,7 +1260,7 @@ fn a_card_that_changes_after_the_write_fails_verify_and_rolls_back() {
         ..Default::default()
     });
     let before = std::fs::read(b.root.join("RADIO/radio.yml")).unwrap();
-    let c = stage(&b, vec![contrast("31")]);
+    let c = stage(&b, vec![contrast("25")]);
     let p = plan(&b, &c);
     let r = b.core.gear_apply(&req(&c, &p)).unwrap();
     assert_eq!(r.status, ChangeStatus::Failed, "{}", r.message);

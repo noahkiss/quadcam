@@ -27,10 +27,11 @@ pub use crate::core::{
 pub use crate::core::{
     CardMountParams, CardMounted, ChangeUpdateParams, CopyParams, DfuLinkParams, DfuLinked,
     ModelDetail, ModelEditParams, ModelParams, OsdEditParams, PackDeleteParams, PackDeleteReport,
-    PackInstallParams, RadioCliAction, RadioCliParams, RadioCliReport, RadioMatch, RadioVerify,
-    RenderReport, RestoreParams, SimRestoreParams, SimRestoreRequest, StageParams,
-    VoiceChooseParams, VoiceChooseRadiosParams, VoiceChooseRadiosReport, VoiceEditParams,
-    VoiceLine, VoicePack, VoiceParams, VoicePreviewParams, VoiceRenderParams, VoiceView,
+    PackInstallParams, RadioCliAction, RadioCliParams, RadioCliReport, RadioMatch,
+    RadioSettingsDetail, RadioSettingsEditParams, RadioSettingsParams, RadioVerify, RenderReport,
+    RestoreParams, SimRestoreParams, SimRestoreRequest, StageParams, VoiceChooseParams,
+    VoiceChooseRadiosParams, VoiceChooseRadiosReport, VoiceEditParams, VoiceLine, VoicePack,
+    VoiceParams, VoicePreviewParams, VoiceRenderParams, VoiceView,
 };
 pub use crate::core::{
     Catalog, CatalogParams, EstimateParams, ImportTakesParams, KeyParams, KeyStatus, LibraryParams,
@@ -214,6 +215,13 @@ macro_rules! with_gear_rows {
             /// Stages model editor ops (and a checklist) for a radio as its one "Model edits" change.
             /// Writes only QuadCam's own data; the apply sheet writes the card.
             gear_model_edit(params: ModelEditParams) -> StagedChange = |c| c.gear_model_edit(&params);
+            /// A radio's own settings (`radio.yml`) for the Settings editor, grouped as the radio's
+            /// Radio Setup screen groups them, with the values each takes, from the mounted card or
+            /// the latest backup, with staged edits on top. Reads only.
+            gear_radio_settings(params: RadioSettingsParams) -> RadioSettingsDetail = |c| c.gear_radio_settings(&params);
+            /// Stages radio settings (`set_scalar`, `select_model`) for a radio as its one "Radio
+            /// settings" change. Writes only QuadCam's own data; the apply sheet writes the card.
+            gear_radio_settings_edit(params: RadioSettingsEditParams) -> StagedChange = |c| c.gear_radio_settings_edit(&params);
             /// The radio's voice: QuadCam's lines with the spoken text, the installed and available
             /// packs, the provider, and a radio's overrides. Reads only; `refresh_index` also reads the
             /// pack index.

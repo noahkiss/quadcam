@@ -35,6 +35,8 @@ cli.arg gear packs save <LABEL>
 cli.arg gear packs type delete <NAME>
 cli.arg gear packs type save <NAME>
 cli.arg gear radio-cli <ACTION>
+cli.arg gear radio-settings <DEVICE>
+cli.arg gear radio-settings-edit <DEVICE>
 cli.arg gear rates [TARGET]...
 cli.arg gear restore <BACKUP>
 cli.arg gear revert <CHANGE>
@@ -155,6 +157,8 @@ cli.command gear packs type save
 cli.command gear preflight
 cli.command gear radio
 cli.command gear radio-cli
+cli.command gear radio-settings
+cli.command gear radio-settings-edit
 cli.command gear rates
 cli.command gear report
 cli.command gear restore
@@ -419,6 +423,11 @@ cli.flag gear radio-cli --device VALUE
 cli.flag gear radio-cli --path VALUE
 cli.flag gear radio-cli --port VALUE
 cli.flag gear radio-cli --yes
+cli.flag gear radio-settings --no-staged
+cli.flag gear radio-settings --text
+cli.flag gear radio-settings-edit --ops VALUE
+cli.flag gear radio-settings-edit --select-model VALUE
+cli.flag gear radio-settings-edit --set VALUE
 cli.flag gear rates --backup VALUE
 cli.flag gear rates --text
 cli.flag gear report --day VALUE

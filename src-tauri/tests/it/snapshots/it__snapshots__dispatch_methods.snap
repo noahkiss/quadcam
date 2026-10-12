@@ -100,6 +100,8 @@ expression: "Core::METHODS"
   "gear_card",
   "gear_model",
   "gear_model_edit",
+  "gear_radio_settings",
+  "gear_radio_settings_edit",
   "gear_voice",
   "gear_voice_preview",
   "gear_voice_edit",

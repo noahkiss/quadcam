@@ -38,6 +38,7 @@ mod osd;
 mod prep;
 mod radio_aircraft;
 mod radio_cli;
+pub mod radio_settings;
 mod rates;
 mod rematch;
 mod session_card;
@@ -105,6 +106,9 @@ pub use model_edit::{ModelDetail, ModelEditParams, ModelEntry, ModelParams, MODE
 pub use ondevice::{OnDeviceClip, OnDeviceParams, OnDeviceReport};
 pub use osd::{OsdEditParams, OsdParams};
 pub use radio_cli::{RadioCliAction, RadioCliParams, RadioCliReport, RadioMatch, RadioVerify};
+pub use radio_settings::{
+    RadioSettingsDetail, RadioSettingsEditParams, RadioSettingsParams, RADIO_CHANGE,
+};
 pub use rates::{RatesParams, RatesPreview, RatesPreviewParams, SimsParams};
 pub use rematch::{LibMatch, LibMatchParams, LibMatchReport};
 pub use session_card::CardRelease;

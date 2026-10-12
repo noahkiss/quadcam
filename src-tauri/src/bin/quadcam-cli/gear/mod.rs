@@ -20,6 +20,7 @@ mod map;
 mod model;
 mod osd;
 mod packs;
+mod radio_settings;
 mod rates;
 mod sim;
 mod voice;
@@ -58,6 +59,13 @@ pub enum GearCmd {
     Model(model::ModelArgs),
     /// Stages model edits for a radio (one "Model edits" change); nothing is written to the card.
     ModelEdit(model::ModelEditArgs),
+    /// A radio's own settings (radio.yml) for the Settings editor: sound, haptic, display,
+    /// alarms, time and GPS, sticks and USB, owner; from the mounted card or the latest
+    /// backup, with staged edits on top.
+    RadioSettings(radio_settings::RadioSettingsArgs),
+    /// Stages radio settings for a radio (one "Radio settings" change); nothing is written to
+    /// the card.
+    RadioSettingsEdit(radio_settings::RadioSettingsEditArgs),
     /// The radio's voice: lines and packs. `render`, `install`, `edit`, `choose` and
     /// `build-pack` are its subcommands.
     Voice(voice::VoiceArgs),
@@ -248,6 +256,8 @@ pub fn run(core: &Core, cmd: GearCmd) -> Result<Value> {
         GearCmd::Voice(a) => voice::run(core, a)?,
         GearCmd::Model(a) => model::run(core, a)?,
         GearCmd::ModelEdit(a) => model::edit(core, a)?,
+        GearCmd::RadioSettings(a) => radio_settings::run(core, a)?,
+        GearCmd::RadioSettingsEdit(a) => radio_settings::edit(core, a)?,
         GearCmd::Rates(a) => rates::rates(core, a)?,
         GearCmd::Sims(a) => rates::sims(core, a)?,
         GearCmd::Status => serde_json::to_value(call::gear_status(core)?)?,

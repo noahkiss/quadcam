@@ -69,15 +69,21 @@ pub fn radio_yml(board: &str, semver: &str, curr_model: u32, crlf: bool) -> Stri
     for (k, mid) in [("LH", 1000), ("LV", 1010), ("RV", 1020), ("RH", 1030)] {
         s += &format!("   {k}:\n      mid: {mid}\n      spanNeg: 700\n      spanPos: 700\n");
     }
-    s += &format!("currModel: {curr_model}\ncontrast: 20\nvBatWarn: 66\n");
+    s += &format!(
+        "currModel: {curr_model}\ncontrast: 20\nvBatWarn: 66\nbacklightMode: backlight_mode_keys\n"
+    );
     s += "trainer: \n   mix: \n";
     for i in 0..4 {
         s += &format!(
             "      {i}:\n         srcChn: {i}\n         mode: REPL\n         studWeight: 100\n"
         );
     }
-    s += "view: 0\nbeepMode: mode_all\nhapticMode: mode_all\ninactivityTimer: 10\n";
+    s += "view: 0\nbeepMode: mode_all\ndisableAlarmWarning: 0\nstickMode: 1\ntimezone: 0\nadjustRTC: 1\n";
+    s += "inactivityTimer: 10\nhapticMode: mode_all\nlightAutoOff: 6\ntemplateSetup: 21\n";
+    s += "hapticLength: 2\nbeepLength: 2\nhapticStrength: 2\ngpsFormat: 0\nspeakerVolume: 12\n";
+    s += "backlightBright: 0\nimperial: 0\ndisableRssiPoweroffAlarm: 0\nUSBMode: 0\n";
     s += "ttsLanguage: \"en\"\nuiLanguage: \"en\"\n";
+    s += "beepVolume: 2\nwavVolume: 2\nvarioVolume: 2\nbackgroundVolume: 2\n";
     s += "customFn: \n   0:\n      swtch: \"ON\"\n      func: VOLUME\n      def: \"P1,1\"\n";
     s += "serialPort: \n   VCP:\n      mode: OFF\n      power: 0\n";
     s += "switchConfig: \n";
