@@ -1991,8 +1991,12 @@ dialog, Mount and Done on a radio's page. Deviations and choices:
   import session's card follows the same cycle in `core/session_card.rs`: `stage` and `load`
   take a `device` id, `import` unmounts the card after "Delete clips after import" and reports
   `ImportOutcome.card`, and `format_plan`, `format`, `eject` and card prep mount it first.
-  A DJI device over USB is not unmounted. Lists (`gear_connected`, Pack up, flight sources) never
-  mount a card.
+  A DJI device over USB (an O4 air unit, goggles in storage mode) follows the same cycle
+  (decided 2026-10-12): `release_session_card` unmounts it, `disk::safe_remove` unmounts it
+  rather than ejecting it (so it stays on the bus, `Presence::Usb`, and a later job mounts it
+  again), and the person's Mount lasts `MOUNT_MINUTES` for it too. Unmount is not format: the
+  never-format guard in `disk::check_volume_contents` is unchanged. Lists (`gear_connected`,
+  Pack up, flight sources) never mount a card.
 - **Restore on a card** names the files (`Edit::Restore { paths }`) and stands alone: the plan
   makes each path read as in the backup (a path the backup lacks is removed), through
   `Card::plan_files`. A whole-card restore is not offered.

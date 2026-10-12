@@ -454,7 +454,7 @@ impl Core {
     }
 
     /// Makes `target` (a mount point or `/dev/diskN`), or the session's card, safe to remove
-    /// (`disk::safe_remove`: unmount a card, eject anything else).
+    /// (`disk::safe_remove`: unmount a card or a DJI device over USB, eject anything else).
     pub fn eject(&self, target: Option<&str>) -> Result<()> {
         let target = match target {
             Some(t) => t.to_string(),
@@ -474,7 +474,7 @@ impl Core {
                 format!("/dev/{whole}")
             }
         };
-        disk::safe_remove(&target)
+        disk::safe_remove(&target, &*self.gear.dji_usb)
     }
 
     /// Everything the confirm dialog names. Runs every guard; an Err means format stays locked.

@@ -18,6 +18,7 @@ mod gear_apply_card;
 mod gear_bench;
 mod gear_bf_flash;
 mod gear_blackbox;
+mod gear_dji;
 mod gear_elrs;
 mod gear_fc;
 mod gear_firmware;

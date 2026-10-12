@@ -5,6 +5,8 @@ User-facing changes in each release, newest first. Release notes on
 
 ## Unreleased
 
+- **The DJI air unit unmounts like a card.** An O4 air unit (or goggles in storage mode) over USB now follows the same mount, work, unmount cycle as every card: QuadCam unmounts it when an import or job ends and says "safe to unplug", it stays on USB, and the next job or **Mount** (10 minutes) mounts it again. **Safe to remove** unmounts it instead of ejecting it. QuadCam still never formats a DJI device over USB.
+
 ## 0.20.2 (2026-10-12)
 
 - **Samples play again.** Sample lines, **Play all** and the packs on this Mac play their sound again; in 0.20.0 and 0.20.1 they played nothing. A line that cannot play now says so in a message, once per **Play all**, instead of being skipped in silence.

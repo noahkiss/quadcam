@@ -270,7 +270,7 @@ pub struct ImportOutcome {
     #[serde(default)]
     pub clip_deletion: Option<Vec<ClipDeletion>>,
     /// What the end of the import did with the card: unmounted (safe to remove) or not.
-    /// None when the clips came from a folder, or the card is a DJI device over USB.
+    /// None when the clips came from a folder, or the disk is not one a person takes out.
     #[serde(default)]
     pub card: Option<CardRelease>,
 }

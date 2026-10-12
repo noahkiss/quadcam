@@ -940,7 +940,7 @@ names the files and the backup to restore. Over the radio's USB a write is slow 
 puts the written files back.
 
 **Mount, work, unmount.** QuadCam keeps a card unmounted between jobs, for every kind of
-card: a radio's, a DVR card and a goggles card. Any job that needs a card mounts it when it is
+card: a radio's, a DVR card, a goggles card and a DJI air unit over USB. Any job that needs a card mounts it when it is
 unmounted but still in, does its work, and unmounts it again:
 
 | Job | Ends with |
@@ -951,14 +951,16 @@ unmounted but still in, does its work, and unmounts it again:
 | Format and card prep | The erase unmounts the card. A refused erase unmounts it too |
 
 A card that is mounted already stays as it is for a plan, a view or a preview. A DJI device
-over USB (an air unit) is never unmounted this way. For the import's card, QuadCam finds the
+over USB (an O4 air unit, goggles in storage mode) follows the same cycle: QuadCam unmounts it
+after the job, it stays on USB, and the next job or **Mount** mounts it again. Unmount is not
+format: QuadCam never formats a DJI device over USB. For the import's card, QuadCam finds the
 card by its volume UUID each time and acts only when it is still on the same disk: if you pulled
 the card and another disk took its place, QuadCam mounts, unmounts and ejects nothing. If an unmount fails, the sheet says so and
 the cue is "failed". Lists such as Connected and the Pack up check never mount a card: they read
 what is mounted, or the latest backup.
 
-**Mount** (on a radio's, a DVR card's or a goggles card's page, when the card is unmounted but
-still in) mounts the card so you can browse it in Finder. QuadCam unmounts it again when you
+**Mount** (on a radio's, a DVR card's or a goggles card's page, an air unit's included, when
+the card is unmounted but still in) mounts the card so you can browse it in Finder. QuadCam unmounts it again when you
 press **Done**, or after 10 minutes. **Import clips…** on a DVR or goggles card's page mounts it
 and starts an import. **Prepare card…** opens [card prep](format-safety.md#card-prep).
 

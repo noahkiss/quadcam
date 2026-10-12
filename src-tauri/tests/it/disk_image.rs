@@ -219,7 +219,7 @@ fn safe_remove_unmounts_and_keeps_the_disk() {
     let whole = disk::info(&card.disk).unwrap();
     assert!(whole.removable, "{whole:?}");
     assert!(disk::is_removable(&whole));
-    disk::safe_remove(&card.mount.to_string_lossy()).unwrap();
+    disk::safe_remove(&card.mount.to_string_lossy(), &|| false).unwrap();
     assert!(card.is_attached() && !card.is_mounted());
     card.remount();
     assert!(card.is_mounted() && card.mount.join("DCIM/PICT0001.AVI").is_file());

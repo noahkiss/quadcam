@@ -457,11 +457,13 @@ pub fn format_card_with(
 }
 
 /// Makes a disk safe to remove. A card (removable media: a reader's card, a card in the
-/// built-in slot) gets `diskutil unmountDisk`: every volume unmounts, and the disk stays
-/// listed until the card is pulled. Anything else gets `diskutil eject`. `target` is a mount
-/// point, `/dev/diskN` or `diskN`; the whole disk is unmounted either way. Unplugging
+/// built-in slot) and a DJI device over USB (an O4 air unit, goggles in storage mode) get
+/// `diskutil unmountDisk`: every volume unmounts, and the disk stays listed until it is
+/// pulled, so a later job can mount it again. Anything else gets `diskutil eject`. `target`
+/// is a mount point, `/dev/diskN` or `diskN`; the whole disk is unmounted either way.
+/// `dji_usb` says whether a DJI USB device is attached (`Env.dji_usb`). Unplugging
 /// mid-write once wedged diskarbitrationd, so this always runs before a pull.
-pub fn safe_remove(target: &str) -> Result<()> {
+pub fn safe_remove(target: &str, dji_usb: &dyn Fn() -> bool) -> Result<()> {
     let vol = info(target)?;
     let whole_id = whole_disk_of(if vol.parent_whole_disk.is_empty() {
         &vol.device_identifier
@@ -470,11 +472,23 @@ pub fn safe_remove(target: &str) -> Result<()> {
     });
     let whole = info(&whole_id).unwrap_or(vol);
     let dev = format!("/dev/{whole_id}");
-    if whole.removable {
+    if removes_by_unmount(&whole, dji_usb) {
         unmount_disk(&dev)
     } else {
         eject(&dev)
     }
+}
+
+/// True when "safe to remove" unmounts the disk rather than ejecting it: a card, or a DJI
+/// device over USB (its media name names DJI, or it is not a slot card while a DJI USB
+/// device is attached). The DJI device stays on the bus, so it can be mounted again.
+pub fn removes_by_unmount(whole: &DiskInfo, dji_usb: &dyn Fn() -> bool) -> bool {
+    whole.removable
+        || whole
+            .media_name
+            .as_deref()
+            .is_some_and(|m| m.to_ascii_uppercase().contains("DJI"))
+        || (!whole.internal && dji_usb())
 }
 
 /// `diskutil unmountDisk`: unmounts every volume of the whole disk; the disk stays attached.
@@ -730,6 +744,31 @@ mod tests {
         check_policy(&analog_policy(), EraseBy::Prep).unwrap();
         assert!(check_policy(&dji, EraseBy::Import).is_err());
         check_policy(&dji, EraseBy::Prep).unwrap();
+    }
+
+    #[test]
+    fn safe_remove_unmounts_a_card_and_a_dji_device_over_usb() {
+        let card = DiskInfo {
+            removable: true,
+            ..Default::default()
+        };
+        assert!(removes_by_unmount(&card, &|| false));
+        // An O4 air unit over USB: ejectable, not removable media. Unmounted, so it stays
+        // on the bus and a later job can mount it again.
+        let o4 = DiskInfo {
+            ejectable: true,
+            media_name: Some("DJI Air Unit".into()),
+            bus_protocol: Some("USB".into()),
+            ..Default::default()
+        };
+        assert!(removes_by_unmount(&o4, &|| false));
+        let unnamed = DiskInfo {
+            media_name: Some("Storage".into()),
+            ..o4.clone()
+        };
+        assert!(removes_by_unmount(&unnamed, &|| true));
+        // Any other external disk is ejected.
+        assert!(!removes_by_unmount(&unnamed, &|| false));
     }
 
     #[test]

@@ -314,7 +314,8 @@ GitHub (`noahkiss/quadcam`, public) is the only remote. Users install the cask
   `core/apply_card.rs` (`locate_volume`, `unmounted_cards`, `mount_picked`, `card_for_job`) for
   gear jobs, `core/session_card.rs` for the import session's card (`stage_device`, `import`
   unmounts it after "Delete clips after import", `format_plan`/`format`/`eject`/card prep mount
-  it again). Do not add a second mount path. A DJI device over USB is never unmounted.
+  it again). Do not add a second mount path. A DJI device over USB (an O4 air unit) follows the
+  same cycle: it is unmounted (never ejected, never formatted).
   Lists and checks that only read (`gear_connected`, Pack up) never mount. The Mount button
   (10 minutes, `MOUNT_MINUTES`) stays for browsing. Tests: `tests/it/gear_apply_card.rs` (fake
   `diskutil`) and `tests/it/mount_cycle.rs` (disk images).

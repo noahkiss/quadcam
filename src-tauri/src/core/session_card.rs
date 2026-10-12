@@ -5,8 +5,8 @@
 //!   still plugged in is mounted for the stage (`Core::mount_source`).
 //! - **Done.** When an import ends (after "Delete clips after import"), the card is
 //!   unmounted (`release_session_card`): the staged copies hold the clips. The outcome says
-//!   whether it is safe to remove. A DJI device over USB (not a removable card) stays
-//!   mounted: QuadCam never unmounts or ejects it on its own.
+//!   whether it is safe to remove. A DJI device over USB (an O4 air unit, goggles in
+//!   storage mode) follows the same cycle: it is unmounted, never formatted.
 //! - **Later.** Format, a second deletion and "Safe to remove" mount the card again first
 //!   (`ensure_session_card`).
 //! - **The same card.** Every mount, unmount and eject acts on the disk found by the card's
@@ -128,13 +128,7 @@ impl Core {
             });
         };
         let info = disk::info(&format!("/dev/{whole_id}")).ok()?;
-        // A card only: never a DJI device over USB (an air unit, goggles in storage mode).
-        let dji_device = info
-            .media_name
-            .as_deref()
-            .is_some_and(|n| n.to_uppercase().contains("DJI"))
-            || (!info.is_slot_card() && (self.gear.dji_usb)());
-        if !disk::is_removable(&info) || dji_device {
+        if !releases_after_import(&info) {
             return None;
         }
         let r = {
@@ -154,6 +148,13 @@ impl Core {
             },
         })
     }
+}
+
+/// Whether the end of an import unmounts this disk: any disk a person can take out, a DJI
+/// device over USB (an O4 air unit, goggles in storage mode) included. Unmount is not
+/// format: the DJI never-format guard stays in `disk::format_card`.
+fn releases_after_import(info: &DiskInfo) -> bool {
+    disk::is_removable(info)
 }
 
 /// The session card's whole disk (`diskN`), found now by its volume UUID. Some only when it
@@ -210,6 +211,29 @@ mod tests {
             volume_uuid: uuid.map(str::to_string),
             ..Default::default()
         }
+    }
+
+    #[test]
+    fn a_dji_device_over_usb_is_unmounted_after_an_import_like_any_card() {
+        let o4 = DiskInfo {
+            bus_protocol: Some("USB".into()),
+            ejectable: true,
+            media_name: Some("DJI Air Unit".into()),
+            ..Default::default()
+        };
+        assert!(releases_after_import(&o4));
+        let reader = DiskInfo {
+            bus_protocol: Some("USB".into()),
+            removable: true,
+            ..Default::default()
+        };
+        assert!(releases_after_import(&reader));
+        // A fixed disk stays: it is not a card or a device a person takes out.
+        let fixed = DiskInfo {
+            bus_protocol: Some("USB".into()),
+            ..Default::default()
+        };
+        assert!(!releases_after_import(&fixed));
     }
 
     #[test]

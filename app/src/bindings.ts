@@ -3390,7 +3390,7 @@ export type ImportOutcome = {
 	clip_deletion?: ClipDeletion[] | null,
 	/**
 	 *  What the end of the import did with the card: unmounted (safe to remove) or not.
-	 *  None when the clips came from a folder, or the card is a DJI device over USB.
+	 *  None when the clips came from a folder, or the disk is not one a person takes out.
 	 */
 	card?: CardRelease | null,
 };
