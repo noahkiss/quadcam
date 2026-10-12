@@ -34,6 +34,7 @@ expression: "Core::METHODS"
   "library_photos",
   "library_apply_name_format",
   "library_match_logs",
+  "library_time_shift",
   "library_rescan",
   "library_analyze_video",
   "video_feature",

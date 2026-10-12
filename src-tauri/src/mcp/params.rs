@@ -40,6 +40,23 @@ pub struct LibraryCut {
     pub end: f64,
 }
 
+// One clip's real time, which shifts a batch of library clips.
+#[derive(Debug, Clone, Deserialize, JsonSchema)]
+#[schemars(deny_unknown_fields)]
+pub struct TimeShift {
+    /// The clip whose real time this is.
+    #[schemars(length(min = 1, max = 200))]
+    pub from: String,
+    /// Its real flying day; omit for its own day.
+    #[schemars(pattern(r"^\d{4}-\d{2}-\d{2}$"))]
+    pub date: Option<String>,
+    /// Its real time of day, HH:MM 24-hour.
+    #[schemars(pattern(r"^\d{2}:\d{2}$"))]
+    pub time: String,
+    /// EdgeTX LOGS folder to check for better times; omit for the log folder setting.
+    pub log_dir: Option<String>,
+}
+
 // ----- the import flow -----
 
 #[derive(Debug, Clone, Default, Deserialize, JsonSchema)]
@@ -249,6 +266,10 @@ pub struct LibraryEditArgs {
     /// Time of day, HH:MM 24-hour; empty string for local noon.
     #[schemars(pattern(r"^(\d{2}:\d{2}(:\d{2})?)?$"))]
     pub time: Option<String>,
+    /// Shift every id by the offset between one clip's real time and its own; a clip a radio log matches takes the log's time. Not with other changes.
+    pub shift: Option<TimeShift>,
+    /// For shift: write the new dates and times. Omit to only report the plan.
+    pub confirm: Option<bool>,
 }
 
 #[derive(Debug, Clone, Default, Deserialize, JsonSchema)]

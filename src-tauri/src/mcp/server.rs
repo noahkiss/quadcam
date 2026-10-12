@@ -410,11 +410,14 @@ impl<B: Backend> Server<B> {
             }
             "quadcam_library_edit" => {
                 let x: LibraryEditArgs = args(a)?;
-                let ids = x.ids.unwrap_or_default();
+                let ids = x.ids.clone().unwrap_or_default();
                 if ids.is_empty() {
                     return Err(anyhow!(
                         "ids is required: library clip ids from quadcam_library."
                     ));
+                }
+                if let Some(sh) = &x.shift {
+                    return self.library_shift(&x, sh, ids);
                 }
                 let edit = json!({
                     "note": x.note, "author": x.author, "place": x.place, "date": x.date,
@@ -1161,6 +1164,110 @@ impl<B: Backend> Server<B> {
 }
 
 impl<B: Backend> Server<B> {
+    /// `quadcam_library_edit` with `shift`: the plan, written only with `confirm`.
+    fn library_shift(
+        &mut self,
+        x: &LibraryEditArgs,
+        sh: &TimeShift,
+        ids: Vec<String>,
+    ) -> Result<(Vec<Value>, Value)> {
+        let others = [
+            x.rating.is_some(),
+            x.flag.is_some(),
+            x.name.is_some(),
+            x.note.is_some(),
+            x.keywords.is_some(),
+            x.author.is_some(),
+            x.place.is_some(),
+            x.location.is_some(),
+            x.profile.is_some(),
+            x.date.is_some(),
+            x.time.is_some(),
+        ];
+        if others.into_iter().any(|o| o) {
+            return Err(anyhow!(
+                "shift takes no other change; send the other fields in a call of their own."
+            ));
+        }
+        let apply = x.confirm.unwrap_or(false);
+        let r = self.backend.call(
+            "library_time_shift",
+            json!({"ids": ids, "from": sh.from, "date": sh.date, "time": sh.time,
+                   "logs": sh.log_dir, "apply": apply}),
+        )?;
+        let rows = r["clips"].as_array().cloned().unwrap_or_default();
+        let when = |d: &Value, t: &Value| match (d.as_str(), t.as_str()) {
+            (Some(d), Some(t)) => format!("{d} {t}"),
+            (Some(d), None) => d.to_string(),
+            _ => "-".to_string(),
+        };
+        let lines: Vec<String> = rows
+            .iter()
+            .map(|c| {
+                let how = match c["source"].as_str() {
+                    Some("set") => "given".to_string(),
+                    Some("log") => format!(
+                        "radio log{}",
+                        c["reason"]
+                            .as_str()
+                            .map(|r| format!(": {r}"))
+                            .unwrap_or_default()
+                    ),
+                    Some("skipped") => format!(
+                        "skipped: {}",
+                        c["reason"].as_str().unwrap_or("no time of day")
+                    ),
+                    _ => "offset".to_string(),
+                };
+                format!(
+                    "- {} [{}]: {} -> {} ({how}){}",
+                    c["name"].as_str().unwrap_or("?"),
+                    c["id"].as_str().unwrap_or("?"),
+                    when(&c["old_date"], &c["old_time"]),
+                    when(&c["date"], &c["time"]),
+                    if c["changed"].as_bool() == Some(false) {
+                        ", unchanged"
+                    } else {
+                        ""
+                    }
+                )
+            })
+            .collect();
+        let changed = rows.iter().filter(|c| c["changed"] == true).count();
+        let offset = r["offset_s"].as_i64().unwrap_or(0);
+        let sign = if offset < 0 { "-" } else { "+" };
+        let (h, m) = (offset.abs() / 3600, offset.abs() % 3600 / 60);
+        let lead = if apply {
+            format!(
+                "Shifted {changed} clip{}",
+                if changed == 1 { "" } else { "s" }
+            )
+        } else {
+            format!(
+                "Plan: {changed} clip{} would change. Nothing was written; call again with confirm=true to write",
+                if changed == 1 { "" } else { "s" }
+            )
+        };
+        let warnings: Vec<String> = r["warnings"]
+            .as_array()
+            .into_iter()
+            .flatten()
+            .filter_map(|w| w.as_str().map(|w| format!("Warning: {w}")))
+            .collect();
+        Ok((
+            vec![text(format!(
+                "{lead} (offset {sign}{h}:{m:02}).\n{}{}",
+                lines.join("\n"),
+                if warnings.is_empty() {
+                    String::new()
+                } else {
+                    format!("\n{}", warnings.join("\n"))
+                }
+            ))],
+            json!({"applied": apply, "offset_s": offset, "clips": rows, "warnings": r["warnings"]}),
+        ))
+    }
+
     /// `quadcam_settings` actions `modules`, `module_install` and `module_remove`.
     fn modules_action(&mut self, action: &str, x: &SettingsArgs) -> Result<(Vec<Value>, Value)> {
         let name = || {

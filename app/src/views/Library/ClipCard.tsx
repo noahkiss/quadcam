@@ -4,6 +4,7 @@ import { fileSrc } from "../../ipc/api";
 import type { LibClip, Moment, Span } from "../../ipc/types";
 import { Chip } from "../../components/Chip";
 import { FlagMark } from "../../components/FlagButton";
+import { HeatStrip } from "../../components/HeatStrip";
 import { Icon } from "../../components/Icon";
 import { Stars } from "../../components/Stars";
 import { fmtDur } from "../../lib/format";
@@ -148,6 +149,7 @@ function Thumb({ clip: c, selected }: { clip: LibClip; selected: boolean }) {
         </>
       )}
       <span className={styles.dur}>{fmtDur(c.duration)}</span>
+      <HeatStrip moments={c.moments} duration={c.duration} className={styles.heat} />
     </div>
   );
 }

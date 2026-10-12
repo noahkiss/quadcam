@@ -103,7 +103,7 @@
     --success-text: color-mix(in oklab, var(--ctp-green) 62%, black);
     --warning-text: color-mix(in oklab, var(--ctp-yellow) 55%, black);
     --error-text: color-mix(in oklab, var(--ctp-red) 88%, black);
-    --primary-text: color-mix(in oklab, var(--ctp-blue) 88%, black);
+    --primary-text: color-mix(in oklab, var(--ctp-blue) 80%, black);
     --star: color-mix(in oklab, var(--ctp-yellow) 80%, black);
     --scrim: color-mix(in srgb, var(--ctp-text) 35%, transparent);
     --chip-dark: color-mix(in srgb, var(--ctp-crust) 70%, transparent);

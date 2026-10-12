@@ -585,6 +585,16 @@ fn places_profiles_settings_and_times_from_the_cli() {
         .is_file());
     let (code, _) = env.run(&["library", "edit", &id]);
     assert_eq!(code, 1, "an edit with nothing to change is refused");
+    // A time shift prints the plan; --yes writes it.
+    let plan = env.ok(&["library", "shift", &id, "--from", &id, "--time", "10:00"]);
+    assert_eq!(plan["clips"][0]["time"], "10:00", "{plan}");
+    assert_eq!(plan["clips"][0]["applied"], false);
+    assert_eq!(env.ok(&["library", "list"])["clips"][0]["time"], "09:15");
+    let done = env.ok(&[
+        "library", "shift", &id, "--from", &id, "--time", "10:00", "--yes",
+    ]);
+    assert_eq!(done["clips"][0]["applied"], true, "{done}");
+    assert_eq!(env.ok(&["library", "list"])["clips"][0]["time"], "10:00");
 
     let gone = env.ok(&["places", "delete", "liberty island"]);
     assert_eq!(gone["profiles_cleared"][0], "Whoop");

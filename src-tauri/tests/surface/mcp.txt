@@ -295,6 +295,7 @@ mcp.param quadcam_library.min_rating integer
 mcp.param quadcam_library.place string
 mcp.param quadcam_library.query string
 mcp.param quadcam_library_edit.author string
+mcp.param quadcam_library_edit.confirm boolean
 mcp.param quadcam_library_edit.date string
 mcp.param quadcam_library_edit.flag string
 mcp.param quadcam_library_edit.ids array<string>
@@ -307,6 +308,11 @@ mcp.param quadcam_library_edit.note string
 mcp.param quadcam_library_edit.place string
 mcp.param quadcam_library_edit.profile string
 mcp.param quadcam_library_edit.rating integer
+mcp.param quadcam_library_edit.shift object
+mcp.param quadcam_library_edit.shift.date string
+mcp.param quadcam_library_edit.shift.from string
+mcp.param quadcam_library_edit.shift.log_dir string
+mcp.param quadcam_library_edit.shift.time string
 mcp.param quadcam_library_edit.time string
 mcp.param quadcam_library_files.action string
 mcp.param quadcam_library_files.again boolean
@@ -426,6 +432,8 @@ mcp.required quadcam_gear_edit.action
 mcp.required quadcam_library_edit.ids
 mcp.required quadcam_library_edit.location.lat
 mcp.required quadcam_library_edit.location.lon
+mcp.required quadcam_library_edit.shift.from
+mcp.required quadcam_library_edit.shift.time
 mcp.required quadcam_library_files.action
 mcp.required quadcam_library_files.cuts.end
 mcp.required quadcam_library_files.cuts.start

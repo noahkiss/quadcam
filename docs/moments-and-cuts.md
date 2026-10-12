@@ -15,8 +15,10 @@ Play starts at once. On import, QuadCam makes a small preview of each clip in th
 |---|---|
 | Video | Frames from the clip |
 | Signal | Flying (the picture is there) and **dead air** (striped) |
-| Moments | Markers found in the radio log's stick channels, or highlights from video analysis |
+| Moments | Markers found in the radio log's stick channels, or highlights from video analysis, over a heat strip that is stronger where the moments are |
 | Cuts | The ranges that export as extra files |
+
+The same heat strip runs along the bottom of a clip's thumbnail in the library grid. A clip without moments has none.
 
 **Keep ranges** are the clip without its dead air. Select **Use keep ranges** to turn them into cuts.
 
@@ -55,6 +57,8 @@ QuadCam finds moments in the radio log's stick channels:
 Each moment has a score from 0 to 1. If the receiver sends attitude telemetry and it shows the quad upside down during a roll or flip, the score goes up.
 
 Every threshold is in `moments::tune` (`src-tauri/src/moments.rs`).
+
+**Best moments** in the sidebar lists the moments of every clip, best score first: kind, clip, day, time in the clip, source and score. Select a row to open the clip and play from that moment. The sidebar's filters (a day, a place, an aircraft, a search) narrow it.
 
 ### Highlights from video analysis
 

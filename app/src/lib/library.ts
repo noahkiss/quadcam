@@ -1,8 +1,10 @@
 // Library rules shared by the grid, the list, keys and the menu: filtering, the one sort
 // order, day groups, flying time.
 import type { LibClip, LibraryView, Span } from "../ipc/types";
+import { interesting } from "./moments";
 
-export type Group = "all" | "last_import" | "moments" | "picks" | "rejected" | "not_in_photos";
+/** `best_moments` is the app's own: the moments of every clip, best first. */
+export type Group = "all" | "last_import" | "moments" | "best_moments" | "picks" | "rejected" | "not_in_photos";
 
 export interface Filter {
   group: Group;
@@ -40,6 +42,9 @@ export function matches(c: LibClip, f: Filter, query: string, lastImport: string
       break;
     case "moments":
       if (!c.moments.length) return false;
+      break;
+    case "best_moments":
+      if (!c.moments.some(interesting)) return false;
       break;
     case "picks":
       if (c.flag !== "pick") return false;
@@ -125,3 +130,12 @@ export function albumAction(album: string | undefined | null, n = 1): string | n
 }
 
 export const thumbPx = (size: number | undefined) => [80, 104, 136, 170, 210][(size || 3) - 1];
+
+/** A time shift as a signed offset: `+18:25`, `-0:05`, or `+3 d 2:00` past a day. */
+export function fmtOffset(seconds: number): string {
+  const sign = seconds < 0 ? "-" : "+";
+  const m = Math.round(Math.abs(seconds) / 60);
+  const d = Math.floor(m / 1440);
+  const hm = `${Math.floor((m % 1440) / 60)}:${String(m % 60).padStart(2, "0")}`;
+  return d ? `${sign}${d} d ${hm}` : `${sign}${hm}`;
+}

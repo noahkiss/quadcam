@@ -153,3 +153,13 @@
   font-size: var(--t-sm);
   color: var(--muted);
 }
+
+.heat {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 4px;
+  border-radius: 0;
+  background-color: var(--chip-dark);
+}

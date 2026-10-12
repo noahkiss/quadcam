@@ -41,6 +41,7 @@ mod rates;
 mod rematch;
 mod session_card;
 mod setup;
+mod shift;
 mod sim;
 mod sim_host;
 mod sim_restore;
@@ -101,6 +102,7 @@ pub use rates::{RatesParams, RatesPreview, RatesPreviewParams, SimsParams};
 pub use rematch::{LibMatch, LibMatchParams, LibMatchReport};
 pub use session_card::CardRelease;
 pub use setup::{PlaceRemoved, SettingsView};
+pub use shift::{LibShift, LibShiftParams, LibShiftReport, ShiftSource};
 pub use sim::{
     CalibrateAction, CalibrateParams, CalibrateView, PerStick, SimCalibration,
     SimCalibrationParams, SimCalibrationSaveParams, SimDefaultsParams, SimValidateParams,

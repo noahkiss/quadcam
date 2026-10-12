@@ -573,7 +573,7 @@ impl Core {
             lib::write_keys(&root.join(f), &set)?;
         }
         if e.date.is_some() || time.is_some() {
-            self.redate(&root, &c, &items, e.date, *time)?;
+            self.redate(&root, &c, &items, e.date, *time, false)?;
         } else {
             self.reread_clips(&[id.to_string()])?;
         }
@@ -616,6 +616,7 @@ impl Core {
 
     /// Gives a clip a new date and time: the QuickTime creation date, the movie header time
     /// and the mtime of the clip, its cuts and its original. A new day moves them all.
+    /// `from_log` records a time that came from a radio log rather than by hand.
     pub(super) fn redate(
         &self,
         root: &Path,
@@ -623,6 +624,7 @@ impl Core {
         items: &[crate::qtmeta::Item],
         date: Option<chrono::NaiveDate>,
         time: Option<Option<chrono::NaiveTime>>,
+        from_log: bool,
     ) -> Result<()> {
         let old_created = crate::qtmeta::get(items, "com.apple.quicktime.creationdate")
             .and_then(|v| chrono::DateTime::parse_from_str(v, "%Y-%m-%dT%H:%M:%S%z").ok());
@@ -642,6 +644,7 @@ impl Core {
             crate::pipeline::creation_time(new_date, new_time, crate::pipeline::DateSource::Edited);
         // A time set here is manual; an empty one removes the time; a date alone keeps it.
         let source = match time {
+            Some(Some(_)) if from_log => Some("log".to_string()),
             Some(Some(_)) => Some("manual".to_string()),
             Some(None) => Some("none".to_string()),
             None => None,

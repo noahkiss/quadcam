@@ -489,13 +489,17 @@ expression: "quadcam_lib::mcp::tools()"
       "readOnlyHint": false,
       "title": "Edit library clips"
     },
-    "description": "Change library clips already imported: star rating, pick/reject flag, short name, note, keywords, author, place, aircraft profile, date and time of day. Every change is written into the clip's file (and its cut files) and the index. Several fields can change in one call; each applies to every id, except `name`, which needs exactly one id.\n\nBest for: rating and flagging after a review, fixing a wrong date or time, moving clips to the right aircraft after export, renaming.\nNot for: the loaded card session (use quadcam_suggest) or cuts, Trash and Photos (use quadcam_library_files).\nEffects: `name` renames the file, its cuts and its original. `date` moves the clip, its cuts and its original to that day's folder (renaming them when the file name starts with the date) and keeps the time unless `time` is given. `time` rewrites the QuickTime creation date and the file times. `profile` rewrites make, model, aircraft, video system and swaps the old profile's keywords for the new one's.\nReturns: the changed clips.",
+    "description": "Change library clips already imported: star rating, pick/reject flag, short name, note, keywords, author, place, aircraft profile, date and time of day. Every change is written into the clip's file (and its cut files) and the index. Several fields can change in one call; each applies to every id, except `name`, which needs exactly one id.\n\nBest for: rating and flagging after a review, fixing a wrong date or time, moving clips to the right aircraft after export, renaming.\nNot for: the loaded card session (use quadcam_suggest) or cuts, Trash and Photos (use quadcam_library_files).\nEffects: `name` renames the file, its cuts and its original. `date` moves the clip, its cuts and its original to that day's folder (renaming them when the file name starts with the date) and keeps the time unless `time` is given. `time` rewrites the QuickTime creation date and the file times. `profile` rewrites make, model, aircraft, video system and swaps the old profile's keywords for the new one's. `shift` (alone, no other fields) fixes a wrong camera clock for a batch: give one clip's real `time` (and `date`) as `from`, and every id moves by the same offset; a clip a radio log in `log_dir` (or the log folder setting) matches takes the log's time instead. Without `confirm` true it only reports the plan: each clip's old and new date and time and where the new one came from (given, offset, radio log, or skipped when the clip has no time of day).\nReturns: the changed clips, or for `shift` the plan.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
         "author": {
           "maxLength": 120,
           "type": "string"
+        },
+        "confirm": {
+          "description": "For shift: write the new dates and times. Omit to only report the plan.",
+          "type": "boolean"
         },
         "date": {
           "description": "New flying day.",
@@ -571,6 +575,37 @@ expression: "quadcam_lib::mcp::tools()"
           "maximum": 5,
           "minimum": 0,
           "type": "integer"
+        },
+        "shift": {
+          "additionalProperties": false,
+          "description": "Shift every id by the offset between one clip's real time and its own; a clip a radio log matches takes the log's time. Not with other changes.",
+          "properties": {
+            "date": {
+              "description": "Its real flying day; omit for its own day.",
+              "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+              "type": "string"
+            },
+            "from": {
+              "description": "The clip whose real time this is.",
+              "maxLength": 200,
+              "minLength": 1,
+              "type": "string"
+            },
+            "log_dir": {
+              "description": "EdgeTX LOGS folder to check for better times; omit for the log folder setting.",
+              "type": "string"
+            },
+            "time": {
+              "description": "Its real time of day, HH:MM 24-hour.",
+              "pattern": "^\\d{2}:\\d{2}$",
+              "type": "string"
+            }
+          },
+          "required": [
+            "from",
+            "time"
+          ],
+          "type": "object"
         },
         "time": {
           "description": "Time of day, HH:MM 24-hour; empty string for local noon.",

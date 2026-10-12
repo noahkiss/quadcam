@@ -72,6 +72,8 @@ export const api = {
   applyNameFormat: () => ok(commands.libraryApplyNameFormat({})),
   rebuild: () => ok(commands.libraryRebuild()),
   matchLogs: (apply: boolean, ids: string[] = []) => ok(commands.libraryMatchLogs({ ids, logs: null, day: null, apply })),
+  /** Shifts clips by one clip's real time; a radio log's time wins. Writes only with `apply`. */
+  timeShift: (p: { ids: string[]; from: string; date: string | null; time: string; apply: boolean }) => ok(commands.libraryTimeShift({ ...p, logs: null })),
   rescan: (id: string) => ok(commands.libraryRescan({ id })),
   analyzeVideo: (ids: string[], again = false) => ok(commands.libraryAnalyzeVideo({ ids, again })),
   videoFeature: () => ok(commands.videoFeature()),

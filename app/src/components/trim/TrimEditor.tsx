@@ -1,6 +1,7 @@
 import { useRef, useState, type PointerEvent as RPointerEvent } from "react";
 import { Button } from "../Button";
 import { Kbd, AgentBadge } from "../Chip";
+import { HeatStrip } from "../HeatStrip";
 import { Icon } from "../Icon";
 import { fmtT, parseT } from "../../lib/format";
 import { KIND, KIND_ICON, SOURCE } from "../../views/Library/moments";
@@ -170,6 +171,7 @@ export function TrimEditor({ trim, strip }: { trim: Trim; strip?: string }) {
             ))}
           </div>
           <div className={styles.marks}>
+            <HeatStrip moments={model.moments} duration={dur} bins={120} className={styles.heat} />
             {model.moments.map((m, i) => (
               <button
                 key={i}

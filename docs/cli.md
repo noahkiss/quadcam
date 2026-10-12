@@ -95,6 +95,7 @@ quadcam-cli library cut <id> 12-18 1:02-1:10 --export   # set the cuts and write
 quadcam-cli library cut <id> --by-flight --export        # add one cut per radio-log flight and write them
 quadcam-cli library apply-name-format             # rename clips to the name_date_format setting
 quadcam-cli library match-logs --logs /path/to/LOGS   # report which clips match a radio log; --apply writes flight numbers and moments
+quadcam-cli library shift <id>... --from <id> --time 18:30 [--date 2026-09-28] [--logs DIR]   # print the plan: every clip shifts by the offset of --from, a matching radio log wins; --yes writes it
 quadcam-cli library analyze-video [<id>...]       # highlights and key frame (macOS 27); skips clips done; --again redoes them
 quadcam-cli library trash <id>                    # clip, cuts and original to the Trash
 quadcam-cli library photos <id> --album Drone
@@ -313,6 +314,7 @@ Every MCP tool has a command. The command line also has `scan`, `analyze`, `clea
 | `quadcam_gear` `*_plan` | the same command without `--yes` or `--digest` (or with `--plan`) |
 | `quadcam_gear_apply` | the same command with `--digest D --yes` (MCP `confirm=true`) |
 | `quadcam_library_files` `cuts`, `split_by_flight`, `export_cuts` | `library cut` (`--by-flight`, `--export`) |
+| `quadcam_library_edit` `shift` | `library shift` (`--yes` is `confirm`) |
 
 Flags that mean one thing everywhere: `--yes` is MCP `confirm`, `--plan` shows the checks and digest and writes nothing, `--device` is a saved device id, `--mount` is a mount point, `--profile` is an aircraft profile. `gear voice` keeps `--confirm`: it allows a voice provider that may charge, which is a different consent. `gear blackbox pull` takes no `--yes`, while MCP `blackbox_pull` needs `confirm=true`. When the `gear_erase_blackbox` setting is on, `pull` erases the flash after a verified pull: the setting is the consent, as `delete_clips_after_import` is for `import`, and `--keep` skips the erase for one run. A new `--yes` requirement would break schema 1 scripts, so the command keeps working without it. `gear voice delete` takes `--yes` like any other write.
 

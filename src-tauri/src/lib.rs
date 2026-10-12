@@ -612,6 +612,7 @@ pub fn specta_builder() -> tauri_specta::Builder<tauri::Wry> {
             c::library_photos,
             c::library_apply_name_format,
             c::library_match_logs,
+            c::library_time_shift,
             c::library_rescan,
             c::library_analyze_video,
             c::video_feature,

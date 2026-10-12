@@ -60,6 +60,7 @@ cli.arg library photos <IDS>...
 cli.arg library rate <IDS>...
 cli.arg library rename <ID>
 cli.arg library rename <NAME>
+cli.arg library shift <IDS>...
 cli.arg library trash <IDS>...
 cli.arg meta <IDS>...
 cli.arg modules install <NAME>
@@ -198,6 +199,7 @@ cli.command library photos
 cli.command library rate
 cli.command library rebuild
 cli.command library rename
+cli.command library shift
 cli.command library trash
 cli.command mcp
 cli.command meta
@@ -592,6 +594,11 @@ cli.flag library rate --pick
 cli.flag library rate --reject
 cli.flag library rate --stars VALUE
 cli.flag library rate --unflag
+cli.flag library shift --date VALUE
+cli.flag library shift --from VALUE
+cli.flag library shift --logs VALUE
+cli.flag library shift --time VALUE
+cli.flag library shift --yes
 cli.flag meta --author VALUE
 cli.flag meta --clear-location
 cli.flag meta --keywords VALUE
