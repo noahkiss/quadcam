@@ -262,6 +262,29 @@ export const commands = {
 	 */
 	gearVoiceSample: (params: SampleParams) => typedError<SampleReport, string>(__TAURI_INVOKE("gear_voice_sample", { params })),
 	/**
+	 *  The sample gallery: each voice's samples (with what the speech check heard and
+	 *  any flag), then the packs on this Mac. Reads files only.
+	 */
+	gearVoiceSamples: () => typedError<SampleGallery_Serialize, string>(__TAURI_INVOKE("gear_voice_samples")),
+	/**
+	 *  Deletes sample voices (`ids`) or every sample (`all`). The takes they were cut
+	 *  from stay in the cache.
+	 */
+	gearVoiceSamplesDelete: (params: SamplesDeleteParams) => typedError<SampleGallery_Serialize, string>(__TAURI_INVOKE("gear_voice_samples_delete", { params })),
+	/**
+	 *  Flags one take of a sample or a pack with a reason and a note, or clears the
+	 *  flag (`clear`). A flagged studio take is made again by `gear_voice_retake`.
+	 */
+	gearVoiceFlag: (params: FlagParams) => typedError<SampleVoice_Serialize, string>(__TAURI_INVOKE("gear_voice_flag", { params })),
+	/**  Every flagged take with its voice, model, speed, seed, text, heard text and file. */
+	gearVoiceFlags: () => typedError<FlagList, string>(__TAURI_INVOKE("gear_voice_flags")),
+	/**
+	 *  Makes the flagged takes of one sample voice or one pack again with another seed.
+	 *  A paid call: without `confirm` (or with `dry_run`) it prices them and answers the
+	 *  digest that `confirm` repeats.
+	 */
+	gearVoiceRetake: (params: RetakeParams) => typedError<RetakeReport, string>(__TAURI_INVOKE("gear_voice_retake", { params })),
+	/**
 	 *  Renders line sets into one local pack per voice and model, priced as one plan with
 	 *  one digest. A paid call: without `confirm` (or with `dry_run`) it prices each pair
 	 *  and the total. A failure keeps the packs made before it; `gear_stop` with the handle
@@ -2820,6 +2843,51 @@ export type FirmwareView = {
 };
 
 export type Flag = "none" | "pick" | "reject";
+
+/**  `gear_voice_flags`. */
+export type FlagList = {
+	flags: FlagRow[],
+};
+
+/**  `gear_voice_flag`: flag one take, or clear its flag. */
+export type FlagParams = {
+	/**  A sample folder id (`gear_voice_samples`), or `pack` instead. */
+	sample?: string,
+	/**  A pack on this Mac. */
+	pack?: string,
+	/**  The take's card path. */
+	line: string,
+	/**  `mispronounced`, `clipped`, `wrong_tone`, `noise` or `other`; not needed to clear. */
+	reason?: string,
+	note?: string,
+	/**  Removes the flag instead. */
+	clear?: boolean,
+};
+
+/**  One flag, with what an agent needs to judge it. */
+export type FlagRow = {
+	/**  `sample` or `pack`. */
+	kind: string,
+	/**  The sample folder id or the pack id. */
+	id: string,
+	voice: string,
+	voice_name: string,
+	model: string,
+	speed: number | null,
+	seed?: number | null,
+	/**  The card path. */
+	line: string,
+	text: string,
+	heard?: string | null,
+	/**  The WAV. */
+	file: string,
+	reason: string,
+	note?: string,
+	at: string,
+	retakes?: number,
+	/**  `gear_voice_retake` can make this take again (a studio take of a known voice). */
+	retake: boolean,
+};
 
 /**  `gear_flash_plan`: which radio, which EdgeTX version, which splash. */
 export type FlashParams = {
@@ -5769,6 +5837,37 @@ export type Retake = {
 	reason: string,
 };
 
+/**
+ *  `gear_voice_retake`: the flagged takes of one sample voice or one pack, made again with
+ *  another seed.
+ */
+export type RetakeParams = {
+	sample?: string,
+	pack?: string,
+	/**  Flagged card paths; empty for every flagged line. */
+	lines?: string[],
+	dry_run?: boolean,
+	confirm?: boolean,
+	/**  The `digest` of the unconfirmed call. A paid `confirm` needs it. */
+	digest?: string | null,
+};
+
+export type RetakeReport = {
+	kind: string,
+	id: string,
+	/**  The lines asked for again. */
+	lines: string[],
+	/**  The seed the re-take uses. */
+	seed: number,
+	estimate: Estimate | null,
+	needs_confirm: boolean,
+	dry_run: boolean,
+	digest: string,
+	/**  Lines with a new take now: their flags are gone. */
+	cleared?: string[],
+	notes?: string[],
+};
+
 /**  One line of the review. */
 export type ReviewLine = {
 	path: string,
@@ -5792,6 +5891,27 @@ export type RfAlarms = {
 };
 
 export type RowState = "pass" | "warn" | "unknown";
+
+/**  `gear_voice_samples`. */
+export type SampleGallery = SampleGallery_Serialize | SampleGallery_Deserialize;
+
+/**  `gear_voice_samples`. */
+export type SampleGallery_Deserialize = {
+	/**  Sample voices first (newest first), then the packs on this Mac. */
+	voices: SampleVoice_Deserialize[],
+	/**  Where the samples are. */
+	dir: string,
+	notes?: string[],
+};
+
+/**  `gear_voice_samples`. */
+export type SampleGallery_Serialize = {
+	/**  Sample voices first (newest first), then the packs on this Mac. */
+	voices: SampleVoice_Serialize[],
+	/**  Where the samples are. */
+	dir: string,
+	notes: string[],
+};
 
 export type SampleItem = {
 	voice: string,
@@ -5839,6 +5959,98 @@ export type SampleReport = {
 	digest?: string,
 	/**  A stop ended the run early: `items` holds the pairs finished before it. */
 	stopped?: boolean,
+};
+
+/**  One take on a card: a sample, or a line of a pack. */
+export type SampleTake = SampleTake_Serialize | SampleTake_Deserialize;
+
+/**  One take on a card: a sample, or a line of a pack. */
+export type SampleTake_Deserialize = {
+	/**  The card path. */
+	line: string,
+	text: string,
+	/**  The WAV. In `samples.json` it is relative to the folder; in an answer, absolute. */
+	file: string,
+	ms: number,
+	/**  The seed the take was asked for; absent when not known. */
+	seed?: number | null,
+	/**  What the speech check heard; absent when it did not run. */
+	heard?: string | null,
+	/**  The heard text matches the line (or the person accepted it). */
+	heard_ok?: boolean | null,
+	flag?: TakeFlag | null,
+};
+
+/**  One take on a card: a sample, or a line of a pack. */
+export type SampleTake_Serialize = {
+	/**  The card path. */
+	line: string,
+	text: string,
+	/**  The WAV. In `samples.json` it is relative to the folder; in an answer, absolute. */
+	file: string,
+	ms: number,
+	/**  The seed the take was asked for; absent when not known. */
+	seed: number | null,
+	/**  What the speech check heard; absent when it did not run. */
+	heard: string | null,
+	/**  The heard text matches the line (or the person accepted it). */
+	heard_ok: boolean | null,
+	flag?: TakeFlag | null,
+};
+
+/**  One voice's card in the gallery. */
+export type SampleVoice = SampleVoice_Serialize | SampleVoice_Deserialize;
+
+/**  One voice's card in the gallery. */
+export type SampleVoice_Deserialize = {
+	/**  The sample folder's name, or the pack id. */
+	id: string,
+	/**  `sample` (the Voice studio's samples) or `pack` (a pack on this Mac). */
+	kind: string,
+	/**  The provider's voice id; empty when not known (samples from 0.19 and earlier). */
+	voice: string,
+	voice_name: string,
+	model: string,
+	provider: string,
+	speed: number | null,
+	description?: string,
+	accent?: string,
+	languages?: string[],
+	/**  When a sample last changed (RFC 3339). */
+	updated?: string | null,
+	/**  The line sets the samples came from. */
+	sets?: string[],
+	takes: SampleTake_Deserialize[],
+};
+
+/**  One voice's card in the gallery. */
+export type SampleVoice_Serialize = {
+	/**  The sample folder's name, or the pack id. */
+	id: string,
+	/**  `sample` (the Voice studio's samples) or `pack` (a pack on this Mac). */
+	kind: string,
+	/**  The provider's voice id; empty when not known (samples from 0.19 and earlier). */
+	voice: string,
+	voice_name: string,
+	model: string,
+	provider: string,
+	speed: number | null,
+	description: string,
+	accent: string,
+	languages: string[],
+	/**  When a sample last changed (RFC 3339). */
+	updated: string | null,
+	/**  The line sets the samples came from. */
+	sets: string[],
+	takes: SampleTake_Serialize[],
+};
+
+/**  `gear_voice_samples_delete`. */
+export type SamplesDeleteParams = {
+	/**  Sample folder ids (`gear_voice_samples`). Packs are deleted on the Voices page. */
+	ids?: string[],
+	/**  Every sample. */
+	all?: boolean,
 };
 
 /**  One radio's saved calibration and what it was made with. */
@@ -6823,6 +7035,19 @@ export type TakeCount = {
 	lines: number,
 };
 
+/**  The person's flag on one take. */
+export type TakeFlag = {
+	/**  The card path. */
+	line: string,
+	/**  `mispronounced`, `clipped`, `wrong_tone`, `noise` or `other`. */
+	reason: string,
+	note?: string,
+	/**  When it was flagged (RFC 3339). */
+	at: string,
+	/**  Re-takes asked for while it stayed flagged; each picks another seed. */
+	retakes?: number,
+};
+
 /**  What a snapshot run did. */
 export type TakeReport = {
 	/**  The new snapshot, or the latest one when nothing changed. */
@@ -7218,6 +7443,8 @@ export type VoiceInfo = {
 	gender?: string,
 	age?: string,
 	use_case?: string,
+	/**  What the voice's maker wrote about it; empty when nothing. */
+	description?: string,
 	/**
 	 *  A Voice Library voice's credit multiplier (`sharing.rate`) when it is not 1: a
 	 *  character in this voice bills that many times the model's credits.
@@ -7278,6 +7505,8 @@ export type VoicePack = {
 	preview?: PreviewLine[],
 	/**  An index pack's download size. */
 	zip_bytes?: number,
+	/**  The takes the person flagged (`gear_voice_flag`). Installed packs only. */
+	flags?: TakeFlag[],
 };
 
 /**  `gear_voice`. */

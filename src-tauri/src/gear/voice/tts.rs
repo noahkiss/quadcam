@@ -96,6 +96,9 @@ pub struct VoiceInfo {
     pub age: String,
     #[serde(default)]
     pub use_case: String,
+    /// What the voice's maker wrote about it; empty when nothing.
+    #[serde(default)]
+    pub description: String,
     /// A Voice Library voice's credit multiplier (`sharing.rate`) when it is not 1: a
     /// character in this voice bills that many times the model's credits.
     #[serde(default)]

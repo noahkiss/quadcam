@@ -52,7 +52,7 @@ const MODELS: &str = r#"[
   {"model_id":"eleven_turbo_v2","name":"Turbo v2","can_do_text_to_speech":true,"model_rates":{"character_cost_multiplier":0.5}},
   {"model_id":"eleven_flash_v2","name":"Flash v2","can_do_text_to_speech":true,"model_rates":{"character_cost_multiplier":0.5}}]"#;
 const VOICES: &str = r#"{"voices":[
-  {"voice_id":"v-callum","name":"Callum","category":"premade","labels":{"accent":"american"}},
+  {"voice_id":"v-callum","name":"Callum","category":"premade","labels":{"accent":"american"},"description":"A steady voice."},
   {"voice_id":"v-matilda","name":"Matilda","category":"premade"}]}"#;
 
 fn sub(left: u64) -> String {
@@ -2244,4 +2244,435 @@ fn a_preview_plays_from_the_cache_and_comes_only_over_https() {
     );
     std::fs::write(dir.join(&name), b"ID3").unwrap();
     assert_eq!(p(url).unwrap(), dir.join(&name).display().to_string());
+}
+
+// ----- the sample gallery and flags -----
+
+fn gallery(b: &Bench) -> quadcam_lib::core::SampleGallery {
+    b.core.gear_voice_samples().unwrap()
+}
+
+fn flag(
+    b: &Bench,
+    sample: &str,
+    pack: &str,
+    line: &str,
+    reason: &str,
+) -> quadcam_lib::core::SampleVoice {
+    b.core
+        .gear_voice_flag(&quadcam_lib::core::FlagParams {
+            sample: sample.into(),
+            pack: pack.into(),
+            line: line.into(),
+            reason: reason.into(),
+            note: "sounds like a sneeze".into(),
+            clear: false,
+        })
+        .unwrap()
+}
+
+#[test]
+fn samples_stay_in_the_gear_folder_by_voice_until_deleted() {
+    let b = bench(50000, true);
+    let m = "eleven_turbo_v2_5";
+    let done = paid_sample(&b, sample(&["Callum", "Matilda"], &[m], false, true));
+    let root = b.dir.path().join("support/gear/voice-samples");
+    assert!(done
+        .items
+        .iter()
+        .all(|i| i.file.starts_with(root.to_str().unwrap())));
+    assert!(!b.dir.path().join("cache/voice/samples").exists());
+    let g = gallery(&b);
+    let cards: Vec<_> = g.voices.iter().filter(|v| v.kind == "sample").collect();
+    assert_eq!(cards.len(), 2, "{g:?}");
+    let callum = cards.iter().find(|v| v.voice_name == "Callum").unwrap();
+    assert_eq!(callum.voice, "v-callum");
+    assert_eq!(callum.model, m);
+    assert_eq!(callum.speed, 1.0);
+    assert_eq!(callum.description, "A steady voice.");
+    assert_eq!(callum.accent, "american");
+    assert_eq!(callum.sets, ["sample"]);
+    assert_eq!(callum.takes.len(), 12);
+    assert!(callum
+        .takes
+        .iter()
+        .all(|t| t.seed == Some(0) && std::path::Path::new(&t.file).is_file()));
+    // A new core (a relaunch) reads the same gallery from disk.
+    let again = bench_at(&b);
+    assert_eq!(gallery(&again).voices, g.voices);
+    // Another speed is its own card.
+    let mut fast = sample(&["Callum"], &[m], false, true);
+    fast.settings = Some(quadcam_lib::gear::voice::render::RenderSettings {
+        speed: 1.1,
+        ..Default::default()
+    });
+    paid_sample(&b, fast);
+    assert_eq!(
+        gallery(&b)
+            .voices
+            .iter()
+            .filter(|v| v.kind == "sample")
+            .count(),
+        3
+    );
+    // Delete one, then all; the takes stay in the cache, so sampling again is free.
+    let one = b
+        .core
+        .gear_voice_samples_delete(&quadcam_lib::core::SamplesDeleteParams {
+            ids: vec![callum.id.clone()],
+            all: false,
+        })
+        .unwrap();
+    assert!(!one.voices.iter().any(|v| v.id == callum.id));
+    assert!(b
+        .core
+        .gear_voice_samples_delete(&quadcam_lib::core::SamplesDeleteParams {
+            ids: vec!["../voices".into()],
+            all: false,
+        })
+        .is_err());
+    let none = b
+        .core
+        .gear_voice_samples_delete(&quadcam_lib::core::SamplesDeleteParams {
+            ids: vec![],
+            all: true,
+        })
+        .unwrap();
+    assert!(none.voices.is_empty());
+    let posts = b.http.posts();
+    let free = b
+        .core
+        .gear_voice_sample(&sample(&["Callum"], &[m], false, false))
+        .unwrap();
+    assert!(!free.needs_confirm);
+    assert_eq!(b.http.posts(), posts);
+    assert_eq!(gallery(&b).voices.len(), 1);
+}
+
+/// A second core on the same folders, as after a relaunch.
+fn bench_at(b: &Bench) -> Bench {
+    let http = b.http.clone();
+    let mut env = quadcam_lib::gear::Env::fake(vec![], Arc::new(FakePorts::new(vec![])));
+    env.tts = Arc::new(Fake(http.clone()));
+    env.keys = b.keys.clone();
+    let core = Core::new(
+        b.dir.path().join("cache"),
+        None,
+        Arc::new(NoHooks),
+        Arc::new(Recorder::default()),
+    )
+    .with_settings(b.dir.path().join("support/settings.json"))
+    .with_gear_env(env);
+    Bench {
+        core,
+        http,
+        keys: b.keys.clone(),
+        dir: tempfile::tempdir().unwrap(),
+    }
+}
+
+#[test]
+fn samples_in_the_cache_move_to_the_gear_folder_once() {
+    let b = bench(50000, true);
+    let m = "eleven_turbo_v2_5";
+    // A 0.19 sample: no list beside it, named for the voice's name and the model.
+    let old = b
+        .dir
+        .path()
+        .join("cache/voice/samples/callum-eleven-turbo-v2-5/SOUNDS/en");
+    std::fs::create_dir_all(&old).unwrap();
+    let wav = [b"RIFF".as_slice(), &[0u8; 6440]].concat();
+    std::fs::write(old.join("armed.wav"), &wav).unwrap();
+    let g = gallery(&b);
+    let card = &g.voices[0];
+    assert_eq!(
+        (card.voice_name.as_str(), card.model.as_str()),
+        ("callum", m)
+    );
+    assert_eq!(card.voice, "");
+    assert_eq!(card.takes[0].text, "Armed");
+    assert_eq!(card.takes[0].ms, 100);
+    let moved = b
+        .dir
+        .path()
+        .join("support/gear/voice-samples/callum-eleven-turbo-v2-5/SOUNDS/en/armed.wav");
+    assert_eq!(std::fs::read(&moved).unwrap(), wav);
+    assert!(!b.dir.path().join("cache/voice/samples").exists());
+    // Flags work on it; a re-take needs the voice's id, which it lacks.
+    flag(&b, &card.id, "", "SOUNDS/en/armed.wav", "noise");
+    assert!(b
+        .core
+        .gear_voice_retake(&quadcam_lib::core::RetakeParams {
+            sample: card.id.clone(),
+            ..Default::default()
+        })
+        .is_err());
+    // A sample of that voice and model takes the folder over: one card, the voice known.
+    paid_sample(&b, sample(&["Callum"], &[m], false, true));
+    let g = gallery(&b);
+    let cards: Vec<_> = g.voices.iter().filter(|v| v.kind == "sample").collect();
+    assert_eq!(cards.len(), 1, "{g:?}");
+    assert_eq!(cards[0].voice, "v-callum");
+    assert_eq!(cards[0].takes.len(), 12);
+    // The new take of Armed replaced the old one, and its flag went with it.
+    assert!(cards[0].takes.iter().all(|t| t.flag.is_none()));
+}
+
+#[test]
+fn a_flagged_sample_is_listed_and_a_retake_makes_it_again() {
+    let wrong = Arc::new(std::sync::Mutex::new(vec![
+        "SOUNDS/en/SYSTEM/0006.wav".to_string()
+    ]));
+    let (b, _) = bench_hearing(wrong.clone());
+    let m = "eleven_turbo_v2_5";
+    paid_sample(&b, sample(&["Callum"], &[m], false, true));
+    let card = gallery(&b).voices.remove(0);
+    // The speech check's mismatch shows on the card.
+    let six = card
+        .takes
+        .iter()
+        .find(|t| t.line == "SOUNDS/en/SYSTEM/0006.wav")
+        .unwrap();
+    assert_eq!(six.heard_ok, Some(false));
+    assert_eq!(six.heard.as_deref(), Some("Battery."));
+    assert!(b
+        .core
+        .gear_voice_flag(&quadcam_lib::core::FlagParams {
+            sample: card.id.clone(),
+            line: "SOUNDS/en/armed.wav".into(),
+            reason: "loud".into(),
+            ..Default::default()
+        })
+        .is_err());
+    let after = flag(&b, &card.id, "", "SOUNDS/en/armed.wav", "mispronounced");
+    let armed = after
+        .takes
+        .iter()
+        .find(|t| t.line == "SOUNDS/en/armed.wav")
+        .unwrap();
+    let f = armed.flag.clone().unwrap();
+    assert_eq!(
+        (f.reason.as_str(), f.note.as_str()),
+        ("mispronounced", "sounds like a sneeze")
+    );
+    let flags = b.core.gear_voice_flags().unwrap().flags;
+    assert_eq!(flags.len(), 1);
+    let row = &flags[0];
+    assert_eq!(
+        (
+            row.kind.as_str(),
+            row.voice.as_str(),
+            row.voice_name.as_str(),
+            row.model.as_str()
+        ),
+        ("sample", "v-callum", "Callum", m)
+    );
+    assert_eq!((row.speed, row.seed), (1.0, Some(0)));
+    assert_eq!(
+        (row.line.as_str(), row.text.as_str()),
+        ("SOUNDS/en/armed.wav", "Armed")
+    );
+    assert_eq!(row.heard.as_deref(), Some("Armed."));
+    assert!(row.retake && std::path::Path::new(&row.file).is_file());
+    assert!(
+        quadcam_lib::core::voice_flags_text(&b.core.gear_voice_flags().unwrap())
+            .contains("mispronounced")
+    );
+    // The flagged take is a re-take now: the same sample again sends nothing and leaves it out.
+    let posts = b.http.posts();
+    let same = b
+        .core
+        .gear_voice_sample(&sample(&["Callum"], &[m], false, false))
+        .unwrap();
+    assert!(!same.needs_confirm);
+    assert!(!same.items.iter().any(|i| i.line == "SOUNDS/en/armed.wav"));
+    assert_eq!(b.http.posts(), posts);
+    // A re-take prices the flagged line only, waits for confirm, then makes it again.
+    let ask = |confirm: bool, digest: Option<String>| {
+        b.core
+            .gear_voice_retake(&quadcam_lib::core::RetakeParams {
+                sample: card.id.clone(),
+                confirm,
+                digest,
+                ..Default::default()
+            })
+            .unwrap()
+    };
+    let r = ask(false, None);
+    assert!(r.needs_confirm && r.seed > 0, "{r:?}");
+    assert_eq!(r.lines, ["SOUNDS/en/armed.wav"]);
+    assert_eq!(r.estimate.as_ref().unwrap().batches, 1);
+    assert_eq!(b.http.posts(), posts);
+    assert!(b
+        .core
+        .gear_voice_retake(&quadcam_lib::core::RetakeParams {
+            sample: card.id.clone(),
+            confirm: true,
+            digest: Some("0000".into()),
+            ..Default::default()
+        })
+        .is_err());
+    let done = ask(true, Some(r.digest.clone()));
+    assert_eq!(done.cleared, ["SOUNDS/en/armed.wav"], "{done:?}");
+    assert_eq!(b.http.posts(), posts + 1);
+    let card = gallery(&b).voices.remove(0);
+    let armed = card
+        .takes
+        .iter()
+        .find(|t| t.line == "SOUNDS/en/armed.wav")
+        .unwrap();
+    assert!(armed.flag.is_none());
+    assert_eq!(armed.seed, Some(r.seed));
+    assert_eq!(card.takes.len(), 12);
+    assert!(b.core.gear_voice_flags().unwrap().flags.is_empty());
+    // Clear works on its own too.
+    flag(&b, &card.id, "", "SOUNDS/en/turtle.wav", "wrong_tone");
+    b.core
+        .gear_voice_flag(&quadcam_lib::core::FlagParams {
+            sample: card.id.clone(),
+            line: "SOUNDS/en/turtle.wav".into(),
+            clear: true,
+            ..Default::default()
+        })
+        .unwrap();
+    assert!(b.core.gear_voice_flags().unwrap().flags.is_empty());
+    let posts = b.http.posts();
+    let free = b
+        .core
+        .gear_voice_sample(&sample(&["Callum"], &[m], false, false))
+        .unwrap();
+    assert!(!free.needs_confirm);
+    assert!(free.items.iter().any(|i| i.line == "SOUNDS/en/turtle.wav"));
+    assert_eq!(b.http.posts(), posts);
+}
+
+#[test]
+fn a_flagged_pack_line_shows_on_its_card_and_a_retake_puts_a_new_take_in() {
+    let b = bench(99_000, true);
+    let m = "eleven_turbo_v2_5";
+    let r = paid_render(&b, render("Callum", m, &["sample"], false, true));
+    const LINE: &str = "SOUNDS/en/armed.wav";
+    let card = gallery(&b)
+        .voices
+        .into_iter()
+        .find(|v| v.kind == "pack")
+        .unwrap();
+    assert_eq!(card.id, r.pack);
+    assert_eq!(card.takes.len(), 12);
+    let pack = b.dir.path().join("support/gear/voices").join(&r.pack);
+    let flagged = flag(&b, "", &r.pack, LINE, "clipped");
+    assert!(flagged
+        .takes
+        .iter()
+        .any(|t| t.line == LINE && t.flag.is_some()));
+    assert!(pack.join("flags.json").is_file());
+    let k = b
+        .core
+        .gear_voice(&quadcam_lib::core::VoiceParams::default())
+        .unwrap()
+        .packs
+        .into_iter()
+        .find(|k| k.id == r.pack)
+        .unwrap();
+    assert_eq!(k.flags.len(), 1);
+    let row = b.core.gear_voice_flags().unwrap().flags.remove(0);
+    assert_eq!(
+        (row.kind.as_str(), row.id.as_str()),
+        ("pack", r.pack.as_str())
+    );
+    assert!(row.retake);
+    // A re-take: priced, confirmed with the digest, one batch, and the flag goes.
+    let posts = b.http.posts();
+    let ask = b
+        .core
+        .gear_voice_retake(&quadcam_lib::core::RetakeParams {
+            pack: r.pack.clone(),
+            ..Default::default()
+        })
+        .unwrap();
+    assert!(ask.needs_confirm);
+    let done = b
+        .core
+        .gear_voice_retake(&quadcam_lib::core::RetakeParams {
+            pack: r.pack.clone(),
+            confirm: true,
+            digest: Some(ask.digest),
+            ..Default::default()
+        })
+        .unwrap();
+    assert_eq!(done.cleared, [LINE], "{done:?}");
+    assert_eq!(b.http.posts(), posts + 1);
+    assert!(pack.join(LINE).is_file());
+    let card = gallery(&b)
+        .voices
+        .into_iter()
+        .find(|v| v.kind == "pack")
+        .unwrap();
+    assert!(card
+        .takes
+        .iter()
+        .all(|t| t.seed == Some(done.seed) && t.flag.is_none()));
+    assert!(b.core.gear_voice_flags().unwrap().flags.is_empty());
+    assert!(!pack.join("flags.json").exists());
+    // Every other line stayed in the pack.
+    let m: serde_json::Value =
+        serde_json::from_slice(&std::fs::read(pack.join("pack.json")).unwrap()).unwrap();
+    assert_eq!(m["files"].as_array().unwrap().len(), 12);
+}
+
+#[test]
+fn the_mcp_tools_list_flags_and_retake_only_with_confirm() {
+    let b = bench(50000, true);
+    let m = "eleven_turbo_v2_5";
+    paid_sample(&b, sample(&["Callum"], &[m], false, true));
+    let id = gallery(&b).voices[0].id.clone();
+    let mut server = Server::new(LocalBackend(Arc::new(bench_at(&b).core)));
+    let call = |server: &mut Server<LocalBackend>, name: &str, args: serde_json::Value| {
+        let r = server.call_tool(name, args);
+        assert_eq!(r["isError"], false, "{r}");
+        r
+    };
+    let r = call(
+        &mut server,
+        "quadcam_gear_edit",
+        json!({"action": "voice_flag", "sample": id, "line": "SOUNDS/en/armed.wav", "reason": "noise", "note": "hiss"}),
+    );
+    assert!(r.to_string().contains("Flagged"), "{r}");
+    let r = call(
+        &mut server,
+        "quadcam_gear",
+        json!({"action": "voice_flags"}),
+    );
+    let t = r.to_string();
+    assert!(
+        t.contains("hiss") && t.contains("v-callum") && t.contains("armed.wav"),
+        "{t}"
+    );
+    let r = call(
+        &mut server,
+        "quadcam_gear",
+        json!({"action": "voice_samples"}),
+    );
+    assert!(r.to_string().contains("FLAGGED noise"), "{r}");
+    let posts = b.http.posts();
+    let r = call(
+        &mut server,
+        "quadcam_gear_edit",
+        json!({"action": "voice_retake", "sample": id}),
+    );
+    assert!(r.to_string().contains("Not rendered"), "{r}");
+    assert_eq!(b.http.posts(), posts);
+    let r = call(
+        &mut server,
+        "quadcam_gear_edit",
+        json!({"action": "voice_samples_delete", "all_samples": true}),
+    );
+    assert!(r.to_string().contains("Not deleted"), "{r}");
+    assert_eq!(gallery(&b).voices.len(), 1);
+    call(
+        &mut server,
+        "quadcam_gear_edit",
+        json!({"action": "voice_samples_delete", "all_samples": true, "confirm": true}),
+    );
+    assert!(gallery(&b).voices.is_empty());
 }

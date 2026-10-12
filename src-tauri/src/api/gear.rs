@@ -49,6 +49,10 @@ pub use crate::core::{
     FirmwareParams, FirmwareRead, FirmwareReadParams, FirmwareView, FlashParams, FlashRequest,
 };
 pub use crate::core::{
+    FlagList, FlagParams, RetakeParams, RetakeReport, SampleGallery, SampleVoice,
+    SamplesDeleteParams,
+};
+pub use crate::core::{
     PackPreviewParams, PreviewTake, PublishApproveParams, PublishApproveReport, PublishParams,
     PublishReview, ReviewLine,
 };
@@ -224,6 +228,21 @@ macro_rules! with_gear_rows {
             /// Renders a few lines in every voice and model for A/B listening. A paid call:
             /// `confirm` allows it; `dry_run` only prices it.
             gear_voice_sample(params: SampleParams) -> SampleReport = |c| c.gear_voice_sample(&params);
+            /// The sample gallery: each voice's samples (with what the speech check heard and
+            /// any flag), then the packs on this Mac. Reads files only.
+            gear_voice_samples() -> SampleGallery = |c| c.gear_voice_samples();
+            /// Deletes sample voices (`ids`) or every sample (`all`). The takes they were cut
+            /// from stay in the cache.
+            gear_voice_samples_delete(params: SamplesDeleteParams) -> SampleGallery = |c| c.gear_voice_samples_delete(&params);
+            /// Flags one take of a sample or a pack with a reason and a note, or clears the
+            /// flag (`clear`). A flagged studio take is made again by `gear_voice_retake`.
+            gear_voice_flag(params: FlagParams) -> SampleVoice = |c| c.gear_voice_flag(&params);
+            /// Every flagged take with its voice, model, speed, seed, text, heard text and file.
+            gear_voice_flags() -> FlagList = |c| c.gear_voice_flags();
+            /// Makes the flagged takes of one sample voice or one pack again with another seed.
+            /// A paid call: without `confirm` (or with `dry_run`) it prices them and answers the
+            /// digest that `confirm` repeats.
+            gear_voice_retake(params: RetakeParams) -> RetakeReport = |c| c.gear_voice_retake(&params);
             /// Renders line sets into one local pack per voice and model, priced as one plan with
             /// one digest. A paid call: without `confirm` (or with `dry_run`) it prices each pair
             /// and the total. A failure keeps the packs made before it; `gear_stop` with the handle

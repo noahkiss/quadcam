@@ -90,6 +90,12 @@ impl Store {
         self.root.join("voices")
     }
 
+    /// `<gear>/voice-samples`: the Voice studio's samples, one folder per voice, model and
+    /// speed.
+    pub fn voice_samples_dir(&self) -> PathBuf {
+        self.root.join("voice-samples")
+    }
+
     /// `<gear>/flights.json`: the rebuildable flight index.
     pub fn flights_file(&self) -> PathBuf {
         self.root.join("flights.json")

@@ -47,6 +47,7 @@ cli.arg gear update <CHANGE>
 cli.arg gear voice add <VOICE>
 cli.arg gear voice check <PACK>
 cli.arg gear voice delete <PACK>
+cli.arg gear voice flag <LINE>
 cli.arg gear voice import-takes <FOLDER>
 cli.arg gear voice install <PACK>
 cli.arg gear voice preview <PACK>
@@ -178,6 +179,8 @@ cli.command gear voice credits
 cli.command gear voice delete
 cli.command gear voice edit
 cli.command gear voice estimate
+cli.command gear voice flag
+cli.command gear voice flags
 cli.command gear voice import-takes
 cli.command gear voice install
 cli.command gear voice key
@@ -190,7 +193,9 @@ cli.command gear voice preview
 cli.command gear voice publish
 cli.command gear voice render
 cli.command gear voice render-packs
+cli.command gear voice retake
 cli.command gear voice sample
+cli.command gear voice samples
 cli.command gear voice sets
 cli.command gear voice voices
 cli.command import
@@ -505,6 +510,12 @@ cli.flag gear voice estimate --tail-ms VALUE
 cli.flag gear voice estimate --tempo VALUE
 cli.flag gear voice estimate --trim-db VALUE
 cli.flag gear voice estimate --voice VALUE
+cli.flag gear voice flag --clear
+cli.flag gear voice flag --note VALUE
+cli.flag gear voice flag --pack VALUE
+cli.flag gear voice flag --reason VALUE
+cli.flag gear voice flag --sample VALUE
+cli.flag gear voice flags --text
 cli.flag gear voice import-takes --dry-run
 cli.flag gear voice install --source VALUE
 cli.flag gear voice library --accent VALUE
@@ -561,6 +572,12 @@ cli.flag gear voice render-packs --tail-ms VALUE
 cli.flag gear voice render-packs --tempo VALUE
 cli.flag gear voice render-packs --trim-db VALUE
 cli.flag gear voice render-packs --voices VALUE
+cli.flag gear voice retake --confirm
+cli.flag gear voice retake --digest VALUE
+cli.flag gear voice retake --dry-run
+cli.flag gear voice retake --lines VALUE
+cli.flag gear voice retake --pack VALUE
+cli.flag gear voice retake --sample VALUE
 cli.flag gear voice sample --carrier VALUE
 cli.flag gear voice sample --confirm
 cli.flag gear voice sample --digest VALUE
@@ -577,6 +594,10 @@ cli.flag gear voice sample --tail-ms VALUE
 cli.flag gear voice sample --tempo VALUE
 cli.flag gear voice sample --trim-db VALUE
 cli.flag gear voice sample --voices VALUE
+cli.flag gear voice samples --all
+cli.flag gear voice samples --delete VALUE
+cli.flag gear voice samples --text
+cli.flag gear voice samples --yes
 cli.flag gear voice sets --carrier VALUE
 cli.flag gear voice sets --fade-out-ms VALUE
 cli.flag gear voice sets --max-lines VALUE

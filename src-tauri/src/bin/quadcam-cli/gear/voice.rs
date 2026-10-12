@@ -218,8 +218,8 @@ pub enum VoiceCmd {
         #[arg(long)]
         dry_run: bool,
     },
-    /// Render a few lines in every voice and model, cut out of carrier sentences, and write
-    /// the WAVs to the cache for listening. Bills ElevenLabs: it needs --confirm.
+    /// Render a few lines in every voice and model, cut out of carrier sentences, and keep
+    /// the WAVs in the sample gallery (`gear voice samples`). Bills ElevenLabs: it needs --confirm.
     Sample {
         /// Voice names or ids, comma separated.
         #[arg(long, value_delimiter = ',', required = true)]
@@ -247,6 +247,72 @@ pub enum VoiceCmd {
         batch: BatchArgs,
         #[command(flatten)]
         settings: SettingsArgs,
+    },
+    /// The sample gallery: each sampled voice with its takes, what the speech check heard and
+    /// any flag, then the packs on this Mac. --delete or --all with --yes removes samples (the
+    /// takes stay in the cache).
+    Samples {
+        /// Sample ids to delete, comma separated (needs --yes).
+        #[arg(long, value_delimiter = ',')]
+        delete: Vec<String>,
+        /// Delete every sample (needs --yes).
+        #[arg(long)]
+        all: bool,
+        /// Delete them.
+        #[arg(long)]
+        yes: bool,
+        /// Print as text.
+        #[arg(long)]
+        text: bool,
+    },
+    /// Every flagged take: voice, model, speed, seed, line, text, heard text, file, reason, note.
+    Flags {
+        /// Print as text.
+        #[arg(long)]
+        text: bool,
+    },
+    /// Flag a take of a sample or a pack with a reason and a note, or clear its flag.
+    Flag {
+        /// The take's card path, such as SOUNDS/en/armed.wav.
+        line: String,
+        /// A sample id (`gear voice samples`).
+        #[arg(long, conflicts_with = "pack", required_unless_present = "pack")]
+        sample: Option<String>,
+        /// A pack on this Mac.
+        #[arg(long)]
+        pack: Option<String>,
+        /// mispronounced, clipped, wrong_tone, noise or other.
+        #[arg(long, required_unless_present = "clear")]
+        reason: Option<String>,
+        /// What is wrong with the take.
+        #[arg(long)]
+        note: Option<String>,
+        /// Remove the flag instead.
+        #[arg(long)]
+        clear: bool,
+    },
+    /// Make the flagged takes of one sample voice or one studio pack again with another seed.
+    /// Bills ElevenLabs: without --confirm it prices them and prints the digest.
+    Retake {
+        /// A sample id (`gear voice samples`).
+        #[arg(long, conflicts_with = "pack", required_unless_present = "pack")]
+        sample: Option<String>,
+        /// A pack the Voice studio rendered.
+        #[arg(long)]
+        pack: Option<String>,
+        /// Only these flagged card paths, comma separated (default every flagged line).
+        #[arg(long, value_delimiter = ',')]
+        lines: Vec<String>,
+        /// Price it; render nothing.
+        #[arg(long)]
+        dry_run: bool,
+        /// Allow the paid call.
+        #[arg(long)]
+        confirm: bool,
+        /// With --confirm: the digest the run without --confirm printed. Refused when the
+        /// plan changed since.
+        #[arg(long)]
+        digest: Option<String>,
     },
     /// Render QuadCam's lines (and your own) with the provider from the settings into a local
     /// pack. A provider that may charge needs --confirm. With --set, render line sets as
@@ -641,6 +707,76 @@ pub fn run(core: &Core, a: VoiceArgs) -> Result<Value> {
                 confirm,
                 settings: settings.get(),
                 batch: batch.get(),
+                digest,
+            },
+        )?)?,
+        Some(VoiceCmd::Samples {
+            delete,
+            all,
+            yes,
+            text,
+        }) => {
+            let g = if all || !delete.is_empty() {
+                if !yes {
+                    bail!(
+                        "Not deleted: {} would be removed (the takes stay in the cache). Run again with --yes.",
+                        if all { "every sample".to_string() } else { delete.join(", ") }
+                    );
+                }
+                call::gear_voice_samples_delete(
+                    core,
+                    api::SamplesDeleteParams { ids: delete, all },
+                )?
+            } else {
+                call::gear_voice_samples(core)?
+            };
+            if text {
+                Value::String(core::voice_samples_text(&g))
+            } else {
+                serde_json::to_value(g)?
+            }
+        }
+        Some(VoiceCmd::Flags { text }) => {
+            let l = call::gear_voice_flags(core)?;
+            if text {
+                Value::String(core::voice_flags_text(&l))
+            } else {
+                serde_json::to_value(l)?
+            }
+        }
+        Some(VoiceCmd::Flag {
+            line,
+            sample,
+            pack,
+            reason,
+            note,
+            clear,
+        }) => serde_json::to_value(call::gear_voice_flag(
+            core,
+            api::FlagParams {
+                sample: sample.unwrap_or_default(),
+                pack: pack.unwrap_or_default(),
+                line,
+                reason: reason.unwrap_or_default(),
+                note: note.unwrap_or_default(),
+                clear,
+            },
+        )?)?,
+        Some(VoiceCmd::Retake {
+            sample,
+            pack,
+            lines,
+            dry_run,
+            confirm,
+            digest,
+        }) => serde_json::to_value(call::gear_voice_retake(
+            core,
+            api::RetakeParams {
+                sample: sample.unwrap_or_default(),
+                pack: pack.unwrap_or_default(),
+                lines,
+                dry_run,
+                confirm,
                 digest,
             },
         )?)?,

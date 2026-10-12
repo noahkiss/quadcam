@@ -535,6 +535,7 @@ impl Tts for Eleven {
                     use_case: Some(text_of(&l, "use_case"))
                         .filter(|u| !u.is_empty())
                         .unwrap_or_else(|| text_of(&l, "use case")),
+                    description: text_of(x, "description"),
                     rate: rate_of(x.pointer("/sharing/rate")),
                 })
             })

@@ -61,12 +61,12 @@ pub struct VoiceCheckReport {
 }
 
 /// The pack's files, read again.
-fn read_manifest(dir: &std::path::Path) -> Result<PackManifest> {
+pub(super) fn read_manifest(dir: &std::path::Path) -> Result<PackManifest> {
     let b = std::fs::read(dir.join("pack.json"))?;
     Ok(serde_json::from_slice(&b)?)
 }
 
-fn write_manifest(dir: &std::path::Path, m: &PackManifest) -> Result<()> {
+pub(super) fn write_manifest(dir: &std::path::Path, m: &PackManifest) -> Result<()> {
     let tmp = dir.join("pack.json.tmp");
     std::fs::write(&tmp, serde_json::to_vec_pretty(m)?)?;
     std::fs::rename(&tmp, dir.join("pack.json"))?;
@@ -74,7 +74,7 @@ fn write_manifest(dir: &std::path::Path, m: &PackManifest) -> Result<()> {
 }
 
 /// Whether a mismatch takes the line out of the pack: a studio pack, which has a re-take path.
-fn holds_lines(m: &PackManifest) -> bool {
+pub(super) fn holds_lines(m: &PackManifest) -> bool {
     m.id.starts_with("local-") && m.provider == PROVIDER && !m.voice_id.is_empty()
 }
 
@@ -115,7 +115,7 @@ impl Core {
     }
 
     /// Every line's text by card path: QuadCam's lines, every set's, and the person's own.
-    fn line_texts(&self) -> Result<HashMap<String, String>> {
+    pub(super) fn line_texts(&self) -> Result<HashMap<String, String>> {
         let mut out: HashMap<String, String> = HashMap::new();
         for id in sets::ids() {
             if id == sets::CUSTOM {

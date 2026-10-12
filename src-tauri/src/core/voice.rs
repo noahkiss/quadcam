@@ -128,6 +128,9 @@ pub struct VoicePack {
     /// An index pack's download size.
     #[serde(default)]
     pub zip_bytes: u64,
+    /// The takes the person flagged (`gear_voice_flag`). Installed packs only.
+    #[serde(default)]
+    pub flags: Vec<super::TakeFlag>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, specta::Type)]
@@ -596,6 +599,7 @@ impl Core {
             heard: m.heard.clone(),
             preview: Vec::new(),
             zip_bytes: 0,
+            flags: super::voice_samples::flags_of(dir),
         }
     }
 
@@ -728,6 +732,7 @@ impl Core {
                     heard: Vec::new(),
                     preview: e.preview.clone(),
                     zip_bytes: e.zip_bytes,
+                    flags: Vec::new(),
                 });
             }
         }
@@ -1701,6 +1706,19 @@ pub fn view_text(v: &VoiceView) -> String {
                 n => format!(", {n} lines heard wrong"),
             }
         );
+        for f in &k.flags {
+            let _ = writeln!(
+                s,
+                "    flagged {}: {}{}",
+                f.line,
+                f.reason,
+                if f.note.is_empty() {
+                    String::new()
+                } else {
+                    format!(" ({})", f.note)
+                }
+            );
+        }
     }
     if !v.speech.available {
         let _ = writeln!(

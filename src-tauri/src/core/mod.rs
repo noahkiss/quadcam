@@ -52,6 +52,7 @@ mod video;
 mod voice;
 mod voice_check;
 mod voice_publish;
+mod voice_samples;
 mod voice_studio;
 mod weather;
 pub use crate::paths::{cache_dir, default_session_file, default_settings_file, support_dir};
@@ -128,6 +129,11 @@ pub use voice_publish::{
     approve_text as voice_approve_text, preview_text as voice_preview_text,
     review_text as voice_review_text, PackPreviewParams, PreviewTake, PublishApproveParams,
     PublishApproveReport, PublishParams, PublishReview, ReviewLine,
+};
+pub use voice_samples::{
+    flags_text as voice_flags_text, retake_text as voice_retake_text,
+    samples_text as voice_samples_text, FlagList, FlagParams, FlagRow, RetakeParams, RetakeReport,
+    SampleGallery, SampleTake, SampleVoice, SamplesDeleteParams, TakeFlag, FLAG_REASONS,
 };
 pub use voice_studio::{
     catalog_text as voice_catalog_text, estimate_text as voice_estimate_text,

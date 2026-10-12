@@ -121,6 +121,10 @@ pub struct Entry {
     /// What the speech check heard in its lines (`asr`).
     #[serde(default)]
     pub heard: Vec<EntryHeard>,
+    /// The spoken texts the person flagged in this take (`gear_voice_flag`): each needs a
+    /// re-take, whatever the cut version, until the flag is cleared.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub rejected: Vec<String>,
 }
 
 /// What the speech check heard in one line of a take.
@@ -136,6 +140,9 @@ pub struct EntryHeard {
     /// The `batch::CUT_VERSION` of the cut it heard; under another, the result no longer holds.
     pub cut: u32,
 }
+
+/// The re-take reason of a line the person flagged.
+pub const REJECTED: &str = "flagged for a re-take";
 
 /// The index key of a line spoken alone.
 fn alone_key(spoken: &str) -> String {
@@ -179,6 +186,7 @@ impl Entry {
             cut: batch::CUT_VERSION,
             alone: false,
             heard: Vec::new(),
+            rejected: Vec::new(),
         }
     }
 
@@ -190,11 +198,17 @@ impl Entry {
             .find(|h| h.cut == batch::CUT_VERSION && h.spoken == spoken && !h.ok && !h.accepted)
     }
 
-    /// A line of this take needs a re-take: its cut failed a check, or the speech check heard
-    /// something else.
+    /// A line of this take needs a re-take: its cut failed a check, the speech check heard
+    /// something else, or the person flagged it.
     pub fn needs_retake(&self, spoken: &str) -> bool {
         (self.cut == batch::CUT_VERSION && self.flagged.iter().any(|f| f == spoken))
             || self.misheard(spoken).is_some()
+            || self.is_rejected(spoken)
+    }
+
+    /// The person flagged this line of the take.
+    pub fn is_rejected(&self, spoken: &str) -> bool {
+        self.rejected.iter().any(|r| r.eq_ignore_ascii_case(spoken))
     }
 
     /// Records what the speech check heard in one of its lines, replacing an earlier result.
@@ -541,7 +555,8 @@ pub fn cut_reused(
                     .iter()
                     .find(|f| f.spoken == c.spoken)
                     .map(|f| f.reason.clone())
-                    .or_else(|| e.misheard(&c.spoken).map(|h| super::asr::reason(&h.heard)));
+                    .or_else(|| e.misheard(&c.spoken).map(|h| super::asr::reason(&h.heard)))
+                    .or_else(|| e.is_rejected(&c.spoken).then(|| REJECTED.to_string()));
                 match reason {
                     Some(reason) => {
                         done.warnings.push(format!("{:?}: {reason}", w.line));
@@ -818,6 +833,7 @@ pub fn import_takes(
             // Not checked yet: the first render that uses it cuts and checks it.
             cut: 0,
             alone: true,
+            rejected: Vec::new(),
             heard: Vec::new(),
         };
         by.entry((t.voice.clone(), t.model.clone(), format!("{:.4}", t.speed)))

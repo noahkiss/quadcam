@@ -1156,7 +1156,8 @@ impl Core {
             same_plan(p.digest.as_deref(), &digest)?;
         }
         let tools = crate::media::find_tools().ok();
-        let out_root = self.cache.join("voice").join("samples");
+        // Samples from 0.19 and earlier move out of the cache first; the gallery shows a failure.
+        let _ = self.move_cached_samples();
         let batches = combos.iter().map(|(.., plan)| plan.batches.len()).sum();
         let mut run = Progress::start(self, "sample", batches)?;
         for (vid, vname, model, plan) in combos {
@@ -1187,7 +1188,7 @@ impl Core {
                     .iter()
                     .map(|w| format!("{vname}, {model}: {w}")),
             );
-            let dir = out_root.join(format!("{}-{}", slug(&vname), slug(&model)));
+            let dir = self.sample_dir(&vid, &vname, &model, settings.speed);
             std::fs::create_dir_all(&dir)?;
             for (l, spoken) in &lines {
                 let Some(cut) = done.cuts.get(spoken) else {
@@ -1214,6 +1215,8 @@ impl Core {
         }
         run.step("Checking speech");
         self.check_samples(&mut report, &settings);
+        let notes = self.save_samples(&report, &voices, &ids, &settings);
+        report.warnings.extend(notes);
         Ok(report)
     }
 
@@ -1676,7 +1679,7 @@ impl Core {
 
     /// Where the samples go (for the CLI to print).
     pub fn voice_samples_dir(&self) -> PathBuf {
-        self.cache.join("voice").join("samples")
+        self.samples_root()
     }
 }
 

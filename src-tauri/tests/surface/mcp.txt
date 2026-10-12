@@ -41,8 +41,10 @@ mcp.action quadcam_gear.usb_timers
 mcp.action quadcam_gear.voice
 mcp.action quadcam_gear.voice_catalog
 mcp.action quadcam_gear.voice_estimate
+mcp.action quadcam_gear.voice_flags
 mcp.action quadcam_gear.voice_library
 mcp.action quadcam_gear.voice_preview
+mcp.action quadcam_gear.voice_samples
 mcp.action quadcam_gear.voice_sets
 mcp.action quadcam_gear_apply.apply
 mcp.action quadcam_gear_apply.blackbox_erase
@@ -95,13 +97,16 @@ mcp.action quadcam_gear_edit.voice_check
 mcp.action quadcam_gear_edit.voice_choose
 mcp.action quadcam_gear_edit.voice_delete
 mcp.action quadcam_gear_edit.voice_edit
+mcp.action quadcam_gear_edit.voice_flag
 mcp.action quadcam_gear_edit.voice_import_takes
 mcp.action quadcam_gear_edit.voice_install
 mcp.action quadcam_gear_edit.voice_key_delete
 mcp.action quadcam_gear_edit.voice_key_set
 mcp.action quadcam_gear_edit.voice_publish
 mcp.action quadcam_gear_edit.voice_render
+mcp.action quadcam_gear_edit.voice_retake
 mcp.action quadcam_gear_edit.voice_sample
+mcp.action quadcam_gear_edit.voice_samples_delete
 mcp.action quadcam_library_files.analyze_video
 mcp.action quadcam_library_files.apply_name_format
 mcp.action quadcam_library_files.cuts
@@ -216,6 +221,7 @@ mcp.param quadcam_gear_edit.action string
 mcp.param quadcam_gear_edit.add_folder string
 mcp.param quadcam_gear_edit.aircraft string
 mcp.param quadcam_gear_edit.all_radios boolean
+mcp.param quadcam_gear_edit.all_samples boolean
 mcp.param quadcam_gear_edit.attribution string
 mcp.param quadcam_gear_edit.backup string
 mcp.param quadcam_gear_edit.broke string
@@ -227,6 +233,7 @@ mcp.param quadcam_gear_edit.charge_a number
 mcp.param quadcam_gear_edit.charged boolean
 mcp.param quadcam_gear_edit.checklist string
 mcp.param quadcam_gear_edit.chemistry string
+mcp.param quadcam_gear_edit.clear boolean
 mcp.param quadcam_gear_edit.clip string
 mcp.param quadcam_gear_edit.command string
 mcp.param quadcam_gear_edit.commands array<string>
@@ -272,10 +279,12 @@ mcp.param quadcam_gear_edit.port string
 mcp.param quadcam_gear_edit.product string
 mcp.param quadcam_gear_edit.radio string
 mcp.param quadcam_gear_edit.radios array<string>
+mcp.param quadcam_gear_edit.reason string
 mcp.param quadcam_gear_edit.received string
 mcp.param quadcam_gear_edit.remove_folder string
 mcp.param quadcam_gear_edit.repaired boolean
 mcp.param quadcam_gear_edit.retired boolean
+mcp.param quadcam_gear_edit.sample string
 mcp.param quadcam_gear_edit.seed integer
 mcp.param quadcam_gear_edit.serial string
 mcp.param quadcam_gear_edit.sets array<string>
