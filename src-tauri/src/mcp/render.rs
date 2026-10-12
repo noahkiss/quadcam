@@ -16,12 +16,13 @@ pub(super) fn lib_view(c: &Value) -> Value {
         "moments": c["moments"].as_array().map(|m| m.iter().map(|x| json!({"kind": x["kind"], "start": x["start"], "score": x["score"], "source": x["source"]})).collect::<Vec<_>>()),
         "keep": c["keep"], "cuts": c["cuts"], "unsaved_cuts": c["pending_cuts"],
         "in_photos": c["in_photos"], "last_import": c["last_import"], "dvr": c["dvr"],
+        "sun": c["sun"], "weather": c["weather"],
     })
 }
 
 pub(super) fn lib_line(c: &Value) -> String {
     format!(
-        "{} {} {} {:?} {:.0}s {}★{}{}{}",
+        "{} {} {} {:?} {:.0}s {}★{}{}{}{}{}",
         c["id"].as_str().unwrap_or("?"),
         c["date"].as_str().unwrap_or("?"),
         c["time"].as_str().unwrap_or(""),
@@ -41,8 +42,56 @@ pub(super) fn lib_line(c: &Value) -> String {
             .as_array()
             .filter(|m| !m.is_empty())
             .map(|m| format!(" {} moments", m.len()))
+            .unwrap_or_default(),
+        c["sun"]
+            .as_str()
+            .map(|s| format!(" {}", s.replace('_', " ")))
+            .unwrap_or_default(),
+        weather_phrase(&c["weather"])
+            .map(|w| format!(" {w}"))
             .unwrap_or_default()
     )
+}
+
+/// A clip's weather as one phrase: `18.2 °C, wind 12 km/h from 270° (gusts 20)`.
+pub(super) fn weather_phrase(w: &Value) -> Option<String> {
+    let t = w["temperature_c"].as_f64()?;
+    let wind = w["wind_kmh"].as_f64()?;
+    let mut s = format!("{t:.1} °C, wind {wind:.0} km/h");
+    if let Some(d) = w["wind_from_deg"].as_f64() {
+        s += &format!(" from {d:.0}°");
+    }
+    if let Some(g) = w["gusts_kmh"].as_f64() {
+        s += &format!(" (gusts {g:.0})");
+    }
+    Some(s)
+}
+
+/// `library_weather`'s report: one line per clip.
+pub(super) fn weather_text(r: &Value) -> String {
+    let clips = r["clips"].as_array().cloned().unwrap_or_default();
+    if clips.is_empty() {
+        return "Every clip has its weather already.".into();
+    }
+    clips
+        .iter()
+        .map(|c| {
+            let what = if let Some(e) = c["error"].as_str() {
+                format!("failed: {e}")
+            } else if let Some(why) = c["skipped"].as_str() {
+                format!("skipped: {why}")
+            } else {
+                let w = weather_phrase(&c["weather"]).unwrap_or_default();
+                if c["kept"].as_bool() == Some(true) {
+                    format!("{w} (kept)")
+                } else {
+                    w
+                }
+            };
+            format!("{} {}", c["id"].as_str().unwrap_or("?"), what)
+        })
+        .collect::<Vec<_>>()
+        .join("\n")
 }
 
 /// `library_analyze_video`'s report: one line per clip, or why nothing ran.

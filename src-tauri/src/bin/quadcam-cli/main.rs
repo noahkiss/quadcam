@@ -278,7 +278,7 @@ enum Cmd {
 enum LibCmd {
     /// List clips, newest first.
     List {
-        /// Words that must all appear in the name, note, place, aircraft, keywords or file.
+        /// Words that must all appear in the name, note, place, aircraft, keywords, file or sun tag.
         #[arg(long, short)]
         query: Option<String>,
         /// all, last_import, moments, picks, rejected, not_in_photos.
@@ -405,6 +405,12 @@ enum LibCmd {
         #[arg(long)]
         again: bool,
     },
+    /// Look up the wind and temperature of clips' places and hours at Open-Meteo, and write
+    /// them into the clip files. Needs the weather setting on; a clip with weather keeps it.
+    Weather {
+        /// Clip ids. Default: every clip without weather.
+        ids: Vec<String>,
+    },
     /// Move clips, with their cuts and originals, to the Trash.
     Trash {
         #[arg(required = true)]
@@ -474,6 +480,14 @@ enum PlaceCmd {
         #[arg(long, default_value_t = 5)]
         limit: usize,
     },
+    /// This Mac's location from Location Services, named by Apple's geocoder. Saves nothing.
+    Here,
+    /// Name a point with Apple's geocoder.
+    Reverse {
+        /// LAT,LON in decimal degrees.
+        #[arg(allow_hyphen_values = true)]
+        location: String,
+    },
     /// Create a place, or change an existing one.
     Save {
         name: String,
@@ -522,7 +536,7 @@ enum SetCmd {
     Show,
     /// Set settings: KEY=VALUE, where VALUE is JSON or plain text ("null" resets a key).
     /// Keys: output_dir, format, encoder, keep_originals, add_time,
-    /// delete_clips_after_import, join_split_recordings, video_analysis, on_device_suggestions, update_check, default_name, photos_album, format_label, log_dir, layout, place_folders, tunables, geocoder,
+    /// delete_clips_after_import, join_split_recordings, video_analysis, weather, on_device_suggestions, update_check, default_name, photos_album, format_label, log_dir, layout, place_folders, tunables, geocoder,
     /// name_date_format, default_profile, ffmpeg_source, modules; Gear: gear_dir, gear_auto_backup, gear_keep_recent,
     /// gear_keep_weeks, gear_keep_monthly, gear_usb_minutes, gear_on_connect, gear_cues,
     /// firmware_check, tts_provider, tts_base_url, tts_model, tts_voice, voice_index, tts_key; sim_preview, betaflight_flash_preview; elrs_preview, elrs_binding_phrase, elrs_region, elrs_wifi_interval.
@@ -1418,6 +1432,10 @@ fn library(core: &Core, cmd: LibCmd) -> Result<Value> {
             core,
             quadcam_lib::core::VideoParams { ids, again },
         )?)?,
+        LibCmd::Weather { ids } => serde_json::to_value(call::library_weather(
+            core,
+            quadcam_lib::core::WeatherParams { ids },
+        )?)?,
         LibCmd::Trash { ids } => {
             serde_json::to_value(call::library_trash(core, api::IdsParams { ids })?)?
         }
@@ -1503,6 +1521,11 @@ fn places(core: &Core, cmd: PlaceCmd) -> Result<Value> {
                 limit: Some(limit),
             },
         )?)?,
+        PlaceCmd::Here => serde_json::to_value(call::place_here(core)?)?,
+        PlaceCmd::Reverse { location } => {
+            let (lat, lon) = latlon(&location)?;
+            serde_json::to_value(call::place_reverse(core, api::LatLonParams { lat, lon })?)?
+        }
         PlaceCmd::Save {
             name,
             location,

@@ -28,7 +28,7 @@ use crate::core::{
     CardStatus, Core, FormatPlan, FormatRequest, ImportOptions, ImportOutcome, LibMatchParams,
     LibMatchReport, LibShiftParams, LibShiftReport, LibraryView, OnDeviceParams, OnDeviceReport,
     PlaceRemoved, RebuildReport, RenameReport, SettingsView, Status, TrashReport, VerifyReport,
-    VideoParams, VideoReport,
+    VideoParams, VideoReport, WeatherParams, WeatherReport,
 };
 use crate::disk::Volume;
 use crate::geocode::GeoResult;
@@ -215,6 +215,9 @@ with_gear_rows! {
     library_rescan(params: ClipIdParams) -> LibClip = |c| c.library_rescan(&params.id);
     /// Highlights and the key frame of library clips, with macOS video analysis.
     library_analyze_video(params: VideoParams) -> VideoReport = |c| c.library_analyze_video(&params);
+    /// The wind and temperature of library clips' places and hours, from Open-Meteo; only
+    /// while the weather setting is on.
+    library_weather(params: WeatherParams) -> WeatherReport = |c| c.library_weather(&params);
     /// Video analysis on this Mac: available, or why not.
     video_feature() -> Feature = |c| Ok(c.video_feature());
     /// A file the web view can play.
@@ -233,6 +236,10 @@ with_gear_rows! {
     /// Searches for an address or a named place.
     place_search(params: SearchParams) -> Vec<GeoResult> =
         |c| c.place_search(&params.query, params.provider.as_deref(), params.limit);
+    /// This Mac's location from Location Services, named by Apple's geocoder.
+    place_here() -> GeoResult = |c| c.place_here();
+    /// Names a point with Apple's geocoder.
+    place_reverse(params: LatLonParams) -> GeoResult = |c| c.place_reverse(params.lat, params.lon);
     /// Creates or changes a saved place.
     place_save(params: PlaceSaveParams) -> Place =
         |c| c.place_save(&params.name, params.lat, params.lon, params.new_name.as_deref());

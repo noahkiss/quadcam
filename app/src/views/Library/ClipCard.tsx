@@ -11,6 +11,7 @@ import { fmtDur } from "../../lib/format";
 import { deadOf } from "../../lib/library";
 import { rate } from "../../actions/library";
 import { KIND, KIND_ICON } from "./moments";
+import { SUN_LABEL } from "../../lib/weather";
 import { NameEdit, useNameClick } from "./NameEdit";
 import styles from "./ClipCard.module.css";
 
@@ -90,6 +91,11 @@ export const ClipCard = memo(function ClipCard({ clip: c, selected, onMenu }: Pr
         </div>
         <div className={styles.line}>
           {c.time && <span className={styles.time}>{c.time}</span>}
+          {c.sun && (
+            <span className={styles.sun} title={SUN_LABEL[c.sun]} role="img" aria-label={SUN_LABEL[c.sun]}>
+              <Icon name="sun" size={13} />
+            </span>
+          )}
           <MomentChips moments={c.moments} />
           <span className={styles.stars}>
             <Stars rating={c.rating || 0} onRate={(r) => rate([c.id], r)} size={12} />

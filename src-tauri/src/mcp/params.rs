@@ -275,9 +275,9 @@ pub struct LibraryEditArgs {
 #[derive(Debug, Clone, Default, Deserialize, JsonSchema)]
 #[schemars(deny_unknown_fields)]
 pub struct LibraryFilesArgs {
-    #[schemars(required, extend("enum" = ["cuts", "split_by_flight", "export_cuts", "trash", "photos", "rebuild", "apply_name_format", "match_logs", "analyze_video"]))]
+    #[schemars(required, extend("enum" = ["cuts", "split_by_flight", "export_cuts", "trash", "photos", "rebuild", "apply_name_format", "match_logs", "analyze_video", "weather"]))]
     pub action: Option<String>,
-    /// Library clip ids from quadcam_library. cuts, split_by_flight and export_cuts take exactly one; rebuild takes none; apply_name_format, match_logs and analyze_video take some or none (every clip).
+    /// Library clip ids from quadcam_library. cuts, split_by_flight and export_cuts take exactly one; rebuild takes none; apply_name_format, match_logs, analyze_video and weather take some or none (every clip).
     #[schemars(length(max = 500))]
     pub ids: Option<Vec<String>>,
     /// For cuts: ranges in clip seconds, each at least 0.5 s.
@@ -305,7 +305,7 @@ pub struct LibraryFilesArgs {
 #[derive(Debug, Clone, Default, Deserialize, JsonSchema)]
 #[schemars(deny_unknown_fields)]
 pub struct PlacesArgs {
-    #[schemars(required, extend("enum" = ["list", "search", "save", "delete"]))]
+    #[schemars(required, extend("enum" = ["list", "search", "save", "delete", "here", "reverse"]))]
     pub action: Option<String>,
     /// For search: an address or a place name.
     #[schemars(length(max = 200))]
@@ -318,7 +318,7 @@ pub struct PlacesArgs {
     /// For save and delete: the place's name (any case).
     #[schemars(length(max = 80))]
     pub name: Option<String>,
-    /// For save: required for a new place.
+    /// For save: required for a new place. For reverse: the point to name.
     #[schemars(range(min = -90, max = 90))]
     pub lat: Option<f64>,
     #[schemars(range(min = -180, max = 180))]
@@ -404,6 +404,9 @@ pub struct SettingsValues {
     /// Find highlights and the key frame of new clips with macOS video analysis (macOS 27 or later), in the background. On by default.
     #[schemars(extend("x-nullable" = true))]
     pub video_analysis: Option<bool>,
+    /// Look up the wind and temperature of each clip's place and hour at Open-Meteo (the clip's location rounded to about 1 km, and its date, leave the Mac). Off by default; while off, no weather request is made.
+    #[schemars(extend("x-nullable" = true))]
+    pub weather: Option<bool>,
     /// Apple's on-device model suggests clip names, keywords and notes after a card loads, where the Mac has it (macOS 26 or later, Apple Intelligence on). On by default.
     #[schemars(extend("x-nullable" = true))]
     pub on_device_suggestions: Option<bool>,

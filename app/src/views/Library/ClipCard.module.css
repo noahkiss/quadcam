@@ -134,6 +134,10 @@
   font-size: var(--t-sm);
   color: var(--muted);
 }
+.sun {
+  display: inline-flex;
+  color: var(--warning-text);
+}
 .stars {
   margin-left: auto;
   flex: none;

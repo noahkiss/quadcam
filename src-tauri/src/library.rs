@@ -55,6 +55,9 @@ pub const KEY_PARTS: &str = "app.quadcam.parts";
 /// What macOS video analysis found: highlights and the key frame (`highlights::value`).
 /// Present once the clip was analysed, even when it found nothing.
 pub const KEY_VIDEO: &str = "app.quadcam.video";
+/// The wind and temperature of the clip's place and hour (`weather::Weather` as JSON), once
+/// looked up. Never looked up again; a new place, date or time removes it.
+pub const KEY_WEATHER: &str = "app.quadcam.weather";
 const QT: &str = "com.apple.quicktime.";
 
 // ---------- layout ----------
@@ -201,6 +204,9 @@ pub struct LibClip {
     /// What macOS video analysis found; None until the clip was analysed.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub video: Option<crate::highlights::VideoScan>,
+    /// The wind and temperature of its place and hour; None until looked up (`weather`).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub weather: Option<crate::weather::Weather>,
     /// Ranges with a picture; empty when the clip has no dead air (or was never scanned).
     #[serde(default)]
     pub keep: Vec<Span>,
@@ -235,6 +241,11 @@ pub struct LibClip {
 }
 
 impl LibClip {
+    /// Where the sun stood when the clip was flown, from its date, time and location.
+    pub fn sun(&self) -> Option<crate::sun::SunTag> {
+        crate::sun::clip_tag(self.date, self.time.as_deref(), self.location.as_ref())
+    }
+
     /// The name to show: the title, else the file name without the date.
     pub fn display_name(&self) -> String {
         if !self.title.trim().is_empty() {
@@ -655,6 +666,7 @@ pub fn read_file(root: &Path, rel: &Path) -> Result<Found> {
             video.as_ref(),
         ),
         video,
+        weather: get(KEY_WEATHER).and_then(|w| serde_json::from_str(&w).ok()),
         keep: get(KEY_KEEP).map(|k| parse_spans(&k)).unwrap_or_default(),
         stats: get(KEY_STATS).and_then(|s| serde_json::from_str(&s).ok()),
         cuts: Vec::new(),
@@ -890,7 +902,8 @@ pub fn id_file(id: &str) -> String {
 #[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, specta::Type)]
 #[serde(default)]
 pub struct Filter {
-    /// Words that must all appear in the name, note, place, aircraft, keywords or DVR name.
+    /// Words that must all appear in the name, note, place, aircraft, keywords, DVR name or
+    /// sun tag.
     pub query: Option<String>,
     /// `all`, `last_import`, `moments`, `picks`, `rejected`, `not_in_photos`.
     pub group: Option<String>,
@@ -912,14 +925,15 @@ pub fn matches(ix: &Index, c: &LibClip, f: &Filter) -> bool {
     let text = |s: &str| s.to_lowercase();
     let ok_query = f.query.as_deref().is_none_or(|q| {
         let hay = text(&format!(
-            "{} {} {} {} {} {} {}",
+            "{} {} {} {} {} {} {} {}",
             c.display_name(),
             c.note,
             c.place.as_deref().unwrap_or(""),
             c.aircraft.as_deref().unwrap_or(""),
             c.keywords.join(" "),
             c.dvr.as_deref().unwrap_or(""),
-            c.path.display()
+            c.path.display(),
+            c.sun().map(|s| s.label()).unwrap_or("")
         ));
         q.split_whitespace().all(|w| hay.contains(&text(w)))
     });
@@ -1167,6 +1181,7 @@ mod tests {
             author: None,
             moments: vec![],
             video: None,
+            weather: None,
             keep: vec![],
             stats: None,
             cuts: vec![],
@@ -1217,6 +1232,28 @@ mod tests {
             ..Default::default()
         };
         assert_eq!(ids(&q).len(), 2);
+        // The sun tag is searchable: some local time on the June solstice in London is
+        // golden hour, whatever this Mac's time zone.
+        let mut sunny = clip("s", "evening", "2026-06-21");
+        sunny.location = Some(Location {
+            lat: 51.5,
+            lon: -0.13,
+            name: None,
+        });
+        sunny.time = (0..24 * 4)
+            .map(|q| format!("{:02}:{:02}", q / 4, q % 4 * 15))
+            .find(|t| {
+                let mut c = sunny.clone();
+                c.time = Some(t.clone());
+                c.sun() == Some(crate::sun::SunTag::GoldenHour)
+            });
+        assert!(sunny.time.is_some());
+        let golden = Filter {
+            query: Some("Golden hour".into()),
+            ..Default::default()
+        };
+        assert!(matches(&ix, &sunny, &golden));
+        assert!(!matches(&ix, &ix.clips[0], &golden));
         let g = groups(&ix);
         assert_eq!(g["days"][0].0, "2026-09-27");
         assert_eq!(g["places"], vec![("Field".to_string(), 2)]);

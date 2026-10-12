@@ -244,7 +244,7 @@
 }
 .placeRow {
   display: grid;
-  grid-template-columns: 2fr 1fr 1fr auto auto;
+  grid-template-columns: 2fr 1fr 1fr auto auto auto;
   gap: var(--s-2);
   align-items: center;
   padding: 2px;

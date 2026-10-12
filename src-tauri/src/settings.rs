@@ -130,6 +130,12 @@ pub const KEYS: &[Key] = &[
         check: boolean,
     },
     Key {
+        file: "weather",
+        name: Some("weather"),
+        about: "true or false",
+        check: boolean,
+    },
+    Key {
         file: "onDeviceSuggestions",
         name: Some("on_device_suggestions"),
         about: "true or false",
@@ -598,6 +604,10 @@ pub struct Defaults {
     /// either way.
     #[serde(default = "yes")]
     pub video_analysis: bool,
+    /// Look up the wind and temperature of each clip's place and hour at Open-Meteo
+    /// (`weather`). Off by default; while it is off QuadCam makes no weather request.
+    #[serde(default)]
+    pub weather: bool,
     /// Apple's on-device model suggests clip names, keywords and notes in the import's
     /// review, where the Mac has it (`core/ondevice.rs`). On by default.
     #[serde(default = "yes")]
@@ -659,6 +669,7 @@ impl Default for Defaults {
             delete_clips_after_import: false,
             join_split_recordings: true,
             video_analysis: true,
+            weather: false,
             on_device_suggestions: true,
             update_check: true,
             default_name: crate::naming::DEFAULT_NAME.into(),
@@ -718,6 +729,9 @@ impl Defaults {
         }
         if let Some(b) = get(v, "videoAnalysis") {
             d.video_analysis = b;
+        }
+        if let Some(b) = get(v, "weather") {
+            d.weather = b;
         }
         if let Some(b) = get(v, "onDeviceSuggestions") {
             d.on_device_suggestions = b;
@@ -793,6 +807,7 @@ mod tests {
         assert_eq!(x.profiles[0].edgetx_models, vec!["WHOOP A"]);
         assert_eq!(x.tunables.max_log_age_days, 60);
         assert!(x.video_analysis, "video analysis is on unless turned off");
+        assert!(!x.weather, "weather is off unless turned on");
         // New settings get their defaults.
         assert_eq!(x.geocoder, "apple");
         assert!(!x.delete_clips_after_import);

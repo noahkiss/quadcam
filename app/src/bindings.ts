@@ -119,6 +119,11 @@ export const commands = {
 	libraryRescan: (params: ClipIdParams) => typedError<LibClip_Serialize, string>(__TAURI_INVOKE("library_rescan", { params })),
 	/**  Highlights and the key frame of library clips, with macOS video analysis. */
 	libraryAnalyzeVideo: (params: VideoParams) => typedError<VideoReport, string>(__TAURI_INVOKE("library_analyze_video", { params })),
+	/**
+	 *  The wind and temperature of library clips' places and hours, from Open-Meteo; only
+	 *  while the weather setting is on.
+	 */
+	libraryWeather: (params: WeatherParams) => typedError<WeatherReport, string>(__TAURI_INVOKE("library_weather", { params })),
 	/**  Video analysis on this Mac: available, or why not. */
 	videoFeature: () => typedError<Feature, string>(__TAURI_INVOKE("video_feature")),
 	/**  A file the web view can play. */
@@ -135,6 +140,10 @@ export const commands = {
 	places: () => typedError<Place[], string>(__TAURI_INVOKE("places")),
 	/**  Searches for an address or a named place. */
 	placeSearch: (params: SearchParams) => typedError<GeoResult[], string>(__TAURI_INVOKE("place_search", { params })),
+	/**  This Mac's location from Location Services, named by Apple's geocoder. */
+	placeHere: () => typedError<GeoResult, string>(__TAURI_INVOKE("place_here")),
+	/**  Names a point with Apple's geocoder. */
+	placeReverse: (params: LatLonParams) => typedError<GeoResult, string>(__TAURI_INVOKE("place_reverse", { params })),
 	/**  Creates or changes a saved place. */
 	placeSave: (params: PlaceSaveParams) => typedError<Place, string>(__TAURI_INVOKE("place_save", { params })),
 	/**  Deletes a saved place. */
@@ -2028,6 +2037,11 @@ export type Defaults_Deserialize = {
 	 */
 	video_analysis?: boolean,
 	/**
+	 *  Look up the wind and temperature of each clip's place and hour at Open-Meteo
+	 *  (`weather`). Off by default; while it is off QuadCam makes no weather request.
+	 */
+	weather?: boolean,
+	/**
 	 *  Apple's on-device model suggests clip names, keywords and notes in the import's
 	 *  review, where the Mac has it (`core/ondevice.rs`). On by default.
 	 */
@@ -2087,6 +2101,11 @@ export type Defaults_Serialize = {
 	 *  either way.
 	 */
 	video_analysis: boolean,
+	/**
+	 *  Look up the wind and temperature of each clip's place and hour at Open-Meteo
+	 *  (`weather`). Off by default; while it is off QuadCam makes no weather request.
+	 */
+	weather: boolean,
 	/**
 	 *  Apple's on-device model suggests clip names, keywords and notes in the import's
 	 *  review, where the Mac has it (`core/ondevice.rs`). On by default.
@@ -2682,7 +2701,10 @@ export type Field = {
 
 /**  The smart groups and other ways to narrow the library. */
 export type Filter = {
-	/**  Words that must all appear in the name, note, place, aircraft, keywords or DVR name. */
+	/**
+	 *  Words that must all appear in the name, note, place, aircraft, keywords, DVR name or
+	 *  sun tag.
+	 */
 	query?: string | null,
 	/**  `all`, `last_import`, `moments`, `picks`, `rejected`, `not_in_photos`. */
 	group?: string | null,
@@ -3366,6 +3388,12 @@ export type LabelParams = {
 	label: string | null,
 };
 
+/**  `place_reverse`: a point in decimal degrees. */
+export type LatLonParams = {
+	lat: number | null,
+	lon: number | null,
+};
+
 /**  The newest stable version of each product, and when it was read. */
 export type Latest = {
 	edgetx?: string | null,
@@ -3413,6 +3441,8 @@ export type LibClip_Deserialize = {
 	moments?: Moment[],
 	/**  What macOS video analysis found; None until the clip was analysed. */
 	video?: VideoScan | null,
+	/**  The wind and temperature of its place and hour; None until looked up (`weather`). */
+	weather?: Weather | null,
 	/**  Ranges with a picture; empty when the clip has no dead air (or was never scanned). */
 	keep?: Span[],
 	stats?: FlightStats_Deserialize | null,
@@ -3462,6 +3492,8 @@ export type LibClip_Serialize = {
 	moments: Moment[],
 	/**  What macOS video analysis found; None until the clip was analysed. */
 	video?: VideoScan | null,
+	/**  The wind and temperature of its place and hour; None until looked up (`weather`). */
+	weather?: Weather | null,
 	/**  Ranges with a picture; empty when the clip has no dead air (or was never scanned). */
 	keep: Span[],
 	stats: FlightStats_Serialize | null,
@@ -3530,6 +3562,11 @@ export type LibItem_Deserialize = {
 	/**  Neither a strip nor a poster could be made. */
 	no_picture: boolean,
 	last_import: boolean,
+	/**
+	 *  Where the sun stood when the clip was flown (`sun`); None without a time and a
+	 *  location, or in daylight and at night.
+	 */
+	sun: SunTag | null,
 } & LibClip_Deserialize;
 
 /**  A clip as the front ends see it: the index entry plus absolute paths. */
@@ -3545,6 +3582,11 @@ export type LibItem_Serialize = {
 	/**  Neither a strip nor a poster could be made. */
 	no_picture: boolean,
 	last_import: boolean,
+	/**
+	 *  Where the sun stood when the clip was flown (`sun`); None without a time and a
+	 *  location, or in daylight and at night.
+	 */
+	sun: SunTag | null,
 } & LibClip_Serialize;
 
 /**  One clip's result. */
@@ -6497,6 +6539,9 @@ export type Summary = {
 	format_ready: SerdeResult<null, string>,
 };
 
+/**  Where the sun stood at a clip's time. */
+export type SunTag = "dawn" | "sunrise" | "golden_hour" | "sunset" | "dusk";
+
 /**
  *  The head's values for the other state of the join: the file's own while the join is on,
  *  the whole recording's while it is off. Turning the join on or off swaps them in.
@@ -6593,7 +6638,9 @@ export type TakeReport = {
 /**  The long library jobs. */
 export type Task = "rebuild" | "cuts" | "thumbnails" | "moments" | 
 /**  Video analysis: highlights and key frames. */
-"video";
+"video" | 
+/**  Weather lookups at Open-Meteo. */
+"weather";
 
 /**  The throttle curve of a rate profile. */
 export type ThrottleView = {
@@ -7073,6 +7120,42 @@ export type Volume = {
 
 /**  Something mounted or unmounted under /Volumes. */
 export type VolumesChanged = null;
+
+/**  The weather of one hour at one place. Metric: degrees Celsius and km/h. */
+export type Weather = {
+	/**  The hour it describes, in UTC (`2026-09-28T18:00Z`). */
+	hour: string,
+	temperature_c: number | null,
+	/**  Mean wind 10 m above ground. */
+	wind_kmh: number | null,
+	gusts_kmh?: number | null,
+	/**  Where the wind came from, in degrees (0 north, 90 east). */
+	wind_from_deg?: number | null,
+	/**  `archive` or `historical_forecast`. */
+	source: string,
+};
+
+/**  What a weather run did with one clip. */
+export type WeatherClip = {
+	id: string,
+	path: string,
+	weather: Weather | null,
+	/**  The clip had its weather already; nothing was asked. */
+	kept: boolean,
+	/**  Why nothing was looked up or found: no place, no time, no data for that hour yet. */
+	skipped: string | null,
+	error: string | null,
+};
+
+/**  `library_weather`: which clips. */
+export type WeatherParams = {
+	/**  Library clip ids; empty means every clip without weather (cuts excluded). */
+	ids?: string[],
+};
+
+export type WeatherReport = {
+	clips: WeatherClip[],
+};
 
 /**  The worst link of the session. */
 export type WorstLink = {

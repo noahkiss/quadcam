@@ -11,11 +11,12 @@ import { rate, setSort } from "../../actions/library";
 import type { SortKey } from "../../lib/library";
 import { MomentChips, stripStyle } from "./ClipCard";
 import { NameEdit, useNameClick } from "./NameEdit";
+import { SUN_LABEL } from "../../lib/weather";
 import styles from "./ClipList.module.css";
 
 const ROW = 44;
 const SORTS: Record<string, SortKey> = { Name: "name", Date: "date", Length: "duration", Rating: "rating" };
-const HEADS = ["", "Name", "Date", "Length", "Rating", "Flag", "Moments", "Place", "Cuts", "Photos"];
+const HEADS = ["", "Name", "Date", "Length", "Rating", "Flag", "Moments", "Place", "Sun", "Cuts", "Photos"];
 
 /** The library as a table, one row per clip; header buttons sort. */
 export function ClipList({ clips, onMenu }: { clips: LibClip[]; onMenu: (e: MouseEvent, id: string) => void }) {
@@ -101,6 +102,7 @@ function Row({ clip: c, selected, onMenu }: { clip: LibClip; selected: boolean; 
         <MomentChips moments={c.moments} />
       </td>
       <td>{c.place || ""}</td>
+      <td>{c.sun ? SUN_LABEL[c.sun] : ""}</td>
       <td>{c.cuts.length ? c.cuts.length : ""}</td>
       <td>{c.in_photos ? <Icon name="photos" tint="green" size={14} /> : null}</td>
     </tr>

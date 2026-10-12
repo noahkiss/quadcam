@@ -38,6 +38,7 @@ expression: library
       "size": 0,
       "stats": null,
       "strip": null,
+      "sun": "<by date, time and place>",
       "time": null,
       "title": "flight-1"
     },
@@ -85,6 +86,7 @@ expression: library
       "size": 0,
       "stats": null,
       "strip": null,
+      "sun": "<by date, time and place>",
       "time": "18:30",
       "title": "loops"
     }

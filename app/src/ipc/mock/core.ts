@@ -47,8 +47,8 @@ import { live as liveOf } from "../../lib/controls";
 /** `Core::dispatch` methods, each also a typed Tauri command of the same name. */
 const DISPATCH = new Set([
   "library", "library_rate", "library_edit", "library_rename", "library_cuts", "library_export_cuts", "library_trash", "library_untrash",
-  "library_photos", "library_apply_name_format", "library_match_logs", "library_time_shift", "library_rebuild", "library_rescan", "library_analyze_video", "video_feature", "library_preview", "library_strips", "card_status",
-  "settings", "settings_set", "place_search", "place_save", "session_cuts", "profiles", "profile_save", "session_split", "library_split",
+  "library_photos", "library_apply_name_format", "library_match_logs", "library_time_shift", "library_rebuild", "library_rescan", "library_analyze_video", "library_weather", "video_feature", "library_preview", "library_strips", "card_status",
+  "settings", "settings_set", "place_search", "place_here", "place_reverse", "place_save", "session_cuts", "profiles", "profile_save", "session_split", "library_split",
   "modules", "module_install", "module_remove", "modules_check", "gear_osd", "gear_osd_edit", "gear_model", "gear_model_edit", "gear_voice", "gear_voice_edit", "gear_voice_preview", "gear_voice_render", "gear_voice_key", "gear_voice_sets", "gear_voice_catalog", "gear_voice_estimate", "gear_voice_sample", "gear_voice_import_takes", "gear_voice_check", "gear_voice_pack_install", "gear_voice_pack_preview", "gear_voice_publish", "gear_voice_choose", "gear_voice_choose_radios", "gear_voice_pack_delete", "gear_rates", "gear_rates_preview", "gear_sims", "gear_sim_sync_plan", "gear_sim_sync", "gear_sim_restore_plan", "gear_sim_restore", "gear_radio_cli", "gear_dfu_link", "gear_firmware", "gear_firmware_read", "gear_splash", "gear_flash_plan", "gear_flash", "gear_elrs", "gear_elrs_read", "gear_elrs_flash_plan", "gear_elrs_flash",
   "gear_status", "gear_devices", "gear_device_save", "gear_device_forget", "gear_dismiss_reminder", "gear_poll_pause",
   "gear_switch_map", "gear_radio", "gear_radio_watch", "gear_sim_calibration", "gear_sim_calibration_save", "gear_sim_defaults", "gear_sim_calibrate",
@@ -77,6 +77,20 @@ export type Emit = (event: string, payload?: unknown) => void;
 export interface Call {
   cmd: string;
   args: Record<string, unknown>;
+}
+
+/** The sun tag for a time of day, as at a mid-northern place in autumn. The real core works
+ * it out from the clip's place, date and time (`sun.rs`). */
+function mockSun(time: string | null): LibClip["sun"] {
+  if (!time) return null;
+  const m = Number(time.slice(0, 2)) * 60 + Number(time.slice(3, 5));
+  const at = (a: string, b: string) => m >= Number(a.slice(0, 2)) * 60 + Number(a.slice(3)) && m < Number(b.slice(0, 2)) * 60 + Number(b.slice(3));
+  if (at("06:00", "06:40")) return "dawn";
+  if (at("06:40", "07:10")) return "sunrise";
+  if (at("07:10", "07:50") || at("17:50", "18:35")) return "golden_hour";
+  if (at("18:35", "19:05")) return "sunset";
+  if (at("19:05", "19:35")) return "dusk";
+  return null;
 }
 
 const VIDEO_OFF = "Video analysis on this Mac needs macOS 27 or later.";
@@ -321,6 +335,8 @@ export class MockCore {
         return this.clip(String(p.id));
       case "library_analyze_video":
         return this.analyzeVideo((p.ids as string[]) || [], !!p.again);
+      case "library_weather":
+        return this.weather((p.ids as string[]) || []);
       case "video_feature":
         return { name: "video", available: this.videoAvailable, min_os: "27.0", reason: this.videoAvailable ? null : VIDEO_OFF, locale: null, assets: null };
       case "library_preview":
@@ -336,6 +352,10 @@ export class MockCore {
         return this.settingsSet(p.values as Record<string, unknown>);
       case "place_search":
         return this.placeSearch(String(p.query));
+      case "place_here":
+        return { name: "Current spot", address: "1 Field Road, Springfield", lat: 40.21, lon: -75.21, provider: "apple" };
+      case "place_reverse":
+        return { name: "Springfield Park", address: "2 Park Road, Springfield", lat: Number(p.lat), lon: Number(p.lon), provider: "apple" };
       case "place_save":
         return this.placeSave(String(p.name), Number(p.lat), Number(p.lon));
       case "session_cuts":
@@ -935,6 +955,7 @@ export class MockCore {
       c.place = e.location.name || null;
     }
     if (e.profile != null) c.aircraft = e.profile || null;
+    const where = JSON.stringify([c.location?.lat, c.location?.lon, c.date, c.time]);
     if (e.time != null) c.time = e.time || null;
     if (e.date && e.date !== c.date) {
       const old = c.date;
@@ -942,6 +963,8 @@ export class MockCore {
       c.file = `${this.lib.root}/${c.path}`;
       c.date = e.date;
     }
+    if (JSON.stringify([c.location?.lat, c.location?.lon, c.date, c.time]) !== where) c.weather = null;
+    c.sun = c.location ? mockSun(c.time) : null;
     this.libraryChanged();
     return structuredClone(c);
   }
@@ -1080,6 +1103,25 @@ export class MockCore {
       this.libraryChanged();
     }
     return { unavailable: null, clips };
+  }
+
+  /** Weather: one fixed hour per clip with a place and a time; refused while the setting is off. */
+  weather(ids: string[]) {
+    if ((this.settings.values as Record<string, unknown>).weather !== true) throw "Weather is off. Turn on the weather setting first (Settings > Import, or settings set weather=true).";
+    for (const id of ids) this.clip(id);
+    const todo = this.lib.clips.filter((c) => !c.cut_of && (ids.length ? ids.includes(c.id) : !c.weather));
+    const clips = todo.map((c, i) => {
+      this.emit("library-task", { task: "weather", done: i, total: todo.length });
+      const row = { id: c.id, path: c.path, weather: c.weather, kept: !!c.weather, skipped: null as string | null, error: null };
+      if (row.kept) return row;
+      if (!c.location) return { ...row, skipped: "no place" };
+      if (!c.time) return { ...row, skipped: "no time of day" };
+      c.weather = { hour: `${c.date}T${c.time.slice(0, 2)}:00Z`, temperature_c: 18.4, wind_kmh: 20, gusts_kmh: 32, wind_from_deg: 315, source: "archive" };
+      return { ...row, weather: c.weather };
+    });
+    this.emit("library-task", { task: "weather", done: todo.length, total: todo.length });
+    if (clips.some((c) => c.weather && !c.kept)) this.libraryChanged();
+    return { clips };
   }
 
   strips() {
@@ -1342,7 +1384,7 @@ export class MockCore {
         id: c.key || `k${p.id}`, path: output.slice(opts.output_dir.length + 1), title: p.name, note: p.note, date: p.date, time: p.time ? p.time.slice(0, 5) : null,
         duration: c.duration, size: r.size, rating: 0, flag: "none", place: loc?.name || null, location: loc || null, aircraft: p.meta.profile || (this.settings.values.defaultProfile as string) || null,
         keywords: ["FPV", ...p.meta.keywords], author: p.meta.author, moments: p.moments, keep: c.signal?.keep || [], stats: p.flight, cuts: cuts.map((k) => ({ path: k.output.slice(opts.output_dir.length + 1), start: k.start, end: k.end, size: k.size })),
-        pending_cuts: [], in_photos: false, original: null, aliases: [], parts: (c.join?.on ? c.join.parts : []).map((id) => { const x = s.clips.find((y) => y.id === id)!; return { source: x.key, dvr: x.name }; }), dvr: c.name, import: "20261001-120000", cut_of: null, name: p.name || defaultName, file: output, strip: null, poster: null, cover: null, video: c.video ?? null, no_picture: false, last_import: true,
+        pending_cuts: [], in_photos: false, original: null, aliases: [], parts: (c.join?.on ? c.join.parts : []).map((id) => { const x = s.clips.find((y) => y.id === id)!; return { source: x.key, dvr: x.name }; }), dvr: c.name, import: "20261001-120000", cut_of: null, name: p.name || defaultName, file: output, strip: null, poster: null, cover: null, video: c.video ?? null, no_picture: false, last_import: true, sun: loc ? mockSun(p.time ? p.time.slice(0, 5) : null) : null, weather: null,
       });
     }
     this.lib.last_import = "20261001-120000";

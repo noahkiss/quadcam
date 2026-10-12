@@ -59,6 +59,10 @@ On by default. QuadCam imports a recording that an analog DVR split into several
 
 On by default. On macOS 27 or later, QuadCam runs video analysis on each clip in the background after a card loads, and on clips an import added before it finished. It marks highlights on clips without a radio log and picks each clip's picture. See [Highlights from video analysis](moments-and-cuts.md#highlights-from-video-analysis). Off, nothing runs on its own; **Find highlights again** in the library and `quadcam-cli library analyze-video` still work. On an older macOS the setting changes nothing, and Settings says why. In the settings file it is `videoAnalysis`; on the command line and in MCP it is `video_analysis`.
 
+### Look up weather
+
+Off by default. On, QuadCam gets the wind and temperature at each library clip's place and hour from [Open-Meteo](https://open-meteo.com) (free, no account), in the background, and saves them in the clip file. A clip needs a place and a time of day. Each clip is looked up once; a new place, date or time looks it up again. Off, QuadCam sends no weather request at all, from the app, the command line or an agent. See [Sun and weather](library.md#sun-and-weather). In the settings file, on the command line and in MCP it is `weather`.
+
 ### On-device suggestions
 
 On by default. On a Mac with Apple's on-device model (macOS 26 or later, Apple Intelligence on), QuadCam suggests clip names, keywords and notes after a card loads, and the session report offers **Summarize day**. Off, neither runs, for the app, the command line or an agent. See [On-device suggestions](library.md#on-device-suggestions). In the settings file it is `onDeviceSuggestions`; on the command line and in MCP it is `on_device_suggestions`.

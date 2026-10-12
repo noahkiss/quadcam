@@ -56,15 +56,15 @@ The server has 19 tools.
 
 | Tool | What it does |
 |---|---|
-| `quadcam_library` | Lists and searches the clips already in the library (read-only) |
+| `quadcam_library` | Lists and searches the clips already in the library (read-only), with each clip's `sun` tag and `weather` |
 | `quadcam_library_edit` | Changes library clips: rating, flag, name, note, keywords, author, place, aircraft, date, time. `shift` (`from`, `time`, optional `date` and `log_dir`) moves every id by the offset between one clip's real time and its own; a clip a radio log matches takes the log's time. Without `confirm=true` it only reports the plan ([Shift the time of many clips](library.md#shift-the-time-of-many-clips)) |
-| `quadcam_library_files` | Sets and writes cuts, adds one cut per radio-log flight (`split_by_flight`), moves clips to the Trash (`removed_cuts` is `keep` or `trash` when a change drops exported cuts), adds them to Photos, rebuilds the index, renames clips to the file-name date format, matches radio logs to library clips, finds highlights and the key frame with macOS video analysis (`analyze_video`, `again`) |
+| `quadcam_library_files` | Sets and writes cuts, adds one cut per radio-log flight (`split_by_flight`), moves clips to the Trash (`removed_cuts` is `keep` or `trash` when a change drops exported cuts), adds them to Photos, rebuilds the index, renames clips to the file-name date format, matches radio logs to library clips, finds highlights and the key frame with macOS video analysis (`analyze_video`, `again`), looks up the wind and temperature at clips' places and hours (`weather`; only while the `weather` setting is on) |
 
 **Setup:**
 
 | Tool | What it does |
 |---|---|
-| `quadcam_places` | Lists, searches (address or place name), saves and deletes saved places |
+| `quadcam_places` | Lists, searches (address or place name), saves and deletes saved places. `here` reads this Mac's location from Location Services, `reverse` names `lat`/`lon` with Apple's geocoder; neither saves |
 | `quadcam_profiles` | Lists, saves and deletes aircraft profiles. Sets the default |
 | `quadcam_settings` | Reads and writes the app's settings. The secrets `google_places_key`, `tts_key` and `elrs_binding_phrase` are write-only: `read` shows each as its hint (`secrets`), never the value. A value written here sits in the agent's transcript; `quadcam-cli settings set-secret` from stdin keeps it out ([Secrets](settings.md#secrets)). Lists, installs and removes [modules](modules.md): `module_install` needs `confirm=true`, after the agent showed you the module's license |
 

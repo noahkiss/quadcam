@@ -2,6 +2,7 @@
 // order, day groups, flying time.
 import type { LibClip, LibraryView, Span } from "../ipc/types";
 import { interesting } from "./moments";
+import { SUN_LABEL } from "./weather";
 
 /** `best_moments` is the app's own: the moments of every clip, best first. */
 export type Group = "all" | "last_import" | "moments" | "best_moments" | "picks" | "rejected" | "not_in_photos";
@@ -62,7 +63,7 @@ export function matches(c: LibClip, f: Filter, query: string, lastImport: string
   if (f.aircraft && (c.aircraft || "").toLowerCase() !== f.aircraft.toLowerCase()) return false;
   const q = query.trim().toLowerCase();
   if (q) {
-    const hay = [c.name, c.note, c.place, c.aircraft, (c.keywords || []).join(" "), c.dvr, c.path].join(" ").toLowerCase();
+    const hay = [c.name, c.note, c.place, c.aircraft, (c.keywords || []).join(" "), c.dvr, c.path, c.sun ? SUN_LABEL[c.sun] : ""].join(" ").toLowerCase();
     if (!q.split(/\s+/).every((w) => hay.includes(w))) return false;
   }
   return true;

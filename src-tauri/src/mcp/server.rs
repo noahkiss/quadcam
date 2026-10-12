@@ -5,7 +5,7 @@ use super::params::*;
 use super::reload::{self, Handoff, Watch};
 use super::render::{
     clip_views, deletion_lines, lib_line, lib_view, names, on_device_text, photos_line,
-    places_text, source_label, table, text, update_note, video_text,
+    places_text, source_label, table, text, update_note, video_text, weather_text,
 };
 use super::tools::INSTRUCTIONS;
 use crate::control::{self, Client};
@@ -590,6 +590,10 @@ impl<B: Backend> Server<B> {
                         }
                         Ok((vec![text(lines.join("\n"))], r))
                     }
+                    "weather" => {
+                        let r = self.backend.call("library_weather", json!({"ids": ids}))?;
+                        Ok((vec![text(weather_text(&r))], r))
+                    }
                     "analyze_video" => {
                         let r = self.backend.call(
                             "library_analyze_video",
@@ -673,6 +677,30 @@ impl<B: Backend> Server<B> {
                                 .join("\n")
                         };
                         Ok((vec![text(line)], json!({"results": hits})))
+                    }
+                    "here" | "reverse" => {
+                        let hit = if action == "here" {
+                            self.backend.call("place_here", Value::Null)?
+                        } else {
+                            let (Some(lat), Some(lon)) = (x.lat, x.lon) else {
+                                return Err(anyhow!("lat and lon are required for reverse"));
+                            };
+                            self.backend
+                                .call("place_reverse", json!({"lat": lat, "lon": lon}))?
+                        };
+                        Ok((
+                            vec![text(format!(
+                                "{} | {} | {}, {}. Save it with action save, name and lat/lon.",
+                                hit["name"]
+                                    .as_str()
+                                    .filter(|n| !n.is_empty())
+                                    .unwrap_or("(no name)"),
+                                hit["address"].as_str().unwrap_or(""),
+                                hit["lat"],
+                                hit["lon"]
+                            ))],
+                            json!({"result": hit}),
+                        ))
                     }
                     "save" => {
                         let name = x.name.clone().context("name is required")?;
@@ -844,11 +872,11 @@ impl<B: Backend> Server<B> {
                         .to_string()
                 };
                 let line = format!(
-                    "{}Settings file {}.\noutput_dir {} | layout {} | place_folders {} | format {} | encoder {} | keep_originals {} | add_time {} | delete_clips_after_import {} | join_split_recordings {} | video_analysis {} | on_device_suggestions {} | update_check {} | default_name {:?} | photos_album {:?} | format_label {} | log_dir {} | geocoder {} | name_date_format {} | default_profile {} | tunables {} | ffmpeg_source {} | google_places_key {} | tts_key {} | elrs_binding_phrase {}",
+                    "{}Settings file {}.\noutput_dir {} | layout {} | place_folders {} | format {} | encoder {} | keep_originals {} | add_time {} | delete_clips_after_import {} | join_split_recordings {} | video_analysis {} | weather {} | on_device_suggestions {} | update_check {} | default_name {:?} | photos_album {:?} | format_label {} | log_dir {} | geocoder {} | name_date_format {} | default_profile {} | tunables {} | ffmpeg_source {} | google_places_key {} | tts_key {} | elrs_binding_phrase {}",
                     if action == "write" { "Saved. " } else { "" },
                     view["path"].as_str().unwrap_or("?"),
                     e["output_dir"].as_str().unwrap_or("none"), e["layout"].as_str().unwrap_or("?"), e["place_folders"],
-                    e["format"].as_str().unwrap_or("?"), e["encoder"].as_str().unwrap_or("?"), e["keep_originals"], e["add_time"], e["delete_clips_after_import"], e["join_split_recordings"], e["video_analysis"], e["on_device_suggestions"], e["update_check"],
+                    e["format"].as_str().unwrap_or("?"), e["encoder"].as_str().unwrap_or("?"), e["keep_originals"], e["add_time"], e["delete_clips_after_import"], e["join_split_recordings"], e["video_analysis"], e["weather"], e["on_device_suggestions"], e["update_check"],
                     e["default_name"].as_str().unwrap_or(""), e["photos_album"].as_str().unwrap_or(""), e["format_label"].as_str().unwrap_or(""),
                     e["log_dir"].as_str().unwrap_or("none"), e["geocoder"].as_str().unwrap_or("?"), e["name_date_format"].as_str().unwrap_or("?"), e["default_profile"].as_str().unwrap_or("none"), e["tunables"], e["ffmpeg_source"].as_str().unwrap_or("?"),
                     secret("googlePlacesKey"), secret("ttsKey"), secret("elrsBindingPhrase"),
@@ -864,6 +892,7 @@ impl<B: Backend> Server<B> {
                     "delete_clips_after_import",
                     "join_split_recordings",
                     "video_analysis",
+                    "weather",
                     "on_device_suggestions",
                     "update_check",
                     "default_name",

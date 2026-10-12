@@ -31,6 +31,7 @@ In the library, open a clip and use its **Details** tab. See [The library](libra
 | Library | `app.quadcam.source`, `.dvr`, `.parts`, `.import`, `.place`, `.profile`, `.moments`, `.keep`, `.cut` | The source file's content fingerprint and file name, the later files of a [joined recording](library.md#joined-recordings), the import, the place and aircraft names, the radio-log moments, the keep ranges, a cut's range |
 | Video analysis | `app.quadcam.video` | The highlights and key frame from [video analysis](moments-and-cuts.md#highlights-from-video-analysis), as JSON (`{"v":1,"k":22.0,"h":[[start,end,score],...]}`). Present once a clip was analysed, even when nothing was found. Kept apart from `.moments`, so older QuadCam versions still read the radio-log moments |
 | Rating, flag, Photos | `app.quadcam.rating`, `.flag`, `.photos` | Set in the library |
+| Weather | `app.quadcam.weather` | The wind and temperature at the clip's place and hour, from Open-Meteo, as JSON (`hour` in UTC, `temperature_c`, `wind_kmh`, `gusts_kmh`, `wind_from_deg`, `source`). Only with [Look up weather](settings.md#look-up-weather) on. A new place, date or time removes it |
 | Time source | `app.quadcam.time` | `log`, `clip` (the DJI clip clock) or `manual` when the clip has a time of day. Without one, QuadCam shows no time (the creation date holds noon) |
 
 QuadCam reads every key back before a file counts as verified. It reads them with ffprobe, and the location also with exiftool when exiftool is installed.
@@ -57,6 +58,14 @@ Settings has editors for places (Settings > Places) and aircraft profiles (Setti
 
 The search button on a row fills that row. You can also type coordinates by hand.
 
+### Use your current location
+
+**Use current location** in Settings > Places asks macOS Location Services where your Mac is, to about 100 m, and adds a place there. Apple's geocoder names it; change the name before you select **Done**. The first time, macOS asks whether QuadCam may use your location. If you said no, allow it in System Settings > Privacy & Security > Location Services. QuadCam asks once per click and never tracks your location.
+
+### Name a place from coordinates
+
+**Name from coordinates** (the tag button on a row) names the row's latitude and longitude with Apple's geocoder: the park or landmark there, else the street or town. It sends the coordinates to Apple.
+
 QuadCam searches only when you ask, never per keystroke.
 
 ### Place search providers
@@ -76,6 +85,8 @@ Google Places needs an API key from a Google Cloud project with the Places API (
 - QuadCam never shows the key again, only its [hint](settings.md#secrets) and **Replace…**. It sends the key to Google in a request header.
 
 The search sends what you type to the provider you picked, and to the US Census Bureau when the fallback runs. Nothing else leaves your Mac.
+
+On the command line, `quadcam-cli places here` and `places reverse LAT,LON` do the same as **Use current location** and **Name from coordinates**; neither saves a place.
 
 ### A profile in the settings file
 

@@ -77,6 +77,7 @@ export const api = {
   rescan: (id: string) => ok(commands.libraryRescan({ id })),
   analyzeVideo: (ids: string[], again = false) => ok(commands.libraryAnalyzeVideo({ ids, again })),
   videoFeature: () => ok(commands.videoFeature()),
+  weather: (ids: string[]) => ok(commands.libraryWeather({ ids })),
   libraryPreview: (id: string) => ok(commands.libraryPreview({ id })),
   strips: () => ok(commands.libraryStrips({})),
   cardStatus: (mount: string) => ok(commands.cardStatus({ mount })),
@@ -86,6 +87,8 @@ export const api = {
   settingsSet: async (values: SettingsValues) => N.settingsView(await ok(commands.settingsSet({ values }))),
   placeSearch: async (query: string, provider: string, limit = 6) => N.geo(await ok(commands.placeSearch({ query, provider, limit }))),
   placeSave: (name: string, lat: number, lon: number) => ok(commands.placeSave({ name, lat, lon })),
+  placeHere: async () => N.geo([await ok(commands.placeHere())])[0] ?? null,
+  placeReverse: async (lat: number, lon: number) => N.geo([await ok(commands.placeReverse({ lat, lon }))])[0] ?? null,
 
   // Gear
   gearStatus: () => ok(commands.gearStatus()),

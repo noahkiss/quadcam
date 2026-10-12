@@ -142,6 +142,24 @@ impl Core {
         geocode::search(&provider, query, limit.unwrap_or(5), key.as_deref())
     }
 
+    /// This Mac's location from Location Services, named by Apple's geocoder when it can
+    /// (else the name and address are empty). Nothing is saved.
+    pub fn place_here(&self) -> Result<GeoResult> {
+        let fix = crate::locate::current()?;
+        Ok(geocode::reverse(fix.lat, fix.lon).unwrap_or(GeoResult {
+            name: String::new(),
+            address: String::new(),
+            lat: fix.lat,
+            lon: fix.lon,
+            provider: "apple".into(),
+        }))
+    }
+
+    /// Names a point with Apple's geocoder.
+    pub fn place_reverse(&self, lat: f64, lon: f64) -> Result<GeoResult> {
+        geocode::reverse(lat, lon)
+    }
+
     /// Saves a place: creates it, or updates the one with this name (any case). `new_name`
     /// renames it, and profiles that use it follow.
     pub fn place_save(

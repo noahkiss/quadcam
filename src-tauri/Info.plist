@@ -6,6 +6,10 @@
   <string>QuadCam adds your imported flight videos to Photos when you click Add to Photos.</string>
   <key>NSPhotoLibraryUsageDescription</key>
   <string>QuadCam finds or creates the album your flight videos go into when you click Add to Photos.</string>
+  <key>NSLocationUsageDescription</key>
+  <string>QuadCam saves a place where you are when you click Use Current Location.</string>
+  <key>NSLocationWhenInUseUsageDescription</key>
+  <string>QuadCam saves a place where you are when you click Use Current Location.</string>
   <key>NSSpeechRecognitionUsageDescription</key>
   <string>QuadCam listens to the voice lines it rendered, on this Mac, to check that each one says its text.</string>
 </dict>

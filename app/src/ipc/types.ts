@@ -213,8 +213,12 @@ export type Suggested = Required<G.Suggested>;
 export type LibCut = Num<G.LibCut, "start" | "end">;
 
 /** `LibItem`: the index entry flattened, plus absolute paths. */
-export type LibClip = Omit<Required<G.LibItem_Serialize>, "duration" | "time" | "location" | "moments" | "keep" | "stats" | "cuts" | "pending_cuts" | "cut_of"> & {
+export type SunTag = G.SunTag;
+export type Weather = Num<G.Weather, "temperature_c" | "wind_kmh">;
+
+export type LibClip = Omit<Required<G.LibItem_Serialize>, "duration" | "time" | "location" | "moments" | "keep" | "stats" | "cuts" | "pending_cuts" | "cut_of" | "weather"> & {
   duration: number;
+  weather: Weather | null;
   time: string | null;
   location: Location | null;
   moments: Moment[];
@@ -282,6 +286,7 @@ export interface SettingsValues {
   deleteClipsAfterImport?: boolean;
   joinSplitRecordings?: boolean;
   videoAnalysis?: boolean;
+  weather?: boolean;
   onDeviceSuggestions?: boolean;
   defaultName?: string;
   photosAlbum?: string;
