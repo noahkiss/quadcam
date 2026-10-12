@@ -23,6 +23,7 @@ mod gear_dji;
 mod gear_elrs;
 mod gear_fc;
 mod gear_firmware;
+mod gear_firmware_restore;
 mod gear_sim_sync;
 mod import;
 mod join;

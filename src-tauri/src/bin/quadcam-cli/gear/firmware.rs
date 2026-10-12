@@ -1,7 +1,9 @@
-//! `quadcam-cli gear firmware|splash`: the firmware check, the splash preview, and the
-//! EdgeTX flash and the Betaflight flash preview (design 6.5, 7.5, 8). `firmware --plan` runs every guard and prints the
-//! digest; `firmware --digest D --yes` flashes. Nothing here flashes without both, and
-//! a process started by cargo never reaches a real USB device.
+//! `quadcam-cli gear firmware|splash`: the firmware check, the splash preview, the EdgeTX
+//! flash and the Betaflight flash preview (design 6.5, 7.5, 8), and the restore of a saved
+//! EdgeTX firmware copy. `firmware --plan` runs every guard and prints the digest;
+//! `firmware --digest D --yes` flashes (with `--restore COPY`, restores that copy). Nothing
+//! here writes a device without both, and a process started by cargo never reaches a real
+//! USB device.
 
 use anyhow::{bail, Context, Result};
 use base64::Engine;
@@ -28,6 +30,15 @@ pub struct FirmwareArgs {
     /// --device is optional.
     #[arg(long)]
     read: bool,
+    /// List the saved firmware copies (of --device, or of every radio), newest first: id,
+    /// date, size, SHA-256 and the EdgeTX version the image names. Reads files only.
+    #[arg(long)]
+    copies: bool,
+    /// Restore this saved firmware copy (an id from --copies) to the radio --device, over
+    /// DFU. With --plan: run every guard and print the digest. With --digest and --yes:
+    /// restore it. The radio must be in DFU mode.
+    #[arg(long, value_name = "COPY")]
+    restore: Option<String>,
     /// The device to flash (a saved device id): an EdgeTX radio, or a Betaflight FC when
     /// betaflight_flash_preview is on.
     #[arg(long)]
@@ -93,6 +104,43 @@ pub fn firmware(core: &Core, a: FirmwareArgs) -> Result<Value> {
         return Ok(serde_json::to_value(call::gear_firmware_read(
             core,
             api::FirmwareReadParams { device: a.device },
+        )?)?);
+    }
+    if a.copies {
+        if a.plan || a.digest.is_some() || a.yes || a.restore.is_some() {
+            bail!("--copies only lists. It takes no --plan, --restore, --digest or --yes.");
+        }
+        return Ok(serde_json::to_value(call::gear_firmware_copies(
+            core,
+            api::FirmwareCopiesParams { device: a.device },
+        )?)?);
+    }
+    if let Some(copy) = a.restore {
+        if a.version.is_some() || a.splash.is_some() {
+            bail!("--restore writes the copy as it is. It takes no --version or --splash.");
+        }
+        let device = a
+            .device
+            .context("--device is required: the radio's saved device id (gear devices)")?;
+        let params = api::FirmwareRestoreParams { device, copy };
+        if a.plan || a.digest.is_none() {
+            if a.yes {
+                bail!("Refused: a restore needs --digest from `--restore COPY --plan` and --yes.");
+            }
+            return Ok(serde_json::to_value(call::gear_firmware_restore_plan(
+                core, params,
+            )?)?);
+        }
+        if !a.yes {
+            bail!("Refused: a restore needs --digest from `--restore COPY --plan` and --yes.");
+        }
+        return Ok(serde_json::to_value(call::gear_firmware_restore(
+            core,
+            api::FirmwareRestoreRequest {
+                params,
+                digest: a.digest.unwrap_or_default(),
+                confirm: true,
+            },
         )?)?);
     }
     if a.plan || a.digest.is_some() {

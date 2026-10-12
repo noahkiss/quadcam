@@ -17,7 +17,9 @@ mcp.action quadcam_gear.elrs
 mcp.action quadcam_gear.elrs_flash_plan
 mcp.action quadcam_gear.fc_identify
 mcp.action quadcam_gear.firmware_check
+mcp.action quadcam_gear.firmware_copies
 mcp.action quadcam_gear.firmware_read
+mcp.action quadcam_gear.firmware_restore_plan
 mcp.action quadcam_gear.flash_plan
 mcp.action quadcam_gear.flights
 mcp.action quadcam_gear.model
@@ -51,6 +53,7 @@ mcp.action quadcam_gear_apply.blackbox_erase
 mcp.action quadcam_gear_apply.blackbox_pull
 mcp.action quadcam_gear_apply.card_repair
 mcp.action quadcam_gear_apply.elrs_flash
+mcp.action quadcam_gear_apply.firmware_restore
 mcp.action quadcam_gear_apply.flash
 mcp.action quadcam_gear_apply.sim_restore
 mcp.action quadcam_gear_apply.sim_sync
