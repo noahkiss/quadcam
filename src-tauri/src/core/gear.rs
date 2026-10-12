@@ -112,18 +112,23 @@ impl Core {
     /// gear folder sits next to the settings file (the support folder), so a core on a test
     /// settings file never reaches the real one.
     pub fn gear_settings(&self) -> GearSettings {
+        let values = self
+            .settings_file
+            .as_deref()
+            .map(|f| crate::settings::read(f).unwrap_or_default())
+            .unwrap_or_default();
+        self.gear_settings_from(&values)
+    }
+
+    /// The Gear settings these settings file values give.
+    pub(super) fn gear_settings_from(&self, values: &crate::settings::Values) -> GearSettings {
         let default_dir = self
             .settings_file
             .as_deref()
             .and_then(|f| f.parent())
             .map(|d| d.join("gear"))
             .unwrap_or_else(crate::paths::default_gear_dir);
-        let values = self
-            .settings_file
-            .as_deref()
-            .map(|f| crate::settings::read(f).unwrap_or_default())
-            .unwrap_or_default();
-        GearSettings::from_values(&values, default_dir)
+        GearSettings::from_values(values, default_dir)
     }
 
     /// The gear folder. A `gear.json` from before radios listed their aircraft is moved

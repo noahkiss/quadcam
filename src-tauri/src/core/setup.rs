@@ -23,6 +23,10 @@ pub struct SettingsView {
     pub secrets: std::collections::BTreeMap<String, crate::secret::Hint>,
     /// What every surface uses: the values on top of the defaults.
     pub effective: Defaults,
+    /// Every setting with a CLI and MCP name (`settings::KEYS`), secrets aside, by that
+    /// name: the value in effect, Gear's and the previews' included.
+    #[specta(type = std::collections::BTreeMap<String, specta_typescript::Unknown>)]
+    pub named: Values,
 }
 
 #[derive(Debug, Clone, Serialize, specta::Type)]
@@ -67,6 +71,42 @@ fn clean_name(name: &str, what: &str) -> Result<String> {
     Ok(n.to_string())
 }
 
+/// The value in effect of the setting with this CLI/MCP name: from the effective defaults
+/// (`d`), the Gear settings (`g`, where `gear_x` is the field `x`), or the reader that uses
+/// it. None for a name no reader knows.
+fn named_setting(name: &str, values: &Values, d: &Value, g: &Value) -> Option<Value> {
+    let b = |file: &str| values.get(file).and_then(Value::as_bool).unwrap_or(false);
+    let text = |file: &str| {
+        values
+            .get(file)
+            .and_then(Value::as_str)
+            .map(str::trim)
+            .unwrap_or("")
+            .to_string()
+    };
+    let elrs = || super::elrs::elrs_prefs_from(values);
+    Some(match name {
+        "map_view" => Value::Bool(b("mapView")),
+        "sim_preview" => Value::Bool(b("simPreview")),
+        "elrs_preview" => Value::Bool(elrs().preview),
+        "elrs_region" => Value::String(elrs().region),
+        "elrs_wifi_interval" => json!(elrs().wifi.unwrap_or(0)),
+        "betaflight_flash_preview" => Value::Bool(super::bf_flash::bf_flash_from(values)),
+        "tts_base_url" => Value::String(text("ttsBaseUrl")),
+        "tts_model" => Value::String(text("ttsModel")),
+        "tts_voice" => Value::String(text("ttsVoice")),
+        "voice_index" => Value::String(super::voice::voice_index_from(values).unwrap_or_default()),
+        "modules" => json!(crate::media::ToolPrefs::from_values(values).paths),
+        _ => {
+            return d
+                .get(name)
+                .or_else(|| g.get(name))
+                .or_else(|| g.get(name.strip_prefix("gear_")?))
+                .cloned()
+        }
+    })
+}
+
 impl Core {
     pub fn settings_file(&self) -> Result<&Path> {
         self.settings_file
@@ -89,12 +129,31 @@ impl Core {
     pub fn settings(&self) -> Result<SettingsView> {
         let path = self.settings_file()?.to_path_buf();
         let values = settings::read(&path)?;
+        let effective = Defaults::from_values(&values);
         Ok(SettingsView {
-            effective: Defaults::from_values(&values),
+            named: self.named_settings(&values, &effective),
+            effective,
             secrets: settings::secret_hints(&values),
             path,
             values: settings::redacted(values),
         })
+    }
+
+    /// Each named setting that is not a secret, by its CLI/MCP name, with the value in
+    /// effect. A setting `named_setting` does not know shows its file value (null: unset).
+    fn named_settings(&self, values: &Values, effective: &Defaults) -> Values {
+        let d = serde_json::to_value(effective).unwrap_or_default();
+        let g = serde_json::to_value(self.gear_settings_from(values)).unwrap_or_default();
+        settings::KEYS
+            .iter()
+            .filter(|k| !settings::SECRET_KEYS.contains(&k.file))
+            .filter_map(|k| {
+                let name = k.name?;
+                let v = named_setting(name, values, &d, &g)
+                    .unwrap_or_else(|| values.get(k.file).cloned().unwrap_or(Value::Null));
+                Some((name.to_string(), v))
+            })
+            .collect()
     }
 
     /// Sets settings by file key or CLI/MCP name; null resets one to its default.
@@ -409,5 +468,36 @@ impl Core {
             );
             Ok(chosen)
         })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Every named setting has a reader, so `named` never falls back to the file's value.
+    #[test]
+    fn every_named_setting_has_a_value_in_effect() {
+        let dir = tempfile::tempdir().unwrap();
+        let core = Core::new(
+            dir.path().join("cache"),
+            None,
+            std::sync::Arc::new(super::super::NoHooks),
+            std::sync::Arc::new(crate::photos::Recorder::default()),
+        )
+        .with_settings(dir.path().join("settings.json"));
+        let values = Values::new();
+        let d = serde_json::to_value(Defaults::default()).unwrap();
+        let g = serde_json::to_value(core.gear_settings_from(&values)).unwrap();
+        for k in settings::KEYS {
+            let Some(name) = k.name else { continue };
+            if settings::SECRET_KEYS.contains(&k.file) {
+                continue;
+            }
+            assert!(
+                named_setting(name, &values, &d, &g).is_some(),
+                "{name} has no value in effect: add it to named_setting"
+            );
+        }
     }
 }

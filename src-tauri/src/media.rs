@@ -42,7 +42,11 @@ pub struct ToolPrefs {
 impl ToolPrefs {
     /// From the settings file; a missing or unreadable file gives the defaults.
     pub fn from_settings(file: &Path) -> ToolPrefs {
-        let v = crate::settings::read(file).unwrap_or_default();
+        ToolPrefs::from_values(&crate::settings::read(file).unwrap_or_default())
+    }
+
+    /// From settings file values; a missing or bad value gives the default.
+    pub fn from_values(v: &crate::settings::Values) -> ToolPrefs {
         ToolPrefs {
             source: v
                 .get("ffmpegSource")

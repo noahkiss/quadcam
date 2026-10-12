@@ -6300,6 +6300,11 @@ export type SettingsView_Deserialize = {
 	secrets: { [key in string]: Hint },
 	/**  What every surface uses: the values on top of the defaults. */
 	effective: Defaults_Deserialize,
+	/**
+	 *  Every setting with a CLI and MCP name (`settings::KEYS`), secrets aside, by that
+	 *  name: the value in effect, Gear's and the previews' included.
+	 */
+	named: { [key in string]: unknown },
 };
 
 /**  The settings file: where it is, what it holds, and the defaults that come out of it. */
@@ -6311,6 +6316,11 @@ export type SettingsView_Serialize = {
 	secrets: { [key in string]: Hint },
 	/**  What every surface uses: the values on top of the defaults. */
 	effective: Defaults_Serialize,
+	/**
+	 *  Every setting with a CLI and MCP name (`settings::KEYS`), secrets aside, by that
+	 *  name: the value in effect, Gear's and the previews' included.
+	 */
+	named: { [key in string]: unknown },
 };
 
 /**

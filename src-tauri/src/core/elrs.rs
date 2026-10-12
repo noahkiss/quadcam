@@ -127,11 +127,11 @@ pub struct ElrsFlashRequest {
     pub confirm: bool,
 }
 
-struct Prefs {
-    preview: bool,
+pub(super) struct Prefs {
+    pub(super) preview: bool,
     phrase: Option<String>,
-    region: String,
-    wifi: Option<u32>,
+    pub(super) region: String,
+    pub(super) wifi: Option<u32>,
 }
 
 struct FlashPrep {
@@ -163,6 +163,32 @@ fn side_of(kind: DeviceKind) -> Option<Side> {
     }
 }
 
+/// The ExpressLRS settings these settings file values give.
+pub(super) fn elrs_prefs_from(values: &crate::settings::Values) -> Prefs {
+    Prefs {
+        preview: values
+            .get("elrsPreview")
+            .and_then(|v| v.as_bool())
+            .unwrap_or(false),
+        phrase: values
+            .get("elrsBindingPhrase")
+            .and_then(|v| v.as_str())
+            .filter(|s| !s.is_empty())
+            .map(str::to_string),
+        region: values
+            .get("elrsRegion")
+            .and_then(|v| v.as_str())
+            .filter(|r| *r == "FCC" || *r == "LBT")
+            .unwrap_or("FCC")
+            .to_string(),
+        wifi: match values.get("elrsWifiInterval").and_then(|v| v.as_u64()) {
+            Some(0) => None,
+            Some(n) => Some(n as u32),
+            None => Some(60),
+        },
+    }
+}
+
 impl Core {
     fn elrs_prefs(&self) -> Prefs {
         let values = self
@@ -170,28 +196,7 @@ impl Core {
             .as_deref()
             .map(|f| crate::settings::read(f).unwrap_or_default())
             .unwrap_or_default();
-        Prefs {
-            preview: values
-                .get("elrsPreview")
-                .and_then(|v| v.as_bool())
-                .unwrap_or(false),
-            phrase: values
-                .get("elrsBindingPhrase")
-                .and_then(|v| v.as_str())
-                .filter(|s| !s.is_empty())
-                .map(str::to_string),
-            region: values
-                .get("elrsRegion")
-                .and_then(|v| v.as_str())
-                .filter(|r| *r == "FCC" || *r == "LBT")
-                .unwrap_or("FCC")
-                .to_string(),
-            wifi: match values.get("elrsWifiInterval").and_then(|v| v.as_u64()) {
-                Some(0) => None,
-                Some(n) => Some(n as u32),
-                None => Some(60),
-            },
-        }
+        elrs_prefs_from(&values)
     }
 
     pub(super) fn elrs_require(&self) -> Result<()> {

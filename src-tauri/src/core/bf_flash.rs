@@ -78,14 +78,21 @@ fn step(name: &str, state: StepState, detail: Option<String>) -> StepReport {
     }
 }
 
+/// Whether these settings file values turn on "Betaflight flashing (preview)".
+pub(super) fn bf_flash_from(values: &crate::settings::Values) -> bool {
+    values
+        .get("bfFlashPreview")
+        .and_then(|x| x.as_bool())
+        .unwrap_or(false)
+}
+
 impl Core {
     /// Whether the person turned on "Betaflight flashing (preview)".
     pub(super) fn bf_flash_on(&self) -> bool {
         self.settings_file
             .as_deref()
             .and_then(|f| crate::settings::read(f).ok())
-            .and_then(|v| v.get("bfFlashPreview").and_then(|x| x.as_bool()))
-            .unwrap_or(false)
+            .is_some_and(|v| bf_flash_from(&v))
     }
 
     /// Replaces the build service the Betaflight flash downloads from (tests pass a fixture).

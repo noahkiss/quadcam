@@ -481,14 +481,7 @@ impl Core {
             .as_deref()
             .map(|f| crate::settings::read(f).unwrap_or_default())
             .unwrap_or_default();
-        match values.get("voiceIndex").filter(|v| !v.is_null()) {
-            None => Some(packs_publish::INDEX_URL.into()),
-            Some(v) => v
-                .as_str()
-                .map(str::trim)
-                .filter(|s| !s.is_empty())
-                .map(String::from),
-        }
+        voice_index_from(&values)
     }
 
     pub(super) fn all_lines(&self) -> Result<Vec<Line>> {
@@ -1804,4 +1797,17 @@ pub fn report_text(r: &RenderReport) -> String {
         ));
     }
     s
+}
+
+/// The pack index these settings file values name: `voiceIndex`, else QuadCam's voices
+/// repo; None when it is written empty.
+pub(super) fn voice_index_from(values: &crate::settings::Values) -> Option<String> {
+    match values.get("voiceIndex").filter(|v| !v.is_null()) {
+        None => Some(packs_publish::INDEX_URL.into()),
+        Some(v) => v
+            .as_str()
+            .map(str::trim)
+            .filter(|s| !s.is_empty())
+            .map(String::from),
+    }
 }
