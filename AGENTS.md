@@ -529,6 +529,10 @@ claude mcp add quadcam -- "$(brew --prefix)/bin/quadcam-cli" mcp
   from a local server; `modules::fetch::real_fetch` reaches only 127.0.0.1 under cargo. A
   module pin is an official upstream release asset with its SHA-256 checked against the
   publisher's (`docs/modules.md`). A new dependency must pass `node scripts/notices.mjs --check`.
+- **Never ask Location Services, the geocoder or a weather service while testing.** In a process
+  started by cargo, `locate::current` refuses unless `QUADCAM_LOCATION=real`, and
+  `geocode::reverse` refuses unless `QUADCAM_FETCH=real`. Weather goes only through
+  `Core.weather_fetch`; tests pass a fixture with `Core::with_weather_fetch`.
 - **Never fill the real Trash while testing.** `trash::real_trash` returns a temporary-folder
   stand-in for any process started by cargo; tests pass `DirTrash`.
 - **Never move the person's mouse or keyboard, or take focus, while testing.** Start the app
