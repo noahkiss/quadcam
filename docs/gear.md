@@ -400,6 +400,42 @@ value screens' limit of 4 lines and 3 sources, the list of timer modes the pop-u
 and the 99-line checklist limit (QuadCam's own cap). Each follows the shape of the
 functions and files a real card does hold. Check each on a real card before relying on it.
 
+## Radio settings
+
+A saved radio's **Settings** segment edits the radio's own settings, `RADIO/radio.yml`. It
+reads them from the mounted card, or from the radio's latest backup when the radio is not
+plugged in, and shows the radio's staged settings on top. Every control stages its change at
+once into one change per radio, "Radio settings". A later edit of a setting replaces the
+earlier one, and an edit that puts a setting back as the radio has it drops out. A staged
+setting shows **Staged** and the value on the radio. **Review…** opens the apply sheet, which
+shows the `radio.yml` diff; **Undo settings edits** discards the change.
+
+The sections follow the radio's own Radio Setup screen:
+
+| Section | Settings (`radio.yml` key) |
+|---|---|
+| Sound | Sound mode (`beepMode`), volume (`speakerVolume`, 0-23), beep volume and length, sound file volume (`wavVolume`), background volume, vario volume (each -2 to +2) |
+| Haptic | Haptic mode, length and strength (-2 to +2) |
+| Display | Contrast (10-30), backlight (off, keys, sticks, keys and sticks, on), backlight off after (5-600 s in 5 s steps, `lightAutoOff`), brightness (5-100; the file holds 100 minus it) |
+| Alarms | Battery low (3.0-12.0 V, `vBatWarn`), inactivity alarm (0-250 min, 0 off), sound off warning, RSSI shutdown alarm |
+| Time and GPS | Time zone (-12 to +14 h), set the clock from GPS (`adjustRTC`), GPS coordinates (DMS or NMEA), units (metric or imperial) |
+| Sticks and USB | Stick mode (Mode 1-4), default channel order for new models (`templateSetup`, RETA to ATER), USB mode (ask, joystick, storage, serial) |
+| Owner | Owner ID (`ownerRegistrationID`, 8 characters: letters, digits, space, `-`, `_`, `.`) |
+| Model | The model the radio selects |
+
+QuadCam checks each value against its range before it stages, and the apply plan checks it
+again. A setting the card's `radio.yml` has no line for shows "Not on this card": QuadCam never
+adds a line, so set it on the radio once. Every other line of the file, keys QuadCam does not
+know included, stays as it was. The plan warns before a new haptic mode **Alarms only** (it
+drops special-function haptics), a new stick mode (check which stick is throttle before you
+fly), and a USB mode other than ask or storage (the radio then no longer shows its card when
+plugged in).
+
+**Not yet checked on a real radio:** the ranges and file encodings above come from EdgeTX
+2.12 files and EdgeTX's Radio Setup screen; the contrast range (10-30), the lowest battery
+warning (3.0 V) and the brightness floor (5) are QuadCam's own cautious limits. Check a change
+on the radio before relying on it.
+
 ## Voices
 
 **Voices** in the Gear sidebar holds every voice pack on this Mac and the Voice studio that
@@ -942,9 +978,8 @@ QuadCam selects the profile it needs, then selects the one the FC had.
 
 A radio's changes use the same five steps. Stage model edits and checklists in the radio's
 **Models** and **Checklists** segments ([Radio model editors](#radio-model-editors)), and a
-voice in its **Voice** segment ([Radio voice](#radio-voice)). The radio's own settings
-(`RADIO/radio.yml`) have no editor in the app: stage them from the command line or an agent
-(an edits file, see [Command line and agents](#command-line-and-agents)). A radio's **Changes**
+voice in its **Voice** segment ([Radio voice](#radio-voice)), and the radio's own settings
+(`RADIO/radio.yml`) in its **Settings** segment ([Radio settings](#radio-settings)). A radio's **Changes**
 segment lists every change and **Review…** opens the same sheet. The checks:
 
 | Check | Fails when |
@@ -1841,7 +1876,8 @@ copy or a model delete. Model ops: `rename`, `set_model_id`, `set_flags`, `set_c
 sensor by label, `tele({RxBt}),35`; QuadCam finds its slot.
 
 These are the common commands. [Command line](cli.md) lists every `gear` command, including
-`gear voice`, `gear model`, `gear model-edit` and `gear sim`.
+`gear voice`, `gear model`, `gear model-edit`, `gear radio-settings`, `gear radio-settings-edit`
+and `gear sim`.
 
 Agents use the `quadcam_gear`, `quadcam_gear_edit` and `quadcam_gear_apply` tools. See
 [MCP server](mcp.md#gear).

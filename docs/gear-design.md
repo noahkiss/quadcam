@@ -620,7 +620,7 @@ QuadCam implements these rules from the file format; it copies no EdgeTX code.
 | Telemetry script names | 6 characters at most |
 | Checklist | `MODELS/<model name>.txt`; EdgeTX looks with spaces kept, then with `_`. On 128x64, 20 characters per line, `=` for a tick box. Needs `displayChecklist` and `checklistInteractive` |
 | `header.modelId` | Index 0 is the internal module. EdgeTX omits zero, so ID 0 means no block |
-| `radio.yml` | `currModel`, `hapticMode` (`mode_alarms` drops special-function haptics) |
+| `radio.yml` | `currModel`, `hapticMode` (`mode_alarms` drops special-function haptics), and the Settings editor's keys in `gear/edgetx/radio.rs` (`SETTINGS`), each checked against its range |
 | Model identity | Check the model's `header.name` before an edit; a different name refuses ("wrong card?") |
 | Timer swap | Swapping two timers trades every field, the stored value included, and every `TmrN` reference outside the timers block |
 
@@ -2048,10 +2048,12 @@ dialog, Mount and Done on a radio's page. Deviations and choices:
 - **`OsdElement`** now renders to `set osd_<element>_pos = N` (`render_fc`, keeping the
   variant bits), x 0-63, y 0-31, profiles 1-3; an empty list turns the element off. The WP7
   editor only has to stage it.
-- **Not done:** a radio's own settings (`radio.yml`, `Edit::Radio`) cannot be staged from the
-  app: CLI and agents stage them. Model edits and checklists (WP9, the Models and Checklists
-  segments) and voice packs (`CardFiles`, the Voice segment) stage from the app. The mount time
-  is not a setting.
+- **Radio settings:** a radio's own settings (`radio.yml`, `Edit::Radio`) stage from the
+  radio's Settings segment (`gear_radio_settings`, `gear_radio_settings_edit`,
+  `core/radio_settings.rs`; the typed view and range checks in `gear/edgetx/radio.rs`) into one
+  "Radio settings" change. Model edits and checklists (WP9, the Models and Checklists
+  segments) and voice packs (`CardFiles`, the Voice segment) stage from the app too. The mount
+  time is not a setting.
 
 ### 8.1 One path for every write
 

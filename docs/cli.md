@@ -207,6 +207,8 @@ quadcam-cli --json gear voice delete PACK --yes [--takes]   # removes an install
 quadcam-cli --json gear voice build-pack --voice V --out DIR [--id ID --version N --lang en --license L --attribution A] [--dry-run] [--confirm] [render flags]   # maintainer tool: a zip and a voices.json entry
 quadcam-cli --json gear model DEVICE [--model model01.yml] [--no-staged] [--text]   # a radio's model for the editors, from the card or the latest backup
 quadcam-cli --json gear model-edit DEVICE --model model01.yml [--timer 2:name=FLT,minuteBeep=1]... [--timer-off N]... [--screen 1:'{RxBt},Tmr1/{Capa}']... [--screen-script N:NAME]... [--screen-off N]... [--logging SA2:0.5|off] [--log-sensor RxBt=off]... [--rf-alarm 50:40] [--callout lowbat:below:'{RxBt}':3.5:2:5]... [--callout armed:switch:L1:'!1x']... [--callout-off TRACK]... [--checklist-file FILE|-] [--checklist on|off] [--ops FILE]   # stages into the one "Model edits" change; writes nothing to the card
+quadcam-cli --json gear radio-settings DEVICE [--no-staged] [--text]   # a radio's own settings (radio.yml) for the Settings editor: each key, its value in the file's units and the values it takes
+quadcam-cli --json gear radio-settings-edit DEVICE [--set beepVolume=3]... [--select-model model00.yml] [--ops FILE]   # stages into the one "Radio settings" change; a value out of range refuses; writes nothing to the card
 quadcam-cli --json gear rates FILE [FILE ...]|DEVICE [--backup ID] [--text]   # rate profiles and throttle curve
 quadcam-cli --json gear sims [FILE ...|DEVICE] [--backup ID] [--rate-profile N] [--text]   # sims' rates, against the quad
 quadcam-cli --json gear sims SIM --restore [--backup ID] [--digest D --yes]   # put a sim's file back from a backup (the plan without --digest)
