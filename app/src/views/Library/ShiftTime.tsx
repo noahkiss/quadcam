@@ -14,7 +14,7 @@ import { fmtDay } from "../../lib/format";
 import { fmtOffset } from "../../lib/library";
 import styles from "./ShiftTime.module.css";
 
-const SOURCE: Record<ShiftSource, [string, BadgeTone]> = { set: ["Set", "neutral"], offset: ["Offset", "neutral"], log: ["Radio log", "ok"], skipped: ["No time", "neutral"] };
+const SOURCE: Record<ShiftSource, [string, BadgeTone]> = { set: ["Set", "accent"], offset: ["Offset", "neutral"], log: ["Radio log", "ok"], skipped: ["No time", "warn"] };
 
 const when = (d: string | null, t: string | null) => (d ? `${fmtDay(d)}${t ? ` ${t}` : ""}` : "—");
 

@@ -64,7 +64,7 @@ test("Best moments lists every moment, best first, and opens the clip at one", a
 for (const scheme of axeSchemes) {
   test.describe(`${scheme} theme`, () => {
     test.use({ colorScheme: scheme });
-    test("Best moments and Shift time pass axe", async ({ page }) => {
+    test("Best moments and Shift time pass axe", async ({ app, page }) => {
       await page.getByRole("navigation", { name: "Library" }).getByRole("button", { name: /Best moments/ }).click();
       await expect(page.getByRole("list", { name: "Best moments" })).toBeVisible();
       const check = async () => {
@@ -73,10 +73,15 @@ for (const scheme of axeSchemes) {
       };
       await check();
       await page.getByRole("navigation", { name: "Library" }).getByRole("button", { name: /All clips/ }).click();
-      await card(page, "backyard-loops").click();
+      // A clip without a time, so the table shows every source: Set, Radio log, No time.
+      await app.core("(core) => { core.lib.clips.find((c) => c.name === 'river-dive').time = null; core.libraryChanged(); }");
+      await card(page, "river-dive").click();
+      await card(page, "backyard-loops").click({ modifiers: ["Meta"] });
       await card(page, "gap-run").click({ modifiers: ["Meta"] });
       await page.getByRole("button", { name: "Shift time…" }).click();
-      await expect(dialog(page, "Shift time").getByRole("table", { name: "New times" })).toBeVisible();
+      const table = dialog(page, "Shift time").getByRole("table", { name: "New times" });
+      await dialog(page, "Shift time").getByLabel("Clip").selectOption({ label: "backyard-loops" });
+      for (const t of ["Set", "Radio log", "No time"]) await expect(table.getByText(t, { exact: true })).toBeVisible();
       await check();
     });
   });
