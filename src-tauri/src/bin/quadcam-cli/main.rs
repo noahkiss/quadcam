@@ -374,6 +374,28 @@ enum LibCmd {
         #[arg(long)]
         apply: bool,
     },
+    /// Shift clips by one clip's real time: every clip moves by the same offset, and a clip a
+    /// radio log matches takes the log's time. Prints the plan; --yes writes it.
+    Shift {
+        /// Clip ids to shift.
+        #[arg(required = true)]
+        ids: Vec<String>,
+        /// The clip whose real time --time (and --date) gives.
+        #[arg(long)]
+        from: String,
+        /// Its real time of day (HH:MM).
+        #[arg(long)]
+        time: String,
+        /// Its real flying day (YYYY-MM-DD). Default: its own day.
+        #[arg(long)]
+        date: Option<NaiveDate>,
+        /// The log folder to check for better times (default: the logDir setting).
+        #[arg(long)]
+        logs: Option<PathBuf>,
+        /// Write the new dates and times.
+        #[arg(long)]
+        yes: bool,
+    },
     /// Find highlights and the key frame of clips with macOS video analysis (macOS 27 or
     /// later), and write them into the clip files. Skips clips analysed already.
     AnalyzeVideo {
@@ -1372,6 +1394,24 @@ fn library(core: &Core, cmd: LibCmd) -> Result<Value> {
                 logs,
                 day,
                 apply,
+            },
+        )?)?,
+        LibCmd::Shift {
+            ids,
+            from,
+            time,
+            date,
+            logs,
+            yes,
+        } => serde_json::to_value(call::library_time_shift(
+            core,
+            quadcam_lib::core::LibShiftParams {
+                ids,
+                from,
+                date,
+                time,
+                logs,
+                apply: yes,
             },
         )?)?,
         LibCmd::AnalyzeVideo { ids, again } => serde_json::to_value(call::library_analyze_video(

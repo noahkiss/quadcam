@@ -110,6 +110,11 @@ export const commands = {
 	 *  with `apply`.
 	 */
 	libraryMatchLogs: (params: LibMatchParams) => typedError<LibMatchReport_Serialize, string>(__TAURI_INVOKE("library_match_logs", { params })),
+	/**
+	 *  Shifts clips by one clip's real time; a radio log's time wins for a clip it matches.
+	 *  Writes only with `apply`.
+	 */
+	libraryTimeShift: (params: LibShiftParams) => typedError<LibShiftReport, string>(__TAURI_INVOKE("library_time_shift", { params })),
 	/**  Finds dead air again in a clip. */
 	libraryRescan: (params: ClipIdParams) => typedError<LibClip_Serialize, string>(__TAURI_INVOKE("library_rescan", { params })),
 	/**  Highlights and the key frame of library clips, with macOS video analysis. */
@@ -3633,6 +3638,52 @@ export type LibPart = {
 	dvr: string,
 };
 
+/**  One clip's result. */
+export type LibShift = {
+	id: string,
+	name: string,
+	path: string,
+	old_date: string,
+	/**  `HH:MM`, when the clip had a time of day. */
+	old_time: string | null,
+	date: string | null,
+	/**  `HH:MM`. */
+	time: string | null,
+	source: ShiftSource,
+	/**  Why a log answer or a skip. */
+	reason: string | null,
+	/**  The new date or time differs from the old one. */
+	changed: boolean,
+	/**  The new date and time were written. */
+	applied: boolean,
+};
+
+/**  `library_time_shift`: the clips, the one whose real time is known, and that time. */
+export type LibShiftParams = {
+	/**  Library clip ids to shift; `from` is added when missing. */
+	ids?: string[],
+	/**  The clip whose real date and time are `date` and `time`. */
+	from?: string,
+	/**  Its real flying day; its own day when missing. */
+	date?: string | null,
+	/**  Its real time of day, `HH:MM`. */
+	time?: string,
+	/**
+	 *  The log folder to check for better times; the `logDir` setting when missing. No
+	 *  folder at all shifts every clip by the offset.
+	 */
+	logs?: string | null,
+	/**  Write the new dates and times. Without it, nothing changes. */
+	apply?: boolean,
+};
+
+export type LibShiftReport = {
+	/**  The offset in seconds: the given time minus the `from` clip's own. */
+	offset_s: number,
+	clips: LibShift[],
+	warnings: string[],
+};
+
 /**
  *  Every change one call may make to library clips: stars and flag, a new name (one clip
  *  only), and the details in `LibEdit`. Missing fields stay as they are.
@@ -5808,6 +5859,17 @@ export type ShareReport = {
 	failed: ([string, string])[],
 	album: string | null,
 };
+
+/**  Where a clip's new time came from. */
+export type ShiftSource = 
+/**  The clip whose time was given. */
+"set" | 
+/**  Its own time plus the offset. */
+"offset" | 
+/**  A radio log that matched the clip. */
+"log" | 
+/**  No new time: the clip has no time of day and no log matched it. */
+"skipped";
 
 /**  The result of scanning a clip's frames. */
 export type SignalScan = {

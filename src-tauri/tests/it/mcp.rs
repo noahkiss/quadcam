@@ -611,6 +611,33 @@ fn library_and_setup_tools() {
     );
     assert_eq!(two["isError"], true, "a name needs one id");
 
+    // A time shift: a plan without confirm, written with it; a clip without a time skips.
+    let shift = json!({"from": id, "time": "17:00"});
+    let mixed = s.call_tool(
+        "quadcam_library_edit",
+        json!({"ids": [id], "shift": shift, "rating": 2}),
+    );
+    assert_eq!(mixed["isError"], true, "shift takes no other change");
+    let plan = call(
+        &mut s,
+        "quadcam_library_edit",
+        json!({"ids": [id, gap["id"]], "shift": shift}),
+    );
+    let text = plan["content"][0]["text"].as_str().unwrap();
+    assert!(text.starts_with("Plan: 1 clip would change"), "{text}");
+    assert!(text.contains("offset +0:40"), "{text}");
+    assert!(text.contains("skipped"), "{text}");
+    let l = call(&mut s, "quadcam_library", json!({"query": "fence"}));
+    assert_eq!(l["structuredContent"]["clips"][0]["time"], "16:20");
+    let done = call(
+        &mut s,
+        "quadcam_library_edit",
+        json!({"ids": [id, gap["id"]], "shift": shift, "confirm": true}),
+    );
+    assert_eq!(done["structuredContent"]["clips"][0]["applied"], true);
+    let l = call(&mut s, "quadcam_library", json!({"query": "fence"}));
+    assert_eq!(l["structuredContent"]["clips"][0]["time"], "17:00");
+
     let ask = s.call_tool(
         "quadcam_library_files",
         json!({"action": "cuts", "ids": [id], "cuts": []}),
