@@ -37,7 +37,7 @@ export const test = base.extend<{ app: AppFixture }>({
 export { expect };
 
 /** The color schemes the axe specs loop over: both, or the ones `QC_AXE_THEMES` names
- *  (comma separated). CI on a branch sets `dark`; main and tags run both. */
+ *  (comma separated). CI on a branch sets `dark`; main, rel-* and tags run both. */
 export const axeSchemes = (() => {
   const all = ["dark", "light"] as const;
   const want = process.env.QC_AXE_THEMES?.split(",").map((t) => t.trim()).filter(Boolean);

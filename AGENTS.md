@@ -137,7 +137,7 @@ scripts/make-fixtures.sh                   # re-record the mock core's data (nee
   glass sidebar, and `html[data-glass]` lays the page out for it (`docs/development.md`
   "Window chrome and theme").
   Every axe spec loops over `axeSchemes` (`e2e/fixtures.ts`); `QC_AXE_THEMES=dark` limits them
-  to one theme, as CI does on a branch (main and tags run both).
+  to one theme, as CI does on a branch (main, `rel-*` and tags run both).
 - **Dev in a browser:** `pnpm dev`, then `http://localhost:4719/?mock=<scenario>` (your `QUADCAM_DEV_PORT` instead of 4719) runs the
   UI on the mock core (scenarios in `app/src/ipc/mock/core.ts`; `gear` has devices plugged
   in). The mock's Gear (`ipc/mock/gear.ts`) is written by hand, not recorded: a recorded
@@ -155,8 +155,8 @@ GitHub (`noahkiss/quadcam`, public) is the only remote. Users install the cask
 
 1. On the release branch (`rel-X.Y.Z`, every change merged in), set the new version in
    `src-tauri/Cargo.toml` and `src-tauri/tauri.conf.json` (they must match), commit
-   `release: X.Y.Z`, and push the branch. CI runs on that commit; the bump touches
-   `Cargo.toml`, so the path filter runs every Rust test.
+   `release: X.Y.Z`, and push the branch. CI runs on that commit; a `rel-*` branch runs
+   everything, as main does (every Rust test, axe in both themes).
 2. Wait for that run to go green (`gh run watch <id> -R noahkiss/quadcam --interval 60 --exit-status`).
 3. Fast-forward main to that same commit and tag it. No merge commit, no rebase: the tag
    names the commit that went green. Check that the main checkout is clean first, and check
@@ -189,18 +189,28 @@ GitHub (`noahkiss/quadcam`, public) is the only remote. Users install the cask
    only main and branches with unmerged work. GitHub deletes a pull request's head branch on
    merge ("Automatically delete head branches"); the rest is this step.
 
-- **Runner image:** `ci.yml` and `release.yml` run on GitHub's `xcode-27` image (macOS 27,
-  arm64, Xcode 27), which is a public preview: it may change or be retired without notice.
+- **Runner image:** `ci.yml`'s `check` job, `release.yml` and `release-cache.yml` run on GitHub's
+  `xcode-27` image (macOS 27, arm64, Xcode 27), which is a public preview: it may change or be
+  retired without notice, and its queue can run long (47 min for the 0.20.0 release). The UI
+  jobs (`ui`, `e2e`) run on `ubuntu-latest`.
   The Swift helper (`intel/`) builds against its SDK: its speech check needs the macOS 26 SDK,
   and the macOS 27 APIs it is meant to add need Xcode 27. Move both files to a GA label once
   one ships Xcode 27. A red run that fails before any
   step of ours (image missing, queue never starts) is the preview, not the change.
 - **The CI wait:** `release-attach` (`noahkiss/workflows`) accepts any green `ci.yml` run on
-  the tagged commit, so the release branch's green run counts and the release does not wait
-  for the runs that the push of main and the tag start. It fails only when every run on the
-  commit ended without success. The tag run (full suite, axe in both themes, never
-  cancelled) still runs; the branch run already proved the commit, so a red tag run means a
-  main-only check (the second axe theme) or a flake, not an untested change.
+  the tagged commit, so the release branch's green run counts. It fails only when every run on
+  the commit ended without success. The runs that the push of main and the tag start find
+  that green `rel-*` run (`ci.yml` job `proven`) and skip the tests, so they leave the macOS
+  runners to the release. A push of main with no green `rel-*` run on its commit (a merge, a
+  direct push) runs everything.
+- **Release cache:** a cache saved under a tag is invisible to the next tag, so
+  `release-cache.yml` builds the app unsigned on main after each Release run and saves the
+  Rust dependency cache under the key `quadcam-release`; `release.yml` restores it
+  (`cache-shared-key`, `cache-save: false` on `tauri-macos-build`). rust-cache removes the
+  workspace's own crates before it saves, so the release still builds the app from the tag.
+  Keep the two jobs' toolchain and `CARGO*`/`RUST*` environment the same: rust-cache hashes
+  them into the key. After a change to `rust-toolchain.toml`, seed it with
+  `gh workflow run release-cache.yml -R noahkiss/quadcam --ref main`.
 
 - **Signing:** `release.yml`'s own job names the `release` environment and runs the composite
   actions `tauri-macos-build`, `macos-sign-notarize` and `release-attach` from `noahkiss/workflows`.
@@ -221,13 +231,14 @@ GitHub (`noahkiss/quadcam`, public) is the only remote. Users install the cask
   local `cargo tauri build` would need the key. A lost key means no in-app update reaches installed
   copies: they must update through Homebrew once.
 - `.github/workflows/ci.yml` runs fmt, clippy, tests (`cargo nextest run --profile ci`) and a
-  release build on every push to a branch or `v*` tag and on pull requests from forks, and a
-  `ui` job for `app/` (typecheck, lint, Vitest, Playwright, build). On a branch or pull request,
+  release build on every push to a branch or `v*` tag and on pull requests from forks, a
+  `ui` job for `app/` (typecheck, lint, Vitest, build), and an `e2e` job that splits the
+  Playwright specs across four Linux runners (`--shard`). On a branch or pull request,
   a path filter (`dorny/paths-filter`, against the merge base with main) picks `ci` only when
   the change touches what the slow tests cover (import, disk, card, prep, join, media, scan,
   session, sources, the CLI's `main.rs`, the MCP server's non-Gear files, `tests/it/common`, those
   test files, `Cargo.toml`/`Cargo.lock`, the toolchain file, `nextest.toml`, `ci.yml`), else
-  `ci-quick`; main and tags always run `ci`. A new slow test, or new code under one, joins that
+  `ci-quick`; main, `rel-*` and tags always run `ci`. A new slow test, or new code under one, joins that
   filter in `ci.yml`. A newer push cancels an
   older run on the same branch or PR. A run on `main` or a tag is never cancelled: the release
   waits for it.

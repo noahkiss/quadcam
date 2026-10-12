@@ -1,8 +1,14 @@
 name: CI
 
 # Format, clippy, tests and a release build of the app on every push to any branch or
-# `v*` tag, and on every pull request from a fork. The app is macOS-only, so this runs on
-# an Apple Silicon runner. The repository is public, so macOS minutes are free.
+# `v*` tag, and on every pull request from a fork. The app is macOS-only, so the Rust job
+# runs on an Apple Silicon runner. The repository is public, so macOS minutes are free.
+# The UI jobs need no macOS (the Playwright specs run on the mocked core), so they run on
+# Linux, where runners start at once.
+#
+# A push of main or a tag skips the tests when a release branch (`rel-*`) already ran them
+# green on the same commit (job `proven`). A rel-* run is as full as a main run: every
+# Rust test and axe in both themes.
 #
 # The runner is GitHub's `xcode-27` image (public preview: macOS 27, arm64, Xcode 27). The
 # Swift helper `quadcam-intel` (intel/) needs the macOS 26 SDK or newer; build.rs builds it
@@ -34,9 +40,40 @@ concurrency:
   cancel-in-progress: ${{ github.ref != 'refs/heads/main' && !startsWith(github.ref, 'refs/tags/') }}
 
 jobs:
+  # The release steps (AGENTS.md "Release") push main and the tag on the commit that a
+  # rel-* branch's run proved. That run counts for both, so their runs skip the other jobs
+  # instead of running the same suite again; Release accepts any green run on the commit.
+  # Any other push of main, such as a merge, finds no such run and runs everything.
+  proven:
+    if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/'))
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      actions: read
+    outputs:
+      by: ${{ steps.find.outputs.by }}
+    steps:
+      - name: Find a green rel-* run on this commit
+        id: find
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -uo pipefail
+          url="$(gh api "repos/$GITHUB_REPOSITORY/actions/workflows/ci.yml/runs?head_sha=$GITHUB_SHA&status=success&event=push&per_page=100" \
+            --jq '[.workflow_runs[] | select(.head_branch | startswith("rel-"))][0].html_url // empty')" || url=""
+          if [ -n "$url" ]; then
+            echo "::notice::$url already passed on this commit; skipping the tests"
+          else
+            echo "No green rel-* run on $GITHUB_SHA; running the tests"
+          fi
+          echo "by=$url" >> "$GITHUB_OUTPUT"
+
   check:
+    needs: proven
     # A pull request from this repository's own branches already ran on its push.
-    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name != github.repository
+    if: >-
+      !cancelled() && needs.proven.outputs.by == '' &&
+      (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name != github.repository)
     runs-on: xcode-27
     timeout-minutes: 45
     env:
@@ -67,10 +104,10 @@ jobs:
 
       # The slow tests (the `serial` disk-image group and tests/it/join.rs) run on a branch or a
       # pull request only when the change since its merge base with main touches the code they
-      # cover; otherwise the profile `ci-quick` skips them. main and tags always run them all.
+      # cover; otherwise the profile `ci-quick` skips them. main, rel-* and tags always run them all.
       - name: Changes the slow tests cover
         id: slow
-        if: github.ref != 'refs/heads/main' && !startsWith(github.ref, 'refs/tags/')
+        if: github.ref != 'refs/heads/main' && !startsWith(github.ref, 'refs/tags/') && !startsWith(github.ref, 'refs/heads/rel-')
         uses: dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d # v4.0.3
         with:
           base: main
@@ -131,14 +168,16 @@ jobs:
 
       - run: cargo build --release --locked --bins
 
-  # The React UI in app/: typecheck, lint, unit tests, build, and the Playwright specs
-  # on the mocked IPC. Node comes from .node-version, pnpm
-  # from packageManager in app/package.json. The license check and the notices that
-  # `pnpm build` writes read `cargo metadata`, so this job needs Rust too.
+  # The React UI in app/: typecheck, lint, unit tests and build. Node comes from
+  # .node-version, pnpm from packageManager in app/package.json. The license check and the
+  # notices that `pnpm build` writes read `cargo metadata`, so this job needs Rust too.
   ui:
-    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name != github.repository
-    runs-on: xcode-27
-    timeout-minutes: 20
+    needs: proven
+    if: >-
+      !cancelled() && needs.proven.outputs.by == '' &&
+      (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name != github.repository)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
     defaults:
       run:
         working-directory: app
@@ -167,11 +206,45 @@ jobs:
       - run: pnpm typecheck
       - run: pnpm lint
       - run: pnpm test
-      - run: pnpm exec playwright install webkit
-      # The axe specs run in the dark theme only on a branch or pull request, and in both on
-      # main and tags (e2e/fixtures.ts `axeSchemes`). Every other spec runs every time.
-      - run: pnpm e2e
-        env:
-          QC_AXE_THEMES: ${{ (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/')) && 'dark,light' || 'dark' }}
       - run: pnpm build
       - run: test -s dist/THIRD_PARTY_NOTICES.txt
+
+  # The Playwright specs on the mocked IPC, in headless WebKit, split across four runners
+  # (`--shard`). They need no macOS: the core is the mock, and no spec compares pixels.
+  e2e:
+    name: e2e (${{ matrix.shard }}/4)
+    needs: proven
+    if: >-
+      !cancelled() && needs.proven.outputs.by == '' &&
+      (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name != github.repository)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3, 4]
+    defaults:
+      run:
+        working-directory: app
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+        with:
+          package_json_file: app/package.json
+
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: .node-version
+          cache: pnpm
+          cache-dependency-path: app/pnpm-lock.yaml
+
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm exec playwright install --with-deps webkit
+      # The axe specs run in the dark theme only on a branch or pull request, and in both on
+      # main, rel-* and tags (e2e/fixtures.ts `axeSchemes`). Every other spec runs every time.
+      - run: pnpm e2e --shard=${{ matrix.shard }}/4
+        env:
+          QC_AXE_THEMES: >-
+            ${{ (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/')
+            || startsWith(github.ref, 'refs/heads/rel-')) && 'dark,light' || 'dark' }}

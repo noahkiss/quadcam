@@ -144,7 +144,7 @@ pnpm build                                 # -> app/dist
 
 - `pnpm dev`, then `http://localhost:4719/?mock=<scenario>`, runs the UI in a browser on the mocked core. The scenarios are in `app/src/ipc/mock/core.ts`.
 - `app/scripts/make-fixtures.sh` records the mocked core's data from the real core. It needs the CLI and the corpus.
-- The axe specs loop over both themes (`axeSchemes` in `e2e/fixtures.ts`). `QC_AXE_THEMES=dark` (or `light`) runs them in one theme only; CI sets `dark` on a branch or a pull request and both on `main` and on a tag. Every other spec runs whatever the variable says. A new axe spec loops over `axeSchemes`, not its own list.
+- The axe specs loop over both themes (`axeSchemes` in `e2e/fixtures.ts`). `QC_AXE_THEMES=dark` (or `light`) runs them in one theme only; CI sets `dark` on a branch or a pull request and both on `main`, a `rel-*` branch and a tag. Every other spec runs whatever the variable says. A new axe spec loops over `axeSchemes`, not its own list.
 - `QC_SHOTS=<dir> pnpm exec playwright test e2e/shots.spec.ts` writes screenshots of each screen in both themes. The images in `docs/images/` come from this spec.
 
 ### How to build a dashboard page
@@ -199,9 +199,11 @@ The Map page (`views/Map/`) shows an Apple MapKit `MKMapView`, not MapKit JS (wh
 `.github/workflows/ci.yml` runs on every push to a branch or a `v*` tag, and on pull requests from forks:
 
 - `cargo fmt --check`, clippy, the tests (`cargo nextest run --profile ci`, with the JUnit report as the `junit` artifact), and a release build.
-- On a branch or a pull request, the disk-image tests and `tests/it/join.rs` run only when the change since the merge base with `main` touches the code they cover: import, disks, cards, card prep, joins, media, scan, the session, the sources, the CLI's `main.rs`, the MCP server outside Gear, `tests/it/common` and those test files, `Cargo.toml`, `Cargo.lock`, `rust-toolchain.toml`, `nextest.toml` or `ci.yml`. Otherwise CI runs the `ci-quick` profile. The filter is in `ci.yml`; a new slow test, or new code it covers, joins it. On `main` and on a tag, CI runs every test.
-- A `ui` job for `app/`: typecheck, lint, Vitest, Playwright, and a build. On a branch or a pull request, the axe specs run in the dark theme only.
-- Both jobs, and the release, run on GitHub's `xcode-27` image (macOS 27, Xcode 27), a public preview. It builds the Swift helper; move to a GA image once one ships Xcode 27.
+- On a branch or a pull request, the disk-image tests and `tests/it/join.rs` run only when the change since the merge base with `main` touches the code they cover: import, disks, cards, card prep, joins, media, scan, the session, the sources, the CLI's `main.rs`, the MCP server outside Gear, `tests/it/common` and those test files, `Cargo.toml`, `Cargo.lock`, `rust-toolchain.toml`, `nextest.toml` or `ci.yml`. Otherwise CI runs the `ci-quick` profile. The filter is in `ci.yml`; a new slow test, or new code it covers, joins it. On `main`, a `rel-*` branch and a tag, CI runs every test.
+- A `ui` job for `app/`: typecheck, lint, Vitest, and a build.
+- An `e2e` job: the Playwright specs in headless WebKit, split across four runners. On a branch or a pull request, the axe specs run in the dark theme only.
+- The Rust job and the release run on GitHub's `xcode-27` image (macOS 27, Xcode 27), a public preview. It builds the Swift helper; move to a GA image once one ships Xcode 27. The `ui` and `e2e` jobs need no macOS and run on `ubuntu-latest`.
+- A push of `main` or a tag skips the tests when a `rel-*` branch's run already passed on the same commit (job `proven`), as it does in the release steps. Any other push of `main` runs everything.
 
 A newer push to the same branch or pull request cancels the older run. A run on `main` or on a tag is never cancelled, because the release waits for a green run on the tagged commit.
 
@@ -268,7 +270,7 @@ Users install the Homebrew cask `noahkiss/tap/quadcam`. A release is a pushed ta
 
 3. `.github/workflows/release.yml` runs the shared composite actions `tauri-macos-build`, `macos-sign-notarize` and `release-attach` from [`noahkiss/workflows`](https://github.com/noahkiss/workflows). They run in this repo's own job, because that job names the `release` environment; a reusable workflow from another repo cannot read this repo's environment secrets.
    - It checks that both manifests state the tag's version.
-   - It builds `QuadCam.app` on an Apple Silicon runner (`xcode-27`, a public-preview image with Xcode 27) with the prebuilt Tauri CLI from `app/`.
+   - It builds `QuadCam.app` on an Apple Silicon runner (`xcode-27`, a public-preview image with Xcode 27) with the prebuilt Tauri CLI from `app/`. It restores the Rust dependency cache that `release-cache.yml` saves on `main` after each release; a cache saved under one tag is invisible to the next.
    - It signs, notarizes and staples the app (see [Signing](#signing)).
    - It waits for a green CI run on the tagged commit. Any green run counts, so the release branch's run passes it at once. It does not run the tests itself. If every run on the commit fails, or none passes within 40 minutes, there is no release.
    - It zips the app as `quadcam-X.Y.Z-arm64.zip` and attaches the zip to the GitHub Release, with the in-app updater's files: `quadcam-X.Y.Z-arm64.app.tar.gz`, its `.sig` and `latest.json`.

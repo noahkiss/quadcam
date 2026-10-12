@@ -1,0 +1,70 @@
+name: Release cache
+
+# Builds QuadCam.app on main the way release.yml's tauri-macos-build step does, unsigned,
+# to save the Rust dependency cache that the next release restores. GitHub scopes a cache
+# to the ref that saved it, plus the default branch: a cache saved under one tag is
+# invisible to the next tag, so without this every release compiles every dependency.
+#
+# It runs after each Release run, on main (a `workflow_run` run uses the default branch),
+# and when this file changes on main. The key (`quadcam-release`) and the rust-cache
+# settings match release.yml's `cache-shared-key`. rust-cache hashes the Rust toolchain and
+# the CARGO*/RUST*/CC* environment into the key, so keep those the same as the release
+# job's. The cache holds third-party crates only: rust-cache removes the workspace's own
+# crates before it saves, so a release always builds the app itself from its tag.
+#
+# Nothing here is uploaded or signed. Run it by hand with
+# `gh workflow run release-cache.yml -R noahkiss/quadcam --ref main`.
+
+on:
+  workflow_run:
+    workflows: [Release]
+    types: [completed]
+  push:
+    branches: [main]
+    paths: ['.github/workflows/release-cache.yml']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-cache-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: xcode-27
+    timeout-minutes: 60
+    env:
+      # As release.yml: build.rs fails instead of bundling a stand-in.
+      QUADCAM_INTEL_REQUIRED: '1'
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      # rust-toolchain.toml names the version, as in the release job.
+      - name: Install Rust
+        run: |
+          rustup toolchain install
+          rustc --version
+
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+        with:
+          workspaces: src-tauri
+          shared-key: quadcam-release
+
+      - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+        with:
+          package_json_file: app/package.json
+
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: .node-version
+          cache: pnpm
+          cache-dependency-path: app/pnpm-lock.yaml
+
+      - run: pnpm install --frozen-lockfile
+        working-directory: app
+
+      - name: Build the app
+        working-directory: src-tauri
+        run: ../app/node_modules/.bin/tauri build --bundles app

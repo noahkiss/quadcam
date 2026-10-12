@@ -8,6 +8,9 @@ name: Release
 # and modules.json (the module pins) to the tag's GitHub Release, then bumps the Homebrew cask
 # (`noahkiss/tap/quadcam`) through the tap's own `bump.yml`.
 #
+# The build restores the Rust dependency cache that release-cache.yml saves on main
+# (a cache saved under a tag is invisible to the next tag).
+#
 # The steps are the shared composite actions in noahkiss/workflows
 # (tauri-macos-build, macos-sign-notarize, release-attach). They run in this
 # repository's own job because that job names the `release` environment: a
@@ -71,14 +74,18 @@ jobs:
           ref: ${{ inputs.tag || github.ref }}
 
       - id: build
-        uses: noahkiss/workflows/actions/tauri-macos-build@dff600318cd6c3077c8b4d6aa6408a33b1d1412a # main after noahkiss/workflows#5 (updater files; any green CI run counts)
+        uses: noahkiss/workflows/actions/tauri-macos-build@2b186179a85613945a83f2241b66d86e498363ae # noahkiss/workflows#9 (cache-shared-key, cache-save; updater files; any green CI run counts)
         with:
           tag: ${{ inputs.tag }}
           app-name: QuadCam
           asset-prefix: quadcam
           brew-packages: ffmpeg
+          # Restore the dependency cache that release-cache.yml saves on main; a cache
+          # saved under this tag would help no later run, so save none.
+          cache-shared-key: quadcam-release
+          cache-save: 'false'
 
-      - uses: noahkiss/workflows/actions/macos-sign-notarize@dff600318cd6c3077c8b4d6aa6408a33b1d1412a # main after noahkiss/workflows#5 (updater files; any green CI run counts)
+      - uses: noahkiss/workflows/actions/macos-sign-notarize@2b186179a85613945a83f2241b66d86e498363ae # noahkiss/workflows#9 (cache-shared-key, cache-save; updater files; any green CI run counts)
         with:
           path: ${{ steps.build.outputs.app }}
           identity: 'Developer ID Application: NKMK Digital Co. (2Z88BYP37C)'
@@ -90,7 +97,7 @@ jobs:
           notary-key-id: ${{ secrets.ASC_KEY_ID }}
           notary-issuer-id: ${{ secrets.ASC_ISSUER_ID }}
 
-      - uses: noahkiss/workflows/actions/release-attach@dff600318cd6c3077c8b4d6aa6408a33b1d1412a # main after noahkiss/workflows#5 (updater files; any green CI run counts)
+      - uses: noahkiss/workflows/actions/release-attach@2b186179a85613945a83f2241b66d86e498363ae # noahkiss/workflows#9 (cache-shared-key, cache-save; updater files; any green CI run counts)
         with:
           path: ${{ steps.build.outputs.app }}
           tag: ${{ steps.build.outputs.tag }}
