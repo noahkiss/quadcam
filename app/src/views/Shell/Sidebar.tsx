@@ -6,6 +6,7 @@ import { TASK_LABEL } from "../../store/tasks";
 import { Icon, type IconName, type IconTint } from "../../components/Icon";
 import { fmtBytes, fmtDay, base, SOURCE_LABEL } from "../../lib/format";
 import { sameFilter, type Filter } from "../../lib/library";
+import { interesting } from "../../lib/moments";
 import { importFrom, openFolderAction, openImport, setLogDir } from "../../actions/session";
 import { deviceName, KIND_ICON, KIND_LABEL, STATE_LABEL } from "../../lib/gear";
 import { deviceRefs, pluggedIn, useNow } from "../Gear/refs";
@@ -65,6 +66,7 @@ export function Sidebar() {
   const cur = (f: Filter) => !detail && sameFilter(s.filter, f);
   const go = (f: Filter) => () => s.setFilter(f);
   const lastN = clips.filter((c) => c.last_import).length;
+  const moments = clips.reduce((a, c) => a + c.moments.filter(interesting).length, 0);
   const cards = s.volumes.filter((v) => v.is_card);
   const days = L?.groups?.days || [];
   const shown = days.slice(0, 6);
@@ -78,6 +80,7 @@ export function Sidebar() {
         <Group title="Library">
           <Item icon="film" tint="blue" label="All clips" count={clips.length} current={cur({ group: "all" })} onClick={go({ group: "all" })} />
           {lastN > 0 && <Item icon="sparkle" tint="pink" label="Last import" count={lastN} current={cur({ group: "last_import" })} onClick={go({ group: "last_import" })} />}
+          {moments > 0 && <Item icon="sparkle" tint="mauve" label="Best moments" count={moments} current={cur({ group: "best_moments" })} onClick={go({ group: "best_moments" })} />}
         </Group>
         <Group title="Import from">
           {cards.map((v) => {

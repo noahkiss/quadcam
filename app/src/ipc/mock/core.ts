@@ -12,6 +12,9 @@ import type {
   LibClip,
   LibCut,
   LibEdit,
+  LibShift,
+  LibShiftParams,
+  LibShiftReport,
   LibraryView,
   Moved,
   PlanPatch,
@@ -44,7 +47,7 @@ import { live as liveOf } from "../../lib/controls";
 /** `Core::dispatch` methods, each also a typed Tauri command of the same name. */
 const DISPATCH = new Set([
   "library", "library_rate", "library_edit", "library_rename", "library_cuts", "library_export_cuts", "library_trash", "library_untrash",
-  "library_photos", "library_apply_name_format", "library_match_logs", "library_rebuild", "library_rescan", "library_analyze_video", "video_feature", "library_preview", "library_strips", "card_status",
+  "library_photos", "library_apply_name_format", "library_match_logs", "library_time_shift", "library_rebuild", "library_rescan", "library_analyze_video", "video_feature", "library_preview", "library_strips", "card_status",
   "settings", "settings_set", "place_search", "place_save", "session_cuts", "profiles", "profile_save", "session_split", "library_split",
   "modules", "module_install", "module_remove", "modules_check", "gear_osd", "gear_osd_edit", "gear_model", "gear_model_edit", "gear_voice", "gear_voice_edit", "gear_voice_preview", "gear_voice_render", "gear_voice_key", "gear_voice_sets", "gear_voice_catalog", "gear_voice_estimate", "gear_voice_sample", "gear_voice_import_takes", "gear_voice_check", "gear_voice_pack_install", "gear_voice_pack_preview", "gear_voice_publish", "gear_voice_choose", "gear_voice_choose_radios", "gear_voice_pack_delete", "gear_rates", "gear_rates_preview", "gear_sims", "gear_sim_sync_plan", "gear_sim_sync", "gear_sim_restore_plan", "gear_sim_restore", "gear_radio_cli", "gear_dfu_link", "gear_firmware", "gear_firmware_read", "gear_splash", "gear_flash_plan", "gear_flash", "gear_elrs", "gear_elrs_read", "gear_elrs_flash_plan", "gear_elrs_flash",
   "gear_status", "gear_devices", "gear_device_save", "gear_device_forget", "gear_dismiss_reminder", "gear_poll_pause",
@@ -308,6 +311,8 @@ export class MockCore {
           clips: this.lib.clips.map((c) => ({ id: c.id, path: c.path, duration: c.duration, badge: "unmatched", log_day: null, log_date: null, log_time: null, log_model: null, flights: 0, reason: null, flight: null, moments: 0, applied: false })),
           warnings: [],
         };
+      case "library_time_shift":
+        return this.timeShift(p as unknown as LibShiftParams);
       case "library_rebuild":
         this.emit("library-task", { task: "rebuild", done: 0, total: 1 });
         this.emit("library-task", { task: "rebuild", done: 1, total: 1 });
@@ -939,6 +944,40 @@ export class MockCore {
     }
     this.libraryChanged();
     return structuredClone(c);
+  }
+
+  /** The core's batch time shift. A clip with radio-log moments stands for one a log
+   * matches: it takes the offset time plus one minute, as the log's own time. */
+  timeShift(params: LibShiftParams): LibShiftReport {
+    const p = { ids: [], from: "", time: "", ...params };
+    const ids = [p.from, ...p.ids.filter((id) => id !== p.from)];
+    const clips = ids.map((id) => this.clip(id));
+    const at = (c: LibClip) => (c.time ? Date.parse(`${c.date}T${c.time}:00Z`) : null);
+    const from = clips[0];
+    if (!/^\d{1,2}:\d{2}$/.test(p.time.trim())) throw `time ${JSON.stringify(p.time)} is not HH:MM (24-hour)`;
+    const old = at(from);
+    if (old == null) throw `${from.name} has no time of day to shift from. Set its time with an edit, or pick a clip that has one.`;
+    const to = Date.parse(`${p.date || from.date}T${p.time.trim().padStart(5, "0")}:00Z`);
+    const offset = to - old;
+    const split = (t: number) => new Date(t).toISOString().slice(0, 16).split("T") as [string, string];
+    const rows: LibShift[] = clips.map((c) => {
+      const own = at(c);
+      const log = c.id !== from.id && own != null && c.moments.some((m) => m.source === "radio_log");
+      const t = c.id === from.id ? to : own == null ? null : own + offset + (log ? 60_000 : 0);
+      const [date, time] = t == null ? [null, null] : split(t);
+      const source = c.id === from.id ? "set" : t == null ? "skipped" : log ? "log" : "offset";
+      const reason = source === "log" ? "2 flights, lengths agree" : source === "skipped" ? "No time of day, and no radio log matched." : null;
+      const changed = t != null && (date !== c.date || time !== c.time);
+      return { id: c.id, name: c.name, path: c.path, old_date: c.date, old_time: c.time, date, time, source, reason, changed, applied: false };
+    });
+    if (p.apply)
+      for (const r of rows) {
+        if (!r.changed) continue;
+        this.edit(r.id, { date: r.date, time: r.time } as LibEdit);
+        r.applied = true;
+        r.path = this.clip(r.id).path;
+      }
+    return { offset_s: Math.round(offset / 1000), clips: rows, warnings: [] };
   }
 
   rename(id: string, name: string) {

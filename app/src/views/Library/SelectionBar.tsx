@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { useShallow } from "zustand/react/shallow";
 import { useStore } from "../../store";
 import { screenOf, selectedIds } from "../../store/library";
@@ -6,14 +7,17 @@ import { Button } from "../../components/Button";
 import { Icon } from "../../components/Icon";
 import { albumAction } from "../../lib/library";
 import { addLibToPhotos, rate, shareClips, trashClips } from "../../actions/library";
+import { ShiftTime } from "./ShiftTime";
 import styles from "./SelectionBar.module.css";
 
-/** The bar for two or more selected clips: rate, flag, share, add to the album, trash. */
+/** The bar for two or more selected clips: rate, flag, shift time, share, add to the album,
+ * trash. */
 export function SelectionBar() {
   const ids = useStore(useShallow(selectedIds));
   const lib = useStore((s) => screenOf(s) === "library");
   const album = useStore((s) => albumAction(sel.photosAlbum(s)));
   const clear = useStore((s) => s.clearSelection);
+  const [shifting, setShifting] = useState<string[] | null>(null);
   if (ids.length < 2 || !lib) return null;
   return (
     <div role="toolbar" aria-label="Selected clips" className={styles.bar}>
@@ -29,6 +33,9 @@ export function SelectionBar() {
       <Button size="sm" variant="ghost" icon="flag" aria-label="Pick" title="Pick" onClick={() => rate(ids, null, "pick")} />
       <Button size="sm" variant="ghost" icon="close" aria-label="Reject" title="Reject" onClick={() => rate(ids, null, "reject")} />
       <span className={styles.sep} aria-hidden="true" />
+      <Button size="sm" variant="ghost" icon="clock" onClick={() => setShifting(ids)}>
+        Shift time…
+      </Button>
       <Button size="sm" variant="ghost" icon="share" onClick={(e) => shareClips(ids, e.currentTarget)}>
         Share
       </Button>
@@ -41,6 +48,7 @@ export function SelectionBar() {
         Trash
       </Button>
       <Button size="sm" variant="ghost" icon="close-circle" aria-label="Deselect" title="Deselect" onClick={clear} />
+      {shifting && <ShiftTime ids={shifting} onClose={() => setShifting(null)} />}
     </div>
   );
 }

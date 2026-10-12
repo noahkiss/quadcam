@@ -17,6 +17,8 @@ import { ClipCard, MiniBar, stripStyle } from "./ClipCard";
 import { ClipList } from "./ClipList";
 import { SelectionBar } from "./SelectionBar";
 import { KIND_ICON } from "./moments";
+import { MomentsView, momentFrame } from "./MomentsView";
+import { bestMoments } from "../../lib/moments";
 import styles from "./LibraryView.module.css";
 
 const GAP = 16;
@@ -28,10 +30,11 @@ export function LibraryView({ onMenu }: { onMenu: (e: MouseEvent, id: string) =>
   const list = useStore(useShallow(visible));
   const view = useStore(sel.libView);
   const query = useStore((s) => s.query);
+  const group = useStore((s) => s.filter.group);
   return (
     <section className={styles.lib} aria-label="Library">
       <Banners list={list} />
-      {!list.length ? <p className={styles.empty}>{query ? "No clips match." : "No clips here."}</p> : view === "list" ? <ClipList clips={list} onMenu={onMenu} /> : <Grid clips={list} onMenu={onMenu} />}
+      {group === "best_moments" ? <MomentsView clips={list} /> : !list.length ? <p className={styles.empty}>{query ? "No clips match." : "No clips here."}</p> : view === "list" ? <ClipList clips={list} onMenu={onMenu} /> : <Grid clips={list} onMenu={onMenu} />}
       <SelectionBar />
       <Footer list={list} />
     </section>
@@ -179,10 +182,7 @@ function DaySummary({ clips: cs }: { clips: LibClip[] }) {
   const air = withStats.length ? withStats.reduce((a, c) => a + (c.stats!.armed_s || 0), 0) : cs.reduce((a, c) => a + flyingOf(c), 0);
   const flights = withStats.reduce((a, c) => a + (c.stats!.flights || 0), 0);
   const volts = withStats.map((c) => c.stats!.min_rx_bat_v).filter((v): v is number => v != null);
-  const best = cs
-    .flatMap((c) => c.moments.map((m) => ({ c, m })))
-    .sort((a, b) => b.m.score - a.m.score)
-    .slice(0, 3);
+  const best = bestMoments(cs, 3).map(({ clip: c, moment: m }) => ({ c, m }));
   const stat = (v: string, l: string) => (
     <div className={styles.stat}>
       <b>{v}</b>
@@ -204,7 +204,7 @@ function DaySummary({ clips: cs }: { clips: LibClip[] }) {
             {best.map(({ c, m }, i) => (
               <li key={i}>
                 <button type="button" title={`${c.name} ${fmtDur(m.start)}`} onClick={() => openDetail(c.id, m.start)}>
-                  <span className={styles.mini} style={stripStyle(c, Math.min(9, Math.floor((m.start / c.duration) * 10)))} />
+                  <span className={styles.mini} style={stripStyle(c, momentFrame(c, m))} />
                   <Icon name={KIND_ICON[m.kind]} size={14} />
                   <span className={styles.name}>{c.name}</span>
                   <span className="mono">{fmtDur(m.start)}</span>

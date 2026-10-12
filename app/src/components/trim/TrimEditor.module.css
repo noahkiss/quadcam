@@ -37,7 +37,7 @@
 }
 .labels {
   display: grid;
-  grid-template-rows: 20px 44px 12px 24px 24px;
+  grid-template-rows: 20px 44px 12px 30px 24px;
   row-gap: var(--s-2);
   font-size: var(--t-sm);
   color: var(--muted);
@@ -49,7 +49,7 @@
   position: relative;
   flex: 1;
   display: grid;
-  grid-template-rows: 20px 44px 12px 24px 24px;
+  grid-template-rows: 20px 44px 12px 30px 24px;
   row-gap: var(--s-2);
   min-width: 0;
 }
@@ -119,6 +119,13 @@
 }
 .marks {
   position: relative;
+}
+.heat {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 4px;
 }
 .mark {
   position: absolute;
