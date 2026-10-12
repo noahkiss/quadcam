@@ -5,6 +5,8 @@ User-facing changes in each release, newest first. Release notes on
 
 ## Unreleased
 
+## 0.21.1 (2026-10-12)
+
 - **Restart to update in the Settings sidebar.** Once a check finds a newer version, **Check for Updates** under the version becomes **Restart to update**, on every Settings page. Settings > Advanced keeps the automatic check and the release notes.
 
 ## 0.21.0 (2026-10-12)
