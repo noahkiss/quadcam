@@ -1378,7 +1378,8 @@ expression: "quadcam_lib::mcp::tools()"
             "flash_plan",
             "elrs",
             "elrs_flash_plan",
-            "voice_preview"
+            "voice_preview",
+            "voice_library"
           ],
           "type": "string"
         },
@@ -1425,6 +1426,9 @@ expression: "quadcam_lib::mcp::tools()"
           "description": "For card_preview: the edits, each {\"kind\": \"model\", \"file\": \"model01.yml\", \"name\": \"<header name>\", \"ops\": [{\"op\": \"set_checklist\", \"enabled\": true}, ...]}, {\"kind\": \"radio\", \"ops\": [{\"op\": \"set_scalar\", \"key\": \"hapticMode\", \"value\": \"mode_nokeys\"}]}, {\"kind\": \"checklist\", \"model\": \"model01.yml\", \"text\": \"=Props tight\"}, {\"kind\": \"model_copy\", ...} or {\"kind\": \"model_delete\", \"file\": ...}.",
           "items": true,
           "type": "array"
+        },
+        "filters": {
+          "description": "For voice_library: filters, any of {\"gender\", \"age\" (young, middle_aged, old), \"accent\", \"language\" (a code such as en), \"use_case\", \"category\" (professional, famous, high_quality), \"descriptives\" (a list such as [\"calm\", \"deep\"]), \"sort\" (created_date, usage_character_count_1y, trending, cloned_by_count), \"page\" (from 0), \"page_size\" (1 to 100)}."
         },
         "from": {
           "description": "For copy_plan: the FC to copy from, a device id (its latest backup) or a backup id from backups.",
@@ -1524,6 +1528,11 @@ expression: "quadcam_lib::mcp::tools()"
           "description": "For voice: read the pack index again from the voice_index setting (the only call that reaches the network).",
           "type": "boolean"
         },
+        "search": {
+          "description": "For voice_library: words to search ElevenLabs' Voice Library for (name, description, labels).",
+          "maxLength": 200,
+          "type": "string"
+        },
         "sets": {
           "description": "For voice_estimate: line set ids from voice_sets (they combine; a line in two sets counts once).",
           "items": {
@@ -1586,7 +1595,7 @@ expression: "quadcam_lib::mcp::tools()"
           "type": "string"
         },
         "voice": {
-          "description": "For voice_estimate: the ElevenLabs voice, by name or id (voice_catalog lists them). For voice_sets: a voice id, with `voice_model`, to count each set's lines that already have a take.",
+          "description": "For voice_estimate: the ElevenLabs voice, by name or id (voice_catalog lists them). For voice_library: one voice by id (the account's own or a library voice) instead of a search. For voice_sets: a voice id, with `voice_model`, to count each set's lines that already have a take.",
           "maxLength": 200,
           "type": "string"
         },
@@ -1680,6 +1689,7 @@ expression: "quadcam_lib::mcp::tools()"
             "voice_import_takes",
             "voice_key_set",
             "voice_key_delete",
+            "voice_add",
             "voice_install",
             "voice_choose",
             "voice_delete",
@@ -1780,7 +1790,7 @@ expression: "quadcam_lib::mcp::tools()"
           "type": "array"
         },
         "confirm": {
-          "description": "For voice_render and voice_edit: allow a render that sends text to a provider that may charge. Only after the person agreed to the characters and the provider. For voice_delete: must be true, after the person agreed. For card_clean: true deletes the `._` files it lists; omit to only list them. For radio_cli reboot: must be true.",
+          "description": "For voice_render and voice_edit: allow a render that sends text to a provider that may charge. Only after the person agreed to the characters and the provider. For voice_delete: must be true, after the person agreed. For voice_add: adds the voice to the ElevenLabs account (it takes a voice slot); only after the person agreed. For card_clean: true deletes the `._` files it lists; omit to only list them. For radio_cli reboot: must be true.",
           "type": "boolean"
         },
         "connector": {
@@ -1901,7 +1911,7 @@ expression: "quadcam_lib::mcp::tools()"
           "type": "array"
         },
         "name": {
-          "description": "For device_save: the person's name for the device; empty for none. For pack_save and\npack_delete: the pack label. For pack_type_save and pack_type_delete: the type name.\nFor voice_publish: the voice's name in the index (default the pack's).",
+          "description": "For device_save: the person's name for the device; empty for none. For pack_save and\npack_delete: the pack label. For pack_type_save and pack_type_delete: the type name.\nFor voice_publish: the voice's name in the index (default the pack's). For voice_add:\nthe name the voice gets in the account (default the library's).",
           "maxLength": 80,
           "type": "string"
         },
@@ -2084,7 +2094,7 @@ expression: "quadcam_lib::mcp::tools()"
           "type": "string"
         },
         "voice": {
-          "description": "For voice_render: the provider's voice; omit for the tts_voice setting. With `sets`, an ElevenLabs voice by name or id.",
+          "description": "For voice_render: the provider's voice; omit for the tts_voice setting. With `sets`, an ElevenLabs voice by name or id. For voice_add: the Voice Library voice's id (quadcam_gear voice_library).",
           "maxLength": 200,
           "type": "string"
         },

@@ -2137,3 +2137,111 @@ fn a_sample_reports_progress_and_stops_after_the_current_batch() {
     assert_eq!(seen[0].total, ask.estimate.batches);
     assert!(!seen.last().unwrap().running);
 }
+
+const LIBRARY: &str = r#"{"voices":[
+  {"public_owner_id":"own1","voice_id":"lib-ranger","name":"Ranger","accent":"british","gender":"male","age":"middle_aged",
+   "use_case":"narrative_story","category":"professional","language":"en","rate":2.0,"preview_url":"https://example.invalid/p.mp3",
+   "verified_languages":[{"language":"en","model_id":"eleven_v4","accent":"british"}]},
+  {"public_owner_id":"own2","voice_id":"v-callum","name":"Callum","accent":"american","language":"en"}],
+  "has_more":false,"total_count":2}"#;
+
+#[test]
+fn the_library_marks_the_voices_the_account_has_and_an_add_waits_for_confirm() {
+    let b = bench(50_000, true);
+    b.http.on("/v1/shared-voices", 200, LIBRARY);
+    let p = b
+        .core
+        .gear_voice_library(&quadcam_lib::core::LibraryParams {
+            query: quadcam_lib::gear::voice::tts::LibraryQuery {
+                language: "en".into(),
+                ..Default::default()
+            },
+            id: String::new(),
+        })
+        .unwrap();
+    assert_eq!(p.voices.len(), 2);
+    assert!(!p.voices[0].added);
+    assert!(p.voices[1].added, "Callum is in the account");
+    assert_eq!(p.voices[0].rate, Some(2.0));
+    // Add by id: the account does not answer for a library voice, so the library does.
+    b.http.on_first("/v1/voices/lib-ranger", 404, "{}");
+    let add = |confirm| {
+        b.core.gear_voice_add(&quadcam_lib::core::VoiceAddParams {
+            voice: "lib-ranger".into(),
+            name: "Ranger UK".into(),
+            confirm,
+            ..Default::default()
+        })
+    };
+    let ask = add(false).unwrap();
+    assert!(ask.needs_confirm && ask.added_id.is_none());
+    assert_eq!(ask.voice.public_owner_id, "own1");
+    assert_eq!(b.http.posts(), 0);
+    b.http.on_first(
+        "/v1/voices/add/own1/lib-ranger",
+        200,
+        r#"{"voice_id":"lib-ranger"}"#,
+    );
+    let done = add(true).unwrap();
+    assert_eq!(done.added_id.as_deref(), Some("lib-ranger"));
+    let seen = b.http.seen.lock().unwrap().clone();
+    let post = seen.iter().find(|r| r.method == "POST").unwrap();
+    assert!(post.url.ends_with("/v1/voices/add/own1/lib-ranger"));
+    assert!(post.body.as_deref().unwrap().contains("Ranger UK"));
+    // A voice the account has already is not added again.
+    let again = b
+        .core
+        .gear_voice_add(&quadcam_lib::core::VoiceAddParams {
+            voice: "v-callum".into(),
+            confirm: true,
+            ..Default::default()
+        })
+        .unwrap();
+    assert!(again.already && !again.needs_confirm);
+    assert_eq!(b.http.posts(), 1);
+}
+
+#[test]
+fn a_voice_with_a_rate_of_its_own_costs_that_many_times_the_credits() {
+    let b = bench(99_000, true);
+    let m = "eleven_turbo_v2_5";
+    let plain = estimate(&b, &["sample"], m).unwrap();
+    assert_eq!(plain.rate, None);
+    // Callum now bills twice the credits (a library voice with a rate of its own).
+    b.http.on_first(
+        "/v1/voices",
+        200,
+        r#"{"voices":[{"voice_id":"v-callum","name":"Callum","category":"professional","sharing":{"rate":2.0}}]}"#,
+    );
+    let twice = estimate(&b, &["sample"], m).unwrap();
+    assert_eq!(twice.rate, Some(2.0));
+    assert_eq!(twice.estimate.chars, plain.estimate.chars);
+    assert_eq!(
+        twice.estimate.credits,
+        (plain.estimate.chars as f64 * 0.5 * 2.0).ceil() as u64
+    );
+    assert!((twice.estimate.usd - 2.0 * plain.estimate.usd).abs() < 1e-9);
+}
+
+#[test]
+fn a_preview_plays_from_the_cache_and_comes_only_over_https() {
+    let b = bench(50_000, true);
+    let p = |url: &str| {
+        b.core
+            .gear_voice_library_preview(&quadcam_lib::core::LibraryPreviewParams {
+                url: url.into(),
+            })
+    };
+    assert!(p("http://example.invalid/a.mp3").is_err());
+    assert!(p("file:///etc/passwd").is_err());
+    // A preview fetched once plays from the cache; under cargo nothing reaches the internet.
+    let url = "https://example.invalid/voices/abc/preview.mp3?x=1";
+    assert!(p(url).is_err());
+    let dir = b.dir.path().join("cache/voice/library-previews");
+    let name = format!(
+        "{}.mp3",
+        &quadcam_lib::gear::voice::sha256_hex(url.as_bytes())[..16]
+    );
+    std::fs::write(dir.join(&name), b"ID3").unwrap();
+    assert_eq!(p(url).unwrap(), dir.join(&name).display().to_string());
+}

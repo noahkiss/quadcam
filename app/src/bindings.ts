@@ -269,6 +269,21 @@ export const commands = {
 	 */
 	gearVoiceRenderPacks: (params: RenderPacksParams) => typedError<RenderPacksReport, string>(__TAURI_INVOKE("gear_voice_render_packs", { params })),
 	/**
+	 *  A page of ElevenLabs' Voice Library (search and filters), or one voice by `id`;
+	 *  each says whether the account has it. Free calls.
+	 */
+	gearVoiceLibrary: (params: LibraryParams) => typedError<LibraryPage, string>(__TAURI_INVOKE("gear_voice_library", { params })),
+	/**
+	 *  Adds a Voice Library voice to the account's My Voices. It changes the account and
+	 *  takes a voice slot, so it waits for `confirm`; no credits.
+	 */
+	gearVoiceAdd: (params: VoiceAddParams) => typedError<VoiceAddReport, string>(__TAURI_INVOKE("gear_voice_add", { params })),
+	/**
+	 *  Fetches a voice's preview sample (`preview_url`) into the cache once and answers
+	 *  the file to play. No credits.
+	 */
+	gearVoiceLibraryPreview: (params: LibraryPreviewParams) => typedError<string, string>(__TAURI_INVOKE("gear_voice_library_preview", { params })),
+	/**
 	 *  Copies earlier ElevenLabs takes of single lines from a folder into the cache, so
 	 *  the studio counts them and never sends their lines again. Reads the folder only.
 	 */
@@ -3761,10 +3776,62 @@ export type LibraryEditParams = {
 	id: string,
 } & LibEdit;
 
+/**  One page of the library. */
+export type LibraryPage = {
+	voices: LibraryVoice[],
+	page: number,
+	has_more: boolean,
+	/**  Voices that match, when the provider says. */
+	total?: number,
+};
+
+/**  `gear_voice_library`: a page of ElevenLabs' Voice Library, or one voice by id. */
+export type LibraryParams = {
+	query?: LibraryQuery,
+	/**  One voice by id instead of a search: the account's own, or a library voice. */
+	id?: string,
+};
+
 /**  `library_photos`: the clips to add with their cuts, and the album (None: the setting). */
 export type LibraryPhotosParams = {
 	ids?: string[],
 	album?: string | null,
+};
+
+/**  `gear_voice_library_preview`: a voice's preview sample, fetched into the cache to play. */
+export type LibraryPreviewParams = {
+	/**  The voice's `preview_url` (HTTPS). */
+	url: string,
+};
+
+/**  A search of a provider's public voice library (ElevenLabs `GET /v1/shared-voices`). */
+export type LibraryQuery = {
+	/**  Words in the name, description or labels. */
+	search?: string,
+	gender?: string,
+	/**  `young`, `middle_aged`, `old`. */
+	age?: string,
+	accent?: string,
+	/**  A language code such as `en`. */
+	language?: string,
+	/**
+	 *  `narrative_story`, `conversational`, `characters_animation`, `social_media`,
+	 *  `entertainment_tv`, `advertisement`, `informative_educational` and so on.
+	 */
+	use_case?: string,
+	/**  `professional`, `famous` or `high_quality`. */
+	category?: string,
+	/**  Words such as `calm`, `deep`, `confident`. */
+	descriptives?: string[],
+	/**
+	 *  `created_date` (the default), `usage_character_count_1y`, `trending`,
+	 *  `cloned_by_count`.
+	 */
+	sort?: string,
+	/**  The page, from 0. */
+	page?: number,
+	/**  Voices a page, 1 to 100 (default 30). */
+	page_size?: number,
 };
 
 /**  A library job's progress: `done` of `total`. */
@@ -3808,6 +3875,39 @@ export type LibraryView_Serialize = {
 	layout: Layout,
 	place_folders: boolean,
 	clips: LibItem_Serialize[],
+};
+
+/**  A voice in the provider's public library. */
+export type LibraryVoice = {
+	voice_id: string,
+	/**  The owner's public id, which adding the voice needs. */
+	public_owner_id: string,
+	name: string,
+	gender?: string,
+	age?: string,
+	accent?: string,
+	/**  The library's language code (`en`). */
+	language?: string,
+	/**  Every language the voice is verified in, with its accent: `en (american)`. */
+	languages?: string[],
+	use_case?: string,
+	descriptive?: string,
+	category?: string,
+	description?: string,
+	preview_url?: string | null,
+	/**
+	 *  The credit multiplier when it is not 1: a character bills that many times the model's
+	 *  credits.
+	 */
+	rate?: number | null,
+	/**  USD per 1,000 credits the owner asks, when not the default. */
+	fiat_rate?: number | null,
+	/**  Days of notice the owner gives before the voice leaves the library. */
+	notice_days?: number | null,
+	/**  Whether a free account may use it. */
+	free_users_allowed?: boolean,
+	/**  The account has added it (it is among the account's voices). */
+	added?: boolean,
 };
 
 /**  A line in a line diff. */
@@ -6535,6 +6635,8 @@ export type StudioEstimate = {
 	/**  Lines whose text goes to ElevenLabs. */
 	to_render?: number,
 	estimate: Estimate,
+	/**  The voice's own credit multiplier (a Voice Library voice), already in `estimate`. */
+	rate?: number | null,
 };
 
 /**  `gear_voice_sets`: the line sets and the key, with no network call. */
@@ -6935,6 +7037,31 @@ export type VideoScan = {
 	key_frame?: number | null,
 };
 
+/**  `gear_voice_add`: a Voice Library voice into the account's My Voices. */
+export type VoiceAddParams = {
+	/**  The library voice's id. */
+	voice: string,
+	/**  The owner's public id (`public_owner_id`); looked up by the voice id when empty. */
+	owner?: string,
+	/**  The name it gets in the account; the library's name when empty. */
+	name?: string,
+	/**  Adds it. Without it, the answer only says what would be added. */
+	confirm?: boolean,
+};
+
+export type VoiceAddReport = {
+	/**  The voice as the library shows it. */
+	voice: LibraryVoice,
+	/**  The name in the account. */
+	name: string,
+	/**  The voice's id in the account, once added. */
+	added_id?: string | null,
+	/**  Nothing was added: run again with `confirm`. */
+	needs_confirm: boolean,
+	/**  The account had the voice already; nothing was sent. */
+	already?: boolean,
+};
+
 /**  `gear_voice_check`. */
 export type VoiceCheckParams = {
 	/**  An installed or rendered pack id. */
@@ -7034,6 +7161,18 @@ export type VoiceInfo = {
 	/**  What the provider says about it: accent, gender, age, use. */
 	labels: string,
 	preview_url?: string | null,
+	/**  The `accent` label, or the first verified language's accent; empty when neither says. */
+	accent?: string,
+	/**  The verified languages (`en`, `de`), else the `language` label. */
+	languages?: string[],
+	gender?: string,
+	age?: string,
+	use_case?: string,
+	/**
+	 *  A Voice Library voice's credit multiplier (`sharing.rate`) when it is not 1: a
+	 *  character in this voice bills that many times the model's credits.
+	 */
+	rate?: number | null,
 };
 
 export type VoiceLine = {

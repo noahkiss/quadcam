@@ -48,6 +48,8 @@ export interface UseStudio {
   progress: VoiceProgress | null;
   /** Stops the paid run after the current batch. */
   stopRun: () => Promise<void>;
+  /** Reads the account's voices, models and credits again (after a voice is added). */
+  refreshCatalog: () => Promise<void>;
   /** A paid call waits for the person's go-ahead. */
   asking: Paid | null;
   busy: boolean;
@@ -257,5 +259,5 @@ export function useStudio(onRendered: () => Promise<void>): UseStudio {
   // Any seed but 0 makes new takes; the pack keeps every batch whose lines all passed.
   const retake = useCallback(() => call("render", false, 1 + Math.floor(Math.random() * 2_000_000_000)), [call]);
 
-  return { key, sets: shownSets, aircraft, takes, speed, setSpeed, importTakes, imported, catalog, voices, models, picked, setVoices, setModels, setPicked, estimate, sample, render, progress: running, stopRun, asking, busy, error, saveKey, deleteKey, run, retake, cancel: stop };
+  return { key, sets: shownSets, aircraft, takes, speed, setSpeed, importTakes, imported, catalog, voices, models, picked, setVoices, setModels, setPicked, estimate, sample, render, progress: running, stopRun, refreshCatalog: loadCatalog, asking, busy, error, saveKey, deleteKey, run, retake, cancel: stop };
 }

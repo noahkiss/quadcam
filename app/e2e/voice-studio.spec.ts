@@ -311,6 +311,82 @@ test("a render the credits do not cover cannot start", async ({ app, page }) => 
   await expect(studio.getByRole("button", { name: "Render pack" })).toBeDisabled();
 });
 
+test("the voice table shows accent and language, and filters by them", async ({ app, page }) => {
+  const studio = await openStudio(app, page);
+  await saveKey(studio);
+  const voices = studio.getByRole("table", { name: "Voices" });
+  await expect(voices.getByRole("columnheader", { name: "Accent" })).toBeVisible();
+  await expect(voices.getByRole("columnheader", { name: "Language" })).toBeVisible();
+  await expect(voices.getByRole("row", { name: /^Brian/ })).toContainText("en, de");
+  const filters = studio.getByRole("search", { name: "Filter voices" });
+  await filters.getByLabel("Accent").selectOption("british");
+  await expect(voices.getByRole("checkbox")).toHaveCount(3);
+  await filters.getByLabel("Language").selectOption("de");
+  await expect(voices.getByRole("checkbox")).toHaveCount(0);
+  await expect(studio).toContainText("No voice matches the filter.");
+  await filters.getByLabel("Accent").selectOption("");
+  await expect(voices.getByRole("checkbox", { name: "Brian" })).toBeVisible();
+  await filters.getByLabel("Language").selectOption("");
+  await filters.getByLabel("Filter").fill("lil");
+  await expect(voices.getByRole("checkbox")).toHaveCount(1);
+  // A voice's preview plays from the cache, fetched by the core.
+  await voices.getByRole("button", { name: "Play a preview of Lily" }).click();
+  expect((await app.method("gear_voice_library_preview")).at(-1)).toEqual({ url: "https://example.invalid/previews/lily.mp3" });
+});
+
+test("Browse voices searches the Voice Library, and Add asks before it changes the account", async ({ app, page }) => {
+  const studio = await openStudio(app, page);
+  await saveKey(studio);
+  await studio.getByRole("button", { name: "Browse voices…" }).click();
+  const sheet = page.getByRole("dialog", { name: "Browse voices" });
+  const table = sheet.getByRole("table", { name: "Voice Library" });
+  // English by default, two a page in the mock.
+  expect((await app.method("gear_voice_library")).at(-1)).toMatchObject({ query: { language: "en" }, id: "" });
+  await expect(table.getByRole("row", { name: /^Ranger/ })).toContainText("british");
+  await expect(table.getByRole("row", { name: /^Ranger/ })).toContainText("2× credits");
+  await expect(table.getByRole("row", { name: /^Ranger/ })).toContainText("30 days' notice");
+  await expect(sheet.getByRole("status", { name: "Page" })).toHaveText("Page 1 · 4 voices");
+  await sheet.getByRole("button", { name: "Next" }).click();
+  await expect(table.getByRole("row", { name: /^Callum/ })).toContainText("In My Voices");
+  await sheet.getByRole("button", { name: "Previous" }).click();
+  await sheet.getByLabel("Accent").selectOption("irish");
+  expect((await app.method("gear_voice_library")).at(-1)).toMatchObject({ query: { accent: "irish", language: "en", page: 0 } });
+  await expect(table.getByRole("row")).toHaveCount(2);
+  await table.getByRole("button", { name: "Play a preview of Maeve" }).click();
+  expect((await app.method("gear_voice_library_preview")).at(-1)).toEqual({ url: "https://example.invalid/library/maeve.mp3" });
+  // Add asks first: nothing reaches the account until the go-ahead.
+  await table.getByRole("button", { name: "Add Maeve to My Voices" }).click();
+  await expect(sheet).toContainText("This adds Maeve to your ElevenLabs account and takes one of its voice slots.");
+  expect(await app.method("gear_voice_add")).toEqual([]);
+  await sheet.getByRole("button", { name: "Add to My Voices" }).click();
+  await expect(sheet.getByRole("status").filter({ hasText: "Added" })).toHaveText("Added Maeve to My Voices.");
+  expect((await app.method("gear_voice_add")).at(-1)).toMatchObject({ voice: "lib-maeve", confirm: true });
+  await expect(table.getByRole("row", { name: /^Maeve/ })).toContainText("In My Voices");
+  await sheet.getByRole("button", { name: "Done" }).click();
+  await expect(studio.getByRole("table", { name: "Voices" }).getByRole("checkbox", { name: "Maeve" })).toBeVisible();
+});
+
+test("Add by ID looks one voice up, and a full account says why the add failed", async ({ app, page }) => {
+  const studio = await openStudio(app, page);
+  await saveKey(studio);
+  await app.core(`c => { c.gear.voice.slots = 8; }`);
+  await studio.getByRole("button", { name: "Browse voices…" }).click();
+  const sheet = page.getByRole("dialog", { name: "Browse voices" });
+  await sheet.getByLabel("Voice ID").fill("lib-fjord");
+  await sheet.getByRole("button", { name: "Look up" }).click();
+  expect((await app.method("gear_voice_library")).at(-1)).toMatchObject({ id: "lib-fjord" });
+  const table = sheet.getByRole("table", { name: "Voice Library" });
+  await expect(table.getByRole("row")).toHaveCount(2);
+  await expect(table.getByRole("row", { name: /^Fjord/ })).toContainText("no (norwegian)");
+  await expect(sheet.getByRole("status", { name: "Page" })).toHaveCount(0);
+  await table.getByRole("button", { name: "Add Fjord to My Voices" }).click();
+  await sheet.getByRole("button", { name: "Add to My Voices" }).click();
+  await expect(sheet.getByRole("alert")).toContainText("no free voice slot");
+  await sheet.getByLabel("Voice ID").fill("nope");
+  await sheet.getByRole("button", { name: "Look up" }).click();
+  await expect(sheet).toContainText('Neither the account nor the Voice Library has a voice "nope".');
+});
+
 for (const scheme of axeSchemes) {
   test.describe(`${scheme} theme`, () => {
     test.use({ colorScheme: scheme });
@@ -328,6 +404,23 @@ for (const scheme of axeSchemes) {
       await studio.getByRole("button", { name: "Render and pay" }).click();
       await page.evaluate(() => window.__qc!.emit("voice-progress", { kind: "render", running: true, done: 3, total: 12, voice: "voice-callum", voice_name: "Callum", model: "eleven_v4", step: "Rendering", stopping: false }));
       await expect(studio.getByRole("status", { name: "Progress" })).toBeVisible();
+      const r = await new AxeBuilder({ page }).withTags(["wcag2a", "wcag2aa", "wcag21aa"]).analyze();
+      expect(r.violations.map((v) => `${v.id}: ${v.nodes.map((n) => n.target.join(" ") + " " + n.failureSummary).join(", ")}`)).toEqual([]);
+    });
+  });
+}
+
+for (const scheme of axeSchemes) {
+  test.describe(`${scheme} theme`, () => {
+    test.use({ colorScheme: scheme });
+    test("Browse voices passes axe", async ({ app, page }) => {
+      const studio = await openStudio(app, page);
+      await saveKey(studio);
+      await studio.getByRole("button", { name: "Browse voices…" }).click();
+      const sheet = page.getByRole("dialog", { name: "Browse voices" });
+      await expect(sheet.getByRole("table", { name: "Voice Library" }).getByRole("row", { name: /^Ranger/ })).toBeVisible();
+      await sheet.getByRole("button", { name: "Add Ranger to My Voices" }).click();
+      await expect(sheet.getByRole("button", { name: "Add to My Voices" })).toBeVisible();
       const r = await new AxeBuilder({ page }).withTags(["wcag2a", "wcag2aa", "wcag21aa"]).analyze();
       expect(r.violations.map((v) => `${v.id}: ${v.nodes.map((n) => n.target.join(" ") + " " + n.failureSummary).join(", ")}`)).toEqual([]);
     });

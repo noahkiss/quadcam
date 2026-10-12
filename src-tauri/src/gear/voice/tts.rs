@@ -74,7 +74,7 @@ pub struct ModelInfo {
 }
 
 /// A voice a provider offers.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Type)]
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize, Type)]
 pub struct VoiceInfo {
     pub id: String,
     pub name: String,
@@ -84,6 +84,118 @@ pub struct VoiceInfo {
     pub labels: String,
     #[serde(default)]
     pub preview_url: Option<String>,
+    /// The `accent` label, or the first verified language's accent; empty when neither says.
+    #[serde(default)]
+    pub accent: String,
+    /// The verified languages (`en`, `de`), else the `language` label.
+    #[serde(default)]
+    pub languages: Vec<String>,
+    #[serde(default)]
+    pub gender: String,
+    #[serde(default)]
+    pub age: String,
+    #[serde(default)]
+    pub use_case: String,
+    /// A Voice Library voice's credit multiplier (`sharing.rate`) when it is not 1: a
+    /// character in this voice bills that many times the model's credits.
+    #[serde(default)]
+    pub rate: Option<f64>,
+}
+
+/// A search of a provider's public voice library (ElevenLabs `GET /v1/shared-voices`).
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize, Type)]
+pub struct LibraryQuery {
+    /// Words in the name, description or labels.
+    #[serde(default)]
+    pub search: String,
+    #[serde(default)]
+    pub gender: String,
+    /// `young`, `middle_aged`, `old`.
+    #[serde(default)]
+    pub age: String,
+    #[serde(default)]
+    pub accent: String,
+    /// A language code such as `en`.
+    #[serde(default)]
+    pub language: String,
+    /// `narrative_story`, `conversational`, `characters_animation`, `social_media`,
+    /// `entertainment_tv`, `advertisement`, `informative_educational` and so on.
+    #[serde(default)]
+    pub use_case: String,
+    /// `professional`, `famous` or `high_quality`.
+    #[serde(default)]
+    pub category: String,
+    /// Words such as `calm`, `deep`, `confident`.
+    #[serde(default)]
+    pub descriptives: Vec<String>,
+    /// `created_date` (the default), `usage_character_count_1y`, `trending`,
+    /// `cloned_by_count`.
+    #[serde(default)]
+    pub sort: String,
+    /// The page, from 0.
+    #[serde(default)]
+    pub page: u32,
+    /// Voices a page, 1 to 100 (default 30).
+    #[serde(default)]
+    pub page_size: u32,
+}
+
+/// A voice in the provider's public library.
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize, Type)]
+pub struct LibraryVoice {
+    pub voice_id: String,
+    /// The owner's public id, which adding the voice needs.
+    pub public_owner_id: String,
+    pub name: String,
+    #[serde(default)]
+    pub gender: String,
+    #[serde(default)]
+    pub age: String,
+    #[serde(default)]
+    pub accent: String,
+    /// The library's language code (`en`).
+    #[serde(default)]
+    pub language: String,
+    /// Every language the voice is verified in, with its accent: `en (american)`.
+    #[serde(default)]
+    pub languages: Vec<String>,
+    #[serde(default)]
+    pub use_case: String,
+    #[serde(default)]
+    pub descriptive: String,
+    #[serde(default)]
+    pub category: String,
+    #[serde(default)]
+    pub description: String,
+    #[serde(default)]
+    pub preview_url: Option<String>,
+    /// The credit multiplier when it is not 1: a character bills that many times the model's
+    /// credits.
+    #[serde(default)]
+    pub rate: Option<f64>,
+    /// USD per 1,000 credits the owner asks, when not the default.
+    #[serde(default)]
+    pub fiat_rate: Option<f64>,
+    /// Days of notice the owner gives before the voice leaves the library.
+    #[serde(default)]
+    pub notice_days: Option<u32>,
+    /// Whether a free account may use it.
+    #[serde(default)]
+    pub free_users_allowed: bool,
+    /// The account has added it (it is among the account's voices).
+    #[serde(default)]
+    pub added: bool,
+}
+
+/// One page of the library.
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize, Type)]
+pub struct LibraryPage {
+    pub voices: Vec<LibraryVoice>,
+    pub page: u32,
+    pub has_more: bool,
+    /// Voices that match, when the provider says.
+    #[serde(default)]
+    pub total: u64,
 }
 
 /// What an account may still spend.
@@ -120,6 +232,19 @@ pub trait Tts: Send + Sync {
     }
     fn credits(&self) -> Result<Credits> {
         no_catalogue(self.id(), "credit balance")
+    }
+    /// A page of the public voice library. A free call.
+    fn library(&self, _q: &LibraryQuery) -> Result<LibraryPage> {
+        no_catalogue(self.id(), "voice library")
+    }
+    /// One voice by id: the account's own, or one in the public library.
+    fn library_voice(&self, _id: &str) -> Result<LibraryVoice> {
+        no_catalogue(self.id(), "voice library")
+    }
+    /// Adds a library voice to the account under `name`; returns its id there. Changes the
+    /// account (it takes a voice slot); costs no credits.
+    fn add_voice(&self, _owner: &str, _id: &str, _name: &str) -> Result<String> {
+        no_catalogue(self.id(), "voice library")
     }
 }
 

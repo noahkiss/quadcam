@@ -522,6 +522,10 @@ export type {
   ImportTakesParams,
   KeyParams,
   KeyStatus,
+  LibraryPage,
+  LibraryParams,
+  LibraryQuery,
+  LibraryVoice,
   ModelInfo,
   RenderPacksParams,
   RenderPacksReport,
@@ -533,6 +537,7 @@ export type {
   StudioEstimate,
   StudioView,
   TakeCount,
+  VoiceAddReport,
   VoiceInfo,
   VoiceProgress,
 } from "../bindings";

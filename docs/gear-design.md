@@ -398,6 +398,9 @@ in `specta_builder` (`lib.rs`).
 | `gear_voice_estimate` | `EstimateParams { sets, voice, model }` → `StudioEstimate` (lines, rendered, re-takes, to render, the estimate of the lines to render) | network (free calls) |
 | `gear_voice_sample` | `SampleParams { voices, models, sets, confirm }` → `SampleReport` | cache; network (paid) |
 | `gear_voice_render_packs` | `RenderPacksParams { voices, models, sets, dry_run, confirm, digest }` → `RenderPacksReport` (each pair's estimate, the total, one digest, the packs made, `stopped`, `error`) | cache; network (paid) |
+| `gear_voice_library` | `LibraryParams { query, id }` → `LibraryPage` (voices with labels, languages, rate, notice, `added`; `has_more`, `total`) | network (free calls) |
+| `gear_voice_add` | `VoiceAddParams { voice, owner, name, confirm }` → `VoiceAddReport` | network (changes the ElevenLabs account) |
+| `gear_voice_library_preview` | `LibraryPreviewParams { url }` → the cached file | cache; network |
 | `gear_voice_pack_install` | `PackInstallParams { pack }` → `VoicePack` | gear folder; network |
 | `gear_voice_choose` | `VoiceChooseParams { radio, pack, keep_overrides }` → `StagedChange` | gear folder |
 | `gear_splash` | `SplashParams { image, threshold, invert, board }` → `SplashPreview` | cache |

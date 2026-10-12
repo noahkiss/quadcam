@@ -4,7 +4,10 @@
 //! in argv, and no error or log line carries it.
 
 use super::rates;
-use super::tts::{curl_quote, Aligned, Alignment, Credits, ModelInfo, Tts, TtsRequest, VoiceInfo};
+use super::tts::{
+    curl_quote, Aligned, Alignment, Credits, LibraryPage, LibraryQuery, LibraryVoice, ModelInfo,
+    Tts, TtsRequest, VoiceInfo,
+};
 use super::wav::Pcm;
 use anyhow::{anyhow, bail, Context, Result};
 use base64::Engine;
@@ -178,6 +181,12 @@ impl Eleven {
             .or_else(|| d.as_str())
             .unwrap_or("")
             .replace(&self.key, "[key]");
+        if body.contains("voice_limit_reached")
+            || msg.contains("maximum amount of custom voices")
+            || msg.contains("voice limit")
+        {
+            return "The account has no free voice slot: remove a voice from My Voices in ElevenLabs, or move to a plan with more slots, then add it again".into();
+        }
         let what = match status {
             401 => "ElevenLabs does not accept this key (or the key lacks this permission)".into(),
             402 | 403 => "ElevenLabs refused the request".into(),
@@ -228,6 +237,144 @@ fn check_ident(what: &str, v: &str) -> Result<()> {
         bail!("{v:?} is not a {what} id");
     }
     Ok(())
+}
+
+/// A query value, percent-encoded for a URL.
+fn query_value(v: &str) -> String {
+    let mut out = String::new();
+    for b in v.bytes() {
+        if b.is_ascii_alphanumeric() || matches!(b, b'-' | b'_' | b'.' | b'~') {
+            out.push(b as char);
+        } else {
+            out.push_str(&format!("%{b:02X}"));
+        }
+    }
+    out
+}
+
+fn text_of(v: &Value, k: &str) -> String {
+    v.get(k)
+        .and_then(Value::as_str)
+        .unwrap_or("")
+        .trim()
+        .to_string()
+}
+
+/// A rate worth showing: set, above 0 and not 1.
+fn rate_of(v: Option<&Value>) -> Option<f64> {
+    v.and_then(Value::as_f64)
+        .filter(|r| *r > 0.0 && (r - 1.0).abs() > 1e-9)
+}
+
+/// `verified_languages` as `en (american)`, in the answer's order, each once.
+fn verified(v: &Value) -> Vec<String> {
+    let mut out: Vec<String> = Vec::new();
+    for l in v
+        .get("verified_languages")
+        .and_then(Value::as_array)
+        .into_iter()
+        .flatten()
+    {
+        let lang = text_of(l, "language");
+        if lang.is_empty() {
+            continue;
+        }
+        let accent = text_of(l, "accent");
+        let one = if accent.is_empty() {
+            lang
+        } else {
+            format!("{lang} ({accent})")
+        };
+        if !out.contains(&one) {
+            out.push(one);
+        }
+    }
+    out
+}
+
+/// A voice of the Voice Library answer (`GET /v1/shared-voices`).
+fn shared_voice(x: &Value) -> Option<LibraryVoice> {
+    Some(LibraryVoice {
+        voice_id: x.get("voice_id")?.as_str()?.to_string(),
+        public_owner_id: text_of(x, "public_owner_id"),
+        name: text_of(x, "name"),
+        gender: text_of(x, "gender"),
+        age: text_of(x, "age"),
+        accent: text_of(x, "accent"),
+        language: text_of(x, "language"),
+        languages: verified(x),
+        use_case: text_of(x, "use_case"),
+        descriptive: text_of(x, "descriptive"),
+        category: text_of(x, "category"),
+        description: text_of(x, "description"),
+        preview_url: x
+            .get("preview_url")
+            .and_then(Value::as_str)
+            .map(String::from),
+        rate: rate_of(x.get("rate")),
+        fiat_rate: x.get("fiat_rate").and_then(Value::as_f64),
+        notice_days: x
+            .get("notice_period")
+            .and_then(Value::as_u64)
+            .map(|d| d as u32),
+        free_users_allowed: x
+            .get("free_users_allowed")
+            .and_then(Value::as_bool)
+            .unwrap_or(false),
+        added: x
+            .get("is_added_by_user")
+            .and_then(Value::as_bool)
+            .unwrap_or(false),
+    })
+}
+
+/// A voice of the account's answer (`GET /v1/voices/{id}`) in the library's shape: labels
+/// and `sharing` stand in for the library's fields.
+fn account_voice(x: &Value) -> Option<LibraryVoice> {
+    let labels = x.get("labels").cloned().unwrap_or(Value::Null);
+    let sharing = x.get("sharing").cloned().unwrap_or(Value::Null);
+    let languages = verified(x);
+    let label = |k: &str| text_of(&labels, k);
+    Some(LibraryVoice {
+        voice_id: x.get("voice_id")?.as_str()?.to_string(),
+        public_owner_id: text_of(&sharing, "public_owner_id"),
+        name: text_of(x, "name"),
+        gender: label("gender"),
+        age: label("age"),
+        accent: label("accent"),
+        language: languages
+            .first()
+            .map(|l| l.split(' ').next().unwrap_or("").to_string())
+            .unwrap_or_else(|| label("language")),
+        languages,
+        use_case: if label("use_case").is_empty() {
+            label("use case")
+        } else {
+            label("use_case")
+        },
+        descriptive: if label("descriptive").is_empty() {
+            label("description")
+        } else {
+            label("descriptive")
+        },
+        category: text_of(x, "category"),
+        description: text_of(x, "description"),
+        preview_url: x
+            .get("preview_url")
+            .and_then(Value::as_str)
+            .map(String::from),
+        rate: rate_of(sharing.get("rate")),
+        fiat_rate: sharing.get("fiat_rate").and_then(Value::as_f64),
+        notice_days: sharing
+            .get("notice_period")
+            .and_then(Value::as_u64)
+            .map(|d| d as u32),
+        free_users_allowed: sharing
+            .get("free_users_allowed")
+            .and_then(Value::as_bool)
+            .unwrap_or(false),
+        added: false,
+    })
 }
 
 impl Tts for Eleven {
@@ -344,6 +491,30 @@ impl Tts for Eleven {
                             .join(", ")
                     })
                     .unwrap_or_default();
+                let l = x.get("labels").cloned().unwrap_or(Value::Null);
+                let ver = x
+                    .get("verified_languages")
+                    .and_then(Value::as_array)
+                    .cloned()
+                    .unwrap_or_default();
+                let mut languages: Vec<String> = Vec::new();
+                for v in &ver {
+                    let lang = text_of(v, "language");
+                    if !lang.is_empty() && !languages.contains(&lang) {
+                        languages.push(lang);
+                    }
+                }
+                if languages.is_empty() && !text_of(&l, "language").is_empty() {
+                    languages.push(text_of(&l, "language"));
+                }
+                let accent = Some(text_of(&l, "accent"))
+                    .filter(|a| !a.is_empty())
+                    .or_else(|| {
+                        ver.iter()
+                            .map(|v| text_of(v, "accent"))
+                            .find(|a| !a.is_empty())
+                    })
+                    .unwrap_or_default();
                 Some(VoiceInfo {
                     id: x.get("voice_id")?.as_str()?.to_string(),
                     name: x.get("name")?.as_str()?.to_string(),
@@ -357,6 +528,14 @@ impl Tts for Eleven {
                         .get("preview_url")
                         .and_then(Value::as_str)
                         .map(String::from),
+                    accent,
+                    languages,
+                    gender: text_of(&l, "gender"),
+                    age: text_of(&l, "age"),
+                    use_case: Some(text_of(&l, "use_case"))
+                        .filter(|u| !u.is_empty())
+                        .unwrap_or_else(|| text_of(&l, "use case")),
+                    rate: rate_of(x.pointer("/sharing/rate")),
                 })
             })
             .collect())
@@ -379,6 +558,90 @@ impl Tts for Eleven {
                 .to_string(),
             resets_at: n("next_character_count_reset_unix").unwrap_or(0),
         })
+    }
+
+    fn library(&self, q: &LibraryQuery) -> Result<LibraryPage> {
+        let size = if q.page_size == 0 {
+            30
+        } else {
+            q.page_size.clamp(1, 100)
+        };
+        let mut path = format!("/v1/shared-voices?page_size={size}&page={}", q.page);
+        for (k, v) in [
+            ("search", &q.search),
+            ("gender", &q.gender),
+            ("age", &q.age),
+            ("accent", &q.accent),
+            ("language", &q.language),
+            ("category", &q.category),
+            ("sort", &q.sort),
+            ("use_cases", &q.use_case),
+        ] {
+            let v = v.trim();
+            if !v.is_empty() {
+                path.push_str(&format!("&{k}={}", query_value(v)));
+            }
+        }
+        for d in q
+            .descriptives
+            .iter()
+            .map(|d| d.trim())
+            .filter(|d| !d.is_empty())
+        {
+            path.push_str(&format!("&descriptives={}", query_value(d)));
+        }
+        let v = self.call("GET", &path, None)?;
+        let list = v
+            .get("voices")
+            .and_then(Value::as_array)
+            .ok_or_else(|| anyhow!("ElevenLabs answered the voice library in an unknown shape"))?;
+        Ok(LibraryPage {
+            voices: list.iter().filter_map(shared_voice).collect(),
+            page: q.page,
+            has_more: v.get("has_more").and_then(Value::as_bool).unwrap_or(false),
+            total: v.get("total_count").and_then(Value::as_u64).unwrap_or(0),
+        })
+    }
+
+    fn library_voice(&self, id: &str) -> Result<LibraryVoice> {
+        let id = id.trim();
+        check_ident("voice", id)?;
+        // The account's own voices and many library voices answer by id; a library voice
+        // that does not is found by a library search for its id.
+        if let Ok(v) = self.call("GET", &format!("/v1/voices/{id}"), None) {
+            if let Some(found) = account_voice(&v) {
+                return Ok(found);
+            }
+        }
+        let page = self.library(&LibraryQuery {
+            search: id.into(),
+            page_size: 100,
+            ..Default::default()
+        })?;
+        page.voices
+            .into_iter()
+            .find(|v| v.voice_id == id)
+            .ok_or_else(|| anyhow!("Neither the account nor the Voice Library has a voice {id:?}."))
+    }
+
+    fn add_voice(&self, owner: &str, id: &str, name: &str) -> Result<String> {
+        check_ident("owner", owner)?;
+        check_ident("voice", id)?;
+        let name = name.trim();
+        if name.is_empty() || name.chars().count() > 100 {
+            bail!("Name the voice (1 to 100 characters).");
+        }
+        // Not retried on a 5xx: the voice may have been added.
+        let (v, _) = self.call_counted(
+            "POST",
+            &format!("/v1/voices/add/{owner}/{id}"),
+            Some(json!({"new_name": name})),
+            true,
+        )?;
+        v.get("voice_id")
+            .and_then(Value::as_str)
+            .map(String::from)
+            .ok_or_else(|| anyhow!("ElevenLabs added the voice but did not say its id"))
     }
 }
 
@@ -431,6 +694,14 @@ pub mod fake {
                 .lock()
                 .unwrap()
                 .push((path_part.into(), status, body.into()));
+        }
+        /// `on`, matched before every answer already given: a longer path under one that is
+        /// answered already (`/v1/voices/abc` under `/v1/voices`).
+        pub fn on_first(&self, path_part: &str, status: u16, body: impl Into<String>) {
+            self.answers
+                .lock()
+                .unwrap()
+                .insert(0, (path_part.into(), status, body.into()));
         }
         pub fn posts(&self) -> usize {
             self.seen
@@ -653,6 +924,167 @@ mod tests {
         assert_eq!(v[0].name, "Callum");
         assert_eq!(v[0].labels, "american, male");
         assert_eq!(v[1].category, "cloned");
+    }
+
+    const SHARED: &str = r#"{"voices":[
+        {"public_owner_id":"own1","voice_id":"lib1","name":"Ranger","accent":"british","gender":"male","age":"middle_aged",
+         "descriptive":"calm","use_case":"narrative_story","category":"professional","language":"en","locale":"en-GB",
+         "description":"A steady voice.","preview_url":"https://x/p.mp3","rate":2.0,"fiat_rate":0.12,"free_users_allowed":false,
+         "notice_period":30,"verified_languages":[{"language":"en","model_id":"eleven_v4","accent":"british"},{"language":"de","model_id":"eleven_v4"}],
+         "is_added_by_user":false},
+        {"public_owner_id":"own2","voice_id":"lib2","name":"Plain","rate":1.0}],
+        "has_more":true,"total_count":412,"last_sort_id":"x"}"#;
+
+    #[test]
+    fn the_library_answers_a_page_with_its_filters_in_the_query() {
+        let h = Arc::new(FakeHttp::default());
+        h.on("/v1/shared-voices", 200, SHARED);
+        let p = client(&h)
+            .library(&LibraryQuery {
+                search: "deep calm".into(),
+                language: "en".into(),
+                gender: "male".into(),
+                use_case: "narrative_story".into(),
+                descriptives: vec!["calm".into(), "deep".into()],
+                page: 2,
+                ..Default::default()
+            })
+            .unwrap();
+        assert!(p.has_more);
+        assert_eq!((p.total, p.page), (412, 2));
+        let r = &p.voices[0];
+        assert_eq!(
+            (r.voice_id.as_str(), r.public_owner_id.as_str()),
+            ("lib1", "own1")
+        );
+        assert_eq!(
+            (r.accent.as_str(), r.age.as_str()),
+            ("british", "middle_aged")
+        );
+        assert_eq!(r.languages, vec!["en (british)", "de"]);
+        assert_eq!(r.rate, Some(2.0));
+        assert_eq!(r.notice_days, Some(30));
+        // A rate of 1 is the usual price: nothing to show.
+        assert_eq!(p.voices[1].rate, None);
+        let url = h.seen.lock().unwrap()[0].url.clone();
+        assert!(
+            url.contains("/v1/shared-voices?page_size=30&page=2"),
+            "{url}"
+        );
+        for part in [
+            "search=deep%20calm",
+            "language=en",
+            "gender=male",
+            "use_cases=narrative_story",
+            "descriptives=calm",
+            "descriptives=deep",
+        ] {
+            assert!(url.contains(part), "{part} in {url}");
+        }
+        assert!(!url.contains("accent="), "{url}");
+    }
+
+    #[test]
+    fn a_voice_by_id_comes_from_the_account_else_from_a_library_search() {
+        let h = Arc::new(FakeHttp::default());
+        h.on(
+            "/v1/voices/acc1",
+            200,
+            r#"{"voice_id":"acc1","name":"Mine","category":"professional",
+                "labels":{"accent":"australian","gender":"female","age":"young","use_case":"conversational"},
+                "verified_languages":[{"language":"en","model_id":"m","accent":"australian"}],
+                "sharing":{"public_owner_id":"own9","rate":1.5}}"#,
+        );
+        h.on(
+            "/v1/voices/lib1",
+            404,
+            r#"{"detail":{"message":"not found"}}"#,
+        );
+        h.on("/v1/shared-voices", 200, SHARED);
+        let c = client(&h);
+        let a = c.library_voice("acc1").unwrap();
+        assert_eq!(
+            (a.name.as_str(), a.accent.as_str(), a.language.as_str()),
+            ("Mine", "australian", "en")
+        );
+        assert_eq!((a.public_owner_id.as_str(), a.rate), ("own9", Some(1.5)));
+        let b = c.library_voice("lib1").unwrap();
+        assert_eq!(b.name, "Ranger");
+        assert!(h
+            .seen
+            .lock()
+            .unwrap()
+            .last()
+            .unwrap()
+            .url
+            .contains("search=lib1"));
+        h.on("/v1/voices/none", 404, "{}");
+        let e = c.library_voice("none").unwrap_err().to_string();
+        assert!(e.contains("Voice Library has a voice"), "{e}");
+        assert!(c.library_voice("../x").is_err());
+    }
+
+    #[test]
+    fn adding_a_voice_names_it_and_a_full_account_says_so() {
+        let h = Arc::new(FakeHttp::default());
+        h.on("/v1/voices/add/own1/lib1", 200, r#"{"voice_id":"new1"}"#);
+        assert_eq!(
+            client(&h).add_voice("own1", "lib1", " Ranger ").unwrap(),
+            "new1"
+        );
+        let seen = h.seen.lock().unwrap().clone();
+        assert_eq!(seen[0].method, "POST");
+        let body: Value = serde_json::from_str(seen[0].body.as_deref().unwrap()).unwrap();
+        assert_eq!(body["new_name"], "Ranger");
+        let h = Arc::new(FakeHttp::default());
+        h.on(
+            "/v1/voices/add/",
+            400,
+            r#"{"detail":{"status":"voice_limit_reached","message":"You have reached your maximum amount of custom voices (30 / 30)."}}"#,
+        );
+        let e = client(&h)
+            .add_voice("own1", "lib1", "R")
+            .unwrap_err()
+            .to_string();
+        assert!(e.contains("no free voice slot"), "{e}");
+        // A 5xx is not retried: the voice may have been added.
+        let h = Arc::new(FakeHttp::default());
+        h.on("/v1/voices/add/", 502, "{}");
+        assert!(client(&h).add_voice("own1", "lib1", "R").is_err());
+        assert_eq!(h.posts(), 1);
+        assert!(client(&h).add_voice("own1", "lib1", "  ").is_err());
+    }
+
+    #[test]
+    fn voices_list_their_accent_languages_and_rate() {
+        let h = Arc::new(FakeHttp::default());
+        h.on(
+            "/v1/voices",
+            200,
+            r#"{"voices":[{"voice_id":"a","name":"A","category":"professional",
+                "labels":{"gender":"male","age":"old","use case":"news"},
+                "verified_languages":[{"language":"en","model_id":"m","accent":"irish"},{"language":"fr","model_id":"m"}],
+                "sharing":{"rate":3}},
+                {"voice_id":"b","name":"B","category":"premade","labels":{"accent":"american","language":"en"}}]}"#,
+        );
+        let v = client(&h).voices().unwrap();
+        assert_eq!(
+            (v[0].accent.as_str(), v[0].languages.clone()),
+            ("irish", vec!["en".to_string(), "fr".into()])
+        );
+        assert_eq!(
+            (
+                v[0].gender.as_str(),
+                v[0].age.as_str(),
+                v[0].use_case.as_str()
+            ),
+            ("male", "old", "news")
+        );
+        assert_eq!(v[0].rate, Some(3.0));
+        assert_eq!(
+            (v[1].accent.as_str(), v[1].languages.clone(), v[1].rate),
+            ("american", vec!["en".to_string()], None)
+        );
     }
 
     #[test]

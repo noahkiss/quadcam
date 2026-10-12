@@ -6,11 +6,13 @@ import { useState } from "react";
 import { Banner } from "../../../components/Banner";
 import { Button } from "../../../components/Button";
 import { SelectField, TextField } from "../../../components/Field";
+import { BrowseVoices } from "./BrowseVoices";
+import { playPreview } from "./play";
 import { Badge } from "../../../components/dash/Badge";
 import { DataTable, type Column } from "../../../components/dash/DataTable";
 import { SectionCard } from "../../../components/dash/SectionCard";
 import { Stat, StatRow } from "../../../components/dash/StatRow";
-import { fileSrc, pickFolder } from "../../../ipc/api";
+import { errText, fileSrc, pickFolder } from "../../../ipc/api";
 import type { ImportReport, ModelInfo, RenderPacksReport, Retake, SampleItem, SetInfo, StudioEstimate, VoiceEstimate, VoiceInfo, VoiceProgress } from "../../../ipc/types";
 import { takesOf, type UseStudio } from "./useStudio";
 import styles from "./Voice.module.css";
@@ -75,14 +77,58 @@ function KeyForm({ s, replacing, done }: { s: UseStudio; replacing: boolean; don
 
 const fmtDay = (d: string) => new Date(`${d}T12:00:00`).toLocaleDateString(undefined, { month: "short", day: "numeric" });
 
-function Pickers({ s }: { s: UseStudio }) {
+const word = (x?: string | null) => (x ? x.replace(/_/g, " ") : "");
+const cap = (x: string) => x.charAt(0).toUpperCase() + x.slice(1);
+const uniq = (xs: string[]) => [...new Set(xs.filter(Boolean))].sort();
+
+/** The voice table's filters: name or label text, accent, language. */
+interface VoiceFilter {
+  text: string;
+  accent: string;
+  language: string;
+}
+
+function matches(v: VoiceInfo, f: VoiceFilter) {
+  const text = f.text.trim().toLowerCase();
+  if (text && !`${v.name} ${v.labels} ${v.category}`.toLowerCase().includes(text)) return false;
+  if (f.accent && v.accent !== f.accent) return false;
+  if (f.language && !(v.languages ?? []).includes(f.language)) return false;
+  return true;
+}
+
+function Pickers({ s, onError }: { s: UseStudio; onError: (e: string) => void }) {
   const cat = s.catalog!;
   const v0 = s.voices[0];
   const m0 = s.models.length === 1 ? s.models[0] : undefined;
+  const [f, setF] = useState<VoiceFilter>({ text: "", accent: "", language: "" });
+  const [browsing, setBrowsing] = useState(false);
+  const accents = uniq(cat.voices.map((v) => v.accent ?? ""));
+  const langs = uniq(cat.voices.flatMap((v) => v.languages ?? []));
+  const shown = cat.voices.filter((v) => matches(v, f));
   const voiceCols: Column<VoiceInfo>[] = [
-    { key: "name", header: "Voice", rowHeader: true, cell: (v) => v.name },
-    { key: "tags", header: "Tags", optional: true, cell: (v) => <span className={styles.muted}>{[v.category, v.labels].filter(Boolean).join(", ")}</span> },
+    {
+      key: "name",
+      header: "Voice",
+      rowHeader: true,
+      cell: (v) => (
+        <span className={styles.cell}>
+          {v.name}
+          {v.rate != null && <Badge tone="warn">{v.rate}× credits</Badge>}
+        </span>
+      ),
+    },
+    { key: "accent", header: "Accent", cell: (v) => word(v.accent) },
+    { key: "language", header: "Language", cell: (v) => (v.languages ?? []).join(", ") },
+    { key: "tags", header: "Tags", optional: true, cell: (v) => <span className={styles.muted}>{[v.category, v.gender, word(v.age), word(v.use_case)].filter(Boolean).join(", ")}</span> },
     { key: "done", header: "Rendered", numeric: true, cell: (v) => n(takesOf(s.takes, v.id, m0)) },
+    {
+      key: "play",
+      header: "",
+      cell: (v) =>
+        v.preview_url ? (
+          <Button size="sm" variant="ghost" icon="play" aria-label={`Play a preview of ${v.name}`} onClick={() => void playPreview(v.preview_url!).catch((e) => onError(errText(e)))} />
+        ) : null,
+    },
   ];
   const modelCols: Column<ModelInfo>[] = [
     {
@@ -111,14 +157,41 @@ function Pickers({ s }: { s: UseStudio }) {
   ];
   return (
     <div className={styles.pickers}>
+      <div className={styles.voices}>
+        <div className={styles.bar} role="search" aria-label="Filter voices">
+          <TextField label="Filter" inline value={f.text} onChange={(e) => setF({ ...f, text: e.target.value })} />
+          <SelectField label="Accent" inline value={f.accent} onChange={(e) => setF({ ...f, accent: e.target.value })}>
+            <option value="">Any</option>
+            {accents.map((a) => (
+              <option key={a} value={a}>
+                {cap(a)}
+              </option>
+            ))}
+          </SelectField>
+          <SelectField label="Language" inline value={f.language} onChange={(e) => setF({ ...f, language: e.target.value })}>
+            <option value="">Any</option>
+            {langs.map((l) => (
+              <option key={l} value={l}>
+                {l}
+              </option>
+            ))}
+          </SelectField>
+          <span className={styles.grow} />
+          <Button size="sm" variant="secondary" onClick={() => setBrowsing(true)}>
+            Browse voices…
+          </Button>
+        </div>
       <DataTable
         label="Voices"
         compact
         columns={voiceCols}
-        rows={cat.voices}
+        rows={shown}
         rowKey={(v) => v.id}
         selection={{ selected: (v) => s.voices.includes(v.id), onChange: (v, on) => s.setVoices(toggle(s.voices, v.id, on)), label: (v) => v.name }}
+        empty="No voice matches the filter."
       />
+      </div>
+      {browsing && <BrowseVoices onClose={() => setBrowsing(false)} onAdded={s.refreshCatalog} />}
       <DataTable
         label="Models"
         compact
@@ -260,7 +333,17 @@ function EstimateStats({ e }: { e: RenderPacksReport }) {
 /** With several voices or models: what each pack costs. */
 function CostByPack({ e }: { e: RenderPacksReport }) {
   const cols: Column<StudioEstimate>[] = [
-    { key: "voice", header: "Voice", rowHeader: true, cell: (p) => p.voice_name },
+    {
+      key: "voice",
+      header: "Voice",
+      rowHeader: true,
+      cell: (p) => (
+        <span className={styles.cell}>
+          {p.voice_name}
+          {p.rate != null && <Badge tone="warn">{p.rate}× credits</Badge>}
+        </span>
+      ),
+    },
     { key: "model", header: "Model", cell: (p) => <span className={styles.muted}>{p.model}</span> },
     { key: "left", header: "To render", numeric: true, cell: (p) => n(p.to_render ?? p.estimate.lines) },
     { key: "chars", header: "Characters", numeric: true, cell: (p) => n(p.estimate.chars) },
@@ -349,6 +432,7 @@ function importText(r: ImportReport) {
 /** The Voice studio card. `s` comes from the page, which also shows its summary. */
 export function Studio({ s }: { s: UseStudio }) {
   const [replacing, setReplacing] = useState(false);
+  const [previewError, setPreviewError] = useState<string | null>(null);
   const keySet = s.key?.set ?? false;
   const e = s.estimate;
   const ready = s.voices.length > 0 && s.models.length > 0 && s.picked.length > 0;
@@ -363,14 +447,14 @@ export function Studio({ s }: { s: UseStudio }) {
       actions={replacing ? undefined : <KeyActions s={s} onReplace={() => setReplacing(true)} />}
     >
       {(!keySet || replacing) && <KeyForm s={s} replacing={replacing} done={() => setReplacing(false)} />}
-      {s.error && (
+      {(s.error || previewError) && (
         <Banner kind="error" icon="danger-triangle">
-          {s.error}
+          {s.error ?? previewError}
         </Banner>
       )}
       {keySet && s.catalog && (
         <>
-          <Pickers s={s} />
+          <Pickers s={s} onError={setPreviewError} />
           <LineSets s={s} />
           {e ? (
             <EstimateStats e={e} />

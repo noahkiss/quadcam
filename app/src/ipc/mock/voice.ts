@@ -2,7 +2,7 @@
 // lines, one pack in a made-up index, per-line overrides, a local render, Choose voice (one
 // `card_files` change, as the core stages it, on one radio or several) and pack delete.
 import type { PreviewLine, PreviewTake, PublishApproveReport, PublishReview, ReviewLine } from "../types";
-import type { Catalog, Edit, HeardLine, RenderPacksReport, ImportReport, KeyStatus, LineOverride, ModelInfo, PackDeleteReport, RenderReport, Retake, SampleItem, SampleReport, SetInfo, StagedChange, StudioEstimate, StudioView, VoiceChooseRadiosReport, VoiceEstimate, VoiceCheckReport, VoiceInfo, VoiceLine, VoicePack, VoiceView } from "../types";
+import type { Catalog, Edit, HeardLine, LibraryPage, LibraryQuery, LibraryVoice, RenderPacksReport, VoiceAddReport, ImportReport, KeyStatus, LineOverride, ModelInfo, PackDeleteReport, RenderReport, Retake, SampleItem, SampleReport, SetInfo, StagedChange, StudioEstimate, StudioView, VoiceChooseRadiosReport, VoiceEstimate, VoiceCheckReport, VoiceInfo, VoiceLine, VoicePack, VoiceView } from "../types";
 import type { MockGear } from "./gear";
 import { hint as secretHint } from "./secret";
 import * as changes from "./changes";
@@ -63,9 +63,13 @@ export interface MockVoice {
   misheard: string | null;
   /** A stop was asked for (`gear_stop` with `voice-studio`): the next paid run ends after its first pack. */
   stop: boolean;
+  /** Library voices added to the account. */
+  added: VoiceInfo[];
+  /** The account's voice slots: an add past them fails. */
+  slots: number;
 }
 
-export const freshVoice = (): MockVoice => ({ installed: [], index: false, overrides: {}, chosen: {}, custom: [], paid: false, keySet: "", spent: 0, retake: null, rendered: {}, imported: [], takesDeleted: [], retakes: {}, heard: {}, speech: true, misheard: null, stop: false });
+export const freshVoice = (): MockVoice => ({ installed: [], index: false, overrides: {}, chosen: {}, custom: [], paid: false, keySet: "", spent: 0, retake: null, rendered: {}, imported: [], takesDeleted: [], retakes: {}, heard: {}, speech: true, misheard: null, stop: false, added: [], slots: 30 });
 
 type Paid = { confirm?: boolean; digest?: string | null; settings?: { seed?: number | null } | null };
 
@@ -304,7 +308,50 @@ export function preview(g: MockGear, p: { line: string; pack?: string | null; ra
 
 // ----- the voice studio (`core/voice_studio.rs`) -----
 
-const VOICES: VoiceInfo[] = ["Callum", "Daniel", "Brian", "Adam", "Matilda", "Alice", "Sarah", "Lily"].map((name, i) => ({ id: `voice-${name.toLowerCase()}`, name, category: "premade", labels: i < 4 ? "male" : "female", preview_url: null }));
+const ACCENTS = ["american", "british", "american", "australian", "british", "british", "american", "irish"];
+const BASE_VOICES: VoiceInfo[] = ["Callum", "Daniel", "Brian", "Adam", "Matilda", "Alice", "Sarah", "Lily"].map((name, i) => ({
+  id: `voice-${name.toLowerCase()}`,
+  name,
+  category: "premade",
+  labels: [ACCENTS[i], i < 4 ? "male" : "female"].join(", "),
+  preview_url: `https://example.invalid/previews/${name.toLowerCase()}.mp3`,
+  accent: ACCENTS[i],
+  languages: i === 2 ? ["en", "de"] : ["en"],
+  gender: i < 4 ? "male" : "female",
+  age: "middle_aged",
+  use_case: "conversational",
+  rate: null,
+}));
+/** The account's voices: the premade ones and those added from the library. */
+const VOICES: VoiceInfo[] = BASE_VOICES;
+
+/** ElevenLabs' Voice Library, as far as the mock needs it. */
+const LIBRARY: LibraryVoice[] = [
+  ["Ranger", "male", "middle_aged", "british", "en", "narrative_story", "calm", 2, 30],
+  ["Juniper", "female", "young", "american", "en", "conversational", "upbeat", null, null],
+  ["Fjord", "male", "old", "norwegian", "no", "narrative_story", "deep", null, null],
+  ["Maeve", "female", "middle_aged", "irish", "en", "informative_educational", "clear", null, 90],
+  ["Callum", "male", "middle_aged", "american", "en", "characters_animation", "husky", null, null],
+].map(([name, gender, age, accent, language, use_case, descriptive, rate, notice]) => ({
+  voice_id: name === "Callum" ? "voice-callum" : `lib-${String(name).toLowerCase()}`,
+  public_owner_id: `owner-${String(name).toLowerCase()}`,
+  name: String(name),
+  gender: String(gender),
+  age: String(age),
+  accent: String(accent),
+  language: String(language),
+  languages: [`${language} (${accent})`],
+  use_case: String(use_case),
+  descriptive: String(descriptive),
+  category: "professional",
+  description: `${name} reads in a ${descriptive} ${accent} voice.`,
+  preview_url: `https://example.invalid/library/${String(name).toLowerCase()}.mp3`,
+  rate: rate as number | null,
+  fiat_rate: null,
+  notice_days: notice as number | null,
+  free_users_allowed: true,
+  added: false,
+}));
 const MODELS: ModelInfo[] = [
   { id: "eleven_v4", name: "Eleven v4", cost_per_char: 1, usd_per_1k: 0.08, promo_until: null, max_chars: 5000 },
   { id: "eleven_v4_turbo", name: "Eleven v4 Turbo", cost_per_char: 0.5, usd_per_1k: 0.04, promo_until: null, max_chars: 5000 },
@@ -396,7 +443,7 @@ export function catalog(g: MockGear, p: { voices?: boolean; models?: boolean; cr
   needKey(g);
   const all = !(p.voices || p.models || p.credits);
   return {
-    voices: all || p.voices ? VOICES : [],
+    voices: all || p.voices ? [...VOICES, ...g.voice.added] : [],
     models: all || p.models ? MODELS : [],
     credits: all || p.credits ? { used: 100_000 - CREDITS + g.voice.spent, limit: 100_000, remaining: CREDITS - g.voice.spent, tier: "creator", resets_at: 0 } : null,
   };
@@ -414,8 +461,8 @@ function price(g: MockGear, setIds: string[], model: string, voice = ""): VoiceE
   return { batches: Math.ceil(lines / 30) + 1, cached_batches: 0, lines, chars, cost_per_char: m.cost_per_char, credits_basis: "estimated", usd_per_1k: m.usd_per_1k ?? 0, promo_until: null, credits, usd, remaining, affordable: credits <= remaining };
 }
 
-function voiceOf(want: string): VoiceInfo {
-  const v = VOICES.find((x) => x.id === want || x.name.toLowerCase() === want.toLowerCase());
+function voiceOf(want: string, g?: MockGear): VoiceInfo {
+  const v = [...VOICES, ...(g?.voice.added ?? [])].find((x) => x.id === want || x.name.toLowerCase() === want.toLowerCase());
   if (!v) throw `The account has no voice "${want}".`;
   return v;
 }
@@ -423,7 +470,7 @@ function voiceOf(want: string): VoiceInfo {
 /** `gear_voice_estimate`. */
 export function estimate(g: MockGear, p: { sets: string[]; voice: string; model: string }): StudioEstimate {
   needKey(g);
-  const v = voiceOf(p.voice);
+  const v = voiceOf(p.voice, g);
   const e = price(g, p.sets, p.model, v.id);
   const lines = SETS.filter((s) => p.sets.includes(s.id)).reduce((n, s) => n + s.lines, 0);
   return { voice: v.id, voice_name: v.name, model: p.model, lines, rendered: lines - e.lines, retakes: 0, to_render: e.lines, estimate: e };
@@ -539,6 +586,41 @@ export function renderPacks(g: MockGear, p: { voices: string[]; models: string[]
     }
   }
   return out;
+}
+
+/** `gear_voice_library`: the library filtered as the core asks ElevenLabs to, two a page. */
+export function library(g: MockGear, p: { query?: Partial<LibraryQuery>; id?: string }): LibraryPage {
+  needKey(g);
+  const mine = new Set([...VOICES, ...g.voice.added].map((v) => v.id));
+  const mark = (v: LibraryVoice) => ({ ...v, added: mine.has(v.voice_id) });
+  if (p.id?.trim()) {
+    const v = LIBRARY.find((x) => x.voice_id === p.id!.trim());
+    if (!v) throw `Neither the account nor the Voice Library has a voice "${p.id}".`;
+    return { voices: [mark(v)], page: 0, has_more: false, total: 1 };
+  }
+  const q = p.query ?? {};
+  const has = (a: string | undefined, b?: string) => !b || (a ?? "").toLowerCase() === b.toLowerCase();
+  const hits = LIBRARY.filter((v) => has(v.gender, q.gender) && has(v.age, q.age) && has(v.accent, q.accent) && has(v.language, q.language) && has(v.use_case, q.use_case) && (!q.search || `${v.name} ${v.description} ${v.descriptive}`.toLowerCase().includes(q.search.toLowerCase())));
+  const size = 2;
+  const page = q.page ?? 0;
+  return { voices: hits.slice(page * size, page * size + size).map(mark), page, has_more: (page + 1) * size < hits.length, total: hits.length };
+}
+
+/** `gear_voice_add`: a library voice into My Voices, after confirm; past the slots it fails. */
+export function add(g: MockGear, p: { voice: string; name?: string; confirm?: boolean }): VoiceAddReport {
+  const v = library(g, { id: p.voice }).voices[0];
+  const name = p.name?.trim() || v.name;
+  if (v.added) return { voice: v, name, added_id: v.voice_id, needs_confirm: false, already: true };
+  if (!p.confirm) return { voice: v, name, added_id: null, needs_confirm: true, already: false };
+  if (VOICES.length + g.voice.added.length >= g.voice.slots) throw "The account has no free voice slot: remove a voice from My Voices in ElevenLabs, or move to a plan with more slots, then add it again";
+  g.voice.added.push({ id: v.voice_id, name, category: "professional", labels: [v.accent, v.gender].join(", "), preview_url: v.preview_url, accent: v.accent, languages: [v.language ?? ""], gender: v.gender, age: v.age, use_case: v.use_case, rate: v.rate });
+  return { voice: { ...v, added: true }, name, added_id: v.voice_id, needs_confirm: false, already: false };
+}
+
+/** `gear_voice_library_preview`: a made-up cache path the dev server serves as a broken URL. */
+export function libraryPreview(p: { url: string }): string {
+  if (!p.url.startsWith("https://")) throw "A preview is fetched only from an https:// address.";
+  return `/Users/pilot/Library/Caches/app.quadcam/voice/library-previews/${p.url.split("/").pop()}`;
 }
 
 /** `gear_voice_pack_preview`: the index pack's preview lines, "fetched" into the cache. */

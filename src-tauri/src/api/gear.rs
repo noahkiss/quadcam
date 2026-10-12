@@ -33,9 +33,10 @@ pub use crate::core::{
     VoiceLine, VoicePack, VoiceParams, VoicePreviewParams, VoiceRenderParams, VoiceView,
 };
 pub use crate::core::{
-    Catalog, CatalogParams, EstimateParams, ImportTakesParams, KeyParams, KeyStatus,
-    RenderPacksParams, RenderPacksReport, SampleParams, SampleReport, SetsParams, StudioEstimate,
-    StudioView, VoiceCheckParams, VoiceCheckReport,
+    Catalog, CatalogParams, EstimateParams, ImportTakesParams, KeyParams, KeyStatus, LibraryParams,
+    LibraryPreviewParams, RenderPacksParams, RenderPacksReport, SampleParams, SampleReport,
+    SetsParams, StudioEstimate, StudioView, VoiceAddParams, VoiceAddReport, VoiceCheckParams,
+    VoiceCheckReport,
 };
 pub use crate::core::{
     CrashSaveParams, FlightFilter, FlightFoldersParams, FlightReport, FlightSetParams, FlightsView,
@@ -228,6 +229,15 @@ macro_rules! with_gear_rows {
             /// and the total. A failure keeps the packs made before it; `gear_stop` with the handle
             /// `voice-studio` stops after the current batch.
             gear_voice_render_packs(params: RenderPacksParams) -> RenderPacksReport = |c| c.gear_voice_render_packs(&params);
+            /// A page of ElevenLabs' Voice Library (search and filters), or one voice by `id`;
+            /// each says whether the account has it. Free calls.
+            gear_voice_library(params: LibraryParams) -> crate::gear::voice::tts::LibraryPage = |c| c.gear_voice_library(&params);
+            /// Adds a Voice Library voice to the account's My Voices. It changes the account and
+            /// takes a voice slot, so it waits for `confirm`; no credits.
+            gear_voice_add(params: VoiceAddParams) -> VoiceAddReport = |c| c.gear_voice_add(&params);
+            /// Fetches a voice's preview sample (`preview_url`) into the cache once and answers
+            /// the file to play. No credits.
+            gear_voice_library_preview(params: LibraryPreviewParams) -> String = |c| c.gear_voice_library_preview(&params);
             /// Copies earlier ElevenLabs takes of single lines from a folder into the cache, so
             /// the studio counts them and never sends their lines again. Reads the folder only.
             gear_voice_import_takes(params: ImportTakesParams) -> ImportReport = |c| c.gear_voice_import_takes(&params);

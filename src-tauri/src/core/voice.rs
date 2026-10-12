@@ -656,7 +656,7 @@ impl Core {
         }
     }
 
-    fn voice_fetch(&self) -> crate::modules::fetch::Curl {
+    pub(super) fn voice_fetch(&self) -> crate::modules::fetch::Curl {
         crate::modules::fetch::Curl {
             loopback_only: std::env::var_os("CARGO_MANIFEST_DIR").is_some()
                 && std::env::var("QUADCAM_FETCH").as_deref() != Ok("real"),

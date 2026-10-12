@@ -41,6 +41,7 @@ mcp.action quadcam_gear.usb_timers
 mcp.action quadcam_gear.voice
 mcp.action quadcam_gear.voice_catalog
 mcp.action quadcam_gear.voice_estimate
+mcp.action quadcam_gear.voice_library
 mcp.action quadcam_gear.voice_preview
 mcp.action quadcam_gear.voice_sets
 mcp.action quadcam_gear_apply.apply
@@ -89,6 +90,7 @@ mcp.action quadcam_gear_edit.sim_calibration_save
 mcp.action quadcam_gear_edit.stage
 mcp.action quadcam_gear_edit.stop
 mcp.action quadcam_gear_edit.update
+mcp.action quadcam_gear_edit.voice_add
 mcp.action quadcam_gear_edit.voice_check
 mcp.action quadcam_gear_edit.voice_choose
 mcp.action quadcam_gear_edit.voice_delete
@@ -153,6 +155,7 @@ mcp.param quadcam_gear.clip string
 mcp.param quadcam_gear.day string
 mcp.param quadcam_gear.device string
 mcp.param quadcam_gear.edits array
+mcp.param quadcam_gear.filters any
 mcp.param quadcam_gear.from string
 mcp.param quadcam_gear.grid string
 mcp.param quadcam_gear.history boolean
@@ -172,6 +175,7 @@ mcp.param quadcam_gear.port string
 mcp.param quadcam_gear.radio string
 mcp.param quadcam_gear.rate_profile integer
 mcp.param quadcam_gear.refresh boolean
+mcp.param quadcam_gear.search string
 mcp.param quadcam_gear.sets array<string>
 mcp.param quadcam_gear.settings array<string>
 mcp.param quadcam_gear.sha256 string

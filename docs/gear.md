@@ -510,6 +510,26 @@ inside carrier sentences, and compares voices before it spends credits.
   a paid call, QuadCam records the character count ElevenLabs reports and uses that next time,
   when it is within 5% of the model's credits a character. It logs every count, kept or not,
   in `voice/charcost.log` in the cache.
+- **Voices table.** Each voice shows its accent and languages in columns of their own, with
+  its other labels (category, gender, age, use) under **Tags**. **Filter**, **Accent** and
+  **Language** above the table narrow it; a ticked voice stays ticked while the filter hides
+  it. The play button plays the voice's ElevenLabs preview. A voice that bills more than the
+  usual credits (a Voice Library voice with a rate of its own) shows the multiplier, such as
+  **2× credits**, and the estimate prices it at that rate.
+- **Browse voices…** opens ElevenLabs' Voice Library: **Search** words, and filter by
+  language (English at first), accent, gender, age, use, category and sort, a page at a time.
+  Each row shows the voice's gender, age, accent, languages, use and description, any rate of
+  its own and the days of notice its owner gives before it leaves the library, a **Preview**
+  button, and whether the account has it. **Add…** asks first, as it changes the account:
+  **Add to My Voices** adds the voice under its name and takes one of the account's voice
+  slots (no credits). When the account has no free slot, the sheet says so; remove a voice in
+  ElevenLabs or move to a larger plan. **Voice ID** and **Look up** find one voice by its id
+  and show it the same way. An added voice joins the studio's voice table. Previews are
+  fetched by QuadCam into `voice/library-previews/` in the cache, once each. CLI
+  `gear voice library` (`--search`, `--language`, `--accent`, `--gender`, `--age`,
+  `--use-case`, `--category`, `--descriptives`, `--sort`, `--page`, `--id`) and
+  `gear voice add VOICE_ID [--name N] [--yes]`; MCP `quadcam_gear` `voice_library` and
+  `quadcam_gear_edit` `voice_add` (`confirm`).
 - **Line sets.** A set is a list of lines to render. Sets combine, and a line in two sets is
   rendered once. Every line has a card path, its text, a tone and the sets that hold it.
   Four tones batch separately, so a calm word never picks up a warning's voice: `calm`,
@@ -623,6 +643,25 @@ inside carrier sentences, and compares voices before it spends credits.
   again from the cache, and the estimate shows 0 credits. A paid
   request is retried only after a 429 (busy), never after a server error, which may already be
   billed. `--carrier "I said {line}."` changes the carrier.
+- **The ElevenLabs calls QuadCam makes.** Every one carries the key in the `xi-api-key`
+  header. Free: `GET /v1/models` (`model_id`, `name`, `can_do_text_to_speech`,
+  `model_rates.character_cost_multiplier`, `maximum_text_length_per_request`),
+  `GET /v1/voices` (`voice_id`, `name`, `category`, `labels`, `preview_url`,
+  `verified_languages[].language` and `.accent`, `sharing.rate`), `GET /v1/voices/{voice_id}`
+  (the same, with `description` and `sharing.public_owner_id`), `GET /v1/user/subscription`
+  (`character_count`, `character_limit`, `tier`, `next_character_count_reset_unix`) and
+  `GET /v1/shared-voices` (query `page_size` up to 100, `page`, `search`, `gender`, `age`,
+  `accent`, `language`, `use_cases`, `descriptives`, `category`, `sort`; answer `voices[]`
+  with `public_owner_id`, `voice_id`, `name`, `gender`, `age`, `accent`, `language`,
+  `descriptive`, `use_case`, `category`, `description`, `preview_url`, `rate`, `fiat_rate`,
+  `notice_period`, `free_users_allowed`, `is_added_by_user`, `verified_languages[]`, and
+  `has_more`, `total_count`). Changes the account: `POST /v1/voices/add/{public_owner_id}/{voice_id}`
+  with `new_name`, answering `voice_id`. Paid: `POST /v1/text-to-speech/{voice_id}/with-timestamps?output_format=pcm_32000`
+  (`text`, `model_id`, `seed`, `voice_settings.speed`; answer `audio_base64` and
+  `alignment`, header `x-character-count`). A voice's `rate` is read as a credit multiplier:
+  the estimate multiplies the model's credits and USD by it. Add by ID asks
+  `GET /v1/voices/{voice_id}` first and, when the account does not answer for it, searches the
+  library for the id.
 
 ### Speech check
 

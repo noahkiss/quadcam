@@ -27,7 +27,7 @@ pub const NOTHING_FOUND: &str = "Nothing found. If macOS asked to allow an acces
 #[derive(Debug, Clone, Default, Deserialize, JsonSchema)]
 #[schemars(deny_unknown_fields)]
 pub struct GearArgs {
-    #[schemars(required, extend("enum" = ["status", "devices", "fc_identify", "board_notes", "usb_timers", "osd", "model", "voice", "voice_sets", "voice_catalog", "voice_estimate", "rates", "sims", "card", "card_preview", "storage", "backups", "backup_read", "backup_diff", "card_checks", "blackbox", "blackbox_summary", "flights", "packs", "session_report", "preflight", "crashes", "switch_map", "radio", "sim_calibration", "sim_defaults", "sim_validate", "changes", "apply_plan", "copy_plan", "sim_sync_plan", "sim_restore_plan", "firmware_check", "firmware_read", "splash", "flash_plan", "elrs", "elrs_flash_plan", "voice_preview"]))]
+    #[schemars(required, extend("enum" = ["status", "devices", "fc_identify", "board_notes", "usb_timers", "osd", "model", "voice", "voice_sets", "voice_catalog", "voice_estimate", "rates", "sims", "card", "card_preview", "storage", "backups", "backup_read", "backup_diff", "card_checks", "blackbox", "blackbox_summary", "flights", "packs", "session_report", "preflight", "crashes", "switch_map", "radio", "sim_calibration", "sim_defaults", "sim_validate", "changes", "apply_plan", "copy_plan", "sim_sync_plan", "sim_restore_plan", "firmware_check", "firmware_read", "splash", "flash_plan", "elrs", "elrs_flash_plan", "voice_preview", "voice_library"]))]
     pub action: Option<String>,
     /// For firmware_check: false reads the last saved answer without the network; default true (checks now). For flash_plan and splash see image.
     pub check: Option<bool>,
@@ -95,7 +95,7 @@ pub struct GearArgs {
     pub what: Option<String>,
     /// For voice_estimate: line set ids from voice_sets (they combine; a line in two sets counts once).
     pub sets: Option<Vec<String>>,
-    /// For voice_estimate: the ElevenLabs voice, by name or id (voice_catalog lists them). For voice_sets: a voice id, with `voice_model`, to count each set's lines that already have a take.
+    /// For voice_estimate: the ElevenLabs voice, by name or id (voice_catalog lists them). For voice_library: one voice by id (the account's own or a library voice) instead of a search. For voice_sets: a voice id, with `voice_model`, to count each set's lines that already have a take.
     #[schemars(length(max = 200))]
     pub voice: Option<String>,
     /// For voice_estimate and voice_sets: the ElevenLabs model id (voice_catalog lists them with what a character costs).
@@ -105,6 +105,11 @@ pub struct GearArgs {
     pub voices: Option<Vec<String>>,
     /// For voice_estimate with `voices`: the model ids to price each voice with.
     pub voice_models: Option<Vec<String>>,
+    /// For voice_library: words to search ElevenLabs' Voice Library for (name, description, labels).
+    #[schemars(length(max = 200))]
+    pub search: Option<String>,
+    /// For voice_library: filters, any of {"gender", "age" (young, middle_aged, old), "accent", "language" (a code such as en), "use_case", "category" (professional, famous, high_quality), "descriptives" (a list such as ["calm", "deep"]), "sort" (created_date, usage_character_count_1y, trending, cloned_by_count), "page" (from 0), "page_size" (1 to 100)}.
+    pub filters: Option<Value>,
     /// For osd with a device: show the layout after the device's staged OSD edits, with their check. For model: show the model after its staged edits (default true).
     pub staged: Option<bool>,
     /// For card and card_preview: the card's mount point. Default: the one EdgeTX card mounted. For switch_map: an EdgeTX card's mount or folder, or one model file.
@@ -157,7 +162,7 @@ pub struct GearArgs {
 #[derive(Debug, Clone, Default, Deserialize, JsonSchema)]
 #[schemars(deny_unknown_fields)]
 pub struct GearEditArgs {
-    #[schemars(required, extend("enum" = ["device_save", "device_forget", "fc_read", "backup", "backup_pin", "blackbox_export", "prune", "export", "import_backups", "card_check", "card_clean", "radio_cli", "dfu_link", "stop", "poll_pause", "flight_set", "flight_folders", "pack_save", "pack_delete", "pack_type_save", "pack_type_delete", "pack_notes", "crash_save", "crash_delete", "report_save", "sim_calibration_save", "stage", "osd_edit", "model_edit", "voice_edit", "voice_render", "voice_sample", "voice_check", "voice_import_takes", "voice_key_set", "voice_key_delete", "voice_install", "voice_choose", "voice_delete", "voice_publish", "update", "discard", "restore_stage", "copy_stage", "keep", "revert_stage", "card_mount", "card_unmount", "elrs_read"]))]
+    #[schemars(required, extend("enum" = ["device_save", "device_forget", "fc_read", "backup", "backup_pin", "blackbox_export", "prune", "export", "import_backups", "card_check", "card_clean", "radio_cli", "dfu_link", "stop", "poll_pause", "flight_set", "flight_folders", "pack_save", "pack_delete", "pack_type_save", "pack_type_delete", "pack_notes", "crash_save", "crash_delete", "report_save", "sim_calibration_save", "stage", "osd_edit", "model_edit", "voice_edit", "voice_render", "voice_sample", "voice_check", "voice_import_takes", "voice_key_set", "voice_key_delete", "voice_add", "voice_install", "voice_choose", "voice_delete", "voice_publish", "update", "discard", "restore_stage", "copy_stage", "keep", "revert_stage", "card_mount", "card_unmount", "elrs_read"]))]
     pub action: Option<String>,
     /// For copy_stage: the FC to copy from, a device id (its latest backup) or a backup id.
     #[schemars(length(max = 200))]
@@ -187,7 +192,7 @@ pub struct GearEditArgs {
     /// For voice_edit: the sound's card path, SOUNDS/en/armed.wav. A path QuadCam has no line for becomes the person's own line when `text` is given.
     #[schemars(length(max = 200))]
     pub line: Option<String>,
-    /// For voice_render: the provider's voice; omit for the tts_voice setting. With `sets`, an ElevenLabs voice by name or id.
+    /// For voice_render: the provider's voice; omit for the tts_voice setting. With `sets`, an ElevenLabs voice by name or id. For voice_add: the Voice Library voice's id (quadcam_gear voice_library).
     #[schemars(length(max = 200))]
     pub voice: Option<String>,
     /// For voice_render and voice_sample: line set ids from quadcam_gear voice_sets. voice_render with `sets` renders them as carrier-sentence batches with ElevenLabs into a local pack; voice_sample defaults to the `sample` set.
@@ -207,7 +212,7 @@ pub struct GearEditArgs {
     pub digest: Option<String>,
     /// For voice_sample and voice_render: the take's seed (default 0). A batched re-render with another seed redoes only the batches with a line that needs a re-take.
     pub seed: Option<u64>,
-    /// For voice_render and voice_edit: allow a render that sends text to a provider that may charge. Only after the person agreed to the characters and the provider. For voice_delete: must be true, after the person agreed. For card_clean: true deletes the `._` files it lists; omit to only list them. For radio_cli reboot: must be true.
+    /// For voice_render and voice_edit: allow a render that sends text to a provider that may charge. Only after the person agreed to the characters and the provider. For voice_delete: must be true, after the person agreed. For voice_add: adds the voice to the ElevenLabs account (it takes a voice slot); only after the person agreed. For card_clean: true deletes the `._` files it lists; omit to only list them. For radio_cli reboot: must be true.
     pub confirm: Option<bool>,
     /// For voice_choose: keep the lines the person overrode (default true).
     pub keep_overrides: Option<bool>,
@@ -267,7 +272,8 @@ pub struct GearEditArgs {
     pub id: Option<String>,
     /// For device_save: the person's name for the device; empty for none. For pack_save and
     /// pack_delete: the pack label. For pack_type_save and pack_type_delete: the type name.
-    /// For voice_publish: the voice's name in the index (default the pack's).
+    /// For voice_publish: the voice's name in the index (default the pack's). For voice_add:
+    /// the name the voice gets in the account (default the library's).
     #[schemars(length(max = 80))]
     pub name: Option<String>,
     /// For device_save: an aircraft profile name from quadcam_profiles; empty to unlink. A
@@ -797,6 +803,22 @@ fn gear<B: Backend>(backend: &mut B, a: &Value) -> Result<(Vec<Value>, Value)> {
             let c: crate::core::Catalog =
                 serde_json::from_value(v.clone()).context("bad voice answer")?;
             Ok((vec![text(crate::core::voice_catalog_text(&c))], v))
+        }
+        "voice_library" => {
+            let mut query = x.filters.clone().unwrap_or_else(|| json!({}));
+            if !query.is_object() {
+                anyhow::bail!("filters is an object, such as {{\"language\": \"en\", \"gender\": \"female\"}}");
+            }
+            if let Some(q) = &x.search {
+                query["search"] = json!(q);
+            }
+            let v = backend.call(
+                "gear_voice_library",
+                json!({"query": query, "id": x.voice.clone().unwrap_or_default()}),
+            )?;
+            let p: crate::gear::voice::tts::LibraryPage =
+                serde_json::from_value(v.clone()).context("bad voice answer")?;
+            Ok((vec![text(crate::core::voice_library_text(&p))], v))
         }
         "voice_estimate" if x.voices.is_some() || x.voice_models.is_some() => {
             let one = |o: &Option<String>| o.clone().into_iter().collect::<Vec<_>>();
@@ -2354,6 +2376,19 @@ fn gear_edit<B: Backend>(backend: &mut B, a: &Value) -> Result<(Vec<Value>, Valu
             let k: crate::core::KeyStatus =
                 serde_json::from_value(v.clone()).context("bad voice answer")?;
             Ok((vec![text(crate::core::voice_key_text(&k))], v))
+        }
+        "voice_add" => {
+            let voice = x
+                .voice
+                .clone()
+                .context("voice_add needs `voice`: a voice id from quadcam_gear voice_library")?;
+            let v = backend.call(
+                "gear_voice_add",
+                json!({"voice": voice, "name": x.name.clone().unwrap_or_default(), "confirm": x.confirm.unwrap_or(false)}),
+            )?;
+            let r: crate::core::VoiceAddReport =
+                serde_json::from_value(v.clone()).context("bad voice answer")?;
+            Ok((vec![text(crate::core::voice_add_text(&r))], v))
         }
         "voice_key_delete" => {
             let v = backend.call("gear_voice_key", json!({"action": "delete"}))?;

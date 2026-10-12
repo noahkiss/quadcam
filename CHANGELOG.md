@@ -7,6 +7,8 @@ User-facing changes in each release, newest first. Release notes on
 
 - **Price and render several voices at once.** The Voice studio's cost now covers every ticked voice with every ticked model, not only the first: the tiles show the total and **Cost by pack** lists each pair. **Render packs** makes one pack per voice and model in one confirmed run; a failure keeps the packs made before it. CLI `gear voice render-packs`; MCP `voice_estimate` and `voice_render` take `voices` and `voice_models`.
 - **Progress and Stop for paid runs.** **Sample and pay** and **Render and pay** show a progress bar (batches done of the total, and the voice and model) and a **Stop** that ends the run after the current batch. A batch already made is never billed again. MCP `stop` with the handle `voice-studio` stops a run in the app.
+- **Browse voices.** The Voice studio's **Browse voices…** searches ElevenLabs' Voice Library by words, language (English at first), accent, gender, age, use and category, a page at a time. Each voice shows its labels, languages, a preview, any rate of its own (the estimate prices it) and its notice period. **Add…** asks, then adds the voice to your account's My Voices; a full account says it has no free voice slot. **Voice ID** and **Look up** find one voice by id. CLI `gear voice library` and `gear voice add`; MCP `voice_library` and `voice_add`.
+- **Accent and language columns.** The studio's voice table shows each voice's accent and languages in columns of their own, filters by them and by name, and plays each voice's preview.
 
 ## 0.18.0 (2026-10-11)
 

@@ -44,6 +44,7 @@ cli.arg gear sims [TARGET]...
 cli.arg gear splash <IMAGE>
 cli.arg gear stop <HANDLE>
 cli.arg gear update <CHANGE>
+cli.arg gear voice add <VOICE>
 cli.arg gear voice check <PACK>
 cli.arg gear voice delete <PACK>
 cli.arg gear voice import-takes <FOLDER>
@@ -169,6 +170,7 @@ cli.command gear stop
 cli.command gear storage
 cli.command gear update
 cli.command gear voice
+cli.command gear voice add
 cli.command gear voice build-pack
 cli.command gear voice check
 cli.command gear voice choose
@@ -182,6 +184,7 @@ cli.command gear voice key
 cli.command gear voice key delete
 cli.command gear voice key set
 cli.command gear voice key status
+cli.command gear voice library
 cli.command gear voice models
 cli.command gear voice preview
 cli.command gear voice publish
@@ -456,6 +459,8 @@ cli.flag gear update --title VALUE
 cli.flag gear voice --radio VALUE
 cli.flag gear voice --refresh
 cli.flag gear voice --text
+cli.flag gear voice add --name VALUE
+cli.flag gear voice add --yes
 cli.flag gear voice build-pack --attribution VALUE
 cli.flag gear voice build-pack --confirm
 cli.flag gear voice build-pack --dry-run
@@ -502,6 +507,18 @@ cli.flag gear voice estimate --trim-db VALUE
 cli.flag gear voice estimate --voice VALUE
 cli.flag gear voice import-takes --dry-run
 cli.flag gear voice install --source VALUE
+cli.flag gear voice library --accent VALUE
+cli.flag gear voice library --age VALUE
+cli.flag gear voice library --category VALUE
+cli.flag gear voice library --descriptives VALUE
+cli.flag gear voice library --gender VALUE
+cli.flag gear voice library --id VALUE
+cli.flag gear voice library --language VALUE
+cli.flag gear voice library --page VALUE
+cli.flag gear voice library --page-size VALUE
+cli.flag gear voice library --search VALUE
+cli.flag gear voice library --sort VALUE
+cli.flag gear voice library --use-case VALUE
 cli.flag gear voice preview --source VALUE
 cli.flag gear voice publish --approve
 cli.flag gear voice publish --attribution VALUE

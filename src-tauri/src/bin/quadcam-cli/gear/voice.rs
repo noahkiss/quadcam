@@ -140,6 +140,56 @@ pub enum VoiceCmd {
     Models,
     /// The account's remaining ElevenLabs credits.
     Credits,
+    /// Search ElevenLabs' Voice Library (free calls): name, gender, age, accent, languages, use
+    /// case, any rate of its own, and whether the account has it. --id looks up one voice.
+    Library {
+        /// Words in the name, description or labels.
+        #[arg(long)]
+        search: Option<String>,
+        /// One voice by id: the account's own or a library voice.
+        #[arg(long)]
+        id: Option<String>,
+        #[arg(long)]
+        gender: Option<String>,
+        /// young, middle_aged or old.
+        #[arg(long)]
+        age: Option<String>,
+        #[arg(long)]
+        accent: Option<String>,
+        /// A language code such as en.
+        #[arg(long)]
+        language: Option<String>,
+        /// narrative_story, conversational, characters_animation, social_media and so on.
+        #[arg(long)]
+        use_case: Option<String>,
+        /// professional, famous or high_quality.
+        #[arg(long)]
+        category: Option<String>,
+        /// Words such as calm,deep, comma separated.
+        #[arg(long, value_delimiter = ',')]
+        descriptives: Vec<String>,
+        /// created_date, usage_character_count_1y, trending or cloned_by_count.
+        #[arg(long)]
+        sort: Option<String>,
+        /// The page, from 0.
+        #[arg(long, default_value_t = 0)]
+        page: u32,
+        /// Voices a page, 1 to 100.
+        #[arg(long, default_value_t = 30)]
+        page_size: u32,
+    },
+    /// Add a Voice Library voice to the account's My Voices. It changes the account and takes a
+    /// voice slot (no credits): without --yes it only shows what would be added.
+    Add {
+        /// The library voice's id (`gear voice library`).
+        voice: String,
+        /// The name in the account (default the library's).
+        #[arg(long)]
+        name: Option<String>,
+        /// Add it.
+        #[arg(long)]
+        yes: bool,
+    },
     /// What rendering line sets would cost, and whether the credits cover it. Makes no paid call.
     Estimate {
         /// Line set ids, comma separated.
@@ -488,6 +538,47 @@ pub fn run(core: &Core, a: VoiceArgs) -> Result<Value> {
         Some(VoiceCmd::Voices) => catalog(core, true, false, false)?,
         Some(VoiceCmd::Models) => catalog(core, false, true, false)?,
         Some(VoiceCmd::Credits) => catalog(core, false, false, true)?,
+        Some(VoiceCmd::Library {
+            search,
+            id,
+            gender,
+            age,
+            accent,
+            language,
+            use_case,
+            category,
+            descriptives,
+            sort,
+            page,
+            page_size,
+        }) => serde_json::to_value(call::gear_voice_library(
+            core,
+            api::LibraryParams {
+                query: quadcam_lib::gear::voice::tts::LibraryQuery {
+                    search: search.unwrap_or_default(),
+                    gender: gender.unwrap_or_default(),
+                    age: age.unwrap_or_default(),
+                    accent: accent.unwrap_or_default(),
+                    language: language.unwrap_or_default(),
+                    use_case: use_case.unwrap_or_default(),
+                    category: category.unwrap_or_default(),
+                    descriptives,
+                    sort: sort.unwrap_or_default(),
+                    page,
+                    page_size,
+                },
+                id: id.unwrap_or_default(),
+            },
+        )?)?,
+        Some(VoiceCmd::Add { voice, name, yes }) => serde_json::to_value(call::gear_voice_add(
+            core,
+            api::VoiceAddParams {
+                voice,
+                owner: String::new(),
+                name: name.unwrap_or_default(),
+                confirm: yes,
+            },
+        )?)?,
         Some(VoiceCmd::Estimate {
             sets,
             voice,

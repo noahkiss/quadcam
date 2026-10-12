@@ -16,8 +16,11 @@ use crate::gear::voice::rates;
 use crate::gear::voice::render::{self, Plan, RenderSettings};
 use crate::gear::voice::reuse::{self, ImportReport, LineIndex, Reuse, Scope, TakeCount};
 use crate::gear::voice::sets::{self, SetInfo, SetLine};
-use crate::gear::voice::tts::{Credits, ModelInfo, ProviderConfig, Tts, VoiceInfo};
-use anyhow::{anyhow, bail, Result};
+use crate::gear::voice::tts::{
+    Credits, LibraryPage, LibraryQuery, LibraryVoice, ModelInfo, ProviderConfig, Tts, VoiceInfo,
+};
+use crate::modules::fetch::Fetch;
+use anyhow::{anyhow, bail, Context, Result};
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
@@ -144,6 +147,9 @@ pub struct StudioEstimate {
     #[serde(default)]
     pub to_render: u32,
     pub estimate: Estimate,
+    /// The voice's own credit multiplier (a Voice Library voice), already in `estimate`.
+    #[serde(default)]
+    pub rate: Option<f64>,
 }
 
 /// `gear_voice_sample`: short A/B renders of a few lines in every voice and model.
@@ -267,6 +273,55 @@ pub struct RenderPacksReport {
     pub notes: Vec<String>,
 }
 
+/// `gear_voice_library`: a page of ElevenLabs' Voice Library, or one voice by id.
+#[derive(Debug, Clone, Default, Serialize, Deserialize, specta::Type)]
+pub struct LibraryParams {
+    #[serde(default)]
+    pub query: LibraryQuery,
+    /// One voice by id instead of a search: the account's own, or a library voice.
+    #[serde(default)]
+    pub id: String,
+}
+
+/// `gear_voice_library_preview`: a voice's preview sample, fetched into the cache to play.
+#[derive(Debug, Clone, Default, Serialize, Deserialize, specta::Type)]
+pub struct LibraryPreviewParams {
+    /// The voice's `preview_url` (HTTPS).
+    pub url: String,
+}
+
+/// `gear_voice_add`: a Voice Library voice into the account's My Voices.
+#[derive(Debug, Clone, Default, Serialize, Deserialize, specta::Type)]
+pub struct VoiceAddParams {
+    /// The library voice's id.
+    pub voice: String,
+    /// The owner's public id (`public_owner_id`); looked up by the voice id when empty.
+    #[serde(default)]
+    pub owner: String,
+    /// The name it gets in the account; the library's name when empty.
+    #[serde(default)]
+    pub name: String,
+    /// Adds it. Without it, the answer only says what would be added.
+    #[serde(default)]
+    pub confirm: bool,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, specta::Type)]
+pub struct VoiceAddReport {
+    /// The voice as the library shows it.
+    pub voice: LibraryVoice,
+    /// The name in the account.
+    pub name: String,
+    /// The voice's id in the account, once added.
+    #[serde(default)]
+    pub added_id: Option<String>,
+    /// Nothing was added: run again with `confirm`.
+    pub needs_confirm: bool,
+    /// The account had the voice already; nothing was sent.
+    #[serde(default)]
+    pub already: bool,
+}
+
 /// The gear job a paid studio run registers: `gear_stop` with this handle stops it after the
 /// current batch.
 pub const STUDIO_JOB: &str = "voice-studio";
@@ -290,6 +345,8 @@ impl Account {
 
 /// One voice and model of a render, priced and not yet paid for.
 struct Prepared {
+    /// The voice's own credit multiplier, when it has one.
+    rate: Option<f64>,
     voice: String,
     voice_name: String,
     model: String,
@@ -314,6 +371,7 @@ impl Prepared {
             retakes: self.counts.1,
             to_render: self.counts.2,
             estimate: self.est.clone(),
+            rate: self.rate,
         }
     }
 }
@@ -747,6 +805,100 @@ impl Core {
         Ok(c)
     }
 
+    /// A page of ElevenLabs' Voice Library (`query`), or one voice (`id`): free calls. Each
+    /// voice says whether the account has it already.
+    pub fn gear_voice_library(&self, p: &LibraryParams) -> Result<LibraryPage> {
+        let tts = self.studio_tts()?;
+        let mut page = if p.id.trim().is_empty() {
+            tts.library(&p.query)?
+        } else {
+            LibraryPage {
+                voices: vec![tts.library_voice(p.id.trim())?],
+                page: 0,
+                has_more: false,
+                total: 1,
+            }
+        };
+        let mine: HashSet<String> = tts.voices()?.into_iter().map(|v| v.id).collect();
+        for v in &mut page.voices {
+            v.added |= mine.contains(&v.voice_id);
+        }
+        Ok(page)
+    }
+
+    /// Fetches a voice's preview sample (its `preview_url`) into the cache once, and answers
+    /// the file to play. No credits.
+    pub fn gear_voice_library_preview(&self, p: &LibraryPreviewParams) -> Result<String> {
+        let url = p.url.trim();
+        if !url.starts_with("https://") || url.chars().any(|c| c.is_whitespace() || c.is_control())
+        {
+            bail!("A preview is fetched only from an https:// address.");
+        }
+        let path = url.split(['?', '#']).next().unwrap_or(url);
+        let ext = path
+            .rsplit_once('.')
+            .map(|(_, e)| e.to_ascii_lowercase())
+            .filter(|e| matches!(e.as_str(), "mp3" | "wav" | "m4a" | "ogg"))
+            .unwrap_or_else(|| "mp3".into());
+        let dir = self.cache.join("voice").join("library-previews");
+        std::fs::create_dir_all(&dir)?;
+        let file = dir.join(format!(
+            "{}.{ext}",
+            &crate::gear::voice::sha256_hex(url.as_bytes())[..16]
+        ));
+        if !file.is_file() {
+            let part = file.with_extension(format!("{ext}.part"));
+            self.voice_fetch()
+                .download(url, &part)
+                .context("fetching the preview")?;
+            std::fs::rename(&part, &file)?;
+        }
+        Ok(file.display().to_string())
+    }
+
+    /// Adds a Voice Library voice to the account's My Voices. It changes the account and takes
+    /// a voice slot, so it waits for `confirm`; it costs no credits.
+    pub fn gear_voice_add(&self, p: &VoiceAddParams) -> Result<VoiceAddReport> {
+        let tts = self.studio_tts()?;
+        let id = p.voice.trim();
+        if id.is_empty() {
+            bail!("Name the voice id to add.");
+        }
+        let mut voice = tts.library_voice(id)?;
+        if !p.owner.trim().is_empty() {
+            voice.public_owner_id = p.owner.trim().to_string();
+        }
+        let name = if p.name.trim().is_empty() {
+            voice.name.clone()
+        } else {
+            p.name.trim().to_string()
+        };
+        let mine = tts.voices()?;
+        let already = mine.iter().any(|v| v.id == voice.voice_id);
+        voice.added |= already;
+        let mut r = VoiceAddReport {
+            voice,
+            name,
+            added_id: None,
+            needs_confirm: false,
+            already,
+        };
+        if already {
+            r.added_id = Some(r.voice.voice_id.clone());
+            return Ok(r);
+        }
+        if r.voice.public_owner_id.is_empty() {
+            bail!("ElevenLabs does not say who shares this voice, so it cannot be added: add it on elevenlabs.io instead.");
+        }
+        if !p.confirm {
+            r.needs_confirm = true;
+            return Ok(r);
+        }
+        r.added_id = Some(tts.add_voice(&r.voice.public_owner_id, &r.voice.voice_id, &r.name)?);
+        r.voice.added = true;
+        Ok(r)
+    }
+
     /// A voice by id or by name (any case), as `(id, name)`.
     fn resolve_voice(voices: &[VoiceInfo], want: &str) -> Result<(String, String)> {
         let want = want.trim();
@@ -775,7 +927,15 @@ impl Core {
         }
     }
 
-    fn pricing(&self, models: &[ModelInfo], model: &str, credits: &Credits) -> Result<Pricing> {
+    /// What a character costs on `model` in a voice billed at `rate` times the usual credits
+    /// (a Voice Library voice with a rate of its own).
+    fn pricing(
+        &self,
+        models: &[ModelInfo],
+        model: &str,
+        credits: &Credits,
+        rate: Option<f64>,
+    ) -> Result<Pricing> {
         let m = models.iter().find(|m| m.id == model).ok_or_else(|| {
             anyhow!(
                 "The account lists no model {model:?}. It lists: {}.",
@@ -794,10 +954,11 @@ impl Core {
         } else {
             "account"
         };
+        let x = rate.unwrap_or(1.0);
         Ok(Pricing {
-            cost_per_char: recorded.unwrap_or(m.cost_per_char),
+            cost_per_char: recorded.unwrap_or(m.cost_per_char) * x,
             basis,
-            usd_per_1k: m.usd_per_1k,
+            usd_per_1k: m.usd_per_1k * x,
             promo_until: m.promo_until.clone(),
             batch_limit: rates::batch_limit(model, m.max_chars),
             remaining: Some(credits.remaining),
@@ -855,9 +1016,11 @@ impl Core {
         settings.check()?;
         let bs = p.batch.clone().unwrap_or_default();
         bs.check()?;
-        let (voice, voice_name) = Self::resolve_voice(&tts.voices()?, &p.voice)?;
+        let voices = tts.voices()?;
+        let (voice, voice_name) = Self::resolve_voice(&voices, &p.voice)?;
+        let rate = voice_rate(&voices, &voice);
         let model = self.studio_model(&p.model)?;
-        let price = self.pricing(&tts.models()?, &model, &tts.credits()?)?;
+        let price = self.pricing(&tts.models()?, &model, &tts.credits()?, rate)?;
         let lines = self.studio_lines(&p.sets, &p.lines)?;
         let (_, old) = self.studio_pack(&voice, &voice_name, &model);
         let old = old.map(|(_, m)| m);
@@ -889,6 +1052,7 @@ impl Core {
             retakes,
             to_render,
             estimate,
+            rate,
         })
     }
 
@@ -936,8 +1100,9 @@ impl Core {
         };
         for v in &p.voices {
             let (vid, vname) = Self::resolve_voice(&voices, v)?;
+            let rate = voice_rate(&voices, &vid);
             for m in &p.models {
-                let price = self.pricing(&models, m, &credits)?;
+                let price = self.pricing(&models, m, &credits, rate)?;
                 let ctx = batch::Ctx {
                     tts: tts.as_ref(),
                     cache: &cache,
@@ -1222,7 +1387,8 @@ impl Core {
         bs: &BatchSettings,
     ) -> Result<Prepared> {
         let (voice, voice_name) = Self::resolve_voice(&account.voices, want)?;
-        let price = self.pricing(&account.models, model, &account.credits)?;
+        let rate = voice_rate(&account.voices, &voice);
+        let price = self.pricing(&account.models, model, &account.credits, rate)?;
         let (id, found) = self.studio_pack(&voice, &voice_name, model);
         let (old_id, old) = match found {
             Some((k, m)) => (Some(k), Some(m)),
@@ -1291,6 +1457,7 @@ impl Core {
             ));
         }
         Ok(Prepared {
+            rate,
             voice,
             voice_name,
             model: model.to_string(),
@@ -1511,6 +1678,11 @@ impl Core {
     pub fn voice_samples_dir(&self) -> PathBuf {
         self.cache.join("voice").join("samples")
     }
+}
+
+/// A voice's own credit multiplier, from the account's voice list.
+fn voice_rate(voices: &[VoiceInfo], id: &str) -> Option<f64> {
+    voices.iter().find(|v| v.id == id).and_then(|v| v.rate)
 }
 
 /// The local pack of a voice and model. A short hash of the voice id names it, so two voices
@@ -1783,6 +1955,84 @@ pub fn render_packs_text(r: &RenderPacksReport) -> String {
         let _ = writeln!(s, "{n}");
     }
     s
+}
+
+/// A library voice as one line: name, labels, languages, rate, and whether the account has it.
+fn library_line(v: &LibraryVoice) -> String {
+    let labels: Vec<&str> = [
+        v.gender.as_str(),
+        v.age.as_str(),
+        v.accent.as_str(),
+        v.use_case.as_str(),
+        v.descriptive.as_str(),
+    ]
+    .into_iter()
+    .filter(|x| !x.is_empty())
+    .collect();
+    let mut s = format!("{}  {} ({})", v.voice_id, v.name, labels.join(", "));
+    if !v.languages.is_empty() {
+        s.push_str(&format!("; languages {}", v.languages.join(", ")));
+    } else if !v.language.is_empty() {
+        s.push_str(&format!("; language {}", v.language));
+    }
+    if let Some(r) = v.rate {
+        s.push_str(&format!("; bills {r}x credits"));
+    }
+    if let Some(d) = v.notice_days {
+        s.push_str(&format!("; {d} days' notice before it leaves"));
+    }
+    if v.added {
+        s.push_str("; in My Voices");
+    }
+    if !v.description.is_empty() {
+        s.push_str(&format!(". {}", v.description));
+    }
+    s
+}
+
+/// A page of the Voice Library as text.
+pub fn library_text(p: &LibraryPage) -> String {
+    use std::fmt::Write;
+    let mut s = format!(
+        "{} voices on page {}{}{}.",
+        p.voices.len(),
+        p.page,
+        if p.total > 0 {
+            format!(" of {} matching", p.total)
+        } else {
+            String::new()
+        },
+        if p.has_more {
+            "; more pages follow"
+        } else {
+            ""
+        }
+    );
+    for v in &p.voices {
+        let _ = write!(s, "\n  {}", library_line(v));
+    }
+    s
+}
+
+/// An add as text.
+pub fn voice_add_text(r: &VoiceAddReport) -> String {
+    if r.already {
+        format!("The account has {} already.", r.voice.name)
+    } else if r.needs_confirm {
+        format!(
+            "Not added: this adds {} to the ElevenLabs account as {:?} and takes a voice slot. Ask the person, then run again with confirm.\n  {}",
+            r.voice.name,
+            r.name,
+            library_line(&r.voice)
+        )
+    } else {
+        format!(
+            "Added {} to My Voices as {:?} (id {}).",
+            r.voice.name,
+            r.name,
+            r.added_id.as_deref().unwrap_or("")
+        )
+    }
 }
 
 /// An import of takes as text.
