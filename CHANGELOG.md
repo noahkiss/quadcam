@@ -8,6 +8,7 @@ User-facing changes in each release, newest first. Release notes on
 - **Samples play again.** Sample lines, **Play all** and the packs on this Mac play their sound again; in 0.20.0 and 0.20.1 they played nothing. A line that cannot play now says so in a message, once per **Play all**, instead of being skipped in silence.
 - **Voice lists scroll in their own box.** The Voice studio's voice list and the **Browse voices…** results now scroll inside a box of their own, under a header that stays. The cost, the Samples and the packs stay close.
 - **The studio remembers its line sets.** The first time, the Voice studio ticks every line set. After that it keeps the sets you ticked, in the gear folder, and ticks them again next time. **QuadCam default** is ticked each time the studio opens: QuadCam's own cues need it. Without it, a note by **Render pack** says that these cues use the Mac voice.
+- **Every setting in a settings read.** `quadcam-cli settings` (in `named`) and the MCP `quadcam_settings` read now show every setting with its value in effect, including the Map page, the Sim and flash previews, Gear, voice and ExpressLRS settings. A write of one of them shows it in the answer too.
 
 ## 0.20.1 (2026-10-12)
 

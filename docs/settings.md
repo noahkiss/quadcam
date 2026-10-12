@@ -90,6 +90,7 @@ The app, the command-line tool and the MCP server all read and write this file.
 - Every writer changes only the settings it was asked to change. It keeps the rest, including keys that a newer or older QuadCam wrote.
 - A change from the command line or an agent shows in the running app at once. The app never writes an older copy over it.
 - The Settings window saves only the keys that you changed while it was open.
+- A read from the command line (`quadcam-cli settings`) or an agent (`quadcam_settings` `read`) shows every setting with its value in effect, Gear's, the voice and ExpressLRS settings and the previews included. Each setting that has a command-line name can also be written there.
 - Settings from QuadCam 0.3.0 carry over as they are.
 - The bottom of the section list shows the QuadCam version and the build (the commit it was built from). **About QuadCam** shows them too.
 

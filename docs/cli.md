@@ -124,7 +124,7 @@ quadcam-cli profiles save Whoop --aircraft "65 mm whoop" --camera-make "Fat Shar
 quadcam-cli profiles save Whoop --author "Your Name"    # changes only that field
 quadcam-cli profiles default Whoop
 quadcam-cli profiles delete Whoop
-quadcam-cli settings                              # the file, its values, the effective settings
+quadcam-cli settings                              # the file, its values, every setting in effect (`named`)
 quadcam-cli settings set layout=day place_folders=true photos_album=Drone
 quadcam-cli settings set output_dir=null          # back to the default
 op read "op://<vault>/<item>/<field>" | quadcam-cli settings set-secret google_places_key   # a secret from stdin
@@ -156,7 +156,7 @@ See [Modules and notices](modules.md) for what a module install checks.
 
 A value is JSON or plain text.
 
-`google_places_key`, `tts_key` and `elrs_binding_phrase` are secrets. `settings set-secret KEY` reads one from one line of stdin (hidden at a terminal), so it never sits in argv or shell history. `settings set` still sets one, and prints a note on stderr that other processes can read a command's arguments. `settings show` keeps `"(set)"` in `values` and puts each secret's hint in `secrets` (`hint`, `prefix`, `suffix`, `length`; see [Secrets](settings.md#secrets)).
+`google_places_key`, `tts_key` and `elrs_binding_phrase` are secrets. `settings set-secret KEY` reads one from one line of stdin (hidden at a terminal), so it never sits in argv or shell history. `settings set` still sets one, and prints a note on stderr that other processes can read a command's arguments. `settings show` lists every setting by its command-line name with its value in effect in `named` (secrets aside). It keeps `"(set)"` in `values` and puts each secret's hint in `secrets` (`hint`, `prefix`, `suffix`, `length`; see [Secrets](settings.md#secrets)).
 
 ## Gear
 

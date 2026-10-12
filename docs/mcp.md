@@ -66,7 +66,7 @@ The server has 19 tools.
 |---|---|
 | `quadcam_places` | Lists, searches (address or place name), saves and deletes saved places. `here` reads this Mac's location from Location Services, `reverse` names `lat`/`lon` with Apple's geocoder; neither saves |
 | `quadcam_profiles` | Lists, saves and deletes aircraft profiles. Sets the default |
-| `quadcam_settings` | Reads and writes the app's settings. The secrets `google_places_key`, `tts_key` and `elrs_binding_phrase` are write-only: `read` shows each as its hint (`secrets`), never the value. A value written here sits in the agent's transcript; `quadcam-cli settings set-secret` from stdin keeps it out ([Secrets](settings.md#secrets)). Lists, installs and removes [modules](modules.md): `module_install` needs `confirm=true`, after the agent showed you the module's license |
+| `quadcam_settings` | Reads and writes the app's settings. `read`, and the answer to `write`, show every setting with its value in effect, Gear's, the voice and ExpressLRS settings and the previews included, grouped in the text. The secrets `google_places_key`, `tts_key` and `elrs_binding_phrase` are write-only: `read` shows each as its hint (`secrets`), never the value. A value written here sits in the agent's transcript; `quadcam-cli settings set-secret` from stdin keeps it out ([Secrets](settings.md#secrets)). Lists, installs and removes [modules](modules.md): `module_install` needs `confirm=true`, after the agent showed you the module's license |
 
 ### Gear
 
