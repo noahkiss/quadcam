@@ -8,7 +8,7 @@ Open Settings with the gear icon or Command-comma. **Done** saves every change a
 |---|---|
 | **Library** | The library folder (default `~/Movies/quadcam`, made on the first import), the layout, the date in file names, place folders, keep originals, and **Rebuild from files**. See [The library](library.md). |
 | **Aircraft** | The aircraft profiles and the default profile. See [Metadata](metadata.md#places-and-profiles). |
-| **Places** | The saved places and the place search provider. See [Metadata](metadata.md#place-search-providers). |
+| **Places** | The saved places, the place search provider, and **Show the Map page**. See [Metadata](metadata.md#place-search-providers) and [The map](library.md#the-map). |
 | **Import** | The format (MP4 or MOV), the MP4 encoder, the default short name, the time in file names, **Delete clips after import**, **Join split recordings**, **On-device suggestions**, and the tolerances for log matching, the DJI clip clock skew included. |
 | **Photos** | The album. An empty album means the library only. See [Photos](photos.md). |
 | **Gear** | The previews (**Show the Sim page**, **Betaflight flashing (preview)**, **Show the ELRS tools**), **Back up on connect**, how many backups to keep, the USB power warning, the blackbox options (**Erase blackbox after download**, **Read through USB disk mode first (not proven)**), the **Steps on connect** table per device kind, and the cues: which play, as speech, sound or notification, mute, the voice and quiet hours. See [Gear](gear.md). |
@@ -62,6 +62,10 @@ On by default. On macOS 27 or later, QuadCam runs video analysis on each clip in
 ### Look up weather
 
 Off by default. On, QuadCam gets the wind and temperature at each library clip's place and hour from [Open-Meteo](https://open-meteo.com) (free, no account), in the background, and saves them in the clip file. A clip needs a place and a time of day. Each clip is looked up once; a new place, date or time looks it up again. Off, QuadCam sends no weather request at all, from the app, the command line or an agent. See [Sun and weather](library.md#sun-and-weather). In the settings file, on the command line and in MCP it is `weather`.
+
+### Show the Map page
+
+Off by default. On, the sidebar shows **Map** under Library: your places and clips on an Apple map. See [The map](library.md#the-map). The map comes from Apple Maps on your Mac and needs no account. In the settings file it is `mapView`; on the command line and in MCP it is `map_view`.
 
 ### On-device suggestions
 

@@ -184,6 +184,16 @@ The window looks like an AppKit sidebar window on macOS 26 and later, and keeps 
 
 Keep a new frame region inside the grid areas in `App.module.css`, and give it its own background, or it shows the glass.
 
+### The native map
+
+The Map page (`views/Map/`) shows an Apple MapKit `MKMapView`, not MapKit JS (which needs a token). `src-tauri/src/mapview.rs` hosts it:
+
+- **Place.** The map is a subview of the web view's parent, above the web view (the glass sits below it). The page keeps a placeholder (`MapHost`, `[data-map-host]`) and sends its rectangle with `map_frame` (CSS pixels and the page width, which gives the zoom); `null` hides the map. Between two reports the autoresizing mask keeps the map's margins, so a window resize stays aligned.
+- **When it reports.** Every animation frame while the page shows, and on every DOM change (a `MutationObserver`), only when the rectangle changes. Leaving the page sends `null`.
+- **Covered means hidden.** A native view draws above the whole page, so the map hides while a dialog, a menu, a listbox, a tooltip or a toast overlaps it, or while another element is on top at its centre or corners (`covered`). Keep the page's own controls outside the map's rectangle.
+- **Pins.** `map_pins` sends the pins (`lib/map.ts` `mapData`: one per place with its clip count, one per saved place without clips, one per clip with a location and no place), the look and whether to zoom to them. A click on a pin comes back as the `map-pick` event with the pin's id (`place:<name>` or `clip:<id>`); MapKit's own clusters zoom in.
+- **Test it.** The mock core records `map_frame` and `map_pins` (`core.mapFrame`, `core.map`) and `core.mapPick(id)` plays a click; the placeholder shows in the browser (`e2e/map.spec.ts`). The real map needs the built app. With `QUADCAM_NO_FOCUS=1` the window sits behind others, so WebKit and MapKit stop drawing: a `screencapture` can show stale content. A debug build logs `map: loaded` and `map: rendered` to stderr. Run it outside a sandboxed shell: MapKit reaches its tiles through a system service.
+
 ### CI
 
 `.github/workflows/ci.yml` runs on every push to a branch or a `v*` tag, and on pull requests from forks:
