@@ -6,6 +6,8 @@ User-facing changes in each release, newest first. Release notes on
 ## Unreleased
 
 - **The DJI air unit unmounts like a card.** An O4 air unit (or goggles in storage mode) over USB now follows the same mount, work, unmount cycle as every card: QuadCam unmounts it when an import or job ends and says "safe to unplug", it stays on USB, and the next job or **Mount** (10 minutes) mounts it again. **Safe to remove** unmounts it instead of ejecting it. QuadCam still never formats a DJI device over USB.
+- **Status bar.** The bar at the bottom of the window now shows each kind's name next to its state, gives an ExpressLRS device its own item, and VoiceOver announces each change of state (safe to unplug, still inserted, needs attention, removed).
+- **Cues in the radio's voice.** Settings > Gear > **Voice** > **Voice pack** now works: "Done, safe to unplug.", "Still inserted.", "A step failed." and "Unplug the quad now." play from a voice pack, the radio's (the pack chosen for the radio plugged in last) or one you pick. A cue the pack has no line for speaks with the macOS voice. The four lines join the QuadCam default line set, so packs rendered from now on hold them; older packs show as needing a new render. The setting `gear_cues` takes `voice_pack`.
 
 ## 0.20.2 (2026-10-12)
 

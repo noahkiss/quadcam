@@ -10,6 +10,14 @@ First time on real hardware? Follow the ordered checklist in [Device trials](tri
 **Gear** is a section of the sidebar, under the library groups. Its triangle opens and closes
 it.
 
+**The status bar** along the bottom of the window has one item per kind of device plugged in:
+Radio, Quad, DJI (a goggles card or an air unit), DVR card and ExpressLRS. Each shows its icon,
+its name and its state: **Working** (a job runs), **Safe to unplug** (unmounted or released),
+**Still inserted** (unmounted, still in after its reminder time; **Dismiss** stops the
+reminder) or **Needs attention** (a failed step, or a device to save). A click opens the
+device, or Connected when several of that kind are in. VoiceOver reads each change of state.
+With nothing plugged in the bar stays and says "No gear connected".
+
 - **Connected** shows what is plugged in now: tiles for how many are plugged in, need
   attention, are working and have changes staged, then a card per device with its state and
   its next step (**Save…**, **Review…**, **Import…**). Each device also has its own row under it.
@@ -743,7 +751,7 @@ list of lines, the sound a radio plays and the text a voice reads, and puts a vo
 them on the card.
 
 - **Lines.** Each line has a card path, its text and a group (callouts, numbers, system,
-  units, extras). A few words read badly, so QuadCam spells them out before a voice speaks them:
+  units, extras, and cues: the lines QuadCam plays on the Mac, see [Cues](#cues)). A few words read badly, so QuadCam spells them out before a voice speaks them:
   `GPS` is spoken `G.P.S.`, `TX` `T.X.`, `dBm` `D.B.M.`. The table shows the spoken text
   beside the text. Your own lines live on your Mac, never in a pack.
 - **Choose voice.** Pick a pack from the library and **Choose voice** stages one change that
@@ -789,8 +797,18 @@ The `gear_cues` setting holds:
 - `reminder_grace_s` (60), `still_inserted_every_s` (300), `reminder_max` (3).
 - `quiet_hours` (`{"start": "22:00", "end": "07:00"}`): no speech or sound in these hours.
   Notifications follow macOS Focus.
-- `voice`: a `say` voice. `voice_source`: `macos` (default) or `voice_pack`. Voice packs
-  cannot play cues yet, so `voice_pack` also speaks with macOS.
+- `voice`: a `say` voice. `voice_source`: `macos` (default) or `voice_pack`.
+- `voice_pack`: with `voice_source` `voice_pack`, the installed pack that speaks cues. Left
+  out, cues use the pack chosen for the radio you plugged in last, so they sound like the
+  radio.
+
+**Cues in the radio's voice.** In Settings > Gear, set **Voice** to **Voice pack**. **Voice
+pack** is **The radio's voice** (the pack chosen for the radio seen last) or one installed
+pack. A pack holds four cue lines: "Done, safe to unplug.", "Still inserted.", "A step
+failed." and "Unplug the quad now." They are in the QuadCam default line set, so a pack
+rendered from it has them; a pack made before 1.0 does not, and shows as needing a new render.
+A clip does not say the device's name; the notification does. A cue the pack has no line for
+speaks with the macOS voice. Mute, the toggles and quiet hours apply as before.
 
 Inside the app bundle, a notification comes from QuadCam through macOS notifications; the
 first one asks you to allow them. Outside a bundle (`cargo tauri dev`, a CLI built on its own)

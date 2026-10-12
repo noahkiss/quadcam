@@ -17,13 +17,13 @@ export const KIND_LABEL: Record<DeviceKind, string> = {
 };
 
 /** The status bar's groups: one icon each. */
-export type KindGroup = "radio" | "quad" | "dji" | "dvr";
+export type KindGroup = "radio" | "quad" | "dji" | "dvr" | "elrs";
 
 export const GROUP_OF: Record<DeviceKind, KindGroup> = {
   radio: "radio",
-  elrs_tx: "radio",
+  elrs_tx: "elrs",
   fc: "quad",
-  elrs_rx: "quad",
+  elrs_rx: "elrs",
   goggles: "dji",
   dvr_card: "dvr",
 };
@@ -33,6 +33,7 @@ export const GROUPS: { id: KindGroup; label: string; icon: IconName }[] = [
   { id: "quad", label: "Quad", icon: "quad" },
   { id: "dji", label: "DJI", icon: "goggles" },
   { id: "dvr", label: "DVR card", icon: "sd-card" },
+  { id: "elrs", label: "ExpressLRS", icon: "signal" },
 ];
 
 export const KIND_ICON: Record<DeviceKind, IconName> = {

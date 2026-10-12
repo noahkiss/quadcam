@@ -67,6 +67,9 @@ test("an unmounted card is safe to unplug, then still inserted with a reminder t
     c.plug([c.gearSeed.dvrConnected(), c.gearSeed.gogglesConnected()], [c.gearSeed.radioConnected()]);
   }`);
   await expect(bar(page).getByRole("button", { name: "Radio: Still inserted" })).toBeVisible();
+  // The change is announced politely; the item shows its name and state.
+  await expect(bar(page).getByRole("status")).toHaveText("Radio: Still inserted");
+  await expect(bar(page).getByRole("button", { name: "Radio: Still inserted" })).toHaveText("RadioStill inserted");
   await bar(page).getByRole("button", { name: "Dismiss the reminder for Field radio" }).click();
   expect(await app.method("gear_dismiss_reminder")).toEqual([{ handle: "disk4" }]);
   await expect(bar(page).getByRole("button", { name: "Radio: Safe to unplug" })).toBeVisible();
@@ -75,6 +78,24 @@ test("an unmounted card is safe to unplug, then still inserted with a reminder t
   // Pulled: it leaves the bar.
   await app.core(`c => c.plug([c.gearSeed.dvrConnected(), c.gearSeed.gogglesConnected()], [])`);
   await expect(bar(page).getByRole("button", { name: /^Radio/ })).toBeHidden();
+  await expect(bar(page).getByRole("status")).toHaveText("Radio: Removed");
+});
+
+test("an ExpressLRS device has its own item, and the DJI air unit shows its state", async ({ page, app }) => {
+  await app.open("gear");
+  await expect(bar(page).getByRole("button", { name: "DJI: Working" })).toBeVisible();
+  await app.core(`c => {
+    const elrs = { id: null, kind: "elrs_tx", link: { kind: "serial", port: "/dev/cu.usbserial-0001", vid: 0x10c4, pid: 0xea60, product: null }, identity: {} };
+    c.gear.working = [];
+    c.plug([c.gearSeed.radioConnected(), elrs], [c.gearSeed.gogglesConnected()]);
+  }`);
+  // The air unit was unmounted after its job and is still on USB: safe to unplug.
+  await expect(bar(page).getByRole("button", { name: "DJI: Safe to unplug" })).toBeVisible();
+  const elrs = bar(page).getByRole("button", { name: "ExpressLRS: Needs attention" });
+  await expect(elrs).toBeVisible();
+  await expect(bar(page).getByRole("status")).toContainText("DJI: Safe to unplug");
+  await elrs.click();
+  await expect(page.getByRole("region", { name: "ELRS TX" })).toBeVisible();
 });
 
 test("a device plugged in shows in the sidebar; Forget removes a saved one", async ({ page, app }) => {
@@ -130,6 +151,25 @@ test("Settings > Gear saves the changed Gear keys with Done and shows the versio
   await dlg.getByRole("navigation", { name: "Settings sections" }).getByRole("button", { name: "Gear" }).click();
   await expect(dlg.getByLabel("Back up on connect")).not.toBeChecked();
   await expect(dlg.getByLabel("Mute all cues")).toBeChecked();
+});
+
+test("Settings > Gear plays cues from a voice pack: the radio's or one picked", async ({ page, app }) => {
+  await app.open();
+  await app.core(`c => { c.gear.voice.installed.push("local-say-samantha"); }`);
+  await page.getByRole("button", { name: "Settings" }).click();
+  const dlg = dialog(page, "Settings");
+  await dlg.getByRole("navigation", { name: "Settings sections" }).getByRole("button", { name: "Gear" }).click();
+  await expect(dlg.getByLabel("macOS voice")).toBeVisible();
+  await dlg.getByLabel("Voice", { exact: true }).selectOption("voice_pack");
+  const pick = dlg.getByLabel("Voice pack");
+  await expect(pick).toHaveValue("");
+  await expect(pick.getByRole("option", { name: "The radio's voice" })).toHaveCount(1);
+  await pick.selectOption("local-say-samantha");
+  await expect(dlg.getByText("A cue the pack has no line for speaks with the macOS voice.")).toBeVisible();
+  await dlg.getByRole("button", { name: "Done" }).click();
+  await expect(dlg).toBeHidden();
+  const w = (await app.method("settings_set")).map((p) => (p as { values: Record<string, unknown> }).values).at(-1)!;
+  expect(w.gearCues).toMatchObject({ voice_source: "voice_pack", voice_pack: "local-say-samantha" });
 });
 
 test("an FC's background reads can be paused and resumed from its page", async ({ page, app }) => {

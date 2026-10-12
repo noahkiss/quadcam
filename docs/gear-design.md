@@ -73,8 +73,13 @@ Gear
 The Settings window gets a **Modules** section (7.10).
 
 A status bar along the bottom of the main window shows one item per kind of device plugged in
-(radio, quad, DJI, DVR card) with its state: working, safe to unplug, still inserted (with
-**Dismiss** for the reminder), needs attention. A click opens the device page. The Settings
+(radio, quad, DJI, DVR card, ExpressLRS) with its icon, name and state: working, safe to unplug,
+still inserted (with **Dismiss** for the reminder), needs attention (a failed step from
+`GearStatus.failures`, a failed card check, or a device not saved). A click opens the device
+page. Each item is a button whose label names the kind and state; a polite live region
+announces each change (`announce` in `Shell/StatusBar.tsx`), never the state at launch. With
+nothing plugged in the bar stays, with "No gear connected", so the window keeps its height.
+It reads the event bus through the store (`gear_status`, the unmounted list); no new events. The Settings
 section list shows the version and the build (commit).
 
 - **Aircraft** in the Library groups filters clips, as today. **Aircraft** under Gear opens
@@ -1821,8 +1826,21 @@ the time: every job mounts, works and releases, and a quad is released after eve
    (`{start, end}`, `HH:MM`, may cross midnight) silences speech and sound. Notifications
    follow macOS Focus on their own: macOS holds them back. An app cannot read the Focus
    state without Full Disk Access, so speech and sound use quiet hours instead.
+6. **Voice pack cues** (decided 2026-10-12). With `voice_source` `voice_pack`, speech plays
+   the cue's clip from an installed voice pack (`CueService::fire_with`, `Core::cue_fire`).
+   Each cue has one fixed line (`Cue::pack_line`): `qcdone` "Done, safe to unplug.",
+   `qcstill` "Still inserted.", `qcfail` "A step failed.", `qcunplug` "Unplug the quad now.",
+   group `cues` in `resources/voice/lines.csv`, so the `quadcam` set renders them with the
+   radio's lines. A clip cannot say a device's own name; the notification still names it.
+   The pack (`Core::cue_pack`): the one `voice_pack` names, else the pack chosen for the saved
+   radio seen last, so a cue sounds like the radio in use. A picked pack that is gone speaks
+   with macOS, never another pack. `cues::pack_clip` takes a line only when the manifest
+   lists it and the file is on disk; any other cue speaks with macOS, line by line. Mute,
+   the toggles, the channels and quiet hours decide first. `voice_source` stays `macos` by
+   default.
 
-Channels: speech (`/usr/bin/say`, an optional voice), a system sound (`/usr/bin/afplay`), a
+Channels: speech (`/usr/bin/say`, an optional voice, or a pack's clip through
+`/usr/bin/afplay`), a system sound (`/usr/bin/afplay`), a
 notification (`UNUserNotificationCenter` when the process runs from an app bundle, else
 `/usr/bin/osascript` with the text passed as arguments, never in the script). Speech and sound
 are child processes with an argv list. A process started by cargo gets the silent

@@ -27,6 +27,12 @@
 .item:hover {
   background: var(--selected);
 }
+.name {
+  color: var(--fg);
+}
+.word {
+  color: var(--muted);
+}
 .item[data-state="attention"] .word,
 .item[data-state="inserted"] .word {
   color: var(--warning-text);
@@ -39,4 +45,12 @@
 }
 .dismiss {
   margin-left: auto;
+}
+.live {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
 }
