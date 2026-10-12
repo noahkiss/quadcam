@@ -23,9 +23,10 @@ describe("moments", () => {
 
   it("draws the strip as a gradient with one stop per bin", () => {
     expect(heatGradient([])).toBeUndefined();
-    const g = heatGradient([0, 1])!;
-    expect(g).toContain("var(--accent) 0%, transparent) 0.00% 50.00%");
-    expect(g).toContain("var(--accent) 100%, transparent) 50.00% 100.00%");
+    const g = heatGradient([0, 1, 0.5])!;
+    expect(g).toContain("var(--accent) 0%, transparent) 0.00% 33.33%");
+    expect(g).toContain("var(--accent) 65%, transparent) 66.67% 100.00%");
+    expect(g).toContain("var(--accent) 100%, transparent) 33.33% 66.67%");
   });
 
   it("lists the best moments across clips, best first", () => {

@@ -26,11 +26,12 @@ export function heat(moments: Moment[], duration: number, bins: number): number[
   return max > 0 ? out.map((v) => v / max) : [];
 }
 
-/** The strip as a CSS gradient: the accent colour, stronger where the moments are. */
+/** The strip as a CSS gradient: the accent colour, stronger where the moments are. A bin
+ *  with any moment shows at 30 % or more, so a single weak moment still reads. */
 export function heatGradient(values: number[], color = "var(--accent)"): string | undefined {
   if (!values.length) return undefined;
   const n = values.length;
-  const stops = values.map((v, i) => `color-mix(in srgb, ${color} ${Math.round(v * 100)}%, transparent) ${((i / n) * 100).toFixed(2)}% ${(((i + 1) / n) * 100).toFixed(2)}%`);
+  const stops = values.map((v, i) => `color-mix(in srgb, ${color} ${v > 0 ? Math.round(30 + v * 70) : 0}%, transparent) ${((i / n) * 100).toFixed(2)}% ${(((i + 1) / n) * 100).toFixed(2)}%`);
   return `linear-gradient(to right, ${stops.join(", ")})`;
 }
 

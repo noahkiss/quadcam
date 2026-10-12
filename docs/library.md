@@ -126,7 +126,9 @@ If the library folder already holds videos that are not in the index, the librar
 - **Search** matches the name, note, place, aircraft, keywords and file name.
 - **Thumbnails** show the clip as you move the pointer across them.
 - **Rejected** in the sidebar shows a **Move to Trash** button for every rejected clip.
-- The day summary shows the clips, armed time, radio-log flights, lowest battery voltage and the best moments of the day.
+- The day summary shows the clips, armed time, radio-log flights, lowest battery voltage and the best moments of the day. **Best moments** in the sidebar lists them for the whole library (see [Moments](moments-and-cuts.md#moments)).
+- A thin strip at the bottom of a card's thumbnail is stronger where the clip's moments are.
+- **Shift time…** in the bar for two or more selected clips fixes a wrong camera clock. See [Shift the time of many clips](#shift-the-time-of-many-clips).
 
 Right-click a clip for these commands:
 
@@ -153,6 +155,27 @@ Open a clip, then use the **Details** tab. It changes the name, date, time of da
 - A new date moves the clip, its cuts and its kept original to that day's folder. If the file name starts with the date, QuadCam renames them too.
 - A new time of day rewrites the QuickTime creation date and the file times of the clip, its cuts and its original.
 - A new aircraft rewrites the camera make and model, the aircraft, the video system and the profile's keywords in the file and its cuts.
+
+## Shift the time of many clips
+
+A DVR or goggles clock that was wrong puts every clip of a day at the wrong time. Fix one clip and shift the rest by the same amount:
+
+1. Select the clips. Command-click or Shift-click selects more.
+2. Select **Shift time…** in the bar at the bottom.
+3. Pick the **Clip** whose real time you know. Set its **Real date** and **Real time**.
+4. Check the table. It shows each clip's time now, its new time and where the new time comes from.
+5. Select **Shift N clips**.
+
+| From | New time |
+|---|---|
+| Set | The real date and time you gave |
+| Offset | The clip's own time plus the same offset as the clip you set |
+| Radio log | The start of the radio log that matches the clip |
+| No time | None: the clip has no time of day to shift, and no log matched it |
+
+QuadCam looks for radio logs in the log folder setting. It matches each clip against the logs of the day the offset moves it to, as [Match radio logs](metadata.md#match-clips-already-in-the-library) does. A clip that matches gets the log's time instead of the offset, and the table says **Radio log**. A new day moves the files, as a date edit does.
+
+The CLI runs it as `library shift`, and an agent as `quadcam_library_edit` with `shift`. Both only show the plan until you confirm.
 
 ## Unfinished imports
 
