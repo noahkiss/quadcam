@@ -143,7 +143,7 @@ test("Settings > Gear saves the changed Gear keys with Done and shows the versio
   expect(w.gearKeepRecent).toBe(5);
   expect(w.firmwareCheck).toBe("daily");
   expect(w.gearOnConnect).toMatchObject({ fc: ["backup", "blackbox"], radio: ["backup"] });
-  expect(w.gearCues).toMatchObject({ mute: true, quiet_hours: { start: "21:30", end: "07:00" }, voice_source: "macos" });
+  expect(w.gearCues).toMatchObject({ mute: true, quiet_hours: { start: "21:30", end: "07:00" }, voice_source: "voice_pack" });
   expect(w.gearKeepWeeks).toBeUndefined();
 
   // Reopened, the pane shows what was saved.
@@ -159,13 +159,16 @@ test("Settings > Gear plays cues from a voice pack: the radio's or one picked", 
   await page.getByRole("button", { name: "Settings" }).click();
   const dlg = dialog(page, "Settings");
   await dlg.getByRole("navigation", { name: "Settings sections" }).getByRole("button", { name: "Gear" }).click();
+  // A voice pack is the default; macOS is a choice.
+  await expect(dlg.getByLabel("Voice", { exact: true })).toHaveValue("voice_pack");
+  await dlg.getByLabel("Voice", { exact: true }).selectOption("macos");
   await expect(dlg.getByLabel("macOS voice")).toBeVisible();
   await dlg.getByLabel("Voice", { exact: true }).selectOption("voice_pack");
   const pick = dlg.getByLabel("Voice pack");
   await expect(pick).toHaveValue("");
   await expect(pick.getByRole("option", { name: "The radio's voice" })).toHaveCount(1);
   await pick.selectOption("local-say-samantha");
-  await expect(dlg.getByText("A cue the pack has no line for speaks with the macOS voice.")).toBeVisible();
+  await expect(dlg.getByText("Without a pack, or for a cue the pack has no line for, the macOS voice speaks.")).toBeVisible();
   await dlg.getByRole("button", { name: "Done" }).click();
   await expect(dlg).toBeHidden();
   const w = (await app.method("settings_set")).map((p) => (p as { values: Record<string, unknown> }).values).at(-1)!;

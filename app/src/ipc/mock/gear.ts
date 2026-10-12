@@ -42,7 +42,7 @@ export function gearDefaults(): GearSettings {
       reminder_max: 3,
       quiet_hours: null,
       voice: null,
-      voice_source: "macos",
+      voice_source: "voice_pack",
       voice_pack: null,
     },
   };

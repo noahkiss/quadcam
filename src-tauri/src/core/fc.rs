@@ -466,20 +466,17 @@ impl Core {
                     .fc_ports()
                     .into_iter()
                     .find(|c| super::gear::link_handle(&c.link) == tm.port);
-                let name = self
-                    .gear_store()
-                    .devices()
-                    .ok()
-                    .and_then(|ds| {
-                        let id = tm.id.as_deref()?;
-                        ds.into_iter().find(|d| d.id == id)
-                    })
-                    .map(|d| d.display_name())
-                    .unwrap_or_else(|| {
-                        c.map(|c| super::gear::connected_name(&c))
-                            .unwrap_or("The FC".into())
-                    });
-                let mut e = CueEvent::new(Cue::UnplugNow, name);
+                let saved = self.gear_store().devices().ok().and_then(|ds| {
+                    let id = tm.id.as_deref()?;
+                    ds.into_iter().find(|d| d.id == id)
+                });
+                let own = saved.as_ref().map(|d| d.name.clone());
+                let name = saved.map(|d| d.display_name()).unwrap_or_else(|| {
+                    c.map(|c| super::gear::connected_name(&c))
+                        .unwrap_or("The FC".into())
+                });
+                let mut e = CueEvent::new(Cue::UnplugNow, name)
+                    .about(own, Some(crate::gear::cues::KindWord::Quad));
                 e.step = Some(format!("{} minutes", tm.elapsed_s / 60));
                 self.cue_fire(&settings.cues, e, now, chrono::Local::now().time());
             }

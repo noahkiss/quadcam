@@ -414,8 +414,13 @@ fn a_0_9_0_gear_folder_keeps_everything_through_writes() {
         })
         .unwrap();
     let new = l.gear_json();
-    keeps(&old, &new, &["devices", "crashes"]);
-    assert_eq!(new["voice"], old["voice"], "the voice block is whole");
+    // Naming a device adds its name to the person's own lines; the rest of voice stays.
+    keeps(&old, &new, &["devices", "crashes", "voice"]);
+    keeps(&old["voice"], &new["voice"], &["custom_lines"]);
+    let lines = old["voice"]["custom_lines"].as_array().unwrap();
+    let added = new["voice"]["custom_lines"].as_array().unwrap();
+    assert_eq!(added[..lines.len()], lines[..], "the old lines stay first");
+    assert!(added.iter().any(|l| l["text"] == "Whoop FC"), "{added:?}");
     assert_eq!(new["voice"]["futureVoiceKey"], 1);
     assert_eq!(
         new["devices"][0], old["devices"][0],

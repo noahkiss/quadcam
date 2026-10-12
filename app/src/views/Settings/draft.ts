@@ -90,7 +90,7 @@ const CUE_DEFAULTS: GearDraft["cues"] = {
   still_inserted_every_s: 300,
   reminder_max: 3,
   voice: "",
-  voice_source: "macos",
+  voice_source: "voice_pack",
   voice_pack: "",
 };
 

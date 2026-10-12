@@ -321,6 +321,11 @@ impl Core {
             self.radio_link(&d.id, &a)?;
         }
         let mut d = store.save_device(&d)?;
+        // The name joins the person's own lines, so the next render of their pack says it
+        // in cues. A failure here never fails the save.
+        if p.name.is_some() && !d.name.is_empty() {
+            let _ = self.add_name_line(&d.name);
+        }
         let (profiles, _) = self.profiles().unwrap_or_default();
         self.fill_radio_aircraft(&mut d, &profiles, None);
         self.hooks.gear_changed();
@@ -527,21 +532,25 @@ impl Core {
     pub fn gear_job_done(&self, c: &Connected, failed_step: Option<&str>) -> bool {
         let s = self.gear_settings().cues;
         let name = connected_name(c);
+        let (own, kind) = (self.own_name(c), Some(self.kind_word(c)));
         let now = Instant::now();
         let event = match failed_step {
             Some(step) => CueEvent::failed(step, name.clone()),
             None => {
                 if matches!(c.link, Link::Volume { .. }) {
-                    self.gear.cues.reminders.lock().unwrap().arm(
+                    self.gear.cues.reminders.lock().unwrap().arm_for(
                         &link_handle(&c.link),
                         &name,
+                        own.clone(),
+                        kind,
                         &s,
                         now,
                     );
                 }
                 CueEvent::new(Cue::SafeToUnplug, name)
             }
-        };
+        }
+        .about(own, kind);
         let fired = self.cue_fire(&s, event, now, chrono::Local::now().time());
         // The reminder state changed: the GUI shows it.
         self.hooks.gear_changed();
@@ -616,20 +625,60 @@ impl Core {
         self.gear.cues.fire_with(
             s,
             e,
-            |cue| {
+            |e| {
                 let p = self.cue_pack(s)?;
-                cues::pack_clip(
+                let name_path = e.name.as_deref().and_then(|n| self.name_line(n));
+                cues::pack_clips(
                     Some((
                         std::path::Path::new(&p.dir),
                         &p.manifest.files,
                         &p.manifest.lang,
                     )),
-                    cue,
+                    e,
+                    name_path.as_deref(),
                 )
             },
             now,
             local,
         )
+    }
+
+    /// The name the person gave a device, if any: the connected record's, else the saved one.
+    fn own_name(&self, c: &Connected) -> Option<String> {
+        let saved = || self.gear_store().device(c.id.as_deref()?).ok().flatten();
+        c.device
+            .clone()
+            .or_else(saved)
+            .map(|d| d.name.trim().to_string())
+            .filter(|n| !n.is_empty())
+    }
+
+    /// The word a voice pack says for a device's kind. A DJI volume is the air unit when a
+    /// DJI USB device that does not name itself goggles is attached and the volume is not in
+    /// the built-in SD slot; else goggles.
+    fn kind_word(&self, c: &Connected) -> cues::KindWord {
+        use cues::KindWord as K;
+        match c.kind {
+            DeviceKind::Radio => K::Radio,
+            DeviceKind::Fc => K::Quad,
+            DeviceKind::ElrsTx | DeviceKind::ElrsRx => K::ExpressLrs,
+            DeviceKind::DvrCard => K::DvrCard,
+            DeviceKind::Goggles => {
+                let slot = matches!(&c.link, Link::Volume { bus_protocol, .. }
+                    if crate::gear::detect::is_sd_slot(bus_protocol.as_deref()));
+                let air = !slot
+                    && (self.gear.presence)().iter().any(|p| {
+                        matches!(p, crate::gear::events::Presence::Usb { vid, name, .. }
+                            if *vid == crate::gear::events::DJI_VID
+                                && !name.as_deref().is_some_and(|n| n.to_lowercase().contains("goggle")))
+                    });
+                if air {
+                    K::AirUnit
+                } else {
+                    K::Goggles
+                }
+            }
+        }
     }
 
     /// The installed voice pack that speaks cues: the one `voice_pack` picks (none when that

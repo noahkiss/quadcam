@@ -48,3 +48,19 @@ SOUNDS/en/qcdone.wav,"Done, safe to unplug.",cues,QuadCam plays it on the Mac wh
 SOUNDS/en/qcstill.wav,Still inserted.,cues,QuadCam plays it on the Mac when a card or device is still in after a job is done.
 SOUNDS/en/qcfail.wav,A step failed.,cues,QuadCam plays it on the Mac when a step of a job failed.
 SOUNDS/en/qcunplug.wav,Unplug the quad now.,cues,QuadCam plays it on the Mac when a quad ran on USB with its battery in past its limit.
+SOUNDS/en/qdradio.wav,"Radio done, safe to unplug.",cues,QuadCam plays it on the Mac when a job on a device of this kind ends and the device is released.
+SOUNDS/en/qdquad.wav,"Quad done, safe to unplug.",cues,QuadCam plays it on the Mac when a job on a device of this kind ends and the device is released.
+SOUNDS/en/qdgoggle.wav,"Goggles done, safe to unplug.",cues,QuadCam plays it on the Mac when a job on a device of this kind ends and the device is released.
+SOUNDS/en/qdair.wav,"Air unit done, safe to unplug.",cues,QuadCam plays it on the Mac when a job on a device of this kind ends and the device is released.
+SOUNDS/en/qddvr.wav,"DVR card done, safe to unplug.",cues,QuadCam plays it on the Mac when a job on a device of this kind ends and the device is released.
+SOUNDS/en/qdelrs.wav,"ExpressLRS done, safe to unplug.",cues,QuadCam plays it on the Mac when a job on a device of this kind ends and the device is released.
+SOUNDS/en/qsradio.wav,The radio card is still inserted.,cues,QuadCam plays it on the Mac when this kind of device is still in after a job is done.
+SOUNDS/en/qsgoggle.wav,The goggles card is still inserted.,cues,QuadCam plays it on the Mac when this kind of device is still in after a job is done.
+SOUNDS/en/qsair.wav,The air unit is still plugged in.,cues,QuadCam plays it on the Mac when this kind of device is still in after a job is done.
+SOUNDS/en/qsdvr.wav,The DVR card is still inserted.,cues,QuadCam plays it on the Mac when this kind of device is still in after a job is done.
+SOUNDS/en/qfradio.wav,A step failed on the radio.,cues,QuadCam plays it on the Mac when a step of a job failed on this kind of device.
+SOUNDS/en/qfquad.wav,A step failed on the quad.,cues,QuadCam plays it on the Mac when a step of a job failed on this kind of device.
+SOUNDS/en/qfgoggle.wav,A step failed on the goggles.,cues,QuadCam plays it on the Mac when a step of a job failed on this kind of device.
+SOUNDS/en/qfair.wav,A step failed on the air unit.,cues,QuadCam plays it on the Mac when a step of a job failed on this kind of device.
+SOUNDS/en/qfdvr.wav,A step failed on the DVR card.,cues,QuadCam plays it on the Mac when a step of a job failed on this kind of device.
+SOUNDS/en/qfelrs.wav,A step failed on the ExpressLRS device.,cues,QuadCam plays it on the Mac when a step of a job failed on this kind of device.

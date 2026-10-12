@@ -184,7 +184,7 @@ A new **Gear** section:
 | Steps on connect | `gearOnConnect` | per device kind: `backup` only (`apply_ready`, `blackbox` off; `import` does nothing) (7.11) |
 | Erase blackbox after download | `gearEraseBlackbox` | off (7.12) |
 | Read the blackbox through USB disk mode first | `gearBlackboxMsc` | off; not proven on a real FC (7.12) |
-| Cues | `gearCues` | speech and notifications on, sound off, each cue on, not muted; debounce 30 s; reminder after 60 s, every 300 s, 3 at most; no quiet hours (7.11) |
+| Cues | `gearCues` | speech and notifications on, sound off, each cue on, not muted; debounce 30 s; reminder after 60 s, every 300 s, 3 at most; no quiet hours; a voice pack when one is installed, else macOS (7.11) |
 
 Each key goes into `settings::KEYS` with a default in `Defaults`, as today.
 
@@ -1826,18 +1826,21 @@ the time: every job mounts, works and releases, and a quad is released after eve
    (`{start, end}`, `HH:MM`, may cross midnight) silences speech and sound. Notifications
    follow macOS Focus on their own: macOS holds them back. An app cannot read the Focus
    state without Full Disk Access, so speech and sound use quiet hours instead.
-6. **Voice pack cues** (decided 2026-10-12). With `voice_source` `voice_pack`, speech plays
-   the cue's clip from an installed voice pack (`CueService::fire_with`, `Core::cue_fire`).
-   Each cue has one fixed line (`Cue::pack_line`): `qcdone` "Done, safe to unplug.",
-   `qcstill` "Still inserted.", `qcfail` "A step failed.", `qcunplug` "Unplug the quad now.",
-   group `cues` in `resources/voice/lines.csv`, so the `quadcam` set renders them with the
-   radio's lines. A clip cannot say a device's own name; the notification still names it.
-   The pack (`Core::cue_pack`): the one `voice_pack` names, else the pack chosen for the saved
-   radio seen last, so a cue sounds like the radio in use. A picked pack that is gone speaks
-   with macOS, never another pack. `cues::pack_clip` takes a line only when the manifest
-   lists it and the file is on disk; any other cue speaks with macOS, line by line. Mute,
-   the toggles, the channels and quiet hours decide first. `voice_source` stays `macos` by
-   default.
+6. **Voice pack cues** (decided 2026-10-12). `voice_source` is `voice_pack` by default: a
+   voice pack when one is installed, else macOS; an explicit `macos` wins. The pack
+   (`Core::cue_pack`): the one `voice_pack` names, else the pack chosen for the saved radio
+   seen last. A picked pack that is gone speaks with macOS, never another pack. One cue
+   never mixes voices (`cues::pack_clips`): (a) the person's name for the device (its line
+   among the person's own lines, `Core::name_line`) then the bare phrase (`Cue::pack_line`:
+   `qcdone`, `qcstill`, `qcfail`, `qcunplug`), `CLIP_GAP` (250 ms) apart; else (b) the kind's
+   whole sentence (`KindWord::line`, `qd*`, `qs*`, `qf*`: 17 lines, one breath each); else
+   (c) the macOS voice says the whole line. `gear_device_save` adds a new name to the
+   person's own lines (`SOUNDS/en/nm<hash>.wav`, `Core::add_name_line`); a rename keeps the
+   old line. The kind of a DJI volume is the air unit when a DJI USB device that does not
+   name itself goggles is attached and the volume is not in the SD slot. All are group
+   `cues` in `resources/voice/lines.csv`, so the `quadcam` set renders them; cue lines go
+   onto a radio's card with the pack like any other. Mute, the toggles, the channels and
+   quiet hours decide first.
 
 Channels: speech (`/usr/bin/say`, an optional voice, or a pack's clip through
 `/usr/bin/afplay`), a system sound (`/usr/bin/afplay`), a

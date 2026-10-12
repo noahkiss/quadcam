@@ -499,6 +499,44 @@ impl Core {
         Ok(out)
     }
 
+    /// The card path of the line that says a device's name: a line with that text (any
+    /// case), QuadCam's or the person's own.
+    pub(super) fn name_line(&self, name: &str) -> Option<String> {
+        let name = name.trim();
+        self.all_lines()
+            .ok()?
+            .into_iter()
+            .find(|l| l.text.trim().eq_ignore_ascii_case(name))
+            .map(|l| l.path)
+    }
+
+    /// Adds a device's name to the person's own lines (`SOUNDS/en/nm<hash>.wav`) unless a
+    /// line already says it, so a render of their pack makes the clip cues play.
+    pub(super) fn add_name_line(&self, name: &str) -> Result<()> {
+        let name = name.trim();
+        if name.is_empty() || self.name_line(name).is_some() {
+            return Ok(());
+        }
+        let hash = xxhash_rust::xxh64::xxh64(name.to_lowercase().as_bytes(), 0);
+        let path = format!("SOUNDS/en/nm{:06x}.wav", hash & 0xff_ffff);
+        lines::check_path(&path)?;
+        self.gear_store().update(|v| {
+            let voice = voice_obj(v)?;
+            let list = voice.entry("custom_lines").or_insert_with(|| json!([]));
+            let Value::Array(a) = list else {
+                bail!("gear.json: voice.custom_lines is not a list");
+            };
+            if !a
+                .iter()
+                .any(|c| c.get("path").and_then(Value::as_str) == Some(path.as_str()))
+            {
+                a.push(json!({"path": path, "text": name}));
+            }
+            Ok(())
+        })?;
+        Ok(())
+    }
+
     pub(super) fn custom_lines(&self) -> Result<Vec<Custom>> {
         let v = self.gear_store().read()?;
         Ok(v.get("voice")

@@ -19,6 +19,7 @@ dB = "D.B."
 mAh = "milliamp hours"
 RSSI = "R.S.S.I."
 RTH = "return to home"
+ExpressLRS = "Express L.R.S."
 
 # Words a voice reads well as they are. A rule that names one of these is a mistake.
 [plain]

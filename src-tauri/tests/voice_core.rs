@@ -292,10 +292,10 @@ fn the_voice_view_lists_lines_with_their_spoken_text_and_the_provider() {
 fn rendering_makes_a_local_pack_and_a_second_render_is_all_cache() {
     let b = bench(Opts::default());
     let dry = render(&b, &[], true, false);
-    assert_eq!(dry.plan.lines, 49);
+    assert_eq!(dry.plan.lines, 65);
     assert_eq!(
         (dry.plan.cached, dry.plan.to_render),
-        (0, 49),
+        (0, 65),
         "{:?}",
         dry.plan
     );
@@ -309,7 +309,7 @@ fn rendering_makes_a_local_pack_and_a_second_render_is_all_cache() {
     let v = view(&b);
     let p = v.packs.iter().find(|p| p.id == r.pack).unwrap();
     assert!(p.installed && p.local && !p.stale);
-    assert_eq!(p.lines, 49);
+    assert_eq!(p.lines, 65);
     assert!(v.lines.iter().all(|l| l.packs == vec![r.pack.clone()]));
     // Again: every take comes from the cache.
     let again = render(&b, &[], false, false);
@@ -322,7 +322,7 @@ fn rendering_makes_a_local_pack_and_a_second_render_is_all_cache() {
     // A subset adds to the pack and keeps the other lines.
     let one = render(&b, &[ARMED], false, false);
     assert_eq!(one.plan.lines, 1);
-    assert_eq!(view(&b).packs[0].lines, 49);
+    assert_eq!(view(&b).packs[0].lines, 65);
 }
 
 #[test]
@@ -379,7 +379,7 @@ fn a_pack_installs_from_an_index_after_a_hash_check() {
             source: Some(idx.display().to_string()),
         })
         .unwrap();
-    assert!(p.installed && !p.local && p.lines == 49);
+    assert!(p.installed && !p.local && p.lines == 65);
     assert_eq!(p.license, "CC BY 4.0");
     assert!(b
         .dir
@@ -497,7 +497,7 @@ fn choose_voice_stages_one_change_and_keeps_overrides_when_asked() {
     let Edit::CardFiles { put, delete } = &c.edits[0] else {
         panic!("{:?}", c.edits[0])
     };
-    assert_eq!(put.len(), 49);
+    assert_eq!(put.len(), 65);
     assert!(delete.is_empty(), "sounds no pack knows are never deleted");
     assert_eq!(view(&b).chosen.as_deref(), Some("en-a-v1"));
     // Apply: backed up, written, read back.
@@ -666,11 +666,11 @@ fn custom_lines_are_the_persons_own_and_never_in_a_built_pack() {
     assert!(format!("{e:#}").contains("no line"), "{e:#}");
     // Rendering includes it; building a pack does not.
     let r = render(&b, &[], false, false);
-    assert_eq!(r.plan.lines, 50);
+    assert_eq!(r.plan.lines, 66);
     let out = b.dir.path().join("release");
     build(&b, &out, "en-test-v1", 150);
     let idx = quadcam_lib::gear::voice::packs::read_index(&out.join("voices.json")).unwrap();
-    assert_eq!(idx.packs[0].lines, 49);
+    assert_eq!(idx.packs[0].lines, 65);
 }
 
 #[test]
@@ -734,7 +734,7 @@ fn the_rows_and_the_mcp_actions() {
         .core
         .dispatch("gear_voice", json!({"radio": b.id}))
         .unwrap();
-    assert_eq!(v["lines"].as_array().unwrap().len(), 49);
+    assert_eq!(v["lines"].as_array().unwrap().len(), 65);
     let r = b
         .core
         .dispatch(
@@ -747,7 +747,7 @@ fn the_rows_and_the_mcp_actions() {
     let r = s.call_tool("quadcam_gear", json!({"action": "voice", "device": b.id}));
     assert_eq!(r["isError"], false, "{r}");
     let text = r["content"][0]["text"].as_str().unwrap();
-    assert!(text.contains("49 lines"), "{text}");
+    assert!(text.contains("65 lines"), "{text}");
     assert!(text.contains("Provider: say"), "{text}");
     let r = s.call_tool(
         "quadcam_gear_edit",

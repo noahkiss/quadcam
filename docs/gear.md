@@ -797,18 +797,28 @@ The `gear_cues` setting holds:
 - `reminder_grace_s` (60), `still_inserted_every_s` (300), `reminder_max` (3).
 - `quiet_hours` (`{"start": "22:00", "end": "07:00"}`): no speech or sound in these hours.
   Notifications follow macOS Focus.
-- `voice`: a `say` voice. `voice_source`: `macos` (default) or `voice_pack`.
-- `voice_pack`: with `voice_source` `voice_pack`, the installed pack that speaks cues. Left
-  out, cues use the pack chosen for the radio you plugged in last, so they sound like the
-  radio.
+- `voice`: a `say` voice. `voice_source`: `voice_pack` (default: a voice pack when one is
+  installed, else macOS) or `macos`.
+- `voice_pack`: the installed pack that speaks cues. Left out, cues use the pack chosen for
+  the radio you plugged in last, so they sound like the radio.
 
-**Cues in the radio's voice.** In Settings > Gear, set **Voice** to **Voice pack**. **Voice
-pack** is **The radio's voice** (the pack chosen for the radio seen last) or one installed
-pack. A pack holds four cue lines: "Done, safe to unplug.", "Still inserted.", "A step
-failed." and "Unplug the quad now." They are in the QuadCam default line set, so a pack
-rendered from it has them; a pack made before 1.0 does not, and shows as needing a new render.
-A clip does not say the device's name; the notification does. A cue the pack has no line for
-speaks with the macOS voice. Mute, the toggles and quiet hours apply as before.
+**Cues in the radio's voice.** Cues speak with a voice pack by default. In Settings > Gear,
+**Voice** is **Voice pack** or **macOS**, and **Voice pack** is **The radio's voice** (the pack
+chosen for the radio seen last) or one installed pack. One cue never mixes voices. QuadCam
+plays the first of these the pack holds:
+
+1. The device's own name, then the cue: "Pocket", a short pause, "Done, safe to unplug."
+   When you name a device, its name joins your own lines, so your next render of your own
+   pack says it. A rename adds the new name and keeps the old line.
+2. The cue as one sentence for the device's kind: "Radio done, safe to unplug.", "The DVR
+   card is still inserted.", "A step failed on the air unit.", "Unplug the quad now."
+3. The macOS voice says the whole cue, with the device's name.
+
+The kind sentences cover radio, quad, goggles, air unit, DVR card and ExpressLRS ("still
+inserted" only for cards and the air unit). They and the bare cue lines are in the QuadCam
+default line set, so every pack rendered from it has them; a pack made before 1.0 does not,
+and shows as needing a new render. Without a pack QuadCam speaks with macOS. Mute, the toggles
+and quiet hours apply as before.
 
 Inside the app bundle, a notification comes from QuadCam through macOS notifications; the
 first one asks you to allow them. Outside a bundle (`cargo tauri dev`, a CLI built on its own)

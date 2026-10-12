@@ -113,8 +113,8 @@ export function GearPane({ d, setD }: { d: Draft; setD: (f: (d: Draft) => Draft)
         </fieldset>
         <div className={styles.row}>
           <SelectField label="Voice" value={g.cues.voice_source} onChange={(e) => cue({ voice_source: e.target.value as GearDraft["cues"]["voice_source"] })}>
-            <option value="macos">macOS</option>
             <option value="voice_pack">Voice pack</option>
+            <option value="macos">macOS</option>
           </SelectField>
           {g.cues.voice_source === "voice_pack" ? (
             <SelectField label="Voice pack" value={g.cues.voice_pack} onChange={(e) => cue({ voice_pack: e.target.value })}>
@@ -130,7 +130,7 @@ export function GearPane({ d, setD }: { d: Draft; setD: (f: (d: Draft) => Draft)
             <TextField label="macOS voice" placeholder="System voice" value={g.cues.voice} onChange={(e) => cue({ voice: e.target.value })} />
           )}
         </div>
-        {g.cues.voice_source === "voice_pack" && <p className={styles.sub}>A cue the pack has no line for speaks with the macOS voice.</p>}
+        {g.cues.voice_source === "voice_pack" && <p className={styles.sub}>Without a pack, or for a cue the pack has no line for, the macOS voice speaks.</p>}
         <Checkbox label="Quiet hours for speech and sound" checked={g.quiet} onChange={(e) => set({ quiet: e.target.checked })} />
         {g.quiet && (
           <div className={styles.row}>

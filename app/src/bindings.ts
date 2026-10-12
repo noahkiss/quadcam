@@ -2032,8 +2032,8 @@ export type CueSettings = {
 	/**  A `say` voice name; None for the system voice. */
 	voice?: string | null,
 	/**
-	 *  What speaks the lines: macOS (`say`) or a voice pack. A cue the pack has no clip
-	 *  for speaks with macOS.
+	 *  What speaks the lines: a voice pack when one is installed (the default), or macOS
+	 *  (`say`) when the person picks it. A cue the pack has no clip for speaks with macOS.
 	 */
 	voice_source?: VoiceSource,
 	/**
@@ -7613,7 +7613,12 @@ export type VoiceRenderParams = {
 };
 
 /**  What speaks the cue lines. */
-export type VoiceSource = "macos" | "voice_pack";
+export type VoiceSource = "macos" | 
+/**
+ *  The default: a voice pack when one is installed (see `CueSettings::voice_pack`),
+ *  else macOS.
+ */
+"voice_pack";
 
 export type VoiceView = {
 	provider: ProviderView,
