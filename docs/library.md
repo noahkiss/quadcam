@@ -206,15 +206,19 @@ Temperatures show in °F, speeds in mph and visibility in mi where your region u
 
 With [Show the Map page](settings.md#show-the-map-page) on, **Map** in the sidebar shows your places and clips on an Apple map.
 
-| Pin | Stands for | Click it to |
-|---|---|---|
-| Red, with a number | A place and its clip count | Show the place's clips in the library |
-| Gray | A saved place without clips | Show the place in the library (empty until you fly there) |
-| Blue | A clip with a location but no place | Open the clip |
+Click a pin to show its callout:
 
+| Pin | Stands for | Its callout shows | Button |
+|---|---|---|---|
+| Red, with a number | A place and its clip count | The place, its clip count, and the first and last day of its clips | **Show clips**: the place's clips in the library |
+| Gray | A saved place without clips | The place and **No clips** | None |
+| Blue | A clip with a location but no place | The clip's name, day and time, its poster frame, and the sky at flight time when [weather](#sun-and-weather) has it | **Open**: the clip |
+
+- Return does what the callout's button does. Escape, or a click elsewhere on the map, closes the callout.
+- VoiceOver reads each pin's name, kind and callout lines.
 - A place sits at its saved point. A place that is not saved sits in the middle of its clips' locations.
 - Pins close together merge into one at a wide zoom. Click it to zoom in.
-- **Map**, **Hybrid** and **Satellite** pick the look. **Show all** zooms to every pin.
+- **Map**, **Hybrid** and **Satellite** pick the look, and the map opens in it the next time ([Map style](settings.md#map-style)). **Show all** zooms to every pin.
 - The header counts the places, the clips on the map, and the clips without a location.
 - Scroll or pinch to zoom; drag to move. The map keeps its view when you come back to the page.
 

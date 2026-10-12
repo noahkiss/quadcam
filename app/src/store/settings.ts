@@ -8,6 +8,7 @@ import { SECRET_KEYS, type Hint, type Place, type Profile, type SettingsValues }
 import { toast } from "../components/toastStore";
 import { validSort, type Sort } from "../lib/library";
 import { asMode } from "../lib/controls";
+import type { MapStyle } from "../bindings";
 
 export interface SettingsSlice {
   values: SettingsValues;
@@ -89,6 +90,7 @@ export const sel = {
   weather: (s: State) => eff<boolean>(s, "weather", "weather", false),
   onDevice: (s: State) => eff<boolean>(s, "onDeviceSuggestions", "on_device_suggestions", true),
   mapView: (s: State) => s.values.mapView === true,
+  mapStyle: (s: State) => eff<MapStyle>(s, "mapStyle", "map_style", "standard"),
   updateCheck: (s: State) => eff<boolean>(s, "updateCheck", "update_check", true),
   defaultName: (s: State) => eff<string>(s, "defaultName", "default_name", "flight") || "flight",
   photosAlbum: (s: State) => eff<string>(s, "photosAlbum", "photos_album", "Drone"),

@@ -148,6 +148,7 @@ See [Modules and notices](modules.md) for what a module install checks.
 - `on_device_suggestions` (`true` or `false`; see [On-device suggestions](settings.md#on-device-suggestions))
 - `update_check` (`true` or `false`; see [Updates](settings.md#updates))
 - `map_view` (`true` or `false`, off by default; see [Show the Map page](settings.md#show-the-map-page))
+- `map_style` (`standard`, `hybrid` or `satellite`; see [Map style](settings.md#map-style))
 - `photos_album`, `format_label`, `log_dir`, `layout`, `place_folders`, `tunables`
 - `geocoder` (`apple`, `nominatim`, `census` or `google`), `google_places_key`
 - `name_date_format` (`YYYY-MM-DD` or `YY.MM.DD`), `default_profile`

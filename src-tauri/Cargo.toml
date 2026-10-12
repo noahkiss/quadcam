@@ -105,5 +105,5 @@ objc2-map-kit = { version = "0.3", default-features = false, features = ["std", 
 objc2-core-location = { version = "0.3", default-features = false, features = ["std", "block2", "CLLocation", "CLPlacemark", "CLGeocoder", "CLLocationManager", "CLLocationManagerDelegate"] }
 objc2-photos = "0.3"
 objc2-user-notifications = { version = "0.3", default-features = false, features = ["std", "block2", "UNUserNotificationCenter", "UNNotificationContent", "UNNotificationRequest", "UNNotificationTrigger"] }
-objc2-app-kit = { version = "0.3", default-features = false, features = ["std", "NSSharingService", "NSResponder", "NSView", "NSGlassEffectView", "NSGraphics", "NSColor"] }
+objc2-app-kit = { version = "0.3", default-features = false, features = ["std", "objc2-core-foundation", "NSSharingService", "NSResponder", "NSView", "NSGlassEffectView", "NSGraphics", "NSColor", "NSControl", "NSButton", "NSButtonCell", "NSCell", "NSTextField", "NSStackView", "NSImageView", "NSImage", "NSEvent", "NSWindow", "NSAccessibilityProtocols", "NSUserInterfaceLayout", "NSLayoutConstraint"] }
 security-framework = "3.5"

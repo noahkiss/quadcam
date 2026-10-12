@@ -413,6 +413,7 @@ mcp.param quadcam_settings.values.join_split_recordings boolean|null
 mcp.param quadcam_settings.values.keep_originals boolean|null
 mcp.param quadcam_settings.values.layout string|null
 mcp.param quadcam_settings.values.log_dir string|null
+mcp.param quadcam_settings.values.map_style string|null
 mcp.param quadcam_settings.values.map_view boolean|null
 mcp.param quadcam_settings.values.modules object|null
 mcp.param quadcam_settings.values.name_date_format string|null
@@ -526,6 +527,10 @@ mcp.value quadcam_settings.values.layout=day
 mcp.value quadcam_settings.values.layout=flat
 mcp.value quadcam_settings.values.layout=null
 mcp.value quadcam_settings.values.layout=year_day
+mcp.value quadcam_settings.values.map_style=hybrid
+mcp.value quadcam_settings.values.map_style=null
+mcp.value quadcam_settings.values.map_style=satellite
+mcp.value quadcam_settings.values.map_style=standard
 mcp.value quadcam_settings.values.name_date_format=YY.MM.DD
 mcp.value quadcam_settings.values.name_date_format=YYYY-MM-DD
 mcp.value quadcam_settings.values.name_date_format=null

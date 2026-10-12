@@ -8,6 +8,8 @@ use serde::{Deserialize, Serialize};
 use specta::Type;
 use tauri::{AppHandle, Manager};
 
+pub use crate::weather::Sky;
+
 /// Where the map goes, in CSS pixels from the top left of the page, and the page's width in
 /// CSS pixels (which gives the zoom between CSS pixels and points).
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, Type, PartialEq)]
@@ -19,15 +21,7 @@ pub struct MapFrame {
     pub page_w: f64,
 }
 
-/// The map's look: Apple Maps' Standard, Satellite and Hybrid.
-#[derive(Debug, Clone, Copy, Serialize, Deserialize, Type, PartialEq, Eq, Default)]
-#[serde(rename_all = "snake_case")]
-pub enum MapStyle {
-    #[default]
-    Standard,
-    Satellite,
-    Hybrid,
-}
+pub use crate::settings::MapStyle;
 
 /// What a pin stands for, which sets its colour.
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, Type, PartialEq, Eq)]
@@ -41,7 +35,7 @@ pub enum PinKind {
     Clip,
 }
 
-/// One pin. `id` comes back in `map-pick` when the pin is clicked.
+/// One pin. A click shows its callout; the callout's button sends `id` back in `map-pick`.
 #[derive(Debug, Clone, Serialize, Deserialize, Type, PartialEq)]
 pub struct MapPin {
     pub id: String,
@@ -52,11 +46,144 @@ pub struct MapPin {
     pub lon: f64,
     /// Shown inside the marker (the clip count of a place); empty shows the default glyph.
     pub glyph: Option<String>,
+    /// A place's clip count.
+    #[serde(default)]
+    pub count: Option<u32>,
+    /// The first and last day (`YYYY-MM-DD`) of a place's clips; a clip's day in both.
+    #[serde(default)]
+    pub first: Option<String>,
+    #[serde(default)]
+    pub last: Option<String>,
+    /// A clip's time of day, `HH:MM`.
+    #[serde(default)]
+    pub time: Option<String>,
+    /// A clip's sky at flight time, and whether the sun was up then.
+    #[serde(default)]
+    pub sky: Option<Sky>,
+    #[serde(default)]
+    pub is_day: Option<bool>,
+    /// A clip's poster frame on disk.
+    #[serde(default)]
+    pub thumb: Option<String>,
 }
 
-/// A pin was clicked: its id.
+/// A pin's callout button was clicked (or Return pressed while its callout shows): its id.
 #[derive(Debug, Clone, Serialize, Deserialize, Type, tauri_specta::Event)]
 pub struct MapPick(pub String);
+
+/// What a pin's callout shows, and what VoiceOver reads for the pin. Pure, so it is tested
+/// without AppKit.
+#[derive(Debug, Clone, PartialEq)]
+pub struct Callout {
+    pub title: String,
+    /// The lines under the title.
+    pub lines: Vec<String>,
+    /// The clip's sky: an SF Symbol name and the sky as words.
+    pub sky: Option<(&'static str, String)>,
+    /// The button's title (Show clips, Open); None for a place without clips.
+    pub button: Option<&'static str>,
+    /// The pin's VoiceOver label.
+    pub label: String,
+}
+
+/// A day as `Sep 28, 2026`; text that is not a `YYYY-MM-DD` date stays as it is.
+pub fn day(d: &str) -> String {
+    match chrono::NaiveDate::parse_from_str(d, "%Y-%m-%d") {
+        Ok(d) => d.format("%b %-d, %Y").to_string(),
+        Err(_) => d.to_string(),
+    }
+}
+
+/// Two days as one range: `Sep 28, 2026`, `Sep 3 – Sep 28, 2026`, or
+/// `Dec 30, 2025 – Jan 2, 2026`.
+pub fn day_range(first: &str, last: &str) -> String {
+    if first == last {
+        return day(first);
+    }
+    let parse = |d: &str| chrono::NaiveDate::parse_from_str(d, "%Y-%m-%d").ok();
+    match (parse(first), parse(last)) {
+        (Some(a), Some(b)) if a.format("%Y").to_string() == b.format("%Y").to_string() => {
+            format!("{} – {}", a.format("%b %-d"), day(last))
+        }
+        _ => format!("{} – {}", day(first), day(last)),
+    }
+}
+
+/// The SF Symbol for a sky; a clear or partly cloudy night shows the moon, as the app's own
+/// icons do (`app/src/lib/weather.ts` `skyIcon`).
+pub fn sky_symbol(sky: Sky, is_day: Option<bool>) -> &'static str {
+    let night = is_day == Some(false);
+    match sky {
+        Sky::Clear if night => "moon.stars",
+        Sky::Clear => "sun.max",
+        Sky::PartlyCloudy if night => "cloud.moon",
+        Sky::PartlyCloudy => "cloud.sun",
+        Sky::Cloudy => "cloud",
+        Sky::Fog => "cloud.fog",
+        Sky::Drizzle => "cloud.drizzle",
+        Sky::Rain => "cloud.rain",
+        Sky::HeavyRain => "cloud.heavyrain",
+        Sky::Sleet => "cloud.sleet",
+        Sky::Snow => "cloud.snow",
+        Sky::Thunderstorm => "cloud.bolt.rain",
+        Sky::Hail => "cloud.hail",
+    }
+}
+
+fn capital(s: &str) -> String {
+    let mut c = s.chars();
+    c.next()
+        .map(|f| f.to_uppercase().chain(c).collect())
+        .unwrap_or_default()
+}
+
+/// The callout of a pin: a place's clip count and date range with Show clips; a clip's day
+/// and time and its sky with Open.
+pub fn callout(p: &MapPin) -> Callout {
+    let mut lines = Vec::new();
+    let mut sky = None;
+    let button;
+    let kind;
+    let dates = match (p.first.as_deref(), p.last.as_deref()) {
+        (Some(a), Some(b)) => Some(day_range(a, b)),
+        (Some(a), None) | (None, Some(a)) => Some(day(a)),
+        (None, None) => None,
+    };
+    match p.kind {
+        PinKind::Place | PinKind::Empty => {
+            kind = "place";
+            let n = p.count.unwrap_or(0);
+            lines.push(match n {
+                0 => "No clips".to_string(),
+                1 => "1 clip".to_string(),
+                n => format!("{n} clips"),
+            });
+            lines.extend(dates);
+            button = (n > 0).then_some("Show clips");
+        }
+        PinKind::Clip => {
+            kind = "clip";
+            lines.extend(
+                dates.map(|d| match p.time.as_deref().filter(|t| !t.is_empty()) {
+                    Some(t) => format!("{d} at {t}"),
+                    None => d,
+                }),
+            );
+            sky = p.sky.map(|s| (sky_symbol(s, p.is_day), capital(s.word())));
+            button = Some("Open");
+        }
+    }
+    let mut label = vec![p.title.clone(), kind.to_string()];
+    label.extend(lines.iter().cloned());
+    label.extend(sky.as_ref().map(|s| s.1.clone()));
+    Callout {
+        title: p.title.clone(),
+        lines,
+        sky,
+        button,
+        label: label.join(", "),
+    }
+}
 
 /// The map's rectangle in its parent view's points, from the page's CSS rectangle.
 /// `bounds_w` and `bounds_h` are the web view's size in points; a web view that is not
@@ -135,13 +262,18 @@ mod native {
 
 #[cfg(target_os = "macos")]
 mod native {
-    use super::{to_points, MapFrame, MapPick, MapPin, MapStyle, PinKind};
+    use super::{callout, to_points, Callout, MapFrame, MapPick, MapPin, MapStyle, PinKind};
     use objc2::rc::Retained;
-    use objc2::runtime::{NSObject, NSObjectProtocol, ProtocolObject};
+    use objc2::runtime::{AnyObject, NSObject, NSObjectProtocol, ProtocolObject};
     use objc2::{
-        define_class, msg_send, ClassType, DefinedClass, MainThreadMarker, MainThreadOnly,
+        define_class, msg_send, sel, AnyThread, ClassType, DefinedClass, MainThreadMarker,
+        MainThreadOnly,
     };
-    use objc2_app_kit::{NSAutoresizingMaskOptions, NSColor, NSView, NSWindowOrderingMode};
+    use objc2_app_kit::{
+        NSAccessibility, NSAutoresizingMaskOptions, NSButton, NSColor, NSEvent, NSImage,
+        NSImageScaling, NSImageView, NSLayoutAttribute, NSResponder, NSStackView, NSTextField,
+        NSUserInterfaceLayoutOrientation, NSView, NSWindowOrderingMode,
+    };
     use objc2_core_location::CLLocationCoordinate2D;
     use objc2_foundation::{NSArray, NSPoint, NSRect, NSSize, NSString};
     use objc2_map_kit::{
@@ -149,28 +281,42 @@ mod native {
         MKImageryMapConfiguration, MKMapConfiguration, MKMapView, MKMapViewDelegate,
         MKMarkerAnnotationView, MKPointAnnotation, MKStandardMapConfiguration,
     };
-    use std::cell::RefCell;
+    use std::cell::{Cell, RefCell};
     use std::collections::HashMap;
     use tauri::AppHandle;
     use tauri_specta::Event;
 
     const REUSE: &str = "pin";
     const CLUSTER: &str = "qc";
+    /// Key codes: Return, the keypad's Enter, Escape.
+    const RETURN: u16 = 36;
+    const ENTER: u16 = 76;
+    const ESCAPE: u16 = 53;
+    /// The poster frame's size in a clip's callout, in points (16:9).
+    const THUMB: (f64, f64) = (96.0, 54.0);
 
     pub struct Host {
-        map: Retained<MKMapView>,
-        _delegate: Retained<Delegate>,
+        map: Retained<Map>,
+        delegate: Retained<Delegate>,
         pins: Vec<Retained<MKPointAnnotation>>,
         webview: usize,
     }
 
-    /// A pin's id, kind and glyph.
-    type Pin = (String, PinKind, Option<String>);
+    /// What a pin's annotation carries: its id, kind, glyph, callout and poster frame.
+    struct Pin {
+        id: String,
+        kind: PinKind,
+        glyph: Option<String>,
+        callout: Callout,
+        thumb: Option<String>,
+    }
 
     thread_local! {
         static HOST: RefCell<Option<Host>> = const { RefCell::new(None) };
-        /// Each pin's id, kind and glyph, by its annotation's address.
+        /// Each pin, by its annotation's address.
         static PINS: RefCell<HashMap<usize, Pin>> = RefCell::new(HashMap::new());
+        /// The annotation whose callout shows, by address.
+        static SELECTED: Cell<Option<usize>> = const { Cell::new(None) };
     }
 
     pub struct Ivars {
@@ -178,11 +324,45 @@ mod native {
     }
 
     define_class!(
+        /// The map view: Return opens the shown callout's pin and Escape closes the callout.
+        #[unsafe(super(MKMapView, NSView, NSResponder, NSObject))]
+        #[thread_kind = MainThreadOnly]
+        #[name = "QuadCamMapView"]
+        pub struct Map;
+
+        impl Map {
+            #[unsafe(method(acceptsFirstResponder))]
+            fn accepts_first_responder(&self) -> bool {
+                true
+            }
+
+            #[unsafe(method(keyDown:))]
+            fn key_down(&self, event: &NSEvent) {
+                let shown = SELECTED.with(Cell::get).is_some();
+                match event.keyCode() {
+                    RETURN | ENTER if shown => open_selected(),
+                    ESCAPE if shown => close_selected(),
+                    // SAFETY: the superclass handles every other key.
+                    _ => unsafe { msg_send![super(self), keyDown: event] },
+                }
+            }
+        }
+    );
+
+    define_class!(
         #[unsafe(super(NSObject))]
         #[thread_kind = MainThreadOnly]
         #[name = "QuadCamMapDelegate"]
         #[ivars = Ivars]
         pub struct Delegate;
+
+        impl Delegate {
+            /// The callout's button.
+            #[unsafe(method(openPin:))]
+            fn open_pin(&self, _sender: Option<&AnyObject>) {
+                open_selected();
+            }
+        }
 
         unsafe impl NSObjectProtocol for Delegate {}
 
@@ -193,7 +373,7 @@ mod native {
                 map: &MKMapView,
                 annotation: &ProtocolObject<dyn MKAnnotation>,
             ) -> Option<Retained<MKAnnotationView>> {
-                view_for(self.mtm(), map, annotation)
+                view_for(self, map, annotation)
             }
 
             #[unsafe(method(mapViewDidFinishLoadingMap:))]
@@ -221,39 +401,143 @@ mod native {
                         return;
                     };
                     let key = &*annotation as *const _ as *const () as usize;
-                    let hit = PINS.with(|s| s.borrow().get(&key).map(|v| v.0.clone()));
+                    if PINS.with(|s| s.borrow().contains_key(&key)) {
+                        // MapKit shows the callout; the map takes the keys for it.
+                        SELECTED.with(|s| s.set(Some(key)));
+                        if let Some(w) = map.window() {
+                            w.makeFirstResponder(Some(map));
+                        }
+                        return;
+                    }
+                    // A cluster MapKit made: zoom in to its pins.
                     map.deselectAnnotation_animated(Some(&annotation), false);
-                    match hit {
-                        Some(id) => {
-                            let _ = MapPick(id).emit(&self.ivars().app);
-                        }
-                        None => {
-                            // A cluster MapKit made: zoom in to its pins.
-                            let obj: &NSObject =
-                                &*(Retained::as_ptr(&annotation) as *const NSObject);
-                            if obj.isKindOfClass(MKClusterAnnotation::class()) {
-                                let cluster =
-                                    &*(obj as *const NSObject as *const MKClusterAnnotation);
-                                map.showAnnotations_animated(&cluster.memberAnnotations(), true);
-                            }
-                        }
+                    let obj: &NSObject = &*(Retained::as_ptr(&annotation) as *const NSObject);
+                    if obj.isKindOfClass(MKClusterAnnotation::class()) {
+                        let cluster = &*(obj as *const NSObject as *const MKClusterAnnotation);
+                        map.showAnnotations_animated(&cluster.memberAnnotations(), true);
                     }
                 }
+            }
+
+            #[unsafe(method(mapView:didDeselectAnnotationView:))]
+            fn did_deselect(&self, _map: &MKMapView, view: &MKAnnotationView) {
+                // SAFETY: MapKit calls this on the main thread with a live view.
+                let key = unsafe { view.annotation() }
+                    .map(|a| &*a as *const _ as *const () as usize);
+                SELECTED.with(|s| {
+                    if s.get() == key {
+                        s.set(None);
+                    }
+                });
             }
         }
     );
 
-    fn view_for(
+    /// Sends the shown callout's pin to the page (`map-pick`) and closes the callout.
+    fn open_selected() {
+        let Some(key) = SELECTED.with(Cell::get) else {
+            return;
+        };
+        let Some(id) = PINS.with(|s| s.borrow().get(&key).map(|p| p.id.clone())) else {
+            return;
+        };
+        let app = HOST.with(|h| {
+            let h = h.borrow();
+            let host = h.as_ref()?;
+            host.deselect(key);
+            Some(host.delegate.ivars().app.clone())
+        });
+        if let Some(app) = app {
+            let _ = MapPick(id).emit(&app);
+        }
+    }
+
+    /// Closes the shown callout.
+    fn close_selected() {
+        if let Some(key) = SELECTED.with(Cell::get) {
+            HOST.with(|h| {
+                if let Some(host) = h.borrow().as_ref() {
+                    host.deselect(key);
+                }
+            });
+        }
+    }
+
+    fn label(text: &str, mtm: MainThreadMarker, secondary: bool) -> Retained<NSView> {
+        let l = NSTextField::labelWithString(&NSString::from_str(text), mtm);
+        if secondary {
+            l.setTextColor(Some(&NSColor::secondaryLabelColor()));
+        }
+        Retained::into_super(Retained::into_super(l))
+    }
+
+    fn stack(
+        views: &[Retained<NSView>],
+        vertical: bool,
         mtm: MainThreadMarker,
+    ) -> Retained<NSStackView> {
+        let refs: Vec<&NSView> = views.iter().map(|v| &**v).collect();
+        let s = NSStackView::stackViewWithViews(&NSArray::from_slice(&refs), mtm);
+        if vertical {
+            s.setOrientation(NSUserInterfaceLayoutOrientation::Vertical);
+            s.setAlignment(NSLayoutAttribute::Leading);
+            s.setSpacing(2.0);
+        } else {
+            s.setOrientation(NSUserInterfaceLayoutOrientation::Horizontal);
+            s.setAlignment(NSLayoutAttribute::CenterY);
+            s.setSpacing(4.0);
+        }
+        s
+    }
+
+    /// The callout's lines and the clip's sky, under the title.
+    fn detail(c: &Callout, mtm: MainThreadMarker) -> Retained<NSView> {
+        let mut rows: Vec<Retained<NSView>> = c.lines.iter().map(|l| label(l, mtm, true)).collect();
+        if let Some((symbol, word)) = &c.sky {
+            let word_ns = NSString::from_str(word);
+            let mut row = Vec::new();
+            if let Some(img) = NSImage::imageWithSystemSymbolName_accessibilityDescription(
+                &NSString::from_str(symbol),
+                Some(&word_ns),
+            ) {
+                let v = NSImageView::imageViewWithImage(&img, mtm);
+                v.setContentTintColor(Some(&NSColor::secondaryLabelColor()));
+                // The word beside it says the same.
+                v.setAccessibilityElement(false);
+                row.push(Retained::into_super(Retained::into_super(v)));
+            }
+            row.push(label(word, mtm, true));
+            rows.push(Retained::into_super(stack(&row, false, mtm)));
+        }
+        Retained::into_super(stack(&rows, true, mtm))
+    }
+
+    /// A clip's poster frame, when it is on disk.
+    fn thumb(path: &str, title: &str, mtm: MainThreadMarker) -> Option<Retained<NSView>> {
+        let img = NSImage::initWithContentsOfFile(NSImage::alloc(), &NSString::from_str(path))?;
+        let v = NSImageView::imageViewWithImage(&img, mtm);
+        v.setImageScaling(NSImageScaling::ScaleProportionallyUpOrDown);
+        v.setFrame(NSRect::new(
+            NSPoint::new(0.0, 0.0),
+            NSSize::new(THUMB.0, THUMB.1),
+        ));
+        v.setAccessibilityLabel(Some(&NSString::from_str(&format!("{title}, poster frame"))));
+        Some(Retained::into_super(Retained::into_super(v)))
+    }
+
+    fn view_for(
+        delegate: &Delegate,
         map: &MKMapView,
         annotation: &ProtocolObject<dyn MKAnnotation>,
     ) -> Option<Retained<MKAnnotationView>> {
+        let mtm = delegate.mtm();
         let key = annotation as *const _ as *const () as usize;
-        let Some((kind, glyph)) = PINS.with(|s| s.borrow().get(&key).map(|v| (v.1, v.2.clone())))
-        else {
-            // A cluster MapKit made: its own view.
-            return None;
-        };
+        let (kind, glyph, c, poster) = PINS.with(|s| {
+            s.borrow()
+                .get(&key)
+                .map(|p| (p.kind, p.glyph.clone(), p.callout.clone(), p.thumb.clone()))
+        })?;
+        // A cluster MapKit made has no entry and gets its own view (the `?` above).
         // SAFETY: MapKit calls this on the main thread with a live map and annotation.
         unsafe {
             let view =
@@ -276,6 +560,27 @@ mod native {
                 PinKind::Clip => NSColor::systemBlueColor(),
             };
             view.setMarkerTintColor(Some(&tint));
+            // A click shows the callout; its button does what the click used to.
+            view.setCanShowCallout(true);
+            view.setDetailCalloutAccessoryView(Some(&detail(&c, mtm)));
+            let left = poster.as_deref().and_then(|p| thumb(p, &c.title, mtm));
+            view.setLeftCalloutAccessoryView(left.as_deref());
+            let button = c.button.map(|title| {
+                let b = NSButton::buttonWithTitle_target_action(
+                    &NSString::from_str(title),
+                    Some(delegate),
+                    Some(sel!(openPin:)),
+                    mtm,
+                );
+                b.setKeyEquivalent(&NSString::from_str("\r"));
+                b.setAccessibilityLabel(Some(&NSString::from_str(&format!(
+                    "{title}: {}",
+                    c.title
+                ))));
+                b
+            });
+            view.setRightCalloutAccessoryView(button.as_deref().map(|b| &***b));
+            view.setAccessibilityLabel(Some(&NSString::from_str(&c.label)));
             Some(Retained::into_super(view))
         }
     }
@@ -305,37 +610,42 @@ mod native {
         unsafe fn new(webview: usize, app: AppHandle, mtm: MainThreadMarker) -> Option<Host> {
             let web: &NSView = unsafe { (webview as *const NSView).as_ref() }?;
             let parent = web.superview()?;
-            let map = unsafe {
-                MKMapView::initWithFrame(
-                    MKMapView::alloc(mtm),
-                    NSRect::new(NSPoint::new(0.0, 0.0), NSSize::new(1.0, 1.0)),
-                )
+            let map: Retained<Map> = unsafe {
+                msg_send![
+                    Map::alloc(mtm),
+                    initWithFrame: NSRect::new(NSPoint::new(0.0, 0.0), NSSize::new(1.0, 1.0))
+                ]
             };
             let delegate: Retained<Delegate> = {
                 let this = Delegate::alloc(mtm).set_ivars(Ivars { app });
                 unsafe { msg_send![super(this), init] }
             };
+            let mk: &MKMapView = &map;
             unsafe {
-                map.setDelegate(Some(ProtocolObject::from_ref(&*delegate)));
-                map.setShowsZoomControls(true);
-                map.setShowsCompass(true);
-                map.setShowsScale(true);
+                mk.setDelegate(Some(ProtocolObject::from_ref(&*delegate)));
+                mk.setShowsZoomControls(true);
+                mk.setShowsCompass(true);
+                mk.setShowsScale(true);
             }
-            map.setHidden(true);
+            mk.setHidden(true);
             // The page lays the map out; between two reports the map keeps its margins, as
             // the page's own layout does while the window is resized.
-            map.setAutoresizingMask(
+            mk.setAutoresizingMask(
                 NSAutoresizingMaskOptions::ViewWidthSizable
                     | NSAutoresizingMaskOptions::ViewHeightSizable,
             );
-            let view: &NSView = &map;
+            let view: &NSView = mk;
             parent.addSubview_positioned_relativeTo(view, NSWindowOrderingMode::Above, Some(web));
             Some(Host {
                 map,
-                _delegate: delegate,
+                delegate,
                 pins: Vec::new(),
                 webview,
             })
+        }
+
+        fn mk(&self) -> &MKMapView {
+            &self.map
         }
 
         fn webview(&self) -> &NSView {
@@ -344,58 +654,125 @@ mod native {
             unsafe { &*(self.webview as *const NSView) }
         }
 
+        /// Closes the callout of the pin at `key`.
+        fn deselect(&self, key: usize) {
+            if let Some(a) = self
+                .pins
+                .iter()
+                .find(|p| Retained::as_ptr(p) as *const () as usize == key)
+            {
+                // SAFETY: on the main thread (the callers run there) with a live annotation.
+                unsafe {
+                    self.mk()
+                        .deselectAnnotation_animated(Some(ProtocolObject::from_ref(&**a)), true)
+                };
+            }
+            SELECTED.with(|s| s.set(None));
+        }
+
+        /// Gives the keys back to the page when the map held them.
+        fn release_keys(&self) {
+            let mk: &NSView = self.mk();
+            let Some(w) = mk.window() else {
+                return;
+            };
+            let holds = w
+                .firstResponder()
+                .is_some_and(|r| Retained::as_ptr(&r) as *const () == mk as *const _ as *const ());
+            if holds {
+                let web: &NSResponder = self.webview();
+                w.makeFirstResponder(Some(web));
+            }
+        }
+
         pub fn place(&mut self, frame: Option<MapFrame>) {
             let frame = frame.filter(|f| f.w > 0.0 && f.h > 0.0);
             let Some(f) = frame else {
-                self.map.setHidden(true);
+                if let Some(key) = SELECTED.with(Cell::get) {
+                    self.deselect(key);
+                }
+                self.release_keys();
+                self.mk().setHidden(true);
                 return;
             };
             let web = self.webview();
             let b = web.bounds();
             let (x, y, w, h) = to_points(&f, b.size.width, b.size.height, web.isFlipped());
             let in_web = NSRect::new(NSPoint::new(x, y), NSSize::new(w, h));
-            let Some(parent) = (unsafe { self.map.superview() }) else {
+            let Some(parent) = (unsafe { self.mk().superview() }) else {
                 return;
             };
             let rect = web.convertRect_toView(in_web, Some(&parent));
-            self.map.setFrame(rect);
-            self.map.setHidden(false);
+            self.mk().setFrame(rect);
+            self.mk().setHidden(false);
         }
 
         pub fn set_pins(&mut self, pins: &[MapPin], style: MapStyle, fit: bool) {
+            let held = self.map.clone();
+            let map: &MKMapView = &held;
             unsafe {
                 let config: Retained<MKMapConfiguration> = match style {
                     MapStyle::Standard => Retained::into_super(MKStandardMapConfiguration::new()),
                     MapStyle::Satellite => Retained::into_super(MKImageryMapConfiguration::new()),
                     MapStyle::Hybrid => Retained::into_super(MKHybridMapConfiguration::new()),
                 };
-                self.map.setPreferredConfiguration(&config);
-                let old: Vec<&ProtocolObject<dyn MKAnnotation>> = self
-                    .pins
-                    .iter()
-                    .map(|p| ProtocolObject::from_ref(&**p))
-                    .collect();
-                self.map.removeAnnotations(&NSArray::from_slice(&old));
+                map.setPreferredConfiguration(&config);
             }
-            let mut ids = HashMap::new();
-            self.pins = pins
-                .iter()
-                .map(|p| {
-                    let a = unsafe { MKPointAnnotation::new() };
-                    unsafe {
-                        a.setCoordinate(CLLocationCoordinate2D {
-                            latitude: p.lat,
-                            longitude: p.lon,
-                        });
-                        a.setTitle(Some(&NSString::from_str(&p.title)));
-                        a.setSubtitle(p.subtitle.as_deref().map(NSString::from_str).as_deref());
-                    }
-                    let key = Retained::as_ptr(&a) as *const () as usize;
-                    ids.insert(key, (p.id.clone(), p.kind, p.glyph.clone()));
-                    a
-                })
-                .collect();
-            PINS.with(|s| *s.borrow_mut() = ids);
+            // The same pins again (a style change, a library reload with nothing new on the
+            // map) keep their annotations, so a shown callout stays open.
+            let same = PINS.with(|s| {
+                let s = s.borrow();
+                self.pins.len() == pins.len()
+                    && self.pins.iter().zip(pins).all(|(a, p)| {
+                        let key = Retained::as_ptr(a) as *const () as usize;
+                        s.get(&key).is_some_and(|q| {
+                            q.id == p.id && q.callout == callout(p) && q.thumb == p.thumb
+                        }) && {
+                            // SAFETY: a live annotation on the main thread.
+                            let c = unsafe { a.coordinate() };
+                            c.latitude == p.lat && c.longitude == p.lon
+                        }
+                    })
+            });
+            if !same {
+                unsafe {
+                    let old: Vec<&ProtocolObject<dyn MKAnnotation>> = self
+                        .pins
+                        .iter()
+                        .map(|p| ProtocolObject::from_ref(&**p))
+                        .collect();
+                    map.removeAnnotations(&NSArray::from_slice(&old));
+                }
+                SELECTED.with(|s| s.set(None));
+                let mut ids = HashMap::new();
+                self.pins = pins
+                    .iter()
+                    .map(|p| {
+                        let a = unsafe { MKPointAnnotation::new() };
+                        unsafe {
+                            a.setCoordinate(CLLocationCoordinate2D {
+                                latitude: p.lat,
+                                longitude: p.lon,
+                            });
+                            a.setTitle(Some(&NSString::from_str(&p.title)));
+                            a.setSubtitle(p.subtitle.as_deref().map(NSString::from_str).as_deref());
+                        }
+                        let key = Retained::as_ptr(&a) as *const () as usize;
+                        ids.insert(
+                            key,
+                            Pin {
+                                id: p.id.clone(),
+                                kind: p.kind,
+                                glyph: p.glyph.clone(),
+                                callout: callout(p),
+                                thumb: p.thumb.clone(),
+                            },
+                        );
+                        a
+                    })
+                    .collect();
+                PINS.with(|s| *s.borrow_mut() = ids);
+            }
             let all: Vec<&ProtocolObject<dyn MKAnnotation>> = self
                 .pins
                 .iter()
@@ -403,9 +780,11 @@ mod native {
                 .collect();
             let all = NSArray::from_slice(&all);
             unsafe {
-                self.map.addAnnotations(&all);
+                if !same {
+                    map.addAnnotations(&all);
+                }
                 if fit && !self.pins.is_empty() {
-                    self.map.showAnnotations_animated(&all, false);
+                    map.showAnnotations_animated(&all, false);
                 }
             }
         }
@@ -415,6 +794,127 @@ mod native {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn pin(kind: PinKind) -> MapPin {
+        MapPin {
+            id: "x".into(),
+            kind,
+            title: "Home field".into(),
+            subtitle: None,
+            lat: 0.0,
+            lon: 0.0,
+            glyph: None,
+            count: None,
+            first: None,
+            last: None,
+            time: None,
+            sky: None,
+            is_day: None,
+            thumb: None,
+        }
+    }
+
+    #[test]
+    fn days_and_ranges_read_as_words() {
+        assert_eq!(day("2026-09-28"), "Sep 28, 2026");
+        assert_eq!(day("2026-09-03"), "Sep 3, 2026");
+        assert_eq!(day("soon"), "soon");
+        assert_eq!(day_range("2026-09-28", "2026-09-28"), "Sep 28, 2026");
+        assert_eq!(
+            day_range("2026-09-03", "2026-09-28"),
+            "Sep 3 – Sep 28, 2026"
+        );
+        assert_eq!(
+            day_range("2025-12-30", "2026-01-02"),
+            "Dec 30, 2025 – Jan 2, 2026"
+        );
+    }
+
+    #[test]
+    fn a_place_callout_counts_its_clips_and_their_days() {
+        let p = MapPin {
+            count: Some(3),
+            first: Some("2026-09-03".into()),
+            last: Some("2026-09-28".into()),
+            ..pin(PinKind::Place)
+        };
+        let c = callout(&p);
+        assert_eq!(c.title, "Home field");
+        assert_eq!(c.lines, ["3 clips", "Sep 3 – Sep 28, 2026"]);
+        assert_eq!(c.button, Some("Show clips"));
+        assert_eq!(c.sky, None);
+        assert_eq!(c.label, "Home field, place, 3 clips, Sep 3 – Sep 28, 2026");
+
+        let one = callout(&MapPin {
+            count: Some(1),
+            first: Some("2026-09-28".into()),
+            last: Some("2026-09-28".into()),
+            ..pin(PinKind::Place)
+        });
+        assert_eq!(one.lines, ["1 clip", "Sep 28, 2026"]);
+    }
+
+    #[test]
+    fn a_place_without_clips_has_no_button() {
+        let c = callout(&pin(PinKind::Empty));
+        assert_eq!(c.lines, ["No clips"]);
+        assert_eq!(c.button, None);
+        assert_eq!(c.label, "Home field, place, No clips");
+    }
+
+    #[test]
+    fn a_clip_callout_shows_its_day_time_and_sky() {
+        let p = MapPin {
+            title: "river-dive".into(),
+            first: Some("2026-09-28".into()),
+            last: Some("2026-09-28".into()),
+            time: Some("18:30".into()),
+            sky: Some(Sky::PartlyCloudy),
+            is_day: Some(false),
+            thumb: Some("/lib/.quadcam/posters/x.jpg".into()),
+            ..pin(PinKind::Clip)
+        };
+        let c = callout(&p);
+        assert_eq!(c.lines, ["Sep 28, 2026 at 18:30"]);
+        assert_eq!(c.sky, Some(("cloud.moon", "Partly cloudy".to_string())));
+        assert_eq!(c.button, Some("Open"));
+        assert_eq!(
+            c.label,
+            "river-dive, clip, Sep 28, 2026 at 18:30, Partly cloudy"
+        );
+        // No time, no weather: the day alone.
+        let bare = callout(&MapPin {
+            time: None,
+            sky: None,
+            ..p
+        });
+        assert_eq!(bare.lines, ["Sep 28, 2026"]);
+        assert_eq!(bare.sky, None);
+    }
+
+    #[test]
+    fn every_sky_has_a_symbol_and_nights_show_the_moon() {
+        use Sky::*;
+        let all = [
+            Clear,
+            PartlyCloudy,
+            Cloudy,
+            Fog,
+            Drizzle,
+            Rain,
+            HeavyRain,
+            Sleet,
+            Snow,
+            Thunderstorm,
+            Hail,
+        ];
+        let day: std::collections::HashSet<_> =
+            all.iter().map(|s| sky_symbol(*s, Some(true))).collect();
+        assert_eq!(day.len(), all.len());
+        assert_eq!(sky_symbol(Clear, None), "sun.max");
+        assert_eq!(sky_symbol(Clear, Some(false)), "moon.stars");
+        assert_eq!(sky_symbol(Rain, Some(false)), "cloud.rain");
+    }
 
     #[test]
     fn a_frame_maps_to_points() {

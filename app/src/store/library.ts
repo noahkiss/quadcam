@@ -4,7 +4,6 @@ import type { StateCreator } from "zustand";
 import type { State } from ".";
 import { api } from "../ipc/api";
 import type { LibClip, LibraryView } from "../ipc/types";
-import type { MapStyle } from "../bindings";
 import { visibleClips, type Filter } from "../lib/library";
 import { sel } from "./settings";
 
@@ -25,7 +24,6 @@ export interface LibrarySlice {
   renaming: string | null;
   /** The Map page shows (Settings > Places > Show the Map page). */
   mapOpen: boolean;
-  mapStyle: MapStyle;
   /** Reads the library. With `onlyIfChanged` nothing changes unless the clips did. */
   loadLibrary: (onlyIfChanged?: boolean) => Promise<void>;
   setFilter: (f: Filter) => void;
@@ -39,7 +37,6 @@ export interface LibrarySlice {
   setDTab: (t: "details" | "flight") => void;
   setRenaming: (id: string | null) => void;
   openMap: () => void;
-  setMapStyle: (s: MapStyle) => void;
 }
 
 let libSig = "";
@@ -56,7 +53,6 @@ export const createLibrarySlice: StateCreator<State, [], [], LibrarySlice> = (se
   detailSeek: null,
   renaming: null,
   mapOpen: false,
-  mapStyle: "standard",
   loadLibrary: async (onlyIfChanged = false) => {
     let lib: LibraryView;
     try {
@@ -97,7 +93,6 @@ export const createLibrarySlice: StateCreator<State, [], [], LibrarySlice> = (se
   closeDetail: () => set({ detailId: null, detailSeek: null }),
   setDTab: (dTab) => set({ dTab }),
   setRenaming: (renaming) => set({ renaming }),
-  setMapStyle: (mapStyle) => set({ mapStyle }),
   openMap: () => set({ mapOpen: true, gearPage: null, detailId: null, detailSeek: null }),
 });
 

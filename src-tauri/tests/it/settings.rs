@@ -307,3 +307,46 @@ fn every_named_setting_reads_and_writes_through_mcp() {
     }
     assert!(named > 40, "only {named} named settings");
 }
+
+/// The Map page's look is saved: standard by default, the three styles through MCP, the
+/// effective defaults and the file; anything else refused, and null resets it.
+#[test]
+fn the_map_style_is_saved() {
+    use quadcam_lib::settings::MapStyle;
+    let dir = tempfile::tempdir().unwrap();
+    let f = dir.path().join("settings.json");
+    let c = core(dir.path(), Arc::new(NoHooks), &f);
+    let mut s = Server::new(quadcam_lib::mcp::LocalBackend(c.clone()));
+    assert_eq!(c.defaults().map_style, MapStyle::Standard);
+    let r = s.call_tool("quadcam_settings", json!({"action": "read"}));
+    assert_eq!(r["structuredContent"]["settings"]["map_style"], "standard");
+
+    for (name, style) in [
+        ("hybrid", MapStyle::Hybrid),
+        ("satellite", MapStyle::Satellite),
+    ] {
+        let w = s.call_tool(
+            "quadcam_settings",
+            json!({"action": "write", "values": {"map_style": name}}),
+        );
+        assert_ne!(w["isError"], true, "{w}");
+        assert_eq!(w["structuredContent"]["settings"]["map_style"], name);
+        assert_eq!(read(&f)["mapStyle"], name);
+        assert_eq!(c.defaults().map_style, style);
+    }
+
+    let bad = s.call_tool(
+        "quadcam_settings",
+        json!({"action": "write", "values": {"map_style": "terrain"}}),
+    );
+    assert_eq!(bad["isError"], true, "{bad}");
+    assert_eq!(c.defaults().map_style, MapStyle::Satellite);
+
+    let w = s.call_tool(
+        "quadcam_settings",
+        json!({"action": "write", "values": {"map_style": null}}),
+    );
+    assert_ne!(w["isError"], true, "{w}");
+    assert_eq!(c.defaults().map_style, MapStyle::Standard);
+    assert!(read(&f).get("mapStyle").is_none());
+}

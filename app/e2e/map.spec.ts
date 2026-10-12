@@ -29,8 +29,8 @@ test("the map shows a pin per place with its clip count, where the page keeps it
   await expect(page.getByRole("heading", { name: "Map" })).toBeVisible();
   await expect(page.getByText("2 places · 3 clips on the map")).toBeVisible();
   await expect.poll(() => pins(app)).toEqual([
-    expect.objectContaining({ id: "place:Home field", kind: "place", glyph: "2", lat: 40, lon: -75 }),
-    expect.objectContaining({ id: "place:Riverside park", kind: "place", glyph: "1" }),
+    expect.objectContaining({ id: "place:Home field", kind: "place", glyph: "2", count: 2, lat: 40, lon: -75 }),
+    expect.objectContaining({ id: "place:Riverside park", kind: "place", glyph: "1", count: 1 }),
   ]);
   // The first pins zoom the map to show them all.
   expect((await app.calls("map_pins")).find((c) => (c.args.pins as unknown[]).length)?.args.fit).toBe(true);
@@ -40,9 +40,17 @@ test("the map shows a pin per place with its clip count, where the page keeps it
 
   await page.getByRole("group", { name: "Map style" }).getByRole("button", { name: "Satellite" }).click();
   await expect.poll(() => app.core<string>("(c) => c.map.style")).toBe("satellite");
+  await expect.poll(async () => (await app.method("settings_set")).map((p) => (p as { values: Record<string, unknown> }).values)).toContainEqual({ mapStyle: "satellite" });
   expect((await app.core<{ fit: boolean }>("(c) => c.map")).fit).toBe(false);
   await page.getByRole("button", { name: "Show all" }).click();
   await expect.poll(() => app.core<boolean>("(c) => c.map.fit")).toBe(true);
+});
+
+test("the map opens in the saved style", async ({ app, page }) => {
+  await app.open("library", { settings: { mapView: true, mapStyle: "hybrid" } });
+  await sidebar(page).getByRole("button", { name: "Map" }).click();
+  await expect.poll(() => app.core<string>("(c) => c.map && c.map.style")).toBe("hybrid");
+  await expect(page.getByRole("group", { name: "Map style" }).getByRole("button", { name: "Hybrid" })).toHaveAttribute("aria-pressed", "true");
 });
 
 test("the map hides under a dialog and when the page closes", async ({ app, page }) => {
@@ -58,7 +66,7 @@ test("the map hides under a dialog and when the page closes", async ({ app, page
   await expect.poll(() => lastFrame(app)).toBeNull();
 });
 
-test("a place's pin shows its clips; a clip's pin opens the clip", async ({ app, page }) => {
+test("a place's callout button shows its clips; a clip's opens the clip", async ({ app, page }) => {
   await app.open("library", { settings: { mapView: true } });
   await sidebar(page).getByRole("button", { name: "Map" }).click();
   await expect.poll(() => pins(app)).not.toBeNull();

@@ -33,7 +33,19 @@ describe("map pins", () => {
 
   it("gives a clip with a location but no place its own pin", () => {
     const d = mapData([clip("c1", { name: "loops", location: at(1, 2) })], []);
-    expect(d.pins).toEqual([{ id: clipPin("c1"), kind: "clip", title: "loops", subtitle: "2026-09-28", lat: 1, lon: 2, glyph: null }]);
+    expect(d.pins).toEqual([{ id: clipPin("c1"), kind: "clip", title: "loops", subtitle: "2026-09-28", lat: 1, lon: 2, glyph: null, first: "2026-09-28", last: "2026-09-28", time: null, sky: null, is_day: null, thumb: null }]);
+  });
+
+  it("gives a clip's pin what its callout shows: day, time, sky and poster frame", () => {
+    const weather = { sky: "rain", is_day: false } as LibClip["weather"];
+    const d = mapData([clip("c1", { name: "loops", time: "18:30", weather, poster: "/lib/p.jpg", location: at(1, 2) })], []);
+    expect(d.pins[0]).toMatchObject({ first: "2026-09-28", last: "2026-09-28", time: "18:30", sky: "rain", is_day: false, thumb: "/lib/p.jpg" });
+  });
+
+  it("gives a place's pin its clip count and its first and last day", () => {
+    const d = mapData([clip("a", { place: "Field", date: "2026-09-28" }), clip("b", { place: "Field", date: "2026-08-03" }), clip("c", { place: "Field", date: "2026-09-01" })], places);
+    expect(d.pins.find((p) => p.id === placePin("Field"))).toMatchObject({ count: 3, first: "2026-08-03", last: "2026-09-28" });
+    expect(d.pins.find((p) => p.id === placePin("Beach"))).toMatchObject({ kind: "empty", count: 0 });
   });
 
   it("counts clips it cannot place", () => {

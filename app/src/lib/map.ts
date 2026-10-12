@@ -1,5 +1,7 @@
 // The Map page's pins: one per place (its clips counted on it), one per saved place without
-// clips, and one per clip that has a location but no place. Pure, so Vitest covers it.
+// clips, and one per clip that has a location but no place. Each pin carries what its native
+// callout shows: a place's clip count and first and last day; a clip's day, time, sky and
+// poster frame. Pure, so Vitest covers it.
 import type { MapPin } from "../bindings";
 import type { LibClip, Place } from "../ipc/types";
 
@@ -44,7 +46,21 @@ export function mapData(clips: LibClip[], places: Place[]): MapData {
       g.clips.push(c);
       groups.set(k, g);
     } else if (c.location && valid(c.location.lat, c.location.lon)) {
-      loose.push({ id: clipPin(c.id), kind: "clip", title: c.name || c.date, subtitle: c.name ? c.date : null, lat: c.location.lat, lon: c.location.lon!, glyph: null });
+      loose.push({
+        id: clipPin(c.id),
+        kind: "clip",
+        title: c.name || c.date,
+        subtitle: c.name ? c.date : null,
+        lat: c.location.lat,
+        lon: c.location.lon!,
+        glyph: null,
+        first: c.date,
+        last: c.date,
+        time: c.time || null,
+        sky: c.weather?.sky ?? null,
+        is_day: c.weather?.is_day ?? null,
+        thumb: c.poster || null,
+      });
     } else unmapped++;
   }
   const pins: MapPin[] = [];
@@ -61,11 +77,23 @@ export function mapData(clips: LibClip[], places: Place[]): MapData {
       continue;
     }
     mapped += g.clips.length;
-    pins.push({ id: placePin(g.name), kind: "place", title: g.name, subtitle: plural(g.clips.length, "clip"), lat: at[0], lon: at[1], glyph: String(g.clips.length) });
+    const days = g.clips.map((c) => c.date).filter(Boolean).sort();
+    pins.push({
+      id: placePin(g.name),
+      kind: "place",
+      title: g.name,
+      subtitle: plural(g.clips.length, "clip"),
+      lat: at[0],
+      lon: at[1],
+      glyph: String(g.clips.length),
+      count: g.clips.length,
+      first: days[0] ?? null,
+      last: days.at(-1) ?? null,
+    });
   }
   for (const [k, p] of saved) {
     if (groups.has(k) || !valid(p.lat, p.lon)) continue;
-    pins.push({ id: placePin(p.name), kind: "empty", title: p.name, subtitle: "No clips", lat: p.lat, lon: p.lon!, glyph: null });
+    pins.push({ id: placePin(p.name), kind: "empty", title: p.name, subtitle: "No clips", lat: p.lat, lon: p.lon!, glyph: null, count: 0 });
   }
   pins.sort((a, b) => a.title.localeCompare(b.title));
   return { pins: [...pins, ...loose], mapped, unmapped };

@@ -2185,6 +2185,8 @@ export type Defaults_Deserialize = {
 	 *  Homebrew (`module`, the default), or Homebrew only (`homebrew`).
 	 */
 	ffmpeg_source?: FfmpegSource,
+	/**  The Map page's look: Apple Maps' Standard, Hybrid or Satellite. */
+	map_style?: MapStyle,
 	/**  Google Places API key from the settings file. Never serialized. */
 	google_places_key?: string | null,
 };
@@ -2250,6 +2252,8 @@ export type Defaults_Serialize = {
 	 *  Homebrew (`module`, the default), or Homebrew only (`homebrew`).
 	 */
 	ffmpeg_source: FfmpegSource,
+	/**  The Map page's look: Apple Maps' Standard, Hybrid or Satellite. */
+	map_style: MapStyle,
 };
 
 /**  What happened to one clip's file on the card or folder after an import. */
@@ -4239,10 +4243,10 @@ export type MapFrame = {
 	page_w: number | null,
 };
 
-/**  A pin was clicked: its id. */
+/**  A pin's callout button was clicked (or Return pressed while its callout shows): its id. */
 export type MapPick = string;
 
-/**  One pin. `id` comes back in `map-pick` when the pin is clicked. */
+/**  One pin. A click shows its callout; the callout's button sends `id` back in `map-pick`. */
 export type MapPin = {
 	id: string,
 	kind: PinKind,
@@ -4252,9 +4256,21 @@ export type MapPin = {
 	lon: number | null,
 	/**  Shown inside the marker (the clip count of a place); empty shows the default glyph. */
 	glyph: string | null,
+	/**  A place's clip count. */
+	count?: number | null,
+	/**  The first and last day (`YYYY-MM-DD`) of a place's clips; a clip's day in both. */
+	first?: string | null,
+	last?: string | null,
+	/**  A clip's time of day, `HH:MM`. */
+	time?: string | null,
+	/**  A clip's sky at flight time, and whether the sun was up then. */
+	sky?: Sky | null,
+	is_day?: boolean | null,
+	/**  A clip's poster frame on disk. */
+	thumb?: string | null,
 };
 
-/**  The map's look: Apple Maps' Standard, Satellite and Hybrid. */
+/**  The Map page's look (setting `mapStyle`): Apple Maps' Standard, Satellite and Hybrid. */
 export type MapStyle = "standard" | "satellite" | "hybrid";
 
 /**  A menu item was chosen: its id. */

@@ -439,6 +439,9 @@ pub struct SettingsValues {
     /// Show the Map page in the sidebar: places and clips on an Apple map. Off by default.
     #[schemars(extend("x-nullable" = true))]
     pub map_view: Option<bool>,
+    /// The Map page's look: standard (default), hybrid or satellite.
+    #[schemars(extend("x-nullable" = true, "enum" = ["standard", "hybrid", "satellite", null]))]
+    pub map_style: Option<String>,
     /// Show the Sim page in the Gear sidebar (a preview). Off by default.
     #[schemars(extend("x-nullable" = true))]
     pub sim_preview: Option<bool>,

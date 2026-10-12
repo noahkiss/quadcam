@@ -67,6 +67,10 @@ Off by default. On, QuadCam gets the weather at each library clip's place and ho
 
 Off by default. On, the sidebar shows **Map** under Library: your places and clips on an Apple map. See [The map](library.md#the-map). The map comes from Apple Maps on your Mac and needs no account. In the settings file it is `mapView`; on the command line and in MCP it is `map_view`.
 
+### Map style
+
+`standard` by default. The Map page's look: `standard` (Map), `hybrid` or `satellite`. The **Map**, **Hybrid** and **Satellite** control on the Map page sets it, and the map opens in it the next time. In the settings file it is `mapStyle`; on the command line and in MCP it is `map_style`.
+
 ### On-device suggestions
 
 On by default. On a Mac with Apple's on-device model (macOS 26 or later, Apple Intelligence on), QuadCam suggests clip names, keywords and notes after a card loads, and the session report offers **Summarize day**. Off, neither runs, for the app, the command line or an agent. See [On-device suggestions](library.md#on-device-suggestions). In the settings file it is `onDeviceSuggestions`; on the command line and in MCP it is `on_device_suggestions`.

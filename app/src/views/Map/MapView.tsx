@@ -1,6 +1,8 @@
 // The Map page: saved places and clips on an Apple map (Settings > Places > Show the Map
-// page). A place's pin carries its clip count; clicking it shows the place's clips in the
-// library. A clip with a location but no place has its own pin, which opens the clip.
+// page). A place's pin carries its clip count; a click shows its native callout, whose Show
+// clips button shows the place's clips in the library. A clip with a location but no place
+// has its own pin, whose callout's Open button opens the clip. Map, Hybrid and Satellite
+// save the setting `mapStyle`.
 import { useMemo, useState } from "react";
 import { useShallow } from "zustand/react/shallow";
 import { useStore } from "../../store";
@@ -23,8 +25,9 @@ const STYLES: { value: MapStyle; label: string }[] = [
 export function MapView() {
   const clips = useStore(useShallow((s) => s.lib?.clips ?? []));
   const places = useStore(sel.places);
-  const style = useStore((s) => s.mapStyle);
-  const setStyle = useStore((s) => s.setMapStyle);
+  const style = useStore(sel.mapStyle);
+  const saveSetting = useStore((s) => s.saveSetting);
+  const setStyle = (v: MapStyle) => void saveSetting("mapStyle", v);
   const setFilter = useStore((s) => s.setFilter);
   const openDetail = useStore((s) => s.openDetail);
   const openSettings = useStore((s) => s.openSettings);

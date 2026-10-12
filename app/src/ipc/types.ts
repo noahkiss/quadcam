@@ -300,6 +300,7 @@ export interface SettingsValues {
   weather?: boolean;
   onDeviceSuggestions?: boolean;
   mapView?: boolean;
+  mapStyle?: G.MapStyle;
   defaultName?: string;
   photosAlbum?: string;
   formatLabel?: string;

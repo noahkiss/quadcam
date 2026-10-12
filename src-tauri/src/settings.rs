@@ -383,6 +383,12 @@ pub const KEYS: &[Key] = &[
         check: boolean,
     },
     Key {
+        file: "mapStyle",
+        name: Some("map_style"),
+        about: "standard, hybrid or satellite",
+        check: |v| one_of(v, &["standard", "hybrid", "satellite"]),
+    },
+    Key {
         file: "simPreview",
         name: Some("sim_preview"),
         about: "true or false",
@@ -651,9 +657,22 @@ pub struct Defaults {
     /// Homebrew (`module`, the default), or Homebrew only (`homebrew`).
     #[serde(default)]
     pub ffmpeg_source: crate::media::FfmpegSource,
+    /// The Map page's look: Apple Maps' Standard, Hybrid or Satellite.
+    #[serde(default)]
+    pub map_style: MapStyle,
     /// Google Places API key from the settings file. Never serialized.
     #[serde(default, skip_serializing)]
     pub google_places_key: Option<String>,
+}
+
+/// The Map page's look (setting `mapStyle`): Apple Maps' Standard, Satellite and Hybrid.
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, specta::Type, PartialEq, Eq, Default)]
+#[serde(rename_all = "snake_case")]
+pub enum MapStyle {
+    #[default]
+    Standard,
+    Satellite,
+    Hybrid,
 }
 
 fn default_geocoder() -> String {
@@ -691,6 +710,7 @@ impl Default for Defaults {
             geocoder: default_geocoder(),
             name_date_format: Default::default(),
             ffmpeg_source: Default::default(),
+            map_style: MapStyle::default(),
             google_places_key: None,
         }
     }
@@ -781,6 +801,9 @@ impl Defaults {
         }
         if let Some(f) = get(v, "ffmpegSource") {
             d.ffmpeg_source = f;
+        }
+        if let Some(m) = get(v, "mapStyle") {
+            d.map_style = m;
         }
         if let Some(g) = get::<String>(v, "geocoder").filter(|g| GEOCODERS.contains(&g.as_str())) {
             d.geocoder = g;
