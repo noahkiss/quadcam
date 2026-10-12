@@ -26,8 +26,9 @@ pub use setup::*;
 
 use crate::core::{
     CardStatus, Core, FormatPlan, FormatRequest, ImportOptions, ImportOutcome, LibMatchParams,
-    LibMatchReport, LibraryView, OnDeviceParams, OnDeviceReport, PlaceRemoved, RebuildReport,
-    RenameReport, SettingsView, Status, TrashReport, VerifyReport, VideoParams, VideoReport,
+    LibMatchReport, LibShiftParams, LibShiftReport, LibraryView, OnDeviceParams, OnDeviceReport,
+    PlaceRemoved, RebuildReport, RenameReport, SettingsView, Status, TrashReport, VerifyReport,
+    VideoParams, VideoReport,
 };
 use crate::disk::Volume;
 use crate::geocode::GeoResult;
@@ -207,6 +208,9 @@ with_gear_rows! {
     /// Matches radio logs to library clips by shape; writes flight numbers and moments only
     /// with `apply`.
     library_match_logs(params: LibMatchParams) -> LibMatchReport = |c| c.library_match_logs(&params);
+    /// Shifts clips by one clip's real time; a radio log's time wins for a clip it matches.
+    /// Writes only with `apply`.
+    library_time_shift(params: LibShiftParams) -> LibShiftReport = |c| c.library_time_shift(&params);
     /// Finds dead air again in a clip.
     library_rescan(params: ClipIdParams) -> LibClip = |c| c.library_rescan(&params.id);
     /// Highlights and the key frame of library clips, with macOS video analysis.

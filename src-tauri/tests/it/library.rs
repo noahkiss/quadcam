@@ -1010,3 +1010,98 @@ fn a_put_back_refuses_outside_the_library_and_onto_a_taken_place() {
     assert_eq!(std::fs::read(&m.from).unwrap(), b"a new file in its place");
     assert!(m.to.is_file());
 }
+
+/// Batch time shift: the real time of one clip moves the others by the same offset, nothing
+/// is written without `apply`, a new day moves the files, and a radio log that matches a
+/// clip gives it the log's time instead.
+#[test]
+fn a_time_shift_moves_the_batch_and_a_log_wins() {
+    use quadcam_lib::core::{LibShiftParams, ShiftSource};
+    let l = lab(Layout::YearDay, false, false);
+    import(&l);
+    let a = by_name(&l, "backyard loops").clip.id;
+    let b = by_name(&l, "gap run").clip.id;
+    // A DVR clock that reset: both clips on 2000-01-01, 15 minutes apart.
+    let reset = NaiveDate::from_ymd_opt(2000, 1, 1).unwrap();
+    for (id, t) in [(&a, "00:05"), (&b, "00:20")] {
+        l.core
+            .library_edit(
+                id,
+                &LibEdit {
+                    date: Some(reset),
+                    time: Some(t.into()),
+                    ..Default::default()
+                },
+            )
+            .unwrap();
+    }
+    let real = NaiveDate::from_ymd_opt(2026, 9, 28).unwrap();
+    let params = |logs: Option<PathBuf>, apply| LibShiftParams {
+        ids: vec![a.clone(), b.clone()],
+        from: a.clone(),
+        date: Some(real),
+        time: "18:30".into(),
+        logs,
+        apply,
+    };
+    let before = by_name(&l, "gap run").file;
+    let bytes = std::fs::read(&before).unwrap();
+    let plan = l.core.library_time_shift(&params(None, false)).unwrap();
+    let row = |id: &str| plan.clips.iter().find(|c| c.id == id).unwrap().clone();
+    assert_eq!(row(&a).time.as_deref(), Some("18:30"));
+    assert_eq!(row(&a).source, ShiftSource::Set);
+    assert_eq!(
+        (row(&b).date, row(&b).time.as_deref()),
+        (Some(real), Some("18:45"))
+    );
+    assert_eq!(row(&b).source, ShiftSource::Offset);
+    assert!(plan.clips.iter().all(|c| !c.applied));
+    assert_eq!(std::fs::read(&before).unwrap(), bytes, "no apply, no write");
+
+    // A radio log of the real day with one armed run as long as "gap run", at 18:47.
+    let logs = l.root.parent().unwrap().join("logs");
+    std::fs::create_dir_all(logs.join("LOGS")).unwrap();
+    let mut csv = String::from("Date,Time,1RSS(dB),RQly(%),RxBt(V),Rud,Ele,Thr,Ail\n");
+    for i in 0..22 {
+        csv.push_str(&format!(
+            "2026-09-28,18:47:{:04.1},-60,100,{:.2},0,0,{},0\n",
+            i as f64 / 10.0,
+            4.2 - i as f64 * 0.005,
+            if i < 20 { 400 } else { -1024 }
+        ));
+    }
+    std::fs::write(logs.join("LOGS/Whoop-2026-09-28-184700.csv"), csv).unwrap();
+    let done = l
+        .core
+        .library_time_shift(&params(Some(logs.clone()), true))
+        .unwrap();
+    let row = |id: &str| done.clips.iter().find(|c| c.id == id).unwrap().clone();
+    assert_eq!(row(&b).source, ShiftSource::Log, "{done:?}");
+    assert_eq!(row(&b).time.as_deref(), Some("18:47"));
+    assert!(row(&a).applied && row(&b).applied);
+    let (ca, cb) = (by_name(&l, "backyard loops"), by_name(&l, "gap run"));
+    assert_eq!(
+        (ca.clip.date, ca.clip.time.as_deref()),
+        (real, Some("18:30"))
+    );
+    assert_eq!(
+        (cb.clip.date, cb.clip.time.as_deref()),
+        (real, Some("18:47"))
+    );
+    assert!(
+        ca.file.starts_with(l.root.join("2026/2026-09-28")),
+        "{:?}",
+        ca.file
+    );
+    assert_eq!(qt(&cb.file, "app.quadcam.time").as_deref(), Some("log"));
+    assert_eq!(qt(&ca.file, "app.quadcam.time").as_deref(), Some("manual"));
+    // The same shift again changes nothing.
+    let again = l
+        .core
+        .library_time_shift(&params(Some(logs), true))
+        .unwrap();
+    assert!(
+        again.clips.iter().all(|c| !c.changed && !c.applied),
+        "{again:?}"
+    );
+}
