@@ -44,3 +44,7 @@ SOUNDS/en/SYSTEM/thralert.wav,Throttle warning,system,The throttle is not at idl
 SOUNDS/en/SYSTEM/swalert.wav,Switch warning,system,A switch is not in its safe position at power-on.
 SOUNDS/en/SYSTEM/lowbatt.wav,Radio battery low,system,The radio's own battery is low.
 SOUNDS/en/SYSTEM/inactiv.wav,Radio inactive,system,The radio was not touched for a while.
+SOUNDS/en/qcdone.wav,"Done, safe to unplug.",cues,QuadCam plays it on the Mac when a job ends and the device is released.
+SOUNDS/en/qcstill.wav,Still inserted.,cues,QuadCam plays it on the Mac when a card or device is still in after a job is done.
+SOUNDS/en/qcfail.wav,A step failed.,cues,QuadCam plays it on the Mac when a step of a job failed.
+SOUNDS/en/qcunplug.wav,Unplug the quad now.,cues,QuadCam plays it on the Mac when a quad ran on USB with its battery in past its limit.

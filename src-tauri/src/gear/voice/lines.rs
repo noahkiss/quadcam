@@ -10,7 +10,8 @@ use specta::Type;
 use std::collections::BTreeMap;
 
 /// The groups a line belongs to.
-pub const GROUPS: &[&str] = &["system", "numbers", "units", "callouts", "extras"];
+/// `cues` are the lines QuadCam plays on the Mac (`gear::cues::Cue::pack_line`), not on the radio.
+pub const GROUPS: &[&str] = &["system", "numbers", "units", "callouts", "extras", "cues"];
 
 /// One sound on the card: its path, the text a voice reads, and why it exists.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Type)]

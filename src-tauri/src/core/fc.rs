@@ -481,9 +481,7 @@ impl Core {
                     });
                 let mut e = CueEvent::new(Cue::UnplugNow, name);
                 e.step = Some(format!("{} minutes", tm.elapsed_s / 60));
-                self.gear
-                    .cues
-                    .fire(&settings.cues, e, now, chrono::Local::now().time());
+                self.cue_fire(&settings.cues, e, now, chrono::Local::now().time());
             }
         }
         self.usb_timers(now)

@@ -526,7 +526,7 @@ impl Core {
     }
 
     /// Every radio's chosen pack.
-    fn chosen_all(&self) -> std::collections::BTreeMap<String, String> {
+    pub(super) fn chosen_all(&self) -> std::collections::BTreeMap<String, String> {
         self.gear_store()
             .read()
             .ok()

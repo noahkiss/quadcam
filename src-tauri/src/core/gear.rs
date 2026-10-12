@@ -542,10 +542,7 @@ impl Core {
                 CueEvent::new(Cue::SafeToUnplug, name)
             }
         };
-        let fired = self
-            .gear
-            .cues
-            .fire(&s, event, now, chrono::Local::now().time());
+        let fired = self.cue_fire(&s, event, now, chrono::Local::now().time());
         // The reminder state changed: the GUI shows it.
         self.hooks.gear_changed();
         fired
@@ -557,7 +554,7 @@ impl Core {
         let Some(e) = cues::batch_cue(done, failed) else {
             return false;
         };
-        self.gear.cues.fire(
+        self.cue_fire(
             &self.gear_settings().cues,
             e,
             Instant::now(),
@@ -603,8 +600,59 @@ impl Core {
             .unwrap()
             .due(&present, &s, now);
         for e in due {
-            self.gear.cues.fire(&s, e, now, local);
+            self.cue_fire(&s, e, now, local);
         }
+    }
+
+    /// Plays a cue (`CueService::fire_with`). With `voice_source` `voice_pack`, speech plays
+    /// the cue's clip from `cue_pack`; a pack without it speaks with macOS.
+    pub(super) fn cue_fire(
+        &self,
+        s: &cues::CueSettings,
+        e: CueEvent,
+        now: Instant,
+        local: chrono::NaiveTime,
+    ) -> bool {
+        self.gear.cues.fire_with(
+            s,
+            e,
+            |cue| {
+                let p = self.cue_pack(s)?;
+                cues::pack_clip(
+                    Some((
+                        std::path::Path::new(&p.dir),
+                        &p.manifest.files,
+                        &p.manifest.lang,
+                    )),
+                    cue,
+                )
+            },
+            now,
+            local,
+        )
+    }
+
+    /// The installed voice pack that speaks cues: the one `voice_pack` picks (none when that
+    /// pack is gone), else the pack chosen for the saved radio seen last, so a cue speaks in
+    /// the voice of the radio in use. None: macOS speaks.
+    pub fn cue_pack(&self, s: &cues::CueSettings) -> Option<crate::gear::voice::packs::Installed> {
+        let installed = crate::gear::voice::packs::installed(&self.voices_dir());
+        let id = match s.voice_pack.as_deref().map(str::trim) {
+            Some(id) if !id.is_empty() => id.to_string(),
+            _ => {
+                let devices = self.gear_store().devices().ok()?;
+                self.chosen_all()
+                    .into_iter()
+                    .filter(|(_, pack)| installed.iter().any(|i| &i.manifest.id == pack))
+                    .filter_map(|(radio, pack)| {
+                        let d = devices.iter().find(|d| d.id == radio)?;
+                        Some((d.last_seen, pack))
+                    })
+                    .max_by_key(|(seen, _)| *seen)?
+                    .1
+            }
+        };
+        installed.into_iter().find(|i| i.manifest.id == id)
     }
 }
 

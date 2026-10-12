@@ -15,6 +15,13 @@
 //!    cannot read the Focus state without Full Disk Access, so speech and sound use quiet
 //!    hours instead.
 //!
+//! 6. With `voice_source` `voice_pack`, speech plays the cue's line from an installed voice
+//!    pack (`Cue::pack_line`, a line of `resources/voice/lines.csv`, group `cues`), in the
+//!    same voice as the radio: the pack picked in `voice_pack`, else the pack chosen for the
+//!    radio seen last (`pack_clip`). A pack without the line falls back to the macOS voice
+//!    for that cue. The clip is the fixed line, without the device's name; the notification
+//!    still names it.
+//!
 //! `SystemCues` speaks with `/usr/bin/say` and plays a system sound with `/usr/bin/afplay`,
 //! each a child process with an argv list, never a shell, run to the end before the next
 //! cue. It posts a notification through the UserNotifications framework when the process
@@ -26,6 +33,7 @@ use chrono::NaiveTime;
 use serde::{Deserialize, Serialize};
 use specta::Type;
 use std::collections::HashMap;
+use std::path::{Path, PathBuf};
 use std::sync::{mpsc, Arc, Mutex};
 use std::time::{Duration, Instant};
 
@@ -89,6 +97,25 @@ impl CueEvent {
 }
 
 impl Cue {
+    pub const ALL: [Cue; 4] = [
+        Cue::SafeToUnplug,
+        Cue::StillInserted,
+        Cue::StepFailed,
+        Cue::UnplugNow,
+    ];
+
+    /// The cue's line in a voice pack: its card path under `SOUNDS/en/` and its text, a line
+    /// of `resources/voice/lines.csv` (group `cues`). The text is fixed: a pack cannot say a
+    /// device's own name.
+    pub fn pack_line(self) -> (&'static str, &'static str) {
+        match self {
+            Cue::SafeToUnplug => ("SOUNDS/en/qcdone.wav", "Done, safe to unplug."),
+            Cue::StillInserted => ("SOUNDS/en/qcstill.wav", "Still inserted."),
+            Cue::StepFailed => ("SOUNDS/en/qcfail.wav", "A step failed."),
+            Cue::UnplugNow => ("SOUNDS/en/qcunplug.wav", "Unplug the quad now."),
+        }
+    }
+
     /// The system sound (`/System/Library/Sounds/<name>.aiff`).
     pub fn sound(self) -> &'static str {
         match self {
@@ -154,9 +181,12 @@ pub struct CueSettings {
     pub quiet_hours: Option<QuietHours>,
     /// A `say` voice name; None for the system voice.
     pub voice: Option<String>,
-    /// What speaks the lines: macOS (`say`) or a voice pack. Until voice packs can play
-    /// cues (WP9), `voice_pack` speaks with macOS too.
+    /// What speaks the lines: macOS (`say`) or a voice pack. A cue the pack has no clip
+    /// for speaks with macOS.
     pub voice_source: VoiceSource,
+    /// The installed pack that speaks cues with `voice_pack`; None for the pack chosen for
+    /// the radio seen last.
+    pub voice_pack: Option<String>,
 }
 
 /// What speaks the cue lines.
@@ -186,6 +216,7 @@ impl Default for CueSettings {
             quiet_hours: None,
             voice: None,
             voice_source: VoiceSource::Macos,
+            voice_pack: None,
         }
     }
 }
@@ -338,9 +369,27 @@ pub fn batch_cue(done: &[String], failed: &[(String, String)]) -> Option<CueEven
     }
 }
 
+/// The clip that speaks `cue` from a voice pack, or None for the macOS voice. `pack` is the
+/// pack's folder, the card paths its manifest lists and its language (see
+/// `CueSettings::voice_pack`). The line must be listed and on disk; a pack for another
+/// language holds it under `SOUNDS/<lang>/`.
+pub fn pack_clip(pack: Option<(&Path, &[String], &str)>, cue: Cue) -> Option<PathBuf> {
+    let (dir, files, lang) = pack?;
+    let (path, _) = cue.pack_line();
+    let own = path.replacen("SOUNDS/en/", &format!("SOUNDS/{lang}/"), 1);
+    let found = [own.as_str(), path]
+        .into_iter()
+        .filter(|p| files.iter().any(|f| f == p))
+        .map(|p| dir.join(p))
+        .find(|f| f.is_file());
+    found
+}
+
 /// Where cues go. Each call returns when the cue has played.
 pub trait CueSink: Send + Sync {
     fn speak(&self, text: &str, voice: Option<&str>);
+    /// Plays a voice pack's clip (a WAV).
+    fn clip(&self, path: &Path);
     fn sound(&self, name: &str);
     fn notify(&self, title: &str, body: &str);
 }
@@ -349,6 +398,7 @@ pub trait CueSink: Send + Sync {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Played {
     Speak(String),
+    Clip(PathBuf),
     Sound(String),
     Notify(String, String),
 }
@@ -377,6 +427,12 @@ impl RecordedCues {
 impl CueSink for RecordedCues {
     fn speak(&self, text: &str, _voice: Option<&str>) {
         self.played.lock().unwrap().push(Played::Speak(text.into()));
+    }
+    fn clip(&self, path: &Path) {
+        self.played
+            .lock()
+            .unwrap()
+            .push(Played::Clip(path.to_path_buf()));
     }
     fn sound(&self, name: &str) {
         self.played.lock().unwrap().push(Played::Sound(name.into()));
@@ -407,6 +463,9 @@ impl CueSink for SystemCues {
             Some(v) => run("/usr/bin/say", &["-v", v, "--", text]),
             None => run("/usr/bin/say", &["--", text]),
         }
+    }
+    fn clip(&self, path: &Path) {
+        run("/usr/bin/afplay", &[&path.to_string_lossy()]);
     }
     fn sound(&self, name: &str) {
         let path = format!("/System/Library/Sounds/{name}.aiff");
@@ -503,21 +562,25 @@ pub fn system() -> Arc<dyn CueSink> {
     }
 }
 
-/// Plays one admitted cue on its channels.
-fn play(sink: &dyn CueSink, e: &CueEvent, ch: Channels, voice: Option<&str>) {
+/// Plays one admitted cue on its channels. Speech plays `clip` (a voice pack's) when there
+/// is one, else the macOS voice speaks the line.
+fn play(sink: &dyn CueSink, e: &CueEvent, ch: Channels, voice: Option<&str>, clip: Option<&Path>) {
     let line = e.line();
     if ch.sound {
         sink.sound(e.cue.sound());
     }
     if ch.speech {
-        sink.speak(&line, voice);
+        match clip {
+            Some(c) => sink.clip(c),
+            None => sink.speak(&line, voice),
+        }
     }
     if ch.notification {
         sink.notify("QuadCam", &line);
     }
 }
 
-type Item = (CueEvent, Channels, Option<String>);
+type Item = (CueEvent, Channels, Option<String>, Option<PathBuf>);
 
 /// The cue queue: the gate, the reminders, and one player, so cues never overlap.
 pub struct CueService {
@@ -543,8 +606,8 @@ impl CueService {
         let (tx, rx) = mpsc::channel::<Item>();
         let player = sink.clone();
         std::thread::spawn(move || {
-            for (e, ch, voice) in rx {
-                play(player.as_ref(), &e, ch, voice.as_deref());
+            for (e, ch, voice, clip) in rx {
+                play(player.as_ref(), &e, ch, voice.as_deref(), clip.as_deref());
             }
         });
         Self {
@@ -560,15 +623,43 @@ impl CueService {
         Self::queued(system())
     }
 
-    /// Plays a cue if the settings and the debounce let it. True when it was queued.
+    /// Plays a cue if the settings and the debounce let it, with the macOS voice. True when
+    /// it was queued.
     pub fn fire(&self, s: &CueSettings, e: CueEvent, now: Instant, local: NaiveTime) -> bool {
+        self.fire_with(s, e, |_| None, now, local)
+    }
+
+    /// `fire`, with `clip` giving the voice pack's clip for a cue (`pack_clip`); it is asked
+    /// only with `voice_source` `voice_pack`, and None speaks with macOS.
+    pub fn fire_with(
+        &self,
+        s: &CueSettings,
+        e: CueEvent,
+        clip: impl FnOnce(Cue) -> Option<PathBuf>,
+        now: Instant,
+        local: NaiveTime,
+    ) -> bool {
         let Some(ch) = self.gate.lock().unwrap().admit(s, &e, now, local) else {
             return false;
         };
+        let clip = match s.voice_source {
+            VoiceSource::VoicePack if ch.speech => clip(e.cue),
+            _ => None,
+        };
         match &self.queue {
-            Some(q) => q.lock().unwrap().send((e, ch, s.voice.clone())).is_ok(),
+            Some(q) => q
+                .lock()
+                .unwrap()
+                .send((e, ch, s.voice.clone(), clip))
+                .is_ok(),
             None => {
-                play(self.sink.as_ref(), &e, ch, s.voice.as_deref());
+                play(
+                    self.sink.as_ref(),
+                    &e,
+                    ch,
+                    s.voice.as_deref(),
+                    clip.as_deref(),
+                );
                 true
             }
         }
@@ -591,6 +682,64 @@ mod tests {
         })
         .unwrap();
         assert_eq!(v["voice_source"], "voice_pack");
+    }
+
+    #[test]
+    fn a_pack_clip_needs_the_line_listed_and_on_disk() {
+        let dir = tempfile::tempdir().unwrap();
+        let done = "SOUNDS/en/qcdone.wav";
+        std::fs::create_dir_all(dir.path().join("SOUNDS/en")).unwrap();
+        std::fs::write(dir.path().join(done), b"RIFF").unwrap();
+        let files = vec![done.to_string(), "SOUNDS/en/qcfail.wav".to_string()];
+        let p = Some((dir.path(), files.as_slice(), "en"));
+        assert_eq!(pack_clip(p, Cue::SafeToUnplug), Some(dir.path().join(done)));
+        // Listed but lost on disk, or not in the pack: the macOS voice.
+        assert_eq!(pack_clip(p, Cue::StepFailed), None);
+        assert_eq!(pack_clip(p, Cue::StillInserted), None);
+        assert_eq!(pack_clip(None, Cue::SafeToUnplug), None);
+        // A German pack holds its lines under SOUNDS/de/.
+        std::fs::create_dir_all(dir.path().join("SOUNDS/de")).unwrap();
+        std::fs::write(dir.path().join("SOUNDS/de/qcdone.wav"), b"RIFF").unwrap();
+        let de = vec!["SOUNDS/de/qcdone.wav".to_string()];
+        assert_eq!(
+            pack_clip(Some((dir.path(), de.as_slice(), "de")), Cue::SafeToUnplug),
+            Some(dir.path().join("SOUNDS/de/qcdone.wav"))
+        );
+    }
+
+    #[test]
+    fn a_voice_pack_clip_replaces_speech_only() {
+        let (sink, cues) = service();
+        let s = CueSettings {
+            voice_source: VoiceSource::VoicePack,
+            ..Default::default()
+        };
+        let clip = PathBuf::from("/packs/x/SOUNDS/en/qcdone.wav");
+        let c = clip.clone();
+        cues.fire_with(
+            &s,
+            CueEvent::new(Cue::SafeToUnplug, "Bench radio"),
+            move |_| Some(c),
+            Instant::now(),
+            t(12, 0),
+        );
+        assert_eq!(
+            *sink.played.lock().unwrap(),
+            [
+                Played::Clip(clip.clone()),
+                Played::Notify("QuadCam".into(), "Bench radio done, safe to unplug.".into())
+            ]
+        );
+        // macOS as the source never asks for a clip.
+        sink.played.lock().unwrap().clear();
+        cues.fire_with(
+            &CueSettings::default(),
+            CueEvent::new(Cue::SafeToUnplug, "Other radio"),
+            |_| panic!("asked for a clip"),
+            Instant::now(),
+            t(12, 0),
+        );
+        assert!(matches!(sink.played.lock().unwrap()[0], Played::Speak(_)));
     }
 
     fn t(h: u32, m: u32) -> NaiveTime {

@@ -169,6 +169,7 @@ pub const QUADCAM: &str = "quadcam";
 fn tone_of_group(l: &Line) -> &'static str {
     match l.group.as_str() {
         "numbers" | "units" => "number",
+        "cues" if l.text.contains("failed") || l.text.starts_with("Unplug") => "alert",
         _ => {
             let t = l.text.to_lowercase();
             if [
@@ -295,7 +296,7 @@ pub fn infos(custom: usize) -> Result<Vec<SetInfo>> {
     out.push(SetInfo {
         id: QUADCAM.into(),
         title: "QuadCam default".into(),
-        about: "The lines of QuadCam's ready-made voice packs: arming, battery, signal, flight modes, timers and numbers.".into(),
+        about: "The lines of QuadCam's ready-made voice packs: arming, battery, signal, flight modes, timers and numbers, and QuadCam's own cues on the Mac.".into(),
         lines: lines_of(QUADCAM)?.len() as u32,
         kinds: Vec::new(),
         rendered: None,

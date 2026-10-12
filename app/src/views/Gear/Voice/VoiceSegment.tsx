@@ -17,7 +17,7 @@ import styles from "./Voice.module.css";
 /** The title prefix of the change Choose voice keeps (`core/voice.rs`). */
 const VOICE_CHANGE = "Voice: ";
 
-const GROUPS = ["all", "callouts", "numbers", "system", "units", "extras"];
+const GROUPS = ["all", "callouts", "numbers", "system", "units", "extras", "cues"];
 
 function StagedVoice({ radio }: { radio: string | null }) {
   const change: StagedChange | undefined = useStore((s) => s.changes.find((c) => c.device === radio && c.title.startsWith(VOICE_CHANGE) && (c.status === "draft" || c.status === "ready")));

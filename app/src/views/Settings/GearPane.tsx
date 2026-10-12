@@ -1,4 +1,7 @@
+import { useEffect, useState } from "react";
 import { useStore } from "../../store";
+import { api } from "../../ipc/api";
+import type { VoicePack } from "../../ipc/types";
 import { Checkbox, SelectField, TextField } from "../../components/Field";
 import type { DeviceKind } from "../../ipc/types";
 import { KIND_LABEL } from "../../lib/gear";
@@ -22,6 +25,7 @@ export function GearPane({ d, setD }: { d: Draft; setD: (f: (d: Draft) => Draft)
   const g = d.gear;
   const set = (patch: Partial<GearDraft>) => setD((x) => ({ ...x, gear: { ...x.gear, ...patch } }));
   const cue = (patch: Partial<GearDraft["cues"]>) => set({ cues: { ...g.cues, ...patch } });
+  const packs = useInstalledPacks();
   const toggle = (k: DeviceKind, a: ShownAutomation, on: boolean) => {
     const cur = g.onConnect[k] || [];
     set({ onConnect: { ...g.onConnect, [k]: AUTOMATIONS.filter((x) => (x === a ? on : cur.includes(x))) } });
@@ -110,12 +114,23 @@ export function GearPane({ d, setD }: { d: Draft; setD: (f: (d: Draft) => Draft)
         <div className={styles.row}>
           <SelectField label="Voice" value={g.cues.voice_source} onChange={(e) => cue({ voice_source: e.target.value as GearDraft["cues"]["voice_source"] })}>
             <option value="macos">macOS</option>
-            <option value="voice_pack" disabled>
-              Voice pack
-            </option>
+            <option value="voice_pack">Voice pack</option>
           </SelectField>
-          <TextField label="macOS voice" placeholder="System voice" value={g.cues.voice} onChange={(e) => cue({ voice: e.target.value })} />
+          {g.cues.voice_source === "voice_pack" ? (
+            <SelectField label="Voice pack" value={g.cues.voice_pack} onChange={(e) => cue({ voice_pack: e.target.value })}>
+              <option value="">The radio's voice</option>
+              {packs.map((p) => (
+                <option key={p.id} value={p.id}>
+                  {p.voice || p.id}
+                </option>
+              ))}
+              {g.cues.voice_pack && !packs.some((p) => p.id === g.cues.voice_pack) && <option value={g.cues.voice_pack}>{g.cues.voice_pack} (not installed)</option>}
+            </SelectField>
+          ) : (
+            <TextField label="macOS voice" placeholder="System voice" value={g.cues.voice} onChange={(e) => cue({ voice: e.target.value })} />
+          )}
         </div>
+        {g.cues.voice_source === "voice_pack" && <p className={styles.sub}>A cue the pack has no line for speaks with the macOS voice.</p>}
         <Checkbox label="Quiet hours for speech and sound" checked={g.quiet} onChange={(e) => set({ quiet: e.target.checked })} />
         {g.quiet && (
           <div className={styles.row}>
@@ -126,4 +141,20 @@ export function GearPane({ d, setD }: { d: Draft; setD: (f: (d: Draft) => Draft)
       </div>
     </section>
   );
+}
+
+/** The voice packs installed on this Mac. */
+function useInstalledPacks(): VoicePack[] {
+  const [packs, setPacks] = useState<VoicePack[]>([]);
+  useEffect(() => {
+    let live = true;
+    api
+      .gearVoice({ radio: null, refresh_index: false })
+      .then((v) => live && setPacks(v.packs.filter((p) => p.installed)))
+      .catch(() => {});
+    return () => {
+      live = false;
+    };
+  }, []);
+  return packs;
 }

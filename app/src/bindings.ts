@@ -2032,10 +2032,15 @@ export type CueSettings = {
 	/**  A `say` voice name; None for the system voice. */
 	voice?: string | null,
 	/**
-	 *  What speaks the lines: macOS (`say`) or a voice pack. Until voice packs can play
-	 *  cues (WP9), `voice_pack` speaks with macOS too.
+	 *  What speaks the lines: macOS (`say`) or a voice pack. A cue the pack has no clip
+	 *  for speaks with macOS.
 	 */
 	voice_source?: VoiceSource,
+	/**
+	 *  The installed pack that speaks cues with `voice_pack`; None for the pack chosen for
+	 *  the radio seen last.
+	 */
+	voice_pack?: string | null,
 };
 
 /**  The answer to a cut change. */

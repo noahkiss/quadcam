@@ -43,6 +43,7 @@ export function gearDefaults(): GearSettings {
       quiet_hours: null,
       voice: null,
       voice_source: "macos",
+      voice_pack: null,
     },
   };
 }

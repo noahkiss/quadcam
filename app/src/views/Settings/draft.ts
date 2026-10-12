@@ -62,7 +62,7 @@ export interface GearDraft {
   firmwareDaily: boolean;
   blackboxMsc: boolean;
   onConnect: Record<DeviceKind, ShownAutomation[]>;
-  cues: Required<Omit<CueSettings, "quiet_hours" | "voice">> & { voice: string };
+  cues: Required<Omit<CueSettings, "quiet_hours" | "voice" | "voice_pack">> & { voice: string; voice_pack: string };
   quiet: boolean;
   quietStart: string;
   quietEnd: string;
@@ -91,6 +91,7 @@ const CUE_DEFAULTS: GearDraft["cues"] = {
   reminder_max: 3,
   voice: "",
   voice_source: "macos",
+  voice_pack: "",
 };
 
 export function gearDraft(g: GearSettings | null | undefined, simPreview = false, bfFlashPreview = false, elrsPreview = false): GearDraft {
@@ -110,7 +111,7 @@ export function gearDraft(g: GearSettings | null | undefined, simPreview = false
     firmwareDaily: g?.firmware_check === "daily",
     blackboxMsc: g?.blackbox_msc ?? false,
     onConnect,
-    cues: { ...cues, voice: cues.voice || "" },
+    cues: { ...cues, voice: cues.voice || "", voice_pack: cues.voice_pack || "" },
     quiet: !!q,
     quietStart: q?.start || "22:00",
     quietEnd: q?.end || "07:00",
@@ -124,7 +125,7 @@ const whole = (v: string, d: number, min: number, max: number) => {
 
 /** The Gear keys the draft stands for (the checks in `settings::KEYS`). */
 export function gearValues(g: GearDraft): SettingsValues {
-  const { voice, ...cues } = g.cues;
+  const { voice, voice_pack, ...cues } = g.cues;
   return {
     gearAutoBackup: g.autoBackup,
     simPreview: g.simPreview,
@@ -138,7 +139,7 @@ export function gearValues(g: GearDraft): SettingsValues {
     gearBlackboxMsc: g.blackboxMsc,
     firmwareCheck: g.firmwareDaily ? "daily" : "manual",
     gearOnConnect: g.onConnect,
-    gearCues: { ...cues, voice: voice.trim() || null, quiet_hours: g.quiet ? { start: g.quietStart, end: g.quietEnd } : null },
+    gearCues: { ...cues, voice: voice.trim() || null, voice_pack: voice_pack || null, quiet_hours: g.quiet ? { start: g.quietStart, end: g.quietEnd } : null },
   };
 }
 
