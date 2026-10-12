@@ -240,7 +240,15 @@ jobs:
           cache-dependency-path: app/pnpm-lock.yaml
 
       - run: pnpm install --frozen-lockfile
-      - run: pnpm exec playwright install --with-deps webkit
+      # An Ubuntu apt mirror can hang the dependency install for the whole job timeout
+      # (seen 2026-10-12: 14 min on InRelease), so each try gets 4 minutes and three tries.
+      - name: Install WebKit and its system packages
+        run: |
+          for try in 1 2 3; do
+            timeout 240 pnpm exec playwright install --with-deps webkit && exit 0
+            echo "::warning::playwright install try $try failed or timed out"
+          done
+          exit 1
       # The axe specs run in the dark theme only on a branch or pull request, and in both on
       # main, rel-* and tags (e2e/fixtures.ts `axeSchemes`). Every other spec runs every time.
       - run: pnpm e2e --shard=${{ matrix.shard }}/4
