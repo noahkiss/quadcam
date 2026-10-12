@@ -244,3 +244,66 @@ fn the_google_key_is_written_but_never_read_back() {
         .unwrap()
         .contains("google_places_key tes…123 (12 chars)"));
 }
+
+/// Every named setting (`settings::KEYS`) is in the MCP read, structured and text, and in the
+/// write's `values` schema, and a CLI read carries it in `named`. Secrets show as hints only.
+#[test]
+fn every_named_setting_reads_and_writes_through_mcp() {
+    let dir = tempfile::tempdir().unwrap();
+    let f = dir.path().join("settings.json");
+    let c = core(dir.path(), Arc::new(NoHooks), &f);
+    let mut s = Server::new(quadcam_lib::mcp::LocalBackend(c.clone()));
+
+    let tools = quadcam_lib::mcp::tools();
+    let schema = tools
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|t| t["name"] == "quadcam_settings")
+        .unwrap()["inputSchema"]["properties"]["values"]["properties"]
+        .clone();
+
+    let w = s.call_tool(
+        "quadcam_settings",
+        json!({"action": "write", "values": {"map_view": true, "elrs_region": "LBT"}}),
+    );
+    assert_ne!(w["isError"], true, "{w}");
+    assert_eq!(w["structuredContent"]["settings"]["map_view"], true);
+    assert_eq!(w["structuredContent"]["settings"]["elrs_region"], "LBT");
+    let r = s.call_tool("quadcam_settings", json!({"action": "read"}));
+    let text = r["content"][0]["text"].as_str().unwrap();
+    let view = serde_json::to_value(c.settings().unwrap()).unwrap();
+    assert_eq!(view["named"]["map_view"], true);
+
+    let mut named = 0;
+    for k in quadcam_lib::settings::KEYS {
+        let Some(name) = k.name else { continue };
+        named += 1;
+        assert!(
+            schema.get(name).is_some(),
+            "{name} is not in the write schema"
+        );
+        let secret = quadcam_lib::settings::SECRET_KEYS.contains(&k.file);
+        let section = if secret { "secrets" } else { "settings" };
+        if secret {
+            assert!(
+                text.contains(&format!("{name} not set")),
+                "{name} is not in the text: {text}"
+            );
+        } else {
+            assert!(
+                r["structuredContent"][section].get(name).is_some(),
+                "{name} is not in the structured read"
+            );
+            assert!(
+                view["named"].get(name).is_some(),
+                "{name} is not in the CLI's named"
+            );
+            assert!(
+                text.split(['\n', '|', ' ', ':']).any(|w| w == name),
+                "{name} is not in the text: {text}"
+            );
+        }
+    }
+    assert!(named > 40, "only {named} named settings");
+}

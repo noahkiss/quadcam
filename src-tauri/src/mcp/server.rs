@@ -863,61 +863,14 @@ impl<B: Backend> Server<B> {
                         ))
                     }
                 };
-                let e = &view["effective"];
-                // A secret reads as its hint (`secret::hint`), never its value.
-                let secret = |k: &str| {
-                    view["secrets"][k]["hint"]
-                        .as_str()
-                        .unwrap_or("not set")
-                        .to_string()
+                let (settings, secrets) = settings_read(&view);
+                let line = settings_line(&view, &settings, &secrets, action == "write");
+                let map = |l: Vec<(&str, Value)>| -> serde_json::Map<String, Value> {
+                    l.into_iter().map(|(k, v)| (k.to_string(), v)).collect()
                 };
-                let line = format!(
-                    "{}Settings file {}.\noutput_dir {} | layout {} | place_folders {} | format {} | encoder {} | keep_originals {} | add_time {} | delete_clips_after_import {} | join_split_recordings {} | video_analysis {} | weather {} | on_device_suggestions {} | update_check {} | default_name {:?} | photos_album {:?} | format_label {} | log_dir {} | geocoder {} | name_date_format {} | default_profile {} | tunables {} | ffmpeg_source {} | google_places_key {} | tts_key {} | elrs_binding_phrase {}",
-                    if action == "write" { "Saved. " } else { "" },
-                    view["path"].as_str().unwrap_or("?"),
-                    e["output_dir"].as_str().unwrap_or("none"), e["layout"].as_str().unwrap_or("?"), e["place_folders"],
-                    e["format"].as_str().unwrap_or("?"), e["encoder"].as_str().unwrap_or("?"), e["keep_originals"], e["add_time"], e["delete_clips_after_import"], e["join_split_recordings"], e["video_analysis"], e["weather"], e["on_device_suggestions"], e["update_check"],
-                    e["default_name"].as_str().unwrap_or(""), e["photos_album"].as_str().unwrap_or(""), e["format_label"].as_str().unwrap_or(""),
-                    e["log_dir"].as_str().unwrap_or("none"), e["geocoder"].as_str().unwrap_or("?"), e["name_date_format"].as_str().unwrap_or("?"), e["default_profile"].as_str().unwrap_or("none"), e["tunables"], e["ffmpeg_source"].as_str().unwrap_or("?"),
-                    secret("googlePlacesKey"), secret("ttsKey"), secret("elrsBindingPhrase"),
-                );
-                let settings: serde_json::Map<String, Value> = [
-                    "output_dir",
-                    "layout",
-                    "place_folders",
-                    "format",
-                    "encoder",
-                    "keep_originals",
-                    "add_time",
-                    "delete_clips_after_import",
-                    "join_split_recordings",
-                    "video_analysis",
-                    "weather",
-                    "on_device_suggestions",
-                    "update_check",
-                    "default_name",
-                    "photos_album",
-                    "format_label",
-                    "log_dir",
-                    "geocoder",
-                    "name_date_format",
-                    "default_profile",
-                    "tunables",
-                    "ffmpeg_source",
-                ]
-                .iter()
-                .map(|k| (k.to_string(), e[*k].clone()))
-                .collect();
-                let secrets: serde_json::Map<String, Value> = crate::settings::SECRET_KEYS
-                    .iter()
-                    .filter_map(|k| {
-                        let h = view["secrets"].get(*k)?;
-                        Some((crate::settings::key(k).ok()?.name?.to_string(), h.clone()))
-                    })
-                    .collect();
                 Ok((
                     vec![text(line)],
-                    json!({"path": view["path"], "settings": settings, "secrets": secrets}),
+                    json!({"path": view["path"], "settings": map(settings), "secrets": map(secrets)}),
                 ))
             }
             "quadcam_load_clips" => {
@@ -1376,4 +1329,96 @@ impl<B: Backend> Server<B> {
             json!({"modules": rows}),
         ))
     }
+}
+
+/// Settings by name, in `settings::KEYS` order.
+type Named = Vec<(&'static str, Value)>;
+
+/// The settings a `quadcam_settings` read shows: every named setting of `settings::KEYS`
+/// with its value in effect (`named`; an older app without it gives `effective`, then the
+/// file's value), and each secret's hint by name.
+fn settings_read(view: &Value) -> (Named, Named) {
+    use crate::settings::{KEYS, SECRET_KEYS};
+    let settings = KEYS
+        .iter()
+        .filter(|k| !SECRET_KEYS.contains(&k.file))
+        .filter_map(|k| {
+            let name = k.name?;
+            let v = view["named"]
+                .get(name)
+                .or_else(|| view["effective"].get(name))
+                .or_else(|| view["values"].get(k.file))
+                .cloned()
+                .unwrap_or(Value::Null);
+            Some((name, v))
+        })
+        .collect();
+    let secrets = KEYS
+        .iter()
+        .filter(|k| SECRET_KEYS.contains(&k.file))
+        .filter_map(|k| Some((k.name?, view["secrets"].get(k.file)?.clone())))
+        .collect();
+    (settings, secrets)
+}
+
+/// The text answer of a settings read or write: every setting, one line per group, and
+/// each secret as its hint (`secret::hint`), never its value.
+fn settings_line(
+    view: &Value,
+    settings: &[(&str, Value)],
+    secrets: &[(&str, Value)],
+    saved: bool,
+) -> String {
+    fn shown(v: &Value) -> String {
+        match v {
+            Value::Null => "none".into(),
+            Value::String(s) if s.is_empty() => "\"\"".into(),
+            Value::String(s) => s.clone(),
+            other => other.to_string(),
+        }
+    }
+    fn group(name: &str) -> usize {
+        if name.starts_with("gear_") || name == "firmware_check" || name.starts_with("betaflight_")
+        {
+            1
+        } else if name.starts_with("tts_") || name.starts_with("voice_") {
+            2
+        } else if name.starts_with("elrs_") {
+            3
+        } else {
+            0
+        }
+    }
+    let mut groups: [Vec<String>; 4] = Default::default();
+    for (name, v) in settings {
+        groups[group(name)].push(format!("{name} {}", shown(v)));
+    }
+    let mut out = format!(
+        "{}Settings file {}.",
+        if saved { "Saved. " } else { "" },
+        view["path"].as_str().unwrap_or("?")
+    );
+    for (label, items) in ["General", "Gear", "Voice", "ExpressLRS"]
+        .iter()
+        .zip(&groups)
+    {
+        if !items.is_empty() {
+            out.push_str(&format!("\n{label}: {}", items.join(" | ")));
+        }
+    }
+    let hints: Vec<String> = crate::settings::KEYS
+        .iter()
+        .filter(|k| crate::settings::SECRET_KEYS.contains(&k.file))
+        .filter_map(|k| {
+            let name = k.name?;
+            let hint = secrets
+                .iter()
+                .find(|(n, _)| *n == name)
+                .and_then(|(_, h)| h["hint"].as_str())
+                .unwrap_or("not set");
+            Some(format!("{name} {hint}"))
+        })
+        .collect();
+    out.push_str(&format!("\nSecrets: {}", hints.join(" | ")));
+    out
 }
