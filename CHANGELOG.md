@@ -5,6 +5,8 @@ User-facing changes in each release, newest first. Release notes on
 
 ## Unreleased
 
+## 0.18.0 (2026-10-11)
+
 - **Shift time of many clips.** Select clips, then **Shift time…**: set the real date and time of one clip, and the rest move by the same offset. A clip that a radio log in the log folder matches takes the log's time instead, and the table says **Radio log**. The table shows every new time before you shift; a new day moves the files. CLI `library shift` (`--yes` writes); MCP `quadcam_library_edit` `shift` (`confirm` writes). See [Shift the time of many clips](docs/library.md#shift-the-time-of-many-clips).
 - **Moment heat strips.** A thin strip on each card's thumbnail and on the clip timeline's Moments row is stronger where the clip's moments are.
 - **Best moments.** A new sidebar item lists the moments of every clip, best first. Select one to open its clip and play from there. The day summary's best moments use the same list, without dead air.
