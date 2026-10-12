@@ -43,7 +43,7 @@ export function StatusBar() {
           Dismiss
         </Button>
       ))}
-      <span role="status" aria-live="polite" className={styles.live}>
+      <span aria-live="polite" aria-atomic="true" data-testid="status-bar-announcer" className={styles.live}>
         {said}
       </span>
     </footer>

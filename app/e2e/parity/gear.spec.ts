@@ -68,7 +68,7 @@ test("an unmounted card is safe to unplug, then still inserted with a reminder t
   }`);
   await expect(bar(page).getByRole("button", { name: "Radio: Still inserted" })).toBeVisible();
   // The change is announced politely; the item shows its name and state.
-  await expect(bar(page).getByRole("status")).toHaveText("Radio: Still inserted");
+  await expect(bar(page).getByTestId("status-bar-announcer")).toHaveText("Radio: Still inserted");
   await expect(bar(page).getByRole("button", { name: "Radio: Still inserted" })).toHaveText("RadioStill inserted");
   await bar(page).getByRole("button", { name: "Dismiss the reminder for Field radio" }).click();
   expect(await app.method("gear_dismiss_reminder")).toEqual([{ handle: "disk4" }]);
@@ -78,7 +78,7 @@ test("an unmounted card is safe to unplug, then still inserted with a reminder t
   // Pulled: it leaves the bar.
   await app.core(`c => c.plug([c.gearSeed.dvrConnected(), c.gearSeed.gogglesConnected()], [])`);
   await expect(bar(page).getByRole("button", { name: /^Radio/ })).toBeHidden();
-  await expect(bar(page).getByRole("status")).toHaveText("Radio: Removed");
+  await expect(bar(page).getByTestId("status-bar-announcer")).toHaveText("Radio: Removed");
 });
 
 test("an ExpressLRS device has its own item, and the DJI air unit shows its state", async ({ page, app }) => {
@@ -93,7 +93,7 @@ test("an ExpressLRS device has its own item, and the DJI air unit shows its stat
   await expect(bar(page).getByRole("button", { name: "DJI: Safe to unplug" })).toBeVisible();
   const elrs = bar(page).getByRole("button", { name: "ExpressLRS: Needs attention" });
   await expect(elrs).toBeVisible();
-  await expect(bar(page).getByRole("status")).toContainText("DJI: Safe to unplug");
+  await expect(bar(page).getByTestId("status-bar-announcer")).toContainText("DJI: Safe to unplug");
   await elrs.click();
   await expect(page.getByRole("region", { name: "ELRS TX" })).toBeVisible();
 });
