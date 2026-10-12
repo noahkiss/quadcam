@@ -1,5 +1,5 @@
 //! The app's own updates through tauri-plugin-updater: a check at launch, once the window has
-//! settled, and once a day while the app runs (unless the `update_check` setting is off), and
+//! settled, and once an hour while the app runs (unless the `update_check` setting is off), and
 //! on request from the app menu. Every check runs while an update is known, and a newer
 //! release replaces the known one (`core::weigh`). The banner's Restart to update checks once
 //! more, downloads the newest release, and the restart installs it, never while a job runs
@@ -17,7 +17,7 @@ use tauri_plugin_updater::{Update, UpdaterExt};
 /// How long after launch the first automatic check waits.
 const FIRST_CHECK: Duration = Duration::from_secs(30);
 /// How often the automatic check runs while the app is open.
-const EVERY: Duration = Duration::from_secs(24 * 60 * 60);
+const EVERY: Duration = Duration::from_secs(60 * 60);
 /// How often the scheduler wakes to see whether a check is due (a Mac that slept wakes late).
 const WAKE: Duration = Duration::from_secs(15 * 60);
 /// How often a ready update looks again whether the job that held the restart ended.
@@ -41,7 +41,7 @@ fn automatic_allowed() -> bool {
         || std::env::var_os("CARGO_MANIFEST_DIR").is_none()
 }
 
-/// Starts the launch and daily checks.
+/// Starts the launch and hourly checks.
 pub fn install<R: Runtime>(app: &AppHandle<R>, core: Arc<Core>) {
     app.manage(Pending::default());
     if !automatic_allowed() {

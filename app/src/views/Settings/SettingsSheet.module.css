@@ -21,8 +21,15 @@
 .version {
   margin: auto 0 0;
   padding: var(--s-2);
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--s-2);
   font-size: var(--t-sm);
   color: var(--muted);
+}
+.version p {
+  margin: 0;
 }
 .fieldset {
   margin: 0;

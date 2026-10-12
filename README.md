@@ -66,7 +66,7 @@ To remove the app, run `brew uninstall --cask quadcam`. Uninstall keeps your set
 
 ### Updates
 
-QuadCam updates itself. It checks GitHub for a newer release when it opens and once a day, and **QuadCam > Check for Updates…** checks at any time. When a newer version is out, a banner shows **Restart to update** and **Later**, with a link to the release notes. **Restart to update** downloads the update, checks its signature, and restarts QuadCam. QuadCam never restarts during an import, a card or device write, or a flash: it offers the restart when the job ends. To stop the automatic check, clear **Settings > Advanced > Check for updates automatically**.
+QuadCam updates itself. It checks GitHub for a newer release when it opens and every hour, and **QuadCam > Check for Updates…** or **Check for Updates** in Settings checks at any time. When a newer version is out, a banner shows **Restart to update** and **Later**, with a link to the release notes. **Restart to update** downloads the update, checks its signature, and restarts QuadCam. QuadCam never restarts during an import, a card or device write, or a flash: it offers the restart when the job ends. To stop the automatic check, clear **Settings > Advanced > Check for updates automatically**.
 
 Because the app updates itself, the cask is marked `auto_updates`. So `brew upgrade` skips QuadCam, and Homebrew may show the version you first installed. To update through Homebrew anyway, run `brew upgrade --cask --greedy quadcam`.
 
@@ -119,7 +119,7 @@ QuadCam follows the system's light or dark appearance. [A light-mode screenshot]
 
 QuadCam works on your Mac. It sends data out only when you ask it to, with one exception:
 
-- The update check reads `latest.json` from QuadCam's latest GitHub release when the app opens and once a day. It sends nothing but the request. Clear **Settings > Advanced > Check for updates automatically** to check only on request. See [Updates](#updates).
+- The update check reads `latest.json` from QuadCam's latest GitHub release when the app opens and every hour. It sends nothing but the request. Clear **Settings > Advanced > Check for updates automatically** to check only on request. See [Updates](#updates).
 
 - A place search sends the search text to the provider you picked. See [Metadata](docs/metadata.md#place-search-providers).
 - **Use current location** asks macOS Location Services where your Mac is, once per click, and **Name from coordinates** sends a place's coordinates to Apple's geocoder to name it. See [Metadata](docs/metadata.md#use-your-current-location).

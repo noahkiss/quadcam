@@ -183,3 +183,11 @@ for (const scheme of axeSchemes) {
     });
   });
 }
+
+test("Check for Updates under the version in Settings checks on every pane", async ({ page }) => {
+  await page.evaluate(() => window.__qc!.emit("menu", "settings"));
+  const dlg = dialog(page, "Settings");
+  await dlg.getByRole("button", { name: "Check for Updates" }).click();
+  await dlg.getByRole("button", { name: "Advanced" }).click();
+  await expect(dlg.getByRole("status", { name: "Update status" })).toContainText("QuadCam 0.99.0 is available.");
+});

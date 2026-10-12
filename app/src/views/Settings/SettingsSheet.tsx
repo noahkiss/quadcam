@@ -131,16 +131,22 @@ function Sheet({ first }: { first: SettingsSection }) {
   );
 }
 
-/** The app version and the commit it was built from. */
+/** The app version, the commit it was built from, and Check for Updates. */
 function Version() {
   const env = useStore((s) => s.env);
+  const update = useStore((s) => s.update);
   if (!env?.version) return null;
   return (
-    <p className={`${styles.version} selectable`} aria-label="Version">
-      QuadCam {env.version}
-      <br />
-      Build {env.build}
-    </p>
+    <div className={styles.version}>
+      <p className="selectable" aria-label="Version">
+        QuadCam {env.version}
+        <br />
+        Build {env.build}
+      </p>
+      <Button size="sm" onClick={() => void checkForUpdates()} disabled={update?.phase === "checking" || update?.phase === "downloading"}>
+        Check for Updates
+      </Button>
+    </div>
   );
 }
 
@@ -548,7 +554,7 @@ function AdvancedPane({ d, set }: { d: Draft; set: SetFn }) {
   return (
     <section>
       <h3>Updates</h3>
-      <Checkbox label="Check for updates automatically" detail="Checks when QuadCam opens and once a day." checked={d.updateCheck} onChange={(e) => set("updateCheck", e.target.checked)} />
+      <Checkbox label="Check for updates automatically" detail="Checks when QuadCam opens and every hour." checked={d.updateCheck} onChange={(e) => set("updateCheck", e.target.checked)} />
       <div className={styles.info}>
         <p role="status" aria-label="Update status">
           {updateLine(update)} {offer?.notes_url && <Link href={offer.notes_url}>Release notes</Link>}
