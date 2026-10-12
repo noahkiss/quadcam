@@ -6,10 +6,11 @@ import { useState } from "react";
 import { Banner } from "../../../components/Banner";
 import { Button } from "../../../components/Button";
 import { Checkbox, Input, Select } from "../../../components/Field";
-import { api, errText, fileSrc } from "../../../ipc/api";
+import { api, errText } from "../../../ipc/api";
 import type { EditCost, StagedChange, VoiceLine, VoiceView } from "../../../ipc/types";
 import { useStore } from "../../../store";
 import type { DeviceRef } from "../slots";
+import { playFile } from "./play";
 import { useVoice } from "./useVoice";
 import styles from "./Voice.module.css";
 
@@ -91,11 +92,6 @@ function Choose({ radio, view, act }: { radio: string; view: VoiceView; act: <T>
   );
 }
 
-function play(path: string) {
-  const a = new Audio(fileSrc(path));
-  void a.play().catch(() => undefined);
-}
-
 function LineRow({ radio, line, view, act, setError }: { radio: string; line: VoiceLine; view: VoiceView; act: <T>(f: () => Promise<T>) => Promise<T | undefined>; setError: (e: string | null) => void }) {
   const [own, setOwn] = useState<string | null>(null);
   // A paid take of the person's text: its characters and the digest Render and pay sends.
@@ -103,7 +99,7 @@ function LineRow({ radio, line, view, act, setError }: { radio: string; line: Vo
   const packs = view.packs.filter((k) => k.installed && line.packs.includes(k.id));
   const preview = async (pack: string | null) => {
     try {
-      play(await api.gearVoicePreview({ line: line.path, pack, radio: pack ? null : radio }));
+      playFile(await api.gearVoicePreview({ line: line.path, pack, radio: pack ? null : radio }));
     } catch (e) {
       setError(errText(e));
     }

@@ -19,6 +19,8 @@ export async function start(): Promise<() => void> {
     on("settings-changed", async () => {
       // The Settings sheet reads them fresh when it closes.
       if (S().settingsOpen) return;
+      // A moved library or gear folder needs the web view's file access again.
+      api.libraryScope().catch(() => {});
       await S().loadSettings();
       await S().loadGear();
       await S().loadLibrary();

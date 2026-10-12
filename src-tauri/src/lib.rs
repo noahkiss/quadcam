@@ -423,12 +423,20 @@ async fn preview(state: State<'_, AppState>, id: usize) -> Result<PathBuf, Strin
     blocking(move || core.preview(id)).await
 }
 
-/// Lets the webview load files from the library folder (thumbnails and MP4 playback).
+/// Lets the webview load files from the library folder (thumbnails and MP4 playback) and
+/// from the voice folders in the gear folder (samples and installed packs). The app calls it
+/// at launch and after the settings change, so a moved folder is granted again.
 #[tauri::command]
 #[specta::specta]
 fn library_scope(app: AppHandle, state: State<'_, AppState>) -> Result<(), String> {
+    let scope = app.asset_protocol_scope();
+    for dir in state.core.voice_media_dirs() {
+        scope
+            .allow_directory(&dir, true)
+            .map_err(|e| e.to_string())?;
+    }
     let root = state.core.library_root().map_err(err)?;
-    app.asset_protocol_scope()
+    scope
         .allow_directory(&root, true)
         .map_err(|e| e.to_string())
 }

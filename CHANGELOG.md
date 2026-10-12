@@ -5,6 +5,8 @@ User-facing changes in each release, newest first. Release notes on
 
 ## Unreleased
 
+- **Samples play again.** Sample lines, **Play all** and the packs on this Mac play their sound again; in 0.20.0 and 0.20.1 they played nothing. A line that cannot play now says so in a message, once per **Play all**, instead of being skipped in silence.
+
 ## 0.20.1 (2026-10-12)
 
 - **Update checks every hour.** QuadCam now checks for a newer release when it opens and every hour while it runs, not once a day. **Check for Updates** under the version in Settings checks now, from any Settings page.

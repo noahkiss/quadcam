@@ -442,6 +442,13 @@ impl Core {
         self.gear_store().voice_samples_dir()
     }
 
+    /// The folders outside the cache whose sounds the app plays: the samples
+    /// (`<gear>/voice-samples`) and the installed packs (`<gear>/voices`). The app grants the
+    /// web view's asset scope these two, not the whole gear folder.
+    pub fn voice_media_dirs(&self) -> Vec<PathBuf> {
+        vec![self.samples_root(), self.voices_dir()]
+    }
+
     /// Moves the samples 0.19 and earlier left in the cache into the gear folder. Never
     /// removes a file before it is in the new place. A failure is a note.
     pub(super) fn move_cached_samples(&self) -> Vec<String> {

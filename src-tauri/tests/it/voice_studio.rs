@@ -2676,3 +2676,37 @@ fn the_mcp_tools_list_flags_and_retake_only_with_confirm() {
     );
     assert!(gallery(&b).voices.is_empty());
 }
+
+#[test]
+fn the_web_views_voice_folders_hold_every_sample_and_pack_take() {
+    let b = bench(50000, true);
+    paid_sample(&b, sample(&["Callum"], &["eleven_turbo_v2_5"], false, true));
+    let r = paid_render(
+        &b,
+        render("Callum", "eleven_turbo_v2_5", &["quad"], false, true),
+    );
+    let gear = b.dir.path().join("support/gear");
+    let dirs = b.core.voice_media_dirs();
+    assert_eq!(
+        dirs,
+        vec![gear.join("voice-samples"), gear.join("voices")],
+        "the narrowest folders, not the gear folder"
+    );
+    let g = b.core.gear_voice_samples().unwrap();
+    let kinds: Vec<&str> = g.voices.iter().map(|v| v.kind.as_str()).collect();
+    assert!(g.voices.iter().any(|v| v.id == r.pack), "{kinds:?}");
+    let files: Vec<&str> = g
+        .voices
+        .iter()
+        .flat_map(|v| v.takes.iter().map(|t| t.file.as_str()))
+        .collect();
+    assert!(files.len() > 12, "{files:?}");
+    for f in files {
+        let p = std::path::Path::new(f);
+        assert!(p.is_file(), "{f}");
+        assert!(
+            dirs.iter().any(|d| p.starts_with(d)),
+            "{f} is outside {dirs:?}"
+        );
+    }
+}

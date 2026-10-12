@@ -2,6 +2,7 @@
 // with the take playing now and Stop. Starting a new play stops the one before it.
 import { useCallback, useEffect, useRef, useState } from "react";
 import { fileSrc } from "../../../ipc/api";
+import { toast } from "../../../components/toastStore";
 
 export interface Track {
   /** The card the take is on. */
@@ -22,6 +23,9 @@ export interface Player {
 
 /** The gap between two takes of a queue, so the lines do not run together. */
 const GAP_MS = 350;
+
+/** The toast for a take the web view could not load or play. */
+export const playError = (line: string) => `Could not play ${line}: the file is not allowed or missing.`;
 
 export function usePlayer(): Player {
   const [now, setNow] = useState<Track | null>(null);
@@ -52,6 +56,8 @@ export function usePlayer(): Player {
     (tracks: Track[], q: string | null) => {
       halt();
       const id = run.current;
+      // One toast per run, however many takes of it fail.
+      let told = false;
       setQueue(q);
       const next = (i: number) => {
         if (id !== run.current) return;
@@ -64,15 +70,22 @@ export function usePlayer(): Player {
         setNow(t);
         const a = new Audio(fileSrc(t.file));
         audio.current = a;
-        const after = () => {
+        let done = false;
+        const after = (failed: boolean) => {
           a.onended = null;
           a.onerror = null;
-          if (id !== run.current) return;
+          // onerror and the play() rejection both report one failure.
+          if (done || id !== run.current) return;
+          done = true;
+          if (failed && !told) {
+            told = true;
+            toast(playError(t.line), true);
+          }
           timer.current = window.setTimeout(() => next(i + 1), tracks.length > 1 ? GAP_MS : 0);
         };
-        a.onended = after;
-        a.onerror = after;
-        void a.play().catch(after);
+        a.onended = () => after(false);
+        a.onerror = () => after(true);
+        void a.play().catch(() => after(true));
       };
       next(0);
     },

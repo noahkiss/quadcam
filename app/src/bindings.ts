@@ -650,7 +650,11 @@ export const commands = {
 	gearElrsFlashClick: (params: ElrsFlashRequest) => typedError<ApplyReport, string>(__TAURI_INVOKE("gear_elrs_flash_click", { params })),
 	/**  The person's answer to an agent's apply request. */
 	answerApplyRequest: (id: number, approve: boolean) => __TAURI_INVOKE<void>("answer_apply_request", { id, approve }),
-	/**  Lets the webview load files from the library folder (thumbnails and MP4 playback). */
+	/**
+	 *  Lets the webview load files from the library folder (thumbnails and MP4 playback) and
+	 *  from the voice folders in the gear folder (samples and installed packs). The app calls it
+	 *  at launch and after the settings change, so a moved folder is granted again.
+	 */
 	libraryScope: () => typedError<null, string>(__TAURI_INVOKE("library_scope")),
 	/**
 	 *  The third-party notices shipped in the app (`Contents/Resources/THIRD_PARTY_NOTICES.txt`,
