@@ -253,7 +253,7 @@ no GPL tool.
 | Downloads | `~/Library/Caches/app.quadcam/firmware/<product>/<version>/` | With a SHA-256 per file |
 | Voice renders | `~/Library/Caches/app.quadcam/voice/raw/<provider>/<key>.wav` | Raw takes; a re-render costs nothing |
 | Voice batches | `~/Library/Caches/app.quadcam/voice/batch/<provider>/<key>.wav` and `.json` | A carrier-sentence batch's raw audio and character timestamps; re-cutting costs nothing |
-| Voice samples | `~/Library/Caches/app.quadcam/voice/samples/<voice>-<model>/` | The A/B WAVs |
+| Voice samples | `<gear>/voice-samples/<voice>-<id hash>-<model>[-x<speed>]/` | The A/B WAVs, `samples.json` and `flags.json` (moved from `~/Library/Caches/app.quadcam/voice/samples/` once) |
 | Installed voice packs | `<gear>/voices/<pack-id>/` | WAVs and `pack.json` |
 | Blackbox pulls | `<gear>/blackbox/<device-id>/<YYYY-MM-DDTHHMMSS>.json` | One record per pull: the blob ref of the raw flash image (in `blobs/`), aircraft, day, method, used and total size, the logs found in the headers, whether the flash was erased (7.12). A blob a record names is never collected |
 | Flight index | `<gear>/flights.json` | A rebuildable cache over the log store and folders the user adds |

@@ -596,10 +596,9 @@ inside carrier sentences, and compares voices before it spends credits.
   model's per-request limit (v3 5,000 characters, multilingual v2 10,000, flash and turbo
   40,000).
 - **Sample.** Tick voices and models and press **Sample**. QuadCam renders the sample lines
-  in each pair, shows the cost, and waits for **Sample and pay**. With one voice and model,
-  each line is one play button. With several, a numbered list names the pairs, and each line
-  has one play button per pair, numbered the same. The sample files keep the card path, so two lines
-  with one file name (`armed.wav` and a script's `armed.wav`) stay apart.
+  in each pair, shows the cost, and waits for **Sample and pay**. The samples go to
+  [Samples](#samples). The sample files keep the card path, so two lines with one file name
+  (`armed.wav` and a script's `armed.wav`) stay apart.
 - **Render pack.** Needs a voice, a model and at least one set. With several voices or models
   ticked it reads **Render packs** and makes one pack per voice and model in one run, priced
   as one plan with one digest. After **Render and pay** the lines go into a local pack named
@@ -662,6 +661,47 @@ inside carrier sentences, and compares voices before it spends credits.
   the estimate multiplies the model's credits and USD by it. Add by ID asks
   `GET /v1/voices/{voice_id}` first and, when the account does not answer for it, searches the
   library for the id.
+
+### Samples
+
+**Samples** on the Voices page holds every sample the Voice studio made, and the packs on this
+Mac, one card per voice.
+
+- **Cards.** A sample card is one voice, model and speed: the voice's name, model, speed (when
+  it is not 1), accent, languages and description, and each sample line as a play chip. A pack
+  card shows the pack's lines of the `sample` set (or its first lines) and every flagged line.
+  The cards wrap to the window's width.
+- **Where samples live.** In the gear folder's `voice-samples/`, one folder per voice, model and
+  speed, with `samples.json` (the voice, and each line's text, seed and what the speech check
+  heard). The page reads them when it opens. Samples from 0.19 and earlier sat in the cache;
+  they move to the gear folder once, and a later sample of that voice and model takes the
+  folder over.
+- **Play all.** **Play all** on a card plays its lines in order and marks the line playing;
+  **Play all voices** plays every card. **Stop** ends it. A play button on one line plays only
+  that line.
+- **Speech check.** A sample the speech check heard wrong is listed on its card with what it
+  heard.
+- **Flag.** The flag button on a line opens a form: a reason (**Mispronounced**, **Clipped**,
+  **Wrong tone**, **Noise**, **Other**) and a note. **Save flag** keeps it in `flags.json` beside
+  the take (in the sample folder or the pack); **Clear flag** removes it. Flagged lines are
+  listed on the card, and a pack's flags in its library row. A pack's
+  [speech check](#speech-check) table has the same flag button on each line. A published pack
+  never holds `flags.json`.
+- **Re-take flagged.** A flagged take the studio made (a sample, or a pack the studio rendered)
+  counts as a re-take: a render or sample with the same seed leaves it out and sends nothing.
+  **Re-take flagged** prices the card's flagged lines with another seed, and **Re-take and
+  pay** makes them again. A line with a new take loses its flag; a line still without one keeps
+  it, and the next re-take uses another seed. A flag on an installed pack is a note only.
+- **Delete.** The trash button on a sample card removes that voice's samples; **Delete all…**
+  removes every sample. Both ask first. The takes stay in the cache, so sampling again costs
+  nothing. Packs are deleted in the library.
+- **Command line and agents.** `quadcam-cli gear voice samples` (`--delete ID,... --yes`,
+  `--all --yes`, `--text`), `gear voice flags`, `gear voice flag LINE --sample ID | --pack P
+  --reason R [--note N] [--clear]`, and `gear voice retake --sample ID | --pack P [--lines ...]
+  [--dry-run] [--confirm --digest D]`. MCP `quadcam_gear` `voice_samples` and `voice_flags`
+  (each flag with the voice, model, speed, seed, line, text, heard text and file), and
+  `quadcam_gear_edit` `voice_flag`, `voice_retake` (`confirm` with the `digest`) and
+  `voice_samples_delete` (`confirm`).
 
 ### Speech check
 
