@@ -50,12 +50,12 @@ async function openVoices(app: AppFixture, page: Page, seed = 0) {
 
 /** Samples one voice through the studio: Callum with eleven_v4, three lines. */
 async function sampleCallum(page: Page) {
-  const studio = page.getByRole("region", { name: "Voice studio" });
+  const studio = page.getByRole("region", { name: "ElevenLabs" });
   await studio.getByLabel("ElevenLabs API key").fill("fake-key-0123456789abcdef");
   await studio.getByRole("button", { name: "Save key" }).click();
   await studio.getByRole("button", { name: "Sample", exact: true }).click();
   await studio.getByRole("button", { name: "Sample and pay" }).click();
-  const card = page.getByRole("region", { name: "Samples" }).getByRole("article", { name: "Callum, eleven_v4" });
+  const card = page.getByRole("region", { name: "Samples" }).getByRole("article", { name: "Callum, Eleven v4" });
   await expect(card).toBeVisible();
   return card;
 }
@@ -63,7 +63,7 @@ async function sampleCallum(page: Page) {
 test("the gallery loads when the page opens and stays after a page change", async ({ app, page }) => {
   const samples = await openVoices(app, page, 27);
   await expect(samples.locator("article")).toHaveCount(27);
-  const first = samples.getByRole("article", { name: "Aria, eleven_turbo_v2_5" });
+  const first = samples.getByRole("article", { name: "Aria, Eleven Turbo v2.5" });
   await expect(first).toContainText("American · en");
   await expect(first.getByRole("list", { name: /^Takes of/ }).getByRole("listitem")).toHaveCount(12);
   await page.getByRole("navigation", { name: "Library" }).getByRole("button", { name: /^Devices/ }).click();
@@ -102,14 +102,14 @@ test("the cards wrap in the narrowest window, and no take runs past its card", a
 
 test("Play all plays a card's takes in order with the current one marked, and Stop ends it", async ({ app, page }) => {
   const samples = await openVoices(app, page, 2);
-  const card = samples.getByRole("article", { name: "Aria, eleven_turbo_v2_5" });
+  const card = samples.getByRole("article", { name: "Aria, Eleven Turbo v2.5" });
   const takes = card.getByRole("list", { name: /^Takes of/ }).getByRole("listitem");
-  await card.getByRole("button", { name: "Play all of Aria, eleven_turbo_v2_5" }).click();
+  await card.getByRole("button", { name: "Play all of Aria, Eleven Turbo v2.5" }).click();
   await expect(takes.nth(0)).toHaveAttribute("aria-current", "true");
   await endTake(page);
   await expect(takes.nth(1)).toHaveAttribute("aria-current", "true");
   await expect(takes.nth(0)).not.toHaveAttribute("aria-current", "true");
-  await card.getByRole("button", { name: "Stop Aria, eleven_turbo_v2_5" }).click();
+  await card.getByRole("button", { name: "Stop Aria, Eleven Turbo v2.5" }).click();
   await expect(card.locator('[aria-current="true"]')).toHaveCount(0);
   expect(await page.evaluate(() => window.__audio!.at(-1)!.paused)).toBe(true);
   // Play all voices runs on into the next card after the last take of the first.
@@ -133,23 +133,23 @@ test("Flag marks a take with a reason and a note; Re-take asks, pays and clears 
   await form.getByLabel("Note").fill("the end is cut off");
   await form.getByRole("button", { name: "Save flag" }).click();
   expect((await app.method("gear_voice_flag")).at(-1)).toMatchObject({ sample: "callum-eleven-v4", pack: "", line: "SOUNDS/en/armed.wav", reason: "clipped", note: "the end is cut off", clear: false });
-  await expect(card.getByRole("list", { name: "Flagged in Callum, eleven_v4" })).toContainText("Armed: Clipped: the end is cut off");
+  await expect(card.getByRole("list", { name: "Flagged in Callum, Eleven v4" })).toContainText("Armed: Clipped: the end is cut off");
   await expect(card.getByRole("button", { name: "Change the flag on Armed" })).toBeVisible();
   // Re-take prices the flagged take first and pays only on the click.
-  await card.getByRole("button", { name: "Re-take the flagged takes of Callum, eleven_v4" }).click();
+  await card.getByRole("button", { name: "Re-take the flagged takes of Callum, Eleven v4" }).click();
   expect((await app.method("gear_voice_retake")).at(-1)).toMatchObject({ sample: "callum-eleven-v4", confirm: false });
   await expect(card).toContainText("This sends 1 line to ElevenLabs, which bills it.");
   await card.getByRole("button", { name: "Re-take and pay" }).click();
   expect((await app.method("gear_voice_retake")).at(-1)).toMatchObject({ confirm: true, digest: expect.stringMatching(/^mock-/) });
   await expect(card.getByRole("status")).toHaveText("Made 1 take again.");
-  await expect(card.getByRole("list", { name: "Flagged in Callum, eleven_v4" })).toHaveCount(0);
+  await expect(card.getByRole("list", { name: "Flagged in Callum, Eleven v4" })).toHaveCount(0);
   // A flag clears on its own too.
   await card.getByRole("button", { name: "Flag Six" }).click();
   await page.getByRole("dialog", { name: "Flag Six" }).getByRole("button", { name: "Save flag" }).click();
-  await expect(card.getByRole("list", { name: "Flagged in Callum, eleven_v4" })).toContainText("Six: Mispronounced");
+  await expect(card.getByRole("list", { name: "Flagged in Callum, Eleven v4" })).toContainText("Six: Mispronounced");
   await card.getByRole("button", { name: "Change the flag on Six" }).click();
   await page.getByRole("dialog", { name: "Flag Six" }).getByRole("button", { name: "Clear flag" }).click();
-  await expect(card.getByRole("list", { name: "Flagged in Callum, eleven_v4" })).toHaveCount(0);
+  await expect(card.getByRole("list", { name: "Flagged in Callum, Eleven v4" })).toHaveCount(0);
   expect((await app.method("gear_voice_flag")).at(-1)).toMatchObject({ line: "SOUNDS/en/SYSTEM/0006.wav", clear: true });
 });
 
@@ -165,7 +165,10 @@ test("a pack line flagged in its speech check shows in the library row and on th
   await form.getByLabel("Reason").selectOption("noise");
   await form.getByRole("button", { name: "Save flag" }).click();
   expect((await app.method("gear_voice_flag")).at(-1)).toMatchObject({ pack: "en-demo-v1", line: "SOUNDS/en/armed.wav", reason: "noise" });
-  await expect(page.getByRole("table", { name: "Voice packs on this Mac" })).toContainText("Flagged: SOUNDS/en/armed.wav: Noise");
+  const row = page.getByRole("table", { name: "Voice packs on this Mac" }).getByRole("row", { name: /^Demo / });
+  await row.getByText("1 flagged").click();
+  await expect(row.getByRole("list", { name: "Re-takes and flags of Demo" })).toContainText("SOUNDS/en/armed.wav");
+  await expect(row.getByRole("list", { name: "Re-takes and flags of Demo" })).toContainText("Flagged: Noise");
   const card = samples.getByRole("article", { name: "Demo, demo" });
   await expect(card.getByRole("list", { name: "Flagged in Demo, demo" })).toContainText("Armed: Noise");
   // A pack the studio did not render has no re-take.
@@ -176,10 +179,10 @@ test("a pack line flagged in its speech check shows in the library row and on th
 test("Delete asks first, per voice and for every sample", async ({ app, page }) => {
   const samples = await openVoices(app, page, 3);
   await expect(samples.locator("article")).toHaveCount(3);
-  await samples.getByRole("button", { name: "Delete the samples of Aria, eleven_turbo_v2_5" }).click();
+  await samples.getByRole("button", { name: "Delete the samples of Aria, Eleven Turbo v2.5" }).click();
   await dialog(page, "Delete the samples of Aria?").getByRole("button", { name: "Cancel" }).click();
   expect(await app.calls("gear_voice_samples_delete")).toHaveLength(0);
-  await samples.getByRole("button", { name: "Delete the samples of Aria, eleven_turbo_v2_5" }).click();
+  await samples.getByRole("button", { name: "Delete the samples of Aria, Eleven Turbo v2.5" }).click();
   await dialog(page, "Delete the samples of Aria?").getByRole("button", { name: "Delete" }).click();
   expect((await app.method("gear_voice_samples_delete")).at(-1)).toEqual({ ids: ["seed-0"], all: false });
   await expect(samples.locator("article")).toHaveCount(2);
@@ -194,11 +197,11 @@ for (const scheme of axeSchemes) {
     test.use({ colorScheme: scheme });
     test("the Samples gallery passes axe", async ({ app, page }) => {
       const samples = await openVoices(app, page, 3);
-      const card = samples.getByRole("article", { name: "Aria, eleven_turbo_v2_5" });
+      const card = samples.getByRole("article", { name: "Aria, Eleven Turbo v2.5" });
       await card.getByRole("button", { name: "Flag Armed" }).click();
       await page.getByRole("dialog", { name: "Flag Armed" }).getByRole("button", { name: "Save flag" }).click();
       await expect(card.getByRole("list", { name: /^Flagged in/ })).toBeVisible();
-      await card.getByRole("button", { name: "Play all of Aria, eleven_turbo_v2_5" }).click();
+      await card.getByRole("button", { name: "Play all of Aria, Eleven Turbo v2.5" }).click();
       await card.getByRole("button", { name: "Flag Six" }).click();
       await expect(page.getByRole("dialog", { name: "Flag Six" })).toBeVisible();
       const r = await new AxeBuilder({ page }).include('[aria-label="Samples"]').withTags(["wcag2a", "wcag2aa", "wcag21aa"]).analyze();

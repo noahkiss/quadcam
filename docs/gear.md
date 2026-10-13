@@ -29,7 +29,7 @@ With nothing plugged in the bar stays and says "No gear connected".
 - **Sims** lists the sims on this Mac against one quad's rates. The item says **Out of date**
   while a sim's rates differ from the quad's. See [Sims](#sims-page).
 - **Controls** shows the radio's sticks and switches live. See [Controls](#controls).
-- **Voices** holds the voice packs on this Mac and the Voice studio. See [Voices](#voices).
+- **Voices** holds the voice packs on this Mac, ElevenLabs and the other voices. See [Voices](#voices).
 - **Firmware** compares each device's firmware with the newest release. It reads a radio's
   firmware, flashes an EdgeTX radio, and, with the previews on, flashes a Betaflight FC and
   reads ExpressLRS devices. See [Firmware and splash](#firmware-and-splash).
@@ -438,18 +438,23 @@ on the radio before relying on it.
 
 ## Voices
 
-**Voices** in the Gear sidebar holds every voice pack on this Mac and the Voice studio that
-renders them. A pack is not tied to a radio: its files, the raw takes and the cache live in
+**Voices** in the Gear sidebar holds every voice pack on this Mac and the voices that render
+them. From the top: the summary (ElevenLabs credits, packs on this Mac, radios with a pack, and
+the lines rendered, with the three voices that have the most), **Voice packs on this Mac**, the
+[ElevenLabs](#elevenlabs) section with its [Samples](#samples), **Mac and other voices**, and
+**Get voice packs**. A pack is not tied to a radio: its files, the raw takes and the cache live in
 the gear folder (`voices/`) and the cache folder. A radio only records which pack it uses and
 its own per-line overrides ([Radio voice](#radio-voice)). Packs are for EdgeTX radios; each
 pack records its firmware family (`edgetx`) in `pack.json`.
 
 - **Library.** One row per pack, rendered here or installed: the voice, the model (or the
-  provider), the line sets it holds every line of, the line count, the size on disk, the date
-  it was made, the [speech check](#speech-check) (**Not checked**, **Heard right** or how many
-  lines it heard wrong), and the radios that chose it. A rendered pack also lists each line
-  that needs a re-take ([Voice studio](#voice-studio)). The play button plays one line (Armed,
-  when the pack has it). **Check speech** opens the pack's speech check.
+  provider), the line sets it was rendered from (a line that waits for a re-take still counts),
+  the line count, the size on disk, the date it was made, the [speech check](#speech-check)
+  (**Not checked**, **Heard right** or how many lines it heard wrong), and the radios that chose
+  it. A pack from the index also shows its id. A pack with lines that need a re-take
+  ([ElevenLabs](#elevenlabs)) or carry a flag shows how many under the voice, such as "150 need
+  a re-take, 2 flagged"; click it to list each line with its reason. The play button plays one
+  line (Armed, when the pack has it). **Check speech** opens the pack's speech check.
 - **Apply to radios…** lists every saved EdgeTX radio with a tick box, and **All radios**.
   Each radio shows **Card connected** when its card is mounted or unmounted and still in, and
   **Not connected** otherwise. **Stage** stages one voice change per radio, the same change a
@@ -473,12 +478,12 @@ pack records its firmware family (`edgetx`) in `pack.json`.
   after a hash check. An index entry without a hash, a path outside `SOUNDS/`, and a symbolic
   link in the zip refuse the install. The QuadCam Voices site plays the same previews in a
   browser.
-- **Render my voice.** QuadCam can also speak every line itself, with the provider in the
-  settings, and keep the takes as a local pack: `tts_provider` is `say` (macOS, free, offline)
+- **Mac and other voices.** This section shows the provider in the settings. **Render my
+  voice** speaks every line with it and keeps the takes as a local pack: `tts_provider` is `say` (macOS, free, offline)
   or `openai` (any server with an OpenAI-compatible `/v1/audio/speech`, such as a Kokoro
   server on this Mac: set `tts_base_url`, `tts_model` and `tts_voice`). The server's key goes
   in `QUADCAM_OPENAI_KEY` or the `tts_key` setting and is never shown or logged. ElevenLabs
-  renders only in the [Voice studio](#voice-studio), which prices a render first: with
+  renders only in the [ElevenLabs](#elevenlabs) section, which prices a render first: with
   `tts_provider` `elevenlabs`, **Render my voice** and **My text…** say so. **Check cost**
   reports the lines, how many the cache already holds, and the characters a provider would
   speak. A provider that is not on this Mac may charge: **Render my voice** then stops and
@@ -497,7 +502,8 @@ pack records its firmware family (`edgetx`) in `pack.json`.
 **Publish…** on a pack you rendered opens the publish section. QuadCam prepares the pack,
 shows a review, and publishes nothing until you click **Approve and publish**.
 
-1. **Prepare.** Give the pack an id (default `<language>-<voice name>`), a version (default 1),
+1. **Prepare.** Give the pack an id (default `<language>-<short name>`: the voice's name before
+   " - ", so "Xavier - Dominating, Metalic Announcer" gives `en-xavier`), a version (default 1),
    the voice's name, a license and an attribution. ElevenLabs packs get "ElevenLabs output, paid
    plan: commercial use allowed", and Kokoro packs (a model name with `kokoro`) get Apache-2.0.
    **Prepare** builds, in QuadCam's cache, the zip, about ten preview lines as AAC (from the
@@ -532,10 +538,12 @@ on this Mac, set `tts_provider` to `openai`, `tts_base_url` to its address (for 
 [docs/kokoro.md](https://github.com/noahkiss/quadcam-voices/blob/main/docs/kokoro.md) has the
 steps.
 
-### Voice studio
+### ElevenLabs
 
-The **Voice studio** on the Voices page renders whole line sets with ElevenLabs,
-inside carrier sentences, and compares voices before it spends credits.
+The **ElevenLabs** section of the Voices page renders whole line sets with ElevenLabs, inside
+carrier sentences, and compares voices before it spends credits. It holds, in order: the key,
+the voices, the models, the line sets, the cost, **Sample** and **Render pack**, and the
+[Samples](#samples). Click its title to collapse it; it stays collapsed until you open it again.
 
 - **Key.** Paste the ElevenLabs API key and **Save key**. It goes to the macOS Keychain
   (service `app.quadcam`) and nowhere else: not `settings.json`, not a log, not an answer.
@@ -548,12 +556,14 @@ inside carrier sentences, and compares voices before it spends credits.
   older `QUADCAM_TTS_KEY` still works, for ElevenLabs only: no other provider gets it.
 - **Account.** The studio lists the account's voices and models and the credits left. Each
   model shows its price in USD per 1,000 characters and the credits a character costs. QuadCam
-  holds one rate table (the pricing page of 2026-10-09). A promo rate, such as the one on v4
-  and v4 turbo until 2026-10-12, shows with its last day. The credit figure is an estimate:
-  one credit is one character at the $0.08 rate, so a $0.04 model costs half a credit. After
-  a paid call, QuadCam records the character count ElevenLabs reports and uses that next time,
-  when it is within 5% of the model's credits a character. It logs every count, kept or not,
-  in `voice/charcost.log` in the cache.
+  holds one rate table (the pricing page of 2026-10-13). A promo rate shows with its last day
+  while it lasts, and QuadCam prices with the base rate after that day. The credit figure is an
+  estimate: QuadCam divides the USD price by the price of one credit, measured on a
+  pay-as-you-go account ($20 for 54,945 credits). A $0.08 model costs about 0.22 credits a
+  character and a $0.04 model about 0.11. A subscription plan may price credits differently.
+  After a paid call, QuadCam records the character count ElevenLabs reports and uses that next
+  time, when it is within 5% of the model's credits a character today. It logs every count,
+  kept or not, in `voice/charcost.log` in the cache.
 - **Voices table.** Each voice shows its accent and languages in columns of their own, with
   its other labels (category, gender, age, use) under **Tags**. **Filter**, **Accent** and
   **Language** above the table narrow it; a ticked voice stays ticked while the filter hides
@@ -712,11 +722,12 @@ inside carrier sentences, and compares voices before it spends credits.
 
 ### Samples
 
-**Samples** on the Voices page holds every sample the Voice studio made, and the packs on this
-Mac, one card per voice.
+**Samples**, the last part of the [ElevenLabs](#elevenlabs) section, holds every sample
+**Sample** made, and the packs on this Mac, one card per voice.
 
-- **Cards.** A sample card is one voice, model and speed: the voice's name, model, speed (when
-  it is not 1), accent, languages and description, and each sample line as a play chip. A pack
+- **Cards.** A sample card is one voice, model and speed: the voice's name as ElevenLabs spells
+  it, the model's name, speed (when it is not 1), accent, languages and description, and the
+  sample lines in an aligned grid, each with its play and flag buttons. A pack
   card shows the pack's lines of the `sample` set (or its first lines) and every flagged line.
   The cards wrap to the window's width.
 - **Where samples live.** In the gear folder's `voice-samples/`, one folder per voice, model and
@@ -765,8 +776,8 @@ everything else works as before.
 - **How it compares.** Both texts go through the spelling rules, then lose case, punctuation
   and spaces, and numbers read as words. So "GPS fix" heard for "G.P.S. fix", "10" for
   "ten" and "Fail safe" for "Failsafe" all count as heard right.
-- **A line heard wrong.** In a pack the Voice studio rendered, the line leaves the pack and is
-  a [re-take](#voice-studio) with the reason "The speech check heard …". A render with the same
+- **A line heard wrong.** In a pack ElevenLabs rendered, the line leaves the pack and is
+  a [re-take](#elevenlabs) with the reason "The speech check heard …". A render with the same
   seed keeps it out and sends nothing; **Re-take** (another seed) prices its batch, asks, and
   renders it again. A sample heard wrong is listed under the samples, and a later render
   treats its line the same way. In any other pack the check only marks the line.

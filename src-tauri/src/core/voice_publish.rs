@@ -205,7 +205,7 @@ impl Core {
         let id =
             p.id.clone()
                 .filter(|s| !s.trim().is_empty())
-                .unwrap_or_else(|| format!("{}-{}", m.lang, super::voice::slug(&voice)));
+                .unwrap_or_else(|| format!("{}-{}", m.lang, super::voice::short_slug(&voice)));
         packs::check_id(&id)?;
         if id.starts_with("local-") {
             bail!("{id:?} is a local pack's id: give the published pack its own id (--id).");

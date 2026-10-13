@@ -992,7 +992,7 @@ impl Core {
                     .join(", ")
             )
         })?;
-        let recorded = rates::Recorded::new(&self.cache).get(model);
+        let recorded = rates::Recorded::new(&self.cache).get(model, &rates::today());
         let basis = if recorded.is_some() {
             "recorded"
         } else if rates::rate(model).is_some() {

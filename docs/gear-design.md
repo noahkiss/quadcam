@@ -1165,11 +1165,14 @@ from the Keychain through `KeyStore` (`keychain.rs`, `security-framework`, no se
 its config on stdin; `FakeHttp` in tests). A model's billing rate is its
 price in `rates.rs`, the one rate table: USD per 1,000 characters, an optional promo rate with
 its last day, and the per-request character limit (v4 and v4 turbo: the v3 limit of 5,000
-until the account says otherwise). Credits a character are the base USD rate over 0.08 and
-read as an estimate; a model the table lacks keeps the account's `character_cost_multiplier`
-(turbo and flash v2 fall back to 0.5). The `x-character-count` header of a paid call is kept
-per model in `<cache>/voice/charcost.json` and wins over the estimate next time, but only within
-5% of the model's multiplier in the table (any table multiplier for a model the table lacks).
+until the account says otherwise). Credits a character are the USD rate today (a live promo
+included) over the price of one credit, `rates::CREDIT_USD` (measured on a pay-as-you-go
+account: $20 for 54,945 credits), and read as an estimate; a subscription plan may price a
+credit differently. A model the table lacks is priced at its `character_cost_multiplier` times
+$0.08 (turbo and flash v2 fall back to 0.5). The `x-character-count` header of a paid call is
+kept per model in `<cache>/voice/charcost.json` and wins over the estimate next time, but only
+within 5% of the model's figure in the table today (any table figure for a model the table
+lacks); a figure recorded during a promo is ignored after it.
 Every reading, kept or not, goes to stderr and `<cache>/voice/charcost.log`.
 
 - Batches (`batch.rs`): `plan` groups lines by tone, wraps each in the carrier (default

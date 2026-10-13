@@ -252,6 +252,37 @@ pub struct RetakeReport {
     pub notes: Vec<String>,
 }
 
+/// Voice id and name by the slug of the name.
+type PackNames = HashMap<String, (String, String)>;
+
+/// A voice name back from its slug, for a folder no pack names: " - " and ", " come back from
+/// the runs of hyphens `slug` made of them, and each word starts with a capital.
+fn unslug(s: &str) -> String {
+    let words = |part: &str| -> String {
+        part.split('-')
+            .filter(|w| !w.is_empty())
+            .map(|w| {
+                let mut c = w.chars();
+                c.next()
+                    .map(|f| f.to_uppercase().chain(c).collect::<String>())
+                    .unwrap_or_default()
+            })
+            .collect::<Vec<_>>()
+            .join(" ")
+    };
+    s.split("---")
+        .map(|part| {
+            part.split("--")
+                .map(words)
+                .filter(|w| !w.is_empty())
+                .collect::<Vec<_>>()
+                .join(", ")
+        })
+        .filter(|p| !p.is_empty())
+        .collect::<Vec<_>>()
+        .join(" - ")
+}
+
 /// A sample folder's name: the voice's name, a short hash of its id (two voices with one
 /// name stay apart), the model, and the speed when it is not 1.
 pub(super) fn sample_dir_name(voice: &str, voice_name: &str, model: &str, speed: f64) -> String {
@@ -570,7 +601,12 @@ impl Core {
     /// A sample folder as a card. A folder without `samples.json` (0.19 and earlier) is read
     /// from its files: the voice's name and the model from the folder's name, each line's
     /// text from QuadCam's lines.
-    fn sample_card(&self, dir: &Path, texts: &HashMap<String, String>) -> Option<SampleVoice> {
+    fn sample_card(
+        &self,
+        dir: &Path,
+        texts: &HashMap<String, String>,
+        names: &PackNames,
+    ) -> Option<SampleVoice> {
         let id = dir.file_name()?.to_string_lossy().into_owned();
         let set = match read_json::<SampleSet>(&dir.join(SAMPLES_FILE)) {
             Some(s) => s,
@@ -589,8 +625,13 @@ impl Core {
                 } else {
                     id[..id.len() - slug(model).len() - 1].to_string()
                 };
+                let (voice, voice_name) = names
+                    .get(&name)
+                    .cloned()
+                    .unwrap_or_else(|| (String::new(), unslug(&name)));
                 SampleSet {
-                    voice_name: name,
+                    voice,
+                    voice_name,
                     model: model.to_string(),
                     speed: 1.0,
                     takes: files
@@ -639,6 +680,20 @@ impl Core {
             sets: set.sets,
             takes,
         })
+    }
+
+    /// The voices of the packs on this Mac by the slug of their name, as a folder from 0.19
+    /// and earlier names them: the voice id and the name.
+    fn pack_names(&self) -> PackNames {
+        packs::installed(&self.voices_dir())
+            .into_iter()
+            .map(|i| {
+                (
+                    slug(&i.manifest.voice),
+                    (i.manifest.voice_id, i.manifest.voice),
+                )
+            })
+            .collect()
     }
 
     /// A pack on this Mac as a card: its lines of the `sample` set (or its first lines), and
@@ -708,12 +763,13 @@ impl Core {
         let notes = self.move_cached_samples();
         let root = self.samples_root();
         let texts = self.line_texts()?;
+        let names = self.pack_names();
         let mut samples: Vec<SampleVoice> = std::fs::read_dir(&root)
             .into_iter()
             .flatten()
             .flatten()
             .filter(|e| e.path().is_dir())
-            .filter_map(|e| self.sample_card(&e.path(), &texts))
+            .filter_map(|e| self.sample_card(&e.path(), &texts, &names))
             .collect();
         samples.sort_by(|a, b| {
             b.updated
@@ -790,7 +846,7 @@ impl Core {
                 }
                 let texts = self.line_texts()?;
                 let card = self
-                    .sample_card(&dir, &texts)
+                    .sample_card(&dir, &texts, &self.pack_names())
                     .with_context(|| format!("The sample {s:?} holds no take."))?;
                 let mut set: SampleSet = read_json(&dir.join(SAMPLES_FILE)).unwrap_or_default();
                 if set.takes.is_empty() {
@@ -944,7 +1000,7 @@ impl Core {
     fn card_of(&self, t: &Target) -> Result<SampleVoice> {
         let texts = self.line_texts()?;
         let card = match t {
-            Target::Sample { dir, .. } => self.sample_card(dir, &texts),
+            Target::Sample { dir, .. } => self.sample_card(dir, &texts, &self.pack_names()),
             Target::Pack { dir, m, .. } => {
                 let sample_lines: Vec<String> = sets::lines_of("sample")?
                     .into_iter()
@@ -1249,6 +1305,20 @@ pub fn retake_text(r: &RetakeReport) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn an_old_folder_name_reads_back_as_a_voice_name() {
+        assert_eq!(unslug("adam---dominant--firm"), "Adam - Dominant, Firm");
+        assert_eq!(
+            unslug("johnny-dynamite---vintage-radio-dj"),
+            "Johnny Dynamite - Vintage Radio Dj"
+        );
+        assert_eq!(unslug("callum"), "Callum");
+        assert_eq!(
+            unslug(&slug("Xavier - Dominating, Metalic Announcer")),
+            "Xavier - Dominating, Metalic Announcer"
+        );
+    }
 
     #[test]
     fn a_sample_folder_names_the_voice_model_and_speed() {

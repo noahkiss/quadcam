@@ -160,9 +160,13 @@ fn the_catalogue_needs_a_key_and_lists_voices_models_and_credits() {
     assert_eq!(c.voices.len(), 2);
     // The account lists v4 and v4 turbo by these ids; the rate table prices them.
     let by = |id: &str| c.models.iter().find(|m| m.id == id).expect(id);
-    assert_eq!(by("eleven_v4").cost_per_char, 1.0);
-    assert_eq!(by("eleven_v4_turbo").cost_per_char, 0.5);
-    assert_eq!(by("eleven_turbo_v2_5").cost_per_char, 0.5);
+    let v4 = by("eleven_v4");
+    assert_eq!(
+        v4.cost_per_char,
+        quadcam_lib::gear::voice::rates::credits_per_char(v4.usd_per_1k)
+    );
+    assert_eq!(by("eleven_v3").cost_per_char, 0.22);
+    assert_eq!(by("eleven_turbo_v2_5").cost_per_char, 0.11);
     assert_eq!(by("eleven_v3").max_chars, 5000);
     assert_eq!(c.credits.unwrap().remaining, 50000);
     let only = b
@@ -199,10 +203,14 @@ fn the_estimate_prices_carriers_at_the_models_rate_and_makes_no_paid_call() {
     // Batches by tone: calm, alert and number lines never share a take.
     assert_eq!(half.estimate.batches, 3);
     assert!(half.estimate.chars > 12 * "The word is .".len() as u64);
-    assert_eq!(full.estimate.credits, full.estimate.chars);
+    // Credits from the dollar rate and the credit price: $0.04 per 1K is 0.11 a character.
     assert_eq!(
         half.estimate.credits,
-        (half.estimate.chars as f64 / 2.0).ceil() as u64
+        (half.estimate.chars as f64 * 0.11).ceil() as u64
+    );
+    assert_eq!(
+        full.estimate.cost_per_char,
+        quadcam_lib::gear::voice::rates::credits_per_char(full.estimate.usd_per_1k)
     );
     // USD from the table: flash and turbo v2.5 are $0.04 per 1K characters, with no promo.
     assert_eq!(half.estimate.usd_per_1k, 0.04);
@@ -340,11 +348,11 @@ fn a_recorded_character_count_replaces_the_estimate() {
         "{log}"
     );
     // Close to its multiplier: kept, and other batches (another set) are priced at it.
-    b.http.bill(0.97);
-    paid_sample(&b, sample(&["Matilda"], &["eleven_v4"], false, true));
-    let after = estimate(&b, &["quad"], "eleven_v4").unwrap();
+    b.http.bill(0.215);
+    paid_sample(&b, sample(&["Matilda"], &["eleven_v3"], false, true));
+    let after = estimate(&b, &["quad"], "eleven_v3").unwrap();
     assert_eq!(after.estimate.credits_basis, "recorded");
-    assert!((after.estimate.cost_per_char - 0.97).abs() < 0.01);
+    assert!((after.estimate.cost_per_char - 0.215).abs() < 0.01);
     assert!(after.estimate.credits < after.estimate.chars);
     let text = quadcam_lib::core::voice_estimate_text(&after.estimate);
     assert!(text.contains("recorded rate"), "{text}");
@@ -845,6 +853,8 @@ fn a_flagged_line_stays_out_of_the_pack_until_a_re_take_redoes_its_batch() {
     };
     let k = library(&b);
     assert_eq!(k.retakes.len(), 2, "{k:?}");
+    // The lines waiting for a re-take do not drop the set from the pack's sets.
+    assert!(k.sets.contains(&"quad".to_string()), "{:?}", k.sets);
     assert!(quadcam_lib::core::voice_view_text(
         &b.core
             .gear_voice(&quadcam_lib::core::VoiceParams::default())
@@ -2258,7 +2268,7 @@ fn a_voice_with_a_rate_of_its_own_costs_that_many_times_the_credits() {
     assert_eq!(twice.estimate.chars, plain.estimate.chars);
     assert_eq!(
         twice.estimate.credits,
-        (plain.estimate.chars as f64 * 0.5 * 2.0).ceil() as u64
+        (plain.estimate.chars as f64 * 0.11 * 2.0).ceil() as u64
     );
     assert!((twice.estimate.usd - 2.0 * plain.estimate.usd).abs() < 1e-9);
 }
@@ -2425,9 +2435,10 @@ fn samples_in_the_cache_move_to_the_gear_folder_once() {
     std::fs::write(old.join("armed.wav"), &wav).unwrap();
     let g = gallery(&b);
     let card = &g.voices[0];
+    // The name reads back from the folder's slug.
     assert_eq!(
         (card.voice_name.as_str(), card.model.as_str()),
-        ("callum", m)
+        ("Callum", m)
     );
     assert_eq!(card.voice, "");
     assert_eq!(card.takes[0].text, "Armed");

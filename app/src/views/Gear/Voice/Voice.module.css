@@ -84,12 +84,54 @@
   font-size: var(--t-sm);
   color: var(--muted);
 }
-.retakes {
-  margin: var(--s-1) 0 0;
-  padding-left: var(--s-2);
+.lineList {
+  margin-top: var(--s-1);
   font-weight: 400;
   font-size: var(--t-sm);
+}
+.lineList summary {
+  cursor: default;
   color: var(--warning-text);
+}
+.lineList ul {
+  list-style: none;
+  margin: var(--s-1) 0 0;
+  padding: 0;
+  max-height: 240px;
+  overflow-y: auto;
+  display: grid;
+  grid-template-columns: minmax(6rem, max-content) 1fr;
+  gap: 2px var(--s-3);
+}
+.lineList li {
+  display: grid;
+  grid-column: 1 / -1;
+  grid-template-columns: subgrid;
+}
+.lineText {
+  color: var(--fg);
+}
+.lineWhy {
+  color: var(--muted);
+}
+.topVoices {
+  display: flex;
+  flex-direction: column;
+}
+.topVoice {
+  display: flex;
+  gap: var(--s-2);
+  min-width: 0;
+}
+.topName {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.topCount {
+  font-variant-numeric: tabular-nums;
 }
 .hidden {
   position: absolute;
@@ -141,10 +183,10 @@
   font-size: var(--t-sm);
 }
 .pickers {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(340px, 1fr));
-  gap: var(--s-4) var(--s-6);
-  align-items: start;
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-3);
+  min-width: 0;
 }
 .price {
   display: inline-flex;

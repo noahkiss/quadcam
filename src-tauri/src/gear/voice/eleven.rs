@@ -449,7 +449,7 @@ impl Tts for Eleven {
                     .pointer("/model_rates/character_cost_multiplier")
                     .and_then(Value::as_f64)
                     .unwrap_or_else(|| fallback_rate(&id));
-                let rate = table.map_or(api_rate, |t| t.credits_per_char());
+                let usd = table.map_or(api_rate * rates::BASE_USD_PER_1K, |t| t.usd_on(&today));
                 let api_max = m
                     .get("maximum_text_length_per_request")
                     .and_then(Value::as_u64)
@@ -460,8 +460,8 @@ impl Tts for Eleven {
                         .and_then(Value::as_str)
                         .unwrap_or(&id)
                         .to_string(),
-                    cost_per_char: rate,
-                    usd_per_1k: table.map_or(rate * rates::BASE_USD_PER_1K, |t| t.usd_on(&today)),
+                    cost_per_char: rates::credits_per_char(usd),
+                    usd_per_1k: usd,
                     promo_until: table
                         .and_then(|t| t.promo_on(&today))
                         .map(|(_, until)| until.to_string()),
@@ -857,10 +857,10 @@ mod tests {
         );
         let m = client(&h).models().unwrap();
         assert_eq!(m.len(), 2);
-        assert_eq!(m[0].cost_per_char, 0.5);
+        assert_eq!(m[0].cost_per_char, 0.11);
         assert_eq!(m[0].max_chars, 40000);
-        // No rate in the answer: the known half-price models still bill half.
-        assert_eq!(m[1].cost_per_char, 0.5);
+        // No rate in the answer: the table prices the model.
+        assert_eq!(m[1].cost_per_char, 0.11);
         let seen = h.seen.lock().unwrap();
         assert!(seen[0].headers.iter().any(|(k, _)| k == "xi-api-key"));
     }
@@ -878,15 +878,15 @@ mod tests {
         // The ids the account lists, v4 and v4 turbo among them.
         assert_eq!(m.len(), 9);
         let v4 = by("eleven_v4");
-        assert_eq!(v4.cost_per_char, 1.0);
-        let turbo = by("eleven_v4_turbo");
-        assert_eq!(turbo.cost_per_char, 0.5);
+        assert_eq!(v4.cost_per_char, rates::credits_per_char(v4.usd_per_1k));
+        assert_eq!(by("eleven_v3").cost_per_char, 0.22);
+        assert_eq!(by("eleven_v3_conversational").cost_per_char, 0.11);
         assert_eq!(by("eleven_multilingual_v2").max_chars, 10000);
         assert_eq!(by("eleven_flash_v2_5").usd_per_1k, 0.04);
         assert_eq!(by("eleven_flash_v2_5").max_chars, 40000);
         assert_eq!(by("eleven_v3").max_chars, 5000);
-        // The older models are not in the table: the account's figure and the fallback stand.
-        assert_eq!(by("eleven_turbo_v2").cost_per_char, 0.5);
+        // The older models are not in the table: the account's multiplier prices them.
+        assert_eq!(by("eleven_turbo_v2").cost_per_char, 0.11);
         assert_eq!(by("eleven_flash_v2").usd_per_1k, 0.04);
         assert_eq!(by("eleven_turbo_v2").promo_until, None);
         // A promo shows only while it lasts; the USD rate is the base or the promo's.

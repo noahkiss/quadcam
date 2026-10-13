@@ -431,6 +431,7 @@ pub fn fetch(ctx: &Ctx<'_>, b: &Batch, snap_ms: u32, may_send: bool) -> Result<(
             ctx.model,
             billed,
             b.text.chars().count() as u64,
+            &rates::today(),
         );
     }
     let cuts = cut(b, &a, snap_ms).with_context(|| {

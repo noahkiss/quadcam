@@ -36,7 +36,7 @@ test("the lines show the spoken text, and Choose voice lists the packs on the Vo
   const choose = page.getByRole("region", { name: "Choose voice" });
   await expect(choose).toContainText("No voice pack on this Mac.");
   // The studio and the pack list live on the Voices page now.
-  await expect(page.getByRole("region", { name: "Voice studio" })).toHaveCount(0);
+  await expect(page.getByRole("region", { name: "ElevenLabs" })).toHaveCount(0);
   await expect(page.getByRole("button", { name: "Refresh packs" })).toHaveCount(0);
   await choose.getByRole("button", { name: "Open Voices" }).click();
   await expect(page.getByRole("heading", { name: "Voices", level: 2 })).toBeVisible();

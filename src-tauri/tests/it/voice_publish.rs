@@ -257,6 +257,34 @@ fn prepare_needs_a_clean_speech_check() {
 }
 
 #[test]
+fn the_default_id_is_the_voices_short_name() {
+    let b = bench();
+    pack(
+        &b,
+        "elevenlabs",
+        &["SOUNDS/en/lowbat.wav"],
+        &["SOUNDS/en/lowbat.wav"],
+        &[],
+    );
+    let r = b
+        .core
+        .gear_voice_publish(&PublishParams {
+            voice_name: Some("Xavier - Dominating, Metalic Announcer".into()),
+            ..params()
+        })
+        .unwrap();
+    assert_eq!(r.entry.id, "en-xavier");
+    let r = b
+        .core
+        .gear_voice_publish(&PublishParams {
+            voice_name: Some("Johnny  Dynamite!!".into()),
+            ..params()
+        })
+        .unwrap();
+    assert_eq!(r.entry.id, "en-johnny-dynamite");
+}
+
+#[test]
 fn prepare_builds_the_bundle_and_the_review() {
     let b = bench();
     pack(

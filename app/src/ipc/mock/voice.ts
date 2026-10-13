@@ -364,9 +364,9 @@ const LIBRARY: LibraryVoice[] = [
   added: false,
 }));
 const MODELS: ModelInfo[] = [
-  { id: "eleven_v4", name: "Eleven v4", cost_per_char: 1, usd_per_1k: 0.08, promo_until: null, max_chars: 5000 },
-  { id: "eleven_v4_turbo", name: "Eleven v4 Turbo", cost_per_char: 0.5, usd_per_1k: 0.04, promo_until: null, max_chars: 5000 },
-  { id: "eleven_turbo_v2_5", name: "Turbo v2.5", cost_per_char: 0.5, usd_per_1k: 0.04, promo_until: null, max_chars: 40000 },
+  { id: "eleven_v4", name: "Eleven v4", cost_per_char: 0.22, usd_per_1k: 0.08, promo_until: null, max_chars: 5000 },
+  { id: "eleven_v4_turbo", name: "Eleven v4 Turbo", cost_per_char: 0.11, usd_per_1k: 0.04, promo_until: null, max_chars: 5000 },
+  { id: "eleven_turbo_v2_5", name: "Eleven Turbo v2.5", cost_per_char: 0.11, usd_per_1k: 0.04, promo_until: null, max_chars: 40000 },
 ];
 const QUAD = ["quad"];
 const SETS: SetInfo[] = [
@@ -694,7 +694,7 @@ export function retake(g: MockGear, p: { sample: string; pack: string; lines: st
   if (!lines.length) throw `${card.id} has no flagged take.`;
   const seed = 1 + (lines.join("|").length * 7919) % 2_000_000_000;
   const chars = lines.length * (CARRIER + 10);
-  const estimate: VoiceEstimate = { batches: 1, cached_batches: 0, lines: lines.length, chars, cost_per_char: 1, credits_basis: "estimated", usd_per_1k: 0.08, promo_until: null, credits: chars, usd: chars * 0.00008, remaining: CREDITS - g.voice.spent, affordable: true };
+  const estimate: VoiceEstimate = { batches: 1, cached_batches: 0, lines: lines.length, chars, cost_per_char: 0.22, credits_basis: "estimated", usd_per_1k: 0.08, promo_until: null, credits: Math.ceil(chars * 0.22), usd: chars * 0.00008, remaining: CREDITS - g.voice.spent, affordable: true };
   const digest = digestOf({ retake: card.id, lines, seed, chars });
   const base: RetakeReport = { kind: card.kind, id: card.id, lines, seed, estimate, needs_confirm: false, dry_run: !!p.dry_run, digest, cleared: [], notes: [] };
   if (p.dry_run) return base;

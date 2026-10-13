@@ -1,8 +1,9 @@
-// The Voice studio (design 7.4): the ElevenLabs key (kept in the macOS Keychain), the
-// account's voices and models, the credits, the line sets with what rendering them costs,
-// a Sample that renders a few hard lines per voice and model into the Samples gallery, and a
-// Render that puts the sets into a local voice pack. Every paid call asks first.
-import { useState } from "react";
+// The ElevenLabs section of the Voices page (design 7.4): the key (kept in the macOS
+// Keychain), the account's voices and models, the credits, the line sets with what rendering
+// them costs, a Sample that renders a few hard lines per voice and model into the Samples
+// gallery (the section's last part), and a Render that puts the sets into a local voice pack.
+// Every paid call asks first.
+import { useState, type ReactNode } from "react";
 import { Banner } from "../../../components/Banner";
 import { Button } from "../../../components/Button";
 import { SelectField, TextField } from "../../../components/Field";
@@ -15,6 +16,7 @@ import { Stat, StatRow } from "../../../components/dash/StatRow";
 import { errText, pickFolder } from "../../../ipc/api";
 import type { ImportReport, ModelInfo, RenderPacksReport, Retake, SetInfo, StudioEstimate, VoiceEstimate, VoiceInfo, VoiceProgress } from "../../../ipc/types";
 import { LIST_HEIGHT, takesOf, type UseStudio } from "./useStudio";
+import { modelName } from "./names";
 import styles from "./Voice.module.css";
 
 const n = (v: number) => v.toLocaleString("en-US");
@@ -152,6 +154,7 @@ function Pickers({ s, onError }: { s: UseStudio; onError: (e: string) => void })
   ];
   return (
     <div className={styles.pickers}>
+      <h4 className={styles.subtitle}>Voices</h4>
       <div className={styles.voices}>
         <div className={styles.bar} role="search" aria-label="Filter voices">
           <TextField label="Filter" inline value={f.text} onChange={(e) => setF({ ...f, text: e.target.value })} />
@@ -188,6 +191,7 @@ function Pickers({ s, onError }: { s: UseStudio; onError: (e: string) => void })
       />
       </div>
       {browsing && <BrowseVoices onClose={() => setBrowsing(false)} onAdded={s.refreshCatalog} />}
+      <h4 className={styles.subtitle}>Models</h4>
       <DataTable
         label="Models"
         compact
@@ -275,7 +279,7 @@ function EstimateStats({ e }: { e: RenderPacksReport }) {
 }
 
 /** With several voices or models: what each pack costs. */
-function CostByPack({ e }: { e: RenderPacksReport }) {
+function CostByPack({ e, models }: { e: RenderPacksReport; models?: ModelInfo[] | null }) {
   const cols: Column<StudioEstimate>[] = [
     {
       key: "voice",
@@ -288,7 +292,7 @@ function CostByPack({ e }: { e: RenderPacksReport }) {
         </span>
       ),
     },
-    { key: "model", header: "Model", cell: (p) => <span className={styles.muted}>{p.model}</span> },
+    { key: "model", header: "Model", cell: (p) => <span className={styles.muted}>{modelName(p.model, models)}</span> },
     { key: "left", header: "To render", numeric: true, cell: (p) => n(p.to_render ?? p.estimate.lines) },
     { key: "chars", header: "Characters", numeric: true, cell: (p) => n(p.estimate.chars) },
     { key: "usd", header: "Cost", numeric: true, cell: (p) => `$${(p.estimate.usd ?? 0).toFixed(2)}` },
@@ -298,9 +302,9 @@ function CostByPack({ e }: { e: RenderPacksReport }) {
 }
 
 /** A paid run going on: batches done of total, the pack it is on, and Stop. */
-function RunProgress({ p, onStop }: { p: VoiceProgress; onStop: () => void }) {
+function RunProgress({ p, models, onStop }: { p: VoiceProgress; models?: ModelInfo[] | null; onStop: () => void }) {
   const what = p.kind === "sample" ? "Sampling" : "Rendering";
-  const on = p.voice_name ? ` · ${p.voice_name}, ${p.model}` : "";
+  const on = p.voice_name ? ` · ${p.voice_name}, ${modelName(p.model, models)}` : "";
   return (
     <div className={styles.bar} role="status" aria-label="Progress">
       <progress className={styles.progress} aria-label={`${what} batches`} max={Math.max(1, p.total)} value={p.done} />
@@ -373,8 +377,9 @@ function importText(r: ImportReport) {
   return `${r.imported} ${r.imported === 1 ? "take" : "takes"} imported, ${r.already} in the cache already${left}.`;
 }
 
-/** The Voice studio card. `s` comes from the page, which also shows its summary. */
-export function Studio({ s }: { s: UseStudio }) {
+/** The ElevenLabs section. `s` comes from the page, which also shows its summary; `children`
+ *  (the Samples) close the section. */
+export function Studio({ s, collapse, children }: { s: UseStudio; collapse?: { open: boolean; onToggle: (open: boolean) => void }; children?: ReactNode }) {
   const [replacing, setReplacing] = useState(false);
   const [previewError, setPreviewError] = useState<string | null>(null);
   const keySet = s.key?.set ?? false;
@@ -385,10 +390,11 @@ export function Studio({ s }: { s: UseStudio }) {
   const retakes = (s.render?.packs ?? []).flatMap((p) => p.retakes ?? []);
   return (
     <SectionCard
-      title="Voice studio"
-      label="Voice studio"
-      status={keySet && !replacing ? <Badge tone="ok">ElevenLabs key {s.key?.hint}</Badge> : undefined}
+      title="ElevenLabs"
+      label="ElevenLabs"
+      status={keySet && !replacing ? <Badge tone="ok">Key {s.key?.hint}</Badge> : undefined}
       actions={replacing ? undefined : <KeyActions s={s} onReplace={() => setReplacing(true)} />}
+      collapse={collapse}
     >
       {(!keySet || replacing) && <KeyForm s={s} replacing={replacing} done={() => setReplacing(false)} />}
       {(s.error || previewError) && (
@@ -407,7 +413,7 @@ export function Studio({ s }: { s: UseStudio }) {
               {ready ? "Working out the cost…" : "Pick a voice, a model and a line set to see what a render costs."}
             </p>
           )}
-          {e && e.pairs.length > 1 && <CostByPack e={e} />}
+          {e && e.pairs.length > 1 && <CostByPack e={e} models={s.catalog?.models} />}
           {e && !e.estimate.affordable && (
             <p className={styles.error} role="alert">
               The account does not have enough credits.
@@ -469,7 +475,7 @@ export function Studio({ s }: { s: UseStudio }) {
               This sends text to ElevenLabs, which bills it.{s.asking === "render" && s.render && s.render.pairs.length > 1 ? ` ${s.render.pairs.length} packs.` : ""} {costText(ask)}
             </Banner>
           )}
-          {s.busy && s.progress && <RunProgress p={s.progress} onStop={() => void s.stopRun()} />}
+          {s.busy && s.progress && <RunProgress p={s.progress} models={s.catalog?.models} onStop={() => void s.stopRun()} />}
           {s.render && !s.render.needs_confirm && !s.asking && <RenderResult r={s.render} />}
           {s.render && !s.render.needs_confirm && !s.asking && retakes.length > 0 && <Retakes s={s} retakes={retakes} />}
           {s.sample?.stopped && !s.asking && (
@@ -479,6 +485,7 @@ export function Studio({ s }: { s: UseStudio }) {
           )}
         </>
       )}
+      {children}
     </SectionCard>
   );
 }

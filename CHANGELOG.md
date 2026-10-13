@@ -5,6 +5,14 @@ User-facing changes in each release, newest first. Release notes on
 
 ## Unreleased
 
+- **A tidier Voices page.** ElevenLabs is now one section that holds the key, the voices, the models, the line sets, the cost, Sample, Render and the Samples. Click its title to collapse it; it stays collapsed until you open it again. A new **Mac and other voices** section holds **Render my voice** and names the provider in the settings. The summary and **Voice packs on this Mac** stay at the top.
+- **Re-takes behind a click.** A pack row no longer lists every line that needs a re-take. It shows a count, such as "150 need a re-take, 2 flagged"; click it to list the lines with their reasons.
+- **Full-width voice list.** The ElevenLabs voice list takes the full width and scrolls in its own box. The models sit below it.
+- **Real names on the sample cards.** Sample cards from 0.19 and earlier show the voice's name ("Adam - Dominant, Firm"), not its folder name, and every card names the model ("Eleven v4 Turbo"). Each card's lines sit in an aligned grid. **Lines rendered** in the summary lists the top three voices by their short names.
+- **Line sets of a pack.** A pack row now lists every set the pack was rendered from. Before, a set with one line waiting for a re-take dropped out of the list.
+- **Credits estimated from the dollar price.** ElevenLabs bills a pay-as-you-go account about $0.000364 a credit ($20 for 54,945 credits). The estimate now divides each model's USD price by that, so a $0.08 model costs about 0.22 credits a character and a $0.04 model about 0.11, not 1 and 0.5. A promo price lowers the credits too while it lasts. A subscription plan may price credits differently, so the figure stays marked as estimated. Before, the check refused renders the account could afford.
+- **Short pack ids.** **Publish…** and `gear voice publish` without an id now name a pack after the voice's short name: "Xavier - Dominating, Metalic Announcer" gives `en-xavier`, not `en-xavier---dominating--metalic-announcer`.
+
 ## 0.21.2 (2026-10-13)
 
 - **S and F keep their hiss.** A rendered line that starts with an s, z, f, h, th, sh or ch sound ("Signal critical", "Failsafe") no longer loses that first sound, which made an S sound like an F. The cut out of the carrier sentence now keeps up to 120 ms of the hiss before the vowel. Render a pack or the samples again with the same settings to get the new cut: QuadCam cuts the cached takes again and sends nothing to ElevenLabs.

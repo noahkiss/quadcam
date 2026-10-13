@@ -100,7 +100,7 @@ The app, the command-line tool and the MCP server all read and write this file.
 
 ## Secrets
 
-Three settings hold secrets: `google_places_key`, `tts_key` and `elrs_binding_phrase`. The ElevenLabs key is not a setting; it lives in the macOS Keychain ([Voice studio](gear.md#voice-studio)).
+Three settings hold secrets: `google_places_key`, `tts_key` and `elrs_binding_phrase`. The ElevenLabs key is not a setting; it lives in the macOS Keychain ([ElevenLabs](gear.md#elevenlabs)).
 
 - **Write-only.** QuadCam never shows a stored secret. Every read shows its hint: the first and last characters and the length, for example `sk_9…8d4d (51 chars)`. A value of 16 or more characters shows 4 at each end, a shorter one a quarter of its length at each end, and one under 4 characters only its length. A hint never shows more than half the value.
 - **The Settings window** shows the hint and **Replace…**. **Replace…** opens an empty field; **Keep current** closes it.
@@ -130,7 +130,7 @@ Three settings hold secrets: `google_places_key`, `tts_key` and `elrs_binding_ph
 | `elrs_region` | `FCC` | `FCC` or `LBT`: which image folder of a release a flash uses |
 | `elrs_wifi_interval` | 60 | Seconds without a link before a flashed device starts its WiFi (0: never) |
 | `firmware_check` | `manual` | `manual` or `daily`; **Check for firmware updates daily** in Settings > Gear sets `daily`. `manual`: the Firmware page reads the network only when you select **Check for updates**. `daily`: it also checks when the last answer is a day old. See [Gear](gear.md#check) |
-| `tts_provider`, `tts_key` | `say`, none | The voice provider: `say`, `openai` or `elevenlabs`. ElevenLabs renders only in the Voice studio, with a key in the Keychain; the studio uses ElevenLabs whatever this says. `tts_key` is the `openai` server's key; `QUADCAM_OPENAI_KEY` in the environment wins over it. Write-only: reads show its [hint](#secrets) |
+| `tts_provider`, `tts_key` | `say`, none | The voice provider: `say`, `openai` or `elevenlabs`. ElevenLabs renders only in the ElevenLabs section of the Voices page, with a key in the Keychain; that section uses ElevenLabs whatever this says. `tts_key` is the `openai` server's key; `QUADCAM_OPENAI_KEY` in the environment wins over it. Write-only: reads show its [hint](#secrets) |
 | `tts_base_url`, `tts_model`, `tts_voice` | none | For `openai`: the server (such as `http://127.0.0.1:8880`), its model, and the voice your own lines render with. For `say`, `tts_voice` is a `say` voice |
 | `voice_index` | The QuadCam Voices index (`https://noahkiss.github.io/quadcam-voices/index.json`) | The address or path of the voice pack index. Empty turns the index off |
 

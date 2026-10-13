@@ -45,30 +45,35 @@
   list-style: none;
   margin: 0;
   padding: 0;
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--s-1);
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 150px), 1fr));
+  gap: 0 var(--s-3);
 }
 .take {
-  display: inline-flex;
+  display: flex;
   align-items: center;
-  max-width: 100%;
-  border: 1px solid var(--border);
-  border-radius: var(--r-2);
+  min-width: 0;
+  border-bottom: 1px solid var(--border);
+  border-radius: var(--r-1);
 }
 .take.playing {
   border-color: var(--primary);
   background: color-mix(in srgb, var(--primary) 12%, transparent);
 }
-.take.flagged {
-  border-color: var(--warning-text);
+.take.flagged .takeText {
+  color: var(--warning-text);
 }
 .takePlay {
+  flex: 1;
   min-width: 0;
-  max-width: 100%;
-  white-space: normal;
+  justify-content: flex-start;
   text-align: left;
-  overflow-wrap: anywhere;
+}
+.takeText {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .flagWrap {
   position: relative;
@@ -119,5 +124,32 @@
   opacity: 1;
 }
 .take .takePlay {
+  justify-content: flex-start;
   padding-right: var(--s-1);
+}
+.part {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-3);
+  min-width: 0;
+  padding-top: var(--s-4);
+  border-top: 1px solid var(--border);
+}
+.partHead {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--s-2) var(--s-3);
+}
+.partTitle {
+  margin: 0;
+  font-size: var(--t-md);
+  font-weight: 600;
+}
+.partActions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--s-2);
+  margin-left: auto;
 }

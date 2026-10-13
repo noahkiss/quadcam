@@ -612,11 +612,22 @@ impl Core {
             stale: !m.lines_csv_sha.is_empty() && m.lines_csv_sha != csv_sha,
             dir: Some(i.dir.clone()),
             firmware: m.firmware.clone(),
-            sets: covered
-                .iter()
-                .filter(|(_, paths)| !paths.is_empty() && paths.iter().all(|p| m.files.contains(p)))
-                .map(|(id, _)| id.clone())
-                .collect(),
+            sets: {
+                // A line waiting for a re-take still belongs to the set it was rendered from.
+                let held: std::collections::HashSet<&str> = m
+                    .files
+                    .iter()
+                    .map(String::as_str)
+                    .chain(m.retakes.iter().map(|r| r.path.as_str()))
+                    .collect();
+                covered
+                    .iter()
+                    .filter(|(_, paths)| {
+                        !paths.is_empty() && paths.iter().all(|p| held.contains(p.as_str()))
+                    })
+                    .map(|(id, _)| id.clone())
+                    .collect()
+            },
             made: std::fs::metadata(dir.join("pack.json"))
                 .and_then(|x| x.modified())
                 .ok()
@@ -967,7 +978,7 @@ impl Core {
         let lang = p.lang.clone().unwrap_or_else(|| "en".into());
         let id =
             p.id.clone()
-                .unwrap_or_else(|| format!("{lang}-{}-v1", slug(&p.voice)));
+                .unwrap_or_else(|| format!("{lang}-{}-v1", short_slug(&p.voice)));
         let all = lines::builtin()?;
         let spelling = Spelling::builtin()?;
         let cache = self.voice_cache();
@@ -1599,6 +1610,27 @@ pub(super) fn slug(s: &str) -> String {
         "default".into()
     } else {
         t
+    }
+}
+
+/// A published pack's id part from a voice name: the short name before " - " ("Xavier -
+/// Dominating, Metalic Announcer" is "xavier"), lower case, each run of other characters one
+/// hyphen.
+pub(super) fn short_slug(name: &str) -> String {
+    let short = name.split(" - ").next().unwrap_or(name);
+    let mut t = String::new();
+    for c in short.chars() {
+        if c.is_ascii_alphanumeric() {
+            t.push(c.to_ascii_lowercase());
+        } else if !t.is_empty() && !t.ends_with('-') {
+            t.push('-');
+        }
+    }
+    let t = t.trim_end_matches('-');
+    if t.is_empty() {
+        slug(name)
+    } else {
+        t.to_string()
     }
 }
 

@@ -124,7 +124,8 @@ test("Apply to radios stages one change per radio, says which cards are connecte
 
 test("Render my voice checks the cost first, and a provider that may charge waits for the click", async ({ app, page }) => {
   await openVoices(app, page);
-  const get = page.getByRole("region", { name: "Get voice packs" });
+  const get = page.getByRole("region", { name: "Mac and other voices" });
+  await expect(get).toContainText("macOS voices");
   await get.getByRole("button", { name: "Check cost" }).click();
   await expect(get.getByRole("status")).toContainText("Would render 7 of 7 lines with say; 0 come from the cache; 46 characters.");
   await app.core(`c => { c.gear.voice.paid = true; }`);
@@ -134,7 +135,7 @@ test("Render my voice checks the cost first, and a provider that may charge wait
   await get.getByRole("button", { name: "Render and pay" }).click();
   expect((await app.method("gear_voice_render")).at(-1)).toMatchObject({ confirm: true });
   await expect(get.getByRole("status")).toContainText("Rendered 7 of 7 lines into local-say-samantha");
-  await expect(library(page).getByRole("row", { name: /^Samantha local-say-samantha/ })).toContainText("Rendered here");
+  await expect(library(page).getByRole("row", { name: /^Samantha / })).toContainText("Rendered here");
 });
 
 test("the speech check says why it is unavailable and installs the speech assets on request", async ({ app, page }) => {
@@ -142,7 +143,7 @@ test("the speech check says why it is unavailable and installs the speech assets
   await page.getByRole("button", { name: "Render my voice" }).click();
   await app.core(`c => { c.gear.voice.speech = false; }`);
   await page.getByRole("button", { name: "Refresh packs" }).click();
-  const row = library(page).getByRole("row", { name: /^Samantha local-say-samantha/ });
+  const row = library(page).getByRole("row", { name: /^Samantha / });
   await expect(row).toContainText("Not checked");
   await row.getByRole("button", { name: "Check speech of Samantha" }).click();
   const check = page.getByRole("region", { name: "Speech check" });

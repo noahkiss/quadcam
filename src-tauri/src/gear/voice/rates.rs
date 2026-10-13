@@ -1,17 +1,29 @@
 //! What ElevenLabs charges, in one table (design 7.4): USD per 1,000 characters for each model,
 //! an optional promo rate with its last day, and the longest text one request takes. Every
-//! estimate reads it. Credits come from the dollar rate: one credit is one character at the
-//! base rate of the 0.08 models, so a model's credits per character are its base rate over
-//! 0.08. That figure is an estimate. After a paid call, the `x-character-count` header gives
-//! the real cost, and `Recorded` keeps it when it is close to a known multiplier; the next
-//! estimate prefers it. Every reading goes to `charcost.log`, kept or not.
+//! estimate reads it. Credits come from the dollar rate today (a live promo included) and the
+//! price of one credit, `CREDIT_USD`. That figure is an estimate. After a paid call, the
+//! `x-character-count` header gives the real cost, and `Recorded` keeps it when it is close to
+//! the table's figure; the next estimate prefers it. Every reading goes to `charcost.log`,
+//! kept or not.
 
 use serde_json::{json, Value};
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
-/// USD per 1,000 characters that equals one credit per character.
+/// USD per 1,000 characters of a model the account bills at a multiplier of 1. A model the
+/// table lacks is priced from its multiplier at this rate.
 pub const BASE_USD_PER_1K: f64 = 0.08;
+
+/// USD one credit costs. Measured on a pay-as-you-go account on 2026-10-13: $20 bought 54,945
+/// credits, and two renders billed exactly this price (v4 Turbo at its $0.011 promo, 0.030
+/// credits a character; Turbo v2.5 at $0.04, 0.110). A subscription plan may price a credit
+/// differently, and no plan has been measured, so every credit figure stays an estimate.
+pub const CREDIT_USD: f64 = 20.0 / 54_945.0;
+
+/// Credits one character bills at `usd_per_1k`, to three decimals.
+pub fn credits_per_char(usd_per_1k: f64) -> f64 {
+    (usd_per_1k / 1000.0 / CREDIT_USD * 1000.0).round() / 1000.0
+}
 
 /// One model's price.
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -27,6 +39,8 @@ pub struct Rate {
 
 /// The pricing page of 2026-10-09. `eleven_v4` and `eleven_v4_turbo` have no limit on the page:
 /// they take the v3 limit until the account says otherwise.
+/// The prices match the page of 2026-10-13. The v4 promo ended on 2026-10-12; an expired promo
+/// stays in the table and `promo_on` ignores it.
 pub const RATES: &[Rate] = &[
     Rate {
         model: "eleven_v4",
@@ -87,9 +101,9 @@ impl Rate {
         self.promo_on(today).map_or(self.usd_per_1k, |(p, _)| p)
     }
 
-    /// Credits one character is estimated to bill, from the base rate.
-    pub fn credits_per_char(&self) -> f64 {
-        self.usd_per_1k / BASE_USD_PER_1K
+    /// Credits one character is estimated to bill on `today`, from the dollar rate then.
+    pub fn credits_on(&self, today: &str) -> f64 {
+        credits_per_char(self.usd_on(today))
     }
 }
 
@@ -125,24 +139,40 @@ impl Recorded {
             .unwrap_or_default()
     }
 
-    /// Credits per character the account billed on `model`, from the last paid call.
-    pub fn get(&self, model: &str) -> Option<f64> {
-        self.load().get(model).copied().filter(|r| *r > 0.0)
+    /// Credits per character the account billed on `model`, from the last paid call. A figure
+    /// more than 5% from the table's figure for `today` is out of date (a promo began or
+    /// ended) and is ignored.
+    pub fn get(&self, model: &str, today: &str) -> Option<f64> {
+        let got = self.load().get(model).copied().filter(|r| *r > 0.0)?;
+        match rate(model) {
+            Some(r) => {
+                let m = r.credits_on(today);
+                ((got - m).abs() <= m * 0.05).then_some(got)
+            }
+            None => Some(got),
+        }
     }
 
     /// Keeps what a call billed: `billed` characters for `sent` characters of text. The rate
-    /// is kept only within 5% of the model's own multiplier in the table (any multiplier
-    /// there for a model the table lacks): the header may count plain characters, and a
-    /// wrong rate would skew every later estimate. Both values are logged either way.
-    /// Returns whether the rate was kept.
-    pub fn record(&self, model: &str, billed: u64, sent: u64) -> bool {
+    /// is kept only within 5% of the model's own figure in the table on `today` (any figure
+    /// there, promo or not, for a model the table lacks): the header may count plain
+    /// characters, and a wrong rate would skew every later estimate. Both values are logged
+    /// either way. Returns whether the rate was kept.
+    pub fn record(&self, model: &str, billed: u64, sent: u64, today: &str) -> bool {
         if sent == 0 || billed == 0 {
             return false;
         }
         let got = billed as f64 / sent as f64;
         let known: Vec<f64> = match rate(model) {
-            Some(r) => vec![r.credits_per_char()],
-            None => RATES.iter().map(Rate::credits_per_char).collect(),
+            Some(r) => vec![r.credits_on(today)],
+            None => RATES
+                .iter()
+                .flat_map(|r| {
+                    std::iter::once(r.usd_per_1k)
+                        .chain(r.promo.map(|(p, _)| p))
+                        .map(credits_per_char)
+                })
+                .collect(),
         };
         let kept = known.iter().any(|m| (got - m).abs() <= m * 0.05);
         let line = format!(
@@ -183,16 +213,50 @@ mod tests {
 
     #[test]
     fn the_table_holds_the_pricing_page() {
+        let usd = |m: &str| rate(m).unwrap().usd_per_1k;
+        for m in ["eleven_v4", "eleven_v3", "eleven_multilingual_v2"] {
+            assert_eq!(usd(m), 0.08, "{m}");
+        }
+        for m in [
+            "eleven_v4_turbo",
+            "eleven_v3_conversational",
+            "eleven_flash_v2_5",
+            "eleven_turbo_v2_5",
+        ] {
+            assert_eq!(usd(m), 0.04, "{m}");
+        }
+        assert_eq!(rate("eleven_v3").unwrap().max_chars, 5000);
+        assert_eq!(rate("eleven_multilingual_v2").unwrap().max_chars, 10000);
+        assert_eq!(rate("eleven_flash_v2_5").unwrap().max_chars, 40000);
+        assert!(rate("eleven_turbo_v2").is_none());
+    }
+
+    #[test]
+    fn a_promo_applies_through_its_last_day_only() {
         let v4 = rate("eleven_v4").unwrap();
         assert_eq!(v4.usd_on("2026-10-12"), 0.022);
+        assert_eq!(v4.promo_on("2026-10-12"), Some((0.022, "2026-10-12")));
         assert_eq!(v4.usd_on("2026-10-13"), 0.08);
-        assert_eq!(v4.credits_per_char(), 1.0);
+        assert_eq!(v4.promo_on("2026-10-13"), None);
         let t = rate("eleven_v4_turbo").unwrap();
         assert_eq!(t.usd_on("2026-10-09"), 0.011);
-        assert_eq!(t.credits_per_char(), 0.5);
-        assert_eq!(rate("eleven_flash_v2_5").unwrap().credits_per_char(), 0.5);
-        assert_eq!(rate("eleven_multilingual_v2").unwrap().max_chars, 10000);
-        assert!(rate("eleven_turbo_v2").is_none());
+        assert_eq!(rate("eleven_v3").unwrap().promo_on("2026-10-09"), None);
+    }
+
+    #[test]
+    fn credits_come_from_the_dollar_rate_and_the_credit_price() {
+        // The account's measurements: $20 for 54,945 credits; v4 Turbo at the $0.011 promo
+        // billed 0.030 a character, Turbo v2.5 at $0.04 billed 0.110.
+        assert_eq!(credits_per_char(0.08), 0.22);
+        assert_eq!(credits_per_char(0.04), 0.11);
+        let t = rate("eleven_v4_turbo").unwrap();
+        assert_eq!(t.credits_on("2026-10-12"), 0.03);
+        assert_eq!(t.credits_on("2026-10-13"), 0.11);
+        assert_eq!(
+            rate("eleven_turbo_v2_5").unwrap().credits_on("2026-10-13"),
+            0.11
+        );
+        assert_eq!(rate("eleven_v4").unwrap().credits_on("2026-10-13"), 0.22);
     }
 
     #[test]
@@ -207,25 +271,36 @@ mod tests {
     fn a_recorded_cost_is_kept() {
         let d = tempfile::tempdir().unwrap();
         let r = Recorded::new(d.path());
-        assert_eq!(r.get("eleven_v4"), None);
-        assert!(r.record("eleven_v4", 98, 100));
-        assert!(!r.record("eleven_v4", 0, 100));
-        assert_eq!(Recorded::new(d.path()).get("eleven_v4"), Some(0.98));
+        let day = "2026-10-13";
+        assert_eq!(r.get("eleven_v4", day), None);
+        assert!(r.record("eleven_v4", 219, 1000, day));
+        assert!(!r.record("eleven_v4", 0, 100, day));
+        assert_eq!(Recorded::new(d.path()).get("eleven_v4", day), Some(0.219));
+    }
+
+    #[test]
+    fn a_rate_recorded_during_a_promo_is_ignored_after_it() {
+        let d = tempfile::tempdir().unwrap();
+        let r = Recorded::new(d.path());
+        assert!(r.record("eleven_v4_turbo", 30, 1000, "2026-10-12"));
+        assert_eq!(r.get("eleven_v4_turbo", "2026-10-12"), Some(0.03));
+        assert_eq!(r.get("eleven_v4_turbo", "2026-10-13"), None);
     }
 
     #[test]
     fn a_rate_far_from_the_models_multiplier_is_logged_not_kept() {
         let d = tempfile::tempdir().unwrap();
         let r = Recorded::new(d.path());
-        // The header counted plain characters on a half-credit model.
-        assert!(!r.record("eleven_flash_v2_5", 100, 100));
-        assert_eq!(r.get("eleven_flash_v2_5"), None);
-        assert!(r.record("eleven_flash_v2_5", 51, 100));
-        // A model the table lacks takes any known multiplier.
-        assert!(r.record("eleven_turbo_v2", 50, 100));
-        assert!(!r.record("eleven_turbo_v2", 25, 100));
+        let day = "2026-10-13";
+        // The header counted plain characters.
+        assert!(!r.record("eleven_flash_v2_5", 100, 100, day));
+        assert_eq!(r.get("eleven_flash_v2_5", day), None);
+        assert!(r.record("eleven_flash_v2_5", 11, 100, day));
+        // A model the table lacks takes any known figure.
+        assert!(r.record("eleven_turbo_v2", 22, 100, day));
+        assert!(!r.record("eleven_turbo_v2", 50, 100, day));
         let log = std::fs::read_to_string(d.path().join("voice/charcost.log")).unwrap();
         assert_eq!(log.lines().count(), 4);
-        assert!(log.contains("eleven_flash_v2_5: billed 100 for 100 characters, 1.000 credits a character; known 0.5; not kept"), "{log}");
+        assert!(log.contains("eleven_flash_v2_5: billed 100 for 100 characters, 1.000 credits a character; known 0.11; not kept"), "{log}");
     }
 }

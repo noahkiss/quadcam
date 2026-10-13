@@ -35,3 +35,45 @@
   gap: var(--s-2);
   margin-left: auto;
 }
+.disclosure {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s-2);
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  cursor: default;
+}
+.disclosure:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+  border-radius: var(--r-1);
+}
+.triangle {
+  width: 0;
+  height: 0;
+  border-top: 5px solid transparent;
+  border-bottom: 5px solid transparent;
+  border-left: 7px solid var(--muted);
+  transition: transform 0.15s ease;
+}
+.disclosure[aria-expanded="true"] .triangle {
+  transform: rotate(90deg);
+}
+@media (prefers-reduced-motion: reduce) {
+  .triangle {
+    transition: none;
+  }
+}
+.body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-4);
+  min-width: 0;
+}
+.body[hidden] {
+  display: none;
+}

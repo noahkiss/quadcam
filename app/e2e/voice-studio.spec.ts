@@ -1,4 +1,4 @@
-// The Voice studio on Gear > Voices, on the mock core (design 7.4): the key (kept out of every
+// The ElevenLabs section on Gear > Voices, on the mock core (design 7.4): the key (kept out of every
 // answer), the voice and model pickers, the credits, the line sets with a cost, a Sample that
 // waits for the person's go-ahead and then fills the Samples gallery, a Render into a local pack that
 // joins the library, and axe.
@@ -19,7 +19,7 @@ async function openStudio(app: AppFixture, page: Page, before?: string) {
 
 async function gotoStudio(page: Page) {
   await page.getByRole("navigation", { name: "Library" }).getByRole("button", { name: /^Voices/ }).click();
-  return page.getByRole("region", { name: "Voice studio" });
+  return page.getByRole("region", { name: "ElevenLabs" });
 }
 
 /** The studio's paid render calls (not the dry runs that price the picks). */
@@ -38,18 +38,18 @@ test("the key goes to the core once, is cleared from the field, and is never sho
   await expect(studio.getByRole("button", { name: "Save key" })).toBeDisabled();
   await saveKey(studio);
   expect((await app.method("gear_voice_key")).at(-1)).toEqual({ action: "set", key: "fake-key-0123456789abcdef" });
-  await expect(studio).toContainText("ElevenLabs key fake…cdef (25 chars)");
+  await expect(studio).toContainText("Key fake…cdef (25 chars)");
   await expect(studio.getByLabel("ElevenLabs API key")).toHaveCount(0);
   await expect(page.locator("body")).not.toContainText("0123456789");
   // Replace… opens an empty field; Keep current keeps the stored key.
   await studio.getByRole("button", { name: "Replace…" }).click();
   await expect(studio.getByLabel("ElevenLabs API key")).toHaveValue("");
   await studio.getByRole("button", { name: "Keep current" }).click();
-  await expect(studio).toContainText("ElevenLabs key fake…cdef (25 chars)");
+  await expect(studio).toContainText("Key fake…cdef (25 chars)");
   await studio.getByRole("button", { name: "Replace…" }).click();
   await studio.getByLabel("ElevenLabs API key").fill("sk_new-REPLACEMIDDLE-9z9z");
   await studio.getByRole("button", { name: "Save key" }).click();
-  await expect(studio).toContainText("ElevenLabs key sk_n…9z9z (25 chars)");
+  await expect(studio).toContainText("Key sk_n…9z9z (25 chars)");
   await expect(page.locator("body")).not.toContainText("REPLACEMIDDLE");
   await expect(stat(page.getByRole("group", { name: "Summary" }), "ElevenLabs credits")).toHaveText("98,500");
   await studio.getByRole("button", { name: "Remove key" }).click();
@@ -105,7 +105,7 @@ test("Sample asks before it pays, then shows one card per voice and model in Sam
   expect((await app.method("gear_voice_sample")).at(-1)).toMatchObject({ confirm: true, digest: expect.stringMatching(/^mock-/) });
   // One card per voice and model, each with its lines as play chips.
   await expect(samples.locator("article")).toHaveCount(4);
-  const card = samples.getByRole("article", { name: "Daniel, eleven_turbo_v2_5" });
+  const card = samples.getByRole("article", { name: "Daniel, Eleven Turbo v2.5" });
   await expect(card.getByRole("list", { name: /^Takes of/ }).getByRole("listitem")).toHaveCount(3);
   await card.getByRole("button", { name: "Play Six" }).click();
   // The credits went down by what the sample cost.
@@ -138,8 +138,12 @@ test("a line whose cut failed a check is listed, and Re-take renders again with 
   await expect(list).toContainText("Battery low (SOUNDS/en/lowbat.wav): the cut is silent");
   await expect(studio).toContainText("1 line needs a re-take and is not in the pack");
   // The pack library lists the line too (pack.json `retakes`).
-  const row = page.getByRole("table", { name: "Voice packs on this Mac" }).getByRole("row", { name: /^Callum local-elevenlabs-voice-callum/ });
-  await expect(row.getByRole("list", { name: "Callum needs a re-take" })).toContainText("Needs a re-take: Battery low (SOUNDS/en/lowbat.wav): the cut is silent");
+  const row = page.getByRole("table", { name: "Voice packs on this Mac" }).getByRole("row", { name: /^Callum / });
+  await row.getByText("1 needs a re-take").click();
+  const lines = row.getByRole("list", { name: "Re-takes and flags of Callum" });
+  await expect(lines.getByRole("listitem")).toHaveCount(1);
+  await expect(lines).toContainText("Battery low");
+  await expect(lines).toContainText("the cut is silent");
   await studio.getByRole("button", { name: "Re-take" }).click();
   await expect(studio.getByRole("button", { name: "Render and pay" })).toBeVisible();
   const ask = (await renders(app)).at(-1) as { confirm: boolean; settings: { seed: number } };
@@ -149,7 +153,7 @@ test("a line whose cut failed a check is listed, and Re-take renders again with 
   await expect(studio).toContainText("1 batch made");
   expect((await renders(app)).at(-1)).toMatchObject({ confirm: true, settings: { seed: ask.settings.seed } });
   await expect(list).toHaveCount(0);
-  await expect(row.getByRole("list", { name: "Callum needs a re-take" })).toHaveCount(0);
+  await expect(row.getByText(/needs a re-take/)).toHaveCount(0);
 });
 
 test("a line the speech check hears wrong is a re-take; Accept on the Voices page puts it back", async ({ app, page }) => {
@@ -159,7 +163,7 @@ test("a line the speech check hears wrong is a re-take; Accept on the Voices pag
   await studio.getByRole("button", { name: "Render pack" }).click();
   await studio.getByRole("button", { name: "Render and pay" }).click();
   await expect(studio.getByRole("list", { name: "Needs a re-take" })).toContainText('Battery low (SOUNDS/en/lowbat.wav): The speech check heard "Battery.".');
-  const row = page.getByRole("table", { name: "Voice packs on this Mac" }).getByRole("row", { name: /^Callum local-elevenlabs-voice-callum/ });
+  const row = page.getByRole("table", { name: "Voice packs on this Mac" }).getByRole("row", { name: /^Callum / });
   await expect(row).toContainText("1 heard wrong");
   await row.getByRole("button", { name: "Check speech of Callum" }).click();
   const check = page.getByRole("region", { name: "Speech check" });
@@ -171,7 +175,7 @@ test("a line the speech check hears wrong is a re-take; Accept on the Voices pag
   expect((await app.method("gear_voice_check")).at(-1)).toEqual({ pack: "local-elevenlabs-voice-callum-eleven-v4", lines: [], accept: ["SOUNDS/en/lowbat.wav"], install: false });
   await expect(table.getByRole("row", { name: /^Battery low/ })).toContainText("Accepted");
   await expect(row).toContainText("Heard right");
-  await expect(row.getByRole("list", { name: "Callum needs a re-take" })).toHaveCount(0);
+  await expect(row.getByText(/needs a re-take/)).toHaveCount(0);
   // Check again hears the pack once more; nothing is sent to ElevenLabs.
   const paid = (await renders(app)).length;
   await check.getByRole("button", { name: "Check again" }).click();
@@ -185,8 +189,8 @@ test("a sample the speech check hears wrong says so on its voice's card", async 
   await app.core(`c => { c.gear.voice.misheard = "SOUNDS/en/SYSTEM/0006.wav"; }`);
   await studio.getByRole("button", { name: "Sample", exact: true }).click();
   await studio.getByRole("button", { name: "Sample and pay" }).click();
-  const card = page.getByRole("region", { name: "Samples" }).getByRole("article", { name: "Callum, eleven_v4" });
-  await expect(card.getByRole("list", { name: "Heard wrong in Callum, eleven_v4" })).toContainText("Six: the speech check heard “Battery.”");
+  const card = page.getByRole("region", { name: "Samples" }).getByRole("article", { name: "Callum, Eleven v4" });
+  await expect(card.getByRole("list", { name: "Heard wrong in Callum, Eleven v4" })).toContainText("Six: the speech check heard “Battery.”");
 });
 
 test("Render pack asks, then adds a local pack", async ({ app, page }) => {
@@ -198,7 +202,7 @@ test("Render pack asks, then adds a local pack", async ({ app, page }) => {
   await studio.getByRole("button", { name: "Render and pay" }).click();
   await expect.poll(async () => (await renders(app)).at(-1)).toMatchObject({ confirm: true });
   await expect(studio.getByRole("list", { name: "Rendered packs" })).toContainText("into local-elevenlabs-voice-callum-eleven-v4");
-  await expect(page.getByRole("table", { name: "Voice packs on this Mac" }).getByRole("row", { name: /^Callum local-elevenlabs-voice-callum-eleven-v4/ })).toContainText("FPV quad");
+  await expect(page.getByRole("table", { name: "Voice packs on this Mac" }).getByRole("row", { name: /^Callum .*Eleven v4/ })).toContainText("FPV quad");
 });
 
 test("several voices price as one plan with a row per pack, and render one pack each", async ({ app, page }) => {
@@ -230,7 +234,7 @@ test("a paid run shows its progress, and Stop ends it after the current batch", 
   await studio.getByRole("button", { name: "Render and pay" }).click();
   await page.evaluate(() => window.__qc!.emit("voice-progress", { kind: "render", running: true, done: 3, total: 12, voice: "voice-callum", voice_name: "Callum", model: "eleven_v4", step: "Rendering", stopping: false }));
   const progress = studio.getByRole("status", { name: "Progress" });
-  await expect(progress).toContainText("Batch 3 of 12 · Callum, eleven_v4");
+  await expect(progress).toContainText("Batch 3 of 12 · Callum, Eleven v4");
   await expect(progress.getByRole("progressbar", { name: "Rendering batches" })).toHaveAttribute("value", "3");
   await progress.getByRole("button", { name: "Stop" }).click();
   expect((await app.method("gear_stop")).at(-1)).toEqual({ handle: "voice-studio" });
@@ -303,7 +307,31 @@ test("a first run ticks every line set; the ticks are saved, and QuadCam default
   await expect(again.getByRole("checkbox", { name: "QuadCam default" })).toBeChecked();
   await expect(again.getByRole("checkbox", { name: "Full EdgeTX English" })).not.toBeChecked();
   for (const t of ["FPV quad", "FPV extras", "Easter eggs", "Helicopter", "Car"]) await expect(again.getByRole("checkbox", { name: t, exact: true })).toBeChecked();
-  await expect(page.getByRole("region", { name: "Voice studio" }).getByRole("note")).toHaveCount(0);
+  await expect(page.getByRole("region", { name: "ElevenLabs" }).getByRole("note")).toHaveCount(0);
+});
+
+test("the voice list takes the full width, and the models sit below it", async ({ app, page }) => {
+  const studio = await openStudio(app, page);
+  await saveKey(studio);
+  const voices = await studio.getByRole("table", { name: "Voices" }).boundingBox();
+  const models = await studio.getByRole("table", { name: "Models" }).boundingBox();
+  expect(models!.y).toBeGreaterThan(voices!.y + voices!.height - 1);
+  expect(Math.abs(models!.width - voices!.width)).toBeLessThan(2);
+});
+
+test("the ElevenLabs section collapses, and stays collapsed after a page change", async ({ app, page }) => {
+  const studio = await openStudio(app, page);
+  const toggle = studio.getByRole("button", { name: "ElevenLabs" });
+  await expect(toggle).toHaveAttribute("aria-expanded", "true");
+  await toggle.click();
+  await expect(toggle).toHaveAttribute("aria-expanded", "false");
+  await expect(studio.getByLabel("ElevenLabs API key")).toHaveCount(0);
+  await expect(page.getByRole("region", { name: "Samples" })).toHaveCount(0);
+  await page.getByRole("navigation", { name: "Library" }).getByRole("button", { name: /^Devices/ }).click();
+  const again = await gotoStudio(page);
+  await expect(again.getByRole("button", { name: "ElevenLabs" })).toHaveAttribute("aria-expanded", "false");
+  await again.getByRole("button", { name: "ElevenLabs" }).click();
+  await expect(again.getByLabel("ElevenLabs API key")).toBeVisible();
 });
 
 test("the voice list scrolls inside its own box under a header that stays", async ({ app, page }) => {
@@ -450,7 +478,7 @@ test("Add by ID looks one voice up, and a full account says why the add failed",
 for (const scheme of axeSchemes) {
   test.describe(`${scheme} theme`, () => {
     test.use({ colorScheme: scheme });
-    test("the Voice studio passes axe", async ({ app, page }) => {
+    test("the ElevenLabs section passes axe", async ({ app, page }) => {
       const studio = await openStudio(app, page, `c => { c.gear.voice.extraVoices = 40; }`);
       await saveKey(studio);
       await studio.getByRole("button", { name: "Sample", exact: true }).click();

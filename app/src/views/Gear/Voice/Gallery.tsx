@@ -1,6 +1,6 @@
-// Gear > Voices > Samples (design 7.4): one card per voice, model and speed the Voice studio
-// sampled, and one per pack on this Mac, each with its takes as play chips. The cards wrap at
-// any window width. Play all plays a card's takes in order (or every card's) and shows the take
+// Gear > Voices > ElevenLabs > Samples (design 7.4): one card per voice, model and speed the
+// Voice studio sampled, and one per pack on this Mac, each with its takes as an aligned grid of
+// play rows. The cards wrap at any window width. Play all plays a card's takes in order (or every card's) and shows the take
 // playing now; Stop ends it. A take the speech check heard wrong says so on its card. Flag marks
 // a take with a reason and a note; Re-take makes a card's flagged takes again (priced first).
 import { useRef, useState } from "react";
@@ -10,8 +10,8 @@ import { Dialog } from "../../../components/Dialog";
 import { SelectField, TextField } from "../../../components/Field";
 import { Popover } from "../../../components/Popover";
 import { Badge } from "../../../components/dash/Badge";
-import { SectionCard } from "../../../components/dash/SectionCard";
-import type { RetakeReport, SampleTake, SampleVoice, TakeFlag } from "../../../ipc/types";
+import type { ModelInfo, RetakeReport, SampleTake, SampleVoice, TakeFlag, VoiceInfo } from "../../../ipc/types";
+import { modelName, voiceName } from "./names";
 import { costText } from "./Studio";
 import type { FlagInput, UseGallery } from "./useGallery";
 import type { Player, Track } from "./usePlayer";
@@ -98,9 +98,15 @@ export function FlagControl({ text, flag, disabled, onSave }: { text: string; fl
 
 const tracksOf = (c: SampleVoice): Track[] => c.takes.map((t) => ({ card: c.id, line: t.line, file: t.file }));
 
-function metaOf(c: SampleVoice) {
+/** The account's voices and models, for readable names. */
+interface Names {
+  voices?: VoiceInfo[] | null;
+  models?: ModelInfo[] | null;
+}
+
+function metaOf(c: SampleVoice, names: Names) {
   const lang = (c.languages ?? []).join(", ");
-  return [c.model || c.provider, c.speed !== 1 ? `speed ${c.speed}` : "", c.accent ? c.accent.charAt(0).toUpperCase() + c.accent.slice(1) : "", lang].filter(Boolean).join(" · ");
+  return [c.model ? modelName(c.model, names.models) : c.provider, c.speed !== 1 ? `speed ${c.speed}` : "", c.accent ? c.accent.charAt(0).toUpperCase() + c.accent.slice(1) : "", lang].filter(Boolean).join(" · ");
 }
 
 /** One take: Play with its text, and Flag. */
@@ -108,29 +114,30 @@ function Take({ c, t, player, g }: { c: SampleVoice; t: SampleTake; player: Play
   const playing = player.now?.card === c.id && player.now.line === t.line;
   return (
     <li className={[styles.take, playing ? styles.playing : "", t.flag ? styles.flagged : ""].filter(Boolean).join(" ")} aria-current={playing ? "true" : undefined}>
-      <Button size="sm" variant="ghost" icon={playing ? "pause" : "play"} className={styles.takePlay} aria-label={`Play ${t.text}`} title={t.line} onClick={() => (playing ? player.stop() : player.play({ card: c.id, line: t.line, file: t.file }))}>
-        {t.text}
+      <Button size="sm" variant="ghost" icon={playing ? "pause" : "play"} className={styles.takePlay} aria-label={`Play ${t.text}`} title={t.text} onClick={() => (playing ? player.stop() : player.play({ card: c.id, line: t.line, file: t.file }))}>
+        <span className={styles.takeText}>{t.text}</span>
       </Button>
       <FlagControl text={t.text} flag={t.flag} disabled={g.busy} onSave={(f) => void g.flag(c, t.line, f)} />
     </li>
   );
 }
 
-function VoiceCard({ c, player, g, onDelete }: { c: SampleVoice; player: Player; g: UseGallery; onDelete: (c: SampleVoice) => void }) {
+function VoiceCard({ c, player, g, names, onDelete }: { c: SampleVoice; player: Player; g: UseGallery; names: Names; onDelete: (c: SampleVoice) => void }) {
   const [ask, setAsk] = useState<RetakeReport | null>(null);
   const [done, setDone] = useState<RetakeReport | null>(null);
   const wrong = c.takes.filter((t) => t.heard_ok === false);
   const flagged = c.takes.filter((t) => t.flag);
   const queued = player.queue === c.id;
   const studio = c.provider === "elevenlabs" && !!c.voice;
-  const name = `${c.voice_name}, ${c.model || c.provider}`;
+  const title = voiceName(c.voice_name, c.voice, names.voices);
+  const name = `${title}, ${c.model ? modelName(c.model, names.models) : c.provider}`;
   return (
     <article className={styles.card} aria-label={name} data-component="voice-card">
       <header className={styles.head}>
-        <h4 className={styles.name}>{c.voice_name}</h4>
+        <h5 className={styles.name}>{title}</h5>
         {c.kind === "pack" && <Badge>Pack</Badge>}
       </header>
-      <p className={styles.meta}>{metaOf(c)}</p>
+      <p className={styles.meta}>{metaOf(c, names)}</p>
       {c.description && <p className={styles.desc}>{c.description}</p>}
       <ul className={styles.takes} aria-label={`Takes of ${name}`}>
         {c.takes.map((t) => (
@@ -213,19 +220,22 @@ function VoiceCard({ c, player, g, onDelete }: { c: SampleVoice; player: Player;
   );
 }
 
-/** The Samples card: every voice's samples, and the packs on this Mac. */
-export function Gallery({ g, player }: { g: UseGallery; player: Player }) {
+/** The Samples part of the ElevenLabs section: every voice's samples, and the packs on this
+ *  Mac. `voices` and `models` (the account's) give the cards their readable names. */
+export function Gallery({ g, player, voices, models }: { g: UseGallery; player: Player } & Names) {
   const [deleting, setDeleting] = useState<SampleVoice | "all" | null>(null);
   const cards = g.gallery?.voices ?? [];
   const samples = cards.filter((c) => c.kind === "sample");
   const all = player.queue === "all";
+  const names = { voices, models };
   return (
-    <SectionCard
-      title="Samples"
-      label="Samples"
-      actions={
-        cards.length > 0 ? (
-          <>
+    <section className={styles.part} aria-label="Samples">
+      <header className={styles.partHead}>
+        <h4 className={styles.partTitle}>
+          Samples
+        </h4>
+        {cards.length > 0 && (
+          <div className={styles.partActions}>
             <Button size="sm" icon={all ? "pause" : "play"} onClick={() => (all ? player.stop() : player.playAll(cards.flatMap(tracksOf), "all"))}>
               {all ? "Stop" : "Play all voices"}
             </Button>
@@ -234,10 +244,9 @@ export function Gallery({ g, player }: { g: UseGallery; player: Player }) {
                 Delete all…
               </Button>
             )}
-          </>
-        ) : undefined
-      }
-    >
+          </div>
+        )}
+      </header>
       {g.error && (
         <Banner kind="error" icon="danger-triangle">
           {g.error}
@@ -248,18 +257,18 @@ export function Gallery({ g, player }: { g: UseGallery; player: Player }) {
           {n}
         </p>
       ))}
-      {g.gallery && cards.length === 0 && <p className={styles.muted}>No samples. Sample in the Voice studio makes them.</p>}
+      {g.gallery && cards.length === 0 && <p className={styles.muted}>No samples. Sample makes them.</p>}
       {cards.length > 0 && (
         <div className={styles.grid} data-component="sample-gallery">
           {cards.map((c) => (
-            <VoiceCard key={`${c.kind}|${c.id}`} c={c} player={player} g={g} onDelete={setDeleting} />
+            <VoiceCard key={`${c.kind}|${c.id}`} c={c} player={player} g={g} names={names} onDelete={setDeleting} />
           ))}
         </div>
       )}
       {deleting && (
         <Dialog
           open
-          title={deleting === "all" ? "Delete every sample?" : `Delete the samples of ${deleting.voice_name}?`}
+          title={deleting === "all" ? "Delete every sample?" : `Delete the samples of ${voiceName(deleting.voice_name, deleting.voice, voices)}?`}
           onClose={async (v) => {
             const d = deleting;
             setDeleting(null);
@@ -279,10 +288,10 @@ export function Gallery({ g, player }: { g: UseGallery; player: Player }) {
           }
         >
           <p className={styles.status}>
-            {deleting === "all" ? `Removes the samples of ${samples.length === 1 ? "1 voice" : `${samples.length} voices`} from this Mac.` : `Removes ${deleting.takes.length === 1 ? "1 take" : `${deleting.takes.length} takes`} of ${deleting.voice_name}, ${deleting.model}.`} The takes stay in the cache, so sampling again costs nothing. Packs stay.
+            {deleting === "all" ? `Removes the samples of ${samples.length === 1 ? "1 voice" : `${samples.length} voices`} from this Mac.` : `Removes ${deleting.takes.length === 1 ? "1 take" : `${deleting.takes.length} takes`} of ${voiceName(deleting.voice_name, deleting.voice, voices)}, ${modelName(deleting.model, models)}.`} The takes stay in the cache, so sampling again costs nothing. Packs stay.
           </p>
         </Dialog>
       )}
-    </SectionCard>
+    </section>
   );
 }
