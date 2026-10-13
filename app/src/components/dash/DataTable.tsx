@@ -17,6 +17,8 @@ export interface Column<T> {
 
 export interface Selection<T> {
   selected: (row: T) => boolean;
+  /** A box that stands for other rows, some of them picked: shown as mixed. */
+  mixed?: (row: T) => boolean;
   onChange: (row: T, on: boolean) => void;
   /** The checkbox's accessible name. */
   label: (row: T) => string;
@@ -83,6 +85,7 @@ export function DataTable<T>({ label, columns, rows, rowKey, selection, group, c
             const head = g !== null && g !== last;
             last = g;
             const on = selection?.selected(r) ?? false;
+            const mixed = !on && (selection?.mixed?.(r) ?? false);
             return (
               <Fragment key={rowKey(r)}>
                 {head && (
@@ -99,6 +102,9 @@ export function DataTable<T>({ label, columns, rows, rowKey, selection, group, c
                         type="checkbox"
                         aria-label={selection.label(r)}
                         checked={on}
+                        ref={(el) => {
+                          if (el) el.indeterminate = mixed;
+                        }}
                         onChange={(e) => {
                           selection.onChange(r, e.target.checked);
                           if (maxHeight) reveal(e.target);

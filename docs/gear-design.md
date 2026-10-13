@@ -1221,6 +1221,11 @@ Every reading, kept or not, goes to stderr and `<cache>/voice/charcost.log`.
   `scripts`, `easter`, `sample`, `quadcam` (the built-in `lines.csv`) and `custom` (from
   `gear.json`). The aircraft and car sets are `radio.csv` and `units.csv` plus their own
   callouts. The text is QuadCam's wording; file names are the names the firmware plays.
+  `SetInfo.part_of` is `edgetx` for the aircraft sets and `scripts` (nine in ten of their
+  lines are in it; a test holds that), so the studio's picker shows them under Full EdgeTX
+  English. The picker counts distinct lines from `sets::paths()`, which the GUI-only command
+  `gear_voice_set_paths` returns (no `api` row). A set's id, its CLI and MCP names stay as
+  they were.
 - Acceptance: unit tests in `eleven.rs`, `keychain.rs`, `batch.rs`, `sets.rs`;
   `tests/it/voice_studio.rs` (key, catalogue, estimate, sample, set render, credits refusal, MCP)
   and `e2e/voice-studio.spec.ts`.

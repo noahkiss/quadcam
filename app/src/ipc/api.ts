@@ -172,6 +172,8 @@ export const api = {
   gearVoicePublishApprove: (params: PublishApproveParams) => ok(commands.gearVoicePublishApprove(params)),
   /** The studio's ticked line sets, saved in the gear folder (a GUI command, no `api` row). */
   gearVoiceSaveSets: (params: SaveSetsParams) => ok(commands.gearVoiceSaveSets(params)),
+  /** Each line set's card paths, so the picker counts a shared line once (a GUI command). */
+  gearVoiceSetPaths: () => ok(commands.gearVoiceSetPaths()),
   gearVoiceChoose: (params: VoiceChooseParams) => ok(commands.gearVoiceChoose(params)),
   gearVoiceChooseRadios: (params: VoiceChooseRadiosParams) => ok(commands.gearVoiceChooseRadios(params)),
   gearVoicePackDelete: (params: PackDeleteParams) => ok(commands.gearVoicePackDelete(params)),

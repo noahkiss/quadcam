@@ -42,6 +42,10 @@ pub struct SetInfo {
     /// was asked about; none without both.
     #[serde(default)]
     pub rendered: Option<u32>,
+    /// The set whose lines hold most of this one's (`edgetx` for the aircraft sets and the
+    /// telemetry scripts), so a picker can show it under that set.
+    #[serde(default)]
+    pub part_of: Option<String>,
 }
 
 struct Def {
@@ -54,6 +58,8 @@ struct Def {
     by_kind: Option<(&'static str, &'static [&'static str])>,
     /// The aircraft kinds the set is made for; empty for a set not made for one kind.
     kinds: &'static [&'static str],
+    /// The set whose lines hold most of this one's.
+    part_of: Option<&'static str>,
 }
 
 macro_rules! file {
@@ -85,6 +91,7 @@ const SETS: &[Def] = &[
         files: &["radio", "units", "quad"],
         by_kind: Some(("quad", &["edgetx", "scripts"])),
         kinds: &["quad"],
+        part_of: Some("edgetx"),
     },
     Def {
         id: "extras",
@@ -93,6 +100,7 @@ const SETS: &[Def] = &[
         files: &["extras", "general"],
         by_kind: None,
         kinds: &["quad"],
+        part_of: None,
     },
     Def {
         id: "easter",
@@ -101,6 +109,7 @@ const SETS: &[Def] = &[
         files: &["easter"],
         by_kind: None,
         kinds: &[],
+        part_of: None,
     },
     Def {
         id: "scripts",
@@ -109,6 +118,7 @@ const SETS: &[Def] = &[
         files: &["scripts"],
         by_kind: None,
         kinds: &[],
+        part_of: Some("edgetx"),
     },
     Def {
         id: "edgetx",
@@ -117,6 +127,7 @@ const SETS: &[Def] = &[
         files: &["radio", "units", "edgetx", "scripts"],
         by_kind: None,
         kinds: &["quad", "heli", "plane", "glider", "car"],
+        part_of: None,
     },
     Def {
         id: "heli",
@@ -125,6 +136,7 @@ const SETS: &[Def] = &[
         files: &["radio", "units", "heli"],
         by_kind: Some(("heli", &["edgetx", "scripts"])),
         kinds: &["heli"],
+        part_of: Some("edgetx"),
     },
     Def {
         id: "plane",
@@ -133,6 +145,7 @@ const SETS: &[Def] = &[
         files: &["radio", "units", "plane"],
         by_kind: Some(("plane", &["edgetx", "scripts"])),
         kinds: &["plane"],
+        part_of: Some("edgetx"),
     },
     Def {
         id: "glider",
@@ -141,6 +154,7 @@ const SETS: &[Def] = &[
         files: &["radio", "units", "glider"],
         by_kind: Some(("glider", &["edgetx", "scripts"])),
         kinds: &["glider"],
+        part_of: Some("edgetx"),
     },
     Def {
         id: "car",
@@ -149,6 +163,7 @@ const SETS: &[Def] = &[
         files: &["radio", "units"],
         by_kind: Some(("car", &["edgetx"])),
         kinds: &["car"],
+        part_of: Some("edgetx"),
     },
     Def {
         id: "sample",
@@ -157,6 +172,7 @@ const SETS: &[Def] = &[
         files: &["sample"],
         by_kind: None,
         kinds: &[],
+        part_of: None,
     },
 ];
 
@@ -275,6 +291,22 @@ pub fn lines_of(id: &str) -> Result<Vec<SetLine>> {
     Ok(out)
 }
 
+/// The card paths of every set that ships (`sample` aside) and `quadcam`, by set id, so a
+/// picker can count the lines of several sets without counting a shared line twice.
+pub fn paths() -> Result<std::collections::BTreeMap<String, Vec<String>>> {
+    SETS.iter()
+        .map(|d| d.id)
+        .filter(|id| *id != "sample")
+        .chain([QUADCAM])
+        .map(|id| {
+            Ok((
+                id.to_string(),
+                lines_of(id)?.into_iter().map(|l| l.line.path).collect(),
+            ))
+        })
+        .collect()
+}
+
 /// The ids of the sets that ship, then `quadcam` and `custom`.
 pub fn ids() -> Vec<&'static str> {
     SETS.iter().map(|d| d.id).chain([QUADCAM, CUSTOM]).collect()
@@ -291,6 +323,7 @@ pub fn infos(custom: usize) -> Result<Vec<SetInfo>> {
             lines: lines_of(d.id)?.len() as u32,
             kinds: d.kinds.iter().map(|k| k.to_string()).collect(),
             rendered: None,
+            part_of: d.part_of.map(String::from),
         });
     }
     out.push(SetInfo {
@@ -300,6 +333,7 @@ pub fn infos(custom: usize) -> Result<Vec<SetInfo>> {
         lines: lines_of(QUADCAM)?.len() as u32,
         kinds: Vec::new(),
         rendered: None,
+        part_of: None,
     });
     out.push(SetInfo {
         id: CUSTOM.into(),
@@ -308,6 +342,7 @@ pub fn infos(custom: usize) -> Result<Vec<SetInfo>> {
         lines: custom as u32,
         kinds: Vec::new(),
         rendered: None,
+        part_of: None,
     });
     Ok(out)
 }
@@ -669,6 +704,29 @@ mod tests {
                 i.id
             );
         }
+    }
+
+    #[test]
+    fn the_sets_under_full_edgetx_english_are_mostly_its_lines() {
+        let paths = paths().unwrap();
+        let full: std::collections::HashSet<&String> = paths["edgetx"].iter().collect();
+        for i in infos(0).unwrap() {
+            let mine = &paths.get(&i.id).map(Vec::as_slice).unwrap_or_default();
+            let inside = mine.iter().filter(|p| full.contains(p)).count();
+            if i.part_of.as_deref() == Some("edgetx") {
+                // The aircraft sets add a file of their own; nine in ten lines are EdgeTX's.
+                assert!(
+                    inside * 10 >= mine.len() * 9,
+                    "{}: {inside} of {}",
+                    i.id,
+                    mine.len()
+                );
+            } else if i.id != "edgetx" && !mine.is_empty() {
+                assert!(inside * 2 < mine.len(), "{} is mostly EdgeTX's", i.id);
+            }
+        }
+        assert!(!paths.contains_key("sample"));
+        assert_eq!(paths["edgetx"].len(), lines_of("edgetx").unwrap().len());
     }
 
     #[test]

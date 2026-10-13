@@ -5,6 +5,12 @@
 // Approve), and axe in both themes.
 import AxeBuilder from "@axe-core/playwright";
 import type { Page } from "@playwright/test";
+
+/** Opens a pack row's "…" menu on the Voices page and picks one item. */
+async function packMenu(page: Page, voice: string, item: string) {
+  await page.getByRole("table", { name: "Voice packs on this Mac" }).getByRole("button", { name: `More actions for ${voice}` }).click();
+  await page.getByRole("menu", { name: `More actions for ${voice}` }).getByRole("menuitem", { name: item }).click();
+}
 import { axeSchemes, dialog, expect, test, type AppFixture } from "./fixtures";
 
 const RADIO_ID = "radio-1f2e3d4c5b6a7980";
@@ -42,30 +48,43 @@ test("the library lists each pack with its model, line sets, lines, size and dat
   await expect(page.getByRole("list", { name: "Packs in the index" })).toContainText("Demo (en-demo-v1) · demo · 7 lines · 2 MB · CC BY 4.0");
   await page.getByRole("button", { name: "Install Demo" }).click();
   expect((await app.method("gear_voice_pack_install")).at(-1)).toEqual({ pack: "en-demo-v1", source: null });
-  const row = library(page).getByRole("row", { name: /^Demo en-demo-v1/ });
+  const row = library(page).getByRole("row", { name: /^Demo / });
+  await expect(row).toContainText("en-demo-v1");
   await expect(row).toContainText("QuadCam default");
   await expect(row).toContainText("7");
   await expect(row).toContainText("4 MB");
-  await expect(row).toContainText("2026");
+  await expect(row).toContainText("Oct 1");
   await row.getByRole("button", { name: "Play a sample of Demo" }).click();
   expect((await app.method("gear_voice_preview")).at(-1)).toEqual({ line: "SOUNDS/en/armed.wav", pack: "en-demo-v1", radio: null });
+});
+
+test("the library fits the narrowest window: no sideways scroll, one short row per pack", async ({ app, page }) => {
+  await page.setViewportSize({ width: 960, height: 800 });
+  await openVoices(app, page);
+  await page.getByRole("button", { name: "Render my voice" }).click();
+  await installDemo(page);
+  const wrap = library(page).locator("xpath=..");
+  const size = await wrap.evaluate((el) => ({ scroll: el.scrollWidth, client: el.clientWidth }));
+  expect(size.scroll).toBeLessThanOrEqual(size.client);
+  for (const r of await library(page).getByRole("row").all()) expect((await r.boundingBox())!.height).toBeLessThan(90);
+  await expect(library(page).getByRole("button", { name: "More actions for Demo" })).toBeInViewport();
 });
 
 test("Delete asks first, and keeps the raw takes unless the box is ticked", async ({ app, page }) => {
   await openVoices(app, page);
   await page.getByRole("button", { name: "Render my voice" }).click();
   await installDemo(page);
-  await library(page).getByRole("button", { name: "Delete Samantha" }).click();
+  await packMenu(page, "Samantha", "Delete…");
   const confirm = dialog(page, "Delete Samantha?");
   await expect(confirm).toContainText("Removes local-say-samantha");
   await confirm.getByRole("button", { name: "Cancel" }).click();
   expect(await app.method("gear_voice_pack_delete")).toEqual([]);
   await expect(library(page)).toContainText("Samantha");
-  await library(page).getByRole("button", { name: "Delete Samantha" }).click();
+  await packMenu(page, "Samantha", "Delete…");
   await confirm.getByRole("button", { name: "Delete" }).click();
   expect((await app.method("gear_voice_pack_delete")).at(-1)).toEqual({ pack: "local-say-samantha", takes: false });
   await expect(library(page)).not.toContainText("Samantha");
-  await library(page).getByRole("button", { name: "Delete Demo" }).click();
+  await packMenu(page, "Demo", "Delete…");
   await dialog(page, "Delete Demo?").getByRole("checkbox", { name: /Also delete the raw takes/ }).check();
   await dialog(page, "Delete Demo?").getByRole("button", { name: "Delete" }).click();
   expect((await app.method("gear_voice_pack_delete")).at(-1)).toEqual({ pack: "en-demo-v1", takes: true });
@@ -78,7 +97,7 @@ test("Delete names the radios that chose the pack and clears their choice", asyn
   await expect(library(page)).toContainText("Samantha");
   await app.core(`c => { c.gear.voice.chosen = { "${RADIO_ID}": "local-say-samantha", "radio-two": "local-say-samantha" }; }`);
   await page.getByRole("button", { name: "Refresh packs" }).click();
-  await library(page).getByRole("button", { name: "Delete Samantha" }).click();
+  await packMenu(page, "Samantha", "Delete…");
   const confirm = dialog(page, "Delete Samantha?");
   await expect(confirm).toContainText("Chosen for Field radio, Bench radio: the delete clears that choice.");
   await confirm.getByRole("button", { name: "Delete" }).click();
@@ -89,7 +108,7 @@ test("Delete names the radios that chose the pack and clears their choice", asyn
 test("Apply to radios stages one change per radio, says which cards are connected, and opens the apply sheet", async ({ app, page }) => {
   await openVoices(app, page, true);
   await installDemo(page);
-  await library(page).getByRole("button", { name: "Apply to radios…" }).click();
+  await packMenu(page, "Demo", "Apply to radios…");
   const sheet = dialog(page, "Apply Demo to radios");
   const radios = sheet.getByRole("group", { name: "Radios" });
   // EdgeTX radios only.
@@ -145,7 +164,7 @@ test("the speech check says why it is unavailable and installs the speech assets
   await page.getByRole("button", { name: "Refresh packs" }).click();
   const row = library(page).getByRole("row", { name: /^Samantha / });
   await expect(row).toContainText("Not checked");
-  await row.getByRole("button", { name: "Check speech of Samantha" }).click();
+  await packMenu(page, "Samantha", "Check speech");
   const check = page.getByRole("region", { name: "Speech check" });
   await expect(check).toContainText("The speech check is unavailable: The speech assets for en-US are not installed");
   await expect(check.getByRole("button", { name: "Check speech" })).toBeDisabled();
@@ -178,7 +197,7 @@ async function checkedPack(app: AppFixture, page: Page) {
   await openVoices(app, page);
   await app.core(`c => { c.gear.voice.installed.push("${STUDIO}"); c.gear.voice.misheard = "SOUNDS/en/lowbat.wav"; }`);
   await page.getByRole("button", { name: "Refresh packs" }).click();
-  await library(page).getByRole("button", { name: "Check speech of Callum" }).click();
+  await packMenu(page, "Callum", "Check speech");
   const check = page.getByRole("region", { name: "Speech check" });
   await check.getByRole("button", { name: "Check speech" }).click();
   await check.getByRole("button", { name: "Accept what was heard for Battery low" }).click();
@@ -189,7 +208,7 @@ test("Publish needs the speech check, reviews every line, and publishes only on 
   await openVoices(app, page);
   await app.core(`c => { c.gear.voice.installed.push("${STUDIO}"); }`);
   await page.getByRole("button", { name: "Refresh packs" }).click();
-  await library(page).getByRole("button", { name: "Publish Callum" }).click();
+  await packMenu(page, "Callum", "Publish…");
   const pub = page.getByRole("region", { name: "Publish" });
   await pub.getByRole("button", { name: "Prepare" }).click();
   await expect(pub.getByRole("alert")).toContainText("The speech check has not heard 7 of the pack's 7 lines");
@@ -197,7 +216,7 @@ test("Publish needs the speech check, reviews every line, and publishes only on 
   await pub.getByRole("button", { name: "Close" }).click();
 
   await checkedPack(app, page);
-  await library(page).getByRole("button", { name: "Publish Callum" }).click();
+  await packMenu(page, "Callum", "Publish…");
   await pub.getByRole("textbox", { name: "Version" }).fill("2");
   await pub.getByRole("button", { name: "Prepare" }).click();
   expect((await app.method("gear_voice_publish")).at(-1)).toEqual({ pack: STUDIO, id: null, version: "2", voice_name: null, license: null, attribution: null, repo: null });
@@ -218,7 +237,7 @@ test("Publish needs the speech check, reviews every line, and publishes only on 
 test("a pack made with say cannot be published", async ({ app, page }) => {
   await openVoices(app, page);
   await page.getByRole("button", { name: "Render my voice" }).click();
-  await library(page).getByRole("button", { name: "Publish Samantha" }).click();
+  await packMenu(page, "Samantha", "Publish…");
   const pub = page.getByRole("region", { name: "Publish" });
   await pub.getByRole("button", { name: "Prepare" }).click();
   await expect(pub.getByRole("alert")).toContainText("made with macOS say");
@@ -232,17 +251,17 @@ for (const scheme of axeSchemes) {
       await installDemo(page);
       let r = await new AxeBuilder({ page }).withTags(["wcag2a", "wcag2aa", "wcag21aa"]).analyze();
       expect(r.violations.map((v) => `${v.id}: ${v.nodes.map((n) => n.target.join(" ") + " " + n.failureSummary).join(", ")}`)).toEqual([]);
-      await library(page).getByRole("button", { name: "Apply to radios…" }).click();
+      await packMenu(page, "Demo", "Apply to radios…");
       await expect(dialog(page, "Apply Demo to radios")).toBeVisible();
       r = await new AxeBuilder({ page }).withTags(["wcag2a", "wcag2aa", "wcag21aa"]).analyze();
       expect(r.violations.map((v) => `${v.id}: ${v.nodes.map((n) => n.target.join(" ") + " " + n.failureSummary).join(", ")}`)).toEqual([]);
       await dialog(page, "Apply Demo to radios").getByRole("button", { name: "Cancel" }).click();
-      await library(page).getByRole("button", { name: "Check speech of Demo" }).click();
+      await packMenu(page, "Demo", "Check speech");
       await page.getByRole("region", { name: "Speech check" }).getByRole("button", { name: "Check speech" }).click();
       await expect(page.getByRole("table", { name: "Speech check of Demo" })).toBeVisible();
       r = await new AxeBuilder({ page }).withTags(["wcag2a", "wcag2aa", "wcag21aa"]).analyze();
       expect(r.violations.map((v) => `${v.id}: ${v.nodes.map((n) => n.target.join(" ") + " " + n.failureSummary).join(", ")}`)).toEqual([]);
-      await library(page).getByRole("button", { name: "Delete Demo" }).click();
+      await packMenu(page, "Demo", "Delete…");
       await expect(dialog(page, "Delete Demo?")).toBeVisible();
       r = await new AxeBuilder({ page }).withTags(["wcag2a", "wcag2aa", "wcag21aa"]).analyze();
       expect(r.violations.map((v) => `${v.id}: ${v.nodes.map((n) => n.target.join(" ") + " " + n.failureSummary).join(", ")}`)).toEqual([]);
@@ -251,7 +270,7 @@ for (const scheme of axeSchemes) {
       await checkedPack(app, page);
       await page.getByRole("button", { name: "Preview Demo" }).click();
       await expect(page.getByRole("list", { name: "Preview lines of Demo" })).toBeVisible();
-      await library(page).getByRole("button", { name: "Publish Callum" }).click();
+      await packMenu(page, "Callum", "Publish…");
       const pub = page.getByRole("region", { name: "Publish" });
       await pub.getByRole("button", { name: "Prepare" }).click();
       await expect(pub.getByRole("table", { name: "Every line" })).toBeVisible();

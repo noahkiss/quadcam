@@ -1,6 +1,6 @@
 // Readable names for voices and models: a voice's short name, a model's name from the account
 // (or from its id), and a voice name from the slug of an older sample folder.
-import type { ModelInfo, VoiceInfo } from "../../../ipc/types";
+import type { ModelInfo, SetInfo, VoiceInfo } from "../../../ipc/types";
 
 /** The voice's name before " - ": "Xavier - Dominating, Metalic Announcer" is "Xavier". */
 export const shortName = (name: string) => name.split(" - ")[0].trim() || name;
@@ -31,4 +31,17 @@ export function modelName(id: string, models?: ModelInfo[] | null) {
 export function voiceName(name: string, voice: string, voices?: VoiceInfo[] | null) {
   const v = voices?.find((x) => (voice ? x.id === voice : slug(x.name) === slug(name)));
   return v?.name ?? name;
+}
+
+/** A pack's sets in one line: "All sets", or the first set and how many more. Full EdgeTX
+ *  English stands for the sets it holds. */
+export function setsSummary(ids: string[], sets: SetInfo[]) {
+  const shown = sets.filter((x) => x.id !== "sample" && x.id !== "custom");
+  if (ids.length === 0) return "Some lines";
+  if (shown.length > 0 && shown.every((x) => ids.includes(x.id))) return "All sets";
+  const full = ids.includes("edgetx");
+  const left = ids.filter((id) => !(full && sets.find((x) => x.id === id)?.part_of === "edgetx"));
+  const ordered = full ? ["edgetx", ...left.filter((id) => id !== "edgetx")] : left;
+  const title = (id: string) => sets.find((x) => x.id === id)?.title ?? id;
+  return ordered.length > 1 ? `${title(ordered[0])} + ${ordered.length - 1}` : title(ordered[0]);
 }

@@ -5,6 +5,12 @@
 // priced first; Delete per voice and Delete all, each asked first; and axe in both themes.
 import AxeBuilder from "@axe-core/playwright";
 import type { Page } from "@playwright/test";
+
+/** Opens a pack row's "…" menu on the Voices page and picks one item. */
+async function packMenu(page: Page, voice: string, item: string) {
+  await page.getByRole("table", { name: "Voice packs on this Mac" }).getByRole("button", { name: `More actions for ${voice}` }).click();
+  await page.getByRole("menu", { name: `More actions for ${voice}` }).getByRole("menuitem", { name: item }).click();
+}
 import { axeSchemes, dialog, expect, test, type AppFixture } from "./fixtures";
 
 declare global {
@@ -157,7 +163,7 @@ test("a pack line flagged in its speech check shows in the library row and on th
   const samples = await openVoices(app, page);
   await page.getByRole("button", { name: "Refresh packs" }).click();
   await page.getByRole("button", { name: "Install Demo" }).click();
-  await page.getByRole("button", { name: "Check speech of Demo" }).click();
+  await packMenu(page, "Demo", "Check speech");
   const check = page.getByRole("region", { name: "Speech check" });
   await check.getByRole("button", { name: "Check speech" }).click();
   await check.getByRole("button", { name: "Flag Armed" }).click();

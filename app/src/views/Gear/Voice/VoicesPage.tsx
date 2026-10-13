@@ -4,11 +4,12 @@
 // voice with the provider from the settings); and the index's packs with their preview lines.
 // Packs are not per radio: a radio's Voice segment picks one of these.
 import { useState } from "react";
-import { modelName, shortName } from "./names";
+import { modelName, setsSummary, shortName } from "./names";
 import { Banner } from "../../../components/Banner";
 import { Button } from "../../../components/Button";
 import { Input } from "../../../components/Field";
 import { Badge } from "../../../components/dash/Badge";
+import { MoreMenu } from "../../../components/dash/MoreMenu";
 import { DataTable, type Column } from "../../../components/dash/DataTable";
 import { SectionCard } from "../../../components/dash/SectionCard";
 import { Stat, StatRow } from "../../../components/dash/StatRow";
@@ -33,24 +34,33 @@ import styles from "./Voice.module.css";
 /** The line a pack's Play button plays: Armed when the pack has it. */
 const SAMPLE_LINE = "SOUNDS/en/armed.wav";
 
-const fmtDay = (t: string | null | undefined) => (t ? new Date(t).toLocaleDateString(undefined, { dateStyle: "medium" }) : "");
 
-/** A pack's voice cell: the name, the id of a pack from the index, and the lines that need a
- *  re-take or carry a flag behind a disclosure. */
-function PackVoice({ k }: { k: VoicePack }) {
+const fmtShort = (t: string | null | undefined) => (t ? new Date(t).toLocaleDateString(undefined, { month: "short", day: "numeric" }) : "");
+
+/** A pack's voice cell: the short name and the rest of the name; the model, where it came
+ *  from, its sets and its radios; and the lines that need a re-take or carry a flag behind a
+ *  disclosure. */
+function PackVoice({ k, sets, models, radios }: { k: VoicePack; sets: SetInfo[]; models?: ModelInfo[] | null; radios: string[] }) {
   const retakes = k.retakes ?? [];
   const flags = k.flags ?? [];
   const count = [retakes.length ? `${n(retakes.length)} ${retakes.length === 1 ? "needs" : "need"} a re-take` : "", flags.length ? `${n(flags.length)} flagged` : ""].filter(Boolean).join(", ");
+  const short = shortName(k.voice);
+  const rest = k.voice.slice(short.length).replace(/^\s*-\s*/, "");
+  const all = (k.sets ?? []).map((id) => sets.find((x) => x.id === id)?.title ?? id).join(", ");
   return (
-    <>
-      {k.voice}
-      {(!k.local || k.stale) && (
-        <span className={styles.sub}>
-          {k.local ? "" : k.id}
-          {!k.local && k.stale ? " · " : ""}
-          {k.stale ? "from older lines" : ""}
-        </span>
-      )}
+    <div className={styles.packCell}>
+      <span className={styles.packName}>
+        <b>{short}</b>
+        {rest && <span className={styles.muted}> {rest}</span>}
+      </span>
+      <span className={styles.packMeta}>
+        <Badge tone={k.local ? "accent" : "neutral"}>{k.local ? "Rendered here" : "Installed"}</Badge>
+        <span>{k.model ? modelName(k.model, models) : k.provider}</span>
+        <span title={all || undefined}>{setsSummary(k.sets ?? [], sets)}</span>
+        {!k.local && <span className="selectable">{k.id}</span>}
+        {k.stale && <span>From older lines</span>}
+        {radios.length > 0 && <span>On {radios.join(", ")}</span>}
+      </span>
       {count && (
         <details className={styles.lineList}>
           <summary>{count}</summary>
@@ -73,7 +83,7 @@ function PackVoice({ k }: { k: VoicePack }) {
           </ul>
         </details>
       )}
-    </>
+    </div>
   );
 }
 
@@ -82,7 +92,6 @@ function Library({ v, view, sets, models, onCheck, onPublish }: { v: UseVoice; v
   const [applying, setApplying] = useState<VoicePack | null>(null);
   const [deleting, setDeleting] = useState<VoicePack | null>(null);
   const packs = view.packs.filter((k) => k.installed);
-  const setTitle = (id: string) => sets.find((s) => s.id === id)?.title ?? id;
   const radioName = (id: string) => {
     const d = devices.find((x) => x.id === id);
     return d ? deviceName(d) : id;
@@ -102,34 +111,27 @@ function Library({ v, view, sets, models, onCheck, onPublish }: { v: UseVoice; v
       key: "voice",
       header: "Voice",
       rowHeader: true,
-      cell: (k) => <PackVoice k={k} />,
+      cell: (k) => <PackVoice k={k} sets={sets} models={models} radios={(k.radios ?? []).map(radioName)} />,
     },
-    { key: "source", header: "Source", cell: (k) => <Badge tone={k.local ? "accent" : "neutral"}>{k.local ? "Rendered here" : "Installed"}</Badge> },
-    { key: "model", header: "Model", optional: true, cell: (k) => (k.model ? modelName(k.model, models) : k.provider) },
-    { key: "sets", header: "Line sets", optional: true, cell: (k) => (k.sets ?? []).map(setTitle).join(", ") || "Some lines" },
-    { key: "lines", header: "Lines", numeric: true, cell: (k) => k.lines },
+    { key: "lines", header: "Lines", numeric: true, cell: (k) => n(k.lines) },
     { key: "speech", header: "Speech check", cell: (k) => <SpeechBadge pack={k} /> },
     { key: "size", header: "Size", numeric: true, optional: true, cell: (k) => fmtBytes(k.bytes) },
-    { key: "date", header: "Date", optional: true, cell: (k) => fmtDay(k.made) },
-    { key: "radios", header: "Radios", cell: (k) => (k.radios ?? []).map(radioName).join(", ") || <span className={styles.muted}>None</span> },
+    { key: "date", header: "Date", optional: true, cell: (k) => <span className={styles.nowrap}>{fmtShort(k.made)}</span> },
     {
       key: "actions",
       header: <span className={styles.hidden}>Actions</span>,
       cell: (k) => (
         <div className={styles.rowActions}>
           <Button size="sm" variant="ghost" icon="play" aria-label={`Play a sample of ${k.voice}`} onClick={() => sample(k)} />
-          <Button size="sm" variant="ghost" aria-label={`Check speech of ${k.voice}`} onClick={() => onCheck(k)}>
-            Check speech
-          </Button>
-          <Button size="sm" onClick={() => setApplying(k)}>
-            Apply to radios…
-          </Button>
-          {k.local && (
-            <Button size="sm" variant="ghost" aria-label={`Publish ${k.voice}`} onClick={() => onPublish(k)}>
-              Publish…
-            </Button>
-          )}
-          <Button size="sm" variant="danger-ghost" icon="trash-bin-trash" aria-label={`Delete ${k.voice}`} onClick={() => setDeleting(k)} />
+          <MoreMenu
+            label={`More actions for ${k.voice}`}
+            items={[
+              { label: "Apply to radios…", run: () => setApplying(k) },
+              { label: "Check speech", run: () => onCheck(k) },
+              k.local ? { label: "Publish…", run: () => onPublish(k) } : null,
+              { label: "Delete…", icon: "trash-bin-trash", danger: true, run: () => setDeleting(k) },
+            ]}
+          />
         </div>
       ),
     },

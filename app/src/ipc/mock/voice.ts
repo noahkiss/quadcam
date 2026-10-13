@@ -370,21 +370,45 @@ const MODELS: ModelInfo[] = [
 ];
 const QUAD = ["quad"];
 const SETS: SetInfo[] = [
-  { id: "quad", title: "FPV quad", about: "What a quad's radio says: its own prompts (power on, alarms, timers), numbers and units for telemetry, and quad callouts such as armed, battery low, signal low, failsafe, turtle mode and the flight modes.", lines: 168, kinds: QUAD },
+  { id: "quad", title: "FPV quad", about: "What a quad's radio says: its own prompts (power on, alarms, timers), numbers and units for telemetry, and quad callouts such as armed, battery low, signal low, failsafe, turtle mode and the flight modes.", lines: 168, kinds: QUAD, part_of: "edgetx" },
   { id: "extras", title: "FPV extras", about: "More quad callouts for switches and special functions: arming checks, Betaflight modes, VTX, DVR and recording, rate and PID profiles, TX power, battery percent, link quality, race laps, the finder. Each plays only when a model's special function names it.", lines: 68, kinds: QUAD },
   { id: "easter", title: "Easter eggs", about: 'Short fun lines, such as "Engines hot. Send it!". Each plays only when a model\'s special function names it.', lines: 12, kinds: [] },
-  { id: "scripts", title: "Telemetry scripts", about: "The prompts the INAV and ArduPilot (Yaapu) telemetry scripts play on the radio. FPV quad already holds the Betaflight script's prompts.", lines: 90, kinds: [] },
+  { id: "scripts", title: "Telemetry scripts", about: "The prompts the INAV and ArduPilot (Yaapu) telemetry scripts play on the radio. FPV quad already holds the Betaflight script's prompts.", lines: 90, kinds: [], part_of: "edgetx" },
   { id: "edgetx", title: "Full EdgeTX English", about: "Every prompt of the EdgeTX English pack: the radio's prompts, numbers and units, the model prompts for quads, helicopters, planes, gliders and cars, and the telemetry-script prompts.", lines: 311, kinds: ["quad", "heli", "plane", "glider", "car"] },
-  { id: "heli", title: "Helicopter", about: "The radio's prompts, numbers and units, and helicopter callouts: throttle hold, idle up, governor, rescue, autorotation, head speed.", lines: 164, kinds: ["heli"] },
-  { id: "plane", title: "Plane", about: "The radio's prompts, numbers and units, and plane callouts: stall, airspeed, landing gear, flaps, lights, fuel.", lines: 169, kinds: ["plane"] },
-  { id: "glider", title: "Glider", about: "The radio's prompts, numbers and units, and glider callouts: thermal mode, lift and sink, crow, launch, ballast.", lines: 164, kinds: ["glider"] },
-  { id: "car", title: "Car", about: "The radio's prompts, numbers and units, and car callouts: drive modes, steering, gears, drift.", lines: 160, kinds: ["car"] },
+  { id: "heli", title: "Helicopter", about: "The radio's prompts, numbers and units, and helicopter callouts: throttle hold, idle up, governor, rescue, autorotation, head speed.", lines: 164, kinds: ["heli"], part_of: "edgetx" },
+  { id: "plane", title: "Plane", about: "The radio's prompts, numbers and units, and plane callouts: stall, airspeed, landing gear, flaps, lights, fuel.", lines: 169, kinds: ["plane"], part_of: "edgetx" },
+  { id: "glider", title: "Glider", about: "The radio's prompts, numbers and units, and glider callouts: thermal mode, lift and sink, crow, launch, ballast.", lines: 164, kinds: ["glider"], part_of: "edgetx" },
+  { id: "car", title: "Car", about: "The radio's prompts, numbers and units, and car callouts: drive modes, steering, gears, drift.", lines: 160, kinds: ["car"], part_of: "edgetx" },
   { id: "sample", title: "Sample", about: "A dozen hard lines for comparing voices: a bare number, short words, warnings.", lines: 12, kinds: [] },
   { id: "quadcam", title: "QuadCam default", about: "The lines of QuadCam's ready-made voice packs: arming, battery, signal, flight modes, timers and numbers.", lines: 45, kinds: [] },
   { id: "custom", title: "Your lines", about: "Lines you added on a radio's Voice segment.", lines: 0, kinds: [] },
 ];
 /** The radio's prompts, numbers and units: every aircraft set and the full set hold them. */
 const SHARED = 140;
+/** Each set's card paths, made up so the aircraft sets and the scripts lie mostly inside the
+ *  full set, with the shared lines in each. */
+function makePaths(): Record<string, string[]> {
+  const n = (k: number, f: (i: number) => string) => Array.from({ length: Math.max(0, k) }, (_, i) => f(i));
+  const shared = n(SHARED, (i) => `SOUNDS/en/r${i}.wav`);
+  const out: Record<string, string[]> = {};
+  const inside: string[] = [];
+  for (const k of ["quad", "heli", "plane", "glider", "car"]) {
+    const own = SETS.find((x) => x.id === k)!.lines - SHARED;
+    const kept = Math.ceil(own * 0.9);
+    const mine = n(kept, (i) => `SOUNDS/en/${k}/e${i}.wav`);
+    inside.push(...mine);
+    out[k] = [...shared, ...mine, ...n(own - kept, (i) => `SOUNDS/en/${k}/o${i}.wav`)];
+  }
+  out.scripts = n(SETS.find((x) => x.id === "scripts")!.lines, (i) => `SOUNDS/en/s${i}.wav`);
+  out.edgetx = [...shared, ...inside, ...out.scripts, ...n(20, (i) => `SOUNDS/en/x${i}.wav`)];
+  for (const x of SETS) if (!out[x.id] && x.id !== "sample" && x.id !== "custom") out[x.id] = n(x.lines, (i) => `SOUNDS/en/${x.id}/${i}.wav`);
+  SETS.find((x) => x.id === "edgetx")!.lines = out.edgetx.length;
+  return out;
+}
+const PATHS = makePaths();
+
+/** `gear_voice_set_paths`. */
+export const setPaths = (): Record<string, string[]> => PATHS;
 const holdsShared = (id: string) => ["quad", "heli", "plane", "glider", "car", "edgetx"].includes(id);
 const CREDITS = 98_500;
 const CARRIER = "The word is .".length;

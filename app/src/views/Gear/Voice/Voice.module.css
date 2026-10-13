@@ -296,3 +296,32 @@
 .progress {
   width: 200px;
 }
+.childSet {
+  display: block;
+  padding-left: var(--s-5);
+}
+.packCell {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.packName {
+  font-weight: 400;
+}
+.packMeta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 2px var(--s-2);
+  font-weight: 400;
+  font-size: var(--t-sm);
+  color: var(--muted);
+}
+.packMeta > span:not(:first-child)::before {
+  content: "·";
+  margin-right: var(--s-2);
+}
+.nowrap {
+  white-space: nowrap;
+}

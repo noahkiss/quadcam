@@ -265,6 +265,8 @@ export class MockCore {
         return voice.approve(p as never);
       case "gear_voice_save_sets":
         return voice.saveSets(this.gear, p as never);
+      case "gear_voice_set_paths":
+        return voice.setPaths();
       case "gear_apply_click":
         return this.applied((p as { id: string }).id, (p as { digest: string }).digest);
       case "answer_apply_request":

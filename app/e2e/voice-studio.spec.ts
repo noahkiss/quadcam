@@ -4,6 +4,12 @@
 // joins the library, and axe.
 import AxeBuilder from "@axe-core/playwright";
 import type { Page } from "@playwright/test";
+
+/** Opens a pack row's "…" menu on the Voices page and picks one item. */
+async function packMenu(page: Page, voice: string, item: string) {
+  await page.getByRole("table", { name: "Voice packs on this Mac" }).getByRole("button", { name: `More actions for ${voice}` }).click();
+  await page.getByRole("menu", { name: `More actions for ${voice}` }).getByRole("menuitem", { name: item }).click();
+}
 import { axeSchemes, expect, test, type AppFixture } from "./fixtures";
 
 /** The value of one tile of a stat row, such as "To render" in the cost. */
@@ -165,7 +171,7 @@ test("a line the speech check hears wrong is a re-take; Accept on the Voices pag
   await expect(studio.getByRole("list", { name: "Needs a re-take" })).toContainText('Battery low (SOUNDS/en/lowbat.wav): The speech check heard "Battery.".');
   const row = page.getByRole("table", { name: "Voice packs on this Mac" }).getByRole("row", { name: /^Callum / });
   await expect(row).toContainText("1 heard wrong");
-  await row.getByRole("button", { name: "Check speech of Callum" }).click();
+  await packMenu(page, "Callum", "Check speech");
   const check = page.getByRole("region", { name: "Speech check" });
   const table = check.getByRole("table", { name: "Speech check of Callum" });
   await expect(table.getByRole("row", { name: /^Battery low/ })).toContainText("Battery.");
@@ -246,12 +252,12 @@ test("a paid run shows its progress, and Stop ends it after the current batch", 
   await expect(studio.getByRole("list", { name: "Rendered packs" }).getByRole("listitem")).toHaveCount(1);
 });
 
-test("the line sets group by aircraft, start with the quad sets, and count what is rendered", async ({ app, page }) => {
+test("the line sets sit under Full EdgeTX English, quad first, and count what is rendered", async ({ app, page }) => {
   const studio = await openStudio(app, page);
   await saveKey(studio);
   const sets = studio.getByRole("table", { name: "Line sets" });
-  const groups = sets.getByRole("columnheader").filter({ hasText: /aircraft|quads/ });
-  await expect(groups).toHaveText(["For your quads", "Any aircraft", "Other aircraft"]);
+  const order = await sets.getByRole("rowheader").allInnerTexts();
+  expect(order.map((t) => t.split("\n")[0])).toEqual(["Full EdgeTX English", "FPV quad", "Telemetry scripts", "Helicopter", "Plane", "Glider", "Car", "FPV extras", "Easter eggs", "QuadCam default"]);
   const row = (t: string) => sets.getByRole("row", { name: new RegExp(`^${t} `) });
   await expect(row("FPV quad").getByRole("checkbox")).toBeChecked();
   await expect(row("FPV extras").getByRole("checkbox")).toBeChecked();
@@ -282,6 +288,42 @@ test("the line sets group by aircraft, start with the quad sets, and count what 
   await expect(cells("FPV quad").nth(2)).toHaveText("—");
 });
 
+test("Full EdgeTX English ticks the sets under it, shows mixed for some, and counts shared lines once", async ({ app, page }) => {
+  const studio = await openStudio(app, page);
+  await saveKey(studio);
+  const sets = studio.getByRole("table", { name: "Line sets" });
+  const full = sets.getByRole("checkbox", { name: "Full EdgeTX English" });
+  const lines = sets.getByRole("row", { name: /^Full EdgeTX English / }).getByRole("cell").nth(1);
+  const mixed = () => full.evaluate((el) => (el as HTMLInputElement).indeterminate);
+  // FPV quad is ticked: the parent is mixed, and counts the quad's lines inside the group.
+  await expect(full).not.toBeChecked();
+  expect(await mixed()).toBe(true);
+  await expect(lines).toHaveText(/^168 of \d/);
+  const total = Number((await lines.innerText()).split(" of ")[1].replace(",", ""));
+  // Helicopter adds only its own lines: the radio's 140 are counted once.
+  await sets.getByRole("checkbox", { name: "Helicopter" }).check();
+  await expect(lines).toHaveText(`${168 + 164 - 140} of ${total}`);
+  await full.check();
+  for (const t of ["FPV quad", "Telemetry scripts", "Helicopter", "Plane", "Glider", "Car"]) await expect(sets.getByRole("checkbox", { name: t, exact: true })).toBeChecked();
+  await expect(lines).toHaveText(`${total} of ${total}`);
+  expect(await mixed()).toBe(false);
+  // One set off: the parent is mixed again, and the rest stay ticked.
+  await sets.getByRole("checkbox", { name: "Car" }).uncheck();
+  await expect(full).not.toBeChecked();
+  expect(await mixed()).toBe(true);
+  await expect(sets.getByRole("checkbox", { name: "Plane" })).toBeChecked();
+  const saved = (await app.method("gear_voice_save_sets")).at(-1)!.sets as string[];
+  expect(saved).not.toContain("edgetx");
+  expect(saved).not.toContain("car");
+  expect(saved).toEqual(expect.arrayContaining(["quad", "heli", "plane", "glider", "scripts"]));
+  // A click on the mixed box ticks everything under it, as on the Mac; a second clears it.
+  await full.click();
+  await expect(full).toBeChecked();
+  await full.uncheck();
+  for (const t of ["FPV quad", "Plane"]) await expect(sets.getByRole("checkbox", { name: t, exact: true })).not.toBeChecked();
+  await expect(sets.getByRole("checkbox", { name: "FPV extras" })).toBeChecked();
+});
+
 test("a first run ticks every line set; the ticks are saved, and QuadCam default is ticked each time", async ({ app, page }) => {
   const studio = await openStudio(app, page, `c => { c.gear.voice.savedSets = null; }`);
   await saveKey(studio);
@@ -306,7 +348,9 @@ test("a first run ticks every line set; the ticks are saved, and QuadCam default
   const again = (await gotoStudio(page)).getByRole("table", { name: "Line sets" });
   await expect(again.getByRole("checkbox", { name: "QuadCam default" })).toBeChecked();
   await expect(again.getByRole("checkbox", { name: "Full EdgeTX English" })).not.toBeChecked();
-  for (const t of ["FPV quad", "FPV extras", "Easter eggs", "Helicopter", "Car"]) await expect(again.getByRole("checkbox", { name: t, exact: true })).toBeChecked();
+  // Full EdgeTX English off took the sets under it off too.
+  for (const t of ["FPV extras", "Easter eggs"]) await expect(again.getByRole("checkbox", { name: t, exact: true })).toBeChecked();
+  for (const t of ["FPV quad", "Helicopter", "Car"]) await expect(again.getByRole("checkbox", { name: t, exact: true })).not.toBeChecked();
   await expect(page.getByRole("region", { name: "ElevenLabs" }).getByRole("note")).toHaveCount(0);
 });
 

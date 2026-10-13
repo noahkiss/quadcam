@@ -3,7 +3,7 @@
 // them costs, a Sample that renders a few hard lines per voice and model into the Samples
 // gallery (the section's last part), and a Render that puts the sets into a local voice pack.
 // Every paid call asks first.
-import { useState, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { Banner } from "../../../components/Banner";
 import { Button } from "../../../components/Button";
 import { SelectField, TextField } from "../../../components/Field";
@@ -13,7 +13,7 @@ import { Badge } from "../../../components/dash/Badge";
 import { DataTable, type Column } from "../../../components/dash/DataTable";
 import { SectionCard } from "../../../components/dash/SectionCard";
 import { Stat, StatRow } from "../../../components/dash/StatRow";
-import { errText, pickFolder } from "../../../ipc/api";
+import { api, errText, pickFolder } from "../../../ipc/api";
 import type { ImportReport, ModelInfo, RenderPacksReport, Retake, SetInfo, StudioEstimate, VoiceEstimate, VoiceInfo, VoiceProgress } from "../../../ipc/types";
 import { LIST_HEIGHT, takesOf, type UseStudio } from "./useStudio";
 import { modelName } from "./names";
@@ -211,12 +211,6 @@ export function costText(e: VoiceEstimate) {
   return `${n(e.chars)} characters in ${e.batches} ${e.batches === 1 ? "batch" : "batches"} (${e.cached_batches} cached): $${(e.usd ?? 0).toFixed(2)}${rate}, ${n(e.credits)} credits (${basis})${left}.`;
 }
 
-const PLURAL: Record<string, string> = { quad: "quads", heli: "helicopters", plane: "planes", glider: "gliders", car: "cars" };
-
-function andList(words: string[]) {
-  return words.length < 2 ? words.join("") : `${words.slice(0, -1).join(", ")} and ${words.at(-1)}`;
-}
-
 /** Where a set goes: made for the aircraft flown (0), for any aircraft (1), for others (2). */
 function rank(x: SetInfo, aircraft: string[]) {
   const k = x.kinds ?? [];
@@ -224,26 +218,81 @@ function rank(x: SetInfo, aircraft: string[]) {
   return k.every((a) => aircraft.includes(a)) ? 0 : 2;
 }
 
+/** The set the others sit under. */
+const FULL = "edgetx";
+
+/** Distinct card paths of some sets. */
+function distinct(paths: Record<string, string[]> | null, ids: string[]) {
+  if (!paths) return null;
+  const all = new Set<string>();
+  for (const id of ids) for (const p of paths[id] ?? []) all.add(p);
+  return all.size;
+}
+
+interface SetRow {
+  x: SetInfo;
+  /** The rows under Full EdgeTX English. */
+  child: boolean;
+}
+
+/** The line sets: Full EdgeTX English with the sets it holds under it (the aircraft flown
+ *  first), then the sets of their own. The parent's box is mixed while only some sets under
+ *  it are ticked, and its Lines column counts the distinct lines ticked of all it holds. */
 function LineSets({ s }: { s: UseStudio }) {
-  const mine = `For your ${andList(s.aircraft.map((k) => PLURAL[k] ?? k))}`;
-  const titles = [mine, "Any aircraft", "Other aircraft"];
-  const rows = s.sets
-    .filter((x) => x.id !== "sample" && !(x.id === "custom" && x.lines === 0))
-    .map((x, i) => ({ x, r: rank(x, s.aircraft), i }))
-    .sort((a, b) => a.r - b.r || a.i - b.i);
-  const cols: Column<(typeof rows)[number]>[] = [
+  const [paths, setPaths] = useState<Record<string, string[]> | null>(null);
+  useEffect(() => {
+    let live = true;
+    api
+      .gearVoiceSetPaths()
+      .then((p) => live && setPaths(p))
+      .catch(() => {});
+    return () => {
+      live = false;
+    };
+  }, []);
+  const shown = s.sets.filter((x) => x.id !== "sample" && !(x.id === "custom" && x.lines === 0));
+  const full = shown.find((x) => x.id === FULL);
+  const kids = shown
+    .map((x, i) => ({ x, i }))
+    .filter(({ x }) => full && x.part_of === FULL)
+    .sort((a, b) => rank(a.x, s.aircraft) - rank(b.x, s.aircraft) || a.i - b.i)
+    .map(({ x }) => x);
+  const kidIds = kids.map((x) => x.id);
+  const own = shown.filter((x) => x.id !== FULL && !kidIds.includes(x.id));
+  const rows: SetRow[] = [...(full ? [{ x: full, child: false }] : []), ...kids.map((x) => ({ x, child: true })), ...own.map((x) => ({ x, child: false }))];
+  const fullOn = s.picked.includes(FULL);
+  const group = [FULL, ...kidIds];
+  const isOn = (r: SetRow) => s.picked.includes(r.x.id) || (r.child && fullOn);
+  const mixed = (r: SetRow) => r.x.id === FULL && !fullOn && kidIds.some((id) => s.picked.includes(id));
+  const change = (r: SetRow, on: boolean) => {
+    if (r.x.id === FULL) return s.setPicked(on ? [...new Set([...s.picked, ...group])] : s.picked.filter((id) => !group.includes(id)));
+    if (r.child && fullOn && !on) return s.setPicked([...new Set([...s.picked.filter((id) => id !== FULL), ...kidIds])].filter((id) => id !== r.x.id));
+    s.setPicked(toggle(s.picked, r.x.id, on));
+  };
+  const ticked = distinct(
+    paths,
+    group.filter((id) => s.picked.includes(id) || (fullOn && id !== FULL)),
+  );
+  const total = distinct(paths, group);
+  const cols: Column<SetRow>[] = [
     {
       key: "set",
       header: "Set",
       rowHeader: true,
-      cell: ({ x }) => (
-        <>
+      cell: ({ x, child }) => (
+        <span className={child ? styles.childSet : undefined}>
           {x.title}
           <span className={styles.about}>{x.about}</span>
-        </>
+        </span>
       ),
     },
-    { key: "lines", header: "Lines", numeric: true, width: "5rem", cell: ({ x }) => n(x.lines) },
+    {
+      key: "lines",
+      header: "Lines",
+      numeric: true,
+      width: "8rem",
+      cell: ({ x }) => (x.id === FULL && ticked !== null && total !== null ? `${n(ticked)} of ${n(total)}` : n(x.lines)),
+    },
     { key: "done", header: "Rendered", numeric: true, width: "6rem", cell: ({ x }) => (x.rendered == null ? "—" : n(x.rendered)) },
   ];
   return (
@@ -252,8 +301,7 @@ function LineSets({ s }: { s: UseStudio }) {
       columns={cols}
       rows={rows}
       rowKey={({ x }) => x.id}
-      group={({ r }) => titles[r]}
-      selection={{ selected: ({ x }) => s.picked.includes(x.id), onChange: ({ x }, on) => s.setPicked(toggle(s.picked, x.id, on)), label: ({ x }) => x.title }}
+      selection={{ selected: isOn, mixed, onChange: change, label: ({ x }) => x.title }}
     />
   );
 }

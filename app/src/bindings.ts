@@ -675,6 +675,11 @@ export const commands = {
 	 *  in the window, so no `api` row.
 	 */
 	gearVoiceSaveSets: (params: SaveSetsParams) => typedError<null, string>(__TAURI_INVOKE("gear_voice_save_sets", { params })),
+	/**
+	 *  The card paths of each line set, so the set picker counts shared lines once. Only the
+	 *  window's picker needs them, so no `api` row.
+	 */
+	gearVoiceSetPaths: () => typedError<{ [key in string]: string[] }, string>(__TAURI_INVOKE("gear_voice_set_paths")),
 	/**  The apply sheet's own Apply button for a sim sync: the click is the confirmation. */
 	gearSimSyncClick: (params: SimSyncRequest) => typedError<ApplyReport, string>(__TAURI_INVOKE("gear_sim_sync_click", { params })),
 	/**  The apply sheet's own Apply button for a sim restore: the click is the confirmation. */
@@ -6413,6 +6418,11 @@ export type SetInfo = {
 	 *  was asked about; none without both.
 	 */
 	rendered?: number | null,
+	/**
+	 *  The set whose lines hold most of this one's (`edgetx` for the aircraft sets and the
+	 *  telemetry scripts), so a picker can show it under that set.
+	 */
+	part_of?: string | null,
 };
 
 /**  `settings_set`: settings by file key or CLI/MCP name; null resets one. */

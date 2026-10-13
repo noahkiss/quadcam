@@ -447,14 +447,18 @@ the gear folder (`voices/`) and the cache folder. A radio only records which pac
 its own per-line overrides ([Radio voice](#radio-voice)). Packs are for EdgeTX radios; each
 pack records its firmware family (`edgetx`) in `pack.json`.
 
-- **Library.** One row per pack, rendered here or installed: the voice, the model (or the
-  provider), the line sets it was rendered from (a line that waits for a re-take still counts),
-  the line count, the size on disk, the date it was made, the [speech check](#speech-check)
-  (**Not checked**, **Heard right** or how many lines it heard wrong), and the radios that chose
-  it. A pack from the index also shows its id. A pack with lines that need a re-take
-  ([ElevenLabs](#elevenlabs)) or carry a flag shows how many under the voice, such as "150 need
-  a re-take, 2 flagged"; click it to list each line with its reason. The play button plays one
-  line (Armed, when the pack has it). **Check speech** opens the pack's speech check.
+- **Library.** One row per pack, rendered here or installed. The first column holds the
+  voice's short name in bold and the rest of its name; under it, where the pack came from, the
+  model (or the provider), the line sets it was rendered from in one line ("All sets", or
+  "Full EdgeTX English + 2"; point at it for the full list; a line that waits for a re-take
+  still counts), a pack from the index's id, and the radios that chose it. The other columns
+  are the line count, the [speech check](#speech-check) (**Not checked**, **Heard right** or how
+  many lines it heard wrong), the size on disk and the date it was made. A pack with lines that
+  need a re-take ([ElevenLabs](#elevenlabs)) or carry a flag shows how many under the voice,
+  such as "150 need a re-take, 2 flagged"; click it to list each line with its reason. The play
+  button plays one line (Armed, when the pack has it). The **…** menu holds **Apply to
+  radios…**, **Check speech** (the pack's speech check), **Publish…** for a pack rendered here,
+  and **Delete…**.
 - **Apply to radios…** lists every saved EdgeTX radio with a tick box, and **All radios**.
   Each radio shows **Card connected** when its card is mounted or unmounted and still in, and
   **Not connected** otherwise. **Stage** stages one voice change per radio, the same change a
@@ -462,7 +466,7 @@ pack records its firmware family (`edgetx`) in `pack.json`.
   each radio's overrides**. A radio whose card is connected has **Review…**, which opens the
   apply sheet (it mounts and unmounts the card as usual). The others keep the staged change
   and apply it when they are next plugged in, like any staged change.
-- **Delete.** The trash button asks first, and names the radios that chose the pack. It
+- **Delete.** **Delete…** asks first, and names the radios that chose the pack. It
   removes the pack's folder and clears those radios' choice, and every line override that
   takes the pack's take; radio cards keep the sounds they have, and a staged voice change keeps
   its own copy of them. The raw takes stay in
@@ -605,10 +609,14 @@ the voices, the models, the line sets, the cost, **Sample** and **Render pack**,
 
   The page opens with a summary: the ElevenLabs credits left, the packs on this Mac, the radios
   with a pack, and the lines each voice has rendered. The voice and model tables show how many
-  lines each one has rendered. The line sets table shows each set with what it holds, and groups the sets: **For your quads** (sets
-  made only for the aircraft you fly), **Any aircraft** (easter eggs, the telemetry scripts,
-  QuadCam's default lines, your lines) and **Other aircraft** (helicopter, plane, glider, car,
-  and the full EdgeTX set, which holds every kind's prompts). QuadCam reads the aircraft you
+  lines each one has rendered. The line sets table shows each set with what it holds.
+  **Full EdgeTX English** comes first, with the sets that are mostly its lines under it: the
+  aircraft sets (the aircraft you fly first) and the telemetry scripts. Its box ticks or clears
+  every set under it, and shows a dash while only some are ticked. Its **Lines** column counts
+  the distinct lines ticked of all it holds, such as "412 of 795": a line two sets share counts
+  once, as in the render. The aircraft sets each add a few callouts of their own, so the total
+  is more than Full EdgeTX English alone. **FPV extras**, **Easter eggs**, **QuadCam default**
+  and your lines follow as sets of their own. QuadCam reads the aircraft you
   fly from the aircraft profiles: a word in a profile's name or aircraft ("5-inch freestyle",
   "whoop", "heli", "glider", "wing", "crawler"), and a profile linked to an FC is a quad. With
   no profile, it takes quads. The first time, every set starts ticked. After that the studio
@@ -771,7 +779,7 @@ the app carries. On an older macOS, or without the helper, the check is unavaila
 everything else works as before.
 
 - **When it runs.** After every render, on the lines the render put into the pack, and after
-  every **Sample**, on each sample. **Check speech** on a library row opens the pack's check,
+  every **Sample**, on each sample. **Check speech** in a library row's **…** menu opens the pack's check,
   and **Check speech** (later **Check again**) hears every line of the pack again.
 - **How it compares.** Both texts go through the spelling rules, then lose case, punctuation
   and spaces, and numbers read as words. So "GPS fix" heard for "G.P.S. fix", "10" for

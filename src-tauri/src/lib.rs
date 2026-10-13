@@ -322,6 +322,14 @@ async fn gear_voice_publish_approve(
     blocking(move || core.voice_publish_approve(&params)).await
 }
 
+/// The card paths of each line set, so the set picker counts shared lines once. Only the
+/// window's picker needs them, so no `api` row.
+#[tauri::command]
+#[specta::specta]
+fn gear_voice_set_paths() -> Result<std::collections::BTreeMap<String, Vec<String>>, String> {
+    crate::gear::voice::sets::paths().map_err(|e| format!("{e:#}"))
+}
+
 /// The Voice studio's ticked line sets, kept in the gear folder for the next time. A choice
 /// in the window, so no `api` row.
 #[tauri::command]
@@ -810,6 +818,7 @@ pub fn specta_builder() -> tauri_specta::Builder<tauri::Wry> {
             gear_apply_click,
             gear_voice_publish_approve,
             gear_voice_save_sets,
+            gear_voice_set_paths,
             gear_sim_sync_click,
             gear_sim_restore_click,
             gear_flash_click,
