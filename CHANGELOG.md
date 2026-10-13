@@ -5,6 +5,8 @@ User-facing changes in each release, newest first. Release notes on
 
 ## Unreleased
 
+- **S and F keep their hiss.** A rendered line that starts with an s, z, f, h, th, sh or ch sound ("Signal critical", "Failsafe") no longer loses that first sound, which made an S sound like an F. The cut out of the carrier sentence now keeps up to 120 ms of the hiss before the vowel. Render a pack or the samples again with the same settings to get the new cut: QuadCam cuts the cached takes again and sends nothing to ElevenLabs.
+
 ## 0.21.1 (2026-10-12)
 
 - **Restart to update in the Settings sidebar.** Once a check finds a newer version, **Check for Updates** under the version becomes **Restart to update**, on every Settings page. Settings > Advanced keeps the automatic check and the release notes.

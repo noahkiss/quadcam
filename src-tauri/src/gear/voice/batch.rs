@@ -8,8 +8,9 @@
 //!    (raw audio and alignment, by provider, voice, model, speed, batch text and seed).
 //! 3. `cut` takes each line from its first character's start to its last character's end,
 //!    each edge moved into the quiet between the line and the carrier (`snap_edge`): the
-//!    timestamps can run 0.1 s off, so the audio decides. A fresh take is cached only after it
-//!    cuts; a cached take that no longer cuts is removed.
+//!    timestamps can run 0.1 s off, so the audio decides. A line that opens with a fricative
+//!    keeps up to 120 ms of its hiss when no quiet divides it from the carrier (`keep_hiss`).
+//!    A fresh take is cached only after it cuts; a cached take that no longer cuts is removed.
 //! 4. `check` flags cuts that are silent, whose length is off for their text, or that start
 //!    with the carrier's last sound. A flagged line stays out of the pack and needs a re-take;
 //!    its batch stays cached (it was paid).
@@ -43,7 +44,7 @@ fn snap_ms() -> u32 {
 
 /// The version of the way `cut` cuts. It changes whenever a cut comes out differently, so a
 /// pack cuts its kept batches again (from the batch cache, at no cost).
-pub const CUT_VERSION: u32 = 2;
+pub const CUT_VERSION: u32 = 3;
 
 /// How lines are batched and cut. Part of a batch's cache key only through the batch text.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Type)]
@@ -535,6 +536,66 @@ pub fn snap_edge(p: &Pcm, lo: usize, hi: usize, at: usize, start: bool) -> usize
     }
 }
 
+/// The hiss a line's first fricative keeps before its vowel, at most.
+const KEEP_HISS_MS: usize = 120;
+
+/// Whether a line's first sound is a fricative: s, z, f, h, th, sh, ch, or a soft c.
+fn starts_with_hiss(spoken: &str) -> bool {
+    let l: Vec<char> = spoken
+        .chars()
+        .filter(|c| c.is_alphanumeric())
+        .take(2)
+        .map(|c| c.to_ascii_lowercase())
+        .collect();
+    matches!(
+        l.as_slice(),
+        ['s' | 'z' | 'f' | 'h', ..] | ['t' | 'c', 'h'] | ['c', 'e' | 'i' | 'y']
+    )
+}
+
+/// Whether the 10 ms around sample `at` is hiss: louder than silence (a mean square of 64),
+/// with `HISS_CROSSINGS` zero crossings or more.
+fn hiss_at(p: &Pcm, at: usize) -> bool {
+    let half = (p.rate as usize / 200).max(1);
+    let a = at.saturating_sub(half);
+    let b = (at + half).min(p.samples.len());
+    if b <= a + 1 {
+        return false;
+    }
+    let f = &p.samples[a..b];
+    let ms = f
+        .iter()
+        .map(|v| (i64::from(*v) * i64::from(*v)) as u64)
+        .sum::<u64>()
+        / f.len() as u64;
+    let zc = f.windows(2).filter(|w| (w[0] < 0) != (w[1] < 0)).count();
+    // Scaled to 10 ms, so a window clipped at the take's edge counts the same.
+    ms >= 64 && zc * 2 * half >= HISS_CROSSINGS as usize * f.len()
+}
+
+/// The start edge of a line that opens with a fricative. With no quiet between the carrier
+/// and the line ("is Signal": the carrier's "s" runs into the line's), `snap_edge` finds the
+/// quietest point at the hiss's end, just before the vowel, and the line loses its first
+/// sound. When `at` sits in hiss, the edge moves back over it to `KEEP_HISS_MS` before the
+/// hiss ends, never before `lo` or the hiss's start, and never later than `at`.
+fn keep_hiss(p: &Pcm, lo: usize, at: usize, end: usize) -> usize {
+    if !hiss_at(p, at) {
+        return at;
+    }
+    let step = (p.rate / 1000).max(1) as usize;
+    let mut from = at;
+    while from >= lo + step && hiss_at(p, from - step) {
+        from -= step;
+    }
+    let mut to = at;
+    let end = end.min(p.samples.len());
+    while to + step < end && hiss_at(p, to + step) {
+        to += step;
+    }
+    let keep = p.rate as usize * KEEP_HISS_MS / 1000;
+    at.min(from.max(to.saturating_sub(keep)))
+}
+
 /// Cuts every item of a batch out of its take. Fails when the alignment does not describe
 /// the batch text or runs past the audio.
 pub fn cut(b: &Batch, a: &Aligned, snap_ms: u32) -> Result<Vec<Cut>> {
@@ -573,6 +634,9 @@ pub fn cut(b: &Batch, a: &Aligned, snap_ms: u32) -> Result<Vec<Cut>> {
             let hi1 = after.map_or(audio_s, |i| al.starts[i].max(t1 + snap));
             s0 = snap_edge(&a.pcm, sample(lo0), sample(hi0), s0, true);
             s1 = snap_edge(&a.pcm, sample(t1 - snap), sample(hi1), s1, false);
+            if starts_with_hiss(&item.spoken) {
+                s0 = keep_hiss(&a.pcm, sample(lo0), s0, s1);
+            }
         }
         if s1 <= s0 {
             // Snapping closed the gap: fall back to the alignment itself.
@@ -1200,6 +1264,133 @@ mod tests {
             to_s: 1.1,
         };
         assert_eq!(carrier_bleed(&c), None);
+    }
+
+    #[test]
+    fn a_fricative_onset_is_spotted() {
+        for l in [
+            "Signal critical",
+            "six",
+            "Failsafe",
+            "Home",
+            "Throttle",
+            "Shutdown",
+            "Cell low",
+            "Zero",
+            "Check",
+        ] {
+            assert!(starts_with_hiss(l), "{l}");
+        }
+        for l in [
+            "Battery low",
+            "Armed",
+            "Turtle mode",
+            "Critical",
+            "Return to home",
+            "1",
+            "",
+        ] {
+            assert!(!starts_with_hiss(l), "{l}");
+        }
+    }
+
+    /// "is Failsafe" as the provider speaks it: the carrier's "i" voiced to 3.00 s, its "s" a
+    /// loud hiss to 3.06, the line's "f" a low, high-pitched hiss to 3.20 that fades to 3.23,
+    /// then the vowel. No quiet anywhere between. The timestamps put the "F" at 3.20.
+    fn fricative_take(line: &str) -> (Batch, Aligned) {
+        let ms = |t: f64| (t * 32000.0).round() as usize;
+        let mut seed = 11;
+        let mut v = hiss(ms(2.80), 2, &mut seed);
+        v.extend(tone(ms(3.00) - v.len(), 220.0, 3000.0));
+        v.extend(hiss(ms(3.06) - v.len(), 2000, &mut seed));
+        // Band-limited: the first difference of white noise leans to the high end.
+        let f = |n: usize, amp: i32, seed: &mut u32| -> Vec<i16> {
+            let w = hiss(n + 1, amp, seed);
+            w.windows(2)
+                .map(|p| ((i32::from(p[1]) - i32::from(p[0])) / 2) as i16)
+                .collect()
+        };
+        v.extend(f(ms(3.20) - v.len(), 400, &mut seed));
+        v.extend(f(ms(3.23) - v.len(), 120, &mut seed));
+        v.extend(tone(ms(3.60) - v.len(), 180.0, 6000.0));
+        v.extend(hiss(ms(4.00) - v.len(), 2, &mut seed));
+        let text = format!("is {line}.");
+        let n = text.chars().count();
+        let span = 3..3 + line.chars().count();
+        let starts: Vec<f64> = (0..n)
+            .map(|i| match i {
+                0 => 2.88,
+                1 => 2.98,
+                2 => 3.06,
+                i if i < span.end => 3.20 + 0.03 * (i - span.start) as f64,
+                _ => 3.62,
+            })
+            .collect();
+        let mut ends: Vec<f64> = starts.iter().skip(1).copied().collect();
+        ends.push(3.70);
+        (
+            Batch {
+                tone: "alert".into(),
+                text: text.clone(),
+                items: vec![(item(line, "alert"), span)],
+            },
+            Aligned {
+                pcm: Pcm {
+                    rate: 32000,
+                    samples: v,
+                },
+                alignment: Alignment {
+                    characters: text.chars().map(|c| c.to_string()).collect(),
+                    starts,
+                    ends,
+                },
+                billed_chars: None,
+            },
+        )
+    }
+
+    #[test]
+    fn a_fricative_onset_keeps_its_hiss() {
+        let (b, a) = fricative_take("Failsafe");
+        let s = |t: f64| (t * 32000.0) as usize;
+        // Snapping alone finds the quietest place at the hiss's fading end, at the vowel.
+        let snapped = snap_edge(&a.pcm, s(3.06), s(3.24), s(3.20), true) as f64 / 32000.0;
+        assert!(snapped >= 3.18, "snaps to {snapped}");
+        // The cut keeps 120 ms of the hiss before the vowel, not the carrier's loud "s".
+        let c = cut(&b, &a, 40).unwrap();
+        assert!(
+            (3.09..=3.13).contains(&c[0].from_s),
+            "starts at {}",
+            c[0].from_s
+        );
+        let lead = &c[0].pcm.samples[..s(0.10)];
+        let ms = lead.iter().map(|v| i64::from(*v).pow(2)).sum::<i64>() / lead.len() as i64;
+        assert!(ms > 64 * 64, "the hiss is kept: {ms}");
+        // Trim and fades keep it too: the shaped take starts with the hiss after its lead.
+        let shaped =
+            super::super::render::shape(&c[0].pcm.samples, &RenderSettings::default()).unwrap();
+        let lead = &shaped[s(0.020) + s(0.010)..s(0.020) + s(0.08)];
+        assert!(
+            lead.iter().any(|v| v.abs() > 200),
+            "the shaped take keeps the hiss"
+        );
+        // A line that starts with a vowel is cut as before.
+        let (b, a) = fricative_take("Armedsafe");
+        let c = cut(&b, &a, 40).unwrap();
+        assert!(c[0].from_s >= 3.18, "starts at {}", c[0].from_s);
+    }
+
+    #[test]
+    fn a_fricative_line_after_a_quiet_gap_stays_in_the_gap() {
+        // The carrier take's gap is a low hum, not hiss: the cut stays in it.
+        let (mut b, a) = carrier_take();
+        b.items[0].0.spoken = "Sattery critical".into();
+        let c = cut(&b, &a, 40).unwrap();
+        assert!(
+            (3.165..=3.21).contains(&c[0].from_s),
+            "starts at {}",
+            c[0].from_s
+        );
     }
 
     fn two_item_batch() -> Batch {

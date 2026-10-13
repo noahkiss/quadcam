@@ -1183,7 +1183,12 @@ Every reading, kept or not, goes to stderr and `<cache>/voice/charcost.log`.
   the start up to 10 ms before that run's end, the end up to 10 ms after its start. The start
   searches from the end of the letter before the line (the carrier's last) through the end of
   the line's first letter, the end from the line's end to the start of the next letter (or the
-  take's end), each at least `snap_ms` (40) either way. `CUT_VERSION` is in each pack's
+  take's end), each at least `snap_ms` (40) either way. A line whose first sound is a
+  fricative (s, z, f, h, th, sh, ch, soft c) can run straight on from the carrier's "s" with
+  no quiet between, and the lowest run is then the hiss's end, just before the vowel.
+  `keep_hiss` moves such a start back over the hiss (10 ms windows louder than silence with
+  30 or more zero crossings) to 120 ms before the hiss ends, never before the search's start
+  or the hiss's own start. `CUT_VERSION` (3) is in each pack's
   `kept_batches` key, so a new cut re-cuts a pack from the batch cache, free.
   `check` flags silent cuts, cuts under 120 ms or over 4.5 s, cuts far from the batch's
   median pace per letter, and carrier bleed: 20-120 ms of hiss (30 or more zero crossings a
