@@ -46,12 +46,20 @@ async function fakeAudio(page: Page) {
 /** Ends the take playing now. */
 const endTake = (page: Page) => page.evaluate(() => window.__audio!.at(-1)!.onended?.());
 
-async function openVoices(app: AppFixture, page: Page, seed = 0) {
+async function openVoices(app: AppFixture, page: Page, seed = 0, drawer: "open" | "closed" = "open") {
   await fakeAudio(page);
   await app.open();
   if (seed) await app.core(`c => { c.gear.voice.seedSamples = ${seed}; }`);
   await page.getByRole("navigation", { name: "Library" }).getByRole("button", { name: /^Voices/ }).click();
-  return page.getByRole("region", { name: "Samples" });
+  const samples = page.getByRole("region", { name: "Samples" });
+  // The drawer starts closed; how much it hides depends on the fonts, so a test that clicks
+  // inside the cards opens it first. The drawer test keeps it closed.
+  if (seed && drawer === "open") {
+    await expect(samples.locator("article").first()).toBeVisible();
+    const more = samples.getByRole("button", { name: /^Show all / });
+    if (await more.count()) await more.click();
+  }
+  return samples;
 }
 
 /** Samples one voice through the studio: Callum with eleven_v4, three lines. */
@@ -67,7 +75,7 @@ async function sampleCallum(page: Page) {
 }
 
 test("the gallery loads when the page opens and stays after a page change", async ({ app, page }) => {
-  const samples = await openVoices(app, page, 27);
+  const samples = await openVoices(app, page, 27, "closed");
   await expect(samples.locator("article")).toHaveCount(27);
   const first = samples.getByRole("article", { name: "Aria, Eleven Turbo v2.5" });
   await expect(first).toContainText("American · en");
@@ -80,7 +88,7 @@ test("the gallery loads when the page opens and stays after a page change", asyn
 });
 
 test("the samples open as a drawer: part of the first row, then every card, remembered", async ({ app, page }) => {
-  const samples = await openVoices(app, page, 27);
+  const samples = await openVoices(app, page, 27, "closed");
   const handle = samples.getByRole("button", { name: "Show all 27 cards" });
   await expect(handle).toHaveAttribute("aria-expanded", "false");
   const drawer = samples.locator('[data-component="drawer"] > div').first();
@@ -101,7 +109,7 @@ test("the samples open as a drawer: part of the first row, then every card, reme
 
 test("the cards wrap in the narrowest window, and no take runs past its card", async ({ app, page }) => {
   await page.setViewportSize({ width: 960, height: 800 });
-  const samples = await openVoices(app, page, 27);
+  const samples = await openVoices(app, page, 27, "closed");
   await expect(samples.locator("article")).toHaveCount(27);
   const box = await samples.boundingBox();
   const overflow = await page.evaluate(() => {
