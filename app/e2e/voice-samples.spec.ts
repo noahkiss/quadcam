@@ -79,6 +79,26 @@ test("the gallery loads when the page opens and stays after a page change", asyn
   expect((await app.calls("gear_voice_samples")).length).toBeGreaterThanOrEqual(2);
 });
 
+test("the samples open as a drawer: part of the first row, then every card, remembered", async ({ app, page }) => {
+  const samples = await openVoices(app, page, 27);
+  const handle = samples.getByRole("button", { name: "Show all 27 cards" });
+  await expect(handle).toHaveAttribute("aria-expanded", "false");
+  const drawer = samples.locator('[data-component="drawer"] > div').first();
+  expect((await drawer.boundingBox())!.height).toBeLessThanOrEqual(201);
+  await handle.click();
+  const less = samples.getByRole("button", { name: "Show less" });
+  await expect(less).toHaveAttribute("aria-expanded", "true");
+  expect((await drawer.boundingBox())!.height).toBeGreaterThan(600);
+  // The choice stays after a page change.
+  await page.getByRole("navigation", { name: "Library" }).getByRole("button", { name: /^Devices/ }).click();
+  await page.getByRole("navigation", { name: "Library" }).getByRole("button", { name: /^Voices/ }).click();
+  await expect(page.getByRole("region", { name: "Samples" }).getByRole("button", { name: "Show less" })).toBeVisible();
+  await page.getByRole("region", { name: "Samples" }).getByRole("button", { name: "Show less" }).click();
+  // Focus that moves into the hidden part opens the drawer.
+  await page.getByRole("region", { name: "Samples" }).getByRole("button", { name: /^Play all of / }).last().focus();
+  await expect(page.getByRole("region", { name: "Samples" }).getByRole("button", { name: "Show less" })).toBeVisible();
+});
+
 test("the cards wrap in the narrowest window, and no take runs past its card", async ({ app, page }) => {
   await page.setViewportSize({ width: 960, height: 800 });
   const samples = await openVoices(app, page, 27);

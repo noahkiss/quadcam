@@ -608,8 +608,11 @@ the voices, the models, the line sets, the cost, **Sample** and **Render pack**,
   | `custom`, `quadcam` | yours, 45 | Your own lines, and the lines a pack holds today |
 
   The page opens with a summary: the ElevenLabs credits left, the packs on this Mac, the radios
-  with a pack, and the lines each voice has rendered. The voice and model tables show how many
-  lines each one has rendered. The line sets table shows each set with what it holds.
+  with a pack, and the lines each voice has rendered. The voice table shows how many lines each
+  voice has rendered. **Model** below it is a pop-up menu: each model with its price per 1K
+  characters. Beside it, the picked model shows its credits a character and, with one voice
+  ticked, the lines that voice has rendered in it. The window renders with one model at a
+  time; the CLI and MCP still take several (`--models`, `voice_models`). The line sets table shows each set with what it holds.
   **Full EdgeTX English** comes first, with the sets that are mostly its lines under it: the
   aircraft sets (the aircraft you fly first) and the telemetry scripts. Its box ticks or clears
   every set under it, and shows a dash while only some are ticked. Its **Lines** column counts
@@ -638,8 +641,8 @@ the voices, the models, the line sets, the cost, **Sample** and **Render pack**,
 - **Cost.** Tiles under the line sets show the lines left to render (of how many, and how many
   are rendered), the characters (carriers included) and batches, the price in USD with a promo
   badge while one applies, and the credits left after the render (estimated). Only the lines left to render cost anything.
-  The cost covers every ticked voice with every ticked model: each pair is one pack. With more
-  than one pair, **Cost by pack** lists each voice and model with its lines to render,
+  The cost covers every ticked voice in the picked model: each voice is one pack. With more
+  than one voice, **Cost by pack** lists each voice and model with its lines to render,
   characters, price and credits, and the tiles show the total.
 - **Import takes…** copies a folder of earlier takes into QuadCam's cache: takes of single
   lines that an older line-by-line ElevenLabs render left, each a `.json` (text, voice, model,
@@ -661,12 +664,12 @@ the voices, the models, the line sets, the cost, **Sample** and **Render pack**,
   anything is sent, and the render stops; estimate again, and its lines are priced. A render the credits do not cover cannot start. A batch stays under the
   model's per-request limit (v3 5,000 characters, multilingual v2 10,000, flash and turbo
   40,000).
-- **Sample.** Tick voices and models and press **Sample**. QuadCam renders the sample lines
-  in each pair, shows the cost, and waits for **Sample and pay**. The samples go to
+- **Sample.** Tick voices, pick a model and press **Sample**. QuadCam renders the sample lines
+  in each voice in that model only, shows the cost, and waits for **Sample and pay**. The samples go to
   [Samples](#samples). The sample files keep the card path, so two lines with one file name
   (`armed.wav` and a script's `armed.wav`) stay apart.
-- **Render pack.** Needs a voice, a model and at least one set. With several voices or models
-  ticked it reads **Render packs** and makes one pack per voice and model in one run, priced
+- **Render pack.** Needs a voice, a model and at least one set. With several voices
+  ticked it reads **Render packs** and makes one pack per voice in one run, priced
   as one plan with one digest. After **Render and pay** the lines go into a local pack named
   for the voice id and the model, so two voices with one name never share a pack; a second set
   adds to the same pack. A pack that fails stops the run: the packs made before it stay, and
@@ -738,6 +741,9 @@ the voices, the models, the line sets, the cost, **Sample** and **Render pack**,
   sample lines in an aligned grid, each with its play and flag buttons. A pack
   card shows the pack's lines of the `sample` set (or its first lines) and every flagged line.
   The cards wrap to the window's width.
+- **Drawer.** Samples opens partly closed: it shows the top of the first row of cards and a fade.
+  **Show all N cards** opens it, and **Show less** closes it again. QuadCam remembers the choice
+  on this Mac. Moving the keyboard focus into the hidden part opens it.
 - **Where samples live.** In the gear folder's `voice-samples/`, one folder per voice, model and
   speed, with `samples.json` (the voice, and each line's text, seed and what the speech check
   heard). The page reads them when it opens. Samples from 0.19 and earlier sat in the cache;

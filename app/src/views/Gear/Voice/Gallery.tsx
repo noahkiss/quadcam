@@ -8,6 +8,8 @@ import { Banner } from "../../../components/Banner";
 import { Button } from "../../../components/Button";
 import { Dialog } from "../../../components/Dialog";
 import { SelectField, TextField } from "../../../components/Field";
+import { Drawer } from "../../../components/dash/Drawer";
+import { useStoredFlag } from "../../../lib/stored";
 import { Popover } from "../../../components/Popover";
 import { Badge } from "../../../components/dash/Badge";
 import type { ModelInfo, RetakeReport, SampleTake, SampleVoice, TakeFlag, VoiceInfo } from "../../../ipc/types";
@@ -228,6 +230,7 @@ export function Gallery({ g, player, voices, models }: { g: UseGallery; player: 
   const samples = cards.filter((c) => c.kind === "sample");
   const all = player.queue === "all";
   const names = { voices, models };
+  const [open, setOpen] = useStoredFlag("quadcam.voices.samples.open", false);
   return (
     <section className={styles.part} aria-label="Samples">
       <header className={styles.partHead}>
@@ -259,11 +262,13 @@ export function Gallery({ g, player, voices, models }: { g: UseGallery; player: 
       ))}
       {g.gallery && cards.length === 0 && <p className={styles.muted}>No samples. Sample makes them.</p>}
       {cards.length > 0 && (
-        <div className={styles.grid} data-component="sample-gallery">
-          {cards.map((c) => (
-            <VoiceCard key={`${c.kind}|${c.id}`} c={c} player={player} g={g} names={names} onDelete={setDeleting} />
-          ))}
-        </div>
+        <Drawer open={open} onToggle={setOpen} closedHeight={200} more={`Show all ${cards.length} cards`}>
+          <div className={styles.grid} data-component="sample-gallery">
+            {cards.map((c) => (
+              <VoiceCard key={`${c.kind}|${c.id}`} c={c} player={player} g={g} names={names} onDelete={setDeleting} />
+            ))}
+          </div>
+        </Drawer>
       )}
       {deleting && (
         <Dialog

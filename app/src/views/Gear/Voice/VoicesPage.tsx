@@ -5,6 +5,7 @@
 // Packs are not per radio: a radio's Voice segment picks one of these.
 import { useState } from "react";
 import { modelName, setsSummary, shortName } from "./names";
+import { useStoredFlag } from "../../../lib/stored";
 import { Banner } from "../../../components/Banner";
 import { Button } from "../../../components/Button";
 import { Input } from "../../../components/Field";
@@ -332,7 +333,7 @@ export function VoicesPage() {
   );
   const [checking, setChecking] = useState<string | null>(null);
   const [publishing, setPublishing] = useState<string | null>(null);
-  const [elevenOpen, setElevenOpen] = useState(readOpen);
+  const [elevenOpen, setElevenOpen] = useStoredFlag("quadcam.voices.elevenlabs.open", true);
   const checked = v.view?.packs.find((k) => k.id === checking && k.installed) ?? null;
   const published = v.view?.packs.find((k) => k.id === publishing && k.local) ?? null;
   return (
@@ -353,10 +354,7 @@ export function VoicesPage() {
         s={s}
         collapse={{
           open: elevenOpen,
-          onToggle: (open) => {
-            setElevenOpen(open);
-            saveOpen(open);
-          },
+          onToggle: setElevenOpen,
         }}
       >
         <Gallery g={g} player={player} voices={s.catalog?.voices} models={s.catalog?.models} />
@@ -365,23 +363,4 @@ export function VoicesPage() {
       {v.view && <GetPacks v={v} view={v.view} />}
     </div>
   );
-}
-
-const OPEN_KEY = "quadcam.voices.elevenlabs.open";
-
-/** Whether the ElevenLabs section was left open (open at first). */
-function readOpen() {
-  try {
-    return localStorage.getItem(OPEN_KEY) !== "false";
-  } catch {
-    return true;
-  }
-}
-
-function saveOpen(open: boolean) {
-  try {
-    localStorage.setItem(OPEN_KEY, String(open));
-  } catch {
-    // A page without storage opens the section each time.
-  }
 }

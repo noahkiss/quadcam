@@ -69,8 +69,9 @@ test("the pickers list the account's voices and models, and the cost follows the
   const voices = studio.getByRole("table", { name: "Voices" });
   await expect(voices.getByRole("checkbox")).toHaveCount(8);
   await expect(voices.getByRole("checkbox", { name: /Callum/ })).toBeChecked();
-  const models = studio.getByRole("table", { name: "Models" });
-  await expect(models.getByRole("checkbox", { name: /\(eleven_turbo_v2_5\)/ })).toBeVisible();
+  const model = studio.getByLabel("Model");
+  await expect(model).toHaveValue("eleven_v4");
+  await expect(model.locator("option")).toHaveText(["Eleven v4 · $0.08 per 1K", "Eleven v4 Turbo · $0.04 per 1K", "Eleven Turbo v2.5 · $0.04 per 1K"]);
   const cost = studio.getByRole("status", { name: "Cost" });
   await expect(stat(cost, "To render")).toHaveText("281");
   await expect(cost).toContainText("of 281 lines · 0 rendered");
@@ -78,13 +79,12 @@ test("the pickers list the account's voices and models, and the cost follows the
   await expect(stat(cost, "Cost")).toHaveText(/^\$\d+\.\d\d$/);
   await expect(cost).toContainText("$0.08 per 1K characters");
   await expect(cost).toContainText(/[\d,]+ credits \(estimated\)/);
-  await expect(models.getByRole("row", { name: /Eleven v4 eleven_v4/ })).toContainText("$0.08");
+  await expect(studio).toContainText("About 0.22 credits a character · 0 lines rendered");
   const spent = cost.locator('[data-component="stat"]', { hasText: "Credits after" }).locator("span").last();
   const credits = async () => Number(/([\d,]+) credits/.exec((await spent.textContent()) ?? "")![1].replace(/,/g, ""));
   const full = await credits();
   // The half-price model costs half the credits for the same sets.
-  await models.getByRole("checkbox", { name: /\(eleven_v4\)/ }).uncheck();
-  await models.getByRole("checkbox", { name: /\(eleven_turbo_v2_5\)/ }).check();
+  await model.selectOption("eleven_turbo_v2_5");
   await expect(cost).toContainText("$0.04 per 1K characters");
   const half = await credits();
   expect(Math.abs(half - full / 2), `${half} of ${full}`).toBeLessThanOrEqual(1);
@@ -94,13 +94,14 @@ test("the pickers list the account's voices and models, and the cost follows the
   expect((await app.method("gear_voice_render_packs")).at(-1)).toMatchObject({ sets: ["quad", "extras", "quadcam", "easter"], voices: ["voice-callum"], models: ["eleven_turbo_v2_5"], dry_run: true });
 });
 
-test("Sample asks before it pays, then shows one card per voice and model in Samples", async ({ app, page }) => {
+test("Sample asks before it pays, then shows one card per voice in the picked model in Samples", async ({ app, page }) => {
   const studio = await openStudio(app, page);
   await saveKey(studio);
   await studio.getByRole("table", { name: "Voices" }).getByRole("checkbox", { name: /Daniel/ }).check();
-  await studio.getByRole("table", { name: "Models" }).getByRole("checkbox", { name: /\(eleven_turbo_v2_5\)/ }).check();
+  await studio.getByLabel("Model").selectOption("eleven_turbo_v2_5");
   await studio.getByRole("button", { name: "Sample", exact: true }).click();
-  expect((await app.method("gear_voice_sample")).at(-1)).toMatchObject({ voices: ["voice-callum", "voice-daniel"], models: ["eleven_v4", "eleven_turbo_v2_5"], confirm: false });
+  // One model picked: Sample asks for each voice in that model only.
+  expect((await app.method("gear_voice_sample")).at(-1)).toMatchObject({ voices: ["voice-callum", "voice-daniel"], models: ["eleven_turbo_v2_5"], confirm: false });
   await expect(studio).toContainText("This sends text to ElevenLabs, which bills it.");
   const samples = page.getByRole("region", { name: "Samples" });
   await expect(samples.locator("article")).toHaveCount(0);
@@ -109,8 +110,8 @@ test("Sample asks before it pays, then shows one card per voice and model in Sam
   await expect.poll(async () => (await app.method("gear_voice_sample")).length).toBe(asked + 1);
   // The go-ahead repeats the digest of the plan the banner priced.
   expect((await app.method("gear_voice_sample")).at(-1)).toMatchObject({ confirm: true, digest: expect.stringMatching(/^mock-/) });
-  // One card per voice and model, each with its lines as play chips.
-  await expect(samples.locator("article")).toHaveCount(4);
+  // One card per voice in the one model picked, each with its lines.
+  await expect(samples.locator("article")).toHaveCount(2);
   const card = samples.getByRole("article", { name: "Daniel, Eleven Turbo v2.5" });
   await expect(card.getByRole("list", { name: /^Takes of/ }).getByRole("listitem")).toHaveCount(3);
   await card.getByRole("button", { name: "Play Six" }).click();
@@ -354,13 +355,13 @@ test("a first run ticks every line set; the ticks are saved, and QuadCam default
   await expect(page.getByRole("region", { name: "ElevenLabs" }).getByRole("note")).toHaveCount(0);
 });
 
-test("the voice list takes the full width, and the models sit below it", async ({ app, page }) => {
+test("the voice list takes the full width, and the model pop-up sits below it", async ({ app, page }) => {
   const studio = await openStudio(app, page);
   await saveKey(studio);
   const voices = await studio.getByRole("table", { name: "Voices" }).boundingBox();
-  const models = await studio.getByRole("table", { name: "Models" }).boundingBox();
-  expect(models!.y).toBeGreaterThan(voices!.y + voices!.height - 1);
-  expect(Math.abs(models!.width - voices!.width)).toBeLessThan(2);
+  const model = await studio.getByLabel("Model").boundingBox();
+  expect(model!.y).toBeGreaterThan(voices!.y + voices!.height - 1);
+  expect(voices!.width).toBeGreaterThan(model!.width * 2);
 });
 
 test("the ElevenLabs section collapses, and stays collapsed after a page change", async ({ app, page }) => {
@@ -419,8 +420,7 @@ test("Import takes… copies a folder of earlier takes, and the voice list count
   await studio.getByRole("button", { name: "Import takes…" }).click();
   await expect(studio.getByRole("status", { name: "Import" })).toHaveText("161 takes imported, 0 in the cache already, 1 left out.");
   expect((await app.method("gear_voice_import_takes")).at(-1)).toEqual({ folder: "/Users/someone/old-takes", dry_run: false });
-  await studio.getByRole("table", { name: "Models" }).getByRole("checkbox", { name: /\(eleven_v4\)/ }).uncheck();
-  await studio.getByRole("table", { name: "Models" }).getByRole("checkbox", { name: /\(eleven_turbo_v2_5\)/ }).check();
+  await studio.getByLabel("Model").selectOption("eleven_turbo_v2_5");
   await expect(studio.getByRole("table", { name: "Voices" }).getByRole("row", { name: /^Callum/ })).toContainText("161");
   await expect(stat(page.getByRole("group", { name: "Summary" }), "Lines rendered")).toHaveText("161");
   // The speed goes with every estimate and paid call.
@@ -437,8 +437,7 @@ test("a render the credits do not cover cannot start", async ({ app, page }) => 
   await group.getByRole("checkbox", { name: /Full EdgeTX English/ }).check();
   for (const t of ["FPV quad", "Helicopter", "Plane", "Glider", "FPV extras"]) await group.getByRole("checkbox", { name: t, exact: true }).check();
   await app.core(`c => { c.gear.voice.spent = 98000; }`);
-  await studio.getByRole("table", { name: "Models" }).getByRole("checkbox", { name: /\(eleven_v4\)/ }).uncheck();
-  await studio.getByRole("table", { name: "Models" }).getByRole("checkbox", { name: /\(eleven_v4_turbo\)/ }).check();
+  await studio.getByLabel("Model").selectOption("eleven_v4_turbo");
   await expect(studio.getByRole("alert")).toContainText("The account does not have enough credits.");
   await expect(studio.getByRole("button", { name: "Render pack" })).toBeDisabled();
 });

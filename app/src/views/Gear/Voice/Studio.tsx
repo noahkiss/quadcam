@@ -127,31 +127,8 @@ function Pickers({ s, onError }: { s: UseStudio; onError: (e: string) => void })
         ) : null,
     },
   ];
-  const modelCols: Column<ModelInfo>[] = [
-    {
-      key: "name",
-      header: "Model",
-      rowHeader: true,
-      cell: (m) => (
-        <>
-          {m.name}
-          <span className={styles.sub}>{m.id}</span>
-        </>
-      ),
-    },
-    {
-      key: "price",
-      header: "Per 1K",
-      numeric: true,
-      cell: (m) => (
-        <span className={styles.price}>
-          {m.promo_until && <Badge tone="accent">Promo to {fmtDay(m.promo_until)}</Badge>}${m.usd_per_1k ?? "?"}
-        </span>
-      ),
-    },
-    { key: "credits", header: "Credits/char", numeric: true, optional: true, cell: (m) => `${m.cost_per_char ?? "?"}` },
-    { key: "done", header: "Rendered", numeric: true, cell: (m) => (v0 ? n(takesOf(s.takes, v0, m.id)) : "—") },
-  ];
+  const m = cat.models.find((x) => x.id === s.models[0]);
+  const price = (x: ModelInfo) => `$${x.usd_per_1k ?? "?"} per 1K${x.promo_until ? `, promo to ${fmtDay(x.promo_until)}` : ""}`;
   return (
     <div className={styles.pickers}>
       <h4 className={styles.subtitle}>Voices</h4>
@@ -191,15 +168,21 @@ function Pickers({ s, onError }: { s: UseStudio; onError: (e: string) => void })
       />
       </div>
       {browsing && <BrowseVoices onClose={() => setBrowsing(false)} onAdded={s.refreshCatalog} />}
-      <h4 className={styles.subtitle}>Models</h4>
-      <DataTable
-        label="Models"
-        compact
-        columns={modelCols}
-        rows={cat.models}
-        rowKey={(m) => m.id}
-        selection={{ selected: (m) => s.models.includes(m.id), onChange: (m, on) => s.setModels(toggle(s.models, m.id, on)), label: (m) => `${m.name} (${m.id})` }}
-      />
+      <div className={styles.bar}>
+        <SelectField label="Model" inline value={s.models[0] ?? ""} onChange={(e) => s.setModels([e.target.value])}>
+          {cat.models.map((x) => (
+            <option key={x.id} value={x.id}>
+              {`${x.name} · ${price(x)}`}
+            </option>
+          ))}
+        </SelectField>
+        {m && (
+          <span className={styles.muted}>
+            {m.promo_until && <Badge tone="accent">Promo to {fmtDay(m.promo_until)}</Badge>} About {m.cost_per_char ?? "?"} credits a character
+            {v0 && s.voices.length === 1 ? ` · ${n(takesOf(s.takes, v0, m.id))} lines rendered` : ""}
+          </span>
+        )}
+      </div>
     </div>
   );
 }

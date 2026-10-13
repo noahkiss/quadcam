@@ -1,0 +1,45 @@
+.drawer {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-2);
+  min-width: 0;
+}
+.closed {
+  overflow: hidden;
+  -webkit-mask-image: linear-gradient(to bottom, currentColor 55%, transparent);
+  mask-image: linear-gradient(to bottom, currentColor 55%, transparent);
+}
+.open {
+  min-width: 0;
+}
+.handle {
+  align-self: center;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s-1);
+  padding: 2px var(--s-2);
+  border: 0;
+  border-radius: var(--r-1);
+  background: transparent;
+  color: var(--muted);
+  font: inherit;
+  font-size: var(--t-sm);
+  cursor: default;
+}
+.handle:hover {
+  color: var(--fg);
+}
+.handle:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+}
+.chevron {
+  width: 6px;
+  height: 6px;
+  border-right: 1.5px solid currentColor;
+  border-bottom: 1.5px solid currentColor;
+  transform: translateY(-2px) rotate(45deg);
+}
+[aria-expanded="true"] > .chevron {
+  transform: translateY(2px) rotate(-135deg);
+}

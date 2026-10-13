@@ -100,7 +100,8 @@ export function useStudio(onRendered: () => Promise<void>, onSampled: () => Prom
     setPlan(null);
   }, []);
   const setVoices = useCallback((v: string[]) => (pickVoices(v), stop()), [stop]);
-  const setModels = useCallback((v: string[]) => (pickModels(v), stop()), [stop]);
+  // The window renders with one model at a time; the core still takes several.
+  const setModels = useCallback((v: string[]) => (pickModels(v.slice(0, 1)), stop()), [stop]);
   /** A tick saves the sets in the gear folder, for the next time the studio opens. */
   const setPicked = useCallback(
     (v: string[]) => {
@@ -121,7 +122,7 @@ export function useStudio(onRendered: () => Promise<void>, onSampled: () => Prom
       const c = await api.gearVoiceCatalog({ voices: false, models: false, credits: false });
       setCatalog(c);
       pickVoices((v) => (v.length ? v : c.voices.slice(0, 1).map((x) => x.id)));
-      pickModels((m) => (m.length ? m : c.models.slice(0, 1).map((x) => x.id)));
+      pickModels((m) => (m.length && c.models.some((x) => x.id === m[0]) ? m.slice(0, 1) : c.models.slice(0, 1).map((x) => x.id)));
     } catch (e) {
       setCatalog(null);
       setError(errText(e));
