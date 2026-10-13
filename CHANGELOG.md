@@ -5,6 +5,8 @@ User-facing changes in each release, newest first. Release notes on
 
 ## Unreleased
 
+## 0.21.3 (2026-10-13)
+
 - **A tidier Voices page.** ElevenLabs is now one section that holds the key, the voices, the models, the line sets, the cost, Sample, Render and the Samples. Click its title to collapse it; it stays collapsed until you open it again. A new **Mac and other voices** section holds **Render my voice** and names the provider in the settings. The summary and **Voice packs on this Mac** stay at the top.
 - **Re-takes behind a click.** A pack row no longer lists every line that needs a re-take. It shows a count, such as "150 need a re-take, 2 flagged"; click it to list the lines with their reasons.
 - **Full-width voice list.** The ElevenLabs voice list takes the full width and scrolls in its own box. The models sit below it.
