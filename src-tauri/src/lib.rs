@@ -485,7 +485,7 @@ fn third_party_notices(app: AppHandle) -> Result<String, String> {
 }
 
 /// Emits `volumes-changed` whenever something mounts or unmounts under /Volumes.
-fn watch_volumes(app: AppHandle) {
+fn watch_volumes(app: AppHandle, core: Arc<Core>) {
     use notify::{RecursiveMode, Watcher};
     std::thread::spawn(move || {
         let (tx, rx) = std::sync::mpsc::channel();
@@ -505,6 +505,7 @@ fn watch_volumes(app: AppHandle) {
                 // Let the mount settle before the UI asks diskutil about it.
                 std::thread::sleep(Duration::from_millis(800));
                 while rx.try_recv().is_ok() {}
+                core.gear_volumes_changed();
                 let _ = app.emit(api::VolumesChanged::NAME, ());
             }
         }
@@ -947,7 +948,7 @@ pub fn run() {
             app.manage(AppState { core, hooks });
             main_window(&handle)?;
             menu::install(&handle)?;
-            watch_volumes(handle.clone());
+            watch_volumes(handle.clone(), gear_core.clone());
             poll_gear(handle, gear_core);
             Ok(())
         })

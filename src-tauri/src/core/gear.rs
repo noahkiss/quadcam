@@ -145,6 +145,11 @@ impl Core {
         self
     }
 
+    /// Invalidates the mounted-volume snapshot after the OS reports a mount-state change.
+    pub fn gear_volumes_changed(&self) {
+        self.gear.volumes_changed();
+    }
+
     /// The Swift helper this core runs (`crate::intel`); tests pass one with a fake runner.
     pub fn with_intel(mut self, intel: std::sync::Arc<crate::intel::Intel>) -> Core {
         self.gear.intel = intel;

@@ -83,6 +83,7 @@ fn env(mounted: &Mounted, present: &Present, cues: &Arc<RecordedCues>) -> Env {
     Env {
         ports: fake_ports(),
         volumes: Arc::new(move || m.lock().unwrap().clone()),
+        refresh_volumes: Arc::new(|| {}),
         dfu: Arc::new(Vec::new),
         presence: Arc::new(move || p.lock().unwrap().clone()),
         card_reader: Arc::new(Vec::new),

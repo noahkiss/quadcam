@@ -232,13 +232,68 @@ pub type UnmountFn = Arc<dyn Fn(&str) -> anyhow::Result<()> + Send + Sync>;
 /// Mounts a whole disk (`disk4`) that an earlier job unmounted.
 pub type MountFn = Arc<dyn Fn(&str) -> anyhow::Result<()> + Send + Sync>;
 
+type VolumesFn = Arc<dyn Fn() -> Vec<Volume> + Send + Sync>;
+type RefreshVolumesFn = Arc<dyn Fn() + Send + Sync>;
+type VolumeSignature = Vec<(std::path::PathBuf, u64, u64)>;
+type VolumeSignatureFn = Arc<dyn Fn() -> VolumeSignature + Send + Sync>;
+
+fn volume_signature() -> VolumeSignature {
+    use std::os::unix::fs::MetadataExt;
+
+    let Ok(entries) = std::fs::read_dir("/Volumes") else {
+        return Vec::new();
+    };
+    let mut signature: VolumeSignature = entries
+        .flatten()
+        .filter(|entry| !entry.file_name().to_string_lossy().starts_with('.'))
+        .filter_map(|entry| {
+            let metadata = entry.metadata().ok()?;
+            Some((entry.path(), metadata.dev(), metadata.ino()))
+        })
+        .collect();
+    signature.sort();
+    signature
+}
+
+/// Keeps the relatively expensive `diskutil` volume scan while the cheap mount-point
+/// signature stays unchanged. The app's volume watcher also invalidates it explicitly.
+/// Serial ports and DFU devices are deliberately not cached: the regular Gear poll must keep
+/// finding those promptly.
+fn cached_volumes(
+    signature: VolumeSignatureFn,
+    source: VolumesFn,
+) -> (VolumesFn, RefreshVolumesFn) {
+    let cache = Arc::new(std::sync::Mutex::new(
+        None::<(VolumeSignature, Vec<Volume>)>,
+    ));
+    let list_cache = cache.clone();
+    let list = Arc::new(move || {
+        let current = signature();
+        let mut cached = list_cache.lock().unwrap();
+        if let Some((seen, volumes)) = cached.as_ref() {
+            if *seen == current {
+                return volumes.clone();
+            }
+        }
+        let volumes = source();
+        *cached = Some((current, volumes.clone()));
+        volumes
+    });
+    let refresh = Arc::new(move || {
+        *cache.lock().unwrap() = None;
+    });
+    (list, refresh)
+}
+
 /// What Gear reaches outside the process. The real one lists `/Volumes`, the system's
 /// serial ports and what is still plugged in (none under cargo, see `serial`), and plays
 /// cues (silent under cargo, see `cues`); tests pass synthetic volumes and fakes.
 #[derive(Clone)]
 pub struct Env {
     pub ports: Arc<dyn serial::Ports>,
-    pub volumes: Arc<dyn Fn() -> Vec<Volume> + Send + Sync>,
+    pub volumes: VolumesFn,
+    /// Invalidates `volumes`; the `/Volumes` watcher and QuadCam's own mount operations use it.
+    pub refresh_volumes: RefreshVolumesFn,
     pub dfu: Arc<dyn Fn() -> Vec<detect::DfuInfo> + Send + Sync>,
     pub presence: Arc<dyn Fn() -> Vec<events::Presence> + Send + Sync>,
     /// Cards in the built-in SD reader, with their hardware identity. Asked only when a
@@ -282,16 +337,35 @@ pub struct Env {
 impl Env {
     /// The system's volumes, ports and DFU devices. Port locks go in `<cache>/locks`.
     pub fn system(cache: &std::path::Path) -> Self {
+        let (volumes, refresh_volumes) = cached_volumes(
+            Arc::new(volume_signature),
+            Arc::new(crate::disk::list_volumes),
+        );
+        let refresh_after_unmount = refresh_volumes.clone();
+        let refresh_after_mount = refresh_volumes.clone();
         Self {
             ports: serial::system(cache.join("locks")),
-            volumes: Arc::new(crate::disk::list_volumes),
+            volumes,
+            refresh_volumes,
             dfu: Arc::new(detect::dfu_devices),
             presence: Arc::new(events::presence),
             card_reader: Arc::new(detect::card_reader),
             usb: Arc::new(detect::usb_storage),
             cues: Arc::new(cues::CueService::system()),
-            unmount: Arc::new(|d| edgetx::card::release(d, edgetx::card::UNMOUNT_TIMEOUT)),
-            mount: Arc::new(|d| edgetx::card::attach(d, edgetx::card::UNMOUNT_TIMEOUT)),
+            unmount: Arc::new(move |d| {
+                let result = edgetx::card::release(d, edgetx::card::UNMOUNT_TIMEOUT);
+                if result.is_ok() {
+                    refresh_after_unmount();
+                }
+                result
+            }),
+            mount: Arc::new(move |d| {
+                let result = edgetx::card::attach(d, edgetx::card::UNMOUNT_TIMEOUT);
+                if result.is_ok() {
+                    refresh_after_mount();
+                }
+                result
+            }),
             fail_readback: None,
             card_write: None,
             real_cards: edgetx::card::REAL_CARDS.into(),
@@ -313,6 +387,7 @@ impl Env {
         Self {
             ports,
             volumes: Arc::new(move || volumes.clone()),
+            refresh_volumes: Arc::new(|| {}),
             dfu: Arc::new(Vec::new),
             presence: Arc::new(Vec::new),
             card_reader: Arc::new(Vec::new),
@@ -360,12 +435,45 @@ impl Env {
         };
         detect::detect_all(&volumes, &self.ports.list(), &(self.dfu)(), &cards, &usb)
     }
+
+    /// Notes that something mounted or unmounted, so the next Gear look scans `/Volumes`.
+    pub fn volumes_changed(&self) {
+        (self.refresh_volumes)();
+    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
     use serde_json::json;
+    use std::sync::atomic::{AtomicUsize, Ordering};
+
+    #[test]
+    fn volume_cache_scans_once_until_invalidated() {
+        let scans = Arc::new(AtomicUsize::new(0));
+        let counted = scans.clone();
+        let signature = Arc::new(std::sync::Mutex::new(vec![(PathBuf::from("card"), 1, 1)]));
+        let read_signature = signature.clone();
+        let (volumes, refresh) = cached_volumes(
+            Arc::new(move || read_signature.lock().unwrap().clone()),
+            Arc::new(move || {
+                counted.fetch_add(1, Ordering::SeqCst);
+                Vec::new()
+            }),
+        );
+
+        volumes();
+        volumes();
+        assert_eq!(scans.load(Ordering::SeqCst), 1);
+
+        refresh();
+        volumes();
+        assert_eq!(scans.load(Ordering::SeqCst), 2);
+
+        *signature.lock().unwrap() = vec![(PathBuf::from("other-card"), 2, 2)];
+        volumes();
+        assert_eq!(scans.load(Ordering::SeqCst), 3);
+    }
 
     #[test]
     fn settings_defaults_and_overrides() {
