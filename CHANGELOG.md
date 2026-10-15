@@ -5,6 +5,10 @@ User-facing changes in each release, newest first. Release notes on
 
 ## Unreleased
 
+## 0.21.4 (2026-10-14)
+
+- **Lower energy use while idle.** Gear no longer asks macOS for full details about every mounted volume every two seconds. It refreshes those details only when a volume changes, while USB serial and DFU devices remain quick to appear.
+
 ## 0.21.3 (2026-10-13)
 
 - **A tidier Voices page.** ElevenLabs is now one section that holds the key, the voices, the models, the line sets, the cost, Sample, Render and the Samples. Click its title to collapse it; it stays collapsed until you open it again. A new **Mac and other voices** section holds **Render my voice** and names the provider in the settings. The summary and **Voice packs on this Mac** stay at the top.
