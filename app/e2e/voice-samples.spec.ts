@@ -192,13 +192,18 @@ test("a pack line flagged in its speech check shows in the library row and on th
   await page.getByRole("button", { name: "Refresh packs" }).click();
   await page.getByRole("button", { name: "Install Demo" }).click();
   await packMenu(page, "Demo", "Check speech");
-  const check = page.getByRole("region", { name: "Speech check" });
+  const check = page.getByRole("dialog", { name: /^Speech check/ });
   await check.getByRole("button", { name: "Check speech" }).click();
   await check.getByRole("button", { name: "Flag Armed" }).click();
   const form = page.getByRole("dialog", { name: "Flag Armed" });
   await form.getByLabel("Reason").selectOption("noise");
   await form.getByRole("button", { name: "Save flag" }).click();
   expect((await app.method("gear_voice_flag")).at(-1)).toMatchObject({ pack: "en-demo-v1", line: "SOUNDS/en/armed.wav", reason: "noise" });
+  // The flagged line needs review; an installed pack offers no re-take.
+  await check.getByRole("button", { name: /^Needs review/ }).click();
+  await expect(check.getByRole("table", { name: "Speech check of Demo" }).getByRole("row", { name: /^Armed/ })).toContainText("Flagged");
+  await expect(check.getByRole("button", { name: "Re-take selected…" })).toHaveCount(0);
+  await check.getByRole("button", { name: "Done" }).click();
   const row = page.getByRole("table", { name: "Voice packs on this Mac" }).getByRole("row", { name: /^Demo / });
   await row.getByText("1 flagged").click();
   await expect(row.getByRole("list", { name: "Re-takes and flags of Demo" })).toContainText("SOUNDS/en/armed.wav");

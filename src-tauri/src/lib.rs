@@ -577,7 +577,8 @@ fn no_focus() -> bool {
 
 /// Makes the main window from its config. With `QUADCAM_NO_FOCUS` it opens unfocused, below
 /// other windows, and keeps rendering there so `screencapture -l` sees it.
-fn main_window(app: &AppHandle) -> tauri::Result<()> {
+/// After Restart to update, the new window comes to the front (`updater::front_at_launch`).
+fn main_window(app: &AppHandle, relaunched: bool) -> tauri::Result<()> {
     let mut builder = glass::configure(tauri::WebviewWindowBuilder::from_config(
         app,
         &app.config().app.windows[0],
@@ -591,6 +592,9 @@ fn main_window(app: &AppHandle) -> tauri::Result<()> {
     }
     let window = builder.build()?;
     glass::install(&window);
+    if updater::front_at_launch(relaunched, no_focus()) {
+        updater::to_front(&window);
+    }
     dev_eval(app, window);
     Ok(())
 }
@@ -875,6 +879,8 @@ pub fn bindings_language() -> specta_typescript::Typescript {
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    // Read before any thread starts: it clears the mark from the environment.
+    let relaunched = updater::take_relaunch();
     let specta = specta_builder();
     // Debug builds keep the new UI's bindings current, once it exists.
     #[cfg(debug_assertions)]
@@ -946,7 +952,7 @@ pub fn run() {
             specta.mount_events(app);
             app.manage(core.clone());
             app.manage(AppState { core, hooks });
-            main_window(&handle)?;
+            main_window(&handle, relaunched)?;
             menu::install(&handle)?;
             watch_volumes(handle.clone(), gear_core.clone());
             poll_gear(handle, gear_core);

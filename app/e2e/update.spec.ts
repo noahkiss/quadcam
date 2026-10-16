@@ -194,3 +194,28 @@ test("Check for Updates under the version becomes Restart to update on any pane"
   await restart.click();
   await expect.poll(() => app.core<number>("(c) => c.update.restarts")).toBe(1);
 });
+
+for (const scheme of axeSchemes) {
+  test.describe(`${scheme} theme`, () => {
+    test.use({ colorScheme: scheme });
+    test("the sidebar's Restart to update has its fill at rest and Check for Updates' width", async ({ page }) => {
+      await page.evaluate(() => window.__qc!.emit("menu", "settings"));
+      const nav = dialog(page, "Settings").getByRole("navigation", { name: "Settings sections" });
+      const checkBtn = nav.getByRole("button", { name: "Check for Updates" });
+      const width = (b: HTMLElement) => b.offsetWidth;
+      const before = await checkBtn.evaluate(width);
+      await checkBtn.click();
+      const restart = nav.getByRole("button", { name: "Restart to update" });
+      await expect(restart).toBeVisible();
+      // At rest: the pointer away and the hover transition over.
+      await page.mouse.move(0, 0);
+      await page.waitForTimeout(400);
+      const bg = await restart.evaluate((b) => getComputedStyle(b).backgroundColor);
+      expect(bg).not.toMatch(/^(transparent|rgba\(0, 0, 0, 0\))$/);
+      expect(await restart.evaluate(width)).toBe(before);
+      expect(await restart.evaluate((b) => b.scrollWidth <= b.clientWidth)).toBe(true);
+      const r = await new AxeBuilder({ page }).include('nav[aria-label="Settings sections"]').withTags(["wcag2a", "wcag2aa", "wcag21aa"]).analyze();
+      expect(r.violations.map((v) => `${v.id}: ${v.nodes.map((n) => n.target.join(" ")).join(", ")}`)).toEqual([]);
+    });
+  });
+}

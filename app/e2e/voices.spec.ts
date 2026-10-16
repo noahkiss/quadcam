@@ -165,7 +165,7 @@ test("the speech check says why it is unavailable and installs the speech assets
   const row = library(page).getByRole("row", { name: /^Samantha / });
   await expect(row).toContainText("Not checked");
   await packMenu(page, "Samantha", "Check speech");
-  const check = page.getByRole("region", { name: "Speech check" });
+  const check = page.getByRole("dialog", { name: /^Speech check/ });
   await expect(check).toContainText("The speech check is unavailable: The speech assets for en-US are not installed");
   await expect(check.getByRole("button", { name: "Check speech" })).toBeDisabled();
   await check.getByRole("button", { name: "Install speech assets" }).click();
@@ -173,7 +173,7 @@ test("the speech check says why it is unavailable and installs the speech assets
   await expect(check.getByRole("status")).toContainText("The speech assets for en-US are installed.");
   await expect(row).toContainText("Heard right");
   await expect(check.getByRole("table", { name: "Speech check of Samantha" }).getByRole("row", { name: /^Armed/ })).toContainText("Heard right");
-  await check.getByRole("button", { name: "Close" }).click();
+  await check.getByRole("button", { name: "Done" }).click();
   await expect(check).toHaveCount(0);
 });
 
@@ -198,10 +198,10 @@ async function checkedPack(app: AppFixture, page: Page) {
   await app.core(`c => { c.gear.voice.installed.push("${STUDIO}"); c.gear.voice.misheard = "SOUNDS/en/lowbat.wav"; }`);
   await page.getByRole("button", { name: "Refresh packs" }).click();
   await packMenu(page, "Callum", "Check speech");
-  const check = page.getByRole("region", { name: "Speech check" });
+  const check = page.getByRole("dialog", { name: /^Speech check/ });
   await check.getByRole("button", { name: "Check speech" }).click();
   await check.getByRole("button", { name: "Accept what was heard for Battery low" }).click();
-  await check.getByRole("button", { name: "Close" }).click();
+  await check.getByRole("button", { name: "Done" }).click();
 }
 
 test("Publish needs the speech check, reviews every line, and publishes only on Approve", async ({ app, page }) => {
@@ -257,10 +257,11 @@ for (const scheme of axeSchemes) {
       expect(r.violations.map((v) => `${v.id}: ${v.nodes.map((n) => n.target.join(" ") + " " + n.failureSummary).join(", ")}`)).toEqual([]);
       await dialog(page, "Apply Demo to radios").getByRole("button", { name: "Cancel" }).click();
       await packMenu(page, "Demo", "Check speech");
-      await page.getByRole("region", { name: "Speech check" }).getByRole("button", { name: "Check speech" }).click();
+      await page.getByRole("dialog", { name: /^Speech check/ }).getByRole("button", { name: "Check speech" }).click();
       await expect(page.getByRole("table", { name: "Speech check of Demo" })).toBeVisible();
       r = await new AxeBuilder({ page }).withTags(["wcag2a", "wcag2aa", "wcag21aa"]).analyze();
       expect(r.violations.map((v) => `${v.id}: ${v.nodes.map((n) => n.target.join(" ") + " " + n.failureSummary).join(", ")}`)).toEqual([]);
+      await page.getByRole("dialog", { name: /^Speech check/ }).getByRole("button", { name: "Done" }).click();
       await packMenu(page, "Demo", "Delete…");
       await expect(dialog(page, "Delete Demo?")).toBeVisible();
       r = await new AxeBuilder({ page }).withTags(["wcag2a", "wcag2aa", "wcag21aa"]).analyze();

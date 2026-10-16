@@ -1401,13 +1401,17 @@ impl Core {
                     .into_iter()
                     .find(|i| &i.manifest.id == pack)
                     .ok_or_else(|| anyhow!("Pack {pack:?} is not installed."))?;
-                if !inst.manifest.files.contains(&p.line) {
-                    bail!("Pack {pack:?} has no take of {}.", p.line);
-                }
-                (
-                    name(pack),
-                    std::fs::read(Path::new(&inst.dir).join(&p.line))?,
-                )
+                // A line the speech check took out of the pack plays its held take.
+                let file = if inst.manifest.files.contains(&p.line) {
+                    Path::new(&inst.dir).join(&p.line)
+                } else {
+                    let held = self.held_dir(pack).join(&p.line);
+                    if !held.is_file() {
+                        bail!("Pack {pack:?} has no take of {}.", p.line);
+                    }
+                    held
+                };
+                (name(pack), std::fs::read(file)?)
             }
             (None, Some(radio)) => {
                 let o = self

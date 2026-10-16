@@ -115,7 +115,15 @@ function Library({ v, view, sets, models, onCheck, onPublish }: { v: UseVoice; v
       cell: (k) => <PackVoice k={k} sets={sets} models={models} radios={(k.radios ?? []).map(radioName)} />,
     },
     { key: "lines", header: "Lines", numeric: true, cell: (k) => n(k.lines) },
-    { key: "speech", header: "Speech check", cell: (k) => <SpeechBadge pack={k} /> },
+    {
+      key: "speech",
+      header: "Speech check",
+      cell: (k) => (
+        <button type="button" className={styles.badgeButton} aria-label={`Open the speech check of ${k.voice}`} onClick={() => onCheck(k)}>
+          <SpeechBadge pack={k} />
+        </button>
+      ),
+    },
     { key: "size", header: "Size", numeric: true, optional: true, cell: (k) => fmtBytes(k.bytes) },
     { key: "date", header: "Date", optional: true, cell: (k) => <span className={styles.nowrap}>{fmtShort(k.made)}</span> },
     {

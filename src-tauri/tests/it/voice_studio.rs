@@ -2672,6 +2672,92 @@ fn a_flagged_pack_line_shows_on_its_card_and_a_retake_puts_a_new_take_in() {
 }
 
 #[test]
+fn a_line_heard_wrong_plays_its_held_take_and_a_retake_by_name_puts_a_new_take_in() {
+    const LOW: &str = "SOUNDS/en/lowbat.wav";
+    let wrong = Arc::new(std::sync::Mutex::new(vec![LOW.to_string()]));
+    let (b, _helper) = bench_hearing(wrong.clone());
+    let m = "eleven_turbo_v2_5";
+    let r = paid_render(&b, render("Callum", m, &["quad"], false, true));
+    assert!(r.retakes.iter().any(|t| t.path == LOW), "{r:?}");
+    let pack = b.dir.path().join("support/gear/voices").join(&r.pack);
+    // The held take plays, though it is out of the pack.
+    let played = b
+        .core
+        .gear_voice_preview(&quadcam_lib::core::VoicePreviewParams {
+            line: LOW.into(),
+            pack: Some(r.pack.clone()),
+            radio: None,
+        })
+        .unwrap();
+    assert!(std::path::Path::new(&played).is_file());
+    // A line that is neither flagged nor a re-take is refused.
+    let e = b
+        .core
+        .gear_voice_retake(&quadcam_lib::core::RetakeParams {
+            pack: r.pack.clone(),
+            lines: vec!["SOUNDS/en/armed.wav".into()],
+            dry_run: true,
+            ..Default::default()
+        })
+        .unwrap_err();
+    assert!(e.to_string().contains("needs no re-take"), "{e}");
+    // Named, the re-take line needs no flag: a dry run prices it and sends nothing.
+    let posts = b.http.posts();
+    let ask = b
+        .core
+        .gear_voice_retake(&quadcam_lib::core::RetakeParams {
+            pack: r.pack.clone(),
+            lines: vec![LOW.into()],
+            dry_run: true,
+            ..Default::default()
+        })
+        .unwrap();
+    assert_eq!(ask.lines, [LOW]);
+    assert!(
+        ask.dry_run && ask.estimate.as_ref().is_some_and(|e| e.chars > 0),
+        "{ask:?}"
+    );
+    assert_eq!(b.http.posts(), posts);
+    // A confirm without the digest is refused and sends nothing.
+    assert!(b
+        .core
+        .gear_voice_retake(&quadcam_lib::core::RetakeParams {
+            pack: r.pack.clone(),
+            lines: vec![LOW.into()],
+            confirm: true,
+            ..Default::default()
+        })
+        .is_err());
+    assert_eq!(b.http.posts(), posts);
+    // The check hears the new take right: it goes into the pack.
+    wrong.lock().unwrap().clear();
+    let done = b
+        .core
+        .gear_voice_retake(&quadcam_lib::core::RetakeParams {
+            pack: r.pack.clone(),
+            lines: vec![LOW.into()],
+            confirm: true,
+            digest: Some(ask.digest.clone()),
+            ..Default::default()
+        })
+        .unwrap();
+    assert_eq!(done.cleared, [LOW], "{done:?}");
+    assert_eq!(done.seed, ask.seed);
+    assert_eq!(b.http.posts(), posts + 1);
+    assert!(pack.join(LOW).is_file());
+    assert!(!pack.join("flags.json").exists());
+    let k = b
+        .core
+        .gear_voice(&Default::default())
+        .unwrap()
+        .packs
+        .into_iter()
+        .find(|k| k.id == r.pack)
+        .unwrap();
+    assert!(!k.retakes.iter().any(|t| t.path == LOW), "{:?}", k.retakes);
+}
+
+#[test]
 fn the_mcp_tools_list_flags_and_retake_only_with_confirm() {
     let b = bench(50000, true);
     let m = "eleven_turbo_v2_5";

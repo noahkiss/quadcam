@@ -158,11 +158,11 @@ function Version() {
         <>
           <p>QuadCam {offer.version} is available.</p>
           <div className={styles.versionActions}>
-            <RestartToUpdate u={offer} />
+            <RestartToUpdate u={offer} className={styles.versionButton} />
           </div>
         </>
       ) : (
-        <Button size="sm" onClick={() => void checkForUpdates()} disabled={update?.phase === "checking"}>
+        <Button size="sm" className={styles.versionButton} onClick={() => void checkForUpdates()} disabled={update?.phase === "checking"}>
           Check for Updates
         </Button>
       )}

@@ -259,5 +259,117 @@ pub async fn update_restart(app: AppHandle, core: State<'_, Arc<Core>>) -> Resul
         core.set_update(|s| s.error = Some(msg.clone()));
         return Err(msg);
     }
+    prepare_relaunch(&app);
     app.restart();
+}
+
+/// Marks the process the restart starts as an update relaunch. Tauri's restart spawns the new
+/// binary with this process's environment.
+const RELAUNCH: &str = "QUADCAM_UPDATE_RELAUNCH";
+
+/// Right before Restart to update restarts: marks the new process, and (macOS 14 and later)
+/// lets it take activation from this one, which the person's click made the active app.
+fn prepare_relaunch<R: Runtime>(app: &AppHandle<R>) {
+    std::env::set_var(RELAUNCH, "1");
+    let (tx, rx) = std::sync::mpsc::channel();
+    let ran = app.run_on_main_thread(move || {
+        yield_activation();
+        let _ = tx.send(());
+    });
+    if ran.is_ok() {
+        let _ = rx.recv_timeout(Duration::from_secs(1));
+    }
+}
+
+/// True in the process Restart to update started. Clears the mark, so nothing this process
+/// starts inherits it. Call it once, at launch, before other threads start.
+pub fn take_relaunch() -> bool {
+    let set = std::env::var_os(RELAUNCH).is_some();
+    std::env::remove_var(RELAUNCH);
+    set
+}
+
+/// Whether the new window comes to the front at launch: only after an update relaunch the
+/// person started, and never in a `QUADCAM_NO_FOCUS` run.
+pub fn front_at_launch(relaunched: bool, no_focus: bool) -> bool {
+    relaunched && !no_focus
+}
+
+/// Brings the app and its window to the front. Runs on the main thread (`setup`).
+pub fn to_front<R: Runtime>(window: &tauri::WebviewWindow<R>) {
+    let _ = window.unminimize();
+    let _ = window.show();
+    activate();
+    let _ = window.set_focus();
+}
+
+#[cfg(target_os = "macos")]
+fn ns_app() -> *mut objc2::runtime::AnyObject {
+    use objc2::{class, msg_send};
+    unsafe { msg_send![class!(NSApplication), sharedApplication] }
+}
+
+/// Makes this app the active one: `activate` on macOS 14 and later, else
+/// `activateIgnoringOtherApps:`.
+#[cfg(target_os = "macos")]
+fn activate() {
+    use objc2::{msg_send, sel};
+    let app = ns_app();
+    if app.is_null() {
+        return;
+    }
+    unsafe {
+        let modern: bool = msg_send![app, respondsToSelector: sel!(activate)];
+        if modern {
+            let _: () = msg_send![app, activate];
+        } else {
+            let _: () = msg_send![app, activateIgnoringOtherApps: true];
+        }
+    }
+}
+
+/// macOS 14 and later: an app may take activation only when the active app yields it. This
+/// yields it to the next process with this app's bundle identifier.
+#[cfg(target_os = "macos")]
+fn yield_activation() {
+    use objc2::{msg_send, sel};
+    use objc2_foundation::NSBundle;
+    let app = ns_app();
+    if app.is_null() {
+        return;
+    }
+    let Some(id) = NSBundle::mainBundle().bundleIdentifier() else {
+        return;
+    };
+    unsafe {
+        let can: bool = msg_send![app, respondsToSelector: sel!(yieldActivationToApplicationWithBundleIdentifier:)];
+        if can {
+            let _: () = msg_send![app, yieldActivationToApplicationWithBundleIdentifier: &*id];
+        }
+    }
+}
+
+#[cfg(not(target_os = "macos"))]
+fn activate() {}
+
+#[cfg(not(target_os = "macos"))]
+fn yield_activation() {}
+
+#[cfg(test)]
+mod tests {
+    use super::front_at_launch;
+
+    #[test]
+    fn only_an_update_relaunch_comes_to_the_front() {
+        assert!(front_at_launch(true, false));
+        assert!(
+            !front_at_launch(true, true),
+            "QUADCAM_NO_FOCUS stays behind"
+        );
+        assert!(
+            !front_at_launch(false, false),
+            "a plain launch never takes focus"
+        );
+        assert!(!front_at_launch(false, true));
+    }
 }

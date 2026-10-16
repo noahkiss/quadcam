@@ -6005,7 +6005,7 @@ export type Retake = {
 export type RetakeParams = {
 	sample?: string,
 	pack?: string,
-	/**  Flagged card paths; empty for every flagged line. */
+	/**  Flagged card paths, or a pack's re-take lines (`retakes`); empty for every flagged line. */
 	lines?: string[],
 	dry_run?: boolean,
 	confirm?: boolean,
