@@ -44,6 +44,9 @@ export interface GearPageSlot {
   count?: (s: import("../../store").State) => number;
   /** A word the sidebar shows beside the label instead of the count ("Out of date"). */
   badge?: (s: import("../../store").State) => string | null;
+  /** A section of another page (its id), reached through that page's segments: the sidebar
+   *  does not list it, and marks that page while it shows. */
+  under?: string;
   render: () => ReactNode;
 }
 

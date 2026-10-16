@@ -1,10 +1,14 @@
 // Gear > Sim (sim design 9.2): pick an aircraft and fly it in the plain room with the radio. The
 // core runs the physics on its own thread and feeds it the radio (`core/sim_host.rs`); this page
 // draws what the core says (`lib/simhost.ts`, `Stage.tsx`). Settings save as they change.
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import { Banner } from "../../../components/Banner";
 import { Button } from "../../../components/Button";
+import { Select } from "../../../components/Field";
 import { Popover } from "../../../components/Popover";
+import { SegmentedControl } from "../../../components/SegmentedControl";
+import { Disclosure } from "../../../components/dash/Disclosure";
+import { PageHeader } from "../../../components/dash/PageHeader";
 import { api, errText } from "../../../ipc/api";
 import type { Calibration, SimPreset, SimStartInfo, SimUiSettings } from "../../../ipc/types";
 import type { PerfSummary } from "../../../lib/simhost";
@@ -30,7 +34,9 @@ function resolve(s: SimUiSettings, camera: SimStartInfo["camera"] | null): SimVi
 
 const ms = (x: number) => `${x.toFixed(1)} ms`;
 
-export function SimPage() {
+/** The Fly section: Fly or Stop and Reset, the aircraft, the view and the settings in the
+ *  header; the stage at its picture shape; the timing as one line with its detail folded. */
+export function SimPage({ tabs }: { tabs?: ReactNode }) {
   const saved = useStore((s) => s.values.simSettings) ?? NONE;
   const saveSetting = useStore((s) => s.saveSetting);
   const openGear = useStore((s) => s.openGear);
@@ -84,37 +90,63 @@ export function SimPage() {
 
   return (
     <div className={styles.page} data-component="sim">
-      <div className={styles.head}>
-        <h2 className={styles.title}>Sim</h2>
-        {run ? (
+      <PageHeader
+        title="Sim"
+        actions={
           <>
-            <Button icon="restart" onClick={() => void api.simReset().catch((e) => setError(errText(e)))}>
-              Reset
-            </Button>
-            <Button variant="secondary" icon="pause" onClick={() => void stop()}>
-              Stop
-            </Button>
-          </>
-        ) : (
-          <Button variant="primary" icon="play" onClick={() => void fly()} disabled={!presets.length}>
-            Fly
-          </Button>
-        )}
-        <span className={styles.anchor}>
-          <Button ref={gear} icon="sliders" aria-label="Sim settings" aria-expanded={open} aria-haspopup="dialog" onClick={() => setOpen((o) => !o)} />
-          {open && (
-            <Popover label="Sim settings" anchor={gear} onClose={() => setOpen(false)}>
-              <SimSettings
-                presets={presets}
-                profile={profile}
-                ui={ui}
-                profileCamera={run ? { uptiltDeg: run.camera.uptilt_deg, fovDeg: run.camera.fov_deg, aspect: run.camera.aspect } : null}
-                onChange={change}
+            <span className={styles.wideOnly}>
+              <Select aria-label="Aircraft" value={profile} onChange={(e) => change({ profile: e.target.value })}>
+                {presets.map((p) => (
+                  <option key={p.id} value={p.id}>
+                    {p.label}
+                  </option>
+                ))}
+              </Select>
+            </span>
+            <span className={styles.wideOnly}>
+              <SegmentedControl
+                label="View"
+                size="sm"
+                value={ui.view}
+                onChange={(view) => change({ view })}
+                segments={[
+                  { value: "fpv", label: "FPV" },
+                  { value: "chase", label: "Chase" },
+                ]}
               />
-            </Popover>
-          )}
-        </span>
-      </div>
+            </span>
+            <span className={styles.anchor}>
+              <Button ref={gear} icon="sliders" aria-label="Sim settings" aria-expanded={open} aria-haspopup="dialog" onClick={() => setOpen((o) => !o)} />
+              {open && (
+                <Popover label="Sim settings" anchor={gear} onClose={() => setOpen(false)}>
+                  <SimSettings
+                    presets={presets}
+                    profile={profile}
+                    ui={ui}
+                    profileCamera={run ? { uptiltDeg: run.camera.uptilt_deg, fovDeg: run.camera.fov_deg, aspect: run.camera.aspect } : null}
+                    onChange={change}
+                  />
+                </Popover>
+              )}
+            </span>
+            {run ? (
+              <>
+                <Button icon="restart" onClick={() => void api.simReset().catch((e) => setError(errText(e)))}>
+                  Reset
+                </Button>
+                <Button variant="secondary" icon="pause" onClick={() => void stop()}>
+                  Stop
+                </Button>
+              </>
+            ) : (
+              <Button variant="primary" icon="play" onClick={() => void fly()} disabled={!presets.length}>
+                Fly
+              </Button>
+            )}
+          </>
+        }
+      />
+      {tabs}
 
       {error && (
         <Banner kind="error" icon="danger-triangle" tint="red">
@@ -127,7 +159,7 @@ export function SimPage() {
           icon="radio"
           action={
             <Button size="sm" onClick={() => openGear({ page: "slot", id: "sim-radio" })}>
-              Open Sim radio
+              Open Radio
             </Button>
           }
         >
@@ -139,13 +171,15 @@ export function SimPage() {
         <Stage key={run.host_ns} info={run} ui={ui} onStopped={(why) => (setError(`The sim stopped: ${why}`), setRun(null))} onStats={setStats} />
       ) : (
         <p className={styles.note}>
-          Fly the plain room with your radio in USB Joystick mode. Arm with the switch you set in Sim radio, with the throttle down.{radioNote ? ` Radio: ${radioNote}.` : ""}
+          Fly the plain room with your radio in USB Joystick mode. Arm with the switch you set in Radio, with the throttle down.{radioNote ? ` Radio: ${radioNote}.` : ""}
         </p>
       )}
       {run && stats && stats.frames > 1 && (
-        <p className={styles.stats} role="status" aria-label="Timing">
-          Frame {ms(stats.p50)}, 99th {ms(stats.p99)}, longest {ms(stats.max)} · Radio to picture {ms(stats.inputP50)}, 95th {ms(stats.inputP95)}
-        </p>
+        <Disclosure summary={<span className={styles.stats}>Frame {ms(stats.p50)} · Radio to picture {ms(stats.inputP50)}</span>}>
+          <p className={styles.stats} role="status" aria-label="Timing">
+            Frame {ms(stats.p50)}, 99th {ms(stats.p99)}, longest {ms(stats.max)} · Radio to picture {ms(stats.inputP50)}, 95th {ms(stats.inputP95)}
+          </p>
+        </Disclosure>
       )}
     </div>
   );

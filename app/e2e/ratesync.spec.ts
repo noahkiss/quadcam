@@ -125,8 +125,10 @@ test("a synced sim can be restored from its backup through the sheet", async ({ 
   await page.getByRole("group", { name: "Sections" }).getByRole("button", { name: "Rates" }).click();
   await profiles(page).getByRole("button", { name: "1 RACE" }).click();
   const sims = page.getByRole("region", { name: "Sims" });
-  // No backup yet: no Restore.
-  await expect(sims.getByRole("button", { name: /^Restore Uncrashed/ })).toHaveCount(0);
+  // No backup yet: no Restore in the sim's menu.
+  await sims.getByRole("button", { name: "More actions for Uncrashed" }).click();
+  await expect(page.getByRole("menuitem", { name: "Restore…" })).toHaveCount(0);
+  await page.keyboard.press("Escape");
 
   await sims.getByRole("button", { name: "Sync 1 RACE into Uncrashed FREE" }).click();
   const sync = page.getByRole("dialog", { name: "Apply to sims" });
@@ -135,7 +137,8 @@ test("a synced sim can be restored from its backup through the sheet", async ({ 
   await sync.getByRole("button", { name: "Done" }).click();
 
   await expect(sims.getByText(/^Backed up /).first()).toBeVisible();
-  await sims.getByRole("button", { name: "Restore Uncrashed from its backup" }).click();
+  await sims.getByRole("button", { name: "More actions for Uncrashed" }).click();
+  await page.getByRole("menuitem", { name: "Restore…" }).click();
   const sheet = page.getByRole("dialog", { name: "Apply to sims" });
   await expect(sheet.getByRole("heading", { name: "Restore a sim backup" })).toBeVisible();
   await expect(sheet.getByRole("region", { name: "Checks" })).toContainText("Backup found");

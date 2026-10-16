@@ -104,8 +104,8 @@ export function Stage({ info, ui, onStopped, onStats }: Props) {
   }, [ui.view, ui.uptiltDeg, ui.fovDeg, aspect]);
 
   return (
-    <div className={styles.stage}>
-      <div ref={picture} className={styles.picture} style={{ "--ar": aspect } as CSSProperties}>
+    <div className={styles.stage} style={{ "--ar": aspect } as CSSProperties}>
+      <div ref={picture} className={styles.picture}>
         <canvas ref={canvas} className={styles.canvas} aria-label="Sim view" data-view={ui.view} />
         <p ref={glMessage} className={styles.empty} role="alert" hidden />
         {ui.osd && hud && <Osd hud={hud} seconds={seconds} radio={radio} />}

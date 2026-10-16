@@ -1,13 +1,14 @@
 // The sim's radio calibration (sim design 7.3): which radio the joystick is, what QuadCam
 // suggests from the aircraft's radio model and quad modes, the guided steps (move, let go,
-// arm switch, reset control), and the review with each axis' channel, ends, deadzone and
-// Reverse. The core runs the session (`gear_sim_calibrate`) on every radio report and sends
+// arm switch, reset control), and the review with each axis' channel, direction, ends and
+// deadzone. The core runs the session (`gear_sim_calibrate`) on every radio report and sends
 // `sim-calibration-event` at most once per frame.
-import { useEffect, useState } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { Banner } from "../../../components/Banner";
 import { Button } from "../../../components/Button";
 import { Sticks, StickModePicker } from "../../../components/gear/Sticks";
 import { DataTable } from "../../../components/dash/DataTable";
+import { Disclosure } from "../../../components/dash/Disclosure";
 import { PageHeader } from "../../../components/dash/PageHeader";
 import { SectionCard } from "../../../components/dash/SectionCard";
 import { api, errText } from "../../../ipc/api";
@@ -25,7 +26,9 @@ const TARGETS: CaptureTarget[] = ["arm", "reset", "turtle", "angle", "horizon", 
 const calibrate = (p: Partial<CalibrateParams> & Pick<CalibrateParams, "action">) =>
   api.gearSimCalibrate({ calibration: null, quick: false, arm_known: false, review: false, target: null, ...p });
 
-export function CalibrationPage() {
+/** The Radio section: the radio link in the header; Calibrate (the sticks, the current step,
+ *  the coverage, and the axes behind a disclosure) beside Switches. */
+export function CalibrationPage({ tabs }: { tabs?: ReactNode }) {
   const profiles = useStore(sel.profiles);
   const devices = useStore((s) => s.devices);
   const mode = useStore(sel.stickMode);
@@ -138,135 +141,145 @@ export function CalibrationPage() {
   return (
     <div className={styles.page} data-component="sim-calibration">
       <PageHeader
-        title="Sim radio"
+        title="Sim"
         subtitle={
           <span role="status" aria-label="Radio">
             {res ? `${res.product}: ${res.how}` : error ? "" : "Looking for the radio…"}
           </span>
         }
+        actions={
+          res &&
+          (res.radio == null || res.provisional) && (
+            <label className={styles.row}>
+              <span>{res.radio == null ? "Which radio is this?" : "Link to a saved radio"}</span>
+              <select aria-label="Radio" value={radio ?? ""} onChange={(e) => setRadio(e.target.value || (res.radio ?? null))}>
+                <option value="">{res.radio == null ? "Choose…" : "Not linked"}</option>
+                {choices.map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {c.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+          )
+        }
       />
+      {tabs}
       {error && (
         <Banner kind="error" icon="danger-triangle" tint="red">
           {error}
         </Banner>
       )}
 
-      {res && (res.radio == null || res.provisional) && (
-        <label className={styles.row}>
-          <span>{res.radio == null ? "Which radio is this?" : "Link to a saved radio"}</span>
-          <select aria-label="Radio" value={radio ?? ""} onChange={(e) => setRadio(e.target.value || (res.radio ?? null))}>
-            <option value="">{res.radio == null ? "Choose…" : "Not linked"}</option>
-            {choices.map((c) => (
-              <option key={c.id} value={c.id}>
-                {c.name}
-              </option>
-            ))}
-          </select>
-        </label>
-      )}
-
-      <SectionCard
-        title="Switches"
-        actions={
-          <label className={styles.row}>
-            <span>Aircraft</span>
-            <select aria-label="Aircraft" value={aircraft} onChange={(e) => setAircraft(e.target.value)}>
-              <option value="">None</option>
-              {profiles.map((p) => (
-                <option key={p.name} value={p.name}>
-                  {p.name}
-                </option>
-              ))}
-            </select>
-          </label>
-        }
-      >
-        {defaults && (
-          <>
-            <p className={styles.sticks}>
-              Sticks: roll CH{cal?.roll.ch ?? defaults.map.roll}, pitch CH{cal?.pitch.ch ?? defaults.map.pitch}, throttle CH{cal?.throttle.ch ?? defaults.map.throttle}, yaw CH
-              {cal?.yaw.ch ?? defaults.map.yaw} <span className={styles.source}>(from {defaults.map.source})</span>
-            </p>
-            <DataTable
-              label="Switches"
-              compact
-              rows={TARGETS}
-              rowKey={(t) => t}
-              columns={[
-                { key: "action", header: "Action", rowHeader: true, width: "9rem", cell: (t) => TARGET_TEXT[t] },
-                { key: "switch", header: "Switch", cell: (t) => <Suggestion target={t} current={cal?.[t] ?? null} suggested={defaults[t] ?? null} /> },
-                {
-                  key: "change",
-                  header: <span className="visually-hidden">Change</span>,
-                  width: "6rem",
-                  cell: (t) => (
-                    <Button size="sm" disabled={view?.phase !== "review"} onClick={() => act({ action: "capture", target: t })} aria-label={`Change ${TARGET_TEXT[t]}`}>
-                      Change
+      <div className={styles.duo}>
+        <SectionCard title="Calibrate" actions={<StickModePicker mode={mode} onChange={setMode} />}>
+          <Sticks values={sticksOf(view)} mode={mode} />
+          {view && (
+            <>
+              <p className={styles.step} role="status" aria-label="Step">
+                {stepText(view.phase, view.quick, view.target)}
+              </p>
+              {view.phase === "move" && (
+                <ul className={styles.coverage} aria-label="Coverage">
+                  {STICK_FNS.map((f) => (
+                    <li key={f}>
+                      <span>{FN_TEXT[f]}</span>
+                      <span className={styles.meter} role="meter" aria-label={FN_TEXT[f]} aria-valuemin={0} aria-valuemax={100} aria-valuenow={view.coverage[f]}>
+                        <span className={styles.fill} style={{ width: `${view.coverage[f]}%` }} />
+                      </span>
+                      <span className={styles.num}>{view.coverage[f]}%</span>
+                    </li>
+                  ))}
+                </ul>
+              )}
+              {view.message && <p className={styles.note}>{view.message}</p>}
+              <div className={styles.bar}>
+                {view.phase === "move" && <Button onClick={() => act({ action: "advance" })}>Done</Button>}
+                {view.phase === "let_go" && <Button onClick={() => act({ action: "advance" })}>Next</Button>}
+                {view.phase === "arm" && <Button onClick={() => act({ action: "skip" })}>No arm switch</Button>}
+                {view.phase === "reset" && (
+                  <>
+                    {cal?.reset && <Button onClick={() => act({ action: "advance" })}>Keep {controlText(cal.reset)}</Button>}
+                    <Button onClick={() => act({ action: "skip" })}>No reset control</Button>
+                  </>
+                )}
+                {view.phase === "capture" && (
+                  <>
+                    <Button onClick={() => act({ action: "advance" })}>Cancel</Button>
+                    <Button onClick={() => act({ action: "skip" })}>Clear</Button>
+                  </>
+                )}
+                {view.phase === "review" && (
+                  <>
+                    <Button variant="primary" disabled={!radio} onClick={() => void save()}>
+                      Save
                     </Button>
-                  ),
-                },
-              ]}
-            />
-          </>
-        )}
-        {defaults?.notes.map((n) => (
-          <p key={n} className={styles.note}>
-            {n}
-          </p>
-        ))}
-      </SectionCard>
-
-      <SectionCard title="Calibrate" actions={<StickModePicker mode={mode} onChange={setMode} />}>
-        <Sticks values={sticksOf(view)} mode={mode} />
-        {view && (
-          <>
-            <p className={styles.step} role="status" aria-label="Step">
-              {stepText(view.phase, view.quick, view.target)}
-            </p>
-            {view.phase === "move" && (
-              <ul className={styles.coverage} aria-label="Coverage">
-                {STICK_FNS.map((f) => (
-                  <li key={f}>
-                    <span>{FN_TEXT[f]}</span>
-                    <span className={styles.meter} role="meter" aria-label={FN_TEXT[f]} aria-valuemin={0} aria-valuemax={100} aria-valuenow={view.coverage[f]}>
-                      <span className={styles.fill} style={{ width: `${view.coverage[f]}%` }} />
-                    </span>
-                    <span className={styles.num}>{view.coverage[f]}%</span>
-                  </li>
+                    <Button onClick={() => act({ action: "recalibrate" })}>Recalibrate</Button>
+                    {saved && <span role="status">Saved</span>}
+                  </>
+                )}
+              </div>
+              {cal && (
+                <Disclosure key={view.phase === "review" ? "review" : "steps"} summary="Axes" defaultOpen={view.phase === "review"}>
+                  <div className={styles.axes}>
+                  <AxisTable cal={cal} onAxis={setAxis} />
+                </div>
+                </Disclosure>
+              )}
+            </>
+          )}
+        </SectionCard>
+        <SectionCard
+          title="Switches"
+          actions={
+            <label className={styles.row}>
+              <span>Aircraft</span>
+              <select aria-label="Aircraft" value={aircraft} onChange={(e) => setAircraft(e.target.value)}>
+                <option value="">None</option>
+                {profiles.map((p) => (
+                  <option key={p.name} value={p.name}>
+                    {p.name}
+                  </option>
                 ))}
-              </ul>
-            )}
-            {view.message && <p className={styles.note}>{view.message}</p>}
-            <div className={styles.bar}>
-              {view.phase === "move" && <Button onClick={() => act({ action: "advance" })}>Done</Button>}
-              {view.phase === "let_go" && <Button onClick={() => act({ action: "advance" })}>Next</Button>}
-              {view.phase === "arm" && <Button onClick={() => act({ action: "skip" })}>No arm switch</Button>}
-              {view.phase === "reset" && (
-                <>
-                  {cal?.reset && <Button onClick={() => act({ action: "advance" })}>Keep {controlText(cal.reset)}</Button>}
-                  <Button onClick={() => act({ action: "skip" })}>No reset control</Button>
-                </>
-              )}
-              {view.phase === "capture" && (
-                <>
-                  <Button onClick={() => act({ action: "advance" })}>Cancel</Button>
-                  <Button onClick={() => act({ action: "skip" })}>Clear</Button>
-                </>
-              )}
-              {view.phase === "review" && (
-                <>
-                  <Button variant="primary" disabled={!radio} onClick={() => void save()}>
-                    Save
-                  </Button>
-                  <Button onClick={() => act({ action: "recalibrate" })}>Recalibrate</Button>
-                  {saved && <span role="status">Saved</span>}
-                </>
-              )}
-            </div>
-            {view.phase === "review" && cal && <AxisTable cal={cal} onAxis={setAxis} />}
-          </>
-        )}
-      </SectionCard>
+              </select>
+            </label>
+          }
+        >
+          {defaults && (
+            <>
+              <p className={styles.sticks}>
+                Sticks: roll CH{cal?.roll.ch ?? defaults.map.roll}, pitch CH{cal?.pitch.ch ?? defaults.map.pitch}, throttle CH{cal?.throttle.ch ?? defaults.map.throttle}, yaw CH
+                {cal?.yaw.ch ?? defaults.map.yaw} <span className={styles.source}>(from {defaults.map.source})</span>
+              </p>
+              <DataTable
+                label="Switches"
+                compact
+                rows={TARGETS}
+                rowKey={(t) => t}
+                columns={[
+                  { key: "action", header: "Action", rowHeader: true, width: "9rem", cell: (t) => TARGET_TEXT[t] },
+                  { key: "switch", header: "Switch", cell: (t) => <Suggestion target={t} current={cal?.[t] ?? null} suggested={defaults[t] ?? null} /> },
+                  {
+                    key: "change",
+                    header: <span className="visually-hidden">Change</span>,
+                    width: "6rem",
+                    cell: (t) => (
+                      <Button size="sm" disabled={view?.phase !== "review"} onClick={() => act({ action: "capture", target: t })} aria-label={`Change ${TARGET_TEXT[t]}`}>
+                        Change
+                      </Button>
+                    ),
+                  },
+                ]}
+              />
+            </>
+          )}
+          {defaults?.notes.map((n) => (
+            <p key={n} className={styles.note}>
+              {n}
+            </p>
+          ))}
+        </SectionCard>
+      </div>
     </div>
   );
 }
@@ -294,7 +307,7 @@ function AxisTable({ cal, onAxis }: { cal: Calibration; onAxis: (f: StickFn, a: 
         <tr>
           <th>Axis</th>
           <th>Channel</th>
-          <th>Reverse</th>
+          <th>Direction</th>
           <th>Ends</th>
           <th>Deadzone</th>
         </tr>
@@ -316,7 +329,10 @@ function AxisTable({ cal, onAxis }: { cal: Calibration; onAxis: (f: StickFn, a: 
                 </select>
               </td>
               <td>
-                <input type="checkbox" aria-label={`${FN_TEXT[f]} reverse`} checked={rev} onChange={(e) => onAxis(f, { reverse: e.target.checked })} />
+                <select aria-label={`${FN_TEXT[f]} direction`} value={rev ? "reversed" : "normal"} onChange={(e) => onAxis(f, { reverse: e.target.value === "reversed" })}>
+                  <option value="normal">Normal</option>
+                  <option value="reversed">Reversed</option>
+                </select>
               </td>
               <td className={styles.ends}>
                 {(["low", "high"] as const).map((end) => {

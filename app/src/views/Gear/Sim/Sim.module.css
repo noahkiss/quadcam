@@ -36,7 +36,6 @@
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: var(--s-2) var(--s-6);
-  max-width: 640px;
 }
 .coverage li {
   display: flex;
@@ -87,4 +86,44 @@
 }
 .table input[type="number"] {
   width: 80px;
+}
+/* Calibrate beside Switches once each has 420 px; Calibrate first when they stack. */
+.duo {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(420px, 100%), 1fr));
+  gap: var(--s-4);
+  align-items: start;
+}
+/* A narrow axis table stacks per axis: the name and channel, the direction, then the two
+   ends side by side. */
+@container content (max-width: 600px) {
+  .table,
+  .table tbody,
+  .table tr {
+    display: block;
+  }
+  .table thead {
+    display: none;
+  }
+  .table tr {
+    padding: var(--s-2) 0;
+    border-bottom: 1px solid var(--border);
+  }
+  .table th,
+  .table td {
+    display: inline-flex;
+    align-items: center;
+    padding: 0 var(--s-3) var(--s-1) 0;
+  }
+  .table td.ends {
+    display: flex;
+  }
+}
+/* The section switch keeps its own width. */
+.page > [role="group"] {
+  align-self: flex-start;
+}
+.axes {
+  overflow-x: auto;
+  min-width: 0;
 }

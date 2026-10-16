@@ -1,11 +1,12 @@
-// Gear > Sims (design 2.1, 6.6): every sim on this Mac against one quad's rate profile in use,
-// with Sync and Restore backup per sim. The sidebar badge "Out of date" counts the sims whose
-// rates differ from the quad the status names (the saved FC seen last that has a backup).
-import { useEffect, useRef, useState } from "react";
+// Gear > Sim > Rates (design 2.1, 6.6): every sim on this Mac against one quad's rate profile
+// in use, with Sync and Restore backup per sim. The sidebar badge "Out of date" counts the
+// sims whose rates differ from the quad the status names (the saved FC seen last that has a
+// backup).
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { Banner } from "../../../components/Banner";
 import { EmptyState } from "../../../components/dash/EmptyState";
 import { PageHeader } from "../../../components/dash/PageHeader";
-import { Stat, StatRow } from "../../../components/dash/StatRow";
+import { SummaryLine } from "../../../components/dash/SummaryLine";
 import { api, errText } from "../../../ipc/api";
 import type { RateProfile, SimRates } from "../../../ipc/types";
 import { profileLabel } from "../../../lib/rates";
@@ -13,7 +14,7 @@ import { useStore } from "../../../store";
 import { SimTable } from "./SimTable";
 import styles from "./Sims.module.css";
 
-export function SimsPage() {
+export function SimsPage({ tabs }: { tabs?: ReactNode }) {
   const devices = useStore((s) => s.devices);
   const preferred = useStore((s) => s.gear?.sims_quad ?? null);
   const quads = devices.filter((d) => d.kind === "fc" && d.last_backup);
@@ -64,8 +65,20 @@ export function SimsPage() {
     <>
       <PageHeader
         id="sims-title"
-        title="Sims"
-        subtitle={quad && profile ? `Compared with ${quad.name || quad.id} · ${profileLabel(profile)}` : undefined}
+        title="Sim"
+        subtitle={
+          quad &&
+          profile && (
+            <SummaryLine
+              parts={[
+                `${found} ${found === 1 ? "sim" : "sims"} found`,
+                late > 0 && { text: `${late} out of date`, tone: "warn" },
+                running > 0 && `${running} running`,
+                `Compared with ${quad.name || quad.id} · ${profileLabel(profile)}`,
+              ]}
+            />
+          )
+        }
         actions={
           quad &&
           quads.length > 1 && (
@@ -82,11 +95,7 @@ export function SimsPage() {
           )
         }
       />
-      <StatRow label="Sims summary">
-        <Stat label="Sims found" value={quad && profile ? found : "—"} />
-        <Stat label="Out of date" value={quad && profile ? late : "—"} tone={late > 0 ? "warn" : undefined} />
-        <Stat label="Running" value={quad && profile ? running : "—"} />
-      </StatRow>
+      {tabs}
       {!quad && <EmptyState icon="play">No quad to compare with. Back up a flight controller first.</EmptyState>}
       {error && (
         <Banner kind="error" icon="danger-triangle" tint="red">

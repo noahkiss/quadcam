@@ -12,13 +12,13 @@ const side = (page: Page) => page.getByRole("navigation", { name: "Library" });
 async function openSim(app: AppFixture, page: Page) {
   await app.open("library", { settings: { simPreview: true } });
   await app.core(`c => c.radioFrame(${JSON.stringify(REST)})`);
-  await side(page).getByRole("button", { name: /^Sim$/ }).click();
+  await side(page).getByRole("button", { name: /^Sim( |$)/ }).click();
   await expect(page.getByRole("heading", { name: "Sim", exact: true })).toBeVisible();
 }
 
 async function fly(app: AppFixture, page: Page) {
   await openSim(app, page);
-  await page.getByRole("button", { name: "Fly" }).click();
+  await page.locator("[data-component=page-header]").getByRole("button", { name: "Fly" }).click();
   await expect(page.getByLabel("Sim view")).toBeVisible();
 }
 
@@ -26,17 +26,19 @@ const box = async (l: Locator) => (await l.boundingBox())!;
 const overlap = (a: { x: number; y: number; width: number; height: number }, b: { x: number; y: number; width: number; height: number }) =>
   a.x < b.x + b.width && b.x < a.x + a.width && a.y < b.y + b.height && b.y < a.y + a.height;
 
-test("the Sim page is hidden until the preview setting is on", async ({ app, page }) => {
+test("the Sim page's Fly section is hidden until the preview setting is on", async ({ app, page }) => {
   await app.open();
-  await expect(side(page).getByRole("button", { name: /^Sim radio/ })).toBeVisible();
-  await expect(side(page).getByRole("button", { name: /^Sim$/ })).toHaveCount(0);
+  await side(page).getByRole("button", { name: /^Sim( |$)/ }).click();
+  const sections = page.getByRole("group", { name: "Sim sections" });
+  await expect(sections.getByRole("button", { name: "Rates" })).toHaveAttribute("aria-pressed", "true");
+  await expect(sections.getByRole("button", { name: "Fly" })).toHaveCount(0);
   // Settings > Gear turns it on.
   await page.getByRole("button", { name: "Settings" }).click();
   const dlg = page.getByRole("dialog").filter({ has: page.getByRole("heading", { name: "Settings" }) });
   await dlg.getByRole("navigation", { name: "Settings sections" }).getByRole("button", { name: "Gear" }).click();
   await dlg.getByLabel("Show the Sim page").check();
   await dlg.getByRole("button", { name: "Done" }).click();
-  await expect(side(page).getByRole("button", { name: /^Sim$/ })).toBeVisible();
+  await expect(sections.getByRole("button", { name: "Fly" })).toBeVisible();
   const sets = (await app.method("settings_set")).map((p) => (p as { values: Record<string, unknown> }).values);
   expect(sets.some((v) => v.simPreview === true)).toBe(true);
 });
@@ -141,7 +143,7 @@ test("Reset and Stop reach the core, and Stop returns to the start screen", asyn
   await expect.poll(async () => (await app.calls("sim_reset")).length).toBe(1);
   await page.getByRole("button", { name: "Stop" }).click();
   await expect(page.getByLabel("Sim view")).toHaveCount(0);
-  await expect(page.getByRole("button", { name: "Fly" })).toBeVisible();
+  await expect(page.locator("[data-component=page-header]").getByRole("button", { name: "Fly" })).toBeVisible();
   expect((await app.calls("sim_stop")).length).toBeGreaterThan(0);
 });
 

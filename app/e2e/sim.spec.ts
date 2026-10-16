@@ -11,8 +11,9 @@ const side = (page: Page) => page.getByRole("navigation", { name: "Library" });
 async function openSim(app: AppFixture, page: Page) {
   await app.open();
   await app.core(`c => c.radioFrame(${JSON.stringify(REST)})`);
-  await side(page).getByRole("button", { name: /^Sim radio/ }).click();
-  await expect(page.getByRole("heading", { name: "Sim radio" })).toBeVisible();
+  await side(page).getByRole("button", { name: /^Sim( |$)/ }).click();
+  await page.getByRole("group", { name: "Sim sections" }).getByRole("button", { name: "Radio" }).click();
+  await expect(page.getByRole("heading", { name: "Sim", exact: true })).toBeVisible();
 }
 
 const step = (page: Page) => page.getByRole("status", { name: "Step" });
@@ -49,7 +50,7 @@ test("a known radio model gets the short check, suggestions show their source, a
   const axes = page.getByRole("table", { name: "Axes" });
   await axes.getByRole("spinbutton", { name: "Pitch Forward end" }).fill("1900");
   await expect(axes.getByRole("row", { name: /Pitch/ })).toContainText("(edited)");
-  await axes.getByRole("checkbox", { name: "Pitch reverse" }).check();
+  await axes.getByLabel("Pitch direction").selectOption("reversed");
   await expect(axes.getByRole("spinbutton", { name: "Pitch Back end" })).toHaveValue("1900");
   await page.getByRole("button", { name: "Save" }).click();
   const saved = (await app.method("gear_sim_calibration_save")).at(-1) as { radio: string; calibration: { pitch: { edited_high: number; reverse: boolean } } };

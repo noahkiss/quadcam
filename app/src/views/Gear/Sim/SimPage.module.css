@@ -3,18 +3,6 @@
   flex-direction: column;
   gap: var(--s-4);
 }
-.head {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: var(--s-3);
-}
-.title {
-  margin: 0;
-  margin-right: auto;
-  font-size: var(--t-xl);
-  font-weight: 700;
-}
 .aircraft {
   display: flex;
   align-items: center;
@@ -22,6 +10,13 @@
 }
 .anchor {
   position: relative;
+}
+/* The aircraft and the view: in the header on a wide page, in the settings popover only on a
+   narrow one. */
+@container content (max-width: 600px) {
+  .wideOnly {
+    display: none;
+  }
 }
 .note {
   margin: 0;
@@ -35,14 +30,17 @@
   font-size: var(--t-sm);
 }
 
-/* The stage fills the page's width and a screen's worth of height. A 16:9 or 4:3 picture sits
-   inside it, letterboxed, so the overlays are laid out against the picture, never the window. */
+/* The stage takes the picture's shape at the content's full width, as tall as the window
+   allows (then narrower, centred). The 16:9 or 4:3 picture inside it lays out the overlays
+   against the picture, never the window. */
 .stage {
   container-type: size;
   display: grid;
   place-items: center;
-  width: 100%;
-  height: clamp(320px, calc(100vh - 220px), 900px);
+  align-self: center;
+  aspect-ratio: var(--ar, 1.7778);
+  width: min(100%, calc((100vh - 260px) * var(--ar, 1.7778)));
+  min-height: 200px;
   border-radius: var(--r-3);
   background: var(--crust);
   overflow: hidden;
@@ -145,4 +143,8 @@
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: var(--s-3);
+}
+/* The section switch keeps its own width. */
+.page > [role="group"] {
+  align-self: flex-start;
 }
