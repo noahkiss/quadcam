@@ -173,10 +173,13 @@ test("a line the speech check hears wrong is a re-take; Accept on the Voices pag
   const row = page.getByRole("table", { name: "Voice packs on this Mac" }).getByRole("row", { name: /^Callum / });
   await expect(row).toContainText("1 heard wrong");
   await packMenu(page, "Callum", "Check speech");
-  const check = page.getByRole("region", { name: "Speech check" });
+  const check = page.getByRole("dialog", { name: /^Speech check/ });
   const table = check.getByRole("table", { name: "Speech check of Callum" });
   await expect(table.getByRole("row", { name: /^Battery low/ })).toContainText("Battery.");
   await expect(table.getByRole("row", { name: /^Battery low/ })).toContainText("Heard wrong");
+  // Needs review shows only the line heard wrong; All shows every line.
+  await expect(table.getByRole("row", { name: /^Armed/ })).toHaveCount(0);
+  await check.getByRole("button", { name: /^All/ }).click();
   await expect(table.getByRole("row", { name: /^Armed/ })).toContainText("Heard right");
   await check.getByRole("button", { name: "Accept what was heard for Battery low" }).click();
   expect((await app.method("gear_voice_check")).at(-1)).toEqual({ pack: "local-elevenlabs-voice-callum-eleven-v4", lines: [], accept: ["SOUNDS/en/lowbat.wav"], install: false });
@@ -188,6 +191,74 @@ test("a line the speech check hears wrong is a re-take; Accept on the Voices pag
   await check.getByRole("button", { name: "Check again" }).click();
   await expect(check.getByRole("status")).toContainText("heard wrong");
   expect((await renders(app)).length).toBe(paid);
+});
+
+/** A rendered Callum pack whose Battery low the speech check heard wrong, its sheet open from
+ *  the row's speech check badge. */
+async function heardWrongSheet(app: AppFixture, page: Page) {
+  const studio = await openStudio(app, page);
+  await saveKey(studio);
+  await app.core(`c => { c.gear.voice.misheard = "SOUNDS/en/lowbat.wav"; }`);
+  await studio.getByRole("button", { name: "Render pack" }).click();
+  await studio.getByRole("button", { name: "Render and pay" }).click();
+  await page.getByRole("button", { name: "Open the speech check of Callum" }).click();
+  const sheet = page.getByRole("dialog", { name: "Speech check: Callum" });
+  await expect(sheet).toBeInViewport();
+  return { sheet, table: sheet.getByRole("table", { name: "Speech check of Callum" }) };
+}
+
+const PACK = "local-elevenlabs-voice-callum-eleven-v4";
+
+test("the speech check sheet opens from the row, shows the lines to review first, and plays a held take", async ({ app, page }) => {
+  const { sheet, table } = await heardWrongSheet(app, page);
+  await expect(sheet.getByRole("button", { name: /^Needs review/ })).toHaveAttribute("aria-pressed", "true");
+  await expect(table.getByRole("row")).toHaveCount(2);
+  await expect(table.getByRole("row", { name: /^Battery low/ })).toContainText("Heard wrong");
+  await sheet.getByRole("button", { name: "Play Battery low" }).click();
+  expect((await app.method("gear_voice_preview")).at(-1)).toEqual({ line: "SOUNDS/en/lowbat.wav", pack: PACK, radio: null });
+  await sheet.getByRole("button", { name: /^All/ }).click();
+  await expect(table.getByRole("row", { name: /^Armed/ })).toContainText("Heard right");
+  // Done closes the sheet.
+  await sheet.getByRole("button", { name: "Done" }).click();
+  await expect(sheet).toHaveCount(0);
+});
+
+test("Re-take selected prices the lines first and pays only after Re-take and pay", async ({ app, page }) => {
+  const { sheet, table } = await heardWrongSheet(app, page);
+  const retake = sheet.getByRole("button", { name: "Re-take selected…" });
+  await expect(retake).toBeDisabled();
+  await table.getByRole("checkbox", { name: "Battery low" }).check();
+  await retake.click();
+  const ask = (await app.method("gear_voice_retake")).at(-1)!;
+  expect(ask).toMatchObject({ pack: PACK, lines: ["SOUNDS/en/lowbat.wav"], dry_run: true, confirm: false });
+  await expect(sheet.getByText(/This sends 1 line to ElevenLabs, which bills it\. .*characters/)).toBeVisible();
+  // Cancel pays nothing.
+  await sheet.getByRole("button", { name: "Cancel" }).click();
+  expect((await app.method("gear_voice_retake")).filter((p) => p.confirm)).toEqual([]);
+  await retake.click();
+  const priced = await app.core<number>(`c => c.gear.voice.spent`);
+  await sheet.getByRole("button", { name: "Re-take and pay" }).click();
+  await expect(sheet.getByRole("status")).toContainText("Made 1 line again.");
+  const paid = (await app.method("gear_voice_retake")).filter((p) => p.confirm);
+  expect(paid).toHaveLength(1);
+  expect(paid[0]).toMatchObject({ pack: PACK, lines: ["SOUNDS/en/lowbat.wav"], dry_run: false, confirm: true });
+  expect(paid[0].digest).toBeTruthy();
+  expect(await app.core<number>(`c => c.gear.voice.spent`)).toBeGreaterThan(priced);
+  await expect(sheet.getByText("No line needs review.")).toBeVisible();
+  await expect(sheet.getByRole("button", { name: /^Needs review \(0\)/ })).toBeVisible();
+});
+
+test("Accept selected accepts every picked line heard wrong", async ({ app, page }) => {
+  const { sheet, table } = await heardWrongSheet(app, page);
+  const accept = sheet.getByRole("button", { name: "Accept selected" });
+  await expect(accept).toBeDisabled();
+  await sheet.getByRole("checkbox", { name: "Select all" }).check();
+  await expect(table.getByRole("checkbox", { name: "Battery low" })).toBeChecked();
+  await accept.click();
+  expect((await app.method("gear_voice_check")).at(-1)).toEqual({ pack: PACK, lines: [], accept: ["SOUNDS/en/lowbat.wav"], install: false });
+  await expect(sheet.getByText("No line needs review.")).toBeVisible();
+  await sheet.getByRole("button", { name: /^All/ }).click();
+  await expect(table.getByRole("row", { name: /^Battery low/ })).toContainText("Accepted");
 });
 
 test("a sample the speech check hears wrong says so on its voice's card", async ({ app, page }) => {
@@ -521,6 +592,14 @@ test("Add by ID looks one voice up, and a full account says why the add failed",
 for (const scheme of axeSchemes) {
   test.describe(`${scheme} theme`, () => {
     test.use({ colorScheme: scheme });
+    test("the speech check sheet with a priced re-take passes axe", async ({ app, page }) => {
+      const { sheet, table } = await heardWrongSheet(app, page);
+      await table.getByRole("checkbox", { name: "Battery low" }).check();
+      await sheet.getByRole("button", { name: "Re-take selected…" }).click();
+      await expect(sheet.getByRole("button", { name: "Re-take and pay" })).toBeVisible();
+      const r = await new AxeBuilder({ page }).withTags(["wcag2a", "wcag2aa", "wcag21aa"]).analyze();
+      expect(r.violations.map((v) => `${v.id}: ${v.nodes.map((n) => n.target.join(" ") + " " + n.failureSummary).join(", ")}`)).toEqual([]);
+    });
     test("the ElevenLabs section passes axe", async ({ app, page }) => {
       const studio = await openStudio(app, page, `c => { c.gear.voice.extraVoices = 40; }`);
       await saveKey(studio);

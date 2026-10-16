@@ -37,6 +37,10 @@ export function FlagControl({ text, flag, disabled, onSave }: { text: string; fl
   const [open, setOpen] = useState(false);
   const [reason, setReason] = useState(flag?.reason ?? "mispronounced");
   const [note, setNote] = useState(flag?.note ?? "");
+  const save = () => {
+    setOpen(false);
+    onSave({ reason, note: note.trim() });
+  };
   const show = () => {
     setReason(flag?.reason ?? "mispronounced");
     setNote(flag?.note ?? "");
@@ -58,12 +62,15 @@ export function FlagControl({ text, flag, disabled, onSave }: { text: string; fl
       />
       {open && (
         <Popover label={`Flag ${text}`} anchor={anchor} onClose={() => setOpen(false)}>
-          <form
+          {/* No <form>: the flag sits inside the speech check sheet's form, and a nested form
+              would submit the page. Return in the note saves. */}
+          <div
             className={styles.flagForm}
-            onSubmit={(e) => {
-              e.preventDefault();
-              setOpen(false);
-              onSave({ reason, note: note.trim() });
+            onKeyDown={(e) => {
+              if (e.key === "Enter" && (e.target as HTMLElement).tagName === "INPUT") {
+                e.preventDefault();
+                save();
+              }
             }}
           >
             <SelectField label="Reason" value={reason} onChange={(e) => setReason(e.target.value)}>
@@ -87,11 +94,11 @@ export function FlagControl({ text, flag, disabled, onSave }: { text: string; fl
                   Clear flag
                 </Button>
               )}
-              <Button type="submit" size="sm" variant="primary">
+              <Button size="sm" variant="primary" onClick={save}>
                 Save flag
               </Button>
             </div>
-          </form>
+          </div>
         </Popover>
       )}
     </span>

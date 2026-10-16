@@ -714,7 +714,11 @@ export function retake(g: MockGear, p: { sample: string; pack: string; lines: st
   const card = gallery(g).voices.find((c) => c.id === (p.sample || p.pack) && c.kind === (p.sample ? "sample" : "pack"));
   if (!card) throw `No sample or pack "${p.sample || p.pack}".`;
   if (card.provider !== "elevenlabs") throw `Only a pack the Voice studio rendered can make a re-take; a flag on ${card.id} is a note.`;
-  const lines = card.takes.filter((t) => t.flag && (!p.lines.length || p.lines.includes(t.line))).map((t) => t.line);
+  const flagged = card.takes.filter((t) => t.flag && (!p.lines.length || p.lines.includes(t.line))).map((t) => t.line);
+  // A pack's re-take lines, named, need no flag.
+  const held = card.kind === "pack" ? (g.voice.retakes[card.id] ?? []).map((r) => r.path).filter((l) => p.lines.includes(l) && !flagged.includes(l)) : [];
+  for (const l of p.lines) if (!flagged.includes(l) && !held.includes(l)) throw `"${l}" has no flag in ${card.id} and needs no re-take: flag it first.`;
+  const lines = [...flagged, ...held];
   if (!lines.length) throw `${card.id} has no flagged take.`;
   const seed = 1 + (lines.join("|").length * 7919) % 2_000_000_000;
   const chars = lines.length * (CARRIER + 10);
@@ -725,7 +729,12 @@ export function retake(g: MockGear, p: { sample: string; pack: string; lines: st
   if (!p.confirm) return { ...base, needs_confirm: true };
   samePlan(p, digest);
   g.voice.spent += chars;
-  if (card.kind === "pack") g.voice.packFlags[card.id] = (g.voice.packFlags[card.id] ?? []).filter((f) => !lines.includes(f.line));
+  if (card.kind === "pack") {
+    g.voice.packFlags[card.id] = (g.voice.packFlags[card.id] ?? []).filter((f) => !lines.includes(f.line));
+    // The new takes go into the pack, and the check hears them right.
+    g.voice.retakes[card.id] = (g.voice.retakes[card.id] ?? []).filter((r) => !lines.includes(r.path));
+    for (const h of g.voice.heard[card.id] ?? []) if (lines.includes(h.path)) Object.assign(h, { heard: `${h.text}.`, ok: true, accepted: false });
+  }
   else for (const t of g.voice.samples.find((c) => c.id === card.id)!.takes) if (lines.includes(t.line)) Object.assign(t, { flag: null, seed });
   return { ...base, cleared: lines };
 }

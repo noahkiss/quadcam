@@ -788,15 +788,21 @@ the app carries. On an older macOS, or without the helper, the check is unavaila
 everything else works as before.
 
 - **When it runs.** After every render, on the lines the render put into the pack, and after
-  every **Sample**, on each sample. **Check speech** in a library row's **…** menu opens the pack's check,
-  and **Check speech** (later **Check again**) hears every line of the pack again.
+  every **Sample**, on each sample. **Check speech** in a library row's **…** menu, or the row's
+  speech check badge, opens the pack's check in a sheet, and **Check speech** (later **Check
+  again**) hears every line of the pack again.
+- **Review.** **Needs review** lists the lines heard wrong, the re-takes and the flagged lines;
+  **All** lists every line. The play button plays the pack's take of a line; a line heard wrong
+  plays the take the check took out of the pack. Tick lines (or **Select all**) for **Accept
+  selected** and **Re-take selected…**.
 - **How it compares.** Both texts go through the spelling rules, then lose case, punctuation
   and spaces, and numbers read as words. So "GPS fix" heard for "G.P.S. fix", "10" for
   "ten" and "Fail safe" for "Failsafe" all count as heard right.
 - **A line heard wrong.** In a pack ElevenLabs rendered, the line leaves the pack and is
   a [re-take](#elevenlabs) with the reason "The speech check heard …". A render with the same
-  seed keeps it out and sends nothing; **Re-take** (another seed) prices its batch, asks, and
-  renders it again. A sample heard wrong is listed under the samples, and a later render
+  seed keeps it out and sends nothing. **Re-take selected…** in a studio pack's check prices
+  the ticked re-take and flagged lines first; **Re-take and pay** renders only their batches
+  again with another seed, and nothing is sent before that click. A sample heard wrong is listed under the samples, and a later render
   treats its line the same way. In any other pack the check only marks the line.
 - **Accept.** When the recognizer is wrong (a name, an unusual word), **Accept** keeps what it
   heard: the line passes, goes back into the pack, and later renders keep it.
@@ -804,7 +810,8 @@ everything else works as before.
   says so, and **Install speech assets** asks macOS to download them.
 - **Command line and agents.** `quadcam-cli gear voice check <pack>` (`--lines`, `--accept`,
   `--install`), and the MCP action `voice_check` on `quadcam_gear_edit` (`pack`, `lines`,
-  `accept`, `install`).
+  `accept`, `install`). `gear voice retake --pack P --lines PATH,...` (MCP `voice_retake`)
+  re-takes a studio pack's re-take lines by name, without a flag.
 
 ## Radio voice
 
