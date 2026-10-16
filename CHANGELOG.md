@@ -5,6 +5,8 @@ User-facing changes in each release, newest first. Release notes on
 
 ## Unreleased
 
+## 0.21.6 (2026-10-16)
+
 - **Gear keeps up with cards again.** Gear looks at the mounted volumes again at least every 30 seconds, and at once after QuadCam deletes clips from a card or formats one. A card that macOS could not describe for a moment no longer stays hidden until something else is plugged in, and a card emptied by an import no longer lingers in Gear.
 
 ## 0.21.5 (2026-10-16)
