@@ -700,7 +700,10 @@ the voices, the models, the line sets, the cost, **Sample** and **Render pack**,
   run 0.1 s early or late, so the audio decides each edge: the start moves into the quiet
   between the carrier's last letter and the line ("is" ends in a hiss), the end into the quiet
   before the next sentence, each at least 40 ms either way. A line that runs straight on from
-  the carrier ("The word is Six") has no quiet, so its edge stays near the timestamp. The cut
+  the carrier ("The word is Six") has no quiet, so its edge stays near the timestamp. For part
+  of a long batch the times can also run up to a second ahead of the audio. QuadCam finds each
+  sentence by the pauses in the audio, and when a sentence starts 150 ms or more from its
+  time, it cuts that line where the other lines of the batch sit in their sentences. The cut
   then gets the usual trim, fades and tempo.
   A cut that fails a check becomes a re-take (above). The raw audio and
   timestamps of each batch are kept by provider, voice, model, speed, text and seed, so a new

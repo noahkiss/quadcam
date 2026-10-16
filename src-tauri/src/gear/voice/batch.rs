@@ -44,7 +44,7 @@ fn snap_ms() -> u32 {
 
 /// The version of the way `cut` cuts. It changes whenever a cut comes out differently, so a
 /// pack cuts its kept batches again (from the batch cache, at no cost).
-pub const CUT_VERSION: u32 = 3;
+pub const CUT_VERSION: u32 = 4;
 
 /// How lines are batched and cut. Part of a batch's cache key only through the batch text.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Type)]
@@ -597,6 +597,199 @@ fn keep_hiss(p: &Pcm, lo: usize, at: usize, end: usize) -> usize {
     at.min(from.max(to.saturating_sub(keep)))
 }
 
+/// How far from where the timestamps put it a pause between sentences is looked for.
+const PAUSE_SEARCH_MS: usize = 600;
+/// A pause between sentences lasts at least this long.
+const MIN_PAUSE_MS: usize = 80;
+/// A sentence heard this far or more from its timestamps is placed by the take.
+const DRIFT_MS: usize = 150;
+
+/// The level of each millisecond of a take: the mean square over the 10 ms around it, in
+/// 3 dB steps, as `snap_edge` reads it.
+fn levels(p: &Pcm) -> Vec<u32> {
+    let step = (p.rate / 1000).max(1) as usize;
+    let half = (p.rate as usize / 200).max(1);
+    let len = p.samples.len();
+    let mut sums = Vec::with_capacity(len + 1);
+    sums.push(0u64);
+    for v in &p.samples {
+        let sq = (i64::from(*v) * i64::from(*v)) as u64;
+        sums.push(sums.last().copied().unwrap_or(0) + sq);
+    }
+    (0..len.div_ceil(step))
+        .map(|i| {
+            let at = i * step;
+            let a = at.saturating_sub(half);
+            let b = (at + half).min(len);
+            let ms = (sums[b] - sums[a]) / (b - a).max(1) as u64;
+            if ms < 64 {
+                0
+            } else {
+                ms.ilog2()
+            }
+        })
+        .collect()
+}
+
+/// The longest quiet run that starts or ends in `lo..hi` (milliseconds of `lv`): points at most
+/// one step above the window's quietest, `MIN_PAUSE_MS` or longer, in a window whose loudest
+/// is four steps or more above its quietest. A run the window cuts off goes on to its own
+/// ends. The earliest wins a tie.
+fn pause_in(lv: &[u32], lo: usize, hi: usize) -> Option<(usize, usize)> {
+    let hi = hi.min(lv.len());
+    if lo >= hi {
+        return None;
+    }
+    let least = *lv[lo..hi].iter().min()?;
+    // Quiet only beside speech: 12 dB or more below the window's loudest.
+    if *lv[lo..hi].iter().max()? < least + 4 {
+        return None;
+    }
+    let quiet = |x: usize| lv[x] <= least + 1;
+    let mut best: Option<(usize, usize)> = None;
+    let mut open: Option<usize> = None;
+    for x in lo..=hi {
+        match (x < hi && quiet(x), open) {
+            (true, None) => open = Some(x),
+            (false, Some(a)) => {
+                if best.is_none_or(|(b0, b1)| x - a > b1 - b0) {
+                    best = Some((a, x));
+                }
+                open = None;
+            }
+            _ => {}
+        }
+    }
+    let (mut a, mut b) = best?;
+    while a > 0 && quiet(a - 1) {
+        a -= 1;
+    }
+    while b < lv.len() && quiet(b) {
+        b += 1;
+    }
+    (b - a >= MIN_PAUSE_MS).then_some((a, b))
+}
+
+/// Where a sentence was heard in the take, in ms: the end of the pause before it (its onset)
+/// and the start of the pause after it.
+#[derive(Debug, Clone, Copy, Default)]
+struct Heard {
+    onset: Option<usize>,
+    pause: Option<usize>,
+}
+
+/// Finds each sentence in the take by the pauses between them. Each pause is the longest quiet
+/// run within `PAUSE_SEARCH_MS` of the gap the timestamps give, moved by how far the take ran
+/// from the timestamps at the pause before, and never before that pause. `sentences` holds
+/// each sentence's first and last letter. The take's leading quiet gives the first onset, its
+/// trailing quiet the last pause.
+fn heard(p: &Pcm, al: &Alignment, sentences: &[(usize, usize)]) -> Vec<Heard> {
+    let ms = |t: f64| (t.max(0.0) * 1000.0).round() as usize;
+    let lv = levels(p);
+    let end = lv.len();
+    let mut out = vec![Heard::default(); sentences.len()];
+    let Some(&(first, _)) = sentences.first() else {
+        return out;
+    };
+    if let Some((0, p1)) = pause_in(&lv, 0, ms(al.starts[first]) + PAUSE_SEARCH_MS) {
+        out[0].onset = Some(p1);
+    }
+    let moved = |t: usize, d: i64| (t as i64 + d).max(0) as usize;
+    // How far the take runs behind the timestamps, as of the last pause.
+    let mut drift: i64 = 0;
+    let mut floor = 0;
+    for (k, &(_, last)) in sentences.iter().enumerate() {
+        let a = ms(al.ends[last]);
+        let next = sentences.get(k + 1).map(|&(first, _)| ms(al.starts[first]));
+        let lo = moved(a, drift).saturating_sub(PAUSE_SEARCH_MS).max(floor);
+        let hi = next.map_or(end, |b| moved(b, drift) + PAUSE_SEARCH_MS);
+        let Some((p0, p1)) = pause_in(&lv, lo, hi) else {
+            continue;
+        };
+        match next {
+            Some(b) => {
+                out[k].pause = Some(p0);
+                out[k + 1].onset = Some(p1);
+                drift = p1 as i64 - b as i64;
+            }
+            None if p1 == end => out[k].pause = Some(p0),
+            None => {}
+        }
+        floor = p1;
+    }
+    out
+}
+
+/// The value at `num / den` of the way up, or none.
+fn quantile(mut v: Vec<i64>, num: usize, den: usize) -> Option<i64> {
+    v.sort_unstable();
+    v.get(v.len() * num / den).copied()
+}
+
+/// How far `cut` moves an item's timestamps onto the take, in seconds.
+#[derive(Debug, Clone, Copy, Default, PartialEq)]
+struct Moved {
+    /// The line's start, and the start edge's search with it.
+    start: f64,
+    /// The line's end.
+    end: f64,
+    /// The next sentence's first letter, where the end edge stops looking.
+    next: f64,
+}
+
+/// ElevenLabs' timestamps can drift up to a second off the audio for a stretch of a long
+/// batch: they shrink the pause between sentences and stretch the carrier, so a line cut on
+/// them starts in the carrier ("is eighty") and stops before its own last syllable ("eight").
+/// A sentence whose onset in the take sits `DRIFT_MS` or more from its first letter's
+/// timestamp is placed by the take instead. Its line starts as long after the onset as lines
+/// do in the batch's sentences that fit (the lower quartile: the carrier is spoken much the
+/// same each time, and a start too late loses the line's first sound). Its line ends as long
+/// before the pause after it as they do (the median). Neither moves earlier than its timestamp.
+/// The line before such a sentence looks for its end up to that sentence's onset. Sentences
+/// that fit, and every sentence of a take with none that fit, keep their timestamps.
+fn moved(al: &Alignment, b: &Batch, sentences: &[(usize, usize)], heard: &[Heard]) -> Vec<Moved> {
+    let ms = |t: f64| (t.max(0.0) * 1000.0).round() as i64;
+    let off = |k: usize| {
+        let (first, _) = sentences[k];
+        heard[k]
+            .onset
+            .map(|o| o as i64 - ms(al.starts[first]))
+            .filter(|d| d.unsigned_abs() >= DRIFT_MS as u64)
+    };
+    let drifted: Vec<bool> = (0..sentences.len()).map(|k| off(k).is_some()).collect();
+    let (mut lead, mut tail) = (Vec::new(), Vec::new());
+    for (k, (_, r)) in b.items.iter().enumerate() {
+        if drifted[k] {
+            continue;
+        }
+        if let Some(o) = heard[k].onset {
+            lead.push(ms(al.starts[r.start]) - o as i64);
+        }
+        if let Some(p) = heard[k].pause {
+            tail.push(p as i64 - ms(al.ends[r.end - 1]));
+        }
+    }
+    let (lead, tail) = (quantile(lead, 1, 4), quantile(tail, 1, 2));
+    let s = |v: i64| v as f64 / 1000.0;
+    b.items
+        .iter()
+        .enumerate()
+        .map(|(k, (_, r))| {
+            let mut m = Moved::default();
+            if let (true, Some(o), Some(l)) = (drifted[k], heard[k].onset, lead) {
+                m.start = s((o as i64 + l - ms(al.starts[r.start])).max(0));
+            }
+            if let (true, Some(p), Some(t)) = (drifted[k], heard[k].pause, tail) {
+                m.end = s((p as i64 - t - ms(al.ends[r.end - 1])).max(0));
+            }
+            if k + 1 < sentences.len() {
+                m.next = off(k + 1).map_or(0.0, s);
+            }
+            m
+        })
+        .collect()
+}
+
 /// Cuts every item of a batch out of its take. Fails when the alignment does not describe
 /// the batch text or runs past the audio.
 pub fn cut(b: &Batch, a: &Aligned, snap_ms: u32) -> Result<Vec<Cut>> {
@@ -617,24 +810,46 @@ pub fn cut(b: &Batch, a: &Aligned, snap_ms: u32) -> Result<Vec<Cut>> {
     let rate = f64::from(a.pcm.rate);
     let sample = |t: f64| ((t.max(0.0) * rate).round() as usize).min(a.pcm.samples.len());
     let snap = f64::from(snap_ms) / 1000.0;
-    let mut out = Vec::new();
     for (item, r) in &b.items {
         if r.is_empty() || r.end > n {
             bail!("the line {:?} has no place in the batch", item.spoken);
         }
+    }
+    // Each sentence's first and last letter: from the first letter after the line before it
+    // through its own line's last.
+    let mut sentences = Vec::new();
+    let mut from = 0;
+    for (_, r) in &b.items {
+        let first = (from..r.end).find(|&i| chars[i].is_alphanumeric());
+        let last = (from..r.end).rev().find(|&i| chars[i].is_alphanumeric());
+        sentences.push((first.unwrap_or(r.start), last.unwrap_or(r.end - 1)));
+        from = r.end;
+    }
+    let moved = if snap_ms > 0 {
+        moved(al, b, &sentences, &heard(&a.pcm, al, &sentences))
+    } else {
+        Vec::new()
+    };
+    let mut out = Vec::new();
+    for (k, (item, r)) in b.items.iter().enumerate() {
         let (t0, t1) = (al.starts[r.start], al.ends[r.end - 1]);
         let (mut s0, mut s1) = (sample(t0), sample(t1));
         if snap_ms > 0 {
             // The start looks back to the end of the letter before the line (the carrier's
             // last) and on through the line's first letter; the end looks on to the start of
-            // the next letter (the next sentence), or to the end of the take.
+            // the next letter (the next sentence), or to the end of the take. A sentence the
+            // timestamps missed is first moved onto the take (`moved`).
+            let Moved { start, end, next } = moved[k];
             let before = (0..r.start).rev().find(|&i| chars[i].is_alphanumeric());
             let after = (r.end..n).find(|&i| chars[i].is_alphanumeric());
-            let lo0 = before.map_or(t0 - snap, |i| al.ends[i].min(t0 - snap));
-            let hi0 = al.ends[r.start].max(t0 + snap);
-            let hi1 = after.map_or(audio_s, |i| al.starts[i].max(t1 + snap));
-            s0 = snap_edge(&a.pcm, sample(lo0), sample(hi0), s0, true);
-            s1 = snap_edge(&a.pcm, sample(t1 - snap), sample(hi1), s1, false);
+            let lo0 = before.map_or(t0 - snap, |i| al.ends[i].min(t0 - snap)) + start;
+            let hi0 = al.ends[r.start].max(t0 + snap) + start;
+            let (t0, t1) = (t0 + start, t1 + end);
+            let hi1 = after
+                .map_or(audio_s, |i| al.starts[i] + next)
+                .max(t1 + snap);
+            s0 = snap_edge(&a.pcm, sample(lo0), sample(hi0), sample(t0), true);
+            s1 = snap_edge(&a.pcm, sample(t1 - snap), sample(hi1), sample(t1), false);
             if starts_with_hiss(&item.spoken) {
                 s0 = keep_hiss(&a.pcm, sample(lo0), s0, s1);
             }
@@ -1392,6 +1607,151 @@ mod tests {
             "starts at {}",
             c[0].from_s
         );
+    }
+
+    /// Six sentences "The word is <line>." as a long batch speaks them, each from `starts[k]`:
+    /// "The word" (450 ms), a 30 ms closure, "is" (150 ms, softer), the line ("eigh" 200 ms, a
+    /// 40 ms closure, "ty" 150 ms), then 700 ms of quiet. With `drift`, the timestamps of
+    /// sentences 3 and 4 run ahead of the take as ElevenLabs' do: the sentence 600 ms early,
+    /// the line 250 ms early (inside "The word"), its end 200 ms early (before the closure).
+    fn drifting_take(drift: bool) -> (Batch, Aligned, Vec<f64>) {
+        let ms = |t: f64| (t * 32000.0).round() as usize;
+        let lines = [
+            "eighty",
+            "eleven",
+            "eighty one",
+            "one",
+            "eighty eight",
+            "eight",
+        ];
+        let starts: Vec<f64> = (0..lines.len()).map(|k| 0.3 + 1.72 * k as f64).collect();
+        let mut seed = 5;
+        let mut v = Vec::new();
+        for s in &starts {
+            v.extend(hiss(ms(*s) - v.len(), 2, &mut seed));
+            v.extend(tone(ms(s + 0.45) - v.len(), 150.0, 4000.0));
+            v.extend(hiss(ms(s + 0.48) - v.len(), 2, &mut seed));
+            v.extend(tone(ms(s + 0.63) - v.len(), 250.0, 1500.0));
+            v.extend(tone(ms(s + 0.83) - v.len(), 180.0, 6000.0));
+            v.extend(hiss(ms(s + 0.87) - v.len(), 2, &mut seed));
+            v.extend(tone(ms(s + 1.02) - v.len(), 300.0, 5000.0));
+        }
+        let end = starts[lines.len() - 1] + 1.72;
+        v.extend(hiss(ms(end) - v.len(), 2, &mut seed));
+        let (mut text, mut items) = (String::new(), Vec::new());
+        let (mut t_starts, mut t_ends) = (Vec::new(), Vec::new());
+        // Each letter of `s` spread evenly from `a` to `b`.
+        let mut spread = |s: &str, a: f64, b: f64, text: &mut String| {
+            let n = s.chars().count();
+            for i in 0..n {
+                t_starts.push(a + (b - a) * i as f64 / n as f64);
+                t_ends.push(a + (b - a) * (i + 1) as f64 / n as f64);
+            }
+            text.push_str(s);
+        };
+        for (k, (line, s)) in lines.iter().zip(&starts).enumerate() {
+            let ahead = drift && (k == 3 || k == 4);
+            let (t, t0, t1) = if ahead {
+                (s - 0.6, s + 0.38, s + 0.82)
+            } else {
+                (s + 0.0, s + 0.63, s + 1.02)
+            };
+            if k > 0 {
+                spread(" ", starts[k - 1] + 1.12, t, &mut text);
+            }
+            spread("The word is ", t, t0, &mut text);
+            let at = text.chars().count();
+            spread(line, t0, t1, &mut text);
+            items.push((item(line, "number"), at..at + line.chars().count()));
+            spread(".", t1, t1 + 0.1, &mut text);
+        }
+        (
+            Batch {
+                tone: "number".into(),
+                text: text.clone(),
+                items,
+            },
+            Aligned {
+                pcm: Pcm {
+                    rate: 32000,
+                    samples: v,
+                },
+                alignment: Alignment {
+                    characters: text.chars().map(|c| c.to_string()).collect(),
+                    starts: t_starts,
+                    ends: t_ends,
+                },
+                billed_chars: None,
+            },
+            starts,
+        )
+    }
+
+    #[test]
+    fn a_line_the_timestamps_ran_ahead_of_holds_no_carrier_and_its_whole_end() {
+        let (b, a, starts) = drifting_take(true);
+        let s = starts[3];
+        // The timestamps put the line inside "The word", and its end before the closure.
+        let r = &b.items[3].1;
+        assert!((a.alignment.starts[r.start] - (s + 0.38)).abs() < 1e-9);
+        assert!((a.alignment.ends[r.end - 1] - (s + 0.82)).abs() < 1e-9);
+        let c = cut(&b, &a, 40).unwrap();
+        for (k, s) in [(3, starts[3]), (4, starts[4])] {
+            // At most the snap's 10 ms inset of "is" (150 ms), and all of the line.
+            assert!(
+                (s + 0.61..=s + 0.63).contains(&c[k].from_s),
+                "{k} starts at {} for {}",
+                c[k].from_s,
+                s + 0.63
+            );
+            // Past "ty", not at the closure after "eigh"; before the next sentence.
+            assert!(
+                (s + 1.02..=s + 1.72).contains(&c[k].to_s),
+                "{k} ends at {} for {}",
+                c[k].to_s,
+                s + 1.02
+            );
+        }
+        // Sentences the timestamps fit cut exactly as in a take they fit throughout.
+        let (b, fit, _) = drifting_take(false);
+        let f = cut(&b, &fit, 40).unwrap();
+        for k in [0, 1, 2, 5] {
+            assert_eq!((c[k].from_s, c[k].to_s), (f[k].from_s, f[k].to_s), "{k}");
+        }
+        // Cut on the timestamps alone, nothing moves.
+        let raw = cut(&b, &a, 0).unwrap();
+        assert!((raw[3].from_s - (s + 0.38)).abs() < 1e-4);
+    }
+
+    #[test]
+    fn the_pauses_between_sentences_are_found_in_the_take() {
+        let (b, a, starts) = drifting_take(true);
+        let sentences: Vec<(usize, usize)> = b
+            .items
+            .iter()
+            .enumerate()
+            .map(|(k, (_, r))| {
+                let first = if k == 0 { 0 } else { b.items[k - 1].1.end + 2 };
+                (first, r.end - 1)
+            })
+            .collect();
+        let h = heard(&a.pcm, &a.alignment, &sentences);
+        let ms = |t: f64| (t * 1000.0).round() as usize;
+        for (k, s) in starts.iter().enumerate() {
+            let onset = h[k].onset.expect("an onset");
+            let pause = h[k].pause.expect("a pause");
+            assert!(onset.abs_diff(ms(*s)) <= 10, "{k}: onset {onset} for {s}");
+            assert!(pause.abs_diff(ms(s + 1.02)) <= 10, "{k}: pause {pause}");
+        }
+        // Without the pauses (one long tone) nothing is found, and nothing moves.
+        let flat = Pcm {
+            rate: 32000,
+            samples: tone(a.pcm.samples.len(), 200.0, 4000.0),
+        };
+        let h = heard(&flat, &a.alignment, &sentences);
+        assert!(h.iter().all(|h| h.onset.is_none() && h.pause.is_none()));
+        let m = moved(&a.alignment, &b, &sentences, &h);
+        assert!(m.iter().all(|m| *m == Moved::default()));
     }
 
     fn two_item_batch() -> Batch {

@@ -1191,7 +1191,19 @@ Every reading, kept or not, goes to stderr and `<cache>/voice/charcost.log`.
   no quiet between, and the lowest run is then the hiss's end, just before the vowel.
   `keep_hiss` moves such a start back over the hiss (10 ms windows louder than silence with
   30 or more zero crossings) to 120 ms before the hiss ends, never before the search's start
-  or the hiss's own start. `CUT_VERSION` (3) is in each pack's
+  or the hiss's own start. ElevenLabs' timestamps can drift up to a second off the audio for a
+  stretch of a long batch: they shrink the pause between sentences and stretch the carrier, so
+  a line cut on them starts in the carrier ("is eighty") and stops short ("eight"). `heard`
+  finds each pause between sentences in the take (the longest run at most one step above the
+  quietest, 80 ms or more, within 600 ms of where the timestamps put it, moved by the drift at
+  the pause before). A sentence whose onset sits 150 ms or more from its first letter's
+  timestamp is placed by the take (`moved`): its line starts as long after the onset as the
+  batch's fitting sentences' lines do (their lower quartile), and ends as long before the pause
+  after it (their median), never earlier than the timestamps; the line before it looks for its
+  end up to that onset. Sentences that fit cut as before. Measured on the cached batches of
+  four 30-sentence packs and 24 sample voices (4,004 sentences), the speech check heard 107
+  lines right that it heard wrong before, and 1 wrong that it heard right ("G.P.S. Glitch",
+  whose carrier ran 0.25 s shorter than the batch's). `CUT_VERSION` (4) is in each pack's
   `kept_batches` key, so a new cut re-cuts a pack from the batch cache, free.
   `check` flags silent cuts, cuts under 120 ms or over 4.5 s, cuts far from the batch's
   median pace per letter, and carrier bleed: 20-120 ms of hiss (30 or more zero crossings a

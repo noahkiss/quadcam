@@ -5,6 +5,8 @@ User-facing changes in each release, newest first. Release notes on
 
 ## Unreleased
 
+- **No more "is eighty".** In a long ElevenLabs render, some lines kept the end of the sentence they were spoken in ("is eighty", "is 75") or lost their last syllable ("eighty" cut to "eight"). ElevenLabs' timestamps can run ahead of the audio for part of a batch; QuadCam now finds each sentence by the pauses in the audio and cuts those lines there. Render a pack again with the same settings to get the new cut: QuadCam cuts the cached takes again and sends nothing to ElevenLabs.
+
 ## 0.21.4 (2026-10-14)
 
 - **Lower energy use while idle.** Gear no longer asks macOS for full details about every mounted volume every two seconds. It refreshes those details only when a volume changes, while USB serial and DFU devices remain quick to appear.
