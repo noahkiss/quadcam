@@ -131,7 +131,7 @@ impl Core {
             self.hooks.confirm_format(&p.plan)?;
         }
         let _b = self.claim()?;
-        let eject_error = disk::format_card_with(
+        let formatted = disk::format_card_with(
             &p.card,
             &p.mount,
             &p.plan.label,
@@ -139,7 +139,10 @@ impl Core {
             disk::EraseBy::Prep,
             &*self.gear.dji_usb,
             &|| self.check_all_in_library(&p.mount).map(|_| ()),
-        )?;
+        );
+        // Even a failed format may have erased or remounted the card.
+        self.gear.volumes_changed();
+        let eject_error = formatted?;
         // A session read from this card can no longer format it.
         if let Some(mut s) = self.session() {
             if s.card.as_ref().is_some_and(|c| {

@@ -3,8 +3,10 @@
 
 use anyhow::{anyhow, bail, Context, Result};
 use serde::{Deserialize, Serialize};
+use std::io::Read;
 use std::path::{Path, PathBuf};
-use std::process::Command;
+use std::process::{Command, Stdio};
+use std::time::{Duration, Instant};
 
 /// Cards over this size ship as exFAT; analog DVRs want FAT32. A card's size is never a
 /// reason to refuse a format: the source's `CardPolicy` turns it into advice
@@ -52,27 +54,80 @@ impl DiskInfo {
     }
 }
 
+/// How long a `diskutil` read may run. A busy Disk Arbitration answers within seconds; a
+/// hung one would otherwise block the caller (the Gear poll, a format guard) for good.
+/// Only reads come through here, so stopping one changes nothing on a disk.
+const DISKUTIL_READ_TIMEOUT: Duration = Duration::from_secs(30);
+
 fn run_diskutil_plist(args: &[&str]) -> Result<plist::Dictionary> {
-    let out = Command::new("/usr/sbin/diskutil")
+    let mut child = Command::new("/usr/sbin/diskutil")
         .args(args)
-        .output()
+        .stdin(Stdio::null())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
         .context("running diskutil")?;
-    if !out.status.success() {
+    let drain = |r: Option<Box<dyn Read + Send>>| {
+        std::thread::spawn(move || {
+            let mut v = Vec::new();
+            if let Some(mut r) = r {
+                let _ = r.read_to_end(&mut v);
+            }
+            v
+        })
+    };
+    let stdout = drain(
+        child
+            .stdout
+            .take()
+            .map(|r| Box::new(r) as Box<dyn Read + Send>),
+    );
+    let stderr = drain(
+        child
+            .stderr
+            .take()
+            .map(|r| Box::new(r) as Box<dyn Read + Send>),
+    );
+    let start = Instant::now();
+    let status = loop {
+        if let Some(s) = child.try_wait().context("waiting for diskutil")? {
+            break s;
+        }
+        if start.elapsed() >= DISKUTIL_READ_TIMEOUT {
+            let _ = child.kill();
+            let _ = child.wait();
+            bail!(
+                "diskutil {} did not answer within {} s.",
+                args.join(" "),
+                DISKUTIL_READ_TIMEOUT.as_secs()
+            );
+        }
+        std::thread::sleep(Duration::from_millis(5));
+    };
+    let stdout = stdout.join().unwrap_or_default();
+    if !status.success() {
         bail!(
             "diskutil {} failed: {}",
             args.join(" "),
-            String::from_utf8_lossy(&out.stderr).trim()
+            String::from_utf8_lossy(&stderr.join().unwrap_or_default()).trim()
         );
     }
-    let v: plist::Value = plist::from_bytes(&out.stdout).context("parsing diskutil plist")?;
+    let v: plist::Value = plist::from_bytes(&stdout).context("parsing diskutil plist")?;
     v.into_dictionary()
         .ok_or_else(|| anyhow!("diskutil returned no dictionary"))
 }
 
 /// `diskutil info -plist <target>`; `target` is a mount point, `/dev/diskN` or `diskN`.
 pub fn info(target: &str) -> Result<DiskInfo> {
+    Ok(info_whole(target)?.0)
+}
+
+/// `info`, and whether the answer was whole: it named the device and said whether the
+/// disk is internal. A partial answer reads as internal storage (`parse_info`).
+fn info_whole(target: &str) -> Result<(DiskInfo, bool)> {
     let d = run_diskutil_plist(&["info", "-plist", target])?;
-    Ok(parse_info(&d))
+    let whole = d.contains_key("Internal") && d.contains_key("DeviceIdentifier");
+    Ok((parse_info(&d), whole))
 }
 
 pub fn parse_info(d: &plist::Dictionary) -> DiskInfo {
@@ -192,6 +247,10 @@ pub fn card_warnings(info: &DiskInfo, policy: &crate::sources::CardPolicy) -> Ve
 /// Inspects one mount point. Returns None when diskutil cannot describe it.
 pub fn probe_volume(mount: &Path) -> Option<Volume> {
     let info = info(&mount.to_string_lossy()).ok()?;
+    Some(volume_of(mount, info))
+}
+
+fn volume_of(mount: &Path, info: DiskInfo) -> Volume {
     let removable = is_removable(&info);
     let is_radio = removable && looks_like_radio(mount);
     let source = (removable && !is_radio)
@@ -201,29 +260,84 @@ pub fn probe_volume(mount: &Path) -> Option<Volume> {
     let warnings = source
         .map(|s| card_warnings(&info, &s.card_policy()))
         .unwrap_or_default();
-    Some(Volume {
+    Volume {
         mount: mount.to_path_buf(),
         info,
         is_card,
         source: source.map(|s| s.kind()),
         is_radio,
         warnings,
-    })
+    }
+}
+
+/// One look at `/Volumes`.
+#[derive(Debug, Clone, Default)]
+pub struct VolumeScan {
+    /// Every removable volume.
+    pub volumes: Vec<Volume>,
+    /// Every local mount point answered `diskutil` in full. False means a volume may be
+    /// missing from `volumes` only for now, so the scan is not worth keeping.
+    pub complete: bool,
 }
 
 /// Every removable volume under `/Volumes`.
 pub fn list_volumes() -> Vec<Volume> {
+    scan_volumes().volumes
+}
+
+/// `list_volumes`, and whether the look was complete. An entry `diskutil` cannot describe
+/// counts against it only when it is a local mount point: a folder left behind under
+/// `/Volumes` or a network share never answers, and is never a card either.
+pub fn scan_volumes() -> VolumeScan {
+    use std::os::unix::fs::MetadataExt;
     let Ok(rd) = std::fs::read_dir("/Volumes") else {
-        return Vec::new();
+        return VolumeScan::default();
     };
-    let mut v: Vec<Volume> = rd
-        .flatten()
-        .filter(|e| !e.file_name().to_string_lossy().starts_with('.'))
-        .filter_map(|e| probe_volume(&e.path()))
-        .filter(|v| is_removable(&v.info))
-        .collect();
-    v.sort_by(|a, b| a.mount.cmp(&b.mount));
-    v
+    let parent = std::fs::metadata("/Volumes").map(|m| m.dev()).ok();
+    let mut scan = VolumeScan {
+        volumes: Vec::new(),
+        complete: true,
+    };
+    for e in rd.flatten() {
+        if e.file_name().to_string_lossy().starts_with('.') {
+            continue;
+        }
+        let mount = e.path();
+        let whole = match info_whole(&mount.to_string_lossy()) {
+            Ok((info, whole)) => {
+                let v = volume_of(&mount, info);
+                if is_removable(&v.info) {
+                    scan.volumes.push(v);
+                }
+                whole
+            }
+            Err(_) => false,
+        };
+        if !whole && is_local_mount(&mount, parent) {
+            scan.complete = false;
+        }
+    }
+    scan.volumes.sort_by(|a, b| a.mount.cmp(&b.mount));
+    scan
+}
+
+/// A file system of this Mac mounted at `path` (not the one `/Volumes` itself is on).
+fn is_local_mount(path: &Path, parent_dev: Option<u64>) -> bool {
+    use std::os::unix::ffi::OsStrExt;
+    use std::os::unix::fs::MetadataExt;
+    let Ok(m) = std::fs::metadata(path) else {
+        return false;
+    };
+    if Some(m.dev()) == parent_dev {
+        return false;
+    }
+    let Ok(c) = std::ffi::CString::new(path.as_os_str().as_bytes()) else {
+        return false;
+    };
+    let mut st: libc::statfs = unsafe { std::mem::zeroed() };
+    // SAFETY: `c` is a valid C string and `st` a writable statfs the call fills in.
+    let r = unsafe { libc::statfs(c.as_ptr(), &mut st) };
+    r == 0 && st.f_flags & libc::MNT_LOCAL as u32 != 0
 }
 
 /// The card the clips were read from, recorded at stage time.

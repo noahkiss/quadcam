@@ -234,8 +234,17 @@ pub type MountFn = Arc<dyn Fn(&str) -> anyhow::Result<()> + Send + Sync>;
 
 type VolumesFn = Arc<dyn Fn() -> Vec<Volume> + Send + Sync>;
 type RefreshVolumesFn = Arc<dyn Fn() + Send + Sync>;
+type VolumeScanFn = Arc<dyn Fn() -> crate::disk::VolumeScan + Send + Sync>;
 type VolumeSignature = Vec<(std::path::PathBuf, u64, u64)>;
 type VolumeSignatureFn = Arc<dyn Fn() -> VolumeSignature + Send + Sync>;
+type ClockFn = Arc<dyn Fn() -> std::time::Instant + Send + Sync>;
+
+/// How long a volume scan stays good while `/Volumes` looks the same. The signature cannot
+/// see a card's contents (clips copied on or deleted, a reformat with the same name) or a
+/// card put back at the same path, and the headless MCP server has no watcher. 30 s keeps an
+/// idle Gear poll (every 2 s) to one `diskutil` round in 15 and lets such a change show
+/// within half a minute. QuadCam's own deletes, formats and mounts invalidate at once.
+const VOLUME_CACHE_TTL: std::time::Duration = std::time::Duration::from_secs(30);
 
 fn volume_signature() -> VolumeSignature {
     use std::os::unix::fs::MetadataExt;
@@ -255,32 +264,56 @@ fn volume_signature() -> VolumeSignature {
     signature
 }
 
+#[derive(Default)]
+struct VolumeCache {
+    /// Counts invalidations, so a scan that started before one does not store its result.
+    generation: u64,
+    kept: Option<(VolumeSignature, std::time::Instant, Vec<Volume>)>,
+}
+
 /// Keeps the relatively expensive `diskutil` volume scan while the cheap mount-point
-/// signature stays unchanged. The app's volume watcher also invalidates it explicitly.
-/// Serial ports and DFU devices are deliberately not cached: the regular Gear poll must keep
-/// finding those promptly.
+/// signature stays unchanged, for at most `ttl`. Only a complete scan is kept. The scan runs
+/// outside the lock, so an invalidation never waits for one, and a scan that an invalidation
+/// overtook is returned but not kept. Serial ports and DFU devices are deliberately not
+/// cached: the regular Gear poll must keep finding those promptly.
 fn cached_volumes(
     signature: VolumeSignatureFn,
-    source: VolumesFn,
+    source: VolumeScanFn,
+    now: ClockFn,
+    ttl: std::time::Duration,
 ) -> (VolumesFn, RefreshVolumesFn) {
-    let cache = Arc::new(std::sync::Mutex::new(
-        None::<(VolumeSignature, Vec<Volume>)>,
-    ));
+    fn lock(cache: &std::sync::Mutex<VolumeCache>) -> std::sync::MutexGuard<'_, VolumeCache> {
+        cache
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+    }
+    let cache = Arc::new(std::sync::Mutex::new(VolumeCache::default()));
     let list_cache = cache.clone();
     let list = Arc::new(move || {
         let current = signature();
-        let mut cached = list_cache.lock().unwrap();
-        if let Some((seen, volumes)) = cached.as_ref() {
-            if *seen == current {
-                return volumes.clone();
+        let generation = {
+            let cached = lock(&list_cache);
+            if let Some((seen, at, volumes)) = cached.kept.as_ref() {
+                if *seen == current && now().saturating_duration_since(*at) < ttl {
+                    return volumes.clone();
+                }
+            }
+            cached.generation
+        };
+        let started = now();
+        let scan = source();
+        if scan.complete {
+            let mut cached = lock(&list_cache);
+            if cached.generation == generation {
+                cached.kept = Some((current, started, scan.volumes.clone()));
             }
         }
-        let volumes = source();
-        *cached = Some((current, volumes.clone()));
-        volumes
+        scan.volumes
     });
     let refresh = Arc::new(move || {
-        *cache.lock().unwrap() = None;
+        let mut cached = lock(&cache);
+        cached.generation += 1;
+        cached.kept = None;
     });
     (list, refresh)
 }
@@ -292,7 +325,8 @@ fn cached_volumes(
 pub struct Env {
     pub ports: Arc<dyn serial::Ports>,
     pub volumes: VolumesFn,
-    /// Invalidates `volumes`; the `/Volumes` watcher and QuadCam's own mount operations use it.
+    /// Invalidates `volumes`; the `/Volumes` watcher and QuadCam's own mounts, clip deletes
+    /// and formats use it.
     pub refresh_volumes: RefreshVolumesFn,
     pub dfu: Arc<dyn Fn() -> Vec<detect::DfuInfo> + Send + Sync>,
     pub presence: Arc<dyn Fn() -> Vec<events::Presence> + Send + Sync>,
@@ -339,7 +373,9 @@ impl Env {
     pub fn system(cache: &std::path::Path) -> Self {
         let (volumes, refresh_volumes) = cached_volumes(
             Arc::new(volume_signature),
-            Arc::new(crate::disk::list_volumes),
+            Arc::new(crate::disk::scan_volumes),
+            Arc::new(std::time::Instant::now),
+            VOLUME_CACHE_TTL,
         );
         let refresh_after_unmount = refresh_volumes.clone();
         let refresh_after_mount = refresh_volumes.clone();
@@ -436,7 +472,8 @@ impl Env {
         detect::detect_all(&volumes, &self.ports.list(), &(self.dfu)(), &cards, &usb)
     }
 
-    /// Notes that something mounted or unmounted, so the next Gear look scans `/Volumes`.
+    /// Notes that something mounted, unmounted or changed on a volume, so the next Gear look
+    /// scans `/Volumes`.
     pub fn volumes_changed(&self) {
         (self.refresh_volumes)();
     }
@@ -448,18 +485,36 @@ mod tests {
     use serde_json::json;
     use std::sync::atomic::{AtomicUsize, Ordering};
 
+    /// A clock tests move by hand.
+    fn test_clock() -> (ClockFn, Arc<std::sync::Mutex<std::time::Duration>>) {
+        let base = std::time::Instant::now();
+        let offset = Arc::new(std::sync::Mutex::new(std::time::Duration::ZERO));
+        let read = offset.clone();
+        (Arc::new(move || base + *read.lock().unwrap()), offset)
+    }
+
+    fn scan(complete: bool) -> crate::disk::VolumeScan {
+        crate::disk::VolumeScan {
+            volumes: Vec::new(),
+            complete,
+        }
+    }
+
     #[test]
     fn volume_cache_scans_once_until_invalidated() {
         let scans = Arc::new(AtomicUsize::new(0));
         let counted = scans.clone();
         let signature = Arc::new(std::sync::Mutex::new(vec![(PathBuf::from("card"), 1, 1)]));
         let read_signature = signature.clone();
+        let (clock, _) = test_clock();
         let (volumes, refresh) = cached_volumes(
             Arc::new(move || read_signature.lock().unwrap().clone()),
             Arc::new(move || {
                 counted.fetch_add(1, Ordering::SeqCst);
-                Vec::new()
+                scan(true)
             }),
+            clock,
+            VOLUME_CACHE_TTL,
         );
 
         volumes();
@@ -471,6 +526,114 @@ mod tests {
         assert_eq!(scans.load(Ordering::SeqCst), 2);
 
         *signature.lock().unwrap() = vec![(PathBuf::from("other-card"), 2, 2)];
+        volumes();
+        assert_eq!(scans.load(Ordering::SeqCst), 3);
+    }
+
+    #[test]
+    fn volume_cache_keeps_no_incomplete_scan() {
+        let scans = Arc::new(AtomicUsize::new(0));
+        let counted = scans.clone();
+        let (clock, _) = test_clock();
+        let (volumes, _) = cached_volumes(
+            Arc::new(Vec::new),
+            // The first look has a volume diskutil could not describe; the second is whole.
+            Arc::new(move || scan(counted.fetch_add(1, Ordering::SeqCst) > 0)),
+            clock,
+            VOLUME_CACHE_TTL,
+        );
+
+        volumes();
+        volumes();
+        assert_eq!(
+            scans.load(Ordering::SeqCst),
+            2,
+            "an incomplete scan is looked at again"
+        );
+        volumes();
+        assert_eq!(scans.load(Ordering::SeqCst), 2, "a complete scan is kept");
+    }
+
+    #[test]
+    fn volume_cache_expires_after_its_ttl() {
+        let scans = Arc::new(AtomicUsize::new(0));
+        let counted = scans.clone();
+        let (clock, offset) = test_clock();
+        let (volumes, _) = cached_volumes(
+            Arc::new(Vec::new),
+            Arc::new(move || {
+                counted.fetch_add(1, Ordering::SeqCst);
+                scan(true)
+            }),
+            clock,
+            VOLUME_CACHE_TTL,
+        );
+
+        volumes();
+        *offset.lock().unwrap() = VOLUME_CACHE_TTL - std::time::Duration::from_secs(1);
+        volumes();
+        assert_eq!(scans.load(Ordering::SeqCst), 1);
+        *offset.lock().unwrap() = VOLUME_CACHE_TTL;
+        volumes();
+        assert_eq!(scans.load(Ordering::SeqCst), 2);
+        volumes();
+        assert_eq!(scans.load(Ordering::SeqCst), 2);
+    }
+
+    #[test]
+    fn volume_cache_drops_a_scan_an_invalidation_overtook() {
+        let scans = Arc::new(AtomicUsize::new(0));
+        let counted = scans.clone();
+        let refresh_slot: Arc<std::sync::OnceLock<RefreshVolumesFn>> = Default::default();
+        let during_scan = refresh_slot.clone();
+        let (clock, _) = test_clock();
+        let (volumes, refresh) = cached_volumes(
+            Arc::new(Vec::new),
+            Arc::new(move || {
+                // Something changes while the first scan runs. The cache lock is free, so
+                // this does not wait for the scan.
+                if counted.fetch_add(1, Ordering::SeqCst) == 0 {
+                    (during_scan.get().unwrap())();
+                }
+                scan(true)
+            }),
+            clock,
+            VOLUME_CACHE_TTL,
+        );
+        let _ = refresh_slot.set(refresh);
+
+        volumes();
+        volumes();
+        assert_eq!(
+            scans.load(Ordering::SeqCst),
+            2,
+            "the overtaken scan was not kept"
+        );
+        volumes();
+        assert_eq!(scans.load(Ordering::SeqCst), 2);
+    }
+
+    #[test]
+    fn volume_cache_survives_a_panicking_scan() {
+        let scans = Arc::new(AtomicUsize::new(0));
+        let counted = scans.clone();
+        let (clock, _) = test_clock();
+        let (volumes, refresh) = cached_volumes(
+            Arc::new(Vec::new),
+            Arc::new(move || {
+                if counted.fetch_add(1, Ordering::SeqCst) == 0 {
+                    panic!("scan failed");
+                }
+                scan(true)
+            }),
+            clock,
+            VOLUME_CACHE_TTL,
+        );
+
+        let first = volumes.clone();
+        assert!(std::panic::catch_unwind(std::panic::AssertUnwindSafe(move || first())).is_err());
+        volumes();
+        refresh();
         volumes();
         assert_eq!(scans.load(Ordering::SeqCst), 3);
     }

@@ -556,6 +556,7 @@ impl Core {
         port: &str,
         t: Timing,
     ) -> Result<Option<MscRead>> {
+        self.gear.volumes_changed();
         let before: HashSet<PathBuf> = (self.gear.volumes)().into_iter().map(|v| v.mount).collect();
         let (mut s, _) = CliSession::enter(ports.open(port, BAUD)?, t)?;
         let help = s.command("help")?;
@@ -566,6 +567,9 @@ impl Core {
         s.msc()?;
         let deadline = Instant::now() + t.reboot;
         let vol = loop {
+            // A fresh look each time: a first look at the new disk may have been incomplete,
+            // and a process without a `/Volumes` watcher hears of no mount.
+            self.gear.volumes_changed();
             if let Some(v) = (self.gear.volumes)()
                 .into_iter()
                 .find(|v| !before.contains(&v.mount) && !bbl_files(&v.mount).is_empty())

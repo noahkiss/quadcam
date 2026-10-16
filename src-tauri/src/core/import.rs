@@ -362,7 +362,10 @@ impl Core {
                 match self.ensure_session_card() {
                     Ok(_) => {
                         let s = self.session().unwrap_or_else(|| s.clone());
-                        delete_imported_clips(&tools, &s)
+                        let deleted = delete_imported_clips(&tools, &s);
+                        // An emptied card may no longer read as a card to Gear.
+                        self.gear.volumes_changed();
+                        deleted
                     }
                     // The outcome says why every clip stays, not "no longer on the card".
                     Err(e) => {
@@ -577,7 +580,7 @@ impl Core {
             .clone()
             .context("Clips came from a folder, not a card.")?;
         let policy = crate::sources::get(s.kind).card_policy();
-        let eject_error = disk::format_card_with(
+        let formatted = disk::format_card_with(
             &card,
             &s.source,
             &plan.label,
@@ -585,7 +588,10 @@ impl Core {
             disk::EraseBy::Import,
             &*self.gear.dji_usb,
             &|| self.current()?.format_ready(),
-        )?;
+        );
+        // Even a failed format may have erased or remounted the card.
+        self.gear.volumes_changed();
+        let eject_error = formatted?;
         let mut latest = self.current()?;
         latest.card = None;
         match &eject_error {
