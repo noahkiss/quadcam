@@ -1,7 +1,7 @@
 import type { PlaceTrend } from "../../../ipc/types";
 import { fmtDay } from "../../../lib/format";
 import { hhmm, num } from "../../../lib/flights";
-import { SectionCard } from "../../../components/dash/SectionCard";
+import { Disclosure } from "../../../components/dash/Disclosure";
 import styles from "./RangeTrend.module.css";
 
 const W = 560;
@@ -13,13 +13,15 @@ const TICKS = [0, 50, 100];
 export function RangeTrend({ places }: { places: PlaceTrend[] }) {
   if (!places.length) return null;
   return (
-    <SectionCard title="Range by place">
-      <div className={styles.section}>
-        {places.map((p) => (
-          <PlaceChart key={p.place} trend={p} />
-        ))}
-      </div>
-    </SectionCard>
+    <section aria-label="Range by place">
+      <Disclosure summary="Range by place" count={places.length}>
+        <div className={styles.section}>
+          {places.map((p) => (
+            <PlaceChart key={p.place} trend={p} />
+          ))}
+        </div>
+      </Disclosure>
+    </section>
   );
 }
 

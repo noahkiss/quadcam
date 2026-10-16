@@ -3,6 +3,16 @@
   grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
   gap: var(--s-3);
 }
+/* A narrow page: two compact tiles a row. */
+@container content (max-width: 600px) {
+  .row {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: var(--s-2);
+  }
+  .stat {
+    padding: var(--s-2) var(--s-3);
+  }
+}
 .stat {
   display: flex;
   flex-direction: column;

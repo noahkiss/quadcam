@@ -93,3 +93,22 @@ select.popup:focus-visible {
   font-size: var(--t-md);
   line-height: 1.5;
 }
+/* Repairs: the clip's frame beside its name. */
+.clipCell {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s-2);
+  padding: 0;
+  border: 0;
+  background: none;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.thumb {
+  flex: none;
+  width: 48px;
+  height: 27px;
+  border-radius: var(--r-1);
+  background-color: var(--crust);
+}

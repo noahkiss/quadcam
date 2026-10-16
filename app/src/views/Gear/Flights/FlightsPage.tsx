@@ -3,13 +3,14 @@ import { useStore } from "../../../store";
 import { api, errText, pickFolder, pickSavePath } from "../../../ipc/api";
 import type { Crash, FlightReport, SessionReport } from "../../../ipc/types";
 import { Button } from "../../../components/Button";
-import { Select, SelectField } from "../../../components/Field";
+import { Select } from "../../../components/Field";
 import { SegmentedControl } from "../../../components/SegmentedControl";
 import { DataTable, type Column } from "../../../components/dash/DataTable";
 import { EmptyState } from "../../../components/dash/EmptyState";
 import { FactList } from "../../../components/dash/FactList";
 import { PageHeader } from "../../../components/dash/PageHeader";
 import { SectionCard } from "../../../components/dash/SectionCard";
+import { DetailDrawer, WithDrawer } from "../../../components/dash/DetailDrawer";
 import { Stat, StatRow } from "../../../components/dash/StatRow";
 import { toast } from "../../../components/toastStore";
 import { fmtDay } from "../../../lib/format";
@@ -20,32 +21,61 @@ import { RangeTrend } from "./RangeTrend";
 import { useGearData } from "./useGearData";
 import styles from "./Flights.module.css";
 
-/** Gear > Flights: the flights of a day from the radio logs, and the session report. */
+/** Gear > Flights: the flights of a day from the radio logs, and the session report. The
+ *  header holds the section switch and the day. */
 export function FlightsPage() {
   const segment = useStore((s) => s.gearSegment);
   const setSegment = useStore((s) => s.setGearSegment);
   const seg = segment === "report" ? "report" : "flights";
+  const flights = useGearData(() => api.gearFlights());
+  const days = flights.data?.days ?? [];
+  const [day, setDay] = useState<string | null>(null);
+  const [reportDay, setReportDay] = useState<string>("");
+  const shown = day && days.includes(day) ? day : (days[0] ?? null);
+  const dayPicker =
+    seg === "report" ? (
+      <Select aria-label="Day" value={reportDay} onChange={(e) => setReportDay(e.target.value)}>
+        <option value="">Last import</option>
+        {days.map((d) => (
+          <option key={d} value={d}>
+            {fmtDay(d, true)}
+          </option>
+        ))}
+      </Select>
+    ) : (
+      shown && (
+        <Select aria-label="Day" value={shown} onChange={(e) => setDay(e.target.value)}>
+          {days.map((d) => (
+            <option key={d} value={d}>
+              {fmtDay(d, true)}
+            </option>
+          ))}
+        </Select>
+      )
+    );
   return (
     <>
       <PageHeader
         id="gear-title"
         title="Flights"
         actions={
-          <Button icon="folder-open" onClick={addFolder}>
-            Add log folder…
-          </Button>
+          <>
+            <SegmentedControl
+              label="Sections"
+              value={seg}
+              onChange={setSegment}
+              segments={[
+                { value: "flights", label: "Flights" },
+                { value: "report", label: "Session report" },
+              ]}
+            />
+            {dayPicker}
+          </>
         }
+        more={[{ label: "Add log folder…", icon: "folder-open", run: () => void addFolder() }]}
+        moreLabel="Flights actions"
       />
-      <SegmentedControl
-        label="Sections"
-        value={seg}
-        onChange={setSegment}
-        segments={[
-          { value: "flights", label: "Flights" },
-          { value: "report", label: "Session report" },
-        ]}
-      />
-      {seg === "report" ? <Report /> : <Flights />}
+      {seg === "report" ? <Report day={reportDay} /> : <Flights data={flights.data} error={flights.error} shown={shown} />}
     </>
   );
 }
@@ -73,12 +103,9 @@ function DayStats({ r }: { r: SessionReport | null }) {
   );
 }
 
-function Flights() {
-  const { data, error } = useGearData(() => api.gearFlights());
+function Flights({ data, error, shown }: { data: Awaited<ReturnType<typeof api.gearFlights>> | null; error: string | null; shown: string | null }) {
   const packs = useGearData(() => api.gearPacks());
-  const [day, setDay] = useState<string | null>(null);
   const [open, setOpen] = useState<string | null>(null);
-  const shown = data && (day && data.days.includes(day) ? day : data.days[0]);
   const report = useGearData(() => (shown ? api.gearSessionReport(shown) : Promise.resolve(null)), [shown]);
   if (error) return <p className={styles.muted}>{error}</p>;
   if (!data) return null;
@@ -103,31 +130,21 @@ function Flights() {
         </button>
       ),
     },
-    { key: "length", header: "Length", numeric: true, cell: (r) => mmss(r.flight.secs) },
-    { key: "aircraft", header: "Aircraft", cell: (r) => r.aircraft || r.flight.model || "–" },
-    { key: "pack", header: "Pack", cell: (r) => <PackPicker r={r} labels={labels} /> },
-    { key: "hover", header: "Hover", numeric: true, optional: true, cell: (r) => num(r.flight.hover.all, 0, "%") },
-    { key: "sag", header: "Sag (p5 / min)", numeric: true, optional: true, cell: (r) => `${num(r.flight.sag_p5_v, 2)} / ${num(r.flight.sag_min_v, 2, "V")}` },
-    { key: "resting", header: "Resting", numeric: true, cell: (r) => num(r.flight.resting_v, 2, "V") },
+    { key: "length", header: "Length", numeric: true, stack: "top", cell: (r) => mmss(r.flight.secs) },
+    { key: "aircraft", header: "Aircraft", optional: true, cell: (r) => r.aircraft || r.flight.model || "–" },
+    { key: "pack", header: "Pack", stack: "top", cell: (r) => <PackPicker r={r} labels={labels} /> },
     { key: "used", header: "Used", numeric: true, cell: (r) => num(r.flight.mah, 0, "mAh") },
+    { key: "resting", header: "Resting", numeric: true, cell: (r) => num(r.flight.resting_v, 2, "V") },
     { key: "link", header: "Worst link", numeric: true, cell: (r) => `${num(r.flight.worst_lq, 0, "%")} · ${num(r.flight.worst_rssi_db, 0, "dB")}` },
     { key: "dropouts", header: "Dropouts", numeric: true, cell: (r) => <span className={r.flight.dropouts.length ? styles.warn : undefined}>{r.flight.dropouts.length}</span> },
   ];
   return (
     <>
-      <div className={styles.bar}>
-        <SelectField label="Day" value={shown} onChange={(e) => setDay(e.target.value)}>
-          {data.days.map((d) => (
-            <option key={d} value={d}>
-              {fmtDay(d, true)}
-            </option>
-          ))}
-        </SelectField>
-      </div>
       <DayStats r={report.data && report.data.days.includes(shown) ? report.data : null} />
-      <DataTable label={`Flights on ${shown}`} columns={columns} rows={list} rowKey={(r) => r.flight.id} />
-      {sel && <FlightDetail r={sel} />}
-      <RangeTrend places={data.places} />
+      <WithDrawer drawer={sel && <FlightDetail r={sel} onClose={() => setOpen(null)} />}>
+        <DataTable label={`Flights on ${shown}`} columns={columns} rows={list} rowKey={(r) => r.flight.id} />
+        <RangeTrend places={data.places} />
+      </WithDrawer>
     </>
   );
 }
@@ -155,11 +172,14 @@ function PackPicker({ r, labels }: { r: FlightReport; labels: string[] }) {
   );
 }
 
-function FlightDetail({ r }: { r: FlightReport }) {
+/** The selected flight in the drawer: hover, sag and the other facts, the clip, and its
+ *  dropouts. */
+function FlightDetail({ r, onClose }: { r: FlightReport; onClose: () => void }) {
   const f = r.flight;
   const openDetail = useStore((s) => s.openDetail);
   const facts = [
     { label: "Hover", value: `${num(f.hover.all, 0, "%")} · first third ${num(f.hover.early, 0, "%")} · last third ${num(f.hover.late, 0, "%")}` },
+    { label: "Sag (p5 / min)", value: `${num(f.sag_p5_v, 2)} / ${num(f.sag_min_v, 2, "V")}` },
     { label: "Resting voltage", value: `${num(f.resting_v, 2, "V")}${f.resting_from === "next_arm" ? " (first reading of the next flight)" : ""}` },
     ...(r.threshold_mah != null ? [{ label: `Warning at ${num(r.threshold_mah, 0, "mAh")}`, value: r.crossed_at_s != null ? `after ${mmss(r.crossed_at_s)}` : "Not reached" }] : []),
     { label: "Most current", value: num(f.max_current_a, 1, "A") },
@@ -186,16 +206,14 @@ function FlightDetail({ r }: { r: FlightReport }) {
     { key: "kind", header: "Kind", cell: (d) => (d.downlink_only ? "Telemetry only" : "Link lost") },
   ];
   return (
-    <SectionCard title={`Flight at ${hhmm(f.start)}`}>
+    <DetailDrawer title={`Flight at ${hhmm(f.start)}`} subtitle={[mmss(f.secs), r.aircraft || f.model, r.pack].filter(Boolean).join(" · ")} onClose={onClose}>
       <FactList facts={facts} />
       {f.dropouts.length > 0 && <DataTable label="Dropouts" compact columns={drops} rows={f.dropouts} rowKey={(d) => String(d.start_s)} />}
-    </SectionCard>
+    </DetailDrawer>
   );
 }
 
-function Report() {
-  const flights = useGearData(() => api.gearFlights());
-  const [day, setDay] = useState<string>("");
+function Report({ day }: { day: string }) {
   const { data, error } = useGearData(() => api.gearSessionReport(day || null), [day]);
   const onDeviceOn = useStore(sel.onDevice);
   const onDeviceReady = useStore((x) => x.onDeviceReady);
@@ -223,14 +241,6 @@ function Report() {
   return (
     <>
       <div className={styles.bar}>
-        <SelectField label="Day" value={day} onChange={(e) => setDay(e.target.value)}>
-          <option value="">Last import</option>
-          {(flights.data?.days || []).map((d) => (
-            <option key={d} value={d}>
-              {fmtDay(d, true)}
-            </option>
-          ))}
-        </SelectField>
         <span className={styles.grow} />
         {onDeviceOn && onDeviceReady && !shown && (
           <Button icon="sparkle" disabled={summarizing} onClick={summarize}>

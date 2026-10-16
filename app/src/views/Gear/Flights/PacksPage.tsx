@@ -11,7 +11,10 @@ import { DataTable, type Column } from "../../../components/dash/DataTable";
 import { EmptyState } from "../../../components/dash/EmptyState";
 import { PageHeader } from "../../../components/dash/PageHeader";
 import { SectionCard } from "../../../components/dash/SectionCard";
-import { Stat, StatRow } from "../../../components/dash/StatRow";
+import { DetailDrawer, WithDrawer } from "../../../components/dash/DetailDrawer";
+import { Disclosure } from "../../../components/dash/Disclosure";
+import { MoreMenu } from "../../../components/dash/MoreMenu";
+import { SummaryLine } from "../../../components/dash/SummaryLine";
 import { StatusDot, type StatusTone } from "../../../components/dash/StatusDot";
 import { toast } from "../../../components/toastStore";
 import { fmtDay } from "../../../lib/format";
@@ -29,7 +32,8 @@ const run = async (f: () => Promise<unknown>) => {
 
 const TONE: Record<ChargeState, StatusTone> = { charged: "ok", flown: "warn", unknown: "idle" };
 
-/** Gear > Packs: the packs with their history, and the charging sheet. */
+/** Gear > Packs: the packs (history in a drawer, retired ones folded), and the charging
+ *  sheet. */
 export function PacksPage() {
   const segment = useStore((s) => s.gearSegment);
   const setSegment = useStore((s) => s.setGearSegment);
@@ -45,24 +49,25 @@ export function PacksPage() {
       <PageHeader
         id="gear-title"
         title="Packs"
-        actions={
-          seg === "charging" ? (
-            <Button icon="add" onClick={() => setType({ name: "", chemistry: "lipo", cells: 1 })}>
-              Add type…
-            </Button>
-          ) : (
-            <Button icon="add" onClick={() => setPack({ label: "", pack_type: data?.types[0]?.pack_type.name ?? null })}>
-              Add pack…
-            </Button>
+        subtitle={
+          data && (
+            <SummaryLine
+              parts={[
+                `${live.length} ${live.length === 1 ? "pack" : "packs"}`,
+                { text: `${charged} of ${live.length} charged`, tone: live.length && charged < live.length ? "warn" : undefined },
+                weak > 0 && { text: `${weak} weak`, tone: "warn" },
+                `${live.reduce((n, p) => n + p.cycles, 0)} cycles`,
+              ]}
+            />
           )
         }
+        fold={[
+          seg === "charging"
+            ? { label: "Add type…", icon: "add", run: () => setType({ name: "", chemistry: "lipo", cells: 1 }) }
+            : { label: "Add pack…", icon: "add", run: () => setPack({ label: "", pack_type: data?.types[0]?.pack_type.name ?? null }) },
+        ]}
+        moreLabel="Packs actions"
       />
-      <StatRow label="Summary">
-        <Stat label="Packs" value={live.length} sub={data && data.packs.length > live.length ? `${data.packs.length - live.length} retired` : undefined} />
-        <Stat label="Charged" value={`${charged} of ${live.length}`} tone={live.length && charged < live.length ? "warn" : undefined} />
-        <Stat label="Weak" value={weak} tone={weak ? "warn" : undefined} />
-        <Stat label="Cycles" value={live.reduce((n, p) => n + p.cycles, 0)} />
-      </StatRow>
       <SegmentedControl
         label="Sections"
         value={seg}
@@ -83,6 +88,8 @@ export function PacksPage() {
 function Packs({ v, onEdit }: { v: PacksView; onEdit: (p: Pack) => void }) {
   const [open, setOpen] = useState<string | null>(null);
   const sel = v.packs.find((p) => p.pack.label === open) || null;
+  const live = v.packs.filter((p) => !p.pack.retired);
+  const retired = v.packs.filter((p) => p.pack.retired);
   const columns: Column<PackView>[] = [
     {
       key: "label",
@@ -95,7 +102,7 @@ function Packs({ v, onEdit }: { v: PacksView; onEdit: (p: Pack) => void }) {
       ),
     },
     { key: "type", header: "Type", cell: (p) => p.pack.pack_type || "–" },
-    { key: "state", header: "State", cell: (p) => (p.pack.retired ? <StatusDot tone="idle">Retired</StatusDot> : <StatusDot tone={TONE[p.state]}>{CHARGE_LABEL[p.state]}</StatusDot>) },
+    { key: "state", header: "State", stack: "top", cell: (p) => (p.pack.retired ? <StatusDot tone="idle">Retired</StatusDot> : <StatusDot tone={TONE[p.state]}>{CHARGE_LABEL[p.state]}</StatusDot>) },
     { key: "cycles", header: "Cycles", numeric: true, cell: (p) => p.cycles },
     { key: "resting", header: "Resting", numeric: true, optional: true, cell: (p) => num(p.median_resting_v, 2, "V") },
     { key: "time", header: "Flight time", numeric: true, optional: true, cell: (p) => mmss(p.median_secs) },
@@ -110,18 +117,28 @@ function Packs({ v, onEdit }: { v: PacksView; onEdit: (p: Pack) => void }) {
               Mark charged
             </Button>
           )}
-          <Button size="sm" onClick={() => onEdit(p.pack)}>
-            Edit…
-          </Button>
+          <MoreMenu
+            label={`More actions for ${p.pack.label}`}
+            items={[
+              { label: "Edit…", run: () => onEdit(p.pack) },
+              { label: p.pack.retired ? "Return to use" : "Retire", run: () => run(() => api.gearPackSave({ ...p.pack, retired: !p.pack.retired })) },
+            ]}
+          />
         </div>
       ),
     },
   ];
   return (
-    <>
-      <DataTable label="Packs" columns={columns} rows={v.packs} rowKey={(p) => p.pack.label} empty={<EmptyState icon="battery">No packs saved.</EmptyState>} />
-      {sel && <History p={sel} />}
-    </>
+    <WithDrawer drawer={sel && <History p={sel} onClose={() => setOpen(null)} />}>
+      <DataTable label="Packs" columns={columns} rows={live} rowKey={(p) => p.pack.label} empty={<EmptyState icon="battery">No packs saved.</EmptyState>} />
+      {retired.length > 0 && (
+        <section aria-label="Retired packs">
+          <Disclosure summary={`${retired.length} retired`}>
+            <DataTable label="Retired packs" columns={columns} rows={retired} rowKey={(p) => p.pack.label} />
+          </Disclosure>
+        </section>
+      )}
+    </WithDrawer>
   );
 }
 
@@ -130,17 +147,18 @@ type PackFlight = PackView["history"][number];
 const historyColumns: Column<PackFlight>[] = [
   { key: "day", header: "Day", rowHeader: true, cell: (h) => fmtDay(h.start.slice(0, 10)) },
   { key: "start", header: "Start", numeric: true, cell: (h) => hhmm(h.start) },
-  { key: "length", header: "Length", numeric: true, cell: (h) => mmss(h.secs) },
+  { key: "length", header: "Length", numeric: true, stack: "top", cell: (h) => mmss(h.secs) },
   { key: "used", header: "Used", numeric: true, cell: (h) => num(h.mah, 0, "mAh") },
   { key: "sag", header: "Sag (p5 / min)", numeric: true, cell: (h) => `${num(h.sag_p5_v, 2)} / ${num(h.sag_min_v, 2, "V")}` },
   { key: "resting", header: "Resting", numeric: true, cell: (h) => num(h.resting_v, 2, "V") },
 ];
 
-function History({ p }: { p: PackView }) {
+/** A pack's flights in the drawer, newest first. */
+function History({ p, onClose }: { p: PackView; onClose: () => void }) {
   return (
-    <SectionCard title={`History of ${p.pack.label}`}>
+    <DetailDrawer title={`History of ${p.pack.label}`} subtitle={[p.pack.pack_type, `${p.cycles} cycles`].filter(Boolean).join(" · ")} onClose={onClose}>
       <DataTable label={`Flights on ${p.pack.label}`} compact columns={historyColumns} rows={p.history} rowKey={(h) => h.flight} empty={<EmptyState>No flights on this pack yet.</EmptyState>} />
-    </SectionCard>
+    </DetailDrawer>
   );
 }
 
@@ -196,6 +214,7 @@ function PackSheet({ pack, types, onClose }: { pack: Pack; types: string[]; onCl
 
 function Charging({ v, onEdit }: { v: PacksView; onEdit: (t: PackType) => void }) {
   const [notes, setNotes] = useState<string | null>(null);
+  const [notesOpen, setNotesOpen] = useState(!!v.notes.trim());
   const columns: Column<PackTypeView>[] = [
     { key: "type", header: "Type", rowHeader: true, cell: (t) => t.pack_type.name },
     { key: "chem", header: "Chemistry", cell: (t) => `${CHEMISTRY_LABEL[t.pack_type.chemistry || "lipo"]} ${t.pack_type.cells ?? 1}S` },
@@ -219,9 +238,10 @@ function Charging({ v, onEdit }: { v: PacksView; onEdit: (t: PackType) => void }
   return (
     <>
       <DataTable label="Pack types" columns={columns} rows={v.types} rowKey={(t) => t.pack_type.name} empty={<EmptyState icon="battery">No pack types saved.</EmptyState>} />
-      <SectionCard title={<label htmlFor="charging-notes">Notes</label>} label="Charging notes">
+      <SectionCard title="Notes" label="Charging notes" collapse={{ open: notesOpen, onToggle: setNotesOpen }}>
         <textarea
           id="charging-notes"
+          aria-label="Charging notes"
           className={styles.notes}
           value={notes ?? v.notes}
           onChange={(e) => setNotes(e.target.value)}

@@ -85,3 +85,55 @@ test("the Bench sums up in its header; a row keeps Review and puts Discard in it
   await page.keyboard.press("Escape");
   if (process.env.QC_SHOTS) await page.screenshot({ path: `${process.env.QC_SHOTS}/pages-bench-420.png` });
 });
+
+test("a flight opens in a drawer beside the table, and as a full-width sheet in a narrow window", async ({ app, page }) => {
+  await app.open();
+  await go(page, "Flights");
+  const table = page.getByRole("table", { name: "Flights on 2026-10-04" });
+  await table.getByRole("button", { name: "10:00" }).click();
+  const drawer = page.getByRole("complementary", { name: "Flight at 10:00" });
+  await expect(drawer).toBeVisible();
+  await expect(table).toBeVisible();
+  const [t, d] = [await table.locator("xpath=..").boundingBox(), await drawer.boundingBox()];
+  expect(d!.x).toBeGreaterThan(t!.x + t!.width - 1);
+  if (process.env.QC_SHOTS) await page.screenshot({ path: `${process.env.QC_SHOTS}/pages-flight-drawer-1280.png` });
+  await page.keyboard.press("Escape");
+  await drawer.getByRole("button", { name: "Close" }).click();
+  await expect(drawer).toHaveCount(0);
+
+  await page.setViewportSize({ width: 420, height: 900 });
+  await table.getByRole("button", { name: "10:00" }).click();
+  const box = (await drawer.boundingBox())!;
+  expect(Math.round(box.width)).toBe(420);
+  await expect(drawer.getByRole("button", { name: "Close" })).toBeFocused();
+  if (process.env.QC_SHOTS) await page.screenshot({ path: `${process.env.QC_SHOTS}/pages-flight-sheet-420.png` });
+  await page.keyboard.press("Escape");
+  await expect(drawer).toHaveCount(0);
+});
+
+test("a pack retires from its menu and folds under the retired disclosure", async ({ app, page }) => {
+  await app.open();
+  await go(page, "Packs");
+  await page.getByRole("table", { name: "Packs" }).getByRole("button", { name: "More actions for A3" }).click();
+  await page.getByRole("menuitem", { name: "Retire" }).click();
+  expect((await app.method("gear_pack_save")).at(-1)).toMatchObject({ pack: { label: "A3", retired: true } });
+  const retired = page.getByRole("region", { name: "Retired packs" });
+  await retired.getByText("1 retired").click();
+  await expect(retired.getByRole("table", { name: "Retired packs" })).toContainText("A3");
+});
+
+test("Repairs puts open crashes first with Mark repaired and folds the repaired ones", async ({ app, page }) => {
+  await app.open();
+  await app.core(
+    `c => { c.flights.crashes = [{ id: "crash-1", clip: null, time_s: 65, aircraft: "Whoop", day: "2026-10-04", broke: "arm", parts: ["frame"], note: "", repaired: false }, { id: "crash-2", clip: null, time_s: 10, aircraft: "Whoop", day: "2026-10-01", broke: "prop", parts: [], note: "", repaired: true }]; c.emit("gear-changed"); }`,
+  );
+  await go(page, "Repairs");
+  await expect(page.locator("[data-component=page-header]")).toContainText("1 open");
+  const card = page.getByRole("region", { name: "Whoop" });
+  await expect(card.getByRole("table", { name: "Crashes on Whoop" })).toContainText("arm");
+  await expect(card.getByRole("table", { name: "Crashes on Whoop" })).not.toContainText("prop");
+  await card.getByText("1 repaired").click();
+  await expect(card.getByRole("table", { name: "Repaired crashes on Whoop" })).toContainText("prop");
+  await card.getByRole("button", { name: "Mark repaired" }).click();
+  expect((await app.method("gear_crash_save")).at(-1)).toMatchObject({ id: "crash-1", repaired: true });
+});

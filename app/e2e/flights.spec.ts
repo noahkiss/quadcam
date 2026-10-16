@@ -18,8 +18,6 @@ test("flights of a day with their measures; a pack is set from the row", async (
   await expect(table.getByRole("row")).toHaveCount(4);
   const first = table.getByRole("row", { name: /10:00/ });
   await expect(first).toContainText("1:00");
-  await expect(first).toContainText("43 %");
-  await expect(first).toContainText("3.50 / 3.30 V");
   await expect(first).toContainText("3.95 V");
   await expect(first).toContainText("360 mAh");
   await expect(first.getByLabel("Pack for 10:00")).toHaveValue("A1");
@@ -30,7 +28,10 @@ test("flights of a day with their measures; a pack is set from the row", async (
   await expect(table.getByLabel("Pack for 10:03")).toHaveValue("A2");
 
   await first.getByRole("button", { name: "10:00" }).click();
-  const detail = page.getByRole("region", { name: "Flight at 10:00" });
+  // The flight opens in the drawer beside the table.
+  const detail = page.getByRole("complementary", { name: "Flight at 10:00" });
+  await expect(detail).toContainText("43 %");
+  await expect(detail).toContainText("3.50 / 3.30 V");
   await expect(detail).toContainText("first third 40 %");
   await expect(detail).toContainText("after 0:50");
   await expect(detail.getByRole("table", { name: "Dropouts" })).toContainText("Telemetry only");
@@ -39,6 +40,7 @@ test("flights of a day with their measures; a pack is set from the row", async (
 test("the range trend charts the worst link per place, with its values", async ({ app, page }) => {
   await openPage(app, page, "Flights");
   const trend = page.getByRole("region", { name: "Range by place" });
+  await trend.getByText("Range by place", { exact: true }).click();
   await expect(trend.getByRole("img", { name: /Worst link quality at Field: 3 flights, from 60 % .* to 100 % / })).toBeVisible();
   await trend.getByText("Values for Field").click();
   const table = trend.getByRole("table", { name: "Worst link at Field" });
@@ -84,8 +86,8 @@ test("packs: history, mark charged, and Pack up passes once all are charged", as
   await openPage(app, page, "Packs");
   const packs = page.getByRole("table", { name: "Packs" });
   await expect(packs.getByRole("row", { name: /A1/ })).toContainText("Flown");
-  await packs.getByRole("button", { name: "A1" }).click();
-  await expect(page.getByRole("table", { name: "Flights on A1" }).getByRole("row")).toHaveCount(2);
+  await packs.getByRole("button", { name: "A1", exact: true }).click();
+  await expect(page.getByRole("complementary", { name: "History of A1" }).getByRole("table", { name: "Flights on A1" }).getByRole("rowheader")).toHaveCount(1);
 
   for (const label of ["A1", "A2", "A3"]) await packs.getByRole("row", { name: new RegExp(label) }).getByRole("button", { name: "Mark charged" }).click();
   await expect(packs.getByRole("button", { name: "Mark charged" })).toHaveCount(0);
@@ -95,9 +97,12 @@ test("packs: history, mark charged, and Pack up passes once all are charged", as
   await expect(page.getByRole("table", { name: "Pack types" })).toContainText("4.35 V");
 
   await side(page).getByRole("button", { name: /^Pack up/ }).click();
-  const checks = page.getByRole("table", { name: "Checks" });
-  await expect(checks).toContainText("3 of 3 charged.");
-  await expect(checks).toContainText("No card in the Mac.");
+  // Checks that need something come first; the ones that passed fold away.
+  await expect(page.getByRole("table", { name: "Checks", exact: true })).toContainText("Plug in the goggles, DVR or air unit card");
+  const passed = page.getByRole("region", { name: "Passed checks" });
+  await passed.getByText(/^\d+ passed$/).click();
+  await expect(passed.getByRole("table", { name: "Passed checks" })).toContainText("3 of 3 charged.");
+  await expect(passed.getByRole("table", { name: "Passed checks" })).toContainText("No card in the Mac.");
 });
 
 test("a pack is added in a sheet", async ({ app, page }) => {
@@ -106,7 +111,7 @@ test("a pack is added in a sheet", async ({ app, page }) => {
   const sheet = dialog(page, "Add pack");
   await sheet.getByLabel("Label").fill("B1");
   await sheet.getByRole("button", { name: "Save" }).click();
-  await expect(page.getByRole("table", { name: "Packs" }).getByRole("button", { name: "B1" })).toBeVisible();
+  await expect(page.getByRole("table", { name: "Packs" }).getByRole("button", { name: "B1", exact: true })).toBeVisible();
 });
 
 test("a crash logged on a clip shows there and under Repairs", async ({ app, page }) => {
