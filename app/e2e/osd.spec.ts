@@ -9,7 +9,7 @@ import { axeSchemes, expect, test, type AppFixture } from "./fixtures";
 async function openOsd(app: AppFixture, page: Page) {
   await app.open();
   await page.getByRole("navigation", { name: "Library" }).getByRole("button", { name: /^Devices/ }).click();
-  await page.getByRole("table", { name: "Devices" }).getByRole("button", { name: /Whoop FC/ }).click();
+  await page.getByRole("table", { name: "Devices" }).getByRole("button", { name: "Whoop FC", exact: true }).click();
   await page.getByRole("group", { name: "Sections" }).getByRole("button", { name: "OSD" }).click();
 }
 

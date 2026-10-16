@@ -134,7 +134,7 @@ test("Read firmware says when no radio is in DFU mode and when the version diffe
 async function openSplash(app: AppFixture, page: Page) {
   await app.open();
   await side(page).getByRole("button", { name: /^Devices/ }).click();
-  await page.getByRole("table", { name: "Devices" }).getByRole("button", { name: /Field radio/ }).click();
+  await page.getByRole("table", { name: "Devices" }).getByRole("button", { name: "Field radio", exact: true }).click();
   await page.getByRole("group", { name: "Sections" }).getByRole("button", { name: "Splash" }).click();
 }
 

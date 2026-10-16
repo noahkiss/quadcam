@@ -115,14 +115,6 @@ export function byDay(list: LibClip[]): [string, LibClip[]][] {
   return [...m];
 }
 
-/** "Home field · Whoop · 2 clips · 2 min flying" */
-export function daySub(cs: LibClip[], fmtLong: (s: number) => string): string {
-  const places = [...new Set(cs.map((c) => c.place).filter(Boolean))];
-  const ac = [...new Set(cs.map((c) => c.aircraft).filter(Boolean))];
-  const flying = cs.reduce((a, c) => a + flyingOf(c), 0);
-  return [...places, ...ac, `${cs.length} clip${cs.length === 1 ? "" : "s"}`, `${fmtLong(flying)} flying`].join(" · ");
-}
-
 /** The Photos album action's label ("Add to Drone Album"); null without an album. */
 export function albumAction(album: string | undefined | null, n = 1): string | null {
   const a = (album || "").trim();

@@ -16,7 +16,7 @@ async function openRates(app: AppFixture, page: Page, plugged = false) {
     await app.core(`c => c.plug([{ id: "${FC_ID}", kind: "fc", link: { kind: "serial", port: "${PORT}", vid: 1155, pid: 22336, serial_number: null, manufacturer: null, product: null }, identity: { board: "BETAFPVG473" } }])`);
   }
   await page.getByRole("navigation", { name: "Library" }).getByRole("button", { name: /^Devices/ }).click();
-  await page.getByRole("table", { name: "Devices" }).getByRole("button", { name: /Whoop FC/ }).click();
+  await page.getByRole("table", { name: "Devices" }).getByRole("button", { name: "Whoop FC", exact: true }).click();
   await page.getByRole("group", { name: "Sections" }).getByRole("button", { name: "Rates" }).click();
 }
 
@@ -89,7 +89,7 @@ test("syncing a sim profile plans, backs up through the sheet and reads as match
   await app.open();
   await app.core(`c => { c.simSync.running = []; }`);
   await page.getByRole("navigation", { name: "Library" }).getByRole("button", { name: /^Devices/ }).click();
-  await page.getByRole("table", { name: "Devices" }).getByRole("button", { name: /Whoop FC/ }).click();
+  await page.getByRole("table", { name: "Devices" }).getByRole("button", { name: "Whoop FC", exact: true }).click();
   await page.getByRole("group", { name: "Sections" }).getByRole("button", { name: "Rates" }).click();
   await profiles(page).getByRole("button", { name: "1 RACE" }).click();
   const sims = page.getByRole("region", { name: "Sims" });
@@ -121,7 +121,7 @@ test("a synced sim can be restored from its backup through the sheet", async ({ 
   await app.open();
   await app.core(`c => { c.simSync.running = []; }`);
   await page.getByRole("navigation", { name: "Library" }).getByRole("button", { name: /^Devices/ }).click();
-  await page.getByRole("table", { name: "Devices" }).getByRole("button", { name: /Whoop FC/ }).click();
+  await page.getByRole("table", { name: "Devices" }).getByRole("button", { name: "Whoop FC", exact: true }).click();
   await page.getByRole("group", { name: "Sections" }).getByRole("button", { name: "Rates" }).click();
   await profiles(page).getByRole("button", { name: "1 RACE" }).click();
   const sims = page.getByRole("region", { name: "Sims" });
@@ -155,7 +155,7 @@ test("a sim that runs cannot be synced, even if it starts after the plan", async
   await app.open();
   await app.core(`c => { c.simSync.running = []; }`);
   await page.getByRole("navigation", { name: "Library" }).getByRole("button", { name: /^Devices/ }).click();
-  await page.getByRole("table", { name: "Devices" }).getByRole("button", { name: /Whoop FC/ }).click();
+  await page.getByRole("table", { name: "Devices" }).getByRole("button", { name: "Whoop FC", exact: true }).click();
   await page.getByRole("group", { name: "Sections" }).getByRole("button", { name: "Rates" }).click();
   await profiles(page).getByRole("button", { name: "1 RACE" }).click();
   const sims = page.getByRole("region", { name: "Sims" });

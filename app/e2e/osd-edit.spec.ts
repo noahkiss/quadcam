@@ -15,7 +15,7 @@ async function openEditor(app: AppFixture, page: Page) {
   await app.open();
   await app.core(`c => c.plug([{ id: "${FC_ID}", kind: "fc", link: { kind: "serial", port: "${PORT}", vid: 1155, pid: 22336, serial_number: null, manufacturer: null, product: null }, identity: { board: "BETAFPVG473" } }])`);
   await page.getByRole("navigation", { name: "Library" }).getByRole("button", { name: /^Devices/ }).click();
-  await page.getByRole("table", { name: "Devices" }).getByRole("button", { name: /Whoop FC/ }).click();
+  await page.getByRole("table", { name: "Devices" }).getByRole("button", { name: "Whoop FC", exact: true }).click();
   await page.getByRole("group", { name: "Sections" }).getByRole("button", { name: "OSD" }).click();
   await page.getByRole("group", { name: "OSD profile" }).getByRole("button", { name: /^1 RACE/ }).click();
   await expect(page.getByRole("group", { name: /OSD profile 1 on a PAL grid/ })).toBeVisible();

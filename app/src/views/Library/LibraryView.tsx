@@ -10,7 +10,7 @@ import { Button } from "../../components/Button";
 import { Chip } from "../../components/Chip";
 import { Icon } from "../../components/Icon";
 import { fmtBytes, fmtDay, fmtDur, fmtLong, tilde } from "../../lib/format";
-import { byDay, daySub, flyingOf, thumbPx } from "../../lib/library";
+import { byDay, flyingOf, thumbPx } from "../../lib/library";
 import { shareClips, trashClips } from "../../actions/library";
 import { rebuildLibrary, revealLibrary } from "../../actions/setup";
 import { ClipCard, MiniBar, stripStyle } from "./ClipCard";
@@ -23,7 +23,7 @@ import styles from "./LibraryView.module.css";
 
 const GAP = 16;
 
-type Row = { kind: "head"; day: string; clips: LibClip[]; summary: boolean } | { kind: "cards"; clips: LibClip[] } | { kind: "flat" };
+type Row = { kind: "head"; day: string; clips: LibClip[] } | { kind: "cards"; clips: LibClip[] } | { kind: "flat" };
 
 /** The library: banners, the clips (grid by day, or a list), the footer. */
 export function LibraryView({ onMenu }: { onMenu: (e: MouseEvent, id: string) => void }) {
@@ -66,12 +66,13 @@ function Banners({ list }: { list: LibClip[] }) {
 
 function Grid({ clips, onMenu }: { clips: LibClip[]; onMenu: (e: MouseEvent, id: string) => void }) {
   const ref = useRef<HTMLDivElement>(null);
-  const thumb = thumbPx(useStore(sel.thumbSize));
+  const picked = thumbPx(useStore(sel.thumbSize));
   const byDate = useStore((s) => sel.sort(s).key === "date");
-  const filterDay = useStore((s) => s.filter.day);
   const selected = useStore((s) => s.selected);
   const cursor = useStore((s) => s.cursor);
   const width = useWidth(ref);
+  // A narrow window hides the size slider: the width alone sets the columns (one or two).
+  const thumb = width > 0 && width < 600 ? thumbPx(3) : picked;
   const cols = Math.max(1, Math.floor((width + GAP) / (thumb * 1.6 + GAP)));
   useEffect(() => {
     colsNow = cols;
@@ -84,18 +85,18 @@ function Grid({ clips, onMenu }: { clips: LibClip[]; onMenu: (e: MouseEvent, id:
     };
     if (!byDate) cardRows(clips);
     else
-      byDay(clips).forEach(([day, cs], i) => {
-        out.push({ kind: "head", day, clips: cs, summary: i === 0 || filterDay === day });
+      byDay(clips).forEach(([day, cs]) => {
+        out.push({ kind: "head", day, clips: cs });
         cardRows(cs);
       });
     return out;
-  }, [clips, cols, byDate, filterDay]);
+  }, [clips, cols, byDate]);
 
   const cardH = thumb + 3 + 64;
   const v = useVirtualizer({
     count: rows.length,
     getScrollElement: () => ref.current,
-    estimateSize: (i) => (rows[i].kind === "head" ? (rows[i].summary ? 150 : 56) : cardH + GAP),
+    estimateSize: (i) => (rows[i].kind === "head" ? 64 : cardH + GAP),
     overscan: 4,
     getItemKey: (i) => (rows[i].kind === "head" ? `h${(rows[i] as { day: string }).day}` : `r${i}`),
   });
@@ -116,7 +117,7 @@ function Grid({ clips, onMenu }: { clips: LibClip[]; onMenu: (e: MouseEvent, id:
             <div key={it.key} role="row" aria-rowindex={it.index + 1} data-index={it.index} ref={v.measureElement} className={styles.vrow} style={{ transform: `translateY(${it.start}px)` }}>
               {r.kind === "head" ? (
                 <div role="gridcell" aria-colspan={cols}>
-                  <DayHead day={r.day} clips={r.clips} summary={r.summary} />
+                  <DayHead day={r.day} clips={r.clips} />
                 </div>
               ) : r.kind === "cards" ? (
                 <div className={styles.cards} style={{ gridTemplateColumns: `repeat(${cols}, minmax(0, 1fr))` }}>
@@ -156,57 +157,41 @@ function useWidth(ref: React.RefObject<HTMLElement | null>) {
   return w;
 }
 
-function DayHead({ day, clips, summary }: { day: string; clips: LibClip[]; summary: boolean }) {
+/** A day's head on one line: the date, its numbers (clips, armed or flying time, flights,
+ *  lowest battery), where and with what, the best moments, and Share. It wraps in a narrow
+ *  window: the numbers, then the moments, each on their own row. */
+function DayHead({ day, clips: cs }: { day: string; clips: LibClip[] }) {
+  const openDetail = useStore((s) => s.openDetail);
+  const withStats = cs.filter((c) => c.stats);
+  const air = withStats.length ? withStats.reduce((a, c) => a + (c.stats!.armed_s || 0), 0) : cs.reduce((a, c) => a + flyingOf(c), 0);
+  const flights = withStats.reduce((a, c) => a + (c.stats!.flights || 0), 0);
+  const volts = withStats.map((c) => c.stats!.min_rx_bat_v).filter((v): v is number => v != null);
+  const where = [...new Set([...cs.map((c) => c.place), ...cs.map((c) => c.aircraft)].filter(Boolean))].join(" · ");
+  const best = cs.length > 1 ? bestMoments(cs, 3) : [];
+  const num = (v: string, l: string) => (
+    <span className={styles.num}>
+      <b>{v}</b> {l}
+    </span>
+  );
   return (
     <div className={styles.day}>
       <div className={styles.dayHead}>
         <h2>{fmtDay(day, true)}</h2>
-        <span className={styles.sub}>{daySub(clips, fmtLong)}</span>
-        {clips.some((c) => c.last_import) && (
+        <span className={styles.nums}>
+          {num(String(cs.length), cs.length === 1 ? "clip" : "clips")}
+          {num(withStats.length ? fmtDur(air) : fmtLong(air), withStats.length ? "armed" : "flying")}
+          {flights > 0 && num(String(flights), flights === 1 ? "flight" : "flights")}
+          {volts.length > 0 && num(`${Math.min(...volts).toFixed(2)} V`, "lowest battery")}
+          {where && <span className={styles.where}>{where}</span>}
+        </span>
+        {cs.some((c) => c.last_import) && (
           <Chip kind="accent" icon="sparkle" tint="pink">
             Last import
           </Chip>
         )}
-        <span className={styles.act}>
-          <Button size="sm" variant="ghost" icon="share" onClick={(e) => shareClips(clips.map((c) => c.id), e.currentTarget)}>
-            Share
-          </Button>
-        </span>
-      </div>
-      {summary && <DaySummary clips={clips} />}
-    </div>
-  );
-}
-
-/** The day's numbers beyond the head's count and flying time; nothing when it would only
- * repeat the head. */
-function DaySummary({ clips: cs }: { clips: LibClip[] }) {
-  const openDetail = useStore((s) => s.openDetail);
-  const withStats = cs.filter((c) => c.stats);
-  if (cs.length < 2 || (!withStats.length && !cs.some((c) => c.moments.length))) return null;
-  const air = withStats.length ? withStats.reduce((a, c) => a + (c.stats!.armed_s || 0), 0) : cs.reduce((a, c) => a + flyingOf(c), 0);
-  const flights = withStats.reduce((a, c) => a + (c.stats!.flights || 0), 0);
-  const volts = withStats.map((c) => c.stats!.min_rx_bat_v).filter((v): v is number => v != null);
-  const best = bestMoments(cs, 3).map(({ clip: c, moment: m }) => ({ c, m }));
-  const stat = (v: string, l: string) => (
-    <div className={styles.stat}>
-      <b>{v}</b>
-      <span>{l}</span>
-    </div>
-  );
-  return (
-    <section className={styles.summary} aria-label="Day summary">
-      <div className={styles.stats}>
-        {stat(String(cs.length), cs.length === 1 ? "clip" : "clips")}
-        {stat(fmtDur(air), withStats.length ? "armed time" : "flying")}
-        {flights > 0 && stat(String(flights), flights === 1 ? "flight" : "flights")}
-        {volts.length > 0 && stat(`${Math.min(...volts).toFixed(2)} V`, "lowest battery")}
-      </div>
-      {best.length > 0 && (
-        <div className={styles.best}>
-          <span className={styles.lbl}>Best moments</span>
-          <ul>
-            {best.map(({ c, m }, i) => (
+        {best.length > 0 && (
+          <ul className={styles.best} aria-label="Best moments">
+            {best.map(({ clip: c, moment: m }, i) => (
               <li key={i}>
                 <button type="button" title={`${c.name} ${fmtDur(m.start)}`} onClick={() => openDetail(c.id, m.start)}>
                   <span className={styles.mini} style={stripStyle(c, momentFrame(c, m))} />
@@ -217,9 +202,14 @@ function DaySummary({ clips: cs }: { clips: LibClip[] }) {
               </li>
             ))}
           </ul>
-        </div>
-      )}
-    </section>
+        )}
+        <span className={styles.act}>
+          <Button size="sm" variant="ghost" icon="share" onClick={(e) => shareClips(cs.map((c) => c.id), e.currentTarget)}>
+            Share
+          </Button>
+        </span>
+      </div>
+    </div>
   );
 }
 

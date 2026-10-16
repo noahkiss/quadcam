@@ -42,8 +42,8 @@
 }
 .dayHead {
   display: flex;
-  align-items: baseline;
-  gap: var(--s-3);
+  align-items: center;
+  gap: var(--s-2) var(--s-4);
   flex-wrap: wrap;
 }
 .dayHead h2 {
@@ -51,59 +51,34 @@
   font-size: var(--t-xl);
   font-weight: 700;
 }
-.sub {
+.nums {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--s-1) var(--s-3);
   color: var(--muted);
   font-size: var(--t-md);
+}
+.num {
+  white-space: nowrap;
+}
+.num b {
+  font-family: var(--mono);
+  font-weight: 500;
+  color: var(--fg);
+}
+.where {
+  overflow-wrap: anywhere;
 }
 .act {
   margin-left: auto;
 }
-.summary {
-  display: grid;
-  grid-template-columns: auto minmax(0, 1fr);
-  align-items: center;
-  gap: var(--s-6);
-  margin-top: var(--s-3);
-  padding: var(--s-3) var(--s-4);
-  border-radius: var(--r-3);
-  border: 1px solid var(--border);
-  background: var(--raised);
-}
-/* Numbers on one row, labels on the row below; neither wraps. */
-.stats {
-  display: grid;
-  grid-auto-flow: column;
-  grid-auto-columns: max-content;
-  column-gap: var(--s-6);
-}
-.stat {
-  display: flex;
-  flex-direction: column;
-  white-space: nowrap;
-}
-.stat b {
-  font-size: var(--t-xl);
-  font-family: var(--mono);
-  font-weight: 500;
-}
-.stat span,
-.lbl {
-  font-size: var(--t-sm);
-  color: var(--muted);
-}
 .best {
-  display: flex;
-  flex-direction: column;
-  gap: var(--s-1);
-  min-width: 0;
-  padding-left: var(--s-6);
-  border-left: 1px solid var(--border);
-}
-.best ul {
   margin: 0;
   padding: 0;
   list-style: none;
   display: flex;
+  flex-wrap: wrap;
   gap: var(--s-2);
   min-width: 0;
 }
@@ -133,16 +108,12 @@
   overflow: hidden;
   text-overflow: ellipsis;
 }
-/* A narrow day stacks the moments under the numbers. */
-@container day (max-width: 820px) {
-  .summary {
-    grid-template-columns: minmax(0, 1fr);
-    gap: var(--s-3);
-  }
+/* A narrow day: the date, the numbers and the moments each take their own row. */
+@container day (max-width: 640px) {
+  .dayHead h2,
+  .nums,
   .best {
-    padding: var(--s-3) 0 0;
-    border-left: 0;
-    border-top: 1px solid var(--border);
+    flex-basis: 100%;
   }
 }
 .mini {
@@ -187,4 +158,19 @@
 }
 .path:hover {
   color: var(--fg);
+}
+/* A narrow window: the footer keeps the counts and the folder. */
+@container content (max-width: 600px) {
+  .pct {
+    display: none;
+  }
+  .footer {
+    gap: var(--s-2);
+  }
+  .footer > span:first-child {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
 }

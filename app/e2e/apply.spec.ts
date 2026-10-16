@@ -16,7 +16,7 @@ async function openChanges(app: AppFixture, page: Page, plugged = true) {
     await app.core(`c => c.plug([{ id: "${FC_ID}", kind: "fc", link: { kind: "serial", port: "${PORT}", vid: 1155, pid: 22336, serial_number: null, manufacturer: null, product: null }, identity: { board: "BETAFPVG473" } }])`);
   }
   await page.getByRole("navigation", { name: "Library" }).getByRole("button", { name: /^Devices/ }).click();
-  await page.getByRole("table", { name: "Devices" }).getByRole("button", { name: /Whoop FC/ }).click();
+  await page.getByRole("table", { name: "Devices" }).getByRole("button", { name: "Whoop FC", exact: true }).click();
   await page.getByRole("group", { name: "Sections" }).getByRole("button", { name: "Changes" }).click();
 }
 

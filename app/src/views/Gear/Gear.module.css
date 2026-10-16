@@ -63,13 +63,13 @@
   min-width: 320px;
 }
 
-/* Connected: a card per device, two columns once there is room. */
+/* Connected: a card per device, as many columns as fit (one in a narrow window). */
 .cards {
   margin: 0;
   padding: 0;
   list-style: none;
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(min(340px, 100%), 1fr));
   gap: var(--s-3);
 }
 .card {
@@ -114,8 +114,10 @@
   min-height: var(--control-h-sm);
   font-size: var(--t-md);
 }
-.cardKind {
+.cardFacts {
+  margin: 0;
   color: var(--muted);
+  font-size: var(--t-md);
 }
 .cardNext {
   flex: 1;
@@ -139,6 +141,32 @@
 .rowLink:hover {
   text-decoration: underline;
 }
-.update {
-  color: var(--warning-text);
+/* A saved device that is not plugged in: its state in muted text, no dot. */
+.away {
+  color: var(--muted);
+}
+.fw {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s-2);
+}
+.badgeButton {
+  padding: 0;
+  border: 0;
+  background: none;
+  font: inherit;
+  cursor: pointer;
+}
+.badgeButton:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+  border-radius: var(--r-1);
+}
+.hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
 }

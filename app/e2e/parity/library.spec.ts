@@ -11,7 +11,13 @@ test("groups clips by flying day, newest first", async ({ page }) => {
   await expect(page.getByRole("article")).toHaveCount(3);
   const days = page.getByRole("heading", { level: 2, name: /2026$/ });
   await expect(days).toHaveText([/Sep(tember)? 28, 2026/, /Sep(tember)? 27, 2026/]);
-  await expect(page.getByText("Home field · Whoop · 2 clips · 2 min flying")).toBeVisible();
+  // The day's head carries its numbers, where and with what.
+  const head = days.nth(1).locator("..");
+  await expect(head).toContainText("2 clips");
+  await expect(head).toContainText("1:50 armed");
+  await expect(head).toContainText("2 flights");
+  await expect(head).toContainText("3.42 V lowest battery");
+  await expect(head).toContainText("Home field · Whoop");
 });
 
 test("click selects; Command-click and Shift-click extend; Escape clears", async ({ page }) => {

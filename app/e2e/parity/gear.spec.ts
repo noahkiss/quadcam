@@ -106,7 +106,7 @@ test("a device plugged in shows in the sidebar; Forget removes a saved one", asy
   await expect(page.getByRole("heading", { name: "Field radio" })).toBeVisible();
 
   await side(page).getByRole("button", { name: /^Devices/ }).click();
-  await page.getByRole("table", { name: "Devices" }).getByRole("button", { name: /Whoop FC/ }).click();
+  await page.getByRole("table", { name: "Devices" }).getByRole("button", { name: "Whoop FC", exact: true }).click();
   const fc = page.getByRole("region", { name: "Whoop FC" });
   await expect(fc).toContainText("Not connected");
   await expect(fc).toContainText("4.5.1");

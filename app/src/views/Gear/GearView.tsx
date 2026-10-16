@@ -1,20 +1,16 @@
 import { useState } from "react";
 import { useStore } from "../../store";
-import { api, errText } from "../../ipc/api";
-import { ask } from "../../store";
 import { Button } from "../../components/Button";
 import { EmptyState } from "../../components/dash/EmptyState";
 import { MoreMenu } from "../../components/dash/MoreMenu";
 import { SegmentedControl } from "../../components/SegmentedControl";
 import { DeviceHeader } from "../../components/gear/DeviceHeader";
-import { toast } from "../../components/toastStore";
 import { importFromDevice, prepCard } from "../../actions/session";
 import { deviceName, KIND_LABEL } from "../../lib/gear";
 import { deviceRefs, pluggedIn, useNow } from "./refs";
 import { segmentsFor } from "./segments";
 import { GEAR_PAGES } from "./pages";
-import { ConnectedPage, DevicesPage } from "./DeviceLists";
-import { identityOf } from "./Overview";
+import { ConnectedPage, DevicesPage, forgetDevice, fwFact } from "./DeviceLists";
 import { SaveDevice } from "./SaveDevice";
 import type { DeviceRef } from "./slots";
 import styles from "./Gear.module.css";
@@ -107,7 +103,7 @@ function DevicePage({ d }: { d: DeviceRef }) {
                 {d.device ? "Edit…" : "Save…"}
               </Button>
             )}
-            {d.device && <MoreMenu items={[{ label: "Forget…", icon: "trash-bin-trash", danger: true, run: () => void forget(d) }]} />}
+            {d.device && <MoreMenu items={[{ label: "Forget…", icon: "trash-bin-trash", danger: true, run: () => void forgetDevice(d) }]} />}
           </>
         }
       />
@@ -116,21 +112,4 @@ function DevicePage({ d }: { d: DeviceRef }) {
       {editing && <SaveDevice d={d} onClose={() => setEditing(false)} />}
     </section>
   );
-}
-
-/** The subtitle's firmware fact: "Betaflight 4.5.1", "EdgeTX 2.10.5". */
-function fwFact(d: DeviceRef) {
-  const id = identityOf(d);
-  return [id.firmware, id.version].filter(Boolean).join(" ") || null;
-}
-
-async function forget(d: DeviceRef) {
-  const dev = d.device!;
-  const ok = await ask(`Forget ${deviceName(dev)}?`, "Its backups stay.", { ok: "Forget", danger: true });
-  if (ok !== true) return;
-  try {
-    await api.gearDeviceForget(dev.id);
-  } catch (e) {
-    toast(errText(e), true);
-  }
 }

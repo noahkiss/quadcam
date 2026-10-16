@@ -15,7 +15,7 @@ async function openSettings(app: AppFixture, page: Page, plugged = false) {
   await app.open();
   if (plugged) await app.core(`c => c.plug([${radio}])`);
   await page.getByRole("navigation", { name: "Library" }).getByRole("button", { name: /^Devices/ }).click();
-  await page.getByRole("table", { name: "Devices" }).getByRole("button", { name: /Field radio/ }).click();
+  await page.getByRole("table", { name: "Devices" }).getByRole("button", { name: "Field radio", exact: true }).click();
   await page.getByRole("group", { name: "Sections" }).getByRole("button", { name: "Settings" }).click();
 }
 

@@ -143,6 +143,7 @@
   .table tbody tr > :not([data-stack]):not(.check) {
     order: 3;
     color: var(--muted);
+    font-family: inherit;
     font-size: var(--t-sm);
   }
   .table tbody tr > [data-label]:not([data-stack])::before {

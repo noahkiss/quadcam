@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { seedLibrary } from "../test/seed";
 import { fmtAgo, fmtBytes, fmtDur, fmtLong, fmtT, parseT } from "./format";
-import { albumAction, byDay, daySub, deadOf, flyingOf, matches, nextSort, sortClips, validSort, visibleClips } from "./library";
+import { albumAction, byDay, deadOf, flyingOf, matches, nextSort, sortClips, validSort, visibleClips } from "./library";
 
 describe("format", () => {
   it("formats sizes and dates", () => {
@@ -66,7 +66,6 @@ describe("library rules", () => {
   it("groups days and describes them", () => {
     const days = byDay(sortClips(lib.clips, { key: "date", dir: "desc" }));
     expect(days.map(([d, cs]) => [d, cs.length])).toEqual([["2026-09-28", 1], ["2026-09-27", 2]]);
-    expect(daySub(days[1][1], fmtLong)).toBe("Home field · Whoop · 2 clips · 2 min flying");
   });
 
   it("names the album action", () => {
