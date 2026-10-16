@@ -20,7 +20,7 @@
         "title": "QuadCam",
         "width": 1280,
         "height": 820,
-        "minWidth": 960,
+        "minWidth": 420,
         "minHeight": 640
       }
     ],

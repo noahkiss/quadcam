@@ -1,8 +1,12 @@
+/* The header is its own container: in a narrow one the `fold` buttons give way to the `…`
+   menu, and controls that always show wrap under the title. */
 .header {
+  container: page-header / inline-size;
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
   align-items: center;
   column-gap: var(--s-3);
+  row-gap: var(--s-2);
   min-height: var(--control-h);
 }
 .withIcon {
@@ -34,9 +38,7 @@
 .sub {
   color: var(--muted);
   font-size: var(--t-md);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  overflow-wrap: anywhere;
 }
 .actions {
   grid-column: -2;
@@ -45,4 +47,22 @@
   justify-content: flex-end;
   align-items: center;
   gap: var(--s-2);
+}
+.wide {
+  display: inline-flex;
+}
+.narrow {
+  display: none;
+}
+@container page-header (max-width: 560px) {
+  .actions .wide {
+    display: none;
+  }
+  .actions .narrow {
+    display: contents;
+  }
+  .controls {
+    grid-column: 1 / -1;
+    justify-content: flex-start;
+  }
 }

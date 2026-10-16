@@ -100,3 +100,64 @@
     display: none;
   }
 }
+/* Stacked rows: the row header and the `top` cells on the first line, the rest as a muted
+   second line, each after its header. */
+@container (max-width: 440px) {
+  .table,
+  .table tbody {
+    display: block;
+  }
+  .table thead {
+    display: none;
+  }
+  .table tbody tr {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 2px var(--s-3);
+    padding: var(--s-2) 0;
+    border-bottom: 1px solid var(--border);
+  }
+  .table tbody tr > * {
+    padding: 0 !important;
+    border: 0;
+    text-align: left !important;
+  }
+  .table tbody tr > .check {
+    order: -1;
+  }
+  .table tbody tr > [data-stack="head"] {
+    order: 0;
+    flex: 1 1 auto;
+    min-width: 0;
+  }
+  .table tbody tr > [data-stack="top"] {
+    order: 1;
+  }
+  .table tbody tr::after {
+    content: "";
+    order: 2;
+    flex-basis: 100%;
+    height: 0;
+  }
+  .table tbody tr > :not([data-stack]):not(.check) {
+    order: 3;
+    color: var(--muted);
+    font-size: var(--t-sm);
+  }
+  .table tbody tr > [data-label]:not([data-stack])::before {
+    content: attr(data-label) " ";
+  }
+  .table tbody tr > :empty,
+  .table tbody tr > [data-stack="hide"] {
+    display: none;
+  }
+  .table tbody tr.group {
+    display: block;
+    border-bottom: 0;
+    padding-bottom: 0;
+  }
+  .table tbody tr.group::after {
+    content: none;
+  }
+}

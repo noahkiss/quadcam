@@ -49,6 +49,13 @@
   gap: var(--s-3);
   flex: none;
 }
+.wide {
+  display: contents;
+}
+.narrow,
+.bar .sidebarButton {
+  display: none;
+}
 .size {
   display: flex;
   align-items: center;
@@ -67,4 +74,33 @@
 }
 .sort select {
   color: var(--fg);
+}
+/* A narrow window: the sidebar button replaces the brand, the search takes the free width,
+   and sort and grid or list fold into a menu. Over the glass the bar clears the traffic
+   lights. */
+@media (max-width: 720px) {
+  .bar {
+    gap: var(--s-2);
+    padding: 0 var(--s-3);
+  }
+  :global([data-glass]) .bar {
+    padding-left: 84px;
+  }
+  .brand,
+  .wide {
+    display: none;
+  }
+  .bar .sidebarButton {
+    display: inline-flex;
+    flex: none;
+  }
+  .narrow {
+    display: contents;
+  }
+  .right {
+    gap: var(--s-2);
+  }
+  .search {
+    width: 100%;
+  }
 }

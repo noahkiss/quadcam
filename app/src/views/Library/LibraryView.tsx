@@ -142,9 +142,14 @@ function useWidth(ref: React.RefObject<HTMLElement | null>) {
   useLayoutEffect(() => {
     const el = ref.current;
     if (!el) return;
-    const pad = 2 * 24;
-    setW(el.clientWidth - pad);
-    const ro = new ResizeObserver(() => setW(el.clientWidth - pad));
+    // The content width: the scroller less its side padding, which holds the content to
+    // --content-max.
+    const inner = () => {
+      const cs = getComputedStyle(el);
+      return el.clientWidth - parseFloat(cs.paddingLeft) - parseFloat(cs.paddingRight);
+    };
+    setW(inner());
+    const ro = new ResizeObserver(() => setW(inner()));
     ro.observe(el);
     return () => ro.disconnect();
   }, [ref]);

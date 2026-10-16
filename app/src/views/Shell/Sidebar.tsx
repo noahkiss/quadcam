@@ -1,4 +1,4 @@
-import type { ReactNode } from "react";
+import { useEffect, type MouseEvent, type ReactNode } from "react";
 import { useStore, type State } from "../../store";
 import { screenOf } from "../../store/library";
 import { sel } from "../../store/settings";
@@ -75,8 +75,21 @@ export function Sidebar() {
   const ac = L?.groups?.aircraft || [];
   const pl = L?.groups?.places || [];
   const n = (fn: (c: (typeof clips)[number]) => boolean) => clips.filter(fn).length;
+  const { sidebarOpen, setSidebarOpen } = s;
+  useEffect(() => {
+    if (!sidebarOpen) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setSidebarOpen(false);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [sidebarOpen, setSidebarOpen]);
+  // Over a narrow window, a pick closes the sidebar; a group's disclosure keeps it open.
+  const onPick = (e: MouseEvent) => {
+    if (sidebarOpen && (e.target as Element).closest("button:not([aria-expanded])")) setSidebarOpen(false);
+  };
   return (
-    <nav aria-label="Library" className={styles.side}>
+    <nav aria-label="Library" className={styles.side} id="sidebar" onClick={onPick}>
       <div className={styles.lights} data-tauri-drag-region />
       <div className={styles.groups}>
         <Group title="Library">

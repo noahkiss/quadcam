@@ -40,3 +40,14 @@
     background: var(--raised);
   }
 }
+/* A narrow page: a segmented control takes the full width and keeps its labels. */
+@container content (max-width: 560px) {
+  .track {
+    display: flex;
+    width: 100%;
+  }
+  .segment {
+    flex: 1;
+    justify-content: center;
+  }
+}

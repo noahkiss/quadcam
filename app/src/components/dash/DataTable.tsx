@@ -11,6 +11,11 @@ export interface Column<T> {
   rowHeader?: boolean;
   /** Hidden when the table is narrower than 720 px. */
   optional?: boolean;
+  /** Where the cell goes when the table folds into stacked rows (440 px and narrower):
+   *  `top` on the first line, at the right of the row header (the key value, the row's
+   *  action; a column keyed `actions` goes there by default), `hide` nowhere. Every other
+   *  cell joins the muted second line, after its header. */
+  stack?: "top" | "hide";
   /** A CSS width, such as `6rem`; the other columns share the rest. */
   width?: string;
 }
@@ -49,13 +54,18 @@ function reveal(el: Element) {
 }
 
 /** A table of rows that share columns: aligned numbers, an optional checkbox column, optional
- *  group header rows, row actions in a last column. It scrolls sideways inside its own box
- *  when the window is too narrow, and drops `optional` columns first. With `maxHeight` it
- *  scrolls down inside that box too. */
+ *  group header rows, row actions in a last column. Narrower than 720 px it drops `optional`
+ *  columns; at 440 px and under each row folds into a stacked row (see `Column.stack`). With
+ *  `maxHeight` it scrolls down inside its box. */
 export function DataTable<T>({ label, columns, rows, rowKey, selection, group, compact, empty, maxHeight }: DataTableProps<T>) {
   if (rows.length === 0 && empty) return <>{empty}</>;
   const span = columns.length + (selection ? 1 : 0);
   const cls = (c: Column<T>) => [c.numeric && styles.num, c.optional && styles.optional].filter(Boolean).join(" ") || undefined;
+  // What a cell carries for the stacked rows: its place, and its header as a label.
+  const stackOf = (c: Column<T>) => ({
+    "data-stack": c.stack ?? (c.key === "actions" ? "top" : c.rowHeader ? "head" : undefined),
+    "data-label": !c.rowHeader && typeof c.header === "string" ? c.header : undefined,
+  });
   let last: string | null = null;
   return (
     <div
@@ -64,16 +74,17 @@ export function DataTable<T>({ label, columns, rows, rowKey, selection, group, c
       style={maxHeight ? { maxHeight } : undefined}
       onFocus={maxHeight ? (e) => reveal(e.target) : undefined}
     >
-      <table className={[styles.table, compact && styles.compact].filter(Boolean).join(" ")} aria-label={label}>
+      {/* Explicit roles: the stacked rows change the table's display, which drops its implicit roles in WebKit. */}
+      <table role="table" className={[styles.table, compact && styles.compact].filter(Boolean).join(" ")} aria-label={label}>
         <thead>
-          <tr>
+          <tr role="row">
             {selection && (
-              <th scope="col" className={styles.check}>
+              <th scope="col" role="columnheader" className={styles.check}>
                 <span className={styles.hidden}>Pick</span>
               </th>
             )}
             {columns.map((c) => (
-              <th key={c.key} scope="col" className={cls(c)} style={c.width ? { width: c.width } : undefined}>
+              <th key={c.key} scope="col" role="columnheader" className={cls(c)} style={c.width ? { width: c.width } : undefined}>
                 {c.header}
               </th>
             ))}
@@ -89,15 +100,15 @@ export function DataTable<T>({ label, columns, rows, rowKey, selection, group, c
             return (
               <Fragment key={rowKey(r)}>
                 {head && (
-                  <tr className={styles.group}>
-                    <th scope="colgroup" colSpan={span}>
+                  <tr role="row" className={styles.group}>
+                    <th scope="colgroup" role="columnheader" colSpan={span}>
                       {g}
                     </th>
                   </tr>
                 )}
-                <tr className={on ? styles.on : undefined}>
+                <tr role="row" className={on ? styles.on : undefined}>
                   {selection && (
-                    <td className={styles.check}>
+                    <td role="cell" className={styles.check}>
                       <input
                         type="checkbox"
                         aria-label={selection.label(r)}
@@ -114,11 +125,11 @@ export function DataTable<T>({ label, columns, rows, rowKey, selection, group, c
                   )}
                   {columns.map((c) =>
                     c.rowHeader ? (
-                      <th key={c.key} scope="row" className={cls(c)}>
+                      <th key={c.key} scope="row" role="rowheader" className={cls(c)} {...stackOf(c)}>
                         {c.cell(r)}
                       </th>
                     ) : (
-                      <td key={c.key} className={cls(c)}>
+                      <td key={c.key} role="cell" className={cls(c)} {...stackOf(c)}>
                         {c.cell(r)}
                       </td>
                     ),

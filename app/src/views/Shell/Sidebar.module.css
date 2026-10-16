@@ -154,3 +154,16 @@
   height: 100%;
   background: var(--primary);
 }
+/* A narrow window: the sidebar is an overlay under the toolbar, opaque over the page. */
+@media (max-width: 720px) {
+  .side,
+  :global([data-glass]) .side {
+    background: var(--mantle);
+  }
+  :global([data-glass]) .lights {
+    display: none;
+  }
+  :global([data-glass]) .groups {
+    padding-top: var(--s-4);
+  }
+}

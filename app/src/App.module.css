@@ -40,9 +40,54 @@
 }
 .main {
   grid-area: main;
+  /* Pages size their layout by the content column (`@container content`), not the window. */
+  container: content / inline-size;
+  position: relative;
   min-width: 0;
   display: flex;
   flex-direction: column;
   min-height: 0;
   background: var(--bg);
+}
+/* The overlay sidebar's scrim: only in a narrow window, while the sidebar is open. */
+.scrim {
+  display: none;
+}
+/* A narrow window: the content takes the full width, and the sidebar slides over it, under
+   the toolbar, from the toolbar's sidebar button. */
+@media (max-width: 720px) {
+  .app,
+  :global([data-glass]) .app {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-areas:
+      "bar"
+      "banners"
+      "main"
+      "status";
+  }
+  .app > nav {
+    position: fixed;
+    inset: var(--bar-h) auto 0 0;
+    z-index: 40;
+    width: var(--sidebar-w);
+    max-width: calc(100vw - var(--s-8));
+    box-shadow: var(--shadow);
+    transform: translateX(-100%);
+    visibility: hidden;
+    transition:
+      transform var(--dur) var(--ease),
+      visibility 0s linear var(--dur);
+  }
+  .app[data-sidebar="open"] > nav {
+    transform: none;
+    visibility: visible;
+    transition: transform var(--dur) var(--ease);
+  }
+  .app[data-sidebar="open"] > .scrim {
+    display: block;
+    position: fixed;
+    inset: var(--bar-h) 0 0;
+    z-index: 39;
+    background: var(--scrim);
+  }
 }

@@ -22,6 +22,9 @@ import { EmptyState } from "../../components/dash/EmptyState";
 import { FactList } from "../../components/dash/FactList";
 import { MoreMenu } from "../../components/dash/MoreMenu";
 import { PageHeader } from "../../components/dash/PageHeader";
+import { SummaryLine } from "../../components/dash/SummaryLine";
+import { Disclosure } from "../../components/dash/Disclosure";
+import { DetailDrawer } from "../../components/dash/DetailDrawer";
 import { SectionCard } from "../../components/dash/SectionCard";
 import { Stat, StatRow } from "../../components/dash/StatRow";
 import { StatusDot } from "../../components/dash/StatusDot";
@@ -130,15 +133,10 @@ export function Gallery() {
       <section aria-label="Dashboard" className={styles.col}>
         <PageHeader
           title="Bench"
-          subtitle="3 staged · 1 plugged in"
-          actions={
-            <>
-              <Button size="sm">Copy as Markdown</Button>
-              <Button size="sm" variant="primary">
-                Copy settings…
-              </Button>
-            </>
-          }
+          subtitle={<SummaryLine parts={["3 staged", "1 plugged in", { text: "1 waiting for Keep", tone: "warn" }]} />}
+          fold={[{ label: "Copy settings…", run: () => {} }]}
+          more={[{ label: "Copy as Markdown", run: () => {} }]}
+          moreLabel="Bench actions"
         />
         <StatRow label="Summary">
           <Stat label="Plugged in" value={2} />
@@ -164,6 +162,12 @@ export function Gallery() {
         <EmptyState icon="sliders" action={<Button size="sm">Open Devices</Button>}>
           Nothing staged.
         </EmptyState>
+        <Disclosure summary="Passed" count={5} defaultOpen>
+          <StatusDot tone="ok">Card space</StatusDot>
+        </Disclosure>
+        <DetailDrawer title="Pack 3" subtitle="4S 650 mAh · 12 cycles" onClose={() => {}}>
+          <FactList facts={[{ label: "Resting", value: "3.82 V" }]} />
+        </DetailDrawer>
       </section>
       <section aria-label="Gear" className={styles.col}>
         <DeviceHeader kind="fc" name="Whoop FC" state="attention" facts={["Betaflight 4.5.1"]} actions={<><Button size="sm">Edit…</Button><MoreMenu items={[{ label: "Forget…", danger: true, run: () => {} }]} /></>} />

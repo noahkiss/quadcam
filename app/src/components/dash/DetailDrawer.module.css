@@ -1,0 +1,82 @@
+/* The page and its drawer side by side once the content column has room; the drawer keeps
+   to the top of the scroller while the page scrolls. */
+.split {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--s-6);
+  align-items: start;
+}
+.main {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-6);
+  min-width: 0;
+}
+@container content (min-width: 841px) {
+  .split[data-drawer="open"] {
+    grid-template-columns: minmax(0, 1fr) clamp(320px, 34%, 480px);
+  }
+}
+.drawer {
+  position: sticky;
+  top: 0;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  max-height: calc(100vh - var(--bar-h) - 2 * var(--s-6) - 32px);
+  border: 1px solid var(--border);
+  border-radius: var(--r-3);
+  background: var(--raised);
+  overflow: hidden;
+}
+.head {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--s-2);
+  padding: var(--s-3) var(--s-3) var(--s-3) var(--s-4);
+  border-bottom: 1px solid var(--border);
+}
+.text {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.title {
+  margin: 0;
+  font-size: var(--t-lg);
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+.sub {
+  color: var(--muted);
+  font-size: var(--t-sm);
+}
+.body {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-4);
+  padding: var(--s-4);
+}
+/* A narrow content column: the drawer is a sheet over the whole page, under the toolbar. */
+@container content (max-width: 840px) {
+  .drawer {
+    position: absolute;
+    inset: 0;
+    z-index: 20;
+    max-height: none;
+    border: 0;
+    border-radius: 0;
+    background: var(--bg);
+  }
+  .body {
+    padding: var(--s-4) var(--page-pad);
+  }
+  .head {
+    padding-left: var(--page-pad);
+  }
+}

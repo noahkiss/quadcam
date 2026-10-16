@@ -77,6 +77,13 @@
      traffic lights. */
   --sidebar-w: 232px;
   --bar-h: 52px;
+  /* The content column (the window less the sidebar) fills the window up to this width,
+     then centres. Prose keeps its own 70ch measure. */
+  --content-max: 1760px;
+  /* A page's side padding, and the padding that centres the content past --content-max.
+     `100%` resolves where it is used: the scroller's width. */
+  --page-pad: var(--s-6);
+  --page-inline: max(var(--page-pad), calc((100% - var(--content-max)) / 2));
 
   --control-h: 32px;
   --control-h-sm: 28px;
@@ -110,6 +117,14 @@
     --chip-dark-fg: var(--ctp-text);
     --shadow-sm: 0 1px 2px rgb(76 79 105 / 0.25);
     --shadow: 0 24px 60px rgb(76 79 105 / 0.3);
+  }
+}
+
+/* A narrow window (720px and under, the same width in every media query): the sidebar is an
+   overlay (App.module.css) and pages keep a smaller margin. */
+@media (max-width: 720px) {
+  :root {
+    --page-pad: var(--s-4);
   }
 }
 

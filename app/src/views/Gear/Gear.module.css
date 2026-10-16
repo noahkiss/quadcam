@@ -1,15 +1,21 @@
 /* The frame of every Gear page and device page. It owns the one left edge: pages and
-   segments inside it add no padding of their own. */
+   segments inside it add no padding of their own. It scrolls at the window's full width;
+   its padding holds the content to --content-max and centres it past that. */
 .page {
   flex: 1;
   min-height: 0;
   overflow-y: auto;
-  padding: var(--s-6);
+  padding: var(--s-6) var(--page-inline);
   display: flex;
   flex-direction: column;
   gap: var(--s-6);
-  max-width: 960px;
   width: 100%;
+}
+@container content (max-width: 600px) {
+  .page {
+    padding-block: var(--s-4);
+    gap: var(--s-4);
+  }
 }
 /* The page scrolls, so its children keep their height instead of shrinking to fit. */
 .page > * {

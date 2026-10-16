@@ -59,6 +59,8 @@ export function App() {
   const env = useStore((s) => s.env);
   const setMenu = useStore((s) => s.setMenu);
   const select = useStore((s) => s.select);
+  const sidebarOpen = useStore((s) => s.sidebarOpen);
+  const setSidebarOpen = useStore((s) => s.setSidebarOpen);
   useKeys();
   useMenu();
   useEffect(() => {
@@ -76,7 +78,7 @@ export function App() {
     setMenu({ id, x: e.clientX, y: e.clientY });
   };
   return (
-    <div className={styles.app}>
+    <div className={styles.app} data-sidebar={sidebarOpen ? "open" : undefined}>
       <Toolbar />
       <div className={styles.banners}>
         {env && !env.tools && (
@@ -98,6 +100,7 @@ export function App() {
         <UpdateBannerRow />
       </div>
       <Sidebar />
+      <div className={styles.scrim} aria-hidden="true" onClick={() => setSidebarOpen(false)} />
       <main className={styles.main}>
         {screen === "gear" ? <GearView /> : screen === "detail" ? <ClipDetail /> : screen === "map" ? <MapView /> : screen === "first-run" ? <FirstRun /> : <LibraryView onMenu={onMenu} />}
       </main>

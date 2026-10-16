@@ -8,6 +8,9 @@ import { FactList } from "./FactList";
 import { MoreMenu } from "./MoreMenu";
 import { PageHeader } from "./PageHeader";
 import { StatusDot } from "./StatusDot";
+import { SummaryLine } from "./SummaryLine";
+import { Disclosure } from "./Disclosure";
+import { DetailDrawer, WithDrawer } from "./DetailDrawer";
 
 describe("PageHeader", () => {
   it("puts the title, subtitle and actions in one header, the heading under its id", async () => {
@@ -51,5 +54,61 @@ describe("MoreMenu", () => {
     await userEvent.click(screen.getByRole("menuitem", { name: "Forget…" }));
     expect(run).toHaveBeenCalledOnce();
     expect(screen.queryByRole("menu")).toBeNull();
+  });
+});
+
+describe("SummaryLine, Disclosure and DetailDrawer", () => {
+  it("joins the counts, drops empty parts, and colours a part that needs action", () => {
+    render(<SummaryLine parts={["4 plugged in", null, { text: "1 needs attention", tone: "warn" }, false]} />);
+    expect(screen.getByText("4 plugged in")).toBeInTheDocument();
+    expect(screen.getByText("1 needs attention").className).toMatch(/warn/);
+    expect(screen.getByText("4 plugged in").parentElement!.children).toHaveLength(2);
+  });
+
+  it("keeps a disclosure's rows out of the page until it opens", async () => {
+    render(
+      <Disclosure summary="Passed" count={5}>
+        <p>Card space</p>
+      </Disclosure>,
+    );
+    expect(screen.queryByText("Card space")).toBeNull();
+    await userEvent.click(screen.getByText("Passed"));
+    expect(screen.getByText("Card space")).toBeInTheDocument();
+  });
+
+  it("names the drawer by its title and closes it from its button and Escape", async () => {
+    const onClose = vi.fn();
+    const { container } = render(
+      <WithDrawer
+        drawer={
+          <DetailDrawer title="Pack 3" onClose={onClose}>
+            <p>12 flights</p>
+          </DetailDrawer>
+        }
+      >
+        <p>Packs</p>
+      </WithDrawer>,
+    );
+    const drawer = screen.getByRole("complementary", { name: "Pack 3" });
+    await userEvent.click(screen.getByRole("button", { name: "Close" }));
+    expect(onClose).toHaveBeenCalledOnce();
+    drawer.querySelector("button")!.focus();
+    await userEvent.keyboard("{Escape}");
+    expect(onClose).toHaveBeenCalledTimes(2);
+    expect(await axeViolations(container)).toEqual([]);
+  });
+});
+
+describe("PageHeader fold", () => {
+  it("shows the fold buttons and puts them, with the rare actions, in the narrow menu", async () => {
+    const copy = vi.fn();
+    render(<PageHeader title="Bench" fold={[{ label: "Copy settings…", run: copy }]} more={[{ label: "Copy as Markdown", run: () => {} }]} moreLabel="Bench actions" />);
+    await userEvent.click(screen.getByRole("button", { name: "Copy settings…" }));
+    expect(copy).toHaveBeenCalledOnce();
+    // jsdom applies no container query: both menus render; the narrow one holds every action.
+    const menus = screen.getAllByRole("button", { name: "Bench actions" });
+    expect(menus).toHaveLength(2);
+    await userEvent.click(menus[1]);
+    expect(screen.getAllByRole("menuitem").map((m) => m.textContent)).toEqual(["Copy settings…", "Copy as Markdown"]);
   });
 });

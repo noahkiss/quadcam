@@ -30,6 +30,9 @@ export interface UiSlice {
   formatConfirm: { text: string; agent: boolean; /** Card prep: the request the Erase click sends. */ prep?: FormatRequest } | null;
   /** The third-party notices window. */
   noticesOpen: boolean;
+  /** The sidebar shows over the page (a narrow window only). */
+  sidebarOpen: boolean;
+  setSidebarOpen: (on: boolean) => void;
   setNoticesOpen: (on: boolean) => void;
   openSettings: (section?: SettingsSection) => void;
   closeSettings: () => void;
@@ -46,6 +49,8 @@ export const createUiSlice: StateCreator<State, [], [], UiSlice> = (set) => ({
   dropping: false,
   formatConfirm: null,
   noticesOpen: false,
+  sidebarOpen: false,
+  setSidebarOpen: (sidebarOpen) => set({ sidebarOpen }),
   setNoticesOpen: (noticesOpen) => set({ noticesOpen }),
   openSettings: (section = "library") => set({ settingsOpen: section }),
   closeSettings: () => set({ settingsOpen: null }),
