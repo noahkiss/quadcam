@@ -291,8 +291,8 @@ pub enum VoiceCmd {
         #[arg(long)]
         clear: bool,
     },
-    /// Make the flagged takes of one sample voice or one studio pack again with another seed.
-    /// Bills ElevenLabs: without --confirm it prices them and prints the digest.
+    /// Make the flagged takes of one sample voice or one studio pack again with another seed,
+    /// or a studio pack's re-take lines named in --lines. Bills ElevenLabs: without --confirm it prices them and prints the digest.
     Retake {
         /// A sample id (`gear voice samples`).
         #[arg(long, conflicts_with = "pack", required_unless_present = "pack")]
@@ -300,7 +300,8 @@ pub enum VoiceCmd {
         /// A pack the Voice studio rendered.
         #[arg(long)]
         pack: Option<String>,
-        /// Only these flagged card paths, comma separated (default every flagged line).
+        /// Only these card paths, comma separated: flagged lines, or a pack's re-take lines
+        /// (default every flagged line).
         #[arg(long, value_delimiter = ',')]
         lines: Vec<String>,
         /// Price it; render nothing.

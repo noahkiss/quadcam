@@ -131,7 +131,8 @@ impl Core {
         Ok(out)
     }
 
-    fn held_dir(&self, id: &str) -> PathBuf {
+    /// Where the takes of a pack's lines heard wrong wait, out of the pack.
+    pub(super) fn held_dir(&self, id: &str) -> PathBuf {
         self.cache.join("voice").join("held").join(id)
     }
 

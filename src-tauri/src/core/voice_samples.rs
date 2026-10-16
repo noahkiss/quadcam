@@ -221,7 +221,7 @@ pub struct RetakeParams {
     pub sample: String,
     #[serde(default)]
     pub pack: String,
-    /// Flagged card paths; empty for every flagged line.
+    /// Flagged card paths, or a pack's re-take lines (`retakes`); empty for every flagged line.
     #[serde(default)]
     pub lines: Vec<String>,
     #[serde(default)]
@@ -387,13 +387,15 @@ fn merge_dir(from: &Path, to: &Path) -> Result<()> {
     Ok(())
 }
 
-/// The seed of a re-take: from the target and its flags, so a confirm repeats the plan its
-/// estimate priced, and a line re-taken again (its count up) gets another.
-fn retake_seed(id: &str, flags: &[&TakeFlag]) -> u64 {
+/// The seed of a re-take: from the target, its flags and its unflagged re-take lines (`held`,
+/// one key each), so a confirm repeats the plan its estimate priced, and a line re-taken again
+/// (its count up) gets another.
+fn retake_seed(id: &str, flags: &[&TakeFlag], held: &[String]) -> u64 {
     let mut key = id.to_string();
     let mut f: Vec<String> = flags
         .iter()
         .map(|f| format!("{}|{}|{}", f.line, f.at, f.retakes))
+        .chain(held.iter().cloned())
         .collect();
     f.sort();
     for x in f {
@@ -885,6 +887,40 @@ impl Core {
         }
     }
 
+    /// A seed key per unflagged re-take line of a studio pack: its path, its reason, and how
+    /// many takes of it the line index holds. A re-take adds a take, so the next one gets
+    /// another seed; the estimate and its confirm see the same count.
+    fn retake_keys(&self, m: &PackManifest, held: &[&packs::Retake]) -> Result<Vec<String>> {
+        if held.is_empty() {
+            return Ok(Vec::new());
+        }
+        let cache = BatchCache::new(&self.cache);
+        let index = LineIndex::load(&Scope {
+            cache: &cache,
+            provider: PROVIDER,
+            voice: &m.voice_id,
+            model: &m.model,
+            settings: &m.settings,
+        });
+        let spelling = Spelling::builtin()?;
+        Ok(held
+            .iter()
+            .map(|r| {
+                let spoken = spelling.apply(&r.text);
+                let takes = index
+                    .entries()
+                    .iter()
+                    .filter(|e| {
+                        e.items
+                            .iter()
+                            .any(|i| i.spoken.eq_ignore_ascii_case(&spoken))
+                    })
+                    .count();
+                format!("{}|retake|{}|{takes}", r.path, r.reason)
+            })
+            .collect())
+    }
+
     /// The text of a line of a target, when the target holds it.
     fn target_line(&self, t: &Target, line: &str) -> Result<String> {
         match t {
@@ -1052,8 +1088,10 @@ impl Core {
         Ok(FlagList { flags })
     }
 
-    /// Makes the flagged takes of one sample voice or one pack again with another seed. A paid
-    /// call: without `confirm` (or with `dry_run`) it prices the lines and answers the digest.
+    /// Makes the flagged takes of one sample voice or one pack again with another seed. A pack
+    /// also takes its re-take lines by name (a line the speech check heard wrong, or whose cut
+    /// failed its checks) without a flag. A paid call: without `confirm` (or with `dry_run`) it
+    /// prices the lines and answers the digest.
     pub fn gear_voice_retake(&self, p: &RetakeParams) -> Result<RetakeReport> {
         let t = self.flag_target(&p.sample, &p.pack)?;
         let flags = read_flags(t.dir());
@@ -1061,16 +1099,36 @@ impl Core {
             .iter()
             .filter(|f| p.lines.is_empty() || p.lines.contains(&f.line))
             .collect();
+        // The named re-take lines of a pack that carry no flag.
+        let held: Vec<&packs::Retake> = match &t {
+            Target::Pack { m, .. } => m
+                .retakes
+                .iter()
+                .filter(|r| p.lines.contains(&r.path) && !flags.iter().any(|f| f.line == r.path))
+                .collect(),
+            Target::Sample { .. } => Vec::new(),
+        };
         for l in &p.lines {
-            if !flags.iter().any(|f| f.line == *l) {
-                bail!("{l:?} has no flag in {}: flag it first.", t.id());
+            if !flags.iter().any(|f| f.line == *l) && !held.iter().any(|r| r.path == *l) {
+                bail!(
+                    "{l:?} has no flag in {} and needs no re-take: flag it first.",
+                    t.id()
+                );
             }
         }
-        if picked.is_empty() {
+        if picked.is_empty() && held.is_empty() {
             bail!("{} has no flagged take.", t.id());
         }
-        let lines: Vec<String> = picked.iter().map(|f| f.line.clone()).collect();
-        let seed = retake_seed(t.id(), &picked);
+        let lines: Vec<String> = picked
+            .iter()
+            .map(|f| f.line.clone())
+            .chain(held.iter().map(|r| r.path.clone()))
+            .collect();
+        let held_keys = match &t {
+            Target::Pack { m, .. } => self.retake_keys(m, &held)?,
+            Target::Sample { .. } => Vec::new(),
+        };
+        let seed = retake_seed(t.id(), &picked, &held_keys);
         let mut report = RetakeReport {
             kind: t.kind().into(),
             id: t.id().into(),
@@ -1170,7 +1228,7 @@ impl Core {
         let left = lines.len() - made.len();
         if left > 0 {
             report.notes.push(format!(
-                "{left} flagged lines have no new take yet: they stay flagged, and the next re-take uses another seed."
+                "{left} lines have no new take yet: they stay flagged or re-takes, and the next re-take uses another seed."
             ));
         }
         report.cleared = made;
@@ -1344,13 +1402,13 @@ mod tests {
             at: "2026-10-11T00:00:00Z".into(),
             retakes: 0,
         };
-        let s1 = retake_seed("x", &[&f]);
-        assert_eq!(s1, retake_seed("x", &[&f]));
+        let s1 = retake_seed("x", &[&f], &[]);
+        assert_eq!(s1, retake_seed("x", &[&f], &[]));
         assert!(s1 > 0);
         let again = TakeFlag {
             retakes: 1,
             ..f.clone()
         };
-        assert_ne!(s1, retake_seed("x", &[&again]));
+        assert_ne!(s1, retake_seed("x", &[&again], &[]));
     }
 }
