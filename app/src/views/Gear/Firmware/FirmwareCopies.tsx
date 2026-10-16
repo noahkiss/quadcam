@@ -6,7 +6,7 @@ import { useStore } from "../../../store";
 import { Button } from "../../../components/Button";
 import { DataTable, type Column } from "../../../components/dash/DataTable";
 import { EmptyState } from "../../../components/dash/EmptyState";
-import { SectionCard } from "../../../components/dash/SectionCard";
+import { Disclosure } from "../../../components/dash/Disclosure";
 import type { FirmwareCopy, FirmwareStatus } from "../../../ipc/types";
 import { fmtWhen } from "../../../lib/backups";
 import styles from "./Firmware.module.css";
@@ -76,16 +76,18 @@ export function FirmwareCopies({ radios }: Props) {
   ];
 
   return (
-    <SectionCard title="Saved firmware copies">
-      {copies && (
-        <DataTable
-          label="Saved firmware copies"
-          columns={columns}
-          rows={copies}
-          rowKey={(c) => c.copy.id}
-          empty={<EmptyState icon="upload-minimalistic">No firmware copies yet. Read firmware saves one.</EmptyState>}
-        />
-      )}
-    </SectionCard>
+    <section aria-label="Saved firmware copies">
+      <Disclosure summary="Saved firmware copies" count={copies?.length}>
+        {copies && (
+          <DataTable
+            label="Saved firmware copies"
+            columns={columns}
+            rows={copies}
+            rowKey={(c) => c.copy.id}
+            empty={<EmptyState icon="upload-minimalistic">No firmware copies yet. Read firmware saves one.</EmptyState>}
+          />
+        )}
+      </Disclosure>
+    </section>
   );
 }

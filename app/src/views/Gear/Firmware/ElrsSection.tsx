@@ -10,6 +10,7 @@ import { Dialog } from "../../../components/Dialog";
 import { DataTable, type Column } from "../../../components/dash/DataTable";
 import { EmptyState } from "../../../components/dash/EmptyState";
 import { SectionCard } from "../../../components/dash/SectionCard";
+import { useStoredFlag } from "../../../lib/stored";
 import { Checkbox, SelectField, TextField } from "../../../components/Field";
 import { ChecksList } from "../../../components/gear/ChecksList";
 import { DiffView, type DiffEntry } from "../../../components/gear/DiffView";
@@ -29,6 +30,7 @@ interface FlashSheet {
 }
 
 export function ElrsSection() {
+  const [shown, setShown] = useStoredFlag("quadcam.firmware.elrs.open", true);
   const preview = useStore((s) => s.values.elrsPreview === true);
   const phraseHint = useStore((s) => s.secrets.elrsBindingPhrase?.hint);
   const saveSetting = useStore((s) => s.saveSetting);
@@ -175,7 +177,7 @@ export function ElrsSection() {
     },
   ];
   return (
-    <SectionCard title="ExpressLRS (preview)" actions={<Checkbox label="Show the ELRS tools" checked={preview} onChange={(e) => void saveSetting("elrsPreview", e.target.checked)} />}>
+    <SectionCard title="ExpressLRS (preview)" collapse={{ open: shown, onToggle: setShown }} actions={<Checkbox label="Show the ELRS tools" checked={preview} onChange={(e) => void saveSetting("elrsPreview", e.target.checked)} />}>
       {preview && (
         <>
           <Banner icon="info">QuadCam has not tried these on a real radio, FC or ExpressLRS device yet.</Banner>

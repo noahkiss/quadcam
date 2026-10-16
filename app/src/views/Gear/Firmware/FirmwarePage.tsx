@@ -1,7 +1,8 @@
 // Gear > Firmware (design 2.2, 6.5): each saved device's installed firmware against the
-// newest release, Flash… for an EdgeTX radio QuadCam has proven, Read firmware, and the
-// saved firmware copies with Restore…. A check reads the
-// network only when Check for updates is selected, or when firmwareCheck is daily.
+// newest release (updates first), Flash… for an EdgeTX radio QuadCam has proven, the
+// ExpressLRS section, Read firmware… (a sheet), and the saved firmware copies with Restore…
+// behind a disclosure. A check reads the network only when Check for updates is selected,
+// or when firmwareCheck is daily.
 import { useEffect, useState } from "react";
 import { useStore } from "../../../store";
 import { Banner } from "../../../components/Banner";
@@ -9,11 +10,11 @@ import { Button } from "../../../components/Button";
 import { DataTable, type Column } from "../../../components/dash/DataTable";
 import { EmptyState } from "../../../components/dash/EmptyState";
 import { PageHeader } from "../../../components/dash/PageHeader";
-import { Stat, StatRow } from "../../../components/dash/StatRow";
+import { SummaryLine } from "../../../components/dash/SummaryLine";
 import { StatusDot, type StatusTone } from "../../../components/dash/StatusDot";
 import type { FirmwareStatus } from "../../../ipc/types";
 import { fmtWhen } from "../../../lib/backups";
-import { fmtAgo } from "../../../lib/format";
+import { fmtAgo, plural } from "../../../lib/format";
 import { ElrsSection } from "./ElrsSection";
 import { FirmwareCopies } from "./FirmwareCopies";
 import { ReadFirmware } from "./ReadFirmware";
@@ -31,6 +32,7 @@ export function FirmwarePage() {
   const load = useStore((s) => s.loadFirmware);
   const openFlash = useStore((s) => s.openFlash);
   const [busy, setBusy] = useState(false);
+  const [reading, setReading] = useState(false);
 
   useEffect(() => {
     void load(null);
@@ -43,9 +45,8 @@ export function FirmwarePage() {
   };
   const errors = view?.latest.errors ?? [];
   const checked = view?.latest.checked_at ?? null;
-  const devices = view?.devices ?? [];
+  const devices = [...(view?.devices ?? [])].sort((a, b) => Number(b.state === "update") - Number(a.state === "update"));
   const updates = devices.filter((d) => d.state === "update").length;
-  const current = devices.filter((d) => d.state === "up_to_date").length;
 
   const columns: Column<FirmwareStatus>[] = [
     {
@@ -102,19 +103,23 @@ export function FirmwarePage() {
       <PageHeader
         id="firmware-title"
         title="Firmware"
-        subtitle={<span role="status">{checked ? `Checked ${fmtWhen(checked)}` : "Not checked yet"}</span>}
-        actions={
-          <Button variant="secondary" icon="refresh" disabled={busy} onClick={() => void check()}>
-            {busy ? "Checking…" : "Check for updates"}
-          </Button>
+        subtitle={
+          <span role="status">
+            <SummaryLine
+              parts={[
+                checked ? { text: <span title={fmtWhen(checked)}>Checked {fmtAgo(checked) === "Now" ? "just now" : `${fmtAgo(checked)} ago`}</span> } : "Not checked yet",
+                checked && { text: updates ? plural(updates, "update") : "No updates", tone: updates ? "warn" : undefined },
+                view?.mode === "daily" && "Checks daily",
+              ]}
+            />
+          </span>
         }
+        fold={[
+          { label: "Read firmware…", run: () => setReading(true) },
+          { label: busy ? "Checking…" : "Check for updates", icon: "refresh", disabled: busy, run: () => void check() },
+        ]}
+        moreLabel="Firmware actions"
       />
-      <StatRow label="Summary">
-        <Stat label="Devices" value={devices.length} />
-        <Stat label="Updates" value={checked ? updates : "—"} tone={updates ? "warn" : undefined} />
-        <Stat label="Up to date" value={checked ? current : "—"} />
-        <Stat label="Last check" value={checked ? fmtAgo(checked) : "—"} sub={view?.mode === "daily" ? "Daily" : "Manual"} />
-      </StatRow>
       {errors.map((e) => (
         <Banner key={e} kind="warning" icon="danger-triangle">
           {e}
@@ -130,7 +135,7 @@ export function FirmwarePage() {
         />
       )}
       <ElrsSection />
-      <ReadFirmware radios={devices.filter((d) => d.kind === "radio")} />
+      {reading && <ReadFirmware radios={devices.filter((d) => d.kind === "radio")} onClose={() => setReading(false)} />}
       <FirmwareCopies radios={devices.filter((d) => d.kind === "radio")} />
     </>
   );

@@ -79,6 +79,7 @@ test("Storage: sizes per device, prune after a confirm, import a folder after a 
   const table = page.getByRole("table", { name: "Storage by device" });
   await expect(table.getByRole("row", { name: /Field radio/ })).toContainText("3");
   await expect(table.getByRole("row", { name: /Whoop FC/ })).toBeVisible();
+  await expect(page.getByRole("region", { name: "Usage" })).toContainText("Stored files");
 
   await page.getByRole("button", { name: "Prune now" }).click();
   const prune = dialog(page, "Prune backups?");
@@ -93,7 +94,7 @@ test("Storage: sizes per device, prune after a confirm, import a folder after a 
   await expect(imp).toContainText("2 new backups");
   await imp.getByRole("button", { name: "Import" }).click();
   await expect(page.getByText("Imported 2 backups.")).toBeVisible();
-  const report = page.getByRole("region", { name: "Import" });
+  const report = page.getByRole("complementary", { name: "Import" });
   await expect(report).toContainText("Already kept");
   await expect(report).toContainText("No saved Radio with board zorro");
   expect((await app.method("gear_import_backups")).map((p) => p.dry_run)).toEqual([true, false]);

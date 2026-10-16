@@ -1,17 +1,17 @@
-// Gear > Storage (design 2.2, 7.1): the gear folder's size as tiles and per device as a table,
-// the folder (the subtitle) with Show in Finder, Prune now, Export…, and Import backups… (an old backup
-// folder, shown first as a dry run).
+// Gear > Storage (design 2.2, 7.1): the gear folder's size as one usage bar and per device as
+// a table (Export… and Show in Finder in each row's … menu), the folder (the subtitle) with
+// Show in Finder, Prune now, and Import backups… (an old backup folder, shown first as a dry
+// run; its report opens in a drawer).
 import { useEffect, useState } from "react";
 import { ask, useStore } from "../../../store";
 import { api, errText, pickFolder, reveal } from "../../../ipc/api";
 import type { DeviceStorage, ImportBackupsReport, StorageView } from "../../../ipc/types";
-import { Button } from "../../../components/Button";
 import { Badge, type BadgeTone } from "../../../components/dash/Badge";
 import { DataTable, type Column } from "../../../components/dash/DataTable";
 import { EmptyState } from "../../../components/dash/EmptyState";
 import { PageHeader } from "../../../components/dash/PageHeader";
-import { SectionCard } from "../../../components/dash/SectionCard";
-import { Stat, StatRow } from "../../../components/dash/StatRow";
+import { DetailDrawer, WithDrawer } from "../../../components/dash/DetailDrawer";
+import { MoreMenu } from "../../../components/dash/MoreMenu";
 import { toast } from "../../../components/toastStore";
 import { fmtBytes, plural, tilde } from "../../../lib/format";
 import { KIND_LABEL } from "../../../lib/gear";
@@ -118,19 +118,23 @@ export function StoragePage() {
         </>
       ),
     },
+    { key: "size", header: "Size", numeric: true, stack: "top", cell: (d) => fmtBytes(d.total_bytes) },
     { key: "backups", header: "Backups", numeric: true, cell: (d) => d.snapshots },
     { key: "logs", header: "Logs", numeric: true, cell: (d) => d.logs },
-    { key: "size", header: "Size", numeric: true, cell: (d) => fmtBytes(d.total_bytes) },
     { key: "latest", header: "Latest", optional: true, cell: (d) => fmtWhen(d.latest) },
     {
-      key: "export",
-      header: <span className="visually-hidden">Export</span>,
-      width: "6rem",
+      key: "actions",
+      header: <span className="visually-hidden">Actions</span>,
+      width: "2.5rem",
       cell: (d) =>
-        d.snapshots > 0 && (
-          <Button size="sm" variant="ghost" onClick={() => exportDevice(d.device)} disabled={busy} aria-label={`Export ${d.name || d.device}`}>
-            Export…
-          </Button>
+        view && (
+          <MoreMenu
+            label={`More actions for ${name(d)}`}
+            items={[
+              { label: "Export…", disabled: busy || d.snapshots === 0, run: () => void exportDevice(d.device) },
+              { label: "Show in Finder", icon: "finder", disabled: d.snapshots === 0, run: () => void reveal(`${view.gear_dir}/snapshots/${d.device}`).catch((e) => toast(errText(e), true)) },
+            ]}
+          />
         ),
     },
   ];
@@ -146,36 +150,63 @@ export function StoragePage() {
         id="storage-title"
         title="Storage"
         subtitle={view && <span className="selectable">{tilde(view.gear_dir, home)}</span>}
-        actions={
-          <>
-            <Button size="sm" variant="ghost" icon="finder" disabled={!view} onClick={() => view && void reveal(view.gear_dir).catch((e) => toast(errText(e), true))}>
-              Show in Finder
-            </Button>
-            <Button size="sm" icon="import" onClick={importFolder} disabled={busy}>
-              Import backups…
-            </Button>
-            <Button size="sm" onClick={prune} disabled={busy}>
-              Prune now
-            </Button>
-          </>
-        }
+        fold={[
+          { label: "Show in Finder", icon: "finder", disabled: !view, run: () => view && void reveal(view.gear_dir).catch((e) => toast(errText(e), true)) },
+          { label: "Import backups…", icon: "import", disabled: busy, run: () => void importFolder() },
+          { label: "Prune now", disabled: busy, run: () => void prune() },
+        ]}
+        moreLabel="Storage actions"
       />
-      <StatRow label="Summary">
-        <Stat label="Total" value={view ? fmtBytes(view.total_bytes) : "—"} />
-        <Stat label="Backups" value={view ? view.snapshots : "—"} />
-        <Stat label="Stored files" value={view ? fmtBytes(view.blob_bytes) : "—"} sub={view && view.shared_blob_bytes > 0 ? `${fmtBytes(view.shared_blob_bytes)} shared` : undefined} />
-        <Stat label="Radio logs" value={view ? fmtBytes(view.log_bytes) : "—"} />
-      </StatRow>
-      {view && (
-        <div className={styles.rows}>
-          <DataTable label="Storage by device" columns={columns} rows={view.devices} rowKey={(d) => d.device} empty={<EmptyState icon="hdd">No backups yet.</EmptyState>} />
-        </div>
-      )}
-      {report && (
-        <SectionCard title={report.dry_run ? "Import (not run)" : "Import"} label="Import">
-          <DataTable label="Import items" columns={items} rows={report.items} rowKey={(i) => i.path} compact />
-        </SectionCard>
-      )}
+      <WithDrawer
+        drawer={
+          report && (
+            <DetailDrawer title={report.dry_run ? "Import (not run)" : "Import"} subtitle={`${plural(report.imported, "backup")} · ${plural(report.logs.added, "log")}`} onClose={() => setReport(null)}>
+              <DataTable label="Import items" columns={items} rows={report.items} rowKey={(i) => i.path} compact />
+            </DetailDrawer>
+          )
+        }
+      >
+        {view && <Usage v={view} />}
+        {view && (
+          <div className={styles.rows}>
+            <DataTable label="Storage by device" columns={columns} rows={view.devices} rowKey={(d) => d.device} empty={<EmptyState icon="hdd">No backups yet.</EmptyState>} />
+          </div>
+        )}
+      </WithDrawer>
     </>
+  );
+}
+
+/** The gear folder's size as one bar: backups, stored files and radio logs, with a legend and
+ *  the total. */
+function Usage({ v }: { v: StorageView }) {
+  const parts = [
+    { label: "Backups", bytes: v.manifest_bytes, sub: plural(v.snapshots, "backup"), cls: styles.backups },
+    { label: "Stored files", bytes: v.blob_bytes, sub: v.shared_blob_bytes > 0 ? `${fmtBytes(v.shared_blob_bytes)} shared` : plural(v.blobs, "file"), cls: styles.files },
+    { label: "Radio logs", bytes: v.log_bytes, sub: null, cls: styles.logs },
+  ];
+  const total = Math.max(1, v.total_bytes);
+  return (
+    <section className={styles.usage} aria-label="Usage">
+      <div className={styles.usageHead}>
+        <span className={styles.total}>{fmtBytes(v.total_bytes)}</span>
+        <span className={styles.muted}>in the gear folder</span>
+      </div>
+      <div className={styles.bar} role="img" aria-label={parts.map((p) => `${p.label} ${fmtBytes(p.bytes)}`).join(", ")}>
+        {parts.map((p) => (
+          <span key={p.label} className={p.cls} style={{ width: `${(p.bytes / total) * 100}%` }} />
+        ))}
+      </div>
+      <ul className={styles.legend}>
+        {parts.map((p) => (
+          <li key={p.label}>
+            <span className={[styles.swatch, p.cls].join(" ")} aria-hidden="true" />
+            <span>{p.label}</span>
+            <b>{fmtBytes(p.bytes)}</b>
+            {p.sub && <span className={styles.muted}>{p.sub}</span>}
+          </li>
+        ))}
+      </ul>
+    </section>
   );
 }

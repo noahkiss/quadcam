@@ -19,6 +19,8 @@ async function openWithCopy(app: AppFixture, page: Page, copy: Record<string, un
   }`);
   await side(page).getByRole("button", { name: /^Firmware/ }).click();
   await expect(page.getByRole("heading", { name: "Firmware", exact: true })).toBeVisible();
+  // The copies sit behind a disclosure.
+  await page.getByRole("region", { name: "Saved firmware copies" }).getByText("Saved firmware copies", { exact: true }).click();
 }
 
 const copies = (page: Page) => page.getByRole("table", { name: "Saved firmware copies" });

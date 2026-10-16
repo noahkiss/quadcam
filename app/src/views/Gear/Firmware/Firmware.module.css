@@ -67,3 +67,10 @@
   flex-direction: column;
   gap: var(--s-2);
 }
+/* The Read firmware sheet. */
+.sheet {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-3);
+  max-width: 70ch;
+}

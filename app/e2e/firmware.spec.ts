@@ -22,7 +22,7 @@ test("the page reads the network only when asked, and says what it found", async
   const table = page.getByRole("table", { name: "Firmware" });
   await expect(page.getByRole("status").filter({ hasText: "Not checked yet" })).toBeVisible();
   await expect(table.getByRole("row", { name: /Field radio/ })).toContainText("Not checked");
-  await expect(page.getByRole("group", { name: "Summary" })).toContainText("Updates—");
+  await expect(page.locator("[data-component=summary-line]")).toHaveText("Not checked yet");
   expect((await app.method("gear_firmware")).every((c) => c.check !== true)).toBe(true);
 
   await page.getByRole("button", { name: "Check for updates" }).click();
@@ -33,7 +33,9 @@ test("the page reads the network only when asked, and says what it found", async
   await expect(radio).toContainText("2.12.4");
   await expect(radio).toContainText("2.11.2 → 2.12.4");
   await expect(radio).toContainText("Update available");
-  await expect(page.getByRole("group", { name: "Summary" })).toContainText("Updates2");
+  await expect(page.locator("[data-component=page-header]")).toContainText("2 updates");
+  // Rows with an update come first.
+  await expect(table.getByRole("row").nth(1)).toContainText("Update available");
   await expect(radio).toContainText("QuadCam will not flash it: Board tx16s is not proven.");
   await expect(radio.getByRole("button")).toHaveCount(0);
   const fc = table.getByRole("row", { name: /Whoop FC/ });
@@ -101,7 +103,8 @@ test("a bad read back is reported and the radio stays in DFU", async ({ app, pag
 test("Read firmware lists the steps, reads with no write, and compares the version", async ({ app, page }) => {
   await openFirmware(app, page);
   await makePocket(app, "2.12.4");
-  const section = page.getByRole("region", { name: "Read radio firmware" });
+  await page.getByRole("button", { name: "Read firmware…" }).click();
+  const section = page.getByRole("dialog", { name: "Read radio firmware" });
   await expect(section.getByRole("list", { name: "Steps" })).toContainText("Turn the radio off.");
   await expect(section.getByRole("list", { name: "Steps" })).toContainText("Do not hold any buttons.");
   await section.getByRole("button", { name: "Read firmware" }).click();
@@ -121,7 +124,8 @@ test("Read firmware says when no radio is in DFU mode and when the version diffe
   await openFirmware(app, page);
   await makePocket(app, "2.11.3");
   await app.core(`c => { c.firmware.dfu = 0; }`);
-  const section = page.getByRole("region", { name: "Read radio firmware" });
+  await page.getByRole("button", { name: "Read firmware…" }).click();
+  const section = page.getByRole("dialog", { name: "Read radio firmware" });
   await section.getByRole("button", { name: "Read firmware" }).click();
   await expect(section).toContainText("No radio is in DFU mode.");
   await expect(section).toContainText("do not hold the trim buttons");

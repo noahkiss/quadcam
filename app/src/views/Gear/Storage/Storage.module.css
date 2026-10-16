@@ -3,3 +3,70 @@
 .rows table tbody th {
   vertical-align: middle;
 }
+/* The usage bar: one row of parts in the chart colours, a legend under it. */
+.usage {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-2);
+}
+.usageHead {
+  display: flex;
+  align-items: baseline;
+  gap: var(--s-2);
+}
+.total {
+  font-family: var(--mono);
+  font-size: var(--t-xl);
+  font-weight: 500;
+}
+.muted {
+  color: var(--muted);
+  font-size: var(--t-md);
+}
+.bar {
+  display: flex;
+  height: 10px;
+  border-radius: 5px;
+  background: var(--surface);
+  overflow: hidden;
+}
+.bar > span {
+  min-width: 2px;
+}
+.backups {
+  background: var(--c-blue);
+}
+.files {
+  background: var(--c-mauve);
+}
+.logs {
+  background: var(--c-teal);
+}
+.legend {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s-1) var(--s-6);
+  font-size: var(--t-md);
+}
+.legend li {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s-2);
+}
+.legend b {
+  font-family: var(--mono);
+  font-weight: 500;
+}
+.swatch {
+  width: 10px;
+  height: 10px;
+  border-radius: 3px;
+}
+@container content (max-width: 600px) {
+  .legend {
+    flex-direction: column;
+  }
+}

@@ -1,11 +1,11 @@
-// Gear > Firmware > Read firmware: the read-only DFU trial. It reads the flash of a radio in
+// Gear > Firmware > Read firmware…: the read-only DFU trial, in a sheet. It reads the flash of a radio in
 // DFU mode twice, saves a copy and compares the version the image names with the radio's
 // known version. It cannot erase, write or restart the radio.
 import { useEffect, useState } from "react";
 import { useStore } from "../../../store";
 import { Banner } from "../../../components/Banner";
 import { Button } from "../../../components/Button";
-import { SectionCard } from "../../../components/dash/SectionCard";
+import { Dialog } from "../../../components/Dialog";
 import { api } from "../../../ipc/api";
 import { on } from "../../../ipc/events";
 import type { FirmwareRead, FirmwareStatus } from "../../../ipc/types";
@@ -13,12 +13,13 @@ import styles from "./Firmware.module.css";
 
 interface Props {
   radios: FirmwareStatus[];
+  onClose: () => void;
 }
 
 const errText = (e: unknown) => (typeof e === "string" ? e : e instanceof Error ? e.message : String(e));
 const NONE = "";
 
-export function ReadFirmware({ radios }: Props) {
+export function ReadFirmware({ radios, onClose }: Props) {
   const [pick, setPick] = useState<string | null>(null);
   const device = pick ?? radios[0]?.device ?? NONE;
   const [busy, setBusy] = useState(false);
@@ -56,7 +57,18 @@ export function ReadFirmware({ radios }: Props) {
   };
 
   return (
-    <SectionCard title="Read radio firmware" status="Read only">
+    <Dialog
+      open
+      title="Read radio firmware"
+      onClose={onClose}
+      blockEscape={busy}
+      actions={
+        <Button type="submit" value="done" disabled={busy}>
+          Done
+        </Button>
+      }
+    >
+      <div className={styles.sheet}>
       <ol className={styles.steps} aria-label="Steps">
         <li>Turn the radio off.</li>
         <li>Plug the radio into this Mac with the USB cable. Do not hold any buttons.</li>
@@ -104,6 +116,7 @@ export function ReadFirmware({ radios }: Props) {
           </p>
         </div>
       )}
-    </SectionCard>
+      </div>
+    </Dialog>
   );
 }
