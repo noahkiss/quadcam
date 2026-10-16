@@ -1,8 +1,9 @@
 // The switch map as a table: one group of rows per control, one row per position, with its
 // channel values, FC modes and radio effects. The position a control is in now is marked.
 import { Fragment } from "react";
-import { Button } from "../../../components/Button";
 import { Badge } from "../../../components/dash/Badge";
+import { Disclosure } from "../../../components/dash/Disclosure";
+import { MoreMenu } from "../../../components/dash/MoreMenu";
 import { DataTable, type Column } from "../../../components/dash/DataTable";
 import { SectionCard } from "../../../components/dash/SectionCard";
 import { StatusDot } from "../../../components/dash/StatusDot";
@@ -33,19 +34,19 @@ const UNMAPPED: Column<Unmapped>[] = [
 
 const CONFLICT: Column<string>[] = [{ key: "conflict", header: "Conflict", cell: (c) => c }];
 
-/** The source pickers and what was read. */
+/** The source pop-up (a card, a model file, a dump) and what was read. */
 export function MapSourceBar({ src, map, openCard, openModel, openDump }: { src: MapSources; map: SwitchMap | null; openCard: () => void; openModel: () => void; openDump: () => void }) {
   return (
     <div className={styles.bar}>
-      <Button icon="sd-card" onClick={openCard}>
-        Open card…
-      </Button>
-      <Button icon="folder-open" onClick={openModel}>
-        Open model…
-      </Button>
-      <Button icon="folder-open" onClick={openDump}>
-        Open dump…
-      </Button>
+      <MoreMenu
+        text="Open…"
+        label="Open"
+        items={[
+          { label: "Open card…", icon: "sd-card", run: openCard },
+          { label: "Open model…", icon: "folder-open", run: openModel },
+          { label: "Open dump…", icon: "folder-open", run: openDump },
+        ]}
+      />
       {(map || src.radio || src.fc.length > 0) && (
         <span className={styles.source}>{map ? [map.model, map.sources.join(", ")].filter(Boolean).join(" · ") : [src.radio, ...src.fc].filter(Boolean).map((p) => base(p!)).join(", ")}</span>
       )}
@@ -84,7 +85,7 @@ export function SwitchMapView({ map, live }: { map: SwitchMap; live: Live | null
             const now = live?.positions[r.id] ?? null;
             const span = r.positions.reduce((n, p) => n + 1 + p.combos.length, 0);
             return (
-              <tbody key={r.id} className={styles.group}>
+              <tbody key={r.id} className={styles.group} aria-label={r.label}>
                 {r.positions.map((p, i) => (
                   <Fragment key={p.name}>
                     <tr aria-current={now === i ? "true" : undefined} className={now === i ? styles.now : undefined}>
@@ -117,22 +118,30 @@ export function SwitchMapView({ map, live }: { map: SwitchMap; live: Live | null
         </table>
       )}
       {map.modes.length > 0 && (
-        <SectionCard title="Modes" status={<Badge>{map.modes.length}</Badge>}>
-          <DataTable label="Modes" columns={modeColumns(live)} rows={map.modes} rowKey={(m) => String(m.slot)} compact />
-        </SectionCard>
+        <section aria-label="Modes">
+          <Disclosure summary="Modes" count={map.modes.length}>
+            <DataTable label="Modes" columns={modeColumns(live)} rows={map.modes} rowKey={(m) => String(m.slot)} compact />
+          </Disclosure>
+        </section>
       )}
       {map.unmapped.length > 0 && (
-        <SectionCard title="Not mapped" status={<Badge>{map.unmapped.length}</Badge>}>
-          <DataTable label="Not mapped" columns={UNMAPPED} rows={map.unmapped} rowKey={(u) => u.switch} compact />
-          <p className={styles.muted}>Logical switches on telemetry, timers or sticky state. The map cannot say when they are on.</p>
-        </SectionCard>
+        <section aria-label="Not mapped">
+          <Disclosure summary="Not mapped" count={map.unmapped.length}>
+            <DataTable label="Not mapped" columns={UNMAPPED} rows={map.unmapped} rowKey={(u) => u.switch} compact />
+            <p className={styles.muted}>Logical switches on telemetry, timers or sticky state. The map cannot say when they are on.</p>
+          </Disclosure>
+        </section>
       )}
       {map.notes.length > 0 && (
-        <ul className={[styles.notes, styles.muted].join(" ")} aria-label="Notes">
-          {map.notes.map((n) => (
-            <li key={n}>{n}</li>
-          ))}
-        </ul>
+        <section aria-label="Notes">
+          <Disclosure summary="Notes" count={map.notes.length}>
+            <ul className={[styles.notes, styles.muted].join(" ")}>
+              {map.notes.map((n) => (
+                <li key={n}>{n}</li>
+              ))}
+            </ul>
+          </Disclosure>
+        </section>
       )}
     </div>
   );

@@ -142,12 +142,16 @@
   }
   .table tbody tr > :not([data-stack]):not(.check) {
     order: 3;
+    display: inline-flex;
+    align-items: center;
+    gap: var(--s-1);
+    min-width: 0;
     color: var(--muted);
     font-family: inherit;
     font-size: var(--t-sm);
   }
   .table tbody tr > [data-label]:not([data-stack])::before {
-    content: attr(data-label) " ";
+    content: attr(data-label);
   }
   .table tbody tr > :empty,
   .table tbody tr > [data-stack="hide"] {

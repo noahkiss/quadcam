@@ -1,9 +1,10 @@
 // The Bench (design 7.7): the changes staged for each device, in the order the next
-// session applies them. The summary tiles, then a card per device: its status (plugged in,
-// unmounted, away), the plug-in prompt, and its changes as a table (`Changes/ChangeTable`)
-// with the status control, Review, Keep and Revert for an applied Try change; then the
-// history. Copy settings opens the copy dialog; Copy as Markdown puts the
-// queue on the clipboard. Nothing here writes a device: Review opens the apply sheet.
+// session applies them. The summary line, then a card per device, plugged-in devices first
+// and open, away ones folded to their staged count: its status, the plug-in prompt, the
+// applied Try changes waiting for Keep, and its changes as a table (`Changes/ChangeTable`)
+// with the status control and Review; then the history. Copy settings opens the copy
+// dialog; Copy as Markdown (in the … menu) puts the queue on the clipboard. Nothing here
+// writes a device: Review opens the apply sheet.
 import { useState } from "react";
 import { useStore } from "../../../store";
 import { Button } from "../../../components/Button";
@@ -11,8 +12,8 @@ import { Icon } from "../../../components/Icon";
 import { EmptyState } from "../../../components/dash/EmptyState";
 import { PageHeader } from "../../../components/dash/PageHeader";
 import { SectionCard } from "../../../components/dash/SectionCard";
-import { Stat, StatRow } from "../../../components/dash/StatRow";
 import { StatusDot } from "../../../components/dash/StatusDot";
+import { SummaryLine } from "../../../components/dash/SummaryLine";
 import { toast } from "../../../components/toastStore";
 import { benchGroups, benchMarkdown, type BenchGroup } from "../../../lib/bench";
 import { KIND_ICON, KIND_LABEL } from "../../../lib/gear";
@@ -51,28 +52,26 @@ export function BenchPage() {
       <PageHeader
         id="bench-title"
         title="Bench"
-        actions={
-          <>
-            <Button size="sm" onClick={copy} disabled={!groups.length}>
-              Copy as Markdown
-            </Button>
-            <Button size="sm" variant="primary" onClick={() => setCopying(true)} disabled={devices.filter((d) => d.kind === "fc").length < 2}>
-              Copy settings…
-            </Button>
-          </>
+        subtitle={
+          groups.length > 0 && (
+            <SummaryLine
+              parts={[
+                `${staged} staged`,
+                `${ready} ready`,
+                `${groups.filter((g) => g.present).length} of ${groups.length} ${groups.length === 1 ? "device" : "devices"} plugged in`,
+                awaiting > 0 && { text: `${awaiting} waiting for Keep`, tone: "warn" },
+              ]}
+            />
+          )
         }
+        fold={[{ label: "Copy settings…", variant: "primary", disabled: devices.filter((d) => d.kind === "fc").length < 2, run: () => setCopying(true) }]}
+        more={[{ label: "Copy as Markdown", disabled: !groups.length, run: () => void copy() }]}
+        moreLabel="Bench actions"
       />
-      <StatRow label="Summary">
-        <Stat label="Staged" value={staged} />
-        <Stat label="Ready to apply" value={ready} />
-        <Stat label="Devices" value={groups.length} />
-        <Stat label="Plugged in" value={groups.filter((g) => g.present).length} />
-        <Stat label="Waiting for Keep" value={awaiting} tone={awaiting ? "warn" : undefined} />
-      </StatRow>
       {groups.length === 0 ? (
         <EmptyState icon="sliders">Nothing staged.</EmptyState>
       ) : (
-        groups.map((g) => <Group key={g.device} g={g} />)
+        [...groups.filter((g) => g.present), ...groups.filter((g) => !g.present)].map((g) => <Group key={g.device} g={g} />)
       )}
       <History rows={history} names={Object.fromEntries(devices.map((d) => [d.id, d.name || KIND_LABEL[d.kind]]))} />
       {copying && <CopyDialog onClose={() => setCopying(false)} />}
@@ -80,20 +79,31 @@ export function BenchPage() {
   );
 }
 
-/** One device: its state, what the next session applies, the plug-in prompt, and its tables. */
+/** One device: its state, what the next session applies, the plug-in prompt, the changes
+ *  waiting for Keep and the staged table. A device that is away folds to one row with its
+ *  staged count until opened. */
 function Group({ g }: { g: BenchGroup }) {
   const open = useStore((s) => s.openApply);
+  const [shown, setShown] = useState(g.present);
   const state = g.mounted ? "Plugged in" : g.unmounted ? "Unmounted, still in" : "Not connected";
+  const folded = !g.present && !shown;
   return (
     <SectionCard
       label={g.name}
+      collapse={g.present ? undefined : { open: shown, onToggle: setShown }}
       title={
         <span className={styles.name}>
           <Icon name={KIND_ICON[g.kind]} size={18} />
           {g.name}
         </span>
       }
-      status={<StatusDot tone={g.mounted ? "ok" : g.unmounted ? "warn" : "idle"}>{state}</StatusDot>}
+      status={
+        <>
+          <StatusDot tone={g.mounted ? "ok" : g.unmounted ? "warn" : "idle"}>{state}</StatusDot>
+          {folded && <span>{g.staged.length + g.awaiting.length} staged</span>}
+          {folded && g.next && <span>Next session: {g.next.title}</span>}
+        </>
+      }
       actions={
         <Button size="sm" variant="primary" disabled={g.ready === 0 || !g.present} onClick={() => void open(g.device)}>
           {g.ready > 1 ? `Review ${g.ready} changes…` : "Review…"}
@@ -111,8 +121,13 @@ function Group({ g }: { g: BenchGroup }) {
             <Icon name="signal" tint="yellow" /> {g.prompt}
           </p>
         )}
+        {g.awaiting.length > 0 && (
+          <div className={styles.awaiting} role="group" aria-label="Waiting for Keep">
+            <span className={styles.awaitingHead}>Applied, fly it</span>
+            <AwaitingTable rows={g.awaiting} label={`Applied changes for ${g.name}`} />
+          </div>
+        )}
         {g.staged.length > 0 && <StagedTable rows={g.staged} label={`Staged changes for ${g.name}`} present={g.present} />}
-        {g.awaiting.length > 0 && <AwaitingTable rows={g.awaiting} label={`Applied changes for ${g.name}`} />}
       </div>
     </SectionCard>
   );

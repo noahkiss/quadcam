@@ -1,12 +1,14 @@
 // The one change table of the Bench and a device's Changes segment: staged changes with
-// their status control, Review and Discard; applied Try changes with Keep and Revert; and the
-// history. Nothing here writes a device: Review opens the apply sheet.
-import { useState } from "react";
+// their status control and Review, and a … menu with who made the change, when, and Discard;
+// applied Try changes with Keep and Revert; and the history. Nothing here writes a device:
+// Review opens the apply sheet.
 import { useStore } from "../../../store";
 import type { StagedChange } from "../../../ipc/types";
 import { Button } from "../../../components/Button";
 import { Select } from "../../../components/Field";
 import { DataTable, type Column } from "../../../components/dash/DataTable";
+import { Disclosure } from "../../../components/dash/Disclosure";
+import { MoreMenu } from "../../../components/dash/MoreMenu";
 import { StatusDot, type StatusTone } from "../../../components/dash/StatusDot";
 import { fmtWhen } from "../../../lib/backups";
 import { STATUS_HINT, STATUS_LABEL, summary, WAITING } from "../../../lib/bench";
@@ -39,8 +41,6 @@ const edit: Column<StagedChange> = {
   },
 };
 
-const by: Column<StagedChange> = { key: "by", header: "By", optional: true, width: "4.5rem", cell: (c) => (c.editor === "agent" ? "Agent" : "You") };
-
 const when: Column<StagedChange> = { key: "when", header: "When", optional: true, width: "11rem", cell: (c) => fmtWhen(c.history?.at(-1)?.at) };
 
 const state: Column<StagedChange> = { key: "status", header: "Status", width: "7rem", cell: (c) => <StatusDot tone={TONE[c.status] ?? "idle"}>{STATUS_LABEL[c.status]}</StatusDot> };
@@ -67,19 +67,23 @@ export function StagedTable({ rows, label, present }: { rows: StagedChange[]; la
         </Select>
       ),
     },
-    by,
     {
       key: "actions",
       header: <span className="visually-hidden">Actions</span>,
-      width: "10rem",
+      width: "8rem",
       cell: (c) => (
         <span className={styles.actions}>
           <Button size="sm" variant="ghost" disabled={!present || c.status === "draft" || c.status === "read_first"} onClick={() => void open(c.device, c.id)}>
             Review…
           </Button>
-          <Button size="sm" variant="danger-ghost" onClick={() => void discard(c.id)}>
-            Discard
-          </Button>
+          <MoreMenu
+            label={`More actions for ${c.title}`}
+            items={[
+              { label: [`By ${c.editor === "agent" ? "an agent" : "you"}`, fmtWhen(c.history?.at(-1)?.at)].filter(Boolean).join(", "), disabled: true, run: () => {} },
+              null,
+              { label: "Discard", icon: "trash-bin-trash", danger: true, run: () => void discard(c.id) },
+            ]}
+          />
         </span>
       ),
     },
@@ -130,15 +134,13 @@ export function HistoryTable({ rows, names }: { rows: StagedChange[]; names?: Re
   return <DataTable label="Applied changes" columns={columns} rows={rows} rowKey={(c) => c.id} compact />;
 }
 
-/** The History disclosure: closed at first, then the history table. */
+/** The History disclosure: closed at first, with its count, then the history table. */
 export function History({ rows, names }: { rows: StagedChange[]; names?: Record<string, string> }) {
-  const [shown, setShown] = useState(false);
   return (
     <section aria-label="History" className={styles.history}>
-      <Button size="sm" variant="ghost" iconEnd={shown ? "chev-down" : "chev-right"} onClick={() => setShown(!shown)} aria-expanded={shown}>
-        History
-      </Button>
-      {shown && (rows.length ? <HistoryTable rows={rows} names={names} /> : <p className={styles.muted}>Nothing applied yet.</p>)}
+      <Disclosure summary="History" count={rows.length}>
+        {rows.length ? <HistoryTable rows={rows} names={names} /> : <p className={styles.muted}>Nothing applied yet.</p>}
+      </Disclosure>
     </section>
   );
 }

@@ -18,8 +18,14 @@ async function openSwitches(app: AppFixture, page: Page) {
   await page.getByRole("table", { name: "Devices" }).getByRole("button", { name: "Whoop FC", exact: true }).click();
   await page.getByRole("group", { name: "Sections" }).getByRole("button", { name: "Switches" }).click();
   await app.core(`c => c.dialogAnswers.push(${JSON.stringify(CARD)}, [${JSON.stringify(DUMP)}])`);
-  await page.getByRole("button", { name: "Open card…" }).click();
-  await page.getByRole("button", { name: "Open dump…" }).click();
+  await openFrom(page, "Open card…");
+  await openFrom(page, "Open dump…");
+}
+
+/** Picks a source from the switch map's Open… pop-up. */
+async function openFrom(page: Page, item: string) {
+  await page.getByRole("button", { name: "Open…" }).click();
+  await page.getByRole("menuitem", { name: item }).click();
 }
 
 /** A control's rows in the map. */
@@ -34,6 +40,7 @@ test("the Switches segment shows what each switch does and marks where it is", a
   await expect(page.getByRole("region", { name: "Conflicts" })).toContainText('Sound "lapclr" is not on the card');
   // Combinations of controls, and the logical switches the map cannot work out.
   await expect(sa.getByRole("row", { name: /down with SD down CH8 2012 BEEPER L2 on/ })).toBeVisible();
+  await page.getByRole("region", { name: "Not mapped" }).getByText("Not mapped", { exact: true }).click();
   await expect(page.getByRole("region", { name: "Not mapped" }).getByRole("row", { name: /^L4 telemetry RxBt > 10/ })).toBeVisible();
   await expect(page.getByRole("group", { name: "Switch map summary" })).toContainText(/Conflicts[1-9]/);
 
@@ -88,7 +95,7 @@ test("the Controls page draws the sticks in the chosen mode, the channels and th
 
   // The map from a card, marked as the switches move.
   await app.core(`c => c.dialogAnswers.push(${JSON.stringify(CARD)})`);
-  await page.getByRole("button", { name: "Open card…" }).click();
+  await openFrom(page, "Open card…");
   await app.core(`c => c.radioFrame(${JSON.stringify(ARMED)})`);
   await expect(control(page, "SA").locator('tr[aria-current="true"]')).toContainText("down");
   await app.core(`c => c.radioFrame([1024, 1024, 0, 1024, 0, 1024, 2048, 0])`);

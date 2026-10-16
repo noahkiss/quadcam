@@ -1,7 +1,7 @@
 // The Controls page: the radio in USB Joystick mode, live. Its sticks in the person's stick
-// mode, its channel outputs and buttons, and the switch map marking what each control does
-// as it moves. The radio is read natively (`gear_radio_watch`): the web view's Gamepad API
-// does not see it.
+// mode beside its channel outputs and buttons, and under them, at the full width, the switch
+// map marking what each control does as it moves. The radio is read natively
+// (`gear_radio_watch`): the web view's Gamepad API does not see it.
 import { Sticks, StickModePicker } from "../../../components/gear/Sticks";
 import { Banner } from "../../../components/Banner";
 import { EmptyState } from "../../../components/dash/EmptyState";
@@ -35,43 +35,46 @@ export function ControlsPage() {
             {status}
           </span>
         }
+        actions={<StickModePicker mode={mode} onChange={(v) => void save("stickMode", v)} />}
       />
       {radio && !radio.connected && (
         <Banner kind="info" icon="info" tint="blue">
           Plug the radio in and choose USB Joystick on it.
         </Banner>
       )}
-      <SectionCard title="Sticks" actions={<StickModePicker mode={mode} onChange={(v) => void save("stickMode", v)} />}>
-        <Sticks values={sticks} mode={mode} />
-      </SectionCard>
-      <SectionCard title="Channels">
-        <ul className={styles.channels}>
-          {(frame?.channels ?? Array<number>(8).fill(1500)).map((us, i) => (
-            <li key={i}>
-              <span className={styles.ch}>CH{i + 1}</span>
-              <span className={styles.meter} role="meter" aria-label={`CH${i + 1}`} aria-valuemin={988} aria-valuemax={2012} aria-valuenow={us} aria-valuetext={frame ? `${us} µs` : "no input"}>
-                <span className={styles.fill} style={{ width: `${Math.max(0, Math.min(100, ((us - 988) / 1024) * 100))}%` }} />
-              </span>
-              <span className={styles.num}>{frame ? us : ""}</span>
-            </li>
-          ))}
-        </ul>
-        <details className={styles.more}>
-          <summary>
-            Buttons{pressed > 0 && <span className={styles.muted}> · {pressed} on</span>}
-          </summary>
-          <ul className={styles.buttons} aria-label="Buttons">
-            {Array.from({ length: BUTTONS }, (_, i) => {
-              const on = !!frame && ((frame.buttons >>> i) & 1) === 1;
-              return (
-                <li key={i} data-on={on ? "" : undefined} aria-label={`Button ${i + 1}${on ? ", on" : ""}`}>
-                  {i + 1}
-                </li>
-              );
-            })}
+      <div className={styles.duo}>
+        <SectionCard title="Sticks">
+          <Sticks values={sticks} mode={mode} />
+        </SectionCard>
+        <SectionCard title="Channels">
+          <ul className={styles.channels}>
+            {(frame?.channels ?? Array<number>(8).fill(1500)).map((us, i) => (
+              <li key={i}>
+                <span className={styles.ch}>CH{i + 1}</span>
+                <span className={styles.meter} role="meter" aria-label={`CH${i + 1}`} aria-valuemin={988} aria-valuemax={2012} aria-valuenow={us} aria-valuetext={frame ? `${us} µs` : "no input"}>
+                  <span className={styles.fill} style={{ width: `${Math.max(0, Math.min(100, ((us - 988) / 1024) * 100))}%` }} />
+                </span>
+                <span className={styles.num}>{frame ? us : ""}</span>
+              </li>
+            ))}
           </ul>
-        </details>
-      </SectionCard>
+          <details className={styles.more}>
+            <summary>
+              Buttons{pressed > 0 && <span className={styles.muted}> · {pressed} on</span>}
+            </summary>
+            <ul className={styles.buttons} aria-label="Buttons">
+              {Array.from({ length: BUTTONS }, (_, i) => {
+                const on = !!frame && ((frame.buttons >>> i) & 1) === 1;
+                return (
+                  <li key={i} data-on={on ? "" : undefined} aria-label={`Button ${i + 1}${on ? ", on" : ""}`}>
+                    {i + 1}
+                  </li>
+                );
+              })}
+            </ul>
+          </details>
+        </SectionCard>
+      </div>
       <section className={styles.panel} aria-labelledby="controls-map">
         <h3 id="controls-map" className={styles.h3}>
           Switch map

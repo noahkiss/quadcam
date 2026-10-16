@@ -53,3 +53,35 @@ test("a narrow Devices table stacks each row and keeps the row menu", async ({ a
   await expect(table.getByRole("button", { name: "More actions for Whoop FC" })).toBeVisible();
   await expect(table.getByRole("cell", { name: /Aircraft/ }).first()).toBeHidden();
 });
+
+const RADIO = `{ id: "radio-1f2e3d4c5b6a7980", kind: "radio", link: { kind: "volume", mount: "/Volumes/RADIO", volume_uuid: null, bus_protocol: "USB", whole_disk: "disk4" }, identity: { board: "tx16s" } }`;
+const stage = (title: string) =>
+  `c => c.dispatch("gear_change_stage", { device: "radio-1f2e3d4c5b6a7980", title: "${title}", edits: [{ kind: "radio", ops: [{ op: "set_scalar", key: "contrast", value: "20" }] }], note: null, editor: null, draft: false }).id`;
+
+test("the Bench sums up in its header; a row keeps Review and puts Discard in its menu", async ({ app, page }) => {
+  await app.open();
+  await app.core(`c => c.plug([${RADIO}])`);
+  await app.core(stage("Raise contrast"));
+  await app.core(stage("Lower contrast"));
+  await go(page, "Bench");
+  await expect(page.locator("[data-component=page-header]")).toContainText("2 staged");
+  await expect(page.locator("[data-component=page-header]")).toContainText("1 of 1 device plugged in");
+  const group = page.getByRole("region", { name: "Field radio" });
+  await expect(group.getByRole("button", { name: "Discard" })).toHaveCount(0);
+  await group.getByRole("button", { name: "More actions for Lower contrast" }).click();
+  await expect(page.getByRole("menuitem", { name: /^By you/ })).toBeDisabled();
+  await page.getByRole("menuitem", { name: "Discard" }).click();
+  await expect(group.getByRole("table", { name: "Staged changes for Field radio" }).getByRole("row", { name: /Lower contrast/ })).toHaveCount(0);
+  // Copy as Markdown sits in the header's … menu.
+  await page.getByRole("button", { name: "Bench actions" }).click();
+  await expect(page.getByRole("menuitem", { name: "Copy as Markdown" })).toBeVisible();
+  await page.keyboard.press("Escape");
+
+  // Narrow: Copy settings… joins the menu, and each change stacks.
+  await page.setViewportSize({ width: 420, height: 900 });
+  await expect(page.getByRole("button", { name: "Copy settings…" })).toBeHidden();
+  await page.getByRole("button", { name: "Bench actions" }).click();
+  await expect(page.getByRole("menuitem", { name: "Copy settings…" })).toBeVisible();
+  await page.keyboard.press("Escape");
+  if (process.env.QC_SHOTS) await page.screenshot({ path: `${process.env.QC_SHOTS}/pages-bench-420.png` });
+});

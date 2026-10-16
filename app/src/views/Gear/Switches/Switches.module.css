@@ -168,3 +168,44 @@
 .more[open] summary {
   margin-bottom: var(--s-2);
 }
+/* Controls: Sticks and Channels side by side once each has 360 px. */
+.duo {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(360px, 100%), 1fr));
+  gap: var(--s-4);
+  align-items: start;
+}
+/* A narrow switch map stacks per control: the control as a heading, then a line per
+   position with its channels, FC modes and radio effects under it. */
+@container content (max-width: 600px) {
+  .table,
+  .table tbody,
+  .table tr {
+    display: block;
+  }
+  .table thead {
+    display: none;
+  }
+  .table th.control {
+    display: block;
+    padding: var(--s-3) 0 var(--s-1);
+  }
+  .table tr {
+    padding: var(--s-1) 0;
+  }
+  .table td {
+    display: inline;
+    padding: 0;
+    color: var(--muted);
+    font-size: var(--t-sm);
+  }
+  .table td:first-of-type {
+    display: block;
+    color: var(--fg);
+    font-size: var(--t-md);
+    font-weight: 500;
+  }
+  .table td:not(:first-of-type):not(:empty) + td:not(:empty)::before {
+    content: " · ";
+  }
+}

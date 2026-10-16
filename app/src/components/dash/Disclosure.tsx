@@ -22,7 +22,7 @@ export function Disclosure({ summary, count, defaultOpen = false, remember, chil
     >
       <summary className={styles.summary}>
         <span className={styles.triangle} aria-hidden="true" />
-        {summary}
+        <span>{summary}</span>
         {count != null && <span className={styles.count}>{count}</span>}
       </summary>
       {open && <div className={styles.body}>{children}</div>}
