@@ -84,10 +84,10 @@ export function Toolbar() {
               <MoreMenu
                 label="View options"
                 items={[
-                  ...SORTS.map((o) => ({ label: `Sort by ${o.label.toLowerCase()}`, icon: sort.key === o.key ? ("check" as const) : undefined, run: () => o.key !== sort.key && setSort(o.key) })),
+                  ...SORTS.map((o) => ({ label: `Sort by ${o.label.toLowerCase()}`, checked: sort.key === o.key, run: () => o.key !== sort.key && setSort(o.key) })),
                   null,
-                  { label: "Show as grid", icon: view === "grid" ? ("check" as const) : undefined, run: () => setView("grid") },
-                  { label: "Show as list", icon: view === "list" ? ("check" as const) : undefined, run: () => setView("list") },
+                  { label: "Show as grid", checked: view === "grid", run: () => setView("grid") },
+                  { label: "Show as list", checked: view === "list", run: () => setView("list") },
                 ]}
               />
             </div>

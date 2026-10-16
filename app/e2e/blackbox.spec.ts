@@ -66,15 +66,24 @@ test("Settings > Gear holds the blackbox erase setting and the Pull blackbox ste
   const dlg = dialog(page, "Settings");
   await dlg.getByRole("navigation", { name: "Settings sections" }).getByRole("button", { name: "Gear" }).click();
   await expect(dlg.getByLabel("Erase blackbox after download")).not.toBeChecked();
-  await expect(dlg.getByLabel("Pull blackbox: FC")).not.toBeChecked();
-  await expect(dlg.getByLabel("Pull blackbox: Radio")).toHaveCount(0);
+  // Each kind's steps sit in its pop-up, a check mark on each step that runs.
+  const steps = async (kind: string) => {
+    await dlg.getByRole("button", { name: new RegExp(`^${kind}: `) }).click();
+    return page.getByRole("menu", { name: `Steps for ${kind}` });
+  };
+  let menu = await steps("FC");
+  await expect(menu.getByRole("menuitemcheckbox", { name: "Pull blackbox" })).toHaveAttribute("aria-checked", "false");
   // Apply ready changes runs for an FC and a radio only.
-  await expect(dlg.getByLabel("Apply ready changes: FC")).toBeVisible();
-  await expect(dlg.getByLabel("Apply ready changes: Radio")).toBeVisible();
-  await expect(dlg.getByLabel("Apply ready changes: ELRS TX")).toHaveCount(0);
-  await expect(dlg.getByLabel("Apply ready changes: ELRS RX")).toHaveCount(0);
+  await expect(menu.getByRole("menuitemcheckbox", { name: "Apply ready changes" })).toBeVisible();
+  await page.keyboard.press("Escape");
+  menu = await steps("Radio");
+  await expect(menu.getByRole("menuitemcheckbox", { name: "Pull blackbox" })).toHaveCount(0);
+  await expect(menu.getByRole("menuitemcheckbox", { name: "Apply ready changes" })).toBeVisible();
+  await page.keyboard.press("Escape");
   await dlg.getByLabel("Erase blackbox after download").check();
-  await dlg.getByLabel("Pull blackbox: FC").check();
+  menu = await steps("FC");
+  await menu.getByRole("menuitemcheckbox", { name: "Pull blackbox" }).click();
+  await expect(dlg.getByRole("button", { name: "FC: Back up, Pull blackbox" })).toBeVisible();
   await dlg.getByRole("button", { name: "Done" }).click();
   const w = (await app.method("settings_set")).map((p) => (p as { values: Record<string, unknown> }).values).at(-1)!;
   expect(w.gearEraseBlackbox).toBe(true);

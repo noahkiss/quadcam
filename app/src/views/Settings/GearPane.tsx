@@ -3,6 +3,7 @@ import { useStore } from "../../store";
 import { api } from "../../ipc/api";
 import type { VoicePack } from "../../ipc/types";
 import { Checkbox, SelectField, TextField } from "../../components/Field";
+import { MoreMenu } from "../../components/dash/MoreMenu";
 import type { DeviceKind } from "../../ipc/types";
 import { KIND_LABEL } from "../../lib/gear";
 import { tilde } from "../../lib/format";
@@ -32,112 +33,113 @@ export function GearPane({ d, setD }: { d: Draft; setD: (f: (d: Draft) => Draft)
   };
   return (
     <section className={form.form}>
-      <h3>Preview</h3>
-      <div className={form.group}>
-        <Checkbox label="Show the Sim page" checked={g.simPreview} onChange={(e) => set({ simPreview: e.target.checked })} />
-        <Checkbox label="Betaflight flashing (preview)" checked={g.bfFlashPreview} onChange={(e) => set({ bfFlashPreview: e.target.checked })} />
-        <Checkbox label="Show the ELRS tools" checked={g.elrsPreview} onChange={(e) => set({ elrsPreview: e.target.checked })} />
-      </div>
-      <h3>Backups</h3>
-      <div className={form.group}>
-        {gearDir && <p className={`${styles.sub} selectable`}>{tilde(gearDir, home)}</p>}
-        <Checkbox label="Back up on connect" checked={g.autoBackup} onChange={(e) => set({ autoBackup: e.target.checked })} />
-        <div className={styles.row}>
-          <TextField label="Keep recent backups" type="number" min={1} max={1000} step={1} value={g.keepRecent} onChange={(e) => set({ keepRecent: e.target.value })} />
-          <TextField label="Then one a week for (weeks)" type="number" min={0} max={520} step={1} value={g.keepWeeks} onChange={(e) => set({ keepWeeks: e.target.value })} />
-        </div>
-        <Checkbox label="Then keep one a month" checked={g.keepMonthly} onChange={(e) => set({ keepMonthly: e.target.checked })} />
-        <div className={styles.row}>
-          <TextField label="USB power warning (min, 0 for off)" type="number" min={0} max={240} step={1} value={g.usbMinutes} onChange={(e) => set({ usbMinutes: e.target.value })} />
+      <div className={form.block}>
+        <h3>Preview</h3>
+        <div className={form.group}>
+          <Checkbox label="Show the Sim page" checked={g.simPreview} onChange={(e) => set({ simPreview: e.target.checked })} />
+          <Checkbox label="Betaflight flashing (preview)" checked={g.bfFlashPreview} onChange={(e) => set({ bfFlashPreview: e.target.checked })} />
+          <Checkbox label="Show the ELRS tools" checked={g.elrsPreview} onChange={(e) => set({ elrsPreview: e.target.checked })} />
         </div>
       </div>
-      <h3>Blackbox</h3>
-      <div className={form.group}>
-        <Checkbox label="Erase blackbox after download" checked={g.eraseBlackbox} onChange={(e) => set({ eraseBlackbox: e.target.checked })} />
-        <Checkbox label="Read through USB disk mode first (not proven)" checked={g.blackboxMsc} onChange={(e) => set({ blackboxMsc: e.target.checked })} />
+      <div className={form.block}>
+        <h3>Backups</h3>
+        <div className={form.group}>
+          {gearDir && <p className={`${styles.sub} selectable`}>{tilde(gearDir, home)}</p>}
+          <Checkbox label="Back up on connect" checked={g.autoBackup} onChange={(e) => set({ autoBackup: e.target.checked })} />
+          <div className={styles.row}>
+            <TextField label="Keep recent backups" type="number" min={1} max={1000} step={1} value={g.keepRecent} onChange={(e) => set({ keepRecent: e.target.value })} />
+            <TextField label="Then one a week for (weeks)" type="number" min={0} max={520} step={1} value={g.keepWeeks} onChange={(e) => set({ keepWeeks: e.target.value })} />
+          </div>
+          <Checkbox label="Then keep one a month" checked={g.keepMonthly} onChange={(e) => set({ keepMonthly: e.target.checked })} />
+          <div className={styles.row}>
+            <TextField label="USB power warning (min, 0 for off)" type="number" min={0} max={240} step={1} value={g.usbMinutes} onChange={(e) => set({ usbMinutes: e.target.value })} />
+          </div>
+        </div>
       </div>
-      <h3>Firmware</h3>
-      <div className={form.group}>
-        <Checkbox label="Check for firmware updates daily" checked={g.firmwareDaily} onChange={(e) => set({ firmwareDaily: e.target.checked })} />
+      <div className={form.block}>
+        <h3>Blackbox</h3>
+        <div className={form.group}>
+          <Checkbox label="Erase blackbox after download" checked={g.eraseBlackbox} onChange={(e) => set({ eraseBlackbox: e.target.checked })} />
+          <Checkbox label="Read through USB disk mode first (not proven)" checked={g.blackboxMsc} onChange={(e) => set({ blackboxMsc: e.target.checked })} />
+        </div>
       </div>
-      <h3>When a device is plugged in</h3>
-      <div className={form.group}>
-        <table className={styles.modules} aria-label="Steps on connect">
-          <thead>
-            <tr>
-              <th scope="col">Device</th>
-              {AUTOMATIONS.map((a) => (
-                <th key={a} scope="col">
-                  {AUTOMATION_LABEL[a]}
-                </th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {GEAR_KINDS.map((k) => (
-              <tr key={k}>
-                <th scope="row">{KIND_LABEL[k]}</th>
-                {AUTOMATIONS.map((a) => (
-                  <td key={a}>
-                    {OFFERED[a].includes(k) && (
-                      <input
-                        type="checkbox"
-                        aria-label={`${AUTOMATION_LABEL[a]}: ${KIND_LABEL[k]}`}
-                        checked={(g.onConnect[k] || []).includes(a)}
-                        disabled={a === "backup" && !g.autoBackup}
-                        onChange={(e) => toggle(k, a, e.target.checked)}
-                      />
-                    )}
-                  </td>
-                ))}
-              </tr>
-            ))}
-          </tbody>
-        </table>
+      <div className={form.block}>
+        <h3>Firmware</h3>
+        <div className={form.group}>
+          <Checkbox label="Check for firmware updates daily" checked={g.firmwareDaily} onChange={(e) => set({ firmwareDaily: e.target.checked })} />
+        </div>
       </div>
-      <h3>Cues</h3>
-      <div className={form.group}>
-        <Checkbox label="Mute all cues" checked={g.cues.mute} onChange={(e) => cue({ mute: e.target.checked })} />
-        <fieldset className={styles.fieldset} disabled={g.cues.mute}>
-          <legend className={styles.label}>Play a cue for</legend>
-          <Checkbox label="Done, safe to unplug" checked={g.cues.safe_to_unplug} onChange={(e) => cue({ safe_to_unplug: e.target.checked })} />
-          <Checkbox label="Still inserted" checked={g.cues.still_inserted} onChange={(e) => cue({ still_inserted: e.target.checked })} />
-          <Checkbox label="Step failed" checked={g.cues.step_failed} onChange={(e) => cue({ step_failed: e.target.checked })} />
-          <Checkbox label="Unplug now" checked={g.cues.unplug_now} onChange={(e) => cue({ unplug_now: e.target.checked })} />
-        </fieldset>
-        <fieldset className={styles.fieldset} disabled={g.cues.mute}>
-          <legend className={styles.label}>Play cues as</legend>
-          <Checkbox label="Speech" checked={g.cues.speech} onChange={(e) => cue({ speech: e.target.checked })} />
-          <Checkbox label="Sound" checked={g.cues.sound} onChange={(e) => cue({ sound: e.target.checked })} />
-          <Checkbox label="Notification" checked={g.cues.notification} onChange={(e) => cue({ notification: e.target.checked })} />
-        </fieldset>
-        <div className={styles.row}>
-          <SelectField label="Voice" value={g.cues.voice_source} onChange={(e) => cue({ voice_source: e.target.value as GearDraft["cues"]["voice_source"] })}>
-            <option value="voice_pack">Voice pack</option>
-            <option value="macos">macOS</option>
-          </SelectField>
-          {g.cues.voice_source === "voice_pack" ? (
-            <SelectField label="Voice pack" value={g.cues.voice_pack} onChange={(e) => cue({ voice_pack: e.target.value })}>
-              <option value="">The radio's voice</option>
-              {packs.map((p) => (
-                <option key={p.id} value={p.id}>
-                  {p.voice || p.id}
-                </option>
-              ))}
-              {g.cues.voice_pack && !packs.some((p) => p.id === g.cues.voice_pack) && <option value={g.cues.voice_pack}>{g.cues.voice_pack} (not installed)</option>}
+      <div className={form.block}>
+        <h3>When a device is plugged in</h3>
+        <div className={form.group}>
+          <ul className={form.steps} aria-label="Steps on connect">
+            {GEAR_KINDS.map((k) => {
+              const on = AUTOMATIONS.filter((a) => OFFERED[a].includes(k) && (g.onConnect[k] || []).includes(a) && (a !== "backup" || g.autoBackup));
+              return (
+                <li key={k}>
+                  <span>{KIND_LABEL[k]}</span>
+                  <MoreMenu
+                    text={on.length ? on.map((a) => AUTOMATION_LABEL[a]).join(", ") : "Nothing"}
+                    label={`Steps for ${KIND_LABEL[k]}`}
+                  buttonLabel={`${KIND_LABEL[k]}: ${on.length ? on.map((a) => AUTOMATION_LABEL[a]).join(", ") : "Nothing"}`}
+                    items={AUTOMATIONS.filter((a) => OFFERED[a].includes(k)).map((a) => ({
+                      label: AUTOMATION_LABEL[a],
+                      checked: (g.onConnect[k] || []).includes(a),
+                      disabled: a === "backup" && !g.autoBackup,
+                      run: () => toggle(k, a, !(g.onConnect[k] || []).includes(a)),
+                    }))}
+                  />
+                </li>
+              );
+            })}
+          </ul>
+        </div>
+      </div>
+      <div className={form.block}>
+        <h3>Cues</h3>
+        <div className={form.group}>
+          <Checkbox label="Mute all cues" checked={g.cues.mute} onChange={(e) => cue({ mute: e.target.checked })} />
+          <fieldset className={styles.fieldset} disabled={g.cues.mute}>
+            <legend className={styles.label}>Play a cue for</legend>
+            <Checkbox label="Done, safe to unplug" checked={g.cues.safe_to_unplug} onChange={(e) => cue({ safe_to_unplug: e.target.checked })} />
+            <Checkbox label="Still inserted" checked={g.cues.still_inserted} onChange={(e) => cue({ still_inserted: e.target.checked })} />
+            <Checkbox label="Step failed" checked={g.cues.step_failed} onChange={(e) => cue({ step_failed: e.target.checked })} />
+            <Checkbox label="Unplug now" checked={g.cues.unplug_now} onChange={(e) => cue({ unplug_now: e.target.checked })} />
+          </fieldset>
+          <fieldset className={styles.fieldset} disabled={g.cues.mute}>
+            <legend className={styles.label}>Play cues as</legend>
+            <Checkbox label="Speech" checked={g.cues.speech} onChange={(e) => cue({ speech: e.target.checked })} />
+            <Checkbox label="Sound" checked={g.cues.sound} onChange={(e) => cue({ sound: e.target.checked })} />
+            <Checkbox label="Notification" checked={g.cues.notification} onChange={(e) => cue({ notification: e.target.checked })} />
+          </fieldset>
+          <div className={styles.row}>
+            <SelectField label="Voice" value={g.cues.voice_source} onChange={(e) => cue({ voice_source: e.target.value as GearDraft["cues"]["voice_source"] })}>
+              <option value="voice_pack">Voice pack</option>
+              <option value="macos">macOS</option>
             </SelectField>
-          ) : (
-            <TextField label="macOS voice" placeholder="System voice" value={g.cues.voice} onChange={(e) => cue({ voice: e.target.value })} />
+            {g.cues.voice_source === "voice_pack" ? (
+              <SelectField label="Voice pack" value={g.cues.voice_pack} onChange={(e) => cue({ voice_pack: e.target.value })}>
+                <option value="">The radio's voice</option>
+                {packs.map((p) => (
+                  <option key={p.id} value={p.id}>
+                    {p.voice || p.id}
+                  </option>
+                ))}
+                {g.cues.voice_pack && !packs.some((p) => p.id === g.cues.voice_pack) && <option value={g.cues.voice_pack}>{g.cues.voice_pack} (not installed)</option>}
+              </SelectField>
+            ) : (
+              <TextField label="macOS voice" placeholder="System voice" value={g.cues.voice} onChange={(e) => cue({ voice: e.target.value })} />
+            )}
+          </div>
+          {g.cues.voice_source === "voice_pack" && <p className={styles.sub}>Without a pack, or for a cue the pack has no line for, the macOS voice speaks.</p>}
+          <Checkbox label="Quiet hours for speech and sound" checked={g.quiet} onChange={(e) => set({ quiet: e.target.checked })} />
+          {g.quiet && (
+            <div className={styles.row}>
+              <TextField label="From" type="time" value={g.quietStart} onChange={(e) => set({ quietStart: e.target.value })} />
+              <TextField label="To" type="time" value={g.quietEnd} onChange={(e) => set({ quietEnd: e.target.value })} />
+            </div>
           )}
         </div>
-        {g.cues.voice_source === "voice_pack" && <p className={styles.sub}>Without a pack, or for a cue the pack has no line for, the macOS voice speaks.</p>}
-        <Checkbox label="Quiet hours for speech and sound" checked={g.quiet} onChange={(e) => set({ quiet: e.target.checked })} />
-        {g.quiet && (
-          <div className={styles.row}>
-            <TextField label="From" type="time" value={g.quietStart} onChange={(e) => set({ quietStart: e.target.value })} />
-            <TextField label="To" type="time" value={g.quietEnd} onChange={(e) => set({ quietEnd: e.target.value })} />
-          </div>
-        )}
       </div>
     </section>
   );

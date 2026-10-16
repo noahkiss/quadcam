@@ -131,7 +131,8 @@ test("Settings > Gear saves the changed Gear keys with Done and shows the versio
   await dlg.getByLabel("Back up on connect").uncheck();
   await dlg.getByLabel("Keep recent backups").fill("5");
   await dlg.getByLabel("Check for firmware updates daily").check();
-  await dlg.getByLabel("Pull blackbox: FC").check();
+  await dlg.getByRole("button", { name: /^FC: / }).click();
+  await page.getByRole("menu", { name: "Steps for FC" }).getByRole("menuitemcheckbox", { name: "Pull blackbox" }).click();
   await dlg.getByLabel("Mute all cues").check();
   await dlg.getByLabel("Quiet hours for speech and sound").check();
   await dlg.getByLabel("From").fill("21:30");

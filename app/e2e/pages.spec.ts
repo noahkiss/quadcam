@@ -137,3 +137,40 @@ test("Repairs puts open crashes first with Mark repaired and folds the repaired 
   await card.getByRole("button", { name: "Mark repaired" }).click();
   expect((await app.method("gear_crash_save")).at(-1)).toMatchObject({ id: "crash-1", repaired: true });
 });
+
+test("the Map page lists the places beside the map; Add place… searches and saves, a place's menu renames it", async ({ app, page }) => {
+  await app.open("library", { settings: { mapView: true } });
+  await nav(page).getByRole("button", { name: "Map" }).click();
+  const list = page.getByRole("complementary", { name: "Places" });
+  await expect(list).toContainText("Home field");
+  await expect(list).toContainText("2 clips");
+  if (process.env.QC_SHOTS) await page.screenshot({ path: `${process.env.QC_SHOTS}/pages-map-1280.png` });
+  await list.getByRole("button", { name: "Add place…" }).click();
+  const pop = page.getByRole("dialog", { name: "Add place" });
+  await pop.getByLabel("Search for a place").fill("Golden Gate Park");
+  await pop.getByLabel("Search for a place").press("Enter");
+  await pop.getByRole("list", { name: "Search results" }).getByRole("button").first().click();
+  await expect.poll(async () => (await app.method("place_save")).length).toBe(1);
+
+  await list.getByRole("button", { name: "More actions for Home field" }).click();
+  await page.getByRole("menuitem", { name: "Rename…" }).click();
+  const d = dialog(page, "Rename Home field");
+  await d.getByRole("textbox").fill("Home");
+  await d.getByRole("button", { name: "Rename" }).click();
+  await expect(list).toContainText("Home");
+});
+
+test("Settings fills a narrow window and picks its section from a pop-up", async ({ app, page }) => {
+  await page.setViewportSize({ width: 420, height: 800 });
+  await app.open();
+  await page.getByRole("button", { name: "Settings" }).click();
+  const dlg = dialog(page, "Settings");
+  await expect(dlg.getByRole("navigation", { name: "Settings sections" })).toBeHidden();
+  await dlg.getByLabel("Section", { exact: true }).selectOption("gear");
+  await expect(dlg.getByRole("button", { name: /^FC: / })).toBeVisible();
+  const box = (await dlg.boundingBox())!;
+  expect(Math.round(box.width)).toBe(420);
+  // A wide sheet sets the Gear pane's groups in two columns.
+  await page.setViewportSize({ width: 1440, height: 900 });
+  if (process.env.QC_SHOTS) await page.screenshot({ path: `${process.env.QC_SHOTS}/pages-settings-gear-1440.png` });
+});

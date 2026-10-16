@@ -1,5 +1,5 @@
 .sheet {
-  width: min(960px, calc(100vw - 64px));
+  width: min(1200px, calc(100vw - 64px));
   height: min(680px, calc(100vh - 64px));
 }
 .body {
@@ -77,6 +77,7 @@
   font-weight: 600;
 }
 .pane {
+  container: pane / inline-size;
   flex: 1;
   min-width: 0;
   overflow-y: auto;
@@ -316,4 +317,29 @@
   margin: 0;
   white-space: pre-wrap;
   overflow-wrap: anywhere;
+}
+/* The section pop-up that takes the list's place in a narrow window. */
+.sectionPicker {
+  display: none;
+}
+/* A narrow window: the sheet fills it, and the section list becomes a pop-up above the pane. */
+@media (max-width: 720px) {
+  .sheet.sheet {
+    width: 100vw;
+    height: 100vh;
+    margin: 0;
+  }
+  .body {
+    flex-direction: column;
+  }
+  .nav {
+    display: none;
+  }
+  .sectionPicker {
+    display: block;
+    padding: var(--s-3) var(--s-4) 0;
+  }
+  .pane {
+    padding: var(--s-3) var(--s-4) var(--s-4);
+  }
 }

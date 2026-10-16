@@ -29,6 +29,16 @@
   max-height: none;
   max-width: none;
 }
+/* A narrow window: a sheet fills it. */
+@media (max-width: 720px) {
+  .sheet.sheet {
+    width: 100vw;
+    height: 100vh;
+    margin: 0;
+    border: 0;
+    border-radius: 0;
+  }
+}
 .form {
   display: flex;
   flex-direction: column;

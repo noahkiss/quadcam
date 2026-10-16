@@ -9,6 +9,8 @@ export interface MenuItem {
   keys?: string;
   danger?: boolean;
   disabled?: boolean;
+  /** A check box item: a check mark while on (`menuitemcheckbox`). */
+  checked?: boolean;
   run: () => void;
 }
 
@@ -59,7 +61,8 @@ export function Menu({ label, at, items, onClose }: Props) {
           <li key={i} role="none">
             <button
               type="button"
-              role="menuitem"
+              role={it.checked === undefined ? "menuitem" : "menuitemcheckbox"}
+              aria-checked={it.checked}
               disabled={it.disabled}
               className={it.danger ? styles.danger : undefined}
               onClick={() => {
@@ -67,7 +70,7 @@ export function Menu({ label, at, items, onClose }: Props) {
                 it.run();
               }}
             >
-              {it.icon ? <Icon name={it.icon} size={15} /> : <span className={styles.noIcon} />}
+              {it.checked ? <Icon name="check" size={15} /> : it.icon ? <Icon name={it.icon} size={15} /> : <span className={styles.noIcon} />}
               <span className={styles.label}>{it.label}</span>
               <span className={styles.keys} aria-hidden="true">
                 {it.keys}

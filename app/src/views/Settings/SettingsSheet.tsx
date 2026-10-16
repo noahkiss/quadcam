@@ -6,7 +6,7 @@ import { api, errText, pickFolder } from "../../ipc/api";
 import type { GeoResult } from "../../ipc/types";
 import { Button } from "../../components/Button";
 import { Dialog } from "../../components/Dialog";
-import { Checkbox, Field, Input, SearchField, SelectField, TextField } from "../../components/Field";
+import { Checkbox, Field, Input, SearchField, Select, SelectField, TextField } from "../../components/Field";
 import { Icon, type IconName } from "../../components/Icon";
 import { SecretField } from "../../components/SecretField";
 import { SegmentedControl } from "../../components/SegmentedControl";
@@ -98,6 +98,15 @@ function Sheet({ first }: { first: SettingsSection }) {
       }
     >
       <div className={styles.body}>
+        <div className={styles.sectionPicker}>
+          <Select aria-label="Section" value={section} onChange={(e) => show(e.target.value as SettingsSection)}>
+            {SECTIONS.map(([id, label]) => (
+              <option key={id} value={id}>
+                {label}
+              </option>
+            ))}
+          </Select>
+        </div>
         <nav aria-label="Settings sections" className={styles.nav}>
           <ul>
             {SECTIONS.map(([id, label, icon]) => (
@@ -329,7 +338,6 @@ function AircraftPane({ d, setD, at, setAt }: { d: Draft; setD: (f: (d: Draft) =
           <div className={`${styles.wide} ${styles.row}`}>
             <Checkbox
               label={<b>Default aircraft</b>}
-              detail="For clips without a matching radio log."
               checked={d.defaultIndex === at}
               onChange={(e) => setD((x) => ({ ...x, defaultIndex: e.target.checked ? at : null, defaultCleared: !e.target.checked }))}
             />
@@ -427,73 +435,80 @@ function PlacesPane({ d, set }: { d: Draft; set: SetFn }) {
       setHits(errText(e));
     }
   };
+  // With the Map page on, places are kept there: this pane keeps the search provider and
+  // the Map page switch.
+  const editor = !d.mapView;
   return (
     <section>
       <h3>Places</h3>
-      <div className={styles.row}>
-        <SearchField
-          label="Search for a place"
-          className={styles.grow}
-          placeholder="Address or place name"
-          value={query}
-          onChange={(e) => setQuery(e.target.value)}
-          onKeyDown={(e) => {
-            // Searches only on Return or the button, never per keystroke.
-            if (e.key === "Enter") {
-              e.preventDefault();
-              search();
-            }
-          }}
-        />
-        <Button size="sm" variant="ghost" icon="search" onClick={search}>
-          Search
-        </Button>
-        <Button size="sm" variant="ghost" icon="gps" onClick={here} disabled={locating}>
-          Use current location
-        </Button>
-      </div>
-      {hits != null && (
-        <ul className={styles.results}>
-          {typeof hits === "string" ? (
-            <li className={styles.sub}>{hits}</li>
-          ) : (
-            hits.map((h, i) => (
-              <li key={i}>
-                <button type="button" onClick={() => pick(h)}>
-                  <b>{h.name}</b> <span className={styles.sub}>{`${h.address} · ${h.lat.toFixed(5)}, ${h.lon.toFixed(5)}`}</span>
-                </button>
-              </li>
-            ))
-          )}
-        </ul>
-      )}
-      <div className={styles.places}>
-        {d.places.map((r, i) => (
-          <div key={i} className={[styles.placeRow, target === i && styles.target].filter(Boolean).join(" ")}>
-            <Input aria-label="Place name" placeholder="Name" value={r.name} onChange={(e) => editRow(i, "name", e.target.value)} />
-            <Input aria-label="Latitude" placeholder="Latitude" type="number" step="any" value={r.lat} onChange={(e) => editRow(i, "lat", e.target.value)} />
-            <Input aria-label="Longitude" placeholder="Longitude" type="number" step="any" value={r.lon} onChange={(e) => editRow(i, "lon", e.target.value)} />
-            <Button
-              size="sm"
-              variant="ghost"
-              icon="search"
-              aria-label="Search for this place"
-              title="Search"
-              onClick={() => {
-                setTarget(i);
-                if (r.name.trim() && !query.trim()) setQuery(r.name.trim());
-                (document.querySelector('input[aria-label="Search for a place"]') as HTMLInputElement | null)?.focus();
+      {editor && (
+        <>
+          <div className={styles.row}>
+            <SearchField
+              label="Search for a place"
+              className={styles.grow}
+              placeholder="Address or place name"
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              onKeyDown={(e) => {
+                // Searches only on Return or the button, never per keystroke.
+                if (e.key === "Enter") {
+                  e.preventDefault();
+                  search();
+                }
               }}
             />
-            <Button size="sm" variant="ghost" icon="tag" aria-label="Name from coordinates" title="Name from coordinates" onClick={() => nameRow(i)} />
-            <Button size="sm" variant="ghost" icon="trash-bin-trash" aria-label="Delete this place" title="Delete" onClick={() => set("places", d.places.filter((_, j) => j !== i))} />
+            <Button size="sm" variant="ghost" icon="search" onClick={search}>
+              Search
+            </Button>
+            <Button size="sm" variant="ghost" icon="gps" onClick={here} disabled={locating}>
+              Use current location
+            </Button>
           </div>
-        ))}
-      </div>
-      <Button size="sm" variant="ghost" icon="add" onClick={() => set("places", [...d.places, { name: "", lat: "", lon: "" }])}>
-        Add place
-      </Button>
-      <Checkbox label="Show the Map page" detail="Adds Map to the sidebar: places and clips on an Apple map." checked={d.mapView} onChange={(e) => set("mapView", e.target.checked)} />
+          {hits != null && (
+            <ul className={styles.results}>
+              {typeof hits === "string" ? (
+                <li className={styles.sub}>{hits}</li>
+              ) : (
+                hits.map((h, i) => (
+                  <li key={i}>
+                    <button type="button" onClick={() => pick(h)}>
+                      <b>{h.name}</b> <span className={styles.sub}>{`${h.address} · ${h.lat.toFixed(5)}, ${h.lon.toFixed(5)}`}</span>
+                    </button>
+                  </li>
+                ))
+              )}
+            </ul>
+          )}
+          <div className={styles.places}>
+            {d.places.map((r, i) => (
+              <div key={i} className={[styles.placeRow, target === i && styles.target].filter(Boolean).join(" ")}>
+                <Input aria-label="Place name" placeholder="Name" value={r.name} onChange={(e) => editRow(i, "name", e.target.value)} />
+                <Input aria-label="Latitude" placeholder="Latitude" type="number" step="any" value={r.lat} onChange={(e) => editRow(i, "lat", e.target.value)} />
+                <Input aria-label="Longitude" placeholder="Longitude" type="number" step="any" value={r.lon} onChange={(e) => editRow(i, "lon", e.target.value)} />
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  icon="search"
+                  aria-label="Search for this place"
+                  title="Search"
+                  onClick={() => {
+                    setTarget(i);
+                    if (r.name.trim() && !query.trim()) setQuery(r.name.trim());
+                    (document.querySelector('input[aria-label="Search for a place"]') as HTMLInputElement | null)?.focus();
+                  }}
+                />
+                <Button size="sm" variant="ghost" icon="tag" aria-label="Name from coordinates" title="Name from coordinates" onClick={() => nameRow(i)} />
+                <Button size="sm" variant="ghost" icon="trash-bin-trash" aria-label="Delete this place" title="Delete" onClick={() => set("places", d.places.filter((_, j) => j !== i))} />
+              </div>
+            ))}
+          </div>
+          <Button size="sm" variant="ghost" icon="add" onClick={() => set("places", [...d.places, { name: "", lat: "", lon: "" }])}>
+            Add place
+          </Button>
+        </>
+      )}
+      <Checkbox label="Show the Map page" checked={d.mapView} onChange={(e) => set("mapView", e.target.checked)} />
       <div className={styles.row}>
         <SelectField label="Search with" value={d.geocoder} onChange={(e) => set("geocoder", e.target.value)}>
           <option value="apple">Apple Maps</option>
@@ -524,10 +539,10 @@ function ImportPane({ d, set }: { d: Draft; set: SetFn }) {
       <TextField label="Default short name" placeholder="flight" value={d.defaultName} onChange={(e) => set("defaultName", e.target.value)} />
       <Checkbox label="Add the time to file names (radio-log dates only)" checked={d.addTime} onChange={(e) => set("addTime", e.target.checked)} />
       <Checkbox label="Delete clips after import" detail="Deletes each clip that verified from the card or folder. Other files stay." checked={d.deleteClips} onChange={(e) => set("deleteClips", e.target.checked)} />
-      <Checkbox label="Join split recordings" detail="Imports a recording the DVR split into several files as one clip." checked={d.joinSplit} onChange={(e) => set("joinSplit", e.target.checked)} />
+      <Checkbox label="Join split recordings" checked={d.joinSplit} onChange={(e) => set("joinSplit", e.target.checked)} />
       <VideoAnalysisBox d={d} set={set} />
       <Checkbox label="Look up weather" detail="Gets the weather and sky at each clip's place and hour from Open-Meteo. Sends the place, to about 1 km, and the date." checked={d.weather} onChange={(e) => set("weather", e.target.checked)} />
-      <Checkbox label="On-device suggestions" detail="Suggests clip names, keywords and notes with Apple's on-device model, on Macs that have it." checked={d.onDevice} onChange={(e) => set("onDevice", e.target.checked)} />
+      <Checkbox label="On-device suggestions" checked={d.onDevice} onChange={(e) => set("onDevice", e.target.checked)} />
       <h3>Log matching</h3>
       <div className={styles.row}>
         <TextField label="Segment gap (s)" type="number" min={1} step={1} value={d.segGap} onChange={(e) => set("segGap", e.target.value)} />
@@ -548,8 +563,7 @@ function VideoAnalysisBox({ d, set }: { d: Draft; set: SetFn }) {
       .then((f) => setWhy(f.available ? null : f.reason || "Video analysis is unavailable on this Mac."))
       .catch(() => {});
   }, []);
-  const what = "Marks highlights in clips without a radio log and picks each clip's poster frame, with macOS video analysis.";
-  return <Checkbox label="Find highlights in new clips" detail={why ? `${what} ${why}` : what} checked={d.videoAnalysis} onChange={(e) => set("videoAnalysis", e.target.checked)} />;
+  return <Checkbox label="Find highlights in new clips" detail={why ?? undefined} checked={d.videoAnalysis} onChange={(e) => set("videoAnalysis", e.target.checked)} />;
 }
 
 function AdvancedPane({ d, set }: { d: Draft; set: SetFn }) {
