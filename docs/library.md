@@ -2,6 +2,8 @@
 
 The library is a folder of video files that QuadCam keeps in order. QuadCam opens on it: every clip you imported, newest first, grouped by flying day.
 
+The window can be as narrow as 420 px. Pages fill the window up to 1760 px and then centre. At 720 px and narrower the sidebar hides: the button at the left of the toolbar shows it over the page, and a pick or Escape hides it. The library's sort and Grid or List move into the toolbar's **…** menu, and the grid's width sets its columns.
+
 ## Where the files go
 
 The library folder is the output folder setting. The default is `~/Movies/quadcam`. QuadCam makes that folder on the first import. It never makes a folder that you picked.
@@ -126,7 +128,7 @@ If the library folder already holds videos that are not in the index, the librar
 - **Search** matches the name, note, place, aircraft, keywords, file name and [sun tag](#sun-and-weather) (`golden hour`).
 - **Thumbnails** show the clip as you move the pointer across them.
 - **Rejected** in the sidebar shows a **Move to Trash** button for every rejected clip.
-- The day summary shows the clips, armed time, radio-log flights, lowest battery voltage and the best moments of the day. **Best moments** in the sidebar lists them for the whole library (see [Moments](moments-and-cuts.md#moments)).
+- Each day's head shows, on one line, the clips, armed time, radio-log flights, lowest battery voltage, the place and aircraft, the best moments of the day, and **Share**. In a narrow window it wraps: the date, then the numbers, then the moments. **Best moments** in the sidebar lists them for the whole library (see [Moments](moments-and-cuts.md#moments)).
 - A thin strip at the bottom of a card's thumbnail is stronger where the clip's moments are.
 - **Shift time…** in the bar for two or more selected clips fixes a wrong camera clock. See [Shift the time of many clips](#shift-the-time-of-many-clips).
 
@@ -220,6 +222,7 @@ Click a pin to show its callout:
 - Pins close together merge into one at a wide zoom. Click it to zoom in.
 - **Map**, **Hybrid** and **Satellite** pick the look, and the map opens in it the next time ([Map style](settings.md#map-style)). **Show all** zooms to every pin.
 - The header counts the places, the clips on the map, and the clips without a location.
+- The **Places** list beside the map shows each saved place with its clip count and the day you last flew there; click one to show its clips. **Add place…** searches for a place or uses this Mac's location, and saves it. A place's **…** menu holds **Rename…**, **Show clips** and **Delete…**. In a narrow window the map sits on top and the list under it.
 - Scroll or pinch to zoom; drag to move. The map keeps its view when you come back to the page.
 
 ## Unfinished imports

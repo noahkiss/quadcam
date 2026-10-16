@@ -8,10 +8,10 @@ Open Settings with the gear icon or Command-comma. **Done** saves every change a
 |---|---|
 | **Library** | The library folder (default `~/Movies/quadcam`, made on the first import), the layout, the date in file names, place folders, keep originals, and **Rebuild from files**. See [The library](library.md). |
 | **Aircraft** | The aircraft profiles and the default profile. See [Metadata](metadata.md#places-and-profiles). |
-| **Places** | The saved places, the place search provider, and **Show the Map page**. See [Metadata](metadata.md#place-search-providers) and [The map](library.md#the-map). |
+| **Places** | The place search provider and **Show the Map page**. While the Map page is off, the saved places too; with it on, you keep places on the Map page. See [Metadata](metadata.md#place-search-providers) and [The map](library.md#the-map). |
 | **Import** | The format (MP4 or MOV), the MP4 encoder, the default short name, the time in file names, **Delete clips after import**, **Join split recordings**, **On-device suggestions**, and the tolerances for log matching, the DJI clip clock skew included. |
 | **Photos** | The album. An empty album means the library only. See [Photos](photos.md). |
-| **Gear** | The previews (**Show the Sim page**, **Betaflight flashing (preview)**, **Show the ELRS tools**), **Back up on connect**, how many backups to keep, the USB power warning, the blackbox options (**Erase blackbox after download**, **Read through USB disk mode first (not proven)**), the **Steps on connect** table per device kind, and the cues: which play, as speech, sound or notification, mute, the voice and quiet hours. See [Gear](gear.md). |
+| **Gear** | The previews (**Show the Sim page**, **Betaflight flashing (preview)**, **Show the ELRS tools**), **Back up on connect**, how many backups to keep, the USB power warning, the blackbox options (**Erase blackbox after download**, **Read through USB disk mode first (not proven)**), a row per device kind for the steps on connect (a pop-up with a check mark on each step that runs), and the cues: which play, as speech, sound or notification, mute, the voice and quiet hours. See [Gear](gear.md). |
 | **Modules** | Tools QuadCam downloads on request (ffmpeg, esptool): install, update, remove, **Check for module updates**, and **Use ffmpeg from** (the QuadCam module, else Homebrew; or Homebrew only). See [Modules and notices](modules.md). |
 | **Advanced** | **Check for updates automatically**, and the last update check with the release notes when a newer version is known (see [Updates](#updates)). Read-only: the ffmpeg in use and the agent socket path. |
 
@@ -97,6 +97,7 @@ The app, the command-line tool and the MCP server all read and write this file.
 - A read from the command line (`quadcam-cli settings`) or an agent (`quadcam_settings` `read`) shows every setting with its value in effect, Gear's, the voice and ExpressLRS settings and the previews included. Each setting that has a command-line name can also be written there.
 - Settings from QuadCam 0.3.0 carry over as they are.
 - The bottom of the section list shows the QuadCam version and the build (the commit it was built from). **About QuadCam** shows them too.
+- The sheet is up to 1200 px wide; a wide sheet sets the Gear section's groups in two columns. In a window 720 px or narrower the sheet fills the window and a **Section** pop-up at the top takes the place of the section list.
 
 ## Secrets
 

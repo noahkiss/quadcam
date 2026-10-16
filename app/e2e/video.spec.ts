@@ -58,7 +58,7 @@ test("the setting says when this Mac cannot run it", async ({ app, page }) => {
   await page.getByRole("button", { name: "Settings" }).click();
   const dlg = dialog(page, "Settings");
   await dlg.getByRole("button", { name: "Import" }).click();
-  await expect(dlg.getByText(/with macOS video analysis\. Video analysis on this Mac needs macOS 27 or later\./)).toBeVisible();
+  await expect(dlg.getByText("Video analysis on this Mac needs macOS 27 or later.")).toBeVisible();
 });
 
 for (const scheme of axeSchemes) {

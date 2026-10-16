@@ -5,9 +5,13 @@ QuadCam is growing a built-in FPV simulator that flies your own quads on your ow
 radio's calibration for the sim, the flight model and its check against your logs, and the
 Sim page, where you fly a plain room.
 
-## Sim radio: calibrating the radio
+**Gear > Sim** has three sections: **Fly** (shown while the preview is on), **Radio** and
+**Rates** (the sims on this Mac against your quad's rates; see
+[Gear](gear.md#sims-page)).
 
-Plug the radio in and choose **USB Joystick** on it, then open **Gear > Sim radio**.
+## Radio: calibrating the radio
+
+Plug the radio in and choose **USB Joystick** on it, then open **Gear > Sim** and pick **Radio**.
 
 **Which radio.** In joystick mode the radio's card is not mounted, so QuadCam matches the
 joystick's USB name to a radio it has saved (read once in USB Storage mode):
@@ -15,8 +19,8 @@ joystick's USB name to a radio it has saved (read once in USB Storage mode):
 | Saved radios of this model | What happens |
 |---|---|
 | One | That radio |
-| Several | Pick it from **Which radio is this?** QuadCam remembers the answer for that model |
-| None | A temporary key. Pick the radio under **Link to a saved radio** once its card has been read |
+| Several | Pick it from **Which radio is this?** in the header. QuadCam remembers the answer for that model |
+| None | A temporary key. Pick the radio under **Link to a saved radio** in the header once its card has been read |
 
 A calibration belongs to one radio. Two radios of the same model each keep their own, even
 though they report the same USB serial number.
@@ -30,7 +34,7 @@ Betaflight modes (the latest backups of the radio and FC linked to it), the page
 | Arm, Angle, Horizon, Turtle, Air mode | The quad's `aux` ranges, named by the switch position that reaches them (`SA down`) |
 | Reset | A button or trim that moves a channel but does nothing in the model or on the quad |
 
-The **Switches** card lists them, each with where it came from. **Change** sets a control by moving it on the radio;
+The **Switches** card, beside **Calibrate** on a wide window, lists them, each with where it came from. **Change** sets a control by moving it on the radio;
 **Clear** removes it. Channels 9 and up reach the joystick as buttons, on above 1500 µs.
 
 **The steps.**
@@ -42,11 +46,12 @@ The **Switches** card lists them, each with where it came from. **Change** sets 
    and a stick were swapped, the one that stays where it was left is throttle.
 3. **Flip the arm switch** (skipped when the quad's modes name it). **No arm switch** skips it.
 4. **Press the reset control**: a free button or trim. **Keep** takes the suggestion.
-5. **Review**: the sticks show the calibrated output live. Per axis: the channel (picking a
-   channel another stick has swaps the two), **Reverse**, the two ends and the deadzone.
+5. **Review**: the sticks show the calibrated output live. **Axes** opens at this step (click it
+   to open it at any step). Per axis: the channel (picking a channel another stick has swaps the
+   two), **Direction** (Normal or Reversed), the two ends and the deadzone.
 
 The ends are named by direction (Left end and Right end, Back end and Forward end, Bottom and
-Top), and the names follow Reverse. An end you type is marked **(edited)** and wins over the
+Top), and the names follow Direction. An end you type is marked **(edited)** and wins over the
 measured one until **Recalibrate**, which runs every step again and keeps the deadzones. The
 deadzone is cut from the middle and the rest is rescaled, so full travel still reaches 100 %.
 
@@ -57,7 +62,7 @@ deadzone is cut from the middle and the rest is rescaled, so full travel still r
 The Sim is a preview and hidden at first: turn on **Settings > Gear > Preview > Show the Sim page**
 (or `quadcam-cli settings set sim_preview=true`). Then open **Gear > Sim** and pick **Fly**. The sim starts at once on the profile chosen in the settings
 (the 75 mm whoop by default) in a 5 × 4 × 2.5 m room with a crate, a low table and two gates.
-The view is FPV, from the quad's camera. Calibrate the radio first (Sim radio): without a saved
+The view is FPV, from the quad's camera. Calibrate the radio first (Radio): without a saved
 calibration the sim still starts, but the arm, turtle and reset switches do nothing.
 
 | Control | What it does |
@@ -68,6 +73,7 @@ calibration the sim still starts, but the arm, turtle and reset switches do noth
 | **Reset** | The same, from the page |
 | **Stop** | Ends the sim. Leaving the page stops it too |
 | Settings button | Opens the settings popover |
+| Aircraft, **FPV** / **Chase** | In the header beside **Fly**; in a narrow window, in the settings popover only |
 
 The OSD shows flight mode and arm state, voltage, mAh used and the flight timer, and a warning
 line (why the quad will not arm, a low pack, upside down, no radio). The stick display shows the
@@ -79,12 +85,12 @@ calibrated sticks in your stick mode, at the right edge above the OSD.
 |---|---|
 | Aircraft | The built-in profile to fly |
 | View | FPV, or a chase camera behind the quad |
-| Picture shape | 16:9 or 4:3; the picture sits letterboxed in the window |
+| Picture shape | 16:9 or 4:3; the picture takes the page's full width in that shape, as tall as the window allows |
 | Camera tilt, Field of view | The camera's up-tilt and diagonal field of view (the profile's to start). A flat picture cannot show more than 100° vertically, so a wide whoop camera is cropped |
 | Stick display, OSD | Show or hide each |
 
 A click outside the popover, or Escape, closes it. Under the picture a line shows the frame
-time and the radio-to-picture time. The sim is a preview: the room, the OSD and the camera are
+time and the radio-to-picture time; click it for the 99th percentile and the longest frame. The sim is a preview: the room, the OSD and the camera are
 the minimal version.
 
 ## The flight model

@@ -5,6 +5,18 @@ User-facing changes in each release, newest first. Release notes on
 
 ## Unreleased
 
+- **The window fills the screen.** Pages now use the window's full width up to 1760 px, then centre; the 960 px limit on Gear pages is gone. The window can be as narrow as 420 px: at 720 px and narrower the sidebar hides behind a button at the left of the toolbar, header buttons fold into a **…** menu, card grids drop to one column, tables fold into stacked rows, and a drawer or sheet fills the window.
+- **One line instead of tiles.** Connected, Devices, Bench, Pack up, Packs, Repairs, Firmware and the Sim page's Rates count what matters in one line under the title. Flights keeps its day tiles; Storage shows one usage bar with a legend.
+- **One action per row.** Rows keep the action they exist for and put the rest in a **…** menu: Devices (**Open**, **Back up now**, **Edit…**, **Forget…**), Connected cards, Bench changes (**Discard**, with who staged it and when), Packs (**Edit…**, **Retire**), Repairs (**Mark repaired** on the row; **Mark open**, **Delete…** in the menu), sims (**Show in Finder**, **Restore…**), Storage (**Export…**, **Show in Finder**) and places.
+- **Details in a drawer.** A flight's details, a pack's history and the backup import report open in a drawer beside the table, not under it.
+- **What needs you comes first.** Connected cards and Firmware rows that need attention sort first. Bench opens the devices that are plugged in and folds the others to one row. Pack up folds the checks that passed, Repairs folds repaired crashes, Packs folds retired packs.
+- **Library days on one line.** A day's head shows its clips, armed time, flights, lowest battery, place, best moments and **Share** on one line; the separate summary card is gone.
+- **Sim in one place.** **Sim radio** and **Sims** are now the **Radio** and **Rates** sections of **Gear > Sim**; **Fly** shows while the Sim preview is on. The stage fills the page at its picture shape. Radio sets Calibrate beside Switches, folds the axes, and picks **Normal** or **Reversed** per axis. Sims with one profile take one row.
+- **Controls side by side.** Sticks and Channels share a row; one **Open…** pop-up opens a card, a model or a dump; Modes, Not mapped and Notes fold.
+- **Places on the Map page.** The Map page lists your places beside the map, with **Add place…** and a menu per place. Settings > Places keeps the place list only while the Map page is off.
+- **Settings.** The sheet is up to 1200 px wide and the Gear section uses two columns. **When a device is plugged in** is a pop-up per device kind with a check mark on each step. In a narrow window the sheet fills it and the sections are a pop-up.
+- **Firmware.** **Read firmware…** opens a sheet; saved firmware copies fold; the ExpressLRS section folds and remembers it.
+
 ## 0.21.6 (2026-10-16)
 
 - **Gear keeps up with cards again.** Gear looks at the mounted volumes again at least every 30 seconds, and at once after QuadCam deletes clips from a card or formats one. A card that macOS could not describe for a moment no longer stays hidden until something else is plugged in, and a card emptied by an import no longer lingers in Gear.

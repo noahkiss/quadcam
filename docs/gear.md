@@ -18,23 +18,30 @@ reminder) or **Needs attention** (a failed step, or a device to save). A click o
 device, or Connected when several of that kind are in. VoiceOver reads each change of state.
 With nothing plugged in the bar stays and says "No gear connected".
 
-- **Connected** shows what is plugged in now: tiles for how many are plugged in, need
-  attention, are working and have changes staged, then a card per device with its state and
-  its next step (**Save…**, **Review…**, **Import…**). Each device also has its own row under it.
-- **Devices** is a table of the devices you saved, plugged in or not: kind, state, last backup,
-  firmware (installed → newest when an update is out) and staged changes.
+- **Connected** shows what is plugged in now. One line under the title counts the devices
+  plugged in, those that need attention, those working and the changes staged. A card per
+  device, those that need you first, shows its state, a line of facts (kind, firmware, last
+  backup, card space) and its next step (**Save…**, **Review…**, **Import…**). The card's
+  **…** menu holds **Open**, **Mount**, **Prepare card…**, **Edit…** and **Forget…**. Each
+  device also has its own row under Connected in the sidebar.
+- **Devices** is a table of the devices you saved, plugged in or not, grouped by kind (Radios,
+  Quads, Goggles and cards, ExpressLRS): aircraft, state, last backup, firmware and staged
+  changes. A device that is not plugged in shows its state in muted text. An **Update** badge
+  beside the firmware opens Firmware. Each row's **…** menu holds **Open**, **Back up now**,
+  **Edit…** and **Forget…**.
 - **Bench** lists the changes staged for each device. See [The Bench](#the-bench).
 - **Pack up**, **Flights**, **Packs** and **Repairs** are described under
   [Flights and packs](#flights-and-packs).
-- **Sims** lists the sims on this Mac against one quad's rates. The item says **Out of date**
-  while a sim's rates differ from the quad's. See [Sims](#sims-page).
 - **Controls** shows the radio's sticks and switches live. See [Controls](#controls).
 - **Voices** holds the voice packs on this Mac, ElevenLabs and the other voices. See [Voices](#voices).
 - **Firmware** compares each device's firmware with the newest release. It reads a radio's
   firmware, flashes an EdgeTX radio, and, with the previews on, flashes a Betaflight FC and
   reads ExpressLRS devices. See [Firmware and splash](#firmware-and-splash).
 - **Storage** shows the gear folder. See [Backups](#backups).
-- **Sim** and **Sim radio** show only while **Show the Sim page** is on. See [Sim](sim.md).
+- **Sim** has three sections: **Fly** (only while **Show the Sim page** is on, see
+  [Sim](sim.md)), **Radio** (the sim's radio calibration, see [Sim](sim.md)) and **Rates** (the
+  sims on this Mac against one quad's rates, see [Sims](#sims-page)). The item says **Out of
+  date** while a sim's rates differ from the quad's.
 - A device's page shows its kind, state and firmware in the header. Its Overview has summary
   tiles: for an FC the firmware (against the newest), the last backup, the staged changes and
   the latest blackbox pull; for a radio the same with its aircraft count in place of the
@@ -224,8 +231,8 @@ moments ago), the pull runs and its answer warns.
 **Other programs and Pause reads.** A pull refuses a port another program has open. The on-connect
 step skips a port whose reads you paused; a pull you start yourself still runs.
 
-**Steps on connect.** `blackbox` is a step in `gear_on_connect` for FCs. It is off until you tick
-**Pull blackbox** in the FC row of **Settings > Gear > When a device is plugged in** (or list
+**Steps on connect.** `blackbox` is a step in `gear_on_connect` for FCs. It is off until you pick
+**Pull blackbox** in the FC pop-up of **Settings > Gear > When a device is plugged in** (or list
 `blackbox` in `gear_on_connect.fc`).
 
 **Dates and flights.** A flight controller has no clock, so its logs read `0000-01-01`. QuadCam
@@ -932,10 +939,11 @@ and the size, then the device's backups on the left. Pick one: the right side sh
 from the backup before it, and below them its files; click a file to read its text. **Pin** keeps
 a backup. **Back up now** backs the device up.
 
-**Gear > Storage** shows the gear folder (with **Show in Finder**), tiles for its total size,
-backups, stored files and radio logs, and a table per device. **Prune now** shows
-what would go and asks first. **Export…** writes a device's backups as plain folders, one per
-backup. **Import backups…** takes an old backup folder:
+**Gear > Storage** shows the gear folder (with **Show in Finder**), one bar for its size split
+into backups, stored files and radio logs with the total, and a table per device. **Prune now**
+shows what would go and asks first. **Export…** (in a device row's **…** menu, beside **Show in
+Finder**) writes a device's backups as plain folders, one per backup. **Import backups…** takes
+an old backup folder; its report opens in a drawer on the right:
 
 - a folder with `RADIO/radio.yml` or `MODELS/` is a radio card copy; its `LOGS/` go to the
   log store;
@@ -1062,14 +1070,19 @@ does not hold.
 ### The Bench
 
 **Bench** (in the sidebar, with a count) lists every device that has a waiting change, in
-the order the next session applies them. Tiles count the staged and ready changes, the devices,
-the ones plugged in, and the applied Try changes that wait for **Keep**. Each device is a card
-with a table of its changes: title, edit, status, who staged it, **Review…** and **Discard**.
-A device's **Changes** segment shows the same table for that device.
+the order the next session applies them. One line under the title counts the staged and ready
+changes, the devices plugged in, and the applied Try changes that wait for **Keep**. Each device
+is a card with a table of its changes: title, edit, status and **Review…**; the row's **…** menu
+says who staged it and when, and holds **Discard**. A device's **Changes** segment shows the same
+table for that device. **Copy settings…** sits in the header; **Copy as Markdown** is in its
+**…** menu.
 
-- Each device shows whether it is plugged in, unmounted but still in, or away. A device that is
-  away shows what to do: "Plug in the radio in USB Storage mode to apply 3 changes." **Next
-  session** names the first Ready or Try change.
+- Devices that are plugged in come first, open. A device that is away folds to one row with its
+  staged count and next session; click its name to open it, and it shows what to do: "Plug in
+  the radio in USB Storage mode to apply 3 changes." **Next session** names the first Ready or
+  Try change.
+- Applied Try changes sit in a band at the top of the device's card, with **Keep** and
+  **Revert…**.
 - Each change has a status you set from its row:
 
   | Status | Means |
@@ -1087,7 +1100,7 @@ A device's **Changes** segment shows the same table for that device.
   set the same line, the revert's note says so, because the revert undoes that value too. For a
   card it restores the files the apply wrote. The change becomes Reverted when the undo
   verifies.
-- **History** lists changes that are done.
+- **History** (closed at first, with its count) lists changes that are done.
 - **Copy as Markdown** puts the queue on the clipboard.
 
 ### Copy settings between quads
@@ -1216,8 +1229,8 @@ rates came from ("From backup" and its time, or the file names).
 - **A diff alone:** a diff lists only values that differ from the defaults. QuadCam fills in
   Betaflight's defaults and says so. Use a dump for exact curves.
 - **Sims:** QuadCam reads the rate files of Liftoff, Liftoff: Micro Drones, Uncrashed and The
-  Zone, and lists each profile's maximum rates in the **Sims** card, the same table as the Sims
-  page (**Open Sims** opens that page). Each sim says "Matches the quad" or "Out of date"
+  Zone, and lists each profile's maximum rates in the **Sims** card, the same table as the Sim
+  page's Rates section (**Open Sims** opens it). Each sim says "Matches the quad" or "Out of date"
   against the selected profile, and shows the largest gap in degrees per second. A sim
   takes Betaflight rates, so a quad on Actual or Quick is fitted to the Betaflight model first.
   The fit stays within 6 % of the maximum rate for Actual profiles with a centre of 40 to 200
@@ -1238,13 +1251,16 @@ rates came from ("From backup" and its time, or the file names).
 
 ### Sims page
 
-**Gear > Sims** lists every sim on this Mac against one quad's profile in use. The quad is the
-saved flight controller that QuadCam saw last and has a backup; **Compare with** picks another
-when there are several. Tiles count the sims found, the ones out of date and the ones running.
-The table has a row per sim (its state, **Matches the quad** or **Out of date**, its files, and
-**Restore…** for a sim QuadCam backed up) and a row per profile under it (the maximum rates,
-the difference from the quad and **Sync…**). Both open the same sheets as in the Rates segment.
-Velocidrone shows **Off** with the reason.
+**Gear > Sim > Rates** lists every sim on this Mac against one quad's profile in use. The quad
+is the saved flight controller that QuadCam saw last and has a backup; **Compare with** picks
+another when there are several. One line under the title counts the sims found, the ones out of
+date and the ones running. The table has a row per sim: its state (**Matches the quad** or
+**Out of date**), and for a sim with one profile its maximum rates, the difference from the
+quad and **Sync…**. A sim with several profiles lists them under it, each with its own
+**Sync…**; the triangle beside its name folds them. The row's **…** menu holds **Show in
+Finder** (one item per file; point at the name to see the paths) and **Restore…** for a sim
+QuadCam backed up. Point at **Difference** for how a quad on Actual or Quick is compared. Both
+open the same sheets as in the Rates segment. Velocidrone shows **Off** with the reason.
 
 The sidebar item says **Out of date** while at least one enabled sim differs from that quad.
 It clears after a sync or when the quad's rates change. `gear status` carries the count as
@@ -1289,7 +1305,7 @@ are not synced: they are outside what the sims' rate adapters cover.
 
 ### Restore a sim's backup
 
-A sim that QuadCam backed up shows when, with **Restore…** in its row of the Sims table. It opens the same apply sheet on a plan to put the file back as it was before a sync.
+A sim that QuadCam backed up shows when, with **Restore…** in its row's **…** menu in the Sims table. It opens the same apply sheet on a plan to put the file back as it was before a sync.
 
 - **The backup:** the newest one that differs from the file now. A second restore therefore
   undoes the first. `gear sims --restore SIM --backup ID` picks one from `gear backups --device
@@ -1309,8 +1325,9 @@ controller's or a radio's page under **Gear > Devices** and choose **Switches**.
 backup shows the latest backups of its aircraft's radio and FC (or its own, with no aircraft).
 An FC's aircraft is the one it is linked to; a radio's is the aircraft whose model the radio
 selects. The radio's model is the profile's EdgeTX model file, else the model the profile
-names under EdgeTX models, else the radio's selected model. To read files instead, open the radio's card (**Open card…**: a mounted card or
-a copy of its folder) or one model file (**Open model…**), and the FC's dump (**Open dump…**).
+names under EdgeTX models, else the radio's selected model. To read files instead, pick from
+the **Open…** pop-up: the radio's card (**Open card…**: a mounted card or a copy of its
+folder), one model file (**Open model…**), or the FC's dump (**Open dump…**).
 
 - **Rows:** each switch (with its type from `radio.yml`: 2-position, 3-position or toggle),
   each trim used as a switch, and each stick a logical switch reads.
@@ -1330,8 +1347,9 @@ a copy of its folder) or one model file (**Open model…**), and the FC's dump (
   reported as doing nothing, and the live match counts these lines. A group of more than 4
   controls is not tried, and a note says so.
 - **Summary:** tiles count the controls, the modes, the conflicts and the logical switches not
-  mapped. The **Conflicts** card comes first when there are any; **Modes** is a table of each
-  mode's channel and range.
+  mapped. The **Conflicts** card comes first when there are any. **Modes** (each mode's channel
+  and range), **Not mapped** and **Notes** are closed disclosures with their counts. In a narrow
+  window the map stacks per control: the control, then a line per position.
 - **Not mapped:** a logical switch on telemetry, a timer or sticky state cannot be worked out.
   The **Not mapped** table shows each with its condition (`RxBt > 3.5`), the controls it reads
   and what uses it. It lights no position. A control that only feeds one is not reported as
@@ -1348,8 +1366,9 @@ a copy of its folder) or one model file (**Open model…**), and the FC's dump (
 and choose **USB Joystick** on it. The page reads the radio directly (the web view cannot see
 it as a game controller).
 
-- **Sticks:** both sticks in your stick mode (**Mode 1** to **Mode 4**; Mode 2 by default,
-  saved as the `stickMode` setting). Each axis says what it does: throttle is power, yaw turns
+- **Sticks:** both sticks in your stick mode (**Mode 1** to **Mode 4** in the header; Mode 2 by
+  default, saved as the `stickMode` setting). On a wide window Sticks and Channels sit side by
+  side, with the switch map under them at the full width. Each axis says what it does: throttle is power, yaw turns
   the nose, pitch tilts forward and back, roll banks.
 - **Channels:** CH1 to CH8 in µs, and the 24 buttons under **Buttons**. In the radio's Classic joystick mode,
   CH9 to CH32 are buttons 1 to 24 (EdgeTX manual, USB Joystick). In Advanced mode the model
@@ -1368,10 +1387,11 @@ A log without an `FM` column gives the same flights as log matching. "Pack" alwa
 battery.
 
 QuadCam reads logs from three places: the gear folder's `logs/`, folders you add (**Add log
-folder…** on the Flights page), and the `LOGS/` of a radio plugged in as USB Storage. It keeps a
+folder…** in the Flights page's **…** menu), and the `LOGS/` of a radio plugged in as USB Storage. It keeps a
 cache of each log's flights in `<gear>/flights.json` and reads a log again only when it changes.
 
-**Flights** shows one day's flights. For each flight:
+**Flights** shows one day's flights; pick the day from the pop-up in the header, beside the
+section switch. For each flight:
 
 | Measure | How QuadCam finds it |
 |---|---|
@@ -1384,7 +1404,10 @@ cache of each log's flights in `<gear>/flights.json` and reads a log again only 
 | Dropouts | Spans of 0.3 s or more while armed with `FM` blank and `RxBt` at 0. Each shows the link before and after it. "Telemetry only" means the flight went on and no failsafe mode showed |
 
 Tiles above the table sum up the day: flights, air time, the longest flight, the worst link
-and dropouts. Click a flight's start time for its details and dropouts.
+and dropouts. The table shows start, length, aircraft, pack, used, resting voltage, worst link
+and dropouts. Click a flight's start time to open its details in a drawer on the right: hover,
+sag, the other measures, the clip and the dropouts. In a narrow window the drawer covers the
+page; **Close** or Escape closes it.
 
 Pick the pack for each flight in its row. QuadCam suggests the next label after the last
 pack used that day, in label order. The flight's aircraft comes from the profile whose EdgeTX
@@ -1399,22 +1422,25 @@ paragraph about the day from Apple's on-device model (macOS 26 or later, Apple I
 on; see [On-device suggestions](library.md#on-device-suggestions)); the copy and the saved file
 then hold it too.
 
-Under the flights, **Range by place** charts the worst link quality (LQ) of each flight at
+Under the flights, **Range by place** (closed at first; click it to open) charts the worst link quality (LQ) of each flight at
 each place, oldest first. The axis names the first and last day, or the first and last time
 when every flight was on one day. **Values** under a chart lists LQ and RSSI per flight.
 
-**Packs** shows tiles for the packs in use, how many are charged, how many are marked weak and
-their cycles. The table lists each pack with its type, its charge state, its cycles (flights on it), and
-its median resting voltage and flight time. A pack whose resting voltage sits 0.05 V a cell
-under its type's median, or whose flights are 20 % shorter, is marked. **Mark charged** records
-a charge; a flight after it makes the pack "Flown" again. Click a label for its history.
+**Packs** counts, in one line under the title, the packs in use, how many are charged, how
+many are marked weak and their cycles. The table lists each pack with its type, its charge
+state, its cycles (flights on it), and its median resting voltage and flight time. A pack whose
+resting voltage sits 0.05 V a cell under its type's median, or whose flights are 20 % shorter,
+is marked. **Mark charged** records a charge; a flight after it makes the pack "Flown" again.
+The row's **…** menu holds **Edit…** and **Retire**; retired packs fold under "N retired" at
+the end. Click a label to open its history in a drawer on the right.
 **Charging** lists the pack types (chemistry, cells, capacity, connector, full and storage
 volts a cell, charge current, mAh warning) with a suggested warning: the mAh where the
 resting voltage reaches 3.7 V a cell, from a straight line through the type's flights. The
-notes field is free text.
+**Notes** section is free text; it starts closed while it is empty.
 
-**Pack up** checks, before a session. Tiles show how many checks pass, the packs charged, and
-the card space and backups rows; the table lists each check with its state and detail.
+**Pack up** checks, before a session. One line under the title says how many checks pass and
+how many packs are charged. Checks that warn or cannot tell come first, each with its fix
+(**Open Packs**, **Check now**); the ones that passed fold under "N passed".
 
 | Row | Pass when |
 |---|---|
@@ -1427,8 +1453,10 @@ the card space and backups rows; the table lists each check with its state and d
 A row QuadCam cannot judge (nothing plugged in, no backups kept yet) reads as unknown. Each radio
 backup records the card's free space for this check.
 
-**Repairs** lists crashes in one table, grouped by aircraft, with tiles for open and repaired
-crashes and the last crash. Log a crash from a clip: open the clip, choose the
+**Repairs** shows a card per aircraft. Open crashes come first, each with **Mark repaired**;
+repaired ones fold under "N repaired" (**Mark open** and **Delete…** are in a row's **…**
+menu). A row shows the clip with its frame, the day and time, what broke and the parts. One
+line under the title counts the open and repaired crashes and names the last crash. Log a crash from a clip: open the clip, choose the
 **Flight** tab, then **Log crash…**. The time is the playhead; add what broke and the parts
 used. The clip's Flight tab lists its crashes.
 
@@ -1447,8 +1475,8 @@ Packs, pack types, the pack set on each flight, added log folders and crashes ar
 ### Check
 
 **Gear > Firmware** lists each saved device with its installed version and the newest release
-(**Installed → newest**). Tiles above the table count the devices, the updates and the devices
-that are up to date, and show the last check:
+(**Installed → newest**), rows with an update first. One line under the title says when it
+last checked and how many updates there are:
 
 | Product | Newest release comes from |
 |---|---|
@@ -1474,7 +1502,9 @@ that are up to date, and show the last check:
 
 ### Read the firmware
 
-The **Read radio firmware** section of **Gear > Firmware** has a **Read firmware** button. It reads the firmware that runs on a radio and saves a copy. It
+**Read firmware…** in the header of **Gear > Firmware** (in its **…** menu in a narrow window)
+opens the **Read radio firmware** sheet. Its **Read firmware** button reads the firmware that
+runs on a radio and saves a copy. It
 cannot erase, write or restart the radio: the USB path it uses refuses every command except
 status polls, aborts, the address pointer and uploads. Run it before any flash.
 
@@ -1504,7 +1534,8 @@ another radio, and a flash of the picked radio refuses it.
 
 ### Restore a saved firmware copy
 
-**Saved firmware copies** on **Gear > Firmware** lists each radio's firmware copies, newest
+**Saved firmware copies** on **Gear > Firmware** (closed at first, with its count; click it to
+open) lists each radio's firmware copies, newest
 first: when the copy was taken, why (**Read firmware**, **Before a flash**, **Before a
 restore**), the radio, the EdgeTX version and board the image names, the size and the SHA-256.
 A copy from a DFU device that is not linked to a radio shows **No radio linked** and cannot
@@ -1701,7 +1732,8 @@ refuses a battery in while no USB timer counts (reads paused, or the FC plugged 
 ### ExpressLRS (preview)
 
 A preview, off by default. Select **Show the ELRS tools** under **Firmware > ExpressLRS
-(preview)**, or turn on **Settings > Gear > Show the ELRS tools**
+(preview)** (a section that folds with a click on its title; QuadCam remembers whether it is
+open), or turn on **Settings > Gear > Show the ELRS tools**
 (`quadcam-cli settings set elrs_preview=true`). **QuadCam has not tried any of this on a real
 radio, FC or ExpressLRS device yet.** Every job refuses while the setting is off.
 
