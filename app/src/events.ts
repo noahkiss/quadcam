@@ -84,6 +84,8 @@ export async function start(): Promise<() => void> {
   makeStrips();
   findNewHighlights();
   findWeather();
+  // With the Map page on, the native map is made now, hidden, so the page opens without the wait.
+  if (sel.mapView(S())) api.mapFrame(null).catch(() => {});
   return () => {
     offs.forEach((off) => off());
     window.removeEventListener("focus", onFocus);

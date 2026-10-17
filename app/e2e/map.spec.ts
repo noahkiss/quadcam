@@ -83,6 +83,52 @@ test("a place's callout button shows its clips; a clip's opens the clip", async 
   await expect(page.getByRole("complementary", { name: "Inspector" })).toBeVisible();
 });
 
+test("the map's pins go to the native map once while nothing on them changes", async ({ app, page }) => {
+  await app.open("library", { settings: { mapView: true } });
+  await sidebar(page).getByRole("button", { name: "Map" }).click();
+  await expect.poll(() => pins(app)).toHaveLength(2);
+  const sent = async () => (await app.calls("map_pins")).length;
+  const first = await sent();
+  // Library and settings reloads with nothing new on the map send nothing, so the native
+  // map keeps its annotations.
+  for (let i = 0; i < 3; i++) {
+    await app.core("(c) => c.emit('library-changed')");
+    await app.core("(c) => c.emit('settings-changed')");
+  }
+  await expect(page.getByText("2 places · 3 clips on the map")).toBeVisible();
+  await page.waitForTimeout(300);
+  expect(await sent()).toBe(first);
+  // A clip that moves to another place changes two pins: they go once.
+  await app.core("(c) => { c.lib.clips.find((x) => x.name === 'river-dive').place = 'Home field'; c.emit('library-changed'); }");
+  await expect.poll(() => pins(app)).toEqual([expect.objectContaining({ id: "place:Home field", count: 3 }), expect.objectContaining({ id: "place:Riverside park", kind: "empty" })]);
+  expect(await sent()).toBe(first + 1);
+});
+
+test("the map follows its spot and rests while nothing moves", async ({ app, page }) => {
+  await page.addInitScript(() => {
+    const w = window as unknown as { __frames: number };
+    w.__frames = 0;
+    const raf = window.requestAnimationFrame.bind(window);
+    window.requestAnimationFrame = (cb) => {
+      w.__frames++;
+      return raf(cb);
+    };
+  });
+  await app.open("library", { settings: { mapView: true } });
+  await sidebar(page).getByRole("button", { name: "Map" }).click();
+  await expect.poll(() => lastFrame(app)).not.toBeNull();
+  // Once the page has settled, it asks for no frames at all.
+  await page.waitForTimeout(1000);
+  const frames = () => page.evaluate(() => (window as unknown as { __frames: number }).__frames);
+  const before = await frames();
+  await page.waitForTimeout(1000);
+  expect(await frames()).toBe(before);
+  // A resize moves the map with its spot.
+  await page.setViewportSize({ width: 1000, height: 700 });
+  const box = (await page.locator("[data-map-host]").boundingBox())!;
+  await expect.poll(() => lastFrame(app)).toEqual(expect.objectContaining({ w: Math.round(box.width * 2) / 2, h: Math.round(box.height * 2) / 2 }));
+});
+
 test("an empty map says what is missing", async ({ app, page }) => {
   await app.open("empty", { settings: { mapView: true, places: [] } });
   await sidebar(page).getByRole("button", { name: "Map" }).click();

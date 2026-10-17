@@ -1,6 +1,6 @@
 // The spot on the page where the native map shows. The app lays an Apple MapKit view over the
 // web view (src-tauri/src/mapview.rs); this element holds its place and reports its rectangle
-// every frame it changes. The map hides while anything covers the spot (a dialog, a menu, a
+// when it changes: frame by frame while something may move it, then not at all. The map hides while anything covers the spot (a dialog, a menu, a
 // toast), since a native view always draws above the page. In a browser (the mock core) the
 // element shows its own placeholder.
 import { useEffect, useEffectEvent, useRef } from "react";
@@ -52,6 +52,15 @@ export function frameOf(el: HTMLElement | null, doc: Document = document): MapFr
 
 // The native map outlives the page: it keeps its region when the page comes back.
 let fitted = false;
+/** The pins and look last sent: the same again is not sent (a library reload, a settings change). */
+let sent = "";
+
+/** Frames without a change before the page stops following the element. */
+const SETTLE = 30;
+/** A check this often catches a move that no event announced. */
+const SLOW_MS = 500;
+const MOVERS = ["transitionrun", "transitionend", "animationstart", "animationend"];
+
 
 interface Props {
   pins: MapPin[];
@@ -65,29 +74,52 @@ export function MapHost({ pins, style, fitSeq, onPick }: Props) {
   const ref = useRef<HTMLDivElement>(null);
   const pick = useEffectEvent((id: string) => onPick(id));
 
-  // Follows the element every frame (resize, banners, scroll), and on every change to the
-  // page (a dialog, a menu or a toast opening), which also lands while frames are paused.
+  // Checks the element on every change to the page (a dialog, a menu or a toast opening),
+  // which also lands while frames are paused. A change, a resize, a scroll or a transition
+  // then follows it frame by frame until it has kept still for SETTLE frames.
   useEffect(() => {
     let last = "";
     let raf = 0;
+    let still = 0;
     const check = () => {
       const f = frameOf(ref.current);
       const key = JSON.stringify(f);
-      if (key !== last) {
-        last = key;
-        api.mapFrame(f).catch(() => {});
-      }
+      if (key === last) return false;
+      last = key;
+      api.mapFrame(f).catch(() => {});
+      return true;
     };
     const tick = () => {
-      check();
-      raf = requestAnimationFrame(tick);
+      raf = 0;
+      still = check() ? 0 : still + 1;
+      if (still < SETTLE) raf = requestAnimationFrame(tick);
     };
-    const watch = new MutationObserver(check);
+    const follow = () => {
+      still = 0;
+      if (!raf) raf = requestAnimationFrame(tick);
+    };
+    const changed = () => {
+      check();
+      follow();
+    };
+    const watch = new MutationObserver(changed);
     watch.observe(document.body, { subtree: true, childList: true, attributes: true, attributeFilter: ["open", "class", "style", "hidden"] });
-    tick();
+    const sizes = new ResizeObserver(follow);
+    if (ref.current) sizes.observe(ref.current);
+    sizes.observe(document.documentElement);
+    window.addEventListener("resize", follow);
+    document.addEventListener("scroll", follow, true);
+    for (const t of MOVERS) document.addEventListener(t, follow, true);
+    const slow = setInterval(check, SLOW_MS);
+    changed();
     return () => {
       cancelAnimationFrame(raf);
+      clearInterval(slow);
       watch.disconnect();
+      sizes.disconnect();
+      window.removeEventListener("resize", follow);
+      document.removeEventListener("scroll", follow, true);
+      for (const t of MOVERS) document.removeEventListener(t, follow, true);
       api.mapFrame(null).catch(() => {});
     };
   }, []);
@@ -97,6 +129,9 @@ export function MapHost({ pins, style, fitSeq, onPick }: Props) {
     const fit = !fitted && pins.length > 0 ? true : seen.current !== fitSeq;
     seen.current = fitSeq;
     if (fit) fitted = true;
+    const key = JSON.stringify([pins, style]);
+    if (key === sent && !fit) return;
+    sent = key;
     api.mapPins(pins, style, fit).catch(() => {});
   }, [pins, style, fitSeq]);
 
