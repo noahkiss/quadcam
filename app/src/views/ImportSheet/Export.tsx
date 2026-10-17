@@ -2,8 +2,9 @@ import { useStore } from "../../store";
 import { clipsOf, planOf, resultOf } from "../../store/session";
 import { sel } from "../../store/settings";
 import { Icon } from "../../components/Icon";
-import { base, fmtBytes, tilde } from "../../lib/format";
+import { base, fmtBytes } from "../../lib/format";
 import styles from "./Export.module.css";
+import { PathText } from "../../components/PathText";
 
 /** Add to Library: each clip as it converts and verifies. */
 export function Export() {
@@ -13,7 +14,6 @@ export function Export() {
   const done = useStore((x) => x.exportDone);
   const out = useStore(sel.outputDir);
   const format = useStore(sel.format);
-  const home = useStore((x) => x.home);
   const defaultName = useStore(sel.defaultName);
   if (!s) return null;
   const running = Object.values(progress)[0] || 0;
@@ -24,8 +24,8 @@ export function Export() {
           Adding {total} clip{total === 1 ? "" : "s"} to the library
         </h3>
         <progress max={1} value={total ? Math.min(1, (done + running) / total) : 1} aria-label="Adding to the library" />
-        <p className="selectable">
-          To {tilde(out, home)} · {format.toUpperCase()}
+        <p>
+          To <PathText path={out} /> · {format.toUpperCase()}
         </p>
       </div>
       <ol className={styles.files}>

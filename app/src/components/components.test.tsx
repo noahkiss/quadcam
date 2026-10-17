@@ -8,12 +8,14 @@ import { Dialog } from "./Dialog";
 import { Checkbox, SearchField, SelectField, TextField } from "./Field";
 import { FlagButtons, FlagMark } from "./FlagButton";
 import { Menu } from "./Menu";
+import { PathText } from "./PathText";
 import { ProgressRing } from "./ProgressRing";
 import { SegmentedControl } from "./SegmentedControl";
 import { Stars } from "./Stars";
 import { Stepper } from "./Stepper";
 import { Toast } from "./Toast";
 import { toast } from "./toastStore";
+import { useStore } from "../store";
 
 describe("Stars", () => {
   it("rates, and the current star again clears", async () => {
@@ -149,3 +151,16 @@ describe("toast", () => {
   });
 });
 
+
+describe("PathText", () => {
+  it("shows ~, keeps the last segment apart, and the whole path in the title", () => {
+    useStore.setState({ home: "/Users/me" });
+    const { container } = render(<PathText path="/Users/me/Movies/quadcam" />);
+    const el = container.querySelector("[data-component='path']")!;
+    expect(el).toHaveTextContent("~/Movies/quadcam");
+    expect(el).toHaveAttribute("title", "/Users/me/Movies/quadcam");
+    expect(el).toHaveClass("mono", "selectable");
+    expect(el.querySelector("[aria-hidden='true']")?.lastElementChild).toHaveTextContent(/^\/quadcam$/);
+    expect(el.querySelector("[data-path]")).toHaveAttribute("data-path", "~/Movies/quadcam");
+  });
+});

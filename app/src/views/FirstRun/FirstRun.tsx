@@ -2,7 +2,7 @@ import { useStore } from "../../store";
 import { sel } from "../../store/settings";
 import { Button } from "../../components/Button";
 import { Icon } from "../../components/Icon";
-import { tilde } from "../../lib/format";
+import { PathText } from "../../components/PathText";
 import { importAction, openFolderAction, pickLogs } from "../../actions/session";
 import styles from "./FirstRun.module.css";
 
@@ -36,7 +36,9 @@ export function FirstRun() {
           <span>Watching for cards</span>
           <span aria-hidden="true">·</span>
           {logDir ? (
-            <span>Radio logs: {tilde(logDir, s.home)}</span>
+            <span className={styles.logs}>
+              Radio logs: <PathText path={logDir} />
+            </span>
           ) : (
             <>
               <Icon name="radio" size={14} />
@@ -76,7 +78,9 @@ export function FirstRun() {
               <Icon name="folder-open" tint="blue" />
               Library folder
             </h3>
-            <p className="mono selectable">{tilde(sel.outputDir(s), s.home)}</p>
+            <p className={styles.folder}>
+              <PathText path={sel.outputDir(s)} />
+            </p>
             <p>{LAYOUT[sel.layout(s)]}</p>
             <Button size="sm" onClick={() => s.openSettings("library")}>
               Change…

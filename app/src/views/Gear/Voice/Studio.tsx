@@ -18,6 +18,7 @@ import type { ImportReport, ModelInfo, RenderPacksReport, Retake, SetInfo, Studi
 import { LIST_HEIGHT, takesOf, type UseStudio } from "./useStudio";
 import { modelName } from "./names";
 import styles from "./Voice.module.css";
+import { PathText } from "../../../components/PathText";
 
 const n = (v: number) => v.toLocaleString("en-US");
 
@@ -393,7 +394,7 @@ function Retakes({ s, retakes }: { s: UseStudio; retakes: Retake[] }) {
       <ul aria-label="Needs a re-take">
         {retakes.map((t, i) => (
           <li key={`${i}|${t.path}`}>
-            {t.text} ({t.path}): {t.reason}
+            {t.text} (<PathText path={t.path} />): {t.reason}
           </li>
         ))}
       </ul>

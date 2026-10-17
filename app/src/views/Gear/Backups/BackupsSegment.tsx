@@ -18,6 +18,7 @@ import { checkFailed, checkFor, failureFor, fmtWhen, jobFor, jobText, TRIGGER_LA
 import { linkHandle } from "../../../lib/gear";
 import type { DeviceRef } from "../slots";
 import styles from "./Backups.module.css";
+import { PathText } from "../../../components/PathText";
 
 /** A backup's time in the list: "Oct 5, 6:00 AM", with the year when it is not this year. */
 const fmtShort = (t: string) => {
@@ -241,7 +242,7 @@ function BackupDetail({ b, first }: { b: BackupSummary; first: boolean }) {
             {content.backup.files.map((f) => (
               <li key={f.path}>
                 <button type="button" className={styles.file} aria-current={file?.path === f.path} onClick={() => open(f.path)}>
-                  <span className="mono">{f.path}</span>
+                  <PathText path={f.path} selectable={false} />
                   <span className={styles.size}>{fmtBytes(f.size)}</span>
                 </button>
               </li>
@@ -254,7 +255,9 @@ function BackupDetail({ b, first }: { b: BackupSummary; first: boolean }) {
               {file.text}
             </pre>
           ) : (
-            <p className={styles.empty}>{file.path} is not a text file.</p>
+            <p className={styles.empty}>
+              <PathText path={file.path} /> is not a text file.
+            </p>
           ))}
       </SectionCard>
     </section>

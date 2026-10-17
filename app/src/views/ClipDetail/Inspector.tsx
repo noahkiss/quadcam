@@ -14,6 +14,7 @@ import { KIND } from "../Library/moments";
 import { SKY_LABEL, skyFacts, skyIcon, SUN_LABEL, weatherLine } from "../../lib/weather";
 import { ClipCrashes } from "./ClipCrashes";
 import styles from "./Inspector.module.css";
+import { PathText } from "../../components/PathText";
 
 /** The open clip's details, flight numbers and crashes. `at` is the playhead, for a new
  *  crash. */
@@ -173,7 +174,9 @@ function Details({ clip: c }: { clip: LibClip }) {
       </div>
       <dl className={styles.meta}>
         <dt>File</dt>
-        <dd className="selectable">{c.path}</dd>
+        <dd>
+          <PathText path={c.path} />
+        </dd>
         <dt>Size</dt>
         <dd>{fmtBytes(c.size)}</dd>
         {c.sun && (

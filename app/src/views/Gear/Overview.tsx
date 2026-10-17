@@ -10,11 +10,12 @@ import { PlugInBar } from "../../components/gear/PlugInBar";
 import { checkFor, fmtWhen } from "../../lib/backups";
 import { linkHandle, linkText } from "../../lib/gear";
 import { aircraftOf } from "../../lib/radioAircraft";
-import { fmtAgo, fmtBytes, plural, tilde } from "../../lib/format";
+import { fmtAgo, fmtBytes, plural } from "../../lib/format";
 import { gearSlots, type DeviceRef } from "./slots";
 import { segmentsFor } from "./segments";
 import { RadioAircraft } from "./RadioAircraft/RadioAircraft";
 import styles from "./Gear.module.css";
+import { PathText } from "../../components/PathText";
 
 const IDENTITY: [keyof NonNullable<DeviceRef["connected"]>["identity"], string][] = [
   ["board", "Board"],
@@ -31,7 +32,6 @@ export const identityOf = (d: DeviceRef) => ({ ...(d.device?.identity || {}), ..
  *  details (identity, where it is plugged in, its aircraft); a radio adds
  *  its list of aircraft. */
 export function Overview({ d }: { d: DeviceRef }) {
-  const home = useStore((s) => s.home);
   useStore((s) => s.changes); // the bar and the Staged tile follow the staged changes
   const setFilter = useStore((s) => s.setFilter);
   const paused = useStore((s) => s.gear?.paused);
@@ -42,7 +42,7 @@ export function Overview({ d }: { d: DeviceRef }) {
   const fcPort = d.connected?.kind === "fc" && d.connected.link.kind === "serial" ? linkHandle(d.connected.link) : null;
   const isPaused = fcPort !== null && !!paused?.includes(fcPort);
   const facts: Fact[] = IDENTITY.filter(([k]) => identity[k]).map(([k, label]) => ({ label, value: identity[k], selectable: true }));
-  if (d.connected) facts.push({ label: d.connected.link.kind === "volume" ? "Mounted at" : "Port", value: d.unmounted ? "Unmounted" : tilde(linkText(d.connected.link), home), selectable: !d.unmounted });
+  if (d.connected) facts.push({ label: d.connected.link.kind === "volume" ? "Mounted at" : "Port", value: d.unmounted ? "Unmounted" : d.connected.link.kind === "dfu" ? linkText(d.connected.link) : <PathText path={linkText(d.connected.link)} />, selectable: !d.unmounted });
   if (fcPort)
     facts.push({
       label: "Background reads",

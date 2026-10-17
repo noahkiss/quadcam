@@ -9,7 +9,7 @@ import { Banner } from "../../components/Banner";
 import { Button } from "../../components/Button";
 import { Chip } from "../../components/Chip";
 import { Icon } from "../../components/Icon";
-import { fmtBytes, fmtDay, fmtDur, fmtLong, tilde } from "../../lib/format";
+import { fmtBytes, fmtDay, fmtDur, fmtLong } from "../../lib/format";
 import { byDay, flyingOf, thumbPx } from "../../lib/library";
 import { shareClips, trashClips } from "../../actions/library";
 import { rebuildLibrary, revealLibrary } from "../../actions/setup";
@@ -20,6 +20,7 @@ import { KIND_ICON } from "./moments";
 import { MomentsView, momentFrame } from "./MomentsView";
 import { bestMoments } from "../../lib/moments";
 import styles from "./LibraryView.module.css";
+import { PathText } from "../../components/PathText";
 
 const GAP = 16;
 
@@ -44,13 +45,12 @@ export function LibraryView({ onMenu }: { onMenu: (e: MouseEvent, id: string) =>
 function Banners({ list }: { list: LibClip[] }) {
   const lib = useStore((s) => s.lib);
   const group = useStore((s) => s.filter.group);
-  const home = useStore((s) => s.home);
   const out: ReactNode[] = [];
   if (lib && lib.unindexed > 0) {
     const n = lib.unindexed;
     out.push(
       <Banner key="unindexed" icon="folder-open" tint="blue" action={<Button size="sm" variant="primary" onClick={rebuildLibrary}>Scan folder</Button>}>
-        {n} video{n === 1 ? "" : "s"} in {tilde(lib.root, home)} {n === 1 ? "is" : "are"} not in the library.
+        {n} video{n === 1 ? "" : "s"} in <PathText path={lib.root} /> {n === 1 ? "is" : "are"} not in the library.
       </Banner>,
     );
   }
@@ -215,7 +215,6 @@ function DayHead({ day, clips: cs }: { day: string; clips: LibClip[] }) {
 
 function Footer({ list }: { list: LibClip[] }) {
   const root = useStore((s) => s.lib?.root || sel.outputDir(s) || "");
-  const home = useStore((s) => s.home);
   const secs = list.reduce((a, c) => a + c.duration, 0);
   const fly = list.reduce((a, c) => a + flyingOf(c), 0);
   const bytes = list.reduce((a, c) => a + c.size + c.cuts.reduce((x, k) => x + k.size, 0), 0);
@@ -235,7 +234,7 @@ function Footer({ list }: { list: LibClip[] }) {
       )}
       <button type="button" className={styles.path} title="Show in Finder" onClick={() => revealLibrary()}>
         <Icon name="folder-open" size={14} />
-        {tilde(root, home)}
+        <PathText path={root} selectable={false} />
       </button>
     </footer>
   );

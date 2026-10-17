@@ -13,10 +13,11 @@ import { PageHeader } from "../../../components/dash/PageHeader";
 import { DetailDrawer, WithDrawer } from "../../../components/dash/DetailDrawer";
 import { MoreMenu } from "../../../components/dash/MoreMenu";
 import { toast } from "../../../components/toastStore";
-import { fmtBytes, plural, tilde } from "../../../lib/format";
+import { fmtBytes, plural } from "../../../lib/format";
 import { KIND_LABEL } from "../../../lib/gear";
 import { fmtWhen } from "../../../lib/backups";
 import styles from "./Storage.module.css";
+import { PathText } from "../../../components/PathText";
 
 const OUTCOME_LABEL: Record<ImportBackupsReport["items"][number]["outcome"], string> = {
   imported: "Imported",
@@ -30,7 +31,6 @@ const OUTCOME_TONE: Record<ImportBackupsReport["items"][number]["outcome"], Badg
 type ImportItem = ImportBackupsReport["items"][number];
 
 export function StoragePage() {
-  const home = useStore((s) => s.home);
   const devices = useStore((s) => s.devices);
   const [view, setView] = useState<StorageView | null>(null);
   const [report, setReport] = useState<ImportBackupsReport | null>(null);
@@ -140,7 +140,7 @@ export function StoragePage() {
   ];
   const items: Column<ImportItem>[] = [
     { key: "outcome", header: "Outcome", width: "8rem", cell: (i) => <Badge tone={OUTCOME_TONE[i.outcome]}>{OUTCOME_LABEL[i.outcome]}</Badge> },
-    { key: "path", header: "Folder", rowHeader: true, cell: (i) => <span className="selectable">{tilde(i.path, home)}</span> },
+    { key: "path", header: "Folder", rowHeader: true, cell: (i) => <PathText path={i.path} /> },
     { key: "reason", header: "Reason", cell: (i) => (i.outcome === "skipped" && i.reason) || "" },
   ];
 
@@ -149,7 +149,7 @@ export function StoragePage() {
       <PageHeader
         id="storage-title"
         title="Storage"
-        subtitle={view && <span className="selectable">{tilde(view.gear_dir, home)}</span>}
+        subtitle={view && <PathText path={view.gear_dir} />}
         fold={[
           { label: "Show in Finder", icon: "finder", disabled: !view, run: () => view && void reveal(view.gear_dir).catch((e) => toast(errText(e), true)) },
           { label: "Import backups…", icon: "import", disabled: busy, run: () => void importFolder() },

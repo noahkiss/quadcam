@@ -146,6 +146,7 @@
 }
 .path {
   margin-left: auto;
+  min-width: 0;
   display: inline-flex;
   align-items: center;
   gap: var(--s-1);

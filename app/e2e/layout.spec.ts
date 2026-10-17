@@ -101,3 +101,38 @@ test("a narrow library folds sort and view into a menu and keeps Import", async 
   await expect(page.getByLabel("Sort by")).toBeVisible();
   await expect(page.getByRole("button", { name: "Show sidebar" })).toBeHidden();
 });
+
+test("a long library folder fits its first-run card at every width", async ({ app, page }) => {
+  const folder = "/var/folders/zs/0123456789abcdefghijklmn/T/tmp.b8v81W12mS/a-very-long-folder-name-for-flights/Movies/quadcam";
+  await app.open("empty", { settings: { outputDir: folder } });
+  const card = page.locator("[class*='card']").filter({ has: page.getByRole("heading", { name: "Library folder" }) });
+  const path = card.locator("[data-component='path']");
+  await expect(path).toHaveAttribute("title", folder);
+  await expect(path).toContainText("/quadcam");
+  for (const w of [420, 900, 1400]) {
+    await page.setViewportSize({ width: w, height: 900 });
+    await page.waitForTimeout(150);
+    const m = await page.evaluate(() => {
+      const first = document.querySelector("section[aria-label='First run']") as HTMLElement;
+      const setup = first.querySelector("section[aria-labelledby='setup-title']") as HTMLElement;
+      const path = setup.querySelector("[data-component='path']") as HTMLElement;
+      const card = path.closest("[class*='card']") as HTMLElement;
+      const tail = path.lastElementChild!.getBoundingClientRect();
+      const box = card.getBoundingClientRect();
+      return {
+        docScroll: document.documentElement.scrollWidth - document.documentElement.clientWidth,
+        firstScroll: first.scrollWidth - first.clientWidth,
+        setupScroll: setup.scrollWidth - setup.clientWidth,
+        cardOut: box.right - setup.getBoundingClientRect().right,
+        pathOut: path.getBoundingClientRect().right - box.right,
+        tailShown: tail.width > 0 && tail.right <= box.right,
+      };
+    });
+    expect(m.docScroll, `at ${w}: the window scrolls sideways`).toBeLessThanOrEqual(0);
+    expect(m.firstScroll, `at ${w}: the first-run page scrolls sideways`).toBeLessThanOrEqual(1);
+    expect(m.setupScroll, `at ${w}: Set up once scrolls sideways`).toBeLessThanOrEqual(1);
+    expect(m.cardOut, `at ${w}: the card passes Set up once`).toBeLessThanOrEqual(0);
+    expect(m.pathOut, `at ${w}: the path passes its card`).toBeLessThanOrEqual(0);
+    expect(m.tailShown, `at ${w}: the last segment is hidden`).toBe(true);
+  }
+});

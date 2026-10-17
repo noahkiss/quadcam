@@ -6,10 +6,10 @@ import { Checkbox, SelectField, TextField } from "../../components/Field";
 import { MoreMenu } from "../../components/dash/MoreMenu";
 import type { DeviceKind } from "../../ipc/types";
 import { KIND_LABEL } from "../../lib/gear";
-import { tilde } from "../../lib/format";
 import { AUTOMATIONS, GEAR_KINDS, type Draft, type GearDraft, type ShownAutomation } from "./draft";
 import styles from "./SettingsSheet.module.css";
 import form from "./GearPane.module.css";
+import { PathText } from "../../components/PathText";
 
 const AUTOMATION_LABEL: Record<ShownAutomation, string> = { backup: "Back up", apply_ready: "Apply ready changes", blackbox: "Pull blackbox" };
 
@@ -21,7 +21,6 @@ const OFFERED: Record<ShownAutomation, DeviceKind[]> = {
 };
 
 export function GearPane({ d, setD }: { d: Draft; setD: (f: (d: Draft) => Draft) => void }) {
-  const home = useStore((s) => s.home);
   const gearDir = useStore((s) => s.gear?.gear_dir);
   const g = d.gear;
   const set = (patch: Partial<GearDraft>) => setD((x) => ({ ...x, gear: { ...x.gear, ...patch } }));
@@ -44,7 +43,11 @@ export function GearPane({ d, setD }: { d: Draft; setD: (f: (d: Draft) => Draft)
       <div className={form.block}>
         <h3>Backups</h3>
         <div className={form.group}>
-          {gearDir && <p className={`${styles.sub} selectable`}>{tilde(gearDir, home)}</p>}
+          {gearDir && (
+            <p className={styles.sub}>
+              <PathText path={gearDir} />
+            </p>
+          )}
           <Checkbox label="Back up on connect" checked={g.autoBackup} onChange={(e) => set({ autoBackup: e.target.checked })} />
           <div className={styles.row}>
             <TextField label="Keep recent backups" type="number" min={1} max={1000} step={1} value={g.keepRecent} onChange={(e) => set({ keepRecent: e.target.value })} />

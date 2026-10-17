@@ -9,12 +9,11 @@ import { SectionCard } from "../../../components/dash/SectionCard";
 import { api, errText, pickFiles } from "../../../ipc/api";
 import type { SplashPreview } from "../../../ipc/types";
 import { useStore } from "../../../store";
-import { tilde } from "../../../lib/format";
 import type { DeviceRef } from "../slots";
 import styles from "./Splash.module.css";
+import { PathText } from "../../../components/PathText";
 
 export function SplashSegment({ d }: { d: DeviceRef }) {
-  const home = useStore((s) => s.home);
   const openFlash = useStore((s) => s.openFlash);
   const [image, setImage] = useState<string | null>(null);
   const [threshold, setThreshold] = useState(128);
@@ -98,7 +97,7 @@ export function SplashSegment({ d }: { d: DeviceRef }) {
           <figcaption className={styles.caption}>{shown ? `${shown.width} × ${shown.height}, 1 bit · ${shown.dark} dark pixels` : "PNG, scaled to fit, two tones"}</figcaption>
         </figure>
         <div className={styles.controls}>
-          {image && <span className={`${styles.path} selectable`}>{tilde(image, home)}</span>}
+          {image && <PathText path={image} className={styles.path} />}
           <Field label="Threshold" inline>
             {(id) => <input id={id} type="range" min={0} max={255} value={threshold} onChange={(e) => setThreshold(Number(e.target.value))} aria-valuetext={`${threshold} of 255`} />}
           </Field>
