@@ -19,6 +19,7 @@ import { remember, setSessionCuts, splitByFlight } from "../../actions/cuts";
 import { MiniBar, MomentChips } from "../Library/ClipCard";
 import { Flight } from "../ClipDetail/Inspector";
 import styles from "./Review.module.css";
+import { PathText } from "../../components/PathText";
 
 /** The review panel's keys, set while it shows. */
 export const reviewTrim: { handleKey?: (e: KeyboardEvent, onButton: boolean) => boolean } = {};
@@ -26,12 +27,17 @@ export const reviewTrim: { handleKey?: (e: KeyboardEvent, onButton: boolean) => 
 export function Review() {
   const s = useStore((x) => x.session);
   const loadingFrom = useStore((x) => x.loadingFrom);
-  const home = useStore((x) => x.home);
   const step = useStore((x) => x.step);
   if (!s || step === "load")
     return (
       <div className={styles.review}>
-        <p className={styles.loading}>{loadingFrom ? `Copying from ${tilde(loadingFrom, home)}…` : "Loading…"}</p>
+        <p className={styles.loading}>{loadingFrom ? (
+            <>
+              Copying from <PathText path={loadingFrom} />…
+            </>
+          ) : (
+            "Loading…"
+          )}</p>
       </div>
     );
   return (

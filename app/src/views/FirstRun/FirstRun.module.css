@@ -41,9 +41,15 @@
 }
 .status {
   display: flex;
+  max-width: 100%;
   align-items: center;
   gap: var(--s-2);
   font-size: var(--t-md);
+}
+.logs {
+  display: flex;
+  gap: 0.5ch;
+  min-width: 0;
 }
 .dot {
   width: 8px;
@@ -71,10 +77,11 @@
 }
 .grid {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  grid-template-columns: repeat(auto-fit, minmax(min(200px, 100%), 1fr));
   gap: var(--s-4);
 }
 .card {
+  min-width: 0;
   display: flex;
   flex-direction: column;
   align-items: flex-start;
@@ -96,4 +103,8 @@
   flex: 1;
   color: var(--muted);
   font-size: var(--t-md);
+}
+.card p.folder {
+  flex: 0 0 auto;
+  max-width: 100%;
 }

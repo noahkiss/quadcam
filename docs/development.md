@@ -153,6 +153,7 @@ Every Gear page and device page follows one pattern. The shared parts live in `a
 
 - **Frame.** `views/Gear/GearView.tsx` puts each page in `Gear.module.css .page`: a `--s-6` gap, and side padding `--page-inline`, which fills the content column (the window less the sidebar) up to `--content-max` (1760 px, `theme/tokens.css`) and centres it past that. The frame scrolls at the full width. A page returns its content (or one wrapper with `.stack` when it needs its own region name) and adds no padding and no max-width of its own; prose may keep a 70ch measure. A segment adds none either, so every page has one left edge.
 - **Responsive.** The app reflows like a web app down to about 400 px (the window's minimum is 420). `main` is the size container `content`: page rules use `@container content (...)`, not the window. At 720 px of window and under, the sidebar is an overlay behind the toolbar's sidebar button and `--page-pad` drops to 16 px. Card grids use `repeat(auto-fill, minmax(min(340px, 100%), 1fr))`, so they drop to one column. `e2e/layout.spec.ts` checks every page at 420, 900, 1400 and 2400 px.
+- **Paths.** Show every file path through `components/PathText.tsx` (`<PathText path selectable? />`): mono, `~` for the home folder, cut in the middle when it does not fit with the last segment kept, the whole path in its title and on a copy. Its parent must be able to shrink: give a grid or flex child that holds one `min-width: 0`.
 - **Order.** `PageHeader` with a `SummaryLine` subtitle, then the page's sections or one `DataTable`. Keep `StatRow` tiles only where the numbers are the page's main job (Flights' day, Storage's usage).
 - **Header.** `<PageHeader title subtitle? icon? actions? fold? more? moreLabel? id? />`. `actions` always show (a pop-up, the main action, primary last). `fold` buttons show in a wide header and join the `…` menu in a narrow one; `more` (rare and destructive actions) is always in the `…` menu. In a narrow header, `actions` wrap under the title. The subtitle is one line (kind · state · a fact, or the page's counts as a `SummaryLine`), never a sentence. Device pages use `components/gear/DeviceHeader.tsx` (`kind name state facts? actions?`), which is a `PageHeader`.
 - **Rows.** A table row keeps one visible action, the one the row exists for; the rest go in its `MoreMenu`. Rows that need action come first; rows with nothing to do fold under a `Disclosure` ("5 passed"). A selected row's detail opens in a `DetailDrawer` on the right (`WithDrawer` around the page), never in a card under the table.
@@ -228,6 +229,24 @@ A newer push to the same branch or pull request cancels the older run. A run on 
 - Set `HOME` to a temporary folder. The settings, cache and session then stay out of your real ones. With your own `HOME`, a build run by `cargo` (`cargo tauri dev`, `cargo run`) stops at the support folder unless `QUADCAM_PATHS=real`.
 - Take screenshots with `screencapture -l <windowid>`.
 
+### Seed a dev HOME with made-up data
+
+A temporary `HOME` starts empty, so every page shows its first-run screen. `scripts/dev-seed.py` fills one with a made-up library and gear:
+
+```bash
+(cd src-tauri && cargo build --bin quadcam-cli)
+H=$(mktemp -d)
+scripts/dev-seed.py "$H" --own-gear      # about 5 minutes the first time
+HOME="$H" QUADCAM_NO_FOCUS=1 cargo tauri dev
+```
+
+- **What it makes:** 4 places, 3 aircraft profiles, 40 clips over 12 flying days (analog AVI and DJI MP4 clips from ffmpeg, with names, notes, places or a location, stars, picks and rejects, and radio-log moments and flight stats), and one EdgeTX log per aircraft and day. With gear: 3 pack types, 10 packs (one retired, three charged), every flight on a pack, and 2 repairs. It turns on the Map and Sim pages, ELRS tools and Betaflight flashing.
+- **How it writes:** through `quadcam-cli` only, the app's own write paths. The clips are staged from generated "cards", dated against the generated logs and imported. The sources stay in `$H/.dev-seed/`.
+- **Safety:** it refuses your real home folder, a folder that holds it, and a `HOME` whose library folder is outside it. It writes nothing outside `HOME`.
+- **Gear:** packs, flights and repairs live in the gear folder. When `gearDir` points outside `HOME`, the seeder leaves it alone and skips them. `--own-gear` points `gearDir` at `HOME`'s own gear folder first.
+- **Again:** a second run changes nothing; a day already in the library is skipped. `--force` deletes the seeded library and sources and imports them again. `--cli PATH` picks another `quadcam-cli` build.
+- **Not seeded:** devices, backups and staged changes (the Devices, Bench and Storage pages need a device plugged in once), sim calibrations, weather and video analysis.
+
 ## Project layout
 
 | Path | Holds |
@@ -262,6 +281,7 @@ A newer push to the same branch or pull request cancels the older run. A run on 
 | `src-tauri/src/intel.rs` | Runs the Swift helper: its features, the speech check of voice files, video analysis |
 | `src-tauri/tests/` | Integration tests on synthetic clips and FAT32 disk images. `it/` is one test binary, one module per area; the three files beside it change an environment variable and stay binaries of their own |
 | `scripts/make-corpus.sh` | Builds `test-clips/synthetic/` |
+| `scripts/dev-seed.py` | Fills a temporary `HOME` with a made-up library and gear for a dev build ("Seed a dev HOME with made-up data" above) |
 | `assets/icon.svg` | The icon source. Regenerate the icons with `cargo tauri icon` |
 
 [`AGENTS.md`](../AGENTS.md) holds the full module map and the rules for contributors and coding agents.

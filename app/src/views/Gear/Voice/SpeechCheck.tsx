@@ -19,6 +19,7 @@ import { playFile } from "./play";
 import { costText } from "./Studio";
 import type { UseVoice } from "./useVoice";
 import styles from "./Voice.module.css";
+import { PathText } from "../../../components/PathText";
 
 /** A line the check heard wrong, unless the person kept it. */
 export const heardWrong = (h: HeardLine) => !h.ok && !h.accepted;
@@ -153,7 +154,9 @@ export function SpeechCheck({ v, view, pack, onClose, onFlagged }: { v: UseVoice
       cell: (r) => (
         <>
           {r.text}
-          <span className={styles.sub}>{r.path}</span>
+          <span className={styles.sub}>
+            <PathText path={r.path} />
+          </span>
         </>
       ),
     },

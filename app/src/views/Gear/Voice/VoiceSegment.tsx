@@ -13,6 +13,7 @@ import type { DeviceRef } from "../slots";
 import { playFile } from "./play";
 import { useVoice } from "./useVoice";
 import styles from "./Voice.module.css";
+import { PathText } from "../../../components/PathText";
 
 /** The title prefix of the change Choose voice keeps (`core/voice.rs`). */
 const VOICE_CHANGE = "Voice: ";
@@ -123,7 +124,9 @@ function LineRow({ radio, line, view, act, setError }: { radio: string; line: Vo
   };
   return (
     <tr>
-      <td className={styles.path}>{line.path.replace(/^SOUNDS\//, "")}</td>
+      <td className={styles.path}>
+        <PathText path={line.path.replace(/^SOUNDS\//, "")} />
+      </td>
       <td>
         {line.text}
         {line.spoken !== line.text && <span className={styles.muted}> (spoken: {line.spoken})</span>}

@@ -55,8 +55,21 @@ export const plural = (n: number, one: string, many = `${one}s`) => `${n} ${n ==
 
 export const base = (p: string | null | undefined) => (p || "").split("/").pop() || "";
 
-/** `/Users/me/Movies/x` -> `~/Movies/x` when `home` is known. */
-export const tilde = (p: string | null | undefined, home: string) => (p && home && p.startsWith(home) ? "~" + p.slice(home.length) : p || "");
+/** `/Users/me/Movies/x` -> `~/Movies/x` when `home` is known; `/Users/meg` stays as it is. */
+export function tilde(p: string | null | undefined, home: string): string {
+  const h = home.replace(/\/+$/, "");
+  if (!p || !h) return p || "";
+  return p === h || p.startsWith(h + "/") ? "~" + p.slice(h.length) : p;
+}
+
+/** A path as shown (`tilde`), cut before its last segment: `head` may be cut short in the
+ *  middle of the line, `tail` (`/quadcam`) always shows. */
+export function splitPath(p: string | null | undefined, home: string): { head: string; tail: string } {
+  const shown = tilde(p, home);
+  const end = shown.length > 1 && shown.endsWith("/") ? shown.length - 1 : shown.length;
+  const cut = shown.lastIndexOf("/", end - 1);
+  return cut > 0 ? { head: shown.slice(0, cut), tail: shown.slice(cut) } : { head: "", tail: shown };
+}
 
 /** How long ago `t` was, short: `Now`, `5 min`, `3 h`, `6 d`, `5 wk`; `—` without a time. */
 export function fmtAgo(t: string | null | undefined, now = Date.now()): string {

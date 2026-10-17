@@ -5,14 +5,14 @@ import { sel } from "../../store/settings";
 import { Button } from "../../components/Button";
 import { Checkbox, Input } from "../../components/Field";
 import { Icon } from "../../components/Icon";
-import { base, fmtBytes, fmtDay, fmtT, tilde, SOURCE_LABEL } from "../../lib/format";
+import { base, fmtBytes, fmtDay, fmtT, SOURCE_LABEL } from "../../lib/format";
 import { addToPhotos, askFormat, checkFormat, eject, formatBlocker, prepCard, runExport } from "../../actions/session";
 import styles from "./Finish.module.css";
+import { PathText } from "../../components/PathText";
 
 /** Finish: what was added, Photos, safe to remove, and the format step. */
 export function Finish() {
   const s = useStore((x) => x.session);
-  const home = useStore((x) => x.home);
   const defaultName = useStore(sel.defaultName);
   const deletion = useStore((x) => x.clipDeletion);
   const release = useStore((x) => x.cardRelease);
@@ -44,12 +44,20 @@ export function Finish() {
         </div>
         {deletion && (
           <p className={styles.muted}>
-            Deleted {deleted} clip{deleted === 1 ? "" : "s"} from {tilde(s.source, home)}
+            Deleted {deleted} clip{deleted === 1 ? "" : "s"} from <PathText path={s.source} />
             {deletion.length > deleted ? ` · kept ${deletion.length - deleted}` : ""}
           </p>
         )}
-        <p className={`${styles.muted} selectable`}>
-          {dirs.length === 1 ? `Saved to ${tilde(dirs[0], home)}/ · each file checked against its source` : `Saved under ${tilde(s.output_dir, home)} · each file checked against its source`}
+        <p className={styles.muted}>
+          {dirs.length === 1 ? (
+            <>
+              Saved to <PathText path={dirs[0]} />/ · each file checked against its source
+            </>
+          ) : (
+            <>
+              Saved under <PathText path={s.output_dir} /> · each file checked against its source
+            </>
+          )}
         </p>
         <ol className={styles.files}>
           {clipsOf(s).map((c) => {

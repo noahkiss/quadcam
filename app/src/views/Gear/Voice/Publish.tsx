@@ -16,6 +16,7 @@ import type { PublishApproveReport, PublishReview, ReviewLine, VoicePack } from 
 import { fmtBytes } from "../../../lib/format";
 import { playFile } from "./play";
 import styles from "./Voice.module.css";
+import { PathText } from "../../../components/PathText";
 
 interface Form {
   id: string;
@@ -42,7 +43,9 @@ function LineTable({ label, rows }: { label: string; rows: ReviewLine[] }) {
       cell: (l) => (
         <>
           {l.text}
-          <span className={styles.sub}>{l.path}</span>
+          <span className={styles.sub}>
+            <PathText path={l.path} />
+          </span>
         </>
       ),
     },
