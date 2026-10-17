@@ -31,6 +31,7 @@ README and `docs/`. Personal preferences go in the app's settings file on the ma
 | `src-tauri/tests/` | Integration tests on synthetic clips and FAT32 disk images. `it/` is one test binary, one module per area; the four files beside it change an environment variable and stay binaries of their own |
 | `test-clips/` | Local test corpus. Git tracks only its README |
 | `scripts/make-corpus.sh` | Builds `test-clips/synthetic/` |
+| `scripts/dev-seed.py` | Fills a temporary `HOME` with a made-up library and gear for a dev build (`docs/development.md`, "Seed a dev HOME with made-up data") |
 | `assets/icon.svg` | Icon source. Regenerate with `cargo tauri icon` |
 | `docs/` | The user guide (linked from `README.md`), `docs/images/` (screenshots from `app/e2e/shots.spec.ts`), and `architecture-plan.md` |
 
