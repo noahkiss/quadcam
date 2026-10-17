@@ -126,7 +126,7 @@ export class MockCore {
   menuState: unknown = null;
   /** The native map's last frame and pins (`map_frame`, `map_pins`). */
   mapFrame: import("../../bindings").MapFrame | null = null;
-  map: { pins: import("../../bindings").MapPin[]; style: import("../../bindings").MapStyle; threeD: boolean; fit: boolean } | null = null;
+  map: { pins: import("../../bindings").MapPin[]; style: import("../../bindings").MapStyle; fit: boolean } | null = null;
   /** A click on a native map pin. */
   mapPick(id: string) {
     this.emit("map-pick", id);
@@ -282,7 +282,7 @@ export class MockCore {
         this.mapFrame = (args.frame as never) ?? null;
         return null;
       case "map_pins":
-        this.map = { pins: args.pins as never, style: args.style as never, threeD: !!args.threeD, fit: !!args.fit };
+        this.map = { pins: args.pins as never, style: args.style as never, fit: !!args.fit };
         return null;
       case "menu_state":
         this.menuState = args;

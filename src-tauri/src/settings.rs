@@ -389,12 +389,6 @@ pub const KEYS: &[Key] = &[
         check: |v| one_of(v, &["standard", "hybrid", "satellite"]),
     },
     Key {
-        file: "map3d",
-        name: Some("map_3d"),
-        about: "true or false",
-        check: boolean,
-    },
-    Key {
         file: "simPreview",
         name: Some("sim_preview"),
         about: "true or false",
@@ -666,9 +660,6 @@ pub struct Defaults {
     /// The Map page's look: Apple Maps' Standard, Hybrid or Satellite.
     #[serde(default)]
     pub map_style: MapStyle,
-    /// The Map page shows terrain in 3D (MapKit's realistic elevation). Off by default: flat.
-    #[serde(default)]
-    pub map_3d: bool,
     /// Google Places API key from the settings file. Never serialized.
     #[serde(default, skip_serializing)]
     pub google_places_key: Option<String>,
@@ -720,7 +711,6 @@ impl Default for Defaults {
             name_date_format: Default::default(),
             ffmpeg_source: Default::default(),
             map_style: MapStyle::default(),
-            map_3d: false,
             google_places_key: None,
         }
     }
@@ -814,9 +804,6 @@ impl Defaults {
         }
         if let Some(m) = get(v, "mapStyle") {
             d.map_style = m;
-        }
-        if let Some(b) = get(v, "map3d") {
-            d.map_3d = b;
         }
         if let Some(g) = get::<String>(v, "geocoder").filter(|g| GEOCODERS.contains(&g.as_str())) {
             d.geocoder = g;

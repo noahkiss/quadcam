@@ -53,34 +53,6 @@ test("the map opens in the saved style", async ({ app, page }) => {
   await expect(page.getByRole("group", { name: "Map style" }).getByRole("button", { name: "Hybrid" })).toHaveAttribute("aria-pressed", "true");
 });
 
-test("3D shows terrain in 3D, is saved, and the map opens with it", async ({ app, page }) => {
-  await app.open("library", { settings: { mapView: true } });
-  await sidebar(page).getByRole("button", { name: "Map" }).click();
-  const box = page.getByRole("checkbox", { name: "3D" });
-  await expect(box).not.toBeChecked();
-  await expect.poll(() => app.core<boolean>("(c) => c.map && c.map.threeD")).toBe(false);
-  const sent = (await app.calls("map_pins")).length;
-  await box.check();
-  await expect.poll(() => app.core<boolean>("(c) => c.map.threeD")).toBe(true);
-  await expect.poll(async () => (await app.method("settings_set")).map((p) => (p as { values: Record<string, unknown> }).values)).toContainEqual({ map3d: true });
-  // One send for the change; the style and the pins stay.
-  expect((await app.calls("map_pins")).length).toBe(sent + 1);
-  expect(await app.core<string>("(c) => c.map.style")).toBe("standard");
-});
-
-test("the map opens with 3D saved, and 3D stays in a narrow window", async ({ app, page }) => {
-  await page.setViewportSize({ width: 420, height: 800 });
-  await app.open("library", { settings: { mapView: true, map3d: true } });
-  await page.getByRole("button", { name: "Show sidebar" }).click();
-  await sidebar(page).getByRole("button", { name: "Map" }).click();
-  await expect.poll(() => app.core<boolean>("(c) => c.map && c.map.threeD")).toBe(true);
-  const box = page.getByRole("checkbox", { name: "3D" });
-  await expect(box).toBeVisible();
-  await expect(box).toBeChecked();
-  await box.uncheck();
-  await expect.poll(() => app.core<boolean>("(c) => c.map.threeD")).toBe(false);
-});
-
 test("the map hides under a dialog and when the page closes", async ({ app, page }) => {
   await app.open("library", { settings: { mapView: true } });
   await sidebar(page).getByRole("button", { name: "Map" }).click();

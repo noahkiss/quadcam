@@ -27,7 +27,7 @@ export const api = {
   share: (paths: string[], r: { x: number; y: number; w: number; h: number }) => ok(commands.share(paths, r.x, r.y, r.w, r.h)),
   /** The Map page's native map: where it goes (null hides it), and its pins and look. */
   mapFrame: (frame: MapFrame | null) => ok(commands.mapFrame(frame)),
-  mapPins: (pins: MapPin[], style: MapStyle, threeD: boolean, fit: boolean) => ok(commands.mapPins(pins, style, threeD, fit)),
+  mapPins: (pins: MapPin[], style: MapStyle, fit: boolean) => ok(commands.mapPins(pins, style, fit)),
 
   // The app's own updates (GUI commands; the core never updates itself for an agent)
   updateStatus: () => commands.updateStatus(),

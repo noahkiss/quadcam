@@ -414,7 +414,6 @@ mcp.param quadcam_settings.values.join_split_recordings boolean|null
 mcp.param quadcam_settings.values.keep_originals boolean|null
 mcp.param quadcam_settings.values.layout string|null
 mcp.param quadcam_settings.values.log_dir string|null
-mcp.param quadcam_settings.values.map_3d boolean|null
 mcp.param quadcam_settings.values.map_style string|null
 mcp.param quadcam_settings.values.map_view boolean|null
 mcp.param quadcam_settings.values.modules object|null

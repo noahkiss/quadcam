@@ -118,13 +118,6 @@
 .narrowOnly {
   display: none;
 }
-/* The 3D checkbox sits on the header's buttons' line. */
-.threeD {
-  align-items: center;
-}
-.threeD input {
-  margin: 0;
-}
 /* A narrow window: the map takes the full width at 60 % of the window's height, the places
    list sits under it, and the map style becomes a pop-up. */
 @container content (max-width: 600px) {

@@ -91,7 +91,6 @@ export const sel = {
   onDevice: (s: State) => eff<boolean>(s, "onDeviceSuggestions", "on_device_suggestions", true),
   mapView: (s: State) => s.values.mapView === true,
   mapStyle: (s: State) => eff<MapStyle>(s, "mapStyle", "map_style", "standard"),
-  map3d: (s: State) => eff<boolean>(s, "map3d", "map_3d", false),
   updateCheck: (s: State) => eff<boolean>(s, "updateCheck", "update_check", true),
   defaultName: (s: State) => eff<string>(s, "defaultName", "default_name", "flight") || "flight",
   photosAlbum: (s: State) => eff<string>(s, "photosAlbum", "photos_album", "Drone"),

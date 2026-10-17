@@ -721,11 +721,8 @@ export const commands = {
 	h: number | null,
 	page_w: number | null,
 } | null) => typedError<null, string>(__TAURI_INVOKE("map_frame", { frame })),
-	/**
-	 *  Replaces the pins and the map's look (`three_d`: terrain in 3D). `fit` zooms the map to
-	 *  show every pin.
-	 */
-	mapPins: (pins: MapPin[], style: MapStyle, threeD: boolean, fit: boolean) => typedError<null, string>(__TAURI_INVOKE("map_pins", { pins, style, threeD, fit })),
+	/**  Replaces the pins and the map's look. `fit` zooms the map to show every pin. */
+	mapPins: (pins: MapPin[], style: MapStyle, fit: boolean) => typedError<null, string>(__TAURI_INVOKE("map_pins", { pins, style, fit })),
 	/**  The update state now (None never happens in the app; it has a GUI). */
 	updateStatus: () => __TAURI_INVOKE<{
 	phase: UpdatePhase,
@@ -2233,8 +2230,6 @@ export type Defaults_Deserialize = {
 	ffmpeg_source?: FfmpegSource,
 	/**  The Map page's look: Apple Maps' Standard, Hybrid or Satellite. */
 	map_style?: MapStyle,
-	/**  The Map page shows terrain in 3D (MapKit's realistic elevation). Off by default: flat. */
-	map_3d?: boolean,
 	/**  Google Places API key from the settings file. Never serialized. */
 	google_places_key?: string | null,
 };
@@ -2302,8 +2297,6 @@ export type Defaults_Serialize = {
 	ffmpeg_source: FfmpegSource,
 	/**  The Map page's look: Apple Maps' Standard, Hybrid or Satellite. */
 	map_style: MapStyle,
-	/**  The Map page shows terrain in 3D (MapKit's realistic elevation). Off by default: flat. */
-	map_3d: boolean,
 };
 
 /**  What happened to one clip's file on the card or folder after an import. */
