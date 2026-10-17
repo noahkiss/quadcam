@@ -229,6 +229,24 @@ A newer push to the same branch or pull request cancels the older run. A run on 
 - Set `HOME` to a temporary folder. The settings, cache and session then stay out of your real ones. With your own `HOME`, a build run by `cargo` (`cargo tauri dev`, `cargo run`) stops at the support folder unless `QUADCAM_PATHS=real`.
 - Take screenshots with `screencapture -l <windowid>`.
 
+### Seed a dev HOME with made-up data
+
+A temporary `HOME` starts empty, so every page shows its first-run screen. `scripts/dev-seed.py` fills one with a made-up library and gear:
+
+```bash
+(cd src-tauri && cargo build --bin quadcam-cli)
+H=$(mktemp -d)
+scripts/dev-seed.py "$H" --own-gear      # about 5 minutes the first time
+HOME="$H" QUADCAM_NO_FOCUS=1 cargo tauri dev
+```
+
+- **What it makes:** 4 places, 3 aircraft profiles, 40 clips over 12 flying days (analog AVI and DJI MP4 clips from ffmpeg, with names, notes, places or a location, stars, picks and rejects, and radio-log moments and flight stats), and one EdgeTX log per aircraft and day. With gear: 3 pack types, 10 packs (one retired, three charged), every flight on a pack, and 2 repairs. It turns on the Map and Sim pages, ELRS tools and Betaflight flashing.
+- **How it writes:** through `quadcam-cli` only, the app's own write paths. The clips are staged from generated "cards", dated against the generated logs and imported. The sources stay in `$H/.dev-seed/`.
+- **Safety:** it refuses your real home folder, a folder that holds it, and a `HOME` whose library folder is outside it. It writes nothing outside `HOME`.
+- **Gear:** packs, flights and repairs live in the gear folder. When `gearDir` points outside `HOME`, the seeder leaves it alone and skips them. `--own-gear` points `gearDir` at `HOME`'s own gear folder first.
+- **Again:** a second run changes nothing; a day already in the library is skipped. `--force` deletes the seeded library and sources and imports them again. `--cli PATH` picks another `quadcam-cli` build.
+- **Not seeded:** devices, backups and staged changes (the Devices, Bench and Storage pages need a device plugged in once), sim calibrations, weather and video analysis.
+
 ## Project layout
 
 | Path | Holds |
@@ -263,6 +281,7 @@ A newer push to the same branch or pull request cancels the older run. A run on 
 | `src-tauri/src/intel.rs` | Runs the Swift helper: its features, the speech check of voice files, video analysis |
 | `src-tauri/tests/` | Integration tests on synthetic clips and FAT32 disk images. `it/` is one test binary, one module per area; the three files beside it change an environment variable and stay binaries of their own |
 | `scripts/make-corpus.sh` | Builds `test-clips/synthetic/` |
+| `scripts/dev-seed.py` | Fills a temporary `HOME` with a made-up library and gear for a dev build ("Seed a dev HOME with made-up data" above) |
 | `assets/icon.svg` | The icon source. Regenerate the icons with `cargo tauri icon` |
 
 [`AGENTS.md`](../AGENTS.md) holds the full module map and the rules for contributors and coding agents.
