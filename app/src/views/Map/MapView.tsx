@@ -3,7 +3,8 @@
 // shows its native callout, whose Show clips button shows the place's clips in the library.
 // A clip with a location but no place has its own pin, whose callout's Open button opens the
 // clip. Add place… searches or takes this Mac's location; a place's … menu renames it, shows
-// its clips or deletes it. Map, Hybrid and Satellite save the setting `mapStyle`.
+// its clips or deletes it. Map, Hybrid and Satellite save the setting `mapStyle`; 3D saves
+// `map3d` (terrain in 3D, flat when off).
 import { useMemo, useRef, useState } from "react";
 import { useShallow } from "zustand/react/shallow";
 import { ask, useStore } from "../../store";
@@ -12,7 +13,7 @@ import type { MapStyle } from "../../bindings";
 import type { GeoResult, Place } from "../../ipc/types";
 import { api, errText } from "../../ipc/api";
 import { Button } from "../../components/Button";
-import { SearchField, Select } from "../../components/Field";
+import { Checkbox, SearchField, Select } from "../../components/Field";
 import { Popover } from "../../components/Popover";
 import { SegmentedControl } from "../../components/SegmentedControl";
 import { MoreMenu } from "../../components/dash/MoreMenu";
@@ -36,6 +37,7 @@ export function MapView() {
   const style = useStore(sel.mapStyle);
   const saveSetting = useStore((s) => s.saveSetting);
   const setStyle = (v: MapStyle) => void saveSetting("mapStyle", v);
+  const threeD = useStore(sel.map3d);
   const setFilter = useStore((s) => s.setFilter);
   const openDetail = useStore((s) => s.openDetail);
   const [fitSeq, setFitSeq] = useState(0);
@@ -67,6 +69,7 @@ export function MapView() {
                   ))}
                 </Select>
               </span>
+              <Checkbox label="3D" className={styles.threeD} checked={threeD} onChange={(e) => void saveSetting("map3d", e.target.checked)} />
               <Button size="sm" onClick={() => setFitSeq((n) => n + 1)} disabled={!data.pins.length}>
                 Show all
               </Button>
@@ -77,7 +80,7 @@ export function MapView() {
       </div>
       <div className={styles.body}>
         <PlaceList places={places} onShow={(name) => setFilter({ group: "all", place: name })} />
-        <MapHost pins={data.pins} style={style} fitSeq={fitSeq} onPick={onPick} />
+        <MapHost pins={data.pins} style={style} threeD={threeD} fitSeq={fitSeq} onPick={onPick} />
       </div>
     </section>
   );

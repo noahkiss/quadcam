@@ -301,6 +301,7 @@ export interface SettingsValues {
   onDeviceSuggestions?: boolean;
   mapView?: boolean;
   mapStyle?: G.MapStyle;
+  map3d?: boolean;
   defaultName?: string;
   photosAlbum?: string;
   formatLabel?: string;

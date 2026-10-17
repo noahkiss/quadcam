@@ -218,6 +218,22 @@ pub fn diff_pins(shown: &[MapPin], next: &[MapPin]) -> PinDiff {
     PinDiff { keep, gone }
 }
 
+/// The map's look: its style and whether terrain shows in 3D (MapKit's realistic elevation;
+/// flat otherwise). Either one makes a new configuration.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Look {
+    pub style: MapStyle,
+    pub three_d: bool,
+}
+
+/// Whether `next` needs a new configuration, which makes MapKit draw the whole map again:
+/// only when it differs from the look last set. Records `next` as the last.
+pub fn look_changes(last: &mut Option<Look>, next: Look) -> bool {
+    let changed = *last != Some(next);
+    *last = Some(next);
+    changed
+}
+
 /// The map's rectangle in its parent view's points, from the page's CSS rectangle.
 /// `bounds_w` and `bounds_h` are the web view's size in points; a web view that is not
 /// flipped counts y from the bottom.
@@ -244,16 +260,19 @@ pub fn map_frame(app: AppHandle, frame: Option<MapFrame>) -> Result<(), String> 
     with_host(&app, move |host| host.place(frame))
 }
 
-/// Replaces the pins and the map's look. `fit` zooms the map to show every pin.
+/// Replaces the pins and the map's look (`three_d`: terrain in 3D). `fit` zooms the map to
+/// show every pin.
 #[tauri::command]
 #[specta::specta]
 pub fn map_pins(
     app: AppHandle,
     pins: Vec<MapPin>,
     style: MapStyle,
+    three_d: bool,
     fit: bool,
 ) -> Result<(), String> {
-    with_host(&app, move |host| host.set_pins(&pins, style, fit))
+    let look = Look { style, three_d };
+    with_host(&app, move |host| host.set_pins(&pins, look, fit))
 }
 
 #[cfg(target_os = "macos")]
@@ -299,14 +318,15 @@ mod native {
     }
     impl Host {
         pub fn place(&mut self, _: Option<super::MapFrame>) {}
-        pub fn set_pins(&mut self, _: &[super::MapPin], _: super::MapStyle, _: bool) {}
+        pub fn set_pins(&mut self, _: &[super::MapPin], _: super::Look, _: bool) {}
     }
 }
 
 #[cfg(target_os = "macos")]
 mod native {
     use super::{
-        callout, diff_pins, to_points, Callout, MapFrame, MapPick, MapPin, MapStyle, PinKind,
+        callout, diff_pins, look_changes, to_points, Callout, Look, MapFrame, MapPick, MapPin,
+        MapStyle, PinKind,
     };
     use objc2::rc::Retained;
     use objc2::runtime::{AnyObject, NSObject, NSObjectProtocol, ProtocolObject};
@@ -326,8 +346,8 @@ mod native {
     };
     use objc2_map_kit::{
         MKAnnotation, MKAnnotationView, MKClusterAnnotation, MKHybridMapConfiguration,
-        MKImageryMapConfiguration, MKMapConfiguration, MKMapView, MKMapViewDelegate,
-        MKMarkerAnnotationView, MKPointAnnotation, MKStandardMapConfiguration,
+        MKImageryMapConfiguration, MKMapConfiguration, MKMapElevationStyle, MKMapView,
+        MKMapViewDelegate, MKMarkerAnnotationView, MKPointAnnotation, MKStandardMapConfiguration,
     };
     use std::cell::{Cell, RefCell};
     use std::collections::HashMap;
@@ -352,7 +372,7 @@ mod native {
         /// The pins `pins` show, in the same order.
         shown: Vec<MapPin>,
         /// The look last set; MapKit draws the whole map again when it is set.
-        style: Option<MapStyle>,
+        look: Option<Look>,
         webview: usize,
     }
 
@@ -955,7 +975,7 @@ mod native {
                 delegate,
                 pins: Vec::new(),
                 shown: Vec::new(),
-                style: None,
+                look: None,
                 webview,
             })
         }
@@ -1023,14 +1043,13 @@ mod native {
             self.mk().setHidden(false);
         }
 
-        pub fn set_pins(&mut self, pins: &[MapPin], style: MapStyle, fit: bool) {
+        pub fn set_pins(&mut self, pins: &[MapPin], look: Look, fit: bool) {
             let held = self.map.clone();
             let map: &MKMapView = &held;
             // A configuration makes MapKit draw the whole map again: set it only on a change.
-            if self.style != Some(style) {
-                self.style = Some(style);
+            if look_changes(&mut self.look, look) {
                 unsafe {
-                    let config: Retained<MKMapConfiguration> = match style {
+                    let config: Retained<MKMapConfiguration> = match look.style {
                         MapStyle::Standard => {
                             Retained::into_super(MKStandardMapConfiguration::new())
                         }
@@ -1039,6 +1058,11 @@ mod native {
                         }
                         MapStyle::Hybrid => Retained::into_super(MKHybridMapConfiguration::new()),
                     };
+                    config.setElevationStyle(if look.three_d {
+                        MKMapElevationStyle::Realistic
+                    } else {
+                        MKMapElevationStyle::Flat
+                    });
                     map.setPreferredConfiguration(&config);
                 }
             }
@@ -1304,6 +1328,44 @@ mod tests {
         assert_eq!(
             to_points(&z, 800.0, 600.0, true),
             (464.0, 104.0, 1136.0, 1000.0)
+        );
+    }
+
+    #[test]
+    fn the_3d_choice_is_part_of_the_look() {
+        let flat = Look {
+            style: MapStyle::Standard,
+            three_d: false,
+        };
+        let three_d = Look {
+            three_d: true,
+            ..flat
+        };
+        let mut last = None;
+        // The first look sets a configuration; the same look again sets none.
+        assert!(look_changes(&mut last, flat));
+        assert!(!look_changes(&mut last, flat));
+        // Turning 3D on, then sending the same look again: exactly one configuration.
+        let sets = [three_d, three_d, three_d]
+            .into_iter()
+            .filter(|&l| look_changes(&mut last, l))
+            .count();
+        assert_eq!(sets, 1);
+        // Off again, and a style change that keeps 3D: one each.
+        assert!(look_changes(&mut last, flat));
+        assert!(look_changes(
+            &mut last,
+            Look {
+                style: MapStyle::Satellite,
+                ..flat
+            }
+        ));
+        assert_eq!(
+            last,
+            Some(Look {
+                style: MapStyle::Satellite,
+                three_d: false
+            })
         );
     }
 }

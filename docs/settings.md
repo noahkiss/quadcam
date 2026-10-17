@@ -71,6 +71,10 @@ Off by default. On, the sidebar shows **Map** under Library: your places and cli
 
 `standard` by default. The Map page's look: `standard` (Map), `hybrid` or `satellite`. The **Map**, **Hybrid** and **Satellite** control on the Map page sets it, and the map opens in it the next time. In the settings file it is `mapStyle`; on the command line and in MCP it is `map_style`.
 
+### Map in 3D
+
+Off by default: the map is flat. On, the map shows terrain in 3D where Apple Maps has it (MapKit's realistic elevation), in every style. The **3D** checkbox on the Map page sets it, and the map opens with it the next time. In the settings file it is `map3d`; on the command line and in MCP it is `map_3d`.
+
 ### On-device suggestions
 
 On by default. On a Mac with Apple's on-device model (macOS 26 or later, Apple Intelligence on), QuadCam suggests clip names, keywords and notes after a card loads, and the session report offers **Summarize day**. Off, neither runs, for the app, the command line or an agent. See [On-device suggestions](library.md#on-device-suggestions). In the settings file it is `onDeviceSuggestions`; on the command line and in MCP it is `on_device_suggestions`.

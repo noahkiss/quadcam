@@ -220,7 +220,7 @@ Click a pin to show its callout:
 - VoiceOver reads each pin's name, kind and callout lines.
 - A place sits at its saved point. A place that is not saved sits in the middle of its clips' locations.
 - Pins close together merge into one at a wide zoom. Click it to zoom in.
-- **Map**, **Hybrid** and **Satellite** pick the look, and the map opens in it the next time ([Map style](settings.md#map-style)). **Show all** zooms to every pin.
+- **Map**, **Hybrid** and **Satellite** pick the look, and the map opens in it the next time ([Map style](settings.md#map-style)). **3D** shows terrain in 3D; off, the map is flat ([Map in 3D](settings.md#map-in-3d)). **Show all** zooms to every pin.
 - The header counts the places, the clips on the map, and the clips without a location.
 - The **Places** list beside the map shows each saved place with its clip count and the day you last flew there; click one to show its clips. **Add place…** searches for a place or uses this Mac's location, and saves it. A place's **…** menu holds **Rename…**, **Show clips** and **Delete…**. In a narrow window the map sits on top and the list under it.
 - Scroll or pinch to zoom; drag to move. The map keeps its view when you come back to the page.

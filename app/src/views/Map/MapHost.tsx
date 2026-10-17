@@ -65,12 +65,14 @@ const MOVERS = ["transitionrun", "transitionend", "animationstart", "animationen
 interface Props {
   pins: MapPin[];
   style: MapStyle;
+  /** Terrain in 3D (the `map3d` setting); flat otherwise. */
+  threeD: boolean;
   /** Bumped by Show all: the map zooms to every pin. */
   fitSeq: number;
   onPick: (id: string) => void;
 }
 
-export function MapHost({ pins, style, fitSeq, onPick }: Props) {
+export function MapHost({ pins, style, threeD, fitSeq, onPick }: Props) {
   const ref = useRef<HTMLDivElement>(null);
   const pick = useEffectEvent((id: string) => onPick(id));
 
@@ -129,11 +131,11 @@ export function MapHost({ pins, style, fitSeq, onPick }: Props) {
     const fit = !fitted && pins.length > 0 ? true : seen.current !== fitSeq;
     seen.current = fitSeq;
     if (fit) fitted = true;
-    const key = JSON.stringify([pins, style]);
+    const key = JSON.stringify([pins, style, threeD]);
     if (key === sent && !fit) return;
     sent = key;
-    api.mapPins(pins, style, fit).catch(() => {});
-  }, [pins, style, fitSeq]);
+    api.mapPins(pins, style, threeD, fit).catch(() => {});
+  }, [pins, style, threeD, fitSeq]);
 
   useEffect(() => {
     let stop: (() => void) | undefined;

@@ -442,6 +442,9 @@ pub struct SettingsValues {
     /// The Map page's look: standard (default), hybrid or satellite.
     #[schemars(extend("x-nullable" = true, "enum" = ["standard", "hybrid", "satellite", null]))]
     pub map_style: Option<String>,
+    /// The Map page shows terrain in 3D (realistic elevation). Off by default: flat.
+    #[schemars(extend("x-nullable" = true))]
+    pub map_3d: Option<bool>,
     /// Show the Sim page in the Gear sidebar (a preview). Off by default.
     #[schemars(extend("x-nullable" = true))]
     pub sim_preview: Option<bool>,
