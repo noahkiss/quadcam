@@ -186,6 +186,38 @@ pub fn callout(p: &MapPin) -> Callout {
     }
 }
 
+/// What a new set of pins changes on the map: for each new pin, the shown pin whose
+/// annotation it keeps (None: a new annotation), and the shown pins that go. A pin keeps its
+/// annotation, and with it its view and a shown callout, while it is equal in every field.
+#[derive(Debug, PartialEq)]
+pub struct PinDiff {
+    pub keep: Vec<Option<usize>>,
+    pub gone: Vec<usize>,
+}
+
+pub fn diff_pins(shown: &[MapPin], next: &[MapPin]) -> PinDiff {
+    let mut free: std::collections::HashMap<&str, usize> = shown
+        .iter()
+        .enumerate()
+        .map(|(i, p)| (p.id.as_str(), i))
+        .collect();
+    let keep: Vec<Option<usize>> = next
+        .iter()
+        .map(|p| {
+            let i = free
+                .get(p.id.as_str())
+                .copied()
+                .filter(|&i| shown[i] == *p)?;
+            free.remove(p.id.as_str());
+            Some(i)
+        })
+        .collect();
+    let gone = (0..shown.len())
+        .filter(|i| !keep.contains(&Some(*i)))
+        .collect();
+    PinDiff { keep, gone }
+}
+
 /// The map's rectangle in its parent view's points, from the page's CSS rectangle.
 /// `bounds_w` and `bounds_h` are the web view's size in points; a web view that is not
 /// flipped counts y from the bottom.
@@ -273,7 +305,9 @@ mod native {
 
 #[cfg(target_os = "macos")]
 mod native {
-    use super::{callout, to_points, Callout, MapFrame, MapPick, MapPin, MapStyle, PinKind};
+    use super::{
+        callout, diff_pins, to_points, Callout, MapFrame, MapPick, MapPin, MapStyle, PinKind,
+    };
     use objc2::rc::Retained;
     use objc2::runtime::{AnyObject, NSObject, NSObjectProtocol, ProtocolObject};
     use objc2::Message;
@@ -287,7 +321,9 @@ mod native {
         NSStackView, NSTextField, NSUserInterfaceLayoutOrientation, NSView, NSWindowOrderingMode,
     };
     use objc2_core_location::CLLocationCoordinate2D;
-    use objc2_foundation::{NSArray, NSPoint, NSRect, NSSize, NSString};
+    use objc2_foundation::{
+        NSArray, NSObjectNSDelayedPerforming, NSPoint, NSRect, NSSize, NSString,
+    };
     use objc2_map_kit::{
         MKAnnotation, MKAnnotationView, MKClusterAnnotation, MKHybridMapConfiguration,
         MKImageryMapConfiguration, MKMapConfiguration, MKMapView, MKMapViewDelegate,
@@ -306,21 +342,38 @@ mod native {
     const ESCAPE: u16 = 53;
     /// The poster frame's size in a clip's callout, in points (16:9).
     const THUMB: (f64, f64) = (96.0, 54.0);
+    /// How long the scale stays after a zoom ends, in seconds.
+    const SCALE_LINGER: f64 = 1.5;
 
     pub struct Host {
         map: Retained<Map>,
         delegate: Retained<Delegate>,
         pins: Vec<Retained<MKPointAnnotation>>,
+        /// The pins `pins` show, in the same order.
+        shown: Vec<MapPin>,
+        /// The look last set; MapKit draws the whole map again when it is set.
+        style: Option<MapStyle>,
         webview: usize,
     }
 
-    /// What a pin's annotation carries: its id, kind, glyph, callout and poster frame.
+    /// What a pin's annotation carries: its id, kind, glyph, callout and poster frame, and
+    /// its callout's views once MapKit first asks for them.
     struct Pin {
         id: String,
         kind: PinKind,
         glyph: Option<String>,
         callout: Callout,
         thumb: Option<String>,
+        views: Option<Accessories>,
+    }
+
+    /// A callout's views: the lines, the poster frame and the button. Made once per pin, so a
+    /// pin that scrolls back into view does not read its poster from disk again.
+    #[derive(Clone)]
+    struct Accessories {
+        detail: Retained<NSView>,
+        left: Option<Retained<NSView>>,
+        right: Option<Retained<NSButton>>,
     }
 
     thread_local! {
@@ -329,10 +382,13 @@ mod native {
         static PINS: RefCell<HashMap<usize, Pin>> = RefCell::new(HashMap::new());
         /// The annotation whose callout shows, by address.
         static SELECTED: Cell<Option<usize>> = const { Cell::new(None) };
+        /// The span when the region began to change, which tells a zoom from a pan.
+        static SPAN: Cell<Option<(f64, f64)>> = const { Cell::new(None) };
     }
 
     pub struct Ivars {
-        app: AppHandle,
+        /// None on `probe_callout`'s map, which sends no events.
+        app: Option<AppHandle>,
     }
 
     define_class!(
@@ -403,6 +459,17 @@ mod native {
             fn open_pin(&self, _sender: Option<&AnyObject>) {
                 open_selected();
             }
+
+            /// Hides the scale a moment after a zoom.
+            #[unsafe(method(hideScale:))]
+            fn hide_scale(&self, _arg: Option<&AnyObject>) {
+                HOST.with(|h| {
+                    if let Some(host) = h.borrow().as_ref() {
+                        // SAFETY: a delayed perform on the main run loop.
+                        unsafe { host.mk().setShowsScale(false) };
+                    }
+                });
+            }
         }
 
         unsafe impl NSObjectProtocol for Delegate {}
@@ -415,6 +482,57 @@ mod native {
                 annotation: &ProtocolObject<dyn MKAnnotation>,
             ) -> Option<Retained<MKAnnotationView>> {
                 view_for(self, map, annotation)
+            }
+
+            #[unsafe(method(mapView:regionWillChangeAnimated:))]
+            fn region_will_change(&self, map: &MKMapView, _animated: bool) {
+                // SAFETY: MapKit calls this on the main thread with a live map.
+                let s = unsafe { map.region() }.span;
+                SPAN.with(|c| c.set(Some((s.latitudeDelta, s.longitudeDelta))));
+            }
+
+            /// Every frame of a change: the scale shows while the zoom changes, as in Maps.
+            #[unsafe(method(mapViewDidChangeVisibleRegion:))]
+            fn region_changing(&self, map: &MKMapView) {
+                let Some((lat, lon)) = SPAN.with(Cell::get) else {
+                    return;
+                };
+                // SAFETY: MapKit calls this on the main thread with a live map.
+                unsafe {
+                    if map.showsScale() {
+                        return;
+                    }
+                    let s = map.region().span;
+                    let zoomed = |a: f64, b: f64| a > 0.0 && ((b - a) / a).abs() > 0.005;
+                    if zoomed(lat, s.latitudeDelta) || zoomed(lon, s.longitudeDelta) {
+                        NSObject::cancelPreviousPerformRequestsWithTarget_selector_object(
+                            self,
+                            sel!(hideScale:),
+                            None,
+                        );
+                        map.setShowsScale(true);
+                    }
+                }
+            }
+
+            #[unsafe(method(mapView:regionDidChangeAnimated:))]
+            fn region_did_change(&self, map: &MKMapView, _animated: bool) {
+                SPAN.with(|c| c.set(None));
+                // SAFETY: MapKit calls this on the main thread with a live map.
+                unsafe {
+                    if map.showsScale() {
+                        NSObject::cancelPreviousPerformRequestsWithTarget_selector_object(
+                            self,
+                            sel!(hideScale:),
+                            None,
+                        );
+                        self.performSelector_withObject_afterDelay(
+                            sel!(hideScale:),
+                            None,
+                            SCALE_LINGER,
+                        );
+                    }
+                }
             }
 
             #[unsafe(method(mapViewDidFinishLoadingMap:))]
@@ -442,7 +560,12 @@ mod native {
                         return;
                     };
                     let key = &*annotation as *const _ as *const () as usize;
-                    if PINS.with(|s| s.borrow().contains_key(&key)) {
+                    if let Some(views) = accessories_of(self, key) {
+                        // The callout's views go on now, not when the pin's view is made: a
+                        // pin view is made each time a pin scrolls into view.
+                        view.setDetailCalloutAccessoryView(Some(&views.detail));
+                        view.setLeftCalloutAccessoryView(views.left.as_deref());
+                        view.setRightCalloutAccessoryView(views.right.as_deref().map(|b| &***b));
                         // MapKit shows the callout; the map takes the keys for it.
                         SELECTED.with(|s| s.set(Some(key)));
                         if let Some(w) = map.window() {
@@ -486,7 +609,7 @@ mod native {
             let h = h.borrow();
             let host = h.as_ref()?;
             host.deselect(key);
-            Some(host.delegate.ivars().app.clone())
+            host.delegate.ivars().app.clone()
         });
         if let Some(app) = app {
             let _ = MapPick(id).emit(&app);
@@ -581,10 +704,10 @@ mod native {
     ) -> Option<Retained<MKAnnotationView>> {
         let mtm = delegate.mtm();
         let key = annotation as *const _ as *const () as usize;
-        let (kind, glyph, c, poster) = PINS.with(|s| {
+        let (kind, glyph, label) = PINS.with(|s| {
             s.borrow()
                 .get(&key)
-                .map(|p| (p.kind, p.glyph.clone(), p.callout.clone(), p.thumb.clone()))
+                .map(|p| (p.kind, p.glyph.clone(), p.callout.label.clone()))
         })?;
         // A cluster MapKit made has no entry and gets its own view (the `?` above).
         // SAFETY: MapKit calls this on the main thread with a live map and annotation.
@@ -610,27 +733,57 @@ mod native {
             };
             view.setMarkerTintColor(Some(&tint));
             // A click shows the callout; its button does what the click used to.
+            // Its views go on when it is selected (`did_select`); a reused view drops the last.
             view.setCanShowCallout(true);
-            view.setDetailCalloutAccessoryView(Some(&detail(&c, mtm)));
-            let left = poster.as_deref().and_then(|p| thumb(p, &c.title, mtm));
-            view.setLeftCalloutAccessoryView(left.as_deref());
-            let button = c.button.map(|title| {
-                let b = NSButton::buttonWithTitle_target_action(
+            view.setDetailCalloutAccessoryView(None);
+            view.setLeftCalloutAccessoryView(None);
+            view.setRightCalloutAccessoryView(None);
+            view.setAccessibilityLabel(Some(&NSString::from_str(&label)));
+            Some(Retained::into_super(view))
+        }
+    }
+
+    /// The callout views of the pin at `key`, made the first time it is selected.
+    fn accessories_of(delegate: &Delegate, key: usize) -> Option<Accessories> {
+        let mtm = delegate.mtm();
+        PINS.with(|s| {
+            let mut s = s.borrow_mut();
+            let p = s.get_mut(&key)?;
+            Some(
+                p.views
+                    .get_or_insert_with(|| {
+                        accessories(delegate, &p.callout, p.thumb.as_deref(), mtm)
+                    })
+                    .clone(),
+            )
+        })
+    }
+
+    /// A pin's callout views: its lines, its poster frame and its button.
+    fn accessories(
+        delegate: &Delegate,
+        c: &Callout,
+        poster: Option<&str>,
+        mtm: MainThreadMarker,
+    ) -> Accessories {
+        let right = c.button.map(|title| {
+            // SAFETY: `openPin:` is the delegate's, and the delegate outlives the button.
+            let b = unsafe {
+                NSButton::buttonWithTitle_target_action(
                     &NSString::from_str(title),
                     Some(delegate),
                     Some(sel!(openPin:)),
                     mtm,
-                );
-                b.setKeyEquivalent(&NSString::from_str("\r"));
-                b.setAccessibilityLabel(Some(&NSString::from_str(&format!(
-                    "{title}: {}",
-                    c.title
-                ))));
-                b
-            });
-            view.setRightCalloutAccessoryView(button.as_deref().map(|b| &***b));
-            view.setAccessibilityLabel(Some(&NSString::from_str(&c.label)));
-            Some(Retained::into_super(view))
+                )
+            };
+            b.setKeyEquivalent(&NSString::from_str("\r"));
+            b.setAccessibilityLabel(Some(&NSString::from_str(&format!("{title}: {}", c.title))));
+            b
+        });
+        Accessories {
+            detail: detail(c, mtm),
+            left: poster.and_then(|p| thumb(p, &c.title, mtm)),
+            right,
         }
     }
 
@@ -669,9 +822,10 @@ mod native {
         v.subviews().iter().find_map(|s| find_detail(&s))
     }
 
-    /// Shows `pin`'s callout, built as the map builds it, on a map in a window that never
-    /// shows, and reads back where MapKit laid it out. Must run on the main thread; None when
-    /// MapKit showed no callout (no window server).
+    /// Shows `pin`'s callout on a map in a window that never shows, through the map's own
+    /// delegate (the pin's view, then its callout views on select), and reads back where MapKit
+    /// laid it out. Must run on the main thread; None when MapKit showed no callout (no window
+    /// server).
     pub fn probe_callout(pin: &MapPin) -> Option<CalloutLayout> {
         use objc2_app_kit::{NSBackingStoreType, NSWindow, NSWindowStyleMask};
         use objc2_foundation::{NSDate, NSRunLoop};
@@ -692,6 +846,11 @@ mod native {
             );
             win.setReleasedWhenClosed(false);
             let map = MKMapView::initWithFrame(MKMapView::alloc(mtm), rect);
+            let delegate: Retained<Delegate> = {
+                let this = Delegate::alloc(mtm).set_ivars(Ivars { app: None });
+                msg_send![super(this), init]
+            };
+            map.setDelegate(Some(ProtocolObject::from_ref(&*delegate)));
             win.contentView()?.addSubview(&map);
             let a = MKPointAnnotation::new();
             a.setCoordinate(CLLocationCoordinate2D {
@@ -699,19 +858,28 @@ mod native {
                 longitude: pin.lon,
             });
             a.setTitle(Some(&NSString::from_str(&c.title)));
+            let key = Retained::as_ptr(&a) as *const () as usize;
+            PINS.with(|s| {
+                s.borrow_mut().insert(
+                    key,
+                    Pin {
+                        id: pin.id.clone(),
+                        kind: pin.kind,
+                        glyph: pin.glyph.clone(),
+                        callout: c.clone(),
+                        thumb: pin.thumb.clone(),
+                        views: None,
+                    },
+                )
+            });
             let a = ProtocolObject::from_ref(&*a);
             map.addAnnotation(a);
             map.setCenterCoordinate_animated(a.coordinate(), false);
             spin(0.3);
-            let view = map.viewForAnnotation(a)?;
-            view.setCanShowCallout(true);
-            view.setDetailCalloutAccessoryView(Some(&detail(&c, mtm)));
-            let button = c.button.map(|t| {
-                NSButton::buttonWithTitle_target_action(&NSString::from_str(t), None, None, mtm)
-            });
-            view.setRightCalloutAccessoryView(button.as_deref().map(|b| &***b));
             map.selectAnnotation_animated(a, false);
             spin(0.7);
+            PINS.with(|s| s.borrow_mut().remove(&key));
+            SELECTED.with(|s| s.set(None));
             let root = win.contentView()?.superview()?;
             let detail = find_detail(&root)?;
             let wrapper = detail.superview()?;
@@ -761,7 +929,7 @@ mod native {
                 ]
             };
             let delegate: Retained<Delegate> = {
-                let this = Delegate::alloc(mtm).set_ivars(Ivars { app });
+                let this = Delegate::alloc(mtm).set_ivars(Ivars { app: Some(app) });
                 unsafe { msg_send![super(this), init] }
             };
             let mk: &MKMapView = &map;
@@ -769,7 +937,9 @@ mod native {
                 mk.setDelegate(Some(ProtocolObject::from_ref(&*delegate)));
                 mk.setShowsZoomControls(true);
                 mk.setShowsCompass(true);
-                mk.setShowsScale(true);
+                // The scale shows only while the zoom changes (`region_changing`): at rest it
+                // covers no label.
+                mk.setShowsScale(false);
             }
             mk.setHidden(true);
             // The page lays the map out; between two reports the map keeps its margins, as
@@ -784,6 +954,8 @@ mod native {
                 map,
                 delegate,
                 pins: Vec::new(),
+                shown: Vec::new(),
+                style: None,
                 webview,
             })
         }
@@ -854,83 +1026,96 @@ mod native {
         pub fn set_pins(&mut self, pins: &[MapPin], style: MapStyle, fit: bool) {
             let held = self.map.clone();
             let map: &MKMapView = &held;
-            unsafe {
-                let config: Retained<MKMapConfiguration> = match style {
-                    MapStyle::Standard => Retained::into_super(MKStandardMapConfiguration::new()),
-                    MapStyle::Satellite => Retained::into_super(MKImageryMapConfiguration::new()),
-                    MapStyle::Hybrid => Retained::into_super(MKHybridMapConfiguration::new()),
-                };
-                map.setPreferredConfiguration(&config);
-            }
-            // The same pins again (a style change, a library reload with nothing new on the
-            // map) keep their annotations, so a shown callout stays open.
-            let same = PINS.with(|s| {
-                let s = s.borrow();
-                self.pins.len() == pins.len()
-                    && self.pins.iter().zip(pins).all(|(a, p)| {
-                        let key = Retained::as_ptr(a) as *const () as usize;
-                        s.get(&key).is_some_and(|q| {
-                            q.id == p.id && q.callout == callout(p) && q.thumb == p.thumb
-                        }) && {
-                            // SAFETY: a live annotation on the main thread.
-                            let c = unsafe { a.coordinate() };
-                            c.latitude == p.lat && c.longitude == p.lon
-                        }
-                    })
-            });
-            if !same {
+            // A configuration makes MapKit draw the whole map again: set it only on a change.
+            if self.style != Some(style) {
+                self.style = Some(style);
                 unsafe {
-                    let old: Vec<&ProtocolObject<dyn MKAnnotation>> = self
-                        .pins
-                        .iter()
-                        .map(|p| ProtocolObject::from_ref(&**p))
-                        .collect();
-                    map.removeAnnotations(&NSArray::from_slice(&old));
-                }
-                SELECTED.with(|s| s.set(None));
-                let mut ids = HashMap::new();
-                self.pins = pins
-                    .iter()
-                    .map(|p| {
-                        let a = unsafe { MKPointAnnotation::new() };
-                        unsafe {
-                            a.setCoordinate(CLLocationCoordinate2D {
-                                latitude: p.lat,
-                                longitude: p.lon,
-                            });
-                            a.setTitle(Some(&NSString::from_str(&p.title)));
-                            a.setSubtitle(p.subtitle.as_deref().map(NSString::from_str).as_deref());
+                    let config: Retained<MKMapConfiguration> = match style {
+                        MapStyle::Standard => {
+                            Retained::into_super(MKStandardMapConfiguration::new())
                         }
-                        let key = Retained::as_ptr(&a) as *const () as usize;
-                        ids.insert(
-                            key,
-                            Pin {
-                                id: p.id.clone(),
-                                kind: p.kind,
-                                glyph: p.glyph.clone(),
-                                callout: callout(p),
-                                thumb: p.thumb.clone(),
-                            },
-                        );
-                        a
-                    })
-                    .collect();
-                PINS.with(|s| *s.borrow_mut() = ids);
+                        MapStyle::Satellite => {
+                            Retained::into_super(MKImageryMapConfiguration::new())
+                        }
+                        MapStyle::Hybrid => Retained::into_super(MKHybridMapConfiguration::new()),
+                    };
+                    map.setPreferredConfiguration(&config);
+                }
             }
-            let all: Vec<&ProtocolObject<dyn MKAnnotation>> = self
-                .pins
-                .iter()
-                .map(|p| ProtocolObject::from_ref(&**p))
-                .collect();
-            let all = NSArray::from_slice(&all);
+            // A pin equal to the shown one keeps its annotation, its view and a shown callout;
+            // only the pins that changed are removed and added.
+            let key = |a: &Retained<MKPointAnnotation>| Retained::as_ptr(a) as *const () as usize;
+            let diff = diff_pins(&self.shown, pins);
+            let gone: Vec<_> = diff.gone.iter().map(|&i| self.pins[i].clone()).collect();
+            let mut added = Vec::new();
+            let next: Vec<_> = PINS.with(|s| {
+                let mut s = s.borrow_mut();
+                for a in &gone {
+                    s.remove(&key(a));
+                }
+                pins.iter()
+                    .zip(&diff.keep)
+                    .map(|(p, kept)| match kept {
+                        Some(i) => self.pins[*i].clone(),
+                        None => {
+                            let a = unsafe { MKPointAnnotation::new() };
+                            unsafe {
+                                a.setCoordinate(CLLocationCoordinate2D {
+                                    latitude: p.lat,
+                                    longitude: p.lon,
+                                });
+                                a.setTitle(Some(&NSString::from_str(&p.title)));
+                                a.setSubtitle(
+                                    p.subtitle.as_deref().map(NSString::from_str).as_deref(),
+                                );
+                            }
+                            s.insert(
+                                key(&a),
+                                Pin {
+                                    id: p.id.clone(),
+                                    kind: p.kind,
+                                    glyph: p.glyph.clone(),
+                                    callout: callout(p),
+                                    thumb: p.thumb.clone(),
+                                    views: None,
+                                },
+                            );
+                            added.push(a.clone());
+                            a
+                        }
+                    })
+                    .collect()
+            });
+            self.pins = next;
+            self.shown = pins.to_vec();
+            if let Some(sel) = SELECTED.with(Cell::get) {
+                if gone.iter().any(|a| key(a) == sel) {
+                    SELECTED.with(|s| s.set(None));
+                }
+            }
+            let list = |v: &[Retained<MKPointAnnotation>]| {
+                let refs: Vec<&ProtocolObject<dyn MKAnnotation>> =
+                    v.iter().map(|p| ProtocolObject::from_ref(&**p)).collect();
+                NSArray::from_slice(&refs)
+            };
             unsafe {
-                if !same {
-                    map.addAnnotations(&all);
+                if !gone.is_empty() {
+                    map.removeAnnotations(&list(&gone));
+                }
+                if !added.is_empty() {
+                    map.addAnnotations(&list(&added));
                 }
                 if fit && !self.pins.is_empty() {
-                    map.showAnnotations_animated(&all, false);
+                    map.showAnnotations_animated(&list(&self.pins), false);
                 }
             }
+            #[cfg(debug_assertions)]
+            eprintln!(
+                "quadcam: map: pins {} (added {}, removed {})",
+                self.pins.len(),
+                added.len(),
+                gone.len()
+            );
         }
     }
 }
@@ -1058,6 +1243,41 @@ mod tests {
         assert_eq!(sky_symbol(Clear, None), "sun.max");
         assert_eq!(sky_symbol(Clear, Some(false)), "moon.stars");
         assert_eq!(sky_symbol(Rain, Some(false)), "cloud.rain");
+    }
+
+    #[test]
+    fn equal_pins_keep_their_annotations() {
+        let place = |id: &str, n: u32| MapPin {
+            id: id.into(),
+            count: Some(n),
+            glyph: Some(n.to_string()),
+            ..pin(PinKind::Place)
+        };
+        let shown = [place("a", 2), place("b", 1), place("c", 4)];
+        // The same pins again (a library reload, a style change): nothing is made again.
+        assert_eq!(
+            diff_pins(&shown, &shown.clone()),
+            PinDiff {
+                keep: vec![Some(0), Some(1), Some(2)],
+                gone: vec![]
+            }
+        );
+        // One place gains a clip, one goes, one is new, the order changes: only those change.
+        let next = [place("c", 4), place("b", 2), place("d", 1)];
+        assert_eq!(
+            diff_pins(&shown, &next),
+            PinDiff {
+                keep: vec![Some(2), None, None],
+                gone: vec![0, 1]
+            }
+        );
+        // A pin that moves is made again at its new spot.
+        let moved = [MapPin {
+            lat: 1.0,
+            ..place("a", 2)
+        }];
+        assert_eq!(diff_pins(&shown[..1], &moved).keep, vec![None]);
+        assert_eq!(diff_pins(&[], &moved).gone, Vec::<usize>::new());
     }
 
     #[test]
