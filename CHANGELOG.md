@@ -3,7 +3,7 @@
 User-facing changes in each release, newest first. Release notes on
 [GitHub](https://github.com/noahkiss/quadcam/releases) hold the test steps for the later ones.
 
-## Unreleased
+## 0.22.0 (2026-10-17)
 
 - **The window fills the screen.** Pages now use the window's full width up to 1760 px, then centre; the 960 px limit on Gear pages is gone. The window can be as narrow as 420 px: at 720 px and narrower the sidebar hides behind a button at the left of the toolbar, header buttons fold into a **…** menu, card grids drop to one column, tables fold into stacked rows, and a drawer or sheet fills the window.
 - **One line instead of tiles.** Connected, Devices, Bench, Pack up, Packs, Repairs, Firmware and the Sim page's Rates count what matters in one line under the title. Flights keeps its day tiles; Storage shows one usage bar with a legend.
@@ -17,6 +17,10 @@ User-facing changes in each release, newest first. Release notes on
 - **Settings.** The sheet is up to 1200 px wide and the Gear section uses two columns. **When a device is plugged in** is a pop-up per device kind with a check mark on each step. In a narrow window the sheet fills it and the sections are a pop-up.
 - **Firmware.** **Read firmware…** opens a sheet; saved firmware copies fold; the ExpressLRS section folds and remembers it.
 - **The maker's builds.** An FC on its maker's own Betaflight build (BetaFPV's Meteor75 Pro II and Air65 II) is checked against the maker's newest file, not the newest Betaflight release. The row shows the build with the maker and day, such as `2025.12.5-alpha (BetaFPV, Jun 25 2026)`, and official Betaflight as information. The FC's page has a **Firmware source** pop-up (Automatic, the maker, Official Betaflight); the CLI takes `gear devices save --firmware-channel`, MCP `device_save` `firmware_channel`. QuadCam now reads an FC's maker code, cloud build key and gyro.
+- **Review the speech check in a sheet.** A pack's speech check now opens as a sheet from the row's **…** menu or its speech check badge, for every pack on this Mac. **Needs review** lists the lines heard wrong, the re-takes and the flags first; **All** lists every line. Each line plays its take, and a line heard wrong plays the take QuadCam held back. **Accept**, **Accept selected** and, for a studio pack, **Re-take selected** act on the lines. A re-take shows its price first and pays only after **Re-take and pay**. MCP `gear_voice_retake` re-takes those lines by name.
+- **Restart to update comes to the front.** After **Restart to update**, the new QuadCam opens its window in front. In Settings, **Restart to update** keeps its fill and **Check for Updates** keeps its border and readable text.
+- **Long paths fit.** QuadCam shows every file path the same way: `~` for your home folder, cut in the middle with the last folder kept, and the whole path on hover and on copy. A long library folder no longer pushes the first-run card out of its box.
+- **A lighter Map page.** The map changes only the pins that changed, sends pins only when they change, and does no work while nothing moves. Callout lines now show in full. The scale shows only while you zoom.
 
 ## 0.21.6 (2026-10-16)
 
