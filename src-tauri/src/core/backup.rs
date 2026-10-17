@@ -678,6 +678,7 @@ impl Core {
                         aliases: Vec::new(),
                         dfu_serial: None,
                         radio_aircraft: None,
+                        firmware_channel: None,
                     },
                 };
                 d.last_backup = Some(latest.id.clone());

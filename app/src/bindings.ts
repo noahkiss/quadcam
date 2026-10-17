@@ -1255,6 +1255,17 @@ export type BoardNotesParams = {
 	version?: string | null,
 };
 
+/**  A build as its version line names it: `2025.12.5-alpha Jun 25 2026 / 03:24:50 (eb2bb5a33)`. */
+export type BuildId = {
+	version: string,
+	/**  The build day, `YYYY-MM-DD`. */
+	date?: string | null,
+	/**  `HH:MM:SS`. */
+	time?: string | null,
+	/**  The short git revision, or `norevision` for a local build. */
+	rev?: string | null,
+};
+
 export type CalPhase = 
 /**  Move both sticks around their full travel. */
 "move" | 
@@ -1600,6 +1611,24 @@ export type ChangeUpdateParams = {
 	order?: number | null,
 };
 
+/**  How QuadCam came to an FC's channel. */
+export type ChannelReason = 
+/**  The person set it on the device. */
+"chosen" | 
+/**
+ *  The FC's cloud build was made on a day the maker's files carry, or its version line
+ *  is one of the maker's.
+ */
+"makers_build" | 
+/**  The maker publishes builds for this FC and the FC has no cloud build key. */
+"local_build" | 
+/**  The maker publishes builds for this FC; its files or the FC's build are not read yet. */
+"not_checked" | 
+/**  The FC runs a cloud build the maker did not publish. */
+"cloud_build" | 
+/**  QuadCam knows no maker's builds for this FC. */
+"no_source";
+
 export type ChannelValue = {
 	/**  1 is CH1. */
 	ch: number,
@@ -1875,6 +1904,15 @@ export type ClockCheck = {
 	newest_log?: string | null,
 	/**  Set when the clock looks wrong. */
 	message?: string | null,
+};
+
+/**  A cloud build as the build service reports it. */
+export type CloudBuild = {
+	key: string,
+	release: string | null,
+	target: string | null,
+	/**  When the build was asked for: the build's day. */
+	submitted: string | null,
 };
 
 /**  What a collection removed. */
@@ -2303,6 +2341,11 @@ export type Device = {
 	 *  out from the profiles on every read and never saved (`Store::save_device` drops it).
 	 */
 	radio_aircraft?: RadioAircraft[] | null,
+	/**
+	 *  For an FC: where its Betaflight comes from, as the person set it. None follows what
+	 *  QuadCam detects (`gear::firmware::vendor::detect`).
+	 */
+	firmware_channel?: FirmwareChannel | null,
 };
 
 /**
@@ -2354,6 +2397,11 @@ export type DeviceSaveParams = {
 	 *  every aircraft off it.
 	 */
 	aircraft?: string | null,
+	/**
+	 *  For an FC: where its firmware comes from, `vendor` (its maker's builds) or `official`
+	 *  (Betaflight releases); `auto` or empty follows what QuadCam detects.
+	 */
+	firmware_channel?: string | null,
 };
 
 /**  One device's share of the gear folder. */
@@ -2807,6 +2855,18 @@ export type Feature = {
 	images?: boolean | null,
 };
 
+/**
+ *  Where a maker publishes its builds. Each kind has its own reader in
+ *  `gear::firmware::vendor`; a maker with another kind of feed (GitHub releases, a WordPress
+ *  category) adds a variant and its reader.
+ */
+export type Feed = 
+/**
+ *  The attachments of one Zendesk Help Center article: `.hex` and `.txt` pairs, the
+ *  `.txt` a `diff all` that starts with the build's version line.
+ */
+{ kind: "zendesk"; host: string; article: string };
+
 /**  Where ffmpeg and ffprobe come from (setting `ffmpegSource`). */
 export type FfmpegSource = 
 /**  QuadCam's ffmpeg module when it is installed, else Homebrew. */
@@ -2834,6 +2894,9 @@ export type Filter = {
 	aircraft?: string | null,
 	min_rating?: number | null,
 };
+
+/**  Where an FC's firmware comes from: its maker's own builds, or official Betaflight. */
+export type FirmwareChannel = "vendor" | "official";
 
 /**  `gear_firmware_copies`: whose copies. */
 export type FirmwareCopiesParams = {
@@ -2926,6 +2989,22 @@ export type FirmwareStatus = {
 	flashable: boolean,
 	/**  What the person should know: why QuadCam does not flash it, or that the device is ahead. */
 	note: string | null,
+	/**  For an FC: where its firmware comes from. `latest` and `state` follow it. */
+	channel?: FirmwareChannel | null,
+	channel_reason?: ChannelReason | null,
+	/**
+	 *  For an FC: the maker whose builds it can follow (`BetaFPV`); None when QuadCam knows
+	 *  none for it.
+	 */
+	vendor?: string | null,
+	/**  The installed build's day (`Jun 25 2026`), when the device reports it. */
+	installed_date?: string | null,
+	/**  In the vendor channel: the maker's newest file for this quad. */
+	vendor_file?: VendorFile | null,
+	/**  For an FC: the newest official Betaflight release. */
+	official?: string | null,
+	/**  For an FC: what the channel means for it, when that needs saying. */
+	channel_note?: string | null,
 };
 
 /**  The Firmware page: one row per device, and what the check found. */
@@ -3607,6 +3686,13 @@ export type Latest = {
 	checked_at?: string | null,
 	/**  Sources that failed, one sentence each. */
 	errors?: string[],
+	/**  Makers' feeds as last read, for FCs in the vendor channel. */
+	vendor?: VendorFeed[],
+	/**
+	 *  The saved FCs' cloud builds as the build service reported them. A key's answer
+	 *  never changes, so each is read once.
+	 */
+	builds?: CloudBuild[],
 };
 
 /**  Where a clip goes inside the library folder. */
@@ -7463,6 +7549,23 @@ export type ValidationReport = {
 	profile: string,
 	logs: string[],
 	checks: CheckResult[],
+};
+
+/**  A maker's article as last read: its `.txt` files with their builds. */
+export type VendorFeed = {
+	feed: Feed,
+	checked_at: string,
+	files: VendorFile[],
+};
+
+/**  One file of a maker's feed. */
+export type VendorFile = {
+	name: string,
+	url: string,
+	/**  The `YYYYMMDD` at the end of the name. */
+	date?: string | null,
+	/**  From the `.txt`'s version line; None for a file QuadCam did not read. */
+	build?: BuildId | null,
 };
 
 /**  A line a dump does not show as written. */

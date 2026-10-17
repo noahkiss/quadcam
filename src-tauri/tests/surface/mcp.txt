@@ -251,6 +251,7 @@ mcp.param quadcam_gear_edit.digest string
 mcp.param quadcam_gear_edit.draft boolean
 mcp.param quadcam_gear_edit.dry_run boolean
 mcp.param quadcam_gear_edit.edits array
+mcp.param quadcam_gear_edit.firmware_channel string
 mcp.param quadcam_gear_edit.flight string
 mcp.param quadcam_gear_edit.folder string
 mcp.param quadcam_gear_edit.from string
@@ -488,6 +489,9 @@ mcp.tool quadcam_suggest
 mcp.tool quadcam_verify
 mcp.value quadcam_export.format=mov
 mcp.value quadcam_export.format=mp4
+mcp.value quadcam_gear_edit.firmware_channel=auto
+mcp.value quadcam_gear_edit.firmware_channel=official
+mcp.value quadcam_gear_edit.firmware_channel=vendor
 mcp.value quadcam_library.group=all
 mcp.value quadcam_library.group=last_import
 mcp.value quadcam_library.group=moments

@@ -599,6 +599,7 @@ fn a_pull_lists_with_its_logs_paired_to_flights_by_order_and_labelled_a_guess() 
             id: id.clone(),
             name: None,
             aircraft: Some("Whoop".into()),
+            firmware_channel: None,
         })
         .unwrap();
     fc.append_dataflash(&synth_image(&[("Whoop", 100)], NOTHING));

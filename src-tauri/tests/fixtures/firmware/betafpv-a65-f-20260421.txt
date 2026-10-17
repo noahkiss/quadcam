@@ -1,0 +1,8 @@
+# 
+
+# diff all
+
+# version
+# Betaflight / STM32G47X (G473) 2026.6.0-alpha Apr 15 2026 / 16:24:57 (norevision) MSP API: 1.48
+
+# start the command batch

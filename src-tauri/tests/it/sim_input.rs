@@ -47,6 +47,7 @@ fn save_radio(c: &Core, id: &str, board: &str) {
             aliases: Vec::new(),
             dfu_serial: None,
             radio_aircraft: None,
+            firmware_channel: None,
         })
         .unwrap();
 }

@@ -192,13 +192,15 @@ impl Core {
         let mode = self.gear_settings().firmware_check;
         let now = Utc::now();
         let last = fwcheck::cached(&cache);
+        let devices = self.gear_store().devices()?;
+        let profiles = self.profiles().map(|(p, _)| p).unwrap_or_default();
         let latest = if p.check.unwrap_or_else(|| fwcheck::due(&mode, &last, now)) {
-            fwcheck::check(self.firmware.fetch.as_ref(), &cache, now)?
+            let wants = fwcheck::wants(&devices, &profiles);
+            fwcheck::check_with(self.firmware.fetch.as_ref(), &cache, now, &wants)?
         } else {
             last
         };
-        let devices = self.gear_store().devices()?;
-        let mut statuses = fwcheck::statuses(&devices, &latest);
+        let mut statuses = fwcheck::statuses_with(&devices, &latest, &profiles);
         crate::gear::firmware::betaflight::adjust_statuses(&mut statuses, self.bf_flash_on());
         Ok(FirmwareView {
             devices: statuses,

@@ -327,6 +327,7 @@ cli.flag gear crashes save --parts VALUE
 cli.flag gear crashes save --repaired VALUE
 cli.flag gear crashes save --time VALUE
 cli.flag gear devices save --aircraft VALUE
+cli.flag gear devices save --firmware-channel VALUE
 cli.flag gear devices save --name VALUE
 cli.flag gear dfu-link --device VALUE
 cli.flag gear dfu-link --serial VALUE

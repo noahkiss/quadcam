@@ -6,7 +6,7 @@
 use super::Core;
 use crate::gear::cues::{self, Cue, CueEvent};
 use crate::gear::events::{DeviceEvent, DeviceEventKind, Tracker};
-use crate::gear::model::{Connected, Device, DeviceKind, Link};
+use crate::gear::model::{Connected, Device, DeviceKind, FirmwareChannel, Link};
 use crate::gear::store::Store;
 use crate::gear::{Automation, GearSettings};
 use anyhow::{bail, Context, Result};
@@ -105,6 +105,10 @@ pub struct DeviceSaveParams {
     /// every aircraft off it.
     #[serde(default)]
     pub aircraft: Option<String>,
+    /// For an FC: where its firmware comes from, `vendor` (its maker's builds) or `official`
+    /// (Betaflight releases); `auto` or empty follows what QuadCam detects.
+    #[serde(default)]
+    pub firmware_channel: Option<String>,
 }
 
 impl Core {
@@ -249,6 +253,29 @@ impl Core {
         Ok(list)
     }
 
+    /// A device's firmware channel from `vendor`, `official`, `auto` or empty (None). Only an
+    /// FC has one, and `vendor` needs a maker QuadCam knows for it.
+    fn firmware_channel_of(&self, d: &Device, value: &str) -> Result<Option<FirmwareChannel>> {
+        let c = match value.trim().to_ascii_lowercase().as_str() {
+            "" | "auto" => return Ok(None),
+            "vendor" => FirmwareChannel::Vendor,
+            "official" => FirmwareChannel::Official,
+            other => bail!("firmware_channel {other:?}: use vendor, official or auto"),
+        };
+        if d.kind != DeviceKind::Fc {
+            bail!("Only an FC has a firmware channel.");
+        }
+        if c == FirmwareChannel::Vendor {
+            let (profiles, _) = self.profiles()?;
+            if crate::gear::firmware::check::source_of(d, &profiles).is_none() {
+                bail!(
+                    "QuadCam knows no maker's builds for this FC. Link it to its aircraft first."
+                );
+            }
+        }
+        Ok(Some(c))
+    }
+
     /// Names a device or links it to an aircraft. A new device is saved from what is
     /// plugged in now.
     pub fn gear_device_save(&self, p: &DeviceSaveParams) -> Result<Device> {
@@ -281,6 +308,7 @@ impl Core {
                     aliases: Vec::new(),
                     dfu_serial: None,
                     radio_aircraft: None,
+                    firmware_channel: None,
                 }
             }
         };
@@ -321,6 +349,9 @@ impl Core {
                     })?;
                 Some(p.name.clone())
             };
+        }
+        if let Some(c) = &p.firmware_channel {
+            d.firmware_channel = self.firmware_channel_of(&d, c)?;
         }
         if let Some(a) = radio_aircraft {
             self.radio_link(&d.id, &a)?;

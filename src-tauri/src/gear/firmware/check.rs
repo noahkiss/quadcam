@@ -5,10 +5,15 @@
 //!
 //! Sources: the EdgeTX and Betaflight GitHub releases and the ExpressLRS artifactory index.
 //! Each is parsed by a pure function over the downloaded JSON, so the tests use fixtures.
+//! An FC in the vendor channel (`vendor`) is checked against its maker's newest file
+//! instead; official Betaflight then shows as information only.
 
 use super::fetch_bytes;
+use super::vendor::{self, BuildId, ChannelReason, CloudBuild, VendorFeed, VendorFile};
+use crate::gear::bf::boards::{self, Feed, VendorSource};
 use crate::gear::compat::{self, Product};
-use crate::gear::model::{Device, DeviceKind};
+use crate::gear::model::{Device, DeviceKind, FirmwareChannel};
+use crate::metadata::Profile;
 use crate::modules::fetch::Fetch;
 use anyhow::{Context, Result};
 use chrono::{DateTime, Duration, Utc};
@@ -166,6 +171,68 @@ pub struct Latest {
     /// Sources that failed, one sentence each.
     #[serde(default)]
     pub errors: Vec<String>,
+    /// Makers' feeds as last read, for FCs in the vendor channel.
+    #[serde(default)]
+    pub vendor: Vec<VendorFeed>,
+    /// The saved FCs' cloud builds as the build service reported them. A key's answer
+    /// never changes, so each is read once.
+    #[serde(default)]
+    pub builds: Vec<CloudBuild>,
+}
+
+/// What a check reads beyond the three releases: the makers' feeds the saved FCs follow
+/// (with the file prefixes wanted from each), and their cloud build keys.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct Wants {
+    pub feeds: Vec<(String, Feed, Vec<String>)>,
+    pub keys: Vec<String>,
+}
+
+/// The names an FC's aircraft goes by: the linked profile's name and its aircraft.
+fn aircraft_names(d: &Device, profiles: &[Profile]) -> Vec<String> {
+    let Some(a) = d.aircraft.as_deref() else {
+        return Vec::new();
+    };
+    let mut names = vec![a.to_string()];
+    if let Some(p) = profiles
+        .iter()
+        .find(|p| p.name.trim().eq_ignore_ascii_case(a.trim()))
+    {
+        names.push(p.aircraft.clone());
+    }
+    names
+}
+
+/// The maker's builds an FC can follow, from its identity and its aircraft.
+pub fn source_of(d: &Device, profiles: &[Profile]) -> Option<VendorSource> {
+    if d.kind != DeviceKind::Fc {
+        return None;
+    }
+    let names = aircraft_names(d, profiles);
+    let names: Vec<&str> = names.iter().map(String::as_str).collect();
+    boards::vendor_source(&d.identity, &names)
+}
+
+/// What a check must read for these devices.
+pub fn wants(devices: &[Device], profiles: &[Profile]) -> Wants {
+    let mut w = Wants::default();
+    for d in devices.iter().filter(|d| d.kind == DeviceKind::Fc) {
+        if let Some(src) = source_of(d, profiles) {
+            match w.feeds.iter_mut().find(|(_, f, _)| *f == src.feed) {
+                Some((_, _, prefixes)) if !prefixes.contains(&src.prefix) => {
+                    prefixes.push(src.prefix)
+                }
+                Some(_) => {}
+                None => w.feeds.push((src.vendor, src.feed, vec![src.prefix])),
+            }
+            if let Some(k) = d.identity.build_key() {
+                if !w.keys.iter().any(|x| x == k) {
+                    w.keys.push(k.to_string());
+                }
+            }
+        }
+    }
+    w
 }
 
 fn cache_file(cache: &Path) -> std::path::PathBuf {
@@ -191,6 +258,17 @@ pub fn due(setting: &str, last: &Latest, now: DateTime<Utc>) -> bool {
 /// Reads the three sources and keeps the answer. A source that fails keeps its old value
 /// and adds an error.
 pub fn check(fetch: &dyn Fetch, cache: &Path, now: DateTime<Utc>) -> Result<Latest> {
+    check_with(fetch, cache, now, &Wants::default())
+}
+
+/// `check`, and the makers' feeds and cloud builds `wants` names. A key the cache answers
+/// is not read again.
+pub fn check_with(
+    fetch: &dyn Fetch,
+    cache: &Path,
+    now: DateTime<Utc>,
+    wants: &Wants,
+) -> Result<Latest> {
     let scratch = cache.join("firmware");
     let old = cached(cache);
     let mut out = Latest {
@@ -222,6 +300,34 @@ pub fn check(fetch: &dyn Fetch, cache: &Path, now: DateTime<Utc>) -> Result<Late
     }
     if let Some(v) = elrs {
         out.elrs = v;
+    }
+    for (name, feed, prefixes) in &wants.feeds {
+        let old = out.vendor.iter().position(|f| f.feed == *feed);
+        match vendor::read_feed(
+            fetch,
+            feed,
+            prefixes,
+            old.map(|i| &out.vendor[i]),
+            &scratch,
+            now,
+        ) {
+            Ok(f) => match old {
+                Some(i) => out.vendor[i] = f,
+                None => out.vendor.push(f),
+            },
+            Err(e) => out.errors.push(format!("{name}: {e:#}")),
+        }
+    }
+    for key in &wants.keys {
+        if out.builds.iter().any(|b| b.key == *key) {
+            continue;
+        }
+        match fetch_bytes(fetch, &vendor::build_url(key), &scratch)
+            .and_then(|b| vendor::parse_build(key, &b))
+        {
+            Ok(b) => out.builds.push(b),
+            Err(e) => out.errors.push(format!("Betaflight build service: {e:#}")),
+        }
     }
     std::fs::create_dir_all(&scratch)?;
     let f = cache_file(cache);
@@ -257,6 +363,27 @@ pub struct FirmwareStatus {
     pub flashable: bool,
     /// What the person should know: why QuadCam does not flash it, or that the device is ahead.
     pub note: Option<String>,
+    /// For an FC: where its firmware comes from. `latest` and `state` follow it.
+    #[serde(default)]
+    pub channel: Option<FirmwareChannel>,
+    #[serde(default)]
+    pub channel_reason: Option<ChannelReason>,
+    /// For an FC: the maker whose builds it can follow (`BetaFPV`); None when QuadCam knows
+    /// none for it.
+    #[serde(default)]
+    pub vendor: Option<String>,
+    /// The installed build's day (`Jun 25 2026`), when the device reports it.
+    #[serde(default)]
+    pub installed_date: Option<String>,
+    /// In the vendor channel: the maker's newest file for this quad.
+    #[serde(default)]
+    pub vendor_file: Option<VendorFile>,
+    /// For an FC: the newest official Betaflight release.
+    #[serde(default)]
+    pub official: Option<String>,
+    /// For an FC: what the channel means for it, when that needs saying.
+    #[serde(default)]
+    pub channel_note: Option<String>,
 }
 
 fn product_of(kind: DeviceKind) -> Option<(&'static str, Option<Product>)> {
@@ -270,6 +397,121 @@ fn product_of(kind: DeviceKind) -> Option<(&'static str, Option<Product>)> {
 
 /// The Firmware page's rows: one per saved device that runs firmware QuadCam checks.
 pub fn statuses(devices: &[Device], latest: &Latest) -> Vec<FirmwareStatus> {
+    statuses_with(devices, latest, &[])
+}
+
+/// Where an FC's build stands against its maker's newest file, by build identity.
+fn vendor_state(
+    vendor: &str,
+    installed: Option<&BuildId>,
+    newest: Option<&BuildId>,
+) -> (FirmwareState, Option<String>) {
+    let (Some(own), Some(new)) = (installed, newest) else {
+        return match installed {
+            None => (
+                FirmwareState::Unknown,
+                Some("The device reported no version.".into()),
+            ),
+            Some(_) => (FirmwareState::Unknown, None),
+        };
+    };
+    if vendor::same_build(own, new) {
+        return (FirmwareState::UpToDate, None);
+    }
+    let order = match (own.date, new.date) {
+        (Some(a), Some(b)) if a != b => Some(a.cmp(&b)),
+        _ => match (Ver::parse(&own.version), Ver::parse(&new.version)) {
+            (Some(a), Some(b)) if a != b => Some(a.cmp(&b)),
+            _ => None,
+        },
+    };
+    match order {
+        Some(Ordering::Less) => (FirmwareState::Update, None),
+        Some(_) => (
+            FirmwareState::UpToDate,
+            Some(format!("This build is newer than {vendor}'s newest file.")),
+        ),
+        None => (
+            FirmwareState::Unknown,
+            Some(format!(
+                "QuadCam cannot compare this build with {vendor}'s file."
+            )),
+        ),
+    }
+}
+
+/// `statuses`, with each FC's channel: its maker's builds (`profiles` give its aircraft)
+/// or official Betaflight.
+pub fn statuses_with(
+    devices: &[Device],
+    latest: &Latest,
+    profiles: &[Profile],
+) -> Vec<FirmwareStatus> {
+    let mut rows = statuses_official(devices, latest);
+    for (row, d) in rows
+        .iter_mut()
+        .zip(devices.iter().filter(|d| product_of(d.kind).is_some()))
+    {
+        if d.kind != DeviceKind::Fc {
+            continue;
+        }
+        let src = source_of(d, profiles);
+        let feed = src
+            .as_ref()
+            .and_then(|s| latest.vendor.iter().find(|f| f.feed == s.feed));
+        let cloud = d
+            .identity
+            .build_key()
+            .and_then(|k| latest.builds.iter().find(|b| b.key == k));
+        let det = vendor::detect(
+            d.firmware_channel,
+            src.as_ref(),
+            &d.identity,
+            feed.map(|f| f.files.as_slice()),
+            cloud,
+        );
+        let own = BuildId::of_identity(&d.identity);
+        row.channel = Some(det.channel);
+        row.channel_reason = Some(det.reason);
+        row.vendor = src.as_ref().map(|s| s.vendor.clone());
+        row.installed_date = own.as_ref().and_then(BuildId::day_label);
+        row.official = latest.betaflight.clone();
+        let (FirmwareChannel::Vendor, Some(src)) = (det.channel, &src) else {
+            if det.reason == ChannelReason::CloudBuild {
+                if let Some(v) = &row.vendor {
+                    row.channel_note = Some(format!(
+                        "This FC runs a Betaflight cloud build, not {v}'s file."
+                    ));
+                }
+            }
+            continue;
+        };
+        let newest = feed.and_then(|f| vendor::newest(src, &f.files)).cloned();
+        let (state, note) = vendor_state(
+            &src.vendor,
+            own.as_ref(),
+            newest.as_ref().and_then(|f| f.build.as_ref()),
+        );
+        row.latest = newest
+            .as_ref()
+            .and_then(|f| f.build.as_ref())
+            .map(|b| b.version.clone());
+        row.state = state;
+        row.flashable = false;
+        row.note = if state == FirmwareState::Update {
+            Some(format!(
+                "QuadCam checks {} builds. It does not flash them.",
+                src.vendor
+            ))
+        } else {
+            note
+        };
+        row.vendor_file = newest;
+    }
+    rows
+}
+
+fn statuses_official(devices: &[Device], latest: &Latest) -> Vec<FirmwareStatus> {
     devices
         .iter()
         .filter_map(|d| {
@@ -324,6 +566,13 @@ pub fn statuses(devices: &[Device], latest: &Latest) -> Vec<FirmwareStatus> {
                 state,
                 flashable,
                 note,
+                channel: None,
+                channel_reason: None,
+                vendor: None,
+                installed_date: None,
+                vendor_file: None,
+                official: None,
+                channel_note: None,
             })
         })
         .collect()
@@ -335,6 +584,7 @@ mod tests {
     use crate::gear::firmware::FixtureFetch;
     use crate::gear::model::Identity;
     use serde_json::json;
+    use std::path::Path;
 
     pub(crate) fn releases_json(tags: &[(&str, bool)]) -> Vec<u8> {
         let v: Vec<Value> = tags
@@ -366,6 +616,7 @@ mod tests {
             aliases: Vec::new(),
             dfu_serial: None,
             radio_aircraft: None,
+            firmware_channel: None,
         }
     }
 
@@ -511,5 +762,189 @@ mod tests {
         // Nothing checked yet: unknown, not an update.
         let none = statuses(&devices[..1], &Latest::default());
         assert_eq!(none[0].state, FirmwareState::Unknown);
+    }
+
+    fn fixture(name: &str) -> Vec<u8> {
+        std::fs::read(
+            Path::new(env!("CARGO_MANIFEST_DIR"))
+                .join("tests/fixtures/firmware")
+                .join(name),
+        )
+        .unwrap()
+    }
+
+    const KEY: &str = "00112233445566778899aabbccddeeff";
+    const M75_TXT: &str = "https://support.betafpv.com/hc/article_attachments/59863253804825";
+    const A65_TXT: &str = "https://support.betafpv.com/hc/article_attachments/58300171193113";
+
+    fn bf_fc(board: &str, version: &str, build: &str, key: Option<&str>, aircraft: &str) -> Device {
+        let mut d = device(DeviceKind::Fc, board, Some(version));
+        d.identity.build = Some(build.into());
+        d.identity.build_key = key.map(str::to_string);
+        d.aircraft = Some(aircraft.into());
+        d
+    }
+
+    fn profiles() -> Vec<Profile> {
+        ["Meteor75 Pro II", "Air65 II"]
+            .iter()
+            .map(|n| Profile {
+                name: n.to_string(),
+                ..Profile::default()
+            })
+            .collect()
+    }
+
+    /// A check with the BetaFPV feeds and one cloud build served from fixtures.
+    fn checked(devices: &[Device], submitted: &str) -> (Latest, FixtureFetch) {
+        let d = tempfile::tempdir().unwrap();
+        let f = FixtureFetch::new();
+        serve_all(&f);
+        f.serve(BETAFLIGHT_RELEASES, releases_json(&[("2026.6.2", false)]));
+        f.serve(
+            &vendor::attachments_url("support.betafpv.com", "59855387002521"),
+            fixture("zendesk-attachments-meteor75-o4.json"),
+        );
+        f.serve(M75_TXT, fixture("betafpv-m75-o4-elrs-20260625.txt"));
+        f.serve(
+            &vendor::attachments_url("support.betafpv.com", "54654422544409"),
+            fixture("zendesk-attachments-air65-ii.json"),
+        );
+        f.serve(A65_TXT, fixture("betafpv-a65-f-20260515.txt"));
+        f.serve(
+            "https://support.betafpv.com/hc/article_attachments/58300189274265",
+            fixture("betafpv-a65-f-20260421.txt"),
+        );
+        f.serve(
+            &vendor::build_url(KEY),
+            json!({"request": {"release": "2026.6.0-alpha", "target": "BETAFPVG473_V2"},
+                   "submitted": submitted})
+            .to_string()
+            .into_bytes(),
+        );
+        let w = wants(devices, &profiles());
+        let l = check_with(&f, d.path(), Utc::now(), &w).unwrap();
+        assert!(l.errors.is_empty(), "{:?}", l.errors);
+        (l, f)
+    }
+
+    #[test]
+    fn a_makers_build_is_checked_against_the_makers_file() {
+        // The Meteor75 Pro II O4 on BetaFPV's file, saved before QuadCam read build keys.
+        let meteor = bf_fc(
+            "BETAFPVG473",
+            "2025.12.5-alpha",
+            "Jun 25 2026 03:24:50 eb2bb5a",
+            None,
+            "Meteor75 Pro II",
+        );
+        // The Air65 II on BetaFPV's cloud build of May 15.
+        let air = bf_fc(
+            "BETAFPVG473_V2",
+            "2026.6.0-alpha",
+            "May 15 2026 06:14:55 e92c10887",
+            Some(KEY),
+            "Air65 II",
+        );
+        let devices = vec![meteor.clone(), air];
+        let (l, f) = checked(&devices, "2026-05-15T06:14:40Z");
+        assert_eq!(l.vendor.len(), 2);
+        assert_eq!(l.builds.len(), 1);
+        let rows = statuses_with(&devices, &l, &profiles());
+        let m = &rows[0];
+        assert_eq!(m.channel, Some(FirmwareChannel::Vendor));
+        assert_eq!(m.channel_reason, Some(ChannelReason::LocalBuild));
+        assert_eq!(m.vendor.as_deref(), Some("BetaFPV"));
+        assert_eq!(m.state, FirmwareState::UpToDate);
+        assert_eq!(m.latest.as_deref(), Some("2025.12.5-alpha"));
+        assert_eq!(m.installed_date.as_deref(), Some("Jun 25 2026"));
+        assert_eq!(m.official.as_deref(), Some("2026.6.2"));
+        assert!(!m.flashable);
+        assert_eq!(m.note, None);
+        assert_eq!(
+            m.vendor_file.as_ref().unwrap().name,
+            "M75 Pro II O4_GF 1811_ELRS_2025_12_4 20260625.txt"
+        );
+        let a = &rows[1];
+        assert_eq!(a.channel_reason, Some(ChannelReason::MakersBuild));
+        assert_eq!(a.state, FirmwareState::UpToDate);
+        assert_eq!(a.latest.as_deref(), Some("2026.6.0-alpha"));
+        // A second check reads the lists again, not the .txt files or the build.
+        let w = wants(&devices, &profiles());
+        let d = tempfile::tempdir().unwrap();
+        std::fs::create_dir_all(d.path().join("firmware")).unwrap();
+        std::fs::write(
+            d.path().join("firmware/latest.json"),
+            serde_json::to_vec(&l).unwrap(),
+        )
+        .unwrap();
+        let before = f.requested.lock().unwrap().len();
+        check_with(&f, d.path(), Utc::now(), &w).unwrap();
+        let asked: Vec<String> = f.requested.lock().unwrap()[before..].to_vec();
+        assert!(
+            !asked
+                .iter()
+                .any(|u| u == M75_TXT || u.contains("build.betaflight")),
+            "{asked:?}"
+        );
+    }
+
+    #[test]
+    fn an_older_makers_build_has_an_update_and_a_choice_wins() {
+        let old = bf_fc(
+            "BETAFPVG473",
+            "2025.12.3",
+            "Mar 2 2026 10:00:00 1234567",
+            None,
+            "Meteor75 Pro II",
+        );
+        let (l, _) = checked(std::slice::from_ref(&old), "2026-05-15T06:14:40Z");
+        let r = &statuses_with(std::slice::from_ref(&old), &l, &profiles())[0];
+        assert_eq!(r.state, FirmwareState::Update);
+        assert_eq!(r.latest.as_deref(), Some("2025.12.5-alpha"));
+        assert!(
+            r.note.as_deref().unwrap().contains("BetaFPV builds"),
+            "{:?}",
+            r.note
+        );
+        // The person picks official Betaflight: the newest release decides.
+        let mut chosen = old.clone();
+        chosen.firmware_channel = Some(FirmwareChannel::Official);
+        let r = &statuses_with(std::slice::from_ref(&chosen), &l, &profiles())[0];
+        assert_eq!(r.channel, Some(FirmwareChannel::Official));
+        assert_eq!(r.channel_reason, Some(ChannelReason::Chosen));
+        assert_eq!(r.latest.as_deref(), Some("2026.6.2"));
+        assert_eq!(
+            r.vendor.as_deref(),
+            Some("BetaFPV"),
+            "the choice stays offered"
+        );
+    }
+
+    #[test]
+    fn a_cloud_build_on_another_day_is_official_with_a_note() {
+        let own = bf_fc(
+            "BETAFPVG473_V2",
+            "2026.6.0-alpha",
+            "Jul 30 2026 01:00:00 abcdef1",
+            Some(KEY),
+            "Air65 II",
+        );
+        let (l, _) = checked(std::slice::from_ref(&own), "2026-07-30T01:00:00Z");
+        let r = &statuses_with(std::slice::from_ref(&own), &l, &profiles())[0];
+        assert_eq!(r.channel, Some(FirmwareChannel::Official));
+        assert_eq!(r.channel_reason, Some(ChannelReason::CloudBuild));
+        assert_eq!(r.state, FirmwareState::Update);
+        assert_eq!(r.latest.as_deref(), Some("2026.6.2"));
+        assert!(r
+            .channel_note
+            .as_deref()
+            .unwrap()
+            .contains("not BetaFPV's file"));
+        // An FC with no maker row: official, no maker.
+        let other = bf_fc("STM32F411", "4.5.1", "x", None, "Air65 II");
+        let r = &statuses_with(std::slice::from_ref(&other), &l, &profiles())[0];
+        assert_eq!(r.channel_reason, Some(ChannelReason::NoSource));
+        assert_eq!(r.vendor, None);
     }
 }

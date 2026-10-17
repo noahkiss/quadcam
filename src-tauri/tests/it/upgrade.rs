@@ -240,6 +240,7 @@ fn a_0_7_0_gear_folder_keeps_everything_through_writes() {
             id: "radio-0123456789abcdef".into(),
             name: Some("Pocket 2".into()),
             aircraft: None,
+            firmware_channel: None,
         })
         .unwrap();
     l.core
@@ -403,6 +404,7 @@ fn a_0_9_0_gear_folder_keeps_everything_through_writes() {
             id: "fc-fedcba9876543210".into(),
             name: Some("Whoop FC".into()),
             aircraft: Some("Whoop A".into()),
+            firmware_channel: None,
         })
         .unwrap();
     l.core

@@ -186,6 +186,7 @@ fn saved(id: &str, kind: DeviceKind, name: &str) -> Device {
         aliases: Vec::new(),
         dfu_serial: None,
         radio_aircraft: None,
+        firmware_channel: None,
     }
 }
 

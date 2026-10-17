@@ -1,0 +1,8 @@
+# 
+
+# diff all
+
+# version
+# Betaflight / STM32G47X (G473) 2026.6.0-alpha May 15 2026 / 06:14:55 (e92c10887) MSP API: 1.48
+# config rev: 6703db5
+

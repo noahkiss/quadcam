@@ -472,6 +472,7 @@ fn the_poll_reports_plug_ins_and_marks_known_devices_seen() {
         id: id.clone(),
         name: Some("Bench radio".into()),
         aircraft: None,
+        firmware_channel: None,
     })
     .unwrap();
     let saved_seen = c.gear_devices().unwrap()[0].last_seen;
@@ -587,6 +588,7 @@ fn renamed(c: &quadcam_lib::gear::model::Connected) -> quadcam_lib::gear::model:
         aliases: Vec::new(),
         dfu_serial: None,
         radio_aircraft: None,
+        firmware_channel: None,
     });
     d
 }

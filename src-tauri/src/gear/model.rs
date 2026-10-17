@@ -139,6 +139,18 @@ pub struct Device {
     /// out from the profiles on every read and never saved (`Store::save_device` drops it).
     #[serde(default)]
     pub radio_aircraft: Option<Vec<RadioAircraft>>,
+    /// For an FC: where its Betaflight comes from, as the person set it. None follows what
+    /// QuadCam detects (`gear::firmware::vendor::detect`).
+    #[serde(default)]
+    pub firmware_channel: Option<FirmwareChannel>,
+}
+
+/// Where an FC's firmware comes from: its maker's own builds, or official Betaflight.
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Hash, Type)]
+#[serde(rename_all = "snake_case")]
+pub enum FirmwareChannel {
+    Vendor,
+    Official,
 }
 
 /// One aircraft on a radio: a profile whose `gear.radio` names the radio, and its EdgeTX

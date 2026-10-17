@@ -14,6 +14,7 @@ pub mod betaflight;
 pub mod betaflight_config;
 pub mod check;
 pub mod edgetx;
+pub mod vendor;
 
 use super::dfu::{self, FakeDfu, Usb};
 use crate::modules::fetch::Fetch;

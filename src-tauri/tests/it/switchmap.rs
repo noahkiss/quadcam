@@ -241,6 +241,7 @@ fn an_aircraft_reads_its_radio_and_fc_backups() {
                 aliases: Vec::new(),
                 dfu_serial: None,
                 radio_aircraft: None,
+                firmware_channel: None,
             })
             .unwrap();
     };
@@ -487,6 +488,7 @@ fn pack_up_reads_a_radio_that_is_not_plugged_in_from_its_backup() {
         aliases: Vec::new(),
         dfu_serial: None,
         radio_aircraft: None,
+        firmware_channel: None,
     };
     store.save_device(&d).unwrap();
     // No backup yet: the model stays unknown.

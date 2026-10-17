@@ -239,6 +239,10 @@ pub enum DevicesCmd {
         /// to the radio (its profile's gear radio), and "" takes every aircraft off it.
         #[arg(long)]
         aircraft: Option<String>,
+        /// For an FC: where its firmware comes from, vendor (its maker's builds) or official
+        /// (Betaflight releases); auto follows what QuadCam detects.
+        #[arg(long, value_parser = ["vendor", "official", "auto"])]
+        firmware_channel: Option<String>,
     },
     /// Remove a device from the list. Its backups stay.
     Forget {
@@ -331,9 +335,20 @@ pub fn run(core: &Core, cmd: GearCmd) -> Result<Value> {
         GearCmd::Elrs { cmd } => elrs::run(core, cmd)?,
         GearCmd::Devices { cmd } => match cmd.unwrap_or(DevicesCmd::List) {
             DevicesCmd::List => serde_json::to_value(call::gear_devices(core)?)?,
-            DevicesCmd::Save { id, name, aircraft } => serde_json::to_value(
-                call::gear_device_save(core, api::DeviceSaveParams { id, name, aircraft })?,
-            )?,
+            DevicesCmd::Save {
+                id,
+                name,
+                aircraft,
+                firmware_channel,
+            } => serde_json::to_value(call::gear_device_save(
+                core,
+                api::DeviceSaveParams {
+                    id,
+                    name,
+                    aircraft,
+                    firmware_channel,
+                },
+            )?)?,
             DevicesCmd::Forget { id } => {
                 serde_json::to_value(call::gear_device_forget(core, api::IdParams { id })?)?
             }

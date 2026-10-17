@@ -1,0 +1,8 @@
+Entering CLI Mode, type '
+
+# diff all
+
+# version
+# Betaflight / STM32G47X (G473) 2025.12.5-alpha Jun 25 2026 / 03:24:50 (eb2bb5a33) MSP API: 1.47
+# config rev: 1359bbe
+

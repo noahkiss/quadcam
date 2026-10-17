@@ -186,6 +186,7 @@ fn bench(hooks: Arc<dyn Hooks>, board: &str, version: &str, backed_up: bool) -> 
         aliases: Vec::new(),
         dfu_serial: None,
         radio_aircraft: None,
+        firmware_channel: None,
     };
     core.gear_store().save_device(&radio).unwrap();
     Bench {
@@ -499,6 +500,7 @@ fn only_a_radio_can_be_flashed() {
         aliases: Vec::new(),
         dfu_serial: None,
         radio_aircraft: None,
+        firmware_channel: None,
     };
     b.core.gear_store().save_device(&fc).unwrap();
     let e = b
@@ -1158,6 +1160,7 @@ fn the_cli_previews_a_splash_and_plans_in_a_temporary_home() {
         aliases: Vec::new(),
         dfu_serial: None,
         radio_aircraft: None,
+        firmware_channel: None,
     };
     std::fs::write(
         gear.join("gear.json"),
@@ -1206,6 +1209,7 @@ fn second_radio(b: &Bench, seen: bool) -> Device {
         aliases: Vec::new(),
         dfu_serial: None,
         radio_aircraft: None,
+        firmware_channel: None,
     };
     b.core.gear_store().save_device(&d).unwrap();
     d
@@ -1350,4 +1354,113 @@ fn the_mcp_firmware_read_action_is_the_read_only_trial() {
     let dev = b.flasher.device.lock().unwrap();
     assert_eq!(dev.mutations, 0);
     assert!(!dev.left);
+}
+
+fn fw_fixture(name: &str) -> Vec<u8> {
+    std::fs::read(
+        Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("tests/fixtures/firmware")
+            .join(name),
+    )
+    .unwrap()
+}
+
+#[test]
+fn an_fc_on_its_makers_build_follows_the_makers_file() {
+    use quadcam_lib::gear::firmware::vendor::{attachments_url, ChannelReason};
+    use quadcam_lib::gear::model::FirmwareChannel;
+    let b = plain();
+    b.fetch.serve(
+        &attachments_url("support.betafpv.com", "59855387002521"),
+        fw_fixture("zendesk-attachments-meteor75-o4.json"),
+    );
+    b.fetch.serve(
+        "https://support.betafpv.com/hc/article_attachments/59863253804825",
+        fw_fixture("betafpv-m75-o4-elrs-20260625.txt"),
+    );
+    b.core
+        .profile_save("Meteor75 Pro II", &Default::default(), None)
+        .unwrap();
+    let fc = Device {
+        id: "fc-0000000000000001".into(),
+        kind: DeviceKind::Fc,
+        name: "Meteor".into(),
+        aircraft: Some("Meteor75 Pro II".into()),
+        identity: Identity {
+            board: Some("BETAFPVG473".into()),
+            firmware: Some("Betaflight".into()),
+            version: Some("2025.12.5-alpha".into()),
+            build: Some("Jun 25 2026 03:24:50 eb2bb5a".into()),
+            manufacturer_id: Some("BEFH".into()),
+            ..Identity::default()
+        },
+        last_seen: None,
+        last_backup: None,
+        last_space: None,
+        aliases: Vec::new(),
+        dfu_serial: None,
+        radio_aircraft: None,
+        firmware_channel: None,
+    };
+    b.core.gear_store().save_device(&fc).unwrap();
+    let v = b
+        .core
+        .gear_firmware(&FirmwareParams { check: Some(true) })
+        .unwrap();
+    assert!(v.latest.errors.is_empty(), "{:?}", v.latest.errors);
+    let row = v.devices.iter().find(|d| d.device == fc.id).unwrap();
+    assert_eq!(row.channel, Some(FirmwareChannel::Vendor));
+    assert_eq!(row.channel_reason, Some(ChannelReason::LocalBuild));
+    assert_eq!(row.state, FirmwareState::UpToDate);
+    assert_eq!(row.latest.as_deref(), Some("2025.12.5-alpha"));
+    assert_eq!(row.official.as_deref(), Some("2026.6.0"));
+    assert!(!row.flashable);
+
+    // The person picks official Betaflight through the API: the release decides.
+    b.core
+        .dispatch(
+            "gear_device_save",
+            json!({"id": fc.id, "firmware_channel": "official"}),
+        )
+        .unwrap();
+    let saved = b.core.gear_store().device(&fc.id).unwrap().unwrap();
+    assert_eq!(saved.firmware_channel, Some(FirmwareChannel::Official));
+    let v = b
+        .core
+        .gear_firmware(&FirmwareParams { check: Some(false) })
+        .unwrap();
+    let row = v.devices.iter().find(|d| d.device == fc.id).unwrap();
+    assert_eq!(row.channel, Some(FirmwareChannel::Official));
+    assert_eq!(row.state, FirmwareState::Update);
+    assert_eq!(row.latest.as_deref(), Some("2026.6.0"));
+    // `auto` clears the choice; a radio has no channel; a bad value refuses.
+    b.core
+        .dispatch(
+            "gear_device_save",
+            json!({"id": fc.id, "firmware_channel": "auto"}),
+        )
+        .unwrap();
+    assert_eq!(
+        b.core
+            .gear_store()
+            .device(&fc.id)
+            .unwrap()
+            .unwrap()
+            .firmware_channel,
+        None
+    );
+    assert!(b
+        .core
+        .dispatch(
+            "gear_device_save",
+            json!({"id": b.radio, "firmware_channel": "official"}),
+        )
+        .is_err());
+    assert!(b
+        .core
+        .dispatch(
+            "gear_device_save",
+            json!({"id": fc.id, "firmware_channel": "sometimes"}),
+        )
+        .is_err());
 }

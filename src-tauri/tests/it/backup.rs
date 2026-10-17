@@ -542,6 +542,7 @@ fn radio_device(id: &str) -> Device {
         aliases: Vec::new(),
         dfu_serial: None,
         radio_aircraft: None,
+        firmware_channel: None,
     }
 }
 

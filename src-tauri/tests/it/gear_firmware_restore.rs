@@ -108,6 +108,7 @@ fn bench_with(hooks: Arc<dyn Hooks>, flasher: Option<Arc<FlashRecorder>>) -> Ben
         aliases: Vec::new(),
         dfu_serial: None,
         radio_aircraft: None,
+        firmware_channel: None,
     };
     core.gear_store().save_device(&radio).unwrap();
     Bench {
@@ -573,6 +574,7 @@ fn under_cargo_a_restore_reaches_only_the_fake_usb_path() {
         aliases: Vec::new(),
         dfu_serial: None,
         radio_aircraft: None,
+        firmware_channel: None,
     };
     b.core.gear_store().save_device(&radio).unwrap();
     let c = save(&b, "2026-10-01T12:00:00Z", &image(7, "pocket", "2.12.4"));

@@ -201,6 +201,7 @@ impl Store {
             aliases: Vec::new(),
             dfu_serial: None,
             radio_aircraft: None,
+            firmware_channel: None,
         });
         d.last_seen = Some(now);
         merge_identity(&mut d.identity, identity);
@@ -333,6 +334,7 @@ mod tests {
             aliases: Vec::new(),
             dfu_serial: None,
             radio_aircraft: None,
+            firmware_channel: None,
         }
     }
 

@@ -17,7 +17,7 @@
 use super::check::{FirmwareState, FirmwareStatus};
 use crate::gear::compat::{self, Product};
 use crate::gear::dfu::FLASH_BASE;
-use crate::gear::model::DeviceKind;
+use crate::gear::model::{DeviceKind, FirmwareChannel};
 use crate::gear::model::{Refusal, RefusalCode};
 use anyhow::{anyhow, bail, Context, Result};
 use sha2::{Digest, Sha256};
@@ -93,7 +93,11 @@ pub fn adjust_statuses(rows: &mut [FirmwareStatus], preview: bool) {
     if !preview {
         return;
     }
-    for r in rows.iter_mut().filter(|r| r.kind == DeviceKind::Fc) {
+    // QuadCam flashes official Betaflight only: an FC in its maker's channel is not offered.
+    for r in rows
+        .iter_mut()
+        .filter(|r| r.kind == DeviceKind::Fc && r.channel != Some(FirmwareChannel::Vendor))
+    {
         let verdict = match (&r.latest, r.board.as_deref()) {
             (Some(latest), Some(board)) => match target_for(board) {
                 None => Err(format!("Board {board} cannot be flashed by QuadCam yet.")),
@@ -639,6 +643,13 @@ mod tests {
             state: FirmwareState::Update,
             flashable: false,
             note: Some("QuadCam checks Betaflight versions. It does not flash them.".into()),
+            channel: Some(FirmwareChannel::Official),
+            channel_reason: None,
+            vendor: None,
+            installed_date: None,
+            vendor_file: None,
+            official: Some(latest.into()),
+            channel_note: None,
         }
     }
 
@@ -663,6 +674,12 @@ mod tests {
             on[1].note
         );
         assert!(!on[2].flashable);
+        // An FC in its maker's channel is never offered the official flash.
+        let mut vendor = vec![fc_row("BETAFPVG473_V2", "2025.12.5", "2026.6.0")];
+        vendor[0].channel = Some(FirmwareChannel::Vendor);
+        vendor[0].note = None;
+        adjust_statuses(&mut vendor, true);
+        assert!(!vendor[0].flashable && vendor[0].note.is_none());
         assert_eq!(
             on[2].note.as_deref(),
             Some("QuadCam will not flash it: Board STM32F411 cannot be flashed by QuadCam yet.")
