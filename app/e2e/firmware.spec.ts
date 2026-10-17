@@ -3,7 +3,7 @@
 // DFU guard, and the Splash segment from a PNG to the flash plan. axe on the page.
 import AxeBuilder from "@axe-core/playwright";
 import type { Page } from "@playwright/test";
-import { expect, test, type AppFixture } from "./fixtures";
+import { axeSchemes, expect, test, type AppFixture } from "./fixtures";
 
 const RADIO_ID = "radio-1f2e3d4c5b6a7980";
 const side = (page: Page) => page.getByRole("navigation", { name: "Library" });
@@ -171,3 +171,61 @@ test("the splash segment previews a PNG, refuses a colour radio, and plans a fla
   expect(click).toContain('"threshold":200');
   expect(click).toContain('"invert":true');
 });
+
+const FC_ID = "fc-0a1b2c3d4e5f6071";
+/** The saved FC becomes a Meteor75 Pro II O4 on BetaFPV's own build. */
+const makeMeteor = (app: AppFixture) =>
+  app.core(
+    `c => { const d = c.gear.devices.find(d => d.id === "${FC_ID}"); d.aircraft = "Meteor75 Pro II"; d.identity = { board: "BETAFPVG473", firmware: "Betaflight", version: "2025.12.5-alpha", build: "Jun 25 2026 03:24:50 eb2bb5a", manufacturer_id: "BEFH" }; c.emit("gear-changed"); }`,
+  );
+
+async function openVendorRow(app: AppFixture, page: Page) {
+  await openFirmware(app, page);
+  await makeMeteor(app);
+  await page.getByRole("button", { name: "Check for updates" }).click();
+  await expect(page.getByRole("status").filter({ hasText: /^Checked / })).toBeVisible();
+  return page.getByRole("table", { name: "Firmware" }).getByRole("row", { name: /Whoop FC/ });
+}
+
+test("an FC on its maker's build is checked against the maker's file", async ({ app, page }) => {
+  const fc = await openVendorRow(app, page);
+  await expect(fc).toContainText("2025.12.5-alpha (BetaFPV, Jun 25 2026)");
+  await expect(fc).toContainText("Up to date");
+  await expect(fc).toContainText("Official Betaflight 2026.6.0 is not BetaFPV's build for this quad.");
+  await expect(fc).not.toContainText("→");
+  await expect(page.locator("[data-component=page-header]")).toContainText("1 update");
+
+  // The device page sets the source: official Betaflight, then the release decides.
+  await side(page).getByRole("button", { name: /^Devices/ }).click();
+  await page.getByRole("table", { name: "Devices" }).getByRole("button", { name: "Whoop FC", exact: true }).click();
+  const source = page.getByRole("combobox", { name: "Firmware source" });
+  await expect(source).toHaveValue("");
+  await expect(source.locator("option:checked")).toHaveText("Automatic (BetaFPV)");
+  await source.selectOption("official");
+  await expect.poll(async () => (await app.method("gear_device_save")).at(-1)).toMatchObject({ id: FC_ID, firmware_channel: "official" });
+  await expect(source).toHaveValue("official");
+
+  await side(page).getByRole("button", { name: /^Firmware/ }).click();
+  await expect(fc).toContainText("2025.12.5-alpha → 2026.6.0");
+  await expect(fc).toContainText("Update available");
+  await expect(fc).not.toContainText("BetaFPV's build");
+});
+
+for (const scheme of axeSchemes) {
+  test.describe(`${scheme} theme`, () => {
+    test.use({ colorScheme: scheme });
+    test("the maker's row and the firmware source pass axe", async ({ app, page }) => {
+      const fc = await openVendorRow(app, page);
+      await expect(fc).toContainText("BetaFPV");
+      const axe = async () => {
+        const r = await new AxeBuilder({ page }).withTags(["wcag2a", "wcag2aa", "wcag21aa"]).analyze();
+        expect(r.violations.map((v) => `${v.id}: ${v.nodes.map((n) => n.target.join(" ") + " " + n.failureSummary).join(", ")}`)).toEqual([]);
+      };
+      await axe();
+      await side(page).getByRole("button", { name: /^Devices/ }).click();
+      await page.getByRole("table", { name: "Devices" }).getByRole("button", { name: "Whoop FC", exact: true }).click();
+      await expect(page.getByRole("combobox", { name: "Firmware source" })).toBeVisible();
+      await axe();
+    });
+  });
+}

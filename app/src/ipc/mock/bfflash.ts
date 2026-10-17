@@ -22,7 +22,7 @@ export function compat(board: string | null, version: string | null): { code: st
 export function adjust(rows: FirmwareStatus[], preview: boolean): FirmwareStatus[] {
   if (!preview) return rows;
   return rows.map((r) => {
-    if (r.kind !== "fc") return r;
+    if (r.kind !== "fc" || r.channel === "vendor") return r;
     const bad = r.latest ? compat(r.board ?? null, r.latest) : { code: "unknown_version", reason: "The newest release is not known." };
     if (!bad) return { ...r, flashable: true, note: r.state === "update" ? null : r.note };
     return { ...r, flashable: false, note: r.state === "update" ? `QuadCam will not flash it: ${bad.reason}` : r.note };

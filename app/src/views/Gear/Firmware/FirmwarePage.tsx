@@ -2,7 +2,8 @@
 // newest release (updates first), Flash… for an EdgeTX radio QuadCam has proven, the
 // ExpressLRS section, Read firmware… (a sheet), and the saved firmware copies with Restore…
 // behind a disclosure. A check reads the network only when Check for updates is selected,
-// or when firmwareCheck is daily.
+// or when firmwareCheck is daily. An FC in its maker's channel shows the maker's build and
+// newest file, with official Betaflight as an information line.
 import { useEffect, useState } from "react";
 import { useStore } from "../../../store";
 import { Banner } from "../../../components/Banner";
@@ -26,6 +27,31 @@ const STATE_LABEL: Record<FirmwareStatus["state"], string> = {
   unknown: "Unknown",
 };
 const STATE_TONE: Record<FirmwareStatus["state"], StatusTone> = { up_to_date: "ok", update: "warn", unknown: "idle" };
+
+/** The maker an FC's firmware comes from, when it is in the maker's channel. */
+export const vendorOf = (d: FirmwareStatus) => (d.channel === "vendor" ? (d.vendor ?? null) : null);
+
+/** The installed version, with the maker and build day for a maker's build: `2025.12.5-alpha (BetaFPV, Jun 25 2026)`. */
+export function installedLabel(d: FirmwareStatus) {
+  const vendor = vendorOf(d);
+  if (!d.installed) return "—";
+  if (!vendor) return d.installed;
+  return `${d.installed} (${[vendor, d.installed_date].filter(Boolean).join(", ")})`;
+}
+
+const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+/** `2026-06-25` as Betaflight prints a build day: `Jun 25 2026`. */
+export function buildDay(iso: string | null | undefined) {
+  const m = iso?.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  return m ? `${MONTHS[Number(m[2]) - 1]} ${Number(m[3])} ${m[1]}` : null;
+}
+
+/** The newest version, with the maker's build day for a maker's file. */
+export function newestLabel(d: FirmwareStatus) {
+  const vendor = vendorOf(d);
+  const day = buildDay(d.vendor_file?.build?.date);
+  return vendor && day ? `${d.latest} (${vendor}, ${day})` : (d.latest ?? "—");
+}
 
 export function FirmwarePage() {
   const view = useStore((s) => s.firmware);
@@ -67,8 +93,8 @@ export function FirmwarePage() {
       numeric: true,
       cell: (d) => (
         <span className="selectable">
-          {d.installed ?? "—"}
-          {checked && d.latest && d.latest !== d.installed && <span className={d.state === "update" ? styles.newer : undefined}> → {d.latest}</span>}
+          {installedLabel(d)}
+          {checked && d.latest && (d.latest !== d.installed || d.state === "update") && <span className={d.state === "update" ? styles.newer : undefined}> → {newestLabel(d)}</span>}
         </span>
       ),
     },
@@ -79,6 +105,12 @@ export function FirmwarePage() {
         <>
           <StatusDot tone={checked ? STATE_TONE[d.state] : "idle"}>{checked ? STATE_LABEL[d.state] : "Not checked"}</StatusDot>
           {d.note && <span className={styles.note}>{d.note}</span>}
+          {d.channel_note && <span className={styles.note}>{d.channel_note}</span>}
+          {checked && vendorOf(d) && d.official && (
+            <span className={styles.note}>
+              Official Betaflight {d.official} is not {vendorOf(d)}'s build for this quad.
+            </span>
+          )}
         </>
       ),
     },

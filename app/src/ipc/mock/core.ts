@@ -411,7 +411,7 @@ export class MockCore {
       case "gear_devices":
         return this.gear.devices.map((d) => gear.withAircraft(d, this.profiles(), false));
       case "gear_device_save":
-        return this.deviceSave(String(p.id), (p.name as string | null) ?? null, (p.aircraft as string | null) ?? null);
+        return this.deviceSave(String(p.id), (p.name as string | null) ?? null, (p.aircraft as string | null) ?? null, (p.firmware_channel as string | null) ?? null);
       case "gear_device_forget": {
         const d = this.gear.devices.find((x) => x.id === p.id);
         if (!d) throw `No device ${p.id}.`;
@@ -867,7 +867,7 @@ export class MockCore {
 
   /** `Core::gear_device_save`: a new device must be plugged in. A radio's aircraft are the
    *  profiles that name it. */
-  deviceSave(id: string, name: string | null, aircraft: string | null) {
+  deviceSave(id: string, name: string | null, aircraft: string | null, channel: string | null = null) {
     let d = this.gear.devices.find((x) => x.id === id);
     const c = this.gear.connected.find((x) => x.id === id);
     if (!d) {
@@ -880,6 +880,11 @@ export class MockCore {
     else if (aircraft != null) {
       if (aircraft && !this.profiles().some((p) => p.name === aircraft)) throw `No aircraft profile named ${aircraft}.`;
       d.aircraft = aircraft || null;
+    }
+    if (channel != null) {
+      if (!["vendor", "official", "auto", ""].includes(channel)) throw `firmware_channel "${channel}": use vendor, official or auto`;
+      if (d.kind !== "fc") throw "Only an FC has a firmware channel.";
+      d.firmware_channel = channel === "vendor" || channel === "official" ? channel : null;
     }
     this.emit("gear-changed");
     return gear.withAircraft(d, this.profiles(), false);

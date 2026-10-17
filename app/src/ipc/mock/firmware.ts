@@ -2,9 +2,12 @@
 // `gear_flash`): the check reads "the network" only when asked and remembers its answer,
 // the flash plan runs the core's guards on the mock's devices, and a flash keeps the
 // radio's old firmware as a backup. A read saves a copy, and a restore writes one back
-// through the same guards. Written by hand from `core/firmware.rs` and `core/fw_restore.rs`.
+// through the same guards. An FC whose maker QuadCam follows (`bf::boards`) is checked
+// against the maker's newest file (`firmware::vendor`). Written by hand from
+// `core/firmware.rs`, `core/fw_restore.rs` and `gear/firmware/check.rs`.
 import * as bf from "./bfflash";
 import type { ApplyPlan, ApplyReport, Check, Device, FirmwareCopy, FirmwareRead, FirmwareRestoreParams, FirmwareStatus, FirmwareView, FlashParams, FwCopy, SplashParams, SplashPreview } from "../types";
+import type { VendorFile } from "../../bindings";
 
 export interface MockFirmware {
   /** What the releases say now. */
@@ -34,6 +37,32 @@ export interface MockFirmware {
   damaged: string[];
   /** Copies restored, for specs. */
   restored: string[];
+  /** Each maker's newest file per quad, as the maker's feed lists it now. */
+  vendorFiles: Record<string, VendorFile>;
+  /** Cloud build keys and the day the build service says each was built. */
+  builds: Record<string, string>;
+}
+
+/** `bf::boards::VENDOR_SOURCES`: board, a word the aircraft's name holds, the maker and quad. */
+const VENDOR_ROWS = [
+  { board: "BETAFPVG473", aircraft: "meteor75", vendor: "BetaFPV", product: "Meteor75 Pro II O4" },
+  { board: "BETAFPVG473_V2", aircraft: "meteor75", vendor: "BetaFPV", product: "Meteor75 Pro II" },
+  { board: "BETAFPVG473_V2", aircraft: "air65", vendor: "BetaFPV", product: "Air65 II" },
+];
+const squash = (s: string) => s.toLowerCase().replace(/[^a-z0-9]/g, "");
+const vendorRow = (d: Device) => {
+  const board = idOf(d).board?.toLowerCase();
+  const names = [d.aircraft ?? ""].map(squash);
+  return d.kind === "fc" && d.aircraft ? VENDOR_ROWS.find((r) => r.board.toLowerCase() === board && names.some((n) => n.includes(r.aircraft))) : undefined;
+};
+/** `vendor::BuildId::of_identity`: the day and revision in an FC's build field. */
+function fcBuild(d: Device) {
+  const b = idOf(d).build ?? "";
+  const m = b.match(/([A-Z][a-z]{2}) +(\d{1,2}) (\d{4})/);
+  const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+  const date = m ? `${m[3]}-${String(months.indexOf(m[1]) + 1).padStart(2, "0")}-${m[2].padStart(2, "0")}` : null;
+  const rev = b.split(/\s+/).pop() ?? null;
+  return { date, rev, label: m ? `${m[1]} ${Number(m[2])} ${m[3]}` : null };
 }
 
 export const freshFirmware = (): MockFirmware => ({
@@ -51,6 +80,21 @@ export const freshFirmware = (): MockFirmware => ({
   current: "7d1c0f5e".repeat(8),
   damaged: [],
   restored: [],
+  vendorFiles: {
+    "Meteor75 Pro II O4": {
+      name: "M75 Pro II O4_GF 1811_ELRS_2025_12_4 20260625.txt",
+      url: "https://support.betafpv.com/hc/article_attachments/59863253804825",
+      date: "2026-06-25",
+      build: { version: "2025.12.5-alpha", date: "2026-06-25", time: "03:24:50", rev: "eb2bb5a33" },
+    },
+    "Air65 II": {
+      name: "A65 II F_0702_Freestyle_GF 1219S_2026_6_0 20260515.txt",
+      url: "https://support.betafpv.com/hc/article_attachments/58300171193113",
+      date: "2026-05-15",
+      build: { version: "2026.6.0-alpha", date: "2026-05-15", time: "06:14:55", rev: "e92c10887" },
+    },
+  },
+  builds: {},
 });
 
 const idOf = (d: Device) => d.identity ?? {};
@@ -101,9 +145,44 @@ export function view(st: MockFirmware, devices: Device[], check: boolean | null,
       if (!r) flashable = true;
       else if (state === "update") note = `QuadCam will not flash it: ${r.reason}`;
     } else if (state === "update") note = `QuadCam checks ${product} versions. It does not flash them.`;
-    rows.push({ device: d.id, kind: d.kind, name: d.name || `Unnamed ${d.kind === "radio" ? "Radio" : d.kind === "fc" ? "FC" : "ELRS"}`, product, board: idOf(d).board ?? null, installed, latest: newest, state, flashable, note });
+    const row: FirmwareStatus = { device: d.id, kind: d.kind, name: d.name || `Unnamed ${d.kind === "radio" ? "Radio" : d.kind === "fc" ? "FC" : "ELRS"}`, product, board: idOf(d).board ?? null, installed, latest: newest, state, flashable, note };
+    if (d.kind === "fc") vendorRowOf(st, d, row, !!latest.checked_at);
+    rows.push(row);
   }
   return { devices: bf.adjust(rows, bfPreview), latest: structuredClone(latest), mode: st.mode };
+}
+
+/** `check::statuses_with` for one FC: its channel, and in the maker's channel the maker's
+ *  newest file in place of official Betaflight. */
+function vendorRowOf(st: MockFirmware, d: Device, row: FirmwareStatus, checked: boolean) {
+  const src = vendorRow(d);
+  const own = fcBuild(d);
+  const key = idOf(d).build_key || null;
+  row.official = st.seen.betaflight ?? null;
+  row.vendor = src?.vendor ?? null;
+  row.channel = "official";
+  row.channel_reason = "no_source";
+  if (!src) return;
+  const file = checked ? st.vendorFiles[src.product] : undefined;
+  const chosen = d.firmware_channel ?? null;
+  const fileDays = file ? [file.date, file.build?.date] : [];
+  if (chosen) [row.channel, row.channel_reason] = [chosen, "chosen"];
+  else if (!key) [row.channel, row.channel_reason] = ["vendor", "local_build"];
+  else if (!file || !st.builds[key]) [row.channel, row.channel_reason] = ["vendor", "not_checked"];
+  else if (fileDays.includes(st.builds[key])) [row.channel, row.channel_reason] = ["vendor", "makers_build"];
+  else [row.channel, row.channel_reason, row.channel_note] = ["official", "cloud_build", `This FC runs a Betaflight cloud build, not ${src.vendor}'s file.`];
+  if (row.channel !== "vendor") return;
+  row.installed_date = own.label;
+  row.flashable = false;
+  row.vendor_file = file ?? null;
+  row.latest = file?.build?.version ?? null;
+  const fb = file?.build;
+  if (!row.installed) [row.state, row.note] = ["unknown", "The device reported no version."];
+  else if (!fb) [row.state, row.note] = ["unknown", null];
+  else if (fb.version === row.installed && own.rev && fb.rev && (fb.rev.startsWith(own.rev) || own.rev.startsWith(fb.rev))) [row.state, row.note] = ["up_to_date", null];
+  else if (own.date && fb.date && own.date < fb.date) [row.state, row.note] = ["update", `QuadCam checks ${src.vendor} builds. It does not flash them.`];
+  else if (own.date && fb.date && own.date > fb.date) [row.state, row.note] = ["up_to_date", `This build is newer than ${src.vendor}'s newest file.`];
+  else [row.state, row.note] = ["unknown", `QuadCam cannot compare this build with ${src.vendor}'s file.`];
 }
 
 // A 1 x 1 white PNG: the mock does not draw pictures.

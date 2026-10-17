@@ -96,7 +96,8 @@ export const api = {
   // Gear
   gearStatus: () => ok(commands.gearStatus()),
   gearDevices: () => ok(commands.gearDevices()),
-  gearDeviceSave: (id: string, name: string | null, aircraft: string | null) => ok(commands.gearDeviceSave({ id, name, aircraft })),
+  gearDeviceSave: (id: string, name: string | null, aircraft: string | null, firmwareChannel: "vendor" | "official" | "auto" | null = null) =>
+    ok(commands.gearDeviceSave(firmwareChannel ? { id, name, aircraft, firmware_channel: firmwareChannel } : { id, name, aircraft })),
   /** Saves an aircraft profile's gear (its FC, radio, EdgeTX model): a radio's aircraft list. */
   profileGear: (name: string, gear: ProfileGear) => ok(commands.profileSave({ name, fields: { gear }, new_name: null })),
   gearDeviceForget: (id: string) => ok(commands.gearDeviceForget({ id })),

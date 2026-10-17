@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { useStore } from "../../store";
-import { api } from "../../ipc/api";
+import { api, errText } from "../../ipc/api";
+import { toast } from "../../components/toastStore";
 import type { BlackboxEntry } from "../../ipc/types";
 import { Button } from "../../components/Button";
 import { FactList, type Fact } from "../../components/dash/FactList";
@@ -69,6 +70,8 @@ export function Overview({ d }: { d: DeviceRef }) {
         </>
       ),
     });
+  const source = useFirmwareSource(d);
+  if (source) facts.push({ label: "Firmware source", value: source });
   if (d.device?.last_seen) facts.push({ label: "Last seen", value: fmtWhen(d.device.last_seen) });
   return (
     <div className={styles.overview}>
@@ -146,6 +149,37 @@ function Tiles({ d }: { d: DeviceRef }) {
     tiles = [fwTile, backupTile, stagedTile];
   }
   return <StatRow label="Summary">{tiles}</StatRow>;
+}
+
+/** An FC's firmware source picker, shown when QuadCam knows its maker's builds: the maker,
+ *  official Betaflight, or what QuadCam detects. */
+function useFirmwareSource(d: DeviceRef) {
+  const firmware = useStore((s) => s.firmware);
+  const load = useStore((s) => s.loadFirmware);
+  const id = d.device?.id ?? null;
+  const isFc = d.kind === "fc" && !!id;
+  useEffect(() => {
+    if (isFc && !firmware) void load(false);
+  }, [isFc, firmware, load]);
+  const fw = firmware?.devices.find((f) => f.device === id);
+  if (!isFc || !fw?.vendor) return null;
+  const chosen = d.device?.firmware_channel ?? "";
+  const label = (c: string | null | undefined) => (c === "vendor" ? fw.vendor : "Official Betaflight");
+  const pick = async (v: string) => {
+    try {
+      await api.gearDeviceSave(id!, null, null, (v || "auto") as "vendor" | "official" | "auto");
+      await load(false);
+    } catch (e) {
+      toast(errText(e), true);
+    }
+  };
+  return (
+    <select aria-label="Firmware source" value={chosen} onChange={(e) => void pick(e.target.value)}>
+      <option value="">{chosen ? "Automatic" : `Automatic (${label(fw.channel)})`}</option>
+      <option value="vendor">{fw.vendor}</option>
+      <option value="official">Official Betaflight</option>
+    </select>
+  );
 }
 
 /** The FC's stored blackbox pulls, newest first; null until they load. */
