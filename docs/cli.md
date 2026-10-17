@@ -165,6 +165,7 @@ A value is JSON or plain text.
 quadcam-cli --json gear status                       # gear folder, Gear settings, what is plugged in
 quadcam-cli --json gear devices                      # saved devices (`devices list` is the same)
 quadcam-cli --json gear devices save <id> --name "Bench radio" --aircraft Whoop   # a radio: adds Whoop to its aircraft
+quadcam-cli --json gear devices save <fc> --firmware-channel vendor|official|auto   # an FC's firmware source; auto follows what QuadCam detects
 quadcam-cli --json gear devices forget <id>
 quadcam-cli --json gear fc identify [--port /dev/cu.usbmodemX]   # MSP identity, no reboot
 quadcam-cli --json gear fc read [--cmd "get osd_ah_pos"]... [--out STEM]   # the FC reboots after
@@ -214,7 +215,7 @@ quadcam-cli --json gear rates FILE [FILE ...]|DEVICE [--backup ID] [--text]   # 
 quadcam-cli --json gear sims [FILE ...|DEVICE] [--backup ID] [--rate-profile N] [--text]   # sims' rates, against the quad
 quadcam-cli --json gear sims SIM --restore [--backup ID] [--digest D --yes]   # put a sim's file back from a backup (the plan without --digest)
 quadcam-cli --json gear sims FILE|DEVICE [--rate-profile N] --sync --to SIM[:PROFILE][@FILE] [--to ...] [--digest D --yes]   # write the quad's rates into sim profiles
-quadcam-cli --json gear firmware [--check]                    # each device's firmware against the newest release; --check reads the network
+quadcam-cli --json gear firmware [--check]                    # each device's firmware against the newest release (an FC on its maker's build: the maker's newest file); --check reads the network
 quadcam-cli --json gear elrs [status [--check]]               # ExpressLRS devices read so far (preview: settings set elrs_preview=true)
 quadcam-cli --json gear elrs read HOST [--port P]             # the module behind a saved radio (stops its pulses) or the receiver behind a saved FC
 quadcam-cli --json gear elrs set DEVICE OPTION=VALUE [...]    # stage ELRS options (packet_rate, telemetry_ratio, power, dynamic_power, switch_mode, model_match); apply with gear apply

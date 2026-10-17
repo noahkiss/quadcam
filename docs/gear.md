@@ -127,7 +127,8 @@ serial is linked to a saved radio once and kept in that radio's record:
 
 QuadCam talks to Betaflight over USB in two ways:
 
-- **MSP** (identify): board, firmware, version, the device id. No reboot.
+- **MSP** (identify): board, firmware, version, maker, the cloud build key, the device id. No
+  reboot.
 - **The CLI** (read): `version`, `status`, `diff all`, `dump all`, `get NAME`. When the read
   ends, QuadCam leaves the CLI and the FC reboots, as it does in the Betaflight Configurator.
 
@@ -1506,6 +1507,39 @@ last checked and how many updates there are:
 - **Flash 2026.6.0…** appears for a Betaflight FC with the preview on, on a board QuadCam has a
   target for, when it has proven that release on the board (see
   [Flash a Betaflight FC](#flash-a-betaflight-fc-preview)).
+
+### The maker's builds
+
+Some makers ship their own Betaflight build for a quad: a Betaflight build with their settings
+in it. For such a quad, the maker's newest file is the update to follow, not the newest
+Betaflight release. QuadCam knows these quads:
+
+| Maker | Quad | Board | Where the files are |
+|---|---|---|---|
+| BetaFPV | Meteor75 Pro II O4 | `BETAFPVG473` | BetaFPV's support article for the quad |
+| BetaFPV | Meteor75 Pro II (analog) | `BETAFPVG473_V2` | BetaFPV's support article for the quad |
+| BetaFPV | Air65 II (Freestyle files; BMI270 or ICM/LSM gyro) | `BETAFPVG473_V2` | BetaFPV's support article for the quad |
+
+- QuadCam finds the row by the FC's board and maker, and by the aircraft the FC is linked to.
+  Link the FC to its aircraft profile (**Edit…** on the device), and give the profile a name
+  or aircraft that says the quad, such as "Meteor75 Pro II" or "Air65 II".
+- **Firmware source.** QuadCam decides whether the FC runs the maker's build:
+  - An FC without a Betaflight cloud build key runs a build the maker made itself: the maker's.
+  - An FC with a key runs the maker's build when the key's build day is one of the maker's file
+    days, or its version line matches one of the maker's files.
+  - Otherwise it runs a Betaflight build of its own, and the row says so.
+- The FC's page has a **Firmware source** pop-up in its Details: **Automatic** (what QuadCam
+  decided), the maker (for example **BetaFPV**), or **Official Betaflight**. The firmware
+  check follows it.
+- On the maker's source, the row shows the installed build with the maker and build day, for
+  example `2025.12.5-alpha (BetaFPV, Jun 25 2026)`, and its state against the maker's newest
+  file. The newest official Betaflight shows under it as information only.
+- QuadCam compares builds by version, git revision and build day, never by the version in a
+  file name: a BetaFPV file named `2025_12_4` holds a `2025.12.5-alpha` build.
+- QuadCam does not flash a maker's build. Flash it with the Betaflight Configurator (**Load
+  Firmware [Local]**). A flash of official Betaflight replaces the maker's settings.
+- A check reads the maker's file list and each new file's version line (a few KB), and asks
+  the Betaflight build service once per build key.
 
 ### Read the firmware
 

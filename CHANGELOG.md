@@ -16,6 +16,7 @@ User-facing changes in each release, newest first. Release notes on
 - **Places on the Map page.** The Map page lists your places beside the map, with **Add place…** and a menu per place. Settings > Places keeps the place list only while the Map page is off.
 - **Settings.** The sheet is up to 1200 px wide and the Gear section uses two columns. **When a device is plugged in** is a pop-up per device kind with a check mark on each step. In a narrow window the sheet fills it and the sections are a pop-up.
 - **Firmware.** **Read firmware…** opens a sheet; saved firmware copies fold; the ExpressLRS section folds and remembers it.
+- **The maker's builds.** An FC on its maker's own Betaflight build (BetaFPV's Meteor75 Pro II and Air65 II) is checked against the maker's newest file, not the newest Betaflight release. The row shows the build with the maker and day, such as `2025.12.5-alpha (BetaFPV, Jun 25 2026)`, and official Betaflight as information. The FC's page has a **Firmware source** pop-up (Automatic, the maker, Official Betaflight); the CLI takes `gear devices save --firmware-channel`, MCP `device_save` `firmware_channel`. QuadCam now reads an FC's maker code, cloud build key and gyro.
 
 ## 0.21.6 (2026-10-16)
 

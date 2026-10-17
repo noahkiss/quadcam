@@ -1,4 +1,4 @@
-//! The vendor channel (design 6.4): an FC that runs its maker's own Betaflight build is
+//! The vendor channel (`docs/gear.md`, "The maker's builds"): an FC that runs its maker's own Betaflight build is
 //! checked against the maker's newest file, not against official Betaflight.
 //!
 //! - **Source.** `bf::boards::vendor_source` names the maker's feed for an FC. BetaFPV
