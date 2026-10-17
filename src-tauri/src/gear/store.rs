@@ -215,11 +215,18 @@ pub fn merge_identity(into: &mut super::model::Identity, from: &super::model::Id
             a.clone_from(b);
         }
     };
+    // A new version is a new flash: a build key read before it no longer holds.
+    if from.version.is_some() && from.version != into.version {
+        into.build_key = None;
+    }
     set(&mut into.board, &from.board);
     set(&mut into.firmware, &from.firmware);
     set(&mut into.version, &from.version);
     set(&mut into.build, &from.build);
     set(&mut into.target, &from.target);
+    set(&mut into.manufacturer_id, &from.manufacturer_id);
+    set(&mut into.build_key, &from.build_key);
+    set(&mut into.gyro, &from.gyro);
 }
 
 fn devices_mut(v: &mut Values) -> Result<&mut Vec<Value>> {
@@ -432,6 +439,28 @@ mod tests {
         assert_eq!(y.name, "Bench radio");
         assert_eq!(y.identity.board.as_deref(), Some("pocket"));
         assert_eq!(y.identity.version.as_deref(), Some("2.12.5"));
+    }
+
+    #[test]
+    fn a_new_version_drops_the_old_build_key() {
+        let mut id = Identity {
+            version: Some("2025.12.5-alpha".into()),
+            build_key: Some("00112233445566778899aabbccddeeff".into()),
+            ..Default::default()
+        };
+        // A read without a key (a dump) keeps it while the version stays.
+        let same = Identity {
+            version: Some("2025.12.5-alpha".into()),
+            ..Default::default()
+        };
+        merge_identity(&mut id, &same);
+        assert!(id.build_key().is_some());
+        let newer = Identity {
+            version: Some("2026.6.2".into()),
+            ..Default::default()
+        };
+        merge_identity(&mut id, &newer);
+        assert_eq!(id.build_key, None);
     }
 
     #[test]

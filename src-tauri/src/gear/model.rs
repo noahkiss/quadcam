@@ -83,6 +83,23 @@ pub struct Identity {
     /// The flash target, for firmware that names one (ExpressLRS).
     #[serde(default)]
     pub target: Option<String>,
+    /// A Betaflight FC's maker code (`BEFH`), from MSP or `manufacturer_id`.
+    #[serde(default)]
+    pub manufacturer_id: Option<String>,
+    /// A Betaflight cloud build's key (32 hex), from MSP or the CLI `status`. Empty when the
+    /// FC said it has none (a local build); None when it was not asked.
+    #[serde(default)]
+    pub build_key: Option<String>,
+    /// The FC's gyro (`BMI270`), from the CLI `status`.
+    #[serde(default)]
+    pub gyro: Option<String>,
+}
+
+impl Identity {
+    /// The cloud build key, when the FC reported one.
+    pub fn build_key(&self) -> Option<&str> {
+        self.build_key.as_deref().filter(|k| !k.trim().is_empty())
+    }
 }
 
 /// A device QuadCam knows, kept in `gear.json`.

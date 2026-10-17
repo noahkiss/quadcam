@@ -27,6 +27,10 @@ pub const MSP_FC_VERSION: u16 = 3;
 pub const MSP_BOARD_INFO: u16 = 4;
 pub const MSP_BUILD_INFO: u16 = 5;
 pub const MSP_UID: u16 = 160;
+/// `MSP2_GET_TEXT`: one text value, picked by the request's type byte.
+pub const MSP2_GET_TEXT: u16 = 0x3006;
+/// The `MSP2_GET_TEXT` type of the cloud build key.
+pub const MSP2TEXT_BUILDKEY: u8 = 5;
 /// Battery voltage, mAh, RSSI, current.
 pub const MSP_ANALOG: u16 = 110;
 /// The channel values the FC receives, µs, CH1 first (the switch map's live view).
@@ -302,6 +306,9 @@ pub struct MspIdentity {
     pub target_name: Option<String>,
     /// Build date, time and git revision.
     pub build: Option<String>,
+    /// The cloud build key. Empty when the FC (API 1.46 or later) has none: a local build.
+    /// None when the FC was not asked or cannot say.
+    pub build_key: Option<String>,
     #[serde(skip)]
     pub uid: Option<String>,
 }
@@ -437,7 +444,36 @@ pub fn read_identity(link: &mut dyn SerialLink, timeout: Duration) -> Result<Msp
     if let Ok(p) = call(link, MSP_UID, timeout) {
         id.uid = parse_uid(&p);
     }
+    let asked = call_with(
+        link,
+        Version::V2,
+        MSP2_GET_TEXT,
+        &[MSP2TEXT_BUILDKEY],
+        timeout,
+    );
+    id.build_key = build_key_of(asked.ok().as_deref(), &id.api);
     Ok(id)
+}
+
+/// The build key from an `MSP2_GET_TEXT` reply (type byte, then a string with a length
+/// byte). The FC answers an error when it has no key, as firmware before API 1.46 does for
+/// any text type, so an error counts as "no key" only from 1.46 on.
+pub fn build_key_of(reply: Option<&[u8]>, api: &str) -> Option<String> {
+    match reply {
+        Some(p) => {
+            let mut r = Rd(p);
+            (r.u8()? == MSP2TEXT_BUILDKEY)
+                .then(|| r.pstr())
+                .flatten()
+                .filter(|k| k.chars().all(|c| c.is_ascii_hexdigit()))
+                .map(|k| k.to_ascii_lowercase())
+        }
+        None => {
+            let mut v = api.split('.').map(|n| n.parse::<u32>().unwrap_or(0));
+            let (major, minor) = (v.next().unwrap_or(0), v.next().unwrap_or(0));
+            ((major, minor) >= (1, 46)).then(String::new)
+        }
+    }
 }
 
 /// The firmware name for a variant code.
@@ -544,5 +580,22 @@ mod tests {
         assert_eq!(parse_analog_volts(&[]), None);
         let uid = [0x01, 0, 0, 0, 0x02, 0, 0, 0, 0xff, 0xee, 0, 0];
         assert_eq!(parse_uid(&uid).unwrap(), "00000001000000020000eeff");
+    }
+
+    #[test]
+    fn the_build_key_reply() {
+        let mut p = vec![MSP2TEXT_BUILDKEY, 32];
+        p.extend_from_slice(b"00112233445566778899AABBCCDDEEFF");
+        assert_eq!(
+            build_key_of(Some(&p), "1.47").as_deref(),
+            Some("00112233445566778899aabbccddeeff")
+        );
+        // An error reply: no key on 1.46 and later, unknown before.
+        assert_eq!(build_key_of(None, "1.47").as_deref(), Some(""));
+        assert_eq!(build_key_of(None, "1.46").as_deref(), Some(""));
+        assert_eq!(build_key_of(None, "1.45"), None);
+        // Another text type, or a value that is not a key.
+        assert_eq!(build_key_of(Some(&[2, 3, b'a', b'b', b'c']), "1.47"), None);
+        assert_eq!(build_key_of(Some(&[5, 3, b'x', b'y', b'z']), "1.47"), None);
     }
 }

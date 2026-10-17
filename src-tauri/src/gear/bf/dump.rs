@@ -298,7 +298,62 @@ impl Config {
             version: Some(v.version.clone()).filter(|f| !f.is_empty()),
             build: v.git.clone(),
             target: v.target.clone(),
+            manufacturer_id: self.manufacturer_id(),
+            build_key: self.build_key(),
+            gyro: self.gyro(),
         }
+    }
+
+    /// `manufacturer_id`, else the `# board: manufacturer_id: X` comment that `version` prints.
+    pub fn manufacturer_id(&self) -> Option<String> {
+        if let Some(m) = self.word("manufacturer_id") {
+            return Some(m.to_string());
+        }
+        self.board_comment("manufacturer_id")
+    }
+
+    fn board_comment(&self, key: &str) -> Option<String> {
+        self.lines.iter().find_map(|l| {
+            let t = l.text.trim().strip_prefix('#')?.trim();
+            let rest = t.strip_prefix("board:")?;
+            rest.split(',').find_map(|kv| {
+                let (k, v) = kv.split_once(':')?;
+                (k.trim() == key)
+                    .then(|| v.trim().to_string())
+                    .filter(|v| !v.is_empty())
+            })
+        })
+    }
+
+    /// The `status` answer's `BUILD KEY: <key> (<release>)`, lowercase. Empty when the text
+    /// holds a `status` answer without one (a local build); None without a `status` answer.
+    pub fn build_key(&self) -> Option<String> {
+        let key = self.lines.iter().find_map(|l| {
+            let k = l
+                .text
+                .trim()
+                .strip_prefix("BUILD KEY:")?
+                .split_whitespace()
+                .next()?;
+            k.chars()
+                .all(|c| c.is_ascii_hexdigit())
+                .then(|| k.to_ascii_lowercase())
+        });
+        let has_status = self.lines.iter().any(|l| {
+            let t = l.text.trim();
+            t.starts_with("CPU:") && t.contains("cycle time")
+        });
+        key.or_else(|| has_status.then(String::new))
+    }
+
+    /// The first gyro the `status` answer names (`GYRO: (1) BMI270 enabled ...`).
+    pub fn gyro(&self) -> Option<String> {
+        self.lines.iter().find_map(|l| {
+            let rest = l.text.trim().strip_prefix("GYRO:")?;
+            rest.split_whitespace()
+                .find(|w| !w.starts_with('('))
+                .map(str::to_string)
+        })
     }
 
     /// The text back, one line each, `\n` endings.
@@ -505,6 +560,34 @@ mod tests {
             "# Betaflight / STM32G47X (G473) 2026.6.0-alpha May 15 2026 / 06:14:55 (e92c10887) MSP API: 1.48\r\n# board: manufacturer_id: BEFH, board_name: BETAFPVG473_V2\r\n",
         );
         assert_eq!(c.board_name().as_deref(), Some("BETAFPVG473_V2"));
+        assert_eq!(c.manufacturer_id().as_deref(), Some("BEFH"));
+        assert_eq!(c.build_key(), None, "no status answer: not asked");
+        assert_eq!(
+            Config::parse(DUMP_G473)
+                .identity()
+                .manufacturer_id
+                .as_deref(),
+            Some("BEFH")
+        );
+    }
+
+    #[test]
+    fn the_status_answer_gives_the_build_key_and_gyro() {
+        let k = "00112233445566778899AABBCCDDEEFF";
+        let status = format!("# status\r\nMCU: STM32G474 CLK=168MHz\r\nGYRO: (1) BMI270 enabled locked dma\r\n\r\nBUILD KEY: {k} (2025.12.4)\r\n\r\nCPU:39%, cycle time: 312, GYRO rate: 3205\r\n");
+        let id = Config::parse(&status).identity();
+        assert_eq!(
+            id.build_key.as_deref(),
+            Some("00112233445566778899aabbccddeeff")
+        );
+        assert_eq!(id.build_key(), Some("00112233445566778899aabbccddeeff"));
+        assert_eq!(id.gyro.as_deref(), Some("BMI270"));
+        // A local build: `status` prints no key.
+        let local =
+            Config::parse("GYRO: (1) ICM42688P enabled\r\nCPU:2%, cycle time: 125\r\n").identity();
+        assert_eq!(local.build_key.as_deref(), Some(""));
+        assert_eq!(local.build_key(), None);
+        assert_eq!(local.gyro.as_deref(), Some("ICM42688P"));
     }
 
     #[test]

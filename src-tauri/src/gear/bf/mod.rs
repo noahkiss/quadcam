@@ -132,6 +132,9 @@ pub fn identify(ports: &dyn Ports, port: &str, timing: Timing) -> Result<FcInfo>
         version: Some(m.version.clone()),
         build: m.build.clone(),
         target: Some(m.board_id.clone()).filter(|b| !b.is_empty()),
+        manufacturer_id: m.manufacturer_id.clone(),
+        build_key: m.build_key.clone(),
+        gyro: None,
     };
     Ok(info(
         port,

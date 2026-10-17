@@ -41,6 +41,8 @@ struct State {
     uid: [u8; 12],
     /// Centivolts on the battery lead; 0 with no battery.
     vbat_cv: u16,
+    /// The cloud build key MSP and `status` report; None for a local build.
+    build_key: Option<String>,
     /// What `MSP_RC` answers: µs per channel.
     rc: Vec<u16>,
     reject: Vec<String>,
@@ -111,6 +113,7 @@ impl FakeFc {
                 reboot_opens: 2,
                 uid: [0x11; 12],
                 vbat_cv: 0,
+                build_key: None,
                 rc: vec![1500, 1500, 988, 1500, 988, 988, 988, 988],
                 reject: Vec::new(),
                 allowed: Vec::new(),
@@ -141,6 +144,11 @@ impl FakeFc {
     /// The MCU id MSP_UID reports and `dump all` prints.
     pub fn with_uid(self, uid: [u8; 12]) -> Self {
         self.st().uid = uid;
+        self
+    }
+    /// A cloud build: MSP2_GET_TEXT and `status` report this key.
+    pub fn with_build_key(self, key: &str) -> Self {
+        self.st().build_key = Some(key.to_string());
         self
     }
     /// Opens refused while the FC reboots.
@@ -501,7 +509,11 @@ impl FakeLink {
             }
             "status" => {
                 let t = format!(
-                    "{echo}MCU G473 Clock=170MHz, Vref=3.30V, Core temp=40degC\r\nVoltage: {} * 0.01V\r\nCPU:2%, cycle time: 125\r\n\r\n# ",
+                    "{echo}MCU G473 Clock=170MHz, Vref=3.30V, Core temp=40degC\r\n{}Voltage: {} * 0.01V\r\nCPU:2%, cycle time: 125\r\n\r\n# ",
+                    s.build_key
+                        .as_ref()
+                        .map(|k| format!("BUILD KEY: {k} (fake)\r\n"))
+                        .unwrap_or_default(),
                     s.vbat_cv
                 );
                 drop(s);
@@ -632,6 +644,13 @@ impl FakeLink {
             }
             msp::MSP_BUILD_INFO => Some(b"Jan  1 202600:00:00abcdef0".to_vec()),
             msp::MSP_UID => Some(s.uid.to_vec()),
+            msp::MSP2_GET_TEXT if f.payload.first() == Some(&msp::MSP2TEXT_BUILDKEY) => {
+                s.build_key.as_ref().map(|k| {
+                    let mut p = vec![msp::MSP2TEXT_BUILDKEY, k.len() as u8];
+                    p.extend_from_slice(k.as_bytes());
+                    p
+                })
+            }
             msp::MSP_RC => Some(s.rc.iter().flat_map(|v| v.to_le_bytes()).collect()),
             msp::MSP_ANALOG => {
                 let mut p = vec![(s.vbat_cv / 10).min(255) as u8, 0, 0, 0, 0, 0, 0];

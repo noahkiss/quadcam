@@ -3416,6 +3416,15 @@ export type Identity = {
 	build?: string | null,
 	/**  The flash target, for firmware that names one (ExpressLRS). */
 	target?: string | null,
+	/**  A Betaflight FC's maker code (`BEFH`), from MSP or `manufacturer_id`. */
+	manufacturer_id?: string | null,
+	/**
+	 *  A Betaflight cloud build's key (32 hex), from MSP or the CLI `status`. Empty when the
+	 *  FC said it has none (a local build); None when it was not asked.
+	 */
+	build_key?: string | null,
+	/**  The FC's gyro (`BMI270`), from the CLI `status`. */
+	gyro?: string | null,
 };
 
 /**

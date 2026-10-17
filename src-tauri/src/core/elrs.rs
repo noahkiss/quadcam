@@ -449,6 +449,7 @@ impl Core {
             version: version.clone(),
             build: None,
             target: Some(info.name.clone()),
+            ..Identity::default()
         };
         let saved = store.seen(&id, kind, &ident)?;
         let snapshot = ElrsSnapshot {
