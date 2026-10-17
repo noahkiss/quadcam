@@ -9,6 +9,7 @@ use specta::Type;
 use tauri::{AppHandle, Manager};
 
 pub use crate::weather::Sky;
+pub use native::{probe_callout, CalloutLayout};
 
 /// Where the map goes, in CSS pixels from the top left of the page, and the page's width in
 /// CSS pixels (which gives the zoom between CSS pixels and points).
@@ -254,6 +255,16 @@ fn with_host(
 #[cfg(not(target_os = "macos"))]
 mod native {
     pub struct Host;
+    pub type Rect = [f64; 4];
+    #[derive(Debug)]
+    pub struct CalloutLayout {
+        pub title: Option<Rect>,
+        pub wrapper: Rect,
+        pub lines: Vec<(String, Rect)>,
+    }
+    pub fn probe_callout(_: &super::MapPin) -> Option<CalloutLayout> {
+        None
+    }
     impl Host {
         pub fn place(&mut self, _: Option<super::MapFrame>) {}
         pub fn set_pins(&mut self, _: &[super::MapPin], _: super::MapStyle, _: bool) {}
@@ -265,14 +276,15 @@ mod native {
     use super::{callout, to_points, Callout, MapFrame, MapPick, MapPin, MapStyle, PinKind};
     use objc2::rc::Retained;
     use objc2::runtime::{AnyObject, NSObject, NSObjectProtocol, ProtocolObject};
+    use objc2::Message;
     use objc2::{
         define_class, msg_send, sel, AnyThread, ClassType, DefinedClass, MainThreadMarker,
         MainThreadOnly,
     };
     use objc2_app_kit::{
         NSAccessibility, NSAutoresizingMaskOptions, NSButton, NSColor, NSEvent, NSImage,
-        NSImageScaling, NSImageView, NSLayoutAttribute, NSResponder, NSStackView, NSTextField,
-        NSUserInterfaceLayoutOrientation, NSView, NSWindowOrderingMode,
+        NSImageScaling, NSImageView, NSLayoutAttribute, NSLayoutConstraint, NSResponder,
+        NSStackView, NSTextField, NSUserInterfaceLayoutOrientation, NSView, NSWindowOrderingMode,
     };
     use objc2_core_location::CLLocationCoordinate2D;
     use objc2_foundation::{NSArray, NSPoint, NSRect, NSSize, NSString};
@@ -345,6 +357,35 @@ mod native {
                     // SAFETY: the superclass handles every other key.
                     _ => unsafe { msg_send![super(self), keyDown: event] },
                 }
+            }
+        }
+    );
+
+    define_class!(
+        /// A callout's lines. MapKit's detail wrapper takes this view's fitting size and clips
+        /// to it, but never places the view inside it, so a plain stack could sit part way out
+        /// and lose its first line. This one pins its edges to the wrapper.
+        #[unsafe(super(NSStackView, NSView, NSResponder, NSObject))]
+        #[thread_kind = MainThreadOnly]
+        #[name = "QuadCamCalloutDetail"]
+        pub struct Detail;
+
+        impl Detail {
+            #[unsafe(method(viewDidMoveToSuperview))]
+            fn did_move(&self) {
+                // SAFETY: the superclass's own handling first.
+                unsafe { msg_send![super(self), viewDidMoveToSuperview] }
+                let Some(parent) = (unsafe { self.superview() }) else {
+                    return;
+                };
+                self.setTranslatesAutoresizingMaskIntoConstraints(false);
+                let edges = [
+                    self.topAnchor().constraintEqualToAnchor(&parent.topAnchor()),
+                    self.bottomAnchor().constraintEqualToAnchor(&parent.bottomAnchor()),
+                    self.leadingAnchor().constraintEqualToAnchor(&parent.leadingAnchor()),
+                    self.trailingAnchor().constraintEqualToAnchor(&parent.trailingAnchor()),
+                ];
+                NSLayoutConstraint::activateConstraints(&NSArray::from_retained_slice(&edges));
             }
         }
     );
@@ -477,7 +518,15 @@ mod native {
         mtm: MainThreadMarker,
     ) -> Retained<NSStackView> {
         let refs: Vec<&NSView> = views.iter().map(|v| &**v).collect();
-        let s = NSStackView::stackViewWithViews(&NSArray::from_slice(&refs), mtm);
+        let refs = NSArray::from_slice(&refs);
+        let s = if vertical {
+            // SAFETY: `Detail` is an `NSStackView`, so the class method makes one of it.
+            let d: Retained<Detail> =
+                unsafe { msg_send![Detail::class(), stackViewWithViews: &*refs] };
+            Retained::into_super(d)
+        } else {
+            NSStackView::stackViewWithViews(&refs, mtm)
+        };
         if vertical {
             s.setOrientation(NSUserInterfaceLayoutOrientation::Vertical);
             s.setAlignment(NSLayoutAttribute::Leading);
@@ -582,6 +631,101 @@ mod native {
             view.setRightCalloutAccessoryView(button.as_deref().map(|b| &***b));
             view.setAccessibilityLabel(Some(&NSString::from_str(&c.label)));
             Some(Retained::into_super(view))
+        }
+    }
+
+    /// A rectangle in window points: x, y, width, height.
+    pub type Rect = [f64; 4];
+
+    /// Where a shown callout put its parts, for `tests/map_callout.rs`.
+    #[derive(Debug)]
+    pub struct CalloutLayout {
+        pub title: Option<Rect>,
+        /// The view MapKit holds the lines in, which clips them.
+        pub wrapper: Rect,
+        pub lines: Vec<(String, Rect)>,
+    }
+
+    fn in_window(v: &NSView) -> Rect {
+        let r = v.convertRect_toView(v.bounds(), None);
+        [r.origin.x, r.origin.y, r.size.width, r.size.height]
+    }
+
+    /// Every text field under `v`, with its text.
+    fn texts(v: &NSView, out: &mut Vec<(String, Rect)>) {
+        if let Some(t) = v.downcast_ref::<NSTextField>() {
+            out.push((t.stringValue().to_string(), in_window(v)));
+            return;
+        }
+        for s in v.subviews() {
+            texts(&s, out);
+        }
+    }
+
+    fn find_detail(v: &NSView) -> Option<Retained<NSView>> {
+        if v.isKindOfClass(Detail::class()) {
+            return Some(v.retain());
+        }
+        v.subviews().iter().find_map(|s| find_detail(&s))
+    }
+
+    /// Shows `pin`'s callout, built as the map builds it, on a map in a window that never
+    /// shows, and reads back where MapKit laid it out. Must run on the main thread; None when
+    /// MapKit showed no callout (no window server).
+    pub fn probe_callout(pin: &MapPin) -> Option<CalloutLayout> {
+        use objc2_app_kit::{NSBackingStoreType, NSWindow, NSWindowStyleMask};
+        use objc2_foundation::{NSDate, NSRunLoop};
+        let mtm = MainThreadMarker::new()?;
+        let spin = |s: f64| {
+            NSRunLoop::mainRunLoop().runUntilDate(&NSDate::dateWithTimeIntervalSinceNow(s))
+        };
+        let c = callout(pin);
+        // SAFETY: main thread; every object lives to the end of this function.
+        unsafe {
+            let rect = NSRect::new(NSPoint::new(0.0, 0.0), NSSize::new(700.0, 500.0));
+            let win = NSWindow::initWithContentRect_styleMask_backing_defer(
+                NSWindow::alloc(mtm),
+                rect,
+                NSWindowStyleMask::Borderless,
+                NSBackingStoreType::Buffered,
+                false,
+            );
+            win.setReleasedWhenClosed(false);
+            let map = MKMapView::initWithFrame(MKMapView::alloc(mtm), rect);
+            win.contentView()?.addSubview(&map);
+            let a = MKPointAnnotation::new();
+            a.setCoordinate(CLLocationCoordinate2D {
+                latitude: pin.lat,
+                longitude: pin.lon,
+            });
+            a.setTitle(Some(&NSString::from_str(&c.title)));
+            let a = ProtocolObject::from_ref(&*a);
+            map.addAnnotation(a);
+            map.setCenterCoordinate_animated(a.coordinate(), false);
+            spin(0.3);
+            let view = map.viewForAnnotation(a)?;
+            view.setCanShowCallout(true);
+            view.setDetailCalloutAccessoryView(Some(&detail(&c, mtm)));
+            let button = c.button.map(|t| {
+                NSButton::buttonWithTitle_target_action(&NSString::from_str(t), None, None, mtm)
+            });
+            view.setRightCalloutAccessoryView(button.as_deref().map(|b| &***b));
+            map.selectAnnotation_animated(a, false);
+            spin(0.7);
+            let root = win.contentView()?.superview()?;
+            let detail = find_detail(&root)?;
+            let wrapper = detail.superview()?;
+            let mut lines = Vec::new();
+            texts(&detail, &mut lines);
+            let mut all = Vec::new();
+            texts(&root, &mut all);
+            let title = all.iter().find(|(t, _)| *t == c.title).map(|(_, r)| *r);
+            win.close();
+            Some(CalloutLayout {
+                title,
+                wrapper: in_window(&wrapper),
+                lines,
+            })
         }
     }
 

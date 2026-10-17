@@ -89,8 +89,9 @@ open target/release/bundle/macos/QuadCam.app
   (`tests/it/main.rs`, a module per area), so a test's name starts with its module
   (`join::...`) and the crate links once, not once per file. `tests/output_dir.rs`, `rates.rs`,
   `real_paths.rs` and `voice_core.rs` change an environment variable that other areas read, so each stays a
-  binary of its own (`Cargo.toml` lists every `[[test]]`; `autotests = false`), as does the
-  sim's `tests/bench.rs`. `tests/it/common` `Image` also takes a machine-wide lock, so
+  binary of its own (`Cargo.toml` lists every `[[test]]`; `autotests = false`), as do the
+  sim's `tests/bench.rs` and `tests/map_callout.rs` (AppKit on the main thread: no test harness,
+  it answers nextest's `--list` itself). `tests/it/common` `Image` also takes a machine-wide lock, so
   disk-image tests in two worktrees take turns. A new test that attaches an `Image` goes into
   the `serial` filter and the `quick` exclusion. Three tests that time the sim's real-time
   thread against the wall clock (`sim/tests/it/runner.rs` stall, `sim/tests/bench.rs`,

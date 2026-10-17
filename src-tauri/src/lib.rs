@@ -18,7 +18,7 @@ pub mod library;
 pub mod locate;
 pub mod logmatch;
 pub mod logs;
-mod mapview;
+pub mod mapview;
 pub mod mcp;
 pub mod media;
 mod menu;
