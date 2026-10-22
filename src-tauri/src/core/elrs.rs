@@ -1471,7 +1471,17 @@ fn pick_target(
 ) -> Result<image::Target, Refusal> {
     let (route, internal) = if host == DeviceKind::Radio {
         let profile = snapshot.host_board.as_deref().and_then(radios::profile);
-        ("etx", profile.and_then(|p| p.elrs.map(|e| (p, e))))
+        // A profiled board QuadCam has not proven is read-only, its module included.
+        if let Some(p) = profile.filter(|p| !p.proven()) {
+            return Err(Refusal::new(
+                RefusalCode::UnknownBoard,
+                format!(
+                    "QuadCam has not proven the {} {}; it does not flash its internal module yet.",
+                    p.maker, p.model
+                ),
+            ));
+        }
+        ("etx", profile.and_then(|p| p.elrs_target().map(|e| (p, e))))
     } else {
         ("betaflight", None)
     };
