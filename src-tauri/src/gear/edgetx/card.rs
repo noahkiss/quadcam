@@ -1354,13 +1354,15 @@ impl WriteOptions {
     /// a board that keeps its files in its own flash) at the board's measured speed, else
     /// in a reader.
     pub fn for_card(radio_usb: bool, board: Option<&str>) -> Self {
-        let spec = super::board::spec(board);
         if !radio_usb && !super::board::on_chip(board) {
             return Self::reader();
         }
         let mut o = Self::radio_usb();
-        if let Some(s) = spec {
-            o.bytes_per_s = s.usb_bytes_per_s;
+        if let Some(s) = board
+            .and_then(|b| crate::gear::radios::profile(b.trim()))
+            .and_then(|p| p.usb_speed)
+        {
+            o.bytes_per_s = s.write_kb_s as u64 * 1000;
         }
         o
     }

@@ -1,6 +1,7 @@
 //! The radios' controls, per board, for the card engine: which switches, buttons, pots and
-//! sliders a board has, the model keys only that board's YAML schema holds, and the link
-//! speed of its storage. Data, reviewed per board (design 6.3, "Boards").
+//! sliders a board has, and the model keys only that board's YAML schema holds. Storage
+//! kind and speed are the radio profile's (`gear::radios`). Data, reviewed per board
+//! (design 6.3, "Boards").
 //!
 //! - `spec` finds a board's facts; `inventory` joins them with what `radio.yml` and a model
 //!   say (a switch's type, a pot's detent, a custom switch's per-model setup).
@@ -78,8 +79,6 @@ pub struct ControlSpec {
     pub sliders: &'static [&'static str],
     /// Characters per checklist line on the screen.
     pub checklist_width: usize,
-    /// The radio's USB Storage speed when it writes, bytes per second (measured).
-    pub usb_bytes_per_s: u64,
     /// Top-level model keys only this board's schema holds. A model copied to a board
     /// without them leaves them out; one copied to this board takes them from a model
     /// already on the card.
@@ -117,7 +116,6 @@ pub const BOARDS: &[ControlSpec] = &[
         pots: &[("P1", false)],
         sliders: &[],
         checklist_width: 20,
-        usb_bytes_per_s: 300_000,
         model_only_keys: &[],
     },
     // RadioMaster GX12: its own schema (the 128x64 one plus custom switches); SG and SH
@@ -139,7 +137,6 @@ pub const BOARDS: &[ControlSpec] = &[
         pots: &[("P1", true), ("P2", true)],
         sliders: &["SL1", "SL2"],
         checklist_width: 20,
-        usb_bytes_per_s: 360_000,
         model_only_keys: GX12_CFS_KEYS,
     },
 ];

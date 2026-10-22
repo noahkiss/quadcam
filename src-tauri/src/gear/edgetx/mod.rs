@@ -11,7 +11,7 @@
 //! - `radio`: the typed view of `radio.yml` for the radio's Settings editor, and the check
 //!   of each value a `RadioOp::SetScalar` writes.
 //! - `board`: each board's controls (switches, custom switches, pots, sliders), its
-//!   model-only keys and storage speed; the control map a model copied between radios
+//!   model-only keys; the control map a model copied between radios
 //!   goes through.
 //! - `setup`: a radio setup as data (jobs, assignments, template, aircraft) and its
 //!   generator, QuadCam's own Lua screens and the steps after a flash.
