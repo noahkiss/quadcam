@@ -66,7 +66,7 @@ pub struct BoardControl {
 
 /// A board's facts.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct BoardSpec {
+pub struct ControlSpec {
     /// `radio.yml`'s `board:` value.
     pub board: &'static str,
     /// Switches on the case and their factory types.
@@ -78,9 +78,6 @@ pub struct BoardSpec {
     pub sliders: &'static [&'static str],
     /// Characters per checklist line on the screen.
     pub checklist_width: usize,
-    /// The radio keeps its files in its own flash, reached only over its USB (no card to
-    /// put in a reader).
-    pub internal_storage: bool,
     /// The radio's USB Storage speed when it writes, bytes per second (measured).
     pub usb_bytes_per_s: u64,
     /// Top-level model keys only this board's schema holds. A model copied to a board
@@ -104,10 +101,10 @@ const GX12_CFS_KEYS: &[&str] = &[
 ];
 
 /// Every board QuadCam knows the controls of.
-pub const BOARDS: &[BoardSpec] = &[
+pub const BOARDS: &[ControlSpec] = &[
     // RadioMaster Pocket: 128x64 schema; SA and SD latch, SE is a momentary button; P1 is
     // the S1 wheel. A card in a reader writes fast; over its USB about 0.3 MB/s.
-    BoardSpec {
+    ControlSpec {
         board: "pocket",
         switches: &[
             ("SA", "2POS"),
@@ -120,14 +117,13 @@ pub const BOARDS: &[BoardSpec] = &[
         pots: &[("P1", false)],
         sliders: &[],
         checklist_width: 20,
-        internal_storage: false,
         usb_bytes_per_s: 300_000,
         model_only_keys: &[],
     },
     // RadioMaster GX12: its own schema (the 128x64 one plus custom switches); SG and SH
     // are momentary; SW1-SW6 are per-model buttons; 512 MB of flash over USB full speed,
     // about 0.36 MB/s.
-    BoardSpec {
+    ControlSpec {
         board: "gx12",
         switches: &[
             ("SA", "2POS"),
@@ -143,7 +139,6 @@ pub const BOARDS: &[BoardSpec] = &[
         pots: &[("P1", true), ("P2", true)],
         sliders: &["SL1", "SL2"],
         checklist_width: 20,
-        internal_storage: true,
         usb_bytes_per_s: 360_000,
         model_only_keys: GX12_CFS_KEYS,
     },
@@ -157,11 +152,19 @@ const LINKS: &[(&str, &str, &str, &str)] = &[
     ("gx12", "pocket", "SH", "SE"),
 ];
 
+/// True when the board keeps its files on a soldered chip (`radios::StorageKind::Chip`):
+/// QuadCam reaches them only over the radio's USB, never in a card reader.
+pub fn on_chip(board: Option<&str>) -> bool {
+    board
+        .and_then(|b| crate::gear::radios::profile(b.trim()))
+        .is_some_and(|p| p.storage == crate::gear::radios::StorageKind::Chip)
+}
+
 /// The custom-switch type a model's 2.12 block names when the radio's own setup applies.
 pub const GLOBAL: &str = "GLOBAL";
 
 /// The facts of a board, by `radio.yml`'s `board:` value.
-pub fn spec(board: Option<&str>) -> Option<&'static BoardSpec> {
+pub fn spec(board: Option<&str>) -> Option<&'static ControlSpec> {
     let b = board?.trim().to_ascii_lowercase();
     BOARDS.iter().find(|s| s.board == b)
 }
@@ -171,7 +174,7 @@ pub fn switch_type(raw: &str) -> String {
     unquote(raw.trim()).to_ascii_uppercase()
 }
 
-impl BoardSpec {
+impl ControlSpec {
     /// The board's controls with their factory types.
     pub fn controls(&self) -> Vec<BoardControl> {
         let mut out: Vec<BoardControl> = self
@@ -767,8 +770,8 @@ pub fn translate(
 /// before the first of `before` the model has, else at the end.
 pub fn swap_board_keys(
     doc: &mut Doc,
-    from: &BoardSpec,
-    to: &BoardSpec,
+    from: &ControlSpec,
+    to: &ControlSpec,
     template: Option<&Doc>,
 ) -> Result<Vec<String>, Refusal> {
     let mut notes = Vec::new();
@@ -868,7 +871,7 @@ mod tests {
     fn custom_names_and_the_board_table() {
         assert!(is_custom_name("SW1") && !is_custom_name("SW") && !is_custom_name("SA1"));
         let g = spec(Some("GX12")).unwrap();
-        assert!(g.internal_storage);
+        assert!(on_chip(Some("gx12")) && !on_chip(Some("pocket")));
         assert_eq!(g.controls().len(), 8 + 6 + 2 + 2);
         assert!(spec(Some("tx16s")).is_none());
     }

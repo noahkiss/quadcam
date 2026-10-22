@@ -432,7 +432,7 @@ fn card_preview(card: &Card, t: &CardTarget, edits: &[Edit]) -> Result<CardPrevi
     let plan = card.plan(edits, None)?;
     let board = plan.identity.board.clone();
     let radio_usb = t.c.as_ref().is_some_and(|c| c.usb.is_some())
-        || crate::gear::edgetx::board::spec(board.as_deref()).is_some_and(|s| s.internal_storage);
+        || crate::gear::edgetx::board::on_chip(board.as_deref());
     let opts = WriteOptions::for_card(radio_usb, board.as_deref());
     Ok(CardPreview {
         identity: plan.identity.clone(),

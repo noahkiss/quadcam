@@ -1011,7 +1011,7 @@ impl Work<'_> {
         &mut self,
         named: Option<&str>,
         radio: Option<&Doc>,
-        spec: &super::board::BoardSpec,
+        spec: &super::board::ControlSpec,
     ) -> Result<Option<Doc>, Refusal> {
         if spec.model_only_keys.is_empty() {
             return Ok(None);
@@ -1282,7 +1282,7 @@ impl WriteOptions {
     /// in a reader.
     pub fn for_card(radio_usb: bool, board: Option<&str>) -> Self {
         let spec = super::board::spec(board);
-        if !radio_usb && !spec.is_some_and(|s| s.internal_storage) {
+        if !radio_usb && !super::board::on_chip(board) {
             return Self::reader();
         }
         let mut o = Self::radio_usb();

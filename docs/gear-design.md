@@ -717,7 +717,8 @@ files, not on a radio: the `LOGS` encoding, 4 lines by 3 sources, the timer mode
   shows the SD card over USB even when the firmware stops at an error.
 
 **Built (GX12 card):** `gear/edgetx/board.rs` holds each board's controls (switch types,
-custom switches, pots, sliders), its model-only keys and its USB write speed. `gx12` is proven
+custom switches, pots, sliders), its model-only keys and its USB write speed; whether the
+storage is a chip comes from the radio profile (`gear/radios.rs`). `gx12` is proven
 for card writes at 2.12.5 only (`compat.rs`), on its factory files and the synthetic
 `SynthCard::gx12()`; no radio-saved 2.12.5 file was at hand. Its schema is the 128x64 one plus
 custom switches: the model's `customSwitches:`/`cfsGroupOn:` blocks and the 2.11 bit fields
