@@ -38,13 +38,15 @@ write (8.1), a plan and a digest before a write, a backup first, a read-back aft
 
 ## 1. Work in flight
 
-Two packages started on 2026-10-22 and cover stages 1 and 2 (section 6). This doc does not
-repeat their scope; it states what the later stages need from them.
+Stages 1, 2, 3 and 7 (section 6) shipped on `main` on 2026-10-22. This doc does not repeat
+their scope; it states what the later stages need from them.
 
-| Package | Branch | Scope |
-|---|---|---|
-| GX12 flash | `feat/gx12-flash` | The board profile table in Rust; `gx12` proven for the EdgeTX flash, firmware read and restore; the DFU instruction from the profile; the ELRS TX target picked from the radio's board |
-| GX12 card | `feat/gx12-card` | GX12 card read and write (its own YAML schema); `gx12` proven for card writes; a model copied across boards through a per-board control map |
+| Package | Stage | Commits | Scope |
+|---|---|---|---|
+| GX12 flash | 1 | `1734cb1`, `3b547ad` | The board profile table in Rust; `gx12` proven for the EdgeTX flash, firmware read and restore; the DFU instruction from the profile; the ELRS TX target picked from the radio's board; the UF2 and last-series refusals |
+| GX12 card | 2 | `3294953`, `c978c3c` | GX12 card read and write (its own YAML schema); `gx12` proven for card writes; a model copied across boards through a per-board control map (`gear/edgetx/board.rs`) |
+| Radio setup | 3 | `5f448a5`, `dd41217` | The setup as data, its generator, rows, CLI and MCP (section 6, stage 3 note) |
+| Other boards | 7 | this package | 50 board profiles as read-only data; the profile on a detected radio; the guards of 2.4 (section 2.5) |
 
 ## 2. Board profiles
 
@@ -152,13 +154,13 @@ Each trap names the guard. A guard refuses before any download or write.
 
 | Trap | Guard |
 |---|---|
-| The GX12 does not enter ROM DFU on plug-in while off. Two waits of 10 and 30 minutes saw no DFU device until the owner held SG and tapped power | The DFU steps come from the profile, never from shared text. `docs/gear.md` "Flash an EdgeTX radio" step 3 is Pocket-only until stage 1 lands |
-| A `.uf2` board (every H7: TX15, GX15, TX16S MK3, Jumper T15 Pro and T22, HelloRadioSky V12 and V15) cannot be flashed with a plain DFU tool. Its firmware lives in external QSPI flash; ST's tools cannot recover it | `uf2` refuses with "This radio updates by a UF2 file, which QuadCam does not do yet." |
-| STM32F2 boards stop at EdgeTX 2.11 (RadioMaster TX12 MK1, Jumper T12, T-Lite, T-Pro V1, BetaFPV LR3 Pro, FrSky X9D, X9D+, X-Lite) | `last_series`: a newer release refuses |
-| EdgeTX reused the target `v12`. Before 2.12.3 it named an F407 B&W radio that was never built; from 2.12.3 it is HelloRadioSky's H7 colour V12. The old firmware bricked a V12 Max | Target history: `v12` below 2.12.3 refuses |
-| Look-alike radios take another firmware: Jumper T-Lite V2 runs as F2; T20 and T20 V2 differ in flash size; HelloRadioSky V14 (OLED) and V14 LCD are `v14` and `v14lcd` | Never infer the board from a name or case. Read `board:`, or `Board-ID:` on a UF2 drive |
-| Makers ship their own firmware forks (HelloRadioSky); upstream drops their features | A warning in the first flash plan |
-| Every production radio has full-speed USB (12 Mb/s), H7 included | The speed field is measured, never assumed faster |
+| The GX12 does not enter ROM DFU on plug-in while off. Two waits of 10 and 30 minutes saw no DFU device until the owner held SG and tapped power | The DFU steps come from the profile, never from shared text (`dfu.steps`, `radios::dfu_hint`). A board whose way in no source gives has `DfuStart::Unknown`: no steps, and the hint says QuadCam does not know |
+| A `.uf2` board (every H7: TX15, GX15, TX16S MK3, Jumper T15 Pro, T15-H7, T18 H7 and T22, HelloRadioSky V12 and V15, iFlight Commando 14, Flysky PA01 and ST16) cannot be flashed with a plain DFU tool. Its firmware lives in external QSPI flash; ST's tools cannot recover it | `firmware_format: Uf2` refuses the flash and names the UF2 route: start the EdgeTX bootloader (the profile's entry), copy the board's `.uf2` to the `EDGETX_UF2` drive, or use EdgeTX Buddy or Companion 2.12+ |
+| STM32F2 boards stop at EdgeTX 2.11 (RadioMaster TX12 MK1, Jumper T12, T-Lite, T-Pro V1, BetaFPV LR3 Pro, FrSky X9D, X9D+, X-Lite, X-Lite S) | `edgetx_series: "2.11"` on every F2 row (a test ties it to the MCU): a 2.12 release refuses |
+| EdgeTX reused the target `v12`. Before 2.12.3 it named an F407 B&W radio that was never built; from 2.12.3 it is HelloRadioSky's H7 colour V12. The old firmware bricked a V12 Max | `target_history` (`until: 2.12.3`): `v12` below 2.12.3 refuses before any other check, and the profile's warnings say why |
+| Look-alike radios take another firmware: Jumper T-Lite V2 runs as F2 (there is no T-Lite F4 firmware); T20 and T20 V2 differ in flash size; T-Pro firmware mirrors a T-Pro V2's screen; HelloRadioSky V14 (OLED) and V14 LCD are `v14` and `v14lcd`; TX12 MK1 and MK2; T15 and T15-H7; X9D+ and X9D+ 2019 | `look_alikes` on both rows, shown as warnings. Never infer the board from a name or case: read `board:`, or `Board-ID:` on a UF2 drive. A USB product name maps to a board by the longest match (`Jumper T20 V2` is not `Jumper T20`) |
+| Makers ship their own firmware forks (HelloRadioSky); upstream drops their features | `fork` on the five HelloRadioSky rows, shown as a warning on the radio and in `radio_boards`. Those boards are read-only, so no flash plan reaches them yet |
+| Every production radio has full-speed USB (12 Mb/s), H7 included | `usb_speed` holds a measured speed (Pocket, GX12) or None, never an assumed faster one |
 | A chip radio has no card to pull | Write route by storage kind (2.3) |
 | Serial gimbals are factory calibrated (GX12) | No calibration prompt; the Settings editor hides calibration |
 | A large or high-rate `hello.wav` can freeze the GX12's switches at boot (2.12.4 reports) | The voice pack apply on a GX12 checks `SYSTEM/hello.wav`: refuse over a size cap, or over the pack's normal sample rate. The owner's own pack keeps it short |
@@ -172,9 +174,36 @@ Each trap names the guard. A guard refuses before any download or write.
 ### 2.5 Other boards
 
 The research of 2026-10-22 covers the RadioMaster, Jumper and HelloRadioSky lines and the other
-EdgeTX makers (BetaFPV, iFlight, Flysky, FrSky). Its values go into the table as data, unproven,
-in stage 7. Until a board is proven its radios are read-only: QuadCam shows the profile, the
-DFU steps and the traps, and refuses writes and flashes.
+EdgeTX makers (BetaFPV, iFlight, Flysky, FrSky). Stage 7 put its values into the table as data,
+unproven: 50 rows in `gear/radios/boards.rs`. Until a board is proven its radios are read-only:
+QuadCam shows the profile, the DFU steps and the traps, and refuses writes and flashes. The ELRS
+flash refuses an unproven board's internal module too.
+
+What shipped:
+
+- **Sources.** The chip, the USB name (`<maker> <model>`), the screen, the switch and pot slots
+  and the trims come from EdgeTX's hardware definitions (`radio/src/boards/hw_defs/*.json`, main
+  on 2026-10-22). The SD-card pack comes from `edgetx-sdcard` `sdcard.json` (v2.11.5 for the F2
+  boards); the YAML schema from `yaml_datastructs.cpp` at v2.12.5; the internal ELRS targets
+  from ExpressLRS `targets.json`. DFU and bootloader entry, storage, ports and quirks come from
+  the research. A value no source gave is None (`bootloader_entry`, `usb_ports`, `usb_speed`,
+  `internal_rf`) or `DfuStart::Unknown`; nothing is guessed.
+- **Fields added to 2.1's list:** `variants`, `look_alikes`, `target_history`, `fork`,
+  `usb_speed`, `sd_pack`, `yaml_schema`, `slots` (each switch and pot slot with what the
+  hardware reads and EdgeTX's default type; the fitted type stays `radio.yml`'s), `trims`,
+  `usb_ports`, `internal_rf`, `quirks`. `elrs` became a list: a board sold in 2.4 GHz and
+  900 MHz versions (Jumper T20, T14, T-Pro) has one target per version, and the ELRS plan takes
+  a board's target only when there is one.
+- **Detection.** `Connected.radio` carries the profile of a radio volume (from `radio.yml`'s
+  `board:`, else the USB product name), a radio serial port (its product name) and a DFU device
+  linked to a saved radio, with whether it is proven, its DFU steps and its warnings. A product
+  name a profile knows marks a USB device as a radio (`detect::is_radio_usb`).
+- **Reach.** `gear_radio_boards` (CLI `gear radio-boards`, MCP `quadcam_gear` `radio_boards`)
+  lists one board, the board a USB product name names, or every board. `quadcam_gear` `status`
+  names a radio's profile on its line.
+- **DFU entry unknown** on `tpros`, `t15pro`, `t15h7`, `t18h7`, `t22`, the five HelloRadioSky
+  boards, `c14`, `pl18u` and the FrSky boards. The DFU hint says so; the flash refuses these
+  boards anyway.
 
 | Line | Boards | Notes for the table |
 |---|---|---|
@@ -407,6 +436,15 @@ models), and `core/radio_setup.rs` with the rows `gear_radio_setup`, `gear_radio
 Lua screen of the same name that QuadCam did not write stays (with a note), so the
 patcher's own scripts plan no file; and sounds are only checked, never written by the setup.
 A customizable switch (SW1-SW6) refuses as a control until `customSwitches:` writes land.
+
+Stage 7 shipped as: `gear/radios/` (`mod.rs` the types, guards and warnings; `boards.rs` the
+50 rows; `tests.rs` a test per guard), `Connected.radio` filled by `gear/detect.rs`, and the row
+`gear_radio_boards` (section 2.5). The guards: a UF2 board refuses with the UF2 route named, an
+F2 board refuses a 2.12 release, `v12` refuses below 2.12.3, look-alikes warn on both boards.
+One choice differs from the plan: the slots use the card engine's `BoardControlKind`
+(`gear/edgetx/board.rs`), and a test checks that every control `board.rs` lists sits in its
+board's slots. `board.rs` still holds its own USB write speed per board, beside the profile's
+`usb_speed`.
 
 Stage 1 is the existing task "QuadCam Gear: per-radio profile table and prove board gx12".
 Stages 1 and 2 run now. Stage 3 needs both. Stage 4 needs 3. Stage 5 needs 4 and the radio.

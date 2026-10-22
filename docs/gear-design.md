@@ -362,6 +362,7 @@ in `specta_builder` (`lib.rs`).
 | `gear_fc_identify` | `FcPortParams { port }` → `FcJob<FcInfo>` (identity, id, read-only reason, notes) | no (MSP read) |
 | `gear_fc_read` | `FcReadParams { port, commands }` → `FcJob<FcRead>` (read-only CLI commands; the FC reboots) | no (CLI read) |
 | `gear_board_notes` | `BoardNotesParams { board, version }` → `Vec<BoardNote>` | no |
+| `gear_radio_boards` | `RadioBoardsParams { board, usb_product }` → `Vec<RadioBoard>` (profile, proven, DFU steps, warnings; every board when both are empty) | no |
 | `gear_usb_timers` | – → `Vec<UsbTimer>` | no |
 | `gear_poll_pause` | `PollPauseParams { port, paused }` → `Vec<String>` (the paused ports; in memory until quit) | no |
 | `gear_card` | `CardParams { mount or device, model }` → `GearCard` (card view, selected model's aircraft, `radio_usb`) | no |
@@ -487,7 +488,7 @@ can then allow the read tool freely and gate the other two.
 
 | Tool | Changes | Actions |
 |---|---|---|
-| `quadcam_gear` | Nothing | `status`, `devices`, `fc_identify`, `board_notes`, `usb_timers`, `card`, `card_preview`, `storage`, `backups`, `backup_read`, `backup_diff`, `blackbox`, `blackbox_summary`, `switch_map`, `osd`, `rates`, `sims`, `changes`, `apply_plan`, `voice`, `firmware_check`, `flights`, `packs`, `session_report`, `preflight`, `crashes` |
+| `quadcam_gear` | Nothing | `status`, `devices`, `fc_identify`, `board_notes`, `radio_boards`, `usb_timers`, `card`, `card_preview`, `storage`, `backups`, `backup_read`, `backup_diff`, `blackbox`, `blackbox_summary`, `switch_map`, `osd`, `rates`, `sims`, `changes`, `apply_plan`, `voice`, `firmware_check`, `flights`, `packs`, `session_report`, `preflight`, `crashes` |
 | `quadcam_gear_edit` | QuadCam's own data only: never a device, a sim or a card | `device_save`, `device_forget`, `fc_read` (a CLI read; the FC reboots), `stage`, `update`, `discard`, `restore_stage`, `voice_edit`, `voice_render`, `voice_choose`, `pack_save`, `pack_delete`, `pack_type_save`, `pack_type_delete`, `pack_notes`, `flight_set`, `flight_folders`, `crash_save`, `crash_delete`, `backup` (a read of the device; writes only to the gear folder), `blackbox_export` (files in a folder), `import_backups`, `prune`, `export` |
 | `quadcam_gear_apply` | A device, a sim or the radio firmware | `apply`, `sim_sync`, `flash`. Each needs the `digest` from a plan and `confirm=true`. `blackbox_pull` and `blackbox_erase` need `confirm=true` only: a pull may erase the FC's flash when the person's `gearEraseBlackbox` setting is on, so it sits in the tool a harness gates, though it has no plan or sheet (like `card_repair`) |
 
@@ -718,7 +719,7 @@ files, not on a radio: the `LOGS` encoding, 4 lines by 3 sources, the timer mode
 
 **Built (GX12 card):** `gear/edgetx/board.rs` holds each board's controls (switch types,
 custom switches, pots, sliders), its model-only keys and its USB write speed; whether the
-storage is a chip comes from the radio profile (`gear/radios.rs`). `gx12` is proven
+storage is a chip comes from the radio profile (`gear/radios/`). `gx12` is proven
 for card writes at 2.12.5 only (`compat.rs`), on its factory files and the synthetic
 `SynthCard::gx12()`; no radio-saved 2.12.5 file was at hand. Its schema is the 128x64 one plus
 custom switches: the model's `customSwitches:`/`cfsGroupOn:` blocks and the 2.11 bit fields
@@ -782,14 +783,21 @@ logical switches a change owns is recorded in the change, so a later change can 
   no official macOS `dfu-util` binary to download, and DFU is a published USB class. It erases
   the pages it writes, writes, reads back and compares before it leaves.
 - Size guard per board (for the B&W Pocket: 400-1000 KB), board name check in the binary.
-- **Radio profiles** (`gear/radios.rs`, shipped with GX12 flashing): one row per board holds
-  the chip, the firmware format and size guard, the ROM DFU entry (plug-in, or a button combo
-  such as the GX12's SG) with the steps the UI shows, the bootloader entry, storage kind and
-  write route, splash mechanism, internal ELRS target and upload methods, USB product name and
-  last EdgeTX series. The flash, read, restore and DFU link take their DFU text from it; the
-  ELRS flash plan takes a radio's internal-module target from it. A UF2 board and a release
-  past the board's last series refuse. `compat.rs` still decides what is flashed: Pocket
-  2.12.4 and GX12 2.12.5.
+- **Radio profiles** (`gear/radios/`, shipped with GX12 flashing; 50 boards since stage 7 of
+  [Radios: design](radio-design.md)): one row per board (`boards.rs`) holds the chip, the
+  firmware format and size guard, the ROM DFU entry (plug-in, a button combo such as the
+  GX12's SG, or unknown) with the steps the UI shows, the bootloader entry, storage kind and
+  write route, measured USB speed, SD-card pack, YAML schema family, splash mechanism, the
+  internal ELRS targets and upload methods, USB product name and ports, last EdgeTX series,
+  look-alike boards, target history (`v12`), the maker's own firmware, the switch and pot
+  slots from EdgeTX's hardware definitions, and quirks. The flash, read, restore and DFU link
+  take their DFU text from it; the ELRS flash plan takes a radio's internal-module target from
+  it, and refuses a profiled board that is not proven. Detection attaches the profile to a
+  radio (`Connected.radio`, from `radio.yml`'s `board:` or the USB product name), with
+  whether it is proven, its DFU steps and its warnings. The flash refuses `v12` below 2.12.3,
+  a release past the board's last series (STM32F2 boards stop at 2.11), and a UF2 board, with
+  the UF2 route named. `compat.rs` still decides what is flashed: Pocket 2.12.4 and GX12
+  2.12.5; every other row is read-only.
 
 ### 6.6 Sim file formats
 

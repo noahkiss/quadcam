@@ -171,6 +171,7 @@ quadcam-cli --json gear fc identify [--port /dev/cu.usbmodemX]   # MSP identity,
 quadcam-cli --json gear fc read [--cmd "get osd_ah_pos"]... [--out STEM]   # the FC reboots after
 quadcam-cli --json gear fc check STEM.diff_all.txt expected.cli  # every expected line in the diff
 quadcam-cli --json gear fc notes [--board BOARD] [--version V]     # known issues of boards
+quadcam-cli --json gear radio-boards [--board tx16s] [--usb-product "Jumper T20 V2 Mass Storage"]   # EdgeTX board profiles: proven or read-only, DFU steps, warnings
 quadcam-cli --json gear fc pause|resume [--port ...]                 # pause the running app's FC reads
 quadcam-cli --json gear fc usb                                   # USB timers
 quadcam-cli --json gear blackbox pull [--port P] [--keep] [--mode auto|msp|msc] [--force]
@@ -334,6 +335,7 @@ Every MCP tool has a command. The command line also has `scan`, `analyze`, `clea
 | `quadcam_gear` `switch_map` | `gear map` |
 | `quadcam_gear` `session_report` | `gear report` |
 | `quadcam_gear` `board_notes`, `usb_timers` | `gear fc notes`, `gear fc usb` |
+| `quadcam_gear` `radio_boards` | `gear radio-boards` |
 | `quadcam_gear` `firmware_copies`, `firmware_restore_plan`; `quadcam_gear_apply` `firmware_restore` | `gear firmware --copies`, `gear firmware --restore COPY --plan`, the same with `--digest D --yes` |
 | `quadcam_gear_edit` `poll_pause` | `gear fc pause`, `gear fc resume` |
 | `quadcam_gear` `*_plan` | the same command without `--yes` or `--digest` (or with `--plan`) |

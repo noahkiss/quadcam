@@ -1711,6 +1711,25 @@ the RadioMaster Pocket on EdgeTX 2.12.4 and the RadioMaster GX12 on EdgeTX 2.12.
 without a splash. Another release, another
 board and any prerelease tag (`2.12.5-rc1`) are refused with the reason.
 
+**Other radios.** QuadCam has a profile for about 50 EdgeTX boards (RadioMaster, Jumper,
+HelloRadioSky, BetaFPV, iFlight, Flysky, FrSky). A radio of one of these boards shows its
+board, its DFU steps (where they are known) and its warnings, even before you save it. It is
+read-only: QuadCam does not flash it or write its card. The flash plan refuses these with the
+reason:
+
+- An H7 radio (TX15, GX15, TX16S MK3, Jumper T15 Pro and T22, HelloRadioSky V12 and V15) updates
+  by a UF2 file. Start its EdgeTX bootloader and copy the `.uf2` file to the `EDGETX_UF2` drive,
+  or use EdgeTX Buddy or Companion.
+- An STM32F2 radio (TX12 MK1, Jumper T-Lite, T-Pro and T12, LiteRadio 3 Pro, FrSky X9D, X9D+
+  and X-Lite) stops at EdgeTX 2.11.
+- EdgeTX before 2.12.3 used the name `v12` for another radio; that firmware is refused on a
+  HelloRadioSky V12.
+
+Some radios look alike but take other firmware: the Jumper T20 and T20 V2, the T-Pro and T-Pro
+V2, the HelloRadioSky V14 (OLED) and V14 LCD. QuadCam reads the board from the radio
+(`radio.yml`), never from its name. `gear radio-boards` (MCP `quadcam_gear` `radio_boards`)
+lists the profiles.
+
 1. Back up the radio's card (**Backups**). The flash plan refuses without a backup.
 2. Open **Firmware > Flash…**, or make a splash first (below). The sheet shows the checks:
    the board and version, the firmware image, the splash markers, the card backup and exactly
@@ -1985,6 +2004,7 @@ quadcam-cli --json gear fc identify [--port /dev/cu.usbmodemX]   # MSP: board, v
 quadcam-cli --json gear fc read [--cmd "diff all"]... [--out STEM]   # CLI read; the FC reboots
 quadcam-cli --json gear fc check STEM.diff_all.txt expected.cli  # offline: lines in the diff
 quadcam-cli --json gear fc notes [--board B] [--version V]       # known issues
+quadcam-cli --json gear radio-boards [--board B] [--usb-product P]   # EdgeTX board profiles
 quadcam-cli --json gear fc pause|resume [--port ...]                 # pause the running app's FC reads
 quadcam-cli --json gear fc usb                                   # USB timers
 quadcam-cli --json gear blackbox pull [--port P] [--keep] [--mode auto|msp|msc] [--force]   # read, verify, store; erase if the setting allows
