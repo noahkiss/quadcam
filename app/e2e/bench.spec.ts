@@ -99,6 +99,8 @@ test("Revert stages a restore of the card files and marks the change Reverted wh
   const sheet2 = page.getByRole("dialog", { name: "Apply to Field radio" });
   await expect(sheet2).toContainText("Revert: Try contrast");
   await expect(sheet2.getByRole("region", { name: "Changes" })).toContainText("RADIO/radio.yml");
+  // The apply's files already name the never-index file; the revert lists it once.
+  await expect(sheet2.getByRole("region", { name: "Changes" }).getByText(".metadata_never_index", { exact: true })).toHaveCount(1);
   await sheet2.getByRole("button", { name: "Apply" }).click();
   await expect(sheet2.getByRole("region", { name: "Result" })).toContainText("Verified");
   await sheet2.getByRole("button", { name: "Done" }).click();

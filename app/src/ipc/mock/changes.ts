@@ -241,7 +241,9 @@ function cardDiff(c: StagedChange): DiffItem[] {
     } else if (e.kind === "card_files") put.push(...e.put.map((f) => f.path));
     else if (e.kind === "restore") put.push(...e.paths);
   }
-  return [{ kind: "files", label: "Card files", put: [...put, ".metadata_never_index"], delete: [] }, ...out];
+  // As the core's plan: the never-index file once. A revert's paths already hold it.
+  if (!put.includes(".metadata_never_index")) put.push(".metadata_never_index");
+  return [{ kind: "files", label: "Card files", put, delete: [] }, ...out];
 }
 
 /** A 64-bit FNV-1a hash as 16 hex digits. */
