@@ -115,6 +115,49 @@ pub struct PackManifest {
     /// What the speech check heard in its lines, by card path (`gear_voice_check`).
     #[serde(default)]
     pub heard: Vec<HeardLine>,
+    /// How this voice says words it got wrong as written, found by a grouped re-take
+    /// (`gear_voice_retake` with `grouped`). A render of the pack's voice and model uses them.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub structures: Vec<Structure>,
+}
+
+/// One word's way to be said in some lines of one pack: what the voice is sent in its
+/// place, and the carrier those lines are spoken in. The speech check still compares with the
+/// line's own text. Only the lines it names use it, so a render of the pack's other lines with
+/// the word sends the same text as before.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Type)]
+pub struct Structure {
+    /// The word as the line's text writes it, matched whole and in any case.
+    pub word: String,
+    /// What the voice is sent for it.
+    pub say: String,
+    /// The carrier for its lines (`{line}` stands for the line); absent for the render's own.
+    #[serde(default)]
+    pub carrier: Option<String>,
+    /// The card paths that use it.
+    pub lines: Vec<String>,
+}
+
+impl PackManifest {
+    /// The spelling the line at `path` is spoken with: `base`, with the pack's structures for
+    /// that line.
+    pub fn spelling_for(&self, base: &Spelling, path: &str) -> Spelling {
+        let words: Vec<(String, String)> = self
+            .structures
+            .iter()
+            .filter(|s| s.lines.iter().any(|l| l == path))
+            .map(|s| (s.word.clone(), s.say.clone()))
+            .collect();
+        base.with_words(&words)
+    }
+
+    /// The carrier for the line at `path`, when a structure names one.
+    pub fn carrier_for(&self, path: &str) -> Option<&str> {
+        self.structures
+            .iter()
+            .filter(|s| s.lines.iter().any(|l| l == path))
+            .find_map(|s| s.carrier.as_deref())
+    }
 }
 
 /// What the speech check heard in one line of a pack.
@@ -223,6 +266,7 @@ pub fn render_to(
         firmware: EDGETX.into(),
         voice_id: ctx.voice.into(),
         heard: Vec::new(),
+        structures: Vec::new(),
     };
     std::fs::write(dir.join("pack.json"), serde_json::to_vec_pretty(&m)?)?;
     Ok((m, made))
@@ -516,4 +560,37 @@ pub fn files_of(p: &Installed) -> Result<Vec<(String, Vec<u8>)>> {
             Ok((f.clone(), b))
         })
         .collect()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn a_structure_changes_only_the_lines_it_names() {
+        let m: PackManifest = serde_json::from_value(serde_json::json!({
+            "id": "p", "voice": "v", "lang": "en", "provider": "elevenlabs",
+            "settings": RenderSettings::default(), "lines": 0, "license": "", "attribution": "",
+            "lines_csv_sha": "", "files": [],
+            "structures": [{"word": "spoilers", "say": "Spoylers", "carrier": "Say {line}.",
+                            "lines": ["SOUNDS/en/splrup.wav"]}],
+        }))
+        .unwrap();
+        let base = Spelling::builtin().unwrap();
+        let up = m.spelling_for(&base, "SOUNDS/en/splrup.wav");
+        assert_eq!(up.apply("Spoilers up"), "Spoylers up");
+        assert_eq!(up.apply("LQ low"), "L.Q. low");
+        let down = m.spelling_for(&base, "SOUNDS/en/splrdn.wav");
+        assert_eq!(down.apply("Spoilers down"), "Spoilers down");
+        assert_eq!(m.carrier_for("SOUNDS/en/splrup.wav"), Some("Say {line}."));
+        assert_eq!(m.carrier_for("SOUNDS/en/splrdn.wav"), None);
+        // A pack without structures writes none.
+        let plain = PackManifest {
+            structures: Vec::new(),
+            ..m
+        };
+        assert!(!serde_json::to_string(&plain)
+            .unwrap()
+            .contains("structures"));
+    }
 }

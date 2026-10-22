@@ -2758,6 +2758,183 @@ fn a_line_heard_wrong_plays_its_held_take_and_a_retake_by_name_puts_a_new_take_i
 }
 
 #[test]
+fn a_held_line_named_to_the_check_is_heard_again_and_goes_back_when_right() {
+    const LOW: &str = "SOUNDS/en/lowbat.wav";
+    let wrong = Arc::new(std::sync::Mutex::new(vec![LOW.to_string()]));
+    let (b, _helper) = bench_hearing(wrong.clone());
+    let r = paid_render(
+        &b,
+        render("Callum", "eleven_turbo_v2_5", &["quad"], false, true),
+    );
+    let pack = b.dir.path().join("support/gear/voices").join(&r.pack);
+    assert!(!pack.join(LOW).exists());
+    let named = |b: &Bench| {
+        b.core
+            .gear_voice_check(&quadcam_lib::core::VoiceCheckParams {
+                pack: r.pack.clone(),
+                lines: vec![LOW.into()],
+                ..Default::default()
+            })
+            .unwrap()
+    };
+    // Still heard wrong: it stays out, with what was heard.
+    let again = named(&b);
+    assert_eq!(
+        (again.mismatches, again.held, again.back),
+        (1, 0, 0),
+        "{again:?}"
+    );
+    assert!(!pack.join(LOW).exists());
+    // Heard right now (a better check, the same take): back in the pack, at no cost.
+    let posts = b.http.posts();
+    wrong.lock().unwrap().clear();
+    let back = named(&b);
+    assert_eq!((back.mismatches, back.back), (0, 1), "{back:?}");
+    assert!(pack.join(LOW).is_file());
+    assert_eq!(b.http.posts(), posts);
+    let k = b
+        .core
+        .gear_voice(&Default::default())
+        .unwrap()
+        .packs
+        .into_iter()
+        .find(|k| k.id == r.pack)
+        .unwrap();
+    assert!(!k.retakes.iter().any(|t| t.path == LOW), "{:?}", k.retakes);
+}
+
+#[test]
+fn a_grouped_retake_tries_a_line_other_ways_and_the_pack_keeps_the_way_that_won() {
+    const LOW: &str = "SOUNDS/en/lowbat.wav";
+    // The check hears "Battery low" wrong twice: in the render, and in the first try.
+    let left = Arc::new(std::sync::Mutex::new(2u32));
+    let mut texts: Vec<(String, String)> = Vec::new();
+    for id in quadcam_lib::gear::voice::sets::ids() {
+        if id == "custom" {
+            continue;
+        }
+        for l in quadcam_lib::gear::voice::sets::lines_of(id).unwrap() {
+            texts.push((l.line.path, l.line.text));
+        }
+    }
+    let counter = left.clone();
+    let helper = Arc::new(quadcam_lib::intel::fake::FakeHelper::new(Box::new(
+        move |f: &str| {
+            let mut n = counter.lock().unwrap();
+            if f.ends_with(LOW) && *n > 0 {
+                *n -= 1;
+                return Some("Battery.".into());
+            }
+            texts
+                .iter()
+                .find(|(p, _)| f.ends_with(p.as_str()))
+                .map(|(_, t)| format!("{t}."))
+        },
+    )));
+    let mut b = bench(99_000, true);
+    let intel = quadcam_lib::intel::Intel::with("/helper/quadcam-intel".into(), helper);
+    b.core = b.core.with_intel(Arc::new(intel));
+    let r = paid_render(
+        &b,
+        render("Callum", "eleven_turbo_v2_5", &["quad"], false, true),
+    );
+    assert!(r.retakes.iter().any(|t| t.path == LOW), "{r:?}");
+    let pack = b.dir.path().join("support/gear/voices").join(&r.pack);
+    // A dry run groups the line by the word it got wrong and prices every try; it sends
+    // nothing.
+    let posts = b.http.posts();
+    let grouped = |confirm: bool, digest: Option<String>| {
+        b.core
+            .gear_voice_retake(&quadcam_lib::core::RetakeParams {
+                pack: r.pack.clone(),
+                grouped: true,
+                confirm,
+                digest,
+                ..Default::default()
+            })
+            .unwrap()
+    };
+    let ask = grouped(false, None);
+    assert!(ask.needs_confirm, "{ask:?}");
+    assert_eq!(ask.groups.len(), 1, "{ask:?}");
+    let g = &ask.groups[0];
+    assert_eq!((g.word.as_str(), g.sample.as_str()), ("low", LOW));
+    assert_eq!(g.tries.len(), 6);
+    assert_eq!(g.tries[0].sentence, "The word is Battery low.");
+    assert_eq!(g.tries[1].sentence, "Say Battery low.");
+    assert!(ask.estimate.as_ref().is_some_and(|e| e.chars > 0));
+    assert_eq!(b.http.posts(), posts);
+    // A confirm without the digest is refused.
+    assert!(b
+        .core
+        .gear_voice_retake(&quadcam_lib::core::RetakeParams {
+            pack: r.pack.clone(),
+            grouped: true,
+            confirm: true,
+            ..Default::default()
+        })
+        .is_err());
+    assert_eq!(b.http.posts(), posts);
+    // The first try is heard wrong, the second (another carrier) right: it wins, and the pack
+    // keeps that way for the line.
+    let done = grouped(true, Some(ask.digest.clone()));
+    let g = &done.groups[0];
+    assert!(g.won, "{done:?}");
+    assert!(g.tries[0].tried && !g.tries[0].ok);
+    assert!(g.tries[1].tried && g.tries[1].ok);
+    assert!(!g.tries[2].tried);
+    assert_eq!(done.cleared, [LOW]);
+    assert_eq!(b.http.posts(), posts + 2);
+    let sent: Vec<String> = b
+        .http
+        .seen
+        .lock()
+        .unwrap()
+        .iter()
+        .filter(|q| q.url.contains("with-timestamps"))
+        .filter_map(|q| {
+            serde_json::from_str::<serde_json::Value>(q.body.as_deref()?)
+                .ok()?
+                .get("text")?
+                .as_str()
+                .map(String::from)
+        })
+        .collect();
+    assert_eq!(sent.last().map(String::as_str), Some("Say Battery low."));
+    assert!(pack.join(LOW).is_file());
+    let m: quadcam_lib::gear::voice::packs::PackManifest =
+        serde_json::from_slice(&std::fs::read(pack.join("pack.json")).unwrap()).unwrap();
+    assert!(!m.retakes.iter().any(|t| t.path == LOW));
+    assert_eq!(
+        m.structures,
+        [quadcam_lib::gear::voice::packs::Structure {
+            word: "low".into(),
+            say: "low".into(),
+            carrier: Some("Say {line}.".into()),
+            lines: vec![LOW.into()],
+        }]
+    );
+    // The check still compares with the line's text, and a recut of the pack's take costs
+    // nothing: the way it was said is the pack's.
+    let again = check(&b, &r.pack, &[]);
+    assert_eq!(again.mismatches, 0, "{again:?}");
+    let posts = b.http.posts();
+    let redo = b
+        .core
+        .gear_voice_render(&VoiceRenderParams {
+            lines: vec![LOW.into()],
+            ..render("Callum", "eleven_turbo_v2_5", &["quad"], true, false)
+        })
+        .unwrap();
+    assert_eq!(
+        redo.estimate.map(|e| e.chars),
+        Some(0),
+        "the take is reused"
+    );
+    assert_eq!(b.http.posts(), posts);
+}
+
+#[test]
 fn the_mcp_tools_list_flags_and_retake_only_with_confirm() {
     let b = bench(50000, true);
     let m = "eleven_turbo_v2_5";

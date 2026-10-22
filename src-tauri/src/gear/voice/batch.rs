@@ -12,7 +12,7 @@
 //!    keeps up to 120 ms of its hiss when no quiet divides it from the carrier (`keep_hiss`).
 //!    A fresh take is cached only after it cuts; a cached take that no longer cuts is removed.
 //! 4. `check` flags cuts that are silent, whose length is off for their text, or that start
-//!    with the carrier's last sound. A flagged line stays out of the pack and needs a re-take;
+//!    with the carrier's last sound (`cut` drops a hiss it finds there first). A flagged line stays out of the pack and needs a re-take;
 //!    its batch stays cached (it was paid).
 //! 5. The cut goes on through `render::normalise` (trim, fades, loudness, tempo) like any take.
 //!
@@ -42,9 +42,11 @@ fn snap_ms() -> u32 {
     40
 }
 
-/// The version of the way `cut` cuts. It changes whenever a cut comes out differently, so a
-/// pack cuts its kept batches again (from the batch cache, at no cost).
-pub const CUT_VERSION: u32 = 4;
+/// The version of the way `cut` cuts and `check` judges. It changes whenever a cut comes out
+/// differently or a check changes, so a pack cuts its kept batches again (from the batch
+/// cache, at no cost). 5: a cut drops the carrier's last hiss instead of failing on it, and an
+/// initialism's pace counts its letters' names.
+pub const CUT_VERSION: u32 = 5;
 
 /// How lines are batched and cut. Part of a batch's cache key only through the batch text.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Type)]
@@ -862,7 +864,7 @@ pub fn cut(b: &Batch, a: &Aligned, snap_ms: u32) -> Result<Vec<Cut>> {
         if s1 <= s0 {
             bail!("the line {:?} came out empty", item.spoken);
         }
-        out.push(Cut {
+        let mut c = Cut {
             spoken: item.spoken.clone(),
             pcm: Pcm {
                 rate: a.pcm.rate,
@@ -870,9 +872,22 @@ pub fn cut(b: &Batch, a: &Aligned, snap_ms: u32) -> Result<Vec<Cut>> {
             },
             from_s: s0 as f64 / rate,
             to_s: s1 as f64 / rate,
-        });
+        };
+        drop_bleed(&mut c);
+        out.push(c);
     }
     Ok(out)
+}
+
+/// Drops the carrier's last sound from the start of a cut (`carrier_bleed`): the cut starts
+/// in the quiet after the hiss.
+fn drop_bleed(c: &mut Cut) {
+    let Some((_, to, _)) = bleed(c) else {
+        return;
+    };
+    let n = (c.pcm.rate as usize / 100).max(1) * to;
+    c.pcm.samples.drain(..n.min(c.pcm.samples.len()));
+    c.from_s += n as f64 / f64::from(c.pcm.rate);
 }
 
 // ----- checking cuts -----
@@ -908,6 +923,12 @@ fn frames(p: &Pcm) -> Vec<(u64, u32)> {
 /// hiss and the gap in ms. A line that starts with a hissing letter may start with a hiss and
 /// a stop ("Stop", "Sky"), so it is not judged.
 fn carrier_bleed(c: &Cut) -> Option<(u32, u32)> {
+    bleed(c).map(|(from, to, gap)| ((to - from) as u32 * 10, (gap - to) as u32 * 10))
+}
+
+/// `carrier_bleed` in 10 ms frames: where the hiss starts, where it ends, and where the
+/// quiet after it ends.
+fn bleed(c: &Cut) -> Option<(usize, usize, usize)> {
     let first = c.spoken.chars().find(|x| x.is_alphanumeric())?;
     if "szxcfj".contains(first.to_ascii_lowercase()) {
         return None;
@@ -934,7 +955,68 @@ fn carrier_bleed(c: &Cut) -> Option<(u32, u32)> {
         return None;
     }
     let crossings = f[i..j].iter().map(|(_, z)| *z).sum::<u32>() / hiss as u32;
-    (crossings >= HISS_CROSSINGS).then_some((hiss as u32 * 10, (g - j) as u32 * 10))
+    (crossings >= HISS_CROSSINGS).then_some((i, j, g))
+}
+
+/// Each letter's name, A to Z, as a voice says it when it spells a word out.
+pub const LETTER_NAMES: [&str; 26] = [
+    "ay",
+    "bee",
+    "see",
+    "dee",
+    "ee",
+    "ef",
+    "gee",
+    "aitch",
+    "eye",
+    "jay",
+    "kay",
+    "el",
+    "em",
+    "en",
+    "oh",
+    "pee",
+    "cue",
+    "ar",
+    "ess",
+    "tee",
+    "you",
+    "vee",
+    "double you",
+    "ex",
+    "why",
+    "zee",
+];
+
+/// The letters a line is spoken with, for its pace: a word of capitals and digits (an
+/// initialism such as "OSD", "3D", or a letter of "L.Q.") counts the letters of each
+/// character's name ("oh ess dee"), as it takes that long to say.
+fn spoken_letters(spoken: &str) -> usize {
+    const DIGITS: [&str; 10] = [
+        "zero", "one", "two", "three", "four", "five", "six", "seven", "eight", "nine",
+    ];
+    spoken
+        .split(|c: char| !c.is_alphanumeric())
+        .filter(|w| !w.is_empty())
+        .map(|w| {
+            let initialism = w.chars().count() <= 4
+                && w.chars().any(|c| c.is_ascii_uppercase())
+                && w.chars()
+                    .all(|c| c.is_ascii_uppercase() || c.is_ascii_digit());
+            if !initialism {
+                return w.chars().count();
+            }
+            w.chars()
+                .map(|c| match c.to_digit(10) {
+                    Some(d) => DIGITS[d as usize].len(),
+                    None => LETTER_NAMES[(c as u8 - b'A') as usize]
+                        .replace(' ', "")
+                        .len(),
+                })
+                .sum()
+        })
+        .sum::<usize>()
+        .max(1)
 }
 
 /// A cut the checks found wrong: its line needs a re-take.
@@ -955,13 +1037,7 @@ impl std::fmt::Display for Flag {
 /// false) had no carrier, so its start is not judged for one.
 pub fn check(cuts: &[Cut], carrier: bool) -> Vec<Flag> {
     let ms = |c: &Cut| c.pcm.samples.len() as f64 * 1000.0 / f64::from(c.pcm.rate);
-    let letters = |c: &Cut| {
-        c.spoken
-            .chars()
-            .filter(|x| x.is_alphanumeric())
-            .count()
-            .max(1) as f64
-    };
+    let letters = |c: &Cut| spoken_letters(&c.spoken) as f64;
     let mut pace: Vec<f64> = cuts.iter().map(|c| ms(c) / letters(c)).collect();
     pace.sort_by(|a, b| a.partial_cmp(b).unwrap());
     let median = if pace.len() >= 4 {
@@ -1439,10 +1515,31 @@ mod tests {
         // After the word's tail, before the next "The".
         assert!((4.37..=4.80).contains(&c[0].to_s), "ends at {}", c[0].to_s);
         assert!(check(&c, true).is_empty(), "{:?}", check(&c, true));
-        // Cut on the timestamps alone, the line starts with the carrier's "s": flagged.
+        // Cut on the timestamps alone, the line would start with the carrier's "s": the cut
+        // drops it and starts in the quiet after it.
         let raw = cut(&b, &a, 0).unwrap();
-        assert!((raw[0].from_s - 3.12).abs() < 1e-4);
-        let flags = check(&raw, true);
+        assert!(
+            (3.13..=3.21).contains(&raw[0].from_s),
+            "starts at {}",
+            raw[0].from_s
+        );
+        assert!(check(&raw, true).is_empty(), "{:?}", check(&raw, true));
+        // A cut that still starts with the hiss is flagged.
+        let n = ((raw[0].from_s - 3.12) * 32000.0).round() as usize;
+        let start = (3.12 * 32000.0) as usize;
+        let bled = Cut {
+            pcm: Pcm {
+                rate: 32000,
+                samples: [
+                    &a.pcm.samples[start..start + n],
+                    raw[0].pcm.samples.as_slice(),
+                ]
+                .concat(),
+            },
+            from_s: 3.12,
+            ..raw[0].clone()
+        };
+        let flags = check(std::slice::from_ref(&bled), true);
         assert_eq!(flags.len(), 1, "{flags:?}");
         assert!(
             flags[0].reason.contains("hiss") && flags[0].reason.contains("gap"),
@@ -1450,8 +1547,31 @@ mod tests {
             flags[0].reason
         );
         // A take spoken alone had no carrier: its start is not judged for one.
-        let alone = check(&raw, false);
+        let alone = check(std::slice::from_ref(&bled), false);
         assert!(alone.is_empty(), "{alone:?}");
+    }
+
+    #[test]
+    fn an_initialism_is_paced_by_its_letters_names() {
+        assert_eq!(spoken_letters("L.Q."), 5);
+        assert_eq!(spoken_letters("OSD"), 8);
+        assert_eq!(spoken_letters("3D"), 8);
+        assert_eq!(spoken_letters("Signal low"), 9);
+        assert_eq!(spoken_letters("Armed"), 5);
+        // An LQ of a second among words of a usual pace is not long; three seconds is.
+        let mut cuts = vec![
+            cut_of("battery low", 800, 3000),
+            cut_of("signal low", 700, 3000),
+            cut_of("armed", 450, 3000),
+            cut_of("disarmed", 600, 3000),
+            cut_of("L.Q.", 1100, 3000),
+            cut_of("O.S.D.", 1300, 3000),
+        ];
+        assert!(check(&cuts, true).is_empty(), "{:?}", check(&cuts, true));
+        cuts.push(cut_of("V.T.X.", 3000, 3000));
+        let w = check(&cuts, true);
+        assert_eq!(w.len(), 1, "{w:?}");
+        assert!(w[0].reason.contains("long for its text"));
     }
 
     #[test]

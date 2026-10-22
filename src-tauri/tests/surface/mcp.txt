@@ -275,6 +275,7 @@ mcp.param quadcam_gear_edit.folder string
 mcp.param quadcam_gear_edit.free array<string>
 mcp.param quadcam_gear_edit.from string
 mcp.param quadcam_gear_edit.full_v number
+mcp.param quadcam_gear_edit.grouped boolean
 mcp.param quadcam_gear_edit.handle string
 mcp.param quadcam_gear_edit.id string
 mcp.param quadcam_gear_edit.install boolean
@@ -328,6 +329,7 @@ mcp.param quadcam_gear_edit.text string
 mcp.param quadcam_gear_edit.time_s number
 mcp.param quadcam_gear_edit.title string
 mcp.param quadcam_gear_edit.to string
+mcp.param quadcam_gear_edit.tries integer
 mcp.param quadcam_gear_edit.unlink boolean
 mcp.param quadcam_gear_edit.version string
 mcp.param quadcam_gear_edit.voice string

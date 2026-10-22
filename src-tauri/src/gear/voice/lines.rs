@@ -149,6 +149,9 @@ pub fn check_path(path: &str) -> Result<()> {
 pub struct Spelling {
     /// Longest word first.
     rules: Vec<(String, String)>,
+    /// A pack's own ways to say some words (`packs::Structure`), ahead of `rules`: whole
+    /// words, any case.
+    words: Vec<(String, String)>,
 }
 
 #[derive(Deserialize)]
@@ -187,10 +190,23 @@ impl Spelling {
             }
         }
         rules.sort_by(|a, b| b.0.len().cmp(&a.0.len()).then(a.0.cmp(&b.0)));
-        Ok(Spelling { rules })
+        Ok(Spelling {
+            rules,
+            words: Vec::new(),
+        })
     }
 
-    /// The text a voice speaks: each rule applies to whole words, case-sensitive.
+    /// These rules with a pack's own ways to say some words ahead of them, as (word, what
+    /// to say): each matches a whole word of the text, any case.
+    pub fn with_words(&self, words: &[(String, String)]) -> Spelling {
+        Spelling {
+            rules: self.rules.clone(),
+            words: words.to_vec(),
+        }
+    }
+
+    /// The text a voice speaks: each rule applies to whole words, case-sensitive; a pack's
+    /// own words (`with_words`) first, any case.
     pub fn apply(&self, text: &str) -> String {
         let mut out = String::new();
         let chars: Vec<char> = text.chars().collect();
@@ -206,6 +222,14 @@ impl Spelling {
                 i += 1;
             }
             let word: String = chars[start..i].iter().collect();
+            if let Some((_, v)) = self
+                .words
+                .iter()
+                .find(|(k, _)| k.eq_ignore_ascii_case(&word))
+            {
+                out.push_str(v);
+                continue;
+            }
             match self.rules.iter().find(|(k, _)| *k == word) {
                 Some((_, v)) => out.push_str(v),
                 None => out.push_str(&word),

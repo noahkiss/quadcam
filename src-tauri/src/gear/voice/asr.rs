@@ -32,6 +32,11 @@ const TENS: [&str; 10] = [
     "", "", "twenty", "thirty", "forty", "fifty", "sixty", "seventy", "eighty", "ninety",
 ];
 
+/// One digit as a word.
+pub fn digit_word(d: u32) -> &'static str {
+    ONES[d.min(9) as usize]
+}
+
 /// A whole number as words, below a million; larger numbers digit by digit.
 fn number_words(n: u64) -> String {
     fn below_thousand(n: u64, out: &mut Vec<String>) {
@@ -78,6 +83,16 @@ fn spell_numbers(text: &str) -> String {
     let mut out = String::new();
     let mut i = 0;
     while i < chars.len() {
+        // A point read before a number or a word, as the recognizer writes "point five":
+        // ".5", ".one". Not inside a word: "G.P.S." keeps its dots.
+        if chars[i] == '.'
+            && chars.get(i + 1).is_some_and(|c| c.is_alphanumeric())
+            && (i == 0 || !chars[i - 1].is_alphanumeric())
+        {
+            out.push_str(" point ");
+            i += 1;
+            continue;
+        }
         if !chars[i].is_ascii_digit() {
             match chars[i] {
                 '%' => out.push_str(" percent "),
@@ -125,10 +140,60 @@ pub fn normalise(text: &str, spelling: &Spelling) -> String {
         .collect()
 }
 
-/// Whether what the recognizer heard is the line's spoken text.
+/// Words the recognizer writes as another word that sounds the same, as (the line's word,
+/// what was heard). Each pair is a true sound-alike: a heard word counts as the line's word
+/// only when the line has that word. A word that sounds different ("blocked" for "locked",
+/// "Boilers" for "Spoilers") is never here: that take is wrong.
+const SOUND_ALIKES: &[(&str, &str)] = &[
+    ("amp", "am"),
+    ("hertz", "hurts"),
+    ("high", "hi"),
+    ("idle", "idol"),
+    ("knot", "not"),
+    ("lift", "lyft"),
+    ("radians", "radiance"),
+    ("variance", "variants"),
+    ("watt", "what"),
+];
+
+/// The words of a text as the check compares them: the spelling rules, numbers as words, each
+/// word only its letters and digits, lowercase.
+pub fn words(text: &str, spelling: &Spelling) -> Vec<String> {
+    spell_numbers(&spelling.apply(text))
+        .split_whitespace()
+        .map(|w| {
+            w.chars()
+                .filter(|c| c.is_alphanumeric())
+                .flat_map(char::to_lowercase)
+                .collect::<String>()
+        })
+        .filter(|w| !w.is_empty())
+        .collect()
+}
+
+/// Whether what the recognizer heard is the line's spoken text. A heard word that sounds
+/// like one of the line's words (`SOUND_ALIKES`) counts as that word, and a line that starts
+/// with "point" may be heard with a zero before it ("0.5" for "point five").
 pub fn same(spoken: &str, heard: &str, spelling: &Spelling) -> bool {
     let want = normalise(spoken, spelling);
-    !want.is_empty() && want == normalise(heard, spelling)
+    if want.is_empty() {
+        return false;
+    }
+    let got = normalise(heard, spelling);
+    if want == got {
+        return true;
+    }
+    let mine = words(spoken, spelling);
+    let got: String = words(heard, spelling)
+        .into_iter()
+        .map(|w| {
+            SOUND_ALIKES
+                .iter()
+                .find(|(line, alike)| *alike == w && mine.iter().any(|m| m == line))
+                .map_or(w, |(line, _)| line.to_string())
+        })
+        .collect();
+    want == got || (want.starts_with("point") && got.strip_prefix("zero") == Some(&want))
 }
 
 /// The reason a re-take gives for a line the check heard wrong.
@@ -188,6 +253,71 @@ mod tests {
         assert!(!same(&spoken("Battery low"), "Battery.", &sp));
         assert!(!same(&spoken("six"), "", &sp));
         assert!(!same("", "", &sp));
+    }
+
+    #[test]
+    fn a_sound_alike_of_the_lines_word_passes() {
+        let sp = Spelling::builtin().unwrap();
+        let spoken = |t: &str| sp.apply(t);
+        assert!(same(&spoken("hertz"), "Hurts.", &sp));
+        assert!(same(&spoken("watt"), "What?", &sp));
+        assert!(same(&spoken("high"), "Hi.", &sp));
+        assert!(same(&spoken("amp"), "Am.", &sp));
+        assert!(same(&spoken("EKF variance"), "EKF variants.", &sp));
+        assert!(same(
+            &spoken("Reverse Thrust Idle"),
+            "Reverse thrust idol.",
+            &sp
+        ));
+        assert!(same(&spoken("Lift"), "Lyft.", &sp));
+        assert!(same(&spoken("radians"), "Radiance.", &sp));
+        assert!(same(&spoken("knot"), "Not.", &sp));
+        // Only for the word the line has.
+        assert!(!same(&spoken("watts"), "What?", &sp));
+        assert!(!same(&spoken("knot"), "What?", &sp));
+        assert!(!same(&spoken("Armed"), "Hi.", &sp));
+    }
+
+    #[test]
+    fn a_point_is_heard_as_a_dot() {
+        let sp = Spelling::builtin().unwrap();
+        let spoken = |t: &str| sp.apply(t);
+        assert!(same(&spoken("point five"), ".5.", &sp));
+        assert!(same(&spoken("point one"), ".one.", &sp));
+        assert!(same(&spoken("point zero"), "0.0.", &sp));
+        assert!(same(&spoken("point two"), "0.2", &sp));
+        assert!(!same(&spoken("point two"), ".3.", &sp));
+        assert!(!same(&spoken("two"), "0.2", &sp));
+        assert!(same(&spoken("GPS fix"), "G.P.S. fix", &sp));
+    }
+
+    #[test]
+    fn a_word_that_sounds_different_still_fails() {
+        let sp = Spelling::builtin().unwrap();
+        let spoken = |t: &str| sp.apply(t);
+        for (line, heard) in [
+            ("Spoilers down", "Boilers down."),
+            ("Spoilers up", "Boilers up."),
+            ("Spooling up", "Booling up."),
+            ("Locked", "blocked."),
+            ("Angle off", "Angle loft."),
+            ("Angle on", "Hang along."),
+            ("RF mode", "Ref mode."),
+            ("Diffs locked", "Diff's lock."),
+            ("hertz", "Turfs."),
+            ("knots", "Not."),
+            ("low", "Blow."),
+            ("Half pack", "It's half pack."),
+            ("radians", "Indians."),
+            ("Reverse Thrust", "Verse thrust."),
+            ("milliamps", "Billy amps."),
+            ("Max gyro", "Axe gyro."),
+            ("minus", "Highness."),
+            ("no", "Oh."),
+            ("thirty", "Oh, see."),
+        ] {
+            assert!(!same(&spoken(line), heard, &sp), "{line:?} heard {heard:?}");
+        }
     }
 
     #[test]

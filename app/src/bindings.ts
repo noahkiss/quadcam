@@ -6820,6 +6820,29 @@ export type Retake = {
 	reason: string,
 };
 
+/**  One group of a grouped re-take. */
+export type RetakeGroup = {
+	/**  The word the group's lines got wrong, as the first line's text writes it. */
+	word: string,
+	/**  Its card paths. */
+	lines: string[],
+	/**  The line tried first. */
+	sample: string,
+	/**  Each way the sample was tried (all of them, priced, in a dry run). */
+	tries: RetakeTry[],
+	/**
+	 *  The way that won, kept by the pack for the group's lines; absent when none won, or
+	 *  when a new seed alone was enough.
+	 */
+	structure?: Structure | null,
+	/**  A way won (the sample is in the pack). */
+	won?: boolean,
+	/**  Lines in the pack now. */
+	passed?: string[],
+	/**  Lines still out of the pack. */
+	still_out?: string[],
+};
+
 /**
  *  `gear_voice_retake`: the flagged takes of one sample voice or one pack, made again with
  *  another seed.
@@ -6833,6 +6856,14 @@ export type RetakeParams = {
 	confirm?: boolean,
 	/**  The `digest` of the unconfirmed call. A paid `confirm` needs it. */
 	digest?: string | null,
+	/**
+	 *  A pack's re-take lines grouped by the word each got wrong: one line per group is tried
+	 *  in other ways until the speech check hears it right, and the rest of the group is made
+	 *  the way that won (`voice_groups`).
+	 */
+	grouped?: boolean,
+	/**  With `grouped`: the ways one group's line is tried at most (default 6, at most 12). */
+	tries?: number | null,
 };
 
 export type RetakeReport = {
@@ -6849,6 +6880,27 @@ export type RetakeReport = {
 	/**  Lines with a new take now: their flags are gone. */
 	cleared?: string[],
 	notes?: string[],
+	/**  With `grouped`: each group, its tries and what came of them. */
+	groups?: RetakeGroup[],
+};
+
+/**  One way of saying a group's sample. */
+export type RetakeTry = {
+	/**  What the voice is sent for the word. */
+	say: string,
+	/**  The carrier; absent for the render's own. */
+	carrier?: string | null,
+	seed: number,
+	/**  The sentence sent. */
+	sentence: string,
+	/**  Not tried yet (a dry run, or a way after the one that won). */
+	tried?: boolean,
+	/**  The speech check heard the line right and its cut passed. */
+	ok?: boolean,
+	/**  What the speech check heard. */
+	heard?: string | null,
+	/**  Why the line is still out. */
+	reason?: string | null,
 };
 
 /**  One line of the review. */
@@ -7952,6 +8004,23 @@ export type StorageView = {
 	devices: DeviceStorage[],
 };
 
+/**
+ *  One word's way to be said in some lines of one pack: what the voice is sent in its
+ *  place, and the carrier those lines are spoken in. The speech check still compares with the
+ *  line's own text. Only the lines it names use it, so a render of the pack's other lines with
+ *  the word sends the same text as before.
+ */
+export type Structure = {
+	/**  The word as the line's text writes it, matched whole and in any case. */
+	word: string,
+	/**  What the voice is sent for it. */
+	say: string,
+	/**  The carrier for its lines (`{line}` stands for the line); absent for the render's own. */
+	carrier?: string | null,
+	/**  The card paths that use it. */
+	lines: string[],
+};
+
 export type StudioEstimate = {
 	voice: string,
 	voice_name: string,
@@ -8466,7 +8535,10 @@ export type VoiceAddReport = {
 export type VoiceCheckParams = {
 	/**  An installed or rendered pack id. */
 	pack: string,
-	/**  Card paths to check; empty for every line of the pack. */
+	/**
+	 *  Card paths to check; empty for every line of the pack. A line the check took out of
+	 *  the pack is heard again from its held take, and goes back in when heard right.
+	 */
 	lines?: string[],
 	/**
 	 *  Card paths whose heard text the person accepts: each passes, and a line the check took
@@ -8488,6 +8560,11 @@ export type VoiceCheckReport = {
 	mismatches: number,
 	/**  Of those, lines taken out of the pack as re-takes. */
 	held?: number,
+	/**
+	 *  Lines out of the pack as re-takes, named in `lines`, whose held take the check heard
+	 *  right now: back in the pack.
+	 */
+	back?: number,
 	notes: string[],
 };
 

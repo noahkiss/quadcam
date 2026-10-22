@@ -620,9 +620,11 @@ cli.flag gear voice render-packs --voices VALUE
 cli.flag gear voice retake --confirm
 cli.flag gear voice retake --digest VALUE
 cli.flag gear voice retake --dry-run
+cli.flag gear voice retake --grouped
 cli.flag gear voice retake --lines VALUE
 cli.flag gear voice retake --pack VALUE
 cli.flag gear voice retake --sample VALUE
+cli.flag gear voice retake --tries VALUE
 cli.flag gear voice sample --carrier VALUE
 cli.flag gear voice sample --confirm
 cli.flag gear voice sample --digest VALUE

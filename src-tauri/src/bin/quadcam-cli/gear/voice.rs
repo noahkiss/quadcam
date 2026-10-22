@@ -314,6 +314,14 @@ pub enum VoiceCmd {
         /// plan changed since.
         #[arg(long)]
         digest: Option<String>,
+        /// A pack's re-take lines grouped by the word each got wrong: one line per group is
+        /// tried in other ways (seed, carrier, spelling) until the speech check hears it right,
+        /// then the rest of the group is made that way. The price is the most it can cost.
+        #[arg(long, requires = "pack")]
+        grouped: bool,
+        /// With --grouped: the ways one group's line is tried at most (default 6, at most 12).
+        #[arg(long, requires = "grouped")]
+        tries: Option<u32>,
     },
     /// Render QuadCam's lines (and your own) with the provider from the settings into a local
     /// pack. A provider that may charge needs --confirm. With --set, render line sets as
@@ -383,7 +391,8 @@ pub enum VoiceCmd {
     Check {
         /// The pack id.
         pack: String,
-        /// Only these card paths, comma separated.
+        /// Only these card paths, comma separated. A re-take line is heard again from its held
+        /// take and goes back into the pack when heard right.
         #[arg(long, value_delimiter = ',')]
         lines: Vec<String>,
         /// Keep what was heard for these card paths, comma separated: each passes, and goes
@@ -770,6 +779,8 @@ pub fn run(core: &Core, a: VoiceArgs) -> Result<Value> {
             dry_run,
             confirm,
             digest,
+            grouped,
+            tries,
         }) => serde_json::to_value(call::gear_voice_retake(
             core,
             api::RetakeParams {
@@ -779,6 +790,8 @@ pub fn run(core: &Core, a: VoiceArgs) -> Result<Value> {
                 dry_run,
                 confirm,
                 digest,
+                grouped,
+                tries,
             },
         )?)?,
         Some(VoiceCmd::Render {

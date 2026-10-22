@@ -54,6 +54,7 @@ mod update;
 mod video;
 mod voice;
 mod voice_check;
+mod voice_groups;
 mod voice_publish;
 mod voice_samples;
 mod voice_studio;
@@ -141,6 +142,7 @@ pub use voice::{
     VoicePreviewParams, VoiceRenderParams, VoiceView, VOICE_CHANGE,
 };
 pub use voice_check::{check_text as voice_check_text, VoiceCheckParams, VoiceCheckReport};
+pub use voice_groups::{RetakeGroup, RetakeTry};
 pub use voice_publish::{
     approve_text as voice_approve_text, preview_text as voice_preview_text,
     review_text as voice_review_text, PackPreviewParams, PreviewTake, PublishApproveParams,

@@ -81,6 +81,8 @@ fn pack(voices: &Path, id: &str, paths: &[&str]) -> PathBuf {
         firmware: "edgetx".into(),
         voice_id: String::new(),
         heard: vec![],
+
+        structures: vec![],
     };
     std::fs::write(dir.join("pack.json"), serde_json::to_vec(&m).unwrap()).unwrap();
     dir

@@ -206,6 +206,8 @@ fn pack(b: &Bench, provider: &str, wrong: &[&str], accepted: &[&str], unheard: &
         firmware: "edgetx".into(),
         voice_id: "v-callum".into(),
         heard,
+
+        structures: vec![],
     };
     std::fs::write(dir.join("pack.json"), serde_json::to_vec(&m).unwrap()).unwrap();
 }

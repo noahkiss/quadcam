@@ -20,6 +20,7 @@ use crate::gear::voice::packs::{self, HeardLine, PackManifest, Retake};
 use crate::gear::voice::render::RenderSettings;
 use crate::gear::voice::reuse::{Entry, EntryHeard, LineIndex, Scope};
 use crate::gear::voice::sets;
+use crate::gear::voice::wav::{self, Pcm};
 use crate::intel::{self, Feature};
 use anyhow::{anyhow, bail, Result};
 use serde::{Deserialize, Serialize};
@@ -31,7 +32,8 @@ use std::path::PathBuf;
 pub struct VoiceCheckParams {
     /// An installed or rendered pack id.
     pub pack: String,
-    /// Card paths to check; empty for every line of the pack.
+    /// Card paths to check; empty for every line of the pack. A line the check took out of
+    /// the pack is heard again from its held take, and goes back in when heard right.
     #[serde(default)]
     pub lines: Vec<String>,
     /// Card paths whose heard text the person accepts: each passes, and a line the check took
@@ -57,6 +59,10 @@ pub struct VoiceCheckReport {
     /// Of those, lines taken out of the pack as re-takes.
     #[serde(default)]
     pub held: u32,
+    /// Lines out of the pack as re-takes, named in `lines`, whose held take the check heard
+    /// right now: back in the pack.
+    #[serde(default)]
+    pub back: u32,
     pub notes: Vec<String>,
 }
 
@@ -148,16 +154,26 @@ impl Core {
             lines: Vec::new(),
             mismatches: 0,
             held: 0,
+            back: 0,
             notes: Vec::new(),
         };
+        // A line the check took out of the pack is heard again from its held take, when named.
+        let held_out = |o: &String| {
+            !m.files.contains(o)
+                && m.retakes
+                    .iter()
+                    .any(|r| r.path == *o && asr::is_speech_reason(&r.reason))
+                && self.held_dir(id).join(o).is_file()
+        };
         for o in only {
-            if !m.files.contains(o) {
+            if !m.files.contains(o) && !held_out(o) {
                 bail!("The pack {id} has no line {o:?}.");
             }
         }
         let texts = self.line_texts()?;
         let mut paths: Vec<String> = Vec::new();
-        for f in &m.files {
+        let named_held: Vec<&String> = only.iter().filter(|o| held_out(o)).collect();
+        for f in m.files.iter().chain(named_held.iter().copied()) {
             if !only.is_empty() && !only.contains(f) {
                 continue;
             }
@@ -169,11 +185,18 @@ impl Core {
                 ));
             }
         }
-        let files: Vec<PathBuf> = paths.iter().map(|f| dir.join(f)).collect();
-        let t = self
-            .gear
-            .intel
-            .transcribe(&files, &intel::locale_of(&m.lang))?;
+        let was_held: HashSet<String> = named_held.into_iter().cloned().collect();
+        let files: Vec<PathBuf> = paths
+            .iter()
+            .map(|f| {
+                if was_held.contains(f) {
+                    self.held_dir(id).join(f)
+                } else {
+                    dir.join(f)
+                }
+            })
+            .collect();
+        let t = self.hear(&files, &intel::locale_of(&m.lang))?;
         if let Some(why) = t.unavailable {
             report.reason = Some(why);
             return Ok(report);
@@ -209,8 +232,11 @@ impl Core {
             let heard = h.text.clone().unwrap_or_default();
             let spoken = spelling.apply(text);
             let ok = asr::same(&spoken, &heard, &spelling);
+            // The line index knows a take by what the voice was sent; the check compares with
+            // the line's own text.
+            let said = m.spelling_for(&spelling, path).apply(text);
             let take = if studio {
-                index.take_of(&scope, &spoken)
+                index.take_of(&scope, &said)
             } else {
                 None
             };
@@ -223,7 +249,7 @@ impl Core {
                     .any(|x| x.path == *path && x.accepted && x.heard == heard)
                     || take.is_some_and(|n| {
                         index.entries()[n].heard.iter().any(|x| {
-                            x.accepted && x.heard == heard && x.spoken.eq_ignore_ascii_case(&spoken)
+                            x.accepted && x.heard == heard && x.spoken.eq_ignore_ascii_case(&said)
                         })
                     }));
             let line = HeardLine {
@@ -239,9 +265,9 @@ impl Core {
                 let said = e
                     .items
                     .iter()
-                    .find(|i| i.spoken.eq_ignore_ascii_case(&spoken))
+                    .find(|i| i.spoken.eq_ignore_ascii_case(&said))
                     .map(|i| i.spoken.clone())
-                    .unwrap_or(spoken.clone());
+                    .unwrap_or(said.clone());
                 e.set_heard(EntryHeard {
                     spoken: said,
                     heard: heard.clone(),
@@ -263,11 +289,26 @@ impl Core {
             m.heard.push(l.clone());
         }
         m.heard.sort_by(|a, b| a.path.cmp(&b.path));
-        for (path, heard, take) in &held {
-            let to = self.held_dir(id).join(path);
+        // A held take heard right now goes back into the pack.
+        for l in checked
+            .iter()
+            .filter(|l| (l.ok || l.accepted) && was_held.contains(&l.path))
+        {
+            let to = dir.join(&l.path);
             std::fs::create_dir_all(to.parent().unwrap())?;
-            let _ = std::fs::remove_file(&to);
-            std::fs::rename(dir.join(path), &to)?;
+            std::fs::rename(self.held_dir(id).join(&l.path), &to)?;
+            m.files.push(l.path.clone());
+            m.retakes.retain(|r| r.path != l.path);
+            report.back += 1;
+        }
+        m.files.sort();
+        for (path, heard, take) in &held {
+            if !was_held.contains(path) {
+                let to = self.held_dir(id).join(path);
+                std::fs::create_dir_all(to.parent().unwrap())?;
+                let _ = std::fs::remove_file(&to);
+                std::fs::rename(dir.join(path), &to)?;
+            }
             m.files.retain(|f| f != path);
             m.retakes.retain(|r| r.path != *path);
             m.retakes.push(Retake {
@@ -285,7 +326,9 @@ impl Core {
                 );
                 m.kept_batches.retain(|x| *x != k);
             }
-            report.held += 1;
+            if !was_held.contains(path) {
+                report.held += 1;
+            }
         }
         m.lines = m.files.len() as u32;
         write_manifest(&dir, &m)?;
@@ -318,6 +361,7 @@ impl Core {
             lines: Vec::new(),
             mismatches: 0,
             held: 0,
+            back: 0,
             notes: Vec::new(),
         };
         for p in paths {
@@ -325,7 +369,7 @@ impl Core {
                 bail!("The speech check has not heard {p:?} in the pack {id}.");
             }
         }
-        let spelling = Spelling::builtin()?;
+        let base = Spelling::builtin()?;
         let cache = BatchCache::new(&self.cache);
         let settings = m.settings.clone();
         let scope = Scope {
@@ -344,10 +388,11 @@ impl Core {
         let mut takes = Vec::new();
         let wanted: HashSet<&String> = paths.iter().collect();
         let mut back = Vec::new();
+        let pack = m.clone();
         for h in m.heard.iter_mut().filter(|h| wanted.contains(&h.path)) {
             h.accepted = !h.ok;
             report.lines.push(h.clone());
-            let spoken = spelling.apply(&h.text);
+            let spoken = pack.spelling_for(&base, &h.path).apply(&h.text);
             // Every take of the line that the check heard this way.
             if studio {
                 for e in index.entries() {
@@ -395,7 +440,66 @@ impl Core {
     }
 }
 
+/// The silence put before and after a file the recognizer heard nothing in.
+const PAD_MS: u32 = 500;
+
 impl Core {
+    /// What the recognizer hears in each file. A short word with no quiet around it ("Lap",
+    /// "no") is often heard as nothing, so a file heard as nothing is heard again with
+    /// `PAD_MS` of silence before and after it. Only the copy is padded.
+    pub(super) fn hear(&self, files: &[PathBuf], locale: &str) -> Result<intel::Transcripts> {
+        let mut t = self.gear.intel.transcribe(files, locale)?;
+        if t.unavailable.is_some() || t.heard.len() != files.len() {
+            return Ok(t);
+        }
+        let empty: Vec<usize> = (0..files.len())
+            .filter(|&i| {
+                let h = &t.heard[i];
+                h.error.is_none() && h.text.as_deref().unwrap_or("").trim().is_empty()
+            })
+            .collect();
+        if empty.is_empty() {
+            return Ok(t);
+        }
+        let dir = self.cache.join("voice").join("padded");
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir)?;
+        let mut padded = Vec::new();
+        let mut which = Vec::new();
+        for &i in &empty {
+            let Ok(p) = std::fs::read(&files[i])
+                .map_err(anyhow::Error::from)
+                .and_then(|b| wav::read(&b))
+            else {
+                continue;
+            };
+            let pad = vec![0i16; (p.rate * PAD_MS / 1000) as usize];
+            let out = Pcm {
+                rate: p.rate,
+                samples: [pad.as_slice(), &p.samples, &pad].concat(),
+            };
+            let to = dir.join(format!("{i}.wav"));
+            std::fs::write(&to, wav::write(&out))?;
+            padded.push(to);
+            which.push(i);
+        }
+        let again = self.gear.intel.transcribe(&padded, locale);
+        let _ = std::fs::remove_dir_all(&dir);
+        let again = again?;
+        if again.unavailable.is_some() || again.heard.len() != padded.len() {
+            return Ok(t);
+        }
+        for (i, h) in which.into_iter().zip(again.heard) {
+            if h.error.is_none() && !h.text.as_deref().unwrap_or("").trim().is_empty() {
+                t.heard[i] = intel::Heard {
+                    file: t.heard[i].file.clone(),
+                    ..h
+                };
+            }
+        }
+        Ok(t)
+    }
+
     /// After a render: the speech check hears the lines rendered into the pack now. A check
     /// that cannot run leaves the report as it is; one that fails adds a note, never an error.
     pub(super) fn check_after_render(&self, id: &str, paths: &[String], report: &mut RenderReport) {
@@ -439,7 +543,7 @@ impl Core {
         if files.is_empty() {
             return;
         }
-        let t = match self.gear.intel.transcribe(&files, &intel::locale_of("en")) {
+        let t = match self.hear(&files, &intel::locale_of("en")) {
             Ok(t) => t,
             Err(e) => {
                 r.warnings
@@ -544,6 +648,9 @@ pub fn check_text(r: &VoiceCheckReport) -> String {
         );
         if r.held > 0 {
             let _ = write!(s, ", {} out of the pack as re-takes", r.held);
+        }
+        if r.back > 0 {
+            let _ = write!(s, ", {} heard right now and back in the pack", r.back);
         }
         s.push('.');
         for l in &r.lines {

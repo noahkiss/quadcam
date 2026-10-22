@@ -13,6 +13,7 @@
 
 use super::voice::{copy_dir, slug};
 use super::voice_check::{holds_lines, read_manifest, write_manifest};
+use super::voice_groups::RetakeGroup;
 use super::voice_studio::{kept_key, SampleParams, SampleReport, PROVIDER};
 use super::{Core, RenderReport, VoiceRenderParams};
 use crate::gear::voice::batch::{BatchCache, Estimate};
@@ -231,6 +232,14 @@ pub struct RetakeParams {
     /// The `digest` of the unconfirmed call. A paid `confirm` needs it.
     #[serde(default)]
     pub digest: Option<String>,
+    /// A pack's re-take lines grouped by the word each got wrong: one line per group is tried
+    /// in other ways until the speech check hears it right, and the rest of the group is made
+    /// the way that won (`voice_groups`).
+    #[serde(default)]
+    pub grouped: bool,
+    /// With `grouped`: the ways one group's line is tried at most (default 6, at most 12).
+    #[serde(default)]
+    pub tries: Option<u32>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, specta::Type)]
@@ -250,6 +259,9 @@ pub struct RetakeReport {
     pub cleared: Vec<String>,
     #[serde(default)]
     pub notes: Vec<String>,
+    /// With `grouped`: each group, its tries and what came of them.
+    #[serde(default)]
+    pub groups: Vec<RetakeGroup>,
 }
 
 /// Voice id and name by the slug of the name.
@@ -411,12 +423,12 @@ enum Target {
     Sample {
         id: String,
         dir: PathBuf,
-        set: SampleSet,
+        set: Box<SampleSet>,
     },
     Pack {
         id: String,
         dir: PathBuf,
-        m: PackManifest,
+        m: Box<PackManifest>,
     },
 }
 
@@ -869,7 +881,7 @@ impl Core {
                 Ok(Target::Sample {
                     id: s.to_string(),
                     dir,
-                    set,
+                    set: Box::new(set),
                 })
             }
             ("", k) if !k.is_empty() => {
@@ -880,7 +892,7 @@ impl Core {
                 Ok(Target::Pack {
                     id: k.to_string(),
                     dir,
-                    m,
+                    m: Box::new(m),
                 })
             }
             _ => bail!("Name one sample (gear_voice_samples) or one pack."),
@@ -902,11 +914,11 @@ impl Core {
             model: &m.model,
             settings: &m.settings,
         });
-        let spelling = Spelling::builtin()?;
+        let base = Spelling::builtin()?;
         Ok(held
             .iter()
             .map(|r| {
-                let spoken = spelling.apply(&r.text);
+                let spoken = m.spelling_for(&base, &r.path).apply(&r.text);
                 let takes = index
                     .entries()
                     .iter()
@@ -955,7 +967,12 @@ impl Core {
             model: &model,
             settings: &settings,
         };
-        let spoken = Spelling::builtin().ok()?.apply(text);
+        let base = Spelling::builtin().ok()?;
+        let spoken = match t {
+            Target::Pack { m, .. } => m.spelling_for(&base, line),
+            Target::Sample { .. } => base,
+        }
+        .apply(text);
         let index = LineIndex::load(&scope);
         let mut changed = Vec::new();
         if on {
@@ -1093,6 +1110,9 @@ impl Core {
     /// failed its checks) without a flag. A paid call: without `confirm` (or with `dry_run`) it
     /// prices the lines and answers the digest.
     pub fn gear_voice_retake(&self, p: &RetakeParams) -> Result<RetakeReport> {
+        if p.grouped {
+            return self.voice_retake_grouped(p);
+        }
         let t = self.flag_target(&p.sample, &p.pack)?;
         let flags = read_flags(t.dir());
         let picked: Vec<&TakeFlag> = flags
@@ -1140,6 +1160,7 @@ impl Core {
             digest: String::new(),
             cleared: Vec::new(),
             notes: Vec::new(),
+            groups: Vec::new(),
         };
         // The lines with a new take after the run.
         let made: Vec<String> = match &t {
@@ -1335,6 +1356,14 @@ pub fn retake_text(r: &RetakeReport) -> String {
     let mut s = String::new();
     if r.needs_confirm {
         let _ = write!(s, "Not rendered: this sends {} lines of {} to ElevenLabs, which bills it. Ask the person, then run again with confirm and digest {}.", r.lines.len(), r.id, r.digest);
+    } else if !r.groups.is_empty() && !r.dry_run {
+        let _ = write!(
+            s,
+            "Grouped re-take of {}: {} of {} lines in the pack now.",
+            r.id,
+            r.cleared.len(),
+            r.lines.len()
+        );
     } else if r.dry_run {
         let _ = write!(
             s,
@@ -1354,6 +1383,7 @@ pub fn retake_text(r: &RetakeReport) -> String {
     if let Some(e) = &r.estimate {
         let _ = write!(s, " {}", super::voice_studio::estimate_text(e));
     }
+    s.push_str(&super::voice_groups::groups_text(&r.groups));
     for n in &r.notes {
         let _ = write!(s, "\n{n}");
     }

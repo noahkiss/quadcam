@@ -784,7 +784,9 @@ the voices, the models, the line sets, the cost, **Sample** and **Render pack**,
   QuadCam refuses a confirm whose plan changed ("estimate again"). A change to any picker
   closes the question. The CLI (`--digest`) and MCP (`digest`) work the same way.
 - **Re-takes.** A cut that fails a check (silent, under 120 ms, too long, long or short for
-  its text, or starting with the carrier's last sound) stays out of the pack. The result and the pack's `pack.json` (`retakes`) list it as
+  its text, or starting with the carrier's last sound) stays out of the pack. An initialism's
+  length counts the names of its letters ("O S D" takes as long as "oh ess dee"), and a hiss
+  the carrier leaves at a cut's start is cut off, not flagged. The result and the pack's `pack.json` (`retakes`) list it as
   "needs a re-take" with the reason. The paid batch stays in the cache. **Re-take** renders
   again with a new seed (CLI `--seed`, MCP `seed`): only the lines that need a re-take go to
   ElevenLabs. The same seed again sends nothing: it is the same take, so the line stays a
@@ -874,6 +876,18 @@ the voices, the models, the line sets, the cost, **Sample** and **Render pack**,
   (each flag with the voice, model, speed, seed, line, text, heard text and file), and
   `quadcam_gear_edit` `voice_flag`, `voice_retake` (`confirm` with the `digest`) and
   `voice_samples_delete` (`confirm`).
+- **Grouped re-take.** `gear voice retake --pack P --grouped` (MCP `voice_retake` with
+  `grouped`) groups a studio pack's re-take lines by the word each got wrong ("Spoilers" in
+  "Spoilers up" heard as "Boilers up"). For each group it makes one line, the shortest, again
+  in other ways until the speech check hears it right: a new seed, another carrier ("Say
+  Spoilers up." or "Okay, Spoilers up.", which end without the hiss of "is"), and the word
+  written another way (an initialism as spaced letters or letter names, a first letter's case
+  flipped, a few spelling rules such as "oi" as "oy"). At most 6 ways per group (`--tries`, up
+  to 12). The way that wins is kept in the pack's `pack.json` (`structures`) for that group's
+  lines, and the rest of the group is made that way; later renders of those lines say them the
+  same way, and the speech check still compares with the line's own text. A group no way wins
+  keeps its lines out. The price is the most it can cost (every try, and the rest of each
+  group said its longest way); `--confirm --digest D` pays at most that.
 
 ### Speech check
 
@@ -893,7 +907,13 @@ everything else works as before.
   selected** and **Re-take selected…**.
 - **How it compares.** Both texts go through the spelling rules, then lose case, punctuation
   and spaces, and numbers read as words. So "GPS fix" heard for "G.P.S. fix", "10" for
-  "ten" and "Fail safe" for "Failsafe" all count as heard right.
+  "ten" and "Fail safe" for "Failsafe" all count as heard right. A word heard as another that
+  sounds the same counts as the line's word: "Hurts" for "hertz", "What" for "watt", "Hi" for
+  "high", "idol" for "idle", "Am" for "amp", "Not" for "knot", "Lyft" for "lift", "Radiance"
+  for "radians", "variants" for "variance". ".5" and "0.5" count as "point five". A word that
+  sounds different, such as "Boilers" for "Spoilers", still fails.
+- **Short words.** A short word with no quiet around it ("Lap", "no") can be heard as
+  nothing. QuadCam then hears it again with half a second of silence before and after it.
 - **A line heard wrong.** In a pack ElevenLabs rendered, the line leaves the pack and is
   a [re-take](#elevenlabs) with the reason "The speech check heard …". A render with the same
   seed keeps it out and sends nothing. **Re-take selected…** in a studio pack's check prices
@@ -904,10 +924,14 @@ everything else works as before.
   heard: the line passes, goes back into the pack, and later renders keep it.
 - **Speech assets.** macOS needs its English speech assets. When they are missing, the check
   says so, and **Install speech assets** asks macOS to download them.
+- **Hear a re-take again.** A re-take line named in `--lines` (MCP `lines`) is heard again from
+  the take the check held back. When it is heard right now, after a QuadCam update to the
+  check, it goes back into the pack at no cost.
 - **Command line and agents.** `quadcam-cli gear voice check <pack>` (`--lines`, `--accept`,
   `--install`), and the MCP action `voice_check` on `quadcam_gear_edit` (`pack`, `lines`,
   `accept`, `install`). `gear voice retake --pack P --lines PATH,...` (MCP `voice_retake`)
-  re-takes a studio pack's re-take lines by name, without a flag.
+  re-takes a studio pack's re-take lines by name, without a flag; `--grouped` re-takes them
+  [by the word they got wrong](#elevenlabs).
 
 ## Radio voice
 

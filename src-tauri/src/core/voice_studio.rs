@@ -374,6 +374,10 @@ struct Prepared {
     /// (rendered, re-takes, to render), as `StudioPlan::counts`.
     counts: (u32, u32, u32),
     report: RenderReport,
+    /// The lines as the pack speaks them (`structured`), and the batch settings with the
+    /// carriers its structures name.
+    lines: Vec<(SetLine, String)>,
+    bs: BatchSettings,
 }
 
 impl Prepared {
@@ -1312,7 +1316,7 @@ impl Core {
             same_plan(p.digest.as_deref(), &digest)?;
         }
         let mut run = Progress::start(self, "render", prep.plan.batches.len())?;
-        let mut done = self.studio_finish(tts.as_ref(), prep, &lines, &settings, &bs, &mut run)?;
+        let mut done = self.studio_finish(tts.as_ref(), prep, &settings, &mut run)?;
         done.digest = digest;
         Ok(done)
     }
@@ -1401,7 +1405,7 @@ impl Core {
                 break;
             }
             let name = format!("{}, {}", prep.voice_name, prep.model);
-            match self.studio_finish(tts.as_ref(), prep, &lines, &settings, &bs, &mut run) {
+            match self.studio_finish(tts.as_ref(), prep, &settings, &mut run) {
                 Ok(r) => report.packs.push(r),
                 Err(e) if e.is::<batch::Stopped>() => {
                     report.stopped = true;
@@ -1443,6 +1447,8 @@ impl Core {
             Some((k, m)) => (Some(k), Some(m)),
             None => (None, None),
         };
+        let (lines, bs) = structured(lines, bs, old.as_ref())?;
+        let (lines, bs) = (lines.as_slice(), &bs);
         let cache = BatchCache::new(&self.cache);
         let bctx = batch::Ctx {
             tts,
@@ -1517,6 +1523,8 @@ impl Core {
             est,
             counts,
             report,
+            lines: lines.to_vec(),
+            bs: bs.clone(),
         })
     }
 
@@ -1526,9 +1534,7 @@ impl Core {
         &self,
         tts: &dyn Tts,
         prep: Prepared,
-        lines: &[(SetLine, String)],
         settings: &RenderSettings,
-        bs: &BatchSettings,
         run: &mut Progress<'_>,
     ) -> Result<RenderReport> {
         let Prepared {
@@ -1540,8 +1546,11 @@ impl Core {
             old,
             plan,
             mut report,
+            lines,
+            bs,
             ..
         } = prep;
+        let (lines, bs) = (lines.as_slice(), &bs);
         let cache = BatchCache::new(&self.cache);
         let bctx = batch::Ctx {
             tts,
@@ -1566,7 +1575,11 @@ impl Core {
             .filter(|(_, spoken)| done.cuts.contains_key(spoken))
             .map(|(l, _)| l.line.clone())
             .collect();
-        let spelling = Spelling::builtin()?;
+        let base = Spelling::builtin()?;
+        let spelling_for = |path: &str| match &old {
+            Some(o) => o.spelling_for(&base, path),
+            None => base.clone(),
+        };
         let dir = self.voices_dir().join(&id);
         let stage = self.voices_dir().join(format!(".rendering-{id}"));
         let _ = std::fs::remove_dir_all(&stage);
@@ -1586,10 +1599,18 @@ impl Core {
             attribution: String::new(),
             lines_csv_sha: lines::builtin_sha(),
         };
-        if !chosen.is_empty() {
-            if let Err(e) =
-                packs::render_to(&opts, &ctx, &chosen, &spelling, &stage, &mut |_, _| {})
-            {
+        // Lines a structure of the pack names are spoken their own way: each spelling renders
+        // its own lines.
+        let mut by_spelling: Vec<(Spelling, Vec<Line>)> = Vec::new();
+        for l in &chosen {
+            let sp = spelling_for(&l.path);
+            match by_spelling.iter_mut().find(|(s, _)| *s == sp) {
+                Some((_, ls)) => ls.push(l.clone()),
+                None => by_spelling.push((sp, vec![l.clone()])),
+            }
+        }
+        for (sp, ls) in &by_spelling {
+            if let Err(e) = packs::render_to(&opts, &ctx, ls, sp, &stage, &mut |_, _| {}) {
                 let _ = std::fs::remove_dir_all(&stage);
                 return Err(e);
             }
@@ -1609,7 +1630,9 @@ impl Core {
         let rendered_now: HashSet<&str> = lines.iter().map(|(l, _)| l.line.path.as_str()).collect();
         let mut kept_batches: Vec<String> = Vec::new();
         let mut heard = Vec::new();
+        let mut structures = Vec::new();
         if let Some(o) = &old {
+            structures = o.structures.clone();
             // What the check heard still holds for a line not rendered into the pack now: one
             // the render left alone, or a re-take whose take is the one heard.
             heard = o
@@ -1617,7 +1640,9 @@ impl Core {
                 .iter()
                 .filter(|h| {
                     !rendered_now.contains(h.path.as_str())
-                        || !done.cuts.contains_key(&spelling.apply(&h.text))
+                        || !done
+                            .cuts
+                            .contains_key(&spelling_for(&h.path).apply(&h.text))
                 })
                 .cloned()
                 .collect();
@@ -1661,6 +1686,7 @@ impl Core {
             firmware: packs::EDGETX.into(),
             voice_id: voice.clone(),
             heard,
+            structures,
         };
         std::fs::write(
             stage.join("pack.json"),
@@ -1770,6 +1796,36 @@ pub(super) fn kept_key(voice: &str, model: &str, settings: &RenderSettings, b: &
         .to_string()
         .as_bytes(),
     )
+}
+
+/// The lines as a pack speaks them: each line's text with the pack's structures applied
+/// (`PackManifest::spelling`), and a line whose structure names a carrier in a tone of its own
+/// that carries it. Without a pack, the lines and settings as they are.
+fn structured(
+    lines: &[(SetLine, String)],
+    bs: &BatchSettings,
+    pack: Option<&PackManifest>,
+) -> Result<(Vec<(SetLine, String)>, BatchSettings)> {
+    let Some(p) = pack.filter(|p| !p.structures.is_empty()) else {
+        return Ok((lines.to_vec(), bs.clone()));
+    };
+    let base = Spelling::builtin()?;
+    let mut bs = bs.clone();
+    let out = lines
+        .iter()
+        .map(|(l, _)| {
+            let mut l = l.clone();
+            if let Some(c) = p.carrier_for(&l.line.path) {
+                let tone = format!("{}|{c}", l.tone);
+                bs.tone_carriers.insert(tone.clone(), c.to_string());
+                l.tone = tone;
+            }
+            let spoken = p.spelling_for(&base, &l.line.path).apply(&l.line.text);
+            (l, spoken)
+        })
+        .collect();
+    bs.check()?;
+    Ok((out, bs))
 }
 
 /// The batches a render still has to make: those the pack does not already hold with every
