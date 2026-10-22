@@ -10,6 +10,7 @@
 //! releases QuadCam flashes on each board.
 
 use super::firmware::edgetx::BoardSpec;
+use super::model::{Refusal, RefusalCode};
 use serde::Serialize;
 use specta::Type;
 
@@ -240,6 +241,40 @@ pub fn dfu_steps(board: Option<&str>) -> Vec<String> {
         .unwrap_or_default()
 }
 
+/// The profile's own guards on an EdgeTX flash of `version`: a UF2 board is not written over
+/// DFU, and a release past the board's last series is not for it. A board with no profile
+/// passes here; `compat` refuses it.
+pub fn check_flash(board: Option<&str>, version: &str) -> Result<(), Refusal> {
+    let Some(p) = board.and_then(profile) else {
+        return Ok(());
+    };
+    if p.firmware_format == FirmwareFormat::Uf2 {
+        return Err(Refusal::new(
+            RefusalCode::Incompatible,
+            "This radio updates by a UF2 file, which QuadCam does not do yet.",
+        ));
+    }
+    let series = |v: &str| -> Option<(u32, u32)> {
+        let mut it = v.trim().trim_start_matches(['v', 'V']).split(['.', '-']);
+        Some((it.next()?.parse().ok()?, it.next()?.parse().ok()?))
+    };
+    if let (Some(want), Some(last)) = (series(version), series(p.edgetx_series)) {
+        if want > last {
+            return Err(Refusal::new(
+                RefusalCode::Incompatible,
+                format!(
+                    "The {} {} gets EdgeTX up to {}; {} is not for it.",
+                    p.maker,
+                    p.model,
+                    p.edgetx_series,
+                    version.trim()
+                ),
+            ));
+        }
+    }
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -316,6 +351,20 @@ mod tests {
         }
         assert_eq!(dfu_steps(Some("gx12")).len(), 4);
         assert!(dfu_steps(Some("tx16s")).is_empty());
+    }
+
+    #[test]
+    fn the_flash_guards_refuse_a_uf2_board_and_a_later_series() {
+        assert!(check_flash(Some("gx12"), "2.12.5").is_ok());
+        assert!(check_flash(Some("gx12"), "2.11.0").is_ok());
+        let e = check_flash(Some("gx12"), "2.13.0").unwrap_err();
+        assert_eq!(e.code, RefusalCode::Incompatible);
+        assert!(e.reason.contains("up to 2.12"), "{}", e.reason);
+        assert!(
+            check_flash(Some("tx16s"), "9.9.9").is_ok(),
+            "compat refuses it"
+        );
+        assert!(check_flash(None, "2.12.5").is_ok());
     }
 
     #[test]

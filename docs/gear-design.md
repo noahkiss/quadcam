@@ -765,8 +765,9 @@ logical switches a change owns is recorded in the change, so a later change can 
   such as the GX12's SG) with the steps the UI shows, the bootloader entry, storage kind and
   write route, splash mechanism, internal ELRS target and upload methods, USB product name and
   last EdgeTX series. The flash, read, restore and DFU link take their DFU text from it; the
-  ELRS flash plan takes a radio's internal-module target from it. `compat.rs` still decides
-  what is flashed: Pocket 2.12.4 and GX12 2.12.5.
+  ELRS flash plan takes a radio's internal-module target from it. A UF2 board and a release
+  past the board's last series refuse. `compat.rs` still decides what is flashed: Pocket
+  2.12.4 and GX12 2.12.5.
 
 ### 6.6 Sim file formats
 
