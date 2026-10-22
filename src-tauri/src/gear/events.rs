@@ -340,6 +340,7 @@ mod tests {
             device: None,
             usb: None,
             also: Vec::new(),
+            radio: None,
         }
     }
 
@@ -357,6 +358,7 @@ mod tests {
             device: None,
             usb: None,
             also: Vec::new(),
+            radio: None,
         }
     }
 

@@ -73,6 +73,7 @@ expression: "Core::METHODS"
   "gear_fc_identify",
   "gear_fc_read",
   "gear_board_notes",
+  "gear_radio_boards",
   "gear_usb_timers",
   "gear_poll_pause",
   "gear_dismiss_reminder",

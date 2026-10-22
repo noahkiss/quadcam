@@ -7,6 +7,7 @@ use super::Core;
 use crate::gear::cues::{self, Cue, CueEvent};
 use crate::gear::events::{DeviceEvent, DeviceEventKind, Tracker};
 use crate::gear::model::{Connected, Device, DeviceKind, FirmwareChannel, Link};
+use crate::gear::radios::{self, BoardFrom, RadioBoard};
 use crate::gear::store::Store;
 use crate::gear::{Automation, GearSettings};
 use anyhow::{bail, Context, Result};
@@ -111,6 +112,16 @@ pub struct DeviceSaveParams {
     pub firmware_channel: Option<String>,
 }
 
+/// `gear_radio_boards`: a board (`tx16s`) or a USB product name (`Jumper T20 V2 Mass
+/// Storage`) to look up; neither lists every board.
+#[derive(Debug, Clone, Default, Serialize, Deserialize, specta::Type)]
+pub struct RadioBoardsParams {
+    #[serde(default)]
+    pub board: Option<String>,
+    #[serde(default)]
+    pub usb_product: Option<String>,
+}
+
 impl Core {
     /// The Gear settings: the settings file's values on top of the defaults. The default
     /// gear folder sits next to the settings file (the support folder), so a core on a test
@@ -180,9 +191,40 @@ impl Core {
                 let _ = store.save_device(&d);
             }
             c.id = Some(d.id.clone());
+            // A radio detection could not name (in DFU mode) takes the saved radio's board.
+            if c.kind == DeviceKind::Radio && c.radio.is_none() {
+                c.radio = crate::gear::detect::radio_info(d.identity.board.as_deref(), None);
+            }
             c.device = Some(d);
         }
         Ok(found)
+    }
+
+    /// The radio board profiles: one `board`, the board a `usb_product` name names, or
+    /// every board QuadCam has a row for. Reads the table only.
+    pub fn gear_radio_boards(&self, p: &RadioBoardsParams) -> Result<Vec<RadioBoard>> {
+        let clean = |s: &Option<String>| {
+            s.as_deref()
+                .map(str::trim)
+                .filter(|s| !s.is_empty())
+                .map(str::to_string)
+        };
+        if let Some(b) = clean(&p.board) {
+            let Some(r) = radios::profile(&b) else {
+                bail!("QuadCam has no profile for the board {b:?}.");
+            };
+            return Ok(vec![radios::info(r, BoardFrom::RadioYml)]);
+        }
+        if let Some(u) = clean(&p.usb_product) {
+            let Some(r) = radios::by_usb_product(&u) else {
+                bail!("No board profile matches the USB product {u:?}.");
+            };
+            return Ok(vec![radios::info(r, BoardFrom::UsbProduct)]);
+        }
+        Ok(radios::PROFILES
+            .iter()
+            .map(|r| radios::info(r, BoardFrom::RadioYml))
+            .collect())
     }
 
     pub fn gear_status(&self) -> Result<GearStatus> {

@@ -388,3 +388,15 @@ fn the_card_engine_controls_sit_in_the_profile_slots() {
         }
     }
 }
+
+#[test]
+fn a_radio_board_reads_back_from_the_table() {
+    let i = info(profile("t20v2").unwrap(), BoardFrom::UsbProduct);
+    let json = serde_json::to_string(&i).unwrap();
+    let back: RadioBoard = serde_json::from_str(&json).unwrap();
+    assert_eq!(back, i);
+    assert!(serde_json::from_str::<RadioBoard>(
+        r#"{"profile":{"board":"no-such-board"},"from":"radio_yml"}"#
+    )
+    .is_err());
+}

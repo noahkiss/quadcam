@@ -162,6 +162,7 @@ cli.command gear packs type save
 cli.command gear post-flash
 cli.command gear preflight
 cli.command gear radio
+cli.command gear radio-boards
 cli.command gear radio-cli
 cli.command gear radio-settings
 cli.command gear radio-settings-edit
@@ -442,6 +443,8 @@ cli.flag gear post-flash --pack-version VALUE
 cli.flag gear post-flash --stage
 cli.flag gear post-flash --step VALUE
 cli.flag gear radio --wait-ms VALUE
+cli.flag gear radio-boards --board VALUE
+cli.flag gear radio-boards --usb-product VALUE
 cli.flag gear radio-cli --device VALUE
 cli.flag gear radio-cli --path VALUE
 cli.flag gear radio-cli --port VALUE

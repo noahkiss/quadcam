@@ -17,8 +17,9 @@ pub use crate::core::{
 pub use crate::core::{
     BoardNotesParams, CardClean, CardCleanParams, CardParams, CardPreview, CardPreviewParams,
     DeviceSaveParams, FcJob, FcPortParams, FcReadParams, GearCard, GearStatus, ModelImport,
-    ModelImportParams, OsdParams, PollPauseParams, RadioParams, RadioWatchParams, RatesParams,
-    RatesPreview, RatesPreviewParams, ReminderParams, SimsParams, SwitchMapParams, UsbTimer,
+    ModelImportParams, OsdParams, PollPauseParams, RadioBoardsParams, RadioParams,
+    RadioWatchParams, RatesParams, RatesPreview, RatesPreviewParams, ReminderParams, SimsParams,
+    SwitchMapParams, UsbTimer,
 };
 pub use crate::core::{
     CalibrateParams, CalibrateView, SimCalibration, SimCalibrationParams, SimCalibrationSaveParams,
@@ -80,6 +81,7 @@ pub use crate::gear::osd::{OsdCopy, OsdMove, OsdView};
 pub use crate::gear::packs::{Pack, PackType, PacksView};
 pub use crate::gear::preflight::Preflight;
 pub use crate::gear::radio_hid::RadioSnapshot;
+pub use crate::gear::radios::RadioBoard;
 pub use crate::gear::rates::RatesView;
 pub use crate::gear::report::SessionReport;
 pub use crate::gear::sim_cal::{SavedCalibration, SimDefaults};
@@ -129,6 +131,10 @@ macro_rules! with_gear_rows {
             gear_fc_read(params: FcReadParams) -> FcJob<FcRead> = |c| c.gear_fc_read(&params);
             /// Known issues of FC boards and builds, for the device page.
             gear_board_notes(params: BoardNotesParams) -> Vec<BoardNote> = |c| Ok(c.gear_board_notes(&params));
+            /// EdgeTX radio board profiles: one board, the board a USB product name names, or
+            /// every board. Each says whether QuadCam has proven it (else read-only), its DFU
+            /// steps and its warnings. Reads the table only.
+            gear_radio_boards(params: RadioBoardsParams) -> Vec<RadioBoard> = |c| c.gear_radio_boards(&params);
             /// Each FC's USB heat timer: battery in, seconds on USB, the limit, seconds left.
             gear_usb_timers() -> Vec<UsbTimer> = |c| Ok(c.gear_usb_timers());
             /// Pauses or resumes QuadCam's own reads of an FC port (the USB timer's probe and the

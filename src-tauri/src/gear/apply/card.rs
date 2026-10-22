@@ -401,6 +401,7 @@ mod tests {
                 device: None,
                 usb: None,
                 also: Vec::new(),
+                radio: None,
             },
             root: root.to_path_buf(),
         }

@@ -496,6 +496,66 @@ fn mcp_and_dispatch_surfaces() {
 }
 
 #[test]
+fn an_unknown_radio_shows_its_board_profile_over_mcp() {
+    // A radio QuadCam has never saved, on its USB serial port: the product names the board.
+    let dir = tempfile::tempdir().unwrap();
+    let locks = dir.path().join("locks");
+    let ports = Arc::new(FakePorts::new(vec![PortInfo {
+        port: "/dev/cu.usbmodemFAKE9".into(),
+        vid: 0x0483,
+        pid: 0x5740,
+        product: Some("Jumper T20 V2 Serial Port".into()),
+        ..Default::default()
+    }]));
+    let b = bench_with(ports, locks, dir);
+    let status = b.core.gear_status().unwrap();
+    let r = status.connected[0].radio.as_ref().expect("a profile");
+    assert_eq!(status.connected[0].kind, DeviceKind::Radio);
+    assert_eq!(r.profile.board, "t20v2");
+    assert!(!r.proven);
+    assert!(r.dfu_steps.iter().any(|s| s.contains("toothpick")));
+    let mut s = Server::new(LocalBackend(b.core.clone()));
+    let r = s.call_tool("quadcam_gear", json!({"action": "status"}));
+    let text = r["content"][0]["text"].as_str().unwrap();
+    assert!(text.contains("Jumper T20 V2 (t20v2, read-only"), "{text}");
+    let r = s.call_tool(
+        "quadcam_gear",
+        json!({"action": "radio_boards", "board": "t20v2"}),
+    );
+    assert_eq!(r["isError"], false, "{r}");
+    let text = r["content"][0]["text"].as_str().unwrap();
+    assert!(
+        text.contains("t20v2 | Jumper T20 V2 | STM32F407xG | bin | read-only"),
+        "{text}"
+    );
+    assert!(text.contains("DFU: Turn the radio off."), "{text}");
+    assert!(
+        text.contains("Warning: The T20 and the T20 V2 look alike"),
+        "{text}"
+    );
+    let r = s.call_tool(
+        "quadcam_gear",
+        json!({"action": "radio_boards", "usb_product": "HelloRadioSky V12 Joystick"}),
+    );
+    let text = r["content"][0]["text"].as_str().unwrap();
+    assert!(text.contains("DFU: unknown."), "{text}");
+    assert!(text.contains("older than 2.12.3"), "{text}");
+    let r = s.call_tool(
+        "quadcam_gear",
+        json!({"action": "radio_boards", "board": "no-such-board"}),
+    );
+    assert_eq!(r["isError"], true, "{r}");
+    let v: Value = b.core.dispatch("gear_radio_boards", json!({})).unwrap();
+    let all = v.as_array().unwrap();
+    assert!(all.len() > 40, "{}", all.len());
+    assert_eq!(
+        all.iter().filter(|r| r["proven"] == true).count(),
+        2,
+        "the Pocket and the GX12"
+    );
+}
+
+#[test]
 fn the_cli_checks_offline_and_finds_no_fc_under_cargo() {
     let home = tempfile::tempdir().unwrap();
     let dir = home.path();

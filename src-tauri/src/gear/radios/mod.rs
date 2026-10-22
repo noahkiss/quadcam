@@ -16,7 +16,7 @@ mod boards;
 use super::edgetx::board::BoardControlKind;
 use super::model::{Refusal, RefusalCode};
 pub use boards::PROFILES;
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use specta::Type;
 
 /// The file the EdgeTX release gives this board.
@@ -278,7 +278,7 @@ impl RadioProfile {
 }
 
 /// Where a connected radio's board came from.
-#[derive(Debug, Clone, Copy, Serialize, PartialEq, Eq, Type)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Type)]
 #[serde(rename_all = "snake_case")]
 pub enum BoardFrom {
     /// `RADIO/radio.yml` `board:`.
@@ -289,7 +289,7 @@ pub enum BoardFrom {
 
 /// A radio's profile as detection shows it.
 #[derive(Debug, Clone, Serialize, PartialEq, Eq, Type)]
-pub struct RadioInfo {
+pub struct RadioBoard {
     pub profile: RadioProfile,
     pub from: BoardFrom,
     /// `RadioProfile::proven`: false means read-only.
@@ -300,9 +300,30 @@ pub struct RadioInfo {
     pub warnings: Vec<String>,
 }
 
+/// A saved `RadioBoard` reads back from its board and source: the table, not the saved
+/// copy, gives the profile.
+impl<'de> Deserialize<'de> for RadioBoard {
+    fn deserialize<D: serde::Deserializer<'de>>(d: D) -> Result<Self, D::Error> {
+        #[derive(Deserialize)]
+        struct Board {
+            board: String,
+        }
+        #[derive(Deserialize)]
+        struct Saved {
+            profile: Board,
+            from: BoardFrom,
+        }
+        let s = Saved::deserialize(d)?;
+        let p = profile(&s.profile.board).ok_or_else(|| {
+            serde::de::Error::custom(format!("no radio profile for {:?}", s.profile.board))
+        })?;
+        Ok(info(p, s.from))
+    }
+}
+
 /// The profile of `p` as detection shows it.
-pub fn info(p: &RadioProfile, from: BoardFrom) -> RadioInfo {
-    RadioInfo {
+pub fn info(p: &RadioProfile, from: BoardFrom) -> RadioBoard {
+    RadioBoard {
         profile: *p,
         from,
         proven: p.proven(),

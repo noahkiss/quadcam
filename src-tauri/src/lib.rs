@@ -690,6 +690,7 @@ pub fn specta_builder() -> tauri_specta::Builder<tauri::Wry> {
             c::gear_fc_identify,
             c::gear_fc_read,
             c::gear_board_notes,
+            c::gear_radio_boards,
             c::gear_usb_timers,
             c::gear_poll_pause,
             c::gear_dismiss_reminder,

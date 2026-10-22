@@ -1176,13 +1176,23 @@ fn the_radios_board_picks_the_module_target_not_the_name_it_reports() {
     // A board without a profile goes by the name: the Pocket's target here.
     let root = b.core.gear_store().root().to_path_buf();
     let mut snap = quadcam_lib::gear::elrs::load_snapshot(&root, &id).unwrap();
-    snap.host_board = Some("tx16s".into());
+    snap.host_board = Some("x12s".into());
     quadcam_lib::gear::elrs::save_snapshot(&root, &snap).unwrap();
     let other = b.core.gear_elrs_flash_plan(&p).unwrap();
     let text = serde_json::to_string(&other.diff).unwrap();
     assert!(
         text.contains("RadioMaster Pocket Internal 2.4GHz TX"),
         "{text}"
+    );
+    // A profiled board QuadCam has not proven is read-only, its module included.
+    snap.host_board = Some("tx16s".into());
+    quadcam_lib::gear::elrs::save_snapshot(&root, &snap).unwrap();
+    let refused = b.core.gear_elrs_flash_plan(&p).unwrap();
+    assert!(!failed(&refused).is_empty());
+    let why = format!("{:?}", refused.checks);
+    assert!(
+        why.contains("has not proven the RadioMaster TX16S"),
+        "{why}"
     );
 }
 

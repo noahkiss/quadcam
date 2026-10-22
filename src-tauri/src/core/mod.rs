@@ -96,7 +96,7 @@ pub use fw_restore::{
 };
 pub use gear::{
     connected_name, link_handle, DeviceSaveParams, GearStatus, Hold, HookFn, HookOutcome, HookRun,
-    OnConnectHook, ReminderParams, Skip, StepFailure, HOLD_GRACE,
+    OnConnectHook, RadioBoardsParams, ReminderParams, Skip, StepFailure, HOLD_GRACE,
 };
 pub use gear_card::{
     CardClean, CardCleanParams, CardParams, CardPreview, CardPreviewParams, GearCard, ModelImport,

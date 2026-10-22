@@ -266,6 +266,10 @@ pub struct Connected {
     /// from the card's hardware serial). Matched against a saved device's `aliases`.
     #[serde(default)]
     pub also: Vec<String>,
+    /// A radio's board profile, when QuadCam has a row for its board (`radio.yml`'s
+    /// `board:`, else its USB product name): proven or read-only, DFU steps and warnings.
+    #[serde(default)]
+    pub radio: Option<super::radios::RadioBoard>,
 }
 
 /// What a USB device says about itself.

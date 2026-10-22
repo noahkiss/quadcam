@@ -29,6 +29,7 @@ mcp.action quadcam_gear.packs
 mcp.action quadcam_gear.post_flash_plan
 mcp.action quadcam_gear.preflight
 mcp.action quadcam_gear.radio
+mcp.action quadcam_gear.radio_boards
 mcp.action quadcam_gear.radio_settings
 mcp.action quadcam_gear.radio_setup
 mcp.action quadcam_gear.rates
@@ -209,6 +210,7 @@ mcp.param quadcam_gear.target_v number
 mcp.param quadcam_gear.template string
 mcp.param quadcam_gear.threshold integer
 mcp.param quadcam_gear.to string
+mcp.param quadcam_gear.usb_product string
 mcp.param quadcam_gear.version string
 mcp.param quadcam_gear.voice string
 mcp.param quadcam_gear.voice_model string

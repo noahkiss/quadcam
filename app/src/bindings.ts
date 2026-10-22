@@ -182,6 +182,12 @@ export const commands = {
 	gearFcRead: (params: FcReadParams) => typedError<FcJob<FcRead>, string>(__TAURI_INVOKE("gear_fc_read", { params })),
 	/**  Known issues of FC boards and builds, for the device page. */
 	gearBoardNotes: (params: BoardNotesParams) => typedError<BoardNote[], string>(__TAURI_INVOKE("gear_board_notes", { params })),
+	/**
+	 *  EdgeTX radio board profiles: one board, the board a USB product name names, or
+	 *  every board. Each says whether QuadCam has proven it (else read-only), its DFU
+	 *  steps and its warnings. Reads the table only.
+	 */
+	gearRadioBoards: (params: RadioBoardsParams) => typedError<RadioBoard[], string>(__TAURI_INVOKE("gear_radio_boards", { params })),
 	/**  Each FC's USB heat timer: battery in, seconds on USB, the limit, seconds left. */
 	gearUsbTimers: () => typedError<UsbTimer[], string>(__TAURI_INVOKE("gear_usb_timers")),
 	/**
@@ -1334,6 +1340,13 @@ export type BoardControlKind =
 /**  A slider (`SL1`). */
 "slider";
 
+/**  Where a connected radio's board came from. */
+export type BoardFrom = 
+/**  `RADIO/radio.yml` `board:`. */
+"radio_yml" | 
+/**  The USB product name. */
+"usb_product";
+
 /**  One known issue of a board, or a board and build. */
 export type BoardNote = {
 	board: string,
@@ -2066,6 +2079,11 @@ export type Connected = {
 	 *  from the card's hardware serial). Matched against a saved device's `aliases`.
 	 */
 	also?: string[],
+	/**
+	 *  A radio's board profile, when QuadCam has a row for its board (`radio.yml`'s
+	 *  `board:`, else its USB product name): proven or read-only, DFU steps and warnings.
+	 */
+	radio?: RadioBoard | null,
 };
 
 /**  One control of a board. */
@@ -2101,6 +2119,32 @@ export type ControlRow = {
 	/**  `2POS`, `3POS` or `TOGGLE` for a switch. */
 	switch_type?: string | null,
 	positions: Position[],
+};
+
+/**
+ *  One control slot of a board, from its EdgeTX hardware definition. The slot is fixed; the
+ *  control fitted in it is not (GX12 switch modules swap, pot positions take blanking plugs),
+ *  so the fitted type always comes from the radio's `radio.yml` (`edgetx::board::inventory`
+ *  joins them for the boards QuadCam writes).
+ */
+export type ControlSlot = {
+	/**  `SA`, `SW1`, `P1`, `SL1`. */
+	name: string,
+	/**
+	 *  A switch, a custom switch, or an analog input as EdgeTX sets it by default (a pot, or
+	 *  a slider when the default is `SLIDER`).
+	 */
+	kind: BoardControlKind,
+	/**
+	 *  What the hardware reads: `2POS` or `3POS` (the most positions the slot gives), `ADC`
+	 *  (a switch read as an analog input), `FLEX` (an analog input).
+	 */
+	hardware: string,
+	/**
+	 *  EdgeTX's default type for the slot (`3POS`, `TOGGLE`, `POT_CENTER`, `SLIDER`, `NONE`);
+	 *  None when the definition gives none.
+	 */
+	default: string | null,
 };
 
 /**  Where a control's type was read. */
@@ -2600,6 +2644,15 @@ export type DeviceStorage = {
 	total_bytes: number,
 };
 
+/**  How a person puts the radio in ROM DFU mode. */
+export type DfuEntry = {
+	start: DfuStart,
+	/**  The steps the UI lists, one sentence each. Empty when the way in is unknown. */
+	steps: string[],
+	/**  The same as one instruction, for a refusal or a check (no "No radio is in DFU mode"). */
+	hint: string,
+};
+
 /**  `gear_dfu_link`: link the radio in DFU mode to a saved radio, or remove a link. */
 export type DfuLinkParams = {
 	/**  The saved radio's id. Omitted: the radio seen most recently. */
@@ -2619,6 +2672,15 @@ export type DfuLinked = {
 	how: string,
 	notes: string[],
 };
+
+/**  How the radio starts the STM32's ROM DFU bootloader. */
+export type DfuStart = 
+/**  Plugging USB into the radio while it is off. */
+"plug_in" | 
+/**  A button held while the radio powers on or is plugged in. */
+"button_combo" | 
+/**  No source says how. */
+"unknown";
 
 /**  One item in a plan's before/after view. */
 export type DiffItem = 
@@ -2789,6 +2851,18 @@ export type ElrsHost = {
 	device: string,
 	name: string,
 	kind: DeviceKind,
+};
+
+/**  The radio's internal ExpressLRS module. */
+export type ElrsInternal = {
+	/**  The target's path in the release's `targets.json` (`vendor.group.model`). */
+	target: string,
+	/**  The name the module's Lua script shows. */
+	lua_name: string,
+	/**  The routes `targets.json` allows (`uart`, `etx`, `wifi`). */
+	upload_methods: string[],
+	/**  The oldest ExpressLRS release with this target. */
+	min_version: string,
 };
 
 /**  An option as the last read found it. */
@@ -3106,6 +3180,13 @@ export type FirmwareCopy = {
 	radio: string | null,
 	copy: FwCopy,
 };
+
+/**  The file the EdgeTX release gives this board. */
+export type FirmwareFormat = 
+/**  A raw image for the STM32's internal flash, written over ROM DFU. */
+"bin" | 
+/**  A UF2 file for the EdgeTX bootloader's drive (H7 radios). QuadCam does not write it. */
+"uf2";
 
 /**  `gear_firmware`: whether to read the network. */
 export type FirmwareParams = {
@@ -4550,6 +4631,16 @@ export type LogicalSwitch = {
 	duration: number,
 };
 
+/**  A radio that looks like this one but takes other firmware. */
+export type LookAlike = {
+	/**  The look-alike's name (`T20 V2`). */
+	name: string,
+	/**  Its board, when EdgeTX has one (`t20v2`); None for a name with no firmware. */
+	board: string | null,
+	/**  The warning the flash plan shows. */
+	note: string,
+};
+
 /**  A logical switch an op sets. `def` may name sensors by label: `tele({RxBt}),35`. */
 export type LsDef = {
 	/**  `FUNC_AND`, `FUNC_VPOS`, `FUNC_EDGE`, `FUNC_STICKY`, ... */
@@ -4584,6 +4675,14 @@ export type LuaScreen = {
 	/**  The script name (`volt`: `SCRIPTS/TELEMETRY/volt.lua`), 6 characters at most. */
 	name: string,
 } & LuaKind;
+
+/**  The maker's own EdgeTX builds. */
+export type MakerFork = {
+	/**  Where the fork's source lives. */
+	source: string,
+	/**  What an upstream flash loses, as the warning before the first flash. */
+	note: string,
+};
 
 /**
  *  Where the map goes, in CSS pixels from the top left of the page, and the page's width in
@@ -6015,6 +6114,27 @@ export type RadioAircraft = {
 	selected?: boolean,
 };
 
+/**  A radio's profile as detection shows it. */
+export type RadioBoard = {
+	profile: RadioProfile,
+	from: BoardFrom,
+	/**  `RadioProfile::proven`: false means read-only. */
+	proven: boolean,
+	/**  `RadioProfile::dfu`'s steps, empty when no source says how. */
+	dfu_steps: string[],
+	/**  `RadioProfile::warnings`. */
+	warnings: string[],
+};
+
+/**
+ *  `gear_radio_boards`: a board (`tx16s`) or a USB product name (`Jumper T20 V2 Mass
+ *  Storage`) to look up; neither lists every board.
+ */
+export type RadioBoardsParams = {
+	board?: string | null,
+	usb_product?: string | null,
+};
+
 /**  A saved radio the user can pick. */
 export type RadioChoice = {
 	id: string,
@@ -6173,6 +6293,61 @@ export type RadioPart = {
 	control_types?: boolean,
 	/**  Delete every model file that is not one of the setup's aircraft. */
 	delete_other_models?: boolean,
+};
+
+/**  One radio board. */
+export type RadioProfile = {
+	/**  The `board:` value of `radio.yml` and the EdgeTX target. */
+	board: string,
+	maker: string,
+	model: string,
+	/**  Other names sold with the same firmware (`GX12 Crush`). */
+	variants: string[],
+	mcu: string,
+	firmware_format: FirmwareFormat,
+	dfu: DfuEntry,
+	/**  How the EdgeTX bootloader starts. None: no source says. */
+	bootloader_entry: string | null,
+	storage: StorageKind,
+	write_route: WriteRoute,
+	/**
+	 *  USB Storage speed measured on a real radio. None: never measured. Every EdgeTX radio
+	 *  runs full speed USB (12 Mb/s), so expect about 0.3 MB/s.
+	 */
+	usb_speed: UsbSpeed | null,
+	/**  The EdgeTX SD-card pack for the board (`bw128x64`, `c480x272`). */
+	sd_pack: string,
+	/**  The EdgeTX YAML schema family the board's files use (`128x64`, `gx12`, `x10`). */
+	yaml_schema: string,
+	splash: SplashKind,
+	/**  The internal RF module as sold. None: no source says. */
+	internal_rf: string | null,
+	/**
+	 *  The ExpressLRS targets of the internal module, one per RF variant the board ships
+	 *  with (2.4 GHz, 900 MHz). Empty: no ExpressLRS internal module, or none named.
+	 */
+	elrs: ElrsInternal[],
+	/**
+	 *  The start of every USB product name the radio reports (`Radiomaster GX12 Mass
+	 *  Storage`), matched ignoring case: EdgeTX names it `<maker> <model>` from its hardware
+	 *  definition, and the GX12 says "Radiomaster" where EdgeTX says "RadioMaster".
+	 */
+	usb_product: string,
+	/**  The USB ports and which one carries data. None: no source says. */
+	usb_ports: string | null,
+	/**  The last EdgeTX series the board gets (`2.12`; `2.11` on STM32F2 boards). */
+	edgetx_series: string,
+	/**  A target name EdgeTX once used for another radio. */
+	target_history: TargetHistory | null,
+	/**  The maker's own EdgeTX builds, which an upstream flash replaces. */
+	fork: MakerFork | null,
+	/**  Radios that look like this one but take other firmware. */
+	look_alikes: LookAlike[],
+	/**  The switch and pot slots on the case. */
+	slots: ControlSlot[],
+	trims: number,
+	/**  Known bugs and oddities, one sentence each. */
+	quirks: string[],
 };
 
 /**  Which radio a joystick is. */
@@ -7574,6 +7749,18 @@ export type SpecialFunction = {
 	def: string,
 };
 
+/**  How the radio's boot picture is set. */
+export type SplashKind = 
+/**
+ *  A 128 x 64, 1-bit picture inside the firmware, between the `SPS`/`SPE` markers
+ *  (`gear::splash`).
+ */
+"firmware_mono128x64" | 
+/**  A 212 x 64 greyscale picture inside the firmware. QuadCam does not patch it. */
+"firmware_mono212x64" | 
+/**  A picture on the storage (`/IMAGES/splash.png`), on colour radios. */
+"storage_image";
+
 /**  `gear_splash`: the image to preview. */
 export type SplashParams = {
 	/**  A PNG file. */
@@ -7740,6 +7927,15 @@ export type StickMap = {
 export type StopParams = {
 	handle: string,
 };
+
+/**  Where the radio keeps its card files. */
+export type StorageKind = 
+/**  A microSD slot: the card can go into the Mac's reader. */
+"card_slot" | 
+/**  A chip soldered to the board: USB Storage mode is the only way in. */
+"chip" | 
+/**  A soldered chip and a microSD slot; a card present at boot hides the chip (H7 radios). */
+"chip_card_overrides";
 
 /**  Sizes in the gear folder. */
 export type StorageView = {
@@ -7946,6 +8142,13 @@ export type TakeReport = {
 	logs: LogCounts,
 };
 
+/**  A target name EdgeTX once used for another radio. */
+export type TargetHistory = {
+	/**  The first EdgeTX release whose target is this radio (`2.12.3`): older ones refuse. */
+	until: string,
+	note: string,
+};
+
 /**  The long library jobs. */
 export type Task = "rebuild" | "cuts" | "thumbnails" | "moments" | 
 /**  Video analysis: highlights and key frames. */
@@ -8129,6 +8332,12 @@ export type UsbInfo = {
 	serial?: string | null,
 	/**  `bcdDevice` as `major.minor` (an EdgeTX radio reports its firmware's, `2.12`). */
 	version?: string | null,
+};
+
+/**  USB Storage speed measured on a real radio, in KB/s. */
+export type UsbSpeed = {
+	write_kb_s: number,
+	read_kb_s: number,
 };
 
 /**  One FC's USB heat timer. It runs while the FC is on USB with its battery in. */
@@ -8616,6 +8825,15 @@ export type WorstLink = {
 	lq: number | null,
 	rssi_db: number | null,
 };
+
+/**  How a big write (a voice pack) reaches the radio's storage. */
+export type WriteRoute = 
+/**  The card in the Mac's reader, or the radio in USB Storage mode. */
+"card_reader_or_usb" | 
+/**  The radio in USB Storage mode only (full speed USB, about 0.3 MB/s). */
+"usb_storage" | 
+/**  A chip a card overrides: no route until a radio of this kind is tested. */
+"untested";
 
 /* Tauri Specta runtime */
 async function typedError<T, E>(result: Promise<T>): Promise<{ status: "ok"; data: T } | { status: "error"; error: E }> {

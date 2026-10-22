@@ -395,6 +395,7 @@ impl Core {
                 device: None,
                 usb: None,
                 also: Vec::new(),
+                radio: None,
             });
         }
         let able = |c: &&Connected| {

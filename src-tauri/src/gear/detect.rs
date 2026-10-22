@@ -10,6 +10,7 @@
 //! ports. The app calls it every `POLL` and sends `gear-changed` when the answer changes.
 
 use super::model::{device_id, Connected, DeviceKind, Identity, Link, UsbInfo};
+use super::radios::{self, BoardFrom, RadioBoard};
 use super::serial::PortInfo;
 use crate::disk::Volume;
 use crate::sources::SourceKind;
@@ -87,7 +88,8 @@ pub fn classify_port(p: &PortInfo) -> Option<DeviceKind> {
 }
 
 /// Words in a USB vendor or product name that mean an EdgeTX radio. A 2.12 radio's serial
-/// port says only "<Brand> <Model> Serial Port"; its vendor string says OpenTX.
+/// port says only "<Brand> <Model> Serial Port"; its vendor string says OpenTX. A product
+/// name a board profile knows (`radios::by_usb_product`) means a radio too.
 pub const RADIO_USB_WORDS: &[&str] = &[
     "edgetx",
     "opentx",
@@ -100,10 +102,22 @@ pub const RADIO_USB_WORDS: &[&str] = &[
 
 /// True when a USB device's vendor or product names an EdgeTX radio.
 pub fn is_radio_usb(vendor: Option<&str>, product: Option<&str>) -> bool {
-    [vendor, product].iter().flatten().any(|s| {
-        let s = s.to_ascii_lowercase();
-        RADIO_USB_WORDS.iter().any(|w| s.contains(w))
-    })
+    product.and_then(radios::by_usb_product).is_some()
+        || [vendor, product].iter().flatten().any(|s| {
+            let s = s.to_ascii_lowercase();
+            RADIO_USB_WORDS.iter().any(|w| s.contains(w))
+        })
+}
+
+/// A radio's board profile: from `radio.yml`'s `board:` when it names a profiled board,
+/// else from the USB product name. None when neither names a board QuadCam has a row for.
+pub fn radio_info(board: Option<&str>, product: Option<&str>) -> Option<RadioBoard> {
+    if let Some(p) = board.and_then(radios::profile) {
+        return Some(radios::info(p, BoardFrom::RadioYml));
+    }
+    product
+        .and_then(radios::by_usb_product)
+        .map(|p| radios::info(p, BoardFrom::UsbProduct))
 }
 
 /// A USB device with the BSD disks below it, as `ioreg` lists them.
@@ -309,11 +323,25 @@ pub fn detect_all(
         } else {
             continue;
         };
-        let identity = if kind == DeviceKind::Radio {
+        let mut identity = if kind == DeviceKind::Radio {
             radio_identity(&v.mount)
         } else {
             Identity::default()
         };
+        let radio = (kind == DeviceKind::Radio)
+            .then(|| {
+                radio_info(
+                    identity.board.as_deref(),
+                    radio_usb.as_ref().and_then(|u| u.product.as_deref()),
+                )
+            })
+            .flatten();
+        // A card without `radio.yml` takes its board from the radio's USB product name.
+        if identity.board.is_none() {
+            if let Some(r) = radio.as_ref().filter(|r| r.from == BoardFrom::UsbProduct) {
+                identity.board = Some(r.profile.board.to_string());
+            }
+        }
         let uuid = v.info.volume_uuid.clone();
         let hw = is_sd_slot(v.info.bus_protocol.as_deref())
             .then(|| cards.iter().find(|c| c.disk == whole))
@@ -348,6 +376,7 @@ pub fn detect_all(
             identity,
             device: None,
             usb: radio_usb,
+            radio,
         });
     }
     for p in ports {
@@ -367,6 +396,9 @@ pub fn detect_all(
             device: None,
             usb: None,
             also: Vec::new(),
+            radio: (kind == DeviceKind::Radio)
+                .then(|| radio_info(None, p.product.as_deref()))
+                .flatten(),
         });
     }
     for d in dfu {
@@ -383,6 +415,7 @@ pub fn detect_all(
                 device: None,
                 usb: None,
                 also: Vec::new(),
+                radio: None,
             });
         }
     }
@@ -559,5 +592,107 @@ mod tests {
         let id = radio_identity(d.path());
         assert_eq!(id.board, None);
         assert_eq!(id.firmware.as_deref(), Some("EdgeTX"));
+    }
+
+    /// A volume on a USB device (`disk7`) as a radio in USB Storage mode shows it.
+    fn usb_volume(root: &Path) -> Volume {
+        Volume {
+            mount: root.to_path_buf(),
+            info: DiskInfo {
+                volume_uuid: Some("UUID-USB".into()),
+                parent_whole_disk: "disk7".into(),
+                removable: true,
+                ..Default::default()
+            },
+            is_card: false,
+            source: None,
+            is_radio: crate::disk::looks_like_radio(root),
+            warnings: vec![],
+        }
+    }
+
+    fn usb_device(vendor: &str, product: &str) -> UsbStorage {
+        UsbStorage {
+            info: UsbInfo {
+                vid: 0x0483,
+                pid: 0x5720,
+                vendor: Some(vendor.into()),
+                product: Some(product.into()),
+                ..Default::default()
+            },
+            disks: vec!["disk7".into(), "disk7s1".into()],
+        }
+    }
+
+    #[test]
+    fn an_unknown_radio_of_a_listed_board_shows_its_profile() {
+        // A TX16S QuadCam has never saved: radio.yml names the board.
+        let d = tempfile::tempdir().unwrap();
+        let mut v = radio_volume(d.path(), "UUID-TX16S");
+        std::fs::write(
+            d.path().join("RADIO/radio.yml"),
+            "semver: 2.12.5\r\nboard: tx16s\r\n",
+        )
+        .unwrap();
+        v.is_radio = true;
+        let found = detect(&[v], &[], &[], &[]);
+        let r = found[0].radio.as_ref().expect("a profile");
+        assert_eq!(found[0].device, None, "not saved");
+        assert_eq!(r.profile.board, "tx16s");
+        assert_eq!(r.from, BoardFrom::RadioYml);
+        assert!(!r.proven);
+        assert_eq!(r.dfu_steps.len(), 3);
+        assert!(r.warnings[0].contains("does not flash or write it"));
+
+        // A card with no radio.yml, on a radio whose vendor string is not one QuadCam
+        // knows: the USB product name finds the board.
+        let e = tempfile::tempdir().unwrap();
+        let v = usb_volume(e.path());
+        let usb = [usb_device("HRSky", "HelloRadioSky V15 Mass Storage")];
+        let found = detect_all(&[v], &[], &[], &[], &usb);
+        assert_eq!(found.len(), 1);
+        assert_eq!(found[0].kind, DeviceKind::Radio);
+        assert_eq!(found[0].identity.board.as_deref(), Some("v15"));
+        let r = found[0].radio.as_ref().unwrap();
+        assert_eq!(r.from, BoardFrom::UsbProduct);
+        assert!(r.warnings.iter().any(|w| w.contains("UF2")));
+        // The longest name wins: a T20 V2 is not a T20.
+        let f = tempfile::tempdir().unwrap();
+        let usb = [usb_device("OpenTX", "Jumper T20 V2 Mass Storage")];
+        let found = detect_all(&[usb_volume(f.path())], &[], &[], &[], &usb);
+        assert_eq!(found[0].identity.board.as_deref(), Some("t20v2"));
+        assert!(found[0]
+            .radio
+            .as_ref()
+            .unwrap()
+            .warnings
+            .join(" ")
+            .contains("not t20"));
+    }
+
+    #[test]
+    fn a_radio_serial_port_shows_its_profile() {
+        let port = |product: &str| PortInfo {
+            port: "/dev/cu.usbmodemFAKE3".into(),
+            vid: 0x0483,
+            pid: 0x5740,
+            product: Some(product.into()),
+            ..Default::default()
+        };
+        let found = detect(
+            &[],
+            &[
+                port("HelloRadioSky V12 Serial Port"),
+                port("STM32 Virtual ComPort"),
+            ],
+            &[],
+            &[],
+        );
+        assert_eq!(found[0].kind, DeviceKind::Radio);
+        assert_eq!(found[0].radio.as_ref().unwrap().profile.board, "v12");
+        assert_eq!(found[1].kind, DeviceKind::Fc);
+        assert!(found[1].radio.is_none());
+        assert!(is_radio_usb(None, Some("iFlight Commando 8 Joystick")));
+        assert!(!is_radio_usb(None, Some("SpeedyBee F405 V4")));
     }
 }

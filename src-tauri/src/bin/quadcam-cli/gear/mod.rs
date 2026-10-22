@@ -107,6 +107,16 @@ pub enum GearCmd {
     Crashes(packs::CrashesArgs),
     /// Back up a radio card or an FC (the FC reboots); `show`, `diff` and `pin` a backup.
     Backup(backup::BackupArgs),
+    /// EdgeTX radio board profiles: proven or read-only, DFU steps, warnings. One board, the
+    /// board a USB product name names, or every board.
+    RadioBoards {
+        /// A board (`radio.yml`'s `board:`, such as tx16s).
+        #[arg(long)]
+        board: Option<String>,
+        /// A USB product name ("Jumper T20 V2 Mass Storage").
+        #[arg(long)]
+        usb_product: Option<String>,
+    },
     /// Backups, newest first.
     Backups {
         /// One device's.
@@ -292,6 +302,9 @@ pub fn run(core: &Core, cmd: GearCmd) -> Result<Value> {
         GearCmd::Packs(a) => packs::packs(core, a)?,
         GearCmd::Crashes(a) => packs::crashes(core, a)?,
         GearCmd::Backup(a) => backup::backup(core, a)?,
+        GearCmd::RadioBoards { board, usb_product } => serde_json::to_value(
+            call::gear_radio_boards(core, api::RadioBoardsParams { board, usb_product })?,
+        )?,
         GearCmd::Backups { device } => backup::backups(core, device)?,
         GearCmd::Storage(a) => backup::storage(core, a)?,
         GearCmd::ImportBackups {
