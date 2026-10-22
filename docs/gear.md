@@ -700,7 +700,7 @@ the voices, the models, the line sets, the cost, **Sample** and **Render pack**,
   | `scripts` | 179 | The Betaflight, INAV and Yaapu telemetry-script prompts |
   | `extras` | 164 | More FPV callouts: arming states, battery stages (ninety to ten percent), link stages, rate profiles (freestyle, race, cinematic), VTX power, beeper, race timing, GPS rescue, checks |
   | `easter` | 20 | Short fun lines in original wording |
-  | `sample` | 12 | Hard lines for comparing voices |
+  | `sample` | 84 | The risky lines: one line per word voices got wrong before (see **Sample**) |
   | `custom`, `quadcam` | yours, 45 | Your own lines, and the lines a pack holds today |
 
   The page opens with a summary: the ElevenLabs credits left, the packs on this Mac, the radios
@@ -764,6 +764,14 @@ the voices, the models, the line sets, the cost, **Sample** and **Render pack**,
   in each voice in that model only, shows the cost, and waits for **Sample and pay**. The samples go to
   [Samples](#samples). The sample files keep the card path, so two lines with one file name
   (`armed.wav` and a script's `armed.wav`) stay apart.
+- **The risky lines.** The `sample` set is the validation set: one line for each word that
+  voices got wrong before, heard wrong by the speech check or cut wrong (Spoilers, Spooling,
+  hertz, watt, knot, LQ, OSD, VTX, dB, RPM, "point five", GPS Glitch, Locked, Angle on, RF
+  mode and others). Listening to samples is listening to the risky words. Sample a new voice
+  first: the speech check hears each sample, so the voice's problem words are known before a
+  pack is priced. The estimate shows what the voice's samples showed (**Risky lines**: how many
+  were sampled, heard right and heard wrong, and the ways of saying words found). The set lives
+  in `resources/voice/sets/sample.csv`; each line's `why` says what went wrong.
 - **Render pack.** Needs a voice, a model and at least one set. With several voices
   ticked it reads **Render packs** and makes one pack per voice in one run, priced
   as one plan with one digest. After **Render and pay** the lines go into a local pack named
@@ -888,6 +896,14 @@ the voices, the models, the line sets, the cost, **Sample** and **Render pack**,
   same way, and the speech check still compares with the line's own text. A group no way wins
   keeps its lines out. The price is the most it can cost (every try, and the rest of each
   group said its longest way); `--confirm --digest D` pays at most that.
+- **A voice's ways, found in samples.** `gear voice retake --sample ID --grouped` does the
+  same for a sample voice's lines heard wrong, and keeps the ways that won in the sample
+  folder's `samples.json` (`structures`; the card and MCP `voice_samples` show them). A pack
+  render of that voice, model and speed carries each way to every line with its word that the
+  pack does not hold yet (a way found for "Spoilers up" also says "Spoilers down"), and the
+  pack keeps it. Lines already in the pack keep the way they were said.
+- **After a re-take.** A line whose new take failed its checks again is listed under
+  `still_out` with the reason, and the next re-take uses another seed.
 
 ### Speech check
 

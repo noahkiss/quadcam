@@ -14,11 +14,11 @@
 use super::voice::{copy_dir, slug};
 use super::voice_check::{holds_lines, read_manifest, write_manifest};
 use super::voice_groups::RetakeGroup;
-use super::voice_studio::{kept_key, SampleParams, SampleReport, PROVIDER};
+use super::voice_studio::{kept_key, SampleParams, SampleReport, Validation, PROVIDER};
 use super::{Core, RenderReport, VoiceRenderParams};
 use crate::gear::voice::batch::{BatchCache, Estimate};
 use crate::gear::voice::lines::Spelling;
-use crate::gear::voice::packs::{self, PackManifest};
+use crate::gear::voice::packs::{self, HeardLine, PackManifest, Structure};
 use crate::gear::voice::render::RenderSettings;
 use crate::gear::voice::reuse::{LineIndex, Scope};
 use crate::gear::voice::sets;
@@ -104,6 +104,10 @@ pub struct SampleVoice {
     #[serde(default)]
     pub sets: Vec<String>,
     pub takes: Vec<SampleTake>,
+    /// The ways of saying words this voice got wrong, found by a grouped re-take: a pack
+    /// render of the voice and model says those words the same way.
+    #[serde(default)]
+    pub structures: Vec<Structure>,
 }
 
 /// `gear_voice_samples`.
@@ -119,27 +123,32 @@ pub struct SampleGallery {
 
 /// `samples.json`: one voice, model and speed.
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
-struct SampleSet {
+pub(super) struct SampleSet {
     #[serde(default)]
-    voice: String,
+    pub(super) voice: String,
     #[serde(default)]
-    voice_name: String,
+    pub(super) voice_name: String,
     #[serde(default)]
-    model: String,
+    pub(super) model: String,
     #[serde(default = "one")]
-    speed: f64,
+    pub(super) speed: f64,
     #[serde(default)]
-    description: String,
+    pub(super) description: String,
     #[serde(default)]
-    accent: String,
+    pub(super) accent: String,
     #[serde(default)]
-    languages: Vec<String>,
+    pub(super) languages: Vec<String>,
     #[serde(default)]
-    updated: Option<String>,
+    pub(super) updated: Option<String>,
     #[serde(default)]
-    sets: Vec<String>,
+    pub(super) sets: Vec<String>,
     #[serde(default)]
-    takes: Vec<SampleTake>,
+    pub(super) takes: Vec<SampleTake>,
+    /// The ways of saying words this voice got wrong, found by a grouped re-take of its
+    /// samples. A pack render of the voice, model and speed carries each to the lines with its
+    /// word (`voice_studio::adopt`).
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub(super) structures: Vec<Structure>,
 }
 
 fn one() -> f64 {
@@ -262,6 +271,9 @@ pub struct RetakeReport {
     /// With `grouped`: each group, its tries and what came of them.
     #[serde(default)]
     pub groups: Vec<RetakeGroup>,
+    /// Lines asked for whose new take failed its checks again, each with the reason.
+    #[serde(default)]
+    pub still_out: Vec<packs::Retake>,
 }
 
 /// Voice id and name by the slug of the name.
@@ -520,6 +532,85 @@ impl Core {
         notes
     }
 
+    /// What the samples of this voice, model and speed show for the `sample` set, the lines
+    /// voices got wrong before.
+    pub(super) fn validation(
+        &self,
+        voice: &str,
+        voice_name: &str,
+        model: &str,
+        speed: f64,
+    ) -> Validation {
+        let risky: Vec<sets::SetLine> = sets::lines_of("sample").unwrap_or_default();
+        let dir = self
+            .samples_root()
+            .join(sample_dir_name(voice, voice_name, model, speed));
+        let set: SampleSet = read_json(&dir.join(SAMPLES_FILE)).unwrap_or_default();
+        let mut v = Validation {
+            lines: risky.len() as u32,
+            structures: set.structures,
+            ..Default::default()
+        };
+        for l in &risky {
+            let Some(t) = set.takes.iter().find(|t| t.line == l.line.path) else {
+                continue;
+            };
+            v.sampled += 1;
+            match t.heard_ok {
+                Some(false) => v.heard_wrong.push(HeardLine {
+                    path: t.line.clone(),
+                    text: t.text.clone(),
+                    heard: t.heard.clone().unwrap_or_default(),
+                    ok: false,
+                    accepted: false,
+                    confidence: None,
+                }),
+                _ => v.heard_right += 1,
+            }
+        }
+        v
+    }
+
+    /// A sample folder by its id, with its `samples.json`.
+    pub(super) fn sample_set(&self, id: &str) -> Result<(PathBuf, SampleSet)> {
+        check_folder_id(id)?;
+        let dir = self.samples_root().join(id);
+        let set = read_json::<SampleSet>(&dir.join(SAMPLES_FILE))
+            .with_context(|| format!("No sample {id:?}: gear_voice_samples lists them."))?;
+        Ok((dir, set))
+    }
+
+    /// The structures the samples of this voice, model and speed found (`samples.json`).
+    pub(super) fn sample_structures(
+        &self,
+        voice: &str,
+        voice_name: &str,
+        model: &str,
+        speed: f64,
+    ) -> Vec<Structure> {
+        let dir = self
+            .samples_root()
+            .join(sample_dir_name(voice, voice_name, model, speed));
+        read_json::<SampleSet>(&dir.join(SAMPLES_FILE))
+            .map(|s| s.structures)
+            .unwrap_or_default()
+    }
+
+    /// Puts a structure in the samples of a sample folder, in place of the word's structure
+    /// for those lines (`None` takes the lines out of it).
+    pub(super) fn set_sample_structure(
+        &self,
+        dir: &Path,
+        word: &str,
+        lines: &[String],
+        s: Option<Structure>,
+    ) -> Result<()> {
+        let p = dir.join(SAMPLES_FILE);
+        let mut set: SampleSet = read_json(&p).context("the sample folder has no samples.json")?;
+        packs::replace_structure(&mut set.structures, word, lines, s);
+        write_json(&p, &set)
+    }
+
     /// The folder a sample of this voice, model and speed goes into. A folder from 0.19 and
     /// earlier (named for the voice's name and the model) becomes this voice's at speed 1.
     pub(super) fn sample_dir(
@@ -693,6 +784,7 @@ impl Core {
             updated: set.updated,
             sets: set.sets,
             takes,
+            structures: set.structures,
         })
     }
 
@@ -768,6 +860,7 @@ impl Core {
             updated: None,
             sets: Vec::new(),
             takes,
+            structures: m.structures.clone(),
         })
     }
 
@@ -1161,6 +1254,7 @@ impl Core {
             cleared: Vec::new(),
             notes: Vec::new(),
             groups: Vec::new(),
+            still_out: Vec::new(),
         };
         // The lines with a new take after the run.
         let made: Vec<String> = match &t {
@@ -1238,18 +1332,34 @@ impl Core {
         if p.dry_run || report.needs_confirm {
             return Ok(report);
         }
-        // A flag goes with its take; a line still without a new take re-takes with another
-        // seed next time.
+        // A flag goes with its take; a line whose new take failed its checks re-takes with
+        // another seed next time.
         let mut flags = read_flags(t.dir());
         flags.retain(|f| !made.contains(&f.line));
         for f in flags.iter_mut().filter(|f| lines.contains(&f.line)) {
             f.retakes += 1;
         }
         write_flags(t.dir(), &flags)?;
+        report.still_out = match &t {
+            Target::Pack { .. } => read_manifest(t.dir())?
+                .retakes
+                .into_iter()
+                .filter(|r| lines.contains(&r.path))
+                .collect(),
+            Target::Sample { .. } => lines
+                .iter()
+                .filter(|l| !made.contains(l))
+                .map(|l| packs::Retake {
+                    path: l.clone(),
+                    text: String::new(),
+                    reason: "its new take failed a check of its cut".into(),
+                })
+                .collect(),
+        };
         let left = lines.len() - made.len();
         if left > 0 {
             report.notes.push(format!(
-                "{left} lines have no new take yet: they stay flagged or re-takes, and the next re-take uses another seed."
+                "{left} lines got a new take that failed its checks again (each reason is under still_out): they stay flagged or re-takes, and the next re-take uses another seed."
             ));
         }
         report.cleared = made;
@@ -1373,17 +1483,21 @@ pub fn retake_text(r: &RetakeReport) -> String {
     } else {
         let _ = write!(
             s,
-            "Re-took {} of {} lines of {} with seed {}.",
-            r.cleared.len(),
+            "Made {} lines of {} again with seed {}: {} passed, {} failed their checks again.",
             r.lines.len(),
             r.id,
-            r.seed
+            r.seed,
+            r.cleared.len(),
+            r.still_out.len()
         );
     }
     if let Some(e) = &r.estimate {
         let _ = write!(s, " {}", super::voice_studio::estimate_text(e));
     }
     s.push_str(&super::voice_groups::groups_text(&r.groups));
+    for o in &r.still_out {
+        let _ = write!(s, "\n  still out {}: {}", o.path, o.reason);
+    }
     for n in &r.notes {
         let _ = write!(s, "\n{n}");
     }

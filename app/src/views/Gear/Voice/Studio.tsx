@@ -1,6 +1,6 @@
 // The ElevenLabs section of the Voices page (design 7.4): the key (kept in the macOS
 // Keychain), the account's voices and models, the credits, the line sets with what rendering
-// them costs, a Sample that renders a few hard lines per voice and model into the Samples
+// them costs, a Sample that renders the risky lines per voice and model into the Samples
 // gallery (the section's last part), and a Render that puts the sets into a local voice pack.
 // Every paid call asks first.
 import { useEffect, useState, type ReactNode } from "react";

@@ -142,22 +142,57 @@ impl PackManifest {
     /// The spelling the line at `path` is spoken with: `base`, with the pack's structures for
     /// that line.
     pub fn spelling_for(&self, base: &Spelling, path: &str) -> Spelling {
-        let words: Vec<(String, String)> = self
-            .structures
-            .iter()
-            .filter(|s| s.lines.iter().any(|l| l == path))
-            .map(|s| (s.word.clone(), s.say.clone()))
-            .collect();
-        base.with_words(&words)
+        spelling_for(&self.structures, base, path)
     }
 
     /// The carrier for the line at `path`, when a structure names one.
     pub fn carrier_for(&self, path: &str) -> Option<&str> {
-        self.structures
-            .iter()
-            .filter(|s| s.lines.iter().any(|l| l == path))
-            .find_map(|s| s.carrier.as_deref())
+        carrier_for(&self.structures, path)
     }
+}
+
+/// The spelling the line at `path` is spoken with: `base`, with the structures for that line.
+pub fn spelling_for(structures: &[Structure], base: &Spelling, path: &str) -> Spelling {
+    let words: Vec<(String, String)> = structures
+        .iter()
+        .filter(|s| s.lines.iter().any(|l| l == path))
+        .map(|s| (s.word.clone(), s.say.clone()))
+        .collect();
+    base.with_words(&words)
+}
+
+/// The carrier for the line at `path`, when one of the structures names one.
+pub fn carrier_for<'a>(structures: &'a [Structure], path: &str) -> Option<&'a str> {
+    structures
+        .iter()
+        .filter(|s| s.lines.iter().any(|l| l == path))
+        .find_map(|s| s.carrier.as_deref())
+}
+
+/// Puts `s` in `structures` in place of the word's structure for `lines`: the word's other
+/// structures keep their other lines. `None` only takes the lines out.
+pub fn replace_structure(
+    structures: &mut Vec<Structure>,
+    word: &str,
+    lines: &[String],
+    s: Option<Structure>,
+) {
+    for x in structures
+        .iter_mut()
+        .filter(|x| x.word.eq_ignore_ascii_case(word))
+    {
+        x.lines.retain(|l| !lines.contains(l));
+    }
+    structures.retain(|x| !x.lines.is_empty());
+    if let Some(s) = s {
+        structures.push(s);
+    }
+}
+
+/// Whether a line's text holds `word` whole, in any case.
+pub fn has_word(text: &str, word: &str) -> bool {
+    text.split(|c: char| !c.is_alphanumeric())
+        .any(|w| w.eq_ignore_ascii_case(word))
 }
 
 /// What the speech check heard in one line of a pack.

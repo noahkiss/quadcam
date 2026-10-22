@@ -158,10 +158,11 @@ pub use voice_studio::{
     import_text as voice_import_text, key_text as voice_key_text,
     library_text as voice_library_text, render_packs_text as voice_render_packs_text,
     sample_text as voice_sample_text, sets_text as voice_sets_text,
-    studio_estimate_text as voice_studio_estimate_text, voice_add_text, Catalog, CatalogParams,
-    EstimateParams, ImportTakesParams, KeyParams, KeyStatus, LibraryParams, LibraryPreviewParams,
-    RenderPacksParams, RenderPacksReport, SampleItem, SampleParams, SampleReport, SaveSetsParams,
-    SetsParams, StudioEstimate, StudioView, VoiceAddParams, VoiceAddReport, STUDIO_JOB,
+    studio_estimate_text as voice_studio_estimate_text, validation_text as voice_validation_text,
+    voice_add_text, Catalog, CatalogParams, EstimateParams, ImportTakesParams, KeyParams,
+    KeyStatus, LibraryParams, LibraryPreviewParams, RenderPacksParams, RenderPacksReport,
+    SampleItem, SampleParams, SampleReport, SaveSetsParams, SetsParams, StudioEstimate, StudioView,
+    Validation, VoiceAddParams, VoiceAddReport, STUDIO_JOB,
 };
 pub use weather::{WeatherClip, WeatherParams, WeatherReport};
 

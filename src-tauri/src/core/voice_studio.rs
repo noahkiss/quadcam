@@ -11,7 +11,7 @@ use crate::api::{Event, VoiceProgress};
 use crate::gear::voice::batch::{self, Batch, BatchCache, BatchSettings, Estimate, Item, Pricing};
 use crate::gear::voice::keychain::ELEVENLABS;
 use crate::gear::voice::lines::{self, Line, Spelling};
-use crate::gear::voice::packs::{self, BuildOpts, PackManifest, Retake};
+use crate::gear::voice::packs::{self, BuildOpts, HeardLine, PackManifest, Retake, Structure};
 use crate::gear::voice::rates;
 use crate::gear::voice::render::{self, Plan, RenderSettings};
 use crate::gear::voice::reuse::{self, ImportReport, LineIndex, Reuse, Scope, TakeCount};
@@ -166,6 +166,27 @@ pub struct StudioEstimate {
     /// The voice's own credit multiplier (a Voice Library voice), already in `estimate`.
     #[serde(default)]
     pub rate: Option<f64>,
+    /// What this voice's samples of the risky lines (the `sample` set) showed.
+    #[serde(default)]
+    pub validation: Validation,
+}
+
+/// What a voice's samples of the risky lines, the `sample` set, showed before a pack is
+/// rendered: the lines heard wrong, and the ways of saying words a grouped re-take found,
+/// which a render of the voice, model and speed carries to the lines with the word.
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize, specta::Type)]
+pub struct Validation {
+    /// Lines in the `sample` set.
+    pub lines: u32,
+    /// Of those, lines this voice, model and speed has a sample of.
+    pub sampled: u32,
+    /// Sampled lines the speech check heard right (or the person accepted).
+    pub heard_right: u32,
+    /// Sampled lines the speech check heard wrong, with what it heard.
+    #[serde(default)]
+    pub heard_wrong: Vec<HeardLine>,
+    #[serde(default)]
+    pub structures: Vec<Structure>,
 }
 
 /// `gear_voice_sample`: short A/B renders of a few lines in every voice and model.
@@ -378,6 +399,9 @@ struct Prepared {
     /// carriers its structures name.
     lines: Vec<(SetLine, String)>,
     bs: BatchSettings,
+    /// The structures the pack speaks its lines with (`adopt`).
+    structures: Vec<Structure>,
+    validation: Validation,
 }
 
 impl Prepared {
@@ -392,6 +416,7 @@ impl Prepared {
             to_render: self.counts.2,
             estimate: self.est.clone(),
             rate: self.rate,
+            validation: self.validation.clone(),
         }
     }
 }
@@ -1074,6 +1099,12 @@ impl Core {
         let lines = self.studio_lines(&p.sets, &p.lines)?;
         let (_, old) = self.studio_pack(&voice, &voice_name, &model);
         let old = old.map(|(_, m)| m);
+        let structures = adopt(
+            old.as_ref(),
+            &self.sample_structures(&voice, &voice_name, &model, settings.speed),
+            &lines,
+        );
+        let (lines, bs) = structured(&lines, &bs, &structures)?;
         let cache = BatchCache::new(&self.cache);
         let ctx = batch::Ctx {
             tts: tts.as_ref(),
@@ -1093,6 +1124,7 @@ impl Core {
         );
         let estimate = batch::estimate(&ctx, &plan.batches, &price);
         let (rendered, retakes, to_render) = plan.counts(&s, &lines);
+        let validation = self.validation(&voice, &voice_name, &model, settings.speed);
         Ok(StudioEstimate {
             voice: voice.clone(),
             voice_name,
@@ -1103,6 +1135,7 @@ impl Core {
             to_render,
             estimate,
             rate,
+            validation,
         })
     }
 
@@ -1161,6 +1194,9 @@ impl Core {
                     settings: &settings,
                 };
                 let s = Scope::of(&ctx);
+                // The voice's own ways of saying words, from an earlier grouped re-take.
+                let found = self.sample_structures(&vid, &vname, m, settings.speed);
+                let (lines, bs) = structured(&lines, &bs, &found)?;
                 let plan = StudioPlan::new(
                     &s,
                     &LineIndex::load(&s),
@@ -1175,7 +1211,7 @@ impl Core {
                 priced.push(serde_json::json!({
                     "voice": vid, "model": m, "to_render": plan.priced,
                 }));
-                combos.push((vid.clone(), vname.clone(), m.clone(), plan));
+                combos.push((vid.clone(), vname.clone(), m.clone(), plan, lines, bs));
             }
         }
         total.affordable = credits.remaining >= total.credits;
@@ -1208,9 +1244,12 @@ impl Core {
         let tools = crate::media::find_tools().ok();
         // Samples from 0.19 and earlier move out of the cache first; the gallery shows a failure.
         let _ = self.move_cached_samples();
-        let batches = combos.iter().map(|(.., plan)| plan.batches.len()).sum();
+        let batches = combos
+            .iter()
+            .map(|(_, _, _, plan, ..)| plan.batches.len())
+            .sum();
         let mut run = Progress::start(self, "sample", batches)?;
-        for (vid, vname, model, plan) in combos {
+        for (vid, vname, model, plan, lines, bs) in combos {
             if run.stopped() {
                 report.stopped = true;
                 break;
@@ -1447,7 +1486,14 @@ impl Core {
             Some((k, m)) => (Some(k), Some(m)),
             None => (None, None),
         };
-        let (lines, bs) = structured(lines, bs, old.as_ref())?;
+        // The pack's structures, and the ones the voice's samples found for lines the pack does
+        // not hold yet.
+        let structures = adopt(
+            old.as_ref(),
+            &self.sample_structures(&voice, &voice_name, model, settings.speed),
+            lines,
+        );
+        let (lines, bs) = structured(lines, bs, &structures)?;
         let (lines, bs) = (lines.as_slice(), &bs);
         let cache = BatchCache::new(&self.cache);
         let bctx = batch::Ctx {
@@ -1511,6 +1557,7 @@ impl Core {
                 plan.kept
             ));
         }
+        let validation = self.validation(&voice, &voice_name, model, settings.speed);
         Ok(Prepared {
             rate,
             voice,
@@ -1525,6 +1572,8 @@ impl Core {
             report,
             lines: lines.to_vec(),
             bs: bs.clone(),
+            structures,
+            validation,
         })
     }
 
@@ -1548,6 +1597,7 @@ impl Core {
             mut report,
             lines,
             bs,
+            structures,
             ..
         } = prep;
         let (lines, bs) = (lines.as_slice(), &bs);
@@ -1576,10 +1626,7 @@ impl Core {
             .map(|(l, _)| l.line.clone())
             .collect();
         let base = Spelling::builtin()?;
-        let spelling_for = |path: &str| match &old {
-            Some(o) => o.spelling_for(&base, path),
-            None => base.clone(),
-        };
+        let spelling_for = |path: &str| packs::spelling_for(&structures, &base, path);
         let dir = self.voices_dir().join(&id);
         let stage = self.voices_dir().join(format!(".rendering-{id}"));
         let _ = std::fs::remove_dir_all(&stage);
@@ -1630,9 +1677,7 @@ impl Core {
         let rendered_now: HashSet<&str> = lines.iter().map(|(l, _)| l.line.path.as_str()).collect();
         let mut kept_batches: Vec<String> = Vec::new();
         let mut heard = Vec::new();
-        let mut structures = Vec::new();
         if let Some(o) = &old {
-            structures = o.structures.clone();
             // What the check heard still holds for a line not rendered into the pack now: one
             // the render left alone, or a re-take whose take is the one heard.
             heard = o
@@ -1801,31 +1846,63 @@ pub(super) fn kept_key(voice: &str, model: &str, settings: &RenderSettings, b: &
 /// The lines as a pack speaks them: each line's text with the pack's structures applied
 /// (`PackManifest::spelling`), and a line whose structure names a carrier in a tone of its own
 /// that carries it. Without a pack, the lines and settings as they are.
-fn structured(
+pub(super) fn structured(
     lines: &[(SetLine, String)],
     bs: &BatchSettings,
-    pack: Option<&PackManifest>,
+    structures: &[Structure],
 ) -> Result<(Vec<(SetLine, String)>, BatchSettings)> {
-    let Some(p) = pack.filter(|p| !p.structures.is_empty()) else {
+    if structures.is_empty() {
         return Ok((lines.to_vec(), bs.clone()));
-    };
+    }
     let base = Spelling::builtin()?;
     let mut bs = bs.clone();
     let out = lines
         .iter()
         .map(|(l, _)| {
             let mut l = l.clone();
-            if let Some(c) = p.carrier_for(&l.line.path) {
+            if let Some(c) = packs::carrier_for(structures, &l.line.path) {
                 let tone = format!("{}|{c}", l.tone);
                 bs.tone_carriers.insert(tone.clone(), c.to_string());
                 l.tone = tone;
             }
-            let spoken = p.spelling_for(&base, &l.line.path).apply(&l.line.text);
+            let spoken = packs::spelling_for(structures, &base, &l.line.path).apply(&l.line.text);
             (l, spoken)
         })
         .collect();
     bs.check()?;
     Ok((out, bs))
+}
+
+/// The structures a pack render speaks its lines with: the pack's own, and each structure the
+/// voice's samples found (`sample_structures`) carried to every line of the render with its
+/// word that the pack does not hold yet and no structure of the pack covers. A line in the
+/// pack keeps the way it was said.
+fn adopt(
+    pack: Option<&PackManifest>,
+    found: &[Structure],
+    lines: &[(SetLine, String)],
+) -> Vec<Structure> {
+    let mut out: Vec<Structure> = pack.map(|p| p.structures.clone()).unwrap_or_default();
+    for s in found {
+        let carried: Vec<String> = lines
+            .iter()
+            .map(|(l, _)| &l.line)
+            .filter(|l| packs::has_word(&l.text, &s.word))
+            .filter(|l| !pack.is_some_and(|p| p.files.contains(&l.path)))
+            .filter(|l| {
+                !out.iter()
+                    .any(|o| o.word.eq_ignore_ascii_case(&s.word) && o.lines.contains(&l.path))
+            })
+            .map(|l| l.path.clone())
+            .collect();
+        if !carried.is_empty() {
+            out.push(Structure {
+                lines: carried,
+                ..s.clone()
+            });
+        }
+    }
+    out
 }
 
 /// The batches a render still has to make: those the pack does not already hold with every
@@ -1971,14 +2048,57 @@ pub fn studio_estimate_text(e: &StudioEstimate) -> String {
         String::new()
     };
     format!(
-        "{} lines, {} with {}: {} rendered{retakes}, {} to render. {}",
+        "{} lines, {} with {}: {} rendered{retakes}, {} to render. {}\n{}",
         e.lines,
         e.voice_name,
         e.model,
         e.rendered,
         e.to_render,
-        estimate_text(&e.estimate)
+        estimate_text(&e.estimate),
+        validation_text(&e.validation)
     )
+}
+
+/// What a voice's samples of the risky lines showed, as text.
+pub fn validation_text(v: &Validation) -> String {
+    use std::fmt::Write;
+    if v.sampled == 0 {
+        return format!(
+            "Risky lines: none sampled yet. Sample this voice first: the sample set holds the {} lines voices got wrong before.",
+            v.lines
+        );
+    }
+    let mut s = format!(
+        "Risky lines: {} of {} sampled, {} heard right, {} heard wrong",
+        v.sampled,
+        v.lines,
+        v.heard_right,
+        v.heard_wrong.len()
+    );
+    if !v.structures.is_empty() {
+        let _ = write!(
+            s,
+            "; {} ways of saying words found, carried to the pack",
+            v.structures.len()
+        );
+    }
+    s.push('.');
+    for h in &v.heard_wrong {
+        let _ = write!(s, "\n  {:?} heard {:?}", h.text, h.heard);
+    }
+    for st in &v.structures {
+        let _ = write!(
+            s,
+            "\n  {:?}: say {:?}{}",
+            st.word,
+            st.say,
+            st.carrier
+                .as_deref()
+                .map(|c| format!(" in {c:?}"))
+                .unwrap_or_default()
+        );
+    }
+    s
 }
 
 /// The line sets as text: the aircraft flown, the sets ticked, and per set what it holds.

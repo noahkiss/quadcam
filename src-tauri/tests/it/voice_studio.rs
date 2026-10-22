@@ -199,10 +199,11 @@ fn the_estimate_prices_carriers_at_the_models_rate_and_makes_no_paid_call() {
     let full = estimate(&b, &["sample"], "eleven_v4").unwrap();
     assert_eq!(half.voice, "v-callum");
     assert_eq!(half.voice_name, "Callum");
-    assert_eq!(half.lines, 12);
-    // Batches by tone: calm, alert and number lines never share a take.
-    assert_eq!(half.estimate.batches, 3);
-    assert!(half.estimate.chars > 12 * "The word is .".len() as u64);
+    assert_eq!(half.lines as usize, sample_n());
+    // Batches by tone: calm, alert and number lines never share a take, and a batch holds
+    // 30 lines at most.
+    assert_eq!(half.estimate.batches, 5);
+    assert!(half.estimate.chars > sample_n() as u64 * "The word is .".len() as u64);
     // Credits from the dollar rate and the credit price: $0.04 per 1K is 0.11 a character.
     assert_eq!(
         half.estimate.credits,
@@ -235,7 +236,14 @@ fn the_estimate_prices_carriers_at_the_models_rate_and_makes_no_paid_call() {
     // Two sets combine and a line in both counts once.
     let one = estimate(&b, &["quad"], "eleven_v4").unwrap();
     let two = estimate(&b, &["quad", "sample"], "eleven_v4").unwrap();
-    assert!(two.lines < one.lines + 12);
+    assert!((two.lines as usize) < one.lines as usize + sample_n());
+}
+
+/// Lines in the `sample` set, the risky lines.
+fn sample_n() -> usize {
+    quadcam_lib::gear::voice::sets::lines_of("sample")
+        .unwrap()
+        .len()
 }
 
 /// A paid sample the way the studio runs it: ask, then confirm with the digest.
@@ -294,7 +302,8 @@ fn a_sample_waits_for_confirm_then_writes_one_wav_per_voice_model_and_line() {
         .unwrap();
     assert!(dry.dry_run && dry.items.is_empty());
     assert_eq!(dry.combos, 4);
-    assert_eq!(dry.estimate.batches, 12);
+    let batches = dry.estimate.batches as usize;
+    assert!(batches >= 4 * 3, "{batches}");
     assert_eq!(b.http.posts(), 0);
 
     let wait = b
@@ -307,8 +316,8 @@ fn a_sample_waits_for_confirm_then_writes_one_wav_per_voice_model_and_line() {
     let mut go = sample(&["Callum", "Matilda"], &both, false, true);
     go.digest = Some(wait.digest.clone());
     let done = b.core.gear_voice_sample(&go).unwrap();
-    assert_eq!(b.http.posts(), 12);
-    assert_eq!(done.items.len(), 4 * 12);
+    assert_eq!(b.http.posts(), batches);
+    assert_eq!(done.items.len(), 4 * sample_n());
     for i in &done.items {
         let bytes = std::fs::read(&i.file).unwrap();
         assert_eq!(&bytes[..4], b"RIFF");
@@ -317,7 +326,7 @@ fn a_sample_waits_for_confirm_then_writes_one_wav_per_voice_model_and_line() {
             .file
             .contains(&format!("{}-", i.voice_name.to_lowercase())));
     }
-    assert!(done.items.iter().any(|i| i.text == "Six"));
+    assert!(done.items.iter().any(|i| i.text == "Spoilers up"));
     assert!(done.warnings.is_empty(), "{:?}", done.warnings);
 
     // The same sample again: every batch is cached, so nothing is billed or asked.
@@ -327,8 +336,8 @@ fn a_sample_waits_for_confirm_then_writes_one_wav_per_voice_model_and_line() {
         .unwrap();
     assert!(!again.needs_confirm);
     assert_eq!(again.estimate.credits, 0);
-    assert_eq!(again.items.len(), 48);
-    assert_eq!(b.http.posts(), 12);
+    assert_eq!(again.items.len(), 4 * sample_n());
+    assert_eq!(b.http.posts(), batches);
 }
 
 #[test]
@@ -724,7 +733,8 @@ fn the_mcp_tools_price_first_and_a_paid_sample_needs_confirm() {
     let go = json!({"action": "voice_sample", "voices": ["Callum"], "voice_models": ["eleven_turbo_v2_5"], "confirm": true, "digest": digest});
     let r = s.call_tool("quadcam_gear_edit", go);
     assert_eq!(r["isError"], false, "{r}");
-    assert_eq!(http.posts(), 3);
+    // One request per batch: the risky lines by tone, 30 a batch at most.
+    assert_eq!(http.posts(), 5);
 
     // An agent can delete the key and set one; the answer shows only the hint.
     let r = s.call_tool("quadcam_gear_edit", json!({"action": "voice_key_delete"}));
@@ -989,7 +999,7 @@ fn a_pack_named_for_its_voice_moves_to_the_voice_id_and_keeps_its_radios() {
 fn samples_of_two_lines_with_one_file_name_keep_both() {
     let b = bench(50000, true);
     let mut p = sample(&["Callum"], &["eleven_turbo_v2_5"], false, false);
-    p.sets = vec!["sample".into(), "scripts".into()];
+    p.sets = vec!["quad".into(), "scripts".into()];
     p.lines = vec![
         "SOUNDS/en/armed.wav".into(),
         "SOUNDS/en/SCRIPTS/YAAPU/armed.wav".into(),
@@ -1117,14 +1127,25 @@ fn a_line_rendered_once_is_never_billed_again() {
     }
     let posts = b.http.posts();
 
-    // The sample's lines are all quad lines: sampling this voice and model is free now.
+    // Sampling this voice and model now prices only the sample lines neither set holds.
+    let held: std::collections::HashSet<String> =
+        sets::combine(&["quad".into(), "heli".into()], &[])
+            .unwrap()
+            .iter()
+            .map(|l| sp.apply(&l.line.text).to_lowercase())
+            .collect();
+    let fresh: std::collections::HashSet<String> = sets::lines_of("sample")
+        .unwrap()
+        .iter()
+        .map(|l| sp.apply(&l.line.text).to_lowercase())
+        .filter(|t| !held.contains(t))
+        .collect();
     let s = b
         .core
-        .gear_voice_sample(&sample(&["Callum"], &[m], false, false))
+        .gear_voice_sample(&sample(&["Callum"], &[m], true, false))
         .unwrap();
-    assert!(!s.needs_confirm, "{s:?}");
-    assert_eq!(s.estimate.credits, 0);
-    assert_eq!(s.items.len(), 12);
+    assert_eq!(s.estimate.lines as usize, fresh.len(), "{s:?}");
+    assert!(fresh.len() < sample_n());
     assert_eq!(b.http.posts(), posts);
     let quad_again = estimate(&b, &["quad", "heli"], m).unwrap();
     assert_eq!(quad_again.to_render, 0);
@@ -1139,8 +1160,19 @@ fn a_render_after_a_sample_reuses_the_sampled_lines() {
     let cold = estimate(&b, &["quad"], m).unwrap();
     paid_sample(&b, sample(&["Callum"], &[m], false, true));
     let warm = estimate(&b, &["quad"], m).unwrap();
-    // Every sample line is a quad line, some at more than one path.
-    assert!(warm.rendered >= 12, "{warm:?}");
+    // The sample lines the quad set holds count as rendered.
+    let quad: std::collections::HashSet<String> = quadcam_lib::gear::voice::sets::lines_of("quad")
+        .unwrap()
+        .into_iter()
+        .map(|l| l.line.path)
+        .collect();
+    let shared = quadcam_lib::gear::voice::sets::lines_of("sample")
+        .unwrap()
+        .iter()
+        .filter(|l| quad.contains(&l.line.path))
+        .count();
+    assert!(shared > 20, "{shared}");
+    assert!(warm.rendered as usize >= shared, "{warm:?}");
     assert!(warm.estimate.chars < cold.estimate.chars);
     let r = paid_render(&b, render("Callum", m, &["quad"], false, true));
     assert!(
@@ -1289,8 +1321,8 @@ fn imported_takes_count_as_rendered_and_are_never_sent_again() {
     let b = bench(50_000, true);
     let m = "eleven_turbo_v2_5";
     let old = tempfile::tempdir().unwrap();
-    old_take(old.path(), "armed", "Armed", "v-callum", 1.2);
-    old_take(old.path(), "disarm", "Disarmed", "v-callum", 1.2);
+    old_take(old.path(), "lap", "Lap", "v-callum", 1.2);
+    old_take(old.path(), "lift", "Lift", "v-callum", 1.2);
     std::fs::create_dir_all(old.path().join("bad")).unwrap();
     std::fs::write(old.path().join("bad/x.json"), "{}").unwrap();
     std::fs::write(old.path().join("bad/x.pcm"), [0u8; 4]).unwrap();
@@ -1343,7 +1375,7 @@ fn imported_takes_count_as_rendered_and_are_never_sent_again() {
     let v = b.core.gear_voice_sets(&Default::default()).unwrap();
     assert_eq!(v.rendered[0].lines, 2);
     assert_eq!(estimate(&b, &["sample"], m).unwrap().rendered, 0);
-    // At their speed, the sample set's "Armed" and "Disarmed" come from the import.
+    // At their speed, the sample set's "Lap" and "Lift" come from the import.
     let fast = Some(quadcam_lib::gear::voice::render::RenderSettings {
         speed: 1.2,
         ..Default::default()
@@ -1370,9 +1402,9 @@ fn imported_takes_count_as_rendered_and_are_never_sent_again() {
         r.notes
     );
     let pack = b.dir.path().join("support/gear/voices").join(&r.pack);
-    assert!(pack.join("SOUNDS/en/armed.wav").is_file());
+    assert!(pack.join("SOUNDS/en/lap.wav").is_file());
     assert!(
-        !r.retakes.iter().any(|t| t.text == "Armed"),
+        !r.retakes.iter().any(|t| t.text == "Lap"),
         "{:?}",
         r.retakes
     );
@@ -1453,17 +1485,17 @@ fn a_reused_take_that_cannot_be_read_or_cut_is_removed_and_priced_again() {
         // The estimate still counts every line as rendered: nothing to confirm.
         let e = estimate(&b, &["sample"], m).unwrap();
         assert_eq!((e.to_render, e.estimate.chars), (0, 0), "{what}: {e:?}");
-        // The render (of another set, with lines of its own) fails before it sends anything.
+        // The render (with a set of lines of its own) fails before it sends anything.
         let ask = b
             .core
-            .gear_voice_render(&render("Callum", m, &["quad"], false, false))
+            .gear_voice_render(&render("Callum", m, &["quad", "sample"], false, false))
             .unwrap();
         assert!(ask.needs_confirm);
         let err = b
             .core
             .gear_voice_render(&VoiceRenderParams {
                 digest: Some(ask.digest),
-                ..render("Callum", m, &["quad"], false, true)
+                ..render("Callum", m, &["quad", "sample"], false, true)
             })
             .unwrap_err();
         assert!(
@@ -1639,7 +1671,7 @@ fn an_imported_take_never_stands_in_for_a_batch() {
     let b = bench(50_000, true);
     let m = "eleven_turbo_v2_5";
     let old = tempfile::tempdir().unwrap();
-    old_take(old.path(), "armed", "Armed", "v-callum", 1.0);
+    old_take(old.path(), "lap", "Lap", "v-callum", 1.0);
     b.core
         .gear_voice_import_takes(&quadcam_lib::core::ImportTakesParams {
             folder: old.path().display().to_string(),
@@ -1654,7 +1686,7 @@ fn an_imported_take_never_stands_in_for_a_batch() {
         ..Default::default()
     };
     let mut p = render("Callum", m, &["sample"], false, false);
-    p.lines = vec!["SOUNDS/en/armed.wav".into()];
+    p.lines = vec!["SOUNDS/en/lap.wav".into()];
     p.batch = Some(bare);
     p.settings = Some(quadcam_lib::gear::voice::render::RenderSettings {
         seed: 1,
@@ -1765,7 +1797,7 @@ fn an_imported_take_is_not_judged_for_a_carrier() {
     let b = bench(50_000, true);
     let m = "eleven_turbo_v2_5";
     let old = tempfile::tempdir().unwrap();
-    old_take(old.path(), "armed", "Armed", "v-callum", 1.2);
+    old_take(old.path(), "lap", "Lap", "v-callum", 1.2);
     // 60 ms of loud hiss, 40 ms of quiet, then the word.
     let mut seed: u32 = 7;
     let mut v: Vec<i16> = (0..32 * 60)
@@ -1780,7 +1812,7 @@ fn an_imported_take_is_not_judged_for_a_carrier() {
             .map(|i| (8000.0 * (i as f64 * 220.0 * std::f64::consts::TAU / 32_000.0).sin()) as i16),
     );
     let pcm: Vec<u8> = v.iter().flat_map(|s| s.to_le_bytes()).collect();
-    std::fs::write(old.path().join("armed/ab12_seed1.pcm"), pcm).unwrap();
+    std::fs::write(old.path().join("lap/ab12_seed1.pcm"), pcm).unwrap();
     b.core
         .gear_voice_import_takes(&quadcam_lib::core::ImportTakesParams {
             folder: old.path().display().to_string(),
@@ -1788,7 +1820,7 @@ fn an_imported_take_is_not_judged_for_a_carrier() {
         })
         .unwrap();
     let mut p = render("Callum", m, &["sample"], false, false);
-    p.lines = vec!["SOUNDS/en/armed.wav".into()];
+    p.lines = vec!["SOUNDS/en/lap.wav".into()];
     p.settings = Some(quadcam_lib::gear::voice::render::RenderSettings {
         speed: 1.2,
         ..Default::default()
@@ -1946,7 +1978,7 @@ fn a_line_the_speech_check_hears_wrong_is_a_re_take_until_accepted() {
 
 #[test]
 fn a_sample_heard_wrong_warns_and_its_line_is_a_re_take() {
-    const SIX: &str = "SOUNDS/en/SYSTEM/0006.wav";
+    const SIX: &str = "SOUNDS/en/SYSTEM/0060.wav";
     let wrong = Arc::new(std::sync::Mutex::new(vec![SIX.to_string()]));
     let (b, _) = bench_hearing(wrong);
     let m = "eleven_turbo_v2_5";
@@ -2028,7 +2060,7 @@ fn several_voices_price_as_one_plan_and_render_one_pack_each() {
     assert_eq!(dry.pairs.len(), 2);
     assert_eq!(dry.pairs[0].voice_name, "Callum");
     assert_eq!(dry.pairs[1].voice_name, "Matilda");
-    assert_eq!(dry.lines, 12);
+    assert_eq!(dry.lines as usize, sample_n());
     let chars: u64 = dry.pairs.iter().map(|x| x.estimate.chars).sum();
     let credits: u64 = dry.pairs.iter().map(|x| x.estimate.credits).sum();
     assert!(chars > 0);
@@ -2342,7 +2374,7 @@ fn samples_stay_in_the_gear_folder_by_voice_until_deleted() {
     assert_eq!(callum.description, "A steady voice.");
     assert_eq!(callum.accent, "american");
     assert_eq!(callum.sets, ["sample"]);
-    assert_eq!(callum.takes.len(), 12);
+    assert_eq!(callum.takes.len(), sample_n());
     assert!(callum
         .takes
         .iter()
@@ -2432,7 +2464,7 @@ fn samples_in_the_cache_move_to_the_gear_folder_once() {
         .join("cache/voice/samples/callum-eleven-turbo-v2-5/SOUNDS/en");
     std::fs::create_dir_all(&old).unwrap();
     let wav = [b"RIFF".as_slice(), &[0u8; 6440]].concat();
-    std::fs::write(old.join("armed.wav"), &wav).unwrap();
+    std::fs::write(old.join("lap.wav"), &wav).unwrap();
     let g = gallery(&b);
     let card = &g.voices[0];
     // The name reads back from the folder's slug.
@@ -2441,16 +2473,16 @@ fn samples_in_the_cache_move_to_the_gear_folder_once() {
         ("Callum", m)
     );
     assert_eq!(card.voice, "");
-    assert_eq!(card.takes[0].text, "Armed");
+    assert_eq!(card.takes[0].text, "Lap");
     assert_eq!(card.takes[0].ms, 100);
     let moved = b
         .dir
         .path()
-        .join("support/gear/voice-samples/callum-eleven-turbo-v2-5/SOUNDS/en/armed.wav");
+        .join("support/gear/voice-samples/callum-eleven-turbo-v2-5/SOUNDS/en/lap.wav");
     assert_eq!(std::fs::read(&moved).unwrap(), wav);
     assert!(!b.dir.path().join("cache/voice/samples").exists());
     // Flags work on it; a re-take needs the voice's id, which it lacks.
-    flag(&b, &card.id, "", "SOUNDS/en/armed.wav", "noise");
+    flag(&b, &card.id, "", "SOUNDS/en/lap.wav", "noise");
     assert!(b
         .core
         .gear_voice_retake(&quadcam_lib::core::RetakeParams {
@@ -2464,15 +2496,15 @@ fn samples_in_the_cache_move_to_the_gear_folder_once() {
     let cards: Vec<_> = g.voices.iter().filter(|v| v.kind == "sample").collect();
     assert_eq!(cards.len(), 1, "{g:?}");
     assert_eq!(cards[0].voice, "v-callum");
-    assert_eq!(cards[0].takes.len(), 12);
-    // The new take of Armed replaced the old one, and its flag went with it.
+    assert_eq!(cards[0].takes.len(), sample_n());
+    // The new take of Lap replaced the old one, and its flag went with it.
     assert!(cards[0].takes.iter().all(|t| t.flag.is_none()));
 }
 
 #[test]
 fn a_flagged_sample_is_listed_and_a_retake_makes_it_again() {
     let wrong = Arc::new(std::sync::Mutex::new(vec![
-        "SOUNDS/en/SYSTEM/0006.wav".to_string()
+        "SOUNDS/en/SYSTEM/0060.wav".to_string()
     ]));
     let (b, _) = bench_hearing(wrong.clone());
     let m = "eleven_turbo_v2_5";
@@ -2482,7 +2514,7 @@ fn a_flagged_sample_is_listed_and_a_retake_makes_it_again() {
     let six = card
         .takes
         .iter()
-        .find(|t| t.line == "SOUNDS/en/SYSTEM/0006.wav")
+        .find(|t| t.line == "SOUNDS/en/SYSTEM/0060.wav")
         .unwrap();
     assert_eq!(six.heard_ok, Some(false));
     assert_eq!(six.heard.as_deref(), Some("Battery."));
@@ -2490,16 +2522,16 @@ fn a_flagged_sample_is_listed_and_a_retake_makes_it_again() {
         .core
         .gear_voice_flag(&quadcam_lib::core::FlagParams {
             sample: card.id.clone(),
-            line: "SOUNDS/en/armed.wav".into(),
+            line: "SOUNDS/en/lap.wav".into(),
             reason: "loud".into(),
             ..Default::default()
         })
         .is_err());
-    let after = flag(&b, &card.id, "", "SOUNDS/en/armed.wav", "mispronounced");
+    let after = flag(&b, &card.id, "", "SOUNDS/en/lap.wav", "mispronounced");
     let armed = after
         .takes
         .iter()
-        .find(|t| t.line == "SOUNDS/en/armed.wav")
+        .find(|t| t.line == "SOUNDS/en/lap.wav")
         .unwrap();
     let f = armed.flag.clone().unwrap();
     assert_eq!(
@@ -2521,9 +2553,9 @@ fn a_flagged_sample_is_listed_and_a_retake_makes_it_again() {
     assert_eq!((row.speed, row.seed), (1.0, Some(0)));
     assert_eq!(
         (row.line.as_str(), row.text.as_str()),
-        ("SOUNDS/en/armed.wav", "Armed")
+        ("SOUNDS/en/lap.wav", "Lap")
     );
-    assert_eq!(row.heard.as_deref(), Some("Armed."));
+    assert_eq!(row.heard.as_deref(), Some("Lap."));
     assert!(row.retake && std::path::Path::new(&row.file).is_file());
     assert!(
         quadcam_lib::core::voice_flags_text(&b.core.gear_voice_flags().unwrap())
@@ -2536,7 +2568,7 @@ fn a_flagged_sample_is_listed_and_a_retake_makes_it_again() {
         .gear_voice_sample(&sample(&["Callum"], &[m], false, false))
         .unwrap();
     assert!(!same.needs_confirm);
-    assert!(!same.items.iter().any(|i| i.line == "SOUNDS/en/armed.wav"));
+    assert!(!same.items.iter().any(|i| i.line == "SOUNDS/en/lap.wav"));
     assert_eq!(b.http.posts(), posts);
     // A re-take prices the flagged line only, waits for confirm, then makes it again.
     let ask = |confirm: bool, digest: Option<String>| {
@@ -2551,7 +2583,7 @@ fn a_flagged_sample_is_listed_and_a_retake_makes_it_again() {
     };
     let r = ask(false, None);
     assert!(r.needs_confirm && r.seed > 0, "{r:?}");
-    assert_eq!(r.lines, ["SOUNDS/en/armed.wav"]);
+    assert_eq!(r.lines, ["SOUNDS/en/lap.wav"]);
     assert_eq!(r.estimate.as_ref().unwrap().batches, 1);
     assert_eq!(b.http.posts(), posts);
     assert!(b
@@ -2564,24 +2596,24 @@ fn a_flagged_sample_is_listed_and_a_retake_makes_it_again() {
         })
         .is_err());
     let done = ask(true, Some(r.digest.clone()));
-    assert_eq!(done.cleared, ["SOUNDS/en/armed.wav"], "{done:?}");
+    assert_eq!(done.cleared, ["SOUNDS/en/lap.wav"], "{done:?}");
     assert_eq!(b.http.posts(), posts + 1);
     let card = gallery(&b).voices.remove(0);
     let armed = card
         .takes
         .iter()
-        .find(|t| t.line == "SOUNDS/en/armed.wav")
+        .find(|t| t.line == "SOUNDS/en/lap.wav")
         .unwrap();
     assert!(armed.flag.is_none());
     assert_eq!(armed.seed, Some(r.seed));
-    assert_eq!(card.takes.len(), 12);
+    assert_eq!(card.takes.len(), sample_n());
     assert!(b.core.gear_voice_flags().unwrap().flags.is_empty());
     // Clear works on its own too.
-    flag(&b, &card.id, "", "SOUNDS/en/turtle.wav", "wrong_tone");
+    flag(&b, &card.id, "", "SOUNDS/en/next.wav", "wrong_tone");
     b.core
         .gear_voice_flag(&quadcam_lib::core::FlagParams {
             sample: card.id.clone(),
-            line: "SOUNDS/en/turtle.wav".into(),
+            line: "SOUNDS/en/next.wav".into(),
             clear: true,
             ..Default::default()
         })
@@ -2593,7 +2625,7 @@ fn a_flagged_sample_is_listed_and_a_retake_makes_it_again() {
         .gear_voice_sample(&sample(&["Callum"], &[m], false, false))
         .unwrap();
     assert!(!free.needs_confirm);
-    assert!(free.items.iter().any(|i| i.line == "SOUNDS/en/turtle.wav"));
+    assert!(free.items.iter().any(|i| i.line == "SOUNDS/en/next.wav"));
     assert_eq!(b.http.posts(), posts);
 }
 
@@ -2602,14 +2634,14 @@ fn a_flagged_pack_line_shows_on_its_card_and_a_retake_puts_a_new_take_in() {
     let b = bench(99_000, true);
     let m = "eleven_turbo_v2_5";
     let r = paid_render(&b, render("Callum", m, &["sample"], false, true));
-    const LINE: &str = "SOUNDS/en/armed.wav";
+    const LINE: &str = "SOUNDS/en/lap.wav";
     let card = gallery(&b)
         .voices
         .into_iter()
         .find(|v| v.kind == "pack")
         .unwrap();
     assert_eq!(card.id, r.pack);
-    assert_eq!(card.takes.len(), 12);
+    assert_eq!(card.takes.len(), sample_n());
     let pack = b.dir.path().join("support/gear/voices").join(&r.pack);
     let flagged = flag(&b, "", &r.pack, LINE, "clipped");
     assert!(flagged
@@ -2668,7 +2700,7 @@ fn a_flagged_pack_line_shows_on_its_card_and_a_retake_puts_a_new_take_in() {
     // Every other line stayed in the pack.
     let m: serde_json::Value =
         serde_json::from_slice(&std::fs::read(pack.join("pack.json")).unwrap()).unwrap();
-    assert_eq!(m["files"].as_array().unwrap().len(), 12);
+    assert_eq!(m["files"].as_array().unwrap().len(), sample_n());
 }
 
 #[test]
@@ -2934,6 +2966,178 @@ fn a_grouped_retake_tries_a_line_other_ways_and_the_pack_keeps_the_way_that_won(
     assert_eq!(b.http.posts(), posts);
 }
 
+/// The text of every take sent to ElevenLabs, in order.
+fn sent_texts(b: &Bench) -> Vec<String> {
+    b.http
+        .seen
+        .lock()
+        .unwrap()
+        .iter()
+        .filter(|q| q.url.contains("with-timestamps"))
+        .filter_map(|q| {
+            serde_json::from_str::<serde_json::Value>(q.body.as_deref()?)
+                .ok()?
+                .get("text")?
+                .as_str()
+                .map(String::from)
+        })
+        .collect()
+}
+
+/// A bench whose speech check hears `line` wrong (`heard`) the first `times` times.
+fn bench_wrong_times(line: &'static str, heard: &'static str, times: u32) -> Bench {
+    let left = Arc::new(std::sync::Mutex::new(times));
+    let mut texts: Vec<(String, String)> = Vec::new();
+    for id in quadcam_lib::gear::voice::sets::ids() {
+        if id == "custom" {
+            continue;
+        }
+        for l in quadcam_lib::gear::voice::sets::lines_of(id).unwrap() {
+            texts.push((l.line.path, l.line.text));
+        }
+    }
+    let helper = Arc::new(quadcam_lib::intel::fake::FakeHelper::new(Box::new(
+        move |f: &str| {
+            let mut n = left.lock().unwrap();
+            if f.ends_with(line) && *n > 0 {
+                *n -= 1;
+                return Some(heard.into());
+            }
+            texts
+                .iter()
+                .find(|(p, _)| f.ends_with(p.as_str()))
+                .map(|(_, t)| format!("{t}."))
+        },
+    )));
+    let mut b = bench(99_000, true);
+    let intel = quadcam_lib::intel::Intel::with("/helper/quadcam-intel".into(), helper);
+    b.core = b.core.with_intel(Arc::new(intel));
+    b
+}
+
+/// The risky lines first: a sample heard wrong shows in the estimate, a grouped re-take of the
+/// sample finds a way to say its word, and a pack render carries that way to the voice's other
+/// lines with the word.
+#[test]
+fn a_sample_finds_a_voices_way_to_say_a_word_and_the_pack_render_carries_it() {
+    const UP: &str = "SOUNDS/en/splrup.wav";
+    const DOWN: &str = "SOUNDS/en/splrdn.wav";
+    let m = "eleven_turbo_v2_5";
+    // Heard wrong in the sample and in the first try.
+    let b = bench_wrong_times(UP, "Boilers up.", 2);
+    let est = |b: &Bench| estimate(b, &["edgetx"], m).unwrap().validation;
+    let v = est(&b);
+    assert_eq!((v.lines as usize, v.sampled), (sample_n(), 0));
+    assert!(quadcam_lib::core::voice_validation_text(&v).contains("none sampled yet"));
+    paid_sample(&b, sample(&["Callum"], &[m], false, true));
+    let v = est(&b);
+    assert_eq!(v.sampled as usize, sample_n());
+    assert_eq!(v.heard_wrong.len(), 1, "{v:?}");
+    assert_eq!(v.heard_wrong[0].path, UP);
+    assert!(v.structures.is_empty());
+    // The grouped re-take of the sample voice: priced first, then the second way wins.
+    let id = gallery(&b)
+        .voices
+        .into_iter()
+        .find(|c| c.kind == "sample")
+        .unwrap()
+        .id;
+    let retake = |confirm: bool, digest: Option<String>| {
+        b.core
+            .gear_voice_retake(&quadcam_lib::core::RetakeParams {
+                sample: id.clone(),
+                grouped: true,
+                confirm,
+                digest,
+                ..Default::default()
+            })
+            .unwrap()
+    };
+    let posts = b.http.posts();
+    let ask = retake(false, None);
+    assert!(ask.needs_confirm, "{ask:?}");
+    assert_eq!(ask.groups.len(), 1);
+    assert_eq!(ask.groups[0].word, "Spoilers");
+    assert_eq!(b.http.posts(), posts);
+    let done = retake(true, Some(ask.digest.clone()));
+    let g = &done.groups[0];
+    assert!(g.won && g.tries[1].ok && !g.tries[0].ok, "{done:?}");
+    assert_eq!(done.cleared, [UP]);
+    assert!(done.still_out.is_empty());
+    assert_eq!(
+        sent_texts(&b).last().map(String::as_str),
+        Some("Say Spoilers up.")
+    );
+    // The voice keeps the way: the gallery and the estimate show it.
+    let card = gallery(&b).voices.into_iter().find(|c| c.id == id).unwrap();
+    assert_eq!(card.structures.len(), 1);
+    assert_eq!(card.structures[0].carrier.as_deref(), Some("Say {line}."));
+    let v = est(&b);
+    assert!(v.heard_wrong.is_empty(), "{v:?}");
+    assert_eq!(v.structures, card.structures);
+    // A pack render of the voice says the word's other lines that way, and keeps it.
+    let r = paid_render(
+        &b,
+        VoiceRenderParams {
+            lines: vec![DOWN.into()],
+            ..render("Callum", m, &["edgetx"], false, true)
+        },
+    );
+    assert!(r.retakes.is_empty(), "{:?}", r.retakes);
+    assert_eq!(
+        sent_texts(&b).last().map(String::as_str),
+        Some("Say Spoilers down.")
+    );
+    let pack = b.dir.path().join("support/gear/voices").join(&r.pack);
+    let pm: quadcam_lib::gear::voice::packs::PackManifest =
+        serde_json::from_slice(&std::fs::read(pack.join("pack.json")).unwrap()).unwrap();
+    assert_eq!(pm.structures.len(), 1, "{:?}", pm.structures);
+    assert_eq!(pm.structures[0].lines, [DOWN]);
+    assert!(pack.join(DOWN).is_file());
+}
+
+#[test]
+fn a_retake_whose_new_take_fails_again_says_so_and_why() {
+    const LOW: &str = "SOUNDS/en/lowbat.wav";
+    // Heard wrong in the render and in the re-take.
+    let b = bench_wrong_times(LOW, "Battery.", 2);
+    let r = paid_render(
+        &b,
+        render("Callum", "eleven_turbo_v2_5", &["quad"], false, true),
+    );
+    assert!(r.retakes.iter().any(|t| t.path == LOW));
+    let ask = b
+        .core
+        .gear_voice_retake(&quadcam_lib::core::RetakeParams {
+            pack: r.pack.clone(),
+            lines: vec![LOW.into()],
+            ..Default::default()
+        })
+        .unwrap();
+    let done = b
+        .core
+        .gear_voice_retake(&quadcam_lib::core::RetakeParams {
+            pack: r.pack.clone(),
+            lines: vec![LOW.into()],
+            confirm: true,
+            digest: Some(ask.digest),
+            ..Default::default()
+        })
+        .unwrap();
+    assert!(done.cleared.is_empty());
+    assert_eq!(done.still_out.len(), 1);
+    assert_eq!(
+        done.still_out[0].reason,
+        "The speech check heard \"Battery.\"."
+    );
+    let t = quadcam_lib::core::voice_retake_text(&done);
+    assert!(
+        t.contains("0 passed, 1 failed their checks again") && t.contains("still out"),
+        "{t}"
+    );
+    assert!(!t.contains("no new take"), "{t}");
+}
+
 #[test]
 fn the_mcp_tools_list_flags_and_retake_only_with_confirm() {
     let b = bench(50000, true);
@@ -2949,7 +3153,7 @@ fn the_mcp_tools_list_flags_and_retake_only_with_confirm() {
     let r = call(
         &mut server,
         "quadcam_gear_edit",
-        json!({"action": "voice_flag", "sample": id, "line": "SOUNDS/en/armed.wav", "reason": "noise", "note": "hiss"}),
+        json!({"action": "voice_flag", "sample": id, "line": "SOUNDS/en/lap.wav", "reason": "noise", "note": "hiss"}),
     );
     assert!(r.to_string().contains("Flagged"), "{r}");
     let r = call(
@@ -2959,7 +3163,7 @@ fn the_mcp_tools_list_flags_and_retake_only_with_confirm() {
     );
     let t = r.to_string();
     assert!(
-        t.contains("hiss") && t.contains("v-callum") && t.contains("armed.wav"),
+        t.contains("hiss") && t.contains("v-callum") && t.contains("lap.wav"),
         "{t}"
     );
     let r = call(

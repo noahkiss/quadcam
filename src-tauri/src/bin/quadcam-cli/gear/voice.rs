@@ -314,10 +314,11 @@ pub enum VoiceCmd {
         /// plan changed since.
         #[arg(long)]
         digest: Option<String>,
-        /// A pack's re-take lines grouped by the word each got wrong: one line per group is
-        /// tried in other ways (seed, carrier, spelling) until the speech check hears it right,
-        /// then the rest of the group is made that way. The price is the most it can cost.
-        #[arg(long, requires = "pack")]
+        /// A pack's re-take lines, or a sample voice's lines heard wrong, grouped by the word
+        /// each got wrong: one line per group is tried in other ways (seed, carrier, spelling)
+        /// until the speech check hears it right, then the rest of the group is made that way.
+        /// The price is the most it can cost.
+        #[arg(long)]
         grouped: bool,
         /// With --grouped: the ways one group's line is tried at most (default 6, at most 12).
         #[arg(long, requires = "grouped")]

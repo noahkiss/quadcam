@@ -6882,6 +6882,8 @@ export type RetakeReport = {
 	notes?: string[],
 	/**  With `grouped`: each group, its tries and what came of them. */
 	groups?: RetakeGroup[],
+	/**  Lines asked for whose new take failed its checks again, each with the reason. */
+	still_out?: Retake[],
 };
 
 /**  One way of saying a group's sample. */
@@ -7056,6 +7058,11 @@ export type SampleVoice_Deserialize = {
 	/**  The line sets the samples came from. */
 	sets?: string[],
 	takes: SampleTake_Deserialize[],
+	/**
+	 *  The ways of saying words this voice got wrong, found by a grouped re-take: a pack
+	 *  render of the voice and model says those words the same way.
+	 */
+	structures?: Structure[],
 };
 
 /**  One voice's card in the gallery. */
@@ -7078,6 +7085,11 @@ export type SampleVoice_Serialize = {
 	/**  The line sets the samples came from. */
 	sets: string[],
 	takes: SampleTake_Serialize[],
+	/**
+	 *  The ways of saying words this voice got wrong, found by a grouped re-take: a pack
+	 *  render of the voice and model says those words the same way.
+	 */
+	structures: Structure[],
 };
 
 /**  `gear_voice_samples_delete`. */
@@ -8039,6 +8051,8 @@ export type StudioEstimate = {
 	estimate: Estimate,
 	/**  The voice's own credit multiplier (a Voice Library voice), already in `estimate`. */
 	rate?: number | null,
+	/**  What this voice's samples of the risky lines (the `sample` set) showed. */
+	validation?: Validation,
 };
 
 /**  `gear_voice_sets`: the line sets and the key, with no network call. */
@@ -8424,6 +8438,23 @@ export type UsbTimer = {
 	remaining_s: number | null,
 	/**  "Unplug now" played for this battery session. */
 	warned: boolean,
+};
+
+/**
+ *  What a voice's samples of the risky lines, the `sample` set, showed before a pack is
+ *  rendered: the lines heard wrong, and the ways of saying words a grouped re-take found,
+ *  which a render of the voice, model and speed carries to the lines with the word.
+ */
+export type Validation = {
+	/**  Lines in the `sample` set. */
+	lines: number,
+	/**  Of those, lines this voice, model and speed has a sample of. */
+	sampled: number,
+	/**  Sampled lines the speech check heard right (or the person accepted). */
+	heard_right: number,
+	/**  Sampled lines the speech check heard wrong, with what it heard. */
+	heard_wrong?: HeardLine[],
+	structures?: Structure[],
 };
 
 export type ValidationReport = {

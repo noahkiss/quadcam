@@ -1,13 +1,85 @@
 path,text,group,tone,why
-SOUNDS/en/SYSTEM/0006.wav,Six,numbers,number,A bare number: the hardest case for a lone word.
-SOUNDS/en/armed.wav,Armed,callouts,calm,A short word with a hard start.
-SOUNDS/en/disarm.wav,Disarmed,callouts,calm,The matching pair of Armed.
-SOUNDS/en/turtle.wav,Turtle mode,callouts,calm,A two-word callout.
-SOUNDS/en/lowbat.wav,Battery low,callouts,alert,A warning.
-SOUNDS/en/critbat.wav,Battery critical,callouts,alert,A last warning.
-SOUNDS/en/critrssi.wav,Signal critical,callouts,alert,"A warning that starts with S, like the carrier's last sound."
-SOUNDS/en/failsafe.wav,Failsafe,callouts,alert,One word with a hard F.
-SOUNDS/en/linkback.wav,Link back,callouts,calm,A calm status.
-SOUNDS/en/rth.wav,Return to home,callouts,alert,A longer callout.
-SOUNDS/en/mahwarn.wav,Capacity warning,callouts,alert,A longer warning.
-SOUNDS/en/SYSTEM/0010.wav,ten,numbers,number,A number that ends in a nasal.
+SOUNDS/en/3d.wav,3D,callouts,calm,Its cut was flagged long for its text.
+SOUNDS/en/difloc.wav,Diffs locked,callouts,calm,"Heard as ""Stiff is locked""."
+SOUNDS/en/halfpack.wav,Half pack,callouts,calm,"Heard as ""It's half pack""."
+SOUNDS/en/hdfmon.wav,Headfree mode active,callouts,calm,Its cut started in the carrier's hiss.
+SOUNDS/en/high.wav,high,callouts,calm,"Heard as ""Hi""."
+SOUNDS/en/home.wav,home,callouts,calm,Its cut started in the carrier's hiss.
+SOUNDS/en/lift.wav,Lift,callouts,calm,Heard as nothing.
+SOUNDS/en/lncmod.wav,Launch mode,callouts,calm,"Heard as ""The launch mode""."
+SOUNDS/en/locked.wav,Locked,callouts,calm,"Heard as ""blocked""."
+SOUNDS/en/low.wav,low,callouts,calm,"Heard as ""Blow""."
+SOUNDS/en/lq.wav,LQ,callouts,calm,Its cut was flagged long for its text.
+SOUNDS/en/maxgyr.wav,Max gyro,callouts,calm,"Heard as ""X Gyro""."
+SOUNDS/en/mothot.wav,Motor overheating,callouts,alert,"Heard as ""Alter overheating""."
+SOUNDS/en/next.wav,next,callouts,calm,Its cut started in the carrier's hiss.
+SOUNDS/en/no.wav,no,callouts,calm,"Heard as ""Wow""."
+SOUNDS/en/osd.wav,OSD,callouts,calm,Its cut was flagged long for its text.
+SOUNDS/en/recsrt.wav,Recording started,callouts,calm,"Heard as ""According started""."
+SOUNDS/en/revthr.wav,Reverse Thrust,callouts,calm,"Heard as ""Verse thrust""."
+SOUNDS/en/rfmode.wav,RF mode,callouts,calm,"Heard as ""Ref mode""."
+SOUNDS/en/rth.wav,Return to home,callouts,alert,"Heard as ""Turn to home mode""."
+SOUNDS/en/splrup.wav,Spoilers up,callouts,calm,"Heard as ""Boilers up""."
+SOUNDS/en/spoolup.wav,Spooling up,callouts,calm,"Heard as ""Fooling up""."
+SOUNDS/en/turnof.wav,Turn signals off,callouts,calm,Its cut started in the carrier's hiss.
+SOUNDS/en/vgfold.wav,Wings folding,callouts,calm,"Heard as ""Folding""."
+SOUNDS/en/vrion.wav,Vario on,callouts,calm,"Heard as ""Farior""."
+SOUNDS/en/vtx.wav,VTX,callouts,calm,"Heard as ""T X changed""."
+SOUNDS/en/wetmde.wav,Wet mode enabled,callouts,calm,"Heard as ""What mode enabled""."
+SOUNDS/en/qdelrs.wav,"ExpressLRS done, safe to unplug.",cues,calm,"Heard as ""Press LRS, done. Safe to unplug""."
+SOUNDS/en/qsdvr.wav,The DVR card is still inserted.,cues,calm,Its cut started in the carrier's hiss.
+SOUNDS/en/SCRIPTS/INAV/hedhld.wav,Heading hold,extras,calm,"Heard as ""Petting hold""."
+SOUNDS/en/SCRIPTS/INAV/lost.wav,Lost,extras,alert,Heard as nothing.
+SOUNDS/en/SCRIPTS/YAAPU/1249672288.wav,Transition started,extras,calm,Its cut started in the carrier's hiss.
+SOUNDS/en/SCRIPTS/YAAPU/2386213680.wav,EKF variance,extras,calm,"Heard as ""E-Caf variants""."
+SOUNDS/en/SCRIPTS/YAAPU/4137200300.wav,GPS Glitch,extras,alert,"Heard as ""P S glitch""."
+SOUNDS/en/SCRIPTS/YAAPU/avoidadsb.wav,Avoid A D S B flight mode,extras,calm,"Heard as ""The void, ADSB, flight mode""."
+SOUNDS/en/SCRIPTS/YAAPU/initializing.wav,Initializing,extras,calm,"Heard as ""realizing""."
+SOUNDS/en/SCRIPTS/YAAPU/qacro.wav,Q acro flight mode,extras,calm,"Heard as ""Quacro flight mode""."
+SOUNDS/en/SCRIPTS/YAAPU/rattitude.wav,Rate attitude mode,extras,calm,"Heard as ""Great attitude mode""."
+SOUNDS/en/angleoff.wav,Angle off,extras,calm,"Heard as ""Angle loft""."
+SOUNDS/en/angleon.wav,Angle on,extras,calm,"Heard as ""Hang along""."
+SOUNDS/en/beepmute.wav,Beeper muted,extras,calm,"Heard as ""Per muted""."
+SOUNDS/en/lap.wav,Lap,extras,calm,Heard as nothing.
+SOUNDS/en/SYSTEM/0001.wav,one,numbers,number,"Heard as ""is one""."
+SOUNDS/en/SYSTEM/0005.wav,five,numbers,number,Heard as nothing.
+SOUNDS/en/SYSTEM/0008.wav,eight,numbers,number,"Heard as ""Hey""."
+SOUNDS/en/SYSTEM/0009.wav,nine,numbers,number,"Heard as ""is nine""."
+SOUNDS/en/SYSTEM/0013.wav,thirteen,numbers,number,Its cut started in the carrier's hiss.
+SOUNDS/en/SYSTEM/0020.wav,twenty,numbers,number,Its cut started in the carrier's hiss.
+SOUNDS/en/SYSTEM/0030.wav,thirty,numbers,number,Its cut started in the carrier's hiss.
+SOUNDS/en/SYSTEM/0046.wav,forty six,numbers,number,"Heard as ""is 46""."
+SOUNDS/en/SYSTEM/0050.wav,fifty,numbers,number,"Heard as ""Is 50""."
+SOUNDS/en/SYSTEM/0060.wav,sixty,numbers,number,"Heard as ""Is sick""."
+SOUNDS/en/SYSTEM/0070.wav,seventy,numbers,number,"Heard as ""is 7""."
+SOUNDS/en/SYSTEM/0080.wav,eighty,numbers,number,"Heard as ""is 8""."
+SOUNDS/en/SYSTEM/0090.wav,ninety,numbers,number,"Heard as ""is 9""."
+SOUNDS/en/SYSTEM/0101.wav,two hundred,numbers,number,"Heard as ""Is 200""."
+SOUNDS/en/SYSTEM/0102.wav,three hundred,numbers,number,"Heard as ""Is 300""."
+SOUNDS/en/SYSTEM/0103.wav,four hundred,numbers,number,"Heard as ""is 400""."
+SOUNDS/en/SYSTEM/0105.wav,six hundred,numbers,number,"Heard as ""Is 600""."
+SOUNDS/en/SYSTEM/0106.wav,seven hundred,numbers,number,"Heard as ""is 700""."
+SOUNDS/en/SYSTEM/0109.wav,thousand,numbers,number,"Heard as ""Is 1000""."
+SOUNDS/en/SYSTEM/0110.wav,and,numbers,number,Its cut started in the carrier's hiss.
+SOUNDS/en/SYSTEM/0111.wav,minus,numbers,number,"Heard as ""In us""."
+SOUNDS/en/SYSTEM/0167.wav,point zero,numbers,number,"Heard as ""0.0""."
+SOUNDS/en/SYSTEM/0172.wav,point five,numbers,number,"Heard as "".5""."
+SOUNDS/en/SYSTEM/modelpwr.wav,Receiver still connected,system,alert,"Heard as ""The receiver still connected""."
+SOUNDS/en/SYSTEM/amp0.wav,amp,units,number,"Heard as ""Am""."
+SOUNDS/en/SYSTEM/db0.wav,dB,units,number,Its cut was flagged long for its text.
+SOUNDS/en/SYSTEM/dbm0.wav,dBm,units,number,Its cut was flagged long for its text.
+SOUNDS/en/SYSTEM/fahr0.wav,degree fahrenheit,units,number,"Heard as ""Three Fahrenheit""."
+SOUNDS/en/SYSTEM/hertz0.wav,hertz,units,number,Its cut started in the carrier's hiss.
+SOUNDS/en/SYSTEM/km0.wav,kilometer,units,number,Its cut started in the carrier's hiss.
+SOUNDS/en/SYSTEM/km1.wav,kilometers,units,number,Its cut started in the carrier's hiss.
+SOUNDS/en/SYSTEM/knot0.wav,knot,units,number,Its cut started in the carrier's hiss.
+SOUNDS/en/SYSTEM/knot1.wav,knots,units,number,Its cut started in the carrier's hiss.
+SOUNDS/en/SYSTEM/mamp0.wav,milliamp,units,number,"Heard as ""It's Milliam""."
+SOUNDS/en/SYSTEM/mamp1.wav,milliamps,units,number,"Heard as ""Billy amps""."
+SOUNDS/en/SYSTEM/meter1.wav,meters,units,number,Heard as nothing.
+SOUNDS/en/SYSTEM/rad0.wav,radian,units,number,Heard as nothing.
+SOUNDS/en/SYSTEM/rad1.wav,radians,units,number,"Heard as ""Ends""."
+SOUNDS/en/SYSTEM/rpm0.wav,RPM,units,number,Its cut was flagged long for its text.
+SOUNDS/en/SYSTEM/volt0.wav,volt,units,number,Heard as nothing.
+SOUNDS/en/SYSTEM/watt0.wav,watt,units,number,"Heard as ""What""."
+SOUNDS/en/SYSTEM/watt1.wav,watts,units,number,Heard as nothing.

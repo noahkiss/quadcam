@@ -379,7 +379,7 @@ const SETS: SetInfo[] = [
   { id: "plane", title: "Plane", about: "The radio's prompts, numbers and units, and plane callouts: stall, airspeed, landing gear, flaps, lights, fuel.", lines: 169, kinds: ["plane"], part_of: "edgetx" },
   { id: "glider", title: "Glider", about: "The radio's prompts, numbers and units, and glider callouts: thermal mode, lift and sink, crow, launch, ballast.", lines: 164, kinds: ["glider"], part_of: "edgetx" },
   { id: "car", title: "Car", about: "The radio's prompts, numbers and units, and car callouts: drive modes, steering, gears, drift.", lines: 160, kinds: ["car"], part_of: "edgetx" },
-  { id: "sample", title: "Sample", about: "A dozen hard lines for comparing voices: a bare number, short words, warnings.", lines: 12, kinds: [] },
+  { id: "sample", title: "Sample", about: "The risky lines: one per word voices got wrong before (heard wrong, or cut wrong). Sample a voice with it before rendering a pack.", lines: 84, kinds: [] },
   { id: "quadcam", title: "QuadCam default", about: "The lines of QuadCam's ready-made voice packs: arming, battery, signal, flight modes, timers and numbers.", lines: 45, kinds: [] },
   { id: "custom", title: "Your lines", about: "Lines you added on a radio's Voice segment.", lines: 0, kinds: [] },
 ];
@@ -579,7 +579,7 @@ function keepSamples(g: MockGear, items: SampleItem[], seed: number) {
     let card = g.voice.samples.find((c) => c.id === id);
     if (!card) {
       const v = voiceOf(i.voice, g);
-      card = { id, kind: "sample", voice: v.id, voice_name: v.name, model: i.model, provider: "elevenlabs", speed: 1, description: `A ${v.gender} voice for narration.`, accent: v.accent ?? "", languages: v.languages ?? [], updated: null, sets: ["sample"], takes: [] };
+      card = { id, kind: "sample", voice: v.id, voice_name: v.name, model: i.model, provider: "elevenlabs", speed: 1, description: `A ${v.gender} voice for narration.`, accent: v.accent ?? "", languages: v.languages ?? [], updated: null, sets: ["sample"], takes: [], structures: [] };
       g.voice.samples.unshift(card);
     }
     card.updated = new Date().toISOString();
@@ -589,7 +589,7 @@ function keepSamples(g: MockGear, items: SampleItem[], seed: number) {
   }
 }
 
-/** The lines of a made-up long gallery: the twelve lines of the `sample` set. */
+/** The lines of a made-up long gallery: twelve made-up sample lines. */
 const SAMPLE_SET: [string, string][] = [
   ["SOUNDS/en/SYSTEM/0006.wav", "Six"],
   ["SOUNDS/en/armed.wav", "Armed"],
@@ -624,6 +624,7 @@ function seedGallery(v: MockVoice) {
       updated: `2026-10-11T${String(10 + (i % 10)).padStart(2, "0")}:00:00Z`,
       sets: ["sample"],
       takes: SAMPLE_SET.map(([line, text]) => ({ line, text, file: `${SAMPLE_ROOT}/${id}/${line}`, ms: 480, seed: 0, heard: `${text}.`, heard_ok: true })),
+      structures: [],
     });
   }
   v.seedSamples = 0;
@@ -650,7 +651,7 @@ function packCard(v: MockVoice, k: VoicePack): SampleVoice {
     takes: lines.map<SampleTake>((l) => {
       const h = heard.find((x) => x.path === l.path);
       return { line: l.path, text: l.text, file: `${k.dir}/${l.path}`, ms: 500, seed: 0, heard: h?.heard ?? null, heard_ok: h ? h.ok || !!h.accepted : null, flag: flags.find((f) => f.line === l.path) ?? null };
-    }),
+    }),    structures: [],
   };
 }
 

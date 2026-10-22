@@ -168,7 +168,7 @@ const SETS: &[Def] = &[
     Def {
         id: "sample",
         title: "Sample",
-        about: "A dozen hard lines for comparing voices: a bare number, short words, warnings.",
+        about: "The risky lines: one per word voices got wrong before (heard wrong, or cut wrong). Sample a voice with it before rendering a pack.",
         files: &["sample"],
         by_kind: None,
         kinds: &[],
@@ -494,7 +494,7 @@ mod tests {
         let c = combine(
             &["sample".into(), CUSTOM.into()],
             &[Line {
-                path: "SOUNDS/en/armed.wav".into(),
+                path: "SOUNDS/en/lq.wav".into(),
                 text: "Mine".into(),
                 group: "extras".into(),
                 why: String::new(),
@@ -503,17 +503,17 @@ mod tests {
         .unwrap();
         assert_eq!(
             c.iter()
-                .filter(|l| l.line.path.ends_with("/armed.wav"))
+                .filter(|l| l.line.path.ends_with("/lq.wav"))
                 .count(),
             1
         );
         assert_eq!(
             c.iter()
-                .find(|l| l.line.path.ends_with("/armed.wav"))
+                .find(|l| l.line.path.ends_with("/lq.wav"))
                 .unwrap()
                 .line
                 .text,
-            "Armed"
+            "LQ"
         );
     }
 
@@ -524,19 +524,20 @@ mod tests {
     }
 
     #[test]
-    fn the_sample_set_holds_the_hard_lines() {
+    fn the_sample_set_holds_the_risky_lines() {
         let s: Vec<String> = lines_of("sample")
             .unwrap()
             .into_iter()
             .map(|l| l.line.text)
             .collect();
-        assert_eq!(s.len(), 12);
+        assert_eq!(s.len(), 84);
         for want in [
-            "Six",
-            "Armed",
-            "Turtle mode",
-            "Battery low",
-            "Signal critical",
+            "Spoilers up",
+            "GPS Glitch",
+            "LQ",
+            "point five",
+            "hertz",
+            "Return to home",
         ] {
             assert!(s.iter().any(|t| t == want), "{want}");
         }
@@ -577,7 +578,7 @@ mod tests {
         let want = [
             ("edgetx", 747),
             ("scripts", 179),
-            ("sample", 12),
+            ("sample", 84),
             ("easter", 20),
         ];
         for (id, n) in want {

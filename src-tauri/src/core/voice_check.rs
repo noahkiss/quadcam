@@ -567,6 +567,10 @@ impl Core {
             let heard = h.text.clone().unwrap_or_default();
             let spoken = spelling.apply(&item.text);
             let ok = asr::same(&spoken, &heard, &spelling);
+            // The line index knows the take by what the voice was sent.
+            let found =
+                self.sample_structures(&item.voice, &item.voice_name, &item.model, settings.speed);
+            let spoken = packs::spelling_for(&found, &spelling, &item.line).apply(&item.text);
             item.heard = Some(heard.clone());
             item.heard_ok = Some(ok);
             let who = (item.voice.clone(), item.model.clone());

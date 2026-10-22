@@ -11,19 +11,20 @@
 
 use super::voice_check::{read_manifest, write_manifest};
 use super::voice_samples::{RetakeParams, RetakeReport};
+use super::voice_studio::SampleParams;
 use super::voice_studio::PROVIDER;
 use super::voice_studio::{plan_digest, same_plan};
 use super::{Core, VoiceRenderParams};
 use crate::gear::voice::asr;
 use crate::gear::voice::batch::{self, BatchCache, BatchSettings, Estimate, Item, LETTER_NAMES};
 use crate::gear::voice::lines::Spelling;
-use crate::gear::voice::packs::{PackManifest, Structure};
+use crate::gear::voice::packs::{self, Structure};
 use crate::gear::voice::render::RenderSettings;
 use crate::gear::voice::reuse::{LineIndex, Scope};
 use crate::gear::voice::sets;
 use anyhow::{bail, Result};
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
+use std::path::PathBuf;
 
 /// Ways one sample is tried at most, by default.
 pub const TRIES: u32 = 6;
@@ -230,90 +231,261 @@ fn sentence(text: &str, word: &str, say: &str, carrier: Option<&str>, sp: &Spell
     )
 }
 
-/// Puts a group's structure in the pack, in place of the word's structure for those lines
-/// (`None` takes the lines out of it).
-fn set_structure(
-    dir: &std::path::Path,
-    word: &str,
-    lines: &[String],
-    s: Option<Structure>,
-) -> Result<()> {
-    let mut m = read_manifest(dir)?;
-    // The word's structures keep their other lines.
-    for x in m
-        .structures
-        .iter_mut()
-        .filter(|x| x.word.eq_ignore_ascii_case(word))
-    {
-        x.lines.retain(|l| !lines.contains(l));
-    }
-    m.structures.retain(|x| !x.lines.is_empty());
-    if let Some(s) = s {
-        m.structures.push(s);
-    }
-    write_manifest(dir, &m)
+/// What a grouped re-take works on: a studio pack, or one voice's samples.
+enum On {
+    Pack { id: String, dir: PathBuf },
+    Sample { id: String, dir: PathBuf },
 }
 
-/// Whether a line is in the pack now, and what the speech check heard and why it is out.
-fn standing(m: &PackManifest, path: &str) -> (bool, Option<String>, Option<String>) {
-    let out = m.retakes.iter().find(|r| r.path == path);
-    let heard = m
-        .heard
-        .iter()
-        .find(|h| h.path == path)
-        .map(|h| h.heard.clone());
-    (
-        m.files.iter().any(|f| f == path) && out.is_none(),
-        heard,
-        out.map(|r| r.reason.clone()),
-    )
+/// The voice, model and settings of what a grouped re-take works on, and its line sets.
+struct Who {
+    voice: String,
+    model: String,
+    settings: RenderSettings,
+    sets: Vec<String>,
 }
+
+/// A line out: a pack's re-take line, or a sample the speech check heard wrong.
+struct Out {
+    path: String,
+    text: String,
+    reason: String,
+    heard: Option<String>,
+}
+
+/// Where a line stands after a try: in (heard right, its cut passed), what was heard, why
+/// it is out.
+type Standing = (bool, Option<String>, Option<String>);
 
 impl Core {
+    /// The pack or sample voice a grouped re-take names, and its lines out.
+    fn group_on(&self, p: &RetakeParams) -> Result<(On, Who, Vec<Out>)> {
+        let (pack, sample) = (p.pack.trim(), p.sample.trim());
+        if pack.is_empty() == sample.is_empty() {
+            bail!("Name one pack or one sample for a grouped re-take.");
+        }
+        if !pack.is_empty() {
+            let dir = self.voices_dir().join(pack);
+            let m = read_manifest(&dir)
+                .map_err(|_| anyhow::anyhow!("Pack {pack:?} is not on this Mac."))?;
+            if !super::voice_check::holds_lines(&m) {
+                bail!("Only a pack the Voice studio rendered can make a re-take.");
+            }
+            let out = m
+                .retakes
+                .iter()
+                .map(|r| Out {
+                    path: r.path.clone(),
+                    text: r.text.clone(),
+                    reason: r.reason.clone(),
+                    heard: asr::is_speech_reason(&r.reason)
+                        .then(|| m.heard.iter().find(|h| h.path == r.path))
+                        .flatten()
+                        .map(|h| h.heard.clone()),
+                })
+                .collect();
+            let who = Who {
+                voice: m.voice_id.clone(),
+                model: m.model.clone(),
+                settings: m.settings.clone(),
+                sets: sets::ids().into_iter().map(String::from).collect(),
+            };
+            return Ok((
+                On::Pack {
+                    id: pack.into(),
+                    dir,
+                },
+                who,
+                out,
+            ));
+        }
+        let (dir, set) = self.sample_set(sample)?;
+        if set.voice.is_empty() {
+            bail!("The sample {sample} was made before QuadCam kept its voice's id: sample the voice again in the Voice studio.");
+        }
+        let out = set
+            .takes
+            .iter()
+            .filter(|t| t.heard_ok == Some(false))
+            .map(|t| {
+                let heard = t.heard.clone().unwrap_or_default();
+                Out {
+                    path: t.line.clone(),
+                    text: t.text.clone(),
+                    reason: asr::reason(&heard),
+                    heard: Some(heard),
+                }
+            })
+            .collect();
+        let who = Who {
+            voice: set.voice.clone(),
+            model: set.model.clone(),
+            settings: RenderSettings {
+                speed: set.speed,
+                ..Default::default()
+            },
+            sets: if set.sets.is_empty() {
+                vec!["sample".into()]
+            } else {
+                set.sets.clone()
+            },
+        };
+        Ok((
+            On::Sample {
+                id: sample.into(),
+                dir,
+            },
+            who,
+            out,
+        ))
+    }
+
+    /// Renders `lines` of what a grouped re-take works on with `seed`: priced (`dry_run`),
+    /// or paid with the digest of that price. Answers the estimate and the digest.
+    fn group_render(
+        &self,
+        who: &Who,
+        on: &On,
+        lines: Vec<String>,
+        seed: u64,
+        dry_run: bool,
+        digest: Option<String>,
+    ) -> Result<(Estimate, String)> {
+        let settings = RenderSettings {
+            seed,
+            ..who.settings.clone()
+        };
+        match on {
+            On::Pack { .. } => {
+                let r = self.voice_studio_render(&VoiceRenderParams {
+                    voice: who.voice.clone(),
+                    lines,
+                    dry_run,
+                    confirm: !dry_run,
+                    settings: Some(settings),
+                    sets: who.sets.clone(),
+                    model: who.model.clone(),
+                    batch: None,
+                    digest,
+                })?;
+                Ok((r.estimate.unwrap_or_default(), r.digest))
+            }
+            On::Sample { .. } => {
+                let r = self.gear_voice_sample(&SampleParams {
+                    voices: vec![who.voice.clone()],
+                    models: vec![who.model.clone()],
+                    sets: who.sets.clone(),
+                    lines,
+                    dry_run,
+                    confirm: !dry_run,
+                    settings: Some(settings),
+                    batch: None,
+                    digest,
+                })?;
+                Ok((r.estimate, r.digest))
+            }
+        }
+    }
+
+    /// Puts a group's structure in place of the word's structure for those lines (`None`
+    /// takes the lines out of it).
+    fn group_structure_set(
+        &self,
+        on: &On,
+        word: &str,
+        lines: &[String],
+        s: Option<Structure>,
+    ) -> Result<()> {
+        match on {
+            On::Pack { dir, .. } => {
+                let mut m = read_manifest(dir)?;
+                packs::replace_structure(&mut m.structures, word, lines, s);
+                write_manifest(dir, &m)
+            }
+            On::Sample { dir, .. } => self.set_sample_structure(dir, word, lines, s),
+        }
+    }
+
+    /// The structures of what a grouped re-take works on, read again.
+    fn group_structures(&self, on: &On) -> Result<Vec<Structure>> {
+        Ok(match on {
+            On::Pack { dir, .. } => read_manifest(dir)?.structures,
+            On::Sample { id, .. } => self.sample_set(id)?.1.structures,
+        })
+    }
+
+    /// Where each line stands now. A sample whose take still has another seed than `seed`
+    /// got no new take: its cut failed a check.
+    fn group_standing(&self, on: &On, paths: &[String], seed: u64) -> Result<Vec<Standing>> {
+        Ok(match on {
+            On::Pack { dir, .. } => {
+                let m = read_manifest(dir)?;
+                paths
+                    .iter()
+                    .map(|path| {
+                        let out = m.retakes.iter().find(|r| r.path == *path);
+                        (
+                            m.files.iter().any(|f| f == path) && out.is_none(),
+                            m.heard
+                                .iter()
+                                .find(|h| h.path == *path)
+                                .map(|h| h.heard.clone()),
+                            out.map(|r| r.reason.clone()),
+                        )
+                    })
+                    .collect()
+            }
+            On::Sample { id, .. } => {
+                let set = self.sample_set(id)?.1;
+                paths
+                    .iter()
+                    .map(|path| {
+                        let t = set.takes.iter().find(|t| t.line == *path);
+                        let fresh = t.is_some_and(|t| t.seed == Some(seed));
+                        let ok = fresh && t.is_some_and(|t| t.heard_ok == Some(true));
+                        let heard = t.and_then(|t| t.heard.clone());
+                        let reason = (!ok).then(|| {
+                            if fresh {
+                                asr::reason(heard.as_deref().unwrap_or(""))
+                            } else {
+                                "its new take failed a check of its cut".into()
+                            }
+                        });
+                        (ok, heard, reason)
+                    })
+                    .collect()
+            }
+        })
+    }
+
     /// `gear_voice_retake` with `grouped`: see the module.
     pub(super) fn voice_retake_grouped(&self, p: &RetakeParams) -> Result<RetakeReport> {
-        let id = p.pack.trim();
-        if id.is_empty() {
-            bail!("A grouped re-take is for a pack: name it.");
-        }
         let tries = p.tries.unwrap_or(TRIES);
         if !(1..=MAX_TRIES).contains(&tries) {
             bail!("tries takes 1 to {MAX_TRIES}, not {tries}.");
         }
-        let dir = self.voices_dir().join(id);
-        let m =
-            read_manifest(&dir).map_err(|_| anyhow::anyhow!("Pack {id:?} is not on this Mac."))?;
-        if !super::voice_check::holds_lines(&m) {
-            bail!("Only a pack the Voice studio rendered can make a re-take.");
-        }
+        let (on, who, all) = self.group_on(p)?;
+        let (kind, id) = match &on {
+            On::Pack { id, .. } => ("pack", id.clone()),
+            On::Sample { id, .. } => ("sample", id.clone()),
+        };
         for l in &p.lines {
-            if !m.retakes.iter().any(|r| r.path == *l) {
-                bail!("{l:?} is not a re-take line of {id}.");
+            if !all.iter().any(|r| r.path == *l) {
+                bail!("{l:?} is not a line of {id} to re-take.");
             }
         }
-        let out: Vec<_> = m
-            .retakes
+        let out: Vec<&Out> = all
             .iter()
             .filter(|r| p.lines.is_empty() || p.lines.contains(&r.path))
             .collect();
         if out.is_empty() {
-            bail!("{id} has no re-take line.");
+            bail!("{id} has no line to re-take.");
         }
         let sp = Spelling::builtin()?;
         // The groups, in the order their first line comes.
         let mut groups: Vec<RetakeGroup> = Vec::new();
-        let mut reasons: HashMap<String, String> = HashMap::new();
         for r in &out {
-            let heard = asr::is_speech_reason(&r.reason)
-                .then(|| {
-                    m.heard
-                        .iter()
-                        .find(|h| h.path == r.path)
-                        .map(|h| h.heard.as_str())
-                })
-                .flatten();
-            let word = root_word(&r.text, heard, &sp);
-            reasons.insert(r.path.clone(), r.reason.clone());
+            let word = root_word(&r.text, r.heard.as_deref(), &sp);
             match groups
                 .iter_mut()
                 .find(|g| g.word.eq_ignore_ascii_case(&word))
@@ -337,13 +509,19 @@ impl Core {
                 .map(|r| r.text.clone())
                 .unwrap_or_default()
         };
+        let reason_of = |path: &str| -> String {
+            out.iter()
+                .find(|r| r.path == path)
+                .map(|r| r.reason.clone())
+                .unwrap_or_default()
+        };
         let cache = BatchCache::new(&self.cache);
         let index = LineIndex::load(&Scope {
             cache: &cache,
             provider: PROVIDER,
-            voice: &m.voice_id,
-            model: &m.model,
-            settings: &m.settings,
+            voice: &who.voice,
+            model: &who.model,
+            settings: &who.settings,
         });
         // How many takes hold the word: each paid try adds one.
         let takes_of = |word: &str| {
@@ -368,11 +546,7 @@ impl Core {
                 .cloned()
                 .unwrap_or_default();
             let text = text_of(&g.sample);
-            let reason = format!(
-                "{}|{}",
-                reasons.get(&g.sample).cloned().unwrap_or_default(),
-                takes_of(&g.word)
-            );
+            let key = format!("{}|{}", reason_of(&g.sample), takes_of(&g.word));
             g.tries = ways(&g.word, &sp, tries)
                 .into_iter()
                 .enumerate()
@@ -380,7 +554,7 @@ impl Core {
                     sentence: sentence(&text, &g.word, &say, carrier.as_deref(), &sp),
                     say,
                     carrier,
-                    seed: try_seed(id, &g.word, &reason, k),
+                    seed: try_seed(&id, &g.word, &key, k),
                     tried: false,
                     ok: false,
                     heard: None,
@@ -408,31 +582,17 @@ impl Core {
             }
         }
         // The price of a character, from the render's own estimate of the samples.
-        let render = |lines: Vec<String>, seed: u64, dry_run: bool, digest: Option<String>| {
-            self.voice_studio_render(&VoiceRenderParams {
-                voice: m.voice_id.clone(),
-                lines,
-                dry_run,
-                confirm: !dry_run,
-                settings: Some(RenderSettings {
-                    seed,
-                    ..m.settings.clone()
-                }),
-                sets: sets::ids().into_iter().map(String::from).collect(),
-                model: m.model.clone(),
-                batch: None,
-                digest,
-            })
-        };
-        let priced = render(
+        let (rate, _) = self.group_render(
+            &who,
+            &on,
             groups.iter().map(|g| g.sample.clone()).collect(),
             1,
             true,
             None,
         )?;
-        let rate = priced.estimate.clone().unwrap_or_default();
         let most = Estimate {
             batches: groups.iter().map(|g| g.tries.len() as u32 + 1).sum(),
+            cached_batches: 0,
             lines: out.len() as u32,
             chars,
             credits: (chars as f64 * rate.cost_per_char).ceil() as u64,
@@ -443,15 +603,16 @@ impl Core {
             ..rate.clone()
         };
         let digest = plan_digest(&serde_json::json!({
-            "kind": "retake_grouped", "pack": id, "chars": chars, "credits": most.credits,
+            "kind": "retake_grouped", "target": kind, "id": id, "chars": chars,
+            "credits": most.credits,
             "groups": groups.iter().map(|g| serde_json::json!({
                 "word": g.word, "lines": g.lines, "sample": g.sample,
                 "tries": g.tries.iter().map(|t| (&t.sentence, t.seed)).collect::<Vec<_>>(),
             })).collect::<Vec<_>>(),
         }));
         let mut report = RetakeReport {
-            kind: "pack".into(),
-            id: id.to_string(),
+            kind: kind.into(),
+            id: id.clone(),
             lines: out.iter().map(|r| r.path.clone()).collect(),
             seed: 0,
             estimate: Some(most.clone()),
@@ -465,6 +626,7 @@ impl Core {
                 groups.len()
             )],
             groups: groups.clone(),
+            still_out: Vec::new(),
         };
         if p.dry_run {
             return Ok(report);
@@ -481,35 +643,33 @@ impl Core {
         // per render.
         let mut spent: (u64, u64) = (0, 0);
         let run = |lines: Vec<String>, seed: u64, spent: &mut (u64, u64)| -> Result<()> {
-            let dry = render(lines.clone(), seed, true, None)?;
-            let (n, cost) = dry
-                .estimate
-                .as_ref()
-                .map_or((0, 0), |e| (e.chars, e.credits));
-            if spent.0 + n > chars {
+            let (e, d) = self.group_render(&who, &on, lines.clone(), seed, true, None)?;
+            if spent.0 + e.chars > chars {
                 bail!("This try would pass the most the plan priced; stopped.");
             }
-            render(lines, seed, false, Some(dry.digest))?;
-            spent.0 += n;
-            spent.1 += cost;
+            self.group_render(&who, &on, lines, seed, false, Some(d))?;
+            spent.0 += e.chars;
+            spent.1 += e.credits;
             Ok(())
         };
+        let said = |w: &str| sp.apply(w);
         for g in &mut groups {
             let text = text_of(&g.sample);
             let mut winner: Option<usize> = None;
             for k in 0..g.tries.len() {
                 let t = g.tries[k].clone();
                 let structure =
-                    (t.say != sp.apply(&g.word) || t.carrier.is_some()).then(|| Structure {
+                    (t.say != said(&g.word) || t.carrier.is_some()).then(|| Structure {
                         word: g.word.clone(),
                         say: t.say.clone(),
                         carrier: t.carrier.clone(),
                         lines: g.lines.clone(),
                     });
-                set_structure(&dir, &g.word, &g.lines, structure)?;
+                self.group_structure_set(&on, &g.word, &g.lines, structure)?;
                 let r = run(vec![g.sample.clone()], t.seed, &mut spent);
-                let now = read_manifest(&dir)?;
-                let (ok, heard, reason) = standing(&now, &g.sample);
+                let (ok, heard, reason) = self
+                    .group_standing(&on, std::slice::from_ref(&g.sample), t.seed)?
+                    .remove(0);
                 let x = &mut g.tries[k];
                 x.tried = true;
                 x.ok = ok && r.is_ok();
@@ -526,61 +686,51 @@ impl Core {
                     break;
                 }
             }
-            let Some(k) = winner else {
-                set_structure(&dir, &g.word, &g.lines, None)?;
-                report.notes.push(format!(
-                    "{:?}: no way of saying {:?} was heard right; its lines stay out.",
-                    text, g.word
-                ));
-                let now = read_manifest(&dir)?;
-                g.still_out = g
-                    .lines
-                    .iter()
-                    .filter(|l| !standing(&now, l).0)
-                    .cloned()
-                    .collect();
-                g.passed = g
-                    .lines
-                    .iter()
-                    .filter(|l| standing(&now, l).0)
-                    .cloned()
-                    .collect();
-                continue;
-            };
-            g.won = true;
-            let now = read_manifest(&dir)?;
-            g.structure = now
-                .structures
-                .iter()
-                .find(|s| s.word.eq_ignore_ascii_case(&g.word) && s.lines.contains(&g.sample))
-                .cloned();
-            let rest: Vec<String> = g
-                .lines
-                .iter()
-                .filter(|l| **l != g.sample)
-                .cloned()
-                .collect();
-            if !rest.is_empty() {
-                if let Err(e) = run(rest, g.tries[k].seed, &mut spent) {
+            let seed = match winner {
+                Some(k) => g.tries[k].seed,
+                None => {
+                    self.group_structure_set(&on, &g.word, &g.lines, None)?;
                     report.notes.push(format!(
-                        "{:?}: the rest of its group was not made: {e:#}",
-                        g.word
+                        "{:?}: no way of saying {:?} was heard right; its lines stay out.",
+                        text, g.word
                     ));
+                    0
+                }
+            };
+            if winner.is_some() {
+                g.won = true;
+                g.structure = self
+                    .group_structures(&on)?
+                    .into_iter()
+                    .find(|s| s.word.eq_ignore_ascii_case(&g.word) && s.lines.contains(&g.sample));
+                let rest: Vec<String> = g
+                    .lines
+                    .iter()
+                    .filter(|l| **l != g.sample)
+                    .cloned()
+                    .collect();
+                if !rest.is_empty() {
+                    if let Err(e) = run(rest, seed, &mut spent) {
+                        report.notes.push(format!(
+                            "{:?}: the rest of its group was not made: {e:#}",
+                            g.word
+                        ));
+                    }
                 }
             }
-            let now = read_manifest(&dir)?;
-            g.passed = g
-                .lines
-                .iter()
-                .filter(|l| standing(&now, l).0)
-                .cloned()
-                .collect();
-            g.still_out = g
-                .lines
-                .iter()
-                .filter(|l| !standing(&now, l).0)
-                .cloned()
-                .collect();
+            let now = self.group_standing(&on, &g.lines, seed)?;
+            for (l, (ok, _, reason)) in g.lines.iter().zip(now) {
+                if ok || (winner.is_some() && *l == g.sample) {
+                    g.passed.push(l.clone());
+                } else {
+                    g.still_out.push(l.clone());
+                    report.still_out.push(packs::Retake {
+                        path: l.clone(),
+                        text: text_of(l),
+                        reason: reason.unwrap_or_default(),
+                    });
+                }
+            }
         }
         report.cleared = groups.iter().flat_map(|g| g.passed.clone()).collect();
         report.notes.push(format!(
