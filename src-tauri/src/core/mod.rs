@@ -39,6 +39,7 @@ mod prep;
 mod radio_aircraft;
 mod radio_cli;
 pub mod radio_settings;
+pub mod radio_setup;
 mod rates;
 mod rematch;
 mod session_card;
@@ -109,6 +110,11 @@ pub use osd::{OsdEditParams, OsdParams};
 pub use radio_cli::{RadioCliAction, RadioCliParams, RadioCliReport, RadioMatch, RadioVerify};
 pub use radio_settings::{
     RadioSettingsDetail, RadioSettingsEditParams, RadioSettingsParams, RADIO_CHANGE,
+};
+pub use radio_setup::{
+    PostFlashParams, PostFlashPlan, PostFlashPlanned, PostFlashStep, RadioSetupDetail,
+    RadioSetupEditParams, RadioSetupEdited, RadioSetupParams, SavedSetup, VolumeLabelParams,
+    VolumeLabeled, SETUP_CHANGE,
 };
 pub use rates::{RatesParams, RatesPreview, RatesPreviewParams, SimsParams};
 pub use rematch::{LibMatch, LibMatchParams, LibMatchReport};

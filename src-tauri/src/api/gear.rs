@@ -58,6 +58,10 @@ pub use crate::core::{
     PackPreviewParams, PreviewTake, PublishApproveParams, PublishApproveReport, PublishParams,
     PublishReview, ReviewLine,
 };
+pub use crate::core::{
+    PostFlashParams, PostFlashPlan, RadioSetupDetail, RadioSetupEditParams, RadioSetupEdited,
+    RadioSetupParams, VolumeLabelParams, VolumeLabeled,
+};
 pub use crate::gear::apply::sim::{SimSyncParams, SimSyncRequest, SimTarget};
 pub use crate::gear::apply::{ApplyPlanParams, ApplyReport, ApplyRequest, StepReport, StepState};
 pub use crate::gear::backup::{
@@ -222,6 +226,22 @@ macro_rules! with_gear_rows {
             /// Stages radio settings (`set_scalar`, `select_model`) for a radio as its one "Radio
             /// settings" change. Writes only QuadCam's own data; the apply sheet writes the card.
             gear_radio_settings_edit(params: RadioSettingsEditParams) -> StagedChange = |c| c.gear_radio_settings_edit(&params);
+            /// A radio setup (jobs, the controls that do them, the model template, the aircraft)
+            /// read against a radio's mounted card or latest backup, or a card folder: each job's
+            /// control and positions, the generated edits and the card files they would change.
+            /// Reads only.
+            gear_radio_setup(params: RadioSetupParams) -> RadioSetupDetail = |c| c.gear_radio_setup(&params);
+            /// Changes a radio's saved setup (a whole setup, a reset, or job controls), checked
+            /// against its board and card; with `stage`, stages the generated edits as its one
+            /// "Radio setup" change. Writes only QuadCam's own data.
+            gear_radio_setup_edit(params: RadioSetupEditParams) -> RadioSetupEdited = |c| c.gear_radio_setup_edit(&params);
+            /// The steps after a flash on a radio's card: the storage pack, the ELRS Lua and the
+            /// volume label, each planned; with `stage`, the pack and the Lua staged as card
+            /// changes. Downloads from upstream; writes no card.
+            gear_radio_post_flash(params: PostFlashParams) -> PostFlashPlan = |c| c.gear_radio_post_flash(&params);
+            /// Renames a radio's mounted volume to a label from its saved name, or the one given
+            /// (`diskutil rename`). Needs confirm=true.
+            gear_volume_label(params: VolumeLabelParams) -> VolumeLabeled = |c| c.gear_volume_label(&params);
             /// The radio's voice: QuadCam's lines with the spoken text, the installed and available
             /// packs, the provider, and a radio's overrides. Reads only; `refresh_index` also reads the
             /// pack index.

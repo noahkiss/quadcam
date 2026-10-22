@@ -222,6 +222,7 @@ function cardDiff(c: StagedChange): DiffItem[] {
     if (e.kind === "radio") {
       const l: { op: "add" | "remove" | "same"; text: string }[] = [];
       for (const op of e.ops) {
+        if (op.op !== "set_scalar" && op.op !== "select_model") continue;
         const [key, value] = op.op === "set_scalar" ? [op.key, radioLine(op.key, op.value)] : ["currModel", String(Number(op.file.replace(/\D/g, "")))];
         const before = RADIO_YML[key];
         if (before != null && before !== value) l.push({ op: "remove", text: `${key}: ${before}` }, { op: "add", text: `${key}: ${value}` });
@@ -382,7 +383,7 @@ export function apply(g: MockGear, id: string, digest: string): ApplyReport {
       if (e.kind !== "radio") continue;
       for (const op of e.ops) {
         if (op.op === "set_scalar") RADIO_YML[op.key] = radioLine(op.key, op.value);
-        else RADIO_YML.currModel = String(Number(op.file.replace(/\D/g, "")));
+        else if (op.op === "select_model") RADIO_YML.currModel = String(Number(op.file.replace(/\D/g, "")));
       }
     }
     const r: ApplyReport = {

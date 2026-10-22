@@ -1,7 +1,7 @@
 // The Bench page's logic (design 7.7): staged changes grouped by device, the first Ready or
 // Try item as "Next session", the plug-in prompt, and the queue as Markdown. Pure functions
 // over the core's shapes; no store, no calls.
-import type { Device, DeviceKind, Edit, StagedChange } from "../ipc/types";
+import type { Device, DeviceKind, Edit, RadioOp, StagedChange } from "../ipc/types";
 import { deviceName, KIND_LABEL } from "./gear";
 
 /** Statuses a change waits in. */
@@ -27,6 +27,22 @@ export const STATUS_HINT: Record<string, string> = {
   read_first: "Read the real value on the device before changing anything.",
 };
 
+/** One radio op in a few words. */
+const radioOpText = (o: RadioOp): string => {
+  switch (o.op) {
+    case "set_scalar":
+      return `${o.key}: ${o.value}`;
+    case "select_model":
+      return `select ${o.file}`;
+    case "set_switch_type":
+      return `${o.switch} type ${o.kind}`;
+    case "set_pot_type":
+      return `${o.pot} type ${o.kind}`;
+    case "remove_functions":
+      return `remove ${o.func} functions`;
+  }
+};
+
 /** What a change does, in one line. */
 export function summary(c: StagedChange): string {
   return c.edits
@@ -34,7 +50,7 @@ export function summary(c: StagedChange): string {
       if (e.kind === "fc_set") return `set ${e.name} = ${e.value}`;
       if (e.kind === "fc_lines") return e.lines.filter((l) => l.trim()).join("; ");
       if (e.kind === "restore") return e.paths.length ? `restore ${e.paths.join(", ")}` : "restore a backup";
-      if (e.kind === "radio") return e.ops.map((o) => (o.op === "set_scalar" ? `${o.key}: ${o.value}` : `select ${o.file}`)).join("; ");
+      if (e.kind === "radio") return e.ops.map(radioOpText).join("; ");
       if (e.kind === "osd_element") return `osd ${e.element} to ${e.x},${e.y} ${e.profiles.length ? `in profile ${e.profiles.join(", ")}` : "off"}`;
       return e.kind.replace(/_/g, " ");
     })

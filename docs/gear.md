@@ -475,6 +475,63 @@ Settings segment has no control for this yet; the CLI takes it in `gear radio-se
 warning (3.0 V) and the brightness floor (5) are QuadCam's own cautious limits. Check a change
 on the radio before relying on it.
 
+## Radio setup
+
+A radio setup says what each control does, as data, and QuadCam writes the radio's models from
+it. There is no window for it yet: the command line and agents reach it (`gear setup`,
+`quadcam_gear radio_setup`). A setup has four parts:
+
+- **Jobs**: what the pilot wants, each on a channel the quad reads. The default jobs are arm
+  (CH5), OSD layout (CH6), rates (CH7), finder (CH8), turtle (CH9), blackbox erase (CH10), VTX
+  power (CH11) and four sim buttons (CH12-CH15).
+- **Assignments**: which control does each job, and for a switch which end sends 2000 µs. A
+  job takes only the controls that fit it: arm a 2-position switch or a latching button,
+  turtle a momentary switch, rates and OSD a 3-position switch, VTX power a pot, slider or
+  wheel. One control does one job.
+- **Template**: the model parts every aircraft shares: mixes, logical switches, special
+  functions, timers, telemetry screens and the switch warning. Its text names a job's
+  control as `@rates.lo`, `@finder.hi` or `@arm.ch`, so moving a job to another control moves
+  its mix, callouts, screens and logic with it.
+- **Aircraft**: one model file each, with its name, ELRS model id, checklist and what differs
+  from the template (a quad that records on board needs no DVR reminder).
+
+The radio part sets `radio.yml` values, the selected model, the switch and pot types from the
+board's controls (the Pocket's factory file had some wrong), and can remove other models.
+
+`gear setup DEVICE` shows each job, its control and what each position does, the edits the
+setup gives and the card files they would change; "none" means the card already matches.
+Without a saved setup it shows the board's default (the Pocket and the GX12 have one).
+`gear setup-edit DEVICE --assign rates=SC:0` moves a job (`:0` says position 0 sends 2000 µs),
+`--free osd` takes a job off its control, `--setup FILE` saves a whole setup and `--reset` goes
+back to the default. `--stage` puts the edits in the radio's one "Radio setup" change for the
+apply sheet. QuadCam refuses a control that does not fit a job, a control that does two jobs,
+and a model that holds another aircraft ("wrong card?").
+
+The setup's telemetry screens are QuadCam's own Lua scripts: `volt` (the quad's battery, link
+quality, TX power and a timer) and `finder` (signal strength and a beep that speeds up as you
+get closer, while the finder control is on). QuadCam writes one when the card lacks it, or
+when its own copy differs, and removes the compiled `.luac` beside it. A script of the same
+name that QuadCam did not write stays, and the setup says so. Sounds stay the voice pack's
+job: the setup lists the sounds its callouts play and warns about each one the card lacks.
+
+### After a flash
+
+`gear post-flash DEVICE` plans the steps after a firmware flash:
+
+| Step | What it does |
+|---|---|
+| Storage pack | EdgeTX's SD-card files for the radio's screen (`bw128x64` on the Pocket and GX12), from the EdgeTX release; only files that differ, never a model or `radio.yml` |
+| ELRS Lua | `SCRIPTS/TOOLS/elrs.lua` from the ExpressLRS release (`--elrs-version`), and `elrsV3.lua` and `.luac` removed so the radio lists one tool |
+| Volume label | A short label from the radio's saved name (`Pocket 2` gives `POCKET2`) |
+
+`--stage` stages the pack and the Lua as card changes. `gear volume-label DEVICE --yes` renames
+the mounted volume (`diskutil rename`); QuadCam knows the card by its marker, so the label is
+for you. The downloads come from EdgeTX and ExpressLRS at run time.
+
+**Not yet checked on a real radio:** QuadCam's Lua screens, the switch and pot type ops, the
+storage pack and label steps, and the GX12's switch directions. The generator reproduces the
+card patcher's Pocket models byte for byte on scrubbed copies of real cards.
+
 ## Voices
 
 **Voices** in the Gear sidebar holds every voice pack on this Mac and the voices that render
@@ -2017,12 +2074,13 @@ copy or a model delete. Model ops: `rename`, `set_model_id`, `set_flags`, `set_c
 `set_mixes`, `set_logical_switch`, `special_functions`, `move_special_function`,
 `set_timer`, `remove_timer`, `swap_timers`, `set_switch_warnings`, `set_screen`, and the editors' ops `set_screen_values`, `set_logging`,
 `set_sensor_logs`, `set_rf_alarms`, `set_callout` and `remove_callout`. Radio ops:
-`set_scalar` and `select_model`. A logical switch or special function may name a telemetry
+`set_scalar`, `select_model`, `set_control_type` and `remove_functions`. A
+`card_text` edit puts a Lua script under `SCRIPTS/` (or deletes one) in the same change. A logical switch or special function may name a telemetry
 sensor by label, `tele({RxBt}),35`; QuadCam finds its slot.
 
 These are the common commands. [Command line](cli.md) lists every `gear` command, including
-`gear voice`, `gear model`, `gear model-edit`, `gear radio-settings`, `gear radio-settings-edit`
-and `gear sim`.
+`gear voice`, `gear model`, `gear model-edit`, `gear radio-settings`, `gear radio-settings-edit`,
+`gear setup`, `gear setup-edit`, `gear post-flash`, `gear volume-label` and `gear sim`.
 
 Agents use the `quadcam_gear`, `quadcam_gear_edit` and `quadcam_gear_apply` tools. See
 [MCP server](mcp.md#gear).

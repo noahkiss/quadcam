@@ -154,6 +154,8 @@ function applyOp(yml: Record<string, string>, op: RadioOp): Record<string, strin
     if (!FILES.some((x) => x.file === f)) throw bad(`The card has no MODELS/${f}.`);
     return { ...yml, currModel: String(Number(f.replace(/\D/g, ""))) };
   }
+  // Switch and pot types and radio functions are the radio setup's; the Settings editor's mock leaves them.
+  if (op.op !== "set_scalar") return yml;
   return { ...yml, [op.key]: lineValue(op.key, op.value) };
 }
 

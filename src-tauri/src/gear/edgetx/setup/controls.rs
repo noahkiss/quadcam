@@ -37,7 +37,14 @@ pub fn controls(board: &str) -> Option<Vec<Control>> {
                 BoardControlKind::Custom => (RadioControlKind::Custom, None),
                 BoardControlKind::Pot => (
                     RadioControlKind::Pot,
-                    Some(if c.detent { "with_detent" } else { "without_detent" }.into()),
+                    Some(
+                        if c.detent {
+                            "with_detent"
+                        } else {
+                            "without_detent"
+                        }
+                        .into(),
+                    ),
                 ),
                 BoardControlKind::Slider => (RadioControlKind::Slider, Some("slider".into())),
             };
@@ -72,7 +79,9 @@ mod tests {
     fn boards_list_their_controls() {
         let p = controls("pocket").unwrap();
         assert_eq!(
-            p.iter().filter(|c| c.kind == RadioControlKind::Trim).count(),
+            p.iter()
+                .filter(|c| c.kind == RadioControlKind::Trim)
+                .count(),
             8
         );
         let sa = p.iter().find(|c| c.name == "SA").unwrap();
@@ -83,7 +92,9 @@ mod tests {
         assert_eq!(p1.radio_type.as_deref(), Some("without_detent"));
         let g = controls("GX12").unwrap();
         assert_eq!(
-            g.iter().filter(|c| c.kind == RadioControlKind::Custom).count(),
+            g.iter()
+                .filter(|c| c.kind == RadioControlKind::Custom)
+                .count(),
             6
         );
         assert_eq!(
@@ -91,7 +102,11 @@ mod tests {
             RadioControlKind::Momentary
         );
         assert_eq!(
-            g.iter().find(|c| c.name == "P2").unwrap().radio_type.as_deref(),
+            g.iter()
+                .find(|c| c.name == "P2")
+                .unwrap()
+                .radio_type
+                .as_deref(),
             Some("with_detent")
         );
         assert!(controls("tx16s").is_none());

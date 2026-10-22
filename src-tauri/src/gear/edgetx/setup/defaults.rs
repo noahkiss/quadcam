@@ -4,12 +4,18 @@
 //! person changes all of it; their setup is saved in the gear folder, never here.
 
 use super::{
-    Aircraft, Assignment, RadioControlKind, FuncPrefix, Job, LsSpec, LuaKind, LuaScreen, MixSpec,
-    ModelTemplate, Owns, RadioPart, RadioSetup, ScreenSpec, SfSpec, SwitchFunc, TimerSpec,
+    Aircraft, Assignment, FuncPrefix, Job, LsSpec, LuaKind, LuaScreen, MixSpec, ModelTemplate,
+    Owns, RadioControlKind, RadioPart, RadioSetup, ScreenSpec, SfSpec, SwitchFunc, TimerSpec,
 };
 use crate::gear::edgetx::model::{Field, LsDef, MixLine, SfDef};
 
-fn job(id: &str, label: &str, channel: Option<u32>, fits: &[RadioControlKind], states: &[&str]) -> Job {
+fn job(
+    id: &str,
+    label: &str,
+    channel: Option<u32>,
+    fits: &[RadioControlKind],
+    states: &[&str],
+) -> Job {
     Job {
         id: id.into(),
         label: label.into(),
@@ -23,13 +29,7 @@ fn job(id: &str, label: &str, channel: Option<u32>, fits: &[RadioControlKind], s
 pub fn jobs() -> Vec<Job> {
     use RadioControlKind::*;
     let mut v = vec![
-        job(
-            "arm",
-            "Arm",
-            Some(4),
-            &[TwoPos],
-            &["disarmed", "armed"],
-        ),
+        job("arm", "Arm", Some(4), &[TwoPos], &["disarmed", "armed"]),
         job(
             "osd",
             "OSD layout",

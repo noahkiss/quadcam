@@ -6,7 +6,7 @@
 
 use super::controls::{self, is_switch};
 use super::lua::{self, FinderControl};
-use super::{Control, RadioControlKind, LsSpec, LuaKind, RadioSetup, ScreenSpec, SfSpec};
+use super::{Control, LsSpec, LuaKind, RadioControlKind, RadioSetup, ScreenSpec, SfSpec};
 use crate::gear::edgetx::card::{is_model_file, RadioOp, RADIO_FILE};
 use crate::gear::edgetx::model::{
     self as em, LsDef, MixLine, ModelOp, SfDef, SwitchWarning, MAX_LOGICAL_SWITCHES,

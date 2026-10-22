@@ -211,6 +211,10 @@ quadcam-cli --json gear model DEVICE [--model model01.yml] [--no-staged] [--text
 quadcam-cli --json gear model-edit DEVICE --model model01.yml [--timer 2:name=FLT,minuteBeep=1]... [--timer-off N]... [--screen 1:'{RxBt},Tmr1/{Capa}']... [--screen-script N:NAME]... [--screen-off N]... [--logging SA2:0.5|off] [--log-sensor RxBt=off]... [--rf-alarm 50:40] [--callout lowbat:below:'{RxBt}':3.5:2:5]... [--callout armed:switch:L1:'!1x']... [--callout-off TRACK]... [--checklist-file FILE|-] [--checklist on|off] [--ops FILE]   # stages into the one "Model edits" change; writes nothing to the card
 quadcam-cli --json gear radio-settings DEVICE [--no-staged] [--text]   # a radio's own settings (radio.yml) for the Settings editor: each key, its value in the file's units and the values it takes
 quadcam-cli --json gear radio-settings-edit DEVICE [--set beepVolume=3]... [--select-model model00.yml] [--ops FILE]   # stages into the one "Radio settings" change; a value out of range refuses; writes nothing to the card
+quadcam-cli --json gear setup [DEVICE] [--mount DIR] [--setup FILE] [--text]   # a radio setup as data: each job, its control and positions, the generated edits and the card files they would change
+quadcam-cli --json gear setup-edit DEVICE [--setup FILE | --reset] [--assign JOB=CONTROL[:HIGH]]... [--free JOB]... [--stage]   # saves the radio's setup; --stage stages it as one "Radio setup" change
+quadcam-cli --json gear post-flash DEVICE [--step storage-pack|elrs-lua|volume-label]... [--pack-version V] [--elrs-version V] [--stage]   # plans the steps after a flash; downloads from upstream
+quadcam-cli --json gear volume-label DEVICE [--label L] --yes   # renames the radio's mounted volume (diskutil rename)
 quadcam-cli --json gear rates FILE [FILE ...]|DEVICE [--backup ID] [--text]   # rate profiles and throttle curve
 quadcam-cli --json gear sims [FILE ...|DEVICE] [--backup ID] [--rate-profile N] [--text]   # sims' rates, against the quad
 quadcam-cli --json gear sims SIM --restore [--backup ID] [--digest D --yes]   # put a sim's file back from a backup (the plan without --digest)

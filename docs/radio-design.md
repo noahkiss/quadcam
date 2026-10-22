@@ -396,6 +396,18 @@ docs. A stage on real gear ends with a trial in [Device trials](trials.md).
 | 6 | Retire the scripts | Nothing in QuadCam. The fpv notes switch the route to QuadCam once the owner passes stages 1-5 | The owner runs a bench session with no script |
 | 7 | Other boards | Profiles for the lines in 2.5 as unproven data; the UF2 refusal; the `v12` floor; the F2 cap | Unit tests for each guard; a profile shows on an unknown radio of a listed board |
 
+Stage 3 shipped as: `gear/edgetx/setup/` (the types, the defaults, the generator, QuadCam's
+Lua screens, the post-flash planners), which takes each board's controls from the board table
+(`gear/edgetx/board.rs`) and writes switch and pot types with stage 2's `set_control_type`;
+the radio op `remove_functions`, the edit `card_text` (a Lua script in the same change as the
+models), and `core/radio_setup.rs` with the rows `gear_radio_setup`, `gear_radio_setup_edit`,
+`gear_radio_post_flash` and `gear_volume_label` (CLI `gear setup`, `setup-edit`, `post-flash`,
+`volume-label`; MCP `radio_setup`, `post_flash_plan`, `radio_setup_edit`, `post_flash_stage`,
+`volume_label`). Stage 4 adds the editor on these rows. Two choices differ from the plan: a
+Lua screen of the same name that QuadCam did not write stays (with a note), so the
+patcher's own scripts plan no file; and sounds are only checked, never written by the setup.
+A customizable switch (SW1-SW6) refuses as a control until `customSwitches:` writes land.
+
 Stage 1 is the existing task "QuadCam Gear: per-radio profile table and prove board gx12".
 Stages 1 and 2 run now. Stage 3 needs both. Stage 4 needs 3. Stage 5 needs 4 and the radio.
 

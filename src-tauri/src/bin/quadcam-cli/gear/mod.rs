@@ -22,6 +22,7 @@ mod osd;
 mod packs;
 mod radio_settings;
 mod rates;
+mod setup;
 mod sim;
 mod voice;
 
@@ -66,6 +67,18 @@ pub enum GearCmd {
     /// Stages radio settings for a radio (one "Radio settings" change); nothing is written to
     /// the card.
     RadioSettingsEdit(radio_settings::RadioSettingsEditArgs),
+    /// A radio setup as data: each job (arm, rates, finder, ...), the control that does it
+    /// and its positions, and the card files the setup would change. Reads only.
+    Setup(setup::SetupArgs),
+    /// Saves a radio's setup (a file, a reset, or job controls); --stage stages it as one
+    /// "Radio setup" change. Nothing is written to the card.
+    SetupEdit(setup::SetupEditArgs),
+    /// The steps after a flash: the storage pack, the ELRS Lua, the volume label; --stage
+    /// stages the pack and the Lua as card changes.
+    PostFlash(setup::PostFlashArgs),
+    /// Renames a radio's mounted volume to a label from its saved name (diskutil rename);
+    /// needs --yes.
+    VolumeLabel(setup::VolumeLabelArgs),
     /// The radio's voice: lines and packs. `render`, `install`, `edit`, `choose` and
     /// `build-pack` are its subcommands.
     Voice(voice::VoiceArgs),
@@ -262,6 +275,10 @@ pub fn run(core: &Core, cmd: GearCmd) -> Result<Value> {
         GearCmd::ModelEdit(a) => model::edit(core, a)?,
         GearCmd::RadioSettings(a) => radio_settings::run(core, a)?,
         GearCmd::RadioSettingsEdit(a) => radio_settings::edit(core, a)?,
+        GearCmd::Setup(a) => setup::run(core, a)?,
+        GearCmd::SetupEdit(a) => setup::edit(core, a)?,
+        GearCmd::PostFlash(a) => setup::post_flash(core, a)?,
+        GearCmd::VolumeLabel(a) => setup::volume_label(core, a)?,
         GearCmd::Rates(a) => rates::rates(core, a)?,
         GearCmd::Sims(a) => rates::sims(core, a)?,
         GearCmd::Status => serde_json::to_value(call::gear_status(core)?)?,

@@ -81,7 +81,9 @@ pub struct PackPlan {
 /// YAML file (models and `radio.yml` are the person's).
 pub fn pack_path_ok(path: &str) -> bool {
     crate::gear::edgetx::card::inside_card(path)
-        && !path.split('/').any(|c| c.starts_with('.'))
+        && !path
+            .split('/')
+            .any(|c| c.starts_with('.') || c == "__MACOSX")
         && !path.to_ascii_lowercase().ends_with(".yml")
 }
 
@@ -120,6 +122,103 @@ pub fn plan_pack(
     out.sort_by(|a, b| a.0.cmp(&b.0));
     plan.put.sort();
     (plan, out)
+}
+
+/// A folder that is removed when dropped.
+pub struct Scratch(pub std::path::PathBuf);
+
+impl Scratch {
+    /// A new empty folder under `parent`.
+    pub fn new(parent: &std::path::Path) -> std::io::Result<Scratch> {
+        static NEXT: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+        let p = parent.join(format!(
+            ".scratch-{}-{}",
+            std::process::id(),
+            NEXT.fetch_add(1, std::sync::atomic::Ordering::Relaxed)
+        ));
+        let _ = std::fs::remove_dir_all(&p);
+        std::fs::create_dir_all(&p)?;
+        Ok(Scratch(p))
+    }
+
+    pub fn path(&self) -> &std::path::Path {
+        &self.0
+    }
+}
+
+impl Drop for Scratch {
+    fn drop(&mut self) {
+        let _ = std::fs::remove_dir_all(&self.0);
+    }
+}
+
+/// The files of a pack zip, by path, unpacked with `/usr/bin/unzip` into a scratch folder
+/// under `work`. Refuses a member that would land outside it, and a link.
+pub fn unpack(
+    zip: &std::path::Path,
+    work: &std::path::Path,
+) -> anyhow::Result<Vec<(String, Vec<u8>)>> {
+    use anyhow::{bail, Context};
+    use std::process::Command;
+    let listed = Command::new("/usr/bin/unzip")
+        .arg("-Z1")
+        .arg(zip)
+        .output()
+        .context("starting unzip")?;
+    if !listed.status.success() {
+        bail!("{} is not a zip file", zip.display());
+    }
+    for name in String::from_utf8_lossy(&listed.stdout).lines() {
+        let n = name.trim_end_matches('/');
+        if n.is_empty() {
+            continue;
+        }
+        if !crate::gear::edgetx::card::inside_card(n) {
+            bail!("The pack holds {name:?}, which is not a path inside a card.");
+        }
+    }
+    let tmp = Scratch::new(work)?;
+    let ran = Command::new("/usr/bin/unzip")
+        .args(["-q", "-o"])
+        .arg(zip)
+        .arg("-d")
+        .arg(tmp.path())
+        .output()
+        .context("starting unzip")?;
+    if !ran.status.success() {
+        bail!(
+            "unzip failed: {}",
+            String::from_utf8_lossy(&ran.stderr).trim()
+        );
+    }
+    fn walk(
+        root: &std::path::Path,
+        dir: &std::path::Path,
+        out: &mut Vec<(String, Vec<u8>)>,
+    ) -> anyhow::Result<()> {
+        for e in std::fs::read_dir(dir)? {
+            let e = e?;
+            let ft = e.file_type()?;
+            if ft.is_symlink() {
+                anyhow::bail!("The pack holds a link, {}.", e.path().display());
+            }
+            if ft.is_dir() {
+                walk(root, &e.path(), out)?;
+            } else {
+                let rel = e
+                    .path()
+                    .strip_prefix(root)?
+                    .to_string_lossy()
+                    .replace('\\', "/");
+                out.push((rel, std::fs::read(e.path())?));
+            }
+        }
+        Ok(())
+    }
+    let mut out = Vec::new();
+    walk(tmp.path(), tmp.path(), &mut out)?;
+    out.sort_by(|a, b| a.0.cmp(&b.0));
+    Ok(out)
 }
 
 /// The card edits that put the ELRS Lua on and take the old names off.

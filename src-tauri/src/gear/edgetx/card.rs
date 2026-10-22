@@ -744,7 +744,6 @@ fn set_control_type(d: &mut Doc, control: &str, value: &str) -> Result<(), Refus
     Ok(())
 }
 
-
 /// Drops the radio's special functions with function `func`; the rest are renumbered in order.
 fn remove_radio_functions(d: &mut Doc, func: &str) -> Result<(), Refusal> {
     let Some(n) = d.top("customFn")? else {

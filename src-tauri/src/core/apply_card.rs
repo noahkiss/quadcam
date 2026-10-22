@@ -909,7 +909,12 @@ fn connected_label(c: &Connected) -> String {
 }
 
 /// A card-files edit puts sounds under `SOUNDS/` only.
+/// A card file a `CardFiles` edit may put or delete: a sound under `SOUNDS/` (a voice pack),
+/// or a storage pack file (`postflash::pack_path_ok`: never a YAML file).
 fn check_sound_path(path: &str) -> Result<()> {
+    if !path.starts_with("SOUNDS/") && crate::gear::edgetx::setup::postflash::pack_path_ok(path) {
+        return Ok(());
+    }
     crate::gear::voice::lines::check_path(path)
         .map_err(|e| anyhow::anyhow!("Refused (shape_unknown): card files go under SOUNDS/: {e:#}"))
 }

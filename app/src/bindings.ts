@@ -367,6 +367,30 @@ export const commands = {
 	 */
 	gearRadioSettingsEdit: (params: RadioSettingsEditParams) => typedError<StagedChange_Serialize, string>(__TAURI_INVOKE("gear_radio_settings_edit", { params })),
 	/**
+	 *  A radio setup (jobs, the controls that do them, the model template, the aircraft)
+	 *  read against a radio's mounted card or latest backup, or a card folder: each job's
+	 *  control and positions, the generated edits and the card files they would change.
+	 *  Reads only.
+	 */
+	gearRadioSetup: (params: RadioSetupParams) => typedError<RadioSetupDetail, string>(__TAURI_INVOKE("gear_radio_setup", { params })),
+	/**
+	 *  Changes a radio's saved setup (a whole setup, a reset, or job controls), checked
+	 *  against its board and card; with `stage`, stages the generated edits as its one
+	 *  "Radio setup" change. Writes only QuadCam's own data.
+	 */
+	gearRadioSetupEdit: (params: RadioSetupEditParams) => typedError<RadioSetupEdited_Serialize, string>(__TAURI_INVOKE("gear_radio_setup_edit", { params })),
+	/**
+	 *  The steps after a flash on a radio's card: the storage pack, the ELRS Lua and the
+	 *  volume label, each planned; with `stage`, the pack and the Lua staged as card
+	 *  changes. Downloads from upstream; writes no card.
+	 */
+	gearRadioPostFlash: (params: PostFlashParams) => typedError<PostFlashPlan_Serialize, string>(__TAURI_INVOKE("gear_radio_post_flash", { params })),
+	/**
+	 *  Renames a radio's mounted volume to a label from its saved name, or the one given
+	 *  (`diskutil rename`). Needs confirm=true.
+	 */
+	gearVolumeLabel: (params: VolumeLabelParams) => typedError<VolumeLabeled, string>(__TAURI_INVOKE("gear_volume_label", { params })),
+	/**
 	 *  What syncing a quad's rate profile into the sims would write: per sim file the
 	 *  values that change, every guard, warnings and a digest. Writes nothing.
 	 */
@@ -844,6 +868,33 @@ export type AgentFormatRequest = {
 	plan: FormatPlan,
 };
 
+/**  One model on the radio, for one aircraft, with what differs from the template. */
+export type Aircraft = {
+	/**  The model file (`model00.yml`). */
+	file: string,
+	/**  The model name; None keeps the name the model has. */
+	name?: string | null,
+	/**
+	 *  Names the model may have before the setup renames it (a factory name). Any other
+	 *  name refuses: "wrong card?".
+	 */
+	was_named?: string[],
+	/**  The ELRS model id of the internal module. */
+	model_id?: number | null,
+	/**  When the file is missing: copy it from this model file, after that model's edits. */
+	copy_from?: string | null,
+	/**  The power-on checklist text (`MODELS/<name>.txt`). */
+	checklist?: string | null,
+	/**  Template timers this model does not have (0 is Timer 1); they are removed. */
+	drop_timers?: number[],
+	/**  Logical switches that replace the template's at the same index, or add to it. */
+	logical_switches?: LsSpec[],
+	/**  The template's own functions on these switches are left out (`L20`). */
+	drop_functions?: string[],
+	/**  Functions after the template's own. */
+	functions?: SfSpec[],
+};
+
 /**  An AppleDouble file found on a card. */
 export type AppleDoubleFile = {
 	/**  Path from the card's root (`MODELS/._model01.yml`). */
@@ -913,6 +964,18 @@ export type Asset = {
 	sha256: string,
 	/**  Bytes. */
 	size: number,
+};
+
+/**  Which control does a job on one radio. */
+export type Assignment = {
+	job: string,
+	/**  The control's EdgeTX name. */
+	control: string,
+	/**
+	 *  For a switch: its position (0 or 2) that sends 2000 µs, so its other end sends
+	 *  1000 µs. Unused for pots, sliders, wheels and trims.
+	 */
+	high?: number | null,
 };
 
 /**
@@ -2005,6 +2068,18 @@ export type Connected = {
 	also?: string[],
 };
 
+/**  One control of a board. */
+export type Control = {
+	/**  The EdgeTX name (`SA`, `P1`, `SL1`, `SW1`, `TrimRudRight`). */
+	name: string,
+	kind: RadioControlKind,
+	/**
+	 *  The type `radio.yml` gives it (`2POS`, `TOGGLE`, `without_detent`, `slider`); None
+	 *  for a custom switch or a trim.
+	 */
+	radio_type?: string | null,
+};
+
 export type ControlKind = "switch" | "trim" | "stick";
 
 /**
@@ -2639,6 +2714,12 @@ export type Edit =
 from_board: string; 
 /**  The source model file's text. */
 text: string; to: string; name: string; links?: ControlLink[]; template?: string | null } | 
+/**
+ *  A Lua script under `SCRIPTS/` (`SCRIPTS/TELEMETRY/volt.lua`) put on the card with this
+ *  text, or deleted (`text` None; a compiled `.luac` too). It joins model and radio
+ *  edits in one change.
+ */
+{ kind: "card_text"; path: string; text?: string | null } | 
 /**
  *  ExpressLRS options of a saved ELRS device, set over CRSF (design 6.4). Never the
  *  binding phrase.
@@ -3402,6 +3483,11 @@ export type FormatRequest = {
 	confirm?: boolean,
 };
 
+export type FuncPrefix = {
+	func: string,
+	def: string,
+};
+
 /**  One saved copy. */
 export type FwCopy = {
 	/**  `<device>/<stamp>-<kind>`. */
@@ -3743,6 +3829,34 @@ export type InstalledTool = {
 	/**  SHA-256 of the executable as installed (after any ad-hoc signature). */
 	sha256: string,
 	signing: Signing,
+};
+
+/**  What the pilot wants one control to do. */
+export type Job = {
+	/**  A short id the template names (`arm`, `rates`). */
+	id: string,
+	label: string,
+	/**  The channel it drives, 0 for CH1. None for a job that stays on the radio. */
+	channel?: number | null,
+	/**  The control kinds that may do it. */
+	fits: RadioControlKind[],
+	/**  Each state in plain words, from 1000 µs to 2000 µs. */
+	states?: string[],
+};
+
+/**  One job as the editor shows it: its channel, control and what each position does. */
+export type JobRow = {
+	job: string,
+	label: string,
+	/**  `CH5`. */
+	channel?: string | null,
+	/**  None: no control does it. */
+	control?: string | null,
+	kind?: RadioControlKind | null,
+	high?: number | null,
+	states: StateRow[],
+	/**  Controls of the board that fit the job and do no other job. */
+	free_controls: string[],
 };
 
 /**  A recording the DVR split into files, on its first file's clip. */
@@ -4448,6 +4562,29 @@ export type LsDef = {
 	duration?: number,
 };
 
+/**  A logical switch of the template (0 is L1); `ls` None leaves it empty. */
+export type LsSpec = {
+	index: number,
+	ls?: LsDef | null,
+	job?: string | null,
+};
+
+/**  What QuadCam's Lua screen of one name shows. */
+export type LuaKind = 
+/**  The quad's battery, link quality, TX power and a timer (0 is Timer 1). */
+{ kind: "volt"; timer: number } | 
+/**
+ *  The finder: signal strength in large digits, a beep that speeds up as the signal
+ *  rises, only while the `job`'s control is on.
+ */
+{ kind: "finder"; job: string };
+
+/**  One of QuadCam's Lua telemetry screens to put on the card. */
+export type LuaScreen = {
+	/**  The script name (`volt`: `SCRIPTS/TELEMETRY/volt.lua`), 6 characters at most. */
+	name: string,
+} & LuaKind;
+
 /**
  *  Where the map goes, in CSS pixels from the top left of the page, and the page's width in
  *  CSS pixels (which gives the zoom between CSS pixels and points).
@@ -4529,6 +4666,13 @@ export type MixLine = {
 	/**  `ADD`, `MUL` or `REPL`. */
 	mltpx: string,
 };
+
+/**  A mix line of the template; `job` leaves it out while the job has no control. */
+export type MixSpec = {
+	/**  0 for CH1. */
+	channel: number,
+	job?: string | null,
+} & MixLine;
 
 /**  A model in full, for the editors. */
 export type ModelDetail = {
@@ -4710,6 +4854,29 @@ export type ModelSummary = {
 	selected: boolean,
 	/**  Set when QuadCam cannot read the file (the reason). */
 	problem?: string | null,
+};
+
+/**  The model parts every aircraft shares. */
+export type ModelTemplate = {
+	timers?: TimerSpec[],
+	/**  The power-on checklist screen on or off. */
+	checklist_on?: boolean | null,
+	/**  Other top-level values the model file has (`disableTelemetryWarning`). */
+	flags?: Field[],
+	/**  The exact mix lines of each channel the template names; other channels stay. */
+	mixes?: MixSpec[],
+	/**  The setup owns every logical switch: one it does not list is emptied. */
+	logical_switches?: LsSpec[],
+	/**  The setup's own special functions, in order. */
+	functions?: SfSpec[],
+	/**  Functions added when the model lacks them and otherwise left where they are. */
+	keep_functions?: SfSpec[],
+	owns?: Owns,
+	/**  Jobs whose control must be at its 1000 µs end at power-on (the arm switch). */
+	switch_warnings?: string[],
+	screens?: ScreenSpec[],
+	/**  QuadCam's Lua screens the template's script screens show. */
+	lua?: LuaScreen[],
 };
 
 /**  What a model file says, as far as Gear reads it. Every list is in file order. */
@@ -5018,6 +5185,22 @@ export type OsdView = {
 
 export type Outcome = "verified" | "failed" | "skipped";
 
+/**
+ *  Which special functions on the card the setup owns: they are removed unless the setup
+ *  still wants them, and the setup's own come after every other function. A function the
+ *  setup lists is always its own.
+ */
+export type Owns = {
+	/**  Every function of these kinds (`SET_SCREEN`, `LOGS`). */
+	funcs?: string[],
+	/**  `PLAY_TRACK` of these tracks, including ones an older setup played. */
+	tracks?: string[],
+	/**  This function on this switch (`L2` `HAPTIC`). */
+	switch_funcs?: SwitchFunc[],
+	/**  This function whose definition starts with this text (`RESET` `Tmr3,`). */
+	def_prefixes?: FuncPrefix[],
+};
+
 /**  One physical battery. */
 export type Pack = {
 	/**  The label written on it ("A1"). Unique. */
@@ -5142,6 +5325,22 @@ export type PackOverride = {
 	radio: string,
 	/**  The card path. */
 	line: string,
+};
+
+/**  What putting a storage pack on the card would do. */
+export type PackPlan = {
+	/**  `edgetx.sdcard.version` on the card now. */
+	version_before?: string | null,
+	/**  The pack's own version. */
+	version_after?: string | null,
+	/**  Files the card lacks or holds with other bytes. */
+	put: string[],
+	/**  Files the card already holds as the pack has them. */
+	unchanged: number,
+	/**  Files of the pack QuadCam never puts (a model or `radio.yml`). */
+	skipped: string[],
+	/**  Bytes to write. */
+	bytes: number,
 };
 
 /**  `gear_voice_pack_preview`. */
@@ -5390,6 +5589,70 @@ export type Position = {
 	 */
 	combos?: Combo[],
 };
+
+/**  `gear_radio_post_flash`: the steps after a flash, planned, and staged on request. */
+export type PostFlashParams = {
+	device: string,
+	/**  The steps; every step when empty. */
+	steps?: PostFlashStep[],
+	/**
+	 *  The storage pack release (`2.12.3`); default the newest QuadCam checked for the
+	 *  radio's EdgeTX series.
+	 */
+	pack_version?: string | null,
+	/**  The ExpressLRS release whose Lua to put on (`4.1.0`); the Lua step needs it. */
+	elrs_version?: string | null,
+	/**  Stage the storage pack and the Lua as card changes. */
+	stage?: boolean,
+	editor?: Editor | null,
+};
+
+/**  The steps after a flash. */
+export type PostFlashPlan = PostFlashPlan_Serialize | PostFlashPlan_Deserialize;
+
+/**  The steps after a flash. */
+export type PostFlashPlan_Deserialize = {
+	device: string,
+	source: string,
+	steps: PostFlashPlanned[],
+	/**  Changes staged (with `stage`). */
+	changes: StagedChange_Deserialize[],
+};
+
+/**  The steps after a flash. */
+export type PostFlashPlan_Serialize = {
+	device: string,
+	source: string,
+	steps: PostFlashPlanned[],
+	/**  Changes staged (with `stage`). */
+	changes: StagedChange_Serialize[],
+};
+
+/**  One planned step. */
+export type PostFlashPlanned = {
+	step: PostFlashStep,
+	/**  What it would do, in a sentence. */
+	summary: string,
+	/**  Nothing to do: the card already has it. */
+	done: boolean,
+	pack?: PackPlan | null,
+	/**  Files the step puts or removes. */
+	files?: string[],
+	/**  The label now, and the label it would get. */
+	label_before?: string | null,
+	label_after?: string | null,
+	/**  Why the step cannot be planned. */
+	problem?: string | null,
+};
+
+/**  A step after a flash. */
+export type PostFlashStep = 
+/**  EdgeTX's SD-card files for the radio's screen. */
+"storage_pack" | 
+/**  `SCRIPTS/TOOLS/elrs.lua` from an ExpressLRS release; the old names removed. */
+"elrs_lua" | 
+/**  A volume label from the radio's saved name. */
+"volume_label";
 
 /**  `gear_preflight`'s answer. */
 export type Preflight = {
@@ -5810,6 +6073,21 @@ export type RadioControl =
 /**  On while button `button` (1-24) is in the `pressed` state. */
 { kind: "button"; button: number; pressed: boolean };
 
+/**  What kind of control a radio has (`docs/radio-design.md` 5.2), and what a job accepts. */
+export type RadioControlKind = 
+/**  A 2-position switch or a button that latches in (`2POS`). */
+"two_pos" | 
+/**  A 3-position switch. */
+"three_pos" | 
+/**  A spring-back switch or button: on while held (`TOGGLE`). */
+"momentary" | 
+/**  A customizable switch (GX12 SW1-SW6): set per model. */
+"custom" | 
+/**  A pot or wheel, with or without a centre detent. */
+"pot" | "slider" | 
+/**  One direction of a trim hat (`TrimRudRight`). */
+"trim";
+
 /**  The radio as the page sees it. */
 export type RadioEvent = {
 	connected: boolean,
@@ -5867,12 +6145,34 @@ export type RadioOp =
  *  takes `none`, `2pos`, `3pos` or `toggle` (written in the file's own case); a pot
  *  `none`, `with_detent` or `without_detent`; a slider `none` or `slider`.
  */
-{ op: "set_control_type"; control: string; value: string };
+{ op: "set_control_type"; control: string; value: string } | 
+/**
+ *  Removes every radio special function (`customFn`) with this function (`VOLUME`); the
+ *  others keep their order.
+ */
+{ op: "remove_functions"; func: string };
 
 /**  `gear_radio`: how long to wait for a report. */
 export type RadioParams = {
 	/**  Milliseconds; default 500, at most 5000. */
 	wait_ms?: number | null,
+};
+
+/**  `radio.yml` parts of the setup. */
+export type RadioPart = {
+	/**  Top-level values (`hapticMode`), checked as the Settings editor checks them. */
+	scalars?: Field[],
+	/**  The model the radio selects. */
+	select_model?: string | null,
+	/**  Radio special functions removed by function (`VOLUME`). */
+	remove_functions?: string[],
+	/**
+	 *  Write each switch's and pot's type from the board's controls (`switchConfig`,
+	 *  `potsConfig`), fixing a factory file that has them wrong.
+	 */
+	control_types?: boolean,
+	/**  Delete every model file that is not one of the setup's aircraft. */
+	delete_other_models?: boolean,
 };
 
 /**  Which radio a joystick is. */
@@ -5943,6 +6243,81 @@ export type RadioSettingsView = {
 	settings: RadioSetting[],
 	/**  The model the radio selects (`model01.yml`). */
 	selected_model?: string | null,
+};
+
+/**  A radio setup: jobs, the controls that do them, the template and the aircraft. */
+export type RadioSetup = {
+	/**  The board whose controls the assignments name (`pocket`, `gx12`). */
+	board: string,
+	jobs: Job[],
+	assignments: Assignment[],
+	template?: ModelTemplate,
+	aircraft: Aircraft[],
+	radio?: RadioPart,
+};
+
+/**  A setup and what it gives on the card. */
+export type RadioSetupDetail = {
+	device?: string | null,
+	/**  `card` (mounted now), `backup <id> (<date>)` or `folder <path>`. */
+	source: string,
+	/**  `saved` (the radio's), `given` or `default` (the starting setup for the board). */
+	origin: string,
+	setup: RadioSetup,
+	/**  The board's controls a job may use. */
+	controls: Control[],
+	jobs: JobRow[],
+	sounds: SoundCheck[],
+	warnings: string[],
+	/**  The generated edits (what `stage` puts in the "Radio setup" change). */
+	edits: Edit[],
+	/**  The card files the edits would change; empty when the card already matches. */
+	files: string[],
+	diff: DiffItem[],
+};
+
+/**  `gear_radio_setup_edit`: changes to a radio's saved setup, and its staging. */
+export type RadioSetupEditParams = {
+	device: string,
+	/**  The whole setup, replacing the saved one. */
+	setup?: RadioSetup | null,
+	/**  Start again from the board's default setup. */
+	reset?: boolean,
+	/**  Controls for jobs: each replaces the job's control (`{job, control, high}`). */
+	assign?: Assignment[],
+	/**  Jobs that no control does any more. */
+	free?: string[],
+	/**  Stage the generated edits as the radio's "Radio setup" change. */
+	stage?: boolean,
+	/**  Who stages it. The app and the CLI leave it out (the person); MCP says `agent`. */
+	editor?: Editor | null,
+};
+
+/**  What an edit saved, and the change it staged. */
+export type RadioSetupEdited = RadioSetupEdited_Serialize | RadioSetupEdited_Deserialize;
+
+/**  What an edit saved, and the change it staged. */
+export type RadioSetupEdited_Deserialize = {
+	detail: RadioSetupDetail,
+	change?: StagedChange_Deserialize | null,
+	notes: string[],
+};
+
+/**  What an edit saved, and the change it staged. */
+export type RadioSetupEdited_Serialize = {
+	detail: RadioSetupDetail,
+	change: StagedChange_Serialize | null,
+	notes: string[],
+};
+
+/**  `gear_radio_setup`: a radio, or a card folder, and the setup to read against it. */
+export type RadioSetupParams = {
+	/**  A saved radio's device id: its saved setup, against its mounted card or latest backup. */
+	device?: string | null,
+	/**  A card folder (a mounted card, or a copy) to read instead of the radio's card. */
+	mount?: string | null,
+	/**  A setup to read instead of the saved one. */
+	setup?: RadioSetup | null,
 };
 
 /**  `gear_radio`: one look at the radio. */
@@ -6528,6 +6903,13 @@ export type ScreenDetail = {
 	labels: string[][],
 };
 
+/**  A telemetry screen of the template (0 is screen 1). */
+export type ScreenSpec = 
+/**  A value screen: up to 4 lines of up to 3 sources (`{RxBt}`, `Tmr2`). */
+{ type: "values"; index: number; lines: string[][] } | 
+/**  A Lua script screen (`SCRIPTS/TELEMETRY/<script>.lua`). */
+{ type: "script"; index: number; script: string };
+
 /**  `place_search`: an address or a place name, and an optional provider and result limit. */
 export type SearchParams = {
 	query: string,
@@ -6775,6 +7157,11 @@ export type SfDef = {
 	func: string,
 	def: string,
 };
+
+/**  A special function of the template. */
+export type SfSpec = {
+	job?: string | null,
+} & SfDef;
 
 export type ShareReport = {
 	added: string[],
@@ -7130,6 +7517,14 @@ export type SimsParams = {
 /**  The sky of an hour, from its WMO weather code (`sky`). */
 export type Sky = "clear" | "partly_cloudy" | "cloudy" | "fog" | "drizzle" | "rain" | "heavy_rain" | "sleet" | "snow" | "thunderstorm" | "hail";
 
+/**  A sound a special function plays, and whether the card has it. */
+export type SoundCheck = {
+	track: string,
+	/**  `SOUNDS/en/<track>.wav`. */
+	path: string,
+	present: boolean,
+};
+
 /**  Where a moment's evidence came from. */
 export type Source = "radio_log" | 
 /**  The clip's own frames (dead air). */
@@ -7262,6 +7657,16 @@ export type StagedChange_Serialize = {
 	 *  that one becomes Reverted.
 	 */
 	reverts?: string | null,
+};
+
+/**  One position of a job's control and what it does. */
+export type StateRow = {
+	/**  What the state does, in the job's words. */
+	words: string,
+	/**  The control's position (`SC2`), for a switch. */
+	position?: string | null,
+	/**  The channel's value in microseconds, as QuadCam shows it (1000, 1500, 2000). */
+	us?: number | null,
 };
 
 export type Status = Status_Serialize | Status_Deserialize;
@@ -7441,6 +7846,11 @@ export type Swap = {
 	detail: string,
 };
 
+export type SwitchFunc = {
+	swtch: string,
+	func: string,
+};
+
 /**  The switch map of one aircraft. */
 export type SwitchMap = {
 	/**  The model's header name. */
@@ -7568,6 +7978,13 @@ export type Timer = {
 	/**  0 off, 1 per flight, 2 until a manual reset. */
 	persistent: string,
 	/**  Every field, raw, in file order. */
+	fields: Field[],
+};
+
+/**  A timer of the template (0 is Timer 1). Its stored value is never set. */
+export type TimerSpec = {
+	index: number,
+	/**  Unquoted values (`swtch` `L1`, `name` `TOT`). */
 	fields: Field[],
 };
 
@@ -8108,6 +8525,27 @@ export type Volume = {
 	/**  Holds `LOGS/` next to `MODELS/` or `RADIO/`: an EdgeTX radio in USB Storage mode. */
 	is_radio: boolean,
 	warnings: string[],
+};
+
+/**  `gear_volume_label`: rename a radio's mounted volume. */
+export type VolumeLabelParams = {
+	device: string,
+	/**
+	 *  The label; default one made from the radio's saved name. Upper case letters, digits,
+	 *  `_` and `-`, 11 characters at most.
+	 */
+	label?: string | null,
+	/**  Must be true. */
+	confirm?: boolean,
+};
+
+/**  The volume's label before and after. */
+export type VolumeLabeled = {
+	device: string,
+	before: string,
+	after: string,
+	/**  False when the volume already had the label. */
+	renamed: boolean,
 };
 
 /**  Something mounted or unmounted under /Volumes. */
