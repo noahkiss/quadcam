@@ -378,13 +378,13 @@ export const commands = {
 	 *  control and positions, the generated edits and the card files they would change.
 	 *  Reads only.
 	 */
-	gearRadioSetup: (params: RadioSetupParams) => typedError<RadioSetupDetail, string>(__TAURI_INVOKE("gear_radio_setup", { params })),
+	gearRadioSetup: (params: RadioSetupParams_Deserialize) => typedError<RadioSetupDetail_Serialize, string>(__TAURI_INVOKE("gear_radio_setup", { params })),
 	/**
 	 *  Changes a radio's saved setup (a whole setup, a reset, or job controls), checked
 	 *  against its board and card; with `stage`, stages the generated edits as its one
 	 *  "Radio setup" change. Writes only QuadCam's own data.
 	 */
-	gearRadioSetupEdit: (params: RadioSetupEditParams) => typedError<RadioSetupEdited_Serialize, string>(__TAURI_INVOKE("gear_radio_setup_edit", { params })),
+	gearRadioSetupEdit: (params: RadioSetupEditParams_Deserialize) => typedError<RadioSetupEdited_Serialize, string>(__TAURI_INVOKE("gear_radio_setup_edit", { params })),
 	/**
 	 *  The steps after a flash on a radio's card: the storage pack, the ELRS Lua and the
 	 *  volume label, each planned; with `stage`, the pack and the Lua staged as card
@@ -2166,6 +2166,15 @@ export type ControlUse = {
 	note?: string | null,
 };
 
+/**  A model the setup change copies from another radio (`Edit::ModelImport`). */
+export type CopiedModel = {
+	/**  The new model file on this radio. */
+	to: string,
+	name: string,
+	/**  The source radio's board. */
+	from_board: string,
+};
+
 /**  Why a copy was taken. */
 export type CopyKind = 
 /**  The person ran "Read radio firmware". */
@@ -3292,6 +3301,20 @@ export type FirmwareView = {
 	latest: Latest,
 	/**  The `firmwareCheck` setting: `manual` or `daily`. */
 	mode: string,
+};
+
+/**
+ *  What is fitted in one switch or pot slot when it differs from the board's factory part:
+ *  a swapped switch module, or a blanking plug (`none`).
+ */
+export type FittedSlot = {
+	/**  The slot's EdgeTX name (`SA`, `P2`). */
+	control: string,
+	/**
+	 *  The type `radio.yml` takes: `2POS`, `3POS`, `TOGGLE` or `NONE` for a switch;
+	 *  `with_detent`, `without_detent` or `none` for a pot; `slider` or `none` for a slider.
+	 */
+	radio_type: string,
 };
 
 export type Flag = "none" | "pick" | "reject";
@@ -6421,27 +6444,76 @@ export type RadioSettingsView = {
 };
 
 /**  A radio setup: jobs, the controls that do them, the template and the aircraft. */
-export type RadioSetup = {
-	/**  The board whose controls the assignments name (`pocket`, `gx12`). */
-	board: string,
-	jobs: Job[],
-	assignments: Assignment[],
-	template?: ModelTemplate,
-	aircraft: Aircraft[],
-	radio?: RadioPart,
-};
+export type RadioSetup = RadioSetup_Serialize | RadioSetup_Deserialize;
 
 /**  A setup and what it gives on the card. */
-export type RadioSetupDetail = {
+export type RadioSetupDetail = RadioSetupDetail_Serialize | RadioSetupDetail_Deserialize;
+
+/**  A setup and what it gives on the card. */
+export type RadioSetupDetail_Deserialize = {
 	device?: string | null,
 	/**  `card` (mounted now), `backup <id> (<date>)` or `folder <path>`. */
 	source: string,
 	/**  `saved` (the radio's), `given` or `default` (the starting setup for the board). */
 	origin: string,
-	setup: RadioSetup,
-	/**  The board's controls a job may use. */
+	setup: RadioSetup_Deserialize,
+	/**  The board's controls a job may use, with the fitted parts in place. */
 	controls: Control[],
+	/**
+	 *  The board's switch and pot slots: the factory part, the fitted part, and what
+	 *  `radio.yml` says now.
+	 */
+	slots?: SlotRow[],
 	jobs: JobRow[],
+	/**
+	 *  What keeps the setup from planning, each at its job when it has one. While any is
+	 *  listed, `edits` and `files` are empty and an edit refuses to save.
+	 */
+	problems?: SetupProblem[],
+	/**
+	 *  Why the card does not take the setup (a model without sensors, a copy that does not
+	 *  plan). The setup still saves; staging refuses.
+	 */
+	card_problem?: string | null,
+	/**  Models the radio's open "Radio setup" change copies from another radio first. */
+	copies?: CopiedModel[],
+	sounds: SoundCheck[],
+	warnings: string[],
+	/**  The generated edits (what `stage` puts in the "Radio setup" change). */
+	edits: Edit[],
+	/**  The card files the edits would change; empty when the card already matches. */
+	files: string[],
+	diff: DiffItem[],
+};
+
+/**  A setup and what it gives on the card. */
+export type RadioSetupDetail_Serialize = {
+	device: string | null,
+	/**  `card` (mounted now), `backup <id> (<date>)` or `folder <path>`. */
+	source: string,
+	/**  `saved` (the radio's), `given` or `default` (the starting setup for the board). */
+	origin: string,
+	setup: RadioSetup_Serialize,
+	/**  The board's controls a job may use, with the fitted parts in place. */
+	controls: Control[],
+	/**
+	 *  The board's switch and pot slots: the factory part, the fitted part, and what
+	 *  `radio.yml` says now.
+	 */
+	slots: SlotRow[],
+	jobs: JobRow[],
+	/**
+	 *  What keeps the setup from planning, each at its job when it has one. While any is
+	 *  listed, `edits` and `files` are empty and an edit refuses to save.
+	 */
+	problems: SetupProblem[],
+	/**
+	 *  Why the card does not take the setup (a model without sensors, a copy that does not
+	 *  plan). The setup still saves; staging refuses.
+	 */
+	card_problem: string | null,
+	/**  Models the radio's open "Radio setup" change copies from another radio first. */
+	copies: CopiedModel[],
 	sounds: SoundCheck[],
 	warnings: string[],
 	/**  The generated edits (what `stage` puts in the "Radio setup" change). */
@@ -6452,20 +6524,60 @@ export type RadioSetupDetail = {
 };
 
 /**  `gear_radio_setup_edit`: changes to a radio's saved setup, and its staging. */
-export type RadioSetupEditParams = {
+export type RadioSetupEditParams = RadioSetupEditParams_Serialize | RadioSetupEditParams_Deserialize;
+
+/**  `gear_radio_setup_edit`: changes to a radio's saved setup, and its staging. */
+export type RadioSetupEditParams_Deserialize = {
 	device: string,
 	/**  The whole setup, replacing the saved one. */
-	setup?: RadioSetup | null,
+	setup?: RadioSetup_Deserialize | null,
 	/**  Start again from the board's default setup. */
 	reset?: boolean,
 	/**  Controls for jobs: each replaces the job's control (`{job, control, high}`). */
 	assign?: Assignment[],
 	/**  Jobs that no control does any more. */
 	free?: string[],
+	/**
+	 *  What is fitted in switch and pot slots (`{control, radio_type}`): a swapped switch
+	 *  module, or `none` for a blanking plug. The factory type takes the slot off the list.
+	 */
+	fit?: FittedSlot[],
+	/**
+	 *  Copy models from another radio first; their models become the setup's aircraft.
+	 *  Stages the change (the copies live only there until it is applied).
+	 */
+	copy_from?: SetupCopy | null,
 	/**  Stage the generated edits as the radio's "Radio setup" change. */
 	stage?: boolean,
 	/**  Who stages it. The app and the CLI leave it out (the person); MCP says `agent`. */
 	editor?: Editor | null,
+};
+
+/**  `gear_radio_setup_edit`: changes to a radio's saved setup, and its staging. */
+export type RadioSetupEditParams_Serialize = {
+	device: string,
+	/**  The whole setup, replacing the saved one. */
+	setup: RadioSetup_Serialize | null,
+	/**  Start again from the board's default setup. */
+	reset: boolean,
+	/**  Controls for jobs: each replaces the job's control (`{job, control, high}`). */
+	assign: Assignment[],
+	/**  Jobs that no control does any more. */
+	free: string[],
+	/**
+	 *  What is fitted in switch and pot slots (`{control, radio_type}`): a swapped switch
+	 *  module, or `none` for a blanking plug. The factory type takes the slot off the list.
+	 */
+	fit: FittedSlot[],
+	/**
+	 *  Copy models from another radio first; their models become the setup's aircraft.
+	 *  Stages the change (the copies live only there until it is applied).
+	 */
+	copy_from: SetupCopy | null,
+	/**  Stage the generated edits as the radio's "Radio setup" change. */
+	stage: boolean,
+	/**  Who stages it. The app and the CLI leave it out (the person); MCP says `agent`. */
+	editor: Editor | null,
 };
 
 /**  What an edit saved, and the change it staged. */
@@ -6473,26 +6585,71 @@ export type RadioSetupEdited = RadioSetupEdited_Serialize | RadioSetupEdited_Des
 
 /**  What an edit saved, and the change it staged. */
 export type RadioSetupEdited_Deserialize = {
-	detail: RadioSetupDetail,
+	detail: RadioSetupDetail_Deserialize,
 	change?: StagedChange_Deserialize | null,
 	notes: string[],
 };
 
 /**  What an edit saved, and the change it staged. */
 export type RadioSetupEdited_Serialize = {
-	detail: RadioSetupDetail,
+	detail: RadioSetupDetail_Serialize,
 	change: StagedChange_Serialize | null,
 	notes: string[],
 };
 
 /**  `gear_radio_setup`: a radio, or a card folder, and the setup to read against it. */
-export type RadioSetupParams = {
+export type RadioSetupParams = RadioSetupParams_Serialize | RadioSetupParams_Deserialize;
+
+/**  `gear_radio_setup`: a radio, or a card folder, and the setup to read against it. */
+export type RadioSetupParams_Deserialize = {
 	/**  A saved radio's device id: its saved setup, against its mounted card or latest backup. */
 	device?: string | null,
 	/**  A card folder (a mounted card, or a copy) to read instead of the radio's card. */
 	mount?: string | null,
 	/**  A setup to read instead of the saved one. */
-	setup?: RadioSetup | null,
+	setup?: RadioSetup_Deserialize | null,
+};
+
+/**  `gear_radio_setup`: a radio, or a card folder, and the setup to read against it. */
+export type RadioSetupParams_Serialize = {
+	/**  A saved radio's device id: its saved setup, against its mounted card or latest backup. */
+	device: string | null,
+	/**  A card folder (a mounted card, or a copy) to read instead of the radio's card. */
+	mount: string | null,
+	/**  A setup to read instead of the saved one. */
+	setup: RadioSetup_Serialize | null,
+};
+
+/**  A radio setup: jobs, the controls that do them, the template and the aircraft. */
+export type RadioSetup_Deserialize = {
+	/**  The board whose controls the assignments name (`pocket`, `gx12`). */
+	board: string,
+	/**
+	 *  Slots whose fitted part differs from the board's factory part. The generator writes
+	 *  each one's type to `radio.yml`.
+	 */
+	fitted?: FittedSlot[],
+	jobs: Job[],
+	assignments: Assignment[],
+	template?: ModelTemplate,
+	aircraft: Aircraft[],
+	radio?: RadioPart,
+};
+
+/**  A radio setup: jobs, the controls that do them, the template and the aircraft. */
+export type RadioSetup_Serialize = {
+	/**  The board whose controls the assignments name (`pocket`, `gx12`). */
+	board: string,
+	/**
+	 *  Slots whose fitted part differs from the board's factory part. The generator writes
+	 *  each one's type to `radio.yml`.
+	 */
+	fitted?: FittedSlot[],
+	jobs: Job[],
+	assignments: Assignment[],
+	template: ModelTemplate,
+	aircraft: Aircraft[],
+	radio: RadioPart,
 };
 
 /**  `gear_radio`: one look at the radio. */
@@ -7324,6 +7481,31 @@ export type SettingsView_Serialize = {
 };
 
 /**
+ *  Copy models from another radio into this one, as the first edits of its setup change
+ *  (`docs/radio-design.md` 5.5).
+ */
+export type SetupCopy = {
+	/**
+	 *  The source: a saved radio's device id (its mounted card, else its latest backup) or
+	 *  a backup id.
+	 */
+	from: string,
+	/**  The source's model files (`model00.yml`); every model when empty. */
+	models?: string[],
+	/**  Links in place of the two boards' default links, per source control. */
+	links?: ControlLink[],
+};
+
+/**  One thing wrong with a setup, at the job (or slot) it is about. */
+export type SetupProblem = {
+	/**  The job it is about, when it is about one. */
+	job?: string | null,
+	/**  The control it is about, when it is about one. */
+	control?: string | null,
+	message: string,
+};
+
+/**
  *  A special function as an op names it (values unquoted). `def` may name sensors by
  *  label.
  */
@@ -7691,6 +7873,21 @@ export type SimsParams = {
 
 /**  The sky of an hour, from its WMO weather code (`sky`). */
 export type Sky = "clear" | "partly_cloudy" | "cloudy" | "fog" | "drizzle" | "rain" | "heavy_rain" | "sleet" | "snow" | "thunderstorm" | "hail";
+
+/**  One switch or pot slot as the editor shows it. */
+export type SlotRow = {
+	/**  `SA`, `P1`. */
+	control: string,
+	kind: BoardControlKind,
+	/**  The board's factory part. */
+	factory: string,
+	/**  What the setup says is fitted. */
+	fitted: string,
+	/**  What the card's `radio.yml` says now; None when it does not list the slot. */
+	on_radio?: string | null,
+	/**  The types the slot may take. */
+	choices: string[],
+};
 
 /**  A sound a special function plays, and whether the card has it. */
 export type SoundCheck = {

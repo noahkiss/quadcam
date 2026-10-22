@@ -466,7 +466,11 @@ cli.flag gear setup --mount VALUE
 cli.flag gear setup --setup VALUE
 cli.flag gear setup --text
 cli.flag gear setup-edit --assign VALUE
+cli.flag gear setup-edit --copy-from VALUE
+cli.flag gear setup-edit --copy-model VALUE
+cli.flag gear setup-edit --fit VALUE
 cli.flag gear setup-edit --free VALUE
+cli.flag gear setup-edit --link VALUE
 cli.flag gear setup-edit --reset
 cli.flag gear setup-edit --setup VALUE
 cli.flag gear setup-edit --stage

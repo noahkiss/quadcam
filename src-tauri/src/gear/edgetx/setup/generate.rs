@@ -178,19 +178,64 @@ impl Ctx<'_> {
     }
 }
 
+/// One thing wrong with a setup, at the job (or slot) it is about.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Type)]
+pub struct SetupProblem {
+    /// The job it is about, when it is about one.
+    #[serde(default)]
+    pub job: Option<String>,
+    /// The control it is about, when it is about one.
+    #[serde(default)]
+    pub control: Option<String>,
+    pub message: String,
+}
+
+fn problem(job: Option<&str>, control: Option<&str>, message: String) -> SetupProblem {
+    SetupProblem {
+        job: job.map(str::to_string),
+        control: control.map(str::to_string),
+        message,
+    }
+}
+
 /// Checks a setup against its board: every assignment names a job and a control of the
 /// board whose kind the job takes, a switch's direction is 0 or 2, and no control or
-/// channel does two jobs. Returns the board's controls.
+/// channel does two jobs. Returns the board's controls with the fitted parts in place.
 pub fn check(setup: &RadioSetup) -> Result<Vec<Control>, Refusal> {
-    let controls = controls::controls(&setup.board).ok_or_else(|| {
-        Refusal::new(
-            RefusalCode::UnknownBoard,
-            format!(
-                "QuadCam has no control list for the board {:?}; a setup needs one.",
-                setup.board
-            ),
-        )
-    })?;
+    let (controls, problems) = problems(setup);
+    if let Some(p) = problems.into_iter().next() {
+        let code = if controls::controls(&setup.board).is_none() {
+            RefusalCode::UnknownBoard
+        } else {
+            RefusalCode::BadSetting
+        };
+        return Err(Refusal::new(code, p.message));
+    }
+    Ok(controls.unwrap_or_default())
+}
+
+/// Every problem `check` would refuse, each at its job, and the board's controls with the
+/// fitted parts in place (None when the board or a fitted part is unknown).
+pub fn problems(setup: &RadioSetup) -> (Option<Vec<Control>>, Vec<SetupProblem>) {
+    let mut out = Vec::new();
+    let controls = match controls::fitted_controls(&setup.board, &setup.fitted) {
+        Ok(Some(c)) => c,
+        Ok(None) => {
+            out.push(problem(
+                None,
+                None,
+                format!(
+                    "QuadCam has no control list for the board {:?}; a setup needs one.",
+                    setup.board
+                ),
+            ));
+            return (None, out);
+        }
+        Err(r) => {
+            out.push(problem(None, None, r.reason));
+            return (None, out);
+        }
+    };
     let mut ids = BTreeSet::new();
     let mut channels = BTreeMap::new();
     for j in &setup.jobs {
@@ -198,45 +243,60 @@ pub fn check(setup: &RadioSetup) -> Result<Vec<Control>, Refusal> {
             || j.id
                 .contains(|c: char| !(c.is_ascii_alphanumeric() || c == '_'))
         {
-            return Err(bad(format!(
-                "Job id {:?} may hold letters, digits and _ only.",
-                j.id
-            )));
+            out.push(problem(
+                None,
+                None,
+                format!("Job id {:?} may hold letters, digits and _ only.", j.id),
+            ));
+            continue;
         }
         if !ids.insert(j.id.as_str()) {
-            return Err(bad(format!("Two jobs are named {:?}.", j.id)));
+            out.push(problem(None, None, format!("Two jobs are named {:?}.", j.id)));
         }
         if let Some(ch) = j.channel {
             if ch >= 32 {
-                return Err(bad(format!("{}: a channel is CH1-CH32.", j.label)));
-            }
-            if let Some(other) = channels.insert(ch, &j.label) {
-                return Err(bad(format!(
-                    "{} and {} both drive CH{}.",
-                    other,
-                    j.label,
-                    ch + 1
-                )));
+                out.push(problem(
+                    Some(&j.id),
+                    None,
+                    format!("{}: a channel is CH1-CH32.", j.label),
+                ));
+            } else if let Some(other) = channels.insert(ch, &j.label) {
+                out.push(problem(
+                    Some(&j.id),
+                    None,
+                    format!("{} and {} both drive CH{}.", other, j.label, ch + 1),
+                ));
             }
         }
     }
     let mut used: BTreeMap<&str, &str> = BTreeMap::new();
     let mut seen_jobs = BTreeSet::new();
     for a in &setup.assignments {
-        let job = setup.job(&a.job).ok_or_else(|| {
-            bad(format!(
-                "The assignment names {:?}, which is not a job.",
-                a.job
-            ))
-        })?;
+        let Some(job) = setup.job(&a.job) else {
+            out.push(problem(
+                None,
+                Some(&a.control),
+                format!("The assignment names {:?}, which is not a job.", a.job),
+            ));
+            continue;
+        };
+        let at = |m: String| problem(Some(&a.job), Some(&a.control), m);
         if !seen_jobs.insert(a.job.as_str()) {
-            return Err(bad(format!("{} has two controls.", job.label)));
+            out.push(at(format!("{} has two controls.", job.label)));
+            continue;
         }
-        let c = controls
-            .iter()
-            .find(|c| c.name == a.control)
-            .ok_or_else(|| {
-                bad(format!(
+        let Some(c) = controls.iter().find(|c| c.name == a.control) else {
+            let blanked = setup
+                .fitted
+                .iter()
+                .any(|f| f.control == a.control && f.radio_type.eq_ignore_ascii_case("none"));
+            out.push(at(if blanked {
+                format!(
+                    "{} is set as not fitted, so it cannot do {}.",
+                    a.control, job.label
+                )
+            } else {
+                format!(
                     "{} is not a control of the {} ({}).",
                     a.control,
                     setup.board,
@@ -245,10 +305,12 @@ pub fn check(setup: &RadioSetup) -> Result<Vec<Control>, Refusal> {
                         .map(|c| c.name.as_str())
                         .collect::<Vec<_>>()
                         .join(", ")
-                ))
-            })?;
+                )
+            }));
+            continue;
+        };
         if !job.fits.contains(&c.kind) {
-            return Err(bad(format!(
+            out.push(at(format!(
                 "{} cannot do {}: it is a {}, and {} takes {}.",
                 c.name,
                 job.label,
@@ -260,22 +322,24 @@ pub fn check(setup: &RadioSetup) -> Result<Vec<Control>, Refusal> {
                     .collect::<Vec<_>>()
                     .join(" or ")
             )));
+            continue;
         }
         if c.kind == RadioControlKind::Custom {
-            return Err(bad(format!(
+            out.push(at(format!(
                 "{} is a customizable switch; QuadCam does not set those up yet.",
                 c.name
             )));
+            continue;
         }
         if c.kind.has_positions() {
             if !matches!(a.high, Some(0) | Some(2)) {
-                return Err(bad(format!(
+                out.push(at(format!(
                     "{} on {}: say which position (0 or 2) sends 2000 µs.",
                     job.label, c.name
                 )));
             }
         } else if a.high.is_some() {
-            return Err(bad(format!(
+            out.push(at(format!(
                 "{} on {}: a {} has no positions; leave the direction out.",
                 job.label,
                 c.name,
@@ -283,7 +347,7 @@ pub fn check(setup: &RadioSetup) -> Result<Vec<Control>, Refusal> {
             )));
         }
         if let Some(other) = used.insert(c.name.as_str(), job.label.as_str()) {
-            return Err(bad(format!(
+            out.push(at(format!(
                 "{} does two jobs: {} and {}.",
                 c.name, other, job.label
             )));
@@ -292,22 +356,26 @@ pub fn check(setup: &RadioSetup) -> Result<Vec<Control>, Refusal> {
     let mut files = BTreeSet::new();
     for a in &setup.aircraft {
         if !is_model_file(&a.file) {
-            return Err(bad(format!(
-                "{:?} is not a model file name (model01.yml).",
-                a.file
-            )));
+            out.push(problem(
+                None,
+                None,
+                format!("{:?} is not a model file name (model01.yml).", a.file),
+            ));
+            continue;
         }
         if !files.insert(a.file.as_str()) {
-            return Err(bad(format!("Two aircraft use {}.", a.file)));
+            out.push(problem(None, None, format!("Two aircraft use {}.", a.file)));
         }
         if let Some(n) = &a.name {
-            em::check_model_name(n)?;
+            if let Err(r) = em::check_model_name(n) {
+                out.push(problem(None, None, r.reason));
+            }
         }
     }
     if setup.aircraft.is_empty() {
-        return Err(bad("A setup names at least one model."));
+        out.push(problem(None, None, "A setup names at least one model.".into()));
     }
-    Ok(controls)
+    (Some(controls), out)
 }
 
 fn kind_words(k: RadioControlKind) -> &'static str {
@@ -762,27 +830,45 @@ pub fn generate(setup: &RadioSetup, src: &dyn Source) -> Result<Generated, Refus
         .as_deref()
         .map(|b| Doc::parse("radio.yml", b))
         .transpose()?;
-    if r.control_types {
-        for c in controls.iter().filter(|c| c.radio_type.is_some()) {
-            let block = if is_switch(c) {
-                "switchConfig"
-            } else {
-                "potsConfig"
-            };
+    // Every slot's type when the setup says so; else the fitted parts only. A blanked slot
+    // is not among `controls`, so it is written from the fitted list.
+    let typed: Vec<(String, String, bool)> = {
+        let board_slots = crate::gear::edgetx::board::spec(Some(&setup.board))
+            .map(|s| s.controls())
+            .unwrap_or_default();
+        board_slots
+            .iter()
+            .filter(|b| b.kind != crate::gear::edgetx::board::BoardControlKind::Custom)
+            .filter_map(|b| {
+                let fit = setup.fitted.iter().find(|f| f.control == b.name);
+                if fit.is_none() && !r.control_types {
+                    return None;
+                }
+                let t = match fit {
+                    Some(f) => controls::slot_type(b.kind, &f.radio_type).ok()?,
+                    None => controls::factory_type(b),
+                };
+                let switch = b.kind == crate::gear::edgetx::board::BoardControlKind::Switch;
+                Some((b.name.clone(), t, switch))
+            })
+            .collect()
+    };
+    {
+        for (name, value, switch) in typed {
+            let block = if switch { "switchConfig" } else { "potsConfig" };
             let present = radio_doc
                 .as_ref()
-                .and_then(|d| d.find(&[block, &c.name]).ok().flatten())
+                .and_then(|d| d.find(&[block, &name]).ok().flatten())
                 .is_some();
             if !present {
                 warnings.push(format!(
-                    "radio.yml has no {} in {block}, so its type stays as the radio has it.",
-                    c.name
+                    "radio.yml has no {name} in {block}, so its type stays as the radio has it."
                 ));
                 continue;
             }
             ops.push(RadioOp::SetControlType {
-                control: c.name.clone(),
-                value: c.radio_type.clone().unwrap_or_default(),
+                control: name,
+                value,
             });
         }
     }

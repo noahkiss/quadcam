@@ -300,11 +300,26 @@ pub struct RadioPart {
     pub delete_other_models: bool,
 }
 
+/// What is fitted in one switch or pot slot when it differs from the board's factory part:
+/// a swapped switch module, or a blanking plug (`none`).
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Type)]
+pub struct FittedSlot {
+    /// The slot's EdgeTX name (`SA`, `P2`).
+    pub control: String,
+    /// The type `radio.yml` takes: `2POS`, `3POS`, `TOGGLE` or `NONE` for a switch;
+    /// `with_detent`, `without_detent` or `none` for a pot; `slider` or `none` for a slider.
+    pub radio_type: String,
+}
+
 /// A radio setup: jobs, the controls that do them, the template and the aircraft.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Type)]
 pub struct RadioSetup {
     /// The board whose controls the assignments name (`pocket`, `gx12`).
     pub board: String,
+    /// Slots whose fitted part differs from the board's factory part. The generator writes
+    /// each one's type to `radio.yml`.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub fitted: Vec<FittedSlot>,
     pub jobs: Vec<Job>,
     pub assignments: Vec<Assignment>,
     #[serde(default)]

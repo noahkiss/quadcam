@@ -667,3 +667,290 @@ fn the_default_gx12_setup_gives_valid_yaml_on_a_gx12_card() {
         again.files.iter().map(|f| &f.path).collect::<Vec<_>>()
     );
 }
+
+// ----- the editor's rows: fitted parts, problems in place, copy from another radio -----
+
+use quadcam_lib::core::SetupCopy;
+use quadcam_lib::gear::edgetx::setup::FittedSlot;
+use std::sync::Mutex;
+
+#[test]
+fn a_fitted_part_changes_what_a_slot_can_do_and_reaches_radio_yml() {
+    let b = bench("pocket-rev11");
+    b.core
+        .gear_radio_setup_edit(&RadioSetupEditParams {
+            device: b.id.clone(),
+            setup: Some(owner_setup()),
+            ..Default::default()
+        })
+        .unwrap();
+    let blank = || FittedSlot {
+        control: "P1".into(),
+        radio_type: "none".into(),
+    };
+    // A blanking plug in P1 while it does VTX power: refused, nothing saved.
+    let e = b
+        .core
+        .gear_radio_setup_edit(&RadioSetupEditParams {
+            device: b.id.clone(),
+            fit: vec![blank()],
+            ..Default::default()
+        })
+        .unwrap_err();
+    assert!(e.to_string().contains("P1 is set as not fitted"), "{e}");
+    // Read with that setup, the problem sits on its job and nothing is planned.
+    let mut s = owner_setup();
+    s.fitted.push(blank());
+    let d = b
+        .core
+        .gear_radio_setup(&RadioSetupParams {
+            device: Some(b.id.clone()),
+            setup: Some(s),
+            ..Default::default()
+        })
+        .unwrap();
+    assert_eq!(d.problems.len(), 1, "{:?}", d.problems);
+    assert_eq!(d.problems[0].job.as_deref(), Some("vtx"));
+    assert!(d.edits.is_empty() && d.files.is_empty());
+    let p1 = d.slots.iter().find(|x| x.control == "P1").unwrap();
+    assert_eq!(
+        (p1.factory.as_str(), p1.fitted.as_str(), p1.on_radio.as_deref()),
+        ("without_detent", "none", Some("without_detent"))
+    );
+    // Free VTX power first: the plug saves, and the staged change writes P1's type.
+    let r = b
+        .core
+        .gear_radio_setup_edit(&RadioSetupEditParams {
+            device: b.id.clone(),
+            free: vec!["vtx".into()],
+            fit: vec![blank()],
+            stage: true,
+            ..Default::default()
+        })
+        .unwrap();
+    assert_eq!(r.detail.setup.fitted, vec![blank()]);
+    assert!(!r.detail.controls.iter().any(|c| c.name == "P1"));
+    assert!(r.detail.edits.iter().any(|e| matches!(e,
+        Edit::Radio { ops } if ops.iter().any(|o| matches!(o,
+            card::RadioOp::SetControlType { control, value } if control == "P1" && value == "none")))));
+    assert!(r.detail.files.contains(&"RADIO/radio.yml".to_string()));
+    // The factory part again takes the slot off the list.
+    let r = b
+        .core
+        .gear_radio_setup_edit(&RadioSetupEditParams {
+            device: b.id.clone(),
+            fit: vec![FittedSlot {
+                control: "P1".into(),
+                radio_type: "without_detent".into(),
+            }],
+            ..Default::default()
+        })
+        .unwrap();
+    assert!(r.detail.setup.fitted.is_empty());
+    // A type the slot cannot take refuses.
+    let e = b
+        .core
+        .gear_radio_setup_edit(&RadioSetupEditParams {
+            device: b.id.clone(),
+            fit: vec![FittedSlot {
+                control: "SA".into(),
+                radio_type: "slider".into(),
+            }],
+            ..Default::default()
+        })
+        .unwrap_err();
+    assert!(e.to_string().contains("2POS, 3POS, TOGGLE, NONE"), "{e}");
+}
+
+/// Two radio cards on one core: `swap` changes which one is plugged in.
+struct Two {
+    core: Arc<Core>,
+    roots: [PathBuf; 2],
+    plugged: Arc<Mutex<usize>>,
+    _dir: tempfile::TempDir,
+}
+
+fn volume_at(root: &Path, uuid: &str) -> Volume {
+    Volume {
+        mount: root.to_path_buf(),
+        info: DiskInfo {
+            volume_uuid: Some(uuid.into()),
+            parent_whole_disk: "disk42".into(),
+            bus_protocol: Some("USB".into()),
+            removable: true,
+            ..Default::default()
+        },
+        is_card: false,
+        source: None,
+        is_radio: true,
+        warnings: vec![],
+    }
+}
+
+fn two_radios() -> Two {
+    let dir = tempfile::tempdir().unwrap();
+    let pocket = dir.path().join("POCKET");
+    copy_dir(&fixtures().join("pocket-rev11"), &pocket);
+    let gx12 = dir.path().join("GX12");
+    gx12_card(&gx12);
+    let vols = [
+        volume_at(&pocket, "11111111-2222-3333-4444-555555555555"),
+        volume_at(&gx12, "66666666-7777-8888-9999-000000000000"),
+    ];
+    let plugged = Arc::new(Mutex::new(0usize));
+    let p = plugged.clone();
+    let mut env = Env::fake(vec![], Arc::new(FakePorts::new(vec![])));
+    env.volumes = Arc::new(move || vec![vols[*p.lock().unwrap()].clone()]);
+    env.unmount = Arc::new(|_| Ok(()));
+    env.mount = Arc::new(|_| Ok(()));
+    let core = Arc::new(
+        Core::new(
+            dir.path().join("cache"),
+            None,
+            Arc::new(NoHooks),
+            Arc::new(Recorder::default()),
+        )
+        .with_settings(dir.path().join("support/settings.json"))
+        .with_gear_env(env),
+    );
+    Two {
+        core,
+        roots: [pocket, gx12],
+        plugged,
+        _dir: dir,
+    }
+}
+
+impl Two {
+    /// Plugs radio `i` in, backs it up and answers its id.
+    fn plug(&self, i: usize) -> String {
+        *self.plugged.lock().unwrap() = i;
+        let id = self
+            .core
+            .gear_connected()
+            .unwrap()
+            .into_iter()
+            .find_map(|c| c.id)
+            .expect("the card has an id");
+        self.core
+            .gear_backup(&BackupParams {
+                device: Some(id.clone()),
+                ..Default::default()
+            })
+            .unwrap();
+        id
+    }
+}
+
+#[test]
+fn a_copy_from_another_radio_stages_the_models_and_the_setup_as_one_change() {
+    let t = two_radios();
+    let pocket = t.plug(0);
+    t.core
+        .gear_radio_setup_edit(&RadioSetupEditParams {
+            device: pocket.clone(),
+            setup: Some(owner_setup()),
+            ..Default::default()
+        })
+        .unwrap();
+    let gx12 = t.plug(1);
+    assert_ne!(pocket, gx12);
+    // The factory GX12 model alone: the setup saves, but the card does not take it.
+    let d = t
+        .core
+        .gear_radio_setup(&RadioSetupParams {
+            device: Some(gx12.clone()),
+            ..Default::default()
+        })
+        .unwrap();
+    assert!(d.problems.is_empty(), "{:?}", d.problems);
+    assert!(d.card_problem.is_some());
+    // Copy both Pocket models (from its latest backup) and its setup.
+    let r = t
+        .core
+        .gear_radio_setup_edit(&RadioSetupEditParams {
+            device: gx12.clone(),
+            copy_from: Some(SetupCopy {
+                from: pocket.clone(),
+                ..Default::default()
+            }),
+            ..Default::default()
+        })
+        .unwrap_or_else(|e| panic!("{e:#}"));
+    let c = r.change.expect("a copy stages");
+    assert!(matches!(c.edits[0], Edit::ModelImport { .. }));
+    assert!(matches!(c.edits[1], Edit::ModelImport { .. }));
+    let copied: Vec<(String, String)> = r
+        .detail
+        .copies
+        .iter()
+        .map(|m| (m.to.clone(), m.name.clone()))
+        .collect();
+    assert_eq!(
+        copied,
+        [
+            ("model01.yml".to_string(), "AIR65 II".to_string()),
+            ("model02.yml".to_string(), "METEOR75".to_string())
+        ]
+    );
+    let control = |j: &str| {
+        r.detail
+            .setup
+            .assignment(j)
+            .map(|a| a.control.clone())
+            .unwrap_or_default()
+    };
+    // The Pocket's momentary SE is the GX12's SH; the rest keep their names.
+    assert_eq!(
+        ["arm", "osd", "rates", "finder", "turtle", "vtx"].map(control),
+        ["SA", "SB", "SC", "SD", "SH", "P1"]
+    );
+    let files: Vec<&str> = r
+        .detail
+        .setup
+        .aircraft
+        .iter()
+        .map(|a| a.file.as_str())
+        .collect();
+    assert_eq!(files, ["model01.yml", "model02.yml"]);
+    assert!(r.notes[0].contains("AIR65 II to model01.yml"), "{:?}", r.notes);
+    // Reading again keeps the copies in front.
+    let d = t
+        .core
+        .gear_radio_setup(&RadioSetupParams {
+            device: Some(gx12.clone()),
+            ..Default::default()
+        })
+        .unwrap();
+    assert_eq!(d.copies.len(), 2);
+    assert!(d.card_problem.is_none(), "{:?}", d.card_problem);
+    // Apply it: both models land, and the setup then matches the card.
+    let p = t
+        .core
+        .gear_apply_plan(&ApplyPlanParams {
+            id: c.id.clone(),
+            port: None,
+        })
+        .unwrap();
+    assert!(p.checks.iter().all(|k| k.ok), "{:?}", p.checks);
+    t.core
+        .gear_apply(&ApplyRequest {
+            id: c.id.clone(),
+            digest: p.digest.clone(),
+            confirm: true,
+            port: None,
+        })
+        .unwrap_or_else(|e| panic!("{e:#}"));
+    for f in ["MODELS/model01.yml", "MODELS/model02.yml"] {
+        assert!(t.roots[1].join(f).is_file(), "{f}");
+    }
+    let d = t
+        .core
+        .gear_radio_setup(&RadioSetupParams {
+            device: Some(gx12.clone()),
+            ..Default::default()
+        })
+        .unwrap();
+    assert!(d.copies.is_empty());
+    assert!(d.files.is_empty(), "{:?}", d.files);
+}
