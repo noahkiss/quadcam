@@ -237,6 +237,10 @@ jobs:
 
   # The Playwright specs on the mocked IPC, in headless WebKit, split across four runners
   # (`--shard`). They need no macOS: the core is the mock, and no spec compares pixels.
+  # The job runs in Playwright's own image, which carries WebKit and its system packages,
+  # so no step reaches an Ubuntu apt mirror (one hung the install for up to 15 minutes about
+  # half the time). The image tag matches @playwright/test in app/package.json; renovate.json
+  # bumps both in one pull request.
   e2e:
     name: e2e (${{ matrix.shard }}/4)
     needs: proven
@@ -244,6 +248,9 @@ jobs:
       !cancelled() && needs.proven.outputs.by == '' &&
       (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name != github.repository)
     runs-on: ubuntu-latest
+    container:
+      image: mcr.microsoft.com/playwright:v1.63.0-noble
+      options: --ipc=host
     timeout-minutes: 15
     strategy:
       fail-fast: false
@@ -266,24 +273,10 @@ jobs:
           cache-dependency-path: app/pnpm-lock.yaml
 
       - run: pnpm install --frozen-lockfile
-      # An Ubuntu apt mirror can hang the dependency install for the whole job timeout
-      # (seen 2026-10-12: 14 min on InRelease; 2026-10-22: 15 min on one package), so each try
-      # gets 3 minutes and three tries. Playwright runs apt-get through sudo, out of reach of a
-      # timeout on pnpm, so the deps install runs as root: then timeout's kill reaches apt-get.
-      # apt keeps what it downloaded, so a later try resumes.
-      - name: Install WebKit
+      # A no-op when the image's WebKit is the one @playwright/test wants. It downloads the
+      # browser only if the two versions ever drift apart.
+      - name: Check WebKit
         run: timeout -k 10 180 pnpm exec playwright install webkit
-      - name: Install WebKit's system packages
-        run: |
-          printf 'Acquire::Retries "3";\nAcquire::http::Timeout "20";\nAcquire::https::Timeout "20";\n' \
-            | sudo tee /etc/apt/apt.conf.d/80-ci-timeouts
-          for try in 1 2 3; do
-            sudo timeout -k 10 180 "$(command -v node)" node_modules/@playwright/test/cli.js \
-              install-deps webkit && exit 0
-            echo "::warning::system package install try $try failed or timed out"
-            sudo dpkg --configure -a || true
-          done
-          exit 1
       # The axe specs run in the dark theme only on a branch or pull request, and in both on
       # main, rel-* and tags (e2e/fixtures.ts `axeSchemes`). Every other spec runs every time.
       - run: pnpm e2e --shard=${{ matrix.shard }}/4
