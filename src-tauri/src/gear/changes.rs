@@ -662,6 +662,7 @@ fn edit_name(e: &Edit) -> &'static str {
         Edit::ModelCopy { .. } | Edit::ModelDelete { .. } | Edit::ModelImport { .. } => {
             "Radio model"
         }
+        Edit::CardText { .. } => "Card script",
         Edit::Restore { .. } => "Restore",
         Edit::ElrsOptions { .. } => "ELRS",
         _ => "These",

@@ -495,6 +495,14 @@ pub enum Edit {
         #[serde(default)]
         template: Option<String>,
     },
+    /// A Lua script under `SCRIPTS/` (`SCRIPTS/TELEMETRY/volt.lua`) put on the card with this
+    /// text, or deleted (`text` None; a compiled `.luac` too). It joins model and radio
+    /// edits in one change.
+    CardText {
+        path: String,
+        #[serde(default)]
+        text: Option<String>,
+    },
     /// ExpressLRS options of a saved ELRS device, set over CRSF (design 6.4). Never the
     /// binding phrase.
     ElrsOptions { options: Vec<super::elrs::ElrsSet> },

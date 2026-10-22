@@ -73,6 +73,7 @@ fn op_key(op: &RadioOp) -> String {
         RadioOp::SetScalar { key, .. } => key.clone(),
         RadioOp::SelectModel { .. } => "currModel".into(),
         RadioOp::SetControlType { control, .. } => format!("type of {control}"),
+        RadioOp::RemoveFunctions { func } => format!("remove {func}"),
     }
 }
 

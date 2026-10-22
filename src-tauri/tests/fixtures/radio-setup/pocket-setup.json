@@ -1,0 +1,988 @@
+{
+ "board": "pocket",
+ "jobs": [
+  {
+   "id": "arm",
+   "label": "Arm",
+   "channel": 4,
+   "fits": [
+    "two_pos"
+   ],
+   "states": [
+    "disarmed",
+    "armed"
+   ]
+  },
+  {
+   "id": "osd",
+   "label": "OSD layout",
+   "channel": 5,
+   "fits": [
+    "three_pos"
+   ],
+   "states": [
+    "OSD profile 1",
+    "OSD profile 2",
+    "OSD profile 3"
+   ]
+  },
+  {
+   "id": "rates",
+   "label": "Rates",
+   "channel": 6,
+   "fits": [
+    "three_pos"
+   ],
+   "states": [
+    "FREE",
+    "RACE",
+    "CINE"
+   ]
+  },
+  {
+   "id": "finder",
+   "label": "Finder",
+   "channel": 7,
+   "fits": [
+    "two_pos",
+    "custom"
+   ],
+   "states": [
+    "off",
+    "beeper on"
+   ]
+  },
+  {
+   "id": "turtle",
+   "label": "Turtle",
+   "channel": 8,
+   "fits": [
+    "momentary"
+   ],
+   "states": [
+    "off",
+    "turtle while held"
+   ]
+  },
+  {
+   "id": "blackbox",
+   "label": "Blackbox erase",
+   "channel": 9,
+   "fits": [
+    "trim",
+    "momentary"
+   ],
+   "states": [
+    "off",
+    "erase while pressed"
+   ]
+  },
+  {
+   "id": "vtx",
+   "label": "VTX power",
+   "channel": 10,
+   "fits": [
+    "pot",
+    "slider",
+    "three_pos"
+   ],
+   "states": [
+    "25 mW",
+    "200 mW",
+    "400 mW"
+   ]
+  },
+  {
+   "id": "sim1",
+   "label": "Sim button 1",
+   "channel": 11,
+   "fits": [
+    "trim",
+    "momentary"
+   ],
+   "states": [
+    "released",
+    "pressed"
+   ]
+  },
+  {
+   "id": "sim2",
+   "label": "Sim button 2",
+   "channel": 12,
+   "fits": [
+    "trim",
+    "momentary"
+   ],
+   "states": [
+    "released",
+    "pressed"
+   ]
+  },
+  {
+   "id": "sim3",
+   "label": "Sim button 3",
+   "channel": 13,
+   "fits": [
+    "trim",
+    "momentary"
+   ],
+   "states": [
+    "released",
+    "pressed"
+   ]
+  },
+  {
+   "id": "sim4",
+   "label": "Sim button 4",
+   "channel": 14,
+   "fits": [
+    "trim",
+    "momentary"
+   ],
+   "states": [
+    "released",
+    "pressed"
+   ]
+  }
+ ],
+ "assignments": [
+  {
+   "job": "arm",
+   "control": "SA",
+   "high": 2
+  },
+  {
+   "job": "osd",
+   "control": "SB",
+   "high": 0
+  },
+  {
+   "job": "rates",
+   "control": "SC",
+   "high": 0
+  },
+  {
+   "job": "finder",
+   "control": "SD",
+   "high": 2
+  },
+  {
+   "job": "turtle",
+   "control": "SE",
+   "high": 2
+  },
+  {
+   "job": "blackbox",
+   "control": "TrimRudRight"
+  },
+  {
+   "job": "vtx",
+   "control": "P1"
+  },
+  {
+   "job": "sim1",
+   "control": "TrimAilRight"
+  },
+  {
+   "job": "sim2",
+   "control": "TrimEleUp"
+  },
+  {
+   "job": "sim3",
+   "control": "TrimEleDown"
+  },
+  {
+   "job": "sim4",
+   "control": "TrimAilLeft"
+  }
+ ],
+ "template": {
+  "timers": [
+   {
+    "index": 0,
+    "fields": [
+     {
+      "key": "start",
+      "value": "0"
+     },
+     {
+      "key": "swtch",
+      "value": "L1"
+     },
+     {
+      "key": "mode",
+      "value": "ON"
+     },
+     {
+      "key": "countdownBeep",
+      "value": "0"
+     },
+     {
+      "key": "minuteBeep",
+      "value": "0"
+     },
+     {
+      "key": "persistent",
+      "value": "2"
+     },
+     {
+      "key": "countdownStart",
+      "value": "0"
+     },
+     {
+      "key": "showElapsed",
+      "value": "0"
+     },
+     {
+      "key": "extraHaptic",
+      "value": "0"
+     },
+     {
+      "key": "name",
+      "value": "TOT"
+     }
+    ]
+   },
+   {
+    "index": 2,
+    "fields": [
+     {
+      "key": "start",
+      "value": "0"
+     },
+     {
+      "key": "swtch",
+      "value": "L1"
+     },
+     {
+      "key": "mode",
+      "value": "ON"
+     },
+     {
+      "key": "countdownBeep",
+      "value": "0"
+     },
+     {
+      "key": "minuteBeep",
+      "value": "0"
+     },
+     {
+      "key": "persistent",
+      "value": "0"
+     },
+     {
+      "key": "countdownStart",
+      "value": "0"
+     },
+     {
+      "key": "showElapsed",
+      "value": "0"
+     },
+     {
+      "key": "extraHaptic",
+      "value": "0"
+     },
+     {
+      "key": "name",
+      "value": "DVR"
+     }
+    ]
+   }
+  ],
+  "checklist_on": false,
+  "flags": [],
+  "mixes": [
+   {
+    "channel": 2,
+    "source": "I2",
+    "weight": 100,
+    "swtch": "NONE",
+    "mltpx": "ADD"
+   },
+   {
+    "channel": 2,
+    "source": "MAX",
+    "weight": -100,
+    "swtch": "L16",
+    "mltpx": "REPL",
+    "job": "turtle"
+   },
+   {
+    "channel": 4,
+    "source": "@arm",
+    "weight": 100,
+    "swtch": "NONE",
+    "mltpx": "ADD",
+    "job": "arm"
+   },
+   {
+    "channel": 4,
+    "source": "MAX",
+    "weight": -100,
+    "swtch": "L16",
+    "mltpx": "REPL",
+    "job": "turtle"
+   },
+   {
+    "channel": 4,
+    "source": "MAX",
+    "weight": 100,
+    "swtch": "L17",
+    "mltpx": "REPL",
+    "job": "turtle"
+   },
+   {
+    "channel": 4,
+    "source": "MAX",
+    "weight": -100,
+    "swtch": "L18",
+    "mltpx": "REPL",
+    "job": "turtle"
+   },
+   {
+    "channel": 5,
+    "source": "@osd",
+    "weight": 100,
+    "swtch": "NONE",
+    "mltpx": "ADD",
+    "job": "osd"
+   },
+   {
+    "channel": 6,
+    "source": "@rates",
+    "weight": 100,
+    "swtch": "NONE",
+    "mltpx": "ADD",
+    "job": "rates"
+   },
+   {
+    "channel": 7,
+    "source": "@finder",
+    "weight": 100,
+    "swtch": "NONE",
+    "mltpx": "ADD",
+    "job": "finder"
+   },
+   {
+    "channel": 8,
+    "source": "@turtle",
+    "weight": 100,
+    "swtch": "NONE",
+    "mltpx": "ADD",
+    "job": "turtle"
+   },
+   {
+    "channel": 9,
+    "source": "MAX",
+    "weight": 100,
+    "swtch": "@blackbox",
+    "mltpx": "ADD",
+    "job": "blackbox"
+   },
+   {
+    "channel": 10,
+    "source": "@vtx",
+    "weight": 100,
+    "swtch": "NONE",
+    "mltpx": "ADD",
+    "job": "vtx"
+   },
+   {
+    "channel": 11,
+    "source": "MAX",
+    "weight": 100,
+    "swtch": "@sim1",
+    "mltpx": "ADD",
+    "job": "sim1"
+   },
+   {
+    "channel": 12,
+    "source": "MAX",
+    "weight": 100,
+    "swtch": "@sim2",
+    "mltpx": "ADD",
+    "job": "sim2"
+   },
+   {
+    "channel": 13,
+    "source": "MAX",
+    "weight": 100,
+    "swtch": "@sim3",
+    "mltpx": "ADD",
+    "job": "sim3"
+   },
+   {
+    "channel": 14,
+    "source": "MAX",
+    "weight": 100,
+    "swtch": "@sim4",
+    "mltpx": "ADD",
+    "job": "sim4"
+   },
+   {
+    "channel": 15,
+    "source": "MAX",
+    "weight": 100,
+    "swtch": "NONE",
+    "mltpx": "ADD"
+   }
+  ],
+  "logical_switches": [
+   {
+    "index": 0,
+    "ls": {
+     "func": "FUNC_STICKY",
+     "def": "L22,!L13",
+     "andsw": "NONE",
+     "delay": 0,
+     "duration": 0
+    },
+    "job": "arm"
+   },
+   {
+    "index": 1,
+    "ls": {
+     "func": "FUNC_AND",
+     "def": "L4,L5",
+     "andsw": "NONE",
+     "delay": 0,
+     "duration": 0
+    }
+   },
+   {
+    "index": 2,
+    "ls": {
+     "func": "FUNC_AND",
+     "def": "L4,L6",
+     "andsw": "NONE",
+     "delay": 0,
+     "duration": 0
+    }
+   },
+   {
+    "index": 3,
+    "ls": {
+     "func": "FUNC_VPOS",
+     "def": "tele({RxBt}),10",
+     "andsw": "NONE",
+     "delay": 0,
+     "duration": 0
+    }
+   },
+   {
+    "index": 4,
+    "ls": {
+     "func": "FUNC_VNEG",
+     "def": "tele({RxBt}),35",
+     "andsw": "NONE",
+     "delay": 20,
+     "duration": 0
+    }
+   },
+   {
+    "index": 5,
+    "ls": {
+     "func": "FUNC_VNEG",
+     "def": "tele({RxBt}),33",
+     "andsw": "NONE",
+     "delay": 20,
+     "duration": 0
+    }
+   },
+   {
+    "index": 6,
+    "ls": {
+     "func": "FUNC_EDGE",
+     "def": "@finder.hi,0,<",
+     "andsw": "NONE",
+     "delay": 0,
+     "duration": 0
+    },
+    "job": "finder"
+   },
+   {
+    "index": 7,
+    "ls": {
+     "func": "FUNC_EDGE",
+     "def": "@finder.lo,0,<",
+     "andsw": "NONE",
+     "delay": 0,
+     "duration": 0
+    },
+    "job": "finder"
+   },
+   {
+    "index": 8,
+    "ls": {
+     "func": "FUNC_VNEG",
+     "def": "tele({RxBt}),36",
+     "andsw": "L21",
+     "delay": 20,
+     "duration": 0
+    }
+   },
+   {
+    "index": 9,
+    "ls": {
+     "func": "FUNC_VPOS",
+     "def": "tele({RQly}),0",
+     "andsw": "NONE",
+     "delay": 0,
+     "duration": 0
+    }
+   },
+   {
+    "index": 10,
+    "ls": {
+     "func": "FUNC_AND",
+     "def": "L10,@blackbox",
+     "andsw": "NONE",
+     "delay": 0,
+     "duration": 0
+    },
+    "job": "blackbox"
+   },
+   {
+    "index": 11,
+    "ls": {
+     "func": "FUNC_AND",
+     "def": "L10,TrimThrUp",
+     "andsw": "NONE",
+     "delay": 0,
+     "duration": 0
+    }
+   },
+   {
+    "index": 12,
+    "ls": {
+     "func": "FUNC_VPOS",
+     "def": "ch(@arm.ch),0",
+     "andsw": "NONE",
+     "delay": 0,
+     "duration": 0
+    },
+    "job": "arm"
+   },
+   {
+    "index": 13,
+    "ls": {
+     "func": "FUNC_AND",
+     "def": "@turtle.hi,L15",
+     "andsw": "NONE",
+     "delay": 2,
+     "duration": 0
+    },
+    "job": "turtle"
+   },
+   {
+    "index": 14,
+    "ls": {
+     "func": "FUNC_VNEG",
+     "def": "Thr,-90",
+     "andsw": "NONE",
+     "delay": 0,
+     "duration": 0
+    },
+    "job": "turtle"
+   },
+   {
+    "index": 15,
+    "ls": {
+     "func": "FUNC_STICKY",
+     "def": "L14,!@turtle.hi",
+     "andsw": "NONE",
+     "delay": 0,
+     "duration": 0
+    },
+    "job": "turtle"
+   },
+   {
+    "index": 16,
+    "ls": {
+     "func": "FUNC_AND",
+     "def": "L16,ON",
+     "andsw": "NONE",
+     "delay": 1,
+     "duration": 0
+    },
+    "job": "turtle"
+   },
+   {
+    "index": 17,
+    "ls": {
+     "func": "FUNC_EDGE",
+     "def": "L16,0,-",
+     "andsw": "NONE",
+     "delay": 0,
+     "duration": 2
+    },
+    "job": "turtle"
+   },
+   {
+    "index": 18,
+    "ls": {
+     "func": "FUNC_VPOS",
+     "def": "Tmr3,479",
+     "andsw": "NONE",
+     "delay": 0,
+     "duration": 0
+    }
+   },
+   {
+    "index": 19,
+    "ls": {
+     "func": "FUNC_EDGE",
+     "def": "L13,0,-",
+     "andsw": "L19",
+     "delay": 0,
+     "duration": 0
+    }
+   },
+   {
+    "index": 20,
+    "ls": {
+     "func": "FUNC_AND",
+     "def": "@rates.mid,L4",
+     "andsw": "NONE",
+     "delay": 0,
+     "duration": 0
+    },
+    "job": "rates"
+   },
+   {
+    "index": 21,
+    "ls": {
+     "func": "FUNC_AND",
+     "def": "L13,L10",
+     "andsw": "NONE",
+     "delay": 0,
+     "duration": 0
+    },
+    "job": "arm"
+   }
+  ],
+  "functions": [
+   {
+    "swtch": "@rates.lo",
+    "func": "PLAY_TRACK",
+    "def": "free,1,!1x",
+    "job": "rates"
+   },
+   {
+    "swtch": "@rates.mid",
+    "func": "PLAY_TRACK",
+    "def": "race,1,!1x",
+    "job": "rates"
+   },
+   {
+    "swtch": "@rates.hi",
+    "func": "PLAY_TRACK",
+    "def": "cine,1,!1x",
+    "job": "rates"
+   },
+   {
+    "swtch": "@finder.hi",
+    "func": "PLAY_TRACK",
+    "def": "finder,1,!1x",
+    "job": "finder"
+   },
+   {
+    "swtch": "L7",
+    "func": "SET_SCREEN",
+    "def": "3,1,1x",
+    "job": "finder"
+   },
+   {
+    "swtch": "L8",
+    "func": "SET_SCREEN",
+    "def": "0,1,1x",
+    "job": "finder"
+   },
+   {
+    "swtch": "L16",
+    "func": "PLAY_TRACK",
+    "def": "turtle,1,1x",
+    "job": "turtle"
+   },
+   {
+    "swtch": "L16",
+    "func": "HAPTIC",
+    "def": "1,1,1x",
+    "job": "turtle"
+   },
+   {
+    "swtch": "L1",
+    "func": "LOGS",
+    "def": "1,1"
+   },
+   {
+    "swtch": "L2",
+    "func": "HAPTIC",
+    "def": "1,1,10"
+   },
+   {
+    "swtch": "L3",
+    "func": "HAPTIC",
+    "def": "2,1,5"
+   },
+   {
+    "swtch": "L20",
+    "func": "PLAY_TRACK",
+    "def": "stopdvr,1,1x"
+   },
+   {
+    "swtch": "L20",
+    "func": "HAPTIC",
+    "def": "2,1,1x"
+   },
+   {
+    "swtch": "L20",
+    "func": "RESET",
+    "def": "Tmr3,1"
+   },
+   {
+    "swtch": "L9",
+    "func": "PLAY_TRACK",
+    "def": "battlow,1,1x"
+   }
+  ],
+  "keep_functions": [
+   {
+    "swtch": "L13",
+    "func": "PLAY_TRACK",
+    "def": "armed,1,1x",
+    "job": "arm"
+   },
+   {
+    "swtch": "!L13",
+    "func": "PLAY_TRACK",
+    "def": "disarm,1,!1x",
+    "job": "arm"
+   },
+   {
+    "swtch": "L13",
+    "func": "HAPTIC",
+    "def": "1,1,1x",
+    "job": "arm"
+   },
+   {
+    "swtch": "L2",
+    "func": "PLAY_VALUE",
+    "def": "tele({RxBt}),1,10"
+   },
+   {
+    "swtch": "L3",
+    "func": "PLAY_TRACK",
+    "def": "lowbat,1,5"
+   },
+   {
+    "swtch": "L12",
+    "func": "PLAY_VALUE",
+    "def": "tele({RxBt}),1,1x"
+   },
+   {
+    "swtch": "TrimThrDown",
+    "func": "PLAY_VALUE",
+    "def": "Tmr2,1,1x"
+   },
+   {
+    "swtch": "TrimRudLeft",
+    "func": "RESET",
+    "def": "Tmr2,1"
+   },
+   {
+    "swtch": "L11",
+    "func": "PLAY_TRACK",
+    "def": "bbclear,1,1x",
+    "job": "blackbox"
+   },
+   {
+    "swtch": "TrimRudLeft",
+    "func": "PLAY_TRACK",
+    "def": "tmrreset,1,1x"
+   }
+  ],
+  "owns": {
+   "funcs": [
+    "SET_SCREEN",
+    "LOGS"
+   ],
+   "tracks": [
+    "battlow",
+    "cine",
+    "easy",
+    "finder",
+    "free",
+    "headsup",
+    "indoor",
+    "longrng",
+    "outdoor",
+    "race",
+    "stopdvr",
+    "turtle"
+   ],
+   "switch_funcs": [
+    {
+     "swtch": "L16",
+     "func": "HAPTIC"
+    },
+    {
+     "swtch": "L2",
+     "func": "HAPTIC"
+    },
+    {
+     "swtch": "L20",
+     "func": "HAPTIC"
+    },
+    {
+     "swtch": "L23",
+     "func": "HAPTIC"
+    },
+    {
+     "swtch": "L3",
+     "func": "HAPTIC"
+    }
+   ],
+   "def_prefixes": [
+    {
+     "func": "RESET",
+     "def": "Tmr3,"
+    }
+   ]
+  },
+  "switch_warnings": [
+   "arm"
+  ],
+  "screens": [
+   {
+    "type": "script",
+    "index": 1,
+    "script": "volt"
+   },
+   {
+    "type": "script",
+    "index": 2,
+    "script": "finder"
+   }
+  ],
+  "lua": [
+   {
+    "name": "volt",
+    "kind": "volt",
+    "timer": 1
+   },
+   {
+    "name": "finder",
+    "kind": "finder",
+    "job": "finder"
+   }
+  ]
+ },
+ "aircraft": [
+  {
+   "file": "model00.yml",
+   "name": "AIR65 II",
+   "was_named": [
+    "ELRS INT"
+   ],
+   "model_id": 0,
+   "checklist": "=DVR recording\n=Props+canopy tight\n=Antenna clear\n"
+  },
+  {
+   "file": "model01.yml",
+   "name": "METEOR75",
+   "model_id": 1,
+   "copy_from": "model00.yml",
+   "checklist": "=Props+canopy tight\n=Antenna clear\n",
+   "drop_timers": [
+    2
+   ],
+   "logical_switches": [
+    {
+     "index": 4,
+     "ls": {
+      "func": "FUNC_VNEG",
+      "def": "tele({RxBt}),33",
+      "andsw": "NONE",
+      "delay": 30,
+      "duration": 0
+     }
+    },
+    {
+     "index": 5,
+     "ls": {
+      "func": "FUNC_VNEG",
+      "def": "tele({RxBt}),31",
+      "andsw": "NONE",
+      "delay": 30,
+      "duration": 0
+     }
+    },
+    {
+     "index": 8,
+     "ls": null
+    },
+    {
+     "index": 18,
+     "ls": null
+    },
+    {
+     "index": 19,
+     "ls": null
+    },
+    {
+     "index": 20,
+     "ls": null
+    },
+    {
+     "index": 22,
+     "ls": {
+      "func": "FUNC_VPOS",
+      "def": "tele({Capa}),400",
+      "andsw": "L13",
+      "delay": 0,
+      "duration": 0
+     }
+    }
+   ],
+   "drop_functions": [
+    "L20",
+    "L9"
+   ],
+   "functions": [
+    {
+     "swtch": "L23",
+     "func": "PLAY_TRACK",
+     "def": "battlow,1,30"
+    },
+    {
+     "swtch": "L23",
+     "func": "HAPTIC",
+     "def": "1,1,1x"
+    }
+   ]
+  }
+ ],
+ "radio": {
+  "scalars": [
+   {
+    "key": "hapticMode",
+    "value": "mode_nokeys"
+   },
+   {
+    "key": "speakerVolume",
+    "value": "22"
+   },
+   {
+    "key": "wavVolume",
+    "value": "4"
+   }
+  ],
+  "select_model": "model00.yml",
+  "remove_functions": [
+   "VOLUME"
+  ],
+  "control_types": true,
+  "delete_other_models": true
+ }
+}

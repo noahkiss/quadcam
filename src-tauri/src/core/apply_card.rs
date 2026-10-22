@@ -348,6 +348,7 @@ impl Core {
                 | Edit::ModelCopy { .. }
                 | Edit::ModelDelete { .. }
                 | Edit::ModelImport { .. }
+                | Edit::CardText { .. }
                 | Edit::CardFiles { .. }
                 | Edit::Restore { .. } => {}
                 other => {

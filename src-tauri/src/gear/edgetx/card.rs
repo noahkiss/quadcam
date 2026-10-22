@@ -52,6 +52,9 @@ pub enum RadioOp {
     /// takes `none`, `2pos`, `3pos` or `toggle` (written in the file's own case); a pot
     /// `none`, `with_detent` or `without_detent`; a slider `none` or `slider`.
     SetControlType { control: String, value: String },
+    /// Removes every radio special function (`customFn`) with this function (`VOLUME`); the
+    /// others keep their order.
+    RemoveFunctions { func: String },
 }
 
 /// `radio.yml` keys `SetScalar` refuses.
@@ -680,6 +683,7 @@ pub fn apply_radio_op(
             }
             Ok(())
         }
+        RadioOp::RemoveFunctions { func } => remove_radio_functions(d, func),
     }
 }
 
@@ -737,6 +741,41 @@ fn set_control_type(d: &mut Doc, control: &str, value: &str) -> Result<(), Refus
         want
     };
     d.set_line(ty.line, format!("{}type: {new}", " ".repeat(ty.indent)));
+    Ok(())
+}
+
+
+/// Drops the radio's special functions with function `func`; the rest are renumbered in order.
+fn remove_radio_functions(d: &mut Doc, func: &str) -> Result<(), Refusal> {
+    let Some(n) = d.top("customFn")? else {
+        return Ok(());
+    };
+    let items = super::model::indexed(d, &n, false)?;
+    let keep: Vec<_> = items
+        .iter()
+        .filter(|(_, f)| super::model::get(f, "func") != func)
+        .collect();
+    if keep.len() == items.len() {
+        return Ok(());
+    }
+    let mut body = Vec::new();
+    let (ipad, fpad) = n
+        .children
+        .first()
+        .map(|c| {
+            (
+                c.indent,
+                c.children.first().map(|g| g.indent).unwrap_or(c.indent + 3),
+            )
+        })
+        .unwrap_or((3, 6));
+    for (i, (_, f)) in keep.iter().enumerate() {
+        body.push(format!("{}{i}:", " ".repeat(ipad)));
+        for x in f.iter() {
+            body.push(format!("{}{}: {}", " ".repeat(fpad), x.key, x.value));
+        }
+    }
+    d.splice(n.body(), body);
     Ok(())
 }
 
@@ -832,6 +871,19 @@ impl Work<'_> {
                 self.raw.insert(path, None);
                 Ok(())
             }
+            Edit::CardText { path, text } => {
+                check_script_path(path, text.is_some())?;
+                let bytes = match text {
+                    Some(t) => Some(
+                        to_latin1(t)
+                            .ok_or_else(|| bad(format!("{path} holds Latin-1 characters only.")))?,
+                    ),
+                    None => None,
+                };
+                self.docs.remove(path);
+                self.raw.insert(path.clone(), bytes);
+                Ok(())
+            }
             other => Err(bad(format!(
                 "{} is not an edit QuadCam's EdgeTX engine plans.",
                 serde_json::to_value(other)
@@ -849,7 +901,9 @@ impl Work<'_> {
                 self.select_asked = true;
                 self.exists(&format!("MODELS/{f}"))
             }
-            RadioOp::SetScalar { .. } | RadioOp::SetControlType { .. } => false,
+            RadioOp::SetScalar { .. }
+            | RadioOp::SetControlType { .. }
+            | RadioOp::RemoveFunctions { .. } => false,
         };
         let mut warnings = std::mem::take(&mut self.warnings);
         let r = self
@@ -1097,6 +1151,26 @@ pub fn effective_links(
     }
     out.sort_by(|a, b| a.from.cmp(&b.from));
     out
+}
+
+/// A `CardText` path: inside `SCRIPTS/`, a `.lua` file to put or delete, or a `.luac` file to
+/// delete (EdgeTX compiles one beside each script it runs).
+pub fn check_script_path(path: &str, put: bool) -> Result<(), Refusal> {
+    let lower = path.to_ascii_lowercase();
+    let ok = inside_card(path)
+        && path.starts_with("SCRIPTS/")
+        && !path.split('/').any(|c| c.starts_with('.'))
+        && (lower.ends_with(".lua") || (!put && lower.ends_with(".luac")));
+    if ok {
+        Ok(())
+    } else {
+        Err(Refusal::new(
+            RefusalCode::ShapeUnknown,
+            format!(
+                "{path:?} is not a Lua script under SCRIPTS/ (a .luac only goes away); nothing was written."
+            ),
+        ))
+    }
 }
 
 // ----- diff -----
