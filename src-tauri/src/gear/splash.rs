@@ -35,8 +35,8 @@ const HEADER: usize = 6;
 /// EdgeTX boards with a 128 x 64, 1-bit screen. Any other board (colour radios, the wide
 /// 212 x 64 screens) is refused: its splash format is not supported yet.
 pub const MONO_128X64: &[&str] = &[
-    "pocket", "boxer", "zorro", "tx12", "tx12mk2", "mt12", "t12", "t14", "t8", "tlite", "tpro",
-    "tpros", "lr3pro", "x7", "xlite", "xlites",
+    "pocket", "gx12", "boxer", "zorro", "tx12", "tx12mk2", "mt12", "t12", "t14", "t8", "tlite",
+    "tpro", "tpros", "lr3pro", "x7", "xlite", "xlites",
 ];
 
 /// True when the board's splash is a 128 x 64, 1-bit picture.

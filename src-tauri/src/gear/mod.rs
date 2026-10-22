@@ -31,6 +31,8 @@
 //! - `blackbox`: pulled blackbox flash images: records, the pairing with flights.
 //! - `backup`: snapshots: take, list, read, diff, retain, prune, export, import old folders.
 //! - `radiologs`: each radio log kept once per radio, outside snapshots.
+//! - `radios`: each EdgeTX radio board's facts (chip, DFU entry, storage, splash, internal
+//!   ELRS target), one table that the flash, the DFU link and the ELRS plan read.
 //! - `health`: the card check (`diskutil verifyVolume`) and repair, and their log.
 //!
 //! `Env` is what Gear reaches outside the process (serial ports, volumes, presence, the cue
@@ -61,6 +63,7 @@ pub mod packs;
 pub mod preflight;
 pub mod radio_hid;
 pub mod radiologs;
+pub mod radios;
 pub mod rates;
 pub mod report;
 pub mod serial;

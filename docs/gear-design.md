@@ -760,6 +760,13 @@ logical switches a change owns is recorded in the change, so a later change can 
   no official macOS `dfu-util` binary to download, and DFU is a published USB class. It erases
   the pages it writes, writes, reads back and compares before it leaves.
 - Size guard per board (for the B&W Pocket: 400-1000 KB), board name check in the binary.
+- **Radio profiles** (`gear/radios.rs`, shipped with GX12 flashing): one row per board holds
+  the chip, the firmware format and size guard, the ROM DFU entry (plug-in, or a button combo
+  such as the GX12's SG) with the steps the UI shows, the bootloader entry, storage kind and
+  write route, splash mechanism, internal ELRS target and upload methods, USB product name and
+  last EdgeTX series. The flash, read, restore and DFU link take their DFU text from it; the
+  ELRS flash plan takes a radio's internal-module target from it. `compat.rs` still decides
+  what is flashed: Pocket 2.12.4 and GX12 2.12.5.
 
 ### 6.6 Sim file formats
 

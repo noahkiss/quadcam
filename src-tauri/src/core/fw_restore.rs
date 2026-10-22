@@ -27,6 +27,7 @@ use crate::gear::model::{
     ApplyPlan, ChangeStatus, Check, Device, DeviceKind, DiffItem, Refusal, RefusalCode,
     StagedChange,
 };
+use crate::gear::radios;
 use anyhow::{anyhow, bail, Result};
 use serde::{Deserialize, Serialize};
 use specta::Type;
@@ -273,9 +274,10 @@ impl Core {
         warnings.push(
             "A radio in DFU mode shows no name. QuadCam writes the one radio in DFU mode; check it is the radio you picked.".into(),
         );
-        warnings.push(
-            "QuadCam reads the radio's current firmware over DFU twice first. If a saved copy already holds it, that copy is the backup; otherwise QuadCam saves a new copy and reads it back. It erases nothing until then. If a restore fails, the radio's ROM bootloader still answers over USB (turn it off, plug in USB) and you can restore again. Restoring has not been tried on a real radio yet.".into(),
-        );
+        warnings.push(format!(
+            "QuadCam reads the radio's current firmware over DFU twice first. If a saved copy already holds it, that copy is the backup; otherwise QuadCam saves a new copy and reads it back. It erases nothing until then. If a restore fails, the radio's ROM bootloader still answers over USB and you can restore again. To put the radio in DFU mode: {} Restoring has not been tried on a real radio yet.",
+            radios::dfu_hint(Some(&board))
+        ));
 
         let diff = vec![
             DiffItem::Version {

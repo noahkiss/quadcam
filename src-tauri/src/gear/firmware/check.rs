@@ -384,6 +384,10 @@ pub struct FirmwareStatus {
     /// For an FC: what the channel means for it, when that needs saying.
     #[serde(default)]
     pub channel_note: Option<String>,
+    /// For a radio: how to put it in DFU mode, one step each (`gear::radios`); empty for a
+    /// board QuadCam has no profile for.
+    #[serde(default)]
+    pub dfu_steps: Vec<String>,
 }
 
 fn product_of(kind: DeviceKind) -> Option<(&'static str, Option<Product>)> {
@@ -573,6 +577,11 @@ fn statuses_official(devices: &[Device], latest: &Latest) -> Vec<FirmwareStatus>
                 vendor_file: None,
                 official: None,
                 channel_note: None,
+                dfu_steps: if d.kind == DeviceKind::Radio {
+                    crate::gear::radios::dfu_steps(d.identity.board.as_deref())
+                } else {
+                    Vec::new()
+                },
             })
         })
         .collect()

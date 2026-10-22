@@ -5,6 +5,7 @@
 use super::Core;
 use crate::gear::detect::STM32_DFU;
 use crate::gear::model::{Device, DeviceKind};
+use crate::gear::radios;
 use anyhow::{bail, Result};
 use serde::{Deserialize, Serialize};
 
@@ -51,17 +52,23 @@ pub fn last_seen_radio(devices: &[Device]) -> Option<&Device> {
 
 impl Core {
     /// The DFU serial of the one radio in DFU mode now, or why there is none.
-    pub(super) fn dfu_serial_now(&self) -> Result<String> {
+    /// `board` picks the DFU instruction (the named radio's board, when known).
+    pub(super) fn dfu_serial_now(&self, board: Option<&str>) -> Result<String> {
         let now: Vec<_> = (self.gear.dfu)()
             .into_iter()
             .filter(|d| (d.vid, d.pid) == STM32_DFU)
             .collect();
         match now.as_slice() {
-            [] => bail!("No radio is in DFU mode. Turn the radio off, then plug in the USB cable (do not hold the trim buttons, which start the EdgeTX bootloader instead). Wait a few seconds."),
+            [] => bail!("No radio is in DFU mode. {}", radios::dfu_hint(board)),
             [one] => one.serial.clone().filter(|s| !s.is_empty()).ok_or_else(|| {
-                anyhow::anyhow!("The radio in DFU mode reports no serial number, so it cannot be linked.")
+                anyhow::anyhow!(
+                    "The radio in DFU mode reports no serial number, so it cannot be linked."
+                )
             }),
-            n => bail!("{} radios are in DFU mode; unplug all but one, or name the serial.", n.len()),
+            n => bail!(
+                "{} radios are in DFU mode; unplug all but one, or name the serial.",
+                n.len()
+            ),
         }
     }
 
@@ -100,7 +107,12 @@ impl Core {
         }
         let serial = match p.serial.as_deref().map(str::trim).filter(|s| !s.is_empty()) {
             Some(s) => s.to_string(),
-            None => self.dfu_serial_now()?,
+            None => {
+                let board = named
+                    .and_then(|id| devices.iter().find(|d| d.id == id))
+                    .and_then(|d| d.identity.board.as_deref());
+                self.dfu_serial_now(board)?
+            }
         };
         let (mut d, how) = match named {
             Some(id) => (

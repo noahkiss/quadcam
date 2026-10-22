@@ -18,10 +18,14 @@ interface Props {
 
 const errText = (e: unknown) => (typeof e === "string" ? e : e instanceof Error ? e.message : String(e));
 const NONE = "";
+/** The steps for a radio with no profile in the core. */
+const PLUG_IN = ["Turn the radio off.", "Plug the radio into this Mac with the USB cable. Do not hold any buttons.", "Wait a few seconds."];
 
 export function ReadFirmware({ radios, onClose }: Props) {
   const [pick, setPick] = useState<string | null>(null);
   const device = pick ?? radios[0]?.device ?? NONE;
+  const own = radios.find((r) => r.device === device)?.dfu_steps ?? [];
+  const steps = own.length > 0 ? own : PLUG_IN;
   const [busy, setBusy] = useState(false);
   const [progress, setProgress] = useState(0);
   const [result, setResult] = useState<FirmwareRead | null>(null);
@@ -70,9 +74,9 @@ export function ReadFirmware({ radios, onClose }: Props) {
     >
       <div className={styles.sheet}>
       <ol className={styles.steps} aria-label="Steps">
-        <li>Turn the radio off.</li>
-        <li>Plug the radio into this Mac with the USB cable. Do not hold any buttons.</li>
-        <li>Wait a few seconds.</li>
+        {steps.map((step) => (
+          <li key={step}>{step}</li>
+        ))}
         <li>Select Read firmware.</li>
       </ol>
       <div className={styles.bar}>

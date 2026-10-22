@@ -9,6 +9,17 @@ import * as bf from "./bfflash";
 import type { ApplyPlan, ApplyReport, Check, Device, FirmwareCopy, FirmwareRead, FirmwareRestoreParams, FirmwareStatus, FirmwareView, FlashParams, FwCopy, SplashParams, SplashPreview } from "../types";
 import type { VendorFile } from "../../bindings";
 
+/** The DFU steps of each radio profile (`gear::radios` in the core). */
+const DFU_STEPS: Record<string, string[]> = {
+  pocket: ["Turn the radio off.", "Plug the radio into this Mac with the USB cable. Do not hold any buttons.", "Wait a few seconds."],
+  gx12: [
+    "Turn the radio off.",
+    "Plug the USB cable into the radio's top port and into this Mac.",
+    "Hold SG, tap the power button, then let go of SG. The screen stays dark.",
+    "Wait a few seconds.",
+  ],
+};
+
 export interface MockFirmware {
   /** What the releases say now. */
   releases: { edgetx: string | null; betaflight: string | null; elrs: string | null };
@@ -145,7 +156,7 @@ export function view(st: MockFirmware, devices: Device[], check: boolean | null,
       if (!r) flashable = true;
       else if (state === "update") note = `QuadCam will not flash it: ${r.reason}`;
     } else if (state === "update") note = `QuadCam checks ${product} versions. It does not flash them.`;
-    const row: FirmwareStatus = { device: d.id, kind: d.kind, name: d.name || `Unnamed ${d.kind === "radio" ? "Radio" : d.kind === "fc" ? "FC" : "ELRS"}`, product, board: idOf(d).board ?? null, installed, latest: newest, state, flashable, note };
+    const row: FirmwareStatus = { device: d.id, kind: d.kind, name: d.name || `Unnamed ${d.kind === "radio" ? "Radio" : d.kind === "fc" ? "FC" : "ELRS"}`, product, board: idOf(d).board ?? null, installed, latest: newest, state, flashable, note, dfu_steps: d.kind === "radio" ? (DFU_STEPS[(idOf(d).board ?? "").toLowerCase()] ?? []) : [] };
     if (d.kind === "fc") vendorRowOf(st, d, row, !!latest.checked_at);
     rows.push(row);
   }

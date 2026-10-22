@@ -131,16 +131,24 @@ fn bundle_zip(dir: &Path) -> PathBuf {
         fixtures::layout().to_string(),
     )
     .unwrap();
-    let tx = root.join("FCC").join("Unified_ESP32_2400_TX");
-    std::fs::create_dir_all(&tx).unwrap();
-    std::fs::write(tx.join("firmware.bin"), fixtures::stock_esp32(4)).unwrap();
-    for f in ["bootloader.bin", "partitions.bin", "boot_app0.bin"] {
-        std::fs::write(tx.join(f), f.as_bytes()).unwrap();
+    for (firmware, salt) in [("Unified_ESP32_2400_TX", 4), ("Unified_ESP32_LR1121_TX", 6)] {
+        let tx = root.join("FCC").join(firmware);
+        std::fs::create_dir_all(&tx).unwrap();
+        std::fs::write(tx.join("firmware.bin"), fixtures::stock_esp32(salt)).unwrap();
+        for f in ["bootloader.bin", "partitions.bin", "boot_app0.bin"] {
+            std::fs::write(tx.join(f), f.as_bytes()).unwrap();
+        }
     }
     std::fs::create_dir_all(root.join("hardware/TX")).unwrap();
     std::fs::write(
         root.join("hardware/TX/Radio.json"),
         json!({"serial_rx": 13, "serial_tx": 13, "power_values": [10, 14]}).to_string(),
+    )
+    .unwrap();
+    std::fs::write(
+        root.join("hardware/TX/GX12.json"),
+        json!({"serial_rx": 3, "serial_tx": 1, "radio_nss_2": 13, "power_values": [120, 100]})
+            .to_string(),
     )
     .unwrap();
     let zip = dir.join("firmware.zip");
@@ -198,8 +206,18 @@ fn set_settings(dir: &Path, v: serde_json::Value) {
 /// A bench with a radio (a Pocket-like transmitter module behind it) and an FC (a receiver
 /// behind it), both on serial.
 fn bench(preview: bool, esptool: bool) -> (Bench, FakeHost, FakeHost) {
+    bench_with(preview, esptool, "pocket", "RM Pocket")
+}
+
+/// `bench` with the radio's board and the name its internal module reports.
+fn bench_with(
+    preview: bool,
+    esptool: bool,
+    board: &str,
+    module: &str,
+) -> (Bench, FakeHost, FakeHost) {
     let dir = tempfile::tempdir().unwrap();
-    let tx = FakeHost::radio(FakeElrs::tx("RM Radio", "4.1.0"));
+    let tx = FakeHost::radio(FakeElrs::tx(module, "4.1.0")).with_board(board);
     let (msp, fc_id) = msp_fc(0x11);
     let rx = FakeHost::fc(FakeElrs::rx("Vendor 2.4GHz AIO RX", "3.5.3")).with_msp(msp);
     let radio_ports = tx.ports("/dev/cu.radio");
@@ -365,7 +383,7 @@ fn the_transmitter_module_is_read_through_the_radio() {
     let (b, tx, _) = bench(true, true);
     let r = read(&b, &b.radio).unwrap();
     assert_eq!(r.snapshot.role, "tx");
-    assert_eq!(r.snapshot.name, "RM Radio");
+    assert_eq!(r.snapshot.name, "RM Pocket");
     assert_eq!(r.snapshot.version.as_deref(), Some("4.1.0"));
     assert_eq!(r.snapshot.version_source.as_deref(), Some("parameters"));
     let keys: Vec<&str> = r.snapshot.options.iter().map(|o| o.key.as_str()).collect();
@@ -394,7 +412,7 @@ fn the_transmitter_module_is_read_through_the_radio() {
     let d = b.core.gear_store().device(&r.device).unwrap().unwrap();
     assert_eq!(d.kind, DeviceKind::ElrsTx);
     assert_eq!(d.identity.version.as_deref(), Some("4.1.0"));
-    assert_eq!(d.identity.target.as_deref(), Some("RM Radio"));
+    assert_eq!(d.identity.target.as_deref(), Some("RM Pocket"));
     // The radio stays in passthrough: a second job needs it restarted.
     assert!(read(&b, &b.radio).is_err());
     tx.restart();
@@ -506,7 +524,7 @@ fn an_fc_that_is_not_the_host_or_does_not_identify_itself_refuses() {
 #[test]
 fn a_device_that_does_not_answer_is_an_error_with_a_hint() {
     let (b, _, _) = bench(true, true);
-    let dead = FakeHost::radio(FakeElrs::tx("RM Radio", "4.1.0").mute());
+    let dead = FakeHost::radio(FakeElrs::tx("RM Pocket", "4.1.0").mute());
     let env = quadcam_lib::gear::Env::fake(vec![], Arc::new(dead.ports("/dev/cu.radio")));
     let core = Core::new(
         b.dir.path().join("cache3"),
@@ -1106,6 +1124,68 @@ fn a_module_flash_checks_the_radio_board_before_the_boot_pin() {
     assert_ne!(b.core.gear_elrs_flash_plan(&p).unwrap().digest, plan.digest);
 }
 
+#[test]
+fn a_gx12_module_flashes_its_boards_target_through_the_edgetx_passthrough() {
+    let (b, tx, _) = bench_with(true, true, "gx12", "RM GX12 X-Band");
+    let id = read(&b, &b.radio).unwrap().device;
+    let (p, plan) = planned(&b, &id);
+    assert!(failed(&plan).is_empty(), "{:?}", plan.checks);
+    let text = serde_json::to_string(&plan.diff).unwrap();
+    assert!(
+        text.contains("RadioMaster GX12 2.4/900 TX (Unified_ESP32_LR1121_TX on esp32)"),
+        "{text}"
+    );
+    assert!(!plan.warnings.iter().any(|w| w.contains("calls itself")));
+    tx.restart();
+    let report = flash(&b, &p, &plan.digest).unwrap();
+    assert_eq!(report.status, ChangeStatus::Verified, "{}", report.message);
+    let calls = b.esptool.calls.lock().unwrap().clone();
+    let write = calls[1].join(" ");
+    assert!(write.contains("--chip esp32"), "{write}");
+    for at in ["0x1000", "0x8000", "0xe000", "0x10000"] {
+        assert!(write.contains(at), "{at} in {write}");
+    }
+    assert_eq!(tx.passthrough_baud(), Some(460_800));
+    let all = format!("{calls:?}{}", serde_json::to_string(&report).unwrap());
+    assert!(!all.contains(PHRASE));
+}
+
+#[test]
+fn the_radios_board_picks_the_module_target_not_the_name_it_reports() {
+    // A GX12 whose module reports another radio's name still gets the GX12's target.
+    let (b, _, _) = bench_with(true, true, "gx12", "RM Pocket");
+    let id = read(&b, &b.radio).unwrap().device;
+    let (_, plan) = planned(&b, &id);
+    assert!(failed(&plan).is_empty(), "{:?}", plan.checks);
+    let text = serde_json::to_string(&plan.diff).unwrap();
+    assert!(text.contains("RadioMaster GX12 2.4/900 TX"), "{text}");
+    assert!(
+        plan.warnings
+            .iter()
+            .any(|w| w.contains("calls itself `RM Pocket`")
+                && w.contains("radiomaster.tx_dual.gx12")),
+        "{:?}",
+        plan.warnings
+    );
+    let p = ElrsFlashParams {
+        device: id.clone(),
+        version: Some("4.1.0".into()),
+        sha256: None,
+        port: None,
+    };
+    // A board without a profile goes by the name: the Pocket's target here.
+    let root = b.core.gear_store().root().to_path_buf();
+    let mut snap = quadcam_lib::gear::elrs::load_snapshot(&root, &id).unwrap();
+    snap.host_board = Some("tx16s".into());
+    quadcam_lib::gear::elrs::save_snapshot(&root, &snap).unwrap();
+    let other = b.core.gear_elrs_flash_plan(&p).unwrap();
+    let text = serde_json::to_string(&other.diff).unwrap();
+    assert!(
+        text.contains("RadioMaster Pocket Internal 2.4GHz TX"),
+        "{text}"
+    );
+}
+
 fn stage_and_plan(b: &Bench, device: &str, edits: &[(&str, &str)]) -> (String, ApplyPlan) {
     let c = b
         .core
@@ -1153,7 +1233,7 @@ fn an_apply_refuses_when_a_list_was_reordered_since_the_read() {
 fn a_write_that_relists_another_option_is_followed_by_a_fresh_read() {
     let (b, tx, _) = bench(true, true);
     // Writing the packet rate reorders the switch modes, as a rate change can.
-    let device = FakeElrs::tx("RM Radio", "4.1.0").relist_on_write(1, 3, &["Wide", "Hybrid"]);
+    let device = FakeElrs::tx("RM Pocket", "4.1.0").relist_on_write(1, 3, &["Wide", "Hybrid"]);
     tx.replace_device(device.clone());
     let id = read(&b, &b.radio).unwrap().device;
     let (c, plan) = stage_and_plan(
@@ -1173,7 +1253,7 @@ fn a_write_that_relists_another_option_is_followed_by_a_fresh_read() {
 #[test]
 fn a_write_the_device_does_not_keep_fails_verify() {
     let (b, tx, _) = bench(true, true);
-    let device = FakeElrs::tx("RM Radio", "4.1.0").forget(1);
+    let device = FakeElrs::tx("RM Pocket", "4.1.0").forget(1);
     tx.replace_device(device.clone());
     let id = read(&b, &b.radio).unwrap().device;
     let (c, plan) = stage_and_plan(&b, &id, &[("packet_rate", "250hz")]);

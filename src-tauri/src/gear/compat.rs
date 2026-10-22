@@ -73,6 +73,14 @@ pub const PROVEN: &[Proven] = &[
         board: Some("pocket"),
         version: "2.12.4",
     },
+    // The GX12 on 2.12.5: the release image passes the same checks, and the same flash
+    // (read the 1 MB first, splash patched, write at 0x08000000, leave) worked on a real
+    // GX12 on 2026-10-22.
+    Proven {
+        product: Product::EdgetxFlash,
+        board: Some("gx12"),
+        version: "2.12.5",
+    },
     // Betaflight's CLI, by the serial runner, keyed by board and build: a vendor build on
     // one board says nothing about another board. Other boards are read-only.
     Proven {
@@ -90,6 +98,11 @@ pub const PROVEN: &[Proven] = &[
         product: Product::Splash,
         board: Some("pocket"),
         version: "2.12.4",
+    },
+    Proven {
+        product: Product::Splash,
+        board: Some("gx12"),
+        version: "2.12.5",
     },
     // ExpressLRS targets and sim file versions are added by the packages that prove them.
 ];
@@ -237,6 +250,19 @@ mod tests {
         }
         let e = check_writable(Product::EdgetxFlash, Some("tx16s"), Some("2.12.4")).unwrap_err();
         assert_eq!(e.code, RefusalCode::UnknownBoard);
+    }
+
+    #[test]
+    fn the_gx12_flashes_2_12_5_only() {
+        assert!(check_writable(Product::EdgetxFlash, Some("gx12"), Some("2.12.5")).is_ok());
+        assert!(check_writable(Product::EdgetxFlash, Some("GX12"), Some("v2.12.5")).is_ok());
+        assert!(check_writable(Product::Splash, Some("gx12"), Some("2.12.5")).is_ok());
+        let e = check_writable(Product::EdgetxFlash, Some("gx12"), Some("2.12.4")).unwrap_err();
+        assert_eq!(e.code, RefusalCode::UnknownVersion);
+        assert!(check_writable(Product::EdgetxFlash, Some("gx12"), Some("2.12.5-rc1")).is_err());
+        assert!(check_writable(Product::Splash, Some("gx12"), Some("2.12.4")).is_err());
+        // Each board's release is its own: the GX12's does not prove the Pocket's.
+        assert!(check_writable(Product::EdgetxFlash, Some("pocket"), Some("2.12.5")).is_err());
     }
 
     #[test]

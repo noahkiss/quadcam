@@ -28,14 +28,19 @@ const VERSION: &str = "2.12.4";
 
 /// A full image: a bootloader vector table, the firmware's at 0x8000, the splash markers.
 fn full_image(salt: u8) -> Vec<u8> {
+    board_image(salt, "pocket", VERSION)
+}
+
+/// `full_image` naming another board and release.
+fn board_image(salt: u8, board: &str, version: &str) -> Vec<u8> {
     let mut b = vec![salt; 600 * 1024];
     b[0..4].copy_from_slice(&0x2002_0000u32.to_le_bytes());
     b[4..8].copy_from_slice(&0x0800_0101u32.to_le_bytes());
     b[0x8000..0x8004].copy_from_slice(&0x2001_FFF0u32.to_le_bytes());
     b[0x8004..0x8008].copy_from_slice(&0x0800_8201u32.to_le_bytes());
     // The version string the real image carries.
-    let v = b"edgetx-pocket-2.12.4 (def35ad3)\0";
-    b[0x9000..0x9000 + v.len()].copy_from_slice(v);
+    let v = format!("edgetx-{board}-{version} (def35ad3)\0");
+    b[0x9000..0x9000 + v.len()].copy_from_slice(v.as_bytes());
     let at = 0x20000;
     b[at..at + 4].copy_from_slice(splash::START);
     b[at + 4] = 0x80;
@@ -47,15 +52,20 @@ fn full_image(salt: u8) -> Vec<u8> {
 }
 
 fn release_zip(dir: &Path, pocket: &[u8]) -> PathBuf {
+    board_release_zip(dir, "pocket", VERSION, pocket)
+}
+
+/// A release zip of `version` holding `bin` as `board`'s binary.
+fn board_release_zip(dir: &Path, board: &str, version: &str, bin: &[u8]) -> PathBuf {
     let src = dir.join("zip-src");
     let _ = std::fs::remove_dir_all(&src);
     std::fs::create_dir_all(&src).unwrap();
     // The names and extra files of the real 2.12.4 release zip.
-    std::fs::write(src.join("pocket-def35ad.bin"), pocket).unwrap();
+    std::fs::write(src.join(format!("{board}-def35ad.bin")), bin).unwrap();
     std::fs::write(src.join("tx16s-def35ad.bin"), full_image(9)).unwrap();
     std::fs::write(src.join("fw.json"), b"{}").unwrap();
     std::fs::write(src.join("LICENSE"), b"x").unwrap();
-    let zip = dir.join(asset_name(VERSION));
+    let zip = dir.join(asset_name(version));
     let st = Command::new("/usr/bin/ditto")
         .args(["-c", "-k", "--sequesterRsrc"])
         .arg(&src)
@@ -67,13 +77,17 @@ fn release_zip(dir: &Path, pocket: &[u8]) -> PathBuf {
 }
 
 fn serve_release(f: &FixtureFetch, zip: &Path) {
+    serve_version(f, zip, VERSION)
+}
+
+fn serve_version(f: &FixtureFetch, zip: &Path, version: &str) {
     let bytes = std::fs::read(zip).unwrap();
-    let url = format!("{DOWNLOAD_PREFIX}v{VERSION}/{}", asset_name(VERSION));
+    let url = format!("{DOWNLOAD_PREFIX}v{version}/{}", asset_name(version));
     f.serve(
-        &release_url(VERSION),
+        &release_url(version),
         serde_json::to_vec(&json!({
-            "tag_name": format!("v{VERSION}"), "prerelease": false, "draft": false,
-            "assets": [{"name": asset_name(VERSION), "browser_download_url": url, "size": bytes.len()}]
+            "tag_name": format!("v{version}"), "prerelease": false, "draft": false,
+            "assets": [{"name": asset_name(version), "browser_download_url": url, "size": bytes.len()}]
         }))
         .unwrap(),
     );
@@ -136,12 +150,25 @@ struct Bench {
 }
 
 fn bench(hooks: Arc<dyn Hooks>, board: &str, version: &str, backed_up: bool) -> Bench {
+    bench_release(hooks, board, version, backed_up, "pocket", VERSION)
+}
+
+/// `bench` with the release the fixture server holds: `release` for `image_board`, whose
+/// binary and the radio's current firmware both name that board and release.
+fn bench_release(
+    hooks: Arc<dyn Hooks>,
+    board: &str,
+    version: &str,
+    backed_up: bool,
+    image_board: &str,
+    release: &str,
+) -> Bench {
     let dir = tempfile::tempdir().unwrap();
-    let old = full_image(3);
-    let new = full_image(5);
-    let zip = release_zip(dir.path(), &new);
+    let old = board_image(3, image_board, release);
+    let new = board_image(5, image_board, release);
+    let zip = board_release_zip(dir.path(), image_board, release, &new);
     let fetch = Arc::new(FixtureFetch::new());
-    serve_release(&fetch, &zip);
+    serve_version(&fetch, &zip, release);
     serve_indexes(&fetch);
     let flasher = Arc::new(FlashRecorder::new(FakeDfu::with_firmware(&old)));
     let dfu = Arc::new(Mutex::new(vec![DfuInfo {
@@ -975,6 +1002,90 @@ fn a_blank_radio_can_be_flashed_and_a_wrong_sized_chip_cannot() {
     let e = small.core.gear_flash(&request(&p, &plan)).unwrap_err();
     assert_eq!(refusal(e).code, RefusalCode::Incompatible);
     assert_eq!(small.flasher.device.lock().unwrap().mutations, 0);
+}
+
+fn gx12() -> Bench {
+    bench_release(Arc::new(NoHooks), "gx12", "2.12.5", true, "gx12", "2.12.5")
+}
+
+#[test]
+fn a_gx12_flashes_2_12_5_with_a_splash_and_says_how_to_reach_dfu() {
+    let b = gx12();
+    let d = tempfile::tempdir().unwrap();
+    let mut sp = picture(d.path());
+    sp.board = Some("gx12".into());
+    let p = params(&b, Some(sp.clone()));
+    let plan = b.core.gear_flash_plan(&p).unwrap();
+    assert!(plan.ready(), "{:?}", failed(&plan));
+    let text = serde_json::to_string(&plan.diff).unwrap();
+    assert!(text.contains("gx12-def35ad.bin"), "{text}");
+    assert!(text.contains("Splash:"), "{text}");
+    // The DFU instruction is the GX12's button, not the Pocket's plug-in.
+    let w = plan.warnings.join(" ");
+    assert!(w.contains("Hold SG"), "{w}");
+    assert!(!w.contains("trim buttons"), "{w}");
+
+    let report = b.core.gear_flash(&request(&p, &plan)).unwrap();
+    assert_eq!(report.status, ChangeStatus::Verified, "{}", report.message);
+    let dev = b.flasher.device.lock().unwrap();
+    assert!(dev.left);
+    let (mono, _) = splash::preview(&sp).unwrap();
+    assert_eq!(splash::decode(&dev.flash[..b.new.len()]).unwrap(), mono);
+    drop(dev);
+    let copies = quadcam_lib::gear::fwcopy::list(&b.core.gear_store(), &b.radio);
+    assert_eq!(copies[0].image_version.as_deref(), Some("2.12.5"));
+    assert_eq!(copies[0].image_board.as_deref(), Some("gx12"));
+
+    // The release the GX12 is proven on is the only one it flashes.
+    let mut other = params(&b, None);
+    other.version = Some("2.12.4".into());
+    let plan = b.core.gear_flash_plan(&other).unwrap();
+    assert!(failed(&plan)
+        .iter()
+        .any(|(n, c)| *n == "Known board and version" && *c == RefusalCode::UnknownVersion));
+}
+
+#[test]
+fn without_dfu_a_gx12_hears_its_button_and_an_unnamed_radio_hears_every_way() {
+    let b = gx12();
+    b.dfu.lock().unwrap().clear();
+    let plan = b.core.gear_flash_plan(&params(&b, None)).unwrap();
+    let c = plan
+        .checks
+        .iter()
+        .find(|c| c.name == "One radio in DFU mode")
+        .unwrap();
+    let reason = &c.refusal.as_ref().unwrap().reason;
+    assert!(
+        reason.contains("Hold SG") && !reason.contains("trim buttons"),
+        "{reason}"
+    );
+    let named = refusal(
+        b.core
+            .gear_firmware_read(&FirmwareReadParams {
+                device: Some(b.radio.clone()),
+            })
+            .unwrap_err(),
+    );
+    assert!(named.reason.contains("Hold SG"), "{}", named.reason);
+    let any = refusal(
+        b.core
+            .gear_firmware_read(&FirmwareReadParams { device: None })
+            .unwrap_err(),
+    );
+    assert!(
+        any.reason.contains("trim buttons") && any.reason.contains("Hold SG"),
+        "{}",
+        any.reason
+    );
+    // The Firmware page lists the radio's DFU steps.
+    let view = b
+        .core
+        .gear_firmware(&FirmwareParams { check: Some(false) })
+        .unwrap();
+    let row = view.devices.iter().find(|r| r.device == b.radio).unwrap();
+    assert_eq!(row.dfu_steps.len(), 4);
+    assert!(row.dfu_steps[2].contains("Hold SG"), "{:?}", row.dfu_steps);
 }
 
 // ----- MCP -----

@@ -31,6 +31,7 @@ use crate::gear::model::{
     ApplyPlan, ChangeStatus, Check, Device, DeviceKind, DiffItem, DiffLine, Edit, Identity, LineOp,
     Refusal, RefusalCode, StagedChange, Trigger,
 };
+use crate::gear::radios;
 use anyhow::{anyhow, bail, Context, Result};
 use chrono::Utc;
 use serde::{Deserialize, Serialize};
@@ -990,7 +991,7 @@ impl Core {
                         .map_err(|e| anyhow!("The release has no targets.json: {e}"))
                         .and_then(|b| image::parse_targets(&b));
                     match targets {
-                        Ok(ts) => match image::find_target(&ts, &snapshot.name, side)
+                        Ok(ts) => match pick_target(&ts, &snapshot, side, host.kind, &mut warnings)
                             .and_then(|t| flash::check_target(&t, &version).map(|pl| (t, pl)))
                         {
                             Ok((t, platform)) => {
@@ -1454,4 +1455,50 @@ pub fn elrs_flash_change(device: &Device, plan: &ApplyPlan) -> StagedChange {
         history: Vec::new(),
         reverts: None,
     }
+}
+
+/// The target a flash builds. A radio's internal module is the target its board's profile
+/// names (`gear::radios`), whatever name the module reports; a board without a profile, and a
+/// receiver, go by the name the device reported at the read. The route must be one the
+/// release and the profile allow: EdgeTX's passthrough (`etx`) for a module, Betaflight's for
+/// a receiver.
+fn pick_target(
+    targets: &[image::Target],
+    snapshot: &ElrsSnapshot,
+    side: Side,
+    host: DeviceKind,
+    warnings: &mut Vec<String>,
+) -> Result<image::Target, Refusal> {
+    let (route, internal) = if host == DeviceKind::Radio {
+        let profile = snapshot.host_board.as_deref().and_then(radios::profile);
+        ("etx", profile.and_then(|p| p.elrs.map(|e| (p, e))))
+    } else {
+        ("betaflight", None)
+    };
+    let t = match internal {
+        Some((p, e)) => {
+            if !e.upload_methods.contains(&route) {
+                return Err(Refusal::new(
+                    RefusalCode::UnknownBoard,
+                    format!(
+                        "The {} {}'s internal module is flashed through {}, not through EdgeTX's passthrough.",
+                        p.maker,
+                        p.model,
+                        e.upload_methods.join(", ")
+                    ),
+                ));
+            }
+            let t = image::target_by_path(targets, e.target, side)?;
+            if !image::names_target(&t, &snapshot.name) {
+                warnings.push(format!(
+                    "The module calls itself `{}`, not {} ({}). QuadCam flashes the {} {}'s internal module target, {}.",
+                    snapshot.name, t.lua_name, t.product_name, p.maker, p.model, t.path
+                ));
+            }
+            t
+        }
+        None => image::find_target(targets, &snapshot.name, side)?,
+    };
+    flash::check_route(&t, route)?;
+    Ok(t)
 }

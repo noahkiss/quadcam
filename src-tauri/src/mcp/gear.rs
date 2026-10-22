@@ -1986,8 +1986,19 @@ fn firmware_text(v: &Value) -> String {
             .as_str()
             .map(|n| format!("; {n}"))
             .unwrap_or_default();
+        let dfu: Vec<&str> = d["dfu_steps"]
+            .as_array()
+            .into_iter()
+            .flatten()
+            .filter_map(Value::as_str)
+            .collect();
+        let dfu = if dfu.is_empty() {
+            String::new()
+        } else {
+            format!("; DFU mode: {}", dfu.join(" "))
+        };
         out.push_str(&format!(
-            "{} ({}, {}): {} installed, {}, {}{}{}{}{}\n",
+            "{} ({}, {}): {} installed, {}, {}{}{}{}{}{}\n",
             d["name"].as_str().unwrap_or("?"),
             d["product"].as_str().unwrap_or("?"),
             d["board"].as_str().unwrap_or("no board"),
@@ -2005,6 +2016,7 @@ fn firmware_text(v: &Value) -> String {
                 .unwrap_or_default(),
             official,
             channel_note,
+            dfu,
         ));
     }
     if out.is_empty() {

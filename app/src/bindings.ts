@@ -3005,6 +3005,11 @@ export type FirmwareStatus = {
 	official?: string | null,
 	/**  For an FC: what the channel means for it, when that needs saying. */
 	channel_note?: string | null,
+	/**
+	 *  For a radio: how to put it in DFU mode, one step each (`gear::radios`); empty for a
+	 *  board QuadCam has no profile for.
+	 */
+	dfu_steps?: string[],
 };
 
 /**  The Firmware page: one row per device, and what the check found. */

@@ -197,6 +197,9 @@ pub struct Target {
     pub firmware: String,
     pub prior_target_name: String,
     pub min_version: Option<String>,
+    /// The routes the release allows for this target (`uart`, `etx`, `betaflight`, `wifi`).
+    /// Empty when `targets.json` lists none.
+    pub upload_methods: Vec<String>,
     pub side: Side,
     /// Layout keys that replace the layout file's (`power_values`, pins).
     pub overlay: Option<serde_json::Map<String, Value>>,
@@ -248,6 +251,12 @@ pub fn parse_targets(json: &[u8]) -> Result<Vec<Target>> {
                     firmware,
                     prior_target_name: s("prior_target_name").unwrap_or_default(),
                     min_version: s("min_version"),
+                    upload_methods: t["upload_methods"]
+                        .as_array()
+                        .into_iter()
+                        .flatten()
+                        .filter_map(|m| m.as_str().map(str::to_string))
+                        .collect(),
                     side,
                     overlay: t["overlay"].as_object().cloned(),
                     logo_file: s("logo_file"),
@@ -287,6 +296,31 @@ pub fn find_target(targets: &[Target], name: &str, side: Side) -> Result<Target,
             ),
         )),
     }
+}
+
+/// The device at `path` (`radiomaster.tx_dual.gx12`) on `side`: a radio's internal module,
+/// picked by the radio's board (`gear::radios`), not by the name the module reports.
+pub fn target_by_path(targets: &[Target], path: &str, side: Side) -> Result<Target, Refusal> {
+    targets
+        .iter()
+        .find(|t| t.side == side && t.path.eq_ignore_ascii_case(path))
+        .cloned()
+        .ok_or_else(|| {
+            Refusal::new(
+                RefusalCode::UnknownBoard,
+                format!("This release has no {} target {path}.", side.dir()),
+            )
+        })
+}
+
+/// True when `name` (the CRSF device name) is one of the target's names: its Lua name, its
+/// product name or its prior target name, ignoring case.
+pub fn names_target(t: &Target, name: &str) -> bool {
+    let n = name.trim();
+    !n.is_empty()
+        && [&t.lua_name, &t.product_name, &t.prior_target_name]
+            .iter()
+            .any(|x| x.eq_ignore_ascii_case(n))
 }
 
 /// The offset of the blocks in an image, or why it is not a unified image.
@@ -567,6 +601,33 @@ pub mod fixtures {
                         "min_version": "3.0.0"
                     }
                 }
+            },
+            // The two RadioMaster rows as the 4.1.0 release lists them (the layout file
+            // names are the fixtures').
+            "radiomaster": {
+                "tx_2400": {
+                    "pocket": {
+                        "product_name": "RadioMaster Pocket Internal 2.4GHz TX",
+                        "lua_name": "RM Pocket",
+                        "layout_file": "Radio.json",
+                        "upload_methods": ["uart", "wifi", "etx"],
+                        "min_version": "3.0.0",
+                        "platform": "esp32",
+                        "firmware": "Unified_ESP32_2400_TX",
+                        "prior_target_name": "RadioMaster_Zorro_2400_TX"
+                    }
+                },
+                "tx_dual": {
+                    "gx12": {
+                        "product_name": "RadioMaster GX12 2.4/900 TX",
+                        "lua_name": "RM GX12 X-Band",
+                        "layout_file": "GX12.json",
+                        "upload_methods": ["etx", "wifi"],
+                        "min_version": "3.6.0",
+                        "platform": "esp32",
+                        "firmware": "Unified_ESP32_LR1121_TX"
+                    }
+                }
             }
         })
         .to_string()
@@ -606,7 +667,7 @@ mod tests {
     #[test]
     fn targets_are_found_by_name_and_side() {
         let t = parse_targets(&targets_json()).unwrap();
-        assert_eq!(t.len(), 3);
+        assert_eq!(t.len(), 5);
         let rx = find_target(&t, "vendor 2.4ghz aio rx", Side::Rx).unwrap();
         assert_eq!(rx.platform, "esp8285");
         assert_eq!(rx.path, "vendor.rx_2400.aio");
@@ -615,6 +676,18 @@ mod tests {
             "Unified_ESP32_2400_TX"
         );
         assert!(find_target(&t, "RM Radio", Side::Rx).is_err());
+        let gx12 = target_by_path(&t, "radiomaster.tx_dual.gx12", Side::Tx).unwrap();
+        assert_eq!(gx12.firmware, "Unified_ESP32_LR1121_TX");
+        assert_eq!(gx12.upload_methods, ["etx", "wifi"]);
+        assert!(names_target(&gx12, "rm gx12 x-band"));
+        assert!(names_target(&gx12, "RadioMaster GX12 2.4/900 TX"));
+        assert!(!names_target(&gx12, "RM Pocket"));
+        assert!(
+            !names_target(&gx12, ""),
+            "an empty prior name matches nothing"
+        );
+        assert!(target_by_path(&t, "radiomaster.tx_dual.gx12", Side::Rx).is_err());
+        assert!(target_by_path(&t, "radiomaster.tx_2400.zorro", Side::Tx).is_err());
         let e = find_target(&t, "VND AIO RX", Side::Rx).unwrap_err();
         assert!(e.reason.contains("share the name"), "{}", e.reason);
         assert_eq!(

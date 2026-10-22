@@ -1552,6 +1552,9 @@ status polls, aborts, the address pointer and uploads. Run it before any flash.
 1. Turn the radio off.
 2. Plug the radio into this Mac with the USB cable. Do not hold any buttons. (Holding both
    trim buttons starts the EdgeTX bootloader, which is a different mode.) Wait a few seconds.
+   Some radios need a button instead: on a RadioMaster GX12, plug the cable into the top port,
+   hold SG, tap the power button, then let go of SG. The screen stays dark. The sheet lists
+   the steps for the radio you pick.
 3. Pick the radio in **Radio**, or **Other radio** to skip the version comparison.
 4. Select **Read firmware**. The progress bar covers two reads of the whole 1 MB flash.
 
@@ -1587,7 +1590,8 @@ be restored until the device is linked (see [What QuadCam finds](#what-quadcam-f
 checks:
 
 - **Copy matches its SHA-256**: the saved file still has the hash recorded when it was saved.
-- **Known board**: the radio's board is one QuadCam flashes (today the RadioMaster Pocket).
+- **Known board**: the radio's board is one QuadCam flashes (today the RadioMaster Pocket and
+  GX12).
 - **Copy is for this radio's board**: the board the image names itself is the radio's board.
   An image with no EdgeTX version string is refused.
 - **Firmware image**: the checks a release flash passes: the size, the bootloader's vector
@@ -1615,7 +1619,8 @@ DFU mode, and the result names the backup. A restore has not been tried on a rea
 ### Flash an EdgeTX radio
 
 QuadCam flashes only a board and an exact EdgeTX release listed in `compat.rs`. Today that is
-the RadioMaster Pocket on EdgeTX 2.12.4, with or without a splash. Another release, another
+the RadioMaster Pocket on EdgeTX 2.12.4 and the RadioMaster GX12 on EdgeTX 2.12.5, with or
+without a splash. Another release, another
 board and any prerelease tag (`2.12.5-rc1`) are refused with the reason.
 
 1. Back up the radio's card (**Backups**). The flash plan refuses without a backup.
@@ -1623,11 +1628,13 @@ board and any prerelease tag (`2.12.5-rc1`) are refused with the reason.
    the board and version, the firmware image, the splash markers, the card backup and exactly
    one radio in DFU mode.
 3. Put the radio in DFU mode: turn it off and plug in the USB cable, without holding any
-   button. The radio shows no name in DFU mode, so check that it is the radio you picked. Once
+   button. A GX12 needs a button: plug the cable into its top port, hold SG, tap the power
+   button, then let go of SG (the screen stays dark). The plan's checks give the steps for
+   the radio's board. The radio shows no name in DFU mode, so check that it is the radio you picked. Once
    the DFU device is linked to a saved radio (see [What QuadCam finds](#what-quadcam-finds)),
    the plan refuses a different radio.
 4. Select **Apply**. QuadCam:
-   - checks the chip has the flash size the board expects (1 MB for the Pocket);
+   - checks the chip has the flash size the board expects (1 MB for the Pocket and the GX12);
    - reads the firmware the radio runs now twice, saves it as a copy and reads the saved file
      back. Nothing is erased until both reads are equal and the file matches. A blank flash
      (an earlier flash that stopped) has nothing to copy and may be flashed;
@@ -1664,7 +1671,8 @@ The STM32 chip has a bootloader in ROM that no flash can erase. A radio whose fi
 missing or broken can still be put in DFU mode, and QuadCam can flash it again.
 
 1. Turn the radio off. Unplug other radios.
-2. Plug in the USB cable, with no button held. Wait a few seconds.
+2. Plug in the USB cable, with no button held (a GX12: top port, hold SG, tap power, let go
+   of SG). Wait a few seconds.
 3. Open **Firmware > Flash…** and select **Apply**, or **Restore…** on a saved copy. A blank
    flash is allowed.
 4. If QuadCam cannot do it, use a DFU tool on the copy in `firmware/<radio>/`. Another
@@ -1814,10 +1822,14 @@ packet rate changes the switch modes). From a terminal:
   action) and unpacks it in the cache. ExpressLRS publishes no checksum, so the plan shows the
   SHA-256 QuadCam recorded; pass `--sha256` (CLI) or `sha256` (MCP) to check against a digest you
   trust, and a mismatch deletes the download.
-- The device's target is found in the release by the name the device reports. QuadCam flashes only
-  the unified ESP8285 receiver and ESP32 transmitter-module targets, on ExpressLRS 3 and newer, and
-  refuses any other target, a name that matches none or several, and a version the target does not
-  support.
+- The device's target is found in the release by the name the device reports. A radio's internal
+  module is the exception: when QuadCam knows the radio's board, the board names the target
+  (RadioMaster Pocket `radiomaster.tx_2400.pocket`, GX12 `radiomaster.tx_dual.gx12`), and the
+  plan warns when the module reports another name. QuadCam flashes only the unified ESP8285
+  receiver and ESP32 transmitter-module targets (2.4 GHz and dual LR1121), on ExpressLRS 3 and
+  newer, and refuses any other target, a name that matches none or several, a version the target
+  does not support, and a target whose release does not allow the route (EdgeTX passthrough for
+  a module, Betaflight passthrough for a receiver).
 - QuadCam configures the image: the device name, your binding phrase as the UID, the hardware
   layout (with the target's overrides from `targets.json`, such as its power table) and the WiFi
   delay (`elrs_wifi_interval`, 60 s by default). It reads the image back and

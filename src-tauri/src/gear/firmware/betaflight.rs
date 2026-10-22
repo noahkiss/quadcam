@@ -650,6 +650,7 @@ mod tests {
             vendor_file: None,
             official: Some(latest.into()),
             channel_note: None,
+            dfu_steps: Vec::new(),
         }
     }
 

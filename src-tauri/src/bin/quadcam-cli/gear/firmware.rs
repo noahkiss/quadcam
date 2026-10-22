@@ -26,7 +26,8 @@ pub struct FirmwareArgs {
     plan: bool,
     /// The read-only DFU trial: read all of the flash of the radio in DFU mode twice, save
     /// it as a firmware copy and compare its EdgeTX version with the radio's known version.
-    /// Turn the radio off and plug in USB first. Cannot erase, write or restart the radio.
+    /// Put the radio in DFU mode first (`gear firmware` lists each radio's steps). Cannot
+    /// erase, write or restart the radio.
     /// --device is optional.
     #[arg(long)]
     read: bool,

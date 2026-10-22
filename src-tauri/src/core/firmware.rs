@@ -38,6 +38,7 @@ use crate::gear::model::{
     ApplyPlan, ChangeStatus, Check, Device, DeviceKind, DiffItem, Refusal, RefusalCode,
     StagedChange,
 };
+use crate::gear::radios;
 use crate::gear::splash::{self, SplashParams, SplashPreview};
 use anyhow::{anyhow, bail, Result};
 use chrono::Utc;
@@ -345,9 +346,10 @@ impl Core {
         warnings.push(
             "A radio in DFU mode shows no name. QuadCam writes the one radio in DFU mode; check it is the radio you picked.".into(),
         );
-        warnings.push(
-            "QuadCam reads the radio's current firmware over DFU twice first and keeps it as a copy; it erases nothing until both reads agree and the saved file reads back. If a flash fails, the radio's ROM bootloader still answers over USB (turn it off, plug in USB) and you can flash again. Flashing has not been tried on a real radio yet.".into(),
-        );
+        warnings.push(format!(
+            "QuadCam reads the radio's current firmware over DFU twice first and keeps it as a copy; it erases nothing until both reads agree and the saved file reads back. If a flash fails, the radio's ROM bootloader still answers over USB and you can flash again. To put the radio in DFU mode: {} Flashing has not been tried on a real radio yet.",
+            radios::dfu_hint(board.as_deref())
+        ));
 
         let ready = checks.iter().all(|c| c.ok);
         let digest = if ready {
@@ -402,7 +404,10 @@ impl Core {
             0 => fail(
                 "One radio in DFU mode",
                 RefusalCode::NoDevice,
-                "No radio is in DFU mode. Turn the radio off, then plug in the USB cable (do not hold the trim buttons, which start the EdgeTX bootloader instead). Wait a few seconds.",
+                format!(
+                    "No radio is in DFU mode. {}",
+                    radios::dfu_hint(device.identity.board.as_deref())
+                ),
             ),
             n => fail(
                 "One radio in DFU mode",
@@ -490,7 +495,10 @@ impl Core {
             [] => {
                 return Err(refuse(
                     RefusalCode::NoDevice,
-                    "No radio is in DFU mode. Turn the radio off, then plug in the USB cable (do not hold the trim buttons, which start the EdgeTX bootloader instead). Wait a few seconds and read again.",
+                    format!(
+                        "No radio is in DFU mode. {} Then read again.",
+                        radios::dfu_hint(device.as_ref().and_then(|d| d.identity.board.as_deref()))
+                    ),
                 ))
             }
             n => {
@@ -847,9 +855,10 @@ impl Core {
                 (
                     ChangeStatus::Failed,
                     format!(
-                        "The {} failed: {e:#} The radio stays in DFU mode. {} again, or unplug it, turn it off, plug it in again and retry. The radio's ROM bootloader always answers over USB. The firmware it ran before is kept ({}).",
+                        "The {} failed: {e:#} The radio stays in DFU mode. {} again, or unplug it and retry. To put the radio in DFU mode again: {} The radio's ROM bootloader always answers over USB. The firmware it ran before is kept ({}).",
                         if w.restore.is_some() { "restore" } else { "flash" },
                         if w.restore.is_some() { "Restore" } else { "Flash" },
+                        radios::dfu_hint(device.identity.board.as_deref()),
                         kept.as_ref().map_or("it was blank".to_string(), |c| c.id.clone())
                     ),
                 )

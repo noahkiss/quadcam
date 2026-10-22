@@ -36,7 +36,40 @@ pub const PLATFORMS: &[Platform] = &[
         side: Side::Tx,
         firmware: "Unified_ESP32_2400_TX",
     },
+    // The dual LR1121 modules (the GX12's): the same ESP32, the same four files and offsets.
+    Platform {
+        id: "esp32",
+        chip: "esp32",
+        side: Side::Tx,
+        firmware: "Unified_ESP32_LR1121_TX",
+    },
 ];
+
+/// The route QuadCam flashes through: `etx` for a radio's internal module (EdgeTX's serial
+/// passthrough), `betaflight` for a receiver behind an FC.
+pub fn check_route(t: &Target, route: &str) -> Result<(), Refusal> {
+    if t.upload_methods.is_empty() || t.upload_methods.iter().any(|m| m == route) {
+        return Ok(());
+    }
+    Err(refuse(
+        RefusalCode::UnknownBoard,
+        format!(
+            "{} cannot be flashed through {} ({route}); its release allows {}.",
+            t.product_name,
+            route_label(route),
+            t.upload_methods.join(", ")
+        ),
+    ))
+}
+
+fn route_label(route: &str) -> &str {
+    match route {
+        "etx" => "the radio's EdgeTX passthrough",
+        "betaflight" => "the FC's Betaflight passthrough",
+        "uart" => "a USB serial adapter",
+        _ => route,
+    }
+}
 
 fn refuse(code: RefusalCode, reason: impl Into<String>) -> Refusal {
     Refusal::new(code, reason)
@@ -330,7 +363,12 @@ mod tests {
     }
 
     fn rx() -> Target {
-        image::parse_targets(&targets_json()).unwrap().remove(0)
+        image::target_by_path(
+            &image::parse_targets(&targets_json()).unwrap(),
+            "vendor.rx_2400.aio",
+            Side::Rx,
+        )
+        .unwrap()
     }
 
     #[test]
@@ -356,6 +394,31 @@ mod tests {
         let mut wrong_side = t.clone();
         wrong_side.side = Side::Tx;
         assert!(check_target(&wrong_side, "4.1.0").is_err());
+    }
+
+    #[test]
+    fn the_route_must_be_one_the_release_allows() {
+        let t = image::parse_targets(&targets_json()).unwrap();
+        let gx12 = image::target_by_path(&t, "radiomaster.tx_dual.gx12", Side::Tx).unwrap();
+        assert_eq!(
+            check_target(&gx12, "4.1.0").unwrap().firmware,
+            "Unified_ESP32_LR1121_TX"
+        );
+        assert_eq!(
+            check_target(&gx12, "3.5.3").unwrap_err().code,
+            RefusalCode::UnknownVersion,
+            "min 3.6.0"
+        );
+        assert!(check_route(&gx12, "etx").is_ok());
+        let e = check_route(&gx12, "uart").unwrap_err();
+        assert!(e.reason.contains("etx, wifi"), "{}", e.reason);
+        // A receiver behind an FC goes through Betaflight; a target that lists no methods
+        // passes.
+        assert!(check_route(&rx(), "betaflight").is_ok());
+        assert!(check_route(&rx(), "etx").is_err());
+        let mut none = rx();
+        none.upload_methods.clear();
+        assert!(check_route(&none, "etx").is_ok());
     }
 
     #[test]

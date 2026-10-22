@@ -38,8 +38,9 @@ pub fn asset_name(version: &str) -> String {
     format!("edgetx-firmware-v{version}.zip")
 }
 
-/// What QuadCam knows of a board's firmware.
-#[derive(Debug, Clone, Copy)]
+/// What QuadCam knows of a board's firmware. Each board's spec is in its row of
+/// `gear::radios::PROFILES`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct BoardSpec {
     /// The `board:` value of `radio.yml`.
     pub id: &'static str,
@@ -54,18 +55,9 @@ pub struct BoardSpec {
     pub flash_bytes: usize,
 }
 
-pub const BOARDS: &[BoardSpec] = &[BoardSpec {
-    id: "pocket",
-    names: &["pocket"],
-    min_kb: 400,
-    max_kb: 1000,
-    app_offset: 0x8000,
-    flash_bytes: 0x10_0000,
-}];
-
+/// The firmware spec of `board`, from its radio profile.
 pub fn spec(board: &str) -> Option<&'static BoardSpec> {
-    let b = board.trim().to_ascii_lowercase();
-    BOARDS.iter().find(|s| s.id == b)
+    crate::gear::radios::profile(board).and_then(|p| p.flash.as_ref())
 }
 
 /// True when the board an image names (`image_identity`) is the saved radio's board: its
