@@ -115,6 +115,7 @@ QuadCam follows the system's light or dark appearance. [A light-mode screenshot]
 | [Radio design](docs/radio-design.md) | The plan for radios: board profiles, the GX12 flash, setting up switches in the app (draft) |
 | [Sim](docs/sim.md) | The built-in sim so far: calibrating the radio for it, flying the plain room, the flight model and its check against your blackbox logs |
 | [Sim design](docs/sim-design.md) | The plan for the built-in sim: physics, flight controller, quad profiles from blackbox, radio calibration, engine choice (draft) |
+| [Community contributions design](docs/community-design.md) | Options for sharing board facts, USB speeds, sim profiles and voice fixes, opt-in and reviewed, and how QuadCam fetches the result (draft) |
 
 ## Privacy
 
