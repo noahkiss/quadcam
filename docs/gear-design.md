@@ -13,6 +13,9 @@ backup first and a verify after.
 This doc is the contract for the build. It names the modules, the data, the `api` rows, the
 CLI, the MCP tools, the safety model, the tests, the work packages and the releases.
 
+Radios beyond the Pocket (board profiles, the GX12, setting up switches in the app) have their
+own plan: [Radio design](radio-design.md).
+
 ---
 
 ## Contents
@@ -909,6 +912,9 @@ Every `diskutil` run goes through `health::DiskRunner`; a cargo process gets `No
 
 ### 7.2 Switch map
 
+The switch map reads a setup. Writing one (assigning jobs to controls per radio) is planned in
+[Radio design](radio-design.md), section 5.
+
 One table per aircraft. Rows: each physical control (switches, trims used as switches,
 sticks with logical switches). Columns per position: the channel value in microseconds, the
 FC effect (`aux` modes, `adjrange` selections such as rate or OSD profile), the radio effect
@@ -1311,6 +1317,9 @@ Before an uncached paid render, the report gives the character count and the acc
 remaining quota; the render runs only when confirmed.
 
 ### 7.5 Splash screen and radio firmware
+
+Per-board facts (DFU entry, image layout, storage, ELRS target) and the GX12 flash are in
+[Radio design](radio-design.md), sections 2 and 3.
 
 Flow on the Radio > Splash segment:
 
