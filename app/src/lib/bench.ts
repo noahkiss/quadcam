@@ -34,10 +34,8 @@ const radioOpText = (o: RadioOp): string => {
       return `${o.key}: ${o.value}`;
     case "select_model":
       return `select ${o.file}`;
-    case "set_switch_type":
-      return `${o.switch} type ${o.kind}`;
-    case "set_pot_type":
-      return `${o.pot} type ${o.kind}`;
+    case "set_control_type":
+      return `${o.control} type ${o.value}`;
     case "remove_functions":
       return `remove ${o.func} functions`;
   }
