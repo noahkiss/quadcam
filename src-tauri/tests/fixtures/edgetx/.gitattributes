@@ -1,0 +1,2 @@
+# The radio writes CRLF; keep these bytes exactly.
+* -text

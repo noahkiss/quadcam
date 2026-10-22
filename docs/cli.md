@@ -249,6 +249,7 @@ quadcam-cli --json gear storage [--prune [--dry-run]] [--export <backup|device> 
 quadcam-cli --json gear import-backups FOLDER [--device ID] [--dry-run]
 quadcam-cli --json gear card [--device ID | --mount M] [--model model01.yml]   # an EdgeTX card: version, models, selected model, radio clock
 quadcam-cli --json gear card preview [--device ID | --mount M] --edits FILE.json   # the checks and diff of card edits; writes nothing
+quadcam-cli --json gear card import [--device ID | --mount M] --from CARD|FILE|BACKUP [--from-model model01.yml] [--from-board pocket] [--to model03.yml] [--name N] [--link SE=SH] [--template model00.yml]   # a model from another radio, its controls mapped; writes nothing
 quadcam-cli --json gear card-check [--device ID | --mount M] [--log]
 quadcam-cli --json gear card-repair --check <check id> --yes
 quadcam-cli --json gear card-clean [--device ID | --mount M] [--remove --yes]   # list or delete the ._ files macOS left on a card
@@ -315,7 +316,7 @@ From 1.0 the command line is a contract. The schema version is 1; `quadcam-cli -
 
 ### MCP equivalents
 
-Every MCP tool has a command. The command line also has `scan`, `analyze`, `clear`, `moments`, `modules manifest`, `gear fc check` and `gear voice build-pack`. An MCP `gear` action maps to a `gear` command of a similar name: `blackbox_pull` is `gear blackbox pull`, `voice_render` is `gear voice render`, and `card_mount` is `gear card-mount`. `gear --help` lists them. The exceptions:
+Every MCP tool has a command. The command line also has `scan`, `analyze`, `clear`, `moments`, `modules manifest`, `gear fc check` and `gear voice build-pack`. An MCP `gear` action maps to a `gear` command of a similar name (`model_import` is `gear card import`): `blackbox_pull` is `gear blackbox pull`, `voice_render` is `gear voice render`, and `card_mount` is `gear card-mount`. `gear --help` lists them. The exceptions:
 
 | MCP | Command |
 |---|---|

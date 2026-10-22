@@ -6,6 +6,10 @@
 //!   `delayPrec`/`speedPrec`; switch warnings as the `switchWarning:` list; no checksum.
 //! - The 2.10 hand-edited layout: entries start with `weight`, `srcRaw` unquoted, the
 //!   legacy `switchWarningState:` line, and a `checksum:` line.
+//! - A GX12 card (`SynthCard::gx12`): `radio.yml` with the GX12's eight switches, pots and
+//!   sliders; each model with its custom switches, as the 2.12 `customSwitches:` block
+//!   (`Saved212`) or as the 2.11 bit fields (`Hand210`). The block's shape follows EdgeTX
+//!   2.12.5's GX12 schema; no radio-saved 2.12.5 file was at hand to compare.
 
 use anyhow::Result;
 use std::path::Path;
@@ -32,6 +36,18 @@ pub struct SynthCard {
     pub curr_model: u32,
     /// Log file names in `LOGS/`.
     pub logs: Vec<String>,
+}
+
+impl SynthCard {
+    /// A GX12 card on EdgeTX 2.12.5: `model00.yml` "ALPHA" with the 2.12 custom-switch
+    /// block, `model01.yml` "BRAVO 2" with the 2.11 bit fields, `model01.yml` selected.
+    pub fn gx12() -> Self {
+        Self {
+            board: "gx12".into(),
+            semver: "2.12.5".into(),
+            ..Self::default()
+        }
+    }
 }
 
 impl Default for SynthCard {
@@ -86,14 +102,39 @@ pub fn radio_yml(board: &str, semver: &str, curr_model: u32, crlf: bool) -> Stri
     s += "beepVolume: 2\nwavVolume: 2\nvarioVolume: 2\nbackgroundVolume: 2\n";
     s += "customFn: \n   0:\n      swtch: \"ON\"\n      func: VOLUME\n      def: \"P1,1\"\n";
     s += "serialPort: \n   VCP:\n      mode: OFF\n      power: 0\n";
+    if board == "gx12" {
+        s += "internalModule: TYPE_CROSSFIRE\ninternalModuleBaudrate: 2\npotsConfig: \n";
+        for (p, t) in [
+            ("P1", "with_detent"),
+            ("P2", "with_detent"),
+            ("SL1", "slider"),
+            ("SL2", "slider"),
+        ] {
+            s += &format!("   {p}:\n      type: {t}\n      inv: 0\n      name: \"\"\n");
+        }
+    }
     s += "switchConfig: \n";
-    for (sw, t) in [
-        ("SA", "2POS"),
-        ("SB", "3POS"),
-        ("SC", "3POS"),
-        ("SD", "2POS"),
-        ("SE", "TOGGLE"),
-    ] {
+    let switches: &[(&str, &str)] = if board == "gx12" {
+        &[
+            ("SA", "2POS"),
+            ("SB", "3POS"),
+            ("SC", "3POS"),
+            ("SD", "2POS"),
+            ("SE", "3POS"),
+            ("SF", "3POS"),
+            ("SG", "TOGGLE"),
+            ("SH", "TOGGLE"),
+        ]
+    } else {
+        &[
+            ("SA", "2POS"),
+            ("SB", "3POS"),
+            ("SC", "3POS"),
+            ("SD", "2POS"),
+            ("SE", "TOGGLE"),
+        ]
+    };
+    for (sw, t) in switches {
         s += &format!("   {sw}:\n      name: \"\"\n      type: {t}\n");
     }
     s += "bluetoothName: \"TEST-\\x80\"\nownerRegistrationID: \"    test\"\nmodelQuickSelect: 1\n";
@@ -192,6 +233,30 @@ pub fn model_yml(name: &str, layout: Layout, semver: &str, crlf: bool) -> String
     eol(s, crlf)
 }
 
+/// A GX12 model's custom switches: the 2.12 `customSwitches:` block and `cfsGroupOn:`
+/// (`Saved212`), or the 2.11 bit fields (`Hand210`). SW1-SW6 latch (2POS) in group 1,
+/// SW1 on at power-on; made-up colours.
+pub fn gx12_custom_switches(layout: Layout, crlf: bool) -> String {
+    let mut s = String::new();
+    match layout {
+        Layout::Saved212 => {
+            s += "customSwitches: \n";
+            for i in 1..=6 {
+                let start = if i == 1 { "START_ON" } else { "START_OFF" };
+                s += &format!("   SW{i}:\n      name: \"\"\n      type: 2POS\n      group: 1\n      start: {start}\n      state: 0\n      onColorLuaOverride: OFF\n      offColorLuaOverride: OFF\n      onColor: \n         r: 255\n         g: {}\n         b: 255\n      offColor: \n         r: 0\n         g: 0\n         b: 0\n", 40 * i);
+            }
+            s += "cfsGroupOn: \n   1:\n      v: 1\n";
+        }
+        Layout::Hand210 => {
+            s += "functionSwitchConfig: 2730\nfunctionSwitchGroup: 9557\nfunctionSwitchStartConfig: 2730\nfunctionSwitchLogicalState: 1\nfunctionSwitchLedONColor: \n";
+            for i in 0..6 {
+                s += &format!("   {i}:\n      r: 248\n      g: {}\n      b: 0\n", 40 * i);
+            }
+        }
+    }
+    eol(s, crlf)
+}
+
 /// Writes the card tree under `root` (a temporary folder; never a mounted card).
 pub fn write_card(root: &Path, card: &SynthCard) -> Result<()> {
     for d in ["RADIO", "MODELS", "LOGS", "SOUNDS/en", "SCRIPTS/TELEMETRY"] {
@@ -202,10 +267,11 @@ pub fn write_card(root: &Path, card: &SynthCard) -> Result<()> {
         radio_yml(&card.board, &card.semver, card.curr_model, card.crlf),
     )?;
     for (file, name, layout) in &card.models {
-        std::fs::write(
-            root.join("MODELS").join(file),
-            model_yml(name, *layout, &card.semver, card.crlf),
-        )?;
+        let mut text = model_yml(name, *layout, &card.semver, card.crlf);
+        if card.board == "gx12" {
+            text += &gx12_custom_switches(*layout, card.crlf);
+        }
+        std::fs::write(root.join("MODELS").join(file), text)?;
     }
     for l in &card.logs {
         std::fs::write(

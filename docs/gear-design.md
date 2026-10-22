@@ -716,6 +716,27 @@ files, not on a radio: the `LOGS` encoding, 4 lines by 3 sources, the timer mode
 - Bootloader route: hold both horizontal trims inward while powering on; the bootloader
   shows the SD card over USB even when the firmware stops at an error.
 
+**Built (GX12 card):** `gear/edgetx/board.rs` holds each board's controls (switch types,
+custom switches, pots, sliders), its model-only keys and its USB write speed. `gx12` is proven
+for card writes at 2.12.5 only (`compat.rs`), on its factory files and the synthetic
+`SynthCard::gx12()`; no radio-saved 2.12.5 file was at hand. Its schema is the 128x64 one plus
+custom switches: the model's `customSwitches:`/`cfsGroupOn:` blocks and the 2.11 bit fields
+(`functionSwitchConfig` and siblings) that 2.12 reads and never writes. QuadCam reads both
+(`ModelView.custom_switches`) and keeps either as it is on an edit; it does not yet convert the
+bit fields or write `customSwitches:`. Switch types read in either case. `CardView` adds
+`controls` and `voice_folder`. A model edit that needs a `logicalSw:` or `timers:` block the
+model lacks (a factory model) adds an empty one where EdgeTX writes it. The preview's
+`eta_s` uses the board's speed plus a per-file cost; a GX12 is always over USB.
+`RadioOp::SetControlType` sets a `switchConfig` or `potsConfig` slot's type (swapped
+switch modules, blanked pots); the inventory and the copy's default links follow the radio's
+current fit, so a link whose type no longer fits is not a default.
+`Edit::ModelImport` copies a model from another board: each control reference is rewritten
+through `ControlLink`s (the boards' defaults, then the caller's), an unmapped control refuses
+(`incompatible`), the source board's model-only keys go and the target's come from a model on
+the card. Row `gear_model_import` (reads the source, previews, returns the edit to stage); CLI
+`gear card import`; MCP `quadcam_gear model_import`. Tests: `tests/it/gx12_card.rs`,
+`gear_apply_card::a_gx12_card_takes_a_model_from_a_pocket_end_to_end`.
+
 **Ownership:** QuadCam does not add marker keys to EdgeTX files. Which special functions and
 logical switches a change owns is recorded in the change, so a later change can replace them.
 

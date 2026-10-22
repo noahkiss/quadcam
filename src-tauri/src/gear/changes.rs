@@ -659,7 +659,9 @@ fn edit_name(e: &Edit) -> &'static str {
         Edit::OsdElement { .. } => "OSD element",
         Edit::CardFiles { .. } => "Card file",
         Edit::Model { .. } | Edit::Radio { .. } | Edit::Checklist { .. } => "Radio",
-        Edit::ModelCopy { .. } | Edit::ModelDelete { .. } => "Radio model",
+        Edit::ModelCopy { .. } | Edit::ModelDelete { .. } | Edit::ModelImport { .. } => {
+            "Radio model"
+        }
         Edit::Restore { .. } => "Restore",
         Edit::ElrsOptions { .. } => "ELRS",
         _ => "These",

@@ -21,6 +21,7 @@
 //! project's source.
 
 use super::bf::dump::{Cmd, Config};
+use super::edgetx::board;
 use super::edgetx::model::{ls_index, ModelView};
 use super::edgetx::yaml::{unquote, Doc};
 use serde::{Deserialize, Serialize};
@@ -313,7 +314,9 @@ pub fn limits(doc: &Doc) -> BTreeMap<u32, Limit> {
     out
 }
 
-/// The radio's switches and their types (`switchConfig` in `radio.yml`), `NONE` left out.
+/// The radio's switches and their types (`switchConfig` in `radio.yml`), upper case
+/// (EdgeTX 2.11 wrote `2pos`), `NONE` left out. A custom switch (`SW1`) is listed with the
+/// radio's type, which applies where a model says `GLOBAL` (`custom_types`).
 pub fn switch_types(radio: &Doc) -> Vec<(String, String)> {
     let Ok(Some(n)) = radio.top("switchConfig") else {
         return Vec::new();
@@ -322,8 +325,32 @@ pub fn switch_types(radio: &Doc) -> Vec<(String, String)> {
         .iter()
         .filter_map(|c| {
             let name = c.key.clone()?;
-            let t = c.get("type").unwrap_or("3POS").to_string();
+            let t = board::switch_type(c.get("type").unwrap_or("3POS"));
             (t != "NONE").then_some((name, t))
+        })
+        .collect()
+}
+
+/// A model's custom switches and their types: the model's own, or the radio's
+/// (`radio_types`, from `switch_types`) where the model says `GLOBAL`. `NONE` left out.
+pub fn custom_types(
+    model: &ModelView,
+    radio_types: &BTreeMap<String, String>,
+) -> Vec<(String, String)> {
+    model
+        .custom_switches
+        .iter()
+        .filter(|c| board::is_custom_name(&c.switch))
+        .filter_map(|c| {
+            let t = if c.switch_type == board::GLOBAL {
+                radio_types
+                    .get(&c.switch)
+                    .cloned()
+                    .unwrap_or_else(|| "2POS".into())
+            } else {
+                c.switch_type.clone()
+            };
+            (t != "NONE").then(|| (c.switch.clone(), t))
         })
         .collect()
 }
@@ -588,18 +615,23 @@ struct Eval<'a> {
     types: BTreeMap<String, String>,
 }
 
-/// A switch source `SA0`..`SH2` split into name and position.
+/// A switch source `SA0`..`SH2`, or a custom switch's `SW10`..`SW62`, split into name and
+/// position.
 fn switch_pos(s: &str) -> Option<(String, u32)> {
     let b = s.as_bytes();
-    (b.len() == 3 && b[0] == b'S' && b[1].is_ascii_uppercase())
-        .then(|| (s[..2].to_string(), (b[2] as char).to_digit(10)))
-        .and_then(|(n, p)| Some((n, p.filter(|p| *p <= 2)?)))
+    let n = match b.len() {
+        3 if b[0] == b'S' && b[1].is_ascii_uppercase() && b[1] != b'W' => 2,
+        4 if board::is_custom_name(&s[..3]) => 3,
+        _ => return None,
+    };
+    let p = (b[n] as char).to_digit(10).filter(|p| *p <= 2)?;
+    Some((s[..n].to_string(), p))
 }
 
-/// A switch name used as a mix source (`SA`).
+/// A switch name used as a mix source (`SA`, or a custom switch's `SW1`).
 fn is_switch_name(s: &str) -> bool {
     let b = s.as_bytes();
-    b.len() == 2 && b[0] == b'S' && b[1].is_ascii_uppercase()
+    (b.len() == 2 && b[0] == b'S' && b[1].is_ascii_uppercase()) || board::is_custom_name(s)
 }
 
 fn is_trim(s: &str) -> bool {
@@ -667,6 +699,7 @@ impl Eval<'_> {
             }
         } else if s.starts_with("Trim")
             || s.starts_with('P')
+            || s.starts_with("SL")
             || s.starts_with("S1")
             || s.starts_with("S2")
         {
@@ -1218,12 +1251,16 @@ pub fn build(inputs: &Inputs) -> SwitchMap {
         screens: vec![],
         checklist: false,
         checklist_interactive: false,
+        custom_switches: vec![],
     };
     let model = inputs.model.as_ref().unwrap_or(&empty);
+    let mut types: BTreeMap<String, String> = inputs.switches.iter().cloned().collect();
+    let custom = custom_types(model, &types);
+    types.extend(custom);
     let ev = Eval {
         inputs,
         model,
-        types: inputs.switches.iter().cloned().collect(),
+        types,
     };
     let modes = inputs.fc.as_ref().map(aux_modes).unwrap_or_default();
     let adjustments = inputs.fc.as_ref().map(adjustments).unwrap_or_default();
@@ -1240,7 +1277,13 @@ pub fn build(inputs: &Inputs) -> SwitchMap {
     }
 
     let (used, trims, stick_ls) = referenced(model);
-    let mut switch_names: Vec<String> = inputs.switches.iter().map(|(n, _)| n.clone()).collect();
+    // Custom switches get a row only when the model uses one (`referenced`).
+    let mut switch_names: Vec<String> = inputs
+        .switches
+        .iter()
+        .map(|(n, _)| n.clone())
+        .filter(|n| !board::is_custom_name(n))
+        .collect();
     if inputs.model.is_some() {
         for s in used {
             if !switch_names.contains(&s) {

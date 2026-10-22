@@ -68,10 +68,11 @@ pub struct RadioSettingsEditParams {
 }
 
 /// The setting an op sets: a later op with the same key replaces an earlier one.
-fn op_key(op: &RadioOp) -> &str {
+fn op_key(op: &RadioOp) -> String {
     match op {
-        RadioOp::SetScalar { key, .. } => key,
-        RadioOp::SelectModel { .. } => "currModel",
+        RadioOp::SetScalar { key, .. } => key.clone(),
+        RadioOp::SelectModel { .. } => "currModel".into(),
+        RadioOp::SetControlType { control, .. } => format!("type of {control}"),
     }
 }
 

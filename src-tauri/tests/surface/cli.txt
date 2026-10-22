@@ -106,6 +106,7 @@ cli.command gear blackbox list
 cli.command gear blackbox pull
 cli.command gear blackbox summary
 cli.command gear card
+cli.command gear card import
 cli.command gear card preview
 cli.command gear card-check
 cli.command gear card-clean
@@ -292,6 +293,15 @@ cli.flag gear blackbox summary --port VALUE
 cli.flag gear card --device VALUE
 cli.flag gear card --model VALUE
 cli.flag gear card --mount VALUE
+cli.flag gear card import --device VALUE
+cli.flag gear card import --from VALUE
+cli.flag gear card import --from-board VALUE
+cli.flag gear card import --from-model VALUE
+cli.flag gear card import --link VALUE
+cli.flag gear card import --mount VALUE
+cli.flag gear card import --name VALUE
+cli.flag gear card import --template VALUE
+cli.flag gear card import --to VALUE
 cli.flag gear card preview --device VALUE
 cli.flag gear card preview --edits VALUE
 cli.flag gear card preview --mount VALUE

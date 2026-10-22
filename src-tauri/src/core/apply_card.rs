@@ -347,6 +347,7 @@ impl Core {
                 | Edit::Checklist { .. }
                 | Edit::ModelCopy { .. }
                 | Edit::ModelDelete { .. }
+                | Edit::ModelImport { .. }
                 | Edit::CardFiles { .. }
                 | Edit::Restore { .. } => {}
                 other => {
@@ -372,7 +373,9 @@ impl Core {
                         _ => None,
                     })
                     .collect(),
-                Edit::ModelCopy { name, .. } => vec![name.as_str()],
+                Edit::ModelCopy { name, .. } | Edit::ModelImport { name, .. } => {
+                    vec![name.as_str()]
+                }
                 _ => vec![],
             };
             for n in names {
@@ -562,8 +565,7 @@ impl Core {
         let radio_usb = l.connected.usb.is_some();
         let mut opts = match &self.gear.card_write {
             Some(o) => o.clone(),
-            None if radio_usb => WriteOptions::radio_usb(),
-            None => WriteOptions::reader(),
+            None => WriteOptions::for_card(radio_usb, plan.identity.board.as_deref()),
         };
         opts.stop = stop.clone();
         opts.real_cards = self.gear.real_cards.clone();

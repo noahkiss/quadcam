@@ -746,6 +746,7 @@ pub fn specta_builder() -> tauri_specta::Builder<tauri::Wry> {
             c::gear_elrs_flash,
             c::gear_card,
             c::gear_card_preview,
+            c::gear_model_import,
             c::gear_card_clean,
             c::gear_radio_cli,
             c::gear_dfu_link,

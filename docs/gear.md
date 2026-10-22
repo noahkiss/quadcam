@@ -292,7 +292,12 @@ cannot take (it names another radio, or the profile is gone) stays in the radio'
 QuadCam reads an EdgeTX SD card, in the radio over USB or in a card reader:
 
 - the board and EdgeTX version, and whether QuadCam may write this pair. EdgeTX 2.12 on the
-  RadioMaster Pocket is proven; other pairs are read only;
+  RadioMaster Pocket and EdgeTX 2.12.5 on the RadioMaster GX12 are proven; other pairs are
+  read only. The GX12 is proven on its factory files and on test cards laid out as its 2.12.5
+  schema says, not yet by a write on a radio;
+- the radio's controls: each switch with its type (2-position, 3-position, or momentary), a
+  GX12's SW1-SW6 buttons as the selected model sets them, the knobs (and whether each has a
+  centre detent) and the sliders; and the folder its voice plays from (`SOUNDS/en`);
 - the models, and the model the radio has selected, with the aircraft profile that names it
   (its `edgetx_model` file, or one of its EdgeTX model names). The app can then warn when
   the radio is set to another quad than the one just connected;
@@ -309,8 +314,24 @@ the edit asks for it. The power-on checklist is a model setting QuadCam turns on
 QuadCam writes the edits through a staged change. See
 [Radio cards](#radio-cards).
 
-**Over the radio's USB, writes are slow** (about 0.3 MB/s, a 37 MB voice pack in about 2
-minutes). QuadCam writes one file at a time under a temporary name and renames it, so the
+**Copy a model from another radio.** QuadCam can put a model from another radio's card, from
+one model file, or from a radio backup onto this card as a new model. Each control the model
+reads maps to a control on this radio: the same name when the type matches, and a few pairs
+QuadCam knows (a Pocket's momentary SE is a GX12's SH). You can set any pair yourself. The
+answer lists each control and where it goes, notes a pair that does not quite fit (a 3-position
+switch on a 2-position one never reaches its middle), and names the controls nothing maps; a
+model with an unmapped control is not copied. A model copied to a GX12 takes its SW1-SW6 setup
+(groups, start state, LED colours) from a model already on the GX12, the selected one unless
+you name another. The copy gets its own name, timers at zero and no receiver model ID, as a
+copy on one card does. The preview writes nothing; stage its edit to write it:
+
+```bash
+quadcam-cli --json gear card --mount /Volumes/GX12 import --from /Volumes/POCKET [--from-model model01.yml] [--link SE=SG] [--to model03.yml] [--name NAME]
+```
+
+**Over the radio's USB, writes are slow** (about 0.3 MB/s on a Pocket, a 37 MB voice pack in
+about 2 minutes; about 0.36 MB/s on a GX12). A GX12 keeps its files in its own flash, so it is
+always written over its USB; the preview's time uses that speed, plus a moment per file. QuadCam writes one file at a time under a temporary name and renames it, so the
 card is always whole. Cancel finishes the current file, then unmounts the card, then says
 "safe to unplug". Do not pull the radio while a file is being written: once, that wedged the
 Mac's disk service until a reboot. If macOS stops answering, QuadCam says a reboot may be
@@ -395,7 +416,7 @@ sensor's precision. A sensor must exist in the model; if it does not, discover s
 the radio first.
 
 **Checklist.** Each item is a line; a tick box starts the line with `=`. A line holds 20
-characters on the RadioMaster Pocket (the `=` counts), and a checklist holds 99 lines.
+characters on the RadioMaster Pocket and GX12 (the `=` counts), and a checklist holds 99 lines.
 QuadCam writes `MODELS/<model name>.txt` and turns on `displayChecklist` and
 `checklistInteractive`. Staging a checklist turns it on; the checkbox turns it on or off.
 Because the file is named after the model, a model name may not hold `/` or `..` or start with
@@ -438,6 +459,16 @@ know included, stays as it was. The plan warns before a new haptic mode **Alarms
 drops special-function haptics), a new stick mode (check which stick is throttle before you
 fly), and a USB mode other than ask or storage (the radio then no longer shows its card when
 plugged in).
+
+**Switch and pot slots.** A radio whose switch modules swap (the GX12 ships spare 2-position and
+momentary switches) or whose pot holes take a blanking plug tells EdgeTX in `switchConfig` and
+`potsConfig`. The edit `set_control_type` sets one slot: a switch is none, 2-position,
+3-position or momentary (`toggle`), written in the file's own case; a pot is none, with detent
+or without; a slider is none or slider. A slot `radio.yml` does not list, and a GX12's SW1-SW6
+(each model sets those), refuse. The card's controls, and a model copied from another radio,
+follow the slots as `radio.yml` has them: a control set to none is no longer a target. The
+Settings segment has no control for this yet; the CLI takes it in `gear radio-settings-edit
+--ops`, MCP in `radio_settings_edit` `ops`.
 
 **Not yet checked on a real radio:** the ranges and file encodings above come from EdgeTX
 2.12 files and EdgeTX's Radio Setup screen; the contrast range (10-30), the lowest battery
@@ -1930,6 +1961,7 @@ quadcam-cli --json gear firmware --restore <copy> --device <radio> --plan   # ch
 quadcam-cli --json gear firmware --restore <copy> --device <radio> --digest D --yes   # restore (radio in DFU mode)
 quadcam-cli --json gear card [--mount M | --device ID] [--model model01.yml]
 quadcam-cli --json gear card preview --edits edits.json   # checks and diff; writes nothing
+quadcam-cli --json gear card import --from CARD|FILE|BACKUP [--link SE=SH]   # a model from another radio; writes nothing
 quadcam-cli gear map --radio /Volumes/RADIO --fc quad.diff_all.txt --text   # the switch map
 quadcam-cli --json gear map --radio model01.yml --fc quad.dump_all.txt --live   # positions now
 quadcam-cli gear map --aircraft Whoop --text         # from the latest backups of its radio and FC

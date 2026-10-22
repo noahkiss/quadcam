@@ -65,6 +65,14 @@ pub const PROVEN: &[Proven] = &[
         board: Some("pocket"),
         version: "2.12",
     },
+    // EdgeTX 2.12.5 on the GX12: its own schema (the 128x64 one plus custom switches),
+    // proven on its factory files and on a card laid out as that schema writes it
+    // (tests/it/gx12_card.rs). Only this release: another one is read-only until proven.
+    Proven {
+        product: Product::Edgetx,
+        board: Some("gx12"),
+        version: "2.12.5",
+    },
     // The EdgeTX flash: the release whose image checks (vector tables, size band, version
     // string) and splash markers are proven on this board. A flash on a real radio is
     // trial 10 (docs/trials.md).
@@ -227,6 +235,12 @@ mod tests {
         assert_eq!(e.code, RefusalCode::UnknownBoard);
         let e = check_writable(Product::Edgetx, Some("pocket"), None).unwrap_err();
         assert_eq!(e.code, RefusalCode::UnknownVersion);
+        // The GX12's card: 2.12.5 only; its factory 2.11 files are read-only.
+        assert!(check_writable(Product::Edgetx, Some("gx12"), Some("2.12.5")).is_ok());
+        for v in ["2.11.0", "2.12.4", "2.12.6"] {
+            let e = check_writable(Product::Edgetx, Some("gx12"), Some(v)).unwrap_err();
+            assert_eq!(e.code, RefusalCode::UnknownVersion, "{v}");
+        }
     }
 
     #[test]

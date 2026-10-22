@@ -98,7 +98,8 @@ pub use gear::{
     OnConnectHook, ReminderParams, Skip, StepFailure, HOLD_GRACE,
 };
 pub use gear_card::{
-    CardClean, CardCleanParams, CardParams, CardPreview, CardPreviewParams, GearCard,
+    CardClean, CardCleanParams, CardParams, CardPreview, CardPreviewParams, GearCard, ModelImport,
+    ModelImportParams,
 };
 pub use import::CardStatus;
 pub use library::{LibEdit, LibItem, LibUpdate, LibraryView, RebuildReport, RenameReport};

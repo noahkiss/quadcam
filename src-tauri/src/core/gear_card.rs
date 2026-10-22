@@ -45,10 +45,63 @@ pub struct CardPreview {
     /// Files the edits would write or delete.
     pub files: Vec<String>,
     pub bytes: u64,
-    /// Seconds at the link's usual speed (a radio over USB writes about 0.3 MB/s).
+    /// Seconds at the link's measured speed, plus each file's own cost (a Pocket over USB
+    /// writes about 0.3 MB/s, a GX12 about 0.36 MB/s; a card in a reader is fast).
     pub eta_s: u64,
-    /// The card is in the radio, over USB (slow), not in a reader.
+    /// The card is in the radio, over USB (slow), not in a reader. Always true for a
+    /// radio that keeps its files in its own flash (a GX12).
     pub radio_usb: bool,
+}
+
+/// `gear_model_import`: a model from another radio's card, a model file or a radio backup,
+/// as a new model on this card. Nothing is written: the answer holds the edit to stage.
+#[derive(Debug, Clone, Default, Serialize, Deserialize, specta::Type)]
+pub struct ModelImportParams {
+    /// The card that gets the model (its mount); default the one card plugged in.
+    #[serde(default)]
+    pub mount: Option<PathBuf>,
+    /// A connected radio's device id, instead of `mount`.
+    #[serde(default)]
+    pub device: Option<String>,
+    /// Where the model comes from: another card's mount or a copy of its folder, one model
+    /// file, or a radio backup id (`<device>/<name>`).
+    pub from: String,
+    /// The model file in `from` (`model01.yml`); default its selected model.
+    #[serde(default)]
+    pub model: Option<String>,
+    /// The source radio's board, when `from` is a model file with no `radio.yml` beside it.
+    #[serde(default)]
+    pub from_board: Option<String>,
+    /// The new model file (`model03.yml`); default the first free one.
+    #[serde(default)]
+    pub to: Option<String>,
+    /// The new model's name; default the source's.
+    #[serde(default)]
+    pub name: Option<String>,
+    /// Links in place of the two boards' default links, per source control.
+    #[serde(default)]
+    pub links: Vec<crate::gear::edgetx::board::ControlLink>,
+    /// The model on this card whose board-only setup (a GX12's custom switches) the new
+    /// model takes; default the selected model.
+    #[serde(default)]
+    pub template: Option<String>,
+}
+
+/// What importing a model would do: the edit to stage, both radios' controls, the links
+/// used and each control the model reads, and the card preview.
+#[derive(Debug, Clone, Serialize, Deserialize, specta::Type)]
+pub struct ModelImport {
+    /// Stage it on the radio (`gear_change_stage`) to write it.
+    pub edit: Edit,
+    pub from_board: String,
+    #[serde(default)]
+    pub to_board: Option<String>,
+    pub from_controls: Vec<crate::gear::edgetx::board::BoardControl>,
+    pub to_controls: Vec<crate::gear::edgetx::board::BoardControl>,
+    /// The links in effect: the boards' defaults with the ones given on top.
+    pub links: Vec<crate::gear::edgetx::board::ControlLink>,
+    pub translation: crate::gear::edgetx::board::Translation,
+    pub preview: CardPreview,
 }
 
 /// `gear_card_clean`: the `._` files macOS left on a card. Without `remove` it lists them.
@@ -237,29 +290,164 @@ impl Core {
         let t = self.gear_card_target(p.mount.as_ref(), p.device.as_deref())?;
         let out = (|| {
             let card = Card::open(&t.root)?;
-            let plan = card.plan(&p.edits, None)?;
-            let radio_usb = t.c.as_ref().is_some_and(|c| c.usb.is_some());
-            let opts = if radio_usb {
-                WriteOptions::radio_usb()
-            } else {
-                WriteOptions::reader()
-            };
-            Ok(CardPreview {
-                identity: plan.identity.clone(),
-                ready: plan.ready(),
-                files: plan.files.iter().map(|f| f.path.clone()).collect(),
-                bytes: plan.bytes(),
-                eta_s: plan.bytes() / opts.bytes_per_s.max(1),
-                checks: plan.checks,
-                diff: plan.diff,
-                warnings: plan.warnings,
-                radio_usb,
-            })
+            card_preview(&card, &t, &p.edits)
         })();
         self.gear_target_done(&t);
         out
     }
 
+    /// A model from another radio as a new model on this card: reads the source, maps its
+    /// controls and previews the edit. Writes nothing.
+    pub fn gear_model_import(&self, p: &ModelImportParams) -> Result<ModelImport> {
+        use super::switchmap::{CardSource, Folder, InBackup};
+        use crate::gear::edgetx::{
+            board, card as ec, model as em,
+            yaml::{latin1, Doc},
+        };
+        let from = p.from.trim();
+        if from.is_empty() {
+            bail!(
+                "from is required: a card's mount or folder, a model file, or a radio backup id."
+            );
+        }
+        let path = PathBuf::from(from);
+        let snaps = self.snapshots();
+        let (source, file_bytes): (Box<dyn CardSource + '_>, Option<NamedBytes>) = if path.is_dir()
+        {
+            Card::open(&path)?;
+            (Box::new(Folder(path.clone())), None)
+        } else if path.is_file() {
+            let name = path
+                .file_name()
+                .map(|n| n.to_string_lossy().into_owned())
+                .unwrap_or_default();
+            let bytes = std::fs::read(&path)?;
+            // MODELS/modelNN.yml on a card copy: radio.yml is two folders up.
+            let root = path
+                .parent()
+                .and_then(std::path::Path::parent)
+                .map(std::path::Path::to_path_buf)
+                .unwrap_or_default();
+            (Box::new(Folder(root)), Some((name, bytes)))
+        } else {
+            let backup = snaps.get(from).map_err(|_| {
+                anyhow::anyhow!("{from:?} is not a folder, a model file or a backup id.")
+            })?;
+            (
+                Box::new(InBackup {
+                    snaps: &snaps,
+                    backup,
+                }),
+                None,
+            )
+        };
+        let radio = source
+            .read(ec::RADIO_FILE)
+            .and_then(|b| Doc::parse("radio.yml", &b).ok());
+        let from_board = p
+            .from_board
+            .clone()
+            .filter(|b| !b.trim().is_empty())
+            .or_else(|| radio.as_ref().and_then(|r| r.top_value("board")))
+            .map(|b| b.trim().to_ascii_lowercase())
+            .ok_or_else(|| anyhow::anyhow!("The source names no board; pass from_board."))?;
+        let (file, bytes) = match file_bytes {
+            Some(fb) => fb,
+            None => {
+                let f = match p.model.as_deref().map(str::trim).filter(|m| !m.is_empty()) {
+                    Some(m) => m.trim_start_matches("MODELS/").to_string(),
+                    None => radio.as_ref().and_then(ec::selected_in).ok_or_else(|| {
+                        anyhow::anyhow!("The source names no selected model; pass model.")
+                    })?,
+                };
+                let b = source
+                    .read(&format!("MODELS/{f}"))
+                    .ok_or_else(|| anyhow::anyhow!("The source has no MODELS/{f}."))?;
+                (f, b)
+            }
+        };
+        let src = Doc::parse(&file, &bytes).map_err(anyhow::Error::new)?;
+        let src_name = em::model_name(&src)
+            .map_err(anyhow::Error::new)?
+            .unwrap_or_default();
+
+        let t = self.gear_card_target(p.mount.as_ref(), p.device.as_deref())?;
+        let out = (|| {
+            let card = Card::open(&t.root)?;
+            let view = card.view(p.template.as_deref(), chrono::Local::now().date_naive())?;
+            let to_board = view.identity.board.clone();
+            let to = match p.to.as_deref().map(str::trim).filter(|s| !s.is_empty()) {
+                Some(f) => f.trim_start_matches("MODELS/").to_string(),
+                None => (0..100)
+                    .map(|n| format!("model{n:02}.yml"))
+                    .find(|f| !view.models.iter().any(|m| &m.file == f))
+                    .ok_or_else(|| anyhow::anyhow!("The card has no free model slot."))?,
+            };
+            let from_controls = board::inventory(Some(&from_board), None, Some(&src));
+            let to_controls = view.controls.clone();
+            let links = ec::effective_links(
+                &from_board,
+                &from_controls,
+                to_board.as_deref().unwrap_or(""),
+                &to_controls,
+                &p.links,
+            );
+            let translation = board::plan_translation(&src, &from_controls, &to_controls, &links)
+                .map_err(anyhow::Error::new)?;
+            let edit = Edit::ModelImport {
+                from_board: from_board.clone(),
+                text: latin1(&bytes),
+                to,
+                name: p
+                    .name
+                    .clone()
+                    .filter(|n| !n.trim().is_empty())
+                    .unwrap_or(src_name.clone()),
+                links: p.links.clone(),
+                template: p.template.clone(),
+            };
+            let preview = card_preview(&card, &t, std::slice::from_ref(&edit))?;
+            Ok(ModelImport {
+                edit,
+                from_board: from_board.clone(),
+                to_board,
+                from_controls,
+                to_controls,
+                links,
+                translation,
+                preview,
+            })
+        })();
+        self.gear_target_done(&t);
+        out
+    }
+}
+
+/// A file's name and bytes.
+type NamedBytes = (String, Vec<u8>);
+
+/// The preview of `edits` on `card`: the plan's checks and diff, and the write's time at
+/// the link's speed.
+fn card_preview(card: &Card, t: &CardTarget, edits: &[Edit]) -> Result<CardPreview> {
+    let plan = card.plan(edits, None)?;
+    let board = plan.identity.board.clone();
+    let radio_usb = t.c.as_ref().is_some_and(|c| c.usb.is_some())
+        || crate::gear::edgetx::board::spec(board.as_deref()).is_some_and(|s| s.internal_storage);
+    let opts = WriteOptions::for_card(radio_usb, board.as_deref());
+    Ok(CardPreview {
+        identity: plan.identity.clone(),
+        ready: plan.ready(),
+        files: plan.files.iter().map(|f| f.path.clone()).collect(),
+        bytes: plan.bytes(),
+        eta_s: opts.eta_s(plan.bytes(), plan.files.len()),
+        checks: plan.checks,
+        diff: plan.diff,
+        warnings: plan.warnings,
+        radio_usb,
+    })
+}
+
+impl Core {
     /// Lists the AppleDouble (`._*`) files macOS left on a card, and with `remove` and
     /// `confirm` deletes them. Only files that start with the AppleDouble magic count.
     /// After a removal on a connected card the card unmounts, as after every card job.

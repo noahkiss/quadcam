@@ -10,11 +10,15 @@
 //!   apply engine), and `card::release` (unmount, before "safe to unplug").
 //! - `radio`: the typed view of `radio.yml` for the radio's Settings editor, and the check
 //!   of each value a `RadioOp::SetScalar` writes.
+//! - `board`: each board's controls (switches, custom switches, pots, sliders), its
+//!   model-only keys and storage speed; the control map a model copied between radios
+//!   goes through.
 //! - `synth`: the synthetic card for tests and the mock core.
 //!
 //! QuadCam learned the format from EdgeTX's files and documentation and copies no EdgeTX
 //! code (EdgeTX is GPL-2.0; QuadCam is MIT).
 
+pub mod board;
 pub mod card;
 pub mod cli;
 pub mod editors;

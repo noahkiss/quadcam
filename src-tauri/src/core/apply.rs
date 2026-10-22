@@ -693,6 +693,9 @@ fn default_title(edits: &[Edit]) -> String {
             }
         }
         Some(Edit::Restore { .. }) => "Restore a backup".into(),
+        Some(Edit::ModelImport {
+            name, from_board, ..
+        }) => format!("Copy {name} from a {from_board} radio"),
         Some(Edit::ElrsOptions { options }) => match options.as_slice() {
             [one] => format!("Set {} = {}", one.option, one.value),
             many => format!("{} ELRS options", many.len()),

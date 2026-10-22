@@ -47,6 +47,11 @@ pub enum RadioOp {
     SetScalar { key: String, value: String },
     /// Selects a model (`model01.yml`): `currModel` and, when present, `currModelFilename`.
     SelectModel { file: String },
+    /// The type of a switch or pot slot the radio has (`switchConfig`, `potsConfig`), for a
+    /// radio whose switch modules swap or whose pot holes take a blanking plug. A switch
+    /// takes `none`, `2pos`, `3pos` or `toggle` (written in the file's own case); a pot
+    /// `none`, `with_detent` or `without_detent`; a slider `none` or `slider`.
+    SetControlType { control: String, value: String },
 }
 
 /// `radio.yml` keys `SetScalar` refuses.
@@ -110,6 +115,13 @@ pub struct CardView {
     /// The typed view of the model asked for.
     #[serde(default)]
     pub model: Option<em::ModelView>,
+    /// The radio's controls: switches with their types, custom switches as the model asked
+    /// for (else the selected model) sets them, pots and sliders.
+    #[serde(default)]
+    pub controls: Vec<super::board::BoardControl>,
+    /// The folder the radio plays its voice from (`SOUNDS/en`), from `ttsLanguage`.
+    #[serde(default)]
+    pub voice_folder: Option<String>,
 }
 
 /// One file a plan changes. `before` None: a new file; `after` None: a delete.
@@ -186,10 +198,7 @@ fn check(name: &str, r: Result<(), Refusal>) -> Check {
 
 /// Characters per checklist line, for boards QuadCam has measured (128x64: 20).
 pub fn checklist_width(board: Option<&str>) -> Option<usize> {
-    match board.map(|b| b.to_ascii_lowercase()).as_deref() {
-        Some("pocket") => Some(20),
-        _ => None,
-    }
+    super::board::spec(board).map(|s| s.checklist_width)
 }
 
 /// `board` and `semver` from `radio.yml` text. Reads through the YAML engine; a file the
@@ -386,17 +395,40 @@ impl Card {
                     .collect()
             })
             .unwrap_or_default();
-        let model = match model {
+        let (model, model_doc) = match model {
             Some(f) => {
                 let f = model_file_arg(f)?;
                 let b = self
                     .read(&format!("MODELS/{f}"))?
                     .with_context(|| format!("The card has no MODELS/{f}."))?;
                 let d = Doc::parse(&f, &b).map_err(anyhow::Error::new)?;
-                Some(em::view(&f, &d).map_err(anyhow::Error::new)?)
+                (Some(em::view(&f, &d).map_err(anyhow::Error::new)?), Some(d))
             }
-            None => None,
+            None => (None, None),
         };
+        let radio = self
+            .read(RADIO_FILE)
+            .ok()
+            .flatten()
+            .and_then(|b| Doc::parse("radio.yml", &b).ok());
+        let model_doc = model_doc.or_else(|| {
+            let f = selected.as_deref()?;
+            let b = self.read(&format!("MODELS/{f}")).ok()??;
+            Doc::parse(f, &b).ok()
+        });
+        let controls = super::board::inventory(
+            identity.board.as_deref(),
+            radio.as_ref(),
+            model_doc.as_ref(),
+        );
+        let voice_folder = radio.as_ref().map(|r| {
+            let lang = r
+                .top_value("ttsLanguage")
+                .map(|v| unquote(v.trim()).to_string())
+                .filter(|v| !v.is_empty())
+                .unwrap_or_else(|| "en".into());
+            format!("SOUNDS/{lang}")
+        });
         Ok(CardView {
             root: self.root.clone(),
             identity,
@@ -407,6 +439,8 @@ impl Card {
             clock: clock_check(&logs, today),
             marker: read_marker(&self.root),
             model,
+            controls,
+            voice_folder,
         })
     }
 
@@ -454,6 +488,7 @@ impl Card {
                     RefusalCode::RoundTrip => "Round trip",
                     RefusalCode::DeviceChanged => "Model identity",
                     RefusalCode::BadSetting => "Values in range",
+                    RefusalCode::Incompatible => "Controls fit the radio",
                     _ => "Shape understood",
                 },
                 Err(r),
@@ -632,6 +667,7 @@ pub fn apply_radio_op(
             d.set_top_scalar(key, &value)?;
             Ok(())
         }
+        RadioOp::SetControlType { control, value } => set_control_type(d, control, value),
         RadioOp::SelectModel { file } => {
             let f = model_file_arg(file).map_err(|e| bad(format!("{e:#}")))?;
             if !has_model(&f) {
@@ -645,6 +681,63 @@ pub fn apply_radio_op(
             Ok(())
         }
     }
+}
+
+/// Sets the type of one switch or pot slot `radio.yml` lists. Refuses a slot the file
+/// lacks, a custom switch (each model sets those), and a type the slot cannot take.
+fn set_control_type(d: &mut Doc, control: &str, value: &str) -> Result<(), Refusal> {
+    let control = control.trim();
+    let want = value.trim().to_ascii_lowercase();
+    if super::board::is_custom_name(control) {
+        return Err(bad(format!(
+            "{control} is a custom switch: each model sets its type."
+        )));
+    }
+    let (block, node) = match d.find(&["switchConfig", control])? {
+        Some(n) => ("switchConfig", n),
+        None => match d.find(&["potsConfig", control])? {
+            Some(n) => ("potsConfig", n),
+            None => {
+                return Err(bad(format!(
+                    "radio.yml lists no {control} in switchConfig or potsConfig; QuadCam does not add a slot."
+                )))
+            }
+        },
+    };
+    let ty = node
+        .child("type")
+        .ok_or_else(|| bad(format!("{control} in radio.yml has no type line.")))?
+        .clone();
+    let old = unquote(ty.value.trim()).to_string();
+    let new = if block == "switchConfig" {
+        if !["none", "2pos", "3pos", "toggle"].contains(&want.as_str()) {
+            return Err(bad(format!(
+                "A switch is none, 2pos, 3pos or toggle, not {value:?}."
+            )));
+        }
+        // The file's own case: EdgeTX 2.11 wrote `2pos`, 2.12 writes `2POS`.
+        if old.chars().any(|c| c.is_ascii_lowercase()) {
+            want
+        } else {
+            want.to_ascii_uppercase()
+        }
+    } else {
+        let slider = old == "slider" || control.starts_with("SL");
+        let ok: &[&str] = if slider {
+            &["none", "slider"]
+        } else {
+            &["none", "with_detent", "without_detent"]
+        };
+        if !ok.contains(&want.as_str()) {
+            return Err(bad(format!(
+                "{control} is {}, not {value:?}.",
+                ok.join(", ")
+            )));
+        }
+        want
+    };
+    d.set_line(ty.line, format!("{}type: {new}", " ".repeat(ty.indent)));
+    Ok(())
 }
 
 /// The edits' working state: each touched file's doc, or raw bytes for non-YAML files
@@ -712,6 +805,14 @@ impl Work<'_> {
             }
             Edit::Checklist { model, text } => self.checklist(model, text),
             Edit::ModelCopy { from, to, name } => self.copy(from, to, name),
+            Edit::ModelImport {
+                from_board,
+                text,
+                to,
+                name,
+                links,
+                template,
+            } => self.import(from_board, text, to, name, links, template.as_deref()),
             Edit::ModelDelete { file } => {
                 let f = model_file_arg(file).map_err(|e| bad(format!("{e:#}")))?;
                 let sel = match self.docs.get(RADIO_FILE) {
@@ -748,7 +849,7 @@ impl Work<'_> {
                 self.select_asked = true;
                 self.exists(&format!("MODELS/{f}"))
             }
-            RadioOp::SetScalar { .. } => false,
+            RadioOp::SetScalar { .. } | RadioOp::SetControlType { .. } => false,
         };
         let mut warnings = std::mem::take(&mut self.warnings);
         let r = self
@@ -802,24 +903,141 @@ impl Work<'_> {
         }
         let src = self.doc(&format!("MODELS/{from}"))?.render();
         let mut d = Doc::parse(&to, &src)?;
-        em::apply(
-            &mut d,
-            &[ModelOp::Rename {
-                name: name.to_string(),
-            }],
-        )?;
-        if let Some(t) = d.top("timers")? {
-            for c in &t.children {
-                if let Some(v) = c.child("value") {
-                    d.set_line(v.line, format!("{}value: 0", " ".repeat(v.indent)));
-                }
-            }
-        }
-        // A copy keeps no ELRS model id of its source; set one with set_model_id.
-        em::apply(&mut d, &[ModelOp::SetModelId { module: 0, id: 0 }])?;
+        fresh_copy(&mut d, name)?;
         self.raw.remove(&to_path);
         self.docs.insert(to_path, d);
         Ok(())
+    }
+
+    /// A model from another radio (its board and file text) as a new model file: each
+    /// control it reads mapped through `links` on top of the two boards' default links,
+    /// the board-only keys swapped (a GX12's custom switches from `template`, else the
+    /// selected model), then made a fresh copy as `copy` does.
+    fn import(
+        &mut self,
+        from_board: &str,
+        text: &str,
+        to: &str,
+        name: &str,
+        links: &[super::board::ControlLink],
+        template: Option<&str>,
+    ) -> Result<(), Refusal> {
+        use super::board;
+        let to = model_file_arg(to).map_err(|e| bad(format!("{e:#}")))?;
+        let to_path = format!("MODELS/{to}");
+        if self.exists(&to_path) {
+            return Err(bad(format!("{to_path} exists; delete it first.")));
+        }
+        let unknown = |b: &str| {
+            Refusal::new(
+                RefusalCode::Incompatible,
+                format!("QuadCam does not know the controls of board {b}; nothing was written."),
+            )
+        };
+        let from_spec = board::spec(Some(from_board)).ok_or_else(|| unknown(from_board))?;
+        let to_board = self.board.clone().unwrap_or_default();
+        let to_spec = board::spec(Some(&to_board)).ok_or_else(|| unknown(&to_board))?;
+        let bytes =
+            to_latin1(text).ok_or_else(|| bad("The model text holds Latin-1 characters only."))?;
+        let mut d = Doc::parse(&to, &bytes)?;
+        let radio = match self.docs.get(RADIO_FILE) {
+            Some(r) => Some(r.clone()),
+            None => self
+                .card
+                .read(RADIO_FILE)
+                .ok()
+                .flatten()
+                .and_then(|b| Doc::parse("radio.yml", &b).ok()),
+        };
+        let template = self.template(template, radio.as_ref(), to_spec)?;
+        let from_c = board::inventory(Some(from_spec.board), None, Some(&d));
+        let to_c = board::inventory(Some(to_spec.board), radio.as_ref(), template.as_ref());
+        let links = effective_links(from_spec.board, &from_c, to_spec.board, &to_c, links);
+        let t = board::translate(&mut d, &from_c, &to_c, &links)?;
+        for w in t.warnings {
+            self.warn(w);
+        }
+        if from_spec.board != to_spec.board {
+            for n in board::swap_board_keys(&mut d, from_spec, to_spec, template.as_ref())? {
+                self.warn(n);
+            }
+            for k in ["beepANACenter", "potsWarnEnabled"] {
+                if d.top_value(k)
+                    .is_some_and(|v| !matches!(v.trim(), "0" | ""))
+                {
+                    self.warn(format!(
+                        "{k} counts pots by their place on the {} radio; check pot warnings and centre beeps on the {} radio.",
+                        from_spec.board, to_spec.board
+                    ));
+                }
+            }
+        }
+        if let (Some(v), true) = (
+            radio.as_ref().and_then(|r| r.top_value("semver")),
+            d.top_value("semver").is_some(),
+        ) {
+            d.set_top_scalar("semver", v.trim())?;
+        }
+        let module = d
+            .find(&["moduleData", "0", "type"])?
+            .map(|n| n.value.trim().to_string());
+        let internal = radio
+            .as_ref()
+            .and_then(|r| r.top_value("internalModule"))
+            .map(|v| v.trim().to_string());
+        if let (Some(m), Some(i)) = (module, internal) {
+            if m != i {
+                self.warn(format!(
+                    "The model's internal module is {m}; this radio's is {i}. Check the model's internal RF before you fly."
+                ));
+            }
+        }
+        fresh_copy(&mut d, name)?;
+        self.raw.remove(&to_path);
+        self.docs.insert(to_path, d);
+        Ok(())
+    }
+
+    fn warn(&mut self, w: String) {
+        if !self.warnings.contains(&w) {
+            self.warnings.push(w);
+        }
+    }
+
+    /// The model on this card whose board-only setup an imported model takes: the one
+    /// named, else the selected model, else the first model that has that setup. None
+    /// when the board has no model-only keys.
+    fn template(
+        &mut self,
+        named: Option<&str>,
+        radio: Option<&Doc>,
+        spec: &super::board::BoardSpec,
+    ) -> Result<Option<Doc>, Refusal> {
+        if spec.model_only_keys.is_empty() {
+            return Ok(None);
+        }
+        if let Some(f) = named {
+            let f = model_file_arg(f).map_err(|e| bad(format!("{e:#}")))?;
+            return Ok(Some(self.doc(&format!("MODELS/{f}"))?.clone()));
+        }
+        let has_keys = |d: &Doc| {
+            spec.model_only_keys
+                .iter()
+                .any(|k| d.top(k).ok().flatten().is_some())
+        };
+        let mut files: Vec<String> = radio.and_then(selected_in).into_iter().collect();
+        files.extend(self.card.model_files());
+        for f in files {
+            let path = format!("MODELS/{f}");
+            if !self.exists(&path) {
+                continue;
+            }
+            let d = self.doc(&path)?.clone();
+            if has_keys(&d) {
+                return Ok(Some(d));
+            }
+        }
+        Ok(None)
     }
 
     /// Every touched file and its new bytes (None: delete). Edited YAML files get
@@ -842,6 +1060,43 @@ impl Work<'_> {
 
 fn bad(reason: impl Into<String>) -> Refusal {
     Refusal::new(RefusalCode::BadSetting, reason)
+}
+
+/// A copied model's own name, every timer value 0, and no ELRS model id of its source
+/// (set one with `set_model_id`).
+fn fresh_copy(d: &mut Doc, name: &str) -> Result<(), Refusal> {
+    em::apply(
+        d,
+        &[ModelOp::Rename {
+            name: name.to_string(),
+        }],
+    )?;
+    if let Some(t) = d.top("timers")? {
+        for c in &t.children {
+            if let Some(v) = c.child("value") {
+                d.set_line(v.line, format!("{}value: 0", " ".repeat(v.indent)));
+            }
+        }
+    }
+    em::apply(d, &[ModelOp::SetModelId { module: 0, id: 0 }])
+}
+
+/// The two boards' default links, with each of `given` in place of the default for its
+/// control.
+pub fn effective_links(
+    from_board: &str,
+    from: &[super::board::BoardControl],
+    to_board: &str,
+    to: &[super::board::BoardControl],
+    given: &[super::board::ControlLink],
+) -> Vec<super::board::ControlLink> {
+    let mut out = super::board::default_links(from_board, from, to_board, to);
+    for g in given {
+        out.retain(|l| l.from != g.from);
+        out.push(g.clone());
+    }
+    out.sort_by(|a, b| a.from.cmp(&b.from));
+    out
 }
 
 // ----- diff -----
@@ -968,6 +1223,9 @@ pub struct WriteOptions {
     pub floor_bytes_per_s: u64,
     /// The link's usual speed, for the ETA.
     pub bytes_per_s: u64,
+    /// What each file costs beyond its bytes (open, rename, folder sync, read-back), for
+    /// the ETA.
+    pub per_file: Duration,
     /// Set to stop after the current file.
     pub stop: Arc<AtomicBool>,
     /// Tests: this path's read-back counts as a mismatch, as a bad card would give.
@@ -992,6 +1250,7 @@ impl WriteOptions {
             base_timeout: Duration::from_secs(20),
             floor_bytes_per_s: 1_000_000,
             bytes_per_s: 10_000_000,
+            per_file: Duration::from_millis(20),
             stop: Arc::new(AtomicBool::new(false)),
             fail_readback: None,
             stuck_wait: Duration::from_secs(60),
@@ -1001,12 +1260,14 @@ impl WriteOptions {
         }
     }
 
-    /// A radio in USB Storage mode: about 0.3 MB/s (measured on a 2.12 radio).
+    /// A radio in USB Storage mode: about 0.3 MB/s (measured on a 2.12 radio), 20 small
+    /// files in 5.5 s.
     pub fn radio_usb() -> Self {
         Self {
             base_timeout: Duration::from_secs(30),
             floor_bytes_per_s: 100_000,
             bytes_per_s: 300_000,
+            per_file: Duration::from_millis(275),
             stop: Arc::new(AtomicBool::new(false)),
             fail_readback: None,
             stuck_wait: Duration::from_secs(120),
@@ -1014,6 +1275,28 @@ impl WriteOptions {
             change_after: None,
             real_cards: PathBuf::from(REAL_CARDS),
         }
+    }
+
+    /// The options for a card on this board: over the radio's USB (`radio_usb`, always for
+    /// a board that keeps its files in its own flash) at the board's measured speed, else
+    /// in a reader.
+    pub fn for_card(radio_usb: bool, board: Option<&str>) -> Self {
+        let spec = super::board::spec(board);
+        if !radio_usb && !spec.is_some_and(|s| s.internal_storage) {
+            return Self::reader();
+        }
+        let mut o = Self::radio_usb();
+        if let Some(s) = spec {
+            o.bytes_per_s = s.usb_bytes_per_s;
+        }
+        o
+    }
+
+    /// Seconds to write `bytes` in `files` files, rounded up.
+    pub fn eta_s(&self, bytes: u64, files: usize) -> u64 {
+        let ms = bytes.saturating_mul(1000) / self.bytes_per_s.max(1)
+            + self.per_file.as_millis() as u64 * files as u64;
+        ms.div_ceil(1000)
     }
 
     pub fn timeout_for(&self, bytes: u64) -> Duration {
@@ -1401,7 +1684,7 @@ pub fn write(
             path: f.path.clone(),
             bytes_done: done,
             bytes_total: total,
-            eta_s: (total - done) / opts.bytes_per_s.max(1),
+            eta_s: opts.eta_s(total - done, plan.files.len().saturating_sub(i)),
             stopping: false,
         });
         let path = root.join(&f.path);

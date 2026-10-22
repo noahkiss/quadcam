@@ -129,6 +129,7 @@ expression: "Core::METHODS"
   "gear_voice_choose_radios",
   "gear_voice_pack_delete",
   "gear_card_preview",
+  "gear_model_import",
   "gear_switch_map",
   "gear_radio",
   "gear_radio_watch",

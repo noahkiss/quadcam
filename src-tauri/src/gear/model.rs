@@ -479,6 +479,22 @@ pub enum Edit {
     },
     /// Deletes a model file; never the selected one.
     ModelDelete { file: String },
+    /// A model from another radio's card or backup as a new model file: its controls
+    /// mapped through `links` (on top of the two boards' default links), the board-only
+    /// setup (a GX12's custom switches) from `template` or the selected model, its own
+    /// name, every timer value 0, no model id.
+    ModelImport {
+        /// The source radio's board (`pocket`).
+        from_board: String,
+        /// The source model file's text.
+        text: String,
+        to: String,
+        name: String,
+        #[serde(default)]
+        links: Vec<super::edgetx::board::ControlLink>,
+        #[serde(default)]
+        template: Option<String>,
+    },
     /// ExpressLRS options of a saved ELRS device, set over CRSF (design 6.4). Never the
     /// binding phrase.
     ElrsOptions { options: Vec<super::elrs::ElrsSet> },

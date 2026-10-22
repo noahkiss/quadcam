@@ -457,6 +457,12 @@ export const commands = {
 	gearCard: (params: CardParams) => typedError<GearCard, string>(__TAURI_INVOKE("gear_card", { params })),
 	/**  Checks and diffs EdgeTX card edits. Writes nothing. */
 	gearCardPreview: (params: CardPreviewParams) => typedError<CardPreview, string>(__TAURI_INVOKE("gear_card_preview", { params })),
+	/**
+	 *  A model from another radio's card, a model file or a radio backup as a new model
+	 *  on this card: each control it reads mapped onto this radio's, what cannot be
+	 *  mapped, and the card preview. Writes nothing; stage the answer's edit to write it.
+	 */
+	gearModelImport: (params: ModelImportParams) => typedError<ModelImport, string>(__TAURI_INVOKE("gear_model_import", { params })),
 	/**  Lists the ._ files macOS left on a card; with remove and confirm, deletes them. */
 	gearCardClean: (params: CardCleanParams) => typedError<CardClean, string>(__TAURI_INVOKE("gear_card_clean", { params })),
 	/**  A radio on its USB serial port (EdgeTX CLI): identify, ls, play, beep, reboot, or verify the card's files against a backup. */
@@ -1240,6 +1246,31 @@ export type BlobRef = {
 	size: number,
 };
 
+/**  One control of a radio. */
+export type BoardControl = {
+	/**  `SA`, `SW1`, `P1`, `SL1`. */
+	name: string,
+	kind: BoardControlKind,
+	/**  `2POS`, `3POS` or `TOGGLE` (held while pressed) for a switch or a custom switch. */
+	switch_type?: string | null,
+	/**  A pot with a centre detent. */
+	detent?: boolean,
+	/**  The name the radio or the model gives it, when it has one. */
+	label?: string | null,
+	source: ControlSource,
+};
+
+/**  What kind of control a radio has. */
+export type BoardControlKind = 
+/**  A switch on the case (`SA`). */
+"switch" | 
+/**  A button whose type, group and LED colour each model sets (`SW1` on a GX12). */
+"custom" | 
+/**  A knob (`P1`). */
+"pot" | 
+/**  A slider (`SL1`). */
+"slider";
+
 /**  One known issue of a board, or a board and build. */
 export type BoardNote = {
 	board: string,
@@ -1516,9 +1547,15 @@ export type CardPreview = {
 	/**  Files the edits would write or delete. */
 	files: string[],
 	bytes: number,
-	/**  Seconds at the link's usual speed (a radio over USB writes about 0.3 MB/s). */
+	/**
+	 *  Seconds at the link's measured speed, plus each file's own cost (a Pocket over USB
+	 *  writes about 0.3 MB/s, a GX12 about 0.36 MB/s; a card in a reader is fast).
+	 */
 	eta_s: number,
-	/**  The card is in the radio, over USB (slow), not in a reader. */
+	/**
+	 *  The card is in the radio, over USB (slow), not in a reader. Always true for a
+	 *  radio that keeps its files in its own flash (a GX12).
+	 */
 	radio_usb: boolean,
 };
 
@@ -1568,6 +1605,13 @@ export type CardView = {
 	marker?: string | null,
 	/**  The typed view of the model asked for. */
 	model?: ModelView | null,
+	/**
+	 *  The radio's controls: switches with their types, custom switches as the model asked
+	 *  for (else the selected model) sets them, pots and sliders.
+	 */
+	controls?: BoardControl[],
+	/**  The folder the radio plays its voice from (`SOUNDS/en`), from `ttsLanguage`. */
+	voice_folder?: string | null,
 };
 
 export type Catalog = {
@@ -1963,6 +2007,15 @@ export type Connected = {
 
 export type ControlKind = "switch" | "trim" | "stick";
 
+/**
+ *  One control of the source radio and the control of the target radio that takes its
+ *  place. The switch-assignment editor sets these.
+ */
+export type ControlLink = {
+	from: string,
+	to: string,
+};
+
 /**  One physical control and what each of its positions does. */
 export type ControlRow = {
 	/**  `SA`, `TrimThrDown`, `stick:Thr`. */
@@ -1973,6 +2026,25 @@ export type ControlRow = {
 	/**  `2POS`, `3POS` or `TOGGLE` for a switch. */
 	switch_type?: string | null,
 	positions: Position[],
+};
+
+/**  Where a control's type was read. */
+export type ControlSource = 
+/**  QuadCam's board table. */
+"board" | 
+/**  `radio.yml` (`switchConfig`, `potsConfig`). */
+"radio" | 
+/**  The model's custom-switch setup. */
+"model";
+
+/**  How a model's controls map onto another radio's. */
+export type ControlUse = {
+	/**  The source radio's control the model reads. */
+	from: string,
+	/**  The target radio's control; None when nothing maps it. */
+	to?: string | null,
+	/**  Why the link needs a look (a 3-position switch on a 2-position one, ...). */
+	note?: string | null,
 };
 
 /**  Why a copy was taken. */
@@ -2125,6 +2197,35 @@ export type CueSettings = {
 	 *  the radio seen last.
 	 */
 	voice_pack?: string | null,
+};
+
+/**  Which layout a model's custom-switch setup is in. */
+export type CustomLayout = 
+/**  The `customSwitches:` block EdgeTX 2.12 writes. */
+"blocks" | 
+/**
+ *  The 2.11 bit fields (`functionSwitchConfig` and its siblings), which 2.12 reads and
+ *  replaces on its next save of the model.
+ */
+"legacy";
+
+/**  One custom switch as a model sets it up. */
+export type CustomSwitch = {
+	/**  `SW1`; on a GX12 also `SA` and `SD`, whose LEDs a model may colour. */
+	switch: string,
+	/**  `2POS`, `TOGGLE`, `NONE`, or `GLOBAL` (the radio's own setup applies). */
+	switch_type: string,
+	/**  Its group: 0 none; in a group, turning one on turns the others off. */
+	group: number,
+	/**  Its state at power-on: `off`, `on` or `previous`. */
+	start: string,
+	/**  On when the model was last saved. */
+	state: boolean,
+	name?: string | null,
+	/**  LED colour when on and when off, `[r, g, b]`. */
+	on_color?: [number, number, number] | null,
+	off_color?: [number, number, number] | null,
+	layout: CustomLayout,
 };
 
 /**  The answer to a cut change. */
@@ -2527,6 +2628,17 @@ export type Edit =
 { kind: "model_copy"; from: string; to: string; name: string } | 
 /**  Deletes a model file; never the selected one. */
 { kind: "model_delete"; file: string } | 
+/**
+ *  A model from another radio's card or backup as a new model file: its controls
+ *  mapped through `links` (on top of the two boards' default links), the board-only
+ *  setup (a GX12's custom switches) from `template` or the selected model, its own
+ *  name, every timer value 0, no model id.
+ */
+{ kind: "model_import"; 
+/**  The source radio's board (`pocket`). */
+from_board: string; 
+/**  The source model file's text. */
+text: string; to: string; name: string; links?: ControlLink[]; template?: string | null } | 
 /**
  *  ExpressLRS options of a saved ELRS device, set over CRSF (design 6.4). Never the
  *  binding phrase.
@@ -4459,6 +4571,54 @@ export type ModelEntry = {
 	selected: boolean,
 };
 
+/**
+ *  What importing a model would do: the edit to stage, both radios' controls, the links
+ *  used and each control the model reads, and the card preview.
+ */
+export type ModelImport = {
+	/**  Stage it on the radio (`gear_change_stage`) to write it. */
+	edit: Edit,
+	from_board: string,
+	to_board?: string | null,
+	from_controls: BoardControl[],
+	to_controls: BoardControl[],
+	/**  The links in effect: the boards' defaults with the ones given on top. */
+	links: ControlLink[],
+	translation: Translation,
+	preview: CardPreview,
+};
+
+/**
+ *  `gear_model_import`: a model from another radio's card, a model file or a radio backup,
+ *  as a new model on this card. Nothing is written: the answer holds the edit to stage.
+ */
+export type ModelImportParams = {
+	/**  The card that gets the model (its mount); default the one card plugged in. */
+	mount?: string | null,
+	/**  A connected radio's device id, instead of `mount`. */
+	device?: string | null,
+	/**
+	 *  Where the model comes from: another card's mount or a copy of its folder, one model
+	 *  file, or a radio backup id (`<device>/<name>`).
+	 */
+	from: string,
+	/**  The model file in `from` (`model01.yml`); default its selected model. */
+	model?: string | null,
+	/**  The source radio's board, when `from` is a model file with no `radio.yml` beside it. */
+	from_board?: string | null,
+	/**  The new model file (`model03.yml`); default the first free one. */
+	to?: string | null,
+	/**  The new model's name; default the source's. */
+	name?: string | null,
+	/**  Links in place of the two boards' default links, per source control. */
+	links?: ControlLink[],
+	/**
+	 *  The model on this card whose board-only setup (a GX12's custom switches) the new
+	 *  model takes; default the selected model.
+	 */
+	template?: string | null,
+};
+
 /**  A model a provider offers. */
 export type ModelInfo = {
 	id: string,
@@ -4570,6 +4730,11 @@ export type ModelView = {
 	checklist: boolean,
 	/**  `checklistInteractive`. */
 	checklist_interactive: boolean,
+	/**
+	 *  The model's custom switches (`SW1`..`SW6` on a GX12): type, group, start and LED
+	 *  colours. Empty on a board without them.
+	 */
+	custom_switches?: CustomSwitch[],
 };
 
 /**  An ELRS (or other) model id for one module slot. */
@@ -5695,7 +5860,14 @@ export type RadioOp =
  */
 { op: "set_scalar"; key: string; value: string } | 
 /**  Selects a model (`model01.yml`): `currModel` and, when present, `currModelFilename`. */
-{ op: "select_model"; file: string };
+{ op: "select_model"; file: string } | 
+/**
+ *  The type of a switch or pot slot the radio has (`switchConfig`, `potsConfig`), for a
+ *  radio whose switch modules swap or whose pot holes take a blanking plug. A switch
+ *  takes `none`, `2pos`, `3pos` or `toggle` (written in the file's own case); a pot
+ *  `none`, `with_detent` or `without_detent`; a slider `none` or `slider`.
+ */
+{ op: "set_control_type"; control: string; value: string };
 
 /**  `gear_radio`: how long to wait for a report. */
 export type RadioParams = {
@@ -7410,6 +7582,15 @@ export type Totals = {
 	bytes: number,
 	seconds: number | null,
 	flying: number | null,
+};
+
+/**  What a translation did, or would need. */
+export type Translation = {
+	/**  Each control the model reads, in name order. */
+	used: ControlUse[],
+	/**  Controls the model reads that no link maps. */
+	unmapped: string[],
+	warnings: string[],
 };
 
 export type TrashReport = {

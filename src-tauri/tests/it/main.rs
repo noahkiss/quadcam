@@ -25,6 +25,7 @@ mod gear_fc;
 mod gear_firmware;
 mod gear_firmware_restore;
 mod gear_sim_sync;
+mod gx12_card;
 mod import;
 mod join;
 mod library;

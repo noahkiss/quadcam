@@ -23,6 +23,7 @@ mcp.action quadcam_gear.firmware_restore_plan
 mcp.action quadcam_gear.flash_plan
 mcp.action quadcam_gear.flights
 mcp.action quadcam_gear.model
+mcp.action quadcam_gear.model_import
 mcp.action quadcam_gear.osd
 mcp.action quadcam_gear.packs
 mcp.action quadcam_gear.preflight
@@ -172,10 +173,12 @@ mcp.param quadcam_gear.history boolean
 mcp.param quadcam_gear.id string
 mcp.param quadcam_gear.image string
 mcp.param quadcam_gear.invert boolean
+mcp.param quadcam_gear.links array<string>
 mcp.param quadcam_gear.live boolean
 mcp.param quadcam_gear.log_dir string
 mcp.param quadcam_gear.model string
 mcp.param quadcam_gear.mount string
+mcp.param quadcam_gear.name string
 mcp.param quadcam_gear.pack string
 mcp.param quadcam_gear.parts array<string>
 mcp.param quadcam_gear.path string
@@ -194,6 +197,7 @@ mcp.param quadcam_gear.sim_targets array<string>
 mcp.param quadcam_gear.staged boolean
 mcp.param quadcam_gear.summarize boolean
 mcp.param quadcam_gear.target_v number
+mcp.param quadcam_gear.template string
 mcp.param quadcam_gear.threshold integer
 mcp.param quadcam_gear.to string
 mcp.param quadcam_gear.version string

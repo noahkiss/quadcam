@@ -1558,3 +1558,39 @@ fn mcp_card_and_change_actions() {
         backups
     );
 }
+
+#[test]
+fn a_gx12_card_takes_a_model_from_a_pocket_end_to_end() {
+    let b = bench(Opts {
+        card: SynthCard::gx12(),
+        ..Default::default()
+    });
+    let pocket = synth::model_yml("POCKET ONE", synth::Layout::Saved212, "2.12.4", true);
+    let c = stage(
+        &b,
+        vec![Edit::ModelImport {
+            from_board: "pocket".into(),
+            text: pocket,
+            to: "model04.yml".into(),
+            name: "POCKET ONE".into(),
+            links: vec![],
+            template: None,
+        }],
+    );
+    assert_eq!(c.title, "Copy POCKET ONE from a pocket radio");
+    let p = plan(&b, &c);
+    assert!(p.checks.iter().all(|k| k.ok), "{:?}", p.checks);
+    let r = b.core.gear_apply(&req(&c, &p)).unwrap();
+    assert_eq!(r.status, ChangeStatus::Verified, "{}", r.message);
+    let m = read(&b, "MODELS/model04.yml");
+    assert!(m.contains("name: \"POCKET ONE\""));
+    assert!(m.contains("semver: 2.12.5"));
+    assert!(
+        m.contains("functionSwitchConfig: 2730"),
+        "the selected model's setup"
+    );
+    // Only the new model (and Spotlight's marker) was written.
+    let mut files = r.files.clone();
+    files.sort();
+    assert_eq!(files, [".metadata_never_index", "MODELS/model04.yml"]);
+}

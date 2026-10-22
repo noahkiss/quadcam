@@ -16,9 +16,9 @@ pub use crate::core::{
 };
 pub use crate::core::{
     BoardNotesParams, CardClean, CardCleanParams, CardParams, CardPreview, CardPreviewParams,
-    DeviceSaveParams, FcJob, FcPortParams, FcReadParams, GearCard, GearStatus, OsdParams,
-    PollPauseParams, RadioParams, RadioWatchParams, RatesParams, RatesPreview, RatesPreviewParams,
-    ReminderParams, SimsParams, SwitchMapParams, UsbTimer,
+    DeviceSaveParams, FcJob, FcPortParams, FcReadParams, GearCard, GearStatus, ModelImport,
+    ModelImportParams, OsdParams, PollPauseParams, RadioParams, RadioWatchParams, RatesParams,
+    RatesPreview, RatesPreviewParams, ReminderParams, SimsParams, SwitchMapParams, UsbTimer,
 };
 pub use crate::core::{
     CalibrateParams, CalibrateView, SimCalibration, SimCalibrationParams, SimCalibrationSaveParams,
@@ -306,6 +306,10 @@ macro_rules! with_gear_rows {
             gear_voice_pack_delete(params: PackDeleteParams) -> PackDeleteReport = |c| c.gear_voice_pack_delete(&params);
             /// Checks and diffs EdgeTX card edits. Writes nothing.
             gear_card_preview(params: CardPreviewParams) -> CardPreview = |c| c.gear_card_preview(&params);
+            /// A model from another radio's card, a model file or a radio backup as a new model
+            /// on this card: each control it reads mapped onto this radio's, what cannot be
+            /// mapped, and the card preview. Writes nothing; stage the answer's edit to write it.
+            gear_model_import(params: ModelImportParams) -> ModelImport = |c| c.gear_model_import(&params);
             /// The switch map: each control's positions with their channel values, FC modes
             /// and radio effects, from an EdgeTX model and a Betaflight dump; with `live`,
             /// where each control is now. Reads only.

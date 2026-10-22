@@ -143,6 +143,10 @@ pub struct ModelView {
     pub checklist: bool,
     /// `checklistInteractive`.
     pub checklist_interactive: bool,
+    /// The model's custom switches (`SW1`..`SW6` on a GX12): type, group, start and LED
+    /// colours. Empty on a board without them.
+    #[serde(default)]
+    pub custom_switches: Vec<super::board::CustomSwitch>,
 }
 
 // ----- names and encodings -----
@@ -429,6 +433,7 @@ pub fn view(file: &str, doc: &Doc) -> Result<ModelView, Refusal> {
         screens,
         checklist: doc.top_value("displayChecklist").as_deref() == Some("1"),
         checklist_interactive: doc.top_value("checklistInteractive").as_deref() == Some("1"),
+        custom_switches: super::board::custom_switches(doc),
     })
 }
 
@@ -899,18 +904,47 @@ fn check_comparison(doc: &Doc, func: &str, def: &str) -> Result<(), Refusal> {
     Ok(())
 }
 
+/// The top-level block `key`. A model without one (a radio's factory model has no logical
+/// switches and no timers) gets an empty block before the first of `before` it has, where
+/// EdgeTX writes it; with none of them, the edit refuses.
+fn top_block(doc: &mut Doc, key: &str, before: &[&str]) -> Result<Node, Refusal> {
+    if let Some(n) = doc.top(key)? {
+        return Ok(n);
+    }
+    let mut at = None;
+    for b in before {
+        if let Some(n) = doc.top(b)? {
+            at = Some(n.line);
+            break;
+        }
+    }
+    let at = at.ok_or_else(|| {
+        bad(format!(
+            "{} has no {key} block and no place for one; nothing was written.",
+            doc.name
+        ))
+    })?;
+    doc.splice(at..at, vec![format!("{key}: ")]);
+    Ok(doc.top(key)?.expect("the block just added"))
+}
+
+/// Where a new `logicalSw:` block goes: before the blocks EdgeTX writes after it.
+const LS_BEFORE: &[&str] = &["customFn", "flightModeData", "thrTraceSrc"];
+/// Where a new `timers:` block goes: after the header, before the model's settings.
+const TIMERS_BEFORE: &[&str] = &["telemetryProtocol", "thrTrim", "noGlobalFunctions"];
+
 pub(super) fn set_ls(doc: &mut Doc, index: u32, ls: Option<&LsDef>) -> Result<(), Refusal> {
     if index >= MAX_LOGICAL_SWITCHES {
         return Err(bad(format!(
             "Logical switches are L1-L{MAX_LOGICAL_SWITCHES}."
         )));
     }
-    let node = doc.top("logicalSw")?.ok_or_else(|| {
-        bad(format!(
-            "{} has no logicalSw block; nothing was written.",
-            doc.name
-        ))
-    })?;
+    let node = match (doc.top("logicalSw")?, ls) {
+        (Some(n), _) => n,
+        // Nothing to remove from a model without logical switches.
+        (None, None) => return Ok(()),
+        (None, Some(_)) => top_block(doc, "logicalSw", LS_BEFORE)?,
+    };
     let items = indexed(doc, &node, false)?;
     for (i, (_, f)) in items.iter().enumerate() {
         if f.iter()
@@ -1139,13 +1173,8 @@ const TIMER_NEW: &[(&str, &str)] = &[
 ];
 const TIMER_QUOTED: &[&str] = &["swtch", "name"];
 
-fn timers_node(doc: &Doc) -> Result<Node, Refusal> {
-    doc.top("timers")?.ok_or_else(|| {
-        bad(format!(
-            "{} has no timers block; nothing was written.",
-            doc.name
-        ))
-    })
+fn timers_node(doc: &mut Doc) -> Result<Node, Refusal> {
+    top_block(doc, "timers", TIMERS_BEFORE)
 }
 
 pub(super) fn render_indexed(n: &Node, items: &BTreeMap<u32, Vec<Field>>) -> Vec<String> {
@@ -1264,7 +1293,12 @@ fn swap_timers(doc: &mut Doc, a: u32, b: u32) -> Result<(), Refusal> {
     if a >= MAX_TIMERS || b >= MAX_TIMERS || a == b {
         return Err(bad(format!("Swap two different timers, 1-{MAX_TIMERS}.")));
     }
-    let n = timers_node(doc)?;
+    let n = doc.top("timers")?.ok_or_else(|| {
+        bad(format!(
+            "{} has no timers block; nothing was written.",
+            doc.name
+        ))
+    })?;
     let mut items: BTreeMap<u32, Vec<Field>> = indexed(doc, &n, false)?.into_iter().collect();
     let ta = items.remove(&a);
     let tb = items.remove(&b);
@@ -1290,9 +1324,10 @@ fn swap_timers(doc: &mut Doc, a: u32, b: u32) -> Result<(), Refusal> {
 fn set_switch_warnings(doc: &mut Doc, want: &[SwitchWarning]) -> Result<(), Refusal> {
     for w in want {
         let b = w.switch.as_bytes();
-        if b.len() != 2 || b[0] != b'S' || !b[1].is_ascii_uppercase() {
+        let case_switch = b.len() == 2 && b[0] == b'S' && b[1].is_ascii_uppercase();
+        if !case_switch && !super::board::is_custom_name(&w.switch) {
             return Err(bad(format!(
-                "{:?} is not a switch (SA, SB, ...).",
+                "{:?} is not a switch (SA, SB, ..., or SW1 on a radio with custom switches).",
                 w.switch
             )));
         }
