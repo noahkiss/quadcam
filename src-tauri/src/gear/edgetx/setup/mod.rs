@@ -318,7 +318,7 @@ pub struct RadioSetup {
     pub board: String,
     /// Slots whose fitted part differs from the board's factory part. The generator writes
     /// each one's type to `radio.yml`.
-    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    #[serde(default)]
     pub fitted: Vec<FittedSlot>,
     pub jobs: Vec<Job>,
     pub assignments: Vec<Assignment>,

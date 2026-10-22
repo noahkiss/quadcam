@@ -213,7 +213,7 @@ quadcam-cli --json gear model-edit DEVICE --model model01.yml [--timer 2:name=FL
 quadcam-cli --json gear radio-settings DEVICE [--no-staged] [--text]   # a radio's own settings (radio.yml) for the Settings editor: each key, its value in the file's units and the values it takes
 quadcam-cli --json gear radio-settings-edit DEVICE [--set beepVolume=3]... [--select-model model00.yml] [--ops FILE]   # stages into the one "Radio settings" change; a value out of range refuses; writes nothing to the card
 quadcam-cli --json gear setup [DEVICE] [--mount DIR] [--setup FILE] [--text]   # a radio setup as data: each job, its control and positions, the generated edits and the card files they would change
-quadcam-cli --json gear setup-edit DEVICE [--setup FILE | --reset] [--assign JOB=CONTROL[:HIGH]]... [--free JOB]... [--stage]   # saves the radio's setup; --stage stages it as one "Radio setup" change
+quadcam-cli --json gear setup-edit DEVICE [--setup FILE | --reset] [--assign JOB=CONTROL[:HIGH]]... [--free JOB]... [--fit CONTROL=TYPE]... [--copy-from SOURCE [--copy-model FILE]... [--link FROM=TO]...] [--stage]   # saves the radio's setup and its fitted parts; --copy-from copies another radio's models first; --stage (and --copy-from) stages it as one "Radio setup" change
 quadcam-cli --json gear post-flash DEVICE [--step storage-pack|elrs-lua|volume-label]... [--pack-version V] [--elrs-version V] [--stage]   # plans the steps after a flash; downloads from upstream
 quadcam-cli --json gear volume-label DEVICE [--label L] --yes   # renames the radio's mounted volume (diskutil rename)
 quadcam-cli --json gear rates FILE [FILE ...]|DEVICE [--backup ID] [--text]   # rate profiles and throttle curve

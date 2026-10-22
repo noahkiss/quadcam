@@ -478,8 +478,8 @@ on the radio before relying on it.
 ## Radio setup
 
 A radio setup says what each control does, as data, and QuadCam writes the radio's models from
-it. There is no window for it yet: the command line and agents reach it (`gear setup`,
-`quadcam_gear radio_setup`). A setup has four parts:
+it. The radio's **Setup** segment edits it; the command line and agents reach the same setup
+(`gear setup`, `quadcam_gear radio_setup`). A setup has four parts:
 
 - **Jobs**: what the pilot wants, each on a channel the quad reads. The default jobs are arm
   (CH5), OSD layout (CH6), rates (CH7), finder (CH8), turtle (CH9), blackbox erase (CH10), VTX
@@ -498,14 +498,52 @@ it. There is no window for it yet: the command line and agents reach it (`gear s
 The radio part sets `radio.yml` values, the selected model, the switch and pot types from the
 board's controls (the Pocket's factory file had some wrong), and can remove other models.
 
+**Fitted parts.** Some radios take other parts in their slots: the GX12's switch modules swap
+(a 2-position, 3-position or momentary switch), and a pot slot can hold a blanking plug. The
+setup records each slot whose part differs from the factory one, and writes that type to
+`radio.yml`. A blanked slot does no job.
+
 `gear setup DEVICE` shows each job, its control and what each position does, the edits the
 setup gives and the card files they would change; "none" means the card already matches.
 Without a saved setup it shows the board's default (the Pocket and the GX12 have one).
 `gear setup-edit DEVICE --assign rates=SC:0` moves a job (`:0` says position 0 sends 2000 µs),
-`--free osd` takes a job off its control, `--setup FILE` saves a whole setup and `--reset` goes
-back to the default. `--stage` puts the edits in the radio's one "Radio setup" change for the
+`--free osd` takes a job off its control, `--fit SA=TOGGLE` records a momentary module in SA
+(`--fit P2=none` a blanking plug; the factory type takes the slot off the list), `--setup FILE`
+saves a whole setup and `--reset` goes back to the default. `--stage` puts the edits in the radio's one "Radio setup" change for the
 apply sheet. QuadCam refuses a control that does not fit a job, a control that does two jobs,
-and a model that holds another aircraft ("wrong card?").
+and a model that holds another aircraft ("wrong card?"). `gear setup` with `--setup FILE`
+lists every problem of that setup at its job instead of refusing, and says when the card does
+not take the setup yet (a factory model with no telemetry sensors).
+
+**Copy from another radio.** `gear setup-edit GX12 --copy-from POCKET` copies the Pocket's
+models (from its card, else its latest backup; `--copy-model model00.yml` picks some) into
+free model slots on the GX12, mapping each control the models read onto the GX12's (the same
+name and type, and the Pocket's momentary SE to the GX12's SH; `--link SE=SG` overrides one).
+When the Pocket has a saved setup, its jobs, template and aircraft come along, each job on the
+mapped control; a job whose control does not fit on the GX12 is left free, with a note. The
+copies and the setup's edits stage together as the GX12's one "Radio setup" change: one plan,
+one confirm, a backup first.
+
+### The Setup segment
+
+A saved radio's page has a **Setup** segment beside Switches:
+
+- **Jobs**: one row per job with its channel, the control that does it (a pop-up of the
+  controls that fit and are free), which end of a switch sends 2000 µs, and what each
+  position sends, in microseconds and words. A problem shows at its job, and the setup is
+  not saved until every problem is gone.
+- **Fitted controls**: each switch and pot slot with its factory part, the part fitted now
+  (a pop-up), and what the radio's `radio.yml` says when that differs.
+- **Learn**: with the radio plugged in and in USB Joystick mode, press Learn on a row and move
+  a control to the job's "on" end; that control, and that end, take the job. Learn reads the
+  channels through the switch map of the radio's model (its latest backup), so it sees only
+  controls that model sends on CH1-CH8; pick the others from the pop-up.
+- **Copy from…** copies another saved radio's models and setup (above).
+- **Review…** stages the setup as the radio's one "Radio setup" change and opens the apply
+  sheet with the diff per file. While the change is staged, each edit keeps it up to date.
+
+The setup is QuadCam's own data and saves as it changes; nothing reaches the radio until the
+apply sheet writes it.
 
 The setup's telemetry screens are QuadCam's own Lua scripts: `volt` (the quad's battery, link
 quality, TX power and a timer) and `finder` (signal strength and a beep that speeds up as you

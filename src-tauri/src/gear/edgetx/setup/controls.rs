@@ -32,7 +32,10 @@ pub fn controls(board: &str) -> Option<Vec<Control>> {
 /// takes that switch's kind, and a blanked slot (`NONE`, `none`) is left out. None for a
 /// board the table does not list; a refusal for a slot the board lacks or a type it cannot
 /// take.
-pub fn fitted_controls(board: &str, fitted: &[FittedSlot]) -> Result<Option<Vec<Control>>, Refusal> {
+pub fn fitted_controls(
+    board: &str,
+    fitted: &[FittedSlot],
+) -> Result<Option<Vec<Control>>, Refusal> {
     let Some(spec) = board::spec(Some(board)) else {
         return Ok(None);
     };
@@ -42,10 +45,7 @@ pub fn fitted_controls(board: &str, fitted: &[FittedSlot]) -> Result<Option<Vec<
         let slot = slots.iter().find(|c| c.name == f.control).ok_or_else(|| {
             Refusal::new(
                 RefusalCode::BadSetting,
-                format!(
-                    "{} is not a switch or pot slot of the {board}.",
-                    f.control
-                ),
+                format!("{} is not a switch or pot slot of the {board}.", f.control),
             )
         })?;
         types.insert(f.control.as_str(), slot_type(slot.kind, &f.radio_type)?);
@@ -184,7 +184,12 @@ pub fn slot_rows(board: &str, fitted: &[FittedSlot], radio: Option<&Doc>) -> Vec
 }
 
 /// The fitted list with one slot set: a slot set back to its factory part leaves the list.
-pub fn set_fitted(board: &str, fitted: &mut Vec<FittedSlot>, control: &str, radio_type: &str) -> Result<(), Refusal> {
+pub fn set_fitted(
+    board: &str,
+    fitted: &mut Vec<FittedSlot>,
+    control: &str,
+    radio_type: &str,
+) -> Result<(), Refusal> {
     let spec = board::spec(Some(board)).ok_or_else(|| {
         Refusal::new(
             RefusalCode::UnknownBoard,
@@ -290,7 +295,10 @@ mod tests {
 
         let rows = slot_rows("gx12", &list, None);
         let sh = rows.iter().find(|r| r.control == "SH").unwrap();
-        assert_eq!((sh.factory.as_str(), sh.fitted.as_str()), ("TOGGLE", "2POS"));
+        assert_eq!(
+            (sh.factory.as_str(), sh.fitted.as_str()),
+            ("TOGGLE", "2POS")
+        );
         assert!(!rows.iter().any(|r| r.control.starts_with("SW")));
     }
 }

@@ -714,7 +714,11 @@ fn a_fitted_part_changes_what_a_slot_can_do_and_reaches_radio_yml() {
     assert!(d.edits.is_empty() && d.files.is_empty());
     let p1 = d.slots.iter().find(|x| x.control == "P1").unwrap();
     assert_eq!(
-        (p1.factory.as_str(), p1.fitted.as_str(), p1.on_radio.as_deref()),
+        (
+            p1.factory.as_str(),
+            p1.fitted.as_str(),
+            p1.on_radio.as_deref()
+        ),
         ("without_detent", "none", Some("without_detent"))
     );
     // Free VTX power first: the plug saves, and the staged change writes P1's type.
@@ -913,7 +917,11 @@ fn a_copy_from_another_radio_stages_the_models_and_the_setup_as_one_change() {
         .map(|a| a.file.as_str())
         .collect();
     assert_eq!(files, ["model01.yml", "model02.yml"]);
-    assert!(r.notes[0].contains("AIR65 II to model01.yml"), "{:?}", r.notes);
+    assert!(
+        r.notes[0].contains("AIR65 II to model01.yml"),
+        "{:?}",
+        r.notes
+    );
     // Reading again keeps the copies in front.
     let d = t
         .core

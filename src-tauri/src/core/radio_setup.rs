@@ -11,8 +11,8 @@ use super::model_edit::Base;
 use super::switchmap::{CardSource, Folder};
 use super::Core;
 use crate::gear::changes::ChangeFilter;
-use crate::gear::edgetx::card::{identity_from_radio_yml, selected_in, Card, RADIO_FILE};
 use crate::gear::edgetx::board::{self, ControlLink};
+use crate::gear::edgetx::card::{identity_from_radio_yml, selected_in, Card, RADIO_FILE};
 use crate::gear::edgetx::setup::controls::SlotRow;
 use crate::gear::edgetx::setup::generate::{
     self, Generated, JobRow, SetupProblem, SoundCheck, Source,
@@ -1202,7 +1202,11 @@ pub fn render_text(d: &RadioSetupDetail) -> String {
     if !fitted.is_empty() {
         let _ = writeln!(s, "Fitted: {}", fitted.join(", "));
     }
-    for x in d.slots.iter().filter(|x| x.on_radio.as_ref().is_some_and(|r| *r != x.fitted)) {
+    for x in d
+        .slots
+        .iter()
+        .filter(|x| x.on_radio.as_ref().is_some_and(|r| *r != x.fitted))
+    {
         let _ = writeln!(
             s,
             "  {}: the radio says {}, the setup {}",

@@ -96,7 +96,7 @@ const lines = (edits: Edit[]): string[] =>
 
 const refused = (code: string, reason: string) => `Refused (${code}): ${reason}`;
 
-const CARD_EDITS = ["model", "radio", "checklist", "model_copy", "model_delete", "restore", "card_files"];
+const CARD_EDITS = ["model", "radio", "checklist", "model_copy", "model_delete", "restore", "card_files", "model_import"];
 
 /** As `Core::check_stageable`: a setting is checked against the FC only when a base backup
  * says which settings it has. */
@@ -222,6 +222,10 @@ function cardDiff(c: StagedChange): DiffItem[] {
     if (e.kind === "radio") {
       const l: { op: "add" | "remove" | "same"; text: string }[] = [];
       for (const op of e.ops) {
+        if (op.op === "set_control_type") {
+          l.push({ op: "add", text: `${op.control}: type: ${op.value}` });
+          continue;
+        }
         if (op.op !== "set_scalar" && op.op !== "select_model") continue;
         const [key, value] = op.op === "set_scalar" ? [op.key, radioLine(op.key, op.value)] : ["currModel", String(Number(op.file.replace(/\D/g, "")))];
         const before = RADIO_YML[key];
@@ -235,6 +239,9 @@ function cardDiff(c: StagedChange): DiffItem[] {
       const lines = e.ops.flatMap((op) => (op.op === "rename" ? [{ op: "remove" as const, text: `  name: "${e.name ?? "ALPHA"}"` }, { op: "add" as const, text: `  name: "${op.name}"` }] : [{ op: "add" as const, text: `  ${opLine(op)}` }]));
       out.push({ kind: "lines", label: `MODELS/${e.file}`, lines });
       put.push(`MODELS/${e.file}`);
+    } else if (e.kind === "model_import") {
+      out.push({ kind: "lines", label: `MODELS/${e.to}`, lines: [{ op: "add", text: `name: "${e.name}" (copied from the ${e.from_board})` }] });
+      put.push(`MODELS/${e.to}`);
     } else if (e.kind === "checklist") {
       out.push({ kind: "lines", label: `MODELS/${e.model}.txt`, lines: e.text.split("\n").filter(Boolean).map((text) => ({ op: "add" as const, text })) });
       put.push(`MODELS/${e.model}.txt`);

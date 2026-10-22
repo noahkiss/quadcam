@@ -251,7 +251,11 @@ pub fn problems(setup: &RadioSetup) -> (Option<Vec<Control>>, Vec<SetupProblem>)
             continue;
         }
         if !ids.insert(j.id.as_str()) {
-            out.push(problem(None, None, format!("Two jobs are named {:?}.", j.id)));
+            out.push(problem(
+                None,
+                None,
+                format!("Two jobs are named {:?}.", j.id),
+            ));
         }
         if let Some(ch) = j.channel {
             if ch >= 32 {
@@ -373,7 +377,11 @@ pub fn problems(setup: &RadioSetup) -> (Option<Vec<Control>>, Vec<SetupProblem>)
         }
     }
     if setup.aircraft.is_empty() {
-        out.push(problem(None, None, "A setup names at least one model.".into()));
+        out.push(problem(
+            None,
+            None,
+            "A setup names at least one model.".into(),
+        ));
     }
     (Some(controls), out)
 }

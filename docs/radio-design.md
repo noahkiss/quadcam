@@ -446,6 +446,17 @@ One choice differs from the plan: the slots use the card engine's `BoardControlK
 board's slots. `board.rs` still holds its own USB write speed per board, beside the profile's
 `usb_speed`.
 
+Stage 4 shipped as the radio's Setup segment (`app/src/views/Gear/Setup/`): the job table with
+the control pop-ups, direction and what each position sends; the fitted parts per slot
+(`RadioSetup.fitted`, written with `set_control_type`; a blanked slot does no job); every
+problem at its job (`generate::problems`, `RadioSetupDetail.problems`), a card that does not
+take the setup yet apart from that (`card_problem`); Copy from (`RadioSetupEditParams.copy_from`:
+`Edit::ModelImport` per model kept first in the open "Radio setup" change, the source's saved
+setup mapped through the boards' links); Review through the apply sheet. Learn reads the
+joystick through the switch map of the radio's model, so it sees only controls the model sends
+on CH1-CH8 (the joystick's axes); the rest are picked from the pop-up. CLI `--fit`,
+`--copy-from`, `--copy-model`, `--link`; MCP `fit`, `from`, `models`, `links`.
+
 Stage 1 is the existing task "QuadCam Gear: per-radio profile table and prove board gx12".
 Stages 1 and 2 run now. Stage 3 needs both. Stage 4 needs 3. Stage 5 needs 4 and the radio.
 

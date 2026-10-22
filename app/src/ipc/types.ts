@@ -489,6 +489,10 @@ export type {
 
 // The radio's Settings editor (radio.yml), as generated.
 export type { Choice as RadioChoiceValue, RadioOp, RadioSetting, RadioSettingsDetail, RadioSettingsEditParams, RadioSettingsParams, RadioSettingsView, SettingKind } from "../bindings";
+// The radio setup editor (`core/radio_setup.rs`), as generated.
+export type { Assignment, BoardControlKind, CopiedModel, FittedSlot, JobRow, RadioControlKind, RadioSetup, RadioSetupDetail, RadioSetupEditParams, RadioSetupParams, SetupCopy, SetupProblem, SlotRow, StateRow, Control as SetupControl } from "../bindings";
+/** `gear_radio_setup_edit`'s answer. */
+export type RadioSetupEdited = { detail: G.RadioSetupDetail; change?: G.StagedChange | null; notes: string[] };
 
 // Radio voice, as generated.
 export type {
