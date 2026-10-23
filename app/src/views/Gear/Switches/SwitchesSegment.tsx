@@ -40,8 +40,12 @@ export function SwitchesSegment({ d }: { d?: DeviceRef }) {
   useEffect(() => {
     if (source !== "fc" || !m.map) return;
     let gone = false;
-    const read = () =>
-      api.gearSwitchMap({ ...m.params, live: true, port }).then(
+    // A slow port skips a tick rather than stacking reads.
+    let reading = false;
+    const read = () => {
+      if (reading) return;
+      reading = true;
+      return api.gearSwitchMap({ ...m.params, live: true, port }).finally(() => (reading = false)).then(
         (x) => {
           if (gone) return;
           setFcLive(x.live);
@@ -51,6 +55,7 @@ export function SwitchesSegment({ d }: { d?: DeviceRef }) {
           if (!gone) setLiveError(errText(e));
         },
       );
+    };
     void read();
     const t = window.setInterval(read, FC_POLL_MS);
     return () => {

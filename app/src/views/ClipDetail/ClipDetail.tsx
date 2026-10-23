@@ -58,7 +58,9 @@ function Detail({ clip: c }: { clip: LibClip }) {
       v.src = fileSrc(path);
       const seekTo = store.getState().detailSeek;
       if (seekTo != null) {
-        v.addEventListener("loadedmetadata", () => (v.currentTime = Math.max(0, seekTo - 1)), { once: true });
+        const src = v.src;
+        // Another clip opened before the metadata came: its own start stays.
+        v.addEventListener("loadedmetadata", () => v.src === src && (v.currentTime = Math.max(0, seekTo - 1)), { once: true });
         store.setState({ detailSeek: null });
       }
       setPlaying("on");

@@ -227,7 +227,9 @@ export async function runExport() {
   // A field that still has focus commits first.
   (document.activeElement as HTMLElement | null)?.blur?.();
   await new Promise((r) => setTimeout(r, 0));
-  const plans = S().session!.plans;
+  // An agent may have cleared the session meanwhile.
+  const plans = S().session?.plans;
+  if (!plans) return;
   const todo = plans.filter((p) => !p.skip).length;
   if (!todo && !(await ask("Every clip is skipped", "Record them all as skipped?", { ok: "Record" }))) return;
   store.setState({ busy: true, progress: {}, exportTotal: todo, exportDone: 0 });

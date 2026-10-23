@@ -22,7 +22,14 @@ export interface HistorySlice {
 }
 
 export const createHistorySlice: StateCreator<State, [], [], HistorySlice> = (set, get) => {
-  const run = async (from: "done" | "undone", which: "undo" | "redo") => {
+  // One step at a time: a second Cmd+Z waits for the first, so steps move in order.
+  let last: Promise<unknown> = Promise.resolve();
+  const run = (from: "done" | "undone", which: "undo" | "redo") => {
+    const next = last.then(() => move(from, which));
+    last = next.catch(() => undefined);
+    return next;
+  };
+  const move = async (from: "done" | "undone", which: "undo" | "redo") => {
     const list = get()[from];
     const step = list.at(-1);
     if (!step) return null;

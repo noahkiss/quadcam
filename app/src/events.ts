@@ -36,7 +36,12 @@ export async function start(): Promise<() => void> {
     }),
     on("library-task", (t) => {
       S().setTask(t.task, t.done, t.total);
-      if (t.done >= t.total) setTimeout(() => S().endTask(t.task), 800);
+      // A task that started again within the delay stays.
+      if (t.done >= t.total)
+        setTimeout(() => {
+          const now = S().tasks[t.task];
+          if (now && now.done >= now.total) S().endTask(t.task);
+        }, 800);
     }),
     on("progress", (p) => {
       store.setState({ staging: p });
