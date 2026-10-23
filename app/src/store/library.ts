@@ -40,6 +40,8 @@ export interface LibrarySlice {
 }
 
 let libSig = "";
+/** The newest `loadLibrary` call: an older answer that lands later is dropped. */
+let libSeq = 0;
 
 export const createLibrarySlice: StateCreator<State, [], [], LibrarySlice> = (set, get) => ({
   lib: null,
@@ -54,6 +56,7 @@ export const createLibrarySlice: StateCreator<State, [], [], LibrarySlice> = (se
   renaming: null,
   mapOpen: false,
   loadLibrary: async (onlyIfChanged = false) => {
+    const seq = ++libSeq;
     let lib: LibraryView;
     try {
       lib = await api.library({});
@@ -61,6 +64,7 @@ export const createLibrarySlice: StateCreator<State, [], [], LibrarySlice> = (se
       console.warn(e);
       lib = { clips: [], unindexed: 0, totals: { clips: 0, bytes: 0, seconds: 0, flying: 0 }, groups: {}, root: sel.outputDir(get()) || "", exists: false, last_import: null, layout: "year_day", place_folders: false };
     }
+    if (seq !== libSeq) return;
     const sig = JSON.stringify([lib.root, lib.unindexed, lib.last_import, lib.clips]);
     if (onlyIfChanged && sig === libSig) return;
     libSig = sig;

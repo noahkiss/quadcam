@@ -45,6 +45,12 @@ export interface AgentApplyAsk {
 }
 
 let tokens = 0;
+/** The newest `loadGear` and `loadFirmware` calls: an older answer that lands later is dropped. */
+let gearSeq = 0;
+let firmwareSeq = 0;
+/** `loadFirmware` calls in flight, and answers set: `loadGear`'s saved read yields to both. */
+let firmwareBusy = 0;
+let firmwareSet = 0;
 /** A newly opened sheet, with its own token. */
 const opened = (a: Omit<ApplySheetState, "token">): ApplySheetState => ({ ...a, token: ++tokens });
 /** The sheet with this token is still the one open. */
@@ -244,10 +250,18 @@ export const createGearSlice: StateCreator<State, [], [], GearSlice> = (set, get
   },
   firmware: null,
   loadFirmware: async (check = null) => {
+    const seq = ++firmwareSeq;
+    firmwareBusy++;
     try {
-      set({ firmware: await api.gearFirmware(check) });
+      const firmware = await api.gearFirmware(check);
+      if (seq === firmwareSeq) {
+        firmwareSet++;
+        set({ firmware });
+      }
     } catch (e) {
       toast(errText(e), true);
+    } finally {
+      firmwareBusy--;
     }
   },
   closeApply: () => {
@@ -374,12 +388,15 @@ export const createGearSlice: StateCreator<State, [], [], GearSlice> = (set, get
   gearSegment: "overview",
   gearExpanded: true,
   loadGear: async () => {
+    const seq = ++gearSeq;
     try {
       const [gear, devices, changes, allChanges] = await Promise.all([api.gearStatus(), api.gearDevices(), api.gearChanges(), api.gearChanges(null, true)]);
+      if (seq !== gearSeq) return;
       set({ gear, devices, changes, allChanges });
-      // The saved answer only: it never reads the network.
+      // The saved answer only: it never reads the network, so a `loadFirmware` that ran since wins.
+      const [fwSeq, fwSet] = [firmwareSeq, firmwareSet];
       api.gearFirmware(false).then(
-        (firmware) => set({ firmware }),
+        (firmware) => fwSeq === firmwareSeq && fwSet === firmwareSet && firmwareBusy === 0 && set({ firmware }),
         () => undefined,
       );
     } catch (e) {

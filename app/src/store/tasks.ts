@@ -15,6 +15,9 @@ export interface TasksSlice {
   refreshVolumes: () => Promise<void>;
 }
 
+/** The newest `refreshVolumes` call: an older answer that lands later is dropped. */
+let volumesSeq = 0;
+
 export const createTasksSlice: StateCreator<State, [], [], TasksSlice> = (set, get) => ({
   tasks: {},
   volumes: [],
@@ -28,13 +31,22 @@ export const createTasksSlice: StateCreator<State, [], [], TasksSlice> = (set, g
       return { tasks };
     }),
   refreshVolumes: async () => {
-    const volumes = await api.listVolumes();
+    const seq = ++volumesSeq;
+    let volumes: Volume[];
+    try {
+      volumes = await api.listVolumes();
+    } catch (e) {
+      console.warn("volumes unavailable", e);
+      return;
+    }
+    if (seq !== volumesSeq) return;
     const mounts = new Set(volumes.map((v) => v.mount));
     set({ volumes, cards: Object.fromEntries(Object.entries(get().cards).filter(([m]) => mounts.has(m))) });
     for (const v of volumes.filter((x) => x.is_card)) {
       api
         .cardStatus(v.mount)
-        .then((st) => set((s) => ({ cards: { ...s.cards, [v.mount]: st } })))
+        // A card that left during the read keeps no status.
+        .then((st) => set((s) => (s.volumes.some((x) => x.mount === v.mount) ? { cards: { ...s.cards, [v.mount]: st } } : {})))
         .catch(() => {});
     }
   },

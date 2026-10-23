@@ -1,4 +1,6 @@
-import { beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { api } from "../ipc/api";
+import { cardVolume } from "../ipc/mock/seed";
 import { installMock, type MockHandle } from "../ipc/mock/install";
 import { menuState } from "../menu/useMenu";
 import { HISTORY_LIMIT } from "./history";
@@ -124,5 +126,103 @@ describe("format confirm text", () => {
     const plan = { disk: "disk9", device: "/dev/disk9", volume_uuid: "U", volume_name: "DVR", size: 32e9, media_name: "", clip_count: 2, label: "DVR" };
     expect(confirmText(plan)).toMatch(/^Erase disk9 \(DVR, .*\) and delete 2 clips\? This cannot be undone\.$/);
     expect(confirmText({ ...plan, clip_count: 0 })).toMatch(/^Erase disk9 \(DVR, [^)]*\)\? This cannot be undone\.$/);
+  });
+});
+
+describe("loaders out of order", () => {
+  afterEach(() => vi.restoreAllMocks());
+
+  /** Two calls of `method`, held open; returns their resolvers in call order. */
+  function hold<K extends keyof typeof api>(method: K) {
+    const real = api[method] as (...a: unknown[]) => Promise<unknown>;
+    const gates: Array<() => void> = [];
+    vi.spyOn(api, method).mockImplementation(((...a: unknown[]) => {
+      const answer = real(...a);
+      return new Promise((r) => gates.push(() => r(answer)));
+    }) as never);
+    return gates;
+  }
+
+  it("keeps the newer library when the older read finishes last", async () => {
+    const gates = hold("library");
+    const p1 = S().loadLibrary();
+    mock.core.trashClips(["x07fee4b870d01a6f"]);
+    const p2 = S().loadLibrary();
+    await tick();
+    gates[1]();
+    await p2;
+    expect(S().lib!.clips).toHaveLength(2);
+    gates[0]();
+    await p1;
+    expect(S().lib!.clips).toHaveLength(2);
+  });
+
+  it("keeps the newer settings when the older read finishes last", async () => {
+    const gates = hold("settings");
+    const p1 = S().loadSettings();
+    const p2 = S().loadSettings();
+    await tick();
+    vi.mocked(api.settings).mockRestore();
+    const before = (await api.settings()).values;
+    gates[1]();
+    await p2;
+    store.setState({ values: { ...before, photosAlbum: "newer" } });
+    gates[0]();
+    await p1;
+    expect(S().values.photosAlbum).toBe("newer");
+  });
+
+  it("keeps the network firmware answer over the saved one that lands later", async () => {
+    const real = api.gearFirmware;
+    let release!: () => void;
+    vi.spyOn(api, "gearFirmware").mockImplementation((check) =>
+      check === false ? new Promise((r) => (release = () => r(real(check).then((f) => ({ ...f, stale: true }) as never)))) : real(check),
+    );
+    await S().loadGear();
+    await S().loadFirmware(true);
+    const fresh = S().firmware;
+    release();
+    await tick();
+    await tick();
+    expect(S().firmware).toBe(fresh);
+  });
+
+  it("keeps a network firmware check that was running when gear reloaded", async () => {
+    const real = api.gearFirmware;
+    let release!: () => void;
+    vi.spyOn(api, "gearFirmware").mockImplementation((check) =>
+      check === true ? new Promise((r) => (release = () => r(real(check)))) : real(check).then((f) => ({ ...f, stale: true }) as never),
+    );
+    const check = S().loadFirmware(true);
+    await S().loadGear();
+    await tick();
+    release();
+    await check;
+    expect((S().firmware as { stale?: boolean }).stale).toBeUndefined();
+  });
+
+  it("drops a card's status when the card left during the read", async () => {
+    const card = cardVolume();
+    const vols = [card];
+    const gates = hold("cardStatus");
+    const list = vi.spyOn(api, "listVolumes").mockResolvedValueOnce(vols);
+    await S().refreshVolumes();
+    list.mockResolvedValueOnce([]);
+    await S().refreshVolumes();
+    for (const g of gates) g();
+    await tick();
+    await tick();
+    expect(S().cards[card.mount]).toBeUndefined();
+  });
+});
+
+describe("settings write fails", () => {
+  afterEach(() => vi.restoreAllMocks());
+
+  it("puts the old value back", async () => {
+    const before = S().values.photosAlbum;
+    vi.spyOn(api, "settingsSet").mockRejectedValueOnce(new Error("disk full"));
+    await S().saveSetting("photosAlbum", "Broken");
+    expect(S().values.photosAlbum).toBe(before);
   });
 });

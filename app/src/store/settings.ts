@@ -33,8 +33,10 @@ export const createSettingsSlice: StateCreator<State, [], [], SettingsSlice> = (
   secrets: {},
   home: "",
   loadSettings: async () => {
+    const seq = ++settingsSeq;
     try {
       const v = await api.settings();
+      if (seq !== settingsSeq) return;
       set({ values: v.values, effective: v.effective, googleKeySet: !!v.values.googlePlacesKey, secrets: v.secrets });
     } catch (e) {
       console.warn("settings unavailable", e);
@@ -50,16 +52,33 @@ export const createSettingsSlice: StateCreator<State, [], [], SettingsSlice> = (
   },
 });
 
+/** The newest `loadSettings` call: an older answer that lands later is dropped. */
+let settingsSeq = 0;
+
 const isSecret = (k: string) => (SECRET_KEYS as readonly string[]).includes(k);
 
 /** Writes `changed`. A secret never stays in the store: the core's answer brings its hint. */
 async function saveValues(set: (f: (s: State) => Partial<State>) => void, changed: SettingsValues) {
   const plain = Object.fromEntries(Object.entries(changed).filter(([k]) => !isSecret(k)));
-  set((s) => ({ values: { ...s.values, ...plain } }));
+  let before: SettingsValues = {};
+  set((s) => {
+    before = s.values;
+    return { values: { ...s.values, ...plain } };
+  });
   try {
     const v = await api.settingsSet(changed);
     if (Object.keys(changed).some(isSecret)) set(() => ({ values: v.values, googleKeySet: !!v.values.googlePlacesKey, secrets: v.secrets }));
   } catch (e) {
+    // Put back the keys this write changed, unless a later change replaced them.
+    set((s) => {
+      const values = { ...s.values };
+      for (const [k, v] of Object.entries(plain)) {
+        if (!sameValue(values[k as keyof SettingsValues], v)) continue;
+        if (k in before) (values as Record<string, unknown>)[k] = (before as Record<string, unknown>)[k];
+        else delete (values as Record<string, unknown>)[k];
+      }
+      return { values };
+    });
     toast(`Settings not saved: ${errText(e)}`, true);
   }
 }
