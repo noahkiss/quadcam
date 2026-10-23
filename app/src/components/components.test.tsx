@@ -118,6 +118,22 @@ describe("Dialog", () => {
     fireEvent(screen.getByRole("dialog"), new Event("cancel", { cancelable: true }));
     expect(onClose).not.toHaveBeenCalled();
   });
+
+  it("reports a close the page did not make as Cancel", () => {
+    const onClose = vi.fn();
+    render(<Dialog open title="Rename" onClose={onClose} />);
+    (screen.getByRole("dialog") as HTMLDialogElement).close();
+    expect(onClose).toHaveBeenCalledWith("cancel");
+  });
+
+  it("opens again after a close the page did not make while blocked", () => {
+    const onClose = vi.fn();
+    render(<Dialog open blockEscape title="Import" onClose={onClose} />);
+    const d = screen.getByRole("dialog") as HTMLDialogElement;
+    d.close();
+    expect(d.open).toBe(true);
+    expect(onClose).not.toHaveBeenCalled();
+  });
 });
 
 describe("Menu", () => {

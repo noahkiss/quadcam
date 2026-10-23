@@ -47,6 +47,22 @@ export function Dialog({ open, title, onClose, children, actions, kind = "dialog
     return () => d.removeEventListener("cancel", onCancel);
   }, [blockEscape]);
 
+  // WebKit may close the dialog itself (a second Escape with no click between). While the
+  // page still holds it open, that close is the person's Cancel, or undone when blocked.
+  const closedNatively = useEffectEvent(() => {
+    const d = ref.current;
+    if (!open || !d || d.open) return;
+    if (blockEscape) d.showModal();
+    else close("cancel");
+  });
+  useEffect(() => {
+    const d = ref.current;
+    if (!d) return;
+    const onNativeClose = () => closedNatively();
+    d.addEventListener("close", onNativeClose);
+    return () => d.removeEventListener("close", onNativeClose);
+  }, []);
+
   return (
     <dialog
       ref={ref}
