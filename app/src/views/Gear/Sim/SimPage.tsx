@@ -16,6 +16,7 @@ import { useStore } from "../../../store";
 import { SimSettings } from "./SimSettings";
 import { Stage, type SimView } from "./Stage";
 import styles from "./SimPage.module.css";
+import { ProfileOptions } from "./ProfileOptions";
 
 const NONE: SimUiSettings = {};
 const DEFAULT_PROFILE = "meteor75";
@@ -96,11 +97,7 @@ export function SimPage({ tabs }: { tabs?: ReactNode }) {
           <>
             <span className={styles.wideOnly}>
               <Select aria-label="Aircraft" value={profile} onChange={(e) => change({ profile: e.target.value })}>
-                {presets.map((p) => (
-                  <option key={p.id} value={p.id}>
-                    {p.label}
-                  </option>
-                ))}
+                <ProfileOptions presets={presets} />
               </Select>
             </span>
             <span className={styles.wideOnly}>

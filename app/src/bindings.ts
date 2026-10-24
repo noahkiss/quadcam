@@ -7716,7 +7716,7 @@ export type SimPose = {
 	quat: [(number | null), (number | null), (number | null), (number | null)],
 };
 
-/**  One built-in profile the Sim page offers. */
+/**  One profile the Sim page offers: built in, or fitted from the person's logs. */
 export type SimPreset = {
 	id: string,
 	label: string,
@@ -7724,6 +7724,8 @@ export type SimPreset = {
 	wheelbase_mm: number | null,
 	/**  All-up mass (g). */
 	mass_g: number | null,
+	/**  Fitted from the person's logs (`gear_sim_fit_save`), not built in. */
+	fitted?: boolean,
 };
 
 /**  `gear_sim_profile_delete`. */
