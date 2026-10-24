@@ -262,6 +262,11 @@ export class MockCore {
         return this.gearChanged(firmware.restore(this.firmware, this.gear.devices, p as never, String(p.digest), true));
       case "gear_elrs_flash_click":
         return this.gearChanged(elrs.flash(this.elrs, this.gear, p as never, String(p.digest), true, this.settings.values));
+      case "gear_card_repair_click":
+      case "gear_blackbox_pull_click":
+      case "gear_blackbox_erase_click":
+        // The app's own buttons: the core's method without the agent's sheet.
+        return this.dispatch(cmd.replace(/_click$/, ""), p);
       case "gear_sim_sync_click":
         return this.gearChanged(simsync.apply(this.simSync, p as never, String(p.digest), true));
       case "gear_sim_restore_click":

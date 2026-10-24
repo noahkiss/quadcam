@@ -345,6 +345,39 @@ async fn gear_sim_sync_click(
     blocking(move || core.gear_sim_sync_click(&params)).await
 }
 
+/// The Backups segment's Repair button: the click is the confirmation.
+#[tauri::command]
+#[specta::specta]
+async fn gear_card_repair_click(
+    state: State<'_, AppState>,
+    params: api::CardRepairParams,
+) -> Result<api::RepairResult, String> {
+    let core = state.core.clone();
+    blocking(move || core.gear_card_repair_click(&params)).await
+}
+
+/// The Blackbox segment's Pull button: the click is the confirmation.
+#[tauri::command]
+#[specta::specta]
+async fn gear_blackbox_pull_click(
+    state: State<'_, AppState>,
+    params: api::BlackboxPullParams,
+) -> Result<api::FcJob<api::BlackboxPullResult>, String> {
+    let core = state.core.clone();
+    blocking(move || core.gear_blackbox_pull_click(&params)).await
+}
+
+/// The Blackbox segment's Erase button: the click is the confirmation.
+#[tauri::command]
+#[specta::specta]
+async fn gear_blackbox_erase_click(
+    state: State<'_, AppState>,
+    params: api::BlackboxEraseParams,
+) -> Result<api::FcJob<api::BlackboxErased>, String> {
+    let core = state.core.clone();
+    blocking(move || core.gear_blackbox_erase_click(&params)).await
+}
+
 /// The apply sheet's own Apply button for a sim restore: the click is the confirmation.
 #[tauri::command]
 #[specta::specta]
@@ -829,6 +862,9 @@ pub fn specta_builder() -> tauri_specta::Builder<tauri::Wry> {
             gear_voice_set_paths,
             gear_sim_sync_click,
             gear_sim_restore_click,
+            gear_card_repair_click,
+            gear_blackbox_pull_click,
+            gear_blackbox_erase_click,
             gear_flash_click,
             gear_firmware_restore_click,
             gear_elrs_flash_click,

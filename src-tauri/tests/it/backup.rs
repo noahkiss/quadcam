@@ -83,6 +83,15 @@ fn radio_volume(root: &Path) -> Volume {
 /// A core on a temp support folder with a synthetic radio card mounted (unless `card` is
 /// false), these serial ports and this fake `diskutil`.
 fn bench_with(card: bool, ports: Arc<dyn Ports>, disk: FakeDisk) -> Bench {
+    bench_hooks(card, ports, disk, Arc::new(NoHooks))
+}
+
+fn bench_hooks(
+    card: bool,
+    ports: Arc<dyn Ports>,
+    disk: FakeDisk,
+    hooks: Arc<dyn quadcam_lib::core::Hooks>,
+) -> Bench {
     let dir = tempfile::tempdir().unwrap();
     let root = dir.path().join("CARD");
     let vols = if card {
@@ -110,7 +119,7 @@ fn bench_with(card: bool, ports: Arc<dyn Ports>, disk: FakeDisk) -> Bench {
         Core::new(
             dir.path().join("cache"),
             None,
-            Arc::new(NoHooks),
+            hooks,
             Arc::new(Recorder::default()),
         )
         .with_settings(dir.path().join("support/settings.json"))
@@ -835,6 +844,61 @@ fn failed_then_fixed() -> FakeDisk {
         out(0, health::REPAIR_FIXED),
         out(0, health::VERIFY_OK),
     ])
+}
+
+/// The app's hooks: each agent request is recorded and cancelled.
+#[derive(Default)]
+struct Deny {
+    asked: std::sync::Mutex<Vec<String>>,
+}
+
+impl quadcam_lib::core::Hooks for Deny {
+    fn confirm_apply(
+        &self,
+        change: &quadcam_lib::gear::model::StagedChange,
+        _plan: &quadcam_lib::gear::model::ApplyPlan,
+    ) -> anyhow::Result<()> {
+        self.asked.lock().unwrap().push(change.id.clone());
+        anyhow::bail!("Refused: the user cancelled the apply in quadcam.")
+    }
+    fn has_gui(&self) -> bool {
+        true
+    }
+}
+
+#[test]
+fn an_agents_repair_waits_for_the_apply_sheet_and_the_apps_button_does_not() {
+    let deny = Arc::new(Deny::default());
+    let b = bench_hooks(
+        true,
+        Arc::new(FakePorts::new(vec![])),
+        failed_then_fixed(),
+        deny.clone(),
+    );
+    for h in backup_hooks() {
+        b.core.gear_add_hook(h);
+    }
+    let c = b.core.gear_connected().unwrap().remove(0);
+    b.core.gear_on_connect(&c);
+    let c = b.core.gear_connected().unwrap().remove(0);
+    b.core.gear_on_connect(&c);
+    let check = b.core.gear_status().unwrap().card_checks[0].clone();
+    assert_eq!(check.state, CheckState::Failed);
+    let p = CardRepairParams {
+        check: check.id.clone(),
+        confirm: true,
+    };
+    let e = b.core.gear_card_repair(&p).unwrap_err();
+    assert!(e.to_string().contains("cancelled"), "{e}");
+    assert_eq!(*deny.asked.lock().unwrap(), ["card-repair"]);
+    assert!(
+        !b.disk.calls().iter().any(|c| c[0] == "repairVolume"),
+        "a cancelled repair runs nothing"
+    );
+    // The Backups segment's Repair button is the person's click: no sheet.
+    let r = b.core.gear_card_repair_click(&p).unwrap();
+    assert_eq!(r.verify.state, CheckState::Ok);
+    assert_eq!(deny.asked.lock().unwrap().len(), 1);
 }
 
 #[test]

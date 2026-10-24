@@ -172,8 +172,8 @@ pub fn blackbox_hooks() -> Vec<OnConnectHook> {
         if core.gear_poll_paused(&port) {
             return Err(Skip.into());
         }
-        // The person turned the step on: that is the consent.
-        core.gear_blackbox_pull(&BlackboxPullParams {
+        // The person turned the step on: that is the consent, so it asks nothing.
+        core.gear_blackbox_pull_click(&BlackboxPullParams {
             port: Some(port),
             confirm: true,
             ..Default::default()
@@ -238,6 +238,24 @@ impl Core {
     /// Pulls the FC's blackbox flash: verify, store, and erase when allowed. One cue at the
     /// end, after the erase finished.
     pub fn gear_blackbox_pull(&self, p: &BlackboxPullParams) -> Result<FcJob<BlackboxPullResult>> {
+        self.blackbox_pull_at(p, false)
+    }
+
+    /// The app's Pull button: the click is the confirm.
+    pub fn gear_blackbox_pull_click(
+        &self,
+        p: &BlackboxPullParams,
+    ) -> Result<FcJob<BlackboxPullResult>> {
+        self.blackbox_pull_at(p, true)
+    }
+
+    /// `gear_blackbox_pull`. A pull that erases, asked by an agent (`!from_gui`), waits for
+    /// the person's click in the app's apply sheet first; a pull that only reads asks nothing.
+    fn blackbox_pull_at(
+        &self,
+        p: &BlackboxPullParams,
+        from_gui: bool,
+    ) -> Result<FcJob<BlackboxPullResult>> {
         if !p.confirm {
             bail!("Refused: a blackbox pull reads the FC and, when the gear_erase_blackbox setting is on, erases its flash; it needs confirm=true.");
         }
@@ -249,8 +267,62 @@ impl Core {
             force: p.force,
             settings: &settings,
         };
-        self.fc_job(p.port.as_deref(), "Blackbox", |ports, port| {
-            self.blackbox_pull_inner(ports, port, &a)
+        let ask = if a.erase && !from_gui {
+            Some(self.blackbox_ask(
+                p.port.as_deref(),
+                super::action_ask::BLACKBOX_PULL,
+                "Pull and erase the blackbox",
+            )?)
+        } else {
+            None
+        };
+        self.after_ask(
+            ask,
+            || {
+                self.fc_job(p.port.as_deref(), "Blackbox", |ports, port| {
+                    self.blackbox_pull_inner(ports, port, &a)
+                })
+            },
+            |j| {
+                let r = &j.result;
+                match (&r.pull, r.erase) {
+                    (None, _) => "The blackbox flash was empty.".to_string(),
+                    (Some(_), EraseState::Done) => {
+                        "Pulled the blackbox and erased the flash.".to_string()
+                    }
+                    (Some(_), _) => format!(
+                        "Pulled the blackbox. {}",
+                        r.erase_note
+                            .as_deref()
+                            .unwrap_or("The flash was not erased.")
+                    ),
+                }
+            },
+        )
+    }
+
+    /// The apply sheet's request for an erase of the FC on `port`.
+    fn blackbox_ask(
+        &self,
+        port: Option<&str>,
+        id: &'static str,
+        title: &str,
+    ) -> Result<super::action_ask::ActionAsk> {
+        let c = self.gear_fc_pick(port)?;
+        Ok(super::action_ask::ActionAsk {
+            id,
+            title: title.into(),
+            device: c.id.clone().unwrap_or_else(|| link_handle(&c.link)),
+            identity: c.identity.clone(),
+            diff: vec![crate::gear::model::DiffItem::Files {
+                label: "Blackbox flash".into(),
+                put: Vec::new(),
+                delete: vec!["Every log on the FC's flash".into()],
+            }],
+            checks: Vec::new(),
+            warnings: vec![
+                "The erase deletes the FC's logs for good. QuadCam erases only when its stored pull holds exactly what the flash holds.".into(),
+            ],
         })
     }
 
@@ -747,9 +819,49 @@ impl Core {
     /// Erases the FC's flash by hand. It must hold exactly what the device's latest stored
     /// pull holds (the same used size: the flash only grows), and `confirm` must be true.
     pub fn gear_blackbox_erase(&self, p: &BlackboxEraseParams) -> Result<FcJob<BlackboxErased>> {
+        self.blackbox_erase_at(p, false)
+    }
+
+    /// The app's Erase button: the click is the confirm.
+    pub fn gear_blackbox_erase_click(
+        &self,
+        p: &BlackboxEraseParams,
+    ) -> Result<FcJob<BlackboxErased>> {
+        self.blackbox_erase_at(p, true)
+    }
+
+    /// `gear_blackbox_erase`; asked by an agent (`!from_gui`), the app's apply sheet waits for
+    /// the person's click first.
+    fn blackbox_erase_at(
+        &self,
+        p: &BlackboxEraseParams,
+        from_gui: bool,
+    ) -> Result<FcJob<BlackboxErased>> {
         if !p.confirm {
             bail!("Refused: erasing the blackbox deletes the FC's logs for good. Pass confirm=true to go ahead.");
         }
+        let ask = if from_gui {
+            None
+        } else {
+            Some(self.blackbox_ask(
+                p.port.as_deref(),
+                super::action_ask::BLACKBOX_ERASE,
+                "Erase the blackbox",
+            )?)
+        };
+        self.after_ask(
+            ask,
+            || self.blackbox_erase_run(p),
+            |j| {
+                format!(
+                    "Erased the blackbox flash in {:.0} s. The stored pull {} holds its logs.",
+                    j.result.secs, j.result.pull
+                )
+            },
+        )
+    }
+
+    fn blackbox_erase_run(&self, p: &BlackboxEraseParams) -> Result<FcJob<BlackboxErased>> {
         let t = self.fc_timing();
         self.fc_job(p.port.as_deref(), "Blackbox erase", |ports, port| {
             if let Some((_, name)) = (self.gear.holders)(port).into_iter().next() {

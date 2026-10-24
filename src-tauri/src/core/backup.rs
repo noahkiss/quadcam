@@ -807,6 +807,17 @@ impl Core {
     /// when the card reads (always kept), the repair, then a check. Needs that check's id
     /// and `confirm`. A repair is not stopped once it starts.
     pub fn gear_card_repair(&self, p: &CardRepairParams) -> Result<RepairResult> {
+        self.card_repair_at(p, false)
+    }
+
+    /// The app's Repair button: the click is the confirm.
+    pub fn gear_card_repair_click(&self, p: &CardRepairParams) -> Result<RepairResult> {
+        self.card_repair_at(p, true)
+    }
+
+    /// `gear_card_repair`; asked by an agent (`!from_gui`), the app's apply sheet waits for the
+    /// person's click first.
+    fn card_repair_at(&self, p: &CardRepairParams, from_gui: bool) -> Result<RepairResult> {
         if !p.confirm {
             bail!("Refused: a repair writes the card's file system; it needs confirm=true.");
         }
@@ -831,6 +842,39 @@ impl Core {
         if latest.state == CheckState::Ok {
             bail!("Refused: the card's latest check passed; there is nothing to repair.");
         }
+        let ask = (!from_gui).then(|| super::action_ask::ActionAsk {
+            id: super::action_ask::CARD_REPAIR,
+            title: "Repair the card".into(),
+            device: c.id.clone().unwrap_or_else(|| link_handle(&c.link)),
+            identity: c.identity.clone(),
+            diff: vec![DiffItem::Files {
+                label: "Card file system".into(),
+                put: vec![format!("diskutil repairVolume, then a check ({})", latest.summary)],
+                delete: Vec::new(),
+            }],
+            checks: vec![crate::gear::apply::pass("The card's latest check failed")],
+            warnings: vec![
+                "QuadCam backs up a radio's card first when it reads. A repair cannot be stopped once it starts.".into(),
+            ],
+        });
+        let started = std::cell::Cell::new(false);
+        let out = self.after_ask(
+            ask,
+            || {
+                started.set(true);
+                self.card_repair_run(&c, here)
+            },
+            |r| r.verify.summary.clone(),
+        );
+        if out.is_err() && !started.get() && here {
+            let _ = self.gear_finish_card(&c, None);
+        }
+        out
+    }
+
+    /// The repair itself, on the mounted card: a backup first, the repair, a check.
+    fn card_repair_run(&self, c: &Connected, here: bool) -> Result<RepairResult> {
+        let c = c.clone();
         let (backup, backup_error) = match (&c.kind, &c.link) {
             (DeviceKind::Radio, Link::Volume { mount, .. }) => {
                 match self.backup_card(&c, mount, Trigger::BeforeApply) {

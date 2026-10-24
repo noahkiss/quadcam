@@ -742,6 +742,12 @@ export const commands = {
 	gearSimSyncClick: (params: SimSyncRequest) => typedError<ApplyReport, string>(__TAURI_INVOKE("gear_sim_sync_click", { params })),
 	/**  The apply sheet's own Apply button for a sim restore: the click is the confirmation. */
 	gearSimRestoreClick: (params: SimRestoreRequest) => typedError<ApplyReport, string>(__TAURI_INVOKE("gear_sim_restore_click", { params })),
+	/**  The Backups segment's Repair button: the click is the confirmation. */
+	gearCardRepairClick: (params: CardRepairParams) => typedError<RepairResult, string>(__TAURI_INVOKE("gear_card_repair_click", { params })),
+	/**  The Blackbox segment's Pull button: the click is the confirmation. */
+	gearBlackboxPullClick: (params: BlackboxPullParams) => typedError<FcJob<BlackboxPullResult>, string>(__TAURI_INVOKE("gear_blackbox_pull_click", { params })),
+	/**  The Blackbox segment's Erase button: the click is the confirmation. */
+	gearBlackboxEraseClick: (params: BlackboxEraseParams) => typedError<FcJob<BlackboxErased>, string>(__TAURI_INVOKE("gear_blackbox_erase_click", { params })),
 	/**  The apply sheet's own Apply button for a firmware flash: the click is the confirmation. */
 	gearFlashClick: (params: FlashRequest) => typedError<ApplyReport, string>(__TAURI_INVOKE("gear_flash_click", { params })),
 	/**  The apply sheet's own Apply button for a firmware restore: the click is the confirmation. */

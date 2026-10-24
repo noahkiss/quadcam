@@ -1053,25 +1053,49 @@ impl Core {
                 renamed: false,
             });
         }
-        let out = self.gear.disk.run(
-            &[
-                "rename".to_string(),
-                mount.display().to_string(),
-                label.clone(),
-            ],
-            None,
-            std::time::Duration::from_secs(60),
-        )?;
-        if out.code != Some(0) {
-            bail!("diskutil rename failed: {}", out.output.trim());
-        }
-        (self.gear.refresh_volumes)();
-        Ok(VolumeLabeled {
+        // The app has no button for this: every call is an agent's or the CLI's, so it asks.
+        let ask = super::action_ask::ActionAsk {
+            id: super::action_ask::VOLUME_LABEL,
+            title: "Rename the radio's volume".into(),
             device: p.device.clone(),
-            before,
-            after: label,
-            renamed: true,
-        })
+            identity: self
+                .gear_store()
+                .device(&p.device)?
+                .map(|d| d.identity)
+                .unwrap_or_default(),
+            diff: vec![DiffItem::Version {
+                label: "Volume name".into(),
+                before: Some(before.clone()),
+                after: label.clone(),
+            }],
+            checks: vec![crate::gear::apply::pass("The radio's card is mounted")],
+            warnings: Vec::new(),
+        };
+        self.after_ask(
+            Some(ask),
+            || {
+                let out = self.gear.disk.run(
+                    &[
+                        "rename".to_string(),
+                        mount.display().to_string(),
+                        label.clone(),
+                    ],
+                    None,
+                    std::time::Duration::from_secs(60),
+                )?;
+                if out.code != Some(0) {
+                    bail!("diskutil rename failed: {}", out.output.trim());
+                }
+                (self.gear.refresh_volumes)();
+                Ok(VolumeLabeled {
+                    device: p.device.clone(),
+                    before: before.clone(),
+                    after: label.clone(),
+                    renamed: true,
+                })
+            },
+            |r| format!("Renamed the volume {} to {}.", r.before, r.after),
+        )
     }
 
     /// The volume name of the radio's mounted card, when it is mounted.

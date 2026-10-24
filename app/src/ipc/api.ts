@@ -106,8 +106,10 @@ export const api = {
   gearBackup: (target: { device?: string | null; port?: string | null; mount?: string | null }) => ok(commands.gearBackup(target)),
   gearBlackbox: (device: string | null) => ok(commands.gearBlackbox({ device })),
   gearBlackboxSummary: (port: string | null) => ok(commands.gearBlackboxSummary({ port })),
-  gearBlackboxPull: (port: string | null, keep = false) => ok(commands.gearBlackboxPull({ port, keep, confirm: true })),
-  gearBlackboxErase: (port: string | null) => ok(commands.gearBlackboxErase({ port, confirm: true })),
+  /** The Pull button: the click is the confirm. */
+  gearBlackboxPull: (port: string | null, keep = false) => ok(commands.gearBlackboxPullClick({ port, keep, confirm: true })),
+  /** The Erase button: the click is the confirm. */
+  gearBlackboxErase: (port: string | null) => ok(commands.gearBlackboxEraseClick({ port, confirm: true })),
   gearBackups: (device: string | null) => ok(commands.gearBackups({ device })),
   gearBackupRead: (id: string, path: string | null) => ok(commands.gearBackupRead({ id, path })),
   gearBackupDiff: (a: string, b: string | null = null, path: string | null = null) => ok(commands.gearBackupDiff({ a, b, path })),
@@ -119,7 +121,8 @@ export const api = {
   gearCardCheck: (device: string) => ok(commands.gearCardCheck({ device })),
   gearCardClean: (device: string, remove = false) => ok(commands.gearCardClean({ device, mount: null, remove, confirm: remove })),
   gearCardChecks: (device: string) => ok(commands.gearCardChecks({ device })),
-  gearCardRepair: (check: string) => ok(commands.gearCardRepair({ check, confirm: true })),
+  /** The Repair button: the click is the confirm. */
+  gearCardRepair: (check: string) => ok(commands.gearCardRepairClick({ check, confirm: true })),
   gearStop: (handle: string) => ok(commands.gearStop({ handle })),
   gearChanges: (device: string | null = null, history = false) => ok(commands.gearChanges({ device, status: null, history })),
   gearChangeStage: (device: string, edits: Edit[], title: string | null = null) => ok(commands.gearChangeStage({ device, title, edits, note: null, editor: null, draft: false })),

@@ -223,7 +223,8 @@ only respect it: `--keep` (CLI) and `keep` (MCP) skip the erase for one run, and
 except the setting. An agent's `quadcam_settings` write may turn the setting off, never on. MCP `blackbox_pull` needs `confirm=true`; CLI `gear blackbox pull` needs no
 `--yes`, so with the setting on it erases after a verified pull. **Erase flash** (`gear blackbox erase --yes`, `blackbox_erase`) erases by hand.
 It needs a stored pull of exactly what the flash holds (the same used size; flash only grows), and
-asks first in the app.
+asks first in the app. While the app runs, an agent's `blackbox_erase`, and a `blackbox_pull` that
+erases, open the apply sheet and wait for your **Apply**. A pull that keeps the flash asks nothing.
 
 **USB heat.** A quad on USB with its battery in heats up. When the timer (see
 [Flight controllers](#flight-controllers)) shows less time left than the read needs, the pull is
@@ -570,7 +571,8 @@ job: the setup lists the sounds its callouts play and warns about each one the c
 
 `--stage` stages the pack and the Lua as card changes. `gear volume-label DEVICE --yes` renames
 the mounted volume (`diskutil rename`); QuadCam knows the card by its marker, so the label is
-for you. The downloads come from EdgeTX and ExpressLRS at run time.
+for you. While the app runs, an agent's `volume_label` opens the apply sheet and waits for your
+**Apply**. The downloads come from EdgeTX and ExpressLRS at run time.
 
 **Not yet checked on a real radio:** QuadCam's Lua screens, the switch and pot type ops, the
 storage pack and label steps, and the GX12's switch directions. The generator reproduces the
@@ -1347,7 +1349,8 @@ the device **Needs attention**. The backup still runs.
 
 After a failed check, **Repair…** asks first, backs the card up when it can read it (that
 backup is always kept), runs `diskutil repairVolume`, and checks the card again. A repair
-cannot be stopped once it starts. Neither command needs an administrator password. QuadCam logs
+cannot be stopped once it starts. While the app runs, an agent's `card_repair` opens the apply
+sheet and waits for your **Apply**. Neither command needs an administrator password. QuadCam logs
 each check per card in `health/<device>.jsonl` in the gear folder.
 
 ## OSD

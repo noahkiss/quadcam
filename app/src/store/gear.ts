@@ -101,6 +101,9 @@ const flashChange = (device: string, plan: ApplyPlan | null): StagedChange => ({
 
 /** The id of the change a firmware restore's sheet and report carry (the core's `RESTORE_CHANGE`). */
 export const FW_RESTORE = "firmware-restore";
+/** The ids of the stand-in changes an agent's device action carries (`core::action_ask`): no
+ *  staged change, only the person's click in the sheet. */
+export const DEVICE_ACTIONS = ["card-repair", "blackbox-pull", "blackbox-erase", "volume-label"] as const;
 
 /** The change the sheet shows for a firmware restore (the core's `restore_change`). */
 const fwRestoreChange = (device: string, plan: ApplyPlan | null): StagedChange => ({ ...flashChange(device, plan), id: FW_RESTORE, title: "Restore firmware" });

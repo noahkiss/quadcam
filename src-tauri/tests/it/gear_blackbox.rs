@@ -6,7 +6,7 @@
 use quadcam_lib::api;
 use quadcam_lib::core::{
     blackbox_hooks, BlackboxEraseParams, BlackboxExportParams, BlackboxFilter, BlackboxPullParams,
-    Core, EraseState, FcPortParams, HookOutcome, NoHooks, PollPauseParams, PullMode,
+    Core, EraseState, FcPortParams, HookOutcome, Hooks, NoHooks, PollPauseParams, PullMode,
 };
 use quadcam_lib::disk::{DiskInfo, Volume};
 use quadcam_lib::gear::bf::blackbox::synth_image;
@@ -54,6 +54,10 @@ impl Bench {
 }
 
 fn bench_env(fc: &FakeFc, edit: impl FnOnce(&mut Env)) -> Bench {
+    bench_hooks(fc, Arc::new(NoHooks), edit)
+}
+
+fn bench_hooks(fc: &FakeFc, hooks: Arc<dyn Hooks>, edit: impl FnOnce(&mut Env)) -> Bench {
     let dir = tempfile::tempdir().unwrap();
     let locks = dir.path().join("locks");
     let ports = Arc::new(fc.ports(PORT, Some(locks.clone())));
@@ -65,7 +69,7 @@ fn bench_env(fc: &FakeFc, edit: impl FnOnce(&mut Env)) -> Bench {
         Core::new(
             dir.path().join("cache"),
             None,
-            Arc::new(NoHooks),
+            hooks,
             Arc::new(Recorder::default()),
         )
         .with_settings(dir.path().join("support/settings.json"))
@@ -744,6 +748,91 @@ fn the_manual_erase_needs_confirm_and_a_stored_pull_of_exactly_the_flash() {
     // Empty flash: say so.
     let e = ask(true).unwrap_err();
     assert!(format!("{e:#}").contains("already empty"), "{e:#}");
+}
+
+/// The app's hooks: each agent request is recorded, then approved or cancelled.
+#[derive(Default)]
+struct Gui {
+    deny: bool,
+    asked: Mutex<Vec<String>>,
+    done: Mutex<Vec<Result<String, String>>>,
+}
+
+impl Hooks for Gui {
+    fn confirm_apply(
+        &self,
+        change: &quadcam_lib::gear::model::StagedChange,
+        _plan: &quadcam_lib::gear::model::ApplyPlan,
+    ) -> anyhow::Result<()> {
+        self.asked.lock().unwrap().push(change.id.clone());
+        if self.deny {
+            anyhow::bail!("Refused: the user cancelled the apply in quadcam.");
+        }
+        Ok(())
+    }
+    fn apply_done(&self, out: &anyhow::Result<api::ApplyReport>) {
+        self.done.lock().unwrap().push(match out {
+            Ok(r) => Ok(r.message.clone()),
+            Err(e) => Err(format!("{e:#}")),
+        });
+    }
+    fn has_gui(&self) -> bool {
+        true
+    }
+}
+
+#[test]
+fn an_agents_erase_waits_for_the_apply_sheet_and_the_apps_own_buttons_do_not() {
+    let img = image();
+    // A pull that erases asks; a cancel erases nothing and reads nothing.
+    let fc = fc_with(img.clone());
+    let gui = Arc::new(Gui {
+        deny: true,
+        ..Gui::default()
+    });
+    let b = bench_hooks(&fc, gui.clone(), |_| {});
+    b.settings(r#"{"gearEraseBlackbox":true}"#);
+    let e = pull(&b).unwrap_err();
+    assert!(format!("{e:#}").contains("cancelled"), "{e:#}");
+    assert_eq!(*gui.asked.lock().unwrap(), ["blackbox-pull"]);
+    assert_eq!(fc.dataflash_erases(), 0);
+    assert!(b
+        .core
+        .gear_blackbox(&BlackboxFilter::default())
+        .unwrap()
+        .is_empty());
+    // A pull that keeps the flash asks nothing.
+    b.core
+        .gear_blackbox_pull(&BlackboxPullParams {
+            confirm: true,
+            keep: true,
+            ..Default::default()
+        })
+        .unwrap();
+    assert_eq!(gui.asked.lock().unwrap().len(), 1);
+    // The manual erase asks too; the app's Erase button does not.
+    let erase = BlackboxEraseParams {
+        port: None,
+        confirm: true,
+    };
+    assert!(b.core.gear_blackbox_erase(&erase).is_err());
+    assert_eq!(gui.asked.lock().unwrap().last().unwrap(), "blackbox-erase");
+    assert_eq!(fc.dataflash_erases(), 0);
+    b.core.gear_blackbox_erase_click(&erase).unwrap();
+    assert_eq!(gui.asked.lock().unwrap().len(), 2);
+    assert_eq!(fc.dataflash_erases(), 1);
+
+    // Approved, the pull erases and its outcome goes back to the sheet.
+    let fc = fc_with(img);
+    let gui = Arc::new(Gui::default());
+    let b = bench_hooks(&fc, gui.clone(), |_| {});
+    b.settings(r#"{"gearEraseBlackbox":true}"#);
+    assert_eq!(pull(&b).unwrap().erase, EraseState::Done);
+    assert_eq!(*gui.asked.lock().unwrap(), ["blackbox-pull"]);
+    assert_eq!(
+        *gui.done.lock().unwrap(),
+        [Ok("Pulled the blackbox and erased the flash.".to_string())]
+    );
 }
 
 #[test]

@@ -150,6 +150,27 @@ test("an approved agent request shows its progress, its result and Restore backu
   await expect(sheet).toHaveCount(0);
 });
 
+test("an agent's blackbox erase shows the apply sheet, waits for Apply and shows the outcome", async ({ app, page }) => {
+  await openChanges(app, page);
+  const change = { id: "blackbox-erase", device: FC_ID, title: "Erase the blackbox", status: "ready", edits: [], base_backup: "", editor: "agent", note: "", order: 0, history: [], reverts: null };
+  const plan = { change: "blackbox-erase", device: { board: "BETAFPVG473" }, checks: [], diff: [{ kind: "files", label: "Blackbox flash", put: [], delete: ["Every log on the FC's flash"] }], digest: "d", warnings: ["The erase deletes the FC's logs for good."] };
+  await page.evaluate(([c, p]) => window.__qc!.emit("agent-apply-request", { id: 12, change: c, plan: p }), [change, plan] as [unknown, unknown]);
+  const sheet = page.getByRole("dialog", { name: "Apply to Whoop FC" });
+  await expect(sheet.getByRole("heading", { name: "Erase the blackbox" })).toBeVisible();
+  await expect(sheet.getByText("An agent asked for this. It goes ahead only if you click Apply.")).toBeVisible();
+  await expect(sheet.getByText(/then erases the flash and waits until it reads empty/)).toBeVisible();
+  await expect(sheet.getByRole("region", { name: "Changes" })).toContainText("Every log on the FC's flash");
+  await sheet.getByRole("button", { name: "Apply" }).click();
+  await expect.poll(async () => (await app.calls("answer_apply_request")).map((c) => c.args)).toEqual([{ id: 12, approve: true }]);
+  await page.evaluate(() => window.__qc!.emit("agent-apply-closed", 12));
+  const report = { change: "blackbox-erase", device: FC_ID, status: "verified", steps: [{ name: "Erase the blackbox", state: "done" }], backup: null, after_backup: null, sent: [], failed_line: null, verify: [], saved: true, files: [], message: "Erased the blackbox flash in 12 s.", notes: [], at: "2026-10-10T12:00:00Z" };
+  await page.evaluate((r) => window.__qc!.emit("agent-apply-result", { id: 12, report: r, error: null }), report);
+  await expect(sheet.getByRole("region", { name: "Result" })).toContainText("Erased the blackbox flash in 12 s.");
+  await expect(sheet.getByRole("button", { name: "Restore backup" })).toHaveCount(0);
+  await sheet.getByRole("button", { name: "Done" }).click();
+  await expect(sheet).toHaveCount(0);
+});
+
 test("an agent request while the person's apply runs waits for that sheet to close", async ({ app, page }) => {
   await openChanges(app, page);
   await stageSetting(page, "osd_cap_alarm", "1500");

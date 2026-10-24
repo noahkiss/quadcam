@@ -23,7 +23,7 @@ test("Pull blackbox stores the flash and keeps it while the erase setting is off
   await expect(fc.getByRole("button", { name: "Erase flash" })).toBeDisabled();
   await fc.getByRole("button", { name: "Pull blackbox" }).click();
   await expect(page.getByText("3 logs stored (4 MB). Flash kept.")).toBeVisible();
-  expect((await app.method("gear_blackbox_pull")).at(-1)).toEqual({ port: "/dev/cu.usbmodem0", keep: false, confirm: true });
+  expect((await app.method("gear_blackbox_pull_click")).at(-1)).toEqual({ port: "/dev/cu.usbmodem0", keep: false, confirm: true });
   const table = fc.getByRole("table", { name: "Blackbox pulls" });
   await expect(table.getByRole("row")).toHaveCount(2);
   await expect(table.getByRole("row").nth(1)).toContainText("Kept");
@@ -52,10 +52,10 @@ test("Erase flash asks first and needs a stored pull of what the flash holds", a
   await fc.getByRole("button", { name: "Erase flash" }).click();
   const ask = dialog(page, "Erase the blackbox flash?");
   await ask.getByRole("button", { name: "Cancel" }).click();
-  expect(await app.method("gear_blackbox_erase")).toHaveLength(0);
+  expect(await app.method("gear_blackbox_erase_click")).toHaveLength(0);
   await fc.getByRole("button", { name: "Erase flash" }).click();
   await dialog(page, "Erase the blackbox flash?").getByRole("button", { name: "Erase" }).click();
-  expect((await app.method("gear_blackbox_erase")).at(-1)).toEqual({ port: "/dev/cu.usbmodem0", confirm: true });
+  expect((await app.method("gear_blackbox_erase_click")).at(-1)).toEqual({ port: "/dev/cu.usbmodem0", confirm: true });
   await expect(page.getByText("Flash erased. Safe to unplug.")).toBeVisible();
   await expect(fc.getByRole("table", { name: "Blackbox pulls" }).getByRole("row").nth(1)).toContainText("Erased");
 });

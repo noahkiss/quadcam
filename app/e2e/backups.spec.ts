@@ -51,8 +51,8 @@ test("a failed card check offers a repair, which asks first", async ({ page, app
   await ask.getByRole("button", { name: "Repair" }).click();
   await expect(page.getByText("Repaired. The card checks out.")).toBeVisible();
   await expect(radio.getByText(/^Card check failed: /)).toBeHidden();
-  expect(await app.method("gear_card_repair")).toHaveLength(1);
-  expect((await app.method("gear_card_repair"))[0]).toMatchObject({ confirm: true });
+  expect(await app.method("gear_card_repair_click")).toHaveLength(1);
+  expect((await app.method("gear_card_repair_click"))[0]).toMatchObject({ confirm: true });
 });
 
 test("Clean ._ files lists them, asks, and removes them", async ({ page, app }) => {

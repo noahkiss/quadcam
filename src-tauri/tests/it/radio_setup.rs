@@ -172,6 +172,10 @@ struct Bench {
 
 /// A core with a copy of a fixture card mounted (USB, never under /Volumes) and backed up.
 fn bench(card: &str) -> Bench {
+    bench_hooks(card, Arc::new(NoHooks))
+}
+
+fn bench_hooks(card: &str, hooks: Arc<dyn quadcam_lib::core::Hooks>) -> Bench {
     let dir = tempfile::tempdir().unwrap();
     let root = dir.path().join("CARD");
     copy_dir(&fixtures().join(card), &root);
@@ -198,7 +202,7 @@ fn bench(card: &str) -> Bench {
         Core::new(
             dir.path().join("cache"),
             None,
-            Arc::new(NoHooks),
+            hooks,
             Arc::new(Recorder::default()),
         )
         .with_settings(dir.path().join("support/settings.json"))
@@ -589,6 +593,55 @@ fn top_keys(text: &str) -> Vec<String> {
         .filter(|l| !l.starts_with(' ') && !l.starts_with('-') && !l.is_empty())
         .filter_map(|l| l.split(':').next().map(str::to_string))
         .collect()
+}
+
+/// The app's hooks: each agent request is recorded and cancelled.
+#[derive(Default)]
+struct Deny {
+    asked: std::sync::Mutex<Vec<(String, Vec<quadcam_lib::gear::model::DiffItem>)>>,
+}
+
+impl quadcam_lib::core::Hooks for Deny {
+    fn confirm_apply(
+        &self,
+        change: &quadcam_lib::gear::model::StagedChange,
+        plan: &quadcam_lib::gear::model::ApplyPlan,
+    ) -> anyhow::Result<()> {
+        self.asked
+            .lock()
+            .unwrap()
+            .push((change.id.clone(), plan.diff.clone()));
+        anyhow::bail!("Refused: the user cancelled the apply in quadcam.")
+    }
+    fn has_gui(&self) -> bool {
+        true
+    }
+}
+
+#[test]
+fn a_volume_rename_waits_for_the_apply_sheet_and_a_cancel_renames_nothing() {
+    let deny = Arc::new(Deny::default());
+    let b = bench_hooks("pocket-rev11", deny.clone());
+    let e = b
+        .core
+        .gear_volume_label(&quadcam_lib::core::VolumeLabelParams {
+            device: b.id.clone(),
+            label: Some("POCKET2".into()),
+            confirm: true,
+        })
+        .unwrap_err();
+    assert!(e.to_string().contains("cancelled"), "{e}");
+    let asked = deny.asked.lock().unwrap();
+    assert_eq!(asked.len(), 1);
+    assert_eq!(asked[0].0, "volume-label");
+    assert_eq!(
+        asked[0].1,
+        [quadcam_lib::gear::model::DiffItem::Version {
+            label: "Volume name".into(),
+            before: Some("CARD".into()),
+            after: "POCKET2".into(),
+        }]
+    );
 }
 
 #[test]
