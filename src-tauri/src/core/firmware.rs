@@ -746,6 +746,22 @@ impl Core {
                 ));
             }
         }
+        // Firmware that names no board (a blank chip, a maker's image) leaves only the flash
+        // size, and boards share it: the DFU device must be linked to this radio first.
+        let linked = device.dfu_serial.is_some() && device.dfu_serial == dfu_info.serial;
+        if identity.is_none() && !linked {
+            let what = if blank {
+                "Its flash is blank"
+            } else {
+                "The firmware on it names no board"
+            };
+            return Err(refuse(
+                RefusalCode::DeviceChanged,
+                format!(
+                    "{what}, so QuadCam cannot tell the radio in DFU mode is {name}. Link this DFU device to {name} first (gear_dfu_link), then plan again. Nothing was erased."
+                ),
+            ));
+        }
         // A restore keeps no second copy of firmware a saved copy already holds, byte for
         // byte (its hash, and the saved file still reads back with that hash).
         let already = if blank || w.restore.is_none() {

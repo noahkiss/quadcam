@@ -980,10 +980,23 @@ fn a_flash_refuses_a_radio_whose_firmware_names_another_board_before_the_erase()
 }
 
 #[test]
-fn a_blank_radio_can_be_flashed_and_a_wrong_sized_chip_cannot() {
+fn a_blank_radio_can_be_flashed_once_linked_and_a_wrong_sized_chip_cannot() {
     let b = plain();
     b.flasher.device.lock().unwrap().flash.fill(0xFF);
     let p = params(&b, None);
+    // A blank chip names no board: only a linked DFU device may take the image.
+    let plan = b.core.gear_flash_plan(&p).unwrap();
+    let e = b.core.gear_flash(&request(&p, &plan)).unwrap_err();
+    let why = refusal(e);
+    assert_eq!(why.code, RefusalCode::DeviceChanged);
+    assert!(why.reason.contains("gear_dfu_link"), "{}", why.reason);
+    assert_eq!(b.flasher.device.lock().unwrap().mutations, 0);
+    b.core
+        .gear_dfu_link(&quadcam_lib::core::DfuLinkParams {
+            device: Some(b.radio.clone()),
+            ..Default::default()
+        })
+        .unwrap();
     let plan = b.core.gear_flash_plan(&p).unwrap();
     let r = b.core.gear_flash(&request(&p, &plan)).unwrap();
     assert_eq!(r.status, ChangeStatus::Verified, "{}", r.message);

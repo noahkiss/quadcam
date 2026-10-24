@@ -572,7 +572,8 @@ fn under_cargo_a_restore_reaches_only_the_fake_usb_path() {
         last_backup: Some("x".into()),
         last_space: None,
         aliases: Vec::new(),
-        dfu_serial: None,
+        // The fake's flash is blank, and a blank chip takes an image only once linked.
+        dfu_serial: Some("0001".into()),
         radio_aircraft: None,
         firmware_channel: None,
     };

@@ -1439,6 +1439,9 @@ binaries only (open question 10).
     compile. The apply saves the copy (`gear/fwcopy.rs`, plain files under
     `<gear>/firmware/<device>/`, read back from disk) before the erase. A blank flash is a
     valid copy to flash over (an interrupted flash must be recoverable) and is not saved.
+    A radio flash over a blank chip, or over firmware that names no board, needs the DFU
+    device linked to the radio first (`gear_dfu_link`): the flash size is all that is left
+    to tell boards apart, and the Pocket and the GX12 share it.
     The copy is not a card snapshot: a snapshot of only `firmware.bin` would become the radio's
     `latest` backup, which `model_edit`, the switch map and the apply engine read cards from,
     and the pruner would collect its blob. (The first version did that.)

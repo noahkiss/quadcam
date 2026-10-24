@@ -1798,6 +1798,9 @@ lists the profiles.
    - compares the board the current firmware names (`edgetx-<board>-...`) with the radio's
      board. Another board is another radio: QuadCam refuses and erases nothing, also for a
      DFU device not yet linked to a radio;
+   - refuses a blank flash, or firmware that names no board, on a DFU device not linked to
+     this radio: the flash size alone does not tell two radios apart. Link it first
+     (`quadcam-cli gear dfu-link --device <radio id>`, or the MCP action `dfu_link`);
    - erases the sectors it needs and writes the image in 16 KB segments, reading each segment
      back before it writes the next;
    - reads the whole image back and compares every byte;
@@ -1831,7 +1834,7 @@ missing or broken can still be put in DFU mode, and QuadCam can flash it again.
 2. Plug in the USB cable, with no button held (a GX12: top port, hold SG, tap power, let go
    of SG). Wait a few seconds.
 3. Open **Firmware > Flash…** and select **Apply**, or **Restore…** on a saved copy. A blank
-   flash is allowed.
+   flash is allowed once the DFU device is linked to the radio (`gear dfu-link`).
 4. If QuadCam cannot do it, use a DFU tool on the copy in `firmware/<radio>/`. Another
    option is STM32CubeProgrammer with the release's `<board>-<hash>.bin` at address
    `0x08000000`.
