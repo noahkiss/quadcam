@@ -60,7 +60,7 @@ quadcam-cli format --prep --device /dev/diskN --volume-uuid <uuid> --yes
 
 **Mount, work, unmount.** The end of `import` unmounts the session's card (a removable card; never a DJI device over USB), and the result says so under `card`. `format`, `format --plan` and `eject` mount it again when they need it. `stage --card` and `format --prep --card` take a card that an earlier job unmounted and mounted by its device id from `gear status`.
 
-`eject` makes the card safe to remove. For a card it runs `diskutil unmountDisk`: every volume unmounts, and the card stays listed until you pull it. A target you name must be a card or a DJI device: `eject` refuses any other disk and changes nothing.
+`eject` makes the card safe to remove. For a card it runs `diskutil unmountDisk`: every volume unmounts, and the card stays listed until you pull it. A target you name must be a card or a DJI device: `eject` refuses any other disk and changes nothing. While a DJI device is on USB, a named target that is not a card must have a mounted DJI volume (`DCIM/DJI_*`), so a backup drive plugged in beside it is never unmounted.
 
 When the `delete_clips_after_import` setting is on, `import` deletes each clip that verified from the card or folder, and its result lists every clip under `clip_deletion` as `deleted`, or `kept` with a `reason`. `--keep-clips` keeps them for that run. No flag turns the delete on. See [Settings](settings.md#delete-clips-after-import).
 

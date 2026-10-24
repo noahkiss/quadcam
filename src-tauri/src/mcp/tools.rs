@@ -150,7 +150,7 @@ pub fn tools() -> Value {
         ),
         tool::<EjectArgs>(
             "quadcam_eject",
-            "Make the session's card (or another card's mount point or /dev/diskN) safe to remove: diskutil unmounts every volume of a card or a DJI device (the card stays listed until it is pulled). A target that is another disk is refused and nothing is ejected.\n\nBest for: the last step after export.\nReturns: {ejected: true}.",
+            "Make the session's card (or another card's mount point or /dev/diskN) safe to remove: diskutil unmounts every volume of a card or a DJI device (the card stays listed until it is pulled). A target that is another disk is refused and nothing is ejected; while a DJI device is on USB, a named disk that is not a card needs a mounted DJI volume (DCIM/DJI_*).\n\nBest for: the last step after export.\nReturns: {ejected: true}.",
             json!({"destructiveHint": false, "idempotentHint": true, "openWorldHint": false, "readOnlyHint": false, "title": "Safe to remove"}),
         ),
         tool::<FormatCardArgs>(

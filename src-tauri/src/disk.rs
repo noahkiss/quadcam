@@ -654,6 +654,8 @@ pub fn safe_remove(target: &str, dji_usb: &dyn Fn() -> bool) -> Result<()> {
 
 /// `safe_remove`, but with `other_disks` false it refuses a disk that is neither a card nor
 /// a DJI device, before it runs anything: a target someone named may be a backup drive.
+/// While a DJI device is on USB, `removes_by_unmount` takes any external disk; a named
+/// target must then prove itself (`named_target_ok`).
 pub fn safe_remove_with(target: &str, dji_usb: &dyn Fn() -> bool, other_disks: bool) -> Result<()> {
     let vol = info(target)?;
     let whole_id = whole_disk_of(if vol.parent_whole_disk.is_empty() {
@@ -663,13 +665,37 @@ pub fn safe_remove_with(target: &str, dji_usb: &dyn Fn() -> bool, other_disks: b
     });
     let whole = info(&whole_id).unwrap_or(vol);
     let dev = format!("/dev/{whole_id}");
-    if removes_by_unmount(&whole, dji_usb) {
-        unmount_disk(&dev)
-    } else if other_disks {
-        eject(&dev)
-    } else {
+    let dji_volume = || {
+        list_volumes().iter().any(|v| {
+            whole_disk_of(&v.info.device_identifier) == whole_id
+                && v.source == Some(crate::sources::SourceKind::Dji)
+        })
+    };
+    if !other_disks && !named_target_ok(&whole, dji_usb, &dji_volume) {
         bail!("{target} is not a card or a DJI device; QuadCam ejects only those. Nothing was ejected.")
     }
+    if removes_by_unmount(&whole, dji_usb) {
+        unmount_disk(&dev)
+    } else {
+        eject(&dev)
+    }
+}
+
+/// A target someone named is a card or a DJI device: removable media, a disk whose media
+/// name names DJI, or, while a DJI device is on USB, an external disk with a mounted DJI
+/// volume (`DCIM/DJI_*`, `dji_volume`). Any other external disk is refused, a backup drive
+/// plugged in beside the DJI device included.
+pub fn named_target_ok(
+    whole: &DiskInfo,
+    dji_usb: &dyn Fn() -> bool,
+    dji_volume: &dyn Fn() -> bool,
+) -> bool {
+    whole.removable
+        || whole
+            .media_name
+            .as_deref()
+            .is_some_and(|m| m.to_ascii_uppercase().contains("DJI"))
+        || (!whole.internal && dji_usb() && dji_volume())
 }
 
 /// True when "safe to remove" unmounts the disk rather than ejecting it: a card, or a DJI
@@ -962,6 +988,43 @@ mod tests {
         assert!(removes_by_unmount(&unnamed, &|| true));
         // Any other external disk is ejected.
         assert!(!removes_by_unmount(&unnamed, &|| false));
+    }
+
+    #[test]
+    fn a_named_target_must_be_a_card_or_a_dji_device() {
+        let card = DiskInfo {
+            removable: true,
+            ..Default::default()
+        };
+        assert!(named_target_ok(&card, &|| true, &|| false));
+        let o4 = DiskInfo {
+            ejectable: true,
+            media_name: Some("DJI Air Unit".into()),
+            bus_protocol: Some("USB".into()),
+            ..Default::default()
+        };
+        assert!(named_target_ok(&o4, &|| false, &|| false));
+        // A DJI device whose media name does not say so: only with its DJI volume mounted.
+        let unnamed = DiskInfo {
+            media_name: Some("Storage".into()),
+            ..o4.clone()
+        };
+        assert!(named_target_ok(&unnamed, &|| true, &|| true));
+        // A backup drive beside a DJI device on USB: refused, never unmounted.
+        let backup = DiskInfo {
+            ejectable: true,
+            media_name: Some("Backup Plus".into()),
+            bus_protocol: Some("USB".into()),
+            ..Default::default()
+        };
+        assert!(removes_by_unmount(&backup, &|| true));
+        assert!(!named_target_ok(&backup, &|| true, &|| false));
+        assert!(!named_target_ok(&backup, &|| false, &|| true));
+        let internal = DiskInfo {
+            internal: true,
+            ..Default::default()
+        };
+        assert!(!named_target_ok(&internal, &|| true, &|| true));
     }
 
     #[test]
