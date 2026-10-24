@@ -372,6 +372,60 @@ fn zip_of(dir: &Path, files: &[(&str, &[u8])]) -> Vec<u8> {
     std::fs::read(zip).unwrap()
 }
 
+/// A cut-short download is never kept, and a kept zip that changed is fetched again.
+#[test]
+fn a_storage_pack_download_is_kept_only_whole() {
+    let b = bench("pocket-rev11");
+    let tmp = tempfile::tempdir().unwrap();
+    let pack = zip_of(tmp.path(), &[("edgetx.sdcard.version", b"2.12.3\n")]);
+    let url = "https://github.com/EdgeTX/edgetx-sdcard/releases/download/v2.12.3/bw128x64.zip";
+    let cached = b
+        .root
+        .parent()
+        .unwrap()
+        .join("cache/post-flash/sdcard-2.12.3/bw128x64.zip");
+    let pack_step = |b: &Bench| {
+        let plan = b
+            .core
+            .gear_radio_post_flash(&PostFlashParams {
+                device: b.id.clone(),
+                steps: vec![PostFlashStep::StoragePack],
+                ..Default::default()
+            })
+            .unwrap();
+        plan.steps
+            .into_iter()
+            .find(|s| s.step == PostFlashStep::StoragePack)
+            .unwrap()
+    };
+    // A truncated download: the step says so and nothing is kept.
+    b.fetch.serve(url, pack[..pack.len() / 2].to_vec());
+    assert!(pack_step(&b).problem.is_some());
+    assert!(!cached.exists());
+    // A whole one is kept and used again without a fetch.
+    b.fetch.serve(url, pack.clone());
+    assert!(pack_step(&b).problem.is_none());
+    assert!(cached.is_file());
+    let fetched = |b: &Bench| {
+        b.fetch
+            .requested
+            .lock()
+            .unwrap()
+            .iter()
+            .filter(|u| *u == url)
+            .count()
+    };
+    assert_eq!(fetched(&b), 2);
+    assert!(pack_step(&b).problem.is_none());
+    assert_eq!(fetched(&b), 2);
+    // A kept zip cut short later is fetched again.
+    std::fs::write(&cached, &pack[..10]).unwrap();
+    let s = pack_step(&b);
+    assert!(s.problem.is_none(), "{:?}", s.problem);
+    assert_eq!(fetched(&b), 3);
+    assert_eq!(std::fs::read(&cached).unwrap(), pack);
+}
+
 #[test]
 fn the_steps_after_a_flash_plan_and_stage_from_fixture_downloads() {
     let b = bench("pocket-rev11");

@@ -715,25 +715,50 @@ impl Core {
             })
     }
 
-    /// The storage pack's files, downloaded once into QuadCam's cache and unpacked.
+    /// The storage pack's files, downloaded once into QuadCam's cache and unpacked. The zip
+    /// is kept only after it unpacked, with the SHA-256 of its download beside it; a kept
+    /// zip that no longer has that hash or does not unpack is fetched again.
     fn pack_files(
         &self,
         scratch: &Path,
         version: &str,
         name: &str,
     ) -> Result<Vec<(String, Vec<u8>)>> {
+        use crate::gear::fwcopy::sha256;
         let dir = scratch.join(format!("sdcard-{version}"));
         std::fs::create_dir_all(&dir)?;
         let zip = dir.join(format!("{name}.zip"));
-        if !zip.is_file() {
-            let bytes = crate::gear::firmware::fetch_bytes(
-                self.firmware.fetch.as_ref(),
-                &postflash::pack_url(version, name),
-                &dir,
-            )?;
-            std::fs::write(&zip, bytes)?;
+        let record = dir.join(format!("{name}.zip.sha256"));
+        if zip.is_file() {
+            let same = match (std::fs::read(&zip), std::fs::read_to_string(&record)) {
+                (Ok(b), Ok(r)) => r.trim() == sha256(&b),
+                _ => false,
+            };
+            if same {
+                if let Ok(files) = postflash::unpack(&zip, &dir) {
+                    return Ok(files);
+                }
+            }
+            let _ = std::fs::remove_file(&zip);
+            let _ = std::fs::remove_file(&record);
         }
-        postflash::unpack(&zip, &dir)
+        let bytes = crate::gear::firmware::fetch_bytes(
+            self.firmware.fetch.as_ref(),
+            &postflash::pack_url(version, name),
+            &dir,
+        )?;
+        let part = dir.join(format!("{name}.zip.part"));
+        std::fs::write(&part, &bytes)?;
+        let files = match postflash::unpack(&part, &dir) {
+            Ok(f) => f,
+            Err(e) => {
+                let _ = std::fs::remove_file(&part);
+                return Err(e.context("The storage pack download is not a whole zip"));
+            }
+        };
+        std::fs::write(&record, sha256(&bytes))?;
+        std::fs::rename(&part, &zip)?;
+        Ok(files)
     }
 }
 
