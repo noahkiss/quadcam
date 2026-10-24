@@ -209,7 +209,7 @@ impl Core {
                     span.end
                 ),
             };
-            let mut qt = items.clone();
+            let mut qt = lib::cut_items(&items, *span);
             crate::qtmeta::set(
                 &mut qt,
                 "com.apple.quicktime.creationdate",

@@ -116,6 +116,7 @@ On import, each cut becomes its own file next to the clip: `YYYY-MM-DD_<name>_cu
 - QuadCam cuts from the original DVR file, not from the converted one. MJPEG has a keyframe on every frame, so each cut starts and ends on the exact frame.
 - MP4 cuts are re-encoded like the full clip. MOV cuts copy the original frames.
 - A DJI clip's MP4 cut is re-encoded too. Its MOV cut copies the H.264 or H.265 frames, so it starts at the keyframe before the cut. Cuts keep only the video and audio, not the DJI data streams.
+- A cut carries its clip's metadata: name, note, date, place, aircraft, keywords and weather. Of the clip's moments it keeps only those inside its range, timed from the cut's own start. Keep ranges, flight stats and highlights describe the whole clip and stay with it.
 - QuadCam verifies every cut: streams, frame count, duration, and the metadata it wrote.
 - QuadCam does not write a verified cut again. You can add cuts later and import again.
 - **Add to Photos** adds a clip's cuts with it.

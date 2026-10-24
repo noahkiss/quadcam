@@ -448,6 +448,31 @@ pub fn moments_value(moments: &[Moment]) -> String {
     serde_json::to_string(&lite).unwrap_or_default()
 }
 
+/// A cut's QuickTime items, from its clip's: the clip's metadata, and of its moments only
+/// the parts inside `span`, moved to the cut's own clock. Items that describe the whole
+/// clip's timeline or files stay out: keep ranges, flight stats, video analysis and the
+/// joined files.
+pub fn cut_items(items: &[Item], span: Span) -> Vec<Item> {
+    let mut qt: Vec<Item> = items
+        .iter()
+        .filter(|(k, _)| ![KEY_KEEP, KEY_STATS, KEY_VIDEO, KEY_PARTS].contains(&k.as_str()))
+        .cloned()
+        .collect();
+    let moments: Vec<Moment> = qtmeta::get(items, KEY_MOMENTS)
+        .map(parse_moments)
+        .unwrap_or_default()
+        .into_iter()
+        .filter(|m| m.end > span.start && m.start < span.end)
+        .map(|m| Moment {
+            start: m.start.max(span.start) - span.start,
+            end: m.end.min(span.end) - span.start,
+            ..m
+        })
+        .collect();
+    qtmeta::set(&mut qt, KEY_MOMENTS, &moments_value(&moments));
+    qt
+}
+
 fn parse_moments(s: &str) -> Vec<Moment> {
     serde_json::from_str::<Vec<MomentLite>>(s)
         .unwrap_or_default()
@@ -1050,6 +1075,71 @@ pub fn groups(ix: &Index) -> HashMap<&'static str, Vec<(String, usize)>> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_cut_keeps_the_clip_metadata_and_only_its_own_moments() {
+        let m = |k, s, e| Moment {
+            kind: k,
+            start: s,
+            end: e,
+            score: 0.9,
+            source: Source::RadioLog,
+            detail: String::new(),
+        };
+        let items: Vec<Item> = vec![
+            ("com.apple.quicktime.title".into(), "loops".into()),
+            (KEY_SOURCE.into(), "abc".into()),
+            (KEY_PLACE.into(), "Home field".into()),
+            (KEY_WEATHER.into(), "{}".into()),
+            (KEY_KEEP.into(), "0.000-9.000".into()),
+            (KEY_STATS.into(), "{}".into()),
+            (KEY_VIDEO.into(), "{}".into()),
+            (KEY_PARTS.into(), "[]".into()),
+            (
+                KEY_MOMENTS.into(),
+                moments_value(&[
+                    m(MomentKind::Roll, 1.0, 2.0),
+                    m(MomentKind::Flip, 11.0, 12.0),
+                    m(MomentKind::Punch, 14.5, 16.0),
+                    m(MomentKind::Dive, 30.0, 31.0),
+                ]),
+            ),
+        ];
+        let qt = cut_items(
+            &items,
+            Span {
+                start: 10.0,
+                end: 15.0,
+            },
+        );
+        for k in [
+            "com.apple.quicktime.title",
+            KEY_SOURCE,
+            KEY_PLACE,
+            KEY_WEATHER,
+        ] {
+            assert_eq!(qtmeta::get(&qt, k), qtmeta::get(&items, k), "{k}");
+        }
+        for k in [KEY_KEEP, KEY_STATS, KEY_VIDEO, KEY_PARTS] {
+            assert_eq!(qtmeta::get(&qt, k), None, "{k}");
+        }
+        let got = parse_moments(qtmeta::get(&qt, KEY_MOMENTS).unwrap());
+        let spans: Vec<(MomentKind, f64, f64)> =
+            got.iter().map(|m| (m.kind, m.start, m.end)).collect();
+        assert_eq!(
+            spans,
+            vec![(MomentKind::Flip, 1.0, 2.0), (MomentKind::Punch, 4.5, 5.0)]
+        );
+        // No moment in range: no moments item at all.
+        let qt = cut_items(
+            &items,
+            Span {
+                start: 20.0,
+                end: 25.0,
+            },
+        );
+        assert_eq!(qtmeta::get(&qt, KEY_MOMENTS), None);
+    }
 
     fn d(s: &str) -> NaiveDate {
         NaiveDate::parse_from_str(s, "%Y-%m-%d").unwrap()

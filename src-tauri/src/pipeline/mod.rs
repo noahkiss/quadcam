@@ -1096,9 +1096,9 @@ pub fn export_cuts(
                 ),
                 ..meta.clone()
             };
-            // The clip's QuickTime items, with this cut's start time and description.
-            let mut qt: Vec<(String, String)> = main
-                .qt
+            // The clip's QuickTime items (`library::cut_items`), with this cut's start time
+            // and description.
+            let mut qt: Vec<(String, String)> = library::cut_items(&main.qt, *span)
                 .iter()
                 .map(|(k, v)| {
                     let v = match k.as_str() {
