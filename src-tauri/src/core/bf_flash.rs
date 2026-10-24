@@ -580,7 +580,7 @@ impl Core {
         if heat.untimed {
             return Err(refuse(
                 RefusalCode::UsbHeat,
-                "A battery is in, and QuadCam's USB timer is not counting for this FC (its reads are paused, or it was plugged in moments ago), so it cannot tell whether the flash would outlast it. Unplug the battery, then flash again.",
+                format!("{} so it cannot tell whether the flash would outlast it. Unplug the battery, then flash again.", super::fc::UNTIMED_REASON),
             ));
         }
         cand.battery = heat.battery;

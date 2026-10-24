@@ -154,7 +154,9 @@ a port only when no other program has it open:
   paused, and the pause lasts until QuadCam quits. A job you start yourself still runs.
 - A pause also turns off the USB heat checks, because they read the timer. A job still reads
   the battery once before its heat check: with a battery in and no timer counting, a flash
-  refuses, and an apply or a blackbox pull warns in its answer.
+  refuses, and an apply, a blackbox pull or an ExpressLRS read through the FC warns in its answer.
+- Only the app counts the timer. A CLI or MCP job with the app closed sees no timer counting,
+  as if reads were paused.
 
 Plug USB in before the battery: many FCs do not show up on USB when the battery is first.
 When several FCs are plugged in, name the port; QuadCam does not guess.
@@ -1930,7 +1932,8 @@ If something goes wrong:
 
 A flash with the battery in runs on USB power for about a minute and a half. The plan refuses
 when the USB timer would run out first. The flash reads the battery again before it starts and
-refuses a battery in while no USB timer counts (reads paused, or the FC plugged in moments ago).
+refuses a battery in while no USB timer counts (reads paused, the FC plugged in moments ago, or
+the app not running).
 
 ### ExpressLRS (preview)
 
@@ -2005,8 +2008,16 @@ packet rate changes the switch modes). From a terminal:
 | Radio | The radio's `ver` must name the board the read recorded. A radio of another model refuses before the pulses stop. Two radios of one model look the same | The module's boot pin is held while it powers up |
 | FC | The FC must identify itself as the saved FC. The receiver must answer a CRSF ping with the name the read saved | The receiver restarts into its bootloader on a CRSF request. What it prints must name the planned target (its prior target name, product name or unified firmware name). An empty reply, or a bare `UNIFIED`, refuses |
 
+Through an FC, the USB heat check runs first ([USB timer](#flight-controllers)): the receiver
+often needs the battery in. A flash refuses when the timer has less than about 90 s left, or when a
+battery is in and no timer counts. A read or an options apply refuses only when the timer ran out,
+and warns when no timer counts.
+
 Every refusal comes before anything is written. Then QuadCam reads the chip's current flash with esptool and keeps it as a backup (`firmware.bin`), writes with
 `esptool write-flash` and reports success only when esptool prints that it verified the data.
+The backup is the whole chip, its config included: the bind UID and, if you set a home network
+in the ExpressLRS web UI, that network's name and password. It sits in the gear folder's backups.
+The configured image QuadCam stages for esptool is removed when the job ends.
 Afterwards restart the radio or power-cycle the quad, then read the device again. ExpressLRS 4
 wipes a receiver's Options page, so note your settings first. A flash that fails leaves the device
 in its bootloader: power-cycle it and flash again.

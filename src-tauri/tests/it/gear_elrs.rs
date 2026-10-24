@@ -28,7 +28,7 @@ use std::path::{Path, PathBuf};
 use std::process::{ExitStatus, Output};
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 const PHRASE: &str = "bench-phrase-not-real";
 const COMMIT: &str = "0123456789abcdef0123456789abcdef01234567";
@@ -115,6 +115,8 @@ struct Bench {
     gui: Arc<Gui>,
     radio: String,
     fc: String,
+    /// The FC behind the receiver host, for its battery.
+    msp: FakeFc,
 }
 
 fn bundle_zip(dir: &Path) -> PathBuf {
@@ -219,7 +221,7 @@ fn bench_with(
     let dir = tempfile::tempdir().unwrap();
     let tx = FakeHost::radio(FakeElrs::tx(module, "4.1.0")).with_board(board);
     let (msp, fc_id) = msp_fc(0x11);
-    let rx = FakeHost::fc(FakeElrs::rx("Vendor 2.4GHz AIO RX", "3.5.3")).with_msp(msp);
+    let rx = FakeHost::fc(FakeElrs::rx("Vendor 2.4GHz AIO RX", "3.5.3")).with_msp(msp.clone());
     let radio_ports = tx.ports("/dev/cu.radio");
     let fc_ports = rx.ports("/dev/cu.fc");
     let both = quadcam_lib::gear::serial::FakePorts::new(
@@ -307,6 +309,7 @@ fn bench_with(
         gui,
         radio: "radio-0000000000000001".into(),
         fc: fc_id,
+        msp,
     };
     (b, tx, rx)
 }
@@ -1042,6 +1045,53 @@ fn a_receiver_flash_pings_the_receiver_and_refuses_another_one() {
     assert_eq!(r.code, RefusalCode::DeviceChanged);
     assert!(r.reason.contains("did not answer"), "{}", r.reason);
     assert_eq!(mute.bootloader_requests(), 0);
+    assert!(b.esptool.calls.lock().unwrap().is_empty());
+}
+
+#[test]
+fn a_job_through_an_fc_runs_the_usb_heat_gate_first() {
+    let (b, _, rx) = bench(true, true);
+    // A battery in and no timer counting: a read warns, a flash refuses.
+    b.msp.set_battery(7.6);
+    let r = read(&b, &b.fc).unwrap();
+    assert!(
+        r.notes.iter().any(|n| n.contains("not counting")),
+        "{:?}",
+        r.notes
+    );
+    let (p, plan) = planned(&b, &r.device);
+    rx.restart();
+    let r = refusal(flash(&b, &p, &plan.digest).unwrap_err());
+    assert_eq!(r.code, RefusalCode::UsbHeat, "{r:?}");
+    assert!(r.reason.contains("not counting"), "{}", r.reason);
+    assert!(b.esptool.calls.lock().unwrap().is_empty());
+    assert_eq!(rx.device().bootloader_requests(), 0);
+    // A timer that ran out refuses every job before the passthrough.
+    b.core
+        .gear_usb_tick(Instant::now() - Duration::from_secs(1800));
+    let t = b.core.gear_usb_timers();
+    assert!(t[0].battery, "{t:?}");
+    assert_eq!(t[0].remaining_s, Some(0), "{t:?}");
+    let limit = t[0].limit_s.unwrap();
+    let r = refusal(read(&b, &b.fc).unwrap_err());
+    assert_eq!(r.code, RefusalCode::UsbHeat, "{r:?}");
+    let r = refusal(flash(&b, &p, &plan.digest).unwrap_err());
+    assert_eq!(r.code, RefusalCode::UsbHeat, "{r:?}");
+    assert_eq!(rx.passthrough_baud(), None, "no passthrough started");
+    // 30 s left: a read runs, a flash (about 90 s) refuses.
+    let (b, _, rx) = bench(true, true);
+    b.msp.set_battery(7.6);
+    b.core
+        .gear_usb_tick(Instant::now() - Duration::from_secs(u64::from(limit - 30)));
+    let t = b.core.gear_usb_timers();
+    assert!(t[0].remaining_s.is_some_and(|s| s <= 30), "{t:?}");
+    let r = read(&b, &b.fc).unwrap();
+    assert!(!r.notes.iter().any(|n| n.contains("not counting")));
+    let (p, plan) = planned(&b, &r.device);
+    rx.restart();
+    let r = refusal(flash(&b, &p, &plan.digest).unwrap_err());
+    assert_eq!(r.code, RefusalCode::UsbHeat, "{r:?}");
+    assert!(r.reason.contains("s left"), "{}", r.reason);
     assert!(b.esptool.calls.lock().unwrap().is_empty());
 }
 

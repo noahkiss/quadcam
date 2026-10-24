@@ -137,8 +137,11 @@ FC hot. A timer stays while a job holds its port, for 60 s after the port left t
 15 min while an STM32 DFU device is attached. It keeps the FC's id and board, moves to another
 port when the same id shows up there, and starts over when another FC's id shows up on its port.
 A job reads the battery itself before its heat check (`Core::usb_heat`): a battery in with no
-timer counting (reads paused, or no probe yet) refuses a Betaflight flash and is a note on an FC
-apply and a blackbox pull.
+timer counting (reads paused, no probe yet, or the app not running: only its poll calls
+`gear_usb_tick`) refuses a Betaflight or an ExpressLRS flash and is a note on an FC apply, a
+blackbox pull, and an ExpressLRS read or options apply through an FC. The ExpressLRS jobs run the
+check before the passthrough (`Core::elrs_fc_heat`), since the probe cannot read the FC once it
+passes its UART through; a receiver flash also refuses under 90 s left.
 
 ### 2.4 The apply sheet
 

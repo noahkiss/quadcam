@@ -41,6 +41,10 @@ use std::time::Duration;
 /// The id of the stand-in change a flash's sheet and report carry.
 pub const ELRS_FLASH_CHANGE: &str = "elrs-flash";
 
+/// About how long a receiver flash through an FC runs on USB: esptool reads the whole chip
+/// (about 1 MB at 420 kbaud) and then writes it.
+const ELRS_FC_FLASH_S: u32 = 90;
+
 const OFF: &str =
     "ELRS tools (preview) are off. Turn them on in Settings > Gear, or set elrs_preview=true.";
 
@@ -379,6 +383,7 @@ impl Core {
                 link::radio_passthrough(ports, port, baud, start, expect_board, &t)?
             }
             _ => {
+                self.elrs_fc_heat(port, start == ModuleStart::Bootloader, notes)?;
                 let (l, r) = link::fc_passthrough(ports, port, link::RECEIVER_BAUD, &t)?;
                 notes.push(format!(
                     "The FC passes its receiver UART ({}) through until you unplug USB: unplug it and plug it in again when you are done.",
@@ -388,6 +393,41 @@ impl Core {
             }
         };
         Ok((CrsfLink::new(raw, t), board))
+    }
+
+    /// The USB heat gate for a job through an FC (`Core::usb_heat`), run before the
+    /// passthrough: the receiver often needs a battery in, and once the FC passes its UART
+    /// through, the timer's probe cannot read it. A timer that ran out refuses. A flash also
+    /// refuses a timer that would run out first, and a battery in with no timer counting;
+    /// for any other job that is a note.
+    fn elrs_fc_heat(&self, port: &str, flash: bool, notes: &mut Vec<String>) -> Result<()> {
+        let volts =
+            crate::gear::bf::battery_volts(self.gear.ports.as_ref(), port, self.fc_timing()).ok();
+        let heat = self.usb_heat(port, volts);
+        let refuse = |why: String| Err(refusal(Refusal::new(RefusalCode::UsbHeat, why)));
+        if heat.battery && heat.remaining_s == Some(0) {
+            return refuse(
+                "This FC has run on USB with its battery in past its limit. Unplug the battery and let it cool.".into(),
+            );
+        }
+        if !flash {
+            if heat.untimed {
+                notes.push(super::fc::UNTIMED_NOTE.into());
+            }
+            return Ok(());
+        }
+        if heat.untimed {
+            return refuse(format!(
+                "{} so it cannot tell whether the flash would outlast it. Unplug the battery, then flash again.",
+                super::fc::UNTIMED_REASON
+            ));
+        }
+        match heat.remaining_s {
+            Some(left) if heat.battery && left < ELRS_FC_FLASH_S => refuse(format!(
+                "A flash through the FC takes about {ELRS_FC_FLASH_S} s, and this FC's USB timer has {left} s left. Unplug the battery and let it cool, then flash again."
+            )),
+            _ => Ok(()),
+        }
     }
 
     /// Finds the device behind the host and reads its parameters.
@@ -1275,6 +1315,8 @@ impl Core {
             crate::gear::store::safe(&prep.device.id)
         ));
         let _ = std::fs::remove_dir_all(&work);
+        // The staged image holds the binding UID: removed on every exit.
+        let _work = RemoveOnDrop(work.clone());
         flash::stage_files(built, &work)?;
         // esptool's `change_baud` must land on the speed the host's UART runs: the radio's
         // module UART is set to FLASH_BAUD by its passthrough, the FC's receiver UART stays at
@@ -1347,7 +1389,6 @@ impl Core {
         // 3. Write. esptool compares the flash with the data it sent before it finishes.
         let write_args = flash::esptool_args(built, &port, esp_baud, &work);
         let outcome = self.run_esptool(&write_args, "Writing the firmware");
-        let _ = std::fs::remove_dir_all(&work);
         let (status, message) = match &outcome {
             Ok(text) if text.to_ascii_lowercase().contains("hash of data verified") => {
                 steps.push(step(
@@ -1418,6 +1459,15 @@ impl Core {
             notes,
             at: Utc::now(),
         })
+    }
+}
+
+/// Removes a folder when dropped.
+struct RemoveOnDrop(std::path::PathBuf);
+
+impl Drop for RemoveOnDrop {
+    fn drop(&mut self) {
+        let _ = std::fs::remove_dir_all(&self.0);
     }
 }
 

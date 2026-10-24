@@ -406,6 +406,83 @@ fn the_usb_timer_keeps_counting_while_the_fc_reboots() {
     assert_eq!(t[0].limit_s, Some(600));
 }
 
+/// Two FCs on one port path: the port goes for `hide` lists, and `second` picks the FC
+/// that answers after.
+struct Swapping {
+    first: FakePorts,
+    other: FakePorts,
+    second: std::sync::atomic::AtomicBool,
+    hide: std::sync::atomic::AtomicU32,
+}
+
+impl Ports for Swapping {
+    fn list(&self) -> Vec<PortInfo> {
+        use std::sync::atomic::Ordering::SeqCst;
+        if self.hide.load(SeqCst) > 0 {
+            self.hide.fetch_sub(1, SeqCst);
+            return Vec::new();
+        }
+        self.pick().list()
+    }
+    fn open(
+        &self,
+        port: &str,
+        baud: u32,
+    ) -> anyhow::Result<Box<dyn quadcam_lib::gear::serial::SerialLink>> {
+        self.pick().open(port, baud)
+    }
+}
+
+impl Swapping {
+    fn pick(&self) -> &FakePorts {
+        if self.second.load(std::sync::atomic::Ordering::SeqCst) {
+            &self.other
+        } else {
+            &self.first
+        }
+    }
+}
+
+#[test]
+fn another_fc_on_the_same_port_starts_its_own_usb_timer() {
+    let a = FakeFc::new(V2).with_uid(UID);
+    let mut uid = UID;
+    uid[0] ^= 0xff;
+    let other = FakeFc::new(V2).with_uid(uid);
+    let dir = tempfile::tempdir().unwrap();
+    let locks = dir.path().join("locks");
+    let ports = Arc::new(Swapping {
+        first: a.ports(PORT, Some(locks.clone())),
+        other: other.ports(PORT, Some(locks.clone())),
+        second: Default::default(),
+        hide: Default::default(),
+    });
+    let b = bench_with(ports.clone(), locks, dir);
+    a.set_battery(7.6);
+    other.set_battery(7.6);
+    let t0 = Instant::now();
+    let t = b.core.gear_usb_tick(t0);
+    assert!(t[0].battery);
+    let first_id = t[0].id.clone();
+    b.core.gear_usb_tick(t0 + Duration::from_secs(480));
+    // The person swaps FCs within the grace: the port goes and comes back.
+    ports.hide.store(1, std::sync::atomic::Ordering::SeqCst);
+    assert!(b.core.gear_connected().unwrap().is_empty());
+    ports
+        .second
+        .store(true, std::sync::atomic::Ordering::SeqCst);
+    assert_eq!(b.core.gear_connected().unwrap().len(), 1);
+    let t = b
+        .core
+        .gear_usb_tick(t0 + Duration::from_secs(480) + USB_PROBE);
+    assert_eq!(t.len(), 1);
+    assert_ne!(t[0].id, first_id, "the timer names the new FC");
+    assert!(
+        t[0].elapsed_s < 60,
+        "the old FC's minutes do not carry over: {t:?}"
+    );
+}
+
 #[test]
 fn a_paused_port_is_never_probed_and_a_busy_one_is_skipped() {
     use quadcam_lib::core::PollPauseParams;

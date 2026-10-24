@@ -442,6 +442,14 @@ impl Core {
             let mut st = self.fc_state.lock().unwrap();
             let info = st.seen.get(&port).cloned();
             let u = st.usb.entry(port.clone()).or_default();
+            // Another FC on the port: its timer starts over.
+            if info
+                .as_ref()
+                .and_then(|i| i.id.as_ref())
+                .is_some_and(|id| u.id.as_ref().is_some_and(|x| x != id))
+            {
+                *u = UsbState::default();
+            }
             u.last_probe = Some(now);
             if let Some(i) = info {
                 u.id = i.id.or(u.id.take());
@@ -522,8 +530,8 @@ impl Core {
     }
 
     /// The heat gate's view of the FC on `port`, with the battery `volts` a job read just
-    /// before the gate. A battery the job reads while no timer counts (reads paused, or the
-    /// first probe not yet run) is `untimed`.
+    /// before the gate. A battery the job reads while no timer counts (reads paused, the first
+    /// probe not yet run, or no app running the probe) is `untimed`.
     pub(super) fn usb_heat(&self, port: &str, volts: Option<f32>) -> UsbHeat {
         let timer = self
             .gear_usb_timers()
@@ -548,8 +556,11 @@ pub(super) struct UsbHeat {
     pub untimed: bool,
 }
 
+/// Why a job finds a battery in and no USB timer counting.
+pub const UNTIMED_REASON: &str = "A battery is in, and QuadCam's USB timer is not counting for this FC (its reads are paused, it was plugged in moments ago, or the app is not running),";
+
 /// What a job says when it finds a battery in and no USB timer counting.
-pub const UNTIMED_NOTE: &str = "A battery is in, and QuadCam's USB timer is not counting for this FC (its reads are paused, or it was plugged in moments ago). Keep the job short or unplug the battery: the quad heats on USB.";
+pub const UNTIMED_NOTE: &str = "A battery is in, and QuadCam's USB timer is not counting for this FC (its reads are paused, it was plugged in moments ago, or the app is not running). Keep the job short or unplug the battery: the quad heats on USB.";
 
 #[cfg(test)]
 mod tests {
