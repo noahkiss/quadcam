@@ -1333,3 +1333,50 @@ fn a_model_name_that_leaves_models_is_refused() {
     assert!(why.contains("outside MODELS/"), "{why}");
     assert!(plan.files.iter().all(|f| card::inside_card(&f.path)));
 }
+
+#[test]
+fn a_value_with_a_line_break_or_control_character_is_refused() {
+    let dir = tempfile::tempdir().unwrap();
+    let c = card_at(&dir.path().join("CARD"), &SynthCard::default());
+    let model = c.model_files()[0].clone();
+    let radio = |value: &str| Edit::Radio {
+        ops: vec![RadioOp::SetScalar {
+            key: "timezoneMinutes".into(),
+            value: value.into(),
+        }],
+    };
+    let model_ops = |ops: Vec<ModelOp>| Edit::Model {
+        file: model.clone(),
+        name: None,
+        ops,
+    };
+    let cases = [
+        radio("0\ncurrModel: 7\nboard: tx16s"),
+        radio("0\rjunk"),
+        radio("0\x07"),
+        model_ops(vec![ModelOp::SetFlags {
+            flags: vec![Field::new("disableTelemetryWarning", "0\nsemver: 9.9.9")],
+        }]),
+        model_ops(vec![ModelOp::SetTimer {
+            index: 0,
+            fields: vec![Field::new("swtch", "\"SA0\"\nsemver: 9.9.9")],
+        }]),
+        // A quote inside a quoted value ends the string early.
+        model_ops(vec![ModelOp::SetTimer {
+            index: 0,
+            fields: vec![Field::new("swtch", "SA0\" x")],
+        }]),
+        model_ops(vec![ModelOp::SetFlags {
+            flags: vec![Field::new("disableTelemetryWarning", "\"a\\\"")],
+        }]),
+    ];
+    for e in cases {
+        let plan = c.plan(std::slice::from_ref(&e), None).unwrap();
+        assert!(!plan.ready(), "{e:?} planned: {:?}", plan.files);
+        assert!(plan.files.is_empty(), "{e:?}");
+        let why = plan.checks.iter().find_map(|k| k.refusal.as_ref()).unwrap();
+        assert_eq!(why.code, RefusalCode::ShapeUnknown, "{e:?}: {}", why.reason);
+    }
+    // A plain value still plans.
+    assert!(c.plan(&[radio("60")], None).unwrap().ready());
+}

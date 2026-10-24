@@ -609,6 +609,10 @@ QuadCam implements these rules from the file format; it copies no EdgeTX code.
 - Parse a block into typed items only when every line is understood. A line the reader does
   not know stops the edit with the file and the line in the reason.
 - Before any edit, parse and render the unchanged file. If the bytes differ, refuse.
+- After an edit, parse every edited file again before any other check. A value with a line
+  break or another control character, or a quote or backslash inside a new quoted value,
+  refuses (`shape_unknown`): the checks read the parsed tree, so a value must not carry lines
+  of its own past them.
 - After an edit, set `checksum: 0` on a file that has a checksum line (EdgeTX accepts 0 or no
   line).
 - Write a file only when its bytes change (FAT writes are slow on macOS). Write to a

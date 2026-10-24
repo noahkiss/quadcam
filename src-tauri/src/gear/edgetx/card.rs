@@ -484,6 +484,11 @@ impl Card {
                 break;
             }
         }
+        // Every check below reads the parsed files: each edited file must still parse,
+        // so a value cannot carry lines of its own past them.
+        if result.is_ok() {
+            result = work.docs.values().try_for_each(Doc::check_written);
+        }
         let (name, result) = match result {
             Ok(()) => ("Shape understood", Ok(())),
             Err(r) => (
@@ -1099,7 +1104,7 @@ impl Work<'_> {
         let mut out = Vec::new();
         for (p, d) in self.docs.iter_mut() {
             if d.changed() || d.original().is_empty() {
-                d.zero_checksum();
+                d.zero_checksum()?;
             }
             out.push((p.clone(), Some(d.render())));
         }

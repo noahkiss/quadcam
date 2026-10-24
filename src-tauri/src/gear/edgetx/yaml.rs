@@ -73,7 +73,9 @@ impl Line {
             None if after.is_empty() => (false, ""),
             None => return None,
         };
-        if value.contains(['\t', '\r']) {
+        // A line break in a value would write a second line; tabs and other control
+        // characters are not EdgeTX's either.
+        if value.chars().any(|c| c.is_ascii_control()) {
             return None;
         }
         Some(Line {
@@ -284,9 +286,14 @@ impl Doc {
             .iter()
             .enumerate()
             .map(|(i, l)| {
-                Line::parse(l)
-                    .filter(|p| p.render() == *l)
-                    .ok_or_else(|| shape_refusal(&self.name, i + 1, ""))
+                Line::parse(l).filter(|p| p.render() == *l).ok_or_else(|| {
+                    let why = if l.chars().any(|c| c.is_ascii_control()) {
+                        "a line break, tab or other control character"
+                    } else {
+                        ""
+                    };
+                    shape_refusal(&self.name, i + 1, why)
+                })
             })
             .collect::<Result<_, _>>()?;
         let mut i = 0;
@@ -431,11 +438,47 @@ impl Doc {
     }
 
     /// Sets `checksum: 0` when the file has a checksum line (EdgeTX accepts 0 or no line).
-    pub fn zero_checksum(&mut self) -> bool {
-        match self.top("checksum") {
-            Ok(Some(n)) if n.value != "0" => self.set_line(n.line, "checksum: 0".into()),
+    /// Refuses a file that no longer parses.
+    pub fn zero_checksum(&mut self) -> Result<bool, Refusal> {
+        Ok(match self.top("checksum")? {
+            Some(n) if n.value != "0" => self.set_line(n.line, "checksum: 0".into()),
             _ => false,
+        })
+    }
+
+    /// Checks a file before it is written: it still parses, and every line it did not
+    /// read keeps a quoted value whole (no `"` or `\\` inside the quotes). Every check of a
+    /// plan reads the parsed tree, so a value must not carry lines or values of its own.
+    pub fn check_written(&self) -> Result<(), Refusal> {
+        self.tree()?;
+        let original = Doc::parse(&self.name, &self.raw)
+            .map(|d| d.lines)
+            .unwrap_or_default();
+        let read: std::collections::HashSet<&str> = original.iter().map(String::as_str).collect();
+        for (i, l) in self.lines.iter().enumerate() {
+            if read.contains(l.as_str()) {
+                continue;
+            }
+            let Some(Line {
+                kind: Kind::Key { value, .. },
+                ..
+            }) = Line::parse(l)
+            else {
+                continue;
+            };
+            if !value.starts_with('"') {
+                continue;
+            }
+            let whole = value.len() >= 2 && value.ends_with('"');
+            if !whole || value[1..value.len() - 1].contains(['"', '\\']) {
+                return Err(shape_refusal(
+                    &self.name,
+                    i + 1,
+                    "a quote or backslash inside a quoted value",
+                ));
+            }
         }
+        Ok(())
     }
 
     /// The text of lines `range`.
@@ -527,7 +570,7 @@ mod tests {
         assert_eq!(e.code, RefusalCode::ShapeUnknown);
         assert_eq!(
             e.reason,
-            "model01.yml line 3 is not understood; nothing was written."
+            "model01.yml line 3 is not understood (a line break, tab or other control character); nothing was written."
         );
         let e = Doc::parse("m.yml", b"a: 1\n   b: 2\n").unwrap_err();
         assert!(
@@ -552,7 +595,7 @@ mod tests {
         assert!(!d.set_top_scalar("last", "2").unwrap());
         assert!(d.set_top_scalar("header", "1").is_err());
         assert!(d.set_top_scalar("nope", "1").is_err());
-        assert!(d.zero_checksum());
+        assert!(d.zero_checksum().unwrap());
         d.splice(10..10, vec!["added: 1".into()]);
         let out = d.render();
         assert!(out.ends_with(b"added: 1\r\nlast: 2\r\n"));
