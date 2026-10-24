@@ -939,9 +939,11 @@ impl Core {
         let format = self.defaults().name_date_format;
         let clips: Vec<(PathBuf, LibClip)> = self.with_index(|root, ix| {
             // An id may be a 0.4 alias: compare current ids.
-            let ids: Option<Vec<String>> = ids
-                .as_ref()
-                .map(|ids| ids.iter().filter_map(|id| Some(ix.get(id)?.id.clone())).collect());
+            let ids: Option<Vec<String>> = ids.as_ref().map(|ids| {
+                ids.iter()
+                    .filter_map(|id| Some(ix.get(id)?.id.clone()))
+                    .collect()
+            });
             Ok((
                 ix.clips
                     .iter()

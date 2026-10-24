@@ -139,7 +139,7 @@ pub fn probe(tools: &Tools, path: &Path) -> Result<Probe> {
         .args(["-v", "error", "-count_packets", "-show_entries"])
         .arg("stream=codec_type,nb_read_packets,r_frame_rate,width,height:stream_disposition=attached_pic:format=duration:format_tags")
         .args(["-of", "json"])
-        .arg(path)
+        .arg(file_arg(path))
         .output()
         .context("running ffprobe")?;
     let errors = String::from_utf8_lossy(&out.stderr).trim().to_string();
@@ -196,9 +196,9 @@ pub fn probe(tools: &Tools, path: &Path) -> Result<Probe> {
 pub fn recover(tools: &Tools, src: &Path, dst: &Path) -> Result<()> {
     let out = Command::new(&tools.ffmpeg)
         .args(["-v", "error", "-y", "-fflags", "+genpts", "-i"])
-        .arg(src)
+        .arg(file_arg(src))
         .args(["-map", "0", "-c", "copy", "-f", "avi"])
-        .arg(dst)
+        .arg(file_arg(dst))
         .output()
         .context("running ffmpeg")?;
     if !out.status.success() || !dst.is_file() {
@@ -337,8 +337,12 @@ pub fn convert_args(
 /// `cuts::write_qt`, which rewrites `moov` in place, so it must be the last box.
 pub fn copy(src: &Path, dst: &Path, meta: &Meta) -> Result<()> {
     let run = || -> Result<()> {
-        if crate::qtmeta::moov_offset(src)? + 8 > src.metadata()?.len() {
-            bail!("no moov box in {}", src.display());
+        // The metadata goes into the last box: find out before copying gigabytes.
+        if !crate::qtmeta::moov_is_last(src)? {
+            bail!(
+                "the moov box is not the last box in {}; QuadCam cannot add its metadata to this file",
+                src.display()
+            );
         }
         std::fs::copy(src, dst).with_context(|| format!("copying {}", src.display()))?;
         if dst.metadata()?.len() != src.metadata()?.len() {
@@ -418,7 +422,7 @@ pub fn convert(
     };
     let r = run_ffmpeg(
         tools,
-        &convert_args(src, dst, format, plan, encoder, meta),
+        &convert_args(&file_arg(src), &file_arg(dst), format, plan, encoder, meta),
         on_progress,
     );
     match r {
@@ -427,7 +431,14 @@ pub fn convert(
             let _ = std::fs::remove_file(dst);
             run_ffmpeg(
                 tools,
-                &convert_args(src, dst, format, plan, Encoder::X264, meta),
+                &convert_args(
+                    &file_arg(src),
+                    &file_arg(dst),
+                    format,
+                    plan,
+                    Encoder::X264,
+                    meta,
+                ),
                 on_progress,
             )
             .map_err(|e2| anyhow!("{e}; x264 fallback also failed: {e2}"))?;
@@ -507,7 +518,7 @@ pub fn cut(
 ) -> Result<Encoder> {
     match run_ffmpeg(
         tools,
-        &cut_args(src, dst, span, format, encoder, meta),
+        &cut_args(&file_arg(src), &file_arg(dst), span, format, encoder, meta),
         &mut |_| {},
     ) {
         Ok(()) => Ok(encoder),
@@ -515,7 +526,14 @@ pub fn cut(
             let _ = std::fs::remove_file(dst);
             run_ffmpeg(
                 tools,
-                &cut_args(src, dst, span, format, Encoder::X264, meta),
+                &cut_args(
+                    &file_arg(src),
+                    &file_arg(dst),
+                    span,
+                    format,
+                    Encoder::X264,
+                    meta,
+                ),
                 &mut |_| {},
             )
             .map_err(|e2| anyhow!("{e}; x264 fallback also failed: {e2}"))?;
@@ -664,10 +682,10 @@ pub fn thumbnail(tools: &Tools, src: &Path, dst: &Path) -> Result<()> {
     for ss in ["1", "0"] {
         let out = Command::new(&tools.ffmpeg)
             .args(["-v", "error", "-y", "-ss", ss, "-i"])
-            .arg(src)
+            .arg(file_arg(src))
             // `V`: the first video stream that is not a cover picture.
             .args(["-map", "0:V:0", "-frames:v", "1", "-vf", "scale=240:-1"])
-            .arg(dst)
+            .arg(file_arg(dst))
             .output()?;
         if out.status.success() && dst.metadata().is_ok_and(|m| m.len() > 0) {
             return Ok(());
@@ -686,7 +704,7 @@ pub fn frame_at(tools: &Tools, src: &Path, secs: f64, width: u32, dst: &Path) ->
     for ss in [format!("{:.3}", secs.max(0.0)), "0".into()] {
         let out = Command::new(&tools.ffmpeg)
             .args(["-v", "error", "-y", "-ss", &ss, "-i"])
-            .arg(src)
+            .arg(file_arg(src))
             .args([
                 "-map",
                 "0:V:0",
@@ -697,7 +715,7 @@ pub fn frame_at(tools: &Tools, src: &Path, secs: f64, width: u32, dst: &Path) ->
                 "-q:v",
                 "4",
             ])
-            .arg(&tmp)
+            .arg(file_arg(&tmp))
             .output()?;
         if out.status.success() && tmp.metadata().is_ok_and(|m| m.len() > 0) {
             std::fs::rename(&tmp, dst)?;
@@ -713,7 +731,7 @@ pub fn proxy(tools: &Tools, src: &Path, dst: &Path) -> Result<()> {
     let tmp = dst.with_extension("part.mp4");
     let out = Command::new(&tools.ffmpeg)
         .args(["-v", "error", "-y", "-i"])
-        .arg(src)
+        .arg(file_arg(src))
         .args([
             "-map",
             "0:V:0",
@@ -736,12 +754,12 @@ pub fn proxy(tools: &Tools, src: &Path, dst: &Path) -> Result<()> {
             "-f",
             "mp4",
         ])
-        .arg(&tmp)
+        .arg(file_arg(&tmp))
         .output()?;
     if !out.status.success() {
         let out = Command::new(&tools.ffmpeg)
             .args(["-v", "error", "-y", "-i"])
-            .arg(src)
+            .arg(file_arg(src))
             .args([
                 "-map",
                 "0:V:0",
@@ -764,9 +782,10 @@ pub fn proxy(tools: &Tools, src: &Path, dst: &Path) -> Result<()> {
                 "-f",
                 "mp4",
             ])
-            .arg(&tmp)
+            .arg(file_arg(&tmp))
             .output()?;
         if !out.status.success() {
+            let _ = std::fs::remove_file(&tmp);
             bail!(
                 "proxy failed: {}",
                 String::from_utf8_lossy(&out.stderr).trim()
@@ -806,7 +825,7 @@ pub fn sample_frames(
             .args(["-hide_banner", "-nostats", "-loglevel", "info", "-nostdin"])
             .args(pre)
             .arg("-i")
-            .arg(src)
+            .arg(file_arg(src))
             .args([
                 "-map",
                 "0:v:0",
@@ -892,7 +911,7 @@ pub fn verify_qt(tools: &Tools, out: &Path, items: &[(String, String)]) -> Resul
             "-UserData:GPSCoordinates",
             "-G1",
         ])
-        .arg(out)
+        .arg(file_arg(out))
         .output()
         .context("running exiftool")?;
     let v: serde_json::Value = serde_json::from_slice(&out.stdout).unwrap_or_default();
@@ -914,11 +933,18 @@ pub fn verify_qt(tools: &Tools, out: &Path, items: &[(String, String)]) -> Resul
     Ok(())
 }
 
+/// A file path as ffmpeg and ffprobe get it: absolute, so a name that starts with `-` is
+/// never read as an option.
+fn file_arg(p: &Path) -> PathBuf {
+    std::path::absolute(p).unwrap_or_else(|_| p.to_path_buf())
+}
+
 /// `+40.6892-074.0445/` to (lat, lon).
 pub fn parse_iso6709(s: &str) -> Option<(f64, f64)> {
     let s = s.trim().trim_end_matches('/');
-    let split = s[1..].find(['+', '-'])? + 1;
-    Some((s[..split].parse().ok()?, s[split..].parse().ok()?))
+    // Another app's value may be empty or start with a character wider than a byte.
+    let split = s.get(1..)?.find(['+', '-'])? + 1;
+    Some((s.get(..split)?.parse().ok()?, s.get(split..)?.parse().ok()?))
 }
 
 #[cfg(test)]
@@ -955,5 +981,44 @@ mod tests {
         assert!(mov.ends_with("-f mov out"));
         assert!(args(Format::Mp4, EncodePlan::Remux).ends_with("-f mp4 out"));
         assert!(args(Format::Mov, EncodePlan::Transcode).contains("h264_videotoolbox"));
+    }
+
+    #[test]
+    fn an_odd_iso6709_value_is_none_not_a_panic() {
+        for v in ["", "/", "+", "\u{2212}40.6+074.0/", "+40\u{e9}-74/"] {
+            assert_eq!(parse_iso6709(v), None, "{v:?}");
+        }
+        assert_eq!(parse_iso6709("+40.5-074.25/"), Some((40.5, -74.25)));
+    }
+
+    #[test]
+    fn a_copy_refuses_a_file_whose_moov_is_not_last_before_copying() {
+        let dir = tempfile::tempdir().unwrap();
+        let src = dir.path().join("a.mp4");
+        let dst = dir.path().join("b.mp4");
+        let bx = |kind: &[u8], body: &[u8]| {
+            let mut v = ((body.len() + 8) as u32).to_be_bytes().to_vec();
+            v.extend_from_slice(kind);
+            v.extend_from_slice(body);
+            v
+        };
+        let bytes = [
+            bx(b"ftyp", b"isom"),
+            bx(b"mdat", &[1u8; 64]),
+            bx(b"moov", &bx(b"mvhd", &[0u8; 100])),
+            bx(b"free", &[0u8; 16]),
+        ]
+        .concat();
+        std::fs::write(&src, bytes).unwrap();
+        let meta = Meta {
+            title: String::new(),
+            comment: String::new(),
+            creation_time: DateTime::<Utc>::default(),
+            date: String::new(),
+            description: String::new(),
+        };
+        let e = copy(&src, &dst, &meta).unwrap_err();
+        assert!(format!("{e:#}").contains("not the last box"), "{e:#}");
+        assert!(!dst.exists());
     }
 }

@@ -179,6 +179,14 @@ fn find_moov(f: &mut std::fs::File, path: &Path) -> Result<(u64, u64, u64)> {
     moov.context("no moov box")
 }
 
+/// True when the top-level `moov` is the file's last box, the one shape `write` edits.
+pub fn moov_is_last(path: &Path) -> Result<bool> {
+    let mut f = std::fs::File::open(path).with_context(|| format!("opening {}", path.display()))?;
+    let len = f.metadata()?.len();
+    let (start, size, _) = find_moov(&mut f, path)?;
+    Ok(start + size == len)
+}
+
 /// Where the top-level `moov` starts.
 pub fn moov_offset(path: &Path) -> Result<u64> {
     let mut f = std::fs::File::open(path)?;
@@ -463,10 +471,7 @@ fn foreign_items(f: &mut std::fs::File, path: &Path) -> Result<Vec<RawItem>> {
     Ok(read_open(f, path)?.1)
 }
 
-fn read_open(
-    f: &mut std::fs::File,
-    path: &Path,
-) -> Result<(Vec<Item>, Vec<RawItem>, Option<f64>)> {
+fn read_open(f: &mut std::fs::File, path: &Path) -> Result<(Vec<Item>, Vec<RawItem>, Option<f64>)> {
     let (start, size, hdr) = find_moov(f, path)?;
     if size > 64 << 20 {
         bail!("moov box too large in {}", path.display());
@@ -608,7 +613,10 @@ mod tests {
         let p = movie(dir.path());
         write(&p, &[item("app.quadcam.rating", "3")], None).unwrap();
         let before = std::fs::read(&p).unwrap();
-        assert!(!journal_path(&p).exists(), "a finished write leaves no journal");
+        assert!(
+            !journal_path(&p).exists(),
+            "a finished write leaves no journal"
+        );
 
         // A crash halfway: the journal is on disk, the new moov half written.
         let mut f = std::fs::File::options()
@@ -673,7 +681,10 @@ mod tests {
         });
         let items = read(&p).unwrap();
         for n in 0..8 {
-            assert!(get(&items, &format!("app.quadcam.test{n}")).is_some(), "{n}");
+            assert!(
+                get(&items, &format!("app.quadcam.test{n}")).is_some(),
+                "{n}"
+            );
         }
     }
 
@@ -683,7 +694,10 @@ mod tests {
         let p = movie(dir.path());
         write(
             &p,
-            &[item("com.apple.quicktime.make", "DJI"), item("com.other.note", " ")],
+            &[
+                item("com.apple.quicktime.make", "DJI"),
+                item("com.other.note", " "),
+            ],
             None,
         )
         .unwrap();
@@ -699,7 +713,10 @@ mod tests {
             b"moov",
             &rebuild_moov(
                 &body,
-                &[item("com.apple.quicktime.make", "DJI"), item("com.other.note", " ")],
+                &[
+                    item("com.apple.quicktime.make", "DJI"),
+                    item("com.other.note", " "),
+                ],
                 &[("com.dji.gimbal".to_string(), int.clone())],
                 None,
             )
@@ -715,7 +732,11 @@ mod tests {
         let (items, raw, _) = read_open(&mut f, &p).unwrap();
         assert_eq!(get(&items, "com.apple.quicktime.make"), Some("DJI"));
         assert_eq!(get(&items, "app.quadcam.rating"), Some("4"));
-        assert_eq!(get(&items, "com.other.note"), Some(" "), "a blank item stays");
+        assert_eq!(
+            get(&items, "com.other.note"),
+            Some(" "),
+            "a blank item stays"
+        );
         assert_eq!(raw, vec![("com.dji.gimbal".to_string(), int)]);
     }
 

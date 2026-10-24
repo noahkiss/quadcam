@@ -1186,7 +1186,9 @@ fn a_place_edit_moves_the_clip_to_that_places_day_folder() {
             },
         )
         .unwrap();
-    let to = l.root.join("2026/2026-09-28 Home field/2026-09-28_gap_run.mp4");
+    let to = l
+        .root
+        .join("2026/2026-09-28 Home field/2026-09-28_gap_run.mp4");
     assert!(to.is_file());
     assert_eq!(by_name(&l, "gap run").file, to);
 
@@ -1224,7 +1226,11 @@ fn a_clip_named_like_a_cut_stays_a_clip() {
         "2026-09-27_cut2_.mp4"
     );
     let dir = l.root.join("2026/2026-09-27");
-    std::fs::rename(dir.join("2026-09-27_cut2_.mp4"), dir.join("2026-09-27_cut7.mp4")).unwrap();
+    std::fs::rename(
+        dir.join("2026-09-27_cut2_.mp4"),
+        dir.join("2026-09-27_cut7.mp4"),
+    )
+    .unwrap();
     let r = l.core.library_rebuild().unwrap();
     let a = all(&l);
     assert_eq!(a.len(), 2, "{r:?}");
@@ -1273,7 +1279,10 @@ fn a_trash_that_fails_partway_leaves_the_clip_whole() {
     let l = lab_failing_on("_cut1");
     import(&l);
     let a = by_name(&l, "backyard loops");
-    let r = l.core.library_trash(std::slice::from_ref(&a.clip.id)).unwrap();
+    let r = l
+        .core
+        .library_trash(std::slice::from_ref(&a.clip.id))
+        .unwrap();
     assert_eq!(r.failed.len(), 1, "{r:?}");
     assert!(r.trashed.is_empty(), "{r:?}");
     assert!(a.file.is_file());
@@ -1282,7 +1291,10 @@ fn a_trash_that_fails_partway_leaves_the_clip_whole() {
     let l = lab_failing_on("backyard_loops.mp4");
     import(&l);
     let a = by_name(&l, "backyard loops");
-    let r = l.core.library_trash(std::slice::from_ref(&a.clip.id)).unwrap();
+    let r = l
+        .core
+        .library_trash(std::slice::from_ref(&a.clip.id))
+        .unwrap();
     assert_eq!(r.failed.len(), 1, "{r:?}");
     assert_eq!(r.moved.len(), 1, "the cut went: {r:?}");
     let b = by_name(&l, "backyard loops");
@@ -1307,7 +1319,10 @@ fn a_put_back_refuses_a_file_quadcam_did_not_trash() {
         to: other.clone(),
     };
     let e = l.core.library_untrash(&[forged.clone()]).unwrap_err();
-    assert!(format!("{e:#}").contains("not a file QuadCam moved"), "{e:#}");
+    assert!(
+        format!("{e:#}").contains("not a file QuadCam moved"),
+        "{e:#}"
+    );
     assert!(other.is_file() && !forged.from.exists());
 }
 
@@ -1330,7 +1345,10 @@ fn a_rating_one_file_refuses_rates_the_rest() {
     assert_eq!(by_name(&l, "backyard loops").clip.rating, 4);
     assert_eq!(by_name(&l, "gap run").clip.rating, 0);
     assert_eq!(
-        quadcam_lib::qtmeta::get(&quadcam_lib::qtmeta::read(&a.file).unwrap(), library::KEY_RATING),
+        quadcam_lib::qtmeta::get(
+            &quadcam_lib::qtmeta::read(&a.file).unwrap(),
+            library::KEY_RATING
+        ),
         Some("4")
     );
 }
