@@ -176,7 +176,8 @@ pub struct Ctx<'a> {
 }
 
 /// One take: from the cache, or from the provider (then cached). Returns whether the cache
-/// answered.
+/// answered. With `cuts` (a studio render), a line missing from them never reaches the
+/// provider: every studio take comes from a priced batch.
 pub fn take(ctx: &Ctx<'_>, spoken: &str) -> Result<(Pcm, bool)> {
     if let Some(p) = ctx.cuts.and_then(|c| c.get(spoken)) {
         return Ok((p.clone(), true));
@@ -185,6 +186,9 @@ pub fn take(ctx: &Ctx<'_>, spoken: &str) -> Result<(Pcm, bool)> {
     let key = Cache::key(ctx.tts.id(), ctx.voice, ctx.model, s.speed, spoken, s.seed);
     if let Some(p) = ctx.cache.get(ctx.tts.id(), &key) {
         return Ok((p, true));
+    }
+    if ctx.cuts.is_some() {
+        bail!("no priced batch holds the line {spoken:?}, so it is not sent on its own");
     }
     let p = ctx
         .tts
@@ -347,6 +351,56 @@ pub fn plan(ctx: &Ctx<'_>, spoken: &[String]) -> Plan {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// A provider that counts its renders.
+    struct Counting(std::sync::atomic::AtomicU32);
+    impl Tts for Counting {
+        fn id(&self) -> &str {
+            "counting"
+        }
+        fn paid(&self) -> bool {
+            true
+        }
+        fn render(&self, _req: &TtsRequest<'_>) -> Result<Pcm> {
+            self.0.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+            Ok(Pcm {
+                rate: OUT_RATE,
+                samples: take_samples(),
+            })
+        }
+    }
+
+    #[test]
+    fn a_studio_line_missing_from_its_cuts_never_reaches_the_provider() {
+        let dir = tempfile::tempdir().unwrap();
+        let tts = Counting(Default::default());
+        let cache = Cache::new(dir.path());
+        let settings = RenderSettings::default();
+        let cuts = std::collections::HashMap::from([(
+            "Armed".to_string(),
+            Pcm {
+                rate: OUT_RATE,
+                samples: take_samples(),
+            },
+        )]);
+        let mut ctx = Ctx {
+            tts: &tts,
+            cache: &cache,
+            voice: "v",
+            model: "m",
+            settings: &settings,
+            tools: None,
+            cuts: Some(&cuts),
+        };
+        assert!(take(&ctx, "Armed").unwrap().1);
+        let e = take(&ctx, "Disarmed").unwrap_err();
+        assert!(format!("{e:#}").contains("not sent on its own"), "{e:#}");
+        assert_eq!(tts.0.load(std::sync::atomic::Ordering::SeqCst), 0);
+        // Without cuts, a miss goes to the provider.
+        ctx.cuts = None;
+        assert!(!take(&ctx, "Disarmed").unwrap().1);
+        assert_eq!(tts.0.load(std::sync::atomic::Ordering::SeqCst), 1);
+    }
 
     /// A burst of 12 windows of +/-8000, with silence and a quiet tail around it.
     fn take_samples() -> Vec<i16> {

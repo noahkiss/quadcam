@@ -1618,8 +1618,8 @@ impl Core {
         let rcache = self.voice_cache();
         let mut ctx = self.render_ctx(tts, &rcache, &voice, &model, settings, tools.as_ref());
         ctx.cuts = Some(&done.cuts);
-        // Only lines with a cut that passed its checks: a line missing from `cuts` would go
-        // to the provider one at a time, unpriced. Kept batches' lines are in the pack already.
+        // Only lines with a cut that passed its checks: `render::take` refuses a line missing
+        // from `cuts` rather than send it unpriced. Kept batches' lines are in the pack already.
         let chosen: Vec<Line> = lines
             .iter()
             .filter(|(_, spoken)| done.cuts.contains_key(spoken))
