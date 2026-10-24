@@ -18,6 +18,7 @@ can run them before trials 6 to 10. Trial 17, the 1.0 gate, comes last.
   | Device | Proven for writes |
   |---|---|
   | RadioMaster Pocket | EdgeTX 2.12 (a splash needs 2.12.4) |
+  | RadioMaster GX12 | EdgeTX 2.12.5 |
   | BetaFPV G473 V2 FC (`BETAFPVG473_V2`) | Betaflight 2026.6.0 |
   | BetaFPV G473 FC (`BETAFPVG473`) | Betaflight 2025.12.5 |
 
@@ -40,8 +41,8 @@ can run them before trials 6 to 10. Trial 17, the 1.0 gate, comes last.
 | [2](#2-read-the-radio-firmware) | Radio firmware (read) | none |
 | [3](#3-identify-an-fc-and-back-it-up) | FC (read, one reboot) | none |
 | [4](#4-pull-the-blackbox) | FC blackbox flash (read, then erase) | **Erase blackbox after download** (second pull) |
-| [5](#5-expresslrs-read-then-one-option) | ExpressLRS options (read, then one write) | **Show the ELRS tools** |
-| [6](#6-betaflight-flashing) | FC flash checks (read), then optionally a real flash | **Betaflight flashing (preview)** |
+| [5](#5-expresslrs-read-each-module-then-one-option-then-a-flash) | ExpressLRS: each radio's module and each receiver (read), one option (write), then a flash | **Show the ELRS tools** |
+| [6](#6-betaflight-flashing) | FC flash checks with the maker's build (read), then optionally a real flash | **Betaflight flashing (preview)** |
 | [7](#7-apply-a-staged-change-to-an-fc-and-revert-it) | FC settings (write) | none |
 | [8](#8-radio-card-apply-a-model-edit-and-a-voice-pack) | Radio card (write) | none |
 | [9](#9-sync-rates-into-a-sim) | A sim's rate file (write) | none |
@@ -239,99 +240,152 @@ Do this only after the exported log opened.
 - Report: the board, the Betaflight version, the flash size and bytes used, how long the pull and
   the erase took (the heat check assumes 4 seconds per MiB for the erase), and the log count.
 
-## 5. ExpressLRS: read, then one option
+## 5. ExpressLRS: read each module, then one option, then a flash
 
-Reads an ExpressLRS device through its host, then changes one option. This is a preview that
-QuadCam has not tried on any real device. Do not select **Flash …** in this trial.
+Reads the ExpressLRS device behind each host, changes one option, and last flashes. This is a
+preview that QuadCam has not tried on a real device. Run the parts in order: A on both radios,
+then B, then trial 6 part A, and only then C. C is a real write.
+
+What the tests prove on simulated devices, and what only this trial can show:
+
+| Proven on fakes | Only a real device shows |
+|---|---|
+| Frames start with a byte ExpressLRS 4.1 takes (`0xC8`, or the device's own address) | That the module answers through EdgeTX's `serialpassthrough rfmod 0 400000` at all |
+| A module answers only right after it takes a frame: QuadCam sends a heartbeat every 20 ms while it waits | That the heartbeats keep the module at 400000 baud |
+| A module misses frames for its first second after power-up: QuadCam pings for up to 8 s | How long the GX12's LR1121 module takes to answer |
+| The target per radio: Pocket `radiomaster.tx_2400.pocket`, GX12 `radiomaster.tx_dual.gx12` | That esptool reaches the module through the passthrough at 460800 |
+| Both quads' receivers: `betafpv.rx_2400.aio` (name `BFPV AIO 2G4RX`) | That esptool reaches the receiver through Betaflight's passthrough at 420000 |
 
 **Needs**
 
 - **Settings > Gear > Preview > Show the ELRS tools** on, or **Show the ELRS tools** under
   **Firmware > ExpressLRS (preview)**. Every job refuses while it is off.
-- For the radio's internal module: a saved radio with its USB serial port set to **CLI**, and no
-  quad powered on that is linked to it. A read stops the radio's RF output at once.
+- For a radio's internal module: the radio saved, its USB serial port set to **CLI**, and no quad
+  powered on that is linked to it. A read stops the radio's RF output at once.
 - For an FC's receiver: a saved FC whose serial receiver is CRSF, not inverted and not half duplex.
   Keep the battery out. If the receiver does not answer on USB power, put the battery in and
   watch the USB timer.
 
-**A. Read (options are read only)**
+**A. Read each radio's internal module (read only)**
 
-1. Plug in the radio. Open **Gear > Firmware** and find **ExpressLRS (preview)**.
-2. Select **Read the module in <radio name>**.
+Do this on the Pocket, then on the GX12.
+
+1. Turn the radio on, plug in USB and choose **USB Serial (VCP)**. Open **Gear > Firmware** and
+   find **ExpressLRS (preview)**.
+2. Select **Read the module in <radio name>**. It can take up to 10 seconds: the module restarts
+   and QuadCam pings until it answers.
 3. When it ends, restart the radio. The radio stays in passthrough until you do. A second job
    needs the restart first.
-4. Unplug the radio. Plug in the FC. Select **Read the receiver in <FC name>**.
-5. When it ends, unplug the FC.
 
-CLI: `quadcam-cli --json gear elrs read <saved radio or FC>` (a radio also needs `--yes`).
+CLI: `quadcam-cli --json gear elrs read <saved radio> --yes`.
 
 **Pass**
 
-- The **ExpressLRS devices** table shows a row per device: **Transmitter** or **Receiver**, its
-  target, its version and when it was read.
+- The **ExpressLRS devices** table shows a **Transmitter** row for each radio: target `RM Pocket`
+  or `RM GX12 X-Band`, version 4.1.0, and the time of the read.
 - **Options** lists packet rate, telemetry ratio, max power, dynamic power, switch mode and model
-  match, as far as the device offers them.
+  match, as far as the module offers them.
 - QuadCam never shows the binding phrase.
 
-**B. Stage one option and Apply**
+**B. Read each receiver, then stage one option and Apply**
 
-1. On a row select **Options**. Change one option, such as the telemetry ratio, to a value you
-   can change back.
-2. Select **Stage changes**. The apply sheet opens.
-3. Read **Changes** and **Checks**. Select **Apply**.
-4. Restart the radio, or unplug the FC. Read the device again and check the option.
-5. Put the option back the same way.
+1. Plug in the Air65 II FC (battery out). Select **Read the receiver in <FC name>**. Unplug it.
+   Do the same for the Meteor75.
+2. Pass: a **Receiver** row for each, target `BFPV AIO 2G4RX`, version 4.1.0.
+3. On a radio's row select **Options**. Change one option, such as the telemetry ratio, to a
+   value you can change back.
+4. Select **Stage changes**. The apply sheet opens. Read **Changes** and **Checks**. Select
+   **Apply**.
+5. Restart the radio. Read the module again and check the option.
+6. Put the option back the same way.
 
 **Pass**
 
 - The sheet says the option read back as written. QuadCam kept the parameters as a backup first.
 - The second read shows the new value.
 
-**If it fails**
+**C. Flash (a real write; after trial 6 part A)**
 
-- A read fails on a radio: the USB serial port is not on **CLI**.
-- A read fails on an FC: the serial receiver is not CRSF, or is inverted or half duplex. QuadCam
-  names the check.
-- A read refuses an FC it cannot identify over MSP: unplug the FC and plug it in again.
-- The apply refuses because a list of values changed: the device's firmware lists them another
-  way now. Read again.
-- The apply refuses: an option moved since your read. Read again.
-- A device stuck in passthrough: restart the radio, or unplug the FC.
-- Report: the host (radio or FC) and its model, the ELRS target and version the read showed, the
-  option, and the sheet's text.
+ExpressLRS majors must match: flash the receivers before the radios. Each plan must show
+**Firmware image** with the right target before you select **Apply**.
 
-## 6. Betaflight flashing
-
-First read the checks only. Then, if you choose, flash the proven release.
-
-**Needs**
-
-- A proven FC (see [Before you start](#before-you-start)), saved in QuadCam, with a backup.
-- **Settings > Gear > Preview > Betaflight flashing (preview)** on. It is off by default.
-- A USB cable, the battery **out**.
-
-**A. Read the checks only**
-
-1. Plug the FC in. Open **Gear > Firmware**.
-2. In the FC's row select **Flash <release>…**. The button shows only for a proven board and
-   release, with the preview on.
-3. Read the **Checks**. Do not select **Apply**. Select **Cancel**.
-
-CLI: `quadcam-cli --json gear firmware --plan --device <FC id>`. QuadCam downloads the image from
-Betaflight's build service for the plan. It writes nothing to the FC.
+1. On a receiver's row select **Flash 4.1.0…**. Check: target `BETAFPV 2.4GHz AIO RX
+   (Unified_ESP8285_2400_RX on esp8285)`, the UID fingerprint, region FCC. Select **Apply**.
+2. Unplug the FC, power-cycle the quad, and read the receiver again.
+3. On each radio's row select **Flash 4.1.0…**. Check the target: Pocket `RadioMaster Pocket
+   Internal 2.4GHz TX`, GX12 `RadioMaster GX12 2.4/900 TX (Unified_ESP32_LR1121_TX on esp32)`.
+   Select **Apply**.
+4. **After a radio's module flash, expect the radio to look frozen for a minute or more**: the
+   screen stays on, sticks, pots and the power button do nothing, and unplugging USB changes
+   nothing. Wait. It recovers by itself (the GX12 sounded its inactivity alarm first), and then
+   the power button works. Do not pull the battery. The plan and the report both say this.
+5. Restart the radio and read the module again.
 
 **Pass**
 
-- Each check passes: the preview is on, one FC, the saved device, the board and release, the
-  firmware image, the port is free, no DFU device is plugged in, and the USB timer outlasts the
-  flash.
-- The plan shows the image's SHA-256 and a digest.
+- Each report says **Verified** (esptool's "Hash of data verified") and names a `before_flash`
+  backup of the chip's old firmware.
+- The read afterwards shows 4.1.0 and the same target. The quad links to the radio.
 
 **If it fails**
 
-- A check names its reason. A board or release that is not proven gets no button.
-- If the service answers in a shape QuadCam does not expect, the plan refuses. Report the text.
-- Report: the board, the installed and the target release, and the failing check.
+- A radio read finds no module: the USB serial port is not on **CLI**, or the module did not
+  answer through the passthrough. Report how long the read ran.
+- A read fails on an FC: the serial receiver is not CRSF, or is inverted or half duplex. QuadCam
+  names the check.
+- A read refuses an FC it cannot identify over MSP: unplug the FC and plug it in again.
+- The apply refuses because a list of values changed, or an option moved since your read. Read
+  again.
+- A device stuck in passthrough: restart the radio, or unplug the FC.
+- A flash that fails leaves the device in its bootloader. Power-cycle it and flash again, or use
+  the ExpressLRS Configurator with the same target.
+- Report: the host and its model, the ELRS target and version the read showed, the step, and the
+  sheet's text.
+
+## 6. Betaflight flashing
+
+First read the checks only, on both quads. Then, if you choose, flash.
+
+**Needs**
+
+- A proven FC (see [Before you start](#before-you-start)), saved in QuadCam with its aircraft
+  linked (the aircraft picks the maker's files), with a backup.
+- **Settings > Gear > Preview > Betaflight flashing (preview)** on. It is off by default.
+- A firmware check run since the FC was saved (**Firmware > Check now**). It reads BetaFPV's
+  files for each quad.
+- A USB cable, the battery **out**.
+
+Both quads run BetaFPV's own builds, so QuadCam plans BetaFPV's `.hex` for each quad, the one
+paired with the newest `.txt` its firmware check read. Keep each FC's **Firmware source** on
+**Automatic**: only a hand-set **Official Betaflight** plans an official build, with a warning.
+
+**A. Read the checks only (no flash)**
+
+Do this on the Air65 II, then on the Meteor75.
+
+1. Plug the FC in.
+2. Run `quadcam-cli --json gear firmware --plan --device <FC id>`. The Firmware page shows no
+   **Flash…** button for an FC in its maker's channel yet. QuadCam downloads the `.hex` for the
+   plan. It writes nothing to the FC.
+3. Read the checks and the **Firmware image** lines.
+
+**Pass**
+
+- **Firmware source** passes, and **Firmware image** names BetaFPV's file for the quad: Air65 II
+  `A65 II F_0702_Freestyle_GF 1219S_2026_6_0 20260515.hex` (BMI270), Meteor75 the
+  `.hex` paired with its `20260625` `.txt` (build 2025.12.5-alpha, eb2bb5a33). Never an official `BETAFPVG473_V2` build.
+- Every other check passes: the preview, one FC, the saved device, the board and release, the
+  port is free, no DFU device is plugged in, and the USB timer outlasts the flash.
+- The plan shows the image's SHA-256 and a digest. If the FC already runs that build, a warning
+  says the flash writes the same build again.
+
+**If it fails**
+
+- **Firmware source** refuses with "has not read BetaFPV's files": run a firmware check first.
+- **Firmware image** names an official build: the FC's **Firmware source** is set to **Official
+  Betaflight**, or QuadCam sees no BetaFPV quad for this FC. Set it to **Automatic** and check
+  its linked aircraft.
+- Report: the board, the installed build, the planned file, and the failing check.
 
 **B. A real flash (optional, do it last)**
 
@@ -339,24 +393,28 @@ A flash replaces the FC's firmware. Do this only on an FC you can recover.
 
 **Needs**
 
-- The proven release for the board, shown on the button.
-- Betaflight Configurator on this Mac, to recover.
+- Trial 6 part A passed on that FC.
+- Betaflight Configurator on this Mac, and BetaFPV's `.hex` for the quad saved locally, to
+  recover.
 - A fresh backup (QuadCam makes one, `before_flash`, and keeps it).
 
 **Steps**
 
-1. Select **Flash <release>…**, check that every check passes, and select **Apply**.
-2. Do not touch the FC, the cable or the battery until the sheet shows the result.
+1. Run the plan again and copy its digest. Run
+   `quadcam-cli --json gear firmware --device <FC id> --digest <D> --yes`, then confirm in the app.
+2. Do not touch the FC, the cable or the battery until the result shows.
 
-QuadCam backs up `diff all` and `dump all`, sends `bl`, waits for one new DFU device, erases and
-writes the flash, reads every byte back, restarts the FC, checks it is the same FC (its MCU id),
-reads the new firmware's settings, and applies the old settings as one change.
+QuadCam backs up `diff all` and `dump all`, sends `bl`, waits for one new DFU device, reads the
+old flash twice and keeps it, erases and writes the flash, reads every byte back, restarts the
+FC, checks it is the same FC (its MCU id), reads the new firmware's settings, and applies the old
+settings as one change.
 
 **Pass**
 
-- The sheet shows the flash and the settings apply as verified.
+- The report shows the flash and the settings apply as verified.
 - The report lists what came back, and what it skipped: a setting the new version no longer has,
   and board lines. Skipped lines stay in the `before_flash` backup.
+- The quad arms on the bench (props off) and the OSD looks as before.
 
 **If it fails**
 
@@ -367,11 +425,11 @@ Recovery, from [Gear](gear.md#flash-a-betaflight-fc-preview):
 | Before the restart into the bootloader | Nothing changed | Fix the named check and retry |
 | The FC never shows as a DFU device | Nothing written | Unplug USB and the battery, plug USB in, retry. The report names the backup |
 | The flash fails before the erase | Nothing erased; the old firmware is whole | QuadCam asks the FC to leave DFU. If it stays there, unplug USB and the battery and plug USB in |
-| A flash step after the erase or the read back fails | Half a firmware. The FC stays in its bootloader | Leave USB in. Flash an official build from Betaflight Configurator, which finds the FC in DFU mode. QuadCam cannot flash it from there |
-| The FC does not start afterwards | The ROM bootloader is intact | Unplug USB and battery. Hold the FC's boot button. Plug USB in. Flash an official build from Betaflight Configurator |
+| A flash step after the erase or the read back fails | Half a firmware. The FC stays in its bootloader | Leave USB in. Flash BetaFPV's `.hex` for the quad from Betaflight Configurator (Load Firmware [Local]), which finds the FC in DFU mode. QuadCam cannot flash it from there |
+| The FC does not start afterwards | The ROM bootloader is intact | Unplug USB and battery. Hold the FC's boot button. Plug USB in. Flash BetaFPV's `.hex` from Betaflight Configurator |
 | Flashed, but settings did not return | Firmware is fine | The old settings are in the `before_flash` backup. The staged change stays in **Changes** |
 
-Report: the board, both releases, the step that failed, and the report text.
+Report: the board, both builds, the step that failed, and the report text.
 
 ## 7. Apply a staged change to an FC and revert it
 

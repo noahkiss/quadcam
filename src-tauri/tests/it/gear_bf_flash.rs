@@ -143,6 +143,8 @@ impl Hooks for Gui {
 
 struct Bench {
     core: Arc<Core>,
+    fetch: Arc<FixtureFetch>,
+    cache: std::path::PathBuf,
     fc: FakeFc,
     cloud: Arc<FixtureCloud>,
     flasher: Arc<FcFlasher>,
@@ -298,6 +300,8 @@ fn bench(o: Opts) -> Bench {
         image: img,
         extra_dfu,
         hide_dfu,
+        fetch,
+        cache: dir.path().join("cache"),
         _dir: dir,
     }
 }
@@ -1064,4 +1068,162 @@ fn the_default_build_service_reaches_only_this_mac_under_cargo() {
         panic!("refused under cargo")
     };
     assert!(format!("{e:#}").contains("off in tests"), "{e:#}");
+}
+
+/// The Air65 II follows BetaFPV's builds: its saved FC is linked to the aircraft, the firmware
+/// check read BetaFPV's files (written straight into the cache here), and the attachment list
+/// and the `.hex` files are served.
+fn air65(b: &Bench) {
+    use quadcam_lib::gear::bf::boards::Feed;
+    use quadcam_lib::gear::firmware::check::Latest;
+    use quadcam_lib::gear::firmware::vendor::{self, file_date, parse_txt, VendorFeed, VendorFile};
+    let fx = |n: &str| {
+        std::fs::read(
+            std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+                .join("tests/fixtures/firmware")
+                .join(n),
+        )
+        .unwrap()
+    };
+    let store = b.core.gear_store();
+    let mut d = store.device(&b.id).unwrap().unwrap();
+    d.aircraft = Some("Air65 II".into());
+    store.save_device(&d).unwrap();
+    let file = |name: &str, url: &str, txt: &str| VendorFile {
+        name: name.into(),
+        url: url.into(),
+        date: file_date(name),
+        build: parse_txt(&String::from_utf8_lossy(&fx(txt))),
+    };
+    let latest = Latest {
+        vendor: vec![VendorFeed {
+            feed: Feed::Zendesk {
+                host: "support.betafpv.com".into(),
+                article: "54654422544409".into(),
+            },
+            checked_at: chrono::Utc::now(),
+            files: vec![
+                file(
+                    "A65 II F_0702_Freestyle_GF 1219S_2026_6_0 20260515.txt",
+                    "https://support.betafpv.com/hc/article_attachments/58300171193113",
+                    "betafpv-a65-f-20260515.txt",
+                ),
+                file(
+                    "A65 II F_0702_Freestyle_GF 1219S_2026_6_0 20260421.txt",
+                    "https://support.betafpv.com/hc/article_attachments/58300189274265",
+                    "betafpv-a65-f-20260421.txt",
+                ),
+            ],
+        }],
+        ..Latest::default()
+    };
+    let cache = b.cache.join("firmware");
+    std::fs::create_dir_all(&cache).unwrap();
+    std::fs::write(
+        cache.join("latest.json"),
+        serde_json::to_vec(&latest).unwrap(),
+    )
+    .unwrap();
+    let f = b.fetch.clone();
+    f.serve(
+        &vendor::attachments_url("support.betafpv.com", "54654422544409"),
+        fx("zendesk-attachments-air65-ii.json"),
+    );
+    for id in ["58300189264793", "58300171198105"] {
+        f.serve(
+            &format!("https://support.betafpv.com/hc/article_attachments/{id}"),
+            to_hex(FLASH_BASE, &b.image).into_bytes(),
+        );
+    }
+}
+
+#[test]
+fn the_air65_plans_betafpvs_hex_unless_set_to_official_by_hand() {
+    let b = bench(Opts::default());
+    air65(&b);
+    let mut p = params(&b);
+    p.version = None;
+    let plan = b.core.gear_flash_plan(&p).unwrap();
+    assert!(plan.checks.iter().all(|c| c.ok), "{:?}", plan.checks);
+    let text = serde_json::to_string(&plan.diff).unwrap();
+    assert!(
+        text.contains("A65 II F_0702_Freestyle_GF 1219S_2026_6_0 2026"),
+        "{text}"
+    );
+    assert!(text.contains(".hex"), "{text}");
+    assert!(text.contains("BetaFPV's build for the Air65 II"), "{text}");
+    assert!(
+        !text.contains("betaflight_2026.6.0_BETAFPVG473_V2"),
+        "{text}"
+    );
+    assert_eq!(b.cloud.count(), 0, "the official build service was asked");
+    assert!(
+        plan.warnings.iter().any(|w| w.contains("BetaFPV's A65 II")),
+        "the recovery names BetaFPV's file: {:?}",
+        plan.warnings
+    );
+    // A version that is not the maker's file refuses.
+    p.version = Some("2025.12.5".into());
+    let other = b.core.gear_flash_plan(&p).unwrap();
+    assert_eq!(failed_check(&other).code, RefusalCode::UnknownVersion);
+    // The person set the FC to official Betaflight by hand: the official build, with a
+    // warning that it replaces BetaFPV's settings and may lack its drivers.
+    let store = b.core.gear_store();
+    let mut d = store.device(&b.id).unwrap().unwrap();
+    d.firmware_channel = Some(quadcam_lib::gear::model::FirmwareChannel::Official);
+    store.save_device(&d).unwrap();
+    let official = b.core.gear_flash_plan(&params(&b)).unwrap();
+    assert!(
+        official.checks.iter().all(|c| c.ok),
+        "{:?}",
+        official.checks
+    );
+    let text = serde_json::to_string(&official.diff).unwrap();
+    assert!(!text.contains("BetaFPV's build"), "{text}");
+    assert!(
+        b.cloud.count() > 0,
+        "the official build service was not asked"
+    );
+    assert!(
+        official
+            .warnings
+            .iter()
+            .any(|w| w.contains("set to Official Betaflight") && w.contains("gyro driver")),
+        "{:?}",
+        official.warnings
+    );
+    assert!(!official.digest.is_empty());
+    assert_ne!(official.digest, plan.digest);
+}
+
+/// Automatic plans the maker's file even when the FC runs an official cloud build now: never
+/// official Betaflight by default.
+#[test]
+fn automatic_never_plans_official_betaflight_onto_a_makers_fc() {
+    let b = bench(Opts::default());
+    air65(&b);
+    let store = b.core.gear_store();
+    let mut d = store.device(&b.id).unwrap().unwrap();
+    d.firmware_channel = None;
+    store.save_device(&d).unwrap();
+    let mut p = params(&b);
+    p.version = None;
+    let plan = b.core.gear_flash_plan(&p).unwrap();
+    assert!(plan.checks.iter().all(|c| c.ok), "{:?}", plan.checks);
+    let text = serde_json::to_string(&plan.diff).unwrap();
+    assert!(text.contains("BetaFPV's build for the Air65 II"), "{text}");
+    assert_eq!(b.cloud.count(), 0);
+}
+
+#[test]
+fn a_makers_fc_without_its_files_read_refuses_until_a_check() {
+    let b = bench(Opts::default());
+    let store = b.core.gear_store();
+    let mut d = store.device(&b.id).unwrap().unwrap();
+    d.aircraft = Some("Air65 II".into());
+    store.save_device(&d).unwrap();
+    let plan = b.core.gear_flash_plan(&params(&b)).unwrap();
+    let r = failed_check(&plan);
+    assert_eq!(r.code, RefusalCode::ReadFirst, "{}", r.reason);
+    assert_eq!(b.cloud.count(), 0);
 }

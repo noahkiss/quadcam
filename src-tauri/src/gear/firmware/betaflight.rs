@@ -367,6 +367,82 @@ pub fn obtain(cloud: &dyn Cloud, cache: &Path, target: &Target, release: &str) -
     })
 }
 
+fn vendor_dir(cache: &Path, file: &str) -> PathBuf {
+    let stem: String = file
+        .chars()
+        .map(|c| {
+            if c.is_ascii_alphanumeric() || c == '.' || c == '-' {
+                c
+            } else {
+                '_'
+            }
+        })
+        .collect();
+    cache.join("firmware").join("vendor").join(stem)
+}
+
+/// The maker's image that pairs with the `.txt` file `txt` of `feed` (`vendor::hex_for`):
+/// from the cache when its recorded SHA-256 and URL still match, else downloaded through
+/// `fetch` (the attachment list, then the file). The maker lists no checksum, so the SHA-256
+/// is the one recorded at the first download. Parses the HEX either way.
+pub fn obtain_vendor(
+    fetch: &dyn crate::modules::fetch::Fetch,
+    cache: &Path,
+    feed: &crate::gear::bf::boards::Feed,
+    txt: &super::vendor::VendorFile,
+) -> Result<Obtained> {
+    use super::vendor;
+    let crate::gear::bf::boards::Feed::Zendesk { host, article } = feed;
+    let dir = vendor_dir(cache, &txt.name);
+    std::fs::create_dir_all(&dir)?;
+    let hex = dir.join("image.hex");
+    let record = dir.join("image.hex.sha256");
+    let name = dir.join("image.hex.name");
+    let list = vendor::parse_attachments(&super::fetch_bytes(
+        fetch,
+        &vendor::attachments_url(host, article),
+        &dir,
+    )?)?;
+    let att = vendor::hex_for(&list, txt).ok_or_else(|| {
+        anyhow!(
+            "The maker publishes no .hex next to {}; QuadCam flashes only a file it can pair with its build's .txt.",
+            txt.name
+        )
+    })?;
+    let want_name = format!("{}\n{}", att.name, att.url);
+    if let (Ok(want), Ok(bytes), Ok(file)) = (
+        std::fs::read_to_string(&record),
+        std::fs::read(&hex),
+        std::fs::read_to_string(&name),
+    ) {
+        let sha = sha256_hex(&bytes);
+        if sha == want.trim() && file == want_name {
+            if let Ok(image) = parse_hex(&String::from_utf8_lossy(&bytes)) {
+                return Ok(Obtained {
+                    image,
+                    file: att.name.clone(),
+                    sha256: sha,
+                    cached: true,
+                });
+            }
+        }
+        let _ = std::fs::remove_file(&hex);
+    }
+    let bytes = super::fetch_bytes(fetch, &att.url, &dir)
+        .with_context(|| format!("The download of {} failed", att.name))?;
+    let image = parse_hex(&String::from_utf8_lossy(&bytes))?;
+    let sha = sha256_hex(&bytes);
+    std::fs::write(&hex, &bytes)?;
+    std::fs::write(&record, &sha)?;
+    std::fs::write(&name, &want_name)?;
+    Ok(Obtained {
+        image,
+        file: att.name.clone(),
+        sha256: sha,
+        cached: false,
+    })
+}
+
 /// The service over `/usr/bin/curl` (HTTPS only; a process started by cargo reaches only
 /// this Mac unless `QUADCAM_FETCH=real`).
 pub struct CurlCloud {

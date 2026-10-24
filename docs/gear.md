@@ -1683,8 +1683,12 @@ Betaflight release. QuadCam knows these quads:
   file. The newest official Betaflight shows under it as information only.
 - QuadCam compares builds by version, git revision and build day, never by the version in a
   file name: a BetaFPV file named `2025_12_4` holds a `2025.12.5-alpha` build.
-- QuadCam does not flash a maker's build. Flash it with the Betaflight Configurator (**Load
-  Firmware [Local]**). A flash of official Betaflight replaces the maker's settings.
+- The Betaflight flash preview flashes the maker's newest file on **Automatic** or the maker's
+  source, and never official Betaflight by default ([Flash a Betaflight FC](#flash-a-betaflight-fc-preview)).
+  On **Official Betaflight** it flashes the official build, which replaces the maker's settings
+  and may lack drivers the maker's build carries. The Firmware page has no **Flash…** for these
+  FCs yet; without the preview, flash the maker's file with the Betaflight Configurator (**Load
+  Firmware [Local]**).
 - A check reads the maker's file list and each new file's version line (a few KB), and asks
   the Betaflight build service once per build key.
 
@@ -1911,7 +1915,18 @@ What comes back, and what does not:
 
 Where the image comes from:
 
-- QuadCam asks Betaflight's build service (`build.betaflight.com`) for the board's target at
+- **An FC whose maker publishes builds for its quad** (the vendor channel, "The maker's builds"):
+  QuadCam flashes the maker's `.hex` paired with the newest `.txt` the firmware check read for
+  that quad (the same name, `.hex` in place of `.txt`), on **Automatic** or the maker's
+  source, even when the FC runs an official build now. Run a firmware check first; a plan without
+  the maker's files refuses at the check **Firmware source**. Only when you set the FC's
+  **Firmware source** to **Official Betaflight** by hand does QuadCam plan the official build,
+  with a warning: it replaces the maker's settings and may lack drivers the maker's build
+  carries, such as the gyro driver on some Air65 II boards. The maker lists no checksum, so QuadCam records the
+  SHA-256 at the first download and shows it. The download is kept in
+  `~/Library/Caches/app.quadcam/firmware/vendor/<file>/`. The Firmware page offers no **Flash…**
+  for these FCs yet; plan and flash from the CLI or MCP.
+- **Any other FC:** QuadCam asks Betaflight's build service (`build.betaflight.com`) for the board's target at
   the release. The unified-target defaults are inside the image. It bundles and redistributes
   no firmware. The download is kept in `~/Library/Caches/app.quadcam/firmware/betaflight/<release>/`.
 - The service lists no checksum. QuadCam records the SHA-256 at the first download and shows
@@ -1933,12 +1948,13 @@ If something goes wrong:
   in again.
 - **A flash step fails after the erase, or the read back differs.** The FC has half a firmware
   and stays in its bootloader. QuadCam cannot flash an FC that is in its bootloader: its flash
-  starts from a serial FC. Leave USB plugged in and flash an official build for the board from
+  starts from a serial FC. Leave USB plugged in and flash the build the report names (the
+  maker's `.hex` for an FC in its maker's channel, else an official build for the board) from
   Betaflight Configurator, which finds the FC in DFU mode. If you unplugged it, use the boot
   button (next item). Then put your settings back from the `before_flash` backup with
   **Restore**.
 - **The FC does not start afterwards.** Unplug USB and the battery, hold the FC's boot
-  button, plug USB in, and flash an official build from Betaflight Configurator. The ROM
+  button, plug USB in, and flash the build the report names from Betaflight Configurator. The ROM
   bootloader cannot be overwritten, so an FC can always be flashed again.
 - **The firmware is flashed but the settings did not go back.** The report says so. The old
   settings are in the `before_flash` backup, and the staged change stays in **Changes**.

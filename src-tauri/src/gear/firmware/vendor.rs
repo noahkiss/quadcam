@@ -205,6 +205,20 @@ pub fn parse_attachments(json: &[u8]) -> Result<Vec<Attachment>> {
         .collect())
 }
 
+/// The maker's image that pairs with `txt`: the attachment with the same name and `.hex` in
+/// place of `.txt`. None when the maker published no such file.
+pub fn hex_for<'a>(list: &'a [Attachment], txt: &VendorFile) -> Option<&'a Attachment> {
+    let stem = txt
+        .name
+        .strip_suffix(".txt")
+        .or_else(|| txt.name.strip_suffix(".TXT"))?;
+    list.iter().find(|a| {
+        a.name
+            .rsplit_once('.')
+            .is_some_and(|(s, ext)| s == stem && ext.eq_ignore_ascii_case("hex"))
+    })
+}
+
 /// The `YYYYMMDD` before a file's extension: `..._2025_12_4 20260625.txt` is 2026-06-25.
 pub fn file_date(name: &str) -> Option<NaiveDate> {
     let stem = name.rsplit_once('.').map_or(name, |(s, _)| s);

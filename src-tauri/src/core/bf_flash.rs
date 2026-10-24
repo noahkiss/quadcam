@@ -2,10 +2,14 @@
 //! shares `gear_flash_plan`, `gear_flash` and `gear_flash_click` with the EdgeTX flash; the
 //! device's kind picks the path (`core/firmware.rs`).
 //!
-//! - **Plan.** Identify the FC over MSP, pick the official build for its board and the
-//!   release (`firmware::betaflight`), run every guard and return a plan with a digest. A
-//!   board not in `betaflight::TARGETS`, or a release `compat` has not proven on that board,
-//!   refuses. Nothing is written and nothing reboots.
+//! - **Plan.** Identify the FC over MSP and pick its image: an FC whose maker publishes
+//!   builds for its quad (`bf::boards::vendor_source`, the vendor channel) takes the maker's
+//!   newest `.hex` for that quad, paired with the `.txt` the firmware check read
+//!   (`betaflight::obtain_vendor`), unless the person set its Firmware source to official
+//!   Betaflight by hand (then the official build, with a warning); any other FC takes the
+//!   official build for its board and the release (`betaflight::obtain`). Run every guard and
+//!   return a plan with a digest. A board not in `betaflight::TARGETS`, or a release `compat`
+//!   has not proven on that board, refuses. Nothing is written and nothing reboots.
 //! - **Apply.** Back up `diff all` and `dump all` (always kept), run `bl` so the FC shows as a
 //!   DFU device, copy its flash twice (`dfu::read_verified`) and keep the copy, flash it over
 //!   `gear::dfu` (erase, write, read back, compare, leave), wait for
@@ -23,6 +27,7 @@ use crate::gear::apply::fc::Cand;
 use crate::gear::apply::{
     check, first_refusal, ApplyPlanParams, ApplyReport, ApplyRequest, StepReport, StepState,
 };
+use crate::gear::bf::boards::VendorSource;
 use crate::gear::bf::cli::Timing;
 use crate::gear::bf::dump::Config;
 use crate::gear::bf::{self, boards};
@@ -32,10 +37,12 @@ use crate::gear::detect::{DfuInfo, STM32_DFU};
 use crate::gear::dfu::{self, Dfu, Layout, FLASH_BASE};
 use crate::gear::firmware::betaflight::{self as bfw, Obtained, Target};
 use crate::gear::firmware::betaflight_config as carryover;
+use crate::gear::firmware::check as fwcheck;
+use crate::gear::firmware::vendor::{self, BuildId, VendorFile};
 use crate::gear::fwcopy::{self, CopyKind};
 use crate::gear::model::{
-    ApplyPlan, ChangeStatus, Check, Device, DeviceKind, DiffItem, Edit, Refusal, RefusalCode,
-    Trigger,
+    ApplyPlan, ChangeStatus, Check, Device, DeviceKind, DiffItem, Edit, FirmwareChannel, Refusal,
+    RefusalCode, Trigger,
 };
 use crate::session::Editor;
 use anyhow::{anyhow, bail, Result};
@@ -46,8 +53,20 @@ use std::time::Instant;
 /// Settings the report names before it adds "and N more".
 const NOTE_CAP: usize = 12;
 
+/// The build a recovery flashes from Betaflight Configurator: the maker's file for an FC in
+/// its maker's channel, else the official build of its target.
+fn recovery_build(maker: Option<(&str, &str)>, target: Option<&Target>) -> String {
+    match (maker, target) {
+        (Some((vendor, file)), _) => format!("{vendor}'s {file} (Load Firmware [Local])"),
+        (None, Some(t)) => format!("an official {} build", t.target),
+        (None, None) => "an official build".into(),
+    }
+}
+
 /// The recovery path every flash plan and every half state names.
-const RECOVERY: &str = "If the FC does not start: unplug USB and the battery, hold the FC's boot button, plug USB in, and flash an official build from Betaflight Configurator. The ROM bootloader cannot be overwritten, so the FC can always be flashed again.";
+fn recovery(build: &str) -> String {
+    format!("If the FC does not start: unplug USB and the battery, hold the FC's boot button, plug USB in, and flash {build} from Betaflight Configurator. The ROM bootloader cannot be overwritten, so the FC can always be flashed again.")
+}
 
 struct Prepared {
     plan: ApplyPlan,
@@ -55,7 +74,10 @@ struct Prepared {
     port: Option<String>,
     target: Option<&'static Target>,
     image: Option<Obtained>,
+    /// The release, for `compat` and the FC's version after the flash (`2026.6.0`).
     release: String,
+    /// What a recovery flashes (`recovery_build`).
+    recovery_build: String,
 }
 
 fn refuse(code: RefusalCode, reason: impl Into<String>) -> anyhow::Error {
@@ -241,20 +263,97 @@ impl Core {
             },
         ));
 
-        // The release: the one asked for, else the one installed (less its suffix).
-        let release = p
+        // The channel. An FC whose maker publishes builds for its quad (`boards::vendor_source`)
+        // takes the maker's newest file, unless the person set its Firmware source to official
+        // Betaflight by hand. Any other FC takes the official build of its target.
+        let mut probe = device.clone();
+        for (to, from) in [
+            (&mut probe.identity.board, &identity.board),
+            (&mut probe.identity.version, &identity.version),
+            (&mut probe.identity.build, &identity.build),
+            (
+                &mut probe.identity.manufacturer_id,
+                &identity.manufacturer_id,
+            ),
+            (&mut probe.identity.build_key, &identity.build_key),
+            (&mut probe.identity.gyro, &identity.gyro),
+        ] {
+            if from.is_some() {
+                to.clone_from(from);
+            }
+        }
+        let profiles = self.profiles().map(|(p, _)| p).unwrap_or_default();
+        let source = fwcheck::source_of(&probe, &profiles);
+        let by_hand = device.firmware_channel == Some(FirmwareChannel::Official);
+        let latest = fwcheck::cached(&self.cache);
+        let maker_file: Option<VendorFile> = match (&source, by_hand) {
+            (Some(src), false) => latest
+                .vendor
+                .iter()
+                .find(|f| f.feed == src.feed)
+                .and_then(|f| vendor::newest(src, &f.files))
+                .cloned(),
+            _ => None,
+        };
+        let maker: Option<(&VendorSource, &VendorFile, &BuildId)> = match (&source, &maker_file) {
+            (Some(src), Some(f)) => f.build.as_ref().map(|b| (src, f, b)),
+            _ => None,
+        };
+        checks.push(check(
+            "Firmware source",
+            match (&source, by_hand, maker) {
+                (Some(src), false, None) => Err(Refusal::new(
+                    RefusalCode::ReadFirst,
+                    format!(
+                        "QuadCam has not read {}'s files for the {} yet. Check firmware first (Firmware > Check now, or `gear firmware --check`).",
+                        src.vendor, src.product
+                    ),
+                )),
+                _ => Ok(()),
+            },
+        ));
+        let by_hand_note = match (&source, by_hand) {
+            (Some(src), true) => Some(format!(
+                "This FC's Firmware source is set to Official Betaflight. {} publishes its own builds for the {}; the official build replaces {}'s settings and may lack drivers {}'s build carries, such as the gyro driver on some Air65 II boards. Set Firmware source to Automatic to flash {}'s file.",
+                src.vendor, src.product, src.vendor, src.vendor, src.vendor
+            )),
+            _ => None,
+        };
+
+        // The release: the maker's file, else the one asked for, else the one installed
+        // (less its suffix).
+        let asked = p
             .version
             .as_deref()
             .map(bfw::release_of)
-            .filter(|v| !v.is_empty())
-            .or_else(|| installed.as_deref().map(bfw::release_of))
-            .filter(|v| !v.is_empty())
-            .ok_or_else(|| {
-                refuse(
-                    RefusalCode::Incompatible,
-                    "The FC reports no version; name the version to flash.",
-                )
-            })?;
+            .filter(|v| !v.is_empty());
+        let release = match maker {
+            Some((_, _, b)) => bfw::release_of(&b.version),
+            None => asked
+                .clone()
+                .or_else(|| installed.as_deref().map(bfw::release_of))
+                .filter(|v| !v.is_empty())
+                .ok_or_else(|| {
+                    refuse(
+                        RefusalCode::Incompatible,
+                        "The FC reports no version; name the version to flash.",
+                    )
+                })?,
+        };
+        if let (Some((src, f, b)), Some(a)) = (maker, &asked) {
+            if *a != release {
+                checks.push(check(
+                    "The version asked for is the maker's",
+                    Err(Refusal::new(
+                        RefusalCode::UnknownVersion,
+                        format!(
+                            "{}'s newest file for the {} is {} ({}), not {a}. QuadCam flashes that file only.",
+                            src.vendor, src.product, b.version, f.name
+                        ),
+                    )),
+                ));
+            }
+        }
 
         let target = board.as_deref().and_then(bfw::target_for);
         let known = match target {
@@ -274,32 +373,62 @@ impl Core {
         let proceed = checks.iter().all(|c| c.ok);
 
         let mut warnings: Vec<String> = Vec::new();
+        warnings.extend(by_hand_note);
         let mut diff = vec![DiffItem::Version {
             label: "Betaflight firmware".into(),
             before: installed.clone(),
-            after: release.clone(),
+            after: maker
+                .map(|(_, _, b)| b.version.clone())
+                .unwrap_or_else(|| release.clone()),
         }];
+        if let Some((src, _, b)) = maker {
+            if BuildId::of_identity(&identity).is_some_and(|own| vendor::same_build(&own, b)) {
+                warnings.push(format!(
+                    "The FC already runs {}'s newest build for the {}; the flash writes the same build again.",
+                    src.vendor, src.product
+                ));
+            }
+        }
         let mut image: Option<Obtained> = None;
         if let (true, Some(t)) = (proceed, target) {
-            match bfw::obtain(self.bf_cloud.as_ref(), &self.cache, t, &release) {
+            let got = match maker {
+                Some((src, f, _)) => {
+                    bfw::obtain_vendor(self.firmware.fetch.as_ref(), &self.cache, &src.feed, f)
+                }
+                None => bfw::obtain(self.bf_cloud.as_ref(), &self.cache, t, &release),
+            };
+            match got {
                 Ok(o) => {
                     checks.push(check("Firmware image", bfw::check_image(&o.image, t)));
+                    let mut put = vec![
+                        format!("{} ({} KB)", o.file, o.image.bytes.len() / 1024),
+                        format!("SHA-256 {}", o.sha256),
+                        format!("{} at {:#010x}", t.mcu, FLASH_BASE),
+                    ];
+                    if let Some((src, f, _)) = maker {
+                        put.insert(
+                            1,
+                            format!(
+                                "{}'s build for the {}, paired with {}",
+                                src.vendor, src.product, f.name
+                            ),
+                        );
+                    }
                     diff.push(DiffItem::Files {
                         label: "Firmware image".into(),
-                        put: vec![
-                            format!("{} ({} KB)", o.file, o.image.bytes.len() / 1024),
-                            format!("SHA-256 {}", o.sha256),
-                            format!("{} at {:#010x}", t.mcu, FLASH_BASE),
-                        ],
+                        put,
                         delete: Vec::new(),
                     });
-                    warnings.push(if o.cached {
-                        "The image is the one downloaded before; its SHA-256 still matches the record.".into()
-                    } else {
-                        format!(
+                    warnings.push(match (o.cached, maker) {
+                        (true, _) => "The image is the one downloaded before; its SHA-256 still matches the record.".into(),
+                        (false, Some((src, _, _))) => format!(
+                            "{} lists no SHA-256 for its files. QuadCam recorded {} at this download.",
+                            src.vendor, o.sha256
+                        ),
+                        (false, None) => format!(
                             "The build service lists no SHA-256. QuadCam recorded {} at this download.",
                             o.sha256
-                        )
+                        ),
                     });
                     image = Some(o);
                 }
@@ -323,7 +452,11 @@ impl Core {
             "QuadCam saves `diff all` and `dump all` first, flashes over DFU, reads the flash back, and puts your settings back through the FC apply. A setting the new version no longer has is listed in the report and skipped. Board lines (resources, serial ports) are not carried over."
                 .into(),
         );
-        warnings.push(RECOVERY.into());
+        let recovery_build = recovery_build(
+            maker.map(|(s, f, _)| (s.vendor.as_str(), f.name.as_str())),
+            target,
+        );
+        warnings.push(recovery(&recovery_build));
         warnings.push(
             "Betaflight flashing is a preview. It has not been tried on a real FC yet.".into(),
         );
@@ -335,7 +468,8 @@ impl Core {
         let digest = if ready {
             blobs::hash(
                 format!(
-                    "bfflash|{}|{}|{}|{}|{}|{}",
+                    "bfflash|{}|{}|{}|{}|{}|{}|{}",
+                    maker.map(|(_, f, _)| f.name.as_str()).unwrap_or("official"),
                     device.id,
                     chosen.map(|c| c.port.clone()).unwrap_or_default(),
                     board.clone().unwrap_or_default(),
@@ -362,6 +496,7 @@ impl Core {
             target,
             image,
             release,
+            recovery_build,
         })
     }
 
@@ -406,7 +541,8 @@ impl Core {
         };
         let mut steps = a.steps;
         let mut notes = prep.plan.warnings.clone();
-        notes.retain(|n| n != RECOVERY || a.failed.is_some());
+        let rec = recovery(&prep.recovery_build);
+        notes.retain(|n| *n != rec || a.failed.is_some());
         let mut report = ApplyReport {
             change: FLASH_CHANGE.into(),
             device: prep.device.id.clone(),
@@ -554,6 +690,7 @@ impl Core {
         let t: Timing = self.fc_timing();
         let ports = self.gear.ports.as_ref();
         let name = prep.device.display_name();
+        let rec = recovery(&prep.recovery_build);
         let mut out = PartA::default();
 
         // The guards again, right before the first step.
@@ -680,7 +817,7 @@ impl Core {
                     Some(e.reason.clone()),
                 ));
                 out.failed = Some(format!(
-                    "{} Nothing was written. {RECOVERY} Your settings are in backup {backup_id}.",
+                    "{} Nothing was written. {rec} Your settings are in backup {backup_id}.",
                     e.reason
                 ));
                 return Ok(out);
@@ -703,7 +840,7 @@ impl Core {
                 out.steps
                     .push(step("Erase", StepState::Failed, Some(format!("{e:#}"))));
                 out.failed = Some(format!(
-                    "QuadCam could not open the FC's DFU device: {e:#} Nothing was written; the FC waits in its bootloader. Unplug USB and plug it in again to start the old firmware. {RECOVERY}"
+                    "QuadCam could not open the FC's DFU device: {e:#} Nothing was written; the FC waits in its bootloader. Unplug USB and plug it in again to start the old firmware. {rec}"
                 ));
                 return Ok(out);
             }
@@ -742,7 +879,7 @@ impl Core {
                 out.steps
                     .push(step("Erase", StepState::Failed, Some(format!("{e:#}"))));
                 out.failed = Some(format!(
-                    "QuadCam could not read the DFU memory layout: {e:#} Nothing was written; the FC waits in its bootloader. Unplug USB and plug it in again. {RECOVERY}"
+                    "QuadCam could not read the DFU memory layout: {e:#} Nothing was written; the FC waits in its bootloader. Unplug USB and plug it in again. {rec}"
                 ));
                 return Ok(out);
             }
@@ -878,8 +1015,8 @@ impl Core {
                     ));
                 }
                 out.failed = Some(format!(
-                    "The flash failed: {e:#} The FC has half a firmware and stays in its bootloader. QuadCam cannot flash an FC that is in its bootloader. Leave USB plugged in and flash an official {} build from Betaflight Configurator, which finds the FC in DFU mode. {RECOVERY} Your settings are in backup {backup_id}: put them back with Restore once the FC runs Betaflight.",
-                    target.target
+                    "The flash failed: {e:#} The FC has half a firmware and stays in its bootloader. QuadCam cannot flash an FC that is in its bootloader. Leave USB plugged in and flash {} from Betaflight Configurator, which finds the FC in DFU mode. {rec} Your settings are in backup {backup_id}: put them back with Restore once the FC runs Betaflight.",
+                    prep.recovery_build
                 ));
                 return Ok(out);
             }
@@ -907,7 +1044,7 @@ impl Core {
                 out.steps
                     .push(step("Restart", StepState::Failed, Some(format!("{e:#}"))));
                 out.failed = Some(format!(
-                    "The firmware is flashed and verified, but the FC did not answer on {port}: {e:#} Unplug USB and the battery, plug USB in again, then re-apply your settings from backup {backup_id} (Restore). {RECOVERY}"
+                    "The firmware is flashed and verified, but the FC did not answer on {port}: {e:#} Unplug USB and the battery, plug USB in again, then re-apply your settings from backup {backup_id} (Restore). {rec}"
                 ));
                 return Ok(out);
             }
