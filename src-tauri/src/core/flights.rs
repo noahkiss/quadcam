@@ -532,6 +532,9 @@ impl Core {
                 p.path.display()
             );
         }
+        if p.path.is_symlink() {
+            bail!("{} is a link; name the file itself.", p.path.display());
+        }
         if p.path.exists() && !p.overwrite {
             bail!("{} exists. Pass overwrite to replace it.", p.path.display());
         }
@@ -548,7 +551,17 @@ impl Core {
             .map(|n| n.to_string_lossy().into_owned())
             .unwrap_or_default();
         let tmp = dir.join(format!(".{name}.quadcam-tmp"));
-        std::fs::write(&tmp, r.markdown.as_bytes())?;
+        let written = (|| -> Result<()> {
+            use std::io::Write;
+            let mut f = std::fs::File::create(&tmp)?;
+            f.write_all(r.markdown.as_bytes())?;
+            f.sync_all()?;
+            Ok(())
+        })();
+        if let Err(e) = written {
+            let _ = std::fs::remove_file(&tmp);
+            return Err(e);
+        }
         if let Err(e) = std::fs::rename(&tmp, &p.path) {
             let _ = std::fs::remove_file(&tmp);
             return Err(e.into());

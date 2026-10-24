@@ -214,6 +214,12 @@ fn session_report_preflight_and_crashes() {
     assert_eq!(std::fs::read_to_string(&rc).unwrap(), "keep");
     assert!(save(&dir.path().join("notes.txt"), false).is_err());
     assert!(save(&dir.path().join("Report.MARKDOWN"), false).is_ok());
+    // A link is refused, even to a Markdown file: the file it names stays.
+    let link = dir.path().join("linked.md");
+    std::os::unix::fs::symlink(&rc, &link).unwrap();
+    let e = save(&link, true).unwrap_err();
+    assert!(format!("{e:#}").contains("is a link"), "{e:#}");
+    assert_eq!(std::fs::read_to_string(&rc).unwrap(), "keep");
 
     let p = c.gear_preflight().unwrap();
     let ids: Vec<&str> = p.rows.iter().map(|r| r.id.as_str()).collect();
