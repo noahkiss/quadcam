@@ -24,7 +24,7 @@ README and `docs/`. Personal preferences go in the app's settings file on the ma
 | `src-tauri/sim/` | `quadcam-sim`, the sim core (`docs/sim-design.md`), a workspace member with no Tauri dependency: `input.rs` (samples, the input ring, calibration, auto-calibration, the link model); the physics and controller (`sim.rs` the step, `world.rs` Rapier, `motor`, `aero`, `battery`, `mixer`, `fc`, `rates`, `diff` its own `diff all` reader, `profile` with the presets in `presets/`, `ring` the frame each step reads, `runner` the real-time thread, `snapshot`, `record`, `bench`); `bbl.rs` QuadCam's own blackbox decoder (from the documented format; `blackbox_decode` is GPL and never used); `log.rs` and `validate.rs` the validation harness on blackbox logs (.bbl, flash images, decoded CSV), with fixtures in `tests/fixtures/`; `fit.rs` the profile fit, which keeps a fitted group only when the harness scores it no worse than its base; `LICENSES/` the notices of ported MIT code. The dev profile builds it and its physics crates optimised. Test it with `cargo test --workspace`; `cargo run -p quadcam-sim --example bench` is the 10 min real-time bench |
 | `intel/` | `quadcam-intel`, the Swift helper (SwiftPM, `docs/development.md` "The Swift helper"): `caps`, `asr` (SpeechAnalyzer + SpeechTranscriber, macOS 26+), `install` (AssetInventory), `video` (`Video.swift`: MediaIntelligence VideoAnalyzer highlights, levels and key frame, macOS 27+), `suggest` (`Names.swift`: Foundation Models clip names, keywords, notes and a day's summary; text on macOS 26, a frame too on 27; FoundationModels weak-linked); JSON lines on stdout, exit 3 for unavailable. Built for arm64 with the newest SDK, deployment target macOS 13, each feature behind `#available`. `src-tauri/build.rs` builds it into `src-tauri/binaries/` (git-ignored); `tauri.conf.json` bundles it as the external binary `binaries/quadcam-intel` (`Contents/MacOS/`, beside `quadcam-cli`; `target/<profile>/` in a cargo build). Without Xcode 26 a stand-in answers unavailable; `QUADCAM_INTEL_REQUIRED=1` (CI, release) fails the build instead. `src-tauri/src/intel.rs` runs it through `modules::run::Runner` with a timeout (`intel/names.rs` its `suggest`, the request in a temp file); `gear::Env.intel` holds it. `core/ondevice.rs` is on-device suggestions: outings (day, place, aircraft) share the model's name with pack numbers, a field is filled only while empty or still the model's last value (`ClipPlan.ondevice`), the setting `on_device_suggestions`, and the session report's `summarize` |
 | `src-tauri/src/schema.rs` | The MCP and CLI schema version (`SCHEMA_VERSION`), the deprecation table (`DEPRECATIONS`) and the surface guard's logic. `tests/it/surface.rs` runs the guard against `tests/surface/mcp.txt` and `cli.txt` |
-| `src-tauri/src/modules/` | The module manager (`docs/modules.md`): `manifest.rs` (the pins in `src-tauri/resources/modules.toml`, compiled in; newer pins from a release's `modules.json`), `fetch.rs` (`Fetch`, `/usr/bin/curl`; a cargo process reaches only 127.0.0.1 unless `QUADCAM_FETCH=real`), `install.rs` (checksum, unpack, quarantine, ad-hoc signature, `installed.json`), `run.rs` (hash check before a run, the child-process `Runner`). `core/modules.rs` holds the `Core` methods |
+| `src-tauri/src/modules/` | The module manager (`docs/modules.md`): `manifest.rs` (the pins in `src-tauri/resources/modules.toml`, compiled in; newer pins from a release's `modules.json`, taken only with its `modules.json.sig` by the updater key, `Modules::check`), `fetch.rs` (`Fetch`, `/usr/bin/curl`; a cargo process reaches only 127.0.0.1 unless `QUADCAM_FETCH=real`), `install.rs` (checksum, unpack, quarantine, ad-hoc signature, `installed.json`), `run.rs` (hash check before a run, the child-process `Runner`). `core/modules.rs` holds the `Core` methods |
 | `scripts/notices.mjs` | Third-party notices (crates, npm packages, fonts, icons) and the license allow list; `pnpm build` writes `app/dist/THIRD_PARTY_NOTICES.txt`, which `tauri.conf.json` copies to `Contents/Resources`. `scripts/licenses/` holds SPDX standard texts |
 | `src-tauri/Info.plist` | Photos, speech recognition and location usage strings, merged into the bundle's Info.plist |
 | `src-tauri/Entitlements.plist` | Hardened-runtime entitlements (Photos library, location) for every signature |
@@ -184,7 +184,8 @@ GitHub (`noahkiss/quadcam`, public) is the only remote. Users install the cask
    prebuilt Tauri CLI from `app/`. It does not run the tests: before it attaches the zip
    (`quadcam-X.Y.Z-arm64.zip`) to the GitHub Release, it waits up to 40 minutes for a green
    `ci.yml` run on the tagged commit, and fails without one. It also attaches `modules.json`
-   (`quadcam-cli modules manifest`, the pins Settings > Modules checks), and the in-app updater's
+   (`quadcam-cli modules manifest`, the pins Settings > Modules checks) with its `modules.json.sig`
+   (`tauri signer sign` with the updater key; the app ignores pins without it), and the in-app updater's
    files: `quadcam-X.Y.Z-arm64.app.tar.gz` (the notarized, stapled app), its minisign `.sig`, and
    `latest.json`, which the app reads from `releases/latest/download/`. It then fires the tap's
    `bump.yml`, which rewrites `Casks/quadcam.rb`, installs it on macOS, and commits.
@@ -235,12 +236,12 @@ GitHub (`noahkiss/quadcam`, public) is the only remote. Users install the cask
   `gh workflow run release.yml -R noahkiss/quadcam --ref vX.Y.Z -f tag=vX.Y.Z`.
 - **Secret:** `HOMEBREW_TAP_TOKEN` (the tap PAT) lets the release dispatch the tap.
 - **Updater key:** `TAURI_SIGNING_PRIVATE_KEY` and `TAURI_SIGNING_PRIVATE_KEY_PASSWORD` (empty) in the
-  `release` environment sign the updater archive; its public key is `plugins.updater.pubkey` in
+  `release` environment sign the updater archive and `modules.json`; its public key is `plugins.updater.pubkey` in
   `tauri.conf.json`. `release-attach` tars the app after notarization and signs that tar with
   `tauri signer sign --app-version` (the config sets `requireSignedVersion`). The config leaves
   `createUpdaterArtifacts` off: Tauri's own archive would hold the app before notarization, and a
   local `cargo tauri build` would need the key. A lost key means no in-app update reaches installed
-  copies: they must update through Homebrew once.
+  copies, and no newer module pin either: they must update through Homebrew once.
 - `.github/workflows/ci.yml` runs fmt, clippy, tests (`cargo nextest run --profile ci`) and a
   release build on every push to a branch or `v*` tag and on pull requests from forks, a
   `ui` job for `app/` (typecheck, lint, Vitest, build), and an `e2e` job that splits the

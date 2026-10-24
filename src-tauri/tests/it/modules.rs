@@ -211,7 +211,29 @@ fn check_and_update() {
     );
     stranger.hosts = vec!["example.com".into()];
     remote.0.insert("stranger".into(), stranger);
-    server.put("/modules.json", serde_json::to_vec(&remote).unwrap());
+    let json = serde_json::to_vec(&remote).unwrap();
+    server.put("/modules.json", json.clone());
+
+    // Pins without a signature, or signed with another key, are refused and change nothing.
+    let e = mods.check().unwrap_err();
+    assert!(format!("{e:#}").contains("Could not read"), "{e:#}");
+    server.put("/modules.json.sig", b"not a signature".to_vec());
+    let e = mods.check().unwrap_err().to_string();
+    assert!(e.contains("no readable signature"), "{e}");
+    let other = manager(d.path(), m.clone(), mods.newest_url.clone())
+        .with_pubkey(quadcam_lib::modules::release_pubkey());
+    server.put("/modules.json.sig", release_sig(&json));
+    let e = other.check().unwrap_err().to_string();
+    assert!(e.contains("not signed by QuadCam's release key"), "{e}");
+    let mut tampered = json.clone();
+    tampered.push(b' ');
+    server.put("/modules.json", tampered);
+    let e = mods.check().unwrap_err().to_string();
+    assert!(e.contains("not signed by QuadCam's release key"), "{e}");
+    assert!(!mods.status("tool").unwrap().update);
+    assert!(mods.status("tool").unwrap().newest.is_none());
+
+    server.put("/modules.json", json);
     let list = mods.check().unwrap();
     assert_eq!(list.len(), 1, "only known modules");
     let s = &list[0];

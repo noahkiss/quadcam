@@ -27,9 +27,42 @@ use std::process::Output;
 use std::sync::Arc;
 use std::time::Duration;
 
-/// Where a release publishes its pins. A check reads it; nothing applies until an install.
+/// Where a release publishes its pins. A check reads it and its signature, `<url>.sig`;
+/// nothing applies until an install.
 pub const NEWEST_URL: &str =
     "https://github.com/noahkiss/quadcam/releases/latest/download/modules.json";
+
+/// The release key's public half (base64 of the minisign public key file), the one the app
+/// updater checks with: `plugins.updater.pubkey` in `tauri.conf.json`.
+pub fn release_pubkey() -> String {
+    let conf: serde_json::Value =
+        serde_json::from_str(include_str!("../../tauri.conf.json")).expect("tauri.conf.json");
+    conf["plugins"]["updater"]["pubkey"]
+        .as_str()
+        .expect("tauri.conf.json names the updater's pubkey")
+        .to_string()
+}
+
+/// Checks `data` against a signature in `tauri signer sign`'s form (base64 of a minisign
+/// signature file) with `pubkey` in the updater's form.
+pub fn verify_signed(data: &[u8], sig: &[u8], pubkey: &str) -> Result<()> {
+    use base64::Engine;
+    let b64 = |b: &[u8]| -> Result<String> {
+        let raw = base64::engine::general_purpose::STANDARD.decode(b.trim_ascii())?;
+        Ok(String::from_utf8(raw)?)
+    };
+    let key = minisign_verify::PublicKey::decode(&b64(pubkey.as_bytes())?)
+        .map_err(|e| anyhow::anyhow!("the release key: {e}"))?;
+    let sig = b64(sig)
+        .ok()
+        .and_then(|s| minisign_verify::Signature::decode(&s).ok())
+        .context("modules.json has no readable signature; the update is ignored.")?;
+    key.verify(data, &sig, true).map_err(|_| {
+        anyhow::anyhow!(
+            "modules.json is not signed by QuadCam's release key; the update is ignored."
+        )
+    })
+}
 
 /// One module: its pin, a newer pin from the last check, and what is installed.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, specta::Type)]
@@ -65,6 +98,8 @@ pub struct Modules {
     pub cache: PathBuf,
     pub manifest: Manifest,
     pub newest_url: String,
+    /// The key `modules.json` must be signed with (`release_pubkey`'s form).
+    pub pubkey: String,
     fetch: Arc<dyn Fetch>,
     runner: Arc<dyn run::Runner>,
 }
@@ -94,9 +129,15 @@ impl Modules {
             cache,
             manifest,
             newest_url,
+            pubkey: release_pubkey(),
             fetch,
             runner: Arc::new(run::Process),
         }
+    }
+
+    pub fn with_pubkey(mut self, pubkey: String) -> Modules {
+        self.pubkey = pubkey;
+        self
     }
 
     pub fn with_runner(mut self, runner: Arc<dyn run::Runner>) -> Modules {
@@ -234,16 +275,24 @@ impl Modules {
     }
 
     /// Reads the newest pins a QuadCam release published and keeps the newer ones for the
-    /// next install. Installs nothing.
+    /// next install. The pins count only with a signature by the release key. Installs
+    /// nothing.
     pub fn check(&self) -> Result<Vec<ModuleStatus>> {
         std::fs::create_dir_all(&self.cache)
             .with_context(|| format!("creating {}", self.cache.display()))?;
-        let part = self.cache.join("modules.json.part");
-        self.fetch
-            .download(&self.newest_url, &part)
-            .context("Could not read the newest module pins")?;
-        let bytes = std::fs::read(&part)?;
-        let _ = std::fs::remove_file(&part);
+        let fetch = |url: &str, name: &str| -> Result<Vec<u8>> {
+            let part = self.cache.join(name);
+            let got = self
+                .fetch
+                .download(url, &part)
+                .context("Could not read the newest module pins")
+                .and_then(|()| Ok(std::fs::read(&part)?));
+            let _ = std::fs::remove_file(&part);
+            got
+        };
+        let bytes = fetch(&self.newest_url, "modules.json.part")?;
+        let sig = fetch(&format!("{}.sig", self.newest_url), "modules.json.sig.part")?;
+        verify_signed(&bytes, &sig, &self.pubkey)?;
         let remote = Manifest::from_json(&bytes)?;
         let keep = Manifest(self.manifest.newer_pins(&remote));
         std::fs::write(self.newest_file(), serde_json::to_vec_pretty(&keep)?)?;

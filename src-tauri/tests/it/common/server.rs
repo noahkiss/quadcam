@@ -146,8 +146,31 @@ pub fn pin(version: &str, tools: &[(&str, &str)], assets: Vec<(String, Vec<u8>)>
     }
 }
 
+/// A test release key, made once per process.
+fn test_key() -> &'static minisign::KeyPair {
+    static KEY: std::sync::OnceLock<minisign::KeyPair> = std::sync::OnceLock::new();
+    KEY.get_or_init(|| minisign::KeyPair::generate_unencrypted_keypair().unwrap())
+}
+
+fn b64(text: String) -> String {
+    use base64::Engine;
+    base64::engine::general_purpose::STANDARD.encode(text)
+}
+
+/// The test release key's public half, in the form `tauri.conf.json` holds.
+pub fn test_pubkey() -> String {
+    b64(test_key().pk.to_box().unwrap().into_string())
+}
+
+/// `data` signed with the test release key, in `tauri signer sign`'s `.sig` form.
+pub fn release_sig(data: &[u8]) -> Vec<u8> {
+    let k = test_key();
+    let sig = minisign::sign(Some(&k.pk), &k.sk, data, None, None).unwrap();
+    b64(sig.into_string()).into_bytes()
+}
+
 /// A module manager in `dir` with this manifest, fetching through curl from the fixture
-/// server only.
+/// server only, and taking pins signed with the test release key.
 pub fn manager(dir: &Path, manifest: Manifest, newest_url: String) -> Modules {
     Modules::new(
         dir.join("support/modules"),
@@ -158,6 +181,7 @@ pub fn manager(dir: &Path, manifest: Manifest, newest_url: String) -> Modules {
             loopback_only: true,
         }),
     )
+    .with_pubkey(test_pubkey())
 }
 
 /// The ffmpeg module as a fixture: `ffmpeg` and `ffprobe` scripts that run the Homebrew
