@@ -3,6 +3,19 @@
 User-facing changes in each release, newest first. Release notes on
 [GitHub](https://github.com/noahkiss/quadcam/releases) hold the test steps for the later ones.
 
+## 0.24.0 (2026-10-24)
+
+- **A card imported twice is not copied twice.** An import into the library skips each clip the library already holds, so a re-import after **Start Over** no longer writes `-2` copies. The Finish step says how many it skipped and marks each one "already in the library". **Import Anyway** converts them again. The CLI takes `import --force`, MCP `quadcam_export` takes `force`.
+- **Buttons and menus in title case.** Every button and menu item now follows the Mac's title case: **Format Card…**, **Start Over**, **Back Up Now**, **Check for Updates**. Dialog text, headings and checkboxes keep sentence case.
+- **Agents' device actions show the apply sheet.** With the app open, an agent's card repair, blackbox erase, erasing blackbox pull and volume rename now wait for the apply sheet, like every other device write. The sheet names the action and what it does.
+- **Link a DFU device from the flash sheet.** A radio flash or restore that needs an unlinked DFU device shows its serial and **Link to** the radio, so the link no longer needs the CLI or MCP.
+- **Logs that could not be read.** The Flights page says how many radio logs it could not read, and lists each one with its error.
+- **Sun and weather in the place's own time zone.** With weather on, a saved place stores its time zone, so a clip flown in another zone gets the sun tag and weather of the right hour. A clip without a saved place keeps the Mac's zone.
+- **Cuts keep their own facts.** A cut keeps its clip's metadata and only the moments inside its range, timed from the cut's start. It no longer copies the parent's keep ranges, flight stats or highlights.
+- **Safer eject.** While a DJI device is on USB, a named eject target must be removable media or a DJI volume. A backup drive is refused.
+- **Signed module updates.** QuadCam takes newer module pins from a release only with their signature, `modules.json.sig`, made by the release key.
+- **The CLI asks first too.** `quadcam-cli stage` refuses to replace an open import unless you pass `--replace`.
+
 ## 0.23.0 (2026-10-24)
 
 - **Set up a radio's switches in QuadCam.** A radio's new **Setup** segment lists each job (arm, rates and the others) with its channel, control, direction and what each position sends. Pick a control from a pop-up, or press **Learn** and move the switch with the radio in USB Joystick mode. Mark a swapped switch module or a blanking plug per slot. **Copy from** takes another radio's models and setup, with the controls mapped across. **Review** stages it as one change for the apply sheet; **Discard staged setup** asks first. The CLI has `gear setup` and `gear setup-edit`, MCP `radio_setup` and `radio_setup_edit`.
