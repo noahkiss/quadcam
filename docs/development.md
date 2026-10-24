@@ -304,6 +304,13 @@ Users install the Homebrew cask `noahkiss/tap/quadcam`. A release is a pushed ta
    git push origin main vX.Y.Z
    ```
 
+   Then create the GitHub Release at once, with the version's CHANGELOG entry as its body. The in-app updater shows `latest.json`'s notes, and the workflow copies them from the release body when it attaches the files. A release it creates itself gets only a compare link:
+
+   ```bash
+   awk '/^## X\.Y\.Z /{f=1; next} /^## /{f=0} f' CHANGELOG.md > notes.md
+   gh release create vX.Y.Z --verify-tag --title vX.Y.Z --notes-file notes.md
+   ```
+
 3. `.github/workflows/release.yml` runs the shared composite actions `tauri-macos-build`, `macos-sign-notarize` and `release-attach` from [`noahkiss/workflows`](https://github.com/noahkiss/workflows). They run in this repo's own job, because that job names the `release` environment; a reusable workflow from another repo cannot read this repo's environment secrets.
    - It checks that both manifests state the tag's version.
    - It builds `QuadCam.app` on an Apple Silicon runner (`xcode-27`, a public-preview image with Xcode 27) with the prebuilt Tauri CLI from `app/`. It restores the Rust dependency cache that `release-cache.yml` saves on `main` after each release; a cache saved under one tag is invisible to the next.
