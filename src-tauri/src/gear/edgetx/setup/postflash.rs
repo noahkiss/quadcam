@@ -77,10 +77,23 @@ pub struct PackPlan {
     pub bytes: u64,
 }
 
-/// True for a pack file QuadCam may put on a card: inside it, no hidden part, and never a
-/// YAML file (models and `radio.yml` are the person's).
+/// The card folders a storage pack may put files in. `LOGS/`, `MODELS/`, `RADIO/`,
+/// `FIRMWARE/` and `SCREENSHOTS/` are the person's and never take a pack file.
+pub const PACK_FOLDERS: &[&str] = &[
+    "SCRIPTS/",
+    "SOUNDS/",
+    "IMAGES/",
+    "THEMES/",
+    "WIDGETS/",
+    "TEMPLATES/",
+];
+
+/// True for a pack file QuadCam may put on a card: inside it, in a pack folder or the pack's
+/// version file, no hidden part, and never a YAML file (models and `radio.yml` are the
+/// person's).
 pub fn pack_path_ok(path: &str) -> bool {
     crate::gear::edgetx::card::inside_card(path)
+        && (path == PACK_VERSION_FILE || PACK_FOLDERS.iter().any(|f| path.starts_with(f)))
         && !path
             .split('/')
             .any(|c| c.starts_with('.') || c == "__MACOSX")

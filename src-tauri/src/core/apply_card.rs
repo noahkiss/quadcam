@@ -285,7 +285,7 @@ impl Core {
                     unreachable!()
                 };
                 for f in put {
-                    check_sound_path(&f.path)?;
+                    check_card_file(&f.path, true)?;
                     let bytes = blobs
                         .get(&crate::gear::blobs::BlobRef {
                             xxh64: f.xxh64.clone(),
@@ -298,7 +298,7 @@ impl Core {
                     out.push((f.path.clone(), Some(bytes)));
                 }
                 for d in delete {
-                    check_sound_path(d)?;
+                    check_card_file(d, false)?;
                     out.retain(|(p, _)| p != d);
                     out.push((d.clone(), None));
                 }
@@ -908,13 +908,55 @@ fn connected_label(c: &Connected) -> String {
     super::connected_name(c)
 }
 
-/// A card-files edit puts sounds under `SOUNDS/` only.
 /// A card file a `CardFiles` edit may put or delete: a sound under `SOUNDS/` (a voice pack),
-/// or a storage pack file (`postflash::pack_path_ok`: never a YAML file).
-fn check_sound_path(path: &str) -> Result<()> {
-    if !path.starts_with("SOUNDS/") && crate::gear::edgetx::setup::postflash::pack_path_ok(path) {
+/// or a storage pack file to put (`postflash::pack_path_ok`). Never a log, a model, a
+/// firmware or a screenshot; a storage pack never deletes.
+fn check_card_file(path: &str, put: bool) -> Result<()> {
+    if put && crate::gear::edgetx::setup::postflash::pack_path_ok(path) {
         return Ok(());
     }
-    crate::gear::voice::lines::check_path(path)
-        .map_err(|e| anyhow::anyhow!("Refused (shape_unknown): card files go under SOUNDS/: {e:#}"))
+    crate::gear::voice::lines::check_path(path).map_err(|e| {
+        anyhow::anyhow!(
+            "Refused (shape_unknown): card files are sounds under SOUNDS/ or storage pack files: {e:#}"
+        )
+    })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::check_card_file;
+
+    #[test]
+    fn card_files_are_sounds_or_storage_pack_files() {
+        for p in [
+            "SOUNDS/en/new.wav",
+            "SCRIPTS/TOOLS/elrs.lua",
+            "IMAGES/x.bmp",
+            "edgetx.sdcard.version",
+        ] {
+            assert!(check_card_file(p, true).is_ok(), "{p}");
+        }
+        for p in [
+            "LOGS/Whoop-2026-10-01.csv",
+            "LOGS/readme.txt",
+            "MODELS/Whoop.txt",
+            "MODELS/model00.yml",
+            "FIRMWARE/pocket.bin",
+            "SCREENSHOTS/x.bmp",
+            "SCRIPTS/x.yml",
+            "SCRIPTS/.hidden/x.lua",
+            "SCRIPTS/../LOGS/x.csv",
+        ] {
+            assert!(check_card_file(p, true).is_err(), "{p}");
+        }
+        // Deletes stay under SOUNDS/: a storage pack never deletes.
+        assert!(check_card_file("SOUNDS/en/old.wav", false).is_ok());
+        for p in [
+            "SCRIPTS/TOOLS/elrs.lua",
+            "LOGS/x.csv",
+            "edgetx.sdcard.version",
+        ] {
+            assert!(check_card_file(p, false).is_err(), "{p}");
+        }
+    }
 }

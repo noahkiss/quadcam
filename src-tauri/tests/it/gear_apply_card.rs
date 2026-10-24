@@ -1404,6 +1404,12 @@ fn card_files_refuse_a_mixed_change_and_paths_outside_sounds() {
             "SOUNDS/en/new.wav",
             Some("SOUNDS/en/../../MODELS/model00.yml"),
         ),
+        // The person's logs, checklists and firmware are no card files.
+        ("LOGS/x.csv", None),
+        ("MODELS/x.txt", None),
+        ("FIRMWARE/x.bin", None),
+        ("SOUNDS/en/new.wav", Some("LOGS/x.csv")),
+        ("SOUNDS/en/new.wav", Some("SCRIPTS/x.lua")),
     ] {
         let mut f = sound.clone();
         f.path = put.into();
@@ -1417,6 +1423,7 @@ fn card_files_refuse_a_mixed_change_and_paths_outside_sounds() {
     assert!(b.root.join("MODELS/model00.yml").is_file());
     assert!(!b.root.join("SOUNDS/en/new.wav").exists());
     assert!(!b.root.join("MODELS/model09.yml").exists());
+    assert!(!b.root.join("LOGS/x.csv").exists());
 }
 
 /// A model copy and a model delete apply with a backup and read back: the copy holds the

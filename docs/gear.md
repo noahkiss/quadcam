@@ -523,7 +523,7 @@ job: the setup lists the sounds its callouts play and warns about each one the c
 
 | Step | What it does |
 |---|---|
-| Storage pack | EdgeTX's SD-card files for the radio's screen (`bw128x64` on the Pocket and GX12), from the EdgeTX release; only files that differ, never a model or `radio.yml` |
+| Storage pack | EdgeTX's SD-card files for the radio's screen (`bw128x64` on the Pocket and GX12), from the EdgeTX release; only files that differ, and only in `SCRIPTS/`, `SOUNDS/`, `IMAGES/`, `THEMES/`, `WIDGETS/`, `TEMPLATES/` or `edgetx.sdcard.version`. Never a model, `radio.yml`, a log, a firmware file or a screenshot |
 | ELRS Lua | `SCRIPTS/TOOLS/elrs.lua` from the ExpressLRS release (`--elrs-version`), and `elrsV3.lua` and `.luac` removed so the radio lists one tool |
 | Volume label | A short label from the radio's saved name (`Pocket 2` gives `POCKET2`) |
 
