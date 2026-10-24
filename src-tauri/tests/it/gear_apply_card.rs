@@ -711,6 +711,60 @@ fn the_person_mounts_a_card_and_it_unmounts_on_done_or_on_the_timer() {
     assert!(b.core.gear_mounted_cards().is_empty());
 }
 
+/// The person's Mount runs out while an apply writes the card: the timer and Done leave
+/// the card mounted until the job ends.
+#[test]
+fn the_mount_timer_never_unmounts_a_card_a_job_writes() {
+    let mut slow = WriteOptions::reader();
+    slow.stall = Some((
+        "RADIO/radio.yml".into(),
+        std::time::Duration::from_millis(1_500),
+    ));
+    let b = bench(Opts {
+        card_write: Some(slow),
+        ..Default::default()
+    });
+    b.core
+        .gear_card_mount(&CardMountParams {
+            device: b.id.clone(),
+            minutes: Some(1),
+        })
+        .unwrap();
+    b.log.lock().unwrap().clear();
+    let c = stage(&b, vec![contrast("27")]);
+    let p = plan(&b, &c);
+    std::thread::scope(|s| {
+        let apply = s.spawn(|| b.core.gear_apply(&req(&c, &p)).unwrap());
+        let t = std::time::Instant::now();
+        while b.core.gear_jobs().is_empty() {
+            assert!(!apply.is_finished() && t.elapsed() < std::time::Duration::from_secs(10));
+            std::thread::sleep(std::time::Duration::from_millis(10));
+        }
+        b.core
+            .gear_mount_tick(std::time::Instant::now() + std::time::Duration::from_secs(61));
+        let e = b
+            .core
+            .gear_card_unmount(&CardMountParams {
+                device: b.id.clone(),
+                minutes: None,
+            })
+            .unwrap_err();
+        assert!(
+            format!("{e:#}").contains("is running on this card"),
+            "{e:#}"
+        );
+        assert!(
+            b.log.lock().unwrap().is_empty(),
+            "{:?}",
+            b.log.lock().unwrap()
+        );
+        assert!(b.mounted.load(Ordering::SeqCst));
+        let r = apply.join().unwrap();
+        assert_eq!(r.status, ChangeStatus::Verified, "{}", r.message);
+    });
+    assert!(read(&b, "RADIO/radio.yml").contains("contrast: 27"));
+}
+
 #[test]
 fn revert_of_a_card_change_restores_the_files_from_the_backup() {
     let b = bench(Opts::default());

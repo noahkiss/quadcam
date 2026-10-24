@@ -2085,7 +2085,9 @@ dialog, Mount and Done on a radio's page. Deviations and choices:
   in `gear_finish_card` like every card job (one cue, "safe to unplug" only after the unmount;
   a refusal plays no cue). The person's Mount (`gear_card_mount`) keeps a card mounted for 10
   minutes (`MOUNT_MINUTES`, a constant; `gear_mount_tick` in the app's poll unmounts it) or
-  until `gear_card_unmount`. `GearStatus.mounted` lists those cards.
+  until `gear_card_unmount`. `GearStatus.mounted` lists those cards. While a job (an apply, a
+  backup, a card check) works on the card, the timer waits a minute and looks again, and
+  `gear_card_unmount` refuses: the job releases the card when it ends.
 - **Mount cycle for every card job (shell gaps).** Decided 2026-10-09: every operation on any
   card or card-like volume mounts it if needed, works, and unmounts it when done. One helper:
   `locate_volume` (`locate_card` is its radio-only form) with `unmounted_cards`,

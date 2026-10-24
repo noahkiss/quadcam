@@ -440,34 +440,62 @@ impl Core {
 
     /// Done: unmounts a card the person mounted (or any mounted radio card). Plays the
     /// "safe to unplug" cue after the unmount worked.
+    /// Refuses while a job (an apply, a backup, a card check) works on the card: the job
+    /// releases the card when it ends.
     pub fn gear_card_unmount(&self, p: &CardMountParams) -> Result<()> {
         let device = p.device.trim();
+        let l = self.locate_volume(device, false, false);
+        if let Ok(Some(l)) = &l {
+            if let Some(step) = self.card_job(&l.connected) {
+                bail!(
+                    "Refused: {} is running on this card; QuadCam releases the card when it ends.",
+                    step.to_lowercase()
+                );
+            }
+        }
         self.gear_mounted_for_user.lock().unwrap().remove(device);
-        let l = self
-            .locate_volume(device, false, false)?
-            .with_context(|| format!("Card {device:?} is not mounted."))?;
+        let l = l?.with_context(|| format!("Card {device:?} is not mounted."))?;
         self.gear_release_card(&l.connected)
     }
 
-    /// Unmounts the cards whose Mount time ran out. The app's poll calls it.
+    /// The step of the job working on this card now, if any.
+    fn card_job(&self, c: &Connected) -> Option<String> {
+        let handle = link_handle(&c.link);
+        let step = self
+            .gear_jobs()
+            .into_iter()
+            .find(|j| j.handle == handle)
+            .map(|j| j.step);
+        step.or_else(|| self.held_by_job(&handle).then(|| "A job".to_string()))
+    }
+
+    /// Unmounts the cards whose Mount time ran out. The app's poll calls it. A card a job
+    /// works on stays mounted, and the timer looks again a minute later.
     pub fn gear_mount_tick(&self, now: Instant) {
         let due: Vec<String> = {
-            let mut m = self.gear_mounted_for_user.lock().unwrap();
-            let due: Vec<String> = m
-                .iter()
+            let m = self.gear_mounted_for_user.lock().unwrap();
+            m.iter()
                 .filter(|(_, (t, _))| *t <= now)
                 .map(|(k, _)| k.clone())
-                .collect();
-            for k in &due {
-                m.remove(k);
-            }
-            due
+                .collect()
         };
         for device in due {
-            let _ = self.gear_card_unmount(&CardMountParams {
-                device,
+            let r = self.gear_card_unmount(&CardMountParams {
+                device: device.clone(),
                 minutes: None,
             });
+            let busy = matches!(&r, Err(e) if format!("{e:#}").starts_with("Refused"));
+            let mut m = self.gear_mounted_for_user.lock().unwrap();
+            if busy {
+                if let Some(e) = m.get_mut(&device) {
+                    *e = (
+                        now + Duration::from_secs(60),
+                        Utc::now() + chrono::Duration::minutes(1),
+                    );
+                }
+            } else {
+                m.remove(&device);
+            }
         }
     }
 
