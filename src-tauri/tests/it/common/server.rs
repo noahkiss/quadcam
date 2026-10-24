@@ -130,6 +130,7 @@ pub fn pin(version: &str, tools: &[(&str, &str)], assets: Vec<(String, Vec<u8>)>
         source: "https://example.invalid/source".into(),
         homepage: "https://example.invalid".into(),
         hosts: vec!["127.0.0.1".into()],
+        team_id: None,
         tools: tools
             .iter()
             .map(|(a, b)| (a.to_string(), b.to_string()))

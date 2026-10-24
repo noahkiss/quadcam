@@ -2,7 +2,8 @@
 //!
 //! The order is the safety: a download is checked against its pinned SHA-256 before anything
 //! else touches it (a mismatch deletes it); only then is it unpacked, has its quarantine
-//! attribute removed and, when the upstream binary is unsigned, gets a local ad-hoc
+//! attribute removed and its signature checked: a pin that names a Team ID needs that
+//! team's signature, and an unsigned binary of a pin without one gets a local ad-hoc
 //! signature. `installed.json` records each tool's hash after signing, and every run checks it.
 
 use super::fetch::Fetch;
@@ -131,8 +132,28 @@ fn is_mach_o(path: &Path) -> bool {
         )
 }
 
-/// Keeps an upstream signature that verifies; signs ad hoc otherwise.
-fn sign(path: &Path) -> Result<Signing> {
+/// With `team`, the executable must carry a valid signature by that Apple Team ID, or the
+/// install fails. Without one, keeps an upstream signature that verifies and signs ad hoc
+/// otherwise.
+fn sign(path: &Path, team: Option<&str>) -> Result<Signing> {
+    if let Some(team) = team {
+        let requirement =
+            format!("=anchor apple generic and certificate leaf[subject.OU] = \"{team}\"");
+        let ok = is_mach_o(path)
+            && Command::new("/usr/bin/codesign")
+                .args(["--verify", "--strict", "-R"])
+                .arg(requirement)
+                .arg(path)
+                .output()
+                .is_ok_and(|o| o.status.success());
+        if !ok {
+            bail!(
+                "{} is not signed by its maker (Team ID {team}); nothing was installed.",
+                path.file_name().unwrap_or_default().to_string_lossy()
+            );
+        }
+        return Ok(Signing::Upstream);
+    }
     if !is_mach_o(path) {
         return Ok(Signing::NotBinary);
     }
@@ -216,7 +237,7 @@ pub fn install(
             let mut perm = std::fs::metadata(&real)?.permissions();
             perm.set_mode(perm.mode() | 0o755);
             std::fs::set_permissions(&real, perm)?;
-            let signing = sign(&real)?;
+            let signing = sign(&real, pin.team_id.as_deref())?;
             tools.insert(
                 tool.clone(),
                 InstalledTool {
@@ -297,7 +318,11 @@ mod tests {
         let f = d.path().join("s");
         std::fs::write(&f, "#!/bin/sh\n").unwrap();
         assert!(!is_mach_o(&f));
-        assert_eq!(sign(&f).unwrap(), Signing::NotBinary);
+        assert_eq!(sign(&f, None).unwrap(), Signing::NotBinary);
+        assert!(
+            sign(&f, Some("QWXF6GB4AV")).is_err(),
+            "a script has no team signature"
+        );
     }
 
     #[test]
@@ -313,9 +338,15 @@ mod tests {
             "codesign",
         )
         .unwrap();
-        assert_eq!(sign(&f).unwrap(), Signing::AdHoc);
+        let e = sign(&f, Some("QWXF6GB4AV")).unwrap_err().to_string();
+        assert!(e.contains("not signed by its maker"), "{e}");
+        assert_eq!(sign(&f, None).unwrap(), Signing::AdHoc);
+        assert!(
+            sign(&f, Some("QWXF6GB4AV")).is_err(),
+            "an ad-hoc signature is no team's"
+        );
         assert_eq!(
-            sign(&f).unwrap(),
+            sign(&f, None).unwrap(),
             Signing::Upstream,
             "the signature now verifies"
         );

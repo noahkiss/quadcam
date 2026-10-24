@@ -8,7 +8,9 @@
 #   license_url        the full license text
 #   source             where the module's source code is
 #   homepage           the page the download comes from
-#   hosts              the only hosts a newer pin (modules.json on a QuadCam release) may use
+#   hosts              where a newer pin's URLs (modules.json on a QuadCam release) may point:
+#                      a host, or a host and path prefix ending in /
+#   team_id            the Apple Team ID that must sign each tool's executable
 #   tools              tool name -> path of its executable inside the unpacked assets
 #   [[name.assets]]    url, sha256 and size of each download; zip or tar.gz, unpacked into
 #                      one folder
@@ -24,7 +26,8 @@ license = "GPL-3.0-or-later"
 license_url = "https://www.gnu.org/licenses/gpl-3.0.html"
 source = "https://ffmpeg.org/releases/ffmpeg-9.0.2.tar.xz"
 homepage = "https://ffmpeg.martin-riedl.de"
-hosts = ["ffmpeg.martin-riedl.de"]
+hosts = ["ffmpeg.martin-riedl.de/download/macos/arm64/"]
+team_id = "KU3N25YGLU"
 tools = { ffmpeg = "ffmpeg", ffprobe = "ffprobe" }
 
 [[ffmpeg.assets]]
@@ -45,7 +48,8 @@ license = "GPL-2.0-or-later"
 license_url = "https://github.com/espressif/esptool/blob/v5.4.0/LICENSE"
 source = "https://github.com/espressif/esptool/tree/v5.4.0"
 homepage = "https://github.com/espressif/esptool/releases/tag/v5.4.0"
-hosts = ["github.com"]
+hosts = ["github.com/espressif/esptool/releases/download/"]
+team_id = "QWXF6GB4AV"
 tools = { esptool = "esptool-macos-arm64/esptool" }
 
 [[esptool.assets]]

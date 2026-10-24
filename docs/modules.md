@@ -43,7 +43,7 @@ Open **Settings > Modules**.
 
 - **Install** shows the module's version, size, license, source and download address. Nothing downloads until you select **Download**.
 - QuadCam checks each download against the SHA-256 that the release pins. A mismatch deletes the file and stops the install: "The download does not match the expected checksum."
-- **Check for module updates** reads the newest pins that the latest QuadCam release published (`modules.json`). It installs nothing. A newer pin counts only when its download addresses are on the module's known hosts.
+- **Check for module updates** reads the newest pins that the latest QuadCam release published (`modules.json`). It installs nothing. A newer pin counts only when its download addresses are under the module's known release path (for esptool, `github.com/espressif/esptool/releases/download/`).
 - **Update** installs the new version next to the old one, then removes the old one.
 - **Remove** deletes the module's folder.
 
@@ -81,7 +81,7 @@ Settings > Modules shows the ffmpeg that is in use. The Homebrew cask does not i
 ### How QuadCam runs a module
 
 - QuadCam downloads with `/usr/bin/curl`, over HTTPS only. A downloaded file carries no quarantine attribute. If a module folder has one (a file copied in by hand), QuadCam removes it only after the checksum matched.
-- Both pinned modules are signed with their maker's Developer ID and notarized by Apple. An unsigned upstream binary would get a local ad-hoc signature after the checksum matched.
+- Both pinned modules are signed with their maker's Developer ID and notarized by Apple. Each pin names its maker's Apple Team ID (`team_id`), and an install refuses an executable that this team did not sign. A newer pin from `modules.json` keeps the built-in pin's team and release path. A pin without a team ID gets a local ad-hoc signature for an unsigned binary after the checksum matched.
 - `installed.json` in the version folder records each tool's SHA-256. Before a tool runs, QuadCam checks the file against it. A changed file is refused: "ffmpeg was changed after install; reinstall it."
 - A module runs only as a separate process, by its full path, with an argument list (never a shell). Nothing is loaded into QuadCam itself.
 
@@ -97,7 +97,7 @@ Each pin in `src-tauri/resources/modules.toml` is an official release asset. For
 
 FFmpeg itself publishes source code only. Its download page links an Intel-only macOS build (evermeet.cx), so the ffmpeg module uses Martin Riedl's build server, which publishes signed and notarized arm64 release builds with checksums. No signed LGPL arm64 build was found; the build is GPL, which is fine for a tool QuadCam downloads and runs as a separate process. QuadCam's own MP4 encoder is VideoToolbox; the x264 setting needs a GPL build.
 
-To change a pin: download the new asset, check its SHA-256 against the publisher's, check its signature with `codesign -dv` and `spctl -a -vv -t install`, update `modules.toml` and this table, and run the module tests.
+To change a pin: download the new asset, check its SHA-256 against the publisher's, check its signature with `codesign -dv` (its Team ID goes in `team_id`) and `spctl -a -vv -t install`, update `modules.toml` and this table, and run the module tests.
 
 ## Third-party notices
 

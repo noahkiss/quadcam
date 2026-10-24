@@ -145,6 +145,28 @@ fn checksum_mismatch_deletes_the_download() {
     assert!(!d.path().join("support/modules/tool/1.0").exists());
 }
 
+#[test]
+fn a_pin_with_a_team_needs_that_teams_signature() {
+    let server = Server::start();
+    let d = tempfile::tempdir().unwrap();
+    let zip = archive(&[("tool", "#!/bin/sh\necho hi\n".into())], false);
+    let url = server.put("/tool.zip", zip.clone());
+    let mut p = pin("1.0", &[("tool", "tool")], vec![(url, zip)]);
+    p.team_id = Some("QWXF6GB4AV".into());
+    let mods = manager(
+        d.path(),
+        Manifest(BTreeMap::from([("tool".to_string(), p)])),
+        String::new(),
+    );
+    let e = mods.install("tool", true).unwrap_err().to_string();
+    assert!(
+        e.contains("not signed by its maker (Team ID QWXF6GB4AV)"),
+        "{e}"
+    );
+    assert!(mods.status("tool").unwrap().installed.is_none());
+    assert!(!d.path().join("support/modules/tool/1.0").exists());
+}
+
 fn walk(dir: &std::path::Path) -> Vec<std::path::PathBuf> {
     let mut out = Vec::new();
     for e in std::fs::read_dir(dir).into_iter().flatten().flatten() {

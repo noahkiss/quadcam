@@ -5573,8 +5573,16 @@ export type Pin = {
 	license_url: string,
 	source: string,
 	homepage: string,
-	/**  Hosts a newer pin's URLs may use. */
+	/**
+	 *  Where a newer pin's URLs may point: a host (`example.com`), or a host and path
+	 *  prefix ending in `/` (`github.com/owner/repo/releases/download/`).
+	 */
 	hosts: string[],
+	/**
+	 *  The Apple Team ID that must sign every tool's executable. Without one, an unsigned
+	 *  tool gets an ad-hoc signature.
+	 */
+	team_id?: string | null,
 	/**  Tool name to the path of its executable inside the unpacked assets. */
 	tools: { [key in string]: string },
 	assets: Asset[],

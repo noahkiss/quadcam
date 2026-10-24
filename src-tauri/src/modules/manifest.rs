@@ -30,8 +30,13 @@ pub struct Pin {
     pub license_url: String,
     pub source: String,
     pub homepage: String,
-    /// Hosts a newer pin's URLs may use.
+    /// Where a newer pin's URLs may point: a host (`example.com`), or a host and path
+    /// prefix ending in `/` (`github.com/owner/repo/releases/download/`).
     pub hosts: Vec<String>,
+    /// The Apple Team ID that must sign every tool's executable. Without one, an unsigned
+    /// tool gets an ad-hoc signature.
+    #[serde(default)]
+    pub team_id: Option<String>,
     /// Tool name to the path of its executable inside the unpacked assets.
     pub tools: BTreeMap<String, String>,
     pub assets: Vec<Asset>,
@@ -47,13 +52,31 @@ impl Pin {
         if !valid_name(name) {
             bail!("module name {name:?} must be lowercase letters, digits and dashes");
         }
-        if self.version.is_empty()
+        if !self
+            .version
+            .starts_with(|c: char| c.is_ascii_alphanumeric())
             || !self
                 .version
                 .chars()
                 .all(|c| c.is_ascii_alphanumeric() || ".-+_".contains(c))
         {
             bail!("{name}: version {:?} is not a plain version", self.version);
+        }
+        if let Some(h) = self
+            .hosts
+            .iter()
+            .find(|h| h.contains('/') && !h.ends_with('/'))
+        {
+            bail!("{name}: host entry {h:?} with a path must end in /");
+        }
+        if let Some(t) = &self.team_id {
+            if t.is_empty()
+                || !t
+                    .bytes()
+                    .all(|b| b.is_ascii_uppercase() || b.is_ascii_digit())
+            {
+                bail!("{name}: team_id {t:?} is not an Apple Team ID");
+            }
         }
         if self.assets.is_empty() {
             bail!("{name}: no assets");
@@ -90,19 +113,26 @@ impl Pin {
     }
 
     /// True when every asset URL is `https://<one of hosts>/...` (plain HTTP only for this
-    /// Mac, which tests use).
+    /// Mac, which tests use). A host entry with a path matches as a prefix, and the URL may
+    /// then hold no query, escape or `.`/`..` segment that could leave that path.
     fn on_hosts(&self, hosts: &[String]) -> bool {
         self.assets.iter().all(|a| {
-            let rest = a.url.strip_prefix("https://").or_else(|| {
+            let Some(rest) = a.url.strip_prefix("https://").or_else(|| {
                 a.url
                     .strip_prefix("http://")
                     .filter(|r| r.starts_with("127.0.0.1") || r.starts_with("localhost"))
-            });
-            let authority = rest
-                .and_then(|r| r.split(['/', '?', '#']).next())
-                .unwrap_or_default();
+            }) else {
+                return false;
+            };
+            let authority = rest.split(['/', '?', '#']).next().unwrap_or_default();
             let host = authority.split(':').next().unwrap_or_default();
-            !authority.contains('@') && hosts.iter().any(|x| x == host)
+            let plain = !rest.contains(['?', '#', '%', '\\'])
+                && !rest.split('/').any(|seg| seg == "." || seg == "..");
+            !authority.contains('@')
+                && hosts.iter().any(|x| match x.split_once('/') {
+                    None => x == host,
+                    Some(_) => plain && rest.starts_with(x.as_str()),
+                })
         })
     }
 }
@@ -167,8 +197,9 @@ impl Manifest {
                 && r.tools.keys().eq(local.tools.keys())
             {
                 let mut pin = r.clone();
-                // Hosts never widen through a remote pin.
+                // Hosts and the signing team never change through a remote pin.
                 pin.hosts = local.hosts.clone();
+                pin.team_id = local.team_id.clone();
                 out.insert(name.clone(), pin);
             }
         }
@@ -243,6 +274,38 @@ mod tests {
     }
 
     #[test]
+    fn remote_pins_stay_on_the_publishers_path() {
+        let local = Manifest::built_in();
+        let try_url = |url: &str| {
+            let mut remote = local.clone();
+            let es = remote.0.get_mut("esptool").unwrap();
+            es.version = "6.0.0".into();
+            es.assets[0].url = url.into();
+            es.team_id = Some("ATTACKER00".into());
+            es.hosts = vec!["github.com".into()];
+            local.newer_pins(&remote).remove("esptool")
+        };
+        let ok = try_url("https://github.com/espressif/esptool/releases/download/v6.0.0/e.tar.gz")
+            .expect("the maker's release path is taken");
+        assert_eq!(
+            ok.team_id.as_deref(),
+            Some("QWXF6GB4AV"),
+            "the team is the local pin's"
+        );
+        assert_eq!(ok.hosts, local.get("esptool").unwrap().hosts);
+        for url in [
+            "https://github.com/attacker/esptool/releases/download/v6/e.tar.gz",
+            "https://github.com/espressif/esptool/releases/download/../../../attacker/x/e.tar.gz",
+            "https://github.com/espressif/esptool/releases/download/%2e%2e/e.tar.gz",
+            "https://github.com/espressif/esptool/releases/download/v6/e.tar.gz?x=../",
+            "https://github.com.evil.example/espressif/esptool/releases/download/v6/e.tar.gz",
+            "https://x@github.com/espressif/esptool/releases/download/v6/e.tar.gz",
+        ] {
+            assert!(try_url(url).is_none(), "{url} is refused");
+        }
+    }
+
+    #[test]
     fn bad_manifests_refuse() {
         let base = |extra: &str| {
             format!(
@@ -253,6 +316,13 @@ mod tests {
         assert!(Manifest::from_toml(&base(&format!("tools={{x='x'}}\n{asset}"))).is_ok());
         assert!(Manifest::from_toml(&base(&format!("tools={{x='../x'}}\n{asset}"))).is_err());
         assert!(Manifest::from_toml(&base(&format!("tools={{x='/bin/sh'}}\n{asset}"))).is_err());
+        for v in ["..", ".", "-1"] {
+            let t = base(&format!("tools={{x='x'}}\n{asset}"))
+                .replace("version='1'", &format!("version='{v}'"));
+            assert!(Manifest::from_toml(&t).is_err(), "version {v:?}");
+        }
+        let t = base(&format!("team_id='abc'\ntools={{x='x'}}\n{asset}"));
+        assert!(Manifest::from_toml(&t).is_err(), "a team id is uppercase");
         assert!(Manifest::from_toml(&base(&format!(
             "tools={{x='x'}}\n{}",
             asset.replace("000000000000", "ABCDEF000000")
