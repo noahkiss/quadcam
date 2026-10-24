@@ -991,6 +991,9 @@ pub fn import_clip(
 }
 
 /// The format button unlocks only when every clip staged and every non-skipped clip verified.
+/// A clip QuadCam could not read (not empty, but no video it could decode or recover) is
+/// never imported, so it keeps the button locked even when it is skipped: the erase would
+/// take the only copy.
 pub fn can_format(clips: &[Clip], results: &[ClipResult]) -> Result<()> {
     if clips.is_empty() {
         bail!("No clips were read from this card.");
@@ -1005,7 +1008,14 @@ pub fn can_format(clips: &[Clip], results: &[ClipResult]) -> Result<()> {
     for c in clips {
         // A part of a joined recording imports with its first file.
         let id = c.part_of.unwrap_or(c.id);
-        match results.iter().rev().find(|r| r.id == id).map(|r| r.outcome) {
+        let outcome = results.iter().rev().find(|r| r.id == id).map(|r| r.outcome);
+        if c.status == ClipStatus::Empty && c.size > 0 && outcome != Some(Outcome::Verified) {
+            bail!(
+                "{} could not be read, so nothing was imported from it. Copy it off the card before you format it.",
+                c.name
+            );
+        }
+        match outcome {
             Some(Outcome::Verified | Outcome::Skipped) => {}
             Some(Outcome::Failed) => bail!("{} failed to import.", c.name),
             None => bail!("{} has not been imported.", c.name),

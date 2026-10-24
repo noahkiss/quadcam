@@ -179,16 +179,11 @@ pub fn presence() -> Vec<Presence> {
 }
 
 /// Whether a DJI USB device (an air unit, or goggles in storage mode) is attached, from
-/// `ioreg`; true when `ioreg` fails. The format guard reads it before it erases a DJI
-/// volume. False in a process
-/// started by cargo unless `QUADCAM_SERIAL=real`, like `presence`.
+/// `ioreg`; true when `ioreg` fails. The format guard reads it before it erases a card. It
+/// asks `ioreg` in every process, a process started by cargo included: the read touches no
+/// device, and a guard that answered "nothing attached" there would let a run from source
+/// erase a real air unit.
 pub fn dji_usb_attached() -> bool {
-    if !super::serial::serial_enabled(
-        std::env::var("QUADCAM_SERIAL").ok().as_deref(),
-        std::env::var_os("CARGO_MANIFEST_DIR").is_some(),
-    ) {
-        return false;
-    }
     std::process::Command::new("/usr/sbin/ioreg")
         .args(["-r", "-a", "-c", "IOUSBHostDevice"])
         .output()

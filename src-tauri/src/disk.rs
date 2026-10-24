@@ -429,6 +429,54 @@ pub fn check_format_guards(
     if whole.total_size == 0 {
         bail!("Refused: {whole_id} reports no size.");
     }
+    if !is_card_filesystem(volume.filesystem.as_deref()) {
+        bail!(
+            "Refused: the volume is {}, and DVRs and DJI units write only FAT or exFAT. This looks like a drive, not a card.",
+            volume.filesystem.as_deref().unwrap_or("an unknown file system")
+        );
+    }
+    Ok(())
+}
+
+/// A file system a DVR or a DJI unit writes: FAT (12, 16, 32) or exFAT. A volume that is
+/// APFS, HFS+, NTFS or unknown is a drive, never a card.
+pub fn is_card_filesystem(fs: Option<&str>) -> bool {
+    fs.is_some_and(|f| {
+        let f = f.to_ascii_uppercase();
+        f.contains("FAT") || f.contains("MSDOS") || f.contains("MS-DOS")
+    })
+}
+
+/// The partitions of a whole disk that can hold a volume, from `diskutil list -plist
+/// <disk>`: every partition but an EFI system partition. A card formatted without a
+/// partition table counts as 0.
+pub fn volume_partitions(list: &plist::Dictionary) -> usize {
+    list.get("AllDisksAndPartitions")
+        .and_then(|v| v.as_array())
+        .and_then(|a| a.first())
+        .and_then(|d| d.as_dictionary())
+        .and_then(|d| d.get("Partitions"))
+        .and_then(|p| p.as_array())
+        .map(|parts| {
+            parts
+                .iter()
+                .filter(|p| {
+                    p.as_dictionary()
+                        .and_then(|p| p.get("Content"))
+                        .and_then(|c| c.as_string())
+                        .is_none_or(|c| !c.eq_ignore_ascii_case("EFI"))
+                })
+                .count()
+        })
+        .unwrap_or(0)
+}
+
+/// The erase takes the whole disk, so a disk with more than one volume (a drive with
+/// partitions) is refused. A card has one.
+pub fn check_one_volume(whole_id: &str, partitions: usize) -> Result<()> {
+    if partitions > 1 {
+        bail!("Refused: {whole_id} holds {partitions} volumes, and the erase would take them all. A card holds one.");
+    }
     Ok(())
 }
 
@@ -446,6 +494,10 @@ pub fn verify_card_for_format(expected: &CardIdentity, mount: &Path) -> Result<D
     let volume = info(&mount.to_string_lossy()).context("the card is no longer mounted")?;
     let whole = info(&whole_disk_of(&volume.parent_whole_disk))?;
     check_format_guards(expected, &volume, &whole, &boot_whole_disks())?;
+    let whole_id = whole_disk_of(&whole.device_identifier);
+    let list = run_diskutil_plist(&["list", "-plist", &whole_id])
+        .context("Refused: diskutil cannot list the card's volumes")?;
+    check_one_volume(&whole_id, volume_partitions(&list))?;
     Ok(whole)
 }
 
@@ -484,23 +536,42 @@ pub fn check_policy(policy: &crate::sources::CardPolicy, by: EraseBy) -> Result<
 }
 
 /// What the volume at `mount` holds, and what it is, as far as a format cares. A radio's SD
-/// card is never erased. A DJI volume (a `DCIM/DJI_*` folder, even an empty one) is erased
-/// only when it is a removable card, never a DJI device over USB: refused when the disk's
-/// media name names DJI, or when it is not in the built-in SD slot while a DJI USB device
-/// (an air unit, goggles in storage mode) is attached (`dji_usb_attached`). `disk` is the
-/// volume's or whole disk's `diskutil info`.
+/// card is never erased. A DJI device over USB (an air unit, goggles in storage mode) is
+/// never erased, whatever its storage holds (it may have been emptied in the goggles):
+/// refused when the disk's media name names DJI, or when a DJI USB device is attached
+/// (`dji_usb_attached`) and the card is not in the built-in SD slot. A volume that holds a
+/// video file no source reads (`sources::unread_videos`) is refused: the erase would take it
+/// without naming it. `disk` is the volume's or whole disk's `diskutil info`.
 pub fn check_volume_contents(mount: &Path, disk: &DiskInfo, dji_usb_attached: bool) -> Result<()> {
     if looks_like_radio(mount) {
         bail!("Refused: this volume is a radio's SD card (LOGS with MODELS or RADIO).");
     }
-    if crate::sources::dji::looks_like_dji_volume(mount) {
-        let named_dji = disk
-            .media_name
-            .as_deref()
-            .is_some_and(|m| m.to_ascii_uppercase().contains("DJI"));
-        if named_dji || (dji_usb_attached && !disk.is_slot_card()) {
-            bail!("Refused: QuadCam never formats a DJI device over USB (air unit or goggles storage). Format it in the device.");
-        }
+    let named_dji = disk
+        .media_name
+        .as_deref()
+        .is_some_and(|m| m.to_ascii_uppercase().contains("DJI"));
+    if named_dji {
+        bail!("Refused: QuadCam never formats a DJI device over USB (air unit or goggles storage). Format it in the device.");
+    }
+    if dji_usb_attached && !disk.is_slot_card() {
+        bail!("Refused: QuadCam never formats a DJI device over USB (air unit or goggles storage), and one is attached. To format a card in a reader, unplug the DJI device first, or use the Mac's SD slot.");
+    }
+    let unread = crate::sources::unread_videos(mount);
+    if !unread.is_empty() {
+        let shown: Vec<&str> = unread.iter().take(5).map(String::as_str).collect();
+        let more = if unread.len() > shown.len() {
+            format!(" and {} more", unread.len() - shown.len())
+        } else {
+            String::new()
+        };
+        bail!(
+            "Refused: {} video file{} on the card {} QuadCam reads ({}{more}). Copy {} off first, or format the card in its device.",
+            unread.len(),
+            if unread.len() == 1 { "" } else { "s" },
+            if unread.len() == 1 { "is not a clip" } else { "are not clips" },
+            shown.join(", "),
+            if unread.len() == 1 { "it" } else { "them" }
+        );
     }
     Ok(())
 }
@@ -900,7 +971,7 @@ mod tests {
         check_volume_contents(d.path(), &reader_card, false).unwrap();
         std::fs::create_dir_all(d.path().join("DCIM")).unwrap();
         std::fs::write(d.path().join("DCIM/PICT0001.AVI"), b"x").unwrap();
-        check_volume_contents(d.path(), &reader_card, true).unwrap();
+        check_volume_contents(d.path(), &reader_card, false).unwrap();
 
         let radio = tempfile::tempdir().unwrap();
         for x in ["LOGS", "MODELS"] {
@@ -929,8 +1000,84 @@ mod tests {
             .unwrap_err()
             .to_string();
         assert!(e.contains("DJI device over USB"), "{e}");
-        // The media name only matters on a DJI volume.
-        check_volume_contents(d.path(), &air_unit, true).unwrap();
+        // A DJI device over USB refuses whatever it holds: an air unit whose storage was
+        // emptied in the goggles has `DCIM/` and `MISC/` but no `DJI_*` folder.
+        let emptied = tempfile::tempdir().unwrap();
+        for x in ["DCIM", "MISC"] {
+            std::fs::create_dir(emptied.path().join(x)).unwrap();
+        }
+        for (disk, usb) in [(&air_unit, false), (&reader_card, true)] {
+            let e = check_volume_contents(emptied.path(), disk, usb)
+                .unwrap_err()
+                .to_string();
+            assert!(e.contains("DJI device over USB"), "{e}");
+        }
+        // An analog card in a reader refuses too while a DJI device is attached; in the
+        // built-in slot it passes.
+        let e = check_volume_contents(d.path(), &reader_card, true)
+            .unwrap_err()
+            .to_string();
+        assert!(e.contains("unplug the DJI device"), "{e}");
+        check_volume_contents(d.path(), &slot_card, true).unwrap();
+    }
+
+    #[test]
+    fn video_files_no_source_reads_refuse() {
+        let (_, reader_card, _) = card();
+        let d = tempfile::tempdir().unwrap();
+        std::fs::create_dir_all(d.path().join("DCIM/100MEDIA")).unwrap();
+        std::fs::write(d.path().join("DCIM/100MEDIA/DJI_0001.MP4"), b"x").unwrap();
+        let e = check_volume_contents(d.path(), &reader_card, false)
+            .unwrap_err()
+            .to_string();
+        assert!(
+            e.contains("1 video file on the card is not a clip QuadCam reads")
+                && e.contains("DJI_0001.MP4"),
+            "{e}"
+        );
+    }
+
+    #[test]
+    fn drives_refuse_a_format() {
+        let boot = vec!["disk0".to_string()];
+        let (id, v, w) = card();
+        // An external SSD: APFS or HFS+, ejectable, not removable media.
+        for fs in [
+            Some("APFS"),
+            Some("Mac OS Extended (Journaled)"),
+            Some("NTFS"),
+            None,
+        ] {
+            let mut v2 = v.clone();
+            v2.filesystem = fs.map(str::to_string);
+            let e = check_format_guards(&id, &v2, &w, &boot)
+                .unwrap_err()
+                .to_string();
+            assert!(e.contains("not a card"), "{fs:?}: {e}");
+        }
+        for fs in ["MS-DOS FAT32", "MS-DOS FAT16", "ExFAT", "exfat", "msdos"] {
+            assert!(is_card_filesystem(Some(fs)), "{fs}");
+        }
+        // A disk with two volumes: the erase would take both.
+        let xml = |parts: &[&str]| {
+            let parts: String = parts
+                .iter()
+                .map(|c| format!("<dict><key>Content</key><string>{c}</string></dict>"))
+                .collect();
+            let x = format!(
+                r#"<?xml version="1.0" encoding="UTF-8"?><plist version="1.0"><dict><key>AllDisksAndPartitions</key><array><dict><key>DeviceIdentifier</key><string>disk9</string><key>Partitions</key><array>{parts}</array></dict></array></dict></plist>"#
+            );
+            let v: plist::Value = plist::from_bytes(x.as_bytes()).unwrap();
+            volume_partitions(&v.into_dictionary().unwrap())
+        };
+        assert_eq!(xml(&["DOS_FAT_32"]), 1);
+        assert_eq!(xml(&["EFI", "Microsoft Basic Data"]), 1);
+        assert_eq!(xml(&[]), 0);
+        assert_eq!(xml(&["EFI", "Apple_HFS", "Microsoft Basic Data"]), 2);
+        check_one_volume("disk9", 1).unwrap();
+        check_one_volume("disk9", 0).unwrap();
+        let e = check_one_volume("disk9", 2).unwrap_err().to_string();
+        assert!(e.contains("2 volumes"), "{e}");
     }
 
     #[test]

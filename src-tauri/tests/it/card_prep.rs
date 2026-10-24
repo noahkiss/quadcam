@@ -375,3 +375,57 @@ fn prep_never_erases_a_dji_volume_while_a_dji_usb_device_is_attached() {
     assert!(e.contains(DJI_USB), "{e}");
     assert!(card.is_mounted() && card.mount.join("DCIM/DJI_001").is_dir());
 }
+
+/// An air unit whose storage was emptied in the goggles has `DCIM/` and `MISC/` and no
+/// `DJI_*` folder: while a DJI USB device is attached it is refused all the same. A card
+/// that holds a video no source reads (a DJI O3 `DCIM/100MEDIA/DJI_0001.MP4`) is refused,
+/// so the erase never takes a file it did not name. The image is never erased here.
+#[test]
+fn prep_refuses_an_emptied_dji_device_and_videos_it_cannot_read() {
+    use quadcam_lib::gear::serial::FakePorts;
+    use std::sync::atomic::{AtomicBool, Ordering};
+
+    let card = Image::create("64m", "QCEMPTY", false);
+    card.assert_is_test_image();
+    for d in ["DCIM", "MISC"] {
+        std::fs::create_dir_all(card.mount.join(d)).unwrap();
+    }
+    let work = tempfile::tempdir().unwrap();
+    let attached = Arc::new(AtomicBool::new(true));
+    let mut env = quadcam_lib::gear::Env::fake(vec![], Arc::new(FakePorts::new(vec![])));
+    let a = attached.clone();
+    env.dji_usb = Arc::new(move || a.load(Ordering::SeqCst));
+    let core = Core::new(
+        work.path().join("cache"),
+        None,
+        Arc::new(NoHooks),
+        Arc::new(Recorder::default()),
+    )
+    .with_gear_env(env);
+
+    let e = err(core.card_prep_plan(&card.mount, None));
+    assert!(e.contains("never formats a DJI device over USB"), "{e}");
+
+    attached.store(false, Ordering::SeqCst);
+    let plan = core.card_prep_plan(&card.mount, None).unwrap();
+    assert_eq!((plan.clip_count, plan.filesystem.as_str()), (0, "FAT32"));
+
+    let o3 = card.mount.join("DCIM/100MEDIA/DJI_0001.MP4");
+    std::fs::create_dir_all(o3.parent().unwrap()).unwrap();
+    std::fs::write(&o3, b"not a clip QuadCam reads").unwrap();
+    let e = err(core.card_prep_plan(&card.mount, None));
+    assert!(
+        e.contains("1 video file on the card is not a clip QuadCam reads")
+            && e.contains("DJI_0001.MP4"),
+        "{e}"
+    );
+    let req = FormatRequest {
+        device: plan.device.clone(),
+        volume_uuid: plan.volume_uuid.clone(),
+        label: None,
+        confirm: true,
+    };
+    let e = err(core.card_prep(&req, false));
+    assert!(e.contains("is not a clip QuadCam reads"), "{e}");
+    assert!(card.is_mounted() && o3.is_file());
+}

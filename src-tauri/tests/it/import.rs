@@ -416,6 +416,50 @@ fn format_gate_needs_every_clip_verified_or_skipped() {
     assert!(pipeline::can_format(&clips, &res(&[Verified, Verified, Verified, Skipped])).is_ok());
 }
 
+/// A clip QuadCam could not read is never imported: skipped (as analysis does on its own)
+/// it still keeps the format locked. A zero-byte clip does not.
+#[test]
+fn format_gate_stays_locked_over_a_clip_it_could_not_read() {
+    let card = synthetic_card();
+    // A RIFF AVI header and nothing ffmpeg can decode or recover.
+    let mut junk = b"RIFF\x00\x10\x00\x00AVI LIST".to_vec();
+    junk.resize(4096, 0);
+    std::fs::write(card.root().join("DCIM/PICT0005.AVI"), junk).unwrap();
+    let work = tempfile::tempdir().unwrap();
+    let clips = load(&card, work.path());
+    let bad = clips.iter().find(|c| c.name == "PICT0005.AVI").unwrap();
+    assert_eq!(bad.status, ClipStatus::Empty, "{}", bad.detail);
+    let results: Vec<pipeline::ClipResult> = clips
+        .iter()
+        .map(|c| pipeline::ClipResult {
+            id: c.id,
+            outcome: if c.status == ClipStatus::Empty {
+                Outcome::Skipped
+            } else {
+                Outcome::Verified
+            },
+            output: None,
+            original: None,
+            size: 0,
+            error: None,
+            encoder: None,
+            meta: None,
+            cuts: Vec::new(),
+            qt: Vec::new(),
+        })
+        .collect();
+    let e = pipeline::can_format(&clips, &results)
+        .unwrap_err()
+        .to_string();
+    assert!(e.contains("PICT0005.AVI could not be read"), "{e}");
+    let readable: Vec<Clip> = clips
+        .iter()
+        .filter(|c| c.name != "PICT0005.AVI")
+        .cloned()
+        .collect();
+    pipeline::can_format(&readable, &results).unwrap();
+}
+
 #[test]
 fn output_folder_checks() {
     let card = synthetic_card();

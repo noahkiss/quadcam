@@ -151,3 +151,114 @@ pub fn detect(root: &Path) -> Option<&'static dyn Source> {
 pub fn for_root(root: &Path) -> &'static dyn Source {
     detect(root).unwrap_or(&analog::Analog)
 }
+
+/// Extensions of the video files a format would erase unseen: what cameras, DVRs and video
+/// systems write, whether QuadCam reads them or not.
+const ANY_VIDEO_EXTS: &[&str] = &[
+    "avi", "mp4", "mov", "m4v", "mkv", "ts", "mts", "m2ts", "264", "h264", "265", "h265",
+];
+
+/// Deepest folder level `unread_videos` searches. Past it, a folder counts as unread.
+const UNREAD_MAX_DEPTH: usize = 16;
+
+/// Video files under `root` that no source lists as a clip (relative paths, sorted): a DJI
+/// O3 `DCIM/100MEDIA/DJI_0001.MP4`, a GoPro or Walksnail MP4, an AVI nested too deep for
+/// the analog scan. A format would erase them without naming them, so the format guards
+/// refuse while any is there. Dot entries are skipped, and so is a DJI volume's `MISC/`
+/// (DJI's housekeeping, `sources::dji`). A folder nested deeper than the search reads is
+/// itself returned, so it refuses too.
+pub fn unread_videos(root: &Path) -> Vec<String> {
+    fn walk(dir: &Path, depth: usize, skip_misc: bool, out: &mut Vec<PathBuf>) {
+        let Ok(rd) = std::fs::read_dir(dir) else {
+            return;
+        };
+        for e in rd.flatten() {
+            let name = e.file_name().to_string_lossy().to_string();
+            if name.starts_with('.') {
+                continue;
+            }
+            let Ok(ft) = e.file_type() else { continue };
+            let path = e.path();
+            if ft.is_dir() {
+                if depth == 0 && skip_misc && name.eq_ignore_ascii_case("MISC") {
+                    continue;
+                }
+                if depth < UNREAD_MAX_DEPTH {
+                    walk(&path, depth + 1, skip_misc, out);
+                } else {
+                    out.push(path);
+                }
+            } else if ft.is_file() {
+                let ext = Path::new(&name)
+                    .extension()
+                    .map(|x| x.to_string_lossy().to_ascii_lowercase())
+                    .unwrap_or_default();
+                if ANY_VIDEO_EXTS.contains(&ext.as_str()) {
+                    out.push(path);
+                }
+            }
+        }
+    }
+    let mut videos = Vec::new();
+    walk(root, 0, dji::looks_like_dji_volume(root), &mut videos);
+    let clips: std::collections::HashSet<PathBuf> = all()
+        .iter()
+        .flat_map(|s| s.list(root))
+        .map(|c| c.path)
+        .collect();
+    let mut out: Vec<String> = videos
+        .into_iter()
+        .filter(|p| !clips.contains(p))
+        .map(|p| {
+            p.strip_prefix(root)
+                .unwrap_or(&p)
+                .to_string_lossy()
+                .to_string()
+        })
+        .collect();
+    out.sort();
+    out
+}
+
+#[cfg(test)]
+mod unread_tests {
+    use super::*;
+
+    fn touch(p: &Path) {
+        std::fs::create_dir_all(p.parent().unwrap()).unwrap();
+        std::fs::write(p, b"x").unwrap();
+    }
+
+    #[test]
+    fn videos_no_source_lists_are_named() {
+        let d = tempfile::tempdir().unwrap();
+        touch(&d.path().join("DCIM/PICT0001.AVI"));
+        touch(&d.path().join("DCIM/100MEDIA/DJI_0001.MP4"));
+        touch(&d.path().join("GX010001.MP4"));
+        touch(&d.path().join("notes.txt"));
+        touch(&d.path().join(".Trashes/x.mp4"));
+        touch(&d.path().join("MISC/x.mp4"));
+        assert_eq!(
+            unread_videos(d.path()),
+            ["DCIM/100MEDIA/DJI_0001.MP4", "GX010001.MP4", "MISC/x.mp4"]
+        );
+        // Past the analog scan's depth, an AVI is no clip, so it is named.
+        let deep = d.path().join("a/b/c/d/e/f/g/PICT0002.AVI");
+        touch(&deep);
+        assert!(unread_videos(d.path()).contains(&"a/b/c/d/e/f/g/PICT0002.AVI".to_string()));
+    }
+
+    #[test]
+    fn a_dji_volumes_misc_and_clips_are_not_named() {
+        let d = tempfile::tempdir().unwrap();
+        touch(&d.path().join("DCIM/DJI_001/DJI_20261005183636_0001_D.MP4"));
+        touch(&d.path().join("MISC/THM/DJI_20261005183636_0001_D.MP4"));
+        assert!(
+            unread_videos(d.path()).is_empty(),
+            "{:?}",
+            unread_videos(d.path())
+        );
+        touch(&d.path().join("DCIM/DJI_001/clip.mov"));
+        assert_eq!(unread_videos(d.path()), ["DCIM/DJI_001/clip.mov"]);
+    }
+}
