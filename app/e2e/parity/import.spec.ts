@@ -123,7 +123,7 @@ test("Command-Return adds to the library, then Finish shows the files", async ({
   await expect(sheet(page).getByText("2026-09-27_loops.mp4")).toBeVisible();
   await sheet(page).getByRole("button", { name: /Add 5 files/ }).click();
   await expect(sheet(page).getByText("5 added to the Drone album.")).toBeVisible();
-  await sheet(page).getByRole("button", { name: "Done · show in Library" }).click();
+  await sheet(page).getByRole("button", { name: "Show in Library" }).click();
   await expect(sheet(page)).toBeHidden();
   await expect(page.getByRole("article", { name: "loops" })).toBeVisible();
 });

@@ -71,6 +71,11 @@ test("the Bench sums up in its header; a row keeps Review and puts Discard in it
   await group.getByRole("button", { name: "More actions for Lower contrast" }).click();
   await expect(page.getByRole("menuitem", { name: /^By you/ })).toBeDisabled();
   await page.getByRole("menuitem", { name: "Discard" }).click();
+  // Discard asks first: Cancel keeps the change, Discard removes it.
+  const ask = dialog(page, "Discard Lower contrast?");
+  await expect(ask).toContainText("Its 1 edit is lost.");
+  await expect(ask.getByRole("button", { name: "Cancel" })).toBeFocused();
+  await ask.getByRole("button", { name: "Discard" }).click();
   await expect(group.getByRole("table", { name: "Staged changes for Field radio" }).getByRole("row", { name: /Lower contrast/ })).toHaveCount(0);
   // Copy as Markdown sits in the header's … menu.
   await page.getByRole("button", { name: "Bench actions" }).click();

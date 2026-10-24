@@ -11,7 +11,9 @@ interface Props {
   actions?: ReactNode;
   /** A sheet is the large panel over the window (Import, Settings). */
   kind?: "dialog" | "sheet";
-  /** Keep Return from submitting (the erase confirmation). */
+  /** Keep Return from submitting (the erase confirmation). Otherwise Return in a field
+   *  clicks the last enabled primary submit button, and does nothing when there is none or
+   *  the field handled Return itself. */
   blockReturn?: boolean;
   /** Keep Escape from closing, for example while a step runs. */
   blockEscape?: boolean;
@@ -69,7 +71,14 @@ export function Dialog({ open, title, onClose, children, actions, kind = "dialog
       aria-labelledby={titleId}
       className={[styles.dialog, kind === "sheet" ? styles.sheet : styles.small, className].filter(Boolean).join(" ")}
       onKeyDown={(e) => {
-        if (blockReturn && e.key === "Enter") e.preventDefault();
+        if (e.key !== "Enter") return;
+        if (blockReturn) return e.preventDefault();
+        // A field that handles Return itself (a search) prevents the default first.
+        if (e.defaultPrevented || e.nativeEvent.isComposing || !isField(e.target)) return;
+        // Native implicit submission clicks the first submit button, which is Cancel here.
+        e.preventDefault();
+        const primary = [...e.currentTarget.querySelectorAll<HTMLButtonElement>('menu button[type="submit"][data-variant="primary"]')].filter((b) => !b.disabled).at(-1);
+        primary?.click();
       }}
     >
       {open && (
@@ -95,3 +104,6 @@ export function Dialog({ open, title, onClose, children, actions, kind = "dialog
     </dialog>
   );
 }
+
+/** A single-line field, where Return submits the form. */
+const isField = (t: EventTarget) => t instanceof HTMLInputElement && !["button", "submit", "reset", "image"].includes(t.type);

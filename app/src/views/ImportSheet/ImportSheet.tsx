@@ -99,7 +99,7 @@ export function ImportSheet() {
             </span>
           )}
           {session && step !== "load" && step !== "export" && (
-            <Button size="sm" variant="ghost" title="Forgets the loaded clips. Imported files stay." onClick={startOver}>
+            <Button size="sm" variant="ghost" onClick={startOver}>
               Start over
             </Button>
           )}
@@ -119,7 +119,7 @@ export function ImportSheet() {
             <span className={styles.footNote}>{step === "finish" && hasCard && release?.released ? "The card is unmounted." : ""}</span>
             {step === "finish" && (
               <Button variant="primary" onClick={doneImport}>
-                Done · show in Library
+                Show in Library
               </Button>
             )}
           </>

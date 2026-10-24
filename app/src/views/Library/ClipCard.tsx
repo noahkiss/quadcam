@@ -55,11 +55,13 @@ export function MomentChips({ moments }: { moments: Moment[] }) {
 interface Props {
   clip: LibClip;
   selected: boolean;
+  /** The grid's one Tab stop. */
+  tabStop: boolean;
   onMenu: (e: MouseEvent, id: string) => void;
 }
 
 /** One clip in the grid: the hover-scrub thumbnail, name, time, rating, moments. */
-export const ClipCard = memo(function ClipCard({ clip: c, selected, onMenu }: Props) {
+export const ClipCard = memo(function ClipCard({ clip: c, selected, tabStop, onMenu }: Props) {
   const select = useStore((s) => s.select);
   const openDetail = useStore((s) => s.openDetail);
   const renaming = useStore((s) => s.renaming === c.id);
@@ -68,7 +70,7 @@ export const ClipCard = memo(function ClipCard({ clip: c, selected, onMenu }: Pr
     <div
       role="gridcell"
       className={[styles.card, selected && styles.selected, c.flag === "reject" && styles.rejected].filter(Boolean).join(" ")}
-      tabIndex={0}
+      tabIndex={tabStop ? 0 : -1}
       aria-selected={selected}
       aria-label={c.name}
       data-id={c.id}

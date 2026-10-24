@@ -13,7 +13,7 @@ test("an import unmounts the card and Finish says it is safe to remove", async (
   await expect(sheet(page).getByText("Unmounted. Safe to remove.")).toBeVisible();
   await expect(sheet(page).getByText("The card is unmounted.")).toBeVisible();
   // The card left the mounted list; the sidebar says it is unmounted.
-  await sheet(page).getByRole("button", { name: "Done · show in Library" }).click();
+  await sheet(page).getByRole("button", { name: "Show in Library" }).click();
   await expect(side(page).getByText("DVR unmounted")).toBeVisible();
 });
 

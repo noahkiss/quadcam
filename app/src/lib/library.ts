@@ -132,3 +132,9 @@ export function fmtOffset(seconds: number): string {
   const hm = `${Math.floor((m % 1440) / 60)}:${String(m % 60).padStart(2, "0")}`;
   return d ? `${sign}${d} d ${hm}` : `${sign}${hm}`;
 }
+
+/** The one clip of `shown` that Tab stops on: the cursor, else the first selected, else the
+ *  first shown. Arrows move between clips. */
+export function tabStop(shown: LibClip[], cursor: string | null, selected: ReadonlySet<string>): string | undefined {
+  return (shown.find((c) => c.id === cursor) ?? shown.find((c) => selected.has(c.id)) ?? shown[0])?.id;
+}

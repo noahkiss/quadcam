@@ -8,6 +8,7 @@ import { Dialog } from "./Dialog";
 import { Checkbox, SearchField, SelectField, TextField } from "./Field";
 import { FlagButtons, FlagMark } from "./FlagButton";
 import { Menu } from "./Menu";
+import { Popover } from "./Popover";
 import { PathText } from "./PathText";
 import { ProgressRing } from "./ProgressRing";
 import { SegmentedControl } from "./SegmentedControl";
@@ -112,6 +113,48 @@ describe("Dialog", () => {
     expect(await axeViolations(document.body)).toEqual([]);
   });
 
+  it("Return in a field clicks the primary button, not Cancel", async () => {
+    const onClose = vi.fn();
+    render(
+      <Dialog open title="Rename" onClose={onClose} actions={<><Button type="submit" value="cancel" variant="ghost">Cancel</Button><Button type="submit" value="save" variant="primary">Save</Button></>}>
+        <input aria-label="Name" />
+      </Dialog>,
+    );
+    await userEvent.type(screen.getByRole("textbox", { name: "Name" }), "Meadow{Enter}");
+    expect(onClose).toHaveBeenCalledTimes(1);
+    expect(onClose).toHaveBeenLastCalledWith("save");
+  });
+
+  it("Return in a field that handles it itself does not submit", async () => {
+    const onClose = vi.fn();
+    const search = vi.fn();
+    render(
+      <Dialog open title="Places" onClose={onClose} actions={<Button type="submit" value="save" variant="primary">Done</Button>}>
+        <input aria-label="Search" onKeyDown={(e) => e.key === "Enter" && (e.preventDefault(), search())} />
+      </Dialog>,
+    );
+    await userEvent.type(screen.getByRole("textbox", { name: "Search" }), "pond{Enter}");
+    expect(search).toHaveBeenCalledTimes(1);
+    expect(onClose).not.toHaveBeenCalled();
+  });
+
+  it("Return in a field does nothing while the primary button is disabled or a danger one", async () => {
+    const onClose = vi.fn();
+    const { rerender } = render(
+      <Dialog open title="Rename" onClose={onClose} actions={<><Button type="submit" value="cancel" variant="ghost">Cancel</Button><Button type="submit" value="save" variant="primary" disabled>Save</Button></>}>
+        <input aria-label="Name" />
+      </Dialog>,
+    );
+    await userEvent.type(screen.getByRole("textbox", { name: "Name" }), "x{Enter}");
+    rerender(
+      <Dialog open title="Rename" onClose={onClose} actions={<><Button type="submit" value="cancel" variant="ghost">Cancel</Button><Button type="submit" value="delete" variant="danger">Delete</Button></>}>
+        <input aria-label="Name" />
+      </Dialog>,
+    );
+    await userEvent.type(screen.getByRole("textbox", { name: "Name" }), "{Enter}");
+    expect(onClose).not.toHaveBeenCalled();
+  });
+
   it("keeps Escape when blocked", () => {
     const onClose = vi.fn();
     render(<Dialog open blockEscape title="Import" onClose={onClose} />);
@@ -178,5 +221,17 @@ describe("PathText", () => {
     expect(el).toHaveClass("mono", "selectable");
     expect(el.querySelector("[aria-hidden='true']")?.lastElementChild).toHaveTextContent(/^\/quadcam$/);
     expect(el.querySelector("[data-path]")).toHaveAttribute("data-path", "~/Movies/quadcam");
+  });
+});
+
+describe("Popover", () => {
+  it("moves focus to its first control on open", () => {
+    const anchor = { current: null };
+    render(
+      <Popover label="Add place" anchor={anchor} onClose={() => {}}>
+        <input aria-label="Place name" />
+      </Popover>,
+    );
+    expect(screen.getByRole("textbox", { name: "Place name" })).toHaveFocus();
   });
 });

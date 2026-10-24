@@ -1,6 +1,7 @@
 import { Banner } from "../../../components/Banner";
 import { Button } from "../../../components/Button";
 import { useStore } from "../../../store";
+import { discardWithAsk } from "../Changes/discard";
 
 /** The title of the change the model editors keep their edits in (`core/model_edit.rs`). */
 export const MODEL_CHANGE = "Model edits";
@@ -9,7 +10,6 @@ export const MODEL_CHANGE = "Model edits";
 export function StagedBar({ device }: { device: string | null }) {
   const change = useStore((s) => s.changes.find((c) => c.device === device && c.title === MODEL_CHANGE && (c.status === "draft" || c.status === "ready")));
   const open = useStore((s) => s.openApply);
-  const discard = useStore((s) => s.discardChange);
   if (!device || !change) return null;
   const n = change.edits.reduce((k, e) => k + (e.kind === "model" ? e.ops.length : e.kind === "checklist" ? 1 : 0), 0);
   return (
@@ -22,7 +22,7 @@ export function StagedBar({ device }: { device: string | null }) {
           <Button size="sm" onClick={() => open(device, change.id)}>
             Review…
           </Button>
-          <Button size="sm" variant="danger-ghost" onClick={() => discard(change.id)}>
+          <Button size="sm" variant="danger-ghost" onClick={() => void discardWithAsk(change, { edits: n, title: "Undo model edits?", ok: "Undo" })}>
             Undo model edits
           </Button>
         </>

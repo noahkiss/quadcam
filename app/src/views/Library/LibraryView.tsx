@@ -10,7 +10,7 @@ import { Button } from "../../components/Button";
 import { Chip } from "../../components/Chip";
 import { Icon } from "../../components/Icon";
 import { fmtBytes, fmtDay, fmtDur, fmtLong } from "../../lib/format";
-import { byDay, flyingOf, thumbPx } from "../../lib/library";
+import { byDay, flyingOf, tabStop, thumbPx } from "../../lib/library";
 import { shareClips, trashClips } from "../../actions/library";
 import { rebuildLibrary, revealLibrary } from "../../actions/setup";
 import { ClipCard, MiniBar, stripStyle } from "./ClipCard";
@@ -108,6 +108,11 @@ function Grid({ clips, onMenu }: { clips: LibClip[]; onMenu: (e: MouseEvent, id:
     if (i >= 0) v.scrollToIndex(i, { align: "auto" });
   }, [cursor, rows, v]);
 
+  const shown = v.getVirtualItems().flatMap((it) => {
+    const r = rows[it.index];
+    return r.kind === "cards" ? r.clips : [];
+  });
+  const stop = tabStop(shown, cursor, selected);
   return (
     <div ref={ref} role="grid" aria-label="Clips" aria-multiselectable="true" aria-rowcount={rows.length} className={styles.scroll} style={{ ["--thumb" as string]: `${thumb}px` }}>
       <div style={{ height: v.getTotalSize(), position: "relative" }}>
@@ -122,7 +127,7 @@ function Grid({ clips, onMenu }: { clips: LibClip[]; onMenu: (e: MouseEvent, id:
               ) : r.kind === "cards" ? (
                 <div className={styles.cards} style={{ gridTemplateColumns: `repeat(${cols}, minmax(0, 1fr))` }}>
                   {r.clips.map((c) => (
-                    <ClipCard key={c.id} clip={c} selected={selected.has(c.id)} onMenu={onMenu} />
+                    <ClipCard key={c.id} clip={c} selected={selected.has(c.id)} tabStop={c.id === stop} onMenu={onMenu} />
                   ))}
                 </div>
               ) : null}

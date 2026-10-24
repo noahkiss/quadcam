@@ -149,7 +149,7 @@ export function SimTable({ sims, error, profile, quad, compact }: { sims: SimRat
     {
       key: "diff",
       header: (
-        <span title="An Actual or Quick quad is fitted to Betaflight rates first. Difference is the largest gap over the stick range." className={styles.help}>
+        <span title="The largest gap from the quad's rates over the stick range" className={styles.help}>
           Difference
         </span>
       ),

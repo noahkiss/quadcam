@@ -8,7 +8,7 @@ import { Icon } from "../../components/Icon";
 import { Stars } from "../../components/Stars";
 import { fmtDur } from "../../lib/format";
 import { rate, setSort } from "../../actions/library";
-import type { SortKey } from "../../lib/library";
+import { tabStop, type SortKey } from "../../lib/library";
 import { MomentChips, stripStyle } from "./ClipCard";
 import { NameEdit, useNameClick } from "./NameEdit";
 import { SUN_LABEL } from "../../lib/weather";
@@ -30,6 +30,7 @@ export function ClipList({ clips, onMenu }: { clips: LibClip[]; onMenu: (e: Mous
     if (i >= 0) v.scrollToIndex(i, { align: "auto" });
   }, [cursor, clips, v]);
   const items = v.getVirtualItems();
+  const stop = tabStop(items.map((it) => clips[it.index]), cursor, selected);
   const top = items[0]?.start ?? 0;
   const bottom = v.getTotalSize() - (items.at(-1)?.end ?? 0);
   return (
@@ -55,7 +56,7 @@ export function ClipList({ clips, onMenu }: { clips: LibClip[]; onMenu: (e: Mous
         <tbody>
           {top > 0 && <tr aria-hidden="true" style={{ height: top }} />}
           {items.map((it) => (
-            <Row key={clips[it.index].id} clip={clips[it.index]} selected={selected.has(clips[it.index].id)} onMenu={onMenu} />
+            <Row key={clips[it.index].id} clip={clips[it.index]} selected={selected.has(clips[it.index].id)} tabStop={clips[it.index].id === stop} onMenu={onMenu} />
           ))}
           {bottom > 0 && <tr aria-hidden="true" style={{ height: bottom }} />}
         </tbody>
@@ -64,14 +65,14 @@ export function ClipList({ clips, onMenu }: { clips: LibClip[]; onMenu: (e: Mous
   );
 }
 
-function Row({ clip: c, selected, onMenu }: { clip: LibClip; selected: boolean; onMenu: (e: MouseEvent, id: string) => void }) {
+function Row({ clip: c, selected, tabStop, onMenu }: { clip: LibClip; selected: boolean; tabStop: boolean; onMenu: (e: MouseEvent, id: string) => void }) {
   const select = useStore((s) => s.select);
   const openDetail = useStore((s) => s.openDetail);
   const renaming = useStore((s) => s.renaming === c.id);
   const nameClick = useNameClick(c.id);
   return (
     <tr
-      tabIndex={0}
+      tabIndex={tabStop ? 0 : -1}
       aria-selected={selected}
       data-id={c.id}
       className={c.flag === "reject" ? styles.rejected : undefined}
