@@ -787,6 +787,27 @@ fn the_surfaces_exist_and_respect_the_setting() {
         props.contains_key("keep") && !props.contains_key("erase"),
         "no `erase` argument"
     );
+    // Nor does a settings write: the setting is the person's consent, so an agent may turn
+    // it off, never on, by its name or its file key.
+    for values in [
+        json!({"gear_erase_blackbox": true}),
+        json!({"gearEraseBlackbox": true}),
+        json!({"default_name": "x", "gear_erase_blackbox": "yes"}),
+    ] {
+        let r = s.call_tool(
+            "quadcam_settings",
+            json!({"action": "write", "values": values}),
+        );
+        assert_eq!(r["isError"], true, "{values} -> {r}");
+        let t = r["content"][0]["text"].as_str().unwrap();
+        assert!(t.contains("turn it off, not on"), "{t}");
+    }
+    assert!(!b.core.gear_settings().erase_blackbox);
+    let r = s.call_tool(
+        "quadcam_settings",
+        json!({"action": "write", "values": {"gear_erase_blackbox": false}}),
+    );
+    assert_eq!(r["isError"], false, "{r}");
     assert_eq!(fc.dataflash_erases(), 0);
     // MCP list shows the pull and the guess label.
     let r = s.call_tool("quadcam_gear", json!({"action": "blackbox"}));

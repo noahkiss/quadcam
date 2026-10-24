@@ -217,7 +217,7 @@ fails, the pull stays stored, and the record says why.
 
 `gear_erase_blackbox` is off by default, like `delete_clips_after_import`. The CLI and the MCP tools
 only respect it: `--keep` (CLI) and `keep` (MCP) skip the erase for one run, and nothing turns it on
-except the setting. MCP `blackbox_pull` needs `confirm=true`; CLI `gear blackbox pull` needs no
+except the setting. An agent's `quadcam_settings` write may turn the setting off, never on. MCP `blackbox_pull` needs `confirm=true`; CLI `gear blackbox pull` needs no
 `--yes`, so with the setting on it erases after a verified pull. **Erase flash** (`gear blackbox erase --yes`, `blackbox_erase`) erases by hand.
 It needs a stored pull of exactly what the flash holds (the same used size; flash only grows), and
 asks first in the app.

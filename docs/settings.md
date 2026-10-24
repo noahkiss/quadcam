@@ -122,7 +122,7 @@ Three settings hold secrets: `google_places_key`, `tts_key` and `elrs_binding_ph
 | `gear_keep_monthly` | on | Then one a month |
 | `gear_usb_minutes` | 20 | Minutes an FC may run on USB with its battery in before "Unplug now"; a board's own shorter limit wins (0: off). See [Gear](gear.md#flight-controllers) |
 | `gear_on_connect` | `backup` for every kind | Steps per device kind on plug-in: `backup`, `import` (accepted, does nothing, not shown in Settings), `apply_ready` (FCs and radios: opens the apply sheet for the device's Ready changes; nothing is written until you click Apply), `blackbox` (FCs: pulls the blackbox flash; see [Gear](gear.md#blackbox)) |
-| `gear_erase_blackbox` | off | Erases an FC's blackbox flash after a pull verified. Off by default, like `delete_clips_after_import`. The CLI and agents respect it and can only skip it for one run |
+| `gear_erase_blackbox` | off | Erases an FC's blackbox flash after a pull verified. Off by default, like `delete_clips_after_import`. You turn it on in Settings or with `quadcam-cli settings set`; an agent can turn it off, never on. The CLI and agents respect it and can only skip it for one run |
 | `gear_blackbox_msc` | off | A blackbox pull tries the FC's USB disk mode before MSP. Not proven on a real FC |
 | `gear_cues` | speech and notifications on | Cues, their channels, mute, debounce, the reminder and quiet hours. See [Gear](gear.md#cues) |
 | `sim_preview` | off | Shows **Gear > Sim**, the flight sim preview. Set it in Settings > Gear, or with `quadcam-cli settings set sim_preview=true` |

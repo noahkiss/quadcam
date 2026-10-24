@@ -955,13 +955,13 @@ impl<B: Backend> Server<B> {
                                 "{k} is set by the person, not over MCP: in the app's Settings window, or `quadcam-cli settings set {k}=...`"
                             );
                         }
-                        // The setting is the only consent to delete clip files from a card:
-                        // an agent may turn it off, never on.
-                        if given("delete_clips_after_import")
-                            .is_some_and(|v| !v.is_null() && v.as_bool() != Some(false))
-                        {
+                        // Each of these settings is the only consent to an erase: an agent may
+                        // turn it off, never on.
+                        if let Some((k, what)) = CONSENT_SETTINGS.iter().find(|(k, _)| {
+                            given(k).is_some_and(|v| !v.is_null() && v.as_bool() != Some(false))
+                        }) {
                             anyhow::bail!(
-                                "delete_clips_after_import is the person's consent to delete clips from a card; an agent may turn it off, not on. The person turns it on in the app's Settings window, or with `quadcam-cli settings set delete_clips_after_import=true`."
+                                "{k} is the person's consent to {what}; an agent may turn it off, not on. The person turns it on in the app's Settings window, or with `quadcam-cli settings set {k}=true`."
                             );
                         }
                         self.backend
@@ -1460,6 +1460,16 @@ type Named = Vec<(&'static str, Value)>;
 /// Settings MCP never writes: `modules` names a program the app runs, `tts_base_url` the
 /// server the stored `tts_key` is sent to.
 const PERSON_ONLY_SETTINGS: &[&str] = &["modules", "tts_base_url"];
+
+/// Settings that are the person's consent to erase something, with what they erase. An agent's
+/// write may turn one off, never on.
+const CONSENT_SETTINGS: &[(&str, &str)] = &[
+    ("delete_clips_after_import", "delete clips from a card"),
+    (
+        "gear_erase_blackbox",
+        "erase an FC's blackbox flash after a pull",
+    ),
+];
 
 /// The settings a `quadcam_settings` read shows: every named setting of `settings::KEYS`
 /// with its value in effect (`named`; an older app without it gives `effective`, then the
