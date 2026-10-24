@@ -141,7 +141,8 @@ quadcam-cli --json gear sim profiles
 `--aircraft` reads the blackbox pulls of the aircraft's FC and its latest backup. Without one,
 pass `--logs` (a `.bbl` file, a pulled flash image, or a folder) and `--fc` (a `diff all`
 file). The saved profile takes its id from the aircraft's name (`--id` sets another) and
-flies like any other: `gear sim validate <id>`, or pick it in the sim.
+takes the same place as a built-in one: `gear sim validate <id>` checks it, and the sim
+starts on it by its id.
 
 ## Checking a profile against your logs
 
