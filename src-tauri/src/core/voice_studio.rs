@@ -451,12 +451,53 @@ fn shared_rate(total: &mut Estimate, each: &[&Estimate]) {
 }
 
 /// A paid run's progress, sent as `VoiceProgress` events, and its stop: the gear job
-/// `STUDIO_JOB` while it lives. Dropping it ends both.
+/// `STUDIO_JOB` while it lives, and the studio lock, which one paid run on this Mac holds at a
+/// time (the app and `quadcam-cli` each have their own jobs, but share the batch cache).
+/// Dropping it ends all three.
 struct Progress<'a> {
     core: &'a Core,
     stop: Arc<AtomicBool>,
     _job: super::backup::JobGuard<'a>,
+    _lock: std::fs::File,
     ev: VoiceProgress,
+}
+
+/// Takes the machine-wide studio lock, `<cache>/voice/studio.lock`, and writes who holds it
+/// into the file. Refused, naming the holder, while another process holds it.
+fn studio_lock(core: &Core) -> Result<std::fs::File> {
+    use std::io::{Seek, Write};
+    let dir = core.cache.join("voice");
+    std::fs::create_dir_all(&dir)?;
+    let path = dir.join("studio.lock");
+    let mut f = std::fs::File::options()
+        .create(true)
+        .truncate(false)
+        .read(true)
+        .write(true)
+        .open(&path)
+        .context("opening the voice studio lock")?;
+    match f.try_lock() {
+        Ok(()) => {}
+        Err(std::fs::TryLockError::WouldBlock) => {
+            let who = std::fs::read_to_string(&path).unwrap_or_default();
+            let who = who.trim();
+            bail!(
+                "Refused: {} is rendering voices on this Mac now. Wait for it to finish, or stop it there.",
+                if who.is_empty() { "another QuadCam" } else { who }
+            );
+        }
+        Err(std::fs::TryLockError::Error(e)) => {
+            return Err(e).context("locking the voice studio lock")
+        }
+    }
+    let exe = std::env::current_exe()
+        .ok()
+        .and_then(|p| p.file_name().map(|n| n.to_string_lossy().into_owned()))
+        .unwrap_or_else(|| "QuadCam".into());
+    f.set_len(0)?;
+    f.rewind()?;
+    write!(f, "{exe} (process {})", std::process::id())?;
+    Ok(f)
 }
 
 impl<'a> Progress<'a> {
@@ -470,10 +511,12 @@ impl<'a> Progress<'a> {
                 "Rendering voices"
             },
         )?;
+        let lock = studio_lock(core)?;
         let p = Progress {
             core,
             stop,
             _job: job,
+            _lock: lock,
             ev: VoiceProgress {
                 kind: kind.into(),
                 running: true,

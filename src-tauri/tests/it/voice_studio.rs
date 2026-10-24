@@ -454,6 +454,44 @@ fn a_render_the_credits_do_not_cover_makes_no_call() {
     assert_eq!(b.http.posts(), 0);
 }
 
+#[test]
+fn a_paid_run_waits_for_another_process_on_this_mac_to_finish() {
+    let b = bench(50000, true);
+    let p = sample(&["Callum"], &["eleven_v4"], false, false);
+    let ask = b.core.gear_voice_sample(&p).unwrap();
+    // Another process (the app, or quadcam-cli) holds the studio lock.
+    let path = b.dir.path().join("cache/voice/studio.lock");
+    std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+    std::fs::write(&path, "quadcam-cli (process 1)").unwrap();
+    let other = std::fs::File::options()
+        .read(true)
+        .write(true)
+        .open(&path)
+        .unwrap();
+    other.lock().unwrap();
+    let go = SampleParams {
+        confirm: true,
+        digest: Some(ask.digest.clone()),
+        ..p.clone()
+    };
+    let e = b.core.gear_voice_sample(&go).unwrap_err();
+    assert!(
+        format!("{e:#}").contains("quadcam-cli (process 1) is rendering voices"),
+        "{e:#}"
+    );
+    assert_eq!(b.http.posts(), 0);
+    // Once it is done, the run goes ahead, and releases the lock when it ends.
+    drop(other);
+    b.core.gear_voice_sample(&go).unwrap();
+    assert!(b.http.posts() > 0);
+    let again = std::fs::File::options()
+        .read(true)
+        .write(true)
+        .open(&path)
+        .unwrap();
+    again.try_lock().unwrap();
+}
+
 fn render(voice: &str, model: &str, sets: &[&str], dry: bool, confirm: bool) -> VoiceRenderParams {
     VoiceRenderParams {
         voice: voice.into(),

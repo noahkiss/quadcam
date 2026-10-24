@@ -789,7 +789,9 @@ the voices, the models, the line sets, the cost, **Sample** and **Render pack**,
   the run after the batch being made: the packs finished stay, and the batches made for the
   next one are in the cache, so the next render cuts them from there instead of paying
   again. An agent stops a run in the app with MCP `quadcam_gear_edit` `stop` and the handle
-  `voice-studio`; a run from the command line stops with Control-C.
+  `voice-studio`; a run from the command line stops with Control-C. One paid sample or
+  render runs on this Mac at a time: while the app runs one, `quadcam-cli` refuses another
+  and names the process that holds it, and the other way round.
 - **Pay for what was priced.** The question names a digest of its plan: the voices, models,
   sets, seed and characters. **Sample and pay** and **Render and pay** send that digest, and
   QuadCam refuses a confirm whose plan changed ("estimate again"). A change to any picker
