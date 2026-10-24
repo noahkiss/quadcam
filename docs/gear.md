@@ -1965,6 +1965,12 @@ port to the device and asks it over CRSF for its name, version, target and param
 | Radio | The radio's USB serial port must be set to CLI (as for the radio CLI). QuadCam reads the radio's board (`ver`) and keeps it with the read, stops the pulses and starts `serialpassthrough rfmod 0 400000` |
 | FC | The FC must identify itself over MSP as the saved FC; another FC, or one that does not answer, refuses. QuadCam checks that the serial receiver is CRSF, not inverted and not half duplex, finds the UART with the serial receiver and starts `serialpassthrough <uart> 420000` |
 
+An ExpressLRS module answers the radio only right after it takes a frame, and with the pulses
+off nothing else reaches it. So while QuadCam waits for an answer it sends a CRSF heartbeat every
+20 ms. A module that was just powered up listens at another speed for about a second, so QuadCam
+pings for up to 8 seconds. Every frame starts with `0xC8` or the device's own address; a device
+drops any other frame.
+
 A read through a radio stops its pulses: the radio stops sending at once, and a quad linked
 to it goes to failsafe. Read with no quad powered on that radio. The radio or FC **stays in
 passthrough** until you restart the radio or unplug the FC. A second
@@ -2031,7 +2037,11 @@ Every refusal comes before anything is written. Then QuadCam reads the chip's cu
 The backup is the whole chip, its config included: the bind UID and, if you set a home network
 in the ExpressLRS web UI, that network's name and password. It sits in the gear folder's backups.
 The configured image QuadCam stages for esptool is removed when the job ends.
-Afterwards restart the radio or power-cycle the quad, then read the device again. ExpressLRS 4
+Afterwards power-cycle the quad, or wait for the radio. After a module flash through the EdgeTX
+passthrough the radio can look frozen for a minute or more (seen on the GX12): the screen stays
+on, the controls and the power button do nothing, and unplugging USB changes nothing. It recovers
+by itself, and then the power button works; do not pull the battery. The plan and the report say
+so. Then restart the radio and read the device again. ExpressLRS 4
 wipes a receiver's Options page, so note your settings first. A flash that fails leaves the device
 in its bootloader: power-cycle it and flash again.
 
