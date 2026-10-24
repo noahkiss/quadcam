@@ -1439,7 +1439,8 @@ create sim profiles.
   load (see below). Check the game's rates screen after the first sync of each.
 - **The write:** QuadCam backs up each file first (the gear folder, as device `sim-<id>`, always
   kept), writes it through a temporary file and a rename with the file's own permissions, reads it
-  back and parses it. If one file fails, every file already written is put back. Only the values
+  back and parses it. A file that is a link (a save linked into a synced folder) is written at
+  the file it links to, and the link stays. If one file fails, every file already written is put back. Only the values
   that differ change; the rest of the file stays as it was. Two profiles in one file (two
   Liftoff profiles, say) are one write that holds both.
 - **Throttle:** Uncrashed gets the quad's throttle mid and expo. A sim has no hover value, so
@@ -1465,7 +1466,7 @@ A sim that QuadCam backed up shows when, with **Restore…** in its row's **…*
   undoes the first. `gear sims --restore SIM --backup ID` picks one from `gear backups --device
   sim-<id>`.
 - **The plan** lists the checks (a backup found and readable, the game is not running, the
-  file is there and writable), the rates that change per profile, and a warning that changes
+  file is there, is one of the sim's own rate files, and is writable), the rates that change per profile, and a warning that changes
   made in the game or by a later sync are lost. A digest covers the backup and the file as it is
   now.
 - **The write:** QuadCam backs up the file as it is now (kept), writes the backup's bytes

@@ -1250,3 +1250,40 @@ fn a_test_process_restores_no_sim_file_outside_the_temporary_folder() {
     assert_eq!(refused(&e), RefusalCode::Disabled, "{e:#}");
     assert_eq!(std::fs::read(&file).unwrap(), after_sync);
 }
+
+/// A `sim-<id>` backup that names a file other than the sim's rate files (a hand-edited
+/// manifest) is refused at the plan: a restore writes only a file the adapter knows.
+#[test]
+fn a_restore_writes_only_the_sims_own_rate_files() {
+    use quadcam_lib::gear::backup::Snapshots;
+    use quadcam_lib::gear::model::{Identity, Trigger};
+    let dir = tempfile::tempdir().unwrap();
+    let (h, _) = home();
+    let c = core(dir.path());
+    let other = h.path().join(".profile");
+    std::fs::write(&other, b"mine").unwrap();
+    let taken = Snapshots::new(c.gear_store())
+        .take_files(
+            "sim-liftoff",
+            &Identity::default(),
+            Trigger::BeforeApply,
+            chrono::Utc::now(),
+            &[(".profile".into(), b"planted".to_vec())],
+            false,
+        )
+        .unwrap();
+    let p = SimRestoreParams {
+        sim: "liftoff".into(),
+        backup: Some(taken.backup.id.clone()),
+    };
+    let plan = c.gear_sim_restore_plan_at(&p, h.path(), &never).unwrap();
+    assert!(!plan.ready());
+    let k = plan
+        .checks
+        .iter()
+        .find(|k| k.name == "A rate file of Liftoff")
+        .expect("the check is there");
+    assert!(!k.ok);
+    assert_eq!(k.refusal.as_ref().unwrap().code, RefusalCode::NotWritable);
+    assert_eq!(std::fs::read(&other).unwrap(), b"mine");
+}

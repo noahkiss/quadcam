@@ -192,9 +192,18 @@ fn full_fsync(f: &std::fs::File) -> std::io::Result<()> {
 }
 
 /// Writes a sim file: a temporary name beside it with the file's permissions, the bytes, a
-/// full sync, a rename, then a read-back. True when the bytes read back equal.
+/// full sync, a rename, then a read-back. True when the bytes read back equal. A path that
+/// is a symlink (a save linked into a synced folder) is written at its target, so the link
+/// stays a link.
 pub fn write_atomic(path: &Path, bytes: &[u8]) -> Result<bool> {
     use std::io::Write;
+    let resolved = if path.is_symlink() {
+        std::fs::canonicalize(path)
+            .with_context(|| format!("{} is a link to a file that is missing", path.display()))?
+    } else {
+        path.to_path_buf()
+    };
+    let path = resolved.as_path();
     let dir = path.parent().context("no parent folder")?;
     let name = path
         .file_name()
@@ -645,5 +654,24 @@ mod tests {
             0o755
         );
         assert!(!d.path().join(".a.sav.quadcam-tmp").exists());
+    }
+
+    #[test]
+    fn an_atomic_write_through_a_link_writes_its_target() {
+        let d = tempfile::tempdir().unwrap();
+        std::fs::create_dir_all(d.path().join("synced")).unwrap();
+        let real = d.path().join("synced/UserData.xml");
+        std::fs::write(&real, b"old").unwrap();
+        let link = d.path().join("UserData.xml");
+        std::os::unix::fs::symlink(&real, &link).unwrap();
+        assert!(write_atomic(&link, b"new").unwrap());
+        assert!(link.is_symlink(), "the link stays a link");
+        assert_eq!(std::fs::read(&real).unwrap(), b"new");
+        std::fs::remove_file(&real).unwrap();
+        assert!(
+            write_atomic(&link, b"x").is_err(),
+            "a dangling link is refused"
+        );
+        assert!(link.is_symlink() && !real.exists());
     }
 }

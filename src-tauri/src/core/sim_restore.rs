@@ -190,6 +190,8 @@ impl Core {
                     } else {
                         pass(&format!("Sim closed ({who})"))
                     });
+                    // Only a rate file the sim's adapter knows: never any file a backup names.
+                    let known = sim.files(home);
                     for (rel, after) in files {
                         if !safe_rel(&rel) {
                             checks.push(fail(
@@ -209,6 +211,14 @@ impl Core {
                             ));
                             continue;
                         };
+                        if !known.contains(&path) {
+                            checks.push(fail(
+                                &format!("A rate file of {who}"),
+                                RefusalCode::NotWritable,
+                                format!("{rel:?} in the backup is not one of {who}'s rate files."),
+                            ));
+                            continue;
+                        }
                         checks.push(check(
                             &format!("Writable ({who})"),
                             can_write(&path).then_some(()).ok_or_else(|| {
