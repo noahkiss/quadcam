@@ -14,6 +14,7 @@
 use crate::modules::run::{Process, Runner};
 use anyhow::{bail, Context, Result};
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 use std::ffi::OsString;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
@@ -362,9 +363,11 @@ impl Intel {
         Ok(a)
     }
 
-    /// Transcribes each file in `locale`. A helper that is missing, a macOS without the
-    /// feature, or a locale without its assets gives `unavailable`; a file the recognizer
-    /// could not read has its own `error`. Errors only when the helper failed to run.
+    /// Transcribes each file in `locale`: one answer per file, in the order of `files`, each
+    /// matched to its file by the helper's `file`, never by position. A helper that is
+    /// missing, a macOS without the feature, or a locale without its assets gives
+    /// `unavailable`; a file the recognizer could not read, or that the helper gave no answer
+    /// for, has its own `error`. Errors only when the helper failed to run.
     pub fn transcribe(&self, files: &[PathBuf], locale: &str) -> Result<Transcripts> {
         let mut t = Transcripts::default();
         if let Err(why) = &self.program {
@@ -376,9 +379,12 @@ impl Intel {
             args.extend(chunk.iter().map(|f| f.as_os_str().to_owned()));
             let timeout = Duration::from_secs(30 + 5 * chunk.len() as u64);
             let (lines, code) = self.run(args, timeout)?;
+            let mut got: HashMap<String, Heard> = HashMap::new();
             for o in lines {
                 match o {
-                    Out::Asr(h) => t.heard.push(h),
+                    Out::Asr(h) => {
+                        got.insert(h.file.clone(), h);
+                    }
                     Out::Error { code: c, message } => {
                         if code == UNAVAILABLE || c == "unavailable" {
                             t.unavailable = Some(message);
@@ -393,6 +399,17 @@ impl Intel {
                 t.unavailable =
                     Some("The quadcam-intel helper says the speech check is unavailable.".into());
                 return Ok(t);
+            }
+            for f in chunk {
+                let file = f.to_string_lossy().into_owned();
+                t.heard
+                    .push(got.get(&file).cloned().unwrap_or_else(|| Heard {
+                        error: Some(format!("quadcam-intel gave no answer for it (exit {code})")),
+                        text: None,
+                        confidence: None,
+                        words: Vec::new(),
+                        file,
+                    }));
             }
         }
         Ok(t)
@@ -711,6 +728,59 @@ mod tests {
         assert!(s.reason.unwrap().contains("macOS 26"));
         let t = i.transcribe(&["/a.wav".into()], "en-US").unwrap();
         assert!(t.unavailable.unwrap().contains("macOS 26"));
+    }
+
+    #[test]
+    fn each_answer_goes_to_its_own_file_and_a_file_with_none_is_an_error() {
+        // The helper answers out of order, skips a file, and prints a line this build does
+        // not parse: every answer still lands on the file it names.
+        struct Gappy(FakeHelper);
+        impl Runner for Gappy {
+            fn run(
+                &self,
+                p: &Path,
+                a: &[OsString],
+                c: &Path,
+                t: Duration,
+            ) -> Result<std::process::Output> {
+                if a[0] == "asr" {
+                    return Ok(Output {
+                        status: ExitStatus::from_raw(0),
+                        stdout: concat!(
+                            r#"{"kind":"asr","file":"/p/c.wav","text":"Three"}"#,
+                            "\n",
+                            r#"{"kind":"future","file":"/p/b.wav"}"#,
+                            "\n",
+                            r#"{"kind":"asr","file":"/p/a.wav","text":"One"}"#,
+                            "\n",
+                        )
+                        .as_bytes()
+                        .to_vec(),
+                        stderr: Vec::new(),
+                    });
+                }
+                self.0.run(p, a, c, t)
+            }
+        }
+        let i = Intel::with("/helper".into(), Arc::new(Gappy(fake(&[]))));
+        let files: Vec<PathBuf> = ["/p/a.wav", "/p/b.wav", "/p/c.wav"]
+            .iter()
+            .map(PathBuf::from)
+            .collect();
+        let t = i.transcribe(&files, "en-US").unwrap();
+        let got: Vec<(&str, Option<&str>, bool)> = t
+            .heard
+            .iter()
+            .map(|h| (h.file.as_str(), h.text.as_deref(), h.error.is_some()))
+            .collect();
+        assert_eq!(
+            got,
+            [
+                ("/p/a.wav", Some("One"), false),
+                ("/p/b.wav", None, true),
+                ("/p/c.wav", Some("Three"), false),
+            ]
+        );
     }
 
     #[test]
