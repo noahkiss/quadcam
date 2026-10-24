@@ -39,9 +39,9 @@ export function Export() {
               <li key={c.id}>
                 <b>{p.name || defaultName}</b>
                 <span className={styles.file}>
-                  {r ? <Icon name={r.outcome === "verified" ? "check-circle" : "close-circle"} tint={r.outcome === "verified" ? "green" : "red"} /> : prog != null ? <Icon name="refresh-moments" tint="blue" /> : <Icon name="clock" tint="muted" />}
+                  {r?.in_library ? <Icon name="check-circle" tint="muted" /> : r ? <Icon name={r.outcome === "verified" ? "check-circle" : "close-circle"} tint={r.outcome === "verified" ? "green" : "red"} /> : prog != null ? <Icon name="refresh-moments" tint="blue" /> : <Icon name="clock" tint="muted" />}
                   <span className="mono selectable">{r?.output ? base(r.output) : c.name}</span>
-                  {prog != null && !r ? <progress max={1} value={prog} aria-label={`Converting ${c.name}`} /> : <span className={styles.muted}>{r?.size ? fmtBytes(r.size) : r?.error || ""}</span>}
+                  {prog != null && !r ? <progress max={1} value={prog} aria-label={`Converting ${c.name}`} /> : <span className={styles.muted}>{r?.in_library ? "Already in the library" : r?.size ? fmtBytes(r.size) : r?.error || ""}</span>}
                 </span>
               </li>
             );

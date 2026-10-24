@@ -76,7 +76,7 @@ The app, the command line and the MCP server take turns on the index: each holds
 
 QuadCam knows a clip by the content of its source file, not by its name. DVRs start again at `PICT0001` after every format, so a name proves nothing. The card's "N new" count in the sidebar uses the same identity.
 
-An import skips a clip that is in the library already, so a card you import twice gives no second copies. The result lists those clips as already in the library. To import one again anyway, for example in another format, force the import: `quadcam-cli import --force`, or `force=true` on `quadcam_export`. The check runs only when the import goes into the library folder.
+An import skips a clip that is in the library already, so a card you import twice gives no second copies. The result lists those clips as already in the library. To import them again anyway, for example in another format, click **Import Anyway** on the import's Finish step, or force the import: `quadcam-cli import --force`, or `force=true` on `quadcam_export`. The check runs only when the import goes into the library folder.
 
 - A clip that QuadCam imported has the fingerprint of its source file: XXH64 over defined bytes of the AVI or MP4 file.
 - A file that QuadCam did not write gets an XXH64 hash of its first MB before `moov`. Metadata edits never touch those bytes.

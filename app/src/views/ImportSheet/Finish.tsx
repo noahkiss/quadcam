@@ -6,7 +6,7 @@ import { Button } from "../../components/Button";
 import { Checkbox, Input } from "../../components/Field";
 import { Icon } from "../../components/Icon";
 import { base, fmtBytes, fmtDay, fmtT, SOURCE_LABEL } from "../../lib/format";
-import { addToPhotos, askFormat, checkFormat, eject, formatBlocker, prepCard, runExport } from "../../actions/session";
+import { addToPhotos, askFormat, checkFormat, eject, formatBlocker, importAnyway, prepCard, runExport } from "../../actions/session";
 import styles from "./Finish.module.css";
 import { PathText } from "../../components/PathText";
 
@@ -29,6 +29,7 @@ export function Finish() {
   };
   const ok = s.results.filter((r) => r.outcome === "verified");
   const cutsOk = ok.reduce((a, r) => a + (r.cuts || []).filter((k) => k.outcome === "verified").length, 0);
+  const known = s.results.filter((r) => r.in_library).length;
   const failed = s.results.filter((r) => r.outcome === "failed").length + s.results.reduce((a, r) => a + (r.cuts || []).filter((k) => k.outcome === "failed").length, 0);
   const dirs = [...new Set(ok.map((r) => (r.output || "").split("/").slice(0, -1).join("/")))];
   const days = [...new Set(s.plans.filter((p) => !p.skip).map((p) => p.date))];
@@ -42,6 +43,16 @@ export function Finish() {
           </h3>
           {failed > 0 && <span className={styles.err}>{failed} did not verify</span>}
         </div>
+        {known > 0 && (
+          <div className={styles.row}>
+            <span className={styles.muted}>
+              Skipped {known} clip{known === 1 ? "" : "s"} already in the library
+            </span>
+            <Button size="sm" onClick={importAnyway}>
+              Import Anyway
+            </Button>
+          </div>
+        )}
         {deletion && (
           <p className={styles.muted}>
             Deleted {deleted} clip{deleted === 1 ? "" : "s"} from <PathText path={s.source} />
@@ -66,7 +77,7 @@ export function Finish() {
             if (!r || r.outcome === "skipped")
               return (
                 <li key={c.id} className={styles.skipped}>
-                  {p.name || c.name} · skipped
+                  {p.name || c.name} · {r?.in_library ? "already in the library" : "skipped"}
                 </li>
               );
             const files = [{ name: r.output ? base(r.output) : c.name, ok: r.outcome === "verified", size: r.size, error: r.error }];

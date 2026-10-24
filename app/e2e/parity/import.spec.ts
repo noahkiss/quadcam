@@ -128,6 +128,26 @@ test("Command-Return adds to the library, then Finish shows the files", async ({
   await expect(page.getByRole("article", { name: "loops" })).toBeVisible();
 });
 
+test("a second import of the same clips skips them as already in the library; Import Anyway imports them", async ({ app, page }) => {
+  await app.open();
+  await openFolder(app);
+  await page.keyboard.press("Meta+Enter");
+  await expect(sheet(page).getByRole("heading", { name: /^Added 4 clips/ })).toBeVisible();
+  await sheet(page).getByRole("button", { name: "Start over" }).click();
+  await dialog(page, "Start over?").getByRole("button", { name: "Start over" }).click();
+  await expect(sheet(page)).toBeHidden();
+  await openFolder(app);
+  await page.keyboard.press("Meta+Enter");
+  await expect(sheet(page).getByRole("heading", { name: /^Added 0 clips to the library$/ })).toBeVisible();
+  await expect(sheet(page).getByText("Skipped 4 clips already in the library")).toBeVisible();
+  await expect(sheet(page).getByText(/· already in the library$/)).toHaveCount(4);
+  expect((await app.method("import")).at(-1)).toMatchObject({ force: false });
+  await sheet(page).getByRole("button", { name: "Import Anyway" }).click();
+  await expect(sheet(page).getByRole("heading", { name: /^Added 4 clips/ })).toBeVisible();
+  expect((await app.method("import")).at(-1)).toMatchObject({ force: true });
+  await expect(sheet(page).getByRole("button", { name: "Import Anyway" })).toBeHidden();
+});
+
 test("Escape closes the sheet; the import stays in the sidebar", async ({ app, page }) => {
   await app.open();
   await openFolder(app);

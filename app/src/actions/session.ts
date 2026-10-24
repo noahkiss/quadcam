@@ -220,7 +220,16 @@ export async function setLogDay(day: string) {
   S().setSession(await api.planDates(sel.logDir(S()), day));
 }
 
-export async function runExport() {
+export function runExport() {
+  return exportClips(false);
+}
+
+/** Imports again the clips the last run skipped as already in the library. */
+export function importAnyway() {
+  return exportClips(true);
+}
+
+async function exportClips(force: boolean) {
   const st = S();
   const out = sel.outputDir(st);
   if (!out) return toast("Choose a library folder in Settings first.", true);
@@ -230,8 +239,8 @@ export async function runExport() {
   // An agent may have cleared the session meanwhile.
   const plans = S().session?.plans;
   if (!plans) return;
-  const todo = plans.filter((p) => !p.skip).length;
-  if (!todo && !(await ask("Every clip is skipped", "Record them all as skipped?", { ok: "Record" }))) return;
+  const todo = force ? (S().session?.results || []).filter((r) => r.in_library).length : plans.filter((p) => !p.skip).length;
+  if (!todo && !force && !(await ask("Every clip is skipped", "Record them all as skipped?", { ok: "Record" }))) return;
   store.setState({ busy: true, progress: {}, exportTotal: todo, exportDone: 0 });
   setStep("export");
   const offProgress = await on("import-progress", (p) => {
@@ -248,7 +257,7 @@ export async function runExport() {
     });
   });
   try {
-    const outcome = await api.importClips({ output_dir: out, format: sel.format(st), encoder: sel.encoder(st), keep_originals: sel.keepOriginals(st), add_time: sel.addTime(st), keep_clips: st.keepClips });
+    const outcome = await api.importClips({ output_dir: out, format: sel.format(st), encoder: sel.encoder(st), keep_originals: sel.keepOriginals(st), add_time: sel.addTime(st), keep_clips: st.keepClips, force });
     S().setSession(await api.getSession());
     store.setState({ busy: false, clipDeletion: outcome.clip_deletion ?? null, cardRelease: outcome.card ?? null });
     setStep("finish");

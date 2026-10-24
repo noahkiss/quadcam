@@ -158,6 +158,8 @@ export class MockCore {
   /** Answers given to agent format requests. */
   formatAnswers: { id: number; approve: boolean }[] = [];
   applyAnswers: { id: number; approve: boolean }[] = [];
+  /** The clips this mock imported, by content key: a later import skips them. */
+  importedKeys = new Set<string>();
   private emit: Emit;
 
   constructor(emit: Emit, opts: MockOptions = {}) {
@@ -218,7 +220,7 @@ export class MockCore {
       case "suggest_on_device":
         return this.suggestOnDevice((p.ids as number[] | null) ?? null);
       case "import":
-        return this.importClips(p as { output_dir: string; format: string; keep_clips?: boolean });
+        return this.importClips(p as { output_dir: string; format: string; keep_clips?: boolean; force?: boolean });
       case "photos":
         return this.addToPhotos((p.ids as number[] | null) ?? null, (p.album as string | null) ?? null);
       case "clear":
@@ -1433,16 +1435,30 @@ export class MockCore {
     else this.lib.clips[at] = { ...clip, pending_cuts: clip.pending_cuts.length ? clip.pending_cuts : this.lib.clips[at].pending_cuts };
   }
 
-  importClips(opts: { output_dir: string; format: string; keep_clips?: boolean }) {
+  importClips(opts: { output_dir: string; format: string; keep_clips?: boolean; force?: boolean }) {
     const s = this.need();
     const defaultName = (this.settings.values.defaultName as string) || "flight";
     const results: ClipResult[] = [];
     let imported = 0;
+    // A clip the library knows by content is skipped, unless forced, when the import goes into the
+    // library. The seed library holds the recorded session's clips too, so the mock knows only the
+    // clips it imported itself; the specs import the seed session as new.
+    const known = !opts.force && opts.output_dir === this.lib.root ? this.importedKeys : new Set<string>();
+    const inLibrary: number[] = [];
     for (const p of s.plans) {
       const c = s.clips.find((x) => x.id === p.id)!;
       if (c.part_of != null) continue;
-      if (p.skip || c.status === "empty") {
-        const r: ClipResult = { id: p.id, outcome: "skipped", output: null, original: null, size: 0, error: null, encoder: null, meta: null, cuts: [], qt: [], in_library: false };
+      const prev = s.results.find((x) => x.id === p.id && x.outcome === "verified");
+      if (prev && !p.skip) {
+        results.push(prev);
+        this.emit("import-result", prev);
+        imported++;
+        continue;
+      }
+      const skipIt = p.skip || c.status === "empty";
+      if (skipIt || known.has(c.key || `k${p.id}`)) {
+        const r: ClipResult = { id: p.id, outcome: "skipped", output: null, original: null, size: 0, error: null, encoder: null, meta: null, cuts: [], qt: [], in_library: !skipIt };
+        if (!skipIt) inLibrary.push(p.id);
         results.push(r);
         this.emit("import-result", r);
         continue;
@@ -1457,6 +1473,7 @@ export class MockCore {
       results.push(r);
       this.emit("import-result", r);
       imported++;
+      this.importedKeys.add(c.key || `k${p.id}`);
       const loc = p.meta.location;
       this.upsert({
         id: c.key || `k${p.id}`, path: output.slice(opts.output_dir.length + 1), title: p.name, note: p.note, date: p.date, time: p.time ? p.time.slice(0, 5) : null,
@@ -1470,7 +1487,7 @@ export class MockCore {
     s.output_dir = opts.output_dir;
     this.libraryChanged();
     this.sessionChanged();
-    const summary = { results, imported, skipped: results.length - imported, failed: 0, in_library: [] as number[], total_bytes: results.reduce((a, r) => a + r.size, 0), output_dir: opts.output_dir, format_ready: s.kind === "dji" ? { Err: "QuadCam does not format DJI cards after an import. Card prep can erase a removable card once every clip is in the library." } : s.card ? { Ok: null } : { Err: "Clips came from a folder, not a card." } };
+    const summary = { results, imported, skipped: results.length - imported, failed: 0, in_library: inLibrary, total_bytes: results.reduce((a, r) => a + r.size, 0), output_dir: opts.output_dir, format_ready: s.kind === "dji" ? { Err: "QuadCam does not format DJI cards after an import. Card prep can erase a removable card once every clip is in the library." } : s.card ? { Ok: null } : { Err: "Clips came from a folder, not a card." } };
     // "Delete clips after import": only the setting turns it on; a run may turn it off.
     const clip_deletion =
       this.settings.values.deleteClipsAfterImport && !opts.keep_clips
