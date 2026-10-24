@@ -3,7 +3,7 @@ import { useStore } from "../../store";
 import { Button } from "../../components/Button";
 import { Icon } from "../../components/Icon";
 import { connectedName, deviceName, GROUP_OF, GROUPS, STATE_LABEL, worst, type DeviceState } from "../../lib/gear";
-import { deviceRefs, pluggedIn, useNow } from "../Gear/refs";
+import { deviceRefs, pluggedIn, useNow, useRefsInput } from "../Gear/refs";
 import type { DeviceRef } from "../Gear/slots";
 import styles from "./StatusBar.module.css";
 
@@ -14,9 +14,11 @@ const TINT: Partial<Record<DeviceState, "yellow" | "green" | "blue">> = { attent
  *  nothing plugged in it stays, empty but for "No gear connected", so the window does not
  *  change height. A change of state is announced politely. */
 export function StatusBar() {
-  const s = useStore();
-  const now = useNow(s.unmounted.length > 0);
-  const plugged = pluggedIn(deviceRefs(s, now));
+  const openGear = useStore((s) => s.openGear);
+  const dismissReminder = useStore((s) => s.dismissReminder);
+  const input = useRefsInput();
+  const now = useNow(input.unmounted.length > 0);
+  const plugged = pluggedIn(deviceRefs(input, now));
   const items = GROUPS.map((g) => ({ g, refs: plugged.filter((r) => GROUP_OF[r.kind] === g.id) }))
     .filter((x) => x.refs.length)
     .map((x) => ({ ...x, state: x.refs.map((r) => r.state!).reduce(worst) }));
@@ -28,7 +30,7 @@ export function StatusBar() {
       {items.map(({ g, refs, state }) => {
         const names = refs.map(nameOf).join(", ");
         const label = `${g.label}: ${refs.length > 1 ? `${refs.length} devices, ` : ""}${STATE_LABEL[state]}`;
-        const open = () => s.openGear(refs.length === 1 ? { page: "device", key: refs[0].key } : { page: "connected" });
+        const open = () => openGear(refs.length === 1 ? { page: "device", key: refs[0].key } : { page: "connected" });
         return (
           <button key={g.id} type="button" className={styles.item} data-state={state} aria-label={label} title={`${names}: ${STATE_LABEL[state]}`} onClick={open}>
             <Icon name={g.icon} size={16} tint={TINT[state]} />
@@ -39,7 +41,7 @@ export function StatusBar() {
         );
       })}
       {inserted.map((r) => (
-        <Button key={r.key} size="sm" variant="ghost" className={styles.dismiss} aria-label={`Dismiss the reminder for ${nameOf(r)}`} title="Dismiss reminder" onClick={() => s.dismissReminder(r.connected!)}>
+        <Button key={r.key} size="sm" variant="ghost" className={styles.dismiss} aria-label={`Dismiss the reminder for ${nameOf(r)}`} title="Dismiss reminder" onClick={() => dismissReminder(r.connected!)}>
           Dismiss
         </Button>
       ))}

@@ -7,7 +7,7 @@ import { SegmentedControl } from "../../components/SegmentedControl";
 import { DeviceHeader } from "../../components/gear/DeviceHeader";
 import { importFromDevice, prepCard } from "../../actions/session";
 import { deviceName, KIND_LABEL } from "../../lib/gear";
-import { deviceRefs, pluggedIn, useNow } from "./refs";
+import { deviceRefs, pluggedIn, useNow, useRefsInput } from "./refs";
 import { segmentsFor } from "./segments";
 import { GEAR_PAGES } from "./pages";
 import { ConnectedPage, DevicesPage, forgetDevice, fwFact } from "./DeviceLists";
@@ -18,16 +18,17 @@ import styles from "./Gear.module.css";
 /** The Gear page the sidebar opened. */
 export function GearView() {
   const page = useStore((s) => s.gearPage);
-  const s = useStore();
-  const now = useNow(s.unmounted.length > 0);
-  const refs = deviceRefs(s, now);
+  const values = useStore((s) => s.values);
+  const input = useRefsInput();
+  const now = useNow(input.unmounted.length > 0);
+  const refs = deviceRefs(input, now);
   if (!page) return null;
   if (page.page === "device") {
     const d = refs.find((r) => r.key === page.key);
     return d ? <DevicePage d={d} /> : <Missing />;
   }
   if (page.page === "slot") {
-    const slot = GEAR_PAGES.find((p) => p.id === page.id && (!p.preview || s.values[p.preview] === true));
+    const slot = GEAR_PAGES.find((p) => p.id === page.id && (!p.preview || values[p.preview] === true));
     return slot ? <section className={styles.page}>{slot.render()}</section> : <Missing />;
   }
   return (

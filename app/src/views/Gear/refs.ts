@@ -1,12 +1,13 @@
 // Device refs for the Gear pages and the status bar: each device once, by page key, with
 // its state now.
 import { useEffect, useState } from "react";
-import type { State } from "../../store";
+import { useShallow } from "zustand/react/shallow";
+import { useStore, type State } from "../../store";
 import { deviceState, pageKey, type StateInput } from "../../lib/gear";
 import { gearSlots, type DeviceRef } from "./slots";
 
 /** The state inputs from the store at `now`. */
-export const stateInput = (s: State, now: number): StateInput => ({
+export const stateInput = (s: RefsInput, now: number): StateInput => ({
   status: s.gear,
   unmountedSince: s.unmountedSince,
   graceS: s.gear?.settings.cues.reminder_grace_s ?? 60,
@@ -15,7 +16,7 @@ export const stateInput = (s: State, now: number): StateInput => ({
 
 /** Plugged-in devices first (connected, then unmounted but still in), then saved ones that
  *  are not plugged in. */
-export function deviceRefs(s: State, now: number): DeviceRef[] {
+export function deviceRefs(s: RefsInput, now: number): DeviceRef[] {
   const x = stateInput(s, now);
   const out = new Map<string, DeviceRef>();
   const add = (c: State["unmounted"][number], unmounted: boolean) => {
@@ -31,6 +32,13 @@ export function deviceRefs(s: State, now: number): DeviceRef[] {
   for (const d of s.devices) if (!out.has(d.id)) out.set(d.id, { key: d.id, kind: d.kind, device: d, connected: null, unmounted: false, state: null });
   return [...out.values()];
 }
+
+/** The store fields device refs read. */
+export type RefsInput = Pick<State, "gear" | "devices" | "unmounted" | "unmountedSince">;
+
+/** Those fields only, so a component renders again when one of them changes, not on every
+ *  store change. */
+export const useRefsInput = (): RefsInput => useStore(useShallow((s) => ({ gear: s.gear, devices: s.devices, unmounted: s.unmounted, unmountedSince: s.unmountedSince })));
 
 /** The refs that are plugged in. */
 export const pluggedIn = (refs: DeviceRef[]) => refs.filter((r) => r.connected);
